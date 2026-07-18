@@ -1,0 +1,19 @@
+【虚拟声卡安装说明】（与 B 站 RVCMAX 教程相同思路）
+
+1. 打开官网下载 VB-Audio Virtual Cable（免费捐赠软件）：
+   https://vb-audio.com/Cable/
+
+2. 把下载到的安装包解压后，将其中的：
+     VBCABLE_Setup_x64.exe
+   放到本文件夹（VBCABLE）。
+
+3. 回到「启动器」点击「安装 虚拟声卡」，或直接双击本目录里的 Setup。
+
+4. 安装时在弹出窗口点 Install（可能需要管理员权限）。
+
+5. 变声时推荐设置：
+   - RVC 输入：你的麦克风
+   - RVC 输出：CABLE Input
+   - 游戏 / QQ / Discord 麦克风：CABLE Output
+
+注意：请从官网获取安装包，遵守 VB-Audio 许可协议。

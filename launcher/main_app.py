@@ -64,6 +64,69 @@ from launcher.win_util import (
 )
 
 
+class HoverTip:
+    """Lightweight tooltip for 白无垢 UI — quiet paper popover on hover."""
+
+    def __init__(self, widget: tk.Widget, text: str, *, delay_ms: int = 350) -> None:
+        self.widget = widget
+        self.text = text
+        self.delay_ms = delay_ms
+        self._after_id: Optional[str] = None
+        self._tip: Optional[tk.Toplevel] = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None) -> None:
+        self._cancel()
+        self._after_id = self.widget.after(self.delay_ms, self._show)
+
+    def _cancel(self) -> None:
+        if self._after_id is not None:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _hide(self, _event=None) -> None:
+        self._cancel()
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
+    def _show(self) -> None:
+        self._after_id = None
+        if self._tip is not None or not self.text:
+            return
+        try:
+            x = self.widget.winfo_rootx() + 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        except Exception:
+            return
+        tip = tk.Toplevel(self.widget)
+        tip.wm_overrideredirect(True)
+        tip.wm_attributes("-topmost", True)
+        tip.configure(bg=TM_HAIRLINE)
+        # Outer hairline frame + warm paper fill
+        wrap = tk.Frame(tip, bg=TM_SURFACE, padx=10, pady=8)
+        wrap.pack(padx=1, pady=1)
+        tk.Label(
+            wrap,
+            text=self.text,
+            justify="left",
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            font=sans_font(9),
+            wraplength=320,
+        ).pack(anchor="w")
+        tip.wm_geometry(f"+{x}+{y}")
+        self._tip = tip
+
+
 class MainApp:
     def __init__(self) -> None:
         ensure_dirs()
@@ -1258,7 +1321,7 @@ class MainApp:
         tk.Label(
             modef, text="模式", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
         ).pack(side="left")
-        tk.Radiobutton(
+        rb_vc = tk.Radiobutton(
             modef,
             text="输出变声",
             variable=self.var_function,
@@ -1266,8 +1329,10 @@ class MainApp:
             bg=TM_SURFACE,
             command=self._on_hot_param,
             font=sans_font(9),
-        ).pack(side="left")
-        tk.Radiobutton(
+            activebackground=TM_SURFACE,
+        )
+        rb_vc.pack(side="left")
+        rb_im = tk.Radiobutton(
             modef,
             text="输入监听",
             variable=self.var_function,
@@ -1275,7 +1340,29 @@ class MainApp:
             bg=TM_SURFACE,
             command=self._on_hot_param,
             font=sans_font(9),
-        ).pack(side="left", padx=8)
+            activebackground=TM_SURFACE,
+        )
+        rb_im.pack(side="left", padx=(8, 0))
+        # Small ? help — hover for plain-language explanation
+        mode_help = tk.Label(
+            modef,
+            text=" ?",
+            font=sans_font(9, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            cursor="question_arrow",
+        )
+        mode_help.pack(side="left", padx=(4, 0))
+        _mode_tip = (
+            "【输出变声】日常开黑/语音用这个。\n"
+            "麦克风 → 变成所选音色 → 从「输出设备」出去（一般选 CABLE Input）。\n"
+            "\n"
+            "【输入监听】不进行变声，只把麦克风原声送到输出。\n"
+            "用来检查麦是否正常、声卡接线对不对；听完记得切回「输出变声」。"
+        )
+        HoverTip(mode_help, _mode_tip)
+        HoverTip(rb_vc, "输出变声：把麦克风变成所选音色再输出（日常变声用这个）。")
+        HoverTip(rb_im, "输入监听：不改变声音，只输出麦克风原声（测麦/测接线）。")
 
         # Performance
         perf = card(wrap, "性能设置（改后需重新「开启变声」）")

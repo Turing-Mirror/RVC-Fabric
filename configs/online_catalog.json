@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "app": {
+    "version": "1.1.0",
+    "channel": "stable",
+    "gui": {
+      "version": "1.1.0",
+      "kind": "zip",
+      "url": "",
+      "sha256": "",
+      "notes": "将 GUI 增量 zip 的直链填到 url（GitHub Release 或 SharePoint download=1）。zip 内路径相对于软件根目录，如 launcher/main_app.py。"
+    }
+  },
+  "community": {
+    "qq_group": "",
+    "qq_link": "",
+    "sharepoint_full": "",
+    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅支持：GUI 本体补丁 + 音色模型。"
+  },
+  "manifest_urls": [
+    ""
+  ],
+  "voices": [
+    {
+      "id": "example-voice",
+      "name": "示例音色（请替换直链）",
+      "tag": "音色",
+      "version": "1",
+      "pth_url": "",
+      "index_url": "",
+      "cover_url": "",
+      "size_bytes": 0,
+      "sha256": "",
+      "description": "把 pth_url 换成 GitHub raw / Release 或 SharePoint 公开直链后即可在「更新」页一键下载到 User_Data/models。"
+    }
+  ]
+}

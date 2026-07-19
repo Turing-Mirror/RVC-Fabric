@@ -283,6 +283,284 @@ class StatusBadge(tk.Frame):
             pass
 
 
+class SoftSlider(tk.Frame):
+    """Library-style range control (Schale track + LyricsKara mono value).
+
+    Visible trough, accent fill, solid thumb — replaces hard-to-see tk.Scale.
+    """
+
+    def __init__(
+        self,
+        master,
+        variable: tk.Variable,
+        from_: float,
+        to: float,
+        *,
+        resolution: float = 1,
+        command=None,
+        bar_width: int = 200,
+        bar_height: int = 28,
+        width: int | None = None,  # alias for bar_width
+        height: int | None = None,  # alias for bar_height
+        **kw,
+    ):
+        bg = kw.pop("bg", TM_SURFACE)
+        # Never pass geometry ints into Frame via **kw
+        kw.pop("width", None)
+        kw.pop("height", None)
+        super().__init__(master, bg=bg, **kw)
+        self.variable = variable
+        self.from_ = float(from_)
+        self.to = float(to)
+        self.resolution = float(resolution) if resolution else 1.0
+        self.command = command
+        self._drag = False
+        self._pad_x = 10
+        self._track_h = 8
+        self._thumb_r = 8
+        bw = int(width if width is not None else bar_width)
+        bh = int(height if height is not None else bar_height)
+
+        self.canvas = tk.Canvas(
+            self,
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+            bg=bg,
+        )
+        self.canvas.configure(width=bw, height=bh)
+        self.canvas.pack(fill="x", expand=True)
+        # NOTE: never use self._w / self._h — Tk stores widget path in _w
+        self._bar_w = bw
+        self._bar_h = bh
+
+        self.canvas.bind("<Configure>", self._on_cfg)
+        self.canvas.bind("<Button-1>", self._on_down)
+        self.canvas.bind("<B1-Motion>", self._on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._on_up)
+        try:
+            self.variable.trace_add("write", lambda *_a: self._draw())
+        except Exception:
+            pass
+        self.after(10, self._draw)
+
+    def _on_cfg(self, event) -> None:
+        if event.width > 1:
+            self._bar_w = event.width
+            self._bar_h = event.height
+            self._draw()
+
+    def get(self):
+        return self.variable.get()
+
+    def set(self, value) -> None:
+        self.variable.set(value)
+
+    def _clamp_val(self, v: float) -> float:
+        lo, hi = (self.from_, self.to) if self.from_ <= self.to else (self.to, self.from_)
+        v = max(lo, min(hi, float(v)))
+        step = self.resolution
+        if step and step > 0:
+            # Snap to resolution grid from from_
+            n = round((v - self.from_) / step)
+            v = self.from_ + n * step
+            v = max(lo, min(hi, v))
+            if step >= 1:
+                v = int(round(v))
+            else:
+                # avoid float dust
+                decimals = max(0, min(6, len(str(step).split(".")[-1])))
+                v = round(v, decimals)
+        return v
+
+    def _frac(self) -> float:
+        span = self.to - self.from_
+        if abs(span) < 1e-12:
+            return 0.0
+        try:
+            v = float(self.variable.get())
+        except Exception:
+            v = self.from_
+        f = (v - self.from_) / span
+        return max(0.0, min(1.0, f))
+
+    def _x_to_val(self, x: float) -> float:
+        usable = max(1.0, self._bar_w - 2 * self._pad_x)
+        f = (x - self._pad_x) / usable
+        f = max(0.0, min(1.0, f))
+        return self._clamp_val(self.from_ + f * (self.to - self.from_))
+
+    def _draw(self) -> None:
+        c = self.canvas
+        try:
+            c.delete("all")
+        except Exception:
+            return
+        w, h = max(self._bar_w, 40), max(self._bar_h, 22)
+        pad = self._pad_x
+        cy = h // 2
+        track_h = self._track_h
+        y0 = cy - track_h // 2
+        y1 = y0 + track_h
+        x0, x1 = pad, w - pad
+        # Track (inset trough)
+        c.create_rectangle(
+            x0, y0, x1, y1, fill=TM_INSET, outline=TM_HAIRLINE, width=1
+        )
+        frac = self._frac()
+        fill_x = x0 + (x1 - x0) * frac
+        if fill_x > x0 + 1:
+            # Accent fill (quiet teal, not neon)
+            c.create_rectangle(
+                x0 + 1, y0 + 1, fill_x, y1 - 1, fill=TM_ACCENT, outline=""
+            )
+        # Thumb
+        r = self._thumb_r
+        tx = fill_x
+        c.create_oval(
+            tx - r,
+            cy - r,
+            tx + r,
+            cy + r,
+            fill=TM_SURFACE_HOVER,
+            outline=TM_ACCENT,
+            width=2,
+        )
+        # Inner dot for affordance
+        c.create_oval(
+            tx - 2, cy - 2, tx + 2, cy + 2, fill=TM_ACCENT, outline=""
+        )
+
+    def _apply_x(self, x: float) -> None:
+        v = self._x_to_val(x)
+        try:
+            cur = self.variable.get()
+        except Exception:
+            cur = None
+        if cur == v:
+            self._draw()
+            return
+        self.variable.set(v)
+        self._draw()
+        if self.command:
+            try:
+                self.command(v)
+            except TypeError:
+                try:
+                    self.command()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    def _on_down(self, event) -> None:
+        self._drag = True
+        self._apply_x(event.x)
+
+    def _on_drag(self, event) -> None:
+        if self._drag:
+            self._apply_x(event.x)
+
+    def _on_up(self, event) -> None:
+        self._drag = False
+        self._apply_x(event.x)
+
+
+class ParamTile(tk.Frame):
+    """Dock parameter cell: mono label + large value + SoftSlider (player-bar style)."""
+
+    def __init__(
+        self,
+        master,
+        label: str,
+        variable: tk.Variable,
+        from_: float,
+        to: float,
+        *,
+        resolution: float = 1,
+        command=None,
+        width: int = 168,
+        fmt: str = "int",
+        **kw,
+    ):
+        super().__init__(
+            master,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+            **kw,
+        )
+        self.variable = variable
+        self.fmt = fmt
+        inner = tk.Frame(self, bg=TM_SURFACE, padx=12, pady=8)
+        inner.pack(fill="both", expand=True)
+
+        head = tk.Frame(inner, bg=TM_SURFACE)
+        head.pack(fill="x")
+        tk.Label(
+            head,
+            text=tracked(label.upper(), gap="  ") if label.isascii() else label,
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        ).pack(side="left")
+        self.val_lbl = tk.Label(
+            head,
+            text="",
+            font=mono_font(11),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="e",
+        )
+        self.val_lbl.pack(side="right")
+
+        self.slider = SoftSlider(
+            inner,
+            variable,
+            from_,
+            to,
+            resolution=resolution,
+            command=self._on_slide,
+            bar_width=max(width - 28, 140),
+            bar_height=32,
+            bg=TM_SURFACE,
+        )
+        self.slider.pack(fill="x", expand=True, pady=(8, 2))
+        # Prefer a comfortable min width for dock tiles
+        try:
+            self.configure(width=max(width, 160))
+        except Exception:
+            pass
+        self._user_cmd = command
+        try:
+            variable.trace_add("write", lambda *_a: self._fmt())
+        except Exception:
+            pass
+        self._fmt()
+
+    def _fmt(self) -> None:
+        try:
+            v = self.variable.get()
+            if self.fmt == "int":
+                text = f"{int(v):+d}" if int(v) != 0 else "0"
+            elif self.fmt == "signed":
+                text = f"{float(v):+.2f}"
+            else:
+                text = f"{float(v):.2f}"
+            self.val_lbl.configure(text=text)
+        except Exception:
+            pass
+
+    def _on_slide(self, _v=None) -> None:
+        self._fmt()
+        if self._user_cmd:
+            try:
+                self._user_cmd()
+            except Exception:
+                pass
+
+
 class SoftActionCard(tk.Frame):
     """Bootstrap action tile — larger, mono caption, left rail."""
 

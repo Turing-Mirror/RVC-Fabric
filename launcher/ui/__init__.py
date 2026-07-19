@@ -8,9 +8,11 @@ from launcher.ui.widgets import (
     ModelCoverCard,
     NavItem,
     PageHeader,
+    ParamTile,
     PrimaryButton,
     SectionCard,
     SoftActionCard,
+    SoftSlider,
     StatusBadge,
 )
 
@@ -21,9 +23,11 @@ __all__ = [
     "ModelCoverCard",
     "NavItem",
     "PageHeader",
+    "ParamTile",
     "PrimaryButton",
     "SectionCard",
     "SoftActionCard",
+    "SoftSlider",
     "StatusBadge",
     "load_cover_photo",
 ]

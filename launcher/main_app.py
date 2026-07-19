@@ -92,10 +92,14 @@ from launcher.ui import (
     ModelCoverCard,
     NavItem,
     PageHeader,
+    ParamTile,
     PrimaryButton,
     SectionCard,
+    SoftSlider,
     StatusBadge,
 )
+from launcher.ui.help_content import SETTING_TIPS, help_plain_text
+from launcher.ui.help_page import HelpPage
 from launcher.ui.store_page import StorePage
 from launcher.version import APP_VERSION
 from launcher.win_util import (
@@ -288,6 +292,7 @@ class MainApp:
             ("models", "模型"),
             ("settings", "设置"),
             ("store", "更新"),
+            ("help", "说明"),
             ("more", "其他"),
         ):
             b = NavItem(nav_rail, label, key, self.show_page)
@@ -305,9 +310,19 @@ class MainApp:
         bottom.pack_propagate(False)
         self._bottom_bar = bottom
 
-        # --- Left: now playing (compact) ---
-        left_info = tk.Frame(bottom, bg=TM_SURFACE)
-        left_info.pack(side="left", padx=(PAD_X, 12), pady=12, fill="y")
+        # Bottom dock zones (Schale card grouping + LyricsKara now-playing meta)
+        # [ NOW PLAYING ] [ MODE ] [ PITCH | FORMANT | THRESH ] …… [ CTA | status ]
+
+        # --- Left: now-playing panel ---
+        left_panel = tk.Frame(
+            bottom,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        left_panel.pack(side="left", padx=(PAD_X, 10), pady=14, fill="y")
+        left_info = tk.Frame(left_panel, bg=TM_SURFACE, padx=14, pady=10)
+        left_info.pack(fill="both", expand=True)
         tk.Label(
             left_info,
             text=tracked("NOW PLAYING", gap="  "),
@@ -319,12 +334,12 @@ class MainApp:
         self.bottom_name = tk.Label(
             left_info,
             text="未选择模型",
-            font=title_font(12, "bold"),
+            font=title_font(13, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.pack(anchor="w", pady=(1, 0))
+        self.bottom_name.pack(anchor="w", pady=(4, 0))
         self.bottom_tag = tk.Label(
             left_info,
             text="请先导入音色到 User_Data/models",
@@ -333,75 +348,80 @@ class MainApp:
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_tag.pack(anchor="w")
-        # Hint lives in tag line when space is tight; keep label for updates
+        self.bottom_tag.pack(anchor="w", pady=(2, 0))
         self.bottom_voice_hint = tk.Label(
             left_info,
-            text="",
+            text="参数随音色单独保存",
             font=mono_font(7),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_voice_hint.pack(anchor="w")
+        self.bottom_voice_hint.pack(anchor="w", pady=(6, 0))
 
-        # --- Right: transport + status (side by side) ---
+        # --- Right: transport + status ---
         right = tk.Frame(bottom, bg=TM_SURFACE)
-        right.pack(side="right", padx=(8, PAD_X), pady=12, fill="y")
-        right_inner = tk.Frame(right, bg=TM_SURFACE)
-        right_inner.pack(expand=True)
-        ctrl = tk.Frame(right_inner, bg=TM_SURFACE)
-        ctrl.pack(side="left", padx=(0, 12))
+        right.pack(side="right", padx=(10, PAD_X), pady=14, fill="y")
+        right_col = tk.Frame(right, bg=TM_SURFACE)
+        right_col.pack(expand=True)
+        ctrl = tk.Frame(right_col, bg=TM_SURFACE)
+        ctrl.pack(anchor="e")
         self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
-        self.btn_start.pack(side="left", padx=3)
-        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(
-            side="left", padx=3
-        )
-        self.status_badge = StatusBadge(right_inner)
-        self.status_badge.pack(side="left")
+        self.btn_start.pack(side="left", padx=(0, 8))
+        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(side="left")
+        self.status_badge = StatusBadge(right_col)
+        self.status_badge.pack(anchor="e", pady=(10, 0))
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
 
-        # --- Center: mode + hot sliders on one row ---
+        # --- Center: mode segment + param tiles ---
         mid = tk.Frame(bottom, bg=TM_SURFACE)
-        mid.pack(side="left", fill="both", expand=True, padx=4, pady=10)
+        mid.pack(side="left", fill="both", expand=True, padx=4, pady=14)
 
-        row = tk.Frame(mid, bg=TM_SURFACE)
-        row.pack(anchor="w", fill="x", expand=True)
-
+        # Mode as its own inset card
+        mode_card = tk.Frame(
+            mid,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        mode_card.pack(side="left", fill="y", padx=(0, 10))
+        mode_inner = tk.Frame(mode_card, bg=TM_SURFACE, padx=12, pady=10)
+        mode_inner.pack(fill="both", expand=True)
         tk.Label(
-            row,
-            text="模式",
+            mode_inner,
+            text=tracked("MODE", gap="  "),
             font=mono_font(7),
             bg=TM_SURFACE,
             fg=TM_META,
-        ).pack(side="left", padx=(0, 6))
-        seg = tk.Frame(row, bg=TM_INSET, padx=3, pady=2)
-        seg.pack(side="left", padx=(0, 16))
+            anchor="w",
+        ).pack(anchor="w")
+        seg = tk.Frame(mode_inner, bg=TM_INSET, padx=4, pady=4)
+        seg.pack(anchor="w", pady=(10, 0))
         self.btn_mode_vc = tk.Button(
             seg,
             text="输出变声",
-            font=sans_font(9),
+            font=sans_font(10),
             relief="flat",
             bd=0,
-            padx=10,
-            pady=2,
+            padx=14,
+            pady=6,
             cursor="hand2",
             command=lambda: self._set_function_mode("vc"),
         )
-        self.btn_mode_vc.pack(side="left", padx=1)
+        self.btn_mode_vc.pack(side="left", padx=2)
         self.btn_mode_im = tk.Button(
             seg,
             text="原声旁路",
-            font=sans_font(9),
+            font=sans_font(10),
             relief="flat",
             bd=0,
-            padx=10,
-            pady=2,
+            padx=14,
+            pady=6,
             cursor="hand2",
             command=lambda: self._set_function_mode("im"),
         )
-        self.btn_mode_im.pack(side="left", padx=1)
+        self.btn_mode_im.pack(side="left", padx=2)
         HoverTip(
             self.btn_mode_vc,
             "输出变声：麦克风 → 变成所选音色再输出（日常开黑）。",
@@ -411,62 +431,45 @@ class MainApp:
             "原声旁路（设置里的「输入监听」）：不改变声音，只输出麦克风原声，用来测麦/接线。",
         )
 
-        def _dock_scale(parent, label, variable, from_, to, res, width=120):
-            box = tk.Frame(parent, bg=TM_SURFACE)
-            box.pack(side="left", padx=(0, 12))
-            head = tk.Frame(box, bg=TM_SURFACE)
-            head.pack(fill="x")
-            tk.Label(
-                head,
-                text=label,
-                font=mono_font(7),
-                bg=TM_SURFACE,
-                fg=TM_META,
-            ).pack(side="left")
-            val_lbl = tk.Label(
-                head,
-                text="",
-                font=mono_font(8),
-                bg=TM_SURFACE,
-                fg=TM_INK,
-            )
-            val_lbl.pack(side="right")
-
-            def _fmt(_=None, lbl=val_lbl, var=variable, r=res):
-                try:
-                    v = var.get()
-                    if float(r) >= 1:
-                        lbl.configure(text=str(int(v)))
-                    else:
-                        lbl.configure(text=f"{float(v):.2f}")
-                except Exception:
-                    pass
-
-            sc = tk.Scale(
-                box,
-                from_=from_,
-                to=to,
-                resolution=res,
-                orient="horizontal",
-                variable=variable,
-                showvalue=0,
-                length=width,
-                bg=TM_SURFACE,
-                fg=TM_INK,
-                troughcolor=TM_HAIRLINE,
-                highlightthickness=0,
-                bd=0,
-                sliderrelief="flat",
-                command=lambda _v: self._on_dock_param(),
-            )
-            sc.pack(fill="x")
-            variable.trace_add("write", lambda *_a: _fmt())
-            _fmt()
-            return sc
-
-        _dock_scale(row, "音高", self.var_pitch, -24, 24, 1, width=140)
-        _dock_scale(row, "共鸣", self.var_formant, -2, 2, 0.05, width=110)
-        _dock_scale(row, "阈值", self.var_threhold, -60, 0, 1, width=100)
+        # Parameter tiles with custom SoftSlider
+        tiles = tk.Frame(mid, bg=TM_SURFACE)
+        tiles.pack(side="left", fill="both", expand=True)
+        self._dock_pitch = ParamTile(
+            tiles,
+            "音高 Pitch",
+            self.var_pitch,
+            -24,
+            24,
+            resolution=1,
+            command=self._on_dock_param,
+            width=176,
+            fmt="int",
+        )
+        self._dock_pitch.pack(side="left", fill="y", padx=(0, 8))
+        self._dock_formant = ParamTile(
+            tiles,
+            "共鸣 Formant",
+            self.var_formant,
+            -2,
+            2,
+            resolution=0.05,
+            command=self._on_dock_param,
+            width=176,
+            fmt="signed",
+        )
+        self._dock_formant.pack(side="left", fill="y", padx=(0, 8))
+        self._dock_thr = ParamTile(
+            tiles,
+            "阈值",
+            self.var_threhold,
+            -60,
+            0,
+            resolution=1,
+            command=self._on_dock_param,
+            width=156,
+            fmt="int",
+        )
+        self._dock_thr.pack(side="left", fill="y")
 
         self._update_mode_buttons()
         self._sync_bottom()
@@ -493,11 +496,13 @@ class MainApp:
 
     def _build_pages(self) -> None:
         self._store_page = StorePage(self, self.body)
+        self._help_page = HelpPage(self, self.body)
         self.pages = {
             "home": self._page_home(),
             "models": self._page_models(),
             "settings": self._page_settings(),
             "store": self._store_page.frame,
+            "help": self._help_page.frame,
             "more": self._page_more(),
         }
 
@@ -518,6 +523,11 @@ class MainApp:
         if key == "store":
             try:
                 self._store_page.on_show()
+            except Exception:
+                pass
+        if key == "help":
+            try:
+                self._help_page.on_show()
             except Exception:
                 pass
             self.root.after(80, lambda: getattr(self._store_page, "reflow", lambda: None)())
@@ -1360,9 +1370,30 @@ class MainApp:
             outer.pack(fill="x", expand=False, padx=GUTTER, pady=10)
             return outer.body
 
-        def scale_row(parent, label, variable, from_, to, res=1, hot=False):
-            f = tk.Frame(parent, bg=TM_SURFACE)
-            f.pack(fill="x", pady=3)
+        def tip_line(parent, text: str) -> None:
+            if not text:
+                return
+            lbl = tk.Label(
+                parent,
+                text=text,
+                font=sans_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                justify="left",
+                anchor="w",
+                wraplength=640,
+            )
+            lbl.pack(fill="x", anchor="w", pady=(0, 2), padx=(4, 4))
+            self._settings_wrap_labels.append(lbl)
+
+        def scale_row(
+            parent, label, variable, from_, to, res=1, hot=False, tip_key: str = ""
+        ):
+            """Settings row with SoftSlider + optional tip (SETTING_TIPS)."""
+            wrap_f = tk.Frame(parent, bg=TM_SURFACE)
+            wrap_f.pack(fill="x", pady=6)
+            f = tk.Frame(wrap_f, bg=TM_SURFACE)
+            f.pack(fill="x")
             tk.Label(
                 f,
                 text=label,
@@ -1372,21 +1403,63 @@ class MainApp:
                 fg=TM_INK_MUTED,
                 font=sans_font(9),
             ).pack(side="left")
-            sc = tk.Scale(
+            tip = SETTING_TIPS.get(tip_key, "")
+            if tip:
+                q = tk.Label(
+                    f,
+                    text=" ?",
+                    font=sans_font(9, "bold"),
+                    bg=TM_SURFACE,
+                    fg=TM_META,
+                    cursor="question_arrow",
+                )
+                q.pack(side="left")
+                HoverTip(q, tip)
+            val_lbl = tk.Label(
                 f,
-                from_=from_,
-                to=to,
-                resolution=res,
-                orient="horizontal",
-                variable=variable,
+                text="",
+                width=7,
+                anchor="e",
                 bg=TM_SURFACE,
                 fg=TM_INK,
-                highlightthickness=0,
-                troughcolor=TM_HAIRLINE,
-                # length grows with parent via fill/expand (no short fixed bar)
-                command=(lambda _v: self._on_hot_param()) if hot else None,
+                font=mono_font(10),
             )
-            sc.pack(side="left", fill="x", expand=True, padx=(0, 4))
+            val_lbl.pack(side="right", padx=(8, 0))
+
+            def _fmt(_=None, lbl=val_lbl, var=variable, r=res):
+                try:
+                    v = var.get()
+                    if float(r) >= 1:
+                        lbl.configure(text=str(int(v)))
+                    else:
+                        lbl.configure(text=f"{float(v):.2f}")
+                except Exception:
+                    pass
+
+            def _cmd(_v=None):
+                _fmt()
+                if hot:
+                    self._on_hot_param()
+
+            sc = SoftSlider(
+                f,
+                variable,
+                from_,
+                to,
+                resolution=res,
+                command=_cmd if hot else (lambda _v=None: _fmt()),
+                width=320,
+                height=28,
+                bg=TM_SURFACE,
+            )
+            sc.pack(side="left", fill="x", expand=True, padx=(4, 4))
+            try:
+                variable.trace_add("write", lambda *_a: _fmt())
+            except Exception:
+                pass
+            _fmt()
+            if tip:
+                tip_line(wrap_f, tip)
             return sc
 
         # Device card
@@ -1437,15 +1510,8 @@ class MainApp:
             cursor="question_arrow",
         )
         accel_help.pack(side="left")
-        HoverTip(
-            accel_help,
-            "官方不是「只加一个参数」：\n"
-            "· N 卡包 = CUDA 专用 Runtime；A/I 卡包 = DirectML 专用 Runtime\n"
-            "· 正确环境里再用 cuda / dml（官方 --dml）选设备\n"
-            "· auto：本机有 CUDA 用 cuda，否则有 DirectML 用 dml，否则 CPU\n"
-            "· 请按显卡下载对应发行包，不要混用 Runtime\n"
-            "改后端后请停止变声再开；必要时重启软件。",
-        )
+        HoverTip(accel_help, SETTING_TIPS["accel"])
+        tip_line(left, SETTING_TIPS["accel"])
         self.lbl_accel_status = tk.Label(
             left,
             text="加速：检测中…",
@@ -1486,6 +1552,7 @@ class MainApp:
         )
         self.cmb_hostapi.pack(side="left", fill="x", expand=True)
         self.cmb_hostapi.bind("<<ComboboxSelected>>", lambda e: self._on_hostapi_change())
+        tip_line(left, SETTING_TIPS["hostapi"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1496,6 +1563,7 @@ class MainApp:
             row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
         )
         self.cmb_input.pack(side="left", fill="x", expand=True)
+        tip_line(left, SETTING_TIPS["input"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1506,6 +1574,7 @@ class MainApp:
             row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
         )
         self.cmb_output.pack(side="left", fill="x", expand=True)
+        tip_line(left, SETTING_TIPS["output"])
 
         # Self-monitor: hear converted voice on headphones while CABLE goes to game
         mon_row = tk.Frame(left, bg=TM_SURFACE)
@@ -1647,11 +1716,17 @@ class MainApp:
         )
         voice_note.pack(fill="x", pady=(0, 6))
         self._settings_wrap_labels.append(voice_note)
-        scale_row(right, "响应阈值", self.var_threhold, -60, 0, 1, hot=True)
-        scale_row(right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True)
-        scale_row(right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True)
-        scale_row(right, "Index Rate", self.var_index_rate, 0, 1, 0.01, hot=True)
-        scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True)
+        scale_row(
+            right, "响应阈值", self.var_threhold, -60, 0, 1, hot=True, tip_key="threhold"
+        )
+        scale_row(right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True, tip_key="pitch")
+        scale_row(
+            right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True, tip_key="formant"
+        )
+        scale_row(
+            right, "Index Rate", self.var_index_rate, 0, 1, 0.01, hot=True, tip_key="index_rate"
+        )
+        scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True, tip_key="rms")
 
         # Feature retrieval .index (bound to current voice model)
         self.var_index_path = tk.StringVar(value="")
@@ -1665,21 +1740,7 @@ class MainApp:
             fg=TM_INK_MUTED,
             anchor="w",
         ).pack(anchor="w")
-        idx_help = tk.Label(
-            idx_block,
-            text=(
-                "对应原版实时面板的 .index 文件（特征检索库，不是训练底模）。\n"
-                "绑定到当前音色；换音色会跟着切换。改后需重新「开启变声」。"
-            ),
-            font=sans_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            justify="left",
-            anchor="w",
-            wraplength=640,
-        )
-        idx_help.pack(fill="x", anchor="w", pady=(0, 4))
-        self._settings_wrap_labels.append(idx_help)
+        tip_line(idx_block, SETTING_TIPS["index"])
         idx_row = tk.Frame(idx_block, bg=TM_SURFACE)
         idx_row.pack(fill="x")
         self.cmb_index = ttk.Combobox(
@@ -1751,6 +1812,7 @@ class MainApp:
         )
         cmb_f0.pack(side="left")
         cmb_f0.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
+        tip_line(right, SETTING_TIPS["f0"])
 
         modef = tk.Frame(right, bg=TM_SURFACE)
         modef.pack(fill="x", pady=4)
@@ -1802,21 +1864,10 @@ class MainApp:
 
         # Performance
         perf = card(wrap, "性能设置（改后需重新「开启变声」）")
-        scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01)
-        scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01)
-        scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01)
-        scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1)
-        nr_hint = tk.Label(
-            perf,
-            text="降噪会明显增加显存/算力；小显卡建议只开一项或先关闭再测。",
-            font=sans_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-            wraplength=640,
-        )
-        nr_hint.pack(fill="x", pady=(2, 0))
-        self._settings_wrap_labels.append(nr_hint)
+        scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01, tip_key="block")
+        scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01, tip_key="crossfade")
+        scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01, tip_key="extra")
+        scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1, tip_key="n_cpu")
         nrf = tk.Frame(perf, bg=TM_SURFACE)
         nrf.pack(fill="x", pady=4)
         tk.Checkbutton(
@@ -1843,6 +1894,8 @@ class MainApp:
             command=self._on_hot_param,
             font=sans_font(9),
         ).pack(side="left")
+        tip_line(perf, SETTING_TIPS["i_nr"] + " / " + SETTING_TIPS["o_nr"])
+        tip_line(perf, SETTING_TIPS["use_pv"])
 
         # ----- Post-RVC DSP (noise gate / compressor / EQ) -----
         from tools.dsp_fx import EQ_LABELS, EQ_PRESET_LABELS, EQ_PRESETS
@@ -1895,21 +1948,7 @@ class MainApp:
         )
 
         fx = card(wrap, "声音效果（变声后 · 可选）")
-        fx_intro = tk.Label(
-            fx,
-            text=(
-                "在 RVC 变声之后处理：噪声门 → 压缩 → 均衡。默认关闭，不影响原有听感。"
-                "开黑可开压缩+轻 EQ；改参运行中可热更新。"
-            ),
-            font=sans_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            justify="left",
-            anchor="w",
-            wraplength=640,
-        )
-        fx_intro.pack(fill="x", pady=(0, 6))
-        self._settings_wrap_labels.append(fx_intro)
+        tip_line(fx, SETTING_TIPS["fx_en"])
         tk.Checkbutton(
             fx,
             text="启用声音效果",
@@ -1930,6 +1969,7 @@ class MainApp:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(anchor="w")
+        tip_line(gbox, SETTING_TIPS["fx_gate"])
         scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True)
         scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True)
         scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True)
@@ -1946,6 +1986,7 @@ class MainApp:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(anchor="w")
+        tip_line(cbox, SETTING_TIPS["fx_comp"])
         scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True)
         scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True)
         scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True)
@@ -1965,6 +2006,7 @@ class MainApp:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(side="left")
+        tip_line(ebox, SETTING_TIPS["fx_eq"])
         tk.Label(
             erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
         ).pack(side="left", padx=(16, 4))
@@ -1999,7 +2041,9 @@ class MainApp:
         for i, name in enumerate(EQ_LABELS):
             scale_row(ebox, name, self.var_fx_eq_gains[i], -12, 12, 0.5, hot=True)
 
-        scale_row(fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True)
+        scale_row(
+            fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True, tip_key="fx_out"
+        )
 
         # --- Keyboard shortcuts ---
         self._build_hotkeys_settings_section(wrap, card)

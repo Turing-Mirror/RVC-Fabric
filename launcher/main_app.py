@@ -1136,7 +1136,7 @@ class MainApp:
             fg=TM_INK,
             activebackground=TM_SURFACE,
             font=sans_font(9),
-            command=self._on_hot_param,
+            command=self._on_monitor_toggle,
         ).pack(side="left")
         mon_help = tk.Label(
             mon_row,
@@ -1150,9 +1150,10 @@ class MainApp:
         HoverTip(
             mon_help,
             "开启后：游戏/语音仍走「输出设备」（一般是 CABLE Input），\n"
-            "同时在「监听设备」里再放一份变声后的声音给你听。\n"
-            "监听请选你的耳机/音箱，不要选 CABLE。\n"
-            "运行中可开关；换监听设备后若没声可停一次再开。",
+            "同时在「监听设备」再放一份变声后的声音给你听。\n"
+            "监听请选真实耳机/音箱（如「耳机 KM-HIFI」），\n"
+            "不要选 CABLE、Steam Streaming、虚拟声卡。\n"
+            "运行中可开关；若仍无声：停一次变声再开，并确认系统默认播放设备。",
         )
         mon_row2 = tk.Frame(left, bg=TM_SURFACE)
         mon_row2.pack(fill="x", pady=3)
@@ -1173,7 +1174,16 @@ class MainApp:
             width=48,
         )
         self.cmb_monitor.pack(side="left", fill="x", expand=True)
-        self.cmb_monitor.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
+        self.cmb_monitor.bind("<<ComboboxSelected>>", lambda e: self._on_monitor_device())
+        self.lbl_monitor_hint = tk.Label(
+            left,
+            text="监听设备须为耳机/音箱；不要选 CABLE 或 Steam 虚拟扬声器",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_monitor_hint.pack(fill="x", pady=(0, 4))
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=4)
@@ -2104,19 +2114,18 @@ class MainApp:
             if hasattr(self, "cmb_monitor"):
                 self.cmb_monitor["values"] = outs
                 cur = self.var_monitor_dev.get()
-                if (not cur or cur not in outs) and outs:
-                    # Prefer real headphones/speakers — not virtual cable
-                    pick = next(
-                        (
-                            n
-                            for n in outs
-                            if "cable" not in n.lower()
-                            and "voicemeeter" not in n.lower()
-                            and "mapper" not in n.lower()
-                        ),
-                        outs[0],
-                    )
-                    self.var_monitor_dev.set(pick)
+                pick = self._prefer_monitor_device(outs, cur)
+                # Always correct empty / missing / virtual endpoints (e.g. Steam Speakers)
+                if pick and pick != cur:
+                    if (not cur) or (cur not in outs) or self._is_virtual_monitor_name(
+                        cur
+                    ):
+                        self.var_monitor_dev.set(pick)
+                        try:
+                            self.cfg["monitor_device"] = pick
+                            save_config(self.cfg)
+                        except Exception:
+                            pass
         except Exception:
             pass
         err = str(st.get("error") or "")
@@ -2131,6 +2140,10 @@ class MainApp:
             )
         elif not self.vc_running and not self._vc_starting:
             self._set_status_visual("idle", "引擎待命", APP_PRODUCT_TAGLINE)
+        try:
+            self._refresh_monitor_hint()
+        except Exception:
+            pass
 
     def _page_more(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -2638,6 +2651,140 @@ class MainApp:
             "已热更新" if self.vc_running else "下次开启变声生效",
         )
 
+    @staticmethod
+    def _is_virtual_monitor_name(name: str) -> bool:
+        low = (name or "").lower()
+        if not low:
+            return True
+        keys = (
+            "cable",
+            "voicemeeter",
+            "mapper",
+            "steam streaming",
+            "steam streaming speakers",
+            "virtual",
+            "vb-audio",
+            "vb audio",
+            "nvidia high definition",
+            "nvidia broadcast",
+            "网易虚拟",
+            "fxsound",
+            "discord",
+            "obs virtual",
+            "stereo mix",
+            "主声音驱动",
+            "primary sound",
+        )
+        return any(k in low for k in keys)
+
+    def _prefer_monitor_device(
+        self, outs: list, current: str = ""
+    ) -> str:
+        """Pick real headphones/speakers; avoid CABLE / Steam / virtual endpoints."""
+        if not outs:
+            return current or ""
+        main_out = ""
+        try:
+            main_out = str(self.var_output_dev.get() or "")
+        except Exception:
+            main_out = str(self.cfg.get("sg_output_device") or "")
+
+        def usable(n: str) -> bool:
+            if not n or n == main_out:
+                return False
+            if self._is_virtual_monitor_name(n):
+                return False
+            if main_out and "cable" in main_out.lower() and "cable" in n.lower():
+                return False
+            return True
+
+        if current and current in outs and usable(current):
+            return current
+
+        # Prefer names that look like headphones
+        for n in outs:
+            low = n.lower()
+            if usable(n) and (
+                "耳机" in n
+                or "headphone" in low
+                or "headset" in low
+                or "earphone" in low
+            ):
+                return n
+        for n in outs:
+            if usable(n):
+                return n
+        return current if current in outs else outs[0]
+
+    def _refresh_monitor_hint(self) -> None:
+        if not hasattr(self, "lbl_monitor_hint"):
+            return
+        try:
+            on = bool(self.var_monitor_on.get())
+            dev = str(self.var_monitor_dev.get() or "")
+        except Exception:
+            return
+        if not on:
+            self.lbl_monitor_hint.configure(
+                text="关闭时只走「输出设备」（通常 CABLE）；开启后在耳机里听变声",
+                fg=TM_META,
+            )
+            return
+        if not dev:
+            self.lbl_monitor_hint.configure(
+                text="请选择监听设备：你的真实耳机/音箱",
+                fg=TM_WARN,
+            )
+            return
+        if self._is_virtual_monitor_name(dev):
+            self.lbl_monitor_hint.configure(
+                text=f"当前「{dev}」是虚拟设备，听不到。请改选真实耳机（如 KM-HIFI）",
+                fg=TM_WARN,
+            )
+            return
+        self.lbl_monitor_hint.configure(
+            text=f"监听中将播放到：{dev}",
+            fg=TM_OK,
+        )
+
+    def _on_monitor_toggle(self) -> None:
+        """Checkbox: validate device then push hot param."""
+        try:
+            on = bool(self.var_monitor_on.get())
+        except Exception:
+            on = False
+        if on:
+            outs = list(self._device_lists.get("output_devices") or [])
+            cur = str(self.var_monitor_dev.get() or "")
+            if (not cur) or self._is_virtual_monitor_name(cur) or (
+                outs and cur not in outs
+            ):
+                pick = self._prefer_monitor_device(outs, cur)
+                if pick:
+                    self.var_monitor_dev.set(pick)
+                    self.cfg["monitor_device"] = pick
+            self._refresh_monitor_hint()
+            # Soft warn if still virtual
+            try:
+                dev = str(self.var_monitor_dev.get() or "")
+            except Exception:
+                dev = ""
+            if self._is_virtual_monitor_name(dev):
+                messagebox.showwarning(
+                    "监听设备无效",
+                    "监听设备仍是虚拟声卡（CABLE / Steam / 网易虚拟等），"
+                    "耳机里不会有声音。\n\n"
+                    "请在「监听设备」里选择真实耳机或音箱（例如带「耳机」的设备），"
+                    "再开启监听。",
+                )
+        else:
+            self._refresh_monitor_hint()
+        self._on_hot_param()
+
+    def _on_monitor_device(self) -> None:
+        self._refresh_monitor_hint()
+        self._on_hot_param()
+
     def _toggle_monitor(self) -> None:
         try:
             if hasattr(self, "var_monitor_on"):
@@ -2647,22 +2794,40 @@ class MainApp:
         except Exception:
             cur = bool(self.cfg.get("monitor_enabled"))
         new_v = not cur
-        self.cfg["monitor_enabled"] = new_v
         try:
             if hasattr(self, "var_monitor_on"):
                 self.var_monitor_on.set(new_v)
         except Exception:
             pass
+        self.cfg["monitor_enabled"] = new_v
+        if new_v:
+            outs = list(self._device_lists.get("output_devices") or [])
+            cur_dev = str(self.cfg.get("monitor_device") or "")
+            try:
+                cur_dev = str(self.var_monitor_dev.get() or cur_dev)
+            except Exception:
+                pass
+            pick = self._prefer_monitor_device(outs, cur_dev)
+            if pick:
+                self.cfg["monitor_device"] = pick
+                try:
+                    self.var_monitor_dev.set(pick)
+                except Exception:
+                    pass
         try:
             save_config(self.cfg)
         except Exception:
             pass
+        self._refresh_monitor_hint()
         if self.vc_running:
             self._on_hot_param()
+        dev = str(self.cfg.get("monitor_device") or "")
         self._set_status_visual(
             "live" if self.vc_running else "idle",
             "监听自己：开" if new_v else "监听自己：关",
-            "运行中可热切换" if self.vc_running else "下次开启变声生效",
+            (dev[:28] if new_v and dev else "运行中可热切换")
+            if self.vc_running
+            else ("下次开启变声生效" if new_v else ""),
         )
 
     def _restart_vc_for_new_model(self) -> None:

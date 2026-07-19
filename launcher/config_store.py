@@ -43,6 +43,23 @@ DEFAULTS: dict[str, Any] = {
     "function": "vc",  # vc | im
     # GPU: auto | cuda | dml | cpu  (official RVC: CUDA vs --dml DirectML)
     "accel_backend": "auto",
+    # Post-RVC DSP (noise gate / compressor / EQ) — default off
+    "fx_enabled": False,
+    "fx_gate_enabled": True,
+    "fx_gate_threshold_db": -50.0,
+    "fx_gate_release_ms": 50.0,
+    "fx_gate_hold_ms": 20.0,
+    "fx_gate_range_db": 20.0,
+    "fx_comp_enabled": True,
+    "fx_comp_threshold_db": -20.0,
+    "fx_comp_ratio": 4.0,
+    "fx_comp_attack_ms": 5.0,
+    "fx_comp_release_ms": 100.0,
+    "fx_comp_makeup_db": 0.0,
+    "fx_eq_enabled": True,
+    "fx_eq_gains": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "fx_eq_preset": "flat",
+    "fx_out_gain_db": 0.0,
     "last_model": "",
     "last_model_name": "",
     "last_model_path": "",
@@ -160,6 +177,12 @@ def _prefer_cable_devices(data: dict[str, Any]) -> None:
 def app_cfg_to_engine_settings(cfg: dict[str, Any]) -> dict[str, Any]:
     """Map app_config fields to configs/inuse/config.json shape."""
     c = _normalize_cfg(cfg)
+    gains = c.get("fx_eq_gains") or [0.0, 0.0, 0.0, 0.0, 0.0]
+    if not isinstance(gains, (list, tuple)):
+        gains = [0.0, 0.0, 0.0, 0.0, 0.0]
+    gains = [float(x) for x in list(gains)[:5]]
+    while len(gains) < 5:
+        gains.append(0.0)
     return {
         "pitch": float(c.get("pitch") or 0),
         "formant": float(c.get("formant") or 0),
@@ -183,6 +206,23 @@ def app_cfg_to_engine_settings(cfg: dict[str, Any]) -> dict[str, Any]:
         "O_noise_reduce": bool(c.get("O_noise_reduce")),
         "use_jit": False,
         "function": str(c.get("function") or "vc"),
+        # DSP post-FX
+        "fx_enabled": bool(c.get("fx_enabled")),
+        "fx_gate_enabled": bool(c.get("fx_gate_enabled", True)),
+        "fx_gate_threshold_db": float(c.get("fx_gate_threshold_db", -50)),
+        "fx_gate_release_ms": float(c.get("fx_gate_release_ms", 50)),
+        "fx_gate_hold_ms": float(c.get("fx_gate_hold_ms", 20)),
+        "fx_gate_range_db": float(c.get("fx_gate_range_db", 20)),
+        "fx_comp_enabled": bool(c.get("fx_comp_enabled", True)),
+        "fx_comp_threshold_db": float(c.get("fx_comp_threshold_db", -20)),
+        "fx_comp_ratio": float(c.get("fx_comp_ratio", 4)),
+        "fx_comp_attack_ms": float(c.get("fx_comp_attack_ms", 5)),
+        "fx_comp_release_ms": float(c.get("fx_comp_release_ms", 100)),
+        "fx_comp_makeup_db": float(c.get("fx_comp_makeup_db", 0)),
+        "fx_eq_enabled": bool(c.get("fx_eq_enabled", True)),
+        "fx_eq_gains": gains,
+        "fx_eq_preset": str(c.get("fx_eq_preset") or "flat"),
+        "fx_out_gain_db": float(c.get("fx_out_gain_db") or 0),
     }
 
 

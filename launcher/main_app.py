@@ -1590,6 +1590,163 @@ class MainApp:
             font=sans_font(9),
         ).pack(side="left")
 
+        # ----- Post-RVC DSP (noise gate / compressor / EQ) -----
+        from tools.dsp_fx import EQ_LABELS, EQ_PRESET_LABELS, EQ_PRESETS
+
+        self.var_fx_enabled = tk.BooleanVar(value=bool(self.cfg.get("fx_enabled")))
+        self.var_fx_gate_en = tk.BooleanVar(value=bool(self.cfg.get("fx_gate_enabled", True)))
+        self.var_fx_gate_thr = tk.DoubleVar(
+            value=float(self.cfg.get("fx_gate_threshold_db", -50))
+        )
+        self.var_fx_gate_rel = tk.DoubleVar(
+            value=float(self.cfg.get("fx_gate_release_ms", 50))
+        )
+        self.var_fx_gate_hold = tk.DoubleVar(
+            value=float(self.cfg.get("fx_gate_hold_ms", 20))
+        )
+        self.var_fx_gate_range = tk.DoubleVar(
+            value=float(self.cfg.get("fx_gate_range_db", 20))
+        )
+        self.var_fx_comp_en = tk.BooleanVar(
+            value=bool(self.cfg.get("fx_comp_enabled", True))
+        )
+        self.var_fx_comp_thr = tk.DoubleVar(
+            value=float(self.cfg.get("fx_comp_threshold_db", -20))
+        )
+        self.var_fx_comp_ratio = tk.DoubleVar(
+            value=float(self.cfg.get("fx_comp_ratio", 4))
+        )
+        self.var_fx_comp_att = tk.DoubleVar(
+            value=float(self.cfg.get("fx_comp_attack_ms", 5))
+        )
+        self.var_fx_comp_rel = tk.DoubleVar(
+            value=float(self.cfg.get("fx_comp_release_ms", 100))
+        )
+        self.var_fx_comp_mu = tk.DoubleVar(
+            value=float(self.cfg.get("fx_comp_makeup_db", 0))
+        )
+        self.var_fx_eq_en = tk.BooleanVar(value=bool(self.cfg.get("fx_eq_enabled", True)))
+        self.var_fx_eq_preset = tk.StringVar(
+            value=str(self.cfg.get("fx_eq_preset") or "flat")
+        )
+        gains0 = self.cfg.get("fx_eq_gains") or [0, 0, 0, 0, 0]
+        if not isinstance(gains0, (list, tuple)):
+            gains0 = [0, 0, 0, 0, 0]
+        gains0 = list(gains0) + [0] * 5
+        self.var_fx_eq_gains = [
+            tk.DoubleVar(value=float(gains0[i])) for i in range(5)
+        ]
+        self.var_fx_out_gain = tk.DoubleVar(
+            value=float(self.cfg.get("fx_out_gain_db") or 0)
+        )
+
+        fx = card(wrap, "声音效果（变声后 · 可选）")
+        fx_intro = tk.Label(
+            fx,
+            text=(
+                "在 RVC 变声之后处理：噪声门 → 压缩 → 均衡。默认关闭，不影响原有听感。"
+                "开黑可开压缩+轻 EQ；改参运行中可热更新。"
+            ),
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            justify="left",
+            anchor="w",
+            wraplength=640,
+        )
+        fx_intro.pack(fill="x", pady=(0, 6))
+        self._settings_wrap_labels.append(fx_intro)
+        tk.Checkbutton(
+            fx,
+            text="启用声音效果",
+            variable=self.var_fx_enabled,
+            bg=TM_SURFACE,
+            font=sans_font(9, "bold"),
+            command=self._on_hot_param,
+        ).pack(anchor="w")
+
+        # Gate
+        gbox = tk.Frame(fx, bg=TM_SURFACE)
+        gbox.pack(fill="x", pady=(8, 4))
+        tk.Checkbutton(
+            gbox,
+            text="噪声门",
+            variable=self.var_fx_gate_en,
+            bg=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_hot_param,
+        ).pack(anchor="w")
+        scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True)
+        scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True)
+        scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True)
+        scale_row(gbox, "衰减 dB", self.var_fx_gate_range, 6, 60, 1, hot=True)
+
+        # Compressor
+        cbox = tk.Frame(fx, bg=TM_SURFACE)
+        cbox.pack(fill="x", pady=(8, 4))
+        tk.Checkbutton(
+            cbox,
+            text="压缩器",
+            variable=self.var_fx_comp_en,
+            bg=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_hot_param,
+        ).pack(anchor="w")
+        scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True)
+        scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True)
+        scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True)
+        scale_row(cbox, "释放 ms", self.var_fx_comp_rel, 10, 500, 1, hot=True)
+        scale_row(cbox, "增益 dB", self.var_fx_comp_mu, 0, 12, 0.5, hot=True)
+
+        # EQ
+        ebox = tk.Frame(fx, bg=TM_SURFACE)
+        ebox.pack(fill="x", pady=(8, 4))
+        erow = tk.Frame(ebox, bg=TM_SURFACE)
+        erow.pack(fill="x")
+        tk.Checkbutton(
+            erow,
+            text="均衡 EQ",
+            variable=self.var_fx_eq_en,
+            bg=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_hot_param,
+        ).pack(side="left")
+        tk.Label(
+            erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left", padx=(16, 4))
+        preset_vals = list(EQ_PRESETS.keys())
+        self.cmb_fx_preset = ttk.Combobox(
+            erow,
+            textvariable=self.var_fx_eq_preset,
+            values=preset_vals,
+            state="readonly",
+            width=14,
+        )
+        self.cmb_fx_preset.pack(side="left")
+
+        def _on_eq_preset(_e=None):
+            key = str(self.var_fx_eq_preset.get() or "flat")
+            gains = EQ_PRESETS.get(key) or EQ_PRESETS["flat"]
+            for i, g in enumerate(gains):
+                self.var_fx_eq_gains[i].set(float(g))
+            self._on_hot_param()
+
+        self.cmb_fx_preset.bind("<<ComboboxSelected>>", _on_eq_preset)
+        # show Chinese labels as tip
+        lab = " / ".join(f"{k}={EQ_PRESET_LABELS.get(k, k)}" for k in preset_vals[:3])
+        tk.Label(
+            ebox,
+            text=f"预设：{lab}…",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        ).pack(fill="x")
+        for i, name in enumerate(EQ_LABELS):
+            scale_row(ebox, name, self.var_fx_eq_gains[i], -12, 12, 0.5, hot=True)
+
+        scale_row(fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True)
+
         act = tk.Frame(wrap, bg=TM_BG)
         act.pack(fill="x", padx=28, pady=10)
         tk.Button(
@@ -1782,6 +1939,26 @@ class MainApp:
             self.cfg["accel_backend"] = normalize_accel(
                 str(self.var_accel.get() or "auto")
             )
+            # DSP FX
+            if hasattr(self, "var_fx_enabled"):
+                self.cfg["fx_enabled"] = bool(self.var_fx_enabled.get())
+                self.cfg["fx_gate_enabled"] = bool(self.var_fx_gate_en.get())
+                self.cfg["fx_gate_threshold_db"] = float(self.var_fx_gate_thr.get())
+                self.cfg["fx_gate_release_ms"] = float(self.var_fx_gate_rel.get())
+                self.cfg["fx_gate_hold_ms"] = float(self.var_fx_gate_hold.get())
+                self.cfg["fx_gate_range_db"] = float(self.var_fx_gate_range.get())
+                self.cfg["fx_comp_enabled"] = bool(self.var_fx_comp_en.get())
+                self.cfg["fx_comp_threshold_db"] = float(self.var_fx_comp_thr.get())
+                self.cfg["fx_comp_ratio"] = float(self.var_fx_comp_ratio.get())
+                self.cfg["fx_comp_attack_ms"] = float(self.var_fx_comp_att.get())
+                self.cfg["fx_comp_release_ms"] = float(self.var_fx_comp_rel.get())
+                self.cfg["fx_comp_makeup_db"] = float(self.var_fx_comp_mu.get())
+                self.cfg["fx_eq_enabled"] = bool(self.var_fx_eq_en.get())
+                self.cfg["fx_eq_preset"] = str(self.var_fx_eq_preset.get() or "flat")
+                self.cfg["fx_eq_gains"] = [
+                    float(self.var_fx_eq_gains[i].get()) for i in range(5)
+                ]
+                self.cfg["fx_out_gain_db"] = float(self.var_fx_out_gain.get())
         except Exception:
             pass
 
@@ -1948,6 +2125,22 @@ class MainApp:
                 function=self.cfg.get("function"),
                 monitor_enabled=self.cfg.get("monitor_enabled"),
                 monitor_device=self.cfg.get("monitor_device"),
+                fx_enabled=self.cfg.get("fx_enabled"),
+                fx_gate_enabled=self.cfg.get("fx_gate_enabled"),
+                fx_gate_threshold_db=self.cfg.get("fx_gate_threshold_db"),
+                fx_gate_release_ms=self.cfg.get("fx_gate_release_ms"),
+                fx_gate_hold_ms=self.cfg.get("fx_gate_hold_ms"),
+                fx_gate_range_db=self.cfg.get("fx_gate_range_db"),
+                fx_comp_enabled=self.cfg.get("fx_comp_enabled"),
+                fx_comp_threshold_db=self.cfg.get("fx_comp_threshold_db"),
+                fx_comp_ratio=self.cfg.get("fx_comp_ratio"),
+                fx_comp_attack_ms=self.cfg.get("fx_comp_attack_ms"),
+                fx_comp_release_ms=self.cfg.get("fx_comp_release_ms"),
+                fx_comp_makeup_db=self.cfg.get("fx_comp_makeup_db"),
+                fx_eq_enabled=self.cfg.get("fx_eq_enabled"),
+                fx_eq_gains=self.cfg.get("fx_eq_gains"),
+                fx_eq_preset=self.cfg.get("fx_eq_preset"),
+                fx_out_gain_db=self.cfg.get("fx_out_gain_db"),
             )
         except Exception:
             pass

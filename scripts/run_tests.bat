@@ -4,7 +4,10 @@ cd /d "%~dp0.."
 title Turing Mirror unit tests
 echo Running product unit tests (unittest discover)...
 echo.
-python -m unittest discover -s tests -p "test_*.py" -v
+set "PY=python"
+if exist "%CD%\Runtime\python.exe" set "PY=%CD%\Runtime\python.exe"
+echo Using: %PY%
+"%PY%" -m unittest discover -s tests -p "test_*.py" -v
 set ERR=%errorlevel%
 echo.
 if %ERR%==0 (

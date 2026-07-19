@@ -240,8 +240,13 @@ def install_voice_pack_zip(
 
     with tempfile.TemporaryDirectory(prefix="tm_voice_") as td:
         tmp = Path(td)
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(tmp)
+        # Safe extract (reject zip-slip ../ members)
+        from launcher.online.safe_zip import UnsafeZipError, safe_extract_zip
+
+        try:
+            safe_extract_zip(zip_path, tmp)
+        except UnsafeZipError as e:
+            raise DownloadError(f"音色包路径不安全：{e}") from e
         # Find content root (optional single folder)
         content = _voice_content_root(tmp)
         pth = _find_first(content, "*.pth")

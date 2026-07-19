@@ -77,7 +77,7 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 |------|------|
 | `launcher/main_app.py` | 日常 UI、启停变声、设置、状态徽章 |
 | `launcher/theme.py` / `launcher/ui/` | 壳层 token 与可复用控件（封面卡等） |
-| `launcher/online/` + `ui/store_page.py` | 在线更新 GUI / 音色库（SharePoint·GitHub 直链）；完整包外链 QQ/SharePoint |
+| `launcher/online/` + `ui/store_page.py` | 在线更新 GUI / 音色库（SharePoint·GitHub 直链）；完整包外链 QQ/SharePoint；safe_zip；GUI 应用须 sha256；启动静默检查更新 |
 | `launcher/bootstrap.py` | 首次：快捷方式、VBCABLE、环境 |
 | `launcher/realtime_client.py` | 启停 worker、单实例、清孤儿；**`shutdown_workers_for_exit` 快速退出** |
 | `launcher/realtime_protocol.py` | 文件 IPC |

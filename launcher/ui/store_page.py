@@ -209,7 +209,7 @@ class StorePage:
         self.voices_host.pack(fill="x")
         self.lbl_voices_empty = tk.Label(
             self.voices_host,
-            text="暂无可用音色条目。请配置清单中的 voices[].pth_url。",
+            text="暂无可用音色条目。请配置 voices[].pack_url 或 pth_url。",
             font=sans_font(10),
             bg=TM_SURFACE,
             fg=TM_META,
@@ -405,7 +405,7 @@ class StorePage:
 
         for w in self.voices_host.winfo_children():
             w.destroy()
-        voices = [v for v in cat.voices if v.pth_url]
+        voices = [v for v in cat.voices if v.has_download()]
         if not voices:
             tk.Label(
                 self.voices_host,
@@ -535,8 +535,8 @@ class StorePage:
                     self.catalog.gui,
                     progress=lambda phase, d, t: self.root.after(
                         0,
-                        lambda: self.lbl_progress.configure(
-                            text=_fmt_prog(phase, d, t), fg=TM_ACCENT
+                        lambda p=phase, dd=d, tt=t: self.lbl_progress.configure(
+                            text=_fmt_prog(p, dd, tt), fg=TM_ACCENT
                         ),
                     ),
                 )
@@ -570,8 +570,11 @@ class StorePage:
     def download_voice(self, entry: VoiceEntry) -> None:
         if self._busy:
             return
-        if not entry.pth_url:
-            messagebox.showinfo("音色", "该条目没有 pth 直链。")
+        if not entry.has_download():
+            messagebox.showinfo(
+                "音色",
+                "该条目没有下载地址（需要 pack_url 音色包或 pth_url）。",
+            )
             return
         self._busy = True
         self.lbl_progress.configure(text=f"正在下载「{entry.name}」…", fg=TM_ACCENT)
@@ -582,8 +585,8 @@ class StorePage:
                     entry,
                     progress=lambda phase, d, t: self.root.after(
                         0,
-                        lambda: self.lbl_progress.configure(
-                            text=f"{entry.name} · {_fmt_prog(phase, d, t)}",
+                        lambda p=phase, dd=d, tt=t, n=entry.name: self.lbl_progress.configure(
+                            text=f"{n} · {_fmt_prog(p, dd, tt)}",
                             fg=TM_ACCENT,
                         ),
                     ),

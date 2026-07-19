@@ -86,8 +86,18 @@ def main() -> int:
         for p in paths:
             count += _add_path(zf, ROOT, Path(p))
 
+    # sha256 for catalog (required for in-app apply)
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(out, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    digest = h.hexdigest()
     print(f"Wrote {out} ({count} files + {TM_PACKAGE_JSON})")
     print(f"package_type={PKG_GUI_PATCH} version={args.version}")
+    print(f"sha256={digest}")
+    print("Put this sha256 into online_catalog app.gui.sha256 before publishing.")
     return 0
 
 

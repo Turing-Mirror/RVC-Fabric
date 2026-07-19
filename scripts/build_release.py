@@ -488,10 +488,12 @@ def default_runtime(variant: str = "nvidia") -> Path | None:
     pack = find_pack_for_variant(variant)
     if pack and (pack / "Runtime" / "python.exe").is_file():
         return pack / "Runtime"
+    # Do NOT fall back to REPO/Runtime: dev trees often junction AMD/50 Runtime there.
+    # Only accept the canonical prefer_dir pack or REF for nvidia.
     if variant == "nvidia":
-        for p in (REF / "Runtime", REPO / "Runtime"):
-            if (p / "python.exe").is_file():
-                return p
+        ref_rt = REF / "Runtime"
+        if (ref_rt / "python.exe").is_file():
+            return ref_rt
     return None
 
 

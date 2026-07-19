@@ -112,6 +112,7 @@ class BootstrapApp:
         self.root.configure(bg=TM_BG)
         self.root.resizable(False, False)
         self._page = "setup"  # setup | system
+        self._deploy_busy = False
         try:
             self.root.attributes("-topmost", True)
             self.root.after(350, lambda: self.root.attributes("-topmost", False))
@@ -423,48 +424,66 @@ class BootstrapApp:
             self._set_status(f"打开声音面板失败：{e}", ok=False)
 
     def on_deploy(self) -> None:
+        if self._deploy_busy:
+            self._set_status("正在处理，请稍候…", ok=False)
+            return
+        self._deploy_busy = True
         self._set_status("正在检测…")
 
         def work():
-            items = check_environment()
-            report = format_check_report(items)
-            core_miss = missing_items(items, kinds={KIND_CORE})
-            need_core_files = any(
-                i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
-            )
-            train_file_miss = [
-                i
-                for i in missing_items(items, kinds={KIND_TRAINING})
-                if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
-            ]
+            try:
+                items = check_environment()
+                report = format_check_report(items)
+                core_miss = missing_items(items, kinds={KIND_CORE})
+                need_core_files = any(
+                    i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
+                )
+                train_file_miss = [
+                    i
+                    for i in missing_items(items, kinds={KIND_TRAINING})
+                    if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
+                ]
+            except Exception as e:
+                def fail():
+                    self._deploy_busy = False
+                    messagebox.showerror("检测失败", str(e))
+                    self._set_status(f"检测失败：{e}", ok=False)
+
+                self.root.after(0, fail)
+                return
 
             def after():
                 self._refresh_hint()
+                try:
+                    if need_core_files:
+                        if messagebox.askyesno(
+                            "环境检测",
+                            f"{report}\n\n缺少变声必需文件，是否下载？",
+                        ):
+                            self._set_status("正在下载…")
+                            self._run_download("core")
+                            return
+                        self._deploy_busy = False
+                        return
 
-                # 缺日常模型 → 一条确认即可
-                if need_core_files:
-                    if messagebox.askyesno(
-                        "环境检测",
-                        f"{report}\n\n缺少变声必需文件，是否下载？",
-                    ):
-                        self._set_status("正在下载…")
-                        self._run_download("core")
-                    return
-
-                # 日常已齐：一条结果；若可选资源缺，同一框里问要不要下
-                if train_file_miss:
-                    if messagebox.askyesno(
-                        "环境检测",
-                        f"{report}\n\n是否下载训练/分离资源？（可选，体积较大）",
-                    ):
-                        self._set_status("正在下载…")
-                        self._run_download("all_advanced")
-                    else:
+                    if train_file_miss:
+                        if messagebox.askyesno(
+                            "环境检测",
+                            f"{report}\n\n是否下载训练/分离资源？（可选，体积较大）",
+                        ):
+                            self._set_status("正在下载…")
+                            self._run_download("all_advanced")
+                            return
+                        self._deploy_busy = False
                         self._set_status("环境正常，可打开变声器。")
-                    return
+                        return
 
-                messagebox.showinfo("环境检测", report)
-                self._set_status("环境正常，可打开变声器。")
+                    messagebox.showinfo("环境检测", report)
+                    self._set_status("环境正常，可打开变声器。")
+                finally:
+                    # If we did not start a download, release busy
+                    if not getattr(self, "_download_running", False):
+                        self._deploy_busy = False
 
             self.root.after(0, after)
 
@@ -472,18 +491,25 @@ class BootstrapApp:
 
     def _run_download(self, scope: str) -> None:
         """scope: core | all_advanced (training+uvr)."""
+        self._download_running = True
+        self._deploy_busy = True
 
         def work():
-            if scope == "all_advanced":
-                ok1, msg1 = download_pretrained(scope="training")
-                ok2, msg2 = download_pretrained(scope="uvr")
-                ok = ok1 and ok2
-                msg = "下载完成。" if ok else f"下载未全部成功。\n{msg1}\n{msg2}"
-            else:
-                ok, raw = download_pretrained(scope=scope)
-                msg = "下载完成。" if ok else raw
+            try:
+                if scope == "all_advanced":
+                    ok1, msg1 = download_pretrained(scope="training")
+                    ok2, msg2 = download_pretrained(scope="uvr")
+                    ok = ok1 and ok2
+                    msg = "下载完成。" if ok else f"下载未全部成功。\n{msg1}\n{msg2}"
+                else:
+                    ok, raw = download_pretrained(scope=scope)
+                    msg = "下载完成。" if ok else raw
+            except Exception as e:
+                ok, msg = False, str(e)
 
             def done():
+                self._download_running = False
+                self._deploy_busy = False
                 self._set_status(msg, ok=ok)
                 messagebox.showinfo("完成" if ok else "提示", msg)
                 self._refresh_hint()

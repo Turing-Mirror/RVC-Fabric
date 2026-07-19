@@ -1072,15 +1072,15 @@ class MainApp:
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-        # Only bind wheel while pointer is over settings canvas
-        canvas.bind(
-            "<Enter>",
-            lambda _e: canvas.bind_all("<MouseWheel>", _on_mousewheel),
-        )
-        canvas.bind(
-            "<Leave>",
-            lambda _e: canvas.unbind_all("<MouseWheel>"),
-        )
+        # Bind wheel on canvas only (not bind_all — avoids stripping app-wide handlers)
+        def _bind_wheel_recursive(widget) -> None:
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            for ch in widget.winfo_children():
+                _bind_wheel_recursive(ch)
+
+        canvas.bind("<MouseWheel>", _on_mousewheel)
+        wrap.bind("<MouseWheel>", _on_mousewheel)
+        wrap.bind("<Map>", lambda _e: _bind_wheel_recursive(wrap), add="+")
 
         # --- vars ---
         self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
@@ -1613,7 +1613,11 @@ class MainApp:
             fg=TM_META,
         )
         self.lbl_settings_hint.pack(side="left")
-        # Initial width sync after layout
+        # Wheel + width after children exist
+        try:
+            _bind_wheel_recursive(wrap)
+        except Exception:
+            pass
         fr.after(80, self._reflow_settings_page)
         return fr
 
@@ -1802,6 +1806,7 @@ class MainApp:
     def _apply_gpu_info(self, info: dict) -> None:
         self._gpu_info = info or {}
         try:
+            # In-place write to os.environ (apply_backend_env mutates mapping)
             apply_backend_env(os.environ, info)
         except Exception:
             pass
@@ -1841,25 +1846,55 @@ class MainApp:
             except Exception:
                 pass
 
+    def _force_restart_worker_for_backend(self) -> None:
+        """Kill live worker so next VC start loads new TM_USE_DML / torch device."""
+        import launcher.realtime_client as rt_client
+
+        was_running = bool(self.vc_running or self._vc_starting)
+        self.vc_running = False
+        self._vc_starting = False
+        try:
+            rt_client.stop_vc_remote(force=True)
+        except Exception:
+            pass
+        try:
+            rt_client.quit_worker(force=True)
+        except Exception:
+            pass
+        try:
+            rt_client.kill_orphan_runtime_workers(include_worker=True)
+        except Exception:
+            pass
+        try:
+            self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+            self._set_status_visual(
+                "idle",
+                "引擎待命",
+                "加速后端已变更，变声引擎已重置" if was_running else "加速后端已更新",
+            )
+            self._sync_bottom()
+        except Exception:
+            pass
+
     def _on_accel_changed(self) -> None:
         self.cfg["accel_backend"] = normalize_accel(str(self.var_accel.get() or "auto"))
         save_config(self.cfg)
-        # Re-detect with new preference; worker must restart to pick env
+        # Re-detect; always restart worker so CUDA/DML/CPU env reloads
         def work():
             try:
                 info = detect_full(ROOT, self.cfg["accel_backend"])
-                self.root.after(0, lambda: self._apply_gpu_info(info))
-                tip = (
-                    f"已设为：{info.get('label')}（{info.get('backend')}）\n"
-                    "请停止变声后重新「开启变声」使新后端生效。\n"
-                    "若仍异常，完全退出软件再开。\n\n"
-                    "说明：A/I 卡请用 AMD 发行包（DirectML Runtime）；"
-                    "50 系请用 50 系包。不要混用 Runtime。"
-                )
-                self.root.after(
-                    0,
-                    lambda: messagebox.showinfo("加速后端", tip),
-                )
+
+                def done():
+                    self._apply_gpu_info(info)
+                    self._force_restart_worker_for_backend()
+                    tip = (
+                        f"已设为：{info.get('label')}（{info.get('backend')}）\n"
+                        "变声引擎已按新后端重置；请重新「开启变声」。\n\n"
+                        "A/I 卡请用 AMD 发行包；50 系请用 50 系包，勿混用 Runtime。"
+                    )
+                    messagebox.showinfo("加速后端", tip)
+
+                self.root.after(0, done)
             except Exception as e:
                 self.root.after(0, lambda: messagebox.showerror("检测失败", str(e)))
 

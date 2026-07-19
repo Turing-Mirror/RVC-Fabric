@@ -1242,19 +1242,29 @@ class MainApp:
         self.lbl_online.configure(text="正在连接变声引擎…", fg=TM_OK)
 
     def reload_devices(self) -> None:
+        # list_devices stops the audio stream on the worker — reflect that in UI
+        if self.vc_running or self._vc_starting:
+            self.vc_running = False
+            self._vc_starting = False
+            try:
+                self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+            except Exception:
+                pass
         self.lbl_online.configure(text="重载设备列表…", fg=TM_OK)
 
         def work():
             try:
-                rt_client.start_worker_process()
+                if not rt_client.is_worker_alive():
+                    rt_client.start_worker_process()
                 rt_client.wait_worker_ready(timeout_s=60)
                 host = ""
                 try:
                     host = self.var_hostapi.get()
                 except Exception:
                     host = self.cfg.get("sg_hostapi") or ""
+                # Save hostapi into config file path worker reads for list
                 rt_client.send_command("list_devices", sg_hostapi=host)
-                time.sleep(0.4)
+                time.sleep(0.5)
                 st = rt_client.poll_status()
                 self.root.after(0, lambda: self._apply_device_status(st, toast=True))
             except Exception as e:
@@ -1353,6 +1363,7 @@ class MainApp:
         soft("打开首次设置启动器", self.open_bootstrap)
         soft("打开 User_Data", lambda: open_path(USER_DATA))
         soft("打开安装目录", lambda: open_path(ROOT))
+        soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("使用说明", self.open_help)
         tk.Label(
             fr,
@@ -1369,6 +1380,24 @@ class MainApp:
 
         pyw = find_python(prefer_windowed=True)
         run_no_console([pyw, str(ROOT / "launcher" / "bootstrap.py")])
+
+    def _force_kill_engine(self) -> None:
+        """Emergency: kill all orphan workers and release sound devices."""
+        if not messagebox.askyesno(
+            "强制结束",
+            "将强制结束所有变声后台进程并释放声卡。\n确定？",
+        ):
+            return
+        try:
+            n = rt_client.kill_all_project_workers()
+            self.vc_running = False
+            self._vc_starting = False
+            self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+            self.lbl_online.configure(text="引擎已强制结束", fg=TM_META)
+            self.lbl_latency.configure(text=APP_PRODUCT_TAGLINE)
+            messagebox.showinfo("完成", f"已清理变声相关进程（约 {n} 个）。")
+        except Exception as e:
+            messagebox.showerror("失败", str(e))
 
     def open_help(self) -> None:
         """User-facing help in a popup window (not developer markdown files)."""
@@ -1679,6 +1708,7 @@ class MainApp:
         self.save_settings_silent()
         self._sync_model_to_realtime_gui(m)
         self._vc_starting = True
+        self.vc_running = False
         self.btn_start.configure(text="启动中…", bg=TM_OK)
         self.lbl_online.configure(
             text=f"启动中：{m['name']}（首次约 20–40 秒，无第二窗口）",
@@ -1688,16 +1718,22 @@ class MainApp:
         def work():
             err = ""
             try:
-                rt_client.start_worker_process()
+                # Single worker only; stop any previous stream before start
+                if not rt_client.is_worker_alive():
+                    rt_client.start_worker_process()
                 rt_client.wait_worker_ready(timeout_s=100)
+                try:
+                    rt_client.stop_vc_remote(force=False, timeout_s=5.0)
+                except Exception:
+                    pass
+                time.sleep(0.3)
                 rt_client.start_vc_remote()
-                # Wait until running or error
                 deadline = time.time() + 180
                 while time.time() < deadline:
                     st = rt_client.poll_status()
                     state = str(st.get("state") or "")
                     if state == "running":
-                        self.root.after(0, lambda: self._on_vc_started(m, st))
+                        self.root.after(0, lambda s=st: self._on_vc_started(m, s))
                         return
                     if state == "error":
                         err = str(st.get("error") or "start failed")
@@ -1736,19 +1772,17 @@ class MainApp:
 
     def _stop_vc(self) -> None:
         self.btn_start.configure(text="停止中…", bg=TM_META)
-        self.lbl_online.configure(text="正在停止…", fg=TM_META)
+        self.lbl_online.configure(text="正在停止并释放声卡…", fg=TM_META)
 
         def work():
             try:
-                rt_client.stop_vc_remote()
-                deadline = time.time() + 20
-                while time.time() < deadline:
-                    st = rt_client.poll_status()
-                    if str(st.get("state") or "") in ("idle", "error"):
-                        break
-                    time.sleep(0.2)
+                # Soft stop then force-kill process tree if stream still running
+                rt_client.stop_vc_remote(force=True, timeout_s=12.0)
             except Exception:
-                pass
+                try:
+                    rt_client.kill_all_project_workers()
+                except Exception:
+                    pass
             self.root.after(0, self._on_vc_stopped)
 
         threading.Thread(target=work, daemon=True).start()
@@ -1802,11 +1836,14 @@ class MainApp:
         except Exception:
             pass
         try:
-            if self.vc_running or self._vc_starting:
-                rt_client.stop_vc_remote()
-            rt_client.quit_worker()
+            # Must release audio devices; force-kill leftover workers
+            rt_client.stop_vc_remote(force=True, timeout_s=8.0)
+            rt_client.quit_worker(force=True)
         except Exception:
-            pass
+            try:
+                rt_client.kill_all_project_workers()
+            except Exception:
+                pass
         self.root.destroy()
 
 

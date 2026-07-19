@@ -1037,16 +1037,64 @@ if __name__ == "__main__":
                     raise
 
         def stop_stream(self):
+            """Always tear down audio I/O — even if flag_vc was cleared elsewhere.
+
+            Previous bug: update_devices/list_devices set flag_vc=False first, then
+            stop_stream became a no-op and AudioIoProcess kept capturing/playing
+            (looping audio / stuck mic). Multiple workers made it worse.
+            """
             global flag_vc
-            if flag_vc:
-                flag_vc = False
-                if self.audio_proc is not None:
-                    print("Exiting")
-                    self.stop_evt.set()
-                    self.in_mem.close()
-                    self.out_mem.close()
-                    self.audio_proc.join()
-                    self.audio_proc = None
+            flag_vc = False
+            proc = getattr(self, "audio_proc", None)
+            if proc is None:
+                return
+            printt("stop_stream: shutting down AudioIoProcess")
+            try:
+                if getattr(self, "stop_evt", None) is not None:
+                    try:
+                        self.stop_evt.set()
+                    except Exception:
+                        pass
+                # Unblock audio_infer if waiting on input event
+                try:
+                    if getattr(self, "in_evt", None) is not None:
+                        self.in_evt.set()
+                except Exception:
+                    pass
+                try:
+                    if getattr(self, "in_mem", None) is not None:
+                        self.in_mem.close()
+                except Exception:
+                    pass
+                try:
+                    if getattr(self, "out_mem", None) is not None:
+                        self.out_mem.close()
+                except Exception:
+                    pass
+                try:
+                    if proc.is_alive():
+                        proc.join(timeout=3.0)
+                except Exception:
+                    pass
+                try:
+                    if proc.is_alive():
+                        proc.terminate()
+                        proc.join(timeout=2.0)
+                except Exception:
+                    pass
+                try:
+                    if proc.is_alive():
+                        proc.kill()
+                except Exception:
+                    pass
+            finally:
+                self.audio_proc = None
+                self.in_mem = None
+                self.out_mem = None
+                self.in_buf = None
+                self.out_buf = None
+                self.stop_evt = None
+                self.in_evt = None
 
         def audio_infer(
             self, buf_size:int # 2 * self.block_frame
@@ -1056,7 +1104,12 @@ if __name__ == "__main__":
             """
             global flag_vc
 
-            self.in_evt.wait()
+            # Timeout so stop_stream can unblock this thread
+            got = self.in_evt.wait(timeout=0.5)
+            if not flag_vc:
+                return
+            if not got:
+                return
             rptr = self.in_ptr.value
             self.in_evt.clear()
             
@@ -1258,9 +1311,12 @@ if __name__ == "__main__":
             printt("Infer time: %.2f", total_time)
 
         def update_devices(self, hostapi_name=None):
-            """获取设备列表"""
-            global flag_vc
-            flag_vc = False
+            """获取设备列表 — must fully stop stream before re-init sounddevice."""
+            # Properly release AudioIoProcess (do NOT only clear flag_vc)
+            try:
+                self.stop_stream()
+            except Exception:
+                traceback.print_exc()
             sd._terminate()
             sd._initialize()
             devices = sd.query_devices()
@@ -1461,19 +1517,16 @@ if __name__ == "__main__":
 
         def _worker_start(self):
             global flag_vc
-            if flag_vc:
-                self._worker_write_status(
-                    state="running",
-                    message="already running",
-                    delay_ms=int(np.round(self.delay_time * 1000)),
-                    infer_ms=self.last_infer_ms,
-                    **self._worker_device_payload(),
-                )
-                return
+            # Always stop previous stream before start (device change / restart)
+            try:
+                self.stop_stream()
+            except Exception:
+                traceback.print_exc()
             self._worker_write_status(
                 state="starting",
                 error="",
                 message="loading model…",
+                pid=os.getpid(),
                 **self._worker_device_payload(),
             )
             try:
@@ -1565,6 +1618,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"stop: {type(e).__name__}: {e}",
+                    pid=os.getpid(),
                 )
                 return
             self._worker_write_status(
@@ -1573,6 +1627,7 @@ if __name__ == "__main__":
                 message="stopped",
                 delay_ms=0,
                 infer_ms=0,
+                pid=os.getpid(),
                 **self._worker_device_payload(),
             )
 
@@ -1582,10 +1637,13 @@ if __name__ == "__main__":
                 default_status,
                 read_command,
                 write_status,
+                write_worker_pid_file,
+                clear_worker_pid_file,
             )
 
-            printt("realtime worker mode (no GUI window)")
-            # Initial status + devices
+            printt("realtime worker mode (no GUI window) pid=%s", os.getpid())
+            write_worker_pid_file(os.getpid())
+            # Initial status + devices (load may call update_devices → stop is fine)
             try:
                 data = self.load()
                 self.gui_config.sg_hostapi = data.get("sg_hostapi") or (
@@ -1603,68 +1661,87 @@ if __name__ == "__main__":
             base["message"] = "worker ready"
             write_status(**base)
 
-            last_seq = 0
+            # Ignore stale commands left from previous sessions
+            try:
+                prev = read_command()
+                last_seq = int(prev.get("seq") or 0)
+            except Exception:
+                last_seq = 0
             running = True
-            while running:
-                try:
-                    cmd = read_command()
-                    seq = int(cmd.get("seq") or 0)
-                    if seq > last_seq and cmd.get("cmd"):
-                        last_seq = seq
-                        action = str(cmd.get("cmd") or "").strip().lower()
-                        printt("worker cmd seq=%s action=%s", seq, action)
-                        write_status(last_cmd_seq=seq, pid=os.getpid())
-                        if action == "quit":
-                            self._worker_stop()
-                            write_status(
-                                state="idle",
-                                message="quit",
-                                pid=os.getpid(),
-                                last_cmd_seq=seq,
-                            )
-                            running = False
-                            break
-                        elif action == "list_devices":
-                            host = cmd.get("sg_hostapi") or cmd.get("hostapi")
-                            self._worker_list_devices(host)
-                        elif action == "start":
-                            self._worker_start()
-                        elif action == "stop":
-                            self._worker_stop()
-                        elif action == "set":
-                            # payload may be nested under "params" or flat
-                            params = cmd.get("params") if isinstance(cmd.get("params"), dict) else cmd
-                            self._worker_apply_hot(params)
+            try:
+                while running:
+                    try:
+                        cmd = read_command()
+                        seq = int(cmd.get("seq") or 0)
+                        if seq > last_seq and cmd.get("cmd"):
+                            last_seq = seq
+                            action = str(cmd.get("cmd") or "").strip().lower()
+                            printt("worker cmd seq=%s action=%s", seq, action)
+                            write_status(last_cmd_seq=seq, pid=os.getpid())
+                            if action == "quit":
+                                self._worker_stop()
+                                write_status(
+                                    state="idle",
+                                    message="quit",
+                                    pid=0,
+                                    last_cmd_seq=seq,
+                                )
+                                running = False
+                                break
+                            elif action == "list_devices":
+                                # Reloading hostapi stops stream — report idle after
+                                host = cmd.get("sg_hostapi") or cmd.get("hostapi")
+                                self._worker_list_devices(host)
+                            elif action == "start":
+                                self._worker_start()
+                            elif action == "stop":
+                                self._worker_stop()
+                            elif action == "set":
+                                params = (
+                                    cmd.get("params")
+                                    if isinstance(cmd.get("params"), dict)
+                                    else cmd
+                                )
+                                self._worker_apply_hot(params)
+                                self._worker_write_status(
+                                    state="running" if flag_vc else "idle",
+                                    message="params applied",
+                                    delay_ms=int(np.round(self.delay_time * 1000)),
+                                    infer_ms=self.last_infer_ms,
+                                    pid=os.getpid(),
+                                    **self._worker_device_payload(),
+                                )
+                            else:
+                                self._worker_write_status(
+                                    message=f"unknown cmd: {action}",
+                                    last_cmd_seq=seq,
+                                    pid=os.getpid(),
+                                )
+                        # heartbeat metrics
+                        if flag_vc:
                             self._worker_write_status(
-                                state="running" if flag_vc else "idle",
-                                message="params applied",
+                                state="running",
                                 delay_ms=int(np.round(self.delay_time * 1000)),
                                 infer_ms=self.last_infer_ms,
-                                **self._worker_device_payload(),
+                                samplerate=int(
+                                    getattr(self.gui_config, "samplerate", 0) or 0
+                                ),
+                                pid=os.getpid(),
                             )
-                        else:
-                            self._worker_write_status(
-                                message=f"unknown cmd: {action}",
-                                last_cmd_seq=seq,
-                            )
-                    # heartbeat metrics
-                    if flag_vc:
+                    except Exception as e:
+                        traceback.print_exc()
                         self._worker_write_status(
-                            state="running",
-                            delay_ms=int(np.round(self.delay_time * 1000)),
-                            infer_ms=self.last_infer_ms,
-                            samplerate=int(
-                                getattr(self.gui_config, "samplerate", 0) or 0
-                            ),
+                            state="error",
+                            error=f"loop: {type(e).__name__}: {e}",
                             pid=os.getpid(),
                         )
-                except Exception as e:
-                    traceback.print_exc()
-                    self._worker_write_status(
-                        state="error",
-                        error=f"loop: {type(e).__name__}: {e}",
-                    )
-                time.sleep(0.08)
-            printt("worker exit")
+                    time.sleep(0.08)
+            finally:
+                try:
+                    self.stop_stream()
+                except Exception:
+                    pass
+                clear_worker_pid_file()
+                printt("worker exit pid=%s", os.getpid())
 
     gui = GUI()

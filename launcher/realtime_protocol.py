@@ -19,6 +19,7 @@ CONTROL_DIR = USER_DATA / "runtime_control"
 COMMAND_PATH = CONTROL_DIR / "command.json"
 STATUS_PATH = CONTROL_DIR / "status.json"
 SEQ_PATH = CONTROL_DIR / "command.seq"
+PID_PATH = CONTROL_DIR / "worker.pid"
 
 # Hot-updatable keys (match gui_v1 event_handler)
 HOT_KEYS = frozenset(
@@ -144,3 +145,25 @@ def clear_command_queue() -> None:
             COMMAND_PATH.unlink()
         except Exception:
             pass
+
+
+def write_worker_pid_file(pid: int) -> None:
+    ensure_control_dir()
+    PID_PATH.write_text(str(int(pid)), encoding="utf-8")
+
+
+def clear_worker_pid_file() -> None:
+    try:
+        if PID_PATH.is_file():
+            PID_PATH.unlink()
+    except Exception:
+        pass
+
+
+def read_worker_pid_file() -> int:
+    try:
+        if PID_PATH.is_file():
+            return int(PID_PATH.read_text(encoding="utf-8").strip() or "0")
+    except Exception:
+        pass
+    return 0

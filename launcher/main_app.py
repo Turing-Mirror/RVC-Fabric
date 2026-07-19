@@ -3056,6 +3056,8 @@ class MainApp:
             pass
 
     def _poll_global_hotkeys(self) -> None:
+        if getattr(self, "_closing", False):
+            return
         try:
             aid = self._global_hk.poll_once()
             if aid:
@@ -3063,7 +3065,8 @@ class MainApp:
         except Exception:
             pass
         try:
-            self.root.after(80, self._poll_global_hotkeys)
+            if not getattr(self, "_closing", False):
+                self.root.after(80, self._poll_global_hotkeys)
         except Exception:
             pass
 
@@ -3862,6 +3865,8 @@ class MainApp:
         self._set_status_visual("idle", "引擎待命", APP_PRODUCT_TAGLINE)
 
     def _tick_status(self) -> None:
+        if getattr(self, "_closing", False):
+            return
         try:
             st = rt_client.poll_status()
             state = str(st.get("state") or "")
@@ -3891,17 +3896,48 @@ class MainApp:
                     self._on_vc_stopped()
         except Exception:
             pass
-        self.root.after(1000, self._tick_status)
+        if not getattr(self, "_closing", False):
+            self.root.after(1000, self._tick_status)
 
     def run(self) -> None:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.mainloop()
 
     def _on_close(self) -> None:
+        """Close UI quickly; use fast worker teardown (no multi-second polls)."""
+        if getattr(self, "_closing", False):
+            return
+        self._closing = True
+
+        # Stop timers / hotkeys first so nothing keeps the event loop busy
         try:
             self._global_hk.unregister_all()
         except Exception:
             pass
+        for attr in (
+            "_hot_job",
+            "_voice_save_job",
+            "_dock_hint_job",
+            "_toast_job",
+            "_resize_job",
+            "_model_restart_job",
+            "_carousel_job",
+        ):
+            job = getattr(self, attr, None)
+            if job is not None:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+        # Hide immediately so the user sees the window go away
+        try:
+            self.root.withdraw()
+        except Exception:
+            pass
+
+        # Fast local writes (usually <50ms)
         try:
             self._persist_voice_params_to_model(immediate=True)
         except Exception:
@@ -3911,16 +3947,23 @@ class MainApp:
             save_config(self.cfg)
         except Exception:
             pass
+
+        # Worker stop/quit used to block 8s+8s on the UI thread — that felt like a hang.
+        # Fast path: short soft wait + kill known PIDs + brief orphan scan.
         try:
-            # Must release audio devices; force-kill leftover workers
-            rt_client.stop_vc_remote(force=True, timeout_s=8.0)
-            rt_client.quit_worker(force=True)
+            rt_client.shutdown_workers_for_exit(soft_wait_s=0.35, scan_timeout_s=1.2)
         except Exception:
             try:
-                rt_client.kill_all_project_workers()
+                rt_client.kill_orphan_runtime_workers(
+                    include_worker=True, scan_timeout_s=1.0
+                )
             except Exception:
                 pass
-        self.root.destroy()
+
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
 
 
 def main() -> None:

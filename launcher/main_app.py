@@ -1222,6 +1222,14 @@ class MainApp:
         scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01)
         scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01)
         scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1)
+        tk.Label(
+            perf,
+            text="降噪会明显增加显存/算力；小显卡建议只开一项或先关闭再测。",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        ).pack(fill="x", pady=(2, 0))
         nrf = tk.Frame(perf, bg=TM_SURFACE)
         nrf.pack(fill="x", pady=4)
         tk.Checkbutton(
@@ -1976,29 +1984,25 @@ class MainApp:
         def work():
             err = ""
             try:
-                # Single worker only; stop any previous stream before start
+                # Ensure single healthy worker; wipe orphans from previous crash
                 if not rt_client.is_worker_alive():
-                    rt_client.start_worker_process()
-                rt_client.wait_worker_ready(timeout_s=100)
+                    rt_client.start_worker_process(clean_orphans=True)
+                st0 = rt_client.wait_worker_ready(timeout_s=100)
+                if str(st0.get("state")) == "error" and st0.get("error"):
+                    err = str(st0.get("error"))
+                    self.root.after(0, lambda: self._on_vc_start_failed(err))
+                    return
                 try:
-                    rt_client.stop_vc_remote(force=False, timeout_s=5.0)
+                    rt_client.stop_vc_remote(force=False, timeout_s=4.0)
                 except Exception:
                     pass
-                time.sleep(0.3)
+                time.sleep(0.25)
                 rt_client.start_vc_remote()
-                deadline = time.time() + 180
-                while time.time() < deadline:
-                    st = rt_client.poll_status()
-                    state = str(st.get("state") or "")
-                    if state == "running":
-                        self.root.after(0, lambda s=st: self._on_vc_started(m, s))
-                        return
-                    if state == "error":
-                        err = str(st.get("error") or "start failed")
-                        break
-                    time.sleep(0.35)
-                if not err:
-                    err = "启动超时，请查看 User_Data/logs"
+                st = rt_client.wait_vc_running(timeout_s=180)
+                if str(st.get("state")) == "running":
+                    self.root.after(0, lambda s=st: self._on_vc_started(m, s))
+                    return
+                err = str(st.get("error") or st.get("message") or "启动失败")
             except Exception as e:
                 err = str(e)
             self.root.after(0, lambda: self._on_vc_start_failed(err))

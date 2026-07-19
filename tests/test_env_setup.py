@@ -47,12 +47,15 @@ class CategoryHelpersTests(unittest.TestCase):
         train = missing_items(items, kinds={KIND_TRAINING})
         self.assertEqual(len(train), 2)
 
-    def test_report_mentions_optional_training(self):
+    def test_report_is_short_and_clear(self):
         text = format_check_report(self._sample())
         self.assertIn("日常变声", text)
-        self.assertIn("训练 / WebUI", text)
         self.assertIn("RMVPE", text)
-        self.assertIn("不影响开黑", text)
+        self.assertIn("缺少", text)
+        self.assertIn("训练/分离", text)
+        # 简洁：不应堆路径或长说明
+        self.assertNotIn("assets/", text)
+        self.assertLess(len(text), 200)
 
 
 class DownloadScopeArgTests(unittest.TestCase):

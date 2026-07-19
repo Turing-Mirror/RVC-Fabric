@@ -375,16 +375,12 @@ class BootstrapApp:
 
         def _done(gpu_text: str):
             items = check_environment()
-            # 状态只看日常变声必需项；训练/UVR/Gradio 缺失不算「环境异常」
             core_miss = missing_items(items, kinds={KIND_CORE})
-            train_miss = missing_items(items, kinds={KIND_TRAINING})
             if not core_miss:
-                base = "日常变声环境正常。可发送快捷方式、安装声卡后打开变声器。"
-                if train_miss:
-                    base += f"（训练/WebUI 可选资源未齐 {len(train_miss)} 项，不影响开黑）"
+                base = "环境正常，可打开变声器。"
                 ok = True
             else:
-                base = "日常变声还缺：" + "；".join(i.name for i in core_miss[:4])
+                base = "缺少：" + "、".join(i.name for i in core_miss[:4])
                 ok = False
             self._set_status(base + "\n" + gpu_text, ok=ok)
 
@@ -428,13 +424,15 @@ class BootstrapApp:
             self._set_status(f"打开声音面板失败：{e}", ok=False)
 
     def on_deploy(self) -> None:
-        self._set_status("正在检测…（若出现黑框属正常）")
+        self._set_status("正在检测…")
 
         def work():
             items = check_environment()
             report = format_check_report(items)
             core_miss = missing_items(items, kinds={KIND_CORE})
-            # 训练底模 / UVR / Gradio 等 — 仅提示，不强制
+            need_core_files = any(
+                i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
+            )
             train_file_miss = [
                 i
                 for i in missing_items(items, kinds={KIND_TRAINING})
@@ -442,80 +440,58 @@ class BootstrapApp:
             ]
 
             def after():
-                messagebox.showinfo("环境检测", report[:1200])
                 self._refresh_hint()
 
-                # 1) 日常必需缺失 → 询问是否只下 hubert/rmvpe
-                need_core_files = any(
-                    i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
-                )
+                # 缺日常模型 → 一条确认即可
                 if need_core_files:
                     if messagebox.askyesno(
-                        "下载日常必需资源",
-                        "缺少 Hubert / RMVPE（实时变声需要）。\n\n"
-                        "是否现在下载？体积约数百 MB，仅日常变声相关，不含训练底模。",
+                        "环境检测",
+                        f"{report}\n\n缺少变声必需文件，是否下载？",
                     ):
-                        self._set_status("正在下载日常必需（Hubert / RMVPE）…")
-                        self._run_download("core", then_training=bool(train_file_miss))
-                        return
+                        self._set_status("正在下载…")
+                        self._run_download("core")
+                    return
 
-                # 2) 训练/分离可选 → 单独询问，默认不下载
+                # 日常已齐：一条结果；若可选资源缺，同一框里问要不要下
                 if train_file_miss:
-                    names = "、".join(i.name for i in train_file_miss)
                     if messagebox.askyesno(
-                        "可选：训练 / 伴奏分离资源",
-                        f"检测到以下【进阶】资源未齐：\n{names}\n\n"
-                        "这些只用于 WebUI 训练音色、伴奏分离，\n"
-                        "开黑实时变声不需要。\n\n"
-                        "体积很大（数 GB 级），是否现在下载？\n"
-                        "（选「否」完全不影响日常变声）",
+                        "环境检测",
+                        f"{report}\n\n是否下载训练/分离资源？（可选，体积较大）",
                     ):
-                        self._set_status("正在下载训练/分离资源（体积大，请耐心）…")
+                        self._set_status("正在下载…")
                         self._run_download("all_advanced")
-                        return
+                    else:
+                        self._set_status("环境正常，可打开变声器。")
+                    return
 
-                if not need_core_files and not train_file_miss:
-                    if core_ready(items):
-                        self._set_status("检测完成：日常变声环境已就绪。")
+                messagebox.showinfo("环境检测", report)
+                self._set_status("环境正常，可打开变声器。")
 
             self.root.after(0, after)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _run_download(self, scope: str, *, then_training: bool = False) -> None:
-        """scope: core | training | uvr | all_advanced (training+uvr)."""
+    def _run_download(self, scope: str) -> None:
+        """scope: core | all_advanced (training+uvr)."""
 
         def work():
             if scope == "all_advanced":
                 ok1, msg1 = download_pretrained(scope="training")
                 ok2, msg2 = download_pretrained(scope="uvr")
-                ok, msg = ok1 and ok2, f"{msg1}\n{msg2}"
+                ok = ok1 and ok2
+                msg = "下载完成。" if ok else f"下载未全部成功。\n{msg1}\n{msg2}"
             else:
-                ok, msg = download_pretrained(scope=scope)
+                ok, raw = download_pretrained(scope=scope)
+                msg = "下载完成。" if ok else raw
 
             def done():
-                self._after_dl(ok, msg)
-                if then_training and ok:
-                    if messagebox.askyesno(
-                        "可选：训练 / 伴奏分离",
-                        "日常资源已处理。\n\n"
-                        "是否继续下载训练底模与伴奏分离权重？\n"
-                        "（体积大，仅 WebUI 训练/分离需要，日常变声不需要）",
-                    ):
-                        self._set_status("正在下载训练/分离资源…")
-                        self._run_download("all_advanced")
+                self._set_status(msg, ok=ok)
+                messagebox.showinfo("完成" if ok else "提示", msg)
+                self._refresh_hint()
 
             self.root.after(0, done)
 
         threading.Thread(target=work, daemon=True).start()
-
-    def _after_dl(self, ok: bool, msg: str, report: str = "") -> None:
-        self._set_status(msg, ok=ok)
-        body = msg
-        if report:
-            body = f"{msg}\n\n{report[:600]}"
-        messagebox.showinfo("部署结果", body)
-        self._refresh_hint()
 
     def on_start_app(self) -> None:
         try:

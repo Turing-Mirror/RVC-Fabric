@@ -16,7 +16,11 @@ if str(ROOT) not in sys.path:
 
 from launcher.online.catalog import OnlineCatalog, compare_versions, load_bundled_catalog
 from launcher.online.downloader import is_github_url, normalize_github_url
-from launcher.online.gui_update import apply_gui_patch_zip, check_gui_update
+from launcher.online.gui_update import (
+    apply_gui_patch_zip,
+    check_gui_update,
+    download_and_apply_gui,
+)
 from launcher.online.package_spec import (
     PKG_FULL,
     PKG_GUI_PATCH,
@@ -24,7 +28,9 @@ from launcher.online.package_spec import (
     detect_zip_package_type,
     normalize_package_type,
 )
+from launcher.online.safe_zip import UnsafeZipError, safe_extract_zip
 from launcher.online.voice_install import install_voice_pack_zip
+from launcher.online.catalog import VoiceEntry
 
 
 class VersionTests(unittest.TestCase):
@@ -177,6 +183,52 @@ class VoicePackTests(unittest.TestCase):
             self.assertTrue((models / "demo" / "config.json").is_file())
             cfg = json.loads((models / "demo" / "config.json").read_text(encoding="utf-8"))
             self.assertEqual(cfg["name"], "DemoVoice")
+
+    def test_has_download_pack_url(self):
+        v = VoiceEntry.from_dict(
+            {"id": "x", "name": "X", "pack_url": "https://example.com/a.zip"}
+        )
+        self.assertTrue(v.has_download())
+        self.assertFalse(
+            VoiceEntry.from_dict({"id": "y", "name": "Y"}).has_download()
+        )
+
+
+class SafeZipTests(unittest.TestCase):
+    def test_reject_zip_slip(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            zpath = td_path / "evil.zip"
+            with zipfile.ZipFile(zpath, "w") as zf:
+                zf.writestr("../evil.txt", "nope")
+                zf.writestr("ok.txt", "yes")
+            dest = td_path / "out"
+            dest.mkdir()
+            with self.assertRaises(UnsafeZipError):
+                safe_extract_zip(zpath, dest)
+
+    def test_safe_member_ok(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            zpath = td_path / "ok.zip"
+            with zipfile.ZipFile(zpath, "w") as zf:
+                zf.writestr("folder/a.txt", "hello")
+            dest = td_path / "out"
+            dest.mkdir()
+            written = safe_extract_zip(zpath, dest)
+            self.assertTrue((dest / "folder" / "a.txt").is_file())
+            self.assertTrue(any("a.txt" in w for w in written))
+
+
+class GuiShaPolicyTests(unittest.TestCase):
+    def test_require_sha256(self):
+        from launcher.online.catalog import GuiUpdate
+        from launcher.online.downloader import DownloadError
+
+        gui = GuiUpdate(version="9.9.9", url="https://example.com/p.zip", sha256="")
+        with self.assertRaises(DownloadError) as ctx:
+            download_and_apply_gui(gui, require_sha256=True)
+        self.assertIn("sha256", str(ctx.exception).lower())
 
 
 if __name__ == "__main__":

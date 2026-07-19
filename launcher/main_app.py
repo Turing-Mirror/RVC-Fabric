@@ -186,7 +186,9 @@ class MainApp:
         self.root.after(400, self._init_gpu_backend)
         self.root.after(600, self._bootstrap_devices_async)
         self.root.after(350, self._poll_global_hotkeys)
+        self.root.after(2500, self._silent_check_updates)
         self._gpu_info: dict = {}
+        self._update_badge_on = False
 
     def _init_shared_voice_vars(self) -> None:
         """Hot-control Tk vars shared by bottom dock and settings page."""
@@ -2006,6 +2008,34 @@ class MainApp:
 
         # Performance
         perf = card(wrap, "性能设置（改后需重新「开启变声」）")
+        preset_row = tk.Frame(perf, bg=TM_SURFACE)
+        preset_row.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            preset_row,
+            text="延迟预设",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(9),
+        ).pack(side="left")
+        for label, key in (
+            ("低延迟", "low_latency"),
+            ("均衡", "balanced"),
+            ("稳定", "stable"),
+        ):
+            GhostButton(
+                preset_row,
+                label,
+                command=lambda k=key: self._apply_perf_preset(k),
+                padx=10,
+                pady=4,
+            ).pack(side="left", padx=3)
+        help_mark(
+            preset_row,
+            "一键设置采样长度/淡入淡出/额外推理时长。"
+            "低延迟更跟嘴、对机器要求高；稳定更扛卡顿、延迟更高。改后需重新开启变声。",
+        )
         scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01, tip_key="block")
         scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01, tip_key="crossfade")
         scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01, tip_key="extra")
@@ -2629,16 +2659,105 @@ class MainApp:
         threading.Thread(target=work, daemon=True).start()
         self._set_status_visual("busy", "正在连接变声引擎…", "首次加载可能需要数十秒")
 
+    def _apply_perf_preset(self, key: str) -> None:
+        """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""
+        presets = {
+            # block_time, crossfade, extra_time
+            "low_latency": (0.12, 0.04, 1.5),
+            "balanced": (0.25, 0.05, 2.5),
+            "stable": (0.40, 0.08, 3.5),
+        }
+        vals = presets.get(key) or presets["balanced"]
+        try:
+            self.var_block.set(vals[0])
+            self.var_crossfade.set(vals[1])
+            self.var_extra.set(vals[2])
+            self.cfg["block_time"] = vals[0]
+            self.cfg["crossfade_length"] = vals[1]
+            self.cfg["extra_time"] = vals[2]
+            save_config(self.cfg)
+        except Exception:
+            pass
+        names = {"low_latency": "低延迟", "balanced": "均衡", "stable": "稳定"}
+        self._set_status_visual(
+            "idle",
+            f"性能预设：{names.get(key, key)}",
+            "请重新「开启变声」后生效",
+        )
+        try:
+            if hasattr(self, "lbl_settings_hint"):
+                self.lbl_settings_hint.configure(
+                    text=f"已应用「{names.get(key, key)}」预设 · 需重新开启变声",
+                    fg=TM_OK,
+                )
+        except Exception:
+            pass
+
+    def _silent_check_updates(self) -> None:
+        """Background catalog fetch; badge 更新 nav if newer GUI (no modal)."""
+
+        def work():
+            has = False
+            cat = None
+            try:
+                from launcher.config_store import load_config
+                from launcher.online.catalog import fetch_catalog
+                from launcher.online.gui_update import check_gui_update
+
+                urls = []
+                u = str(load_config().get("update_manifest_url") or "").strip()
+                if u:
+                    urls.append(u)
+                cat = fetch_catalog(urls)
+                st = check_gui_update(cat)
+                has = bool(st.get("available"))
+            except Exception:
+                has = False
+                cat = None
+
+            def done(has_new=has, catalog=cat):
+                self._update_badge_on = has_new
+                self._apply_update_nav_badge()
+                if has_new and catalog is not None and hasattr(self, "_store_page"):
+                    try:
+                        self._store_page.catalog = catalog
+                    except Exception:
+                        pass
+
+            self.root.after(0, done)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _apply_update_nav_badge(self) -> None:
+        btn = self.nav_btns.get("store")
+        if not btn:
+            return
+        try:
+            if self._update_badge_on:
+                btn.configure(text="更新·新")
+            else:
+                btn.configure(text="更新")
+            # re-apply active style if on store page
+            if self._current_page == "store":
+                btn.set_active(True)
+        except Exception:
+            pass
+
     def reload_devices(self) -> None:
         # list_devices stops the audio stream on the worker — reflect that in UI
-        if self.vc_running or self._vc_starting:
+        was_live = bool(self.vc_running or self._vc_starting)
+        if was_live:
             self.vc_running = False
             self._vc_starting = False
             try:
                 self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
             except Exception:
                 pass
-        self._set_status_visual("busy", "重载设备列表…", "请稍候")
+        self._set_status_visual(
+            "busy",
+            "重载设备列表…",
+            "变声已停止，请稍候" if was_live else "请稍候",
+        )
 
         def work():
             try:

@@ -105,6 +105,9 @@ def apply_gui_patch_zip(
             "请先安装中间版本或下载全量包。"
         )
 
+    from launcher.online.safe_zip import UnsafeZipError, assert_path_under_root
+
+    root = Path(root).resolve()
     written: list[str] = []
     skipped: list[str] = []
     with zipfile.ZipFile(zip_path, "r") as zf:
@@ -124,6 +127,11 @@ def apply_gui_patch_zip(
                     skipped.append(raw)
                 continue
             dest = root / rel
+            try:
+                assert_path_under_root(dest, root)
+            except UnsafeZipError:
+                skipped.append(raw)
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(info, "r") as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
@@ -214,8 +222,12 @@ def download_and_apply_gui(
     *,
     root: Optional[Path] = None,
     progress: Optional[ProgressCb] = None,
+    require_sha256: bool = True,
 ) -> dict:
-    """Download by catalog entry; route by package_type."""
+    """Download by catalog entry; route by package_type.
+
+    require_sha256: default True for supply-chain safety (electron-updater style).
+    """
     if not gui.url:
         raise DownloadError("没有 GUI 更新地址")
 
@@ -231,6 +243,13 @@ def download_and_apply_gui(
             "message": "已打开全量包下载链接。请下载后解压到新目录使用，勿在软件内覆盖 Runtime。",
         }
 
+    sha = (gui.sha256 or "").strip()
+    if require_sha256 and not sha:
+        raise DownloadError(
+            "清单未提供 gui.sha256，已拒绝应用增量包（供应链安全）。\n"
+            "请运营在 online_catalog 填写校验和，或用 scripts/pack_gui_patch.py 生成后登记。"
+        )
+
     cache = USER_DATA / "update_cache" / "gui"
     cache.mkdir(parents=True, exist_ok=True)
     dest = cache / f"gui_{gui.version or 'patch'}.zip"
@@ -243,7 +262,7 @@ def download_and_apply_gui(
         gui.url,
         dest,
         progress=_p,
-        expected_sha256=gui.sha256 or "",
+        expected_sha256=sha,
     )
 
     # Re-detect after download (catalog may be wrong)

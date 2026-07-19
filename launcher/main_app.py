@@ -1160,12 +1160,12 @@ class MainApp:
         accel_help.pack(side="left")
         HoverTip(
             accel_help,
-            "对齐官方 RVC：\n"
-            "· auto：有 NVIDIA 用 CUDA，否则试 AMD/Intel DirectML，再否则 CPU\n"
-            "· cuda：强制 NVIDIA（需本包 CUDA Runtime）\n"
-            "· dml：强制 DirectML（AMD/Intel，对应官方 --dml）\n"
-            "· cpu：仅 CPU（很慢）\n"
-            "改后端后请「停止变声」再开，必要时重启软件。",
+            "官方不是「只加一个参数」：\n"
+            "· N 卡包 = CUDA 专用 Runtime；A/I 卡包 = DirectML 专用 Runtime\n"
+            "· 正确环境里再用 cuda / dml（官方 --dml）选设备\n"
+            "· auto：本机有 CUDA 用 cuda，否则有 DirectML 用 dml，否则 CPU\n"
+            "· 请按显卡下载对应发行包，不要混用 Runtime\n"
+            "改后端后请停止变声再开；必要时重启软件。",
         )
         self.lbl_accel_status = tk.Label(
             left,

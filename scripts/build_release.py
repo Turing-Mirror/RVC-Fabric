@@ -26,6 +26,7 @@ Default Runtime/models/VBCABLE sources try the local RVCMAX reference pack if pr
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -36,6 +37,32 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO / "dist" / "TuringMirror_Voice"
 REF = REPO / "RVCMAX" / "RVCMAX_Nvidia_xiaoyuan"
+RVCMAX_ROOT = REPO / "RVCMAX"
+
+# Official-style multi-pack: each variant = full tree + its own Runtime
+VARIANTS: dict[str, dict] = {
+    "nvidia": {
+        "out_name": "TuringMirror_Voice_Nvidia",
+        "accel_default": "cuda",
+        "label": "NVIDIA CUDA",
+        "name_keys": ("nvidia", "n卡", "cuda"),
+        "prefer_dir": "RVCMAX_Nvidia_xiaoyuan",
+    },
+    "amd": {
+        "out_name": "TuringMirror_Voice_AMD",
+        "accel_default": "dml",
+        "label": "AMD/Intel DirectML",
+        "name_keys": ("amd", "dml", "a卡", "intel", "directml"),
+        "prefer_dir": "",
+    },
+    "nvidia50": {
+        "out_name": "TuringMirror_Voice_Nvidia50",
+        "accel_default": "cuda",
+        "label": "NVIDIA 50-series CUDA",
+        "name_keys": ("50", "5xxx", "rtx50", "blackwell"),
+        "prefer_dir": "",
+    },
+}
 
 # Engine files/dirs to ship (lean but runnable)
 ENGINE_DIRS = (
@@ -320,8 +347,16 @@ def copy_models(out: Path, models_src: Path | None) -> None:
                     log(f"  + repo model {child.name}")
 
 
-def write_readme(out: Path) -> None:
-    text = f"""Turing Mirror 变声器 — 发行版
+def write_readme(out: Path, *, variant: str = "nvidia", label: str = "NVIDIA CUDA") -> None:
+    accel_line = {
+        "nvidia": "本包为 NVIDIA CUDA（对齐官方 N 卡整合包）。",
+        "amd": (
+            "本包为 AMD/Intel DirectML（对齐官方 A/I 卡整合包 + --dml）。\n"
+            "请勿与 N 卡 Runtime 混用。默认走 DirectML，勿强行改 cuda。"
+        ),
+        "nvidia50": "本包为 NVIDIA 50 系适配 CUDA Runtime（参考 RVCMAX 50 系包）。",
+    }.get(variant, f"加速变体：{label}")
+    text = f"""Turing Mirror 变声器 — 发行版（{label}）
 ================================
 
 【用户只需要】
@@ -330,45 +365,85 @@ def write_readme(out: Path) -> None:
 3. 点「发送快捷方式」「安装虚拟声卡」
 4. 之后双击桌面图标或「变声器.exe」（或 TM_Voice.exe）
 
+【显卡说明 — 与官方 RVC 一致】
+{accel_line}
+官方 Windows：
+  · N 卡 = 单独 CUDA 环境（requirements / Nvidia 7z）
+  · A/I 卡 = 单独 DirectML 环境（requirements-dml / AMD_Intel 7z）+ 启动 --dml
+不是「同一个 Runtime 只加一个参数」；参数只在正确环境里切换设备。
+
 【已内置】
-- Runtime\\     绿色 Python 环境（无需自装 Python）
+- Runtime\\     本变体专用绿色 Python（无需自装 Python）
+- package_meta.json  标记本包变体与默认加速
 - User_Data\\models\\  预置音色（若打包时带了）
 - VBCABLE\\     虚拟声卡安装包
-- 引擎与界面
+- 引擎与界面（含 rmvpe.pt / rmvpe.onnx）
 
 【不要用】
 - tools\\dev\\ 下的 .bat 仅供开发调试
-- 不要指望系统里另装 Python
+- 不要把 N 卡包 Runtime 拷进 A 卡包混用
 
 打包时间: {time.strftime("%Y-%m-%d %H:%M:%S")}
+变体: {variant}
 """
     (out / "使用说明.txt").write_text(text, encoding="utf-8")
     log("[doc] 使用说明.txt")
 
 
-def default_runtime() -> Path | None:
-    for p in (
-        REF / "Runtime",
-        REPO / "Runtime",
-        Path(os.environ.get("TM_RUNTIME_SRC", "")),
-    ):
-        if p and str(p) and (p / "python.exe").is_file():
+def find_rvcmax_pack_dir(name_keys: tuple[str, ...], prefer_dir: str = "") -> Path | None:
+    """Find RVCMAX/<pack>/ that matches keywords and has Runtime/python.exe."""
+    if prefer_dir:
+        p = RVCMAX_ROOT / prefer_dir
+        if (p / "Runtime" / "python.exe").is_file():
+            return p
+    if not RVCMAX_ROOT.is_dir():
+        return None
+    keys = tuple(k.lower() for k in name_keys)
+    for child in sorted(RVCMAX_ROOT.iterdir(), key=lambda x: x.name.lower()):
+        if not child.is_dir():
+            continue
+        name = child.name.lower()
+        if not any(k in name for k in keys):
+            continue
+        if (child / "Runtime" / "python.exe").is_file():
+            return child
+    return None
+
+
+def default_runtime(variant: str = "nvidia") -> Path | None:
+    env = os.environ.get("TM_RUNTIME_SRC", "")
+    if env and (Path(env) / "python.exe").is_file():
+        return Path(env)
+    info = VARIANTS.get(variant, VARIANTS["nvidia"])
+    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    if pack and (pack / "Runtime" / "python.exe").is_file():
+        return pack / "Runtime"
+    if variant == "nvidia":
+        for p in (REF / "Runtime", REPO / "Runtime"):
+            if (p / "python.exe").is_file():
+                return p
+    return None
+
+
+def default_models(variant: str = "nvidia") -> Path | None:
+    env = os.environ.get("TM_MODELS_SRC", "")
+    if env and Path(env).is_dir():
+        return Path(env)
+    info = VARIANTS.get(variant, VARIANTS["nvidia"])
+    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    if pack and (pack / "User_Data" / "models").is_dir():
+        return pack / "User_Data" / "models"
+    for p in (REF / "User_Data" / "models", REPO / "User_Data" / "models"):
+        if p.is_dir():
             return p
     return None
 
 
-def default_models() -> Path | None:
-    for p in (
-        REF / "User_Data" / "models",
-        REPO / "User_Data" / "models",
-        Path(os.environ.get("TM_MODELS_SRC", "")),
-    ):
-        if p and str(p) and p.is_dir():
-            return p
-    return None
-
-
-def default_vbcable() -> Path | None:
+def default_vbcable(variant: str = "nvidia") -> Path | None:
+    info = VARIANTS.get(variant, VARIANTS["nvidia"])
+    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    if pack and (pack / "VBCABLE").is_dir() and any((pack / "VBCABLE").glob("*.exe")):
+        return pack / "VBCABLE"
     for p in (REF / "VBCABLE", REPO / "VBCABLE"):
         if p.is_dir() and any(p.glob("*.exe")):
             return p
@@ -376,8 +451,16 @@ def default_vbcable() -> Path | None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Build Turing Mirror Voice release pack")
-    p.add_argument("--out", type=Path, default=DEFAULT_OUT, help="output directory")
+    p = argparse.ArgumentParser(
+        description="Build Turing Mirror Voice release pack (official multi-pack ready)"
+    )
+    p.add_argument(
+        "--variant",
+        choices=list(VARIANTS.keys()),
+        default="nvidia",
+        help="nvidia | amd | nvidia50 — full separate packs like official RVC",
+    )
+    p.add_argument("--out", type=Path, default=None, help="output directory")
     p.add_argument("--runtime", type=Path, default=None, help="Runtime source dir")
     p.add_argument("--models", type=Path, default=None, help="models source dir")
     p.add_argument("--vbcable", type=Path, default=None, help="VBCABLE source dir")
@@ -389,8 +472,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    out: Path = args.out.resolve()
-    log(f"=== build release -> {out} ===")
+    variant = str(args.variant or "nvidia")
+    vinfo = VARIANTS[variant]
+    if args.out is None:
+        out = (REPO / "dist" / vinfo["out_name"]).resolve()
+    else:
+        out = args.out.resolve()
+    log(f"=== build release variant={variant} -> {out} ===")
+    log(f"    label={vinfo['label']} accel_default={vinfo['accel_default']}")
 
     if args.clean and out.exists():
         log("[clean] remove old out")
@@ -400,27 +489,65 @@ def main() -> int:
     # 1) engine
     copy_engine(out)
 
-    # 2) runtime
+    # 2) runtime (full pack must ship correct green env — not flag-only)
     if args.skip_runtime:
         copy_runtime(out, None)
     else:
-        rt = args.runtime or default_runtime()
+        rt = args.runtime or default_runtime(variant)
         if rt is None:
             log(
-                "[runtime] WARNING: no Runtime source. "
-                "Pass --runtime PATH (e.g. RVCMAX pack Runtime)."
+                f"[runtime] WARNING: no Runtime for variant={variant}. "
+                "Put RVCMAX pack under RVCMAX/ or pass --runtime PATH."
             )
+            if variant != "nvidia":
+                log(
+                    "[runtime] AMD/50-series pack CANNOT be faked by only setting --dml. "
+                    "Need the matching Runtime (official AMD_Intel / RVCMAX A-card pack)."
+                )
             copy_runtime(out, None)
         else:
             copy_runtime(out, rt)
 
     # 3) models
-    copy_models(out, args.models or default_models())
+    copy_models(out, args.models or default_models(variant))
 
     # 4) vbcable
-    copy_vbcable(out, args.vbcable or default_vbcable())
+    copy_vbcable(out, args.vbcable or default_vbcable(variant))
 
-    # 5) exes into out root
+    # 5) package identity (official multi-pack)
+    try:
+        from launcher.package_meta import write_package_meta
+
+        write_package_meta(
+            out,
+            variant,
+            label=vinfo["label"],
+            accel_default=vinfo["accel_default"],
+            use_dml=bool(vinfo["accel_default"] == "dml"),
+        )
+        log(f"[meta] package_meta.json variant={variant}")
+    except Exception as e:
+        log(f"[meta] failed: {e}")
+
+    # Seed default app config accel for first launch
+    try:
+        ud = out / "User_Data"
+        ud.mkdir(parents=True, exist_ok=True)
+        cfg_path = ud / "app_config.json"
+        if not cfg_path.is_file():
+            seed = {
+                "accel_backend": vinfo["accel_default"],
+                "pitch": 0,
+                "f0method": "fcpe",
+            }
+            cfg_path.write_text(
+                json.dumps(seed, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            log(f"[meta] seed User_Data/app_config.json accel={vinfo['accel_default']}")
+    except Exception as e:
+        log(f"[meta] seed config skip: {e}")
+
+    # 6) exes into out root
     if not args.skip_exe:
         try:
             build_exes(out)
@@ -431,7 +558,7 @@ def main() -> int:
     else:
         log("[exe] skipped")
 
-    write_readme(out)
+    write_readme(out, variant=variant, label=str(vinfo["label"]))
 
     # summary
     log("=== done ===")
@@ -444,10 +571,13 @@ def main() -> int:
         "Runtime",
         "User_Data",
         "VBCABLE",
+        "package_meta.json",
     ):
         p = out / name
         mark = "OK" if (p.is_file() or p.is_dir()) else "MISSING"
         log(f"  [{mark}] {name}")
+    if not (out / "Runtime" / "python.exe").is_file():
+        log("[WARN] Runtime incomplete — do not ship this folder to users yet.")
     log("User path: unzip -> double-click 启动器.exe or TM_Setup.exe (no bat).")
     return 0
 

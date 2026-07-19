@@ -102,7 +102,16 @@ def list_models_in_user_data(
         side = _read_sidecar(folder)
         name = str(side.get("name") or folder.name)
         tag = str(side.get("tag") or guess_tag(name))
-        index = str(side.get("index") or "") or _find_index(name, roots)
+        index = str(side.get("index") or "")
+        if index and not Path(index).is_file():
+            index = ""
+        if not index:
+            # Prefer .index sitting next to the .pth in this folder
+            local_idx = sorted(folder.glob("*.index"))
+            if local_idx:
+                index = str(local_idx[0].resolve())
+        if not index:
+            index = _find_index(name, roots) or _find_index(pth.stem, roots)
         cover = side.get("cover")
         if cover:
             cp = Path(str(cover))
@@ -198,6 +207,7 @@ def import_model_to_catalog(
     *,
     display_name: Optional[str] = None,
     cover_src: Optional[Path] = None,
+    index_src: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Copy a .pth into User_Data/models/<name>/ and write config.json."""
     src_pth = Path(src_pth)
@@ -211,11 +221,27 @@ def import_model_to_catalog(
     if cover_src and Path(cover_src).is_file():
         ext = Path(cover_src).suffix.lower() or ".png"
         shutil.copy2(cover_src, dest_dir / f"cover{ext}")
+    # Auto-pick sibling .index next to the pth if not provided
+    if index_src is None:
+        sib = src_pth.with_suffix(".index")
+        if sib.is_file():
+            index_src = sib
+        else:
+            # same folder, any .index containing stem
+            for ip in src_pth.parent.glob("*.index"):
+                if src_pth.stem in ip.stem or name in ip.stem:
+                    index_src = ip
+                    break
+    index_path = ""
+    if index_src and Path(index_src).is_file():
+        index_path = bind_index_to_model_dir(dest_dir, Path(index_src), display_name=name)
     cfg = {
         "name": name,
         "tag": guess_tag(name),
         "file": dest_pth.name,
     }
+    if index_path:
+        cfg["index"] = index_path
     (dest_dir / "config.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -226,7 +252,83 @@ def import_model_to_catalog(
         "file": dest_pth.name,
         "dir": str(dest_dir.resolve()),
         "cover": _find_cover(dest_dir),
-        "index": "",
+        "index": index_path,
         "tag": cfg["tag"],
         "source": "user_data",
     }
+
+
+def discover_index_files(search_roots: list[Path]) -> list[str]:
+    """Return sorted absolute paths of *.index under roots (skip *trained*)."""
+    found: set[str] = set()
+    for root in search_roots:
+        root = Path(root)
+        if not root.is_dir():
+            continue
+        try:
+            for ip in root.rglob("*.index"):
+                if "trained" in ip.name.lower():
+                    continue
+                if ip.is_file():
+                    found.add(str(ip.resolve()))
+        except Exception:
+            continue
+    return sorted(found)
+
+
+def bind_index_to_model_dir(
+    model_dir: Path,
+    index_src: Path,
+    *,
+    display_name: Optional[str] = None,
+    copy_into_folder: bool = True,
+) -> str:
+    """Attach a .index file to a catalog model folder (write config.json).
+
+    Prefer copying the index next to the .pth so the voice pack is portable.
+    Returns absolute path of the index that should be used.
+    """
+    model_dir = Path(model_dir)
+    index_src = Path(index_src)
+    if not index_src.is_file() or index_src.suffix.lower() != ".index":
+        raise ValueError(f"not a .index file: {index_src}")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    if copy_into_folder:
+        dest = model_dir / index_src.name
+        try:
+            if dest.resolve() != index_src.resolve():
+                shutil.copy2(index_src, dest)
+            index_path = str(dest.resolve())
+        except Exception:
+            index_path = str(index_src.resolve())
+    else:
+        index_path = str(index_src.resolve())
+
+    side = _read_sidecar(model_dir)
+    if display_name:
+        side.setdefault("name", display_name)
+    side["index"] = index_path
+    pth = _find_pth(model_dir)
+    if pth is not None:
+        side.setdefault("file", pth.name)
+    side.setdefault("tag", guess_tag(str(side.get("name") or model_dir.name)))
+    (model_dir / "config.json").write_text(
+        json.dumps(side, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return index_path
+
+
+def clear_model_index(model_dir: Path) -> None:
+    """Remove index binding from model config.json (does not delete files)."""
+    model_dir = Path(model_dir)
+    side = _read_sidecar(model_dir)
+    if not side and not model_dir.is_dir():
+        return
+    side.pop("index", None)
+    if "name" not in side:
+        side["name"] = model_dir.name
+    (model_dir / "config.json").write_text(
+        json.dumps(side, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )

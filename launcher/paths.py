@@ -171,15 +171,22 @@ def desktop_dir() -> Path:
     return home / "Desktop"
 
 
-def list_voice_models() -> list[dict]:
+def index_search_roots() -> list[Path]:
+    """Folders scanned for FAISS .index files (feature retrieval, not 底模)."""
     ensure_dirs()
-    index_roots = [
+    roots = [
+        MODELS_DIR,
         USER_DATA / "indices",
         ROOT / "logs",
         ROOT / "assets" / "indices",
     ]
+    return roots
+
+
+def list_voice_models() -> list[dict]:
+    ensure_dirs()
     return list_voice_catalog(
         MODELS_DIR,
         ENGINE_WEIGHTS,
-        index_search_roots=index_roots,
+        index_search_roots=index_search_roots(),
     )

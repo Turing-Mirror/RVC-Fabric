@@ -19,6 +19,11 @@ from launcher.online.catalog import (
 )
 from launcher.online.downloader import DownloadError, open_in_browser
 from launcher.online.gui_update import check_gui_update, download_and_apply_gui
+from launcher.online.package_spec import (
+    PKG_FULL,
+    PKG_GUI_PATCH,
+    describe_package_type,
+)
 from launcher.online.voice_install import install_voice_from_entry
 from launcher.paths import MODELS_DIR
 from launcher.theme import (
@@ -134,10 +139,13 @@ class StorePage:
             side="left", padx=(0, 8)
         )
         self.btn_gui_apply = PrimaryButton(
-            row_g, "下载并应用 GUI", command=self.apply_gui, padx=14, pady=6
+            row_g, "下载并应用增量包", command=self.apply_gui, padx=14, pady=6
         )
         self.btn_gui_apply.pack(side="left", padx=4)
         self.btn_gui_apply.configure(state="disabled")
+        GhostButton(
+            row_g, "全量包说明 / 打开链接", command=self.open_full_package_help, padx=12, pady=6
+        ).pack(side="left", padx=4)
 
         # --- Manifest URL ---
         sec_url = SectionCard(
@@ -277,24 +285,47 @@ class StorePage:
         cat = self.catalog
         self.lbl_ver.configure(text=f"当前版本  {local_app_version()}")
         st = check_gui_update(cat)
+        ptype = st.get("package_type") or PKG_GUI_PATCH
+        type_line = f"包类型：{describe_package_type(ptype)}"
         if st["available"]:
-            self.lbl_gui_status.configure(
-                text=(
-                    f"发现 GUI 更新：{st['local']} → {st['remote']}\n"
-                    f"{st['notes'] or '（无更新说明）'}"
-                ),
-                fg=TM_ACCENT,
-            )
-            self.btn_gui_apply.configure(state="normal")
+            if ptype == PKG_FULL or st.get("action") == "external":
+                self.lbl_gui_status.configure(
+                    text=(
+                        f"发现【全量】更新提示：{st['local']} → {st['remote']}\n"
+                        f"{type_line}\n"
+                        f"{st['notes'] or ''}\n"
+                        "全量包不会在软件内覆盖 Runtime，请用下方按钮打开下载链接，"
+                        "解压到新目录后使用。"
+                    ),
+                    fg=TM_ACCENT,
+                )
+                self.btn_gui_apply.configure(state="disabled")
+            else:
+                self.lbl_gui_status.configure(
+                    text=(
+                        f"发现【增量】GUI 更新：{st['local']} → {st['remote']}\n"
+                        f"{type_line}\n"
+                        f"{st['notes'] or '（无更新说明）'}"
+                    ),
+                    fg=TM_ACCENT,
+                )
+                self.btn_gui_apply.configure(state="normal")
         elif st["url"]:
             self.lbl_gui_status.configure(
-                text=f"已是最新或同版本（本地 {st['local']} · 远程 {st['remote']}）",
+                text=(
+                    f"已是最新或同版本（本地 {st['local']} · 远程 {st['remote']}）\n"
+                    f"{type_line}"
+                ),
                 fg=TM_INK_MUTED,
             )
             self.btn_gui_apply.configure(state="disabled")
         else:
             self.lbl_gui_status.configure(
-                text="清单中未配置 gui.url。可在 configs/online_catalog.json 填写 SharePoint/GitHub 直链。",
+                text=(
+                    "清单中未配置 gui.url。\n"
+                    "增量包：package_type=gui_patch + zip 直链；"
+                    "全量包：package_type=full_package + SharePoint/QQ（软件外安装）。"
+                ),
                 fg=TM_META,
             )
             self.btn_gui_apply.configure(state="disabled")
@@ -329,6 +360,25 @@ class StorePage:
         for v in voices:
             self._voice_row(v)
 
+    def open_full_package_help(self) -> None:
+        from launcher.online.package_spec import full_package_policy_help
+
+        url = (self.catalog.sharepoint_full or self.catalog.gui.url or "").strip()
+        msg = full_package_policy_help()
+        if url and (
+            normalize_is_full(self.catalog)
+            or (self.catalog.sharepoint_full or "").strip()
+        ):
+            if messagebox.askyesno(
+                "全量包",
+                msg + "\n\n是否打开配置的完整包 / 更新链接？",
+            ):
+                open_in_browser(
+                    (self.catalog.sharepoint_full or self.catalog.gui.url or "").strip()
+                )
+        else:
+            messagebox.showinfo("全量包策略", msg)
+
     def _voice_row(self, v: VoiceEntry) -> None:
         row = tk.Frame(
             self.voices_host,
@@ -347,7 +397,8 @@ class StorePage:
             fg=TM_INK,
             anchor="w",
         ).pack(anchor="w")
-        meta = f"{v.tag}  ·  id={v.id}"
+        kind = "zip包" if v.pack_url else "多文件"
+        meta = f"{v.tag}  ·  {kind}  ·  id={v.id}"
         if v.size_bytes:
             meta += f"  ·  {v.size_bytes // 1024 // 1024} MB"
         installed = is_voice_installed(v.id, MODELS_DIR)
@@ -391,19 +442,27 @@ class StorePage:
         if not st["url"]:
             messagebox.showinfo("GUI 更新", "没有可用的 GUI 更新地址。")
             return
+        if st.get("package_type") == PKG_FULL or st.get("action") == "external":
+            messagebox.showinfo(
+                "全量包",
+                "当前清单指向全量包，不能在软件内合并安装。\n"
+                "请使用「全量包说明 / 打开链接」。",
+            )
+            return
         if not messagebox.askyesno(
-            "应用 GUI 更新",
-            f"将下载并覆盖允许的壳层文件（launcher/ 等）。\n"
+            "应用增量 GUI 包",
+            f"将下载【增量壳层包】并合并覆盖白名单路径（launcher/、configs/ 等）。\n"
             f"{st['local']} → {st['remote']}\n\n"
-            "不会替换 Runtime / 完整包。完成后建议重启软件。\n继续？",
+            "不会替换 Runtime / User_Data / 大权重。\n"
+            "若 zip 被识别为全量包将中止。完成后请重启。\n继续？",
         ):
             return
         self._busy = True
-        self.lbl_progress.configure(text="正在下载 GUI 补丁…", fg=TM_ACCENT)
+        self.lbl_progress.configure(text="正在下载增量 GUI 包…", fg=TM_ACCENT)
 
         def work():
             try:
-                written = download_and_apply_gui(
+                result = download_and_apply_gui(
                     self.catalog.gui,
                     progress=lambda phase, d, t: self.root.after(
                         0,
@@ -414,7 +473,7 @@ class StorePage:
                 )
                 err = None
             except Exception as e:
-                written = []
+                result = {}
                 err = str(e)
 
             def done():
@@ -423,13 +482,16 @@ class StorePage:
                     self.lbl_progress.configure(text=f"GUI 更新失败：{err}", fg=TM_WARN)
                     messagebox.showerror("GUI 更新失败", err)
                 else:
+                    written = result.get("written") or []
                     self.lbl_progress.configure(
-                        text=f"已写入 {len(written)} 个文件，请重启软件。",
+                        text=f"增量包已应用（{len(written)} 个文件），请重启。",
                         fg=TM_OK,
                     )
                     messagebox.showinfo(
                         "完成",
-                        f"GUI 更新已应用（{len(written)} 个文件）。\n请关闭并重新打开变声器。",
+                        f"增量 GUI 已应用（{len(written)} 个文件）。\n"
+                        f"类型：{result.get('package_type')}\n"
+                        "请关闭并重新打开变声器。",
                     )
 
             self.root.after(0, done)
@@ -516,3 +578,8 @@ def _fmt_prog(phase: str, done: int, total: int) -> str:
         pct = min(100, done * 100 // total)
         return f"{phase}  {pct}%  ({done // 1024} KB / {total // 1024} KB)"
     return f"{phase}  {done // 1024} KB"
+
+
+def normalize_is_full(cat) -> bool:
+    st = check_gui_update(cat)
+    return st.get("package_type") == PKG_FULL

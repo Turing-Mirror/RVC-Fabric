@@ -1,73 +1,52 @@
 # -*- coding: utf-8 -*-
-"""Apply GUI/shell zip updates (not full Runtime packages).
+"""Apply GUI updates with package-type awareness.
 
-Zip layout: relative paths under package root, e.g.::
-
-    launcher/main_app.py
-    launcher/theme.py
-    configs/online_catalog.json
-
-Blocked prefixes protect Runtime, user data, and large engine weights.
+- **gui_patch** (增量): download zip → merge allowlist into product root
+- **full_package** (全量): download optional / open link only — **never** merge Runtime
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional
 
 from launcher.online.catalog import GuiUpdate, OnlineCatalog, compare_versions
-from launcher.online.downloader import DownloadError, download_file
+from launcher.online.downloader import DownloadError, download_file, open_in_browser
+from launcher.online.package_spec import (
+    PKG_FULL,
+    PKG_GUI_PATCH,
+    TM_PACKAGE_JSON,
+    detect_zip_package_type,
+    full_package_policy_help,
+    gui_member_allowed,
+    normalize_package_type,
+    read_zip_tm_package,
+)
 from launcher.paths import ROOT, USER_DATA
 from launcher.version import APP_VERSION
 
 ProgressCb = Callable[[str, int, int], None]
 
-# Paths that must never be overwritten by an in-app GUI patch
-BLOCKED_PREFIXES = (
-    "runtime/",
-    "user_data/",
-    "userdata/",
-    "rvcmax/",
-    "dist/",
-    "build/",
-    "assets/pretrained/",
-    "assets/pretrained_v2/",
-    "assets/uvr5_weights/",
-    "assets/hubert/",
-    "assets/rmvpe/",
-    "assets/weights/",
-    "vbcable/",
-    ".git/",
-)
-
-ALLOWED_PREFIXES = (
-    "launcher/",
-    "configs/",
-    "docs/",
-    "i18n/",
-    "scripts/",
-    "tools/",
-)
-
-ALLOWED_ROOT_FILES = frozenset(
-    {
-        "gui_v1.py",
-        "infer-web.py",
-        "readme.md",
-        "package_meta.json",
-        "version.txt",
-    }
-)
-
 
 def check_gui_update(catalog: OnlineCatalog, local_version: str = "") -> dict:
-    """Return status dict: available, local, remote, notes, url."""
+    """Return status for UI: available, package_type, action, …"""
     local = (local_version or APP_VERSION).strip()
     remote = (catalog.gui.version or catalog.app_version or "").strip()
     url = (catalog.gui.url or "").strip()
-    available = bool(url and remote and compare_versions(local, remote) < 0)
+    pkg_type = normalize_package_type(
+        catalog.gui.package_type or PKG_GUI_PATCH, default=PKG_GUI_PATCH
+    )
+    newer = bool(remote and compare_versions(local, remote) < 0)
+    # full_package may still show as "available" for notice, but action differs
+    available = bool(url and remote and newer)
+    if pkg_type == PKG_FULL:
+        action = "external"  # open link / download to folder, do not apply
+    else:
+        action = "apply_patch"
+
     return {
         "available": available,
         "local": local,
@@ -75,55 +54,159 @@ def check_gui_update(catalog: OnlineCatalog, local_version: str = "") -> dict:
         "notes": catalog.gui.notes or "",
         "url": url,
         "sha256": catalog.gui.sha256 or "",
+        "package_type": pkg_type,
+        "action": action,
+        "min_app_version": catalog.gui.min_app_version or "",
     }
 
 
-def _safe_member(name: str) -> Optional[str]:
-    """Normalize zip member; return None if blocked."""
-    n = name.replace("\\", "/").lstrip("/")
-    if not n or n.endswith("/"):
-        return None
-    if ".." in n.split("/"):
-        return None
-    low = n.lower()
-    for b in BLOCKED_PREFIXES:
-        if low.startswith(b):
-            return None
-    # allowlisted prefixes or root files
-    if any(low.startswith(p) for p in ALLOWED_PREFIXES):
-        return n
-    base = Path(n).name.lower()
-    if "/" not in n.rstrip("/") and base in ALLOWED_ROOT_FILES:
-        return n
-    return None
-
-
-def apply_gui_zip(
+def apply_gui_patch_zip(
     zip_path: Path,
     *,
     root: Optional[Path] = None,
-) -> list[str]:
-    """Extract allowed files from zip into package root. Returns written paths."""
+    enforce_type: bool = True,
+) -> dict:
+    """Merge a **gui_patch** zip into product root.
+
+    Returns dict: written, package_type, meta, skipped_blocked.
+    Raises DownloadError if zip is full_package or has nothing allowed.
+    """
     root = Path(root or ROOT)
     zip_path = Path(zip_path)
     if not zip_path.is_file():
         raise DownloadError(f"找不到更新包：{zip_path}")
+
+    detected = detect_zip_package_type(zip_path)
+    meta = read_zip_tm_package(zip_path)
+    declared = normalize_package_type(
+        str(meta.get("package_type") or meta.get("type") or meta.get("kind") or ""),
+        default=detected,
+    )
+    pkg_type = declared if meta else detected
+
+    if enforce_type and pkg_type == PKG_FULL:
+        raise DownloadError(
+            "该文件被识别为【全量发行包】，不能在软件内覆盖安装。\n"
+            + full_package_policy_help()
+        )
+
+    if enforce_type and pkg_type not in (PKG_GUI_PATCH,):
+        # voice packs should not go through this function
+        if pkg_type.startswith("voice"):
+            raise DownloadError(
+                "该 zip 是音色包，请走「音色库」下载安装，不要当作 GUI 更新应用。"
+            )
+
+    # min_app_version check
+    min_v = str(meta.get("min_app_version") or "").strip()
+    if min_v and compare_versions(APP_VERSION, min_v) < 0:
+        raise DownloadError(
+            f"此增量包要求软件版本 ≥ {min_v}，当前为 {APP_VERSION}。"
+            "请先安装中间版本或下载全量包。"
+        )
+
     written: list[str] = []
+    skipped: list[str] = []
     with zipfile.ZipFile(zip_path, "r") as zf:
-        for info in zf.infolist():
-            rel = _safe_member(info.filename)
+        members = list(zf.infolist())
+        # Optional: strip single root folder if all paths share it and it's not allowlist
+        prefix = _common_strip_prefix([m.filename for m in members])
+
+        for info in members:
+            raw = info.filename.replace("\\", "/")
+            if prefix and raw.startswith(prefix):
+                raw_body = raw[len(prefix) :]
+            else:
+                raw_body = raw
+            rel = gui_member_allowed(raw_body)
             if not rel:
+                if not raw.endswith("/") and TM_PACKAGE_JSON not in raw:
+                    skipped.append(raw)
                 continue
             dest = root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(info, "r") as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
             written.append(rel)
+
     if not written:
         raise DownloadError(
-            "更新包中没有可应用的文件（可能被安全策略拦截，或 zip 结构不正确）"
+            "增量包中没有可应用的文件。\n"
+            "请确认 zip 内路径为 launcher/、configs/、tools/ 等白名单，"
+            "且未误打成全量 Runtime 包。"
         )
-    return written
+
+    # Write version stamp if package declares version
+    ver = str(meta.get("version") or "").strip()
+    if ver:
+        try:
+            stamp = root / "User_Data" / "update_state.json"
+            # also update launcher/version.py is not automatic — stamp only
+            state_path = USER_DATA / "update_state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state = {}
+            if state_path.is_file():
+                try:
+                    state = json.loads(state_path.read_text(encoding="utf-8"))
+                except Exception:
+                    state = {}
+            state["last_gui_patch_version"] = ver
+            state["last_gui_patch_files"] = written[:50]
+            state_path.write_text(
+                json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception:
+            pass
+
+    return {
+        "written": written,
+        "skipped_blocked": skipped[:30],
+        "package_type": PKG_GUI_PATCH,
+        "meta": meta,
+        "version": ver,
+    }
+
+
+# Back-compat name
+def apply_gui_zip(zip_path: Path, *, root: Optional[Path] = None) -> list[str]:
+    return list(apply_gui_patch_zip(zip_path, root=root)["written"])
+
+
+def _common_strip_prefix(names: list[str]) -> str:
+    """If all files are under one folder Foo/, strip Foo/ (except tm_package at root)."""
+    cleaned = []
+    for n in names:
+        n = n.replace("\\", "/")
+        if not n or n.endswith("/"):
+            continue
+        cleaned.append(n)
+    if not cleaned:
+        return ""
+    tops = {n.split("/")[0] for n in cleaned if "/" in n}
+    if len(tops) != 1:
+        return ""
+    top = next(iter(tops))
+    # don't strip if top is an allowed root dir name
+    if top.lower() in (
+        "launcher",
+        "configs",
+        "docs",
+        "i18n",
+        "scripts",
+        "tools",
+        "tests",
+        "runtime",
+        "user_data",
+        "assets",
+    ):
+        return ""
+    # all multi-segment paths must start with top/
+    for n in cleaned:
+        if n == TM_PACKAGE_JSON:
+            continue
+        if not n.startswith(top + "/"):
+            return ""
+    return top + "/"
 
 
 def download_and_apply_gui(
@@ -131,9 +214,23 @@ def download_and_apply_gui(
     *,
     root: Optional[Path] = None,
     progress: Optional[ProgressCb] = None,
-) -> list[str]:
+) -> dict:
+    """Download by catalog entry; route by package_type."""
     if not gui.url:
         raise DownloadError("没有 GUI 更新地址")
+
+    pkg_type = normalize_package_type(gui.package_type or PKG_GUI_PATCH)
+
+    if pkg_type == PKG_FULL:
+        # Never apply: open browser or download to cache with instruction
+        open_in_browser(gui.url)
+        return {
+            "package_type": PKG_FULL,
+            "action": "external_opened",
+            "written": [],
+            "message": "已打开全量包下载链接。请下载后解压到新目录使用，勿在软件内覆盖 Runtime。",
+        }
+
     cache = USER_DATA / "update_cache" / "gui"
     cache.mkdir(parents=True, exist_ok=True)
     dest = cache / f"gui_{gui.version or 'patch'}.zip"
@@ -148,9 +245,45 @@ def download_and_apply_gui(
         progress=_p,
         expected_sha256=gui.sha256 or "",
     )
+
+    # Re-detect after download (catalog may be wrong)
+    detected = detect_zip_package_type(dest)
+    if detected == PKG_FULL or pkg_type == PKG_FULL:
+        raise DownloadError(
+            "下载到的文件是【全量包】标记/结构，已中止自动安装。\n"
+            f"文件保存在：{dest}\n"
+            + full_package_policy_help()
+        )
+
     if progress:
         progress("apply", 0, 1)
-    written = apply_gui_zip(dest, root=root)
+    result = apply_gui_patch_zip(dest, root=root, enforce_type=True)
     if progress:
         progress("apply", 1, 1)
-    return written
+    result["action"] = "applied_patch"
+    result["zip_path"] = str(dest)
+    return result
+
+
+def handle_full_package_url(url: str, *, download_to_cache: bool = False) -> dict:
+    """Policy entry for full packages: open browser; optional save only."""
+    url = (url or "").strip()
+    if not url:
+        raise DownloadError("未配置全量包地址")
+    if download_to_cache:
+        cache = USER_DATA / "update_cache" / "full_packages"
+        cache.mkdir(parents=True, exist_ok=True)
+        dest = cache / "full_package_download.bin"
+        download_file(url, dest)
+        return {
+            "package_type": PKG_FULL,
+            "action": "downloaded_only",
+            "path": str(dest),
+            "message": "全量包已下载到缓存目录，请手动解压到新文件夹后使用，勿覆盖当前 Runtime。",
+        }
+    open_in_browser(url)
+    return {
+        "package_type": PKG_FULL,
+        "action": "external_opened",
+        "message": "已在浏览器打开全量包链接。",
+    }

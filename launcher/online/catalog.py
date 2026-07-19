@@ -27,6 +27,8 @@ class VoiceEntry:
     name: str
     tag: str = "音色"
     version: str = "1"
+    package_type: str = ""  # voice_pack | voice_files (auto if empty)
+    pack_url: str = ""  # zip 音色包直链
     pth_url: str = ""
     index_url: str = ""
     cover_url: str = ""
@@ -41,6 +43,10 @@ class VoiceEntry:
             name=str(d.get("name") or d.get("id") or "未命名").strip(),
             tag=str(d.get("tag") or "音色"),
             version=str(d.get("version") or "1"),
+            package_type=str(
+                d.get("package_type") or d.get("type") or d.get("kind") or ""
+            ),
+            pack_url=str(d.get("pack_url") or d.get("zip_url") or d.get("pack") or ""),
             pth_url=str(d.get("pth_url") or d.get("pth") or d.get("url") or ""),
             index_url=str(d.get("index_url") or d.get("index") or ""),
             cover_url=str(d.get("cover_url") or d.get("cover") or ""),
@@ -49,6 +55,9 @@ class VoiceEntry:
             description=str(d.get("description") or d.get("desc") or ""),
         )
 
+    def has_download(self) -> bool:
+        return bool(self.pack_url or self.pth_url)
+
 
 @dataclass
 class GuiUpdate:
@@ -56,7 +65,9 @@ class GuiUpdate:
     url: str = ""
     sha256: str = ""
     notes: str = ""
-    kind: str = "zip"  # zip of relative paths under package root
+    kind: str = "zip"  # archive format
+    package_type: str = "gui_patch"  # gui_patch | full_package
+    min_app_version: str = ""
 
     @classmethod
     def from_dict(cls, d: Optional[dict[str, Any]]) -> "GuiUpdate":
@@ -67,6 +78,10 @@ class GuiUpdate:
             sha256=str(d.get("sha256") or ""),
             notes=str(d.get("notes") or d.get("changelog") or ""),
             kind=str(d.get("kind") or "zip"),
+            package_type=str(
+                d.get("package_type") or d.get("type") or "gui_patch"
+            ),
+            min_app_version=str(d.get("min_app_version") or ""),
         )
 
 
@@ -103,7 +118,7 @@ class OnlineCatalog:
                 if isinstance(item, dict):
                     try:
                         v = VoiceEntry.from_dict(item)
-                        if v.id and v.pth_url:
+                        if v.id and v.has_download():
                             voices.append(v)
                     except Exception:
                         continue
@@ -186,6 +201,8 @@ def _catalog_to_dict(cat: OnlineCatalog) -> dict[str, Any]:
                 "sha256": cat.gui.sha256,
                 "notes": cat.gui.notes,
                 "kind": cat.gui.kind,
+                "package_type": cat.gui.package_type,
+                "min_app_version": cat.gui.min_app_version,
             },
         },
         "community": {
@@ -200,6 +217,8 @@ def _catalog_to_dict(cat: OnlineCatalog) -> dict[str, Any]:
                 "name": v.name,
                 "tag": v.tag,
                 "version": v.version,
+                "package_type": v.package_type,
+                "pack_url": v.pack_url,
                 "pth_url": v.pth_url,
                 "index_url": v.index_url,
                 "cover_url": v.cover_url,

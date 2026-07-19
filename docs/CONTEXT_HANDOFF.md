@@ -21,7 +21,7 @@
 | UI | **白无垢**（`docs/UI-AESTHETIC-DESIGN.md`），禁止 AI 蓝紫/金渐变、禁止抄 RVCMAX 粉紫 |
 | 参考包 | `RVCMAX/RVCMAX_Nvidia_xiaoyuan`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker，**不必开原版 RVC 窗**） |
-| 发行 | 全量包在 `dist/`（gitignore）；仓库只含源码+文档 |
+| 发行 | 全量包在 `dist/`（gitignore）；**Git 含什么见 `docs/仓库内容说明.md`** |
 
 ---
 
@@ -166,8 +166,8 @@ Linux AMD 是 ROCm，不是 Windows DML。
 | `upstream` | 官方 RVC WebUI |
 
 - 分支：`tm-release`（组织库默认分支）  
-- **无** 跟踪文件 ≥10MB；Runtime/dist/RVCMAX/模型/ffmpeg **gitignore**，不会进库  
-- 单文件 GitHub 硬限 100MB；当前无需 LFS  
+- **Git 含什么 / 不含什么**：见 `docs/仓库内容说明.md`（无大体积 Runtime/发行包/权重进库）  
+- 单文件 GitHub 硬限 100MB；当前已跟踪文件均远小于限制，无需 LFS  
 
 ---
 
@@ -199,9 +199,10 @@ Linux AMD 是 ROCm，不是 Windows DML。
 
 | 文档 | 内容 |
 |------|------|
+| `docs/仓库内容说明.md` | **Git 含什么 / 不含什么**（clone ≠ 完整安装包） |
 | `docs/UI-AESTHETIC-DESIGN.md` | 白无垢硬约束 |
 | `docs/项目结构.md` | 目录角色 |
-| `docs/发布布局与角色分工.md` | 对齐 RVCMAX 岗位 |
+| `docs/发布布局与角色分工.md` | 发布岗位分工 |
 | `docs/发行版打包与用户使用.md` | 打包命令与用户路径 |
 | `docs/发行包-显卡分版.md` | N/A/50 多包方案与官方真相 |
 | `docs/大众版使用说明.md` | 面向用户 |

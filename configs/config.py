@@ -58,9 +58,45 @@ class Config:
             self.noautoopen,
             self.dml,
         ) = self.arg_parse()
+        # Product / worker env (official AMD path uses --dml; we also honor TM_*)
+        self.dml = self._resolve_dml_flag(self.dml)
         self.instead = ""
         self.preprocess_per = 3.7
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
+
+    @staticmethod
+    def _resolve_dml_flag(cli_dml: bool) -> bool:
+        """Match official RVC: CLI --dml, plus env auto for single dual-backend pack.
+
+        TM_USE_DML=1/0 forces; TM_ACCEL=auto|cuda|dml|cpu selects policy.
+        Auto: CUDA if available, else DirectML if torch_directml works, else CPU.
+        """
+        force = os.environ.get("TM_USE_DML", "").strip().lower()
+        if force in ("1", "true", "yes"):
+            return True
+        if force in ("0", "false", "no"):
+            return False
+        accel = os.environ.get("TM_ACCEL", "").strip().lower()
+        if accel in ("directml", "amd", "intel"):
+            accel = "dml"
+        if accel == "dml":
+            return True
+        if accel in ("cuda", "cpu", "nvidia"):
+            return False
+        if cli_dml:
+            return True
+        # auto
+        if torch.cuda.is_available():
+            return False
+        try:
+            import torch_directml  # type: ignore
+
+            if int(torch_directml.device_count()) >= 1:
+                logger.info("Auto backend: DirectML (no CUDA; torch_directml available)")
+                return True
+        except Exception:
+            pass
+        return False
 
     @staticmethod
     def load_config_json() -> dict:
@@ -93,7 +129,8 @@ class Config:
             action="store_true",
             help="torch_dml",
         )
-        cmd_opts = parser.parse_args()
+        # parse_known_args: gui_v1 / worker may pass extra argv
+        cmd_opts, _unknown = parser.parse_known_args()
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
 
@@ -198,57 +235,68 @@ class Config:
             x_center = 30
             x_max = 32
         if self.dml:
-            logger.info("Use DirectML instead")
-            if (
-                os.path.exists(
-                    "runtime\Lib\site-packages\onnxruntime\capi\DirectML.dll"
-                )
-                == False
-            ):
-                try:
-                    os.rename(
-                        "runtime\Lib\site-packages\onnxruntime",
-                        "runtime\Lib\site-packages\onnxruntime-cuda",
-                    )
-                except:
-                    pass
-                try:
-                    os.rename(
-                        "runtime\Lib\site-packages\onnxruntime-dml",
-                        "runtime\Lib\site-packages\onnxruntime",
-                    )
-                except:
-                    pass
-            # if self.device != "cpu":
-            import torch_directml
+            logger.info("Use DirectML instead (AMD/Intel path, official RVC --dml)")
+            self._swap_onnxruntime_provider(want_dml=True)
+            try:
+                import torch_directml  # type: ignore
 
-            self.device = torch_directml.device(torch_directml.default_device())
-            self.is_half = False
+                self.device = torch_directml.device(torch_directml.default_device())
+                try:
+                    self.gpu_name = str(
+                        torch_directml.device_name(torch_directml.default_device())
+                    )
+                except Exception:
+                    self.gpu_name = "DirectML"
+                self.is_half = False
+                self.use_fp32_config()
+            except Exception as e:
+                logger.warning("DirectML unavailable (%s), fallback CPU", e)
+                self.device = self.instead = "cpu"
+                self.is_half = False
+                self.use_fp32_config()
         else:
             if self.instead:
                 logger.info(f"Use {self.instead} instead")
-            if (
-                os.path.exists(
-                    "runtime\Lib\site-packages\onnxruntime\capi\onnxruntime_providers_cuda.dll"
-                )
-                == False
-            ):
-                try:
-                    os.rename(
-                        "runtime\Lib\site-packages\onnxruntime",
-                        "runtime\Lib\site-packages\onnxruntime-dml",
-                    )
-                except:
-                    pass
-                try:
-                    os.rename(
-                        "runtime\Lib\site-packages\onnxruntime-cuda",
-                        "runtime\Lib\site-packages\onnxruntime",
-                    )
-                except:
-                    pass
+            self._swap_onnxruntime_provider(want_dml=False)
         logger.info(
             "Half-precision floating-point: %s, device: %s"
             % (self.is_half, self.device)
         )
         return x_pad, x_query, x_center, x_max
+
+    @staticmethod
+    def _swap_onnxruntime_provider(*, want_dml: bool) -> None:
+        """Official RVC renames onnxruntime <-> onnxruntime-dml/cuda under Runtime.
+
+        Paths are case-insensitive on Windows; try both runtime/ and Runtime/.
+        """
+        roots = []
+        for name in ("Runtime", "runtime"):
+            p = os.path.join(name, "Lib", "site-packages")
+            if os.path.isdir(p):
+                roots.append(p)
+        if not roots:
+            return
+        for sp in roots:
+            ort = os.path.join(sp, "onnxruntime")
+            ort_dml = os.path.join(sp, "onnxruntime-dml")
+            ort_cuda = os.path.join(sp, "onnxruntime-cuda")
+            dml_dll = os.path.join(ort, "capi", "DirectML.dll")
+            cuda_dll = os.path.join(ort, "capi", "onnxruntime_providers_cuda.dll")
+            try:
+                if want_dml:
+                    if not os.path.isfile(dml_dll):
+                        if os.path.isdir(ort) and not os.path.isdir(ort_cuda):
+                            os.rename(ort, ort_cuda)
+                        if os.path.isdir(ort_dml) and not os.path.isdir(ort):
+                            os.rename(ort_dml, ort)
+                else:
+                    if not os.path.isfile(cuda_dll):
+                        if os.path.isdir(ort) and not os.path.isdir(ort_dml):
+                            # only rename away if it looks like dml package
+                            if os.path.isfile(os.path.join(ort, "capi", "DirectML.dll")):
+                                os.rename(ort, ort_dml)
+                        if os.path.isdir(ort_cuda) and not os.path.isdir(ort):
+                            os.rename(ort_cuda, ort)
+            except Exception:
+                pass

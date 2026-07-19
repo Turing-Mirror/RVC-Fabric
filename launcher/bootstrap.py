@@ -195,12 +195,32 @@ class BootstrapApp:
         self.status.configure(text=text, fg=TM_OK if ok else TM_WARN)
 
     def _refresh_hint(self) -> None:
-        bad = [i for i in check_environment() if not i.ok]
-        if not bad:
-            self._set_status("环境就绪。可将快捷方式放到桌面，之后直接打开主界面。")
-        else:
-            names = "、".join(i.name for i in bad[:4])
-            self._set_status(f"待处理：{names}。可点「检测与部署」。", ok=False)
+        # GPU line (non-blocking: short WMI + optional Runtime probe)
+        def _gpu_line():
+            try:
+                from launcher.config_store import load_config
+                from launcher.gpu_backend import detect_full
+
+                pref = str(load_config().get("accel_backend") or "auto")
+                info = detect_full(RROOT, pref)
+                return f"加速：{info.get('label')} {info.get('detail') or ''}（{info.get('backend')}）"
+            except Exception as e:
+                return f"加速：检测失败 ({e})"
+
+        def _done(gpu_text: str):
+            bad = [i for i in check_environment() if not i.ok]
+            base = ""
+            if not bad:
+                base = "环境看起来正常。可发送快捷方式、安装声卡后打开变声器。"
+            else:
+                base = "缺少：" + "；".join(i.name for i in bad[:4])
+            self._set_status(base + "\n" + gpu_text, ok=not bad)
+
+        def work():
+            t = _gpu_line()
+            self.root.after(0, lambda: _done(t))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def on_shortcut(self) -> None:
         try:

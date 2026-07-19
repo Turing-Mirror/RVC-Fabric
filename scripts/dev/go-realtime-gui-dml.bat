@@ -7,5 +7,8 @@ if not defined PY (
   exit /b 1
 )
 title RVC realtime GUI DML (DEV)
-"%PY%" gui_v1.py
+REM Official AMD/Intel path: gui uses Config --dml / torch_directml
+set TM_USE_DML=1
+set TM_ACCEL=dml
+"%PY%" gui_v1.py --dml
 pause

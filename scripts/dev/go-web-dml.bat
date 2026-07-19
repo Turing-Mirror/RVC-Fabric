@@ -8,5 +8,7 @@ if not defined PY (
 )
 title RVC WebUI DML (DEV)
 set PORT=7897
+set TM_USE_DML=1
+set TM_ACCEL=dml
 "%PY%" infer-web.py --pycmd "%PY%" --port %PORT% --dml
 pause

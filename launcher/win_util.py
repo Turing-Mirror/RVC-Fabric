@@ -194,6 +194,10 @@ def _env_for_runtime_python() -> dict:
     # Preserve auto-start flag from parent main_app
     if os.environ.get("TM_AUTO_START_VC"):
         env["TM_AUTO_START_VC"] = os.environ["TM_AUTO_START_VC"]
+    # GPU backend (CUDA / DirectML) — set by main_app via apply_backend_env
+    for k in ("TM_USE_DML", "TM_ACCEL", "TM_ACCEL_RESOLVED"):
+        if os.environ.get(k) is not None:
+            env[k] = os.environ[k]
     return env
 
 
@@ -312,11 +316,12 @@ def start_webui(port: int = 7897) -> subprocess.Popen:
     py = find_python(prefer_windowed=False)
     pyw = find_python(prefer_windowed=True)
     script = ROOT / "infer-web.py"
-    env = _env_with_root()
-    return run_no_console(
-        [pyw, str(script), "--pycmd", py, "--port", str(port), "--noautoopen"],
-        env=env,
-    )
+    env = _env_for_runtime_python()
+    args = [pyw, str(script), "--pycmd", py, "--port", str(port), "--noautoopen"]
+    # Official AMD/Intel: infer-web.py --dml
+    if os.environ.get("TM_USE_DML", "").strip().lower() in ("1", "true", "yes"):
+        args.append("--dml")
+    return run_no_console(args, env=env)
 
 
 def start_legacy_realtime_gui() -> subprocess.Popen:

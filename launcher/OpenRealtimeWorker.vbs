@@ -40,6 +40,10 @@ End If
 sh.Environment("Process")("PYTHONPATH") = repo
 sh.Environment("Process")("TM_REALTIME_WORKER") = "1"
 sh.Environment("Process")("TM_VOICE_ROOT") = repo
+' GPU backend: parent may set TM_USE_DML / TM_ACCEL; default auto (Config resolves)
+If Len(sh.Environment("Process")("TM_USE_DML")) = 0 Then
+  ' leave unset -> configs.Config auto CUDA then DirectML
+End If
 On Error Resume Next
 sh.Environment("Process").Remove "PYTHONHOME"
 sh.Environment("Process").Remove "_MEIPASS"
@@ -47,10 +51,19 @@ On Error GoTo 0
 
 ts.WriteLine "pyw=" & pyw
 ts.WriteLine "script=" & script
+ts.WriteLine "TM_USE_DML=" & sh.Environment("Process")("TM_USE_DML")
+ts.WriteLine "TM_ACCEL=" & sh.Environment("Process")("TM_ACCEL")
 ts.Close
 
+' Optional --dml for official parity when forced
+Dim args
+args = """" & pyw & """ """ & script & """"
+If sh.Environment("Process")("TM_USE_DML") = "1" Then
+  args = args & " --dml"
+End If
+
 ' Window style 0 = hidden
-rc = sh.Run("""" & pyw & """ """ & script & """", 0, False)
+rc = sh.Run(args, 0, False)
 Set ts = fso.OpenTextFile(logf, 8, True)
 ts.WriteLine "Run rc=" & rc & " (async)"
 ts.Close

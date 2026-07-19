@@ -79,10 +79,18 @@ class RVC:
             self.use_jit = self.config.use_jit
             self.is_half = config.is_half
 
-            if index_rate != 0:
-                self.index = faiss.read_index(index_path)
-                self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
-                printt("Index search enabled")
+            # Missing / wrong index must not kill the process (common for catalog models)
+            if index_rate != 0 and index_path and os.path.isfile(index_path):
+                try:
+                    self.index = faiss.read_index(index_path)
+                    self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
+                    printt("Index search enabled")
+                except Exception as e:
+                    printt("Index load failed, continue without index: %s", e)
+                    index_rate = 0
+            elif index_rate != 0:
+                printt("Index file missing, continue without index: %s", index_path)
+                index_rate = 0
             self.pth_path: str = pth_path
             self.index_path = index_path
             self.index_rate = index_rate
@@ -197,9 +205,17 @@ class RVC:
 
     def change_index_rate(self, new_index_rate):
         if new_index_rate != 0 and self.index_rate == 0:
-            self.index = faiss.read_index(self.index_path)
-            self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
-            printt("Index search enabled")
+            if self.index_path and os.path.isfile(self.index_path):
+                try:
+                    self.index = faiss.read_index(self.index_path)
+                    self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
+                    printt("Index search enabled")
+                except Exception as e:
+                    printt("Index load failed: %s", e)
+                    new_index_rate = 0
+            else:
+                printt("Index file missing: %s", self.index_path)
+                new_index_rate = 0
         self.index_rate = new_index_rate
 
     def get_f0_post(self, f0):

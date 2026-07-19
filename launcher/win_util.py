@@ -186,6 +186,9 @@ def _env_for_runtime_python() -> dict:
     env.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
     # Avoid user site overriding Runtime packages
     env["PYTHONNOUSERSITE"] = "1"
+    # Preserve auto-start flag from parent main_app
+    if os.environ.get("TM_AUTO_START_VC"):
+        env["TM_AUTO_START_VC"] = os.environ["TM_AUTO_START_VC"]
     return env
 
 

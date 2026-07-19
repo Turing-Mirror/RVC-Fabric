@@ -160,6 +160,50 @@ if __name__ == "__main__":
             self.update_devices()
             self.launcher()
 
+        def _pick_default_devices(self, data):
+            """Prefer real mic in + CABLE Input out (VB-Cable / VoiceMeeter path)."""
+            def _match(names, keywords, exclude=()):
+                for n in names:
+                    low = n.lower()
+                    if any(x in low for x in exclude):
+                        continue
+                    if any(k in low for k in keywords):
+                        return n
+                return None
+
+            ins = list(self.input_devices or [])
+            outs = list(self.output_devices or [])
+            # Input: real mic — avoid cable/voicemeeter virtual outputs as mic
+            mic = _match(
+                ins,
+                ("microphone", "mic", "麦克风", "array"),
+                exclude=("cable", "voicemeeter", "vb-audio", "virtual"),
+            )
+            if mic is None and ins:
+                mic = next(
+                    (
+                        n
+                        for n in ins
+                        if "cable" not in n.lower() and "voicemeeter" not in n.lower()
+                    ),
+                    ins[0],
+                )
+            # Output: CABLE Input / VoiceMeeter Input (game apps listen on CABLE Output)
+            cable_out = _match(
+                outs,
+                ("cable input", "voicemeeter input", "vb-audio"),
+                exclude=("output",),
+            )
+            if cable_out is None:
+                cable_out = _match(outs, ("cable input", "cable"))
+            if cable_out is None and outs:
+                cable_out = outs[0]
+            if mic:
+                data["sg_input_device"] = mic
+            if cable_out:
+                data["sg_output_device"] = cable_out
+            return data
+
         def load(self):
             try:
                 if not os.path.exists("configs/inuse/config.json"):
@@ -173,28 +217,30 @@ if __name__ == "__main__":
                     data["crepe"] = data["f0method"] == "crepe"
                     data["rmvpe"] = data["f0method"] == "rmvpe"
                     data["fcpe"] = data["f0method"] == "fcpe"
-                    if data["sg_hostapi"] in self.hostapis:
+                    # Drop broken index (stale logs/*.index) so start won't crash
+                    ip = str(data.get("index_path") or "").strip()
+                    if ip and not os.path.isfile(ip):
+                        data["index_path"] = ""
+                        data["index_rate"] = 0
+                    elif not ip:
+                        data["index_rate"] = 0
+                    if data.get("sg_hostapi") in self.hostapis:
                         self.update_devices(hostapi_name=data["sg_hostapi"])
                         if (
-                            data["sg_input_device"] not in self.input_devices
-                            or data["sg_output_device"] not in self.output_devices
+                            data.get("sg_input_device") not in self.input_devices
+                            or data.get("sg_output_device") not in self.output_devices
                         ):
-                            self.update_devices()
-                            data["sg_hostapi"] = self.hostapis[0]
-                            data["sg_input_device"] = self.input_devices[
-                                self.input_devices_indices.index(sd.default.device[0])
-                            ]
-                            data["sg_output_device"] = self.output_devices[
-                                self.output_devices_indices.index(sd.default.device[1])
-                            ]
+                            self.update_devices(hostapi_name=data["sg_hostapi"])
+                            data = self._pick_default_devices(data)
                     else:
-                        data["sg_hostapi"] = self.hostapis[0]
-                        data["sg_input_device"] = self.input_devices[
-                            self.input_devices_indices.index(sd.default.device[0])
-                        ]
-                        data["sg_output_device"] = self.output_devices[
-                            self.output_devices_indices.index(sd.default.device[1])
-                        ]
+                        # Prefer MME for Cable compatibility when present
+                        if "MME" in self.hostapis:
+                            data["sg_hostapi"] = "MME"
+                            self.update_devices(hostapi_name="MME")
+                        else:
+                            data["sg_hostapi"] = self.hostapis[0]
+                            self.update_devices(hostapi_name=self.hostapis[0])
+                        data = self._pick_default_devices(data)
             except:
                 with open("configs/inuse/config.json", "w") as j:
                     data = {
@@ -540,7 +586,45 @@ if __name__ == "__main__":
                 ],
             ]
             self.window = sg.Window("RVC - GUI", layout=layout, finalize=True)
+            self._try_auto_start_vc()
             self.event_handler()
+
+        def _try_auto_start_vc(self):
+            """Main app sets TM_AUTO_START_VC=1 when user clicks 开启变声."""
+            flag = os.environ.get("TM_AUTO_START_VC", "").strip().lower()
+            if flag not in ("1", "true", "yes"):
+                return
+            try:
+                # One short read to materialize widget values
+                _ev, values = self.window.read(timeout=150)
+                if not values:
+                    return
+                if self.set_values(values) is not True:
+                    return
+                printt("auto-start VC (TM_AUTO_START_VC)")
+                printt("cuda_is_available: %s", torch.cuda.is_available())
+                self.start_vc()
+                if self.audio_proc is not None:
+                    self.delay_time = (
+                        self.audio_proc.get_latency()
+                        + float(values.get("block_time") or 0.25)
+                        + float(values.get("crossfade_length") or 0.05)
+                        + 0.01
+                    )
+                    self.window["sr_stream"].update(self.gui_config.samplerate)
+                    self.window["delay_time"].update(
+                        int(np.round(self.delay_time * 1000))
+                    )
+            except Exception as e:
+                traceback.print_exc()
+                try:
+                    sg.popup_error(
+                        i18n("自动开始音频转换失败")
+                        + f"\n\n{type(e).__name__}: {e}\n\n"
+                        + i18n("请检查输入/输出设备，或手动点「开始音频转换」。")
+                    )
+                except Exception:
+                    pass
 
         def event_handler(self):
             global flag_vc
@@ -574,7 +658,24 @@ if __name__ == "__main__":
                 if event == "start_vc" and not flag_vc:
                     if self.set_values(values) == True:
                         printt("cuda_is_available: %s", torch.cuda.is_available())
-                        self.start_vc()
+                        try:
+                            self.start_vc()
+                        except Exception as e:
+                            traceback.print_exc()
+                            flag_vc = False
+                            try:
+                                self.stop_stream()
+                            except Exception:
+                                pass
+                            sg.popup_error(
+                                i18n("启动音频转换失败")
+                                + f"\n\n{type(e).__name__}: {e}\n\n"
+                                + i18n(
+                                    "常见原因：模型路径无效、显存不足、声卡占用、index 损坏。"
+                                    "无 index 文件时可把 Index Rate 设为 0。"
+                                )
+                            )
+                            continue
                         settings = {
                             "pth_path": values["pth_path"],
                             "index_path": values["index_path"],
@@ -610,6 +711,9 @@ if __name__ == "__main__":
                                 ].index(True)
                             ],
                         }
+                        # Keep formant if present in values
+                        if "formant" in values:
+                            settings["formant"] = values["formant"]
                         with open("configs/inuse/config.json", "w") as j:
                             json.dump(settings, j)
                         if self.audio_proc is not None:
@@ -667,15 +771,29 @@ if __name__ == "__main__":
             if len(values["pth_path"].strip()) == 0:
                 sg.popup(i18n("请选择pth文件"))
                 return False
-            if len(values["index_path"].strip()) == 0:
-                sg.popup(i18n("请选择index文件"))
-                return False
+            pth = values["pth_path"].strip()
+            index_path = (values.get("index_path") or "").strip()
+            # Index is optional. Missing file used to hard-crash faiss on start.
+            if index_path and not os.path.isfile(index_path):
+                printt("index missing, disable index: %s", index_path)
+                index_path = ""
+                values["index_path"] = ""
+                try:
+                    self.window["index_path"].update("")
+                except Exception:
+                    pass
+            if not index_path:
+                # Force rate 0 so rtrvc never calls faiss.read_index
+                values["index_rate"] = 0
             pattern = re.compile("[^\x00-\x7F]+")
-            if pattern.findall(values["pth_path"]):
+            if pattern.findall(pth):
                 sg.popup(i18n("pth文件路径不可包含中文"))
                 return False
-            if pattern.findall(values["index_path"]):
+            if index_path and pattern.findall(index_path):
                 sg.popup(i18n("index文件路径不可包含中文"))
+                return False
+            if not os.path.isfile(pth):
+                sg.popup(i18n("pth文件不存在") + f"\n{pth}")
                 return False
             self.set_devices(values["sg_input_device"], values["sg_output_device"])
             self.config.use_jit = False  # values["use_jit"]
@@ -684,8 +802,8 @@ if __name__ == "__main__":
             self.gui_config.sg_wasapi_exclusive = values["sg_wasapi_exclusive"]
             self.gui_config.sg_input_device = values["sg_input_device"]
             self.gui_config.sg_output_device = values["sg_output_device"]
-            self.gui_config.pth_path = values["pth_path"]
-            self.gui_config.index_path = values["index_path"]
+            self.gui_config.pth_path = pth
+            self.gui_config.index_path = index_path
             self.gui_config.sr_type = ["sr_model", "sr_device"][
                 [
                     values["sr_model"],
@@ -702,7 +820,9 @@ if __name__ == "__main__":
             self.gui_config.O_noise_reduce = values["O_noise_reduce"]
             self.gui_config.use_pv = values["use_pv"]
             self.gui_config.rms_mix_rate = values["rms_mix_rate"]
-            self.gui_config.index_rate = values["index_rate"]
+            self.gui_config.index_rate = (
+                0 if not index_path else values["index_rate"]
+            )
             self.gui_config.n_cpu = values["n_cpu"]
             self.gui_config.f0method = ["pm", "harvest", "crepe", "rmvpe", "fcpe"][
                 [
@@ -837,47 +957,55 @@ if __name__ == "__main__":
                     wasapi_exclusive = True
                 else:
                     wasapi_exclusive = False
-                self.audio_proc = AudioIoProcess(
-                    input_device=sd.default.device[0],
-                    output_device=sd.default.device[1],
-                    input_audio_block_size = self.block_frame,
-                    sample_rate = self.gui_config.samplerate,
-                    channel_num=self.gui_config.channels,
-                    is_input_wasapi_exclusive=wasapi_exclusive,
-                    is_output_wasapi_exclusive=wasapi_exclusive,
-                    is_device_combined = True
-                    # TODO: Add control UI to allow devices with different type API & different WASAPI settings
-                )
-                self.in_mem = SharedMemory(name=self.audio_proc.get_in_mem_name())
-                self.out_mem = SharedMemory(name=self.audio_proc.get_out_mem_name())
-                self.in_buf = np.ndarray(
-                    self.audio_proc.get_np_shape(),
-                    dtype=self.audio_proc.get_np_dtype(),
-                    buffer=self.in_mem.buf,
-                    order='C'
-                )
-                self.out_buf = np.ndarray(
-                    self.audio_proc.get_np_shape(),
-                    dtype=self.audio_proc.get_np_dtype(),
-                    buffer=self.out_mem.buf,
-                    order='C'
-                )
-                self.in_ptr, \
-                self.out_ptr, \
-                self.play_ptr, \
-                self.in_evt, \
-                self.stop_evt = self.audio_proc.get_ptrs_and_events()
+                try:
+                    self.audio_proc = AudioIoProcess(
+                        input_device=sd.default.device[0],
+                        output_device=sd.default.device[1],
+                        input_audio_block_size=self.block_frame,
+                        sample_rate=self.gui_config.samplerate,
+                        channel_num=self.gui_config.channels,
+                        is_input_wasapi_exclusive=wasapi_exclusive,
+                        is_output_wasapi_exclusive=wasapi_exclusive,
+                        is_device_combined=True
+                        # TODO: Add control UI to allow devices with different type API & different WASAPI settings
+                    )
+                    self.in_mem = SharedMemory(name=self.audio_proc.get_in_mem_name())
+                    self.out_mem = SharedMemory(name=self.audio_proc.get_out_mem_name())
+                    self.in_buf = np.ndarray(
+                        self.audio_proc.get_np_shape(),
+                        dtype=self.audio_proc.get_np_dtype(),
+                        buffer=self.in_mem.buf,
+                        order="C",
+                    )
+                    self.out_buf = np.ndarray(
+                        self.audio_proc.get_np_shape(),
+                        dtype=self.audio_proc.get_np_dtype(),
+                        buffer=self.out_mem.buf,
+                        order="C",
+                    )
+                    (
+                        self.in_ptr,
+                        self.out_ptr,
+                        self.play_ptr,
+                        self.in_evt,
+                        self.stop_evt,
+                    ) = self.audio_proc.get_ptrs_and_events()
 
-                self.audio_proc.start()
+                    self.audio_proc.start()
 
-                def audio_loop():
-                    while flag_vc:
-                        self.audio_infer(self.block_frame << 1)
+                    def audio_loop():
+                        while flag_vc:
+                            try:
+                                self.audio_infer(self.block_frame << 1)
+                            except Exception:
+                                traceback.print_exc()
+                                break
 
-                threading.Thread(
-                    target=audio_loop,
-                    daemon=True
-                ).start()
+                    threading.Thread(target=audio_loop, daemon=True).start()
+                except Exception:
+                    flag_vc = False
+                    self.audio_proc = None
+                    raise
 
         def stop_stream(self):
             global flag_vc

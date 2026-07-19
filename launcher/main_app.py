@@ -870,9 +870,17 @@ class MainApp:
         ).pack(anchor="w", pady=(0, 8))
         tk.Label(
             left,
-            text="输入：麦克风\n输出：CABLE Input（安装虚拟声卡后）\n"
-            "游戏 / 语音软件麦克风：CABLE Output\n\n"
-            "细调设备请打开「高级实时面板」。",
+            text=(
+                "【虚拟声卡怎么接】\n"
+                "1. 本软件「输入」= 你的真实麦克风\n"
+                "2. 本软件「输出」= CABLE Input（或 VoiceMeeter Input）\n"
+                "3. 游戏/QQ/Discord「麦克风」= CABLE Output\n"
+                "   （别人听到的是变声后的声音）\n"
+                "4. Windows 默认播放设备仍用你的耳机/音箱\n"
+                "5. 不要勾选 WASAPI 独占（除非你很清楚）\n\n"
+                "点底部「开启变声」会打开面板并自动开始转换。\n"
+                "无 .index 文件也可变声（Index Rate 会自动为 0）。"
+            ),
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
@@ -890,6 +898,18 @@ class MainApp:
             bd=0,
             pady=6,
         ).pack(anchor="w", pady=12)
+        tk.Button(
+            left,
+            text="声卡接线说明",
+            font=sans_font(9),
+            bg=TM_BG,
+            fg=TM_INK_MUTED,
+            relief="flat",
+            cursor="hand2",
+            command=self._show_cable_help,
+            bd=0,
+            pady=4,
+        ).pack(anchor="w", pady=(0, 8))
 
         tk.Label(
             right, text="变声参数", font=serif_font(13, "bold"), bg=TM_SURFACE, fg=TM_INK
@@ -1176,6 +1196,26 @@ class MainApp:
         except Exception:
             pass
 
+    def _show_cable_help(self) -> None:
+        messagebox.showinfo(
+            "虚拟声卡接线",
+            "推荐：VB-Cable 或 VoiceMeeter\n\n"
+            "【本软件高级实时面板】\n"
+            "· 输入设备：你的真实麦克风（不要选 CABLE）\n"
+            "· 输出设备：CABLE Input\n"
+            "  （有的列表显示为「CABLE Input (VB-Audio Virtual Cable)」）\n"
+            "· 设备类型：MME 最省事；WASAPI 不要勾独占\n\n"
+            "【游戏 / 语音软件】\n"
+            "· 麦克风 / 输入：CABLE Output\n"
+            "· 这样对面听到的是变声后的声音\n\n"
+            "【自己监听】\n"
+            "· 用耳机听系统声音；不要把 CABLE 设成 Windows 默认播放\n\n"
+            "【开启变声】\n"
+            "· 主界面点「开启变声」→ 自动打开面板并开始转换\n"
+            "· 若只有 pth 没有 index 文件也能用，Index 会自动关闭\n"
+            "· 首次加载模型约 20–40 秒，请稍候",
+        )
+
     def open_webui(self) -> None:
         try:
             if self.webui_proc is None or self.webui_proc.poll() is not None:
@@ -1274,6 +1314,8 @@ class MainApp:
             self.save_settings_silent()
             if self.models:
                 self._sync_model_to_realtime_gui(self.models[self.model_idx])
+            # Manual panel open: do not auto-start conversion
+            os.environ.pop("TM_AUTO_START_VC", None)
             # Do NOT show a blocking "已载入音色" dialog — that looked like the
             # only result while gui_v1 still loads torch for ~30s.
             name = ""
@@ -1314,12 +1356,14 @@ class MainApp:
         self.save_settings_silent()
         self._sync_model_to_realtime_gui(m)
         try:
+            # Realtime panel will auto-click 开始音频转换 after load
+            os.environ["TM_AUTO_START_VC"] = "1"
             proc = start_legacy_realtime_gui()
             self.gui_proc = proc
             self.vc_running = True
             self.btn_start.configure(text="变声运行中", bg=TM_OK)
             self.lbl_online.configure(
-                text=f"启动中：{m['name']}（约 20–40 秒）",
+                text=f"启动中：{m['name']}（约 20–40 秒，将自动开始转换）",
                 fg=TM_OK,
             )
             threading.Thread(
@@ -1328,6 +1372,7 @@ class MainApp:
                 daemon=True,
             ).start()
         except Exception as e:
+            os.environ.pop("TM_AUTO_START_VC", None)
             messagebox.showerror("启动失败", str(e))
 
     def _tick_status(self) -> None:

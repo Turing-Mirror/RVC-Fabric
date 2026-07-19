@@ -113,10 +113,13 @@ def _should_keep_process(cmdline: str) -> bool:
     return False
 
 
-def kill_orphan_runtime_workers(*, include_worker: bool = True) -> int:
+def kill_orphan_runtime_workers(
+    *, include_worker: bool = True, scan_timeout_s: float = 60.0
+) -> int:
     """Kill worker + harvest children under project Runtime.
 
     Does NOT kill main_app / bootstrap / webui.
+    ``scan_timeout_s`` caps the PowerShell process sweep (use a short value on app exit).
     """
     killed = 0
     if include_worker:
@@ -134,10 +137,11 @@ def kill_orphan_runtime_workers(*, include_worker: bool = True) -> int:
         clear_worker_pid_file()
         return killed
 
-    root_s = str(ROOT).replace("'", "''")
-    # Enumerate in Python for safer keep-list
-    try:
-        ps = f"""
+    # Full CIM scan is slow; allow callers (app close) to skip or use a tight timeout
+    if scan_timeout_s and scan_timeout_s > 0:
+        root_s = str(ROOT).replace("'", "''")
+        try:
+            ps = f"""
 $root = '{root_s}'
 Get-CimInstance Win32_Process | Where-Object {{
   $_.Name -match '^(python|pythonw)\\.exe$' -and $_.CommandLine
@@ -162,24 +166,28 @@ Get-CimInstance Win32_Process | Where-Object {{
   }}
 }}
 """
-        r = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                ps,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            creationflags=0x08000000,
-        )
-        lines = [x.strip() for x in (r.stdout or "").splitlines() if x.strip().isdigit()]
-        killed = max(killed, len(lines))
-    except Exception:
-        pass
+            r = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    ps,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=max(0.5, float(scan_timeout_s)),
+                creationflags=0x08000000,
+            )
+            lines = [
+                x.strip()
+                for x in (r.stdout or "").splitlines()
+                if x.strip().isdigit()
+            ]
+            killed = max(killed, len(lines))
+        except Exception:
+            pass
 
     clear_worker_pid_file()
     try:
@@ -439,6 +447,70 @@ def quit_worker(force: bool = True) -> None:
     clear_worker_pid_file()
     try:
         write_status(state="idle", pid=0, message="quit", error="", delay_ms=0)
+    except Exception:
+        pass
+    _worker_launcher = None
+
+
+def shutdown_workers_for_exit(
+    *, soft_wait_s: float = 0.35, scan_timeout_s: float = 1.5
+) -> None:
+    """Fast cleanup when the main window is closing.
+
+    Avoids multi-second stop/quit polls that freeze the UI on exit.
+    Soft-quit briefly, then kill known PIDs and a short orphan scan.
+    """
+    global _worker_launcher
+    pid = get_worker_pid() or 0
+    try:
+        st_pid = int(read_status().get("pid") or 0)
+    except Exception:
+        st_pid = 0
+
+    try:
+        if pid or st_pid:
+            try:
+                send_command("stop")
+            except Exception:
+                pass
+            try:
+                send_command("quit")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Brief grace for clean stream teardown (do not wait many seconds)
+    deadline = time.time() + max(0.0, float(soft_wait_s))
+    while time.time() < deadline:
+        still = False
+        if pid and _pid_alive(pid):
+            still = True
+        if st_pid and st_pid != pid and _pid_alive(st_pid):
+            still = True
+        if not still:
+            break
+        time.sleep(0.04)
+
+    for p in {pid, st_pid}:
+        if p and _pid_alive(p):
+            try:
+                kill_process_tree(p)
+            except Exception:
+                pass
+
+    try:
+        kill_orphan_runtime_workers(
+            include_worker=True, scan_timeout_s=float(scan_timeout_s)
+        )
+    except Exception:
+        try:
+            clear_worker_pid_file()
+        except Exception:
+            pass
+
+    try:
+        write_status(state="idle", pid=0, message="exit", error="", delay_ms=0)
     except Exception:
         pass
     _worker_launcher = None

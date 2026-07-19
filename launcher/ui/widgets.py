@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Shared Tk widgets for Turing Mirror shell (library chrome + stage focus)."""
+"""Shared Tk widgets — library chrome, stage band, cover cards."""
 
 from __future__ import annotations
 
@@ -19,18 +19,19 @@ from launcher.theme import (
     TM_INSET,
     TM_META,
     TM_OK,
+    TM_STAGE,
     TM_SURFACE,
     TM_SURFACE_HOVER,
     TM_WARN,
+    display_font,
     mono_font,
     sans_font,
-    serif_font,
+    title_font,
+    tracked,
 )
 
 
 class HoverTip:
-    """Quiet paper popover on hover."""
-
     def __init__(self, widget: tk.Widget, text: str, *, delay_ms: int = 350) -> None:
         self.widget = widget
         self.text = text
@@ -75,7 +76,7 @@ class HoverTip:
         tip.wm_overrideredirect(True)
         tip.wm_attributes("-topmost", True)
         tip.configure(bg=TM_HAIRLINE)
-        wrap = tk.Frame(tip, bg=TM_SURFACE, padx=10, pady=8)
+        wrap = tk.Frame(tip, bg=TM_SURFACE, padx=12, pady=10)
         wrap.pack(padx=1, pady=1)
         tk.Label(
             wrap,
@@ -84,7 +85,7 @@ class HoverTip:
             bg=TM_SURFACE,
             fg=TM_INK,
             font=sans_font(9),
-            wraplength=320,
+            wraplength=340,
         ).pack(anchor="w")
         tip.wm_geometry(f"+{x}+{y}")
         self._tip = tip
@@ -95,7 +96,7 @@ class PrimaryButton(tk.Button):
         super().__init__(
             master,
             text=text,
-            font=kw.pop("font", sans_font(10, "bold")),
+            font=kw.pop("font", title_font(11, "bold")),
             bg=TM_ACCENT,
             fg=TM_ACCENT_INK,
             activebackground=TM_INK,
@@ -103,8 +104,8 @@ class PrimaryButton(tk.Button):
             relief="flat",
             cursor="hand2",
             bd=0,
-            padx=kw.pop("padx", 18),
-            pady=kw.pop("pady", 7),
+            padx=kw.pop("padx", 22),
+            pady=kw.pop("pady", 10),
             command=command,
             **kw,
         )
@@ -115,7 +116,7 @@ class GhostButton(tk.Button):
         super().__init__(
             master,
             text=text,
-            font=kw.pop("font", sans_font(9)),
+            font=kw.pop("font", sans_font(10)),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             activebackground=TM_SURFACE_HOVER,
@@ -123,8 +124,8 @@ class GhostButton(tk.Button):
             relief="flat",
             cursor="hand2",
             bd=0,
-            padx=kw.pop("padx", 12),
-            pady=kw.pop("pady", 7),
+            padx=kw.pop("padx", 16),
+            pady=kw.pop("pady", 9),
             highlightthickness=1,
             highlightbackground=TM_HAIRLINE,
             command=command,
@@ -133,61 +134,78 @@ class GhostButton(tk.Button):
 
 
 class SectionCard(tk.Frame):
-    """Surface panel with optional left accent rail (library section card)."""
+    """Panel with left accent rail + optional mono eyebrow + title."""
 
     def __init__(
         self,
         master,
         title: str = "",
         *,
+        eyebrow: str = "",
         accent_rail: bool = True,
-        pad: int = 14,
+        pad: int = 16,
         **kw,
     ):
         super().__init__(master, bg=TM_BG, **kw)
-        rail_w = 3 if accent_rail else 0
         if accent_rail:
-            tk.Frame(self, bg=TM_ACCENT, width=rail_w).pack(side="left", fill="y")
+            tk.Frame(self, bg=TM_ACCENT, width=4).pack(side="left", fill="y")
         self.body = tk.Frame(
             self,
             bg=TM_SURFACE,
             highlightthickness=1,
             highlightbackground=TM_HAIRLINE,
             padx=pad,
-            pady=10,
+            pady=14,
         )
         self.body.pack(side="left", fill="both", expand=True)
         self.title_lbl: Optional[tk.Label] = None
+        if eyebrow:
+            tk.Label(
+                self.body,
+                text=tracked(eyebrow.upper(), gap="  ") if eyebrow.isascii() else eyebrow,
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                anchor="w",
+            ).pack(anchor="w", pady=(0, 4))
         if title:
             self.title_lbl = tk.Label(
                 self.body,
                 text=title,
-                font=serif_font(12, "bold"),
+                font=title_font(13, "bold"),
                 bg=TM_SURFACE,
                 fg=TM_INK,
                 anchor="w",
             )
-            self.title_lbl.pack(anchor="w", pady=(0, 6))
+            self.title_lbl.pack(anchor="w", pady=(0, 8))
 
 
 class NavItem(tk.Label):
-    """Top-bar text nav with active accent treatment."""
+    """Segment control item (Schale-like pill group)."""
 
-    def __init__(self, master, text: str, key: str, on_click: Callable[[str], None], **kw):
+    def __init__(
+        self,
+        master,
+        text: str,
+        key: str,
+        on_click: Callable[[str], None],
+        **kw,
+    ):
         super().__init__(
             master,
             text=text,
-            font=sans_font(11),
-            bg=kw.pop("bg", TM_SURFACE),
+            font=sans_font(10),
+            bg=kw.pop("bg", TM_INSET),
             fg=TM_INK_MUTED,
-            padx=14,
-            pady=6,
+            padx=18,
+            pady=8,
             cursor="hand2",
             **kw,
         )
         self.key = key
         self._on_click = on_click
         self._active = False
+        self._rail_bg = master.cget("bg") if master else TM_INSET
         self.bind("<Button-1>", lambda _e: self._on_click(key))
         self.bind("<Enter>", self._enter)
         self.bind("<Leave>", self._leave)
@@ -196,35 +214,33 @@ class NavItem(tk.Label):
         self._active = active
         if active:
             self.configure(
-                fg=TM_ACCENT,
-                font=sans_font(11, "bold"),
-                bg=TM_ACCENT_SOFT,
+                fg=TM_ACCENT_INK,
+                font=title_font(10, "bold"),
+                bg=TM_ACCENT,
             )
         else:
             self.configure(
                 fg=TM_INK_MUTED,
-                font=sans_font(11),
-                bg=self.master.cget("bg") if self.master else TM_SURFACE,
+                font=sans_font(10),
+                bg=self._rail_bg,
             )
 
     def _enter(self, _e=None) -> None:
         if not self._active:
-            self.configure(fg=TM_INK)
+            self.configure(fg=TM_INK, bg=TM_SURFACE_HOVER)
 
     def _leave(self, _e=None) -> None:
         if not self._active:
-            self.configure(fg=TM_INK_MUTED)
+            self.configure(fg=TM_INK_MUTED, bg=self._rail_bg)
 
 
 class StatusBadge(tk.Frame):
-    """Bottom-right engine status pill."""
-
     def __init__(self, master, **kw):
-        super().__init__(master, bg=TM_INSET, padx=12, pady=5, **kw)
+        super().__init__(master, bg=TM_INSET, padx=14, pady=8, **kw)
         self.title_lbl = tk.Label(
             self,
             text="引擎待命",
-            font=sans_font(10),
+            font=title_font(10, "bold"),
             bg=TM_INSET,
             fg=TM_INK_MUTED,
         )
@@ -236,35 +252,26 @@ class StatusBadge(tk.Frame):
             bg=TM_INSET,
             fg=TM_META,
         )
-        self.sub_lbl.pack(anchor="e")
+        self.sub_lbl.pack(anchor="e", pady=(2, 0))
 
     def set_mode(self, mode: str, title: str, subtitle: str = "") -> None:
-        """mode: idle|busy|live|error"""
         if mode == "live":
-            badge_bg = TM_ACCENT_SOFT
-            title_fg = TM_ACCENT
-            title_font = sans_font(11, "bold")
-            sub_fg = TM_OK
+            badge_bg, title_fg, sub_fg = TM_ACCENT_SOFT, TM_ACCENT, TM_OK
+            title_font_ = title_font(11, "bold")
             title = "● " + title
         elif mode == "busy":
-            badge_bg = TM_INSET
-            title_fg = TM_WARN
-            title_font = sans_font(10, "bold")
-            sub_fg = TM_META
+            badge_bg, title_fg, sub_fg = TM_INSET, TM_WARN, TM_META
+            title_font_ = title_font(10, "bold")
         elif mode == "error":
-            badge_bg = TM_INSET
-            title_fg = TM_ERROR
-            title_font = sans_font(10, "bold")
-            sub_fg = TM_META
+            badge_bg, title_fg, sub_fg = TM_INSET, TM_ERROR, TM_META
+            title_font_ = title_font(10, "bold")
         else:
-            badge_bg = TM_INSET
-            title_fg = TM_INK_MUTED
-            title_font = sans_font(10)
-            sub_fg = TM_META
+            badge_bg, title_fg, sub_fg = TM_INSET, TM_INK_MUTED, TM_META
+            title_font_ = sans_font(10)
         try:
             self.configure(bg=badge_bg)
             self.title_lbl.configure(
-                text=title, bg=badge_bg, fg=title_fg, font=title_font
+                text=title, bg=badge_bg, fg=title_fg, font=title_font_
             )
             self.sub_lbl.configure(
                 text=subtitle or "",
@@ -277,7 +284,7 @@ class StatusBadge(tk.Frame):
 
 
 class SoftActionCard(tk.Frame):
-    """Clickable action tile (bootstrap)."""
+    """Bootstrap action tile — larger, mono caption, left rail."""
 
     def __init__(self, master, title: str, subtitle: str, command, **kw):
         super().__init__(
@@ -287,43 +294,52 @@ class SoftActionCard(tk.Frame):
             highlightbackground=TM_HAIRLINE,
             **kw,
         )
-        self.configure(width=148, height=118)
+        self.configure(width=168, height=140)
+        self.pack_propagate(False)
         self._cmd = command
-        rail = tk.Frame(self, bg=TM_ACCENT, width=3, height=118)
-        rail.place(x=0, y=0)
-        self._inner = tk.Frame(self, bg=TM_SURFACE, width=128, height=72)
-        self._inner.pack(padx=10, pady=(14, 4))
-        self._inner.pack_propagate(False)
+        tk.Frame(self, bg=TM_ACCENT, width=4).pack(side="left", fill="y")
+        col = tk.Frame(self, bg=TM_SURFACE)
+        col.pack(side="left", fill="both", expand=True, padx=12, pady=14)
         self._lbl = tk.Label(
-            self._inner,
+            col,
             text=title,
-            font=sans_font(11, "bold"),
+            font=title_font(12, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
-            wraplength=118,
-            justify="center",
+            wraplength=130,
+            justify="left",
+            anchor="w",
         )
-        self._lbl.place(relx=0.5, rely=0.5, anchor="center")
+        self._lbl.pack(anchor="w", pady=(8, 6))
         self._sub = tk.Label(
-            self,
+            col,
             text=subtitle,
-            font=sans_font(8),
+            font=mono_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
+            wraplength=130,
+            justify="left",
+            anchor="w",
         )
-        self._sub.pack(pady=(0, 10))
-        for w in (self, self._inner, self._lbl, self._sub):
+        self._sub.pack(anchor="w")
+        for w in (self, col, self._lbl, self._sub):
             w.bind("<Button-1>", self._click)
             w.bind("<Enter>", self._enter)
             w.bind("<Leave>", self._leave)
 
     def _enter(self, _e=None):
-        for w in (self, self._inner, self._lbl, self._sub):
-            w.configure(bg=TM_SURFACE_HOVER)
+        for w in (self, self._lbl, self._sub):
+            try:
+                w.configure(bg=TM_SURFACE_HOVER)
+            except Exception:
+                pass
 
     def _leave(self, _e=None):
-        for w in (self, self._inner, self._lbl, self._sub):
-            w.configure(bg=TM_SURFACE)
+        for w in (self, self._lbl, self._sub):
+            try:
+                w.configure(bg=TM_SURFACE)
+            except Exception:
+                pass
 
     def _click(self, _e=None):
         if self._cmd:
@@ -331,7 +347,7 @@ class SoftActionCard(tk.Frame):
 
 
 class ModelCoverCard(tk.Frame):
-    """Cover-forward model tile for home carousel / model grid."""
+    """Cover-dominant tile (Schale work-card proportion)."""
 
     def __init__(
         self,
@@ -343,8 +359,8 @@ class ModelCoverCard(tk.Frame):
         active: bool = False,
         focus: bool = False,
         index_text: str = "",
-        width: int = 180,
-        height: int = 220,
+        width: int = 200,
+        height: int = 260,
         on_click: Optional[Callable] = None,
         action_text: str = "",
         on_action: Optional[Callable] = None,
@@ -354,7 +370,7 @@ class ModelCoverCard(tk.Frame):
         thick = 2 if (active or focus) else 1
         super().__init__(
             master,
-            bg=TM_SURFACE if (focus or active) else TM_BG,
+            bg=TM_SURFACE,
             width=width,
             height=height,
             highlightthickness=thick,
@@ -365,10 +381,10 @@ class ModelCoverCard(tk.Frame):
         self.pack_propagate(False)
         self.grid_propagate(False)
         self._on_click = on_click
-        self._photo = photo  # keep ref
+        self._photo = photo
 
-        # Cover / placeholder
-        cover_h = max(int(height * 0.48), 72)
+        # Cover ~58% of card (image-first)
+        cover_h = max(int(height * 0.58), 96)
         cover_box = tk.Frame(self, bg=TM_INSET, height=cover_h)
         cover_box.pack(fill="x")
         cover_box.pack_propagate(False)
@@ -377,48 +393,51 @@ class ModelCoverCard(tk.Frame):
             lbl.place(relx=0.5, rely=0.5, anchor="center")
             widgets = [lbl]
         else:
-            initial = (name[:1] or "·").upper()
+            initial = (name[:1] or "·")
             lbl = tk.Label(
                 cover_box,
                 text=initial,
-                font=serif_font(22 if focus else 16, "bold"),
+                font=display_font(28 if focus else 20),
                 bg=TM_INSET,
                 fg=TM_META,
             )
             lbl.place(relx=0.5, rely=0.5, anchor="center")
             widgets = [lbl]
 
-        body = tk.Frame(self, bg=self.cget("bg"))
-        body.pack(fill="both", expand=True, padx=8, pady=6)
-        name_lbl = tk.Label(
-            body,
-            text=name[:14],
-            font=serif_font(12 if focus else 10, "bold"),
-            bg=self.cget("bg"),
-            fg=TM_INK,
-        )
-        name_lbl.pack(pady=(2, 0))
+        body = tk.Frame(self, bg=TM_SURFACE)
+        body.pack(fill="both", expand=True, padx=10, pady=(8, 10))
+
         tag_lbl = tk.Label(
             body,
-            text=tag or "音色",
-            font=sans_font(8),
-            bg=self.cget("bg"),
+            text=(tag or "音色").upper() if (tag or "").isascii() else (tag or "音色"),
+            font=mono_font(7),
+            bg=TM_SURFACE,
             fg=TM_META,
+            anchor="w",
         )
-        tag_lbl.pack()
+        tag_lbl.pack(anchor="w")
+        name_lbl = tk.Label(
+            body,
+            text=name[:16],
+            font=title_font(12 if focus else 11, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="w",
+        )
+        name_lbl.pack(anchor="w", pady=(2, 0))
         widgets.extend([body, name_lbl, tag_lbl, cover_box, self])
 
         if active:
             badge = tk.Label(
                 self,
                 text="使用中",
-                font=sans_font(8, "bold"),
+                font=mono_font(7),
                 bg=TM_ACCENT,
                 fg=TM_ACCENT_INK,
-                padx=6,
-                pady=1,
+                padx=8,
+                pady=2,
             )
-            badge.place(relx=1.0, x=-6, y=6, anchor="ne")
+            badge.place(relx=1.0, x=-8, y=8, anchor="ne")
             widgets.append(badge)
 
         if index_text:
@@ -426,37 +445,38 @@ class ModelCoverCard(tk.Frame):
                 body,
                 text=index_text,
                 font=mono_font(8),
-                bg=self.cget("bg"),
+                bg=TM_SURFACE,
                 fg=TM_META,
+                anchor="w",
             )
-            idx.pack(pady=(4, 0))
+            idx.pack(anchor="w", pady=(4, 0))
             widgets.append(idx)
 
         if action_text and on_action and not active:
             btn = tk.Button(
                 body,
                 text=action_text,
-                font=sans_font(9),
+                font=title_font(9, "bold"),
                 bg=TM_ACCENT,
                 fg=TM_ACCENT_INK,
                 relief="flat",
                 cursor="hand2",
                 command=on_action,
                 bd=0,
-                padx=12,
-                pady=3,
+                padx=14,
+                pady=4,
             )
-            btn.pack(pady=(6, 2))
+            btn.pack(anchor="w", pady=(8, 0))
         elif active and action_text:
             tk.Label(
                 body,
                 text=action_text,
-                font=sans_font(9, "bold"),
-                bg=TM_ACCENT,
-                fg=TM_ACCENT_INK,
-                padx=12,
+                font=mono_font(8),
+                bg=TM_ACCENT_SOFT,
+                fg=TM_ACCENT,
+                padx=10,
                 pady=3,
-            ).pack(pady=(6, 2))
+            ).pack(anchor="w", pady=(8, 0))
 
         def _click(_e=None):
             if on_click:
@@ -464,3 +484,46 @@ class ModelCoverCard(tk.Frame):
 
         for w in widgets:
             w.bind("<Button-1>", _click)
+
+
+class PageHeader(tk.Frame):
+    """Page title block: mono eyebrow + large title + muted lead."""
+
+    def __init__(
+        self,
+        master,
+        *,
+        eyebrow: str,
+        title: str,
+        lead: str = "",
+        bg: str = TM_BG,
+        **kw,
+    ):
+        super().__init__(master, bg=bg, **kw)
+        tk.Label(
+            self,
+            text=tracked(eyebrow, gap="  ") if all(ord(c) < 128 for c in eyebrow) else eyebrow,
+            font=mono_font(8),
+            bg=bg,
+            fg=TM_META,
+            anchor="w",
+        ).pack(anchor="w")
+        tk.Label(
+            self,
+            text=title,
+            font=title_font(22, "bold"),
+            bg=bg,
+            fg=TM_INK,
+            anchor="w",
+        ).pack(anchor="w", pady=(4, 0))
+        if lead:
+            tk.Label(
+                self,
+                text=lead,
+                font=sans_font(10),
+                bg=bg,
+                fg=TM_INK_MUTED,
+                anchor="w",
+                wraplength=640,
+                justify="left",
+            ).pack(anchor="w", pady=(8, 0))

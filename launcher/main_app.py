@@ -40,8 +40,12 @@ from launcher import realtime_client as rt_client
 from launcher.gpu_backend import apply_backend_env, detect_full, normalize_accel
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
+    APP_ROUTE,
+    APP_WORDMARK,
     BOTTOM_HEIGHT,
+    GUTTER,
     NAV_HEIGHT,
+    PAD_X,
     TM_ACCENT,
     TM_ACCENT_INK,
     TM_ACCENT_SOFT,
@@ -52,12 +56,16 @@ from launcher.theme import (
     TM_INSET,
     TM_META,
     TM_OK,
+    TM_STAGE,
     TM_SURFACE,
     TM_SURFACE_HOVER,
     TM_WARN,
+    display_font,
     mono_font,
     sans_font,
     serif_font,
+    title_font,
+    tracked,
 )
 from launcher.ui import (
     CoverCache,
@@ -65,6 +73,7 @@ from launcher.ui import (
     HoverTip,
     ModelCoverCard,
     NavItem,
+    PageHeader,
     PrimaryButton,
     SectionCard,
     StatusBadge,
@@ -188,30 +197,31 @@ class MainApp:
             self._reflow_settings_page()
 
     def _build_chrome(self) -> None:
-        # Library-style header: surface bar + hairline
+        # LyricsKara-style head: tracked wordmark + mono route | Schale segment nav
         top = tk.Frame(self.root, bg=TM_SURFACE, height=NAV_HEIGHT)
         top.pack(fill="x")
         top.pack_propagate(False)
 
         brand = tk.Frame(top, bg=TM_SURFACE)
-        brand.pack(side="left", padx=20, pady=12)
+        brand.pack(side="left", padx=PAD_X, pady=10)
         tk.Label(
             brand,
-            text="Turing Mirror",
-            font=serif_font(15, "bold"),
+            text=tracked(APP_WORDMARK, gap="  "),
+            font=display_font(13),
             bg=TM_SURFACE,
             fg=TM_INK,
-        ).pack(side="left")
+        ).pack(anchor="w")
         tk.Label(
             brand,
-            text="  变声器",
-            font=sans_font(11),
+            text="变声器  ·  " + tracked(APP_ROUTE, gap=""),
+            font=mono_font(8),
             bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
-        ).pack(side="left")
+            fg=TM_META,
+        ).pack(anchor="w", pady=(2, 0))
 
-        nav = tk.Frame(top, bg=TM_SURFACE)
-        nav.pack(side="left", expand=True, padx=8)
+        # Segment control rail
+        nav_rail = tk.Frame(top, bg=TM_INSET, padx=4, pady=4)
+        nav_rail.pack(side="right", padx=PAD_X, pady=12)
         self.nav_btns: dict[str, NavItem] = {}
         for key, label in (
             ("home", "首页"),
@@ -219,8 +229,8 @@ class MainApp:
             ("settings", "设置"),
             ("more", "其他"),
         ):
-            b = NavItem(nav, label, key, self.show_page, bg=TM_SURFACE)
-            b.pack(side="left", padx=3)
+            b = NavItem(nav_rail, label, key, self.show_page)
+            b.pack(side="left", padx=2)
             self.nav_btns[key] = b
 
         tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x")
@@ -233,24 +243,34 @@ class MainApp:
         bottom.pack(fill="x", side="bottom")
         bottom.pack_propagate(False)
 
+        left_info = tk.Frame(bottom, bg=TM_SURFACE)
+        left_info.place(x=PAD_X, rely=0.5, anchor="w")
+        tk.Label(
+            left_info,
+            text=tracked("NOW PLAYING", gap="  "),
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        ).pack(anchor="w")
         self.bottom_name = tk.Label(
-            bottom,
+            left_info,
             text="未选择模型",
-            font=serif_font(12, "bold"),
+            font=title_font(13, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.place(x=20, y=14)
+        self.bottom_name.pack(anchor="w", pady=(2, 0))
         self.bottom_tag = tk.Label(
-            bottom,
+            left_info,
             text="请先导入音色到 User_Data/models",
-            font=sans_font(9),
+            font=mono_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_tag.place(x=20, y=38)
+        self.bottom_tag.pack(anchor="w", pady=(2, 0))
 
         ctrl = tk.Frame(bottom, bg=TM_SURFACE)
         ctrl.place(relx=0.5, rely=0.5, anchor="center")
@@ -261,10 +281,9 @@ class MainApp:
         )
 
         right = tk.Frame(bottom, bg=TM_SURFACE)
-        right.place(relx=0.97, rely=0.5, anchor="e")
+        right.place(relx=1.0, x=-PAD_X, rely=0.5, anchor="e")
         self.status_badge = StatusBadge(right)
         self.status_badge.pack(anchor="e")
-        # Back-compat aliases used by older status paths
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
         self._sync_bottom()
@@ -315,69 +334,102 @@ class MainApp:
     def _page_home(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
         fr.columnconfigure(0, weight=1)
-        fr.rowconfigure(2, weight=1)
+        fr.rowconfigure(1, weight=1)
 
-        hero = tk.Frame(fr, bg=TM_BG)
-        hero.grid(row=0, column=0, sticky="ew", pady=(18, 4), padx=20)
-        tk.Label(
-            hero,
-            text="选择音色，开始变声",
-            font=serif_font(18, "bold"),
-            bg=TM_BG,
-            fg=TM_INK,
-        ).pack()
-        tk.Label(
-            hero,
-            text="左右切换会立即设为当前音色 · 底部栏也会同步更新",
-            font=sans_font(10),
-            bg=TM_BG,
-            fg=TM_INK_MUTED,
-        ).pack(pady=(6, 0))
+        # Full-width stage band (LyricsKara “band” hierarchy)
+        stage = tk.Frame(fr, bg=TM_STAGE)
+        stage.grid(row=0, column=0, sticky="ew")
+        stage_inner = tk.Frame(stage, bg=TM_STAGE)
+        stage_inner.pack(fill="x", padx=GUTTER, pady=(22, 18))
+        stage_inner.columnconfigure(0, weight=1)
 
-        cur = SectionCard(fr, title="", accent_rail=True, pad=12)
-        cur.grid(row=1, column=0, sticky="ew", padx=24, pady=(10, 4))
-        self.home_current_lbl = tk.Label(
-            cur.body,
-            text="当前音色：—",
-            font=serif_font(13, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            anchor="w",
-        )
-        self.home_current_lbl.pack(fill="x", pady=(0, 2))
-        self.home_hint_lbl = tk.Label(
-            cur.body,
-            text="点击左右箭头或卡片即可切换",
-            font=sans_font(9),
-            bg=TM_SURFACE,
+        head_row = tk.Frame(stage_inner, bg=TM_STAGE)
+        head_row.grid(row=0, column=0, sticky="ew")
+        tk.Label(
+            head_row,
+            text=tracked("HOME  ·  STAGE", gap="  "),
+            font=mono_font(8),
+            bg=TM_STAGE,
             fg=TM_META,
             anchor="w",
+        ).pack(side="left")
+        self.home_index_lbl = tk.Label(
+            head_row,
+            text="— / —",
+            font=mono_font(9),
+            bg=TM_STAGE,
+            fg=TM_META,
+            anchor="e",
         )
-        self.home_hint_lbl.pack(fill="x")
+        self.home_index_lbl.pack(side="right")
 
-        self.carousel_host = tk.Frame(fr, bg=TM_BG)
-        self.carousel_host.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
+        tk.Label(
+            stage_inner,
+            text="选择音色，开始变声",
+            font=title_font(24, "bold"),
+            bg=TM_STAGE,
+            fg=TM_INK,
+            anchor="w",
+        ).grid(row=1, column=0, sticky="w", pady=(10, 6))
+
+        self.home_current_lbl = tk.Label(
+            stage_inner,
+            text="当前音色：—",
+            font=title_font(15, "bold"),
+            bg=TM_STAGE,
+            fg=TM_ACCENT,
+            anchor="w",
+        )
+        self.home_current_lbl.grid(row=2, column=0, sticky="w", pady=(4, 2))
+        self.home_hint_lbl = tk.Label(
+            stage_inner,
+            text="左右切换会立即设为当前音色 · 底部栏同步",
+            font=sans_font(10),
+            bg=TM_STAGE,
+            fg=TM_INK_MUTED,
+            anchor="w",
+        )
+        self.home_hint_lbl.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        tk.Frame(fr, bg=TM_HAIRLINE, height=1).grid(row=0, column=0, sticky="sew")
+
+        # Carousel stage
+        mid = tk.Frame(fr, bg=TM_BG)
+        mid.grid(row=1, column=0, sticky="nsew", padx=GUTTER, pady=(8, 0))
+        mid.columnconfigure(0, weight=1)
+        mid.rowconfigure(0, weight=1)
+        self.carousel_host = tk.Frame(mid, bg=TM_BG)
+        self.carousel_host.grid(row=0, column=0, sticky="nsew")
         self.carousel_host.bind("<Configure>", lambda e: self._schedule_carousel_reflow())
 
         nav = tk.Frame(fr, bg=TM_BG)
-        nav.grid(row=3, column=0, sticky="ew", pady=(4, 12))
+        nav.grid(row=2, column=0, sticky="ew", pady=(8, 6))
         nav_inner = tk.Frame(nav, bg=TM_BG)
         nav_inner.pack()
         GhostButton(
-            nav_inner, "‹ 上一个", command=lambda: self._shift_model(-1), padx=16, pady=8
+            nav_inner,
+            "‹  PREV",
+            command=lambda: self._shift_model(-1),
+            font=mono_font(9),
+            padx=20,
+            pady=10,
         ).pack(side="left", padx=8)
         GhostButton(
-            nav_inner, "下一个 ›", command=lambda: self._shift_model(1), padx=16, pady=8
+            nav_inner,
+            "NEXT  ›",
+            command=lambda: self._shift_model(1),
+            font=mono_font(9),
+            padx=20,
+            pady=10,
         ).pack(side="left", padx=8)
 
         self.home_toast = tk.Label(
             fr,
             text="",
-            font=sans_font(10),
+            font=mono_font(9),
             bg=TM_BG,
             fg=TM_OK,
         )
-        self.home_toast.grid(row=4, column=0, sticky="ew", pady=(0, 8))
+        self.home_toast.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         return fr
 
     def _schedule_carousel_reflow(self) -> None:
@@ -410,11 +462,12 @@ class MainApp:
 
         self.carousel_host.update_idletasks()
         host_w = max(self.carousel_host.winfo_width(), 400)
-        host_h = max(self.carousel_host.winfo_height(), 220)
-        focus_w = max(160, min(280, int(host_w * 0.28)))
-        focus_h = max(200, min(320, int(host_h * 0.78)))
-        side_w = max(120, int(focus_w * 0.72))
-        side_h = max(160, int(focus_h * 0.78))
+        host_h = max(self.carousel_host.winfo_height(), 240)
+        # Focus card dominates (stage hierarchy)
+        focus_w = max(200, min(320, int(host_w * 0.34)))
+        focus_h = max(240, min(360, int(host_h * 0.88)))
+        side_w = max(130, int(focus_w * 0.62))
+        side_h = max(180, int(focus_h * 0.72))
 
         n = len(self.models)
         idxs = [(self.model_idx - 1) % n, self.model_idx % n, (self.model_idx + 1) % n]
@@ -427,8 +480,8 @@ class MainApp:
             w, h = (focus_w, focus_h) if focus else (side_w, side_h)
             photo = self._cover_cache.get(
                 m.get("cover"),
-                max_w=max(w - 8, 80),
-                max_h=max(int(h * 0.48), 60),
+                max_w=max(w - 4, 100),
+                max_h=max(int(h * 0.58), 80),
             )
             card = ModelCoverCard(
                 row,
@@ -437,28 +490,32 @@ class MainApp:
                 photo=photo,
                 active=focus,
                 focus=focus,
-                index_text=f"{self.model_idx + 1} / {n}" if focus else "",
+                index_text=f"{self.model_idx + 1:02d} / {n:02d}" if focus else "",
                 width=w,
                 height=h,
                 on_click=lambda ix=mi: self._select_model(ix, feedback=True),
             )
-            card.pack(side="left", padx=max(6, int(host_w * 0.012)), pady=8)
+            card.pack(side="left", padx=max(10, int(host_w * 0.016)), pady=12)
 
     def _update_home_current_label(self) -> None:
         if not hasattr(self, "home_current_lbl"):
             return
         if not self.models:
-            self.home_current_lbl.configure(text="当前音色：尚未选择")
+            self.home_current_lbl.configure(text="尚未选择音色")
             self.home_hint_lbl.configure(text="请先到「模型」页导入音色")
+            if hasattr(self, "home_index_lbl"):
+                self.home_index_lbl.configure(text="— / —")
             return
         m = self.models[self.model_idx]
         n = len(self.models)
-        self.home_current_lbl.configure(
-            text=f"当前音色：{m['name']}    （{self.model_idx + 1} / {n}）"
-        )
+        self.home_current_lbl.configure(text=m["name"])
         self.home_hint_lbl.configure(
-            text=f"标签：{m.get('tag') or '音色'}  ·  左右切换会立即生效并保存"
+            text=f"{m.get('tag') or '音色'}  ·  左右切换立即生效并保存"
         )
+        if hasattr(self, "home_index_lbl"):
+            self.home_index_lbl.configure(
+                text=f"{self.model_idx + 1:02d}  /  {n:02d}"
+            )
 
     def _show_switch_toast(self, name: str) -> None:
         if not hasattr(self, "home_toast"):
@@ -592,37 +649,38 @@ class MainApp:
         fr.rowconfigure(1, weight=1)
 
         bar = tk.Frame(fr, bg=TM_BG)
-        bar.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
+        bar.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(18, 8))
         left = tk.Frame(bar, bg=TM_BG)
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(
+        PageHeader(
             left,
-            text="音色目录",
-            font=serif_font(14, "bold"),
-            bg=TM_BG,
-            fg=TM_INK,
-        ).pack(side="left")
+            eyebrow="CATALOG",
+            title="音色目录",
+            lead="",
+        ).pack(anchor="w")
         self.models_status_lbl = tk.Label(
             left,
             text="",
-            font=sans_font(9),
+            font=mono_font(9),
             bg=TM_BG,
             fg=TM_META,
         )
-        self.models_status_lbl.pack(side="left", padx=10)
+        self.models_status_lbl.pack(anchor="w", pady=(6, 0))
 
-        GhostButton(bar, "打开目录", command=lambda: open_path(MODELS_DIR), padx=12, pady=5).pack(
+        actions = tk.Frame(bar, bg=TM_BG)
+        actions.pack(side="right", anchor="n", pady=(8, 0))
+        GhostButton(
+            actions, "打开目录", command=lambda: open_path(MODELS_DIR), padx=12, pady=6
+        ).pack(side="right", padx=4)
+        GhostButton(actions, "刷新", command=self.refresh_models, padx=12, pady=6).pack(
             side="right", padx=4
         )
-        GhostButton(bar, "刷新", command=self.refresh_models, padx=12, pady=5).pack(
-            side="right", padx=4
-        )
-        PrimaryButton(bar, "导入模型", command=self.import_model, padx=12, pady=5).pack(
+        PrimaryButton(actions, "导入模型", command=self.import_model, padx=14, pady=6).pack(
             side="right", padx=4
         )
 
         list_wrap = tk.Frame(fr, bg=TM_BG)
-        list_wrap.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        list_wrap.grid(row=1, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 12))
         list_wrap.columnconfigure(0, weight=1)
         list_wrap.rowconfigure(0, weight=1)
 
@@ -692,11 +750,11 @@ class MainApp:
             self._sync_bottom()
             return
 
-        # Columns adapt to width
+        # Columns adapt to width — cover-first cards need more width
         self._models_canvas.update_idletasks()
         cw = max(self._models_canvas.winfo_width(), 320)
-        card_min = 160
-        cols = max(1, min(6, cw // (card_min + 16)))
+        card_min = 180
+        cols = max(1, min(5, cw // (card_min + 20)))
         for c in range(cols):
             self.model_grid.columnconfigure(c, weight=1, uniform="m")
 
@@ -704,7 +762,7 @@ class MainApp:
             r, c = divmod(i, cols)
             active = self._is_active_model(m)
             photo = self._cover_cache.get(
-                m.get("cover"), max_w=card_min + 20, max_h=90
+                m.get("cover"), max_w=card_min + 40, max_h=130
             )
             card = ModelCoverCard(
                 self.model_grid,
@@ -713,13 +771,13 @@ class MainApp:
                 photo=photo,
                 active=active,
                 focus=active,
-                width=max(card_min, 160),
-                height=200,
+                width=max(card_min, 180),
+                height=250,
                 on_click=lambda ix=i: self._use_model_from_grid(ix),
-                action_text="正在使用" if active else "使用",
+                action_text="使用中" if active else "使用",
                 on_action=None if active else (lambda ix=i: self._use_model_from_grid(ix)),
             )
-            card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
+            card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
             self.model_grid.rowconfigure(r, weight=0)
 
         self._sync_bottom()
@@ -857,8 +915,18 @@ class MainApp:
         )
 
         def card(parent, title: str) -> tk.Frame:
-            outer = SectionCard(parent, title=title, accent_rail=True, pad=14)
-            outer.pack(fill="x", expand=False, padx=28, pady=8)
+            # Map Chinese section titles to mono eyebrows (library catalog feel)
+            brows = {
+                "设备与音频": "DEVICES",
+                "变声参数（运行中可热更新）": "VOICE",
+                "性能设置（改后需重新「开启变声」）": "PERFORMANCE",
+                "声音效果（变声后 · 可选）": "FX CHAIN",
+            }
+            eyebrow = brows.get(title, "SECTION")
+            outer = SectionCard(
+                parent, title=title, eyebrow=eyebrow, accent_rail=True, pad=16
+            )
+            outer.pack(fill="x", expand=False, padx=GUTTER, pady=10)
             return outer.body
 
         def scale_row(parent, label, variable, from_, to, res=1, hot=False):
@@ -2007,11 +2075,21 @@ class MainApp:
 
     def _page_more(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
-        box = tk.Frame(fr, bg=TM_BG)
-        box.place(relx=0.5, rely=0.42, anchor="center")
+        wrap = tk.Frame(fr, bg=TM_BG)
+        wrap.place(relx=0.5, rely=0.12, anchor="n")
+        PageHeader(
+            wrap,
+            eyebrow="MORE",
+            title="其他",
+            lead="高级入口与紧急操作。日常开黑一般只需要首页与设置。",
+        ).pack(anchor="w", pady=(0, 16))
+        box = tk.Frame(wrap, bg=TM_BG)
+        box.pack(anchor="w")
 
         def soft(text, cmd):
-            GhostButton(box, text, command=cmd, padx=20, pady=11).pack(pady=6, fill="x")
+            GhostButton(box, text, command=cmd, padx=22, pady=12).pack(
+                pady=6, fill="x", ipadx=40
+            )
 
         soft("打开训练 / 翻唱 WebUI（高级 · 浏览器）", self.open_webui)
         soft("打开首次设置启动器", self.open_bootstrap)
@@ -2021,11 +2099,11 @@ class MainApp:
         soft("使用说明", self.open_help)
         tk.Label(
             fr,
-            text="Turing Mirror 配套 · 开源 RVC 引擎 · 请遵守当地法规与平台规则",
+            text=tracked("TURING MIRROR  ·  RVC ENGINE", gap="  "),
             bg=TM_BG,
             fg=TM_META,
-            font=sans_font(8),
-        ).place(relx=0.5, rely=0.9, anchor="center")
+            font=mono_font(8),
+        ).place(relx=0.5, rely=0.94, anchor="center")
         return fr
 
     def open_bootstrap(self) -> None:

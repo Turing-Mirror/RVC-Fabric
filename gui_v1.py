@@ -724,8 +724,11 @@ if __name__ == "__main__":
                         # Keep formant if present in values
                         if "formant" in values:
                             settings["formant"] = values["formant"]
-                        with open("configs/inuse/config.json", "w") as j:
-                            json.dump(settings, j)
+                        _cfg = "configs/inuse/config.json"
+                        _tmp = _cfg + ".tmp"
+                        with open(_tmp, "w", encoding="utf-8") as j:
+                            json.dump(settings, j, ensure_ascii=False, indent=2)
+                        os.replace(_tmp, _cfg)
                         if self.audio_proc is not None:
                             self.delay_time = (
                                 self.audio_proc.get_latency()
@@ -1425,11 +1428,32 @@ if __name__ == "__main__":
         def _values_from_config_file(self):
             """Build set_values-compatible dict from configs/inuse/config.json."""
             path = "configs/inuse/config.json"
-            if not os.path.isfile(path):
-                if os.path.isfile("configs/config.json"):
-                    shutil.copy("configs/config.json", path)
-            with open(path, "r", encoding="utf-8") as j:
-                data = json.load(j)
+            data = {}
+            try:
+                if (not os.path.isfile(path)) or os.path.getsize(path) == 0:
+                    if os.path.isfile("configs/config.json"):
+                        shutil.copy("configs/config.json", path)
+                with open(path, "r", encoding="utf-8") as j:
+                    raw = j.read().strip()
+                if not raw:
+                    raise ValueError("empty inuse config")
+                data = json.loads(raw)
+                if not isinstance(data, dict):
+                    data = {}
+            except Exception as e:
+                printt("config read failed (%s), using defaults", e)
+                # Repair empty/corrupt file so next start works
+                try:
+                    if os.path.isfile("configs/config.json"):
+                        shutil.copy("configs/config.json", path)
+                        with open(path, "r", encoding="utf-8") as j:
+                            data = json.load(j)
+                    else:
+                        data = {}
+                        with open(path, "w", encoding="utf-8") as j:
+                            json.dump(data, j)
+                except Exception:
+                    data = {}
             f0 = data.get("f0method") or "fcpe"
             sr = data.get("sr_type") or "sr_model"
             # Ensure devices are refreshed for hostapi
@@ -1621,8 +1645,12 @@ if __name__ == "__main__":
                         "I_noise_reduce": self.gui_config.I_noise_reduce,
                         "O_noise_reduce": self.gui_config.O_noise_reduce,
                     }
-                    with open("configs/inuse/config.json", "w", encoding="utf-8") as j:
+                    # Atomic write — plain "w" left 0-byte file when process killed mid-write
+                    cfg_path = "configs/inuse/config.json"
+                    tmp_path = cfg_path + ".tmp"
+                    with open(tmp_path, "w", encoding="utf-8") as j:
                         json.dump(settings, j, ensure_ascii=False, indent=2)
+                    os.replace(tmp_path, cfg_path)
                 except Exception:
                     traceback.print_exc()
                 self._worker_write_status(

@@ -53,11 +53,12 @@ def run_gui_process(
     cwd: Path | None = None,
     env: dict | None = None,
     log_path: Path | None = None,
+    hide_console: bool = False,
 ) -> subprocess.Popen:
     """Start a windowed GUI process (pythonw / FreeSimpleGUI / tk).
 
-    Unlike run_no_console, does not pass CREATE_NO_WINDOW (which can break
-    GUI toolkits). Stderr goes to a log file so silent crashes are visible.
+    pythonw already has no console. For python.exe workers, pass
+    hide_console=True to avoid a black cmd window (CREATE_NO_WINDOW).
     """
     cwd = cwd or ROOT
     env = env or os.environ.copy()
@@ -79,10 +80,14 @@ def run_gui_process(
         kw["stdout"] = subprocess.DEVNULL
         kw["stderr"] = subprocess.DEVNULL
     if sys.platform == "win32":
-        # Do not use CREATE_NO_WINDOW here — it can prevent FreeSimpleGUI/tk
-        # windows from appearing. pythonw already has no console subsystem.
-        # CREATE_NEW_PROCESS_GROUP only: survive parent exit cleanly.
-        kw["creationflags"] = CREATE_NEW_PROCESS_GROUP
+        flags = CREATE_NEW_PROCESS_GROUP
+        # Hide console only when requested (headless worker via python.exe).
+        # Do not use CREATE_NO_WINDOW for FreeSimpleGUI/tk windows.
+        exe0 = str(args[0]).lower() if args else ""
+        if hide_console or exe0.endswith("python.exe"):
+            if "pythonw" not in exe0:
+                flags |= CREATE_NO_WINDOW
+        kw["creationflags"] = flags
     proc = subprocess.Popen(args, **kw)
     # Popen keeps the file handle open for the child; do not close log_f here
     proc._tm_log_file = log_f  # type: ignore[attr-defined]

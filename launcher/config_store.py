@@ -95,17 +95,39 @@ def save_config(cfg: dict[str, Any]) -> None:
     )
 
 
+def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    """Write JSON atomically so readers never see a truncated empty file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 def _load_gui_json() -> dict[str, Any]:
     GUI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not GUI_CONFIG_PATH.is_file():
+    if not GUI_CONFIG_PATH.is_file() or GUI_CONFIG_PATH.stat().st_size == 0:
+        # Empty/corrupt file is common after a crash mid-write — repair
         if GUI_CONFIG_TEMPLATE.is_file():
-            shutil.copy(GUI_CONFIG_TEMPLATE, GUI_CONFIG_PATH)
+            try:
+                shutil.copy(GUI_CONFIG_TEMPLATE, GUI_CONFIG_PATH)
+            except Exception:
+                GUI_CONFIG_PATH.write_text("{}", encoding="utf-8")
         else:
             GUI_CONFIG_PATH.write_text("{}", encoding="utf-8")
     try:
-        data = json.loads(GUI_CONFIG_PATH.read_text(encoding="utf-8"))
+        raw = GUI_CONFIG_PATH.read_text(encoding="utf-8").strip()
+        if not raw:
+            raise ValueError("empty config")
+        data = json.loads(raw)
         return data if isinstance(data, dict) else {}
     except Exception:
+        # Last resort: rewrite empty object so next read works
+        try:
+            GUI_CONFIG_PATH.write_text("{}", encoding="utf-8")
+        except Exception:
+            pass
         return {}
 
 
@@ -205,10 +227,7 @@ def sync_realtime_gui_model(
     data.setdefault("O_noise_reduce", False)
     _prefer_cable_devices(data)
 
-    GUI_CONFIG_PATH.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(GUI_CONFIG_PATH, data)
     logger.info("Synced realtime engine config -> %s", pth)
     return GUI_CONFIG_PATH
 

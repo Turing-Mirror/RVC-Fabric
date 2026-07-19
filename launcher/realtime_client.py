@@ -238,7 +238,6 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
 
     env = _env_for_runtime_python()
     env["TM_REALTIME_WORKER"] = "1"
-    # Unbuffered logs if using python.exe
     env["PYTHONUNBUFFERED"] = "1"
     with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
         lf.write(f"via direct: {pyw} {script}\n")
@@ -263,11 +262,14 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
             creationflags=CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
         )
     else:
-        # Prefer python.exe (not pythonw) so crashes land in the log file
-        if rt_py.is_file():
+        # pythonw = no black console; stdout still redirected to log by run_gui_process
+        if rt_pyw.is_file():
+            pyw = str(rt_pyw)
+        elif rt_py.is_file():
+            # Fallback: python.exe with CREATE_NO_WINDOW (no black box)
             pyw = str(rt_py)
         _worker_launcher = run_gui_process(
-            [pyw, "-u", str(script)], cwd=ROOT, env=env, log_path=log_path
+            [pyw, str(script)], cwd=ROOT, env=env, log_path=log_path
         )
 
 

@@ -49,6 +49,7 @@ from launcher.theme import (
     TM_OK,
     TM_SURFACE,
     TM_SURFACE_HOVER,
+    TM_WARN,
     sans_font,
     serif_font,
 )
@@ -1505,7 +1506,7 @@ class MainApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
-        self.lbl_online.configure(text="正在连接变声引擎…", fg=TM_OK)
+        self.lbl_online.configure(text="正在连接变声引擎…", fg=TM_WARN)
 
     def reload_devices(self) -> None:
         # list_devices stops the audio stream on the worker — reflect that in UI
@@ -1516,7 +1517,7 @@ class MainApp:
                 self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
             except Exception:
                 pass
-        self.lbl_online.configure(text="重载设备列表…", fg=TM_OK)
+        self.lbl_online.configure(text="重载设备列表…", fg=TM_WARN)
 
         def work():
             try:
@@ -1977,8 +1978,8 @@ class MainApp:
         self.vc_running = False
         self.btn_start.configure(text="启动中…", bg=TM_OK)
         self.lbl_online.configure(
-            text=f"启动中：{m['name']}（首次约 20–40 秒，无第二窗口）",
-            fg=TM_OK,
+            text=f"启动中：{m['name']}（首次约 20–40 秒）",
+            fg=TM_WARN,
         )
 
         def work():
@@ -2026,10 +2027,19 @@ class MainApp:
         self.vc_running = False
         self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
         self.lbl_online.configure(text="启动失败", fg=TM_META)
+        msg = err or "未知错误"
+        # Friendlier text for known engine errors
+        low = msg.lower()
+        if "jsondecode" in low or "expecting value" in low or "empty" in low:
+            msg = (
+                "引擎配置文件损坏或为空（常见于上次强制结束时正在写配置）。\n"
+                "已可自动修复，请再点一次「开启变声」。\n\n"
+                f"技术信息：{err}"
+            )
         messagebox.showerror(
             "启动失败",
-            (err or "未知错误")
-            + "\n\n可尝试：设置里检查输入/输出设备，或「打开原版实时面板」。",
+            msg
+            + "\n\n仍不行时：设置里检查输入/输出设备，或「其他 → 强制结束变声引擎」后再试。",
         )
 
     def _stop_vc(self) -> None:

@@ -26,6 +26,10 @@ from launcher.paths import release_roles
 from launcher.theme import (
     TM_ACCENT,
     TM_BG,
+    TM_HELP,
+    TM_INK,
+    TM_INK_MUTED,
+    TM_META,
     forbidden_chrome_hexes,
     light_tokens,
 )
@@ -61,6 +65,22 @@ class ThemeTests(unittest.TestCase):
         # Explicitly not BA primary / RVCMAX pink
         self.assertNotEqual(TM_ACCENT.lower(), "#1289f0")
         self.assertNotEqual(TM_BG.lower(), "#050508")
+
+    def test_text_contrast_hierarchy(self):
+        """Labels/help darker than pure meta; all darker than surface for readability."""
+        self.assertIn("tm-help", light_tokens())
+        self.assertEqual(TM_HELP, light_tokens()["tm-help"])
+        # Simple relative darkness: lower hex ≈ darker on light UI
+        def lum(h: str) -> int:
+            s = h.lstrip("#")
+            r, g, b = int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+            return r + g + b
+
+        self.assertLess(lum(TM_INK), lum(TM_INK_MUTED))
+        self.assertLessEqual(lum(TM_INK_MUTED), lum(TM_HELP))
+        self.assertLessEqual(lum(TM_HELP), lum(TM_META))
+        # Muted labels must not be washed-out gray (~#92968f old meta)
+        self.assertLess(lum(TM_INK_MUTED), lum("#707070"))
 
 
 class CatalogTests(unittest.TestCase):

@@ -1541,22 +1541,25 @@ class MainApp:
             outer.pack(fill="x", expand=False, padx=GUTTER, pady=10)
             return outer.body
 
-        def tip_line(parent, text: str) -> None:
-            """Inline help under a control (not the ? hover). Stronger than pure meta."""
-            if not text:
-                return
-            lbl = tk.Label(
+        def help_mark(parent, tip: str, *, pack_side: str = "left") -> Optional[tk.Label]:
+            """Prominent ? badge; hover shows full tip (no duplicate inline text)."""
+            if not tip:
+                return None
+            q = tk.Label(
                 parent,
-                text=text,
-                font=sans_font(9),
-                bg=TM_SURFACE,
-                fg=TM_HELP,
-                justify="left",
-                anchor="w",
-                wraplength=640,
+                text="?",
+                font=sans_font(10, "bold"),
+                bg=TM_ACCENT_SOFT,
+                fg=TM_ACCENT,
+                cursor="question_arrow",
+                padx=6,
+                pady=1,
+                highlightthickness=1,
+                highlightbackground=TM_ACCENT,
             )
-            lbl.pack(fill="x", anchor="w", pady=(0, 4), padx=(4, 4))
-            self._settings_wrap_labels.append(lbl)
+            q.pack(side=pack_side, padx=(6, 0))
+            HoverTip(q, tip)
+            return q
 
         def field_label(parent, text: str, **pack_kw) -> tk.Label:
             """Settings row caption — high contrast on surface (Schale-like body)."""
@@ -1576,24 +1579,13 @@ class MainApp:
         def scale_row(
             parent, label, variable, from_, to, res=1, hot=False, tip_key: str = ""
         ):
-            """Settings row with SoftSlider + optional tip (SETTING_TIPS)."""
-            wrap_f = tk.Frame(parent, bg=TM_SURFACE)
-            wrap_f.pack(fill="x", pady=6)
-            f = tk.Frame(wrap_f, bg=TM_SURFACE)
-            f.pack(fill="x")
+            """Settings row with SoftSlider; tip only on ? (no duplicate caption)."""
+            f = tk.Frame(parent, bg=TM_SURFACE)
+            f.pack(fill="x", pady=6)
             field_label(f, label).pack(side="left")
             tip = SETTING_TIPS.get(tip_key, "")
             if tip:
-                q = tk.Label(
-                    f,
-                    text=" ?",
-                    font=sans_font(9, "bold"),
-                    bg=TM_SURFACE,
-                    fg=TM_META,
-                    cursor="question_arrow",
-                )
-                q.pack(side="left")
-                HoverTip(q, tip)
+                help_mark(f, tip)
             val_lbl = tk.Label(
                 f,
                 text="",
@@ -1637,8 +1629,6 @@ class MainApp:
             except Exception:
                 pass
             _fmt()
-            if tip:
-                tip_line(wrap_f, tip)
             return sc
 
         # Device card
@@ -1680,17 +1670,7 @@ class MainApp:
         )
         self.cmb_accel.pack(side="left")
         self.cmb_accel.bind("<<ComboboxSelected>>", lambda e: self._on_accel_changed())
-        accel_help = tk.Label(
-            row,
-            text=" ?",
-            font=sans_font(9, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            cursor="question_arrow",
-        )
-        accel_help.pack(side="left")
-        HoverTip(accel_help, SETTING_TIPS["accel"])
-        tip_line(left, SETTING_TIPS["accel"])
+        help_mark(row, SETTING_TIPS["accel"])
         self.lbl_accel_status = tk.Label(
             left,
             text="加速：检测中…",
@@ -1731,7 +1711,7 @@ class MainApp:
         )
         self.cmb_hostapi.pack(side="left", fill="x", expand=True)
         self.cmb_hostapi.bind("<<ComboboxSelected>>", lambda e: self._on_hostapi_change())
-        tip_line(left, SETTING_TIPS["hostapi"])
+        help_mark(row, SETTING_TIPS["hostapi"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1742,7 +1722,7 @@ class MainApp:
             row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
         )
         self.cmb_input.pack(side="left", fill="x", expand=True)
-        tip_line(left, SETTING_TIPS["input"])
+        help_mark(row, SETTING_TIPS["input"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1753,7 +1733,7 @@ class MainApp:
             row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
         )
         self.cmb_output.pack(side="left", fill="x", expand=True)
-        tip_line(left, SETTING_TIPS["output"])
+        help_mark(row, SETTING_TIPS["output"])
 
         # Self-monitor: hear converted voice on headphones while CABLE goes to game
         mon_row = tk.Frame(left, bg=TM_SURFACE)
@@ -1768,17 +1748,8 @@ class MainApp:
             font=sans_font(9),
             command=self._on_monitor_toggle,
         ).pack(side="left")
-        mon_help = tk.Label(
+        help_mark(
             mon_row,
-            text=" ?",
-            font=sans_font(9, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            cursor="question_arrow",
-        )
-        mon_help.pack(side="left")
-        HoverTip(
-            mon_help,
             "开启后：游戏/语音仍走「输出设备」（一般是 CABLE Input），\n"
             "同时在「监听设备」再放一份变声后的声音给你听。\n"
             "监听请选真实耳机/音箱（如「耳机 KM-HIFI」），\n"
@@ -1911,15 +1882,17 @@ class MainApp:
         self.var_index_path = tk.StringVar(value="")
         idx_block = tk.Frame(right, bg=TM_SURFACE)
         idx_block.pack(fill="x", pady=(8, 4))
+        idx_title = tk.Frame(idx_block, bg=TM_SURFACE)
+        idx_title.pack(fill="x", anchor="w")
         tk.Label(
-            idx_block,
+            idx_title,
             text="特征检索 .index",
             font=sans_font(10),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             anchor="w",
-        ).pack(anchor="w")
-        tip_line(idx_block, SETTING_TIPS["index"])
+        ).pack(side="left")
+        help_mark(idx_title, SETTING_TIPS["index"])
         idx_row = tk.Frame(idx_block, bg=TM_SURFACE)
         idx_row.pack(fill="x")
         self.cmb_index = ttk.Combobox(
@@ -1991,7 +1964,7 @@ class MainApp:
         )
         cmb_f0.pack(side="left")
         cmb_f0.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
-        tip_line(right, SETTING_TIPS["f0"])
+        help_mark(f0f, SETTING_TIPS["f0"])
 
         modef = tk.Frame(right, bg=TM_SURFACE)
         modef.pack(fill="x", pady=4)
@@ -2020,16 +1993,6 @@ class MainApp:
             activebackground=TM_SURFACE,
         )
         rb_im.pack(side="left", padx=(8, 0))
-        # Small ? help — hover for plain-language explanation
-        mode_help = tk.Label(
-            modef,
-            text=" ?",
-            font=sans_font(9, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            cursor="question_arrow",
-        )
-        mode_help.pack(side="left", padx=(4, 0))
         _mode_tip = (
             "【输出变声】日常开黑/语音用这个。\n"
             "麦克风 → 变成所选音色 → 从「输出设备」出去（一般选 CABLE Input）。\n"
@@ -2037,7 +2000,7 @@ class MainApp:
             "【输入监听】不进行变声，只把麦克风原声送到输出。\n"
             "用来检查麦是否正常、声卡接线对不对；听完记得切回「输出变声」。"
         )
-        HoverTip(mode_help, _mode_tip)
+        help_mark(modef, _mode_tip)
         HoverTip(rb_vc, "输出变声：把麦克风变成所选音色再输出（日常变声用这个）。")
         HoverTip(rb_im, "输入监听：不改变声音，只输出麦克风原声（测麦/测接线）。")
 
@@ -2057,6 +2020,7 @@ class MainApp:
             command=self._on_hot_param,
             font=sans_font(9),
         ).pack(side="left")
+        help_mark(nrf, SETTING_TIPS["i_nr"])
         tk.Checkbutton(
             nrf,
             text="输出降噪",
@@ -2064,7 +2028,8 @@ class MainApp:
             bg=TM_SURFACE,
             command=self._on_hot_param,
             font=sans_font(9),
-        ).pack(side="left", padx=8)
+        ).pack(side="left", padx=(8, 0))
+        help_mark(nrf, SETTING_TIPS["o_nr"])
         tk.Checkbutton(
             nrf,
             text="相位声码器",
@@ -2072,9 +2037,8 @@ class MainApp:
             bg=TM_SURFACE,
             command=self._on_hot_param,
             font=sans_font(9),
-        ).pack(side="left")
-        tip_line(perf, SETTING_TIPS["i_nr"] + " / " + SETTING_TIPS["o_nr"])
-        tip_line(perf, SETTING_TIPS["use_pv"])
+        ).pack(side="left", padx=(8, 0))
+        help_mark(nrf, SETTING_TIPS["use_pv"])
 
         # ----- Post-RVC DSP (noise gate / compressor / EQ) -----
         from tools.dsp_fx import EQ_LABELS, EQ_PRESET_LABELS, EQ_PRESETS
@@ -2127,28 +2091,32 @@ class MainApp:
         )
 
         fx = card(wrap, "声音效果（变声后 · 可选）")
-        tip_line(fx, SETTING_TIPS["fx_en"])
+        fx_en_row = tk.Frame(fx, bg=TM_SURFACE)
+        fx_en_row.pack(anchor="w", fill="x")
         tk.Checkbutton(
-            fx,
+            fx_en_row,
             text="启用声音效果",
             variable=self.var_fx_enabled,
             bg=TM_SURFACE,
             font=sans_font(9, "bold"),
             command=self._on_hot_param,
-        ).pack(anchor="w")
+        ).pack(side="left")
+        help_mark(fx_en_row, SETTING_TIPS["fx_en"])
 
         # Gate
         gbox = tk.Frame(fx, bg=TM_SURFACE)
         gbox.pack(fill="x", pady=(8, 4))
+        gate_row = tk.Frame(gbox, bg=TM_SURFACE)
+        gate_row.pack(anchor="w", fill="x")
         tk.Checkbutton(
-            gbox,
+            gate_row,
             text="噪声门",
             variable=self.var_fx_gate_en,
             bg=TM_SURFACE,
             font=sans_font(9),
             command=self._on_hot_param,
-        ).pack(anchor="w")
-        tip_line(gbox, SETTING_TIPS["fx_gate"])
+        ).pack(side="left")
+        help_mark(gate_row, SETTING_TIPS["fx_gate"])
         scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True)
         scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True)
         scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True)
@@ -2157,15 +2125,17 @@ class MainApp:
         # Compressor
         cbox = tk.Frame(fx, bg=TM_SURFACE)
         cbox.pack(fill="x", pady=(8, 4))
+        comp_row = tk.Frame(cbox, bg=TM_SURFACE)
+        comp_row.pack(anchor="w", fill="x")
         tk.Checkbutton(
-            cbox,
+            comp_row,
             text="压缩器",
             variable=self.var_fx_comp_en,
             bg=TM_SURFACE,
             font=sans_font(9),
             command=self._on_hot_param,
-        ).pack(anchor="w")
-        tip_line(cbox, SETTING_TIPS["fx_comp"])
+        ).pack(side="left")
+        help_mark(comp_row, SETTING_TIPS["fx_comp"])
         scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True)
         scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True)
         scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True)
@@ -2185,7 +2155,7 @@ class MainApp:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(side="left")
-        tip_line(ebox, SETTING_TIPS["fx_eq"])
+        help_mark(erow, SETTING_TIPS["fx_eq"])
         tk.Label(
             erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left", padx=(16, 4))

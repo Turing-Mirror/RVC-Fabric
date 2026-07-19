@@ -137,12 +137,30 @@ if __name__ == "__main__":
             self.sg_output_device: str = ""
             self.monitor_device: str = ""
             self.monitor_enabled: bool = False
+            # Post-RVC DSP (tools.dsp_fx) — flat keys mirrored from app_config
+            self.fx_enabled: bool = False
+            self.fx_gate_enabled: bool = True
+            self.fx_gate_threshold_db: float = -50.0
+            self.fx_gate_release_ms: float = 50.0
+            self.fx_gate_hold_ms: float = 20.0
+            self.fx_gate_range_db: float = 20.0
+            self.fx_comp_enabled: bool = True
+            self.fx_comp_threshold_db: float = -20.0
+            self.fx_comp_ratio: float = 4.0
+            self.fx_comp_attack_ms: float = 5.0
+            self.fx_comp_release_ms: float = 100.0
+            self.fx_comp_makeup_db: float = 0.0
+            self.fx_eq_enabled: bool = True
+            self.fx_eq_gains: list = [0.0, 0.0, 0.0, 0.0, 0.0]
+            self.fx_eq_preset: str = "flat"
+            self.fx_out_gain_db: float = 0.0
 
     class GUI:
         def __init__(self) -> None:
             self.gui_config = GUIConfig()
             self.config = Config()
             self.function = "vc"
+            self._fx_chain = None
             self.delay_time = 0
             self.last_infer_ms = 0
             self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
@@ -873,7 +891,89 @@ if __name__ == "__main__":
                     values["fcpe"],
                 ].index(True)
             ]
+            self._load_fx_from_values(values)
             return True
+
+        def _load_fx_from_values(self, values: dict) -> None:
+            """Copy fx_* keys from values/config into gui_config + rebuild chain."""
+            gc = self.gui_config
+            gc.fx_enabled = bool(values.get("fx_enabled", False))
+            gc.fx_gate_enabled = bool(values.get("fx_gate_enabled", True))
+            gc.fx_gate_threshold_db = float(values.get("fx_gate_threshold_db", -50))
+            gc.fx_gate_release_ms = float(values.get("fx_gate_release_ms", 50))
+            gc.fx_gate_hold_ms = float(values.get("fx_gate_hold_ms", 20))
+            gc.fx_gate_range_db = float(values.get("fx_gate_range_db", 20))
+            gc.fx_comp_enabled = bool(values.get("fx_comp_enabled", True))
+            gc.fx_comp_threshold_db = float(values.get("fx_comp_threshold_db", -20))
+            gc.fx_comp_ratio = float(values.get("fx_comp_ratio", 4))
+            gc.fx_comp_attack_ms = float(values.get("fx_comp_attack_ms", 5))
+            gc.fx_comp_release_ms = float(values.get("fx_comp_release_ms", 100))
+            gc.fx_comp_makeup_db = float(values.get("fx_comp_makeup_db", 0))
+            gc.fx_eq_enabled = bool(values.get("fx_eq_enabled", True))
+            gains = values.get("fx_eq_gains") or [0, 0, 0, 0, 0]
+            if isinstance(gains, (list, tuple)):
+                gc.fx_eq_gains = [float(x) for x in list(gains)[:5]]
+            while len(gc.fx_eq_gains) < 5:
+                gc.fx_eq_gains.append(0.0)
+            gc.fx_eq_preset = str(values.get("fx_eq_preset") or "flat")
+            gc.fx_out_gain_db = float(values.get("fx_out_gain_db") or 0)
+            self._rebuild_fx_chain()
+
+        def _fx_config_dict(self) -> dict:
+            gc = self.gui_config
+            return {
+                "fx_enabled": bool(gc.fx_enabled),
+                "fx_gate_enabled": bool(gc.fx_gate_enabled),
+                "fx_gate_threshold_db": float(gc.fx_gate_threshold_db),
+                "fx_gate_release_ms": float(gc.fx_gate_release_ms),
+                "fx_gate_hold_ms": float(gc.fx_gate_hold_ms),
+                "fx_gate_range_db": float(gc.fx_gate_range_db),
+                "fx_comp_enabled": bool(gc.fx_comp_enabled),
+                "fx_comp_threshold_db": float(gc.fx_comp_threshold_db),
+                "fx_comp_ratio": float(gc.fx_comp_ratio),
+                "fx_comp_attack_ms": float(gc.fx_comp_attack_ms),
+                "fx_comp_release_ms": float(gc.fx_comp_release_ms),
+                "fx_comp_makeup_db": float(gc.fx_comp_makeup_db),
+                "fx_eq_enabled": bool(gc.fx_eq_enabled),
+                "fx_eq_gains": list(gc.fx_eq_gains),
+                "fx_eq_preset": str(gc.fx_eq_preset or "flat"),
+                "fx_out_gain_db": float(gc.fx_out_gain_db or 0),
+            }
+
+        def _rebuild_fx_chain(self) -> None:
+            try:
+                from tools.dsp_fx import RealtimeFxChain
+
+                if self._fx_chain is None:
+                    self._fx_chain = RealtimeFxChain(self._fx_config_dict())
+                else:
+                    self._fx_chain.apply_config(self._fx_config_dict())
+            except Exception:
+                traceback.print_exc()
+                self._fx_chain = None
+
+        def _apply_fx_chain(self, infer_wav: torch.Tensor) -> torch.Tensor:
+            """Run numpy DSP on last block_frame samples of infer_wav (device tensor)."""
+            if self._fx_chain is None:
+                self._rebuild_fx_chain()
+            if self._fx_chain is None or not self._fx_chain.enabled:
+                return infer_wav
+            sr = int(getattr(self.gui_config, "samplerate", 40000) or 40000)
+            n = int(getattr(self, "block_frame", 0) or 0)
+            if n <= 0 or infer_wav.numel() < n:
+                # process whole tensor
+                x = infer_wav.detach().float().cpu().numpy()
+                y = self._fx_chain.process(x, sr)
+                return torch.from_numpy(y).to(infer_wav.device).type_as(infer_wav)
+            # only shape the newest block (rest is overlap history for SOLA)
+            head = infer_wav[:-n]
+            tail = infer_wav[-n:]
+            x = tail.detach().float().cpu().numpy()
+            y = self._fx_chain.process(x, sr)
+            tail_t = torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
+                infer_wav.device
+            ).type_as(infer_wav)
+            return torch.cat([head, tail_t], dim=0)
 
         def start_vc(self):
             torch.cuda.empty_cache()
@@ -895,6 +995,12 @@ if __name__ == "__main__":
                 else self.get_device_samplerate()
             )
             self.gui_config.channels = self.get_device_channels()
+            try:
+                self._rebuild_fx_chain()
+                if self._fx_chain is not None:
+                    self._fx_chain.reset()
+            except Exception:
+                traceback.print_exc()
             self.zc = self.gui_config.samplerate // 100
             self.block_frame = (
                 int(
@@ -1324,6 +1430,15 @@ if __name__ == "__main__":
                 infer_wav = self.tg(
                     infer_wav.unsqueeze(0), self.output_buffer.unsqueeze(0)
                 ).squeeze(0)
+            # Post-RVC DSP chain (gate / compressor / EQ) — numpy on CPU
+            if (
+                self.function == "vc"
+                and bool(getattr(self.gui_config, "fx_enabled", False))
+            ):
+                try:
+                    infer_wav = self._apply_fx_chain(infer_wav)
+                except Exception:
+                    traceback.print_exc()
             # volume envelop mixing
             if self.gui_config.rms_mix_rate < 1 and self.function == "vc":
                 if self.gui_config.I_noise_reduce:
@@ -1649,6 +1764,23 @@ if __name__ == "__main__":
                 "crepe": f0 == "crepe",
                 "rmvpe": f0 == "rmvpe",
                 "fcpe": f0 == "fcpe",
+                # Post-RVC DSP
+                "fx_enabled": bool(data.get("fx_enabled")),
+                "fx_gate_enabled": bool(data.get("fx_gate_enabled", True)),
+                "fx_gate_threshold_db": float(data.get("fx_gate_threshold_db", -50)),
+                "fx_gate_release_ms": float(data.get("fx_gate_release_ms", 50)),
+                "fx_gate_hold_ms": float(data.get("fx_gate_hold_ms", 20)),
+                "fx_gate_range_db": float(data.get("fx_gate_range_db", 20)),
+                "fx_comp_enabled": bool(data.get("fx_comp_enabled", True)),
+                "fx_comp_threshold_db": float(data.get("fx_comp_threshold_db", -20)),
+                "fx_comp_ratio": float(data.get("fx_comp_ratio", 4)),
+                "fx_comp_attack_ms": float(data.get("fx_comp_attack_ms", 5)),
+                "fx_comp_release_ms": float(data.get("fx_comp_release_ms", 100)),
+                "fx_comp_makeup_db": float(data.get("fx_comp_makeup_db", 0)),
+                "fx_eq_enabled": bool(data.get("fx_eq_enabled", True)),
+                "fx_eq_gains": data.get("fx_eq_gains") or [0.0, 0.0, 0.0, 0.0, 0.0],
+                "fx_eq_preset": str(data.get("fx_eq_preset") or "flat"),
+                "fx_out_gain_db": float(data.get("fx_out_gain_db") or 0),
             }
             # Fill missing devices with defaults
             if (
@@ -1745,6 +1877,31 @@ if __name__ == "__main__":
                         self._close_monitor_stream()
                 except Exception:
                     traceback.print_exc()
+            # DSP chain hot params
+            fx_keys = (
+                "fx_enabled",
+                "fx_gate_enabled",
+                "fx_gate_threshold_db",
+                "fx_gate_release_ms",
+                "fx_gate_hold_ms",
+                "fx_gate_range_db",
+                "fx_comp_enabled",
+                "fx_comp_threshold_db",
+                "fx_comp_ratio",
+                "fx_comp_attack_ms",
+                "fx_comp_release_ms",
+                "fx_comp_makeup_db",
+                "fx_eq_enabled",
+                "fx_eq_gains",
+                "fx_eq_preset",
+                "fx_out_gain_db",
+            )
+            if any(k in payload for k in fx_keys):
+                merged = self._fx_config_dict()
+                for k in fx_keys:
+                    if k in payload and payload[k] is not None:
+                        merged[k] = payload[k]
+                self._load_fx_from_values(merged)
 
         def _worker_start(self):
             global flag_vc

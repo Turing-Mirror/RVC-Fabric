@@ -33,7 +33,8 @@ DEFAULTS: dict[str, Any] = {
     "sg_output_device": "",
     "input_device": "",  # legacy alias
     "output_device": "",
-    "monitor_device": "",
+    "monitor_device": "",  # headphones to hear yourself while VC runs
+    "monitor_enabled": False,  # 边变声边听自己
     "I_noise_reduce": False,
     "O_noise_reduce": False,
     "input_noise_reduce": False,  # legacy alias → I_noise_reduce
@@ -160,6 +161,8 @@ def app_cfg_to_engine_settings(cfg: dict[str, Any]) -> dict[str, Any]:
         "sg_wasapi_exclusive": bool(c.get("sg_wasapi_exclusive")),
         "sg_input_device": str(c.get("sg_input_device") or ""),
         "sg_output_device": str(c.get("sg_output_device") or ""),
+        "monitor_device": str(c.get("monitor_device") or ""),
+        "monitor_enabled": bool(c.get("monitor_enabled")),
         "use_pv": bool(c.get("use_pv")),
         "I_noise_reduce": bool(c.get("I_noise_reduce")),
         "O_noise_reduce": bool(c.get("O_noise_reduce")),

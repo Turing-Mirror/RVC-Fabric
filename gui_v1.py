@@ -135,6 +135,8 @@ if __name__ == "__main__":
             self.wasapi_exclusive: bool = False
             self.sg_input_device: str = ""
             self.sg_output_device: str = ""
+            self.monitor_device: str = ""
+            self.monitor_enabled: bool = False
 
     class GUI:
         def __init__(self) -> None:
@@ -164,6 +166,8 @@ if __name__ == "__main__":
             self.in_evt = None
             self.stop_evt = None
             self.window = None
+            self.monitor_stream = None
+            self.monitor_channels = 2
             self.update_devices()
             if self.worker_mode:
                 self.worker_main()
@@ -834,6 +838,10 @@ if __name__ == "__main__":
             self.gui_config.sg_wasapi_exclusive = values["sg_wasapi_exclusive"]
             self.gui_config.sg_input_device = values["sg_input_device"]
             self.gui_config.sg_output_device = values["sg_output_device"]
+            self.gui_config.monitor_device = str(
+                values.get("monitor_device") or values.get("sg_monitor_device") or ""
+            )
+            self.gui_config.monitor_enabled = bool(values.get("monitor_enabled", False))
             self.gui_config.pth_path = pth
             self.gui_config.index_path = index_path
             self.gui_config.sr_type = ["sr_model", "sr_device"][
@@ -1024,6 +1032,11 @@ if __name__ == "__main__":
                     ) = self.audio_proc.get_ptrs_and_events()
 
                     self.audio_proc.start()
+                    # Optional self-monitor (headphones) while main out stays on CABLE
+                    try:
+                        self._open_monitor_stream()
+                    except Exception:
+                        traceback.print_exc()
 
                     def audio_loop():
                         while flag_vc:
@@ -1037,7 +1050,115 @@ if __name__ == "__main__":
                 except Exception:
                     flag_vc = False
                     self.audio_proc = None
+                    try:
+                        self._close_monitor_stream()
+                    except Exception:
+                        pass
                     raise
+
+        def _close_monitor_stream(self) -> None:
+            stream = getattr(self, "monitor_stream", None)
+            self.monitor_stream = None
+            if stream is None:
+                return
+            try:
+                stream.stop()
+            except Exception:
+                pass
+            try:
+                stream.close()
+            except Exception:
+                pass
+            printt("monitor stream closed")
+
+        def _resolve_output_device_index(self, name: str):
+            """Find sounddevice output device index by name (any host API)."""
+            if not name:
+                return None
+            try:
+                devices = sd.query_devices()
+            except Exception:
+                return None
+            # exact
+            for i, d in enumerate(devices):
+                if d.get("max_output_channels", 0) <= 0:
+                    continue
+                dn = d.get("name") or ""
+                if dn == name:
+                    return d.get("index", i)
+            # prefix / truncated
+            for i, d in enumerate(devices):
+                if d.get("max_output_channels", 0) <= 0:
+                    continue
+                dn = d.get("name") or ""
+                if dn.startswith(name) or name.startswith(dn[: max(8, len(name) - 2)]):
+                    return d.get("index", i)
+            return None
+
+        def _open_monitor_stream(self) -> None:
+            """Play converted (or passthrough) audio to a second device for self-listen."""
+            self._close_monitor_stream()
+            if not bool(getattr(self.gui_config, "monitor_enabled", False)):
+                return
+            name = str(getattr(self.gui_config, "monitor_device", "") or "").strip()
+            if not name:
+                printt("monitor enabled but no device selected")
+                return
+            # Do not open same device as main VC output (would double-open / fail)
+            main_out = str(getattr(self.gui_config, "sg_output_device", "") or "")
+            if name == main_out or (
+                main_out and (name.startswith(main_out[:16]) or main_out.startswith(name[:16]))
+            ):
+                printt("monitor device same as main output, skip: %s", name)
+                return
+            idx = self._resolve_output_device_index(name)
+            if idx is None:
+                printt("monitor device not found: %s", name)
+                return
+            try:
+                info = sd.query_devices(idx)
+                ch = min(
+                    int(getattr(self.gui_config, "channels", 2) or 2),
+                    int(info.get("max_output_channels") or 2),
+                    2,
+                )
+                ch = max(1, ch)
+                sr = int(getattr(self.gui_config, "samplerate", 48000) or 48000)
+                stream = sd.OutputStream(
+                    device=idx,
+                    samplerate=sr,
+                    channels=ch,
+                    dtype=np.float32,
+                    latency="low",
+                )
+                stream.start()
+                self.monitor_stream = stream
+                self.monitor_channels = ch
+                printt("monitor stream open: %s idx=%s ch=%s sr=%s", name, idx, ch, sr)
+            except Exception as e:
+                printt("monitor open failed: %s", e)
+                self.monitor_stream = None
+
+        def _write_monitor(self, outdata: np.ndarray) -> None:
+            stream = getattr(self, "monitor_stream", None)
+            if stream is None or outdata is None:
+                return
+            try:
+                data = np.asarray(outdata, dtype=np.float32)
+                if data.ndim == 1:
+                    data = data.reshape(-1, 1)
+                want = int(getattr(self, "monitor_channels", data.shape[1]) or data.shape[1])
+                if data.shape[1] != want:
+                    if want == 1:
+                        data = data.mean(axis=1, keepdims=True).astype(np.float32)
+                    elif data.shape[1] == 1:
+                        data = np.repeat(data, want, axis=1)
+                    else:
+                        data = data[:, :want]
+                # Non-blocking-ish: write may raise if stream closed mid-flight
+                stream.write(data)
+            except Exception:
+                pass
 
         def stop_stream(self):
             """Always tear down audio I/O — even if flag_vc was cleared elsewhere.
@@ -1048,6 +1169,10 @@ if __name__ == "__main__":
             """
             global flag_vc
             flag_vc = False
+            try:
+                self._close_monitor_stream()
+            except Exception:
+                pass
             proc = getattr(self, "audio_proc", None)
             if proc is not None:
                 printt("stop_stream: shutting down AudioIoProcess")
@@ -1275,6 +1400,9 @@ if __name__ == "__main__":
                 .numpy()
             )
 
+            # Self-monitor: same converted audio to headphones (main out stays CABLE)
+            self._write_monitor(outdata)
+
             # 装填输出缓冲
             start = self.out_ptr.value
             play_pos = self.play_ptr.value
@@ -1500,6 +1628,8 @@ if __name__ == "__main__":
                 "sg_wasapi_exclusive": bool(data.get("sg_wasapi_exclusive")),
                 "sg_input_device": str(data.get("sg_input_device") or ""),
                 "sg_output_device": str(data.get("sg_output_device") or ""),
+                "monitor_device": str(data.get("monitor_device") or ""),
+                "monitor_enabled": bool(data.get("monitor_enabled")),
                 "sr_model": sr == "sr_model",
                 "sr_device": sr == "sr_device",
                 "threhold": data.get("threhold", -60),
@@ -1595,6 +1725,26 @@ if __name__ == "__main__":
                 self.gui_config.use_pv = bool(payload["use_pv"])
             if "function" in payload and payload["function"] in ("vc", "im"):
                 self.function = payload["function"]
+            # Self-monitor can toggle while running
+            mon_changed = False
+            if "monitor_enabled" in payload:
+                new_en = bool(payload["monitor_enabled"])
+                if new_en != bool(getattr(self.gui_config, "monitor_enabled", False)):
+                    mon_changed = True
+                self.gui_config.monitor_enabled = new_en
+            if "monitor_device" in payload and payload["monitor_device"] is not None:
+                new_dev = str(payload["monitor_device"] or "")
+                if new_dev != str(getattr(self.gui_config, "monitor_device", "") or ""):
+                    mon_changed = True
+                self.gui_config.monitor_device = new_dev
+            if mon_changed and flag_vc:
+                try:
+                    if self.gui_config.monitor_enabled:
+                        self._open_monitor_stream()
+                    else:
+                        self._close_monitor_stream()
+                except Exception:
+                    traceback.print_exc()
 
         def _worker_start(self):
             global flag_vc
@@ -1672,6 +1822,12 @@ if __name__ == "__main__":
                         "f0method": self.gui_config.f0method,
                         "I_noise_reduce": self.gui_config.I_noise_reduce,
                         "O_noise_reduce": self.gui_config.O_noise_reduce,
+                        "monitor_enabled": bool(
+                            getattr(self.gui_config, "monitor_enabled", False)
+                        ),
+                        "monitor_device": str(
+                            getattr(self.gui_config, "monitor_device", "") or ""
+                        ),
                     }
                     # Atomic write — plain "w" left 0-byte file when process killed mid-write
                     cfg_path = "configs/inuse/config.json"

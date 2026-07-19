@@ -1053,6 +1053,10 @@ class MainApp:
         self.var_output_dev = tk.StringVar(
             value=str(self.cfg.get("sg_output_device") or "")
         )
+        self.var_monitor_dev = tk.StringVar(
+            value=str(self.cfg.get("monitor_device") or "")
+        )
+        self.var_monitor_on = tk.BooleanVar(value=bool(self.cfg.get("monitor_enabled")))
         self.var_wasapi = tk.BooleanVar(value=bool(self.cfg.get("sg_wasapi_exclusive")))
         self.var_sr_type = tk.StringVar(value=str(self.cfg.get("sr_type") or "sr_model"))
         self.var_i_nr = tk.BooleanVar(value=bool(self.cfg.get("I_noise_reduce")))
@@ -1110,7 +1114,7 @@ class MainApp:
             left,
             text=(
                 "输入=真实麦克风 · 输出=CABLE Input · 游戏麦克风=CABLE Output\n"
-                "点「开启变声」在本软件内开始，无需再开第二个窗口。"
+                "勾选「变声时监听自己」并选耳机，可一边开黑一边听自己的变声效果。"
             ),
             font=sans_font(8),
             bg=TM_SURFACE,
@@ -1148,6 +1152,56 @@ class MainApp:
             row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
         )
         self.cmb_output.pack(side="left", fill="x", expand=True)
+
+        # Self-monitor: hear converted voice on headphones while CABLE goes to game
+        mon_row = tk.Frame(left, bg=TM_SURFACE)
+        mon_row.pack(fill="x", pady=(6, 2))
+        tk.Checkbutton(
+            mon_row,
+            text="变声时监听自己",
+            variable=self.var_monitor_on,
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            activebackground=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_hot_param,
+        ).pack(side="left")
+        mon_help = tk.Label(
+            mon_row,
+            text=" ?",
+            font=sans_font(9, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            cursor="question_arrow",
+        )
+        mon_help.pack(side="left")
+        HoverTip(
+            mon_help,
+            "开启后：游戏/语音仍走「输出设备」（一般是 CABLE Input），\n"
+            "同时在「监听设备」里再放一份变声后的声音给你听。\n"
+            "监听请选你的耳机/音箱，不要选 CABLE。\n"
+            "运行中可开关；换监听设备后若没声可停一次再开。",
+        )
+        mon_row2 = tk.Frame(left, bg=TM_SURFACE)
+        mon_row2.pack(fill="x", pady=3)
+        tk.Label(
+            mon_row2,
+            text="监听设备",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(9),
+        ).pack(side="left")
+        self.cmb_monitor = ttk.Combobox(
+            mon_row2,
+            textvariable=self.var_monitor_dev,
+            values=[],
+            state="readonly",
+            width=48,
+        )
+        self.cmb_monitor.pack(side="left", fill="x", expand=True)
+        self.cmb_monitor.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=4)
@@ -1580,6 +1634,8 @@ class MainApp:
             self.cfg["sg_hostapi"] = str(self.var_hostapi.get() or "MME")
             self.cfg["sg_input_device"] = str(self.var_input_dev.get() or "")
             self.cfg["sg_output_device"] = str(self.var_output_dev.get() or "")
+            self.cfg["monitor_device"] = str(self.var_monitor_dev.get() or "")
+            self.cfg["monitor_enabled"] = bool(self.var_monitor_on.get())
             self.cfg["sg_wasapi_exclusive"] = bool(self.var_wasapi.get())
             self.cfg["sr_type"] = str(self.var_sr_type.get() or "sr_model")
             self.cfg["I_noise_reduce"] = bool(self.var_i_nr.get())
@@ -1635,6 +1691,8 @@ class MainApp:
                 O_noise_reduce=self.cfg.get("O_noise_reduce"),
                 use_pv=self.cfg.get("use_pv"),
                 function=self.cfg.get("function"),
+                monitor_enabled=self.cfg.get("monitor_enabled"),
+                monitor_device=self.cfg.get("monitor_device"),
             )
         except Exception:
             pass
@@ -1738,6 +1796,22 @@ class MainApp:
                         outs[0],
                     )
                     self.var_output_dev.set(pick)
+            if hasattr(self, "cmb_monitor"):
+                self.cmb_monitor["values"] = outs
+                cur = self.var_monitor_dev.get()
+                if (not cur or cur not in outs) and outs:
+                    # Prefer real headphones/speakers — not virtual cable
+                    pick = next(
+                        (
+                            n
+                            for n in outs
+                            if "cable" not in n.lower()
+                            and "voicemeeter" not in n.lower()
+                            and "mapper" not in n.lower()
+                        ),
+                        outs[0],
+                    )
+                    self.var_monitor_dev.set(pick)
         except Exception:
             pass
         err = str(st.get("error") or "")

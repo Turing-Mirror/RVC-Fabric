@@ -289,7 +289,7 @@ class BootstrapApp:
         ).pack(fill="x", padx=28, pady=(10, 4))
         tk.Label(
             page,
-            text="用于配置麦克风、CABLE、默认设备等。此处打开的是系统「声音」面板，不是设备管理器。",
+            text="用于配置麦克风、CABLE、默认设备等。此处打开的是系统「声音」面板。",
             font=sans_font(8),
             bg=TM_BG,
             fg=TM_INK_MUTED,

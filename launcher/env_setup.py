@@ -192,34 +192,44 @@ def core_ready(items: Optional[Iterable[CheckItem]] = None) -> bool:
 
 
 def format_check_report(items: Optional[Iterable[CheckItem]] = None) -> str:
+    """Short report for dialogs — only status + missing names, no path dump."""
     items = list(items if items is not None else check_environment())
-    sections = [
-        (KIND_CORE, "【日常变声 · 必需】"),
-        (KIND_SOFT, "【建议 · 可后补】"),
-        (KIND_TRAINING, "【训练 / WebUI · 可选】"),
+    core_miss = missing_items(items, kinds={KIND_CORE})
+    soft_miss = missing_items(items, kinds={KIND_SOFT})
+    # 训练相关只关心可下载的文件，不报 Gradio/Faiss 包名
+    train_file_miss = [
+        i
+        for i in missing_items(items, kinds={KIND_TRAINING})
+        if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
     ]
+
     lines: list[str] = []
-    for kind, title in sections:
-        group = [i for i in items if i.kind == kind]
-        if not group:
-            continue
-        lines.append(title)
-        for i in group:
-            mark = "OK" if i.ok else "缺"
-            note = f" — {i.note}" if i.note else ""
-            lines.append(f"  [{mark}] {i.name}: {i.detail}{note}")
-        lines.append("")
-    if core_ready(items):
-        lines.append("结论：日常变声环境已就绪。")
+    if not core_miss:
+        lines.append("日常变声：正常")
     else:
-        miss = "、".join(i.name for i in missing_items(items, kinds={KIND_CORE}))
-        lines.append(f"结论：日常变声还缺：{miss}")
-    train_miss = missing_items(items, kinds={KIND_TRAINING})
-    if train_miss:
-        lines.append(
-            "训练/分离相关缺失不影响开黑变声；需要时再选下载（体积较大）。"
-        )
-    return "\n".join(lines).strip()
+        names = "、".join(i.name for i in core_miss)
+        lines.append(f"日常变声：缺少 {names}")
+
+    if soft_miss:
+        # 音色为空很常见，单独一句即可
+        soft_names = "、".join(i.name for i in soft_miss)
+        lines.append(f"可后补：{soft_names}")
+
+    if train_file_miss:
+        lines.append("训练/分离：未下载（可选，不影响变声）")
+    else:
+        # 仅当训练类项存在且都 OK 时显示
+        train_items = [i for i in items if i.kind == KIND_TRAINING]
+        if train_items and not any(
+            (not i.ok) and i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
+            for i in train_items
+        ):
+            # 有可能 Gradio 缺但文件齐 — 仍显示简洁
+            file_ok = not train_file_miss
+            if file_ok:
+                lines.append("训练/分离：已就绪")
+
+    return "\n".join(lines)
 
 
 def download_pretrained(

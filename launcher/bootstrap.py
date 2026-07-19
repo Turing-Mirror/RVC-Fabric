@@ -22,7 +22,6 @@ from launcher.env_setup import (
     KIND_CORE,
     KIND_TRAINING,
     check_environment,
-    core_ready,
     download_pretrained,
     format_check_report,
     missing_items,

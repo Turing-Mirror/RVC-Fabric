@@ -34,7 +34,8 @@ class AudioIoProcess(Process):
         self.in_evt = Event()  # 当收满一个block时由本进程设置
         self.stop_evt = Event()  # 当主进程停止音频活动时由主进程设置
 
-        self.latency = Value('d', 114514.1919810)
+        # -1 = not measured yet (was 114514 meme sentinel — UI showed 114514xxx ms)
+        self.latency = Value('d', -1.0)
 
         self.buf_shape: tuple = (self.buf_size, self.channels)
         self.buf_dtype: np.dtype = np.float32
@@ -69,7 +70,15 @@ class AudioIoProcess(Process):
             self.stop_evt\
 
     def get_latency(self) -> float:
-        return self.latency.value
+        """Device stream latency in seconds, or -1 if not ready yet."""
+        try:
+            v = float(self.latency.value)
+        except Exception:
+            return -1.0
+        # Guard against stale meme sentinel if old process still running
+        if v < 0 or v > 5.0:
+            return -1.0
+        return v
 
     def run(self):
         signal.signal(signal.SIGINT, signal.SIG_IGN)

@@ -45,6 +45,7 @@ from launcher.theme import (
     TM_HAIRLINE,
     TM_INK,
     TM_INK_MUTED,
+    TM_INSET,
     TM_META,
     TM_OK,
     TM_SURFACE,
@@ -274,23 +275,82 @@ class MainApp:
 
         right = tk.Frame(bottom, bg=TM_SURFACE)
         right.place(relx=0.97, rely=0.5, anchor="e")
-        self.lbl_online = tk.Label(
+        # Status badge — quiet surface pill (白无垢: no neon, ink emphasis when live)
+        self.status_badge = tk.Frame(
             right,
+            bg=TM_INSET,
+            padx=12,
+            pady=5,
+            highlightthickness=0,
+        )
+        self.status_badge.pack(anchor="e")
+        self.lbl_online = tk.Label(
+            self.status_badge,
             text="引擎待命",
-            font=sans_font(9),
-            bg=TM_SURFACE,
-            fg=TM_META,
+            font=sans_font(10),
+            bg=TM_INSET,
+            fg=TM_INK_MUTED,
         )
         self.lbl_online.pack(anchor="e")
         self.lbl_latency = tk.Label(
-            right,
+            self.status_badge,
             text=APP_PRODUCT_TAGLINE,
             font=sans_font(8),
-            bg=TM_SURFACE,
+            bg=TM_INSET,
             fg=TM_META,
         )
         self.lbl_latency.pack(anchor="e")
         self._sync_bottom()
+
+    def _format_latency_line(self, delay_ms: int, infer_ms: int) -> str:
+        """Human-readable metrics; hide absurd delayed-sentinel values."""
+        parts: list[str] = []
+        # Real algorithm delay is usually tens–hundreds of ms, rarely > 5s
+        if 0 < delay_ms < 8000:
+            parts.append(f"延迟 {delay_ms} ms")
+        elif delay_ms >= 8000:
+            parts.append("延迟 测量中…")
+        if 0 < infer_ms < 8000:
+            parts.append(f"推理 {infer_ms} ms")
+        return " · ".join(parts) if parts else APP_PRODUCT_TAGLINE
+
+    def _set_status_visual(self, mode: str, title: str, subtitle: str = "") -> None:
+        """Update bottom-right status badge. mode: idle|busy|live|error."""
+        # 白无垢: 运行态用素墨标题 + 安静绿点感；忙碌用琥珀；错误略加重 ink
+        if mode == "live":
+            badge_bg = TM_SURFACE_HOVER
+            title_fg = TM_INK
+            title_font = sans_font(11, "bold")
+            sub_fg = TM_OK
+            title = "● " + title
+        elif mode == "busy":
+            badge_bg = TM_INSET
+            title_fg = TM_WARN
+            title_font = sans_font(10, "bold")
+            sub_fg = TM_META
+        elif mode == "error":
+            badge_bg = TM_INSET
+            title_fg = TM_INK
+            title_font = sans_font(10, "bold")
+            sub_fg = TM_META
+        else:
+            badge_bg = TM_INSET
+            title_fg = TM_INK_MUTED
+            title_font = sans_font(10)
+            sub_fg = TM_META
+        try:
+            self.status_badge.configure(bg=badge_bg)
+            self.lbl_online.configure(
+                text=title, bg=badge_bg, fg=title_fg, font=title_font
+            )
+            self.lbl_latency.configure(
+                text=subtitle or APP_PRODUCT_TAGLINE,
+                bg=badge_bg,
+                fg=sub_fg,
+                font=sans_font(8),
+            )
+        except Exception:
+            pass
 
     def _build_pages(self) -> None:
         self.pages = {
@@ -1506,7 +1566,7 @@ class MainApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
-        self.lbl_online.configure(text="正在连接变声引擎…", fg=TM_WARN)
+        self._set_status_visual("busy", "正在连接变声引擎…", "首次加载可能需要数十秒")
 
     def reload_devices(self) -> None:
         # list_devices stops the audio stream on the worker — reflect that in UI
@@ -1517,7 +1577,7 @@ class MainApp:
                 self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
             except Exception:
                 pass
-        self.lbl_online.configure(text="重载设备列表…", fg=TM_WARN)
+        self._set_status_visual("busy", "重载设备列表…", "请稍候")
 
         def work():
             try:
@@ -1596,13 +1656,15 @@ class MainApp:
         err = str(st.get("error") or "")
         state = str(st.get("state") or "")
         if err and state == "error":
-            self.lbl_online.configure(text=f"引擎错误: {err[:60]}", fg=TM_META)
+            self._set_status_visual("error", "引擎错误", err[:48])
         elif toast:
-            self.lbl_online.configure(
-                text=f"已刷新设备（输入 {len(ins)} / 输出 {len(outs)}）", fg=TM_OK
+            self._set_status_visual(
+                "idle",
+                "设备已刷新",
+                f"输入 {len(ins)} · 输出 {len(outs)}",
             )
         elif not self.vc_running and not self._vc_starting:
-            self.lbl_online.configure(text="引擎待命", fg=TM_META)
+            self._set_status_visual("idle", "引擎待命", APP_PRODUCT_TAGLINE)
 
     def _page_more(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -1660,8 +1722,7 @@ class MainApp:
             self.vc_running = False
             self._vc_starting = False
             self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-            self.lbl_online.configure(text="引擎已强制结束", fg=TM_META)
-            self.lbl_latency.configure(text=APP_PRODUCT_TAGLINE)
+            self._set_status_visual("idle", "引擎已强制结束", APP_PRODUCT_TAGLINE)
             messagebox.showinfo("完成", f"已清理变声相关进程（约 {n} 个）。")
         except Exception as e:
             messagebox.showerror("失败", str(e))
@@ -1977,9 +2038,10 @@ class MainApp:
         self._vc_starting = True
         self.vc_running = False
         self.btn_start.configure(text="启动中…", bg=TM_OK)
-        self.lbl_online.configure(
-            text=f"启动中：{m['name']}（首次约 20–40 秒）",
-            fg=TM_WARN,
+        self._set_status_visual(
+            "busy",
+            f"启动中 · {m['name']}",
+            "加载模型中，约 20–40 秒",
         )
 
         def work():
@@ -2015,18 +2077,18 @@ class MainApp:
         self.vc_running = True
         self.btn_start.configure(text="停止变声", bg=TM_OK)
         delay = int(st.get("delay_ms") or 0)
-        self.lbl_online.configure(
-            text=f"变声中：{m.get('name') or ''}",
-            fg=TM_OK,
+        infer = int(st.get("infer_ms") or 0)
+        self._set_status_visual(
+            "live",
+            f"变声中 · {m.get('name') or ''}",
+            self._format_latency_line(delay, infer),
         )
-        if delay:
-            self.lbl_latency.configure(text=f"算法延迟约 {delay} ms")
 
     def _on_vc_start_failed(self, err: str) -> None:
         self._vc_starting = False
         self.vc_running = False
         self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-        self.lbl_online.configure(text="启动失败", fg=TM_META)
+        self._set_status_visual("error", "启动失败", (err or "")[:40])
         msg = err or "未知错误"
         # Friendlier text for known engine errors
         low = msg.lower()
@@ -2044,7 +2106,7 @@ class MainApp:
 
     def _stop_vc(self) -> None:
         self.btn_start.configure(text="停止中…", bg=TM_META)
-        self.lbl_online.configure(text="正在停止并释放声卡…", fg=TM_META)
+        self._set_status_visual("busy", "正在停止…", "释放声卡中")
 
         def work():
             try:
@@ -2063,8 +2125,7 @@ class MainApp:
         self.vc_running = False
         self._vc_starting = False
         self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-        self.lbl_online.configure(text="引擎待命", fg=TM_META)
-        self.lbl_latency.configure(text=APP_PRODUCT_TAGLINE)
+        self._set_status_visual("idle", "引擎待命", APP_PRODUCT_TAGLINE)
 
     def _tick_status(self) -> None:
         try:
@@ -2077,19 +2138,20 @@ class MainApp:
                     delay = int(st.get("delay_ms") or 0)
                     infer = int(st.get("infer_ms") or 0)
                     self.btn_start.configure(text="停止变声", bg=TM_OK)
-                    parts = []
-                    if delay:
-                        parts.append(f"延迟 {delay}ms")
-                    if infer:
-                        parts.append(f"推理 {infer}ms")
-                    if parts:
-                        self.lbl_latency.configure(text=" · ".join(parts))
+                    name = ""
+                    if self.models:
+                        name = self.models[self.model_idx].get("name") or ""
+                    self._set_status_visual(
+                        "live",
+                        f"变声中 · {name}" if name else "变声中",
+                        self._format_latency_line(delay, infer),
+                    )
                 elif state == "error":
                     err = str(st.get("error") or "error")
                     self.vc_running = False
                     self._vc_starting = False
                     self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-                    self.lbl_online.configure(text=f"错误: {err[:48]}", fg=TM_META)
+                    self._set_status_visual("error", "引擎错误", err[:48])
                 elif state == "idle" and self.vc_running and not self._vc_starting:
                     # Worker stopped externally
                     self._on_vc_stopped()

@@ -3,7 +3,7 @@
 > **用途**  
 > 1. 新开 Grok / 协作者对话：先读本文再动代码。  
 > 2. 在 GitHub 上看仓库的人：了解产品定位、架构、已做事项与坑。  
-> **生成 / 最后大更新**：2026-07-19（本对话全量整理）  
+> **生成 / 最后大更新**：2026-07-20（衔接 `SESSION_CHANGELOG_2026-07-20.md`）  
 > **工作区**：`L:\My project\Grok`  
 > **当前分支**：`tm-release`  
 > **组织仓库**：https://github.com/Turing-Mirror/TuringMirror-Voice （private，`org` remote）  
@@ -21,7 +21,10 @@
 | UI | 内容库壳 + 舞台焦点（`docs/UI-AESTHETIC-DESIGN.md` §0）；`launcher/theme.py` + `launcher/ui/`；禁止霓虹/RVCMAX 粉紫/照抄 BA 蓝 |
 | 参考包 | `RVCMAX/RVCMAX_Nvidia_xiaoyuan`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker，**不必开原版 RVC 窗**） |
+| 底栏 | 变声/原声、音高·共鸣·阈值（热更新）、按音色保存；撤销 Ctrl+Z / 默认 Ctrl+0 |
+| 快捷键 | `launcher/hotkeys.py`；设置页可改；可选全局热键 |
 | 发行 | 全量包在 `dist/`（gitignore）；**Git 含什么见 `docs/仓库内容说明.md`** |
+| 最近会话纪要 | `docs/SESSION_CHANGELOG_2026-07-20.md` |
 
 ---
 
@@ -83,6 +86,9 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 | `launcher/catalog.py` | `User_Data/models` 扫描、index 绑定 |
 | `launcher/config_store.py` | app 配置 + 同步 inuse |
 | `launcher/hotkeys.py` | 快捷键定义 / 解析 / Windows 全局热键 |
+| `launcher/ui/widgets.py` | SoftSlider / ParamTile / SectionCard 等 |
+| `launcher/ui/store_page.py` | 「更新」页（滚动、在线清单 UI） |
+| `launcher/realtime_client.py` | 启停 worker；**`shutdown_workers_for_exit` 快速退出** |
 | `tools/realtime_worker.py` | 无窗入口（runpy gui_v1） |
 | `gui_v1.py` | 实时引擎；worker 模式无 FreeSimpleGUI 窗 |
 | `infer/lib/rtrvc.py` | 实时推理；无 index 不崩 |
@@ -219,6 +225,8 @@ Linux AMD 是 ROCm，不是 Windows DML。
 | `docs/RVC_ANALYSIS.md` | 早期引擎/安全分析 |
 | `docs/reference-screenshots/` | 问题截图（error/issue） |
 | `docs/CONTEXT_HANDOFF.md` | **本文** |
+| `docs/SESSION_CHANGELOG_2026-07-19.md` | 前一会话全量改动 |
+| `docs/SESSION_CHANGELOG_2026-07-20.md` | **本会话**快捷键/底栏/监听/关闭等 |
 | `docs/在线更新与音色库.md` | **包规范**：gui_patch 增量 / full_package 全量 / voice_pack·voice_files；处理流程与打包脚本 |
 
 ---
@@ -252,17 +260,18 @@ Linux AMD 是 ROCm，不是 Windows DML。
 
 ```text
 工作区：L:\My project\Grok
-先读：docs/CONTEXT_HANDOFF.md（完整交接）
+先读：docs/CONTEXT_HANDOFF.md + docs/SESSION_CHANGELOG_2026-07-20.md
 分支：tm-release → remote org = Turing-Mirror/TuringMirror-Voice
-产品：RVC 底座 + 白无垢 launcher + 无窗 realtime_worker + 多包 GPU 方案
-发行：scripts/build_release.py --variant nvidia|amd|nvidia50；TEMP 用 L 盘
-约束：不改未要求的 UI；PowerShell；改完 commit；大文件不进 git
-当前：三套 RVCMAX Runtime 已齐；代码/单测/选包适配完成；用 build_release --variant 打全量 exe 并实机验
+产品：RVC + 内容库壳 launcher + 无窗 worker；底栏热控/按音色参数/快捷键/监听修复/快速退出
+发行：scripts/build_release.py --variant nvidia|amd|nvidia50
+约束：不改未要求的 UI 气质；PowerShell；改完 commit；大文件不进 git
+当前：功能侧已齐，待分显卡全量 exe 实机验收
 ```
 
 ---
 
 ## 10. 一句话状态
 
-**N 卡产品路径已成型；A 卡 / 50 系按官方多包方式适配完成（选包、package_meta、默认加速、sync --variant、单测）。**  
-官方 A/I = **整包 DML Runtime + `--dml`**；50 系 = **独立 cu128 Runtime**。本机参考包已齐，下一步是按变体打全量发行包并实机验收。
+**单窗口日常变声 + 底栏热控 + 按音色参数 + 快捷键 + 监听自听 + 快速退出已落地。**  
+N/A/50 多包适配与单测仍在；**下一步仍是按 variant 打全量 exe 并实机验收。**  
+会话细节见 **`docs/SESSION_CHANGELOG_2026-07-20.md`**。

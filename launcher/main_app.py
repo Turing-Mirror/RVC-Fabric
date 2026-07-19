@@ -530,7 +530,6 @@ class MainApp:
                 self._help_page.on_show()
             except Exception:
                 pass
-            self.root.after(80, lambda: getattr(self._store_page, "reflow", lambda: None)())
 
     def _page_home(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -2620,7 +2619,7 @@ class MainApp:
         soft("打开安装目录", lambda: open_path(ROOT))
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("快捷键说明", self.show_hotkeys_help)
-        soft("使用说明", self.open_help)
+        soft("使用说明", lambda: self.show_page("help"))
         soft("在线更新与音色库", lambda: self.show_page("store"))
         tk.Label(
             fr,
@@ -2657,182 +2656,25 @@ class MainApp:
             messagebox.showerror("失败", str(e))
 
     def open_help(self) -> None:
-        """User-facing help in a popup window (not developer markdown files)."""
-        win = tk.Toplevel(self.root)
-        win.title("使用说明")
-        win.configure(bg=TM_BG)
-        win.geometry("520x480")
-        win.minsize(420, 360)
-        win.transient(self.root)
-        try:
-            win.grab_set()
-        except Exception:
-            pass
-
-        tk.Label(
-            win,
-            text="Turing Mirror 变声器 · 使用说明",
-            font=serif_font(16, "bold"),
-            bg=TM_BG,
-            fg=TM_INK,
-        ).pack(anchor="w", padx=20, pady=(18, 6))
-
-        frame = tk.Frame(win, bg=TM_SURFACE, highlightthickness=1, highlightbackground=TM_HAIRLINE)
-        frame.pack(fill="both", expand=True, padx=20, pady=8)
-
-        text = tk.Text(
-            frame,
-            wrap="word",
-            font=sans_font(10),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            relief="flat",
-            padx=14,
-            pady=12,
-            cursor="arrow",
-        )
-        scroll = ttk.Scrollbar(frame, command=text.yview)
-        text.configure(yscrollcommand=scroll.set)
-        scroll.pack(side="right", fill="y")
-        text.pack(side="left", fill="both", expand=True)
-
-        body = (
-            "【快捷键（可自定义）】\n"
-            "· 左 / 右方向键：上一个 / 下一个音色（变声中会自动重启加载）\n"
-            "· F5：开启 / 停止变声\n"
-            "· Ctrl+↑ / Ctrl+↓：音高 ±1\n"
-            "· Ctrl+Alt+1～9：直接选第 1～9 个音色\n"
-            "· F1：快捷键说明 · 在「设置 → 快捷键」可改键并开启全局（游戏中可用）\n"
-            "\n"
-            "【快速上手：实时变声】\n"
-            "1. 首次：用「首次设置启动器」安装虚拟声卡（VB-Cable），并发送桌面快捷方式。\n"
-            "2. 在「模型」页导入或选择音色（.pth，约 50–60MB 的推理小模型）。\n"
-            "3. 点底部「开启变声」或「高级实时面板」。\n"
-            "4. 实时面板里建议：\n"
-            "   · 输入设备 = 你的麦克风\n"
-            "   · 输出设备 = CABLE Input（虚拟声卡）\n"
-            "   · 输入/输出尽量选同一种类型（例如都是 MME，或都是 ASIO）\n"
-            "5. 游戏 / QQ / 微信 / Discord 的「麦克风」选 CABLE Output。\n"
-            "6. 自己监听可戴耳机，避免扬声器回授啸叫。\n"
-            "\n"
-            "【音高与参数（大家最常问）】\n"
-            "· 音高 Pitch：男变女常试 +8～+12；女变男试 -8～-12；同性别可从 0 微调。\n"
-            "· 音高算法：实时优先 fcpe / rmvpe（更稳、少哑音）；不稳可换 harvest。\n"
-            "· 特征检索 index rate：越高越像模型音色、越少「漏原声」；模型音质一般时\n"
-            "  过高可能发糊，可试 0.3～0.75。没有 .index 文件也可以用，只是还原度可能差一点。\n"
-            "· 响度/包络：实时里可让输出响度贴近你的说话大小，减少「不说话还有底噪」。\n"
-            "\n"
-            "【音色模型】\n"
-            "· 请使用约 55–60MB 的推理用 .pth（别人分享的「小模型」）。\n"
-            "· 不要用训练过程里几百 MB 的大文件去变声，容易打不开或报错。\n"
-            "· 导入：本页「模型」→「导入模型」。有同名 .index 时尽量一起使用。\n"
-            "· 分享给朋友：发小模型 .pth + 对应 .index（如有），不要发训练日志里的大包。\n"
-            "\n"
-            "【常见问题与解决】\n"
-            "\n"
-            "Q：对方听不到变声，只有原声或没声？\n"
-            "A：1）是否安装 VB-Cable 且软件输出选 CABLE Input；\n"
-            "   2）对方软件麦克风是否选 CABLE Output；\n"
-            "   3）变声是否已点 Start/开启；\n"
-            "   4）关掉系统「对麦克风的独占模式」或换一组同类型设备再试。\n"
-            "\n"
-            "Q：只有自己能听到变声，通话软件里没有？\n"
-            "A：通话软件选错麦克风。应选 CABLE Output，不要选物理麦克风。\n"
-            "\n"
-            "Q：破音、电流声、爆破音？\n"
-            "A：1）输入输出选同一种 API；\n"
-            "   2）略增大缓冲/块时长，降低采样压力；\n"
-            "   3）麦克风增益别过大；\n"
-            "   4）关掉其他占用麦克风的软件；\n"
-            "   5）ASIO 用户确认驱动稳定。\n"
-            "\n"
-            "Q：延迟很高，对不上嘴？\n"
-            "A：1）减小实时块时长（过小可能爆音，需折中）；\n"
-            "   2）优先用独立显卡，关省电；\n"
-            "   3）关闭无关后台；\n"
-            "   4）输入输出用同类型低延迟设备（ASIO 通常更低，但看驱动）。\n"
-            "\n"
-            "Q：变出来不像、发虚、哑音（没音调）？\n"
-            "A：1）换 rmvpe/fcpe 音高算法；\n"
-            "   2）微调 Pitch；\n"
-            "   3）有 index 时打开检索并试 index rate；\n"
-            "   4）换更高质量的模型；干声/原麦尽量清晰少底噪。\n"
-            "\n"
-            "Q：一说话有杂音，不说话也有沙沙声？\n"
-            "A：调高门限/阈值，打开输入降噪（若面板有）；麦克风远离风扇；\n"
-            "   可开「响度贴近输入」减少静音段噪声。\n"
-            "\n"
-            "Q：显存不足 / CUDA out of memory？\n"
-            "A：关闭其他占显存程序；换更小模型或降低实时质量相关选项；\n"
-            "   显存很小的卡实时会吃力，可尝试 CPU（更慢）或减小音频块。\n"
-            "\n"
-            "Q：翻唱/推理时报路径、ffmpeg 错误？\n"
-            "A：音频路径尽量不要有特殊符号；可先把文件拷到简单英文路径再试。\n"
-            "   本整合包已带 ffmpeg 时一般无需另装。\n"
-            "\n"
-            "Q：WebUI 提示 Connection Error 或 JSON 解析错误？\n"
-            "A：关掉系统代理/VPN 全局模式后再开；不要关掉正在运行的主程序窗口。\n"
-            "\n"
-            "Q：模型列表是空的？\n"
-            "A：到「模型」页导入 .pth；导入后点刷新。确认文件是完整推理模型。\n"
-            "\n"
-            "Q：想自己训练音色？\n"
-            "A：用「其他」里的训练/翻唱 WebUI。建议干净人声约 10 分钟以上；\n"
-            "   音质差时轮数不必太多（大约 20–50 轮量级按效果调整）。\n"
-            "   训练完成后用「小模型」做推理和分享，不要把训练中途的大文件当成品。\n"
-            "\n"
-            "【提示】\n"
-            "日常开黑只需要：虚拟声卡 + 音色 + 实时变声。\n"
-            "训练/翻唱 WebUI 是进阶功能，不是每次都要开。\n"
-            "\n"
-            "本软件与 Turing Mirror 配套，请遵守当地法律法规与游戏/平台规则。"
-        )
-        text.insert("1.0", body)
-        text.configure(state="disabled")
-
-        tk.Button(
-            win,
-            text="知道了",
-            font=sans_font(10, "bold"),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
-            relief="flat",
-            padx=24,
-            pady=8,
-            cursor="hand2",
-            command=win.destroy,
-            bd=0,
-        ).pack(pady=14)
-
-        # Center on parent
-        try:
-            win.update_idletasks()
-            px = self.root.winfo_rootx() + 80
-            py = self.root.winfo_rooty() + 40
-            win.geometry(f"+{px}+{py}")
-            win.lift()
-            win.focus_force()
-        except Exception:
-            pass
+        """Open dedicated in-app 说明 page."""
+        self.show_page("help")
 
     def _show_cable_help(self) -> None:
         messagebox.showinfo(
             "虚拟声卡接线",
-            "推荐：VB-Cable 或 VoiceMeeter\n\n"
-            "【本软件高级实时面板】\n"
-            "· 输入设备：你的真实麦克风（不要选 CABLE）\n"
-            "· 输出设备：CABLE Input\n"
-            "  （有的列表显示为「CABLE Input (VB-Audio Virtual Cable)」）\n"
-            "· 设备类型：MME 最省事；WASAPI 不要勾独占\n\n"
-            "【游戏 / 语音软件】\n"
-            "· 麦克风 / 输入：CABLE Output\n"
-            "· 这样对面听到的是变声后的声音\n\n"
-            "【自己监听】\n"
-            "· 用耳机听系统声音；不要把 CABLE 设成 Windows 默认播放\n\n"
+            "【在本软件「设置」】\n"
+            "· 输入设备 = 真实麦克风（不要选 CABLE）\n"
+            "· 输出设备 = CABLE Input\n"
+            "· 监听设备（可选）= 耳机，配合「变声时监听自己」\n"
+            "· 设备类型：MME 最省事；WASAPI 独占一般不要勾\n\n"
+            "【游戏 / QQ / Discord】\n"
+            "· 麦克风 = CABLE Output（对面听到变声）\n\n"
+            "【Windows】\n"
+            "· 默认播放 = 耳机，不要设成 CABLE\n\n"
             "【开启变声】\n"
-            "· 主界面点「开启变声」→ 自动打开面板并开始转换\n"
-            "· 若只有 pth 没有 index 文件也能用，Index 会自动关闭\n"
-            "· 首次加载模型约 20–40 秒，请稍候",
+            "· 底栏点「开启变声」；首次加载约 20～40 秒\n"
+            "· 没有 .index 也能用\n\n"
+            "更完整的说明见顶部导航「说明」页。",
         )
 
     def open_webui(self) -> None:

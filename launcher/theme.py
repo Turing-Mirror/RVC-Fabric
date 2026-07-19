@@ -70,18 +70,18 @@ FONT_SERIF: Final[tuple] = _FONT_DISPLAY
 FONT_SANS: Final[tuple] = _FONT_SANS
 FONT_MONO: Final[tuple] = _FONT_MONO
 
-# Layout rhythm (more air than old compact shell)
-PAD_X: Final[int] = 28
-PAD_CARD: Final[int] = 16
-NAV_HEIGHT: Final[int] = 64
-# Dock: single-row-ish mode + sliders + transport (taller window leaves body room)
-BOTTOM_HEIGHT: Final[int] = 100
-GUTTER: Final[int] = 32
-# Default main window (bottom dock needs width; body needs height)
-DEFAULT_WIN_W: Final[int] = 1120
-DEFAULT_WIN_H: Final[int] = 780
-MIN_WIN_W: Final[int] = 960
-MIN_WIN_H: Final[int] = 640
+# Layout rhythm — air like Schale cards / LyricsKara stage padding
+PAD_X: Final[int] = 36
+PAD_CARD: Final[int] = 18
+NAV_HEIGHT: Final[int] = 68
+# Player-style dock: now-playing | mode | param tiles | transport
+BOTTOM_HEIGHT: Final[int] = 132
+GUTTER: Final[int] = 36
+# Wider default so dock tiles + page content breathe
+DEFAULT_WIN_W: Final[int] = 1280
+DEFAULT_WIN_H: Final[int] = 860
+MIN_WIN_W: Final[int] = 1080
+MIN_WIN_H: Final[int] = 720
 
 APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"
 APP_PRODUCT_TAGLINE: Final[str] = "TURING MIRROR · VOICE"

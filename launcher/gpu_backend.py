@@ -23,7 +23,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, MutableMapping, Optional
 
 # auto | cuda | dml | cpu
 VALID = frozenset({"auto", "cuda", "dml", "cpu"})
@@ -38,6 +38,32 @@ def normalize_accel(value: str | None) -> str:
     if v not in VALID:
         return "auto"
     return v
+
+
+def _probe_env(cwd: Path) -> dict:
+    """Env for Runtime probe — strip PyInstaller host pollution (same spirit as worker)."""
+    try:
+        from launcher.win_util import _env_for_runtime_python
+
+        env = _env_for_runtime_python()
+    except Exception:
+        env = dict(os.environ)
+        for k in list(env.keys()):
+            ku = k.upper()
+            if ku.startswith("PYTHON") or ku in {
+                "_MEIPASS",
+                "TCL_LIBRARY",
+                "TK_LIBRARY",
+                "TIX_LIBRARY",
+            }:
+                del env[k]
+    # Probe raw capability — do not force DML/CUDA preference into the probe process
+    for k in ("TM_USE_DML", "TM_ACCEL", "TM_ACCEL_RESOLVED"):
+        env.pop(k, None)
+    env["PYTHONPATH"] = str(cwd)
+    env["PYTHONNOUSERSITE"] = "1"
+    env["TM_VOICE_ROOT"] = str(cwd)
+    return env
 
 
 def probe_via_runtime_python(python_exe: Path, cwd: Path) -> dict[str, Any]:
@@ -75,21 +101,22 @@ except Exception:
 print(json.dumps(out, ensure_ascii=False))
 """
     try:
+        env = _probe_env(Path(cwd))
         r = subprocess.run(
             [str(python_exe), "-c", code],
             cwd=str(cwd),
             capture_output=True,
             text=True,
             timeout=90,
-            env={
-                **os.environ,
-                "PYTHONPATH": str(cwd),
-                "PYTHONNOUSERSITE": "1",
-            },
+            env=env,
         )
         line = (r.stdout or "").strip().splitlines()
         if not line:
-            return {"error": (r.stderr or "empty probe")[:200], "cuda": False, "dml": False}
+            return {
+                "error": (r.stderr or "empty probe")[:200],
+                "cuda": False,
+                "dml": False,
+            }
         return json.loads(line[-1])
     except Exception as e:
         return {"error": str(e), "cuda": False, "dml": False}
@@ -130,7 +157,9 @@ def probe_via_wmi() -> dict[str, Any]:
             if "amd" in low or "radeon" in low:
                 info["has_amd"] = True
                 info["vendors"].append("amd")
-            if "intel" in low and ("uhd" in low or "iris" in low or "arc" in low or "graphics" in low):
+            if "intel" in low and (
+                "uhd" in low or "iris" in low or "arc" in low or "graphics" in low
+            ):
                 info["has_intel_gpu"] = True
                 info["vendors"].append("intel")
     except Exception:
@@ -143,6 +172,7 @@ def resolve_backend(
     *,
     probe: Optional[dict[str, Any]] = None,
     wmi: Optional[dict[str, Any]] = None,
+    package_variant: str | None = None,
 ) -> dict[str, Any]:
     """Return resolved backend: cuda | dml | cpu plus labels for UI."""
     pref = normalize_accel(preference)
@@ -150,23 +180,30 @@ def resolve_backend(
     wmi = wmi or {}
     has_cuda = bool(probe.get("cuda"))
     has_dml = bool(probe.get("dml"))
+    var = (package_variant or "").strip().lower()
 
     if pref == "cuda":
-        backend = "cuda" if has_cuda else ("cpu" if not has_dml else "cuda")  # force attempt
-        if not has_cuda:
-            backend = "cpu"
+        backend = "cuda" if has_cuda else "cpu"
     elif pref == "dml":
-        backend = "dml" if has_dml else "cpu"
+        # Prefer DML when pack is AMD even if probe failed (Config may still work)
+        if has_dml:
+            backend = "dml"
+        elif var == "amd":
+            backend = "dml"
+        else:
+            backend = "cpu"
     elif pref == "cpu":
         backend = "cpu"
     else:
-        # auto — official spirit: CUDA first, else DirectML, else CPU
+        # auto — CUDA first, else DirectML, else CPU
         if has_cuda:
             backend = "cuda"
         elif has_dml:
             backend = "dml"
+        elif var == "amd":
+            # AMD shipping pack: default try DML even if probe was empty
+            backend = "dml"
         elif wmi.get("has_amd") or wmi.get("has_intel_gpu"):
-            # Package may still have dml libs; try dml if import said no but vendor is A/I
             backend = "dml" if has_dml else "cpu"
         else:
             backend = "cpu"
@@ -181,6 +218,8 @@ def resolve_backend(
         detail = str(probe.get("cuda_name") or "")
     elif backend == "dml":
         detail = str(probe.get("dml_name") or "DirectML")
+        if not has_dml and var == "amd":
+            detail = (detail + " · 探测未确认").strip(" ·")
     elif probe.get("error"):
         detail = str(probe.get("error"))[:80]
 
@@ -197,16 +236,17 @@ def resolve_backend(
     }
 
 
-def apply_backend_env(env: dict, resolved: dict[str, Any]) -> dict:
-    """Mutate env for child Runtime processes (gui_v1 / worker / webui)."""
-    env = dict(env)
-    backend = resolved.get("backend") or "cpu"
+def apply_backend_env(
+    env: MutableMapping[str, str], resolved: dict[str, Any]
+) -> MutableMapping[str, str]:
+    """Set TM_* backend keys **in place** on *env* (works with os.environ).
+
+    Returns the same mapping for chaining.
+    """
+    backend = str(resolved.get("backend") or "cpu")
     env["TM_ACCEL"] = str(resolved.get("preference") or "auto")
     env["TM_ACCEL_RESOLVED"] = backend
-    if backend == "dml":
-        env["TM_USE_DML"] = "1"
-    else:
-        env["TM_USE_DML"] = "0"
+    env["TM_USE_DML"] = "1" if backend == "dml" else "0"
     return env
 
 
@@ -233,7 +273,22 @@ def detect_full(root: Path, preference: str = "auto") -> dict[str, Any]:
     probe: dict[str, Any] = {}
     if py and py.is_file():
         probe = probe_via_runtime_python(py, root)
-    resolved = resolve_backend(preference, probe=probe, wmi=wmi)
+
+    package_variant = None
+    try:
+        from launcher.package_meta import load_package_meta
+
+        package_variant = str(load_package_meta(root).get("variant") or "")
+    except Exception:
+        package_variant = None
+
+    resolved = resolve_backend(
+        preference,
+        probe=probe,
+        wmi=wmi,
+        package_variant=package_variant,
+    )
     resolved["probe"] = probe
     resolved["wmi"] = wmi
+    resolved["package_variant"] = package_variant or ""
     return resolved

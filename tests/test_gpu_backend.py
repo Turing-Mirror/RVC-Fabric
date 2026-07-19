@@ -63,22 +63,32 @@ class ResolveBackendTests(unittest.TestCase):
 
 
 class ApplyEnvTests(unittest.TestCase):
-    def test_dml_env(self):
-        env = apply_backend_env(
-            {},
+    def test_dml_env_inplace(self):
+        env = {}
+        out = apply_backend_env(
+            env,
             {"backend": "dml", "preference": "dml", "use_dml": True},
         )
+        self.assertIs(out, env)  # same object — mutates in place
         self.assertEqual(env["TM_USE_DML"], "1")
         self.assertEqual(env["TM_ACCEL"], "dml")
         self.assertEqual(env["TM_ACCEL_RESOLVED"], "dml")
 
-    def test_cuda_env(self):
-        env = apply_backend_env(
-            {"TM_USE_DML": "1"},
-            {"backend": "cuda", "preference": "auto"},
-        )
+    def test_cuda_env_overwrites(self):
+        env = {"TM_USE_DML": "1"}
+        apply_backend_env(env, {"backend": "cuda", "preference": "auto"})
         self.assertEqual(env["TM_USE_DML"], "0")
         self.assertEqual(env["TM_ACCEL_RESOLVED"], "cuda")
+
+    def test_amd_pack_prefers_dml_when_probe_empty(self):
+        r = resolve_backend(
+            "auto",
+            probe={"cuda": False, "dml": False},
+            wmi={},
+            package_variant="amd",
+        )
+        self.assertEqual(r["backend"], "dml")
+        self.assertTrue(r["use_dml"])
 
 
 if __name__ == "__main__":

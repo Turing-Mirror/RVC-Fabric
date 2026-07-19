@@ -126,6 +126,36 @@ def check_environment(*, heavy: bool = False) -> list[CheckItem]:
             )
         )
 
+    # AMD pack: torch_directml is core for official A/I path
+    package_variant = ""
+    try:
+        from launcher.package_meta import load_package_meta
+
+        package_variant = str(load_package_meta().get("variant") or "").lower()
+    except Exception:
+        package_variant = ""
+    dml_pkg = bool(site and (site / "torch_directml").exists())
+    if package_variant == "amd":
+        items.append(
+            CheckItem(
+                "torch_directml",
+                dml_pkg,
+                "Runtime 已含" if dml_pkg else "AMD 包应含 torch_directml",
+                KIND_CORE,
+                "A/I DirectML 加速必需",
+            )
+        )
+    elif dml_pkg:
+        items.append(
+            CheckItem(
+                "torch_directml",
+                True,
+                "Runtime 已含",
+                KIND_SOFT,
+                "本机 Runtime 含 DirectML（非 AMD 包时可选）",
+            )
+        )
+
     # Training bottom models (sample key files)
     pre_v2 = ROOT / "assets" / "pretrained_v2" / "f0G40k.pth"
     pre_v1 = ROOT / "assets" / "pretrained" / "f0G40k.pth"

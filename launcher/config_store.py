@@ -108,10 +108,7 @@ def load_config() -> dict[str, Any]:
 def save_config(cfg: dict[str, Any]) -> None:
     ensure_dirs()
     merged = _normalize_cfg(cfg)
-    CONFIG_PATH.write_text(
-        json.dumps(merged, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(CONFIG_PATH, merged)
 
 
 def atomic_write_json(path: Path, data: dict[str, Any]) -> None:

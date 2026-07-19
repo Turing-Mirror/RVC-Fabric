@@ -8,9 +8,9 @@ Scopes (product-oriented)::
   all       — everything (legacy full download)
 
 Improvements over the original script:
-- Skip files that already exist and are non-empty
+- Skip only when size exceeds minimum thresholds (not size>0)
+- Verify Content-Length when server provides it
 - Simple progress logging and retries
-- Clear exit code on failure
 """
 
 from __future__ import annotations
@@ -20,14 +20,21 @@ import sys
 import time
 from pathlib import Path
 
-import requests
-
 RVC_DOWNLOAD_LINK = "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 MAX_RETRIES = 3
 CHUNK_SIZE = 1 << 20  # 1 MiB
+
+# Minimum sizes to treat an existing file as valid (avoid stuck corrupt stubs)
+MIN_SIZE = {
+    "hubert_base.pt": 1_000_000,
+    "rmvpe.pt": 1_000_000,
+    "rmvpe.onnx": 100_000,
+    "vocals.onnx": 100_000,
+}
+DEFAULT_MIN = 50_000  # generic .pth weights
 
 PRETRAIN_NAMES = [
     "D32k.pth",
@@ -56,11 +63,37 @@ UVR_NAMES = [
 ]
 
 
-def dl_model(link: str, model_name: str, dir_name: Path, retries: int = MAX_RETRIES) -> None:
+def _min_size(model_name: str) -> int:
+    return int(MIN_SIZE.get(model_name, DEFAULT_MIN))
+
+
+def _is_complete(path: Path, model_name: str) -> bool:
+    return path.is_file() and path.stat().st_size >= _min_size(model_name)
+
+
+def dl_model(
+    link: str,
+    model_name: str,
+    dir_name: Path,
+    retries: int = MAX_RETRIES,
+) -> None:
+    try:
+        import requests
+    except ImportError as e:
+        raise RuntimeError("需要 requests 库：pip install requests") from e
+
     dest = dir_name / model_name
-    if dest.is_file() and dest.stat().st_size > 0:
-        print(f"  skip (exists): {dest}")
+    if _is_complete(dest, model_name):
+        print(f"  skip (ok): {dest} ({dest.stat().st_size} bytes)")
         return
+    if dest.is_file():
+        print(
+            f"  re-download (too small {dest.stat().st_size} < {_min_size(model_name)}): {model_name}"
+        )
+        try:
+            dest.unlink()
+        except OSError:
+            pass
 
     url = f"{link}{model_name}"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -85,8 +118,16 @@ def dl_model(link: str, model_name: str, dir_name: Path, retries: int = MAX_RETR
                             print(f"\r    {pct:3d}% ({done}/{total} bytes)", end="")
                 if total:
                     print()
+            if total and done != total:
+                raise RuntimeError(
+                    f"size mismatch: got {done} bytes, Content-Length {total}"
+                )
+            if done < _min_size(model_name):
+                raise RuntimeError(
+                    f"file too small: {done} < min {_min_size(model_name)}"
+                )
             tmp.replace(dest)
-            print(f"  saved: {dest}")
+            print(f"  saved: {dest} ({done} bytes)")
             return
         except Exception as e:
             last_err = e
@@ -107,7 +148,6 @@ def download_core() -> None:
     dl_model(RVC_DOWNLOAD_LINK, "hubert_base.pt", BASE_DIR / "assets/hubert")
     print("Downloading rmvpe.pt...")
     dl_model(RVC_DOWNLOAD_LINK, "rmvpe.pt", BASE_DIR / "assets/rmvpe")
-    # Optional ONNX for DirectML F0 — ignore hard failure
     try:
         print("Downloading rmvpe.onnx (optional, AMD/DML)...")
         dl_model(RVC_DOWNLOAD_LINK, "rmvpe.onnx", BASE_DIR / "assets/rmvpe")

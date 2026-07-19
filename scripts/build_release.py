@@ -234,8 +234,18 @@ def merge_rvcmax_engine_bits(out: Path) -> None:
 def copy_runtime(out: Path, runtime_src: Path | None) -> None:
     dst = out / "Runtime"
     if runtime_src is None:
-        log("[runtime] SKIP (--skip-runtime or no source)")
-        (dst / "README_PLACE_RUNTIME_HERE.txt").parent.mkdir(parents=True, exist_ok=True)
+        # Keep an existing complete Runtime (incremental rebuild / --skip-runtime)
+        if (dst / "python.exe").is_file():
+            log(f"[runtime] SKIP — keep existing {dst}")
+            # Remove stale placeholder if a real Runtime is present
+            ph = dst / "README_PLACE_RUNTIME_HERE.txt"
+            if ph.is_file():
+                try:
+                    ph.unlink()
+                except Exception:
+                    pass
+            return
+        log("[runtime] SKIP (--skip-runtime or no source) — writing placeholder")
         dst.mkdir(parents=True, exist_ok=True)
         (dst / "README_PLACE_RUNTIME_HERE.txt").write_text(
             "Put embedded Python Runtime here (python.exe + site-packages).\n"

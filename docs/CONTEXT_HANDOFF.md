@@ -74,6 +74,7 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 |------|------|
 | `launcher/main_app.py` | 日常 UI、启停变声、设置、状态徽章 |
 | `launcher/theme.py` / `launcher/ui/` | 壳层 token 与可复用控件（封面卡等） |
+| `launcher/online/` + `ui/store_page.py` | 在线更新 GUI / 音色库（SharePoint·GitHub 直链）；完整包外链 QQ/SharePoint |
 | `launcher/bootstrap.py` | 首次：快捷方式、VBCABLE、环境 |
 | `launcher/realtime_client.py` | 启停 worker、单实例、清孤儿进程 |
 | `launcher/realtime_protocol.py` | 文件 IPC |
@@ -210,6 +211,7 @@ Linux AMD 是 ROCm，不是 Windows DML。
 | `docs/RVC_ANALYSIS.md` | 早期引擎/安全分析 |
 | `docs/reference-screenshots/` | 问题截图（error/issue） |
 | `docs/CONTEXT_HANDOFF.md` | **本文** |
+| `docs/在线更新与音色库.md` | catalog JSON、直链、GUI zip 白名单 |
 
 ---
 

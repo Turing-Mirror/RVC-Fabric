@@ -65,6 +65,14 @@ DEFAULTS: dict[str, Any] = {
     "last_model_path": "",
     "desktop_shortcut_done": False,
     "vbcable_hint_done": False,
+    # Online update / voice library (SharePoint or GitHub raw catalog JSON)
+    "update_manifest_url": "",
+    # Keyboard shortcuts (merged with launcher.hotkeys.DEFAULT_HOTKEYS)
+    "hotkeys": {},
+    # Windows global hotkeys (work while game is focused)
+    "global_hotkeys": False,
+    # When VC is running, switching model via hotkey/carousel restarts engine
+    "hotkey_restart_on_model_switch": True,
 }
 
 # gui_v1.py / realtime_worker read this file on launch / start
@@ -90,6 +98,13 @@ def _normalize_cfg(data: dict[str, Any]) -> dict[str, Any]:
     out["output_noise_reduce"] = bool(out.get("O_noise_reduce"))
     out["input_device"] = str(out.get("sg_input_device") or "")
     out["output_device"] = str(out.get("sg_output_device") or "")
+    # Hotkeys: always a dict (merge done at use site via launcher.hotkeys.merge_hotkeys)
+    if not isinstance(out.get("hotkeys"), dict):
+        out["hotkeys"] = {}
+    out["global_hotkeys"] = bool(out.get("global_hotkeys"))
+    out["hotkey_restart_on_model_switch"] = bool(
+        out.get("hotkey_restart_on_model_switch", True)
+    )
     return out
 
 

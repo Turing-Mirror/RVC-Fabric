@@ -28,6 +28,19 @@ from launcher.catalog import (
     import_model_to_catalog,
 )
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
+from launcher.hotkeys import (
+    ACTIONS,
+    ACTION_BY_ID,
+    DEFAULT_HOTKEYS,
+    GlobalHotkeyManager,
+    event_to_hotkey_spec,
+    find_duplicate_bindings,
+    focus_should_skip_hotkey,
+    format_help_text,
+    merge_hotkeys,
+    normalize_hotkey,
+    to_tk_sequence,
+)
 from launcher.paths import (
     APP_TITLE,
     MODELS_DIR,
@@ -78,6 +91,8 @@ from launcher.ui import (
     SectionCard,
     StatusBadge,
 )
+from launcher.ui.store_page import StorePage
+from launcher.version import APP_VERSION
 from launcher.win_util import (
     focus_window_by_title,
     open_path,
@@ -124,6 +139,11 @@ class MainApp:
             "input_devices": [],
             "output_devices": [],
         }
+        self._hotkey_map: dict[str, str] = merge_hotkeys(self.cfg.get("hotkeys"))
+        self._tk_hotkey_binds: list[str] = []
+        self._global_hk = GlobalHotkeyManager()
+        self._model_restart_job = None
+        self._capture_action_id: Optional[str] = None
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
@@ -137,10 +157,12 @@ class MainApp:
         self.root.bind("<Configure>", self._on_root_configure)
         self.show_page("home")
         self._tick_status()
+        self._setup_hotkeys()
         self.root.after(200, lambda: self._place_and_raise(force_size=False))
         self.root.after(800, lambda: self._place_and_raise(force_size=False))
         self.root.after(400, self._init_gpu_backend)
         self.root.after(600, self._bootstrap_devices_async)
+        self.root.after(350, self._poll_global_hotkeys)
         self._gpu_info: dict = {}
 
     def _place_and_raise(self, force_size: bool = False) -> None:
@@ -227,6 +249,7 @@ class MainApp:
             ("home", "首页"),
             ("models", "模型"),
             ("settings", "设置"),
+            ("store", "更新"),
             ("more", "其他"),
         ):
             b = NavItem(nav_rail, label, key, self.show_page)
@@ -309,10 +332,12 @@ class MainApp:
             pass
 
     def _build_pages(self) -> None:
+        self._store_page = StorePage(self, self.body)
         self.pages = {
             "home": self._page_home(),
             "models": self._page_models(),
             "settings": self._page_settings(),
+            "store": self._store_page.frame,
             "more": self._page_more(),
         }
 
@@ -330,6 +355,11 @@ class MainApp:
             self._update_home_current_label()
         if key == "settings":
             self.root.after(50, self._reflow_settings_page)
+        if key == "store":
+            try:
+                self._store_page.on_show()
+            except Exception:
+                pass
 
     def _page_home(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -493,7 +523,9 @@ class MainApp:
                 index_text=f"{self.model_idx + 1:02d} / {n:02d}" if focus else "",
                 width=w,
                 height=h,
-                on_click=lambda ix=mi: self._select_model(ix, feedback=True),
+                on_click=lambda ix=mi: self._select_model(
+                    ix, feedback=True, maybe_restart=True
+                ),
             )
             card.pack(side="left", padx=max(10, int(host_w * 0.016)), pady=12)
 
@@ -533,9 +565,18 @@ class MainApp:
     def _shift_model(self, delta: int) -> None:
         if not self.models:
             return
-        self._select_model((self.model_idx + delta) % len(self.models), feedback=True)
+        self._select_model(
+            (self.model_idx + delta) % len(self.models),
+            feedback=True,
+            maybe_restart=True,
+        )
 
-    def _select_model(self, idx: int, feedback: bool = False) -> None:
+    def _select_model(
+        self,
+        idx: int,
+        feedback: bool = False,
+        maybe_restart: bool = False,
+    ) -> None:
         if not self.models:
             return
         idx = idx % len(self.models)
@@ -558,6 +599,14 @@ class MainApp:
         if feedback or prev != idx:
             self._show_switch_toast(m["name"])
         self._refresh_index_ui_for_model(m)
+        # Cold param: model load only at start — restart stream if already live
+        if (
+            maybe_restart
+            and prev != idx
+            and (self.vc_running or self._vc_starting)
+            and bool(self.cfg.get("hotkey_restart_on_model_switch", True))
+        ):
+            self._restart_vc_for_new_model()
 
     def _sync_model_to_realtime_gui(self, m: Optional[dict] = None) -> None:
         """Write current model + full settings into engine config.json."""
@@ -2097,9 +2146,11 @@ class MainApp:
         soft("打开安装目录", lambda: open_path(ROOT))
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("使用说明", self.open_help)
+        soft("在线更新与音色库", lambda: self.show_page("store"))
         tk.Label(
             fr,
-            text=tracked("TURING MIRROR  ·  RVC ENGINE", gap="  "),
+            text=tracked("TURING MIRROR  ·  RVC ENGINE", gap="  ")
+            + f"  ·  v{APP_VERSION}",
             bg=TM_BG,
             fg=TM_META,
             font=mono_font(8),

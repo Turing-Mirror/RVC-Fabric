@@ -1046,55 +1046,59 @@ if __name__ == "__main__":
             global flag_vc
             flag_vc = False
             proc = getattr(self, "audio_proc", None)
-            if proc is None:
-                return
-            printt("stop_stream: shutting down AudioIoProcess")
-            try:
-                if getattr(self, "stop_evt", None) is not None:
+            if proc is not None:
+                printt("stop_stream: shutting down AudioIoProcess")
+                try:
+                    if getattr(self, "stop_evt", None) is not None:
+                        try:
+                            self.stop_evt.set()
+                        except Exception:
+                            pass
                     try:
-                        self.stop_evt.set()
+                        if getattr(self, "in_evt", None) is not None:
+                            self.in_evt.set()
                     except Exception:
                         pass
-                # Unblock audio_infer if waiting on input event
-                try:
-                    if getattr(self, "in_evt", None) is not None:
-                        self.in_evt.set()
-                except Exception:
-                    pass
-                try:
-                    if getattr(self, "in_mem", None) is not None:
-                        self.in_mem.close()
-                except Exception:
-                    pass
-                try:
-                    if getattr(self, "out_mem", None) is not None:
-                        self.out_mem.close()
-                except Exception:
-                    pass
-                try:
-                    if proc.is_alive():
-                        proc.join(timeout=3.0)
-                except Exception:
-                    pass
-                try:
-                    if proc.is_alive():
-                        proc.terminate()
-                        proc.join(timeout=2.0)
-                except Exception:
-                    pass
-                try:
-                    if proc.is_alive():
-                        proc.kill()
-                except Exception:
-                    pass
-            finally:
-                self.audio_proc = None
-                self.in_mem = None
-                self.out_mem = None
-                self.in_buf = None
-                self.out_buf = None
-                self.stop_evt = None
-                self.in_evt = None
+                    try:
+                        if getattr(self, "in_mem", None) is not None:
+                            self.in_mem.close()
+                    except Exception:
+                        pass
+                    try:
+                        if getattr(self, "out_mem", None) is not None:
+                            self.out_mem.close()
+                    except Exception:
+                        pass
+                    try:
+                        if proc.is_alive():
+                            proc.join(timeout=3.0)
+                    except Exception:
+                        pass
+                    try:
+                        if proc.is_alive():
+                            proc.terminate()
+                            proc.join(timeout=2.0)
+                    except Exception:
+                        pass
+                    try:
+                        if proc.is_alive():
+                            proc.kill()
+                    except Exception:
+                        pass
+                finally:
+                    self.audio_proc = None
+                    self.in_mem = None
+                    self.out_mem = None
+                    self.in_buf = None
+                    self.out_buf = None
+                    self.stop_evt = None
+                    self.in_evt = None
+            # Free VRAM so second start after denoise/settings is less likely to OOM
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
 
         def audio_infer(
             self, buf_size:int # 2 * self.block_frame
@@ -1348,16 +1352,41 @@ if __name__ == "__main__":
                 if d["max_output_channels"] > 0 and d["hostapi_name"] == hostapi_name
             ]
 
+        def _resolve_device_name(self, name, names):
+            """Exact or prefix match (saved names are often truncated by UI/JSON)."""
+            if not name or not names:
+                return None
+            if name in names:
+                return name
+            # Prefix / contains match for truncated MME names
+            for n in names:
+                if n.startswith(name) or name.startswith(n[: max(8, len(name) - 2)]):
+                    return n
+            # Fuzzy: strip spaces compare head
+            head = name[:24].lower()
+            for n in names:
+                if n[:24].lower() == head or head in n.lower():
+                    return n
+            return None
+
         def set_devices(self, input_device, output_device):
-            """设置输出设备"""
+            """设置输入输出设备（允许截断的设备名）。"""
+            in_name = self._resolve_device_name(input_device, self.input_devices or [])
+            out_name = self._resolve_device_name(output_device, self.output_devices or [])
+            if in_name is None:
+                raise ValueError(f"输入设备不在列表中: {input_device!r}")
+            if out_name is None:
+                raise ValueError(f"输出设备不在列表中: {output_device!r}")
             sd.default.device[0] = self.input_devices_indices[
-                self.input_devices.index(input_device)
+                self.input_devices.index(in_name)
             ]
             sd.default.device[1] = self.output_devices_indices[
-                self.output_devices.index(output_device)
+                self.output_devices.index(out_name)
             ]
-            printt("Input device: %s:%s", str(sd.default.device[0]), input_device)
-            printt("Output device: %s:%s", str(sd.default.device[1]), output_device)
+            self.gui_config.sg_input_device = in_name
+            self.gui_config.sg_output_device = out_name
+            printt("Input device: %s:%s", str(sd.default.device[0]), in_name)
+            printt("Output device: %s:%s", str(sd.default.device[1]), out_name)
 
         def get_device_samplerate(self):
             return int(
@@ -1549,6 +1578,14 @@ if __name__ == "__main__":
                     self.function = "vc"
                 printt("worker start_vc")
                 printt("cuda_is_available: %s", torch.cuda.is_available())
+                printt(
+                    "I_nr=%s O_nr=%s sr_type=%s block=%s",
+                    self.gui_config.I_noise_reduce,
+                    self.gui_config.O_noise_reduce,
+                    self.gui_config.sr_type,
+                    self.gui_config.block_time,
+                )
+                sys.stdout.flush()
                 self.start_vc()
                 if self.audio_proc is not None:
                     self.delay_time = (

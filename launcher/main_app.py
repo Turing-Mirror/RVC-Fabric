@@ -232,6 +232,8 @@ class MainApp:
             self._render_carousel()
         elif self._current_page == "models":
             self.refresh_models()
+        elif self._current_page == "settings":
+            self._reflow_settings_page()
 
     def _build_chrome(self) -> None:
         top = tk.Frame(self.root, bg=TM_BG, height=52)
@@ -442,6 +444,8 @@ class MainApp:
         if key == "home":
             self._render_carousel()
             self._update_home_current_label()
+        if key == "settings":
+            self.root.after(50, self._reflow_settings_page)
 
     def _page_home(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -1016,25 +1020,67 @@ class MainApp:
         if n:
             messagebox.showinfo("导入完成", f"已写入 {n} 个模型到\n{MODELS_DIR}")
 
+    def _reflow_settings_page(self) -> None:
+        """Keep settings cards/sliders matching window width (fix maximize empty right)."""
+        canvas = getattr(self, "_settings_canvas", None)
+        wrap = getattr(self, "_settings_wrap", None)
+        win_id = getattr(self, "_settings_win_id", None)
+        if not canvas or not wrap or win_id is None:
+            return
+        try:
+            canvas.update_idletasks()
+            w = max(int(canvas.winfo_width()), 400)
+            canvas.itemconfigure(win_id, width=w)
+            # Help / intro labels wrap to card width
+            inner = max(w - 80, 280)
+            for lbl in getattr(self, "_settings_wrap_labels", []) or []:
+                try:
+                    lbl.configure(wraplength=inner)
+                except Exception:
+                    pass
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        except Exception:
+            pass
+
     def _page_settings(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
-        # Scrollable settings
+        # Scrollable settings — inner window width tracks canvas (fills on maximize)
         canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
         sb = ttk.Scrollbar(fr, orient="vertical", command=canvas.yview)
         wrap = tk.Frame(canvas, bg=TM_BG)
-        wrap.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.create_window((0, 0), window=wrap, anchor="nw")
+        win_id = canvas.create_window((0, 0), window=wrap, anchor="nw")
         canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
+        self._settings_canvas = canvas
+        self._settings_wrap = wrap
+        self._settings_win_id = win_id
+        self._settings_wrap_labels: list = []
+
+        def _sync_scroll(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_width(event) -> None:
+            # Critical: make wrap as wide as viewport so cards expand
+            if event.width > 1:
+                canvas.itemconfigure(win_id, width=event.width)
+
+        wrap.bind("<Configure>", _sync_scroll)
+        canvas.bind("<Configure>", _on_canvas_width)
+
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Only bind wheel while pointer is over settings canvas
+        canvas.bind(
+            "<Enter>",
+            lambda _e: canvas.bind_all("<MouseWheel>", _on_mousewheel),
+        )
+        canvas.bind(
+            "<Leave>",
+            lambda _e: canvas.unbind_all("<MouseWheel>"),
+        )
 
         # --- vars ---
         self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
@@ -1079,7 +1125,7 @@ class MainApp:
                 padx=14,
                 pady=10,
             )
-            box.pack(fill="x", padx=28, pady=8)
+            box.pack(fill="x", expand=False, padx=28, pady=8)
             tk.Label(
                 box, text=title, font=serif_font(12, "bold"), bg=TM_SURFACE, fg=TM_INK
             ).pack(anchor="w", pady=(0, 6))
@@ -1108,15 +1154,15 @@ class MainApp:
                 fg=TM_INK,
                 highlightthickness=0,
                 troughcolor=TM_HAIRLINE,
-                length=260,
+                # length grows with parent via fill/expand (no short fixed bar)
                 command=(lambda _v: self._on_hot_param()) if hot else None,
             )
-            sc.pack(side="left", fill="x", expand=True)
+            sc.pack(side="left", fill="x", expand=True, padx=(0, 4))
             return sc
 
         # Device card
         left = card(wrap, "设备与音频")
-        tk.Label(
+        intro = tk.Label(
             left,
             text=(
                 "输入=真实麦克风 · 输出=CABLE Input · 游戏麦克风=CABLE Output\n"
@@ -1126,7 +1172,11 @@ class MainApp:
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             justify="left",
-        ).pack(anchor="w", pady=(0, 6))
+            anchor="w",
+            wraplength=640,
+        )
+        intro.pack(fill="x", anchor="w", pady=(0, 6))
+        self._settings_wrap_labels.append(intro)
 
         # GPU backend (official: CUDA vs --dml DirectML)
         row = tk.Frame(left, bg=TM_SURFACE)
@@ -1205,7 +1255,7 @@ class MainApp:
         self.cmb_hostapi = ttk.Combobox(
             row, textvariable=self.var_hostapi, values=["MME"], state="readonly", width=28
         )
-        self.cmb_hostapi.pack(side="left")
+        self.cmb_hostapi.pack(side="left", fill="x", expand=True)
         self.cmb_hostapi.bind("<<ComboboxSelected>>", lambda e: self._on_hostapi_change())
 
         row = tk.Frame(left, bg=TM_SURFACE)
@@ -1361,7 +1411,7 @@ class MainApp:
             fg=TM_INK_MUTED,
             anchor="w",
         ).pack(anchor="w")
-        tk.Label(
+        idx_help = tk.Label(
             idx_block,
             text=(
                 "对应原版实时面板的 .index 文件（特征检索库，不是训练底模）。\n"
@@ -1372,7 +1422,10 @@ class MainApp:
             fg=TM_META,
             justify="left",
             anchor="w",
-        ).pack(anchor="w", pady=(0, 4))
+            wraplength=640,
+        )
+        idx_help.pack(fill="x", anchor="w", pady=(0, 4))
+        self._settings_wrap_labels.append(idx_help)
         idx_row = tk.Frame(idx_block, bg=TM_SURFACE)
         idx_row.pack(fill="x")
         self.cmb_index = ttk.Combobox(
@@ -1499,14 +1552,17 @@ class MainApp:
         scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01)
         scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01)
         scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1)
-        tk.Label(
+        nr_hint = tk.Label(
             perf,
             text="降噪会明显增加显存/算力；小显卡建议只开一项或先关闭再测。",
             font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
-        ).pack(fill="x", pady=(2, 0))
+            wraplength=640,
+        )
+        nr_hint.pack(fill="x", pady=(2, 0))
+        self._settings_wrap_labels.append(nr_hint)
         nrf = tk.Frame(perf, bg=TM_SURFACE)
         nrf.pack(fill="x", pady=4)
         tk.Checkbutton(
@@ -1557,6 +1613,8 @@ class MainApp:
             fg=TM_META,
         )
         self.lbl_settings_hint.pack(side="left")
+        # Initial width sync after layout
+        fr.after(80, self._reflow_settings_page)
         return fr
 
     def _update_index_hint(self) -> None:

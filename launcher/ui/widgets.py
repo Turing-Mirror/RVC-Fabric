@@ -296,8 +296,8 @@ def _hex_to_rgb(h: str) -> tuple[int, int, int]:
 class SoftSlider(tk.Frame):
     """Anti-aliased range control (Material/iOS-style pill track + soft thumb).
 
-    Tk Canvas circles look jagged; we render via Pillow at 2× then downsample
-    (standard approach for smooth custom controls in desktop Tk).
+    Pillow 2× supersample for smooth edges. Layout is height-fixed so parent
+    dock does not reflow/jitter when the value changes.
     """
 
     def __init__(
@@ -309,6 +309,8 @@ class SoftSlider(tk.Frame):
         *,
         resolution: float = 1,
         command=None,
+        on_press=None,
+        on_release=None,
         bar_width: int = 200,
         bar_height: int = 36,
         width: int | None = None,
@@ -324,20 +326,27 @@ class SoftSlider(tk.Frame):
         self.to = float(to)
         self.resolution = float(resolution) if resolution else 1.0
         self.command = command
+        self.on_press = on_press
+        self.on_release = on_release
         self._bg = bg
         self._drag = False
         self._pad_x = 14
-        self._photo = None  # keep ref so Tk doesn't GC
+        self._photo = None
+        self._img_id = None
+        self._drawing = False
+        self._last_frac = -1.0
         bw = int(width if width is not None else bar_width)
         bh = int(height if height is not None else bar_height)
         bh = max(bh, 34)
 
+        # Fixed height canvas — prevents dock vertical jitter on redraw
         self.canvas = tk.Canvas(
             self,
             highlightthickness=0,
             bd=0,
             cursor="hand2",
             bg=bg,
+            height=bh,
         )
         self.canvas.configure(width=bw, height=bh)
         self.canvas.pack(fill="x", expand=True)
@@ -350,16 +359,26 @@ class SoftSlider(tk.Frame):
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_up)
         try:
-            self.variable.trace_add("write", lambda *_a: self._draw())
+            self.variable.trace_add("write", lambda *_a: self._on_var_write())
         except Exception:
             pass
         self.after(10, self._draw)
 
+    def _on_var_write(self) -> None:
+        # Skip redundant redraws when frac unchanged (stops feedback thrash)
+        f = self._frac()
+        if abs(f - self._last_frac) < 1e-6 and self._photo is not None:
+            return
+        self._draw()
+
     def _on_cfg(self, event) -> None:
-        if event.width > 1:
-            self._bar_w = event.width
-            self._bar_h = max(event.height, 34)
-            self._draw()
+        # Only react to real width changes; never grow height from event (jitter source)
+        if event.width <= 1:
+            return
+        if abs(event.width - self._bar_w) < 2:
+            return
+        self._bar_w = int(event.width)
+        self._draw()
 
     def get(self):
         return self.variable.get()
@@ -400,12 +419,19 @@ class SoftSlider(tk.Frame):
         return self._clamp_val(self.from_ + f * (self.to - self.from_))
 
     def _draw(self) -> None:
-        w = max(int(self._bar_w), 48)
-        h = max(int(self._bar_h), 34)
+        if self._drawing:
+            return
+        self._drawing = True
         try:
-            self._draw_pil(w, h)
-        except Exception:
-            self._draw_fallback(w, h)
+            w = max(int(self._bar_w), 48)
+            h = max(int(self._bar_h), 34)
+            try:
+                self._draw_pil(w, h)
+            except Exception:
+                self._draw_fallback(w, h)
+            self._last_frac = self._frac()
+        finally:
+            self._drawing = False
 
     def _draw_pil(self, w: int, h: int) -> None:
         """2× supersampled rounded track + soft thumb (anti-aliased)."""
@@ -414,8 +440,8 @@ class SoftSlider(tk.Frame):
         scale = 2
         W, H = w * scale, h * scale
         pad = self._pad_x * scale
-        track_h = max(10, int(6 * scale))  # ~6px logical track
-        thumb_r = int(9 * scale)  # ~9px radius
+        track_h = max(10, int(6 * scale))
+        thumb_r = int(9 * scale)
         cy = H // 2
         x0, x1 = pad, W - pad
 
@@ -432,33 +458,29 @@ class SoftSlider(tk.Frame):
                 return
             r = th / 2
             y0, y1 = y_c - r, y_c + r
-            draw.rounded_rectangle(
-                [x_a, y0, x_b, y1], radius=r, fill=fill
-            )
+            draw.rounded_rectangle([x_a, y0, x_b, y1], radius=r, fill=fill)
 
-        # Inactive track
         rounded_capsule(x0, x1, cy, track_h, (*inset, 255))
 
         frac = self._frac()
         fill_x = x0 + (x1 - x0) * frac
-        # Active fill (min width so thumb always sits on a tip of color)
         if fill_x > x0 + 1:
-            rounded_capsule(x0, max(fill_x, x0 + track_h), cy, track_h, (*accent, 255))
+            rounded_capsule(
+                x0, max(fill_x, x0 + track_h), cy, track_h, (*accent, 255)
+            )
 
         tx = int(round(fill_x))
-        # Soft shadow under thumb (blurred disc)
         shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         sd = ImageDraw.Draw(shadow)
         sr = thumb_r + 2
         sd.ellipse(
             [tx - sr, cy - sr + 2, tx + sr, cy + sr + 2],
-            fill=(0, 0, 0, 40),
+            fill=(0, 0, 0, 36),
         )
-        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=2.5 * scale / 2))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=max(1, scale)))
         img = Image.alpha_composite(img, shadow)
         draw = ImageDraw.Draw(img)
 
-        # Thumb: white fill + accent ring (no 1px canvas outline aliasing)
         ring = thumb_r
         draw.ellipse(
             [tx - ring, cy - ring, tx + ring, cy + ring],
@@ -466,7 +488,6 @@ class SoftSlider(tk.Frame):
             outline=(*accent, 255),
             width=max(2, scale),
         )
-        # Tiny center accent for affordance
         cr = max(2, scale)
         draw.ellipse(
             [tx - cr, cy - cr, tx + cr, cy + cr],
@@ -474,22 +495,28 @@ class SoftSlider(tk.Frame):
         )
 
         out = img.resize((w, h), Image.Resampling.LANCZOS)
-        self._photo = ImageTk.PhotoImage(out, master=self.canvas)
+        # Keep canvas height locked so pack geometry never shifts
+        try:
+            self.canvas.configure(height=h)
+        except Exception:
+            pass
+        photo = ImageTk.PhotoImage(out, master=self.canvas)
+        self._photo = photo
         c = self.canvas
-        c.delete("all")
-        c.create_image(0, 0, anchor="nw", image=self._photo)
+        if self._img_id is None:
+            self._img_id = c.create_image(0, 0, anchor="nw", image=photo)
+        else:
+            c.itemconfigure(self._img_id, image=photo)
 
     def _draw_fallback(self, w: int, h: int) -> None:
-        """If PIL missing: thick track + filled thumb (less jagged than thin rings)."""
+        """If PIL missing: thick track + filled thumb."""
         c = self.canvas
         c.delete("all")
+        self._img_id = None
         pad = self._pad_x
         cy = h // 2
         track_h = 8
-        y0 = cy - track_h // 2
-        y1 = y0 + track_h
         x0, x1 = pad, w - pad
-        # Use thick lines without outlines
         c.create_line(x0, cy, x1, cy, fill=TM_INSET, width=track_h, capstyle=tk.ROUND)
         frac = self._frac()
         fill_x = x0 + (x1 - x0) * frac
@@ -508,7 +535,7 @@ class SoftSlider(tk.Frame):
             width=2,
         )
 
-    def _apply_x(self, x: float) -> None:
+    def _apply_x(self, x: float, *, notify: bool = True) -> None:
         v = self._x_to_val(x)
         try:
             cur = self.variable.get()
@@ -517,9 +544,9 @@ class SoftSlider(tk.Frame):
         if cur == v:
             self._draw()
             return
+        # Set var; trace will redraw — avoid double draw
         self.variable.set(v)
-        self._draw()
-        if self.command:
+        if notify and self.command:
             try:
                 self.command(v)
             except TypeError:
@@ -532,6 +559,11 @@ class SoftSlider(tk.Frame):
 
     def _on_down(self, event) -> None:
         self._drag = True
+        if self.on_press:
+            try:
+                self.on_press()
+            except Exception:
+                pass
         self._apply_x(event.x)
 
     def _on_drag(self, event) -> None:
@@ -539,12 +571,18 @@ class SoftSlider(tk.Frame):
             self._apply_x(event.x)
 
     def _on_up(self, event) -> None:
+        was = self._drag
         self._drag = False
         self._apply_x(event.x)
+        if was and self.on_release:
+            try:
+                self.on_release()
+            except Exception:
+                pass
 
 
 class ParamTile(tk.Frame):
-    """Dock parameter cell: mono label + large value + SoftSlider (player-bar style)."""
+    """Dock parameter cell: mono label + fixed-width value + SoftSlider."""
 
     def __init__(
         self,
@@ -556,6 +594,8 @@ class ParamTile(tk.Frame):
         *,
         resolution: float = 1,
         command=None,
+        on_press=None,
+        on_release=None,
         width: int = 168,
         fmt: str = "int",
         **kw,
@@ -569,6 +609,16 @@ class ParamTile(tk.Frame):
         )
         self.variable = variable
         self.fmt = fmt
+        self._user_cmd = command
+        # Fixed outer size — prevents bottom bar vertical/horizontal thrash
+        tile_w = max(int(width), 168)
+        tile_h = 92
+        try:
+            self.configure(width=tile_w, height=tile_h)
+            self.pack_propagate(False)
+        except Exception:
+            pass
+
         inner = tk.Frame(self, bg=TM_SURFACE, padx=14, pady=10)
         inner.pack(fill="both", expand=True)
 
@@ -582,13 +632,15 @@ class ParamTile(tk.Frame):
             fg=TM_META,
             anchor="w",
         ).pack(side="left")
+        # Fixed character columns so values never reflow neighbors
         self.val_lbl = tk.Label(
             head,
-            text="",
+            text="+0",
             font=mono_font(12),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="e",
+            width=7,
         )
         self.val_lbl.pack(side="right")
 
@@ -599,27 +651,31 @@ class ParamTile(tk.Frame):
             to,
             resolution=resolution,
             command=self._on_slide,
-            bar_width=max(width - 28, 150),
+            on_press=on_press,
+            on_release=on_release,
+            bar_width=max(tile_w - 28, 150),
             bar_height=36,
             bg=TM_SURFACE,
         )
         self.slider.pack(fill="x", expand=True, pady=(6, 0))
-        try:
-            self.configure(width=max(width, 168))
-        except Exception:
-            pass
-        self._user_cmd = command
         try:
             variable.trace_add("write", lambda *_a: self._fmt())
         except Exception:
             pass
         self._fmt()
 
+    def set_history_hooks(self, on_press=None, on_release=None) -> None:
+        try:
+            self.slider.on_press = on_press
+            self.slider.on_release = on_release
+        except Exception:
+            pass
+
     def _fmt(self) -> None:
         try:
             v = self.variable.get()
             if self.fmt == "int":
-                text = f"{int(v):+d}" if int(v) != 0 else "0"
+                text = f"{int(v):+d}"
             elif self.fmt == "signed":
                 text = f"{float(v):+.2f}"
             else:

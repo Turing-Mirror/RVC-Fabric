@@ -1,61 +1,153 @@
 # -*- coding: utf-8 -*-
 """Turing Mirror shell design tokens.
 
-Layout / hierarchy inspired by Schale-Library (content-library chrome, cover
-cards, section panels) and LyricsKara (serif wordmark scale, mono meta, stage
-focus). Colors are a product-owned palette — not a copy of either site's CSS,
-and not locked to the historical 白无垢 table.
-
-Accent is an independent quiet teal-ink (not pure black, not BA #1289F0).
-No blue-purple gradients, neon glow, or RVCMAX pink chrome.
+Typography & layout methods from LyricsKara (tracked wordmark, mono meta,
+stage hierarchy) and Schale-Library (segment nav, cover-first cards, panels).
+Product-owned colors — not a hex copy of either site.
 """
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Sequence
 
-# --- Canvas & surfaces (cool-neutral paper library) ---
-TM_BG: Final[str] = "#f0efeb"
-TM_SURFACE: Final[str] = "#fafaf7"
+# --- Canvas & surfaces ---
+TM_BG: Final[str] = "#ebeae4"
+TM_SURFACE: Final[str] = "#f7f6f2"
 TM_SURFACE_HOVER: Final[str] = "#ffffff"
-TM_INK: Final[str] = "#1f221f"
-TM_INK_MUTED: Final[str] = "#7d7f78"
-TM_META: Final[str] = "#9a9b93"
-TM_INSET: Final[str] = "#e4e3dc"
-TM_HAIRLINE: Final[str] = "#d6d4cb"
+TM_INK: Final[str] = "#1a1d1b"
+TM_INK_MUTED: Final[str] = "#6e726c"
+TM_META: Final[str] = "#92968f"
+TM_INSET: Final[str] = "#dddcd4"
+TM_HAIRLINE: Final[str] = "#cccbc2"
+TM_STAGE: Final[str] = "#e2e5e1"  # home stage band (slightly cooler wash)
 
-# Independent accent (quiet teal-slate) — CTA / active nav / selection edge
 TM_ACCENT: Final[str] = "#3d5c55"
 TM_ACCENT_INK: Final[str] = "#f7f8f6"
-TM_ACCENT_SOFT: Final[str] = "#e6eeeb"  # soft wash behind active pills
+TM_ACCENT_SOFT: Final[str] = "#dce8e4"
 
-# Semantic status (quiet, not neon)
 TM_OK: Final[str] = "#4a7a68"
 TM_WARN: Final[str] = "#a8894e"
 TM_ERROR: Final[str] = "#8a4a48"
 
-# Optional dark ink paper (reserved; shell is light-first)
 TM_BG_DARK: Final[str] = "#1a1c1a"
 TM_INK_DARK: Final[str] = "#e8e6de"
 
-# Type stacks
-FONT_SERIF: Final[tuple] = ("Georgia", "Noto Serif SC", "SimSun", "serif")
-FONT_SANS: Final[tuple] = ("Segoe UI", "Microsoft YaHei UI", "sans-serif")
-FONT_MONO: Final[tuple] = ("Cascadia Code", "Consolas", "monospace")
+# Font stacks — prefer faces that read clearly on Chinese Windows
+# Display (English wordmark / stage): serif tracking look
+_FONT_DISPLAY: Final[tuple] = (
+    "Cambria",
+    "Georgia",
+    "Palatino Linotype",
+    "Times New Roman",
+    "serif",
+)
+# Chinese page titles: YaHei UI (Schale-like clean UI face) then legacy
+_FONT_TITLE: Final[tuple] = (
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    "PingFang SC",
+    "Noto Sans SC",
+    "sans-serif",
+)
+# Body UI
+_FONT_SANS: Final[tuple] = (
+    "Microsoft YaHei UI",
+    "Segoe UI",
+    "Microsoft YaHei",
+    "sans-serif",
+)
+# Meta / route / latency (LyricsKara mono)
+_FONT_MONO: Final[tuple] = (
+    "Cascadia Mono",
+    "Cascadia Code",
+    "Consolas",
+    "Courier New",
+    "monospace",
+)
 
-# Layout rhythm
-PAD_X: Final[int] = 20
-PAD_CARD: Final[int] = 14
-NAV_HEIGHT: Final[int] = 56
-BOTTOM_HEIGHT: Final[int] = 72
-CARD_RADIUS_HINT: Final[int] = 8  # Tk cannot round; documented for future
+# Back-compat aliases used elsewhere
+FONT_SERIF: Final[tuple] = _FONT_DISPLAY
+FONT_SANS: Final[tuple] = _FONT_SANS
+FONT_MONO: Final[tuple] = _FONT_MONO
+
+# Layout rhythm (more air than old compact shell)
+PAD_X: Final[int] = 28
+PAD_CARD: Final[int] = 16
+NAV_HEIGHT: Final[int] = 64
+BOTTOM_HEIGHT: Final[int] = 84
+GUTTER: Final[int] = 32
 
 APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"
-APP_PRODUCT_TAGLINE: Final[str] = "与 Turing Mirror 配套"
+APP_PRODUCT_TAGLINE: Final[str] = "TURING MIRROR · VOICE"
+APP_WORDMARK: Final[str] = "TURING MIRROR"
+APP_ROUTE: Final[str] = "voice.local"
+
+
+def _family(families: Sequence[str]) -> str:
+    """Return preferred family name; Tk falls back if missing on the system."""
+    return families[0]
+
+
+def _display() -> str:
+    return _family(_FONT_DISPLAY)
+
+
+def _title() -> str:
+    return _family(_FONT_TITLE)
+
+
+def _sans() -> str:
+    return _family(_FONT_SANS)
+
+
+def _mono() -> str:
+    return _family(_FONT_MONO)
+
+
+def tracked(text: str, *, gap: str = " ") -> str:
+    """Letter-spacing approximation (Tk has no CSS letter-spacing).
+
+    Latin words get inter-letter gaps; spaces between words become a double gap.
+    CJK strings are left unchanged.
+    """
+    s = (text or "").strip()
+    if not s:
+        return s
+    if any(ord(c) >= 128 and not c.isspace() for c in s):
+        return s
+    words = s.split()
+    spaced = [gap.join(list(w)) for w in words]
+    return (gap * 3).join(spaced)
+
+
+def display_font(size: int, weight: str = "normal") -> tuple:
+    """English wordmark / display serif."""
+    f = _display()
+    return (f, size, weight) if weight != "normal" else (f, size)
+
+
+def title_font(size: int, weight: str = "bold") -> tuple:
+    """Chinese / page hero titles (YaHei UI)."""
+    f = _title()
+    return (f, size, weight) if weight != "normal" else (f, size)
+
+
+def serif_font(size: int, weight: str = "normal") -> tuple:
+    """Alias: display serif (legacy name)."""
+    return display_font(size, weight)
+
+
+def sans_font(size: int, weight: str = "normal") -> tuple:
+    f = _sans()
+    return (f, size, weight) if weight != "normal" else (f, size)
+
+
+def mono_font(size: int, weight: str = "normal") -> tuple:
+    f = _mono()
+    return (f, size, weight) if weight != "normal" else (f, size)
 
 
 def light_tokens() -> dict[str, str]:
-    """Flat dict of light-theme color tokens (tests / GUI)."""
     return {
         "tm-bg": TM_BG,
         "tm-surface": TM_SURFACE,
@@ -65,6 +157,7 @@ def light_tokens() -> dict[str, str]:
         "tm-meta": TM_META,
         "tm-inset": TM_INSET,
         "tm-hairline": TM_HAIRLINE,
+        "tm-stage": TM_STAGE,
         "tm-accent": TM_ACCENT,
         "tm-accent-ink": TM_ACCENT_INK,
         "tm-accent-soft": TM_ACCENT_SOFT,
@@ -75,7 +168,6 @@ def light_tokens() -> dict[str, str]:
 
 
 def forbidden_chrome_hexes() -> frozenset[str]:
-    """Colors that must not be primary chrome (RVCMAX pink / AI purple / BA blue copy)."""
     return frozenset(
         {
             "#f7c9d4",
@@ -85,23 +177,8 @@ def forbidden_chrome_hexes() -> frozenset[str]:
             "#7b6cf6",
             "#6a5ae0",
             "#3a3a42",
-            "#1289f0",  # Schale primary — do not copy as our accent
-            "#f32d90",  # BA pink
-            "#2df3e0",  # BA cyan as brand fill
+            "#1289f0",
+            "#f32d90",
+            "#2df3e0",
         }
     )
-
-
-def serif_font(size: int, weight: str = "normal") -> tuple:
-    family = FONT_SERIF[0]
-    return (family, size, weight) if weight != "normal" else (family, size)
-
-
-def sans_font(size: int, weight: str = "normal") -> tuple:
-    family = FONT_SANS[0]
-    return (family, size, weight) if weight != "normal" else (family, size)
-
-
-def mono_font(size: int, weight: str = "normal") -> tuple:
-    family = FONT_MONO[0]
-    return (family, size, weight) if weight != "normal" else (family, size)

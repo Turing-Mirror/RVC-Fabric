@@ -1196,42 +1196,76 @@ class MainApp:
             pass
 
     def _watch_realtime_gui(self, proc) -> None:
-        """Background: surface crash; when window appears, bring to front."""
+        """Background: when RVC-GUI appears, bring to front; else report failure.
+
+        Note: release path launches via wscript→VBS; that helper process exits
+        immediately even when gui_v1 is still loading — do not treat early
+        proc.poll()!=None as failure.
+        """
         log = realtime_gui_log_path()
+        vbs_log = Path(USER_DATA) / "logs" / "realtime_gui_vbs.log"
         try:
             # Cold start: torch/CUDA often 20–40s before FreeSimpleGUI window
-            focused = focus_window_by_title("RVC - GUI", timeout_s=50.0)
+            focused = focus_window_by_title("RVC - GUI", timeout_s=55.0)
             if focused:
                 def _ok():
                     self.lbl_online.configure(text="实时面板已打开", fg=TM_OK)
+
                 self.root.after(0, _ok)
                 return
-            if proc.poll() is not None:
-                tail = read_tail(log)
-                msg = (
-                    f"实时面板进程已退出（代码 {proc.returncode}）。\n"
-                    f"日志：{log}\n\n{tail or '（日志为空，可能是 Runtime/依赖缺失）'}"
+
+            tail = read_tail(log) + "\n" + read_tail(vbs_log)
+            # If any pythonw running gui_v1 is still up, don't scare the user
+            still = False
+            try:
+                import subprocess as _sp
+
+                r = _sp.run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        "Get-CimInstance Win32_Process | "
+                        "Where-Object { $_.CommandLine -match 'gui_v1' } | "
+                        "Select-Object -First 1 ProcessId",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                    creationflags=0x08000000 if sys.platform == "win32" else 0,
                 )
+                still = bool((r.stdout or "").strip())
+            except Exception:
+                still = False
 
-                def _fail():
-                    self.lbl_online.configure(text="实时面板启动失败", fg="#a33")
-                    self.vc_running = False
-                    try:
-                        self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-                    except Exception:
-                        pass
-                    messagebox.showerror("实时面板启动失败", msg)
+            if still:
+                def _loading():
+                    self.lbl_online.configure(
+                        text="实时面板加载中…请看任务栏 RVC - GUI",
+                        fg=TM_META,
+                    )
 
-                self.root.after(0, _fail)
+                self.root.after(0, _loading)
                 return
 
-            def _slow():
-                self.lbl_online.configure(
-                    text="实时面板加载中…若无窗口请看任务栏",
-                    fg=TM_META,
-                )
+            msg = (
+                "未检测到实时面板窗口（RVC - GUI）。\n"
+                f"日志：\n{log}\n{vbs_log}\n\n"
+                f"{tail.strip() or '（日志为空）'}\n\n"
+                "开发版 bat 正常而 exe 不行时，多半是 Runtime 启动失败；"
+                "请确认包内有 Runtime\\pythonw.exe 与 gui_v1.py。"
+            )
 
-            self.root.after(0, _slow)
+            def _fail():
+                self.lbl_online.configure(text="实时面板启动失败", fg="#a33")
+                self.vc_running = False
+                try:
+                    self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+                except Exception:
+                    pass
+                messagebox.showerror("实时面板启动失败", msg)
+
+            self.root.after(0, _fail)
         except Exception:
             pass
 

@@ -153,6 +153,42 @@ def _env_with_root() -> dict:
     return env
 
 
+def _env_for_runtime_python() -> dict:
+    """Env for embedded Runtime\\python(w).exe — strip PyInstaller host pollution.
+
+    Frozen TM_Voice.exe is built with host Python 3.13 while Runtime is 3.9.
+    Inherited PYTHONHOME / _MEIPASS / host site-packages on PYTHONPATH can make
+    the child exit immediately (no process left in Task Manager).
+    """
+    env = os.environ.copy()
+    for k in list(env.keys()):
+        ku = k.upper()
+        if ku.startswith("PYTHON") or ku in {
+            "_MEIPASS",
+            "TCL_LIBRARY",
+            "TK_LIBRARY",
+            "TIX_LIBRARY",
+        }:
+            del env[k]
+    rt = str((ROOT / "Runtime").resolve()) if (ROOT / "Runtime").is_dir() else str(ROOT)
+    path_parts: list[str] = [rt, str(ROOT)]
+    for p in env.get("PATH", "").split(os.pathsep):
+        if not p:
+            continue
+        pl = p.replace("/", "\\").lower()
+        if "_mei" in pl:
+            continue
+        path_parts.append(p)
+    env["PATH"] = os.pathsep.join(path_parts)
+    env["PYTHONPATH"] = str(ROOT)
+    env["TM_VOICE_ROOT"] = str(ROOT)
+    env.setdefault("no_proxy", "localhost,127.0.0.1,::1")
+    env.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
+    # Avoid user site overriding Runtime packages
+    env["PYTHONNOUSERSITE"] = "1"
+    return env
+
+
 def create_desktop_shortcut(
     target_script: Path | None = None,
     name: str = SHORTCUT_NAME,
@@ -278,15 +314,67 @@ def start_webui(port: int = 7897) -> subprocess.Popen:
 def start_legacy_realtime_gui() -> subprocess.Popen:
     """Launch advanced realtime panel (gui_v1 FreeSimpleGUI).
 
-    Cold start often needs 20–40s (torch/CUDA). Logs: User_Data/logs/realtime_gui.log
+    Release/frozen path: prefer OpenRealtime.vbs (same style as OpenApp.vbs / bat).
+    Direct pythonw Popen from a PyInstaller exe often leaves no child process.
+
+    Cold start often needs 20–40s (torch/CUDA).
+    Logs: User_Data/logs/realtime_gui.log and realtime_gui_vbs.log
     """
-    pyw = find_python(prefer_windowed=True)
     script = ROOT / "gui_v1.py"
     if not script.is_file():
         raise FileNotFoundError(f"找不到实时面板脚本: {script}")
-    env = _env_with_root()
-    # Prefer pythonw so no black console; never CREATE_NO_WINDOW for this GUI
+
     log_path = USER_LOGS / "realtime_gui.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+        lf.write(f"\n===== launch {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+        lf.write(f"ROOT={ROOT}\nfrozen={getattr(sys, 'frozen', False)}\n")
+        lf.write(f"executable={sys.executable}\n")
+
+    # 1) VBS route — matches working dev bat / OpenApp.vbs behavior
+    vbs_candidates = [
+        ROOT / "launcher" / "OpenRealtime.vbs",
+        ROOT / "OpenRealtime.vbs",
+    ]
+    vbs = next((p for p in vbs_candidates if p.is_file()), None)
+    if vbs is not None and sys.platform == "win32":
+        wscript = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "wscript.exe"
+        if not wscript.is_file():
+            wscript = Path(r"C:\Windows\System32\wscript.exe")
+        env = _env_for_runtime_python()
+        with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+            lf.write(f"via VBS: {vbs}\n")
+        # Do not use CREATE_NO_WINDOW on wscript — child GUI must be allowed
+        proc = subprocess.Popen(
+            [str(wscript), "//nologo", str(vbs)],
+            cwd=str(ROOT),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+        )
+        return proc
+
+    # 2) Direct Runtime pythonw with cleaned env
+    pyw = find_python(prefer_windowed=True)
+    # Never re-exec the frozen TM_Voice.exe as "python"
+    if getattr(sys, "frozen", False):
+        exe_name = Path(pyw).name.lower()
+        if exe_name.endswith(".exe") and "python" not in exe_name:
+            rt_pyw = ROOT / "Runtime" / "pythonw.exe"
+            rt_py = ROOT / "Runtime" / "python.exe"
+            if rt_pyw.is_file():
+                pyw = str(rt_pyw)
+            elif rt_py.is_file():
+                pyw = str(rt_py)
+            else:
+                raise FileNotFoundError(
+                    f"发布版找不到 Runtime\\pythonw.exe（当前解释器候选是 {pyw}）"
+                )
+    env = _env_for_runtime_python()
+    with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+        lf.write(f"via direct: {pyw} {script}\n")
     return run_gui_process([pyw, str(script)], cwd=ROOT, env=env, log_path=log_path)
 
 

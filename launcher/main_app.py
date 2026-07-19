@@ -37,6 +37,7 @@ from launcher.paths import (
     list_voice_models,
 )
 from launcher import realtime_client as rt_client
+from launcher.gpu_backend import apply_backend_env, detect_full, normalize_accel
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
     TM_ACCENT,
@@ -177,7 +178,9 @@ class MainApp:
         self._tick_status()
         self.root.after(200, lambda: self._place_and_raise(force_size=False))
         self.root.after(800, lambda: self._place_and_raise(force_size=False))
+        self.root.after(400, self._init_gpu_backend)
         self.root.after(600, self._bootstrap_devices_async)
+        self._gpu_info: dict = {}
 
     def _place_and_raise(self, force_size: bool = False) -> None:
         """Show window on primary screen. Only set default size once (allow user resize)."""
@@ -1063,6 +1066,9 @@ class MainApp:
         self.var_o_nr = tk.BooleanVar(value=bool(self.cfg.get("O_noise_reduce")))
         self.var_use_pv = tk.BooleanVar(value=bool(self.cfg.get("use_pv")))
         self.var_function = tk.StringVar(value=str(self.cfg.get("function") or "vc"))
+        self.var_accel = tk.StringVar(
+            value=str(self.cfg.get("accel_backend") or "auto")
+        )
 
         def card(parent, title: str) -> tk.Frame:
             box = tk.Frame(
@@ -1121,6 +1127,55 @@ class MainApp:
             fg=TM_INK_MUTED,
             justify="left",
         ).pack(anchor="w", pady=(0, 6))
+
+        # GPU backend (official: CUDA vs --dml DirectML)
+        row = tk.Frame(left, bg=TM_SURFACE)
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row,
+            text="加速后端",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(9),
+        ).pack(side="left")
+        self.cmb_accel = ttk.Combobox(
+            row,
+            textvariable=self.var_accel,
+            values=["auto", "cuda", "dml", "cpu"],
+            state="readonly",
+            width=12,
+        )
+        self.cmb_accel.pack(side="left")
+        self.cmb_accel.bind("<<ComboboxSelected>>", lambda e: self._on_accel_changed())
+        accel_help = tk.Label(
+            row,
+            text=" ?",
+            font=sans_font(9, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            cursor="question_arrow",
+        )
+        accel_help.pack(side="left")
+        HoverTip(
+            accel_help,
+            "对齐官方 RVC：\n"
+            "· auto：有 NVIDIA 用 CUDA，否则试 AMD/Intel DirectML，再否则 CPU\n"
+            "· cuda：强制 NVIDIA（需本包 CUDA Runtime）\n"
+            "· dml：强制 DirectML（AMD/Intel，对应官方 --dml）\n"
+            "· cpu：仅 CPU（很慢）\n"
+            "改后端后请「停止变声」再开，必要时重启软件。",
+        )
+        self.lbl_accel_status = tk.Label(
+            left,
+            text="加速：检测中…",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_accel_status.pack(fill="x", pady=(0, 4))
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1642,8 +1697,79 @@ class MainApp:
             self.cfg["O_noise_reduce"] = bool(self.var_o_nr.get())
             self.cfg["use_pv"] = bool(self.var_use_pv.get())
             self.cfg["function"] = str(self.var_function.get() or "vc")
+            self.cfg["accel_backend"] = normalize_accel(
+                str(self.var_accel.get() or "auto")
+            )
         except Exception:
             pass
+
+    def _init_gpu_backend(self) -> None:
+        """Detect CUDA / DirectML and apply env for worker children."""
+
+        def work():
+            try:
+                pref = normalize_accel(str(self.cfg.get("accel_backend") or "auto"))
+                info = detect_full(ROOT, pref)
+                self.root.after(0, lambda: self._apply_gpu_info(info))
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda: self._set_status_visual(
+                        "idle", "引擎待命", f"GPU 检测失败: {e}"
+                    ),
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _apply_gpu_info(self, info: dict) -> None:
+        self._gpu_info = info or {}
+        try:
+            apply_backend_env(os.environ, info)
+        except Exception:
+            pass
+        label = info.get("label") or "?"
+        detail = info.get("detail") or ""
+        pref = info.get("preference") or "auto"
+        backend = info.get("backend") or "?"
+        line = f"加速：{label}"
+        if detail:
+            line += f" · {detail}"
+        line += f"  （偏好 {pref} → {backend}）"
+        try:
+            if hasattr(self, "lbl_accel_status"):
+                self.lbl_accel_status.configure(text=line, fg=TM_INK_MUTED)
+        except Exception:
+            pass
+        # Subtitle when idle
+        if not self.vc_running and not self._vc_starting:
+            try:
+                self.lbl_latency.configure(
+                    text=f"{label}" + (f" · {detail}" if detail else "")
+                )
+            except Exception:
+                pass
+
+    def _on_accel_changed(self) -> None:
+        self.cfg["accel_backend"] = normalize_accel(str(self.var_accel.get() or "auto"))
+        save_config(self.cfg)
+        # Re-detect with new preference; worker must restart to pick env
+        def work():
+            try:
+                info = detect_full(ROOT, self.cfg["accel_backend"])
+                self.root.after(0, lambda: self._apply_gpu_info(info))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        "加速后端",
+                        f"已设为：{info.get('label')}（{info.get('backend')}）\n"
+                        "请停止变声后重新「开启变声」使新后端生效。\n"
+                        "若仍异常，完全退出软件再开。",
+                    ),
+                )
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("检测失败", str(e)))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def save_settings(self) -> None:
         self._collect_settings_into_cfg()

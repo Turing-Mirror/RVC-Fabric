@@ -41,6 +41,8 @@ DEFAULTS: dict[str, Any] = {
     "output_noise_reduce": False,
     "use_pv": False,
     "function": "vc",  # vc | im
+    # GPU: auto | cuda | dml | cpu  (official RVC: CUDA vs --dml DirectML)
+    "accel_backend": "auto",
     "last_model": "",
     "last_model_name": "",
     "last_model_path": "",

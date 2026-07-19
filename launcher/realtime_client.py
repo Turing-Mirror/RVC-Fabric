@@ -239,6 +239,22 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
     env = _env_for_runtime_python()
     env["TM_REALTIME_WORKER"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
+    # Ensure GPU backend env is present (parent main_app should already set)
+    try:
+        from launcher.config_store import load_config
+        from launcher.gpu_backend import detect_full, apply_backend_env
+
+        pref = str(load_config().get("accel_backend") or "auto")
+        resolved = detect_full(ROOT, pref)
+        env = apply_backend_env(env, resolved)
+        with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+            lf.write(
+                f"accel pref={pref} resolved={resolved.get('backend')} "
+                f"dml={env.get('TM_USE_DML')} detail={resolved.get('detail')}\n"
+            )
+    except Exception as e:
+        with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+            lf.write(f"accel detect skip: {e}\n")
     with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
         lf.write(f"via direct: {pyw} {script}\n")
 

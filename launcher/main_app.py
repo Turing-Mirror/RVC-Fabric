@@ -313,15 +313,17 @@ class MainApp:
         # Bottom dock zones (Schale card grouping + LyricsKara now-playing meta)
         # [ NOW PLAYING ] [ MODE ] [ PITCH | FORMANT | THRESH ] …… [ CTA | status ]
 
-        # --- Left: now-playing panel ---
+        dock_pad_y = 12  # vertical air inside fixed-height dock (must fit BOTTOM_HEIGHT)
+
+        # --- Left: now-playing panel (3 lines max so nothing clips) ---
         left_panel = tk.Frame(
             bottom,
             bg=TM_SURFACE,
             highlightthickness=1,
             highlightbackground=TM_HAIRLINE,
         )
-        left_panel.pack(side="left", padx=(PAD_X, 10), pady=14, fill="y")
-        left_info = tk.Frame(left_panel, bg=TM_SURFACE, padx=14, pady=10)
+        left_panel.pack(side="left", padx=(PAD_X, 10), pady=dock_pad_y, fill="y")
+        left_info = tk.Frame(left_panel, bg=TM_SURFACE, padx=14, pady=12)
         left_info.pack(fill="both", expand=True)
         tk.Label(
             left_info,
@@ -339,7 +341,8 @@ class MainApp:
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.pack(anchor="w", pady=(4, 0))
+        self.bottom_name.pack(anchor="w", pady=(6, 0))
+        # tag + voice hint share one line (was 2 lines → got clipped)
         self.bottom_tag = tk.Label(
             left_info,
             text="请先导入音色到 User_Data/models",
@@ -348,37 +351,40 @@ class MainApp:
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_tag.pack(anchor="w", pady=(2, 0))
+        self.bottom_tag.pack(anchor="w", pady=(4, 0))
         self.bottom_voice_hint = tk.Label(
             left_info,
-            text="参数随音色单独保存",
-            font=mono_font(7),
+            text="",
+            font=mono_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_voice_hint.pack(anchor="w", pady=(6, 0))
+        self.bottom_voice_hint.pack(anchor="w", pady=(2, 0))
 
-        # --- Right: transport + status ---
+        # --- Right: transport + status (compact) ---
         right = tk.Frame(bottom, bg=TM_SURFACE)
-        right.pack(side="right", padx=(10, PAD_X), pady=14, fill="y")
+        right.pack(side="right", padx=(10, PAD_X), pady=dock_pad_y, fill="y")
         right_col = tk.Frame(right, bg=TM_SURFACE)
         right_col.pack(expand=True)
         ctrl = tk.Frame(right_col, bg=TM_SURFACE)
         ctrl.pack(anchor="e")
-        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
+        self.btn_start = PrimaryButton(
+            ctrl, "开启变声", command=self.toggle_vc, padx=18, pady=8
+        )
         self.btn_start.pack(side="left", padx=(0, 8))
-        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(side="left")
+        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui, padx=12, pady=7).pack(
+            side="left"
+        )
         self.status_badge = StatusBadge(right_col)
-        self.status_badge.pack(anchor="e", pady=(10, 0))
+        self.status_badge.pack(anchor="e", pady=(8, 0))
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
 
-        # --- Center: mode segment + param tiles ---
+        # --- Center: mode + param tiles ---
         mid = tk.Frame(bottom, bg=TM_SURFACE)
-        mid.pack(side="left", fill="both", expand=True, padx=4, pady=14)
+        mid.pack(side="left", fill="both", expand=True, padx=4, pady=dock_pad_y)
 
-        # Mode as its own inset card
         mode_card = tk.Frame(
             mid,
             bg=TM_SURFACE,
@@ -386,7 +392,7 @@ class MainApp:
             highlightbackground=TM_HAIRLINE,
         )
         mode_card.pack(side="left", fill="y", padx=(0, 10))
-        mode_inner = tk.Frame(mode_card, bg=TM_SURFACE, padx=12, pady=10)
+        mode_inner = tk.Frame(mode_card, bg=TM_SURFACE, padx=12, pady=12)
         mode_inner.pack(fill="both", expand=True)
         tk.Label(
             mode_inner,
@@ -397,7 +403,7 @@ class MainApp:
             anchor="w",
         ).pack(anchor="w")
         seg = tk.Frame(mode_inner, bg=TM_INSET, padx=4, pady=4)
-        seg.pack(anchor="w", pady=(10, 0))
+        seg.pack(anchor="w", pady=(12, 0))
         self.btn_mode_vc = tk.Button(
             seg,
             text="输出变声",
@@ -405,7 +411,7 @@ class MainApp:
             relief="flat",
             bd=0,
             padx=14,
-            pady=6,
+            pady=7,
             cursor="hand2",
             command=lambda: self._set_function_mode("vc"),
         )
@@ -417,7 +423,7 @@ class MainApp:
             relief="flat",
             bd=0,
             padx=14,
-            pady=6,
+            pady=7,
             cursor="hand2",
             command=lambda: self._set_function_mode("im"),
         )
@@ -431,7 +437,6 @@ class MainApp:
             "原声旁路（设置里的「输入监听」）：不改变声音，只输出麦克风原声，用来测麦/接线。",
         )
 
-        # Parameter tiles with custom SoftSlider
         tiles = tk.Frame(mid, bg=TM_SURFACE)
         tiles.pack(side="left", fill="both", expand=True)
         self._dock_pitch = ParamTile(
@@ -442,10 +447,10 @@ class MainApp:
             24,
             resolution=1,
             command=self._on_dock_param,
-            width=176,
+            width=188,
             fmt="int",
         )
-        self._dock_pitch.pack(side="left", fill="y", padx=(0, 8))
+        self._dock_pitch.pack(side="left", fill="both", expand=True, padx=(0, 8))
         self._dock_formant = ParamTile(
             tiles,
             "共鸣 Formant",
@@ -454,10 +459,10 @@ class MainApp:
             2,
             resolution=0.05,
             command=self._on_dock_param,
-            width=176,
+            width=188,
             fmt="signed",
         )
-        self._dock_formant.pack(side="left", fill="y", padx=(0, 8))
+        self._dock_formant.pack(side="left", fill="both", expand=True, padx=(0, 8))
         self._dock_thr = ParamTile(
             tiles,
             "阈值",
@@ -466,10 +471,10 @@ class MainApp:
             0,
             resolution=1,
             command=self._on_dock_param,
-            width=156,
+            width=168,
             fmt="int",
         )
-        self._dock_thr.pack(side="left", fill="y")
+        self._dock_thr.pack(side="left", fill="both", expand=True)
 
         self._update_mode_buttons()
         self._sync_bottom()
@@ -875,16 +880,17 @@ class MainApp:
                     p = int(self.var_pitch.get())
                     f = float(self.var_formant.get())
                     mode = "变声" if str(self.var_function.get()) == "vc" else "原声"
+                    # Keep one short line — dock height is fixed
                     self.bottom_voice_hint.configure(
-                        text=f"音色专属 · 音高 {p:+d} · 共鸣 {f:.2f} · {mode}"
+                        text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}  ·  {mode}"
                     )
                 except Exception:
-                    self.bottom_voice_hint.configure(text="音高/共鸣随音色单独保存")
+                    self.bottom_voice_hint.configure(text="参数随音色单独保存")
         else:
             self.bottom_name.configure(text="未选择模型")
             self.bottom_tag.configure(text="请到「模型」页导入音色")
             if hasattr(self, "bottom_voice_hint"):
-                self.bottom_voice_hint.configure(text="音高/共鸣随音色单独保存")
+                self.bottom_voice_hint.configure(text="参数随音色单独保存")
         try:
             self._update_mode_buttons()
         except Exception:
@@ -1447,8 +1453,8 @@ class MainApp:
                 to,
                 resolution=res,
                 command=_cmd if hot else (lambda _v=None: _fmt()),
-                width=320,
-                height=28,
+                bar_width=360,
+                bar_height=36,
                 bg=TM_SURFACE,
             )
             sc.pack(side="left", fill="x", expand=True, padx=(4, 4))

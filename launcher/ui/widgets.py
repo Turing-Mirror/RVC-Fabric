@@ -283,10 +283,21 @@ class StatusBadge(tk.Frame):
             pass
 
 
-class SoftSlider(tk.Frame):
-    """Library-style range control (Schale track + LyricsKara mono value).
+def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+    s = (h or "#000000").lstrip("#")
+    if len(s) == 3:
+        s = "".join(ch * 2 for ch in s)
+    try:
+        return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+    except Exception:
+        return 0, 0, 0
 
-    Visible trough, accent fill, solid thumb — replaces hard-to-see tk.Scale.
+
+class SoftSlider(tk.Frame):
+    """Anti-aliased range control (Material/iOS-style pill track + soft thumb).
+
+    Tk Canvas circles look jagged; we render via Pillow at 2× then downsample
+    (standard approach for smooth custom controls in desktop Tk).
     """
 
     def __init__(
@@ -299,13 +310,12 @@ class SoftSlider(tk.Frame):
         resolution: float = 1,
         command=None,
         bar_width: int = 200,
-        bar_height: int = 28,
-        width: int | None = None,  # alias for bar_width
-        height: int | None = None,  # alias for bar_height
+        bar_height: int = 36,
+        width: int | None = None,
+        height: int | None = None,
         **kw,
     ):
         bg = kw.pop("bg", TM_SURFACE)
-        # Never pass geometry ints into Frame via **kw
         kw.pop("width", None)
         kw.pop("height", None)
         super().__init__(master, bg=bg, **kw)
@@ -314,12 +324,13 @@ class SoftSlider(tk.Frame):
         self.to = float(to)
         self.resolution = float(resolution) if resolution else 1.0
         self.command = command
+        self._bg = bg
         self._drag = False
-        self._pad_x = 10
-        self._track_h = 8
-        self._thumb_r = 8
+        self._pad_x = 14
+        self._photo = None  # keep ref so Tk doesn't GC
         bw = int(width if width is not None else bar_width)
         bh = int(height if height is not None else bar_height)
+        bh = max(bh, 34)
 
         self.canvas = tk.Canvas(
             self,
@@ -330,7 +341,7 @@ class SoftSlider(tk.Frame):
         )
         self.canvas.configure(width=bw, height=bh)
         self.canvas.pack(fill="x", expand=True)
-        # NOTE: never use self._w / self._h — Tk stores widget path in _w
+        # Never assign self._w — Tk uses it for widget path
         self._bar_w = bw
         self._bar_h = bh
 
@@ -347,7 +358,7 @@ class SoftSlider(tk.Frame):
     def _on_cfg(self, event) -> None:
         if event.width > 1:
             self._bar_w = event.width
-            self._bar_h = event.height
+            self._bar_h = max(event.height, 34)
             self._draw()
 
     def get(self):
@@ -361,14 +372,12 @@ class SoftSlider(tk.Frame):
         v = max(lo, min(hi, float(v)))
         step = self.resolution
         if step and step > 0:
-            # Snap to resolution grid from from_
             n = round((v - self.from_) / step)
             v = self.from_ + n * step
             v = max(lo, min(hi, v))
             if step >= 1:
                 v = int(round(v))
             else:
-                # avoid float dust
                 decimals = max(0, min(6, len(str(step).split(".")[-1])))
                 v = round(v, decimals)
         return v
@@ -391,44 +400,112 @@ class SoftSlider(tk.Frame):
         return self._clamp_val(self.from_ + f * (self.to - self.from_))
 
     def _draw(self) -> None:
-        c = self.canvas
+        w = max(int(self._bar_w), 48)
+        h = max(int(self._bar_h), 34)
         try:
-            c.delete("all")
+            self._draw_pil(w, h)
         except Exception:
-            return
-        w, h = max(self._bar_w, 40), max(self._bar_h, 22)
+            self._draw_fallback(w, h)
+
+    def _draw_pil(self, w: int, h: int) -> None:
+        """2× supersampled rounded track + soft thumb (anti-aliased)."""
+        from PIL import Image, ImageDraw, ImageFilter, ImageTk
+
+        scale = 2
+        W, H = w * scale, h * scale
+        pad = self._pad_x * scale
+        track_h = max(10, int(6 * scale))  # ~6px logical track
+        thumb_r = int(9 * scale)  # ~9px radius
+        cy = H // 2
+        x0, x1 = pad, W - pad
+
+        bg = _hex_to_rgb(self._bg)
+        inset = _hex_to_rgb(TM_INSET)
+        accent = _hex_to_rgb(TM_ACCENT)
+        white = (255, 255, 255)
+
+        img = Image.new("RGBA", (W, H), (*bg, 255))
+        draw = ImageDraw.Draw(img)
+
+        def rounded_capsule(x_a, x_b, y_c, th, fill):
+            if x_b <= x_a:
+                return
+            r = th / 2
+            y0, y1 = y_c - r, y_c + r
+            draw.rounded_rectangle(
+                [x_a, y0, x_b, y1], radius=r, fill=fill
+            )
+
+        # Inactive track
+        rounded_capsule(x0, x1, cy, track_h, (*inset, 255))
+
+        frac = self._frac()
+        fill_x = x0 + (x1 - x0) * frac
+        # Active fill (min width so thumb always sits on a tip of color)
+        if fill_x > x0 + 1:
+            rounded_capsule(x0, max(fill_x, x0 + track_h), cy, track_h, (*accent, 255))
+
+        tx = int(round(fill_x))
+        # Soft shadow under thumb (blurred disc)
+        shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(shadow)
+        sr = thumb_r + 2
+        sd.ellipse(
+            [tx - sr, cy - sr + 2, tx + sr, cy + sr + 2],
+            fill=(0, 0, 0, 40),
+        )
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=2.5 * scale / 2))
+        img = Image.alpha_composite(img, shadow)
+        draw = ImageDraw.Draw(img)
+
+        # Thumb: white fill + accent ring (no 1px canvas outline aliasing)
+        ring = thumb_r
+        draw.ellipse(
+            [tx - ring, cy - ring, tx + ring, cy + ring],
+            fill=(*white, 255),
+            outline=(*accent, 255),
+            width=max(2, scale),
+        )
+        # Tiny center accent for affordance
+        cr = max(2, scale)
+        draw.ellipse(
+            [tx - cr, cy - cr, tx + cr, cy + cr],
+            fill=(*accent, 255),
+        )
+
+        out = img.resize((w, h), Image.Resampling.LANCZOS)
+        self._photo = ImageTk.PhotoImage(out, master=self.canvas)
+        c = self.canvas
+        c.delete("all")
+        c.create_image(0, 0, anchor="nw", image=self._photo)
+
+    def _draw_fallback(self, w: int, h: int) -> None:
+        """If PIL missing: thick track + filled thumb (less jagged than thin rings)."""
+        c = self.canvas
+        c.delete("all")
         pad = self._pad_x
         cy = h // 2
-        track_h = self._track_h
+        track_h = 8
         y0 = cy - track_h // 2
         y1 = y0 + track_h
         x0, x1 = pad, w - pad
-        # Track (inset trough)
-        c.create_rectangle(
-            x0, y0, x1, y1, fill=TM_INSET, outline=TM_HAIRLINE, width=1
-        )
+        # Use thick lines without outlines
+        c.create_line(x0, cy, x1, cy, fill=TM_INSET, width=track_h, capstyle=tk.ROUND)
         frac = self._frac()
         fill_x = x0 + (x1 - x0) * frac
-        if fill_x > x0 + 1:
-            # Accent fill (quiet teal, not neon)
-            c.create_rectangle(
-                x0 + 1, y0 + 1, fill_x, y1 - 1, fill=TM_ACCENT, outline=""
+        if fill_x > x0 + 2:
+            c.create_line(
+                x0, cy, fill_x, cy, fill=TM_ACCENT, width=track_h, capstyle=tk.ROUND
             )
-        # Thumb
-        r = self._thumb_r
-        tx = fill_x
+        r = 9
         c.create_oval(
-            tx - r,
+            fill_x - r,
             cy - r,
-            tx + r,
+            fill_x + r,
             cy + r,
             fill=TM_SURFACE_HOVER,
             outline=TM_ACCENT,
             width=2,
-        )
-        # Inner dot for affordance
-        c.create_oval(
-            tx - 2, cy - 2, tx + 2, cy + 2, fill=TM_ACCENT, outline=""
         )
 
     def _apply_x(self, x: float) -> None:
@@ -492,7 +569,7 @@ class ParamTile(tk.Frame):
         )
         self.variable = variable
         self.fmt = fmt
-        inner = tk.Frame(self, bg=TM_SURFACE, padx=12, pady=8)
+        inner = tk.Frame(self, bg=TM_SURFACE, padx=14, pady=10)
         inner.pack(fill="both", expand=True)
 
         head = tk.Frame(inner, bg=TM_SURFACE)
@@ -500,7 +577,7 @@ class ParamTile(tk.Frame):
         tk.Label(
             head,
             text=tracked(label.upper(), gap="  ") if label.isascii() else label,
-            font=mono_font(7),
+            font=mono_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -508,7 +585,7 @@ class ParamTile(tk.Frame):
         self.val_lbl = tk.Label(
             head,
             text="",
-            font=mono_font(11),
+            font=mono_font(12),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="e",
@@ -522,14 +599,13 @@ class ParamTile(tk.Frame):
             to,
             resolution=resolution,
             command=self._on_slide,
-            bar_width=max(width - 28, 140),
-            bar_height=32,
+            bar_width=max(width - 28, 150),
+            bar_height=36,
             bg=TM_SURFACE,
         )
-        self.slider.pack(fill="x", expand=True, pady=(8, 2))
-        # Prefer a comfortable min width for dock tiles
+        self.slider.pack(fill="x", expand=True, pady=(6, 0))
         try:
-            self.configure(width=max(width, 160))
+            self.configure(width=max(width, 168))
         except Exception:
             pass
         self._user_cmd = command

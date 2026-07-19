@@ -72,7 +72,8 @@ ffprobe.*
 /图片*.png
 # Reference third-party pack (do not ship in this repo)
 /RVCMAX/
-error*.png
+# Only ignore loose error dumps at repo root (keep docs/reference-screenshots/)
+/error*.png
 /_local/
 /UserData/
 # Dev-only noise

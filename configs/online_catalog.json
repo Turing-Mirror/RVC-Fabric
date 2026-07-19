@@ -4,34 +4,45 @@
     "version": "1.1.0",
     "channel": "stable",
     "gui": {
+      "package_type": "gui_patch",
       "version": "1.1.0",
       "kind": "zip",
       "url": "",
       "sha256": "",
-      "notes": "将 GUI 增量 zip 的直链填到 url（GitHub Release 或 SharePoint download=1）。zip 内路径相对于软件根目录，如 launcher/main_app.py。"
+      "min_app_version": "",
+      "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。全量含 Runtime 请用 community.sharepoint_full / QQ，package_type=full_package，软件内不会合并安装。"
     }
   },
   "community": {
     "qq_group": "",
     "qq_link": "",
     "sharepoint_full": "",
-    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅支持：GUI 本体补丁 + 音色模型。"
+    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅：gui_patch 增量 + 音色包。"
   },
-  "manifest_urls": [
-    ""
-  ],
+  "manifest_urls": [],
   "voices": [
     {
-      "id": "example-voice",
-      "name": "示例音色（请替换直链）",
+      "id": "example-voice-pack",
+      "name": "示例音色包（zip）",
       "tag": "音色",
       "version": "1",
+      "package_type": "voice_pack",
+      "pack_url": "",
+      "sha256": "",
+      "size_bytes": 0,
+      "description": "推荐：zip 内含 *.pth + 可选 index/cover/config.json/tm_package.json。用 scripts/pack_voice_pack.py 制作后填写 pack_url。"
+    },
+    {
+      "id": "example-voice-files",
+      "name": "示例音色（多文件直链）",
+      "tag": "音色",
+      "version": "1",
+      "package_type": "voice_files",
       "pth_url": "",
       "index_url": "",
       "cover_url": "",
-      "size_bytes": 0,
       "sha256": "",
-      "description": "把 pth_url 换成 GitHub raw / Release 或 SharePoint 公开直链后即可在「更新」页一键下载到 User_Data/models。"
+      "description": "备选：分别填 pth_url / index_url / cover_url，无需 zip。"
     }
   ]
 }

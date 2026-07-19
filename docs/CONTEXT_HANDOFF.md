@@ -219,7 +219,7 @@ Linux AMD 是 ROCm，不是 Windows DML。
 | `docs/RVC_ANALYSIS.md` | 早期引擎/安全分析 |
 | `docs/reference-screenshots/` | 问题截图（error/issue） |
 | `docs/CONTEXT_HANDOFF.md` | **本文** |
-| `docs/在线更新与音色库.md` | catalog JSON、直链、GUI zip 白名单 |
+| `docs/在线更新与音色库.md` | **包规范**：gui_patch 增量 / full_package 全量 / voice_pack·voice_files；处理流程与打包脚本 |
 
 ---
 

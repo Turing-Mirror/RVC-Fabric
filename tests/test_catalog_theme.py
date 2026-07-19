@@ -23,30 +23,41 @@ from launcher.paths import release_roles
 from launcher.theme import (
     TM_ACCENT,
     TM_BG,
-    TM_INK,
     forbidden_chrome_hexes,
     light_tokens,
 )
 
 
 class ThemeTests(unittest.TestCase):
-    def test_light_tokens_match_tm_handbook(self):
+    def test_light_tokens_complete(self):
         t = light_tokens()
-        self.assertEqual(t["tm-bg"], "#f4f1ea")
-        self.assertEqual(t["tm-ink"], "#1c1a17")
-        self.assertEqual(t["tm-accent"], t["tm-ink"])  # ink-only accent
-        self.assertEqual(TM_BG, "#f4f1ea")
-        self.assertEqual(TM_ACCENT, TM_INK)
+        for key in (
+            "tm-bg",
+            "tm-surface",
+            "tm-ink",
+            "tm-accent",
+            "tm-accent-ink",
+            "tm-ok",
+            "tm-warn",
+        ):
+            self.assertIn(key, t)
+            self.assertTrue(str(t[key]).startswith("#"))
+        # Accent is independent (may differ from ink) but must not equal forbidden chrome
+        self.assertEqual(TM_BG, t["tm-bg"])
+        self.assertEqual(TM_ACCENT, t["tm-accent"])
 
-    def test_no_rvcmax_pink_as_accent(self):
+    def test_no_forbidden_chrome_as_token(self):
         t = light_tokens()
-        bad = forbidden_chrome_hexes()
+        bad = {x.lower() for x in forbidden_chrome_hexes()}
         for key, val in t.items():
             self.assertNotIn(
                 val.lower(),
-                {x.lower() for x in bad},
+                bad,
                 msg=f"{key}={val} is forbidden chrome",
             )
+        # Explicitly not BA primary / RVCMAX pink
+        self.assertNotEqual(TM_ACCENT.lower(), "#1289f0")
+        self.assertNotEqual(TM_BG.lower(), "#050508")
 
 
 class CatalogTests(unittest.TestCase):

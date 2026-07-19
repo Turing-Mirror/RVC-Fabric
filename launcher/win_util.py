@@ -148,6 +148,21 @@ def open_path(path: Path | str) -> None:
         subprocess.Popen(["xdg-open", path])
 
 
+def open_windows_sound_panel() -> None:
+    """Open classic Windows Sound control panel (Playback + Recording devices).
+
+    This is ``mmsys.cpl`` — not Device Manager, not the simplified Settings page.
+    """
+    if sys.platform != "win32":
+        raise OSError("仅支持 Windows 打开系统声音面板")
+    # control.exe mmsys.cpl → 播放 / 录制 / 声音 / 通讯 四个选项卡
+    subprocess.Popen(
+        ["control.exe", "mmsys.cpl"],
+        cwd=os.environ.get("SystemRoot", r"C:\Windows"),
+        creationflags=CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+    )
+
+
 def _env_with_root() -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")

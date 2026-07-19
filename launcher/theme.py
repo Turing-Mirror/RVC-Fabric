@@ -74,7 +74,8 @@ FONT_MONO: Final[tuple] = _FONT_MONO
 PAD_X: Final[int] = 28
 PAD_CARD: Final[int] = 16
 NAV_HEIGHT: Final[int] = 64
-BOTTOM_HEIGHT: Final[int] = 84
+# Dock: model info + mode toggle + hot sliders + start/status
+BOTTOM_HEIGHT: Final[int] = 118
 GUTTER: Final[int] = 32
 
 APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"

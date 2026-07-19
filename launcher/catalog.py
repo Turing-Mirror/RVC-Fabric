@@ -121,20 +121,24 @@ def list_models_in_user_data(
                 cover = str(cp.resolve())
         else:
             cover = _find_cover(folder)
-        out.append(
-            {
-                "name": name,
-                "path": str(pth.resolve()),
-                "file": pth.name,
-                "dir": str(folder.resolve()),
-                "cover": cover,
-                "index": index,
-                "tag": tag,
-                "source": "user_data",
-                "pitch": side.get("pitch"),
-                "formant": side.get("formant"),
-            }
-        )
+        entry = {
+            "name": name,
+            "path": str(pth.resolve()),
+            "file": pth.name,
+            "dir": str(folder.resolve()),
+            "cover": cover,
+            "index": index,
+            "tag": tag,
+            "source": "user_data",
+            "pitch": None,
+            "formant": None,
+            "index_rate": None,
+            "rms_mix_rate": None,
+            "threhold": None,
+            "f0method": None,
+        }
+        entry.update(voice_params_from_side(side))
+        out.append(entry)
     return out
 
 
@@ -332,3 +336,79 @@ def clear_model_index(model_dir: Path) -> None:
         json.dumps(side, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+# Per-voice hot params stored in User_Data/models/<name>/config.json
+VOICE_PARAM_KEYS: tuple[str, ...] = (
+    "pitch",
+    "formant",
+    "index_rate",
+    "rms_mix_rate",
+    "threhold",
+    "f0method",
+)
+
+
+def voice_params_from_side(side: dict[str, Any]) -> dict[str, Any]:
+    """Return only keys that are explicitly set (not null/empty) on a sidecar."""
+    out: dict[str, Any] = {}
+    if not isinstance(side, dict):
+        return out
+    for k in VOICE_PARAM_KEYS:
+        if k not in side:
+            continue
+        v = side.get(k)
+        if v is None or v == "":
+            continue
+        out[k] = v
+    return out
+
+
+def get_model_voice_params(model_dir: Path) -> dict[str, Any]:
+    """Read per-model voice params from config.json (missing keys omitted)."""
+    return voice_params_from_side(_read_sidecar(Path(model_dir)))
+
+
+def save_model_voice_params(
+    model_dir: Path,
+    params: dict[str, Any],
+    *,
+    display_name: Optional[str] = None,
+) -> dict[str, Any]:
+    """Merge voice params into model folder config.json. Returns full sidecar."""
+    model_dir = Path(model_dir)
+    if not model_dir.is_dir():
+        raise ValueError(f"model dir missing: {model_dir}")
+    side = _read_sidecar(model_dir)
+    if display_name:
+        side["name"] = str(display_name)
+    elif "name" not in side:
+        side["name"] = model_dir.name
+    pth = _find_pth(model_dir)
+    if pth is not None:
+        side.setdefault("file", pth.name)
+    side.setdefault("tag", guess_tag(str(side.get("name") or model_dir.name)))
+
+    for k in VOICE_PARAM_KEYS:
+        if k not in params:
+            continue
+        v = params.get(k)
+        if v is None or v == "":
+            # explicit clear
+            side[k] = None
+            continue
+        if k == "pitch":
+            side[k] = int(round(float(v)))
+        elif k == "threhold":
+            side[k] = int(round(float(v)))
+        elif k == "f0method":
+            side[k] = str(v)
+        else:
+            side[k] = float(v)
+
+    cfg_path = model_dir / "config.json"
+    cfg_path.write_text(
+        json.dumps(side, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return side

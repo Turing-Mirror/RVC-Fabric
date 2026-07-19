@@ -14,10 +14,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from launcher.catalog import (
+    get_model_voice_params,
     import_model_to_catalog,
     list_models_in_user_data,
     list_voice_catalog,
     safe_model_dir_name,
+    save_model_voice_params,
+    voice_params_from_side,
 )
 from launcher.paths import release_roles
 from launcher.theme import (
@@ -86,6 +89,39 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(len(listed), 1)
             self.assertEqual(listed[0]["name"], "测试音色")
             self.assertEqual(listed[0]["source"], "user_data")
+
+    def test_per_model_voice_params_roundtrip(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            models = root / "models"
+            src = root / "src" / "v.pth"
+            src.parent.mkdir(parents=True)
+            src.write_bytes(b"FAKE")
+            entry = import_model_to_catalog(src, models, display_name="高音角色")
+            md = Path(entry["dir"])
+            save_model_voice_params(
+                md,
+                {
+                    "pitch": 12,
+                    "formant": 0.25,
+                    "index_rate": 0.4,
+                    "rms_mix_rate": 0.1,
+                    "threhold": -45,
+                    "f0method": "rmvpe",
+                },
+                display_name="高音角色",
+            )
+            got = get_model_voice_params(md)
+            self.assertEqual(got["pitch"], 12)
+            self.assertAlmostEqual(float(got["formant"]), 0.25)
+            self.assertEqual(got["f0method"], "rmvpe")
+            listed = list_models_in_user_data(models)
+            self.assertEqual(listed[0]["pitch"], 12)
+            # null keys ignored
+            self.assertEqual(
+                voice_params_from_side({"pitch": None, "formant": 1.0}),
+                {"formant": 1.0},
+            )
 
     def test_catalog_prefers_user_data_over_legacy(self):
         with tempfile.TemporaryDirectory() as td:

@@ -18,7 +18,7 @@
 | 产品 | **Turing Mirror 变声器**（图灵之镜网站配套本地变声器） |
 | 底座 | 官方 RVC WebUI + 实时 `gui_v1.py`，**不重写算法** |
 | 体验目标 | 像 B 站 RVCMAX：解压 → 启动器 → 桌面图标 → 开黑变声；日常**不**靠 bat |
-| UI | **白无垢**（`docs/UI-AESTHETIC-DESIGN.md`），禁止 AI 蓝紫/金渐变、禁止抄 RVCMAX 粉紫 |
+| UI | 内容库壳 + 舞台焦点（`docs/UI-AESTHETIC-DESIGN.md` §0）；`launcher/theme.py` + `launcher/ui/`；禁止霓虹/RVCMAX 粉紫/照抄 BA 蓝 |
 | 参考包 | `RVCMAX/RVCMAX_Nvidia_xiaoyuan`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker，**不必开原版 RVC 窗**） |
 | 发行 | 全量包在 `dist/`（gitignore）；**Git 含什么见 `docs/仓库内容说明.md`** |
@@ -73,6 +73,7 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 | 路径 | 职责 |
 |------|------|
 | `launcher/main_app.py` | 日常 UI、启停变声、设置、状态徽章 |
+| `launcher/theme.py` / `launcher/ui/` | 壳层 token 与可复用控件（封面卡等） |
 | `launcher/bootstrap.py` | 首次：快捷方式、VBCABLE、环境 |
 | `launcher/realtime_client.py` | 启停 worker、单实例、清孤儿进程 |
 | `launcher/realtime_protocol.py` | 文件 IPC |
@@ -215,7 +216,7 @@ Linux AMD 是 ROCm，不是 Windows DML。
 ## 7. 约束（Agents / 用户偏好）
 
 - 无 emoji（除非要求）；无未请求的 AI 渐变 UI  
-- 严格继承白无垢；中文/文件 UTF-8；PowerShell  
+- UI 气质见 UI-AESTHETIC-DESIGN §0；中文/文件 UTF-8；PowerShell  
 - 任务结束 **git commit**；文档只放 `docs/`  
 - 回答在聊天，不写进 App  
 - `gh` 用 Windows 凭据（非沙箱）  

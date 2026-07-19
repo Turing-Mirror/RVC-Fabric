@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Consumer app (RVCMAX role: daily GUI).
 
-Turing Mirror companion skin — 「白无垢」. Not RVCMAX pink/purple chrome.
+Shell layout inspired by content-library chrome + stage focus.
 Models: User_Data/models catalog first; engine assets only for hubert/rmvpe story.
 """
 
@@ -40,8 +40,11 @@ from launcher import realtime_client as rt_client
 from launcher.gpu_backend import apply_backend_env, detect_full, normalize_accel
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
+    BOTTOM_HEIGHT,
+    NAV_HEIGHT,
     TM_ACCENT,
     TM_ACCENT_INK,
+    TM_ACCENT_SOFT,
     TM_BG,
     TM_HAIRLINE,
     TM_INK,
@@ -52,8 +55,19 @@ from launcher.theme import (
     TM_SURFACE,
     TM_SURFACE_HOVER,
     TM_WARN,
+    mono_font,
     sans_font,
     serif_font,
+)
+from launcher.ui import (
+    CoverCache,
+    GhostButton,
+    HoverTip,
+    ModelCoverCard,
+    NavItem,
+    PrimaryButton,
+    SectionCard,
+    StatusBadge,
 )
 from launcher.win_util import (
     focus_window_by_title,
@@ -63,69 +77,6 @@ from launcher.win_util import (
     start_legacy_realtime_gui,
     start_webui,
 )
-
-
-class HoverTip:
-    """Lightweight tooltip for 白无垢 UI — quiet paper popover on hover."""
-
-    def __init__(self, widget: tk.Widget, text: str, *, delay_ms: int = 350) -> None:
-        self.widget = widget
-        self.text = text
-        self.delay_ms = delay_ms
-        self._after_id: Optional[str] = None
-        self._tip: Optional[tk.Toplevel] = None
-        widget.bind("<Enter>", self._schedule, add="+")
-        widget.bind("<Leave>", self._hide, add="+")
-        widget.bind("<ButtonPress>", self._hide, add="+")
-
-    def _schedule(self, _event=None) -> None:
-        self._cancel()
-        self._after_id = self.widget.after(self.delay_ms, self._show)
-
-    def _cancel(self) -> None:
-        if self._after_id is not None:
-            try:
-                self.widget.after_cancel(self._after_id)
-            except Exception:
-                pass
-            self._after_id = None
-
-    def _hide(self, _event=None) -> None:
-        self._cancel()
-        if self._tip is not None:
-            try:
-                self._tip.destroy()
-            except Exception:
-                pass
-            self._tip = None
-
-    def _show(self) -> None:
-        self._after_id = None
-        if self._tip is not None or not self.text:
-            return
-        try:
-            x = self.widget.winfo_rootx() + 12
-            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
-        except Exception:
-            return
-        tip = tk.Toplevel(self.widget)
-        tip.wm_overrideredirect(True)
-        tip.wm_attributes("-topmost", True)
-        tip.configure(bg=TM_HAIRLINE)
-        # Outer hairline frame + warm paper fill
-        wrap = tk.Frame(tip, bg=TM_SURFACE, padx=10, pady=8)
-        wrap.pack(padx=1, pady=1)
-        tk.Label(
-            wrap,
-            text=self.text,
-            justify="left",
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            font=sans_font(9),
-            wraplength=320,
-        ).pack(anchor="w")
-        tip.wm_geometry(f"+{x}+{y}")
-        self._tip = tip
 
 
 class MainApp:
@@ -158,6 +109,7 @@ class MainApp:
         self._toast_job = None
         self._placed_once = False
         self._hot_job = None
+        self._cover_cache = CoverCache()
         self._device_lists = {
             "hostapis": [],
             "input_devices": [],
@@ -236,57 +188,50 @@ class MainApp:
             self._reflow_settings_page()
 
     def _build_chrome(self) -> None:
-        top = tk.Frame(self.root, bg=TM_BG, height=52)
+        # Library-style header: surface bar + hairline
+        top = tk.Frame(self.root, bg=TM_SURFACE, height=NAV_HEIGHT)
         top.pack(fill="x")
         top.pack_propagate(False)
 
-        brand = tk.Frame(top, bg=TM_BG)
-        brand.pack(side="left", padx=20, pady=10)
+        brand = tk.Frame(top, bg=TM_SURFACE)
+        brand.pack(side="left", padx=20, pady=12)
         tk.Label(
             brand,
             text="Turing Mirror",
             font=serif_font(15, "bold"),
-            bg=TM_BG,
+            bg=TM_SURFACE,
             fg=TM_INK,
         ).pack(side="left")
         tk.Label(
             brand,
             text="  变声器",
             font=sans_font(11),
-            bg=TM_BG,
+            bg=TM_SURFACE,
             fg=TM_INK_MUTED,
         ).pack(side="left")
 
-        nav = tk.Frame(top, bg=TM_BG)
-        nav.pack(side="left", expand=True, padx=12)
-        self.nav_btns = {}
+        nav = tk.Frame(top, bg=TM_SURFACE)
+        nav.pack(side="left", expand=True, padx=8)
+        self.nav_btns: dict[str, NavItem] = {}
         for key, label in (
             ("home", "首页"),
             ("models", "模型"),
             ("settings", "设置"),
             ("more", "其他"),
         ):
-            b = tk.Label(
-                nav,
-                text=label,
-                font=sans_font(11),
-                bg=TM_BG,
-                fg=TM_INK_MUTED,
-                padx=14,
-                cursor="hand2",
-            )
-            b.pack(side="left", padx=2)
-            b.bind("<Button-1>", lambda e, k=key: self.show_page(k))
+            b = NavItem(nav, label, key, self.show_page, bg=TM_SURFACE)
+            b.pack(side="left", padx=3)
             self.nav_btns[key] = b
+
+        tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x")
 
         self.body = tk.Frame(self.root, bg=TM_BG)
         self.body.pack(fill="both", expand=True)
 
-        bottom = tk.Frame(self.root, bg=TM_SURFACE, height=70)
+        tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x", side="bottom")
+        bottom = tk.Frame(self.root, bg=TM_SURFACE, height=BOTTOM_HEIGHT)
         bottom.pack(fill="x", side="bottom")
         bottom.pack_propagate(False)
-        # hairline top
-        tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x", side="bottom")
 
         self.bottom_name = tk.Label(
             bottom,
@@ -296,7 +241,7 @@ class MainApp:
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.place(x=20, y=12)
+        self.bottom_name.place(x=20, y=14)
         self.bottom_tag = tk.Label(
             bottom,
             text="请先导入音色到 User_Data/models",
@@ -305,75 +250,28 @@ class MainApp:
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_tag.place(x=20, y=36)
+        self.bottom_tag.place(x=20, y=38)
 
         ctrl = tk.Frame(bottom, bg=TM_SURFACE)
         ctrl.place(relx=0.5, rely=0.5, anchor="center")
-        self.btn_start = tk.Button(
-            ctrl,
-            text="开启变声",
-            font=sans_font(10, "bold"),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
-            activebackground=TM_INK,
-            activeforeground=TM_ACCENT_INK,
-            relief="flat",
-            padx=18,
-            pady=7,
-            cursor="hand2",
-            command=self.toggle_vc,
-            bd=0,
-        )
+        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
         self.btn_start.pack(side="left", padx=6)
-        tk.Button(
-            ctrl,
-            text="高级实时面板",
-            font=sans_font(9),
-            bg=TM_BG,
-            fg=TM_INK_MUTED,
-            relief="flat",
-            padx=12,
-            pady=7,
-            cursor="hand2",
-            command=self.open_legacy_gui,
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-        ).pack(side="left", padx=6)
+        GhostButton(ctrl, "高级实时面板", command=self.open_legacy_gui).pack(
+            side="left", padx=6
+        )
 
         right = tk.Frame(bottom, bg=TM_SURFACE)
         right.place(relx=0.97, rely=0.5, anchor="e")
-        # Status badge — quiet surface pill (白无垢: no neon, ink emphasis when live)
-        self.status_badge = tk.Frame(
-            right,
-            bg=TM_INSET,
-            padx=12,
-            pady=5,
-            highlightthickness=0,
-        )
+        self.status_badge = StatusBadge(right)
         self.status_badge.pack(anchor="e")
-        self.lbl_online = tk.Label(
-            self.status_badge,
-            text="引擎待命",
-            font=sans_font(10),
-            bg=TM_INSET,
-            fg=TM_INK_MUTED,
-        )
-        self.lbl_online.pack(anchor="e")
-        self.lbl_latency = tk.Label(
-            self.status_badge,
-            text=APP_PRODUCT_TAGLINE,
-            font=sans_font(8),
-            bg=TM_INSET,
-            fg=TM_META,
-        )
-        self.lbl_latency.pack(anchor="e")
+        # Back-compat aliases used by older status paths
+        self.lbl_online = self.status_badge.title_lbl
+        self.lbl_latency = self.status_badge.sub_lbl
         self._sync_bottom()
 
     def _format_latency_line(self, delay_ms: int, infer_ms: int) -> str:
         """Human-readable metrics; hide absurd delayed-sentinel values."""
         parts: list[str] = []
-        # Real algorithm delay is usually tens–hundreds of ms, rarely > 5s
         if 0 < delay_ms < 8000:
             parts.append(f"延迟 {delay_ms} ms")
         elif delay_ms >= 8000:
@@ -384,38 +282,9 @@ class MainApp:
 
     def _set_status_visual(self, mode: str, title: str, subtitle: str = "") -> None:
         """Update bottom-right status badge. mode: idle|busy|live|error."""
-        # 白无垢: 运行态用素墨标题 + 安静绿点感；忙碌用琥珀；错误略加重 ink
-        if mode == "live":
-            badge_bg = TM_SURFACE_HOVER
-            title_fg = TM_INK
-            title_font = sans_font(11, "bold")
-            sub_fg = TM_OK
-            title = "● " + title
-        elif mode == "busy":
-            badge_bg = TM_INSET
-            title_fg = TM_WARN
-            title_font = sans_font(10, "bold")
-            sub_fg = TM_META
-        elif mode == "error":
-            badge_bg = TM_INSET
-            title_fg = TM_INK
-            title_font = sans_font(10, "bold")
-            sub_fg = TM_META
-        else:
-            badge_bg = TM_INSET
-            title_fg = TM_INK_MUTED
-            title_font = sans_font(10)
-            sub_fg = TM_META
         try:
-            self.status_badge.configure(bg=badge_bg)
-            self.lbl_online.configure(
-                text=title, bg=badge_bg, fg=title_fg, font=title_font
-            )
-            self.lbl_latency.configure(
-                text=subtitle or APP_PRODUCT_TAGLINE,
-                bg=badge_bg,
-                fg=sub_fg,
-                font=sans_font(8),
+            self.status_badge.set_mode(
+                mode, title, subtitle or APP_PRODUCT_TAGLINE
             )
         except Exception:
             pass
@@ -434,11 +303,7 @@ class MainApp:
             fr.pack_forget()
         self.pages[key].pack(fill="both", expand=True)
         for k, b in self.nav_btns.items():
-            active = k == key
-            b.configure(
-                fg=TM_INK if active else TM_INK_MUTED,
-                font=sans_font(11, "bold" if active else "normal"),
-            )
+            b.set_active(k == key)
         if key == "models":
             self.refresh_models()
         if key == "home":
@@ -453,7 +318,7 @@ class MainApp:
         fr.rowconfigure(2, weight=1)
 
         hero = tk.Frame(fr, bg=TM_BG)
-        hero.grid(row=0, column=0, sticky="ew", pady=(16, 4), padx=16)
+        hero.grid(row=0, column=0, sticky="ew", pady=(18, 4), padx=20)
         tk.Label(
             hero,
             text="选择音色，开始变声",
@@ -469,27 +334,26 @@ class MainApp:
             fg=TM_INK_MUTED,
         ).pack(pady=(6, 0))
 
-        # Current selection banner (always visible)
-        cur_wrap = tk.Frame(fr, bg=TM_SURFACE, highlightthickness=1, highlightbackground=TM_HAIRLINE)
-        cur_wrap.grid(row=1, column=0, sticky="ew", padx=24, pady=(8, 4))
+        cur = SectionCard(fr, title="", accent_rail=True, pad=12)
+        cur.grid(row=1, column=0, sticky="ew", padx=24, pady=(10, 4))
         self.home_current_lbl = tk.Label(
-            cur_wrap,
+            cur.body,
             text="当前音色：—",
             font=serif_font(13, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
         )
-        self.home_current_lbl.pack(fill="x", padx=14, pady=(10, 2))
+        self.home_current_lbl.pack(fill="x", pady=(0, 2))
         self.home_hint_lbl = tk.Label(
-            cur_wrap,
+            cur.body,
             text="点击左右箭头或卡片即可切换",
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
         )
-        self.home_hint_lbl.pack(fill="x", padx=14, pady=(0, 10))
+        self.home_hint_lbl.pack(fill="x")
 
         self.carousel_host = tk.Frame(fr, bg=TM_BG)
         self.carousel_host.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
@@ -499,35 +363,11 @@ class MainApp:
         nav.grid(row=3, column=0, sticky="ew", pady=(4, 12))
         nav_inner = tk.Frame(nav, bg=TM_BG)
         nav_inner.pack()
-        tk.Button(
-            nav_inner,
-            text="‹ 上一个",
-            font=sans_font(11),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            relief="flat",
-            padx=16,
-            pady=8,
-            command=lambda: self._shift_model(-1),
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-            cursor="hand2",
+        GhostButton(
+            nav_inner, "‹ 上一个", command=lambda: self._shift_model(-1), padx=16, pady=8
         ).pack(side="left", padx=8)
-        tk.Button(
-            nav_inner,
-            text="下一个 ›",
-            font=sans_font(11),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            relief="flat",
-            padx=16,
-            pady=8,
-            command=lambda: self._shift_model(1),
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-            cursor="hand2",
+        GhostButton(
+            nav_inner, "下一个 ›", command=lambda: self._shift_model(1), padx=16, pady=8
         ).pack(side="left", padx=8)
 
         self.home_toast = tk.Label(
@@ -556,15 +396,10 @@ class MainApp:
         self._update_home_current_label()
 
         if not self.models:
-            box = tk.Frame(
-                self.carousel_host,
-                bg=TM_SURFACE,
-                highlightthickness=1,
-                highlightbackground=TM_HAIRLINE,
-            )
+            box = SectionCard(self.carousel_host, accent_rail=False, pad=20)
             box.pack(expand=True, fill="both", padx=40, pady=20)
             tk.Label(
-                box,
+                box.body,
                 text="暂无音色\n\n请到「模型」页导入 .pth",
                 font=sans_font(11),
                 bg=TM_SURFACE,
@@ -573,14 +408,13 @@ class MainApp:
             ).pack(expand=True, pady=40)
             return
 
-        # Scale card sizes with host width
         self.carousel_host.update_idletasks()
         host_w = max(self.carousel_host.winfo_width(), 400)
         host_h = max(self.carousel_host.winfo_height(), 220)
         focus_w = max(160, min(280, int(host_w * 0.28)))
-        focus_h = max(180, min(300, int(host_h * 0.75)))
-        side_w = max(110, int(focus_w * 0.7))
-        side_h = max(140, int(focus_h * 0.75))
+        focus_h = max(200, min(320, int(host_h * 0.78)))
+        side_w = max(120, int(focus_w * 0.72))
+        side_h = max(160, int(focus_h * 0.78))
 
         n = len(self.models)
         idxs = [(self.model_idx - 1) % n, self.model_idx % n, (self.model_idx + 1) % n]
@@ -591,61 +425,24 @@ class MainApp:
             m = self.models[mi]
             focus = i == 1
             w, h = (focus_w, focus_h) if focus else (side_w, side_h)
-            card = tk.Frame(
+            photo = self._cover_cache.get(
+                m.get("cover"),
+                max_w=max(w - 8, 80),
+                max_h=max(int(h * 0.48), 60),
+            )
+            card = ModelCoverCard(
                 row,
-                bg=TM_SURFACE if focus else TM_BG,
+                name=m["name"],
+                tag=m.get("tag") or "音色",
+                photo=photo,
+                active=focus,
+                focus=focus,
+                index_text=f"{self.model_idx + 1} / {n}" if focus else "",
                 width=w,
                 height=h,
-                highlightthickness=2 if focus else 1,
-                highlightbackground=TM_INK if focus else TM_HAIRLINE,
-                cursor="hand2",
+                on_click=lambda ix=mi: self._select_model(ix, feedback=True),
             )
             card.pack(side="left", padx=max(6, int(host_w * 0.012)), pady=8)
-            card.pack_propagate(False)
-
-            if focus:
-                badge = tk.Label(
-                    card,
-                    text="当前使用",
-                    font=sans_font(8, "bold"),
-                    bg=TM_INK,
-                    fg=TM_ACCENT_INK,
-                    padx=8,
-                    pady=2,
-                )
-                badge.place(relx=0.5, rely=0.12, anchor="center")
-
-            name_lbl = tk.Label(
-                card,
-                text=m["name"][:12],
-                font=serif_font(14 if focus else 10, "bold"),
-                bg=card["bg"],
-                fg=TM_INK,
-            )
-            name_lbl.place(relx=0.5, rely=0.42 if focus else 0.38, anchor="center")
-            tag_lbl = tk.Label(
-                card,
-                text=m.get("tag") or "音色",
-                font=sans_font(9),
-                bg=card["bg"],
-                fg=TM_META,
-            )
-            tag_lbl.place(relx=0.5, rely=0.58 if focus else 0.55, anchor="center")
-            if focus:
-                idx_lbl = tk.Label(
-                    card,
-                    text=f"{self.model_idx + 1} / {n}",
-                    font=sans_font(9),
-                    bg=card["bg"],
-                    fg=TM_META,
-                )
-                idx_lbl.place(relx=0.5, rely=0.78, anchor="center")
-
-            def _bind_all(widget, ix=mi):
-                widget.bind("<Button-1>", lambda e, i=ix: self._select_model(i, feedback=True))
-
-            for wdg in (card, name_lbl, tag_lbl):
-                _bind_all(wdg)
 
     def _update_home_current_label(self) -> None:
         if not hasattr(self, "home_current_lbl"):
@@ -795,7 +592,7 @@ class MainApp:
         fr.rowconfigure(1, weight=1)
 
         bar = tk.Frame(fr, bg=TM_BG)
-        bar.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 4))
+        bar.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 6))
         left = tk.Frame(bar, bg=TM_BG)
         left.pack(side="left", fill="x", expand=True)
         tk.Label(
@@ -814,25 +611,15 @@ class MainApp:
         )
         self.models_status_lbl.pack(side="left", padx=10)
 
-        for text, cmd in (
-            ("刷新", self.refresh_models),
-            ("导入模型", self.import_model),
-            ("打开目录", lambda: open_path(MODELS_DIR)),
-        ):
-            primary = text == "导入模型"
-            tk.Button(
-                bar,
-                text=text,
-                font=sans_font(9),
-                bg=TM_ACCENT if primary else TM_SURFACE,
-                fg=TM_ACCENT_INK if primary else TM_INK_MUTED,
-                relief="flat",
-                padx=12,
-                pady=5,
-                cursor="hand2",
-                command=cmd,
-                bd=0,
-            ).pack(side="right", padx=4)
+        GhostButton(bar, "打开目录", command=lambda: open_path(MODELS_DIR), padx=12, pady=5).pack(
+            side="right", padx=4
+        )
+        GhostButton(bar, "刷新", command=self.refresh_models, padx=12, pady=5).pack(
+            side="right", padx=4
+        )
+        PrimaryButton(bar, "导入模型", command=self.import_model, padx=12, pady=5).pack(
+            side="right", padx=4
+        )
 
         list_wrap = tk.Frame(fr, bg=TM_BG)
         list_wrap.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
@@ -916,71 +703,24 @@ class MainApp:
         for i, m in enumerate(self.models):
             r, c = divmod(i, cols)
             active = self._is_active_model(m)
-            card = tk.Frame(
+            photo = self._cover_cache.get(
+                m.get("cover"), max_w=card_min + 20, max_h=90
+            )
+            card = ModelCoverCard(
                 self.model_grid,
-                bg=TM_SURFACE,
-                height=150,
-                highlightthickness=2 if active else 1,
-                highlightbackground=TM_INK if active else TM_HAIRLINE,
-                cursor="hand2",
+                name=m["name"],
+                tag=m.get("tag") or "音色",
+                photo=photo,
+                active=active,
+                focus=active,
+                width=max(card_min, 160),
+                height=200,
+                on_click=lambda ix=i: self._use_model_from_grid(ix),
+                action_text="正在使用" if active else "使用",
+                on_action=None if active else (lambda ix=i: self._use_model_from_grid(ix)),
             )
             card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
-            card.grid_propagate(False)
             self.model_grid.rowconfigure(r, weight=0)
-
-            # Tag row: always show type; active gets extra ink badge
-            tk.Label(
-                card,
-                text=m.get("tag") or "音色",
-                font=sans_font(8),
-                bg=TM_SURFACE,
-                fg=TM_META,
-            ).place(x=10, y=10)
-            if active:
-                tk.Label(
-                    card,
-                    text="使用中",
-                    font=sans_font(8, "bold"),
-                    bg=TM_INK,
-                    fg="#ffffff",
-                    padx=8,
-                    pady=2,
-                ).place(relx=1.0, x=-10, y=10, anchor="ne")
-
-            tk.Label(
-                card,
-                text=m["name"][:16],
-                font=serif_font(11, "bold"),
-                bg=TM_SURFACE,
-                fg=TM_INK,
-            ).place(relx=0.5, rely=0.42, anchor="center")
-
-            # Active: use Label (disabled Button grays out to unreadable bar on Windows)
-            if active:
-                tk.Label(
-                    card,
-                    text="正在使用",
-                    font=sans_font(9, "bold"),
-                    bg=TM_INK,
-                    fg="#ffffff",
-                    padx=14,
-                    pady=5,
-                ).place(relx=0.5, rely=0.78, anchor="center")
-            else:
-                tk.Button(
-                    card,
-                    text="使用",
-                    font=sans_font(9),
-                    bg=TM_ACCENT,
-                    fg=TM_ACCENT_INK,
-                    relief="flat",
-                    cursor="hand2",
-                    command=lambda ix=i: self._use_model_from_grid(ix),
-                    bd=0,
-                    padx=14,
-                    pady=4,
-                ).place(relx=0.5, rely=0.78, anchor="center")
-                card.bind("<Button-1>", lambda e, ix=i: self._use_model_from_grid(ix))
 
         self._sync_bottom()
 
@@ -1117,19 +857,9 @@ class MainApp:
         )
 
         def card(parent, title: str) -> tk.Frame:
-            box = tk.Frame(
-                parent,
-                bg=TM_SURFACE,
-                highlightthickness=1,
-                highlightbackground=TM_HAIRLINE,
-                padx=14,
-                pady=10,
-            )
-            box.pack(fill="x", expand=False, padx=28, pady=8)
-            tk.Label(
-                box, text=title, font=serif_font(12, "bold"), bg=TM_SURFACE, fg=TM_INK
-            ).pack(anchor="w", pady=(0, 6))
-            return box
+            outer = SectionCard(parent, title=title, accent_rail=True, pad=14)
+            outer.pack(fill="x", expand=False, padx=28, pady=8)
+            return outer.body
 
         def scale_row(parent, label, variable, from_, to, res=1, hot=False):
             f = tk.Frame(parent, bg=TM_SURFACE)
@@ -2281,21 +2011,7 @@ class MainApp:
         box.place(relx=0.5, rely=0.42, anchor="center")
 
         def soft(text, cmd):
-            tk.Button(
-                box,
-                text=text,
-                font=sans_font(11),
-                bg=TM_SURFACE,
-                fg=TM_INK,
-                relief="flat",
-                width=30,
-                pady=11,
-                cursor="hand2",
-                command=cmd,
-                bd=0,
-                highlightthickness=1,
-                highlightbackground=TM_HAIRLINE,
-            ).pack(pady=6)
+            GhostButton(box, text, command=cmd, padx=20, pady=11).pack(pady=6, fill="x")
 
         soft("打开训练 / 翻唱 WebUI（高级 · 浏览器）", self.open_webui)
         soft("打开首次设置启动器", self.open_bootstrap)

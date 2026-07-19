@@ -2,7 +2,7 @@
 """First-run helper (RVCMAX role: 启动器).
 
 Jobs: desktop shortcut, VB-Cable install, env check — not the daily voice UI.
-Skin: Turing Mirror 「白无垢」 (docs/UI-AESTHETIC-DESIGN.md). No pink RVCMAX chrome.
+Shell tokens shared with main_app (library chrome, product-owned palette).
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from launcher.paths import APP_BRAND, APP_TITLE, ROOT as RROOT, ensure_dirs
 from launcher.theme import (
     TM_ACCENT,
     TM_ACCENT_INK,
+    TM_ACCENT_SOFT,
     TM_BG,
     TM_HAIRLINE,
     TM_INK,
@@ -42,6 +43,7 @@ from launcher.theme import (
     sans_font,
     serif_font,
 )
+from launcher.ui import GhostButton, PrimaryButton, SoftActionCard
 from launcher.vbcable import install_vbcable
 from launcher.win_util import (
     create_desktop_shortcut,
@@ -51,64 +53,12 @@ from launcher.win_util import (
 )
 
 
-class SoftCard(tk.Frame):
-    """Surface card with ink label — no pink fill."""
-
-    def __init__(self, master, title: str, subtitle: str, command, **kw):
-        super().__init__(
-            master,
-            bg=TM_SURFACE,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-            **kw,
-        )
-        self.configure(width=148, height=118)
-        self._cmd = command
-        self._inner = tk.Frame(self, bg=TM_SURFACE, width=128, height=72)
-        self._inner.pack(padx=10, pady=(14, 4))
-        self._inner.pack_propagate(False)
-        self._lbl = tk.Label(
-            self._inner,
-            text=title,
-            font=sans_font(11, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            wraplength=118,
-            justify="center",
-        )
-        self._lbl.place(relx=0.5, rely=0.5, anchor="center")
-        self._sub = tk.Label(
-            self,
-            text=subtitle,
-            font=sans_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-        )
-        self._sub.pack(pady=(0, 10))
-        for w in (self, self._inner, self._lbl, self._sub):
-            w.bind("<Button-1>", self._click)
-            w.bind("<Enter>", self._enter)
-            w.bind("<Leave>", self._leave)
-
-    def _enter(self, _e=None):
-        for w in (self, self._inner, self._lbl, self._sub):
-            w.configure(bg=TM_SURFACE_HOVER)
-
-    def _leave(self, _e=None):
-        for w in (self, self._inner, self._lbl, self._sub):
-            w.configure(bg=TM_SURFACE)
-
-    def _click(self, _e=None):
-        if self._cmd:
-            self._cmd()
-
-
 class BootstrapApp:
     def __init__(self) -> None:
         ensure_dirs()
         self.root = tk.Tk()
         self.root.title(f"{APP_TITLE} · 启动器")
-        self.root.geometry("560x460")
+        self.root.geometry("580x500")
         self.root.configure(bg=TM_BG)
         self.root.resizable(False, False)
         self._page = "setup"  # setup | system
@@ -119,27 +69,30 @@ class BootstrapApp:
         except Exception:
             pass
 
-        head = tk.Frame(self.root, bg=TM_BG)
-        head.pack(fill="x", pady=(24, 4), padx=28)
+        head = tk.Frame(self.root, bg=TM_SURFACE)
+        head.pack(fill="x")
+        head_inner = tk.Frame(head, bg=TM_SURFACE)
+        head_inner.pack(fill="x", pady=(18, 12), padx=28)
         tk.Label(
-            head,
+            head_inner,
             text=APP_TITLE,
             font=serif_font(18, "bold"),
-            bg=TM_BG,
+            bg=TM_SURFACE,
             fg=TM_INK,
         ).pack(anchor="w")
         self.lbl_subtitle = tk.Label(
-            head,
+            head_inner,
             text=APP_BRAND + "  ·  首次设置：快捷方式 · 声卡 · 环境",
             font=sans_font(9),
-            bg=TM_BG,
+            bg=TM_SURFACE,
             fg=TM_INK_MUTED,
         )
         self.lbl_subtitle.pack(anchor="w", pady=(4, 0))
+        tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x")
 
-        # Page switch (白无垢：素墨选中，淡面未选)
+        # Page switch
         nav = tk.Frame(self.root, bg=TM_BG)
-        nav.pack(fill="x", padx=28, pady=(12, 4))
+        nav.pack(fill="x", padx=28, pady=(14, 4))
         self.btn_nav_setup = tk.Button(
             nav,
             text="首次设置",
@@ -165,7 +118,6 @@ class BootstrapApp:
         )
         self.btn_nav_system.pack(side="left")
 
-        # Content host
         self.content = tk.Frame(self.root, bg=TM_BG)
         self.content.pack(fill="both", expand=True, padx=0, pady=0)
 
@@ -185,42 +137,16 @@ class BootstrapApp:
         self.status.pack(fill="x", padx=28, pady=(2, 6))
 
         btn_row = tk.Frame(self.root, bg=TM_BG)
-        btn_row.pack(pady=(2, 14))
-        tk.Button(
-            btn_row,
-            text="打开变声器",
-            font=sans_font(11, "bold"),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
-            activebackground=TM_INK,
-            activeforeground=TM_ACCENT_INK,
-            relief="flat",
-            padx=26,
-            pady=8,
-            cursor="hand2",
-            command=self.on_start_app,
-            bd=0,
-        ).pack(side="left", padx=6)
-        tk.Button(
-            btn_row,
-            text="打开安装目录",
-            font=sans_font(10),
-            bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
-            activebackground=TM_SURFACE_HOVER,
-            relief="flat",
-            padx=14,
-            pady=8,
-            cursor="hand2",
-            command=lambda: open_path(RROOT),
-            bd=0,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
+        btn_row.pack(pady=(2, 16))
+        PrimaryButton(btn_row, "打开变声器", command=self.on_start_app, padx=26, pady=8).pack(
+            side="left", padx=6
+        )
+        GhostButton(
+            btn_row, "打开安装目录", command=lambda: open_path(RROOT), padx=14, pady=8
         ).pack(side="left", padx=6)
 
         self.show_page("setup")
 
-        # Defer env check so the window paints immediately (no torch import freeze)
         try:
             self.root.update_idletasks()
             self.root.deiconify()
@@ -234,7 +160,6 @@ class BootstrapApp:
     def _build_page_setup(self, parent: tk.Frame) -> tk.Frame:
         page = tk.Frame(parent, bg=TM_BG)
 
-        # Notice: first-run black console is normal
         notice = tk.Frame(
             page,
             bg=TM_SURFACE,
@@ -242,8 +167,13 @@ class BootstrapApp:
             highlightbackground=TM_HAIRLINE,
         )
         notice.pack(fill="x", padx=28, pady=(8, 4))
+        # left accent rail
+        rail = tk.Frame(notice, bg=TM_ACCENT, width=3)
+        rail.pack(side="left", fill="y")
+        notice_body = tk.Frame(notice, bg=TM_SURFACE)
+        notice_body.pack(side="left", fill="both", expand=True)
         tk.Label(
-            notice,
+            notice_body,
             text="说明",
             font=sans_font(9, "bold"),
             bg=TM_SURFACE,
@@ -251,7 +181,7 @@ class BootstrapApp:
             anchor="w",
         ).pack(fill="x", padx=12, pady=(8, 2))
         tk.Label(
-            notice,
+            notice_body,
             text=(
                 "初次启动或「检测与部署」时，若短暂出现黑色命令行窗口，属于正常现象，"
                 "是绿色运行环境在加载，不是报错。窗口会自行关闭；日常用桌面快捷方式 / "
@@ -266,14 +196,14 @@ class BootstrapApp:
         ).pack(fill="x", padx=12, pady=(0, 10))
 
         cards = tk.Frame(page, bg=TM_BG)
-        cards.pack(pady=(12, 8))
-        SoftCard(cards, "发送快捷方式", "放到桌面 · 一键打开", self.on_shortcut).pack(
+        cards.pack(pady=(16, 8))
+        SoftActionCard(cards, "发送快捷方式", "放到桌面 · 一键打开", self.on_shortcut).pack(
             side="left", padx=8
         )
-        SoftCard(cards, "安装虚拟声卡", "VB-Cable · 开黑用", self.on_vbcable).pack(
+        SoftActionCard(cards, "安装虚拟声卡", "VB-Cable · 开黑用", self.on_vbcable).pack(
             side="left", padx=8
         )
-        SoftCard(cards, "检测与部署", "日常必需 · 可选训练", self.on_deploy).pack(
+        SoftActionCard(cards, "检测与部署", "日常必需 · 可选训练", self.on_deploy).pack(
             side="left", padx=8
         )
         return page
@@ -301,13 +231,12 @@ class BootstrapApp:
 
         cards = tk.Frame(page, bg=TM_BG)
         cards.pack(pady=8)
-        SoftCard(
+        SoftActionCard(
             cards,
             "声音设备",
             "播放 · 录制列表",
             self.on_open_sound_panel,
         ).pack(side="left", padx=8)
-        # 预留：后续可在此并排增加更多系统快捷卡片
         return page
 
     def show_page(self, key: str) -> None:
@@ -336,6 +265,7 @@ class BootstrapApp:
                     activebackground=TM_INK,
                     activeforeground=TM_ACCENT_INK,
                     font=sans_font(9, "bold"),
+                    highlightthickness=0,
                 )
             else:
                 btn.configure(
@@ -355,7 +285,6 @@ class BootstrapApp:
         self.status.configure(text=text, fg=TM_OK if ok else TM_WARN)
 
     def _refresh_hint(self) -> None:
-        # GPU line (non-blocking: short WMI + optional Runtime probe)
         def _gpu_line():
             try:
                 from launcher.config_store import load_config
@@ -481,7 +410,6 @@ class BootstrapApp:
                     messagebox.showinfo("环境检测", report)
                     self._set_status("环境正常，可打开变声器。")
                 finally:
-                    # If we did not start a download, release busy
                     if not getattr(self, "_download_running", False):
                         self._deploy_busy = False
 
@@ -537,15 +465,7 @@ def main() -> None:
         log.write_text("bootstrap main() enter\n", encoding="utf-8")
     except Exception:
         pass
-    app = BootstrapApp()
-    try:
-        log.write_text(
-            "bootstrap window up geometry=" + app.root.geometry() + "\n",
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
-    app.run()
+    BootstrapApp().run()
 
 
 if __name__ == "__main__":

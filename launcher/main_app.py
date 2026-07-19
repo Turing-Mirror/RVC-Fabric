@@ -21,13 +21,19 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from launcher.catalog import import_model_to_catalog
+from launcher.catalog import (
+    bind_index_to_model_dir,
+    clear_model_index,
+    discover_index_files,
+    import_model_to_catalog,
+)
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
 from launcher.paths import (
     APP_TITLE,
     MODELS_DIR,
     USER_DATA,
     ensure_dirs,
+    index_search_roots,
     list_voice_models,
 )
 from launcher import realtime_client as rt_client
@@ -566,6 +572,7 @@ class MainApp:
             self.refresh_models()
         if feedback or prev != idx:
             self._show_switch_toast(m["name"])
+        self._refresh_index_ui_for_model(m)
 
     def _sync_model_to_realtime_gui(self, m: Optional[dict] = None) -> None:
         """Write current model + full settings into engine config.json."""
@@ -576,14 +583,49 @@ class MainApp:
         pth = m.get("path") or ""
         if not pth:
             return
-        idx_path = m.get("index") or ""
+        idx_path = ""
+        try:
+            if hasattr(self, "var_index_path"):
+                idx_path = str(self.var_index_path.get() or "").strip()
+        except Exception:
+            idx_path = ""
+        if not idx_path:
+            idx_path = m.get("index") or ""
         try:
             self._collect_settings_into_cfg()
+            # Keep rate 0 when no index file
+            if not idx_path or not Path(idx_path).is_file():
+                self.cfg["index_rate"] = 0.0
+                try:
+                    if hasattr(self, "var_index_rate"):
+                        self.var_index_rate.set(0.0)
+                except Exception:
+                    pass
             sync_realtime_gui_model(
                 pth,
                 idx_path,
                 app_cfg=self.cfg,
             )
+        except Exception:
+            pass
+
+    def _refresh_index_ui_for_model(self, m: Optional[dict] = None) -> None:
+        """Update settings page index path label for current voice."""
+        if not hasattr(self, "var_index_path"):
+            return
+        if m is None:
+            if not self.models:
+                self.var_index_path.set("")
+                self._update_index_hint()
+                return
+            m = self.models[self.model_idx]
+        idx = str(m.get("index") or "").strip()
+        if idx and not Path(idx).is_file():
+            idx = ""
+        self.var_index_path.set(idx)
+        self._update_index_hint()
+        try:
+            self._refresh_index_combobox_values()
         except Exception:
             pass
 
@@ -1053,6 +1095,88 @@ class MainApp:
         scale_row(right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True)
         scale_row(right, "Index Rate", self.var_index_rate, 0, 1, 0.01, hot=True)
         scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True)
+
+        # Feature retrieval .index (bound to current voice model)
+        self.var_index_path = tk.StringVar(value="")
+        idx_block = tk.Frame(right, bg=TM_SURFACE)
+        idx_block.pack(fill="x", pady=(8, 4))
+        tk.Label(
+            idx_block,
+            text="特征检索 .index",
+            font=sans_font(9),
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            anchor="w",
+        ).pack(anchor="w")
+        tk.Label(
+            idx_block,
+            text=(
+                "对应原版实时面板的 .index 文件（特征检索库，不是训练底模）。\n"
+                "绑定到当前音色；换音色会跟着切换。改后需重新「开启变声」。"
+            ),
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", pady=(0, 4))
+        idx_row = tk.Frame(idx_block, bg=TM_SURFACE)
+        idx_row.pack(fill="x")
+        self.cmb_index = ttk.Combobox(
+            idx_row,
+            textvariable=self.var_index_path,
+            values=[],
+            width=52,
+        )
+        self.cmb_index.pack(side="left", fill="x", expand=True)
+        self.cmb_index.bind("<<ComboboxSelected>>", lambda e: self._on_index_chosen())
+        tk.Button(
+            idx_row,
+            text="浏览…",
+            font=sans_font(8),
+            bg=TM_BG,
+            fg=TM_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self.browse_index_file,
+            bd=0,
+            padx=8,
+        ).pack(side="left", padx=(6, 0))
+        tk.Button(
+            idx_row,
+            text="清除",
+            font=sans_font(8),
+            bg=TM_BG,
+            fg=TM_INK_MUTED,
+            relief="flat",
+            cursor="hand2",
+            command=self.clear_index_file,
+            bd=0,
+            padx=8,
+        ).pack(side="left")
+        tk.Button(
+            idx_row,
+            text="扫描",
+            font=sans_font(8),
+            bg=TM_BG,
+            fg=TM_INK_MUTED,
+            relief="flat",
+            cursor="hand2",
+            command=self._refresh_index_combobox_values,
+            bd=0,
+            padx=8,
+        ).pack(side="left")
+        self.lbl_index_status = tk.Label(
+            idx_block,
+            text="",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_index_status.pack(anchor="w", pady=(2, 0))
+        self._refresh_index_ui_for_model()
+
         f0f = tk.Frame(right, bg=TM_SURFACE)
         f0f.pack(fill="x", pady=3)
         tk.Label(
@@ -1142,13 +1266,147 @@ class MainApp:
         ).pack(side="right")
         self.lbl_settings_hint = tk.Label(
             act,
-            text="无 .index 时 Index Rate 自动为 0",
+            text="无 .index 时 Index Rate 自动为 0；换 index 后请重新开启变声",
             font=sans_font(8),
             bg=TM_BG,
             fg=TM_META,
         )
         self.lbl_settings_hint.pack(side="left")
         return fr
+
+    def _update_index_hint(self) -> None:
+        if not hasattr(self, "lbl_index_status"):
+            return
+        path = ""
+        try:
+            path = str(self.var_index_path.get() or "").strip()
+        except Exception:
+            path = ""
+        if not path:
+            self.lbl_index_status.configure(
+                text="当前：未绑定 index（仅用 .pth，Index Rate=0）",
+                fg=TM_META,
+            )
+            return
+        if Path(path).is_file():
+            self.lbl_index_status.configure(
+                text=f"当前：{Path(path).name}",
+                fg=TM_OK,
+            )
+        else:
+            self.lbl_index_status.configure(
+                text="当前路径无效，请重新选择 .index",
+                fg=TM_META,
+            )
+
+    def _refresh_index_combobox_values(self) -> None:
+        if not hasattr(self, "cmb_index"):
+            return
+        roots = index_search_roots()
+        found = discover_index_files(roots)
+        # Always include current selection even if outside roots
+        cur = ""
+        try:
+            cur = str(self.var_index_path.get() or "").strip()
+        except Exception:
+            pass
+        if cur and cur not in found and Path(cur).is_file():
+            found = [cur] + found
+        self.cmb_index["values"] = found
+        self._update_index_hint()
+
+    def _on_index_chosen(self) -> None:
+        path = str(self.var_index_path.get() or "").strip()
+        if path and Path(path).is_file():
+            self._apply_index_to_current_model(path)
+        else:
+            self._update_index_hint()
+
+    def browse_index_file(self) -> None:
+        if not self.models:
+            messagebox.showwarning("没有模型", "请先在「模型」页选择或导入音色。")
+            return
+        initial = MODELS_DIR
+        m = self.models[self.model_idx]
+        if m.get("dir") and Path(m["dir"]).is_dir():
+            initial = Path(m["dir"])
+        path = filedialog.askopenfilename(
+            title="选择特征检索 .index 文件",
+            initialdir=str(initial),
+            filetypes=[
+                ("FAISS index", "*.index"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        self._apply_index_to_current_model(path)
+
+    def clear_index_file(self) -> None:
+        if not self.models:
+            return
+        m = self.models[self.model_idx]
+        model_dir = m.get("dir") or ""
+        try:
+            if model_dir and m.get("source") == "user_data":
+                clear_model_index(Path(model_dir))
+            m["index"] = ""
+            self.var_index_path.set("")
+            self.cfg["index_rate"] = 0.0
+            if hasattr(self, "var_index_rate"):
+                self.var_index_rate.set(0.0)
+            save_config(self.cfg)
+            self._sync_model_to_realtime_gui(m)
+            self._update_index_hint()
+            self.lbl_online.configure(
+                text="已清除 index（需重新开启变声才完全生效）",
+                fg=TM_META,
+            )
+        except Exception as e:
+            messagebox.showerror("清除失败", str(e))
+
+    def _apply_index_to_current_model(self, index_path: str) -> None:
+        if not self.models:
+            return
+        m = self.models[self.model_idx]
+        ip = Path(index_path)
+        if not ip.is_file():
+            messagebox.showerror("无效文件", f"找不到：\n{index_path}")
+            return
+        try:
+            model_dir = m.get("dir") or ""
+            if model_dir and m.get("source") == "user_data":
+                bound = bind_index_to_model_dir(
+                    Path(model_dir),
+                    ip,
+                    display_name=m.get("name"),
+                    copy_into_folder=True,
+                )
+            else:
+                # Legacy weights: keep absolute path without catalog sidecar
+                bound = str(ip.resolve())
+            m["index"] = bound
+            self.var_index_path.set(bound)
+            # Sensible default rate when binding an index
+            if float(self.cfg.get("index_rate") or 0) <= 0:
+                self.cfg["index_rate"] = 0.5
+                if hasattr(self, "var_index_rate"):
+                    self.var_index_rate.set(0.5)
+            save_config(self.cfg)
+            self._sync_model_to_realtime_gui(m)
+            self._refresh_index_combobox_values()
+            self._update_index_hint()
+            self.lbl_online.configure(
+                text=f"已绑定 index：{Path(bound).name}（请重新开启变声）",
+                fg=TM_OK,
+            )
+            if self.vc_running:
+                messagebox.showinfo(
+                    "需要重新开始",
+                    "特征检索库已更换。\n请先「停止变声」再「开启变声」后才会加载新的 .index。",
+                )
+        except Exception as e:
+            messagebox.showerror("绑定失败", str(e))
 
     def _collect_settings_into_cfg(self) -> None:
         """Pull UI vars into self.cfg (safe if settings page not built yet)."""

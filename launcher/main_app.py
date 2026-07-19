@@ -1176,6 +1176,26 @@ class MainApp:
             anchor="w",
         )
         self.lbl_accel_status.pack(fill="x", pady=(0, 4))
+        # Package identity (Nvidia / AMD DML / 50-series) — avoid mixing Runtimes
+        try:
+            from launcher.package_meta import load_package_meta
+
+            _pm = load_package_meta()
+            _plabel = str(_pm.get("label") or _pm.get("variant") or "NVIDIA CUDA")
+            _psum = str(_pm.get("summary") or "").strip()
+        except Exception:
+            _plabel, _psum = "未标记发行包", "开发树或旧包：请按显卡使用对应 Runtime"
+        self.lbl_pack_meta = tk.Label(
+            left,
+            text=f"发行包：{_plabel}",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_pack_meta.pack(fill="x", pady=(0, 2))
+        if _psum:
+            HoverTip(self.lbl_pack_meta, _psum + "\n请勿混用 N 卡 / A 卡 / 50 系 Runtime。")
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -1735,6 +1755,20 @@ class MainApp:
         if detail:
             line += f" · {detail}"
         line += f"  （偏好 {pref} → {backend}）"
+        # Soft mismatch: AMD pack but no DML / 50 pack but no CUDA
+        try:
+            from launcher.package_meta import load_package_meta
+
+            pm = load_package_meta()
+            var = str(pm.get("variant") or "")
+            if var == "amd" and not info.get("has_dml"):
+                line += "  · 本包为 DirectML，但 Runtime 未检出 DML"
+            if var in ("nvidia", "nvidia50") and pref in ("auto", "cuda") and not info.get(
+                "has_cuda"
+            ):
+                line += "  · 未检出 CUDA，确认使用了对应显卡发行包 Runtime"
+        except Exception:
+            pass
         try:
             if hasattr(self, "lbl_accel_status"):
                 self.lbl_accel_status.configure(text=line, fg=TM_INK_MUTED)
@@ -1757,14 +1791,16 @@ class MainApp:
             try:
                 info = detect_full(ROOT, self.cfg["accel_backend"])
                 self.root.after(0, lambda: self._apply_gpu_info(info))
+                tip = (
+                    f"已设为：{info.get('label')}（{info.get('backend')}）\n"
+                    "请停止变声后重新「开启变声」使新后端生效。\n"
+                    "若仍异常，完全退出软件再开。\n\n"
+                    "说明：A/I 卡请用 AMD 发行包（DirectML Runtime）；"
+                    "50 系请用 50 系包。不要混用 Runtime。"
+                )
                 self.root.after(
                     0,
-                    lambda: messagebox.showinfo(
-                        "加速后端",
-                        f"已设为：{info.get('label')}（{info.get('backend')}）\n"
-                        "请停止变声后重新「开启变声」使新后端生效。\n"
-                        "若仍异常，完全退出软件再开。",
-                    ),
+                    lambda: messagebox.showinfo("加速后端", tip),
                 )
             except Exception as e:
                 self.root.after(0, lambda: messagebox.showerror("检测失败", str(e)))

@@ -2747,17 +2747,54 @@ class MainApp:
             pass
 
     def _page_more(self) -> tk.Frame:
+        """More page: pack layout only (no place) so footer never overlaps buttons."""
         fr = tk.Frame(self.body, bg=TM_BG)
-        wrap = tk.Frame(fr, bg=TM_BG)
-        wrap.place(relx=0.5, rely=0.12, anchor="n")
+        fr.columnconfigure(0, weight=1)
+        fr.rowconfigure(0, weight=1)
+
+        # Scroll when window is short — fixed place() used to sit on top of buttons
+        canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
+        sb = tk.Scrollbar(fr, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        sb.grid(row=0, column=1, sticky="ns")
+
+        wrap = tk.Frame(canvas, bg=TM_BG)
+        win = canvas.create_window((0, 0), window=wrap, anchor="n")
+
+        def _sync(_e=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            try:
+                cw = max(int(canvas.winfo_width()), 200)
+                # Center content block
+                wrap.update_idletasks()
+                ww = max(wrap.winfo_reqwidth(), 320)
+                x = max((cw - ww) // 2, 12)
+                canvas.coords(win, x, 16)
+                canvas.itemconfigure(win, width=min(ww + 8, cw - 24))
+            except Exception:
+                pass
+
+        wrap.bind("<Configure>", _sync)
+        canvas.bind("<Configure>", _sync)
+
+        def _wheel(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        canvas.bind("<MouseWheel>", _wheel)
+        wrap.bind("<MouseWheel>", _wheel)
+
+        inner = tk.Frame(wrap, bg=TM_BG)
+        inner.pack(padx=24, pady=(8, 16))
+
         PageHeader(
-            wrap,
+            inner,
             eyebrow="MORE",
             title="其他",
             lead="高级入口与紧急操作。日常开黑一般只需要首页与设置。",
         ).pack(anchor="w", pady=(0, 16))
-        box = tk.Frame(wrap, bg=TM_BG)
-        box.pack(anchor="w")
+        box = tk.Frame(inner, bg=TM_BG)
+        box.pack(anchor="w", fill="x")
 
         def soft(text, cmd):
             GhostButton(box, text, command=cmd, padx=22, pady=12).pack(
@@ -2772,14 +2809,27 @@ class MainApp:
         soft("快捷键说明", self.show_hotkeys_help)
         soft("使用说明", lambda: self.show_page("help"))
         soft("在线更新与音色库", lambda: self.show_page("store"))
+
+        # Footer after buttons (pack) — never place() over the list
         tk.Label(
-            fr,
+            inner,
             text=tracked("TURING MIRROR  ·  RVC ENGINE", gap="  ")
             + f"  ·  v{APP_VERSION}",
             bg=TM_BG,
             fg=TM_META,
             font=mono_font(8),
-        ).place(relx=0.5, rely=0.94, anchor="center")
+        ).pack(anchor="center", pady=(20, 12))
+
+        def _wheel_tree(w):
+            w.bind("<MouseWheel>", _wheel)
+            for c in w.winfo_children():
+                _wheel_tree(c)
+
+        try:
+            _wheel_tree(wrap)
+        except Exception:
+            pass
+        fr.after(80, _sync)
         return fr
 
     def open_bootstrap(self) -> None:

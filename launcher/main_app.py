@@ -2662,9 +2662,9 @@ class MainApp:
     def _apply_perf_preset(self, key: str) -> None:
         """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""
         presets = {
-            # block_time, crossfade, extra_time
+            # block_time, crossfade, extra_time (aligned with realtime quality/latency tradeoff)
             "low_latency": (0.12, 0.04, 1.5),
-            "balanced": (0.25, 0.05, 2.5),
+            "balanced": (0.22, 0.05, 2.5),
             "stable": (0.40, 0.08, 3.5),
         }
         vals = presets.get(key) or presets["balanced"]

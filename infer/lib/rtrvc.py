@@ -391,27 +391,32 @@ class RVC:
                 npy = feats[0][skip_head // 2 :].cpu().numpy().astype("float32")
                 score, ix = self.index.search(npy, k=8)
                 if (ix >= 0).all():
-                    weight = np.square(1 / score)
-                    weight /= weight.sum(axis=1, keepdims=True)
+                    # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
+                    weight = np.square(1.0 / np.maximum(score, 1e-4))
+                    weight /= weight.sum(axis=1, keepdims=True) + 1e-8
                     npy = np.sum(
                         self.big_npy[ix] * np.expand_dims(weight, axis=2), axis=1
                     )
                     if self.config.is_half:
                         npy = npy.astype("float16")
+                    # slightly soft blend: keep a bit more of live features for naturalness
+                    rate = float(np.clip(self.index_rate, 0.0, 1.0))
                     feats[0][skip_head // 2 :] = (
-                        torch.from_numpy(npy).unsqueeze(0).to(self.device)
-                        * self.index_rate
-                        + (1 - self.index_rate) * feats[0][skip_head // 2 :]
+                        torch.from_numpy(npy).unsqueeze(0).to(self.device) * rate
+                        + (1.0 - rate) * feats[0][skip_head // 2 :]
                     )
                 else:
-                    printt(
-                        "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
-                    )
-            else:
-                printt("Index search FAILED or disabled")
-        except:
-            traceback.print_exc()
-            printt("Index search FAILED")
+                    if not getattr(self, "_warned_bad_index", False):
+                        printt(
+                            "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
+                        )
+                        self._warned_bad_index = True
+            # else: index disabled — no per-block log (was spam + cost)
+        except Exception:
+            if not getattr(self, "_warned_index_exc", False):
+                traceback.print_exc()
+                printt("Index search FAILED (will not re-spam)")
+                self._warned_index_exc = True
         t3 = ttime()
         p_len = input_wav.shape[0] // 160
         factor = pow(2, self.formant_shift / 12)
@@ -467,11 +472,16 @@ class RVC:
                 infered_audio[:, : return_length * upp_res]
             )
         t5 = ttime()
-        printt(
-            "Spent time: fea = %.3fs, index = %.3fs, f0 = %.3fs, model = %.3fs",
-            t2 - t1,
-            t3 - t2,
-            t4 - t3,
-            t5 - t4,
-        )
+        # Hot-path: only log timing occasionally (every ~2s of wall time)
+        now = t5
+        last = getattr(self, "_last_timing_log", 0.0)
+        if now - last > 2.0:
+            self._last_timing_log = now
+            printt(
+                "Spent time: fea = %.3fs, index = %.3fs, f0 = %.3fs, model = %.3fs",
+                t2 - t1,
+                t3 - t2,
+                t4 - t3,
+                t5 - t4,
+            )
         return infered_audio.squeeze()

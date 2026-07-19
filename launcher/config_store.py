@@ -19,10 +19,12 @@ DEFAULTS: dict[str, Any] = {
     "formant": 0.0,
     # 0 = no FAISS index required (most catalog models ship without .index)
     "index_rate": 0.0,
-    "rms_mix_rate": 0.0,
-    "threhold": -60,
+    # Follow speech envelope a little (0=model only, 1=input loudness only)
+    "rms_mix_rate": 0.25,
+    # > -60 enables input silence gate in gui_v1 (cuts room noise between words)
+    "threhold": -48,
     "f0method": "fcpe",
-    "block_time": 0.25,
+    "block_time": 0.22,
     "crossfade_length": 0.05,
     "extra_time": 2.5,
     "n_cpu": 4,

@@ -23,6 +23,17 @@ def printt(strr, *args):
         print(strr % args)
 
 
+def soft_clip_np(data: "np.ndarray", ceiling: float = 0.98) -> "np.ndarray":
+    """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
+    import numpy as np
+
+    x = np.asarray(data, dtype=np.float32)
+    # cubic soft knee for |x| < 1, then clip
+    y = x - (x * x * x) * 0.12
+    np.clip(y, -ceiling, ceiling, out=y)
+    return y
+
+
 def phase_vocoder(a, b, fade_out, fade_in):
     window = torch.sqrt(fade_out * fade_in)
     fa = torch.fft.rfft(a * window)
@@ -120,14 +131,15 @@ if __name__ == "__main__":
             self.pitch: int = 0
             self.formant=0.0
             self.sr_type: str = "sr_model"
-            self.block_time: float = 0.25  # s
-            self.threhold: int = -60
+            # Defaults tuned for realtime product feel (shell may override)
+            self.block_time: float = 0.22  # s — slightly snappier than 0.25
+            self.threhold: int = -48  # >-60 enables gate; cuts room noise when quiet
             self.crossfade_time: float = 0.05
             self.extra_time: float = 2.5
             self.I_noise_reduce: bool = False
             self.O_noise_reduce: bool = False
             self.use_pv: bool = False
-            self.rms_mix_rate: float = 0.0
+            self.rms_mix_rate: float = 0.25  # follow speech loudness a bit
             self.index_rate: float = 0.0
             self.n_cpu: int = min(n_cpu, 4)
             self.f0method: str = "fcpe"
@@ -291,16 +303,16 @@ if __name__ == "__main__":
                             self.output_devices_indices.index(sd.default.device[1])
                         ],
                         "sr_type": "sr_model",
-                        "threhold": -60,
+                        "threhold": -48,
                         "pitch": 0,
                         "formant": 0.0,
                         "index_rate": 0,
-                        "rms_mix_rate": 0,
-                        "block_time": 0.25,
+                        "rms_mix_rate": 0.25,
+                        "block_time": 0.22,
                         "crossfade_length": 0.05,
                         "extra_time": 2.5,
                         "n_cpu": 4,
-                        "f0method": "rmvpe",
+                        "f0method": "fcpe",
                         "use_jit": False,
                         "use_pv": False,
                     }
@@ -1456,8 +1468,8 @@ if __name__ == "__main__":
                         for c in range(data.shape[1])
                     ]
                     data = np.stack(cols, axis=1)
-                # Soft clip to avoid DAC harshness
-                np.clip(data, -1.0, 1.0, out=data)
+                # Soft clip to avoid DAC harshness (cubic + ceiling)
+                data = soft_clip_np(data)
                 q.append(data)
             except Exception as e:
                 self._monitor_err_count = int(
@@ -1608,15 +1620,28 @@ if __name__ == "__main__":
                 )
             # infer
             if self.function == "vc":
-                infer_wav = self.rvc.infer(
-                    self.input_wav_res,
-                    self.block_frame_16k,
-                    self.skip_head,
-                    self.return_length,
-                    self.gui_config.f0method,
-                )
-                if self.resampler2 is not None:
-                    infer_wav = self.resampler2(infer_wav)
+                # Skip full RVC when this block is gated silent — less GPU load / no "ghost" noise
+                peak = float(np.max(np.abs(indata))) if indata.size else 0.0
+                if peak < 1e-5:
+                    need = (
+                        int(self.block_frame)
+                        + int(self.sola_buffer_frame)
+                        + int(self.sola_search_frame)
+                        + 32
+                    )
+                    infer_wav = torch.zeros(
+                        need, device=self.config.device, dtype=torch.float32
+                    )
+                else:
+                    infer_wav = self.rvc.infer(
+                        self.input_wav_res,
+                        self.block_frame_16k,
+                        self.skip_head,
+                        self.return_length,
+                        self.gui_config.f0method,
+                    )
+                    if self.resampler2 is not None:
+                        infer_wav = self.resampler2(infer_wav)
             elif self.gui_config.I_noise_reduce:
                 infer_wav = self.input_wav_denoise[self.extra_frame :].clone()
             else:
@@ -1690,7 +1715,7 @@ if __name__ == "__main__":
                 sola_offset = sola_offset.item()
             else:
                 sola_offset = torch.argmax(cor_nom[0, 0] / cor_den[0, 0])
-            printt("sola_offset = %d", int(sola_offset))
+            # Hot-path: no per-block log (was printt every chunk → latency)
             infer_wav = infer_wav[sola_offset:]
             if "privateuseone" in str(self.config.device) or not self.gui_config.use_pv:
                 infer_wav[: self.sola_buffer_frame] *= self.fade_in_window
@@ -1714,6 +1739,7 @@ if __name__ == "__main__":
                 .cpu()
                 .numpy()
             )
+            outdata = soft_clip_np(outdata)
 
             # Self-monitor: same converted audio to headphones (main out stays CABLE)
             self._write_monitor(outdata)
@@ -1758,7 +1784,13 @@ if __name__ == "__main__":
                     self.window["infer_time"].update(self.last_infer_ms)
                 except Exception:
                     pass
-            printt("Infer time: %.2f", total_time)
+            # Soft-clip main output buffer write (below) via outdata path
+            # Rate-limit timing log
+            _lt = getattr(self, "_last_infer_log_t", 0.0)
+            if total_time > 0.05 or (time.perf_counter() - _lt) > 2.0:
+                self._last_infer_log_t = time.perf_counter()
+                if total_time > 0.05:
+                    printt("Infer time: %.2f", total_time)
 
         def update_devices(self, hostapi_name=None):
             """获取设备列表 — must fully stop stream before re-init sounddevice."""

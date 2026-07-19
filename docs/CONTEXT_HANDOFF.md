@@ -82,6 +82,7 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 | `launcher/package_meta.py` | 发行包变体标记（nvidia/amd/50） |
 | `launcher/catalog.py` | `User_Data/models` 扫描、index 绑定 |
 | `launcher/config_store.py` | app 配置 + 同步 inuse |
+| `launcher/hotkeys.py` | 快捷键定义 / 解析 / Windows 全局热键 |
 | `tools/realtime_worker.py` | 无窗入口（runpy gui_v1） |
 | `gui_v1.py` | 实时引擎；worker 模式无 FreeSimpleGUI 窗 |
 | `infer/lib/rtrvc.py` | 实时推理；无 index 不崩 |
@@ -116,6 +117,13 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 - **Index**：设置页可浏览/扫描/清除 `.index`，写入音色目录 `config.json`（特征检索库，不是训练底模）。  
 - **模式**：「输出变声」= 正常变声；「输入监听」= 原麦旁路测接线；`?` 悬停说明。  
 - **边变声边听自己**：主输出仍给 CABLE；可选**监听设备=耳机**，第二路 `OutputStream` 放变声结果。
+
+### 3.3b 快捷键（2026-07-20）
+
+- **模块**：`launcher/hotkeys.py`；配置键 `hotkeys` / `global_hotkeys` / `hotkey_restart_on_model_switch`  
+- **默认**：←/→ 切换音色，F5 启停，Ctrl+↑↓ 音高，Ctrl+Alt+1–9 直选，F1 说明  
+- **设置页「快捷键」**：录制改键、清空、恢复默认；可选 **全局快捷键**（游戏中可用，纯方向键不会注册为全局）  
+- **变声中切音色**：默认自动重启引擎加载新模型（可关）
 
 ### 3.4 延迟显示 `114514542ms`
 

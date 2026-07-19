@@ -29,7 +29,6 @@ from launcher.catalog import (
 )
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
 from launcher.hotkeys import (
-    ACTIONS,
     ACTION_BY_ID,
     DEFAULT_HOTKEYS,
     GlobalHotkeyManager,
@@ -413,7 +412,7 @@ class MainApp:
         self.home_current_lbl.grid(row=2, column=0, sticky="w", pady=(4, 2))
         self.home_hint_lbl = tk.Label(
             stage_inner,
-            text="左右切换会立即设为当前音色 · 底部栏同步",
+            text="← → 切换音色 · F5 启停变声 · F1 快捷键",
             font=sans_font(10),
             bg=TM_STAGE,
             fg=TM_INK_MUTED,
@@ -542,7 +541,7 @@ class MainApp:
         n = len(self.models)
         self.home_current_lbl.configure(text=m["name"])
         self.home_hint_lbl.configure(
-            text=f"{m.get('tag') or '音色'}  ·  左右切换立即生效并保存"
+            text=f"{m.get('tag') or '音色'}  ·  切换立即生效 · 运行中会自动重载"
         )
         if hasattr(self, "home_index_lbl"):
             self.home_index_lbl.configure(
@@ -832,7 +831,7 @@ class MainApp:
         self._sync_bottom()
 
     def _use_model_from_grid(self, ix: int) -> None:
-        self._select_model(ix, feedback=True)
+        self._select_model(ix, feedback=True, maybe_restart=True)
         # Light toast via status label; avoid modal spam
         if hasattr(self, "models_status_lbl") and self.models:
             self.models_status_lbl.configure(
@@ -970,6 +969,7 @@ class MainApp:
                 "变声参数（运行中可热更新）": "VOICE",
                 "性能设置（改后需重新「开启变声」）": "PERFORMANCE",
                 "声音效果（变声后 · 可选）": "FX CHAIN",
+                "快捷键": "HOTKEYS",
             }
             eyebrow = brows.get(title, "SECTION")
             outer = SectionCard(
@@ -1594,6 +1594,9 @@ class MainApp:
 
         scale_row(fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True)
 
+        # --- Keyboard shortcuts ---
+        self._build_hotkeys_settings_section(wrap, card)
+
         act = tk.Frame(wrap, bg=TM_BG)
         act.pack(fill="x", padx=28, pady=10)
         tk.Button(
@@ -1611,7 +1614,7 @@ class MainApp:
         ).pack(side="right")
         self.lbl_settings_hint = tk.Label(
             act,
-            text="无 .index 时 Index Rate 自动为 0；换 index 后请重新开启变声",
+            text="无 .index 时 Index Rate 自动为 0；换 index 后请重新开启变声 · F1 查看快捷键",
             font=sans_font(8),
             bg=TM_BG,
             fg=TM_META,
@@ -1806,6 +1809,13 @@ class MainApp:
                     float(self.var_fx_eq_gains[i].get()) for i in range(5)
                 ]
                 self.cfg["fx_out_gain_db"] = float(self.var_fx_out_gain.get())
+            # Hotkey toggles (binding map applied via「应用快捷键」)
+            if hasattr(self, "var_global_hk"):
+                self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
+            if hasattr(self, "var_restart_on_switch"):
+                self.cfg["hotkey_restart_on_model_switch"] = bool(
+                    self.var_restart_on_switch.get()
+                )
         except Exception:
             pass
 
@@ -2145,6 +2155,7 @@ class MainApp:
         soft("打开 User_Data", lambda: open_path(USER_DATA))
         soft("打开安装目录", lambda: open_path(ROOT))
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
+        soft("快捷键说明", self.show_hotkeys_help)
         soft("使用说明", self.open_help)
         soft("在线更新与音色库", lambda: self.show_page("store"))
         tk.Label(
@@ -2222,6 +2233,13 @@ class MainApp:
         text.pack(side="left", fill="both", expand=True)
 
         body = (
+            "【快捷键（可自定义）】\n"
+            "· 左 / 右方向键：上一个 / 下一个音色（变声中会自动重启加载）\n"
+            "· F5：开启 / 停止变声\n"
+            "· Ctrl+↑ / Ctrl+↓：音高 ±1\n"
+            "· Ctrl+Alt+1～9：直接选第 1～9 个音色\n"
+            "· F1：快捷键说明 · 在「设置 → 快捷键」可改键并开启全局（游戏中可用）\n"
+            "\n"
             "【快速上手：实时变声】\n"
             "1. 首次：用「首次设置启动器」安装虚拟声卡（VB-Cable），并发送桌面快捷方式。\n"
             "2. 在「模型」页导入或选择音色（.pth，约 50–60MB 的推理小模型）。\n"
@@ -2475,6 +2493,593 @@ class MainApp:
         except Exception as e:
             messagebox.showerror("失败", str(e))
 
+    # ------------------------------------------------------------------
+    # Hotkeys
+    # ------------------------------------------------------------------
+
+    def _setup_hotkeys(self) -> None:
+        """(Re)bind in-app Tk shortcuts and optional Windows global hotkeys."""
+        self._hotkey_map = merge_hotkeys(self.cfg.get("hotkeys"))
+        # Clear previous binds
+        for seq in self._tk_hotkey_binds:
+            try:
+                self.root.unbind(seq)
+            except Exception:
+                pass
+        self._tk_hotkey_binds.clear()
+
+        for action_id, spec in self._hotkey_map.items():
+            if not spec:
+                continue
+            seq = to_tk_sequence(spec)
+            if not seq:
+                continue
+
+            def _handler(_event=None, aid=action_id):
+                return self._on_hotkey_event(aid, _event)
+
+            try:
+                self.root.bind(seq, _handler)
+                self._tk_hotkey_binds.append(seq)
+            except Exception:
+                pass
+
+        self._refresh_global_hotkeys()
+
+    def _refresh_global_hotkeys(self) -> None:
+        """Register or tear down Windows global hotkeys based on config."""
+        try:
+            self._global_hk.unregister_all()
+        except Exception:
+            pass
+        if not bool(self.cfg.get("global_hotkeys")):
+            return
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = self.root.winfo_id()
+            fails = self._global_hk.register(hwnd, self._hotkey_map)
+            if fails and hasattr(self, "lbl_online"):
+                # Soft notice — don't block UI
+                self.lbl_online.configure(
+                    text=f"部分全局快捷键未注册（{len(fails)}）",
+                    fg=TM_WARN,
+                )
+        except Exception:
+            pass
+
+    def _poll_global_hotkeys(self) -> None:
+        try:
+            aid = self._global_hk.poll_once()
+            if aid:
+                self._dispatch_hotkey(aid, from_global=True)
+        except Exception:
+            pass
+        try:
+            self.root.after(80, self._poll_global_hotkeys)
+        except Exception:
+            pass
+
+    def _on_hotkey_event(self, action_id: str, event=None) -> Optional[str]:
+        # Skip when typing in Entry / Combobox
+        try:
+            focus = self.root.focus_get()
+            if focus_should_skip_hotkey(focus):
+                return None
+        except Exception:
+            pass
+        self._dispatch_hotkey(action_id, from_global=False)
+        return "break"
+
+    def _dispatch_hotkey(self, action_id: str, from_global: bool = False) -> None:
+        if action_id == "prev_model":
+            self._shift_model(-1)
+        elif action_id == "next_model":
+            self._shift_model(1)
+        elif action_id == "toggle_vc":
+            self.toggle_vc()
+        elif action_id == "pitch_up":
+            self._nudge_pitch(1)
+        elif action_id == "pitch_down":
+            self._nudge_pitch(-1)
+        elif action_id == "toggle_monitor":
+            self._toggle_monitor()
+        elif action_id == "page_home":
+            self.show_page("home")
+        elif action_id == "page_models":
+            self.show_page("models")
+        elif action_id == "page_settings":
+            self.show_page("settings")
+        elif action_id == "page_more":
+            self.show_page("more")
+        elif action_id == "show_hotkeys":
+            self.show_hotkeys_help()
+        elif action_id.startswith("select_model_"):
+            try:
+                n = int(action_id.rsplit("_", 1)[-1])
+                self._select_model_by_slot(n)
+            except Exception:
+                pass
+
+    def _select_model_by_slot(self, one_based: int) -> None:
+        """Quick-pick model 1..9 (1-based index into catalog order)."""
+        if not self.models or one_based < 1:
+            return
+        ix = one_based - 1
+        if ix >= len(self.models):
+            self._show_switch_toast(f"没有第 {one_based} 个音色")
+            return
+        self._select_model(ix, feedback=True, maybe_restart=True)
+
+    def _nudge_pitch(self, delta: int) -> None:
+        try:
+            if hasattr(self, "var_pitch"):
+                cur = int(self.var_pitch.get())
+            else:
+                cur = int(self.cfg.get("pitch") or 0)
+        except Exception:
+            cur = int(self.cfg.get("pitch") or 0)
+        new_v = max(-24, min(24, cur + int(delta)))
+        self.cfg["pitch"] = new_v
+        try:
+            if hasattr(self, "var_pitch"):
+                self.var_pitch.set(new_v)
+        except Exception:
+            pass
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        if self.vc_running:
+            self._on_hot_param()
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            f"音高 {new_v:+d}" if new_v else "音高 0",
+            "已热更新" if self.vc_running else "下次开启变声生效",
+        )
+
+    def _toggle_monitor(self) -> None:
+        try:
+            if hasattr(self, "var_monitor_on"):
+                cur = bool(self.var_monitor_on.get())
+            else:
+                cur = bool(self.cfg.get("monitor_enabled"))
+        except Exception:
+            cur = bool(self.cfg.get("monitor_enabled"))
+        new_v = not cur
+        self.cfg["monitor_enabled"] = new_v
+        try:
+            if hasattr(self, "var_monitor_on"):
+                self.var_monitor_on.set(new_v)
+        except Exception:
+            pass
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        if self.vc_running:
+            self._on_hot_param()
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            "监听自己：开" if new_v else "监听自己：关",
+            "运行中可热切换" if self.vc_running else "下次开启变声生效",
+        )
+
+    def _restart_vc_for_new_model(self) -> None:
+        """Debounced stop+start so rapid Left/Right only restarts once."""
+        if self._model_restart_job is not None:
+            try:
+                self.root.after_cancel(self._model_restart_job)
+            except Exception:
+                pass
+        name = ""
+        if self.models:
+            name = self.models[self.model_idx].get("name") or ""
+        self._set_status_visual(
+            "busy",
+            f"切换音色 · {name}",
+            "将自动重启变声引擎…",
+        )
+        self._model_restart_job = self.root.after(450, self._do_model_restart)
+
+    def _do_model_restart(self) -> None:
+        self._model_restart_job = None
+        if not self.models:
+            return
+
+        def work():
+            try:
+                rt_client.stop_vc_remote(force=False, timeout_s=8.0)
+            except Exception:
+                try:
+                    rt_client.stop_vc_remote(force=True, timeout_s=6.0)
+                except Exception:
+                    pass
+            self.root.after(0, self._start_vc)
+
+        self.vc_running = False
+        self._vc_starting = True
+        try:
+            self.btn_start.configure(text="切换中…", bg=TM_OK)
+        except Exception:
+            pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _build_hotkeys_settings_section(self, wrap, card_fn) -> None:
+        """Settings card: enable global, list bindings, capture/reset."""
+        sec = card_fn(wrap, "快捷键")
+        intro = tk.Label(
+            sec,
+            text=(
+                "窗口内快捷键默认可用；开启「全局快捷键」后，游戏全屏时也可切换音色 / 启停变声。"
+                "点「录制」后按下组合键即可自定义。F1 打开完整说明。"
+            ),
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            justify="left",
+            anchor="w",
+            wraplength=640,
+        )
+        intro.pack(fill="x", pady=(0, 8))
+        self._settings_wrap_labels.append(intro)
+
+        self.var_global_hk = tk.BooleanVar(value=bool(self.cfg.get("global_hotkeys")))
+        self.var_restart_on_switch = tk.BooleanVar(
+            value=bool(self.cfg.get("hotkey_restart_on_model_switch", True))
+        )
+        tk.Checkbutton(
+            sec,
+            text="启用全局快捷键（Windows · 游戏中可用）",
+            variable=self.var_global_hk,
+            bg=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_global_hk_toggle,
+        ).pack(anchor="w")
+        tk.Checkbutton(
+            sec,
+            text="切换音色时若正在变声则自动重启引擎",
+            variable=self.var_restart_on_switch,
+            bg=TM_SURFACE,
+            font=sans_font(9),
+            command=self._on_restart_switch_toggle,
+        ).pack(anchor="w", pady=(2, 8))
+
+        self._hotkey_row_vars: dict[str, tk.StringVar] = {}
+        # Compact list — primary actions first
+        primary = [
+            "prev_model",
+            "next_model",
+            "toggle_vc",
+            "pitch_up",
+            "pitch_down",
+            "toggle_monitor",
+            "select_model_1",
+            "select_model_2",
+            "select_model_3",
+            "page_home",
+            "page_models",
+            "page_settings",
+            "show_hotkeys",
+        ]
+        for aid in primary:
+            act = ACTION_BY_ID.get(aid)
+            if not act:
+                continue
+            row = tk.Frame(sec, bg=TM_SURFACE)
+            row.pack(fill="x", pady=2)
+            tk.Label(
+                row,
+                text=act.label,
+                font=sans_font(9),
+                bg=TM_SURFACE,
+                fg=TM_INK,
+                width=18,
+                anchor="w",
+            ).pack(side="left")
+            var = tk.StringVar(value=self._hotkey_map.get(aid) or "")
+            self._hotkey_row_vars[aid] = var
+            ent = tk.Entry(
+                row,
+                textvariable=var,
+                font=mono_font(9),
+                width=16,
+                relief="flat",
+                bg=TM_INSET,
+                fg=TM_INK,
+            )
+            ent.pack(side="left", padx=(4, 6))
+            tk.Button(
+                row,
+                text="录制",
+                font=sans_font(8),
+                bg=TM_INSET,
+                fg=TM_INK,
+                relief="flat",
+                cursor="hand2",
+                command=lambda a=aid: self._begin_capture_hotkey(a),
+                bd=0,
+                padx=8,
+                pady=2,
+            ).pack(side="left", padx=2)
+            tk.Button(
+                row,
+                text="清空",
+                font=sans_font(8),
+                bg=TM_INSET,
+                fg=TM_INK_MUTED,
+                relief="flat",
+                cursor="hand2",
+                command=lambda a=aid, v=var: self._clear_hotkey_row(a, v),
+                bd=0,
+                padx=6,
+                pady=2,
+            ).pack(side="left", padx=2)
+
+        btnrow = tk.Frame(sec, bg=TM_SURFACE)
+        btnrow.pack(fill="x", pady=(10, 0))
+        tk.Button(
+            btnrow,
+            text="应用快捷键",
+            font=sans_font(9),
+            bg=TM_ACCENT,
+            fg=TM_ACCENT_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self._apply_hotkeys_from_ui,
+            bd=0,
+            padx=12,
+            pady=5,
+        ).pack(side="left")
+        tk.Button(
+            btnrow,
+            text="恢复默认",
+            font=sans_font(9),
+            bg=TM_INSET,
+            fg=TM_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self._reset_hotkeys_defaults,
+            bd=0,
+            padx=12,
+            pady=5,
+        ).pack(side="left", padx=8)
+        tk.Button(
+            btnrow,
+            text="查看全部",
+            font=sans_font(9),
+            bg=TM_INSET,
+            fg=TM_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self.show_hotkeys_help,
+            bd=0,
+            padx=12,
+            pady=5,
+        ).pack(side="left")
+        self.lbl_hk_status = tk.Label(
+            sec,
+            text="",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_hk_status.pack(fill="x", pady=(6, 0))
+
+    def _on_global_hk_toggle(self) -> None:
+        self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        self._refresh_global_hotkeys()
+        if hasattr(self, "lbl_hk_status"):
+            on = bool(self.cfg.get("global_hotkeys"))
+            self.lbl_hk_status.configure(
+                text="全局快捷键已开启" if on else "全局快捷键已关闭",
+                fg=TM_OK if on else TM_META,
+            )
+
+    def _on_restart_switch_toggle(self) -> None:
+        self.cfg["hotkey_restart_on_model_switch"] = bool(
+            self.var_restart_on_switch.get()
+        )
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+
+    def _clear_hotkey_row(self, action_id: str, var: tk.StringVar) -> None:
+        var.set("")
+
+    def _begin_capture_hotkey(self, action_id: str) -> None:
+        self._capture_action_id = action_id
+        act = ACTION_BY_ID.get(action_id)
+        label = act.label if act else action_id
+        if hasattr(self, "lbl_hk_status"):
+            self.lbl_hk_status.configure(
+                text=f"请按下要绑定到「{label}」的键…（Esc 取消）",
+                fg=TM_WARN,
+            )
+        # Bind once on root
+        self.root.bind("<KeyPress>", self._on_capture_key, add="+")
+
+    def _on_capture_key(self, event) -> Optional[str]:
+        if not self._capture_action_id:
+            return None
+        try:
+            ks = str(getattr(event, "keysym", "") or "")
+            if ks.lower() in ("escape", "esc"):
+                self._end_capture(None)
+                return "break"
+            # Ignore bare modifiers
+            if ks.lower() in (
+                "shift_l",
+                "shift_r",
+                "control_l",
+                "control_r",
+                "alt_l",
+                "alt_r",
+                "meta_l",
+                "meta_r",
+                "win_l",
+                "win_r",
+            ):
+                return "break"
+            spec = event_to_hotkey_spec(event)
+            if not spec:
+                return "break"
+            self._end_capture(spec)
+            return "break"
+        except Exception:
+            self._end_capture(None)
+            return "break"
+
+    def _end_capture(self, spec: Optional[str]) -> None:
+        aid = self._capture_action_id
+        self._capture_action_id = None
+        try:
+            self.root.unbind("<KeyPress>")
+        except Exception:
+            pass
+        # Re-apply normal hotkeys after unbinding capture
+        self._setup_hotkeys()
+        if not aid:
+            return
+        if spec is None:
+            if hasattr(self, "lbl_hk_status"):
+                self.lbl_hk_status.configure(text="已取消录制", fg=TM_META)
+            return
+        if aid in getattr(self, "_hotkey_row_vars", {}):
+            self._hotkey_row_vars[aid].set(spec)
+        if hasattr(self, "lbl_hk_status"):
+            self.lbl_hk_status.configure(
+                text=f"已录制 {spec}（请点「应用快捷键」生效）",
+                fg=TM_OK,
+            )
+
+    def _apply_hotkeys_from_ui(self) -> None:
+        custom: dict[str, str] = {}
+        # Start from full map so unlisted select_model_4..9 stay
+        custom.update(self._hotkey_map)
+        for aid, var in getattr(self, "_hotkey_row_vars", {}).items():
+            raw = str(var.get() or "").strip()
+            if not raw:
+                custom[aid] = ""
+            else:
+                custom[aid] = normalize_hotkey(raw)
+        # Preserve select_model_4..9 from defaults if not in UI
+        for i in range(4, 10):
+            k = f"select_model_{i}"
+            if k not in getattr(self, "_hotkey_row_vars", {}):
+                custom.setdefault(k, DEFAULT_HOTKEYS.get(k, ""))
+
+        dups = find_duplicate_bindings(custom)
+        if dups:
+            lines = []
+            for key, ids in dups:
+                labels = [
+                    ACTION_BY_ID[i].label if i in ACTION_BY_ID else i for i in ids
+                ]
+                lines.append(f"{key} → {', '.join(labels)}")
+            messagebox.showwarning(
+                "快捷键冲突",
+                "以下按键绑定到了多个功能，请修改后再应用：\n\n" + "\n".join(lines),
+            )
+            return
+
+        self.cfg["hotkeys"] = {
+            k: v for k, v in custom.items() if v != DEFAULT_HOTKEYS.get(k)
+        }
+        # Also store explicit empty overrides for cleared defaults
+        for k, v in custom.items():
+            if not v and DEFAULT_HOTKEYS.get(k):
+                self.cfg["hotkeys"][k] = ""
+        if hasattr(self, "var_global_hk"):
+            self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
+        if hasattr(self, "var_restart_on_switch"):
+            self.cfg["hotkey_restart_on_model_switch"] = bool(
+                self.var_restart_on_switch.get()
+            )
+        try:
+            save_config(self.cfg)
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            return
+        self._hotkey_map = merge_hotkeys(self.cfg.get("hotkeys"))
+        # Refresh row display
+        for aid, var in getattr(self, "_hotkey_row_vars", {}).items():
+            var.set(self._hotkey_map.get(aid) or "")
+        self._setup_hotkeys()
+        if hasattr(self, "lbl_hk_status"):
+            self.lbl_hk_status.configure(text="快捷键已应用", fg=TM_OK)
+        messagebox.showinfo("已应用", "快捷键已更新。")
+
+    def _reset_hotkeys_defaults(self) -> None:
+        if not messagebox.askyesno("恢复默认", "将快捷键恢复为默认绑定？"):
+            return
+        self.cfg["hotkeys"] = {}
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        self._hotkey_map = merge_hotkeys({})
+        for aid, var in getattr(self, "_hotkey_row_vars", {}).items():
+            var.set(self._hotkey_map.get(aid) or "")
+        self._setup_hotkeys()
+        if hasattr(self, "lbl_hk_status"):
+            self.lbl_hk_status.configure(text="已恢复默认快捷键", fg=TM_OK)
+
+    def show_hotkeys_help(self) -> None:
+        """Popup listing current shortcut map."""
+        win = tk.Toplevel(self.root)
+        win.title("快捷键说明")
+        win.configure(bg=TM_BG)
+        win.geometry("480x520")
+        win.minsize(400, 360)
+        win.transient(self.root)
+        try:
+            win.grab_set()
+        except Exception:
+            pass
+        tk.Label(
+            win,
+            text="快捷键",
+            font=serif_font(16, "bold"),
+            bg=TM_BG,
+            fg=TM_INK,
+        ).pack(anchor="w", padx=20, pady=(18, 6))
+        frame = tk.Frame(
+            win, bg=TM_SURFACE, highlightthickness=1, highlightbackground=TM_HAIRLINE
+        )
+        frame.pack(fill="both", expand=True, padx=20, pady=8)
+        text = tk.Text(
+            frame,
+            wrap="word",
+            font=sans_font(10),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            relief="flat",
+            padx=14,
+            pady=12,
+            cursor="arrow",
+        )
+        scroll = ttk.Scrollbar(frame, command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+        body = format_help_text(self.cfg.get("hotkeys"))
+        if bool(self.cfg.get("global_hotkeys")):
+            body += "\n\n当前：全局快捷键已开启。"
+        else:
+            body += "\n\n当前：仅窗口内生效（可在设置中开启全局）。"
+        text.insert("1.0", body)
+        text.configure(state="disabled")
+        GhostButton(win, "关闭", command=win.destroy, padx=18, pady=8).pack(
+            pady=(4, 14)
+        )
+
     def toggle_vc(self) -> None:
         if not self.models:
             messagebox.showwarning("没有模型", "请先导入音色。")
@@ -2618,6 +3223,10 @@ class MainApp:
         self.root.mainloop()
 
     def _on_close(self) -> None:
+        try:
+            self._global_hk.unregister_all()
+        except Exception:
+            pass
         try:
             self.save_settings_silent()
             save_config(self.cfg)

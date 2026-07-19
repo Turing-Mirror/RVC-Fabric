@@ -46,6 +46,9 @@ ACTIONS: list[HotkeyAction] = [
     HotkeyAction("page_settings", "打开设置页", "nav", False),
     HotkeyAction("page_more", "打开其他页", "nav", False),
     HotkeyAction("show_hotkeys", "显示快捷键说明", "misc", False),
+    HotkeyAction("undo_voice", "撤销音色参数", "voice", False),
+    HotkeyAction("redo_voice", "重做音色参数", "voice", False),
+    HotkeyAction("reset_voice", "音色参数恢复默认", "voice", False),
 ]
 
 ACTION_BY_ID: dict[str, HotkeyAction] = {a.id: a for a in ACTIONS}
@@ -64,6 +67,9 @@ DEFAULT_HOTKEYS: dict[str, str] = {
     "page_settings": "Ctrl+3",
     "page_more": "Ctrl+4",
     "show_hotkeys": "F1",
+    "undo_voice": "Ctrl+Z",
+    "redo_voice": "Ctrl+Y",
+    "reset_voice": "Ctrl+0",
     "select_model_1": "Ctrl+Alt+1",
     "select_model_2": "Ctrl+Alt+2",
     "select_model_3": "Ctrl+Alt+3",

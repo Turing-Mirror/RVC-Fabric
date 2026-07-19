@@ -155,6 +155,10 @@ class MainApp:
         self._capture_action_id: Optional[str] = None
         self._loading_voice = False  # skip persist while applying per-model params
         self._voice_save_job = None
+        self._voice_undo: list[dict] = []
+        self._voice_redo: list[dict] = []
+        self._voice_hist_limit = 40
+        self._dock_hint_job = None
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
@@ -354,11 +358,12 @@ class MainApp:
         self.bottom_tag.pack(anchor="w", pady=(4, 0))
         self.bottom_voice_hint = tk.Label(
             left_info,
-            text="",
+            text="参数随音色单独保存",
             font=mono_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
+            width=34,  # fixed cols — value changes must not reflow dock
         )
         self.bottom_voice_hint.pack(anchor="w", pady=(2, 0))
 
@@ -447,10 +452,11 @@ class MainApp:
             24,
             resolution=1,
             command=self._on_dock_param,
+            on_press=self._voice_hist_push,
             width=188,
             fmt="int",
         )
-        self._dock_pitch.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        self._dock_pitch.pack(side="left", fill="y", padx=(0, 8))
         self._dock_formant = ParamTile(
             tiles,
             "共鸣 Formant",
@@ -459,10 +465,11 @@ class MainApp:
             2,
             resolution=0.05,
             command=self._on_dock_param,
+            on_press=self._voice_hist_push,
             width=188,
             fmt="signed",
         )
-        self._dock_formant.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        self._dock_formant.pack(side="left", fill="y", padx=(0, 8))
         self._dock_thr = ParamTile(
             tiles,
             "阈值",
@@ -471,10 +478,40 @@ class MainApp:
             0,
             resolution=1,
             command=self._on_dock_param,
+            on_press=self._voice_hist_push,
             width=168,
             fmt="int",
         )
-        self._dock_thr.pack(side="left", fill="both", expand=True)
+        self._dock_thr.pack(side="left", fill="y", padx=(0, 8))
+
+        # Undo / reset for voice params (dock)
+        hist = tk.Frame(
+            tiles,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        hist.pack(side="left", fill="y")
+        hist_in = tk.Frame(hist, bg=TM_SURFACE, padx=10, pady=10)
+        hist_in.pack(fill="both", expand=True)
+        tk.Label(
+            hist_in,
+            text=tracked("EDIT", gap="  "),
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        ).pack(anchor="w")
+        GhostButton(
+            hist_in, "撤销", command=self.undo_voice_params, padx=10, pady=4
+        ).pack(fill="x", pady=(8, 4))
+        GhostButton(
+            hist_in, "重做", command=self.redo_voice_params, padx=10, pady=4
+        ).pack(fill="x", pady=2)
+        GhostButton(
+            hist_in, "默认", command=self.reset_voice_params_default, padx=10, pady=4
+        ).pack(fill="x", pady=(4, 0))
+        HoverTip(hist_in, "Ctrl+Z 撤销 · Ctrl+Y 重做 · Ctrl+0 恢复默认音高/共鸣/阈值")
 
         self._update_mode_buttons()
         self._sync_bottom()
@@ -772,6 +809,8 @@ class MainApp:
         self.cfg["last_model_path"] = m.get("path") or ""
         # Load this voice's pitch/formant/… then sync engine config
         self._apply_model_voice_params(m, push_remote=False)
+        self._voice_undo.clear()
+        self._voice_redo.clear()
         save_config(self.cfg)
         self._sync_model_to_realtime_gui(m)
         self._sync_bottom()
@@ -1082,8 +1121,122 @@ class MainApp:
                 pass
         self._voice_save_job = self.root.after(280, _write)
 
+    def _voice_snapshot(self) -> dict:
+        return self._collect_voice_params_dict()
+
+    def _voice_hist_push(self) -> None:
+        """Push current voice params before a user edit (slider press / reset)."""
+        if self._loading_voice:
+            return
+        snap = self._voice_snapshot()
+        if self._voice_undo and self._voice_undo[-1] == snap:
+            return
+        self._voice_undo.append(snap)
+        if len(self._voice_undo) > self._voice_hist_limit:
+            self._voice_undo.pop(0)
+        self._voice_redo.clear()
+
+    def _apply_voice_snapshot(self, snap: dict, *, push_remote: bool = True) -> None:
+        if not snap:
+            return
+        self._loading_voice = True
+        try:
+            if "pitch" in snap:
+                self.var_pitch.set(int(snap["pitch"]))
+                self.cfg["pitch"] = int(snap["pitch"])
+            if "formant" in snap:
+                self.var_formant.set(float(snap["formant"]))
+                self.cfg["formant"] = float(snap["formant"])
+            if "threhold" in snap:
+                self.var_threhold.set(int(snap["threhold"]))
+                self.cfg["threhold"] = int(snap["threhold"])
+            if "index_rate" in snap and hasattr(self, "var_index_rate"):
+                self.var_index_rate.set(float(snap["index_rate"]))
+                self.cfg["index_rate"] = float(snap["index_rate"])
+            if "rms_mix_rate" in snap and hasattr(self, "var_rms"):
+                self.var_rms.set(float(snap["rms_mix_rate"]))
+                self.cfg["rms_mix_rate"] = float(snap["rms_mix_rate"])
+            if "f0method" in snap and hasattr(self, "var_f0"):
+                self.var_f0.set(str(snap["f0method"]))
+                self.cfg["f0method"] = str(snap["f0method"])
+        finally:
+            self._loading_voice = False
+        self._persist_voice_params_to_model(immediate=True)
+        self._refresh_dock_hint_only()
+        if push_remote:
+            self._on_hot_param()
+
+    def undo_voice_params(self) -> None:
+        if not self._voice_undo:
+            self._set_status_visual(
+                "live" if self.vc_running else "idle",
+                "无可撤销",
+                "先调整音高/共鸣/阈值",
+            )
+            return
+        cur = self._voice_snapshot()
+        prev = self._voice_undo.pop()
+        self._voice_redo.append(cur)
+        self._apply_voice_snapshot(prev)
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            "已撤销",
+            f"剩余 {len(self._voice_undo)} 步",
+        )
+
+    def redo_voice_params(self) -> None:
+        if not self._voice_redo:
+            self._set_status_visual(
+                "live" if self.vc_running else "idle",
+                "无可重做",
+                "",
+            )
+            return
+        cur = self._voice_snapshot()
+        nxt = self._voice_redo.pop()
+        self._voice_undo.append(cur)
+        self._apply_voice_snapshot(nxt)
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            "已重做",
+            f"还可重做 {len(self._voice_redo)} 步",
+        )
+
+    def reset_voice_params_default(self) -> None:
+        """Restore pitch/formant/threshold defaults for current session + model."""
+        self._voice_hist_push()
+        defaults = {
+            "pitch": 0,
+            "formant": 0.0,
+            "threhold": -60,
+            # keep index/f0/rms as-is (model/index dependent)
+        }
+        # merge with current so index_rate etc stay
+        snap = self._voice_snapshot()
+        snap.update(defaults)
+        self._apply_voice_snapshot(snap)
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            "已恢复默认",
+            "音高 0 · 共鸣 0 · 阈值 -60",
+        )
+
+    def _refresh_dock_hint_only(self) -> None:
+        """Update dock hint text without full bottom rebuild (no layout thrash)."""
+        if not hasattr(self, "bottom_voice_hint"):
+            return
+        try:
+            p = int(self.var_pitch.get())
+            f = float(self.var_formant.get())
+            mode = "变声" if str(self.var_function.get()) == "vc" else "原声"
+            self.bottom_voice_hint.configure(
+                text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}  ·  {mode}"
+            )
+        except Exception:
+            pass
+
     def _on_dock_param(self) -> None:
-        """Bottom dock slider moved — save per-model + hot update."""
+        """Bottom dock slider moved — save per-model + hot update (no dock reflow)."""
         if self._loading_voice:
             return
         try:
@@ -1093,8 +1246,20 @@ class MainApp:
         except Exception:
             pass
         self._persist_voice_params_to_model()
-        self._sync_bottom()
-        self._on_hot_param()
+        # Debounce hint only — never full _sync_bottom while dragging (causes shake)
+        if self._dock_hint_job is not None:
+            try:
+                self.root.after_cancel(self._dock_hint_job)
+            except Exception:
+                pass
+        self._dock_hint_job = self.root.after(120, self._refresh_dock_hint_only)
+        # Hot push without _sync_bottom
+        if self._hot_job is not None:
+            try:
+                self.root.after_cancel(self._hot_job)
+            except Exception:
+                pass
+        self._hot_job = self.root.after(180, self._push_hot_params)
 
     def _page_models(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -2414,8 +2579,9 @@ class MainApp:
             except Exception:
                 pass
             self._persist_voice_params_to_model()
+            # Hint only — full _sync_bottom reflows dock and looks like a shake
             try:
-                self._sync_bottom()
+                self._refresh_dock_hint_only()
             except Exception:
                 pass
         if self._hot_job is not None:
@@ -2903,6 +3069,12 @@ class MainApp:
             except Exception:
                 cur = str(self.cfg.get("function") or "vc")
             self._set_function_mode("im" if cur == "vc" else "vc")
+        elif action_id == "undo_voice":
+            self.undo_voice_params()
+        elif action_id == "redo_voice":
+            self.redo_voice_params()
+        elif action_id == "reset_voice":
+            self.reset_voice_params_default()
         elif action_id == "page_home":
             self.show_page("home")
         elif action_id == "page_models":
@@ -2931,6 +3103,7 @@ class MainApp:
         self._select_model(ix, feedback=True, maybe_restart=True)
 
     def _nudge_pitch(self, delta: int) -> None:
+        self._voice_hist_push()
         try:
             if hasattr(self, "var_pitch"):
                 cur = int(self.var_pitch.get())
@@ -2950,7 +3123,7 @@ class MainApp:
         except Exception:
             pass
         self._persist_voice_params_to_model()
-        self._sync_bottom()
+        self._refresh_dock_hint_only()
         if self.vc_running:
             self._on_hot_param()
         self._set_status_visual(

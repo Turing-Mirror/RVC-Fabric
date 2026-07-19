@@ -69,6 +69,7 @@ from launcher.theme import (
     TM_ACCENT_SOFT,
     TM_BG,
     TM_HAIRLINE,
+    TM_HELP,
     TM_INK,
     TM_INK_MUTED,
     TM_INSET,
@@ -1541,20 +1542,36 @@ class MainApp:
             return outer.body
 
         def tip_line(parent, text: str) -> None:
+            """Inline help under a control (not the ? hover). Stronger than pure meta."""
             if not text:
                 return
             lbl = tk.Label(
                 parent,
                 text=text,
-                font=sans_font(8),
+                font=sans_font(9),
                 bg=TM_SURFACE,
-                fg=TM_META,
+                fg=TM_HELP,
                 justify="left",
                 anchor="w",
                 wraplength=640,
             )
-            lbl.pack(fill="x", anchor="w", pady=(0, 2), padx=(4, 4))
+            lbl.pack(fill="x", anchor="w", pady=(0, 4), padx=(4, 4))
             self._settings_wrap_labels.append(lbl)
+
+        def field_label(parent, text: str, **pack_kw) -> tk.Label:
+            """Settings row caption — high contrast on surface (Schale-like body)."""
+            lbl = tk.Label(
+                parent,
+                text=text,
+                width=14,
+                anchor="w",
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                font=sans_font(10),
+            )
+            if pack_kw:
+                lbl.pack(**pack_kw)
+            return lbl
 
         def scale_row(
             parent, label, variable, from_, to, res=1, hot=False, tip_key: str = ""
@@ -1564,15 +1581,7 @@ class MainApp:
             wrap_f.pack(fill="x", pady=6)
             f = tk.Frame(wrap_f, bg=TM_SURFACE)
             f.pack(fill="x")
-            tk.Label(
-                f,
-                text=label,
-                width=14,
-                anchor="w",
-                bg=TM_SURFACE,
-                fg=TM_INK_MUTED,
-                font=sans_font(9),
-            ).pack(side="left")
+            field_label(f, label).pack(side="left")
             tip = SETTING_TIPS.get(tip_key, "")
             if tip:
                 q = tk.Label(
@@ -1592,7 +1601,7 @@ class MainApp:
                 anchor="e",
                 bg=TM_SURFACE,
                 fg=TM_INK,
-                font=mono_font(10),
+                font=mono_font(11),
             )
             val_lbl.pack(side="right", padx=(8, 0))
 
@@ -1640,9 +1649,9 @@ class MainApp:
                 "输入=真实麦克风 · 输出=CABLE Input · 游戏麦克风=CABLE Output\n"
                 "勾选「变声时监听自己」并选耳机，可一边开黑一边听自己的变声效果。"
             ),
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
+            fg=TM_HELP,
             justify="left",
             anchor="w",
             wraplength=640,
@@ -1660,7 +1669,7 @@ class MainApp:
             anchor="w",
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
-            font=sans_font(9),
+            font=sans_font(10),
         ).pack(side="left")
         self.cmb_accel = ttk.Combobox(
             row,
@@ -1685,9 +1694,9 @@ class MainApp:
         self.lbl_accel_status = tk.Label(
             left,
             text="加速：检测中…",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             anchor="w",
         )
         self.lbl_accel_status.pack(fill="x", pady=(0, 4))
@@ -1703,9 +1712,9 @@ class MainApp:
         self.lbl_pack_meta = tk.Label(
             left,
             text=f"发行包：{_plabel}",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             anchor="w",
         )
         self.lbl_pack_meta.pack(fill="x", pady=(0, 2))
@@ -1715,7 +1724,7 @@ class MainApp:
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="设备类型", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            row, text="设备类型", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left")
         self.cmb_hostapi = ttk.Combobox(
             row, textvariable=self.var_hostapi, values=["MME"], state="readonly", width=28
@@ -1727,7 +1736,7 @@ class MainApp:
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="输入设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            row, text="输入设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left")
         self.cmb_input = ttk.Combobox(
             row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
@@ -1738,7 +1747,7 @@ class MainApp:
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="输出设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            row, text="输出设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left")
         self.cmb_output = ttk.Combobox(
             row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
@@ -1785,7 +1794,7 @@ class MainApp:
             anchor="w",
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
-            font=sans_font(9),
+            font=sans_font(10),
         ).pack(side="left")
         self.cmb_monitor = ttk.Combobox(
             mon_row2,
@@ -1799,9 +1808,9 @@ class MainApp:
         self.lbl_monitor_hint = tk.Label(
             left,
             text="监听设备须为耳机/音箱；不要选 CABLE 或 Steam 虚拟扬声器",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             anchor="w",
         )
         self.lbl_monitor_hint.pack(fill="x", pady=(0, 4))
@@ -1818,7 +1827,7 @@ class MainApp:
             font=sans_font(9),
         ).pack(side="left")
         tk.Label(
-            row, text="采样率", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            row, text="采样率", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left", padx=(16, 4))
         ttk.Combobox(
             row,
@@ -1877,9 +1886,9 @@ class MainApp:
                 "音高 / 共鸣 / 阈值 / Index / 响度 / 算法会写入当前音色目录的 config.json；"
                 "切换音色时自动恢复该音色上次的参数。底栏可快速调节。"
             ),
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             justify="left",
             anchor="w",
             wraplength=640,
@@ -1905,7 +1914,7 @@ class MainApp:
         tk.Label(
             idx_block,
             text="特征检索 .index",
-            font=sans_font(9),
+            font=sans_font(10),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             anchor="w",
@@ -1924,7 +1933,7 @@ class MainApp:
         tk.Button(
             idx_row,
             text="浏览…",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_INK,
             relief="flat",
@@ -1936,7 +1945,7 @@ class MainApp:
         tk.Button(
             idx_row,
             text="清除",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_INK_MUTED,
             relief="flat",
@@ -1948,7 +1957,7 @@ class MainApp:
         tk.Button(
             idx_row,
             text="扫描",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_INK_MUTED,
             relief="flat",
@@ -1960,9 +1969,9 @@ class MainApp:
         self.lbl_index_status = tk.Label(
             idx_block,
             text="",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             anchor="w",
         )
         self.lbl_index_status.pack(anchor="w", pady=(2, 0))
@@ -1971,7 +1980,7 @@ class MainApp:
         f0f = tk.Frame(right, bg=TM_SURFACE)
         f0f.pack(fill="x", pady=3)
         tk.Label(
-            f0f, text="音高算法", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            f0f, text="音高算法", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left")
         cmb_f0 = ttk.Combobox(
             f0f,
@@ -1987,7 +1996,7 @@ class MainApp:
         modef = tk.Frame(right, bg=TM_SURFACE)
         modef.pack(fill="x", pady=4)
         tk.Label(
-            modef, text="模式", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            modef, text="模式", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left")
         rb_vc = tk.Radiobutton(
             modef,
@@ -2178,7 +2187,7 @@ class MainApp:
         ).pack(side="left")
         tip_line(ebox, SETTING_TIPS["fx_eq"])
         tk.Label(
-            erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+            erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left", padx=(16, 4))
         preset_vals = list(EQ_PRESETS.keys())
         self.cmb_fx_preset = ttk.Combobox(
@@ -2203,9 +2212,9 @@ class MainApp:
         tk.Label(
             ebox,
             text=f"预设：{lab}…",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             anchor="w",
         ).pack(fill="x")
         for i, name in enumerate(EQ_LABELS):
@@ -2236,9 +2245,9 @@ class MainApp:
         self.lbl_settings_hint = tk.Label(
             act,
             text="无 .index 时 Index Rate 自动为 0；换 index 后请重新开启变声 · F1 查看快捷键",
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_BG,
-            fg=TM_META,
+            fg=TM_HELP,
         )
         self.lbl_settings_hint.pack(side="left")
         # Wheel + width after children exist
@@ -2260,7 +2269,7 @@ class MainApp:
         if not path:
             self.lbl_index_status.configure(
                 text="当前：未绑定 index（仅用 .pth，Index Rate=0）",
-                fg=TM_META,
+                fg=TM_HELP,
             )
             return
         if Path(path).is_file():
@@ -2271,7 +2280,7 @@ class MainApp:
         else:
             self.lbl_index_status.configure(
                 text="当前路径无效，请重新选择 .index",
-                fg=TM_META,
+                fg=TM_HELP,
             )
 
     def _refresh_index_combobox_values(self) -> None:
@@ -3208,7 +3217,7 @@ class MainApp:
         if not on:
             self.lbl_monitor_hint.configure(
                 text="关闭时只走「输出设备」（通常 CABLE）；开启后在耳机里听变声",
-                fg=TM_META,
+                fg=TM_HELP,
             )
             return
         if not dev:
@@ -3360,9 +3369,9 @@ class MainApp:
                 "窗口内快捷键默认可用；开启「全局快捷键」后，游戏全屏时也可切换音色 / 启停变声。"
                 "点「录制」后按下组合键即可自定义。F1 打开完整说明。"
             ),
-            font=sans_font(8),
+            font=sans_font(9),
             bg=TM_SURFACE,
-            fg=TM_META,
+            fg=TM_HELP,
             justify="left",
             anchor="w",
             wraplength=640,

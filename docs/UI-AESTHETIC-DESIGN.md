@@ -22,9 +22,10 @@
 | `TM_BG` | `#f0efeb` | 画布（中性浅） |
 | `TM_SURFACE` | `#fafaf7` | 卡片 / 顶底栏 |
 | `TM_SURFACE_HOVER` | `#ffffff` | hover |
-| `TM_INK` | `#1f221f` | 正文 |
-| `TM_INK_MUTED` | `#7d7f78` | 弱文案 |
-| `TM_META` | `#9a9b93` | 元信息 |
+| `TM_INK` | `#1a1d1b` | 正文 |
+| `TM_INK_MUTED` | `#3f443f` | 表单项标签 / 次要正文（须可读） |
+| `TM_HELP` | `#505650` | 设置说明小字（非 `?` 悬停） |
+| `TM_META` | `#5c615b` | 等宽 meta / 眉题（仍次级，但不发灰） |
 | `TM_INSET` | `#e4e3dc` | 封面占位 / 徽章底 |
 | `TM_HAIRLINE` | `#d6d4cb` | 分割 |
 | `TM_ACCENT` | `#3d5c55` | **独立**安静青绿主色（CTA / active / 选中） |

@@ -11,12 +11,19 @@ from __future__ import annotations
 from typing import Final, Sequence
 
 # --- Canvas & surfaces ---
+# Contrast tuned for light chrome (method from Schale muted-foreground / LyricsKara
+# ink hierarchy — not a hex copy of either site). Labels must stay readable on
+# TM_SURFACE; pure meta (eyebrows, route) stays quieter.
 TM_BG: Final[str] = "#ebeae4"
 TM_SURFACE: Final[str] = "#f7f6f2"
 TM_SURFACE_HOVER: Final[str] = "#ffffff"
 TM_INK: Final[str] = "#1a1d1b"
-TM_INK_MUTED: Final[str] = "#6e726c"
-TM_META: Final[str] = "#92968f"
+# Form field labels / secondary body (was #6e726c — too faint on surface)
+TM_INK_MUTED: Final[str] = "#3f443f"
+# Helper prose under settings rows (between ink and pure meta)
+TM_HELP: Final[str] = "#505650"
+# True meta: mono eyebrows, route, timestamps (still secondary, but not washed out)
+TM_META: Final[str] = "#5c615b"
 TM_INSET: Final[str] = "#dddcd4"
 TM_HAIRLINE: Final[str] = "#cccbc2"
 TM_STAGE: Final[str] = "#e2e5e1"  # home stage band (slightly cooler wash)
@@ -160,6 +167,7 @@ def light_tokens() -> dict[str, str]:
         "tm-surface-hover": TM_SURFACE_HOVER,
         "tm-ink": TM_INK,
         "tm-ink-muted": TM_INK_MUTED,
+        "tm-help": TM_HELP,
         "tm-meta": TM_META,
         "tm-inset": TM_INSET,
         "tm-hairline": TM_HAIRLINE,

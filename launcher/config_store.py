@@ -78,15 +78,31 @@ def _normalize_cfg(data: dict[str, Any]) -> dict[str, Any]:
 
 def load_config() -> dict[str, Any]:
     ensure_dirs()
+    # Package identity (Nvidia vs AMD pack) supplies default accel when first run
+    try:
+        from launcher.package_meta import default_accel_for_package
+
+        pkg_accel = default_accel_for_package()
+    except Exception:
+        pkg_accel = "auto"
+
     if not CONFIG_PATH.is_file():
-        return dict(DEFAULTS)
+        out = dict(DEFAULTS)
+        out["accel_backend"] = pkg_accel
+        return out
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
-            return dict(DEFAULTS)
+            out = dict(DEFAULTS)
+            out["accel_backend"] = pkg_accel
+            return out
+        if "accel_backend" not in data or not data.get("accel_backend"):
+            data["accel_backend"] = pkg_accel
         return _normalize_cfg(data)
     except Exception:
-        return dict(DEFAULTS)
+        out = dict(DEFAULTS)
+        out["accel_backend"] = pkg_accel
+        return out
 
 
 def save_config(cfg: dict[str, Any]) -> None:

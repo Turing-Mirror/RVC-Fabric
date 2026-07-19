@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
-"""GPU backend selection — align with official RVC N-card CUDA vs AMD/Intel DirectML.
+"""GPU backend selection — official RVC is environment + switch, not a flag alone.
 
-Official RVC:
-  - Nvidia pack + default launch (CUDA)
-  - AMD/Intel pack + ``--dml`` (torch_directml) / go-*-dml.bat
+Official Windows A/I support (README + Changelog)::
 
-Our release Runtime (from RVCMAX Nvidia) often ships *both* torch+cu118 and
-torch_directml; we pick at runtime instead of two full installers first.
+  1. **Different install** — ``pip install -r requirements-dml.txt``
+     or HF ``RVC1006AMD_Intel.7z`` green Runtime
+     (torch + torch-directml, onnxruntime-directml; rmvpe.onnx for DML F0)
+  2. **Then** launch with ``--dml`` / go-*-dml.bat so Config uses
+     ``torch_directml.device()`` and swaps onnxruntime folders
+
+N-card: requirements.txt / Nvidia 7z + CUDA torch, no --dml.
+
+Shipping: separate full packs (package_meta.json). In-pack ``accel_backend``
+only fine-tunes; AMD users should use the AMD pack Runtime, not only flip dml
+on a pure CUDA environment.
 """
 
 from __future__ import annotations

@@ -1415,6 +1415,34 @@ if __name__ == "__main__":
             except Exception:
                 traceback.print_exc()
 
+        def _device_latency_sec(self) -> float:
+            """Sounddevice stream latency in seconds; 0 if not ready / absurd."""
+            if self.audio_proc is None:
+                return 0.0
+            try:
+                lat = float(self.audio_proc.get_latency())
+            except Exception:
+                return 0.0
+            # Reject unready (-1) and legacy meme sentinel (~114514)
+            if lat < 0 or lat > 5.0:
+                return 0.0
+            return lat
+
+        def _refresh_delay_time(self) -> float:
+            """Algorithm delay estimate: device + block + crossfade (+ denoise)."""
+            self.delay_time = (
+                self._device_latency_sec()
+                + float(getattr(self.gui_config, "block_time", 0.25) or 0.25)
+                + float(getattr(self.gui_config, "crossfade_time", 0.05) or 0.05)
+                + 0.01
+            )
+            if getattr(self.gui_config, "I_noise_reduce", False):
+                self.delay_time += min(
+                    float(getattr(self.gui_config, "crossfade_time", 0.05) or 0.05),
+                    0.04,
+                )
+            return self.delay_time
+
         def _worker_device_payload(self):
             return {
                 "hostapis": list(self.hostapis or []),
@@ -1611,15 +1639,15 @@ if __name__ == "__main__":
                 )
                 sys.stdout.flush()
                 self.start_vc()
+                # Wait briefly for AudioIoProcess to publish real device latency
+                # (child sets latency after sd.Stream opens; old code read 114514 sentinel)
                 if self.audio_proc is not None:
-                    self.delay_time = (
-                        self.audio_proc.get_latency()
-                        + float(self.gui_config.block_time)
-                        + float(self.gui_config.crossfade_time)
-                        + 0.01
-                    )
-                    if self.gui_config.I_noise_reduce:
-                        self.delay_time += min(float(self.gui_config.crossfade_time), 0.04)
+                    for _ in range(30):
+                        lat = float(self.audio_proc.get_latency())
+                        if 0 <= lat < 5.0:
+                            break
+                        time.sleep(0.05)
+                    self._refresh_delay_time()
                 # persist
                 try:
                     settings = {
@@ -1782,8 +1810,9 @@ if __name__ == "__main__":
                                     last_cmd_seq=seq,
                                     pid=os.getpid(),
                                 )
-                        # heartbeat metrics
+                        # heartbeat metrics — refresh delay (device latency may arrive late)
                         if flag_vc:
+                            self._refresh_delay_time()
                             self._worker_write_status(
                                 state="running",
                                 delay_ms=int(np.round(self.delay_time * 1000)),

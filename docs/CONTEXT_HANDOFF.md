@@ -79,16 +79,15 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 | `launcher/theme.py` / `launcher/ui/` | 壳层 token 与可复用控件（封面卡等） |
 | `launcher/online/` + `ui/store_page.py` | 在线更新 GUI / 音色库（SharePoint·GitHub 直链）；完整包外链 QQ/SharePoint |
 | `launcher/bootstrap.py` | 首次：快捷方式、VBCABLE、环境 |
-| `launcher/realtime_client.py` | 启停 worker、单实例、清孤儿进程 |
+| `launcher/realtime_client.py` | 启停 worker、单实例、清孤儿；**`shutdown_workers_for_exit` 快速退出** |
 | `launcher/realtime_protocol.py` | 文件 IPC |
 | `launcher/gpu_backend.py` | CUDA / DirectML 检测与偏好 |
 | `launcher/package_meta.py` | 发行包变体标记（nvidia/amd/50） |
-| `launcher/catalog.py` | `User_Data/models` 扫描、index 绑定 |
+| `launcher/catalog.py` | `User_Data/models` 扫描、index 绑定、**按音色参数** |
 | `launcher/config_store.py` | app 配置 + 同步 inuse |
 | `launcher/hotkeys.py` | 快捷键定义 / 解析 / Windows 全局热键 |
 | `launcher/ui/widgets.py` | SoftSlider / ParamTile / SectionCard 等 |
 | `launcher/ui/store_page.py` | 「更新」页（滚动、在线清单 UI） |
-| `launcher/realtime_client.py` | 启停 worker；**`shutdown_workers_for_exit` 快速退出** |
 | `tools/realtime_worker.py` | 无窗入口（runpy gui_v1） |
 | `gui_v1.py` | 实时引擎；worker 模式无 FreeSimpleGUI 窗 |
 | `infer/lib/rtrvc.py` | 实时推理；无 index 不崩 |
@@ -127,9 +126,28 @@ exe 用主机 **Python 3.13** PyInstaller 打包；推理必须在 **Runtime 3.9
 ### 3.3b 快捷键（2026-07-20）
 
 - **模块**：`launcher/hotkeys.py`；配置键 `hotkeys` / `global_hotkeys` / `hotkey_restart_on_model_switch`  
-- **默认**：←/→ 切换音色，F5 启停，Ctrl+↑↓ 音高，Ctrl+Alt+1–9 直选，F1 说明  
+- **默认**：←/→ 切换音色，F5 启停，Ctrl+↑↓ 音高，Ctrl+Alt+1–9 直选，F1 说明，Ctrl+B 变声/原声  
 - **设置页「快捷键」**：录制改键、清空、恢复默认；可选 **全局快捷键**（游戏中可用，纯方向键不会注册为全局）  
-- **变声中切音色**：默认自动重启引擎加载新模型（可关）
+- **变声中切音色**：默认自动重启引擎加载新模型（可关）  
+- **参数历史**：Ctrl+Z / Ctrl+Y / Ctrl+0（撤销 / 重做 / 音高共鸣阈值默认）
+
+### 3.3c 底栏 + 按音色参数 + SoftSlider（2026-07-20）
+
+- **底栏**：MODE（输出变声 / 原声旁路）+ 音高 / 共鸣 / 阈值 + 启停；EDIT 撤销区  
+- **按音色**：`User_Data/models/<名>/config.json` 存 pitch/formant/threhold 等；切换音色恢复  
+- **SoftSlider**：Pillow 抗锯齿；固定高度防底栏抖动  
+- **默认窗口**：约 1320×900，`BOTTOM_HEIGHT`≈168  
+
+### 3.3d 监听自己修复（2026-07-20）
+
+- 禁止/纠正 Steam 虚拟扬声器等错误监听端；优先真耳机  
+- 监听流：callback + 队列；设备采样率；失败有日志/状态  
+
+### 3.3e 设置页说明与关闭（2026-07-20）
+
+- 说明只放在显眼 **`?` 徽章**悬停，不在控件下重复长文  
+- 对比度：`TM_INK_MUTED` / `TM_HELP` / `TM_META`（见 `theme.py`）  
+- **关闭**：`shutdown_workers_for_exit`，避免 UI 线程等 8s+8s+PowerShell 全扫  
 
 ### 3.4 延迟显示 `114514542ms`
 

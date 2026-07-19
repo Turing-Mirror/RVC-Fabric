@@ -30,6 +30,7 @@ from launcher.paths import (
     ensure_dirs,
     list_voice_models,
 )
+from launcher import realtime_client as rt_client
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
     TM_ACCENT,
@@ -79,15 +80,22 @@ class MainApp:
         self.webui_proc = None
         self.gui_proc = None
         self.vc_running = False
+        self._vc_starting = False
         self._current_page = "home"
         self._resize_job = None
         self._toast_job = None
         self._placed_once = False
+        self._hot_job = None
+        self._device_lists = {
+            "hostapis": [],
+            "input_devices": [],
+            "output_devices": [],
+        }
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("960x620")
-        self.root.minsize(720, 480)
+        self.root.geometry("980x680")
+        self.root.minsize(780, 520)
         self.root.configure(bg=TM_BG)
         self._place_and_raise(force_size=True)
 
@@ -98,6 +106,7 @@ class MainApp:
         self._tick_status()
         self.root.after(200, lambda: self._place_and_raise(force_size=False))
         self.root.after(800, lambda: self._place_and_raise(force_size=False))
+        self.root.after(600, self._bootstrap_devices_async)
 
     def _place_and_raise(self, force_size: bool = False) -> None:
         """Show window on primary screen. Only set default size once (allow user resize)."""
@@ -559,7 +568,7 @@ class MainApp:
             self._show_switch_toast(m["name"])
 
     def _sync_model_to_realtime_gui(self, m: Optional[dict] = None) -> None:
-        """Write current model + pitch settings into realtime panel config."""
+        """Write current model + full settings into engine config.json."""
         if m is None:
             if not self.models:
                 return
@@ -569,14 +578,11 @@ class MainApp:
             return
         idx_path = m.get("index") or ""
         try:
+            self._collect_settings_into_cfg()
             sync_realtime_gui_model(
                 pth,
                 idx_path,
-                pitch=float(self.cfg.get("pitch") or 0),
-                formant=float(self.cfg.get("formant") or 0),
-                index_rate=float(self.cfg.get("index_rate") or 0),
-                f0method=str(self.cfg.get("f0method") or "fcpe"),
-                rms_mix_rate=float(self.cfg.get("rms_mix_rate") or 0),
+                app_cfg=self.cfg,
             )
         except Exception:
             pass
@@ -843,63 +849,178 @@ class MainApp:
 
     def _page_settings(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
-        wrap = tk.Frame(fr, bg=TM_BG)
-        wrap.pack(fill="both", expand=True, padx=36, pady=20)
-
-        left = tk.Frame(
-            wrap,
-            bg=TM_SURFACE,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-            padx=16,
-            pady=12,
+        # Scrollable settings
+        canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
+        sb = ttk.Scrollbar(fr, orient="vertical", command=canvas.yview)
+        wrap = tk.Frame(canvas, bg=TM_BG)
+        wrap.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
         )
-        left.pack(side="left", fill="both", expand=True, padx=(0, 10))
-        right = tk.Frame(
-            wrap,
-            bg=TM_SURFACE,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-            padx=16,
-            pady=12,
-        )
-        right.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        canvas.create_window((0, 0), window=wrap, anchor="nw")
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
 
-        tk.Label(
-            left, text="设备与音频", font=serif_font(13, "bold"), bg=TM_SURFACE, fg=TM_INK
-        ).pack(anchor="w", pady=(0, 8))
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # --- vars ---
+        self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
+        self.var_formant = tk.DoubleVar(value=float(self.cfg.get("formant") or 0))
+        self.var_f0 = tk.StringVar(value=str(self.cfg.get("f0method") or "fcpe"))
+        self.var_threhold = tk.IntVar(
+            value=int(self.cfg.get("threhold") if self.cfg.get("threhold") is not None else -60)
+        )
+        self.var_index_rate = tk.DoubleVar(value=float(self.cfg.get("index_rate") or 0))
+        self.var_rms = tk.DoubleVar(value=float(self.cfg.get("rms_mix_rate") or 0))
+        self.var_block = tk.DoubleVar(value=float(self.cfg.get("block_time") or 0.25))
+        self.var_crossfade = tk.DoubleVar(
+            value=float(self.cfg.get("crossfade_length") or 0.05)
+        )
+        self.var_extra = tk.DoubleVar(value=float(self.cfg.get("extra_time") or 2.5))
+        self.var_n_cpu = tk.IntVar(value=int(self.cfg.get("n_cpu") or 4))
+        self.var_hostapi = tk.StringVar(value=str(self.cfg.get("sg_hostapi") or "MME"))
+        self.var_input_dev = tk.StringVar(value=str(self.cfg.get("sg_input_device") or ""))
+        self.var_output_dev = tk.StringVar(
+            value=str(self.cfg.get("sg_output_device") or "")
+        )
+        self.var_wasapi = tk.BooleanVar(value=bool(self.cfg.get("sg_wasapi_exclusive")))
+        self.var_sr_type = tk.StringVar(value=str(self.cfg.get("sr_type") or "sr_model"))
+        self.var_i_nr = tk.BooleanVar(value=bool(self.cfg.get("I_noise_reduce")))
+        self.var_o_nr = tk.BooleanVar(value=bool(self.cfg.get("O_noise_reduce")))
+        self.var_use_pv = tk.BooleanVar(value=bool(self.cfg.get("use_pv")))
+        self.var_function = tk.StringVar(value=str(self.cfg.get("function") or "vc"))
+
+        def card(parent, title: str) -> tk.Frame:
+            box = tk.Frame(
+                parent,
+                bg=TM_SURFACE,
+                highlightthickness=1,
+                highlightbackground=TM_HAIRLINE,
+                padx=14,
+                pady=10,
+            )
+            box.pack(fill="x", padx=28, pady=8)
+            tk.Label(
+                box, text=title, font=serif_font(12, "bold"), bg=TM_SURFACE, fg=TM_INK
+            ).pack(anchor="w", pady=(0, 6))
+            return box
+
+        def scale_row(parent, label, variable, from_, to, res=1, hot=False):
+            f = tk.Frame(parent, bg=TM_SURFACE)
+            f.pack(fill="x", pady=3)
+            tk.Label(
+                f,
+                text=label,
+                width=14,
+                anchor="w",
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                font=sans_font(9),
+            ).pack(side="left")
+            sc = tk.Scale(
+                f,
+                from_=from_,
+                to=to,
+                resolution=res,
+                orient="horizontal",
+                variable=variable,
+                bg=TM_SURFACE,
+                fg=TM_INK,
+                highlightthickness=0,
+                troughcolor=TM_HAIRLINE,
+                length=260,
+                command=(lambda _v: self._on_hot_param()) if hot else None,
+            )
+            sc.pack(side="left", fill="x", expand=True)
+            return sc
+
+        # Device card
+        left = card(wrap, "设备与音频")
         tk.Label(
             left,
             text=(
-                "【虚拟声卡怎么接】\n"
-                "1. 本软件「输入」= 你的真实麦克风\n"
-                "2. 本软件「输出」= CABLE Input（或 VoiceMeeter Input）\n"
-                "3. 游戏/QQ/Discord「麦克风」= CABLE Output\n"
-                "   （别人听到的是变声后的声音）\n"
-                "4. Windows 默认播放设备仍用你的耳机/音箱\n"
-                "5. 不要勾选 WASAPI 独占（除非你很清楚）\n\n"
-                "点底部「开启变声」会打开面板并自动开始转换。\n"
-                "无 .index 文件也可变声（Index Rate 会自动为 0）。"
+                "输入=真实麦克风 · 输出=CABLE Input · 游戏麦克风=CABLE Output\n"
+                "点「开启变声」在本软件内开始，无需再开第二个窗口。"
             ),
-            font=sans_font(9),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             justify="left",
-        ).pack(anchor="w")
-        tk.Button(
-            left,
-            text="打开高级实时面板",
+        ).pack(anchor="w", pady=(0, 6))
+
+        row = tk.Frame(left, bg=TM_SURFACE)
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row, text="设备类型", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left")
+        self.cmb_hostapi = ttk.Combobox(
+            row, textvariable=self.var_hostapi, values=["MME"], state="readonly", width=28
+        )
+        self.cmb_hostapi.pack(side="left")
+        self.cmb_hostapi.bind("<<ComboboxSelected>>", lambda e: self._on_hostapi_change())
+
+        row = tk.Frame(left, bg=TM_SURFACE)
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row, text="输入设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left")
+        self.cmb_input = ttk.Combobox(
+            row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
+        )
+        self.cmb_input.pack(side="left", fill="x", expand=True)
+
+        row = tk.Frame(left, bg=TM_SURFACE)
+        row.pack(fill="x", pady=3)
+        tk.Label(
+            row, text="输出设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left")
+        self.cmb_output = ttk.Combobox(
+            row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
+        )
+        self.cmb_output.pack(side="left", fill="x", expand=True)
+
+        row = tk.Frame(left, bg=TM_SURFACE)
+        row.pack(fill="x", pady=4)
+        tk.Checkbutton(
+            row,
+            text="WASAPI 独占（一般不要勾）",
+            variable=self.var_wasapi,
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            activebackground=TM_SURFACE,
             font=sans_font(9),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
+        ).pack(side="left")
+        tk.Label(
+            row, text="采样率", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left", padx=(16, 4))
+        ttk.Combobox(
+            row,
+            textvariable=self.var_sr_type,
+            values=["sr_model", "sr_device"],
+            state="readonly",
+            width=12,
+        ).pack(side="left")
+        tk.Button(
+            row,
+            text="重载设备列表",
+            font=sans_font(9),
+            bg=TM_BG,
+            fg=TM_INK,
             relief="flat",
             cursor="hand2",
-            command=self.open_legacy_gui,
+            command=self.reload_devices,
             bd=0,
-            pady=6,
-        ).pack(anchor="w", pady=12)
+            padx=10,
+        ).pack(side="right")
+
+        btnrow = tk.Frame(left, bg=TM_SURFACE)
+        btnrow.pack(fill="x", pady=6)
         tk.Button(
-            left,
+            btnrow,
             text="声卡接线说明",
             font=sans_font(9),
             bg=TM_BG,
@@ -908,98 +1029,303 @@ class MainApp:
             cursor="hand2",
             command=self._show_cable_help,
             bd=0,
+            padx=10,
             pady=4,
-        ).pack(anchor="w", pady=(0, 8))
-
-        tk.Label(
-            right, text="变声参数", font=serif_font(13, "bold"), bg=TM_SURFACE, fg=TM_INK
-        ).pack(anchor="w", pady=(0, 8))
-        self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
-        self.var_formant = tk.DoubleVar(value=float(self.cfg.get("formant") or 0))
-        self.var_f0 = tk.StringVar(value=self.cfg.get("f0method") or "fcpe")
-
-        def scale_row(parent, label, widget):
-            f = tk.Frame(parent, bg=TM_SURFACE)
-            f.pack(fill="x", pady=6)
-            tk.Label(
-                f, text=label, width=12, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
-            ).pack(side="left")
-            widget.pack(side="left", fill="x", expand=True)
-
-        scale_row(
-            right,
-            "音高 Pitch",
-            tk.Scale(
-                right,
-                from_=-24,
-                to=24,
-                orient="horizontal",
-                variable=self.var_pitch,
-                bg=TM_SURFACE,
-                fg=TM_INK,
-                highlightthickness=0,
-                troughcolor=TM_HAIRLINE,
-                length=220,
-            ),
-        )
-        scale_row(
-            right,
-            "共鸣 Formant",
-            tk.Scale(
-                right,
-                from_=-2,
-                to=2,
-                resolution=0.1,
-                orient="horizontal",
-                variable=self.var_formant,
-                bg=TM_SURFACE,
-                fg=TM_INK,
-                highlightthickness=0,
-                troughcolor=TM_HAIRLINE,
-                length=220,
-            ),
-        )
-        f0f = tk.Frame(right, bg=TM_SURFACE)
-        f0f.pack(fill="x", pady=6)
-        tk.Label(
-            f0f, text="音高算法", width=12, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
         ).pack(side="left")
-        ttk.Combobox(
+        tk.Button(
+            btnrow,
+            text="打开原版实时面板",
+            font=sans_font(9),
+            bg=TM_ACCENT,
+            fg=TM_ACCENT_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self.open_legacy_gui,
+            bd=0,
+            padx=10,
+            pady=4,
+        ).pack(side="left", padx=8)
+
+        # Voice params
+        right = card(wrap, "变声参数（运行中可热更新）")
+        scale_row(right, "响应阈值", self.var_threhold, -60, 0, 1, hot=True)
+        scale_row(right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True)
+        scale_row(right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True)
+        scale_row(right, "Index Rate", self.var_index_rate, 0, 1, 0.01, hot=True)
+        scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True)
+        f0f = tk.Frame(right, bg=TM_SURFACE)
+        f0f.pack(fill="x", pady=3)
+        tk.Label(
+            f0f, text="音高算法", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
+        ).pack(side="left")
+        cmb_f0 = ttk.Combobox(
             f0f,
             textvariable=self.var_f0,
             values=["fcpe", "rmvpe", "harvest", "crepe", "pm"],
             state="readonly",
             width=12,
+        )
+        cmb_f0.pack(side="left")
+        cmb_f0.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
+
+        modef = tk.Frame(right, bg=TM_SURFACE)
+        modef.pack(fill="x", pady=4)
+        tk.Label(
+            modef, text="模式", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(9)
         ).pack(side="left")
-        tk.Button(
-            right,
-            text="保存设置",
+        tk.Radiobutton(
+            modef,
+            text="输出变声",
+            variable=self.var_function,
+            value="vc",
+            bg=TM_SURFACE,
+            command=self._on_hot_param,
             font=sans_font(9),
+        ).pack(side="left")
+        tk.Radiobutton(
+            modef,
+            text="输入监听",
+            variable=self.var_function,
+            value="im",
+            bg=TM_SURFACE,
+            command=self._on_hot_param,
+            font=sans_font(9),
+        ).pack(side="left", padx=8)
+
+        # Performance
+        perf = card(wrap, "性能设置（改后需重新「开启变声」）")
+        scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01)
+        scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01)
+        scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01)
+        scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1)
+        nrf = tk.Frame(perf, bg=TM_SURFACE)
+        nrf.pack(fill="x", pady=4)
+        tk.Checkbutton(
+            nrf,
+            text="输入降噪",
+            variable=self.var_i_nr,
+            bg=TM_SURFACE,
+            command=self._on_hot_param,
+            font=sans_font(9),
+        ).pack(side="left")
+        tk.Checkbutton(
+            nrf,
+            text="输出降噪",
+            variable=self.var_o_nr,
+            bg=TM_SURFACE,
+            command=self._on_hot_param,
+            font=sans_font(9),
+        ).pack(side="left", padx=8)
+        tk.Checkbutton(
+            nrf,
+            text="相位声码器",
+            variable=self.var_use_pv,
+            bg=TM_SURFACE,
+            command=self._on_hot_param,
+            font=sans_font(9),
+        ).pack(side="left")
+
+        act = tk.Frame(wrap, bg=TM_BG)
+        act.pack(fill="x", padx=28, pady=10)
+        tk.Button(
+            act,
+            text="保存设置",
+            font=sans_font(10),
             bg=TM_ACCENT,
             fg=TM_ACCENT_INK,
             relief="flat",
             cursor="hand2",
             command=self.save_settings,
             bd=0,
+            padx=16,
             pady=6,
-        ).pack(anchor="e", pady=12)
+        ).pack(side="right")
+        self.lbl_settings_hint = tk.Label(
+            act,
+            text="无 .index 时 Index Rate 自动为 0",
+            font=sans_font(8),
+            bg=TM_BG,
+            fg=TM_META,
+        )
+        self.lbl_settings_hint.pack(side="left")
         return fr
 
-    def save_settings(self) -> None:
-        self.cfg["pitch"] = int(self.var_pitch.get())
-        self.cfg["formant"] = float(self.var_formant.get())
-        self.cfg["f0method"] = self.var_f0.get()
-        save_config(self.cfg)
-        messagebox.showinfo("已保存", f"设置已写入\n{USER_DATA}")
-
-    def save_settings_silent(self) -> None:
+    def _collect_settings_into_cfg(self) -> None:
+        """Pull UI vars into self.cfg (safe if settings page not built yet)."""
         try:
             self.cfg["pitch"] = int(self.var_pitch.get())
             self.cfg["formant"] = float(self.var_formant.get())
-            self.cfg["f0method"] = self.var_f0.get()
+            self.cfg["f0method"] = str(self.var_f0.get())
+            self.cfg["threhold"] = int(self.var_threhold.get())
+            self.cfg["index_rate"] = float(self.var_index_rate.get())
+            self.cfg["rms_mix_rate"] = float(self.var_rms.get())
+            self.cfg["block_time"] = float(self.var_block.get())
+            self.cfg["crossfade_length"] = float(self.var_crossfade.get())
+            self.cfg["extra_time"] = float(self.var_extra.get())
+            self.cfg["n_cpu"] = int(self.var_n_cpu.get())
+            self.cfg["sg_hostapi"] = str(self.var_hostapi.get() or "MME")
+            self.cfg["sg_input_device"] = str(self.var_input_dev.get() or "")
+            self.cfg["sg_output_device"] = str(self.var_output_dev.get() or "")
+            self.cfg["sg_wasapi_exclusive"] = bool(self.var_wasapi.get())
+            self.cfg["sr_type"] = str(self.var_sr_type.get() or "sr_model")
+            self.cfg["I_noise_reduce"] = bool(self.var_i_nr.get())
+            self.cfg["O_noise_reduce"] = bool(self.var_o_nr.get())
+            self.cfg["use_pv"] = bool(self.var_use_pv.get())
+            self.cfg["function"] = str(self.var_function.get() or "vc")
+        except Exception:
+            pass
+
+    def save_settings(self) -> None:
+        self._collect_settings_into_cfg()
+        save_config(self.cfg)
+        if self.models:
+            self._sync_model_to_realtime_gui(self.models[self.model_idx])
+        if self.vc_running:
+            self._push_hot_params()
+        messagebox.showinfo("已保存", "设置已写入，并同步到变声引擎配置。")
+
+    def save_settings_silent(self) -> None:
+        try:
+            self._collect_settings_into_cfg()
             save_config(self.cfg)
         except Exception:
             pass
+
+    def _on_hot_param(self) -> None:
+        """Debounced hot update while VC running."""
+        if self._hot_job is not None:
+            try:
+                self.root.after_cancel(self._hot_job)
+            except Exception:
+                pass
+        self._hot_job = self.root.after(180, self._push_hot_params)
+
+    def _push_hot_params(self) -> None:
+        self._hot_job = None
+        self._collect_settings_into_cfg()
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        if not self.vc_running:
+            return
+        try:
+            rt_client.set_params_remote(
+                pitch=self.cfg.get("pitch"),
+                formant=self.cfg.get("formant"),
+                index_rate=self.cfg.get("index_rate"),
+                rms_mix_rate=self.cfg.get("rms_mix_rate"),
+                threhold=self.cfg.get("threhold"),
+                f0method=self.cfg.get("f0method"),
+                I_noise_reduce=self.cfg.get("I_noise_reduce"),
+                O_noise_reduce=self.cfg.get("O_noise_reduce"),
+                use_pv=self.cfg.get("use_pv"),
+                function=self.cfg.get("function"),
+            )
+        except Exception:
+            pass
+
+    def _bootstrap_devices_async(self) -> None:
+        def work():
+            try:
+                st = rt_client.ensure_worker_and_devices(timeout_s=100)
+                self.root.after(0, lambda: self._apply_device_status(st))
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda: self.lbl_online.configure(
+                        text=f"设备枚举失败: {e}", fg=TM_META
+                    ),
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+        self.lbl_online.configure(text="正在连接变声引擎…", fg=TM_OK)
+
+    def reload_devices(self) -> None:
+        self.lbl_online.configure(text="重载设备列表…", fg=TM_OK)
+
+        def work():
+            try:
+                rt_client.start_worker_process()
+                rt_client.wait_worker_ready(timeout_s=60)
+                host = ""
+                try:
+                    host = self.var_hostapi.get()
+                except Exception:
+                    host = self.cfg.get("sg_hostapi") or ""
+                rt_client.send_command("list_devices", sg_hostapi=host)
+                time.sleep(0.4)
+                st = rt_client.poll_status()
+                self.root.after(0, lambda: self._apply_device_status(st, toast=True))
+            except Exception as e:
+                self.root.after(
+                    0, lambda: messagebox.showerror("重载失败", str(e))
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_hostapi_change(self) -> None:
+        self.reload_devices()
+
+    def _apply_device_status(self, st: dict, toast: bool = False) -> None:
+        if not st:
+            return
+        hosts = list(st.get("hostapis") or [])
+        ins = list(st.get("input_devices") or [])
+        outs = list(st.get("output_devices") or [])
+        self._device_lists = {
+            "hostapis": hosts,
+            "input_devices": ins,
+            "output_devices": outs,
+        }
+        try:
+            if hasattr(self, "cmb_hostapi") and hosts:
+                self.cmb_hostapi["values"] = hosts
+                cur = self.var_hostapi.get()
+                if cur not in hosts:
+                    prefer = "MME" if "MME" in hosts else hosts[0]
+                    self.var_hostapi.set(prefer)
+            if hasattr(self, "cmb_input"):
+                self.cmb_input["values"] = ins
+                cur = self.var_input_dev.get()
+                if (not cur or cur not in ins) and ins:
+                    # Prefer non-cable mic
+                    pick = next(
+                        (
+                            n
+                            for n in ins
+                            if "cable" not in n.lower()
+                            and "voicemeeter" not in n.lower()
+                        ),
+                        ins[0],
+                    )
+                    self.var_input_dev.set(pick)
+            if hasattr(self, "cmb_output"):
+                self.cmb_output["values"] = outs
+                cur = self.var_output_dev.get()
+                if (not cur or cur not in outs) and outs:
+                    pick = next(
+                        (
+                            n
+                            for n in outs
+                            if "cable input" in n.lower()
+                            or "voicemeeter input" in n.lower()
+                        ),
+                        outs[0],
+                    )
+                    self.var_output_dev.set(pick)
+        except Exception:
+            pass
+        err = str(st.get("error") or "")
+        state = str(st.get("state") or "")
+        if err and state == "error":
+            self.lbl_online.configure(text=f"引擎错误: {err[:60]}", fg=TM_META)
+        elif toast:
+            self.lbl_online.configure(
+                text=f"已刷新设备（输入 {len(ins)} / 输出 {len(outs)}）", fg=TM_OK
+            )
+        elif not self.vc_running and not self._vc_starting:
+            self.lbl_online.configure(text="引擎待命", fg=TM_META)
 
     def _page_more(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -1310,19 +1636,17 @@ class MainApp:
             pass
 
     def open_legacy_gui(self) -> None:
+        """Open original RVC FreeSimpleGUI panel (optional / debug)."""
         try:
             self.save_settings_silent()
             if self.models:
                 self._sync_model_to_realtime_gui(self.models[self.model_idx])
-            # Manual panel open: do not auto-start conversion
             os.environ.pop("TM_AUTO_START_VC", None)
-            # Do NOT show a blocking "已载入音色" dialog — that looked like the
-            # only result while gui_v1 still loads torch for ~30s.
             name = ""
             if self.models:
                 name = self.models[self.model_idx].get("name") or ""
             self.lbl_online.configure(
-                text="正在启动实时面板（约 20–40 秒）…",
+                text="正在启动原版实时面板（约 20–40 秒）…",
                 fg=TM_OK,
             )
             proc = start_legacy_realtime_gui()
@@ -1333,9 +1657,8 @@ class MainApp:
                 daemon=True,
             ).start()
             if name:
-                # Non-blocking status only; window will appear separately
                 self.lbl_online.configure(
-                    text=f"启动中：{name}（首次约半分钟）",
+                    text=f"原版面板启动中：{name}",
                     fg=TM_OK,
                 )
         except Exception as e:
@@ -1346,37 +1669,127 @@ class MainApp:
             messagebox.showwarning("没有模型", "请先导入音色。")
             self.show_page("models")
             return
-        if self.vc_running:
-            self.vc_running = False
-            self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
-            self.lbl_online.configure(text="引擎待命", fg=TM_META)
-            messagebox.showinfo("提示", "若实时面板仍在运行，请在面板内停止。")
+        if self.vc_running or self._vc_starting:
+            self._stop_vc()
             return
+        self._start_vc()
+
+    def _start_vc(self) -> None:
         m = self.models[self.model_idx]
         self.save_settings_silent()
         self._sync_model_to_realtime_gui(m)
-        try:
-            # Realtime panel will auto-click 开始音频转换 after load
-            os.environ["TM_AUTO_START_VC"] = "1"
-            proc = start_legacy_realtime_gui()
-            self.gui_proc = proc
-            self.vc_running = True
-            self.btn_start.configure(text="变声运行中", bg=TM_OK)
-            self.lbl_online.configure(
-                text=f"启动中：{m['name']}（约 20–40 秒，将自动开始转换）",
-                fg=TM_OK,
-            )
-            threading.Thread(
-                target=self._watch_realtime_gui,
-                args=(proc,),
-                daemon=True,
-            ).start()
-        except Exception as e:
-            os.environ.pop("TM_AUTO_START_VC", None)
-            messagebox.showerror("启动失败", str(e))
+        self._vc_starting = True
+        self.btn_start.configure(text="启动中…", bg=TM_OK)
+        self.lbl_online.configure(
+            text=f"启动中：{m['name']}（首次约 20–40 秒，无第二窗口）",
+            fg=TM_OK,
+        )
+
+        def work():
+            err = ""
+            try:
+                rt_client.start_worker_process()
+                rt_client.wait_worker_ready(timeout_s=100)
+                rt_client.start_vc_remote()
+                # Wait until running or error
+                deadline = time.time() + 180
+                while time.time() < deadline:
+                    st = rt_client.poll_status()
+                    state = str(st.get("state") or "")
+                    if state == "running":
+                        self.root.after(0, lambda: self._on_vc_started(m, st))
+                        return
+                    if state == "error":
+                        err = str(st.get("error") or "start failed")
+                        break
+                    time.sleep(0.35)
+                if not err:
+                    err = "启动超时，请查看 User_Data/logs"
+            except Exception as e:
+                err = str(e)
+            self.root.after(0, lambda: self._on_vc_start_failed(err))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_vc_started(self, m: dict, st: dict) -> None:
+        self._vc_starting = False
+        self.vc_running = True
+        self.btn_start.configure(text="停止变声", bg=TM_OK)
+        delay = int(st.get("delay_ms") or 0)
+        self.lbl_online.configure(
+            text=f"变声中：{m.get('name') or ''}",
+            fg=TM_OK,
+        )
+        if delay:
+            self.lbl_latency.configure(text=f"算法延迟约 {delay} ms")
+
+    def _on_vc_start_failed(self, err: str) -> None:
+        self._vc_starting = False
+        self.vc_running = False
+        self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+        self.lbl_online.configure(text="启动失败", fg=TM_META)
+        messagebox.showerror(
+            "启动失败",
+            (err or "未知错误")
+            + "\n\n可尝试：设置里检查输入/输出设备，或「打开原版实时面板」。",
+        )
+
+    def _stop_vc(self) -> None:
+        self.btn_start.configure(text="停止中…", bg=TM_META)
+        self.lbl_online.configure(text="正在停止…", fg=TM_META)
+
+        def work():
+            try:
+                rt_client.stop_vc_remote()
+                deadline = time.time() + 20
+                while time.time() < deadline:
+                    st = rt_client.poll_status()
+                    if str(st.get("state") or "") in ("idle", "error"):
+                        break
+                    time.sleep(0.2)
+            except Exception:
+                pass
+            self.root.after(0, self._on_vc_stopped)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_vc_stopped(self) -> None:
+        self.vc_running = False
+        self._vc_starting = False
+        self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+        self.lbl_online.configure(text="引擎待命", fg=TM_META)
+        self.lbl_latency.configure(text=APP_PRODUCT_TAGLINE)
 
     def _tick_status(self) -> None:
-        self.root.after(2000, self._tick_status)
+        try:
+            st = rt_client.poll_status()
+            state = str(st.get("state") or "")
+            if self.vc_running or self._vc_starting:
+                if state == "running":
+                    self.vc_running = True
+                    self._vc_starting = False
+                    delay = int(st.get("delay_ms") or 0)
+                    infer = int(st.get("infer_ms") or 0)
+                    self.btn_start.configure(text="停止变声", bg=TM_OK)
+                    parts = []
+                    if delay:
+                        parts.append(f"延迟 {delay}ms")
+                    if infer:
+                        parts.append(f"推理 {infer}ms")
+                    if parts:
+                        self.lbl_latency.configure(text=" · ".join(parts))
+                elif state == "error":
+                    err = str(st.get("error") or "error")
+                    self.vc_running = False
+                    self._vc_starting = False
+                    self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+                    self.lbl_online.configure(text=f"错误: {err[:48]}", fg=TM_META)
+                elif state == "idle" and self.vc_running and not self._vc_starting:
+                    # Worker stopped externally
+                    self._on_vc_stopped()
+        except Exception:
+            pass
+        self.root.after(1000, self._tick_status)
 
     def run(self) -> None:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -1384,7 +1797,14 @@ class MainApp:
 
     def _on_close(self) -> None:
         try:
+            self.save_settings_silent()
             save_config(self.cfg)
+        except Exception:
+            pass
+        try:
+            if self.vc_running or self._vc_starting:
+                rt_client.stop_vc_remote()
+            rt_client.quit_worker()
         except Exception:
             pass
         self.root.destroy()

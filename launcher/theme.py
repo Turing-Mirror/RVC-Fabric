@@ -74,14 +74,14 @@ FONT_MONO: Final[tuple] = _FONT_MONO
 PAD_X: Final[int] = 36
 PAD_CARD: Final[int] = 18
 NAV_HEIGHT: Final[int] = 68
-# Player-style dock: now-playing | mode | param tiles | transport
-BOTTOM_HEIGHT: Final[int] = 132
+# Player-style dock: room for now-playing lines + param tiles (no clip)
+BOTTOM_HEIGHT: Final[int] = 168
 GUTTER: Final[int] = 36
 # Wider default so dock tiles + page content breathe
-DEFAULT_WIN_W: Final[int] = 1280
-DEFAULT_WIN_H: Final[int] = 860
-MIN_WIN_W: Final[int] = 1080
-MIN_WIN_H: Final[int] = 720
+DEFAULT_WIN_W: Final[int] = 1320
+DEFAULT_WIN_H: Final[int] = 900
+MIN_WIN_W: Final[int] = 1100
+MIN_WIN_H: Final[int] = 740
 
 APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"
 APP_PRODUCT_TAGLINE: Final[str] = "TURING MIRROR · VOICE"

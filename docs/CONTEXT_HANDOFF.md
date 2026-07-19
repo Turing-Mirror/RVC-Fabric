@@ -227,12 +227,13 @@ Linux AMD 是 ROCm，不是 Windows DML。
 
 | 优先级 | 项 |
 |--------|-----|
-| 高 | 用户放入 **RVCMAX A 卡 Runtime**、**50 系包** 后，按 `发行包-显卡分版.md` 打 `amd` / `nvidia50` 全量包 |
-| 高 | 实机验收：单窗口启停、监听自己、N 卡听感；A 卡包到位后验 DML |
+| 高 | **三套 RVCMAX Runtime 已在本机**（`RVCMAX_Nvidia_xiaoyuan` / `RVCMAX_AMD_xiaoyuan` / `RVCMAX_Nvidia50x0_xiaoyuan`）。用 `build_release.py --variant nvidia\|amd\|nvidia50` 打正式全量 exe 包并实机验收 |
+| 高 | 实机验收：单窗口启停、监听自己；N 卡 CUDA；A 卡包 DML；50 系机 cu128 Runtime |
+| 中 | 开发切换 Runtime：`python scripts/sync_from_rvcmax.py --variant amd --force-runtime`（写 `User_Data/dev_variant.txt`） |
+| 中 | 产品单测：`scripts/run_tests.bat`（含可选 Runtime 冒烟） |
 | 中 | 若改 launcher 逻辑需 **重打 exe**；仅改 `gui_v1`/`rtrvc` 可拷贝进 dist |
 | 中 | 是否同步 push `origin`（个人仓） |
 | 低 | 主界面「运行中」与面板停止双向同步仍可再打磨；中文路径限制（原版） |
-| 低 | 清理本机残留 pythonw（若用户测崩后） |
 
 ---
 
@@ -245,12 +246,12 @@ Linux AMD 是 ROCm，不是 Windows DML。
 产品：RVC 底座 + 白无垢 launcher + 无窗 realtime_worker + 多包 GPU 方案
 发行：scripts/build_release.py --variant nvidia|amd|nvidia50；TEMP 用 L 盘
 约束：不改未要求的 UI；PowerShell；改完 commit；大文件不进 git
-当前：N 卡包已成型；等 A 卡/50 系 RVCMAX Runtime 路径后打对应全量包
+当前：三套 RVCMAX Runtime 已齐；代码/单测/选包适配完成；用 build_release --variant 打全量 exe 并实机验
 ```
 
 ---
 
 ## 10. 一句话状态
 
-**N 卡产品路径（单窗口变声 + 设置全量参数 + 监听自己 + 打包/组织仓）已成型。**  
-官方 A/I 支持 = **整包 DML Runtime + `--dml`**，不是单参数；多包构建脚本已就绪，**等参考 Runtime 到位后打 AMD/50 系发行包。**
+**N 卡产品路径已成型；A 卡 / 50 系按官方多包方式适配完成（选包、package_meta、默认加速、sync --variant、单测）。**  
+官方 A/I = **整包 DML Runtime + `--dml`**；50 系 = **独立 cu128 Runtime**。本机参考包已齐，下一步是按变体打全量发行包并实机验收。

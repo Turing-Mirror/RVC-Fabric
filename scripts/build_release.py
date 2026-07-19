@@ -40,6 +40,8 @@ REF = REPO / "RVCMAX" / "RVCMAX_Nvidia_xiaoyuan"
 RVCMAX_ROOT = REPO / "RVCMAX"
 
 # Official-style multi-pack: each variant = full tree + its own Runtime
+# prefer_dir = local RVCMAX folder name (exact). name_keys = fallback scan.
+# exclude_keys = directory names that must NOT match (nvidia vs nvidia50).
 VARIANTS: dict[str, dict] = {
     "nvidia": {
         "out_name": "TuringMirror_Voice_Nvidia",
@@ -47,22 +49,28 @@ VARIANTS: dict[str, dict] = {
         "label": "NVIDIA CUDA",
         "name_keys": ("nvidia", "n卡", "cuda"),
         "prefer_dir": "RVCMAX_Nvidia_xiaoyuan",
+        "exclude_keys": ("50", "5xxx", "50x0", "blackwell"),
     },
     "amd": {
         "out_name": "TuringMirror_Voice_AMD",
         "accel_default": "dml",
         "label": "AMD/Intel DirectML",
         "name_keys": ("amd", "dml", "a卡", "intel", "directml"),
-        "prefer_dir": "",
+        "prefer_dir": "RVCMAX_AMD_xiaoyuan",
+        "exclude_keys": (),
     },
     "nvidia50": {
         "out_name": "TuringMirror_Voice_Nvidia50",
         "accel_default": "cuda",
         "label": "NVIDIA 50-series CUDA",
-        "name_keys": ("50", "5xxx", "rtx50", "blackwell"),
-        "prefer_dir": "",
+        "name_keys": ("50", "5xxx", "rtx50", "50x0", "blackwell"),
+        "prefer_dir": "RVCMAX_Nvidia50x0_xiaoyuan",
+        "exclude_keys": (),
     },
 }
+
+# Substrings that mark a 50-series pack (shared helper for tests)
+SERIES50_KEYS = ("50", "5xxx", "50x0", "rtx50", "blackwell")
 
 # Engine files/dirs to ship (lean but runnable)
 ENGINE_DIRS = (
@@ -232,30 +240,50 @@ def copy_engine(out: Path) -> None:
     merge_rvcmax_engine_bits(out)
 
 
+def _rvc_core_candidates() -> list[Path]:
+    """Prefer N-card core, then AMD / 50-series cores for hubert/rmvpe/ffmpeg."""
+    cores: list[Path] = []
+    for name in (
+        "RVCMAX_Nvidia_xiaoyuan",
+        "RVCMAX_AMD_xiaoyuan",
+        "RVCMAX_Nvidia50x0_xiaoyuan",
+    ):
+        p = RVCMAX_ROOT / name / "RVC_Core"
+        if p.is_dir():
+            cores.append(p)
+    return cores
+
+
 def merge_rvcmax_engine_bits(out: Path) -> None:
-    """Fill hubert/rmvpe/ffmpeg from local RVCMAX pack (no network)."""
-    core = REF / "RVC_Core"
-    if not core.is_dir():
-        log("[merge] RVCMAX RVC_Core not found — ensure hubert/rmvpe already in out/assets")
+    """Fill hubert/rmvpe/ffmpeg from local RVCMAX packs (no network).
+
+    Always try to ship both rmvpe.pt and rmvpe.onnx (AMD/DML needs onnx for F0).
+    """
+    cores = _rvc_core_candidates()
+    if not cores:
+        log("[merge] no RVCMAX RVC_Core — ensure hubert/rmvpe already in out/assets")
         return
-    log("[merge] hubert / rmvpe / ffmpeg from RVCMAX")
+    log("[merge] hubert / rmvpe / ffmpeg from RVCMAX (multi-core fallback)")
 
-    def _cf(src: Path, dst: Path) -> None:
-        if not src.is_file():
-            log(f"  missing: {src}")
+    def _cf_first(rel: str, dst: Path) -> None:
+        for core in cores:
+            src = core / rel
+            if not src.is_file():
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if dst.is_file() and dst.stat().st_size == src.stat().st_size:
+                log(f"  skip: {dst.relative_to(out)}")
+                return
+            shutil.copy2(src, dst)
+            log(f"  + {dst.relative_to(out)} ({src.stat().st_size // 1024 // 1024} MB) from {core.parent.name}")
             return
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.is_file() and dst.stat().st_size == src.stat().st_size:
-            log(f"  skip: {dst.relative_to(out)}")
-            return
-        shutil.copy2(src, dst)
-        log(f"  + {dst.relative_to(out)} ({src.stat().st_size // 1024 // 1024} MB)")
+        log(f"  missing: {rel}")
 
-    _cf(core / "assets" / "hubert" / "hubert_base.pt", out / "assets" / "hubert" / "hubert_base.pt")
+    _cf_first("assets/hubert/hubert_base.pt", out / "assets" / "hubert" / "hubert_base.pt")
     for n in ("rmvpe.pt", "rmvpe.onnx"):
-        _cf(core / "assets" / "rmvpe" / n, out / "assets" / "rmvpe" / n)
+        _cf_first(f"assets/rmvpe/{n}", out / "assets" / "rmvpe" / n)
     for n in ("ffmpeg.exe", "ffprobe.exe"):
-        _cf(core / n, out / n)
+        _cf_first(n, out / n)
 
 
 def copy_runtime(out: Path, runtime_src: Path | None) -> None:
@@ -390,32 +418,74 @@ def write_readme(out: Path, *, variant: str = "nvidia", label: str = "NVIDIA CUD
     log("[doc] 使用说明.txt")
 
 
-def find_rvcmax_pack_dir(name_keys: tuple[str, ...], prefer_dir: str = "") -> Path | None:
-    """Find RVCMAX/<pack>/ that matches keywords and has Runtime/python.exe."""
+def pack_dir_matches(
+    dir_name: str,
+    *,
+    name_keys: tuple[str, ...],
+    exclude_keys: tuple[str, ...] = (),
+) -> bool:
+    """Return True if folder name matches include keys and none of exclude keys."""
+    name = (dir_name or "").lower()
+    if not name:
+        return False
+    keys = tuple(k.lower() for k in name_keys if k)
+    excludes = tuple(k.lower() for k in exclude_keys if k)
+    if excludes and any(ex in name for ex in excludes):
+        return False
+    if not keys:
+        return False
+    return any(k in name for k in keys)
+
+
+def find_rvcmax_pack_dir(
+    name_keys: tuple[str, ...],
+    prefer_dir: str = "",
+    *,
+    exclude_keys: tuple[str, ...] = (),
+    rvcmax_root: Path | None = None,
+) -> Path | None:
+    """Find RVCMAX/<pack>/ that matches keywords and has Runtime/python.exe.
+
+    Order: prefer_dir (exact) → scan by name_keys with exclude_keys filter.
+    ``rvcmax_root`` is injectable for unit tests.
+    """
+    root = rvcmax_root if rvcmax_root is not None else RVCMAX_ROOT
     if prefer_dir:
-        p = RVCMAX_ROOT / prefer_dir
+        p = root / prefer_dir
         if (p / "Runtime" / "python.exe").is_file():
             return p
-    if not RVCMAX_ROOT.is_dir():
+    if not root.is_dir():
         return None
-    keys = tuple(k.lower() for k in name_keys)
-    for child in sorted(RVCMAX_ROOT.iterdir(), key=lambda x: x.name.lower()):
+    for child in sorted(root.iterdir(), key=lambda x: x.name.lower()):
         if not child.is_dir():
             continue
-        name = child.name.lower()
-        if not any(k in name for k in keys):
+        if not pack_dir_matches(
+            child.name, name_keys=name_keys, exclude_keys=exclude_keys
+        ):
             continue
         if (child / "Runtime" / "python.exe").is_file():
             return child
     return None
 
 
+def find_pack_for_variant(
+    variant: str, *, rvcmax_root: Path | None = None
+) -> Path | None:
+    """Resolve RVCMAX pack directory for a shipping variant."""
+    info = VARIANTS.get(variant, VARIANTS["nvidia"])
+    return find_rvcmax_pack_dir(
+        tuple(info.get("name_keys") or ()),
+        str(info.get("prefer_dir") or ""),
+        exclude_keys=tuple(info.get("exclude_keys") or ()),
+        rvcmax_root=rvcmax_root,
+    )
+
+
 def default_runtime(variant: str = "nvidia") -> Path | None:
     env = os.environ.get("TM_RUNTIME_SRC", "")
     if env and (Path(env) / "python.exe").is_file():
         return Path(env)
-    info = VARIANTS.get(variant, VARIANTS["nvidia"])
-    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    pack = find_pack_for_variant(variant)
     if pack and (pack / "Runtime" / "python.exe").is_file():
         return pack / "Runtime"
     if variant == "nvidia":
@@ -429,8 +499,7 @@ def default_models(variant: str = "nvidia") -> Path | None:
     env = os.environ.get("TM_MODELS_SRC", "")
     if env and Path(env).is_dir():
         return Path(env)
-    info = VARIANTS.get(variant, VARIANTS["nvidia"])
-    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    pack = find_pack_for_variant(variant)
     if pack and (pack / "User_Data" / "models").is_dir():
         return pack / "User_Data" / "models"
     for p in (REF / "User_Data" / "models", REPO / "User_Data" / "models"):
@@ -440,8 +509,7 @@ def default_models(variant: str = "nvidia") -> Path | None:
 
 
 def default_vbcable(variant: str = "nvidia") -> Path | None:
-    info = VARIANTS.get(variant, VARIANTS["nvidia"])
-    pack = find_rvcmax_pack_dir(tuple(info["name_keys"]), str(info.get("prefer_dir") or ""))
+    pack = find_pack_for_variant(variant)
     if pack and (pack / "VBCABLE").is_dir() and any((pack / "VBCABLE").glob("*.exe")):
         return pack / "VBCABLE"
     for p in (REF / "VBCABLE", REPO / "VBCABLE"):
@@ -516,6 +584,8 @@ def main() -> int:
 
     # 5) package identity (official multi-pack)
     try:
+        if str(REPO) not in sys.path:
+            sys.path.insert(0, str(REPO))
         from launcher.package_meta import write_package_meta
 
         write_package_meta(
@@ -527,7 +597,19 @@ def main() -> int:
         )
         log(f"[meta] package_meta.json variant={variant}")
     except Exception as e:
-        log(f"[meta] failed: {e}")
+        # Fallback: write meta without importing launcher (path issues)
+        log(f"[meta] import write_package_meta failed ({e}); writing JSON fallback")
+        meta = {
+            "variant": variant,
+            "label": vinfo["label"],
+            "accel_default": vinfo["accel_default"],
+            "use_dml": bool(vinfo["accel_default"] == "dml"),
+            "tagged": True,
+        }
+        (out / "package_meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        log(f"[meta] package_meta.json variant={variant} (fallback)")
 
     # Seed default app config accel for first launch
     try:

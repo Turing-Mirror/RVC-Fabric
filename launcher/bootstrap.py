@@ -200,10 +200,16 @@ class BootstrapApp:
             try:
                 from launcher.config_store import load_config
                 from launcher.gpu_backend import detect_full
+                from launcher.package_meta import load_package_meta
 
                 pref = str(load_config().get("accel_backend") or "auto")
                 info = detect_full(RROOT, pref)
-                return f"加速：{info.get('label')} {info.get('detail') or ''}（{info.get('backend')}）"
+                pm = load_package_meta()
+                pack = str(pm.get("label") or pm.get("variant") or "未标记")
+                return (
+                    f"发行包：{pack}\n"
+                    f"加速：{info.get('label')} {info.get('detail') or ''}（{info.get('backend')}）"
+                )
             except Exception as e:
                 return f"加速：检测失败 ({e})"
 

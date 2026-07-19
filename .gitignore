@@ -49,6 +49,8 @@ ffprobe.*
 *.spec
 /启动器.exe
 /变声器.exe
+/TM_Setup.exe
+/TM_Voice.exe
 /UserData/app_config.json
 /UserData/gui_configs.json
 /User_Data/app_config.json
@@ -60,6 +62,12 @@ ffprobe.*
 !/User_Data/models/.gitkeep
 !/User_Data/README.md
 
+# Local build/debug scratch (keep off git — can be multi-GB logs + probes)
+/TEMP_BUILD/
+/TEMP/
+*.log
+!docs/**/*.md
+
 # Local reference screenshots (not product assets)
 /图片*.png
 # Reference third-party pack (do not ship in this repo)
@@ -67,6 +75,16 @@ ffprobe.*
 error*.png
 /_local/
 /UserData/
+# Dev-only noise
+/scripts/dev/_env_trace.bat
+/scripts/dev/*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
 
 .env
 

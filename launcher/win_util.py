@@ -9,11 +9,14 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Optional
 
 from launcher.paths import (
     ROOT,
     SHORTCUT_NAME,
+    USER_LOGS,
     desktop_dir,
     find_python,
     find_release_exe,
@@ -21,6 +24,10 @@ from launcher.paths import (
 
 
 CREATE_NO_WINDOW = 0x08000000
+# GUI child processes must NOT use CREATE_NO_WINDOW — it can suppress or
+# delay window creation for FreeSimpleGUI / tk under some Windows sessions.
+DETACHED_PROCESS = 0x00000008
+CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 
 def run_no_console(
@@ -38,6 +45,94 @@ def run_no_console(
         kw["stdout"] = subprocess.DEVNULL
         kw["stderr"] = subprocess.DEVNULL
     return subprocess.Popen(args, **kw)
+
+
+def run_gui_process(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict | None = None,
+    log_path: Path | None = None,
+) -> subprocess.Popen:
+    """Start a windowed GUI process (pythonw / FreeSimpleGUI / tk).
+
+    Unlike run_no_console, does not pass CREATE_NO_WINDOW (which can break
+    GUI toolkits). Stderr goes to a log file so silent crashes are visible.
+    """
+    cwd = cwd or ROOT
+    env = env or os.environ.copy()
+    kw: dict = {
+        "cwd": str(cwd),
+        "env": env,
+        "stdin": subprocess.DEVNULL,
+    }
+    log_f = None
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_f = open(log_path, "a", encoding="utf-8", errors="replace")
+        log_f.write(f"\n===== launch {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+        log_f.write("cmd: " + " ".join(args) + "\n")
+        log_f.flush()
+        kw["stdout"] = log_f
+        kw["stderr"] = subprocess.STDOUT
+    else:
+        kw["stdout"] = subprocess.DEVNULL
+        kw["stderr"] = subprocess.DEVNULL
+    if sys.platform == "win32":
+        # Do not use CREATE_NO_WINDOW here — it can prevent FreeSimpleGUI/tk
+        # windows from appearing. pythonw already has no console subsystem.
+        # CREATE_NEW_PROCESS_GROUP only: survive parent exit cleanly.
+        kw["creationflags"] = CREATE_NEW_PROCESS_GROUP
+    proc = subprocess.Popen(args, **kw)
+    # Popen keeps the file handle open for the child; do not close log_f here
+    proc._tm_log_file = log_f  # type: ignore[attr-defined]
+    return proc
+
+
+def focus_window_by_title(title_substr: str, timeout_s: float = 45.0) -> bool:
+    """Bring first visible window whose title contains title_substr to front."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    found_hwnd = ctypes.c_void_p(0)
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def _enum(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n <= 0:
+            return True
+        buf = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(hwnd, buf, n + 1)
+        if title_substr.lower() in (buf.value or "").lower():
+            found_hwnd.value = hwnd
+            return False
+        return True
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        found_hwnd.value = 0
+        user32.EnumWindows(_enum, 0)
+        if found_hwnd.value:
+            hwnd = found_hwnd.value
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def read_tail(path: Path, max_chars: int = 1200) -> str:
+    try:
+        if not path.is_file():
+            return ""
+        data = path.read_text(encoding="utf-8", errors="replace")
+        return data[-max_chars:] if len(data) > max_chars else data
+    except Exception:
+        return ""
 
 
 def open_path(path: Path | str) -> None:
@@ -181,7 +276,19 @@ def start_webui(port: int = 7897) -> subprocess.Popen:
 
 
 def start_legacy_realtime_gui() -> subprocess.Popen:
+    """Launch advanced realtime panel (gui_v1 FreeSimpleGUI).
+
+    Cold start often needs 20–40s (torch/CUDA). Logs: User_Data/logs/realtime_gui.log
+    """
     pyw = find_python(prefer_windowed=True)
     script = ROOT / "gui_v1.py"
+    if not script.is_file():
+        raise FileNotFoundError(f"找不到实时面板脚本: {script}")
     env = _env_with_root()
-    return run_no_console([pyw, str(script)], env=env)
+    # Prefer pythonw so no black console; never CREATE_NO_WINDOW for this GUI
+    log_path = USER_LOGS / "realtime_gui.log"
+    return run_gui_process([pyw, str(script)], cwd=ROOT, env=env, log_path=log_path)
+
+
+def realtime_gui_log_path() -> Path:
+    return USER_LOGS / "realtime_gui.log"

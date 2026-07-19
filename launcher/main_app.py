@@ -46,7 +46,10 @@ from launcher.theme import (
     serif_font,
 )
 from launcher.win_util import (
+    focus_window_by_title,
     open_path,
+    read_tail,
+    realtime_gui_log_path,
     start_legacy_realtime_gui,
     start_webui,
 )
@@ -74,6 +77,7 @@ class MainApp:
                     break
 
         self.webui_proc = None
+        self.gui_proc = None
         self.vc_running = False
         self._current_page = "home"
         self._resize_job = None
@@ -1191,21 +1195,72 @@ class MainApp:
         except Exception:
             pass
 
+    def _watch_realtime_gui(self, proc) -> None:
+        """Background: surface crash; when window appears, bring to front."""
+        log = realtime_gui_log_path()
+        try:
+            # Cold start: torch/CUDA often 20–40s before FreeSimpleGUI window
+            focused = focus_window_by_title("RVC - GUI", timeout_s=50.0)
+            if focused:
+                def _ok():
+                    self.lbl_online.configure(text="实时面板已打开", fg=TM_OK)
+                self.root.after(0, _ok)
+                return
+            if proc.poll() is not None:
+                tail = read_tail(log)
+                msg = (
+                    f"实时面板进程已退出（代码 {proc.returncode}）。\n"
+                    f"日志：{log}\n\n{tail or '（日志为空，可能是 Runtime/依赖缺失）'}"
+                )
+
+                def _fail():
+                    self.lbl_online.configure(text="实时面板启动失败", fg="#a33")
+                    self.vc_running = False
+                    try:
+                        self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
+                    except Exception:
+                        pass
+                    messagebox.showerror("实时面板启动失败", msg)
+
+                self.root.after(0, _fail)
+                return
+
+            def _slow():
+                self.lbl_online.configure(
+                    text="实时面板加载中…若无窗口请看任务栏",
+                    fg=TM_META,
+                )
+
+            self.root.after(0, _slow)
+        except Exception:
+            pass
+
     def open_legacy_gui(self) -> None:
         try:
             self.save_settings_silent()
             if self.models:
                 self._sync_model_to_realtime_gui(self.models[self.model_idx])
-            start_legacy_realtime_gui()
-            self.lbl_online.configure(text="实时面板已打开", fg=TM_OK)
+            # Do NOT show a blocking "已载入音色" dialog — that looked like the
+            # only result while gui_v1 still loads torch for ~30s.
+            name = ""
             if self.models:
-                m = self.models[self.model_idx]
-                messagebox.showinfo(
-                    "实时面板",
-                    f"已载入当前音色：\n{m['name']}\n\n"
-                    f"{m.get('path', '')}\n\n"
-                    "面板中的模型路径应与上面一致。\n"
-                    "输出选 CABLE Input，游戏麦克风选 CABLE Output。",
+                name = self.models[self.model_idx].get("name") or ""
+            self.lbl_online.configure(
+                text="正在启动实时面板（约 20–40 秒）…",
+                fg=TM_OK,
+            )
+            proc = start_legacy_realtime_gui()
+            self.gui_proc = proc
+            threading.Thread(
+                target=self._watch_realtime_gui,
+                args=(proc,),
+                daemon=True,
+            ).start()
+            if name:
+                # Non-blocking status only; window will appear separately
+                self.lbl_online.configure(
+                    text=f"启动中：{name}（首次约半分钟）",
+                    fg=TM_OK,
                 )
         except Exception as e:
             messagebox.showerror("失败", str(e))
@@ -1225,16 +1280,19 @@ class MainApp:
         self.save_settings_silent()
         self._sync_model_to_realtime_gui(m)
         try:
-            start_legacy_realtime_gui()
+            proc = start_legacy_realtime_gui()
+            self.gui_proc = proc
             self.vc_running = True
             self.btn_start.configure(text="变声运行中", bg=TM_OK)
-            self.lbl_online.configure(text="变声运行中", fg=TM_OK)
-            messagebox.showinfo(
-                "已启动",
-                f"当前音色：{m['name']}\n{m.get('path', '')}\n\n"
-                "实时面板已按该模型路径启动。\n"
-                "输出选 CABLE Input，游戏麦克风选 CABLE Output。",
+            self.lbl_online.configure(
+                text=f"启动中：{m['name']}（约 20–40 秒）",
+                fg=TM_OK,
             )
+            threading.Thread(
+                target=self._watch_realtime_gui,
+                args=(proc,),
+                daemon=True,
+            ).start()
         except Exception as e:
             messagebox.showerror("启动失败", str(e))
 

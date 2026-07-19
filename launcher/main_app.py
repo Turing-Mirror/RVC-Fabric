@@ -25,7 +25,9 @@ from launcher.catalog import (
     bind_index_to_model_dir,
     clear_model_index,
     discover_index_files,
+    get_model_voice_params,
     import_model_to_catalog,
+    save_model_voice_params,
 )
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
 from launcher.hotkeys import (
@@ -143,16 +145,25 @@ class MainApp:
         self._global_hk = GlobalHotkeyManager()
         self._model_restart_job = None
         self._capture_action_id: Optional[str] = None
+        self._loading_voice = False  # skip persist while applying per-model params
+        self._voice_save_job = None
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("980x680")
-        self.root.minsize(780, 520)
+        self.root.geometry("980x720")
+        self.root.minsize(820, 560)
         self.root.configure(bg=TM_BG)
         self._place_and_raise(force_size=True)
 
+        # Shared hot-control vars (bottom dock + settings page)
+        self._init_shared_voice_vars()
         self._build_chrome()
         self._build_pages()
+        # Apply selected model's saved voice params after UI exists
+        if self.models:
+            self._apply_model_voice_params(
+                self.models[self.model_idx], push_remote=False
+            )
         self.root.bind("<Configure>", self._on_root_configure)
         self.show_page("home")
         self._tick_status()
@@ -164,12 +175,28 @@ class MainApp:
         self.root.after(350, self._poll_global_hotkeys)
         self._gpu_info: dict = {}
 
+    def _init_shared_voice_vars(self) -> None:
+        """Hot-control Tk vars shared by bottom dock and settings page."""
+        self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
+        self.var_formant = tk.DoubleVar(value=float(self.cfg.get("formant") or 0))
+        self.var_threhold = tk.IntVar(
+            value=int(
+                self.cfg.get("threhold")
+                if self.cfg.get("threhold") is not None
+                else -60
+            )
+        )
+        self.var_index_rate = tk.DoubleVar(value=float(self.cfg.get("index_rate") or 0))
+        self.var_rms = tk.DoubleVar(value=float(self.cfg.get("rms_mix_rate") or 0))
+        self.var_f0 = tk.StringVar(value=str(self.cfg.get("f0method") or "fcpe"))
+        self.var_function = tk.StringVar(value=str(self.cfg.get("function") or "vc"))
+
     def _place_and_raise(self, force_size: bool = False) -> None:
         """Show window on primary screen. Only set default size once (allow user resize)."""
         try:
             self.root.update_idletasks()
             if force_size or not self._placed_once:
-                w, h = 960, 620
+                w, h = 980, 700
                 sw = self.root.winfo_screenwidth()
                 sh = self.root.winfo_screenheight()
                 x = max(0, (sw - w) // 2)
@@ -264,9 +291,11 @@ class MainApp:
         bottom = tk.Frame(self.root, bg=TM_SURFACE, height=BOTTOM_HEIGHT)
         bottom.pack(fill="x", side="bottom")
         bottom.pack_propagate(False)
+        self._bottom_bar = bottom
 
+        # --- Left: now playing ---
         left_info = tk.Frame(bottom, bg=TM_SURFACE)
-        left_info.place(x=PAD_X, rely=0.5, anchor="w")
+        left_info.pack(side="left", padx=(PAD_X, 8), pady=10, fill="y")
         tk.Label(
             left_info,
             text=tracked("NOW PLAYING", gap="  "),
@@ -278,7 +307,7 @@ class MainApp:
         self.bottom_name = tk.Label(
             left_info,
             text="未选择模型",
-            font=title_font(13, "bold"),
+            font=title_font(12, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
@@ -293,21 +322,140 @@ class MainApp:
             anchor="w",
         )
         self.bottom_tag.pack(anchor="w", pady=(2, 0))
-
-        ctrl = tk.Frame(bottom, bg=TM_SURFACE)
-        ctrl.place(relx=0.5, rely=0.5, anchor="center")
-        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
-        self.btn_start.pack(side="left", padx=6)
-        GhostButton(ctrl, "高级实时面板", command=self.open_legacy_gui).pack(
-            side="left", padx=6
+        self.bottom_voice_hint = tk.Label(
+            left_info,
+            text="音高/共鸣随音色单独保存",
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
         )
+        self.bottom_voice_hint.pack(anchor="w", pady=(4, 0))
 
+        # --- Right: start + status ---
         right = tk.Frame(bottom, bg=TM_SURFACE)
-        right.place(relx=1.0, x=-PAD_X, rely=0.5, anchor="e")
+        right.pack(side="right", padx=(8, PAD_X), pady=10, fill="y")
         self.status_badge = StatusBadge(right)
         self.status_badge.pack(anchor="e")
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
+        ctrl = tk.Frame(right, bg=TM_SURFACE)
+        ctrl.pack(anchor="e", pady=(8, 0))
+        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
+        self.btn_start.pack(side="left", padx=4)
+        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(
+            side="left", padx=4
+        )
+
+        # --- Center: mode + hot sliders ---
+        mid = tk.Frame(bottom, bg=TM_SURFACE)
+        mid.pack(side="left", fill="both", expand=True, padx=4, pady=8)
+
+        mode_row = tk.Frame(mid, bg=TM_SURFACE)
+        mode_row.pack(anchor="w", fill="x")
+        tk.Label(
+            mode_row,
+            text="模式",
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+        ).pack(side="left", padx=(0, 6))
+        seg = tk.Frame(mode_row, bg=TM_INSET, padx=3, pady=3)
+        seg.pack(side="left")
+        self.btn_mode_vc = tk.Button(
+            seg,
+            text="输出变声",
+            font=sans_font(9),
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=lambda: self._set_function_mode("vc"),
+        )
+        self.btn_mode_vc.pack(side="left", padx=1)
+        self.btn_mode_im = tk.Button(
+            seg,
+            text="原声旁路",
+            font=sans_font(9),
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=3,
+            cursor="hand2",
+            command=lambda: self._set_function_mode("im"),
+        )
+        self.btn_mode_im.pack(side="left", padx=1)
+        HoverTip(
+            self.btn_mode_vc,
+            "输出变声：麦克风 → 变成所选音色再输出（日常开黑）。",
+        )
+        HoverTip(
+            self.btn_mode_im,
+            "原声旁路（设置里的「输入监听」）：不改变声音，只输出麦克风原声，用来测麦/接线。",
+        )
+
+        slide_row = tk.Frame(mid, bg=TM_SURFACE)
+        slide_row.pack(anchor="w", fill="x", pady=(6, 0))
+
+        def _dock_scale(parent, label, variable, from_, to, res, width=120):
+            box = tk.Frame(parent, bg=TM_SURFACE)
+            box.pack(side="left", padx=(0, 14))
+            head = tk.Frame(box, bg=TM_SURFACE)
+            head.pack(fill="x")
+            tk.Label(
+                head,
+                text=label,
+                font=mono_font(7),
+                bg=TM_SURFACE,
+                fg=TM_META,
+            ).pack(side="left")
+            val_lbl = tk.Label(
+                head,
+                text="",
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_INK,
+            )
+            val_lbl.pack(side="right")
+
+            def _fmt(_=None, lbl=val_lbl, var=variable, r=res):
+                try:
+                    v = var.get()
+                    if float(r) >= 1:
+                        lbl.configure(text=str(int(v)))
+                    else:
+                        lbl.configure(text=f"{float(v):.2f}")
+                except Exception:
+                    pass
+
+            sc = tk.Scale(
+                box,
+                from_=from_,
+                to=to,
+                resolution=res,
+                orient="horizontal",
+                variable=variable,
+                showvalue=0,
+                length=width,
+                bg=TM_SURFACE,
+                fg=TM_INK,
+                troughcolor=TM_HAIRLINE,
+                highlightthickness=0,
+                bd=0,
+                sliderrelief="flat",
+                command=lambda _v: self._on_dock_param(),
+            )
+            sc.pack(fill="x")
+            variable.trace_add("write", lambda *_a: _fmt())
+            _fmt()
+            return sc
+
+        _dock_scale(slide_row, "音高", self.var_pitch, -24, 24, 1, width=130)
+        _dock_scale(slide_row, "共鸣", self.var_formant, -2, 2, 0.05, width=110)
+        _dock_scale(slide_row, "阈值", self.var_threhold, -60, 0, 1, width=100)
+
+        self._update_mode_buttons()
         self._sync_bottom()
 
     def _format_latency_line(self, delay_ms: int, infer_ms: int) -> str:
@@ -580,14 +728,23 @@ class MainApp:
             return
         idx = idx % len(self.models)
         prev = self.model_idx
+        # Save previous model's voice params before switching
+        if prev != idx and self.models:
+            try:
+                self._persist_voice_params_to_model(
+                    self.models[prev], immediate=True
+                )
+            except Exception:
+                pass
         self.model_idx = idx
         m = self.models[self.model_idx]
         # Persist so realtime / next launch use the same model
         self.cfg["last_model"] = m["file"]
         self.cfg["last_model_name"] = m["name"]
         self.cfg["last_model_path"] = m.get("path") or ""
+        # Load this voice's pitch/formant/… then sync engine config
+        self._apply_model_voice_params(m, push_remote=False)
         save_config(self.cfg)
-        # Push into gui_v1's configs/inuse/config.json (read only at panel start)
         self._sync_model_to_realtime_gui(m)
         self._sync_bottom()
         self._update_home_current_label()
@@ -606,6 +763,9 @@ class MainApp:
             and bool(self.cfg.get("hotkey_restart_on_model_switch", True))
         ):
             self._restart_vc_for_new_model()
+        elif prev != idx and self.vc_running:
+            # Same stream, different voice params only — hot push (model weight needs restart)
+            self._push_hot_params()
 
     def _sync_model_to_realtime_gui(self, m: Optional[dict] = None) -> None:
         """Write current model + full settings into engine config.json."""
@@ -687,9 +847,225 @@ class MainApp:
                 + (f" · {extra}" if extra == "legacy_weights" else "")
                 + f"  ·  {self.model_idx + 1}/{len(self.models)}"
             )
+            if hasattr(self, "bottom_voice_hint"):
+                try:
+                    p = int(self.var_pitch.get())
+                    f = float(self.var_formant.get())
+                    mode = "变声" if str(self.var_function.get()) == "vc" else "原声"
+                    self.bottom_voice_hint.configure(
+                        text=f"音色专属 · 音高 {p:+d} · 共鸣 {f:.2f} · {mode}"
+                    )
+                except Exception:
+                    self.bottom_voice_hint.configure(text="音高/共鸣随音色单独保存")
         else:
             self.bottom_name.configure(text="未选择模型")
             self.bottom_tag.configure(text="请到「模型」页导入音色")
+            if hasattr(self, "bottom_voice_hint"):
+                self.bottom_voice_hint.configure(text="音高/共鸣随音色单独保存")
+        try:
+            self._update_mode_buttons()
+        except Exception:
+            pass
+
+    def _update_mode_buttons(self) -> None:
+        """Style bottom segment control for vc / im."""
+        if not hasattr(self, "btn_mode_vc"):
+            return
+        mode = "vc"
+        try:
+            mode = str(self.var_function.get() or "vc")
+        except Exception:
+            mode = str(self.cfg.get("function") or "vc")
+        active = mode == "vc"
+        try:
+            self.btn_mode_vc.configure(
+                bg=TM_ACCENT if active else TM_INSET,
+                fg=TM_ACCENT_INK if active else TM_INK,
+                activebackground=TM_ACCENT if active else TM_SURFACE_HOVER,
+                activeforeground=TM_ACCENT_INK if active else TM_INK,
+            )
+            self.btn_mode_im.configure(
+                bg=TM_INSET if active else TM_ACCENT,
+                fg=TM_INK if active else TM_ACCENT_INK,
+                activebackground=TM_SURFACE_HOVER if active else TM_ACCENT,
+                activeforeground=TM_INK if active else TM_ACCENT_INK,
+            )
+        except Exception:
+            pass
+
+    def _set_function_mode(self, mode: str) -> None:
+        """Switch 输出变声 (vc) / 原声旁路 (im). Session-level, hot-updatable."""
+        mode = "im" if str(mode) == "im" else "vc"
+        try:
+            self.var_function.set(mode)
+        except Exception:
+            pass
+        self.cfg["function"] = mode
+        self._update_mode_buttons()
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        self._sync_bottom()
+        if self.vc_running:
+            self._on_hot_param()
+        else:
+            try:
+                self._collect_settings_into_cfg()
+                if self.models:
+                    self._sync_model_to_realtime_gui(self.models[self.model_idx])
+            except Exception:
+                pass
+        self._set_status_visual(
+            "live" if self.vc_running else "idle",
+            "模式：输出变声" if mode == "vc" else "模式：原声旁路",
+            "运行中已热切换" if self.vc_running else "下次开启变声生效",
+        )
+
+    def _collect_voice_params_dict(self) -> dict:
+        """Current UI voice params for per-model save."""
+        d: dict = {}
+        try:
+            d["pitch"] = int(self.var_pitch.get())
+            d["formant"] = float(self.var_formant.get())
+            d["threhold"] = int(self.var_threhold.get())
+            d["index_rate"] = float(self.var_index_rate.get())
+            d["rms_mix_rate"] = float(self.var_rms.get())
+            d["f0method"] = str(self.var_f0.get() or "fcpe")
+        except Exception:
+            d["pitch"] = int(self.cfg.get("pitch") or 0)
+            d["formant"] = float(self.cfg.get("formant") or 0)
+            d["threhold"] = int(
+                self.cfg.get("threhold")
+                if self.cfg.get("threhold") is not None
+                else -60
+            )
+            d["index_rate"] = float(self.cfg.get("index_rate") or 0)
+            d["rms_mix_rate"] = float(self.cfg.get("rms_mix_rate") or 0)
+            d["f0method"] = str(self.cfg.get("f0method") or "fcpe")
+        return d
+
+    def _apply_model_voice_params(
+        self, m: dict, *, push_remote: bool = False
+    ) -> None:
+        """Load per-model pitch/formant/… into UI + cfg (fallback: global app cfg)."""
+        if not m:
+            return
+        self._loading_voice = True
+        try:
+            # Prefer live sidecar on disk, then catalog fields, then app defaults
+            disk: dict = {}
+            if m.get("source") == "user_data" and m.get("dir"):
+                try:
+                    disk = get_model_voice_params(Path(m["dir"]))
+                except Exception:
+                    disk = {}
+            def pick(key, cast, default):
+                if key in disk and disk[key] is not None:
+                    return cast(disk[key])
+                if m.get(key) is not None:
+                    return cast(m.get(key))
+                v = self.cfg.get(key)
+                if v is None or v == "":
+                    return cast(default)
+                return cast(v)
+
+            pitch = pick("pitch", lambda x: int(round(float(x))), 0)
+            formant = pick("formant", float, 0.0)
+            thr = pick("threhold", lambda x: int(round(float(x))), -60)
+            ir = pick("index_rate", float, 0.0)
+            rms = pick("rms_mix_rate", float, 0.0)
+            f0 = pick("f0method", str, "fcpe")
+
+            self.var_pitch.set(pitch)
+            self.var_formant.set(formant)
+            self.var_threhold.set(thr)
+            self.var_index_rate.set(ir)
+            self.var_rms.set(rms)
+            self.var_f0.set(f0)
+
+            self.cfg["pitch"] = pitch
+            self.cfg["formant"] = formant
+            self.cfg["threhold"] = thr
+            self.cfg["index_rate"] = ir
+            self.cfg["rms_mix_rate"] = rms
+            self.cfg["f0method"] = f0
+
+            # Keep in-memory model dict in sync
+            m["pitch"] = pitch
+            m["formant"] = formant
+            m["threhold"] = thr
+            m["index_rate"] = ir
+            m["rms_mix_rate"] = rms
+            m["f0method"] = f0
+        finally:
+            self._loading_voice = False
+        try:
+            self._sync_bottom()
+        except Exception:
+            pass
+        if push_remote and self.vc_running:
+            self._push_hot_params()
+
+    def _persist_voice_params_to_model(
+        self, m: Optional[dict] = None, *, immediate: bool = False
+    ) -> None:
+        """Write current voice params into this model's config.json (user_data only)."""
+        if self._loading_voice:
+            return
+        if m is None:
+            if not self.models:
+                return
+            m = self.models[self.model_idx]
+        if m.get("source") != "user_data" or not m.get("dir"):
+            return
+        params = self._collect_voice_params_dict()
+
+        def _write():
+            self._voice_save_job = None
+            try:
+                side = save_model_voice_params(
+                    Path(m["dir"]),
+                    params,
+                    display_name=m.get("name"),
+                )
+                for k, v in params.items():
+                    m[k] = v
+                # also refresh tag/name from disk if any
+                if side.get("name"):
+                    m["name"] = side["name"]
+            except Exception:
+                pass
+
+        if immediate:
+            if self._voice_save_job is not None:
+                try:
+                    self.root.after_cancel(self._voice_save_job)
+                except Exception:
+                    pass
+                self._voice_save_job = None
+            _write()
+            return
+        if self._voice_save_job is not None:
+            try:
+                self.root.after_cancel(self._voice_save_job)
+            except Exception:
+                pass
+        self._voice_save_job = self.root.after(280, _write)
+
+    def _on_dock_param(self) -> None:
+        """Bottom dock slider moved — save per-model + hot update."""
+        if self._loading_voice:
+            return
+        try:
+            self.cfg["pitch"] = int(self.var_pitch.get())
+            self.cfg["formant"] = float(self.var_formant.get())
+            self.cfg["threhold"] = int(self.var_threhold.get())
+        except Exception:
+            pass
+        self._persist_voice_params_to_model()
+        self._sync_bottom()
+        self._on_hot_param()
 
     def _page_models(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
@@ -928,15 +1304,7 @@ class MainApp:
         wrap.bind("<MouseWheel>", _on_mousewheel)
         wrap.bind("<Map>", lambda _e: _bind_wheel_recursive(wrap), add="+")
 
-        # --- vars ---
-        self.var_pitch = tk.IntVar(value=int(self.cfg.get("pitch") or 0))
-        self.var_formant = tk.DoubleVar(value=float(self.cfg.get("formant") or 0))
-        self.var_f0 = tk.StringVar(value=str(self.cfg.get("f0method") or "fcpe"))
-        self.var_threhold = tk.IntVar(
-            value=int(self.cfg.get("threhold") if self.cfg.get("threhold") is not None else -60)
-        )
-        self.var_index_rate = tk.DoubleVar(value=float(self.cfg.get("index_rate") or 0))
-        self.var_rms = tk.DoubleVar(value=float(self.cfg.get("rms_mix_rate") or 0))
+        # --- vars (pitch/formant/function etc. already created in _init_shared_voice_vars)
         self.var_block = tk.DoubleVar(value=float(self.cfg.get("block_time") or 0.25))
         self.var_crossfade = tk.DoubleVar(
             value=float(self.cfg.get("crossfade_length") or 0.05)
@@ -957,7 +1325,6 @@ class MainApp:
         self.var_i_nr = tk.BooleanVar(value=bool(self.cfg.get("I_noise_reduce")))
         self.var_o_nr = tk.BooleanVar(value=bool(self.cfg.get("O_noise_reduce")))
         self.var_use_pv = tk.BooleanVar(value=bool(self.cfg.get("use_pv")))
-        self.var_function = tk.StringVar(value=str(self.cfg.get("function") or "vc"))
         self.var_accel = tk.StringVar(
             value=str(self.cfg.get("accel_backend") or "auto")
         )
@@ -967,6 +1334,7 @@ class MainApp:
             brows = {
                 "设备与音频": "DEVICES",
                 "变声参数（运行中可热更新）": "VOICE",
+                "变声参数（运行中可热更新 · 按音色保存）": "VOICE",
                 "性能设置（改后需重新「开启变声」）": "PERFORMANCE",
                 "声音效果（变声后 · 可选）": "FX CHAIN",
                 "快捷键": "HOTKEYS",
@@ -1248,8 +1616,23 @@ class MainApp:
             pady=4,
         ).pack(side="left", padx=8)
 
-        # Voice params
-        right = card(wrap, "变声参数（运行中可热更新）")
+        # Voice params (also on bottom dock; saved per model under User_Data/models)
+        right = card(wrap, "变声参数（运行中可热更新 · 按音色保存）")
+        voice_note = tk.Label(
+            right,
+            text=(
+                "音高 / 共鸣 / 阈值 / Index / 响度 / 算法会写入当前音色目录的 config.json；"
+                "切换音色时自动恢复该音色上次的参数。底栏可快速调节。"
+            ),
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            justify="left",
+            anchor="w",
+            wraplength=640,
+        )
+        voice_note.pack(fill="x", pady=(0, 6))
+        self._settings_wrap_labels.append(voice_note)
         scale_row(right, "响应阈值", self.var_threhold, -60, 0, 1, hot=True)
         scale_row(right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True)
         scale_row(right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True)
@@ -1366,7 +1749,7 @@ class MainApp:
             variable=self.var_function,
             value="vc",
             bg=TM_SURFACE,
-            command=self._on_hot_param,
+            command=lambda: self._set_function_mode("vc"),
             font=sans_font(9),
             activebackground=TM_SURFACE,
         )
@@ -1377,7 +1760,7 @@ class MainApp:
             variable=self.var_function,
             value="im",
             bg=TM_SURFACE,
-            command=self._on_hot_param,
+            command=lambda: self._set_function_mode("im"),
             font=sans_font(9),
             activebackground=TM_SURFACE,
         )
@@ -1961,7 +2344,17 @@ class MainApp:
             pass
 
     def _on_hot_param(self) -> None:
-        """Debounced hot update while VC running."""
+        """Debounced hot update while VC running; also bind params to current voice."""
+        if not self._loading_voice:
+            try:
+                self._collect_settings_into_cfg()
+            except Exception:
+                pass
+            self._persist_voice_params_to_model()
+            try:
+                self._sync_bottom()
+            except Exception:
+                pass
         if self._hot_job is not None:
             try:
                 self.root.after_cancel(self._hot_job)
@@ -2597,6 +2990,13 @@ class MainApp:
             self._nudge_pitch(-1)
         elif action_id == "toggle_monitor":
             self._toggle_monitor()
+        elif action_id == "toggle_mode":
+            cur = "vc"
+            try:
+                cur = str(self.var_function.get() or "vc")
+            except Exception:
+                cur = str(self.cfg.get("function") or "vc")
+            self._set_function_mode("im" if cur == "vc" else "vc")
         elif action_id == "page_home":
             self.show_page("home")
         elif action_id == "page_models":
@@ -2643,12 +3043,14 @@ class MainApp:
             save_config(self.cfg)
         except Exception:
             pass
+        self._persist_voice_params_to_model()
+        self._sync_bottom()
         if self.vc_running:
             self._on_hot_param()
         self._set_status_visual(
             "live" if self.vc_running else "idle",
             f"音高 {new_v:+d}" if new_v else "音高 0",
-            "已热更新" if self.vc_running else "下次开启变声生效",
+            "已写入当前音色" if self.vc_running else "已保存到当前音色",
         )
 
     @staticmethod
@@ -3390,6 +3792,10 @@ class MainApp:
     def _on_close(self) -> None:
         try:
             self._global_hk.unregister_all()
+        except Exception:
+            pass
+        try:
+            self._persist_voice_params_to_model(immediate=True)
         except Exception:
             pass
         try:

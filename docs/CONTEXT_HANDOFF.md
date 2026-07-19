@@ -95,7 +95,10 @@ L:\My project\Grok\dist\TuringMirror_Voice\
 | `launcher/config_store.py` | `User_Data/app_config.json` + 同步 `configs/inuse/config.json` |
 | `launcher/catalog.py` | `User_Data/models` 目录扫描、index 搜索 |
 | `launcher/theme.py` | 白无垢 token |
-| `gui_v1.py` | 高级实时面板；`TM_AUTO_START_VC=1` 时自动「开始音频转换」 |
+| `gui_v1.py` | 原版实时面板；**`TM_REALTIME_WORKER=1` 时无窗 worker 模式** |
+| `tools/realtime_worker.py` | 无窗入口（runpy → gui_v1 worker） |
+| `launcher/realtime_client.py` / `realtime_protocol.py` | 主界面 ↔ worker 文件协议 |
+| `launcher/OpenRealtimeWorker.vbs` | 发布版拉起 worker（清洗 PyInstaller 环境） |
 | `infer/lib/rtrvc.py` | 实时推理；**index 缺失时不得 faiss 崩溃** |
 | `scripts/build_release.py` | 一键打包（engine + Runtime + models + VBCABLE + PyInstaller） |
 
@@ -244,5 +247,8 @@ python scripts/build_release.py --skip-runtime --out dist\TuringMirror_Voice
 
 ## 12. 一句话状态
 
-**发布树已能构建；实时面板在 exe 下应经 VBS 启动；无 index 不应再秒崩；开启变声应自动开始转换。**  
-下一棒优先：**用户实机听感验收 + 未 push 的 3 个 commit 是否推送 + 残余设备/停止状态体验。**
+**日常变声默认走无窗 worker（单窗口）：** 主界面调设备/参数 → `tools/realtime_worker.py`（`TM_REALTIME_WORKER=1` 的 gui_v1 引擎）→ 文件协议 `User_Data/runtime_control/`。  
+原版 `gui_v1` 窗口仍保留为「打开原版实时面板」。  
+发布树仍可构建；无 index 不崩；热更新 pitch/formant/index 等与原版一致。
+
+下一棒优先：**实机听感验收（单窗口启停 + 热调）+ 未 push 的 commits + 必要时重打 `变声器.exe`。**

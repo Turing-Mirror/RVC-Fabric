@@ -142,6 +142,12 @@ if __name__ == "__main__":
             self.config = Config()
             self.function = "vc"
             self.delay_time = 0
+            self.last_infer_ms = 0
+            self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
             self.hostapis = None
             self.input_devices = None
             self.output_devices = None
@@ -157,8 +163,12 @@ if __name__ == "__main__":
             self.play_ptr = None
             self.in_evt = None
             self.stop_evt = None
+            self.window = None
             self.update_devices()
-            self.launcher()
+            if self.worker_mode:
+                self.worker_main()
+            else:
+                self.launcher()
 
         def _pick_default_devices(self, data):
             """Prefer real mic in + CABLE Input out (VB-Cable / VoiceMeeter path)."""
@@ -767,9 +777,22 @@ if __name__ == "__main__":
                     # Other parameters do not support hot update
                     self.stop_stream()
 
+        def _notify(self, msg: str) -> None:
+            printt("%s", msg)
+            if self.worker_mode:
+                try:
+                    self._worker_write_status(error=str(msg), message=str(msg))
+                except Exception:
+                    pass
+                return
+            try:
+                sg.popup(msg)
+            except Exception:
+                pass
+
         def set_values(self, values):
             if len(values["pth_path"].strip()) == 0:
-                sg.popup(i18n("请选择pth文件"))
+                self._notify(i18n("请选择pth文件"))
                 return False
             pth = values["pth_path"].strip()
             index_path = (values.get("index_path") or "").strip()
@@ -778,24 +801,30 @@ if __name__ == "__main__":
                 printt("index missing, disable index: %s", index_path)
                 index_path = ""
                 values["index_path"] = ""
-                try:
-                    self.window["index_path"].update("")
-                except Exception:
-                    pass
+                if self.window is not None:
+                    try:
+                        self.window["index_path"].update("")
+                    except Exception:
+                        pass
             if not index_path:
                 # Force rate 0 so rtrvc never calls faiss.read_index
                 values["index_rate"] = 0
             pattern = re.compile("[^\x00-\x7F]+")
             if pattern.findall(pth):
-                sg.popup(i18n("pth文件路径不可包含中文"))
+                self._notify(i18n("pth文件路径不可包含中文"))
                 return False
             if index_path and pattern.findall(index_path):
-                sg.popup(i18n("index文件路径不可包含中文"))
+                self._notify(i18n("index文件路径不可包含中文"))
                 return False
             if not os.path.isfile(pth):
-                sg.popup(i18n("pth文件不存在") + f"\n{pth}")
+                self._notify(i18n("pth文件不存在") + f"\n{pth}")
                 return False
-            self.set_devices(values["sg_input_device"], values["sg_output_device"])
+            # Devices must exist for current hostapi list
+            try:
+                self.set_devices(values["sg_input_device"], values["sg_output_device"])
+            except Exception as e:
+                self._notify(f"设备无效: {e}")
+                return False
             self.config.use_jit = False  # values["use_jit"]
             # self.device_latency = values["device_latency"]
             self.gui_config.sg_hostapi = values["sg_hostapi"]
@@ -1220,8 +1249,12 @@ if __name__ == "__main__":
                 self.in_evt.clear()
 
             total_time = time.perf_counter() - start_time
-            if flag_vc:
-                self.window["infer_time"].update(int(total_time * 1000))
+            self.last_infer_ms = int(total_time * 1000)
+            if flag_vc and self.window is not None:
+                try:
+                    self.window["infer_time"].update(self.last_infer_ms)
+                except Exception:
+                    pass
             printt("Infer time: %.2f", total_time)
 
         def update_devices(self, hostapi_name=None):
@@ -1283,5 +1316,355 @@ if __name__ == "__main__":
                 "max_output_channels"
             ]
             return min(max_input_channels, max_output_channels, 2)
+
+        # ----- Headless worker mode (driven by main_app via JSON files) -----
+
+        def _worker_write_status(self, **fields):
+            try:
+                from launcher.realtime_protocol import write_status
+
+                write_status(**fields)
+            except Exception:
+                traceback.print_exc()
+
+        def _worker_device_payload(self):
+            return {
+                "hostapis": list(self.hostapis or []),
+                "input_devices": list(self.input_devices or []),
+                "output_devices": list(self.output_devices or []),
+                "sg_hostapi": self.gui_config.sg_hostapi,
+                "sg_input_device": self.gui_config.sg_input_device,
+                "sg_output_device": self.gui_config.sg_output_device,
+            }
+
+        def _values_from_config_file(self):
+            """Build set_values-compatible dict from configs/inuse/config.json."""
+            path = "configs/inuse/config.json"
+            if not os.path.isfile(path):
+                if os.path.isfile("configs/config.json"):
+                    shutil.copy("configs/config.json", path)
+            with open(path, "r", encoding="utf-8") as j:
+                data = json.load(j)
+            f0 = data.get("f0method") or "fcpe"
+            sr = data.get("sr_type") or "sr_model"
+            # Ensure devices are refreshed for hostapi
+            hostapi = data.get("sg_hostapi") or (
+                self.hostapis[0] if self.hostapis else ""
+            )
+            if hostapi:
+                try:
+                    self.update_devices(hostapi_name=hostapi)
+                except Exception:
+                    traceback.print_exc()
+            values = {
+                "pth_path": str(data.get("pth_path") or ""),
+                "index_path": str(data.get("index_path") or ""),
+                "sg_hostapi": hostapi,
+                "sg_wasapi_exclusive": bool(data.get("sg_wasapi_exclusive")),
+                "sg_input_device": str(data.get("sg_input_device") or ""),
+                "sg_output_device": str(data.get("sg_output_device") or ""),
+                "sr_model": sr == "sr_model",
+                "sr_device": sr == "sr_device",
+                "threhold": data.get("threhold", -60),
+                "pitch": data.get("pitch", 0),
+                "formant": data.get("formant", 0.0),
+                "index_rate": data.get("index_rate", 0),
+                "rms_mix_rate": data.get("rms_mix_rate", 0),
+                "block_time": data.get("block_time", 0.25),
+                "crossfade_length": data.get("crossfade_length", 0.05),
+                "extra_time": data.get("extra_time", 2.5),
+                "n_cpu": data.get("n_cpu", 4),
+                "I_noise_reduce": bool(data.get("I_noise_reduce")),
+                "O_noise_reduce": bool(data.get("O_noise_reduce")),
+                "use_pv": bool(data.get("use_pv")),
+                "pm": f0 == "pm",
+                "harvest": f0 == "harvest",
+                "crepe": f0 == "crepe",
+                "rmvpe": f0 == "rmvpe",
+                "fcpe": f0 == "fcpe",
+            }
+            # Fill missing devices with defaults
+            if (
+                values["sg_input_device"] not in (self.input_devices or [])
+                and self.input_devices
+            ):
+                values = self._pick_default_devices(values)
+                # _pick_default_devices mutates data-like dict
+                if "sg_input_device" not in values or not values["sg_input_device"]:
+                    values["sg_input_device"] = self.input_devices[0]
+            if (
+                values["sg_output_device"] not in (self.output_devices or [])
+                and self.output_devices
+            ):
+                if not values.get("sg_output_device"):
+                    values = self._pick_default_devices(values)
+                if values["sg_output_device"] not in self.output_devices:
+                    values["sg_output_device"] = self.output_devices[0]
+            return values
+
+        def _worker_list_devices(self, hostapi=None):
+            try:
+                name = hostapi or self.gui_config.sg_hostapi or None
+                self.update_devices(hostapi_name=name)
+                if name and name in (self.hostapis or []):
+                    self.gui_config.sg_hostapi = name
+                elif self.hostapis:
+                    self.gui_config.sg_hostapi = self.hostapis[0]
+                payload = self._worker_device_payload()
+                self._worker_write_status(
+                    state="idle" if not flag_vc else "running",
+                    error="",
+                    message="devices refreshed",
+                    **payload,
+                )
+            except Exception as e:
+                traceback.print_exc()
+                self._worker_write_status(
+                    state="error",
+                    error=f"list_devices: {type(e).__name__}: {e}",
+                )
+
+        def _worker_apply_hot(self, payload: dict):
+            """Apply hot-updatable parameters while stream may be running."""
+            if "pitch" in payload and payload["pitch"] is not None:
+                self.gui_config.pitch = payload["pitch"]
+                if hasattr(self, "rvc") and self.rvc is not None:
+                    self.rvc.change_key(payload["pitch"])
+            if "formant" in payload and payload["formant"] is not None:
+                self.gui_config.formant = payload["formant"]
+                if hasattr(self, "rvc") and self.rvc is not None:
+                    self.rvc.change_formant(payload["formant"])
+            if "index_rate" in payload and payload["index_rate"] is not None:
+                rate = float(payload["index_rate"])
+                if not self.gui_config.index_path:
+                    rate = 0.0
+                self.gui_config.index_rate = rate
+                if hasattr(self, "rvc") and self.rvc is not None:
+                    try:
+                        self.rvc.change_index_rate(rate)
+                    except Exception:
+                        traceback.print_exc()
+            if "rms_mix_rate" in payload and payload["rms_mix_rate"] is not None:
+                self.gui_config.rms_mix_rate = float(payload["rms_mix_rate"])
+            if "threhold" in payload and payload["threhold"] is not None:
+                self.gui_config.threhold = payload["threhold"]
+            if "f0method" in payload and payload["f0method"]:
+                self.gui_config.f0method = str(payload["f0method"])
+            if "I_noise_reduce" in payload:
+                self.gui_config.I_noise_reduce = bool(payload["I_noise_reduce"])
+            if "O_noise_reduce" in payload:
+                self.gui_config.O_noise_reduce = bool(payload["O_noise_reduce"])
+            if "use_pv" in payload:
+                self.gui_config.use_pv = bool(payload["use_pv"])
+            if "function" in payload and payload["function"] in ("vc", "im"):
+                self.function = payload["function"]
+
+        def _worker_start(self):
+            global flag_vc
+            if flag_vc:
+                self._worker_write_status(
+                    state="running",
+                    message="already running",
+                    delay_ms=int(np.round(self.delay_time * 1000)),
+                    infer_ms=self.last_infer_ms,
+                    **self._worker_device_payload(),
+                )
+                return
+            self._worker_write_status(
+                state="starting",
+                error="",
+                message="loading model…",
+                **self._worker_device_payload(),
+            )
+            try:
+                values = self._values_from_config_file()
+                ok = self.set_values(values)
+                if ok is not True:
+                    self._worker_write_status(
+                        state="error",
+                        error="invalid settings (model path / devices)",
+                        message="set_values failed",
+                    )
+                    return
+                try:
+                    with open("configs/inuse/config.json", "r", encoding="utf-8") as jf:
+                        raw = json.load(jf)
+                    fn = str(raw.get("function") or "vc")
+                    if fn in ("vc", "im"):
+                        self.function = fn
+                except Exception:
+                    self.function = "vc"
+                printt("worker start_vc")
+                printt("cuda_is_available: %s", torch.cuda.is_available())
+                self.start_vc()
+                if self.audio_proc is not None:
+                    self.delay_time = (
+                        self.audio_proc.get_latency()
+                        + float(self.gui_config.block_time)
+                        + float(self.gui_config.crossfade_time)
+                        + 0.01
+                    )
+                    if self.gui_config.I_noise_reduce:
+                        self.delay_time += min(float(self.gui_config.crossfade_time), 0.04)
+                # persist
+                try:
+                    settings = {
+                        "pth_path": self.gui_config.pth_path,
+                        "index_path": self.gui_config.index_path,
+                        "sg_hostapi": self.gui_config.sg_hostapi,
+                        "sg_wasapi_exclusive": self.gui_config.sg_wasapi_exclusive,
+                        "sg_input_device": self.gui_config.sg_input_device,
+                        "sg_output_device": self.gui_config.sg_output_device,
+                        "sr_type": self.gui_config.sr_type,
+                        "threhold": self.gui_config.threhold,
+                        "pitch": self.gui_config.pitch,
+                        "formant": self.gui_config.formant,
+                        "rms_mix_rate": self.gui_config.rms_mix_rate,
+                        "index_rate": self.gui_config.index_rate,
+                        "block_time": self.gui_config.block_time,
+                        "crossfade_length": self.gui_config.crossfade_time,
+                        "extra_time": self.gui_config.extra_time,
+                        "n_cpu": self.gui_config.n_cpu,
+                        "use_jit": False,
+                        "use_pv": self.gui_config.use_pv,
+                        "f0method": self.gui_config.f0method,
+                        "I_noise_reduce": self.gui_config.I_noise_reduce,
+                        "O_noise_reduce": self.gui_config.O_noise_reduce,
+                    }
+                    with open("configs/inuse/config.json", "w", encoding="utf-8") as j:
+                        json.dump(settings, j, ensure_ascii=False, indent=2)
+                except Exception:
+                    traceback.print_exc()
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    message="vc running",
+                    delay_ms=int(np.round(self.delay_time * 1000)),
+                    infer_ms=0,
+                    samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
+                    **self._worker_device_payload(),
+                )
+            except Exception as e:
+                traceback.print_exc()
+                flag_vc = False
+                try:
+                    self.stop_stream()
+                except Exception:
+                    pass
+                self._worker_write_status(
+                    state="error",
+                    error=f"{type(e).__name__}: {e}",
+                    message="start failed",
+                )
+
+        def _worker_stop(self):
+            try:
+                self.stop_stream()
+            except Exception as e:
+                traceback.print_exc()
+                self._worker_write_status(
+                    state="error",
+                    error=f"stop: {type(e).__name__}: {e}",
+                )
+                return
+            self._worker_write_status(
+                state="idle",
+                error="",
+                message="stopped",
+                delay_ms=0,
+                infer_ms=0,
+                **self._worker_device_payload(),
+            )
+
+        def worker_main(self):
+            """No FreeSimpleGUI window — poll User_Data/runtime_control/command.json."""
+            from launcher.realtime_protocol import (
+                default_status,
+                read_command,
+                write_status,
+            )
+
+            printt("realtime worker mode (no GUI window)")
+            # Initial status + devices
+            try:
+                data = self.load()
+                self.gui_config.sg_hostapi = data.get("sg_hostapi") or (
+                    self.hostapis[0] if self.hostapis else ""
+                )
+                self.gui_config.sg_input_device = data.get("sg_input_device") or ""
+                self.gui_config.sg_output_device = data.get("sg_output_device") or ""
+                self.function = data.get("function") or "vc"
+            except Exception:
+                traceback.print_exc()
+            base = default_status()
+            base.update(self._worker_device_payload())
+            base["state"] = "idle"
+            base["pid"] = os.getpid()
+            base["message"] = "worker ready"
+            write_status(**base)
+
+            last_seq = 0
+            running = True
+            while running:
+                try:
+                    cmd = read_command()
+                    seq = int(cmd.get("seq") or 0)
+                    if seq > last_seq and cmd.get("cmd"):
+                        last_seq = seq
+                        action = str(cmd.get("cmd") or "").strip().lower()
+                        printt("worker cmd seq=%s action=%s", seq, action)
+                        write_status(last_cmd_seq=seq, pid=os.getpid())
+                        if action == "quit":
+                            self._worker_stop()
+                            write_status(
+                                state="idle",
+                                message="quit",
+                                pid=os.getpid(),
+                                last_cmd_seq=seq,
+                            )
+                            running = False
+                            break
+                        elif action == "list_devices":
+                            host = cmd.get("sg_hostapi") or cmd.get("hostapi")
+                            self._worker_list_devices(host)
+                        elif action == "start":
+                            self._worker_start()
+                        elif action == "stop":
+                            self._worker_stop()
+                        elif action == "set":
+                            # payload may be nested under "params" or flat
+                            params = cmd.get("params") if isinstance(cmd.get("params"), dict) else cmd
+                            self._worker_apply_hot(params)
+                            self._worker_write_status(
+                                state="running" if flag_vc else "idle",
+                                message="params applied",
+                                delay_ms=int(np.round(self.delay_time * 1000)),
+                                infer_ms=self.last_infer_ms,
+                                **self._worker_device_payload(),
+                            )
+                        else:
+                            self._worker_write_status(
+                                message=f"unknown cmd: {action}",
+                                last_cmd_seq=seq,
+                            )
+                    # heartbeat metrics
+                    if flag_vc:
+                        self._worker_write_status(
+                            state="running",
+                            delay_ms=int(np.round(self.delay_time * 1000)),
+                            infer_ms=self.last_infer_ms,
+                            samplerate=int(
+                                getattr(self.gui_config, "samplerate", 0) or 0
+                            ),
+                            pid=os.getpid(),
+                        )
+                except Exception as e:
+                    traceback.print_exc()
+                    self._worker_write_status(
+                        state="error",
+                        error=f"loop: {type(e).__name__}: {e}",
+                    )
+                time.sleep(0.08)
+            printt("worker exit")
 
     gui = GUI()

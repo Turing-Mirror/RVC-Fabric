@@ -186,6 +186,10 @@ if __name__ == "__main__":
             self.window = None
             self.monitor_stream = None
             self.monitor_channels = 2
+            self.monitor_sr = 0
+            self._monitor_q = None  # collections.deque of float32 frames
+            self._monitor_err_count = 0
+            self._monitor_status = ""  # last open/write message for UI
             self.update_devices()
             if self.worker_mode:
                 self.worker_main()
@@ -1162,9 +1166,44 @@ if __name__ == "__main__":
                         pass
                     raise
 
+        @staticmethod
+        def _is_virtual_playback_name(name: str) -> bool:
+            """Virtual / non-listening endpoints — not real headphones/speakers."""
+            low = (name or "").lower()
+            if not low:
+                return True
+            keys = (
+                "cable",
+                "voicemeeter",
+                "mapper",
+                "steam streaming",
+                "steam streaming speakers",
+                "virtual cable",
+                "vb-audio",
+                "vb audio",
+                "nvidia high definition",
+                "nvidia broadcast",
+                "网易虚拟",
+                "网易云",
+                "fxsound",
+                "discord",
+                "obs virtual",
+                "stereo mix",
+                "what u hear",
+                "wave speaker",  # SteelSeries Sonar virtual ends
+                "sonar_vad",
+                "steelseries_sonar",
+                "vac ",
+                "line 1",
+                "primary sound driver",
+                "主声音驱动",
+            )
+            return any(k in low for k in keys)
+
         def _close_monitor_stream(self) -> None:
             stream = getattr(self, "monitor_stream", None)
             self.monitor_stream = None
+            self._monitor_q = None
             if stream is None:
                 return
             try:
@@ -1178,9 +1217,21 @@ if __name__ == "__main__":
             printt("monitor stream closed")
 
         def _resolve_output_device_index(self, name: str):
-            """Find sounddevice output device index by name (any host API)."""
+            """Find output device index; prefer current hostapi list."""
             if not name:
                 return None
+            # Prefer same host API as main VC (stable names + indices)
+            try:
+                if self.output_devices and self.output_devices_indices:
+                    resolved = self._resolve_device_name(
+                        name, list(self.output_devices)
+                    )
+                    if resolved is not None:
+                        return self.output_devices_indices[
+                            self.output_devices.index(resolved)
+                        ]
+            except Exception:
+                pass
             try:
                 devices = sd.query_devices()
             except Exception:
@@ -1201,27 +1252,115 @@ if __name__ == "__main__":
                     return d.get("index", i)
             return None
 
+        def _pick_better_monitor_device(self, preferred: str = "") -> str:
+            """Choose a real headphone/speaker from current hostapi output list."""
+            outs = list(self.output_devices or [])
+            if not outs:
+                return preferred or ""
+            main_out = str(getattr(self.gui_config, "sg_output_device", "") or "")
+
+            def _usable(n: str) -> bool:
+                if not n or n == main_out:
+                    return False
+                if self._is_virtual_playback_name(n):
+                    return False
+                # Same as main CABLE with truncated names
+                if main_out and (
+                    n.startswith(main_out[:20]) or main_out.startswith(n[:20])
+                ):
+                    # Allow if one is clearly headphones and other is cable
+                    if "cable" in main_out.lower() and "cable" not in n.lower():
+                        return True
+                    if "cable" in n.lower():
+                        return False
+                return True
+
+            # 1) keep preferred if it's a real device
+            if preferred and preferred in outs and _usable(preferred):
+                return preferred
+            if preferred:
+                resolved = self._resolve_device_name(preferred, outs)
+                if resolved and _usable(resolved):
+                    return resolved
+
+            # 2) system default output (if listed under this hostapi)
+            try:
+                def_idx = sd.default.device[1]
+                if def_idx is not None and int(def_idx) >= 0:
+                    def_name = sd.query_devices(int(def_idx)).get("name") or ""
+                    hit = self._resolve_device_name(def_name, outs)
+                    if hit and _usable(hit):
+                        return hit
+            except Exception:
+                pass
+
+            # 3) prefer headphones / 耳机
+            for n in outs:
+                low = n.lower()
+                if _usable(n) and (
+                    "耳机" in n
+                    or "headphone" in low
+                    or "headset" in low
+                    or "earphone" in low
+                ):
+                    return n
+
+            # 4) first non-virtual
+            for n in outs:
+                if _usable(n):
+                    return n
+            return preferred if preferred in outs else (outs[0] if outs else "")
+
         def _open_monitor_stream(self) -> None:
-            """Play converted (or passthrough) audio to a second device for self-listen."""
+            """Play converted audio to a second device (headphones) for self-listen.
+
+            Uses callback + queue so the infer thread never blocks on stream.write,
+            and opens at the *device* default sample rate (resample if needed).
+            """
             self._close_monitor_stream()
+            self._monitor_status = ""
+            self._monitor_err_count = 0
             if not bool(getattr(self.gui_config, "monitor_enabled", False)):
                 return
             name = str(getattr(self.gui_config, "monitor_device", "") or "").strip()
+            # Auto-fix virtual / empty monitor targets (common bug: Steam Speakers)
+            if (not name) or self._is_virtual_playback_name(name):
+                better = self._pick_better_monitor_device("")
+                if better and better != name:
+                    printt(
+                        "monitor device auto-fixed: %r -> %r",
+                        name or "(empty)",
+                        better,
+                    )
+                    name = better
+                    self.gui_config.monitor_device = better
             if not name:
-                printt("monitor enabled but no device selected")
+                msg = "monitor enabled but no usable device"
+                printt(msg)
+                self._monitor_status = msg
                 return
-            # Do not open same device as main VC output (would double-open / fail)
             main_out = str(getattr(self.gui_config, "sg_output_device", "") or "")
-            if name == main_out or (
-                main_out and (name.startswith(main_out[:16]) or main_out.startswith(name[:16]))
-            ):
-                printt("monitor device same as main output, skip: %s", name)
+            # Exact same endpoint only (avoid false skip on both starting with 扬声器)
+            if name == main_out:
+                msg = "monitor same as main output, skip: %s" % name
+                printt(msg)
+                self._monitor_status = msg
                 return
+            if main_out and "cable" in main_out.lower() and "cable" in name.lower():
+                msg = "monitor is also CABLE, skip: %s" % name
+                printt(msg)
+                self._monitor_status = msg
+                return
+
             idx = self._resolve_output_device_index(name)
             if idx is None:
-                printt("monitor device not found: %s", name)
+                msg = "monitor device not found: %s" % name
+                printt(msg)
+                self._monitor_status = msg
                 return
             try:
+                from collections import deque
+
                 info = sd.query_devices(idx)
                 ch = min(
                     int(getattr(self.gui_config, "channels", 2) or 2),
@@ -1229,42 +1368,103 @@ if __name__ == "__main__":
                     2,
                 )
                 ch = max(1, ch)
-                sr = int(getattr(self.gui_config, "samplerate", 48000) or 48000)
+                # Prefer device native rate (stable). Fall back to VC rate.
+                dev_sr = int(float(info.get("default_samplerate") or 0) or 0)
+                vc_sr = int(getattr(self.gui_config, "samplerate", 0) or 0) or 48000
+                sr = dev_sr if dev_sr > 0 else vc_sr
+                # ~0.5s ring so short stalls don't underrun
+                block = max(256, int(sr * 0.02))
+                q = deque(maxlen=64)
+                self._monitor_q = q
+                self.monitor_channels = ch
+                self.monitor_sr = sr
+                self._monitor_src_sr = vc_sr
+
+                def _cb(outdata, frames, time_info, status):
+                    if status:
+                        pass
+                    need = frames
+                    pos = 0
+                    outdata.fill(0)
+                    while need > 0 and q:
+                        chunk = q[0]
+                        take = min(need, chunk.shape[0])
+                        outdata[pos : pos + take] = chunk[:take]
+                        if take < chunk.shape[0]:
+                            q[0] = chunk[take:]
+                        else:
+                            q.popleft()
+                        pos += take
+                        need -= take
+
                 stream = sd.OutputStream(
                     device=idx,
                     samplerate=sr,
                     channels=ch,
                     dtype=np.float32,
-                    latency="low",
+                    latency="high",
+                    blocksize=block,
+                    callback=_cb,
                 )
                 stream.start()
                 self.monitor_stream = stream
-                self.monitor_channels = ch
-                printt("monitor stream open: %s idx=%s ch=%s sr=%s", name, idx, ch, sr)
+                self._monitor_status = "ok:%s" % name
+                printt(
+                    "monitor stream open: %s idx=%s ch=%s sr=%s (vc_sr=%s)",
+                    name,
+                    idx,
+                    ch,
+                    sr,
+                    vc_sr,
+                )
             except Exception as e:
-                printt("monitor open failed: %s", e)
+                msg = "monitor open failed: %s" % e
+                printt(msg)
+                self._monitor_status = msg
                 self.monitor_stream = None
+                self._monitor_q = None
 
         def _write_monitor(self, outdata: np.ndarray) -> None:
-            stream = getattr(self, "monitor_stream", None)
-            if stream is None or outdata is None:
+            q = getattr(self, "_monitor_q", None)
+            if q is None or outdata is None:
+                return
+            if getattr(self, "monitor_stream", None) is None:
                 return
             try:
-                data = np.asarray(outdata, dtype=np.float32)
+                data = np.ascontiguousarray(outdata, dtype=np.float32)
                 if data.ndim == 1:
                     data = data.reshape(-1, 1)
-                want = int(getattr(self, "monitor_channels", data.shape[1]) or data.shape[1])
+                want = int(
+                    getattr(self, "monitor_channels", data.shape[1]) or data.shape[1]
+                )
                 if data.shape[1] != want:
                     if want == 1:
                         data = data.mean(axis=1, keepdims=True).astype(np.float32)
                     elif data.shape[1] == 1:
                         data = np.repeat(data, want, axis=1)
                     else:
-                        data = data[:, :want]
-                # Non-blocking-ish: write may raise if stream closed mid-flight
-                stream.write(data)
-            except Exception:
-                pass
+                        data = data[:, :want].copy()
+                # Resample VC rate → monitor device rate when they differ
+                src_sr = int(getattr(self, "_monitor_src_sr", 0) or 0)
+                dst_sr = int(getattr(self, "monitor_sr", 0) or 0)
+                if src_sr > 0 and dst_sr > 0 and src_sr != dst_sr and data.shape[0] > 1:
+                    n_out = max(1, int(round(data.shape[0] * float(dst_sr) / src_sr)))
+                    x_old = np.linspace(0.0, 1.0, data.shape[0], endpoint=False)
+                    x_new = np.linspace(0.0, 1.0, n_out, endpoint=False)
+                    cols = [
+                        np.interp(x_new, x_old, data[:, c]).astype(np.float32)
+                        for c in range(data.shape[1])
+                    ]
+                    data = np.stack(cols, axis=1)
+                # Soft clip to avoid DAC harshness
+                np.clip(data, -1.0, 1.0, out=data)
+                q.append(data)
+            except Exception as e:
+                self._monitor_err_count = int(
+                    getattr(self, "_monitor_err_count", 0) or 0
+                ) + 1
+                if self._monitor_err_count <= 3 or self._monitor_err_count % 50 == 0:
+                    printt("monitor write err (%s): %s", self._monitor_err_count, e)
 
         def stop_stream(self):
             """Always tear down audio I/O — even if flag_vc was cleared elsewhere.
@@ -1788,7 +1988,6 @@ if __name__ == "__main__":
                 and self.input_devices
             ):
                 values = self._pick_default_devices(values)
-                # _pick_default_devices mutates data-like dict
                 if "sg_input_device" not in values or not values["sg_input_device"]:
                     values["sg_input_device"] = self.input_devices[0]
             if (
@@ -1799,6 +1998,20 @@ if __name__ == "__main__":
                     values = self._pick_default_devices(values)
                 if values["sg_output_device"] not in self.output_devices:
                     values["sg_output_device"] = self.output_devices[0]
+            # Fix virtual monitor targets (Steam Speakers / CABLE / empty)
+            if values.get("monitor_enabled"):
+                mon = str(values.get("monitor_device") or "")
+                try:
+                    self.gui_config.sg_output_device = str(
+                        values.get("sg_output_device") or ""
+                    )
+                except Exception:
+                    pass
+                if (not mon) or self._is_virtual_playback_name(mon):
+                    better = self._pick_better_monitor_device(mon)
+                    if better:
+                        printt("config monitor device fixed: %r -> %r", mon, better)
+                        values["monitor_device"] = better
             return values
 
         def _worker_list_devices(self, hostapi=None):

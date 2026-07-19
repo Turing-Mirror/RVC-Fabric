@@ -162,12 +162,46 @@ HELP_SECTIONS: list[tuple[str, str, str]] = [
 ]
 
 
+def strip_md_emphasis(text: str) -> str:
+    """Remove lightweight Markdown markers used in help bodies (**bold**).
+
+    In-app display either strips these or renders bold; never show raw asterisks.
+    """
+    import re
+
+    if not text:
+        return ""
+    # **bold** → bold (content only)
+    out = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+    # leftover single ** pairs / orphan *
+    out = out.replace("**", "")
+    return out
+
+
+def iter_md_segments(text: str) -> list[tuple[str, str]]:
+    """Split into (kind, text) where kind is 'normal' | 'bold' for **...** only."""
+    import re
+
+    if not text:
+        return []
+    parts: list[tuple[str, str]] = []
+    pos = 0
+    for m in re.finditer(r"\*\*(.+?)\*\*", text, flags=re.DOTALL):
+        if m.start() > pos:
+            parts.append(("normal", text[pos : m.start()]))
+        parts.append(("bold", m.group(1)))
+        pos = m.end()
+    if pos < len(text):
+        parts.append(("normal", text[pos:]))
+    return parts or [("normal", text)]
+
+
 def help_plain_text() -> str:
-    """Flatten for dialog / copy."""
+    """Flatten for dialog / copy (no raw markdown asterisks)."""
     parts: list[str] = ["Turing Mirror 变声器 · 使用说明", ""]
     for _eye, title, body in HELP_SECTIONS:
         parts.append(f"【{title}】")
-        parts.append(body)
+        parts.append(strip_md_emphasis(body))
         parts.append("")
     return "\n".join(parts).strip() + "\n"
 

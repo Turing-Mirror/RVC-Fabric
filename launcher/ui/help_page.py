@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Dedicated in-app usage guide page."""
+"""Dedicated in-app usage guide page.
+
+Help bodies may use lightweight ``**bold**`` markers (same as markdown docs).
+They are rendered as bold in a Text widget — never shown as raw asterisks.
+"""
 
 from __future__ import annotations
 
@@ -8,29 +12,40 @@ from typing import TYPE_CHECKING
 
 from launcher.theme import (
     GUTTER,
-    TM_ACCENT,
     TM_BG,
-    TM_HAIRLINE,
     TM_INK,
-    TM_INK_MUTED,
     TM_META,
     TM_SURFACE,
     mono_font,
     sans_font,
-    title_font,
     tracked,
 )
-from launcher.ui.help_content import HELP_SECTIONS, help_plain_text
+from launcher.ui.help_content import HELP_SECTIONS, help_plain_text, iter_md_segments
 from launcher.ui.widgets import GhostButton, PageHeader, SectionCard
 
 if TYPE_CHECKING:
     from launcher.main_app import MainApp
 
 
+def _fill_rich_text(widget: tk.Text, body: str) -> None:
+    """Insert body with **bold** segments as font weight bold."""
+    widget.configure(state="normal")
+    widget.delete("1.0", "end")
+    for kind, chunk in iter_md_segments(body):
+        if not chunk:
+            continue
+        if kind == "bold":
+            widget.insert("end", chunk, ("bold",))
+        else:
+            widget.insert("end", chunk)
+    widget.configure(state="disabled")
+
+
 class HelpPage:
     def __init__(self, app: "MainApp", parent: tk.Frame) -> None:
         self.app = app
         self.fr = tk.Frame(parent, bg=TM_BG)
+        self._body_texts: list[tk.Text] = []
         self._build()
 
     @property
@@ -77,6 +92,13 @@ class HelpPage:
         def _width(e):
             if e.width > 1:
                 canvas.itemconfigure(win, width=e.width)
+                # Keep text wrap in sync with viewport
+                tw = max(int(e.width) - 100, 280)
+                for t in self._body_texts:
+                    try:
+                        t.configure(width=max(tw // 8, 36))
+                    except Exception:
+                        pass
 
         inner.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)
@@ -90,29 +112,44 @@ class HelpPage:
         for i, (eye, title, body) in enumerate(HELP_SECTIONS):
             sec = SectionCard(inner, title=title, eyebrow=eye, pad=16)
             sec.pack(fill="x", padx=GUTTER, pady=(0, 10) if i else (4, 10))
-            lbl = tk.Label(
+            # Text supports mixed bold; Label would show raw **
+            txt = tk.Text(
                 sec.body,
-                text=body,
+                wrap="word",
                 font=sans_font(10),
                 bg=TM_SURFACE,
                 fg=TM_INK,
-                justify="left",
-                anchor="w",
-                wraplength=720,
+                relief="flat",
+                borderwidth=0,
+                highlightthickness=0,
+                padx=0,
+                pady=0,
+                cursor="arrow",
+                height=1,
             )
-            lbl.pack(fill="x", anchor="w")
-            # reflow wrap on resize
-            def _bind_wrap(label=lbl, canvas=canvas):
-                def on_cfg(e):
-                    w = max(int(canvas.winfo_width()) - 100, 320)
+            txt.tag_configure("bold", font=sans_font(10, "bold"), foreground=TM_INK)
+            _fill_rich_text(txt, body)
+            txt.pack(fill="x", anchor="w")
+            # Block editing
+            txt.bind("<Key>", lambda e: "break")
+            self._body_texts.append(txt)
+
+            def _autosize(t=txt):
+                try:
+                    t.update_idletasks()
+                    n = t.count("1.0", "end-1c", "displaylines")
+                    if isinstance(n, (tuple, list)):
+                        n = n[0]
+                    t.configure(height=max(int(n or 1), 2))
+                except Exception:
                     try:
-                        label.configure(wraplength=w)
+                        n = int(float(t.index("end-1c").split(".")[0]))
+                        t.configure(height=max(n, 2))
                     except Exception:
-                        pass
+                        t.configure(height=8)
 
-                canvas.bind("<Configure>", on_cfg, add="+")
-
-            _bind_wrap()
+            _autosize()
+            txt.bind("<Configure>", lambda _e, t=txt: _autosize(t), add="+")
 
         foot = tk.Label(
             inner,
@@ -133,14 +170,17 @@ class HelpPage:
         except Exception:
             pass
 
+        # Initial wrap width after layout
+        fr.after(100, lambda: _width(type("E", (), {"width": max(canvas.winfo_width(), 600)})()))
+
     def _copy_all(self) -> None:
-        text = help_plain_text()
+        text = help_plain_text()  # already stripped of **
         try:
             self.app.root.clipboard_clear()
             self.app.root.clipboard_append(text)
             from tkinter import messagebox
 
-            messagebox.showinfo("已复制", "使用说明全文已复制到剪贴板。")
+            messagebox.showinfo("已复制", "使用说明全文已复制到剪贴板（无 Markdown 星号）。")
         except Exception:
             pass
 

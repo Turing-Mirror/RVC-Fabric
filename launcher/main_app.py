@@ -59,6 +59,10 @@ from launcher.theme import (
     BOTTOM_HEIGHT,
     GUTTER,
     NAV_HEIGHT,
+    DEFAULT_WIN_H,
+    DEFAULT_WIN_W,
+    MIN_WIN_H,
+    MIN_WIN_W,
     PAD_X,
     TM_ACCENT,
     TM_ACCENT_INK,
@@ -150,8 +154,8 @@ class MainApp:
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry("980x720")
-        self.root.minsize(820, 560)
+        self.root.geometry(f"{DEFAULT_WIN_W}x{DEFAULT_WIN_H}")
+        self.root.minsize(MIN_WIN_W, MIN_WIN_H)
         self.root.configure(bg=TM_BG)
         self._place_and_raise(force_size=True)
 
@@ -196,9 +200,12 @@ class MainApp:
         try:
             self.root.update_idletasks()
             if force_size or not self._placed_once:
-                w, h = 980, 700
+                w, h = DEFAULT_WIN_W, DEFAULT_WIN_H
                 sw = self.root.winfo_screenwidth()
                 sh = self.root.winfo_screenheight()
+                # Leave margin on small laptops
+                w = min(w, max(MIN_WIN_W, sw - 48))
+                h = min(h, max(MIN_WIN_H, sh - 72))
                 x = max(0, (sw - w) // 2)
                 y = max(0, (sh - h) // 2)
                 self.root.geometry(f"{w}x{h}+{x}+{y}")
@@ -243,6 +250,11 @@ class MainApp:
             self.refresh_models()
         elif self._current_page == "settings":
             self._reflow_settings_page()
+        elif self._current_page == "store":
+            try:
+                self._store_page.reflow()
+            except Exception:
+                pass
 
     def _build_chrome(self) -> None:
         # LyricsKara-style head: tracked wordmark + mono route | Schale segment nav
@@ -293,9 +305,9 @@ class MainApp:
         bottom.pack_propagate(False)
         self._bottom_bar = bottom
 
-        # --- Left: now playing ---
+        # --- Left: now playing (compact) ---
         left_info = tk.Frame(bottom, bg=TM_SURFACE)
-        left_info.pack(side="left", padx=(PAD_X, 8), pady=10, fill="y")
+        left_info.pack(side="left", padx=(PAD_X, 12), pady=12, fill="y")
         tk.Label(
             left_info,
             text=tracked("NOW PLAYING", gap="  "),
@@ -312,7 +324,7 @@ class MainApp:
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.pack(anchor="w", pady=(2, 0))
+        self.bottom_name.pack(anchor="w", pady=(1, 0))
         self.bottom_tag = tk.Label(
             left_info,
             text="请先导入音色到 User_Data/models",
@@ -321,47 +333,51 @@ class MainApp:
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_tag.pack(anchor="w", pady=(2, 0))
+        self.bottom_tag.pack(anchor="w")
+        # Hint lives in tag line when space is tight; keep label for updates
         self.bottom_voice_hint = tk.Label(
             left_info,
-            text="音高/共鸣随音色单独保存",
+            text="",
             font=mono_font(7),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
         )
-        self.bottom_voice_hint.pack(anchor="w", pady=(4, 0))
+        self.bottom_voice_hint.pack(anchor="w")
 
-        # --- Right: start + status ---
+        # --- Right: transport + status (side by side) ---
         right = tk.Frame(bottom, bg=TM_SURFACE)
-        right.pack(side="right", padx=(8, PAD_X), pady=10, fill="y")
-        self.status_badge = StatusBadge(right)
-        self.status_badge.pack(anchor="e")
+        right.pack(side="right", padx=(8, PAD_X), pady=12, fill="y")
+        right_inner = tk.Frame(right, bg=TM_SURFACE)
+        right_inner.pack(expand=True)
+        ctrl = tk.Frame(right_inner, bg=TM_SURFACE)
+        ctrl.pack(side="left", padx=(0, 12))
+        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
+        self.btn_start.pack(side="left", padx=3)
+        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(
+            side="left", padx=3
+        )
+        self.status_badge = StatusBadge(right_inner)
+        self.status_badge.pack(side="left")
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
-        ctrl = tk.Frame(right, bg=TM_SURFACE)
-        ctrl.pack(anchor="e", pady=(8, 0))
-        self.btn_start = PrimaryButton(ctrl, "开启变声", command=self.toggle_vc)
-        self.btn_start.pack(side="left", padx=4)
-        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui).pack(
-            side="left", padx=4
-        )
 
-        # --- Center: mode + hot sliders ---
+        # --- Center: mode + hot sliders on one row ---
         mid = tk.Frame(bottom, bg=TM_SURFACE)
-        mid.pack(side="left", fill="both", expand=True, padx=4, pady=8)
+        mid.pack(side="left", fill="both", expand=True, padx=4, pady=10)
 
-        mode_row = tk.Frame(mid, bg=TM_SURFACE)
-        mode_row.pack(anchor="w", fill="x")
+        row = tk.Frame(mid, bg=TM_SURFACE)
+        row.pack(anchor="w", fill="x", expand=True)
+
         tk.Label(
-            mode_row,
+            row,
             text="模式",
             font=mono_font(7),
             bg=TM_SURFACE,
             fg=TM_META,
         ).pack(side="left", padx=(0, 6))
-        seg = tk.Frame(mode_row, bg=TM_INSET, padx=3, pady=3)
-        seg.pack(side="left")
+        seg = tk.Frame(row, bg=TM_INSET, padx=3, pady=2)
+        seg.pack(side="left", padx=(0, 16))
         self.btn_mode_vc = tk.Button(
             seg,
             text="输出变声",
@@ -369,7 +385,7 @@ class MainApp:
             relief="flat",
             bd=0,
             padx=10,
-            pady=3,
+            pady=2,
             cursor="hand2",
             command=lambda: self._set_function_mode("vc"),
         )
@@ -381,7 +397,7 @@ class MainApp:
             relief="flat",
             bd=0,
             padx=10,
-            pady=3,
+            pady=2,
             cursor="hand2",
             command=lambda: self._set_function_mode("im"),
         )
@@ -395,12 +411,9 @@ class MainApp:
             "原声旁路（设置里的「输入监听」）：不改变声音，只输出麦克风原声，用来测麦/接线。",
         )
 
-        slide_row = tk.Frame(mid, bg=TM_SURFACE)
-        slide_row.pack(anchor="w", fill="x", pady=(6, 0))
-
         def _dock_scale(parent, label, variable, from_, to, res, width=120):
             box = tk.Frame(parent, bg=TM_SURFACE)
-            box.pack(side="left", padx=(0, 14))
+            box.pack(side="left", padx=(0, 12))
             head = tk.Frame(box, bg=TM_SURFACE)
             head.pack(fill="x")
             tk.Label(
@@ -451,9 +464,9 @@ class MainApp:
             _fmt()
             return sc
 
-        _dock_scale(slide_row, "音高", self.var_pitch, -24, 24, 1, width=130)
-        _dock_scale(slide_row, "共鸣", self.var_formant, -2, 2, 0.05, width=110)
-        _dock_scale(slide_row, "阈值", self.var_threhold, -60, 0, 1, width=100)
+        _dock_scale(row, "音高", self.var_pitch, -24, 24, 1, width=140)
+        _dock_scale(row, "共鸣", self.var_formant, -2, 2, 0.05, width=110)
+        _dock_scale(row, "阈值", self.var_threhold, -60, 0, 1, width=100)
 
         self._update_mode_buttons()
         self._sync_bottom()
@@ -507,6 +520,7 @@ class MainApp:
                 self._store_page.on_show()
             except Exception:
                 pass
+            self.root.after(80, lambda: getattr(self._store_page, "reflow", lambda: None)())
 
     def _page_home(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)

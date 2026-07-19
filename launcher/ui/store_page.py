@@ -91,9 +91,14 @@ class StorePage:
         canvas.configure(yscrollcommand=sb.set)
         canvas.grid(row=0, column=0, sticky="nsew")
         sb.grid(row=0, column=1, sticky="ns")
+        self._canvas = canvas
+        self._canvas_win = win
 
         def _sync(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            try:
+                canvas.configure(scrollregion=canvas.bbox("all"))
+            except Exception:
+                pass
 
         def _width(e):
             if e.width > 1:
@@ -103,10 +108,25 @@ class StorePage:
         canvas.bind("<Configure>", _width)
 
         def _wheel(e):
-            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+            # Windows/macOS: event.delta; Linux often Button-4/5
+            try:
+                if getattr(e, "delta", 0):
+                    canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+                elif getattr(e, "num", None) == 4:
+                    canvas.yview_scroll(-3, "units")
+                elif getattr(e, "num", None) == 5:
+                    canvas.yview_scroll(3, "units")
+            except Exception:
+                pass
+            return "break"
 
-        canvas.bind("<MouseWheel>", _wheel)
-        self._inner.bind("<MouseWheel>", _wheel)
+        self._on_wheel = _wheel
+        # Bind on canvas + whole page frame; recursive on children so cards/labels work
+        for w in (canvas, self._inner, fr, wrap_host):
+            w.bind("<MouseWheel>", _wheel, add="+")
+            w.bind("<Button-4>", _wheel, add="+")
+            w.bind("<Button-5>", _wheel, add="+")
+        self._inner.bind("<Map>", lambda _e: self._bind_wheel_tree(), add="+")
 
         # --- GUI update ---
         sec_gui = SectionCard(
@@ -233,10 +253,53 @@ class StorePage:
         self.lbl_progress.pack(fill="x", padx=GUTTER, pady=(4, 20))
 
         self._render_catalog()
+        self.root.after(80, self._bind_wheel_tree)
+        self.root.after(100, self.reflow)
+
+    def _bind_wheel_tree(self) -> None:
+        """Re-bind wheel on all descendants (cards recreate children)."""
+        canvas = getattr(self, "_canvas", None)
+        handler = getattr(self, "_on_wheel", None)
+        if canvas is None or handler is None:
+            return
+
+        def walk(widget) -> None:
+            try:
+                widget.bind("<MouseWheel>", handler, add="+")
+                widget.bind("<Button-4>", handler, add="+")
+                widget.bind("<Button-5>", handler, add="+")
+            except Exception:
+                pass
+            try:
+                for ch in widget.winfo_children():
+                    walk(ch)
+            except Exception:
+                pass
+
+        try:
+            walk(self.fr)
+        except Exception:
+            pass
+
+    def reflow(self) -> None:
+        """Keep canvas inner width + scrollregion in sync with viewport."""
+        canvas = getattr(self, "_canvas", None)
+        win = getattr(self, "_canvas_win", None)
+        if canvas is None or win is None:
+            return
+        try:
+            canvas.update_idletasks()
+            w = max(int(canvas.winfo_width()), 400)
+            canvas.itemconfigure(win, width=w)
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        except Exception:
+            pass
 
     def on_show(self) -> None:
         """Called when user switches to this page."""
         self._render_catalog()
+        self.root.after(40, self._bind_wheel_tree)
+        self.root.after(60, self.reflow)
 
     def save_manifest_url(self) -> None:
         cfg = load_config()
@@ -359,6 +422,12 @@ class StorePage:
 
         for v in voices:
             self._voice_row(v)
+        # New rows need wheel bindings
+        try:
+            self.root.after(30, self._bind_wheel_tree)
+            self.root.after(50, self.reflow)
+        except Exception:
+            pass
 
     def open_full_package_help(self) -> None:
         from launcher.online.package_spec import full_package_policy_help

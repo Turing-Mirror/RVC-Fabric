@@ -74,9 +74,14 @@ FONT_MONO: Final[tuple] = _FONT_MONO
 PAD_X: Final[int] = 28
 PAD_CARD: Final[int] = 16
 NAV_HEIGHT: Final[int] = 64
-# Dock: model info + mode toggle + hot sliders + start/status
-BOTTOM_HEIGHT: Final[int] = 118
+# Dock: single-row-ish mode + sliders + transport (taller window leaves body room)
+BOTTOM_HEIGHT: Final[int] = 100
 GUTTER: Final[int] = 32
+# Default main window (bottom dock needs width; body needs height)
+DEFAULT_WIN_W: Final[int] = 1120
+DEFAULT_WIN_H: Final[int] = 780
+MIN_WIN_W: Final[int] = 960
+MIN_WIN_H: Final[int] = 640
 
 APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"
 APP_PRODUCT_TAGLINE: Final[str] = "TURING MIRROR · VOICE"

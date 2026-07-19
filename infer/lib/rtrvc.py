@@ -355,7 +355,8 @@ class RVC:
             x.to(self.device_fcpe).unsqueeze(0).float(),
             sr=16000,
             decoder_mode="local_argmax",
-            threshold=0.006,
+            # slightly more sensitive than 0.006 — fewer pitch dropouts on soft speech
+            threshold=0.005,
         )
         f0 *= pow(2, f0_up_key / 12)
         return self.get_f0_post(f0)

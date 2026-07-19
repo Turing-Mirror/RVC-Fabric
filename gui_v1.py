@@ -23,13 +23,13 @@ def printt(strr, *args):
         print(strr % args)
 
 
-def soft_clip_np(data: "np.ndarray", ceiling: float = 0.98) -> "np.ndarray":
+def soft_clip_np(data: "np.ndarray", ceiling: float = 0.97) -> "np.ndarray":
     """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
     import numpy as np
 
     x = np.asarray(data, dtype=np.float32)
-    # cubic soft knee for |x| < 1, then clip
-    y = x - (x * x * x) * 0.12
+    # slightly stronger soft knee than 0.12 — peaks a bit less brittle
+    y = x - (x * x * x) * 0.15
     np.clip(y, -ceiling, ceiling, out=y)
     return y
 
@@ -1622,7 +1622,7 @@ if __name__ == "__main__":
             if self.function == "vc":
                 # Skip full RVC when this block is gated silent — less GPU load / no "ghost" noise
                 peak = float(np.max(np.abs(indata))) if indata.size else 0.0
-                if peak < 1e-5:
+                if peak < 2e-5:
                     need = (
                         int(self.block_frame)
                         + int(self.sola_buffer_frame)
@@ -1632,6 +1632,11 @@ if __name__ == "__main__":
                     infer_wav = torch.zeros(
                         need, device=self.config.device, dtype=torch.float32
                     )
+                    # Decay SOLA tail so stop-speaking does not leave a short "aftertaste"
+                    try:
+                        self.sola_buffer.mul_(0.88)
+                    except Exception:
+                        pass
                 else:
                     infer_wav = self.rvc.infer(
                         self.input_wav_res,
@@ -1694,10 +1699,12 @@ if __name__ == "__main__":
                     mode="linear",
                     align_corners=True,
                 )[0, 0, :-1]
-                rms2 = torch.max(rms2, torch.zeros_like(rms2) + 1e-3)
-                infer_wav *= torch.pow(
-                    rms1 / rms2, torch.tensor(1 - self.gui_config.rms_mix_rate)
-                )
+                rms2 = torch.max(rms2, torch.zeros_like(rms2) + 2e-3)
+                # Clamp envelope gain — avoids rare sudden loud pops when rms2 dips
+                exp = float(1.0 - self.gui_config.rms_mix_rate)
+                gain = torch.pow(rms1 / rms2, exp)
+                gain = torch.clamp(gain, 0.15, 3.5)
+                infer_wav *= gain
             # SOLA algorithm from https://github.com/yxlllc/DDSP-SVC
             conv_input = infer_wav[
                 None, None, : self.sola_buffer_frame + self.sola_search_frame
@@ -1755,7 +1762,10 @@ if __name__ == "__main__":
                 # 装填赶不上播放，导致播放进度追上来了，
                 # 此时已产生无法挽回的破音，
                 # 只好直接卡着播放指针写入，保证接下来的尽快放出来
-                print("[W] Output underrun")
+                n_u = int(getattr(self, "_underrun_n", 0) or 0) + 1
+                self._underrun_n = n_u
+                if n_u <= 2 or n_u % 40 == 0:
+                    print("[W] Output underrun")
                 write_pos = play_pos
             else:
                 # 否则按块对齐
@@ -1774,7 +1784,10 @@ if __name__ == "__main__":
             self.out_ptr.value = write_pos
 
             if self.in_evt.is_set():
-                print("[W] Input overrun")
+                n_o = int(getattr(self, "_overrun_n", 0) or 0) + 1
+                self._overrun_n = n_o
+                if n_o <= 2 or n_o % 40 == 0:
+                    print("[W] Input overrun")
                 self.in_evt.clear()
 
             total_time = time.perf_counter() - start_time

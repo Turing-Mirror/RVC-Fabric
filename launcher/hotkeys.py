@@ -295,6 +295,22 @@ def merge_hotkeys(cfg_hotkeys: Any) -> dict[str, str]:
     return out
 
 
+def merge_global_actions(cfg_value: Any) -> dict[str, bool]:
+    """Per-action global-enable flags.
+
+    Every action that *can* be a Windows global hotkey defaults to ``True`` so
+    the master switch alone turns them all on. User config may switch specific
+    actions off. Unknown / non-global actions are ignored.
+    """
+    out: dict[str, bool] = {a.id: True for a in ACTIONS if a.global_ok}
+    if isinstance(cfg_value, dict):
+        for k, v in cfg_value.items():
+            if k in out:
+                out[k] = bool(v)
+    return out
+
+
+
 def find_duplicate_bindings(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
     """Return list of (normalized_key, [action_ids]) for collisions."""
     inv: dict[str, list[str]] = {}

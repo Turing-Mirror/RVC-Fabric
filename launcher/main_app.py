@@ -32,12 +32,14 @@ from launcher.catalog import (
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
 from launcher.hotkeys import (
     ACTION_BY_ID,
+    DEFAULT_GLOBAL_ACTIONS,
     DEFAULT_HOTKEYS,
     GlobalHotkeyManager,
     event_to_hotkey_spec,
     find_duplicate_bindings,
     focus_should_skip_hotkey,
     format_help_text,
+    merge_global_actions,
     merge_hotkeys,
     normalize_hotkey,
     to_tk_sequence,
@@ -111,6 +113,15 @@ from launcher.win_util import (
     start_legacy_realtime_gui,
     start_webui,
 )
+
+
+# ---------------------------------------------------------------------------
+# 运营占位：新手引导最后一步「加入 QQ 群」的入口链接。
+# TODO(运营): 上线前把下面的 URL 换成你的【B 站视频链接】。
+#   视频文案引导：一键三连 + 关注 UP 主后，私信「加群」即可获取 QQ 群号。
+# 只需改这一处；引导页与「其他」页的重看入口都会用它。
+# ---------------------------------------------------------------------------
+COMMUNITY_LINK_URL = "https://www.bilibili.com/"  # ← 改成 B 站视频链接
 
 
 class MainApp:
@@ -187,6 +198,7 @@ class MainApp:
         self.root.after(600, self._bootstrap_devices_async)
         self.root.after(350, self._poll_global_hotkeys)
         self.root.after(2500, self._silent_check_updates)
+        self.root.after(1200, self._maybe_show_onboarding)
         self._gpu_info: dict = {}
         self._update_badge_on = False
 
@@ -2147,10 +2159,10 @@ class MainApp:
             command=self._on_hot_param,
         ).pack(side="left")
         help_mark(gate_row, SETTING_TIPS["fx_gate"])
-        scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True)
-        scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True)
-        scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True)
-        scale_row(gbox, "衰减 dB", self.var_fx_gate_range, 6, 60, 1, hot=True)
+        scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True, tip_key="fx_gate_thr")
+        scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True, tip_key="fx_gate_rel")
+        scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True, tip_key="fx_gate_hold")
+        scale_row(gbox, "衰减 dB", self.var_fx_gate_range, 6, 60, 1, hot=True, tip_key="fx_gate_range")
 
         # Compressor
         cbox = tk.Frame(fx, bg=TM_SURFACE)
@@ -2166,11 +2178,11 @@ class MainApp:
             command=self._on_hot_param,
         ).pack(side="left")
         help_mark(comp_row, SETTING_TIPS["fx_comp"])
-        scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True)
-        scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True)
-        scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True)
-        scale_row(cbox, "释放 ms", self.var_fx_comp_rel, 10, 500, 1, hot=True)
-        scale_row(cbox, "增益 dB", self.var_fx_comp_mu, 0, 12, 0.5, hot=True)
+        scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True, tip_key="fx_comp_thr")
+        scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True, tip_key="fx_comp_ratio")
+        scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True, tip_key="fx_comp_att")
+        scale_row(cbox, "释放 ms", self.var_fx_comp_rel, 10, 500, 1, hot=True, tip_key="fx_comp_rel")
+        scale_row(cbox, "增益 dB", self.var_fx_comp_mu, 0, 12, 0.5, hot=True, tip_key="fx_comp_mu")
 
         # EQ
         ebox = tk.Frame(fx, bg=TM_SURFACE)
@@ -2217,8 +2229,18 @@ class MainApp:
             fg=TM_HELP,
             anchor="w",
         ).pack(fill="x")
+        eq_tip_keys = ("fx_eq_60", "fx_eq_250", "fx_eq_1k", "fx_eq_4k", "fx_eq_8k")
         for i, name in enumerate(EQ_LABELS):
-            scale_row(ebox, name, self.var_fx_eq_gains[i], -12, 12, 0.5, hot=True)
+            scale_row(
+                ebox,
+                name,
+                self.var_fx_eq_gains[i],
+                -12,
+                12,
+                0.5,
+                hot=True,
+                tip_key=eq_tip_keys[i] if i < len(eq_tip_keys) else "",
+            )
 
         scale_row(
             fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True, tip_key="fx_out"
@@ -2927,6 +2949,7 @@ class MainApp:
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("快捷键说明", self.show_hotkeys_help)
         soft("使用说明", lambda: self.show_page("help"))
+        soft("重新观看新手引导", lambda: self.show_onboarding(first_run=False))
         soft("在线更新与音色库", lambda: self.show_page("store"))
 
         # Footer after buttons (pack) — never place() over the list
@@ -3152,6 +3175,11 @@ class MainApp:
 
         self._refresh_global_hotkeys()
 
+    def _enabled_global_action_ids(self) -> list[str]:
+        """Global-eligible actions whose per-key「全局」toggle is on."""
+        flags = merge_global_actions(self.cfg.get("global_hotkey_actions"))
+        return [aid for aid in DEFAULT_GLOBAL_ACTIONS if flags.get(aid, True)]
+
     def _refresh_global_hotkeys(self) -> None:
         """Register or tear down Windows global hotkeys based on config."""
         try:
@@ -3164,7 +3192,9 @@ class MainApp:
             return
         try:
             hwnd = self.root.winfo_id()
-            fails = self._global_hk.register(hwnd, self._hotkey_map)
+            fails = self._global_hk.register(
+                hwnd, self._hotkey_map, action_ids=self._enabled_global_action_ids()
+            )
             if fails and hasattr(self, "lbl_online"):
                 # Soft notice — don't block UI
                 self.lbl_online.configure(
@@ -3508,8 +3538,8 @@ class MainApp:
         intro = tk.Label(
             sec,
             text=(
-                "窗口内快捷键默认可用；开启「全局快捷键」后，游戏全屏时也可切换音色 / 启停变声。"
-                "点「录制」后按下组合键即可自定义。F1 打开完整说明。"
+                "窗口内快捷键默认可用；开启「全局快捷键」总开关后，勾选了「全局」的按键在游戏全屏时也能触发。"
+                "每个按键可单独取消「全局」；点「录制」后按下组合键即可自定义。F1 打开完整说明。"
             ),
             font=sans_font(9),
             bg=TM_SURFACE,
@@ -3527,7 +3557,7 @@ class MainApp:
         )
         tk.Checkbutton(
             sec,
-            text="启用全局快捷键（Windows · 游戏中可用）",
+            text="启用全局快捷键（Windows · 游戏中可用 · 各键的「全局」总开关）",
             variable=self.var_global_hk,
             bg=TM_SURFACE,
             font=sans_font(9),
@@ -3542,6 +3572,10 @@ class MainApp:
             command=self._on_restart_switch_toggle,
         ).pack(anchor="w", pady=(2, 8))
 
+        # Per-action global-enable flags (default all on; gated by master switch)
+        gflags = merge_global_actions(self.cfg.get("global_hotkey_actions"))
+        self._global_action_vars: dict[str, tk.BooleanVar] = {}
+        self._global_action_checks: dict[str, tk.Checkbutton] = {}
         self._hotkey_row_vars: dict[str, tk.StringVar] = {}
         # Compact list — primary actions first
         primary = [
@@ -3612,6 +3646,32 @@ class MainApp:
                 padx=6,
                 pady=2,
             ).pack(side="left", padx=2)
+            if act.global_ok:
+                gvar = tk.BooleanVar(value=bool(gflags.get(aid, True)))
+                self._global_action_vars[aid] = gvar
+                gcb = tk.Checkbutton(
+                    row,
+                    text="全局",
+                    variable=gvar,
+                    bg=TM_SURFACE,
+                    fg=TM_INK_MUTED,
+                    activebackground=TM_SURFACE,
+                    selectcolor=TM_INSET,
+                    font=sans_font(8),
+                    command=self._on_per_key_global_toggle,
+                )
+                gcb.pack(side="left", padx=(8, 0))
+                self._global_action_checks[aid] = gcb
+            else:
+                tk.Label(
+                    row,
+                    text="窗口内",
+                    font=sans_font(8),
+                    bg=TM_SURFACE,
+                    fg=TM_META,
+                ).pack(side="left", padx=(8, 0))
+
+        self._sync_per_key_global_state()
 
         btnrow = tk.Frame(sec, bg=TM_SURFACE)
         btnrow.pack(fill="x", pady=(10, 0))
@@ -3670,12 +3730,41 @@ class MainApp:
             save_config(self.cfg)
         except Exception:
             pass
+        self._sync_per_key_global_state()
         self._refresh_global_hotkeys()
         if hasattr(self, "lbl_hk_status"):
             on = bool(self.cfg.get("global_hotkeys"))
             self.lbl_hk_status.configure(
                 text="全局快捷键已开启" if on else "全局快捷键已关闭",
                 fg=TM_OK if on else TM_META,
+            )
+
+    def _sync_per_key_global_state(self) -> None:
+        """Enable per-key「全局」checkboxes only while the master switch is on."""
+        on = bool(getattr(self, "var_global_hk", None) and self.var_global_hk.get())
+        for cb in getattr(self, "_global_action_checks", {}).values():
+            try:
+                cb.configure(state="normal" if on else "disabled")
+            except Exception:
+                pass
+
+    def _collect_global_action_flags(self) -> dict[str, bool]:
+        return {
+            aid: bool(v.get())
+            for aid, v in getattr(self, "_global_action_vars", {}).items()
+        }
+
+    def _on_per_key_global_toggle(self) -> None:
+        self.cfg["global_hotkey_actions"] = self._collect_global_action_flags()
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+        self._refresh_global_hotkeys()
+        if hasattr(self, "lbl_hk_status"):
+            n = sum(1 for v in self._collect_global_action_flags().values() if v)
+            self.lbl_hk_status.configure(
+                text=f"全局按键已更新（{n} 个启用）", fg=TM_OK
             )
 
     def _on_restart_switch_toggle(self) -> None:
@@ -3795,6 +3884,8 @@ class MainApp:
                 self.cfg["hotkeys"][k] = ""
         if hasattr(self, "var_global_hk"):
             self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
+        if getattr(self, "_global_action_vars", None):
+            self.cfg["global_hotkey_actions"] = self._collect_global_action_flags()
         if hasattr(self, "var_restart_on_switch"):
             self.cfg["hotkey_restart_on_model_switch"] = bool(
                 self.var_restart_on_switch.get()
@@ -3817,6 +3908,7 @@ class MainApp:
         if not messagebox.askyesno("恢复默认", "将快捷键恢复为默认绑定？"):
             return
         self.cfg["hotkeys"] = {}
+        self.cfg["global_hotkey_actions"] = {}
         try:
             save_config(self.cfg)
         except Exception:
@@ -3824,6 +3916,11 @@ class MainApp:
         self._hotkey_map = merge_hotkeys({})
         for aid, var in getattr(self, "_hotkey_row_vars", {}).items():
             var.set(self._hotkey_map.get(aid) or "")
+        # Per-key「全局」flags back to all-on default
+        defaults = merge_global_actions({})
+        for aid, gvar in getattr(self, "_global_action_vars", {}).items():
+            gvar.set(bool(defaults.get(aid, True)))
+        self._sync_per_key_global_state()
         self._setup_hotkeys()
         if hasattr(self, "lbl_hk_status"):
             self.lbl_hk_status.configure(text="已恢复默认快捷键", fg=TM_OK)
@@ -3876,6 +3973,213 @@ class MainApp:
         GhostButton(win, "关闭", command=win.destroy, padx=18, pady=8).pack(
             pady=(4, 14)
         )
+
+    # ------------------------------------------------------------------
+    # First-run newbie onboarding wizard
+    # ------------------------------------------------------------------
+    def _maybe_show_onboarding(self) -> None:
+        """Show the guide once on first launch; no-op if already completed."""
+        try:
+            if bool(self.cfg.get("onboarding_done", False)):
+                return
+        except Exception:
+            return
+        self.show_onboarding(first_run=True)
+
+    def _mark_onboarding_done(self) -> None:
+        self.cfg["onboarding_done"] = True
+        try:
+            save_config(self.cfg)
+        except Exception:
+            pass
+
+    def _open_community_link(self) -> None:
+        """Open the community entry (placeholder → 换成 B 站视频链接)."""
+        url = (COMMUNITY_LINK_URL or "").strip()
+        if url:
+            try:
+                webbrowser.open(url)
+                return
+            except Exception:
+                pass
+        messagebox.showinfo(
+            "获取 QQ 群",
+            "请打开 UP 主视频：一键三连 + 关注后，私信「加群」即可获取 QQ 群号。",
+        )
+
+    def show_onboarding(self, first_run: bool = False) -> None:
+        """Simple multi-step guide; ends with community + help call-to-action."""
+        steps: list[tuple[str, str, list[str]]] = [
+            (
+                "WELCOME",
+                "欢迎使用 Turing Mirror 变声器",
+                [
+                    "这是一个本地实时变声工具：对着麦克风说话，声音会被实时换成你选的音色。",
+                    "常用于游戏 / QQ / Discord 语音，全部在本机运行，不上传你的声音。",
+                    "跟着下面几步走，两分钟就能开黑。",
+                ],
+            ),
+            (
+                "STEP 1 · 接线",
+                "先把声音接对（最重要）",
+                [
+                    "① 本软件「设置」→ 输入设备 = 你的真实麦克风",
+                    "② 本软件「设置」→ 输出设备 = CABLE Input",
+                    "③ 游戏 / QQ 里的麦克风 = CABLE Output",
+                    "还没有虚拟声卡？先在启动器点「安装虚拟声卡」。",
+                ],
+            ),
+            (
+                "STEP 2 · 开声",
+                "三步开始变声",
+                [
+                    "① 在「首页」或「模型」页选择一个音色",
+                    "② 在「设置」页确认输入 / 输出设备",
+                    "③ 点底栏「开启变声」（首次加载约 20～40 秒）",
+                    "想边变声边听自己：勾选「监听自己」，监听设备选真实耳机。",
+                ],
+            ),
+            (
+                "STEP 3 · 调声",
+                "调出更像的声音",
+                [
+                    "· 音高 Pitch：男变女常试 +8～+12，女变男试 −8～−12。",
+                    "· 共鸣 Formant：微调音色的明暗与厚度。",
+                    "· 底栏可随时快速调节，并会按当前音色自动记住。",
+                    "· 更多细调（降噪 / 声音效果）在设置页，每项旁都有「?」说明。",
+                ],
+            ),
+            (
+                "DONE · 加入我们",
+                "加群 & 看完整说明",
+                [
+                    "遇到问题、想要更多音色？欢迎加入玩家 QQ 群一起玩。",
+                    "获取方式：点下方按钮打开视频 → 一键三连 + 关注 UP 主 →",
+                    "再私信 UP 主「加群」，即可拿到最新 QQ 群号。",
+                    "完整图文教程见「说明」页，随时可以回看。",
+                ],
+            ),
+        ]
+
+        win = tk.Toplevel(self.root)
+        win.title("新手引导")
+        win.configure(bg=TM_BG)
+        win.geometry("560x470")
+        win.minsize(480, 420)
+        win.transient(self.root)
+        try:
+            win.grab_set()
+        except Exception:
+            pass
+
+        state = {"i": 0}
+
+        def _close_done():
+            self._mark_onboarding_done()
+            try:
+                win.grab_release()
+            except Exception:
+                pass
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", _close_done)
+
+        eyebrow = tk.Label(win, text="", font=mono_font(9), bg=TM_BG, fg=TM_META)
+        eyebrow.pack(anchor="w", padx=24, pady=(20, 0))
+        title = tk.Label(
+            win,
+            text="",
+            font=title_font(17, "bold"),
+            bg=TM_BG,
+            fg=TM_INK,
+            justify="left",
+            anchor="w",
+        )
+        title.pack(anchor="w", padx=24, pady=(2, 8))
+
+        body = tk.Frame(
+            win, bg=TM_SURFACE, highlightthickness=1, highlightbackground=TM_HAIRLINE
+        )
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 8))
+        body_inner = tk.Frame(body, bg=TM_SURFACE)
+        body_inner.pack(fill="both", expand=True, padx=18, pady=16)
+
+        footer = tk.Frame(win, bg=TM_BG)
+        footer.pack(fill="x", padx=24, pady=(4, 16))
+
+        def _next():
+            if state["i"] < len(steps) - 1:
+                state["i"] += 1
+                render()
+
+        def _prev():
+            if state["i"] > 0:
+                state["i"] -= 1
+                render()
+
+        def _open_help():
+            _close_done()
+            self.show_page("help")
+
+        def render():
+            i = state["i"]
+            eb, ttl, lines = steps[i]
+            eyebrow.configure(text=tracked(eb, gap=" "))
+            title.configure(text=ttl)
+            for w in body_inner.winfo_children():
+                w.destroy()
+            for ln in lines:
+                tk.Label(
+                    body_inner,
+                    text=ln,
+                    font=sans_font(11),
+                    bg=TM_SURFACE,
+                    fg=TM_INK,
+                    justify="left",
+                    anchor="w",
+                    wraplength=470,
+                ).pack(anchor="w", pady=4, fill="x")
+            for w in footer.winfo_children():
+                w.destroy()
+            is_final = i == len(steps) - 1
+            tk.Label(
+                footer,
+                text=f"第 {i + 1} / {len(steps)} 步",
+                font=mono_font(9),
+                bg=TM_BG,
+                fg=TM_META,
+            ).pack(side="left")
+            GhostButton(
+                footer,
+                "完成" if is_final else "跳过引导",
+                command=_close_done,
+                padx=12,
+                pady=8,
+            ).pack(side="left", padx=(12, 0))
+            if is_final:
+                PrimaryButton(
+                    footer,
+                    "打开视频 · 三连关注得 QQ 群",
+                    command=self._open_community_link,
+                    padx=16,
+                    pady=8,
+                ).pack(side="right")
+                GhostButton(
+                    footer, "查看使用说明", command=_open_help, padx=14, pady=8
+                ).pack(side="right", padx=(0, 8))
+                GhostButton(
+                    footer, "上一步", command=_prev, padx=14, pady=8
+                ).pack(side="right", padx=(0, 8))
+            else:
+                PrimaryButton(
+                    footer, "下一步", command=_next, padx=22, pady=8
+                ).pack(side="right")
+                if i > 0:
+                    GhostButton(
+                        footer, "上一步", command=_prev, padx=14, pady=8
+                    ).pack(side="right", padx=(0, 8))
+
+        render()
 
     def toggle_vc(self) -> None:
         if not self.models:

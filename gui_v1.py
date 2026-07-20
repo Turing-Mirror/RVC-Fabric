@@ -23,6 +23,13 @@ def printt(strr, *args):
         print(strr % args)
 
 
+# Upstream engine pieces (ffmpeg/faiss/model loaders) are unreliable on
+# non-ASCII install paths — warn early so support can spot it in the log
+if any(ord(_c) > 127 for _c in os.getcwd()):
+    printt("WARNING: install path contains non-ASCII characters: %s", os.getcwd())
+    printt("WARNING: 安装路径含中文/特殊字符，部分组件可能异常，建议移到纯英文路径")
+
+
 def soft_clip_np(data: "np.ndarray", ceiling: float = 0.97) -> "np.ndarray":
     """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
     import numpy as np
@@ -102,6 +109,10 @@ if __name__ == "__main__":
     import torch
     import torch.nn.functional as F
     import torchaudio.transforms as tat
+
+    # realtime process is inference-only: skip autograd bookkeeping everywhere
+    # (SOLA / noise gate / resample run outside the engine's no_grad blocks)
+    torch.set_grad_enabled(False)
 
     from infer.lib import rtrvc as rvc_for_realtime
     from i18n.i18n import I18nAuto
@@ -1106,12 +1117,90 @@ if __name__ == "__main__":
             self.tg = TorchGate(
                 sr=self.gui_config.samplerate, n_fft=4 * self.zc, prop_decrease=0.9
             ).to(self.config.device)
+            # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
+            # here instead of inside the first audible blocks
+            try:
+                self._warmup_engine()
+            except Exception:
+                traceback.print_exc()
             self.start_stream()
+
+        def _warmup_engine(self):
+            dummy = torch.zeros_like(self.input_wav_res)
+            # a short voiced tail so the f0 extractor runs its full path
+            n = min(int(dummy.shape[0]), 4000)
+            t = torch.arange(n, device=dummy.device, dtype=torch.float32)
+            dummy[-n:] = 0.1 * torch.sin(2 * np.pi * 150.0 * t / 16000.0)
+            for _ in range(2):
+                infer_wav = self.rvc.infer(
+                    dummy,
+                    self.block_frame_16k,
+                    self.skip_head,
+                    self.return_length,
+                    self.gui_config.f0method,
+                )
+                if self.resampler2 is not None:
+                    infer_wav = self.resampler2(infer_wav)
+            # drop warmup pitch history so the real stream starts clean
+            self.rvc.cache_pitch.zero_()
+            self.rvc.cache_pitchf.zero_()
+
+        def _perf_meta(self) -> dict:
+            meta = {"created": time.strftime("%Y-%m-%d %H:%M:%S")}
+            try:
+                meta["mode"] = (
+                    "worker" if os.environ.get("TM_REALTIME_WORKER") == "1" else "gui"
+                )
+                meta["torch"] = str(getattr(torch, "__version__", ""))
+                meta["device"] = str(self.config.device)
+                meta["half"] = bool(self.config.is_half)
+                if torch.cuda.is_available():
+                    meta["gpu"] = torch.cuda.get_device_name(0)
+                meta["samplerate"] = int(self.gui_config.samplerate)
+                meta["block_time"] = float(self.gui_config.block_time)
+                meta["f0method"] = str(self.gui_config.f0method)
+                meta["index_on"] = bool(getattr(self.gui_config, "index_rate", 0))
+                meta["model"] = os.path.basename(
+                    str(getattr(self.gui_config, "pth_path", ""))
+                )
+            except Exception:
+                pass
+            return meta
+
+        def _save_perf_report(self):
+            perf = getattr(self, "_perf", None)
+            self._perf = None
+            if perf is None:
+                return
+            from tools.perf_report import MIN_SESSION_SAMPLES, should_save
+
+            out_dir = os.path.join("User_Data", "perf_reports")
+            if os.environ.get("TM_PERF_REPORT") != "1":
+                # occasional sampling: skip trivial sessions and rate-limit
+                if perf.summary().get("n", 0) < MIN_SESSION_SAMPLES:
+                    return
+                if not should_save(out_dir):
+                    return
+            path = perf.save(out_dir)
+            if path:
+                printt("perf report saved: %s", path)
 
         def start_stream(self):
             global flag_vc
             if not flag_vc:
                 flag_vc = True
+                # Occasional local perf sampling (User_Data/perf_reports): saved
+                # at most once per interval, never uploaded — users share the
+                # file themselves. TM_PERF_REPORT=0 disables, =1 forces saving.
+                try:
+                    if os.environ.get("TM_PERF_REPORT") != "0":
+                        from tools.perf_report import PerfCollector
+
+                        self._perf = PerfCollector(self._perf_meta())
+                    else:
+                        self._perf = None
+                except Exception:
+                    self._perf = None
                 if (
                     "WASAPI" in self.gui_config.sg_hostapi
                     and self.gui_config.sg_wasapi_exclusive
@@ -1488,6 +1577,10 @@ if __name__ == "__main__":
             global flag_vc
             flag_vc = False
             try:
+                self._save_perf_report()
+            except Exception:
+                traceback.print_exc()
+            try:
                 self._close_monitor_stream()
             except Exception:
                 pass
@@ -1792,6 +1885,9 @@ if __name__ == "__main__":
 
             total_time = time.perf_counter() - start_time
             self.last_infer_ms = int(total_time * 1000)
+            perf = getattr(self, "_perf", None)
+            if perf is not None:
+                perf.add(total_time)
             if flag_vc and self.window is not None:
                 try:
                     self.window["infer_time"].update(self.last_infer_ms)

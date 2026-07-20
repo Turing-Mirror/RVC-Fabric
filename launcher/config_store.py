@@ -67,6 +67,8 @@ DEFAULTS: dict[str, Any] = {
     "last_model_path": "",
     "desktop_shortcut_done": False,
     "vbcable_hint_done": False,
+    # First-run newbie onboarding wizard shown once (reopen from 其他 page)
+    "onboarding_done": False,
     # Online update / voice library (SharePoint or GitHub raw catalog JSON)
     "update_manifest_url": "",
     # Keyboard shortcuts (merged with launcher.hotkeys.DEFAULT_HOTKEYS)

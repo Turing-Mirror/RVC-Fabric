@@ -39,12 +39,16 @@
 
 | 模块 | 说明 |
 |------|------|
-| `launcher/ui/widgets.py` | SectionCard、Primary/GhostButton、NavItem、StatusBadge、ModelCoverCard、SoftActionCard、HoverTip |
+| `launcher/ui/widgets.py` | SectionCard、Primary/GhostButton、NavItem、StatusBadge、ModelCoverCard、SoftActionCard、HoverTip、**SearchField**、**SegmentControl** |
 | `launcher/ui/covers.py` | 音色 cover 缩略缓存 |
 | 首页 | 舞台轮播 + 封面焦点卡 |
-| 模型 | 封面网格 |
+| 模型 | 封面网格 + **搜索(SearchField ⌕)/排序(SegmentControl 分段 pill)** + 检索库角标 |
 | 设置 | SectionCard 分组（左 accent 条） |
 | 启动器 | 同 token + SoftActionCard |
+
+> **SearchField / SegmentControl 借鉴**：Schale 库感搜索框（扁平淡面 + ⌕，无发光）
+> 与分段导航 pill（inactive 融入 rail、active 取 accent）；等宽 `SORT` 眉题延续
+> LyricsKara mono meta。二者是通用件，避免把筛选逻辑写进 `main_app.py`。
 
 ---
 

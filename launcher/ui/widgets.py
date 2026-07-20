@@ -896,6 +896,138 @@ class ModelCoverCard(tk.Frame):
             w.bind("<Button-1>", _click)
 
 
+class SearchField(tk.Frame):
+    """Flat themed search input: mono glyph + placeholder (Schale library search).
+
+    Kept visually quiet — hairline border, surface fill, no focus glow — so it
+    reads as library chrome, not an AI-app input.
+    """
+
+    def __init__(
+        self,
+        master,
+        *,
+        placeholder: str = "搜索音色…",
+        on_change: Optional[Callable[[str], None]] = None,
+        width: int = 20,
+        **kw,
+    ):
+        super().__init__(
+            master,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+            **kw,
+        )
+        self._on_change = on_change
+        self._placeholder = placeholder
+        self._ph_active = True
+
+        row = tk.Frame(self, bg=TM_SURFACE, padx=10, pady=6)
+        row.pack(fill="x")
+        tk.Label(
+            row, text="⌕", font=mono_font(12), bg=TM_SURFACE, fg=TM_META
+        ).pack(side="left", padx=(0, 8))
+        self.entry = tk.Entry(
+            row,
+            font=sans_font(10),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            relief="flat",
+            bd=0,
+            insertbackground=TM_INK,
+            width=width,
+            highlightthickness=0,
+        )
+        self.entry.pack(side="left", fill="x", expand=True)
+        self.entry.insert(0, placeholder)
+        self.entry.bind("<FocusIn>", self._focus_in)
+        self.entry.bind("<FocusOut>", self._focus_out)
+        self.entry.bind("<KeyRelease>", self._changed)
+        self._clear = tk.Label(
+            row, text="✕", font=mono_font(9), bg=TM_SURFACE, fg=TM_META, cursor="hand2"
+        )
+        self._clear.bind("<Button-1>", lambda _e: self.reset())
+
+    def query(self) -> str:
+        return "" if self._ph_active else self.entry.get().strip()
+
+    def reset(self) -> None:
+        self.entry.delete(0, "end")
+        self._show_placeholder()
+        self._clear.pack_forget()
+        if self._on_change:
+            self._on_change("")
+
+    def _show_placeholder(self) -> None:
+        self._ph_active = True
+        self.entry.delete(0, "end")
+        self.entry.insert(0, self._placeholder)
+        self.entry.configure(fg=TM_META)
+
+    def _focus_in(self, _e=None) -> None:
+        if self._ph_active:
+            self._ph_active = False
+            self.entry.delete(0, "end")
+            self.entry.configure(fg=TM_INK)
+
+    def _focus_out(self, _e=None) -> None:
+        if not self.entry.get().strip():
+            self._show_placeholder()
+
+    def _changed(self, _e=None) -> None:
+        has = bool(self.entry.get().strip()) and not self._ph_active
+        if has:
+            self._clear.pack(side="left", padx=(6, 0))
+        else:
+            self._clear.pack_forget()
+        if self._on_change:
+            self._on_change(self.query())
+
+
+class SegmentControl(tk.Frame):
+    """Schale-style pill segment for a small, mutually-exclusive option set."""
+
+    def __init__(
+        self,
+        master,
+        options: list[tuple[str, str]],
+        *,
+        value: Optional[str] = None,
+        on_change: Optional[Callable[[str], None]] = None,
+        **kw,
+    ):
+        super().__init__(master, bg=TM_INSET, **kw)
+        self._on_change = on_change
+        self._items: dict[str, NavItem] = {}
+        self._value = value or (options[0][0] if options else "")
+        for key, label in options:
+            it = NavItem(self, label, key, self._pick, bg=TM_INSET)
+            it.pack(side="left")
+            self._items[key] = it
+        self._refresh()
+
+    def value(self) -> str:
+        return self._value
+
+    def set_value(self, key: str) -> None:
+        if key in self._items:
+            self._value = key
+            self._refresh()
+
+    def _pick(self, key: str) -> None:
+        if key == self._value:
+            return
+        self._value = key
+        self._refresh()
+        if self._on_change:
+            self._on_change(key)
+
+    def _refresh(self) -> None:
+        for k, it in self._items.items():
+            it.set_active(k == self._value)
+
+
 class PageHeader(tk.Frame):
     """Page title block: mono eyebrow + large title + muted lead."""
 

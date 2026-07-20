@@ -25,6 +25,7 @@ from launcher.catalog import (
     bind_index_to_model_dir,
     clear_model_index,
     discover_index_files,
+    filter_sort_models,
     get_model_voice_params,
     import_model_to_catalog,
     save_model_voice_params,
@@ -97,7 +98,9 @@ from launcher.ui import (
     PageHeader,
     ParamTile,
     PrimaryButton,
+    SearchField,
     SectionCard,
+    SegmentControl,
     SoftSlider,
     StatusBadge,
 )
@@ -1279,7 +1282,6 @@ class MainApp:
     def _page_models(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
         fr.columnconfigure(0, weight=1)
-        fr.rowconfigure(1, weight=1)
 
         bar = tk.Frame(fr, bg=TM_BG)
         bar.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(18, 8))
@@ -1312,8 +1314,36 @@ class MainApp:
             side="right", padx=4
         )
 
+        # Filter row: search (left) + sort segment (right) — library chrome
+        filt = tk.Frame(fr, bg=TM_BG)
+        filt.grid(row=1, column=0, sticky="ew", padx=GUTTER, pady=(0, 6))
+        self._models_search = SearchField(
+            filt,
+            placeholder="搜索音色 / 标签…",
+            on_change=lambda _q: self._apply_models_filter(),
+            width=22,
+        )
+        self._models_search.pack(side="left")
+        sort_wrap = tk.Frame(filt, bg=TM_BG)
+        sort_wrap.pack(side="right")
+        tk.Label(
+            sort_wrap,
+            text=tracked("SORT", gap="  "),
+            font=mono_font(8),
+            bg=TM_BG,
+            fg=TM_META,
+        ).pack(side="left", padx=(0, 8))
+        self._models_sort_seg = SegmentControl(
+            sort_wrap,
+            [("default", "默认"), ("name", "名称"), ("index", "检索库")],
+            value="default",
+            on_change=lambda _k: self._apply_models_filter(),
+        )
+        self._models_sort_seg.pack(side="left")
+
+        fr.rowconfigure(2, weight=1)
         list_wrap = tk.Frame(fr, bg=TM_BG)
-        list_wrap.grid(row=1, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 12))
+        list_wrap.grid(row=2, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 12))
         list_wrap.columnconfigure(0, weight=1)
         list_wrap.rowconfigure(0, weight=1)
 
@@ -1345,6 +1375,19 @@ class MainApp:
                 pass
         self._models_job = self.root.after(100, self.refresh_models)
 
+    def _apply_models_filter(self) -> None:
+        """Re-render the grid for the current search/sort without a disk rescan."""
+        if not hasattr(self, "model_grid"):
+            return
+        # refresh_models re-lists from disk; that's cheap and keeps things simple,
+        # but debounce so fast typing doesn't rescan on every keystroke
+        if getattr(self, "_models_filter_job", None):
+            try:
+                self.root.after_cancel(self._models_filter_job)
+            except Exception:
+                pass
+        self._models_filter_job = self.root.after(120, self.refresh_models)
+
     def refresh_models(self) -> None:
         if not hasattr(self, "model_grid"):
             return
@@ -1363,19 +1406,45 @@ class MainApp:
         for w in self.model_grid.winfo_children():
             w.destroy()
 
+        # Search + sort view (self.models stays the full list — carousel,
+        # hotkeys and model_idx all index into it)
+        query = ""
+        sort = "default"
+        if getattr(self, "_models_search", None) is not None:
+            query = self._models_search.query()
+        if getattr(self, "_models_sort_seg", None) is not None:
+            sort = self._models_sort_seg.value()
+        view = filter_sort_models(self.models, query, sort=sort)
+        idx_by_path = {m.get("path"): i for i, m in enumerate(self.models)}
+
         if hasattr(self, "models_status_lbl"):
-            if self.models:
+            if not self.models:
+                self.models_status_lbl.configure(text="共 0 个音色")
+            elif query and len(view) != len(self.models):
+                self.models_status_lbl.configure(
+                    text=f"共 {len(self.models)} 个 · 匹配 {len(view)} 个"
+                )
+            else:
                 cur = self.models[self.model_idx]["name"]
                 self.models_status_lbl.configure(
                     text=f"共 {len(self.models)} 个 · 使用中：{cur}"
                 )
-            else:
-                self.models_status_lbl.configure(text="共 0 个音色")
 
         if not self.models:
             tk.Label(
                 self.model_grid,
-                text="还没有模型。点右上角「导入模型」添加音色。",
+                text="还没有模型。点右上角「导入模型」添加音色，或到「更新」页下载。",
+                bg=TM_BG,
+                fg=TM_INK_MUTED,
+                font=sans_font(11),
+            ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
+            self._sync_bottom()
+            return
+
+        if not view:
+            tk.Label(
+                self.model_grid,
+                text=f"没有匹配「{query}」的音色。清空搜索可看全部。",
                 bg=TM_BG,
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
@@ -1391,8 +1460,9 @@ class MainApp:
         for c in range(cols):
             self.model_grid.columnconfigure(c, weight=1, uniform="m")
 
-        for i, m in enumerate(self.models):
-            r, c = divmod(i, cols)
+        for pos, m in enumerate(view):
+            r, c = divmod(pos, cols)
+            full_ix = idx_by_path.get(m.get("path"), 0)
             active = self._is_active_model(m)
             photo = self._cover_cache.get(
                 m.get("cover"), max_w=card_min + 40, max_h=130
@@ -1404,11 +1474,12 @@ class MainApp:
                 photo=photo,
                 active=active,
                 focus=active,
+                index_text="✓ 检索库" if (m.get("index") or "") else "",
                 width=max(card_min, 180),
                 height=250,
-                on_click=lambda ix=i: self._use_model_from_grid(ix),
+                on_click=lambda ix=full_ix: self._use_model_from_grid(ix),
                 action_text="使用中" if active else "使用",
-                on_action=None if active else (lambda ix=i: self._use_model_from_grid(ix)),
+                on_action=None if active else (lambda ix=full_ix: self._use_model_from_grid(ix)),
             )
             card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
             self.model_grid.rowconfigure(r, weight=0)

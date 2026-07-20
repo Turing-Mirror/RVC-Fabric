@@ -9,5 +9,11 @@ methods resolve at runtime via the composed class.
 from launcher.pages.home_page import HomePageMixin
 from launcher.pages.models_page import ModelsPageMixin
 from launcher.pages.more_page import MorePageMixin
+from launcher.pages.settings_page import SettingsPageMixin
 
-__all__ = ["HomePageMixin", "ModelsPageMixin", "MorePageMixin"]
+__all__ = [
+    "HomePageMixin",
+    "ModelsPageMixin",
+    "MorePageMixin",
+    "SettingsPageMixin",
+]

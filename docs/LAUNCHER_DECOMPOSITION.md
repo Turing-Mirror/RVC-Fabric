@@ -22,9 +22,20 @@
 |-------|------|------|
 | `HomePageMixin` | `launcher/pages/home_page.py` | `_page_home`、轮播 `_render_carousel`、`_update_home_current_label`、`_show_switch_toast`、`_schedule_carousel_reflow` |
 | `ModelsPageMixin` | `launcher/pages/models_page.py` | `_page_models`、`refresh_models`、`_apply_models_filter`、`_use_model_from_grid`、`import_model`、`_schedule_models_reflow` |
+| `MorePageMixin` | `launcher/pages/more_page.py` | `_page_more`、`open_bootstrap`、`_force_kill_engine`、`_open_perf_reports`、`_collect_diagnostics` |
+| `SettingsPageMixin` | `launcher/pages/settings_page.py` | `_page_settings`（含设置区全部：index/设备/加速/预设/更新/监听）+ `_reflow_settings_page`、`_update_index_hint`、`_collect_settings_into_cfg`、`_init/_apply_gpu_info`、`_apply_perf_preset`、`reload_devices`、`_apply_device_status` 等 24 个方法 |
 
-`class MainApp(HomePageMixin, ModelsPageMixin)` 组合；mixin 共享同一 `self`，跨页面的
-`self.*` 属性/方法在组合实例上运行期解析。**main_app.py 4461 → 4018 行。**
+`class MainApp(HomePageMixin, ModelsPageMixin, MorePageMixin, SettingsPageMixin)` 组合；
+mixin 共享同一 `self`，跨页面的 `self.*` 属性/方法在组合实例上运行期解析。
+**main_app.py 4461 → 2409 行（砍掉一半多）。**
+
+### 验证工具（关键）
+
+`python3.12 import` 只抓模块级导入错误，**抓不到方法体内引用的未导入全局名**（那要运行时
+才 NameError）。因此改用 **pyflakes** 静态检查 mixin：`python3 -m pyflakes launcher/pages/x.py`
+会报 `undefined name`（F821，= 漏 import）与 `imported but unused`（F401，= 可裁剪）。
+设置页 1430 行即靠此逐一补齐/裁剪导入，确认零 F821（仅剩 8 个 `e`-in-lambda 告警，
+经 `git show HEAD:` 核对为**搬迁前既有**、非本次引入）。
 
 ## 安全模式（务必照做）
 
@@ -44,11 +55,13 @@
 
 | 优先 | 抽取项 | 说明 / 风险 |
 |------|--------|-------------|
-| 中 | `MorePageMixin`（`_page_more` + `_open_perf_reports`/`_collect_diagnostics`/`_force_kill_engine`/`open_bootstrap`） | 内聚、近文件尾，低风险 |
-| 中 | `SettingsPageMixin`（`_page_settings` ~800 行 + index/设备/加速/预设处理） | **最大块**；但协作者近期在此改动（FX/快捷键/引导），先协调再动，避免冲突 |
-| 中 | `HotkeysMixin`（`_build_hotkeys_settings_section` + 捕获/全局/应用） | 同上，协作者活跃区 |
+| 中 | `HotkeysMixin`（`_build_hotkeys_settings_section` + 捕获/全局/应用/`_dispatch_hotkey`） | 内聚，按 pyflakes 流程搬 |
+| 中 | `OnboardingMixin`（`show_onboarding`/`_maybe_show_onboarding`/`_open_community_link`） | 内聚，低风险 |
 | 低 | `RealtimeControlMixin`（`toggle_vc`/`_start_vc`/`_stop_vc`/`_tick_status`/状态徽章） | 与实时协议耦合，仔细搬 |
 | 低 | `MonitorMixin`（监听设备 UI：`_refresh_monitor_hint`/`_on_monitor_*`/`_toggle_monitor`） | 纯启发式已抽到 `audio_devices.py`，UI 部分可再分 |
+
+已抽完：Home / Models / More / **Settings**（最大块）。主类现仅剩 chrome/骨架、
+`show_page`、语音参数与 dock、快捷键、实时控制、监听、引导。
 
 目标终态：`main_app.py` 只保留 `__init__`、窗口/chrome 骨架、`show_page`、页面组合与
 跨页面共享方法；每个页面一个 mixin 文件；纯逻辑在无 Tk 的可测模块里。

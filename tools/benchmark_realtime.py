@@ -21,6 +21,7 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -65,7 +66,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="synchronize the device between stages so the engine's per-stage "
         "'Spent time' log is truthful (end-to-end gets slightly slower)",
     )
+    p.add_argument(
+        "--json-out", default="", help="also write the full results to this JSON file"
+    )
     return p
+
+
+def stage_stats(stage_rows) -> dict:
+    """Aggregate per-block (fea, index, f0, model) second tuples into ms stats."""
+    if not stage_rows:
+        return {}
+    arr = np.asarray(stage_rows, dtype=np.float64) * 1000.0
+    out = {}
+    for i, name in enumerate(("fea", "index", "f0", "model")):
+        col = arr[:, i]
+        out[name] = {
+            "mean_ms": round(float(col.mean()), 2),
+            "p95_ms": round(float(np.percentile(col, 95)), 2),
+        }
+    return out
 
 
 def block_geometry(
@@ -154,6 +173,7 @@ def main() -> int:
     input_wav_res = torch.zeros(geo["input_res_len"], device=device, dtype=torch.float32)
 
     times: list[float] = []
+    stage_rows: list[tuple] = []
     bf16k = geo["block_frame_16k"]
     for i in range(total):
         chunk = torch.from_numpy(src[i * bf16k : (i + 1) * bf16k]).to(device)
@@ -171,6 +191,9 @@ def main() -> int:
             torch.cuda.synchronize()
         if i >= args.warmup:
             times.append(time.perf_counter() - t0)
+            st = getattr(rvc, "last_stage_times", None)
+            if st is not None:
+                stage_rows.append(st)
 
     arr = np.asarray(times) * 1000.0
     block_ms = args.block_time * 1000.0
@@ -195,6 +218,15 @@ def main() -> int:
         "[bench] block=%.0fms n=%d | mean=%.1f p50=%.1f p95=%.1f max=%.1f ms | RTF=%.2f"
         % (block_ms, len(arr), arr.mean(), p50, p95, arr.max(), rtf)
     )
+    st = stage_stats(stage_rows) if args.sync_stages else {}
+    if st:
+        print(
+            "[bench] stages: "
+            + " | ".join(
+                "%s mean=%.1f p95=%.1f" % (k, v["mean_ms"], v["p95_ms"])
+                for k, v in st.items()
+            )
+        )
     budget = 0.8 * block_ms
     if p95 <= budget:
         print("[bench] OK: p95 within 80%% of block budget (%.0fms)" % budget)
@@ -203,6 +235,36 @@ def main() -> int:
             "[bench] OVER BUDGET: p95 %.1fms > %.0fms — expect glitches; "
             "raise block-time or use a faster f0method/device" % (p95, budget)
         )
+    if args.json_out:
+        payload = {
+            "env": {
+                "torch": str(torch.__version__),
+                "gpu": gpu,
+                "device": str(device),
+                "half": bool(config.is_half),
+            },
+            "run": {
+                "model": os.path.basename(args.pth),
+                "model_sr": int(rvc.tgt_sr),
+                "version": str(getattr(rvc, "version", "?")),
+                "f0method": args.f0method,
+                "index_rate": args.index_rate if args.index else 0.0,
+                "block_time": args.block_time,
+                "sync_stages": bool(args.sync_stages),
+                "n_blocks": len(arr),
+            },
+            "summary": {
+                "mean_ms": round(float(arr.mean()), 2),
+                "p50_ms": round(float(p50), 2),
+                "p95_ms": round(float(p95), 2),
+                "max_ms": round(float(arr.max()), 2),
+                "rtf": round(rtf, 3),
+            },
+            "stages": st or None,
+        }
+        with open(args.json_out, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print("[bench] json written: %s" % args.json_out)
     return 0
 
 

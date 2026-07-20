@@ -10,7 +10,12 @@ np = pytest.importorskip("numpy")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.benchmark_realtime import block_geometry, build_parser, synth_input
+from tools.benchmark_realtime import (
+    block_geometry,
+    build_parser,
+    stage_stats,
+    synth_input,
+)
 
 
 def test_geometry_40k_default_params():
@@ -56,8 +61,23 @@ def test_parser_defaults_and_required_pth():
     assert args.warmup == 10
     assert args.index == ""
     assert args.sync_stages is False
+    assert args.json_out == ""
     with pytest.raises(SystemExit):
         p.parse_args([])
+
+
+def test_stage_stats_aggregation():
+    rows = [
+        (0.010, 0.001, 0.020, 0.015),
+        (0.012, 0.001, 0.022, 0.017),
+        (0.011, 0.001, 0.021, 0.016),
+    ]
+    st = stage_stats(rows)
+    assert set(st) == {"fea", "index", "f0", "model"}
+    assert st["fea"]["mean_ms"] == 11.0
+    assert st["f0"]["mean_ms"] == 21.0
+    assert st["model"]["p95_ms"] >= st["model"]["mean_ms"]
+    assert stage_stats([]) == {}
 
 
 def test_synth_input_is_sane():

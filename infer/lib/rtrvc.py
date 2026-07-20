@@ -583,6 +583,8 @@ class RVC:
             )
         self._bench_sync()
         t5 = ttime()
+        # per-stage seconds for the benchmark / perf tooling (fea, index, f0, model)
+        self.last_stage_times = (t2 - t1, t3 - t2, t4 - t3, t5 - t4)
         # Hot-path: only log timing occasionally (every ~2s of wall time)
         now = t5
         last = getattr(self, "_last_timing_log", 0.0)

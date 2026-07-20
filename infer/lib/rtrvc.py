@@ -272,20 +272,29 @@ class RVC:
             return
         if os.environ.get("TM_INDEX_GPU", "1") == "0":
             return
-        if big.shape[0] > 1_500_000:  # ~0.75 GB fp16 — keep on CPU
+        # Match the model dtype: fp16 halves memory + matches feats on half-precision
+        # cards; fp32 keeps full accuracy and avoids Pascal's crippled fp16 matmul
+        # on cards forced to fp32 (e.g. GTX 10xx).
+        bank_dtype = torch.float16 if self.is_half else torch.float32
+        itemsize = 2 if self.is_half else 4
+        est_bytes = int(big.shape[0]) * int(big.shape[1]) * itemsize
+        if est_bytes > 512 * 1024 * 1024:  # keep >512 MB banks on CPU faiss
             printt(
-                "Index bank too large for GPU search (%d rows), using CPU faiss",
+                "Index bank too large for GPU search (%d rows, ~%d MB), using CPU faiss",
                 big.shape[0],
+                est_bytes // (1024 * 1024),
             )
             return
         try:
-            self._index_bank = torch.from_numpy(big).to(
-                self.device, dtype=torch.float16
-            )
+            self._index_bank = torch.from_numpy(big).to(self.device, dtype=bank_dtype)
             self._index_bank_sq = torch.from_numpy(
-                np.square(big).sum(axis=1)
+                np.square(big.astype(np.float32)).sum(axis=1)
             ).to(self.device, dtype=torch.float32)
-            printt("Index search on GPU (%d rows)", big.shape[0])
+            printt(
+                "Index search on GPU (%d rows, %s)",
+                big.shape[0],
+                "fp16" if self.is_half else "fp32",
+            )
         except Exception as e:
             self._index_bank = None
             self._index_bank_sq = None

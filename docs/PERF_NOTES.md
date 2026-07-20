@@ -51,7 +51,7 @@
 |------|----|------|
 | ✅ | 常量控制张量缓存 | padding mask / p_len / sid 等每块复用,不再重分配上传 |
 | ✅ | cudnn.benchmark + TF32 | 实时进程形状固定,autotune 收益免费 |
-| ✅ | GPU index 检索 | fp16 特征库常驻显存,精确 top-8 替代每块 CPU faiss(≤150 万行;失败自动回退) |
+| ✅ | GPU index 检索 | 特征库常驻显存(dtype 跟随模型:fp16 半精度卡 / **fp32 强制卡如 10 系**,避免 Pascal 慢速 fp16),精确 top-8 替代每块 CPU faiss;显存预算 512MB,超则回退;距离计算恒 fp32 |
 | ✅ | RMVPE 解码矢量化 | 去掉逐帧 Python 循环,批量管线同样受益 |
 | ✅ | 引擎预热 | start_vc 音频流打开前跑 2 次哑推理,首块卡顿移出可听区 |
 | ✅ | f0 后处理去分支 | torch.where 替代掩码赋值,消每块一次主机同步 |

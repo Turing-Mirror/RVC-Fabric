@@ -79,12 +79,23 @@ class RVC:
             self.use_jit = self.config.use_jit
             self.is_half = config.is_half
 
+            # Realtime shapes are fixed per stream: let cudnn autotune conv kernels,
+            # and allow TF32 so any fp32 matmul path keeps tensor-core speed.
+            if "cuda" in str(self.device):
+                try:
+                    torch.backends.cudnn.benchmark = True
+                    torch.backends.cuda.matmul.allow_tf32 = True
+                    torch.backends.cudnn.allow_tf32 = True
+                except Exception:
+                    pass
+
             # Missing / wrong index must not kill the process (common for catalog models)
             if index_rate != 0 and index_path and os.path.isfile(index_path):
                 try:
                     self.index = faiss.read_index(index_path)
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
+                    self._init_index_bank()
                 except Exception as e:
                     printt("Index load failed, continue without index: %s", e)
                     index_rate = 0
@@ -210,6 +221,7 @@ class RVC:
                     self.index = faiss.read_index(self.index_path)
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
+                    self._init_index_bank()
                 except Exception as e:
                     printt("Index load failed: %s", e)
                     new_index_rate = 0
@@ -245,6 +257,54 @@ class RVC:
         if t is None:
             t = cache[value] = torch.LongTensor([value])
         return t
+
+    # Exact top-8 retrieval on the GPU replaces the per-block CPU faiss search:
+    # it removes a forced GPU→CPU sync every block, and exact search is at least
+    # as accurate as the IVF approximation faiss uses. CPU faiss remains the
+    # fallback (dml / cpu devices, oversized banks, or TM_INDEX_GPU=0).
+    def _init_index_bank(self):
+        self._index_bank = None
+        self._index_bank_sq = None
+        big = getattr(self, "big_npy", None)
+        if big is None or getattr(big, "ndim", 0) != 2:
+            return
+        if "cuda" not in str(self.device):
+            return
+        if os.environ.get("TM_INDEX_GPU", "1") == "0":
+            return
+        if big.shape[0] > 1_500_000:  # ~0.75 GB fp16 — keep on CPU
+            printt(
+                "Index bank too large for GPU search (%d rows), using CPU faiss",
+                big.shape[0],
+            )
+            return
+        try:
+            self._index_bank = torch.from_numpy(big).to(
+                self.device, dtype=torch.float16
+            )
+            self._index_bank_sq = torch.from_numpy(
+                np.square(big).sum(axis=1)
+            ).to(self.device, dtype=torch.float32)
+            printt("Index search on GPU (%d rows)", big.shape[0])
+        except Exception as e:
+            self._index_bank = None
+            self._index_bank_sq = None
+            printt("GPU index init failed, using CPU faiss: %s", e)
+
+    def _index_blend_gpu(self, tail):
+        """Top-8 neighbour blend of the feats tail; same weighting as the CPU path."""
+        q = tail.to(self._index_bank.dtype)
+        sim = q @ self._index_bank.T
+        d = (
+            q.float().pow(2).sum(1, keepdim=True)
+            + self._index_bank_sq.unsqueeze(0)
+            - 2.0 * sim.float()
+        )
+        score, ix = torch.topk(d, 8, dim=1, largest=False)  # squared L2, small = near
+        weight = (1.0 / score.clamp_min(1e-4)).square()
+        weight = weight / (weight.sum(dim=1, keepdim=True) + 1e-8)
+        neigh = self._index_bank[ix].float()  # (n, 8, dim)
+        return (neigh * weight.unsqueeze(2)).sum(dim=1)
 
     def get_f0_post(self, f0):
         if not torch.is_tensor(f0):
@@ -417,31 +477,43 @@ class RVC:
         t2 = ttime()
         try:
             if hasattr(self, "index") and self.index_rate != 0:
-                npy = feats[0][skip_head // 2 :].cpu().numpy().astype("float32", copy=False)
-                score, ix = self.index.search(npy, k=8)
-                if (ix >= 0).all():
-                    # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
-                    weight = np.square(1.0 / np.maximum(score, 1e-4))
-                    weight /= weight.sum(axis=1, keepdims=True) + 1e-8
-                    npy = np.sum(
-                        self.big_npy[ix] * np.expand_dims(weight, axis=2), axis=1
-                    )
-                    if self.config.is_half:
-                        npy = npy.astype("float16")
-                    # slightly soft blend: keep a bit more of live features for naturalness
-                    rate = float(np.clip(self.index_rate, 0.0, 1.0))
-                    feats[0][skip_head // 2 :] = (
-                        torch.from_numpy(npy).unsqueeze(0).to(self.device) * rate
-                        + (1.0 - rate) * feats[0][skip_head // 2 :]
-                    )
+                # slightly soft blend: keep a bit more of live features for naturalness
+                rate = float(np.clip(self.index_rate, 0.0, 1.0))
+                if getattr(self, "_index_bank", None) is not None:
+                    tail = feats[0][skip_head // 2 :]
+                    blended = self._index_blend_gpu(tail).to(feats.dtype)
+                    feats[0][skip_head // 2 :] = blended * rate + (1.0 - rate) * tail
                 else:
-                    if not getattr(self, "_warned_bad_index", False):
-                        printt(
-                            "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
+                    npy = (
+                        feats[0][skip_head // 2 :]
+                        .cpu()
+                        .numpy()
+                        .astype("float32", copy=False)
+                    )
+                    score, ix = self.index.search(npy, k=8)
+                    if (ix >= 0).all():
+                        # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
+                        weight = np.square(1.0 / np.maximum(score, 1e-4))
+                        weight /= weight.sum(axis=1, keepdims=True) + 1e-8
+                        npy = np.sum(
+                            self.big_npy[ix] * np.expand_dims(weight, axis=2), axis=1
                         )
-                        self._warned_bad_index = True
+                        if self.config.is_half:
+                            npy = npy.astype("float16")
+                        feats[0][skip_head // 2 :] = (
+                            torch.from_numpy(npy).unsqueeze(0).to(self.device) * rate
+                            + (1.0 - rate) * feats[0][skip_head // 2 :]
+                        )
+                    else:
+                        if not getattr(self, "_warned_bad_index", False):
+                            printt(
+                                "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
+                            )
+                            self._warned_bad_index = True
             # else: index disabled — no per-block log (was spam + cost)
         except Exception:
+            # degrade to the CPU faiss path on any GPU-search failure (e.g. OOM)
+            self._index_bank = None
             if not getattr(self, "_warned_index_exc", False):
                 traceback.print_exc()
                 printt("Index search FAILED (will not re-spam)")

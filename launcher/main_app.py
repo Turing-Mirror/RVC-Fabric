@@ -2946,6 +2946,8 @@ class MainApp:
         soft("打开首次设置启动器", self.open_bootstrap)
         soft("打开 User_Data", lambda: open_path(USER_DATA))
         soft("打开安装目录", lambda: open_path(ROOT))
+        soft("打开性能信息文件夹（帮助我们优化适配）", self._open_perf_reports)
+        soft("生成诊断包（反馈问题时用）", self._collect_diagnostics)
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("快捷键说明", self.show_hotkeys_help)
         soft("使用说明", lambda: self.show_page("help"))
@@ -2995,6 +2997,50 @@ class MainApp:
             self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
             self._set_status_visual("idle", "引擎已强制结束", APP_PRODUCT_TAGLINE)
             messagebox.showinfo("完成", f"已清理变声相关进程（约 {n} 个）。")
+        except Exception as e:
+            messagebox.showerror("失败", str(e))
+
+    def _open_perf_reports(self) -> None:
+        """Perf samples live here; user decides whether to share them."""
+        d = USER_DATA / "perf_reports"
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        open_path(d)
+        try:
+            has_reports = any(p.name.startswith("perf_") for p in d.iterdir())
+        except Exception:
+            has_reports = True
+        if not has_reports:
+            messagebox.showinfo(
+                "性能信息",
+                "软件偶尔会把变声性能信息记录在此文件夹（仅保存在本机，不会自动上传）。\n\n"
+                "目前还没有记录：正常变声一段时间后会自动生成。\n"
+                "如愿意帮助我们优化和适配，可将文件夹内的文件发送给团队。",
+            )
+
+    def _collect_diagnostics(self) -> None:
+        """Build a support zip via tools/collect_diagnostics.py (stdlib-only).
+
+        Loaded from file so it works from the PyInstaller exe too."""
+        try:
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location(
+                "tm_collect_diagnostics",
+                str(ROOT / "tools" / "collect_diagnostics.py"),
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            path = mod.collect(str(ROOT))
+            open_path(USER_DATA / "diagnostics")
+            messagebox.showinfo(
+                "诊断包已生成",
+                f"已生成：\n{path}\n\n"
+                "内容仅含日志与配置，不含音频或音色模型。\n"
+                "反馈问题时把这个 zip 发给团队即可。",
+            )
         except Exception as e:
             messagebox.showerror("失败", str(e))
 

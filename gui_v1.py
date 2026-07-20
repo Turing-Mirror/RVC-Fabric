@@ -103,6 +103,10 @@ if __name__ == "__main__":
     import torch.nn.functional as F
     import torchaudio.transforms as tat
 
+    # realtime process is inference-only: skip autograd bookkeeping everywhere
+    # (SOLA / noise gate / resample run outside the engine's no_grad blocks)
+    torch.set_grad_enabled(False)
+
     from infer.lib import rtrvc as rvc_for_realtime
     from i18n.i18n import I18nAuto
     from configs.config import Config
@@ -1134,6 +1138,23 @@ if __name__ == "__main__":
             self.rvc.cache_pitch.zero_()
             self.rvc.cache_pitchf.zero_()
 
+        def _perf_report_enabled(self) -> bool:
+            """Opt-in only: user consents via the settings toggle (pending UI)
+            which writes perf_report_enabled into User_Data/app_config.json.
+            TM_PERF_REPORT=1/0 overrides for dev/bench use."""
+            env = os.environ.get("TM_PERF_REPORT")
+            if env == "1":
+                return True
+            if env == "0":
+                return False
+            try:
+                with open(
+                    os.path.join("User_Data", "app_config.json"), "r", encoding="utf-8"
+                ) as f:
+                    return bool(json.load(f).get("perf_report_enabled", False))
+            except Exception:
+                return False
+
         def _perf_meta(self) -> dict:
             meta = {"created": time.strftime("%Y-%m-%d %H:%M:%S")}
             try:
@@ -1170,11 +1191,14 @@ if __name__ == "__main__":
             if not flag_vc:
                 flag_vc = True
                 # Local perf report (User_Data/perf_reports) — how we get timing
-                # data from user GPUs we don't own; nothing is uploaded
+                # data from user GPUs we don't own; opt-in, nothing is uploaded
                 try:
-                    from tools.perf_report import PerfCollector
+                    if self._perf_report_enabled():
+                        from tools.perf_report import PerfCollector
 
-                    self._perf = PerfCollector(self._perf_meta())
+                        self._perf = PerfCollector(self._perf_meta())
+                    else:
+                        self._perf = None
                 except Exception:
                     self._perf = None
                 if (

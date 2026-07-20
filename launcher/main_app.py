@@ -25,12 +25,18 @@ from launcher.catalog import (
     bind_index_to_model_dir,
     clear_model_index,
     discover_index_files,
-    filter_sort_models,
     get_model_voice_params,
-    import_model_to_catalog,
     save_model_voice_params,
 )
+from launcher.app_presets import (
+    format_latency_line,
+    perf_preset_name,
+    perf_preset_values,
+)
+from launcher.audio_devices import is_virtual_monitor_name, prefer_monitor_device
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
+from launcher.pages import HomePageMixin, ModelsPageMixin
+from launcher.voice_history import VoiceParamHistory
 from launcher.hotkeys import (
     ACTION_BY_ID,
     DEFAULT_GLOBAL_ACTIONS,
@@ -93,14 +99,11 @@ from launcher.ui import (
     CoverCache,
     GhostButton,
     HoverTip,
-    ModelCoverCard,
     NavItem,
     PageHeader,
     ParamTile,
     PrimaryButton,
-    SearchField,
     SectionCard,
-    SegmentControl,
     SoftSlider,
     StatusBadge,
 )
@@ -127,7 +130,7 @@ from launcher.win_util import (
 COMMUNITY_LINK_URL = "https://www.bilibili.com/"  # ← 改成 B 站视频链接
 
 
-class MainApp:
+class MainApp(HomePageMixin, ModelsPageMixin):
     def __init__(self) -> None:
         ensure_dirs()
         self.cfg = load_config()
@@ -170,9 +173,7 @@ class MainApp:
         self._capture_action_id: Optional[str] = None
         self._loading_voice = False  # skip persist while applying per-model params
         self._voice_save_job = None
-        self._voice_undo: list[dict] = []
-        self._voice_redo: list[dict] = []
-        self._voice_hist_limit = 40
+        self._voice_hist = VoiceParamHistory(limit=40)
         self._dock_hint_job = None
 
         self.root = tk.Tk()
@@ -535,15 +536,7 @@ class MainApp:
         self._sync_bottom()
 
     def _format_latency_line(self, delay_ms: int, infer_ms: int) -> str:
-        """Human-readable metrics; hide absurd delayed-sentinel values."""
-        parts: list[str] = []
-        if 0 < delay_ms < 8000:
-            parts.append(f"延迟 {delay_ms} ms")
-        elif delay_ms >= 8000:
-            parts.append("延迟 测量中…")
-        if 0 < infer_ms < 8000:
-            parts.append(f"推理 {infer_ms} ms")
-        return " · ".join(parts) if parts else APP_PRODUCT_TAGLINE
+        return format_latency_line(delay_ms, infer_ms, APP_PRODUCT_TAGLINE)
 
     def _set_status_visual(self, mode: str, title: str, subtitle: str = "") -> None:
         """Update bottom-right status badge. mode: idle|busy|live|error."""
@@ -591,207 +584,6 @@ class MainApp:
             except Exception:
                 pass
 
-    def _page_home(self) -> tk.Frame:
-        fr = tk.Frame(self.body, bg=TM_BG)
-        fr.columnconfigure(0, weight=1)
-        fr.rowconfigure(1, weight=1)
-
-        # Full-width stage band (LyricsKara “band” hierarchy)
-        stage = tk.Frame(fr, bg=TM_STAGE)
-        stage.grid(row=0, column=0, sticky="ew")
-        stage_inner = tk.Frame(stage, bg=TM_STAGE)
-        stage_inner.pack(fill="x", padx=GUTTER, pady=(22, 18))
-        stage_inner.columnconfigure(0, weight=1)
-
-        head_row = tk.Frame(stage_inner, bg=TM_STAGE)
-        head_row.grid(row=0, column=0, sticky="ew")
-        tk.Label(
-            head_row,
-            text=tracked("HOME  ·  STAGE", gap="  "),
-            font=mono_font(8),
-            bg=TM_STAGE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(side="left")
-        self.home_index_lbl = tk.Label(
-            head_row,
-            text="— / —",
-            font=mono_font(9),
-            bg=TM_STAGE,
-            fg=TM_META,
-            anchor="e",
-        )
-        self.home_index_lbl.pack(side="right")
-
-        tk.Label(
-            stage_inner,
-            text="选择音色，开始变声",
-            font=title_font(24, "bold"),
-            bg=TM_STAGE,
-            fg=TM_INK,
-            anchor="w",
-        ).grid(row=1, column=0, sticky="w", pady=(10, 6))
-
-        self.home_current_lbl = tk.Label(
-            stage_inner,
-            text="当前音色：—",
-            font=title_font(15, "bold"),
-            bg=TM_STAGE,
-            fg=TM_ACCENT,
-            anchor="w",
-        )
-        self.home_current_lbl.grid(row=2, column=0, sticky="w", pady=(4, 2))
-        self.home_hint_lbl = tk.Label(
-            stage_inner,
-            text="← → 切换音色 · F5 启停变声 · F1 快捷键",
-            font=sans_font(10),
-            bg=TM_STAGE,
-            fg=TM_INK_MUTED,
-            anchor="w",
-        )
-        self.home_hint_lbl.grid(row=3, column=0, sticky="w", pady=(2, 0))
-        tk.Frame(fr, bg=TM_HAIRLINE, height=1).grid(row=0, column=0, sticky="sew")
-
-        # Carousel stage
-        mid = tk.Frame(fr, bg=TM_BG)
-        mid.grid(row=1, column=0, sticky="nsew", padx=GUTTER, pady=(8, 0))
-        mid.columnconfigure(0, weight=1)
-        mid.rowconfigure(0, weight=1)
-        self.carousel_host = tk.Frame(mid, bg=TM_BG)
-        self.carousel_host.grid(row=0, column=0, sticky="nsew")
-        self.carousel_host.bind("<Configure>", lambda e: self._schedule_carousel_reflow())
-
-        nav = tk.Frame(fr, bg=TM_BG)
-        nav.grid(row=2, column=0, sticky="ew", pady=(8, 6))
-        nav_inner = tk.Frame(nav, bg=TM_BG)
-        nav_inner.pack()
-        GhostButton(
-            nav_inner,
-            "‹  PREV",
-            command=lambda: self._shift_model(-1),
-            font=mono_font(9),
-            padx=20,
-            pady=10,
-        ).pack(side="left", padx=8)
-        GhostButton(
-            nav_inner,
-            "NEXT  ›",
-            command=lambda: self._shift_model(1),
-            font=mono_font(9),
-            padx=20,
-            pady=10,
-        ).pack(side="left", padx=8)
-
-        self.home_toast = tk.Label(
-            fr,
-            text="",
-            font=mono_font(9),
-            bg=TM_BG,
-            fg=TM_OK,
-        )
-        self.home_toast.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        return fr
-
-    def _schedule_carousel_reflow(self) -> None:
-        if getattr(self, "_carousel_job", None):
-            try:
-                self.root.after_cancel(self._carousel_job)
-            except Exception:
-                pass
-        self._carousel_job = self.root.after(80, self._render_carousel)
-
-    def _render_carousel(self) -> None:
-        if not hasattr(self, "carousel_host"):
-            return
-        for w in self.carousel_host.winfo_children():
-            w.destroy()
-        self._update_home_current_label()
-
-        if not self.models:
-            box = SectionCard(self.carousel_host, accent_rail=False, pad=20)
-            box.pack(expand=True, fill="both", padx=40, pady=20)
-            tk.Label(
-                box.body,
-                text="暂无音色\n\n请到「模型」页导入 .pth",
-                font=sans_font(11),
-                bg=TM_SURFACE,
-                fg=TM_INK_MUTED,
-                justify="center",
-            ).pack(expand=True, pady=40)
-            return
-
-        self.carousel_host.update_idletasks()
-        host_w = max(self.carousel_host.winfo_width(), 400)
-        host_h = max(self.carousel_host.winfo_height(), 240)
-        # Focus card dominates (stage hierarchy)
-        focus_w = max(200, min(320, int(host_w * 0.34)))
-        focus_h = max(240, min(360, int(host_h * 0.88)))
-        side_w = max(130, int(focus_w * 0.62))
-        side_h = max(180, int(focus_h * 0.72))
-
-        n = len(self.models)
-        idxs = [(self.model_idx - 1) % n, self.model_idx % n, (self.model_idx + 1) % n]
-        row = tk.Frame(self.carousel_host, bg=TM_BG)
-        row.place(relx=0.5, rely=0.5, anchor="center")
-
-        for i, mi in enumerate(idxs):
-            m = self.models[mi]
-            focus = i == 1
-            w, h = (focus_w, focus_h) if focus else (side_w, side_h)
-            photo = self._cover_cache.get(
-                m.get("cover"),
-                max_w=max(w - 4, 100),
-                max_h=max(int(h * 0.58), 80),
-            )
-            card = ModelCoverCard(
-                row,
-                name=m["name"],
-                tag=m.get("tag") or "音色",
-                photo=photo,
-                active=focus,
-                focus=focus,
-                index_text=f"{self.model_idx + 1:02d} / {n:02d}" if focus else "",
-                width=w,
-                height=h,
-                on_click=lambda ix=mi: self._select_model(
-                    ix, feedback=True, maybe_restart=True
-                ),
-            )
-            card.pack(side="left", padx=max(10, int(host_w * 0.016)), pady=12)
-
-    def _update_home_current_label(self) -> None:
-        if not hasattr(self, "home_current_lbl"):
-            return
-        if not self.models:
-            self.home_current_lbl.configure(text="尚未选择音色")
-            self.home_hint_lbl.configure(text="请先到「模型」页导入音色")
-            if hasattr(self, "home_index_lbl"):
-                self.home_index_lbl.configure(text="— / —")
-            return
-        m = self.models[self.model_idx]
-        n = len(self.models)
-        self.home_current_lbl.configure(text=m["name"])
-        self.home_hint_lbl.configure(
-            text=f"{m.get('tag') or '音色'}  ·  切换立即生效 · 运行中会自动重载"
-        )
-        if hasattr(self, "home_index_lbl"):
-            self.home_index_lbl.configure(
-                text=f"{self.model_idx + 1:02d}  /  {n:02d}"
-            )
-
-    def _show_switch_toast(self, name: str) -> None:
-        if not hasattr(self, "home_toast"):
-            return
-        self.home_toast.configure(text=f"已切换为「{name}」", fg=TM_OK)
-        if self._toast_job is not None:
-            try:
-                self.root.after_cancel(self._toast_job)
-            except Exception:
-                pass
-        self._toast_job = self.root.after(
-            2200, lambda: self.home_toast.configure(text="")
-        )
-
     def _shift_model(self, delta: int) -> None:
         if not self.models:
             return
@@ -827,8 +619,7 @@ class MainApp:
         self.cfg["last_model_path"] = m.get("path") or ""
         # Load this voice's pitch/formant/… then sync engine config
         self._apply_model_voice_params(m, push_remote=False)
-        self._voice_undo.clear()
-        self._voice_redo.clear()
+        self._voice_hist.clear()
         save_config(self.cfg)
         self._sync_model_to_realtime_gui(m)
         self._sync_bottom()
@@ -1146,13 +937,7 @@ class MainApp:
         """Push current voice params before a user edit (slider press / reset)."""
         if self._loading_voice:
             return
-        snap = self._voice_snapshot()
-        if self._voice_undo and self._voice_undo[-1] == snap:
-            return
-        self._voice_undo.append(snap)
-        if len(self._voice_undo) > self._voice_hist_limit:
-            self._voice_undo.pop(0)
-        self._voice_redo.clear()
+        self._voice_hist.push(self._voice_snapshot())
 
     def _apply_voice_snapshot(self, snap: dict, *, push_remote: bool = True) -> None:
         if not snap:
@@ -1185,39 +970,35 @@ class MainApp:
             self._on_hot_param()
 
     def undo_voice_params(self) -> None:
-        if not self._voice_undo:
+        prev = self._voice_hist.undo(self._voice_snapshot())
+        if prev is None:
             self._set_status_visual(
                 "live" if self.vc_running else "idle",
                 "无可撤销",
                 "先调整音高/共鸣/阈值",
             )
             return
-        cur = self._voice_snapshot()
-        prev = self._voice_undo.pop()
-        self._voice_redo.append(cur)
         self._apply_voice_snapshot(prev)
         self._set_status_visual(
             "live" if self.vc_running else "idle",
             "已撤销",
-            f"剩余 {len(self._voice_undo)} 步",
+            f"剩余 {self._voice_hist.undo_len} 步",
         )
 
     def redo_voice_params(self) -> None:
-        if not self._voice_redo:
+        nxt = self._voice_hist.redo(self._voice_snapshot())
+        if nxt is None:
             self._set_status_visual(
                 "live" if self.vc_running else "idle",
                 "无可重做",
                 "",
             )
             return
-        cur = self._voice_snapshot()
-        nxt = self._voice_redo.pop()
-        self._voice_undo.append(cur)
         self._apply_voice_snapshot(nxt)
         self._set_status_visual(
             "live" if self.vc_running else "idle",
             "已重做",
-            f"还可重做 {len(self._voice_redo)} 步",
+            f"还可重做 {self._voice_hist.redo_len} 步",
         )
 
     def reset_voice_params_default(self) -> None:
@@ -1278,249 +1059,6 @@ class MainApp:
             except Exception:
                 pass
         self._hot_job = self.root.after(180, self._push_hot_params)
-
-    def _page_models(self) -> tk.Frame:
-        fr = tk.Frame(self.body, bg=TM_BG)
-        fr.columnconfigure(0, weight=1)
-
-        bar = tk.Frame(fr, bg=TM_BG)
-        bar.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(18, 8))
-        left = tk.Frame(bar, bg=TM_BG)
-        left.pack(side="left", fill="x", expand=True)
-        PageHeader(
-            left,
-            eyebrow="CATALOG",
-            title="音色目录",
-            lead="",
-        ).pack(anchor="w")
-        self.models_status_lbl = tk.Label(
-            left,
-            text="",
-            font=mono_font(9),
-            bg=TM_BG,
-            fg=TM_META,
-        )
-        self.models_status_lbl.pack(anchor="w", pady=(6, 0))
-
-        actions = tk.Frame(bar, bg=TM_BG)
-        actions.pack(side="right", anchor="n", pady=(8, 0))
-        GhostButton(
-            actions, "打开目录", command=lambda: open_path(MODELS_DIR), padx=12, pady=6
-        ).pack(side="right", padx=4)
-        GhostButton(actions, "刷新", command=self.refresh_models, padx=12, pady=6).pack(
-            side="right", padx=4
-        )
-        PrimaryButton(actions, "导入模型", command=self.import_model, padx=14, pady=6).pack(
-            side="right", padx=4
-        )
-
-        # Filter row: search (left) + sort segment (right) — library chrome
-        filt = tk.Frame(fr, bg=TM_BG)
-        filt.grid(row=1, column=0, sticky="ew", padx=GUTTER, pady=(0, 6))
-        self._models_search = SearchField(
-            filt,
-            placeholder="搜索音色 / 标签…",
-            on_change=lambda _q: self._apply_models_filter(),
-            width=22,
-        )
-        self._models_search.pack(side="left")
-        sort_wrap = tk.Frame(filt, bg=TM_BG)
-        sort_wrap.pack(side="right")
-        tk.Label(
-            sort_wrap,
-            text=tracked("SORT", gap="  "),
-            font=mono_font(8),
-            bg=TM_BG,
-            fg=TM_META,
-        ).pack(side="left", padx=(0, 8))
-        self._models_sort_seg = SegmentControl(
-            sort_wrap,
-            [("default", "默认"), ("name", "名称"), ("index", "检索库")],
-            value="default",
-            on_change=lambda _k: self._apply_models_filter(),
-        )
-        self._models_sort_seg.pack(side="left")
-
-        fr.rowconfigure(2, weight=1)
-        list_wrap = tk.Frame(fr, bg=TM_BG)
-        list_wrap.grid(row=2, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 12))
-        list_wrap.columnconfigure(0, weight=1)
-        list_wrap.rowconfigure(0, weight=1)
-
-        canvas = tk.Canvas(list_wrap, bg=TM_BG, highlightthickness=0)
-        scroll = ttk.Scrollbar(list_wrap, orient="vertical", command=canvas.yview)
-        self.model_grid = tk.Frame(canvas, bg=TM_BG)
-        self._models_canvas = canvas
-        self._models_canvas_win = canvas.create_window((0, 0), window=self.model_grid, anchor="nw")
-
-        def _on_grid_cfg(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def _on_canvas_cfg(e):
-            canvas.itemconfigure(self._models_canvas_win, width=e.width)
-            self._schedule_models_reflow()
-
-        self.model_grid.bind("<Configure>", _on_grid_cfg)
-        canvas.bind("<Configure>", _on_canvas_cfg)
-        canvas.configure(yscrollcommand=scroll.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scroll.grid(row=0, column=1, sticky="ns")
-        return fr
-
-    def _schedule_models_reflow(self) -> None:
-        if getattr(self, "_models_job", None):
-            try:
-                self.root.after_cancel(self._models_job)
-            except Exception:
-                pass
-        self._models_job = self.root.after(100, self.refresh_models)
-
-    def _apply_models_filter(self) -> None:
-        """Re-render the grid for the current search/sort without a disk rescan."""
-        if not hasattr(self, "model_grid"):
-            return
-        # refresh_models re-lists from disk; that's cheap and keeps things simple,
-        # but debounce so fast typing doesn't rescan on every keystroke
-        if getattr(self, "_models_filter_job", None):
-            try:
-                self.root.after_cancel(self._models_filter_job)
-            except Exception:
-                pass
-        self._models_filter_job = self.root.after(120, self.refresh_models)
-
-    def refresh_models(self) -> None:
-        if not hasattr(self, "model_grid"):
-            return
-        self.models = list_voice_models()
-        if self.model_idx >= len(self.models):
-            self.model_idx = max(0, len(self.models) - 1)
-
-        # Restore selection from saved path if possible
-        want = self.cfg.get("last_model_path") or self.cfg.get("last_model")
-        if want and self.models:
-            for i, m in enumerate(self.models):
-                if m.get("path") == want or m.get("file") == want or m.get("name") == want:
-                    self.model_idx = i
-                    break
-
-        for w in self.model_grid.winfo_children():
-            w.destroy()
-
-        # Search + sort view (self.models stays the full list — carousel,
-        # hotkeys and model_idx all index into it)
-        query = ""
-        sort = "default"
-        if getattr(self, "_models_search", None) is not None:
-            query = self._models_search.query()
-        if getattr(self, "_models_sort_seg", None) is not None:
-            sort = self._models_sort_seg.value()
-        view = filter_sort_models(self.models, query, sort=sort)
-        idx_by_path = {m.get("path"): i for i, m in enumerate(self.models)}
-
-        if hasattr(self, "models_status_lbl"):
-            if not self.models:
-                self.models_status_lbl.configure(text="共 0 个音色")
-            elif query and len(view) != len(self.models):
-                self.models_status_lbl.configure(
-                    text=f"共 {len(self.models)} 个 · 匹配 {len(view)} 个"
-                )
-            else:
-                cur = self.models[self.model_idx]["name"]
-                self.models_status_lbl.configure(
-                    text=f"共 {len(self.models)} 个 · 使用中：{cur}"
-                )
-
-        if not self.models:
-            tk.Label(
-                self.model_grid,
-                text="还没有模型。点右上角「导入模型」添加音色，或到「更新」页下载。",
-                bg=TM_BG,
-                fg=TM_INK_MUTED,
-                font=sans_font(11),
-            ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._sync_bottom()
-            return
-
-        if not view:
-            tk.Label(
-                self.model_grid,
-                text=f"没有匹配「{query}」的音色。清空搜索可看全部。",
-                bg=TM_BG,
-                fg=TM_INK_MUTED,
-                font=sans_font(11),
-            ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._sync_bottom()
-            return
-
-        # Columns adapt to width — cover-first cards need more width
-        self._models_canvas.update_idletasks()
-        cw = max(self._models_canvas.winfo_width(), 320)
-        card_min = 180
-        cols = max(1, min(5, cw // (card_min + 20)))
-        for c in range(cols):
-            self.model_grid.columnconfigure(c, weight=1, uniform="m")
-
-        for pos, m in enumerate(view):
-            r, c = divmod(pos, cols)
-            full_ix = idx_by_path.get(m.get("path"), 0)
-            active = self._is_active_model(m)
-            photo = self._cover_cache.get(
-                m.get("cover"), max_w=card_min + 40, max_h=130
-            )
-            card = ModelCoverCard(
-                self.model_grid,
-                name=m["name"],
-                tag=m.get("tag") or "音色",
-                photo=photo,
-                active=active,
-                focus=active,
-                index_text="✓ 检索库" if (m.get("index") or "") else "",
-                width=max(card_min, 180),
-                height=250,
-                on_click=lambda ix=full_ix: self._use_model_from_grid(ix),
-                action_text="使用中" if active else "使用",
-                on_action=None if active else (lambda ix=full_ix: self._use_model_from_grid(ix)),
-            )
-            card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
-            self.model_grid.rowconfigure(r, weight=0)
-
-        self._sync_bottom()
-
-    def _use_model_from_grid(self, ix: int) -> None:
-        self._select_model(ix, feedback=True, maybe_restart=True)
-        # Light toast via status label; avoid modal spam
-        if hasattr(self, "models_status_lbl") and self.models:
-            self.models_status_lbl.configure(
-                text=f"已切换为：{self.models[ix]['name']}",
-                fg=TM_OK,
-            )
-            self.root.after(
-                2000,
-                lambda: self.models_status_lbl.configure(
-                    text=f"共 {len(self.models)} 个 · 使用中：{self.models[self.model_idx]['name']}",
-                    fg=TM_META,
-                )
-                if self.models
-                else None,
-            )
-
-    def import_model(self) -> None:
-        paths = filedialog.askopenfilenames(
-            title="选择 RVC 模型 (.pth)",
-            filetypes=[("RVC 模型", "*.pth"), ("全部", "*.*")],
-        )
-        if not paths:
-            return
-        n = 0
-        for p in paths:
-            try:
-                import_model_to_catalog(Path(p), MODELS_DIR)
-                n += 1
-            except Exception as e:
-                messagebox.showerror("导入失败", f"{p}\n{e}")
-        self.refresh_models()
-        if n:
-            messagebox.showinfo("导入完成", f"已写入 {n} 个模型到\n{MODELS_DIR}")
 
     def _reflow_settings_page(self) -> None:
         """Keep settings cards/sliders matching window width (fix maximize empty right)."""
@@ -2754,33 +2292,27 @@ class MainApp:
 
     def _apply_perf_preset(self, key: str) -> None:
         """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""
-        presets = {
-            # block_time, crossfade, extra_time (aligned with realtime quality/latency tradeoff)
-            "low_latency": (0.12, 0.04, 1.5),
-            "balanced": (0.22, 0.05, 2.5),
-            "stable": (0.40, 0.08, 3.5),
-        }
-        vals = presets.get(key) or presets["balanced"]
+        block, crossfade, extra = perf_preset_values(key)
         try:
-            self.var_block.set(vals[0])
-            self.var_crossfade.set(vals[1])
-            self.var_extra.set(vals[2])
-            self.cfg["block_time"] = vals[0]
-            self.cfg["crossfade_length"] = vals[1]
-            self.cfg["extra_time"] = vals[2]
+            self.var_block.set(block)
+            self.var_crossfade.set(crossfade)
+            self.var_extra.set(extra)
+            self.cfg["block_time"] = block
+            self.cfg["crossfade_length"] = crossfade
+            self.cfg["extra_time"] = extra
             save_config(self.cfg)
         except Exception:
             pass
-        names = {"low_latency": "低延迟", "balanced": "均衡", "stable": "稳定"}
+        name = perf_preset_name(key)
         self._set_status_visual(
             "idle",
-            f"性能预设：{names.get(key, key)}",
+            f"性能预设：{name}",
             "请重新「开启变声」后生效",
         )
         try:
             if hasattr(self, "lbl_settings_hint"):
                 self.lbl_settings_hint.configure(
-                    text=f"已应用「{names.get(key, key)}」预设 · 需重新开启变声",
+                    text=f"已应用「{name}」预设 · 需重新开启变声",
                     fg=TM_OK,
                 )
         except Exception:
@@ -3432,68 +2964,14 @@ class MainApp:
 
     @staticmethod
     def _is_virtual_monitor_name(name: str) -> bool:
-        low = (name or "").lower()
-        if not low:
-            return True
-        keys = (
-            "cable",
-            "voicemeeter",
-            "mapper",
-            "steam streaming",
-            "steam streaming speakers",
-            "virtual",
-            "vb-audio",
-            "vb audio",
-            "nvidia high definition",
-            "nvidia broadcast",
-            "网易虚拟",
-            "fxsound",
-            "discord",
-            "obs virtual",
-            "stereo mix",
-            "主声音驱动",
-            "primary sound",
-        )
-        return any(k in low for k in keys)
+        return is_virtual_monitor_name(name)
 
-    def _prefer_monitor_device(
-        self, outs: list, current: str = ""
-    ) -> str:
-        """Pick real headphones/speakers; avoid CABLE / Steam / virtual endpoints."""
-        if not outs:
-            return current or ""
-        main_out = ""
+    def _prefer_monitor_device(self, outs: list, current: str = "") -> str:
         try:
             main_out = str(self.var_output_dev.get() or "")
         except Exception:
             main_out = str(self.cfg.get("sg_output_device") or "")
-
-        def usable(n: str) -> bool:
-            if not n or n == main_out:
-                return False
-            if self._is_virtual_monitor_name(n):
-                return False
-            if main_out and "cable" in main_out.lower() and "cable" in n.lower():
-                return False
-            return True
-
-        if current and current in outs and usable(current):
-            return current
-
-        # Prefer names that look like headphones
-        for n in outs:
-            low = n.lower()
-            if usable(n) and (
-                "耳机" in n
-                or "headphone" in low
-                or "headset" in low
-                or "earphone" in low
-            ):
-                return n
-        for n in outs:
-            if usable(n):
-                return n
-        return current if current in outs else outs[0]
+        return prefer_monitor_device(outs, current, main_out)
 
     def _refresh_monitor_hint(self) -> None:
         if not hasattr(self, "lbl_monitor_hint"):

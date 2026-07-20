@@ -218,6 +218,34 @@ class RVC:
                 new_index_rate = 0
         self.index_rate = new_index_rate
 
+    # Block geometry is fixed while a stream runs, so the small control tensors
+    # passed to hubert / net_g are identical every block — rebuilding them costs
+    # allocations + host-to-device copies on the hot path.
+    def _padding_mask_for(self, shape):
+        mask = getattr(self, "_padding_mask", None)
+        if mask is None or tuple(mask.shape) != tuple(shape):
+            mask = torch.zeros(tuple(shape), dtype=torch.bool, device=self.device)
+            self._padding_mask = mask
+        return mask
+
+    def _long_dev(self, value):
+        cache = getattr(self, "_long_dev_cache", None)
+        if cache is None:
+            cache = self._long_dev_cache = {}
+        t = cache.get(value)
+        if t is None:
+            t = cache[value] = torch.LongTensor([value]).to(self.device)
+        return t
+
+    def _long_cpu(self, value):
+        cache = getattr(self, "_long_cpu_cache", None)
+        if cache is None:
+            cache = self._long_cpu_cache = {}
+        t = cache.get(value)
+        if t is None:
+            t = cache[value] = torch.LongTensor([value])
+        return t
+
     def get_f0_post(self, f0):
         if not torch.is_tensor(f0):
             f0 = torch.from_numpy(f0)
@@ -375,7 +403,7 @@ class RVC:
                 feats = input_wav.half().view(1, -1)
             else:
                 feats = input_wav.float().view(1, -1)
-            padding_mask = torch.BoolTensor(feats.shape).to(self.device).fill_(False)
+            padding_mask = self._padding_mask_for(feats.shape)
             inputs = {
                 "source": feats,
                 "padding_mask": padding_mask,
@@ -389,7 +417,7 @@ class RVC:
         t2 = ttime()
         try:
             if hasattr(self, "index") and self.index_rate != 0:
-                npy = feats[0][skip_head // 2 :].cpu().numpy().astype("float32")
+                npy = feats[0][skip_head // 2 :].cpu().numpy().astype("float32", copy=False)
                 score, ix = self.index.search(npy, k=8)
                 if (ix >= 0).all():
                     # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
@@ -439,11 +467,11 @@ class RVC:
         t4 = ttime()
         feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
         feats = feats[:, :p_len, :]
-        p_len = torch.LongTensor([p_len]).to(self.device)
-        sid = torch.LongTensor([0]).to(self.device)
-        skip_head = torch.LongTensor([skip_head])
-        return_length2 = torch.LongTensor([return_length2])
-        return_length = torch.LongTensor([return_length])
+        p_len = self._long_dev(p_len)
+        sid = self._long_dev(0)
+        skip_head = self._long_cpu(skip_head)
+        return_length2 = self._long_cpu(return_length2)
+        return_length = self._long_cpu(return_length)
         with torch.no_grad():
             if self.if_f0 == 1:
                 infered_audio, _, _ = self.net_g.infer(

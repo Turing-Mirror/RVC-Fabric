@@ -1134,10 +1134,49 @@ if __name__ == "__main__":
             self.rvc.cache_pitch.zero_()
             self.rvc.cache_pitchf.zero_()
 
+        def _perf_meta(self) -> dict:
+            meta = {"created": time.strftime("%Y-%m-%d %H:%M:%S")}
+            try:
+                meta["mode"] = (
+                    "worker" if os.environ.get("TM_REALTIME_WORKER") == "1" else "gui"
+                )
+                meta["torch"] = str(getattr(torch, "__version__", ""))
+                meta["device"] = str(self.config.device)
+                meta["half"] = bool(self.config.is_half)
+                if torch.cuda.is_available():
+                    meta["gpu"] = torch.cuda.get_device_name(0)
+                meta["samplerate"] = int(self.gui_config.samplerate)
+                meta["block_time"] = float(self.gui_config.block_time)
+                meta["f0method"] = str(self.gui_config.f0method)
+                meta["index_on"] = bool(getattr(self.gui_config, "index_rate", 0))
+                meta["model"] = os.path.basename(
+                    str(getattr(self.gui_config, "pth_path", ""))
+                )
+            except Exception:
+                pass
+            return meta
+
+        def _save_perf_report(self):
+            perf = getattr(self, "_perf", None)
+            self._perf = None
+            if perf is None:
+                return
+            path = perf.save(os.path.join("User_Data", "perf_reports"))
+            if path:
+                printt("perf report saved: %s", path)
+
         def start_stream(self):
             global flag_vc
             if not flag_vc:
                 flag_vc = True
+                # Local perf report (User_Data/perf_reports) — how we get timing
+                # data from user GPUs we don't own; nothing is uploaded
+                try:
+                    from tools.perf_report import PerfCollector
+
+                    self._perf = PerfCollector(self._perf_meta())
+                except Exception:
+                    self._perf = None
                 if (
                     "WASAPI" in self.gui_config.sg_hostapi
                     and self.gui_config.sg_wasapi_exclusive
@@ -1514,6 +1553,10 @@ if __name__ == "__main__":
             global flag_vc
             flag_vc = False
             try:
+                self._save_perf_report()
+            except Exception:
+                traceback.print_exc()
+            try:
                 self._close_monitor_stream()
             except Exception:
                 pass
@@ -1818,6 +1861,9 @@ if __name__ == "__main__":
 
             total_time = time.perf_counter() - start_time
             self.last_infer_ms = int(total_time * 1000)
+            perf = getattr(self, "_perf", None)
+            if perf is not None:
+                perf.add(total_time)
             if flag_vc and self.window is not None:
                 try:
                     self.window["infer_time"].update(self.last_infer_ms)

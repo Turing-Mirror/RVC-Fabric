@@ -55,6 +55,7 @@ def test_parser_defaults_and_required_pth():
     assert args.n_blocks == 200
     assert args.warmup == 10
     assert args.index == ""
+    assert args.sync_stages is False
     with pytest.raises(SystemExit):
         p.parse_args([])
 

@@ -81,3 +81,33 @@ def test_rmvpe_decode_matches_loop_reference():
     got = RMVPE.to_local_average_cents(ns, salience.copy(), thred=0.03)
     ref = _reference_local_average_cents(cents_mapping, salience.copy(), 0.03)
     assert np.allclose(got, ref, rtol=1e-6, atol=1e-8, equal_nan=True)
+
+
+def _reference_f0_post(f0, mel_min, mel_max):
+    """Original masked-assignment implementation of get_f0_post."""
+    f0_mel = 1127 * np.log(1 + f0 / 700)
+    mask = f0_mel > 0
+    f0_mel[mask] = (f0_mel[mask] - mel_min) * 254 / (mel_max - mel_min) + 1
+    f0_mel[f0_mel <= 1] = 1
+    f0_mel[f0_mel > 255] = 255
+    return np.rint(f0_mel).astype(np.int64)
+
+
+def test_get_f0_post_branchless_matches_reference():
+    from infer.lib.rtrvc import RVC
+
+    f0_min, f0_max = 50, 1100
+    ns = types.SimpleNamespace(
+        device="cpu",
+        f0_mel_min=1127 * np.log(1 + f0_min / 700),
+        f0_mel_max=1127 * np.log(1 + f0_max / 700),
+    )
+    rng = np.random.default_rng(3)
+    f0 = rng.uniform(0, 1200, size=200).astype(np.float32)
+    f0[::7] = 0.0  # unvoiced frames
+
+    coarse, f0_out = RVC.get_f0_post(ns, f0.copy())
+    # reference in fp32 to mirror get_f0_post's .float() pipeline
+    ref = _reference_f0_post(f0.astype(np.float32).copy(), ns.f0_mel_min, ns.f0_mel_max)
+    assert np.array_equal(coarse.numpy(), ref)
+    assert np.allclose(f0_out.numpy(), f0, rtol=1e-6)

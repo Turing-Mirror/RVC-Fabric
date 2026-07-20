@@ -1079,7 +1079,7 @@ class SettingsPageMixin:
             except Exception as e:
                 self.root.after(
                     0,
-                    lambda: self._set_status_visual(
+                    lambda e=e: self._set_status_visual(
                         "idle", "引擎待命", f"GPU 检测失败: {e}"
                     ),
                 )
@@ -1179,7 +1179,7 @@ class SettingsPageMixin:
 
                 self.root.after(0, done)
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("检测失败", str(e)))
+                self.root.after(0, lambda e=e: messagebox.showerror("检测失败", str(e)))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1270,7 +1270,7 @@ class SettingsPageMixin:
             except Exception as e:
                 self.root.after(
                     0,
-                    lambda: self.lbl_online.configure(
+                    lambda e=e: self.lbl_online.configure(
                         text=f"设备枚举失败: {e}", fg=TM_META
                     ),
                 )
@@ -1389,7 +1389,7 @@ class SettingsPageMixin:
                 self.root.after(0, lambda: self._apply_device_status(st, toast=True))
             except Exception as e:
                 self.root.after(
-                    0, lambda: messagebox.showerror("重载失败", str(e))
+                    0, lambda e=e: messagebox.showerror("重载失败", str(e))
                 )
 
         threading.Thread(target=work, daemon=True).start()

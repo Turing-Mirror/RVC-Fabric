@@ -57,10 +57,38 @@
 | ✅ | f0 后处理去分支 | torch.where 替代掩码赋值,消每块一次主机同步 |
 | ✅ | 本地性能报告 | 停止变声时写 `User_Data/perf_reports/perf_*.json`,收集用户显卡数据用 |
 | ✖ | f0/HuBERT 双流并行 | **数据否决**:fcpe 实测仅 ~4ms/块,无并行价值 |
-| ⏳ | CUDA Graphs(net_g) | **当前第一优先**:net_g 占 ~50%;Windows 可用,torch 2.0 有 API;需静态缓冲改造 |
+| ✖(建议) | CUDA Graphs(net_g) | **建议不做**:见下「CUDA Graphs 结论」。收益不确定、需改共享模型代码、老卡已有 4–5× 余量 |
 | ⏳ | HuBERT 上下文裁剪 | 已由性能预设承载(低延迟档 extra 1.5s);更激进需试听验收 |
 | ⏳ | ONNX 后端 | 主要为 DML(A/I 卡)补 fp32 短板;N 卡优先级低 |
 | ✅ | 「其他」页快捷按钮 | 打开性能信息文件夹 + 生成诊断包(launcher 解锁后补上) |
+
+## 3.1 CUDA Graphs 结论（建议不做；如坚持做，交真机环境）
+
+**什么是 CUDA Graphs**：把一串固定形状的 GPU 计算「录制」成一张图，之后每块用一次
+`replay` 重放，省掉逐核 kernel-launch 的 CPU 开销。理论上能压 net_g 的启动开销。
+
+**为什么建议不做**：
+
+1. **收益不确定且用户感知≈0**：net_g 占 ~50% 耗时，但整机在 9 年前的 GTX 1060 上就已
+   RTF 0.22–0.27（4–5× 余量）。CUDA Graphs 省的是 launch 开销、不是算力；在本就有大量
+   余量的机器上，端到端几乎无感。3050 及以上只会余量更大。
+2. **要改共享模型代码（兼容性红线）**：`infer/lib/infer_pack/models.py` 的 `infer` 内部有
+   `int(skip_head.item())` 等 host 同步调用；CUDA Graph 捕获期间**禁止**任何 host 同步，
+   直接捕获必失败。绕过要重写模型前向的切片逻辑——正是我们一直保护、不碰的部分。
+3. **必须真机反复验证**：捕获/重放只能在真 CUDA 上测；且换模型/换 formant（改变输出形状）
+   要重新捕获，边界情况多，崩溃即整个变声不可用。
+
+**如果仍要做（交给有真机的人）——最小可行规格**：
+
+- 只在「模型/formant/block 固定」的稳态下、对 **net_g** 做捕获；不含 hubert/f0。
+- 先改 `models.py` 让 `infer` 不在前向里 `.item()`：`skip_head/return_length/return_length2`
+  改为在**构造期**传入的 Python int（或 graph 外预解析），前向只做纯张量运算。
+- 用 `torch.cuda.CUDAGraph` + 静态输入/输出缓冲：warmup 数次 → capture → 每块 `copy_` 进
+  静态输入、`replay()`、从静态输出 `copy_` 出。
+- **任何捕获/重放异常 → 自动回退 eager**（`self._use_graph=False`），保证零回归。
+- 用 `tools/benchmark_realtime.py --sync-stages` A/B `model` 段的 p95；无显著改善就撤。
+
+结论：**投入产出比低、风险高，建议跳过**；把精力放在真机验收与打包上更值。
 
 ## 4. 用户数据收集(定案:偶尔采样 + 用户自取)
 

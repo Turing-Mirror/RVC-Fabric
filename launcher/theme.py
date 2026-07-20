@@ -11,33 +11,36 @@ from __future__ import annotations
 from typing import Final, Sequence
 
 # --- Canvas & surfaces ---
-# Contrast tuned for light chrome (method from Schale muted-foreground / LyricsKara
-# ink hierarchy — not a hex copy of either site). Labels must stay readable on
-# TM_SURFACE; pure meta (eyebrows, route) stays quieter.
-TM_BG: Final[str] = "#ebeae4"
-TM_SURFACE: Final[str] = "#f7f6f2"
-TM_SURFACE_HOVER: Final[str] = "#ffffff"
-TM_INK: Final[str] = "#1a1d1b"
-# Form field labels / secondary body (was #6e726c — too faint on surface)
-TM_INK_MUTED: Final[str] = "#3f443f"
-# Helper prose under settings rows (between ink and pure meta)
-TM_HELP: Final[str] = "#505650"
-# True meta: mono eyebrows, route, timestamps (still secondary, but not washed out)
-TM_META: Final[str] = "#5c615b"
-TM_INSET: Final[str] = "#dddcd4"
-TM_HAIRLINE: Final[str] = "#cccbc2"
-TM_STAGE: Final[str] = "#e2e5e1"  # home stage band (slightly cooler wash)
+# Palette copied from the Schale-Library project (frontend globals.css) —
+# light-blue library look. Primary = BA blue #1289F0. We deliberately DO NOT
+# use Schale's cyan accent #2DF3E0 (no teal per product direction); blue carries
+# both primary and the live/active state. Values are Schale tokens 1:1 unless a
+# note says otherwise (readability nudges for desktop Tk text).
+TM_BG: Final[str] = "#f7f9fb"  # Schale --background
+TM_SURFACE: Final[str] = "#ffffff"  # Schale --card
+TM_SURFACE_HOVER: Final[str] = "#f0f4f8"  # Schale --muted (subtle hover on white)
+TM_INK: Final[str] = "#2b333e"  # Schale --foreground / --ba-dark
+# Form field labels / secondary body — darker than Schale muted-foreground so
+# Tk labels stay crisp on white
+TM_INK_MUTED: Final[str] = "#46525f"
+# Helper prose under settings rows = Schale --muted-foreground
+TM_HELP: Final[str] = "#5a6a7a"
+# True meta: mono eyebrows, route, timestamps (slightly lighter than help)
+TM_META: Final[str] = "#6e7d8c"
+TM_INSET: Final[str] = "#f0f4f8"  # Schale --muted (cover placeholder / badge bg)
+TM_HAIRLINE: Final[str] = "#d6e4f0"  # Schale --border
+TM_STAGE: Final[str] = "#e8f4fd"  # Schale --secondary (home stage band, light blue)
 
-TM_ACCENT: Final[str] = "#3d5c55"
-TM_ACCENT_INK: Final[str] = "#f7f8f6"
-TM_ACCENT_SOFT: Final[str] = "#dce8e4"
+TM_ACCENT: Final[str] = "#1289f0"  # Schale --primary (BA blue)
+TM_ACCENT_INK: Final[str] = "#ffffff"  # Schale --primary-foreground
+TM_ACCENT_SOFT: Final[str] = "#e8f4fd"  # Schale --secondary (active nav soft)
 
-TM_OK: Final[str] = "#4a7a68"
-TM_WARN: Final[str] = "#a8894e"
-TM_ERROR: Final[str] = "#8a4a48"
+TM_OK: Final[str] = "#1178d6"  # deeper blue for live/ok (no green/teal)
+TM_WARN: Final[str] = "#b5791c"  # restrained amber (Schale has no warn token)
+TM_ERROR: Final[str] = "#e53e3e"  # Schale --destructive
 
-TM_BG_DARK: Final[str] = "#1a1c1a"
-TM_INK_DARK: Final[str] = "#e8e6de"
+TM_BG_DARK: Final[str] = "#1a1f2e"  # Schale dark --background
+TM_INK_DARK: Final[str] = "#e8f4fd"  # Schale dark --foreground
 
 # Font stacks — prefer faces that read clearly on Chinese Windows
 # Display (English wordmark / stage): serif tracking look
@@ -182,6 +185,9 @@ def light_tokens() -> dict[str, str]:
 
 
 def forbidden_chrome_hexes() -> frozenset[str]:
+    # BA blue #1289f0 is now the sanctioned primary (copied from Schale-Library
+    # per product direction). Still forbidden: RVCMAX pinks, AI purples, and
+    # Schale's cyan/pink accents — no teal, no high-sat AI chrome.
     return frozenset(
         {
             "#f7c9d4",
@@ -191,8 +197,7 @@ def forbidden_chrome_hexes() -> frozenset[str]:
             "#7b6cf6",
             "#6a5ae0",
             "#3a3a42",
-            "#1289f0",
-            "#f32d90",
-            "#2df3e0",
+            "#f32d90",  # Schale BA pink — not used
+            "#2df3e0",  # Schale BA cyan/teal — no teal
         }
     )

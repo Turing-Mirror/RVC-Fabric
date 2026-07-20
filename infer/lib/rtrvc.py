@@ -79,12 +79,23 @@ class RVC:
             self.use_jit = self.config.use_jit
             self.is_half = config.is_half
 
+            # Realtime shapes are fixed per stream: let cudnn autotune conv kernels,
+            # and allow TF32 so any fp32 matmul path keeps tensor-core speed.
+            if "cuda" in str(self.device):
+                try:
+                    torch.backends.cudnn.benchmark = True
+                    torch.backends.cuda.matmul.allow_tf32 = True
+                    torch.backends.cudnn.allow_tf32 = True
+                except Exception:
+                    pass
+
             # Missing / wrong index must not kill the process (common for catalog models)
             if index_rate != 0 and index_path and os.path.isfile(index_path):
                 try:
                     self.index = faiss.read_index(index_path)
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
+                    self._init_index_bank()
                 except Exception as e:
                     printt("Index load failed, continue without index: %s", e)
                     index_rate = 0
@@ -210,6 +221,7 @@ class RVC:
                     self.index = faiss.read_index(self.index_path)
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
+                    self._init_index_bank()
                 except Exception as e:
                     printt("Index load failed: %s", e)
                     new_index_rate = 0
@@ -218,18 +230,109 @@ class RVC:
                 new_index_rate = 0
         self.index_rate = new_index_rate
 
+    # Block geometry is fixed while a stream runs, so the small control tensors
+    # passed to hubert / net_g are identical every block — rebuilding them costs
+    # allocations + host-to-device copies on the hot path.
+    def _padding_mask_for(self, shape):
+        mask = getattr(self, "_padding_mask", None)
+        if mask is None or tuple(mask.shape) != tuple(shape):
+            mask = torch.zeros(tuple(shape), dtype=torch.bool, device=self.device)
+            self._padding_mask = mask
+        return mask
+
+    def _long_dev(self, value):
+        cache = getattr(self, "_long_dev_cache", None)
+        if cache is None:
+            cache = self._long_dev_cache = {}
+        t = cache.get(value)
+        if t is None:
+            t = cache[value] = torch.LongTensor([value]).to(self.device)
+        return t
+
+    def _long_cpu(self, value):
+        cache = getattr(self, "_long_cpu_cache", None)
+        if cache is None:
+            cache = self._long_cpu_cache = {}
+        t = cache.get(value)
+        if t is None:
+            t = cache[value] = torch.LongTensor([value])
+        return t
+
+    # Exact top-8 retrieval on the GPU replaces the per-block CPU faiss search:
+    # it removes a forced GPU→CPU sync every block, and exact search is at least
+    # as accurate as the IVF approximation faiss uses. CPU faiss remains the
+    # fallback (dml / cpu devices, oversized banks, or TM_INDEX_GPU=0).
+    def _init_index_bank(self):
+        self._index_bank = None
+        self._index_bank_sq = None
+        big = getattr(self, "big_npy", None)
+        if big is None or getattr(big, "ndim", 0) != 2:
+            return
+        if "cuda" not in str(self.device):
+            return
+        if os.environ.get("TM_INDEX_GPU", "1") == "0":
+            return
+        # Match the model dtype: fp16 halves memory + matches feats on half-precision
+        # cards; fp32 keeps full accuracy and avoids Pascal's crippled fp16 matmul
+        # on cards forced to fp32 (e.g. GTX 10xx).
+        bank_dtype = torch.float16 if self.is_half else torch.float32
+        itemsize = 2 if self.is_half else 4
+        est_bytes = int(big.shape[0]) * int(big.shape[1]) * itemsize
+        if est_bytes > 512 * 1024 * 1024:  # keep >512 MB banks on CPU faiss
+            printt(
+                "Index bank too large for GPU search (%d rows, ~%d MB), using CPU faiss",
+                big.shape[0],
+                est_bytes // (1024 * 1024),
+            )
+            return
+        try:
+            self._index_bank = torch.from_numpy(big).to(self.device, dtype=bank_dtype)
+            self._index_bank_sq = torch.from_numpy(
+                np.square(big.astype(np.float32)).sum(axis=1)
+            ).to(self.device, dtype=torch.float32)
+            printt(
+                "Index search on GPU (%d rows, %s)",
+                big.shape[0],
+                "fp16" if self.is_half else "fp32",
+            )
+        except Exception as e:
+            self._index_bank = None
+            self._index_bank_sq = None
+            printt("GPU index init failed, using CPU faiss: %s", e)
+
+    def _index_blend_gpu(self, tail):
+        """Top-8 neighbour blend of the feats tail; same weighting as the CPU path."""
+        q = tail.to(self._index_bank.dtype)
+        sim = q @ self._index_bank.T
+        d = (
+            q.float().pow(2).sum(1, keepdim=True)
+            + self._index_bank_sq.unsqueeze(0)
+            - 2.0 * sim.float()
+        )
+        score, ix = torch.topk(d, 8, dim=1, largest=False)  # squared L2, small = near
+        weight = (1.0 / score.clamp_min(1e-4)).square()
+        weight = weight / (weight.sum(dim=1, keepdim=True) + 1e-8)
+        neigh = self._index_bank[ix].float()  # (n, 8, dim)
+        return (neigh * weight.unsqueeze(2)).sum(dim=1)
+
     def get_f0_post(self, f0):
         if not torch.is_tensor(f0):
             f0 = torch.from_numpy(f0)
         f0 = f0.float().to(self.device).squeeze()
         f0_mel = 1127 * torch.log(1 + f0 / 700)
-        f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - self.f0_mel_min) * 254 / (
+        # branch-free mel scaling: masked tensor assignment forces a host sync
+        # on the hot path every block
+        scaled = (f0_mel - self.f0_mel_min) * 254 / (
             self.f0_mel_max - self.f0_mel_min
         ) + 1
-        f0_mel[f0_mel <= 1] = 1
-        f0_mel[f0_mel > 255] = 255
+        f0_mel = torch.where(f0_mel > 0, scaled, f0_mel).clamp_(min=1, max=255)
         f0_coarse = torch.round(f0_mel).long()
         return f0_coarse, f0
+
+    def _bench_sync(self):
+        # opt-in (benchmark --sync-stages): truthful per-stage timings on async devices
+        if getattr(self, "bench_sync", False) and "cuda" in str(self.device):
+            torch.cuda.synchronize()
 
     def get_f0(self, x, f0_up_key, n_cpu, method="harvest"):
         n_cpu = int(n_cpu)
@@ -375,7 +478,7 @@ class RVC:
                 feats = input_wav.half().view(1, -1)
             else:
                 feats = input_wav.float().view(1, -1)
-            padding_mask = torch.BoolTensor(feats.shape).to(self.device).fill_(False)
+            padding_mask = self._padding_mask_for(feats.shape)
             inputs = {
                 "source": feats,
                 "padding_mask": padding_mask,
@@ -386,38 +489,52 @@ class RVC:
                 self.model.final_proj(logits[0]) if self.version == "v1" else logits[0]
             )
             feats = torch.cat((feats, feats[:, -1:, :]), 1)
+        self._bench_sync()
         t2 = ttime()
         try:
             if hasattr(self, "index") and self.index_rate != 0:
-                npy = feats[0][skip_head // 2 :].cpu().numpy().astype("float32")
-                score, ix = self.index.search(npy, k=8)
-                if (ix >= 0).all():
-                    # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
-                    weight = np.square(1.0 / np.maximum(score, 1e-4))
-                    weight /= weight.sum(axis=1, keepdims=True) + 1e-8
-                    npy = np.sum(
-                        self.big_npy[ix] * np.expand_dims(weight, axis=2), axis=1
-                    )
-                    if self.config.is_half:
-                        npy = npy.astype("float16")
-                    # slightly soft blend: keep a bit more of live features for naturalness
-                    rate = float(np.clip(self.index_rate, 0.0, 1.0))
-                    feats[0][skip_head // 2 :] = (
-                        torch.from_numpy(npy).unsqueeze(0).to(self.device) * rate
-                        + (1.0 - rate) * feats[0][skip_head // 2 :]
-                    )
+                # slightly soft blend: keep a bit more of live features for naturalness
+                rate = float(np.clip(self.index_rate, 0.0, 1.0))
+                if getattr(self, "_index_bank", None) is not None:
+                    tail = feats[0][skip_head // 2 :]
+                    blended = self._index_blend_gpu(tail).to(feats.dtype)
+                    feats[0][skip_head // 2 :] = blended * rate + (1.0 - rate) * tail
                 else:
-                    if not getattr(self, "_warned_bad_index", False):
-                        printt(
-                            "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
+                    npy = (
+                        feats[0][skip_head // 2 :]
+                        .cpu()
+                        .numpy()
+                        .astype("float32", copy=False)
+                    )
+                    score, ix = self.index.search(npy, k=8)
+                    if (ix >= 0).all():
+                        # floor scores to avoid 1/score blow-ups (unstable "metallic" voice)
+                        weight = np.square(1.0 / np.maximum(score, 1e-4))
+                        weight /= weight.sum(axis=1, keepdims=True) + 1e-8
+                        npy = np.sum(
+                            self.big_npy[ix] * np.expand_dims(weight, axis=2), axis=1
                         )
-                        self._warned_bad_index = True
+                        if self.config.is_half:
+                            npy = npy.astype("float16")
+                        feats[0][skip_head // 2 :] = (
+                            torch.from_numpy(npy).unsqueeze(0).to(self.device) * rate
+                            + (1.0 - rate) * feats[0][skip_head // 2 :]
+                        )
+                    else:
+                        if not getattr(self, "_warned_bad_index", False):
+                            printt(
+                                "Invalid index. You MUST use added_xxxx.index but not trained_xxxx.index!"
+                            )
+                            self._warned_bad_index = True
             # else: index disabled — no per-block log (was spam + cost)
         except Exception:
+            # degrade to the CPU faiss path on any GPU-search failure (e.g. OOM)
+            self._index_bank = None
             if not getattr(self, "_warned_index_exc", False):
                 traceback.print_exc()
                 printt("Index search FAILED (will not re-spam)")
                 self._warned_index_exc = True
+        self._bench_sync()
         t3 = ttime()
         p_len = input_wav.shape[0] // 160
         factor = pow(2, self.formant_shift / 12)
@@ -436,14 +553,15 @@ class RVC:
             self.cache_pitchf[4 - pitch.shape[0] :] = pitchf[3:-1]
             cache_pitch = self.cache_pitch[None, -p_len:]
             cache_pitchf = self.cache_pitchf[None, -p_len:] * return_length2 / return_length
+        self._bench_sync()
         t4 = ttime()
         feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
         feats = feats[:, :p_len, :]
-        p_len = torch.LongTensor([p_len]).to(self.device)
-        sid = torch.LongTensor([0]).to(self.device)
-        skip_head = torch.LongTensor([skip_head])
-        return_length2 = torch.LongTensor([return_length2])
-        return_length = torch.LongTensor([return_length])
+        p_len = self._long_dev(p_len)
+        sid = self._long_dev(0)
+        skip_head = self._long_cpu(skip_head)
+        return_length2 = self._long_cpu(return_length2)
+        return_length = self._long_cpu(return_length)
         with torch.no_grad():
             if self.if_f0 == 1:
                 infered_audio, _, _ = self.net_g.infer(
@@ -472,7 +590,10 @@ class RVC:
             infered_audio = self.resample_kernel[upp_res](
                 infered_audio[:, : return_length * upp_res]
             )
+        self._bench_sync()
         t5 = ttime()
+        # per-stage seconds for the benchmark / perf tooling (fea, index, f0, model)
+        self.last_stage_times = (t2 - t1, t3 - t2, t4 - t3, t5 - t4)
         # Hot-path: only log timing occasionally (every ~2s of wall time)
         now = t5
         last = getattr(self, "_last_timing_log", 0.0)

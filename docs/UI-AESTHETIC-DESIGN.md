@@ -8,43 +8,74 @@
 
 ## 0. 变声器壳（现行 · 2026-07）
 
-### 0.1 结构参考（方法借鉴，非抄色）
+### 0.1 结构参考
 
 | 来源 | 借鉴 |
 |------|------|
-| Schale-Library | 库感顶栏、封面优先卡片、左描边分组卡、内容留白 |
+| Schale-Library | **配色直接取用**（浅蓝库感）+ 库感顶栏、封面优先卡片、左描边分组卡、内容留白 |
 | LyricsKara | 衬线刊头字阶、等宽 meta、焦点「舞台」层次 |
 
-### 0.2 现行 light token（`launcher/theme.py`）
+### 0.2 现行 light token（`launcher/theme.py` · 取自 Schale-Library globals.css）
 
-| Token | 值 | 用途 |
-|-------|-----|------|
-| `TM_BG` | `#f0efeb` | 画布（中性浅） |
-| `TM_SURFACE` | `#fafaf7` | 卡片 / 顶底栏 |
-| `TM_SURFACE_HOVER` | `#ffffff` | hover |
-| `TM_INK` | `#1a1d1b` | 正文 |
-| `TM_INK_MUTED` | `#3f443f` | 表单项标签 / 次要正文（须可读） |
-| `TM_HELP` | `#505650` | 设置说明小字（非 `?` 悬停） |
-| `TM_META` | `#5c615b` | 等宽 meta / 眉题（仍次级，但不发灰） |
-| `TM_INSET` | `#e4e3dc` | 封面占位 / 徽章底 |
-| `TM_HAIRLINE` | `#d6d4cb` | 分割 |
-| `TM_ACCENT` | `#3d5c55` | **独立**安静青绿主色（CTA / active / 选中） |
-| `TM_ACCENT_INK` | `#f7f8f6` | accent 上文字 |
-| `TM_ACCENT_SOFT` | `#e6eeeb` | active 导航浅底 |
-| `TM_OK` / `TM_WARN` / `TM_ERROR` | `#4a7a68` / `#a8894e` / `#8a4a48` | 状态 |
+> **配色定案（2026-07）：** 禁 AI 配色、禁青绿。桌面壳配色**直接抄 Schale-Library**
+> 浅蓝库感（主色 = BA blue `#1289F0`）；**不用** Schale 青绿 accent `#2DF3E0`（无青绿），
+> 蓝色一色承担主色 + live/active。下表值即 Schale token 1:1（个别文字色为可读性微调）。
 
-禁止：RVCMAX 粉紫壳、蓝紫渐变/霓虹、直接照抄 BA `#1289F0` / LyricsKara 近黑画布作为主壳。
+| Token | 值 | Schale 来源 | 用途 |
+|-------|-----|-------------|------|
+| `TM_BG` | `#f7f9fb` | `--background` | 画布（浅蓝白） |
+| `TM_SURFACE` | `#ffffff` | `--card` | 卡片 / 顶底栏 |
+| `TM_SURFACE_HOVER` | `#f0f4f8` | `--muted` | hover |
+| `TM_INK` | `#2b333e` | `--foreground` | 正文 |
+| `TM_INK_MUTED` | `#46525f` | (比 muted-fg 深，为可读) | 表单项标签 / 次要正文 |
+| `TM_HELP` | `#5a6a7a` | `--muted-foreground` | 设置说明小字 |
+| `TM_META` | `#6e7d8c` | (比 help 浅) | 等宽 meta / 眉题 |
+| `TM_INSET` | `#f0f4f8` | `--muted` | 封面占位 / 徽章底 |
+| `TM_HAIRLINE` | `#d6e4f0` | `--border` | 分割 |
+| `TM_STAGE` | `#e8f4fd` | `--secondary` | 首页舞台带（浅蓝 wash） |
+| `TM_ACCENT` | `#1289f0` | `--primary`（BA blue） | CTA / active / 选中 |
+| `TM_ACCENT_INK` | `#ffffff` | `--primary-foreground` | accent 上文字 |
+| `TM_ACCENT_SOFT` | `#e8f4fd` | `--secondary` | active 导航浅底 |
+| `TM_OK` | `#1178d6` | (深一档蓝) | live / 变声中（用蓝，非绿/青） |
+| `TM_WARN` | `#b5791c` | (克制琥珀) | 连接中 / busy |
+| `TM_ERROR` | `#e53e3e` | `--destructive` | 错误 |
+
+禁止：RVCMAX 粉紫壳、蓝紫渐变/霓虹、**青绿/青色 accent（含 Schale `#2DF3E0`）**、
+Schale BA 粉 `#F32D90`、LyricsKara 近黑 `#050508` 作主壳。（`theme.forbidden_chrome_hexes()`
+有单测守护。）
 
 ### 0.3 组件与页面
 
 | 模块 | 说明 |
 |------|------|
-| `launcher/ui/widgets.py` | SectionCard、Primary/GhostButton、NavItem、StatusBadge、ModelCoverCard、SoftActionCard、HoverTip |
+| `launcher/ui/widgets.py` | SectionCard、Primary/GhostButton、NavItem、StatusBadge、ModelCoverCard、SoftActionCard、HoverTip、**SearchField**、**SegmentControl** |
 | `launcher/ui/covers.py` | 音色 cover 缩略缓存 |
 | 首页 | 舞台轮播 + 封面焦点卡 |
-| 模型 | 封面网格 |
+| 模型 | 封面网格 + **搜索(SearchField ⌕)/排序(SegmentControl 分段 pill)** + 检索库角标 |
 | 设置 | SectionCard 分组（左 accent 条） |
 | 启动器 | 同 token + SoftActionCard |
+
+> **SearchField / SegmentControl 借鉴**：Schale 库感搜索框（扁平淡面 + ⌕，无发光）
+> 与分段导航 pill（inactive 融入 rail、active 取 accent）；等宽 `SORT` 眉题延续
+> LyricsKara mono meta。二者是通用件，避免把筛选逻辑写进 `main_app.py`。
+
+### 0.4 MagiaDC 参考（UI/UX 目标形态，**排在性能等更重要任务之后再做**）
+
+作者另一产品 MagiaDC（桌面伴侣）的界面语言，作为本壳后续 UX 打磨的目标：
+
+| 区块 | MagiaDC 做法 | 对应我们 |
+|------|-------------|----------|
+| 左侧栏 | 图标+文字行，active = 浅底圆角 pill；顶部余额/状态；`全局设置` 固定底部带分隔 | 已有 NavItem；可加底部固定项 + 顶部状态块 |
+| 顶部状态条 | 圆角 pill 卡：已授权 / 所有者 / 域名·id | 可用于「引擎/账户」状态行 |
+| 设置分段 | 顶部 pill 分段 tab（常规/聊天·文件/…） | **已有 SegmentControl**，设置分级可直接用 |
+| 内容卡 | 大圆角白卡 + 充裕留白 + 发丝边 + 轻投影；小节 = 小图标+标题+灰副标题 | SectionCard 增大圆角感 + 图标 |
+| 列表行 | 圆角方图标 + 标题 + 灰副标题 + 右侧 `›` chevron（以太工作台/工坊列表） | 「其他」页/工坊可采用此行式 |
+| KPI 磁贴 | 大数字 + 图标 + 标签 + 小副（运营总览网格） | 首页/状态可用 stat tile |
+| 整体气质 | 极浅、通透、大圆角(~12–16px)、柔灰边、蓝色 active、磨砂玻璃(可选)、留白足 | 与现行 Schale 浅蓝 token 一致 |
+
+> **落地顺序（用户明确）**：先完成更重要任务（性能正确性、真机验收、打包等），
+> **UI/UX 再动**。本表仅为目标存档，非本轮施工项。Tk 大圆角需 PIL 贴图（参考
+> SoftSlider 的 2× 超采样思路），列表行 chevron 用 `›` mono 字形即可。
 
 ---
 

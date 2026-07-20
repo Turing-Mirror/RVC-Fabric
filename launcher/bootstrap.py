@@ -396,10 +396,14 @@ class BootstrapApp:
                     if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
                 ]
             except Exception as e:
+                # bind the message now — `e` is unbound once the except block ends,
+                # so the deferred callback must not reference it directly
+                err = str(e)
+
                 def fail():
                     self._deploy_busy = False
-                    messagebox.showerror("检测失败", str(e))
-                    self._set_status(f"检测失败：{e}", ok=False)
+                    messagebox.showerror("检测失败", err)
+                    self._set_status(f"检测失败：{err}", ok=False)
 
                 self.root.after(0, fail)
                 return

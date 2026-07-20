@@ -62,9 +62,11 @@ class ThemeTests(unittest.TestCase):
                 bad,
                 msg=f"{key}={val} is forbidden chrome",
             )
-        # Explicitly not BA primary / RVCMAX pink
-        self.assertNotEqual(TM_ACCENT.lower(), "#1289f0")
+        # Accent is now Schale's BA blue (copied per product direction); the
+        # canvas must not be LyricsKara's near-black, and no teal anywhere.
+        self.assertEqual(TM_ACCENT.lower(), "#1289f0")
         self.assertNotEqual(TM_BG.lower(), "#050508")
+        self.assertNotIn("#2df3e0", {v.lower() for v in t.values()})
 
     def test_text_contrast_hierarchy(self):
         """Labels/help darker than pure meta; all darker than surface for readability."""

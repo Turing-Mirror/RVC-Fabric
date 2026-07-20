@@ -55,6 +55,7 @@ ffprobe.*
 /UserData/gui_configs.json
 /User_Data/app_config.json
 /User_Data/gui_configs.json
+/User_Data/update_state.json
 /User_Data/runtime_control/
 /User_Data/logs/*
 !/User_Data/logs/.gitkeep

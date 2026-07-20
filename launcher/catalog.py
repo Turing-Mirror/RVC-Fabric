@@ -205,6 +205,46 @@ def list_voice_catalog(
     return primary
 
 
+MODEL_SORT_KEYS: tuple[str, ...] = ("default", "name", "index")
+
+
+def filter_sort_models(
+    models: list[dict[str, Any]],
+    query: str = "",
+    *,
+    sort: str = "default",
+) -> list[dict[str, Any]]:
+    """Filter the catalog by substring and sort it — UI-independent.
+
+    * ``query``: case-insensitive substring matched against name / tag / file.
+    * ``sort``: ``default`` keeps catalog order; ``name`` sorts A→Z;
+      ``index`` puts models that have an ``.index`` first, then by name.
+
+    Never mutates the input list.
+    """
+    q = (query or "").strip().lower()
+    if q:
+        def _hit(m: dict[str, Any]) -> bool:
+            return any(
+                q in str(m.get(k) or "").lower() for k in ("name", "tag", "file")
+            )
+
+        out = [m for m in models if _hit(m)]
+    else:
+        out = list(models)
+
+    if sort == "name":
+        out.sort(key=lambda m: str(m.get("name") or "").lower())
+    elif sort == "index":
+        out.sort(
+            key=lambda m: (
+                0 if (m.get("index") or "") else 1,
+                str(m.get("name") or "").lower(),
+            )
+        )
+    return out
+
+
 def import_model_to_catalog(
     src_pth: Path,
     models_root: Path,

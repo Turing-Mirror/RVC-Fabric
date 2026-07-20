@@ -1,0 +1,83 @@
+# -*- coding: utf-8 -*-
+"""Math-equivalence checks for inference-side optimizations.
+
+These verify that the GPU index blend and the vectorized RMVPE decode produce
+the same numbers as the original CPU/loop implementations. They need the
+Runtime environment (torch etc.) and are skipped elsewhere:
+
+    scripts\\run_tests.bat  (or Runtime\\python.exe -m pytest tests -k realtime_math)
+"""
+
+import types
+
+import pytest
+
+np = pytest.importorskip("numpy")
+torch = pytest.importorskip("torch")
+
+
+def _reference_index_blend(q, bank):
+    """Original CPU faiss path semantics with exact (non-IVF) search."""
+    d = ((q[:, None, :] - bank[None, :, :]) ** 2).sum(-1)  # squared L2
+    ix = np.argsort(d, axis=1)[:, :8]
+    score = np.take_along_axis(d, ix, axis=1)
+    weight = np.square(1.0 / np.maximum(score, 1e-4))
+    weight /= weight.sum(axis=1, keepdims=True) + 1e-8
+    return np.sum(bank[ix] * weight[:, :, None], axis=1)
+
+
+def test_index_blend_gpu_matches_cpu_reference():
+    from infer.lib.rtrvc import RVC
+
+    rng = np.random.default_rng(7)
+    bank = rng.standard_normal((64, 12)).astype(np.float32)
+    q = rng.standard_normal((5, 12)).astype(np.float32)
+
+    ns = types.SimpleNamespace(
+        _index_bank=torch.from_numpy(bank),  # fp32 on CPU: dtype-adaptive code path
+        _index_bank_sq=torch.from_numpy(np.square(bank).sum(axis=1)),
+    )
+    got = RVC._index_blend_gpu(ns, torch.from_numpy(q)).numpy()
+    ref = _reference_index_blend(q, bank)
+    assert np.allclose(got, ref, rtol=1e-4, atol=1e-5)
+
+
+def _reference_local_average_cents(cents_mapping, salience, thred):
+    """Verbatim copy of the original per-frame loop implementation."""
+    center = np.argmax(salience, axis=1)
+    salience = np.pad(salience, ((0, 0), (4, 4)))
+    center += 4
+    todo_salience = []
+    todo_cents_mapping = []
+    starts = center - 4
+    ends = center + 5
+    for idx in range(salience.shape[0]):
+        todo_salience.append(salience[:, starts[idx] : ends[idx]][idx])
+        todo_cents_mapping.append(cents_mapping[starts[idx] : ends[idx]])
+    todo_salience = np.array(todo_salience)
+    todo_cents_mapping = np.array(todo_cents_mapping)
+    product_sum = np.sum(todo_salience * todo_cents_mapping, 1)
+    weight_sum = np.sum(todo_salience, 1)
+    devided = product_sum / weight_sum
+    maxx = np.max(salience, axis=1)
+    devided[maxx <= thred] = 0
+    return devided
+
+
+def test_rmvpe_decode_matches_loop_reference():
+    pytest.importorskip("librosa")
+    from infer.lib.rmvpe import RMVPE
+
+    cents_mapping = np.pad(20 * np.arange(360) + 1997.3794084376191, (4, 4))
+    ns = types.SimpleNamespace(cents_mapping=cents_mapping)
+
+    rng = np.random.default_rng(11)
+    salience = rng.random((40, 360)).astype(np.float32)
+    salience[3] *= 1e-4  # below-threshold frame must decode to 0
+    # peaks at the edges exercise the padded window
+    salience[5, 0] = 5.0
+    salience[7, 359] = 5.0
+
+    got = RMVPE.to_local_average_cents(ns, salience.copy(), thred=0.03)
+    ref = _reference_local_average_cents(cents_mapping, salience.copy(), 0.03)
+    assert np.allclose(got, ref, rtol=1e-6, atol=1e-8, equal_nan=True)

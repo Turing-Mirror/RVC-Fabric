@@ -8,5 +8,6 @@ methods resolve at runtime via the composed class.
 
 from launcher.pages.home_page import HomePageMixin
 from launcher.pages.models_page import ModelsPageMixin
+from launcher.pages.more_page import MorePageMixin
 
-__all__ = ["HomePageMixin", "ModelsPageMixin"]
+__all__ = ["HomePageMixin", "ModelsPageMixin", "MorePageMixin"]

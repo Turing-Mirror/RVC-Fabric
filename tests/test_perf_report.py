@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.perf_report import _KEEP_REPORTS, PerfCollector, _prune
+from tools.perf_report import _KEEP_REPORTS, PerfCollector, _prune, should_save
 
 
 def test_empty_collector_saves_nothing(tmp_path):
@@ -43,6 +43,23 @@ def test_save_writes_valid_json(tmp_path):
     assert payload["summary"]["n"] == 2
     assert not path.endswith(".tmp")
     assert len(list(tmp_path.glob("*.tmp"))) == 0
+
+
+def test_should_save_throttles_occasional_sampling(tmp_path):
+    # empty (or missing) dir → save
+    assert should_save(str(tmp_path)) is True
+    assert should_save(str(tmp_path / "nope")) is True
+    # fresh report → skip
+    report = tmp_path / "perf_20260101_000000.json"
+    report.write_text("{}")
+    assert should_save(str(tmp_path), min_interval_s=1800) is False
+    # old report → save again
+    old = os.path.getmtime(report) - 4000
+    os.utime(report, (old, old))
+    assert should_save(str(tmp_path), min_interval_s=1800) is True
+    # non-report files don't count
+    (tmp_path / "notes.txt").write_text("x")
+    assert should_save(str(tmp_path), min_interval_s=1800) is True
 
 
 def test_prune_keeps_newest(tmp_path):

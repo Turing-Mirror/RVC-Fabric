@@ -19,6 +19,28 @@ import time
 # Bounded memory: ~4 blocks/s * 8 bytes ≈ 1.6 MB at the cap (≈14 h of audio)
 _MAX_SAMPLES = 200_000
 _KEEP_REPORTS = 30
+# "Occasional" sampling policy: at most one report per interval, and ignore
+# sessions too short to be meaningful (instant start/stop clicks)
+MIN_REPORT_INTERVAL_S = 1800
+MIN_SESSION_SAMPLES = 40
+
+
+def should_save(dir_path: str, min_interval_s: float = MIN_REPORT_INTERVAL_S, now: float | None = None) -> bool:
+    """True when enough time has passed since the newest existing report."""
+    try:
+        newest = max(
+            (
+                os.path.getmtime(os.path.join(dir_path, n))
+                for n in os.listdir(dir_path)
+                if n.startswith("perf_") and n.endswith(".json")
+            ),
+            default=0.0,
+        )
+    except OSError:
+        return True
+    if now is None:
+        now = time.time()
+    return (now - newest) >= min_interval_s
 
 
 class PerfCollector:

@@ -23,6 +23,13 @@ def printt(strr, *args):
         print(strr % args)
 
 
+# Upstream engine pieces (ffmpeg/faiss/model loaders) are unreliable on
+# non-ASCII install paths — warn early so support can spot it in the log
+if any(ord(_c) > 127 for _c in os.getcwd()):
+    printt("WARNING: install path contains non-ASCII characters: %s", os.getcwd())
+    printt("WARNING: 安装路径含中文/特殊字符，部分组件可能异常，建议移到纯英文路径")
+
+
 def soft_clip_np(data: "np.ndarray", ceiling: float = 0.97) -> "np.ndarray":
     """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
     import numpy as np
@@ -1138,23 +1145,6 @@ if __name__ == "__main__":
             self.rvc.cache_pitch.zero_()
             self.rvc.cache_pitchf.zero_()
 
-        def _perf_report_enabled(self) -> bool:
-            """Opt-in only: user consents via the settings toggle (pending UI)
-            which writes perf_report_enabled into User_Data/app_config.json.
-            TM_PERF_REPORT=1/0 overrides for dev/bench use."""
-            env = os.environ.get("TM_PERF_REPORT")
-            if env == "1":
-                return True
-            if env == "0":
-                return False
-            try:
-                with open(
-                    os.path.join("User_Data", "app_config.json"), "r", encoding="utf-8"
-                ) as f:
-                    return bool(json.load(f).get("perf_report_enabled", False))
-            except Exception:
-                return False
-
         def _perf_meta(self) -> dict:
             meta = {"created": time.strftime("%Y-%m-%d %H:%M:%S")}
             try:
@@ -1182,7 +1172,16 @@ if __name__ == "__main__":
             self._perf = None
             if perf is None:
                 return
-            path = perf.save(os.path.join("User_Data", "perf_reports"))
+            from tools.perf_report import MIN_SESSION_SAMPLES, should_save
+
+            out_dir = os.path.join("User_Data", "perf_reports")
+            if os.environ.get("TM_PERF_REPORT") != "1":
+                # occasional sampling: skip trivial sessions and rate-limit
+                if perf.summary().get("n", 0) < MIN_SESSION_SAMPLES:
+                    return
+                if not should_save(out_dir):
+                    return
+            path = perf.save(out_dir)
             if path:
                 printt("perf report saved: %s", path)
 
@@ -1190,10 +1189,11 @@ if __name__ == "__main__":
             global flag_vc
             if not flag_vc:
                 flag_vc = True
-                # Local perf report (User_Data/perf_reports) — how we get timing
-                # data from user GPUs we don't own; opt-in, nothing is uploaded
+                # Occasional local perf sampling (User_Data/perf_reports): saved
+                # at most once per interval, never uploaded — users share the
+                # file themselves. TM_PERF_REPORT=0 disables, =1 forces saving.
                 try:
-                    if self._perf_report_enabled():
+                    if os.environ.get("TM_PERF_REPORT") != "0":
                         from tools.perf_report import PerfCollector
 
                         self._perf = PerfCollector(self._perf_meta())

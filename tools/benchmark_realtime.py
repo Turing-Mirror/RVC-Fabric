@@ -59,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--n-blocks", type=int, default=200, help="measured blocks")
     p.add_argument("--warmup", type=int, default=10, help="unmeasured warmup blocks")
+    p.add_argument(
+        "--sync-stages",
+        action="store_true",
+        help="synchronize the device between stages so the engine's per-stage "
+        "'Spent time' log is truthful (end-to-end gets slightly slower)",
+    )
     return p
 
 
@@ -137,6 +143,7 @@ def main() -> int:
     )
     if getattr(rvc, "net_g", None) is None:
         raise SystemExit("[bench] model failed to load — see traceback above")
+    rvc.bench_sync = bool(args.sync_stages)
 
     geo = block_geometry(rvc.tgt_sr, args.block_time, args.crossfade_time, args.extra_time)
     total = args.warmup + args.n_blocks
@@ -169,7 +176,9 @@ def main() -> int:
     block_ms = args.block_time * 1000.0
     p50, p95 = np.percentile(arr, [50, 95])
     rtf = float(arr.mean()) / block_ms
+    gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "-"
     print("=" * 64)
+    print("[bench] torch=%s gpu=%s" % (torch.__version__, gpu))
     print(
         "[bench] device=%s half=%s | model sr=%d v=%s f0=%s | f0method=%s index_rate=%.2f"
         % (

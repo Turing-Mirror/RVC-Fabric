@@ -1106,7 +1106,33 @@ if __name__ == "__main__":
             self.tg = TorchGate(
                 sr=self.gui_config.samplerate, n_fft=4 * self.zc, prop_decrease=0.9
             ).to(self.config.device)
+            # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
+            # here instead of inside the first audible blocks
+            try:
+                self._warmup_engine()
+            except Exception:
+                traceback.print_exc()
             self.start_stream()
+
+        def _warmup_engine(self):
+            dummy = torch.zeros_like(self.input_wav_res)
+            # a short voiced tail so the f0 extractor runs its full path
+            n = min(int(dummy.shape[0]), 4000)
+            t = torch.arange(n, device=dummy.device, dtype=torch.float32)
+            dummy[-n:] = 0.1 * torch.sin(2 * np.pi * 150.0 * t / 16000.0)
+            for _ in range(2):
+                infer_wav = self.rvc.infer(
+                    dummy,
+                    self.block_frame_16k,
+                    self.skip_head,
+                    self.return_length,
+                    self.gui_config.f0method,
+                )
+                if self.resampler2 is not None:
+                    infer_wav = self.resampler2(infer_wav)
+            # drop warmup pitch history so the real stream starts clean
+            self.rvc.cache_pitch.zero_()
+            self.rvc.cache_pitchf.zero_()
 
         def start_stream(self):
             global flag_vc

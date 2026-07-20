@@ -311,13 +311,19 @@ class RVC:
             f0 = torch.from_numpy(f0)
         f0 = f0.float().to(self.device).squeeze()
         f0_mel = 1127 * torch.log(1 + f0 / 700)
-        f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - self.f0_mel_min) * 254 / (
+        # branch-free mel scaling: masked tensor assignment forces a host sync
+        # on the hot path every block
+        scaled = (f0_mel - self.f0_mel_min) * 254 / (
             self.f0_mel_max - self.f0_mel_min
         ) + 1
-        f0_mel[f0_mel <= 1] = 1
-        f0_mel[f0_mel > 255] = 255
+        f0_mel = torch.where(f0_mel > 0, scaled, f0_mel).clamp_(min=1, max=255)
         f0_coarse = torch.round(f0_mel).long()
         return f0_coarse, f0
+
+    def _bench_sync(self):
+        # opt-in (benchmark --sync-stages): truthful per-stage timings on async devices
+        if getattr(self, "bench_sync", False) and "cuda" in str(self.device):
+            torch.cuda.synchronize()
 
     def get_f0(self, x, f0_up_key, n_cpu, method="harvest"):
         n_cpu = int(n_cpu)
@@ -474,6 +480,7 @@ class RVC:
                 self.model.final_proj(logits[0]) if self.version == "v1" else logits[0]
             )
             feats = torch.cat((feats, feats[:, -1:, :]), 1)
+        self._bench_sync()
         t2 = ttime()
         try:
             if hasattr(self, "index") and self.index_rate != 0:
@@ -518,6 +525,7 @@ class RVC:
                 traceback.print_exc()
                 printt("Index search FAILED (will not re-spam)")
                 self._warned_index_exc = True
+        self._bench_sync()
         t3 = ttime()
         p_len = input_wav.shape[0] // 160
         factor = pow(2, self.formant_shift / 12)
@@ -536,6 +544,7 @@ class RVC:
             self.cache_pitchf[4 - pitch.shape[0] :] = pitchf[3:-1]
             cache_pitch = self.cache_pitch[None, -p_len:]
             cache_pitchf = self.cache_pitchf[None, -p_len:] * return_length2 / return_length
+        self._bench_sync()
         t4 = ttime()
         feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
         feats = feats[:, :p_len, :]
@@ -572,6 +581,7 @@ class RVC:
             infered_audio = self.resample_kernel[upp_res](
                 infered_audio[:, : return_length * upp_res]
             )
+        self._bench_sync()
         t5 = ttime()
         # Hot-path: only log timing occasionally (every ~2s of wall time)
         now = t5

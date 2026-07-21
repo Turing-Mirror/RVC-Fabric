@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-One-click release packer for Turing Mirror 变声器.
+One-click release packer for RVC Fabric.
 
 Builds a RVCMAX-style tree::
 
-    dist/TuringMirror_Voice/
+    dist/TuringMirror_Voice/   # pack folder name (legacy script id)
       启动器.exe          first-run helper (exe)
-      变声器.exe          daily app (exe)
+      变声器.exe          daily app (UI title: RVC Fabric)
       Runtime/            embedded Python (required)
       User_Data/models/   bundled voice models
       VBCABLE/            VB-Cable installers
@@ -384,14 +384,14 @@ def write_readme(out: Path, *, variant: str = "nvidia", label: str = "NVIDIA CUD
         ),
         "nvidia50": "本包为 NVIDIA 50 系适配 CUDA Runtime（参考 RVCMAX 50 系包）。",
     }.get(variant, f"加速变体：{label}")
-    text = f"""Turing Mirror 变声器 — 发行版（{label}）
+    text = f"""RVC Fabric — 发行版（{label}）
 ================================
 
 【用户只需要】
-1. 解压到英文路径（推荐 D:\\TM_Voice\\）
+1. 解压到英文路径（推荐 D:\\RVC_Fabric\\）
 2. 双击「启动器.exe」（或 TM_Setup.exe）
 3. 点「发送快捷方式」「安装虚拟声卡」
-4. 之后双击桌面图标或「变声器.exe」（或 TM_Voice.exe）
+4. 之后双击桌面图标或主界面「变声器.exe」（界面标题为 RVC Fabric）
 
 【显卡说明 — 与官方 RVC 一致】
 {accel_line}

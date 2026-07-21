@@ -215,7 +215,6 @@ class HotkeysMixin:
             "已写入当前音色" if self.vc_running else "已保存到当前音色",
         )
 
-    @staticmethod
     def _build_hotkeys_settings_section(self, wrap, card_fn) -> None:
         """Settings card: enable global, list bindings, capture/reset."""
         sec = card_fn(wrap, "快捷键")

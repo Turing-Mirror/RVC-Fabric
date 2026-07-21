@@ -71,6 +71,6 @@
 |------|----|------|
 | 低 | chrome 再拆 `ChromeMixin` | 收益有限；主类已可读 |
 | 低 | 错误文案抽纯函数 + 单测 | 仅当要改启停 UX 时顺带做 |
-| 低 | 给 Runtime 装 pytest | 消除 `test_benchmark_realtime` / `test_realtime_math` 的 import 噪声 |
+| 低 | 在 Runtime 装 pytest 后跑完整 math/bench 用例 | 无 pytest 时已 soft-skip，不挡 `unittest discover` |
 
 目标终态已基本达成：`main_app.py` 只保留 shell；每页/每能力一个 mixin；纯逻辑在无 Tk 模块 + unittest。

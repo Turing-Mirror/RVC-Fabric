@@ -21,7 +21,10 @@ class MainAppCompositionTests(unittest.TestCase):
             "MonitorMixin",
             "RealtimeControlMixin",
             "DockVoiceMixin",
+            "ProfilesMixin",
             "HomePageMixin",
+            "ModelsPageMixin",
+            "MorePageMixin",
             "SettingsPageMixin",
         ):
             self.assertIn(mixin, names)
@@ -41,16 +44,25 @@ class MainAppCompositionTests(unittest.TestCase):
             "_toggle_monitor",
             "_refresh_monitor_hint",
             "_prefer_monitor_device",
+            "_is_virtual_monitor_name",
             "_sync_bottom",
             "undo_voice_params",
             "_apply_model_voice_params",
+            "_apply_active_profile",
             "_page_home",
+            "_page_models",
+            "_page_more",
             "_page_settings",
+            "show_page",
+            "_select_model",
         ):
             self.assertTrue(
                 callable(getattr(MainApp, meth, None)),
                 msg=f"MainApp missing {meth}",
             )
+        # Static monitor helper still works without an instance
+        self.assertTrue(MainApp._is_virtual_monitor_name("CABLE Input"))
+        self.assertFalse(MainApp._is_virtual_monitor_name("Realtek Headphones"))
 
 
 if __name__ == "__main__":

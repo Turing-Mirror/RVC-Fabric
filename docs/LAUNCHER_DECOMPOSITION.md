@@ -30,6 +30,7 @@
 | `RealtimeControlMixin` | `realtime_control.py` | 启停变声、状态 tick、切音色重启 |
 | `DockVoiceMixin` | `dock_voice.py` | 底栏 MODE/参数、按音色持久化、撤销重做 |
 | `ProfilesMixin` | `profiles_page.py` | 配置档案面板 + 应用 active profile |
+| `ConsultMixin` | `consult_page.py` | 咨询包向导（样本 + 档案打包） |
 | `SettingsPageMixin` | `settings_page.py` | 设置页（设备/加速/预设/Index/更新等） |
 
 `class MainApp(...mixins...)` 组合；mixin 共享同一 `self`，跨页面属性/方法运行期解析。

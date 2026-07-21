@@ -87,6 +87,7 @@ class MorePageMixin:
         soft("根据本机表现自动优化性能", self._auto_perf_from_history)
         soft("打开性能信息文件夹（帮助我们优化适配）", self._open_perf_reports)
         soft("生成诊断包（反馈问题时用）", self._collect_diagnostics)
+        soft("生成咨询包（调参服务用）", self.open_consult_wizard)
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
         soft("快捷键说明", self.show_hotkeys_help)
         soft("使用说明", lambda: self.show_page("help"))

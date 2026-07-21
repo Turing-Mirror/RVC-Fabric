@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 from launcher.app_presets import format_latency_line
 from launcher.config_store import load_config, save_config, sync_realtime_gui_model
 from launcher.pages import (
+    ConsultMixin,
     DockVoiceMixin,
     HomePageMixin,
     HotkeysMixin,
@@ -96,6 +97,7 @@ class MainApp(
     RealtimeControlMixin,
     DockVoiceMixin,
     ProfilesMixin,
+    ConsultMixin,
     SettingsPageMixin,
 ):
     def __init__(self) -> None:

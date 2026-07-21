@@ -85,6 +85,7 @@ ffprobe.*
 # Runtime-generated user data (beyond app configs already listed)
 /User_Data/perf_reports/
 /User_Data/diagnostics/
+/User_Data/consult_packs/
 /User_Data/dev_variant.txt
 
 # Dev-only noise

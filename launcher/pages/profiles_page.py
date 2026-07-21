@@ -324,6 +324,8 @@ class ProfilesMixin:
                     padx=12, pady=6).pack(side="left", padx=6)
         GhostButton(actions, "导出当前档案…", command=self._ui_export_active,
                     padx=12, pady=6).pack(side="left", padx=6)
+        GhostButton(actions, "打包咨询包…", command=self.open_consult_wizard,
+                    padx=12, pady=6).pack(side="left", padx=6)
 
     def _profile_row(self, parent, *, pid, name, source, score, active) -> None:
         edge = TM_ACCENT if active else TM_HAIRLINE

@@ -6,6 +6,7 @@ MainApp. They share the same instance (self), so cross-page attributes and
 methods resolve at runtime via the composed class.
 """
 
+from launcher.pages.consult_page import ConsultMixin
 from launcher.pages.dock_voice import DockVoiceMixin
 from launcher.pages.home_page import HomePageMixin
 from launcher.pages.hotkeys_page import HotkeysMixin
@@ -18,6 +19,7 @@ from launcher.pages.realtime_control import RealtimeControlMixin
 from launcher.pages.settings_page import SettingsPageMixin
 
 __all__ = [
+    "ConsultMixin",
     "DockVoiceMixin",
     "HomePageMixin",
     "HotkeysMixin",

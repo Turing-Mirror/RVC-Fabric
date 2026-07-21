@@ -25,6 +25,7 @@
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker） |
 | 底栏 | 变声/原声、音高·共鸣·阈值（热更新）、按音色保存；撤销/重做/默认 |
 | 配置档案 | 每音色 `.tmvp`（`launcher/profiles.py` + 模型页面板） |
+| 咨询包 | 调参服务 zip（`launcher/consult_pack.py` + 其他/模型页向导）；参数不设墙 |
 | 发行 | `scripts/build_release.py --variant nvidia\|amd\|nvidia50` → `dist/`（gitignore） |
 | Git 含什么 | **`docs/仓库内容说明.md`** |
 | launcher 拆分 | **`docs/LAUNCHER_DECOMPOSITION.md`** |
@@ -92,6 +93,7 @@
 - 在线更新 / 音色库（sha256、safe_zip）  
 - 性能优化与本机 perf 报告  
 - 配置档案 Plan A（`.tmvp`）  
+- **咨询包**（样本 + 档案 + 环境 + 可选模型文件 → `User_Data/consult_packs/`）  
 - **main_app 拆分**为多 mixin（见 LAUNCHER_DECOMPOSITION）  
 - **产品更名 RVC Fabric**，去掉 voice.local / 英文装饰眉题、「复制全文」等  
 - **启动**：pythonw + 进程内 GPU 探测；引擎待命仍预热 worker；修复设置页 `@staticmethod` 闪退、bootstrap 语法错误  
@@ -176,5 +178,5 @@
 
 ## 10. 一句话状态
 
-**RVC Fabric 功能侧已齐（单窗变声、底栏、档案、更新、拆分壳层、静默启动与 GPU 进程内探测）。**  
+**RVC Fabric 功能侧已齐（单窗变声、底栏、档案、咨询包、更新、拆分壳层、静默启动与 GPU 进程内探测）。**  
 下一步仍是 **分显卡全量 exe 实机验收**；代码真相以 `git log` + 源码为准。

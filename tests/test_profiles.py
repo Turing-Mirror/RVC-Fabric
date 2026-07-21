@@ -187,3 +187,61 @@ def test_resolve_active_returns_profile(tmp_path):
     P.set_active_profile_id(md, "act00001")
     got = P.resolve_active_profile(md)
     assert got is not None and got["voice"] == {"pitch": 9}
+
+
+# --- config <-> profile bridge -------------------------------------------
+
+def test_profile_to_config_updates_flattens_groups():
+    p = P.make_profile(
+        "x",
+        voice={"pitch": 5, "f0method": "rmvpe"},
+        fx={"fx_enabled": True, "fx_out_gain_db": -2.0},
+        perf={"block_time": 0.15},
+    )
+    upd = P.profile_to_config_updates(p)
+    assert upd == {
+        "pitch": 5,
+        "f0method": "rmvpe",
+        "fx_enabled": True,
+        "fx_out_gain_db": -2.0,
+        "block_time": 0.15,
+    }
+    assert P.profile_to_config_updates(None) == {}
+
+
+def test_config_to_profile_snapshots_tunables_only():
+    cfg = {
+        "pitch": 7,
+        "formant": 1.0,
+        "index_rate": 0.8,
+        "f0method": "fcpe",
+        "fx_enabled": True,
+        "fx_eq_gains": [1, 2, 3, 4, 5],
+        "block_time": 0.22,
+        "crossfade_length": 0.05,
+        "extra_time": 2.5,
+        "sg_output_device": "CABLE Input",  # non-tunable → excluded
+        "last_model": "kiki",               # excluded
+    }
+    prof = P.config_to_profile(cfg, "我的调音", for_model="kiki")
+    assert prof["voice"]["pitch"] == 7
+    assert prof["voice"]["f0method"] == "fcpe"
+    assert prof["fx"]["fx_enabled"] is True
+    assert prof["perf"]["block_time"] == 0.22
+    # only tunable groups snapshotted
+    assert "sg_output_device" not in P.profile_to_config_updates(prof)
+    assert "last_model" not in P.profile_to_config_updates(prof)
+
+
+def test_config_to_profile_round_trips_through_updates():
+    cfg = {"pitch": 3, "fx_out_gain_db": -1.5, "extra_time": 1.5}
+    prof = P.config_to_profile(cfg, "rt")
+    # applying the snapshot back yields the same tunable values
+    assert P.profile_to_config_updates(prof) == cfg
+
+
+def test_config_to_profile_can_skip_perf():
+    cfg = {"pitch": 1, "block_time": 0.3}
+    prof = P.config_to_profile(cfg, "noperf", include_perf=False)
+    assert prof["perf"] == {}
+    assert prof["voice"] == {"pitch": 1}

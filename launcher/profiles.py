@@ -333,3 +333,55 @@ def resolve_active_profile(model_dir: str) -> Optional[dict]:
     if not pid:
         return None
     return load_profile(model_dir, pid)
+
+
+# --------------------------------------------------------------------------
+# bridge: flat app-config  <->  structured profile
+# --------------------------------------------------------------------------
+# The worker reads a flat config (pitch/…/fx_*/block_time). The engine already
+# applies fx_* from it, so "engine reads a profile" = write the profile's
+# flattened params into that config. These pure helpers are the bridge; the
+# main_app wiring (apply on switch, snapshot current as a profile) sits on top.
+def profile_to_config_updates(profile: Optional[dict]) -> dict:
+    """Flatten a profile's voice + fx + perf into flat app-config key/values."""
+    out: dict[str, Any] = {}
+    if not profile:
+        return out
+    for group in ("voice", "fx", "perf"):
+        g = profile.get(group)
+        if isinstance(g, dict):
+            out.update(g)
+    return out
+
+
+def config_to_profile(
+    cfg: dict,
+    name: str,
+    *,
+    source: str = "self",
+    for_model: str = "",
+    include_perf: bool = True,
+    profile_id: Optional[str] = None,
+) -> dict:
+    """Snapshot the current flat config's tunable params into a new profile.
+
+    Backs the settings-page 「另存当前为档案」 action — a user's manual tuning
+    becomes a reusable, bindable profile.
+    """
+    cfg = cfg or {}
+    voice = {k: cfg[k] for k in VOICE_KEYS if cfg.get(k) not in (None, "")}
+    fx = {k: cfg[k] for k in FX_KEYS if cfg.get(k) is not None}
+    perf = (
+        {k: cfg[k] for k in PERF_KEYS if cfg.get(k) not in (None, "")}
+        if include_perf
+        else {}
+    )
+    return make_profile(
+        name,
+        voice=voice,
+        fx=fx,
+        perf=perf,
+        source=source,
+        for_model=for_model,
+        profile_id=profile_id,
+    )

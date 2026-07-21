@@ -122,6 +122,15 @@ class ModelsPageMixin:
         canvas.configure(yscrollcommand=scroll.set)
         canvas.grid(row=0, column=0, sticky="nsew")
         scroll.grid(row=0, column=1, sticky="ns")
+
+        # Per-model config profiles (bind / switch / cancel) — outside the grid
+        # so grid rebuilds don't destroy it
+        panel = tk.Frame(fr, bg=TM_BG)
+        panel.grid(row=3, column=0, sticky="ew", padx=GUTTER, pady=(0, 12))
+        try:
+            self._build_profiles_panel(panel)
+        except Exception:
+            pass
         return fr
 
     def _schedule_models_reflow(self) -> None:
@@ -242,6 +251,10 @@ class ModelsPageMixin:
             self.model_grid.rowconfigure(r, weight=0)
 
         self._sync_bottom()
+        try:
+            self.refresh_profiles_ui()
+        except Exception:
+            pass
 
     def _use_model_from_grid(self, ix: int) -> None:
         self._select_model(ix, feedback=True, maybe_restart=True)

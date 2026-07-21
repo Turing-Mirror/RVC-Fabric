@@ -15,13 +15,22 @@ class MainAppCompositionTests(unittest.TestCase):
         from launcher.main_app import MainApp
 
         names = [c.__name__ for c in MainApp.__mro__]
-        self.assertIn("OnboardingMixin", names)
+        for mixin in (
+            "OnboardingMixin",
+            "HotkeysMixin",
+            "HomePageMixin",
+            "SettingsPageMixin",
+        ):
+            self.assertIn(mixin, names)
         for meth in (
             "show_onboarding",
             "_maybe_show_onboarding",
             "_open_community_link",
             "toggle_vc",
             "_setup_hotkeys",
+            "_dispatch_hotkey",
+            "_build_hotkeys_settings_section",
+            "show_hotkeys_help",
             "_toggle_monitor",
             "_page_home",
             "_page_settings",

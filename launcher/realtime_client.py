@@ -247,22 +247,35 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
     env = _env_for_runtime_python()
     env["TM_REALTIME_WORKER"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
-    # Ensure GPU backend env is present (parent main_app should already set)
+    # Reuse parent GPU env when already set — avoid a second probe process
     try:
         from launcher.config_store import load_config
-        from launcher.gpu_backend import detect_full, apply_backend_env
+        from launcher.gpu_backend import apply_backend_env, detect_full
 
-        pref = str(load_config().get("accel_backend") or "auto")
-        resolved = detect_full(ROOT, pref)
-        env = apply_backend_env(env, resolved)
-        with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
-            lf.write(
-                f"accel pref={pref} resolved={resolved.get('backend')} "
-                f"dml={env.get('TM_USE_DML')} detail={resolved.get('detail')}\n"
-            )
+        if env.get("TM_ACCEL_RESOLVED") or os.environ.get("TM_ACCEL_RESOLVED"):
+            for k in ("TM_USE_DML", "TM_ACCEL", "TM_ACCEL_RESOLVED"):
+                if os.environ.get(k) is not None:
+                    env[k] = os.environ[k]
+            with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+                lf.write(
+                    f"accel from parent resolved={env.get('TM_ACCEL_RESOLVED')} "
+                    f"dml={env.get('TM_USE_DML')}\n"
+                )
+        else:
+            pref = str(load_config().get("accel_backend") or "auto")
+            resolved = detect_full(ROOT, pref)
+            env = apply_backend_env(env, resolved)
+            with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+                lf.write(
+                    f"accel pref={pref} resolved={resolved.get('backend')} "
+                    f"dml={env.get('TM_USE_DML')} detail={resolved.get('detail')}\n"
+                )
     except Exception as e:
         with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
             lf.write(f"accel detect skip: {e}\n")
+    # Never start worker with console python.exe
+    if Path(pyw).name.lower() == "python.exe" and rt_pyw.is_file():
+        pyw = str(rt_pyw)
     with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
         lf.write(f"via direct: {pyw} {script}\n")
 

@@ -25,7 +25,22 @@ from configs.config import Config
 
 # config = Config()
 
-mm = M()
+# Lazy Manager — import-time Manager() spawns a Windows child process.
+# Only harvest multi-cpu path needs the shared dict.
+_mm = None
+
+
+def _shared_mm():
+    global _mm
+    if _mm is None:
+        try:
+            from launcher.win_util import force_windowed_multiprocessing
+
+            force_windowed_multiprocessing()
+        except Exception:
+            pass
+        _mm = M()
+    return _mm
 
 
 def printt(strr, *args):
@@ -377,7 +392,7 @@ class RVC:
         part_length = 160 * ((length // 160 - 1) // n_cpu + 1)
         n_cpu = (length // 160 - 1) // (part_length // 160) + 1
         ts = ttime()
-        res_f0 = mm.dict()
+        res_f0 = _shared_mm().dict()
         for idx in range(n_cpu):
             tail = part_length * (idx + 1) + 320
             if idx == 0:

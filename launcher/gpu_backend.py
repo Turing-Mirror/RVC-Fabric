@@ -66,8 +66,77 @@ def _probe_env(cwd: Path) -> dict:
     return env
 
 
+def probe_inprocess() -> dict[str, Any]:
+    """Probe CUDA/DML in the current process (no child, no black console).
+
+    Main app already runs under Runtime\\pythonw.exe, so torch is importable here.
+    Spawning Runtime\\python.exe for this was the flash titled \"…\\python.exe\".
+    """
+    out: dict[str, Any] = {
+        "torch": None,
+        "cuda": False,
+        "cuda_name": "",
+        "cuda_ver": None,
+        "dml": False,
+        "dml_name": "",
+        "dml_count": 0,
+        "error": "",
+    }
+    try:
+        import torch
+
+        out["torch"] = str(getattr(torch, "__version__", ""))
+        out["cuda"] = bool(torch.cuda.is_available())
+        out["cuda_ver"] = getattr(torch.version, "cuda", None)
+        if out["cuda"]:
+            try:
+                out["cuda_name"] = torch.cuda.get_device_name(0)
+            except Exception as e:
+                out["error"] = "cuda_name:" + str(e)
+    except Exception as e:
+        out["error"] = "torch:" + str(e)
+    try:
+        import torch_directml  # type: ignore
+
+        n = int(torch_directml.device_count())
+        out["dml_count"] = n
+        out["dml"] = n >= 1
+        if n >= 1:
+            try:
+                out["dml_name"] = str(
+                    torch_directml.device_name(torch_directml.default_device())
+                )
+            except Exception:
+                out["dml_name"] = "DirectML"
+    except Exception:
+        pass
+    return out
+
+
+def _running_under_runtime(root: Path) -> bool:
+    """True if this interpreter lives under package Runtime/."""
+    try:
+        exe = Path(sys.executable).resolve()
+        for name in ("Runtime", "runtime"):
+            rt = (Path(root) / name).resolve()
+            if rt.is_dir() and (rt == exe.parent or rt in exe.parents):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def probe_via_runtime_python(python_exe: Path, cwd: Path) -> dict[str, Any]:
-    """Run a short probe in Runtime Python (accurate CUDA/DML)."""
+    """Subprocess probe — only pythonw (never console python.exe)."""
+    pe = Path(python_exe)
+    if pe.name.lower() == "python.exe":
+        pyw = pe.with_name("pythonw.exe")
+        if pyw.is_file():
+            pe = pyw
+        else:
+            # Refuse bare console python to avoid black window
+            return {"error": "no pythonw for probe", "cuda": False, "dml": False}
+
     code = r"""
 import json
 out = {
@@ -109,10 +178,16 @@ print(json.dumps(out, ensure_ascii=False))
             "timeout": 90,
             "env": env,
         }
-        # Avoid black console flash when probing Runtime\python.exe at app start
         if sys.platform == "win32":
-            kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-        r = subprocess.run([str(python_exe), "-c", code], **kw)
+            kw["creationflags"] = 0x08000000
+            try:
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = 0
+                kw["startupinfo"] = si
+            except Exception:
+                pass
+        r = subprocess.run([str(pe), "-c", code], **kw)
         line = (r.stdout or "").strip().splitlines()
         if not line:
             return {
@@ -254,28 +329,34 @@ def apply_backend_env(
 
 
 def detect_full(root: Path, preference: str = "auto") -> dict[str, Any]:
-    """Full detection using Runtime python if present."""
+    """Full detection — in-process under Runtime (no Runtime\\python.exe child)."""
     from launcher.paths import find_python  # late import
 
     wmi = probe_via_wmi()
-    py = None
-    for cand in (
-        root / "Runtime" / "python.exe",
-        root / "runtime" / "python.exe",
-    ):
-        if cand.is_file():
-            py = cand
-            break
-    if py is None:
-        try:
-            p = find_python(prefer_windowed=False)
-            if p and "python" in Path(p).name.lower():
-                py = Path(p)
-        except Exception:
-            pass
     probe: dict[str, Any] = {}
-    if py and py.is_file():
-        probe = probe_via_runtime_python(py, root)
+    if _running_under_runtime(root):
+        # App/worker already on Runtime pythonw — probe here, zero console windows
+        probe = probe_inprocess()
+    else:
+        py = None
+        for cand in (
+            root / "Runtime" / "pythonw.exe",
+            root / "runtime" / "pythonw.exe",
+        ):
+            if cand.is_file():
+                py = cand
+                break
+        if py is None:
+            try:
+                p = find_python(prefer_windowed=True)
+                if p and Path(p).name.lower() == "pythonw.exe" and Path(p).is_file():
+                    py = Path(p)
+            except Exception:
+                pass
+        if py is not None:
+            probe = probe_via_runtime_python(py, root)
+        else:
+            probe = probe_inprocess()
 
     package_variant = None
     try:

@@ -22,7 +22,6 @@ from launcher.theme import (
     mono_font,
     sans_font,
     title_font,
-    tracked,
 )
 from launcher.ui import GhostButton, PrimaryButton
 
@@ -70,8 +69,8 @@ class OnboardingMixin:
         """Simple multi-step guide; ends with community + help call-to-action."""
         steps: list[tuple[str, str, list[str]]] = [
             (
-                "WELCOME",
-                "欢迎使用 Turing Mirror 变声器",
+                "欢迎",
+                "欢迎使用 RVC Fabric",
                 [
                     "这是一个本地实时变声工具：对着麦克风说话，声音会被实时换成你选的音色。",
                     "常用于游戏 / QQ / Discord 语音，全部在本机运行，不上传你的声音。",
@@ -79,7 +78,7 @@ class OnboardingMixin:
                 ],
             ),
             (
-                "STEP 1 · 接线",
+                "接线",
                 "先把声音接对（最重要）",
                 [
                     "① 本软件「设置」→ 输入设备 = 你的真实麦克风",
@@ -89,7 +88,7 @@ class OnboardingMixin:
                 ],
             ),
             (
-                "STEP 2 · 开声",
+                "开声",
                 "三步开始变声",
                 [
                     "① 在「首页」或「模型」页选择一个音色",
@@ -99,17 +98,17 @@ class OnboardingMixin:
                 ],
             ),
             (
-                "STEP 3 · 调声",
+                "调声",
                 "调出更像的声音",
                 [
-                    "· 音高 Pitch：男变女常试 +8～+12，女变男试 −8～−12。",
-                    "· 共鸣 Formant：微调音色的明暗与厚度。",
+                    "· 音高：男变女常试 +8～+12，女变男试 −8～−12。",
+                    "· 共鸣：微调音色的明暗与厚度。",
                     "· 底栏可随时快速调节，并会按当前音色自动记住。",
                     "· 更多细调（降噪 / 声音效果）在设置页，每项旁都有「?」说明。",
                 ],
             ),
             (
-                "DONE · 加入我们",
+                "完成",
                 "加群 & 看完整说明",
                 [
                     "遇到问题、想要更多音色？欢迎加入玩家 QQ 群一起玩。",
@@ -183,7 +182,7 @@ class OnboardingMixin:
         def render():
             i = state["i"]
             eb, ttl, lines = steps[i]
-            eyebrow.configure(text=tracked(eb, gap=" "))
+            eyebrow.configure(text=eb)
             title.configure(text=ttl)
             for w in body_inner.winfo_children():
                 w.destroy()

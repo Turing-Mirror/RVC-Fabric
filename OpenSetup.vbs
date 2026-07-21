@@ -27,7 +27,7 @@ If pyw = "" Then pyw = py
 If pyw = "" Or Not fso.FileExists(pyw) Then
   ts.WriteLine "NO_RUNTIME"
   ts.Close
-  MsgBox "Runtime\pythonw.exe not found." & vbCrLf & "Run scripts\sync_from_rvcmax.bat first.", 16, "Turing Mirror"
+  MsgBox "Runtime\pythonw.exe not found." & vbCrLf & "Run scripts\sync_from_rvcmax.bat first.", 16, "RVC Fabric"
   WScript.Quit 1
 End If
 
@@ -35,7 +35,7 @@ script = repo & "\launcher\bootstrap.py"
 If Not fso.FileExists(script) Then
   ts.WriteLine "NO_SCRIPT"
   ts.Close
-  MsgBox "Missing launcher\bootstrap.py", 16, "Turing Mirror"
+  MsgBox "Missing launcher\bootstrap.py", 16, "RVC Fabric"
   WScript.Quit 1
 End If
 

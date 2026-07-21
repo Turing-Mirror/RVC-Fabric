@@ -22,7 +22,6 @@ from launcher.theme import (
     TM_OK,
     mono_font,
     sans_font,
-    tracked,
 )
 from launcher.ui import (
     GhostButton,
@@ -46,7 +45,7 @@ class ModelsPageMixin:
         left.pack(side="left", fill="x", expand=True)
         PageHeader(
             left,
-            eyebrow="CATALOG",
+            eyebrow="",
             title="音色目录",
             lead="",
         ).pack(anchor="w")
@@ -83,13 +82,6 @@ class ModelsPageMixin:
         self._models_search.pack(side="left")
         sort_wrap = tk.Frame(filt, bg=TM_BG)
         sort_wrap.pack(side="right")
-        tk.Label(
-            sort_wrap,
-            text=tracked("SORT", gap="  "),
-            font=mono_font(8),
-            bg=TM_BG,
-            fg=TM_META,
-        ).pack(side="left", padx=(0, 8))
         self._models_sort_seg = SegmentControl(
             sort_wrap,
             [("default", "默认"), ("name", "名称"), ("index", "检索库")],

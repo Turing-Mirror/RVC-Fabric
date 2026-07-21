@@ -29,7 +29,7 @@ If Not fso.FileExists(pyw) Then pyw = py
 If Not fso.FileExists(pyw) Then
   ts.WriteLine "NO_RUNTIME"
   ts.Close
-  MsgBox "Runtime\pythonw.exe not found under:" & vbCrLf & repo, 16, "Turing Mirror"
+  MsgBox "Runtime\pythonw.exe not found under:" & vbCrLf & repo, 16, "RVC Fabric"
   WScript.Quit 1
 End If
 
@@ -37,7 +37,7 @@ script = repo & "\gui_v1.py"
 If Not fso.FileExists(script) Then
   ts.WriteLine "NO_SCRIPT"
   ts.Close
-  MsgBox "gui_v1.py not found under:" & vbCrLf & repo, 16, "Turing Mirror"
+  MsgBox "gui_v1.py not found under:" & vbCrLf & repo, 16, "RVC Fabric"
   WScript.Quit 1
 End If
 

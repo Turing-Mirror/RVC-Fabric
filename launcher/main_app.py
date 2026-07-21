@@ -46,7 +46,6 @@ from launcher.paths import (
 from launcher import realtime_client as rt_client
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
-    APP_ROUTE,
     APP_WORDMARK,
     BOTTOM_HEIGHT,
     NAV_HEIGHT,
@@ -63,11 +62,9 @@ from launcher.theme import (
     TM_META,
     TM_OK,
     TM_SURFACE,
-    display_font,
     mono_font,
     sans_font,
     title_font,
-    tracked,
 )
 from launcher.ui import (
     CoverCache,
@@ -263,18 +260,11 @@ class MainApp(
         brand.pack(side="left", padx=PAD_X, pady=10)
         tk.Label(
             brand,
-            text=tracked(APP_WORDMARK, gap="  "),
-            font=display_font(13),
+            text=APP_WORDMARK,
+            font=title_font(14, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
         ).pack(anchor="w")
-        tk.Label(
-            brand,
-            text="变声器  ·  " + tracked(APP_ROUTE, gap=""),
-            font=mono_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-        ).pack(anchor="w", pady=(2, 0))
 
         # Segment control rail
         nav_rail = tk.Frame(top, bg=TM_INSET, padx=4, pady=4)
@@ -318,14 +308,6 @@ class MainApp(
         left_panel.pack(side="left", padx=(PAD_X, 10), pady=dock_pad_y, fill="y")
         left_info = tk.Frame(left_panel, bg=TM_SURFACE, padx=14, pady=12)
         left_info.pack(fill="both", expand=True)
-        tk.Label(
-            left_info,
-            text=tracked("NOW PLAYING", gap="  "),
-            font=mono_font(7),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(anchor="w")
         self.bottom_name = tk.Label(
             left_info,
             text="未选择模型",
@@ -334,7 +316,7 @@ class MainApp(
             fg=TM_INK,
             anchor="w",
         )
-        self.bottom_name.pack(anchor="w", pady=(6, 0))
+        self.bottom_name.pack(anchor="w")
         # tag + voice hint share one line (was 2 lines → got clipped)
         self.bottom_tag = tk.Label(
             left_info,
@@ -388,16 +370,8 @@ class MainApp(
         mode_card.pack(side="left", fill="y", padx=(0, 10))
         mode_inner = tk.Frame(mode_card, bg=TM_SURFACE, padx=12, pady=12)
         mode_inner.pack(fill="both", expand=True)
-        tk.Label(
-            mode_inner,
-            text=tracked("MODE", gap="  "),
-            font=mono_font(7),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(anchor="w")
         seg = tk.Frame(mode_inner, bg=TM_INSET, padx=4, pady=4)
-        seg.pack(anchor="w", pady=(12, 0))
+        seg.pack(anchor="w")
         self.btn_mode_vc = tk.Button(
             seg,
             text="输出变声",
@@ -435,7 +409,7 @@ class MainApp(
         tiles.pack(side="left", fill="both", expand=True)
         self._dock_pitch = ParamTile(
             tiles,
-            "音高 Pitch",
+            "音高",
             self.var_pitch,
             -24,
             24,
@@ -448,7 +422,7 @@ class MainApp(
         self._dock_pitch.pack(side="left", fill="y", padx=(0, 8))
         self._dock_formant = ParamTile(
             tiles,
-            "共鸣 Formant",
+            "共鸣",
             self.var_formant,
             -2,
             2,
@@ -483,17 +457,9 @@ class MainApp(
         hist.pack(side="left", fill="y")
         hist_in = tk.Frame(hist, bg=TM_SURFACE, padx=10, pady=10)
         hist_in.pack(fill="both", expand=True)
-        tk.Label(
-            hist_in,
-            text=tracked("EDIT", gap="  "),
-            font=mono_font(7),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(anchor="w")
         GhostButton(
             hist_in, "撤销", command=self.undo_voice_params, padx=10, pady=4
-        ).pack(fill="x", pady=(8, 4))
+        ).pack(fill="x", pady=(0, 4))
         GhostButton(
             hist_in, "重做", command=self.redo_voice_params, padx=10, pady=4
         ).pack(fill="x", pady=2)

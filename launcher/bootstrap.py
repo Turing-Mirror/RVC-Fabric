@@ -26,9 +26,8 @@ from launcher.env_setup import (
     format_check_report,
     missing_items,
 )
-from launcher.paths import APP_BRAND, APP_TITLE, ROOT as RROOT, ensure_dirs
+from launcher.paths import APP_TITLE, ROOT as RROOT, ensure_dirs
 from launcher.theme import (
-    APP_ROUTE,
     APP_WORDMARK,
     PAD_X,
     TM_ACCENT,
@@ -43,11 +42,9 @@ from launcher.theme import (
     TM_SURFACE,
     TM_SURFACE_HOVER,
     TM_WARN,
-    display_font,
     mono_font,
     sans_font,
     title_font,
-    tracked,
 )
 from launcher.ui import GhostButton, PrimaryButton, SoftActionCard
 from launcher.vbcable import install_vbcable
@@ -81,20 +78,12 @@ class BootstrapApp:
         head_inner.pack(fill="x", pady=(20, 14), padx=PAD_X)
         tk.Label(
             head_inner,
-            text=tracked(APP_WORDMARK, gap="  "),
-            font=display_font(14),
+            text=APP_WORDMARK,
+            font=title_font(16, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
         ).pack(anchor="w")
-        tk.Label(
-            head_inner,
-            text="启动器  ·  " + tracked(APP_ROUTE, gap=""),
-            font=mono_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(anchor="w", pady=(4, 0))
         self.lbl_subtitle = tk.Label(
             head_inner,
             text="首次设置：快捷方式 · 声卡 · 环境",
@@ -155,7 +144,7 @@ class BootstrapApp:
 
         btn_row = tk.Frame(self.root, bg=TM_BG)
         btn_row.pack(pady=(2, 18))
-        PrimaryButton(btn_row, "打开变声器", command=self.on_start_app, padx=28, pady=10).pack(
+        PrimaryButton(btn_row, "打开主界面", command=self.on_start_app, padx=28, pady=10).pack(
             side="left", padx=6
         )
         GhostButton(
@@ -189,26 +178,15 @@ class BootstrapApp:
         notice_body.pack(side="left", fill="both", expand=True, padx=14, pady=12)
         tk.Label(
             notice_body,
-            text=tracked("NOTICE", gap="  "),
-            font=mono_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            notice_body,
             text="说明",
             font=title_font(12, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
-        ).pack(fill="x", pady=(4, 4))
+        ).pack(fill="x", pady=(0, 4))
         tk.Label(
             notice_body,
-            text=(
-                "推荐双击桌面快捷方式、OpenApp.vbs / OpenSetup.vbs 或发行包里的 exe 启动，"
-                "可完全避免黑框。检测 GPU / 下载资源也会静默进行，不再弹出命令行窗口。"
-            ),
+            text="请用桌面快捷方式或启动器进入主界面。检测与下载会在后台完成。",
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
@@ -219,13 +197,13 @@ class BootstrapApp:
 
         cards = tk.Frame(page, bg=TM_BG)
         cards.pack(pady=(18, 10))
-        SoftActionCard(cards, "发送快捷方式", "DESKTOP SHORTCUT", self.on_shortcut).pack(
+        SoftActionCard(cards, "发送快捷方式", "", self.on_shortcut).pack(
             side="left", padx=10
         )
-        SoftActionCard(cards, "安装虚拟声卡", "VB-CABLE", self.on_vbcable).pack(
+        SoftActionCard(cards, "安装虚拟声卡", "", self.on_vbcable).pack(
             side="left", padx=10
         )
-        SoftActionCard(cards, "检测与部署", "ENV · CORE", self.on_deploy).pack(
+        SoftActionCard(cards, "检测与部署", "", self.on_deploy).pack(
             side="left", padx=10
         )
         return page
@@ -234,20 +212,12 @@ class BootstrapApp:
         page = tk.Frame(parent, bg=TM_BG)
         tk.Label(
             page,
-            text=tracked("SYSTEM", gap="  "),
-            font=mono_font(8),
-            bg=TM_BG,
-            fg=TM_META,
-            anchor="w",
-        ).pack(fill="x", padx=PAD_X, pady=(14, 2))
-        tk.Label(
-            page,
             text="系统快捷",
             font=title_font(16, "bold"),
             bg=TM_BG,
             fg=TM_INK,
             anchor="w",
-        ).pack(fill="x", padx=PAD_X, pady=(0, 4))
+        ).pack(fill="x", padx=PAD_X, pady=(14, 4))
         tk.Label(
             page,
             text="打开 Windows「声音」面板，配置麦克风、CABLE 与默认设备。",
@@ -264,7 +234,7 @@ class BootstrapApp:
         SoftActionCard(
             cards,
             "声音设备",
-            "PLAYBACK · RECORD",
+            "",
             self.on_open_sound_panel,
         ).pack(side="left", padx=10)
         return page
@@ -329,7 +299,7 @@ class BootstrapApp:
             items = check_environment()
             core_miss = missing_items(items, kinds={KIND_CORE})
             if not core_miss:
-                base = "环境正常，可打开变声器。"
+                base = "环境正常，可打开主界面。"
                 ok = True
             else:
                 base = "缺少：" + "、".join(i.name for i in core_miss[:4])
@@ -430,11 +400,10 @@ class BootstrapApp:
                             self._run_download("all_advanced")
                             return
                         self._deploy_busy = False
-                        self._set_status("环境正常，可打开变声器。")
-                        return
+                        self._set_status("环境正常，可打开主界面。")                        return
 
                     messagebox.showinfo("环境检测", report)
-                    self._set_status("环境正常，可打开变声器。")
+                    self._set_status("环境正常，可打开主界面。")
                 finally:
                     if not getattr(self, "_download_running", False):
                         self._deploy_busy = False

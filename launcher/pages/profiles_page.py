@@ -283,10 +283,10 @@ class ProfilesMixin:
         head.pack(fill="x", pady=(6, 4))
         tk.Label(
             head,
-            text=tracked("PROFILES", gap="  "),
-            font=mono_font(8),
+            text="配置档案",
+            font=sans_font(10, "bold"),
             bg=TM_BG,
-            fg=TM_META,
+            fg=TM_INK,
         ).pack(side="left")
         if not d:
             tk.Label(

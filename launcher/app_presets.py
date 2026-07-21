@@ -32,6 +32,31 @@ def perf_preset_name(key: str) -> str:
     return PERF_PRESET_NAMES.get(key, key)
 
 
+def recommend_perf_preset(
+    p95_ms: float,
+    block_ms: float,
+    over_budget_blocks: int = 0,
+    n: int = 0,
+) -> tuple[str, str]:
+    """Pick a performance preset from the machine's own measured per-block times.
+
+    Returns (preset_key, plain-Chinese reason). Logic:
+      * glitches happened (some blocks blew the budget) or timing is tight →
+        a steadier preset (a bit more delay, fewer dropouts);
+      * plenty of spare time → a lower-latency preset;
+      * otherwise keep it balanced.
+    """
+    if n <= 0 or block_ms <= 0:
+        return "balanced", "还没有足够的使用记录，先用均衡设置。"
+    over_ratio = (over_budget_blocks / n) if n else 0.0
+    budget = 0.8 * block_ms
+    if over_ratio > 0.02 or p95_ms > budget:
+        return "stable", "偶尔有卡顿，换成更稳的设置（延迟会略高一点）。"
+    if p95_ms < 0.45 * block_ms:
+        return "low_latency", "你的电脑很有余力，可以用更低的延迟。"
+    return "balanced", "目前表现均衡，保持均衡设置就好。"
+
+
 def format_latency_line(delay_ms: int, infer_ms: int, fallback: str) -> str:
     """Human-readable metrics line; hides the absurd delayed-sentinel values.
 

@@ -305,6 +305,28 @@ def install_voice_pack_zip(
         name = str(pack_cfg.get("name") or name)
         tag = str(pack_cfg.get("tag") or tag or guess_tag(name))
 
+        extra = {
+            k: pack_cfg[k]
+            for k in ("pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method")
+            if k in pack_cfg
+        }
+        # Prefer pack stamps when present (tm_package / config from CNB pack)
+        for k in ("publisher", "fabric_official", "is_rvc_fabric"):
+            if k in pack_cfg:
+                extra[k] = pack_cfg[k]
+        tm_meta_path = content / TM_PACKAGE_JSON
+        if tm_meta_path.is_file():
+            try:
+                tm = json.loads(tm_meta_path.read_text(encoding="utf-8"))
+                if isinstance(tm, dict):
+                    for k in ("publisher", "fabric_official", "voice_id"):
+                        if k in tm and k not in extra:
+                            if k == "voice_id" and not vid:
+                                vid = str(tm.get("voice_id") or vid)
+                            elif k != "voice_id":
+                                extra[k] = tm[k]
+            except Exception:
+                pass
         return _write_voice_config(
             dest_dir,
             dest_pth=dest_pth,
@@ -315,11 +337,7 @@ def install_voice_pack_zip(
             index_path=index_path or str(pack_cfg.get("index") or ""),
             cover_path=cover_path,
             source="online_pack",
-            extra={
-                k: pack_cfg[k]
-                for k in ("pitch", "formant", "index_rate")
-                if k in pack_cfg
-            },
+            extra=extra,
         )
 
 
@@ -364,6 +382,8 @@ def _write_voice_config(
     source: str,
     extra: Optional[dict] = None,
 ) -> dict:
+    # Official RVC Fabric library installs always stamp publisher so consult
+    # pack / free-vs-paid paths recognize them offline (also matches catalog id).
     cfg = {
         "name": name,
         "tag": tag or guess_tag(name),
@@ -371,6 +391,8 @@ def _write_voice_config(
         "version": version,
         "source": source,
         "online_id": online_id,
+        "publisher": "rvc_fabric",
+        "fabric_official": True,
     }
     if index_path and Path(index_path).is_file():
         cfg["index"] = str(Path(index_path).resolve())
@@ -378,6 +400,12 @@ def _write_voice_config(
         cfg["cover"] = cover_path
     if extra:
         cfg.update(extra)
+    # Do not let pack config wipe official stamps unless pack is not fabric
+    if source in ("online_pack", "online_files"):
+        cfg["publisher"] = "rvc_fabric"
+        cfg["fabric_official"] = True
+        if online_id:
+            cfg["online_id"] = online_id
     (dest_dir / "config.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",

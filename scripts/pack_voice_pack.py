@@ -50,12 +50,17 @@ def main() -> int:
         voice_id=args.id,
         tag=args.tag,
         notes=args.notes,
+        publisher="rvc_fabric",
+        fabric_official=True,
     )
     cfg = {
         "name": name,
         "tag": args.tag,
         "version": args.version,
         "file": pth.name,
+        "publisher": "rvc_fabric",
+        "fabric_official": True,
+        "online_id": args.id,
     }
 
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:

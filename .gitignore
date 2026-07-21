@@ -90,6 +90,7 @@ ffprobe.*
 /User_Data/perf_reports/
 /User_Data/diagnostics/
 /User_Data/consult_packs/
+/User_Data/consult_samples/
 /User_Data/dev_variant.txt
 
 # Dev-only noise

@@ -11,6 +11,7 @@ from launcher.app_presets import (
     format_latency_line,
     perf_preset_name,
     perf_preset_values,
+    recommend_perf_preset,
 )
 from launcher.audio_devices import is_virtual_monitor_name, prefer_monitor_device
 from launcher.voice_history import VoiceParamHistory
@@ -28,6 +29,32 @@ def test_perf_preset_values_known_and_fallback():
 def test_perf_preset_name():
     assert perf_preset_name("low_latency") == "低延迟"
     assert perf_preset_name("weird") == "weird"
+
+
+def test_recommend_perf_preset_headroom_low_latency():
+    # p95 well under 45% of a 250ms block, no glitches -> low latency
+    key, reason = recommend_perf_preset(p95_ms=60, block_ms=250, over_budget_blocks=0, n=200)
+    assert key == "low_latency"
+    assert reason
+
+
+def test_recommend_perf_preset_glitches_go_stable():
+    # some blocks blew the budget -> stable
+    key, _ = recommend_perf_preset(p95_ms=180, block_ms=250, over_budget_blocks=10, n=200)
+    assert key == "stable"
+    # p95 over 80% budget alone also -> stable
+    key2, _ = recommend_perf_preset(p95_ms=210, block_ms=250, over_budget_blocks=0, n=200)
+    assert key2 == "stable"
+
+
+def test_recommend_perf_preset_balanced_middle():
+    key, _ = recommend_perf_preset(p95_ms=140, block_ms=250, over_budget_blocks=0, n=200)
+    assert key == "balanced"
+
+
+def test_recommend_perf_preset_no_samples():
+    assert recommend_perf_preset(0, 0, 0, 0)[0] == "balanced"
+    assert recommend_perf_preset(100, 250, 0, 0)[0] == "balanced"
 
 
 def test_format_latency_line_normal():

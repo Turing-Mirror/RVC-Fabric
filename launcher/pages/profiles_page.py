@@ -42,6 +42,14 @@ _SOURCE_LABELS = {
     "official": "官方优化",
 }
 
+
+def _safe_filename(name: str) -> str:
+    """Strip characters that are invalid in filenames (for export suggestions)."""
+    import re
+
+    cleaned = re.sub(r'[\\/:*?"<>|]+', "_", str(name or "")).strip(". ")
+    return cleaned[:80] or "档案"
+
 # cfg-key -> the settings/dock Tk var attribute that mirrors it. Reflecting a
 # profile into these vars (then calling _push_hot_params, which re-collects from
 # them) keeps cfg, UI, and the worker consistent. Verified against
@@ -374,29 +382,54 @@ class ProfilesMixin:
 
     def _ui_import(self) -> None:
         path = filedialog.askopenfilename(
-            title="导入配置档案", filetypes=[("配置档案", "*.tmvp"), ("全部", "*.*")]
+            title="导入别人分享的配置档案",
+            filetypes=[("配置档案", "*.tmvp"), ("全部", "*.*")],
         )
         if not path:
             return
+        # warn if this profile was tuned for a different voice (peer sharing)
+        import json
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            for_model = str((raw.get("meta") or {}).get("for_model") or "")
+        except Exception:
+            for_model = ""
+        cur = str((self._current_model() or {}).get("name") or "")
+        if for_model and cur and for_model != cur:
+            if not messagebox.askyesno(
+                "音色不一致",
+                f"这份档案是给「{for_model}」调的，你现在选的是「{cur}」。\n"
+                "仍然可以用，但效果可能和分享者的不一样。要继续导入吗？",
+            ):
+                return
         if self._import_profile(path) is None:
-            messagebox.showerror("导入失败", "档案无效，或未选中用户音色。")
+            messagebox.showerror("导入失败", "这个档案打不开或格式不对，或者你还没选中一个用户音色。")
             return
         self.refresh_profiles_ui()
-        self._toast_profile("已导入并应用档案")
+        self._toast_profile("已导入并应用")
 
     def _ui_export_active(self) -> None:
         pid = self._active_profile_id_current()
-        if not pid:
-            messagebox.showinfo("提示", "当前是默认(未绑定档案)，无可导出的档案。")
+        d = self._current_model_dir()
+        if not pid or not d:
+            messagebox.showinfo("提示", "现在用的是默认参数，没有可分享的档案。先切到某个档案再导出。")
             return
+        prof = P.load_profile(d, pid)
+        cur = str((self._current_model() or {}).get("name") or "音色")
+        pname = str((prof or {}).get("name") or "档案")
+        suggested = _safe_filename(f"{cur}-{pname}") + P.PROFILE_EXT
         path = filedialog.asksaveasfilename(
-            title="导出配置档案", defaultextension=".tmvp",
-            filetypes=[("配置档案", "*.tmvp")]
+            title="导出档案（可发给别人使用）",
+            initialfile=suggested,
+            defaultextension=P.PROFILE_EXT,
+            filetypes=[("配置档案", "*.tmvp")],
         )
         if not path:
             return
         if self._export_profile(pid, path):
-            self._toast_profile("已导出档案")
+            self._toast_profile("已导出，可以把这个文件发给别人")
         else:
             messagebox.showerror("导出失败", "无法写入文件。")
 

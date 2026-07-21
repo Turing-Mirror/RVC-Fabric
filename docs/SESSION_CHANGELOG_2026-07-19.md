@@ -2,7 +2,7 @@
 
 > **用途**：记录本次协作对话中完成的全部设计、适配、修复与功能开发。  
 > **分支**：`tm-release`（相对 `org/tm-release` 约 11 个提交）  
-> **产品**：Turing Mirror 变声器（RVC 底座 + 白无垢 launcher + 无窗 realtime_worker）
+> **产品**：（历史会话）现产品名 **RVC Fabric**；当时为 RVC 底座 + launcher + 无窗 realtime_worker
 
 ---
 

@@ -1,10 +1,11 @@
-> **Turing Mirror 配套变声器（本仓库定制）**  
+> **RVC Fabric（本仓库定制 · 基于 RVC WebUI）**  
 > - **仓库含什么 / 不含什么**：[`docs/仓库内容说明.md`](docs/仓库内容说明.md)（源码仓 ≠ 完整安装包）  
 > - 目录说明：[`docs/项目结构.md`](docs/项目结构.md)  
-> - 开发启动：`start.bat` / `start_app.bat`（详见 `scripts/dev/`）  
+> - 开发启动：`OpenApp.vbs` / `start_app.bat`（详见 `scripts/dev/`）  
 > - 发行打包：`scripts/build_release.bat` → `dist/`（需本机 Runtime 与权重）  
 > - 界面美学：[`docs/UI-AESTHETIC-DESIGN.md`](docs/UI-AESTHETIC-DESIGN.md)  
 > - 交接：[`docs/CONTEXT_HANDOFF.md`](docs/CONTEXT_HANDOFF.md)  
+> - 组织仓库：`Turing-Mirror/RVC-Fabric`（分支 `tm-release`）  
 > 以下为上游 RVC WebUI 原文说明。
 
 ---

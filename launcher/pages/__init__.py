@@ -13,6 +13,7 @@ from launcher.pages.monitor_mixin import MonitorMixin
 from launcher.pages.more_page import MorePageMixin
 from launcher.pages.onboarding_page import OnboardingMixin
 from launcher.pages.profiles_page import ProfilesMixin
+from launcher.pages.realtime_control import RealtimeControlMixin
 from launcher.pages.settings_page import SettingsPageMixin
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "MorePageMixin",
     "OnboardingMixin",
     "ProfilesMixin",
+    "RealtimeControlMixin",
     "SettingsPageMixin",
 ]

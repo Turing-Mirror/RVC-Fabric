@@ -19,6 +19,7 @@ class MainAppCompositionTests(unittest.TestCase):
             "OnboardingMixin",
             "HotkeysMixin",
             "MonitorMixin",
+            "RealtimeControlMixin",
             "HomePageMixin",
             "SettingsPageMixin",
         ):
@@ -28,6 +29,10 @@ class MainAppCompositionTests(unittest.TestCase):
             "_maybe_show_onboarding",
             "_open_community_link",
             "toggle_vc",
+            "_start_vc",
+            "_stop_vc",
+            "_tick_status",
+            "_restart_vc_for_new_model",
             "_setup_hotkeys",
             "_dispatch_hotkey",
             "_build_hotkeys_settings_section",

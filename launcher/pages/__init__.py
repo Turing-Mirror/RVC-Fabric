@@ -9,6 +9,7 @@ methods resolve at runtime via the composed class.
 from launcher.pages.home_page import HomePageMixin
 from launcher.pages.hotkeys_page import HotkeysMixin
 from launcher.pages.models_page import ModelsPageMixin
+from launcher.pages.monitor_mixin import MonitorMixin
 from launcher.pages.more_page import MorePageMixin
 from launcher.pages.onboarding_page import OnboardingMixin
 from launcher.pages.profiles_page import ProfilesMixin
@@ -18,6 +19,7 @@ __all__ = [
     "HomePageMixin",
     "HotkeysMixin",
     "ModelsPageMixin",
+    "MonitorMixin",
     "MorePageMixin",
     "OnboardingMixin",
     "ProfilesMixin",

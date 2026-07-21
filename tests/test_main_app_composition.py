@@ -20,6 +20,7 @@ class MainAppCompositionTests(unittest.TestCase):
             "HotkeysMixin",
             "MonitorMixin",
             "RealtimeControlMixin",
+            "DockVoiceMixin",
             "HomePageMixin",
             "SettingsPageMixin",
         ):
@@ -40,6 +41,9 @@ class MainAppCompositionTests(unittest.TestCase):
             "_toggle_monitor",
             "_refresh_monitor_hint",
             "_prefer_monitor_device",
+            "_sync_bottom",
+            "undo_voice_params",
+            "_apply_model_voice_params",
             "_page_home",
             "_page_settings",
         ):

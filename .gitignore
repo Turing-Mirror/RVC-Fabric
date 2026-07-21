@@ -77,6 +77,10 @@ ffprobe.*
 # Reference third-party pack (do not ship in this repo)
 /RVCMAX/
 
+# CNB releases staging (sync to https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases via Git LFS)
+# Multi-GB Runtime / voice artifacts — never commit into the product source repo
+/CNB-GIT-RELEASE/
+
 # One-off local sync backups (multi-GB possible)
 /_sync_backup_*/
 /_local/

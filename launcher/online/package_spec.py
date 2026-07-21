@@ -264,5 +264,12 @@ def tm_package_template(package_type: str, **extra: Any) -> dict[str, Any]:
         base["applies"] = "install_to_user_data_models"
         base["voice_id"] = extra.get("voice_id") or extra.get("id") or ""
         base["tag"] = extra.get("tag") or "音色"
+        # Official publisher stamp — clients read this without network
+        base["publisher"] = extra.get("publisher") or "rvc_fabric"
+        base["fabric_official"] = (
+            True
+            if extra.get("fabric_official") is None
+            else bool(extra.get("fabric_official"))
+        )
     base.update({k: v for k, v in extra.items() if k not in base})
     return base

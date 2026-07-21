@@ -25,7 +25,7 @@
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker） |
 | 底栏 | 变声/原声、音高·共鸣·阈值（热更新）、按音色保存；撤销/重做/默认 |
 | 配置档案 | 每音色 `.tmvp`（`launcher/profiles.py` + 模型页面板） |
-| 咨询包 | 调参服务 zip（`launcher/consult_pack.py` + 其他/模型页向导）；参数不设墙 |
+| 咨询包 | 调参服务 zip（`consult_pack` + 应用内录音 `sample_record`）；官方音色 = publisher 标记 ∪ catalog id |
 | 发行 | `scripts/build_release.py --variant nvidia\|amd\|nvidia50` → `dist/`（gitignore） |
 | Git 含什么 | **`docs/仓库内容说明.md`** |
 | launcher 拆分 | **`docs/LAUNCHER_DECOMPOSITION.md`** |

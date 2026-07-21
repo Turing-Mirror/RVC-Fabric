@@ -32,6 +32,18 @@ _KEEP_BUNDLES = 10
 AUDIO_EXTS = frozenset({".wav", ".mp3", ".flac", ".ogg", ".m4a"})
 
 _FABRIC_SOURCES = frozenset({"online_pack", "online_files"})
+# Written into official packs / config.json so clients can recognize without network.
+FABRIC_PUBLISHER = "rvc_fabric"
+_FABRIC_PUBLISHER_ALIASES = frozenset(
+    {
+        "rvc_fabric",
+        "rvc-fabric",
+        "rvcf",
+        "turing_mirror",
+        "turing-mirror",
+        "turingmirror",
+    }
+)
 
 _README = """RVC Fabric 咨询包
 ================
@@ -77,15 +89,94 @@ def _write_json_str(data: dict) -> str:
 
 
 # --------------------------------------------------------------------------
-# model identity
+# model identity (combine pack mark + install source + catalog id match)
 # --------------------------------------------------------------------------
-def is_fabric_model(side: Optional[dict]) -> bool:
-    """True when the voice came from RVC Fabric online catalog / pack."""
+def _truthy_flag(v: Any) -> bool:
+    if v is True:
+        return True
+    if isinstance(v, (int, float)) and v == 1:
+        return True
+    s = str(v or "").strip().lower()
+    return s in ("1", "true", "yes", "y", "official", "fabric")
+
+
+def has_fabric_publisher_mark(side: Optional[dict]) -> bool:
+    """JSON marks written by official pack / install (works offline)."""
     if not isinstance(side, dict):
         return False
-    if str(side.get("online_id") or "").strip():
+    if _truthy_flag(side.get("fabric_official")) or _truthy_flag(
+        side.get("is_rvc_fabric")
+    ):
         return True
-    return str(side.get("source") or "").strip().lower() in _FABRIC_SOURCES
+    pub = str(side.get("publisher") or side.get("provider") or "").strip().lower()
+    return pub in _FABRIC_PUBLISHER_ALIASES
+
+
+def load_fabric_catalog_ids() -> set[str]:
+    """Voice ids from bundled + cached online catalog (CNB/Git remote after fetch).
+
+    Matching a local ``online_id`` against this set is the second recognition
+    path (list compare). Empty when catalog not configured yet.
+    """
+    ids: set[str] = set()
+    try:
+        from launcher.online.catalog import (
+            load_bundled_catalog,
+            load_cached_catalog,
+        )
+
+        for cat in (load_bundled_catalog(), load_cached_catalog()):
+            if cat is None:
+                continue
+            for v in cat.voices or []:
+                vid = str(getattr(v, "id", "") or "").strip()
+                if vid and not vid.startswith("example-"):
+                    ids.add(vid)
+    except Exception:
+        pass
+    return ids
+
+
+def fabric_match_reasons(
+    side: Optional[dict],
+    *,
+    catalog_ids: Optional[set[str]] = None,
+) -> list[str]:
+    """Why we treat this sidecar as Fabric official (may be empty = not official)."""
+    if not isinstance(side, dict):
+        return []
+    reasons: list[str] = []
+    if has_fabric_publisher_mark(side):
+        reasons.append("publisher_mark")
+    src = str(side.get("source") or "").strip().lower()
+    if src in _FABRIC_SOURCES:
+        reasons.append("install_source")
+    oid = str(side.get("online_id") or "").strip()
+    if oid:
+        reasons.append("online_id")
+        ids = catalog_ids if catalog_ids is not None else load_fabric_catalog_ids()
+        if oid in ids:
+            reasons.append("catalog_id_match")
+    return reasons
+
+
+def is_fabric_model(
+    side: Optional[dict],
+    *,
+    catalog_ids: Optional[set[str]] = None,
+) -> bool:
+    """True when the voice is treated as RVC Fabric official for consult packs.
+
+    Recognition (any one is enough)::
+
+      1. config.json / pack mark: publisher=rvc_fabric | fabric_official
+      2. installed from online library: source online_pack|online_files
+      3. online_id present (from library install) — metadata always kept
+      4. online_id listed in local/remote catalog (bundled + cache)
+
+    Official → consult pack defaults to *metadata only* (no large pth).
+    """
+    return bool(fabric_match_reasons(side, catalog_ids=catalog_ids))
 
 
 def default_include_model_files(side: Optional[dict]) -> bool:
@@ -129,6 +220,7 @@ def build_model_meta(model_dir: str, side: Optional[dict] = None) -> dict:
     if not file_name and pth:
         file_name = os.path.basename(pth)
     index_path = _resolve_index_path(model_dir, side)
+    reasons = fabric_match_reasons(side)
     return {
         "display_name": str(side.get("name") or os.path.basename(model_dir)),
         "folder_name": os.path.basename(model_dir),
@@ -137,8 +229,12 @@ def build_model_meta(model_dir: str, side: Optional[dict] = None) -> dict:
         "index_path_present": bool(index_path),
         "source": str(side.get("source") or ""),
         "online_id": str(side.get("online_id") or ""),
+        "publisher": str(side.get("publisher") or ""),
+        "fabric_official": has_fabric_publisher_mark(side)
+        or bool(side.get("fabric_official")),
         "tag": str(side.get("tag") or ""),
-        "is_fabric_catalog": is_fabric_model(side),
+        "is_fabric_catalog": bool(reasons),
+        "fabric_match": reasons,
         "model_dir_name": os.path.basename(model_dir),
     }
 
@@ -277,7 +373,9 @@ def build_manifest(
             "index_file": model_meta.get("index_file") or "",
             "source": model_meta.get("source") or "",
             "online_id": model_meta.get("online_id") or "",
+            "publisher": model_meta.get("publisher") or "",
             "is_fabric_catalog": bool(model_meta.get("is_fabric_catalog")),
+            "fabric_match": list(model_meta.get("fabric_match") or []),
             "tag": model_meta.get("tag") or "",
         },
         "include_model_files": bool(include_model_files),

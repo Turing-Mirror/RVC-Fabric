@@ -16,6 +16,8 @@ from launcher import profiles as P
 from launcher.consult_pack import (
     ConsultPackError,
     build_model_meta,
+    fabric_match_reasons,
+    has_fabric_publisher_mark,
     is_fabric_model,
     pack_consult_zip,
     resolve_profile,
@@ -73,6 +75,20 @@ class ConsultPackTests(unittest.TestCase):
         self.assertTrue(is_fabric_model({"online_id": "x"}))
         self.assertTrue(is_fabric_model({"source": "online_pack"}))
         self.assertTrue(is_fabric_model({"source": "online_files"}))
+        self.assertTrue(is_fabric_model({"publisher": "rvc_fabric"}))
+        self.assertTrue(is_fabric_model({"fabric_official": True}))
+        self.assertTrue(
+            is_fabric_model(
+                {"online_id": "kiki"}, catalog_ids={"kiki", "guanguan"}
+            )
+        )
+        self.assertIn(
+            "catalog_id_match",
+            fabric_match_reasons(
+                {"online_id": "kiki"}, catalog_ids={"kiki"}
+            ),
+        )
+        self.assertTrue(has_fabric_publisher_mark({"publisher": "RVC-Fabric"}))
         self.assertFalse(is_fabric_model({"source": "user_import"}))
         self.assertFalse(is_fabric_model({}))
         self.assertFalse(is_fabric_model(None))
@@ -87,6 +103,7 @@ class ConsultPackTests(unittest.TestCase):
             self.assertEqual(meta["online_id"], "hero_v1")
             self.assertEqual(meta["file"], "hero.pth")
             self.assertEqual(meta["index_file"], "hero.index")
+            self.assertTrue(meta.get("fabric_match"))
 
     def test_resolve_profile_active_vs_snapshot(self):
         import tempfile

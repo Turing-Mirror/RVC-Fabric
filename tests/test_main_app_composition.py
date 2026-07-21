@@ -18,6 +18,7 @@ class MainAppCompositionTests(unittest.TestCase):
         for mixin in (
             "OnboardingMixin",
             "HotkeysMixin",
+            "MonitorMixin",
             "HomePageMixin",
             "SettingsPageMixin",
         ):
@@ -32,6 +33,8 @@ class MainAppCompositionTests(unittest.TestCase):
             "_build_hotkeys_settings_section",
             "show_hotkeys_help",
             "_toggle_monitor",
+            "_refresh_monitor_hint",
+            "_prefer_monitor_device",
             "_page_home",
             "_page_settings",
         ):

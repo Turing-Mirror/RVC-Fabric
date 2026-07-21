@@ -721,18 +721,20 @@ class SoftActionCard(tk.Frame):
             anchor="w",
         )
         self._lbl.pack(anchor="w", pady=(8, 6))
-        self._sub = tk.Label(
-            col,
-            text=subtitle,
-            font=mono_font(8),
-            bg=TM_SURFACE,
-            fg=TM_META,
-            wraplength=130,
-            justify="left",
-            anchor="w",
-        )
-        self._sub.pack(anchor="w")
-        for w in (self, col, self._lbl, self._sub):
+        self._sub = None
+        if subtitle:
+            self._sub = tk.Label(
+                col,
+                text=subtitle,
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                wraplength=130,
+                justify="left",
+                anchor="w",
+            )
+            self._sub.pack(anchor="w")
+        for w in (self, col, self._lbl) + ((self._sub,) if self._sub else ()):
             w.bind("<Button-1>", self._click)
             w.bind("<Enter>", self._enter)
             w.bind("<Leave>", self._leave)
@@ -1042,14 +1044,19 @@ class PageHeader(tk.Frame):
         **kw,
     ):
         super().__init__(master, bg=bg, **kw)
-        tk.Label(
-            self,
-            text=tracked(eyebrow, gap="  ") if all(ord(c) < 128 for c in eyebrow) else eyebrow,
-            font=mono_font(8),
-            bg=bg,
-            fg=TM_META,
-            anchor="w",
-        ).pack(anchor="w")
+        if eyebrow:
+            tk.Label(
+                self,
+                text=(
+                    tracked(eyebrow, gap="  ")
+                    if all(ord(c) < 128 for c in eyebrow)
+                    else eyebrow
+                ),
+                font=mono_font(8),
+                bg=bg,
+                fg=TM_META,
+                anchor="w",
+            ).pack(anchor="w")
         tk.Label(
             self,
             text=title,
@@ -1057,7 +1064,7 @@ class PageHeader(tk.Frame):
             bg=bg,
             fg=TM_INK,
             anchor="w",
-        ).pack(anchor="w", pady=(4, 0))
+        ).pack(anchor="w", pady=(4, 0) if eyebrow else (0, 0))
         if lead:
             tk.Label(
                 self,

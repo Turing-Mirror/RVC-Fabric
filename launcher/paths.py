@@ -65,13 +65,20 @@ HUBERT = ROOT / "assets" / "hubert" / "hubert_base.pt"
 RMVPE = ROOT / "assets" / "rmvpe" / "rmvpe.pt"
 
 CONFIG_PATH = USER_DATA / "app_config.json"
-SHORTCUT_NAME = "Turing Mirror 变声器.lnk"
+SHORTCUT_NAME = "RVC Fabric.lnk"
 APP_TITLE = APP_PRODUCT_NAME
 APP_BRAND = APP_PRODUCT_TAGLINE
 
 # Canonical release exe names (ASCII-safe + Chinese brand)
 EXE_BOOTSTRAP_NAMES = ("启动器.exe", "TM_Setup.exe", "bootstrap.exe")
-EXE_APP_NAMES = ("变声器.exe", "TM_Voice.exe", "RVC变声器.exe", "main_app.exe")
+EXE_APP_NAMES = (
+    "RVC Fabric.exe",
+    "RVC_Fabric.exe",
+    "变声器.exe",
+    "TM_Voice.exe",
+    "RVC变声器.exe",
+    "main_app.exe",
+)
 
 
 def is_frozen() -> bool:

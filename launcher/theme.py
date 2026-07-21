@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Turing Mirror shell design tokens.
+"""RVC Fabric shell design tokens.
 
 Typography & layout methods from LyricsKara (tracked wordmark, mono meta,
 stage hierarchy) and Schale-Library (segment nav, cover-first cards, panels).
@@ -93,10 +93,11 @@ DEFAULT_WIN_H: Final[int] = 900
 MIN_WIN_W: Final[int] = 1100
 MIN_WIN_H: Final[int] = 740
 
-APP_PRODUCT_NAME: Final[str] = "Turing Mirror 变声器"
-APP_PRODUCT_TAGLINE: Final[str] = "TURING MIRROR · VOICE"
-APP_WORDMARK: Final[str] = "TURING MIRROR"
-APP_ROUTE: Final[str] = "voice.local"
+APP_PRODUCT_NAME: Final[str] = "RVC Fabric"
+APP_PRODUCT_TAGLINE: Final[str] = "就绪"
+APP_WORDMARK: Final[str] = "RVC Fabric"
+# Deprecated decorative route string (kept empty; UI no longer shows it)
+APP_ROUTE: Final[str] = ""
 
 
 def _family(families: Sequence[str]) -> str:

@@ -24,7 +24,6 @@ from launcher.theme import (
     mono_font,
     sans_font,
     title_font,
-    tracked,
 )
 from launcher.ui import GhostButton, ModelCoverCard, SectionCard
 
@@ -44,14 +43,6 @@ class HomePageMixin:
 
         head_row = tk.Frame(stage_inner, bg=TM_STAGE)
         head_row.grid(row=0, column=0, sticky="ew")
-        tk.Label(
-            head_row,
-            text=tracked("HOME  ·  STAGE", gap="  "),
-            font=mono_font(8),
-            bg=TM_STAGE,
-            fg=TM_META,
-            anchor="w",
-        ).pack(side="left")
         self.home_index_lbl = tk.Label(
             head_row,
             text="— / —",

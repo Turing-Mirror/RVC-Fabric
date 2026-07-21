@@ -137,17 +137,8 @@ class SettingsPageMixin:
 
         def card(parent, title: str) -> tk.Frame:
             # Map Chinese section titles to mono eyebrows (library catalog feel)
-            brows = {
-                "设备与音频": "DEVICES",
-                "变声参数（运行中可热更新）": "VOICE",
-                "变声参数（运行中可热更新 · 按音色保存）": "VOICE",
-                "性能设置（改后需重新「开启变声」）": "PERFORMANCE",
-                "声音效果（变声后 · 可选）": "FX CHAIN",
-                "快捷键": "HOTKEYS",
-            }
-            eyebrow = brows.get(title, "SECTION")
             outer = SectionCard(
-                parent, title=title, eyebrow=eyebrow, accent_rail=True, pad=16
+                parent, title=title, eyebrow="", accent_rail=True, pad=16
             )
             outer.pack(fill="x", expand=False, padx=GUTTER, pady=10)
             return outer.body

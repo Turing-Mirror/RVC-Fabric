@@ -18,7 +18,6 @@ from launcher.theme import (
     TM_BG,
     TM_META,
     mono_font,
-    tracked,
 )
 from launcher.ui import GhostButton, PageHeader
 from launcher.version import APP_VERSION
@@ -69,9 +68,9 @@ class MorePageMixin:
 
         PageHeader(
             inner,
-            eyebrow="MORE",
+            eyebrow="",
             title="其他",
-            lead="高级入口与紧急操作。日常开黑一般只需要首页与设置。",
+            lead="高级入口与紧急操作。",
         ).pack(anchor="w", pady=(0, 16))
         box = tk.Frame(inner, bg=TM_BG)
         box.pack(anchor="w", fill="x")
@@ -97,8 +96,7 @@ class MorePageMixin:
         # Footer after buttons (pack) — never place() over the list
         tk.Label(
             inner,
-            text=tracked("TURING MIRROR  ·  RVC ENGINE", gap="  ")
-            + f"  ·  v{APP_VERSION}",
+            text=f"v{APP_VERSION}",
             bg=TM_BG,
             fg=TM_META,
             font=mono_font(8),

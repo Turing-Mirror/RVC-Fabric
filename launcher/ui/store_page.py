@@ -72,10 +72,9 @@ class StorePage:
         head.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(16, 8))
         PageHeader(
             head,
-            eyebrow="UPDATE  ·  LIBRARY",
+            eyebrow="",
             title="在线更新与音色库",
-            lead="软件内：GUI 补丁 + 音色下载（GitHub / SharePoint 直链）。"
-            "完整包请走 SharePoint 或 QQ 群。",
+            lead="软件内可下载 GUI 补丁与音色；完整包请通过分享链接或社群获取。",
         ).pack(anchor="w")
 
         # Scrollable body
@@ -130,7 +129,7 @@ class StorePage:
 
         # --- GUI update ---
         sec_gui = SectionCard(
-            self._inner, title="软件本体（GUI）", eyebrow="GUI PATCH", pad=16
+            self._inner, title="软件本体（GUI）", eyebrow="", pad=16
         )
         sec_gui.pack(fill="x", padx=GUTTER, pady=8)
         self.lbl_ver = tk.Label(
@@ -169,7 +168,7 @@ class StorePage:
 
         # --- Manifest URL ---
         sec_url = SectionCard(
-            self._inner, title="清单地址", eyebrow="MANIFEST", pad=16
+            self._inner, title="清单地址", eyebrow="", pad=16
         )
         sec_url.pack(fill="x", padx=GUTTER, pady=8)
         tk.Label(
@@ -202,7 +201,7 @@ class StorePage:
 
         # --- Voices ---
         sec_v = SectionCard(
-            self._inner, title="在线音色库", eyebrow="VOICES", pad=16
+            self._inner, title="在线音色库", eyebrow="", pad=16
         )
         sec_v.pack(fill="x", padx=GUTTER, pady=8)
         self.voices_host = tk.Frame(sec_v.body, bg=TM_SURFACE)
@@ -219,7 +218,7 @@ class StorePage:
 
         # --- Full package / community ---
         sec_c = SectionCard(
-            self._inner, title="完整包与社群", eyebrow="FULL PACKAGE", pad=16
+            self._inner, title="完整包与社群", eyebrow="", pad=16
         )
         sec_c.pack(fill="x", padx=GUTTER, pady=8)
         self.lbl_community = tk.Label(
@@ -560,7 +559,7 @@ class StorePage:
                         "完成",
                         f"增量 GUI 已应用（{len(written)} 个文件）。\n"
                         f"类型：{result.get('package_type')}\n"
-                        "请关闭并重新打开变声器。",
+                        "请关闭并重新打开软件。",
                     )
 
             self.root.after(0, done)

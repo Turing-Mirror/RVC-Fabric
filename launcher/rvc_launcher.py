@@ -81,7 +81,7 @@ def count_voice_models() -> int:
 class LauncherApp:
     def __init__(self) -> None:
         self.root = tk.Tk()
-        self.root.title("RVC 变声器 · 一键启动（整合包风格）")
+        self.root.title("RVC Fabric")
         self.root.geometry("720x560")
         self.root.minsize(640, 480)
         self.root.configure(bg=BG)

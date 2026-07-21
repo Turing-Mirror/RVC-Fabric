@@ -234,7 +234,7 @@ def create_desktop_shortcut(
     vbs = ROOT / "launcher" / "run_hidden.vbs"
 
     if sys.platform != "win32":
-        sh = desk / "TuringMirror-Voice.sh"
+        sh = desk / "RVC-Fabric.sh"
         sh.write_text(
             f"#!/bin/sh\ncd '{ROOT}'\n'{pyw}' '{script}'\n",
             encoding="utf-8",
@@ -268,7 +268,7 @@ $sc.TargetPath = '{_esc(target_path)}'
 $sc.Arguments = '{_esc(arguments)}'
 $sc.WorkingDirectory = '{_esc(workdir)}'
 $sc.WindowStyle = 1
-$sc.Description = 'Turing Mirror 变声器'
+$sc.Description = 'RVC Fabric'
 $sc.IconLocation = '{_esc(icon_path)},0'
 $sc.Save()
 """
@@ -287,7 +287,7 @@ $sc.Save()
     if not lnk.is_file():
         if app_exe is not None:
             # copy a tiny launcher bat as last resort
-            bat = desk / "TuringMirror-Voice.bat"
+            bat = desk / "RVC-Fabric.bat"
             bat.write_text(
                 f'@echo off\ncd /d "{ROOT}"\nstart "" "{app_exe}"\n',
                 encoding="gbk",
@@ -295,12 +295,12 @@ $sc.Save()
             )
             return bat
         if vbs.is_file():
-            dest = desk / "TuringMirror-Voice.vbs"
+            dest = desk / "RVC-Fabric.vbs"
             dest.write_text(
                 vbs.read_text(encoding="utf-8", errors="replace"), encoding="utf-8"
             )
             return dest
-        bat = desk / "TuringMirror-Voice.bat"
+        bat = desk / "RVC-Fabric.bat"
         bat.write_text(
             f'@echo off\ncd /d "{ROOT}"\nstart "" "{pyw}" "{script}"\n',
             encoding="gbk",

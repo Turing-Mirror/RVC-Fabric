@@ -14,14 +14,11 @@ from launcher.theme import (
     GUTTER,
     TM_BG,
     TM_INK,
-    TM_META,
     TM_SURFACE,
-    mono_font,
     sans_font,
-    tracked,
 )
-from launcher.ui.help_content import HELP_SECTIONS, help_plain_text, iter_md_segments
-from launcher.ui.widgets import GhostButton, PageHeader, SectionCard
+from launcher.ui.help_content import HELP_SECTIONS, iter_md_segments
+from launcher.ui.widgets import PageHeader, SectionCard
 
 if TYPE_CHECKING:
     from launcher.main_app import MainApp
@@ -61,17 +58,10 @@ class HelpPage:
         head.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(16, 8))
         PageHeader(
             head,
-            eyebrow="GUIDE",
+            eyebrow="",
             title="使用说明",
-            lead="按本软件实际按钮与页面编写。设置页每一项旁也有说明，可对照阅读。",
+            lead="",
         ).pack(side="left", fill="x", expand=True)
-        GhostButton(
-            head,
-            "复制全文",
-            command=self._copy_all,
-            padx=12,
-            pady=6,
-        ).pack(side="right", padx=(12, 0), pady=(28, 0))
 
         host = tk.Frame(fr, bg=TM_BG)
         host.grid(row=1, column=0, sticky="nsew")
@@ -92,7 +82,6 @@ class HelpPage:
         def _width(e):
             if e.width > 1:
                 canvas.itemconfigure(win, width=e.width)
-                # Keep text wrap in sync with viewport
                 tw = max(int(e.width) - 100, 280)
                 for t in self._body_texts:
                     try:
@@ -109,10 +98,9 @@ class HelpPage:
         canvas.bind("<MouseWheel>", _wheel)
         inner.bind("<MouseWheel>", _wheel)
 
-        for i, (eye, title, body) in enumerate(HELP_SECTIONS):
-            sec = SectionCard(inner, title=title, eyebrow=eye, pad=16)
+        for i, (_eye, title, body) in enumerate(HELP_SECTIONS):
+            sec = SectionCard(inner, title=title, eyebrow="", pad=16)
             sec.pack(fill="x", padx=GUTTER, pady=(0, 10) if i else (4, 10))
-            # Text supports mixed bold; Label would show raw **
             txt = tk.Text(
                 sec.body,
                 wrap="word",
@@ -130,7 +118,6 @@ class HelpPage:
             txt.tag_configure("bold", font=sans_font(10, "bold"), foreground=TM_INK)
             _fill_rich_text(txt, body)
             txt.pack(fill="x", anchor="w")
-            # Block editing
             txt.bind("<Key>", lambda e: "break")
             self._body_texts.append(txt)
 
@@ -151,15 +138,6 @@ class HelpPage:
             _autosize()
             txt.bind("<Configure>", lambda _e, t=txt: _autosize(t), add="+")
 
-        foot = tk.Label(
-            inner,
-            text=tracked("TURING MIRROR  ·  VOICE GUIDE", gap="  "),
-            font=mono_font(8),
-            bg=TM_BG,
-            fg=TM_META,
-        )
-        foot.pack(pady=(8, 24))
-
         def _wheel_tree(w):
             w.bind("<MouseWheel>", _wheel)
             for c in w.winfo_children():
@@ -170,19 +148,12 @@ class HelpPage:
         except Exception:
             pass
 
-        # Initial wrap width after layout
-        fr.after(100, lambda: _width(type("E", (), {"width": max(canvas.winfo_width(), 600)})()))
-
-    def _copy_all(self) -> None:
-        text = help_plain_text()  # already stripped of **
-        try:
-            self.app.root.clipboard_clear()
-            self.app.root.clipboard_append(text)
-            from tkinter import messagebox
-
-            messagebox.showinfo("已复制", "使用说明全文已复制到剪贴板（无 Markdown 星号）。")
-        except Exception:
-            pass
+        fr.after(
+            100,
+            lambda: _width(
+                type("E", (), {"width": max(canvas.winfo_width(), 600)})()
+            ),
+        )
 
     def on_show(self) -> None:
         pass

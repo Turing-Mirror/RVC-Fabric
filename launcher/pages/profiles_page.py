@@ -15,8 +15,32 @@ from __future__ import annotations
 
 from typing import Optional
 
+import tkinter as tk
+from tkinter import filedialog, messagebox, simpledialog
+
 from launcher import profiles as P
 from launcher.config_store import save_config
+from launcher.theme import (
+    TM_ACCENT,
+    TM_ACCENT_SOFT,
+    TM_BG,
+    TM_HAIRLINE,
+    TM_INK,
+    TM_META,
+    TM_SURFACE,
+    mono_font,
+    sans_font,
+    title_font,
+    tracked,
+)
+from launcher.ui import GhostButton, PrimaryButton
+
+_SOURCE_LABELS = {
+    "default": "原始",
+    "self": "自建",
+    "import": "导入",
+    "official": "官方优化",
+}
 
 # cfg-key -> the settings/dock Tk var attribute that mirrors it. Reflecting a
 # profile into these vars (then calling _push_hot_params, which re-collects from
@@ -229,3 +253,157 @@ class ProfilesMixin:
         except Exception:
             return False
         return True
+
+    # -- UI panel (M3b) ----------------------------------------------------
+    def _build_profiles_panel(self, parent) -> tk.Frame:
+        """Compact 「配置档案」 strip for the current model (bind/switch/cancel)."""
+        host = tk.Frame(parent, bg=TM_BG)
+        host.pack(fill="x")
+        self._profiles_host = host
+        self.refresh_profiles_ui()
+        return host
+
+    def refresh_profiles_ui(self) -> None:
+        host = getattr(self, "_profiles_host", None)
+        if host is None:
+            return
+        for w in host.winfo_children():
+            w.destroy()
+
+        d = self._current_model_dir()
+        head = tk.Frame(host, bg=TM_BG)
+        head.pack(fill="x", pady=(6, 4))
+        tk.Label(
+            head,
+            text=tracked("PROFILES", gap="  "),
+            font=mono_font(8),
+            bg=TM_BG,
+            fg=TM_META,
+        ).pack(side="left")
+        if not d:
+            tk.Label(
+                host,
+                text="选中一个用户音色(User_Data)后可绑定配置档案。",
+                font=sans_font(10),
+                bg=TM_BG,
+                fg=TM_META,
+                anchor="w",
+            ).pack(anchor="w", pady=(2, 4))
+            return
+
+        active = self._active_profile_id_current()
+        rows = tk.Frame(host, bg=TM_BG)
+        rows.pack(fill="x")
+
+        # default (unbound) row
+        self._profile_row(rows, pid="", name="默认（原始参数）", source="default",
+                          score=None, active=(active == ""))
+        for prof in self._profiles_for_current():
+            self._profile_row(
+                rows,
+                pid=prof["id"],
+                name=prof.get("name") or "未命名",
+                source=str(prof.get("meta", {}).get("source") or "self"),
+                score=prof.get("meta", {}).get("score"),
+                active=(active == prof["id"]),
+            )
+
+        actions = tk.Frame(host, bg=TM_BG)
+        actions.pack(fill="x", pady=(6, 2))
+        GhostButton(actions, "另存当前为档案", command=self._ui_save_current,
+                    padx=12, pady=6).pack(side="left", padx=(0, 6))
+        GhostButton(actions, "导入档案…", command=self._ui_import,
+                    padx=12, pady=6).pack(side="left", padx=6)
+        GhostButton(actions, "导出当前档案…", command=self._ui_export_active,
+                    padx=12, pady=6).pack(side="left", padx=6)
+
+    def _profile_row(self, parent, *, pid, name, source, score, active) -> None:
+        edge = TM_ACCENT if active else TM_HAIRLINE
+        row = tk.Frame(parent, bg=TM_SURFACE, highlightthickness=1,
+                       highlightbackground=edge)
+        row.pack(fill="x", pady=3)
+        inner = tk.Frame(row, bg=TM_SURFACE, padx=12, pady=8)
+        inner.pack(fill="x")
+        left = tk.Frame(inner, bg=TM_SURFACE)
+        left.pack(side="left", fill="x", expand=True)
+        badge = _SOURCE_LABELS.get(source, source)
+        if score is not None:
+            try:
+                badge += f" · 相似度 {float(score):.2f}"
+            except (TypeError, ValueError):
+                pass
+        tk.Label(left, text=badge, font=mono_font(7), bg=TM_SURFACE,
+                 fg=TM_META, anchor="w").pack(anchor="w")
+        tk.Label(left, text=name, font=title_font(11, "bold"), bg=TM_SURFACE,
+                 fg=TM_INK, anchor="w").pack(anchor="w", pady=(1, 0))
+
+        right = tk.Frame(inner, bg=TM_SURFACE)
+        right.pack(side="right")
+        if active:
+            tk.Label(right, text="使用中", font=mono_font(8), bg=TM_ACCENT_SOFT,
+                     fg=TM_ACCENT, padx=10, pady=4).pack(side="right")
+        else:
+            PrimaryButton(right, "使用", command=lambda p=pid: self._ui_switch(p),
+                          padx=12, pady=4).pack(side="right")
+        # default row can't be deleted
+        if pid:
+            GhostButton(right, "删除", command=lambda p=pid: self._ui_delete(p),
+                        padx=10, pady=4).pack(side="right", padx=(0, 6))
+
+    # -- UI action handlers -----------------------------------------------
+    def _ui_switch(self, pid: str) -> None:
+        self._switch_profile(pid)
+        self.refresh_profiles_ui()
+        self._toast_profile("已切换档案" if pid else "已回到默认")
+
+    def _ui_delete(self, pid: str) -> None:
+        if not messagebox.askyesno("删除档案", "确定删除这个配置档案？(不影响模型本身)"):
+            return
+        self._delete_profile(pid)
+        self.refresh_profiles_ui()
+
+    def _ui_save_current(self) -> None:
+        name = simpledialog.askstring("另存为档案", "档案名称：", parent=self.root)
+        if not name:
+            return
+        if self._save_current_as_profile(name) is None:
+            messagebox.showinfo("提示", "请先选中一个用户音色(User_Data)。")
+            return
+        self.refresh_profiles_ui()
+        self._toast_profile("已保存并绑定档案")
+
+    def _ui_import(self) -> None:
+        path = filedialog.askopenfilename(
+            title="导入配置档案", filetypes=[("配置档案", "*.tmvp"), ("全部", "*.*")]
+        )
+        if not path:
+            return
+        if self._import_profile(path) is None:
+            messagebox.showerror("导入失败", "档案无效，或未选中用户音色。")
+            return
+        self.refresh_profiles_ui()
+        self._toast_profile("已导入并应用档案")
+
+    def _ui_export_active(self) -> None:
+        pid = self._active_profile_id_current()
+        if not pid:
+            messagebox.showinfo("提示", "当前是默认(未绑定档案)，无可导出的档案。")
+            return
+        path = filedialog.asksaveasfilename(
+            title="导出配置档案", defaultextension=".tmvp",
+            filetypes=[("配置档案", "*.tmvp")]
+        )
+        if not path:
+            return
+        if self._export_profile(pid, path):
+            self._toast_profile("已导出档案")
+        else:
+            messagebox.showerror("导出失败", "无法写入文件。")
+
+    def _toast_profile(self, text: str) -> None:
+        try:
+            self._set_status_visual(
+                "live" if self.vc_running else "idle", text, ""
+            )
+        except Exception:
+            pass

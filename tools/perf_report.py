@@ -98,6 +98,26 @@ class PerfCollector:
         return path
 
 
+def load_latest(dir_path: str) -> dict | None:
+    """Newest saved perf report as a dict, or None when there are none."""
+    try:
+        files = sorted(
+            n
+            for n in os.listdir(dir_path)
+            if n.startswith("perf_") and n.endswith(".json")
+        )
+    except OSError:
+        return None
+    if not files:
+        return None
+    try:
+        with open(os.path.join(dir_path, files[-1]), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
 def _prune(dir_path: str, keep: int = _KEEP_REPORTS) -> None:
     try:
         names = sorted(

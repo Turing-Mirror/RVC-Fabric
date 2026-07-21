@@ -85,6 +85,7 @@ class MorePageMixin:
         soft("打开首次设置启动器", self.open_bootstrap)
         soft("打开 User_Data", lambda: open_path(USER_DATA))
         soft("打开安装目录", lambda: open_path(ROOT))
+        soft("根据本机表现自动优化性能", self._auto_perf_from_history)
         soft("打开性能信息文件夹（帮助我们优化适配）", self._open_perf_reports)
         soft("生成诊断包（反馈问题时用）", self._collect_diagnostics)
         soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
@@ -138,6 +139,36 @@ class MorePageMixin:
             messagebox.showinfo("完成", f"已清理变声相关进程（约 {n} 个）。")
         except Exception as e:
             messagebox.showerror("失败", str(e))
+
+    def _auto_perf_from_history(self) -> None:
+        """Pick a good performance setting from this machine's own usage record."""
+        from launcher.app_presets import perf_preset_name, recommend_perf_preset
+        from tools.perf_report import load_latest
+
+        rep = load_latest(str(USER_DATA / "perf_reports"))
+        summary = (rep or {}).get("summary") or {}
+        n = int(summary.get("n") or 0)
+        if not rep or n <= 0:
+            messagebox.showinfo(
+                "自动优化性能",
+                "还没有足够的使用记录。\n"
+                "正常变声用一会儿再回来，我会按你电脑的实际表现帮你调好。",
+            )
+            return
+        key, reason = recommend_perf_preset(
+            float(summary.get("p95_ms") or 0),
+            float(summary.get("block_ms") or 0),
+            int(summary.get("over_budget_blocks") or 0),
+            n,
+        )
+        try:
+            self._apply_perf_preset(key)
+        except Exception:
+            pass
+        messagebox.showinfo(
+            "性能已优化",
+            f"{reason}\n已切换到「{perf_preset_name(key)}」，重新开启变声后完全生效。",
+        )
 
     def _open_perf_reports(self) -> None:
         """Perf samples live here; user decides whether to share them."""

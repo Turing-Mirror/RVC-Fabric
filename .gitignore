@@ -69,17 +69,35 @@ ffprobe.*
 *.log
 !docs/**/*.md
 
-# Local reference screenshots (not product assets)
+# Local / issue reference screenshots (not product assets; do not ship)
 /图片*.png
+/error*.png
+/docs/reference-screenshots/
+
 # Reference third-party pack (do not ship in this repo)
 /RVCMAX/
-# Only ignore loose error dumps at repo root (keep docs/reference-screenshots/)
-/error*.png
+
+# One-off local sync backups (multi-GB possible)
+/_sync_backup_*/
 /_local/
 /UserData/
+
+# Runtime-generated user data (beyond app configs already listed)
+/User_Data/perf_reports/
+/User_Data/diagnostics/
+/User_Data/dev_variant.txt
+
 # Dev-only noise
 /scripts/dev/_env_trace.bat
 /scripts/dev/*.log
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.py[cod]
 
 # IDE / OS
 .idea/

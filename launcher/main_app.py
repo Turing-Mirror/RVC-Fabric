@@ -15,7 +15,7 @@ import webbrowser
 from pathlib import Path
 from typing import Optional
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -56,17 +56,13 @@ from launcher.theme import (
     MIN_WIN_W,
     PAD_X,
     TM_ACCENT,
-    TM_ACCENT_INK,
     TM_BG,
     TM_HAIRLINE,
-    TM_HELP,
     TM_INK,
-    TM_INK_MUTED,
     TM_INSET,
     TM_META,
     TM_OK,
     TM_SURFACE,
-    TM_WARN,
     display_font,
     mono_font,
     sans_font,

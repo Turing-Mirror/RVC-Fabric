@@ -89,7 +89,7 @@ class RealtimeControlMixin:
                 st0 = rt_client.wait_worker_ready(timeout_s=100)
                 if str(st0.get("state")) == "error" and st0.get("error"):
                     err = str(st0.get("error"))
-                    self.root.after(0, lambda: self._on_vc_start_failed(err))
+                    self.root.after(0, lambda e=err: self._on_vc_start_failed(e))
                     return
                 try:
                     rt_client.stop_vc_remote(force=False, timeout_s=4.0)
@@ -104,7 +104,7 @@ class RealtimeControlMixin:
                 err = str(st.get("error") or st.get("message") or "启动失败")
             except Exception as e:
                 err = str(e)
-            self.root.after(0, lambda: self._on_vc_start_failed(err))
+            self.root.after(0, lambda e=err: self._on_vc_start_failed(e))
 
         threading.Thread(target=work, daemon=True).start()
 

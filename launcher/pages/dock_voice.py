@@ -7,7 +7,6 @@ owns Tk var sync, per-model persist, and hot push of dock params.
 
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 from typing import Optional
 
@@ -18,9 +17,6 @@ from launcher.theme import (
     TM_ACCENT_INK,
     TM_INK,
     TM_INSET,
-    TM_META,
-    TM_OK,
-    TM_SURFACE,
     TM_SURFACE_HOVER,
 )
 

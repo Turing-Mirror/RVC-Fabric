@@ -102,14 +102,17 @@ print(json.dumps(out, ensure_ascii=False))
 """
     try:
         env = _probe_env(Path(cwd))
-        r = subprocess.run(
-            [str(python_exe), "-c", code],
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=90,
-            env=env,
-        )
+        kw: dict[str, Any] = {
+            "cwd": str(cwd),
+            "capture_output": True,
+            "text": True,
+            "timeout": 90,
+            "env": env,
+        }
+        # Avoid black console flash when probing Runtime\python.exe at app start
+        if sys.platform == "win32":
+            kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+        r = subprocess.run([str(python_exe), "-c", code], **kw)
         line = (r.stdout or "").strip().splitlines()
         if not line:
             return {

@@ -1,6 +1,6 @@
-' Main app (no black console). Double-click this if start_app.bat flashes.
+' Main app — silent launch (no black console). Double-click this, or use start_app.bat.
 Option Explicit
-Dim sh, fso, repo, pyw, py, script, logf, ts, rc
+Dim sh, fso, repo, pyw, py, script, logf, ts, rc, winStyle, cmd
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 repo = fso.GetParentFolderName(WScript.ScriptFullName)
@@ -12,13 +12,20 @@ Set ts = fso.CreateTextFile(logf, True)
 ts.WriteLine "OpenApp.vbs"
 ts.WriteLine "repo=" & repo
 
-pyw = repo & "\Runtime\pythonw.exe"
-py = repo & "\Runtime\python.exe"
-If Not fso.FileExists(pyw) Then pyw = repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\pythonw.exe"
-If Not fso.FileExists(py) Then py = repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\python.exe"
-If Not fso.FileExists(pyw) Then pyw = py
+' Prefer windowed interpreter (no console subsystem)
+pyw = ""
+py = ""
+If fso.FileExists(repo & "\Runtime\pythonw.exe") Then pyw = repo & "\Runtime\pythonw.exe"
+If fso.FileExists(repo & "\Runtime\python.exe") Then py = repo & "\Runtime\python.exe"
+If pyw = "" And fso.FileExists(repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\pythonw.exe") Then
+  pyw = repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\pythonw.exe"
+End If
+If py = "" And fso.FileExists(repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\python.exe") Then
+  py = repo & "\RVCMAX\RVCMAX_Nvidia_xiaoyuan\Runtime\python.exe"
+End If
+If pyw = "" Then pyw = py
 
-If Not fso.FileExists(pyw) Then
+If pyw = "" Or Not fso.FileExists(pyw) Then
   ts.WriteLine "NO_RUNTIME"
   ts.Close
   MsgBox "Runtime\pythonw.exe not found." & vbCrLf & "Run scripts\sync_from_rvcmax.bat first.", 16, "Turing Mirror"
@@ -33,12 +40,25 @@ If Not fso.FileExists(script) Then
   WScript.Quit 1
 End If
 
+' Clean host pollution for embedded Runtime
 sh.Environment("Process")("PYTHONPATH") = repo
+sh.Environment("Process")("TM_VOICE_ROOT") = repo
+On Error Resume Next
+sh.Environment("Process").Remove "PYTHONHOME"
+sh.Environment("Process").Remove "_MEIPASS"
+On Error GoTo 0
+
+' Window style 0 = hidden console; pythonw has no console; python.exe console stays hidden
+' (Tk still creates its own GUI window.)
+winStyle = 0
+cmd = """" & pyw & """ """ & script & """"
 ts.WriteLine "pyw=" & pyw
 ts.WriteLine "script=" & script
+ts.WriteLine "winStyle=" & winStyle
 ts.Close
 
-rc = sh.Run("""" & pyw & """ """ & script & """", 1, False)
+rc = sh.Run(cmd, winStyle, False)
 Set ts = fso.OpenTextFile(logf, 8, True)
 ts.WriteLine "Run rc=" & rc & " (async start)"
 ts.Close
+WScript.Quit 0

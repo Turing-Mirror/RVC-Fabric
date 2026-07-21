@@ -206,9 +206,8 @@ class BootstrapApp:
         tk.Label(
             notice_body,
             text=(
-                "初次启动或「检测与部署」时，若短暂出现黑色命令行窗口，属于正常现象，"
-                "是绿色运行环境在加载，不是报错。窗口会自行关闭；日常用桌面快捷方式 / "
-                "「变声器」一般不会再弹黑框。"
+                "推荐双击桌面快捷方式、OpenApp.vbs / OpenSetup.vbs 或发行包里的 exe 启动，"
+                "可完全避免黑框。检测 GPU / 下载资源也会静默进行，不再弹出命令行窗口。"
             ),
             font=sans_font(9),
             bg=TM_SURFACE,

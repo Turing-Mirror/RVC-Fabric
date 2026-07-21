@@ -29,6 +29,7 @@ from launcher.pages import (
     HomePageMixin,
     ModelsPageMixin,
     MorePageMixin,
+    ProfilesMixin,
     SettingsPageMixin,
 )
 from launcher.voice_history import VoiceParamHistory
@@ -113,7 +114,9 @@ from launcher.win_util import (
 COMMUNITY_LINK_URL = "https://www.bilibili.com/"  # ← 改成 B 站视频链接
 
 
-class MainApp(HomePageMixin, ModelsPageMixin, MorePageMixin, SettingsPageMixin):
+class MainApp(
+    HomePageMixin, ModelsPageMixin, MorePageMixin, ProfilesMixin, SettingsPageMixin
+):
     def __init__(self) -> None:
         ensure_dirs()
         self.cfg = load_config()
@@ -600,8 +603,13 @@ class MainApp(HomePageMixin, ModelsPageMixin, MorePageMixin, SettingsPageMixin):
         self.cfg["last_model"] = m["file"]
         self.cfg["last_model_name"] = m["name"]
         self.cfg["last_model_path"] = m.get("path") or ""
-        # Load this voice's pitch/formant/… then sync engine config
+        # Load this voice's pitch/formant/… then overlay its active profile
+        # (voice + FX + perf). Models without a bound profile are untouched.
         self._apply_model_voice_params(m, push_remote=False)
+        try:
+            self._apply_active_profile()
+        except Exception:
+            pass
         self._voice_hist.clear()
         save_config(self.cfg)
         self._sync_model_to_realtime_gui(m)

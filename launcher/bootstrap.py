@@ -37,7 +37,6 @@ from launcher.theme import (
     TM_INK,
     TM_INK_MUTED,
     TM_INSET,
-    TM_META,
     TM_OK,
     TM_SURFACE,
     TM_SURFACE_HOVER,
@@ -400,7 +399,8 @@ class BootstrapApp:
                             self._run_download("all_advanced")
                             return
                         self._deploy_busy = False
-                        self._set_status("环境正常，可打开主界面。")                        return
+                        self._set_status("环境正常，可打开主界面。")
+                        return
 
                     messagebox.showinfo("环境检测", report)
                     self._set_status("环境正常，可打开主界面。")

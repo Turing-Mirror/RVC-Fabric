@@ -69,11 +69,23 @@ ffprobe.*
 *.log
 !docs/**/*.md
 
+# Dev-only scratch docs (session handoff / plans / changelogs / analysis — not product docs)
+# 产品文档（CONTRIBUTING / UI-AESTHETIC-DESIGN / 仓库内容说明 / 发布* / 发行包* /
+# 在线更新与音色库 / *使用说明 / 项目结构 / B站与官方整合包形态 / 各语言翻译 / legal）
+# 仍然保留在 git 中；此处仅排除开发过程生成的临时分析/计划/会话日志。
+/docs/CONTEXT_HANDOFF.md
+/docs/PERF_NOTES.md
+/docs/PLAN_*.md
+/docs/RVC_ANALYSIS.md
+/docs/SESSION_CHANGELOG_*.md
+/docs/LAUNCHER_DECOMPOSITION.md
+
 # Local reference screenshots (not product assets)
 /图片*.png
 # Reference third-party pack (do not ship in this repo)
 /RVCMAX/
-# Only ignore loose error dumps at repo root (keep docs/reference-screenshots/)
+# Reference screenshots used during dev (error/issue captures) — not shipped
+/docs/reference-screenshots/
 /error*.png
 /_local/
 /UserData/

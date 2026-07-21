@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0.."
-title Build Turing Mirror Voice RELEASE
+title Build RVC-Fabric RELEASE
 
 echo ============================================
 echo  一键打包发行版 - Turing Mirror 变声器
-echo  输出: dist\TuringMirror_Voice\
+echo  输出: dist\RVC-Fabric\
 echo  含: 启动器.exe 变声器.exe Runtime 模型 VBCABLE
 echo ============================================
 echo.
@@ -40,7 +40,7 @@ python scripts\build_release.py %ARGS%
 set ERR=%errorlevel%
 echo.
 if %ERR%==0 (
-  echo 完成。发给用户: dist\TuringMirror_Voice\  整个文件夹（可再压 7z）
+  echo 完成。发给用户: dist\RVC-Fabric\  整个文件夹（可再压 7z）
   echo 用户只双击 启动器.exe ，再装虚拟声卡即可。
 ) else (
   echo 打包失败 code=%ERR%

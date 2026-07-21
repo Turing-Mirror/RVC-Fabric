@@ -4,7 +4,7 @@ One-click release packer for Turing Mirror 变声器.
 
 Builds a RVCMAX-style tree::
 
-    dist/TuringMirror_Voice/
+    dist/RVC-Fabric/
       启动器.exe          first-run helper (exe)
       变声器.exe          daily app (exe)
       Runtime/            embedded Python (required)
@@ -35,7 +35,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = REPO / "dist" / "TuringMirror_Voice"
+DEFAULT_OUT = REPO / "dist" / "RVC-Fabric"
 REF = REPO / "RVCMAX" / "RVCMAX_Nvidia_xiaoyuan"
 RVCMAX_ROOT = REPO / "RVCMAX"
 
@@ -44,7 +44,7 @@ RVCMAX_ROOT = REPO / "RVCMAX"
 # exclude_keys = directory names that must NOT match (nvidia vs nvidia50).
 VARIANTS: dict[str, dict] = {
     "nvidia": {
-        "out_name": "TuringMirror_Voice_Nvidia",
+        "out_name": "RVC-Fabric_Nvidia",
         "accel_default": "cuda",
         "label": "NVIDIA CUDA",
         "name_keys": ("nvidia", "n卡", "cuda"),
@@ -52,7 +52,7 @@ VARIANTS: dict[str, dict] = {
         "exclude_keys": ("50", "5xxx", "50x0", "blackwell"),
     },
     "amd": {
-        "out_name": "TuringMirror_Voice_AMD",
+        "out_name": "RVC-Fabric_AMD",
         "accel_default": "dml",
         "label": "AMD/Intel DirectML",
         "name_keys": ("amd", "dml", "a卡", "intel", "directml"),
@@ -60,7 +60,7 @@ VARIANTS: dict[str, dict] = {
         "exclude_keys": (),
     },
     "nvidia50": {
-        "out_name": "TuringMirror_Voice_Nvidia50",
+        "out_name": "RVC-Fabric_Nvidia50",
         "accel_default": "cuda",
         "label": "NVIDIA 50-series CUDA",
         "name_keys": ("50", "5xxx", "rtx50", "50x0", "blackwell"),
@@ -522,7 +522,7 @@ def default_vbcable(variant: str = "nvidia") -> Path | None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Build Turing Mirror Voice release pack (official multi-pack ready)"
+        description="Build RVC-Fabric release pack (official multi-pack ready)"
     )
     p.add_argument(
         "--variant",

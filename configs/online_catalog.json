@@ -1,48 +1,69 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "kind": "zip",
       "url": "",
-      "sha256": "",
-      "min_app_version": "",
-      "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。全量含 Runtime 请用 community.sharepoint_full / QQ，package_type=full_package，软件内不会合并安装。"
+      "sha256": "dc2c8e5c8a527872707bdf13aa9f693597095d44f47bc119c5959e2b7ba92dcc",
+      "min_app_version": "1.0.0",
+      "notes": "测试自动更新：版本号 1.1.0 -> 1.2.0；launcher/ 与 configs/online_catalog.json 同步。"
     }
   },
   "community": {
     "qq_group": "",
     "qq_link": "",
     "sharepoint_full": "",
-    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅：gui_patch 增量 + 音色包。"
+    "note": "全量包（含 Runtime / 7.2GB / nvidia 变体）请从 CNB 下载。软件内仅：gui_patch 增量 + 音色包。"
   },
   "manifest_urls": [],
   "voices": [
     {
-      "id": "example-voice-pack",
-      "name": "示例音色包（zip）",
-      "tag": "音色",
+      "id": "kiki",
+      "name": "kikiV1",
+      "tag": "少女音",
       "version": "1",
       "package_type": "voice_pack",
       "pack_url": "",
-      "sha256": "",
-      "size_bytes": 0,
-      "description": "推荐：zip 内含 *.pth + 可选 index/cover/config.json/tm_package.json。用 scripts/pack_voice_pack.py 制作后填写 pack_url。"
+      "sha256": "e939138900fa2fcf66f1b1bf82f32656438262a0096b7122d749f8bbe9ce32a7",
+      "size_bytes": 51020932,
+      "description": "kikiV1 推理模型（.pth + cover）。安装到 User_Data/models/kiki/。"
     },
     {
-      "id": "example-voice-files",
-      "name": "示例音色（多文件直链）",
-      "tag": "音色",
+      "id": "keruan",
+      "name": "keruanV1",
+      "tag": "少女音",
       "version": "1",
-      "package_type": "voice_files",
-      "pth_url": "",
-      "index_url": "",
-      "cover_url": "",
-      "sha256": "",
-      "description": "备选：分别填 pth_url / index_url / cover_url，无需 zip。"
+      "package_type": "voice_pack",
+      "pack_url": "",
+      "sha256": "b355d60f42128e9e799dffa08b24010a16451819e8899c85e94c3768f9ddc3fc",
+      "size_bytes": 51012412,
+      "description": "keruanV1 推理模型（.pth + cover）。安装到 User_Data/models/keruan/。"
+    },
+    {
+      "id": "guanguan",
+      "name": "guanguanV1",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "pack_url": "",
+      "sha256": "79e2bc044774f47665a84594291a0967c6a4c638238299d370806d4d6c8a1630",
+      "size_bytes": 51006309,
+      "description": "guanguanV1 推理模型（.pth + cover）。安装到 User_Data/models/guanguan/。"
+    },
+    {
+      "id": "youzhanv2-xi",
+      "name": "youzhanv2-xi",
+      "tag": "少年音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "pack_url": "",
+      "sha256": "e06bd0ffae494b6033a241e2ed0a7a3122def169b9761b4ff1336b452de362aa",
+      "size_bytes": 53357320,
+      "description": "youzhanv2-xi 推理模型（.pth + cover）。安装到 User_Data/models/youzhanv2-xi/。"
     }
   ]
 }

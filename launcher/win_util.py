@@ -81,12 +81,15 @@ def run_gui_process(
         kw["stderr"] = subprocess.DEVNULL
     if sys.platform == "win32":
         flags = CREATE_NEW_PROCESS_GROUP
-        # Hide console only when requested (headless worker via python.exe).
-        # Do not use CREATE_NO_WINDOW for FreeSimpleGUI/tk windows.
-        exe0 = str(args[0]).lower() if args else ""
-        if hide_console or exe0.endswith("python.exe"):
-            if "pythonw" not in exe0:
-                flags |= CREATE_NO_WINDOW
+        exe0 = str(args[0]).lower().replace("/", "\\") if args else ""
+        is_pythonw = exe0.endswith("pythonw.exe") or exe0.endswith("\\pythonw")
+        # pythonw is a windowed subsystem binary — no console to hide.
+        # For python.exe (console subsystem), CREATE_NO_WINDOW kills the black box
+        # while Tk/FreeSimpleGUI still create their own top-level windows.
+        if hide_console and not is_pythonw:
+            flags |= CREATE_NO_WINDOW
+        elif (not is_pythonw) and exe0.endswith("python.exe"):
+            flags |= CREATE_NO_WINDOW
         kw["creationflags"] = flags
     proc = subprocess.Popen(args, **kw)
     # Popen keeps the file handle open for the child; do not close log_f here
@@ -264,7 +267,7 @@ $sc = $ws.CreateShortcut('{_esc(str(lnk))}')
 $sc.TargetPath = '{_esc(target_path)}'
 $sc.Arguments = '{_esc(arguments)}'
 $sc.WorkingDirectory = '{_esc(workdir)}'
-$sc.WindowStyle = 7
+$sc.WindowStyle = 1
 $sc.Description = 'Turing Mirror 变声器'
 $sc.IconLocation = '{_esc(icon_path)},0'
 $sc.Save()
@@ -308,23 +311,26 @@ $sc.Save()
 
 
 def start_main_app() -> subprocess.Popen:
+    """Launch daily GUI without a black console (pythonw / windowed exe)."""
     env = _env_with_root()
     app_exe = find_release_exe("app")
     if app_exe is not None:
-        return run_no_console([str(app_exe)], env=env)
+        return run_gui_process([str(app_exe)], env=env, hide_console=True)
     pyw = find_python(prefer_windowed=True)
     script = ROOT / "launcher" / "main_app.py"
-    return run_no_console([pyw, str(script)], env=env)
+    # pythonw: no console; if only python.exe is available, hide its console
+    return run_gui_process([pyw, str(script)], env=env, hide_console=True)
 
 
 def start_bootstrap() -> subprocess.Popen:
+    """Launch first-run helper without a black console."""
     env = _env_with_root()
     boot = find_release_exe("bootstrap")
     if boot is not None:
-        return run_no_console([str(boot)], env=env)
+        return run_gui_process([str(boot)], env=env, hide_console=True)
     pyw = find_python(prefer_windowed=True)
     script = ROOT / "launcher" / "bootstrap.py"
-    return run_no_console([pyw, str(script)], env=env)
+    return run_gui_process([pyw, str(script)], env=env, hide_console=True)
 
 
 def start_webui(port: int = 7897) -> subprocess.Popen:
@@ -336,6 +342,7 @@ def start_webui(port: int = 7897) -> subprocess.Popen:
     # Official AMD/Intel: infer-web.py --dml
     if os.environ.get("TM_USE_DML", "").strip().lower() in ("1", "true", "yes"):
         args.append("--dml")
+    # Headless server — always hide console
     return run_no_console(args, env=env)
 
 

@@ -52,8 +52,9 @@ ts.WriteLine "pyw=" & pyw
 ts.WriteLine "script=" & script
 ts.Close
 
-' Window style 1 = normal; False = do not wait
-rc = sh.Run("""" & pyw & """ """ & script & """", 1, False)
+' Style 0 = hide console if Runtime fell back to python.exe; pythonw has no console.
+' FreeSimpleGUI still creates its own window.
+rc = sh.Run("""" & pyw & """ """ & script & """", 0, False)
 Set ts = fso.OpenTextFile(logf, 8, True)
 ts.WriteLine "Run rc=" & rc & " (async)"
 ts.Close

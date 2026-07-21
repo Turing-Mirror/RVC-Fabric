@@ -1254,10 +1254,35 @@ class SettingsPageMixin:
             pass
 
     def _bootstrap_devices_async(self) -> None:
+        """Fill device lists + prewarm worker (引擎待命). No Runtime\\python.exe probe."""
+
         def work():
             try:
+                from launcher.audio_devices import list_audio_devices_for_ui
+
+                host = ""
+                try:
+                    host = str(self.var_hostapi.get() or "")
+                except Exception:
+                    host = str(self.cfg.get("sg_hostapi") or "")
+                # Fast UI fill (no worker)
+                st_local = list_audio_devices_for_ui(host or None)
+                if st_local.get("input_devices") is not None:
+                    self.root.after(
+                        0, lambda s=st_local: self._apply_device_status(s)
+                    )
+                # Engine standby prewarm (pythonw worker only)
                 st = rt_client.ensure_worker_and_devices(timeout_s=100)
-                self.root.after(0, lambda: self._apply_device_status(st))
+                if st.get("input_devices") is not None:
+                    self.root.after(0, lambda s=st: self._apply_device_status(s))
+                elif str(st.get("state")) == "error" and st.get("error"):
+                    err = str(st.get("error") or "")[:48]
+                    self.root.after(
+                        0,
+                        lambda e=err: self.lbl_online.configure(
+                            text=f"引擎预热: {e}", fg=TM_META
+                        ),
+                    )
             except Exception as e:
                 self.root.after(
                     0,
@@ -1267,7 +1292,9 @@ class SettingsPageMixin:
                 )
 
         threading.Thread(target=work, daemon=True).start()
-        self._set_status_visual("busy", "正在连接变声引擎…", "首次加载可能需要数十秒")
+        self._set_status_visual(
+            "busy", "正在连接变声引擎…", "预热中，首次变声会更快"
+        )
 
     def _apply_perf_preset(self, key: str) -> None:
         """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""

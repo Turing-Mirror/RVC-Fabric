@@ -101,6 +101,21 @@ if __name__ == "__main__":
     from multiprocessing.shared_memory import SharedMemory
     from queue import Empty
 
+    # Multiprocessing children must use pythonw (no Runtime\\python.exe flash)
+    try:
+        from launcher.win_util import force_windowed_multiprocessing
+
+        force_windowed_multiprocessing()
+    except Exception:
+        try:
+            from pathlib import Path as _Path
+
+            _pyw = _Path(sys.executable).with_name("pythonw.exe")
+            if _pyw.is_file():
+                multiprocessing.set_executable(str(_pyw))
+        except Exception:
+            pass
+
     import librosa
     from tools.torchgate import TorchGate
     import numpy as np
@@ -130,10 +145,26 @@ if __name__ == "__main__":
     inp_q = Queue()
     opt_q = Queue()
     n_cpu = min(cpu_count(), 8)
-    for _ in range(n_cpu):
-        p = Harvest(inp_q, opt_q)
-        p.daemon = True
-        p.start()
+    # Harvest only if user config uses harvest (see ensure_harvest_workers)
+    _harvest_workers: list = []
+
+    def ensure_harvest_workers(n: int | None = None) -> None:
+        """Start harvest pool once; default f0 fcpe/rmvpe never needs this."""
+        global _harvest_workers
+        if _harvest_workers:
+            return
+        try:
+            from launcher.win_util import force_windowed_multiprocessing
+
+            force_windowed_multiprocessing()
+        except Exception:
+            pass
+        count = max(1, int(n or n_cpu))
+        for _ in range(count):
+            p = Harvest(inp_q, opt_q)
+            p.daemon = True
+            p.start()
+            _harvest_workers.append(p)
 
     class GUIConfig:
         def __init__(self) -> None:
@@ -1004,6 +1035,11 @@ if __name__ == "__main__":
 
         def start_vc(self):
             torch.cuda.empty_cache()
+            if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
+                try:
+                    ensure_harvest_workers(self.gui_config.n_cpu)
+                except Exception:
+                    pass
             self.rvc = rvc_for_realtime.RVC(
                 self.gui_config.pitch,
                 self.gui_config.formant,
@@ -2202,7 +2238,13 @@ if __name__ == "__main__":
             if "threhold" in payload and payload["threhold"] is not None:
                 self.gui_config.threhold = payload["threhold"]
             if "f0method" in payload and payload["f0method"]:
-                self.gui_config.f0method = str(payload["f0method"])
+                method = str(payload["f0method"] or "fcpe")
+                self.gui_config.f0method = method
+                if method == "harvest":
+                    try:
+                        ensure_harvest_workers(self.gui_config.n_cpu)
+                    except Exception:
+                        pass
             if "I_noise_reduce" in payload:
                 self.gui_config.I_noise_reduce = bool(payload["I_noise_reduce"])
             if "O_noise_reduce" in payload:
@@ -2406,6 +2448,17 @@ if __name__ == "__main__":
             # Initial status + devices (load may call update_devices → stop is fine)
             try:
                 data = self.load()
+                # Prewarm Harvest only when user config actually uses harvest
+                try:
+                    f0m = str(data.get("f0method") or "fcpe")
+                    self.gui_config.f0method = f0m
+                    if f0m == "harvest":
+                        ensure_harvest_workers(
+                            int(data.get("n_cpu") or self.gui_config.n_cpu or 4)
+                        )
+                        printt("harvest workers prewarmed (f0method=harvest)")
+                except Exception:
+                    traceback.print_exc()
                 self.gui_config.sg_hostapi = data.get("sg_hostapi") or (
                     self.hostapis[0] if self.hostapis else ""
                 )

@@ -30,6 +30,47 @@ DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 
+def hidden_run_kwargs() -> dict:
+    """Hide console for python.exe / powershell children (CREATE_NO_WINDOW + SW_HIDE)."""
+    if sys.platform != "win32":
+        return {}
+    kw: dict = {"creationflags": CREATE_NO_WINDOW}
+    try:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        kw["startupinfo"] = si
+    except Exception:
+        pass
+    return kw
+
+
+def force_windowed_multiprocessing() -> Optional[str]:
+    """Force multiprocessing children onto pythonw.exe (no CUI flash)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import multiprocessing as mp
+    except Exception:
+        return None
+    try:
+        exe = Path(sys.executable).resolve()
+    except Exception:
+        return None
+    for cand in (
+        exe.with_name("pythonw.exe"),
+        Path(ROOT) / "Runtime" / "pythonw.exe",
+        Path(ROOT) / "runtime" / "pythonw.exe",
+    ):
+        if cand.is_file():
+            try:
+                mp.set_executable(str(cand))
+                return str(cand)
+            except Exception:
+                continue
+    return None
+
+
 def run_no_console(
     args: list[str],
     cwd: Path | None = None,
@@ -38,12 +79,11 @@ def run_no_console(
     kw: dict = {
         "cwd": str(cwd or ROOT),
         "env": env or os.environ.copy(),
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
     }
-    if sys.platform == "win32":
-        kw["creationflags"] = CREATE_NO_WINDOW
-        kw["stdin"] = subprocess.DEVNULL
-        kw["stdout"] = subprocess.DEVNULL
-        kw["stderr"] = subprocess.DEVNULL
+    kw.update(hidden_run_kwargs())
     return subprocess.Popen(args, **kw)
 
 
@@ -83,13 +123,15 @@ def run_gui_process(
         flags = CREATE_NEW_PROCESS_GROUP
         exe0 = str(args[0]).lower().replace("/", "\\") if args else ""
         is_pythonw = exe0.endswith("pythonw.exe") or exe0.endswith("\\pythonw")
-        # pythonw is a windowed subsystem binary — no console to hide.
-        # For python.exe (console subsystem), CREATE_NO_WINDOW kills the black box
-        # while Tk/FreeSimpleGUI still create their own top-level windows.
-        if hide_console and not is_pythonw:
+        if (hide_console or exe0.endswith("python.exe")) and not is_pythonw:
             flags |= CREATE_NO_WINDOW
-        elif (not is_pythonw) and exe0.endswith("python.exe"):
-            flags |= CREATE_NO_WINDOW
+            try:
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = 0
+                kw["startupinfo"] = si
+            except Exception:
+                pass
         kw["creationflags"] = flags
     proc = subprocess.Popen(args, **kw)
     # Popen keeps the file handle open for the child; do not close log_f here

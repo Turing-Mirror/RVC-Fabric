@@ -32,6 +32,66 @@ _VIRTUAL_MONITOR_KEYS: tuple[str, ...] = (
 _HEADPHONE_HINTS: tuple[str, ...] = ("headphone", "headset", "earphone")
 
 
+def list_audio_devices_for_ui(hostapi_name: str | None = None) -> dict:
+    """Enumerate devices via sounddevice in-process (no worker / no python.exe)."""
+    try:
+        import sounddevice as sd
+    except Exception as e:
+        return {
+            "state": "error",
+            "error": f"sounddevice: {e}",
+            "hostapis": [],
+            "input_devices": [],
+            "output_devices": [],
+        }
+    try:
+        devices = sd.query_devices()
+        hostapis = sd.query_hostapis()
+        for hostapi in hostapis:
+            for device_idx in hostapi["devices"]:
+                devices[device_idx]["hostapi_name"] = hostapi["name"]
+        names = [h["name"] for h in hostapis]
+        if not names:
+            return {
+                "state": "error",
+                "error": "no hostapis",
+                "hostapis": [],
+                "input_devices": [],
+                "output_devices": [],
+            }
+        if hostapi_name not in names:
+            hostapi_name = "MME" if "MME" in names else names[0]
+        inputs = [
+            d["name"]
+            for d in devices
+            if d.get("max_input_channels", 0) > 0
+            and d.get("hostapi_name") == hostapi_name
+        ]
+        outputs = [
+            d["name"]
+            for d in devices
+            if d.get("max_output_channels", 0) > 0
+            and d.get("hostapi_name") == hostapi_name
+        ]
+        return {
+            "state": "idle",
+            "error": "",
+            "message": "devices local",
+            "hostapis": names,
+            "input_devices": inputs,
+            "output_devices": outputs,
+            "sg_hostapi": hostapi_name,
+        }
+    except Exception as e:
+        return {
+            "state": "error",
+            "error": str(e),
+            "hostapis": [],
+            "input_devices": [],
+            "output_devices": [],
+        }
+
+
 def is_virtual_monitor_name(name: str) -> bool:
     """True for empty names and known virtual/loopback endpoints (not real speakers)."""
     low = (name or "").lower()

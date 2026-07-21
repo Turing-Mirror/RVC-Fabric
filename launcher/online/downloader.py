@@ -78,12 +78,64 @@ def normalize_github_url(url: str) -> str:
     return u
 
 
+def is_cnb_url(url: str) -> bool:
+    u = (url or "").lower()
+    return "cnb.cool" in u
+
+
+def normalize_cnb_url(url: str) -> str:
+    """CNB blob / files page → git raw (anonymous file body when not LFS).
+
+    Known working form::
+
+        https://cnb.cool/<org>/<repo>/-/git/raw/<branch>/<path>
+
+    ``/-/blob/main/...`` (browser page) is rewritten to that form.
+    """
+    u = (url or "").strip()
+    if not u or not is_cnb_url(u):
+        return u
+    # Already raw
+    if "/-/git/raw/" in u:
+        return u
+    # https://cnb.cool/org/repo/-/blob/branch/path → …/-/git/raw/branch/path
+    m = re.match(
+        r"https?://cnb\.cool/([^/]+)/([^/]+)/-/blob/([^/]+)/(.*)$",
+        u,
+        re.I,
+    )
+    if m:
+        org, repo, branch, path = m.groups()
+        path = path.split("?", 1)[0]
+        return f"https://cnb.cool/{org}/{repo}/-/git/raw/{branch}/{path}"
+    # https://cnb.cool/org/repo/-/raw/branch/path (short form → git/raw)
+    m = re.match(
+        r"https?://cnb\.cool/([^/]+)/([^/]+)/-/raw/([^/]+)/(.*)$",
+        u,
+        re.I,
+    )
+    if m:
+        org, repo, branch, path = m.groups()
+        path = path.split("?", 1)[0]
+        return f"https://cnb.cool/{org}/{repo}/-/git/raw/{branch}/{path}"
+    return u
+
+
+def is_git_lfs_pointer_bytes(data: bytes) -> bool:
+    """True when body is a Git LFS pointer text, not the real object."""
+    if not data or len(data) > 1024:
+        return False
+    head = data.lstrip()[:80]
+    return head.startswith(b"version https://git-lfs.github.com/spec/")
+
+
 def resolve_download_url(url: str, session=None) -> str:
     """Turn a share/page URL into a streamable download URL when possible."""
     u = (url or "").strip()
     if not u:
         raise DownloadError("空下载地址")
     u = normalize_github_url(u)
+    u = normalize_cnb_url(u)
 
     # Already force-download
     if "download=1" in u or "download.aspx" in u.lower():
@@ -177,10 +229,13 @@ def download_file(
                             f" Content-Type={ctype} 预览={snippet[:80]!r}"
                         )
                     done = 0
+                    first = b""
                     with open(tmp, "wb") as f:
                         for chunk in r.iter_content(chunk_size=CHUNK):
                             if not chunk:
                                 continue
+                            if len(first) < 200:
+                                first += chunk[: 200 - len(first)]
                             f.write(chunk)
                             done += len(chunk)
                             if progress:
@@ -191,6 +246,15 @@ def download_file(
                     if total and done < total * 0.98:
                         raise DownloadError(
                             f"下载不完整：{done}/{total} bytes"
+                        )
+                    # CNB/Git LFS: anonymous raw often returns a 100-byte pointer
+                    if is_git_lfs_pointer_bytes(first) or (
+                        done < 1024 and is_git_lfs_pointer_bytes(tmp.read_bytes()[:200])
+                    ):
+                        raise DownloadError(
+                            "下载到的是 Git LFS 指针而不是真实文件（约百字节文本）。\n"
+                            "CNB 上 LFS 大文件匿名 raw 可能无法直接拉实体；"
+                            "请用已 smudge 的制品直链、Release 附件，或在可公开下载的位置托管 zip。"
                         )
                 if expected_sha256:
                     _verify_sha256(tmp, expected_sha256)

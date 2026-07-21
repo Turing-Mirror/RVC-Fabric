@@ -17,32 +17,64 @@
     "qq_group": "",
     "qq_link": "",
     "sharepoint_full": "",
-    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅：gui_patch 增量 + 音色包。"
+    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅：gui_patch 增量 + 音色包。音色与 Runtime 大文件见 CNB 制品仓。"
   },
-  "manifest_urls": [],
+  "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
+  "manifest_urls": [
+    "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/catalog/online_catalog.snippet.json"
+  ],
   "voices": [
     {
-      "id": "example-voice-pack",
-      "name": "示例音色包（zip）",
-      "tag": "音色",
-      "version": "1",
+      "id": "guanguan",
+      "name": "guanguanV1",
+      "tag": "少女音",
+      "version": "2",
       "package_type": "voice_pack",
-      "pack_url": "",
-      "sha256": "",
-      "size_bytes": 0,
-      "description": "推荐：zip 内含 *.pth + 可选 index/cover/config.json/tm_package.json。用 scripts/pack_voice_pack.py 制作后填写 pack_url。"
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/voices/guanguan/guanguan-v2.zip",
+      "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
+      "size_bytes": 51006395,
+      "description": "guanguanV1（CNB · fabric_official）",
+      "publisher": "rvc_fabric",
+      "fabric_official": true
     },
     {
-      "id": "example-voice-files",
-      "name": "示例音色（多文件直链）",
+      "id": "keruan",
+      "name": "keruanV1",
+      "tag": "少女音",
+      "version": "2",
+      "package_type": "voice_pack",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/voices/keruan/keruan-v2.zip",
+      "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
+      "size_bytes": 51012498,
+      "description": "keruanV1（CNB · fabric_official）",
+      "publisher": "rvc_fabric",
+      "fabric_official": true
+    },
+    {
+      "id": "kiki",
+      "name": "kikiV1",
+      "tag": "少女音",
+      "version": "2",
+      "package_type": "voice_pack",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/voices/kiki/kiki-v2.zip",
+      "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
+      "size_bytes": 51021019,
+      "description": "kikiV1（CNB · fabric_official）",
+      "publisher": "rvc_fabric",
+      "fabric_official": true
+    },
+    {
+      "id": "youzhanv2-xi",
+      "name": "youzhanv2-xi",
       "tag": "音色",
-      "version": "1",
-      "package_type": "voice_files",
-      "pth_url": "",
-      "index_url": "",
-      "cover_url": "",
-      "sha256": "",
-      "description": "备选：分别填 pth_url / index_url / cover_url，无需 zip。"
+      "version": "2",
+      "package_type": "voice_pack",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/voices/youzhanv2-xi/youzhanv2-xi-v2.zip",
+      "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
+      "size_bytes": 53357394,
+      "description": "youzhanv2-xi（CNB · fabric_official）",
+      "publisher": "rvc_fabric",
+      "fabric_official": true
     }
   ]
 }

@@ -15,7 +15,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from launcher.online.catalog import OnlineCatalog, compare_versions, load_bundled_catalog
-from launcher.online.downloader import is_github_url, normalize_github_url
+from launcher.online.downloader import (
+    is_git_lfs_pointer_bytes,
+    is_github_url,
+    normalize_cnb_url,
+    normalize_github_url,
+)
 from launcher.online.gui_update import (
     apply_gui_patch_zip,
     check_gui_update,
@@ -38,6 +43,36 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(compare_versions("1.0.0", "1.0.1"), -1)
         self.assertEqual(compare_versions("1.1.0", "1.0.9"), 1)
         self.assertEqual(compare_versions("1.1.0", "1.1.0"), 0)
+
+
+class CnbUrlTests(unittest.TestCase):
+    def test_blob_to_git_raw(self):
+        blob = (
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+            "-/blob/main/voices/guanguan/guanguan-v2.zip"
+        )
+        raw = normalize_cnb_url(blob)
+        self.assertEqual(
+            raw,
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+            "-/git/raw/main/voices/guanguan/guanguan-v2.zip",
+        )
+
+    def test_git_raw_unchanged(self):
+        u = (
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+            "-/git/raw/main/catalog/online_catalog.snippet.json"
+        )
+        self.assertEqual(normalize_cnb_url(u), u)
+
+    def test_lfs_pointer_detect(self):
+        ptr = (
+            b"version https://git-lfs.github.com/spec/v1\n"
+            b"oid sha256:be1bdb2cec1b6110f404dbc08e6672f3d39ba6846aba9ef58267e892c57d9367\n"
+            b"size 51006400\n"
+        )
+        self.assertTrue(is_git_lfs_pointer_bytes(ptr))
+        self.assertFalse(is_git_lfs_pointer_bytes(b"PK\x03\x04fakezip"))
 
 
 class CatalogTests(unittest.TestCase):

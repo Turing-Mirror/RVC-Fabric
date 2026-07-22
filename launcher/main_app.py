@@ -38,6 +38,7 @@ from launcher.pages import (
     RealtimeControlMixin,
     SettingsPageMixin,
 )
+from launcher.tray import TrayController, tray_available
 from launcher.voice_history import VoiceParamHistory
 from launcher.hotkeys import GlobalHotkeyManager, merge_hotkeys
 from launcher.paths import (
@@ -65,6 +66,7 @@ from launcher.theme import (
     TM_META,
     TM_OK,
     TM_SURFACE,
+    TM_WARN,
     mono_font,
     sans_font,
     title_font,
@@ -165,6 +167,9 @@ class MainApp(
                 self.models[self.model_idx], push_remote=False
             )
         self.root.bind("<Configure>", self._on_root_configure)
+        # Minimize → system tray (only when pystray/Pillow are packaged)
+        self._tray = TrayController(self)
+        self.root.bind("<Unmap>", self._on_root_unmap, add="+")
         self.show_page("home")
         self._tick_status()
         self._setup_hotkeys()
@@ -173,6 +178,7 @@ class MainApp(
         self.root.after(400, self._init_gpu_backend)
         self.root.after(600, self._bootstrap_devices_async)
         self.root.after(350, self._poll_global_hotkeys)
+        self.root.after(900, self._tick_mic_level)
         self.root.after(2500, self._silent_check_updates)
         self.root.after(1200, self._maybe_show_onboarding)
         self._gpu_info: dict = {}
@@ -272,6 +278,16 @@ class MainApp(
         except Exception:
             pass
 
+    def _on_root_unmap(self, event) -> None:
+        """Minimize button → shrink to the system tray instead of taskbar."""
+        if event.widget is not self.root or getattr(self, "_closing", False):
+            return
+        try:
+            if self.root.state() == "iconic" and tray_available():
+                self.root.after(10, self._tray.hide_to_tray)
+        except Exception:
+            pass
+
     def _on_root_configure(self, event) -> None:
         if event.widget is not self.root:
             return
@@ -344,7 +360,7 @@ class MainApp(
         # Bottom dock zones (Schale card grouping + LyricsKara now-playing meta)
         # [ NOW PLAYING ] [ MODE ] [ PITCH | FORMANT | THRESH ] …… [ CTA | status ]
 
-        dock_pad_y = 12  # vertical air inside fixed-height dock (must fit BOTTOM_HEIGHT)
+        dock_pad_y = 8  # vertical air inside fixed-height dock (must fit BOTTOM_HEIGHT)
 
         # --- Left: now-playing panel (3 lines max so nothing clips) ---
         left_panel = tk.Frame(
@@ -382,7 +398,7 @@ class MainApp(
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
-            width=34,  # fixed cols — value changes must not reflow dock
+            width=36,  # fixed cols — value changes must not reflow dock
         )
         self.bottom_voice_hint.pack(anchor="w", pady=(2, 0))
 
@@ -452,6 +468,32 @@ class MainApp(
             "原声旁路（设置里的「输入监听」）：不改变声音，只输出麦克风原声，用来测麦/接线。",
         )
 
+        # Mic level meter — the fastest "is it hearing me?" answer
+        meter_row = tk.Frame(mode_inner, bg=TM_SURFACE)
+        meter_row.pack(fill="x", pady=(10, 0))
+        tk.Label(
+            meter_row,
+            text="麦克风",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+        ).pack(side="left")
+        self._mic_meter = tk.Canvas(
+            meter_row,
+            width=150,
+            height=8,
+            bg=TM_INSET,
+            highlightthickness=0,
+        )
+        self._mic_meter.pack(side="left", padx=(8, 0), pady=1)
+        HoverTip(
+            meter_row,
+            "变声中实时显示麦克风音量。\n"
+            "条到不了竖线（响应阈值）时会被判定为安静、不变声；\n"
+            "说话时条应明显越过竖线。",
+        )
+        self._draw_mic_meter(None)
+
         tiles = tk.Frame(mid, bg=TM_SURFACE)
         tiles.pack(side="left", fill="both", expand=True)
         self._dock_pitch = ParamTile(
@@ -520,6 +562,38 @@ class MainApp(
 
     def _format_latency_line(self, delay_ms: int, infer_ms: int) -> str:
         return format_latency_line(delay_ms, infer_ms, APP_PRODUCT_TAGLINE)
+
+    def _draw_mic_meter(self, db) -> None:
+        """Level bar vs threshold marker. db=None → empty bar (engine idle)."""
+        c = getattr(self, "_mic_meter", None)
+        if c is None:
+            return
+        try:
+            w = int(c.winfo_width()) or 150
+            if w <= 1:
+                w = 150
+            h = 8
+            c.delete("all")
+            try:
+                thr = int(self.var_threhold.get())
+            except Exception:
+                thr = int(self.cfg.get("threhold") or -60)
+
+            def _x(v) -> int:
+                return int((max(-60.0, min(0.0, float(v))) + 60.0) / 60.0 * w)
+
+            if db is not None:
+                x = _x(db)
+                over = float(db) >= thr
+                c.create_rectangle(
+                    0, 0, x, h,
+                    fill=TM_ACCENT if over else TM_HAIRLINE,
+                    width=0,
+                )
+            tx = _x(thr)
+            c.create_rectangle(max(tx - 1, 0), 0, tx + 1, h, fill=TM_WARN, width=0)
+        except Exception:
+            pass
 
     def _set_status_visual(self, mode: str, title: str, subtitle: str = "") -> None:
         """Update bottom-right status badge. mode: idle|busy|live|error."""
@@ -872,6 +946,10 @@ class MainApp(
 
         # Remember size/place BEFORE hiding — next launch reopens here
         self._remember_geometry()
+        try:
+            self._tray.stop()
+        except Exception:
+            pass
 
         # Hide immediately so the user sees the window go away
         try:

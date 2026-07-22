@@ -287,6 +287,13 @@ class ProfilesMixin:
             bg=TM_BG,
             fg=TM_INK,
         ).pack(side="left")
+        tk.Label(
+            head,
+            text="同一个音色可存多套参数（音高/音效/性能），点「使用」即切换；可导出分享，也能导入别人调好的档案",
+            font=sans_font(9),
+            bg=TM_BG,
+            fg=TM_META,
+        ).pack(side="left", padx=(10, 0))
         if not d:
             tk.Label(
                 host,
@@ -323,26 +330,7 @@ class ProfilesMixin:
                     padx=12, pady=6).pack(side="left", padx=6)
         GhostButton(actions, "导出当前档案（可分享）…", command=self._ui_export_active,
                     padx=12, pady=6).pack(side="left", padx=6)
-
-        # Funnel entry: guide toward the paid tuning service for this voice.
-        # Opens the consult wizard (samples + profile + env in one zip).
-        promo = tk.Frame(host, bg=TM_BG)
-        promo.pack(fill="x", pady=(8, 2))
-        PrimaryButton(
-            promo,
-            "✦ 想更像这个角色？申请专业优化",
-            command=self.open_consult_wizard,
-            padx=14,
-            pady=8,
-        ).pack(side="left")
-        tk.Label(
-            promo,
-            text="软件免费；我们代调一套最贴合你嗓音+这个角色的配置",
-            font=sans_font(9),
-            bg=TM_BG,
-            fg=TM_META,
-            anchor="w",
-        ).pack(side="left", padx=(10, 0))
+        # （申请专业优化的入口在页面顶部标题右侧，不再重复放这里）
 
     def _profile_row(self, parent, *, pid, name, source, score, active) -> None:
         edge = TM_ACCENT if active else TM_HAIRLINE

@@ -121,22 +121,10 @@ class HelpPage:
             txt.bind("<Key>", lambda e: "break")
             self._body_texts.append(txt)
 
-            def _autosize(t=txt):
-                try:
-                    t.update_idletasks()
-                    n = t.count("1.0", "end-1c", "displaylines")
-                    if isinstance(n, (tuple, list)):
-                        n = n[0]
-                    t.configure(height=max(int(n or 1), 2))
-                except Exception:
-                    try:
-                        n = int(float(t.index("end-1c").split(".")[0]))
-                        t.configure(height=max(n, 2))
-                    except Exception:
-                        t.configure(height=8)
-
-            _autosize()
-            txt.bind("<Configure>", lambda _e, t=txt: _autosize(t), add="+")
+            self._autosize_text(txt)
+            txt.bind(
+                "<Configure>", lambda _e, t=txt: self._autosize_text(t), add="+"
+            )
 
         def _wheel_tree(w):
             w.bind("<MouseWheel>", _wheel)
@@ -155,5 +143,38 @@ class HelpPage:
             ),
         )
 
+    @staticmethod
+    def _autosize_text(t: tk.Text) -> None:
+        """Size the Text to its wrapped line count (+1 slack so the last
+        line can never be swallowed by CJK measurement wobble)."""
+
+        def _do():
+            try:
+                t.update_idletasks()
+                n = t.count("1.0", "end-1c", "displaylines")
+                if isinstance(n, (tuple, list)):
+                    n = n[0]
+                t.configure(height=max(int(n or 1) + 1, 2))
+            except Exception:
+                try:
+                    n = int(float(t.index("end-1c").split(".")[0]))
+                    t.configure(height=max(n + 1, 2))
+                except Exception:
+                    t.configure(height=8)
+
+        try:
+            t.after_idle(_do)
+        except Exception:
+            _do()
+
     def on_show(self) -> None:
-        pass
+        # Widths only settle once the page is actually displayed — re-measure
+        # every block so the final line is never cut off.
+        for delay in (50, 300):
+            try:
+                self.fr.after(
+                    delay,
+                    lambda: [self._autosize_text(t) for t in self._body_texts],
+                )
+            except Exception:
+                pass

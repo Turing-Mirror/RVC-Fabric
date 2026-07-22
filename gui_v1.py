@@ -217,6 +217,7 @@ if __name__ == "__main__":
             self._fx_chain = None
             self.delay_time = 0
             self.last_infer_ms = 0
+            self.last_input_db = -90.0  # mic level for the launcher meter
             self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
                 "1",
                 "true",
@@ -1698,6 +1699,12 @@ if __name__ == "__main__":
             indata = np.copy(self.in_buf[rptr:rend])
 
             indata = librosa.to_mono(indata.T)
+            # Block input level in dB for the launcher's mic meter (cheap)
+            try:
+                _rms = float(np.sqrt(np.mean(np.square(indata))) + 1e-9)
+                self.last_input_db = float(max(-90.0, 20.0 * np.log10(_rms)))
+            except Exception:
+                pass
             if self.gui_config.threhold > -60:
                 indata = np.append(self.rms_buffer, indata)
                 rms = librosa.feature.rms(
@@ -2537,6 +2544,9 @@ if __name__ == "__main__":
                                 state="running",
                                 delay_ms=int(np.round(self.delay_time * 1000)),
                                 infer_ms=self.last_infer_ms,
+                                input_db=round(
+                                    float(getattr(self, "last_input_db", -90.0)), 1
+                                ),
                                 samplerate=int(
                                     getattr(self.gui_config, "samplerate", 0) or 0
                                 ),

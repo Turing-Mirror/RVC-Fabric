@@ -14,6 +14,7 @@ from launcher import realtime_client as rt_client
 from launcher.paths import ROOT, USER_DATA
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
+    GUTTER,
     TM_ACCENT,
     TM_BG,
     TM_META,
@@ -26,53 +27,43 @@ from launcher.win_util import open_path
 
 class MorePageMixin:
     def _page_more(self) -> tk.Frame:
-        """More page: pack layout only (no place) so footer never overlaps buttons."""
+        """Same chrome as the other pages: left-aligned header at the page
+        gutter, then a full-width 3-per-row button grid."""
         fr = tk.Frame(self.body, bg=TM_BG)
-        fr.columnconfigure(0, weight=1)
-        fr.rowconfigure(0, weight=1)
-
-        # Scroll when window is short — fixed place() used to sit on top of buttons
         canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
         sb = tk.Scrollbar(fr, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        sb.grid(row=0, column=1, sticky="ns")
-
         wrap = tk.Frame(canvas, bg=TM_BG)
-        win = canvas.create_window((0, 0), window=wrap, anchor="n")
+        win = canvas.create_window((0, 0), window=wrap, anchor="nw")
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
 
         def _sync(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
             try:
-                cw = max(int(canvas.winfo_width()), 200)
-                # Content fills the viewport width (3-per-row grid stretches)
-                w = min(max(cw - 24, 320), 980)
-                x = max((cw - w) // 2, 12)
-                canvas.coords(win, x, 16)
-                canvas.itemconfigure(win, width=w)
+                canvas.configure(scrollregion=canvas.bbox("all"))
             except Exception:
                 pass
 
+        def _width(e):
+            if e.width > 1:
+                canvas.itemconfigure(win, width=e.width)
+
         wrap.bind("<Configure>", _sync)
-        canvas.bind("<Configure>", _sync)
+        canvas.bind("<Configure>", _width)
 
         def _wheel(e):
             canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
         canvas.bind("<MouseWheel>", _wheel)
-        wrap.bind("<MouseWheel>", _wheel)
-
-        inner = tk.Frame(wrap, bg=TM_BG)
-        inner.pack(padx=24, pady=(8, 16), fill="x")
 
         PageHeader(
-            inner,
+            wrap,
             eyebrow="",
             title="其他",
             lead="高级入口与紧急操作。",
-        ).pack(anchor="w", pady=(0, 16))
-        box = tk.Frame(inner, bg=TM_BG)
-        box.pack(anchor="w", fill="x")
+        ).pack(anchor="w", padx=GUTTER, pady=(18, 12))
+        box = tk.Frame(wrap, bg=TM_BG)
+        box.pack(fill="x", padx=GUTTER)
         for c in range(3):
             box.columnconfigure(c, weight=1, uniform="more")
 
@@ -95,14 +86,13 @@ class MorePageMixin:
             b = cls(box, text, command=cmd, padx=10, pady=14)
             b.grid(row=i // 3, column=i % 3, sticky="nsew", padx=6, pady=6)
 
-        # Footer after buttons (pack) — never place() over the list
         tk.Label(
-            inner,
+            wrap,
             text=f"v{APP_VERSION}",
             bg=TM_BG,
             fg=TM_META,
             font=mono_font(8),
-        ).pack(anchor="center", pady=(20, 12))
+        ).pack(anchor="center", pady=(24, 16))
 
         def _wheel_tree(w):
             w.bind("<MouseWheel>", _wheel)

@@ -37,10 +37,10 @@ class DockVoiceMixin:
                 try:
                     p = int(self.var_pitch.get())
                     f = float(self.var_formant.get())
-                    mode = "变声" if str(self.var_function.get()) == "vc" else "原声"
-                    # Keep one short line — dock height is fixed
+                    # One short line, no 变声/原声 tail — the mode segment
+                    # sits right next to this panel, and the tail got clipped
                     self.bottom_voice_hint.configure(
-                        text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}  ·  {mode}"
+                        text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}"
                     )
                 except Exception:
                     self.bottom_voice_hint.configure(text="参数随音色单独保存")
@@ -337,9 +337,8 @@ class DockVoiceMixin:
         try:
             p = int(self.var_pitch.get())
             f = float(self.var_formant.get())
-            mode = "变声" if str(self.var_function.get()) == "vc" else "原声"
             self.bottom_voice_hint.configure(
-                text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}  ·  {mode}"
+                text=f"专属参数  音高 {p:+d}  共鸣 {f:.2f}"
             )
         except Exception:
             pass

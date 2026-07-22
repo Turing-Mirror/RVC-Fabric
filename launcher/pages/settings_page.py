@@ -484,76 +484,17 @@ class SettingsPageMixin:
         )
         scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True, tip_key="rms")
 
-        # Feature retrieval .index (bound to current voice model)
+        # .index 文件的绑定/切换在「模型」页管理；这里只保留内部变量
+        # （Index Rate 滑杆仍在上方 — 它是参数，不是文件选择）。
         self.var_index_path = tk.StringVar(value="")
-        idx_block = tk.Frame(right, bg=TM_SURFACE)
-        idx_block.pack(fill="x", pady=(8, 4))
-        idx_title = tk.Frame(idx_block, bg=TM_SURFACE)
-        idx_title.pack(fill="x", anchor="w")
         tk.Label(
-            idx_title,
-            text="特征检索 .index",
-            font=sans_font(10),
-            bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
-            anchor="w",
-        ).pack(side="left")
-        help_mark(idx_title, SETTING_TIPS["index"])
-        idx_row = tk.Frame(idx_block, bg=TM_SURFACE)
-        idx_row.pack(fill="x")
-        self.cmb_index = ttk.Combobox(
-            idx_row,
-            textvariable=self.var_index_path,
-            values=[],
-            width=52,
-        )
-        self.cmb_index.pack(side="left", fill="x", expand=True)
-        self.cmb_index.bind("<<ComboboxSelected>>", lambda e: self._on_index_chosen())
-        tk.Button(
-            idx_row,
-            text="浏览…",
-            font=sans_font(9),
-            bg=TM_BG,
-            fg=TM_INK,
-            relief="flat",
-            cursor="hand2",
-            command=self.browse_index_file,
-            bd=0,
-            padx=8,
-        ).pack(side="left", padx=(6, 0))
-        tk.Button(
-            idx_row,
-            text="清除",
-            font=sans_font(9),
-            bg=TM_BG,
-            fg=TM_INK_MUTED,
-            relief="flat",
-            cursor="hand2",
-            command=self.clear_index_file,
-            bd=0,
-            padx=8,
-        ).pack(side="left")
-        tk.Button(
-            idx_row,
-            text="扫描",
-            font=sans_font(9),
-            bg=TM_BG,
-            fg=TM_INK_MUTED,
-            relief="flat",
-            cursor="hand2",
-            command=self._refresh_index_combobox_values,
-            bd=0,
-            padx=8,
-        ).pack(side="left")
-        self.lbl_index_status = tk.Label(
-            idx_block,
-            text="",
+            right,
+            text="检索库（.index 文件）的绑定与切换在「模型」页进行。",
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_HELP,
             anchor="w",
-        )
-        self.lbl_index_status.pack(anchor="w", pady=(2, 0))
+        ).pack(fill="x", pady=(4, 6))
         self._refresh_index_ui_for_model()
 
         f0f = tk.Frame(right, bg=TM_SURFACE)
@@ -877,6 +818,16 @@ class SettingsPageMixin:
             b.pack(side="left", padx=(0, 6))
             b.bind("<Button-1>", lambda _e, o=outer: _jump_to(o))
 
+        # Long device names get clipped in the closed field — hovering shows
+        # the full current value.
+        for _cmb, _var in (
+            (getattr(self, "cmb_input", None), self.var_input_dev),
+            (getattr(self, "cmb_output", None), self.var_output_dev),
+            (getattr(self, "cmb_monitor", None), self.var_monitor_dev),
+        ):
+            if _cmb is not None:
+                self._attach_full_value_tip(_cmb, _var)
+
         # Device names are long ("Voicemeeter AUX Input (VB-Audio…)"): widen
         # each combobox's popdown list to the longest item before it opens.
         for _cmb in (
@@ -930,6 +881,23 @@ class SettingsPageMixin:
     def _settings_autosave(self) -> None:
         self._settings_autosave_job = None
         self.save_settings_silent()
+
+    @staticmethod
+    def _attach_full_value_tip(cmb, var) -> None:
+        """Hovering a combobox shows its full (possibly clipped) value."""
+        tip = HoverTip(cmb, "")
+
+        def _upd(*_a):
+            try:
+                tip.text = str(var.get() or "")
+            except Exception:
+                pass
+
+        try:
+            var.trace_add("write", _upd)
+        except Exception:
+            pass
+        _upd()
 
     @staticmethod
     def _fit_combo_popdown(cmb) -> None:

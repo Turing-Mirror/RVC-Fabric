@@ -52,9 +52,10 @@ class RealtimeControlMixin:
         self.vc_running = False
         self._vc_starting = True
         try:
-            self.btn_start.configure(text="切换中…", bg=TM_OK)
+            self.btn_start.configure(bg=TM_OK)
         except Exception:
             pass
+        self._animate_busy_btn("切换中")
         threading.Thread(target=work, daemon=True).start()
 
     def toggle_vc(self) -> None:
@@ -90,7 +91,8 @@ class RealtimeControlMixin:
         self._sync_model_to_realtime_gui(m)
         self._vc_starting = True
         self.vc_running = False
-        self.btn_start.configure(text="启动中…", bg=TM_OK)
+        self.btn_start.configure(bg=TM_OK)
+        self._animate_busy_btn("启动中")
         self._set_status_visual(
             "busy",
             f"启动中 · {m['name']}",
@@ -179,6 +181,49 @@ class RealtimeControlMixin:
         self._vc_starting = False
         self.btn_start.configure(text="开启变声", bg=TM_ACCENT)
         self._set_status_visual("idle", "引擎待命", APP_PRODUCT_TAGLINE)
+
+    def _tick_mic_level(self) -> None:
+        """Fast, cheap loop for the dock mic meter (separate from _tick_status
+        so the meter can move ~3×/s while everything else stays at 1s)."""
+        if getattr(self, "_closing", False):
+            return
+        delay = 800
+        try:
+            if self.vc_running:
+                st = rt_client.poll_status()
+                db = st.get("input_db")
+                self._draw_mic_meter(float(db) if db is not None else None)
+                delay = 300
+            else:
+                self._draw_mic_meter(None)
+        except Exception:
+            pass
+        try:
+            self.root.after(delay, self._tick_mic_level)
+        except Exception:
+            pass
+
+    def _animate_busy_btn(self, base: str) -> None:
+        """While starting/switching, the button text pulses ('切换中·''··'…)
+        so the silent seconds visibly ARE doing something."""
+        self._busy_anim_base = base
+        self._busy_anim_i = 0
+        self._busy_anim_step()
+
+    def _busy_anim_step(self) -> None:
+        if not self._vc_starting:
+            return  # final text is set by _on_vc_started/_on_vc_start_failed
+        base = getattr(self, "_busy_anim_base", "启动中")
+        i = getattr(self, "_busy_anim_i", 0)
+        try:
+            self.btn_start.configure(text=base + "·" * (1 + i % 3))
+        except Exception:
+            return
+        self._busy_anim_i = i + 1
+        try:
+            self.root.after(400, self._busy_anim_step)
+        except Exception:
+            pass
 
     def _tick_status(self) -> None:
         if getattr(self, "_closing", False):

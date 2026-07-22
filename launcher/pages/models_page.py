@@ -17,16 +17,17 @@ from launcher.paths import MODELS_DIR, list_voice_models
 from launcher.theme import (
     GUTTER,
     TM_BG,
+    TM_INK,
     TM_INK_MUTED,
     TM_META,
     TM_OK,
     mono_font,
     sans_font,
+    title_font,
 )
 from launcher.ui import (
     GhostButton,
     ModelCoverCard,
-    PageHeader,
     PrimaryButton,
     SearchField,
     SegmentControl,
@@ -37,19 +38,64 @@ from launcher.win_util import open_path
 
 class ModelsPageMixin:
     def _page_models(self) -> tk.Frame:
+        """Plain top-down flow: header → filter → paged catalog → index →
+        profiles. The whole page scrolls (same pattern as 设置页); the catalog
+        itself is PAGED — max 3 card rows per page, no inner scrollbar, and no
+        blank filler when a page has fewer rows."""
         fr = tk.Frame(self.body, bg=TM_BG)
-        fr.columnconfigure(0, weight=1)
+        canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
+        sb = ttk.Scrollbar(fr, orient="vertical", command=canvas.yview)
+        wrap = tk.Frame(canvas, bg=TM_BG)
+        win_id = canvas.create_window((0, 0), window=wrap, anchor="nw")
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self._models_canvas = canvas  # page viewport; width drives column count
+        self._models_page = 0
 
-        bar = tk.Frame(fr, bg=TM_BG)
-        bar.grid(row=0, column=0, sticky="ew", padx=GUTTER, pady=(18, 8))
+        def _sync(_e=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _width(e):
+            if e.width > 1:
+                canvas.itemconfigure(win_id, width=e.width)
+                self._schedule_models_reflow()
+
+        wrap.bind("<Configure>", _sync)
+        canvas.bind("<Configure>", _width)
+
+        def _wheel(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        def _bind_wheel_tree(w):
+            w.bind("<MouseWheel>", _wheel)
+            for ch in w.winfo_children():
+                _bind_wheel_tree(ch)
+
+        canvas.bind("<MouseWheel>", _wheel)
+        self._models_bind_wheel = lambda: _bind_wheel_tree(wrap)
+
+        # --- Header: title + funnel button inline; actions on the right ---
+        bar = tk.Frame(wrap, bg=TM_BG)
+        bar.pack(fill="x", padx=GUTTER, pady=(18, 8))
         left = tk.Frame(bar, bg=TM_BG)
         left.pack(side="left", fill="x", expand=True)
-        PageHeader(
-            left,
-            eyebrow="",
-            title="音色目录",
-            lead="",
-        ).pack(anchor="w")
+        title_row = tk.Frame(left, bg=TM_BG)
+        title_row.pack(anchor="w")
+        tk.Label(
+            title_row,
+            text="音色目录",
+            font=title_font(22, "bold"),
+            bg=TM_BG,
+            fg=TM_INK,
+        ).pack(side="left")
+        PrimaryButton(
+            title_row,
+            "✦ 想更像这个角色？申请专业优化",
+            command=self.open_consult_wizard,
+            padx=14,
+            pady=7,
+        ).pack(side="left", padx=(16, 0))
         self.models_status_lbl = tk.Label(
             left,
             text="",
@@ -77,11 +123,10 @@ class ModelsPageMixin:
             padx=14,
             pady=6,
         ).pack(side="right", padx=4)
-        self._models_bar = bar
 
-        # Filter row: search (left) + sort segment (right) — library chrome
-        filt = tk.Frame(fr, bg=TM_BG)
-        filt.grid(row=1, column=0, sticky="ew", padx=GUTTER, pady=(0, 6))
+        # --- Filter row: search + sort ---
+        filt = tk.Frame(wrap, bg=TM_BG)
+        filt.pack(fill="x", padx=GUTTER, pady=(0, 6))
         self._models_search = SearchField(
             filt,
             placeholder="搜索音色 / 标签…",
@@ -99,38 +144,17 @@ class ModelsPageMixin:
         )
         self._models_sort_seg.pack(side="left")
 
-        self._models_filt = filt
+        # --- Paged catalog: plain frame, height = exactly the rows shown ---
+        self.model_grid = tk.Frame(wrap, bg=TM_BG)
+        self.model_grid.pack(fill="x", padx=GUTTER - 8, pady=(4, 0))
 
-        # Catalog area: at most ~3 card rows tall, scrolls inside itself so
-        # the index / profile panels below always stay reachable.
-        list_wrap = tk.Frame(fr, bg=TM_BG)
-        list_wrap.grid(row=2, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 8))
-        list_wrap.columnconfigure(0, weight=1)
-        list_wrap.rowconfigure(0, weight=1)
+        # Pager (built in refresh; collapses to nothing when single page)
+        self._models_pager = tk.Frame(wrap, bg=TM_BG)
+        self._models_pager.pack(fill="x", padx=GUTTER, pady=(2, 4))
 
-        canvas = tk.Canvas(list_wrap, bg=TM_BG, highlightthickness=0)
-        scroll = ttk.Scrollbar(list_wrap, orient="vertical", command=canvas.yview)
-        self.model_grid = tk.Frame(canvas, bg=TM_BG)
-        self._models_canvas = canvas
-        self._models_canvas_win = canvas.create_window((0, 0), window=self.model_grid, anchor="nw")
-
-        def _on_grid_cfg(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def _on_canvas_cfg(e):
-            canvas.itemconfigure(self._models_canvas_win, width=e.width)
-            self._schedule_models_reflow()
-
-        self.model_grid.bind("<Configure>", _on_grid_cfg)
-        canvas.bind("<Configure>", _on_canvas_cfg)
-        canvas.configure(yscrollcommand=scroll.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scroll.grid(row=0, column=1, sticky="ns")
-
-        # Below the catalog: index bindings, then config profiles — both live
-        # outside the grid so grid rebuilds don't destroy them.
-        panel_host = tk.Frame(fr, bg=TM_BG)
-        panel_host.grid(row=3, column=0, sticky="ew", padx=GUTTER, pady=(0, 12))
+        # --- Index bindings, then config profiles — natural flow below ---
+        panel_host = tk.Frame(wrap, bg=TM_BG)
+        panel_host.pack(fill="x", padx=GUTTER, pady=(0, 16))
         self._models_panel_host = panel_host
         try:
             self._build_index_panel(panel_host)
@@ -142,32 +166,32 @@ class ModelsPageMixin:
             pass
         return fr
 
-    def _fit_models_catalog_height(self) -> None:
-        """Cap the catalog viewport at 3 card rows, but never squeeze the
-        index / profile panels below out of the window."""
-        canvas = getattr(self, "_models_canvas", None)
-        if canvas is None:
+    def _models_page_shift(self, delta: int) -> None:
+        self._models_page = max(0, int(getattr(self, "_models_page", 0)) + delta)
+        self.refresh_models()
+
+    def _render_models_pager(self, total_pages: int, total_items: int) -> None:
+        pager = getattr(self, "_models_pager", None)
+        if pager is None:
             return
-        try:
-            self.root.update_idletasks()
-            page = (self.pages or {}).get("models") if hasattr(self, "pages") else None
-            ph = int(page.winfo_height()) if page is not None else 0
-            rows = max(1, int(getattr(self, "_models_view_rows", 1) or 1))
-            want = min(rows, 3) * 270
-            if ph > 1:
-                other = 0
-                for w in (
-                    getattr(self, "_models_bar", None),
-                    getattr(self, "_models_filt", None),
-                    getattr(self, "_models_panel_host", None),
-                ):
-                    if w is not None:
-                        other += int(w.winfo_reqheight())
-                avail = ph - other - 60
-                want = min(want, max(220, avail))
-            canvas.configure(height=want)
-        except Exception:
-            pass
+        for w in pager.winfo_children():
+            w.destroy()
+        if total_pages <= 1:
+            return
+        cur = int(getattr(self, "_models_page", 0))
+        box = tk.Frame(pager, bg=TM_BG)
+        box.pack(side="right")
+        GhostButton(box, "上一页", command=lambda: self._models_page_shift(-1),
+                    padx=12, pady=5).pack(side="left", padx=(0, 8))
+        tk.Label(
+            box,
+            text=f"第 {cur + 1} / {total_pages} 页 · 共 {total_items} 个",
+            font=mono_font(9),
+            bg=TM_BG,
+            fg=TM_META,
+        ).pack(side="left")
+        GhostButton(box, "下一页", command=lambda: self._models_page_shift(1),
+                    padx=12, pady=5).pack(side="left", padx=(8, 0))
 
     def _schedule_models_reflow(self) -> None:
         if getattr(self, "_models_job", None):
@@ -181,6 +205,7 @@ class ModelsPageMixin:
         """Re-render the grid for the current search/sort without a disk rescan."""
         if not hasattr(self, "model_grid"):
             return
+        self._models_page = 0  # a new filter starts from its first page
         # refresh_models re-lists from disk; that's cheap and keeps things simple,
         # but debounce so fast typing doesn't rescan on every keystroke
         if getattr(self, "_models_filter_job", None):
@@ -240,7 +265,7 @@ class ModelsPageMixin:
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._models_view_rows = 1
+            self._render_models_pager(0, 0)
             self._models_after_refresh()
             return
 
@@ -252,19 +277,27 @@ class ModelsPageMixin:
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._models_view_rows = 1
+            self._render_models_pager(0, 0)
             self._models_after_refresh()
             return
 
         # Columns adapt to width — cover-first cards need more width
         self._models_canvas.update_idletasks()
-        cw = max(self._models_canvas.winfo_width(), 320)
+        cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
         card_min = 180
         cols = max(1, min(5, cw // (card_min + 20)))
         for c in range(cols):
             self.model_grid.columnconfigure(c, weight=1, uniform="m")
 
-        for pos, m in enumerate(view):
+        # Pagination: at most 3 card rows per page; fewer rows = shorter page
+        page_size = cols * 3
+        total_pages = (len(view) + page_size - 1) // page_size
+        self._models_page = min(max(0, int(getattr(self, "_models_page", 0))),
+                                total_pages - 1)
+        start = self._models_page * page_size
+        page_view = view[start:start + page_size]
+
+        for pos, m in enumerate(page_view):
             r, c = divmod(pos, cols)
             full_ix = idx_by_path.get(m.get("path"), 0)
             active = self._is_active_model(m)
@@ -289,7 +322,7 @@ class ModelsPageMixin:
             self.model_grid.rowconfigure(r, weight=0)
             self._attach_model_menu(card, m, full_ix)
 
-        self._models_view_rows = (len(view) + cols - 1) // cols
+        self._render_models_pager(total_pages, len(view))
         self._models_after_refresh()
 
     def _models_after_refresh(self) -> None:
@@ -302,9 +335,9 @@ class ModelsPageMixin:
             self.refresh_profiles_ui()
         except Exception:
             pass
-        # Panels changed height — refit the catalog viewport afterwards
+        # New cards/panels need the page-scroll wheel binding again
         try:
-            self.root.after(30, self._fit_models_catalog_height)
+            self.root.after(30, self._models_bind_wheel)
         except Exception:
             pass
 

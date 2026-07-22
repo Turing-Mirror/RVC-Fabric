@@ -66,9 +66,17 @@ class ModelsPageMixin:
         GhostButton(actions, "刷新", command=self.refresh_models, padx=12, pady=6).pack(
             side="right", padx=4
         )
-        PrimaryButton(actions, "导入模型", command=self.import_model, padx=14, pady=6).pack(
+        GhostButton(actions, "导入模型", command=self.import_model, padx=12, pady=6).pack(
             side="right", padx=4
         )
+        PrimaryButton(
+            actions,
+            "社区下载",
+            command=lambda: self._store_page.open_voices_dialog(),
+            padx=14,
+            pady=6,
+        ).pack(side="right", padx=4)
+        self._models_bar = bar
 
         # Filter row: search (left) + sort segment (right) — library chrome
         filt = tk.Frame(fr, bg=TM_BG)
@@ -90,9 +98,12 @@ class ModelsPageMixin:
         )
         self._models_sort_seg.pack(side="left")
 
-        fr.rowconfigure(2, weight=1)
+        self._models_filt = filt
+
+        # Catalog area: at most ~3 card rows tall, scrolls inside itself so
+        # the index / profile panels below always stay reachable.
         list_wrap = tk.Frame(fr, bg=TM_BG)
-        list_wrap.grid(row=2, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 12))
+        list_wrap.grid(row=2, column=0, sticky="nsew", padx=GUTTER - 8, pady=(4, 8))
         list_wrap.columnconfigure(0, weight=1)
         list_wrap.rowconfigure(0, weight=1)
 
@@ -115,15 +126,47 @@ class ModelsPageMixin:
         canvas.grid(row=0, column=0, sticky="nsew")
         scroll.grid(row=0, column=1, sticky="ns")
 
-        # Per-model config profiles (bind / switch / cancel) — outside the grid
-        # so grid rebuilds don't destroy it
-        panel = tk.Frame(fr, bg=TM_BG)
-        panel.grid(row=3, column=0, sticky="ew", padx=GUTTER, pady=(0, 12))
+        # Below the catalog: index bindings, then config profiles — both live
+        # outside the grid so grid rebuilds don't destroy them.
+        panel_host = tk.Frame(fr, bg=TM_BG)
+        panel_host.grid(row=3, column=0, sticky="ew", padx=GUTTER, pady=(0, 12))
+        self._models_panel_host = panel_host
         try:
-            self._build_profiles_panel(panel)
+            self._build_index_panel(panel_host)
+        except Exception:
+            pass
+        try:
+            self._build_profiles_panel(panel_host)
         except Exception:
             pass
         return fr
+
+    def _fit_models_catalog_height(self) -> None:
+        """Cap the catalog viewport at 3 card rows, but never squeeze the
+        index / profile panels below out of the window."""
+        canvas = getattr(self, "_models_canvas", None)
+        if canvas is None:
+            return
+        try:
+            self.root.update_idletasks()
+            page = (self.pages or {}).get("models") if hasattr(self, "pages") else None
+            ph = int(page.winfo_height()) if page is not None else 0
+            rows = max(1, int(getattr(self, "_models_view_rows", 1) or 1))
+            want = min(rows, 3) * 270
+            if ph > 1:
+                other = 0
+                for w in (
+                    getattr(self, "_models_bar", None),
+                    getattr(self, "_models_filt", None),
+                    getattr(self, "_models_panel_host", None),
+                ):
+                    if w is not None:
+                        other += int(w.winfo_reqheight())
+                avail = ph - other - 60
+                want = min(want, max(220, avail))
+            canvas.configure(height=want)
+        except Exception:
+            pass
 
     def _schedule_models_reflow(self) -> None:
         if getattr(self, "_models_job", None):
@@ -191,12 +234,13 @@ class ModelsPageMixin:
         if not self.models:
             tk.Label(
                 self.model_grid,
-                text="还没有模型。点右上角「导入模型」添加音色，或到「更新」页下载。",
+                text="还没有音色。点「社区下载」在线获取，或点「导入模型」添加本地 .pth。",
                 bg=TM_BG,
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._sync_bottom()
+            self._models_view_rows = 1
+            self._models_after_refresh()
             return
 
         if not view:
@@ -207,7 +251,8 @@ class ModelsPageMixin:
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
-            self._sync_bottom()
+            self._models_view_rows = 1
+            self._models_after_refresh()
             return
 
         # Columns adapt to width — cover-first cards need more width
@@ -242,9 +287,22 @@ class ModelsPageMixin:
             card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
             self.model_grid.rowconfigure(r, weight=0)
 
+        self._models_view_rows = (len(view) + cols - 1) // cols
+        self._models_after_refresh()
+
+    def _models_after_refresh(self) -> None:
         self._sync_bottom()
         try:
+            self.refresh_index_panel_ui()
+        except Exception:
+            pass
+        try:
             self.refresh_profiles_ui()
+        except Exception:
+            pass
+        # Panels changed height — refit the catalog viewport afterwards
+        try:
+            self.root.after(30, self._fit_models_catalog_height)
         except Exception:
             pass
 
@@ -273,13 +331,26 @@ class ModelsPageMixin:
         )
         if not paths:
             return
+        # 规范文件管理：问清楚是复制还是移动进软件目录
+        move = messagebox.askyesnocancel(
+            "导入方式",
+            "把模型文件放进软件目录，用哪种方式？\n\n"
+            "是：复制进来（原文件保留在原位置）\n"
+            "否：移动进来（原位置不再保留，统一由软件管理）\n",
+        )
+        if move is None:
+            return
+        move = not move  # 是=复制 → move=False；否=移动 → move=True
         n = 0
         for p in paths:
             try:
-                import_model_to_catalog(Path(p), MODELS_DIR)
+                import_model_to_catalog(Path(p), MODELS_DIR, move=move)
                 n += 1
             except Exception as e:
                 messagebox.showerror("导入失败", f"{p}\n{e}")
         self.refresh_models()
         if n:
-            messagebox.showinfo("导入完成", f"已写入 {n} 个模型到\n{MODELS_DIR}")
+            verb = "移入" if move else "复制到"
+            messagebox.showinfo(
+                "导入完成", f"已{verb} {n} 个模型：\n{MODELS_DIR}"
+            )

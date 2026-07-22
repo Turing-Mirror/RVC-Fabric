@@ -37,6 +37,7 @@ from launcher.theme import (
     TM_HELP,
     TM_INK,
     TM_INK_MUTED,
+    TM_INSET,
     TM_META,
     TM_OK,
     TM_SURFACE,
@@ -72,6 +73,10 @@ class SettingsPageMixin:
 
     def _page_settings(self) -> tk.Frame:
         fr = tk.Frame(self.body, bg=TM_BG)
+        # Fixed section index on top — one click jumps straight to a section
+        idx_bar = tk.Frame(fr, bg=TM_BG)
+        idx_bar.pack(fill="x", padx=GUTTER, pady=(8, 0))
+        self._settings_sections: list = []
         # Scrollable settings — inner window width tracks canvas (fills on maximize)
         canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
         sb = ttk.Scrollbar(fr, orient="vertical", command=canvas.yview)
@@ -136,11 +141,10 @@ class SettingsPageMixin:
         )
 
         def card(parent, title: str) -> tk.Frame:
-            # Map Chinese section titles to mono eyebrows (library catalog feel)
-            outer = SectionCard(
-                parent, title=title, eyebrow="", accent_rail=True, pad=16
-            )
+            outer = SectionCard(parent, title=title, eyebrow="", pad=16)
             outer.pack(fill="x", expand=False, padx=GUTTER, pady=10)
+            # Short name (before any parenthetical) feeds the top jump index
+            self._settings_sections.append((title.split("（")[0], outer))
             return outer.body
 
         def help_mark(parent, tip: str, *, pack_side: str = "left") -> Optional[tk.Label]:
@@ -837,29 +841,84 @@ class SettingsPageMixin:
         # --- Keyboard shortcuts ---
         self._build_hotkeys_settings_section(wrap, card)
 
-        act = tk.Frame(wrap, bg=TM_BG)
-        act.pack(fill="x", padx=28, pady=10)
-        tk.Button(
-            act,
-            text="保存设置",
-            font=sans_font(10),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
-            relief="flat",
-            cursor="hand2",
-            command=self.save_settings,
-            bd=0,
-            padx=16,
-            pady=6,
-        ).pack(side="right")
-        self.lbl_settings_hint = tk.Label(
-            act,
-            text="无 .index 时 Index Rate 自动为 0；换 index 后请重新开启变声 · F1 查看快捷键",
+        # --- Online update (demoted from its own page to a settings section) ---
+        self._online_update_card_body = card(wrap, "在线更新")
+
+        # No save button: every change is saved the moment it is made.
+        tk.Label(
+            wrap,
+            text="调整会立即保存。音色与声音效果立即生效；设备与性能类改动需重新「开启变声」。",
             font=sans_font(9),
             bg=TM_BG,
             fg=TM_HELP,
-        )
-        self.lbl_settings_hint.pack(side="left")
+            anchor="w",
+        ).pack(fill="x", padx=28, pady=(4, 12))
+
+        # Populate the top jump index now that all sections exist
+        def _jump_to(outer=None):
+            try:
+                canvas.update_idletasks()
+                total = max(int(wrap.winfo_height()), 1)
+                canvas.yview_moveto(max(0, int(outer.winfo_y()) - 6) / total)
+            except Exception:
+                pass
+
+        for short, outer in self._settings_sections:
+            b = tk.Label(
+                idx_bar,
+                text=short,
+                font=sans_font(9),
+                bg=TM_INSET,
+                fg=TM_INK_MUTED,
+                padx=12,
+                pady=5,
+                cursor="hand2",
+            )
+            b.pack(side="left", padx=(0, 6))
+            b.bind("<Button-1>", lambda _e, o=outer: _jump_to(o))
+
+        # Device names are long ("Voicemeeter AUX Input (VB-Audio…)"): widen
+        # each combobox's popdown list to the longest item before it opens.
+        for _cmb in (
+            getattr(self, "cmb_hostapi", None),
+            getattr(self, "cmb_input", None),
+            getattr(self, "cmb_output", None),
+            getattr(self, "cmb_monitor", None),
+            getattr(self, "cmb_index", None),
+            getattr(self, "cmb_accel", None),
+            getattr(self, "cmb_fx_preset", None),
+        ):
+            if _cmb is not None:
+                _cmb.configure(
+                    postcommand=lambda c=_cmb: self._fit_combo_popdown(c)
+                )
+
+        # Auto-save: any settings var change → debounced silent save
+        def _autosave_later(*_a):
+            if getattr(self, "_loading_voice", False):
+                return
+            job = getattr(self, "_settings_autosave_job", None)
+            if job is not None:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:
+                    pass
+            self._settings_autosave_job = self.root.after(
+                600, self._settings_autosave
+            )
+
+        for name in dir(self):
+            if not name.startswith("var_"):
+                continue
+            v = getattr(self, name, None)
+            items = v if isinstance(v, (list, tuple)) else [v]
+            for one in items:
+                if isinstance(one, tk.Variable):
+                    try:
+                        one.trace_add("write", _autosave_later)
+                    except Exception:
+                        pass
+
         # Wheel + width after children exist
         try:
             _bind_wheel_recursive(wrap)
@@ -867,6 +926,21 @@ class SettingsPageMixin:
             pass
         fr.after(80, self._reflow_settings_page)
         return fr
+
+    def _settings_autosave(self) -> None:
+        self._settings_autosave_job = None
+        self.save_settings_silent()
+
+    @staticmethod
+    def _fit_combo_popdown(cmb) -> None:
+        """Make the dropdown list wide enough for its longest entry."""
+        try:
+            values = cmb.cget("values") or ()
+            longest = max((len(str(v)) for v in values), default=0)
+            pd = cmb.tk.call("ttk::combobox::PopdownWindow", cmb)
+            cmb.tk.call(f"{pd}.f.l", "configure", "-width", max(longest, 20))
+        except Exception:
+            pass
 
     def _update_index_hint(self) -> None:
         if not hasattr(self, "lbl_index_status"):
@@ -1052,10 +1126,6 @@ class SettingsPageMixin:
             # Hotkey toggles (binding map applied via「应用快捷键」)
             if hasattr(self, "var_global_hk"):
                 self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
-            if hasattr(self, "var_restart_on_switch"):
-                self.cfg["hotkey_restart_on_model_switch"] = bool(
-                    self.var_restart_on_switch.get()
-                )
         except Exception:
             pass
 
@@ -1315,14 +1385,6 @@ class SettingsPageMixin:
             f"性能预设：{name}",
             "请重新「开启变声」后生效",
         )
-        try:
-            if hasattr(self, "lbl_settings_hint"):
-                self.lbl_settings_hint.configure(
-                    text=f"已应用「{name}」预设 · 需重新开启变声",
-                    fg=TM_OK,
-                )
-        except Exception:
-            pass
 
     def _silent_check_updates(self) -> None:
         """Background catalog fetch; badge 更新 nav if newer GUI (no modal)."""
@@ -1360,16 +1422,16 @@ class SettingsPageMixin:
         threading.Thread(target=work, daemon=True).start()
 
     def _apply_update_nav_badge(self) -> None:
-        btn = self.nav_btns.get("store")
+        # 在线更新 now lives inside 设置 — badge the 设置 nav item instead
+        btn = self.nav_btns.get("settings")
         if not btn:
             return
         try:
             if self._update_badge_on:
-                btn.configure(text="更新·新")
+                btn.configure(text="设置·新")
             else:
-                btn.configure(text="更新")
-            # re-apply active style if on store page
-            if self._current_page == "store":
+                btn.configure(text="设置")
+            if self._current_page == "settings":
                 btn.set_active(True)
         except Exception:
             pass

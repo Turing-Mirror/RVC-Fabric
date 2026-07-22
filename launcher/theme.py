@@ -95,7 +95,7 @@ MIN_WIN_H: Final[int] = 740
 
 APP_PRODUCT_NAME: Final[str] = "RVC Fabric"
 APP_PRODUCT_TAGLINE: Final[str] = "就绪"
-APP_WORDMARK: Final[str] = "RVC Fabric"
+APP_WORDMARK: Final[str] = "RVC Fabric · 图灵镜"
 # Deprecated decorative route string (kept empty; UI no longer shows it)
 APP_ROUTE: Final[str] = ""
 

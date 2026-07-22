@@ -57,6 +57,10 @@
 5. 清死导入；更新本文件与 `pages/__init__.py`。
 6. 改 launcher **需重打 exe** 才能在发行包里看到（分解本身不改运行行为）。
 
+追加：`IndexPanelMixin`（launcher/pages/index_panel.py）— 模型页「特征索引文件」
+绑定面板；数据层为 launcher/catalog.py 的 list/add/remove_index_binding、
+set_active_index（多对多，纯逻辑可单测）。
+
 ## 主类仍保留（终态）
 
 | 区域 | 方法簇 |

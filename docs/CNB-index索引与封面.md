@@ -1,63 +1,69 @@
 # CNB `index.json` 索引与 `ch-banner` 封面
 
 仓库：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases  
-本机暂存：`CNB-GIT-RELEASE/`（产品仓 gitignore）
+本机暂存：`CNB-GIT-RELEASE/`（产品仓 gitignore，不进源码 Git）
 
 ## 目录
 
 ```text
 CNB-GIT-RELEASE/
-  index.json          # 软件自动读取的主索引（优先）
-  ch-banner/          # 角色封面图 <id>.jpg
-  voices/<id>/        # 音色 zip + .sha256（LFS）
-  runtime/<variant>/  # Runtime（Release 或 LFS）
-  setup/              # Setup 安装器
-  catalog/            # 旧 snippet（可选兼容）
+  index.json              # 软件自动读取的主索引
+  ch-banner/<id>.jpg      # 角色封面（社区下载缩略图）
+  voices/<id>/            # 音色 zip + .sha256（LFS）
+  runtime/<variant>/      # Runtime tar（Release 或 LFS）
+  setup/                  # Setup 安装器
+  catalog/online_catalog.snippet.json  # 兼容副清单
 ```
 
-## index.json 字段（音色）
+## 音色条目（`voices[]`）
 
 | 字段 | 说明 |
 |------|------|
 | `name` | 音色名称 |
 | `author` | 作者 |
 | `author_url` | 作者链接 |
-| `released` | 发布日 **YYMMDD**（如 `260722`） |
-| `cover` | 仓内相对路径 `ch-banner/<id>.jpg` |
-| `cover_url` | 完整 raw URL，社区下载列表展示用 |
+| `date` / `released` | **YYMMDD**（如 `260722`） |
+| `cover` | 仓内路径 `ch-banner/<id>.jpg` |
+| `cover_url` | raw 完整 URL，社区下载列表展示 |
 | `pack_url` / `sha256` | LFS 音色包 |
 
-## packages（安装/更新包）
+## 安装/更新包（`packages`）
 
-按 **发布时间 YYMMDD** 命名 id，例如：
+按 **发布时间 YYMMDD** 命名 `id`：
 
-- `setup-260722` — Inno Setup  
-- `gui-260722` — 壳层增量  
-- `runtime-nvidia-260721` — Runtime  
+| 键 | 示例 id | 内容 |
+|----|---------|------|
+| `setup` | `setup-260722` | Inno Setup |
+| `gui_patch` | `gui-260722` | 壳层增量 zip |
+| `runtime` | `runtime-nvidia-260721` | 分显卡 Runtime |
 
-字段：`released`、`version`、`url`、`sha256`、`kind` / `package_type`。
+字段：`released`/`date`、`version`、`url`、`sha256`、`kind`/`package_type`。
 
-## 软件读取顺序
+## 软件如何读
 
-1. `https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json`  
-2. 本地 `configs/online_catalog.json` 的 `manifest_urls`  
-3. 缓存 / 内置清单  
+1. 优先：`…/raw/main/index.json`（`configs/online_catalog.json` → `manifest_urls`）  
+2. 兼容：`catalog/online_catalog.snippet.json`  
+3. 本地缓存 / 内置清单  
 
-实现：`launcher/online/catalog.py`（`VoiceEntry.author` / `released` / `cover_url`）。
+实现：
+
+| 模块 | 作用 |
+|------|------|
+| `launcher/online/catalog.py` | 解析 index；`VoiceEntry` 含 author/date/cover_url |
+| `launcher/ui/store_page.py` | 社区下载行展示封面缩略图 + 作者 |
+| `scripts/write_cnb_index.py` | 从产品清单生成 index + 拷贝 ch-banner |
 
 ## 运维
-
-推送封面与 index（小文件，非 LFS）：
-
-```powershell
-cd CNB-GIT-RELEASE
-git add index.json ch-banner/
-git commit -m "chore: index.json + ch-banner covers"
-git push origin main
-```
-
-生成/刷新索引也可用产品仓脚本（若已提供）：
 
 ```bat
 python scripts\write_cnb_index.py
 ```
+
+```powershell
+cd CNB-GIT-RELEASE
+git add index.json ch-banner/ catalog/
+git commit -m "chore: index.json + ch-banner"
+git push origin main
+```
+
+封面用 **git/raw**（小图，勿 LFS）。音色 zip / Runtime 大文件用 LFS 或 Release。

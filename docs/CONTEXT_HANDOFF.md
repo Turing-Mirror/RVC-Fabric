@@ -24,6 +24,7 @@
 | Setup | **Inno 薄包**（壳层：启动器+主界面+源码配置）；**不含** Runtime / engine-core / VB-Cable |
 | Runtime | **仅 CNB**（按显卡分版）；启动器下载 |
 | engine-core | **仅 CNB LFS** `assets/core/engine-core-*.zip`（hubert+rmvpe+ffmpeg+ffprobe，全卡共用） |
+| 启动器下载 | `launcher/online/multipart.py`：多连接 Range + 断点续传；`provision_progress` 流程 UI |
 | 在线索引 | CNB 仓根 **`index.json`**（主）+ **`ch-banner/`** 封面；`packages` 按 YYMMDD 命名 Setup/gui/runtime；文档 `docs/CNB-index索引与封面.md` |
 | 本地封面 | **`User_Data/ch-banner/<id>.jpg`**；`config.json` 只写相对路径 `ch-banner/...`（禁止绝对盘符） |
 | 音色包 | zip 内 **`config.json`** 含 name/author/author_url/date/cover；模型页与社区下载显示作者与封面 |

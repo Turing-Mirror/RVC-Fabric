@@ -32,6 +32,13 @@ from launcher.env_setup import (
 from launcher.package_meta import load_package_meta
 from launcher.paths import APP_TITLE, ROOT as RROOT, USER_DATA, ensure_dirs
 from launcher.runtime_provision import ensure_runtime, runtime_ready
+from launcher.provision_progress import (
+    ProvisionSnapshot,
+    ProvisionTracker,
+    format_bytes,
+    format_eta,
+    format_speed,
+)
 from launcher.theme import (
     APP_WORDMARK,
     PAD_X,
@@ -42,6 +49,7 @@ from launcher.theme import (
     TM_INK,
     TM_INK_MUTED,
     TM_INSET,
+    TM_META,
     TM_OK,
     TM_SURFACE,
     TM_SURFACE_HOVER,
@@ -60,17 +68,149 @@ from launcher.win_util import (
 )
 
 
+class ProvisionProgressPanel(tk.Frame):
+    """Schale-quiet multi-step progress for Runtime / engine-core / VB-Cable."""
+
+    def __init__(self, master, **kw):
+        super().__init__(master, bg=TM_SURFACE, highlightthickness=1,
+                         highlightbackground=TM_HAIRLINE, **kw)
+        self._step_labels: list[tk.Label] = []
+        top = tk.Frame(self, bg=TM_SURFACE)
+        top.pack(fill="x", padx=12, pady=(10, 4))
+        self.lbl_head = tk.Label(
+            top,
+            text="补全进度",
+            font=title_font(10, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="w",
+        )
+        self.lbl_head.pack(side="left")
+        self.lbl_stepn = tk.Label(
+            top,
+            text="",
+            font=mono_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="e",
+        )
+        self.lbl_stepn.pack(side="right")
+
+        self.steps_host = tk.Frame(self, bg=TM_SURFACE)
+        self.steps_host.pack(fill="x", padx=12, pady=(2, 6))
+
+        bar_row = tk.Frame(self, bg=TM_SURFACE)
+        bar_row.pack(fill="x", padx=12, pady=(0, 4))
+        self.bar_bg = tk.Frame(bar_row, bg=TM_INSET, height=8)
+        self.bar_bg.pack(fill="x")
+        self.bar_bg.pack_propagate(False)
+        self.bar_fg = tk.Frame(self.bar_bg, bg=TM_ACCENT, height=8, width=1)
+        self.bar_fg.place(x=0, y=0, relheight=1.0, width=1)
+
+        self.lbl_detail = tk.Label(
+            self,
+            text="",
+            font=mono_font(8),
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            anchor="w",
+            justify="left",
+        )
+        self.lbl_detail.pack(fill="x", padx=12, pady=(0, 4))
+        self.lbl_remain = tk.Label(
+            self,
+            text="",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        )
+        self.lbl_remain.pack(fill="x", padx=12, pady=(0, 10))
+        self._bar_w = 520
+        self.bar_bg.bind("<Configure>", self._on_bar_cfg)
+
+    def _on_bar_cfg(self, e) -> None:
+        self._bar_w = max(int(e.width), 1)
+
+    def reset_idle(self, message: str = "") -> None:
+        self.lbl_head.configure(text="补全进度")
+        self.lbl_stepn.configure(text="")
+        for w in self._step_labels:
+            w.destroy()
+        self._step_labels.clear()
+        self.bar_fg.place_configure(width=1)
+        self.lbl_detail.configure(text=message or "点击「补全运行环境」开始（多连接下载 · 可断点续传）")
+        self.lbl_remain.configure(text="")
+
+    def apply(self, snap: ProvisionSnapshot) -> None:
+        self.lbl_head.configure(text="补全进度")
+        self.lbl_stepn.configure(
+            text=f"第 {snap.step_index + 1} / {snap.total_steps} 步"
+        )
+        # rebuild step rows if count mismatch
+        if len(self._step_labels) != len(snap.steps):
+            for w in self._step_labels:
+                w.destroy()
+            self._step_labels.clear()
+            for _ in snap.steps:
+                lb = tk.Label(
+                    self.steps_host,
+                    text="",
+                    font=mono_font(8),
+                    bg=TM_SURFACE,
+                    fg=TM_META,
+                    anchor="w",
+                )
+                lb.pack(fill="x", pady=1)
+                self._step_labels.append(lb)
+        status_map = {
+            "done": ("[完成]", TM_OK),
+            "active": ("[进行]", TM_ACCENT),
+            "error": ("[失败]", TM_WARN),
+            "skipped": ("[跳过]", TM_META),
+            "pending": ("[等待]", TM_META),
+        }
+        for lb, st in zip(self._step_labels, snap.steps):
+            tag, color = status_map.get(st.status, ("[等待]", TM_META))
+            lb.configure(text=f"  {tag}  {st.title}", fg=color)
+
+        pct = snap.pct
+        w = max(1, int(self._bar_w * min(100.0, pct) / 100.0))
+        self.bar_fg.place_configure(width=w)
+
+        if snap.total_bytes > 0 and snap.phase == "download":
+            detail = (
+                f"{pct:.0f}%  ·  {format_bytes(snap.done_bytes)} / "
+                f"{format_bytes(snap.total_bytes)}  ·  "
+                f"{format_speed(snap.speed_bps)}  ·  {format_eta(snap.eta_sec)}"
+            )
+        elif snap.phase == "extract":
+            detail = "正在解压…"
+        else:
+            detail = snap.note or snap.step_title
+        self.lbl_detail.configure(text=detail)
+        if snap.remaining_titles:
+            self.lbl_remain.configure(
+                text="剩余：" + " → ".join(snap.remaining_titles)
+            )
+        else:
+            self.lbl_remain.configure(text="剩余：无（本流程最后一步）")
+
+
 class BootstrapApp:
     def __init__(self) -> None:
         ensure_dirs()
         self.root = tk.Tk()
         self.root.title(f"{APP_TITLE} · 启动器")
-        self.root.geometry("620x560")
+        self.root.geometry("640x720")
         self.root.configure(bg=TM_BG)
         self.root.resizable(False, False)
         self._page = "setup"
         self._deploy_busy = False
         self._provision_busy = False
+        self._tracker: ProvisionTracker | None = None
         try:
             self.root.attributes("-topmost", True)
             self.root.after(350, lambda: self.root.attributes("-topmost", False))
@@ -135,17 +275,21 @@ class BootstrapApp:
         self.page_setup = self._build_page_setup(self.content)
         self.page_system = self._build_page_system(self.content)
 
+        self.progress_panel = ProvisionProgressPanel(self.root)
+        self.progress_panel.pack(fill="x", padx=PAD_X, pady=(4, 4))
+        self.progress_panel.reset_idle()
+
         self.status = tk.Label(
             self.root,
             text="正在准备界面…",
             font=mono_font(8),
             bg=TM_BG,
             fg=TM_INK_MUTED,
-            wraplength=540,
+            wraplength=560,
             justify="left",
             anchor="w",
         )
-        self.status.pack(fill="x", padx=PAD_X, pady=(4, 8))
+        self.status.pack(fill="x", padx=PAD_X, pady=(2, 6))
 
         btn_row = tk.Frame(self.root, bg=TM_BG)
         btn_row.pack(pady=(2, 18))
@@ -519,6 +663,18 @@ class BootstrapApp:
         self._set_status("环境正常，可打开主界面。")
         self._refresh_hint()
 
+    def _apply_tracker_ui(self, snap: ProvisionSnapshot) -> None:
+        try:
+            self.progress_panel.apply(snap)
+            line = (
+                f"{snap.step_title} · 第 {snap.step_index + 1}/{snap.total_steps} 步"
+            )
+            if snap.total_bytes > 0 and snap.phase == "download":
+                line += f" · {snap.pct:.0f}%"
+            self._set_status(line, ok=True)
+        except Exception:
+            pass
+
     def _run_provision(
         self,
         variant: str,
@@ -531,128 +687,141 @@ class BootstrapApp:
         self._provision_busy = True
         self._deploy_busy = True
 
+        tracker = ProvisionTracker(
+            on_change=lambda snap: self.root.after(
+                0, lambda s=snap: self._apply_tracker_ui(s)
+            )
+        )
+        self._tracker = tracker
+        self.root.after(
+            0,
+            lambda: self.progress_panel.apply(tracker.snapshot()),
+        )
+
         def work() -> None:
             def log(msg: str) -> None:
+                tracker.set_note(msg)
                 self.root.after(0, lambda m=msg: self._set_status(m, ok=True))
 
             def progress(phase: str, done: int, total: int) -> None:
-                if phase == "download" and total > 0:
-                    pct = min(100, int(100 * done / total))
-                    mb = done / 1e6
-                    tot = total / 1e6
-                    self.root.after(
-                        0,
-                        lambda: self._set_status(
-                            f"下载 Runtime… {pct}%（{mb:.0f}/{tot:.0f} MB）",
-                            ok=True,
-                        ),
-                    )
+                if phase == "download":
+                    tracker.set_step("runtime_dl")
+                    tracker.set_bytes(done, total)
                 elif phase == "extract":
-                    self.root.after(
-                        0, lambda: self._set_status("正在解压 Runtime…", ok=True)
-                    )
+                    tracker.set_step("runtime_extract")
+                    tracker.set_phase("extract")
                 elif phase == "models":
-                    self.root.after(
-                        0, lambda: self._set_status("正在检查/补全模型…", ok=True)
-                    )
+                    tracker.set_step("engine_dl")
 
             try:
-                from launcher.runtime_provision import provision_runtime
+                from launcher.runtime_provision import provision_runtime, runtime_ready as _rr
 
-                ok, msg = provision_runtime(
-                    variant,
-                    root=RROOT,
-                    progress=progress,
-                    log=log,
-                    force=force,
-                    download_core_models=False,
-                )
+                already_rt = _rr(RROOT) and not force
+                if already_rt:
+                    tracker.set_step("runtime_dl")
+                    tracker.mark_done("runtime_dl")
+                    tracker.mark_done("runtime_extract")
+                    ok, msg = True, "Runtime 已就绪，跳过下载。"
+                else:
+                    tracker.set_step("runtime_dl")
+                    ok, msg = provision_runtime(
+                        variant,
+                        root=RROOT,
+                        progress=progress,
+                        log=log,
+                        force=force,
+                        download_core_models=False,
+                    )
+                    if ok:
+                        tracker.mark_done("runtime_dl")
+                        tracker.mark_done("runtime_extract")
             except Exception as e:
                 ok, msg = False, str(e)
+                tracker.mark_error("runtime_dl", msg)
 
             extra_msgs: list[str] = []
-            # Runtime 成功后：engine-core（必需）→ VB-Cable（可选安装包）
             if ok:
                 try:
                     from launcher.engine_core import ensure_engine_core, engine_core_ready
 
                     if not engine_core_ready(RROOT) or force:
-                        self.root.after(
-                            0,
-                            lambda: self._set_status(
-                                "Runtime 已就绪，正在下载引擎资源（Hubert/RMVPE/ffmpeg）…",
-                                ok=True,
-                            ),
-                        )
+                        tracker.set_step("engine_dl")
 
                         def _ecore_progress(phase: str, done: int, total: int) -> None:
-                            if phase in ("engine_core", "download") and total > 0:
-                                pct = min(100, int(100 * done / total))
-                                mb = done / 1e6
-                                tot = total / 1e6
-                                self.root.after(
-                                    0,
-                                    lambda: self._set_status(
-                                        f"下载引擎资源… {pct}%（{mb:.0f}/{tot:.0f} MB）",
-                                        ok=True,
-                                    ),
-                                )
+                            if phase in ("engine_core", "download"):
+                                tracker.set_step("engine_dl")
+                                tracker.set_bytes(done, total)
                             elif phase == "engine_extract":
-                                self.root.after(
-                                    0,
-                                    lambda: self._set_status(
-                                        "正在解压引擎资源…", ok=True
-                                    ),
-                                )
+                                tracker.set_step("engine_extract")
+                                tracker.set_phase("extract")
 
                         eok, emsg = ensure_engine_core(
                             root=RROOT,
-                            force=False,
+                            force=bool(force),
                             progress=_ecore_progress,
                             log=log,
                         )
                         extra_msgs.append(emsg)
-                        if not eok:
+                        if eok:
+                            tracker.mark_done("engine_dl")
+                            tracker.mark_done("engine_extract")
+                        else:
                             ok = False
                             msg = emsg
+                            tracker.mark_error("engine_dl", emsg)
                     else:
+                        tracker.mark_skipped("engine_dl")
+                        tracker.mark_skipped("engine_extract")
                         extra_msgs.append("引擎资源已就绪")
                 except Exception as e:
                     ok = False
                     msg = f"引擎资源补全失败：{e}"
                     extra_msgs.append(msg)
+                    tracker.mark_error("engine_dl", msg)
 
             if ok:
                 try:
                     from launcher.vbcable import ensure_vbcable_pack, vbcable_pack_ready
 
                     if not vbcable_pack_ready():
-                        self.root.after(
-                            0,
-                            lambda: self._set_status(
-                                "正在下载虚拟声卡安装包…", ok=True
-                            ),
+                        tracker.set_step("vbcable_dl")
+
+                        def _vb_prog(done: int, total: int) -> None:
+                            tracker.set_bytes(done, total)
+
+                        vok, vmsg = ensure_vbcable_pack(
+                            log=log, progress=_vb_prog
                         )
-                        vok, vmsg = ensure_vbcable_pack(log=log)
                         extra_msgs.append(
                             vmsg if vok else f"虚拟声卡包未就绪：{vmsg}"
                         )
                         if vok:
+                            tracker.mark_done("vbcable_dl")
                             log("VB-Cable 安装包已就绪（可点「安装虚拟声卡」）。")
+                        else:
+                            tracker.mark_error("vbcable_dl", vmsg)
                     else:
+                        tracker.mark_skipped("vbcable_dl")
                         extra_msgs.append("本地已有虚拟声卡安装包")
                 except Exception as e:
                     extra_msgs.append(f"虚拟声卡包下载跳过：{e}")
+                    tracker.mark_skipped("vbcable_dl")
 
             def done() -> None:
                 self._provision_busy = False
                 self._deploy_busy = False
+                self._tracker = None
                 if ok:
                     self._clear_pending_marker()
                     full = msg
                     if extra_msgs:
                         full = msg + "\n" + "\n".join(extra_msgs)
                     self._set_status(full, ok=True)
+                    try:
+                        self.progress_panel.lbl_detail.configure(text="补全完成")
+                        self.progress_panel.lbl_remain.configure(text="")
+                    except Exception:
+                        pass
                     if interactive:
                         self._offer_optional_after_runtime(already_had_runtime=False)
                 else:
@@ -661,7 +830,7 @@ class BootstrapApp:
                         messagebox.showwarning(
                             "补全未完成",
                             msg + "\n\n可点击「补全运行环境」重试。\n"
-                            "需联网下载 Runtime 与 engine-core（无需本机 Python）。",
+                            "支持断点续传；大文件使用多连接下载。",
                         )
                 self._refresh_hint()
 

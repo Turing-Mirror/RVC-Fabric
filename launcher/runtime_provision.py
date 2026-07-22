@@ -268,9 +268,10 @@ def provision_runtime(
     _log(
         log,
         f"准备下载 {spec.label} Runtime "
-        f"v{spec.version or '?'}（约 {format_size(spec.size_bytes or part.size_bytes)}）",
+        f"v{spec.version or '?'}（约 {format_size(spec.size_bytes or part.size_bytes)}）"
+        " · 多连接 / 可断点续传",
     )
-    _progress(progress, "prepare", 0, part.size_bytes or 1)
+    _progress(progress, "download", 0, part.size_bytes or 1)
 
     cache = cache_dir(base)
     dest_file = cache / (part.name or f"runtime-{var}.tar")

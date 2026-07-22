@@ -16,6 +16,8 @@ if str(ROOT) not in sys.path:
 
 from launcher.online.catalog import OnlineCatalog, compare_versions, load_bundled_catalog
 from launcher.online.downloader import (
+    _has_requests,
+    _session,
     cnb_lfs_object_url,
     is_git_lfs_pointer_bytes,
     is_github_url,
@@ -87,6 +89,14 @@ class CnbUrlTests(unittest.TestCase):
             cnb_lfs_object_url("Turing-Mirror", "RVC-Fabric-Releases", oid),
             f"https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{oid}",
         )
+
+    def test_session_optional_without_requests(self):
+        # 启动器补全 Runtime 时允许无 requests；_session 不得抛错
+        s = _session()
+        if not _has_requests():
+            self.assertIsNone(s)
+        else:
+            self.assertIsNotNone(s)
         raw = (
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
             "-/git/raw/main/voices/guanguan/guanguan-v2.zip"

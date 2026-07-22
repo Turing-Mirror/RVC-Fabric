@@ -12,7 +12,9 @@ import re
 import time
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import parse_qs, unquote, urlparse, urlunparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, unquote, urlparse
+from urllib.request import Request, urlopen
 
 ProgressCb = Callable[[int, int], None]  # done_bytes, total_bytes (0 if unknown)
 
@@ -28,11 +30,25 @@ class DownloadError(RuntimeError):
     pass
 
 
+def _has_requests() -> bool:
+    try:
+        import requests  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def _session():
+    """Optional requests.Session; None when only stdlib is available.
+
+    启动器补全 Runtime 时往往还没有 Runtime，主机/壳层也不保证有 requests。
+    下载必须能用 urllib 走通，不能向用户索要 pip install。
+    """
     try:
         import requests
-    except ImportError as e:
-        raise DownloadError("需要 requests 库（Runtime 或主机 Python 请安装 requests）") from e
+    except ImportError:
+        return None
     s = requests.Session()
     s.headers.update(
         {
@@ -41,6 +57,16 @@ def _session():
         }
     )
     return s
+
+
+def _urlopen_get(url: str, *, timeout: int = 120):
+    """GET with redirects (stdlib). Returns http.client response-like."""
+    req = Request(
+        url,
+        headers={"User-Agent": DEFAULT_UA, "Accept": "*/*"},
+        method="GET",
+    )
+    return urlopen(req, timeout=timeout)
 
 
 def is_sharepoint_or_onedrive(url: str) -> bool:
@@ -203,55 +229,133 @@ def resolve_download_url(url: str, session=None) -> str:
         return u
 
     # SharePoint / OneDrive public share: follow redirects, rewrite to download.aspx
+    if "download=1" not in u:
+        joiner = "&" if "?" in u else "?"
+        candidate = f"{u}{joiner}download=1"
+    else:
+        candidate = u
+
     close = False
     if session is None:
         session = _session()
-        close = True
+        close = session is not None
     try:
-        # Prefer append download=1 first (works for many :u: :b: shares)
-        if "download=1" not in u:
-            joiner = "&" if "?" in u else "?"
-            candidate = f"{u}{joiner}download=1"
+        if session is not None:
+            r = session.get(candidate, allow_redirects=True, stream=True, timeout=60)
+            final = r.url
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            status = r.status_code
+            r.close()
         else:
-            candidate = u
+            with _urlopen_get(candidate, timeout=60) as r:
+                final = r.geturl()
+                ctype = (r.headers.get("Content-Type") or "").lower()
+                status = getattr(r, "status", 200) or 200
 
-        r = session.get(candidate, allow_redirects=True, stream=True, timeout=60)
-        final = r.url
-        # Peek content-type: if HTML, try download.aspx rewrite
-        ctype = (r.headers.get("Content-Type") or "").lower()
-        r.close()
-
-        if "text/html" not in ctype and r.status_code < 400:
+        if "text/html" not in ctype and status < 400:
             return final
 
-        # Rewrite onedrive.aspx?id= → download.aspx?SourceUrl=
         if "onedrive.aspx" in final.lower():
-            new_url = final.replace("onedrive.aspx", "download.aspx").replace(
+            return final.replace("onedrive.aspx", "download.aspx").replace(
                 "?id=", "?SourceUrl="
             )
-            return new_url
 
         parsed = urlparse(final)
         qs = parse_qs(parsed.query)
-        # UniqueId / sourcedoc style
         if "sourcedoc" in qs or "UniqueId" in qs:
             uid = (qs.get("UniqueId") or qs.get("sourcedoc") or [""])[0]
             base = f"{parsed.scheme}://{parsed.netloc}"
-            # Prefer layouts download
             return f"{base}/_layouts/15/download.aspx?UniqueId={unquote(uid)}"
 
-        # Fallback: original + download=1
         return candidate
     except DownloadError:
         raise
     except Exception as e:
         raise DownloadError(f"解析 SharePoint/OneDrive 链接失败: {e}") from e
     finally:
-        if close:
+        if close and session is not None:
             try:
                 session.close()
             except Exception:
                 pass
+
+
+def _stream_to_file(
+    resolved: str,
+    tmp: Path,
+    *,
+    progress: Optional[ProgressCb],
+    timeout: int,
+    session=None,
+) -> tuple[int, int, bytes]:
+    """Write body to tmp. Returns (done_bytes, total_hint, first_bytes)."""
+    if session is not None:
+        with session.get(
+            resolved, stream=True, allow_redirects=True, timeout=timeout
+        ) as r:
+            r.raise_for_status()
+            total = int(r.headers.get("content-length") or 0)
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            if "text/html" in ctype and total < 500_000:
+                snippet = r.content[:200].decode("utf-8", errors="ignore")
+                raise DownloadError(
+                    "服务器返回了网页而不是文件（链接可能需要登录或已失效）。"
+                    f" Content-Type={ctype} 预览={snippet[:80]!r}"
+                )
+            done = 0
+            first = b""
+            with open(tmp, "wb") as f:
+                for chunk in r.iter_content(chunk_size=CHUNK):
+                    if not chunk:
+                        continue
+                    if len(first) < 200:
+                        first += chunk[: 200 - len(first)]
+                    f.write(chunk)
+                    done += len(chunk)
+                    if progress:
+                        try:
+                            progress(done, total)
+                        except Exception:
+                            pass
+            return done, total, first
+
+    # stdlib urllib — works without requests (pre-Runtime / thin host Python)
+    try:
+        resp = _urlopen_get(resolved, timeout=timeout)
+    except HTTPError as e:
+        raise DownloadError(f"HTTP {e.code}: {e.reason}") from e
+    except URLError as e:
+        raise DownloadError(f"网络错误：{e.reason}") from e
+    try:
+        total = int(resp.headers.get("Content-Length") or 0)
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        done = 0
+        first = b""
+        with open(tmp, "wb") as f:
+            while True:
+                chunk = resp.read(CHUNK)
+                if not chunk:
+                    break
+                if len(first) < 200:
+                    first += chunk[: 200 - len(first)]
+                f.write(chunk)
+                done += len(chunk)
+                if progress:
+                    try:
+                        progress(done, total)
+                    except Exception:
+                        pass
+        if "text/html" in ctype and done < 500_000:
+            raise DownloadError(
+                "服务器返回了网页而不是文件（链接可能需要登录或已失效）。"
+                f" Content-Type={ctype} 预览={first[:80]!r}"
+            )
+        return done, total, first
+    finally:
+        try:
+            resp.close()
+        except Exception:
+            pass
 
 
 def download_file(
@@ -263,7 +367,11 @@ def download_file(
     timeout: int = 120,
     expected_sha256: str = "",
 ) -> Path:
-    """Download url → dest (atomic .part rename). Returns dest."""
+    """Download url → dest (atomic .part rename). Returns dest.
+
+    Uses ``requests`` when available; otherwise **stdlib urllib** so the
+    启动器 can fetch Runtime before any green env exists.
+    """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
@@ -271,98 +379,57 @@ def download_file(
     last_err: Exception | None = None
 
     try:
-        # Prefer CNB LFS object URL when content hash is known (real zip/tar bytes).
         resolved = prefer_cnb_lfs_url(
             resolve_download_url(url, session=session), expected_sha256
         )
         for attempt in range(1, retries + 1):
             try:
-                with session.get(
-                    resolved, stream=True, allow_redirects=True, timeout=timeout
-                ) as r:
-                    r.raise_for_status()
-                    total = int(r.headers.get("content-length") or 0)
-                    ctype = (r.headers.get("Content-Type") or "").lower()
-                    if "text/html" in ctype and total < 500_000:
-                        # likely an error / login page
-                        snippet = r.content[:200].decode("utf-8", errors="ignore")
-                        raise DownloadError(
-                            "服务器返回了网页而不是文件（链接可能需要登录或已失效）。"
-                            f" Content-Type={ctype} 预览={snippet[:80]!r}"
-                        )
-                    done = 0
-                    first = b""
-                    with open(tmp, "wb") as f:
-                        for chunk in r.iter_content(chunk_size=CHUNK):
-                            if not chunk:
-                                continue
-                            if len(first) < 200:
-                                first += chunk[: 200 - len(first)]
-                            f.write(chunk)
-                            done += len(chunk)
-                            if progress:
-                                try:
-                                    progress(done, total)
-                                except Exception:
-                                    pass
-                    if total and done < total * 0.98:
-                        raise DownloadError(
-                            f"下载不完整：{done}/{total} bytes"
-                        )
-                    # git/raw of LFS files returns pointer text — upgrade to /-/lfs/<oid>
-                    body_head = first
-                    if done < 1024 and tmp.is_file():
+                done, total, first = _stream_to_file(
+                    resolved,
+                    tmp,
+                    progress=progress,
+                    timeout=timeout,
+                    session=session,
+                )
+                if total and done < total * 0.98:
+                    raise DownloadError(f"下载不完整：{done}/{total} bytes")
+
+                body_head = first
+                if done < 1024 and tmp.is_file():
+                    try:
+                        body_head = tmp.read_bytes()[:512]
+                    except OSError:
+                        pass
+                if is_git_lfs_pointer_bytes(body_head):
+                    oid = parse_git_lfs_pointer_oid(body_head)
+                    pr = parse_cnb_org_repo(resolved)
+                    if oid and pr and "/-/lfs/" not in resolved:
+                        resolved = cnb_lfs_object_url(pr[0], pr[1], oid)
                         try:
-                            body_head = tmp.read_bytes()[:512]
+                            tmp.unlink()
                         except OSError:
                             pass
-                    if is_git_lfs_pointer_bytes(body_head):
-                        oid = parse_git_lfs_pointer_oid(body_head)
-                        pr = parse_cnb_org_repo(resolved)
-                        if oid and pr and "/-/lfs/" not in resolved:
-                            resolved = cnb_lfs_object_url(pr[0], pr[1], oid)
-                            try:
-                                tmp.unlink()
-                            except OSError:
-                                pass
-                            # Retry same attempt slot with LFS object URL
-                            with session.get(
-                                resolved,
-                                stream=True,
-                                allow_redirects=True,
-                                timeout=timeout,
-                            ) as r2:
-                                r2.raise_for_status()
-                                total2 = int(r2.headers.get("content-length") or 0)
-                                done = 0
-                                first2 = b""
-                                with open(tmp, "wb") as f:
-                                    for chunk in r2.iter_content(chunk_size=CHUNK):
-                                        if not chunk:
-                                            continue
-                                        if len(first2) < 200:
-                                            first2 += chunk[: 200 - len(first2)]
-                                        f.write(chunk)
-                                        done += len(chunk)
-                                        if progress:
-                                            try:
-                                                progress(done, total2)
-                                            except Exception:
-                                                pass
-                                if is_git_lfs_pointer_bytes(first2):
-                                    raise DownloadError(
-                                        "CNB LFS 对象地址仍返回指针，无法取得实体文件。"
-                                    )
-                                if total2 and done < total2 * 0.98:
-                                    raise DownloadError(
-                                        f"下载不完整：{done}/{total2} bytes"
-                                    )
-                        else:
+                        done, total, first2 = _stream_to_file(
+                            resolved,
+                            tmp,
+                            progress=progress,
+                            timeout=timeout,
+                            session=session,
+                        )
+                        if is_git_lfs_pointer_bytes(first2):
                             raise DownloadError(
-                                "下载到的是 Git LFS 指针而不是真实文件。\n"
-                                "请在 catalog 中使用 CNB 直链：…/-/lfs/<sha256> "
-                                "（内容哈希，与 sha256 字段相同）。"
+                                "CNB LFS 对象地址仍返回指针，无法取得实体文件。"
                             )
+                        if total and done < total * 0.98:
+                            raise DownloadError(
+                                f"下载不完整：{done}/{total} bytes"
+                            )
+                    else:
+                        raise DownloadError(
+                            "下载到的是 Git LFS 指针而不是真实文件。\n"
+                            "请在 catalog 中使用 CNB 直链：…/-/lfs/<sha256> "
+                            "（内容哈希，与 sha256 字段相同）。"
+                        )
                 if expected_sha256:
                     _verify_sha256(tmp, expected_sha256)
                 if dest.is_file():
@@ -388,10 +455,11 @@ def download_file(
                     time.sleep(1.2 * attempt)
         raise DownloadError(str(last_err) if last_err else "下载失败")
     finally:
-        try:
-            session.close()
-        except Exception:
-            pass
+        if session is not None:
+            try:
+                session.close()
+            except Exception:
+                pass
 
 
 def _verify_sha256(path: Path, expect: str) -> None:

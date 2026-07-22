@@ -161,7 +161,6 @@
 
 | 优先级 | 项 |
 |--------|-----|
-| 高 | 打出 Setup 薄包并推到 CNB `setup/`；三变体 Runtime Release 齐（含 amd） |
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 中 | 改 launcher 后需重打 exe 才能在发行包看到 |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |
@@ -183,5 +182,5 @@
 
 ## 10. 一句话状态
 
-**RVC Fabric 功能侧已齐；安装动线定为 Setup 薄包 + 启动器从 CNB Release 补 Runtime + 社区 LFS 音色。**  
-下一步：**打 Setup 推 CNB、实机走通补全与变声**；代码真相以 `git log` + 源码为准。
+**RVC Fabric 功能侧已齐；Runtime 已在 CNB Release 就绪；安装动线为 Setup 薄包 + 启动器补 Runtime + 社区 LFS 音色。**  
+下一步：**Setup → 补全 → 变声 实机验收**；代码真相以 `git log` + 源码为准。

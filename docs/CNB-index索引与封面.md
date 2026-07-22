@@ -10,10 +10,11 @@ CNB-GIT-RELEASE/
   index.json              # 软件自动读取的主索引
   ch-banner/<id>.jpg      # 角色封面（社区下载缩略图）
   voices/<id>/            # 音色 zip + .sha256（LFS）
-  runtime/<variant>/      # Runtime tar（Release 或 LFS）
   setup/                  # Setup 安装器
   catalog/online_catalog.snippet.json  # 兼容副清单
 ```
+
+（Runtime 制品在 CNB **Release 标签 `RVC-runtime`**，不由本索引文档维护上传流程。）
 
 ## 音色条目（`voices[]`）
 
@@ -29,13 +30,7 @@ CNB-GIT-RELEASE/
 
 ## 安装/更新包（`packages`）
 
-按 **发布时间 YYMMDD** 命名 `id`：
-
-| 键 | 示例 id | 内容 |
-|----|---------|------|
-| `setup` | `setup-260722` | Inno Setup |
-| `gui_patch` | `gui-260722` | 壳层增量 zip |
-| `runtime` | `runtime-nvidia-260721` | 分显卡 Runtime |
+按 **发布时间 YYMMDD** 命名 `id`（如 `setup-260722`、`gui-260722`）。
 
 字段：`released`/`date`、`version`、`url`、`sha256`、`kind`/`package_type`。
 
@@ -80,4 +75,4 @@ git commit -m "chore: index.json + ch-banner"
 git push origin main
 ```
 
-封面用 **git/raw**（小图，勿 LFS）。音色 zip / Runtime 大文件用 LFS 或 Release。
+封面用 **git/raw**（小图，勿 LFS）。音色 zip 用 LFS。

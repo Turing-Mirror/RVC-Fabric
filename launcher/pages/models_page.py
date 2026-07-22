@@ -343,7 +343,7 @@ class ModelsPageMixin:
                 focus=active,
                 index_text=corner,
                 width=max(card_min, 180),
-                height=250,
+                height=268,
                 on_click=lambda ix=full_ix: self._use_model_from_grid(ix),
                 action_text="使用中" if active else "使用",
                 on_action=None if active else (lambda ix=full_ix: self._use_model_from_grid(ix)),

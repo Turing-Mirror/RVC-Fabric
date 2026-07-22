@@ -22,6 +22,22 @@ from launcher.online.package_spec import (
 
 
 class VoiceMetaUnitTests(unittest.TestCase):
+    def test_portable_cover_rel_no_drive_letter(self):
+        from launcher.online.voice_install import _portable_cover_rel
+
+        self.assertEqual(
+            _portable_cover_rel("ch-banner/kiki.jpg", Path("x")),
+            "ch-banner/kiki.jpg",
+        )
+        # Windows-style absolute leak → strip to relative
+        self.assertEqual(
+            _portable_cover_rel(
+                r"L:\My project\Grok\User_Data\ch-banner\kiki.jpg", Path("x")
+            ),
+            "ch-banner/kiki.jpg",
+        )
+        self.assertEqual(_portable_cover_rel("cover.jpg", Path("x")), "cover.jpg")
+
     def test_normalize_yymmdd(self):
         self.assertEqual(normalize_yymmdd("260722"), "260722")
         self.assertEqual(normalize_yymmdd("2026-07-22"), "260722")

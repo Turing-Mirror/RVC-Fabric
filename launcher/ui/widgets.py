@@ -867,10 +867,24 @@ class ModelCoverCard(tk.Frame):
         self._on_click = on_click
         self._photo = photo
 
-        # Cover ~58% of card (image-first)
-        cover_h = max(int(height * 0.58), 96)
+        # Layout: cover | meta (tag/name/author) | foot (使用 button, fixed).
+        # Author line was packed into the same body as the action button; with
+        # fixed card height + pack_propagate(False) the blue「使用」button was
+        # vertically clipped (looked "squeezed"). Foot is reserved so the
+        # button always keeps full height. Index badge stays place()'d SE so
+        # it never shares a pack-row with the button either.
+        has_action = bool(action_text)
+        foot_h = 36 if has_action else 0
+        # Slightly lower cover ratio when action is shown so meta+foot fit
+        cover_ratio = 0.52 if has_action else 0.58
+        cover_h = max(int(height * cover_ratio), 96)
+        # Cap cover so meta (tag+name+author ≈ 52px) + foot always fit
+        meta_min = 52
+        max_cover = max(height - meta_min - foot_h - 16, 96)
+        cover_h = min(cover_h, max_cover)
+
         cover_box = tk.Frame(self, bg=TM_INSET, height=cover_h)
-        cover_box.pack(fill="x")
+        cover_box.pack(side="top", fill="x")
         cover_box.pack_propagate(False)
         if photo is not None:
             lbl = tk.Label(cover_box, image=photo, bg=TM_INSET)
@@ -888,8 +902,44 @@ class ModelCoverCard(tk.Frame):
             lbl.place(relx=0.5, rely=0.5, anchor="center")
             widgets = [lbl]
 
+        # Reserve foot before body expands, so「使用」is never clipped
+        foot = None
+        if has_action:
+            foot = tk.Frame(self, bg=TM_SURFACE, height=foot_h)
+            foot.pack(side="bottom", fill="x", padx=10, pady=(4, 8))
+            foot.pack_propagate(False)
+            widgets.append(foot)
+            if on_action and not active:
+                btn = tk.Button(
+                    foot,
+                    text=action_text,
+                    font=title_font(9, "bold"),
+                    bg=TM_ACCENT,
+                    fg=TM_ACCENT_INK,
+                    relief="flat",
+                    cursor="hand2",
+                    command=on_action,
+                    bd=0,
+                    padx=14,
+                    pady=3,
+                    highlightthickness=0,
+                )
+                btn.pack(side="left", anchor="w")
+            elif active:
+                soft = tk.Label(
+                    foot,
+                    text=action_text,
+                    font=mono_font(8),
+                    bg=TM_ACCENT_SOFT,
+                    fg=TM_ACCENT,
+                    padx=10,
+                    pady=3,
+                )
+                soft.pack(side="left", anchor="w")
+                widgets.append(soft)
+
         body = tk.Frame(self, bg=TM_SURFACE)
-        body.pack(fill="both", expand=True, padx=10, pady=(8, 10))
+        body.pack(side="top", fill="both", expand=True, padx=10, pady=(6, 0))
 
         tag_lbl = tk.Label(
             body,
@@ -911,29 +961,16 @@ class ModelCoverCard(tk.Frame):
         name_lbl.pack(anchor="w", pady=(2, 0))
         widgets.extend([body, name_lbl, tag_lbl, cover_box, self])
         author_s = (author or "").strip()
-        if author_s:
-            auth_lbl = tk.Label(
-                body,
-                text=f"作者 · {author_s[:18]}",
-                font=mono_font(8),
-                bg=TM_SURFACE,
-                fg=TM_META,
-                anchor="w",
-            )
-            auth_lbl.pack(anchor="w", pady=(1, 0))
-            widgets.append(auth_lbl)
-        else:
-            # 旧音色无 config 作者时也给一行提示，避免卡片空白
-            auth_lbl = tk.Label(
-                body,
-                text="作者 · 未标注",
-                font=mono_font(8),
-                bg=TM_SURFACE,
-                fg=TM_META,
-                anchor="w",
-            )
-            auth_lbl.pack(anchor="w", pady=(1, 0))
-            widgets.append(auth_lbl)
+        auth_lbl = tk.Label(
+            body,
+            text=f"作者 · {author_s[:18]}" if author_s else "作者 · 未标注",
+            font=mono_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        auth_lbl.pack(anchor="w", pady=(1, 0))
+        widgets.append(auth_lbl)
 
         if active:
             badge = tk.Label(
@@ -949,8 +986,7 @@ class ModelCoverCard(tk.Frame):
             widgets.append(badge)
 
         if index_text:
-            # Bottom-right corner badge — must not share the row with the
-            # 使用 button (that squeezed the button when a voice had an index).
+            # Bottom-right corner badge — absolute, never packs with「使用」
             idx = tk.Label(
                 self,
                 text=index_text,
@@ -960,32 +996,6 @@ class ModelCoverCard(tk.Frame):
             )
             idx.place(relx=1.0, rely=1.0, x=-10, y=-8, anchor="se")
             widgets.append(idx)
-
-        if action_text and on_action and not active:
-            btn = tk.Button(
-                body,
-                text=action_text,
-                font=title_font(9, "bold"),
-                bg=TM_ACCENT,
-                fg=TM_ACCENT_INK,
-                relief="flat",
-                cursor="hand2",
-                command=on_action,
-                bd=0,
-                padx=14,
-                pady=4,
-            )
-            btn.pack(anchor="w", pady=(8, 0))
-        elif active and action_text:
-            tk.Label(
-                body,
-                text=action_text,
-                font=mono_font(8),
-                bg=TM_ACCENT_SOFT,
-                fg=TM_ACCENT,
-                padx=10,
-                pady=3,
-            ).pack(anchor="w", pady=(8, 0))
 
         def _click(_e=None):
             if on_click:

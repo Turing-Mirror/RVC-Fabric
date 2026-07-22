@@ -92,7 +92,7 @@ class IndexPanelMixin:
             return
         tk.Label(
             head,
-            text="与 .pth 放在同一音色文件夹；没有检索库也能变声",
+            text="检索库可选；无 index 也能用",
             font=sans_font(9),
             bg=TM_BG,
             fg=TM_META,
@@ -132,13 +132,12 @@ class IndexPanelMixin:
             except Exception:
                 pass
             if inside:
-                badge = "本音色文件夹内"
+                badge = "当前音色目录"
             else:
-                # Should be rare after sanitize; show real location, not「共享」
                 try:
-                    badge = f"外部：{Path(p).parent}"
+                    badge = str(Path(p).parent)
                 except Exception:
-                    badge = "外部路径"
+                    badge = str(p)
             self._index_row(
                 rows,
                 path=p,
@@ -219,14 +218,13 @@ class IndexPanelMixin:
         # Always start in this model's folder — indices live next to the .pth.
         init = d if d and Path(d).is_dir() else str(Path(d).parent)
         path = filedialog.askopenfilename(
-            title="选择特征索引文件（将复制进本音色文件夹）",
+            title="选择特征索引文件 (.index)",
             initialdir=init,
             filetypes=[("特征索引", "*.index"), ("全部", "*.*")],
         )
         if not path:
             return
         try:
-            # Product rule: always copy next to .pth (no ghost「共享位置」)
             bound = add_index_binding(
                 Path(d), Path(path), copy_into_folder=True
             )
@@ -235,7 +233,7 @@ class IndexPanelMixin:
             messagebox.showerror("绑定失败", str(e))
             return
         self._after_index_change(bound)
-        self._toast_profile("已复制进本音色文件夹并启用")
+        self._toast_profile("已绑定并启用")
 
     def _ui_use_index(self, path: str) -> None:
         d = self._current_model_dir()

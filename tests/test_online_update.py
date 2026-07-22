@@ -107,6 +107,21 @@ class CnbUrlTests(unittest.TestCase):
             f"https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{oid}",
         )
 
+    def test_prefer_cnb_lfs_does_not_rewrite_release_urls(self):
+        """Runtime nvidia/nvidia50 must stay on Release, not dead LFS rewrite."""
+        oid = "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b"
+        rel = (
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+            "-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar"
+        )
+        self.assertEqual(prefer_cnb_lfs_url(rel, oid), rel)
+        rel50 = (
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+            "-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar"
+        )
+        oid50 = "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489"
+        self.assertEqual(prefer_cnb_lfs_url(rel50, oid50), rel50)
+
     def test_index_json_voice_meta(self):
         from pathlib import Path
 

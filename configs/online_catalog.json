@@ -10,19 +10,82 @@
       "url": "",
       "sha256": "",
       "min_app_version": "",
-      "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。全量含 Runtime 请用 community.sharepoint_full / QQ，package_type=full_package，软件内不会合并安装。"
+      "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。Runtime 由启动器从 CNB Release 补全，不在软件内静默覆盖。"
     }
   },
   "community": {
     "qq_group": "",
     "qq_link": "",
     "sharepoint_full": "",
-    "note": "完整软件包（含 Runtime / 显卡分版）请从 SharePoint 或 QQ 群下载。软件内仅：gui_patch 增量 + 音色包。音色与 Runtime 大文件见 CNB 制品仓 LFS 直链。"
+    "note": "推荐：下载 Setup 薄包 → 启动器补全 Runtime。音色见 CNB LFS；Runtime 见 CNB Release（标签 RVC-runtime）。"
   },
   "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
+  "runtime_release_tag": "RVC-runtime",
   "manifest_urls": [
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/catalog/online_catalog.snippet.json"
   ],
+  "runtimes": {
+    "nvidia": {
+      "variant": "nvidia",
+      "label": "NVIDIA CUDA",
+      "version": "2026.07.21",
+      "format": "tar",
+      "size_bytes": 6077133824,
+      "extract_root": "Runtime",
+      "release_tag": "RVC-runtime",
+      "parts": [
+        {
+          "name": "runtime-nvidia-2026.07.21.tar",
+          "size_bytes": 6077133824,
+          "sha256": "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
+          "urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar",
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b"
+          ]
+        }
+      ]
+    },
+    "amd": {
+      "variant": "amd",
+      "label": "AMD/Intel DirectML",
+      "version": "2026.07.21",
+      "format": "tar",
+      "size_bytes": 1801268224,
+      "extract_root": "Runtime",
+      "release_tag": "RVC-runtime",
+      "parts": [
+        {
+          "name": "runtime-amd-2026.07.21.tar",
+          "size_bytes": 1801268224,
+          "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+          "urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-amd-2026.07.21.tar",
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274"
+          ]
+        }
+      ]
+    },
+    "nvidia50": {
+      "variant": "nvidia50",
+      "label": "NVIDIA 50 系 CUDA",
+      "version": "2026.07.21",
+      "format": "tar",
+      "size_bytes": 6698774016,
+      "extract_root": "Runtime",
+      "release_tag": "RVC-runtime",
+      "parts": [
+        {
+          "name": "runtime-nvidia50-2026.07.21.tar",
+          "size_bytes": 6698774016,
+          "sha256": "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
+          "urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar",
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489"
+          ]
+        }
+      ]
+    }
+  },
   "voices": [
     {
       "id": "guanguan",

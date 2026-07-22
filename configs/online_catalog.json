@@ -112,7 +112,8 @@
       "size_bytes": 51006395,
       "description": "guanguanV1 · 官方音色",
       "publisher": "rvc_fabric",
-      "fabric_official": true
+      "fabric_official": true,
+      "date": "260721"
     },
     {
       "id": "keruan",
@@ -130,7 +131,8 @@
       "size_bytes": 51012498,
       "description": "keruanV1 · 官方音色",
       "publisher": "rvc_fabric",
-      "fabric_official": true
+      "fabric_official": true,
+      "date": "260721"
     },
     {
       "id": "kiki",
@@ -148,7 +150,8 @@
       "size_bytes": 51021019,
       "description": "kikiV1 · 官方音色",
       "publisher": "rvc_fabric",
-      "fabric_official": true
+      "fabric_official": true,
+      "date": "260721"
     },
     {
       "id": "youzhanv2-xi",
@@ -166,7 +169,8 @@
       "size_bytes": 53357394,
       "description": "youzhanv2-xi · 官方音色",
       "publisher": "rvc_fabric",
-      "fabric_official": true
+      "fabric_official": true,
+      "date": "260721"
     }
   ]
 }

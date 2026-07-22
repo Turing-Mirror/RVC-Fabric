@@ -23,8 +23,8 @@
 | 体验目标 | **Setup 安装壳** → **启动器补全 Runtime** → 主界面 → 社区音色 → 变声 |
 | Setup | **Inno Setup 6**（`installer/RVC_Fabric_Setup.iss` + `scripts/build_setup.py`）；含壳层+hubert/rmvpe/ffmpeg |
 | Runtime | **仅 CNB**（`CNB-GIT-RELEASE/runtime` + Release `RVC-runtime`）；Setup **不打** Runtime；启动器安装后下载 |
-| 在线索引 | CNB 仓根 **`index.json`** + **`ch-banner/`** 封面；音色字段 name/author/author_url/date/cover |
-| 音色包 | zip 内 **`config.json`**（+ 可选 tm_package.json）含作者元数据；模型页卡片显示「作者 · …」 |
+| 在线索引 | CNB 仓根 **`index.json`**（主）+ **`ch-banner/`** 封面；`packages` 按 YYMMDD 命名 Setup/gui/runtime；文档 `docs/CNB-index索引与封面.md` |
+| 音色包 | zip 内 **`config.json`** 含 name/author/author_url/date/cover；模型页与社区下载显示作者与封面 |
 | UI | Schale 浅蓝 token（`theme.py`）；禁止 AI 渐变 / RVCMAX 粉紫 / 青绿 |
 | 参考包 | `RVCMAX/RVCMAX_*`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker） |

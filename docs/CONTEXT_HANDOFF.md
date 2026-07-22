@@ -21,8 +21,8 @@
 | 产品名 | **RVC Fabric**（界面文案 / 桌面快捷方式；`launcher/theme.py` 的 `APP_*`） |
 | 底座 | 官方 RVC WebUI + 实时 `gui_v1.py`，**不重写算法** |
 | 体验目标 | **Setup 安装壳** → **启动器补全 Runtime** → 主界面 → 社区音色 → 变声 |
-| Setup | **Inno Setup 6**（`installer/RVC_Fabric_Setup.iss` + `scripts/build_setup.py`）；**勿自写 Tk 安装器** |
-| Runtime | CNB **Release**（标签 `RVC-runtime`）；音色 CNB **Git LFS**；安装后由**启动器**补全 |
+| Setup | **Inno Setup 6**（`installer/RVC_Fabric_Setup.iss` + `scripts/build_setup.py`）；含壳层+hubert/rmvpe/ffmpeg |
+| Runtime | **仅 CNB**（`CNB-GIT-RELEASE/runtime` + Release `RVC-runtime`）；Setup **不打** Runtime；启动器安装后下载 |
 | UI | Schale 浅蓝 token（`theme.py`）；禁止 AI 渐变 / RVCMAX 粉紫 / 青绿 |
 | 参考包 | `RVCMAX/RVCMAX_*`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker） |

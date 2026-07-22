@@ -255,12 +255,21 @@ def normalize_voice_meta(data: Any) -> dict[str, str]:
     if aurl not in (None, ""):
         out["author_url"] = str(aurl).strip()
     date = normalize_yymmdd(
-        data.get("date") or data.get("yymmdd") or data.get("release_date")
+        data.get("date")
+        or data.get("released")
+        or data.get("yymmdd")
+        or data.get("release_date")
     )
     if date:
         out["date"] = date
-    cover = data.get("cover") or data.get("cover_path") or data.get("cover_file")
+    cover = (
+        data.get("cover")
+        or data.get("cover_path")
+        or data.get("cover_file")
+        or data.get("cover_url")
+    )
     if cover not in (None, ""):
+        # Keep relative pack paths; absolute http covers stay as-is for catalog
         out["cover"] = str(cover).strip().replace("\\", "/")
     return out
 

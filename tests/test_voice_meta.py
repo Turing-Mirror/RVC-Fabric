@@ -42,6 +42,12 @@ def test_normalize_voice_meta_fields():
     assert "url" not in m
 
 
+def test_normalize_voice_meta_released_alias():
+    m = normalize_voice_meta({"name": "x", "released": "260101", "author": "A"})
+    assert m["date"] == "260101"
+    assert m["author"] == "A"
+
+
 def test_voice_meta_template():
     t = voice_meta_template(
         name="kiki", author="TM", author_url="https://x", date="260101"

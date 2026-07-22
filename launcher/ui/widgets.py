@@ -914,7 +914,19 @@ class ModelCoverCard(tk.Frame):
         if author_s:
             auth_lbl = tk.Label(
                 body,
-                text=author_s[:20],
+                text=f"作者 · {author_s[:18]}",
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                anchor="w",
+            )
+            auth_lbl.pack(anchor="w", pady=(1, 0))
+            widgets.append(auth_lbl)
+        else:
+            # 旧音色无 config 作者时也给一行提示，避免卡片空白
+            auth_lbl = tk.Label(
+                body,
+                text="作者 · 未标注",
                 font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,

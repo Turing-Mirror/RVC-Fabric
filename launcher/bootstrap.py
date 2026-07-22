@@ -605,13 +605,14 @@ class BootstrapApp:
             messagebox.showerror("失败", str(e))
 
     def on_vbcable(self) -> None:
-        # 先提示用户即将出现 UAC / 安装窗，避免“没有任何提示”
+        # 先说明即将出现 UAC / 安装窗；成功启动后不要再弹窗或置顶，
+        # 否则会把 UAC 和 VB-Cable 安装界面盖住，看起来像“没有安装提示”。
         if not messagebox.askyesno(
             "安装虚拟声卡",
             "即将启动 VB-Cable 安装程序。\n\n"
-            "接下来可能出现：\n"
+            "点「是」之后请注意：\n"
             "· Windows 用户账户控制（UAC）— 请点「是」\n"
-            "· VB-Cable 安装窗口 — 请点 Install\n\n"
+            "· VB-Cable 安装窗口 — 请点 Install / 安装\n\n"
             "软件须已完整安装/解压到硬盘（不要从压缩包内直接运行）。\n"
             "是否继续？",
         ):
@@ -619,16 +620,12 @@ class BootstrapApp:
             return
         ok, msg = install_vbcable()
         self._set_status(msg, ok=ok)
-        try:
-            self.root.lift()
-            self.root.attributes("-topmost", True)
-            self.root.after(300, lambda: self.root.attributes("-topmost", False))
-        except Exception:
-            pass
-        (messagebox.showinfo if ok else messagebox.showwarning)("虚拟声卡", msg)
         cfg = load_config()
         cfg["vbcable_hint_done"] = True
         save_config(cfg)
+        if not ok:
+            messagebox.showwarning("虚拟声卡", msg)
+        # 成功时只更新状态栏，让 UAC / 安装窗保持在前台
 
     def on_open_sound_panel(self) -> None:
         try:

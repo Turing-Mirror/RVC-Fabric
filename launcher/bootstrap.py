@@ -202,6 +202,12 @@ class ProvisionProgressPanel(tk.Frame):
 class BootstrapApp:
     def __init__(self) -> None:
         ensure_dirs()
+        try:
+            from launcher.install_health import ensure_install_health
+
+            self._install_health = ensure_install_health(RROOT)
+        except Exception:
+            self._install_health = {}
         self.root = tk.Tk()
         self.root.title(f"{APP_TITLE} · 启动器")
         self.root.geometry("640x720")

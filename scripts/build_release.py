@@ -286,6 +286,16 @@ def copy_engine(out: Path) -> None:
     # Merge critical weights/ffmpeg from RVCMAX if repo placeholders are empty
     merge_rvcmax_engine_bits(out)
 
+    # Never ship developer absolute paths in configs/inuse
+    try:
+        sys.path.insert(0, str(REPO))
+        from launcher.inuse_config import write_clean_inuse
+
+        write_clean_inuse(out)
+        log("[engine] sanitized configs/inuse/config.json")
+    except Exception as e:
+        log(f"[engine] inuse sanitize skip: {e}")
+
 
 def _rvc_core_candidates() -> list[Path]:
     """Prefer N-card core, then AMD / 50-series cores for hubert/rmvpe/ffmpeg."""

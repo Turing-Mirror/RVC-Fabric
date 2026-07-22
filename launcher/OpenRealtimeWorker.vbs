@@ -1,18 +1,17 @@
-' Launch headless realtime worker (no FreeSimpleGUI window).
-' Used by release TM_Voice.exe so Runtime is not polluted by PyInstaller env.
-' Stdout/stderr go to User_Data\logs\realtime_worker.log via cmd redirect
-' (pythonw alone often discards console streams).
+' Launch headless realtime worker with a clean Runtime environment.
+' Used by frozen 变声器.exe so host Python 3.13 / PyInstaller never pollutes Runtime 3.9.
 Option Explicit
-Dim sh, fso, repo, py, pyw, script, logf, vblog, ts, rc, cmdLine
+Dim sh, fso, repo, py, script, logf, vblog, ts, rc, cmdLine, env
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
+Set env = sh.Environment("Process")
 
 repo = fso.GetParentFolderName(WScript.ScriptFullName)
 If fso.GetFileName(repo) = "launcher" Then
   repo = fso.GetParentFolderName(repo)
 End If
-If Len(sh.Environment("Process")("TM_VOICE_ROOT")) > 0 Then
-  repo = sh.Environment("Process")("TM_VOICE_ROOT")
+If Len(env("TM_VOICE_ROOT")) > 0 Then
+  repo = env("TM_VOICE_ROOT")
 End If
 sh.CurrentDirectory = repo
 
@@ -24,10 +23,9 @@ Set ts = fso.CreateTextFile(vblog, True)
 ts.WriteLine "OpenRealtimeWorker.vbs"
 ts.WriteLine "repo=" & repo
 
-' Prefer python.exe (stdout redirect works); hide window via cmd /c start style 0
+' Prefer python.exe so cmd redirect captures traceback; hide window via Run style 0
 py = repo & "\Runtime\python.exe"
-pyw = repo & "\Runtime\pythonw.exe"
-If Not fso.FileExists(py) Then py = pyw
+If Not fso.FileExists(py) Then py = repo & "\Runtime\pythonw.exe"
 If Not fso.FileExists(py) Then
   ts.WriteLine "NO_RUNTIME"
   ts.Close
@@ -41,30 +39,49 @@ If Not fso.FileExists(script) Then
   WScript.Quit 1
 End If
 
-sh.Environment("Process")("PYTHONPATH") = repo
-sh.Environment("Process")("TM_REALTIME_WORKER") = "1"
-sh.Environment("Process")("TM_VOICE_ROOT") = repo
-sh.Environment("Process")("PYTHONUNBUFFERED") = "1"
+' --- scrub host / PyInstaller / conda pollution (must match win_util spirit) ---
+Dim dropList, i, k
+dropList = Array( _
+  "PYTHONHOME", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONEXECUTABLE", "PYTHONUSERBASE", _
+  "PYTHONWARNINGS", "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE", "PYTHONUNBUFFERED", _
+  "_MEIPASS", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", _
+  "TCL_LIBRARY", "TK_LIBRARY", "TIX_LIBRARY", _
+  "VIRTUAL_ENV", "CONDA_PREFIX", "CONDA_DEFAULT_ENV", "CONDA_PYTHON_EXE", "CONDA_SHLVL", _
+  "PIP_TARGET", "UV_PROJECT", "UV_PYTHON", "POETRY_ACTIVE", _
+  "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE" _
+)
 On Error Resume Next
-sh.Environment("Process").Remove "PYTHONHOME"
-sh.Environment("Process").Remove "_MEIPASS"
+For i = 0 To UBound(dropList)
+  env.Remove dropList(i)
+Next
 On Error GoTo 0
+
+' Clean assignment for Runtime child
+env("PYTHONPATH") = repo
+env("TM_REALTIME_WORKER") = "1"
+env("TM_VOICE_ROOT") = repo
+env("PYTHONUNBUFFERED") = "1"
+env("PYTHONNOUSERSITE") = "1"
+' PATH: Runtime first (DLL load), then package root, then system PATH as inherited
+Dim path0
+path0 = repo & "\Runtime;" & repo & ";" & env("PATH")
+env("PATH") = path0
 
 ts.WriteLine "py=" & py
 ts.WriteLine "script=" & script
-ts.WriteLine "TM_USE_DML=" & sh.Environment("Process")("TM_USE_DML")
-ts.WriteLine "TM_ACCEL=" & sh.Environment("Process")("TM_ACCEL")
-ts.WriteLine "TM_ACCEL_RESOLVED=" & sh.Environment("Process")("TM_ACCEL_RESOLVED")
+ts.WriteLine "TM_USE_DML=" & env("TM_USE_DML")
+ts.WriteLine "TM_ACCEL=" & env("TM_ACCEL")
+ts.WriteLine "TM_ACCEL_RESOLVED=" & env("TM_ACCEL_RESOLVED")
+ts.WriteLine "PYTHONPATH=" & env("PYTHONPATH")
 ts.Close
 
 Dim args
+' Quote every path segment — install dirs may contain spaces (e.g. E:\RVC Fabric)
 args = """" & py & """ -u """ & script & """"
-If sh.Environment("Process")("TM_USE_DML") = "1" Then
+If env("TM_USE_DML") = "1" Then
   args = args & " --dml"
 End If
 
-' cmd /c with redirect so crash traceback always lands in realtime_worker.log
-' Window style 0 = hidden
 cmdLine = "cmd.exe /c (" & args & ") >> """ & logf & """ 2>&1"
 Set ts = fso.OpenTextFile(vblog, 8, True)
 ts.WriteLine "cmdline=" & cmdLine

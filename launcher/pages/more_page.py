@@ -75,6 +75,7 @@ class MorePageMixin:
             ("使用说明", lambda: self.show_page("help"), False),
             ("快捷键说明", self.show_hotkeys_help, False),
             ("生成诊断包（反馈问题）", self._collect_diagnostics, False),
+            ("校验 Runtime 完整性", self._verify_runtime_integrity, False),
             ("打开性能信息文件夹", self._open_perf_reports, False),
             ("打开 User_Data", lambda: open_path(USER_DATA), False),
             ("打开安装目录", lambda: open_path(ROOT), False),
@@ -203,3 +204,49 @@ class MorePageMixin:
             )
         except Exception as e:
             messagebox.showerror("失败", str(e))
+
+    def _verify_runtime_integrity(self) -> None:
+        """Compare local Runtime to CNB integrity JSON + import smoke."""
+        import threading
+
+        self._set_status_visual("busy", "校验 Runtime…", "文件与 torch 导入探测")
+
+        def work() -> None:
+            err = ""
+            summary = ""
+            ok = False
+            path = None
+            try:
+                from launcher.runtime_integrity import (
+                    format_report_summary,
+                    integrity_report_path,
+                    verify_runtime,
+                )
+
+                rep = verify_runtime(ROOT, fetch_remote=True)
+                ok = bool(rep.get("ok"))
+                summary = format_report_summary(rep)
+                path = integrity_report_path(ROOT)
+            except Exception as e:
+                err = str(e)
+
+            def done() -> None:
+                if err:
+                    self._set_status_visual("error", "校验失败", err[:48])
+                    messagebox.showerror("Runtime 完整性", err)
+                    return
+                self._set_status_visual(
+                    "idle" if ok else "error",
+                    "Runtime 校验通过" if ok else "Runtime 校验失败",
+                    (summary or "")[:64],
+                )
+                messagebox.showinfo(
+                    "Runtime 完整性",
+                    (summary or "")
+                    + (f"\n\n详情：\n{path}" if path else "")
+                    + "\n\n失败时可在启动器重新「补全运行环境」。",
+                )
+
+            self.root.after(0, done)
+
+        threading.Thread(target=work, daemon=True).start()

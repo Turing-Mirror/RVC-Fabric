@@ -70,6 +70,9 @@ def gather_files(root: str) -> list[tuple[str, str]]:
         "User_Data/runtime_control/gpu_probe.json",
         "User_Data/app_config.json",
         "User_Data/update_state.json",
+        "User_Data/logs/runtime_integrity_last.json",
+        "User_Data/logs/install_health.log",
+        "User_Data/logs/gpu_probe.log",
         "configs/inuse/config.json",
         "package_meta.json",
     ):

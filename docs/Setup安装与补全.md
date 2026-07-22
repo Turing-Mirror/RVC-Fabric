@@ -13,7 +13,23 @@
 | VB-Cable | **CNB LFS** | Runtime/engine-core 后再下 |
 | 社区音色 voice_pack | CNB LFS | 软件内「社区下载」 |
 
-**用户动线**：Setup 装壳 → 启动器下 Runtime（分版）→ 下 engine-core（共用）→ 可选 VB-Cable → 主界面变声。
+**用户动线**：Setup 装壳 → 启动器下 Runtime（分版）→ **完整性校验**（关键文件 + torch 导入）→ 下 engine-core（共用）→ 可选 VB-Cable → 主界面变声。
+
+### Runtime 完整性（类 Steam 校验）
+
+| 项 | 说明 |
+|----|------|
+| 清单生成 | `python scripts/gen_runtime_integrity.py --runtime <Runtime目录> --variant nvidia --version 2026.07.21 --out CNB-GIT-RELEASE/runtime/nvidia/integrity-2026.07.21.json --alias` |
+| 上传 CNB | 小 JSON 走 git raw：`runtime/<variant>/integrity-<version>.json`（及 `integrity.json` 别名） |
+| 软件拉取 | 补全 Runtime 后自动校验；主界面「其他 → 校验 Runtime 完整性」可手动重跑 |
+| 本地报告 | `User_Data/logs/runtime_integrity_last.json` |
+| 离线兜底 | `configs/runtime_integrity/<variant>.json`（打进 Setup 壳时可选） |
+
+### 发行包禁止污染
+
+- `configs/inuse/config.json` **不得**含开发机绝对路径（`L:\…` 等）
+- Setup 打包时 `sanitize_inuse_config` 强制写入干净模板
+- 启动时 `ensure_clean_inuse_config` 会清掉外盘绝对路径
 
 **下载体验（启动器）**：补全面板显示 **第 i/n 步**、剩余步骤、当前文件进度 / 速度 / ETA。大文件走 **多连接 HTTP Range**（默认最多 16 连接，可断点续传 `.part`）；服务器不支持 Range 时自动回落单连接。
 

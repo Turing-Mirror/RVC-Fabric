@@ -34,6 +34,7 @@ CNB_LFS_BASE = f"{CNB_HOST}/{CNB_ORG_REPO}/-/lfs"
 DEFAULT_RUNTIME_RELEASE_TAG = "RVC-runtime"
 
 MANIFEST_URLS = (
+    f"{CNB_RAW_MAIN}/index.json",
     f"{CNB_RAW_MAIN}/catalog/online_catalog.snippet.json",
     f"{CNB_RAW_MAIN}/manifest.json",
 )
@@ -271,12 +272,15 @@ def _normalize_part(
                 if lfs not in urls:
                     urls.insert(0, lfs)
         else:
-            # release：Release 优先，去掉误加的 AMD 式纯 LFS 作为首选时可保留作回退
-            release_urls = [u for u in urls if "/-/releases/download/" in u]
-            other = [u for u in urls if u not in release_urls]
+            # release：只走 Release，禁止再附带失效 LFS 回退
+            release_urls = [
+                u
+                for u in urls
+                if "/-/releases/download/" in u or "/releases/download/" in u
+            ]
             if not release_urls and name:
                 release_urls = [cnb_release_download_url(release_tag, name)]
-            urls = release_urls + other
+            urls = release_urls
 
     sha256_urls: list[str] = []
     raw_s = part.get("sha256_urls") or part.get("sha256_url")

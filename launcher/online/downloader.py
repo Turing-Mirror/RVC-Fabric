@@ -172,13 +172,24 @@ def normalize_cnb_url(url: str) -> str:
 
 
 def prefer_cnb_lfs_url(url: str, sha256: str = "") -> str:
-    """If URL is CNB and sha256 known, use ``/-/lfs/<sha256>`` for real bytes."""
+    """Upgrade git/raw (or similar) to LFS object URL when oid is known.
+
+    **Do not** rewrite CNB **Release** asset URLs (``…/-/releases/download/…``).
+    Runtime nvidia/nvidia50 are published only as Release files; rewriting them
+    to ``/-/lfs/<oid>`` yields a dead/wrong link even when sha256 matches.
+    """
     u = normalize_cnb_url(url)
     oid = re.sub(r"[^0-9a-fA-F]", "", (sha256 or "").strip())
     if not is_cnb_url(u) or len(oid) != 64:
         return u
     if "/-/lfs/" in u:
-        return u
+        return u.split("?", 1)[0]
+    # Release / attachment downloads are already real files — keep them
+    if "/-/releases/download/" in u or "/releases/download/" in u:
+        return u.split("?", 1)[0]
+    # API release download links also stay
+    if "api.cnb.cool" in u.lower() and "/releases/download/" in u:
+        return u.split("?", 1)[0]
     parsed = parse_cnb_org_repo(u)
     if not parsed:
         return u

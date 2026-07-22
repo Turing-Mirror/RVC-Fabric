@@ -12,7 +12,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 
-from launcher.catalog import filter_sort_models, import_model_to_catalog
+from launcher.catalog import (
+    filter_sort_models,
+    import_model_to_catalog,
+    import_user_files,
+    model_folder_layout_help,
+)
 from launcher.paths import MODELS_DIR, list_voice_models
 from launcher.theme import (
     GUTTER,
@@ -113,9 +118,9 @@ class ModelsPageMixin:
         GhostButton(actions, "刷新", command=self.refresh_models, padx=12, pady=6).pack(
             side="right", padx=4
         )
-        GhostButton(actions, "导入模型", command=self.import_model, padx=12, pady=6).pack(
-            side="right", padx=4
-        )
+        GhostButton(
+            actions, "导入音色…", command=self.import_model, padx=12, pady=6
+        ).pack(side="right", padx=4)
         PrimaryButton(
             actions,
             "社区下载",
@@ -277,7 +282,7 @@ class ModelsPageMixin:
         if not self.models:
             tk.Label(
                 self.model_grid,
-                text="还没有音色。点「社区下载」在线获取，或点「导入模型」添加本地 .pth。",
+                text="还没有音色。点「社区下载」在线获取，或点「导入音色」添加 .pth / .index / .zip 包。",
                 bg=TM_BG,
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
@@ -543,17 +548,31 @@ class ModelsPageMixin:
         )
 
     def import_model(self) -> None:
+        """Import local .pth / .index / .zip (CNB-style voice pack) into User_Data/models.
+
+        Placement rule (fixed)::
+
+            User_Data/models/<名称>/
+                *.pth + optional *.index (same folder) + cover + config.json
+        """
         paths = filedialog.askopenfilenames(
-            title="选择 RVC 模型 (.pth)",
-            filetypes=[("RVC 模型", "*.pth"), ("全部", "*.*")],
+            title="导入音色（.pth / .index / .zip 音色包）",
+            filetypes=[
+                ("音色文件", "*.pth *.index *.zip"),
+                ("模型权重", "*.pth"),
+                ("特征检索", "*.index"),
+                ("音色包 zip", "*.zip"),
+                ("全部", "*.*"),
+            ],
         )
         if not paths:
             return
-        # 规范文件管理：按钮直接写清动作，不用「是/否」猜
         choice = ask_choice(
             self.root,
             "导入方式",
-            "把模型文件放进软件目录，用哪种方式？\n"
+            "文件会放进软件的音色目录（每个音色一个文件夹，"
+            ".pth 与 .index 放在一起）：\n"
+            f"{MODELS_DIR}\n\n"
             "复制：原文件保留在原位置。\n"
             "移动：原位置不再保留，统一由软件管理。",
             [("copy", "复制进来"), ("move", "移动进来")],
@@ -561,16 +580,71 @@ class ModelsPageMixin:
         if choice is None:
             return
         move = choice == "move"
-        n = 0
-        for p in paths:
+        current_dir = None
+        try:
+            current_dir = self._current_model_dir()
+        except Exception:
+            current_dir = None
+
+        # Local pth/index/cover first; zips use the same installer as CNB packs
+        summary = import_user_files(
+            list(paths),
+            MODELS_DIR,
+            move=move,
+            current_model_dir=Path(current_dir) if current_dir else None,
+        )
+        zip_ok = 0
+        for zp in summary.get("zips") or []:
             try:
-                import_model_to_catalog(Path(p), MODELS_DIR, move=move)
-                n += 1
+                from launcher.online.voice_install import install_voice_pack_zip
+
+                install_voice_pack_zip(Path(zp), models_root=MODELS_DIR)
+                zip_ok += 1
+                if move:
+                    try:
+                        Path(zp).unlink()
+                    except Exception:
+                        pass
             except Exception as e:
-                messagebox.showerror("导入失败", f"{p}\n{e}")
+                summary.setdefault("errors", []).append(
+                    {"path": str(zp), "error": str(e)}
+                )
+
         self.refresh_models()
-        if n:
-            verb = "移入" if move else "复制到"
+        n_models = len(summary.get("models") or [])
+        n_idx = len(summary.get("indices") or [])
+        errs = summary.get("errors") or []
+        lines = []
+        if n_models:
+            lines.append(f"新建/更新音色 {n_models} 个")
+        if n_idx:
+            lines.append(f"绑定检索库 {n_idx} 个（已复制进音色文件夹）")
+        if zip_ok:
+            lines.append(f"安装音色包 zip {zip_ok} 个")
+        if not lines and not errs:
+            lines.append("没有可导入的文件。")
+        msg = "\n".join(lines)
+        msg += f"\n\n位置：{MODELS_DIR}"
+        if errs:
+            detail = "\n".join(
+                f"· {Path(e['path']).name}: {e['error']}" for e in errs[:6]
+            )
+            msg += f"\n\n部分失败：\n{detail}"
+            messagebox.showwarning("导入完成（有失败项）", msg)
+        elif n_models or n_idx or zip_ok:
+            # Select last imported model when we created one
+            last = (summary.get("models") or [None])[-1]
+            if last and last.get("path"):
+                for i, mm in enumerate(self.models):
+                    if mm.get("path") == last.get("path"):
+                        self._select_model(i, feedback=True, maybe_restart=False)
+                        break
             messagebox.showinfo(
-                "导入完成", f"已{verb} {n} 个模型：\n{MODELS_DIR}"
+                "导入完成",
+                msg + "\n\n" + model_folder_layout_help().split("导入时可选")[0].strip(),
+            )
+        else:
+            messagebox.showinfo(
+                "未能导入",
+                msg + "\n\n" + model_folder_layout_help(),
             )

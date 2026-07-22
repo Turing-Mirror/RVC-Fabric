@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """Voice model catalog under User_Data (RVCMAX job split; not engine assets).
 
-Preferred layout (product story)::
+Canonical on-disk layout (after import / community install)::
 
     User_Data/models/<name>/
-        *.pth
-        cover.png|jpg   (optional)
-        config.json     (optional: pitch, formant, tag, index)
+        *.pth            # required — model weight (one primary file)
+        *.index          # optional — FAISS retrieval, **same folder as .pth**
+        cover.png|jpg    # optional — card art
+        config.json      # sidecar: name/tag/params + index binding + active_profile
+        profiles/*.tmvp  # optional — named config profiles
+
+Import entry points accept ``.pth`` / ``.index`` / (via UI) ``.zip`` voice packs.
+``.index`` never lives in a global dump folder by default: it is copied next to
+its ``.pth`` so a voice folder is portable.
 
 Legacy fallback: flat ``assets/weights/*.pth`` still listed, tagged as legacy.
 """
@@ -17,7 +23,7 @@ import json
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, Union
 
 # Safe folder name for catalog entries
 _SAFE = re.compile(r"[^\w\u4e00-\u9fff\-]+", re.UNICODE)
@@ -396,6 +402,116 @@ def filter_sort_models(
     return out
 
 
+_COVER_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+_IMPORT_EXTS = frozenset({".pth", ".index", ".zip", ".png", ".jpg", ".jpeg", ".webp"})
+
+
+def model_folder_layout_help() -> str:
+    """User-facing placement rules (import dialog / help page)."""
+    return (
+        "音色装好后的固定位置：\n"
+        "  User_Data/models/<名称>/\n"
+        "    *.pth        模型权重（必需）\n"
+        "    *.index      特征检索库（可选，与 .pth 放同一文件夹）\n"
+        "    cover.jpg    封面（可选）\n"
+        "    config.json  参数与绑定（软件维护）\n"
+        "    profiles/    配置档案（可选）\n"
+        "\n"
+        "导入时可选：\n"
+        "  · .pth — 装成一个音色；同目录同名 .index 会自动带上\n"
+        "  · .pth + .index — 一起放进同一文件夹并绑定（推荐）\n"
+        "  · 仅 .index — 复制进当前选中音色的文件夹并绑定\n"
+        "  · .zip — 与社区/CNB 音色包相同，整包安装\n"
+    )
+
+
+def classify_import_paths(
+    paths: Sequence[Union[str, Path]],
+) -> dict[str, list[Path]]:
+    """Split user-selected paths into zips / pths / indices / covers."""
+    out: dict[str, list[Path]] = {
+        "zip": [],
+        "pth": [],
+        "index": [],
+        "cover": [],
+        "other": [],
+    }
+    seen: set[str] = set()
+    for raw in paths:
+        p = Path(raw)
+        try:
+            key = str(p.resolve())
+        except Exception:
+            key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        if not p.is_file():
+            out["other"].append(p)
+            continue
+        suf = p.suffix.lower()
+        if suf == ".zip":
+            out["zip"].append(p)
+        elif suf == ".pth":
+            out["pth"].append(p)
+        elif suf == ".index":
+            out["index"].append(p)
+        elif suf in _COVER_EXTS:
+            out["cover"].append(p)
+        else:
+            out["other"].append(p)
+    return out
+
+
+def match_index_for_pth(
+    pth: Path, indices: Sequence[Path]
+) -> Optional[Path]:
+    """Pick the best .index for a .pth from a multi-select list (or siblings)."""
+    pth = Path(pth)
+    inds = [Path(i) for i in indices if Path(i).is_file()]
+    if not inds:
+        return None
+    stem = pth.stem.lower()
+    for ip in inds:
+        if ip.stem.lower() == stem:
+            return ip
+    for ip in inds:
+        n = ip.stem.lower()
+        if stem in n or n in stem:
+            return ip
+    try:
+        parent = pth.parent.resolve()
+        same_dir = [ip for ip in inds if ip.parent.resolve() == parent]
+    except Exception:
+        same_dir = []
+    if len(same_dir) == 1:
+        return same_dir[0]
+    if len(inds) == 1:
+        return inds[0]
+    return None
+
+
+def match_cover_for_pth(pth: Path, covers: Sequence[Path]) -> Optional[Path]:
+    pth = Path(pth)
+    covs = [Path(c) for c in covers if Path(c).is_file()]
+    if not covs:
+        return None
+    stem = pth.stem.lower()
+    for c in covs:
+        if c.stem.lower() in (stem, "cover"):
+            return c
+    try:
+        parent = pth.parent.resolve()
+        same = [c for c in covs if c.parent.resolve() == parent]
+    except Exception:
+        same = []
+    if len(same) == 1:
+        return same[0]
+    if len(covs) == 1:
+        return covs[0]
+    return None
+
+
 def import_model_to_catalog(
     src_pth: Path,
     models_root: Path,
@@ -407,6 +523,9 @@ def import_model_to_catalog(
 ) -> dict[str, Any]:
     """Copy (or move) a .pth into User_Data/models/<name>/ + write config.json.
 
+    The .index is **copied into the model folder** (not left as a loose shared
+    path) so placement is always: models/<name>/*.pth + models/<name>/*.index.
+
     ``move=True`` removes the source files after a successful import — the
     user chose 「移动」 so the software folder becomes the single home.
     """
@@ -417,9 +536,12 @@ def import_model_to_catalog(
     dest_dir = Path(models_root) / name
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_pth = dest_dir / src_pth.name
-    shutil.copy2(src_pth, dest_pth)
+    if dest_pth.resolve() != src_pth.resolve():
+        shutil.copy2(src_pth, dest_pth)
     if cover_src and Path(cover_src).is_file():
         ext = Path(cover_src).suffix.lower() or ".png"
+        if ext == ".jpeg":
+            ext = ".jpg"
         shutil.copy2(cover_src, dest_dir / f"cover{ext}")
     # Auto-pick sibling .index next to the pth if not provided
     if index_src is None:
@@ -434,19 +556,42 @@ def import_model_to_catalog(
                     break
     index_path = ""
     if index_src and Path(index_src).is_file():
-        index_path = bind_index_to_model_dir(dest_dir, Path(index_src), display_name=name)
-    cfg = {
-        "name": name,
-        "tag": guess_tag(name),
-        "file": dest_pth.name,
-    }
-    if index_path:
-        cfg["index"] = index_path
-        cfg["index_files"] = [index_path]
-    (dest_dir / "config.json").write_text(
-        json.dumps(cfg, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+        # Always copy into the model folder (portable pack rule)
+        index_path = bind_index_to_model_dir(
+            dest_dir,
+            Path(index_src),
+            display_name=name,
+            copy_into_folder=True,
+        )
+        # bind_index_to_model_dir already wrote config; re-read and keep
+        side = _read_sidecar(dest_dir)
+        side["name"] = name
+        side["tag"] = side.get("tag") or guess_tag(name)
+        side["file"] = dest_pth.name
+        side["source"] = "import"
+        side["index"] = index_path
+        files = [str(p) for p in (side.get("index_files") or [])]
+        if index_path not in files:
+            files.append(index_path)
+        side["index_files"] = files
+        _write_sidecar(dest_dir, side)
+    else:
+        cfg = {
+            "name": name,
+            "tag": guess_tag(name),
+            "file": dest_pth.name,
+            "source": "import",
+        }
+        # Preserve any pre-existing index keys if re-importing over same folder
+        old = _read_sidecar(dest_dir)
+        for k in ("index", "index_files", "pitch", "formant", "index_rate",
+                  "rms_mix_rate", "threhold", "f0method", "active_profile"):
+            if k in old and k not in cfg:
+                cfg[k] = old[k]
+        (dest_dir / "config.json").write_text(
+            json.dumps(cfg, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     if move:
         # Source files have a safe copy inside dest_dir — remove the originals
         try:
@@ -464,16 +609,158 @@ def import_model_to_catalog(
                 Path(index_src).unlink()
         except Exception:
             pass
+        try:
+            if (
+                cover_src
+                and Path(cover_src).is_file()
+                and Path(cover_src).resolve().parent.resolve()
+                != dest_dir.resolve()
+            ):
+                Path(cover_src).unlink()
+        except Exception:
+            pass
+    side = _read_sidecar(dest_dir)
+    index_path = str(side.get("index") or index_path or "")
     return {
-        "name": name,
+        "name": str(side.get("name") or name),
         "path": str(dest_pth.resolve()),
         "file": dest_pth.name,
         "dir": str(dest_dir.resolve()),
         "cover": _find_cover(dest_dir),
         "index": index_path,
-        "tag": cfg["tag"],
+        "tag": str(side.get("tag") or guess_tag(name)),
         "source": "user_data",
     }
+
+
+def import_index_for_model(
+    model_dir: Path,
+    index_src: Path,
+    *,
+    move: bool = False,
+    activate: bool = True,
+) -> str:
+    """Copy a standalone .index into an existing model folder and bind it.
+
+    Placement rule: always ends up as ``model_dir / <filename>.index``.
+    """
+    model_dir = Path(model_dir)
+    index_src = Path(index_src)
+    if not model_dir.is_dir():
+        raise ValueError(f"音色文件夹不存在：{model_dir}")
+    if not index_src.is_file() or index_src.suffix.lower() != ".index":
+        raise ValueError(f"不是 .index 文件：{index_src}")
+    path = add_index_binding(
+        model_dir, index_src, copy_into_folder=True, move_into_folder=move
+    )
+    if activate:
+        set_active_index(model_dir, path)
+    return path
+
+
+def import_user_files(
+    paths: Sequence[Union[str, Path]],
+    models_root: Path,
+    *,
+    move: bool = False,
+    current_model_dir: Optional[Path] = None,
+) -> dict[str, Any]:
+    """Import a multi-select of .pth / .index / covers (not zips).
+
+    Returns a summary dict::
+
+        {
+          "models": [import_model_to_catalog results…],
+          "indices": [{"path": …, "model_dir": …}, …],
+          "errors": [{"path": str, "error": str}, …],
+          "skipped_other": [str, …],
+        }
+
+    Zip files are listed under ``skipped_other`` — the UI should route them
+    to ``install_voice_pack_zip`` separately.
+    """
+    groups = classify_import_paths(paths)
+    summary: dict[str, Any] = {
+        "models": [],
+        "indices": [],
+        "errors": [],
+        "skipped_other": [str(p) for p in groups["other"]],
+        "zips": [str(p) for p in groups["zip"]],
+    }
+    models_root = Path(models_root)
+    pths = list(groups["pth"])
+    indices = list(groups["index"])
+    covers = list(groups["cover"])
+    used_indices: set[str] = set()
+    used_covers: set[str] = set()
+
+    for pth in pths:
+        try:
+            idx = match_index_for_pth(pth, indices)
+            cov = match_cover_for_pth(pth, covers)
+            info = import_model_to_catalog(
+                pth,
+                models_root,
+                cover_src=cov,
+                index_src=idx,
+                move=move,
+            )
+            summary["models"].append(info)
+            if idx is not None:
+                try:
+                    used_indices.add(str(idx.resolve()))
+                except Exception:
+                    used_indices.add(str(idx))
+            if cov is not None:
+                try:
+                    used_covers.add(str(cov.resolve()))
+                except Exception:
+                    used_covers.add(str(cov))
+        except Exception as e:
+            summary["errors"].append({"path": str(pth), "error": str(e)})
+
+    leftover_idx = []
+    for ip in indices:
+        try:
+            key = str(ip.resolve())
+        except Exception:
+            key = str(ip)
+        if key not in used_indices:
+            leftover_idx.append(ip)
+
+    target_dir: Optional[Path] = None
+    if leftover_idx:
+        if current_model_dir and Path(current_model_dir).is_dir():
+            target_dir = Path(current_model_dir)
+        elif summary["models"]:
+            # bind extras to the last imported model in this batch
+            target_dir = Path(summary["models"][-1]["dir"])
+        else:
+            summary["errors"].append(
+                {
+                    "path": str(leftover_idx[0]),
+                    "error": (
+                        "只选了 .index 时，请先在音色目录里选中一个音色，"
+                        "或同时选中配套的 .pth。"
+                    ),
+                }
+            )
+            leftover_idx = []
+
+    for ip in leftover_idx:
+        if target_dir is None:
+            break
+        try:
+            bound = import_index_for_model(
+                target_dir, ip, move=move, activate=True
+            )
+            summary["indices"].append(
+                {"path": bound, "model_dir": str(target_dir.resolve())}
+            )
+        except Exception as e:
+            summary["errors"].append({"path": str(ip), "error": str(e)})
+
+    return summary
 
 
 def discover_index_files(search_roots: list[Path]) -> list[str]:

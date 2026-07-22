@@ -144,7 +144,7 @@ class HomePageMixin:
             box.pack(expand=True, fill="both", padx=40, pady=20)
             tk.Label(
                 box.body,
-                text="暂无音色\n\n请到「模型」页导入 .pth",
+                text="暂无音色\n\n请到「模型」页导入 .pth / .zip",
                 font=sans_font(11),
                 bg=TM_SURFACE,
                 fg=TM_INK_MUTED,

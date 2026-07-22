@@ -273,3 +273,55 @@ def test_resolve_explicit_empty_index_stays_empty(tmp_path):
     (md / "Soyo.index").write_bytes(b"idx")
     side = {"name": "Soyo", "index": ""}
     assert resolve_model_active_index(md, side, name="Soyo") == ""
+
+
+def test_import_user_files_pth_plus_index_same_folder(tmp_path):
+    """Multi-select .pth + .index → both land under models/<name>/."""
+    from launcher.catalog import import_user_files, list_index_bindings
+
+    src = tmp_path / "dl"
+    src.mkdir()
+    pth = src / "MyVoice.pth"
+    idx = src / "MyVoice.index"
+    pth.write_bytes(b"x" * (300 * 1024))
+    idx.write_bytes(b"fake-index-bytes")
+    root = tmp_path / "models"
+    summary = import_user_files([pth, idx], root, move=False)
+    assert len(summary["models"]) == 1
+    info = summary["models"][0]
+    dest = Path(info["dir"])
+    assert (dest / "MyVoice.pth").is_file()
+    assert info["index"]
+    assert Path(info["index"]).parent.resolve() == dest.resolve()
+    assert Path(info["index"]).is_file()
+    assert list_index_bindings(dest)
+
+
+def test_import_index_only_onto_current_model(tmp_path):
+    from launcher.catalog import import_model_to_catalog, import_user_files
+
+    root = tmp_path / "models"
+    pth = tmp_path / "A.pth"
+    pth.write_bytes(b"x" * (300 * 1024))
+    info = import_model_to_catalog(pth, root)
+    md = Path(info["dir"])
+    idx = tmp_path / "extra.index"
+    idx.write_bytes(b"idx-data")
+    summary = import_user_files(
+        [idx], root, move=False, current_model_dir=md
+    )
+    assert len(summary["indices"]) == 1
+    bound = Path(summary["indices"][0]["path"])
+    assert bound.parent.resolve() == md.resolve()
+    assert bound.is_file()
+
+
+def test_import_index_only_without_target_errors(tmp_path):
+    from launcher.catalog import import_user_files
+
+    idx = tmp_path / "lonely.index"
+    idx.write_bytes(b"idx")
+    summary = import_user_files([idx], tmp_path / "models", move=False)
+    assert summary["models"] == []
+    assert summary["indices"] == []
+    assert summary["errors"]

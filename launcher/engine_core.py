@@ -144,11 +144,7 @@ def ensure_engine_core(
             except Exception as e:
                 last_err = e
                 _log(log, f"  失败：{e}")
-                try:
-                    if dest.is_file():
-                        dest.unlink()
-                except OSError:
-                    pass
+                # Keep .part / partial cache for resume on retry
         if last_err is not None:
             return False, f"引擎资源下载失败：{last_err}"
 

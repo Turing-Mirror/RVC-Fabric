@@ -67,6 +67,7 @@ def gather_files(root: str) -> list[tuple[str, str]]:
     for rel in (
         "User_Data/runtime_control/status.json",
         "User_Data/runtime_control/worker.pid",
+        "User_Data/runtime_control/gpu_probe.json",
         "User_Data/app_config.json",
         "User_Data/update_state.json",
         "configs/inuse/config.json",

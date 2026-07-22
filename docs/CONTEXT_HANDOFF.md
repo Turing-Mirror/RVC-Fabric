@@ -173,6 +173,10 @@
 - **原因**：设置页为 EQ 文案导入 `tools.dsp_fx`；旧版该模块**顶层** `import numpy`。主程序是 **PyInstaller 壳**（无 numpy），numpy 只在 **Runtime 3.9** 给 worker 用。
 - **修复**：`tools/dsp_fx.py` 改为惰性导入 numpy；`EQ_*` 常量纯 Python。改后需 **重打 `变声器.exe` / GUI 补丁** 才进用户包。
 
+- **现象**：worker `status=starting` / `pid=0`，UI「引擎错误 · CPU · empty probe」。
+- **原因**：Runtime 子进程起不来或探测失败；旧版崩溃无日志；发行包曾污染 `configs/inuse` 开发机路径。
+- **修复**：worker/VBS 落盘崩溃日志；`inuse` 消毒；`_env_for_runtime_python` 深度清洗；**Runtime 完整性校验**（CNB `runtime/<variant>/integrity-*.json`）。
+
 ---
 
 ## 9. 新对话建议开场

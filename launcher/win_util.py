@@ -218,6 +218,50 @@ def _env_with_root() -> dict:
     return env
 
 
+# Host / conda / venv keys that must never reach Runtime 3.9 child processes
+_RUNTIME_ENV_DROP_EXACT = frozenset(
+    {
+        "_MEIPASS",
+        "_PYI_APPLICATION_HOME_DIR",
+        "_PYI_ARCHIVE_FILE",
+        "_PYI_LINUX_PROCESS_NAME",
+        "TCL_LIBRARY",
+        "TK_LIBRARY",
+        "TIX_LIBRARY",
+        "VIRTUAL_ENV",
+        "CONDA_PREFIX",
+        "CONDA_DEFAULT_ENV",
+        "CONDA_PYTHON_EXE",
+        "CONDA_SHLVL",
+        "CONDA_PROMPT_MODIFIER",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "PYTHONEXECUTABLE",
+        "PYTHONUSERBASE",
+        "PYTHONWARNINGS",
+        "PYTHONDONTWRITEBYTECODE",
+        "PIP_TARGET",
+        "UV_PROJECT",
+        "UV_PYTHON",
+        "POETRY_ACTIVE",
+        "SSL_CERT_FILE",  # host cert path may not exist in Runtime view
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    }
+)
+_RUNTIME_ENV_DROP_PREFIXES = (
+    "PYTHON",
+    "CONDA_",
+    "VIRTUAL_ENV",
+    "PIP_",
+    "UV_",
+    "POETRY_",
+    "MAMBA_",
+    "PYENV_",
+)
+
+
 def _env_for_runtime_python() -> dict:
     """Env for embedded Runtime\\python(w).exe — strip PyInstaller host pollution.
 
@@ -228,29 +272,47 @@ def _env_for_runtime_python() -> dict:
     env = os.environ.copy()
     for k in list(env.keys()):
         ku = k.upper()
-        if ku.startswith("PYTHON") or ku in {
+        if ku in _RUNTIME_ENV_DROP_EXACT or any(
+            ku.startswith(p) for p in _RUNTIME_ENV_DROP_PREFIXES
+        ):
+            # keep proxy / language unrelated keys that start with PYTHON? none
+            del env[k]
+            continue
+        if ku in {
             "_MEIPASS",
             "TCL_LIBRARY",
             "TK_LIBRARY",
             "TIX_LIBRARY",
         }:
             del env[k]
-    rt = str((ROOT / "Runtime").resolve()) if (ROOT / "Runtime").is_dir() else str(ROOT)
-    path_parts: list[str] = [rt, str(ROOT)]
+    rt_path = ROOT / "Runtime"
+    if not rt_path.is_dir():
+        rt_path = ROOT / "runtime"
+    rt = str(rt_path.resolve()) if rt_path.is_dir() else str(ROOT.resolve())
+    root_s = str(ROOT.resolve())
+    path_parts: list[str] = [rt, root_s]
     for p in env.get("PATH", "").split(os.pathsep):
         if not p:
             continue
         pl = p.replace("/", "\\").lower()
-        if "_mei" in pl:
+        # drop PyInstaller extract dirs and host Python installs that shadow DLLs
+        if "_mei" in pl or "pyinstaller" in pl:
             continue
+        if "\\python3" in pl or "/python3" in pl.replace("\\", "/"):
+            # keep system PATH entries that are not clearly host python? safer drop
+            # only drop if it looks like Scripts or python install
+            if "scripts" in pl or pl.rstrip("\\").endswith("python313") or "python3" in pl:
+                continue
         path_parts.append(p)
     env["PATH"] = os.pathsep.join(path_parts)
-    env["PYTHONPATH"] = str(ROOT)
-    env["TM_VOICE_ROOT"] = str(ROOT)
+    # Package root only — never host site-packages
+    env["PYTHONPATH"] = root_s
+    env["TM_VOICE_ROOT"] = root_s
     env.setdefault("no_proxy", "localhost,127.0.0.1,::1")
     env.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
     # Avoid user site overriding Runtime packages
     env["PYTHONNOUSERSITE"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
     # Preserve auto-start flag from parent main_app
     if os.environ.get("TM_AUTO_START_VC"):
         env["TM_AUTO_START_VC"] = os.environ["TM_AUTO_START_VC"]

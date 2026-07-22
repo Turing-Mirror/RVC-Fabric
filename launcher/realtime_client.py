@@ -247,6 +247,14 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
     env = _env_for_runtime_python()
     env["TM_REALTIME_WORKER"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
+    # Log scrub proof (support: empty PYTHONHOME / no _MEIPASS)
+    with open(log_path, "a", encoding="utf-8", errors="replace") as lf:
+        lf.write(
+            f"env clean: PYTHONHOME={env.get('PYTHONHOME')!r} "
+            f"_MEIPASS={env.get('_MEIPASS')!r} "
+            f"PYTHONPATH={env.get('PYTHONPATH')!r} "
+            f"VIRTUAL_ENV={env.get('VIRTUAL_ENV')!r}\n"
+        )
     # Reuse parent GPU env when already set — avoid a second probe process
     try:
         from launcher.config_store import load_config

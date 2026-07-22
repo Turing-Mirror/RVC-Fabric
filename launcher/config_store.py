@@ -159,6 +159,12 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
 
 def _load_gui_json() -> dict[str, Any]:
     GUI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from launcher.inuse_config import ensure_clean_inuse_config
+
+        ensure_clean_inuse_config(ROOT)
+    except Exception:
+        pass
     if not GUI_CONFIG_PATH.is_file() or GUI_CONFIG_PATH.stat().st_size == 0:
         # Empty/corrupt file is common after a crash mid-write — repair
         if GUI_CONFIG_TEMPLATE.is_file():

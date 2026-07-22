@@ -369,6 +369,31 @@ def provision_runtime(
     if not runtime_ready(base):
         return False, "安装结束但 Runtime 仍不可用，请重试或检查磁盘空间。"
 
+    # Steam-like integrity: files + import smoke (uses CNB integrity JSON when online)
+    try:
+        from launcher.runtime_integrity import format_report_summary, verify_runtime
+
+        _log(log, "正在校验 Runtime 完整性（关键文件 + torch 导入）…")
+        rep = verify_runtime(
+            base,
+            variant=var,
+            version=str(spec.version or ""),
+            fetch_remote=True,
+            log=log,
+        )
+        if not rep.get("ok"):
+            summary = format_report_summary(rep)
+            _log(log, summary)
+            return (
+                False,
+                summary
+                + "\n请重新「补全运行环境」或检查杀软是否隔离了 Runtime 文件。"
+                "\n详情见 User_Data/logs/runtime_integrity_last.json",
+            )
+        _log(log, format_report_summary(rep))
+    except Exception as e:
+        _log(log, f"完整性校验跳过（异常）：{e}")
+
     return True, f"{spec.label} 运行环境已安装完成。"
 
 

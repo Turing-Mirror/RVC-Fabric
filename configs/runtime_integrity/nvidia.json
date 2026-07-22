@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "format": "rvc_fabric_runtime_integrity",
+  "variant": "nvidia",
+  "runtime_version": "2026.07.21",
+  "generated": "2026-07-23T00:20:34",
+  "product": "RVC Fabric",
+  "notes": "Launcher compares local Runtime files + import smoke test",
+  "files": [
+    {
+      "path": "Lib/site-packages/FreeSimpleGUI/__init__.py",
+      "size": 91,
+      "required": true,
+      "sha256": "6dbb3366531a7937697c5d36f9ebfb1c7d39025a2a3cf905f834203efb9ce844"
+    },
+    {
+      "path": "Lib/site-packages/faiss/__init__.py",
+      "size": 56567,
+      "required": true,
+      "sha256": "02d0b366aab8c8e7a3ac6a74ea4aae23b09e5b5fff3b5fe682e9b98565ee01b5"
+    },
+    {
+      "path": "Lib/site-packages/librosa/__init__.py",
+      "size": 3324,
+      "required": true,
+      "sha256": "d6b14f9b542038404b8d6ff555a440b708bc606d1ff5e1d69ce2e30b5cf1cff7"
+    },
+    {
+      "path": "Lib/site-packages/numpy/__init__.py",
+      "size": 15817,
+      "required": true,
+      "sha256": "217e500e28e1f45d8f36157c1c4c190c96415514601062885bb3ac95b1047404"
+    },
+    {
+      "path": "Lib/site-packages/torch/__init__.py",
+      "size": 57800,
+      "required": true,
+      "sha256": "3260e9cdfd7872c82fb19c337e2296bbce1623d3a4026ea914133e28735637f8"
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/c10_cuda.dll",
+      "size": 446464,
+      "required": false,
+      "sha256": "c997f533f897c5165c223877789b882737f673cdff71b3efe1067ba69ae4d1a3"
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn64_8.dll",
+      "size": 288296,
+      "required": false,
+      "sha256": "43ebbcafcf798575b356407868f0ace9f6c8eecebe8e3f9ede62381945b5805b"
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_adv_infer64_8.dll",
+      "size": 130224168,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_adv_train64_8.dll",
+      "size": 121318440,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_cnn_infer64_8.dll",
+      "size": 602384936,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_cnn_train64_8.dll",
+      "size": 95406632,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_ops_infer64_8.dll",
+      "size": 96301608,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/cudnn_ops_train64_8.dll",
+      "size": 74290216,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/lib/torch_cuda.dll",
+      "size": 1098544640,
+      "required": false
+    },
+    {
+      "path": "Lib/site-packages/torch/version.py",
+      "size": 129,
+      "required": true,
+      "sha256": "042d797881bec293514d52c7ee2a1b650b6ef4530ee2d9c4410f0bf9f55ac7b1"
+    },
+    {
+      "path": "Lib/site-packages/torchaudio/__init__.py",
+      "size": 672,
+      "required": true,
+      "sha256": "273cbbb0f904faf4e4d12a0fd83b538c4121267f00635c9a8387af85cc4771a5"
+    },
+    {
+      "path": "python.exe",
+      "size": 103416,
+      "required": true,
+      "sha256": "07c96337729e3c4c986e8f5660a97cb475c4c04842606be2654b37892af57de9"
+    },
+    {
+      "path": "python3.dll",
+      "size": 61432,
+      "required": true,
+      "sha256": "5a2f39ed041d35bb48e89c72c1ad16a5a24a3674f8eb34bfbc6310fd75128f16"
+    },
+    {
+      "path": "python39.dll",
+      "size": 4527096,
+      "required": true,
+      "sha256": "324963a39b8fd045ff634bb3271508dab5098b4d99e85e7648d0b47c32dc85c3"
+    },
+    {
+      "path": "pythonw.exe",
+      "size": 101880,
+      "required": true,
+      "sha256": "7407fac6e170430f34322202b73aa392431b5c2c49e15304fb255bb24c540366"
+    },
+    {
+      "path": "vcruntime140.dll",
+      "size": 98224,
+      "required": true,
+      "sha256": "9d2b40f0395cc5d1b4d5ea17b84970c29971d448c37104676db577586d4ad1b1"
+    },
+    {
+      "path": "vcruntime140_1.dll",
+      "size": 37256,
+      "required": true,
+      "sha256": "34048abaa070ecc13b318cea31425f4ca3edd133d350318ac65259e6058c8b32"
+    }
+  ],
+  "imports": [
+    "torch",
+    "numpy",
+    "sounddevice",
+    "librosa",
+    "FreeSimpleGUI",
+    "faiss",
+    "torchaudio"
+  ],
+  "expect_cuda": true,
+  "expect_dml": false
+}

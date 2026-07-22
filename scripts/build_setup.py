@@ -236,37 +236,11 @@ def strip_heavy_from_payload(out: Path) -> None:
 
 def sanitize_inuse_config(out: Path) -> None:
     """Never ship developer absolute paths in configs/inuse/config.json."""
-    clean = {
-        "pth_path": "",
-        "index_path": "",
-        "sg_hostapi": "MME",
-        "sg_wasapi_exclusive": False,
-        "sg_input_device": "",
-        "sg_output_device": "",
-        "sr_type": "sr_model",
-        "threhold": -48,
-        "pitch": 0,
-        "formant": 0.0,
-        "rms_mix_rate": 0.25,
-        "index_rate": 0.0,
-        "block_time": 0.22,
-        "crossfade_length": 0.05,
-        "extra_time": 2.5,
-        "n_cpu": 4,
-        "use_jit": False,
-        "use_pv": False,
-        "f0method": "fcpe",
-        "monitor_device": "",
-        "monitor_enabled": False,
-        "I_noise_reduce": False,
-        "O_noise_reduce": False,
-        "function": "vc",
-        "fx_enabled": False,
-    }
-    p = out / "configs" / "inuse" / "config.json"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(clean, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    log("[payload] sanitized configs/inuse/config.json (no absolute paths)")
+    sys.path.insert(0, str(REPO))
+    from launcher.inuse_config import write_clean_inuse
+
+    write_clean_inuse(out)
+    log("[payload] sanitized configs/inuse/config.json (clean template, no absolute paths)")
 
 
 def assemble_payload(out: Path, *, skip_exe: bool) -> None:

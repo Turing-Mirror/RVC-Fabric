@@ -106,6 +106,13 @@ class MainApp(
 ):
     def __init__(self) -> None:
         ensure_dirs()
+        # Path / write perms / inuse sanitize (log only; UI may show later)
+        try:
+            from launcher.install_health import ensure_install_health
+
+            self._install_health = ensure_install_health()
+        except Exception:
+            self._install_health = {}
         self.cfg = load_config()
         self.models = list_voice_models()
         self.model_idx = 0

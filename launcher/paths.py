@@ -126,6 +126,13 @@ def ensure_dirs() -> None:
     (ROOT / "logs").mkdir(parents=True, exist_ok=True)
     # Optional package-root ch-banner (read-only ships / shared banners)
     (ROOT / "ch-banner").mkdir(parents=True, exist_ok=True)
+    # Never leave foreign absolute model paths in configs/inuse (release pollution)
+    try:
+        from launcher.inuse_config import ensure_clean_inuse_config
+
+        ensure_clean_inuse_config(ROOT)
+    except Exception:
+        pass
 
 
 def release_roles() -> dict[str, str]:

@@ -28,6 +28,7 @@ from launcher.pages import (
     DockVoiceMixin,
     HomePageMixin,
     HotkeysMixin,
+    IndexPanelMixin,
     ModelsPageMixin,
     MonitorMixin,
     MorePageMixin,
@@ -96,6 +97,7 @@ class MainApp(
     MonitorMixin,
     RealtimeControlMixin,
     DockVoiceMixin,
+    IndexPanelMixin,
     ProfilesMixin,
     ConsultMixin,
     SettingsPageMixin,
@@ -194,6 +196,14 @@ class MainApp(
     def _place_and_raise(self, force_size: bool = False) -> None:
         """Show window on primary screen. Only set default size once (allow user resize)."""
         try:
+            if not force_size and self._placed_once:
+                # Already up and focused (user may even be dragging it) —
+                # re-raising would interrupt them for no benefit.
+                try:
+                    if self.root.focus_displayof() is not None:
+                        return
+                except Exception:
+                    pass
             self.root.update_idletasks()
             if force_size or not self._placed_once:
                 w, h = DEFAULT_WIN_W, DEFAULT_WIN_H
@@ -230,6 +240,13 @@ class MainApp(
     def _on_root_configure(self, event) -> None:
         if event.widget is not self.root:
             return
+        # <Configure> also fires while the window is being MOVED. Rebuilding
+        # widgets mid-drag makes Windows cancel the drag and snap the window
+        # back, so only reflow when the size actually changed.
+        size = (int(event.width), int(event.height))
+        if size == getattr(self, "_last_root_size", None):
+            return
+        self._last_root_size = size
         # Debounce reflow on resize
         if self._resize_job is not None:
             try:
@@ -246,11 +263,6 @@ class MainApp(
             self.refresh_models()
         elif self._current_page == "settings":
             self._reflow_settings_page()
-        elif self._current_page == "store":
-            try:
-                self._store_page.reflow()
-            except Exception:
-                pass
 
     def _build_chrome(self) -> None:
         # LyricsKara-style head: tracked wordmark + mono route | Schale segment nav
@@ -276,7 +288,6 @@ class MainApp(
             ("home", "首页"),
             ("models", "模型"),
             ("settings", "设置"),
-            ("store", "更新"),
             ("help", "说明"),
             ("more", "其他"),
         ):
@@ -340,22 +351,21 @@ class MainApp(
         )
         self.bottom_voice_hint.pack(anchor="w", pady=(2, 0))
 
-        # --- Right: transport + status (compact) ---
+        # --- Right: transport + status. Start button top 1/3, status lower 2/3.
+        # (高级面板 entry lives in 设置 only.)
         right = tk.Frame(bottom, bg=TM_SURFACE)
         right.pack(side="right", padx=(10, PAD_X), pady=dock_pad_y, fill="y")
         right_col = tk.Frame(right, bg=TM_SURFACE)
-        right_col.pack(expand=True)
-        ctrl = tk.Frame(right_col, bg=TM_SURFACE)
-        ctrl.pack(anchor="e")
+        right_col.pack(fill="both", expand=True)
+        right_col.columnconfigure(0, weight=1)
+        right_col.rowconfigure(0, weight=1)
+        right_col.rowconfigure(1, weight=2)
         self.btn_start = PrimaryButton(
-            ctrl, "开启变声", command=self.toggle_vc, padx=18, pady=8
+            right_col, "开启变声", command=self.toggle_vc, padx=18, pady=8
         )
-        self.btn_start.pack(side="left", padx=(0, 8))
-        GhostButton(ctrl, "高级面板", command=self.open_legacy_gui, padx=12, pady=7).pack(
-            side="left"
-        )
+        self.btn_start.grid(row=0, column=0, sticky="nsew")
         self.status_badge = StatusBadge(right_col)
-        self.status_badge.pack(anchor="e", pady=(8, 0))
+        self.status_badge.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
         self.lbl_online = self.status_badge.title_lbl
         self.lbl_latency = self.status_badge.sub_lbl
 
@@ -486,16 +496,16 @@ class MainApp(
             pass
 
     def _build_pages(self) -> None:
-        self._store_page = StorePage(self, self.body)
         self._help_page = HelpPage(self, self.body)
         self.pages = {
             "home": self._page_home(),
             "models": self._page_models(),
             "settings": self._page_settings(),
-            "store": self._store_page.frame,
             "help": self._help_page.frame,
             "more": self._page_more(),
         }
+        # Built after settings — the online-update section lives inside it
+        self._store_page = StorePage(self, self._online_update_card_body)
 
     def show_page(self, key: str) -> None:
         self._current_page = key
@@ -511,11 +521,6 @@ class MainApp(
             self._update_home_current_label()
         if key == "settings":
             self.root.after(50, self._reflow_settings_page)
-        if key == "store":
-            try:
-                self._store_page.on_show()
-            except Exception:
-                pass
         if key == "help":
             try:
                 self._help_page.on_show()
@@ -574,17 +579,12 @@ class MainApp(
         if feedback or prev != idx:
             self._show_switch_toast(m["name"])
         self._refresh_index_ui_for_model(m)
-        # Cold param: model load only at start — restart stream if already live
-        if (
-            maybe_restart
-            and prev != idx
-            and (self.vc_running or self._vc_starting)
-            and bool(self.cfg.get("hotkey_restart_on_model_switch", True))
-        ):
+        # Model weight loads only at stream start — switching voice while live
+        # ALWAYS auto-restarts the stream (product promise: 运行中切换立即生效).
+        # No config gate: a stale/off toggle used to leave the old voice
+        # playing after a switch, which read as "switching does nothing".
+        if prev != idx and (self.vc_running or self._vc_starting):
             self._restart_vc_for_new_model()
-        elif prev != idx and self.vc_running:
-            # Same stream, different voice params only — hot push (model weight needs restart)
-            self._push_hot_params()
 
     def _sync_model_to_realtime_gui(self, m: Optional[dict] = None) -> None:
         """Write current model + full settings into engine config.json."""
@@ -638,6 +638,10 @@ class MainApp(
         self._update_index_hint()
         try:
             self._refresh_index_combobox_values()
+        except Exception:
+            pass
+        try:
+            self.refresh_index_panel_ui()
         except Exception:
             pass
 

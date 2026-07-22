@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Release layout paths — RVCMAX *roles*, Turing Mirror product naming.
+"""Release layout paths — RVCMAX *roles*, RVC Fabric product naming.
 
 Roles::
 

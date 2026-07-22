@@ -134,7 +134,7 @@ class GhostButton(tk.Button):
 
 
 class SectionCard(tk.Frame):
-    """Panel with left accent rail + optional mono eyebrow + title."""
+    """Flat panel with optional mono eyebrow + title (no accent rail)."""
 
     def __init__(
         self,
@@ -142,13 +142,11 @@ class SectionCard(tk.Frame):
         title: str = "",
         *,
         eyebrow: str = "",
-        accent_rail: bool = True,
+        accent_rail: bool = False,  # accepted for compat; rail design removed
         pad: int = 16,
         **kw,
     ):
         super().__init__(master, bg=TM_BG, **kw)
-        if accent_rail:
-            tk.Frame(self, bg=TM_ACCENT, width=4).pack(side="left", fill="y")
         self.body = tk.Frame(
             self,
             bg=TM_SURFACE,
@@ -694,7 +692,7 @@ class ParamTile(tk.Frame):
 
 
 class SoftActionCard(tk.Frame):
-    """Bootstrap action tile — larger, mono caption, left rail."""
+    """Bootstrap action tile — larger, mono caption (rail design removed)."""
 
     def __init__(self, master, title: str, subtitle: str, command, **kw):
         super().__init__(
@@ -707,7 +705,6 @@ class SoftActionCard(tk.Frame):
         self.configure(width=168, height=140)
         self.pack_propagate(False)
         self._cmd = command
-        tk.Frame(self, bg=TM_ACCENT, width=4).pack(side="left", fill="y")
         col = tk.Frame(self, bg=TM_SURFACE)
         col.pack(side="left", fill="both", expand=True, padx=12, pady=14)
         self._lbl = tk.Label(

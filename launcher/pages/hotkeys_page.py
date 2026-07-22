@@ -235,9 +235,6 @@ class HotkeysMixin:
         self._settings_wrap_labels.append(intro)
 
         self.var_global_hk = tk.BooleanVar(value=bool(self.cfg.get("global_hotkeys")))
-        self.var_restart_on_switch = tk.BooleanVar(
-            value=bool(self.cfg.get("hotkey_restart_on_model_switch", True))
-        )
         tk.Checkbutton(
             sec,
             text="启用全局快捷键（Windows · 游戏中可用 · 各键的「全局」总开关）",
@@ -245,15 +242,9 @@ class HotkeysMixin:
             bg=TM_SURFACE,
             font=sans_font(9),
             command=self._on_global_hk_toggle,
-        ).pack(anchor="w")
-        tk.Checkbutton(
-            sec,
-            text="切换音色时若正在变声则自动重启引擎",
-            variable=self.var_restart_on_switch,
-            bg=TM_SURFACE,
-            font=sans_font(9),
-            command=self._on_restart_switch_toggle,
-        ).pack(anchor="w", pady=(2, 8))
+        ).pack(anchor="w", pady=(0, 8))
+        # 「切换音色自动重启」不再是可选项：运行中切换音色一律自动重载，
+        # 这是产品承诺（其余设置改动仍需手动重新开启变声）。
 
         # Per-action global-enable flags (default all on; gated by master switch)
         gflags = merge_global_actions(self.cfg.get("global_hotkey_actions"))
@@ -450,15 +441,6 @@ class HotkeysMixin:
                 text=f"全局按键已更新（{n} 个启用）", fg=TM_OK
             )
 
-    def _on_restart_switch_toggle(self) -> None:
-        self.cfg["hotkey_restart_on_model_switch"] = bool(
-            self.var_restart_on_switch.get()
-        )
-        try:
-            save_config(self.cfg)
-        except Exception:
-            pass
-
     def _clear_hotkey_row(self, action_id: str, var: tk.StringVar) -> None:
         var.set("")
 
@@ -569,10 +551,6 @@ class HotkeysMixin:
             self.cfg["global_hotkeys"] = bool(self.var_global_hk.get())
         if getattr(self, "_global_action_vars", None):
             self.cfg["global_hotkey_actions"] = self._collect_global_action_flags()
-        if hasattr(self, "var_restart_on_switch"):
-            self.cfg["hotkey_restart_on_model_switch"] = bool(
-                self.var_restart_on_switch.get()
-            )
         try:
             save_config(self.cfg)
         except Exception as e:

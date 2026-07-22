@@ -19,7 +19,7 @@ from launcher.theme import (
     TM_META,
     mono_font,
 )
-from launcher.ui import GhostButton, PageHeader
+from launcher.ui import GhostButton, PageHeader, PrimaryButton
 from launcher.version import APP_VERSION
 from launcher.win_util import open_path
 
@@ -45,12 +45,11 @@ class MorePageMixin:
             canvas.configure(scrollregion=canvas.bbox("all"))
             try:
                 cw = max(int(canvas.winfo_width()), 200)
-                # Center content block
-                wrap.update_idletasks()
-                ww = max(wrap.winfo_reqwidth(), 320)
-                x = max((cw - ww) // 2, 12)
+                # Content fills the viewport width (3-per-row grid stretches)
+                w = min(max(cw - 24, 320), 980)
+                x = max((cw - w) // 2, 12)
                 canvas.coords(win, x, 16)
-                canvas.itemconfigure(win, width=min(ww + 8, cw - 24))
+                canvas.itemconfigure(win, width=w)
             except Exception:
                 pass
 
@@ -64,7 +63,7 @@ class MorePageMixin:
         wrap.bind("<MouseWheel>", _wheel)
 
         inner = tk.Frame(wrap, bg=TM_BG)
-        inner.pack(padx=24, pady=(8, 16))
+        inner.pack(padx=24, pady=(8, 16), fill="x")
 
         PageHeader(
             inner,
@@ -74,25 +73,27 @@ class MorePageMixin:
         ).pack(anchor="w", pady=(0, 16))
         box = tk.Frame(inner, bg=TM_BG)
         box.pack(anchor="w", fill="x")
+        for c in range(3):
+            box.columnconfigure(c, weight=1, uniform="more")
 
-        def soft(text, cmd):
-            GhostButton(box, text, command=cmd, padx=22, pady=12).pack(
-                pady=6, fill="x", ipadx=40
-            )
-
-        soft("打开训练 / 翻唱 WebUI（高级 · 浏览器）", self.open_webui)
-        soft("打开首次设置启动器", self.open_bootstrap)
-        soft("打开 User_Data", lambda: open_path(USER_DATA))
-        soft("打开安装目录", lambda: open_path(ROOT))
-        soft("根据本机表现自动优化性能", self._auto_perf_from_history)
-        soft("打开性能信息文件夹（帮助我们优化适配）", self._open_perf_reports)
-        soft("生成诊断包（反馈问题时用）", self._collect_diagnostics)
-        soft("生成咨询包（调参服务用）", self.open_consult_wizard)
-        soft("强制结束变声引擎（卡音频时点）", self._force_kill_engine)
-        soft("快捷键说明", self.show_hotkeys_help)
-        soft("使用说明", lambda: self.show_page("help"))
-        soft("重新观看新手引导", lambda: self.show_onboarding(first_run=False))
-        soft("在线更新与音色库", lambda: self.show_page("store"))
+        entries = [
+            # (文本, 回调, 是否主按钮)
+            ("性能&参数优化服务", self.open_consult_wizard, True),
+            ("根据本机表现自动优化性能", self._auto_perf_from_history, False),
+            ("重新观看新手引导", lambda: self.show_onboarding(first_run=False), False),
+            ("使用说明", lambda: self.show_page("help"), False),
+            ("快捷键说明", self.show_hotkeys_help, False),
+            ("生成诊断包（反馈问题）", self._collect_diagnostics, False),
+            ("打开性能信息文件夹", self._open_perf_reports, False),
+            ("打开 User_Data", lambda: open_path(USER_DATA), False),
+            ("打开安装目录", lambda: open_path(ROOT), False),
+            ("训练 / 翻唱 WebUI（高级）", self.open_webui, False),
+            ("强制结束变声引擎（卡音频时点）", self._force_kill_engine, False),
+        ]
+        for i, (text, cmd, primary) in enumerate(entries):
+            cls = PrimaryButton if primary else GhostButton
+            b = cls(box, text, command=cmd, padx=10, pady=14)
+            b.grid(row=i // 3, column=i % 3, sticky="nsew", padx=6, pady=6)
 
         # Footer after buttons (pack) — never place() over the list
         tk.Label(

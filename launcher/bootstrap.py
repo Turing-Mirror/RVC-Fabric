@@ -172,7 +172,6 @@ class BootstrapApp:
             highlightbackground=TM_HAIRLINE,
         )
         notice.pack(fill="x", padx=PAD_X, pady=(10, 6))
-        tk.Frame(notice, bg=TM_ACCENT, width=4).pack(side="left", fill="y")
         notice_body = tk.Frame(notice, bg=TM_SURFACE)
         notice_body.pack(side="left", fill="both", expand=True, padx=14, pady=12)
         tk.Label(

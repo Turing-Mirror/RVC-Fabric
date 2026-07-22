@@ -10,6 +10,7 @@ from launcher.pages.consult_page import ConsultMixin
 from launcher.pages.dock_voice import DockVoiceMixin
 from launcher.pages.home_page import HomePageMixin
 from launcher.pages.hotkeys_page import HotkeysMixin
+from launcher.pages.index_panel import IndexPanelMixin
 from launcher.pages.models_page import ModelsPageMixin
 from launcher.pages.monitor_mixin import MonitorMixin
 from launcher.pages.more_page import MorePageMixin
@@ -23,6 +24,7 @@ __all__ = [
     "DockVoiceMixin",
     "HomePageMixin",
     "HotkeysMixin",
+    "IndexPanelMixin",
     "ModelsPageMixin",
     "MonitorMixin",
     "MorePageMixin",

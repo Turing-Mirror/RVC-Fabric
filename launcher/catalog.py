@@ -252,8 +252,13 @@ def import_model_to_catalog(
     display_name: Optional[str] = None,
     cover_src: Optional[Path] = None,
     index_src: Optional[Path] = None,
+    move: bool = False,
 ) -> dict[str, Any]:
-    """Copy a .pth into User_Data/models/<name>/ and write config.json."""
+    """Copy (or move) a .pth into User_Data/models/<name>/ + write config.json.
+
+    ``move=True`` removes the source files after a successful import — the
+    user chose 「移动」 so the software folder becomes the single home.
+    """
     src_pth = Path(src_pth)
     if not src_pth.is_file() or src_pth.suffix.lower() != ".pth":
         raise ValueError(f"not a .pth file: {src_pth}")
@@ -286,10 +291,28 @@ def import_model_to_catalog(
     }
     if index_path:
         cfg["index"] = index_path
+        cfg["index_files"] = [index_path]
     (dest_dir / "config.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if move:
+        # Source files have a safe copy inside dest_dir — remove the originals
+        try:
+            if dest_pth.is_file() and dest_pth.resolve() != src_pth.resolve():
+                src_pth.unlink()
+        except Exception:
+            pass
+        try:
+            if (
+                index_src
+                and Path(index_src).is_file()
+                and index_path
+                and Path(index_path).resolve() != Path(index_src).resolve()
+            ):
+                Path(index_src).unlink()
+        except Exception:
+            pass
     return {
         "name": name,
         "path": str(dest_pth.resolve()),
@@ -376,6 +399,134 @@ def clear_model_index(model_dir: Path) -> None:
         json.dumps(side, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+# --------------------------------------------------------------------------
+# Index bindings (many-to-many): a model keeps a LIST of candidate .index
+# files in its sidecar ("index_files") plus the active one ("index", kept for
+# engine compatibility). The same .index path may appear in several models'
+# lists — that is what makes the binding many-to-many.
+# --------------------------------------------------------------------------
+
+
+def _write_sidecar(model_dir: Path, side: dict) -> None:
+    model_dir = Path(model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    if "name" not in side:
+        side["name"] = model_dir.name
+    (model_dir / "config.json").write_text(
+        json.dumps(side, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def list_index_bindings(model_dir: Path) -> list[str]:
+    """All .index files bound to this model (existing files only, deduped).
+
+    Union of: sidecar ``index_files``, the active ``index``, and any .index
+    sitting inside the model folder. Order: model-folder files first, then
+    the rest in recorded order.
+    """
+    model_dir = Path(model_dir)
+    side = _read_sidecar(model_dir)
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def _add(p: str) -> None:
+        try:
+            rp = str(Path(p).resolve())
+        except Exception:
+            return
+        if rp in seen or not Path(rp).is_file():
+            return
+        seen.add(rp)
+        out.append(rp)
+
+    if model_dir.is_dir():
+        for ip in sorted(model_dir.glob("*.index")):
+            _add(str(ip))
+    _add(str(side.get("index") or ""))
+    for p in side.get("index_files") or []:
+        _add(str(p))
+    return out
+
+
+def add_index_binding(
+    model_dir: Path,
+    index_src: Path,
+    *,
+    copy_into_folder: bool = False,
+    move_into_folder: bool = False,
+) -> str:
+    """Bind one more .index to the model; returns the recorded path.
+
+    ``copy_into_folder`` copies the file next to the .pth (portable pack);
+    ``move_into_folder`` moves it instead; default records the source path
+    (shared index — the same file can stay bound to other models too).
+    Becomes the active index only when the model had none.
+    """
+    model_dir = Path(model_dir)
+    index_src = Path(index_src)
+    if not index_src.is_file() or index_src.suffix.lower() != ".index":
+        raise ValueError(f"not a .index file: {index_src}")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    if copy_into_folder or move_into_folder:
+        dest = model_dir / index_src.name
+        if dest.resolve() != index_src.resolve():
+            if move_into_folder:
+                shutil.move(str(index_src), str(dest))
+            else:
+                shutil.copy2(index_src, dest)
+        path = str(dest.resolve())
+    else:
+        path = str(index_src.resolve())
+    side = _read_sidecar(model_dir)
+    files = [str(p) for p in (side.get("index_files") or [])]
+    if path not in files:
+        files.append(path)
+    side["index_files"] = files
+    if not str(side.get("index") or ""):
+        side["index"] = path
+    _write_sidecar(model_dir, side)
+    return path
+
+
+def remove_index_binding(model_dir: Path, index_path: str) -> None:
+    """Unbind (never deletes the .index file itself)."""
+    model_dir = Path(model_dir)
+    side = _read_sidecar(model_dir)
+    try:
+        target = str(Path(index_path).resolve())
+    except Exception:
+        target = str(index_path)
+
+    def _same(p: str) -> bool:
+        try:
+            return str(Path(p).resolve()) == target
+        except Exception:
+            return p == target
+
+    side["index_files"] = [
+        p for p in (side.get("index_files") or []) if not _same(str(p))
+    ]
+    if _same(str(side.get("index") or "")):
+        side["index"] = ""
+    _write_sidecar(model_dir, side)
+
+
+def set_active_index(model_dir: Path, index_path: str) -> None:
+    """Choose which bound .index the engine uses ("" = use none)."""
+    model_dir = Path(model_dir)
+    side = _read_sidecar(model_dir)
+    path = str(index_path or "").strip()
+    if path:
+        path = str(Path(path).resolve())
+        files = [str(p) for p in (side.get("index_files") or [])]
+        if path not in files:
+            files.append(path)
+            side["index_files"] = files
+    side["index"] = path
+    _write_sidecar(model_dir, side)
 
 
 # Per-voice hot params stored in User_Data/models/<name>/config.json

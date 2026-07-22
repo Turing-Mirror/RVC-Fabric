@@ -84,7 +84,7 @@ class OnboardingMixin:
                     "① 本软件「设置」→ 输入设备 = 你的真实麦克风",
                     "② 本软件「设置」→ 输出设备 = CABLE Input",
                     "③ 游戏 / QQ 里的麦克风 = CABLE Output",
-                    "还没有虚拟声卡？先在启动器点「安装虚拟声卡」。",
+                    "还没有虚拟声卡或环境不完整？点下方按钮打开首次设置启动器安装。",
                 ],
             ),
             (
@@ -197,6 +197,15 @@ class OnboardingMixin:
                     anchor="w",
                     wraplength=470,
                 ).pack(anchor="w", pady=4, fill="x")
+            if eb == "接线":
+                # 首次设置启动器并入引导：装环境 / 虚拟声卡都从这里进
+                GhostButton(
+                    body_inner,
+                    "打开首次设置启动器（装环境 / 虚拟声卡）",
+                    command=self.open_bootstrap,
+                    padx=14,
+                    pady=8,
+                ).pack(anchor="w", pady=(10, 0))
             for w in footer.winfo_children():
                 w.destroy()
             is_final = i == len(steps) - 1

@@ -215,10 +215,11 @@ def voice_pack_layout_help() -> str:
         "音色包 zip 推荐结构：\n"
         "  tm_package.json   （可选，package_type=voice_pack）\n"
         "  *.pth             （必需，至少一个）\n"
-        "  *.index           （可选）\n"
+        "  *.index           （可选，与 .pth 同级）\n"
         "  cover.png|jpg     （可选）\n"
         "  config.json       （可选：name/tag/pitch 等）\n"
         "也可包在一层目录内：MyVoice/*.pth …\n"
+        "安装后固定到 User_Data/models/<id>/（.pth 与 .index 同一文件夹）。\n"
     )
 
 

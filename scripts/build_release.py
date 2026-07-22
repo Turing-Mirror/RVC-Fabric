@@ -150,8 +150,34 @@ def ensure_pyinstaller() -> None:
         run([sys.executable, "-m", "pip", "install", "-U", "pyinstaller"])
 
 
+def ensure_shell_download_deps() -> None:
+    """打包机安装壳层联网依赖，打进 启动器.exe（用户机无需系统 Python）。
+
+    若打包环境没有 requests，PyInstaller 打不进包 → 用户点「补全运行环境」直接失败。
+    """
+    try:
+        import requests  # noqa: F401
+        import certifi  # noqa: F401
+    except ImportError:
+        log("[deps] pip install requests certifi (for frozen 启动器 download)")
+        run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-U",
+                "requests",
+                "certifi",
+            ]
+        )
+    else:
+        log("[deps] requests/certifi ok (will bundle into shell exes)")
+
+
 def build_exes(out: Path) -> None:
     ensure_pyinstaller()
+    ensure_shell_download_deps()
     work = REPO / "build" / "release_work"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -181,6 +207,24 @@ def build_exes(out: Path) -> None:
                 str(work / "spec"),
                 "--paths",
                 str(REPO),
+                "--hidden-import",
+                "requests",
+                "--hidden-import",
+                "urllib3",
+                "--hidden-import",
+                "certifi",
+                "--hidden-import",
+                "charset_normalizer",
+                "--hidden-import",
+                "idna",
+                "--hidden-import",
+                "launcher.online.downloader",
+                "--hidden-import",
+                "launcher.runtime_provision",
+                "--hidden-import",
+                "launcher.cnb_sources",
+                "--collect-all",
+                "certifi",
                 str(script),
             ]
         )

@@ -23,6 +23,17 @@ CNB 上你上传的大环境 = **Runtime**；Setup 负责其余可安装文件�
 - 打包：`python scripts/build_setup.py`
 - 本机 ISCC 示例：`K:\jihuang\Inno Setup 6\ISCC.exe`（或环境变量 `ISCC`）
 
+### 用户机不需要 Python
+
+| 角色 | 是什么 |
+|------|--------|
+| 用户拿到的 | `RVC_Fabric_Setup.exe` → 安装后的 `启动器.exe` / `变声器.exe` |
+| 启动器.exe | **PyInstaller 自带嵌入式解释器**，并打包 `requests` 等下载依赖 |
+| 系统 Python | **不需要**；用户没装 Python 也能点「补全运行环境」从 CNB 下 Runtime |
+| 打包机 Python | **需要**（仅你这边打包用），且必须能 `pip install requests` 以便打进 exe |
+
+若打包机漏装 requests，打出的启动器会在补全时失败——`build_setup.py` / `build_release.py` 已在打包前自动 `ensure_shell_download_deps()`。
+
 ---
 
 ## 用户动线

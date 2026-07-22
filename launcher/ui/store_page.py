@@ -45,7 +45,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui.widgets import GhostButton, PrimaryButton
+from launcher.ui.widgets import GhostButton, PrimaryButton, center_over
 
 if TYPE_CHECKING:
     from launcher.main_app import MainApp
@@ -181,6 +181,7 @@ class StorePage:
             dlg.minsize(520, 480)
         except Exception:
             pass
+        center_over(dlg, self.root)
         self._dlg = dlg
 
         def _closed(_e=None):

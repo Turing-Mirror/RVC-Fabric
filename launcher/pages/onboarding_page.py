@@ -23,7 +23,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui import GhostButton, PrimaryButton
+from launcher.ui import GhostButton, PrimaryButton, center_over
 
 # ---------------------------------------------------------------------------
 # 运营占位：新手引导最后一步「加入 QQ 群」的入口链接。
@@ -125,6 +125,7 @@ class OnboardingMixin:
         win.geometry("560x470")
         win.minsize(480, 420)
         win.transient(self.root)
+        center_over(win, self.root)
         try:
             win.grab_set()
         except Exception:

@@ -6,6 +6,8 @@ from launcher.ui.help_content import SETTING_TIPS, HELP_SECTIONS, help_plain_tex
 from launcher.ui.widgets import (
     GhostButton,
     HoverTip,
+    ask_choice,
+    center_over,
     ModelCoverCard,
     NavItem,
     PageHeader,
@@ -22,6 +24,8 @@ from launcher.ui.widgets import (
 __all__ = [
     "CoverCache",
     "GhostButton",
+    "ask_choice",
+    "center_over",
     "HoverTip",
     "ModelCoverCard",
     "NavItem",

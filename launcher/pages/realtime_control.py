@@ -65,6 +65,23 @@ class RealtimeControlMixin:
         if self.vc_running or self._vc_starting:
             self._stop_vc()
             return
+        # Preflight: catch missing devices NOW instead of a 20–40s wait + error
+        try:
+            inp = str(self.var_input_dev.get() or "").strip()
+            out = str(self.var_output_dev.get() or "").strip()
+        except Exception:
+            inp = str(self.cfg.get("sg_input_device") or "").strip()
+            out = str(self.cfg.get("sg_output_device") or "").strip()
+        if not inp or not out:
+            messagebox.showinfo(
+                "先选好设备",
+                "还没有选输入/输出设备，开了也不会出声。\n\n"
+                "输入设备 = 你的真实麦克风\n"
+                "输出设备 = CABLE Input（虚拟声卡）\n\n"
+                "带你去设置页选好，再回来点「开启变声」。",
+            )
+            self.show_page("settings")
+            return
         self._start_vc()
 
     def _start_vc(self) -> None:

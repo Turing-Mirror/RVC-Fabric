@@ -8,6 +8,7 @@ Models: User_Data/models catalog first; engine assets only for hubert/rmvpe stor
 from __future__ import annotations
 
 import os
+import re
 import sys
 import threading
 import time
@@ -206,15 +207,16 @@ class MainApp(
                     pass
             self.root.update_idletasks()
             if force_size or not self._placed_once:
-                w, h = DEFAULT_WIN_W, DEFAULT_WIN_H
                 sw = self.root.winfo_screenwidth()
                 sh = self.root.winfo_screenheight()
-                # Leave margin on small laptops
-                w = min(w, max(MIN_WIN_W, sw - 48))
-                h = min(h, max(MIN_WIN_H, sh - 72))
-                x = max(0, (sw - w) // 2)
-                y = max(0, (sh - h) // 2)
-                self.root.geometry(f"{w}x{h}+{x}+{y}")
+                if not self._restore_saved_geometry(sw, sh):
+                    w, h = DEFAULT_WIN_W, DEFAULT_WIN_H
+                    # Leave margin on small laptops
+                    w = min(w, max(MIN_WIN_W, sw - 48))
+                    h = min(h, max(MIN_WIN_H, sh - 72))
+                    x = max(0, (sw - w) // 2)
+                    y = max(0, (sh - h) // 2)
+                    self.root.geometry(f"{w}x{h}+{x}+{y}")
                 self._placed_once = True
             self.root.deiconify()
             self.root.lift()
@@ -234,6 +236,39 @@ class MainApp(
                     user32.SetForegroundWindow(target)
                 except Exception:
                     pass
+        except Exception:
+            pass
+
+    def _restore_saved_geometry(self, sw: int, sh: int) -> bool:
+        """Reopen at the size/place the user left the window (if still sane)."""
+        saved = str(self.cfg.get("win_geometry") or "").strip()
+        if saved == "zoomed":
+            try:
+                self.root.state("zoomed")
+                return True
+            except Exception:
+                return False
+        m = re.match(r"^(\d+)x(\d+)\+(-?\d+)\+(-?\d+)$", saved)
+        if not m:
+            return False
+        w, h, x, y = (int(g) for g in m.groups())
+        # Reject sizes/positions that no longer fit (monitor unplugged etc.)
+        if w < MIN_WIN_W or h < MIN_WIN_H or w > sw + 64 or h > sh + 64:
+            return False
+        if x < -32 or y < -32 or x > sw - 160 or y > sh - 120:
+            return False
+        try:
+            self.root.geometry(saved)
+            return True
+        except Exception:
+            return False
+
+    def _remember_geometry(self) -> None:
+        try:
+            if self.root.state() == "zoomed":
+                self.cfg["win_geometry"] = "zoomed"
+            else:
+                self.cfg["win_geometry"] = self.root.geometry()
         except Exception:
             pass
 
@@ -834,6 +869,9 @@ class MainApp(
                 except Exception:
                     pass
                 setattr(self, attr, None)
+
+        # Remember size/place BEFORE hiding — next launch reopens here
+        self._remember_geometry()
 
         # Hide immediately so the user sees the window go away
         try:

@@ -5,15 +5,21 @@ No new dependencies (numpy only; optional scipy not required).
 Designed for block processing with continuous state across calls.
 
 Default: chain master switch off so legacy behaviour is unchanged.
+
+Important: numpy is imported lazily. The frozen main-app shell (PyInstaller)
+imports EQ_* constants for the settings UI but does **not** ship numpy —
+numpy lives in Runtime (worker). Top-level `import numpy` would crash the
+shell after a clean install even when Runtime is ready.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
 # 5-band graphic EQ centre frequencies (Hz)
 EQ_FREQS: tuple[float, ...] = (60.0, 250.0, 1000.0, 4000.0, 8000.0)
@@ -37,6 +43,13 @@ EQ_PRESET_LABELS: Dict[str, str] = {
     "de_nasal": "消除鼻音",
     "thick": "低沉厚实",
 }
+
+
+def _numpy():
+    """Import numpy only when audio processing runs (Runtime worker)."""
+    import numpy as np
+
+    return np
 
 
 def _db_to_lin(db: float) -> float:
@@ -72,7 +85,7 @@ class BiquadPeak:
     def design(cls, sr: int, freq: float, gain_db: float, q: float = 1.0) -> "BiquadPeak":
         if abs(gain_db) < 1e-6:
             return cls()  # bypass
-        freq = float(np.clip(freq, 20.0, 0.45 * sr))
+        freq = float(min(max(freq, 20.0), 0.45 * sr))
         A = 10.0 ** (gain_db / 40.0)
         w0 = 2.0 * math.pi * freq / sr
         cos_w = math.cos(w0)
@@ -92,7 +105,8 @@ class BiquadPeak:
             a2=a2 / a0,
         )
 
-    def process(self, x: np.ndarray) -> np.ndarray:
+    def process(self, x: "np.ndarray") -> "np.ndarray":
+        np = _numpy()
         if self.b0 == 1.0 and self.b1 == 0.0 and self.b2 == 0.0 and self.a1 == 0.0:
             return x
         y = np.empty_like(x)
@@ -146,7 +160,8 @@ class NoiseGate:
         self._hold_left = 0
         self._gain = 1.0
 
-    def process(self, x: np.ndarray, sr: int) -> np.ndarray:
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
         self._sr = sr
         thr = _db_to_lin(self.threshold_db)
         min_g = _db_to_lin(-abs(self.range_db))
@@ -212,7 +227,8 @@ class Compressor:
     def reset(self) -> None:
         self._env_db = -100.0
 
-    def process(self, x: np.ndarray, sr: int) -> np.ndarray:
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
         thr = self.threshold_db
         ratio = self.ratio
         att = _ms_to_coef(self.attack_ms, sr)
@@ -280,7 +296,8 @@ class GraphicEQ:
         for f in self._filters:
             f.reset()
 
-    def process(self, x: np.ndarray, sr: int) -> np.ndarray:
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
         self._ensure(sr)
         y = x.astype(np.float32, copy=False)
         for f in self._filters:
@@ -382,7 +399,8 @@ class RealtimeFxChain:
         self.comp.reset()
         self.eq.reset()
 
-    def process(self, x: np.ndarray, sr: int) -> np.ndarray:
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
         if x is None or x.size == 0:
             return x
         if not self.enabled:

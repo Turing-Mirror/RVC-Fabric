@@ -21,8 +21,9 @@
 | 产品名 | **RVC Fabric**（界面文案 / 桌面快捷方式；`launcher/theme.py` 的 `APP_*`） |
 | 底座 | 官方 RVC WebUI + 实时 `gui_v1.py`，**不重写算法** |
 | 体验目标 | **Setup 安装壳** → **启动器补全 Runtime** → 主界面 → 社区音色 → 变声 |
-| Setup | **Inno Setup 6**（`installer/RVC_Fabric_Setup.iss` + `scripts/build_setup.py`）；含壳层+hubert/rmvpe/ffmpeg |
-| Runtime | **仅 CNB**（`CNB-GIT-RELEASE/runtime` + Release `RVC-runtime`）；Setup **不打** Runtime；启动器安装后下载 |
+| Setup | **Inno 薄包**（壳层：启动器+主界面+源码配置）；**不含** Runtime / engine-core / VB-Cable |
+| Runtime | **仅 CNB**（按显卡分版）；启动器下载 |
+| engine-core | **仅 CNB LFS** `assets/core/engine-core-*.zip`（hubert+rmvpe+ffmpeg+ffprobe，全卡共用） |
 | 在线索引 | CNB 仓根 **`index.json`**（主）+ **`ch-banner/`** 封面；`packages` 按 YYMMDD 命名 Setup/gui/runtime；文档 `docs/CNB-index索引与封面.md` |
 | 本地封面 | **`User_Data/ch-banner/<id>.jpg`**；`config.json` 只写相对路径 `ch-banner/...`（禁止绝对盘符） |
 | 音色包 | zip 内 **`config.json`** 含 name/author/author_url/date/cover；模型页与社区下载显示作者与封面 |
@@ -164,6 +165,12 @@
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 中 | 改 launcher 后需重打 exe 才能在发行包看到 |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |
+
+### 已知坑（已修，需重打主程序壳）
+
+- **现象**：Runtime 补全成功，打开主程序闪退 / 控制台 `ModuleNotFoundError: No module named 'numpy'`，栈在 `settings_page` → `tools.dsp_fx`。
+- **原因**：设置页为 EQ 文案导入 `tools.dsp_fx`；旧版该模块**顶层** `import numpy`。主程序是 **PyInstaller 壳**（无 numpy），numpy 只在 **Runtime 3.9** 给 worker 用。
+- **修复**：`tools/dsp_fx.py` 改为惰性导入 numpy；`EQ_*` 常量纯 Python。改后需 **重打 `变声器.exe` / GUI 补丁** 才进用户包。
 
 ---
 

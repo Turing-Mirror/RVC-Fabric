@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """特征索引文件（.index）绑定面板 — 模型页目录与配置档案之间的区块。
 
-一个模型可绑定多个 .index 候选、随时切换或不用；同一个 .index 文件也可以
-被多个模型绑定（记录路径即可，多对多）。数据层在 launcher/catalog.py：
-list_index_bindings / add_index_binding / remove_index_binding / set_active_index。
+一个模型可绑定多个 .index 候选、随时切换或不用。规范：.index 复制进该音色
+自己的文件夹（与 .pth 同级）。数据层在 launcher/catalog.py。
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui import GhostButton, ask_choice
+from launcher.ui import GhostButton
 
 
 class IndexPanelMixin:
@@ -93,7 +92,7 @@ class IndexPanelMixin:
             return
         tk.Label(
             head,
-            text="检索库让咬字更贴角色；没有也能用",
+            text="与 .pth 放在同一音色文件夹；没有检索库也能变声",
             font=sans_font(9),
             bg=TM_BG,
             fg=TM_META,
@@ -104,8 +103,11 @@ class IndexPanelMixin:
 
         m = self._current_model() or {}
         model_dir = Path(d)
-        # Disk is source of truth — never use a stale in-memory m["index"]
-        # left over from the previously selected voice.
+        # list_index_bindings sanitizes config (drops fake external twins)
+        try:
+            bindings = list_index_bindings(model_dir)
+        except Exception:
+            bindings = []
         try:
             active = get_model_active_index(model_dir)
         except Exception:
@@ -123,17 +125,25 @@ class IndexPanelMixin:
         self._index_row(
             rows, path="", label="不用检索库（仅 .pth）", badge="", active=(active == "")
         )
-        for p in list_index_bindings(model_dir):
+        for p in bindings:
             inside = False
             try:
                 inside = Path(p).parent.resolve() == model_dir.resolve()
             except Exception:
                 pass
+            if inside:
+                badge = "本音色文件夹内"
+            else:
+                # Should be rare after sanitize; show real location, not「共享」
+                try:
+                    badge = f"外部：{Path(p).parent}"
+                except Exception:
+                    badge = "外部路径"
             self._index_row(
                 rows,
                 path=p,
                 label=Path(p).name,
-                badge="模型文件夹内" if inside else "共享位置（可被多个模型绑定）",
+                badge=badge,
                 active=bool(active) and self._same_index_path(p, active),
             )
 
@@ -206,35 +216,26 @@ class IndexPanelMixin:
         d = self._current_model_dir()
         if not d:
             return
-        # Default to this model's own folder if present, else the shared
-        # indices folder — users can still browse out to external files.
-        from launcher.paths import INDICES_DIR
-
-        init = d if d and Path(d).is_dir() else str(INDICES_DIR)
+        # Always start in this model's folder — indices live next to the .pth.
+        init = d if d and Path(d).is_dir() else str(Path(d).parent)
         path = filedialog.askopenfilename(
-            title="选择特征索引文件 (.index)",
+            title="选择特征索引文件（将复制进本音色文件夹）",
             initialdir=init,
             filetypes=[("特征索引", "*.index"), ("全部", "*.*")],
         )
         if not path:
             return
-        choice = ask_choice(
-            self.root,
-            "绑定方式",
-            "把这个 index 文件放在哪里？\n"
-            "复制进模型文件夹：跟着模型走，推荐。\n"
-            "留在原位置：仅记录路径，同一个文件可被多个模型绑定。",
-            [("copy", "复制进模型文件夹"), ("link", "留在原位置")],
-        )
-        if choice is None:
-            return
         try:
-            add_index_binding(Path(d), Path(path), copy_into_folder=(choice == "copy"))
+            # Product rule: always copy next to .pth (no ghost「共享位置」)
+            bound = add_index_binding(
+                Path(d), Path(path), copy_into_folder=True
+            )
+            set_active_index(Path(d), bound)
         except Exception as e:
             messagebox.showerror("绑定失败", str(e))
             return
-        self.refresh_index_panel_ui()
-        self._toast_profile("已绑定 index，点「使用」启用")
+        self._after_index_change(bound)
+        self._toast_profile("已复制进本音色文件夹并启用")
 
     def _ui_use_index(self, path: str) -> None:
         d = self._current_model_dir()
@@ -242,6 +243,10 @@ class IndexPanelMixin:
             return
         try:
             set_active_index(Path(d), path)
+            # Re-read local path after set (may have been copied in)
+            from launcher.catalog import get_model_active_index
+
+            path = get_model_active_index(Path(d)) or path
         except Exception as e:
             messagebox.showerror("切换失败", str(e))
             return

@@ -31,12 +31,12 @@ def _mk_index(tmp_path: Path, name: str = "voice.index") -> Path:
 def test_add_first_binding_becomes_active(tmp_path):
     md = tmp_path / "models" / "Miku"
     idx = _mk_index(tmp_path)
-    recorded = add_index_binding(md, idx)
-    assert Path(recorded).resolve() == idx.resolve()
+    recorded = add_index_binding(md, idx)  # default: copy into model folder
+    assert Path(recorded).parent.resolve() == md.resolve()
+    assert Path(recorded).name == idx.name
     assert _side(md)["index"] == recorded
     assert list_index_bindings(md) == [recorded]
-    # shared binding: source file untouched
-    assert idx.is_file()
+    assert idx.is_file()  # source kept on copy
 
 
 def test_second_binding_listed_but_not_active(tmp_path):
@@ -56,7 +56,7 @@ def test_set_active_and_clear(tmp_path):
     pa = add_index_binding(md, a)
     pb = add_index_binding(md, b)
     set_active_index(md, pb)
-    assert _side(md)["index"] == pb
+    assert Path(_side(md)["index"]).resolve() == Path(pb).resolve()
     set_active_index(md, "")
     assert _side(md)["index"] == ""
     # both still bound
@@ -69,8 +69,11 @@ def test_remove_binding_clears_active_keeps_file(tmp_path):
     pa = add_index_binding(md, a)
     remove_index_binding(md, pa)
     assert _side(md)["index"] == ""
-    assert list_index_bindings(md) == []
-    assert a.is_file()  # unbind never deletes
+    # File still sits in the model folder → still listed; unbind never deletes.
+    local = str((md / a.name).resolve())
+    assert list_index_bindings(md) == [local]
+    assert a.is_file()
+    assert Path(local).is_file()
 
 
 def test_copy_and_move_into_folder(tmp_path):
@@ -85,15 +88,54 @@ def test_copy_and_move_into_folder(tmp_path):
     assert not b.is_file()  # move removes source
 
 
-def test_same_index_bound_to_two_models(tmp_path):
+def test_same_index_copied_into_two_models(tmp_path):
+    """Each model gets its own copy under its folder (not a ghost shared path)."""
     shared = _mk_index(tmp_path, "shared.index")
     m1 = tmp_path / "m" / "A"
     m2 = tmp_path / "m" / "B"
     p1 = add_index_binding(m1, shared)
     p2 = add_index_binding(m2, shared)
-    assert p1 == p2
+    assert Path(p1).parent.resolve() == m1.resolve()
+    assert Path(p2).parent.resolve() == m2.resolve()
+    assert Path(p1).name == Path(p2).name == "shared.index"
     assert list_index_bindings(m1) == [p1]
     assert list_index_bindings(m2) == [p2]
+
+
+def test_sanitize_drops_external_twin_of_local_index(tmp_path):
+    """Stale absolute path from another install must not appear as「共享」."""
+    from launcher.catalog import sanitize_index_bindings, set_active_index
+
+    other = tmp_path / "Grok_test" / "models" / "Tomori"
+    local = tmp_path / "models" / "Tomori"
+    other.mkdir(parents=True)
+    local.mkdir(parents=True)
+    name = "added_IVF3156_Flat_nprobe_1_tomori-speak_v2.index"
+    ext = other / name
+    loc = local / name
+    ext.write_bytes(b"external")
+    loc.write_bytes(b"local")
+    (local / "config.json").write_text(
+        json.dumps(
+            {
+                "name": "Tomori",
+                "index": str(ext.resolve()),
+                "index_files": [str(ext.resolve()), str(loc.resolve())],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    got = sanitize_index_bindings(local)
+    assert len(got) == 1
+    assert Path(got[0]).resolve() == loc.resolve()
+    side = _side(local)
+    assert Path(side["index"]).resolve() == loc.resolve()
+    # 「使用」external twin → still lands on local
+    set_active_index(local, str(ext))
+    assert Path(_side(local)["index"]).resolve() == loc.resolve()
+    assert len(list_index_bindings(local)) == 1
 
 
 def test_import_copy_keeps_source(tmp_path):

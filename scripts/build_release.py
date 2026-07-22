@@ -151,28 +151,25 @@ def ensure_pyinstaller() -> None:
 
 
 def ensure_shell_download_deps() -> None:
-    """打包机安装壳层联网依赖，打进 启动器.exe（用户机无需系统 Python）。
+    """打包机安装壳层联网/封面依赖，打进 启动器.exe / 变声器.exe。
 
-    若打包环境没有 requests，PyInstaller 打不进包 → 用户点「补全运行环境」直接失败。
+    用户机无需系统 Python。缺 requests → 补全 Runtime 失败；缺 Pillow → 社区封面空白。
     """
+    need: list[str] = []
     try:
         import requests  # noqa: F401
         import certifi  # noqa: F401
     except ImportError:
-        log("[deps] pip install requests certifi (for frozen 启动器 download)")
-        run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-U",
-                "requests",
-                "certifi",
-            ]
-        )
+        need.extend(["requests", "certifi"])
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        need.append("Pillow")
+    if need:
+        log(f"[deps] pip install {' '.join(need)} (for frozen shell exes)")
+        run([sys.executable, "-m", "pip", "install", "-U", *need])
     else:
-        log("[deps] requests/certifi ok (will bundle into shell exes)")
+        log("[deps] requests/certifi/Pillow ok (will bundle into shell exes)")
 
 
 def build_exes(out: Path) -> None:
@@ -223,6 +220,12 @@ def build_exes(out: Path) -> None:
                 "launcher.runtime_provision",
                 "--hidden-import",
                 "launcher.cnb_sources",
+                "--hidden-import",
+                "PIL",
+                "--hidden-import",
+                "PIL.Image",
+                "--hidden-import",
+                "PIL.ImageTk",
                 "--collect-all",
                 "certifi",
                 str(script),

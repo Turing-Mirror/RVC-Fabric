@@ -113,6 +113,69 @@ class RuntimeSpecTests(unittest.TestCase):
         self.assertEqual(spec.variant, "nvidia50")
         self.assertTrue(spec.primary.sha256)
 
+    def test_remote_overrides_runtime_urls(self):
+        remote = {
+            "runtimes": {
+                "nvidia": {
+                    "variant": "nvidia",
+                    "channel": "release",
+                    "parts": [
+                        {
+                            "name": "runtime-nvidia-new.tar",
+                            "sha256": "c" * 64,
+                            "urls": [
+                                "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+                                "-/releases/download/RVC-runtime/runtime-nvidia-new.tar"
+                            ],
+                        }
+                    ],
+                }
+            }
+        }
+        with mock.patch(
+            "launcher.cnb_sources.fetch_remote_catalog",
+            return_value=remote,
+        ):
+            spec = resolve_runtime_spec("nvidia", prefer_remote=True)
+        self.assertIn("runtime-nvidia-new.tar", spec.primary.urls[0])
+        self.assertEqual(spec.primary.sha256, "c" * 64)
+
+
+class RuntimeTarSafetyTests(unittest.TestCase):
+    def test_reject_path_traversal(self):
+        import tarfile
+        import io
+
+        from launcher.runtime_provision import ProvisionError, _safe_tar_members
+
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tf:
+            info = tarfile.TarInfo(name="../evil.txt")
+            data = b"x"
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        buf.seek(0)
+        with tarfile.open(fileobj=buf, mode="r:") as tf:
+            with self.assertRaises(ProvisionError):
+                _safe_tar_members(tf, Path(tempfile.gettempdir()) / "rt_dest")
+
+    def test_allow_runtime_tree(self):
+        import tarfile
+        import io
+
+        from launcher.runtime_provision import _safe_tar_members
+
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tf:
+            info = tarfile.TarInfo(name="Runtime/python.exe")
+            data = b"MZ"
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+        buf.seek(0)
+        with tarfile.open(fileobj=buf, mode="r:") as tf:
+            members = _safe_tar_members(tf, Path(tempfile.gettempdir()) / "rt_ok")
+        self.assertEqual(len(members), 1)
+
 
 class RuntimeReadyTests(unittest.TestCase):
     def test_missing(self):

@@ -376,32 +376,59 @@ def parse_runtime_spec(variant: str, data: dict[str, Any] | None = None) -> Runt
     )
 
 
+def _merge_runtime_blob(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Deep-merge one variant: override wins for channel/urls/sha256/parts."""
+    out = dict(base)
+    for k, v in override.items():
+        if k == "parts" and isinstance(v, list) and v:
+            out["parts"] = v
+        elif v not in (None, "", [], {}):
+            out[k] = v
+    return out
+
+
 def resolve_runtime_spec(
     variant: str,
     *,
     prefer_remote: bool = True,
     timeout: float = 20.0,
 ) -> RuntimeSpec:
-    """Build RuntimeSpec: bundled catalog first for correct channels, remote merge optional."""
-    # Prefer local bundled (correct channel) over remote snippet that may be stale
-    data: Optional[dict[str, Any]] = load_bundled_runtime_catalog()
+    """Build RuntimeSpec: **remote index/catalog wins**, bundled is fallback.
+
+    When CNB ``index.json`` / catalog is reachable, its ``runtimes`` URLs and
+    channels override the pack-in copy so old Setup builds still get current links.
+    """
+    local = load_bundled_runtime_catalog() or {
+        "runtimes": dict(_FALLBACK_RUNTIMES),
+        "schema": 1,
+    }
+    data: dict[str, Any] = dict(local)
     if prefer_remote:
         try:
             remote = fetch_remote_catalog(timeout=timeout)
-            # merge remote only for same-variant size/version; keep our channel urls if remote wrong
-            if isinstance(remote.get("runtimes"), dict) and isinstance(
-                data.get("runtimes"), dict
-            ):
-                for key, local_rt in data["runtimes"].items():
-                    rem = remote["runtimes"].get(key)
-                    if not isinstance(rem, dict) or not isinstance(local_rt, dict):
+            # Prefer full remote runtimes table when present
+            rem_rt = remote.get("runtimes") if isinstance(remote, dict) else None
+            loc_rt = data.get("runtimes") if isinstance(data.get("runtimes"), dict) else {}
+            if isinstance(rem_rt, dict) and rem_rt:
+                merged: dict[str, Any] = dict(loc_rt) if isinstance(loc_rt, dict) else {}
+                for key, rem_blob in rem_rt.items():
+                    if not isinstance(rem_blob, dict):
                         continue
-                    # keep local urls/channel authoritative
-                    if rem.get("size_bytes") and not local_rt.get("size_bytes"):
-                        local_rt["size_bytes"] = rem["size_bytes"]
+                    base_blob = (
+                        merged.get(key)
+                        if isinstance(merged.get(key), dict)
+                        else _FALLBACK_RUNTIMES.get(str(key), {})
+                    )
+                    if not isinstance(base_blob, dict):
+                        base_blob = {}
+                    merged[key] = _merge_runtime_blob(base_blob, rem_blob)
+                data["runtimes"] = merged
+                if remote.get("runtime_release_tag"):
+                    data["runtime_release_tag"] = remote["runtime_release_tag"]
+                data["_source"] = remote.get("_source_url") or "remote"
         except Exception:
-            pass
-    if data is None:
+            data.setdefault("_source", "bundled_fallback")
+    if not data.get("runtimes"):
         data = {"runtimes": dict(_FALLBACK_RUNTIMES), "schema": 1}
     return parse_runtime_spec(variant, data)
 

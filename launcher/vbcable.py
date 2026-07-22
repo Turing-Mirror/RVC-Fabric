@@ -18,7 +18,7 @@ import webbrowser
 from pathlib import Path
 
 from launcher.paths import ROOT, VBCABLE_DIR, ensure_dirs
-from launcher.win_util import CREATE_NO_WINDOW, open_path
+from launcher.win_util import open_path
 
 VB_CABLE_URL = "https://vb-audio.com/Cable/"
 SETUP_NAMES = (
@@ -78,68 +78,75 @@ def _ps_quote(s: str) -> str:
 
 
 def _run_elevated(setup: Path) -> None:
-    """Start installer with UAC + working directory = VBCABLE (required for INF/SYS)."""
+    """Start installer with UAC + working directory = VBCABLE (required for INF/SYS).
+
+    Prefer ShellExecuteW runas (native UAC, SW_SHOWNORMAL). Do not hide consoles
+    in a way that steals focus from the installer UI.
+    """
     setup = setup.resolve()
     work = str(setup.parent)
     if sys.platform != "win32":
         subprocess.Popen([str(setup)], cwd=work)
         return
 
-    # PowerShell Start-Process -Verb RunAs is the most reliable elevated launch
-    # (ShellExecuteW often fails silently or leaves UAC behind other windows).
+    errors: list[str] = []
+
+    # 1) ShellExecute "runas" — clearest UAC + installer window
+    try:
+        import ctypes
+
+        rc = int(
+            ctypes.windll.shell32.ShellExecuteW(
+                None,
+                "runas",
+                str(setup),
+                None,
+                work,
+                1,  # SW_SHOWNORMAL
+            )
+        )
+        if rc > 32:
+            return
+        errors.append(f"ShellExecute={rc}")
+    except Exception as e:
+        errors.append(f"ShellExecute: {e}")
+
+    # 2) PowerShell Start-Process -Verb RunAs (still show window; no CREATE_NO_WINDOW)
     ps = (
         "Start-Process -FilePath {fp} -WorkingDirectory {wd} -Verb RunAs"
     ).format(fp=_ps_quote(str(setup)), wd=_ps_quote(work))
-    kw: dict = {
-        "capture_output": True,
-        "text": True,
-        "encoding": "utf-8",
-        "errors": "replace",
-    }
-    if sys.platform == "win32":
-        kw["creationflags"] = CREATE_NO_WINDOW
-    r = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            ps,
-        ],
-        **kw,
-    )
-    if r.returncode != 0:
-        err = (r.stderr or r.stdout or "").strip() or f"exit={r.returncode}"
-        # Fallback 1: ShellExecute runas
-        try:
-            import ctypes
-
-            rc = int(
-                ctypes.windll.shell32.ShellExecuteW(
-                    None,
-                    "runas",
-                    str(setup),
-                    None,
-                    work,
-                    1,  # SW_SHOWNORMAL
-                )
-            )
-            if rc > 32:
-                return
-            err = f"{err}; ShellExecute={rc}"
-        except Exception as e2:
-            err = f"{err}; ShellExecute: {e2}"
-        # Fallback 2: plain start with cwd (user may need to approve later)
-        try:
-            subprocess.Popen(
-                [str(setup)],
-                cwd=work,
-                shell=False,
-            )
+    try:
+        r = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                ps,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if r.returncode == 0:
             return
-        except Exception as e3:
-            raise OSError(f"无法启动安装程序：{err}; Popen: {e3}") from e3
+        err = (r.stderr or r.stdout or "").strip() or f"exit={r.returncode}"
+        errors.append(f"PowerShell: {err}")
+    except Exception as e:
+        errors.append(f"PowerShell: {e}")
+
+    # 3) Non-elevated launch with correct cwd (user may re-run as admin)
+    try:
+        subprocess.Popen([str(setup)], cwd=work, shell=False)
+        return
+    except Exception as e3:
+        raise OSError(
+            "无法启动安装程序：" + "; ".join(errors) + f"; Popen: {e3}"
+        ) from e3
 
 
 def install_vbcable() -> tuple[bool, str]:
@@ -190,12 +197,9 @@ def install_vbcable() -> tuple[bool, str]:
         _run_elevated(setup)
         return (
             True,
-            f"已启动安装程序：{setup.name}\n\n"
-            "接下来请：\n"
-            "1. 若弹出 UAC（用户账户控制），点「是」\n"
-            "2. 在 VB-Cable 安装窗口中点 Install / 安装\n"
-            "3. 完成后在 Windows「声音」设置中应能看到 CABLE\n\n"
-            "若没看到窗口：请看任务栏是否闪烁，或 Alt+Tab 切换窗口。",
+            f"已启动 {setup.name} — 请处理前台的 UAC / 安装窗口 "
+            "（UAC 点「是」，安装窗点 Install）。"
+            "若被挡住请看任务栏闪烁或 Alt+Tab。",
         )
     except Exception as e:
         open_path(VBCABLE_DIR)

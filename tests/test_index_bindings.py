@@ -185,3 +185,26 @@ def test_missing_and_broken_models_flagged(tmp_path):
     assert got["gone"]["missing"] is True    # no .pth at all
     assert got["gone"]["path"] == ""
     assert "random" not in got               # not a voice folder → hidden
+
+def test_promote_legacy_via_import_move(tmp_path):
+    # 模拟旧版散装音色 assets/weights/foo.pth + 同名 index，移动进独立文件夹
+    from launcher.catalog import import_model_to_catalog, list_index_bindings
+
+    weights = tmp_path / "assets" / "weights"
+    weights.mkdir(parents=True)
+    pth = weights / "guanguanV1.pth"
+    pth.write_bytes(b"x" * (300 * 1024))
+    idx = weights / "guanguanV1.index"
+    idx.write_bytes(b"fake-index")
+    root = tmp_path / "models"
+
+    info = import_model_to_catalog(
+        pth, root, display_name="guanguanV1",
+        index_src=idx, move=True,
+    )
+    dest = Path(info["dir"])
+    assert dest.parent.resolve() == root.resolve()
+    assert Path(info["path"]).is_file()          # pth now in its own folder
+    assert info["index"]                          # index bound
+    assert list_index_bindings(dest) == [info["index"]]
+    assert not pth.is_file()                      # moved out of weights

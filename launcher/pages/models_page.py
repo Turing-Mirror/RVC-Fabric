@@ -451,8 +451,7 @@ class ModelsPageMixin:
             # Tell the user plainly instead of silently switching to a dead voice
             if messagebox.askyesno(
                 "音色文件缺失",
-                f"「{m.get('name')}」的模型文件缺失或没下载完整，现在还不能用。\n\n"
-                "常见原因：下载中断、或从别处拷贝时漏了 .pth 文件。\n\n"
+                f"「{m.get('name')}」的模型文件缺失或不完整（.pth 不存在或过小），现在还不能用。\n\n"
                 "是否打开它的文件夹检查？（也可在卡片右键选择删除）",
             ):
                 try:
@@ -476,6 +475,52 @@ class ModelsPageMixin:
                 if self.models
                 else None,
             )
+
+    def _promote_current_legacy(self) -> None:
+        """Move a legacy 散装音色 into its own User_Data folder so it can bind
+        检索库 / 配置档案 like any other voice."""
+        m = self._current_model() if hasattr(self, "_current_model") else (
+            self.models[self.model_idx] if self.models else None
+        )
+        if not m or m.get("source") != "legacy_weights" or not m.get("path"):
+            return
+        if self.vc_running or self._vc_starting:
+            messagebox.showinfo(
+                "先停止变声", "转换会移动模型文件，请先停止变声再操作。"
+            )
+            return
+        choice = ask_choice(
+            self.root,
+            "转为可管理音色",
+            f"把「{m.get('name')}」变成可绑定检索库/配置档案的音色。\n"
+            "复制：原文件保留在 assets/weights。\n"
+            "移动：原位置不再保留，统一由软件管理（推荐）。",
+            [("move", "移动（推荐）"), ("copy", "复制")],
+        )
+        if choice is None:
+            return
+        try:
+            info = import_model_to_catalog(
+                Path(m["path"]),
+                MODELS_DIR,
+                display_name=m.get("name"),
+                cover_src=Path(m["cover"]) if m.get("cover") else None,
+                index_src=Path(m["index"]) if m.get("index") else None,
+                move=(choice == "move"),
+            )
+        except Exception as e:
+            messagebox.showerror("转换失败", str(e))
+            return
+        self.refresh_models()
+        # Select the freshly promoted voice
+        for i, mm in enumerate(self.models):
+            if mm.get("path") == info.get("path"):
+                self._select_model(i, feedback=True, maybe_restart=False)
+                break
+        messagebox.showinfo(
+            "完成",
+            f"「{info.get('name')}」已转为可管理音色，现在可以绑定检索库和配置档案了。",
+        )
 
     def import_model(self) -> None:
         paths = filedialog.askopenfilenames(

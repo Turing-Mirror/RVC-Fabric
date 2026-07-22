@@ -838,6 +838,7 @@ class ModelCoverCard(tk.Frame):
         *,
         name: str,
         tag: str = "",
+        author: str = "",
         photo: Optional[tk.PhotoImage] = None,
         active: bool = False,
         focus: bool = False,
@@ -909,6 +910,18 @@ class ModelCoverCard(tk.Frame):
         )
         name_lbl.pack(anchor="w", pady=(2, 0))
         widgets.extend([body, name_lbl, tag_lbl, cover_box, self])
+        author_s = (author or "").strip()
+        if author_s:
+            auth_lbl = tk.Label(
+                body,
+                text=author_s[:20],
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                anchor="w",
+            )
+            auth_lbl.pack(anchor="w", pady=(1, 0))
+            widgets.append(auth_lbl)
 
         if active:
             badge = tk.Label(

@@ -115,6 +115,17 @@ VOICE_INDEX_EXTS = (".index",)
 VOICE_COVER_NAMES = ("cover.png", "cover.jpg", "cover.jpeg", "cover.webp")
 VOICE_CONFIG_NAME = "config.json"
 
+# Voice pack / installed sidecar identity fields (config.json or tm_package.json)
+# Required product fields for RVC Fabric released packs:
+#   name, author, author_url, date (YYMMDD), cover (local path in pack)
+VOICE_META_KEYS: tuple[str, ...] = (
+    "name",
+    "author",
+    "author_url",
+    "date",
+    "cover",
+)
+
 
 def normalize_package_type(raw: str, *, default: str = PKG_GUI_PATCH) -> str:
     s = (raw or "").strip().lower().replace("-", "_")
@@ -210,16 +221,86 @@ def describe_package_type(pkg_type: str) -> str:
     }.get(t, t)
 
 
+def normalize_yymmdd(raw: Any) -> str:
+    """Normalize to YYMMDD string; empty if unusable."""
+    import re
+
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    digits = re.sub(r"\D", "", s)
+    if len(digits) == 8:  # YYYYMMDD → YYMMDD
+        return digits[2:]
+    if len(digits) == 6:
+        return digits
+    return ""
+
+
+def normalize_voice_meta(data: Any) -> dict[str, str]:
+    """Extract voice identity fields from pack config / tm_package / catalog.
+
+    Canonical keys: name, author, author_url, date (YYMMDD), cover (relative path).
+    """
+    out: dict[str, str] = {}
+    if not isinstance(data, dict):
+        return out
+    name = data.get("name") or data.get("title") or data.get("voice_name")
+    if name not in (None, ""):
+        out["name"] = str(name).strip()
+    author = data.get("author") or data.get("creator") or data.get("artist")
+    if author not in (None, ""):
+        out["author"] = str(author).strip()
+    # Do not use generic "url" — that is often the pack download link
+    aurl = data.get("author_url") or data.get("author_link") or data.get("homepage")
+    if aurl not in (None, ""):
+        out["author_url"] = str(aurl).strip()
+    date = normalize_yymmdd(
+        data.get("date") or data.get("yymmdd") or data.get("release_date")
+    )
+    if date:
+        out["date"] = date
+    cover = data.get("cover") or data.get("cover_path") or data.get("cover_file")
+    if cover not in (None, ""):
+        out["cover"] = str(cover).strip().replace("\\", "/")
+    return out
+
+
+def voice_meta_template(
+    *,
+    name: str = "",
+    author: str = "",
+    author_url: str = "",
+    date: str = "",
+    cover: str = "cover.jpg",
+    **extra: Any,
+) -> dict[str, Any]:
+    """Minimal config.json body for a released voice pack."""
+    body: dict[str, Any] = {
+        "name": name or "",
+        "author": author or "",
+        "author_url": author_url or "",
+        "date": normalize_yymmdd(date) or "",
+        "cover": cover or "cover.jpg",
+    }
+    body.update({k: v for k, v in extra.items() if v is not None})
+    return body
+
+
 def voice_pack_layout_help() -> str:
     return (
-        "音色包 zip 推荐结构：\n"
-        "  tm_package.json   （可选，package_type=voice_pack）\n"
-        "  *.pth             （必需，至少一个）\n"
+        "音色包 zip 结构：\n"
+        "  config.json       （必需字段见下）\n"
+        "  *.pth             （必需）\n"
         "  *.index           （可选，与 .pth 同级）\n"
-        "  cover.png|jpg     （可选）\n"
-        "  config.json       （可选：name/tag/pitch 等）\n"
-        "也可包在一层目录内：MyVoice/*.pth …\n"
-        "安装后固定到 User_Data/models/<id>/（.pth 与 .index 同一文件夹）。\n"
+        "  cover.jpg|png     （封面，路径写在 config.cover）\n"
+        "  tm_package.json   （可选，package_type=voice_pack）\n"
+        "config.json 字段：\n"
+        "  name        音色名称\n"
+        "  author      作者\n"
+        "  author_url  作者链接\n"
+        "  date        YYMMDD\n"
+        "  cover       包内封面相对路径（如 cover.jpg）\n"
+        "安装后：User_Data/models/<id>/\n"
     )
 
 
@@ -265,6 +346,11 @@ def tm_package_template(package_type: str, **extra: Any) -> dict[str, Any]:
         base["applies"] = "install_to_user_data_models"
         base["voice_id"] = extra.get("voice_id") or extra.get("id") or ""
         base["tag"] = extra.get("tag") or "音色"
+        base["name"] = extra.get("name") or ""
+        base["author"] = extra.get("author") or ""
+        base["author_url"] = extra.get("author_url") or ""
+        base["date"] = normalize_yymmdd(extra.get("date") or "") or ""
+        base["cover"] = extra.get("cover") or "cover.jpg"
         # Official publisher stamp — clients read this without network
         base["publisher"] = extra.get("publisher") or "rvc_fabric"
         base["fabric_official"] = (

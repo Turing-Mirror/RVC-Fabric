@@ -24,6 +24,7 @@ from launcher.online.package_spec import (
     VOICE_COVER_NAMES,
     detect_zip_package_type,
     normalize_package_type,
+    normalize_voice_meta,
     read_zip_tm_package,
 )
 from launcher.paths import MODELS_DIR, USER_DATA
@@ -48,7 +49,7 @@ def install_voice_from_entry(
     if entry.pack_url or pkg == PKG_VOICE_PACK:
         if not entry.pack_url:
             raise DownloadError("voice_pack 类型需要 pack_url（音色 zip 直链）")
-        return install_voice_pack_url(
+        info = install_voice_pack_url(
             entry.pack_url,
             voice_id=entry.id,
             display_name=entry.name,
@@ -58,6 +59,9 @@ def install_voice_from_entry(
             progress=progress,
             expected_sha256=entry.sha256 or "",
         )
+        # Catalog author/date fill gaps when pack config omitted them
+        _merge_entry_identity_into_installed(info, entry)
+        return info
 
     if not entry.pth_url:
         raise DownloadError(
@@ -140,6 +144,7 @@ def install_voice_files(
         except Exception:
             pass
 
+    extra = _entry_identity_extra(entry)
     return _write_voice_config(
         dest_dir,
         dest_pth=dest_pth,
@@ -150,6 +155,7 @@ def install_voice_files(
         index_path=index_path,
         cover_path=cover_path,
         source="online_files",
+        extra=extra or None,
     )
 
 
@@ -185,6 +191,18 @@ def install_voice_pack_url(
         version=version,
         models_root=models_root,
     )
+
+
+def _entry_identity_extra(entry: VoiceEntry) -> dict:
+    """Catalog-level identity fallbacks when the zip has no config.json fields."""
+    extra: dict = {}
+    if entry.author:
+        extra["author"] = entry.author
+    if entry.author_url:
+        extra["author_url"] = entry.author_url
+    if entry.date:
+        extra["date"] = entry.date
+    return extra
 
 
 def install_voice_pack_zip(
@@ -268,30 +286,7 @@ def install_voice_pack_zip(
             shutil.copy2(idx, dest_idx)
             index_path = str(dest_idx.resolve())
 
-        cover_path = ""
-        for cname in VOICE_COVER_NAMES:
-            c = content / cname
-            if c.is_file() and c.stat().st_size > 500:
-                dest_c = dest_dir / c.name
-                shutil.copy2(c, dest_c)
-                cover_path = str(dest_c.resolve())
-                break
-        if not cover_path:
-            for ext in (".png", ".jpg", ".jpeg", ".webp"):
-                found = list(content.glob(f"*{ext}"))
-                # skip random huge assets; prefer small images
-                for f in found:
-                    if f.name.lower() == TM_PACKAGE_JSON:
-                        continue
-                    if 500 < f.stat().st_size < 8_000_000:
-                        dest_c = dest_dir / f"cover{ext if ext != '.jpeg' else '.jpg'}"
-                        shutil.copy2(f, dest_c)
-                        cover_path = str(dest_c.resolve())
-                        break
-                if cover_path:
-                    break
-
-        # merge optional config.json from pack
+        # merge optional config.json from pack (identity + params)
         pack_cfg: dict = {}
         cfg_file = content / VOICE_CONFIG_NAME
         if cfg_file.is_file():
@@ -302,7 +297,53 @@ def install_voice_pack_zip(
             except Exception:
                 pack_cfg = {}
 
-        name = str(pack_cfg.get("name") or name)
+        tm_meta: dict = {}
+        tm_meta_path = content / TM_PACKAGE_JSON
+        if tm_meta_path.is_file():
+            try:
+                tm_meta = json.loads(tm_meta_path.read_text(encoding="utf-8"))
+                if not isinstance(tm_meta, dict):
+                    tm_meta = {}
+            except Exception:
+                tm_meta = {}
+
+        # Identity: config.json wins, then tm_package.json
+        identity = normalize_voice_meta(tm_meta)
+        identity.update(normalize_voice_meta(pack_cfg))
+
+        # Cover: config.cover relative path first, then conventional names
+        cover_path = ""
+        cover_rel = identity.get("cover") or ""
+        if cover_rel:
+            c = content / cover_rel
+            if c.is_file() and c.stat().st_size > 500:
+                dest_name = Path(cover_rel).name
+                dest_c = dest_dir / dest_name
+                shutil.copy2(c, dest_c)
+                cover_path = str(dest_c.resolve())
+        if not cover_path:
+            for cname in VOICE_COVER_NAMES:
+                c = content / cname
+                if c.is_file() and c.stat().st_size > 500:
+                    dest_c = dest_dir / c.name
+                    shutil.copy2(c, dest_c)
+                    cover_path = str(dest_c.resolve())
+                    break
+        if not cover_path:
+            for ext in (".png", ".jpg", ".jpeg", ".webp"):
+                found = list(content.glob(f"*{ext}"))
+                for f in found:
+                    if f.name.lower() in (TM_PACKAGE_JSON, VOICE_CONFIG_NAME):
+                        continue
+                    if 500 < f.stat().st_size < 8_000_000:
+                        dest_c = dest_dir / f"cover{ext if ext != '.jpeg' else '.jpg'}"
+                        shutil.copy2(f, dest_c)
+                        cover_path = str(dest_c.resolve())
+                        break
+                if cover_path:
+                    break
+
+        name = str(identity.get("name") or pack_cfg.get("name") or name)
         tag = str(pack_cfg.get("tag") or tag or guess_tag(name))
 
         extra = {
@@ -310,23 +351,21 @@ def install_voice_pack_zip(
             for k in ("pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method")
             if k in pack_cfg
         }
-        # Prefer pack stamps when present (tm_package / config from CNB pack)
         for k in ("publisher", "fabric_official", "is_rvc_fabric"):
             if k in pack_cfg:
                 extra[k] = pack_cfg[k]
-        tm_meta_path = content / TM_PACKAGE_JSON
-        if tm_meta_path.is_file():
-            try:
-                tm = json.loads(tm_meta_path.read_text(encoding="utf-8"))
-                if isinstance(tm, dict):
-                    for k in ("publisher", "fabric_official", "voice_id"):
-                        if k in tm and k not in extra:
-                            if k == "voice_id" and not vid:
-                                vid = str(tm.get("voice_id") or vid)
-                            elif k != "voice_id":
-                                extra[k] = tm[k]
-            except Exception:
-                pass
+            elif k in tm_meta and k not in extra:
+                extra[k] = tm_meta[k]
+        if tm_meta.get("voice_id") and not vid:
+            vid = str(tm_meta.get("voice_id") or vid)
+        # Persist identity fields into installed config.json
+        for k in ("author", "author_url", "date"):
+            if identity.get(k):
+                extra[k] = identity[k]
+        # Store cover as filename relative to model dir when possible
+        if cover_path:
+            extra["cover"] = Path(cover_path).name
+
         return _write_voice_config(
             dest_dir,
             dest_pth=dest_pth,
@@ -369,6 +408,29 @@ def _find_first(root: Path, pattern: str) -> Optional[Path]:
     return None
 
 
+def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
+    """If installed config lacks author/date, copy from catalog entry."""
+    d = Path(info.get("dir") or "")
+    if not d.is_dir():
+        return
+    cfg_path = d / VOICE_CONFIG_NAME
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() else {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+    except Exception:
+        cfg = {}
+    changed = False
+    for k, v in _entry_identity_extra(entry).items():
+        if v and not cfg.get(k):
+            cfg[k] = v
+            changed = True
+    if changed:
+        cfg_path.write_text(
+            json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+
 def _write_voice_config(
     dest_dir: Path,
     *,
@@ -397,7 +459,15 @@ def _write_voice_config(
     if index_path and Path(index_path).is_file():
         cfg["index"] = str(Path(index_path).resolve())
     if cover_path:
-        cfg["cover"] = cover_path
+        # Prefer basename so the folder is portable
+        try:
+            cp = Path(cover_path)
+            if cp.is_file() and cp.parent.resolve() == Path(dest_dir).resolve():
+                cfg["cover"] = cp.name
+            else:
+                cfg["cover"] = cover_path
+        except Exception:
+            cfg["cover"] = cover_path
     if extra:
         cfg.update(extra)
     # Do not let pack config wipe official stamps unless pack is not fabric

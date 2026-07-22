@@ -470,6 +470,10 @@ class StorePage:
         ).pack(anchor="w")
         kind = "音色包" if v.pack_url else "多文件"
         meta = f"{v.tag}  ·  {kind}"
+        if v.author:
+            meta += f"  ·  {v.author}"
+        if v.date:
+            meta += f"  ·  {v.date}"
         if v.size_bytes:
             meta += f"  ·  {v.size_bytes // 1024 // 1024} MB"
         installed = is_voice_installed(v.id, MODELS_DIR)

@@ -337,6 +337,7 @@ class ModelsPageMixin:
                 self.model_grid,
                 name=m["name"],
                 tag=m.get("tag") or "音色",
+                author=str(m.get("author") or ""),
                 photo=photo,
                 active=active,
                 focus=active,
@@ -392,6 +393,12 @@ class ModelsPageMixin:
                 label="使用这个音色",
                 command=lambda: self._use_model_from_grid(full_ix),
             )
+            aurl = str(m.get("author_url") or "").strip()
+            if aurl:
+                menu.add_command(
+                    label="打开作者链接",
+                    command=lambda u=aurl: self._open_author_url(u),
+                )
             if m.get("source") == "user_data" and m.get("dir"):
                 menu.add_command(
                     label="重命名…", command=lambda: self._ui_rename_model(m)
@@ -424,6 +431,17 @@ class ModelsPageMixin:
             _bind_tree(card)
         except Exception:
             pass
+
+    def _open_author_url(self, url: str) -> None:
+        u = (url or "").strip()
+        if not u:
+            return
+        try:
+            import webbrowser
+
+            webbrowser.open(u)
+        except Exception as e:
+            messagebox.showerror("打开失败", str(e))
 
     def _ui_rename_model(self, m: dict) -> None:
         from tkinter import simpledialog

@@ -193,8 +193,8 @@ class BootstrapApp:
         tk.Label(
             notice_body,
             text=(
-                "首次使用会自动从 CNB Release 补全 Runtime（按 Setup 所选显卡分版）。"
-                "日常请用桌面快捷方式或本启动器进入主界面。"
+                "新电脑默认缺少 Runtime：点「补全运行环境」从 CNB 下载（不依赖本机 pip/requests）。"
+                "补完后可再按需下载模型等。日常请用桌面快捷方式或本启动器进主界面。"
             ),
             font=sans_font(9),
             bg=TM_SURFACE,
@@ -205,19 +205,14 @@ class BootstrapApp:
         ).pack(fill="x")
 
         cards = tk.Frame(page, bg=TM_BG)
-        cards.pack(pady=(18, 6))
+        cards.pack(pady=(18, 10))
         SoftActionCard(cards, "发送快捷方式", "", self.on_shortcut).pack(
             side="left", padx=10
         )
         SoftActionCard(cards, "安装虚拟声卡", "", self.on_vbcable).pack(
             side="left", padx=10
         )
-        SoftActionCard(cards, "检测与部署", "", self.on_deploy).pack(
-            side="left", padx=10
-        )
-        cards2 = tk.Frame(page, bg=TM_BG)
-        cards2.pack(pady=(4, 10))
-        SoftActionCard(cards2, "补全运行环境", "", self.on_provision_runtime).pack(
+        SoftActionCard(cards, "补全运行环境", "", self.on_provision_runtime).pack(
             side="left", padx=10
         )
         return page
@@ -373,27 +368,87 @@ class BootstrapApp:
         self._run_provision(var, interactive=False)
 
     def on_provision_runtime(self) -> None:
-        if self._provision_busy:
+        """一键：先补 Runtime（默认用户机上没有），再可选补模型/训练资源。"""
+        if self._provision_busy or self._deploy_busy:
             self._set_status("正在补全运行环境，请稍候…", ok=False)
             return
         var = self._selected_variant()
+        force = False
         if runtime_ready(RROOT):
-            if not messagebox.askyesno(
-                "运行环境",
-                "已检测到 Runtime。是否仍强制重新下载安装？\n"
-                "（一般不需要；仅在环境损坏时选择「是」。）",
-            ):
-                return
-            force = True
-        else:
-            force = False
-            if not messagebox.askyesno(
-                "补全运行环境",
-                f"将从 CNB Release 下载「{var}」分版 Runtime（数 GB）。\n"
-                "是否继续？",
-            ):
-                return
+            # 已有 Runtime：进入「可选二次补全」对话，而不是挡在 requests 上
+            self._offer_optional_after_runtime(already_had_runtime=True)
+            return
+        # 默认视为缺失：直接开始，少一次确认打断
+        self._set_status(
+            f"开始补全 Runtime（{var}）… 本机无需预装 Python/requests。",
+            ok=True,
+        )
         self._run_provision(var, interactive=True, force=force)
+
+    def _offer_optional_after_runtime(self, *, already_had_runtime: bool) -> None:
+        """Runtime 就绪后：合并原「检测与部署」的可选下载。"""
+        try:
+            items = check_environment()
+            report = format_check_report(items)
+            core_miss = missing_items(items, kinds={KIND_CORE})
+            need_core_files = any(
+                i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
+            )
+            train_file_miss = [
+                i
+                for i in missing_items(items, kinds={KIND_TRAINING})
+                if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
+            ]
+        except Exception as e:
+            messagebox.showwarning("检测", f"Runtime 已就绪，附加检测失败：{e}")
+            self._refresh_hint()
+            return
+
+        if already_had_runtime and not need_core_files and not train_file_miss:
+            if messagebox.askyesno(
+                "运行环境",
+                "已检测到 Runtime，日常变声所需也基本齐全。\n\n"
+                "是否强制重新下载 Runtime？（一般不需要，仅环境损坏时选「是」。）",
+            ):
+                self._run_provision(
+                    self._selected_variant(), interactive=True, force=True
+                )
+            else:
+                messagebox.showinfo("环境", report + "\n\n可打开主界面使用。")
+                self._set_status("环境正常，可打开主界面。")
+            self._refresh_hint()
+            return
+
+        if need_core_files:
+            if messagebox.askyesno(
+                "继续补全",
+                f"Runtime 已就绪。\n\n{report}\n\n"
+                "是否继续下载变声必需模型（Hubert / RMVPE）？\n"
+                "（Setup 若已带上则可跳过。）",
+            ):
+                self._set_status("正在下载必需模型…")
+                self._run_download("core")
+                return
+            self._set_status("已跳过模型下载；可稍后再次点「补全运行环境」。")
+            self._refresh_hint()
+            return
+
+        if train_file_miss:
+            if messagebox.askyesno(
+                "可选资源",
+                f"日常变声环境已就绪。\n\n{report}\n\n"
+                "是否再下载训练/伴奏分离资源？（可选，体积较大，日常变声不需要。）",
+            ):
+                self._set_status("正在下载训练/分离资源…")
+                self._run_download("all_advanced")
+                return
+            self._set_status("日常环境已就绪，可打开主界面。")
+            self._refresh_hint()
+            return
+
+        messagebox.showinfo("完成", report + "\n\n可打开主界面开始使用。")
+        self._set_status("环境正常，可打开主界面。")
+        self._refresh_hint()
 
     def _run_provision(
         self,
@@ -408,10 +463,7 @@ class BootstrapApp:
         self._deploy_busy = True
 
         def work() -> None:
-            lines: list[str] = []
-
             def log(msg: str) -> None:
-                lines.append(msg)
                 self.root.after(0, lambda m=msg: self._set_status(m, ok=True))
 
             def progress(phase: str, done: int, total: int) -> None:
@@ -430,14 +482,22 @@ class BootstrapApp:
                     self.root.after(
                         0, lambda: self._set_status("正在解压 Runtime…", ok=True)
                     )
+                elif phase == "models":
+                    self.root.after(
+                        0, lambda: self._set_status("正在检查/补全模型…", ok=True)
+                    )
 
             try:
-                ok, msg = ensure_runtime(
-                    variant=variant,
+                # 先只装 Runtime；模型等放到「可选二次补全」
+                from launcher.runtime_provision import provision_runtime
+
+                ok, msg = provision_runtime(
+                    variant,
                     root=RROOT,
                     progress=progress,
                     log=log,
                     force=force,
+                    download_core_models=False,
                 )
             except Exception as e:
                 ok, msg = False, str(e)
@@ -449,13 +509,27 @@ class BootstrapApp:
                     self._clear_pending_marker()
                     self._set_status(msg, ok=True)
                     if interactive:
-                        messagebox.showinfo("完成", msg)
+                        # Runtime 完成后才询问是否继续补全（原检测与部署）
+                        self._offer_optional_after_runtime(already_had_runtime=False)
+                    else:
+                        # 自动补全：静默再补 hubert/rmvpe 若缺失
+                        try:
+                            items = check_environment()
+                            need = any(
+                                i.name in ("Hubert 模型", "RMVPE 模型")
+                                for i in missing_items(items, kinds={KIND_CORE})
+                            )
+                            if need:
+                                self._run_download("core")
+                        except Exception:
+                            pass
                 else:
                     self._set_status(msg, ok=False)
                     if interactive or not runtime_ready(RROOT):
                         messagebox.showwarning(
                             "补全未完成",
-                            msg + "\n\n可点击「补全运行环境」重试。",
+                            msg + "\n\n可点击「补全运行环境」重试。\n"
+                            "无需在本机安装 Python 或 requests。",
                         )
                 self._refresh_hint()
 
@@ -494,75 +568,6 @@ class BootstrapApp:
         except Exception as e:
             messagebox.showerror("无法打开", str(e))
             self._set_status(f"打开声音面板失败：{e}", ok=False)
-
-    def on_deploy(self) -> None:
-        if self._deploy_busy:
-            self._set_status("正在处理，请稍候…", ok=False)
-            return
-        self._deploy_busy = True
-        self._set_status("正在检测…")
-
-        def work():
-            try:
-                items = check_environment()
-                report = format_check_report(items)
-                core_miss = missing_items(items, kinds={KIND_CORE})
-                need_core_files = any(
-                    i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
-                )
-                train_file_miss = [
-                    i
-                    for i in missing_items(items, kinds={KIND_TRAINING})
-                    if i.name in ("训练底模 (pretrained)", "伴奏分离 UVR")
-                ]
-            except Exception as e:
-                # bind the message now — `e` is unbound once the except block ends,
-                # so the deferred callback must not reference it directly
-                err = str(e)
-
-                def fail():
-                    self._deploy_busy = False
-                    messagebox.showerror("检测失败", err)
-                    self._set_status(f"检测失败：{err}", ok=False)
-
-                self.root.after(0, fail)
-                return
-
-            def after():
-                self._refresh_hint()
-                try:
-                    if need_core_files:
-                        if messagebox.askyesno(
-                            "环境检测",
-                            f"{report}\n\n缺少变声必需文件，是否下载？",
-                        ):
-                            self._set_status("正在下载…")
-                            self._run_download("core")
-                            return
-                        self._deploy_busy = False
-                        return
-
-                    if train_file_miss:
-                        if messagebox.askyesno(
-                            "环境检测",
-                            f"{report}\n\n是否下载训练/分离资源？（可选，体积较大）",
-                        ):
-                            self._set_status("正在下载…")
-                            self._run_download("all_advanced")
-                            return
-                        self._deploy_busy = False
-                        self._set_status("环境正常，可打开主界面。")
-                        return
-
-                    messagebox.showinfo("环境检测", report)
-                    self._set_status("环境正常，可打开主界面。")
-                finally:
-                    if not getattr(self, "_download_running", False):
-                        self._deploy_busy = False
-
-            self.root.after(0, after)
-
-        threading.Thread(target=work, daemon=True).start()
 
     def _run_download(self, scope: str) -> None:
         self._download_running = True

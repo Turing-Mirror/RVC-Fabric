@@ -10,8 +10,8 @@
 ;   默认路径: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
 ;
 ; 用户动线：
-;   Setup.exe（本安装器）安装壳层+启动器+主界面
-;   → 启动器从 CNB Release 补全 Runtime
+;   Setup.exe（本安装器）安装薄包：启动器 + 主界面 + 源码配置
+;   → 启动器从 CNB 补全 Runtime（分版）+ engine-core（共用）+ VB-Cable
 ;   → 主界面 / 社区音色（LFS）
 
 #define MyAppName "RVC Fabric"
@@ -88,7 +88,7 @@ Name: "gpu_amd"; Description: "AMD / Intel 显卡（DirectML）"; GroupDescripti
 Name: "gpu_nvidia50"; Description: "NVIDIA 50 系（RTX 50xx / Blackwell）"; GroupDescription: "选择显卡分版（安装后启动器将下载对应 Runtime）:"; Flags: exclusive
 
 [Files]
-; 薄包：壳层 + 启动器 + 主界面，不含 Runtime
+; 薄包：壳层 + 启动器 + 主界面；不含 Runtime / engine-core / VB-Cable
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -206,7 +206,7 @@ begin
   if MemoDirInfo <> '' then
     S := S + MemoDirInfo + NewLine + NewLine;
   S := S + '显卡分版: ' + GpuLabel(GpuVariant) + NewLine;
-  S := S + '安装后启动器将从 CNB Release 下载 Runtime（体积较大，需联网）。' + NewLine;
+  S := S + '安装后启动器将从 CNB 下载 Runtime（按显卡）与 engine-core（共用，约 700MB+），需联网。' + NewLine;
   if MemoTasksInfo <> '' then
     S := S + NewLine + MemoTasksInfo;
   Result := S;

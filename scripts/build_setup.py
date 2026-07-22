@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """Build RVC Fabric Setup with Inno Setup 6.
 
-What goes into Setup (payload):
-  - 软件壳：launcher / 启动器.exe / 变声器.exe / 引擎源码 / configs …
-  - 必需资源：hubert / rmvpe / ffmpeg 等（与 build_release 的 copy_engine 一致）
-  - **不含 Runtime**（Python 绿色环境只在 CNB Release，安装后由启动器下载）
+What goes into Setup (payload) — **thin shell** (plan B)::
 
-CNB 制品仓（本机 CNB-GIT-RELEASE）里 Runtime 才是大环境包；
-不要把 Setup 里的 hubert/ffmpeg 当成「也要从 CNB 下」而删掉。
+  - 软件壳：启动器.exe / 变声器.exe / launcher / gui_v1 / infer / configs …
+  - **不含** Runtime（CNB Release，按显卡分版）
+  - **不含** engine-core（hubert / rmvpe / ffmpeg / ffprobe — CNB LFS 共用包）
+  - **不含** VB-Cable（CNB LFS）
+
+安装后启动器顺序：Runtime → engine-core → VB-Cable。
 
 Usage::
 
-  set ISCC=K:\\jihuang\\Inno Setup 6\\ISCC.exe   # 或依赖 find_iscc 内路径
+  set ISCC=K:\\jihuang\\Inno Setup 6\\ISCC.exe
   python scripts/build_setup.py --clean
 """
 
@@ -128,6 +129,8 @@ def build_payload_exes(out: Path) -> None:
                 "--hidden-import",
                 "launcher.runtime_provision",
                 "--hidden-import",
+                "launcher.engine_core",
+                "--hidden-import",
                 "launcher.cnb_sources",
                 "--hidden-import",
                 "PIL",
@@ -149,25 +152,94 @@ def build_payload_exes(out: Path) -> None:
 
 
 def write_payload_readme(out: Path) -> None:
-    text = """RVC Fabric · Setup 安装内容
+    text = """RVC Fabric · Setup 薄包
 ========================================
 
-本包含：软件壳、启动器、主界面、hubert/rmvpe/ffmpeg 等运行所需文件。
-本包不含：Runtime（绿色 Python 环境）——安装后由启动器从 CNB 下载。
+本包含：软件壳（启动器 + 主界面）、引擎源码与配置。
+本包不含（安装后由启动器从 CNB 下载）：
+  1. Runtime（绿色 Python，按显卡分版）
+  2. engine-core（hubert / rmvpe / ffmpeg / ffprobe，全卡共用）
+  3. VB-Cable 虚拟声卡安装包
 
 CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases
-（Runtime 见 Release 标签 RVC-runtime）
 """
     (out / "使用说明.txt").write_text(text, encoding="utf-8")
+
+
+def strip_heavy_from_payload(out: Path) -> None:
+    """Remove engine-core weights / ffmpeg and other bulk so Setup stays thin."""
+    removed = 0
+
+    def _rm(p: Path) -> None:
+        nonlocal removed
+        if p.is_file():
+            try:
+                sz = p.stat().st_size
+                p.unlink()
+                removed += sz
+                log(f"  strip file: {p.relative_to(out)} ({sz // 1024 // 1024} MB)")
+            except OSError as e:
+                log(f"  strip fail: {p}: {e}")
+        elif p.is_dir():
+            try:
+                shutil.rmtree(p)
+                log(f"  strip dir: {p.relative_to(out)}")
+            except OSError as e:
+                log(f"  strip dir fail: {p}: {e}")
+
+    for rel in (
+        "assets/hubert/hubert_base.pt",
+        "assets/rmvpe/rmvpe.pt",
+        "assets/rmvpe/rmvpe.onnx",
+        "ffmpeg.exe",
+        "ffprobe.exe",
+    ):
+        _rm(out / rel)
+
+    for rel in (
+        "docs/reference-screenshots",
+        "docs/en",
+        "docs/fr",
+        "docs/jp",
+        "docs/kr",
+        "docs/pt",
+        "docs/tr",
+        "docs/小白简易教程.doc",
+        "assets/pretrained",
+        "assets/pretrained_v2",
+        "assets/uvr5_weights",
+        "assets/indices",
+    ):
+        p = out / rel
+        if p.exists():
+            _rm(p)
+
+    for name in ("TM_Setup.exe", "TM_Voice.exe"):
+        _rm(out / name)
+
+    for d in (
+        out / "assets" / "hubert",
+        out / "assets" / "rmvpe",
+        out / "assets" / "weights",
+    ):
+        d.mkdir(parents=True, exist_ok=True)
+    (out / "assets" / "hubert" / "请由启动器下载engine-core.txt").write_text(
+        "hubert_base.pt 由启动器从 CNB engine-core 包下载。\n",
+        encoding="utf-8",
+    )
+    (out / "assets" / "rmvpe" / "请由启动器下载engine-core.txt").write_text(
+        "rmvpe.pt / rmvpe.onnx 由启动器从 CNB engine-core 包下载。\n",
+        encoding="utf-8",
+    )
+    log(f"[strip] removed ~{removed // 1024 // 1024} MB heavy assets from payload")
 
 
 def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     log(f"[payload] assemble -> {out}")
     out.mkdir(parents=True, exist_ok=True)
-    # 与全量发行相同：引擎 + hubert/rmvpe/ffmpeg（可从 RVCMAX 合并）
     copy_engine(out)
-    # 只去掉 Runtime；剔除废弃自写 Setup 源码（正式安装器用 Inno）
     ensure_no_runtime(out)
+    strip_heavy_from_payload(out)
     for dead in (
         out / "launcher" / "setup_app.py",
         out / "launcher" / "_setup_shell.py",
@@ -180,7 +252,6 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
                 pass
 
     (out / "User_Data" / "models").mkdir(parents=True, exist_ok=True)
-    # VB-Cable 独立走 CNB（Runtime 后再下载），Setup 只留空目录 + 说明
     dst_vb = out / "VBCABLE"
     if dst_vb.exists():
         shutil.rmtree(dst_vb, ignore_errors=True)
@@ -189,28 +260,30 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
         "VB-Cable 安装包不随 Setup 安装。\n\n"
         "流程：\n"
         "1. 启动器「补全运行环境」下载 Runtime\n"
-        "2. 完成后自动从 CNB 下载 VB-Cable 安装包到本目录\n"
-        "3. 再点「安装虚拟声卡」启动官方安装程序（需 UAC）\n\n"
-        "CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases\n"
-        "路径：vbcable/vbcable-setup.zip（LFS）\n"
-        "官网：https://vb-audio.com/Cable/\n",
+        "2. 下载 engine-core（hubert/rmvpe/ffmpeg）\n"
+        "3. 下载 VB-Cable 安装包到本目录\n"
+        "4. 点「安装虚拟声卡」启动官方安装程序（需 UAC）\n\n"
+        "CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases\n",
         encoding="utf-8",
     )
-    log("[vbcable] placeholder only (pack downloaded from CNB after Runtime)")
+    log("[vbcable] placeholder only")
 
     meta = {
         "product": "RVC Fabric",
         "package_kind": "setup_payload",
         "includes_runtime": False,
         "includes_vbcable": False,
-        "includes_engine_assets": True,
+        "includes_engine_assets": False,
+        "includes_engine_core": False,
         "runtime_channel": "cnb_release",
         "runtime_release_tag": "RVC-runtime",
+        "engine_core_channel": "cnb_lfs",
+        "engine_core_path": "assets/core/engine-core-*.zip",
         "vbcable_channel": "cnb_lfs",
         "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
         "installer": "inno_setup",
         "iss": "installer/RVC_Fabric_Setup.iss",
-        "note": "Runtime + VB-Cable 均从 CNB 补全；hubert/rmvpe/ffmpeg 随 Setup 安装",
+        "note": "薄包：壳+源码。Runtime（分版）+ engine-core（共用）+ VB-Cable 均从 CNB 补全",
     }
     (out / "setup_package.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -222,6 +295,15 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
         return
     build_payload_exes(out)
     ensure_no_runtime(out)
+    strip_heavy_from_payload(out)
+    for name in ("TM_Setup.exe", "TM_Voice.exe"):
+        p = out / name
+        if p.is_file():
+            try:
+                p.unlink()
+                log(f"  strip duplicate exe: {name}")
+            except OSError:
+                pass
     if not (out / "启动器.exe").is_file():
         raise FileNotFoundError("payload missing 启动器.exe")
     if not (out / "变声器.exe").is_file():
@@ -262,8 +344,8 @@ def copy_to_cnb(setup_exe: Path) -> None:
     dest = CNB_SETUP / SETUP_EXE_NAME
     shutil.copy2(setup_exe, dest)
     (CNB_SETUP / "README.txt").write_text(
-        "RVC_Fabric_Setup.exe = Inno 安装器（含壳层与引擎资源，不含 Runtime）。\n"
-        "Runtime 在本仓 runtime/ 与 CNB Release，由启动器下载。\n"
+        "RVC_Fabric_Setup.exe = Inno 薄包（壳层+主界面，不含 Runtime / engine-core）。\n"
+        "Runtime：CNB Release（按显卡）。engine-core：assets/core/（LFS 共用）。\n"
         "构建：python scripts/build_setup.py\n",
         encoding="utf-8",
     )
@@ -286,9 +368,9 @@ def main() -> int:
     payload = args.payload.resolve()
     out_dir = args.out.resolve()
 
-    log("=== RVC Fabric Setup (Inno Setup) ===")
-    log("  payload: shell + hubert/rmvpe/ffmpeg + exes")
-    log("  NOT in payload: Runtime (CNB only)")
+    log("=== RVC Fabric Setup (Inno Setup · thin shell) ===")
+    log("  payload: 启动器 + 变声器 + 源码/配置")
+    log("  NOT in payload: Runtime / engine-core / VB-Cable (CNB)")
 
     if args.clean:
         if payload.exists():

@@ -455,9 +455,14 @@ class BootstrapApp:
             items = check_environment()
             report = format_check_report(items)
             core_miss = missing_items(items, kinds={KIND_CORE})
-            need_core_files = any(
-                i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
-            )
+            try:
+                from launcher.engine_core import engine_core_ready
+
+                need_core_files = not engine_core_ready(RROOT)
+            except Exception:
+                need_core_files = any(
+                    i.name in ("Hubert 模型", "RMVPE 模型") for i in core_miss
+                )
             train_file_miss = [
                 i
                 for i in missing_items(items, kinds={KIND_TRAINING})
@@ -487,13 +492,13 @@ class BootstrapApp:
             if messagebox.askyesno(
                 "继续补全",
                 f"Runtime 已就绪。\n\n{report}\n\n"
-                "是否继续下载变声必需模型（Hubert / RMVPE）？\n"
-                "（Setup 若已带上则可跳过。）",
+                "是否继续下载引擎资源包 engine-core？\n"
+                "（含 Hubert / RMVPE / ffmpeg，约 700+ MB；Setup 薄包不含此项。）",
             ):
-                self._set_status("正在下载必需模型…")
-                self._run_download("core")
+                self._set_status("正在下载引擎资源…")
+                self._run_engine_core_download()
                 return
-            self._set_status("已跳过模型下载；可稍后再次点「补全运行环境」。")
+            self._set_status("已跳过引擎资源；可稍后再次点「补全运行环境」。")
             self._refresh_hint()
             return
 
@@ -552,7 +557,6 @@ class BootstrapApp:
                     )
 
             try:
-                # 先只装 Runtime；模型等放到「可选二次补全」
                 from launcher.runtime_provision import provision_runtime
 
                 ok, msg = provision_runtime(
@@ -566,8 +570,58 @@ class BootstrapApp:
             except Exception as e:
                 ok, msg = False, str(e)
 
-            # Runtime 成功后再下 VB-Cable 安装包（独立小包，不装驱动，仅落地文件）
-            vb_msg = ""
+            extra_msgs: list[str] = []
+            # Runtime 成功后：engine-core（必需）→ VB-Cable（可选安装包）
+            if ok:
+                try:
+                    from launcher.engine_core import ensure_engine_core, engine_core_ready
+
+                    if not engine_core_ready(RROOT) or force:
+                        self.root.after(
+                            0,
+                            lambda: self._set_status(
+                                "Runtime 已就绪，正在下载引擎资源（Hubert/RMVPE/ffmpeg）…",
+                                ok=True,
+                            ),
+                        )
+
+                        def _ecore_progress(phase: str, done: int, total: int) -> None:
+                            if phase in ("engine_core", "download") and total > 0:
+                                pct = min(100, int(100 * done / total))
+                                mb = done / 1e6
+                                tot = total / 1e6
+                                self.root.after(
+                                    0,
+                                    lambda: self._set_status(
+                                        f"下载引擎资源… {pct}%（{mb:.0f}/{tot:.0f} MB）",
+                                        ok=True,
+                                    ),
+                                )
+                            elif phase == "engine_extract":
+                                self.root.after(
+                                    0,
+                                    lambda: self._set_status(
+                                        "正在解压引擎资源…", ok=True
+                                    ),
+                                )
+
+                        eok, emsg = ensure_engine_core(
+                            root=RROOT,
+                            force=False,
+                            progress=_ecore_progress,
+                            log=log,
+                        )
+                        extra_msgs.append(emsg)
+                        if not eok:
+                            ok = False
+                            msg = emsg
+                    else:
+                        extra_msgs.append("引擎资源已就绪")
+                except Exception as e:
+                    ok = False
+                    msg = f"引擎资源补全失败：{e}"
+                    extra_msgs.append(msg)
+
             if ok:
                 try:
                     from launcher.vbcable import ensure_vbcable_pack, vbcable_pack_ready
@@ -576,17 +630,19 @@ class BootstrapApp:
                         self.root.after(
                             0,
                             lambda: self._set_status(
-                                "Runtime 已就绪，正在下载虚拟声卡安装包…", ok=True
+                                "正在下载虚拟声卡安装包…", ok=True
                             ),
                         )
                         vok, vmsg = ensure_vbcable_pack(log=log)
-                        vb_msg = vmsg if vok else f"虚拟声卡包未就绪：{vmsg}"
+                        extra_msgs.append(
+                            vmsg if vok else f"虚拟声卡包未就绪：{vmsg}"
+                        )
                         if vok:
                             log("VB-Cable 安装包已就绪（可点「安装虚拟声卡」）。")
                     else:
-                        vb_msg = "本地已有虚拟声卡安装包"
+                        extra_msgs.append("本地已有虚拟声卡安装包")
                 except Exception as e:
-                    vb_msg = f"虚拟声卡包下载跳过：{e}"
+                    extra_msgs.append(f"虚拟声卡包下载跳过：{e}")
 
             def done() -> None:
                 self._provision_busy = False
@@ -594,20 +650,18 @@ class BootstrapApp:
                 if ok:
                     self._clear_pending_marker()
                     full = msg
-                    if vb_msg:
-                        full = f"{msg}\n{vb_msg}"
+                    if extra_msgs:
+                        full = msg + "\n" + "\n".join(extra_msgs)
                     self._set_status(full, ok=True)
                     if interactive:
-                        # Runtime 完成后才询问是否继续补全（原检测与部署）
                         self._offer_optional_after_runtime(already_had_runtime=False)
-                    # 非 interactive 不再静默下模型（避免二次失败/流量浪费）
                 else:
                     self._set_status(msg, ok=False)
                     if interactive or not runtime_ready(RROOT):
                         messagebox.showwarning(
                             "补全未完成",
                             msg + "\n\n可点击「补全运行环境」重试。\n"
-                            "无需在本机安装 Python 或 requests。",
+                            "需联网下载 Runtime 与 engine-core（无需本机 Python）。",
                         )
                 self._refresh_hint()
 
@@ -697,6 +751,11 @@ class BootstrapApp:
                     ok2, msg2 = download_pretrained(scope="uvr")
                     ok = ok1 and ok2
                     msg = "下载完成。" if ok else f"下载未全部成功。\n{msg1}\n{msg2}"
+                elif scope == "core":
+                    from launcher.engine_core import ensure_engine_core
+
+                    ok, raw = ensure_engine_core(root=RROOT, log=None)
+                    msg = raw if ok else raw
                 else:
                     ok, raw = download_pretrained(scope=scope)
                     msg = "下载完成。" if ok else raw
@@ -714,6 +773,10 @@ class BootstrapApp:
 
         threading.Thread(target=work, daemon=True).start()
 
+    def _run_engine_core_download(self) -> None:
+        """Download CNB engine-core pack (hubert/rmvpe/ffmpeg)."""
+        self._run_download("core")
+
     def on_start_app(self) -> None:
         if self._provision_busy:
             messagebox.showinfo("请稍候", "正在补全运行环境，完成后再打开主界面。")
@@ -726,6 +789,19 @@ class BootstrapApp:
             ):
                 self._run_provision(self._selected_variant(), interactive=True)
             return
+        try:
+            from launcher.engine_core import engine_core_ready
+
+            if not engine_core_ready(RROOT):
+                if messagebox.askyesno(
+                    "缺少引擎资源",
+                    "尚未下载 engine-core（Hubert / RMVPE / ffmpeg）。\n"
+                    "是否现在从 CNB 下载？",
+                ):
+                    self._run_engine_core_download()
+                return
+        except Exception:
+            pass
         try:
             start_main_app()
             self._set_status("主程序已启动。")

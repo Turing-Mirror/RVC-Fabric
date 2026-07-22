@@ -339,18 +339,22 @@ def provision_runtime(
 
     if download_core_models:
         try:
-            from launcher.env_setup import download_pretrained
+            from launcher.engine_core import ensure_engine_core, engine_core_ready
 
-            _log(log, "补全 Hubert / RMVPE …")
-            _progress(progress, "models", 0, 1)
-            ok, msg = download_pretrained(scope="core")
-            _log(log, msg)
-            _progress(progress, "models", 1, 1)
-            if not ok:
-                # Runtime itself is enough to open the app; models can retry later
-                _log(log, f"模型补全未完全成功（可稍后在启动器重试）：{msg}")
+            if engine_core_ready(base):
+                _log(log, "引擎资源（engine-core）已就绪")
+            else:
+                _log(log, "补全 engine-core（Hubert / RMVPE / ffmpeg）…")
+                _progress(progress, "models", 0, 1)
+                ok_m, msg_m = ensure_engine_core(
+                    root=base, progress=progress, log=log
+                )
+                _log(log, msg_m)
+                _progress(progress, "models", 1, 1)
+                if not ok_m:
+                    _log(log, f"引擎资源未完全成功（可稍后在启动器重试）：{msg_m}")
         except Exception as e:
-            _log(log, f"模型补全跳过：{e}")
+            _log(log, f"引擎资源补全跳过：{e}")
 
     if not keep_archive:
         try:

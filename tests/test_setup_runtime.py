@@ -46,22 +46,42 @@ class CnbUrlBuildTests(unittest.TestCase):
 
 
 class RuntimeSpecTests(unittest.TestCase):
-    def test_fallback_nvidia_prefers_release_then_lfs(self):
+    def test_nvidia_uses_release_only(self):
         spec = parse_runtime_spec("nvidia", None)
         self.assertEqual(spec.variant, "nvidia")
-        self.assertEqual(spec.release_tag, DEFAULT_RUNTIME_RELEASE_TAG)
+        self.assertEqual(spec.channel, "release")
         part = spec.primary
         self.assertEqual(len(part.sha256), 64)
         self.assertTrue(part.urls)
-        self.assertIn("/-/releases/download/", part.urls[0])
-        self.assertTrue(any("/-/lfs/" in u for u in part.urls))
+        self.assertIn("/-/releases/download/RVC-runtime/runtime-nvidia-", part.urls[0])
+        self.assertNotIn("/-/lfs/", part.urls[0])
+
+    def test_amd_uses_lfs_only(self):
+        spec = parse_runtime_spec("amd", None)
+        self.assertEqual(spec.channel, "lfs")
+        part = spec.primary
+        self.assertEqual(
+            part.urls[0],
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/"
+            "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
+        )
+        self.assertFalse(any("/-/releases/download/" in u for u in part.urls))
+        self.assertTrue(any("runtime/amd/" in u for u in part.sha256_urls))
+
+    def test_nvidia50_uses_release(self):
+        spec = parse_runtime_spec("nvidia50", None)
+        self.assertIn(
+            "runtime-nvidia50-2026.07.21.tar",
+            spec.primary.urls[0],
+        )
+        self.assertIn("/-/releases/download/", spec.primary.urls[0])
 
     def test_catalog_override_urls(self):
         data = {
-            "runtime_release_tag": "RVC-runtime",
             "runtimes": {
                 "amd": {
                     "variant": "amd",
+                    "channel": "lfs",
                     "label": "AMD test",
                     "version": "1.0",
                     "size_bytes": 100,
@@ -70,7 +90,10 @@ class RuntimeSpecTests(unittest.TestCase):
                             "name": "runtime-amd-1.0.tar",
                             "sha256": "a" * 64,
                             "size_bytes": 100,
-                            "urls": ["https://example.com/rt.tar"],
+                            "urls": [
+                                "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/"
+                                + "a" * 64
+                            ],
                         }
                     ],
                 }
@@ -78,9 +101,8 @@ class RuntimeSpecTests(unittest.TestCase):
         }
         spec = parse_runtime_spec("amd", data)
         self.assertEqual(spec.label, "AMD test")
-        # release URL inserted first
-        self.assertIn("/-/releases/download/", spec.primary.urls[0])
-        self.assertIn("https://example.com/rt.tar", spec.primary.urls)
+        self.assertIn("/-/lfs/", spec.primary.urls[0])
+        self.assertNotIn("/-/releases/download/", spec.primary.urls[0])
 
     def test_resolve_bundled_no_network(self):
         with mock.patch(

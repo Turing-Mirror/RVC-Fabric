@@ -106,9 +106,19 @@ class ProfilesMixin:
             return "还没有选择音色。"
         if m.get("missing"):
             return "这个音色的模型文件缺失或没下载完整，先修好或删除后再绑定。"
+        if self._current_model_is_promotable():
+            return "这是旧版散装音色，先「转为可管理音色」就能绑定检索库和配置档案。"
         if m.get("source") != "user_data" or not m.get("dir"):
-            return "内置/旧版音色不支持绑定；把它导入为用户音色后即可。"
+            return "这个音色不支持绑定。"
         return ""
+
+    def _current_model_is_promotable(self) -> bool:
+        """A real legacy voice (assets/weights/*.pth) that can be moved into its
+        own folder so it becomes fully manageable."""
+        m = self._current_model()
+        if not m or m.get("missing"):
+            return False
+        return m.get("source") == "legacy_weights" and bool(m.get("path"))
 
     # -- apply -------------------------------------------------------------
     def _reflect_updates_to_ui(self, updates: dict) -> None:
@@ -316,6 +326,14 @@ class ProfilesMixin:
                 fg=TM_META,
                 anchor="w",
             ).pack(anchor="w", pady=(2, 4))
+            if self._current_model_is_promotable():
+                GhostButton(
+                    host,
+                    "转为可管理音色",
+                    command=self._promote_current_legacy,
+                    padx=12,
+                    pady=5,
+                ).pack(anchor="w", pady=(0, 4))
             return
 
         active = self._active_profile_id_current()

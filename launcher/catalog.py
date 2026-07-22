@@ -49,8 +49,9 @@ def _find_pth(folder: Path) -> Optional[Path]:
     return pths[0] if pths else None
 
 
-# A real RVC .pth is many MB; a git-LFS pointer / truncated download is a few
-# hundred bytes of text. Anything under this is "present but not a real model".
+# A real RVC .pth is many MB. A few-hundred-byte "model" is not usable —
+# an interrupted copy, a truncated/placeholder file, etc. Flag it so the app
+# tells the user instead of pretending it's a working voice.
 _MIN_MODEL_BYTES = 200 * 1024
 
 

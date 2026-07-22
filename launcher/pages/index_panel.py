@@ -59,10 +59,12 @@ class IndexPanelMixin:
         ).pack(side="left")
         if not d:
             reason = ""
+            promotable = False
             try:
                 reason = self._current_model_block_reason()
+                promotable = self._current_model_is_promotable()
             except Exception:
-                reason = ""
+                pass
             tk.Label(
                 host,
                 text=reason or "选中一个用户音色后可绑定检索库。",
@@ -71,6 +73,14 @@ class IndexPanelMixin:
                 fg=TM_META,
                 anchor="w",
             ).pack(anchor="w", pady=(2, 4))
+            if promotable:
+                GhostButton(
+                    host,
+                    "转为可管理音色",
+                    command=self._promote_current_legacy,
+                    padx=12,
+                    pady=5,
+                ).pack(anchor="w", pady=(0, 4))
             return
         tk.Label(
             head,

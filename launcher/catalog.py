@@ -840,10 +840,11 @@ def clear_model_index(model_dir: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Index bindings (many-to-many): a model keeps a LIST of candidate .index
-# files in its sidecar ("index_files") plus the active one ("index", kept for
-# engine compatibility). The same .index path may appear in several models'
-# lists — that is what makes the binding many-to-many.
+# Index bindings: candidates live in the model folder by default.
+# config.json keeps ``index`` (active) + ``index_files`` (list). Stale absolute
+# paths from other installs (e.g. Grok_test\...) are sanitized away when the
+# same filename already exists next to the .pth — that was the fake
+# 「共享位置」 row users saw.
 # --------------------------------------------------------------------------
 
 
@@ -858,49 +859,180 @@ def _write_sidecar(model_dir: Path, side: dict) -> None:
     )
 
 
-def list_index_bindings(model_dir: Path) -> list[str]:
-    """All .index files bound to this model (existing files only, deduped).
+def _path_inside_dir(path: Path, folder: Path) -> bool:
+    try:
+        return path.resolve().parent.resolve() == folder.resolve()
+    except Exception:
+        return False
 
-    Union of: sidecar ``index_files``, the active ``index``, and any .index
-    sitting inside the model folder. Order: model-folder files first, then
-    the rest in recorded order.
+
+def ensure_index_in_model_dir(model_dir: Path, index_src: Path) -> str:
+    """Guarantee ``index_src`` is available as a file inside ``model_dir``.
+
+    Copies when the source is outside the model folder. Returns the local
+    absolute path (always under model_dir when copy succeeds).
+    """
+    model_dir = Path(model_dir)
+    index_src = Path(index_src)
+    if not index_src.is_file() or index_src.suffix.lower() != ".index":
+        raise ValueError(f"not a .index file: {index_src}")
+    model_dir.mkdir(parents=True, exist_ok=True)
+    if _path_inside_dir(index_src, model_dir):
+        return str(index_src.resolve())
+    dest = model_dir / index_src.name
+    try:
+        if not dest.is_file() or dest.resolve() != index_src.resolve():
+            shutil.copy2(index_src, dest)
+        return str(dest.resolve())
+    except Exception:
+        # last resort: keep original path if copy fails
+        return str(index_src.resolve())
+
+
+def sanitize_index_bindings(model_dir: Path) -> list[str]:
+    """Dedupe + prefer files inside the model folder; rewrite config.json.
+
+    Rules:
+    - Local ``*.index`` in the model folder always win.
+    - External paths with the **same filename** as a local file are dropped
+      (they were the misleading 「共享位置」 duplicates from old absolute paths).
+    - External paths that still exist and have no local twin are **copied in**
+      so everything ends up under the model folder.
+    - Missing paths are removed. Active ``index`` is healed to a local file.
     """
     model_dir = Path(model_dir)
     side = _read_sidecar(model_dir)
-    seen: set[str] = set()
-    out: list[str] = []
-
-    def _add(p: str) -> None:
-        try:
-            rp = str(Path(p).resolve())
-        except Exception:
-            return
-        if rp in seen or not Path(rp).is_file():
-            return
-        seen.add(rp)
-        out.append(rp)
-
+    candidates: list[str] = []
     if model_dir.is_dir():
         for ip in sorted(model_dir.glob("*.index")):
-            _add(str(ip))
-    _add(str(side.get("index") or ""))
+            candidates.append(str(ip))
+    if side.get("index"):
+        candidates.append(str(side.get("index")))
     for p in side.get("index_files") or []:
-        _add(str(p))
-    return out
+        candidates.append(str(p))
+
+    # basename -> preferred absolute path (local first)
+    by_name: dict[str, str] = {}
+    order: list[str] = []
+
+    def _prefer(path_str: str) -> None:
+        try:
+            p = Path(path_str)
+            if not p.is_file():
+                return
+            name = p.name
+            rp = str(p.resolve())
+        except Exception:
+            return
+        existing = by_name.get(name)
+        if existing is None:
+            by_name[name] = rp
+            order.append(name)
+            return
+        # Prefer path inside model_dir
+        try:
+            ex = Path(existing)
+            if _path_inside_dir(p, model_dir) and not _path_inside_dir(ex, model_dir):
+                by_name[name] = rp
+            # else keep existing (already local or first seen)
+        except Exception:
+            pass
+
+    for c in candidates:
+        _prefer(c)
+
+    # Copy any remaining external-only entries into the model folder
+    cleaned: list[str] = []
+    for name in order:
+        rp = by_name[name]
+        p = Path(rp)
+        if _path_inside_dir(p, model_dir):
+            cleaned.append(rp)
+            continue
+        try:
+            local = ensure_index_in_model_dir(model_dir, p)
+            cleaned.append(local)
+        except Exception:
+            cleaned.append(rp)
+
+    # Dedup cleaned by resolve
+    seen: set[str] = set()
+    final: list[str] = []
+    for p in cleaned:
+        try:
+            r = str(Path(p).resolve())
+        except Exception:
+            continue
+        if r in seen or not Path(r).is_file():
+            continue
+        seen.add(r)
+        final.append(r)
+
+    # Heal active pointer
+    active_raw = str(side.get("index") or "").strip()
+    active = ""
+    if active_raw:
+        try:
+            ap = Path(active_raw)
+            if ap.is_file():
+                local_same = model_dir / ap.name
+                if local_same.is_file():
+                    active = str(local_same.resolve())
+                elif _path_inside_dir(ap, model_dir):
+                    active = str(ap.resolve())
+                else:
+                    try:
+                        active = ensure_index_in_model_dir(model_dir, ap)
+                    except Exception:
+                        active = str(ap.resolve())
+        except Exception:
+            active = ""
+    if active and active not in final:
+        # active might already be in final under same resolve
+        try:
+            ar = str(Path(active).resolve())
+            if ar not in {str(Path(x).resolve()) for x in final}:
+                final.insert(0, ar)
+            active = ar
+        except Exception:
+            pass
+    if not active and final:
+        # keep empty if user explicitly cleared; only when key missing use first
+        if "index" not in side:
+            active = final[0]
+        elif str(side.get("index") or "").strip():
+            # had a broken path — pick best local name match or first
+            active = final[0]
+        else:
+            active = ""
+
+    side["index_files"] = final
+    side["index"] = active
+    _write_sidecar(model_dir, side)
+    return final
+
+
+def list_index_bindings(model_dir: Path) -> list[str]:
+    """All .index files for this model (sanitized, model-folder preferred).
+
+    Side effect: rewrites config.json when stale external duplicates exist so
+    the UI never shows a fake 「共享位置」 twin of a local file.
+    """
+    return sanitize_index_bindings(Path(model_dir))
 
 
 def add_index_binding(
     model_dir: Path,
     index_src: Path,
     *,
-    copy_into_folder: bool = False,
+    copy_into_folder: bool = True,
     move_into_folder: bool = False,
 ) -> str:
     """Bind one more .index to the model; returns the recorded path.
 
-    ``copy_into_folder`` copies the file next to the .pth (portable pack);
-    ``move_into_folder`` moves it instead; default records the source path
-    (shared index — the same file can stay bound to other models too).
+    Default **copies into the model folder** (portable). ``move_into_folder``
+    moves instead. ``copy_into_folder=False`` only records an external path
+    (discouraged; UI no longer offers this).
     Becomes the active index only when the model had none.
     """
     model_dir = Path(model_dir)
@@ -975,17 +1107,31 @@ def delete_model_dir(model_dir: Path, models_root: Path) -> None:
 
 
 def set_active_index(model_dir: Path, index_path: str) -> None:
-    """Choose which bound .index the engine uses ("" = use none)."""
+    """Choose which bound .index the engine uses ("" = use none).
+
+    Non-empty paths are always copied into the model folder first, so the
+    active pointer never stays on a foreign absolute path (other install /
+    other model). That makes「使用」actually stick in the UI.
+    """
     model_dir = Path(model_dir)
-    side = _read_sidecar(model_dir)
     path = str(index_path or "").strip()
-    if path:
-        path = str(Path(path).resolve())
-        files = [str(p) for p in (side.get("index_files") or [])]
-        if path not in files:
-            files.append(path)
-            side["index_files"] = files
-    side["index"] = path
+    if not path:
+        side = _read_sidecar(model_dir)
+        side["index"] = ""
+        _write_sidecar(model_dir, side)
+        return
+    local = ensure_index_in_model_dir(model_dir, Path(path))
+    side = _read_sidecar(model_dir)
+    files = [str(p) for p in (side.get("index_files") or [])]
+    if local not in files:
+        files.append(local)
+    side["index_files"] = files
+    side["index"] = local
+    _write_sidecar(model_dir, side)
+    # Drop stale external twins with the same filename
+    sanitize_index_bindings(model_dir)
+    side = _read_sidecar(model_dir)
+    side["index"] = local
     _write_sidecar(model_dir, side)
 
 

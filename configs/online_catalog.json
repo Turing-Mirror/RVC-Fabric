@@ -21,6 +21,21 @@
   },
   "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
   "runtime_release_tag": "RVC-runtime",
+  "vbcable": {
+    "name": "vbcable-setup.zip",
+    "version": "1.0.0",
+    "channel": "lfs",
+    "size_bytes": 1299644,
+    "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+    "urls": [
+      "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5"
+    ],
+    "sha256_urls": [
+      "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/vbcable/vbcable-setup.zip.sha256"
+    ],
+    "extract_root": "VBCABLE",
+    "notes": "VB-Cable 完整安装包+驱动；Setup 不含此包，Runtime 补全后由启动器下载。"
+  },
   "manifest_urls": [
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json",
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/catalog/online_catalog.snippet.json"

@@ -180,37 +180,37 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
                 pass
 
     (out / "User_Data" / "models").mkdir(parents=True, exist_ok=True)
-    # VB-Cable 必须带完整驱动（.inf/.sys/.cat），不能只拷 Setup.exe
-    vb_src = REPO / "VBCABLE"
-    if vb_src.is_dir():
-        dst_vb = out / "VBCABLE"
-        if dst_vb.exists():
-            shutil.rmtree(dst_vb, ignore_errors=True)
-        shutil.copytree(
-            vb_src,
-            dst_vb,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-        )
-        n_inf = len(list(dst_vb.glob("*.inf")))
-        n_sys = len(list(dst_vb.glob("*.sys")))
-        log(f"[vbcable] full pack: {dst_vb} (inf={n_inf}, sys={n_sys})")
-        if n_inf < 1 or n_sys < 1:
-            log("[vbcable] WARNING: missing driver files; install will fail")
-    else:
-        (out / "VBCABLE").mkdir(parents=True, exist_ok=True)
-        log("[vbcable] WARNING: no REPO/VBCABLE source")
+    # VB-Cable 独立走 CNB（Runtime 后再下载），Setup 只留空目录 + 说明
+    dst_vb = out / "VBCABLE"
+    if dst_vb.exists():
+        shutil.rmtree(dst_vb, ignore_errors=True)
+    dst_vb.mkdir(parents=True, exist_ok=True)
+    (dst_vb / "虚拟声卡由启动器下载.txt").write_text(
+        "VB-Cable 安装包不随 Setup 安装。\n\n"
+        "流程：\n"
+        "1. 启动器「补全运行环境」下载 Runtime\n"
+        "2. 完成后自动从 CNB 下载 VB-Cable 安装包到本目录\n"
+        "3. 再点「安装虚拟声卡」启动官方安装程序（需 UAC）\n\n"
+        "CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases\n"
+        "路径：vbcable/vbcable-setup.zip（LFS）\n"
+        "官网：https://vb-audio.com/Cable/\n",
+        encoding="utf-8",
+    )
+    log("[vbcable] placeholder only (pack downloaded from CNB after Runtime)")
 
     meta = {
         "product": "RVC Fabric",
         "package_kind": "setup_payload",
         "includes_runtime": False,
+        "includes_vbcable": False,
         "includes_engine_assets": True,
         "runtime_channel": "cnb_release",
         "runtime_release_tag": "RVC-runtime",
+        "vbcable_channel": "cnb_lfs",
         "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
         "installer": "inno_setup",
         "iss": "installer/RVC_Fabric_Setup.iss",
-        "note": "仅 Runtime 从 CNB 补全；hubert/rmvpe/ffmpeg 随 Setup 安装",
+        "note": "Runtime + VB-Cable 均从 CNB 补全；hubert/rmvpe/ffmpeg 随 Setup 安装",
     }
     (out / "setup_package.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"

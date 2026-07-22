@@ -57,6 +57,10 @@ else:
 
 MODELS_DIR = USER_DATA / "models"
 USER_LOGS = USER_DATA / "logs"
+# Default browse target for 绑定 index / 导入·导出档案 — a stable in-app folder
+# so users can drop reusable files here, yet still navigate out to their own.
+INDICES_DIR = USER_DATA / "indices"
+SHARED_PROFILES_DIR = USER_DATA / "shared_profiles"
 VBCABLE_DIR = ROOT / "VBCABLE"
 
 ENGINE_WEIGHTS = ROOT / "assets" / "weights"
@@ -110,6 +114,8 @@ def find_release_exe(kind: str = "app") -> Path | None:
 def ensure_dirs() -> None:
     USER_DATA.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    INDICES_DIR.mkdir(parents=True, exist_ok=True)
+    SHARED_PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     USER_LOGS.mkdir(parents=True, exist_ok=True)
     VBCABLE_DIR.mkdir(parents=True, exist_ok=True)
     ENGINE_WEIGHTS.mkdir(parents=True, exist_ok=True)

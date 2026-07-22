@@ -2120,9 +2120,18 @@ if __name__ == "__main__":
                     self.update_devices(hostapi_name=hostapi)
                 except Exception:
                     traceback.print_exc()
+            # Drop missing / foreign-machine absolute model paths (common Setup pollution)
+            pth = str(data.get("pth_path") or "")
+            idx = str(data.get("index_path") or "")
+            if pth and not os.path.isfile(pth):
+                printt("config pth_path missing on this machine, cleared: %s", pth)
+                pth = ""
+            if idx and not os.path.isfile(idx):
+                printt("config index_path missing on this machine, cleared: %s", idx)
+                idx = ""
             values = {
-                "pth_path": str(data.get("pth_path") or ""),
-                "index_path": str(data.get("index_path") or ""),
+                "pth_path": pth,
+                "index_path": idx,
                 "sg_hostapi": hostapi,
                 "sg_wasapi_exclusive": bool(data.get("sg_wasapi_exclusive")),
                 "sg_input_device": str(data.get("sg_input_device") or ""),

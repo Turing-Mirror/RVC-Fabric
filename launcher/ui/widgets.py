@@ -924,15 +924,16 @@ class ModelCoverCard(tk.Frame):
             widgets.append(badge)
 
         if index_text:
+            # Bottom-right corner badge — must not share the row with the
+            # 使用 button (that squeezed the button when a voice had an index).
             idx = tk.Label(
-                body,
+                self,
                 text=index_text,
                 font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
-                anchor="w",
             )
-            idx.pack(anchor="w", pady=(4, 0))
+            idx.place(relx=1.0, rely=1.0, x=-10, y=-8, anchor="se")
             widgets.append(idx)
 
         if action_text and on_action and not active:

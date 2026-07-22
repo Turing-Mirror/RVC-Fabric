@@ -66,6 +66,16 @@ class RealtimeControlMixin:
         if self.vc_running or self._vc_starting:
             self._stop_vc()
             return
+        # Preflight: current voice's model file must actually be there
+        cur = self.models[self.model_idx] if self.models else None
+        if cur and cur.get("missing"):
+            messagebox.showinfo(
+                "音色文件缺失",
+                f"当前音色「{cur.get('name')}」的模型文件缺失或没下载完整，无法开启变声。\n\n"
+                "请到「模型」页换一个可用音色，或重新下载这个音色。",
+            )
+            self.show_page("models")
+            return
         # Preflight: catch missing devices NOW instead of a 20–40s wait + error
         try:
             inp = str(self.var_input_dev.get() or "").strip()

@@ -58,9 +58,14 @@ class IndexPanelMixin:
             fg=TM_INK,
         ).pack(side="left")
         if not d:
+            reason = ""
+            try:
+                reason = self._current_model_block_reason()
+            except Exception:
+                reason = ""
             tk.Label(
                 host,
-                text="选中一个用户音色(User_Data)后可绑定检索库。",
+                text=reason or "选中一个用户音色后可绑定检索库。",
                 font=sans_font(10),
                 bg=TM_BG,
                 fg=TM_META,

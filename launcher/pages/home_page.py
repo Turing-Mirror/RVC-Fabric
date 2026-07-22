@@ -25,7 +25,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui import GhostButton, ModelCoverCard, SectionCard
+from launcher.ui import ModelCoverCard, SectionCard
 
 
 class HomePageMixin:
@@ -40,18 +40,6 @@ class HomePageMixin:
         stage_inner = tk.Frame(stage, bg=TM_STAGE)
         stage_inner.pack(fill="x", padx=GUTTER, pady=(22, 18))
         stage_inner.columnconfigure(0, weight=1)
-
-        head_row = tk.Frame(stage_inner, bg=TM_STAGE)
-        head_row.grid(row=0, column=0, sticky="ew")
-        self.home_index_lbl = tk.Label(
-            head_row,
-            text="— / —",
-            font=mono_font(9),
-            bg=TM_STAGE,
-            fg=TM_META,
-            anchor="e",
-        )
-        self.home_index_lbl.pack(side="right")
 
         tk.Label(
             stage_inner,
@@ -73,7 +61,7 @@ class HomePageMixin:
         self.home_current_lbl.grid(row=2, column=0, sticky="w", pady=(4, 2))
         self.home_hint_lbl = tk.Label(
             stage_inner,
-            text="← → 切换音色 · F5 启停变声 · F1 快捷键",
+            text="点卡片切换音色 · F5 启停变声 · F1 快捷键",
             font=sans_font(10),
             bg=TM_STAGE,
             fg=TM_INK_MUTED,
@@ -82,35 +70,22 @@ class HomePageMixin:
         self.home_hint_lbl.grid(row=3, column=0, sticky="w", pady=(2, 0))
         tk.Frame(fr, bg=TM_HAIRLINE, height=1).grid(row=0, column=0, sticky="sew")
 
-        # Carousel stage
+        # Recent voices (最近使用的三个) — click to switch
         mid = tk.Frame(fr, bg=TM_BG)
         mid.grid(row=1, column=0, sticky="nsew", padx=GUTTER, pady=(8, 0))
         mid.columnconfigure(0, weight=1)
-        mid.rowconfigure(0, weight=1)
+        mid.rowconfigure(1, weight=1)
+        tk.Label(
+            mid,
+            text="最近使用",
+            font=sans_font(10, "bold"),
+            bg=TM_BG,
+            fg=TM_META,
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w", pady=(4, 0))
         self.carousel_host = tk.Frame(mid, bg=TM_BG)
-        self.carousel_host.grid(row=0, column=0, sticky="nsew")
+        self.carousel_host.grid(row=1, column=0, sticky="nsew")
         self.carousel_host.bind("<Configure>", lambda e: self._schedule_carousel_reflow())
-
-        nav = tk.Frame(fr, bg=TM_BG)
-        nav.grid(row=2, column=0, sticky="ew", pady=(8, 6))
-        nav_inner = tk.Frame(nav, bg=TM_BG)
-        nav_inner.pack()
-        GhostButton(
-            nav_inner,
-            "‹  PREV",
-            command=lambda: self._shift_model(-1),
-            font=mono_font(9),
-            padx=20,
-            pady=10,
-        ).pack(side="left", padx=8)
-        GhostButton(
-            nav_inner,
-            "NEXT  ›",
-            command=lambda: self._shift_model(1),
-            font=mono_font(9),
-            padx=20,
-            pady=10,
-        ).pack(side="left", padx=8)
 
         self.home_toast = tk.Label(
             fr,
@@ -119,8 +94,35 @@ class HomePageMixin:
             bg=TM_BG,
             fg=TM_OK,
         )
-        self.home_toast.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self.home_toast.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         return fr
+
+    def _recent_models(self, limit: int = 3) -> list[int]:
+        """Indices (into self.models) of the most-recently-used voices, current
+        first. Falls back to catalog order when there's no history yet."""
+        if not self.models:
+            return []
+        order: list[int] = []
+        seen: set[int] = set()
+
+        def _push(i: int) -> None:
+            if 0 <= i < len(self.models) and i not in seen:
+                seen.add(i)
+                order.append(i)
+
+        _push(self.model_idx)  # current always shown first
+        keys = self.cfg.get("recent_models") or []
+        by_key = {}
+        for i, m in enumerate(self.models):
+            by_key[m.get("path") or ""] = i
+            by_key[(m.get("dir") or "") + "|" + (m.get("name") or "")] = i
+        for k in keys:
+            j = by_key.get(k)
+            if j is not None:
+                _push(j)
+        for i in range(len(self.models)):  # pad with catalog order
+            _push(i)
+        return order[:limit]
 
     def _schedule_carousel_reflow(self) -> None:
         if getattr(self, "_carousel_job", None):
@@ -153,26 +155,31 @@ class HomePageMixin:
         self.carousel_host.update_idletasks()
         host_w = max(self.carousel_host.winfo_width(), 400)
         host_h = max(self.carousel_host.winfo_height(), 240)
-        # Focus card dominates (stage hierarchy)
+        # First card (current) dominates; the other recents are smaller
         focus_w = max(200, min(320, int(host_w * 0.34)))
         focus_h = max(240, min(360, int(host_h * 0.88)))
         side_w = max(130, int(focus_w * 0.62))
         side_h = max(180, int(focus_h * 0.72))
 
-        n = len(self.models)
-        idxs = [(self.model_idx - 1) % n, self.model_idx % n, (self.model_idx + 1) % n]
+        idxs = self._recent_models(limit=3)
         row = tk.Frame(self.carousel_host, bg=TM_BG)
         row.place(relx=0.5, rely=0.5, anchor="center")
 
         for i, mi in enumerate(idxs):
             m = self.models[mi]
-            focus = i == 1
+            focus = i == 0  # current is first + largest
             w, h = (focus_w, focus_h) if focus else (side_w, side_h)
             photo = self._cover_cache.get(
                 m.get("cover"),
                 max_w=max(w - 4, 100),
                 max_h=max(int(h * 0.58), 80),
             )
+            if m.get("missing"):
+                corner = "⚠ 缺失"
+            elif m.get("index"):
+                corner = "✓ 检索库"
+            else:
+                corner = ""
             card = ModelCoverCard(
                 row,
                 name=m["name"],
@@ -180,7 +187,7 @@ class HomePageMixin:
                 photo=photo,
                 active=focus,
                 focus=focus,
-                index_text=f"{self.model_idx + 1:02d} / {n:02d}" if focus else "",
+                index_text=corner,
                 width=w,
                 height=h,
                 on_click=lambda ix=mi: self._select_model(
@@ -195,19 +202,12 @@ class HomePageMixin:
         if not self.models:
             self.home_current_lbl.configure(text="尚未选择音色")
             self.home_hint_lbl.configure(text="请先到「模型」页导入音色")
-            if hasattr(self, "home_index_lbl"):
-                self.home_index_lbl.configure(text="— / —")
             return
         m = self.models[self.model_idx]
-        n = len(self.models)
         self.home_current_lbl.configure(text=m["name"])
         self.home_hint_lbl.configure(
             text=f"{m.get('tag') or '音色'}  ·  切换立即生效 · 运行中会自动重载"
         )
-        if hasattr(self, "home_index_lbl"):
-            self.home_index_lbl.configure(
-                text=f"{self.model_idx + 1:02d}  /  {n:02d}"
-            )
 
     def _show_switch_toast(self, name: str) -> None:
         if not hasattr(self, "home_toast"):

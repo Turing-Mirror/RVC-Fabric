@@ -98,6 +98,18 @@ class ProfilesMixin:
             return None
         return str(m["dir"])
 
+    def _current_model_block_reason(self) -> str:
+        """Why the current voice can't take index/profile bindings — '' if it
+        can. Used so the panels explain themselves instead of going blank."""
+        m = self._current_model()
+        if not m:
+            return "还没有选择音色。"
+        if m.get("missing"):
+            return "这个音色的模型文件缺失或没下载完整，先修好或删除后再绑定。"
+        if m.get("source") != "user_data" or not m.get("dir"):
+            return "内置/旧版音色不支持绑定；把它导入为用户音色后即可。"
+        return ""
+
     # -- apply -------------------------------------------------------------
     def _reflect_updates_to_ui(self, updates: dict) -> None:
         """Push profile values into the mirror Tk vars (+ cfg) so the next
@@ -297,7 +309,8 @@ class ProfilesMixin:
         if not d:
             tk.Label(
                 host,
-                text="选中一个用户音色(User_Data)后可绑定配置档案。",
+                text=self._current_model_block_reason()
+                or "选中一个用户音色后可绑定配置档案。",
                 font=sans_font(10),
                 bg=TM_BG,
                 fg=TM_META,

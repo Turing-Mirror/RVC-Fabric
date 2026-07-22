@@ -49,6 +49,29 @@ def _find_pth(folder: Path) -> Optional[Path]:
     return pths[0] if pths else None
 
 
+# A real RVC .pth is many MB; a git-LFS pointer / truncated download is a few
+# hundred bytes of text. Anything under this is "present but not a real model".
+_MIN_MODEL_BYTES = 200 * 1024
+
+
+def _model_is_broken(pth: Optional[Path]) -> bool:
+    """True when the .pth is missing or too small to be a real model."""
+    if pth is None or not pth.is_file():
+        return True
+    try:
+        return pth.stat().st_size < _MIN_MODEL_BYTES
+    except Exception:
+        return False
+
+
+def _looks_like_voice_folder(folder: Path) -> bool:
+    """A folder the user thinks is a voice (has config or a cover) even if the
+    .pth is missing — so we can show it as 缺失 instead of hiding it silently."""
+    if (folder / "config.json").is_file():
+        return True
+    return _find_cover(folder) is not None
+
+
 def _find_cover(folder: Path) -> Optional[str]:
     for ext in (".png", ".jpg", ".jpeg", ".webp"):
         for p in folder.glob(f"*{ext}"):
@@ -97,11 +120,29 @@ def list_models_in_user_data(
         if not folder.is_dir() or folder.name.startswith("."):
             continue
         pth = _find_pth(folder)
-        if pth is None:
-            continue
         side = _read_sidecar(folder)
         name = str(side.get("name") or folder.name)
         tag = str(side.get("tag") or guess_tag(name))
+        broken = _model_is_broken(pth)
+        if pth is None:
+            # No .pth at all: surface it as 缺失 only if it looks like a voice
+            # folder (config/cover); otherwise it's just some other directory.
+            if not _looks_like_voice_folder(folder):
+                continue
+            out.append({
+                "name": name,
+                "path": "",
+                "file": "",
+                "dir": str(folder.resolve()),
+                "cover": _find_cover(folder),
+                "index": "",
+                "tag": tag,
+                "source": "user_data",
+                "missing": True,
+                "pitch": None, "formant": None, "index_rate": None,
+                "rms_mix_rate": None, "threhold": None, "f0method": None,
+            })
+            continue
         index = str(side.get("index") or "")
         if index and not Path(index).is_file():
             index = ""
@@ -130,6 +171,7 @@ def list_models_in_user_data(
             "index": index,
             "tag": tag,
             "source": "user_data",
+            "missing": broken,
             "pitch": None,
             "formant": None,
             "index_rate": None,
@@ -171,6 +213,7 @@ def list_models_legacy_weights(
                 "index": _find_index(name, roots),
                 "tag": guess_tag(name),
                 "source": "legacy_weights",
+                "missing": _model_is_broken(p),
                 "pitch": None,
                 "formant": None,
             }

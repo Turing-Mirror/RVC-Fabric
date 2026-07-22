@@ -204,28 +204,36 @@ def ensure_vbcable_pack(
     for i, url in enumerate(spec.urls):
         try:
             _log(log, f"下载 ({i + 1}/{len(spec.urls)})：{url[:96]}")
+            # progress may be (done,total) or (phase,done,total)
+            def _prog(done: int, total: int) -> None:
+                if not progress:
+                    return
+                try:
+                    progress(done, total)  # type: ignore[misc]
+                except TypeError:
+                    try:
+                        progress("download", done, total)  # type: ignore[misc]
+                    except Exception:
+                        pass
+
             download_file(
                 url,
                 dest,
-                progress=progress,
+                progress=_prog if progress else None,
                 retries=3,
                 timeout=600,
                 expected_sha256=spec.sha256,
+                resume=True,
             )
             ok_dl = True
             break
         except Exception as e:
             last_err = e
             _log(log, f"  失败：{e}")
+            # Keep .part for resume; only drop broken final dest
             try:
-                if dest.is_file():
+                if dest.is_file() and dest.stat().st_size < 1000:
                     dest.unlink()
-            except OSError:
-                pass
-            part = dest.with_suffix(dest.suffix + ".part")
-            try:
-                if part.is_file():
-                    part.unlink()
             except OSError:
                 pass
     if not ok_dl:

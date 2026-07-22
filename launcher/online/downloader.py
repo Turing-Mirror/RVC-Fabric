@@ -377,11 +377,14 @@ def download_file(
     retries: int = 3,
     timeout: int = 120,
     expected_sha256: str = "",
+    connections: Optional[int] = None,
+    resume: bool = True,
 ) -> Path:
     """Download url → dest (atomic .part rename). Returns dest.
 
-    Uses ``requests`` when available; otherwise **stdlib urllib** so the
-    启动器 can fetch Runtime before any green env exists.
+    Uses multi-connection Range download when the server supports it (CNB /
+    Release / LFS verified). Falls back to single-connection with optional
+    resume. Uses ``requests`` when available; otherwise stdlib urllib.
     """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -393,75 +396,82 @@ def download_file(
         resolved = prefer_cnb_lfs_url(
             resolve_download_url(url, session=session), expected_sha256
         )
-        for attempt in range(1, retries + 1):
+        # Fast path: already complete dest with matching sha
+        if dest.is_file() and expected_sha256:
             try:
-                done, total, first = _stream_to_file(
-                    resolved,
-                    tmp,
-                    progress=progress,
-                    timeout=timeout,
-                    session=session,
-                )
-                if total and done < total * 0.98:
-                    raise DownloadError(f"下载不完整：{done}/{total} bytes")
-
-                body_head = first
-                if done < 1024 and tmp.is_file():
-                    try:
-                        body_head = tmp.read_bytes()[:512]
-                    except OSError:
-                        pass
-                if is_git_lfs_pointer_bytes(body_head):
-                    oid = parse_git_lfs_pointer_oid(body_head)
-                    pr = parse_cnb_org_repo(resolved)
-                    if oid and pr and "/-/lfs/" not in resolved:
-                        resolved = cnb_lfs_object_url(pr[0], pr[1], oid)
-                        try:
-                            tmp.unlink()
-                        except OSError:
-                            pass
-                        done, total, first2 = _stream_to_file(
-                            resolved,
-                            tmp,
-                            progress=progress,
-                            timeout=timeout,
-                            session=session,
-                        )
-                        if is_git_lfs_pointer_bytes(first2):
-                            raise DownloadError(
-                                "CNB LFS 对象地址仍返回指针，无法取得实体文件。"
-                            )
-                        if total and done < total * 0.98:
-                            raise DownloadError(
-                                f"下载不完整：{done}/{total} bytes"
-                            )
-                    else:
-                        raise DownloadError(
-                            "下载到的是 Git LFS 指针而不是真实文件。\n"
-                            "请在 catalog 中使用 CNB 直链：…/-/lfs/<sha256> "
-                            "（内容哈希，与 sha256 字段相同）。"
-                        )
-                if expected_sha256:
-                    _verify_sha256(tmp, expected_sha256)
-                if dest.is_file():
-                    try:
-                        dest.unlink()
-                    except OSError:
-                        pass
-                tmp.replace(dest)
+                _verify_sha256(dest, expected_sha256)
                 if progress:
                     try:
                         progress(dest.stat().st_size, dest.stat().st_size)
                     except Exception:
                         pass
                 return dest
+            except Exception:
+                pass
+
+        from launcher.online.multipart import (
+            MultipartError,
+            download_multipart,
+            download_single_resumable,
+        )
+
+        for attempt in range(1, retries + 1):
+            try:
+                # Prefer multi-connection (raises MultipartError if unsuitable)
+                try:
+                    return download_multipart(
+                        resolved,
+                        dest,
+                        progress=progress,
+                        timeout=timeout,
+                        expected_sha256=expected_sha256,
+                        connections=connections,
+                        resume=resume,
+                        session=session,
+                    )
+                except MultipartError as me:
+                    msg = str(me)
+                    # Hard auth / pointer issues should not silent-fallback forever
+                    if "SHA256" in msg:
+                        raise DownloadError(msg) from me
+                    # Fall through to single-connection resumable
+                    last_err = me
+
+                return download_single_resumable(
+                    resolved,
+                    dest,
+                    progress=progress,
+                    timeout=timeout,
+                    expected_sha256=expected_sha256,
+                    session=session,
+                    resume=resume,
+                )
+            except DownloadError:
+                raise
             except Exception as e:
                 last_err = e
+                # LFS pointer on single stream: try upgrade then retry
                 try:
-                    if tmp.is_file():
-                        tmp.unlink()
-                except OSError:
+                    if tmp.is_file() and tmp.stat().st_size < 1024:
+                        head = tmp.read_bytes()[:512]
+                        if is_git_lfs_pointer_bytes(head):
+                            oid = parse_git_lfs_pointer_oid(head)
+                            pr = parse_cnb_org_repo(resolved)
+                            if oid and pr and "/-/lfs/" not in resolved:
+                                resolved = cnb_lfs_object_url(pr[0], pr[1], oid)
+                                try:
+                                    tmp.unlink()
+                                except OSError:
+                                    pass
+                except Exception:
                     pass
+                # Keep .part for resume unless last attempt and no resume
+                if not resume and attempt >= retries:
+                    try:
+                        if tmp.is_file():
+                            tmp.unlink()
+                    except OSError:
+                        pass
                 if attempt < retries:
                     time.sleep(1.2 * attempt)
         raise DownloadError(str(last_err) if last_err else "下载失败")

@@ -242,7 +242,17 @@ class ModelsPageMixin:
         if getattr(self, "_models_sort_seg", None) is not None:
             sort = self._models_sort_seg.value()
         view = filter_sort_models(self.models, query, sort=sort)
-        idx_by_path = {m.get("path"): i for i, m in enumerate(self.models)}
+        # Key by (path, dir, name) — missing voices share path="" so path alone
+        # collides; identity map avoids selecting the wrong card.
+        idx_by_key = {
+            (m.get("path") or "", m.get("dir") or "", m.get("name") or ""): i
+            for i, m in enumerate(self.models)
+        }
+
+        def _full_ix(m: dict) -> int:
+            return idx_by_key.get(
+                (m.get("path") or "", m.get("dir") or "", m.get("name") or ""), 0
+            )
 
         if hasattr(self, "models_status_lbl"):
             if not self.models:
@@ -299,11 +309,18 @@ class ModelsPageMixin:
 
         for pos, m in enumerate(page_view):
             r, c = divmod(pos, cols)
-            full_ix = idx_by_path.get(m.get("path"), 0)
+            full_ix = _full_ix(m)
             active = self._is_active_model(m)
+            missing = bool(m.get("missing"))
             photo = self._cover_cache.get(
                 m.get("cover"), max_w=card_min + 40, max_h=130
             )
+            if missing:
+                corner = "⚠ 文件缺失"
+            elif m.get("index"):
+                corner = "✓ 检索库"
+            else:
+                corner = ""
             card = ModelCoverCard(
                 self.model_grid,
                 name=m["name"],
@@ -311,7 +328,7 @@ class ModelsPageMixin:
                 photo=photo,
                 active=active,
                 focus=active,
-                index_text="✓ 检索库" if (m.get("index") or "") else "",
+                index_text=corner,
                 width=max(card_min, 180),
                 height=250,
                 on_click=lambda ix=full_ix: self._use_model_from_grid(ix),
@@ -429,6 +446,20 @@ class ModelsPageMixin:
             self.models_status_lbl.configure(text=f"已删除：{m.get('name')}")
 
     def _use_model_from_grid(self, ix: int) -> None:
+        m = self.models[ix] if 0 <= ix < len(self.models) else None
+        if m and m.get("missing"):
+            # Tell the user plainly instead of silently switching to a dead voice
+            if messagebox.askyesno(
+                "音色文件缺失",
+                f"「{m.get('name')}」的模型文件缺失或没下载完整，现在还不能用。\n\n"
+                "常见原因：下载中断、或从别处拷贝时漏了 .pth 文件。\n\n"
+                "是否打开它的文件夹检查？（也可在卡片右键选择删除）",
+            ):
+                try:
+                    open_path(Path(m["dir"]))
+                except Exception:
+                    pass
+            return
         self._select_model(ix, feedback=True, maybe_restart=True)
         # Light toast via status label; avoid modal spam
         if hasattr(self, "models_status_lbl") and self.models:

@@ -157,3 +157,31 @@ def test_delete_model_dir_guarded(tmp_path):
     except ValueError:
         pass
     assert outside.exists()
+
+def test_missing_and_broken_models_flagged(tmp_path):
+    from launcher.catalog import list_models_in_user_data
+
+    root = tmp_path / "models"
+    # real-ish model: big enough .pth
+    real = root / "Miku"
+    real.mkdir(parents=True)
+    (real / "Miku.pth").write_bytes(b"x" * (300 * 1024))
+    (real / "config.json").write_text('{"name": "Miku"}', encoding="utf-8")
+    # broken: tiny LFS-pointer-sized .pth
+    broken = root / "kiki"
+    broken.mkdir()
+    (broken / "kiki.pth").write_bytes(b"version https://git-lfs...")
+    (broken / "config.json").write_text('{"name": "kiki"}', encoding="utf-8")
+    # missing: no .pth but looks like a voice (has config)
+    gone = root / "gone"
+    gone.mkdir()
+    (gone / "config.json").write_text('{"name": "gone"}', encoding="utf-8")
+    # not a voice: empty dir → skipped entirely
+    (root / "random").mkdir()
+
+    got = {m["name"]: m for m in list_models_in_user_data(root)}
+    assert got["Miku"]["missing"] is False
+    assert got["kiki"]["missing"] is True   # too small
+    assert got["gone"]["missing"] is True    # no .pth at all
+    assert got["gone"]["path"] == ""
+    assert "random" not in got               # not a voice folder → hidden

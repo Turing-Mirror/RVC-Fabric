@@ -73,7 +73,6 @@ from launcher.theme import (
 )
 from launcher.ui import (
     CoverCache,
-    GhostButton,
     HoverTip,
     NavItem,
     ParamTile,
@@ -224,24 +223,13 @@ class MainApp(
                     y = max(0, (sh - h) // 2)
                     self.root.geometry(f"{w}x{h}+{x}+{y}")
                 self._placed_once = True
+            # Show + raise ONCE, without forcing topmost — pinning the window
+            # above everything on launch covered whatever the user was doing.
             self.root.deiconify()
-            self.root.lift()
-            self.root.attributes("-topmost", True)
-            self.root.after(1200, lambda: self.root.attributes("-topmost", False))
-            self.root.focus_force()
-            if sys.platform == "win32":
-                try:
-                    import ctypes
-
-                    self.root.update()
-                    hwnd = self.root.winfo_id()
-                    user32 = ctypes.windll.user32
-                    parent = user32.GetParent(hwnd)
-                    target = parent or hwnd
-                    user32.ShowWindow(target, 9)
-                    user32.SetForegroundWindow(target)
-                except Exception:
-                    pass
+            if force_size or not getattr(self, "_raised_once", False):
+                self.root.lift()
+                self.root.focus_force()
+                self._raised_once = True
         except Exception:
             pass
 
@@ -522,40 +510,9 @@ class MainApp(
             fmt="signed",
         )
         self._dock_formant.pack(side="left", fill="y", padx=(0, 8))
-        self._dock_thr = ParamTile(
-            tiles,
-            "阈值",
-            self.var_threhold,
-            -60,
-            0,
-            resolution=1,
-            command=self._on_dock_param,
-            on_press=self._voice_hist_push,
-            width=168,
-            fmt="int",
-        )
-        self._dock_thr.pack(side="left", fill="y", padx=(0, 8))
-
-        # Undo / reset for voice params (dock)
-        hist = tk.Frame(
-            tiles,
-            bg=TM_SURFACE,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-        )
-        hist.pack(side="left", fill="y")
-        hist_in = tk.Frame(hist, bg=TM_SURFACE, padx=10, pady=10)
-        hist_in.pack(fill="both", expand=True)
-        GhostButton(
-            hist_in, "撤销", command=self.undo_voice_params, padx=10, pady=4
-        ).pack(fill="x", pady=(0, 4))
-        GhostButton(
-            hist_in, "重做", command=self.redo_voice_params, padx=10, pady=4
-        ).pack(fill="x", pady=2)
-        GhostButton(
-            hist_in, "默认", command=self.reset_voice_params_default, padx=10, pady=4
-        ).pack(fill="x", pady=(4, 0))
-        HoverTip(hist_in, "Ctrl+Z 撤销 · Ctrl+Y 重做 · Ctrl+0 恢复默认音高/共鸣/阈值")
+        # 阈值滑块与「撤销/重做/默认」按钮列已从底栏移除 —— 阈值在设置页调，
+        # 撤销/重做仍可用 Ctrl+Z / Ctrl+Y / Ctrl+0 快捷键。底栏只保留最常用的
+        # 音高与共鸣。
 
         self._update_mode_buttons()
         self._sync_bottom()
@@ -669,6 +626,11 @@ class MainApp(
         self.cfg["last_model"] = m["file"]
         self.cfg["last_model_name"] = m["name"]
         self.cfg["last_model_path"] = m.get("path") or ""
+        # Most-recently-used order for the home page (front = latest)
+        key = m.get("path") or ((m.get("dir") or "") + "|" + (m.get("name") or ""))
+        recents = [k for k in (self.cfg.get("recent_models") or []) if k != key]
+        recents.insert(0, key)
+        self.cfg["recent_models"] = recents[:12]
         # Load this voice's pitch/formant/… then overlay its active profile
         # (voice + FX + perf). Models without a bound profile are untouched.
         self._apply_model_voice_params(m, push_remote=False)

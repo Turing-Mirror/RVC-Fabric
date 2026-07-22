@@ -457,6 +457,50 @@ def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
         )
 
 
+def _portable_cover_rel(cover: str, dest_dir: Path) -> str:
+    """Normalize cover for config.json — never store drive-absolute paths."""
+    s = (cover or "").strip().replace("\\", "/")
+    if not s:
+        return ""
+    if s.lower().startswith(("http://", "https://")):
+        return s  # remote catalog only; not used as local install path
+    # Already portable
+    if s.startswith("ch-banner/"):
+        return s
+    p = Path(cover)
+    try:
+        if p.is_file():
+            # under model dir → cover.jpg
+            if p.parent.resolve() == Path(dest_dir).resolve():
+                return p.name
+            # under User_Data/ch-banner → ch-banner/name
+            from launcher.paths import CH_BANNER_DIR, ROOT
+
+            for base, prefix in (
+                (CH_BANNER_DIR, "ch-banner/"),
+                (ROOT / "ch-banner", "ch-banner/"),
+            ):
+                try:
+                    if p.resolve().is_relative_to(base.resolve()):
+                        return prefix + p.name
+                except Exception:
+                    try:
+                        rel = p.resolve().relative_to(base.resolve())
+                        return prefix + str(rel).replace("\\", "/")
+                    except Exception:
+                        pass
+            # fallback: just filename (resolve via ch-banner by id later)
+            return p.name
+    except Exception:
+        pass
+    # strip accidental Windows abs like L:\...\ch-banner\x.jpg
+    low = s.lower()
+    idx = low.find("ch-banner/")
+    if idx >= 0:
+        return s[idx:]
+    return Path(s).name
+
+
 def _write_voice_config(
     dest_dir: Path,
     *,
@@ -485,25 +529,18 @@ def _write_voice_config(
     }
     if index_path and Path(index_path).is_file():
         cfg["index"] = str(Path(index_path).resolve())
-    # Prefer ch-banner/<id>.ext for local catalog resolution
+    # cover 只写相对路径，禁止绝对盘符路径（换盘/搬家可移植）
+    # 规范：ch-banner/<id>.jpg  或  音色目录内 cover.jpg
     if cover_cfg:
-        cfg["cover"] = cover_cfg
+        cfg["cover"] = _portable_cover_rel(cover_cfg, dest_dir)
     elif cover_path:
-        try:
-            cp = Path(cover_path)
-            if cp.is_file() and cp.parent.resolve() == Path(dest_dir).resolve():
-                cfg["cover"] = cp.name
-            else:
-                cfg["cover"] = cover_path
-        except Exception:
-            cfg["cover"] = cover_path
+        cfg["cover"] = _portable_cover_rel(cover_path, dest_dir)
     if extra:
         cfg.update(extra)
-        # Keep ch-banner path if extra overwrote with basename only
-        if cover_cfg and not str(cfg.get("cover") or "").replace("\\", "/").startswith(
-            "ch-banner/"
-        ):
-            cfg["cover"] = cover_cfg
+        if cfg.get("cover"):
+            cfg["cover"] = _portable_cover_rel(str(cfg["cover"]), dest_dir)
+        elif cover_cfg:
+            cfg["cover"] = _portable_cover_rel(cover_cfg, dest_dir)
     # Do not let pack config wipe official stamps unless pack is not fabric
     if source in ("online_pack", "online_files"):
         cfg["publisher"] = "rvc_fabric"

@@ -569,3 +569,129 @@ def resolve_vbcable_spec(
         except Exception:
             pass
     return _parse_vbcable_blob(blob)
+
+
+# ---------------------------------------------------------------------------
+# engine-core（hubert / rmvpe / ffmpeg — 全显卡共用；不进 Setup）
+# ---------------------------------------------------------------------------
+
+_FALLBACK_ENGINE_CORE: dict[str, Any] = {
+    "name": "engine-core-260722.zip",
+    "version": "2026.07.22",
+    "channel": "lfs",
+    "size_bytes": 753796337,
+    "sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+    "urls": [
+        f"{CNB_LFS_BASE}/"
+        "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+    ],
+    "sha256_urls": [
+        f"{CNB_RAW_MAIN}/assets/core/engine-core-260722.zip.sha256",
+    ],
+    "extract_root": ".",
+    "notes": "hubert_base.pt + rmvpe.pt/onnx + ffmpeg/ffprobe；全 GPU 共用",
+}
+
+
+@dataclass
+class EngineCoreSpec:
+    name: str
+    version: str
+    sha256: str
+    size_bytes: int
+    urls: list[str]
+    sha256_urls: list[str] = field(default_factory=list)
+    channel: str = "lfs"
+    extract_root: str = "."
+
+
+def _parse_engine_core_blob(blob: dict[str, Any] | None) -> EngineCoreSpec:
+    b = dict(_FALLBACK_ENGINE_CORE)
+    if isinstance(blob, dict):
+        for k, v in blob.items():
+            if v not in (None, "", [], {}):
+                b[k] = v
+    sha = re.sub(r"[^0-9a-fA-F]", "", str(b.get("sha256") or "")).lower()
+    urls: list[str] = []
+    raw_u = b.get("urls") or b.get("url") or b.get("pack_url")
+    if isinstance(raw_u, str) and raw_u.strip():
+        urls.append(raw_u.strip())
+    elif isinstance(raw_u, list):
+        for u in raw_u:
+            if isinstance(u, str) and u.strip():
+                urls.append(u.strip())
+    if not urls and len(sha) == 64:
+        urls = [cnb_lfs_url(sha)]
+    lfs_urls = [u for u in urls if "/-/lfs/" in u]
+    if lfs_urls:
+        urls = lfs_urls + [u for u in urls if u not in lfs_urls]
+    elif len(sha) == 64:
+        urls.insert(0, cnb_lfs_url(sha))
+
+    sha_urls: list[str] = []
+    raw_s = b.get("sha256_urls") or b.get("sha256_url")
+    if isinstance(raw_s, str) and raw_s.strip():
+        sha_urls.append(raw_s.strip())
+    elif isinstance(raw_s, list):
+        for u in raw_s:
+            if isinstance(u, str) and u.strip():
+                sha_urls.append(u.strip())
+    if not sha_urls:
+        name = str(b.get("name") or "engine-core.zip")
+        sha_urls = [f"{CNB_RAW_MAIN}/assets/core/{name}.sha256"]
+
+    return EngineCoreSpec(
+        name=str(b.get("name") or "engine-core.zip"),
+        version=str(b.get("version") or "1.0.0"),
+        sha256=sha,
+        size_bytes=int(b.get("size_bytes") or 0),
+        urls=urls,
+        sha256_urls=sha_urls,
+        channel=str(b.get("channel") or "lfs"),
+        extract_root=str(b.get("extract_root") or "."),
+    )
+
+
+def resolve_engine_core_spec(
+    *,
+    prefer_remote: bool = True,
+    timeout: float = 20.0,
+) -> EngineCoreSpec:
+    """Resolve engine-core pack: remote index wins, bundled fallback second."""
+    blob: dict[str, Any] = dict(_FALLBACK_ENGINE_CORE)
+    try:
+        local = load_bundled_runtime_catalog()
+        if isinstance(local.get("engine_core"), dict):
+            blob = {**blob, **local["engine_core"]}
+    except Exception:
+        pass
+    if prefer_remote:
+        try:
+            remote = fetch_remote_catalog(timeout=timeout)
+            rem = remote.get("engine_core") if isinstance(remote, dict) else None
+            if isinstance(rem, dict) and rem:
+                blob = {**blob, **rem}
+            pkgs = remote.get("packages") if isinstance(remote, dict) else None
+            if isinstance(pkgs, dict):
+                arr = pkgs.get("engine_core")
+                if isinstance(arr, list) and arr and isinstance(arr[0], dict):
+                    first = arr[0]
+                    for k in (
+                        "sha256",
+                        "size_bytes",
+                        "url",
+                        "urls",
+                        "name",
+                        "version",
+                        "channel",
+                        "file",
+                    ):
+                        if first.get(k) not in (None, "", [], {}):
+                            blob[k] = first[k]
+                    if first.get("url") and not blob.get("urls"):
+                        blob["urls"] = [first["url"]]
+                    if first.get("name") and not blob.get("name"):
+                        blob["name"] = first["name"]
+        except Exception:
+            pass
+    return _parse_engine_core_blob(blob)

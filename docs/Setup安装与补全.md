@@ -7,13 +7,13 @@
 
 | 内容 | 放哪里 | 说明 |
 |------|--------|------|
-| **Runtime**（绿色 Python / torch） | **仅 CNB**（`runtime/` + Release 标签 `RVC-runtime`） | 体积数 GB；安装后由**启动器**下载 |
-| 软件壳、启动器、主界面 | **Setup 安装包** | Inno Setup 打进 `RVC_Fabric_Setup.exe` |
-| hubert / rmvpe / ffmpeg 等 | **Setup 安装包** | 与 `build_release.copy_engine` 一致，**不是** CNB Runtime 的一部分 |
-| 社区音色 voice_pack | CNB LFS（可选） | 软件内「社区下载」 |
+| **Runtime**（绿色 Python / torch） | **仅 CNB**（按显卡：nvidia / amd / nvidia50） | 体积数 GB；启动器下载 |
+| **engine-core**（hubert / rmvpe / ffmpeg / ffprobe） | **仅 CNB LFS**（`assets/core/engine-core-*.zip`） | **全显卡共用**；启动器在 Runtime 之后下载 |
+| 软件壳、启动器、主界面、引擎源码 | **Setup 薄包** | Inno Setup → `RVC_Fabric_Setup.exe` |
+| VB-Cable | **CNB LFS** | Runtime/engine-core 后再下 |
+| 社区音色 voice_pack | CNB LFS | 软件内「社区下载」 |
 
-**不要**把 hubert/ffmpeg 从 Setup 里删掉再指望 CNB 只传 Runtime 时能补上。  
-CNB 上你上传的大环境 = **Runtime**；Setup 负责其余可安装文件。
+**用户动线**：Setup 装壳 → 启动器下 Runtime（分版）→ 下 engine-core（共用）→ 可选 VB-Cable → 主界面变声。
 
 ---
 
@@ -38,9 +38,9 @@ CNB 上你上传的大环境 = **Runtime**；Setup 负责其余可安装文件�
 
 ## 用户动线
 
-1. 下载并运行 `RVC_Fabric_Setup.exe`
-2. 选目录 + 显卡分版 → 安装壳层与引擎资源
-3. **启动器**从 CNB 下载对应分版 **Runtime**
+1. 下载并运行 `RVC_Fabric_Setup.exe`（薄包，仅壳层）
+2. 选目录 + 显卡分版 → 安装启动器 / 主界面
+3. **启动器**从 CNB 依次下载：**Runtime**（分版）→ **engine-core**（共用）→ VB-Cable 包
 4. 主界面 → 新手指引 → 社区音色 → 变声
 
 ---
@@ -54,4 +54,4 @@ python scripts\build_setup.py --clean
 
 产出：`dist\RVC_Fabric_Setup.exe`  
 
-校验：payload / 安装目录下 **不得** 有 `Runtime\python.exe`；**应有** hubert / rmvpe / ffmpeg（若本机 RVCMAX 或 assets 已备齐）。
+校验：payload / 安装目录下 **不得** 有 `Runtime\python.exe`，也 **不得** 有 hubert/rmvpe 大权重或 ffmpeg/ffprobe（这些走 CNB engine-core）。

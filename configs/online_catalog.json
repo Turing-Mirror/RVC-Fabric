@@ -21,6 +21,21 @@
   },
   "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
   "runtime_release_tag": "RVC-runtime",
+  "engine_core": {
+    "name": "engine-core-260722.zip",
+    "version": "2026.07.22",
+    "channel": "lfs",
+    "size_bytes": 753796337,
+    "sha256": "ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47",
+    "urls": [
+      "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/ecb3231c7d26ad553e902ac24d40daf3d3fbe5786a7d8e78af8038fc389cab47"
+    ],
+    "sha256_urls": [
+      "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/assets/core/engine-core-260722.zip.sha256"
+    ],
+    "extract_root": ".",
+    "notes": "hubert_base.pt + rmvpe.pt/onnx + ffmpeg/ffprobe；全 GPU 共用；Setup 薄包不含，启动器下载。"
+  },
   "vbcable": {
     "name": "vbcable-setup.zip",
     "version": "1.0.0",

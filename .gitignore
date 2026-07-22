@@ -62,6 +62,12 @@ ffprobe.*
 /User_Data/models/**
 !/User_Data/models/.gitkeep
 !/User_Data/README.md
+/User_Data/ch-banner/
+/User_Data/update_cache/
+/User_Data/indices/
+/User_Data/shared_profiles/
+# Dev/package-root local banner dump (user data lives under User_Data/ch-banner)
+/ch-banner/
 
 # Local build/debug scratch (keep off git — can be multi-GB logs + probes)
 /TEMP_BUILD/

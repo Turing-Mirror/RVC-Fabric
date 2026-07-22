@@ -616,7 +616,28 @@ class SettingsPageMixin:
         help_mark(nrf, SETTING_TIPS["use_pv"])
 
         # ----- Post-RVC DSP (noise gate / compressor / EQ) -----
-        from tools.dsp_fx import EQ_LABELS, EQ_PRESET_LABELS, EQ_PRESETS
+        # Shell (PyInstaller) has no numpy; dsp_fx must not hard-require it at import.
+        # Fallback keeps settings UI up even if tools.dsp_fx is missing/broken.
+        try:
+            from tools.dsp_fx import EQ_LABELS, EQ_PRESET_LABELS, EQ_PRESETS
+        except Exception:
+            EQ_LABELS = ("60Hz", "250Hz", "1kHz", "4kHz", "8kHz")
+            EQ_PRESETS = {
+                "flat": [0.0, 0.0, 0.0, 0.0, 0.0],
+                "vocal_front": [-2.0, 1.0, 3.0, 2.5, 1.0],
+                "warm": [2.0, 1.5, 0.0, -1.0, -2.0],
+                "bright": [-1.5, 0.0, 1.0, 3.0, 2.5],
+                "de_nasal": [0.0, -3.5, -1.0, 1.5, 0.5],
+                "thick": [3.0, 1.5, 0.0, -0.5, -1.5],
+            }
+            EQ_PRESET_LABELS = {
+                "flat": "平直",
+                "vocal_front": "人声前倾",
+                "warm": "温暖饱满",
+                "bright": "清晰明亮",
+                "de_nasal": "消除鼻音",
+                "thick": "低沉厚实",
+            }
 
         self.var_fx_enabled = tk.BooleanVar(value=bool(self.cfg.get("fx_enabled")))
         self.var_fx_gate_en = tk.BooleanVar(value=bool(self.cfg.get("fx_gate_enabled", True)))

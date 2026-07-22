@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """First-run helper (RVCMAX role: 启动器).
 
-Jobs: desktop shortcut, VB-Cable install, env check — not the daily voice UI.
+Jobs: desktop shortcut, VB-Cable install, env check, **auto-provision Runtime**
+from CNB Release when missing — not the daily voice UI.
+
 Typography / chrome aligned with main_app (tracked wordmark, segment nav).
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import tkinter as tk
@@ -26,7 +29,9 @@ from launcher.env_setup import (
     format_check_report,
     missing_items,
 )
-from launcher.paths import APP_TITLE, ROOT as RROOT, ensure_dirs
+from launcher.package_meta import load_package_meta
+from launcher.paths import APP_TITLE, ROOT as RROOT, USER_DATA, ensure_dirs
+from launcher.runtime_provision import ensure_runtime, runtime_ready
 from launcher.theme import (
     APP_WORDMARK,
     PAD_X,
@@ -60,11 +65,12 @@ class BootstrapApp:
         ensure_dirs()
         self.root = tk.Tk()
         self.root.title(f"{APP_TITLE} · 启动器")
-        self.root.geometry("620x540")
+        self.root.geometry("620x560")
         self.root.configure(bg=TM_BG)
         self.root.resizable(False, False)
         self._page = "setup"
         self._deploy_busy = False
+        self._provision_busy = False
         try:
             self.root.attributes("-topmost", True)
             self.root.after(350, lambda: self.root.attributes("-topmost", False))
@@ -85,7 +91,7 @@ class BootstrapApp:
         ).pack(anchor="w")
         self.lbl_subtitle = tk.Label(
             head_inner,
-            text="首次设置：快捷方式 · 声卡 · 环境",
+            text="首次设置：补全环境 · 快捷方式 · 声卡",
             font=sans_font(10),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
@@ -161,6 +167,8 @@ class BootstrapApp:
         except Exception:
             pass
         self.root.after(50, self._refresh_hint)
+        # After UI paints: auto-download Runtime when Setup left a pending mark or Runtime missing
+        self.root.after(200, self._maybe_auto_provision)
 
     def _build_page_setup(self, parent: tk.Frame) -> tk.Frame:
         page = tk.Frame(parent, bg=TM_BG)
@@ -184,7 +192,10 @@ class BootstrapApp:
         ).pack(fill="x", pady=(0, 4))
         tk.Label(
             notice_body,
-            text="请用桌面快捷方式或启动器进入主界面。检测与下载会在后台完成。",
+            text=(
+                "首次使用会自动从 CNB Release 补全 Runtime（按 Setup 所选显卡分版）。"
+                "日常请用桌面快捷方式或本启动器进入主界面。"
+            ),
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
@@ -194,7 +205,7 @@ class BootstrapApp:
         ).pack(fill="x")
 
         cards = tk.Frame(page, bg=TM_BG)
-        cards.pack(pady=(18, 10))
+        cards.pack(pady=(18, 6))
         SoftActionCard(cards, "发送快捷方式", "", self.on_shortcut).pack(
             side="left", padx=10
         )
@@ -202,6 +213,11 @@ class BootstrapApp:
             side="left", padx=10
         )
         SoftActionCard(cards, "检测与部署", "", self.on_deploy).pack(
+            side="left", padx=10
+        )
+        cards2 = tk.Frame(page, bg=TM_BG)
+        cards2.pack(pady=(4, 10))
+        SoftActionCard(cards2, "补全运行环境", "", self.on_provision_runtime).pack(
             side="left", padx=10
         )
         return page
@@ -247,7 +263,7 @@ class BootstrapApp:
             self._style_nav(active="system")
         else:
             self.page_setup.pack(fill="both", expand=True)
-            self.lbl_subtitle.configure(text="首次设置：快捷方式 · 声卡 · 环境")
+            self.lbl_subtitle.configure(text="首次设置：补全环境 · 快捷方式 · 声卡")
             self._style_nav(active="setup")
 
     def _style_nav(self, active: str) -> None:
@@ -307,6 +323,143 @@ class BootstrapApp:
         def work():
             t = _gpu_line()
             self.root.after(0, lambda: _done(t))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _pending_runtime_marker(self) -> dict | None:
+        p = USER_DATA / "setup_pending.json"
+        if not p.is_file():
+            return None
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    def _clear_pending_marker(self) -> None:
+        p = USER_DATA / "setup_pending.json"
+        try:
+            if p.is_file():
+                p.unlink()
+        except OSError:
+            pass
+
+    def _selected_variant(self) -> str:
+        pending = self._pending_runtime_marker()
+        if pending and pending.get("variant"):
+            return str(pending["variant"]).lower()
+        try:
+            return str(load_package_meta(RROOT).get("variant") or "nvidia").lower()
+        except Exception:
+            return "nvidia"
+
+    def _maybe_auto_provision(self) -> None:
+        if self._provision_busy or self._deploy_busy:
+            return
+        if runtime_ready(RROOT):
+            self._clear_pending_marker()
+            return
+        pending = self._pending_runtime_marker()
+        # Auto when Setup marked pending, or Runtime simply missing on first open
+        auto = bool(pending and pending.get("pending_runtime")) or True
+        if not auto:
+            return
+        var = self._selected_variant()
+        self._set_status(
+            f"未检测到 Runtime，正在按分版「{var}」从 CNB 下载补全…\n"
+            "体积较大，请保持网络畅通。",
+            ok=False,
+        )
+        self._run_provision(var, interactive=False)
+
+    def on_provision_runtime(self) -> None:
+        if self._provision_busy:
+            self._set_status("正在补全运行环境，请稍候…", ok=False)
+            return
+        var = self._selected_variant()
+        if runtime_ready(RROOT):
+            if not messagebox.askyesno(
+                "运行环境",
+                "已检测到 Runtime。是否仍强制重新下载安装？\n"
+                "（一般不需要；仅在环境损坏时选择「是」。）",
+            ):
+                return
+            force = True
+        else:
+            force = False
+            if not messagebox.askyesno(
+                "补全运行环境",
+                f"将从 CNB Release 下载「{var}」分版 Runtime（数 GB）。\n"
+                "是否继续？",
+            ):
+                return
+        self._run_provision(var, interactive=True, force=force)
+
+    def _run_provision(
+        self,
+        variant: str,
+        *,
+        interactive: bool,
+        force: bool = False,
+    ) -> None:
+        if self._provision_busy:
+            return
+        self._provision_busy = True
+        self._deploy_busy = True
+
+        def work() -> None:
+            lines: list[str] = []
+
+            def log(msg: str) -> None:
+                lines.append(msg)
+                self.root.after(0, lambda m=msg: self._set_status(m, ok=True))
+
+            def progress(phase: str, done: int, total: int) -> None:
+                if phase == "download" and total > 0:
+                    pct = min(100, int(100 * done / total))
+                    mb = done / 1e6
+                    tot = total / 1e6
+                    self.root.after(
+                        0,
+                        lambda: self._set_status(
+                            f"下载 Runtime… {pct}%（{mb:.0f}/{tot:.0f} MB）",
+                            ok=True,
+                        ),
+                    )
+                elif phase == "extract":
+                    self.root.after(
+                        0, lambda: self._set_status("正在解压 Runtime…", ok=True)
+                    )
+
+            try:
+                ok, msg = ensure_runtime(
+                    variant=variant,
+                    root=RROOT,
+                    progress=progress,
+                    log=log,
+                    force=force,
+                )
+            except Exception as e:
+                ok, msg = False, str(e)
+
+            def done() -> None:
+                self._provision_busy = False
+                self._deploy_busy = False
+                if ok:
+                    self._clear_pending_marker()
+                    self._set_status(msg, ok=True)
+                    if interactive:
+                        messagebox.showinfo("完成", msg)
+                else:
+                    self._set_status(msg, ok=False)
+                    if interactive or not runtime_ready(RROOT):
+                        messagebox.showwarning(
+                            "补全未完成",
+                            msg + "\n\n可点击「补全运行环境」重试。",
+                        )
+                self._refresh_hint()
+
+            self.root.after(0, done)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -440,6 +593,17 @@ class BootstrapApp:
         threading.Thread(target=work, daemon=True).start()
 
     def on_start_app(self) -> None:
+        if self._provision_busy:
+            messagebox.showinfo("请稍候", "正在补全运行环境，完成后再打开主界面。")
+            return
+        if not runtime_ready(RROOT):
+            if messagebox.askyesno(
+                "缺少运行环境",
+                "尚未安装 Runtime，主界面无法推理变声。\n"
+                "是否现在从 CNB 下载补全？",
+            ):
+                self._run_provision(self._selected_variant(), interactive=True)
+            return
         try:
             start_main_app()
             self._set_status("主程序已启动。")

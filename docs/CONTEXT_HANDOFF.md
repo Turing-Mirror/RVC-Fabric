@@ -3,13 +3,14 @@
 > **用途**  
 > 1. 新开 Grok / 协作者对话：先读本文再动代码。  
 > 2. 在 GitHub 上看仓库的人：了解产品定位、架构、已做事项与坑。  
-> **最后大更新**：2026-07-21  
+> **最后大更新**：2026-07-22  
 > **工作区**：`L:\My Project\Grok`  
 > **当前分支**：`tm-release`  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  
 > **上游 RVC**：`upstream` → RVC-Project/Retrieval-based-Voice-Conversion-WebUI  
+> **CNB 制品**：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases（本机 `CNB-GIT-RELEASE/`）  
 
 ---
 
@@ -19,16 +20,16 @@
 |----|------|
 | 产品名 | **RVC Fabric**（界面文案 / 桌面快捷方式；`launcher/theme.py` 的 `APP_*`） |
 | 底座 | 官方 RVC WebUI + 实时 `gui_v1.py`，**不重写算法** |
-| 体验目标 | 解压 → 启动器 → 桌面图标 → 开黑变声；日常**不**靠 bat |
+| 体验目标 | **Setup 安装壳** → **启动器补全 Runtime** → 主界面 → 社区音色 → 变声 |
+| Setup | `launcher/setup_app.py`；打薄包 `scripts/build_setup.py`；文档 `docs/Setup安装与补全.md` |
+| Runtime | CNB **Release**（标签 `RVC-runtime`）；音色 CNB **Git LFS** |
 | UI | Schale 浅蓝 token（`theme.py`）；禁止 AI 渐变 / RVCMAX 粉紫 / 青绿 |
 | 参考包 | `RVCMAX/RVCMAX_*`（布局/Runtime，不抄皮） |
 | 日常主路径 | 主界面选音色 → 设置设备 → **开启变声**（后台无窗 worker） |
-| 底栏 | 变声/原声、音高·共鸣·阈值（热更新）、按音色保存；撤销/重做/默认 |
 | 配置档案 | 每音色 `.tmvp`（`launcher/profiles.py` + 模型页面板） |
-| 咨询包 | 调参服务 zip（`consult_pack` + 应用内录音 `sample_record`）；官方音色 = publisher 标记 ∪ catalog id |
-| 发行 | `scripts/build_release.py --variant nvidia\|amd\|nvidia50` → `dist/`（gitignore） |
+| 咨询包 | 调参服务 zip；进件漏斗「申请专业优化」 |
+| 发行全量 | `scripts/build_release.py --variant nvidia\|amd\|nvidia50` → `dist/` |
 | Git 含什么 | **`docs/仓库内容说明.md`** |
-| launcher 拆分 | **`docs/LAUNCHER_DECOMPOSITION.md`** |
 
 **发行包文件名（打包脚本现状）**：仍可能输出 `启动器.exe` / `变声器.exe` 与目录 `TuringMirror_Voice_*`——这是打包脚本命名；**产品显示名一律 RVC Fabric**。
 
@@ -134,6 +135,7 @@
 | `docs/项目结构.md` | 目录角色 |
 | `docs/LAUNCHER_DECOMPOSITION.md` | main_app 拆分 |
 | `docs/发行版打包与用户使用.md` | 打包与用户路径 |
+| `docs/Setup安装与补全.md` | Setup + Runtime 补全（定稿动线） |
 | `docs/发行包-显卡分版.md` | N/A/50 分版 |
 | `docs/大众版使用说明.md` | 用户说明 |
 | `docs/在线更新与音色库.md` | 更新包规范 |
@@ -156,8 +158,8 @@
 
 | 优先级 | 项 |
 |--------|-----|
-| 高 | 三变体全量 exe 实机验收（N / A / 50） |
-| 中 | 打包脚本目录/exe 命名是否与 RVC Fabric 完全对齐（可选） |
+| 高 | 打出 Setup 薄包并推到 CNB `setup/`；三变体 Runtime Release 齐（含 amd） |
+| 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 中 | 改 launcher 后需重打 exe 才能在发行包看到 |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |
 
@@ -178,5 +180,5 @@
 
 ## 10. 一句话状态
 
-**RVC Fabric 功能侧已齐（单窗变声、底栏、档案、咨询包、更新、拆分壳层、静默启动与 GPU 进程内探测）。**  
-下一步仍是 **分显卡全量 exe 实机验收**；代码真相以 `git log` + 源码为准。
+**RVC Fabric 功能侧已齐；安装动线定为 Setup 薄包 + 启动器从 CNB Release 补 Runtime + 社区 LFS 音色。**  
+下一步：**打 Setup 推 CNB、实机走通补全与变声**；代码真相以 `git log` + 源码为准。

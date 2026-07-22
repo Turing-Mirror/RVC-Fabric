@@ -180,12 +180,25 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
                 pass
 
     (out / "User_Data" / "models").mkdir(parents=True, exist_ok=True)
-    (out / "VBCABLE").mkdir(parents=True, exist_ok=True)
+    # VB-Cable 必须带完整驱动（.inf/.sys/.cat），不能只拷 Setup.exe
     vb_src = REPO / "VBCABLE"
     if vb_src.is_dir():
-        for f in vb_src.iterdir():
-            if f.is_file() and f.suffix.lower() in (".exe", ".txt", ".md"):
-                shutil.copy2(f, out / "VBCABLE" / f.name)
+        dst_vb = out / "VBCABLE"
+        if dst_vb.exists():
+            shutil.rmtree(dst_vb, ignore_errors=True)
+        shutil.copytree(
+            vb_src,
+            dst_vb,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+        n_inf = len(list(dst_vb.glob("*.inf")))
+        n_sys = len(list(dst_vb.glob("*.sys")))
+        log(f"[vbcable] full pack: {dst_vb} (inf={n_inf}, sys={n_sys})")
+        if n_inf < 1 or n_sys < 1:
+            log("[vbcable] WARNING: missing driver files; install will fail")
+    else:
+        (out / "VBCABLE").mkdir(parents=True, exist_ok=True)
+        log("[vbcable] WARNING: no REPO/VBCABLE source")
 
     meta = {
         "product": "RVC Fabric",

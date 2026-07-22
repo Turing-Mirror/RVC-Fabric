@@ -53,6 +53,20 @@ CNB-GIT-RELEASE/
 | `launcher/ui/store_page.py` | 社区下载行展示封面缩略图 + 作者 |
 | `scripts/write_cnb_index.py` | 从产品清单生成 index + 拷贝 ch-banner |
 
+## 本地软件 ch-banner
+
+```text
+User_Data/ch-banner/<id>.jpg   # 主位置
+ch-banner/                     # 安装根可选共享
+User_Data/models/<id>/cover.*  # 兼容
+
+config.json:
+  "cover": "ch-banner/kiki.jpg"
+```
+
+解析：`launcher/catalog.py` → `resolve_cover_path` / `install_cover_to_ch_banner`。  
+导入与社区安装会把封面写入 `User_Data/ch-banner/` 并写回 config。
+
 ## 运维
 
 ```bat

@@ -23,7 +23,7 @@ from launcher.cnb_sources import (
     resolve_runtime_spec,
 )
 from launcher.runtime_provision import runtime_python, runtime_ready
-from launcher.setup_app import _is_shell_tree, copy_shell_tree
+from launcher._setup_shell import _is_shell_tree, copy_shell_tree
 
 
 class CnbUrlBuildTests(unittest.TestCase):

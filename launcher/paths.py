@@ -57,6 +57,9 @@ else:
 
 MODELS_DIR = USER_DATA / "models"
 USER_LOGS = USER_DATA / "logs"
+# Local character covers (mirrors CNB ch-banner/). config.json cover:
+#   "ch-banner/<id>.jpg"  or  "<id>.jpg" under this folder
+CH_BANNER_DIR = USER_DATA / "ch-banner"
 # Default browse target for 绑定 index / 导入·导出档案 — a stable in-app folder
 # so users can drop reusable files here, yet still navigate out to their own.
 INDICES_DIR = USER_DATA / "indices"
@@ -114,12 +117,15 @@ def find_release_exe(kind: str = "app") -> Path | None:
 def ensure_dirs() -> None:
     USER_DATA.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    CH_BANNER_DIR.mkdir(parents=True, exist_ok=True)
     INDICES_DIR.mkdir(parents=True, exist_ok=True)
     SHARED_PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     USER_LOGS.mkdir(parents=True, exist_ok=True)
     VBCABLE_DIR.mkdir(parents=True, exist_ok=True)
     ENGINE_WEIGHTS.mkdir(parents=True, exist_ok=True)
     (ROOT / "logs").mkdir(parents=True, exist_ok=True)
+    # Optional package-root ch-banner (read-only ships / shared banners)
+    (ROOT / "ch-banner").mkdir(parents=True, exist_ok=True)
 
 
 def release_roles() -> dict[str, str]:

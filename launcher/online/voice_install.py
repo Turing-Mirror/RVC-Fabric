@@ -127,6 +127,7 @@ def install_voice_files(
             pass
 
     cover_path = ""
+    cover_cfg = ""
     if entry.cover_url:
         ext = ".jpg"
         low = entry.cover_url.lower()
@@ -138,13 +139,23 @@ def install_voice_files(
         try:
             download_file(entry.cover_url, cov_tmp, progress=_prog("cover"))
             if cov_tmp.stat().st_size > 500:
-                dest_cov = dest_dir / f"cover{ext}"
-                shutil.copy2(cov_tmp, dest_cov)
-                cover_path = str(dest_cov.resolve())
+                from launcher.catalog import install_cover_to_ch_banner
+
+                abs_c, rel_c = install_cover_to_ch_banner(
+                    cov_tmp, vid, also_model_dir=dest_dir
+                )
+                cover_path = abs_c or str((dest_dir / f"cover{ext}").resolve())
+                cover_cfg = rel_c or f"cover{ext}"
+                if not abs_c:
+                    dest_cov = dest_dir / f"cover{ext}"
+                    shutil.copy2(cov_tmp, dest_cov)
+                    cover_path = str(dest_cov.resolve())
         except Exception:
             pass
 
     extra = _entry_identity_extra(entry)
+    if cover_cfg:
+        extra["cover"] = cover_cfg
     return _write_voice_config(
         dest_dir,
         dest_pth=dest_pth,
@@ -154,6 +165,7 @@ def install_voice_files(
         online_id=entry.id,
         index_path=index_path,
         cover_path=cover_path,
+        cover_cfg=cover_cfg,
         source="online_files",
         extra=extra or None,
     )
@@ -362,9 +374,22 @@ def install_voice_pack_zip(
         for k in ("author", "author_url", "date"):
             if identity.get(k):
                 extra[k] = identity[k]
-        # Store cover as filename relative to model dir when possible
-        if cover_path:
-            extra["cover"] = Path(cover_path).name
+        # Cover → User_Data/ch-banner/<id>.ext + model folder; config stores ch-banner path
+        cover_cfg = ""
+        if cover_path and Path(cover_path).is_file():
+            try:
+                from launcher.catalog import install_cover_to_ch_banner
+
+                abs_c, rel_c = install_cover_to_ch_banner(
+                    Path(cover_path), vid, also_model_dir=dest_dir
+                )
+                if abs_c:
+                    cover_path = abs_c
+                    cover_cfg = rel_c
+            except Exception:
+                cover_cfg = Path(cover_path).name
+        if cover_cfg:
+            extra["cover"] = cover_cfg
 
         return _write_voice_config(
             dest_dir,
@@ -375,6 +400,7 @@ def install_voice_pack_zip(
             online_id=vid,
             index_path=index_path or str(pack_cfg.get("index") or ""),
             cover_path=cover_path,
+            cover_cfg=cover_cfg,
             source="online_pack",
             extra=extra,
         )
@@ -443,6 +469,7 @@ def _write_voice_config(
     cover_path: str,
     source: str,
     extra: Optional[dict] = None,
+    cover_cfg: str = "",
 ) -> dict:
     # Official RVC Fabric library installs always stamp publisher so consult
     # pack / free-vs-paid paths recognize them offline (also matches catalog id).
@@ -458,8 +485,10 @@ def _write_voice_config(
     }
     if index_path and Path(index_path).is_file():
         cfg["index"] = str(Path(index_path).resolve())
-    if cover_path:
-        # Prefer basename so the folder is portable
+    # Prefer ch-banner/<id>.ext for local catalog resolution
+    if cover_cfg:
+        cfg["cover"] = cover_cfg
+    elif cover_path:
         try:
             cp = Path(cover_path)
             if cp.is_file() and cp.parent.resolve() == Path(dest_dir).resolve():
@@ -470,6 +499,11 @@ def _write_voice_config(
             cfg["cover"] = cover_path
     if extra:
         cfg.update(extra)
+        # Keep ch-banner path if extra overwrote with basename only
+        if cover_cfg and not str(cfg.get("cover") or "").replace("\\", "/").startswith(
+            "ch-banner/"
+        ):
+            cfg["cover"] = cover_cfg
     # Do not let pack config wipe official stamps unless pack is not fabric
     if source in ("online_pack", "online_files"):
         cfg["publisher"] = "rvc_fabric"

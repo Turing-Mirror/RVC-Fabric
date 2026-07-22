@@ -89,6 +89,108 @@ def _find_cover(folder: Path) -> Optional[str]:
     return None
 
 
+def ch_banner_dirs() -> list[Path]:
+    """Local ch-banner search roots (User_Data first, then package root)."""
+    from launcher.paths import CH_BANNER_DIR, ROOT
+
+    out: list[Path] = []
+    for p in (CH_BANNER_DIR, ROOT / "ch-banner"):
+        if p not in out:
+            out.append(p)
+    return out
+
+
+def resolve_cover_path(
+    cover: str,
+    *,
+    model_dir: Optional[Path] = None,
+    voice_id: str = "",
+) -> str:
+    """Resolve config cover field to an absolute file path.
+
+    Accepts::
+      - absolute path
+      - model-dir relative (cover.jpg)
+      - ch-banner relative (ch-banner/kiki.jpg or kiki.jpg under ch-banner/)
+      - http(s) URL left unchanged (caller may download)
+    """
+    cover = (cover or "").strip().replace("\\", "/")
+    if not cover:
+        return ""
+    if cover.lower().startswith(("http://", "https://")):
+        return cover
+    cp = Path(cover)
+    if cp.is_file():
+        return str(cp.resolve())
+    # ch-banner/<file>
+    rel = cover
+    if rel.lower().startswith("ch-banner/"):
+        rel = rel[len("ch-banner/") :]
+    for base in ch_banner_dirs():
+        cand = base / rel
+        if cand.is_file():
+            return str(cand.resolve())
+        # bare id → try id.jpg / cover patterns
+        stem = Path(rel).stem if rel else (voice_id or "")
+        if stem:
+            for ext in (".jpg", ".jpeg", ".png", ".webp"):
+                c2 = base / f"{stem}{ext}"
+                if c2.is_file():
+                    return str(c2.resolve())
+    if model_dir is not None:
+        md = Path(model_dir)
+        cand = md / cover
+        if cand.is_file():
+            return str(cand.resolve())
+        # cover.jpg style already handled by _find_cover
+        found = _find_cover(md)
+        if found:
+            return found
+    if voice_id:
+        for base in ch_banner_dirs():
+            for ext in (".jpg", ".jpeg", ".png", ".webp"):
+                c2 = base / f"{voice_id}{ext}"
+                if c2.is_file():
+                    return str(c2.resolve())
+    return ""
+
+
+def install_cover_to_ch_banner(
+    src: Path,
+    voice_id: str,
+    *,
+    also_model_dir: Optional[Path] = None,
+) -> tuple[str, str]:
+    """Copy cover into User_Data/ch-banner/<id>.<ext>.
+
+    Returns (absolute_path, config_relative ``ch-banner/<id>.ext``).
+    """
+    from launcher.paths import CH_BANNER_DIR, ensure_dirs
+
+    ensure_dirs()
+    src = Path(src)
+    if not src.is_file():
+        return "", ""
+    vid = safe_model_dir_name(voice_id or src.stem)
+    ext = src.suffix.lower() or ".jpg"
+    if ext == ".jpeg":
+        ext = ".jpg"
+    dest = CH_BANNER_DIR / f"{vid}{ext}"
+    try:
+        shutil.copy2(src, dest)
+    except OSError:
+        return "", ""
+    if also_model_dir is not None:
+        md = Path(also_model_dir)
+        md.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(src, md / f"cover{ext}")
+        except OSError:
+            pass
+    rel = f"ch-banner/{vid}{ext}"
+    return str(dest.resolve()), rel
+
+
 def _find_index(name: str, search_roots: list[Path]) -> str:
     """Find an .index whose *name or parent folder* matches ``name``.
 
@@ -237,24 +339,20 @@ def voice_meta_from_side(
         for k in ("name", "author", "author_url", "date", "cover"):
             if side.get(k) not in (None, ""):
                 meta[k] = str(side.get(k)).strip()
-    # Resolve cover to an existing absolute path when possible
+    # Resolve cover via ch-banner / model dir
     cover = meta.get("cover") or str(side.get("cover") or "").strip()
-    if cover and model_dir is not None:
-        md = Path(model_dir)
-        cp = Path(cover)
-        if not cp.is_file():
-            cand = md / cover
-            if cand.is_file():
-                cover = str(cand.resolve())
-            else:
-                found = _find_cover(md)
-                cover = found or ""
-        else:
-            cover = str(cp.resolve())
-        if cover:
-            meta["cover"] = cover
-    elif cover:
-        meta["cover"] = cover
+    vid = ""
+    if model_dir is not None:
+        vid = Path(model_dir).name
+    if not vid:
+        vid = str(side.get("online_id") or side.get("id") or "").strip()
+    resolved = resolve_cover_path(cover, model_dir=model_dir, voice_id=vid)
+    if not resolved and model_dir is not None:
+        resolved = _find_cover(Path(model_dir)) or ""
+    if not resolved and vid:
+        resolved = resolve_cover_path(f"ch-banner/{vid}.jpg", voice_id=vid)
+    if resolved:
+        meta["cover"] = resolved
     return meta
 
 
@@ -575,11 +673,16 @@ def import_model_to_catalog(
     dest_pth = dest_dir / src_pth.name
     if dest_pth.resolve() != src_pth.resolve():
         shutil.copy2(src_pth, dest_pth)
+    cover_cfg = ""
     if cover_src and Path(cover_src).is_file():
-        ext = Path(cover_src).suffix.lower() or ".png"
-        if ext == ".jpeg":
-            ext = ".jpg"
-        shutil.copy2(cover_src, dest_dir / f"cover{ext}")
+        abs_c, cover_cfg = install_cover_to_ch_banner(
+            Path(cover_src), name, also_model_dir=dest_dir
+        )
+        if not abs_c:
+            ext = Path(cover_src).suffix.lower() or ".png"
+            if ext == ".jpeg":
+                ext = ".jpg"
+            shutil.copy2(cover_src, dest_dir / f"cover{ext}")
     # Auto-pick sibling .index next to the pth if not provided
     if index_src is None:
         sib = src_pth.with_suffix(".index")
@@ -607,6 +710,8 @@ def import_model_to_catalog(
         side["file"] = dest_pth.name
         side["source"] = "import"
         side["index"] = index_path
+        if cover_cfg:
+            side["cover"] = cover_cfg
         files = [str(p) for p in (side.get("index_files") or [])]
         if index_path not in files:
             files.append(index_path)
@@ -619,10 +724,12 @@ def import_model_to_catalog(
             "file": dest_pth.name,
             "source": "import",
         }
+        if cover_cfg:
+            cfg["cover"] = cover_cfg
         # Preserve any pre-existing index keys if re-importing over same folder
         old = _read_sidecar(dest_dir)
         for k in ("index", "index_files", "pitch", "formant", "index_rate",
-                  "rms_mix_rate", "threhold", "f0method", "active_profile"):
+                  "rms_mix_rate", "threhold", "f0method", "active_profile", "cover"):
             if k in old and k not in cfg:
                 cfg[k] = old[k]
         (dest_dir / "config.json").write_text(

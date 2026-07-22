@@ -184,6 +184,7 @@ class HomePageMixin:
                 row,
                 name=m["name"],
                 tag=m.get("tag") or "音色",
+                author=str(m.get("author") or ""),
                 photo=photo,
                 active=focus,
                 focus=focus,
@@ -205,9 +206,13 @@ class HomePageMixin:
             return
         m = self.models[self.model_idx]
         self.home_current_lbl.configure(text=m["name"])
-        self.home_hint_lbl.configure(
-            text=f"{m.get('tag') or '音色'}  ·  切换立即生效 · 运行中会自动重载"
-        )
+        bits = [str(m.get("tag") or "音色")]
+        if m.get("author"):
+            bits.append(str(m.get("author")))
+        if m.get("date"):
+            bits.append(str(m.get("date")))
+        bits.append("切换立即生效 · 运行中会自动重载")
+        self.home_hint_lbl.configure(text="  ·  ".join(bits))
 
     def _show_switch_toast(self, name: str) -> None:
         if not hasattr(self, "home_toast"):

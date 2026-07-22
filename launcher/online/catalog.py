@@ -35,9 +35,14 @@ class VoiceEntry:
     size_bytes: int = 0
     sha256: str = ""
     description: str = ""
+    author: str = ""
+    author_url: str = ""
+    date: str = ""  # YYMMDD
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "VoiceEntry":
+        from launcher.online.package_spec import normalize_yymmdd
+
         return cls(
             id=str(d.get("id") or d.get("name") or "").strip(),
             name=str(d.get("name") or d.get("id") or "未命名").strip(),
@@ -53,6 +58,13 @@ class VoiceEntry:
             size_bytes=int(d.get("size_bytes") or d.get("size") or 0),
             sha256=str(d.get("sha256") or ""),
             description=str(d.get("description") or d.get("desc") or ""),
+            author=str(d.get("author") or d.get("creator") or "").strip(),
+            author_url=str(
+                d.get("author_url") or d.get("author_link") or ""
+            ).strip(),
+            date=normalize_yymmdd(
+                d.get("date") or d.get("yymmdd") or d.get("release_date") or ""
+            ),
         )
 
     def has_download(self) -> bool:

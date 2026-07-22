@@ -222,6 +222,42 @@ def _read_sidecar(folder: Path) -> dict[str, Any]:
         return {}
 
 
+def voice_meta_from_side(
+    side: dict[str, Any], model_dir: Optional[Path] = None
+) -> dict[str, str]:
+    """Identity fields for UI/catalog from a model config.json."""
+    try:
+        from launcher.online.package_spec import normalize_voice_meta
+    except Exception:
+        normalize_voice_meta = None  # type: ignore
+    if normalize_voice_meta is not None:
+        meta = normalize_voice_meta(side)
+    else:
+        meta = {}
+        for k in ("name", "author", "author_url", "date", "cover"):
+            if side.get(k) not in (None, ""):
+                meta[k] = str(side.get(k)).strip()
+    # Resolve cover to an existing absolute path when possible
+    cover = meta.get("cover") or str(side.get("cover") or "").strip()
+    if cover and model_dir is not None:
+        md = Path(model_dir)
+        cp = Path(cover)
+        if not cp.is_file():
+            cand = md / cover
+            if cand.is_file():
+                cover = str(cand.resolve())
+            else:
+                found = _find_cover(md)
+                cover = found or ""
+        else:
+            cover = str(cp.resolve())
+        if cover:
+            meta["cover"] = cover
+    elif cover:
+        meta["cover"] = cover
+    return meta
+
+
 def list_models_in_user_data(
     models_root: Path,
     *,
@@ -238,7 +274,8 @@ def list_models_in_user_data(
             continue
         pth = _find_pth(folder)
         side = _read_sidecar(folder)
-        name = str(side.get("name") or folder.name)
+        meta = voice_meta_from_side(side, folder)
+        name = str(meta.get("name") or side.get("name") or folder.name)
         tag = str(side.get("tag") or guess_tag(name))
         broken = _model_is_broken(pth)
         if pth is None:
@@ -251,9 +288,12 @@ def list_models_in_user_data(
                 "path": "",
                 "file": "",
                 "dir": str(folder.resolve()),
-                "cover": _find_cover(folder),
+                "cover": meta.get("cover") or _find_cover(folder),
                 "index": "",
                 "tag": tag,
+                "author": meta.get("author") or "",
+                "author_url": meta.get("author_url") or "",
+                "date": meta.get("date") or "",
                 "source": "user_data",
                 "missing": True,
                 "pitch": None, "formant": None, "index_rate": None,
@@ -267,15 +307,9 @@ def list_models_in_user_data(
             pth_stem=pth.stem,
             search_roots=roots,
         )
-        cover = side.get("cover")
-        if cover:
-            cp = Path(str(cover))
-            if not cp.is_file():
-                cover = _find_cover(folder)
-            else:
-                cover = str(cp.resolve())
-        else:
-            cover = _find_cover(folder)
+        cover = meta.get("cover") or ""
+        if not cover:
+            cover = _find_cover(folder) or ""
         entry = {
             "name": name,
             "path": str(pth.resolve()),
@@ -284,6 +318,9 @@ def list_models_in_user_data(
             "cover": cover,
             "index": index,
             "tag": tag,
+            "author": meta.get("author") or "",
+            "author_url": meta.get("author_url") or "",
+            "date": meta.get("date") or "",
             "source": "user_data",
             "missing": broken,
             "pitch": None,

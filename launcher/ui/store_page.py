@@ -458,6 +458,11 @@ class StorePage:
             highlightbackground=TM_HAIRLINE,
         )
         row.pack(fill="x", pady=5)
+        if v.cover_url:
+            try:
+                self._attach_cover_thumb(row, v)
+            except Exception:
+                pass
         left = tk.Frame(row, bg=TM_SURFACE)
         left.pack(side="left", fill="x", expand=True, padx=12, pady=10)
         tk.Label(
@@ -487,6 +492,21 @@ class StorePage:
             fg=TM_META,
             anchor="w",
         ).pack(anchor="w", pady=(2, 0))
+        if v.author_url:
+            link = tk.Label(
+                left,
+                text=v.author_url,
+                font=mono_font(7),
+                bg=TM_SURFACE,
+                fg=TM_ACCENT,
+                anchor="w",
+                cursor="hand2",
+            )
+            link.pack(anchor="w")
+            link.bind(
+                "<Button-1>",
+                lambda _e, u=v.author_url: open_in_browser(u),
+            )
         if v.description:
             tk.Label(
                 left,
@@ -494,7 +514,7 @@ class StorePage:
                 font=sans_font(9),
                 bg=TM_SURFACE,
                 fg=TM_INK_MUTED,
-                wraplength=380,
+                wraplength=340,
                 justify="left",
                 anchor="w",
             ).pack(anchor="w", pady=(4, 0))
@@ -509,6 +529,53 @@ class StorePage:
             padx=12,
             pady=6,
         ).pack()
+
+    def _attach_cover_thumb(self, row: tk.Frame, v: VoiceEntry) -> None:
+        """Show ch-banner cover from cover_url (async)."""
+        import io
+        import urllib.request
+
+        from launcher.theme import TM_INSET
+
+        box = tk.Frame(row, bg=TM_INSET, width=56, height=56)
+        box.pack(side="left", padx=(10, 0), pady=10)
+        box.pack_propagate(False)
+        lbl = tk.Label(box, text="", bg=TM_INSET)
+        lbl.pack(expand=True)
+        cache = getattr(self, "_cover_photos", None)
+        if cache is None:
+            self._cover_photos = {}
+            cache = self._cover_photos
+        if v.cover_url in cache:
+            lbl.configure(image=cache[v.cover_url])
+            return
+
+        def work() -> None:
+            try:
+                req = urllib.request.Request(
+                    v.cover_url, headers={"User-Agent": "RVCFabric/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    raw = resp.read()
+                from PIL import Image, ImageTk
+
+                im = Image.open(io.BytesIO(raw)).convert("RGB")
+                im.thumbnail((56, 56))
+
+                def apply() -> None:
+                    try:
+                        photo = ImageTk.PhotoImage(im)
+                        cache[v.cover_url] = photo
+                        if lbl.winfo_exists():
+                            lbl.configure(image=photo)
+                    except Exception:
+                        pass
+
+                self.root.after(0, apply)
+            except Exception:
+                pass
+
+        threading.Thread(target=work, daemon=True).start()
 
     def apply_gui(self) -> None:
         if self._busy:

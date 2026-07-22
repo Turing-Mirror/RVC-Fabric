@@ -298,6 +298,13 @@ class ProfilesMixin:
             return
         for w in host.winfo_children():
             w.destroy()
+        # Rebound wheel so scrolling still works with the mouse over this panel
+        cb = getattr(self, "_models_bind_wheel", None)
+        if cb:
+            try:
+                self.root.after(0, cb)
+            except Exception:
+                pass
 
         d = self._current_model_dir()
         head = tk.Frame(host, bg=TM_BG)
@@ -419,8 +426,11 @@ class ProfilesMixin:
         self._toast_profile("已保存并绑定档案")
 
     def _ui_import(self) -> None:
+        from launcher.paths import SHARED_PROFILES_DIR
+
         path = filedialog.askopenfilename(
             title="导入别人分享的配置档案",
+            initialdir=str(SHARED_PROFILES_DIR),
             filetypes=[("配置档案", "*.tmvp"), ("全部", "*.*")],
         )
         if not path:
@@ -458,8 +468,11 @@ class ProfilesMixin:
         cur = str((self._current_model() or {}).get("name") or "音色")
         pname = str((prof or {}).get("name") or "档案")
         suggested = _safe_filename(f"{cur}-{pname}") + P.PROFILE_EXT
+        from launcher.paths import SHARED_PROFILES_DIR
+
         path = filedialog.asksaveasfilename(
             title="导出档案（可发给别人使用）",
+            initialdir=str(SHARED_PROFILES_DIR),
             initialfile=suggested,
             defaultextension=P.PROFILE_EXT,
             filetypes=[("配置档案", "*.tmvp")],

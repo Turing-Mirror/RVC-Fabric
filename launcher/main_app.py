@@ -646,7 +646,8 @@ class MainApp(
         if self._current_page == "home":
             self._render_carousel()
         elif self._current_page == "models":
-            self.refresh_models()
+            # Selecting keeps the page scroll position (no jump to top)
+            self.refresh_models(keep_scroll=True)
         if feedback or prev != idx:
             self._show_switch_toast(m["name"])
         self._refresh_index_ui_for_model(m)

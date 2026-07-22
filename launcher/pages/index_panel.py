@@ -46,6 +46,14 @@ class IndexPanelMixin:
             return
         for w in host.winfo_children():
             w.destroy()
+        # New rows need the models-page wheel binding (mouse over this panel
+        # must still scroll the page). Runs after this rebuild completes.
+        cb = getattr(self, "_models_bind_wheel", None)
+        if cb:
+            try:
+                self.root.after(0, cb)
+            except Exception:
+                pass
 
         d = self._current_model_dir()
         head = tk.Frame(host, bg=TM_BG)
@@ -190,8 +198,14 @@ class IndexPanelMixin:
         d = self._current_model_dir()
         if not d:
             return
+        # Default to this model's own folder if present, else the shared
+        # indices folder — users can still browse out to external files.
+        from launcher.paths import INDICES_DIR
+
+        init = d if d and Path(d).is_dir() else str(INDICES_DIR)
         path = filedialog.askopenfilename(
             title="选择特征索引文件 (.index)",
+            initialdir=init,
             filetypes=[("特征索引", "*.index"), ("全部", "*.*")],
         )
         if not path:

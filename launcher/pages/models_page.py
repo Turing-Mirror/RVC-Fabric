@@ -215,9 +215,16 @@ class ModelsPageMixin:
                 pass
         self._models_filter_job = self.root.after(120, self.refresh_models)
 
-    def refresh_models(self) -> None:
+    def refresh_models(self, keep_scroll: bool = False) -> None:
         if not hasattr(self, "model_grid"):
             return
+        # Selecting a voice shouldn't jump the page back to the top
+        self._models_saved_scroll = None
+        if keep_scroll:
+            try:
+                self._models_saved_scroll = self._models_canvas.yview()[0]
+            except Exception:
+                self._models_saved_scroll = None
         self.models = list_voice_models()
         if self.model_idx >= len(self.models):
             self.model_idx = max(0, len(self.models) - 1)
@@ -357,6 +364,19 @@ class ModelsPageMixin:
             self.root.after(30, self._models_bind_wheel)
         except Exception:
             pass
+        # Restore scroll after a selection-only refresh (layout settles first)
+        frac = getattr(self, "_models_saved_scroll", None)
+        if frac is not None:
+            def _restore(f=frac):
+                try:
+                    self._models_canvas.yview_moveto(f)
+                except Exception:
+                    pass
+            try:
+                self.root.after(40, _restore)
+            except Exception:
+                pass
+            self._models_saved_scroll = None
 
     def _attach_model_menu(self, card, m: dict, full_ix: int) -> None:
         """Right-click on a voice card: use / rename / open folder / delete."""

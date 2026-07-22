@@ -514,6 +514,28 @@ def remove_index_binding(model_dir: Path, index_path: str) -> None:
     _write_sidecar(model_dir, side)
 
 
+def rename_model_display(model_dir: Path, new_name: str) -> str:
+    """Change the display name shown in the app (folder/files untouched)."""
+    new_name = str(new_name or "").strip()
+    if not new_name:
+        raise ValueError("名称不能为空")
+    model_dir = Path(model_dir)
+    side = _read_sidecar(model_dir)
+    side["name"] = new_name
+    _write_sidecar(model_dir, side)
+    return new_name
+
+
+def delete_model_dir(model_dir: Path, models_root: Path) -> None:
+    """Delete a voice folder (model + sidecar + profiles). Guarded to the
+    catalog root so a bad path can never wipe anything else."""
+    md = Path(model_dir).resolve()
+    root = Path(models_root).resolve()
+    if root not in md.parents:
+        raise ValueError(f"refuse to delete outside models root: {md}")
+    shutil.rmtree(md)
+
+
 def set_active_index(model_dir: Path, index_path: str) -> None:
     """Choose which bound .index the engine uses ("" = use none)."""
     model_dir = Path(model_dir)

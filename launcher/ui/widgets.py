@@ -31,6 +31,80 @@ from launcher.theme import (
 )
 
 
+def center_over(win: tk.Toplevel, master: tk.Misc) -> None:
+    """Place a dialog centered over its parent window (upper third)."""
+    try:
+        win.update_idletasks()
+        top = master.winfo_toplevel()
+        mx, my = top.winfo_rootx(), top.winfo_rooty()
+        mw, mh = top.winfo_width(), top.winfo_height()
+        w = max(win.winfo_width(), win.winfo_reqwidth())
+        h = max(win.winfo_height(), win.winfo_reqheight())
+        x = mx + max((mw - w) // 2, 0)
+        y = my + max((mh - h) // 3, 0)
+        win.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+    except Exception:
+        pass
+
+
+def ask_choice(
+    parent: tk.Misc,
+    title: str,
+    message: str,
+    options: list[tuple[str, str]],
+    *,
+    cancel_text: str = "取消",
+) -> Optional[str]:
+    """Modal question whose buttons say what they DO (not 是/否).
+
+    ``options`` = [(key, button_label), …]; first option renders as the
+    primary button. Returns the chosen key, or None on cancel/close.
+    """
+    win = tk.Toplevel(parent)
+    win.title(title)
+    win.configure(bg=TM_BG)
+    win.resizable(False, False)
+    win.transient(parent.winfo_toplevel())
+    result: dict = {"v": None}
+
+    tk.Label(
+        win,
+        text=message,
+        font=sans_font(10),
+        bg=TM_BG,
+        fg=TM_INK,
+        justify="left",
+        anchor="w",
+        wraplength=400,
+    ).pack(padx=22, pady=(18, 14), anchor="w")
+
+    row = tk.Frame(win, bg=TM_BG)
+    row.pack(padx=22, pady=(0, 18), anchor="e", fill="x")
+
+    def _pick(key):
+        result["v"] = key
+        win.destroy()
+
+    GhostButton(row, cancel_text, command=lambda: _pick(None), padx=14, pady=7).pack(
+        side="right", padx=(8, 0)
+    )
+    for i, (key, label) in enumerate(reversed(options)):
+        is_primary = i == len(options) - 1  # first option = primary
+        cls = PrimaryButton if is_primary else GhostButton
+        cls(row, label, command=lambda k=key: _pick(k), padx=14, pady=7).pack(
+            side="right", padx=(8, 0)
+        )
+
+    win.protocol("WM_DELETE_WINDOW", lambda: _pick(None))
+    center_over(win, parent)
+    try:
+        win.grab_set()
+    except Exception:
+        pass
+    win.wait_window()
+    return result["v"]
+
+
 class HoverTip:
     def __init__(self, widget: tk.Widget, text: str, *, delay_ms: int = 350) -> None:
         self.widget = widget

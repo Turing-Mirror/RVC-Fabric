@@ -29,7 +29,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui import GhostButton
+from launcher.ui import GhostButton, ask_choice
 
 
 class IndexPanelMixin:
@@ -181,16 +181,18 @@ class IndexPanelMixin:
         )
         if not path:
             return
-        copy = messagebox.askyesnocancel(
+        choice = ask_choice(
+            self.root,
             "绑定方式",
-            "把这个 index 文件复制进模型文件夹吗？\n\n"
-            "是：复制进来（跟着模型走，推荐）\n"
-            "否：留在原位置，仅记录路径（同一个文件可被多个模型绑定）\n",
+            "把这个 index 文件放在哪里？\n"
+            "复制进模型文件夹：跟着模型走，推荐。\n"
+            "留在原位置：仅记录路径，同一个文件可被多个模型绑定。",
+            [("copy", "复制进模型文件夹"), ("link", "留在原位置")],
         )
-        if copy is None:
+        if choice is None:
             return
         try:
-            add_index_binding(Path(d), Path(path), copy_into_folder=bool(copy))
+            add_index_binding(Path(d), Path(path), copy_into_folder=(choice == "copy"))
         except Exception as e:
             messagebox.showerror("绑定失败", str(e))
             return

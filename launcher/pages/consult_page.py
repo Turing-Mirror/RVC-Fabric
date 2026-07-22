@@ -41,7 +41,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui import GhostButton, PrimaryButton
+from launcher.ui import GhostButton, PrimaryButton, center_over
 from launcher.version import APP_VERSION
 from launcher.win_util import open_path
 
@@ -64,8 +64,8 @@ class ConsultMixin:
             m = None
         if not m or m.get("source") != "user_data" or not m.get("dir"):
             messagebox.showinfo(
-                "咨询包",
-                "请先在「模型」页选中一个用户音色（User_Data），再生成咨询包。",
+                "申请专业优化",
+                "请先在「模型」页选中一个用户音色（User_Data），再申请优化。",
             )
             return
         self._show_consult_wizard(m)
@@ -93,7 +93,7 @@ class ConsultMixin:
         rec_dir = samples_dir(str(USER_DATA))
 
         win = tk.Toplevel(self.root)
-        win.title("生成咨询包")
+        win.title("申请专业优化")
         win.configure(bg=TM_BG)
         win.transient(self.root)
         win.grab_set()
@@ -102,13 +102,14 @@ class ConsultMixin:
             win.minsize(500, 580)
         except Exception:
             pass
+        center_over(win, self.root)
 
         body = tk.Frame(win, bg=TM_BG, padx=20, pady=16)
         body.pack(fill="both", expand=True)
 
         tk.Label(
             body,
-            text="咨询包（调参服务）",
+            text="申请专业优化",
             font=title_font(14, "bold"),
             bg=TM_BG,
             fg=TM_INK,
@@ -447,7 +448,7 @@ class ConsultMixin:
             except Exception:
                 pass
             messagebox.showinfo(
-                "咨询包已生成",
+                "申请包已生成",
                 f"已生成：\n{zpath}\n\n"
                 "请把这个 zip 发给团队（可进群后发送）。\n"
                 "内容含环境摘要、配置档案、音频对照与模型身份"
@@ -458,6 +459,6 @@ class ConsultMixin:
 
         win.protocol("WM_DELETE_WINDOW", close)
         GhostButton(actions, "取消", command=close, padx=16, pady=8).pack(side="right")
-        PrimaryButton(actions, "生成咨询包", command=do_pack, padx=18, pady=8).pack(
+        PrimaryButton(actions, "生成申请包", command=do_pack, padx=18, pady=8).pack(
             side="right", padx=(0, 8)
         )

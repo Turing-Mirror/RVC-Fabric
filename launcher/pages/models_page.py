@@ -30,6 +30,7 @@ from launcher.ui import (
     PrimaryButton,
     SearchField,
     SegmentControl,
+    ask_choice,
 )
 from launcher.win_util import open_path
 
@@ -286,6 +287,7 @@ class ModelsPageMixin:
             )
             card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
             self.model_grid.rowconfigure(r, weight=0)
+            self._attach_model_menu(card, m, full_ix)
 
         self._models_view_rows = (len(view) + cols - 1) // cols
         self._models_after_refresh()
@@ -305,6 +307,93 @@ class ModelsPageMixin:
             self.root.after(30, self._fit_models_catalog_height)
         except Exception:
             pass
+
+    def _attach_model_menu(self, card, m: dict, full_ix: int) -> None:
+        """Right-click on a voice card: use / rename / open folder / delete."""
+
+        def _popup(e):
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(
+                label="使用这个音色",
+                command=lambda: self._use_model_from_grid(full_ix),
+            )
+            if m.get("source") == "user_data" and m.get("dir"):
+                menu.add_command(
+                    label="重命名…", command=lambda: self._ui_rename_model(m)
+                )
+                menu.add_command(
+                    label="打开所在文件夹",
+                    command=lambda: open_path(Path(m["dir"])),
+                )
+                menu.add_separator()
+                menu.add_command(
+                    label="删除这个音色…", command=lambda: self._ui_delete_model(m)
+                )
+            else:
+                menu.add_command(
+                    label="打开所在文件夹",
+                    command=lambda: open_path(Path(m["path"]).parent),
+                )
+            try:
+                menu.tk_popup(e.x_root, e.y_root)
+            finally:
+                menu.grab_release()
+            return "break"
+
+        def _bind_tree(w):
+            w.bind("<Button-3>", _popup, add="+")
+            for ch in w.winfo_children():
+                _bind_tree(ch)
+
+        try:
+            _bind_tree(card)
+        except Exception:
+            pass
+
+    def _ui_rename_model(self, m: dict) -> None:
+        from tkinter import simpledialog
+
+        from launcher.catalog import rename_model_display
+
+        new = simpledialog.askstring(
+            "重命名", "这个音色显示为：", initialvalue=str(m.get("name") or "")
+        )
+        if not new or not new.strip():
+            return
+        try:
+            rename_model_display(Path(m["dir"]), new)
+        except Exception as e:
+            messagebox.showerror("重命名失败", str(e))
+            return
+        self.refresh_models()
+
+    def _ui_delete_model(self, m: dict) -> None:
+        from launcher.catalog import delete_model_dir
+
+        if self._is_active_model(m) and (self.vc_running or self._vc_starting):
+            messagebox.showinfo(
+                "正在使用", "这个音色正在变声中，先停止变声再删除。"
+            )
+            return
+        if not messagebox.askyesno(
+            "删除音色",
+            f"确定删除「{m.get('name')}」？\n"
+            "模型文件、绑定的配置档案会一起删除，无法撤销。",
+        ):
+            return
+        try:
+            delete_model_dir(Path(m["dir"]), MODELS_DIR)
+        except Exception as e:
+            messagebox.showerror("删除失败", str(e))
+            return
+        was_current = self._is_active_model(m)
+        if was_current:
+            self.model_idx = 0
+            for k in ("last_model", "last_model_name", "last_model_path"):
+                self.cfg.pop(k, None)
+        self.refresh_models()
+        if hasattr(self, "models_status_lbl"):
+            self.models_status_lbl.configure(text=f"已删除：{m.get('name')}")
 
     def _use_model_from_grid(self, ix: int) -> None:
         self._select_model(ix, feedback=True, maybe_restart=True)
@@ -331,16 +420,18 @@ class ModelsPageMixin:
         )
         if not paths:
             return
-        # 规范文件管理：问清楚是复制还是移动进软件目录
-        move = messagebox.askyesnocancel(
+        # 规范文件管理：按钮直接写清动作，不用「是/否」猜
+        choice = ask_choice(
+            self.root,
             "导入方式",
-            "把模型文件放进软件目录，用哪种方式？\n\n"
-            "是：复制进来（原文件保留在原位置）\n"
-            "否：移动进来（原位置不再保留，统一由软件管理）\n",
+            "把模型文件放进软件目录，用哪种方式？\n"
+            "复制：原文件保留在原位置。\n"
+            "移动：原位置不再保留，统一由软件管理。",
+            [("copy", "复制进来"), ("move", "移动进来")],
         )
-        if move is None:
+        if choice is None:
             return
-        move = not move  # 是=复制 → move=False；否=移动 → move=True
+        move = choice == "move"
         n = 0
         for p in paths:
             try:

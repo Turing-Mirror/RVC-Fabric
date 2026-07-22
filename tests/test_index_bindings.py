@@ -124,3 +124,36 @@ def test_import_move_removes_source(tmp_path):
     assert Path(info["index"]).is_file()
     assert not pth.is_file()
     assert not idx.is_file()
+
+def test_rename_model_display(tmp_path):
+    from launcher.catalog import rename_model_display
+
+    md = tmp_path / "models" / "kiki"
+    md.mkdir(parents=True)
+    assert rename_model_display(md, " 琪琪 ") == "琪琪"
+    assert _side(md)["name"] == "琪琪"
+    try:
+        rename_model_display(md, "   ")
+        assert False, "empty name must raise"
+    except ValueError:
+        pass
+
+
+def test_delete_model_dir_guarded(tmp_path):
+    from launcher.catalog import delete_model_dir
+
+    root = tmp_path / "models"
+    md = root / "kiki"
+    md.mkdir(parents=True)
+    (md / "kiki.pth").write_bytes(b"x")
+    delete_model_dir(md, root)
+    assert not md.exists()
+    # refuse anything outside the catalog root
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    try:
+        delete_model_dir(outside, root)
+        assert False, "outside root must raise"
+    except ValueError:
+        pass
+    assert outside.exists()

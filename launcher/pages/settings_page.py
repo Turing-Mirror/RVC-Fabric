@@ -1170,12 +1170,20 @@ class SettingsPageMixin:
                 self.lbl_accel_status.configure(text=line, fg=TM_INK_MUTED)
         except Exception:
             pass
-        # Subtitle when idle
+        # Subtitle when idle — never clobber an engine-error badge with GPU text
         if not self.vc_running and not self._vc_starting:
             try:
-                self.lbl_latency.configure(
-                    text=f"{label}" + (f" · {detail}" if detail else "")
-                )
+                title_now = ""
+                try:
+                    title_now = str(self.lbl_online.cget("text") or "")
+                except Exception:
+                    title_now = ""
+                if "错误" in title_now or "失败" in title_now:
+                    pass  # keep real worker error subtitle
+                else:
+                    self.lbl_latency.configure(
+                        text=f"{label}" + (f" · {detail}" if detail else "")
+                    )
             except Exception:
                 pass
 

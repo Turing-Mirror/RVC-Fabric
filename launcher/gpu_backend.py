@@ -126,19 +126,45 @@ def _running_under_runtime(root: Path) -> bool:
     return False
 
 
-def probe_via_runtime_python(python_exe: Path, cwd: Path) -> dict[str, Any]:
-    """Subprocess probe — only pythonw (never console python.exe)."""
-    pe = Path(python_exe)
-    if pe.name.lower() == "python.exe":
-        pyw = pe.with_name("pythonw.exe")
-        if pyw.is_file():
-            pe = pyw
-        else:
-            # Refuse bare console python to avoid black window
-            return {"error": "no pythonw for probe", "cuda": False, "dml": False}
+def _probe_log(cwd: Path, msg: str) -> None:
+    """Append one line to User_Data/logs/gpu_probe.log (best-effort)."""
+    try:
+        log_dir = Path(cwd) / "User_Data" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_dir / "gpu_probe.log", "a", encoding="utf-8", errors="replace") as f:
+            f.write(msg.rstrip() + "\n")
+    except Exception:
+        pass
 
+
+def probe_via_runtime_python(python_exe: Path, cwd: Path) -> dict[str, Any]:
+    """Subprocess probe under Runtime.
+
+    Prefer ``python.exe`` + CREATE_NO_WINDOW (stdout/stderr reliable).
+    Also write JSON to a temp file so a silent crash still leaves a trail.
+    Avoid relying on pythonw stdout alone (can be empty on some hosts).
+    """
+    pe = Path(python_exe)
+    # Prefer console python with hidden window — capture works; no black box.
+    if pe.name.lower() == "pythonw.exe":
+        py_console = pe.with_name("python.exe")
+        if py_console.is_file():
+            pe = py_console
+    if not pe.is_file():
+        return {"error": f"probe python missing: {python_exe}", "cuda": False, "dml": False}
+
+    cwd = Path(cwd)
+    out_file = cwd / "User_Data" / "runtime_control" / "gpu_probe.json"
+    try:
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        if out_file.is_file():
+            out_file.unlink()
+    except Exception:
+        pass
+
+    # Write result to file (and print) so we can recover if stdout is lost.
     code = r"""
-import json
+import json, sys
 out = {
   "torch": None, "cuda": False, "cuda_name": "", "cuda_ver": None,
   "dml": False, "dml_name": "", "dml_count": 0, "error": ""
@@ -167,19 +193,25 @@ try:
             out["dml_name"] = "DirectML"
 except Exception:
     pass
-print(json.dumps(out, ensure_ascii=False))
+payload = json.dumps(out, ensure_ascii=False)
+print(payload)
+try:
+    with open(sys.argv[1], "w", encoding="utf-8") as f:
+        f.write(payload)
+except Exception:
+    pass
 """
     try:
-        env = _probe_env(Path(cwd))
+        env = _probe_env(cwd)
         kw: dict[str, Any] = {
             "cwd": str(cwd),
             "capture_output": True,
             "text": True,
-            "timeout": 90,
+            "timeout": 120,
             "env": env,
         }
         if sys.platform == "win32":
-            kw["creationflags"] = 0x08000000
+            kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
             try:
                 si = subprocess.STARTUPINFO()
                 si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -187,16 +219,51 @@ print(json.dumps(out, ensure_ascii=False))
                 kw["startupinfo"] = si
             except Exception:
                 pass
-        r = subprocess.run([str(pe), "-c", code], **kw)
+        r = subprocess.run(
+            [str(pe), "-c", code, str(out_file)],
+            **kw,
+        )
+        # 1) stdout JSON
+        data: Optional[dict[str, Any]] = None
         line = (r.stdout or "").strip().splitlines()
-        if not line:
-            return {
-                "error": (r.stderr or "empty probe")[:200],
-                "cuda": False,
-                "dml": False,
-            }
-        return json.loads(line[-1])
+        if line:
+            try:
+                data = json.loads(line[-1])
+            except json.JSONDecodeError:
+                data = None
+        # 2) file fallback
+        if data is None and out_file.is_file():
+            try:
+                data = json.loads(out_file.read_text(encoding="utf-8"))
+            except Exception:
+                data = None
+        if isinstance(data, dict) and (
+            data.get("torch") is not None or data.get("error") or data.get("cuda") or data.get("dml")
+        ):
+            _probe_log(
+                cwd,
+                f"probe ok pe={pe.name} rc={r.returncode} "
+                f"torch={data.get('torch')} cuda={data.get('cuda')} dml={data.get('dml')} "
+                f"err={data.get('error')!r}",
+            )
+            return data
+
+        err_bits = [
+            f"empty probe rc={r.returncode}",
+            f"pe={pe.name}",
+        ]
+        if r.stderr:
+            err_bits.append((r.stderr or "").strip()[:160])
+        if r.stdout:
+            err_bits.append("stdout=" + (r.stdout or "").strip()[:80])
+        err = " | ".join(err_bits)[:200]
+        _probe_log(cwd, f"probe fail {err}")
+        return {"error": err, "cuda": False, "dml": False}
+    except subprocess.TimeoutExpired:
+        _probe_log(cwd, "probe timeout 120s")
+        return {"error": "probe timeout (torch load >120s)", "cuda": False, "dml": False}
     except Exception as e:
+        _probe_log(cwd, f"probe exception {e}")
         return {"error": str(e), "cuda": False, "dml": False}
 
 

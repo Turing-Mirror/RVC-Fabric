@@ -36,6 +36,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 from build_release import (  # noqa: E402
     copy_engine,
     ensure_pyinstaller,
+    ensure_shell_download_deps,
     log,
     run,
 )
@@ -76,8 +77,13 @@ def ensure_no_runtime(out: Path) -> None:
 
 
 def build_payload_exes(out: Path) -> None:
-    """启动器 = bootstrap，变声器 = main_app（与全量包相同 PyInstaller 目标）。"""
+    """启动器 = bootstrap，变声器 = main_app（与全量包相同 PyInstaller 目标）。
+
+    用户机不需要装 Python：exe 自带解释器 + 下载依赖。
+    打包机必须先装 requests，否则启动器无法联网补 Runtime。
+    """
     ensure_pyinstaller()
+    ensure_shell_download_deps()
     work = REPO / "build" / "setup_work"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -106,8 +112,25 @@ def build_payload_exes(out: Path) -> None:
                 str(work / "spec"),
                 "--paths",
                 str(REPO),
+                # 下载栈打进 onefile：用户机无需系统 Python / Runtime
                 "--hidden-import",
                 "requests",
+                "--hidden-import",
+                "urllib3",
+                "--hidden-import",
+                "certifi",
+                "--hidden-import",
+                "charset_normalizer",
+                "--hidden-import",
+                "idna",
+                "--hidden-import",
+                "launcher.online.downloader",
+                "--hidden-import",
+                "launcher.runtime_provision",
+                "--hidden-import",
+                "launcher.cnb_sources",
+                "--collect-all",
+                "certifi",
                 str(script),
             ]
         )

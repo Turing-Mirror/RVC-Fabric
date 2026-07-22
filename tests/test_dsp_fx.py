@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for tools.dsp_fx (no audio device)."""
+"""Unit tests for tools.dsp_fx (no audio device).
+
+Constants (EQ_*) must import without numpy — the frozen shell has no numpy.
+Audio-processing tests require numpy (Runtime).
+"""
 
 from __future__ import annotations
 
@@ -11,28 +15,56 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.dsp_fx import (  # noqa: E402 — path setup above
+    DEFAULT_FX_CONFIG,
+    EQ_LABELS,
+    EQ_PRESET_LABELS,
+    EQ_PRESETS,
+    Compressor,
+    GraphicEQ,
+    NoiseGate,
+    RealtimeFxChain,
+    extract_fx_config,
+)
+
 try:
     import numpy as np
-    from tools.dsp_fx import (
-        EQ_PRESETS,
-        Compressor,
-        GraphicEQ,
-        NoiseGate,
-        RealtimeFxChain,
-        extract_fx_config,
-    )
 
     _HAS_NP = True
 except ImportError:
     _HAS_NP = False
 
 
+class ConstantsWithoutNumpyTests(unittest.TestCase):
+    """Shell UI imports these; must never require numpy at module load."""
+
+    def test_eq_labels(self):
+        self.assertEqual(len(EQ_LABELS), 5)
+        self.assertEqual(EQ_LABELS[0], "60Hz")
+
+    def test_presets_defined(self):
+        self.assertIn("flat", EQ_PRESETS)
+        self.assertEqual(len(EQ_PRESETS["vocal_front"]), 5)
+        self.assertEqual(set(EQ_PRESETS), set(EQ_PRESET_LABELS))
+
+    def test_extract_fx_config(self):
+        d = extract_fx_config({"fx_enabled": True, "pitch": 12})
+        self.assertTrue(d["fx_enabled"])
+        self.assertIn("fx_eq_gains", d)
+        self.assertEqual(len(d["fx_eq_gains"]), 5)
+
+    def test_default_fx_config_keys(self):
+        self.assertIn("fx_enabled", DEFAULT_FX_CONFIG)
+        self.assertFalse(DEFAULT_FX_CONFIG["fx_enabled"])
+
+    def test_graphic_eq_preset_without_numpy(self):
+        eq = GraphicEQ()
+        eq.apply_preset("bright")
+        self.assertNotEqual(eq.gains_db, [0.0] * 5)
+
+
 @unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
-class _DspRequireNumpy(unittest.TestCase):
-    pass
-
-
-class NoiseGateTests(_DspRequireNumpy):
+class NoiseGateTests(unittest.TestCase):
     def test_silence_attenuated(self):
         g = NoiseGate(threshold_db=-40, range_db=40, release_ms=5, hold_ms=0)
         sr = 16000
@@ -44,7 +76,8 @@ class NoiseGateTests(_DspRequireNumpy):
         self.assertLess(float(np.sqrt(np.mean(out**2))), 0.01)
 
 
-class CompressorTests(_DspRequireNumpy):
+@unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
+class CompressorTests(unittest.TestCase):
     def test_peaks_reduced(self):
         c = Compressor(
             threshold_db=-12, ratio=8, attack_ms=1, release_ms=50, makeup_db=0
@@ -59,7 +92,8 @@ class CompressorTests(_DspRequireNumpy):
         self.assertLess(float(np.max(np.abs(out))), float(np.max(np.abs(x))) * 0.95)
 
 
-class EQTests(_DspRequireNumpy):
+@unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
+class EQTests(unittest.TestCase):
     def test_flat_near_unity(self):
         eq = GraphicEQ([0, 0, 0, 0, 0])
         sr = 48000
@@ -69,15 +103,9 @@ class EQTests(_DspRequireNumpy):
         # flat peaking filters are bypass
         np.testing.assert_allclose(y, x, rtol=1e-5, atol=1e-5)
 
-    def test_presets_defined(self):
-        self.assertIn("flat", EQ_PRESETS)
-        self.assertEqual(len(EQ_PRESETS["vocal_front"]), 5)
-        eq = GraphicEQ()
-        eq.apply_preset("bright")
-        self.assertNotEqual(eq.gains_db, [0.0] * 5)
 
-
-class ChainTests(_DspRequireNumpy):
+@unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
+class ChainTests(unittest.TestCase):
     def test_disabled_is_passthrough(self):
         ch = RealtimeFxChain({"fx_enabled": False})
         x = np.random.randn(1024).astype(np.float32) * 0.1
@@ -99,11 +127,6 @@ class ChainTests(_DspRequireNumpy):
         y = ch.process(x, 48000)
         self.assertEqual(y.shape, x.shape)
         self.assertTrue(np.all(np.isfinite(y)))
-
-    def test_extract_fx_config(self):
-        d = extract_fx_config({"fx_enabled": True, "pitch": 12})
-        self.assertTrue(d["fx_enabled"])
-        self.assertIn("fx_eq_gains", d)
 
 
 if __name__ == "__main__":

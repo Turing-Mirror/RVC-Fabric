@@ -445,3 +445,127 @@ def format_size(n: int) -> str:
     if n >= 1_000_000:
         return f"{n / 1e6:.0f} MB"
     return f"{n / 1e3:.0f} KB"
+
+
+# ---------------------------------------------------------------------------
+# VB-Cable（独立小包，Runtime 后再下载；不进 Setup 壳层）
+# ---------------------------------------------------------------------------
+
+_FALLBACK_VBCABLE: dict[str, Any] = {
+    "name": "vbcable-setup.zip",
+    "version": "1.0.0",
+    "channel": "lfs",
+    "size_bytes": 1299644,
+    "sha256": "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+    "urls": [
+        f"{CNB_LFS_BASE}/"
+        "0518435a76264856e4e2733ac22143ff16595c763cbf58106ed04d6895c6ddf5",
+    ],
+    "sha256_urls": [
+        f"{CNB_RAW_MAIN}/vbcable/vbcable-setup.zip.sha256",
+    ],
+    "extract_root": "VBCABLE",
+}
+
+
+@dataclass
+class VbcableSpec:
+    name: str
+    version: str
+    sha256: str
+    size_bytes: int
+    urls: list[str]
+    sha256_urls: list[str] = field(default_factory=list)
+    channel: str = "lfs"
+    extract_root: str = "VBCABLE"
+
+
+def _parse_vbcable_blob(blob: dict[str, Any] | None) -> VbcableSpec:
+    b = dict(_FALLBACK_VBCABLE)
+    if isinstance(blob, dict):
+        for k, v in blob.items():
+            if v not in (None, "", [], {}):
+                b[k] = v
+    sha = re.sub(r"[^0-9a-fA-F]", "", str(b.get("sha256") or "")).lower()
+    urls: list[str] = []
+    raw_u = b.get("urls") or b.get("url") or b.get("pack_url")
+    if isinstance(raw_u, str) and raw_u.strip():
+        urls.append(raw_u.strip())
+    elif isinstance(raw_u, list):
+        for u in raw_u:
+            if isinstance(u, str) and u.strip():
+                urls.append(u.strip())
+    if not urls and len(sha) == 64:
+        urls = [cnb_lfs_url(sha)]
+    # Prefer LFS for this package
+    lfs_urls = [u for u in urls if "/-/lfs/" in u]
+    if lfs_urls:
+        urls = lfs_urls + [u for u in urls if u not in lfs_urls]
+    elif len(sha) == 64:
+        urls.insert(0, cnb_lfs_url(sha))
+
+    sha_urls: list[str] = []
+    raw_s = b.get("sha256_urls") or b.get("sha256_url")
+    if isinstance(raw_s, str) and raw_s.strip():
+        sha_urls.append(raw_s.strip())
+    elif isinstance(raw_s, list):
+        for u in raw_s:
+            if isinstance(u, str) and u.strip():
+                sha_urls.append(u.strip())
+    if not sha_urls:
+        sha_urls = [f"{CNB_RAW_MAIN}/vbcable/vbcable-setup.zip.sha256"]
+
+    return VbcableSpec(
+        name=str(b.get("name") or "vbcable-setup.zip"),
+        version=str(b.get("version") or "1.0.0"),
+        sha256=sha,
+        size_bytes=int(b.get("size_bytes") or 0),
+        urls=urls,
+        sha256_urls=sha_urls,
+        channel=str(b.get("channel") or "lfs"),
+        extract_root=str(b.get("extract_root") or "VBCABLE"),
+    )
+
+
+def resolve_vbcable_spec(
+    *,
+    prefer_remote: bool = True,
+    timeout: float = 20.0,
+) -> VbcableSpec:
+    """Resolve VB-Cable pack: remote index.json wins, bundled fallback second."""
+    blob: dict[str, Any] = dict(_FALLBACK_VBCABLE)
+    # Bundled catalog
+    try:
+        local = load_bundled_runtime_catalog()
+        if isinstance(local.get("vbcable"), dict):
+            blob = {**blob, **local["vbcable"]}
+    except Exception:
+        pass
+    if prefer_remote:
+        try:
+            remote = fetch_remote_catalog(timeout=timeout)
+            rem = remote.get("vbcable") if isinstance(remote, dict) else None
+            if isinstance(rem, dict) and rem:
+                blob = {**blob, **rem}
+            # Also accept packages.vbcable[0]
+            pkgs = remote.get("packages") if isinstance(remote, dict) else None
+            if isinstance(pkgs, dict):
+                arr = pkgs.get("vbcable")
+                if isinstance(arr, list) and arr and isinstance(arr[0], dict):
+                    first = arr[0]
+                    for k in (
+                        "sha256",
+                        "size_bytes",
+                        "url",
+                        "urls",
+                        "name",
+                        "version",
+                        "channel",
+                    ):
+                        if first.get(k) not in (None, "", [], {}):
+                            blob[k] = first[k]
+                    if first.get("url") and not blob.get("urls"):
+                        blob["urls"] = [first["url"]]
+        except Exception:
+            pass
+    return _parse_vbcable_blob(blob)

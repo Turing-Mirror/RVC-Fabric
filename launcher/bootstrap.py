@@ -566,12 +566,37 @@ class BootstrapApp:
             except Exception as e:
                 ok, msg = False, str(e)
 
+            # Runtime 成功后再下 VB-Cable 安装包（独立小包，不装驱动，仅落地文件）
+            vb_msg = ""
+            if ok:
+                try:
+                    from launcher.vbcable import ensure_vbcable_pack, vbcable_pack_ready
+
+                    if not vbcable_pack_ready():
+                        self.root.after(
+                            0,
+                            lambda: self._set_status(
+                                "Runtime 已就绪，正在下载虚拟声卡安装包…", ok=True
+                            ),
+                        )
+                        vok, vmsg = ensure_vbcable_pack(log=log)
+                        vb_msg = vmsg if vok else f"虚拟声卡包未就绪：{vmsg}"
+                        if vok:
+                            log("VB-Cable 安装包已就绪（可点「安装虚拟声卡」）。")
+                    else:
+                        vb_msg = "本地已有虚拟声卡安装包"
+                except Exception as e:
+                    vb_msg = f"虚拟声卡包下载跳过：{e}"
+
             def done() -> None:
                 self._provision_busy = False
                 self._deploy_busy = False
                 if ok:
                     self._clear_pending_marker()
-                    self._set_status(msg, ok=True)
+                    full = msg
+                    if vb_msg:
+                        full = f"{msg}\n{vb_msg}"
+                    self._set_status(full, ok=True)
                     if interactive:
                         # Runtime 完成后才询问是否继续补全（原检测与部署）
                         self._offer_optional_after_runtime(already_had_runtime=False)
@@ -607,10 +632,21 @@ class BootstrapApp:
     def on_vbcable(self) -> None:
         # 先说明即将出现 UAC / 安装窗；成功启动后不要再弹窗或置顶，
         # 否则会把 UAC 和 VB-Cable 安装界面盖住，看起来像“没有安装提示”。
+        from launcher.vbcable import vbcable_pack_ready
+
+        need_dl = not vbcable_pack_ready()
+        extra = (
+            "\n\n本地尚无安装包：将先从 CNB 下载（约 1–2 MB，需联网），"
+            "再启动安装程序。"
+            if need_dl
+            else ""
+        )
         if not messagebox.askyesno(
             "安装虚拟声卡",
-            "即将启动 VB-Cable 安装程序。\n\n"
-            "点「是」之后请注意：\n"
+            "即将启动 VB-Cable 安装程序。"
+            + extra
+            + "\n\n点「是」之后请注意：\n"
+            "· 若需下载安装包，请稍候状态栏进度\n"
             "· Windows 用户账户控制（UAC）— 请点「是」\n"
             "· VB-Cable 安装窗口 — 请点 Install / 安装\n\n"
             "软件须已完整安装/解压到硬盘（不要从压缩包内直接运行）。\n"
@@ -618,14 +654,27 @@ class BootstrapApp:
         ):
             self._set_status("已取消安装虚拟声卡。", ok=False)
             return
-        ok, msg = install_vbcable()
-        self._set_status(msg, ok=ok)
-        cfg = load_config()
-        cfg["vbcable_hint_done"] = True
-        save_config(cfg)
-        if not ok:
-            messagebox.showwarning("虚拟声卡", msg)
-        # 成功时只更新状态栏，让 UAC / 安装窗保持在前台
+
+        def work() -> None:
+            def log(m: str) -> None:
+                self.root.after(0, lambda s=m: self._set_status(s, ok=True))
+
+            if need_dl:
+                log("正在下载虚拟声卡安装包…")
+            ok, msg = install_vbcable(download_if_missing=True, log=log)
+
+            def done() -> None:
+                self._set_status(msg, ok=ok)
+                cfg = load_config()
+                cfg["vbcable_hint_done"] = True
+                save_config(cfg)
+                if not ok:
+                    messagebox.showwarning("虚拟声卡", msg)
+                # 成功时只更新状态栏，让 UAC / 安装窗保持在前台
+
+            self.root.after(0, done)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def on_open_sound_panel(self) -> None:
         try:

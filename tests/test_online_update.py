@@ -97,6 +97,7 @@ class CnbUrlTests(unittest.TestCase):
             self.assertIsNone(s)
         else:
             self.assertIsNotNone(s)
+        oid = "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3"
         raw = (
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
             "-/git/raw/main/voices/guanguan/guanguan-v2.zip"
@@ -105,6 +106,22 @@ class CnbUrlTests(unittest.TestCase):
             prefer_cnb_lfs_url(raw, oid),
             f"https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{oid}",
         )
+
+    def test_index_json_voice_meta(self):
+        from pathlib import Path
+
+        from launcher.online.catalog import OnlineCatalog
+
+        p = Path(__file__).resolve().parents[1] / "CNB-GIT-RELEASE" / "index.json"
+        if not p.is_file():
+            self.skipTest("CNB-GIT-RELEASE/index.json not present")
+        data = json.loads(p.read_text(encoding="utf-8"))
+        cat = OnlineCatalog.from_dict(data, source="index")
+        self.assertGreaterEqual(len(cat.voices), 1)
+        v = cat.voices[0]
+        self.assertTrue(v.author)
+        self.assertTrue(v.date)
+        self.assertIn("ch-banner", v.cover_url)
 
 
 class CatalogTests(unittest.TestCase):

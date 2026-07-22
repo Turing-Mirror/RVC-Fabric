@@ -16,9 +16,13 @@ BUNDLED_CATALOG = ROOT / "configs" / "online_catalog.json"
 CACHE_PATH = USER_DATA / "update_cache" / "catalog.json"
 STATE_PATH = USER_DATA / "update_state.json"
 
-# Default remote (publisher can override in app_config / online_catalog.json)
-# Prefer a public raw JSON or SharePoint-hosted catalog URL.
-DEFAULT_MANIFEST_URLS: list[str] = []
+# Canonical remote index (CNB-GIT-RELEASE/index.json)
+DEFAULT_MANIFEST_URLS: list[str] = [
+    "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json",
+]
+CNB_RAW_MAIN = (
+    "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main"
+)
 
 
 @dataclass
@@ -37,34 +41,46 @@ class VoiceEntry:
     description: str = ""
     author: str = ""
     author_url: str = ""
-    date: str = ""  # YYMMDD
+    date: str = ""  # YYMMDD（与 index.json released 同义）
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "VoiceEntry":
         from launcher.online.package_spec import normalize_yymmdd
 
+        cover = str(
+            d.get("cover_url") or d.get("cover") or d.get("banner") or ""
+        ).strip()
+        if cover and not cover.lower().startswith(("http://", "https://")):
+            cover = f"{CNB_RAW_MAIN}/{cover.replace(chr(92), '/').lstrip('/')}"
+        date = normalize_yymmdd(
+            d.get("date")
+            or d.get("released")
+            or d.get("yymmdd")
+            or d.get("release_date")
+            or ""
+        )
         return cls(
             id=str(d.get("id") or d.get("name") or "").strip(),
             name=str(d.get("name") or d.get("id") or "未命名").strip(),
             tag=str(d.get("tag") or "音色"),
-            version=str(d.get("version") or "1"),
+            version=str(d.get("version") or date or "1"),
             package_type=str(
                 d.get("package_type") or d.get("type") or d.get("kind") or ""
             ),
             pack_url=str(d.get("pack_url") or d.get("zip_url") or d.get("pack") or ""),
-            pth_url=str(d.get("pth_url") or d.get("pth") or d.get("url") or ""),
+            pth_url=str(d.get("pth_url") or d.get("pth") or ""),
             index_url=str(d.get("index_url") or d.get("index") or ""),
-            cover_url=str(d.get("cover_url") or d.get("cover") or ""),
+            cover_url=cover,
             size_bytes=int(d.get("size_bytes") or d.get("size") or 0),
             sha256=str(d.get("sha256") or ""),
             description=str(d.get("description") or d.get("desc") or ""),
-            author=str(d.get("author") or d.get("creator") or "").strip(),
+            author=str(
+                d.get("author") or d.get("publisher") or d.get("creator") or ""
+            ).strip(),
             author_url=str(
                 d.get("author_url") or d.get("author_link") or ""
             ).strip(),
-            date=normalize_yymmdd(
-                d.get("date") or d.get("yymmdd") or d.get("release_date") or ""
-            ),
+            date=date,
         )
 
     def has_download(self) -> bool:
@@ -118,6 +134,7 @@ class OnlineCatalog:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str = "unknown") -> "OnlineCatalog":
+        data = _normalize_index_payload(dict(data) if isinstance(data, dict) else {})
         app = data.get("app") if isinstance(data.get("app"), dict) else {}
         community = (
             data.get("community") if isinstance(data.get("community"), dict) else {}
@@ -151,9 +168,10 @@ class OnlineCatalog:
             full_package_note=str(
                 community.get("note")
                 or data.get("full_package_note")
+                or data.get("note")
                 or cls.full_package_note
             ),
-            manifest_urls=list(data.get("manifest_urls") or []),
+            manifest_urls=list(data.get("manifest_urls") or DEFAULT_MANIFEST_URLS),
             source=source,
             fetched_at=time.time(),
             raw=data,
@@ -161,6 +179,75 @@ class OnlineCatalog:
         if not cat.gui.version and cat.app_version:
             cat.gui.version = cat.app_version
         return cat
+
+
+def _normalize_index_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Accept CNB ``index.json`` (format=rvc_fabric_index) and classic catalogs.
+
+    - packages.gui_patch / packages.setup → app.gui when gui url empty
+    - packages named by released YYMMDD
+    - voices cover relative paths resolved later in VoiceEntry
+    """
+    if not data:
+        return data
+    # Ensure manifest self-reference
+    murls = list(data.get("manifest_urls") or [])
+    primary = (
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json"
+    )
+    if primary not in murls:
+        murls.insert(0, primary)
+    data["manifest_urls"] = murls
+
+    packages = data.get("packages") if isinstance(data.get("packages"), dict) else {}
+    app = data.get("app") if isinstance(data.get("app"), dict) else {}
+    gui = app.get("gui") if isinstance(app.get("gui"), dict) else {}
+    if not gui.get("url"):
+        # newest gui_patch by released / version
+        patches = packages.get("gui_patch") or packages.get("gui") or []
+        if isinstance(patches, list) and patches:
+            best = _pick_latest_package(patches)
+            if best:
+                gui = dict(gui)
+                gui.setdefault("package_type", "gui_patch")
+                gui["version"] = str(
+                    best.get("version") or best.get("released") or gui.get("version") or ""
+                )
+                gui["url"] = str(best.get("url") or best.get("pack_url") or "")
+                gui["sha256"] = str(best.get("sha256") or "")
+                if best.get("notes"):
+                    gui["notes"] = str(best.get("notes"))
+                app = dict(app)
+                app["gui"] = gui
+                if best.get("version") and not app.get("version"):
+                    app["version"] = str(best.get("version"))
+                data["app"] = app
+    # setup package → community full package hint
+    setups = packages.get("setup") or []
+    if isinstance(setups, list) and setups:
+        best_s = _pick_latest_package(setups)
+        community = (
+            dict(data["community"])
+            if isinstance(data.get("community"), dict)
+            else {}
+        )
+        if best_s and best_s.get("url") and not community.get("sharepoint_full"):
+            community["sharepoint_full"] = str(best_s.get("url"))
+            data["community"] = community
+    return data
+
+
+def _pick_latest_package(items: list[Any]) -> Optional[dict[str, Any]]:
+    best: Optional[dict[str, Any]] = None
+    best_key = ""
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        key = str(it.get("released") or it.get("version") or it.get("id") or "")
+        if key >= best_key:
+            best_key = key
+            best = it
+    return best
 
 
 def load_bundled_catalog() -> OnlineCatalog:
@@ -237,10 +324,14 @@ def _catalog_to_dict(cat: OnlineCatalog) -> dict[str, Any]:
                 "size_bytes": v.size_bytes,
                 "sha256": v.sha256,
                 "description": v.description,
+                "author": v.author,
+                "author_url": v.author_url,
+                "date": v.date,
+                "released": v.date,
             }
             for v in cat.voices
         ],
-        "manifest_urls": cat.manifest_urls,
+        "manifest_urls": cat.manifest_urls or list(DEFAULT_MANIFEST_URLS),
     }
 
 

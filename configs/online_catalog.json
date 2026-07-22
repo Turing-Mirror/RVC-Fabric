@@ -32,6 +32,7 @@
       "format": "tar",
       "size_bytes": 6077133824,
       "extract_root": "Runtime",
+      "channel": "release",
       "release_tag": "RVC-runtime",
       "parts": [
         {
@@ -39,8 +40,10 @@
           "size_bytes": 6077133824,
           "sha256": "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",
           "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar",
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b"
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar"
+          ],
+          "sha256_urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia-2026.07.21.tar.sha256"
           ]
         }
       ]
@@ -52,15 +55,17 @@
       "format": "tar",
       "size_bytes": 1801268224,
       "extract_root": "Runtime",
-      "release_tag": "RVC-runtime",
+      "channel": "lfs",
       "parts": [
         {
           "name": "runtime-amd-2026.07.21.tar",
           "size_bytes": 1801268224,
           "sha256": "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
           "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-amd-2026.07.21.tar",
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274"
+          ],
+          "sha256_urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/runtime/amd/runtime-amd-2026.07.21.tar.sha256"
           ]
         }
       ]
@@ -72,6 +77,7 @@
       "format": "tar",
       "size_bytes": 6698774016,
       "extract_root": "Runtime",
+      "channel": "release",
       "release_tag": "RVC-runtime",
       "parts": [
         {
@@ -79,8 +85,10 @@
           "size_bytes": 6698774016,
           "sha256": "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
           "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar",
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489"
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar"
+          ],
+          "sha256_urls": [
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/RVC-runtime/runtime-nvidia50-2026.07.21.tar.sha256"
           ]
         }
       ]

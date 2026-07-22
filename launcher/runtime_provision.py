@@ -88,7 +88,8 @@ def _download_part(
 
     last_err: Exception | None = None
     for i, url in enumerate(urls):
-        _log(log, f"下载 ({i + 1}/{len(urls)})：{url.split('/')[-1]}")
+        # 日志打完整 URL，便于核对分版通道（Release vs LFS）
+        _log(log, f"下载 ({i + 1}/{len(urls)})：{url}")
         try:
 
             def _cb(done: int, total: int, _phase: str = "download") -> None:

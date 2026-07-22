@@ -129,6 +129,12 @@ def build_payload_exes(out: Path) -> None:
                 "launcher.runtime_provision",
                 "--hidden-import",
                 "launcher.cnb_sources",
+                "--hidden-import",
+                "PIL",
+                "--hidden-import",
+                "PIL.Image",
+                "--hidden-import",
+                "PIL.ImageTk",
                 "--collect-all",
                 "certifi",
                 str(script),
@@ -160,8 +166,18 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     out.mkdir(parents=True, exist_ok=True)
     # 与全量发行相同：引擎 + hubert/rmvpe/ffmpeg（可从 RVCMAX 合并）
     copy_engine(out)
-    # 只去掉 Runtime，其它一律保留
+    # 只去掉 Runtime；剔除废弃自写 Setup 源码（正式安装器用 Inno）
     ensure_no_runtime(out)
+    for dead in (
+        out / "launcher" / "setup_app.py",
+        out / "launcher" / "_setup_shell.py",
+    ):
+        if dead.is_file():
+            try:
+                dead.unlink()
+                log(f"  strip deprecated: {dead.name}")
+            except OSError:
+                pass
 
     (out / "User_Data" / "models").mkdir(parents=True, exist_ok=True)
     (out / "VBCABLE").mkdir(parents=True, exist_ok=True)

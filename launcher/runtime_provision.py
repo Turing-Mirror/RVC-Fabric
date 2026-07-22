@@ -31,6 +31,10 @@ from launcher.paths import ROOT, USER_DATA
 ProgressCb = Callable[[str, int, int], None]  # phase, done, total
 LogCb = Callable[[str], None]
 
+# Multi-GB Runtime: long idle timeout (per blocking I/O), not wall-clock total.
+RUNTIME_DOWNLOAD_TIMEOUT = 7200
+RUNTIME_DOWNLOAD_RETRIES = 3
+
 
 class ProvisionError(RuntimeError):
     pass
@@ -99,8 +103,8 @@ def _download_part(
                 url,
                 dest,
                 progress=_cb,
-                retries=2,
-                timeout=180,
+                retries=RUNTIME_DOWNLOAD_RETRIES,
+                timeout=RUNTIME_DOWNLOAD_TIMEOUT,
                 expected_sha256=sha256,
             )
         except Exception as e:
@@ -120,52 +124,97 @@ def _download_part(
     raise ProvisionError(str(last_err) if last_err else "Runtime 下载失败")
 
 
+def _safe_tar_members(tf: tarfile.TarFile, dest_root: Path) -> list[tarfile.TarInfo]:
+    """Reject path traversal; only allow Runtime/ (or a single nested Runtime)."""
+    dest_root = dest_root.resolve()
+    ok: list[tarfile.TarInfo] = []
+    for m in tf.getmembers():
+        name = (m.name or "").replace("\\", "/").lstrip("/")
+        if not name or name.startswith("../") or "/../" in f"/{name}/":
+            raise ProvisionError(f"tar 含非法路径：{m.name!r}")
+        # Block absolute / drive paths
+        if name.startswith(("/", "\\")) or (len(name) > 1 and name[1] == ":"):
+            raise ProvisionError(f"tar 含绝对路径：{m.name!r}")
+        # Must land under dest_root after join
+        target = (dest_root / name).resolve()
+        try:
+            target.relative_to(dest_root)
+        except ValueError as e:
+            raise ProvisionError(f"tar 路径越界：{m.name!r}") from e
+        # Prefer only Runtime tree (or top-level files that form Runtime/)
+        top = name.split("/", 1)[0].lower()
+        if top not in ("runtime", ".") and not name.lower().startswith("runtime/"):
+            # Allow a single wrapper folder that contains Runtime later
+            if "/" not in name.rstrip("/"):
+                # top-level dir other than Runtime — keep, normalize later
+                pass
+            elif "runtime" not in name.lower().split("/"):
+                # skip junk outside Runtime tree
+                continue
+        ok.append(m)
+    if not ok:
+        raise ProvisionError("tar 中没有可安全解压的 Runtime 成员")
+    return ok
+
+
 def _extract_tar(archive: Path, dest_root: Path, *, log: Optional[LogCb] = None) -> None:
-    """Extract tar so that dest_root/Runtime/python.exe exists."""
+    """Extract tar so that dest_root/Runtime/python.exe exists (path-safe)."""
+    dest_root = Path(dest_root)
     dest_root.mkdir(parents=True, exist_ok=True)
     rt = dest_root / "Runtime"
     if rt.exists():
         _log(log, "移除旧 Runtime…")
         shutil.rmtree(rt, ignore_errors=True)
 
+    staging = dest_root / "User_Data" / "update_cache" / "runtime_extract"
+    if staging.exists():
+        shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True, exist_ok=True)
+
     _log(log, f"解压 {archive.name} …")
-    tar_exe = shutil.which("tar") or shutil.which("tar.exe")
-    if tar_exe:
-        # Prefer OS tar — better long-path support on Windows
-        r = subprocess.run(
-            [tar_exe, "-xf", str(archive), "-C", str(dest_root)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if r.returncode != 0:
-            err = (r.stderr or r.stdout or "")[-500:]
-            raise ProvisionError(f"tar 解压失败 (code={r.returncode})：{err}")
-    else:
+    # Always extract via Python tarfile with path checks (OS tar has no easy filter)
+    try:
         with tarfile.open(archive, "r:*") as tf:
-            # Python 3.12+ has filter=; older: plain extractall
+            members = _safe_tar_members(tf, staging)
             try:
-                tf.extractall(path=dest_root, filter="data")  # type: ignore[call-arg]
+                tf.extractall(path=staging, members=members, filter="data")  # type: ignore[call-arg]
             except TypeError:
-                tf.extractall(path=dest_root)
+                tf.extractall(path=staging, members=members)
+    except ProvisionError:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    except Exception as e:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ProvisionError(f"tar 解压失败：{e}") from e
 
-    # Some archives nest as Runtime/Runtime — normalize
-    if not (dest_root / "Runtime" / "python.exe").is_file():
-        nested = list(dest_root.glob("**/python.exe"))
+    # Normalize: staging/Runtime or staging/**/python.exe → dest_root/Runtime
+    candidate_rt = staging / "Runtime"
+    if not (candidate_rt / "python.exe").is_file():
+        nested = list(staging.glob("**/python.exe"))
         for cand in nested:
-            if cand.parent.name.lower() in ("runtime",) or (
-                cand.parent / "Lib" / "site-packages"
+            parent = cand.parent
+            if parent.name.lower() == "runtime" or (
+                parent / "Lib" / "site-packages"
             ).is_dir():
-                parent = cand.parent
-                target = dest_root / "Runtime"
-                if parent.resolve() != target.resolve():
-                    if target.exists():
-                        shutil.rmtree(target, ignore_errors=True)
-                    shutil.move(str(parent), str(target))
+                candidate_rt = parent
                 break
+    if not (candidate_rt / "python.exe").is_file():
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ProvisionError(
+            "解压后未找到 Runtime\\python.exe。请检查 tar 是否完整或重试。"
+        )
 
-    if not (dest_root / "Runtime" / "python.exe").is_file():
+    final_rt = dest_root / "Runtime"
+    if final_rt.exists():
+        shutil.rmtree(final_rt, ignore_errors=True)
+    try:
+        shutil.move(str(candidate_rt), str(final_rt))
+    except Exception as e:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ProvisionError(f"移动 Runtime 失败：{e}") from e
+    shutil.rmtree(staging, ignore_errors=True)
+
+    if not (final_rt / "python.exe").is_file():
         raise ProvisionError(
             "解压后未找到 Runtime\\python.exe。请检查 tar 是否完整或重试。"
         )

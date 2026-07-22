@@ -349,40 +349,104 @@ class BootstrapApp:
             return "nvidia"
 
     def _maybe_auto_provision(self) -> None:
+        """仅在 Setup 留下 pending 标记时提示补全；绝不静默下数 GB。"""
         if self._provision_busy or self._deploy_busy:
             return
         if runtime_ready(RROOT):
             self._clear_pending_marker()
             return
         pending = self._pending_runtime_marker()
-        # Auto when Setup marked pending, or Runtime simply missing on first open
-        auto = bool(pending and pending.get("pending_runtime")) or True
-        if not auto:
-            return
-        var = self._selected_variant()
-        self._set_status(
-            f"未检测到 Runtime，正在按分版「{var}」从 CNB 下载补全…\n"
-            "体积较大，请保持网络畅通。",
-            ok=False,
+        from_setup = bool(pending and pending.get("pending_runtime"))
+        # 提示用户，不自动开下
+        hint_var = self._selected_variant()
+        if from_setup:
+            self._set_status(
+                f"安装未完成：尚未下载 Runtime（当前分版标记：{hint_var}）。\n"
+                "请点「补全运行环境」确认显卡分版后开始下载（约数 GB）。",
+                ok=False,
+            )
+        else:
+            self._set_status(
+                "未检测到 Runtime。请点「补全运行环境」选择显卡分版并下载。",
+                ok=False,
+            )
+
+    def _ask_variant_and_confirm(self, *, force: bool = False) -> str | None:
+        """Ask GPU variant + size warning. Returns variant or None if cancelled."""
+        from launcher.cnb_sources import VARIANT_LABELS, format_size, resolve_runtime_spec
+        from launcher.ui import ask_choice
+
+        current = self._selected_variant()
+        options = [
+            ("nvidia", VARIANT_LABELS.get("nvidia", "NVIDIA")),
+            ("amd", VARIANT_LABELS.get("amd", "AMD/Intel")),
+            ("nvidia50", VARIANT_LABELS.get("nvidia50", "NVIDIA 50系")),
+        ]
+        # Put current first
+        options.sort(key=lambda x: 0 if x[0] == current else 1)
+        choice = ask_choice(
+            self.root,
+            "选择显卡分版",
+            "Runtime 体积较大（约 2–7 GB），请选择与本机显卡匹配的分版：\n"
+            "· NVIDIA 大多数 N 卡（非 50 系）\n"
+            "· AMD / Intel（DirectML）\n"
+            "· NVIDIA 50 系（RTX 50xx）\n\n"
+            "下载来自 CNB，需保持网络畅通。",
+            options,
+            cancel_text="取消",
         )
-        self._run_provision(var, interactive=False)
+        if not choice:
+            return None
+        var = str(choice).lower()
+        try:
+            spec = resolve_runtime_spec(var, prefer_remote=True)
+            size_s = format_size(spec.size_bytes or spec.primary.size_bytes)
+            url_hint = (spec.primary.urls[0] if spec.primary.urls else "")[:72]
+        except Exception:
+            size_s = "数 GB"
+            url_hint = ""
+        verb = "重新下载并覆盖" if force else "下载并安装"
+        if not messagebox.askyesno(
+            "确认补全运行环境",
+            f"将{verb}：\n"
+            f"  分版：{VARIANT_LABELS.get(var, var)}\n"
+            f"  约：{size_s}\n"
+            f"{('  源：' + url_hint + '…\n') if url_hint else ''}\n"
+            "是否继续？",
+        ):
+            return None
+        # Persist choice for package_meta / next launch
+        try:
+            from launcher.package_meta import write_package_meta
+
+            write_package_meta(RROOT, var, install_via="bootstrap_confirm")
+        except Exception:
+            pass
+        try:
+            USER_DATA.mkdir(parents=True, exist_ok=True)
+            (USER_DATA / "setup_pending.json").write_text(
+                '{"pending_runtime": true, "variant": "%s"}\n' % var,
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        return var
 
     def on_provision_runtime(self) -> None:
-        """一键：先补 Runtime（默认用户机上没有），再可选补模型/训练资源。"""
+        """一键：确认分版后补 Runtime，再可选补模型/训练资源。"""
         if self._provision_busy or self._deploy_busy:
             self._set_status("正在补全运行环境，请稍候…", ok=False)
             return
-        var = self._selected_variant()
         force = False
         if runtime_ready(RROOT):
-            # 已有 Runtime：进入「可选二次补全」对话，而不是挡在 requests 上
+            # 已有 Runtime：先问是否二次补全 / 强制重装
             self._offer_optional_after_runtime(already_had_runtime=True)
             return
-        # 默认视为缺失：直接开始，少一次确认打断
-        self._set_status(
-            f"开始补全 Runtime（{var}）… 本机无需预装 Python/requests。",
-            ok=True,
-        )
+        var = self._ask_variant_and_confirm(force=False)
+        if not var:
+            self._set_status("已取消补全。", ok=False)
+            return
+        self._set_status(f"开始补全 Runtime（{var}）…", ok=True)
         self._run_provision(var, interactive=True, force=force)
 
     def _offer_optional_after_runtime(self, *, already_had_runtime: bool) -> None:
@@ -410,9 +474,9 @@ class BootstrapApp:
                 "已检测到 Runtime，日常变声所需也基本齐全。\n\n"
                 "是否强制重新下载 Runtime？（一般不需要，仅环境损坏时选「是」。）",
             ):
-                self._run_provision(
-                    self._selected_variant(), interactive=True, force=True
-                )
+                var = self._ask_variant_and_confirm(force=True)
+                if var:
+                    self._run_provision(var, interactive=True, force=True)
             else:
                 messagebox.showinfo("环境", report + "\n\n可打开主界面使用。")
                 self._set_status("环境正常，可打开主界面。")
@@ -511,18 +575,7 @@ class BootstrapApp:
                     if interactive:
                         # Runtime 完成后才询问是否继续补全（原检测与部署）
                         self._offer_optional_after_runtime(already_had_runtime=False)
-                    else:
-                        # 自动补全：静默再补 hubert/rmvpe 若缺失
-                        try:
-                            items = check_environment()
-                            need = any(
-                                i.name in ("Hubert 模型", "RMVPE 模型")
-                                for i in missing_items(items, kinds={KIND_CORE})
-                            )
-                            if need:
-                                self._run_download("core")
-                        except Exception:
-                            pass
+                    # 非 interactive 不再静默下模型（避免二次失败/流量浪费）
                 else:
                     self._set_status(msg, ok=False)
                     if interactive or not runtime_ready(RROOT):

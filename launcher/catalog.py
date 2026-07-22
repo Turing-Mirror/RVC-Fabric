@@ -84,15 +84,125 @@ def _find_cover(folder: Path) -> Optional[str]:
 
 
 def _find_index(name: str, search_roots: list[Path]) -> str:
+    """Find an .index whose *name or parent folder* matches ``name``.
+
+    Scans search roots but never returns a hit from another model folder
+    just because the path string loosely overlaps — parent folder name or
+    filename must contain the model name (case-insensitive).
+    """
+    key = (name or "").strip()
+    if not key:
+        return ""
+    key_l = key.lower()
     for root in search_roots:
         if not root.is_dir():
             continue
         for ip in root.rglob("*.index"):
-            if "trained" in ip.name:
+            if "trained" in ip.name.lower():
                 continue
-            if name in ip.name or name in str(ip):
+            try:
+                parent_l = ip.parent.name.lower()
+                name_l = ip.name.lower()
+            except Exception:
+                continue
+            if key_l in name_l or key_l in parent_l:
                 return str(ip.resolve())
     return ""
+
+
+def _pick_local_index(
+    folder: Path, *, name: str = "", pth_stem: str = ""
+) -> str:
+    """Choose the best .index inside ``folder``.
+
+    Prefer a file whose name matches the model name / pth stem. Never pick
+    alphabetically-first when a name-matched candidate exists — that used to
+    make Soyo auto-select a leftover rana-cloud.index from another voice.
+    """
+    folder = Path(folder)
+    if not folder.is_dir():
+        return ""
+    local = sorted(folder.glob("*.index"))
+    if not local:
+        return ""
+    keys = [k for k in (name, pth_stem, folder.name) if k]
+    for key in keys:
+        key_l = str(key).lower()
+        for ip in local:
+            if "trained" in ip.name.lower():
+                continue
+            if key_l in ip.name.lower():
+                return str(ip.resolve())
+    for ip in local:
+        if "trained" not in ip.name.lower():
+            return str(ip.resolve())
+    return str(local[0].resolve())
+
+
+def resolve_model_active_index(
+    model_dir: Path,
+    side: Optional[dict[str, Any]] = None,
+    *,
+    name: str = "",
+    pth_stem: str = "",
+    search_roots: Optional[list[Path]] = None,
+) -> str:
+    """Resolve which .index this model should use (disk is source of truth).
+
+    Order:
+    1. If ``config.json`` has an ``index`` key:
+       - ``""`` means the user chose「不用检索库」— do **not** auto-pick.
+       - non-empty path: use it when the file exists. If it points *outside*
+         the model folder but the same filename sits inside, prefer the local
+         copy (heals sticky absolute paths from another install / model dir).
+       - non-empty but missing file: fall through to auto-discover.
+    2. No ``index`` key yet: best local ``*.index`` (name-matched preferred).
+    3. Optional scan of ``search_roots`` by model name / pth stem.
+    """
+    model_dir = Path(model_dir)
+    if side is None:
+        side = _read_sidecar(model_dir)
+    display = str(name or side.get("name") or model_dir.name)
+    stem = str(pth_stem or "")
+    if not stem:
+        pth = _find_pth(model_dir)
+        if pth is not None:
+            stem = pth.stem
+
+    if "index" in side:
+        configured = str(side.get("index") or "").strip()
+        if not configured:
+            # Explicit none — user clicked「不用检索库」or cleared binding.
+            return ""
+        try:
+            cfg_path = Path(configured)
+            if cfg_path.is_file():
+                local_same = model_dir / cfg_path.name
+                try:
+                    outside = (
+                        model_dir.is_dir()
+                        and cfg_path.parent.resolve() != model_dir.resolve()
+                    )
+                except Exception:
+                    outside = True
+                if outside and local_same.is_file():
+                    return str(local_same.resolve())
+                return str(cfg_path.resolve())
+        except Exception:
+            pass
+        # Configured path missing on disk → fall through to discover.
+
+    local = _pick_local_index(model_dir, name=display, pth_stem=stem)
+    if local:
+        return local
+
+    roots = search_roots or []
+    return _find_index(display, roots) or _find_index(stem, roots) or ""
+
+
+def get_model_active_index(model_dir: Path) -> str:
+    """Active .index path for a model folder ("" = none / missing file)."""
+    return resolve_model_active_index(Path(model_dir))
 
 
 def _read_sidecar(folder: Path) -> dict[str, Any]:
@@ -144,16 +254,13 @@ def list_models_in_user_data(
                 "rms_mix_rate": None, "threhold": None, "f0method": None,
             })
             continue
-        index = str(side.get("index") or "")
-        if index and not Path(index).is_file():
-            index = ""
-        if not index:
-            # Prefer .index sitting next to the .pth in this folder
-            local_idx = sorted(folder.glob("*.index"))
-            if local_idx:
-                index = str(local_idx[0].resolve())
-        if not index:
-            index = _find_index(name, roots) or _find_index(pth.stem, roots)
+        index = resolve_model_active_index(
+            folder,
+            side,
+            name=name,
+            pth_stem=pth.stem,
+            search_roots=roots,
+        )
         cover = side.get("cover")
         if cover:
             cp = Path(str(cover))

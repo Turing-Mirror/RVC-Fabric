@@ -14,6 +14,7 @@ from tkinter import filedialog, messagebox
 
 from launcher.catalog import (
     add_index_binding,
+    get_model_active_index,
     list_index_bindings,
     remove_index_binding,
     set_active_index,
@@ -102,13 +103,20 @@ class IndexPanelMixin:
         ).pack(side="right")
 
         m = self._current_model() or {}
-        active = str(m.get("index") or "").strip()
-        try:
-            if active and not Path(active).is_file():
-                active = ""
-        except Exception:
-            active = ""
         model_dir = Path(d)
+        # Disk is source of truth — never use a stale in-memory m["index"]
+        # left over from the previously selected voice.
+        try:
+            active = get_model_active_index(model_dir)
+        except Exception:
+            active = str(m.get("index") or "").strip()
+            try:
+                if active and not Path(active).is_file():
+                    active = ""
+            except Exception:
+                active = ""
+        if m is not None:
+            m["index"] = active
 
         rows = tk.Frame(host, bg=TM_BG)
         rows.pack(fill="x")

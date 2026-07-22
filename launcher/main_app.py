@@ -640,6 +640,10 @@ class MainApp(
             pass
         self._voice_hist.clear()
         save_config(self.cfg)
+        # Index UI / var_index_path MUST be refreshed BEFORE engine sync.
+        # Otherwise the previous voice's .index stays in the UI var and is
+        # written into configs/inuse (and shows as「使用中」for the new voice).
+        self._refresh_index_ui_for_model(m)
         self._sync_model_to_realtime_gui(m)
         self._sync_bottom()
         self._update_home_current_label()
@@ -648,9 +652,13 @@ class MainApp(
         elif self._current_page == "models":
             # Selecting keeps the page scroll position (no jump to top)
             self.refresh_models(keep_scroll=True)
+            # refresh_models rebuilds self.models — re-bind index from the
+            # fresh entry so the panel cannot keep a stale path.
+            if self.models:
+                m = self.models[self.model_idx]
+                self._refresh_index_ui_for_model(m)
         if feedback or prev != idx:
             self._show_switch_toast(m["name"])
-        self._refresh_index_ui_for_model(m)
         # Model weight loads only at stream start — switching voice while live
         # ALWAYS auto-restarts the stream (product promise: 运行中切换立即生效).
         # No config gate: a stale/off toggle used to leave the old voice
@@ -667,14 +675,17 @@ class MainApp(
         pth = m.get("path") or ""
         if not pth:
             return
-        idx_path = ""
-        try:
-            if hasattr(self, "var_index_path"):
-                idx_path = str(self.var_index_path.get() or "").strip()
-        except Exception:
-            idx_path = ""
+        # Prefer the *model's* bound index over the UI var. The var can still
+        # hold the previous voice after a switch if refresh order slips.
+        idx_path = str(m.get("index") or "").strip()
         if not idx_path:
-            idx_path = m.get("index") or ""
+            try:
+                if hasattr(self, "var_index_path"):
+                    idx_path = str(self.var_index_path.get() or "").strip()
+            except Exception:
+                idx_path = ""
+        if idx_path and not Path(idx_path).is_file():
+            idx_path = ""
         try:
             self._collect_settings_into_cfg()
             # Keep rate 0 when no index file
@@ -703,9 +714,21 @@ class MainApp(
                 self._update_index_hint()
                 return
             m = self.models[self.model_idx]
-        idx = str(m.get("index") or "").strip()
+        # Re-read from disk when possible so a previous voice's path never
+        # sticks on the in-memory catalog entry.
+        idx = ""
+        if m.get("source") == "user_data" and m.get("dir"):
+            try:
+                from launcher.catalog import get_model_active_index
+
+                idx = get_model_active_index(Path(m["dir"]))
+            except Exception:
+                idx = ""
+        if not idx:
+            idx = str(m.get("index") or "").strip()
         if idx and not Path(idx).is_file():
             idx = ""
+        m["index"] = idx
         self.var_index_path.set(idx)
         self._update_index_hint()
         try:

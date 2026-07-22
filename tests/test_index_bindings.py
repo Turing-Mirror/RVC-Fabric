@@ -208,3 +208,68 @@ def test_promote_legacy_via_import_move(tmp_path):
     assert info["index"]                          # index bound
     assert list_index_bindings(dest) == [info["index"]]
     assert not pth.is_file()                      # moved out of weights
+
+
+def test_resolve_prefers_name_matched_local_over_foreign_alpha(tmp_path):
+    """Soyo folder with leftover rana-cloud.index must not auto-pick it first."""
+    from launcher.catalog import (
+        get_model_active_index,
+        list_models_in_user_data,
+        resolve_model_active_index,
+    )
+
+    root = tmp_path / "models"
+    soyo = root / "Soyo"
+    soyo.mkdir(parents=True)
+    (soyo / "Soyo-normal-local.pth").write_bytes(b"x" * (300 * 1024))
+    # Alphabetically first is the foreign leftover
+    foreign = soyo / "added_IVF1021_Flat_nprobe_1_rana-cloud_v2.index"
+    own = soyo / "added_IVF2071_Flat_nprobe_1_Soyo-normal-local_v2.index"
+    foreign.write_bytes(b"foreign")
+    own.write_bytes(b"own")
+    # No index key → auto-discover must prefer name match
+    got = resolve_model_active_index(soyo, name="Soyo", pth_stem="Soyo-normal-local")
+    assert Path(got).resolve() == own.resolve()
+
+    listed = {m["name"]: m for m in list_models_in_user_data(root)}
+    assert Path(listed["Soyo"]["index"]).resolve() == own.resolve()
+    assert Path(get_model_active_index(soyo)).resolve() == own.resolve()
+
+
+def test_resolve_heals_external_path_to_local_same_name(tmp_path):
+    """Active index pointing at another model's folder, local copy exists → local."""
+    from launcher.catalog import resolve_model_active_index
+
+    root = tmp_path / "models"
+    rana = root / "Rana"
+    soyo = root / "Soyo"
+    rana.mkdir(parents=True)
+    soyo.mkdir(parents=True)
+    (soyo / "Soyo.pth").write_bytes(b"x" * (300 * 1024))
+    name = "added_IVF1021_Flat_nprobe_1_rana-cloud_v2.index"
+    external = rana / name
+    local = soyo / name
+    external.write_bytes(b"ext")
+    local.write_bytes(b"loc")
+    side = {
+        "name": "Soyo",
+        "index": str(external.resolve()),
+        "index_files": [str(external.resolve()), str(local.resolve())],
+    }
+    (soyo / "config.json").write_text(
+        json.dumps(side, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    got = resolve_model_active_index(soyo, side, name="Soyo")
+    assert Path(got).resolve() == local.resolve()
+
+
+def test_resolve_explicit_empty_index_stays_empty(tmp_path):
+    """「不用检索库」must not auto-pick a local leftover .index."""
+    from launcher.catalog import resolve_model_active_index
+
+    md = tmp_path / "models" / "Soyo"
+    md.mkdir(parents=True)
+    (md / "Soyo.pth").write_bytes(b"x" * (300 * 1024))
+    (md / "Soyo.index").write_bytes(b"idx")
+    side = {"name": "Soyo", "index": ""}
+    assert resolve_model_active_index(md, side, name="Soyo") == ""

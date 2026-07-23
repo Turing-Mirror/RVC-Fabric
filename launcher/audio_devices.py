@@ -37,12 +37,15 @@ def list_audio_devices_for_ui(hostapi_name: str | None = None) -> dict:
     try:
         import sounddevice as sd
     except Exception as e:
+        # Shell (frozen PyInstaller exe) has no sounddevice; return None so the
+        # caller skips local apply and lets the Runtime worker take over device
+        # enumeration. Empty list would mean "confirmed no devices" — wrong here.
         return {
             "state": "error",
             "error": f"sounddevice: {e}",
             "hostapis": [],
-            "input_devices": [],
-            "output_devices": [],
+            "input_devices": None,
+            "output_devices": None,
         }
     try:
         devices = sd.query_devices()

@@ -140,7 +140,7 @@
       "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "size_bytes": 51006395,
-      "description": "guanguanV1 · 官方音色",
+      "description": "guanguanV1 · 来源于官方下载",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -159,7 +159,7 @@
       "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "size_bytes": 51012498,
-      "description": "keruanV1 · 官方音色",
+      "description": "keruanV1 · 来源于官方下载",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -178,7 +178,7 @@
       "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "size_bytes": 51021019,
-      "description": "kikiV1 · 官方音色",
+      "description": "kikiV1 · 来源于官方下载",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -197,7 +197,7 @@
       "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "size_bytes": 53357394,
-      "description": "youzhanv2-xi · 官方音色",
+      "description": "youzhanv2-xi · 来源于官方下载",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"

@@ -154,7 +154,7 @@ class ConsultMixin:
                 bits.append("官方标记")
             if "catalog_id_match" in match_reasons:
                 bits.append("清单匹配")
-            tip = "RVC Fabric 官方库音色"
+            tip = "来源于官方下载渠道"
             if bits:
                 tip += "（" + " · ".join(bits) + "）"
             tip += " — 默认只写入身份信息，无需上传大模型文件"

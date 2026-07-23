@@ -466,13 +466,28 @@ class StorePage:
             highlightbackground=TM_HAIRLINE,
         )
         row.pack(fill="x", pady=5)
+
+        installed = is_voice_installed(v.id, MODELS_DIR)
+        # Pack button first (side=right) so meta text cannot squeeze it.
+        right = tk.Frame(row, bg=TM_SURFACE)
+        right.pack(side="right", padx=(4, 12), pady=10)
+        label = "重新下载" if installed else "下载安装"
+        PrimaryButton(
+            right,
+            label,
+            command=lambda e=v: self.download_voice(e),
+            padx=12,
+            pady=6,
+        ).pack()
+
         if v.cover_url:
             try:
                 self._attach_cover_thumb(row, v)
             except Exception:
                 pass
+
         left = tk.Frame(row, bg=TM_SURFACE)
-        left.pack(side="left", fill="x", expand=True, padx=12, pady=10)
+        left.pack(side="left", fill="both", expand=True, padx=(8, 8), pady=10)
         tk.Label(
             left,
             text=v.name,
@@ -480,6 +495,8 @@ class StorePage:
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
+            bd=0,
+            highlightthickness=0,
         ).pack(anchor="w")
         kind = "音色包" if v.pack_url else "多文件"
         meta = f"{v.tag}  ·  {kind}"
@@ -489,7 +506,6 @@ class StorePage:
             meta += f"  ·  {v.date}"
         if v.size_bytes:
             meta += f"  ·  {v.size_bytes // 1024 // 1024} MB"
-        installed = is_voice_installed(v.id, MODELS_DIR)
         if installed:
             meta += "  ·  已安装"
         tk.Label(
@@ -499,6 +515,11 @@ class StorePage:
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
+            # Long meta wraps instead of stealing button width
+            wraplength=360,
+            justify="left",
+            bd=0,
+            highlightthickness=0,
         ).pack(anchor="w", pady=(2, 0))
         if v.author_url:
             link = tk.Label(
@@ -509,6 +530,10 @@ class StorePage:
                 fg=TM_ACCENT,
                 anchor="w",
                 cursor="hand2",
+                wraplength=360,
+                justify="left",
+                bd=0,
+                highlightthickness=0,
             )
             link.pack(anchor="w")
             link.bind(
@@ -522,21 +547,12 @@ class StorePage:
                 font=sans_font(9),
                 bg=TM_SURFACE,
                 fg=TM_INK_MUTED,
-                wraplength=340,
+                wraplength=360,
                 justify="left",
                 anchor="w",
+                bd=0,
+                highlightthickness=0,
             ).pack(anchor="w", pady=(4, 0))
-
-        right = tk.Frame(row, bg=TM_SURFACE)
-        right.pack(side="right", padx=12, pady=10)
-        label = "重新下载" if installed else "下载安装"
-        PrimaryButton(
-            right,
-            label,
-            command=lambda e=v: self.download_voice(e),
-            padx=12,
-            pady=6,
-        ).pack()
 
     def _attach_cover_thumb(self, row: tk.Frame, v: VoiceEntry) -> None:
         """Show ch-banner cover from cover_url (async)."""

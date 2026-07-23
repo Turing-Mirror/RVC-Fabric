@@ -265,6 +265,18 @@ class _ProgressAgg:
                     pass
 
 
+def _new_worker_session():
+    """One Session per worker thread (requests.Session is not thread-safe)."""
+    try:
+        import requests
+
+        s = requests.Session()
+        s.headers.update(_headers_base())
+        return s
+    except ImportError:
+        return None
+
+
 def _download_range_requests(
     session,
     url: str,
@@ -277,10 +289,14 @@ def _download_range_requests(
     on_bytes: Callable[[int], None],
     stop: threading.Event,
 ) -> int:
-    """Write bytes [start+already, end] into part. Returns total done in segment (from start)."""
+    """Write bytes [start+already, end] into part. Returns total done in segment (from start).
+
+    Requires HTTP 206. Never writes past ``end``.
+    """
     abs_start = start + already
     if abs_start > end:
         return already
+    need = end - abs_start + 1
     headers = {"Range": f"bytes={abs_start}-{end}"}
     written = 0
     with session.get(
@@ -290,10 +306,11 @@ def _download_range_requests(
         allow_redirects=True,
         timeout=timeout,
     ) as r:
-        if r.status_code not in (200, 206):
-            raise MultipartError(f"HTTP {r.status_code} for Range {abs_start}-{end}")
-        if r.status_code == 200 and abs_start > 0:
-            raise MultipartError("服务器忽略 Range，回落单连接")
+        if r.status_code != 206:
+            raise MultipartError(
+                f"需要 HTTP 206 Partial Content，得到 {r.status_code} "
+                f"（Range {abs_start}-{end}），回落单连接"
+            )
         with open(part, "r+b") as f:
             f.seek(abs_start)
             for chunk in r.iter_content(chunk_size=CHUNK):
@@ -301,11 +318,17 @@ def _download_range_requests(
                     raise MultipartError("下载已取消")
                 if not chunk:
                     continue
+                remain = need - written
+                if remain <= 0:
+                    break
+                if len(chunk) > remain:
+                    chunk = chunk[:remain]
                 f.write(chunk)
                 written += len(chunk)
                 on_bytes(already + written)
-    need = end - abs_start + 1
-    if written < need * 0.98:
+                if written >= need:
+                    break
+    if written != need:
         raise MultipartError(
             f"分段不完整：{abs_start}-{end} 得到 {written}/{need}"
         )
@@ -326,6 +349,7 @@ def _download_range_urllib(
     abs_start = start + already
     if abs_start > end:
         return already
+    need = end - abs_start + 1
     req = Request(
         url,
         headers={**_headers_base(), "Range": f"bytes={abs_start}-{end}"},
@@ -340,16 +364,17 @@ def _download_range_urllib(
         raise MultipartError(f"网络错误：{e.reason}") from e
     try:
         code = resp.getcode()
-        if code not in (200, 206):
-            raise MultipartError(f"HTTP {code} for Range {abs_start}-{end}")
-        if code == 200 and abs_start > 0:
-            raise MultipartError("服务器忽略 Range，回落单连接")
+        if code != 206:
+            raise MultipartError(
+                f"需要 HTTP 206 Partial Content，得到 {code} "
+                f"（Range {abs_start}-{end}），回落单连接"
+            )
         with open(part, "r+b") as f:
             f.seek(abs_start)
-            while True:
+            while written < need:
                 if stop.is_set():
                     raise MultipartError("下载已取消")
-                chunk = resp.read(CHUNK)
+                chunk = resp.read(min(CHUNK, need - written))
                 if not chunk:
                     break
                 f.write(chunk)
@@ -360,12 +385,28 @@ def _download_range_urllib(
             resp.close()
         except Exception:
             pass
-    need = end - abs_start + 1
-    if written < need * 0.98:
+    if written != need:
         raise MultipartError(
             f"分段不完整：{abs_start}-{end} 得到 {written}/{need}"
         )
     return already + written
+
+
+def discard_multipart_shell(part: Path) -> None:
+    """Remove preallocated multipart .part so single-connection won't treat size as progress."""
+    part = Path(part)
+    meta = load_meta(part)
+    if meta is None:
+        return
+    # Multipart always writes mode + segments
+    if str(meta.get("mode") or "") != "multipart" and not meta.get("segments"):
+        return
+    try:
+        if part.is_file():
+            part.unlink()
+    except OSError:
+        pass
+    clear_meta(part)
 
 
 def download_multipart(
@@ -445,6 +486,7 @@ def download_multipart(
 
     def _persist() -> None:
         data = {
+            "mode": "multipart",
             "url": url,
             "sha256": (expected_sha256 or "").strip().lower(),
             "total": total,
@@ -471,50 +513,59 @@ def download_multipart(
                 seg_done[i] = max(seg_done[i], min(done_in_seg, need))
             agg.notify()
 
-        for attempt in range(1, SEGMENT_RETRIES + 1):
-            if stop.is_set():
-                raise MultipartError("下载已取消")
-            with done_lock:
-                already = seg_done[i]
-            if already >= need:
-                return
-            try:
-                if session is not None:
-                    got = _download_range_requests(
-                        session,
-                        url,
-                        start,
-                        end,
-                        part,
-                        already=already,
-                        timeout=timeout,
-                        on_bytes=on_bytes,
-                        stop=stop,
-                    )
-                else:
-                    got = _download_range_urllib(
-                        url,
-                        start,
-                        end,
-                        part,
-                        already=already,
-                        timeout=timeout,
-                        on_bytes=on_bytes,
-                        stop=stop,
-                    )
+        # Never share Session across threads
+        worker_sess = _new_worker_session()
+        try:
+            for attempt in range(1, SEGMENT_RETRIES + 1):
+                if stop.is_set():
+                    raise MultipartError("下载已取消")
                 with done_lock:
-                    seg_done[i] = max(seg_done[i], got)
-                with meta_lock:
-                    _persist()
-                if seg_done[i] >= need:
+                    already = seg_done[i]
+                if already >= need:
                     return
-            except Exception as e:
-                last_err = e
-                with meta_lock:
-                    _persist()
-                time.sleep(0.6 * attempt)
-        stop.set()
-        raise MultipartError(str(last_err) if last_err else f"分段 {i} 失败")
+                try:
+                    if worker_sess is not None:
+                        got = _download_range_requests(
+                            worker_sess,
+                            url,
+                            start,
+                            end,
+                            part,
+                            already=already,
+                            timeout=timeout,
+                            on_bytes=on_bytes,
+                            stop=stop,
+                        )
+                    else:
+                        got = _download_range_urllib(
+                            url,
+                            start,
+                            end,
+                            part,
+                            already=already,
+                            timeout=timeout,
+                            on_bytes=on_bytes,
+                            stop=stop,
+                        )
+                    with done_lock:
+                        seg_done[i] = max(seg_done[i], got)
+                    with meta_lock:
+                        _persist()
+                    if seg_done[i] >= need:
+                        return
+                except Exception as e:
+                    last_err = e
+                    with meta_lock:
+                        _persist()
+                    time.sleep(0.6 * attempt)
+            stop.set()
+            raise MultipartError(str(last_err) if last_err else f"分段 {i} 失败")
+        finally:
+            if worker_sess is not None:
+                try:
+                    worker_sess.close()
+                except Exception:
+                    pass
 
     try:
         with ThreadPoolExecutor(max_workers=n) as ex:
@@ -575,6 +626,13 @@ def download_single_resumable(
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
 
+    # Never treat preallocated multipart shell size as sequential progress
+    meta0 = load_meta(part) if part.is_file() else None
+    if meta0 and (
+        str(meta0.get("mode") or "") == "multipart" or meta0.get("segments")
+    ):
+        discard_multipart_shell(part)
+
     accept, total = probe_ranges(url, timeout=min(timeout, 120), session=session)
     already = 0
     if resume and part.is_file():
@@ -588,16 +646,25 @@ def download_single_resumable(
                 part.unlink()
             except OSError:
                 pass
-        if total and already == total and expected_sha256:
-            try:
-                _verify_sha256_local(part, expected_sha256)
-                if dest.is_file():
-                    dest.unlink()
-                part.replace(dest)
-                if progress:
-                    progress(total, total)
-                return dest
-            except Exception:
+        # size==total alone is NOT enough (could be sparse zeros) — require SHA
+        if total and already == total:
+            if expected_sha256:
+                try:
+                    _verify_sha256_local(part, expected_sha256)
+                    if dest.is_file():
+                        dest.unlink()
+                    part.replace(dest)
+                    if progress:
+                        progress(total, total)
+                    return dest
+                except Exception:
+                    already = 0
+                    try:
+                        part.unlink()
+                    except OSError:
+                        pass
+            else:
+                # No hash: cannot trust full-size file; re-download
                 already = 0
                 try:
                     part.unlink()
@@ -701,7 +768,7 @@ def download_single_resumable(
         except Exception:
             pass
     final_size = part.stat().st_size
-    if total and final_size < total * 0.98:
+    if total and final_size != total:
         raise MultipartError(f"下载不完整：{final_size}/{total}")
 
     if expected_sha256:

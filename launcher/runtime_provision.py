@@ -53,9 +53,10 @@ def runtime_ready(root: Path | None = None) -> bool:
     py = runtime_python(root)
     if py is None:
         return False
-    # torch folder is the real signal that green env is complete
+    # Must have torch — python.exe alone is a hollow/partial extract
     site = py.parent / "Lib" / "site-packages" / "torch"
-    return site.is_dir() or (py.parent / "python.exe").is_file()
+    init_py = site / "__init__.py"
+    return site.is_dir() and init_py.is_file()
 
 
 def cache_dir(root: Path | None = None) -> Path:
@@ -110,15 +111,13 @@ def _download_part(
         except Exception as e:
             last_err = e
             _log(log, f"  失败：{e}")
+            # Keep .part / meta for resume across mirror URLs (same sha).
+            # Only drop a broken final dest if it is incomplete/tiny.
             try:
-                if dest.is_file():
+                if dest.is_file() and (
+                    not sha256 or dest.stat().st_size < 1_000_000
+                ):
                     dest.unlink()
-            except OSError:
-                pass
-            part = dest.with_suffix(dest.suffix + ".part")
-            try:
-                if part.is_file():
-                    part.unlink()
             except OSError:
                 pass
     raise ProvisionError(str(last_err) if last_err else "Runtime 下载失败")

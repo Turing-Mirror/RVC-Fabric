@@ -73,6 +73,15 @@ class ProvisionTracker:
     def set_step(self, step_id: str, *, status: str = "active") -> None:
         if step_id not in self._by_id:
             return
+        # Same step re-entry must NOT clear speed window (progress ticks call us)
+        cur = self._by_id.get(step_id)
+        if (
+            step_id == self._active_id
+            and cur is not None
+            and cur.status == status
+            and status == "active"
+        ):
+            return
         # mark previous active as done if moving forward
         ids = [s.id for s in self.steps]
         try:
@@ -89,11 +98,13 @@ class ProvisionTracker:
                 s.status = status
             elif s.status == "active" and s.id != step_id:
                 s.status = "done"
+        stepped = step_id != self._active_id
         self._active_id = step_id
-        self.done_bytes = 0
-        self.total_bytes = 0
-        self._speed_window.clear()
-        self._speed_bps = 0.0
+        if stepped:
+            self.done_bytes = 0
+            self.total_bytes = 0
+            self._speed_window.clear()
+            self._speed_bps = 0.0
         if status == "active":
             self.phase = "download" if step_id.endswith("_dl") else (
                 "extract" if "extract" in step_id else "idle"

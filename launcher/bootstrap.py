@@ -776,7 +776,7 @@ class BootstrapApp:
 
             def progress(phase: str, done: int, total: int) -> None:
                 if phase == "download":
-                    tracker.set_step("runtime_dl")
+                    tracker.set_step("runtime_dl")  # no-op if already on this step
                     tracker.set_bytes(done, total)
                 elif phase == "extract":
                     tracker.set_step("runtime_extract")
@@ -820,7 +820,7 @@ class BootstrapApp:
 
                         def _ecore_progress(phase: str, done: int, total: int) -> None:
                             if phase in ("engine_core", "download"):
-                                tracker.set_step("engine_dl")
+                                tracker.set_step("engine_dl")  # no-op if already active
                                 tracker.set_bytes(done, total)
                             elif phase == "engine_extract":
                                 tracker.set_step("engine_extract")

@@ -164,11 +164,17 @@ class StorePage:
 
     # ------------------------------------------------------------ voices dialog
     def open_voices_dialog(self) -> None:
-        """「社区下载」 window: online voices + full package / community links."""
+        """「社区下载」 window: online voices + full package / community links.
+
+        Every open (including re-focus of an existing dialog) auto-refreshes the
+        online catalog so new CNB releases show without a manual「刷新清单」.
+        """
         if self._dlg is not None:
             try:
                 self._dlg.lift()
                 self._dlg.focus_force()
+                # Re-open: still pull latest list
+                self.root.after(50, self.refresh_catalog)
                 return
             except Exception:
                 self._dlg = None
@@ -302,8 +308,10 @@ class StorePage:
         )
         self._dlg_progress.pack(fill="x", pady=(0, 10))
 
+        # Show cached list first, then always refresh from network on open
         self._render_catalog()
         self.root.after(60, self._dlg_bind_wheel)
+        self.root.after(120, self.refresh_catalog)
 
     # ---------------------------------------------------------------- catalog
     def refresh_catalog(self) -> None:

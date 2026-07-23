@@ -476,7 +476,7 @@ class StorePage:
         kind = "音色包" if v.pack_url else "多文件"
         meta = f"{v.tag}  ·  {kind}"
         if v.author:
-            meta += f"  ·  {v.author}"
+            meta += f"  ·  作者: {v.author}"
         if v.date:
             meta += f"  ·  {v.date}"
         if v.size_bytes:

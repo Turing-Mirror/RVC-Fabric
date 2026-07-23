@@ -786,7 +786,12 @@ class ParamTile(tk.Frame):
 
 
 class SoftActionCard(tk.Frame):
-    """Bootstrap action tile — larger, mono caption (rail design removed)."""
+    """Bootstrap action tile — larger, mono caption (rail design removed).
+
+    Hover / press feedback is **rim only** (thicker + accent border). Never recolor
+    title/subtitle: painting Label bg draws a tight gray box around the glyphs on
+    Windows (looks like the text itself is selected/deepened).
+    """
 
     def __init__(self, master, title: str, subtitle: str, command, **kw):
         super().__init__(
@@ -803,10 +808,10 @@ class SoftActionCard(tk.Frame):
         self._cmd = command
         # Inner column: no default Label chrome (Windows Label bd defaults to 2
         # and draws a box tightly around the title text).
-        col = tk.Frame(self, bg=TM_SURFACE, bd=0, highlightthickness=0)
-        col.pack(fill="both", expand=True, padx=14, pady=16)
+        self._col = tk.Frame(self, bg=TM_SURFACE, bd=0, highlightthickness=0)
+        self._col.pack(fill="both", expand=True, padx=14, pady=16)
         self._lbl = tk.Label(
-            col,
+            self._col,
             text=title,
             font=title_font(12, "bold"),
             bg=TM_SURFACE,
@@ -814,13 +819,14 @@ class SoftActionCard(tk.Frame):
             wraplength=130,
             justify="left",
             anchor="w",
+            takefocus=0,
             **_no_chrome(),
         )
         self._lbl.pack(anchor="nw", pady=(4, 6))
         self._sub = None
         if subtitle:
             self._sub = tk.Label(
-                col,
+                self._col,
                 text=subtitle,
                 font=mono_font(8),
                 bg=TM_SURFACE,
@@ -828,31 +834,44 @@ class SoftActionCard(tk.Frame):
                 wraplength=130,
                 justify="left",
                 anchor="w",
+                takefocus=0,
                 **_no_chrome(),
             )
             self._sub.pack(anchor="nw")
-        for w in (self, col, self._lbl) + ((self._sub,) if self._sub else ()):
+        for w in (self, self._col, self._lbl) + ((self._sub,) if self._sub else ()):
             w.bind("<Button-1>", self._click)
             w.bind("<Enter>", self._enter)
             w.bind("<Leave>", self._leave)
 
+    def _set_rim(self, *, hover: bool) -> None:
+        """Only the card perimeter changes; surface + ink stay constant."""
+        try:
+            if hover:
+                self.configure(
+                    bg=TM_SURFACE,
+                    highlightthickness=2,
+                    highlightbackground=TM_ACCENT,
+                    highlightcolor=TM_ACCENT,
+                )
+            else:
+                self.configure(
+                    bg=TM_SURFACE,
+                    highlightthickness=1,
+                    highlightbackground=TM_HAIRLINE,
+                    highlightcolor=TM_HAIRLINE,
+                )
+            self._col.configure(bg=TM_SURFACE)
+            self._lbl.configure(bg=TM_SURFACE, fg=TM_INK)
+            if self._sub is not None:
+                self._sub.configure(bg=TM_SURFACE, fg=TM_META)
+        except Exception:
+            pass
+
     def _enter(self, _e=None):
-        for w in (self, self._lbl, self._sub):
-            if w is None:
-                continue
-            try:
-                w.configure(bg=TM_SURFACE_HOVER)
-            except Exception:
-                pass
+        self._set_rim(hover=True)
 
     def _leave(self, _e=None):
-        for w in (self, self._lbl, self._sub):
-            if w is None:
-                continue
-            try:
-                w.configure(bg=TM_SURFACE)
-            except Exception:
-                pass
+        self._set_rim(hover=False)
 
     def _click(self, _e=None):
         if self._cmd:

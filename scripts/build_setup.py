@@ -35,11 +35,14 @@ SETUP_EXE_NAME = "RVC_Fabric_Setup.exe"
 
 sys.path.insert(0, str(REPO / "scripts"))
 from build_release import (  # noqa: E402
+    assert_pyinstaller_collected_tkinter,
     copy_engine,
     ensure_pyinstaller,
     ensure_shell_download_deps,
+    ensure_shell_ui_deps,
     log,
     run,
+    shell_pyinstaller_args,
 )
 
 
@@ -80,11 +83,12 @@ def ensure_no_runtime(out: Path) -> None:
 def build_payload_exes(out: Path) -> None:
     """启动器 = bootstrap，变声器 = main_app（与全量包相同 PyInstaller 目标）。
 
-    用户机不需要装 Python：exe 自带解释器 + 下载依赖。
-    打包机必须先装 requests，否则启动器无法联网补 Runtime。
+    用户机不需要装 Python：exe 自带解释器 + 下载依赖 + tkinter。
+    打包机必须用完整 CPython（含 Tcl/Tk），且已装 requests / Pillow。
     """
     ensure_pyinstaller()
     ensure_shell_download_deps()
+    ensure_shell_ui_deps()
     work = REPO / "build" / "setup_work"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -95,60 +99,15 @@ def build_payload_exes(out: Path) -> None:
     for name, script, alias in specs:
         log(f"[exe] building {name}.exe from {script.name}")
         run(
-            [
-                sys.executable,
-                "-m",
-                "PyInstaller",
-                "--noconfirm",
-                "--clean",
-                "--onefile",
-                "--windowed",
-                "--name",
-                name,
-                "--distpath",
-                str(out),
-                "--workpath",
-                str(work / name),
-                "--specpath",
-                str(work / "spec"),
-                "--paths",
-                str(REPO),
-                # 下载栈打进 onefile：用户机无需系统 Python / Runtime
-                "--hidden-import",
-                "requests",
-                "--hidden-import",
-                "urllib3",
-                "--hidden-import",
-                "certifi",
-                "--hidden-import",
-                "charset_normalizer",
-                "--hidden-import",
-                "idna",
-                "--hidden-import",
-                "launcher.online.downloader",
-                "--hidden-import",
-                "launcher.online.multipart",
-                "--hidden-import",
-                "launcher.online.safe_zip",
-                "--hidden-import",
-                "launcher.provision_progress",
-                "--hidden-import",
-                "launcher.runtime_provision",
-                "--hidden-import",
-                "launcher.engine_core",
-                "--hidden-import",
-                "launcher.cnb_sources",
-                "--hidden-import",
-                "PIL",
-                "--hidden-import",
-                "PIL.Image",
-                "--hidden-import",
-                "PIL.ImageTk",
-                "--collect-all",
-                "certifi",
-                str(script),
-            ]
+            shell_pyinstaller_args(
+                name=name,
+                script=script,
+                distpath=out,
+                workpath=work / name,
+                specpath=work / "spec",
+            )
         )
+        assert_pyinstaller_collected_tkinter(work / name / name, name)
         exe = out / f"{name}.exe"
         if not exe.is_file():
             raise FileNotFoundError(f"expected {exe}")

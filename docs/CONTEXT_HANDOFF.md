@@ -177,6 +177,12 @@
 - **原因**：Runtime 子进程起不来或探测失败；旧版崩溃无日志；发行包曾污染 `configs/inuse` 开发机路径。
 - **修复**：worker/VBS 落盘崩溃日志；`inuse` 消毒；`_env_for_runtime_python` 深度清洗；**Runtime 完整性校验**（CNB `runtime/<variant>/integrity-*.json`）。
 
+- **现象（Kara / 最新 Setup）**：安装后一点启动器或主界面就  
+  `ModuleNotFoundError: No module named 'tkinter'`（栈在 `bootstrap.py` / `main_app.py`）；  
+  偶发 `Failed to load Python DLL …\python310.dll`（file being used by another process）。
+- **原因**：壳 exe 曾用 **TRAE SOLO 等 IDE agent 内嵌精简 Python 3.10** 打包（路径含 `ModularData\ai-agent\vm\tools\python`），**无 tkinter/_tkinter**；PyInstaller 仅在 warn 写 missing 仍生成 exe。UPX 压 DLL + onefile 解压占用会加剧 DLL 加载失败。
+- **修复**：`ensure_shell_ui_deps()` 打包前硬校验 tkinter；拒绝 agent 精简解释器；hidden-import 全量 tkinter 栈；warn 仍缺 tkinter 则中止；`--noupx`。必须用完整 CPython（如 `py -3.13`）重打 `RVC_Fabric_Setup.exe` 再发用户。
+
 ---
 
 ## 9. 新对话建议开场

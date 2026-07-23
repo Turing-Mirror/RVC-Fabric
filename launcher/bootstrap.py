@@ -560,14 +560,16 @@ class BootstrapApp:
             size_s = "数 GB"
             url_hint = ""
         verb = "重新下载并覆盖" if force else "下载并安装"
-        if not messagebox.askyesno(
-            "确认补全运行环境",
+        # Py3.9 Runtime: no backslash inside f-string expressions
+        src_line = ("  源：" + url_hint + "…\n") if url_hint else ""
+        confirm = (
             f"将{verb}：\n"
             f"  分版：{VARIANT_LABELS.get(var, var)}\n"
             f"  约：{size_s}\n"
-            f"{('  源：' + url_hint + '…\n') if url_hint else ''}\n"
-            "是否继续？",
-        ):
+            f"{src_line}\n"
+            "是否继续？"
+        )
+        if not messagebox.askyesno("确认补全运行环境", confirm):
             return None
         # Persist choice for package_meta / next launch
         try:

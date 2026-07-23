@@ -165,8 +165,21 @@ class HoverTip:
         self._tip = tip
 
 
+def _no_chrome(**extra) -> dict:
+    """Kill Windows Tk default Label/Button borders that frame text."""
+    d = {
+        "bd": 0,
+        "borderwidth": 0,
+        "highlightthickness": 0,
+        "relief": "flat",
+    }
+    d.update(extra)
+    return d
+
+
 class PrimaryButton(tk.Button):
     def __init__(self, master, text: str, command=None, **kw):
+        # Windows default highlightthickness=1 draws a system box around the label
         super().__init__(
             master,
             text=text,
@@ -178,6 +191,8 @@ class PrimaryButton(tk.Button):
             relief="flat",
             cursor="hand2",
             bd=0,
+            borderwidth=0,
+            highlightthickness=0,
             padx=kw.pop("padx", 22),
             pady=kw.pop("pady", 10),
             command=command,
@@ -187,6 +202,7 @@ class PrimaryButton(tk.Button):
 
 class GhostButton(tk.Button):
     def __init__(self, master, text: str, command=None, **kw):
+        # Hairline via highlight only; force bd=0 so text is not double-framed
         super().__init__(
             master,
             text=text,
@@ -198,10 +214,12 @@ class GhostButton(tk.Button):
             relief="flat",
             cursor="hand2",
             bd=0,
+            borderwidth=0,
             padx=kw.pop("padx", 16),
             pady=kw.pop("pady", 9),
             highlightthickness=1,
             highlightbackground=TM_HAIRLINE,
+            highlightcolor=TM_HAIRLINE,
             command=command,
             **kw,
         )
@@ -239,6 +257,7 @@ class SectionCard(tk.Frame):
                 bg=TM_SURFACE,
                 fg=TM_META,
                 anchor="w",
+                **_no_chrome(),
             ).pack(anchor="w", pady=(0, 4))
         if title:
             self.title_lbl = tk.Label(
@@ -248,6 +267,7 @@ class SectionCard(tk.Frame):
                 bg=TM_SURFACE,
                 fg=TM_INK,
                 anchor="w",
+                **_no_chrome(),
             )
             self.title_lbl.pack(anchor="w", pady=(0, 8))
 
@@ -774,13 +794,17 @@ class SoftActionCard(tk.Frame):
             bg=TM_SURFACE,
             highlightthickness=1,
             highlightbackground=TM_HAIRLINE,
+            highlightcolor=TM_HAIRLINE,
+            cursor="hand2",
             **kw,
         )
         self.configure(width=168, height=140)
         self.pack_propagate(False)
         self._cmd = command
-        col = tk.Frame(self, bg=TM_SURFACE)
-        col.pack(side="left", fill="both", expand=True, padx=12, pady=14)
+        # Inner column: no default Label chrome (Windows Label bd defaults to 2
+        # and draws a box tightly around the title text).
+        col = tk.Frame(self, bg=TM_SURFACE, bd=0, highlightthickness=0)
+        col.pack(fill="both", expand=True, padx=14, pady=16)
         self._lbl = tk.Label(
             col,
             text=title,
@@ -790,8 +814,9 @@ class SoftActionCard(tk.Frame):
             wraplength=130,
             justify="left",
             anchor="w",
+            **_no_chrome(),
         )
-        self._lbl.pack(anchor="w", pady=(8, 6))
+        self._lbl.pack(anchor="nw", pady=(4, 6))
         self._sub = None
         if subtitle:
             self._sub = tk.Label(
@@ -803,8 +828,9 @@ class SoftActionCard(tk.Frame):
                 wraplength=130,
                 justify="left",
                 anchor="w",
+                **_no_chrome(),
             )
-            self._sub.pack(anchor="w")
+            self._sub.pack(anchor="nw")
         for w in (self, col, self._lbl) + ((self._sub,) if self._sub else ()):
             w.bind("<Button-1>", self._click)
             w.bind("<Enter>", self._enter)
@@ -812,6 +838,8 @@ class SoftActionCard(tk.Frame):
 
     def _enter(self, _e=None):
         for w in (self, self._lbl, self._sub):
+            if w is None:
+                continue
             try:
                 w.configure(bg=TM_SURFACE_HOVER)
             except Exception:
@@ -819,6 +847,8 @@ class SoftActionCard(tk.Frame):
 
     def _leave(self, _e=None):
         for w in (self, self._lbl, self._sub):
+            if w is None:
+                continue
             try:
                 w.configure(bg=TM_SURFACE)
             except Exception:
@@ -948,6 +978,7 @@ class ModelCoverCard(tk.Frame):
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
+            **_no_chrome(),
         )
         tag_lbl.pack(anchor="w")
         name_lbl = tk.Label(
@@ -957,6 +988,7 @@ class ModelCoverCard(tk.Frame):
             bg=TM_SURFACE,
             fg=TM_INK,
             anchor="w",
+            **_no_chrome(),
         )
         name_lbl.pack(anchor="w", pady=(2, 0))
         widgets.extend([body, name_lbl, tag_lbl, cover_box, self])
@@ -968,6 +1000,7 @@ class ModelCoverCard(tk.Frame):
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
+            **_no_chrome(),
         )
         auth_lbl.pack(anchor="w", pady=(1, 0))
         widgets.append(auth_lbl)

@@ -259,6 +259,8 @@ class BootstrapApp:
             pady=7,
             cursor="hand2",
             bd=0,
+            borderwidth=0,
+            highlightthickness=0,
             command=lambda: self.show_page("setup"),
         )
         self.btn_nav_setup.pack(side="left", padx=2)
@@ -271,6 +273,8 @@ class BootstrapApp:
             pady=7,
             cursor="hand2",
             bd=0,
+            borderwidth=0,
+            highlightthickness=0,
             command=lambda: self.show_page("system"),
         )
         self.btn_nav_system.pack(side="left", padx=2)

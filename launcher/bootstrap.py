@@ -79,7 +79,7 @@ class ProvisionProgressPanel(tk.Frame):
         top.pack(fill="x", padx=12, pady=(10, 4))
         self.lbl_head = tk.Label(
             top,
-            text="补全进度",
+            text="运行环境",
             font=title_font(10, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
@@ -96,16 +96,18 @@ class ProvisionProgressPanel(tk.Frame):
         )
         self.lbl_stepn.pack(side="right")
 
+        # Not packed until provision actually starts
         self.steps_host = tk.Frame(self, bg=TM_SURFACE)
-        self.steps_host.pack(fill="x", padx=12, pady=(2, 6))
 
-        bar_row = tk.Frame(self, bg=TM_SURFACE)
-        bar_row.pack(fill="x", padx=12, pady=(0, 4))
-        self.bar_bg = tk.Frame(bar_row, bg=TM_INSET, height=8)
+        # Bar host — not packed while idle (no fake blue fill)
+        self.bar_row = tk.Frame(self, bg=TM_SURFACE)
+        self.bar_bg = tk.Frame(self.bar_row, bg=TM_INSET, height=8)
         self.bar_bg.pack(fill="x")
         self.bar_bg.pack_propagate(False)
-        self.bar_fg = tk.Frame(self.bar_bg, bg=TM_ACCENT, height=8, width=1)
-        self.bar_fg.place(x=0, y=0, relheight=1.0, width=1)
+        self.bar_fg = tk.Frame(self.bar_bg, bg=TM_ACCENT, height=8)
+        self._bar_w = 520
+        self.bar_bg.bind("<Configure>", self._on_bar_cfg)
+        self._active_ui = False
 
         self.lbl_detail = tk.Label(
             self,
@@ -128,23 +130,64 @@ class ProvisionProgressPanel(tk.Frame):
             wraplength=520,
         )
         self.lbl_remain.pack(fill="x", padx=12, pady=(0, 10))
-        self._bar_w = 520
-        self.bar_bg.bind("<Configure>", self._on_bar_cfg)
 
     def _on_bar_cfg(self, e) -> None:
         self._bar_w = max(int(e.width), 1)
+        # Keep fill ratio if currently active
+        if self._active_ui and hasattr(self, "_last_pct"):
+            self._set_bar_pct(self._last_pct)
+
+    def _set_bar_pct(self, pct: float) -> None:
+        """0 = empty track (no blue). Only show fill when pct > 0."""
+        self._last_pct = max(0.0, min(100.0, float(pct)))
+        if self._last_pct <= 0.05:
+            try:
+                self.bar_fg.place_forget()
+            except Exception:
+                pass
+            return
+        w = max(2, int(self._bar_w * self._last_pct / 100.0))
+        self.bar_fg.place(x=0, y=0, relheight=1.0, width=w)
+
+    def _show_active_chrome(self) -> None:
+        if self._active_ui:
+            return
+        self._active_ui = True
+        self.bar_row.pack(fill="x", padx=12, pady=(0, 4), before=self.lbl_detail)
+        self.steps_host.pack(fill="x", padx=12, pady=(2, 6), before=self.bar_row)
+
+    def _hide_active_chrome(self) -> None:
+        self._active_ui = False
+        try:
+            self.bar_fg.place_forget()
+        except Exception:
+            pass
+        try:
+            self.bar_row.pack_forget()
+        except Exception:
+            pass
+        # steps_host stays packed empty after clear; forget to reclaim space
+        try:
+            self.steps_host.pack_forget()
+        except Exception:
+            pass
 
     def reset_idle(self, message: str = "") -> None:
-        self.lbl_head.configure(text="补全进度")
+        """Idle: no steps, no blue fill — only a quiet hint (not a fake progress)."""
+        self.lbl_head.configure(text="运行环境")
         self.lbl_stepn.configure(text="")
         for w in self._step_labels:
             w.destroy()
         self._step_labels.clear()
-        self.bar_fg.place_configure(width=1)
-        self.lbl_detail.configure(text=message or "点击「补全运行环境」开始（多连接下载 · 可断点续传）")
+        self._hide_active_chrome()
+        self.lbl_detail.configure(
+            text=message
+            or "尚未开始补全。点上方「补全运行环境」后才会显示下载进度。"
+        )
         self.lbl_remain.configure(text="")
 
     def apply(self, snap: ProvisionSnapshot) -> None:
+        self._show_active_chrome()
         self.lbl_head.configure(text="补全进度")
         self.lbl_stepn.configure(
             text=f"第 {snap.step_index + 1} / {snap.total_steps} 步"
@@ -162,6 +205,8 @@ class ProvisionProgressPanel(tk.Frame):
                     bg=TM_SURFACE,
                     fg=TM_META,
                     anchor="w",
+                    bd=0,
+                    highlightthickness=0,
                 )
                 lb.pack(fill="x", pady=1)
                 self._step_labels.append(lb)
@@ -177,8 +222,11 @@ class ProvisionProgressPanel(tk.Frame):
             lb.configure(text=f"  {tag}  {st.title}", fg=color)
 
         pct = snap.pct
-        w = max(1, int(self._bar_w * min(100.0, pct) / 100.0))
-        self.bar_fg.place_configure(width=w)
+        if snap.phase == "extract":
+            # Indeterminate-ish: show a small active cue, not a fake %
+            self._set_bar_pct(8.0 if pct <= 0 else pct)
+        else:
+            self._set_bar_pct(pct)
 
         if snap.total_bytes > 0 and snap.phase == "download":
             detail = (
@@ -196,7 +244,18 @@ class ProvisionProgressPanel(tk.Frame):
                 text="剩余：" + " → ".join(snap.remaining_titles)
             )
         else:
-            self.lbl_remain.configure(text="剩余：无（本流程最后一步）")
+            # Only say "最后一步" when actually on last step in active run
+            if snap.step_index >= snap.total_steps - 1:
+                self.lbl_remain.configure(text="剩余：无（本流程最后一步）")
+            else:
+                self.lbl_remain.configure(text="")
+
+    def set_finished(self, message: str = "补全完成") -> None:
+        self.lbl_head.configure(text="运行环境")
+        self.lbl_stepn.configure(text="")
+        self._set_bar_pct(100.0)
+        self.lbl_detail.configure(text=message)
+        self.lbl_remain.configure(text="")
 
 
 class BootstrapApp:
@@ -830,14 +889,21 @@ class BootstrapApp:
                         full = msg + "\n" + "\n".join(extra_msgs)
                     self._set_status(full, ok=True)
                     try:
-                        self.progress_panel.lbl_detail.configure(text="补全完成")
-                        self.progress_panel.lbl_remain.configure(text="")
+                        self.progress_panel.set_finished(
+                            "补全完成。可打开主界面，或再点「补全运行环境」重试。"
+                        )
                     except Exception:
                         pass
                     if interactive:
                         self._offer_optional_after_runtime(already_had_runtime=False)
                 else:
                     self._set_status(msg, ok=False)
+                    try:
+                        self.progress_panel.reset_idle(
+                            "补全未完成。点「补全运行环境」可重试（支持断点续传）。"
+                        )
+                    except Exception:
+                        pass
                     if interactive or not runtime_ready(RROOT):
                         messagebox.showwarning(
                             "补全未完成",

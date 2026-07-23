@@ -46,11 +46,31 @@
 | 角色 | 是什么 |
 |------|--------|
 | 用户拿到的 | `RVC_Fabric_Setup.exe` → 安装后的 `启动器.exe` / `变声器.exe` |
-| 启动器.exe | **PyInstaller 自带嵌入式解释器**，并打包 `requests` 等下载依赖 |
+| 启动器.exe | **PyInstaller 自带嵌入式解释器**，并打包 `requests`、**tkinter/Tcl-Tk** 等 |
 | 系统 Python | **不需要**；用户没装 Python 也能点「补全运行环境」从 CNB 下 Runtime |
-| 打包机 Python | **需要**（仅你这边打包用），且必须能 `pip install requests` 以便打进 exe |
+| 打包机 Python | **需要完整 CPython**（含 Tcl/Tk），且能 `pip install requests Pillow` |
 
-若打包机漏装 requests，打出的启动器会在补全时失败——`build_setup.py` / `build_release.py` 已在打包前自动 `ensure_shell_download_deps()`。
+打包前会跑：
+
+- `ensure_shell_download_deps()`：缺 requests/Pillow 则自动装  
+- `ensure_shell_ui_deps()`：**硬失败**若无 `tkinter` / `_tkinter`，或解释器路径像 IDE agent 精简 Python  
+- Analysis 后若 warn 仍有 `missing module named tkinter` → **中止打包**（禁止发出坏壳）  
+- `--noupx`：避免 UPX 压 `pythonXY.dll` 后用户机 LoadLibrary / 文件占用失败  
+
+### 已知坑（Kara 报告，2026-07）
+
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| `ModuleNotFoundError: No module named 'tkinter'`（`bootstrap` / `main_app`） | 用 **TRAE 等 IDE 自带精简 Python 3.10** 打包，stdlib 无 tkinter；PyInstaller 只 warn 仍产出 exe | 用本机完整 CPython（如 3.13）重打 Setup；脚本已拦截 |
+| `Failed to load Python DLL … python310.dll`（being used by another process） | onefile 解压 `_MEI*` 时 DLL 被占用，或 UPX 压 DLL | 关杀软/旧进程后重开；打包已 `--noupx` |
+| 旧版「引擎错误 · empty probe」 | worker 起不来 / inuse 污染开发机路径 | 完整性校验 + inuse 消毒（见 CONTEXT_HANDOFF） |
+
+**正确打包**：
+
+```bat
+REM 不要用 TRAE/Cursor agent 内嵌 python
+py -3.13 scripts\build_setup.py --clean
+```
 
 ---
 

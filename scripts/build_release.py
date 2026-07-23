@@ -172,9 +172,145 @@ def ensure_shell_download_deps() -> None:
         log("[deps] requests/certifi/Pillow ok (will bundle into shell exes)")
 
 
+def ensure_shell_ui_deps() -> None:
+    """壳层 GUI 依赖 Tcl/Tk。精简/嵌入式 Python（如部分 IDE agent 自带解释器）常无 tkinter。
+
+    若用无 tkinter 的解释器打 onefile，PyInstaller 只会在 warn 里写
+    ``missing module named tkinter`` 却仍产出 exe；用户机一点启动器/主界面就：
+    ``ModuleNotFoundError: No module named 'tkinter'``。
+    """
+    exe = Path(sys.executable).resolve()
+    log(f"[deps] shell build interpreter: {exe} ({sys.version.split()[0]})")
+    bad_markers = (
+        "ModularData\\ai-agent\\vm\\tools\\python",
+        "ModularData/ai-agent/vm/tools/python",
+        "TRAE SOLO",
+    )
+    exe_s = str(exe)
+    for m in bad_markers:
+        if m.lower() in exe_s.lower():
+            raise RuntimeError(
+                "当前 Python 是 IDE/agent 内嵌精简解释器，通常不含 tkinter，"
+                "不能用来打包 启动器.exe / 变声器.exe。\n"
+                f"  当前: {exe}\n"
+                "  请改用完整安装的 CPython（安装时勾选 tcl/tk），例如:\n"
+                "  py -3.13 scripts\\build_setup.py\n"
+                "  或: C:\\Users\\...\\Python313\\python.exe scripts\\build_setup.py"
+            )
+    try:
+        import tkinter  # noqa: F401
+        import _tkinter  # noqa: F401
+        from tkinter import messagebox, filedialog, ttk  # noqa: F401
+    except ImportError as e:
+        raise RuntimeError(
+            "打包机 Python 缺少 tkinter / _tkinter（Tcl/Tk）。\n"
+            f"  interpreter: {exe}\n"
+            f"  error: {e}\n"
+            "  官方 Windows 安装包请勾选 tcl/tk；不要用 embeddable 或 IDE 自带精简 Python 打包。"
+        ) from e
+    # Touch Tk once so broken installs fail here, not on the user's PC.
+    try:
+        root = tkinter.Tk()
+        root.withdraw()
+        root.destroy()
+    except Exception as e:
+        raise RuntimeError(
+            f"tkinter 可 import 但无法创建 Tk 窗口（Tcl/Tk 数据缺失）: {e}\n"
+            f"  interpreter: {exe}"
+        ) from e
+    log(f"[deps] tkinter OK (Tk {tkinter.TkVersion})")
+
+
+def shell_hidden_imports() -> list[str]:
+    """启动器 / 变声器 onefile 必须打进的模块（下载栈 + GUI + 封面）。"""
+    return [
+        "requests",
+        "urllib3",
+        "certifi",
+        "charset_normalizer",
+        "idna",
+        "launcher.online.downloader",
+        "launcher.online.multipart",
+        "launcher.online.safe_zip",
+        "launcher.provision_progress",
+        "launcher.runtime_provision",
+        "launcher.engine_core",
+        "launcher.cnb_sources",
+        "PIL",
+        "PIL.Image",
+        "PIL.ImageTk",
+        # GUI：必须显式列出；精简 stdlib 缺模块时由 ensure_shell_ui_deps 硬失败
+        "tkinter",
+        "tkinter.ttk",
+        "tkinter.messagebox",
+        "tkinter.filedialog",
+        "tkinter.simpledialog",
+        "tkinter.scrolledtext",
+        "tkinter.font",
+        "tkinter.commondialog",
+        "tkinter.constants",
+        "tkinter.colorchooser",
+        "_tkinter",
+    ]
+
+
+def shell_pyinstaller_args(
+    *,
+    name: str,
+    script: Path,
+    distpath: Path,
+    workpath: Path,
+    specpath: Path,
+) -> list[str]:
+    """Shared PyInstaller CLI for 启动器 / 变声器 shells."""
+    args: list[str] = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--onefile",
+        "--windowed",
+        "--noupx",  # UPX 压 pythonXY.dll 易导致 LoadLibrary / 文件占用失败
+        "--name",
+        name,
+        "--distpath",
+        str(distpath),
+        "--workpath",
+        str(workpath),
+        "--specpath",
+        str(specpath),
+        "--paths",
+        str(REPO),
+    ]
+    for mod in shell_hidden_imports():
+        args.extend(["--hidden-import", mod])
+    args.extend(["--collect-all", "certifi", str(script)])
+    return args
+
+
+def assert_pyinstaller_collected_tkinter(work_name_dir: Path, exe_name: str) -> None:
+    """Fail the build if Analysis still reports tkinter missing (do not ship broken shells)."""
+    warn = work_name_dir / f"warn-{exe_name}.txt"
+    if not warn.is_file():
+        # Older layout: warn-TM_Setup.txt next to Analysis
+        cands = list(work_name_dir.rglob("warn-*.txt"))
+        warn = cands[0] if cands else warn
+    if warn.is_file():
+        text = warn.read_text(encoding="utf-8", errors="replace")
+        if "missing module named tkinter" in text or "missing module named _tkinter" in text:
+            raise RuntimeError(
+                f"PyInstaller 未打进 tkinter（见 {warn}）。\n"
+                "不要用无 Tcl/Tk 的精简 Python 打包。请换完整 CPython 后重打。"
+            )
+    # Binary smoke: onefile 里应能搜到 tkinter / _tkinter 字样（压缩后仍常保留）
+    # 真正保证靠上面的 warn + 打包前 ensure_shell_ui_deps。
+
+
 def build_exes(out: Path) -> None:
     ensure_pyinstaller()
     ensure_shell_download_deps()
+    ensure_shell_ui_deps()
     work = REPO / "build" / "release_work"
     work.mkdir(parents=True, exist_ok=True)
 
@@ -186,51 +322,15 @@ def build_exes(out: Path) -> None:
     for name, script, alias in specs:
         log(f"[exe] building {name}.exe from {script.name}")
         run(
-            [
-                sys.executable,
-                "-m",
-                "PyInstaller",
-                "--noconfirm",
-                "--clean",
-                "--onefile",
-                "--windowed",
-                "--name",
-                name,
-                "--distpath",
-                str(out),
-                "--workpath",
-                str(work / name),
-                "--specpath",
-                str(work / "spec"),
-                "--paths",
-                str(REPO),
-                "--hidden-import",
-                "requests",
-                "--hidden-import",
-                "urllib3",
-                "--hidden-import",
-                "certifi",
-                "--hidden-import",
-                "charset_normalizer",
-                "--hidden-import",
-                "idna",
-                "--hidden-import",
-                "launcher.online.downloader",
-                "--hidden-import",
-                "launcher.runtime_provision",
-                "--hidden-import",
-                "launcher.cnb_sources",
-                "--hidden-import",
-                "PIL",
-                "--hidden-import",
-                "PIL.Image",
-                "--hidden-import",
-                "PIL.ImageTk",
-                "--collect-all",
-                "certifi",
-                str(script),
-            ]
+            shell_pyinstaller_args(
+                name=name,
+                script=script,
+                distpath=out,
+                workpath=work / name,
+                specpath=work / "spec",
+            )
         )
+        assert_pyinstaller_collected_tkinter(work / name / name, name)
         exe = out / f"{name}.exe"
         if not exe.is_file():
             raise FileNotFoundError(f"expected {exe}")

@@ -436,6 +436,13 @@ def download_file(
                         raise DownloadError(msg) from me
                     # Fall through to single-connection resumable
                     last_err = me
+                    # Drop preallocated multipart shell so size is not mistaken for progress
+                    try:
+                        from launcher.online.multipart import discard_multipart_shell
+
+                        discard_multipart_shell(tmp)
+                    except Exception:
+                        pass
 
                 return download_single_resumable(
                     resolved,

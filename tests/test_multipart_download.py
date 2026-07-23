@@ -129,12 +129,41 @@ def test_single_resume(range_server):
     url, data, sha, tmp = range_server
     dest = tmp / "resume.bin"
     part = dest.with_suffix(dest.suffix + ".part")
-    # pre-write first 1MB
+    # pre-write first 1MB (sequential single-connection part, no multipart meta)
     part.write_bytes(data[: 1 * 1024 * 1024])
     out = download_single_resumable(
         url,
         dest,
         timeout=30,
+        expected_sha256=sha,
+        resume=True,
+        session=None,
+    )
+    assert out.read_bytes() == data
+
+
+def test_hollow_prealloc_not_accepted_without_sha(range_server):
+    """Preallocated size==total with zeros must not promote without SHA."""
+    url, data, sha, tmp = range_server
+    dest = tmp / "hollow.bin"
+    part = dest.with_suffix(dest.suffix + ".part")
+    # sparse-like full size zeros + multipart meta
+    part.write_bytes(b"\0" * len(data))
+    from launcher.online.multipart import save_meta
+
+    save_meta(
+        part,
+        {
+            "mode": "multipart",
+            "url": url,
+            "total": len(data),
+            "segments": [{"start": 0, "end": len(data) - 1, "done": 0}],
+        },
+    )
+    out = download_single_resumable(
+        url,
+        dest,
+        timeout=60,
         expected_sha256=sha,
         resume=True,
         session=None,

@@ -583,12 +583,24 @@ class StorePage:
                     raw = resp.read()
                 from PIL import Image, ImageTk
 
-                im = Image.open(io.BytesIO(raw)).convert("RGB")
-                im.thumbnail((56, 56))
+                # Contain (not crop): full standing art stays visible in the square
+                im = Image.open(io.BytesIO(raw)).convert("RGBA")
+                box_s = 56
+                w, h = im.size
+                scale = min(box_s / max(w, 1), box_s / max(h, 1))
+                nw = max(1, int(round(w * scale)))
+                nh = max(1, int(round(h * scale)))
+                im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+                canvas = Image.new("RGB", (box_s, box_s), (240, 244, 248))
+                canvas.paste(
+                    im,
+                    ((box_s - nw) // 2, (box_s - nh) // 2),
+                    im.split()[-1],
+                )
 
                 def apply() -> None:
                     try:
-                        photo = ImageTk.PhotoImage(im)
+                        photo = ImageTk.PhotoImage(canvas)
                         cache[v.cover_url] = photo
                         if lbl.winfo_exists():
                             lbl.configure(image=photo)

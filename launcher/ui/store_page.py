@@ -45,7 +45,7 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui.widgets import GhostButton, PrimaryButton, center_over
+from launcher.ui.widgets import GhostButton, PrimaryButton, SearchField, center_over
 
 if TYPE_CHECKING:
     from launcher.main_app import MainApp
@@ -63,6 +63,8 @@ class StorePage:
         self.voices_host: Optional[tk.Frame] = None
         self.lbl_community: Optional[tk.Label] = None
         self._dlg_progress: Optional[tk.Label] = None
+        self._voices_search: Optional[SearchField] = None
+        self._voices_search_q: str = ""
         self._dlg_bind_wheel = lambda: None
         self._build_update_section(update_parent)
         self._render_catalog()
@@ -173,6 +175,12 @@ class StorePage:
             try:
                 self._dlg.lift()
                 self._dlg.focus_force()
+                # Keep typed query if search field still alive
+                if self._voices_search is not None:
+                    try:
+                        self._voices_search_q = self._voices_search.query()
+                    except Exception:
+                        pass
                 # Re-open: still pull latest list
                 self.root.after(50, self.refresh_catalog)
                 return
@@ -195,6 +203,7 @@ class StorePage:
             self.voices_host = None
             self.lbl_community = None
             self._dlg_progress = None
+            self._voices_search = None
 
         dlg.bind("<Destroy>", lambda e: _closed() if e.widget is dlg else None)
 
@@ -211,6 +220,19 @@ class StorePage:
         GhostButton(
             head, "刷新清单", command=self.refresh_catalog, padx=12, pady=5
         ).pack(side="right")
+
+        # Search bar (filters list by name / id / author / tag / description)
+        search_row = tk.Frame(dlg, bg=TM_BG, padx=GUTTER)
+        search_row.pack(fill="x", pady=(0, 8))
+        self._voices_search = SearchField(
+            search_row,
+            placeholder="搜索音色 / 作者 / 标签…",
+            on_change=self._on_voices_search,
+            width=36,
+        )
+        self._voices_search.pack(side="left", fill="x", expand=True)
+        # Keep previous query when reopening would rebuild — fresh dialog resets
+        self._voices_search_q = ""
 
         # Scrollable voices list with a visible scrollbar
         host = tk.Frame(dlg, bg=TM_BG)
@@ -348,6 +370,31 @@ class StorePage:
 
         threading.Thread(target=work, daemon=True).start()
 
+    def _on_voices_search(self, q: str) -> None:
+        self._voices_search_q = (q or "").strip()
+        # Re-list only (settings update block is cheap enough via full render)
+        self._render_catalog()
+
+    @staticmethod
+    def _filter_voices(voices: list, query: str) -> list:
+        q = (query or "").strip().lower()
+        if not q:
+            return list(voices)
+        out = []
+        for v in voices:
+            blob = " ".join(
+                [
+                    str(getattr(v, "id", "") or ""),
+                    str(getattr(v, "name", "") or ""),
+                    str(getattr(v, "tag", "") or ""),
+                    str(getattr(v, "author", "") or ""),
+                    str(getattr(v, "description", "") or ""),
+                ]
+            ).lower()
+            if q in blob:
+                out.append(v)
+        return out
+
     def _render_catalog(self) -> None:
         cat = self.catalog
         try:
@@ -420,10 +467,16 @@ class StorePage:
             self.voices_host = None
             return
         voices = [v for v in cat.voices if v.has_download()]
+        voices = self._filter_voices(voices, self._voices_search_q)
         if not voices:
+            empty = (
+                f"没有匹配「{self._voices_search_q}」的音色。"
+                if self._voices_search_q
+                else "暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。"
+            )
             tk.Label(
                 host,
-                text="暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。",
+                text=empty,
                 font=sans_font(10),
                 bg=TM_BG,
                 fg=TM_META,

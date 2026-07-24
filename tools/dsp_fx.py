@@ -109,17 +109,21 @@ class BiquadPeak:
         np = _numpy()
         if self.b0 == 1.0 and self.b1 == 0.0 and self.b2 == 0.0 and self.a1 == 0.0:
             return x
-        y = np.empty_like(x)
+        # 向量化预计算:把整个输入一次性转 float64 数组,避免循环内逐帧转换
+        x_arr = np.asarray(x, dtype=np.float64)
+        y = np.empty_like(x_arr)
+        # 预计算 b0*x(向量化)— 循环内不再重复乘法
+        bx = self.b0 * x_arr
+        b1, b2, a1, a2 = self.b1, self.b2, self.a1, self.a2
         z1, z2 = self.z1, self.z2
-        b0, b1, b2, a1, a2 = self.b0, self.b1, self.b2, self.a1, self.a2
-        for i in range(x.shape[0]):
-            xn = float(x[i])
-            yn = b0 * xn + z1
-            z1 = b1 * xn - a1 * yn + z2
-            z2 = b2 * xn - a2 * yn
+        # IIR 差分方程本质递归,无法纯向量化;但预计算 + 局部变量已显著降低开销
+        for i in range(x_arr.shape[0]):
+            yn = bx[i] + z1
+            z1 = b1 * x_arr[i] - a1 * yn + z2
+            z2 = b2 * x_arr[i] - a2 * yn
             y[i] = yn
-        self.z1, self.z2 = z1, z2
-        return y
+        self.z1, self.z2 = float(z1), float(z2)
+        return y.astype(np.float32)
 
     def reset(self) -> None:
         self.z1 = 0.0
@@ -168,14 +172,16 @@ class NoiseGate:
         att_c = _ms_to_coef(2.0, sr)  # fast open
         rel_c = _ms_to_coef(self.release_ms, sr)
         hold_n = max(int(sr * self.hold_ms * 0.001), 0)
-        # envelope
-        abs_x = np.abs(x.astype(np.float64, copy=False))
+        # 向量化:一次性算完整块 |x|(替代循环内逐帧 abs + float 转换)
+        x_arr = np.asarray(x, dtype=np.float64)
+        levels = np.abs(x_arr)
         env = self._env
         hold = self._hold_left
         g = self._gain
-        out = np.empty_like(x, dtype=np.float32)
-        for i in range(x.shape[0]):
-            level = abs_x[i]
+        out = np.empty_like(x_arr, dtype=np.float32)
+        # envelope / gain 一阶 IIR 本质递归,无法纯向量化;但预计算已消除主要开销
+        for i in range(x_arr.shape[0]):
+            level = levels[i]
             if level > env:
                 env = att_c * env + (1.0 - att_c) * level
             else:
@@ -193,7 +199,7 @@ class NoiseGate:
                 g = rel_c * g + (1.0 - rel_c) * target
             else:
                 g = att_c * g + (1.0 - att_c) * target
-            out[i] = np.float32(x[i] * g)
+            out[i] = np.float32(x_arr[i] * g)
         self._env = float(env)
         self._hold_left = int(hold)
         self._gain = float(g)
@@ -235,9 +241,14 @@ class Compressor:
         rel = _ms_to_coef(self.release_ms, sr)
         makeup = _db_to_lin(self.makeup_db)
         env_db = self._env_db
-        out = np.empty_like(x, dtype=np.float32)
-        for i in range(x.shape[0]):
-            level_db = _lin_to_db(float(x[i]))
+        # 向量化关键优化:一次性算完整块 level_db(替代循环内逐帧 math.log10)
+        # 这是 Compressor 的主要开销点:10560 次 math.log10 → 1 次 np.log10
+        x_arr = np.asarray(x, dtype=np.float64)
+        levels_db = 20.0 * np.log10(np.abs(x_arr) + 1e-10)
+        out = np.empty_like(x_arr, dtype=np.float32)
+        # envelope 一阶 IIR 仍需递归,但已消除 log10 调用开销
+        for i in range(x_arr.shape[0]):
+            level_db = float(levels_db[i])
             if level_db > env_db:
                 env_db = att * env_db + (1.0 - att) * level_db
             else:
@@ -248,7 +259,7 @@ class Compressor:
                 gain = _db_to_lin(-gr) * makeup
             else:
                 gain = makeup
-            out[i] = np.float32(x[i] * gain)
+            out[i] = np.float32(x_arr[i] * gain)
         self._env_db = float(env_db)
         return out
 

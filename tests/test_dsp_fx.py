@@ -129,5 +129,53 @@ class ChainTests(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(y)))
 
 
+@unittest.skipUnless(_HAS_NP, "numpy / Runtime required for performance tests")
+class PerformanceTests(unittest.TestCase):
+    """Verify FX chain meets realtime budget on a realistic block.
+
+    Block size 10560 samples = 48000 Hz * 0.22s (matches the AMD test report).
+    Budget: block_time is 220ms; FX must finish in a small fraction of that
+    so it never causes an overrun. Target < 30ms (was 200-500ms+ before
+    vectorization, with 4125ms peaks reported in the field).
+    """
+
+    def test_full_chain_under_30ms(self):
+        import time
+
+        ch = RealtimeFxChain(
+            {
+                "fx_enabled": True,
+                "fx_gate_enabled": True,
+                "fx_gate_threshold_db": -50,
+                "fx_comp_enabled": True,
+                "fx_comp_threshold_db": -20,
+                "fx_comp_ratio": 4.0,
+                "fx_eq_enabled": True,
+                "fx_eq_preset": "bright",
+            }
+        )
+        sr = 48000
+        block = 10560  # 0.22s @ 48k — matches AMD perf report
+        # voiced-like signal so gate/comp actually do work
+        t = np.arange(block) / sr
+        x = (0.3 * np.sin(2 * np.pi * 220 * t) + 0.05 * np.random.randn(block)).astype(
+            np.float32
+        )
+        # warm up state + JIT
+        ch.process(x, sr)
+        # measure 5 runs, take median
+        times = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            ch.process(x, sr)
+            times.append((time.perf_counter() - t0) * 1000.0)
+        median_ms = sorted(times)[2]
+        self.assertLess(
+            median_ms,
+            30.0,
+            f"FX chain too slow: {median_ms:.1f}ms (budget 30ms for 220ms block)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

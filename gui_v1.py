@@ -1022,14 +1022,16 @@ if __name__ == "__main__":
             sr = int(getattr(self.gui_config, "samplerate", 40000) or 40000)
             n = int(getattr(self, "block_frame", 0) or 0)
             if n <= 0 or infer_wav.numel() < n:
-                # process whole tensor
-                x = infer_wav.detach().float().cpu().numpy()
+                # process whole tensor — .cpu() already detaches + copies
+                x = infer_wav.cpu().numpy()
                 y = self._fx_chain.process(x, sr)
-                return torch.from_numpy(y).to(infer_wav.device).type_as(infer_wav)
+                return torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
+                    infer_wav.device
+                ).type_as(infer_wav)
             # only shape the newest block (rest is overlap history for SOLA)
             head = infer_wav[:-n]
             tail = infer_wav[-n:]
-            x = tail.detach().float().cpu().numpy()
+            x = tail.cpu().numpy()
             y = self._fx_chain.process(x, sr)
             tail_t = torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
                 infer_wav.device
@@ -1037,7 +1039,16 @@ if __name__ == "__main__":
             return torch.cat([head, tail_t], dim=0)
 
         def start_vc(self):
-            torch.cuda.empty_cache()
+            # DML: ensure previous heavy objects are gone before allocating new ones
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                else:
+                    import gc
+
+                    gc.collect()
+            except Exception:
+                pass
             if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
                 try:
                     ensure_harvest_workers(self.gui_config.n_cpu)
@@ -1675,6 +1686,25 @@ if __name__ == "__main__":
             try:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
+            except Exception:
+                pass
+            # DML path has no empty_cache; rely on del + gc
+            # (ref: infer/modules/vc/pipeline.py DML memory release pattern)
+            try:
+                if not torch.cuda.is_available():
+                    import gc
+
+                    # Drop heavy model refs so DML allocator can reclaim memory
+                    for attr in (
+                        "rvc",
+                        "resampler",
+                        "resampler2",
+                        "tg",
+                        "_fx_chain",
+                    ):
+                        if hasattr(self, attr):
+                            setattr(self, attr, None)
+                    gc.collect()
             except Exception:
                 pass
 

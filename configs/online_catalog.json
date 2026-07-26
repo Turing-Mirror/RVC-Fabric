@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.0-hotfix1",
+    "version": "1.1.1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.0-hotfix1",
+      "version": "1.1.1",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/c3b7dc7287698021d96f3d855dee0ff647d3337e9ae506dfe223828599f7c29f",
-      "sha256": "c3b7dc7287698021d96f3d855dee0ff647d3337e9ae506dfe223828599f7c29f",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/9c15112fe1e5c2708db923521eb97f4e3df5d3fde62812c8bf8d2cc12da7c641",
+      "sha256": "9c15112fe1e5c2708db923521eb97f4e3df5d3fde62812c8bf8d2cc12da7c641",
       "min_app_version": "1.1.0",
-      "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。Runtime 由启动器从 CNB Release 补全，不在软件内静默覆盖。"
+      "notes": "v1.1.1：新增麦克风增益（设置-设备与音频，变声中可实时调整）；社区音色支持系列分组（MyGO!!!!! / RVC原版）；安装向导全中文；界面精简。Runtime 由启动器从 CNB Release 补全，不在软件内静默覆盖。"
     }
   },
   "community": {

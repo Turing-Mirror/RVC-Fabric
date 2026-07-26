@@ -16,7 +16,7 @@
 
 #define MyAppName "RVC Fabric"
 #define MyAppNameCN "RVC Fabric · 图灵镜"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Turing-Mirror"
 #define MyAppURL "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases"
 #define MyAppId "{{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}"

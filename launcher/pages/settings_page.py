@@ -808,6 +808,49 @@ class SettingsPageMixin:
             fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True, tip_key="fx_out"
         )
 
+        # --- 常规（关闭行为等） ---
+        gen = card(wrap, "常规")
+        self.var_close_action = tk.StringVar(
+            value=str(self.cfg.get("close_action") or "ask")
+        )
+        close_row = tk.Frame(gen, bg=TM_SURFACE)
+        close_row.pack(fill="x", pady=3)
+        tk.Label(
+            close_row,
+            text="关闭主窗口时",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
+        ).pack(side="left")
+        _close_labels = {"ask": "每次询问", "tray": "最小化到托盘", "exit": "直接退出"}
+        _close_keys = {v: k for k, v in _close_labels.items()}
+        self.cmb_close_action = ttk.Combobox(
+            close_row,
+            values=list(_close_labels.values()),
+            state="readonly",
+            width=16,
+        )
+        self.cmb_close_action.set(
+            _close_labels.get(str(self.var_close_action.get()), "每次询问")
+        )
+
+        def _on_close_action(_e=None):
+            key = _close_keys.get(self.cmb_close_action.get(), "ask")
+            self.var_close_action.set(key)
+            self.cfg["close_action"] = key
+            save_config(self.cfg)
+
+        self.cmb_close_action.bind("<<ComboboxSelected>>", _on_close_action)
+        self.cmb_close_action.pack(side="left")
+        help_mark(
+            close_row,
+            "最小化到托盘：窗口藏到右下角托盘图标，变声继续后台运行。\n"
+            "每次询问：点关闭时弹出选择（可勾选记住）。\n"
+            "直接退出：关闭窗口即停止变声并退出软件。",
+        )
+
         # --- Keyboard shortcuts ---
         self._build_hotkeys_settings_section(wrap, card)
 

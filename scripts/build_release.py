@@ -165,11 +165,16 @@ def ensure_shell_download_deps() -> None:
         import PIL  # noqa: F401
     except ImportError:
         need.append("Pillow")
+    try:
+        import pystray  # noqa: F401
+    except ImportError:
+        # 系统托盘常驻（缺失时软件仍可用，但托盘/最小化到托盘不可用）
+        need.append("pystray")
     if need:
         log(f"[deps] pip install {' '.join(need)} (for frozen shell exes)")
         run([sys.executable, "-m", "pip", "install", "-U", *need])
     else:
-        log("[deps] requests/certifi/Pillow ok (will bundle into shell exes)")
+        log("[deps] requests/certifi/Pillow/pystray ok (will bundle into shell exes)")
 
 
 def ensure_shell_ui_deps() -> None:
@@ -239,6 +244,8 @@ def shell_hidden_imports() -> list[str]:
         "PIL",
         "PIL.Image",
         "PIL.ImageTk",
+        "PIL.ImageDraw",
+        "pystray",  # 托盘常驻（tray.py 运行时探测，缺了不崩但托盘失效）
         # GUI：必须显式列出；精简 stdlib 缺模块时由 ensure_shell_ui_deps 硬失败
         "tkinter",
         "tkinter.ttk",
@@ -285,6 +292,9 @@ def shell_pyinstaller_args(
     ]
     for mod in shell_hidden_imports():
         args.extend(["--hidden-import", mod])
+    # 入口是 stub（runpy 动态启动 launcher.*），静态分析不到 launcher 依赖树，
+    # 必须整包收集作为 frozen 兜底；磁盘 launcher/ 存在时优先磁盘（_disk_first）
+    args.extend(["--collect-submodules", "launcher"])
     args.extend(["--collect-all", "certifi", str(script)])
     return args
 
@@ -315,9 +325,10 @@ def build_exes(out: Path) -> None:
     work.mkdir(parents=True, exist_ok=True)
 
     # ASCII names for PyInstaller (Windows code-page safe); Chinese aliases copied after
+    # 入口为 stub：frozen 后 launcher 包磁盘优先加载，gui_patch 才能更新壳层
     specs = [
-        ("TM_Setup", REPO / "launcher" / "bootstrap.py", "启动器.exe"),
-        ("TM_Voice", REPO / "launcher" / "main_app.py", "变声器.exe"),
+        ("TM_Setup", REPO / "scripts" / "shell_entry_setup.py", "启动器.exe"),
+        ("TM_Voice", REPO / "scripts" / "shell_entry_app.py", "变声器.exe"),
     ]
     for name, script, alias in specs:
         log(f"[exe] building {name}.exe from {script.name}")

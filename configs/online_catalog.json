@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.1",
+    "version": "1.1.1-hotfix1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.1",
+      "version": "1.1.1-hotfix1",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/9c15112fe1e5c2708db923521eb97f4e3df5d3fde62812c8bf8d2cc12da7c641",
-      "sha256": "9c15112fe1e5c2708db923521eb97f4e3df5d3fde62812c8bf8d2cc12da7c641",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/563b4015e9ba17dda4244a25435b04cada22731f63a9c576f7119711cca07391",
+      "sha256": "563b4015e9ba17dda4244a25435b04cada22731f63a9c576f7119711cca07391",
       "min_app_version": "1.1.0",
-      "notes": "v1.1.1：新增麦克风增益（设置-设备与音频，变声中可实时调整）；社区音色支持系列分组（MyGO!!!!! / RVC原版）；安装向导全中文；界面精简。Runtime 由启动器从 CNB Release 补全，不在软件内静默覆盖。"
+      "notes": "v1.1.1-hotfix1：常驻系统托盘（关闭窗口可选最小化到托盘，后台继续变声，设置里可改默认行为）；启动自动检查更新；修复增量更新对主程序不生效的问题（自本安装包起增量包可直接更新主界面）。注意：若应用本更新后版本号仍显示 1.1.0，说明主程序为旧版，请重新下载最新安装包覆盖安装（数据与音色不会丢失）。"
     }
   },
   "community": {

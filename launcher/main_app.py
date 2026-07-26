@@ -173,8 +173,10 @@ class MainApp(
                 self.models[self.model_idx], push_remote=False
             )
         self.root.bind("<Configure>", self._on_root_configure)
-        # Minimize → system tray (only when pystray/Pillow are packaged)
+        # System tray: persistent icon in the Windows notification area
+        # (needs pystray/Pillow in the shell env; silently absent otherwise)
         self._tray = TrayController(self)
+        self.root.after(500, self._tray.ensure_icon)
         self.root.bind("<Unmap>", self._on_root_unmap, add="+")
         self.show_page("home")
         self._tick_status()
@@ -909,10 +911,88 @@ class MainApp(
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.mainloop()
 
-    def _on_close(self) -> None:
+    def _ask_close_action(self) -> Optional[str]:
+        """点 X 时询问：最小化到托盘还是退出。返回 "tray" / "exit" / None(取消)。"""
+        from launcher.theme import TM_BG as _BG, TM_INK as _INK, TM_META as _META
+        from launcher.theme import TM_SURFACE as _SURF
+        from launcher.theme import sans_font as _sans, title_font as _title
+        from launcher.ui import GhostButton, PrimaryButton, center_over
+
+        win = tk.Toplevel(self.root)
+        win.title("关闭 RVC Fabric")
+        win.configure(bg=_BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+        win.grab_set()
+        result: list = [None]
+
+        body = tk.Frame(win, bg=_BG, padx=22, pady=16)
+        body.pack(fill="both", expand=True)
+        tk.Label(
+            body, text="要如何关闭？", font=_title(13, "bold"), bg=_BG, fg=_INK,
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            body,
+            text="最小化到托盘后变声继续在后台运行，右下角图标可随时恢复。",
+            font=_sans(9), bg=_BG, fg=_META, anchor="w", wraplength=320,
+            justify="left",
+        ).pack(fill="x", pady=(4, 10))
+
+        var_choice = tk.StringVar(value="tray")
+        for val, label in (("tray", "最小化到托盘（后台继续变声）"), ("exit", "直接关闭软件")):
+            tk.Radiobutton(
+                body, text=label, value=val, variable=var_choice,
+                font=_sans(10), bg=_BG, fg=_INK, activebackground=_BG,
+                selectcolor=_SURF, anchor="w",
+            ).pack(fill="x", pady=1)
+
+        var_remember = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            body, text="记住我的选择，下次不再询问（可在设置里更改）",
+            variable=var_remember, font=_sans(9), bg=_BG, fg=_META,
+            activebackground=_BG, selectcolor=_SURF, anchor="w",
+        ).pack(fill="x", pady=(8, 10))
+
+        def _done(ok: bool) -> None:
+            if ok:
+                result[0] = str(var_choice.get() or "tray")
+                if var_remember.get():
+                    self.cfg["close_action"] = result[0]
+                    save_config(self.cfg)
+            try:
+                win.grab_release()
+            except Exception:
+                pass
+            win.destroy()
+
+        row = tk.Frame(body, bg=_BG)
+        row.pack(fill="x")
+        GhostButton(row, "取消", command=lambda: _done(False), padx=14, pady=7).pack(
+            side="right"
+        )
+        PrimaryButton(row, "确定", command=lambda: _done(True), padx=18, pady=7).pack(
+            side="right", padx=(0, 8)
+        )
+        win.protocol("WM_DELETE_WINDOW", lambda: _done(False))
+        center_over(win, self.root)
+        self.root.wait_window(win)
+        return result[0]
+
+    def _on_close(self, force_exit: bool = False) -> None:
         """Close UI quickly; use fast worker teardown (no multi-second polls)."""
         if getattr(self, "_closing", False):
             return
+        if not force_exit:
+            action = str(self.cfg.get("close_action") or "ask")
+            if action == "ask" and tray_available():
+                picked = self._ask_close_action()
+                if picked is None:
+                    return
+                action = picked
+            if action == "tray" and tray_available():
+                self._tray.hide_to_tray()
+                return
         self._closing = True
 
         # Stop timers / hotkeys first so nothing keeps the event loop busy

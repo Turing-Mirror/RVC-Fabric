@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """tools/benchmark_realtime.py — geometry must mirror gui_v1.start_vc exactly.
 
-Requires pytest (+ numpy). Without them, unittest discover soft-skips so the
-product suite stays green on hosts that only run pure launcher tests.
+Requires numpy (Runtime stack). Without it the module soft-skips under BOTH
+runners — gate on the actual dependency, not on pytest being importable:
+pytest.importorskip raises pytest's own Skipped, which unittest discover
+reports as an error, so a host with pytest but no numpy would go red.
 """
 
 from __future__ import annotations
@@ -14,17 +16,16 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-_HAS_PYTEST = importlib.util.find_spec("pytest") is not None
+_HAS_NUMPY = importlib.util.find_spec("numpy") is not None
 
 
-@unittest.skipUnless(_HAS_PYTEST, "pytest not installed")
+@unittest.skipUnless(_HAS_NUMPY, "numpy (Runtime stack) not installed")
 class BenchmarkRealtimeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import pytest
+        import numpy
 
-        cls.pytest = pytest
-        cls.np = pytest.importorskip("numpy")
+        cls.np = numpy
         from tools.benchmark_realtime import (
             block_geometry,
             build_parser,

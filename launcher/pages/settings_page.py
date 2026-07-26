@@ -330,6 +330,14 @@ class SettingsPageMixin:
         self.cmb_input.pack(side="left", fill="x", expand=True)
         help_mark(row, SETTING_TIPS["input"])
 
+        # 麦克风增益：门限/电平表之前的输入前置增益，运行中可热调
+        self.var_in_gain = tk.DoubleVar(
+            value=float(self.cfg.get("in_gain_db") or 0.0)
+        )
+        scale_row(
+            left, "麦克风增益 dB", self.var_in_gain, -20, 20, 0.5, hot=True, tip_key="in_gain"
+        )
+
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
@@ -1092,6 +1100,8 @@ class SettingsPageMixin:
             self.cfg["accel_backend"] = normalize_accel(
                 str(self.var_accel.get() or "auto")
             )
+            if hasattr(self, "var_in_gain"):
+                self.cfg["in_gain_db"] = float(self.var_in_gain.get())
             # DSP FX
             if hasattr(self, "var_fx_enabled"):
                 self.cfg["fx_enabled"] = bool(self.var_fx_enabled.get())
@@ -1293,6 +1303,7 @@ class SettingsPageMixin:
                 index_rate=self.cfg.get("index_rate"),
                 rms_mix_rate=self.cfg.get("rms_mix_rate"),
                 threhold=self.cfg.get("threhold"),
+                in_gain_db=self.cfg.get("in_gain_db"),
                 f0method=self.cfg.get("f0method"),
                 I_noise_reduce=self.cfg.get("I_noise_reduce"),
                 O_noise_reduce=self.cfg.get("O_noise_reduce"),

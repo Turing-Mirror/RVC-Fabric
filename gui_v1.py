@@ -178,6 +178,7 @@ if __name__ == "__main__":
             # Defaults tuned for realtime product feel (shell may override)
             self.block_time: float = 0.22  # s — slightly snappier than 0.25
             self.threhold: int = -48  # >-60 enables gate; cuts room noise when quiet
+            self.in_gain_db: float = 0.0  # mic pre-gain before gate/meter, hot
             self.crossfade_time: float = 0.05
             self.extra_time: float = 2.5
             self.I_noise_reduce: bool = False
@@ -930,6 +931,7 @@ if __name__ == "__main__":
                 ].index(True)
             ]
             self.gui_config.threhold = values["threhold"]
+            self.gui_config.in_gain_db = float(values.get("in_gain_db") or 0.0)
             self.gui_config.pitch = values["pitch"]
             self.gui_config.formant = values["formant"]
             self.gui_config.block_time = values["block_time"]
@@ -1731,6 +1733,11 @@ if __name__ == "__main__":
             indata = np.copy(self.in_buf[rptr:rend])
 
             indata = librosa.to_mono(indata.T)
+            # Mic pre-gain (dB) before meter/gate so both see the boosted signal
+            in_gain_db = float(getattr(self.gui_config, "in_gain_db", 0.0) or 0.0)
+            if abs(in_gain_db) >= 0.05:
+                indata = indata * np.float32(10.0 ** (in_gain_db / 20.0))
+                np.clip(indata, -1.0, 1.0, out=indata)
             # Block input level in dB for the launcher's mic meter (cheap)
             try:
                 _rms = float(np.sqrt(np.mean(np.square(indata))) + 1e-9)
@@ -2173,6 +2180,7 @@ if __name__ == "__main__":
                 "sr_model": sr == "sr_model",
                 "sr_device": sr == "sr_device",
                 "threhold": data.get("threhold", -60),
+                "in_gain_db": float(data.get("in_gain_db") or 0.0),
                 "pitch": data.get("pitch", 0),
                 "formant": data.get("formant", 0.0),
                 "index_rate": data.get("index_rate", 0),
@@ -2285,6 +2293,8 @@ if __name__ == "__main__":
                 self.gui_config.rms_mix_rate = float(payload["rms_mix_rate"])
             if "threhold" in payload and payload["threhold"] is not None:
                 self.gui_config.threhold = payload["threhold"]
+            if "in_gain_db" in payload and payload["in_gain_db"] is not None:
+                self.gui_config.in_gain_db = float(payload["in_gain_db"])
             if "f0method" in payload and payload["f0method"]:
                 method = str(payload["f0method"] or "fcpe")
                 self.gui_config.f0method = method
@@ -2410,6 +2420,9 @@ if __name__ == "__main__":
                         "sg_output_device": self.gui_config.sg_output_device,
                         "sr_type": self.gui_config.sr_type,
                         "threhold": self.gui_config.threhold,
+                        "in_gain_db": float(
+                            getattr(self.gui_config, "in_gain_db", 0.0) or 0.0
+                        ),
                         "pitch": self.gui_config.pitch,
                         "formant": self.gui_config.formant,
                         "rms_mix_rate": self.gui_config.rms_mix_rate,

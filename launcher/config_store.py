@@ -23,6 +23,8 @@ DEFAULTS: dict[str, Any] = {
     "rms_mix_rate": 0.25,
     # > -60 enables input silence gate in gui_v1 (cuts room noise between words)
     "threhold": -48,
+    # 麦克风增益（dB）：门限/电平表之前的输入前置增益；0 = 不变
+    "in_gain_db": 0.0,
     "f0method": "fcpe",
     "block_time": 0.22,
     "crossfade_length": 0.05,
@@ -214,6 +216,7 @@ def app_cfg_to_engine_settings(cfg: dict[str, Any]) -> dict[str, Any]:
         "index_rate": float(c.get("index_rate") or 0),
         "rms_mix_rate": float(c.get("rms_mix_rate") or 0),
         "threhold": int(c.get("threhold") if c.get("threhold") is not None else -60),
+        "in_gain_db": float(c.get("in_gain_db") or 0.0),
         "f0method": str(c.get("f0method") or "fcpe"),
         "block_time": float(c.get("block_time") or 0.25),
         "crossfade_length": float(c.get("crossfade_length") or 0.05),

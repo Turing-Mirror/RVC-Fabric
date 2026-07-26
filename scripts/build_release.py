@@ -261,6 +261,67 @@ def shell_hidden_imports() -> list[str]:
     ]
 
 
+def _app_version_text() -> str:
+    """launcher/version.py 里的 APP_VERSION（文本解析，不 import 避免副作用）。"""
+    import re
+
+    text = (REPO / "launcher" / "version.py").read_text(encoding="utf-8")
+    m = re.search(r'APP_VERSION[^"\']*["\']([^"\']+)["\']', text)
+    return m.group(1) if m else "0.0.0"
+
+
+def write_shell_version_file(out_dir: Path, exe_name: str) -> Path:
+    """生成 PyInstaller --version-file 版本资源。
+
+    无签名 + 无版本资源是杀软启发引擎（360 QVM 等）的典型恶意样本画像；
+    补齐 CompanyName/ProductName/FileDescription 可显著降低误报分。
+    """
+    import re
+
+    ver = _app_version_text()
+    nums = [int(x) for x in re.findall(r"\d+", ver)][:4]
+    while len(nums) < 4:
+        nums.append(0)
+    filevers = tuple(nums)
+    desc = {
+        "TM_Setup": "RVC Fabric 启动器（环境补全与首次配置）",
+        "TM_Voice": "RVC Fabric 实时变声主界面",
+    }.get(exe_name, "RVC Fabric")
+    content = f"""# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={filevers!r},
+    prodvers={filevers!r},
+    mask=0x3F,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('080404b0', [
+        StringStruct('CompanyName', 'Turing-Mirror'),
+        StringStruct('FileDescription', {desc!r}),
+        StringStruct('FileVersion', {ver!r}),
+        StringStruct('InternalName', {exe_name!r}),
+        StringStruct('LegalCopyright', 'Copyright (C) Turing-Mirror. MIT Licensed.'),
+        StringStruct('OriginalFilename', {(exe_name + '.exe')!r}),
+        StringStruct('ProductName', 'RVC Fabric'),
+        StringStruct('ProductVersion', {ver!r}),
+      ]),
+    ]),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])]),
+  ],
+)
+"""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"version_{exe_name}.txt"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def shell_pyinstaller_args(
     *,
     name: str,
@@ -295,6 +356,8 @@ def shell_pyinstaller_args(
     # 入口是 stub（runpy 动态启动 launcher.*），静态分析不到 launcher 依赖树，
     # 必须整包收集作为 frozen 兜底；磁盘 launcher/ 存在时优先磁盘（_disk_first）
     args.extend(["--collect-submodules", "launcher"])
+    # 版本资源：降低无签名 exe 的杀软启发误报（360 QVM 曾误报 HEUR/QVM05.1）
+    args.extend(["--version-file", str(write_shell_version_file(specpath, name))])
     args.extend(["--collect-all", "certifi", str(script)])
     return args
 

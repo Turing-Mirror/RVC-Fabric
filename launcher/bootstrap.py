@@ -54,7 +54,6 @@ from launcher.theme import (
     TM_SURFACE,
     TM_SURFACE_HOVER,
     TM_WARN,
-    mono_font,
     px,
     sans_font,
     set_scale_from_dpi as theme_set_scale_from_dpi,
@@ -98,7 +97,7 @@ class ProvisionProgressPanel(tk.Frame):
         self.lbl_stepn = tk.Label(
             top,
             text="",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="e",

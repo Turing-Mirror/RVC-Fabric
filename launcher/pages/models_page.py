@@ -27,7 +27,6 @@ from launcher.theme import (
     TM_INK_MUTED,
     TM_META,
     TM_OK,
-    mono_font,
     px,
     sans_font,
     title_font,
@@ -111,7 +110,7 @@ class ModelsPageMixin:
         self.models_status_lbl = tk.Label(
             left,
             text="",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_META,
         )
@@ -199,7 +198,7 @@ class ModelsPageMixin:
         tk.Label(
             box,
             text=f"第 {cur + 1} / {total_pages} 页 · 共 {total_items} 个",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_META,
         ).pack(side="left")
@@ -224,8 +223,15 @@ class ModelsPageMixin:
         self.refresh_models()
 
     def _models_catalog_stamp(self):
-        """Cheap dirty-stamp of the two model roots. None on error — None
-        never equals anything, degrading to today's always-refresh."""
+        """Cheap dirty-stamp of the model roots. None on error — None never
+        equals anything, degrading to today's always-refresh.
+
+        Includes each voice folder's own mtime: NTFS bumps a directory's
+        mtime only for direct children, so dropping kiki.pth into an existing
+        models/kiki/ moves kiki's mtime but not MODELS_DIR's. One stat per
+        voice folder keeps external file drops visible on the next visit.
+        (In-place overwrite of an existing filename still isn't seen — the
+        manual refresh button covers that edge.)"""
         try:
             from launcher.paths import ENGINE_WEIGHTS, MODELS_DIR
 
@@ -235,6 +241,12 @@ class ModelsPageMixin:
                     parts.append(root.stat().st_mtime_ns)
                 except OSError:
                     parts.append(-1)
+            try:
+                for child in sorted(MODELS_DIR.iterdir()):
+                    if child.is_dir():
+                        parts.append(child.stat().st_mtime_ns)
+            except OSError:
+                parts.append(-2)
             return tuple(parts)
         except Exception:
             return None

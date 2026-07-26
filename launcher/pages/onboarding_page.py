@@ -19,7 +19,6 @@ from launcher.theme import (
     TM_INK,
     TM_META,
     TM_SURFACE,
-    mono_font,
     px,
     sans_font,
     title_font,
@@ -144,7 +143,7 @@ class OnboardingMixin:
 
         win.protocol("WM_DELETE_WINDOW", _close_done)
 
-        eyebrow = tk.Label(win, text="", font=mono_font(9), bg=TM_BG, fg=TM_META)
+        eyebrow = tk.Label(win, text="", font=sans_font(9), bg=TM_BG, fg=TM_META)
         eyebrow.pack(anchor="w", padx=24, pady=(20, 0))
         title = tk.Label(
             win,
@@ -214,7 +213,7 @@ class OnboardingMixin:
             tk.Label(
                 footer,
                 text=f"第 {i + 1} / {len(steps)} 步",
-                font=mono_font(9),
+                font=sans_font(9),
                 bg=TM_BG,
                 fg=TM_META,
             ).pack(side="left")

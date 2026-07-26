@@ -964,6 +964,9 @@ class StorePage:
                 f"已安装:{info and info.get('name')}（可在首页 / 模型页选用）", TM_OK
             )
             try:
+                inv = getattr(self.app, "_invalidate_catalog_views", None)
+                if inv:
+                    inv()
                 self.app.refresh_models()
             except Exception:
                 pass

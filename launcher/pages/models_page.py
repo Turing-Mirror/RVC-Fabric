@@ -66,7 +66,11 @@ class ModelsPageMixin:
         def _width(e):
             if e.width > 1:
                 canvas.itemconfigure(win_id, width=e.width)
-                self._schedule_models_reflow()
+                # Reflow only when the width actually changed since the last
+                # render — pack/tkraise-era Configure echoes are just noise
+                snap = getattr(self, "_models_render_snap", None)
+                if snap is None or int(e.width) != snap[0]:
+                    self._schedule_models_reflow()
 
         wrap.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)
@@ -209,7 +213,55 @@ class ModelsPageMixin:
                 self.root.after_cancel(self._models_job)
             except Exception:
                 pass
-        self._models_job = self.root.after(100, self.refresh_models)
+        self._models_job = self.root.after(100, self._models_reflow_tick)
+
+    def _models_reflow_tick(self) -> None:
+        self._models_job = None
+        # Hidden-page resizes would rebuild every card + rescan disk for
+        # nothing; the show_page snapshot re-renders on next visit instead
+        if getattr(self, "_current_page", "") != "models":
+            return
+        self.refresh_models()
+
+    def _models_catalog_stamp(self):
+        """Cheap dirty-stamp of the two model roots. None on error — None
+        never equals anything, degrading to today's always-refresh."""
+        try:
+            from launcher.paths import ENGINE_WEIGHTS, MODELS_DIR
+
+            parts = []
+            for root in (MODELS_DIR, ENGINE_WEIGHTS):
+                try:
+                    parts.append(root.stat().st_mtime_ns)
+                except OSError:
+                    parts.append(-1)
+            return tuple(parts)
+        except Exception:
+            return None
+
+    def _invalidate_catalog_views(self) -> None:
+        """Force home carousel + models grid to re-render on next visit.
+        Called after grandchild-level changes the dir mtime can't see
+        (index bind/unbind) and after any voice install/rename/delete."""
+        self._models_render_snap = None
+        self._home_render_snap = None
+
+    def _show_models_page(self) -> None:
+        """show_page hook: skip the full rebuild when nothing changed."""
+        if getattr(self, "_models_job", None):
+            try:
+                self.root.after_cancel(self._models_job)
+            except Exception:
+                pass
+            self._models_job = None
+        snap_now = (
+            int(self._models_canvas.winfo_width()),
+            self._current_model_key(),
+            self._models_catalog_stamp(),
+        )
+        prev = getattr(self, "_models_render_snap", None)
+        if prev is None or prev[2] is None or snap_now != prev:
+            self.refresh_models()
 
     def _apply_models_filter(self) -> None:
         """Re-render the grid for the current search/sort without a disk rescan."""
@@ -312,8 +364,10 @@ class ModelsPageMixin:
             self._models_after_refresh()
             return
 
-        # Columns adapt to width — cover-first cards need more width
-        self._models_canvas.update_idletasks()
+        # Columns adapt to width — cover-first cards need more width.
+        # (No update_idletasks here: it painted the just-cleared grid — a
+        # white flash. Pages stay mapped under grid stacking, so the width
+        # below is always current.)
         # cw is physical pixels (measured), so the column math needs px too
         cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
         card_min = px(180)
@@ -372,6 +426,16 @@ class ModelsPageMixin:
         self._models_after_refresh()
 
     def _models_after_refresh(self) -> None:
+        # Render snapshot gates the next show_page / reflow (width, selected
+        # voice, catalog stamp). Recorded on every refresh path.
+        try:
+            self._models_render_snap = (
+                int(self._models_canvas.winfo_width()),
+                self._current_model_key(),
+                self._models_catalog_stamp(),
+            )
+        except Exception:
+            self._models_render_snap = None
         self._sync_bottom()
         try:
             self.refresh_index_panel_ui()
@@ -391,13 +455,18 @@ class ModelsPageMixin:
         if frac is not None:
 
             def _restore(f=frac):
+                # Hidden-state refreshes must not move the scroll position
+                if getattr(self, "_current_page", "") != "models":
+                    return
                 try:
                     self._models_canvas.yview_moveto(f)
                 except Exception:
                     pass
 
             try:
-                self.root.after(40, _restore)
+                # after_idle: runs right after the queued relayout, before the
+                # fixed-40ms window could paint one frame at the wrong offset
+                self.root.after_idle(_restore)
             except Exception:
                 pass
             self._models_saved_scroll = None
@@ -476,6 +545,7 @@ class ModelsPageMixin:
         except Exception as e:
             messagebox.showerror("重命名失败", str(e))
             return
+        self._invalidate_catalog_views()
         self.refresh_models()
 
     def _ui_delete_model(self, m: dict) -> None:
@@ -500,6 +570,7 @@ class ModelsPageMixin:
             self.model_idx = 0
             for k in ("last_model", "last_model_name", "last_model_path"):
                 self.cfg.pop(k, None)
+        self._invalidate_catalog_views()
         self.refresh_models()
         if hasattr(self, "models_status_lbl"):
             self.models_status_lbl.configure(text=f"已删除：{m.get('name')}")
@@ -574,6 +645,7 @@ class ModelsPageMixin:
         except Exception as e:
             messagebox.showerror("转换失败", str(e))
             return
+        self._invalidate_catalog_views()
         self.refresh_models()
         # Select the freshly promoted voice
         for i, mm in enumerate(self.models):
@@ -648,6 +720,7 @@ class ModelsPageMixin:
                     {"path": str(zp), "error": str(e)}
                 )
 
+        self._invalidate_catalog_views()
         self.refresh_models()
         n_models = len(summary.get("models") or [])
         n_idx = len(summary.get("indices") or [])

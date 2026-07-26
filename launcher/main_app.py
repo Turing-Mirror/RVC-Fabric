@@ -610,26 +610,47 @@ class MainApp(
         }
         # Built after settings — the online-update section lives inside it
         self._store_page = StorePage(self, self._online_update_card_body)
+        # All pages stay gridded in one cell; show_page just raises one.
+        # pack_forget→pack unmapped the body for a frame (white flash on
+        # Windows — Tk has no double buffering); tkraise never unmaps.
+        self.body.rowconfigure(0, weight=1)
+        self.body.columnconfigure(0, weight=1)
+        for fr in self.pages.values():
+            fr.grid(row=0, column=0, sticky="nsew")
 
     def show_page(self, key: str) -> None:
         self._current_page = key
-        for fr in self.pages.values():
-            fr.pack_forget()
-        self.pages[key].pack(fill="both", expand=True)
         for k, b in self.nav_btns.items():
             b.set_active(k == key)
+        # Per-page hooks run BEFORE tkraise: render first, then lift the
+        # finished page (raising early would flash stale content mid-rebuild)
         if key == "models":
-            self.refresh_models()
+            self._show_models_page()
         if key == "home":
+            # Cancel any pending hidden-state reflow; render synchronously so
+            # the raised page is already final (no post-switch jump)
+            if getattr(self, "_carousel_job", None):
+                try:
+                    self.root.after_cancel(self._carousel_job)
+                except Exception:
+                    pass
+                self._carousel_job = None
             self._render_carousel()
             self._update_home_current_label()
         if key == "settings":
-            self.root.after(50, self._reflow_settings_page)
+            self._reflow_settings_page()
+            # Wheel rebind replaces the old <Map> hook: pages stay mapped
+            # under grid stacking, so <Map> would fire only once at startup
+            # and miss widgets StorePage rebuilds at runtime
+            cb = getattr(self, "_settings_bind_wheel", None)
+            if cb:
+                self.root.after_idle(cb)
         if key == "help":
             try:
                 self._help_page.on_show()
             except Exception:
                 pass
+        self.pages[key].tkraise()
 
     def _shift_model(self, delta: int) -> None:
         if not self.models:

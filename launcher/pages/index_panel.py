@@ -261,6 +261,11 @@ class IndexPanelMixin:
         except Exception as e:
             messagebox.showerror("解绑失败", str(e))
             return
+        # Grandchild change — dir mtime stamp can't see it, invalidate manually
+        try:
+            self._invalidate_catalog_views()
+        except Exception:
+            pass
         self.refresh_index_panel_ui()
         self._toast_profile("已解绑（文件本身未删除）")
 
@@ -277,6 +282,11 @@ class IndexPanelMixin:
             pass
         try:
             self._sync_model_to_realtime_gui(m)
+        except Exception:
+            pass
+        # Grandchild change — dir mtime stamp can't see it, invalidate manually
+        try:
+            self._invalidate_catalog_views()
         except Exception:
             pass
         self.refresh_index_panel_ui()

@@ -25,6 +25,11 @@ from launcher.online.catalog import (
     paginate,
     sort_voices_newest_first,
 )
+from launcher.online.download_queue import (
+    STATE_ACTIVE,
+    STATE_QUEUED,
+    DownloadQueue,
+)
 from launcher.online.downloader import open_in_browser
 from launcher.online.gui_update import check_gui_update, download_and_apply_gui
 from launcher.online.package_spec import (
@@ -68,8 +73,11 @@ class StorePage:
         self.app = app
         self.root = app.root
         self.catalog: OnlineCatalog = load_bundled_catalog()
-        self._busy = False  # 下载/应用增量占用（互斥用户操作）
+        self._busy = False  # 应用增量包占用（音色下载走 _dlq 并发队列，不占它）
         self._refreshing = False  # 清单刷新占用（不阻塞下载点击）
+        self._dlq = DownloadQueue(max_active=2)  # 音色并发下载：2 路 + 等待队列
+        self._dl_pending: dict = {}  # 排队中的 VoiceEntry，晋升时启动
+        self._dl_buttons: dict = {}  # voice id -> 当前渲染的下载按钮
         self._cover_inflight: set = set()  # 封面下载去重（防搜索重建线程放大）
         self._dlg: Optional[tk.Toplevel] = None
         self.voices_host: Optional[tk.Frame] = None
@@ -188,6 +196,7 @@ class StorePage:
             self._dlg_progress = None
             self._voices_search = None
             self._voices_pager_host = None
+            self._dl_buttons = {}
             if self._voices_filter_job:
                 try:
                     self.root.after_cancel(self._voices_filter_job)
@@ -304,7 +313,7 @@ class StorePage:
     # ---------------------------------------------------------------- catalog
     def refresh_catalog(self) -> None:
         # 刷新用独立 _refreshing 标志：打开对话框自动刷新期间（弱网可达数十秒）
-        # 不得占用 _busy，否则「下载安装」点击会被静默吞掉
+        # 不占 _busy（_busy 现仅用于 gui 增量包应用；音色下载走 _dlq 队列）
         if self._refreshing:
             return
         self._refreshing = True
@@ -412,6 +421,7 @@ class StorePage:
     def _render_voices_list(self) -> None:
         """Re-render only the dialog voice list + pager (search/page/view/toggle)."""
         self._voices_filter_job = None
+        self._dl_buttons = {}
         cat = self.catalog
         host = self.voices_host
         if host is None:
@@ -636,14 +646,17 @@ class StorePage:
         # Pack button first (side=right) so meta text cannot squeeze it.
         right = tk.Frame(row, bg=TM_SURFACE)
         right.pack(side="right", padx=(4, 12), pady=10)
-        label = "重新下载" if installed else "下载安装"
-        PrimaryButton(
+        # 按钮就是下载状态：下载安装 / 待下载 / NN% / 重新下载。
+        # 下载中不 disable（灰字在蓝底上难读）；重复点击由 _dlq.request 吞掉。
+        btn = PrimaryButton(
             right,
-            label,
+            self._dl_button_label(v.id, installed),
             command=lambda e=v: self.download_voice(e),
             padx=12,
             pady=6,
-        ).pack()
+        )
+        btn.pack()
+        self._dl_buttons[v.id] = btn
 
         if v.cover_url:
             try:
@@ -653,8 +666,10 @@ class StorePage:
 
         left = tk.Frame(row, bg=TM_SURFACE)
         left.pack(side="left", fill="both", expand=True, padx=(8, 8), pady=10)
+        title_row = tk.Frame(left, bg=TM_SURFACE)
+        title_row.pack(anchor="w", fill="x")
         tk.Label(
-            left,
+            title_row,
             text=v.name,
             font=title_font(12, "bold"),
             bg=TM_SURFACE,
@@ -662,7 +677,19 @@ class StorePage:
             anchor="w",
             bd=0,
             highlightthickness=0,
-        ).pack(anchor="w")
+        ).pack(side="left")
+        # 中文标题时在旁边放拉丁 id 小字（千早爱音 Anon），方便对照原名
+        if v.id and v.id.isascii() and not v.name.isascii():
+            tk.Label(
+                title_row,
+                text=v.id,
+                font=mono_font(8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+                anchor="w",
+                bd=0,
+                highlightthickness=0,
+            ).pack(side="left", padx=(8, 0), pady=(4, 0))
         kind = "音色包" if v.pack_url else "多文件"
         meta = f"{v.tag}  ·  {kind}"
         if v.series:
@@ -859,13 +886,43 @@ class StorePage:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def download_voice(self, entry: VoiceEntry) -> None:
-        if self._busy:
+    def _dl_button_label(self, vid: str, installed: bool) -> str:
+        """Download-button text doubles as the download state display."""
+        st = self._dlq.state(vid)
+        if st == STATE_ACTIVE:
+            pct = self._dlq.percent(vid)
+            return f"{pct}%" if pct >= 0 else "下载中"
+        if st == STATE_QUEUED:
+            return "待下载"
+        return "重新下载" if installed else "下载安装"
+
+    def _update_dl_button(self, vid: str) -> None:
+        btn = self._dl_buttons.get(vid)
+        if btn is None:
             return
+        try:
+            if btn.winfo_exists():
+                btn.configure(
+                    text=self._dl_button_label(vid, is_voice_installed(vid, MODELS_DIR))
+                )
+        except Exception:
+            pass
+
+    def download_voice(self, entry: VoiceEntry) -> None:
         if not entry.has_download():
             messagebox.showinfo("音色", "该条目没有下载地址。")
             return
-        self._busy = True
+        verdict = self._dlq.request(entry.id)
+        if verdict == "busy":
+            return  # 已在下载/排队；重复点击忽略
+        if verdict == "wait":
+            self._dl_pending[entry.id] = entry
+            self._set_progress(f"「{entry.name}」已加入下载队列…", TM_ACCENT)
+        else:
+            self._start_voice_download(entry)
+        self._update_dl_button(entry.id)
+
+    def _start_voice_download(self, entry: VoiceEntry) -> None:
         self._set_progress(f"正在下载「{entry.name}」…", TM_ACCENT)
 
         def work():
@@ -873,38 +930,43 @@ class StorePage:
                 info = install_voice_from_entry(
                     entry,
                     progress=lambda phase, d, t: self.root.after(
-                        0,
-                        lambda p=phase, dd=d, tt=t, n=entry.name: self._set_progress(
-                            f"{n} · {_fmt_prog(p, dd, tt)}", TM_ACCENT
-                        ),
+                        0, self._on_dl_progress, entry, phase, d, t
                     ),
                 )
                 err = None
             except Exception as e:
                 info = None
                 err = str(e)
-
-            def done():
-                self._busy = False
-                if err:
-                    self._set_progress(f"下载失败:{err}", TM_WARN)
-                    messagebox.showerror("下载失败", err)
-                else:
-                    self._set_progress(f"已安装:{info and info.get('name')}", TM_OK)
-                    try:
-                        self.app.refresh_models()
-                    except Exception:
-                        pass
-                    self._render_catalog()
-                    messagebox.showinfo(
-                        "完成",
-                        f"音色已安装到:\n{info and info.get('dir')}\n\n"
-                        "可在首页 / 模型页选用。",
-                    )
-
-            self.root.after(0, done)
+            self.root.after(0, self._on_dl_done, entry, info, err)
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _on_dl_progress(
+        self, entry: VoiceEntry, phase: str, done: int, total: int
+    ) -> None:
+        self._dlq.set_percent(entry.id, done * 100 // total if total > 0 else -1)
+        self._update_dl_button(entry.id)
+        self._set_progress(f"{entry.name} · {_fmt_prog(phase, done, total)}", TM_ACCENT)
+
+    def _on_dl_done(self, entry: VoiceEntry, info, err) -> None:
+        # 先晋升等待队列，让下一个立刻开跑，再处理本条的结果反馈
+        for vid in self._dlq.finish(entry.id):
+            nxt = self._dl_pending.pop(vid, None)
+            if nxt is not None:
+                self._start_voice_download(nxt)
+        if err:
+            self._set_progress(f"「{entry.name}」下载失败:{err}", TM_WARN)
+            messagebox.showerror("下载失败", f"{entry.name}\n{err}")
+        else:
+            self._set_progress(
+                f"已安装:{info and info.get('name')}（可在首页 / 模型页选用）", TM_OK
+            )
+            try:
+                self.app.refresh_models()
+            except Exception:
+                pass
+        # 并发下载不弹逐条成功弹窗；按钮回到「重新下载」即完成反馈
+        self._render_voices_list()
 
 
 def _fmt_prog(phase: str, done: int, total: int) -> str:

@@ -192,9 +192,7 @@ def install_voice_pack_url(
         if progress:
             progress("pack", done, total)
 
-    download_file(
-        pack_url, zpath, progress=_p, expected_sha256=expected_sha256
-    )
+    download_file(pack_url, zpath, progress=_p, expected_sha256=expected_sha256)
     return install_voice_pack_zip(
         zpath,
         voice_id=voice_id,
@@ -249,11 +247,7 @@ def install_voice_pack_zip(
         or display_name
         or zip_path.stem
     )
-    name = (
-        display_name
-        or str(meta.get("name") or "")
-        or vid
-    )
+    name = display_name or str(meta.get("name") or "") or vid
     tag = tag or str(meta.get("tag") or "音色")
     version = version or str(meta.get("version") or "1")
 
@@ -362,7 +356,14 @@ def install_voice_pack_zip(
 
         extra = {
             k: pack_cfg[k]
-            for k in ("pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method")
+            for k in (
+                "pitch",
+                "formant",
+                "index_rate",
+                "rms_mix_rate",
+                "threhold",
+                "f0method",
+            )
             if k in pack_cfg
         }
         for k in ("publisher", "fabric_official", "is_rvc_fabric"):
@@ -443,7 +444,11 @@ def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
         return
     cfg_path = d / VOICE_CONFIG_NAME
     try:
-        cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() else {}
+        cfg = (
+            json.loads(cfg_path.read_text(encoding="utf-8"))
+            if cfg_path.is_file()
+            else {}
+        )
         if not isinstance(cfg, dict):
             cfg = {}
     except Exception:
@@ -453,6 +458,17 @@ def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
         if v and not cfg.get(k):
             cfg[k] = v
             changed = True
+    # 清单中文标题优先：zip 内 config 只有拉丁名时，用目录里的中文名作展示名
+    cur_name = str(cfg.get("name") or "")
+    if (
+        entry.name
+        and not entry.name.isascii()
+        and (not cur_name or cur_name.isascii())
+        and cur_name != entry.name
+    ):
+        cfg["name"] = entry.name
+        info["name"] = entry.name
+        changed = True
     if changed:
         cfg_path.write_text(
             json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"

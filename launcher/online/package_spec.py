@@ -75,7 +75,6 @@ GUI_BLOCKED_PREFIXES = (
 GUI_ALLOWED_PREFIXES = (
     "launcher/",
     "configs/",
-    "docs/",
     "i18n/",
     "scripts/",
     "tools/",
@@ -239,7 +238,8 @@ def normalize_yymmdd(raw: Any) -> str:
 def normalize_voice_meta(data: Any) -> dict[str, str]:
     """Extract voice identity fields from pack config / tm_package / catalog.
 
-    Canonical keys: name, author, author_url, date (YYMMDD), cover (relative path).
+    Canonical keys: name, author, author_url, date (YYMMDD), cover (relative
+    path), series (系列包名，如 Mygo / VOCALOID).
     """
     out: dict[str, str] = {}
     if not isinstance(data, dict):
@@ -247,6 +247,9 @@ def normalize_voice_meta(data: Any) -> dict[str, str]:
     name = data.get("name") or data.get("title") or data.get("voice_name")
     if name not in (None, ""):
         out["name"] = str(name).strip()
+    series = data.get("series") or data.get("series_name") or data.get("collection")
+    if series not in (None, ""):
+        out["series"] = str(series).strip()
     author = data.get("author") or data.get("creator") or data.get("artist")
     if author not in (None, ""):
         out["author"] = str(author).strip()

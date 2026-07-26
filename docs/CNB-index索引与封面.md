@@ -27,6 +27,9 @@ CNB-GIT-RELEASE/
 | `cover` | 仓内路径 `ch-banner/<id>.jpg` |
 | `cover_url` | raw 完整 URL，社区下载列表展示 |
 | `pack_url` / `sha256` | LFS 音色包 |
+| `series` | 可选；系列包名（如 `Mygo` / `VOCALOID` / `RVC原版`），社区下载窗口按此分组展示；留空 = 单品音色 |
+
+`series` 写入 `index.json` 的 `voices[].series` 字段即可，客户端也识别 `series_name` / `collection` 别名。同 `series` 的音色在「社区下载」窗口会显示一个分组小标题（如「系列 · Mygo · 3 个音色」），未分组的单品音色合并在最前。
 
 ## 安装/更新包（`packages`）
 

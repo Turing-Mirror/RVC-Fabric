@@ -17,6 +17,7 @@ from launcher.online.catalog import (
     OnlineCatalog,
     VoiceEntry,
     fetch_catalog,
+    group_voices_by_series,
     is_voice_installed,
     load_bundled_catalog,
     local_app_version,
@@ -389,6 +390,7 @@ class StorePage:
                     str(getattr(v, "tag", "") or ""),
                     str(getattr(v, "author", "") or ""),
                     str(getattr(v, "description", "") or ""),
+                    str(getattr(v, "series", "") or ""),
                 ]
             ).lower()
             if q in blob:
@@ -485,8 +487,11 @@ class StorePage:
                 anchor="w",
             ).pack(anchor="w", pady=8)
         else:
-            for v in voices:
-                self._voice_row(v)
+            for series, group in group_voices_by_series(voices):
+                if series:
+                    self._series_header(series, len(group))
+                for v in group:
+                    self._voice_row(v)
         try:
             self.root.after(30, self._dlg_bind_wheel)
         except Exception:
@@ -510,6 +515,28 @@ class StorePage:
                 )
         else:
             messagebox.showinfo("全量包策略", msg)
+
+    def _series_header(self, series: str, count: int) -> None:
+        """系列包分组标题（Mygo / VOCALOID …）— mono 眉题 + 细线。"""
+        head = tk.Frame(self.voices_host, bg=TM_BG)
+        head.pack(fill="x", pady=(10, 2))
+        tk.Label(
+            head,
+            text=f"系列 · {series}",
+            font=mono_font(8),
+            bg=TM_BG,
+            fg=TM_META,
+            anchor="w",
+        ).pack(side="left")
+        tk.Label(
+            head,
+            text=f"{count} 个音色",
+            font=mono_font(8),
+            bg=TM_BG,
+            fg=TM_META,
+            anchor="e",
+        ).pack(side="right")
+        tk.Frame(self.voices_host, bg=TM_HAIRLINE, height=1).pack(fill="x")
 
     def _voice_row(self, v: VoiceEntry) -> None:
         row = tk.Frame(
@@ -553,6 +580,8 @@ class StorePage:
         ).pack(anchor="w")
         kind = "音色包" if v.pack_url else "多文件"
         meta = f"{v.tag}  ·  {kind}"
+        if v.series:
+            meta += f"  ·  系列: {v.series}"
         if v.author:
             meta += f"  ·  作者: {v.author}"
         if v.date:

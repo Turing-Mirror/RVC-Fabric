@@ -1,15 +1,15 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.0",
+    "version": "1.1.0-hotfix1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.0",
+      "version": "1.1.0-hotfix1",
       "kind": "zip",
-      "url": "",
-      "sha256": "",
-      "min_app_version": "",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/c3b7dc7287698021d96f3d855dee0ff647d3337e9ae506dfe223828599f7c29f",
+      "sha256": "c3b7dc7287698021d96f3d855dee0ff647d3337e9ae506dfe223828599f7c29f",
+      "min_app_version": "1.1.0",
       "notes": "增量壳层包：package_type=gui_patch 的 zip 直链。Runtime 由启动器从 CNB Release 补全，不在软件内静默覆盖。"
     }
   },
@@ -141,6 +141,7 @@
       "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "size_bytes": 51006395,
       "description": "guanguanV1 · 来源于官方下载",
+      "series": "RVC原版",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -160,6 +161,7 @@
       "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "size_bytes": 51012498,
       "description": "keruanV1 · 来源于官方下载",
+      "series": "RVC原版",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -179,6 +181,7 @@
       "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "size_bytes": 51021019,
       "description": "kikiV1 · 来源于官方下载",
+      "series": "RVC原版",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"
@@ -198,6 +201,7 @@
       "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "size_bytes": 53357394,
       "description": "youzhanv2-xi · 来源于官方下载",
+      "series": "RVC原版",
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721"

@@ -57,12 +57,15 @@ from launcher.theme import (
     mono_font,
     px,
     sans_font,
+    set_scale_from_dpi as theme_set_scale_from_dpi,
     title_font,
 )
 from launcher.ui import GhostButton, PrimaryButton, SoftActionCard
 from launcher.vbcable import install_vbcable
 from launcher.win_util import (
     create_desktop_shortcut,
+    enable_dpi_awareness,
+    get_window_dpi,
     open_path,
     open_windows_sound_panel,
     start_main_app,
@@ -271,6 +274,13 @@ class BootstrapApp:
         except Exception:
             self._install_health = {}
         self.root = tk.Tk()
+        # DPI awareness was declared in main() (before Tk); sync font + px scale
+        dpi = get_window_dpi(self.root.winfo_id())
+        theme_set_scale_from_dpi(dpi)
+        try:
+            self.root.tk.call("tk", "scaling", dpi / 72.0)
+        except Exception:
+            pass
         self.root.title(f"{APP_TITLE} · 启动器")
         # Fixed-size window: must scale or 125%/150% content gets clipped
         self.root.geometry(f"{px(640)}x{px(720)}")
@@ -1066,10 +1076,14 @@ class BootstrapApp:
 
 
 def main() -> None:
+    # Must run before tk.Tk() — see main_app.main()
+    dpi_level = enable_dpi_awareness()
     log = Path(__file__).resolve().parent.parent / "TEMP" / "gui_alive.log"
     try:
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text("bootstrap main() enter\n", encoding="utf-8")
+        log.write_text(
+            f"bootstrap main() enter dpi_awareness={dpi_level}\n", encoding="utf-8"
+        )
     except Exception:
         pass
     BootstrapApp().run()

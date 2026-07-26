@@ -70,6 +70,7 @@ from launcher.theme import (
     mono_font,
     px,
     sans_font,
+    set_scale_from_dpi,
     title_font,
 )
 from launcher.ui import (
@@ -83,7 +84,9 @@ from launcher.ui import (
 from launcher.ui.help_page import HelpPage
 from launcher.ui.store_page import StorePage
 from launcher.win_util import (
+    enable_dpi_awareness,
     focus_window_by_title,
+    get_window_dpi,
     read_tail,
     realtime_gui_log_path,
     start_legacy_realtime_gui,
@@ -158,6 +161,14 @@ class MainApp(
         self._dock_hint_job = None
 
         self.root = tk.Tk()
+        # DPI awareness was declared in main() (before Tk); read the real DPI
+        # so point fonts scale via `tk scaling` and pixel constants via px()
+        self._ui_dpi = get_window_dpi(self.root.winfo_id())
+        set_scale_from_dpi(self._ui_dpi)
+        try:
+            self.root.tk.call("tk", "scaling", self._ui_dpi / 72.0)
+        except Exception:
+            pass
         self.root.title(APP_TITLE)
         self.root.geometry(f"{px(DEFAULT_WIN_W)}x{px(DEFAULT_WIN_H)}")
         self.root.minsize(px(MIN_WIN_W), px(MIN_WIN_H))
@@ -256,6 +267,13 @@ class MainApp(
         if not m:
             return False
         w, h, x, y = (int(g) for g in m.groups())
+        # Geometry saved by a pre-DPI-aware build (or at another monitor scale)
+        # is in different physical units — rescale before the sanity checks
+        saved_dpi = int(self.cfg.get("win_dpi") or 96)
+        cur_dpi = int(getattr(self, "_ui_dpi", 96) or 96)
+        if saved_dpi > 0 and saved_dpi != cur_dpi:
+            k = cur_dpi / saved_dpi
+            w, h, x, y = round(w * k), round(h * k), round(x * k), round(y * k)
         # Reject sizes/positions that no longer fit (monitor unplugged etc.)
         # Saved geometry is physical pixels, so compare against scaled minimums
         if w < px(MIN_WIN_W) or h < px(MIN_WIN_H) or w > sw + 64 or h > sh + 64:
@@ -274,6 +292,8 @@ class MainApp(
                 self.cfg["win_geometry"] = "zoomed"
             else:
                 self.cfg["win_geometry"] = self.root.geometry()
+            # Physical pixels are DPI-relative; record the scale they refer to
+            self.cfg["win_dpi"] = int(getattr(self, "_ui_dpi", 96) or 96)
         except Exception:
             pass
 
@@ -1089,6 +1109,9 @@ class MainApp(
 
 
 def main() -> None:
+    # Must run before tk.Tk(): neither shell exe nor Runtime pythonw carries
+    # a dpiAware manifest, so scaled displays bitmap-stretch us otherwise
+    dpi_level = enable_dpi_awareness()
     os.chdir(ROOT)
     try:
         from dotenv import load_dotenv
@@ -1099,13 +1122,17 @@ def main() -> None:
     log = ROOT / "TEMP" / "gui_alive.log"
     try:
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text("main_app main() enter\n", encoding="utf-8")
+        log.write_text(
+            f"main_app main() enter dpi_awareness={dpi_level}\n", encoding="utf-8"
+        )
     except Exception:
         pass
     app = MainApp()
     try:
         log.write_text(
-            "main_app window up geometry=" + app.root.geometry() + "\n",
+            "main_app window up geometry="
+            + app.root.geometry()
+            + f" dpi={getattr(app, '_ui_dpi', '?')} awareness={dpi_level}\n",
             encoding="utf-8",
         )
     except Exception:

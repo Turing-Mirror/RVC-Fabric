@@ -186,26 +186,98 @@ class MorePageMixin:
     def _collect_diagnostics(self) -> None:
         """Build a support zip via tools/collect_diagnostics.py (stdlib-only).
 
-        Loaded from file so it works from the PyInstaller exe too."""
-        try:
-            import importlib.util
+        Optionally runs a quick offline benchmark in the Runtime first (user's
+        current voice + settings) so the bundle carries fresh timing samples
+        from this machine — that is how the team gathers per-GPU data for
+        further optimization. Benchmark and packing run off the Tk thread."""
+        if getattr(self, "_diag_busy", False):
+            return
+        from launcher import perf_bench
 
-            spec = importlib.util.spec_from_file_location(
-                "tm_collect_diagnostics",
-                str(ROOT / "tools" / "collect_diagnostics.py"),
-            )
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            path = mod.collect(str(ROOT))
-            open_path(USER_DATA / "diagnostics")
+        run_bench = False
+        bench_note = "本次未运行性能测试。"
+        bench_pth = ""
+        bench_index = ""
+        if self.vc_running or self._vc_starting:
             messagebox.showinfo(
-                "诊断包已生成",
-                f"已生成：\n{path}\n\n"
-                "内容仅含日志与配置，不含音频或音色模型。\n"
-                "反馈问题时把这个 zip 发给团队即可。",
+                "生成诊断包",
+                "检测到变声正在运行，将直接打包现有日志与性能记录。\n"
+                "如需附带全新的性能测试数据，请先停止变声再生成。",
             )
-        except Exception as e:
-            messagebox.showerror("失败", str(e))
+        else:
+            m = self.models[self.model_idx] if getattr(self, "models", None) else {}
+            bench_pth = str(m.get("path") or "")
+            bench_index = str(m.get("index") or "")
+            ready, why = perf_bench.bench_ready(ROOT, bench_pth)
+            if ready:
+                run_bench = messagebox.askyesno(
+                    "生成诊断包",
+                    "是否先运行一次性能测试（约 1 分钟）？\n\n"
+                    "测试会用当前音色与设置做一小段离线推理（不占用麦克风），\n"
+                    "结果仅保存在本机并打进诊断包，帮助团队针对你的机型优化。\n\n"
+                    "选「否」则只打包现有日志与配置。",
+                )
+            else:
+                bench_note = f"本次未运行性能测试（{why}）。"
+
+        import threading
+
+        self._diag_busy = True
+        if run_bench:
+            self._set_status_visual("busy", "正在性能测试…", "约 1 分钟 · 请勿开启变声")
+        else:
+            self._set_status_visual("busy", "正在生成诊断包…", "")
+        # Snapshot on the Tk thread: settings sliders mutate self.cfg live, and
+        # copying a dict while it grows raises RuntimeError on the worker thread
+        bench_cfg = dict(self.cfg or {})
+
+        def work() -> None:
+            note = bench_note
+            err = ""
+            path = ""
+            try:
+                if run_bench:
+                    res = perf_bench.run_benchmark(
+                        ROOT, bench_pth, bench_index, bench_cfg
+                    )
+                    if res["ok"]:
+                        line = perf_bench.format_bench_summary(res["summary"])
+                        note = "已包含刚测得的性能数据" + (
+                            f"：{line}" if line else "。"
+                        )
+                    else:
+                        note = f"性能测试未完成（{res['error']}），已打包其余信息。"
+                import importlib.util
+
+                spec = importlib.util.spec_from_file_location(
+                    "tm_collect_diagnostics",
+                    str(ROOT / "tools" / "collect_diagnostics.py"),
+                )
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                path = mod.collect(str(ROOT))
+            except Exception as e:
+                err = str(e)
+
+            def done() -> None:
+                self._diag_busy = False
+                if err:
+                    self._set_status_visual("error", "诊断包生成失败", err[:48])
+                    messagebox.showerror("失败", err)
+                    return
+                self._set_status_visual("idle", "诊断包已生成", APP_PRODUCT_TAGLINE)
+                open_path(USER_DATA / "diagnostics")
+                messagebox.showinfo(
+                    "诊断包已生成",
+                    f"已生成：\n{path}\n\n{note}\n\n"
+                    "内容仅含日志、配置、机器环境与性能记录，"
+                    "不含音频或音色模型，也不会自动上传。\n"
+                    "反馈问题时把这个 zip 发给团队即可。",
+                )
+
+            self.root.after(0, done)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _verify_runtime_integrity(self) -> None:
         """Compare local Runtime to CNB integrity JSON + import smoke."""

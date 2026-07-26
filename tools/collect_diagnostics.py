@@ -31,6 +31,9 @@ import zipfile
 
 _MAX_FILE_BYTES = 8 * 1024 * 1024  # skip anything bigger (runaway logs)
 _MAX_PER_DIR = 10  # newest N files per collected directory
+# perf reports are ~1 KB each and are exactly what the team optimizes from —
+# bundle every kept sample (perf_report keeps 30, bench keeps 10)
+_MAX_PERF_REPORTS = 40
 _KEEP_BUNDLES = 10
 
 
@@ -50,6 +53,7 @@ def _newest_files(dir_path: str, limit: int = _MAX_PER_DIR) -> list[str]:
 def gather_files(root: str) -> list[tuple[str, str]]:
     """(arcname, abs_path) pairs for everything worth bundling that exists."""
     out: list[tuple[str, str]] = []
+    seen: set[str] = set()
 
     def add(path: str) -> None:
         if not os.path.isfile(path):
@@ -59,10 +63,19 @@ def gather_files(root: str) -> list[tuple[str, str]]:
                 return
         except OSError:
             return
-        out.append((os.path.relpath(path, root).replace(os.sep, "/"), path))
+        arc = os.path.relpath(path, root).replace(os.sep, "/")
+        # the explicit list below overlaps with the newest-N directory sweep;
+        # duplicate arcnames make ZipFile warn and bloat the bundle
+        if arc in seen:
+            return
+        seen.add(arc)
+        out.append((arc, path))
 
-    for rel_dir in ("User_Data/logs", "User_Data/perf_reports"):
-        for p in _newest_files(os.path.join(root, rel_dir)):
+    for rel_dir, limit in (
+        ("User_Data/logs", _MAX_PER_DIR),
+        ("User_Data/perf_reports", _MAX_PERF_REPORTS),
+    ):
+        for p in _newest_files(os.path.join(root, rel_dir), limit):
             add(p)
     for rel in (
         "User_Data/runtime_control/status.json",
@@ -80,14 +93,73 @@ def gather_files(root: str) -> list[tuple[str, str]]:
     return out
 
 
+def _cpu_name() -> str:
+    """Human CPU model name; registry first (Windows), platform fallback."""
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+        ) as k:
+            name, _ = winreg.QueryValueEx(k, "ProcessorNameString")
+            if name:
+                return str(name).strip()
+    except Exception:
+        pass
+    return platform.processor() or ""
+
+
+def _total_ram_gb() -> float | None:
+    """Physical RAM in GB via GlobalMemoryStatusEx; None off-Windows/on error."""
+    try:
+        import ctypes
+
+        class _MemStatus(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_uint32),
+                ("dwMemoryLoad", ctypes.c_uint32),
+                ("ullTotalPhys", ctypes.c_uint64),
+                ("ullAvailPhys", ctypes.c_uint64),
+                ("ullTotalPageFile", ctypes.c_uint64),
+                ("ullAvailPageFile", ctypes.c_uint64),
+                ("ullTotalVirtual", ctypes.c_uint64),
+                ("ullAvailVirtual", ctypes.c_uint64),
+                ("ullAvailExtendedVirtual", ctypes.c_uint64),
+            ]
+
+        st = _MemStatus()
+        st.dwLength = ctypes.sizeof(st)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+            return round(st.ullTotalPhys / (1024**3), 1)
+    except Exception:
+        pass
+    return None
+
+
 def env_summary(root: str) -> dict:
+    """Machine + stack snapshot — the per-machine sample the team optimizes
+    from, so it should identify the hardware class (CPU/RAM/OS/GPU), not just
+    the Python stack."""
     info = {
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         "python": sys.version.split()[0],
         "platform": platform.platform(),
+        "machine": platform.machine(),
+        "cpu": _cpu_name(),
+        "cpu_count": os.cpu_count() or 0,
         "root": os.path.abspath(root),
         "root_ascii": all(ord(c) < 128 for c in os.path.abspath(root)),
     }
+    ram = _total_ram_gb()
+    if ram is not None:
+        info["ram_total_gb"] = ram
+    try:
+        win_ver = "-".join(x for x in platform.win32_ver() if x)
+        if win_ver:
+            info["windows"] = win_ver
+    except Exception:
+        pass
     try:
         import torch  # optional: broken ML stack must not break diagnostics
 

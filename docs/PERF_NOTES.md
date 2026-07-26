@@ -103,5 +103,15 @@
   如愿协助,可将文件夹内文件发送给团队"。
 - **诊断包**:`Runtime\python.exe tools\collect_diagnostics.py` 一键打包
   日志 + 性能报告 + 配置 + 环境摘要到 `User_Data/diagnostics/diag_*.zip`
-  (纯标准库,ML 栈坏了也能跑);「其他」页同样可加一个按钮调它(暂缓,同上)。
+  (纯标准库,ML 栈坏了也能跑);「其他」页按钮已接入(见下)。
+- **诊断包内的详尽性能诊断(2026-07-27 落地)**:「其他」页「生成诊断包」在打包前会
+  **询问用户是否先跑一次快速性能测试**(约 1 分钟;变声运行中/Runtime 未就绪/无模型时自动跳过):
+  - 壳层桥接模块 `launcher/perf_bench.py`(Tk-free、可单测):用**用户当前音色与实机设置**
+    (block/crossfade/extra/f0method/index_rate,harvest 自动回退 fcpe)拼出
+    `tools/benchmark_realtime.py --json-out` 命令,经 `_env_for_runtime_python()` 清洗环境后
+    在 Runtime pythonw 里无窗运行,stdout 落 `User_Data/logs/perf_bench.log`,超时 600s 自动放弃。
+  - 结果写 `User_Data/perf_reports/bench_*.json`(保留 10 份),与会话报告 `perf_*.json` 同目录,
+    诊断包自动收齐(perf_reports 目录预算 40 份,日志仍 10 份)。
+  - `env.json` 现在还带**机型样本字段**:CPU 型号(注册表)、核数、物理内存 GB、Windows 版本、
+    machine;配合 bench/perf 报告即是"一台机器一份样本",供团队按机型定针对性优化。
 - 基准脚本可 `--json-out 文件名` 直接产出可发送的结果文件。

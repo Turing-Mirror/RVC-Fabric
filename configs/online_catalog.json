@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.1-hotfix1",
+    "version": "1.1.2-part1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.1-hotfix1",
+      "version": "1.1.2-part1",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/563b4015e9ba17dda4244a25435b04cada22731f63a9c576f7119711cca07391",
-      "sha256": "563b4015e9ba17dda4244a25435b04cada22731f63a9c576f7119711cca07391",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/ac7fdafb45c153ce7469b35f517135ea4e7db73ea463674f96abb26e0d9dbcf1",
+      "sha256": "ac7fdafb45c153ce7469b35f517135ea4e7db73ea463674f96abb26e0d9dbcf1",
       "min_app_version": "1.1.0",
-      "notes": "v1.1.1-hotfix1：常驻系统托盘（关闭窗口可选最小化到托盘，后台继续变声，设置里可改默认行为）；启动自动检查更新；修复增量更新对主程序不生效的问题（自本安装包起增量包可直接更新主界面）。注意：若应用本更新后版本号仍显示 1.1.0，说明主程序为旧版，请重新下载最新安装包覆盖安装（数据与音色不会丢失）。"
+      "notes": "v1.1.2-part1：诊断包升级——「其他」页「生成诊断包」现在可选先运行约 1 分钟的快速性能测试（用当前音色与设置做离线推理，不占用麦克风），测试结果连同 CPU/内存/系统/显卡等机器信息一并打进诊断包，帮助团队按你的机型做进一步性能优化；诊断内容仅保存在本机、绝不自动上传，反馈问题时把 zip 发给团队即可。"
     }
   },
   "community": {

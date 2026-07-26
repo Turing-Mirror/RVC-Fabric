@@ -28,6 +28,7 @@ from launcher.theme import (
     TM_META,
     TM_OK,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -188,8 +189,9 @@ class ModelsPageMixin:
         cur = int(getattr(self, "_models_page", 0))
         box = tk.Frame(pager, bg=TM_BG)
         box.pack(side="right")
-        GhostButton(box, "上一页", command=lambda: self._models_page_shift(-1),
-                    padx=12, pady=5).pack(side="left", padx=(0, 8))
+        GhostButton(
+            box, "上一页", command=lambda: self._models_page_shift(-1), padx=12, pady=5
+        ).pack(side="left", padx=(0, 8))
         tk.Label(
             box,
             text=f"第 {cur + 1} / {total_pages} 页 · 共 {total_items} 个",
@@ -197,8 +199,9 @@ class ModelsPageMixin:
             bg=TM_BG,
             fg=TM_META,
         ).pack(side="left")
-        GhostButton(box, "下一页", command=lambda: self._models_page_shift(1),
-                    padx=12, pady=5).pack(side="left", padx=(8, 0))
+        GhostButton(
+            box, "下一页", command=lambda: self._models_page_shift(1), padx=12, pady=5
+        ).pack(side="left", padx=(8, 0))
 
     def _schedule_models_reflow(self) -> None:
         if getattr(self, "_models_job", None):
@@ -240,7 +243,11 @@ class ModelsPageMixin:
         want = self.cfg.get("last_model_path") or self.cfg.get("last_model")
         if want and self.models:
             for i, m in enumerate(self.models):
-                if m.get("path") == want or m.get("file") == want or m.get("name") == want:
+                if (
+                    m.get("path") == want
+                    or m.get("file") == want
+                    or m.get("name") == want
+                ):
                     self.model_idx = i
                     break
 
@@ -307,8 +314,9 @@ class ModelsPageMixin:
 
         # Columns adapt to width — cover-first cards need more width
         self._models_canvas.update_idletasks()
+        # cw is physical pixels (measured), so the column math needs px too
         cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
-        card_min = 180
+        card_min = px(180)
         cols = max(1, min(5, cw // (card_min + 20)))
         for c in range(cols):
             self.model_grid.columnconfigure(c, weight=1, uniform="m")
@@ -316,10 +324,11 @@ class ModelsPageMixin:
         # Pagination: at most 3 card rows per page; fewer rows = shorter page
         page_size = cols * 3
         total_pages = (len(view) + page_size - 1) // page_size
-        self._models_page = min(max(0, int(getattr(self, "_models_page", 0))),
-                                total_pages - 1)
+        self._models_page = min(
+            max(0, int(getattr(self, "_models_page", 0))), total_pages - 1
+        )
         start = self._models_page * page_size
-        page_view = view[start:start + page_size]
+        page_view = view[start : start + page_size]
 
         for pos, m in enumerate(page_view):
             r, c = divmod(pos, cols)
@@ -327,7 +336,7 @@ class ModelsPageMixin:
             active = self._is_active_model(m)
             missing = bool(m.get("missing"))
             photo = self._cover_cache.get(
-                m.get("cover"), max_w=card_min + 40, max_h=130
+                m.get("cover"), max_w=card_min + 40, max_h=px(130)
             )
             if missing:
                 corner = "⚠ 文件缺失"
@@ -344,11 +353,16 @@ class ModelsPageMixin:
                 active=active,
                 focus=active,
                 index_text=corner,
-                width=max(card_min, 180),
+                # Design units — ModelCoverCard applies px() itself
+                width=180,
                 height=268,
                 on_click=lambda ix=full_ix: self._use_model_from_grid(ix),
                 action_text="使用中" if active else "使用",
-                on_action=None if active else (lambda ix=full_ix: self._use_model_from_grid(ix)),
+                on_action=(
+                    None
+                    if active
+                    else (lambda ix=full_ix: self._use_model_from_grid(ix))
+                ),
             )
             card.grid(row=r, column=c, padx=10, pady=10, sticky="nsew")
             self.model_grid.rowconfigure(r, weight=0)
@@ -375,11 +389,13 @@ class ModelsPageMixin:
         # Restore scroll after a selection-only refresh (layout settles first)
         frac = getattr(self, "_models_saved_scroll", None)
         if frac is not None:
+
             def _restore(f=frac):
                 try:
                     self._models_canvas.yview_moveto(f)
                 except Exception:
                     pass
+
             try:
                 self.root.after(40, _restore)
             except Exception:
@@ -466,9 +482,7 @@ class ModelsPageMixin:
         from launcher.catalog import delete_model_dir
 
         if self._is_active_model(m) and (self.vc_running or self._vc_starting):
-            messagebox.showinfo(
-                "正在使用", "这个音色正在变声中，先停止变声再删除。"
-            )
+            messagebox.showinfo("正在使用", "这个音色正在变声中，先停止变声再删除。")
             return
         if not messagebox.askyesno(
             "删除音色",
@@ -513,19 +527,23 @@ class ModelsPageMixin:
             )
             self.root.after(
                 2000,
-                lambda: self.models_status_lbl.configure(
-                    text=f"共 {len(self.models)} 个 · 使用中：{self.models[self.model_idx]['name']}",
-                    fg=TM_META,
-                )
-                if self.models
-                else None,
+                lambda: (
+                    self.models_status_lbl.configure(
+                        text=f"共 {len(self.models)} 个 · 使用中：{self.models[self.model_idx]['name']}",
+                        fg=TM_META,
+                    )
+                    if self.models
+                    else None
+                ),
             )
 
     def _promote_current_legacy(self) -> None:
         """Move a legacy 散装音色 into its own User_Data folder so it can bind
         检索库 / 配置档案 like any other voice."""
-        m = self._current_model() if hasattr(self, "_current_model") else (
-            self.models[self.model_idx] if self.models else None
+        m = (
+            self._current_model()
+            if hasattr(self, "_current_model")
+            else (self.models[self.model_idx] if self.models else None)
         )
         if not m or m.get("source") != "legacy_weights" or not m.get("path"):
             return
@@ -661,7 +679,9 @@ class ModelsPageMixin:
                         break
             messagebox.showinfo(
                 "导入完成",
-                msg + "\n\n" + model_folder_layout_help().split("导入时可选")[0].strip(),
+                msg
+                + "\n\n"
+                + model_folder_layout_help().split("导入时可选")[0].strip(),
             )
         else:
             messagebox.showinfo(

@@ -1,4 +1,4 @@
-; RVC Fabric — Windows installer (Inno Setup 6)
+﻿; RVC Fabric — Windows installer (Inno Setup 6)
 ; 企业/独立软件常用安装器技术，不要用自写 Tk 向导替代本脚本。
 ;
 ; 构建（在仓库根，先打出 payload）：
@@ -72,12 +72,15 @@ UsePreviousAppDir=yes
 ShowLanguageDialog=no
 
 [Languages]
-; 任务/说明文案已是中文；语言包用官方 Default，避免机器未装 ChineseSimplified.isl 时编译失败
-; 若已安装简中语言包，可自行加：
-; Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 安装向导整体中文：简中语言文件随仓库自带（installer/ChineseSimplified.isl，
+; UTF-8 带 BOM），相对本 .iss 引用，不依赖打包机的 Inno 语言包。
+; 英文仅作非中文系统的兜底（ShowLanguageDialog=no 时按系统语言自动匹配，
+; 无匹配则取第一项 = 简中）。
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
+chinesesimplified.BeveledLabel=RVC Fabric 安装程序
 english.BeveledLabel=RVC Fabric Setup
 
 [Tasks]

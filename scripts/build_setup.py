@@ -161,15 +161,18 @@ def strip_heavy_from_payload(out: Path) -> None:
     ):
         _rm(out / rel)
 
+    # 整个 docs/ 不进用户安装包（含内部开发文档、会话日志、设计计划）。
+    # 仅保留 docs/legal/（MIT 协议声明）→ 拷贝到 out/legal 后删除 docs。
+    legal_src = out / "docs" / "legal"
+    legal_dst = out / "legal"
+    if legal_src.is_dir():
+        if legal_dst.exists():
+            shutil.rmtree(legal_dst, ignore_errors=True)
+        shutil.copytree(legal_src, legal_dst)
+        log("  keep: docs/legal -> legal/ (MIT 协议声明)")
+    _rm(out / "docs")
+
     for rel in (
-        "docs/reference-screenshots",
-        "docs/en",
-        "docs/fr",
-        "docs/jp",
-        "docs/kr",
-        "docs/pt",
-        "docs/tr",
-        "docs/小白简易教程.doc",
         "assets/pretrained",
         "assets/pretrained_v2",
         "assets/uvr5_weights",

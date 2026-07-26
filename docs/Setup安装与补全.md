@@ -40,6 +40,10 @@
 - **Inno Setup 6**：`installer/RVC_Fabric_Setup.iss`
 - 打包：`python scripts/build_setup.py`
 - 本机 ISCC 示例：`K:\jihuang\Inno Setup 6\ISCC.exe`（或环境变量 `ISCC`）
+- **向导语言为简体中文**：语言文件随仓库自带 `installer/ChineseSimplified.isl`
+  （UTF-8 带 BOM，.iss 相对路径引用，不依赖打包机的 Inno 语言包）；
+  英文仅作非中文系统兜底。`.iss` 与 `.isl` 均需保持 UTF-8 **带 BOM**，
+  否则旧版 Inno 按 ANSI 读取会乱码。
 
 ### 用户机不需要 Python
 

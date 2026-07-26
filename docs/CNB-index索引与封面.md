@@ -58,7 +58,7 @@ catalog-src/
 | `pack_url` / `sha256` | LFS 音色包 |
 | `series` | 可选；系列包名（如 `Mygo` / `VOCALOID` / `RVC原版`），社区下载窗口按此分组展示；留空 = 单品音色 |
 
-`series` 写在 `catalog-src/voices/<id>.yaml` 里即可（客户端也识别 `series_name` / `collection` 别名）。同 `series` 的音色在「社区下载」窗口会显示一个分组小标题（如「系列 · Mygo · 3 个音色」），未分组的单品音色合并在最前。现有归类：官方 4 色 `RVC原版`，Anon/Rana/Soyo/Taki/Tomori 5 色 `MyGO!!!!!`。
+`series` 写在 `catalog-src/voices/<id>.yaml` 里即可（客户端也识别 `series_name` / `collection` 别名）。「社区下载」窗口首页按上传时间从晚到早分页平铺（每页 5 个）；「系列专区」视图按 `series` 归组，默认收起、点标题展开，未分组单品只出现在首页。现有归类：官方 4 色 `RVC原版`（作者统一标注 `RVC`，链接指向 RVC-Project 上游仓库），Anon/Rana/Soyo/Taki/Tomori 5 色 `MyGO!!!!!`。
 
 ## 安装/更新包（`packages`）
 
@@ -77,7 +77,7 @@ catalog-src/
 | 模块 | 作用 |
 |------|------|
 | `launcher/online/catalog.py` | 解析 index；`VoiceEntry` 含 author/date/cover_url/series |
-| `launcher/ui/store_page.py` | 社区下载行展示封面缩略图 + 作者 + 系列分组 |
+| `launcher/ui/store_page.py` | 社区下载：首页最新在前分页 + 系列专区折叠；行展示封面缩略图 + 作者 |
 | `scripts/build_catalog.py` | catalog-src YAML → index/snippet/内置清单三份生成物 |
 
 ## 本地软件 ch-banner

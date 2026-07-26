@@ -2,7 +2,7 @@
 """在线功能：设置页内的「在线更新」区块 + 模型页弹出的「社区下载」窗口。
 
 原独立「更新」页已按产品要求拆掉：GUI 更新降级为设置页一个区块；
-在线音色库改为模型页的社区下载对话框。完整包 / 社群链接放在对话框内。
+在线音色库改为模型页的社区下载对话框（首页最新在前分页 + 系列专区折叠视图）。
 """
 
 from __future__ import annotations
@@ -17,10 +17,13 @@ from launcher.online.catalog import (
     OnlineCatalog,
     VoiceEntry,
     fetch_catalog,
-    group_voices_by_series,
+    filter_voices,
+    group_series_only,
     is_voice_installed,
     load_bundled_catalog,
     local_app_version,
+    paginate,
+    sort_voices_newest_first,
 )
 from launcher.online.downloader import open_in_browser
 from launcher.online.gui_update import check_gui_update, download_and_apply_gui
@@ -46,7 +49,13 @@ from launcher.theme import (
     sans_font,
     title_font,
 )
-from launcher.ui.widgets import GhostButton, PrimaryButton, SearchField, center_over
+from launcher.ui.widgets import (
+    GhostButton,
+    PrimaryButton,
+    SearchField,
+    SegmentControl,
+    center_over,
+)
 
 if TYPE_CHECKING:
     from launcher.main_app import MainApp
@@ -64,10 +73,14 @@ class StorePage:
         self._cover_inflight: set = set()  # 封面下载去重（防搜索重建线程放大）
         self._dlg: Optional[tk.Toplevel] = None
         self.voices_host: Optional[tk.Frame] = None
-        self.lbl_community: Optional[tk.Label] = None
         self._dlg_progress: Optional[tk.Label] = None
         self._voices_search: Optional[SearchField] = None
         self._voices_search_q: str = ""
+        self._store_view: str = "home"  # home = 分页平铺 | series = 系列专区
+        self._voices_page: int = 1  # 1-based（paginate 会 clamp）
+        self._expanded_series: set = set()
+        self._voices_pager_host: Optional[tk.Frame] = None
+        self._voices_filter_job = None  # 搜索防抖 after id
         self._dlg_bind_wheel = lambda: None
         self._build_update_section(update_parent)
         self._render_catalog()
@@ -137,7 +150,7 @@ class StorePage:
 
     # ------------------------------------------------------------ voices dialog
     def open_voices_dialog(self) -> None:
-        """「社区下载」 window: online voices + full package / community links.
+        """「社区下载」 window: paged newest-first voices + collapsible series view.
 
         Every open (including re-focus of an existing dialog) auto-refreshes the
         online catalog so new CNB releases show without a manual「刷新清单」.
@@ -172,9 +185,15 @@ class StorePage:
         def _closed(_e=None):
             self._dlg = None
             self.voices_host = None
-            self.lbl_community = None
             self._dlg_progress = None
             self._voices_search = None
+            self._voices_pager_host = None
+            if self._voices_filter_job:
+                try:
+                    self.root.after_cancel(self._voices_filter_job)
+                except Exception:
+                    pass
+                self._voices_filter_job = None
 
         dlg.bind("<Destroy>", lambda e: _closed() if e.widget is dlg else None)
 
@@ -192,18 +211,28 @@ class StorePage:
             head, "刷新清单", command=self.refresh_catalog, padx=12, pady=5
         ).pack(side="right")
 
-        # Search bar (filters list by name / id / author / tag / description)
+        # Search bar (filters list by name / id / author / tag / series) + view toggle
         search_row = tk.Frame(dlg, bg=TM_BG, padx=GUTTER)
         search_row.pack(fill="x", pady=(0, 8))
         self._voices_search = SearchField(
             search_row,
-            placeholder="搜索音色 / 作者 / 标签…",
+            placeholder="搜索音色 / 作者 / 系列 / 标签…",
             on_change=self._on_voices_search,
-            width=36,
+            width=30,
         )
         self._voices_search.pack(side="left", fill="x", expand=True)
-        # Keep previous query when reopening would rebuild — fresh dialog resets
+        self._voices_view_seg = SegmentControl(
+            search_row,
+            [("home", "首页"), ("series", "系列专区")],
+            value="home",
+            on_change=self._on_view_change,
+        )
+        self._voices_view_seg.pack(side="right", padx=(8, 0))
+        # Fresh dialog resets query / view / page (StorePage outlives the Toplevel)
         self._voices_search_q = ""
+        self._store_view = "home"
+        self._voices_page = 1
+        self._expanded_series = set()
 
         # Scrollable voices list with a visible scrollbar
         host = tk.Frame(dlg, bg=TM_BG)
@@ -252,43 +281,9 @@ class StorePage:
         self.voices_host = tk.Frame(inner, bg=TM_BG)
         self.voices_host.pack(fill="x", pady=(4, 8))
 
-        # Community / full package block at the bottom of the dialog
-        comm = tk.Frame(
-            inner,
-            bg=TM_SURFACE,
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-        )
-        comm.pack(fill="x", pady=(4, 12))
-        comm_in = tk.Frame(comm, bg=TM_SURFACE, padx=14, pady=12)
-        comm_in.pack(fill="x")
-        tk.Label(
-            comm_in,
-            text="完整包与社群",
-            font=title_font(11, "bold"),
-            bg=TM_SURFACE,
-            fg=TM_INK,
-            anchor="w",
-        ).pack(anchor="w")
-        self.lbl_community = tk.Label(
-            comm_in,
-            text="",
-            font=sans_font(9),
-            bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
-            wraplength=520,
-            justify="left",
-            anchor="w",
-        )
-        self.lbl_community.pack(anchor="w", pady=(4, 8))
-        row_c = tk.Frame(comm_in, bg=TM_SURFACE)
-        row_c.pack(anchor="w")
-        GhostButton(
-            row_c, "打开完整包链接", command=self.open_sharepoint, padx=12, pady=6
-        ).pack(side="left", padx=(0, 8))
-        GhostButton(row_c, "打开 QQ 群", command=self.open_qq, padx=12, pady=6).pack(
-            side="left"
-        )
+        # Pager stays outside the canvas so it never scrolls out of reach
+        self._voices_pager_host = tk.Frame(dlg, bg=TM_BG, padx=GUTTER)
+        self._voices_pager_host.pack(fill="x", pady=(4, 0))
 
         self._dlg_progress = tk.Label(
             dlg,
@@ -345,31 +340,28 @@ class StorePage:
 
     def _on_voices_search(self, q: str) -> None:
         self._voices_search_q = (q or "").strip()
-        # Re-list only (settings update block is cheap enough via full render)
-        self._render_catalog()
+        self._voices_page = 1  # 新搜索回到第 1 页
+        # 120ms debounce（对齐模型页）：逐键全量重建会放大封面轮询与滚轮重绑
+        if self._voices_filter_job:
+            try:
+                self.root.after_cancel(self._voices_filter_job)
+            except Exception:
+                pass
+        self._voices_filter_job = self.root.after(120, self._render_voices_list)
 
-    @staticmethod
-    def _filter_voices(voices: list, query: str) -> list:
-        q = (query or "").strip().lower()
-        if not q:
-            return list(voices)
-        out = []
-        for v in voices:
-            blob = " ".join(
-                [
-                    str(getattr(v, "id", "") or ""),
-                    str(getattr(v, "name", "") or ""),
-                    str(getattr(v, "tag", "") or ""),
-                    str(getattr(v, "author", "") or ""),
-                    str(getattr(v, "description", "") or ""),
-                    str(getattr(v, "series", "") or ""),
-                ]
-            ).lower()
-            if q in blob:
-                out.append(v)
-        return out
+    def _on_view_change(self, key: str) -> None:
+        if key == self._store_view:
+            return
+        self._store_view = key
+        self._voices_page = 1
+        self._render_voices_list()
 
     def _render_catalog(self) -> None:
+        """Full render: settings update card + dialog voices list."""
+        self._render_update_card()
+        self._render_voices_list()
+
+    def _render_update_card(self) -> None:
         cat = self.catalog
         try:
             self.lbl_ver.configure(text=f"当前版本  {local_app_version()}")
@@ -417,20 +409,10 @@ class StorePage:
             )
             self.btn_gui_apply.configure(state="disabled")
 
-        if self.lbl_community is not None:
-            note = cat.full_package_note or ""
-            lines = [note] if note else []
-            if cat.qq_group:
-                lines.append(f"QQ 群:{cat.qq_group}")
-            if cat.sharepoint_full:
-                lines.append("完整包链接:已配置")
-            else:
-                lines.append("完整包链接:未配置")
-            try:
-                self.lbl_community.configure(text="\n".join(lines))
-            except Exception:
-                pass
-
+    def _render_voices_list(self) -> None:
+        """Re-render only the dialog voice list + pager (search/page/view/toggle)."""
+        self._voices_filter_job = None
+        cat = self.catalog
         host = self.voices_host
         if host is None:
             return
@@ -440,34 +422,70 @@ class StorePage:
         except Exception:
             self.voices_host = None
             return
+        pager = self._voices_pager_host
+        if pager is not None:
+            try:
+                for w in pager.winfo_children():
+                    w.destroy()
+            except Exception:
+                self._voices_pager_host = None
         voices = [v for v in cat.voices if v.has_download()]
-        voices = self._filter_voices(voices, self._voices_search_q)
-        if not voices:
-            empty = (
-                f"没有匹配「{self._voices_search_q}」的音色。"
-                if self._voices_search_q
-                else "暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。"
-            )
-            tk.Label(
-                host,
-                text=empty,
-                font=sans_font(10),
-                bg=TM_BG,
-                fg=TM_META,
-                wraplength=520,
-                justify="left",
-                anchor="w",
-            ).pack(anchor="w", pady=8)
+        voices = filter_voices(voices, self._voices_search_q)
+        if self._store_view == "series":
+            self._render_series_view(voices)
         else:
-            for series, group in group_voices_by_series(voices):
-                if series:
-                    self._series_header(series, len(group))
-                for v in group:
-                    self._voice_row(v)
+            self._render_home_view(voices)
         try:
             self.root.after(30, self._dlg_bind_wheel)
         except Exception:
             pass
+
+    def _render_home_view(self, voices: list) -> None:
+        """首页：最新上架在前的平铺列表，底部页码分页（每页 5 个）。"""
+        if not voices:
+            self._voices_empty_label(
+                f"没有匹配「{self._voices_search_q}」的音色。"
+                if self._voices_search_q
+                else "暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。"
+            )
+            return
+        ordered = sort_voices_newest_first(voices)
+        page_items, self._voices_page, total_pages = paginate(
+            ordered, self._voices_page, 5
+        )
+        for v in page_items:
+            self._voice_row(v)
+        self._render_voices_pager(total_pages, len(ordered))
+
+    def _render_series_view(self, voices: list) -> None:
+        """系列专区：只列现有系列，默认收起；点标题展开；搜索词激活时自动展开。"""
+        groups = group_series_only(voices)
+        if not groups:
+            self._voices_empty_label(
+                f"没有匹配「{self._voices_search_q}」的系列音色。"
+                if self._voices_search_q
+                else "暂无系列音色。可点「刷新清单」重试。"
+            )
+            return
+        q_active = bool(self._voices_search_q)
+        for series, group in groups:
+            expanded = q_active or (series in self._expanded_series)
+            self._series_toggle_header(series, len(group), expanded)
+            if expanded:
+                for v in group:
+                    self._voice_row(v)
+
+    def _voices_empty_label(self, text: str) -> None:
+        tk.Label(
+            self.voices_host,
+            text=text,
+            font=sans_font(10),
+            bg=TM_BG,
+            fg=TM_META,
+            wraplength=520,
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", pady=8)
 
     def open_full_package_help(self) -> None:
         from launcher.online.package_spec import full_package_policy_help
@@ -488,27 +506,122 @@ class StorePage:
         else:
             messagebox.showinfo("全量包策略", msg)
 
-    def _series_header(self, series: str, count: int) -> None:
-        """系列包分组标题（Mygo / VOCALOID …）— mono 眉题 + 细线。"""
-        head = tk.Frame(self.voices_host, bg=TM_BG)
-        head.pack(fill="x", pady=(10, 2))
-        tk.Label(
+    def _series_toggle_header(self, series: str, count: int, expanded: bool) -> None:
+        """系列专区折叠标题 — 整行可点，▸ 收起 / ▾ 展开（几何箭头，非 emoji）。"""
+        head = tk.Frame(self.voices_host, bg=TM_BG, cursor="hand2")
+        head.pack(fill="x", pady=(10, 6))
+        arrow = "▾" if expanded else "▸"
+        left = tk.Label(
             head,
-            text=f"系列 · {series}",
+            text=f"{arrow} 系列 · {series}",
             font=mono_font(8),
             bg=TM_BG,
             fg=TM_META,
             anchor="w",
-        ).pack(side="left")
-        tk.Label(
+        )
+        left.pack(side="left")
+        right = tk.Label(
             head,
             text=f"{count} 个音色",
             font=mono_font(8),
             bg=TM_BG,
             fg=TM_META,
             anchor="e",
-        ).pack(side="right")
+        )
+        right.pack(side="right")
+        for w in (head, left, right):
+            w.bind("<Button-1>", lambda _e, s=series: self._toggle_series(s))
         tk.Frame(self.voices_host, bg=TM_HAIRLINE, height=1).pack(fill="x")
+
+    def _toggle_series(self, series: str) -> None:
+        if series in self._expanded_series:
+            self._expanded_series.discard(series)
+        else:
+            self._expanded_series.add(series)
+        self._render_voices_list()
+
+    def _render_voices_pager(self, total_pages: int, total_items: int) -> None:
+        """页码条：【1】【2】…、第 N/M 页 · 共 X 个、跳到 x 页。单页时留空。"""
+        host = self._voices_pager_host
+        if host is None or total_pages <= 1:
+            return
+        cur = self._voices_page
+
+        def page_btn(p: int) -> None:
+            cls = PrimaryButton if p == cur else GhostButton
+            btn = cls(
+                host,
+                str(p),
+                command=(None if p == cur else (lambda p=p: self._set_voices_page(p))),
+                padx=10,
+                pady=4,
+                font=mono_font(9),
+            )
+            btn.pack(side="left", padx=2)
+
+        def ellipsis() -> None:
+            tk.Label(host, text="…", font=mono_font(9), bg=TM_BG, fg=TM_META).pack(
+                side="left", padx=2
+            )
+
+        if total_pages <= 7:
+            pages = list(range(1, total_pages + 1))
+        else:
+            mid = [p for p in (cur - 1, cur, cur + 1) if 1 < p < total_pages]
+            pages = [1] + mid + [total_pages]
+        prev = 0
+        for p in pages:
+            if p - prev > 1:
+                ellipsis()
+            page_btn(p)
+            prev = p
+
+        # Right side: jump entry + summary（pack 逆序从右往左排）
+        GhostButton(
+            host,
+            "跳转",
+            command=lambda: self._jump_to_page(jump),
+            padx=8,
+            pady=3,
+            font=mono_font(9),
+        ).pack(side="right", padx=(4, 0))
+        tk.Label(host, text="页", font=mono_font(9), bg=TM_BG, fg=TM_META).pack(
+            side="right"
+        )
+        jump = tk.Entry(
+            host,
+            width=3,
+            font=mono_font(9),
+            justify="center",
+            relief="flat",
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            insertbackground=TM_INK,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        jump.pack(side="right", padx=(4, 2))
+        jump.bind("<Return>", lambda _e: self._jump_to_page(jump))
+        tk.Label(host, text="跳到", font=mono_font(9), bg=TM_BG, fg=TM_META).pack(
+            side="right"
+        )
+        tk.Label(
+            host,
+            text=f"第 {cur} / {total_pages} 页 · 共 {total_items} 个",
+            font=mono_font(9),
+            bg=TM_BG,
+            fg=TM_META,
+        ).pack(side="right", padx=(0, 10))
+
+    def _set_voices_page(self, page: int) -> None:
+        self._voices_page = int(page)  # paginate clamps out-of-range values
+        self._render_voices_list()
+
+    def _jump_to_page(self, entry: tk.Entry) -> None:
+        try:
+            self._set_voices_page(int(entry.get().strip()))
+        except (ValueError, tk.TclError):
+            pass  # 非数字输入静默忽略
 
     def _voice_row(self, v: VoiceEntry) -> None:
         row = tk.Frame(
@@ -630,6 +743,7 @@ class StorePage:
         # 搜索每键会重建列表；同一封面的下载线程只允许一个在途。
         # 命中在途时轮询缓存，下载完成后仍能点亮当前这行的缩略图。
         if v.cover_url in self._cover_inflight:
+
             def _poll(tries: int = 20) -> None:
                 if not lbl.winfo_exists():
                     return
@@ -791,27 +905,6 @@ class StorePage:
             self.root.after(0, done)
 
         threading.Thread(target=work, daemon=True).start()
-
-    def open_sharepoint(self) -> None:
-        url = (self.catalog.sharepoint_full or "").strip()
-        if not url:
-            messagebox.showinfo(
-                "完整包",
-                "未配置完整包链接。请通过 QQ 群等社群渠道获取。",
-            )
-            return
-        open_in_browser(url)
-
-    def open_qq(self) -> None:
-        url = (self.catalog.qq_link or "").strip()
-        if url:
-            open_in_browser(url)
-            return
-        g = (self.catalog.qq_group or "").strip()
-        if g:
-            messagebox.showinfo("QQ 群", f"群号:{g}\n（可在 QQ 中搜索群号加群）")
-        else:
-            messagebox.showinfo("QQ 群", "未配置社群信息。")
 
 
 def _fmt_prog(phase: str, done: int, total: int) -> str:

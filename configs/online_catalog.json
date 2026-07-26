@@ -130,8 +130,8 @@
     {
       "id": "guanguan",
       "name": "guanguanV1",
-      "author": "RVC Fabric",
-      "author_url": "https://cnb.cool/Turing-Mirror",
+      "author": "RVC",
+      "author_url": "https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI",
       "released": "260721",
       "tag": "少女音",
       "version": "2",
@@ -150,8 +150,8 @@
     {
       "id": "keruan",
       "name": "keruanV1",
-      "author": "RVC Fabric",
-      "author_url": "https://cnb.cool/Turing-Mirror",
+      "author": "RVC",
+      "author_url": "https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI",
       "released": "260721",
       "tag": "少女音",
       "version": "2",
@@ -170,8 +170,8 @@
     {
       "id": "kiki",
       "name": "kikiV1",
-      "author": "RVC Fabric",
-      "author_url": "https://cnb.cool/Turing-Mirror",
+      "author": "RVC",
+      "author_url": "https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI",
       "released": "260721",
       "tag": "少女音",
       "version": "2",
@@ -190,8 +190,8 @@
     {
       "id": "youzhanv2-xi",
       "name": "youzhanv2-xi",
-      "author": "RVC Fabric",
-      "author_url": "https://cnb.cool/Turing-Mirror",
+      "author": "RVC",
+      "author_url": "https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI",
       "released": "260721",
       "tag": "音色",
       "version": "2",

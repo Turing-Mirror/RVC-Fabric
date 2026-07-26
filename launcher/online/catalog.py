@@ -20,9 +20,7 @@ STATE_PATH = USER_DATA / "update_state.json"
 DEFAULT_MANIFEST_URLS: list[str] = [
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json",
 ]
-CNB_RAW_MAIN = (
-    "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main"
-)
+CNB_RAW_MAIN = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main"
 
 
 @dataclass
@@ -78,9 +76,7 @@ class VoiceEntry:
             author=str(
                 d.get("author") or d.get("publisher") or d.get("creator") or ""
             ).strip(),
-            author_url=str(
-                d.get("author_url") or d.get("author_link") or ""
-            ).strip(),
+            author_url=str(d.get("author_url") or d.get("author_link") or "").strip(),
             date=date,
             series=str(
                 d.get("series") or d.get("series_name") or d.get("collection") or ""
@@ -110,9 +106,7 @@ class GuiUpdate:
             sha256=str(d.get("sha256") or ""),
             notes=str(d.get("notes") or d.get("changelog") or ""),
             kind=str(d.get("kind") or "zip"),
-            package_type=str(
-                d.get("package_type") or d.get("type") or "gui_patch"
-            ),
+            package_type=str(d.get("package_type") or d.get("type") or "gui_patch"),
             min_app_version=str(d.get("min_app_version") or ""),
         )
 
@@ -137,13 +131,17 @@ class OnlineCatalog:
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], *, source: str = "unknown") -> "OnlineCatalog":
+    def from_dict(
+        cls, data: dict[str, Any], *, source: str = "unknown"
+    ) -> "OnlineCatalog":
         data = _normalize_index_payload(dict(data) if isinstance(data, dict) else {})
         app = data.get("app") if isinstance(data.get("app"), dict) else {}
         community = (
             data.get("community") if isinstance(data.get("community"), dict) else {}
         )
-        gui_raw = app.get("gui") if isinstance(app.get("gui"), dict) else data.get("gui")
+        gui_raw = (
+            app.get("gui") if isinstance(app.get("gui"), dict) else data.get("gui")
+        )
         voices_raw = data.get("voices") or data.get("models") or []
         voices: list[VoiceEntry] = []
         if isinstance(voices_raw, list):
@@ -215,7 +213,10 @@ def _normalize_index_payload(data: dict[str, Any]) -> dict[str, Any]:
                 gui = dict(gui)
                 gui.setdefault("package_type", "gui_patch")
                 gui["version"] = str(
-                    best.get("version") or best.get("released") or gui.get("version") or ""
+                    best.get("version")
+                    or best.get("released")
+                    or gui.get("version")
+                    or ""
                 )
                 gui["url"] = str(best.get("url") or best.get("pack_url") or "")
                 gui["sha256"] = str(best.get("sha256") or "")
@@ -231,9 +232,7 @@ def _normalize_index_payload(data: dict[str, Any]) -> dict[str, Any]:
     if isinstance(setups, list) and setups:
         best_s = _pick_latest_package(setups)
         community = (
-            dict(data["community"])
-            if isinstance(data.get("community"), dict)
-            else {}
+            dict(data["community"]) if isinstance(data.get("community"), dict) else {}
         )
         if best_s and best_s.get("url") and not community.get("sharepoint_full"):
             community["sharepoint_full"] = str(best_s.get("url"))
@@ -461,6 +460,61 @@ def group_voices_by_series(voices: list) -> list:
     return [(k, groups[k]) for k in order]
 
 
+def group_series_only(voices: list) -> list:
+    """系列专区 grouping: like group_voices_by_series but drops the
+    empty-series (单品) group. Order = first appearance in the list."""
+    return [(s, g) for s, g in group_voices_by_series(voices) if s]
+
+
+def filter_voices(voices: list, query: str) -> list:
+    """Case-insensitive substring filter over id/name/tag/author/description/series."""
+    q = (query or "").strip().lower()
+    if not q:
+        return list(voices)
+    out = []
+    for v in voices:
+        blob = " ".join(
+            [
+                str(getattr(v, "id", "") or ""),
+                str(getattr(v, "name", "") or ""),
+                str(getattr(v, "tag", "") or ""),
+                str(getattr(v, "author", "") or ""),
+                str(getattr(v, "description", "") or ""),
+                str(getattr(v, "series", "") or ""),
+            ]
+        ).lower()
+        if q in blob:
+            out.append(v)
+    return out
+
+
+def sort_voices_newest_first(voices: list) -> list:
+    """Newest-first copy: date (YYMMDD) desc; undated entries sink to the end.
+
+    Stable sort keeps manifest order (date asc + id asc at build time) for
+    equal dates, so same-day voices stay id-ascending.
+    """
+    return sorted(
+        voices,
+        key=lambda v: str(getattr(v, "date", "") or ""),
+        reverse=True,
+    )
+
+
+def paginate(items: list, page: int, per_page: int = 5) -> tuple:
+    """Return (page_items, clamped_page, total_pages); page is 1-based.
+
+    Empty list → ([], 1, 1). Out-of-range page clamps to [1, total_pages],
+    so a shrunken list (search / refresh) never strands the view on a
+    nonexistent page — callers must write the clamped page back.
+    """
+    per_page = max(1, int(per_page))
+    total_pages = max(1, -(-len(items) // per_page))
+    page = min(max(1, int(page)), total_pages)
+    start = (page - 1) * per_page
+    return items[start : start + per_page], page, total_pages
+
+
 def is_voice_installed(voice_id: str, models_dir: Path) -> bool:
     d = Path(models_dir) / voice_id
     if not d.is_dir():
@@ -471,6 +525,7 @@ def is_voice_installed(voice_id: str, models_dir: Path) -> bool:
 
 def compare_versions(a: str, b: str) -> int:
     """Return -1 if a<b, 0 if equal, 1 if a>b. Non-semver → string compare."""
+
     def parts(v: str) -> list[int]:
         out: list[int] = []
         for p in re_split(v):

@@ -121,7 +121,7 @@ class ProvisionProgressPanel(tk.Frame):
         self.lbl_detail = tk.Label(
             self,
             text="",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             anchor="w",
@@ -209,7 +209,7 @@ class ProvisionProgressPanel(tk.Frame):
                 lb = tk.Label(
                     self.steps_host,
                     text="",
-                    font=mono_font(8),
+                    font=sans_font(8),
                     bg=TM_SURFACE,
                     fg=TM_META,
                     anchor="w",
@@ -326,7 +326,7 @@ class BootstrapApp:
         self.btn_nav_setup = tk.Button(
             rail,
             text="首次设置",
-            font=title_font(9, "bold"),
+            font=title_font(10, "bold"),
             relief="flat",
             padx=16,
             pady=7,
@@ -340,7 +340,7 @@ class BootstrapApp:
         self.btn_nav_system = tk.Button(
             rail,
             text="系统快捷",
-            font=sans_font(9),
+            font=sans_font(10),
             relief="flat",
             padx=16,
             pady=7,
@@ -365,7 +365,7 @@ class BootstrapApp:
         self.status = tk.Label(
             self.root,
             text="正在准备界面…",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_BG,
             fg=TM_INK_MUTED,
             wraplength=px(560),
@@ -496,7 +496,7 @@ class BootstrapApp:
                     fg=TM_ACCENT_INK,
                     activebackground=TM_INK,
                     activeforeground=TM_ACCENT_INK,
-                    font=title_font(9, "bold"),
+                    font=title_font(10, "bold"),
                 )
             else:
                 btn.configure(
@@ -504,7 +504,7 @@ class BootstrapApp:
                     fg=TM_INK_MUTED,
                     activebackground=TM_SURFACE_HOVER,
                     activeforeground=TM_INK,
-                    font=sans_font(9),
+                    font=sans_font(10),
                 )
 
         style(self.btn_nav_setup, active == "setup")

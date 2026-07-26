@@ -34,6 +34,7 @@ from launcher.pages import (
     MonitorMixin,
     MorePageMixin,
     OnboardingMixin,
+    PlazaPageMixin,
     ProfilesMixin,
     RealtimeControlMixin,
     SettingsPageMixin,
@@ -97,6 +98,7 @@ from launcher.win_util import (
 class MainApp(
     HomePageMixin,
     ModelsPageMixin,
+    PlazaPageMixin,
     MorePageMixin,
     OnboardingMixin,
     HotkeysMixin,
@@ -206,6 +208,7 @@ class MainApp(
         self.root.after(350, self._poll_global_hotkeys)
         self.root.after(900, self._tick_mic_level)
         self.root.after(2500, self._silent_check_updates)
+        self.root.after(3000, self._silent_fetch_plaza)
         self.root.after(1200, self._maybe_show_onboarding)
         self._gpu_info: dict = {}
         self._update_badge_on = False
@@ -365,6 +368,7 @@ class MainApp(
         for key, label in (
             ("home", "首页"),
             ("models", "模型"),
+            ("plaza", "广场"),
             ("settings", "设置"),
             ("help", "说明"),
             ("more", "其他"),
@@ -606,6 +610,7 @@ class MainApp(
         self.pages = {
             "home": self._page_home(),
             "models": self._page_models(),
+            "plaza": self._page_plaza(),
             "settings": self._page_settings(),
             "help": self._help_page.frame,
             "more": self._page_more(),
@@ -628,6 +633,8 @@ class MainApp(
         # finished page (raising early would flash stale content mid-rebuild)
         if key == "models":
             self._show_models_page()
+        if key == "plaza":
+            self._show_plaza_page()
         if key == "home":
             # Cancel any pending hidden-state reflow; render synchronously so
             # the raised page is already final (no post-switch jump)
@@ -1086,6 +1093,7 @@ class MainApp(
             "_resize_job",
             "_model_restart_job",
             "_carousel_job",
+            "_plaza_job",
         ):
             job = getattr(self, attr, None)
             if job is not None:

@@ -155,6 +155,12 @@ class ModelsPageMixin:
         )
         self._models_sort_seg.pack(side="left")
 
+        # 广场 feed 的广告横幅槽（至多一条、可关闭；无投放时不占高度）。
+        # 渲染由 PlazaPageMixin._render_models_ad 负责，独立于 refresh_models
+        # 的网格销毁重建，所以关闭状态不会被网格刷新复活。
+        self._models_ad_host = tk.Frame(wrap, bg=TM_BG)
+        self._models_ad_host.pack(fill="x", padx=GUTTER, pady=0)
+
         # --- Paged catalog: plain frame, height = exactly the rows shown ---
         self.model_grid = tk.Frame(wrap, bg=TM_BG)
         self.model_grid.pack(fill="x", padx=GUTTER - 8, pady=(4, 0))
@@ -274,6 +280,12 @@ class ModelsPageMixin:
         prev = getattr(self, "_models_render_snap", None)
         if prev is None or prev[2] is None or snap_now != prev:
             self.refresh_models()
+        # Ad banner renders independently of the grid (own id-level snapshot;
+        # covers the feed-arrived-before-page-built case)
+        try:
+            self._render_models_ad()
+        except Exception:
+            pass
 
     def _apply_models_filter(self) -> None:
         """Re-render the grid for the current search/sort without a disk rescan."""

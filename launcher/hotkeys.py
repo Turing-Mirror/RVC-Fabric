@@ -16,6 +16,7 @@ from typing import Any, Callable, Optional
 # Action catalog
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class HotkeyAction:
     id: str
@@ -43,6 +44,7 @@ ACTIONS: list[HotkeyAction] = [
     HotkeyAction("toggle_mode", "变声 / 原声旁路切换", "transport", True),
     HotkeyAction("page_home", "打开首页", "nav", False),
     HotkeyAction("page_models", "打开模型页", "nav", False),
+    HotkeyAction("page_plaza", "打开广场页", "nav", False),
     HotkeyAction("page_settings", "打开设置页", "nav", False),
     HotkeyAction("page_more", "打开其他页", "nav", False),
     HotkeyAction("show_hotkeys", "显示快捷键说明", "misc", False),
@@ -66,6 +68,8 @@ DEFAULT_HOTKEYS: dict[str, str] = {
     "page_models": "Ctrl+2",
     "page_settings": "Ctrl+3",
     "page_more": "Ctrl+4",
+    # 广场后加：既有 1-4 绑定不动（不破坏肌肉记忆），广场排 5
+    "page_plaza": "Ctrl+5",
     "show_hotkeys": "F1",
     "undo_voice": "Ctrl+Z",
     "redo_voice": "Ctrl+Y",
@@ -310,7 +314,6 @@ def merge_global_actions(cfg_value: Any) -> dict[str, bool]:
     return out
 
 
-
 def find_duplicate_bindings(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
     """Return list of (normalized_key, [action_ids]) for collisions."""
     inv: dict[str, list[str]] = {}
@@ -388,6 +391,7 @@ def focus_should_skip_hotkey(widget) -> bool:
 # ---------------------------------------------------------------------------
 # Windows global hotkeys via RegisterHotKey
 # ---------------------------------------------------------------------------
+
 
 class GlobalHotkeyManager:
     """Register system-wide hotkeys; poll via Tk ``after`` loop."""

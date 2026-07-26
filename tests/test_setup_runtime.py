@@ -190,7 +190,10 @@ class RuntimeReadyTests(unittest.TestCase):
             py = root / "Runtime" / "python.exe"
             py.parent.mkdir(parents=True)
             py.write_bytes(b"MZ")
-            (root / "Runtime" / "Lib" / "site-packages" / "torch").mkdir(parents=True)
+            torch_dir = root / "Runtime" / "Lib" / "site-packages" / "torch"
+            torch_dir.mkdir(parents=True)
+            # runtime_ready 要求 torch/__init__.py 存在（空壳目录视为半截解压）
+            (torch_dir / "__init__.py").write_text("", encoding="utf-8")
             self.assertTrue(runtime_ready(root))
 
 

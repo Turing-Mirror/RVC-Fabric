@@ -1,14 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Tests for multi-connection download + resume helpers."""
+"""Tests for multi-connection download + resume helpers (pytest fixtures).
+
+无 pytest 的宿主机（unittest discover）整模块软跳过，套件保持全绿；
+需要完整跑请用 Runtime\\python.exe -m pytest tests -k multipart。
+"""
 
 from __future__ import annotations
 
 import hashlib
 import threading
+import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import pytest
+try:
+    import pytest
+except ImportError:  # pragma: no cover — host python without pytest
+    raise unittest.SkipTest("pytest not installed; run via Runtime pytest")
 
 from launcher.online.multipart import (
     auto_connections,

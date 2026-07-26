@@ -2,9 +2,10 @@
 """Math-equivalence checks for inference-side optimizations.
 
 These verify that the GPU index blend and the vectorized RMVPE decode produce
-the same numbers as the original CPU/loop implementations. They need pytest +
-Runtime stack (torch etc.). Without pytest, unittest discover soft-skips so
-the product suite stays green on hosts without ML deps:
+the same numbers as the original CPU/loop implementations. They need the
+Runtime stack (numpy + torch). Gate on the actual dependencies, not on pytest:
+pytest.importorskip raises pytest's own Skipped, which unittest discover
+reports as an error, so a host with pytest but no ML stack would go red.
 
     scripts\\run_tests.bat  (or Runtime\\python.exe -m pytest tests -k realtime_math)
 """
@@ -12,10 +13,14 @@ the product suite stays green on hosts without ML deps:
 from __future__ import annotations
 
 import importlib.util
+import os
+import sys
 import types
 import unittest
 
-_HAS_PYTEST = importlib.util.find_spec("pytest") is not None
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+_HAS_ML = all(importlib.util.find_spec(m) is not None for m in ("numpy", "torch"))
 
 
 def _reference_index_blend(q, bank, np):
@@ -60,15 +65,15 @@ def _reference_f0_post(f0, mel_min, mel_max, np):
     return np.rint(f0_mel).astype(np.int64)
 
 
-@unittest.skipUnless(_HAS_PYTEST, "pytest not installed")
+@unittest.skipUnless(_HAS_ML, "Runtime stack (numpy + torch) not installed")
 class RealtimeMathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import pytest
+        import numpy
+        import torch
 
-        cls.pytest = pytest
-        cls.np = pytest.importorskip("numpy")
-        cls.torch = pytest.importorskip("torch")
+        cls.np = numpy
+        cls.torch = torch
 
     def test_index_blend_gpu_matches_cpu_reference(self):
         from infer.lib.rtrvc import RVC
@@ -87,7 +92,8 @@ class RealtimeMathTests(unittest.TestCase):
         self.assertTrue(np.allclose(got, ref, rtol=1e-4, atol=1e-5))
 
     def test_rmvpe_decode_matches_loop_reference(self):
-        self.pytest.importorskip("librosa")
+        if importlib.util.find_spec("librosa") is None:
+            self.skipTest("librosa not installed")
         from infer.lib.rmvpe import RMVPE
 
         np = self.np
@@ -102,12 +108,8 @@ class RealtimeMathTests(unittest.TestCase):
         salience[7, 359] = 5.0
 
         got = RMVPE.to_local_average_cents(ns, salience.copy(), thred=0.03)
-        ref = _reference_local_average_cents(
-            cents_mapping, salience.copy(), 0.03, np
-        )
-        self.assertTrue(
-            np.allclose(got, ref, rtol=1e-6, atol=1e-8, equal_nan=True)
-        )
+        ref = _reference_local_average_cents(cents_mapping, salience.copy(), 0.03, np)
+        self.assertTrue(np.allclose(got, ref, rtol=1e-6, atol=1e-8, equal_nan=True))
 
     def test_get_f0_post_branchless_matches_reference(self):
         from infer.lib.rtrvc import RVC

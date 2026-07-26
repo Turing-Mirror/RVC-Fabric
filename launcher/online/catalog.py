@@ -524,24 +524,42 @@ def is_voice_installed(voice_id: str, models_dir: Path) -> bool:
 
 
 def compare_versions(a: str, b: str) -> int:
-    """Return -1 if a<b, 0 if equal, 1 if a>b. Non-semver → string compare."""
+    """Return -1 if a<b, 0 if equal, 1 if a>b. Non-semver → digit compare.
 
-    def parts(v: str) -> list[int]:
-        out: list[int] = []
-        for p in re_split(v):
+    ``X.Y.Z-partN`` 是预发布：同基础版本时排在正式版 ``X.Y.Z`` 之前
+    （否则纯数字提取会把 1.1.2-part1 判得比 1.1.2 新，正式版发不出去）。
+    """
+    import re
+
+    def split(v: str) -> tuple[list[int], Optional[int]]:
+        s = str(v or "")
+        m = re.search(r"-part(\d+)\s*$", s, flags=re.IGNORECASE)
+        pre = int(m.group(1)) if m else None
+        if m:
+            s = s[: m.start()]
+        digits: list[int] = []
+        for p in re_split(s):
             try:
-                out.append(int(p))
+                digits.append(int(p))
             except ValueError:
-                out.append(0)
-        return out or [0]
+                digits.append(0)
+        return digits or [0], pre
 
-    pa, pb = parts(a), parts(b)
+    pa, pre_a = split(a)
+    pb, pre_b = split(b)
     n = max(len(pa), len(pb))
     pa += [0] * (n - len(pa))
     pb += [0] * (n - len(pb))
     if pa < pb:
         return -1
     if pa > pb:
+        return 1
+    # 基础版本相同：无 part 后缀 = 正式版 = 最新；part 序号大者较新
+    ka = (1 << 30) if pre_a is None else pre_a
+    kb = (1 << 30) if pre_b is None else pre_b
+    if ka < kb:
+        return -1
+    if ka > kb:
         return 1
     return 0
 

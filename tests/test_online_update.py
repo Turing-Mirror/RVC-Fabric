@@ -14,7 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from launcher.online.catalog import OnlineCatalog, compare_versions, load_bundled_catalog
+from launcher.online.catalog import (
+    OnlineCatalog,
+    compare_versions,
+    load_bundled_catalog,
+)
 from launcher.online.downloader import (
     _has_requests,
     _session,
@@ -48,6 +52,16 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(compare_versions("1.0.0", "1.0.1"), -1)
         self.assertEqual(compare_versions("1.1.0", "1.0.9"), 1)
         self.assertEqual(compare_versions("1.1.0", "1.1.0"), 0)
+
+    def test_part_suffix_is_prerelease(self):
+        # partN 预发布 < 同基础正式版；part 序号大者较新
+        self.assertEqual(compare_versions("1.1.2-part1", "1.1.2"), -1)
+        self.assertEqual(compare_versions("1.1.2", "1.1.2-part1"), 1)
+        self.assertEqual(compare_versions("1.1.2-part1", "1.1.2-part2"), -1)
+        self.assertEqual(compare_versions("1.1.2-part1", "1.1.2-part1"), 0)
+        # 基础版本不同时 part 后缀不影响大小关系
+        self.assertEqual(compare_versions("1.1.2-part1", "1.1.1"), 1)
+        self.assertEqual(compare_versions("1.1.2-part9", "1.1.3"), -1)
 
 
 class CnbUrlTests(unittest.TestCase):
@@ -188,9 +202,7 @@ class CatalogTests(unittest.TestCase):
 
 class GithubUrlTests(unittest.TestCase):
     def test_blob_to_raw(self):
-        u = normalize_github_url(
-            "https://github.com/org/repo/blob/main/path/file.pth"
-        )
+        u = normalize_github_url("https://github.com/org/repo/blob/main/path/file.pth")
         self.assertIn("raw.githubusercontent.com", u)
 
     def test_is_github(self):
@@ -275,12 +287,12 @@ class VoicePackTests(unittest.TestCase):
                     "config.json",
                     json.dumps({"name": "DemoVoice", "tag": "测试"}),
                 )
-            info = install_voice_pack_zip(
-                zpath, voice_id="demo", models_root=models
-            )
+            info = install_voice_pack_zip(zpath, voice_id="demo", models_root=models)
             self.assertTrue(Path(info["path"]).is_file())
             self.assertTrue((models / "demo" / "config.json").is_file())
-            cfg = json.loads((models / "demo" / "config.json").read_text(encoding="utf-8"))
+            cfg = json.loads(
+                (models / "demo" / "config.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(cfg["name"], "DemoVoice")
 
     def test_has_download_pack_url(self):
@@ -288,9 +300,7 @@ class VoicePackTests(unittest.TestCase):
             {"id": "x", "name": "X", "pack_url": "https://example.com/a.zip"}
         )
         self.assertTrue(v.has_download())
-        self.assertFalse(
-            VoiceEntry.from_dict({"id": "y", "name": "Y"}).has_download()
-        )
+        self.assertFalse(VoiceEntry.from_dict({"id": "y", "name": "Y"}).has_download())
 
     def test_install_voice_zip_keeps_series(self):
         with tempfile.TemporaryDirectory() as td:
@@ -303,7 +313,9 @@ class VoicePackTests(unittest.TestCase):
                     "config.json",
                     json.dumps({"name": "灯", "series": "Mygo"}),
                 )
-            info = install_voice_pack_zip(zpath, voice_id="mygo-tomori", models_root=models)
+            info = install_voice_pack_zip(
+                zpath, voice_id="mygo-tomori", models_root=models
+            )
             cfg = json.loads(
                 (Path(info["dir"]) / "config.json").read_text(encoding="utf-8")
             )
@@ -317,9 +329,7 @@ class VoiceSeriesTests(unittest.TestCase):
                 {"id": "a", "name": "A", "pth_url": "https://x/a.pth", key: "VOCALOID"}
             )
             self.assertEqual(v.series, "VOCALOID")
-        v = VoiceEntry.from_dict(
-            {"id": "b", "name": "B", "pth_url": "https://x/b.pth"}
-        )
+        v = VoiceEntry.from_dict({"id": "b", "name": "B", "pth_url": "https://x/b.pth"})
         self.assertEqual(v.series, "")
 
     def test_group_voices_by_series(self):
@@ -347,9 +357,7 @@ class VoiceSeriesTests(unittest.TestCase):
         from launcher.online.catalog import group_voices_by_series
 
         voices = [
-            VoiceEntry.from_dict(
-                {"id": i, "name": i, "pth_url": f"https://x/{i}.pth"}
-            )
+            VoiceEntry.from_dict({"id": i, "name": i, "pth_url": f"https://x/{i}.pth"})
             for i in ("a", "b")
         ]
         groups = group_voices_by_series(voices)

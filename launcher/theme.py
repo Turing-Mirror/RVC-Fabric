@@ -93,6 +93,35 @@ DEFAULT_WIN_H: Final[int] = 900
 MIN_WIN_W: Final[int] = 1100
 MIN_WIN_H: Final[int] = 740
 
+# --- HiDPI scaling ---
+# The shell declares DPI awareness at startup (win_util.enable_dpi_awareness);
+# point-size fonts then scale via `tk scaling`, but raw pixel values (geometry,
+# wraplength, fixed card sizes) do not — they go through px().
+# Anti-double-scaling contract: px() may appear only (a) at the outermost
+# page/entry call site, or (b) inside a composite widget's __init__ for its
+# OWN constants. Widget width=/height= parameters are design units — the
+# widget itself applies px(); callers pass bare numbers.
+_SCALE: float = 1.0
+
+
+def set_scale_from_dpi(dpi: int) -> None:
+    """Record UI scale from monitor DPI (96 → 1.0). Never scales below 1."""
+    global _SCALE
+    try:
+        _SCALE = max(1.0, float(dpi) / 96.0)
+    except (TypeError, ValueError):
+        _SCALE = 1.0
+
+
+def scale() -> float:
+    return _SCALE
+
+
+def px(n: int) -> int:
+    """Design-unit pixels → physical pixels. Exact identity at 96 dpi."""
+    return n if _SCALE == 1.0 else round(n * _SCALE)
+
+
 APP_PRODUCT_NAME: Final[str] = "RVC Fabric"
 APP_PRODUCT_TAGLINE: Final[str] = "就绪"
 APP_WORDMARK: Final[str] = "RVC Fabric · 图灵镜"
@@ -162,6 +191,15 @@ def sans_font(size: int, weight: str = "normal") -> tuple:
 def mono_font(size: int, weight: str = "normal") -> tuple:
     f = _mono()
     return (f, size, weight) if weight != "normal" else (f, size)
+
+
+def meta_font(text: str, size: int = 8) -> tuple:
+    """Meta caption font for text that may be ASCII or CJK.
+
+    Cascadia Mono carries no CJK glyphs — Tk falls back per-glyph and small
+    grey captions render mushy. ASCII keeps the mono eyebrow look; CJK goes sans.
+    """
+    return mono_font(size) if (text or "").isascii() else sans_font(size)
 
 
 def light_tokens() -> dict[str, str]:

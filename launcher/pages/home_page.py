@@ -22,7 +22,9 @@ from launcher.theme import (
     TM_STAGE,
     TM_SURFACE,
     mono_font,
+    px,
     sans_font,
+    scale,
     title_font,
 )
 from launcher.ui import ModelCoverCard, SectionCard
@@ -85,7 +87,9 @@ class HomePageMixin:
         ).grid(row=0, column=0, sticky="w", pady=(4, 0))
         self.carousel_host = tk.Frame(mid, bg=TM_BG)
         self.carousel_host.grid(row=1, column=0, sticky="nsew")
-        self.carousel_host.bind("<Configure>", lambda e: self._schedule_carousel_reflow())
+        self.carousel_host.bind(
+            "<Configure>", lambda e: self._schedule_carousel_reflow()
+        )
 
         self.home_toast = tk.Label(
             fr,
@@ -130,10 +134,33 @@ class HomePageMixin:
                 self.root.after_cancel(self._carousel_job)
             except Exception:
                 pass
-        self._carousel_job = self.root.after(80, self._render_carousel)
+        self._carousel_job = self.root.after(80, self._carousel_reflow_tick)
+
+    def _carousel_reflow_tick(self) -> None:
+        self._carousel_job = None
+        # Hidden-page resizes: skip the rebuild; the show_page render (snapshot
+        # mismatch) catches up on the next visit
+        if getattr(self, "_current_page", "") != "home":
+            return
+        self._render_carousel()
 
     def _render_carousel(self) -> None:
         if not hasattr(self, "carousel_host"):
+            return
+        # Host is measured (physical px); card sizes are design units for
+        # ModelCoverCard, which applies px() itself — divide the scale out
+        s = scale()
+        host_w = max(int(self.carousel_host.winfo_width() / s), 400)
+        host_h = max(int(self.carousel_host.winfo_height() / s), 240)
+        snap = (
+            host_w,
+            host_h,
+            self._current_model_key(),
+            tuple((self.cfg.get("recent_models") or [])[:3]),
+            len(self.models),
+        )
+        # Unchanged inputs → identical output; skip the destroy/rebuild churn
+        if snap == getattr(self, "_home_render_snap", None):
             return
         for w in self.carousel_host.winfo_children():
             w.destroy()
@@ -150,16 +177,19 @@ class HomePageMixin:
                 fg=TM_INK_MUTED,
                 justify="center",
             ).pack(expand=True, pady=40)
+            self._home_render_snap = snap
             return
 
-        self.carousel_host.update_idletasks()
-        host_w = max(self.carousel_host.winfo_width(), 400)
-        host_h = max(self.carousel_host.winfo_height(), 240)
         # First card (current) dominates; the other recents are smaller
         focus_w = max(200, min(320, int(host_w * 0.34)))
         focus_h = max(240, min(360, int(host_h * 0.88)))
         side_w = max(130, int(focus_w * 0.62))
         side_h = max(180, int(focus_h * 0.72))
+
+        def _cover_px(v: int) -> int:
+            # Physical cover pixels, quantized to a 16px bucket so the cover
+            # cache stays bounded while the window is dragged around
+            return max(16, (px(v) // 16) * 16)
 
         idxs = self._recent_models(limit=3)
         row = tk.Frame(self.carousel_host, bg=TM_BG)
@@ -171,8 +201,8 @@ class HomePageMixin:
             w, h = (focus_w, focus_h) if focus else (side_w, side_h)
             photo = self._cover_cache.get(
                 m.get("cover"),
-                max_w=max(w - 4, 100),
-                max_h=max(int(h * 0.58), 80),
+                max_w=_cover_px(max(w - 4, 100)),
+                max_h=_cover_px(max(int(h * 0.58), 80)),
             )
             if m.get("missing"):
                 corner = "⚠ 缺失"
@@ -195,7 +225,8 @@ class HomePageMixin:
                     ix, feedback=True, maybe_restart=True
                 ),
             )
-            card.pack(side="left", padx=max(10, int(host_w * 0.016)), pady=12)
+            card.pack(side="left", padx=px(max(10, int(host_w * 0.016))), pady=12)
+        self._home_render_snap = snap
 
     def _update_home_current_label(self) -> None:
         if not hasattr(self, "home_current_lbl"):

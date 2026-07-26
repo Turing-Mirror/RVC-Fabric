@@ -57,6 +57,13 @@ class MainAppCompositionTests(unittest.TestCase):
             "_page_settings",
             "show_page",
             "_select_model",
+            # page-switch snapshot contract (grid+tkraise refactor)
+            "_show_models_page",
+            "_invalidate_catalog_views",
+            "_models_catalog_stamp",
+            "_models_reflow_tick",
+            "_carousel_reflow_tick",
+            "_render_carousel",
         ):
             self.assertTrue(
                 callable(getattr(MainApp, meth, None)),

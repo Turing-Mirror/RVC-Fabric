@@ -122,9 +122,17 @@ class HelpPage:
             self._body_texts.append(txt)
 
             self._autosize_text(txt)
-            txt.bind(
-                "<Configure>", lambda _e, t=txt: self._autosize_text(t), add="+"
-            )
+
+            def _txt_cfg(e, t=txt):
+                # Only re-measure on a real width change. Height changes fire
+                # <Configure> too — without this guard, set height → Configure
+                # → re-measure would self-oscillate.
+                if int(e.width) == getattr(t, "_tm_asz_w", None):
+                    return
+                t._tm_asz_w = int(e.width)
+                self._autosize_text(t)
+
+            txt.bind("<Configure>", _txt_cfg, add="+")
 
         def _wheel_tree(w):
             w.bind("<MouseWheel>", _wheel)
@@ -138,9 +146,7 @@ class HelpPage:
 
         fr.after(
             100,
-            lambda: _width(
-                type("E", (), {"width": max(canvas.winfo_width(), 600)})()
-            ),
+            lambda: _width(type("E", (), {"width": max(canvas.winfo_width(), 600)})()),
         )
 
     @staticmethod
@@ -168,13 +174,15 @@ class HelpPage:
             _do()
 
     def on_show(self) -> None:
-        # Widths only settle once the page is actually displayed — re-measure
-        # every block so the final line is never cut off.
-        for delay in (50, 300):
-            try:
-                self.fr.after(
-                    delay,
-                    lambda: [self._autosize_text(t) for t in self._body_texts],
-                )
-            except Exception:
-                pass
+        # Under grid stacking the hidden page keeps tracking width, so sizes
+        # are already right on repeat visits (instant). One idle pass on the
+        # first show covers CJK measurement wobble from the initial layout.
+        if getattr(self, "_shown_once", False):
+            return
+        self._shown_once = True
+        try:
+            self.fr.after_idle(
+                lambda: [self._autosize_text(t) for t in self._body_texts]
+            )
+        except Exception:
+            pass

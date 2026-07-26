@@ -57,8 +57,11 @@ class SettingsPageMixin:
         if not canvas or not wrap or win_id is None:
             return
         try:
-            canvas.update_idletasks()
+            # Pages stay mapped under grid stacking, so the width is always
+            # current — no update_idletasks needed. Same width = same layout.
             w = max(int(canvas.winfo_width()), 400)
+            if w == getattr(self, "_settings_reflow_w", None):
+                return
             canvas.itemconfigure(win_id, width=w)
             # Help / intro labels wrap to card width
             inner = max(w - 80, 280)
@@ -68,6 +71,7 @@ class SettingsPageMixin:
                 except Exception:
                     pass
             canvas.configure(scrollregion=canvas.bbox("all"))
+            self._settings_reflow_w = w
         except Exception:
             pass
 
@@ -113,7 +117,12 @@ class SettingsPageMixin:
 
         canvas.bind("<MouseWheel>", _on_mousewheel)
         wrap.bind("<MouseWheel>", _on_mousewheel)
-        wrap.bind("<Map>", lambda _e: _bind_wheel_recursive(wrap), add="+")
+        # Rebound from show_page (after_idle) on each visit — under grid
+        # stacking the page never unmaps, so a <Map> hook would run only once
+        # at startup and miss widgets StorePage rebuilds later (update card,
+        # download rows). Mirrors the models page _models_bind_wheel pattern.
+        self._settings_bind_wheel = lambda: _bind_wheel_recursive(wrap)
+        _bind_wheel_recursive(wrap)
 
         # --- vars (pitch/formant/function etc. already created in _init_shared_voice_vars)
         self.var_block = tk.DoubleVar(value=float(self.cfg.get("block_time") or 0.25))

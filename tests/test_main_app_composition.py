@@ -25,6 +25,7 @@ class MainAppCompositionTests(unittest.TestCase):
             "ConsultMixin",
             "HomePageMixin",
             "ModelsPageMixin",
+            "PlazaPageMixin",
             "MorePageMixin",
             "SettingsPageMixin",
         ):
@@ -64,6 +65,14 @@ class MainAppCompositionTests(unittest.TestCase):
             "_models_reflow_tick",
             "_carousel_reflow_tick",
             "_render_carousel",
+            # 广场 page + models-page ad banner (PlazaPageMixin contract)
+            "_page_plaza",
+            "_show_plaza_page",
+            "_plaza_reflow_tick",
+            "_silent_fetch_plaza",
+            "_apply_plaza_nav_badge",
+            "_render_plaza",
+            "_render_models_ad",
         ):
             self.assertTrue(
                 callable(getattr(MainApp, meth, None)),

@@ -163,6 +163,8 @@ class HotkeysMixin:
             self.show_page("home")
         elif action_id == "page_models":
             self.show_page("models")
+        elif action_id == "page_plaza":
+            self.show_page("plaza")
         elif action_id == "page_settings":
             self.show_page("settings")
         elif action_id == "page_more":

@@ -107,6 +107,7 @@
 - **社区下载改版（2026-07-27）**：首页按上传时间从晚到早分页（每页 5 个、页码+跳页）；新增「系列专区」折叠视图；移除「完整包与社群」卡片；RVC 原版 4 音色作者规范为「RVC」；**并发下载**（2 路 + 等待队列，按钮即状态：下载安装/待下载/NN%/重新下载）；MyGO 5 音色标题改中文角色名（千早爱音/高松灯/长崎爽世/椎名立希/要乐奈，拉丁 id 作副标）。**已随 v1.1.2 发布**（CNB gui_patch_1.1.2.zip，含 part1 诊断包与设置页整理；`compare_versions` 已支持 `-partN` 预发布语义——旧 part1 客户端因本地旧比较代码收不到 1.1.2 提示，属已知小尾巴）  
 - **设置页整理（2026-07-27）**：设置页「声卡接线说明」改为「实体声卡连接说明」（虚拟声卡选法在设置页各项旁与「说明」页已覆盖，弹窗改讲 USB 直播声卡 / 调音台）；「打开原版实时面板」从设置页移到「其他」页（高级入口不再吸引新手）；全项目用词「接线」统一改为「连接」
 - **文字清晰度 + 切页防闪（2026-07-27，6 提交 56aefac..bcb98a1）**：(a) 壳与启动器启动时声明 PMv2 DPI awareness + `tk scaling`（此前完全没有 → 125%/150% 屏整窗位图拉伸发糊）；像素常量统一过 `theme.px()`（100% 屏逐位零变化），控件 width/height 形参为设计单位由控件内部 px（防双重缩放契约写在 theme.py docstring）；win_geometry 持久化带 `win_dpi` 迁移。(b) 中文小字全部撤离 Cascadia Mono（无 CJK 字形逐字回退是截图发糊主因）；7pt 全部抬 8pt；≤9pt bold 抬 10pt；Combobox 配 sans 10；ASCII/CJK 双态文本走新 `theme.meta_font`。(c) `show_page` 由 pack_forget/pack 改 grid 叠放 + `tkraise`（消 unmap 白帧）；models/home 切页用渲染快照短路（宽度+选中音色+目录 mtime 戳，含每个音色子目录），数据变更点调 `_invalidate_catalog_views()`；settings `<Map>` 全树滚轮重绑改 show_page after_idle；help 首次 show 才自适应高度并解除 Configure 自激。**改动仅进 launcher/ 源码，需重打 exe 或发 gui_patch 才到用户**；125%/150% 实机验收待做（本机 96dpi 仅验证了零变化基线）。新增「广场」页时须遵守 grid+tkraise 与 px() 新架构（见 tests/test_dpi_scale.py 与 theme.py 注释）。  
+- **广场页（2026-07-27）**：新增「广场」导航页（TRM/RVC Fabric 资讯 + 引流 + 赞助卡片）与模型页至多一条可关闭广告横幅；feed 为 CNB 仓根 `plaza.json`，独立于 index.json，运营改内容不发版（源 `catalog-src/plaza.yaml`，build_catalog 编译回环校验）。ad/sponsor 强制可关闭并带「广告」角标；点击统计只靠编译期给 url 盖 utm 参数，客户端**零遥测**。详见 `docs/广场页与内容运营.md`。  
 
 ---
 
@@ -148,6 +149,7 @@
 | `docs/发行包-显卡分版.md` | N/A/50 分版 |
 | `docs/大众版使用说明.md` | 用户说明 |
 | `docs/在线更新与音色库.md` | 更新包规范 |
+| `docs/广场页与内容运营.md` | 广场页 feed 规范与投放手册（plaza.json / utm / 零遥测） |
 | `docs/CONTEXT_HANDOFF.md` | **本文** |
 
 上游多语言 FAQ/Changelog（`docs/en` 等）仍属原版 RVC 文档，未全部改产品名。

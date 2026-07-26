@@ -1,20 +1,24 @@
 # -*- coding: utf-8 -*-
-"""CNB 在线清单编译器 — YAML 源文件 → index.json / snippet / bundled catalog.
+"""CNB 在线清单编译器 — YAML 源文件 → index.json / snippet / bundled catalog / plaza.
 
 维护者只改 ``CNB-GIT-RELEASE/catalog-src/`` 下的 YAML（每音色一个文件，
 只写人话字段与制品相对路径）；sha256 / size_bytes / pack_url / cover_url /
-sha256_urls 全部由本脚本从本地制品自动补全。三份 JSON 产物为**生成物，
+sha256_urls 全部由本脚本从本地制品自动补全。四份 JSON 产物为**生成物，
 禁止手改**::
 
     CNB-GIT-RELEASE/index.json                          主索引（schema 2）
     CNB-GIT-RELEASE/catalog/online_catalog.snippet.json 兼容清单（schema 1）
     configs/online_catalog.json                         app 内置兜底（schema 1）
+    CNB-GIT-RELEASE/plaza.json                          广场 feed（独立管线，不进 index.json）
+
+广场源文件 ``catalog-src/plaza.yaml`` 是**可选**的：不存在或为空时
+plaza.json 仍会生成（内容 = 从 app.yaml 自动派生的版本资讯）。
 
 用法（仓库根目录，宿主 Python，需 PyYAML）::
 
     python scripts/build_catalog.py init            # 一次性：从线上 index.json 反向生成 YAML 源
     python scripts/build_catalog.py check           # 只校验（契约 + 回环过真实客户端解析器）
-    python scripts/build_catalog.py build --diff    # 校验 + 打印语义 diff + 写出三份产物
+    python scripts/build_catalog.py build --diff    # 校验 + 打印语义 diff + 写出四份产物
 
 锁定值语义：YAML 里的 ``sha256`` / ``size_bytes`` = 已发布的线上真值；
 与本地制品不一致时**警告并以锁定值为准**（--strict 升级为错误），
@@ -33,6 +37,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
@@ -68,6 +73,7 @@ class Paths:
         self.cnb = Path(cnb) if cnb else REPO / "CNB-GIT-RELEASE"
         self.src = self.cnb / "catalog-src"
         self.index_out = self.cnb / "index.json"
+        self.plaza_out = self.cnb / "plaza.json"
         self.snippet_out = self.cnb / "catalog" / "online_catalog.snippet.json"
         self.bundled_out = (
             Path(bundled) if bundled else REPO / "configs" / "online_catalog.json"
@@ -244,7 +250,9 @@ def _resolve_artifact(
     elif channel == "lfs":
         urls = [cnb_lfs_url(sha)] if sha else []
     else:
-        urls = [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}"] if name else []
+        urls = (
+            [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}"] if name else []
+        )
 
     if entry.get("sha256_urls"):
         sha_urls = [str(u) for u in entry["sha256_urls"] if u]
@@ -301,6 +309,15 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             rep.error(f"catalog-src/{fname}: 解析失败: {e}")
             out[key] = {}
 
+    # plaza.yaml 是可选源：不存在/为空 = {}，plaza.json 仍会生成（自动派生条目）
+    out["plaza"] = {}
+    p = src / "plaza.yaml"
+    if p.is_file():
+        try:
+            out["plaza"] = _load_yaml(p)
+        except Exception as e:
+            rep.error(f"catalog-src/plaza.yaml: 解析失败: {e}")
+
     out["runtimes"] = {}
     for variant in VALID_VARIANTS:
         p = src / "runtimes" / f"{variant}.yaml"
@@ -311,13 +328,19 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             out["runtimes"][variant] = _load_yaml(p)
         except Exception as e:
             rep.error(f"runtimes/{variant}.yaml: 解析失败: {e}")
-    extra = sorted(
-        f.stem
-        for f in (src / "runtimes").glob("*.yaml")
-        if (src / "runtimes").is_dir() and f.stem not in VALID_VARIANTS
-    ) if (src / "runtimes").is_dir() else []
+    extra = (
+        sorted(
+            f.stem
+            for f in (src / "runtimes").glob("*.yaml")
+            if (src / "runtimes").is_dir() and f.stem not in VALID_VARIANTS
+        )
+        if (src / "runtimes").is_dir()
+        else []
+    )
     for stem in extra:
-        rep.error(f"runtimes/{stem}.yaml: 非法 variant（只允许 {'/'.join(VALID_VARIANTS)}）")
+        rep.error(
+            f"runtimes/{stem}.yaml: 非法 variant（只允许 {'/'.join(VALID_VARIANTS)}）"
+        )
 
     out["voices"] = []
     vdir = src / "voices"
@@ -358,7 +381,10 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     explicit_pack = str(v.get("pack_url") or "").strip()
     explicit_pth = str(v.get("pth_url") or "").strip()
     if explicit_pth and not explicit_pack and not v.get("file"):
-        art = {"sha256": str(v.get("sha256") or ""), "size_bytes": int(v.get("size_bytes") or 0)}
+        art = {
+            "sha256": str(v.get("sha256") or ""),
+            "size_bytes": int(v.get("size_bytes") or 0),
+        }
         pack_url = ""
     else:
         art = _resolve_artifact(v, paths, rep, who=who, channel="lfs")
@@ -368,10 +394,31 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
             return None
 
     known = {
-        "id", "name", "tag", "series", "author", "author_url", "date", "released",
-        "version", "description", "file", "cover", "sha256", "size_bytes",
-        "package_type", "publisher", "fabric_official", "pack_url", "pth_url",
-        "index_url", "urls", "url", "sha256_urls", "name_display", "notes",
+        "id",
+        "name",
+        "tag",
+        "series",
+        "author",
+        "author_url",
+        "date",
+        "released",
+        "version",
+        "description",
+        "file",
+        "cover",
+        "sha256",
+        "size_bytes",
+        "package_type",
+        "publisher",
+        "fabric_official",
+        "pack_url",
+        "pth_url",
+        "index_url",
+        "urls",
+        "url",
+        "sha256_urls",
+        "name_display",
+        "notes",
     }
     item: dict[str, Any] = {
         "id": vid,
@@ -407,7 +454,9 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     return item
 
 
-def _compile_runtime(variant: str, r: dict, paths: Paths, rep: Report) -> Optional[dict]:
+def _compile_runtime(
+    variant: str, r: dict, paths: Paths, rep: Report
+) -> Optional[dict]:
     who = f"runtimes/{variant}"
     channel = str(r.get("channel") or ("lfs" if variant == "amd" else "release"))
     if channel not in VALID_CHANNELS:
@@ -421,7 +470,11 @@ def _compile_runtime(variant: str, r: dict, paths: Paths, rep: Report) -> Option
     parts = []
     for i, p in enumerate(parts_src):
         art = _resolve_artifact(
-            dict(p), paths, rep, who=f"{who}.parts[{i}]", channel=channel,
+            dict(p),
+            paths,
+            rep,
+            who=f"{who}.parts[{i}]",
+            channel=channel,
             release_tag=release_tag,
         )
         parts.append(
@@ -449,7 +502,9 @@ def _compile_runtime(variant: str, r: dict, paths: Paths, rep: Report) -> Option
     return spec
 
 
-def _compile_blob(entry: dict, paths: Paths, rep: Report, *, who: str, extract_root: str) -> dict:
+def _compile_blob(
+    entry: dict, paths: Paths, rep: Report, *, who: str, extract_root: str
+) -> dict:
     """engine_core / vbcable 顶层 blob（管线 B 的直接输入）。"""
     channel = str(entry.get("channel") or "lfs")
     art = _resolve_artifact(entry, paths, rep, who=who, channel=channel)
@@ -467,7 +522,9 @@ def _compile_blob(entry: dict, paths: Paths, rep: Report, *, who: str, extract_r
 
 
 def _package_row(entry: dict, blob: dict, *, kind: str, package_type: str = "") -> dict:
-    released = _yymmdd(entry.get("released") or entry.get("date")) or datetime.now().strftime("%y%m%d")
+    released = _yymmdd(
+        entry.get("released") or entry.get("date")
+    ) or datetime.now().strftime("%y%m%d")
     row: dict[str, Any] = {
         "id": str(entry.get("id") or f"{kind.replace('_', '-')}-{released}"),
         "name": str(entry.get("display_name") or entry.get("name") or blob["name"]),
@@ -518,7 +575,7 @@ def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
 
 
 def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
-    """源字典 → {index, snippet, bundled} 三份产物 dict。"""
+    """源字典 → {index, snippet, bundled} 产物 dict（广场走 compile_plaza 独立管线）。"""
     if rep.errors:
         return None
     meta = src.get("meta") or {}
@@ -526,7 +583,9 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     community = {
         "qq_group": str((src.get("community") or {}).get("qq_group") or ""),
         "qq_link": str((src.get("community") or {}).get("qq_link") or ""),
-        "sharepoint_full": str((src.get("community") or {}).get("sharepoint_full") or ""),
+        "sharepoint_full": str(
+            (src.get("community") or {}).get("sharepoint_full") or ""
+        ),
         "note": str((src.get("community") or {}).get("note") or ""),
     }
     runtime_release_tag = str(meta.get("runtime_release_tag") or "RVC-runtime")
@@ -550,8 +609,18 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         vbcable_top["url"] = vbcable_top["urls"][0]
         vbcable_top = {  # 保持线上键序（url 紧跟 urls）
             k: vbcable_top[k]
-            for k in ("name", "version", "channel", "size_bytes", "sha256",
-                      "urls", "url", "sha256_urls", "extract_root", "notes")
+            for k in (
+                "name",
+                "version",
+                "channel",
+                "size_bytes",
+                "sha256",
+                "urls",
+                "url",
+                "sha256_urls",
+                "extract_root",
+                "notes",
+            )
             if k in vbcable_top
         }
 
@@ -598,7 +667,11 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     setup_src = src.get("setup") or {}
     setup_blob = _compile_blob(setup_src, paths, rep, who="setup", extract_root=".")
     packages = {
-        "setup": [_package_row(setup_src, setup_blob, kind="setup", package_type="full_package")],
+        "setup": [
+            _package_row(
+                setup_src, setup_blob, kind="setup", package_type="full_package"
+            )
+        ],
         "gui_patch": [],
         "engine_core": [
             _package_row(src.get("engine_core") or {}, engine_core, kind="engine_core")
@@ -682,6 +755,296 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     return {"index": index, "snippet": snippet, "bundled": bundled}
 
 
+# -------------------------------------------------------------------- plaza
+#
+# 广场 feed 是独立管线：plaza.yaml（可选）+ app.yaml 自动派生 → plaza.json。
+# 不进 index.json；客户端契约见 launcher/online/plaza.py。
+
+_PLAZA_KNOWN_TYPES = ("news", "notice", "banner", "ad", "sponsor")
+_PLAZA_AD_TYPES = ("ad", "sponsor")
+_PLAZA_BODY_CAP = 220  # 自动派生资讯正文截断长度
+
+_PLAZA_YAML_TEMPLATE = """\
+# 广场 feed 源文件（可选）— 编译产物为 CNB 根目录 plaza.json，独立于 index.json。
+# 本文件不存在或为空时，plaza.json 仍会生成（内容 = 自动派生的版本资讯）。
+# 编译: python scripts/build_catalog.py build --diff
+
+# true（默认）= 自动从 app.yaml 派生一条版本资讯：
+#   id=release-<version>，title="RVC Fabric v<version> 发布"，body=notes 截断 220 字，
+#   date=released，priority=50。显示顺序只由 pinned/priority/date 决定
+#   （自动条目 priority=50，手写条目想压过它就写更高 priority 或 pinned）；
+#   手写了同 id 条目则不再自动生成。
+auto_release_news: true
+
+# 条目字段（仅 id/title 必填）：
+#   id            全局唯一；用户按 id 永久关闭，想重新曝光就换新 id
+#   type          news | notice | banner | ad | sponsor（ad/sponsor 强制可关闭 + 「广告」角标）
+#   title / body  标题 / 正文
+#   image         CNB 仓内相对路径（本地必须存在）或 cnb.cool https 直链；外部图床禁止
+#   url           点击跳转链接，仅 http(s)
+#   action_label  按钮文案（如「查看详情」）
+#   date          YYMMDD；start / end 为投放窗口（含当天）
+#   priority      数字越大越靠前（默认 0）；pinned: true 置顶
+#   dismissible   是否可关闭（资讯默认 false；ad/sponsor 编译时强制 true）
+#   placements    [plaza] 和/或 [models_page]（模型页至多显示一条且必须可关闭）
+#   min_app_version / max_app_version  版本门槛（含 -partN 语义）
+#   sponsor       广告主名（非空即按广告处理）
+#   utm: true     给 url 追加 utm_source/utm_medium/utm_campaign（ad/sponsor 一律自动追加）
+items:
+#   - id: notice-260801-maintenance
+#     type: notice
+#     title: 下载源维护公告
+#     body: CNB 下载源 8 月 1 日 02:00-04:00 维护，期间社区下载可能失败。
+#     url: https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases
+#     date: 260801
+#     pinned: true
+#     utm: true
+#   - id: ad-example-260801
+#     type: ad
+#     sponsor: 示例广告主
+#     title: 示例推广卡片
+#     body: 广告条目强制可关闭，UI 显示「广告」角标；url 自动追加 utm 参数。
+#     image: ch-banner/example.jpg
+#     url: https://example.com/landing?ref=abc
+#     action_label: 了解详情
+#     placements: [plaza, models_page]
+#     start: 260801
+#     end: 260831
+"""
+
+
+def _plaza_types() -> tuple[tuple, tuple]:
+    """KNOWN_TYPES/AD_TYPES 以客户端为准；launcher 不可导入时用本地兜底。"""
+    try:
+        from launcher.online.plaza import AD_TYPES, KNOWN_TYPES
+
+        return tuple(KNOWN_TYPES), tuple(AD_TYPES)
+    except ImportError:  # pragma: no cover
+        return _PLAZA_KNOWN_TYPES, _PLAZA_AD_TYPES
+
+
+def _stamp_utm(url: str, *, medium: str, campaign: str) -> str:
+    """给 url 追加 utm 参数；已含 utm_source 则原样返回。"""
+    parts = urlsplit(url)
+    if "utm_source" in parse_qs(parts.query):
+        return url
+    extra = urlencode(
+        {
+            "utm_source": "rvc_fabric",
+            "utm_medium": medium,
+            "utm_campaign": campaign,
+        }
+    )
+    query = f"{parts.query}&{extra}" if parts.query else extra
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
+
+
+def _compile_plaza_item(
+    raw: Any, paths: Paths, rep: Report, *, who: str, known: tuple, ads: tuple
+) -> Optional[dict]:
+    """单条 plaza.yaml 条目 → feed 行；不可用返回 None（错误已进 rep）。"""
+    if not isinstance(raw, dict):
+        rep.error(f"{who}: 条目必须是映射（mapping）")
+        return None
+    item_id = str(raw.get("id") or "").strip()
+    title = str(raw.get("title") or "").strip()
+    if not item_id:
+        rep.error(f"{who}: 缺 id")
+    if not title:
+        rep.error(f"{who}: 缺 title")
+    if not item_id or not title:
+        return None
+
+    typ = str(raw.get("type") or "news").strip().lower()
+    if typ not in known:
+        rep.warn(f"{who}: 未知 type={typ}（前向兼容允许，但旧客户端不会显示此条）")
+    sponsor = str(raw.get("sponsor") or "").strip()
+    is_ad = typ in ads or bool(sponsor)
+
+    placements = raw.get("placements") or ["plaza"]
+    if isinstance(placements, str):
+        placements = [placements]
+    if not isinstance(placements, list):
+        rep.error(f"{who}: placements 必须是列表或字符串")
+        placements = ["plaza"]
+    placements = [str(p).strip() for p in placements if str(p).strip()] or ["plaza"]
+
+    image = str(raw.get("image") or "").strip().replace("\\", "/")
+    if image:
+        if image.lower().startswith(("http://", "https://")):
+            host = (urlparse(image).hostname or "").lower()
+            if not (host == "cnb.cool" or host.endswith(".cnb.cool")):
+                rep.error(f"{who}: image 只允许 cnb.cool 域名（客户端会丢弃）: {image}")
+        elif not (paths.cnb / image).is_file():
+            rep.error(f"{who}: image 文件不存在于 CNB 仓: {image}")
+
+    url = str(raw.get("url") or "").strip()
+    if url and not url.lower().startswith(("http://", "https://")):
+        rep.error(f"{who}: url 必须是 http(s): {url}")
+        url = ""
+    # utm 盖章：广告一律；其他条目仅当源里 utm: true。utm 字段本身不进产物。
+    if url and (is_ad or bool(raw.get("utm"))):
+        url = _stamp_utm(url, medium=placements[0], campaign=item_id)
+
+    row: dict[str, Any] = {"id": item_id, "type": typ, "title": title}
+    body = str(raw.get("body") or "").strip()
+    if body:
+        row["body"] = body
+    if image:
+        row["image"] = image
+    if url:
+        row["url"] = url
+    action = str(raw.get("action_label") or "").strip()
+    if action:
+        row["action_label"] = action
+    date = _yymmdd(raw.get("date"))
+    if raw.get("date") and not date:
+        rep.warn(f"{who}: date 无法解析为 YYMMDD: {raw.get('date')}")
+    if date:
+        row["date"] = date
+    try:
+        priority = int(raw.get("priority") or 0)
+    except (TypeError, ValueError):
+        rep.warn(f"{who}: priority 不是整数，按 0 处理: {raw.get('priority')}")
+        priority = 0
+    if priority:
+        row["priority"] = priority
+    if raw.get("pinned"):
+        row["pinned"] = True
+    # 广告必须可关闭——编译时强制写 true，feed 无权关掉这个开关
+    if bool(raw.get("dismissible", False)) or is_ad:
+        row["dismissible"] = True
+    # 模型页横幅契约：客户端 pick_models_banner 只接受可关闭条目。
+    # 忘写 dismissible 的 models_page 条目会在所有界面静默隐身——编译期拦下。
+    if "models_page" in placements and not row.get("dismissible"):
+        rep.error(
+            f"{who}: placements 含 models_page 的条目必须 dismissible: true"
+            "（模型页横幅强制可关闭，否则客户端不会展示该条目）"
+        )
+    row["placements"] = placements
+    for key in ("start", "end"):
+        v = _yymmdd(raw.get(key))
+        if raw.get(key) and not v:
+            rep.warn(f"{who}: {key} 无法解析为 YYMMDD: {raw.get(key)}")
+        if v:
+            row[key] = v
+    for key in ("min_app_version", "max_app_version"):
+        v = str(raw.get(key) or "").strip()
+        if v:
+            row[key] = v
+    if sponsor:
+        row["sponsor"] = sponsor
+    return row
+
+
+def _auto_release_news(app_src: dict) -> Optional[dict]:
+    """从 app.yaml 派生一条版本资讯（id=release-<version>）。"""
+    version = str(app_src.get("version") or "").strip()
+    if not version:
+        return None
+    gui = app_src.get("gui") if isinstance(app_src.get("gui"), dict) else {}
+    body = str(app_src.get("notes") or gui.get("notes") or "").strip()
+    if len(body) > _PLAZA_BODY_CAP:
+        body = body[:_PLAZA_BODY_CAP] + "……"
+    row: dict[str, Any] = {
+        "id": f"release-{version}",
+        "type": "news",
+        "title": f"RVC Fabric v{version} 发布",
+    }
+    if body:
+        row["body"] = body
+    date = _yymmdd(app_src.get("released"))
+    if date:
+        row["date"] = date
+    row["priority"] = 50
+    row["placements"] = ["plaza"]
+    return row
+
+
+def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
+    """plaza.yaml（可选）+ app.yaml → plaza.json payload（schema 1）。"""
+    plaza_src = src.get("plaza") or {}
+    known, ads = _plaza_types()
+
+    rows_src = plaza_src.get("items") or []
+    if not isinstance(rows_src, list):
+        rep.error("plaza: items 必须是列表")
+        rows_src = []
+
+    items: list[dict] = []
+    seen: set[str] = set()
+    for i, raw in enumerate(rows_src):
+        row = _compile_plaza_item(
+            raw, paths, rep, who=f"plaza.items[{i}]", known=known, ads=ads
+        )
+        if row is None:
+            continue
+        if row["id"] in seen:
+            rep.error(f"plaza: id 重复: {row['id']}")
+            continue
+        seen.add(row["id"])
+        items.append(row)
+
+    # 自动派生版本资讯附在数组末尾（显示顺序由 pinned/priority/date 决定，
+    # 数组顺序不影响客户端展示）；同 id 已存在则不重复生成
+    if plaza_src.get("auto_release_news", True):
+        auto = _auto_release_news(src.get("app") or {})
+        if auto and auto["id"] not in seen:
+            seen.add(auto["id"])
+            items.append(auto)
+
+    return {"schema": 1, "items": items}
+
+
+def _plaza_roundtrip(payload: dict, rep: Report) -> None:
+    """回环[C]: 产物喂给真实客户端 plaza 解析器 — 防 schema 手滑让内容隐身。"""
+    try:
+        from launcher.online import plaza as plaza_mod
+    except ImportError as e:  # pragma: no cover
+        rep.warn(f"回环[C]跳过（plaza 不可导入: {e}）")
+        return
+    rows = payload.get("items") or []
+    parsed = plaza_mod.parse_feed(json.loads(json.dumps(payload)))
+    want_ids = {str(r.get("id")) for r in rows}
+    got_ids = {it.id for it in parsed}
+    if len(parsed) != len(rows) or want_ids != got_ids:
+        lost = sorted(want_ids - got_ids)
+        rep.error(
+            f"回环[C]: 客户端只解析出 {len(parsed)}/{len(rows)} 条"
+            f"（被静默丢弃: {', '.join(lost) or '?'}）"
+        )
+    for it in parsed:
+        if (it.type in plaza_mod.AD_TYPES or it.sponsor) and not (
+            it.is_ad and it.dismissible
+        ):
+            rep.error(f"回环[C]: 广告条目未标记 is_ad/dismissible: {it.id}")
+
+    # 探测日取 start 优先于 date：排期卡（date=创建日 < start=开播日）用
+    # date 当探测日会落在投放窗口之前，把合法排期误判为隐身
+    def _probe_day(it) -> str:
+        return it.start or it.date or ""
+
+    plaza_items = [it for it in parsed if plaza_mod.PLACEMENT_PLAZA in it.placements]
+    if plaza_items:
+        visible = 0
+        for it in plaza_items:
+            if plaza_mod.visible_items(
+                [it], plaza_mod.PLACEMENT_PLAZA, today=_probe_day(it)
+            ):
+                visible += 1
+        if not visible:
+            rep.error("回环[C]: 广场条目全部被 visible_items 过滤（字段疑似写错）")
+    # 模型页横幅位：每条 models_page 条目都必须能被 pick_models_banner 选中
+    # （客户端只接受 dismissible 条目——这里兜住编译校验之外的任何回归）
+    for it in parsed:
+        if plaza_mod.PLACEMENT_MODELS not in it.placements:
+            continue
+        if plaza_mod.pick_models_banner([it], today=_probe_day(it)) is None:
+            rep.error(
+                f"回环[C]: models_page 条目在模型页不可见（需 dismissible: true）: {it.id}"
+            )
+
+
 # ---------------------------------------------------------------- roundtrip
 
 
@@ -739,6 +1102,7 @@ def _semantic_diff(old: Any, new: Any, path: str = "") -> list[str]:
             else:
                 out.extend(_semantic_diff(old[k], new[k], p))
     elif isinstance(old, list) and isinstance(new, list):
+
         def _key(x: Any) -> str:
             return str(x.get("id")) if isinstance(x, dict) and x.get("id") else ""
 
@@ -754,8 +1118,10 @@ def _semantic_diff(old: Any, new: Any, path: str = "") -> list[str]:
                 else:
                     out.extend(_semantic_diff(old_by[k], new_by[k], p))
         elif old != new:
-            out.append(f"~ {path}: {json.dumps(old, ensure_ascii=False)[:60]} -> "
-                       f"{json.dumps(new, ensure_ascii=False)[:60]}")
+            out.append(
+                f"~ {path}: {json.dumps(old, ensure_ascii=False)[:60]} -> "
+                f"{json.dumps(new, ensure_ascii=False)[:60]}"
+            )
     elif old != new:
         o = json.dumps(old, ensure_ascii=False)
         n = json.dumps(new, ensure_ascii=False)
@@ -811,7 +1177,9 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         {
             "product": str(index.get("product") or "RVC Fabric"),
             "note": str(index.get("note") or ""),
-            "runtime_release_tag": str(index.get("runtime_release_tag") or "RVC-runtime"),
+            "runtime_release_tag": str(
+                index.get("runtime_release_tag") or "RVC-runtime"
+            ),
             "manifest_urls": list(index.get("manifest_urls") or MANIFEST_URLS),
         },
         hdr,
@@ -836,7 +1204,8 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
                 "notes": str(gui.get("notes") or ""),
             },
         },
-        hdr + "\ngui.url 由 sha256 推导（LFS）；发新增量包时改 version/sha256/min_app_version。",
+        hdr
+        + "\ngui.url 由 sha256 推导（LFS）；发新增量包时改 version/sha256/min_app_version。",
     )
 
     community = index.get("community") or {}
@@ -858,7 +1227,11 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         return rows[0] if rows and isinstance(rows[0], dict) else {}
 
     ec_row = _pkg0("engine_core")
-    ec_top = bundled.get("engine_core") if isinstance(bundled.get("engine_core"), dict) else {}
+    ec_top = (
+        bundled.get("engine_core")
+        if isinstance(bundled.get("engine_core"), dict)
+        else {}
+    )
     _dump_yaml(
         paths.src / "engine-core.yaml",
         {
@@ -868,7 +1241,9 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
             "channel": str(ec_row.get("channel") or "lfs"),
             "extract_root": str(ec_top.get("extract_root") or "."),
             "sha256": str(ec_row.get("sha256") or ec_top.get("sha256") or ""),
-            "size_bytes": int(ec_row.get("size_bytes") or ec_top.get("size_bytes") or 0),
+            "size_bytes": int(
+                ec_row.get("size_bytes") or ec_top.get("size_bytes") or 0
+            ),
             "notes": str(ec_row.get("notes") or ec_top.get("notes") or ""),
         },
         hdr,
@@ -886,7 +1261,9 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
             "channel": str(vb_row.get("channel") or "lfs"),
             "extract_root": str(vb_top.get("extract_root") or "VBCABLE"),
             "sha256": str(vb_row.get("sha256") or vb_top.get("sha256") or ""),
-            "size_bytes": int(vb_row.get("size_bytes") or vb_top.get("size_bytes") or 0),
+            "size_bytes": int(
+                vb_row.get("size_bytes") or vb_top.get("size_bytes") or 0
+            ),
             "notes": str(vb_row.get("notes") or vb_top.get("notes") or ""),
         },
         hdr,
@@ -908,7 +1285,11 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         hdr,
     )
 
-    rt_rows = {str(r.get("variant")): r for r in (pkgs.get("runtime") or []) if isinstance(r, dict)}
+    rt_rows = {
+        str(r.get("variant")): r
+        for r in (pkgs.get("runtime") or [])
+        if isinstance(r, dict)
+    }
     for variant, spec in (index.get("runtimes") or {}).items():
         if variant not in VALID_VARIANTS or not isinstance(spec, dict):
             continue
@@ -937,7 +1318,8 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         _dump_yaml(
             paths.src / "runtimes" / f"{variant}.yaml",
             data,
-            hdr + "\nsha256/size_bytes 为已发布锁定值；重发 Runtime 时更新为新制品的值。",
+            hdr
+            + "\nsha256/size_bytes 为已发布锁定值；重发 Runtime 时更新为新制品的值。",
         )
 
     bundled_series = {
@@ -975,9 +1357,15 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         )
         _dump_yaml(paths.src / "voices" / f"{vid}.yaml", data, hdr)
 
+    (paths.src / "plaza.yaml").write_text(_PLAZA_YAML_TEMPLATE, encoding="utf-8")
+
     n = len(list((paths.src / "voices").glob("*.yaml")))
-    print(f"init 完成: {paths.src}（voices={n}，runtimes={len(index.get('runtimes') or {})}）")
-    print("请人工核对 YAML（尤其 series 归类）后运行: python scripts/build_catalog.py build --diff")
+    print(
+        f"init 完成: {paths.src}（voices={n}，runtimes={len(index.get('runtimes') or {})}）"
+    )
+    print(
+        "请人工核对 YAML（尤其 series 归类）后运行: python scripts/build_catalog.py build --diff"
+    )
     return 0
 
 
@@ -990,6 +1378,10 @@ def _compile_all(paths: Paths) -> tuple[Optional[dict], Report]:
     outputs = compile_catalog(src, paths, rep) if not rep.errors else None
     if outputs:
         _roundtrip_check(outputs, src, rep)
+        n_err = len(rep.errors)
+        outputs["plaza"] = compile_plaza(src, paths, rep)
+        if len(rep.errors) == n_err:  # 编译干净才回环，避免级联报错
+            _plaza_roundtrip(outputs["plaza"], rep)
     return outputs, rep
 
 
@@ -999,7 +1391,10 @@ def cmd_check(paths: Paths, *, strict: bool = False) -> int:
     if rep.failed(strict) or outputs is None:
         print(f"check 失败（错误 {len(rep.errors)}，警告 {len(rep.warnings)}）")
         return 1
-    print(f"check 通过（警告 {len(rep.warnings)}，音色 {len(outputs['index']['voices'])} 个）")
+    print(
+        f"check 通过（警告 {len(rep.warnings)}，音色 {len(outputs['index']['voices'])} 个，"
+        f"广场 {len(outputs['plaza']['items'])} 条）"
+    )
     return 0
 
 
@@ -1019,8 +1414,12 @@ def cmd_build(paths: Paths, *, strict: bool = False, show_diff: bool = False) ->
             old_index = {}
 
     if _stable_equal(index, old_index):
-        index["updated"] = str(old_index.get("updated") or datetime.now().strftime("%Y-%m-%d"))
-        index["released"] = str(old_index.get("released") or datetime.now().strftime("%y%m%d"))
+        index["updated"] = str(
+            old_index.get("updated") or datetime.now().strftime("%Y-%m-%d")
+        )
+        index["released"] = str(
+            old_index.get("released") or datetime.now().strftime("%y%m%d")
+        )
     else:
         index["updated"] = datetime.now().strftime("%Y-%m-%d")
         index["released"] = datetime.now().strftime("%y%m%d")
@@ -1038,24 +1437,54 @@ def cmd_build(paths: Paths, *, strict: bool = False, show_diff: bool = False) ->
             print("  （无变化）")
         print("---")
 
+    plaza = outputs["plaza"]
+    if show_diff and paths.plaza_out.is_file():
+        old_plaza: dict = {}
+        try:
+            old_plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
+        except Exception:
+            old_plaza = {}
+        lines = _semantic_diff(old_plaza, plaza)
+        print("--- plaza.json 语义 diff ---")
+        if lines:
+            for ln in lines:
+                print(" ", ln)
+        else:
+            print("  （无变化）")
+        print("---")
+
     _write_json(paths.index_out, index)
     _write_json(paths.snippet_out, outputs["snippet"])
     _write_json(paths.bundled_out, outputs["bundled"])
-    print(f"已写出:\n  {paths.index_out}\n  {paths.snippet_out}\n  {paths.bundled_out}")
-    print(f"（音色 {len(index['voices'])} 个，警告 {len(rep.warnings)}）")
+    _write_json(paths.plaza_out, plaza)
+    print(
+        f"已写出:\n  {paths.index_out}\n  {paths.snippet_out}\n"
+        f"  {paths.bundled_out}\n  {paths.plaza_out}"
+    )
+    print(
+        f"（音色 {len(index['voices'])} 个，广场 {len(plaza['items'])} 条，"
+        f"警告 {len(rep.warnings)}）"
+    )
     return 0
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="CNB 清单编译器（YAML 源 → JSON 产物）")
-    ap.add_argument("--cnb", type=Path, default=None, help="CNB-GIT-RELEASE 目录（默认仓内）")
-    ap.add_argument("--bundled", type=Path, default=None, help="configs/online_catalog.json 输出路径")
+    ap.add_argument(
+        "--cnb", type=Path, default=None, help="CNB-GIT-RELEASE 目录（默认仓内）"
+    )
+    ap.add_argument(
+        "--bundled",
+        type=Path,
+        default=None,
+        help="configs/online_catalog.json 输出路径",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_init = sub.add_parser("init", help="从线上 index.json 反向生成 YAML 源（一次性）")
     p_init.add_argument("--force", action="store_true")
     p_check = sub.add_parser("check", help="只校验，不写文件（CI 可用）")
     p_check.add_argument("--strict", action="store_true", help="警告也算失败")
-    p_build = sub.add_parser("build", help="校验并写出三份 JSON 产物")
+    p_build = sub.add_parser("build", help="校验并写出四份 JSON 产物")
     p_build.add_argument("--strict", action="store_true")
     p_build.add_argument("--diff", action="store_true", help="写出前打印语义 diff")
     args = ap.parse_args(argv)

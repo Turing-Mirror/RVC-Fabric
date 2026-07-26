@@ -48,11 +48,12 @@ python scripts\build_catalog.py check         :: 只校验（含回环过真实�
 
 Two test styles coexist, and the difference matters: most files are `unittest.TestCase`, but
 `test_profiles`, `test_launcher_extracted`, `test_catalog_filter`, `test_index_bindings`,
-`test_multipart_download`, `test_collect_diagnostics` and `test_perf_report` are bare pytest
+`test_multipart_download`, `test_collect_diagnostics`, `test_perf_bench` and `test_perf_report` are bare pytest
 functions — **`unittest discover` silently collects zero tests from them**, so run pytest too before
 trusting a green run. Tests needing the ML stack (`test_realtime_math`, `test_benchmark_realtime`)
-soft-skip when pytest is absent so the suite stays green on a host without torch; run them with
-`Runtime\python.exe -m pytest tests -k realtime_math`.
+soft-skip when numpy/torch are absent (guards probe the real deps via `find_spec`, never pytest —
+a host with pytest but no numpy must stay green too). The product Runtime has no pytest, so run them
+with `Runtime\python.exe -m unittest discover -s tests -p "test_realtime_math.py"`.
 
 Upstream CI (`.github/workflows/`) runs `black .` on `main`/`dev` — keep new Python black-formatted.
 

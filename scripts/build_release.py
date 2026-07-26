@@ -258,6 +258,9 @@ def shell_hidden_imports() -> list[str]:
         "tkinter.constants",
         "tkinter.colorchooser",
         "_tkinter",
+        # 诊断包 env.json 读注册表取 CPU 名；collect_diagnostics.py 是磁盘加载,
+        # PyInstaller 静态分析看不到它,显式点名以免精简 stdlib 缺失时静默降级
+        "winreg",
     ]
 
 

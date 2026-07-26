@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tools.collect_diagnostics import (
     _MAX_PER_DIR,
+    _MAX_PERF_REPORTS,
     collect,
     env_summary,
     gather_files,
@@ -44,8 +45,37 @@ def test_gather_caps_per_directory(tmp_path):
     _make_tree(tmp_path)
     for i in range(_MAX_PER_DIR + 7):
         (tmp_path / "User_Data" / "logs" / f"old_{i:02d}.log").write_text("x")
-    arcs = [a for a, _ in gather_files(str(tmp_path)) if a.startswith("User_Data/logs/")]
+    arcs = [
+        a for a, _ in gather_files(str(tmp_path)) if a.startswith("User_Data/logs/")
+    ]
     assert len(arcs) == _MAX_PER_DIR
+
+
+def test_gather_keeps_more_perf_reports_than_logs(tmp_path):
+    """Perf samples (incl. bench_*.json) are the optimization dataset —
+    they get a larger per-dir budget than logs."""
+    _make_tree(tmp_path)
+    pr = tmp_path / "User_Data" / "perf_reports"
+    for i in range(_MAX_PERF_REPORTS + 5):
+        (pr / f"perf_{i:03d}.json").write_text("{}")
+    (pr / "bench_20260727_120000.json").write_text("{}")
+    arcs = [
+        a
+        for a, _ in gather_files(str(tmp_path))
+        if a.startswith("User_Data/perf_reports/")
+    ]
+    assert len(arcs) == _MAX_PERF_REPORTS
+    assert _MAX_PERF_REPORTS > _MAX_PER_DIR
+
+
+def test_gather_deduplicates_overlapping_entries(tmp_path):
+    """Files in the explicit list that also land in the newest-N sweep
+    (e.g. logs/install_health.log) must appear once, not twice."""
+    _make_tree(tmp_path)
+    (tmp_path / "User_Data" / "logs" / "install_health.log").write_text("ok")
+    arcs = [a for a, _ in gather_files(str(tmp_path))]
+    assert len(arcs) == len(set(arcs))
+    assert "User_Data/logs/install_health.log" in arcs
 
 
 def test_collect_builds_zip_with_env(tmp_path):
@@ -64,3 +94,12 @@ def test_collect_builds_zip_with_env(tmp_path):
 def test_env_summary_survives_missing_torch(tmp_path):
     info = env_summary(str(tmp_path))
     assert "torch" in info  # either a version or an 'unavailable: ...' marker
+
+
+def test_env_summary_identifies_machine(tmp_path):
+    """The bundle doubles as a per-machine perf sample: it must say what
+    hardware class this is, not just the Python stack."""
+    info = env_summary(str(tmp_path))
+    assert "cpu" in info
+    assert isinstance(info["cpu_count"], int) and info["cpu_count"] >= 1
+    assert info["machine"]

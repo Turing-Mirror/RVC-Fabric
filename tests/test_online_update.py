@@ -292,6 +292,70 @@ class VoicePackTests(unittest.TestCase):
             VoiceEntry.from_dict({"id": "y", "name": "Y"}).has_download()
         )
 
+    def test_install_voice_zip_keeps_series(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            models = td_path / "models"
+            zpath = td_path / "v.zip"
+            with zipfile.ZipFile(zpath, "w") as zf:
+                zf.writestr("mygo.pth", b"x" * 60_000)
+                zf.writestr(
+                    "config.json",
+                    json.dumps({"name": "灯", "series": "Mygo"}),
+                )
+            info = install_voice_pack_zip(zpath, voice_id="mygo-tomori", models_root=models)
+            cfg = json.loads(
+                (Path(info["dir"]) / "config.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(cfg.get("series"), "Mygo")
+
+
+class VoiceSeriesTests(unittest.TestCase):
+    def test_from_dict_reads_series_aliases(self):
+        for key in ("series", "series_name", "collection"):
+            v = VoiceEntry.from_dict(
+                {"id": "a", "name": "A", "pth_url": "https://x/a.pth", key: "VOCALOID"}
+            )
+            self.assertEqual(v.series, "VOCALOID")
+        v = VoiceEntry.from_dict(
+            {"id": "b", "name": "B", "pth_url": "https://x/b.pth"}
+        )
+        self.assertEqual(v.series, "")
+
+    def test_group_voices_by_series(self):
+        from launcher.online.catalog import group_voices_by_series
+
+        def mk(i, series=""):
+            return VoiceEntry.from_dict(
+                {"id": i, "name": i, "pth_url": f"https://x/{i}.pth", "series": series}
+            )
+
+        voices = [
+            mk("solo1"),
+            mk("tomori", "Mygo"),
+            mk("miku", "VOCALOID"),
+            mk("anon", "Mygo"),
+            mk("solo2"),
+        ]
+        groups = group_voices_by_series(voices)
+        self.assertEqual([g[0] for g in groups], ["", "Mygo", "VOCALOID"])
+        self.assertEqual([v.id for v in groups[0][1]], ["solo1", "solo2"])
+        self.assertEqual([v.id for v in groups[1][1]], ["tomori", "anon"])
+        self.assertEqual([v.id for v in groups[2][1]], ["miku"])
+
+    def test_group_all_ungrouped_single_group(self):
+        from launcher.online.catalog import group_voices_by_series
+
+        voices = [
+            VoiceEntry.from_dict(
+                {"id": i, "name": i, "pth_url": f"https://x/{i}.pth"}
+            )
+            for i in ("a", "b")
+        ]
+        groups = group_voices_by_series(voices)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0][0], "")
+
 
 class SafeZipTests(unittest.TestCase):
     def test_reject_zip_slip(self):

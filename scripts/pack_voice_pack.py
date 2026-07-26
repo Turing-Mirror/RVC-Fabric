@@ -46,6 +46,11 @@ def main() -> int:
         help="Release date YYMMDD (default: today)",
     )
     ap.add_argument("--tag", default="音色")
+    ap.add_argument(
+        "--series",
+        default="",
+        help="系列包名（如 Mygo / VOCALOID）；社区下载按此分组显示",
+    )
     ap.add_argument("--version", default="1")
     ap.add_argument("--pth", required=True, type=Path, help="Path to .pth")
     ap.add_argument("--index", type=Path, default=None)
@@ -106,6 +111,10 @@ def main() -> int:
         online_id=args.id,
         released=date,
     )
+    series = (args.series or "").strip()
+    if series:
+        meta["series"] = series
+        cfg["series"] = series
 
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(TM_PACKAGE_JSON, json.dumps(meta, ensure_ascii=False, indent=2))

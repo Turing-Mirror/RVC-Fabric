@@ -42,6 +42,7 @@ class VoiceEntry:
     author: str = ""
     author_url: str = ""
     date: str = ""  # YYMMDD（与 index.json released 同义）
+    series: str = ""  # 系列包名（Mygo / VOCALOID …）；空 = 单品音色
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "VoiceEntry":
@@ -81,6 +82,9 @@ class VoiceEntry:
                 d.get("author_url") or d.get("author_link") or ""
             ).strip(),
             date=date,
+            series=str(
+                d.get("series") or d.get("series_name") or d.get("collection") or ""
+            ).strip(),
         )
 
     def has_download(self) -> bool:
@@ -328,6 +332,7 @@ def _catalog_to_dict(cat: OnlineCatalog) -> dict[str, Any]:
                 "author_url": v.author_url,
                 "date": v.date,
                 "released": v.date,
+                "series": v.series,
             }
             for v in cat.voices
         ],
@@ -433,6 +438,27 @@ def save_update_state(state: dict[str, Any]) -> None:
         json.dumps(state, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def group_voices_by_series(voices: list) -> list:
+    """Group VoiceEntry list into [(series_name, [entries…]), …].
+
+    - 无系列（series 为空）的音色合并在首组，组名 ""。
+    - 系列组按首次出现顺序排列，组内保持清单顺序。
+    """
+    order: list[str] = []
+    groups: dict[str, list] = {}
+    for v in voices:
+        key = str(getattr(v, "series", "") or "").strip()
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(v)
+    # 空组（单品）永远排最前，其余按出现顺序
+    if "" in order:
+        order.remove("")
+        order.insert(0, "")
+    return [(k, groups[k]) for k in order]
 
 
 def is_voice_installed(voice_id: str, models_dir: Path) -> bool:

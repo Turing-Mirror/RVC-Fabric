@@ -214,6 +214,8 @@ def _entry_identity_extra(entry: VoiceEntry) -> dict:
         extra["author_url"] = entry.author_url
     if entry.date:
         extra["date"] = entry.date
+    if getattr(entry, "series", ""):
+        extra["series"] = entry.series
     return extra
 
 
@@ -371,7 +373,7 @@ def install_voice_pack_zip(
         if tm_meta.get("voice_id") and not vid:
             vid = str(tm_meta.get("voice_id") or vid)
         # Persist identity fields into installed config.json
-        for k in ("author", "author_url", "date"):
+        for k in ("author", "author_url", "date", "series"):
             if identity.get(k):
                 extra[k] = identity[k]
         # Cover → User_Data/ch-banner/<id>.ext + model folder; config stores ch-banner path

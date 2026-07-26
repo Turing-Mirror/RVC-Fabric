@@ -18,6 +18,7 @@ from launcher.catalog import (
     import_user_files,
     model_folder_layout_help,
 )
+from launcher.features import CONSULT_ENTRY_ENABLED
 from launcher.paths import MODELS_DIR, list_voice_models
 from launcher.theme import (
     GUTTER,
@@ -94,13 +95,14 @@ class ModelsPageMixin:
             bg=TM_BG,
             fg=TM_INK,
         ).pack(side="left")
-        PrimaryButton(
-            title_row,
-            "✦ 想更像这个角色？申请专业优化",
-            command=self.open_consult_wizard,
-            padx=14,
-            pady=7,
-        ).pack(side="left", padx=(16, 0))
+        if CONSULT_ENTRY_ENABLED:
+            PrimaryButton(
+                title_row,
+                "✦ 想更像这个角色？申请专业优化",
+                command=self.open_consult_wizard,
+                padx=14,
+                pady=7,
+            ).pack(side="left", padx=(16, 0))
         self.models_status_lbl = tk.Label(
             left,
             text="",

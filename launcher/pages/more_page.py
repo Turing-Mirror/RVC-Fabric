@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from launcher import realtime_client as rt_client
+from launcher.features import CONSULT_ENTRY_ENABLED
 from launcher.paths import ROOT, USER_DATA
 from launcher.theme import (
     APP_PRODUCT_TAGLINE,
@@ -69,7 +70,6 @@ class MorePageMixin:
 
         entries = [
             # (文本, 回调, 是否主按钮)
-            ("性能&参数优化服务", self.open_consult_wizard, True),
             ("根据本机表现自动优化性能", self._auto_perf_from_history, False),
             ("重新观看新手引导", lambda: self.show_onboarding(first_run=False), False),
             ("使用说明", lambda: self.show_page("help"), False),
@@ -82,6 +82,8 @@ class MorePageMixin:
             ("训练 / 翻唱 WebUI（高级）", self.open_webui, False),
             ("强制结束变声引擎（卡音频时点）", self._force_kill_engine, False),
         ]
+        if CONSULT_ENTRY_ENABLED:
+            entries.insert(0, ("性能&参数优化服务", self.open_consult_wizard, True))
         for i, (text, cmd, primary) in enumerate(entries):
             cls = PrimaryButton if primary else GhostButton
             b = cls(box, text, command=cmd, padx=10, pady=14)

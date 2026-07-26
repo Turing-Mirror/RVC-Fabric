@@ -29,6 +29,7 @@ HOT_KEYS = frozenset(
         "index_rate",
         "rms_mix_rate",
         "threhold",
+        "in_gain_db",  # 麦克风增益（dB），门限/电平表之前
         "f0method",
         "I_noise_reduce",
         "O_noise_reduce",

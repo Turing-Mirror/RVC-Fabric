@@ -22,7 +22,6 @@ from launcher.paths import (
     find_release_exe,
 )
 
-
 CREATE_NO_WINDOW = 0x08000000
 # GUI child processes must NOT use CREATE_NO_WINDOW — it can suppress or
 # delay window creation for FreeSimpleGUI / tk under some Windows sessions.
@@ -175,6 +174,76 @@ def focus_window_by_title(title_substr: str, timeout_s: float = 45.0) -> bool:
     return False
 
 
+def enable_dpi_awareness() -> Optional[str]:
+    """Declare per-monitor DPI awareness so Tk text renders crisp on scaled displays.
+
+    Must run before tk.Tk(). Neither the PyInstaller shell nor Runtime pythonw
+    ships a dpiAware manifest, so without this Windows bitmap-stretches the
+    whole window at 125%/150% scaling. Returns the level achieved
+    ("pmv2" / "pm" / "system") or None (non-Windows / all calls failed).
+    """
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    try:
+        # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (Win10 1703+): stays crisp
+        # on every monitor of a mixed-DPI setup (system-aware gets re-stretched
+        # when dragged to a second monitor).
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return "pmv2"
+    except Exception:
+        pass
+    try:
+        hr = ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PER_MONITOR_DPI_AWARE
+        # E_ACCESSDENIED: awareness already set for this process — still a win
+        if hr in (0, -2147024891):  # S_OK / 0x80070005
+            return "pm"
+    except Exception:
+        pass
+    try:
+        if ctypes.windll.user32.SetProcessDPIAware():
+            return "system"
+    except Exception:
+        pass
+    return None
+
+
+def get_window_dpi(hwnd: Optional[int] = None) -> int:
+    """Effective DPI for a window (or the system). Honest only after
+    enable_dpi_awareness() — an unaware process always reads 96, which
+    conveniently makes every scale computation collapse to 1.0."""
+    if sys.platform != "win32":
+        return 96
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    if hwnd:
+        try:
+            dpi = int(user32.GetDpiForWindow(ctypes.c_void_p(hwnd)))
+            if dpi > 0:
+                return dpi
+        except Exception:
+            pass
+    try:
+        dpi = int(user32.GetDpiForSystem())
+        if dpi > 0:
+            return dpi
+    except Exception:
+        pass
+    try:
+        hdc = user32.GetDC(0)
+        try:
+            dpi = int(ctypes.windll.gdi32.GetDeviceCaps(hdc, 88))  # LOGPIXELSX
+        finally:
+            user32.ReleaseDC(0, hdc)
+        if dpi > 0:
+            return dpi
+    except Exception:
+        pass
+    return 96
+
+
 def read_tail(path: Path, max_chars: int = 1200) -> str:
     try:
         if not path.is_file():
@@ -301,7 +370,11 @@ def _env_for_runtime_python() -> dict:
         if "\\python3" in pl or "/python3" in pl.replace("\\", "/"):
             # keep system PATH entries that are not clearly host python? safer drop
             # only drop if it looks like Scripts or python install
-            if "scripts" in pl or pl.rstrip("\\").endswith("python313") or "python3" in pl:
+            if (
+                "scripts" in pl
+                or pl.rstrip("\\").endswith("python313")
+                or "python3" in pl
+            ):
                 continue
         path_parts.append(p)
     env["PATH"] = os.pathsep.join(path_parts)
@@ -477,7 +550,11 @@ def start_legacy_realtime_gui() -> subprocess.Popen:
     ]
     vbs = next((p for p in vbs_candidates if p.is_file()), None)
     if vbs is not None and sys.platform == "win32":
-        wscript = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "wscript.exe"
+        wscript = (
+            Path(os.environ.get("SystemRoot", r"C:\Windows"))
+            / "System32"
+            / "wscript.exe"
+        )
         if not wscript.is_file():
             wscript = Path(r"C:\Windows\System32\wscript.exe")
         env = _env_for_runtime_python()

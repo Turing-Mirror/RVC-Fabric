@@ -169,6 +169,12 @@ class MainApp(
             self.root.tk.call("tk", "scaling", self._ui_dpi / 72.0)
         except Exception:
             pass
+        try:
+            # Combobox popdown Listbox ignores widget font= — set it app-wide
+            # (widget-level font on the entry part is set per Combobox)
+            self.root.option_add("*TCombobox*Listbox.font", sans_font(10))
+        except Exception:
+            pass
         self.root.title(APP_TITLE)
         self.root.geometry(f"{px(DEFAULT_WIN_W)}x{px(DEFAULT_WIN_H)}")
         self.root.minsize(px(MIN_WIN_W), px(MIN_WIN_H))
@@ -404,7 +410,7 @@ class MainApp(
         self.bottom_tag = tk.Label(
             left_info,
             text="请先导入音色到 User_Data/models",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -413,7 +419,7 @@ class MainApp(
         self.bottom_voice_hint = tk.Label(
             left_info,
             text="参数随音色单独保存",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",

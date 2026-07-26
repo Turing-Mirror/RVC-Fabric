@@ -50,6 +50,7 @@ from launcher.theme import (
     TM_OK,
     TM_SURFACE,
     TM_WARN,
+    meta_font,
     mono_font,
     px,
     sans_font,
@@ -525,7 +526,7 @@ class StorePage:
         left = tk.Label(
             head,
             text=f"{arrow} 系列 · {series}",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_BG,
             fg=TM_META,
             anchor="w",
@@ -534,7 +535,7 @@ class StorePage:
         right = tk.Label(
             head,
             text=f"{count} 个音色",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_BG,
             fg=TM_META,
             anchor="e",
@@ -706,7 +707,7 @@ class StorePage:
         tk.Label(
             left,
             text=meta,
-            font=mono_font(8),
+            font=meta_font(meta, 8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -720,7 +721,7 @@ class StorePage:
             link = tk.Label(
                 left,
                 text=v.author_url,
-                font=mono_font(7),
+                font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_ACCENT,
                 anchor="w",

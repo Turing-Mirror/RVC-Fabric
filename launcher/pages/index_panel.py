@@ -123,7 +123,11 @@ class IndexPanelMixin:
         rows = tk.Frame(host, bg=TM_BG)
         rows.pack(fill="x")
         self._index_row(
-            rows, path="", label="不用检索库（仅 .pth）", badge="", active=(active == "")
+            rows,
+            path="",
+            label="不用检索库（仅 .pth）",
+            badge="",
+            active=(active == ""),
         )
         for p in bindings:
             inside = False
@@ -178,7 +182,7 @@ class IndexPanelMixin:
             tk.Label(
                 left,
                 text=badge,
-                font=mono_font(7),
+                font=sans_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
                 anchor="w",
@@ -189,7 +193,7 @@ class IndexPanelMixin:
             tk.Label(
                 right,
                 text="使用中",
-                font=sans_font(9, "bold"),
+                font=sans_font(10, "bold"),
                 bg=TM_SURFACE,
                 fg=TM_ACCENT,
             ).pack(side="right", padx=6)
@@ -225,9 +229,7 @@ class IndexPanelMixin:
         if not path:
             return
         try:
-            bound = add_index_binding(
-                Path(d), Path(path), copy_into_folder=True
-            )
+            bound = add_index_binding(Path(d), Path(path), copy_into_folder=True)
             set_active_index(Path(d), bound)
         except Exception as e:
             messagebox.showerror("绑定失败", str(e))

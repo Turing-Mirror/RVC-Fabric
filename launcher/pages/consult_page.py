@@ -138,7 +138,7 @@ class ConsultMixin:
         tk.Label(
             inner,
             text="当前音色",
-            font=mono_font(7),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -231,7 +231,7 @@ class ConsultMixin:
                 width=12,
                 anchor="w",
             ).pack(side="left")
-            ent = tk.Entry(fr, textvariable=var, font=mono_font(8), relief="flat", bd=4)
+            ent = tk.Entry(fr, textvariable=var, font=sans_font(9), relief="flat", bd=4)
             ent.pack(side="left", fill="x", expand=True, padx=(0, 4))
             ent.configure(highlightthickness=1, highlightbackground=TM_HAIRLINE)
 
@@ -338,7 +338,7 @@ class ConsultMixin:
         tk.Label(
             body,
             textvariable=rec_status,
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_BG,
             fg=TM_ACCENT,
             anchor="w",

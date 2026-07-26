@@ -24,6 +24,7 @@ from launcher.theme import (
     TM_SURFACE_HOVER,
     TM_WARN,
     display_font,
+    meta_font,
     mono_font,
     px,
     sans_font,
@@ -256,7 +257,7 @@ class SectionCard(tk.Frame):
                 text=(
                     tracked(eyebrow.upper(), gap="  ") if eyebrow.isascii() else eyebrow
                 ),
-                font=mono_font(8),
+                font=meta_font(eyebrow, 8),
                 bg=TM_SURFACE,
                 fg=TM_META,
                 anchor="w",
@@ -343,7 +344,7 @@ class StatusBadge(tk.Frame):
         self.sub_lbl = tk.Label(
             self,
             text="",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_INSET,
             fg=TM_META,
         )
@@ -372,7 +373,7 @@ class StatusBadge(tk.Frame):
                 text=subtitle or "",
                 bg=badge_bg,
                 fg=sub_fg,
-                font=mono_font(8),
+                font=sans_font(8),
             )
         except Exception:
             pass
@@ -723,7 +724,7 @@ class ParamTile(tk.Frame):
         tk.Label(
             head,
             text=tracked(label.upper(), gap="  ") if label.isascii() else label,
-            font=mono_font(8),
+            font=meta_font(label, 8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -832,7 +833,7 @@ class SoftActionCard(tk.Frame):
             self._sub = tk.Label(
                 self._col,
                 text=subtitle,
-                font=mono_font(8),
+                font=sans_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
                 wraplength=px(130),
@@ -935,7 +936,7 @@ class ModelCoverCard(tk.Frame):
         cover_ratio = 0.52 if has_action else 0.58
         cover_h = max(int(height * cover_ratio), px(96))
         # Cap cover so meta (tag+name+author) + foot always fit
-        meta_min = px(52)
+        meta_min = px(56)
         max_cover = max(height - meta_min - foot_h - px(16), px(96))
         cover_h = min(cover_h, max_cover)
 
@@ -969,7 +970,7 @@ class ModelCoverCard(tk.Frame):
                 btn = tk.Button(
                     foot,
                     text=action_text,
-                    font=title_font(9, "bold"),
+                    font=title_font(10, "bold"),
                     bg=TM_ACCENT,
                     fg=TM_ACCENT_INK,
                     relief="flat",
@@ -985,7 +986,7 @@ class ModelCoverCard(tk.Frame):
                 soft = tk.Label(
                     foot,
                     text=action_text,
-                    font=mono_font(8),
+                    font=sans_font(8),
                     bg=TM_ACCENT_SOFT,
                     fg=TM_ACCENT,
                     padx=10,
@@ -1000,7 +1001,7 @@ class ModelCoverCard(tk.Frame):
         tag_lbl = tk.Label(
             body,
             text=(tag or "音色").upper() if (tag or "").isascii() else (tag or "音色"),
-            font=mono_font(7),
+            font=meta_font(tag or "音色", 8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -1022,7 +1023,7 @@ class ModelCoverCard(tk.Frame):
         auth_lbl = tk.Label(
             body,
             text=f"作者 · {author_s[:18]}" if author_s else "作者 · 未标注",
-            font=mono_font(8),
+            font=sans_font(8),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -1035,7 +1036,7 @@ class ModelCoverCard(tk.Frame):
             badge = tk.Label(
                 self,
                 text="使用中",
-                font=mono_font(7),
+                font=sans_font(8),
                 bg=TM_ACCENT,
                 fg=TM_ACCENT_INK,
                 padx=8,
@@ -1049,7 +1050,7 @@ class ModelCoverCard(tk.Frame):
             idx = tk.Label(
                 self,
                 text=index_text,
-                font=mono_font(8),
+                font=sans_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
             )
@@ -1229,7 +1230,7 @@ class PageHeader(tk.Frame):
                     if all(ord(c) < 128 for c in eyebrow)
                     else eyebrow
                 ),
-                font=mono_font(8),
+                font=meta_font(eyebrow, 8),
                 bg=bg,
                 fg=TM_META,
                 anchor="w",

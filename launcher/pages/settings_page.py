@@ -278,6 +278,7 @@ class SettingsPageMixin:
             textvariable=self.var_accel,
             values=["auto", "cuda", "dml", "cpu"],
             state="readonly",
+            font=sans_font(10),
             width=12,
         )
         self.cmb_accel.pack(side="left")
@@ -331,6 +332,7 @@ class SettingsPageMixin:
             textvariable=self.var_hostapi,
             values=["MME"],
             state="readonly",
+            font=sans_font(10),
             width=28,
         )
         self.cmb_hostapi.pack(side="left", fill="x", expand=True)
@@ -351,7 +353,12 @@ class SettingsPageMixin:
             font=sans_font(10),
         ).pack(side="left")
         self.cmb_input = ttk.Combobox(
-            row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
+            row,
+            textvariable=self.var_input_dev,
+            values=[],
+            state="readonly",
+            width=48,
+            font=sans_font(10),
         )
         self.cmb_input.pack(side="left", fill="x", expand=True)
         help_mark(row, SETTING_TIPS["input"])
@@ -381,7 +388,12 @@ class SettingsPageMixin:
             font=sans_font(10),
         ).pack(side="left")
         self.cmb_output = ttk.Combobox(
-            row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
+            row,
+            textvariable=self.var_output_dev,
+            values=[],
+            state="readonly",
+            width=48,
+            font=sans_font(10),
         )
         self.cmb_output.pack(side="left", fill="x", expand=True)
         help_mark(row, SETTING_TIPS["output"])
@@ -423,6 +435,7 @@ class SettingsPageMixin:
             textvariable=self.var_monitor_dev,
             values=[],
             state="readonly",
+            font=sans_font(10),
             width=48,
         )
         self.cmb_monitor.pack(side="left", fill="x", expand=True)
@@ -458,6 +471,7 @@ class SettingsPageMixin:
             textvariable=self.var_sr_type,
             values=["sr_model", "sr_device"],
             state="readonly",
+            font=sans_font(10),
             width=12,
         ).pack(side="left")
         tk.Button(
@@ -572,6 +586,7 @@ class SettingsPageMixin:
             textvariable=self.var_f0,
             values=["fcpe", "rmvpe", "harvest", "crepe", "pm"],
             state="readonly",
+            font=sans_font(10),
             width=12,
         )
         cmb_f0.pack(side="left")
@@ -771,7 +786,7 @@ class SettingsPageMixin:
             text="启用声音效果",
             variable=self.var_fx_enabled,
             bg=TM_SURFACE,
-            font=sans_font(9, "bold"),
+            font=sans_font(10, "bold"),
             command=self._on_hot_param,
         ).pack(side="left")
         help_mark(fx_en_row, SETTING_TIPS["fx_en"])
@@ -919,6 +934,7 @@ class SettingsPageMixin:
             textvariable=self.var_fx_eq_preset,
             values=preset_vals,
             state="readonly",
+            font=sans_font(10),
             width=14,
         )
         self.cmb_fx_preset.pack(side="left")
@@ -987,6 +1003,7 @@ class SettingsPageMixin:
             close_row,
             values=list(_close_labels.values()),
             state="readonly",
+            font=sans_font(10),
             width=16,
         )
         self.cmb_close_action.set(

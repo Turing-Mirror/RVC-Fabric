@@ -49,6 +49,7 @@ def _safe_filename(name: str) -> str:
     cleaned = re.sub(r'[\\/:*?"<>|]+', "_", str(name or "")).strip(". ")
     return cleaned[:80] or "档案"
 
+
 # cfg-key -> the settings/dock Tk var attribute that mirrors it. Reflecting a
 # profile into these vars (then calling _push_hot_params, which re-collects from
 # them) keeps cfg, UI, and the worker consistent. Verified against
@@ -348,8 +349,14 @@ class ProfilesMixin:
         rows.pack(fill="x")
 
         # default (unbound) row
-        self._profile_row(rows, pid="", name="默认（原始参数）", source="default",
-                          score=None, active=(active == ""))
+        self._profile_row(
+            rows,
+            pid="",
+            name="默认（原始参数）",
+            source="default",
+            score=None,
+            active=(active == ""),
+        )
         for prof in self._profiles_for_current():
             self._profile_row(
                 rows,
@@ -362,18 +369,26 @@ class ProfilesMixin:
 
         actions = tk.Frame(host, bg=TM_BG)
         actions.pack(fill="x", pady=(6, 2))
-        GhostButton(actions, "另存当前为档案", command=self._ui_save_current,
-                    padx=12, pady=6).pack(side="left", padx=(0, 6))
-        GhostButton(actions, "导入档案…", command=self._ui_import,
-                    padx=12, pady=6).pack(side="left", padx=6)
-        GhostButton(actions, "导出当前档案（可分享）…", command=self._ui_export_active,
-                    padx=12, pady=6).pack(side="left", padx=6)
+        GhostButton(
+            actions, "另存当前为档案", command=self._ui_save_current, padx=12, pady=6
+        ).pack(side="left", padx=(0, 6))
+        GhostButton(
+            actions, "导入档案…", command=self._ui_import, padx=12, pady=6
+        ).pack(side="left", padx=6)
+        GhostButton(
+            actions,
+            "导出当前档案（可分享）…",
+            command=self._ui_export_active,
+            padx=12,
+            pady=6,
+        ).pack(side="left", padx=6)
         # （申请专业优化的入口在页面顶部标题右侧，不再重复放这里）
 
     def _profile_row(self, parent, *, pid, name, source, score, active) -> None:
         edge = TM_ACCENT if active else TM_HAIRLINE
-        row = tk.Frame(parent, bg=TM_SURFACE, highlightthickness=1,
-                       highlightbackground=edge)
+        row = tk.Frame(
+            parent, bg=TM_SURFACE, highlightthickness=1, highlightbackground=edge
+        )
         row.pack(fill="x", pady=3)
         inner = tk.Frame(row, bg=TM_SURFACE, padx=12, pady=8)
         inner.pack(fill="x")
@@ -385,23 +400,39 @@ class ProfilesMixin:
                 badge += f" · 相似度 {float(score):.2f}"
             except (TypeError, ValueError):
                 pass
-        tk.Label(left, text=badge, font=mono_font(7), bg=TM_SURFACE,
-                 fg=TM_META, anchor="w").pack(anchor="w")
-        tk.Label(left, text=name, font=title_font(11, "bold"), bg=TM_SURFACE,
-                 fg=TM_INK, anchor="w").pack(anchor="w", pady=(1, 0))
+        tk.Label(
+            left, text=badge, font=sans_font(8), bg=TM_SURFACE, fg=TM_META, anchor="w"
+        ).pack(anchor="w")
+        tk.Label(
+            left,
+            text=name,
+            font=title_font(11, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="w",
+        ).pack(anchor="w", pady=(1, 0))
 
         right = tk.Frame(inner, bg=TM_SURFACE)
         right.pack(side="right")
         if active:
-            tk.Label(right, text="使用中", font=mono_font(8), bg=TM_ACCENT_SOFT,
-                     fg=TM_ACCENT, padx=10, pady=4).pack(side="right")
+            tk.Label(
+                right,
+                text="使用中",
+                font=sans_font(8),
+                bg=TM_ACCENT_SOFT,
+                fg=TM_ACCENT,
+                padx=10,
+                pady=4,
+            ).pack(side="right")
         else:
-            PrimaryButton(right, "使用", command=lambda p=pid: self._ui_switch(p),
-                          padx=12, pady=4).pack(side="right")
+            PrimaryButton(
+                right, "使用", command=lambda p=pid: self._ui_switch(p), padx=12, pady=4
+            ).pack(side="right")
         # default row can't be deleted
         if pid:
-            GhostButton(right, "删除", command=lambda p=pid: self._ui_delete(p),
-                        padx=10, pady=4).pack(side="right", padx=(0, 6))
+            GhostButton(
+                right, "删除", command=lambda p=pid: self._ui_delete(p), padx=10, pady=4
+            ).pack(side="right", padx=(0, 6))
 
     # -- UI action handlers -----------------------------------------------
     def _ui_switch(self, pid: str) -> None:
@@ -410,7 +441,9 @@ class ProfilesMixin:
         self._toast_profile("已切换档案" if pid else "已回到默认")
 
     def _ui_delete(self, pid: str) -> None:
-        if not messagebox.askyesno("删除档案", "确定删除这个配置档案？(不影响模型本身)"):
+        if not messagebox.askyesno(
+            "删除档案", "确定删除这个配置档案？(不影响模型本身)"
+        ):
             return
         self._delete_profile(pid)
         self.refresh_profiles_ui()
@@ -453,7 +486,9 @@ class ProfilesMixin:
             ):
                 return
         if self._import_profile(path) is None:
-            messagebox.showerror("导入失败", "这个档案打不开或格式不对，或者你还没选中一个用户音色。")
+            messagebox.showerror(
+                "导入失败", "这个档案打不开或格式不对，或者你还没选中一个用户音色。"
+            )
             return
         self.refresh_profiles_ui()
         self._toast_profile("已导入并应用")
@@ -462,7 +497,9 @@ class ProfilesMixin:
         pid = self._active_profile_id_current()
         d = self._current_model_dir()
         if not pid or not d:
-            messagebox.showinfo("提示", "现在用的是默认参数，没有可分享的档案。先切到某个档案再导出。")
+            messagebox.showinfo(
+                "提示", "现在用的是默认参数，没有可分享的档案。先切到某个档案再导出。"
+            )
             return
         prof = P.load_profile(d, pid)
         cur = str((self._current_model() or {}).get("name") or "音色")
@@ -486,8 +523,6 @@ class ProfilesMixin:
 
     def _toast_profile(self, text: str) -> None:
         try:
-            self._set_status_visual(
-                "live" if self.vc_running else "idle", text, ""
-            )
+            self._set_status_visual("live" if self.vc_running else "idle", text, "")
         except Exception:
             pass

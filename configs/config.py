@@ -162,6 +162,57 @@ class Config:
         else:
             return False
 
+    @staticmethod
+    def cuda_capability_supported() -> tuple[bool, str]:
+        """Check if the current CUDA device's compute capability is supported by torch.
+
+        torch.cuda.is_available() only checks driver + device presence, NOT whether
+        the installed torch has kernels for the device's compute capability.
+        RTX 50-series (Blackwell, sm_120) + torch cu118 (max sm_90) reports
+        is_available()=True but crashes natively on kernel execution (no kernel image).
+
+        Compatibility rule: a cubin compiled for sm_{A}{B} runs on a device of
+        capability (X, Y) when A == X and B <= Y (forward-compat within the same
+        major version). Cross-major (e.g. sm_90 cubin on sm_120 device) does NOT
+        work, and PTX JIT is unreliable across generations — so we require a
+        same-major cubin. This avoids false-positiving RTX 40-series (sm_89),
+        which runs fine on cu118 via the sm_86 cubin.
+        Returns (supported, reason).
+        """
+        try:
+            if not torch.cuda.is_available():
+                return (True, "")
+            cap = torch.cuda.get_device_capability(0)
+            dev_major, dev_minor = int(cap[0]), int(cap[1])
+            arch_list = list(torch.cuda.get_arch_list())
+
+            def _parse_sm(s: str):
+                if not s.startswith("sm_"):
+                    return None
+                digits = s[3:]
+                if not digits.isdigit() or len(digits) < 2:
+                    return None
+                return (int(digits[:-1]), int(digits[-1]))  # (major, minor)
+
+            for s in arch_list:
+                parsed = _parse_sm(s)
+                if parsed is None:
+                    continue
+                a_major, a_minor = parsed
+                if a_major == dev_major and a_minor <= dev_minor:
+                    return (True, "")
+
+            name = torch.cuda.get_device_name(0)
+            reason = (
+                f"{name} (CUDA capability sm_{dev_major}{dev_minor}) is not compatible "
+                f"with the installed PyTorch (supports {', '.join(arch_list)}). "
+                f"50-series GPU needs the nvidia50 variant (CUDA 12.8 Runtime). "
+                f"Falling back to CPU."
+            )
+            return (False, reason)
+        except Exception:
+            return (True, "")
+
     def use_fp32_config(self):
         for config_file in version_config_list:
             self.json_config[config_file]["train"]["fp16_run"] = False
@@ -175,33 +226,44 @@ class Config:
 
     def device_config(self) -> tuple:
         if torch.cuda.is_available():
-            if self.has_xpu():
-                self.device = self.instead = "xpu:0"
-                self.is_half = True
-            i_device = int(self.device.split(":")[-1])
-            self.gpu_name = torch.cuda.get_device_name(i_device)
-            if (
-                ("16" in self.gpu_name and "V100" not in self.gpu_name.upper())
-                or "P40" in self.gpu_name.upper()
-                or "P10" in self.gpu_name.upper()
-                or "1060" in self.gpu_name
-                or "1070" in self.gpu_name
-                or "1080" in self.gpu_name
-            ):
-                logger.info("Found GPU %s, force to fp32", self.gpu_name)
+            # Check compute capability compatibility BEFORE using CUDA.
+            # RTX 50-series (sm_120) + torch cu118 (max sm_90) reports
+            # is_available()=True but crashes natively on kernel execution.
+            cap_ok, cap_reason = self.cuda_capability_supported()
+            if not cap_ok:
+                logger.warning("CUDA device incompatible, falling back to CPU: %s", cap_reason)
+                print(f"[Config] {cap_reason}", flush=True)
+                self.device = self.instead = "cpu"
                 self.is_half = False
                 self.use_fp32_config()
             else:
-                logger.info("Found GPU %s", self.gpu_name)
-            self.gpu_mem = int(
-                torch.cuda.get_device_properties(i_device).total_memory
-                / 1024
-                / 1024
-                / 1024
-                + 0.4
-            )
-            if self.gpu_mem <= 4:
-                self.preprocess_per = 3.0
+                if self.has_xpu():
+                    self.device = self.instead = "xpu:0"
+                    self.is_half = True
+                i_device = int(self.device.split(":")[-1])
+                self.gpu_name = torch.cuda.get_device_name(i_device)
+                if (
+                    ("16" in self.gpu_name and "V100" not in self.gpu_name.upper())
+                    or "P40" in self.gpu_name.upper()
+                    or "P10" in self.gpu_name.upper()
+                    or "1060" in self.gpu_name
+                    or "1070" in self.gpu_name
+                    or "1080" in self.gpu_name
+                ):
+                    logger.info("Found GPU %s, force to fp32", self.gpu_name)
+                    self.is_half = False
+                    self.use_fp32_config()
+                else:
+                    logger.info("Found GPU %s", self.gpu_name)
+                self.gpu_mem = int(
+                    torch.cuda.get_device_properties(i_device).total_memory
+                    / 1024
+                    / 1024
+                    / 1024
+                    + 0.4
+                )
+                if self.gpu_mem <= 4:
+                    self.preprocess_per = 3.0
         elif self.has_mps():
             logger.info("No supported Nvidia GPU found")
             self.device = self.instead = "mps"

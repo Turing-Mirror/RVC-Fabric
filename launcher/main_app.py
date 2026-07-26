@@ -287,7 +287,9 @@ class MainApp(
         if x < -32 or y < -32 or x > sw - 160 or y > sh - 120:
             return False
         try:
-            self.root.geometry(saved)
+            # Apply the RESCALED values — applying `saved` verbatim would
+            # discard the DPI migration the checks above just validated
+            self.root.geometry(f"{w}x{h}+{x}+{y}")
             return True
         except Exception:
             return False

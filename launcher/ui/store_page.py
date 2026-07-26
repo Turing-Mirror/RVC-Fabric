@@ -101,7 +101,7 @@ class StorePage:
         self.lbl_ver = tk.Label(
             body,
             text=f"当前版本  {local_app_version()}",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
@@ -141,7 +141,7 @@ class StorePage:
         self.lbl_progress = tk.Label(
             body,
             text="",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_OK,
             anchor="w",
@@ -299,7 +299,7 @@ class StorePage:
         self._dlg_progress = tk.Label(
             dlg,
             text="",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_OK,
             anchor="w",
@@ -595,9 +595,9 @@ class StorePage:
             command=lambda: self._jump_to_page(jump),
             padx=8,
             pady=3,
-            font=mono_font(9),
+            font=sans_font(9),
         ).pack(side="right", padx=(4, 0))
-        tk.Label(host, text="页", font=mono_font(9), bg=TM_BG, fg=TM_META).pack(
+        tk.Label(host, text="页", font=sans_font(9), bg=TM_BG, fg=TM_META).pack(
             side="right"
         )
         jump = tk.Entry(
@@ -614,13 +614,13 @@ class StorePage:
         )
         jump.pack(side="right", padx=(4, 2))
         jump.bind("<Return>", lambda _e: self._jump_to_page(jump))
-        tk.Label(host, text="跳到", font=mono_font(9), bg=TM_BG, fg=TM_META).pack(
+        tk.Label(host, text="跳到", font=sans_font(9), bg=TM_BG, fg=TM_META).pack(
             side="right"
         )
         tk.Label(
             host,
             text=f"第 {cur} / {total_pages} 页 · 共 {total_items} 个",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_META,
         ).pack(side="right", padx=(0, 10))

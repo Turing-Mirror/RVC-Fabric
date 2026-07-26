@@ -21,7 +21,6 @@ from launcher.theme import (
     TM_OK,
     TM_STAGE,
     TM_SURFACE,
-    mono_font,
     px,
     sans_font,
     scale,
@@ -94,7 +93,7 @@ class HomePageMixin:
         self.home_toast = tk.Label(
             fr,
             text="",
-            font=mono_font(9),
+            font=sans_font(9),
             bg=TM_BG,
             fg=TM_OK,
         )
@@ -147,6 +146,15 @@ class HomePageMixin:
     def _render_carousel(self) -> None:
         if not hasattr(self, "carousel_host"):
             return
+        if self.carousel_host.winfo_width() <= 1:
+            # Startup only: the first show_page("home") runs before mainloop's
+            # first layout pass, so the host is still unplaced (width 1).
+            # Flush geometry once so the first visible frame is final —
+            # otherwise cards render at the 400x240 fallback and jump ~80ms in.
+            try:
+                self.carousel_host.update_idletasks()
+            except Exception:
+                pass
         # Host is measured (physical px); card sizes are design units for
         # ModelCoverCard, which applies px() itself — divide the scale out
         s = scale()

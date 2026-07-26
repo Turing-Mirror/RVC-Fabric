@@ -103,6 +103,7 @@
 - **main_app 拆分**为多 mixin（见 LAUNCHER_DECOMPOSITION）  
 - **产品更名 RVC Fabric**，去掉 voice.local / 英文装饰眉题、「复制全文」等  
 - **启动**：pythonw + 进程内 GPU 探测；引擎待命仍预热 worker；修复设置页 `@staticmethod` 闪退、bootstrap 语法错误  
+- **社区下载改版（2026-07-27）**：首页按上传时间从晚到早分页（每页 5 个、页码+跳页）；新增「系列专区」折叠视图；移除「完整包与社群」卡片；RVC 原版 4 音色作者规范为「RVC」（catalog-src 源 + 产物已重建，**待推送 CNB**）  
 
 ---
 

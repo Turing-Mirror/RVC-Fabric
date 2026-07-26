@@ -59,7 +59,9 @@ class StorePage:
         self.app = app
         self.root = app.root
         self.catalog: OnlineCatalog = load_bundled_catalog()
-        self._busy = False
+        self._busy = False  # 下载/应用增量占用（互斥用户操作）
+        self._refreshing = False  # 清单刷新占用（不阻塞下载点击）
+        self._cover_inflight: set = set()  # 封面下载去重（防搜索重建线程放大）
         self._dlg: Optional[tk.Toplevel] = None
         self.voices_host: Optional[tk.Frame] = None
         self.lbl_community: Optional[tk.Label] = None
@@ -111,34 +113,8 @@ class StorePage:
             pady=6,
         ).pack(side="left", padx=4)
 
-        # Manifest URL (merged into the same card)
-        tk.Label(
-            body,
-            text="在线清单地址（可选，覆盖内置 configs/online_catalog.json）：",
-            font=sans_font(9),
-            bg=TM_SURFACE,
-            fg=TM_INK_MUTED,
-            anchor="w",
-        ).pack(anchor="w", pady=(12, 0))
-        self.var_manifest = tk.StringVar(
-            value=str(load_config().get("update_manifest_url") or "")
-        )
-        row_u = tk.Frame(body, bg=TM_SURFACE)
-        row_u.pack(fill="x", pady=(6, 0))
-        tk.Entry(
-            row_u,
-            textvariable=self.var_manifest,
-            font=mono_font(9),
-            bg=TM_BG,
-            fg=TM_INK,
-            relief="flat",
-            highlightthickness=1,
-            highlightbackground=TM_HAIRLINE,
-        ).pack(side="left", fill="x", expand=True, ipady=6)
-        GhostButton(
-            row_u, "保存地址", command=self.save_manifest_url, padx=12, pady=5
-        ).pack(side="left", padx=(8, 0))
-
+        # 清单地址固定为 CNB（configs/online_catalog.json manifest_urls），
+        # 不再提供 UI 覆盖；高级用户仍可手改 app_config.json 的 update_manifest_url。
         self.lbl_progress = tk.Label(
             body,
             text="",
@@ -148,12 +124,6 @@ class StorePage:
             anchor="w",
         )
         self.lbl_progress.pack(fill="x", pady=(8, 0))
-
-    def save_manifest_url(self) -> None:
-        cfg = load_config()
-        cfg["update_manifest_url"] = self.var_manifest.get().strip()
-        save_config(cfg)
-        self._set_progress("清单地址已保存。", TM_OK)
 
     def _set_progress(self, text: str, fg: str) -> None:
         """Update every live progress label (settings card + dialog if open)."""
@@ -338,12 +308,14 @@ class StorePage:
 
     # ---------------------------------------------------------------- catalog
     def refresh_catalog(self) -> None:
-        if self._busy:
+        # 刷新用独立 _refreshing 标志：打开对话框自动刷新期间（弱网可达数十秒）
+        # 不得占用 _busy，否则「下载安装」点击会被静默吞掉
+        if self._refreshing:
             return
-        self._busy = True
+        self._refreshing = True
         self._set_progress("正在拉取在线清单…", TM_ACCENT)
         urls = []
-        u = self.var_manifest.get().strip()
+        u = str(load_config().get("update_manifest_url") or "").strip()
         if u:
             urls.append(u)
 
@@ -356,7 +328,7 @@ class StorePage:
                 err = str(e)
 
             def done():
-                self._busy = False
+                self._refreshing = False
                 self.catalog = cat
                 self._render_catalog()
                 if err:
@@ -655,6 +627,23 @@ class StorePage:
         if v.cover_url in cache:
             lbl.configure(image=cache[v.cover_url])
             return
+        # 搜索每键会重建列表；同一封面的下载线程只允许一个在途。
+        # 命中在途时轮询缓存，下载完成后仍能点亮当前这行的缩略图。
+        if v.cover_url in self._cover_inflight:
+            def _poll(tries: int = 20) -> None:
+                if not lbl.winfo_exists():
+                    return
+                photo = cache.get(v.cover_url)
+                if photo is not None:
+                    lbl.configure(image=photo)
+                elif tries > 0:
+                    # 不依赖 inflight 状态：worker 清掉 inflight 与 apply()
+                    # 写入缓存之间有窗口，多轮询几次直到拿到或超时
+                    self.root.after(500, lambda: _poll(tries - 1))
+
+            self.root.after(500, _poll)
+            return
+        self._cover_inflight.add(v.cover_url)
 
         def work() -> None:
             try:
@@ -692,6 +681,8 @@ class StorePage:
                 self.root.after(0, apply)
             except Exception:
                 pass
+            finally:
+                self._cover_inflight.discard(v.cover_url)
 
         threading.Thread(target=work, daemon=True).start()
 

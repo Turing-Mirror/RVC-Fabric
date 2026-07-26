@@ -1115,7 +1115,18 @@ class SearchField(tk.Frame):
 
     def reset(self) -> None:
         self.entry.delete(0, "end")
-        self._show_placeholder()
+        # 焦点仍在输入框时不能进占位态：占位态下 _focus_in 不会再触发，
+        # 继续输入会拼在占位文字后且 query() 恒为空（点 ✕ 清除即此场景）
+        focused = False
+        try:
+            focused = self.entry.focus_get() is self.entry
+        except Exception:
+            focused = False
+        if focused:
+            self._ph_active = False
+            self.entry.configure(fg=TM_INK)
+        else:
+            self._show_placeholder()
         self._clear.pack_forget()
         if self._on_change:
             self._on_change("")

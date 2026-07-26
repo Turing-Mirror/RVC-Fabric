@@ -21,8 +21,8 @@ def _resize_with_pil(path: Path, max_w: int, max_h: int) -> Optional[tk.PhotoIma
         w, h = im.size
         if w <= 0 or h <= 0:
             return None
-        scale = min(max_w / w, max_h / h, 1.0)
         # Always fit into target box for consistent card/list thumbs
+        # (small art is upscaled on purpose so grids stay uniform)
         scale = min(max_w / w, max_h / h)
         nw = max(1, int(round(w * scale)))
         nh = max(1, int(round(h * scale)))

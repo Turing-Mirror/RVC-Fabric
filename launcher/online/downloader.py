@@ -433,6 +433,14 @@ def download_file(
                     msg = str(me)
                     # Hard auth / pointer issues should not silent-fallback forever
                     if "SHA256" in msg:
+                        # 污染的 .part（下载完整但内容哈希不符）必须清掉，
+                        # 否则之后每次重试都秒续传到 done 再失败，永远无法自愈
+                        try:
+                            from launcher.online.multipart import discard_multipart_shell
+
+                            discard_multipart_shell(tmp)
+                        except Exception:
+                            pass
                         raise DownloadError(msg) from me
                     # Fall through to single-connection resumable
                     last_err = me

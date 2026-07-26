@@ -92,9 +92,10 @@ def build_payload_exes(out: Path) -> None:
     work = REPO / "build" / "setup_work"
     work.mkdir(parents=True, exist_ok=True)
 
+    # 入口为 stub：frozen 后 launcher 包磁盘优先加载，gui_patch 才能更新壳层
     specs = [
-        ("TM_Setup", REPO / "launcher" / "bootstrap.py", "启动器.exe"),
-        ("TM_Voice", REPO / "launcher" / "main_app.py", "变声器.exe"),
+        ("TM_Setup", REPO / "scripts" / "shell_entry_setup.py", "启动器.exe"),
+        ("TM_Voice", REPO / "scripts" / "shell_entry_app.py", "变声器.exe"),
     ]
     for name, script, alias in specs:
         log(f"[exe] building {name}.exe from {script.name}")

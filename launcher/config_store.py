@@ -71,6 +71,8 @@ DEFAULTS: dict[str, Any] = {
     "vbcable_hint_done": False,
     # First-run newbie onboarding wizard shown once (reopen from 其他 page)
     "onboarding_done": False,
+    # 点主窗口 X 的行为：ask=每次询问 | tray=最小化到托盘 | exit=直接退出
+    "close_action": "ask",
     # Online update / voice library (SharePoint or GitHub raw catalog JSON)
     "update_manifest_url": "",
     # Keyboard shortcuts (merged with launcher.hotkeys.DEFAULT_HOTKEYS)
@@ -111,6 +113,8 @@ def _normalize_cfg(data: dict[str, Any]) -> dict[str, Any]:
     out["hotkey_restart_on_model_switch"] = bool(
         out.get("hotkey_restart_on_model_switch", True)
     )
+    if out.get("close_action") not in ("ask", "tray", "exit"):
+        out["close_action"] = "ask"
     return out
 
 

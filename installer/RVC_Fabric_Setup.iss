@@ -16,7 +16,9 @@
 
 #define MyAppName "RVC Fabric"
 #define MyAppNameCN "RVC Fabric · 图灵镜"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.1-hotfix1"
+; Windows 版本资源只接受纯数字 a.b.c.d
+#define MyAppVerNum "1.1.1.1"
 #define MyAppPublisher "Turing-Mirror"
 #define MyAppURL "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases"
 #define MyAppId "{{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}"
@@ -55,7 +57,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName={#MyAppName}
-VersionInfoVersion={#MyAppVersion}.0
+VersionInfoVersion={#MyAppVerNum}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoProductName={#MyAppName}

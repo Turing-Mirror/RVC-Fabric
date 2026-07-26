@@ -70,20 +70,20 @@ RestartApplications=no
 ; 目录页允许浏览
 DisableDirPage=no
 UsePreviousAppDir=yes
-; 向导语言：有简中语言包则优先
+; 向导语言：一律简中
 ShowLanguageDialog=no
+; 关键：默认 yes 时升级安装会沿用注册表里上次安装的语言——
+; 老用户从纯英文旧 Setup 升级会永远卡在英文。必须关掉。
+UsePreviousLanguage=no
 
 [Languages]
 ; 安装向导整体中文：简中语言文件随仓库自带（installer/ChineseSimplified.isl，
 ; UTF-8 带 BOM），相对本 .iss 引用，不依赖打包机的 Inno 语言包。
-; 英文仅作非中文系统的兜底（ShowLanguageDialog=no 时按系统语言自动匹配，
-; 无匹配则取第一项 = 简中）。
+; 只保留简中一种语言：任何系统语言、任何升级路径都不会落回英文。
 Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
 chinesesimplified.BeveledLabel=RVC Fabric 安装程序
-english.BeveledLabel=RVC Fabric Setup
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce

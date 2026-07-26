@@ -78,7 +78,7 @@ class OnboardingMixin:
                 ],
             ),
             (
-                "接线",
+                "连接",
                 "先把声音接对（最重要）",
                 [
                     "① 本软件「设置」→ 输入设备 = 你的真实麦克风",
@@ -198,7 +198,7 @@ class OnboardingMixin:
                     anchor="w",
                     wraplength=470,
                 ).pack(anchor="w", pady=4, fill="x")
-            if eb == "接线":
+            if eb == "连接":
                 # 首次设置启动器并入引导：装环境 / 虚拟声卡都从这里进
                 GhostButton(
                     body_inner,

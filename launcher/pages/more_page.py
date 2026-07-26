@@ -80,6 +80,7 @@ class MorePageMixin:
             ("打开 User_Data", lambda: open_path(USER_DATA), False),
             ("打开安装目录", lambda: open_path(ROOT), False),
             ("训练 / 翻唱 WebUI（高级）", self.open_webui, False),
+            ("原版实时面板（高级）", self.open_legacy_gui, False),
             ("强制结束变声引擎（卡音频时点）", self._force_kill_engine, False),
         ]
         if CONSULT_ENTRY_ENABLED:

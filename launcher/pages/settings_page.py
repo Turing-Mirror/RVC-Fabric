@@ -31,7 +31,6 @@ from launcher.theme import (
     APP_PRODUCT_TAGLINE,
     GUTTER,
     TM_ACCENT,
-    TM_ACCENT_INK,
     TM_ACCENT_SOFT,
     TM_BG,
     TM_HELP,
@@ -475,9 +474,11 @@ class SettingsPageMixin:
 
         btnrow = tk.Frame(left, bg=TM_SURFACE)
         btnrow.pack(fill="x", pady=6)
+        # 虚拟声卡（VB-Cable）的选法在各设备项旁与「说明」页已覆盖；
+        # 这个按钮专讲外置实体声卡的接法。原版实时面板入口在「其他」页。
         tk.Button(
             btnrow,
-            text="声卡接线说明",
+            text="实体声卡连接说明",
             font=sans_font(9),
             bg=TM_BG,
             fg=TM_INK_MUTED,
@@ -488,19 +489,6 @@ class SettingsPageMixin:
             padx=10,
             pady=4,
         ).pack(side="left")
-        tk.Button(
-            btnrow,
-            text="打开原版实时面板",
-            font=sans_font(9),
-            bg=TM_ACCENT,
-            fg=TM_ACCENT_INK,
-            relief="flat",
-            cursor="hand2",
-            command=self.open_legacy_gui,
-            bd=0,
-            padx=10,
-            pady=4,
-        ).pack(side="left", padx=8)
 
         # Voice params (also on bottom dock; saved per model under User_Data/models)
         right = card(wrap, "变声参数（运行中可热更新 · 按音色保存）")
@@ -627,11 +615,11 @@ class SettingsPageMixin:
             "麦克风 → 变成所选音色 → 从「输出设备」出去（一般选 CABLE Input）。\n"
             "\n"
             "【输入监听】不进行变声，只把麦克风原声送到输出。\n"
-            "用来检查麦是否正常、声卡接线对不对；听完记得切回「输出变声」。"
+            "用来检查麦是否正常、声卡连接对不对；听完记得切回「输出变声」。"
         )
         help_mark(modef, _mode_tip)
         HoverTip(rb_vc, "输出变声：把麦克风变成所选音色再输出（日常变声用这个）。")
-        HoverTip(rb_im, "输入监听：不改变声音，只输出麦克风原声（测麦/测接线）。")
+        HoverTip(rb_im, "输入监听：不改变声音，只输出麦克风原声（测麦/测连接）。")
 
         # Performance
         perf = card(wrap, "性能设置（改后需重新「开启变声」）")

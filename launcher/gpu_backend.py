@@ -93,6 +93,12 @@ def probe_inprocess() -> dict[str, Any]:
                 out["cuda_name"] = torch.cuda.get_device_name(0)
             except Exception as e:
                 out["error"] = "cuda_name:" + str(e)
+            # Reject incompatible compute capability (e.g. RTX 5060 sm_120 + cu118 torch)
+            cap_ok, cap_reason = _cuda_capability_compatible(torch)
+            if not cap_ok:
+                out["cuda"] = False
+                out["cuda_name"] = ""
+                out["error"] = cap_reason
     except Exception as e:
         out["error"] = "torch:" + str(e)
     try:
@@ -137,6 +143,52 @@ def _probe_log(cwd: Path, msg: str) -> None:
         pass
 
 
+def _cuda_capability_compatible(torch_module: Any) -> tuple[bool, str]:
+    """Check if the CUDA device's compute capability is supported by torch.
+
+    torch.cuda.is_available() only checks driver + device presence. RTX 50-series
+    (Blackwell, sm_120) + torch cu118 (max sm_90) reports is_available()=True but
+    crashes natively on kernel execution (no kernel image for sm_120).
+
+    Compatibility rule: a cubin for sm_{A}{B} runs on device (X, Y) when A == X
+    and B <= Y (forward-compat within the same major version). Cross-major does
+    NOT work; PTX JIT is unreliable across generations. This avoids false-
+    positive on RTX 40-series (sm_89), which runs fine on cu118 via sm_86 cubin.
+    Returns (compatible, reason).
+    """
+    try:
+        if not torch_module.cuda.is_available():
+            return (True, "")
+        cap = torch_module.cuda.get_device_capability(0)
+        dev_major, dev_minor = int(cap[0]), int(cap[1])
+        arch_list = list(torch_module.cuda.get_arch_list())
+
+        def _parse_sm(s: str):
+            if not s.startswith("sm_"):
+                return None
+            digits = s[3:]
+            if not digits.isdigit() or len(digits) < 2:
+                return None
+            return (int(digits[:-1]), int(digits[-1]))
+
+        for s in arch_list:
+            parsed = _parse_sm(s)
+            if parsed is None:
+                continue
+            a_major, a_minor = parsed
+            if a_major == dev_major and a_minor <= dev_minor:
+                return (True, "")
+
+        name = str(torch_module.cuda.get_device_name(0))
+        reason = (
+            f"{name} (sm_{dev_major}{dev_minor}) incompatible with PyTorch "
+            f"(supports {', '.join(arch_list)}); 50-series needs nvidia50 variant"
+        )
+        return (False, reason)
+    except Exception:
+        return (True, "")
+
+
 def probe_via_runtime_python(python_exe: Path, cwd: Path) -> dict[str, Any]:
     """Subprocess probe under Runtime.
 
@@ -169,6 +221,35 @@ out = {
   "torch": None, "cuda": False, "cuda_name": "", "cuda_ver": None,
   "dml": False, "dml_name": "", "dml_count": 0, "error": ""
 }
+def _cap_compat(torch_module):
+    try:
+        if not torch_module.cuda.is_available():
+            return (True, "")
+        cap = torch_module.cuda.get_device_capability(0)
+        dev_major, dev_minor = int(cap[0]), int(cap[1])
+        arch_list = list(torch_module.cuda.get_arch_list())
+        def _parse_sm(s):
+            if not s.startswith("sm_"):
+                return None
+            digits = s[3:]
+            if not digits.isdigit() or len(digits) < 2:
+                return None
+            return (int(digits[:-1]), int(digits[-1]))
+        for s in arch_list:
+            parsed = _parse_sm(s)
+            if parsed is None:
+                continue
+            a_major, a_minor = parsed
+            if a_major == dev_major and a_minor <= dev_minor:
+                return (True, "")
+        name = str(torch_module.cuda.get_device_name(0))
+        reason = (
+            "%s (sm_%d%d) incompatible with PyTorch (supports %s); "
+            "50-series needs nvidia50 variant"
+        ) % (name, dev_major, dev_minor, ", ".join(arch_list))
+        return (False, reason)
+    except Exception:
+        return (True, "")
 try:
     import torch
     out["torch"] = str(getattr(torch, "__version__", ""))
@@ -179,6 +260,11 @@ try:
             out["cuda_name"] = torch.cuda.get_device_name(0)
         except Exception as e:
             out["error"] = "cuda_name:" + str(e)
+        cap_ok, cap_reason = _cap_compat(torch)
+        if not cap_ok:
+            out["cuda"] = False
+            out["cuda_name"] = ""
+            out["error"] = cap_reason
 except Exception as e:
     out["error"] = "torch:" + str(e)
 try:

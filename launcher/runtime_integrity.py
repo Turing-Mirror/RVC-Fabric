@@ -241,7 +241,10 @@ def smoke_imports(
     # script prints JSON
     code = r"""
 import json, sys
-out = {"modules": {}, "torch": None, "cuda": False, "cuda_name": "", "error": ""}
+out = {
+  "modules": {}, "torch": None, "cuda": False, "cuda_name": "",
+  "cuda_capability_warning": "", "error": "",
+}
 for name in sys.argv[1:]:
     try:
         __import__(name)
@@ -257,6 +260,37 @@ try:
             out["cuda_name"] = torch.cuda.get_device_name(0)
         except Exception as e:
             out["cuda_name"] = str(e)
+        # Capability compat: RTX 50-series (sm_120) + torch cu118 (max sm_90) crashes.
+        # Rule: cubin sm_{A}{B} runs on device (X,Y) when A==X and B<=Y (same-major
+        # forward-compat). Avoids false-positive on RTX 40-series (sm_89, runs via sm_86).
+        # Report as warning, not failure (Runtime files are intact; variant mismatch).
+        try:
+            cap = torch.cuda.get_device_capability(0)
+            dev_major, dev_minor = int(cap[0]), int(cap[1])
+            arch_list = list(torch.cuda.get_arch_list())
+            def _parse_sm(s):
+                if not s.startswith("sm_"):
+                    return None
+                digits = s[3:]
+                if not digits.isdigit() or len(digits) < 2:
+                    return None
+                return (int(digits[:-1]), int(digits[-1]))
+            _compatible = False
+            for s in arch_list:
+                parsed = _parse_sm(s)
+                if parsed is None:
+                    continue
+                a_major, a_minor = parsed
+                if a_major == dev_major and a_minor <= dev_minor:
+                    _compatible = True
+                    break
+            if not _compatible:
+                out["cuda_capability_warning"] = (
+                    "%s (sm_%d%d) incompatible with PyTorch (supports %s); "
+                    "50-series GPU needs nvidia50 variant (CUDA 12.8 Runtime)"
+                ) % (out["cuda_name"], dev_major, dev_minor, ", ".join(arch_list))
+        except Exception:
+            pass
 except Exception as e:
     out["error"] = "torch:" + str(e)
 print(json.dumps(out, ensure_ascii=False))
@@ -426,6 +460,11 @@ def verify_runtime(
             "import smoke failed: "
             + str(smoke.get("error") or smoke.get("failed_imports") or "unknown")
         )
+    # Surface CUDA capability mismatch as a visible warning (files are intact,
+    # but the installed variant can't drive this GPU — needs nvidia50 Runtime).
+    cap_warn = str(smoke.get("cuda_capability_warning") or "")
+    if cap_warn:
+        report["warnings"].append(cap_warn)
 
     report["ok"] = not report["errors"]
     _save_report(base, report)
@@ -454,6 +493,10 @@ def format_report_summary(report: dict[str, Any]) -> str:
         line = f"Runtime 校验通过 · torch {torch_v}"
         if cuda:
             line += f" · CUDA {name}".rstrip()
+        # Surface capability mismatch even when integrity passed (variant ≠ GPU)
+        cap_warn = str(smoke.get("cuda_capability_warning") or "")
+        if cap_warn:
+            line += f" · [注意] {cap_warn}"
         return line
     errs = report.get("errors") or ["unknown"]
     return "Runtime 校验失败：" + "；".join(str(e) for e in errs[:2])

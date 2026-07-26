@@ -29,6 +29,12 @@ DEFAULT_PATHS = [
     "tools/realtime_worker.py",
     "tools/dsp_fx.py",
     "tools/download_models.py",
+    # diagnostics bundle deps: more_page loads collect_diagnostics from disk,
+    # perf_bench runs benchmark_realtime in the Runtime, perf_report is
+    # imported by the shell for 自动优化性能 — patches must ship all three
+    "tools/collect_diagnostics.py",
+    "tools/benchmark_realtime.py",
+    "tools/perf_report.py",
     "gui_v1.py",
 ]
 

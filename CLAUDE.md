@@ -42,7 +42,8 @@ python scripts\build_release.py --skip-exe --skip-runtime      :: layout-only dr
 python scripts\pack_gui_patch.py --version 1.2.0 --out dist\gui_patch_1.2.0.zip
 python scripts\pack_voice_pack.py --id kiki --name ... --pth ... --out dist\kiki_voice.zip
 python scripts\gen_runtime_integrity.py --runtime <dir> --variant nvidia --version YYYY.MM.DD --out ... --alias
-python scripts\write_cnb_index.py                              :: configs/online_catalog.json → CNB index.json
+python scripts\build_catalog.py build --diff  :: CNB-GIT-RELEASE/catalog-src/*.yaml → index.json + snippet + configs/online_catalog.json（三份生成物勿手改）
+python scripts\build_catalog.py check         :: 只校验（含回环过真实客户端解析器），CI 可用
 ```
 
 Two test styles coexist, and the difference matters: most files are `unittest.TestCase`, but

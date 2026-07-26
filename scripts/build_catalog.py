@@ -1,0 +1,1072 @@
+# -*- coding: utf-8 -*-
+"""CNB 在线清单编译器 — YAML 源文件 → index.json / snippet / bundled catalog.
+
+维护者只改 ``CNB-GIT-RELEASE/catalog-src/`` 下的 YAML（每音色一个文件，
+只写人话字段与制品相对路径）；sha256 / size_bytes / pack_url / cover_url /
+sha256_urls 全部由本脚本从本地制品自动补全。三份 JSON 产物为**生成物，
+禁止手改**::
+
+    CNB-GIT-RELEASE/index.json                          主索引（schema 2）
+    CNB-GIT-RELEASE/catalog/online_catalog.snippet.json 兼容清单（schema 1）
+    configs/online_catalog.json                         app 内置兜底（schema 1）
+
+用法（仓库根目录，宿主 Python，需 PyYAML）::
+
+    python scripts/build_catalog.py init            # 一次性：从线上 index.json 反向生成 YAML 源
+    python scripts/build_catalog.py check           # 只校验（契约 + 回环过真实客户端解析器）
+    python scripts/build_catalog.py build --diff    # 校验 + 打印语义 diff + 写出三份产物
+
+锁定值语义：YAML 里的 ``sha256`` / ``size_bytes`` = 已发布的线上真值；
+与本地制品不一致时**警告并以锁定值为准**（--strict 升级为错误），
+防止「本地重打包未发布」把索引改成用户下不到的哈希。
+新条目不写锁定值，由本地制品自动填充。
+
+客户端契约（勿破坏）见 docs/CNB-index索引与封面.md 与本文件 _roundtrip_check。
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+REPO = Path(__file__).resolve().parents[1]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    print(
+        "ERROR: 需要 PyYAML（仅维护机需要，客户端不用）。请先: pip install pyyaml",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+CNB_HOST = "https://cnb.cool"
+CNB_ORG_REPO = "Turing-Mirror/RVC-Fabric-Releases"
+CNB_REPO_URL = f"{CNB_HOST}/{CNB_ORG_REPO}"
+RAW = f"{CNB_REPO_URL}/-/git/raw/main"
+LFS = f"{CNB_REPO_URL}/-/lfs"
+MANIFEST_URLS = [
+    f"{RAW}/index.json",
+    f"{RAW}/catalog/online_catalog.snippet.json",
+]
+
+VALID_VARIANTS = ("nvidia", "amd", "nvidia50")
+VALID_CHANNELS = ("release", "lfs")
+
+
+class Paths:
+    """所有输入/输出路径；测试可指向 tmpdir。"""
+
+    def __init__(self, cnb: Path | None = None, bundled: Path | None = None) -> None:
+        self.cnb = Path(cnb) if cnb else REPO / "CNB-GIT-RELEASE"
+        self.src = self.cnb / "catalog-src"
+        self.index_out = self.cnb / "index.json"
+        self.snippet_out = self.cnb / "catalog" / "online_catalog.snippet.json"
+        self.bundled_out = (
+            Path(bundled) if bundled else REPO / "configs" / "online_catalog.json"
+        )
+
+
+# --------------------------------------------------------------------- utils
+
+
+def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def _sidecar_path(path: Path) -> Path:
+    return path.with_suffix(path.suffix + ".sha256")
+
+
+def local_artifact_hash(path: Path, *, refresh_sidecar: bool = True) -> str:
+    """本地制品 sha256；.sha256 边车比制品新则当缓存，否则重算并回写边车。"""
+    side = _sidecar_path(path)
+    try:
+        if side.is_file() and side.stat().st_mtime >= path.stat().st_mtime:
+            head = side.read_text(encoding="utf-8", errors="replace").split()
+            if head and len(head[0]) == 64:
+                return head[0].lower()
+    except OSError:
+        pass
+    digest = sha256_file(path)
+    if refresh_sidecar:
+        try:
+            side.write_text(f"{digest}  {path.name}\n", encoding="utf-8")
+        except OSError:
+            pass
+    return digest
+
+
+def cnb_lfs_url(sha256: str) -> str:
+    oid = "".join(c for c in (sha256 or "").strip().lower() if c in "0123456789abcdef")
+    return f"{LFS}/{oid}" if len(oid) == 64 else ""
+
+
+def cnb_raw_url(rel_path: str) -> str:
+    return f"{RAW}/{(rel_path or '').replace(chr(92), '/').lstrip('/')}"
+
+
+def _yymmdd(raw: Any) -> str:
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if len(digits) == 8:
+        return digits[2:]
+    if len(digits) == 6:
+        return digits
+    return ""
+
+
+def _load_yaml(path: Path) -> dict:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name}: 顶层必须是映射（mapping）")
+    return data
+
+
+def _dump_yaml(path: Path, data: dict, header: str = "") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = yaml.safe_dump(
+        data, allow_unicode=True, sort_keys=False, default_flow_style=False, width=100
+    )
+    if header:
+        text = "".join(f"# {line}\n" for line in header.splitlines()) + text
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    tmp.replace(path)
+
+
+class Report:
+    """收集 errors/warnings；--strict 时 warnings 也算失败。"""
+
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+
+    def error(self, msg: str) -> None:
+        self.errors.append(msg)
+
+    def warn(self, msg: str) -> None:
+        self.warnings.append(msg)
+
+    def failed(self, strict: bool) -> bool:
+        return bool(self.errors or (strict and self.warnings))
+
+    def print(self) -> None:
+        for w in self.warnings:
+            print(f"  [警告] {w}")
+        for e in self.errors:
+            print(f"  [错误] {e}")
+
+
+# ---------------------------------------------------------------- artifacts
+
+
+def _resolve_artifact(
+    entry: dict,
+    paths: Paths,
+    rep: Report,
+    *,
+    who: str,
+    channel: str,
+    release_tag: str = "RVC-runtime",
+) -> dict:
+    """解析一条制品：file(相对 CNB 仓) + 可选锁定 sha256/size → name/sha256/size/urls。
+
+    锁定值（已发布真值）优先；本地文件哈希只用于补新条目与漂移告警。
+    """
+    rel_file = str(entry.get("file") or "").replace("\\", "/").strip()
+    pinned_sha = str(entry.get("sha256") or "").strip().lower()
+    pinned_size = entry.get("size_bytes")
+    name = str(entry.get("name") or (Path(rel_file).name if rel_file else "")).strip()
+
+    local_sha = ""
+    local_size: Optional[int] = None
+    if rel_file:
+        f = paths.cnb / rel_file
+        if f.is_file():
+            local_sha = local_artifact_hash(f)
+            local_size = f.stat().st_size
+        elif not pinned_sha:
+            rep.error(f"{who}: 制品不存在且无锁定 sha256: {rel_file}")
+        else:
+            rep.warn(f"{who}: 本地缺制品文件（用锁定值继续）: {rel_file}")
+
+    sha = pinned_sha or local_sha
+    if pinned_sha and local_sha and pinned_sha != local_sha:
+        rep.warn(
+            f"{who}: 本地制品哈希 ≠ 锁定值（本地未发布？以锁定值为准）: "
+            f"{rel_file} local={local_sha[:12]}… pinned={pinned_sha[:12]}…"
+        )
+    size = pinned_size if pinned_size is not None else local_size
+    if (
+        pinned_size is not None
+        and local_size is not None
+        and int(pinned_size) != int(local_size)
+        and not (pinned_sha and local_sha and pinned_sha != local_sha)
+    ):
+        rep.warn(
+            f"{who}: 本地大小 ≠ 锁定 size_bytes: {rel_file} "
+            f"local={local_size} pinned={pinned_size}"
+        )
+
+    if not name:
+        rep.error(f"{who}: 缺 name/file，无法生成下载名")
+    if not sha:
+        rep.error(f"{who}: 缺 sha256（无本地制品也无锁定值）")
+
+    # URL 推导（允许 YAML 显式 url/urls 覆盖）
+    if entry.get("urls"):
+        urls = [str(u) for u in entry["urls"] if u]
+    elif entry.get("url"):
+        urls = [str(entry["url"])]
+    elif channel == "lfs":
+        urls = [cnb_lfs_url(sha)] if sha else []
+    else:
+        urls = [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}"] if name else []
+
+    if entry.get("sha256_urls"):
+        sha_urls = [str(u) for u in entry["sha256_urls"] if u]
+    elif channel == "lfs" and rel_file:
+        sha_urls = [cnb_raw_url(rel_file + ".sha256")]
+    elif channel == "release" and name:
+        sha_urls = [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}.sha256"]
+    else:
+        sha_urls = []
+
+    # channel/URL 一致性（客户端 cnb_sources 会按此过滤，不一致=用户下不到）
+    for u in urls:
+        if channel == "lfs" and "/-/releases/download/" in u:
+            rep.error(f"{who}: channel=lfs 但 URL 是 Release 形态: {u}")
+        if channel == "release" and "/-/lfs/" in u:
+            rep.error(f"{who}: channel=release 但 URL 是 LFS 形态: {u}")
+
+    return {
+        "name": name,
+        "sha256": sha,
+        "size_bytes": int(size) if size is not None else 0,
+        "urls": urls,
+        "sha256_urls": sha_urls,
+        "file": rel_file,
+    }
+
+
+# ------------------------------------------------------------------ sources
+
+
+def load_sources(paths: Paths, rep: Report) -> dict:
+    """读取 catalog-src/ 全部 YAML → 原始源字典。"""
+    src = paths.src
+    if not src.is_dir():
+        rep.error(f"源目录不存在: {src}（先运行 init）")
+        return {}
+    out: dict[str, Any] = {}
+    for key, fname in (
+        ("meta", "meta.yaml"),
+        ("app", "app.yaml"),
+        ("community", "community.yaml"),
+        ("engine_core", "engine-core.yaml"),
+        ("vbcable", "vbcable.yaml"),
+        ("setup", "setup.yaml"),
+    ):
+        p = src / fname
+        if not p.is_file():
+            rep.error(f"缺源文件: catalog-src/{fname}")
+            out[key] = {}
+            continue
+        try:
+            out[key] = _load_yaml(p)
+        except Exception as e:
+            rep.error(f"catalog-src/{fname}: 解析失败: {e}")
+            out[key] = {}
+
+    out["runtimes"] = {}
+    for variant in VALID_VARIANTS:
+        p = src / "runtimes" / f"{variant}.yaml"
+        if not p.is_file():
+            rep.error(f"缺源文件: catalog-src/runtimes/{variant}.yaml")
+            continue
+        try:
+            out["runtimes"][variant] = _load_yaml(p)
+        except Exception as e:
+            rep.error(f"runtimes/{variant}.yaml: 解析失败: {e}")
+    extra = sorted(
+        f.stem
+        for f in (src / "runtimes").glob("*.yaml")
+        if (src / "runtimes").is_dir() and f.stem not in VALID_VARIANTS
+    ) if (src / "runtimes").is_dir() else []
+    for stem in extra:
+        rep.error(f"runtimes/{stem}.yaml: 非法 variant（只允许 {'/'.join(VALID_VARIANTS)}）")
+
+    out["voices"] = []
+    vdir = src / "voices"
+    if vdir.is_dir():
+        for p in sorted(vdir.glob("*.yaml")):
+            try:
+                v = _load_yaml(p)
+            except Exception as e:
+                rep.error(f"voices/{p.name}: 解析失败: {e}")
+                continue
+            v.setdefault("id", p.stem)
+            if str(v["id"]) != p.stem:
+                rep.warn(f"voices/{p.name}: id={v['id']} 与文件名不一致")
+            out["voices"].append(v)
+    else:
+        rep.error("缺源目录: catalog-src/voices/")
+    return out
+
+
+# ------------------------------------------------------------------ compile
+
+
+def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
+    vid = str(v.get("id") or "").strip()
+    who = f"voices/{vid or '?'}"
+    if not vid:
+        rep.error(f"{who}: 缺 id")
+        return None
+    date = _yymmdd(v.get("date") or v.get("released"))
+    if not date:
+        rep.error(f"{who}: date 必须是 YYMMDD")
+        return None
+
+    cover = str(v.get("cover") or f"ch-banner/{vid}.jpg").replace("\\", "/")
+    if not (paths.cnb / cover).is_file():
+        rep.warn(f"{who}: 封面文件不存在: {cover}")
+
+    explicit_pack = str(v.get("pack_url") or "").strip()
+    explicit_pth = str(v.get("pth_url") or "").strip()
+    if explicit_pth and not explicit_pack and not v.get("file"):
+        art = {"sha256": str(v.get("sha256") or ""), "size_bytes": int(v.get("size_bytes") or 0)}
+        pack_url = ""
+    else:
+        art = _resolve_artifact(v, paths, rep, who=who, channel="lfs")
+        pack_url = explicit_pack or cnb_lfs_url(art["sha256"])
+        if not pack_url:
+            rep.error(f"{who}: 无法得到 pack_url（缺 sha256）")
+            return None
+
+    known = {
+        "id", "name", "tag", "series", "author", "author_url", "date", "released",
+        "version", "description", "file", "cover", "sha256", "size_bytes",
+        "package_type", "publisher", "fabric_official", "pack_url", "pth_url",
+        "index_url", "urls", "url", "sha256_urls", "name_display", "notes",
+    }
+    item: dict[str, Any] = {
+        "id": vid,
+        "name": str(v.get("name") or vid),
+        "author": str(v.get("author") or "RVC Fabric"),
+        "author_url": str(v.get("author_url") or "https://cnb.cool/Turing-Mirror"),
+        "released": date,
+        "tag": str(v.get("tag") or "音色"),
+        "version": str(v.get("version") or "1"),
+        "package_type": str(v.get("package_type") or "voice_pack"),
+        "cover": cover,
+        "cover_url": cnb_raw_url(cover),
+    }
+    if explicit_pth:
+        item["pth_url"] = explicit_pth
+        if v.get("index_url"):
+            item["index_url"] = str(v["index_url"])
+    else:
+        item["pack_url"] = pack_url
+    item["sha256"] = art["sha256"]
+    item["size_bytes"] = int(art["size_bytes"] or 0)
+    item["description"] = str(v.get("description") or "")
+    item["publisher"] = str(v.get("publisher") or "rvc_fabric")
+    item["fabric_official"] = bool(v.get("fabric_official", True))
+    item["date"] = date
+    series = str(v.get("series") or "").strip()
+    if series:
+        item["series"] = series
+    # 未识别字段原样透传（客户端容忍额外键）
+    for k, val in v.items():
+        if k not in known and k not in item:
+            item[k] = val
+    return item
+
+
+def _compile_runtime(variant: str, r: dict, paths: Paths, rep: Report) -> Optional[dict]:
+    who = f"runtimes/{variant}"
+    channel = str(r.get("channel") or ("lfs" if variant == "amd" else "release"))
+    if channel not in VALID_CHANNELS:
+        rep.error(f"{who}: channel 非法: {channel}")
+        return None
+    release_tag = str(r.get("release_tag") or "RVC-runtime")
+    parts_src = r.get("parts") or []
+    if not isinstance(parts_src, list) or not parts_src:
+        rep.error(f"{who}: 缺 parts")
+        return None
+    parts = []
+    for i, p in enumerate(parts_src):
+        art = _resolve_artifact(
+            dict(p), paths, rep, who=f"{who}.parts[{i}]", channel=channel,
+            release_tag=release_tag,
+        )
+        parts.append(
+            {
+                "name": art["name"],
+                "size_bytes": art["size_bytes"],
+                "sha256": art["sha256"],
+                "urls": art["urls"],
+                "sha256_urls": art["sha256_urls"],
+            }
+        )
+    total = sum(p["size_bytes"] for p in parts)
+    spec: dict[str, Any] = {
+        "variant": variant,
+        "label": str(r.get("label") or variant),
+        "version": str(r.get("version") or ""),
+        "format": str(r.get("format") or "tar"),
+        "size_bytes": int(r.get("size_bytes") or total),
+        "extract_root": str(r.get("extract_root") or "Runtime"),
+        "channel": channel,
+    }
+    if channel == "release":
+        spec["release_tag"] = release_tag
+    spec["parts"] = parts
+    return spec
+
+
+def _compile_blob(entry: dict, paths: Paths, rep: Report, *, who: str, extract_root: str) -> dict:
+    """engine_core / vbcable 顶层 blob（管线 B 的直接输入）。"""
+    channel = str(entry.get("channel") or "lfs")
+    art = _resolve_artifact(entry, paths, rep, who=who, channel=channel)
+    return {
+        "name": art["name"],
+        "version": str(entry.get("version") or ""),
+        "channel": channel,
+        "size_bytes": art["size_bytes"],
+        "sha256": art["sha256"],
+        "urls": art["urls"],
+        "sha256_urls": art["sha256_urls"],
+        "extract_root": str(entry.get("extract_root") or extract_root),
+        "notes": str(entry.get("notes") or ""),
+    }
+
+
+def _package_row(entry: dict, blob: dict, *, kind: str, package_type: str = "") -> dict:
+    released = _yymmdd(entry.get("released") or entry.get("date")) or datetime.now().strftime("%y%m%d")
+    row: dict[str, Any] = {
+        "id": str(entry.get("id") or f"{kind.replace('_', '-')}-{released}"),
+        "name": str(entry.get("display_name") or entry.get("name") or blob["name"]),
+        "kind": kind,
+    }
+    if package_type:
+        row["package_type"] = package_type
+    row.update(
+        {
+            "released": released,
+            "version": str(entry.get("version") or ""),
+            "file": str(entry.get("file") or ""),
+            "url": (blob["urls"][0] if blob["urls"] else ""),
+            "sha256": blob["sha256"],
+        }
+    )
+    if blob["sha256_urls"]:
+        row["sha256_url"] = blob["sha256_urls"][0]
+    row["size_bytes"] = blob["size_bytes"]
+    row["channel"] = blob["channel"]
+    if entry.get("notes"):
+        row["notes"] = str(entry["notes"])
+    return row
+
+
+def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
+    gui_src = app.get("gui") if isinstance(app.get("gui"), dict) else {}
+    gui: dict[str, Any] = {
+        "package_type": str(gui_src.get("package_type") or "gui_patch"),
+        "version": str(gui_src.get("version") or app.get("version") or ""),
+        "kind": str(gui_src.get("kind") or "zip"),
+    }
+    url = str(gui_src.get("url") or "").strip()
+    sha = str(gui_src.get("sha256") or "").strip().lower()
+    if gui_src.get("file"):
+        art = _resolve_artifact(dict(gui_src), paths, rep, who="app.gui", channel="lfs")
+        sha = sha or art["sha256"]
+        url = url or (art["urls"][0] if art["urls"] else "")
+    if not url and sha:
+        url = cnb_lfs_url(sha)
+    gui["url"] = url
+    gui["sha256"] = sha
+    gui["min_app_version"] = str(gui_src.get("min_app_version") or "")
+    gui["notes"] = str(gui_src.get("notes") or "")
+    if url and not sha:
+        rep.error("app.gui: 有 url 但缺 sha256 — 客户端会拒绝一键增量更新")
+    return gui
+
+
+def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
+    """源字典 → {index, snippet, bundled} 三份产物 dict。"""
+    if rep.errors:
+        return None
+    meta = src.get("meta") or {}
+    app_src = src.get("app") or {}
+    community = {
+        "qq_group": str((src.get("community") or {}).get("qq_group") or ""),
+        "qq_link": str((src.get("community") or {}).get("qq_link") or ""),
+        "sharepoint_full": str((src.get("community") or {}).get("sharepoint_full") or ""),
+        "note": str((src.get("community") or {}).get("note") or ""),
+    }
+    runtime_release_tag = str(meta.get("runtime_release_tag") or "RVC-runtime")
+
+    gui = _compile_gui(app_src, paths, rep)
+    app = {
+        "version": str(app_src.get("version") or ""),
+        "channel": str(app_src.get("channel") or "stable"),
+        "gui": gui,
+    }
+
+    engine_core = _compile_blob(
+        src.get("engine_core") or {}, paths, rep, who="engine-core", extract_root="."
+    )
+    vbcable = _compile_blob(
+        src.get("vbcable") or {}, paths, rep, who="vbcable", extract_root="VBCABLE"
+    )
+    # 兼容线上现状：顶层 vbcable 曾带标量 url
+    vbcable_top = dict(vbcable)
+    if vbcable_top.get("urls"):
+        vbcable_top["url"] = vbcable_top["urls"][0]
+        vbcable_top = {  # 保持线上键序（url 紧跟 urls）
+            k: vbcable_top[k]
+            for k in ("name", "version", "channel", "size_bytes", "sha256",
+                      "urls", "url", "sha256_urls", "extract_root", "notes")
+            if k in vbcable_top
+        }
+
+    runtimes: dict[str, Any] = {}
+    runtime_rows: list[dict] = []
+    for variant in VALID_VARIANTS:
+        r = (src.get("runtimes") or {}).get(variant)
+        if not r:
+            continue
+        spec = _compile_runtime(variant, r, paths, rep)
+        if not spec:
+            continue
+        runtimes[variant] = spec
+        p0 = spec["parts"][0]
+        released = _yymmdd(r.get("released") or r.get("version")) or ""
+        row = {
+            "id": f"runtime-{variant}-{released}",
+            "variant": variant,
+            "released": released,
+            "version": spec["version"],
+            "channel": spec["channel"],
+            "name": p0["name"],
+            "url": p0["urls"][0] if p0["urls"] else "",
+            "sha256": p0["sha256"],
+        }
+        if p0["sha256_urls"]:
+            row["sha256_url"] = p0["sha256_urls"][0]
+        row["size_bytes"] = p0["size_bytes"]
+        runtime_rows.append(row)
+
+    voices: list[dict] = []
+    seen_ids: set[str] = set()
+    for v in src.get("voices") or []:
+        item = _compile_voice(v, paths, rep)
+        if not item:
+            continue
+        if item["id"] in seen_ids:
+            rep.error(f"voices: id 重复: {item['id']}")
+            continue
+        seen_ids.add(item["id"])
+        voices.append(item)
+    voices.sort(key=lambda x: (x.get("date") or "", str(x.get("id") or "").lower()))
+
+    setup_src = src.get("setup") or {}
+    setup_blob = _compile_blob(setup_src, paths, rep, who="setup", extract_root=".")
+    packages = {
+        "setup": [_package_row(setup_src, setup_blob, kind="setup", package_type="full_package")],
+        "gui_patch": [],
+        "engine_core": [
+            _package_row(src.get("engine_core") or {}, engine_core, kind="engine_core")
+        ],
+        "runtime": runtime_rows,
+        "vbcable": [_package_row(src.get("vbcable") or {}, vbcable, kind="vbcable")],
+    }
+    # packages.gui_patch 行仅当 app.yaml 显式给出 released 时生成
+    # （app.gui 本身已是管线 A 的权威入口，这行只是索引可读性补充）
+    gui_released = _yymmdd(app_src.get("released"))
+    if gui_released and gui.get("url") and gui.get("sha256"):
+        packages["gui_patch"] = [
+            {
+                "id": f"gui-{gui_released}",
+                "name": "RVC Fabric GUI Patch",
+                "kind": "gui_patch",
+                "package_type": "gui_patch",
+                "released": gui_released,
+                "version": gui["version"],
+                "url": gui["url"],
+                "sha256": gui["sha256"],
+                "size_bytes": 0,
+                "channel": "lfs",
+                "notes": gui["notes"],
+            }
+        ]
+
+    if rep.errors:
+        return None
+
+    note = str(meta.get("note") or "")
+    index = {
+        "schema": 2,
+        "format": "rvc_fabric_index",
+        "product": str(meta.get("product") or "RVC Fabric"),
+        "updated": "",  # 幂等：仅内容变化时由 build 刷新
+        "released": "",
+        "cnb_repo": CNB_REPO_URL,
+        "cnb_git": f"{CNB_REPO_URL}.git",
+        "raw_base": RAW,
+        "lfs_base": LFS,
+        "ch_banner_dir": "ch-banner",
+        "note": note,
+        "packages": packages,
+        "app": app,
+        "community": community,
+        "voices": voices,
+        "runtime_release_tag": runtime_release_tag,
+        "runtimes": runtimes,
+        "manifest_urls": list(meta.get("manifest_urls") or MANIFEST_URLS),
+        "engine_core": engine_core,
+        "vbcable": vbcable_top,
+    }
+    snippet = {
+        "schema": 1,
+        "note": "兼容清单；主索引请用根目录 index.json（本文件为生成物，勿手改）",
+        "cnb_repo": CNB_REPO_URL,
+        "raw_base": RAW,
+        "lfs_base": LFS,
+        "manifest_urls": index["manifest_urls"],
+        "app": app,
+        "community": community,
+        "voices": voices,
+        "runtime_release_tag": runtime_release_tag,
+        "runtimes": runtimes,
+        "engine_core": engine_core,
+        "vbcable": vbcable_top,
+    }
+    bundled = {
+        "schema": 1,
+        "app": app,
+        "community": community,
+        "cnb_repo": CNB_REPO_URL,
+        "runtime_release_tag": runtime_release_tag,
+        "engine_core": engine_core,
+        "vbcable": vbcable_top,
+        "manifest_urls": index["manifest_urls"],
+        "runtimes": runtimes,
+        "voices": voices,
+    }
+    return {"index": index, "snippet": snippet, "bundled": bundled}
+
+
+# ---------------------------------------------------------------- roundtrip
+
+
+def _roundtrip_check(outputs: dict, src: dict, rep: Report) -> None:
+    """把产物喂给真实客户端解析器 — schema 对但客户端读不出 = 直接报错。"""
+    index = outputs["index"]
+    n_src = len(src.get("voices") or [])
+    try:
+        from launcher.online.catalog import OnlineCatalog
+
+        for name in ("index", "snippet", "bundled"):
+            cat = OnlineCatalog.from_dict(
+                json.loads(json.dumps(outputs[name])), source="check"
+            )
+            if len(cat.voices) != n_src:
+                rep.error(
+                    f"回环[A/{name}]: 客户端只解析出 {len(cat.voices)}/{n_src} 个音色"
+                    "（有音色缺 id 或下载地址被静默丢弃）"
+                )
+        gui = index["app"]["gui"]
+        if gui.get("url") and not gui.get("sha256"):
+            rep.error("回环[A]: gui.url 存在但 sha256 为空")
+    except ImportError as e:  # pragma: no cover
+        rep.warn(f"回环[A]跳过（launcher 不可导入: {e}）")
+
+    try:
+        from launcher.cnb_sources import parse_runtime_spec
+
+        for variant in index.get("runtimes", {}):
+            spec = parse_runtime_spec(variant, json.loads(json.dumps(index)))
+            if not spec.parts or not spec.parts[0].urls:
+                rep.error(f"回环[B]: runtimes.{variant} 客户端解析后无可用 URL")
+            if not spec.parts[0].sha256:
+                rep.error(f"回环[B]: runtimes.{variant} 客户端解析后无 sha256")
+        for key in ("engine_core", "vbcable"):
+            blob = index.get(key) or {}
+            if not blob.get("urls") or not blob.get("sha256"):
+                rep.error(f"回环[B]: 顶层 {key} 缺 urls/sha256")
+    except ImportError as e:  # pragma: no cover
+        rep.warn(f"回环[B]跳过（cnb_sources 不可导入: {e}）")
+
+
+# --------------------------------------------------------------------- diff
+
+
+def _semantic_diff(old: Any, new: Any, path: str = "") -> list[str]:
+    out: list[str] = []
+    if isinstance(old, dict) and isinstance(new, dict):
+        for k in sorted(set(old) | set(new)):
+            p = f"{path}.{k}" if path else str(k)
+            if k not in old:
+                out.append(f"+ {p}")
+            elif k not in new:
+                out.append(f"- {p}")
+            else:
+                out.extend(_semantic_diff(old[k], new[k], p))
+    elif isinstance(old, list) and isinstance(new, list):
+        def _key(x: Any) -> str:
+            return str(x.get("id")) if isinstance(x, dict) and x.get("id") else ""
+
+        old_by = {_key(x): x for x in old if _key(x)}
+        new_by = {_key(x): x for x in new if _key(x)}
+        if old_by or new_by:
+            for k in sorted(set(old_by) | set(new_by)):
+                p = f"{path}[{k}]"
+                if k not in old_by:
+                    out.append(f"+ {p}")
+                elif k not in new_by:
+                    out.append(f"- {p}")
+                else:
+                    out.extend(_semantic_diff(old_by[k], new_by[k], p))
+        elif old != new:
+            out.append(f"~ {path}: {json.dumps(old, ensure_ascii=False)[:60]} -> "
+                       f"{json.dumps(new, ensure_ascii=False)[:60]}")
+    elif old != new:
+        o = json.dumps(old, ensure_ascii=False)
+        n = json.dumps(new, ensure_ascii=False)
+        out.append(f"~ {path}: {o[:60]} -> {n[:60]}")
+    return out
+
+
+def _stable_equal(a: dict, b: dict) -> bool:
+    ka = {k: v for k, v in a.items() if k not in ("updated", "released")}
+    kb = {k: v for k, v in b.items() if k not in ("updated", "released")}
+    return ka == kb
+
+
+# --------------------------------------------------------------------- init
+
+
+def _voice_local_zip(paths: Paths, vid: str, pinned_sha: str) -> str:
+    d = paths.cnb / "voices" / vid
+    if not d.is_dir():
+        return ""
+    zips = sorted(d.glob("*.zip"))
+    if not zips:
+        return ""
+    for z in zips:
+        side = _sidecar_path(z)
+        if side.is_file():
+            head = side.read_text(encoding="utf-8", errors="replace").split()
+            if head and head[0].lower() == pinned_sha:
+                return f"voices/{vid}/{z.name}"
+    return f"voices/{vid}/{zips[-1].name}"
+
+
+def cmd_init(paths: Paths, *, force: bool = False) -> int:
+    """从线上真值 index.json 反向生成 YAML 源；configs 只补它独有的字段。"""
+    if paths.src.exists() and any(paths.src.iterdir()) and not force:
+        print(f"ERROR: {paths.src} 已存在（--force 覆盖）", file=sys.stderr)
+        return 2
+    if not paths.index_out.is_file():
+        print(f"ERROR: 找不到线上真值 {paths.index_out}", file=sys.stderr)
+        return 2
+    index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+    bundled = {}
+    if paths.bundled_out.is_file():
+        try:
+            bundled = json.loads(paths.bundled_out.read_text(encoding="utf-8"))
+        except Exception:
+            bundled = {}
+
+    hdr = "由 build_catalog.py init 生成；此后人工维护本文件，产物 json 勿手改。"
+
+    _dump_yaml(
+        paths.src / "meta.yaml",
+        {
+            "product": str(index.get("product") or "RVC Fabric"),
+            "note": str(index.get("note") or ""),
+            "runtime_release_tag": str(index.get("runtime_release_tag") or "RVC-runtime"),
+            "manifest_urls": list(index.get("manifest_urls") or MANIFEST_URLS),
+        },
+        hdr,
+    )
+
+    # app：bundled（1.1.0-hotfix1 + 真实 gui url/sha256）比 index 新，优先
+    app = (bundled.get("app") if isinstance(bundled.get("app"), dict) else None) or (
+        index.get("app") or {}
+    )
+    gui = app.get("gui") if isinstance(app.get("gui"), dict) else {}
+    _dump_yaml(
+        paths.src / "app.yaml",
+        {
+            "version": str(app.get("version") or ""),
+            "channel": str(app.get("channel") or "stable"),
+            "gui": {
+                "package_type": str(gui.get("package_type") or "gui_patch"),
+                "version": str(gui.get("version") or ""),
+                "kind": str(gui.get("kind") or "zip"),
+                "sha256": str(gui.get("sha256") or ""),
+                "min_app_version": str(gui.get("min_app_version") or ""),
+                "notes": str(gui.get("notes") or ""),
+            },
+        },
+        hdr + "\ngui.url 由 sha256 推导（LFS）；发新增量包时改 version/sha256/min_app_version。",
+    )
+
+    community = index.get("community") or {}
+    _dump_yaml(
+        paths.src / "community.yaml",
+        {
+            "qq_group": str(community.get("qq_group") or ""),
+            "qq_link": str(community.get("qq_link") or ""),
+            "sharepoint_full": str(community.get("sharepoint_full") or ""),
+            "note": str(community.get("note") or ""),
+        },
+        hdr,
+    )
+
+    pkgs = index.get("packages") or {}
+
+    def _pkg0(kind: str) -> dict:
+        rows = pkgs.get(kind) or []
+        return rows[0] if rows and isinstance(rows[0], dict) else {}
+
+    ec_row = _pkg0("engine_core")
+    ec_top = bundled.get("engine_core") if isinstance(bundled.get("engine_core"), dict) else {}
+    _dump_yaml(
+        paths.src / "engine-core.yaml",
+        {
+            "file": str(ec_row.get("file") or "assets/core/engine-core-260722.zip"),
+            "version": str(ec_row.get("version") or ec_top.get("version") or ""),
+            "released": _yymmdd(ec_row.get("released")),
+            "channel": str(ec_row.get("channel") or "lfs"),
+            "extract_root": str(ec_top.get("extract_root") or "."),
+            "sha256": str(ec_row.get("sha256") or ec_top.get("sha256") or ""),
+            "size_bytes": int(ec_row.get("size_bytes") or ec_top.get("size_bytes") or 0),
+            "notes": str(ec_row.get("notes") or ec_top.get("notes") or ""),
+        },
+        hdr,
+    )
+
+    vb_row = _pkg0("vbcable")
+    vb_top = index.get("vbcable") if isinstance(index.get("vbcable"), dict) else {}
+    _dump_yaml(
+        paths.src / "vbcable.yaml",
+        {
+            "display_name": str(vb_row.get("name") or "VB-Cable Setup Pack"),
+            "file": str(vb_row.get("file") or "vbcable/vbcable-setup.zip"),
+            "version": str(vb_row.get("version") or vb_top.get("version") or "1.0.0"),
+            "released": _yymmdd(vb_row.get("released")),
+            "channel": str(vb_row.get("channel") or "lfs"),
+            "extract_root": str(vb_top.get("extract_root") or "VBCABLE"),
+            "sha256": str(vb_row.get("sha256") or vb_top.get("sha256") or ""),
+            "size_bytes": int(vb_row.get("size_bytes") or vb_top.get("size_bytes") or 0),
+            "notes": str(vb_row.get("notes") or vb_top.get("notes") or ""),
+        },
+        hdr,
+    )
+
+    st_row = _pkg0("setup")
+    _dump_yaml(
+        paths.src / "setup.yaml",
+        {
+            "display_name": str(st_row.get("name") or "RVC Fabric Setup"),
+            "file": str(st_row.get("file") or "setup/RVC_Fabric_Setup.exe"),
+            "version": str(st_row.get("version") or ""),
+            "released": _yymmdd(st_row.get("released")),
+            "channel": str(st_row.get("channel") or "lfs"),
+            "sha256": str(st_row.get("sha256") or ""),
+            "size_bytes": int(st_row.get("size_bytes") or 0),
+            "notes": str(st_row.get("notes") or ""),
+        },
+        hdr,
+    )
+
+    rt_rows = {str(r.get("variant")): r for r in (pkgs.get("runtime") or []) if isinstance(r, dict)}
+    for variant, spec in (index.get("runtimes") or {}).items():
+        if variant not in VALID_VARIANTS or not isinstance(spec, dict):
+            continue
+        parts = []
+        for p in spec.get("parts") or []:
+            parts.append(
+                {
+                    "file": f"runtime/{variant}/{p.get('name')}",
+                    "sha256": str(p.get("sha256") or ""),
+                    "size_bytes": int(p.get("size_bytes") or 0),
+                }
+            )
+        row = rt_rows.get(variant) or {}
+        data = {
+            "variant": variant,
+            "label": str(spec.get("label") or variant),
+            "version": str(spec.get("version") or ""),
+            "released": _yymmdd(row.get("released") or spec.get("version")),
+            "format": str(spec.get("format") or "tar"),
+            "channel": str(spec.get("channel") or ""),
+            "extract_root": str(spec.get("extract_root") or "Runtime"),
+        }
+        if spec.get("release_tag"):
+            data["release_tag"] = str(spec["release_tag"])
+        data["parts"] = parts
+        _dump_yaml(
+            paths.src / "runtimes" / f"{variant}.yaml",
+            data,
+            hdr + "\nsha256/size_bytes 为已发布锁定值；重发 Runtime 时更新为新制品的值。",
+        )
+
+    bundled_series = {
+        str(v.get("id")): str(v.get("series") or "")
+        for v in (bundled.get("voices") or [])
+        if isinstance(v, dict)
+    }
+    for v in index.get("voices") or []:
+        if not isinstance(v, dict) or not v.get("id"):
+            continue
+        vid = str(v["id"])
+        series = bundled_series.get(vid, "")
+        if not series and "mygo" in str(v.get("description") or "").lower():
+            series = "MyGO!!!!!"
+        sha = str(v.get("sha256") or "").lower()
+        data = {
+            "id": vid,
+            "name": str(v.get("name") or vid),
+            "tag": str(v.get("tag") or "音色"),
+        }
+        if series:
+            data["series"] = series
+        data.update(
+            {
+                "author": str(v.get("author") or "RVC Fabric"),
+                "author_url": str(v.get("author_url") or ""),
+                "date": _yymmdd(v.get("date") or v.get("released")),
+                "version": str(v.get("version") or "1"),
+                "description": str(v.get("description") or ""),
+                "file": _voice_local_zip(paths, vid, sha),
+                "cover": str(v.get("cover") or f"ch-banner/{vid}.jpg"),
+                "sha256": sha,
+                "size_bytes": int(v.get("size_bytes") or 0),
+            }
+        )
+        _dump_yaml(paths.src / "voices" / f"{vid}.yaml", data, hdr)
+
+    n = len(list((paths.src / "voices").glob("*.yaml")))
+    print(f"init 完成: {paths.src}（voices={n}，runtimes={len(index.get('runtimes') or {})}）")
+    print("请人工核对 YAML（尤其 series 归类）后运行: python scripts/build_catalog.py build --diff")
+    return 0
+
+
+# -------------------------------------------------------------- check/build
+
+
+def _compile_all(paths: Paths) -> tuple[Optional[dict], Report]:
+    rep = Report()
+    src = load_sources(paths, rep)
+    outputs = compile_catalog(src, paths, rep) if not rep.errors else None
+    if outputs:
+        _roundtrip_check(outputs, src, rep)
+    return outputs, rep
+
+
+def cmd_check(paths: Paths, *, strict: bool = False) -> int:
+    outputs, rep = _compile_all(paths)
+    rep.print()
+    if rep.failed(strict) or outputs is None:
+        print(f"check 失败（错误 {len(rep.errors)}，警告 {len(rep.warnings)}）")
+        return 1
+    print(f"check 通过（警告 {len(rep.warnings)}，音色 {len(outputs['index']['voices'])} 个）")
+    return 0
+
+
+def cmd_build(paths: Paths, *, strict: bool = False, show_diff: bool = False) -> int:
+    outputs, rep = _compile_all(paths)
+    rep.print()
+    if rep.failed(strict) or outputs is None:
+        print("build 中止：先修复上述问题")
+        return 1
+
+    index = outputs["index"]
+    old_index: dict = {}
+    if paths.index_out.is_file():
+        try:
+            old_index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+        except Exception:
+            old_index = {}
+
+    if _stable_equal(index, old_index):
+        index["updated"] = str(old_index.get("updated") or datetime.now().strftime("%Y-%m-%d"))
+        index["released"] = str(old_index.get("released") or datetime.now().strftime("%y%m%d"))
+    else:
+        index["updated"] = datetime.now().strftime("%Y-%m-%d")
+        index["released"] = datetime.now().strftime("%y%m%d")
+
+    if show_diff and old_index:
+        lines = _semantic_diff(
+            {k: v for k, v in old_index.items() if k not in ("updated", "released")},
+            {k: v for k, v in index.items() if k not in ("updated", "released")},
+        )
+        print("--- index.json 语义 diff（不含时间戳）---")
+        if lines:
+            for ln in lines:
+                print(" ", ln)
+        else:
+            print("  （无变化）")
+        print("---")
+
+    _write_json(paths.index_out, index)
+    _write_json(paths.snippet_out, outputs["snippet"])
+    _write_json(paths.bundled_out, outputs["bundled"])
+    print(f"已写出:\n  {paths.index_out}\n  {paths.snippet_out}\n  {paths.bundled_out}")
+    print(f"（音色 {len(index['voices'])} 个，警告 {len(rep.warnings)}）")
+    return 0
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = argparse.ArgumentParser(description="CNB 清单编译器（YAML 源 → JSON 产物）")
+    ap.add_argument("--cnb", type=Path, default=None, help="CNB-GIT-RELEASE 目录（默认仓内）")
+    ap.add_argument("--bundled", type=Path, default=None, help="configs/online_catalog.json 输出路径")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p_init = sub.add_parser("init", help="从线上 index.json 反向生成 YAML 源（一次性）")
+    p_init.add_argument("--force", action="store_true")
+    p_check = sub.add_parser("check", help="只校验，不写文件（CI 可用）")
+    p_check.add_argument("--strict", action="store_true", help="警告也算失败")
+    p_build = sub.add_parser("build", help="校验并写出三份 JSON 产物")
+    p_build.add_argument("--strict", action="store_true")
+    p_build.add_argument("--diff", action="store_true", help="写出前打印语义 diff")
+    args = ap.parse_args(argv)
+
+    paths = Paths(cnb=args.cnb, bundled=args.bundled)
+    if args.cmd == "init":
+        return cmd_init(paths, force=args.force)
+    if args.cmd == "check":
+        return cmd_check(paths, strict=args.strict)
+    return cmd_build(paths, strict=args.strict, show_diff=args.diff)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

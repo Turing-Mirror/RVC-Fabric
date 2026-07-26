@@ -235,16 +235,16 @@ class OnboardingMixin:
                 GhostButton(
                     footer, "查看使用说明", command=_open_help, padx=14, pady=8
                 ).pack(side="right", padx=(0, 8))
-                GhostButton(
-                    footer, "上一步", command=_prev, padx=14, pady=8
-                ).pack(side="right", padx=(0, 8))
+                GhostButton(footer, "上一步", command=_prev, padx=14, pady=8).pack(
+                    side="right", padx=(0, 8)
+                )
             else:
-                PrimaryButton(
-                    footer, "下一步", command=_next, padx=22, pady=8
-                ).pack(side="right")
+                PrimaryButton(footer, "下一步", command=_next, padx=22, pady=8).pack(
+                    side="right"
+                )
                 if i > 0:
-                    GhostButton(
-                        footer, "上一步", command=_prev, padx=14, pady=8
-                    ).pack(side="right", padx=(0, 8))
+                    GhostButton(footer, "上一步", command=_prev, padx=14, pady=8).pack(
+                        side="right", padx=(0, 8)
+                    )
 
         render()

@@ -123,7 +123,9 @@ class SettingsPageMixin:
         self.var_extra = tk.DoubleVar(value=float(self.cfg.get("extra_time") or 2.5))
         self.var_n_cpu = tk.IntVar(value=int(self.cfg.get("n_cpu") or 4))
         self.var_hostapi = tk.StringVar(value=str(self.cfg.get("sg_hostapi") or "MME"))
-        self.var_input_dev = tk.StringVar(value=str(self.cfg.get("sg_input_device") or ""))
+        self.var_input_dev = tk.StringVar(
+            value=str(self.cfg.get("sg_input_device") or "")
+        )
         self.var_output_dev = tk.StringVar(
             value=str(self.cfg.get("sg_output_device") or "")
         )
@@ -132,7 +134,9 @@ class SettingsPageMixin:
         )
         self.var_monitor_on = tk.BooleanVar(value=bool(self.cfg.get("monitor_enabled")))
         self.var_wasapi = tk.BooleanVar(value=bool(self.cfg.get("sg_wasapi_exclusive")))
-        self.var_sr_type = tk.StringVar(value=str(self.cfg.get("sr_type") or "sr_model"))
+        self.var_sr_type = tk.StringVar(
+            value=str(self.cfg.get("sr_type") or "sr_model")
+        )
         self.var_i_nr = tk.BooleanVar(value=bool(self.cfg.get("I_noise_reduce")))
         self.var_o_nr = tk.BooleanVar(value=bool(self.cfg.get("O_noise_reduce")))
         self.var_use_pv = tk.BooleanVar(value=bool(self.cfg.get("use_pv")))
@@ -147,7 +151,9 @@ class SettingsPageMixin:
             self._settings_sections.append((title.split("（")[0], outer))
             return outer.body
 
-        def help_mark(parent, tip: str, *, pack_side: str = "left") -> Optional[tk.Label]:
+        def help_mark(
+            parent, tip: str, *, pack_side: str = "left"
+        ) -> Optional[tk.Label]:
             """Prominent ? badge; hover shows full tip (no duplicate inline text)."""
             if not tip:
                 return None
@@ -305,24 +311,44 @@ class SettingsPageMixin:
         )
         self.lbl_pack_meta.pack(fill="x", pady=(0, 2))
         if _psum:
-            HoverTip(self.lbl_pack_meta, _psum + "\n请勿混用 N 卡 / A 卡 / 50 系 Runtime。")
+            HoverTip(
+                self.lbl_pack_meta, _psum + "\n请勿混用 N 卡 / A 卡 / 50 系 Runtime。"
+            )
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="设备类型", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
+            row,
+            text="设备类型",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
         ).pack(side="left")
         self.cmb_hostapi = ttk.Combobox(
-            row, textvariable=self.var_hostapi, values=["MME"], state="readonly", width=28
+            row,
+            textvariable=self.var_hostapi,
+            values=["MME"],
+            state="readonly",
+            width=28,
         )
         self.cmb_hostapi.pack(side="left", fill="x", expand=True)
-        self.cmb_hostapi.bind("<<ComboboxSelected>>", lambda e: self._on_hostapi_change())
+        self.cmb_hostapi.bind(
+            "<<ComboboxSelected>>", lambda e: self._on_hostapi_change()
+        )
         help_mark(row, SETTING_TIPS["hostapi"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="输入设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
+            row,
+            text="输入设备",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
         ).pack(side="left")
         self.cmb_input = ttk.Combobox(
             row, textvariable=self.var_input_dev, values=[], state="readonly", width=48
@@ -331,17 +357,28 @@ class SettingsPageMixin:
         help_mark(row, SETTING_TIPS["input"])
 
         # 麦克风增益：门限/电平表之前的输入前置增益，运行中可热调
-        self.var_in_gain = tk.DoubleVar(
-            value=float(self.cfg.get("in_gain_db") or 0.0)
-        )
+        self.var_in_gain = tk.DoubleVar(value=float(self.cfg.get("in_gain_db") or 0.0))
         scale_row(
-            left, "麦克风增益 dB", self.var_in_gain, -20, 20, 0.5, hot=True, tip_key="in_gain"
+            left,
+            "麦克风增益 dB",
+            self.var_in_gain,
+            -20,
+            20,
+            0.5,
+            hot=True,
+            tip_key="in_gain",
         )
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
         tk.Label(
-            row, text="输出设备", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
+            row,
+            text="输出设备",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
         ).pack(side="left")
         self.cmb_output = ttk.Combobox(
             row, textvariable=self.var_output_dev, values=[], state="readonly", width=48
@@ -389,7 +426,9 @@ class SettingsPageMixin:
             width=48,
         )
         self.cmb_monitor.pack(side="left", fill="x", expand=True)
-        self.cmb_monitor.bind("<<ComboboxSelected>>", lambda e: self._on_monitor_device())
+        self.cmb_monitor.bind(
+            "<<ComboboxSelected>>", lambda e: self._on_monitor_device()
+        )
         self.lbl_monitor_hint = tk.Label(
             left,
             text="监听设备须为耳机/音箱；不要选 CABLE 或 Steam 虚拟扬声器",
@@ -481,14 +520,37 @@ class SettingsPageMixin:
         voice_note.pack(fill="x", pady=(0, 6))
         self._settings_wrap_labels.append(voice_note)
         scale_row(
-            right, "响应阈值", self.var_threhold, -60, 0, 1, hot=True, tip_key="threhold"
+            right,
+            "响应阈值",
+            self.var_threhold,
+            -60,
+            0,
+            1,
+            hot=True,
+            tip_key="threhold",
         )
-        scale_row(right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True, tip_key="pitch")
         scale_row(
-            right, "共鸣 Formant", self.var_formant, -2, 2, 0.05, hot=True, tip_key="formant"
+            right, "音高 Pitch", self.var_pitch, -24, 24, 1, hot=True, tip_key="pitch"
         )
         scale_row(
-            right, "Index Rate", self.var_index_rate, 0, 1, 0.01, hot=True, tip_key="index_rate"
+            right,
+            "共鸣 Formant",
+            self.var_formant,
+            -2,
+            2,
+            0.05,
+            hot=True,
+            tip_key="formant",
+        )
+        scale_row(
+            right,
+            "Index Rate",
+            self.var_index_rate,
+            0,
+            1,
+            0.01,
+            hot=True,
+            tip_key="index_rate",
         )
         scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True, tip_key="rms")
 
@@ -508,7 +570,13 @@ class SettingsPageMixin:
         f0f = tk.Frame(right, bg=TM_SURFACE)
         f0f.pack(fill="x", pady=3)
         tk.Label(
-            f0f, text="音高算法", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
+            f0f,
+            text="音高算法",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
         ).pack(side="left")
         cmb_f0 = ttk.Combobox(
             f0f,
@@ -524,7 +592,13 @@ class SettingsPageMixin:
         modef = tk.Frame(right, bg=TM_SURFACE)
         modef.pack(fill="x", pady=4)
         tk.Label(
-            modef, text="模式", width=14, anchor="w", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
+            modef,
+            text="模式",
+            width=14,
+            anchor="w",
+            bg=TM_SURFACE,
+            fg=TM_INK_MUTED,
+            font=sans_font(10),
         ).pack(side="left")
         rb_vc = tk.Radiobutton(
             modef,
@@ -590,8 +664,12 @@ class SettingsPageMixin:
             "低延迟更跟嘴、对机器要求高；稳定更扛卡顿、延迟更高。改后需重新开启变声。",
         )
         scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01, tip_key="block")
-        scale_row(perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01, tip_key="crossfade")
-        scale_row(perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01, tip_key="extra")
+        scale_row(
+            perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01, tip_key="crossfade"
+        )
+        scale_row(
+            perf, "额外推理时长", self.var_extra, 0.05, 5.0, 0.01, tip_key="extra"
+        )
         scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1, tip_key="n_cpu")
         nrf = tk.Frame(perf, bg=TM_SURFACE)
         nrf.pack(fill="x", pady=4)
@@ -648,7 +726,9 @@ class SettingsPageMixin:
             }
 
         self.var_fx_enabled = tk.BooleanVar(value=bool(self.cfg.get("fx_enabled")))
-        self.var_fx_gate_en = tk.BooleanVar(value=bool(self.cfg.get("fx_gate_enabled", True)))
+        self.var_fx_gate_en = tk.BooleanVar(
+            value=bool(self.cfg.get("fx_gate_enabled", True))
+        )
         self.var_fx_gate_thr = tk.DoubleVar(
             value=float(self.cfg.get("fx_gate_threshold_db", -50))
         )
@@ -679,7 +759,9 @@ class SettingsPageMixin:
         self.var_fx_comp_mu = tk.DoubleVar(
             value=float(self.cfg.get("fx_comp_makeup_db", 0))
         )
-        self.var_fx_eq_en = tk.BooleanVar(value=bool(self.cfg.get("fx_eq_enabled", True)))
+        self.var_fx_eq_en = tk.BooleanVar(
+            value=bool(self.cfg.get("fx_eq_enabled", True))
+        )
         self.var_fx_eq_preset = tk.StringVar(
             value=str(self.cfg.get("fx_eq_preset") or "flat")
         )
@@ -687,9 +769,7 @@ class SettingsPageMixin:
         if not isinstance(gains0, (list, tuple)):
             gains0 = [0, 0, 0, 0, 0]
         gains0 = list(gains0) + [0] * 5
-        self.var_fx_eq_gains = [
-            tk.DoubleVar(value=float(gains0[i])) for i in range(5)
-        ]
+        self.var_fx_eq_gains = [tk.DoubleVar(value=float(gains0[i])) for i in range(5)]
         self.var_fx_out_gain = tk.DoubleVar(
             value=float(self.cfg.get("fx_out_gain_db") or 0)
         )
@@ -721,10 +801,46 @@ class SettingsPageMixin:
             command=self._on_hot_param,
         ).pack(side="left")
         help_mark(gate_row, SETTING_TIPS["fx_gate"])
-        scale_row(gbox, "门限 dB", self.var_fx_gate_thr, -80, -10, 1, hot=True, tip_key="fx_gate_thr")
-        scale_row(gbox, "释放 ms", self.var_fx_gate_rel, 5, 300, 1, hot=True, tip_key="fx_gate_rel")
-        scale_row(gbox, "保持 ms", self.var_fx_gate_hold, 0, 200, 1, hot=True, tip_key="fx_gate_hold")
-        scale_row(gbox, "衰减 dB", self.var_fx_gate_range, 6, 60, 1, hot=True, tip_key="fx_gate_range")
+        scale_row(
+            gbox,
+            "门限 dB",
+            self.var_fx_gate_thr,
+            -80,
+            -10,
+            1,
+            hot=True,
+            tip_key="fx_gate_thr",
+        )
+        scale_row(
+            gbox,
+            "释放 ms",
+            self.var_fx_gate_rel,
+            5,
+            300,
+            1,
+            hot=True,
+            tip_key="fx_gate_rel",
+        )
+        scale_row(
+            gbox,
+            "保持 ms",
+            self.var_fx_gate_hold,
+            0,
+            200,
+            1,
+            hot=True,
+            tip_key="fx_gate_hold",
+        )
+        scale_row(
+            gbox,
+            "衰减 dB",
+            self.var_fx_gate_range,
+            6,
+            60,
+            1,
+            hot=True,
+            tip_key="fx_gate_range",
+        )
 
         # Compressor
         cbox = tk.Frame(fx, bg=TM_SURFACE)
@@ -740,11 +856,56 @@ class SettingsPageMixin:
             command=self._on_hot_param,
         ).pack(side="left")
         help_mark(comp_row, SETTING_TIPS["fx_comp"])
-        scale_row(cbox, "阈值 dB", self.var_fx_comp_thr, -40, 0, 1, hot=True, tip_key="fx_comp_thr")
-        scale_row(cbox, "比率", self.var_fx_comp_ratio, 1, 20, 0.5, hot=True, tip_key="fx_comp_ratio")
-        scale_row(cbox, "启动 ms", self.var_fx_comp_att, 0.5, 50, 0.5, hot=True, tip_key="fx_comp_att")
-        scale_row(cbox, "释放 ms", self.var_fx_comp_rel, 10, 500, 1, hot=True, tip_key="fx_comp_rel")
-        scale_row(cbox, "增益 dB", self.var_fx_comp_mu, 0, 12, 0.5, hot=True, tip_key="fx_comp_mu")
+        scale_row(
+            cbox,
+            "阈值 dB",
+            self.var_fx_comp_thr,
+            -40,
+            0,
+            1,
+            hot=True,
+            tip_key="fx_comp_thr",
+        )
+        scale_row(
+            cbox,
+            "比率",
+            self.var_fx_comp_ratio,
+            1,
+            20,
+            0.5,
+            hot=True,
+            tip_key="fx_comp_ratio",
+        )
+        scale_row(
+            cbox,
+            "启动 ms",
+            self.var_fx_comp_att,
+            0.5,
+            50,
+            0.5,
+            hot=True,
+            tip_key="fx_comp_att",
+        )
+        scale_row(
+            cbox,
+            "释放 ms",
+            self.var_fx_comp_rel,
+            10,
+            500,
+            1,
+            hot=True,
+            tip_key="fx_comp_rel",
+        )
+        scale_row(
+            cbox,
+            "增益 dB",
+            self.var_fx_comp_mu,
+            0,
+            12,
+            0.5,
+            hot=True,
+            tip_key="fx_comp_mu",
+        )
 
         # EQ
         ebox = tk.Frame(fx, bg=TM_SURFACE)
@@ -805,7 +966,14 @@ class SettingsPageMixin:
             )
 
         scale_row(
-            fx, "输出增益 dB", self.var_fx_out_gain, -12, 12, 0.5, hot=True, tip_key="fx_out"
+            fx,
+            "输出增益 dB",
+            self.var_fx_out_gain,
+            -12,
+            12,
+            0.5,
+            hot=True,
+            tip_key="fx_out",
         )
 
         # --- 常规（关闭行为等） ---
@@ -912,9 +1080,7 @@ class SettingsPageMixin:
             getattr(self, "cmb_fx_preset", None),
         ):
             if _cmb is not None:
-                _cmb.configure(
-                    postcommand=lambda c=_cmb: self._fit_combo_popdown(c)
-                )
+                _cmb.configure(postcommand=lambda c=_cmb: self._fit_combo_popdown(c))
 
         # Auto-save: any settings var change → debounced silent save
         def _autosave_later(*_a):
@@ -926,9 +1092,7 @@ class SettingsPageMixin:
                     self.root.after_cancel(job)
                 except Exception:
                     pass
-            self._settings_autosave_job = self.root.after(
-                600, self._settings_autosave
-            )
+            self._settings_autosave_job = self.root.after(600, self._settings_autosave)
 
         for name in dir(self):
             if not name.startswith("var_"):
@@ -1212,8 +1376,10 @@ class SettingsPageMixin:
             var = str(pm.get("variant") or "")
             if var == "amd" and not info.get("has_dml"):
                 line += "  · 本包为 DirectML，但 Runtime 未检出 DML"
-            if var in ("nvidia", "nvidia50") and pref in ("auto", "cuda") and not info.get(
-                "has_cuda"
+            if (
+                var in ("nvidia", "nvidia50")
+                and pref in ("auto", "cuda")
+                and not info.get("has_cuda")
             ):
                 line += "  · 未检出 CUDA，确认使用了对应显卡发行包 Runtime"
         except Exception:
@@ -1273,6 +1439,7 @@ class SettingsPageMixin:
     def _on_accel_changed(self) -> None:
         self.cfg["accel_backend"] = normalize_accel(str(self.var_accel.get() or "auto"))
         save_config(self.cfg)
+
         # Re-detect; always restart worker so CUDA/DML/CPU env reloads
         def work():
             try:
@@ -1389,9 +1556,7 @@ class SettingsPageMixin:
                 # Fast UI fill (no worker)
                 st_local = list_audio_devices_for_ui(host or None)
                 if st_local.get("input_devices") is not None:
-                    self.root.after(
-                        0, lambda s=st_local: self._apply_device_status(s)
-                    )
+                    self.root.after(0, lambda s=st_local: self._apply_device_status(s))
                 # Engine standby prewarm (pythonw worker only)
                 st = rt_client.ensure_worker_and_devices(timeout_s=100)
                 if st.get("input_devices") is not None:
@@ -1413,9 +1578,7 @@ class SettingsPageMixin:
                 )
 
         threading.Thread(target=work, daemon=True).start()
-        self._set_status_visual(
-            "busy", "正在连接变声引擎…", "预热中，首次变声会更快"
-        )
+        self._set_status_visual("busy", "正在连接变声引擎…", "预热中，首次变声会更快")
 
     def _apply_perf_preset(self, key: str) -> None:
         """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""
@@ -1519,9 +1682,7 @@ class SettingsPageMixin:
                 st = rt_client.poll_status()
                 self.root.after(0, lambda: self._apply_device_status(st, toast=True))
             except Exception as e:
-                self.root.after(
-                    0, lambda e=e: messagebox.showerror("重载失败", str(e))
-                )
+                self.root.after(0, lambda e=e: messagebox.showerror("重载失败", str(e)))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1581,8 +1742,10 @@ class SettingsPageMixin:
                 pick = self._prefer_monitor_device(outs, cur)
                 # Always correct empty / missing / virtual endpoints (e.g. Steam Speakers)
                 if pick and pick != cur:
-                    if (not cur) or (cur not in outs) or self._is_virtual_monitor_name(
-                        cur
+                    if (
+                        (not cur)
+                        or (cur not in outs)
+                        or self._is_virtual_monitor_name(cur)
                     ):
                         self.var_monitor_dev.set(pick)
                         try:
@@ -1608,4 +1771,3 @@ class SettingsPageMixin:
             self._refresh_monitor_hint()
         except Exception:
             pass
-

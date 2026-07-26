@@ -68,6 +68,7 @@ from launcher.theme import (
     TM_SURFACE,
     TM_WARN,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -158,8 +159,8 @@ class MainApp(
 
         self.root = tk.Tk()
         self.root.title(APP_TITLE)
-        self.root.geometry(f"{DEFAULT_WIN_W}x{DEFAULT_WIN_H}")
-        self.root.minsize(MIN_WIN_W, MIN_WIN_H)
+        self.root.geometry(f"{px(DEFAULT_WIN_W)}x{px(DEFAULT_WIN_H)}")
+        self.root.minsize(px(MIN_WIN_W), px(MIN_WIN_H))
         self.root.configure(bg=TM_BG)
         self._place_and_raise(force_size=True)
 
@@ -224,10 +225,10 @@ class MainApp(
                 sw = self.root.winfo_screenwidth()
                 sh = self.root.winfo_screenheight()
                 if not self._restore_saved_geometry(sw, sh):
-                    w, h = DEFAULT_WIN_W, DEFAULT_WIN_H
+                    w, h = px(DEFAULT_WIN_W), px(DEFAULT_WIN_H)
                     # Leave margin on small laptops
-                    w = min(w, max(MIN_WIN_W, sw - 48))
-                    h = min(h, max(MIN_WIN_H, sh - 72))
+                    w = min(w, max(px(MIN_WIN_W), sw - 48))
+                    h = min(h, max(px(MIN_WIN_H), sh - 72))
                     x = max(0, (sw - w) // 2)
                     y = max(0, (sh - h) // 2)
                     self.root.geometry(f"{w}x{h}+{x}+{y}")
@@ -256,7 +257,8 @@ class MainApp(
             return False
         w, h, x, y = (int(g) for g in m.groups())
         # Reject sizes/positions that no longer fit (monitor unplugged etc.)
-        if w < MIN_WIN_W or h < MIN_WIN_H or w > sw + 64 or h > sh + 64:
+        # Saved geometry is physical pixels, so compare against scaled minimums
+        if w < px(MIN_WIN_W) or h < px(MIN_WIN_H) or w > sw + 64 or h > sh + 64:
             return False
         if x < -32 or y < -32 or x > sw - 160 or y > sh - 120:
             return False
@@ -314,7 +316,7 @@ class MainApp(
 
     def _build_chrome(self) -> None:
         # LyricsKara-style head: tracked wordmark + mono route | Schale segment nav
-        top = tk.Frame(self.root, bg=TM_SURFACE, height=NAV_HEIGHT)
+        top = tk.Frame(self.root, bg=TM_SURFACE, height=px(NAV_HEIGHT))
         top.pack(fill="x")
         top.pack_propagate(False)
 
@@ -349,7 +351,7 @@ class MainApp(
         self.body.pack(fill="both", expand=True)
 
         tk.Frame(self.root, bg=TM_HAIRLINE, height=1).pack(fill="x", side="bottom")
-        bottom = tk.Frame(self.root, bg=TM_SURFACE, height=BOTTOM_HEIGHT)
+        bottom = tk.Frame(self.root, bg=TM_SURFACE, height=px(BOTTOM_HEIGHT))
         bottom.pack(fill="x", side="bottom")
         bottom.pack_propagate(False)
         self._bottom_bar = bottom
@@ -946,7 +948,7 @@ class MainApp(
             bg=_BG,
             fg=_META,
             anchor="w",
-            wraplength=320,
+            wraplength=px(320),
             justify="left",
         ).pack(fill="x", pady=(4, 10))
 

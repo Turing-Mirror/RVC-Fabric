@@ -38,6 +38,7 @@ from launcher.theme import (
     TM_META,
     TM_SURFACE,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -98,8 +99,8 @@ class ConsultMixin:
         win.transient(self.root)
         win.grab_set()
         try:
-            win.geometry("560x640")
-            win.minsize(500, 580)
+            win.geometry(f"{px(560)}x{px(640)}")
+            win.minsize(px(500), px(580))
         except Exception:
             pass
         center_over(win, self.root)
@@ -123,7 +124,7 @@ class ConsultMixin:
             bg=TM_BG,
             fg=TM_META,
             anchor="w",
-            wraplength=500,
+            wraplength=px(500),
             justify="left",
         ).pack(fill="x", pady=(4, 12))
 
@@ -135,7 +136,12 @@ class ConsultMixin:
         inner = tk.Frame(card, bg=TM_SURFACE, padx=12, pady=10)
         inner.pack(fill="x")
         tk.Label(
-            inner, text="当前音色", font=mono_font(7), bg=TM_SURFACE, fg=TM_META, anchor="w"
+            inner,
+            text="当前音色",
+            font=mono_font(7),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
         ).pack(anchor="w")
         tk.Label(
             inner,
@@ -167,7 +173,7 @@ class ConsultMixin:
             bg=TM_SURFACE,
             fg=TM_META,
             anchor="w",
-            wraplength=480,
+            wraplength=px(480),
         ).pack(anchor="w", pady=(4, 0))
 
         # character name
@@ -185,7 +191,9 @@ class ConsultMixin:
         )
         ent_name.pack(fill="x", pady=(0, 8))
         ent_name.configure(
-            highlightthickness=1, highlightbackground=TM_HAIRLINE, highlightcolor=TM_ACCENT
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+            highlightcolor=TM_ACCENT,
         )
 
         # samples
@@ -242,9 +250,7 @@ class ConsultMixin:
             def toggle_rec() -> None:
                 if recorder.recording:
                     if recorder.role != role:
-                        messagebox.showinfo(
-                            "录音", "请先停止当前录音。", parent=win
-                        )
+                        messagebox.showinfo("录音", "请先停止当前录音。", parent=win)
                         return
                     try:
                         path = recorder.stop()
@@ -303,7 +309,9 @@ class ConsultMixin:
                 rec_status.set("录音中 %s · 设备：%s" % (role, hint))
                 _tick()
 
-            GhostButton(fr, "浏览…", command=browse, padx=8, pady=4).pack(side="left", padx=(0, 4))
+            GhostButton(fr, "浏览…", command=browse, padx=8, pady=4).pack(
+                side="left", padx=(0, 4)
+            )
             btn_rec = GhostButton(fr, "录音", command=toggle_rec, padx=8, pady=4)
             btn_rec.pack(side="left")
 
@@ -314,7 +322,7 @@ class ConsultMixin:
             bg=TM_BG,
             fg=TM_META,
             anchor="w",
-            wraplength=500,
+            wraplength=px(500),
         ).pack(fill="x", pady=(4, 2))
         tk.Label(
             body,
@@ -323,7 +331,7 @@ class ConsultMixin:
             bg=TM_BG,
             fg=TM_META,
             anchor="w",
-            wraplength=500,
+            wraplength=px(500),
         ).pack(fill="x", pady=(0, 2))
         _row_file(body, "原声", "dry", var_dry)
         _row_file(body, "变声后效果", "wet", var_wet)
@@ -363,7 +371,12 @@ class ConsultMixin:
 
         # notes
         tk.Label(
-            body, text="备注（可选）", font=sans_font(10), bg=TM_BG, fg=TM_INK, anchor="w"
+            body,
+            text="备注（可选）",
+            font=sans_font(10),
+            bg=TM_BG,
+            fg=TM_INK,
+            anchor="w",
         ).pack(fill="x", pady=(10, 2))
         notes_box = scrolledtext.ScrolledText(
             body, height=3, font=sans_font(10), relief="flat", wrap="word", bd=4
@@ -371,7 +384,9 @@ class ConsultMixin:
         notes_box.pack(fill="both", expand=True, pady=(0, 8))
         notes_box.configure(highlightthickness=1, highlightbackground=TM_HAIRLINE)
 
-        status = tk.Label(body, text="", font=sans_font(9), bg=TM_BG, fg=TM_META, anchor="w")
+        status = tk.Label(
+            body, text="", font=sans_font(9), bg=TM_BG, fg=TM_META, anchor="w"
+        )
         status.pack(fill="x", pady=(0, 6))
 
         actions = tk.Frame(body, bg=TM_BG)

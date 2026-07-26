@@ -55,6 +55,7 @@ from launcher.theme import (
     TM_SURFACE_HOVER,
     TM_WARN,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -72,8 +73,13 @@ class ProvisionProgressPanel(tk.Frame):
     """Schale-quiet multi-step progress for Runtime / engine-core / VB-Cable."""
 
     def __init__(self, master, **kw):
-        super().__init__(master, bg=TM_SURFACE, highlightthickness=1,
-                         highlightbackground=TM_HAIRLINE, **kw)
+        super().__init__(
+            master,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+            **kw,
+        )
         self._step_labels: list[tk.Label] = []
         top = tk.Frame(self, bg=TM_SURFACE)
         top.pack(fill="x", padx=12, pady=(10, 4))
@@ -127,7 +133,7 @@ class ProvisionProgressPanel(tk.Frame):
             fg=TM_META,
             anchor="w",
             justify="left",
-            wraplength=520,
+            wraplength=px(520),
         )
         self.lbl_remain.pack(fill="x", padx=12, pady=(0, 10))
 
@@ -181,8 +187,7 @@ class ProvisionProgressPanel(tk.Frame):
         self._step_labels.clear()
         self._hide_active_chrome()
         self.lbl_detail.configure(
-            text=message
-            or "尚未开始补全。点上方「补全运行环境」后才会显示下载进度。"
+            text=message or "尚未开始补全。点上方「补全运行环境」后才会显示下载进度。"
         )
         self.lbl_remain.configure(text="")
 
@@ -240,9 +245,7 @@ class ProvisionProgressPanel(tk.Frame):
             detail = snap.note or snap.step_title
         self.lbl_detail.configure(text=detail)
         if snap.remaining_titles:
-            self.lbl_remain.configure(
-                text="剩余：" + " → ".join(snap.remaining_titles)
-            )
+            self.lbl_remain.configure(text="剩余：" + " → ".join(snap.remaining_titles))
         else:
             # Only say "最后一步" when actually on last step in active run
             if snap.step_index >= snap.total_steps - 1:
@@ -269,7 +272,8 @@ class BootstrapApp:
             self._install_health = {}
         self.root = tk.Tk()
         self.root.title(f"{APP_TITLE} · 启动器")
-        self.root.geometry("640x720")
+        # Fixed-size window: must scale or 125%/150% content gets clipped
+        self.root.geometry(f"{px(640)}x{px(720)}")
         self.root.configure(bg=TM_BG)
         self.root.resizable(False, False)
         self._page = "setup"
@@ -354,7 +358,7 @@ class BootstrapApp:
             font=mono_font(8),
             bg=TM_BG,
             fg=TM_INK_MUTED,
-            wraplength=560,
+            wraplength=px(560),
             justify="left",
             anchor="w",
         )
@@ -362,9 +366,9 @@ class BootstrapApp:
 
         btn_row = tk.Frame(self.root, bg=TM_BG)
         btn_row.pack(pady=(2, 18))
-        PrimaryButton(btn_row, "打开主界面", command=self.on_start_app, padx=28, pady=10).pack(
-            side="left", padx=6
-        )
+        PrimaryButton(
+            btn_row, "打开主界面", command=self.on_start_app, padx=28, pady=10
+        ).pack(side="left", padx=6)
         GhostButton(
             btn_row, "打开安装目录", command=lambda: open_path(RROOT), padx=16, pady=10
         ).pack(side="left", padx=6)
@@ -412,7 +416,7 @@ class BootstrapApp:
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
-            wraplength=500,
+            wraplength=px(500),
             justify="left",
             anchor="w",
         ).pack(fill="x")
@@ -446,7 +450,7 @@ class BootstrapApp:
             font=sans_font(9),
             bg=TM_BG,
             fg=TM_INK_MUTED,
-            wraplength=500,
+            wraplength=px(500),
             justify="left",
             anchor="w",
         ).pack(fill="x", padx=PAD_X, pady=(0, 14))
@@ -586,7 +590,11 @@ class BootstrapApp:
 
     def _ask_variant_and_confirm(self, *, force: bool = False) -> str | None:
         """Ask GPU variant + size warning. Returns variant or None if cancelled."""
-        from launcher.cnb_sources import VARIANT_LABELS, format_size, resolve_runtime_spec
+        from launcher.cnb_sources import (
+            VARIANT_LABELS,
+            format_size,
+            resolve_runtime_spec,
+        )
         from launcher.ui import ask_choice
 
         current = self._selected_variant()
@@ -737,9 +745,7 @@ class BootstrapApp:
     def _apply_tracker_ui(self, snap: ProvisionSnapshot) -> None:
         try:
             self.progress_panel.apply(snap)
-            line = (
-                f"{snap.step_title} · 第 {snap.step_index + 1}/{snap.total_steps} 步"
-            )
+            line = f"{snap.step_title} · 第 {snap.step_index + 1}/{snap.total_steps} 步"
             if snap.total_bytes > 0 and snap.phase == "download":
                 line += f" · {snap.pct:.0f}%"
             self._set_status(line, ok=True)
@@ -785,7 +791,10 @@ class BootstrapApp:
                     tracker.set_step("engine_dl")
 
             try:
-                from launcher.runtime_provision import provision_runtime, runtime_ready as _rr
+                from launcher.runtime_provision import (
+                    provision_runtime,
+                    runtime_ready as _rr,
+                )
 
                 already_rt = _rr(RROOT) and not force
                 if already_rt:
@@ -813,7 +822,10 @@ class BootstrapApp:
             extra_msgs: list[str] = []
             if ok:
                 try:
-                    from launcher.engine_core import ensure_engine_core, engine_core_ready
+                    from launcher.engine_core import (
+                        ensure_engine_core,
+                        engine_core_ready,
+                    )
 
                     if not engine_core_ready(RROOT) or force:
                         tracker.set_step("engine_dl")
@@ -860,12 +872,8 @@ class BootstrapApp:
                         def _vb_prog(done: int, total: int) -> None:
                             tracker.set_bytes(done, total)
 
-                        vok, vmsg = ensure_vbcable_pack(
-                            log=log, progress=_vb_prog
-                        )
-                        extra_msgs.append(
-                            vmsg if vok else f"虚拟声卡包未就绪：{vmsg}"
-                        )
+                        vok, vmsg = ensure_vbcable_pack(log=log, progress=_vb_prog)
+                        extra_msgs.append(vmsg if vok else f"虚拟声卡包未就绪：{vmsg}")
                         if vok:
                             tracker.mark_done("vbcable_dl")
                             log("VB-Cable 安装包已就绪（可点「安装虚拟声卡」）。")
@@ -944,9 +952,7 @@ class BootstrapApp:
         )
         if not messagebox.askyesno(
             "安装虚拟声卡",
-            "即将启动 VB-Cable 安装程序。"
-            + extra
-            + "\n\n点「是」之后请注意：\n"
+            "即将启动 VB-Cable 安装程序。" + extra + "\n\n点「是」之后请注意：\n"
             "· 若需下载安装包，请稍候状态栏进度\n"
             "· Windows 用户账户控制（UAC）— 请点「是」\n"
             "· VB-Cable 安装窗口 — 请点 Install / 安装\n\n"
@@ -1031,8 +1037,7 @@ class BootstrapApp:
         if not runtime_ready(RROOT):
             if messagebox.askyesno(
                 "缺少运行环境",
-                "尚未安装 Runtime，主界面无法推理变声。\n"
-                "是否现在从 CNB 下载补全？",
+                "尚未安装 Runtime，主界面无法推理变声。\n" "是否现在从 CNB 下载补全？",
             ):
                 self._run_provision(self._selected_variant(), interactive=True)
             return

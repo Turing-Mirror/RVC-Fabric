@@ -20,6 +20,7 @@ from launcher.theme import (
     TM_META,
     TM_SURFACE,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -122,8 +123,8 @@ class OnboardingMixin:
         win = tk.Toplevel(self.root)
         win.title("新手引导")
         win.configure(bg=TM_BG)
-        win.geometry("560x470")
-        win.minsize(480, 420)
+        win.geometry(f"{px(560)}x{px(470)}")
+        win.minsize(px(480), px(420))
         win.transient(self.root)
         center_over(win, self.root)
         try:
@@ -196,7 +197,7 @@ class OnboardingMixin:
                     fg=TM_INK,
                     justify="left",
                     anchor="w",
-                    wraplength=470,
+                    wraplength=px(470),
                 ).pack(anchor="w", pady=4, fill="x")
             if eb == "连接":
                 # 首次设置启动器并入引导：装环境 / 虚拟声卡都从这里进

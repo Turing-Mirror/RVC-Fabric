@@ -41,6 +41,7 @@ from launcher.theme import (
     TM_OK,
     TM_SURFACE,
     mono_font,
+    px,
     sans_font,
 )
 from launcher.ui import GhostButton, HoverTip, SectionCard, SoftSlider
@@ -230,8 +231,8 @@ class SettingsPageMixin:
                 to,
                 resolution=res,
                 command=_cmd if hot else (lambda _v=None: _fmt()),
-                bar_width=360,
-                bar_height=36,
+                bar_width=px(360),
+                bar_height=px(36),
                 bg=TM_SURFACE,
             )
             sc.pack(side="left", fill="x", expand=True, padx=(4, 4))
@@ -255,7 +256,7 @@ class SettingsPageMixin:
             fg=TM_HELP,
             justify="left",
             anchor="w",
-            wraplength=640,
+            wraplength=px(640),
         )
         intro.pack(fill="x", anchor="w", pady=(0, 6))
         self._settings_wrap_labels.append(intro)
@@ -503,7 +504,7 @@ class SettingsPageMixin:
             fg=TM_HELP,
             justify="left",
             anchor="w",
-            wraplength=640,
+            wraplength=px(640),
         )
         voice_note.pack(fill="x", pady=(0, 6))
         self._settings_wrap_labels.append(voice_note)

@@ -41,6 +41,7 @@ from launcher.theme import (
     TM_SURFACE,
     TM_WARN,
     mono_font,
+    px,
     sans_font,
     serif_font,
 )
@@ -229,7 +230,7 @@ class HotkeysMixin:
             fg=TM_HELP,
             justify="left",
             anchor="w",
-            wraplength=640,
+            wraplength=px(640),
         )
         intro.pack(fill="x", pady=(0, 8))
         self._settings_wrap_labels.append(intro)
@@ -437,9 +438,7 @@ class HotkeysMixin:
         self._refresh_global_hotkeys()
         if hasattr(self, "lbl_hk_status"):
             n = sum(1 for v in self._collect_global_action_flags().values() if v)
-            self.lbl_hk_status.configure(
-                text=f"全局按键已更新（{n} 个启用）", fg=TM_OK
-            )
+            self.lbl_hk_status.configure(text=f"全局按键已更新（{n} 个启用）", fg=TM_OK)
 
     def _clear_hotkey_row(self, action_id: str, var: tk.StringVar) -> None:
         var.set("")
@@ -591,8 +590,8 @@ class HotkeysMixin:
         win = tk.Toplevel(self.root)
         win.title("快捷键说明")
         win.configure(bg=TM_BG)
-        win.geometry("480x520")
-        win.minsize(400, 360)
+        win.geometry(f"{px(480)}x{px(520)}")
+        win.minsize(px(400), px(360))
         win.transient(self.root)
         try:
             win.grab_set()
@@ -634,4 +633,3 @@ class HotkeysMixin:
         GhostButton(win, "关闭", command=win.destroy, padx=18, pady=8).pack(
             pady=(4, 14)
         )
-

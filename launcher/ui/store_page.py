@@ -51,6 +51,7 @@ from launcher.theme import (
     TM_SURFACE,
     TM_WARN,
     mono_font,
+    px,
     sans_font,
     title_font,
 )
@@ -112,7 +113,7 @@ class StorePage:
             bg=TM_SURFACE,
             fg=TM_INK_MUTED,
             anchor="w",
-            wraplength=640,
+            wraplength=px(640),
             justify="left",
         )
         self.lbl_gui_status.pack(anchor="w", pady=(6, 8))
@@ -183,8 +184,8 @@ class StorePage:
         dlg.configure(bg=TM_BG)
         dlg.transient(self.root)
         try:
-            dlg.geometry("640x640")
-            dlg.minsize(520, 480)
+            dlg.geometry(f"{px(640)}x{px(640)}")
+            dlg.minsize(px(520), px(480))
         except Exception:
             pass
         center_over(dlg, self.root)
@@ -492,7 +493,7 @@ class StorePage:
             font=sans_font(10),
             bg=TM_BG,
             fg=TM_META,
-            wraplength=520,
+            wraplength=px(520),
             justify="left",
             anchor="w",
         ).pack(anchor="w", pady=8)
@@ -710,7 +711,7 @@ class StorePage:
             fg=TM_META,
             anchor="w",
             # Long meta wraps instead of stealing button width
-            wraplength=360,
+            wraplength=px(360),
             justify="left",
             bd=0,
             highlightthickness=0,
@@ -724,7 +725,7 @@ class StorePage:
                 fg=TM_ACCENT,
                 anchor="w",
                 cursor="hand2",
-                wraplength=360,
+                wraplength=px(360),
                 justify="left",
                 bd=0,
                 highlightthickness=0,
@@ -741,7 +742,7 @@ class StorePage:
                 font=sans_font(9),
                 bg=TM_SURFACE,
                 fg=TM_INK_MUTED,
-                wraplength=360,
+                wraplength=px(360),
                 justify="left",
                 anchor="w",
                 bd=0,
@@ -755,7 +756,7 @@ class StorePage:
 
         from launcher.theme import TM_INSET
 
-        box = tk.Frame(row, bg=TM_INSET, width=56, height=56)
+        box = tk.Frame(row, bg=TM_INSET, width=px(56), height=px(56))
         box.pack(side="left", padx=(10, 0), pady=10)
         box.pack_propagate(False)
         lbl = tk.Label(box, text="", bg=TM_INSET)

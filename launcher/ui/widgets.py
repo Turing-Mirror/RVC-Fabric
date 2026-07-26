@@ -25,6 +25,7 @@ from launcher.theme import (
     TM_WARN,
     display_font,
     mono_font,
+    px,
     sans_font,
     title_font,
     tracked,
@@ -75,7 +76,7 @@ def ask_choice(
         fg=TM_INK,
         justify="left",
         anchor="w",
-        wraplength=400,
+        wraplength=px(400),
     ).pack(padx=22, pady=(18, 14), anchor="w")
 
     row = tk.Frame(win, bg=TM_BG)
@@ -159,7 +160,7 @@ class HoverTip:
             bg=TM_SURFACE,
             fg=TM_INK,
             font=sans_font(9),
-            wraplength=340,
+            wraplength=px(340),
         ).pack(anchor="w")
         tip.wm_geometry(f"+{x}+{y}")
         self._tip = tip
@@ -252,7 +253,9 @@ class SectionCard(tk.Frame):
         if eyebrow:
             tk.Label(
                 self.body,
-                text=tracked(eyebrow.upper(), gap="  ") if eyebrow.isascii() else eyebrow,
+                text=(
+                    tracked(eyebrow.upper(), gap="  ") if eyebrow.isascii() else eyebrow
+                ),
                 font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
@@ -479,7 +482,9 @@ class SoftSlider(tk.Frame):
         self.variable.set(value)
 
     def _clamp_val(self, v: float) -> float:
-        lo, hi = (self.from_, self.to) if self.from_ <= self.to else (self.to, self.from_)
+        lo, hi = (
+            (self.from_, self.to) if self.from_ <= self.to else (self.to, self.from_)
+        )
         v = max(lo, min(hi, float(v)))
         step = self.resolution
         if step and step > 0:
@@ -557,9 +562,7 @@ class SoftSlider(tk.Frame):
         frac = self._frac()
         fill_x = x0 + (x1 - x0) * frac
         if fill_x > x0 + 1:
-            rounded_capsule(
-                x0, max(fill_x, x0 + track_h), cy, track_h, (*accent, 255)
-            )
+            rounded_capsule(x0, max(fill_x, x0 + track_h), cy, track_h, (*accent, 255))
 
         tx = int(round(fill_x))
         shadow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -702,9 +705,10 @@ class ParamTile(tk.Frame):
         self.variable = variable
         self.fmt = fmt
         self._user_cmd = command
-        # Fixed outer size — prevents bottom bar vertical/horizontal thrash
-        tile_w = max(int(width), 168)
-        tile_h = 92
+        # Fixed outer size — prevents bottom bar vertical/horizontal thrash.
+        # width is design units; scale here (callers pass bare numbers).
+        tile_w = max(px(int(width)), px(168))
+        tile_h = px(92)
         try:
             self.configure(width=tile_w, height=tile_h)
             self.pack_propagate(False)
@@ -745,8 +749,8 @@ class ParamTile(tk.Frame):
             command=self._on_slide,
             on_press=on_press,
             on_release=on_release,
-            bar_width=max(tile_w - 28, 150),
-            bar_height=36,
+            bar_width=max(tile_w - px(28), px(150)),
+            bar_height=px(36),
             bg=TM_SURFACE,
         )
         self.slider.pack(fill="x", expand=True, pady=(6, 0))
@@ -803,7 +807,7 @@ class SoftActionCard(tk.Frame):
             cursor="hand2",
             **kw,
         )
-        self.configure(width=168, height=140)
+        self.configure(width=px(168), height=px(140))
         self.pack_propagate(False)
         self._cmd = command
         # Inner column: no default Label chrome (Windows Label bd defaults to 2
@@ -816,7 +820,7 @@ class SoftActionCard(tk.Frame):
             font=title_font(12, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
-            wraplength=130,
+            wraplength=px(130),
             justify="left",
             anchor="w",
             takefocus=0,
@@ -831,7 +835,7 @@ class SoftActionCard(tk.Frame):
                 font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_META,
-                wraplength=130,
+                wraplength=px(130),
                 justify="left",
                 anchor="w",
                 takefocus=0,
@@ -901,6 +905,9 @@ class ModelCoverCard(tk.Frame):
     ):
         edge = TM_ACCENT if (active or focus) else TM_HAIRLINE
         thick = 2 if (active or focus) else 1
+        # width/height are design units; scale here (callers pass bare numbers)
+        width = px(width)
+        height = px(height)
         super().__init__(
             master,
             bg=TM_SURFACE,
@@ -923,13 +930,13 @@ class ModelCoverCard(tk.Frame):
         # button always keeps full height. Index badge stays place()'d SE so
         # it never shares a pack-row with the button either.
         has_action = bool(action_text)
-        foot_h = 36 if has_action else 0
+        foot_h = px(36) if has_action else 0
         # Slightly lower cover ratio when action is shown so meta+foot fit
         cover_ratio = 0.52 if has_action else 0.58
-        cover_h = max(int(height * cover_ratio), 96)
-        # Cap cover so meta (tag+name+author ≈ 52px) + foot always fit
-        meta_min = 52
-        max_cover = max(height - meta_min - foot_h - 16, 96)
+        cover_h = max(int(height * cover_ratio), px(96))
+        # Cap cover so meta (tag+name+author) + foot always fit
+        meta_min = px(52)
+        max_cover = max(height - meta_min - foot_h - px(16), px(96))
         cover_h = min(cover_h, max_cover)
 
         cover_box = tk.Frame(self, bg=TM_INSET, height=cover_h)
@@ -940,7 +947,7 @@ class ModelCoverCard(tk.Frame):
             lbl.place(relx=0.5, rely=0.5, anchor="center")
             widgets = [lbl]
         else:
-            initial = (name[:1] or "·")
+            initial = name[:1] or "·"
             lbl = tk.Label(
                 cover_box,
                 text=initial,
@@ -1086,9 +1093,9 @@ class SearchField(tk.Frame):
 
         row = tk.Frame(self, bg=TM_SURFACE, padx=10, pady=6)
         row.pack(fill="x")
-        tk.Label(
-            row, text="⌕", font=mono_font(12), bg=TM_SURFACE, fg=TM_META
-        ).pack(side="left", padx=(0, 8))
+        tk.Label(row, text="⌕", font=mono_font(12), bg=TM_SURFACE, fg=TM_META).pack(
+            side="left", padx=(0, 8)
+        )
         self.entry = tk.Entry(
             row,
             font=sans_font(10),
@@ -1243,6 +1250,6 @@ class PageHeader(tk.Frame):
                 bg=bg,
                 fg=TM_INK_MUTED,
                 anchor="w",
-                wraplength=640,
+                wraplength=px(640),
                 justify="left",
             ).pack(anchor="w", pady=(8, 0))

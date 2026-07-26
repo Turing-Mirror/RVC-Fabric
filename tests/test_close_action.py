@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""close_action（关闭主窗口行为）配置接线测试（无 Tk）。"""
+"""close_action（关闭主窗口行为）配置连接测试（无 Tk）。"""
 
 from __future__ import annotations
 

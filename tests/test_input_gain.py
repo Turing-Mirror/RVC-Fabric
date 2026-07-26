@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""麦克风增益（in_gain_db）launcher 侧接线测试（无 Tk / 无 torch）。
+"""麦克风增益（in_gain_db）launcher 侧连接测试（无 Tk / 无 torch）。
 
 引擎侧行为（gui_v1 audio_infer 前置增益）需要 Runtime，见实机验收。
 """

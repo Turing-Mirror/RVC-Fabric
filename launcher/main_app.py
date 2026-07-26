@@ -552,7 +552,10 @@ class MainApp(
                 x = _x(db)
                 over = float(db) >= thr
                 c.create_rectangle(
-                    0, 0, x, h,
+                    0,
+                    0,
+                    x,
+                    h,
                     fill=TM_ACCENT if over else TM_HAIRLINE,
                     width=0,
                 )
@@ -564,9 +567,7 @@ class MainApp(
     def _set_status_visual(self, mode: str, title: str, subtitle: str = "") -> None:
         """Update bottom-right status badge. mode: idle|busy|live|error."""
         try:
-            self.status_badge.set_mode(
-                mode, title, subtitle or APP_PRODUCT_TAGLINE
-            )
+            self.status_badge.set_mode(mode, title, subtitle or APP_PRODUCT_TAGLINE)
         except Exception:
             pass
 
@@ -624,9 +625,7 @@ class MainApp(
         # Save previous model's voice params before switching
         if prev != idx and self.models:
             try:
-                self._persist_voice_params_to_model(
-                    self.models[prev], immediate=True
-                )
+                self._persist_voice_params_to_model(self.models[prev], immediate=True)
             except Exception:
                 pass
         self.model_idx = idx
@@ -817,6 +816,7 @@ class MainApp(
             # Cold start: torch/CUDA often 20–40s before FreeSimpleGUI window
             focused = focus_window_by_title("RVC - GUI", timeout_s=55.0)
             if focused:
+
                 def _ok():
                     self.lbl_online.configure(text="实时面板已打开", fg=TM_OK)
 
@@ -848,6 +848,7 @@ class MainApp(
                 still = False
 
             if still:
+
                 def _loading():
                     self.lbl_online.configure(
                         text="实时面板加载中…请看任务栏 RVC - GUI",
@@ -929,29 +930,53 @@ class MainApp(
         body = tk.Frame(win, bg=_BG, padx=22, pady=16)
         body.pack(fill="both", expand=True)
         tk.Label(
-            body, text="要如何关闭？", font=_title(13, "bold"), bg=_BG, fg=_INK,
+            body,
+            text="要如何关闭？",
+            font=_title(13, "bold"),
+            bg=_BG,
+            fg=_INK,
             anchor="w",
         ).pack(fill="x")
         tk.Label(
             body,
             text="最小化到托盘后变声继续在后台运行，右下角图标可随时恢复。",
-            font=_sans(9), bg=_BG, fg=_META, anchor="w", wraplength=320,
+            font=_sans(9),
+            bg=_BG,
+            fg=_META,
+            anchor="w",
+            wraplength=320,
             justify="left",
         ).pack(fill="x", pady=(4, 10))
 
         var_choice = tk.StringVar(value="tray")
-        for val, label in (("tray", "最小化到托盘（后台继续变声）"), ("exit", "直接关闭软件")):
+        for val, label in (
+            ("tray", "最小化到托盘（后台继续变声）"),
+            ("exit", "直接关闭软件"),
+        ):
             tk.Radiobutton(
-                body, text=label, value=val, variable=var_choice,
-                font=_sans(10), bg=_BG, fg=_INK, activebackground=_BG,
-                selectcolor=_SURF, anchor="w",
+                body,
+                text=label,
+                value=val,
+                variable=var_choice,
+                font=_sans(10),
+                bg=_BG,
+                fg=_INK,
+                activebackground=_BG,
+                selectcolor=_SURF,
+                anchor="w",
             ).pack(fill="x", pady=1)
 
         var_remember = tk.BooleanVar(value=False)
         tk.Checkbutton(
-            body, text="记住我的选择，下次不再询问（可在设置里更改）",
-            variable=var_remember, font=_sans(9), bg=_BG, fg=_META,
-            activebackground=_BG, selectcolor=_SURF, anchor="w",
+            body,
+            text="记住我的选择，下次不再询问（可在设置里更改）",
+            variable=var_remember,
+            font=_sans(9),
+            bg=_BG,
+            fg=_META,
+            activebackground=_BG,
+            selectcolor=_SURF,
+            anchor="w",
         ).pack(fill="x", pady=(8, 10))
 
         def _done(ok: bool) -> None:

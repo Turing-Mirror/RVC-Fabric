@@ -81,6 +81,12 @@ DEFAULTS: dict[str, Any] = {
     "global_hotkeys": False,
     # When VC is running, switching model via hotkey/carousel restarts engine
     "hotkey_restart_on_model_switch": True,
+    # Custom wallpaper (settings → 外观): path under User_Data/wallpaper/ or absolute
+    "ui_wallpaper_path": "",
+    # Image strength 0–100 (0 = theme only; 100 = full art after frost)
+    "ui_wallpaper_opacity": 40,
+    # Gaussian frost radius 0–40 (Pillow ImageFilter.GaussianBlur)
+    "ui_wallpaper_blur": 16,
 }
 
 # gui_v1.py / realtime_worker read this file on launch / start
@@ -115,6 +121,26 @@ def _normalize_cfg(data: dict[str, Any]) -> dict[str, Any]:
     )
     if out.get("close_action") not in ("ask", "tray", "exit"):
         out["close_action"] = "ask"
+    # Wallpaper sliders
+    try:
+        from launcher.ui.wallpaper import clamp_blur, clamp_opacity
+
+        out["ui_wallpaper_opacity"] = clamp_opacity(
+            out.get("ui_wallpaper_opacity", 40)
+        )
+        out["ui_wallpaper_blur"] = clamp_blur(out.get("ui_wallpaper_blur", 16))
+    except Exception:
+        try:
+            out["ui_wallpaper_opacity"] = max(
+                0, min(100, int(out.get("ui_wallpaper_opacity") or 40))
+            )
+            out["ui_wallpaper_blur"] = max(
+                0, min(40, int(out.get("ui_wallpaper_blur") or 16))
+            )
+        except (TypeError, ValueError):
+            out["ui_wallpaper_opacity"] = 40
+            out["ui_wallpaper_blur"] = 16
+    out["ui_wallpaper_path"] = str(out.get("ui_wallpaper_path") or "")
     return out
 
 

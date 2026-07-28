@@ -49,6 +49,298 @@ from launcher.ui.help_content import SETTING_TIPS
 
 
 class SettingsPageMixin:
+    def _build_wallpaper_settings_section(self, wrap: tk.Frame, card) -> None:
+        """外观：自定义背景图 + 不透明度 + 磨砂（Pillow GaussianBlur）。
+
+        Image pipeline follows common Tk/desktop practice (cover-scale + blur +
+        blend). Panel see-through uses Win32 color-key / pywinstyles.
+        """
+        from launcher.ui.wallpaper import clamp_blur, clamp_opacity
+
+        body = card(wrap, "外观（背景图）")
+        note = tk.Label(
+            body,
+            text=(
+                "为软件换一张自己的背景图。磨砂使用 Pillow 高斯模糊"
+                "（与界面阴影同源技术）；不透明度控制图案相对默认画布的强度。"
+                "导航栏与底栏保持实色以便阅读。"
+            ),
+            font=sans_font(9),
+            bg=TM_SURFACE,
+            fg=TM_HELP,
+            justify="left",
+            anchor="w",
+            wraplength=px(640),
+        )
+        note.pack(fill="x", anchor="w", pady=(0, 8))
+        self._settings_wrap_labels.append(note)
+
+        row = tk.Frame(body, bg=TM_SURFACE)
+        row.pack(fill="x", pady=4)
+        tk.Button(
+            row,
+            text="选择图片…",
+            font=sans_font(9),
+            bg=TM_BG,
+            fg=TM_INK,
+            relief="flat",
+            cursor="hand2",
+            command=self._wallpaper_pick,
+            bd=0,
+            padx=12,
+            pady=5,
+        ).pack(side="left")
+        tk.Button(
+            row,
+            text="恢复默认",
+            font=sans_font(9),
+            bg=TM_BG,
+            fg=TM_INK_MUTED,
+            relief="flat",
+            cursor="hand2",
+            command=self._wallpaper_clear,
+            bd=0,
+            padx=12,
+            pady=5,
+        ).pack(side="left", padx=(8, 0))
+        self.lbl_wallpaper_path = tk.Label(
+            row,
+            text=self._wallpaper_path_caption(),
+            font=sans_font(9),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+        )
+        self.lbl_wallpaper_path.pack(side="left", padx=(12, 0), fill="x", expand=True)
+
+        # Preview
+        prev_row = tk.Frame(body, bg=TM_SURFACE)
+        prev_row.pack(fill="x", pady=(6, 4))
+        self.lbl_wallpaper_preview = tk.Label(
+            prev_row,
+            text="（未设置背景图）",
+            font=sans_font(9),
+            bg=TM_INSET,
+            fg=TM_META,
+            width=28,
+            height=6,
+            anchor="center",
+        )
+        self.lbl_wallpaper_preview.pack(side="left")
+        self._wallpaper_preview_photo = None
+        self.root.after(80, self._wallpaper_update_preview)
+
+        self.var_wallpaper_opacity = tk.IntVar(
+            value=clamp_opacity(self.cfg.get("ui_wallpaper_opacity", 40))
+        )
+        self.var_wallpaper_blur = tk.IntVar(
+            value=clamp_blur(self.cfg.get("ui_wallpaper_blur", 16))
+        )
+
+        def _opacity_row():
+            f = tk.Frame(body, bg=TM_SURFACE)
+            f.pack(fill="x", pady=6)
+            tk.Label(
+                f,
+                text="背景不透明度",
+                width=14,
+                anchor="w",
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                font=sans_font(10),
+            ).pack(side="left")
+            val = tk.Label(
+                f,
+                text="",
+                width=5,
+                anchor="e",
+                bg=TM_SURFACE,
+                fg=TM_INK,
+                font=mono_font(11),
+            )
+            val.pack(side="right")
+
+            def _fmt(*_a):
+                try:
+                    val.configure(text=str(int(self.var_wallpaper_opacity.get())))
+                except Exception:
+                    pass
+
+            def _on(_v=None):
+                _fmt()
+                self._wallpaper_on_opacity()
+
+            SoftSlider(
+                f,
+                self.var_wallpaper_opacity,
+                0,
+                100,
+                resolution=1,
+                command=_on,
+                bar_width=px(320),
+                bar_height=px(36),
+                bg=TM_SURFACE,
+            ).pack(side="left", fill="x", expand=True, padx=4)
+            try:
+                self.var_wallpaper_opacity.trace_add("write", lambda *_: _fmt())
+            except Exception:
+                pass
+            _fmt()
+
+        def _blur_row():
+            f = tk.Frame(body, bg=TM_SURFACE)
+            f.pack(fill="x", pady=6)
+            tk.Label(
+                f,
+                text="磨砂程度",
+                width=14,
+                anchor="w",
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                font=sans_font(10),
+            ).pack(side="left")
+            val = tk.Label(
+                f,
+                text="",
+                width=5,
+                anchor="e",
+                bg=TM_SURFACE,
+                fg=TM_INK,
+                font=mono_font(11),
+            )
+            val.pack(side="right")
+
+            def _fmt(*_a):
+                try:
+                    val.configure(text=str(int(self.var_wallpaper_blur.get())))
+                except Exception:
+                    pass
+
+            def _on(_v=None):
+                _fmt()
+                self._wallpaper_on_blur()
+
+            SoftSlider(
+                f,
+                self.var_wallpaper_blur,
+                0,
+                40,
+                resolution=1,
+                command=_on,
+                bar_width=px(320),
+                bar_height=px(36),
+                bg=TM_SURFACE,
+            ).pack(side="left", fill="x", expand=True, padx=4)
+            try:
+                self.var_wallpaper_blur.trace_add("write", lambda *_: _fmt())
+            except Exception:
+                pass
+            _fmt()
+
+        _opacity_row()
+        _blur_row()
+        tip = tk.Label(
+            body,
+            text="提示：不透明度 0≈纯色界面；磨砂 0=清晰原图，数值越大越雾面。图片保存在 User_Data/wallpaper/。",
+            font=sans_font(8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+            anchor="w",
+            justify="left",
+            wraplength=px(640),
+        )
+        tip.pack(fill="x", pady=(4, 0))
+        self._settings_wrap_labels.append(tip)
+
+    def _wallpaper_path_caption(self) -> str:
+        p = str(self.cfg.get("ui_wallpaper_path") or "").strip()
+        if not p:
+            return "当前：默认画布（无自定义图）"
+        name = Path(p).name
+        return f"当前：{name}"
+
+    def _wallpaper_pick(self) -> None:
+        ctrl = getattr(self, "_wallpaper", None)
+        if ctrl is None:
+            return
+        if ctrl.set_image_from_dialog():
+            try:
+                self.lbl_wallpaper_path.configure(text=self._wallpaper_path_caption())
+            except Exception:
+                pass
+            self._wallpaper_update_preview()
+
+    def _wallpaper_clear(self) -> None:
+        ctrl = getattr(self, "_wallpaper", None)
+        if ctrl is None:
+            return
+        ctrl.clear_image()
+        try:
+            self.lbl_wallpaper_path.configure(text=self._wallpaper_path_caption())
+        except Exception:
+            pass
+        self._wallpaper_update_preview()
+
+    def _wallpaper_on_opacity(self) -> None:
+        ctrl = getattr(self, "_wallpaper", None)
+        if ctrl is None:
+            return
+        try:
+            v = int(self.var_wallpaper_opacity.get())
+        except Exception:
+            return
+        # Debounce rapid slider drags
+        job = getattr(self, "_wallpaper_opacity_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+
+        def _apply(val=v):
+            self._wallpaper_opacity_job = None
+            ctrl.set_opacity(val)
+            self._wallpaper_update_preview()
+
+        self._wallpaper_opacity_job = self.root.after(80, _apply)
+
+    def _wallpaper_on_blur(self) -> None:
+        ctrl = getattr(self, "_wallpaper", None)
+        if ctrl is None:
+            return
+        try:
+            v = int(self.var_wallpaper_blur.get())
+        except Exception:
+            return
+        job = getattr(self, "_wallpaper_blur_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+
+        def _apply(val=v):
+            self._wallpaper_blur_job = None
+            ctrl.set_blur(val)
+            self._wallpaper_update_preview()
+
+        self._wallpaper_blur_job = self.root.after(80, _apply)
+
+    def _wallpaper_update_preview(self) -> None:
+        lbl = getattr(self, "lbl_wallpaper_preview", None)
+        ctrl = getattr(self, "_wallpaper", None)
+        if lbl is None or ctrl is None:
+            return
+        photo = ctrl.preview_photo(max_w=px(200), max_h=px(112))
+        self._wallpaper_preview_photo = photo
+        try:
+            if photo is None:
+                lbl.configure(image="", text="（未设置背景图）")
+            else:
+                lbl.configure(image=photo, text="")
+        except Exception:
+            pass
+
     def _reflow_settings_page(self) -> None:
         """Keep settings cards/sliders matching window width (fix maximize empty right)."""
         canvas = getattr(self, "_settings_canvas", None)
@@ -989,6 +1281,9 @@ class SettingsPageMixin:
             hot=True,
             tip_key="fx_out",
         )
+
+        # --- 外观：自定义背景图（Pillow cover + GaussianBlur 磨砂） ---
+        self._build_wallpaper_settings_section(wrap, card)
 
         # --- 常规（关闭行为等） ---
         gen = card(wrap, "常规")

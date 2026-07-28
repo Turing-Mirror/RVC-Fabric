@@ -252,27 +252,21 @@ def install_voice_pack_zip(
     version = version or str(meta.get("version") or "1")
 
     dest_dir = models_root / vid
-    # clean reinstall of pack contents
-    if dest_dir.is_dir():
-        for p in dest_dir.iterdir():
-            try:
-                if p.is_file():
-                    p.unlink()
-                elif p.is_dir():
-                    shutil.rmtree(p, ignore_errors=True)
-            except OSError:
-                pass
-    dest_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="tm_voice_") as td:
         tmp = Path(td)
-        # Safe extract (reject zip-slip ../ members)
+        # Safe extract (reject zip-slip ../ members) BEFORE wiping dest —
+        # a bad zip must not destroy an already-installed voice.
         from launcher.online.safe_zip import UnsafeZipError, safe_extract_zip
 
         try:
             safe_extract_zip(zip_path, tmp)
         except UnsafeZipError as e:
             raise DownloadError(f"音色包路径不安全：{e}") from e
+        except zipfile.BadZipFile as e:
+            raise DownloadError(f"音色包不是有效的 zip：{e}") from e
+        except OSError as e:
+            raise DownloadError(f"无法解压音色包：{e}") from e
         # Find content root (optional single folder)
         content = _voice_content_root(tmp)
         pth = _find_first(content, "*.pth")
@@ -283,6 +277,18 @@ def install_voice_pack_zip(
             )
         if pth.stat().st_size < MIN_PTH_BYTES:
             raise DownloadError("音色包内 .pth 过小，可能损坏")
+
+        # Valid pack — now safe to replace any previous install
+        if dest_dir.is_dir():
+            for p in dest_dir.iterdir():
+                try:
+                    if p.is_file():
+                        p.unlink()
+                    elif p.is_dir():
+                        shutil.rmtree(p, ignore_errors=True)
+                except OSError:
+                    pass
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
         dest_pth = dest_dir / pth.name
         shutil.copy2(pth, dest_pth)

@@ -11,8 +11,9 @@ from launcher.catalog import (
     clear_model_index,
     discover_index_files,
 )
+from launcher.config_store import save_config
 from launcher.paths import MODELS_DIR, index_search_roots
-from launcher.theme import TM_HELP, TM_OK
+from launcher.theme import TM_HELP, TM_META, TM_OK
 
 
 class SettingsIndexMixin:

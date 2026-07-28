@@ -20,6 +20,7 @@ from launcher.theme import (
     TM_INK_MUTED,
     TM_META,
     TM_SURFACE,
+    px,
     sans_font,
 )
 from launcher.ui import HoverTip

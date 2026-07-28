@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from launcher.pages.settings_ui import SettingsUiKit
-from launcher.theme import TM_HELP, TM_INK_MUTED, TM_SURFACE, sans_font
+from launcher.theme import TM_HELP, TM_INK_MUTED, TM_SURFACE, px, sans_font
 from launcher.ui import HoverTip
 from launcher.ui.help_content import SETTING_TIPS
 

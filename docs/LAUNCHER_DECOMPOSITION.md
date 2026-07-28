@@ -95,6 +95,8 @@ set_active_index（多对多，纯逻辑可单测）。
 2. **UI 组件**：只通过 `SettingsUiKit`（`kit.card` / `kit.scale_row` / `kit.help_mark`），保证 jump 索引与行布局一致。  
 3. **业务 handler**：与该区块放同一 mixin（如设备列表与设备 UI）；跨区块共享的 save/hot-param 留在 `settings_page.py`。  
 4. **公开名不变**：`save_settings`、`reload_devices`、`_on_hot_param`、`_silent_check_updates` 等勿改名。  
-5. **组合测试**：新 mixin 加入 `tests/test_main_app_composition.py` MRO 断言。
+5. **组合测试**：新 mixin 加入 `tests/test_main_app_composition.py` MRO 断言。  
+6. **导入契约**：section 文件用到的 `px` / `sans_font` / `TM_*` / `save_config` 必须在**本文件** import；拆分时不要假设会从 `settings_page` 继承导入。  
+7. **启动冒烟**：`tests/test_main_app_startup.py` 会实例化 `MainApp` 并 `show_page` 全页；改设置 mixin 后务必跑通。
 
 目标终态：`main_app.py` 只保留 shell；每页/每能力一个 mixin；纯逻辑在无 Tk 模块 + unittest。

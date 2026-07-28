@@ -73,6 +73,11 @@ class MainAppCompositionTests(unittest.TestCase):
             "_apply_plaza_nav_badge",
             "_render_plaza",
             "_render_models_ad",
+            # wallpaper (settings → 外观)
+            "_build_wallpaper_settings_section",
+            "_wallpaper_pick",
+            "_wallpaper_clear",
+            "_wallpaper_update_preview",
         ):
             self.assertTrue(
                 callable(getattr(MainApp, meth, None)),

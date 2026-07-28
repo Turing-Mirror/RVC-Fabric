@@ -40,6 +40,7 @@ from launcher.pages import (
     SettingsPageMixin,
 )
 from launcher.tray import TrayController, tray_available
+from launcher.ui.wallpaper import WallpaperController
 from launcher.voice_history import VoiceParamHistory
 from launcher.hotkeys import GlobalHotkeyManager, merge_hotkeys
 from launcher.paths import (
@@ -187,6 +188,9 @@ class MainApp(
         self._init_shared_voice_vars()
         self._build_chrome()
         self._build_pages()
+        # Custom wallpaper (PIL cover + Gaussian frost; settings → 外观)
+        self._wallpaper = WallpaperController(self)
+        self._wallpaper.setup()
         # Apply selected model's saved voice params after UI exists
         if self.models:
             self._apply_model_voice_params(
@@ -213,6 +217,8 @@ class MainApp(
         self.root.after(2500, self._silent_check_updates)
         self.root.after(3000, self._silent_fetch_plaza)
         self.root.after(1200, self._maybe_show_onboarding)
+        # Wallpaper after first layout so size is real (also re-applies glass key)
+        self.root.after(350, self._wallpaper.apply_from_config)
         self._gpu_info: dict = {}
         self._update_badge_on = False
 
@@ -328,6 +334,11 @@ class MainApp(
             except Exception:
                 pass
         self._resize_job = self.root.after(120, self._reflow_current_page)
+        # Wallpaper cover-scale follows the window (Pillow re-render, debounced)
+        try:
+            self._wallpaper.on_resize()
+        except Exception:
+            pass
 
     def _reflow_current_page(self) -> None:
         self._resize_job = None

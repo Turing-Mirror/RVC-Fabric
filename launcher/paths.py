@@ -64,6 +64,7 @@ CH_BANNER_DIR = USER_DATA / "ch-banner"
 # so users can drop reusable files here, yet still navigate out to their own.
 INDICES_DIR = USER_DATA / "indices"
 SHARED_PROFILES_DIR = USER_DATA / "shared_profiles"
+WALLPAPER_DIR = USER_DATA / "wallpaper"
 VBCABLE_DIR = ROOT / "VBCABLE"
 
 ENGINE_WEIGHTS = ROOT / "assets" / "weights"
@@ -120,6 +121,7 @@ def ensure_dirs() -> None:
     CH_BANNER_DIR.mkdir(parents=True, exist_ok=True)
     INDICES_DIR.mkdir(parents=True, exist_ok=True)
     SHARED_PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+    WALLPAPER_DIR.mkdir(parents=True, exist_ok=True)
     USER_LOGS.mkdir(parents=True, exist_ok=True)
     VBCABLE_DIR.mkdir(parents=True, exist_ok=True)
     ENGINE_WEIGHTS.mkdir(parents=True, exist_ok=True)

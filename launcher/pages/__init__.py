@@ -19,6 +19,7 @@ from launcher.pages.plaza_page import PlazaPageMixin
 from launcher.pages.profiles_page import ProfilesMixin
 from launcher.pages.realtime_control import RealtimeControlMixin
 from launcher.pages.settings_page import SettingsPageMixin
+from launcher.pages.wallpaper_settings import WallpaperSettingsMixin
 
 __all__ = [
     "ConsultMixin",
@@ -34,4 +35,5 @@ __all__ = [
     "ProfilesMixin",
     "RealtimeControlMixin",
     "SettingsPageMixin",
+    "WallpaperSettingsMixin",
 ]

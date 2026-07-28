@@ -4,38 +4,50 @@
 Technique (well-trodden, not bespoke R&D)::
 
   - Cover crop / resize like CSS ``background-size: cover`` (LANCZOS)
-  - Frosted glass ≈ ``PIL.ImageFilter.GaussianBlur`` (same family as
-    soft UI shadows already used in ``launcher/ui/widgets.py``)
-  - Opacity / strength ≈ ``Image.blend`` against the theme canvas color
-    (standard Pillow compositing)
-
-Windows see-through for solid ``TM_BG`` panels uses layered-window color-key
-(``SetLayeredWindowAttributes``), the same approach wrapped by
-`Akascape/py-window-styles` (CustomTkinter community) — optional soft import
-of ``pywinstyles`` when present, else a minimal ctypes fallback.
+  - Frosted glass ≈ ``PIL.ImageFilter.GaussianBlur``
+  - Opacity / strength ≈ ``Image.blend`` against theme canvas color
+  - Windows see-through: layered-window **dedicated chromakey** (not TM_BG)
+    via ``SetLayeredWindowAttributes`` / optional ``pywinstyles`` — same idea
+    as Akascape/py-window-styles, but never color-key the theme paint used by
+    buttons (which would punch interactive holes).
 
 Config keys (app_config.json)::
 
-  ui_wallpaper_path      relative under User_Data/ or absolute image path
-  ui_wallpaper_opacity   0–100 image strength (0 = theme only, 100 = full art)
-  ui_wallpaper_blur      0–40 Gaussian radius at design pixels
+  ui_wallpaper_path      relative under User_Data/wallpaper/ only
+  ui_wallpaper_opacity   0–100 image strength
+  ui_wallpaper_blur      0–40 Gaussian radius
 """
 
 from __future__ import annotations
 
 import shutil
 import sys
+import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Callable, Optional
 
-if TYPE_CHECKING:
-    import tkinter as tk
-
-# Theme canvas (Schale bg) — blend target for strength
-_FILL_RGB = (247, 249, 251)  # TM_BG
+# Dedicated chromakey — must NOT be TM_BG / SURFACE / accent (those paint controls).
+# Only page-root / body / scroll canvas use this while wallpaper is on.
+WALLPAPER_CHROMAKEY: str = "#010203"
 _WALLPAPER_DIRNAME = "wallpaper"
 _STORED_NAME = "background"
-_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+_ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+# P0: reject multi‑tens-of-MB / multi‑10k-pixel dumps on install
+MAX_WALLPAPER_BYTES = 20 * 1024 * 1024
+MAX_WALLPAPER_EDGE = 4096
+
+
+def _theme_fill_rgb() -> tuple[int, int, int]:
+    """Parse theme.TM_BG; fallback Schale default if theme unavailable."""
+    try:
+        from launcher.theme import TM_BG
+
+        h = str(TM_BG).strip().lstrip("#")
+        if len(h) == 6:
+            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    except Exception:
+        pass
+    return (247, 249, 251)
 
 
 def wallpaper_dir(user_data: Path) -> Path:
@@ -58,47 +70,115 @@ def clamp_blur(v: Any) -> int:
         return 16
 
 
+def _is_under_dir(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
 def resolve_wallpaper_path(raw: str, *, user_data: Path, root: Path) -> Optional[Path]:
-    """Return an existing image path, or None."""
+    """Only files under ``User_Data/wallpaper/`` (portable + no arbitrary abs paths)."""
+    del root  # kept for call-site compatibility
     s = (raw or "").strip()
     if not s:
         return None
+    wp_root = (Path(user_data) / _WALLPAPER_DIRNAME).resolve()
     p = Path(s)
     candidates: list[Path] = []
     if p.is_absolute():
         candidates.append(p)
     else:
-        # Prefer User_Data-relative (portable installs)
         candidates.append(Path(user_data) / s)
-        candidates.append(Path(user_data) / _WALLPAPER_DIRNAME / Path(s).name)
-        candidates.append(Path(root) / s)
+        candidates.append(wp_root / Path(s).name)
     for c in candidates:
         try:
-            if c.is_file() and c.suffix.lower() in _ALLOWED_EXT:
-                return c.resolve()
+            if not c.is_file():
+                continue
+            if c.suffix.lower() not in _ALLOWED_EXT:
+                continue
+            resolved = c.resolve()
+            if not _is_under_dir(resolved, wp_root):
+                continue
+            return resolved
         except OSError:
             continue
     return None
 
 
 def install_wallpaper_file(src: Path, user_data: Path) -> str:
-    """Copy *src* into User_Data/wallpaper/ and return a relative path string."""
+    """Validate, downscale if needed, copy into User_Data/wallpaper/.
+
+    Returns a relative path string (``wallpaper/background.ext``).
+    """
     src = Path(src)
     if not src.is_file():
         raise FileNotFoundError(str(src))
     ext = src.suffix.lower()
     if ext not in _ALLOWED_EXT:
         raise ValueError(f"不支持的图片格式：{ext or '（无扩展名）'}")
+    try:
+        sz = src.stat().st_size
+    except OSError as e:
+        raise ValueError(f"无法读取文件：{e}") from e
+    if sz <= 0:
+        raise ValueError("文件为空")
+    if sz > MAX_WALLPAPER_BYTES:
+        raise ValueError(
+            f"图片过大（{sz // (1024 * 1024)} MB），请选用不超过 "
+            f"{MAX_WALLPAPER_BYTES // (1024 * 1024)} MB 的图片"
+        )
+
+    from PIL import Image
+
+    try:
+        im = Image.open(src)
+        im.load()
+    except Exception as e:
+        raise ValueError(f"无法解码图片：{e}") from e
+
+    # Flatten alpha; cap long edge (decompression / RAM guard)
+    if im.mode not in ("RGB", "L"):
+        fill = _theme_fill_rgb()
+        rgba = im.convert("RGBA")
+        base = Image.new("RGB", rgba.size, fill)
+        base.paste(rgba, mask=rgba.split()[-1])
+        im = base
+    else:
+        im = im.convert("RGB")
+
+    w, h = im.size
+    if w <= 0 or h <= 0:
+        raise ValueError("图片尺寸无效")
+    edge = max(w, h)
+    if edge > MAX_WALLPAPER_EDGE:
+        scale = MAX_WALLPAPER_EDGE / float(edge)
+        nw = max(1, int(round(w * scale)))
+        nh = max(1, int(round(h * scale)))
+        im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+
     dest_dir = wallpaper_dir(user_data)
-    # Clear previous stored files (one active wallpaper)
     for old in dest_dir.glob(f"{_STORED_NAME}.*"):
         try:
             old.unlink()
         except OSError:
             pass
-    dest = dest_dir / f"{_STORED_NAME}{ext if ext != '.jpeg' else '.jpg'}"
-    shutil.copy2(src, dest)
-    # Relative for portability across machines / drive letters
+
+    # Prefer JPEG for photos; keep PNG if source was PNG (graphics)
+    if ext in (".png", ".webp", ".bmp"):
+        dest = dest_dir / f"{_STORED_NAME}.png"
+        im.save(dest, format="PNG", optimize=True)
+    else:
+        dest = dest_dir / f"{_STORED_NAME}.jpg"
+        im.save(dest, format="JPEG", quality=88, optimize=True)
+
+    # Final size guard after re-encode
+    try:
+        if dest.stat().st_size > MAX_WALLPAPER_BYTES:
+            raise ValueError("处理后图片仍过大，请换一张更小的图")
+    except OSError:
+        pass
     return f"{_WALLPAPER_DIRNAME}/{dest.name}"
 
 
@@ -117,10 +197,11 @@ def cover_resize(im, tw: int, th: int):
     """CSS-like cover: scale to fill, center-crop (Pillow)."""
     from PIL import Image
 
+    fill = _theme_fill_rgb()
     tw, th = max(1, int(tw)), max(1, int(th))
     w, h = im.size
     if w <= 0 or h <= 0:
-        return Image.new("RGB", (tw, th), _FILL_RGB)
+        return Image.new("RGB", (tw, th), fill)
     scale = max(tw / w, th / h)
     nw = max(1, int(round(w * scale)))
     nh = max(1, int(round(h * scale)))
@@ -136,25 +217,21 @@ def process_wallpaper(
     *,
     opacity: int = 40,
     blur: int = 16,
-    fill_rgb: tuple[int, int, int] = _FILL_RGB,
+    fill_rgb: Optional[tuple[int, int, int]] = None,
 ):
-    """Load *path* → cover *size* → blur → blend with *fill_rgb* by *opacity*.
-
-    ``opacity`` 0..100: 0 = pure fill (no art), 100 = full processed art.
-    ``blur`` 0..40: Gaussian radius in pixels (0 = sharp).
-    Returns a PIL RGB Image.
-    """
+    """Load → cover *size* → blur → blend with theme fill. Pure PIL (any thread)."""
     from PIL import Image, ImageFilter
 
+    fill = fill_rgb if fill_rgb is not None else _theme_fill_rgb()
     tw, th = max(1, int(size[0])), max(1, int(size[1]))
     op = clamp_opacity(opacity) / 100.0
     br = clamp_blur(blur)
 
     im = Image.open(path)
+    im.load()
     if im.mode not in ("RGB", "L"):
         im = im.convert("RGBA")
-        # Flatten alpha onto fill
-        base = Image.new("RGB", im.size, fill_rgb)
+        base = Image.new("RGB", im.size, fill)
         base.paste(im, mask=im.split()[-1] if im.mode == "RGBA" else None)
         im = base
     else:
@@ -162,17 +239,15 @@ def process_wallpaper(
 
     im = cover_resize(im, tw, th)
     if br > 0:
-        # Radius scales mildly with size so 4K windows stay soft without mush
         radius = float(br) * max(1.0, min(tw, th) / 900.0)
         im = im.filter(ImageFilter.GaussianBlur(radius=radius))
 
     if op <= 0.001:
-        return Image.new("RGB", (tw, th), fill_rgb)
+        return Image.new("RGB", (tw, th), fill)
     if op >= 0.999:
         return im
-    fill = Image.new("RGB", (tw, th), fill_rgb)
-    # blend(fill, im, op): op=1 → im, op=0 → fill
-    return Image.blend(fill, im, op)
+    fill_im = Image.new("RGB", (tw, th), fill)
+    return Image.blend(fill_im, im, op)
 
 
 def process_wallpaper_photo(
@@ -183,7 +258,7 @@ def process_wallpaper_photo(
     blur: int = 16,
     master=None,
 ):
-    """process_wallpaper + ImageTk.PhotoImage (keeps ref via return)."""
+    """Main-thread helper: process + ImageTk.PhotoImage."""
     from PIL import ImageTk
 
     im = process_wallpaper(path, size, opacity=opacity, blur=blur)
@@ -193,29 +268,27 @@ def process_wallpaper_photo(
 
 
 # ---------------------------------------------------------------------------
-# Windows color-key (pywinstyles-compatible technique)
+# Windows color-key (dedicated chromakey only)
 # ---------------------------------------------------------------------------
-
-_TM_BG_HEX = "#f7f9fb"
 
 
 def _hex_to_colorref(hex_color: str) -> int:
     h = (hex_color or "").strip().lstrip("#")
     if len(h) != 6:
-        h = "f7f9fb"
+        h = "010203"
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return r | (g << 8) | (b << 16)
 
 
-def set_widget_colorkey(widget, hex_color: str = _TM_BG_HEX) -> bool:
-    """Make *hex_color* pixels of *widget* see-through (Windows layered hwnd).
+def _tk_hwnd(widget) -> int:
+    """Tk widget client hwnd (no GetParent — avoids wrong parent layered state)."""
+    return int(widget.winfo_id())
 
-    Prefer ``pywinstyles.set_opacity`` when installed; otherwise ctypes
-    ``SetLayeredWindowAttributes`` + ``LWA_COLORKEY`` (same Win32 API).
-    """
+
+def set_widget_colorkey(widget, hex_color: str = WALLPAPER_CHROMAKEY) -> bool:
+    """Make *hex_color* pixels of *widget* see-through (Windows layered hwnd)."""
     if sys.platform != "win32":
         return False
-    # Soft dep: Akascape/py-window-styles
     try:
         import pywinstyles  # type: ignore
 
@@ -226,12 +299,10 @@ def set_widget_colorkey(widget, hex_color: str = _TM_BG_HEX) -> bool:
     try:
         import ctypes
 
-        hwnd = int(widget.winfo_id())
+        hwnd = _tk_hwnd(widget)
+        if not hwnd:
+            return False
         user32 = ctypes.windll.user32
-        # Tk child ids often need parent for the real client hwnd
-        parent = user32.GetParent(hwnd)
-        if parent:
-            hwnd = int(parent)
         GWL_EXSTYLE = -20
         WS_EX_LAYERED = 0x00080000
         LWA_COLORKEY = 0x00000001
@@ -246,17 +317,15 @@ def set_widget_colorkey(widget, hex_color: str = _TM_BG_HEX) -> bool:
 
 
 def clear_widget_colorkey(widget) -> None:
-    """Best-effort remove WS_EX_LAYERED from widget hwnd (restore solid paint)."""
     if sys.platform != "win32":
         return
     try:
         import ctypes
 
-        hwnd = int(widget.winfo_id())
+        hwnd = _tk_hwnd(widget)
+        if not hwnd:
+            return
         user32 = ctypes.windll.user32
-        parent = user32.GetParent(hwnd)
-        if parent:
-            hwnd = int(parent)
         GWL_EXSTYLE = -20
         WS_EX_LAYERED = 0x00080000
         style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
@@ -273,22 +342,21 @@ class WallpaperController:
         self.app = app
         self._label: Any = None
         self._photo = None
-        self._job = None
-        self._last_size: tuple[int, int] = (0, 0)
+        self._resize_job = None
+        self._glass_job = None
+        self._gen = 0  # invalidates in-flight worker results
         self._last_sig: tuple = ()
+        self._glass_on = False
         self._glass_targets: list = []
-
-    # -- public API ---------------------------------------------------------
+        self._saved_bgs: dict[int, str] = {}  # id(widget) -> previous bg
 
     def setup(self) -> None:
-        """Create the wallpaper layer once (call after chrome exists)."""
         import tkinter as tk
 
         root = self.app.root
         if self._label is not None:
             return
         self._label = tk.Label(root, bd=0, highlightthickness=0)
-        # Behind chrome: place full window then lower under packed children
         self._label.place(x=0, y=0, relwidth=1, relheight=1)
         try:
             self._label.lower()
@@ -300,9 +368,7 @@ class WallpaperController:
         self.refresh(force=True)
 
     def refresh(self, force: bool = False) -> None:
-        """Re-render wallpaper to the current window size (debounced by caller)."""
-        import tkinter as tk
-
+        """Re-render wallpaper; heavy PIL work runs off the UI thread."""
         from launcher.paths import ROOT, USER_DATA
         from launcher.theme import TM_BG
 
@@ -317,6 +383,7 @@ class WallpaperController:
         blur = clamp_blur(cfg.get("ui_wallpaper_blur", 16))
 
         if path is None or opacity <= 0:
+            self._gen += 1
             self._clear_visual()
             return
 
@@ -330,37 +397,71 @@ class WallpaperController:
         sig = (str(path), w, h, opacity, blur)
         if not force and sig == self._last_sig:
             return
-        self._last_sig = sig
-        self._last_size = (w, h)
 
-        try:
-            photo = process_wallpaper_photo(
-                path, (w, h), opacity=opacity, blur=blur, master=root
-            )
-        except Exception:
-            self._clear_visual()
-            return
+        self._gen += 1
+        gen = self._gen
+        path_s = str(path)
+        fill = _theme_fill_rgb()
 
-        self._photo = photo  # keep ref
-        if self._label is None:
-            self.setup()
-        try:
-            self._label.configure(image=photo, bg=TM_BG)
-            self._label.place(x=0, y=0, relwidth=1, relheight=1)
-            self._label.lower()
-        except Exception:
-            return
-        self._apply_glass_panels(enabled=True)
-
-    def on_resize(self) -> None:
-        """Debounced refresh when the window size changes."""
-        root = self.app.root
-        if self._job is not None:
+        def work() -> None:
             try:
-                root.after_cancel(self._job)
+                im = process_wallpaper(
+                    Path(path_s),
+                    (w, h),
+                    opacity=opacity,
+                    blur=blur,
+                    fill_rgb=fill,
+                )
+            except Exception:
+                def _fail() -> None:
+                    if gen != self._gen:
+                        return
+                    self._clear_visual()
+
+                try:
+                    root.after(0, _fail)
+                except Exception:
+                    pass
+                return
+
+            def apply() -> None:
+                if gen != self._gen:
+                    return
+                try:
+                    from PIL import ImageTk
+
+                    photo = ImageTk.PhotoImage(im, master=root)
+                except Exception:
+                    self._clear_visual()
+                    return
+                self._last_sig = sig
+                self._photo = photo
+                if self._label is None:
+                    self.setup()
+                try:
+                    self._label.configure(image=photo, bg=TM_BG)
+                    self._label.place(x=0, y=0, relwidth=1, relheight=1)
+                    self._label.lower()
+                except Exception:
+                    return
+                self._schedule_glass(enabled=True)
+
+            try:
+                root.after(0, apply)
             except Exception:
                 pass
-        self._job = root.after(120, lambda: self.refresh(force=False))
+
+        threading.Thread(target=work, daemon=True, name="tm-wallpaper").start()
+
+    def on_resize(self) -> None:
+        root = self.app.root
+        if self._resize_job is not None:
+            try:
+                root.after_cancel(self._resize_job)
+            except Exception:
+                pass
+        # Slightly longer debounce than page reflow — full-frame blur is expensive
+        self._resize_job = root.after(200, lambda: self.refresh(force=False))
 
     def set_image_from_dialog(self) -> bool:
         from tkinter import filedialog, messagebox
@@ -372,7 +473,7 @@ class WallpaperController:
             parent=self.app.root,
             title="选择背景图",
             filetypes=[
-                ("图片", "*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif"),
+                ("图片", "*.jpg;*.jpeg;*.png;*.webp;*.bmp"),
                 ("全部", "*.*"),
             ],
         )
@@ -395,6 +496,7 @@ class WallpaperController:
         clear_installed_wallpaper(USER_DATA)
         self.app.cfg["ui_wallpaper_path"] = ""
         save_config(self.app.cfg)
+        self._gen += 1
         self._clear_visual()
 
     def set_opacity(self, value: int) -> None:
@@ -412,7 +514,7 @@ class WallpaperController:
         self.refresh(force=True)
 
     def preview_photo(self, max_w: int = 200, max_h: int = 112):
-        """Small PhotoImage for the settings card, or None."""
+        """Small PhotoImage for settings (main-thread; tiny cost)."""
         from launcher.paths import ROOT, USER_DATA
 
         cfg = self.app.cfg
@@ -445,54 +547,101 @@ class WallpaperController:
                 self._label.configure(image="")
             except Exception:
                 pass
-        self._apply_glass_panels(enabled=False)
+        self._schedule_glass(enabled=False)
+
+    def _schedule_glass(self, *, enabled: bool) -> None:
+        """Single-flight glass apply (cancel prior after)."""
+        app = self.app
+        root = app.root
+        if self._glass_job is not None:
+            try:
+                root.after_cancel(self._glass_job)
+            except Exception:
+                pass
+            self._glass_job = None
+
+        def _go() -> None:
+            self._glass_job = None
+            self._apply_glass_panels(enabled=enabled)
+
+        try:
+            self._glass_job = root.after(40, _go)
+        except Exception:
+            _go()
 
     def _apply_glass_panels(self, *, enabled: bool) -> None:
-        """Color-key TM_BG on body/pages so wallpaper shows; cards stay SURFACE."""
+        """Chromakey only on page shells; paint them WALLPAPER_CHROMAKEY while on."""
         from launcher.theme import TM_BG
 
         targets = self._collect_glass_targets()
         if not enabled:
-            for w in targets:
-                clear_widget_colorkey(w)
-            self._glass_targets = []
-            return
-        # Apply after idle so hwnds exist
-        app = self.app
-
-        def _go():
-            ok_any = False
-            for w in targets:
+            for w in list(self._glass_targets) or targets:
                 try:
-                    if set_widget_colorkey(w, TM_BG):
-                        ok_any = True
+                    clear_widget_colorkey(w)
                 except Exception:
                     pass
-            self._glass_targets = targets if ok_any else []
+                self._restore_bg(w, TM_BG)
+            self._glass_targets = []
+            self._glass_on = False
+            self._saved_bgs.clear()
+            return
 
+        ok_any = False
+        for w in targets:
+            try:
+                self._paint_chromakey(w)
+                if set_widget_colorkey(w, WALLPAPER_CHROMAKEY):
+                    ok_any = True
+            except Exception:
+                pass
+        self._glass_targets = targets if ok_any else []
+        self._glass_on = ok_any
+        # If color-key failed entirely, still leave chromakey paint — solid dark
+        # is wrong; restore TM_BG so UI stays usable.
+        if not ok_any:
+            for w in targets:
+                self._restore_bg(w, TM_BG)
+
+    def _paint_chromakey(self, widget) -> None:
+        wid = id(widget)
+        if wid not in self._saved_bgs:
+            try:
+                self._saved_bgs[wid] = str(widget.cget("bg") or "")
+            except Exception:
+                self._saved_bgs[wid] = ""
         try:
-            app.root.after(50, _go)
+            widget.configure(bg=WALLPAPER_CHROMAKEY)
         except Exception:
-            _go()
+            pass
+
+    def _restore_bg(self, widget, default: str) -> None:
+        wid = id(widget)
+        prev = self._saved_bgs.pop(wid, None)
+        try:
+            widget.configure(bg=prev or default)
+        except Exception:
+            try:
+                widget.configure(bg=default)
+            except Exception:
+                pass
 
     def _collect_glass_targets(self) -> list:
-        """Frames painted with TM_BG that should reveal wallpaper underneath."""
+        """Containers that should reveal wallpaper (not SURFACE cards / buttons)."""
         app = self.app
         out: list = []
-        for name in (
-            "body",
-            "_settings_canvas",
-            "_settings_wrap",
-            "_help_page",
-        ):
+        for name in ("body", "_settings_canvas", "_settings_wrap"):
             w = getattr(app, name, None)
             if w is not None:
-                out.append(getattr(w, "frame", w))
+                out.append(w)
+        help_page = getattr(app, "_help_page", None)
+        if help_page is not None:
+            fr = getattr(help_page, "frame", None)
+            if fr is not None:
+                out.append(fr)
         pages = getattr(app, "pages", None) or {}
         for fr in pages.values():
             if fr is not None:
                 out.append(fr)
-        # Dedup by id
         seen: set[int] = set()
         uniq: list = []
         for w in out:

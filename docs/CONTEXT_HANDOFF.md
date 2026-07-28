@@ -3,9 +3,10 @@
 > **用途**  
 > 1. 新开 Grok / 协作者对话：先读本文再动代码。  
 > 2. 在 GitHub 上看仓库的人：了解产品定位、架构、已做事项与坑。  
-> **最后大更新**：2026-07-22  
+> **最后大更新**：2026-07-28  
 > **工作区**：`L:\My Project\Grok`  
-> **当前分支**：`tm-release`  
+> **当前分支**：`tm-release`（相对 `fabric/tm-release` 可能超前：广场页 `0800079` 等）  
+> **壳版本**：1.1.2  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  
@@ -82,9 +83,10 @@
 
 | 路径 | 职责 |
 |------|------|
-| `launcher/main_app.py` | 壳骨架 + mixin 组合（约 900+ 行） |
-| `launcher/pages/*` | Home / Models / Settings / More / Hotkeys / Monitor / Realtime / Dock / Onboarding / Profiles |
-| `launcher/theme.py` | 产品名 `RVC Fabric`、色板 token |
+| `launcher/main_app.py` | 壳骨架 + mixin 组合（约 1180 行） |
+| `launcher/pages/*` | Home / Models / **Plaza** / Settings / More / Hotkeys / Monitor / Realtime / Dock / Onboarding / Profiles / Consult |
+| `launcher/online/plaza.py` | 广场 feed 解析/过滤/缓存（Tk-free）；运营见 `docs/广场页与内容运营.md` |
+| `launcher/theme.py` | 产品名 `RVC Fabric`、色板 token、`px()` HiDPI、`meta_font` |
 | `launcher/gpu_backend.py` | GPU 探测：**Runtime 进程内探测**，禁止为探测起 `python.exe` 黑窗 |
 | `launcher/realtime_client.py` | worker 启停；预热引擎待命；只用 **pythonw** 起 worker |
 | `gui_v1.py` | 实时引擎；**Harvest 仅当配置 f0method=harvest 时预热** |
@@ -150,7 +152,9 @@
 | `docs/大众版使用说明.md` | 用户说明 |
 | `docs/在线更新与音色库.md` | 更新包规范 |
 | `docs/广场页与内容运营.md` | 广场页 feed 规范与投放手册（plaza.json / utm / 零遥测） |
+| `docs/REVIEW_BACKLOG_2026-07-27.md` | 壳层审查 38 条已确认缺陷（未改代码，按条修即可） |
 | `docs/CONTEXT_HANDOFF.md` | **本文** |
+| `CLAUDE.md` | 给 Claude/协作者的英文架构指引（与 handoff 同步） |
 
 上游多语言 FAQ/Changelog（`docs/en` 等）仍属原版 RVC 文档，未全部改产品名。
 
@@ -170,8 +174,14 @@
 | 优先级 | 项 |
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
-| 中 | 改 launcher 后需重打 exe 才能在发行包看到 |
+| 高 | 壳层审查 backlog **high×4**（见 `docs/REVIEW_BACKLOG_2026-07-27.md`）：worker.pid 误杀 / 音色包覆盖前校验 / 冻结壳 open_bootstrap / 全局热键 WM_HOTKEY |
+| 中 | 同 backlog 的 medium/low（按用户可见度择修）；**勿重跑** Claude 整轮对抗审查 |
+| 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
+| 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |
+| 低 | 旧壳 `compare_versions` 无 `-partN` 时可能收不到更新提示（已知小尾巴） |
+
+**审查中断说明（2026-07-27）**：Claude 全库审查（排除广场并行开发）已产出 38 条 confirmed，**工作区无半截代码改动**（fix 阶段未开始即 login expired）。补全方式 = 按 backlog 逐条修，不是重做审查。
 
 ### 已知坑（已修，需重打主程序壳）
 

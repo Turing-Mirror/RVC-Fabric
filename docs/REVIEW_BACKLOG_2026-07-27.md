@@ -1,0 +1,78 @@
+# 全库审查 backlog（2026-07-27）
+
+> **状态**：Claude 对抗审查已完成 find/verify，**未开始改代码**（会话限流 + login expired 中断）。
+> **范围**：产品壳与相关脚本；**故意排除**当时并行开发的广场页 / 模型页广告（`plaza.py` / `plaza_page.py` 等）。
+> **结论**：41 raw → 41 deduped → **38 confirmed / 3 refuted**。
+> **用法**：按条修复即可，**不要重跑整轮审查**。修完一条可在本表勾掉或删行。
+
+## 统计
+
+| 严重度 | 数量 |
+|--------|------|
+| high | 4 |
+| medium | 18 |
+| low | 16 |
+| **合计** | **38** |
+
+## 已确认缺陷
+
+| # | 严重度 | 位置 | 标题 | 修复草图（摘要） |
+|---|--------|------|------|------------------|
+| 0 | high | `launcher/hotkeys.py:517` | Global hotkeys never dispatch: Tk's message pump consumes WM_HOTKEY before poll_once can peek it | Don't rely on queue peeking on the Tk thread. Either (a) run RegisterHotKey(hwnd=None) + GetMessageW loop on a dedicated daemon thread and hand action ids to... |
+| 1 | high | `launcher/online/voice_install.py:256` | install_voice_pack_zip wipes the existing installed voice BEFORE validating the new zip — data loss | Move the dest_dir cleanup to after extraction and pth validation succeed (i.e., after line 285, just before copying files out of the temp dir). Also wrap saf... |
+| 2 | high | `launcher/pages/more_page.py:118` | open_bootstrap broken in frozen release: relaunches 变声器.exe or spawns Runtime child with polluted env | In open_bootstrap: if paths.is_frozen(), first try `exe = find_release_exe("bootstrap")` and launch that exe directly; otherwise (dev) run bootstrap.py, pass... |
+| 3 | high | `launcher/realtime_client.py:128` | Stale worker.pid trusted without identity check; taskkill /F /T can kill an unrelated recycled-PID process | Before trusting or killing a recorded PID, verify identity: query the process image path / command line (QueryFullProcessImageNameW via ctypes, or the existi... |
+| 4 | medium | `launcher/bootstrap.py:268` | Unguarded ensure_dirs() in BootstrapApp.__init__ crashes the launcher windowless on a non-writable install dir | Wrap the ensure_dirs() call in try/except, run ensure_install_health first, and on failure show a tk messagebox (a bare tk.Tk withdraw + showerror works pre-... |
+| 5 | medium | `launcher/bootstrap.py:632` | Variant-confirm dialog does blocking CNB network fetch on the Tk main thread (UI freeze up to ~60s) | Resolve the spec in a worker thread (or pass a short timeout / prefer_remote=False for the size hint) and show the confirm dialog from root.after once resolu... |
+| 6 | medium | `launcher/bootstrap.py:1005` | Missing busy guards let two threads download the same cache file concurrently (engine-core / VB-Cable) | Guard _run_download() and on_vbcable() with `if self._provision_busy or self._deploy_busy: return`, and make on_start_app() check _deploy_busy as well (mirro... |
+| 7 | medium | `launcher/catalog.py:1250` | delete_model_dir: bare shutil.rmtree fails on read-only files imported via copy2, leaving half-deleted voice | In delete_model_dir, call shutil.rmtree with an onexc/onerror handler that does os.chmod(path, stat.S_IWRITE) and retries the failed op (standard Windows rmt... |
+| 8 | medium | `launcher/inuse_config.py:95` | sanitize_inuse_dict strips in_gain_db from configs/inuse/config.json, so mic gain is lost at engine start | Add "in_gain_db": 0.0 to CLEAN_INUSE in launcher/inuse_config.py (it is a plain float, no path-pollution risk). More robustly, have sanitize_inuse_dict prese... |
+| 9 | medium | `launcher/online/gui_update.py:136` | apply_gui_patch_zip has no staging/rollback; mid-apply failure leaves a half-patched install | Two-phase apply: extract all allowed members to a temp directory under User_Data/update_cache (validating and fully writing everything there, catching disk-f... |
+| 10 | medium | `launcher/online/gui_update.py:234` | Catalog gui.min_app_version is never enforced on the apply path — documented install gate is a no-op | In download_and_apply_gui (and/or check_gui_update's 'available' computation), before downloading: if gui.min_app_version and compare_versions(APP_VERSION, g... |
+| 11 | medium | `launcher/online/voice_install.py:564` | Arbitrary user-imported local zips are stamped publisher=rvc_fabric / fabric_official=true | Thread an explicit official flag: install_voice_from_entry (catalog installs) passes official=True; models_page local imports call install_voice_pack_zip wit... |
+| 12 | medium | `launcher/pages/dock_voice.py:160` | Unvalidated voice-param casts crash model selection on malformed community/hand-edited config.json | Make pick() tolerant: wrap each cast in try/except (ValueError, TypeError) and fall through to the next source / the default instead of raising (e.g. `try: r... |
+| 13 | medium | `launcher/pages/hotkeys_page.py:458` | Hotkey capture: pressing any already-bound key triggers its action instead of being recorded | In _begin_capture_hotkey, first tear down the normal binds (loop self._tk_hotkey_binds with root.unbind, clear the list) before binding <KeyPress>; _end_capt... |
+| 14 | medium | `launcher/pages/realtime_control.py:172` | Stop during engine startup is a no-op: zombie start thread pops spurious error or restarts VC after stop | Add a start-generation counter on MainApp: _start_vc captures gen = self._vc_gen; _stop_vc increments it and cancels self._model_restart_job; the work-thread... |
+| 15 | medium | `launcher/pages/settings_page.py:113` | Mouse-wheel over settings comboboxes mutates settings; over accel combobox it force-kills the live engine | In _on_mousewheel return "break" (the recursive per-widget binding then suppresses the TCombobox class binding), or explicitly bind <MouseWheel> on each ttk.... |
+| 16 | medium | `launcher/paths.py:180` | find_python falls back to the frozen shell exe itself, spawning a second main-app instance | In find_python, when getattr(sys, "frozen", False) is true, never return sys.executable unless its basename starts with "python"; return the bare "python"/"p... |
+| 17 | medium | `launcher/profiles.py:272` | Profiles listed by filename but loaded/deleted by internal id — renamed .tmvp silently never applies | Make the on-disk filename the identity: have list_profiles record the filename stem it read each profile from (overriding/ignoring the JSON id), or have load... |
+| 18 | medium | `launcher/realtime_client.py:217` | start_worker_process has no lock; concurrent prewarm and start-VC threads can spawn two workers | Add a module-level threading.Lock (with a re-check of get_worker_pid() inside the critical section) around the whole body of start_worker_process; hoist the ... |
+| 19 | medium | `launcher/realtime_client.py:329` | wait_worker_ready never aborts when the worker dies during load; UI stuck on 启动中 for 90-100 s | In the poll loop, break out early when the launched process is gone: if read_status() has state=="error" and the pid-file PID is dead (or _worker_launcher.po... |
+| 20 | medium | `scripts/build_release.py:83` | Full release pack ships the entire internal docs/ tree (dev paths, account name, session logs) | Mirror build_setup.py: remove "docs" from ENGINE_DIRS (or after copy_engine, copy docs/legal -> legal/ and delete docs/, reusing the same logic as strip_heav... |
+| 21 | medium | `tools/collect_diagnostics.py:62` | Diagnostics bundle silently drops realtime_worker.log once it exceeds the 8 MB cap (no rotation, no tail) | Instead of skipping oversized files in add(), write the last N MB as a tail into the zip (open in 'rb', seek(-cap, 2), zf.writestr(arc + '.tail', data)); alt... |
+| 22 | low | `launcher/bootstrap.py:980` | on_vbcable worker thread has no try/except — an OSError kills it silently and wedges the status line | Wrap the work() body in try/except like _run_download does (ok, msg = False, str(e)) so done() always runs and surfaces the error via messagebox/status. |
+| 23 | low | `launcher/catalog.py:843` | import_user_files with move=True silently drops index binding when two .pth match the same .index | Resolve all pth->index matches up front (before any move), then for a shared index copy for all but the last consumer and only unlink the source after the la... |
+| 24 | low | `launcher/catalog.py:1000` | Sidecar config.json written non-atomically on hot slider path; crash mid-write wipes voice params/bindings | Write to config.json.tmp in the same directory, flush + os.replace() onto config.json (atomic on NTFS). Centralize the four direct write_text call sites thro... |
+| 25 | low | `launcher/engine_core.py:107` | Remote-catalog-controlled spec.name joined into cache path without sanitization | Use only the basename and reject separators: name = Path(spec.name).name, falling back to 'engine-core.zip' if the sanitized result is empty or differs from ... |
+| 26 | low | `launcher/pages/settings_page.py:1696` | reload_devices reads status after fixed 0.5s sleep instead of waiting for command seq; shows stale device list | Use rt_client.send_command("list_devices", sg_hostapi=host, wait_seq=True, timeout_s=15) and then poll until status.last_cmd_seq >= seq (or until input_devic... |
+| 27 | low | `launcher/paths.py:197` | desktop_dir misses redirected desktops (OneDrive Business / KFM), shortcut lands in an unused folder | Resolve the desktop via the shell API instead of guessing: ctypes SHGetKnownFolderPath(FOLDERID_Desktop) (or read HKCU\...\User Shell Folders\Desktop with en... |
+| 28 | low | `launcher/realtime_client.py:157` | Orphan sweep matches '*realtime_worker*' unscoped; kills workers belonging to other installs | Scope the clause to the install: `($cl -like '*realtime_worker*' -and $cl -like ('*' + $root + '*'))`, mirroring the gui_v1.py/spawn_main clauses. |
+| 29 | low | `launcher/realtime_protocol.py:80` | tmp.replace() on status/command JSON races concurrent readers on Windows; PermissionError with no retry | In _write_json, retry the replace a few times on PermissionError with a short sleep (e.g. 5 x 10 ms), and give each writer a unique tmp name (pid+thread in s... |
+| 30 | low | `launcher/sample_record.py:221` | _auto_stop swallows stop() failures; UI stays on 停止 and the next click restarts recording instead of stopping | In _auto_stop, catch the exception and still notify the UI (extend the callback contract, e.g. on_auto_stop(path_or_empty) or a separate on_error), so consul... |
+| 31 | low | `launcher/sample_record.py:279` | SampleRecorder.cancel() saves the recording instead of discarding it — canceled voice samples persist on disk | Give stop() a save flag (stop(save=False) stops/closes the stream and clears chunks without writing) and make cancel() use it; optionally delete self._path i... |
+| 32 | low | `launcher/ui/store_page.py:330` | Concurrent fetch_catalog threads race on shared catalog_fetch.json/.part and catalog.json cache | Make the fetch temp file unique per call (e.g. tempfile.NamedTemporaryFile in update_cache, or suffix with thread id/uuid, deleted after parse), and guard sa... |
+| 33 | low | `launcher/ui/store_page.py:802` | Cover thumbnail resized to 56 logical px but placed in a px(56) physical-pixel box (HiDPI mismatch) | Compute the target size once on the Tk side before starting the worker: box_px = px(56); use box_px for both the tk.Frame width/height and as box_s inside wo... |
+| 34 | low | `launcher/vbcable.py:147` | After user denies UAC, _run_elevated launches VB-Cable Setup unelevated and reports success | Treat ShellExecuteW return SE_ERR_ACCESSDENIED/cancel as "user declined" and return (False, 需要管理员权限) instead of chaining more attempts; drop the unelevated P... |
+| 35 | low | `scripts/sync_from_rvcmax.py:166` | Path.is_junction() requires Python 3.12+; script crashes with AttributeError on Python <=3.11 | Add a compat helper: `def _is_junction(p): f = getattr(p, 'is_junction', None); return bool(f and f()) if f else (p.exists() and not p.is_symlink() and os.pa... |
+| 36 | low | `scripts/sync_from_rvcmax.py:280` | dev_variant.txt updated even when Runtime re-link is skipped, arming DML flags against a CUDA Runtime | In link_or_copy_runtime, return a status (linked/skipped + actual pack the existing junction targets); in main(), only write_dev_variant(variant) when the Ru... |
+| 37 | low | `tools/dsp_fx.py:283` | GraphicEQ.set_gains zeroes biquad state on every hot-param push, causing clicks in live audio | In set_gains, early-return when the normalized gains equal self.gains_db (skip the _sr = 0 redesign); additionally have _ensure carry the old filters' z1/z2 ... |
+
+## 已证伪（不要再当 bug 修）
+
+- `launcher/audio_devices.py` prefer_monitor_device 回退到 main_out 的契约指控 — **refuted**
+- `launcher/online/downloader.py` 无 sha256 时接受 Git LFS pointer — **refuted**
+- `launcher/rvc_launcher.py` 下载线程直接调 Tk API — **refuted**
+
+## 建议修复顺序（仅建议，非强制）
+
+1. **high**：`worker.pid` 身份校验 / 音色包先校验再覆盖 / 冻结壳 `open_bootstrap` / 全局热键 `WM_HOTKEY`
+2. **medium 数据与安全**：voice_install 官方章误盖、gui_patch min_app_version、delete_model_dir 只读文件、in_gain_db 消毒
+3. **medium 并发与生命周期**：worker 启动锁、wait_worker_ready 早退、启动中 Stop、bootstrap 下载互斥
+4. **low**：按用户可见度择修（诊断日志 tail、HiDPI 缩略图、sync_from_rvcmax 3.12 API 等）
+
+## 与后续提交的关系
+
+- 广场页对抗审查 6 项缺陷已在 `0800079` 内修完，**不在本表**。
+- DPI/切页审查 follow-up 已在 `bcb98a1` 落地，**不在本表**。
+- 本表是壳层存量问题清单；修复时请避开与广场页契约冲突的无关重写。
+

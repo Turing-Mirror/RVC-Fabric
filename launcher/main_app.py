@@ -197,7 +197,10 @@ class MainApp(
         # (needs pystray/Pillow in the shell env; silently absent otherwise)
         self._tray = TrayController(self)
         self.root.after(500, self._tray.ensure_icon)
-        self.root.bind("<Unmap>", self._on_root_unmap, add="+")
+        # Do NOT bind <Unmap> → hide_to_tray. Windows minimizes the window when
+        # the user clicks the taskbar button of the active app; auto-withdrawing
+        # to the tray made it look like "click 变声器 on the taskbar → vanishes".
+        # Tray hide is only via close_action / the close dialog.
         self.show_page("home")
         self._tick_status()
         self._setup_hotkeys()
@@ -305,16 +308,6 @@ class MainApp(
                 self.cfg["win_geometry"] = self.root.geometry()
             # Physical pixels are DPI-relative; record the scale they refer to
             self.cfg["win_dpi"] = int(getattr(self, "_ui_dpi", 96) or 96)
-        except Exception:
-            pass
-
-    def _on_root_unmap(self, event) -> None:
-        """Minimize button → shrink to the system tray instead of taskbar."""
-        if event.widget is not self.root or getattr(self, "_closing", False):
-            return
-        try:
-            if self.root.state() == "iconic" and tray_available():
-                self.root.after(10, self._tray.hide_to_tray)
         except Exception:
             pass
 

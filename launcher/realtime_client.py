@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -31,6 +32,7 @@ from launcher.win_util import (
 )
 
 _worker_launcher: Optional[subprocess.Popen] = None
+_start_lock = threading.Lock()
 
 # Never kill these when sweeping Runtime processes
 _KEEP_CMDLINE = (
@@ -38,6 +40,13 @@ _KEEP_CMDLINE = (
     "bootstrap.py",
     "rvc_launcher.py",
     "infer-web.py",
+)
+
+# Tokens that identify our realtime worker (image path or command line)
+_WORKER_MARKERS = (
+    "realtime_worker",
+    "gui_v1.py",
+    "tm_realtime_worker",
 )
 
 
@@ -73,11 +82,120 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+def _pid_image_path(pid: int) -> str:
+    """Full path of the process image, or '' if unknown / not ours to query."""
+    if not pid or pid <= 0 or sys.platform != "win32":
+        return ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, int(pid))
+        if not handle:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(len(buf))
+            # QueryFullProcessImageNameW(hProcess, 0, buf, &size)
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                return ""
+            return buf.value or ""
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        return ""
+
+
+def _pid_is_our_worker(pid: int) -> bool:
+    """True only if *pid* looks like this install's realtime worker.
+
+    Prevents taskkill on a recycled PID that now belongs to an unrelated process.
+    Hot path uses image path only (no PowerShell) so wait/poll loops stay cheap.
+    """
+    if not pid or not _pid_alive(pid):
+        return False
+    root_n = str(ROOT).lower().replace("/", "\\")
+    runtime_dir = ROOT / "Runtime"
+    # Do NOT Path.resolve() Runtime for the needle: it may be a junction into
+    # RVCMAX and then fail to match the logical ``...\Runtime\pythonw.exe`` path
+    # reported by QueryFullProcessImageName.
+    runtime_needles = [
+        str(runtime_dir).lower().replace("/", "\\"),
+    ]
+    try:
+        runtime_needles.append(
+            str(runtime_dir.resolve()).lower().replace("/", "\\")
+        )
+    except Exception:
+        pass
+    has_runtime = (runtime_dir / "python.exe").is_file() or (
+        runtime_dir / "pythonw.exe"
+    ).is_file()
+    img = _pid_image_path(pid).lower().replace("/", "\\")
+    if img:
+        base = Path(img).name.lower()
+        if base not in ("python.exe", "pythonw.exe"):
+            return False
+        # Product Runtime python (logical path or resolved junction target) = ours
+        if any(n and n in img for n in runtime_needles):
+            return True
+        # Also accept any python under this product root (dev / RVCMAX layout)
+        if root_n and root_n in img:
+            return True
+        # When Runtime exists, foreign python outside product root is not ours
+        if has_runtime:
+            return False
+        return False
+
+    # No image path (rare) — last-resort cmdline probe, only when Runtime missing
+    if has_runtime or sys.platform != "win32":
+        return False
+    try:
+        ps = (
+            f"$p = Get-CimInstance Win32_Process -Filter \"ProcessId = {int(pid)}\" "
+            f"-ErrorAction SilentlyContinue; if ($p) {{ $p.CommandLine }}"
+        )
+        r = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+            creationflags=0x08000000,
+        )
+        cl = (r.stdout or "").strip().lower().replace("/", "\\")
+        if not cl:
+            return False
+        if any(k in cl for k in _KEEP_CMDLINE):
+            return False
+        return any(m in cl for m in _WORKER_MARKERS) and (
+            root_n in cl or "realtime_worker" in cl
+        )
+    except Exception:
+        return False
+
+
 def get_worker_pid() -> int:
-    """Live worker PID from pid file then status.json."""
+    """Live worker PID from pid file then status.json (identity-checked)."""
     for pid in (read_worker_pid_file(), int(read_status().get("pid") or 0)):
-        if pid and _pid_alive(pid):
+        if not pid:
+            continue
+        if _pid_is_our_worker(int(pid)):
             return int(pid)
+        # Stale / recycled PID — do not trust, do not kill here
+        if not _pid_alive(int(pid)):
+            try:
+                clear_worker_pid_file()
+            except Exception:
+                pass
     return 0
 
 
@@ -114,38 +232,43 @@ def _should_keep_process(cmdline: str) -> bool:
 
 
 def kill_orphan_runtime_workers(
-    *, include_worker: bool = True, scan_timeout_s: float = 60.0
+    *, include_worker: bool = True, scan_timeout_s: float = 4.0
 ) -> int:
     """Kill worker + harvest children under project Runtime.
 
     Does NOT kill main_app / bootstrap / webui.
-    ``scan_timeout_s`` caps the PowerShell process sweep (use a short value on app exit).
+    ``scan_timeout_s`` caps the PowerShell process sweep (keep short on start —
+    full 60s CIM scans were a common cause of probabilistic startup stalls).
     """
     killed = 0
     if include_worker:
-        pid = get_worker_pid()
-        if pid:
-            kill_process_tree(pid)
-            killed += 1
-        # Also kill status pid even if OpenProcess lied
-        st_pid = int(read_status().get("pid") or 0)
-        if st_pid and st_pid != pid:
-            kill_process_tree(st_pid)
-            killed += 1
+        # Only kill PIDs that still look like *our* worker (no recycled-PID murder)
+        for pid in (
+            read_worker_pid_file(),
+            int(read_status().get("pid") or 0),
+        ):
+            if not pid:
+                continue
+            pid = int(pid)
+            if _pid_is_our_worker(pid):
+                kill_process_tree(pid)
+                killed += 1
+            elif not _pid_alive(pid):
+                # Dead entry — just clear later
+                pass
 
     if sys.platform != "win32":
         clear_worker_pid_file()
         return killed
 
-    # Full CIM scan is slow; allow callers (app close) to skip or use a tight timeout
+    # Scoped CIM scan (python/pythonw only) — much faster than full process table
     if scan_timeout_s and scan_timeout_s > 0:
         root_s = str(ROOT).replace("'", "''")
         try:
             ps = f"""
 $root = '{root_s}'
-Get-CimInstance Win32_Process | Where-Object {{
-  $_.Name -match '^(python|pythonw)\\.exe$' -and $_.CommandLine
-}} | ForEach-Object {{
+Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" -ErrorAction SilentlyContinue |
+Where-Object {{ $_.CommandLine }} | ForEach-Object {{
   $cl = $_.CommandLine
   $keep = $false
   foreach ($k in @('main_app.py','bootstrap.py','rvc_launcher.py','infer-web.py')) {{
@@ -206,7 +329,7 @@ Get-CimInstance Win32_Process | Where-Object {{
 
 def kill_all_project_workers() -> int:
     """Public alias used by UI emergency button."""
-    return kill_orphan_runtime_workers(include_worker=True)
+    return kill_orphan_runtime_workers(include_worker=True, scan_timeout_s=8.0)
 
 
 def start_worker_process(*, clean_orphans: bool = True) -> None:
@@ -214,14 +337,25 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
     global _worker_launcher
     ensure_control_dir()
 
+    with _start_lock:
+        _start_worker_process_locked(clean_orphans=clean_orphans)
+
+
+def _start_worker_process_locked(*, clean_orphans: bool = True) -> None:
+    global _worker_launcher
+
     existing = get_worker_pid()
     if existing:
         return
 
     if clean_orphans:
-        # Dead parent often leaves harvest children holding GPU / devices
-        kill_orphan_runtime_workers(include_worker=True)
-        time.sleep(0.4)
+        # Dead parent often leaves harvest children holding GPU / devices.
+        # Keep the CIM sweep short so prewarm never blocks UI for tens of seconds.
+        kill_orphan_runtime_workers(include_worker=True, scan_timeout_s=3.0)
+        time.sleep(0.25)
+        # Re-check after sweep (another thread may have won the race)
+        if get_worker_pid():
+            return
 
     script = ROOT / "tools" / "realtime_worker.py"
     if not script.is_file():
@@ -319,19 +453,40 @@ def start_worker_process(*, clean_orphans: bool = True) -> None:
 
 
 def wait_worker_ready(timeout_s: float = 90.0) -> dict[str, Any]:
-    """Wait until a live worker reports idle/running/error with pid."""
+    """Wait until a live worker reports idle/running/error with pid.
+
+    Aborts early when status is already ``error`` or the announced PID dies
+    mid-load (previously the UI could sit on 启动中 for the full 90–100 s).
+    """
     deadline = time.time() + timeout_s
     last: dict[str, Any] = {}
+    saw_live = False
     while time.time() < deadline:
         last = read_status()
         pid = int(last.get("pid") or 0) or read_worker_pid_file()
         st = str(last.get("state") or "")
-        if pid and _pid_alive(pid) and st in ("idle", "running", "error"):
-            write_worker_pid_file(pid)
+        # Worker reported a hard error — don't keep spinning
+        if st == "error":
             return last
-        if pid and _pid_alive(pid) and last.get("hostapis"):
-            write_worker_pid_file(pid)
-            return last
+        if pid and _pid_is_our_worker(pid):
+            saw_live = True
+            if st in ("idle", "running") or last.get("hostapis"):
+                write_worker_pid_file(pid)
+                return last
+        elif pid and not _pid_alive(pid):
+            # Announced PID is dead (crash during load / recycled entry)
+            if saw_live or st in ("starting", "idle", "running"):
+                try:
+                    clear_worker_pid_file()
+                except Exception:
+                    pass
+                err = str(last.get("error") or "").strip() or "worker died during load"
+                return {
+                    "state": "error",
+                    "error": err,
+                    "message": "worker pid not alive",
+                    "pid": 0,
+                }
         time.sleep(0.25)
     return last or {"state": "error", "error": "worker ready timeout"}
 

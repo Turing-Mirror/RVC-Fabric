@@ -111,11 +111,18 @@ class MorePageMixin:
         return fr
 
     def open_bootstrap(self) -> None:
-        from launcher.paths import find_python
-        from launcher.win_util import run_no_console
+        """Open the first-run helper (启动器).
 
-        pyw = find_python(prefer_windowed=True)
-        run_no_console([pyw, str(ROOT / "launcher" / "bootstrap.py")])
+        Frozen release must launch ``启动器.exe`` (or sibling bootstrap names),
+        never re-exec the shell exe / Runtime python as bootstrap.py — that
+        either reopened 变声器.exe or polluted the child with host env.
+        """
+        try:
+            from launcher.win_util import start_bootstrap
+
+            start_bootstrap()
+        except Exception as e:
+            messagebox.showerror("无法打开启动器", str(e))
 
     def _force_kill_engine(self) -> None:
         """Emergency: kill all orphan workers and release sound devices."""

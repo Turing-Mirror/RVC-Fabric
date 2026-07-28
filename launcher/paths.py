@@ -162,7 +162,11 @@ def _runtime_bases() -> list[Path]:
 
 
 def find_python(prefer_windowed: bool = False) -> str:
-    """Prefer embedded Runtime (release / RVCMAX); avoid requiring user pip install."""
+    """Prefer embedded Runtime (release / RVCMAX); avoid requiring user pip install.
+
+    Never returns the frozen shell exe (``变声器.exe``) as a Python interpreter —
+    that used to spawn a second main-app instance when Runtime was missing.
+    """
     candidates: list[Path] = []
     for base in _runtime_bases():
         if not base.is_dir():
@@ -170,14 +174,17 @@ def find_python(prefer_windowed: bool = False) -> str:
         if prefer_windowed:
             candidates.append(base / "pythonw.exe")
         candidates.append(base / "python.exe")
-    # Last resort: host interpreter (dev machine only)
-    if prefer_windowed and sys.executable:
+    # Host interpreter only in non-frozen (dev) sessions, and only if the
+    # basename really looks like python*.
+    if not is_frozen() and sys.executable:
         p = Path(sys.executable)
-        for w in (p.with_name("pythonw.exe"), p.parent / "pythonw.exe"):
-            if w.is_file():
-                candidates.append(w)
-    if sys.executable:
-        candidates.append(Path(sys.executable))
+        base = p.name.lower()
+        if prefer_windowed:
+            for w in (p.with_name("pythonw.exe"), p.parent / "pythonw.exe"):
+                if w.is_file():
+                    candidates.append(w)
+        if base.startswith("python"):
+            candidates.append(p)
     for c in candidates:
         if c and Path(c).is_file():
             return str(c)

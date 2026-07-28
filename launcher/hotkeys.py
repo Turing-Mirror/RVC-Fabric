@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import queue
 import sys
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -394,34 +397,65 @@ def focus_should_skip_hotkey(widget) -> bool:
 
 
 class GlobalHotkeyManager:
-    """Register system-wide hotkeys; poll via Tk ``after`` loop."""
+    """Register system-wide hotkeys; deliver via a dedicated message thread.
+
+    Tk's own message pump can consume ``WM_HOTKEY`` before a Tk-thread
+    ``PeekMessage`` ever sees it. Hotkeys are therefore registered with
+    ``hwnd=NULL`` on a daemon thread that owns a GetMessage/PeekMessage loop;
+    the Tk ``after`` poll only drains an in-process queue.
+    """
 
     WM_HOTKEY = 0x0312
+    WM_QUIT = 0x0012
     # id base; keep in 1..0xBFFF
     _ID_BASE = 0x5000
 
     def __init__(self) -> None:
         self._registered: dict[int, str] = {}  # hotkey id → action id
-        self._hwnd = None
-        self._user32 = None
+        self._pending: list[tuple[int, int, int, str]] = []  # hid, flags, vk, aid
+        self._queue: queue.Queue[str] = queue.Queue()
+        self._thread: Optional[threading.Thread] = None
+        self._thread_id: int = 0
+        self._stop = threading.Event()
+        self._ready = threading.Event()
+        self._reg_failures: list[str] = []
         self._enabled = False
+        self._lock = threading.Lock()
 
     @property
     def enabled(self) -> bool:
         return self._enabled and bool(self._registered)
 
     def unregister_all(self) -> None:
-        if sys.platform != "win32" or not self._user32:
-            self._registered.clear()
-            self._enabled = False
-            return
-        for hid in list(self._registered.keys()):
+        """Stop the hotkey thread and clear registrations."""
+        self._stop.set()
+        th = self._thread
+        if th is not None and th.is_alive():
+            # Wake PeekMessage loop
             try:
-                self._user32.UnregisterHotKey(self._hwnd, hid)
+                import ctypes
+
+                if self._thread_id:
+                    ctypes.windll.user32.PostThreadMessageW(
+                        int(self._thread_id), self.WM_QUIT, 0, 0
+                    )
             except Exception:
                 pass
+            try:
+                th.join(timeout=1.5)
+            except Exception:
+                pass
+        self._thread = None
+        self._thread_id = 0
         self._registered.clear()
+        self._pending.clear()
         self._enabled = False
+        # Drain any stale queue items
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
 
     def register(
         self,
@@ -429,30 +463,20 @@ class GlobalHotkeyManager:
         mapping: dict[str, str],
         action_ids: Optional[list[str]] = None,
     ) -> list[str]:
-        """Register global hotkeys. Returns list of human-readable failures."""
+        """Register global hotkeys. Returns list of human-readable failures.
+
+        ``hwnd`` is ignored (kept for call-site compatibility); registration
+        uses a NULL target so messages land on the hotkey thread.
+        """
+        del hwnd  # intentionally unused — see class docstring
         self.unregister_all()
         if sys.platform != "win32":
             return ["全局快捷键仅支持 Windows"]
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            self._user32 = ctypes.windll.user32
-            self._hwnd = int(hwnd) if hwnd else None
-        except Exception as e:
-            return [f"无法加载 user32：{e}"]
-
-        # Prefer top-level HWND (Tk root.winfo_id may be child)
-        try:
-            parent = self._user32.GetParent(self._hwnd)
-            if parent:
-                self._hwnd = parent
-        except Exception:
-            pass
 
         ids = action_ids if action_ids is not None else list(DEFAULT_GLOBAL_ACTIONS)
         failures: list[str] = []
         used_vk: set[tuple[int, int]] = set()
+        pending: list[tuple[int, int, int, str]] = []
 
         for i, aid in enumerate(ids):
             act = ACTION_BY_ID.get(aid)
@@ -479,25 +503,40 @@ class GlobalHotkeyManager:
                 failures.append(f"{act.label}：与其它全局键冲突「{spec}」")
                 continue
             hid = self._ID_BASE + i
-            ok = self._user32.RegisterHotKey(self._hwnd, hid, flags, vk)
-            if not ok:
-                failures.append(
-                    f"{act.label}（{spec}）：注册失败（可能被其它软件占用）"
-                )
-                continue
             used_vk.add((flags, vk))
-            self._registered[hid] = aid
+            pending.append((hid, flags, vk, aid))
 
+        if not pending:
+            self._enabled = False
+            return failures
+
+        self._pending = pending
+        self._stop.clear()
+        self._ready.clear()
+        self._reg_failures = []
+        self._thread = threading.Thread(
+            target=self._hotkey_thread_main,
+            name="tm-global-hotkeys",
+            daemon=True,
+        )
+        self._thread.start()
+        # Wait briefly for RegisterHotKey results from the worker thread
+        self._ready.wait(timeout=2.0)
+        failures.extend(self._reg_failures)
         self._enabled = bool(self._registered)
+        if not self._enabled:
+            # Registration failed entirely — stop the idle thread
+            self.unregister_all()
         return failures
 
-    def poll_once(self) -> Optional[str]:
-        """Non-blocking peek for WM_HOTKEY only (does not steal Tk messages)."""
-        if not self._enabled or sys.platform != "win32" or not self._user32:
-            return None
+    def _hotkey_thread_main(self) -> None:
         try:
             import ctypes
             from ctypes import wintypes
+
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            self._thread_id = int(kernel32.GetCurrentThreadId())
 
             class MSG(ctypes.Structure):
                 _fields_ = [
@@ -510,23 +549,80 @@ class GlobalHotkeyManager:
                     ("pt_y", wintypes.LONG),
                 ]
 
+            registered: dict[int, str] = {}
+            reg_failures: list[str] = []
+            for hid, flags, vk, aid in list(self._pending):
+                ok = user32.RegisterHotKey(None, int(hid), int(flags), int(vk))
+                if not ok:
+                    act = ACTION_BY_ID.get(aid)
+                    label = act.label if act else aid
+                    reg_failures.append(
+                        f"{label}：注册失败（可能被其它软件占用）"
+                    )
+                    continue
+                registered[int(hid)] = aid
+
+            with self._lock:
+                self._registered = dict(registered)
+                self._reg_failures = list(reg_failures)
+                self._enabled = bool(registered)
+            self._ready.set()
+
+            if not registered:
+                return
+
             msg = MSG()
-            # Filter only WM_HOTKEY so we never starve Tk's queue
-            # PM_REMOVE = 1
-            found: Optional[str] = None
-            while self._user32.PeekMessageW(
-                ctypes.byref(msg),
-                0,
-                self.WM_HOTKEY,
-                self.WM_HOTKEY,
-                1,
-            ):
-                hid = int(msg.wParam)
-                aid = self._registered.get(hid)
-                if aid and found is None:
-                    found = aid
-            return found
+            while not self._stop.is_set():
+                # PeekMessage with filter WM_HOTKEY; short sleep when idle
+                got = user32.PeekMessageW(
+                    ctypes.byref(msg),
+                    None,
+                    self.WM_HOTKEY,
+                    self.WM_HOTKEY,
+                    1,  # PM_REMOVE
+                )
+                if got:
+                    if int(msg.message) == self.WM_HOTKEY:
+                        hid = int(msg.wParam)
+                        aid = registered.get(hid)
+                        if aid:
+                            try:
+                                self._queue.put_nowait(aid)
+                            except Exception:
+                                pass
+                    continue
+                # Also drain quit / other posted messages for this thread
+                got2 = user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1)
+                if got2:
+                    if int(msg.message) == self.WM_QUIT:
+                        break
+                    continue
+                time.sleep(0.02)
         except Exception:
+            self._ready.set()
+        finally:
+            try:
+                import ctypes
+
+                user32 = ctypes.windll.user32
+                for hid in list(self._registered.keys()):
+                    try:
+                        user32.UnregisterHotKey(None, int(hid))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            with self._lock:
+                self._registered.clear()
+                self._enabled = False
+
+    def poll_once(self) -> Optional[str]:
+        """Non-blocking: pop one hotkey action delivered by the hotkey thread."""
+        if not self._enabled and self._queue.empty():
+            return None
+        try:
+            return self._queue.get_nowait()
+        except queue.Empty:
             return None
 
 

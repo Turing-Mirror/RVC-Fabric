@@ -174,8 +174,8 @@
 | 优先级 | 项 |
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
-| 高 | 壳层审查 backlog **high×4**（见 `docs/REVIEW_BACKLOG_2026-07-27.md`）：worker.pid 误杀 / 音色包覆盖前校验 / 冻结壳 open_bootstrap / 全局热键 WM_HOTKEY |
-| 中 | 同 backlog 的 medium/low（按用户可见度择修）；**勿重跑** Claude 整轮对抗审查 |
+| 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28）：worker.pid 身份校验 / 音色包先校验再覆盖 / open_bootstrap→启动器.exe / 全局热键独立线程 |
+| 中 | backlog 其余 medium/low（见 `docs/REVIEW_BACKLOG_2026-07-27.md`）；**勿重跑** Claude 整轮对抗审查 |
 | 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |

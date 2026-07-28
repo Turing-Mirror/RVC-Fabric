@@ -1,6 +1,6 @@
 # 全库审查 backlog（2026-07-27）
 
-> **状态**：Claude 对抗审查已完成 find/verify，**未开始改代码**（会话限流 + login expired 中断）。
+> **状态**：Claude 对抗审查已完成 find/verify；**high×4 已在 2026-07-28 落地**（见下表「已修」）。其余 medium/low 仍待按条修。
 > **范围**：产品壳与相关脚本；**故意排除**当时并行开发的广场页 / 模型页广告（`plaza.py` / `plaza_page.py` 等）。
 > **结论**：41 raw → 41 deduped → **38 confirmed / 3 refuted**。
 > **用法**：按条修复即可，**不要重跑整轮审查**。修完一条可在本表勾掉或删行。
@@ -18,10 +18,10 @@
 
 | # | 严重度 | 位置 | 标题 | 修复草图（摘要） |
 |---|--------|------|------|------------------|
-| 0 | high | `launcher/hotkeys.py:517` | Global hotkeys never dispatch: Tk's message pump consumes WM_HOTKEY before poll_once can peek it | Don't rely on queue peeking on the Tk thread. Either (a) run RegisterHotKey(hwnd=None) + GetMessageW loop on a dedicated daemon thread and hand action ids to... |
-| 1 | high | `launcher/online/voice_install.py:256` | install_voice_pack_zip wipes the existing installed voice BEFORE validating the new zip — data loss | Move the dest_dir cleanup to after extraction and pth validation succeed (i.e., after line 285, just before copying files out of the temp dir). Also wrap saf... |
-| 2 | high | `launcher/pages/more_page.py:118` | open_bootstrap broken in frozen release: relaunches 变声器.exe or spawns Runtime child with polluted env | In open_bootstrap: if paths.is_frozen(), first try `exe = find_release_exe("bootstrap")` and launch that exe directly; otherwise (dev) run bootstrap.py, pass... |
-| 3 | high | `launcher/realtime_client.py:128` | Stale worker.pid trusted without identity check; taskkill /F /T can kill an unrelated recycled-PID process | Before trusting or killing a recorded PID, verify identity: query the process image path / command line (QueryFullProcessImageNameW via ctypes, or the existi... |
+| 0 | high **已修** | `launcher/hotkeys.py` | Global hotkeys never dispatch | 专用线程 `RegisterHotKey(NULL)` + 队列，`poll_once` 只出队 |
+| 1 | high **已修** | `launcher/online/voice_install.py` | install_voice_pack_zip wipes before validate | 先解压校验 .pth，再 wipe dest |
+| 2 | high **已修** | `launcher/pages/more_page.py` | open_bootstrap broken frozen | 走 `start_bootstrap()`（优先启动器.exe） |
+| 3 | high **已修** | `launcher/realtime_client.py` | Stale worker.pid kill recycled PID | `_pid_is_our_worker` 身份校验后再 kill |
 | 4 | medium | `launcher/bootstrap.py:268` | Unguarded ensure_dirs() in BootstrapApp.__init__ crashes the launcher windowless on a non-writable install dir | Wrap the ensure_dirs() call in try/except, run ensure_install_health first, and on failure show a tk messagebox (a bare tk.Tk withdraw + showerror works pre-... |
 | 5 | medium | `launcher/bootstrap.py:632` | Variant-confirm dialog does blocking CNB network fetch on the Tk main thread (UI freeze up to ~60s) | Resolve the spec in a worker thread (or pass a short timeout / prefer_remote=False for the size hint) and show the confirm dialog from root.after once resolu... |
 | 6 | medium | `launcher/bootstrap.py:1005` | Missing busy guards let two threads download the same cache file concurrently (engine-core / VB-Cable) | Guard _run_download() and on_vbcable() with `if self._provision_busy or self._deploy_busy: return`, and make on_start_app() check _deploy_busy as well (mirro... |

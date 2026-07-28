@@ -1616,11 +1616,17 @@ class SettingsPageMixin:
         )
 
     def _silent_check_updates(self) -> None:
-        """Background catalog fetch; badge 更新 nav if newer GUI (no modal)."""
+        """Background catalog fetch on startup; refresh settings update card + nav badge.
+
+        Previously only flipped the「设置·新」badge and never re-rendered the
+        online-update card, so users saw a permanent「点击检查更新」and believed
+        auto-check did nothing.
+        """
 
         def work():
             has = False
             cat = None
+            err = ""
             try:
                 from launcher.config_store import load_config
                 from launcher.online.catalog import fetch_catalog
@@ -1630,19 +1636,45 @@ class SettingsPageMixin:
                 u = str(load_config().get("update_manifest_url") or "").strip()
                 if u:
                     urls.append(u)
-                cat = fetch_catalog(urls)
+                cat = fetch_catalog(urls, timeout=20)
                 st = check_gui_update(cat)
                 has = bool(st.get("available"))
-            except Exception:
+            except Exception as e:
                 has = False
                 cat = None
+                err = str(e)[:120]
 
-            def done(has_new=has, catalog=cat):
+            def done(has_new=has, catalog=cat, error=err):
                 self._update_badge_on = has_new
                 self._apply_update_nav_badge()
-                if has_new and catalog is not None and hasattr(self, "_store_page"):
+                if catalog is not None and hasattr(self, "_store_page"):
                     try:
                         self._store_page.catalog = catalog
+                        self._store_page._render_update_card()
+                    except Exception:
+                        pass
+                if has_new:
+                    try:
+                        remote = ""
+                        if catalog is not None:
+                            remote = (
+                                catalog.gui.version or catalog.app_version or ""
+                            ).strip()
+                        self._set_status_visual(
+                            "idle",
+                            "发现软件更新" + (f" {remote}" if remote else ""),
+                            "打开「设置 → 在线更新」可下载应用",
+                        )
+                    except Exception:
+                        pass
+                elif error and not catalog:
+                    try:
+                        # Soft notice only — don't block or look like an engine fault
+                        if hasattr(self, "lbl_online"):
+                            self.lbl_online.configure(
+                                text="更新检查失败（可稍后在设置里重试）",
+                                fg=TM_META,
+                            )
                     except Exception:
                         pass
 

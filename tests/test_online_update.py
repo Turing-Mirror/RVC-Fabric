@@ -321,6 +321,29 @@ class VoicePackTests(unittest.TestCase):
             )
             self.assertEqual(cfg.get("series"), "Mygo")
 
+    def test_install_voice_zip_bad_pack_does_not_wipe_existing(self):
+        """Validate before wipe: a bad zip must not destroy an installed voice."""
+        from launcher.online.downloader import DownloadError
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            models = td_path / "models"
+            dest = models / "keep-me"
+            dest.mkdir(parents=True)
+            keep = dest / "good.pth"
+            keep.write_bytes(b"y" * 60_000)
+            (dest / "config.json").write_text(
+                json.dumps({"name": "Keep"}), encoding="utf-8"
+            )
+            bad = td_path / "bad.zip"
+            # Valid zip but no .pth → validation fails after extract
+            with zipfile.ZipFile(bad, "w") as zf:
+                zf.writestr("readme.txt", "no model here")
+            with self.assertRaises(DownloadError):
+                install_voice_pack_zip(bad, voice_id="keep-me", models_root=models)
+            self.assertTrue(keep.is_file(), "existing pth must survive bad pack")
+            self.assertTrue((dest / "config.json").is_file())
+
 
 class VoiceSeriesTests(unittest.TestCase):
     def test_from_dict_reads_series_aliases(self):

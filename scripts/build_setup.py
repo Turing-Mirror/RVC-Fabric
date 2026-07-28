@@ -319,16 +319,53 @@ def compile_inno(payload: Path, output_dir: Path) -> Path:
 
 
 def copy_to_cnb(setup_exe: Path) -> None:
+    """Overwrite the stable path under CNB-GIT-RELEASE/setup/.
+
+    Fixed public links (do not rename the file)::
+
+      https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/blob/main/setup/RVC_Fabric_Setup.exe
+      https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/setup/RVC_Fabric_Setup.exe
+
+    Always replace in place so the URL never changes across releases.
+    """
+    import hashlib
+
     CNB_SETUP.mkdir(parents=True, exist_ok=True)
     dest = CNB_SETUP / SETUP_EXE_NAME
     shutil.copy2(setup_exe, dest)
+    h = hashlib.sha256()
+    with open(dest, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+    (CNB_SETUP / f"{SETUP_EXE_NAME}.sha256").write_text(
+        f"{digest}  {SETUP_EXE_NAME}\n", encoding="utf-8"
+    )
+    stable_blob = (
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+        "-/blob/main/setup/RVC_Fabric_Setup.exe"
+    )
+    stable_raw = (
+        "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/"
+        "-/git/raw/main/setup/RVC_Fabric_Setup.exe"
+    )
     (CNB_SETUP / "README.txt").write_text(
         "RVC_Fabric_Setup.exe = Inno 薄包（壳层+主界面，不含 Runtime / engine-core）。\n"
         "Runtime：CNB Release（按显卡）。engine-core：assets/core/（LFS 共用）。\n"
-        "构建：python scripts/build_setup.py\n",
+        "构建：python scripts/build_setup.py --clean --copy-cnb\n"
+        "\n"
+        "【固定下载链接 — 文件名勿改，每次发版覆盖同路径】\n"
+        f"  页面：{stable_blob}\n"
+        f"  直链：{stable_raw}\n"
+        f"  sha256：{digest}\n"
+        "\n"
+        "说明：*.exe 走 Git LFS；浏览器 raw 对 LFS 可能只返回指针，\n"
+        "完整下载请用 git lfs pull 或 cnb CLI 的 LFS 预签名链接。\n",
         encoding="utf-8",
     )
     log(f"[cnb] copied {dest} ({dest.stat().st_size // 1024} KB)")
+    log(f"[cnb] sha256={digest}")
+    log(f"[cnb] stable URL: {stable_blob}")
 
 
 def parse_args() -> argparse.Namespace:

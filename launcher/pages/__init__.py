@@ -18,7 +18,14 @@ from launcher.pages.onboarding_page import OnboardingMixin
 from launcher.pages.plaza_page import PlazaPageMixin
 from launcher.pages.profiles_page import ProfilesMixin
 from launcher.pages.realtime_control import RealtimeControlMixin
+from launcher.pages.settings_accel import SettingsAccelMixin
+from launcher.pages.settings_devices import SettingsDevicesMixin
+from launcher.pages.settings_general import SettingsGeneralMixin
+from launcher.pages.settings_index import SettingsIndexMixin
 from launcher.pages.settings_page import SettingsPageMixin
+from launcher.pages.settings_perf_dsp import SettingsPerfDspMixin
+from launcher.pages.settings_updates import SettingsUpdatesMixin
+from launcher.pages.settings_voice import SettingsVoiceParamsMixin
 from launcher.pages.wallpaper_settings import WallpaperSettingsMixin
 
 __all__ = [
@@ -34,6 +41,13 @@ __all__ = [
     "PlazaPageMixin",
     "ProfilesMixin",
     "RealtimeControlMixin",
+    "SettingsAccelMixin",
+    "SettingsDevicesMixin",
+    "SettingsGeneralMixin",
+    "SettingsIndexMixin",
     "SettingsPageMixin",
+    "SettingsPerfDspMixin",
+    "SettingsUpdatesMixin",
+    "SettingsVoiceParamsMixin",
     "WallpaperSettingsMixin",
 ]

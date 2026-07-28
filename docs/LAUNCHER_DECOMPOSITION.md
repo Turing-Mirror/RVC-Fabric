@@ -31,11 +31,20 @@
 | `DockVoiceMixin` | `dock_voice.py` | 底栏 MODE/参数、按音色持久化、撤销重做 |
 | `ProfilesMixin` | `profiles_page.py` | 配置档案面板 + 应用 active profile |
 | `ConsultMixin` | `consult_page.py` | 咨询包向导（样本 + 档案打包） |
-| `SettingsPageMixin` | `settings_page.py` | 设置页（设备/加速/预设/Index/更新等） |
+| `SettingsPageMixin` | `settings_page.py` | 设置页**壳**：滚动布局、jump 索引、共享 vars、autosave、热参 push |
+| `SettingsDevicesMixin` | `settings_devices.py` | 设备与音频区块 + 列表重载 / 引擎预热 |
+| `SettingsAccelMixin` | `settings_accel.py` | GPU 探测、加速切换、worker 重置 |
+| `SettingsVoiceParamsMixin` | `settings_voice.py` | 变声参数区块（音高/共鸣/Index Rate/算法/模式） |
+| `SettingsPerfDspMixin` | `settings_perf_dsp.py` | 性能预设 + 后级 DSP（门/压缩/EQ） |
+| `SettingsGeneralMixin` | `settings_general.py` | 常规（关闭行为） |
+| `SettingsUpdatesMixin` | `settings_updates.py` | 静默检查更新 + 导航角标 |
+| `SettingsIndexMixin` | `settings_index.py` | `.index` 绑定逻辑（文件 UI 主要在模型页） |
+| `WallpaperSettingsMixin` | `wallpaper_settings.py` | 外观背景图 |
+| （工具）`SettingsUiKit` | `settings_ui.py` | SectionCard / help / SoftSlider 行（无业务状态） |
 
 `class MainApp(...mixins...)` 组合；mixin 共享同一 `self`，跨页面属性/方法运行期解析。
 
-**体量**：`main_app.py` ~4460 → **~930 行**（chrome + 模型选择 + 引擎入口 + lifecycle）。
+**体量**：`main_app.py` ~4460 → **~930+ 行** shell；设置页由单文件 ~1800 行拆为多个能力 mixin（每块可独立改 UI/handler）。
 
 ### 3. 组合冒烟测试
 
@@ -78,5 +87,14 @@ set_active_index（多对多，纯逻辑可单测）。
 | 低 | chrome 再拆 `ChromeMixin` | 收益有限；主类已可读 |
 | 低 | 错误文案抽纯函数 + 单测 | 仅当要改启停 UX 时顺带做 |
 | 低 | 在 Runtime 装 pytest 后跑完整 math/bench 用例 | 无 pytest 时已 soft-skip，不挡 `unittest discover` |
+| 低 | 设置页 `_page_settings` 与 StorePage 在线更新卡再松耦合 | 已可独立改各 section |
 
-目标终态已基本达成：`main_app.py` 只保留 shell；每页/每能力一个 mixin；纯逻辑在无 Tk 模块 + unittest。
+### 设置页拆分约定（2026-07-29）
+
+1. **新区块**：新增 `settings_<能力>.py` mixin，提供 `_build_settings_<能力>_section(self, kit)`；在 `SettingsPageMixin._page_settings` 里按产品顺序调用。  
+2. **UI 组件**：只通过 `SettingsUiKit`（`kit.card` / `kit.scale_row` / `kit.help_mark`），保证 jump 索引与行布局一致。  
+3. **业务 handler**：与该区块放同一 mixin（如设备列表与设备 UI）；跨区块共享的 save/hot-param 留在 `settings_page.py`。  
+4. **公开名不变**：`save_settings`、`reload_devices`、`_on_hot_param`、`_silent_check_updates` 等勿改名。  
+5. **组合测试**：新 mixin 加入 `tests/test_main_app_composition.py` MRO 断言。
+
+目标终态：`main_app.py` 只保留 shell；每页/每能力一个 mixin；纯逻辑在无 Tk 模块 + unittest。

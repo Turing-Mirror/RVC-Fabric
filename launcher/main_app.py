@@ -37,7 +37,14 @@ from launcher.pages import (
     PlazaPageMixin,
     ProfilesMixin,
     RealtimeControlMixin,
+    SettingsAccelMixin,
+    SettingsDevicesMixin,
+    SettingsGeneralMixin,
+    SettingsIndexMixin,
     SettingsPageMixin,
+    SettingsPerfDspMixin,
+    SettingsUpdatesMixin,
+    SettingsVoiceParamsMixin,
     WallpaperSettingsMixin,
 )
 from launcher.tray import TrayController, tray_available
@@ -110,6 +117,13 @@ class MainApp(
     IndexPanelMixin,
     ProfilesMixin,
     ConsultMixin,
+    SettingsAccelMixin,
+    SettingsDevicesMixin,
+    SettingsVoiceParamsMixin,
+    SettingsPerfDspMixin,
+    SettingsGeneralMixin,
+    SettingsUpdatesMixin,
+    SettingsIndexMixin,
     WallpaperSettingsMixin,
     SettingsPageMixin,
 ):

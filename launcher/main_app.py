@@ -213,14 +213,14 @@ class MainApp(
                 self.models[self.model_idx], push_remote=False
             )
         self.root.bind("<Configure>", self._on_root_configure)
-        # System tray: persistent icon in the Windows notification area
-        # (needs pystray/Pillow in the shell env; silently absent otherwise)
+        # System tray: from launch until real exit (pystray+Pillow; soft-absent)
         self._tray = TrayController(self)
-        self.root.after(500, self._tray.ensure_icon)
-        # Do NOT bind <Unmap> → hide_to_tray. Windows minimizes the window when
-        # the user clicks the taskbar button of the active app; auto-withdrawing
-        # to the tray made it look like "click 变声器 on the taskbar → vanishes".
-        # Tray hide is only via close_action / the close dialog.
+        self._tray.ensure_icon()
+        self.root.after(300, self._tray.ensure_icon)  # retry if first paint raced
+        self.root.after(1500, self._tray.ensure_icon)
+        # Title-bar X / Alt+F4 / 系统菜单「关闭」→ 同一路径（WM_DELETE_WINDOW）
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        # Do NOT bind <Unmap> → hide_to_tray (taskbar minimize must stay on taskbar).
         self.show_page("home")
         self._tick_status()
         self._setup_hotkeys()
@@ -989,22 +989,32 @@ class MainApp(
             messagebox.showerror("失败", str(e))
 
     def run(self) -> None:
+        # Protocol also set in __init__; re-bind here in case something cleared it
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._tray.ensure_icon()
         self.root.mainloop()
 
-    def _ask_close_action(self) -> Optional[str]:
-        """点 X 时询问：最小化到托盘还是退出。返回 "tray" / "exit" / None(取消)。"""
+    def _ask_close_action(self, *, can_tray: Optional[bool] = None) -> Optional[str]:
+        """点 X / 系统菜单关闭时询问。返回 "tray" / "exit" / None(取消)。"""
         from launcher.theme import TM_BG as _BG, TM_INK as _INK, TM_META as _META
         from launcher.theme import TM_SURFACE as _SURF
         from launcher.theme import sans_font as _sans, title_font as _title
         from launcher.ui import GhostButton, PrimaryButton, center_over
+
+        if can_tray is None:
+            can_tray = tray_available()
 
         win = tk.Toplevel(self.root)
         win.title("关闭 RVC Fabric")
         win.configure(bg=_BG)
         win.transient(self.root)
         win.resizable(False, False)
+        try:
+            win.attributes("-topmost", True)
+        except Exception:
+            pass
         win.grab_set()
+        win.focus_force()
         result: list = [None]
 
         body = tk.Frame(win, bg=_BG, padx=22, pady=16)
@@ -1017,9 +1027,14 @@ class MainApp(
             fg=_INK,
             anchor="w",
         ).pack(fill="x")
+        tip = (
+            "最小化到托盘后变声继续在后台运行，右下角图标可随时恢复。"
+            if can_tray
+            else "当前环境未启用系统托盘（需壳层安装 pystray + Pillow）。只能直接关闭软件。"
+        )
         tk.Label(
             body,
-            text="最小化到托盘后变声继续在后台运行，右下角图标可随时恢复。",
+            text=tip,
             font=_sans(9),
             bg=_BG,
             fg=_META,
@@ -1028,11 +1043,13 @@ class MainApp(
             justify="left",
         ).pack(fill="x", pady=(4, 10))
 
-        var_choice = tk.StringVar(value="tray")
-        for val, label in (
-            ("tray", "最小化到托盘（后台继续变声）"),
-            ("exit", "直接关闭软件"),
-        ):
+        default = "tray" if can_tray else "exit"
+        var_choice = tk.StringVar(value=default)
+        choices = []
+        if can_tray:
+            choices.append(("tray", "最小化到托盘（后台继续变声）"))
+        choices.append(("exit", "直接关闭软件"))
+        for val, label in choices:
             tk.Radiobutton(
                 body,
                 text=label,
@@ -1049,7 +1066,7 @@ class MainApp(
         var_remember = tk.BooleanVar(value=False)
         tk.Checkbutton(
             body,
-            text="记住我的选择，下次不再询问（可在设置里更改）",
+            text="记住我的选择，下次不再询问（可在「设置 → 常规」更改）",
             variable=var_remember,
             font=_sans(9),
             bg=_BG,
@@ -1061,12 +1078,16 @@ class MainApp(
 
         def _done(ok: bool) -> None:
             if ok:
-                result[0] = str(var_choice.get() or "tray")
+                result[0] = str(var_choice.get() or default)
                 if var_remember.get():
                     self.cfg["close_action"] = result[0]
                     save_config(self.cfg)
             try:
                 win.grab_release()
+            except Exception:
+                pass
+            try:
+                win.attributes("-topmost", False)
             except Exception:
                 pass
             win.destroy()
@@ -1081,23 +1102,47 @@ class MainApp(
         )
         win.protocol("WM_DELETE_WINDOW", lambda: _done(False))
         center_over(win, self.root)
+        try:
+            win.lift()
+        except Exception:
+            pass
         self.root.wait_window(win)
         return result[0]
 
     def _on_close(self, force_exit: bool = False) -> None:
-        """Close UI quickly; use fast worker teardown (no multi-second polls)."""
+        """Title-bar X / Alt+F4 / 系统菜单关闭 / 托盘「退出」。
+
+        close_action: ask=每次询问 | tray=直接进托盘 | exit=直接退出。
+        托盘图标从启动常驻到真正退出（force_exit 或选 exit）。
+        """
         if getattr(self, "_closing", False):
             return
         if not force_exit:
             action = str(self.cfg.get("close_action") or "ask")
-            if action == "ask" and tray_available():
-                picked = self._ask_close_action()
+            can_tray = tray_available()
+            # Always ask when configured as ask. If tray was remembered but
+            # pystray is missing, fall back to the dialog (exit-only).
+            if action == "ask" or (action == "tray" and not can_tray):
+                picked = self._ask_close_action(can_tray=can_tray)
                 if picked is None:
                     return
                 action = picked
-            if action == "tray" and tray_available():
-                self._tray.hide_to_tray()
+            if action == "tray":
+                if self._tray.hide_to_tray():
+                    return
+                # Tray failed mid-session — don't silently kill the app
+                messagebox.showwarning(
+                    "托盘不可用",
+                    "无法最小化到系统托盘（缺少 pystray/Pillow 或创建图标失败）。\n"
+                    "请选择关闭软件，或先安装托盘依赖后再试。",
+                )
+                picked = self._ask_close_action(can_tray=False)
+                if picked is None or picked == "tray":
+                    return
+                action = picked
+            if action != "exit":
                 return
+
         self._closing = True
 
         # Stop timers / hotkeys first so nothing keeps the event loop busy

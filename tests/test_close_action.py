@@ -26,6 +26,16 @@ class CloseActionTests(unittest.TestCase):
         for v in ("", None, "minimize", 123):
             self.assertEqual(_normalize_cfg({"close_action": v})["close_action"], "ask")
 
+    def test_tray_module_api(self):
+        from launcher.tray import TrayController, tray_available
+
+        # API contract used by MainApp close path
+        self.assertTrue(callable(tray_available))
+        self.assertTrue(hasattr(TrayController, "ensure_icon"))
+        self.assertTrue(hasattr(TrayController, "hide_to_tray"))
+        self.assertTrue(hasattr(TrayController, "stop"))
+        self.assertTrue(hasattr(TrayController, "restore"))
+
 
 if __name__ == "__main__":
     unittest.main()

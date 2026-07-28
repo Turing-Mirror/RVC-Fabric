@@ -27,6 +27,7 @@ class MainAppCompositionTests(unittest.TestCase):
             "ModelsPageMixin",
             "PlazaPageMixin",
             "MorePageMixin",
+            "WallpaperSettingsMixin",
             "SettingsPageMixin",
         ):
             self.assertIn(mixin, names)

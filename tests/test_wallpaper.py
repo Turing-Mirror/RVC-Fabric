@@ -13,6 +13,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from launcher.ui.wallpaper import (  # noqa: E402
+    MAX_WALLPAPER_BYTES,
+    WALLPAPER_CHROMAKEY,
     clamp_blur,
     clamp_opacity,
     clear_installed_wallpaper,
@@ -89,6 +91,33 @@ class ProcessTests(unittest.TestCase):
             self.assertIsNone(
                 resolve_wallpaper_path(rel, user_data=ud, root=Path(td))
             )
+
+    def test_resolve_rejects_outside_wallpaper_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            ud = Path(td) / "User_Data"
+            ud.mkdir()
+            outside = Path(td) / "evil.png"
+            self._solid_png(outside)
+            self.assertIsNone(
+                resolve_wallpaper_path(str(outside), user_data=ud, root=Path(td))
+            )
+
+    def test_install_rejects_oversize(self):
+        with tempfile.TemporaryDirectory() as td:
+            ud = Path(td) / "User_Data"
+            ud.mkdir()
+            huge = Path(td) / "huge.jpg"
+            # Sparse-ish: write more than limit without full image decode path
+            huge.write_bytes(b"0" * (MAX_WALLPAPER_BYTES + 100))
+            with self.assertRaises(ValueError):
+                install_wallpaper_file(huge, ud)
+
+    def test_chromakey_is_not_theme_bg(self):
+        from launcher.theme import TM_BG, TM_SURFACE
+
+        self.assertNotEqual(WALLPAPER_CHROMAKEY.lower(), str(TM_BG).lower())
+        self.assertNotEqual(WALLPAPER_CHROMAKEY.lower(), str(TM_SURFACE).lower())
+        self.assertEqual(WALLPAPER_CHROMAKEY, "#010203")
 
 
 if __name__ == "__main__":

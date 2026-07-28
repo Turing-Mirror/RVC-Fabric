@@ -38,6 +38,7 @@ from launcher.pages import (
     ProfilesMixin,
     RealtimeControlMixin,
     SettingsPageMixin,
+    WallpaperSettingsMixin,
 )
 from launcher.tray import TrayController, tray_available
 from launcher.ui.wallpaper import WallpaperController
@@ -109,6 +110,7 @@ class MainApp(
     IndexPanelMixin,
     ProfilesMixin,
     ConsultMixin,
+    WallpaperSettingsMixin,
     SettingsPageMixin,
 ):
     def __init__(self) -> None:

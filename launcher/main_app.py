@@ -642,10 +642,18 @@ class MainApp(
         # Windows — Tk has no double buffering); tkraise never unmaps.
         self.body.rowconfigure(0, weight=1)
         self.body.columnconfigure(0, weight=1)
-        for fr in self.pages.values():
+        # Grid non-home first, home last: last-gridded sits on top until
+        # tkraise. Previously "more" was last → startup flash of 其他页.
+        for key, fr in self.pages.items():
+            if key == "home":
+                continue
             fr.grid(row=0, column=0, sticky="nsew")
+        self.pages["home"].grid(row=0, column=0, sticky="nsew")
+        self.pages["home"].tkraise()
 
     def show_page(self, key: str) -> None:
+        if key not in self.pages:
+            key = "home"
         self._current_page = key
         for k, b in self.nav_btns.items():
             b.set_active(k == key)
@@ -680,6 +688,12 @@ class MainApp(
             except Exception:
                 pass
         self.pages[key].tkraise()
+        # Wallpaper chromakey only on the visible page (see wallpaper.py) —
+        # otherwise transparent TM_BG on 首页 shows 其他 stacked underneath.
+        try:
+            self._wallpaper.on_page_changed()
+        except Exception:
+            pass
 
     def _shift_model(self, delta: int) -> None:
         if not self.models:

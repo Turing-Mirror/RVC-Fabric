@@ -36,9 +36,14 @@ class MainAppStartupTests(unittest.TestCase):
             self.assertTrue(hasattr(app, "pages"))
             for key in ("home", "models", "plaza", "settings", "help", "more"):
                 self.assertIn(key, app.pages, msg=f"missing page {key}")
+            # Default after construct: 首页 on top (not last-gridded 其他)
+            self.assertEqual(app._current_page, "home")
             # Navigate each page (show_page hooks must not throw)
             for key in ("home", "models", "plaza", "settings", "help", "more"):
                 app.show_page(key)
+                self.assertEqual(app._current_page, key)
+            app.show_page("home")
+            self.assertEqual(app._current_page, "home")
             # Settings section builders left critical widgets behind
             self.assertTrue(hasattr(app, "var_hostapi"))
             self.assertTrue(hasattr(app, "var_fx_enabled"))

@@ -536,6 +536,12 @@ class WallpaperController:
         except Exception:
             return None
 
+    def on_page_changed(self) -> None:
+        """Re-bind chromakey to the newly visible page only (show_page hook)."""
+        if self._photo is None and not self._glass_on:
+            return
+        self._schedule_glass(enabled=self._photo is not None)
+
     # -- internals ----------------------------------------------------------
 
     def _clear_visual(self) -> None:
@@ -570,22 +576,28 @@ class WallpaperController:
             _go()
 
     def _apply_glass_panels(self, *, enabled: bool) -> None:
-        """Chromakey only on page shells; paint them WALLPAPER_CHROMAKEY while on."""
+        """Chromakey only the *visible* page shell + body — never all pages.
+
+        Stacking all pages with TM_BG color-key made the top page transparent
+        so the last-gridded page (其他) showed through until ready.
+        """
         from launcher.theme import TM_BG
 
-        targets = self._collect_glass_targets()
+        # Always clear previous glass targets first (inactive pages go solid)
+        for w in list(self._glass_targets):
+            try:
+                clear_widget_colorkey(w)
+            except Exception:
+                pass
+            self._restore_bg(w, TM_BG)
+        self._glass_targets = []
+
         if not enabled:
-            for w in list(self._glass_targets) or targets:
-                try:
-                    clear_widget_colorkey(w)
-                except Exception:
-                    pass
-                self._restore_bg(w, TM_BG)
-            self._glass_targets = []
             self._glass_on = False
             self._saved_bgs.clear()
             return
 
+        targets = self._collect_glass_targets()
         ok_any = False
         for w in targets:
             try:
@@ -596,8 +608,6 @@ class WallpaperController:
                 pass
         self._glass_targets = targets if ok_any else []
         self._glass_on = ok_any
-        # If color-key failed entirely, still leave chromakey paint — solid dark
-        # is wrong; restore TM_BG so UI stays usable.
         if not ok_any:
             for w in targets:
                 self._restore_bg(w, TM_BG)
@@ -626,22 +636,28 @@ class WallpaperController:
                 pass
 
     def _collect_glass_targets(self) -> list:
-        """Containers that should reveal wallpaper (not SURFACE cards / buttons)."""
+        """Only body + the current page (and settings scroll guts when on settings)."""
         app = self.app
         out: list = []
-        for name in ("body", "_settings_canvas", "_settings_wrap"):
-            w = getattr(app, name, None)
-            if w is not None:
-                out.append(w)
-        help_page = getattr(app, "_help_page", None)
-        if help_page is not None:
-            fr = getattr(help_page, "frame", None)
-            if fr is not None:
-                out.append(fr)
+        body = getattr(app, "body", None)
+        if body is not None:
+            out.append(body)
+        key = str(getattr(app, "_current_page", None) or "home")
         pages = getattr(app, "pages", None) or {}
-        for fr in pages.values():
-            if fr is not None:
-                out.append(fr)
+        fr = pages.get(key)
+        if fr is not None:
+            out.append(fr)
+        if key == "settings":
+            for name in ("_settings_canvas", "_settings_wrap"):
+                w = getattr(app, name, None)
+                if w is not None:
+                    out.append(w)
+        if key == "help":
+            help_page = getattr(app, "_help_page", None)
+            if help_page is not None:
+                hfr = getattr(help_page, "frame", None)
+                if hfr is not None:
+                    out.append(hfr)
         seen: set[int] = set()
         uniq: list = []
         for w in out:

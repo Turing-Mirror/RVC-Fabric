@@ -142,21 +142,27 @@
 
 | 文档 | 内容 |
 |------|------|
+| `docs/CONTEXT_HANDOFF.md` | **本文（交接主文档）** |
 | `docs/仓库内容说明.md` | Git 含什么 / 不含什么 |
-| `docs/UI-AESTHETIC-DESIGN.md` | UI 约束（Schale 浅蓝） |
-| `docs/项目结构.md` | 目录角色 |
-| `docs/LAUNCHER_DECOMPOSITION.md` | main_app 拆分 |
+| `docs/项目结构.md` | 目录角色 + 引擎数据流 |
+| `docs/发布布局与角色分工.md` | 发行角色 / RVCMAX 对照 |
+| `docs/Setup安装与补全.md` | Setup 薄包 + Runtime 补全 |
 | `docs/发行版打包与用户使用.md` | 打包与用户路径 |
-| `docs/Setup安装与补全.md` | Setup + Runtime 补全（定稿动线） |
 | `docs/发行包-显卡分版.md` | N/A/50 分版 |
+| `docs/在线更新与音色库.md` | 更新包 / 音色包规范 |
+| `docs/CNB-index索引与封面.md` | CNB index / 封面 |
+| `docs/广场页与内容运营.md` | plaza.json 投放（零遥测） |
+| `docs/UI-AESTHETIC-DESIGN.md` | UI 约束（Schale 浅蓝） |
+| `docs/LAUNCHER_DECOMPOSITION.md` | main_app 拆分规则 |
+| `docs/PERF_NOTES.md` | 性能基准 + 后续推理路线 |
+| `docs/审查缺陷清单.md` | 壳层审查 backlog（按条修；勿重跑审查） |
 | `docs/大众版使用说明.md` | 用户说明 |
-| `docs/在线更新与音色库.md` | 更新包规范 |
-| `docs/广场页与内容运营.md` | 广场页 feed 规范与投放手册（plaza.json / utm / 零遥测） |
-| `docs/REVIEW_BACKLOG_2026-07-27.md` | 壳层审查 38 条已确认缺陷（未改代码，按条修即可） |
-| `docs/CONTEXT_HANDOFF.md` | **本文** |
-| `CLAUDE.md` | 给 Claude/协作者的英文架构指引（与 handoff 同步） |
+| `CLAUDE.md` | 协作者英文架构指引（与 handoff 同步） |
 
 上游多语言 FAQ/Changelog（`docs/en` 等）仍属原版 RVC 文档，未全部改产品名。
+
+**文档约定**：进度写入本文 §3 / §8；**不要**再新增 `SESSION_CHANGELOG_*`、`PLAN_YYYY-MM-DD_*`、
+`REVIEW_BACKLOG_*` 等带日期英文散页。历史会话内容已吸收进本文与上表常驻手册。
 
 ---
 
@@ -175,13 +181,15 @@
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28）：worker.pid 身份校验 / 音色包先校验再覆盖 / open_bootstrap→启动器.exe / 全局热键独立线程 |
-| 中 | backlog 其余 medium/low（见 `docs/REVIEW_BACKLOG_2026-07-27.md`）；**勿重跑** Claude 整轮对抗审查 |
+| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；**勿重跑**整轮对抗审查 |
 | 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
+| 中 | 三变体全量/Setup 实机验收矩阵（启停/切音色/热更/监听/强杀） |
 | 低 | MagiaDC 向 UX 打磨（排在验收之后） |
 | 低 | 旧壳 `compare_versions` 无 `-partN` 时可能收不到更新提示（已知小尾巴） |
+| 低 | 推理侧可选路线见 `PERF_NOTES.md` §5（ONNX/DML 等） |
 
-**审查中断说明（2026-07-27）**：Claude 全库审查（排除广场并行开发）已产出 38 条 confirmed，**工作区无半截代码改动**（fix 阶段未开始即 login expired）。补全方式 = 按 backlog 逐条修，不是重做审查。
+**审查 backlog**：`docs/审查缺陷清单.md`（high 已修；其余按条修）。
 
 ### 已知坑（已修，需重打主程序壳）
 

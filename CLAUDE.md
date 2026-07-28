@@ -24,8 +24,8 @@ maintained handoff doc. Also relevant:
 | `docs/LAUNCHER_DECOMPOSITION.md` | main_app mixin split rules |
 | `docs/UI-AESTHETIC-DESIGN.md` | Schale palette / forbidden chrome |
 | `docs/广场页与内容运营.md` | plaza.json feed + ops handbook |
-| `docs/PERF_NOTES.md` | Perf bench + diagnostics samples |
-| `docs/REVIEW_BACKLOG_2026-07-27.md` | Confirmed shell defects (review done; fixes not applied) |
+| `docs/PERF_NOTES.md` | Perf bench + residual inference roadmap |
+| `docs/审查缺陷清单.md` | Shell review backlog (high fixed; pick medium/low by item) |
 
 ## Commands
 
@@ -216,9 +216,10 @@ see home/store UI + `launcher/ui/store_page.py`.
   Temp dirs (`.trae/`, `TEMP_*`) stay out of git.
 - **2026-07-27 full-shell adversarial review** (plaza intentionally excluded) finished find/verify:
   38 confirmed / 3 refuted. **No fix commits were made** (session limit + login expiry). Do not
-  re-run the whole multi-agent review; pick items from `docs/REVIEW_BACKLOG_2026-07-27.md` when
-  fixing. High: stale `worker.pid` kill, voice_pack wipe-before-validate, frozen `open_bootstrap`,
-  global hotkey `WM_HOTKEY` dispatch.
+  re-run the whole multi-agent review; pick items from `docs/审查缺陷清单.md` when fixing.
+  High items (pid identity, voice_pack validate-before-wipe, open_bootstrap, global hotkeys)
+  were fixed 2026-07-28. Do not add dated SESSION_*/PLAN_*/REVIEW_* scatter docs — update
+  `docs/CONTEXT_HANDOFF.md` instead.
 
 ## Conventions
 

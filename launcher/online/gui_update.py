@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional
@@ -110,46 +112,102 @@ def apply_gui_patch_zip(
     root = Path(root).resolve()
     written: list[str] = []
     skipped: list[str] = []
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        members = list(zf.infolist())
-        # Optional: strip single root folder if all paths share it and it's not allowlist
-        prefix = _common_strip_prefix([m.filename for m in members])
 
-        for info in members:
-            raw = info.filename.replace("\\", "/")
-            if prefix and raw.startswith(prefix):
-                raw_body = raw[len(prefix) :]
-            else:
-                raw_body = raw
-            rel = gui_member_allowed(raw_body)
-            if not rel:
-                if not raw.endswith("/") and TM_PACKAGE_JSON not in raw:
-                    skipped.append(raw)
-                continue
-            dest = root / rel
-            try:
-                assert_path_under_root(dest, root)
-            except UnsafeZipError:
-                skipped.append(raw)
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(info, "r") as src, open(dest, "wb") as out:
-                shutil.copyfileobj(src, out)
-            written.append(rel)
-
-    if not written:
-        raise DownloadError(
-            "增量包中没有可应用的文件。\n"
-            "请确认 zip 内路径为 launcher/、configs/、tools/ 等白名单，"
-            "且未误打成全量 Runtime 包。"
+    # Two-phase apply (review #9): extract fully to staging, then commit with
+    # per-file backups so a mid-write failure can restore the previous tree.
+    stage_root = USER_DATA / "update_cache" / "gui_stage"
+    stage_root.mkdir(parents=True, exist_ok=True)
+    stage = Path(
+        tempfile.mkdtemp(
+            prefix=f"patch_{int(time.time())}_",
+            dir=str(stage_root),
         )
+    )
+    staged: list[tuple[str, Path]] = []  # (rel posix, staged file)
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            members = list(zf.infolist())
+            prefix = _common_strip_prefix([m.filename for m in members])
+
+            for info in members:
+                raw = info.filename.replace("\\", "/")
+                if prefix and raw.startswith(prefix):
+                    raw_body = raw[len(prefix) :]
+                else:
+                    raw_body = raw
+                rel = gui_member_allowed(raw_body)
+                if not rel:
+                    if not raw.endswith("/") and TM_PACKAGE_JSON not in raw:
+                        skipped.append(raw)
+                    continue
+                dest_check = root / rel
+                try:
+                    assert_path_under_root(dest_check, root)
+                except UnsafeZipError:
+                    skipped.append(raw)
+                    continue
+                staged_path = stage / rel
+                staged_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    with zf.open(info, "r") as src, open(staged_path, "wb") as out:
+                        shutil.copyfileobj(src, out)
+                except OSError as e:
+                    raise DownloadError(
+                        f"增量包解压到暂存区失败（磁盘满或权限不足）：{e}"
+                    ) from e
+                staged.append((rel, staged_path))
+
+        if not staged:
+            raise DownloadError(
+                "增量包中没有可应用的文件。\n"
+                "请确认 zip 内路径为 launcher/、configs/、tools/ 等白名单，"
+                "且未误打成全量 Runtime 包。"
+            )
+
+        # Backup then commit each file
+        backup_dir = stage / "_backup"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backups: list[tuple[Path, Path | None]] = []  # (dest, backup or None)
+        try:
+            for rel, staged_path in staged:
+                dest = root / rel
+                bak: Path | None = None
+                if dest.is_file():
+                    bak = backup_dir / rel
+                    bak.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(dest, bak)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(staged_path, dest)
+                backups.append((dest, bak))
+                written.append(rel)
+        except Exception as e:
+            # Rollback committed files
+            for dest, bak in reversed(backups):
+                try:
+                    if bak is not None and bak.is_file():
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(bak, dest)
+                    elif dest.is_file() and bak is None:
+                        # Newly added file — remove
+                        try:
+                            dest.unlink()
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+            raise DownloadError(
+                f"应用增量包失败，已尝试回滚已写入文件：{e}"
+            ) from e
+    finally:
+        try:
+            shutil.rmtree(stage, ignore_errors=True)
+        except Exception:
+            pass
 
     # Write version stamp if package declares version
     ver = str(meta.get("version") or "").strip()
     if ver:
         try:
-            stamp = root / "User_Data" / "update_state.json"
-            # also update launcher/version.py is not automatic — stamp only
             state_path = USER_DATA / "update_state.json"
             state_path.parent.mkdir(parents=True, exist_ok=True)
             state = {}

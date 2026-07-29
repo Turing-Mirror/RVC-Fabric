@@ -146,6 +146,21 @@ def test_list_profiles_skips_corrupt_files(tmp_path):
     assert len(got) == 1 and got[0]["name"] == "ok"
 
 
+def test_list_profiles_id_follows_filename_stem(tmp_path):
+    """Renamed .tmvp: load/delete use filename stem, not JSON id (review #17)."""
+    md = str(tmp_path)
+    p = P.make_profile("renamed", voice={"pitch": 3}, profile_id="oldid001")
+    P.save_profile(md, p)
+    src = P.profile_path(md, "oldid001")
+    dst = os.path.join(P.profiles_dir(md), "newstem01.tmvp")
+    os.replace(src, dst)
+    listed = P.list_profiles(md)
+    assert len(listed) == 1
+    assert listed[0]["id"] == "newstem01"
+    assert P.load_profile(md, "newstem01") is not None
+    assert P.load_profile(md, "oldid001") is None
+
+
 def test_delete_profile_and_active_reverts(tmp_path):
     md = str(tmp_path)
     p = P.make_profile("del", voice={"pitch": 1}, profile_id="dead0001")

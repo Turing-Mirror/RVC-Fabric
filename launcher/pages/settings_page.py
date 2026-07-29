@@ -58,6 +58,9 @@ class SettingsPageMixin:
 
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            # Suppress TCombobox class binding: wheel over combobox must not
+            # mutate selection / kill the engine (accel) (review #15).
+            return "break"
 
         def _bind_wheel_recursive(widget) -> None:
             widget.bind("<MouseWheel>", _on_mousewheel)

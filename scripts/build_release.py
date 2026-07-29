@@ -72,7 +72,8 @@ VARIANTS: dict[str, dict] = {
 # Substrings that mark a 50-series pack (shared helper for tests)
 SERIES50_KEYS = ("50", "5xxx", "50x0", "rtx50", "blackwell")
 
-# Engine files/dirs to ship (lean but runnable)
+# Engine files/dirs to ship (lean but runnable).
+# docs/ is NOT shipped whole (dev paths / session notes); legal only via strip step.
 ENGINE_DIRS = (
     "assets",
     "configs",
@@ -80,7 +81,6 @@ ENGINE_DIRS = (
     "infer",
     "launcher",
     "tools",
-    "docs",
 )
 ENGINE_FILES = (
     ".env",
@@ -454,6 +454,20 @@ def copy_engine(out: Path) -> None:
         if src.is_file():
             shutil.copy2(src, out / f)
             log(f"  file: {f}")
+
+    # Keep only docs/legal (MIT) — never ship full internal docs tree (review #20)
+    legal_src = REPO / "docs" / "legal"
+    legal_dst = out / "legal"
+    if legal_src.is_dir():
+        if legal_dst.exists():
+            shutil.rmtree(legal_dst, ignore_errors=True)
+        copy_tree(legal_src, legal_dst)
+        log("  keep: docs/legal -> legal/ (MIT)")
+    # Drop any docs/ that might have been pulled in by mistake
+    docs_out = out / "docs"
+    if docs_out.is_dir():
+        shutil.rmtree(docs_out, ignore_errors=True)
+        log("  strip: docs/ (internal handoff/session notes)")
 
     # dev launchers (not for end-users)
     dev_src = REPO / "scripts" / "dev"

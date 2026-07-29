@@ -182,7 +182,7 @@
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28）：worker.pid 身份校验 / 音色包先校验再覆盖 / open_bootstrap→启动器.exe / 全局热键独立线程 |
-| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；**勿重跑**整轮对抗审查 |
+| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；**勿重跑**整轮对抗审查；#29 status.json 竞态写已修（2026-07-29，diag_20260727） |
 | 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 中 | 三变体全量/Setup 实机验收矩阵（启停/切音色/热更/监听/强杀） |
@@ -211,7 +211,11 @@
 
 - **现象**：worker `status=starting` / `pid=0`，UI「引擎错误 · CPU · empty probe」。
 - **原因**：Runtime 子进程起不来或探测失败；旧版崩溃无日志；发行包曾污染 `configs/inuse` 开发机路径。
-- **修复**：worker/VBS 落盘崩溃日志；`inuse` 消毒；`_env_for_runtime_python` 深度清洗；**Runtime 完整性校验**（CNB `runtime/<variant>/integrity-*.json`）。
+- **修复**：worker/VBS 落盘崩溃日志；`inuse` 消毒；`_env_for_runtime_python` 深度清洗；**Runtime 完整性校验**（CNB `runtime/<variant>/integrity-*.json`）。**2026-07-29 跟进**（diag_20260727_151048）：nvidia 包在 probe 空失败时不再把 `TM_ACCEL_RESOLVED` 打成 cpu（与 amd 包信任 DML 对称）；worker 侧仍会真实探测 CUDA。
+
+- **现象**：`realtime_worker.log` 刷 `PermissionError: [WinError 5] ... status.json.tmp -> status.json`（滑条热更/心跳写状态时）。
+- **原因**：壳与 worker 并发写同一固定名 `.tmp`，Windows 读者占用目标文件时 `replace` 失败且无重试。
+- **修复**：`realtime_protocol._write_json` 唯一临时名 + 重试 + 失败回退直写（审查 #29）。
 
 - **现象（Kara / 最新 Setup）**：安装后一点启动器或主界面就  
   `ModuleNotFoundError: No module named 'tkinter'`（栈在 `bootstrap.py` / `main_app.py`）；  

@@ -398,6 +398,18 @@ def probe_via_wmi() -> dict[str, Any]:
     return info
 
 
+def _probe_hard_rejects_cuda(probe: dict[str, Any]) -> bool:
+    """True when probe positively ruled out CUDA (e.g. 50-series on cu118).
+
+    Empty / failed probes (``empty probe rc=1``) are *not* hard rejects — the
+    NVIDIA shipping pack should still prefer CUDA; the worker re-detects.
+    """
+    err = str(probe.get("error") or "")
+    if "incompatible with PyTorch" in err or "50-series needs" in err:
+        return True
+    return False
+
+
 def resolve_backend(
     preference: str = "auto",
     *,
@@ -412,9 +424,17 @@ def resolve_backend(
     has_cuda = bool(probe.get("cuda"))
     has_dml = bool(probe.get("dml"))
     var = (package_variant or "").strip().lower()
+    # NVIDIA shipping packs: empty probe must not force UI/env to CPU
+    # (diag_20260727_151048: RTX 3050 + nvidia pack, probe empty → resolved=cpu
+    # while worker still found cuda:0 and ran fine).
+    nvidia_pack = var in ("nvidia", "nvidia50")
+    trust_nvidia_cuda = nvidia_pack and not _probe_hard_rejects_cuda(probe)
 
     if pref == "cuda":
-        backend = "cuda" if has_cuda else "cpu"
+        if has_cuda or trust_nvidia_cuda:
+            backend = "cuda"
+        else:
+            backend = "cpu"
     elif pref == "dml":
         # Prefer DML when pack is AMD even if probe failed (Config may still work)
         if has_dml:
@@ -434,6 +454,8 @@ def resolve_backend(
         elif var == "amd":
             # AMD shipping pack: default try DML even if probe was empty
             backend = "dml"
+        elif trust_nvidia_cuda:
+            backend = "cuda"
         elif wmi.get("has_amd") or wmi.get("has_intel_gpu"):
             backend = "dml" if has_dml else "cpu"
         else:
@@ -447,6 +469,8 @@ def resolve_backend(
     detail = ""
     if backend == "cuda":
         detail = str(probe.get("cuda_name") or "")
+        if not has_cuda and trust_nvidia_cuda:
+            detail = (detail + " · 探测未确认").strip(" ·")
     elif backend == "dml":
         detail = str(probe.get("dml_name") or "DirectML")
         if not has_dml and var == "amd":

@@ -43,6 +43,11 @@ class VoiceEntry:
     author_url: str = ""
     date: str = ""  # YYMMDD（与 index.json released 同义）
     series: str = ""  # 系列包名（Mygo / VOCALOID …）；空 = 单品音色
+    # 第三方源字段（图灵镜源保持默认：origin 空、official True）
+    origin: str = ""  # huggingface / 预留其它；空 = 图灵镜源
+    source_url: str = ""  # 溯源页（社区站点仓库页）
+    official: bool = True  # False = 第三方，永不带官方章
+    popularity: int = 0  # 可选快照（如社区站下载量）；本期 UI 不用
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "VoiceEntry":
@@ -60,6 +65,38 @@ class VoiceEntry:
             or d.get("release_date")
             or ""
         )
+        # author：勿把 publisher: community 误当成展示作者
+        author_raw = d.get("author") or d.get("creator") or ""
+        if not author_raw and d.get("publisher") not in (
+            None,
+            "",
+            "community",
+            "rvc_fabric",
+            "user",
+        ):
+            author_raw = d.get("publisher")
+        pop = (
+            d.get("hf_downloads")
+            if d.get("hf_downloads") is not None
+            else d.get("downloads")
+        )
+        try:
+            popularity = int(pop or 0)
+        except (TypeError, ValueError):
+            popularity = 0
+        official_raw = d.get("official")
+        if official_raw is None:
+            official_raw = d.get("fabric_official")
+        if official_raw is None:
+            official = True
+        else:
+            official = str(official_raw).strip().lower() not in (
+                "0",
+                "false",
+                "no",
+                "n",
+                "",
+            )
         return cls(
             id=str(d.get("id") or d.get("name") or "").strip(),
             name=str(d.get("name") or d.get("id") or "未命名").strip(),
@@ -75,14 +112,18 @@ class VoiceEntry:
             size_bytes=int(d.get("size_bytes") or d.get("size") or 0),
             sha256=str(d.get("sha256") or ""),
             description=str(d.get("description") or d.get("desc") or ""),
-            author=str(
-                d.get("author") or d.get("publisher") or d.get("creator") or ""
-            ).strip(),
+            author=str(author_raw or "").strip(),
             author_url=str(d.get("author_url") or d.get("author_link") or "").strip(),
             date=date,
             series=str(
                 d.get("series") or d.get("series_name") or d.get("collection") or ""
             ).strip(),
+            origin=str(d.get("origin") or d.get("source") or "").strip(),
+            source_url=str(
+                d.get("source_url") or d.get("repo_url") or d.get("page_url") or ""
+            ).strip(),
+            official=bool(official),
+            popularity=popularity,
         )
 
     def has_download(self) -> bool:
@@ -113,6 +154,59 @@ class GuiUpdate:
         )
 
 
+def _parse_voice_list(
+    raw: Any, *, force_official: Optional[bool] = None
+) -> list[VoiceEntry]:
+    """Parse a list of voice dicts; optionally force official flag."""
+    out: list[VoiceEntry] = []
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            v = VoiceEntry.from_dict(item)
+            if force_official is not None:
+                v.official = force_official
+            if v.id and v.has_download():
+                out.append(v)
+        except Exception:
+            continue
+    return out
+
+
+def _voice_entry_to_dict(v: VoiceEntry) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "id": v.id,
+        "name": v.name,
+        "tag": v.tag,
+        "version": v.version,
+        "package_type": v.package_type,
+        "pack_url": v.pack_url,
+        "pth_url": v.pth_url,
+        "index_url": v.index_url,
+        "cover_url": v.cover_url,
+        "size_bytes": v.size_bytes,
+        "sha256": v.sha256,
+        "description": v.description,
+        "author": v.author,
+        "author_url": v.author_url,
+        "date": v.date,
+        "released": v.date,
+        "series": v.series,
+    }
+    if v.origin:
+        d["origin"] = v.origin
+    if v.source_url:
+        d["source_url"] = v.source_url
+    if not v.official:
+        d["official"] = False
+        d["publisher"] = "community"
+    if v.popularity:
+        d["hf_downloads"] = v.popularity
+    return d
+
+
 @dataclass
 class OnlineCatalog:
     schema: int = 1
@@ -120,6 +214,7 @@ class OnlineCatalog:
     channel: str = "stable"
     gui: GuiUpdate = field(default_factory=GuiUpdate)
     voices: list[VoiceEntry] = field(default_factory=list)
+    thirdparty_voices: list[VoiceEntry] = field(default_factory=list)
     qq_group: str = ""
     qq_link: str = ""
     sharepoint_full: str = ""
@@ -144,23 +239,19 @@ class OnlineCatalog:
         gui_raw = (
             app.get("gui") if isinstance(app.get("gui"), dict) else data.get("gui")
         )
-        voices_raw = data.get("voices") or data.get("models") or []
-        voices: list[VoiceEntry] = []
-        if isinstance(voices_raw, list):
-            for item in voices_raw:
-                if isinstance(item, dict):
-                    try:
-                        v = VoiceEntry.from_dict(item)
-                        if v.id and v.has_download():
-                            voices.append(v)
-                    except Exception:
-                        continue
+        voices = _parse_voice_list(data.get("voices") or data.get("models") or [])
+        # 第三方列表：客户端强制 official=False（清单自称官方也不信）
+        thirdparty = _parse_voice_list(
+            data.get("thirdparty_voices") or data.get("third_party_voices") or [],
+            force_official=False,
+        )
         cat = cls(
             schema=int(data.get("schema") or 1),
             app_version=str(app.get("version") or data.get("version") or ""),
             channel=str(app.get("channel") or data.get("channel") or "stable"),
             gui=GuiUpdate.from_dict(gui_raw if isinstance(gui_raw, dict) else {}),
             voices=voices,
+            thirdparty_voices=thirdparty,
             qq_group=str(community.get("qq_group") or data.get("qq_group") or ""),
             qq_link=str(community.get("qq_link") or data.get("qq_link") or ""),
             sharepoint_full=str(
@@ -315,28 +406,8 @@ def _catalog_to_dict(cat: OnlineCatalog) -> dict[str, Any]:
             "sharepoint_full": cat.sharepoint_full,
             "note": cat.full_package_note,
         },
-        "voices": [
-            {
-                "id": v.id,
-                "name": v.name,
-                "tag": v.tag,
-                "version": v.version,
-                "package_type": v.package_type,
-                "pack_url": v.pack_url,
-                "pth_url": v.pth_url,
-                "index_url": v.index_url,
-                "cover_url": v.cover_url,
-                "size_bytes": v.size_bytes,
-                "sha256": v.sha256,
-                "description": v.description,
-                "author": v.author,
-                "author_url": v.author_url,
-                "date": v.date,
-                "released": v.date,
-                "series": v.series,
-            }
-            for v in cat.voices
-        ],
+        "voices": [_voice_entry_to_dict(v) for v in cat.voices],
+        "thirdparty_voices": [_voice_entry_to_dict(v) for v in cat.thirdparty_voices],
         "manifest_urls": cat.manifest_urls or list(DEFAULT_MANIFEST_URLS),
     }
 
@@ -350,6 +421,8 @@ def merge_catalogs(base: OnlineCatalog, remote: OnlineCatalog) -> OnlineCatalog:
         out.gui = remote.gui
     if remote.voices:
         out.voices = remote.voices
+    if remote.thirdparty_voices:
+        out.thirdparty_voices = remote.thirdparty_voices
     if remote.qq_group:
         out.qq_group = remote.qq_group
     if remote.qq_link:
@@ -389,7 +462,10 @@ def fetch_catalog(
     for url in candidates:
         # Unique temp per call so concurrent refresh threads cannot clobber
         # each other's catalog_fetch.json (review #32)
-        tmp = cache_dir / f"catalog_fetch_{os.getpid()}_{threading.get_ident()}_{int(time.time()*1000)}.json"
+        tmp = (
+            cache_dir
+            / f"catalog_fetch_{os.getpid()}_{threading.get_ident()}_{int(time.time()*1000)}.json"
+        )
         try:
             download_file(url, tmp, timeout=timeout)
             data = json.loads(tmp.read_text(encoding="utf-8"))
@@ -493,6 +569,8 @@ def filter_voices(voices: list, query: str) -> list:
                 str(getattr(v, "author", "") or ""),
                 str(getattr(v, "description", "") or ""),
                 str(getattr(v, "series", "") or ""),
+                str(getattr(v, "origin", "") or ""),
+                origin_display(str(getattr(v, "origin", "") or "")),
             ]
         ).lower()
         if q in blob:
@@ -511,6 +589,24 @@ def sort_voices_newest_first(voices: list) -> list:
         key=lambda v: str(getattr(v, "date", "") or ""),
         reverse=True,
     )
+
+
+def origin_display(origin: str) -> str:
+    """短源名：空→图灵镜；huggingface→Hugging Face；其它原样。"""
+    o = (origin or "").strip()
+    if not o:
+        return "图灵镜"
+    key = o.lower().replace(" ", "").replace("_", "").replace("-", "")
+    if key in ("huggingface", "hf", "huggingfaces"):
+        return "Hugging Face"
+    return o
+
+
+def merged_latest(official: list, thirdparty: list) -> list:
+    """双源合流后按日期降序；同日期时图灵镜源在前（stable + 官方先拼接）。"""
+    # 同 date 时 sort 稳定：先 official 后 thirdparty 拼接，官方排前
+    combined = list(official or []) + list(thirdparty or [])
+    return sort_voices_newest_first(combined)
 
 
 def paginate(items: list, page: int, per_page: int = 5) -> tuple:

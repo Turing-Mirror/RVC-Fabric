@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""在线功能：设置页内的「在线更新」区块 + 模型页弹出的「社区下载」窗口。
+"""在线功能：设置页内的「在线更新」区块 + 模型页弹出的「社区音色」窗口。
 
 原独立「更新」页已按产品要求拆掉：GUI 更新降级为设置页一个区块；
-在线音色库改为模型页的社区下载对话框（首页最新在前分页 + 系列专区折叠视图）。
+在线音色库改为模型页的社区音色对话框（最新合流 / 图灵镜源 / 第三方 / 系列专区）。
 """
 
 from __future__ import annotations
@@ -22,6 +22,8 @@ from launcher.online.catalog import (
     is_voice_installed,
     load_bundled_catalog,
     local_app_version,
+    merged_latest,
+    origin_display,
     paginate,
     sort_voices_newest_first,
 )
@@ -86,7 +88,8 @@ class StorePage:
         self._dlg_progress: Optional[tk.Label] = None
         self._voices_search: Optional[SearchField] = None
         self._voices_search_q: str = ""
-        self._store_view: str = "home"  # home = 分页平铺 | series = 系列专区
+        # latest | official | thirdparty | series
+        self._store_view: str = "latest"
         self._voices_page: int = 1  # 1-based（paginate 会 clamp）
         self._expanded_series: set = set()
         self._voices_pager_host: Optional[tk.Frame] = None
@@ -160,7 +163,7 @@ class StorePage:
 
     # ------------------------------------------------------------ voices dialog
     def open_voices_dialog(self) -> None:
-        """「社区下载」 window: paged newest-first voices + collapsible series view.
+        """「社区音色」窗口：最新合流 / 图灵镜源 / 第三方 / 系列专区。
 
         Every open (including re-focus of an existing dialog) auto-refreshes the
         online catalog so new CNB releases show without a manual「刷新清单」.
@@ -181,12 +184,12 @@ class StorePage:
             except Exception:
                 self._dlg = None
         dlg = tk.Toplevel(self.root)
-        dlg.title("社区下载 · 在线音色库")
+        dlg.title("社区音色 · 在线音色库")
         dlg.configure(bg=TM_BG)
         dlg.transient(self.root)
         try:
-            dlg.geometry(f"{px(640)}x{px(640)}")
-            dlg.minsize(px(520), px(480))
+            dlg.geometry(f"{px(680)}x{px(680)}")
+            dlg.minsize(px(540), px(500))
         except Exception:
             pass
         center_over(dlg, self.root)
@@ -212,7 +215,7 @@ class StorePage:
         head.pack(fill="x")
         tk.Label(
             head,
-            text="社区下载",
+            text="社区音色",
             font=title_font(15, "bold"),
             bg=TM_BG,
             fg=TM_INK,
@@ -229,19 +232,24 @@ class StorePage:
             search_row,
             placeholder="搜索音色 / 作者 / 系列 / 标签…",
             on_change=self._on_voices_search,
-            width=30,
+            width=28,
         )
         self._voices_search.pack(side="left", fill="x", expand=True)
         self._voices_view_seg = SegmentControl(
             search_row,
-            [("home", "首页"), ("series", "系列专区")],
-            value="home",
+            [
+                ("latest", "最新"),
+                ("official", "图灵镜源"),
+                ("thirdparty", "第三方"),
+                ("series", "系列专区"),
+            ],
+            value="latest",
             on_change=self._on_view_change,
         )
         self._voices_view_seg.pack(side="right", padx=(8, 0))
         # Fresh dialog resets query / view / page (StorePage outlives the Toplevel)
         self._voices_search_q = ""
-        self._store_view = "home"
+        self._store_view = "latest"
         self._voices_page = 1
         self._expanded_series = set()
 
@@ -441,25 +449,93 @@ class StorePage:
                     w.destroy()
             except Exception:
                 self._voices_pager_host = None
-        voices = [v for v in cat.voices if v.has_download()]
-        voices = filter_voices(voices, self._voices_search_q)
-        if self._store_view == "series":
+
+        official = [v for v in (cat.voices or []) if v.has_download()]
+        thirdparty = [
+            v
+            for v in (getattr(cat, "thirdparty_voices", None) or [])
+            if v.has_download()
+        ]
+        view = self._store_view or "latest"
+        # 兼容旧会话状态
+        if view == "home":
+            view = "latest"
+            self._store_view = "latest"
+
+        if view == "series":
+            voices = filter_voices(official, self._voices_search_q)
             self._render_series_view(voices)
+        elif view == "official":
+            voices = filter_voices(official, self._voices_search_q)
+            self._render_flat_paged(
+                voices,
+                empty_text=(
+                    f"没有匹配「{self._voices_search_q}」的图灵镜源音色。"
+                    if self._voices_search_q
+                    else "暂无图灵镜源音色。可点「刷新清单」重试。"
+                ),
+            )
+        elif view == "thirdparty":
+            self._render_thirdparty_disclaimer()
+            voices = filter_voices(thirdparty, self._voices_search_q)
+            self._render_flat_paged(
+                voices,
+                empty_text=(
+                    f"没有匹配「{self._voices_search_q}」的第三方音色。"
+                    if self._voices_search_q
+                    else "暂无第三方音色。可点「刷新清单」重试。"
+                ),
+            )
         else:
-            self._render_home_view(voices)
+            # 最新：双源合流
+            voices = filter_voices(
+                merged_latest(official, thirdparty), self._voices_search_q
+            )
+            self._render_flat_paged(
+                voices,
+                empty_text=(
+                    f"没有匹配「{self._voices_search_q}」的音色。"
+                    if self._voices_search_q
+                    else "暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。"
+                ),
+            )
         try:
             self.root.after(30, self._dlg_bind_wheel)
         except Exception:
             pass
 
-    def _render_home_view(self, voices: list) -> None:
-        """首页：最新上架在前的平铺列表，底部页码分页（每页 5 个）。"""
+    def _render_thirdparty_disclaimer(self) -> None:
+        """第三方页顶固定免责：风险与 RVC Fabric 官方无关。"""
+        if self.voices_host is None:
+            return
+        box = tk.Frame(
+            self.voices_host,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        box.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            box,
+            text=(
+                "第三方音色收录自公开社区站点（如 Hugging Face 等模型托管站），"
+                "本软件仅提供索引与下载直链，不做官方制作、审核或授权。"
+                "模型授权、音质、版权与使用后果由来源站点及上传者负责，"
+                "与 RVC Fabric / 图灵镜官方无关。请勿将他人声音用于冒充、诈骗等用途。"
+                "每个条目均附来源链接，下载前请自行判断。"
+            ),
+            font=sans_font(9),
+            bg=TM_SURFACE,
+            fg=TM_WARN,
+            wraplength=px(580),
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", padx=10, pady=8)
+
+    def _render_flat_paged(self, voices: list, *, empty_text: str) -> None:
+        """平铺列表：最新在前，底部页码分页（每页 5 个）。"""
         if not voices:
-            self._voices_empty_label(
-                f"没有匹配「{self._voices_search_q}」的音色。"
-                if self._voices_search_q
-                else "暂无可在线下载的音色。可点「刷新清单」重试，或通过社群获取。"
-            )
+            self._voices_empty_label(empty_text)
             return
         ordered = sort_voices_newest_first(voices)
         page_items, self._voices_page, total_pages = paginate(
@@ -470,7 +546,7 @@ class StorePage:
         self._render_voices_pager(total_pages, len(ordered))
 
     def _render_series_view(self, voices: list) -> None:
-        """系列专区：只列现有系列，默认收起；点标题展开；搜索词激活时自动展开。"""
+        """系列专区：只列图灵镜源系列，默认收起；点标题展开；搜索词激活时自动展开。"""
         groups = group_series_only(voices)
         if not groups:
             self._voices_empty_label(
@@ -692,8 +768,13 @@ class StorePage:
                 bd=0,
                 highlightthickness=0,
             ).pack(side="left", padx=(8, 0), pady=(4, 0))
+        is_tp = not bool(getattr(v, "official", True))
+        src_label = origin_display(str(getattr(v, "origin", "") or ""))
         kind = "音色包" if v.pack_url else "多文件"
-        meta = f"{v.tag}  ·  {kind}"
+        # 源徽标打头：图灵镜 / Hugging Face …
+        meta = f"{src_label}  ·  {v.tag}  ·  {kind}"
+        if is_tp:
+            meta += "  ·  非官方"
         if v.series:
             meta += f"  ·  系列: {v.series}"
         if v.author:
@@ -717,10 +798,19 @@ class StorePage:
             bd=0,
             highlightthickness=0,
         ).pack(anchor="w", pady=(2, 0))
-        if v.author_url:
+        # 第三方：来源链接优先；官方：作者主页
+        link_url = ""
+        link_text = ""
+        if is_tp and getattr(v, "source_url", ""):
+            link_url = str(v.source_url).strip()
+            link_text = "来源：" + link_url
+        elif v.author_url:
+            link_url = v.author_url
+            link_text = v.author_url
+        if link_url:
             link = tk.Label(
                 left,
-                text=v.author_url,
+                text=link_text,
                 font=mono_font(8),
                 bg=TM_SURFACE,
                 fg=TM_ACCENT,
@@ -734,7 +824,7 @@ class StorePage:
             link.pack(anchor="w")
             link.bind(
                 "<Button-1>",
-                lambda _e, u=v.author_url: open_in_browser(u),
+                lambda _e, u=link_url: open_in_browser(u),
             )
         if v.description:
             tk.Label(

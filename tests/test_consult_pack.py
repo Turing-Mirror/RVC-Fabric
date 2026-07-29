@@ -30,7 +30,9 @@ def _write(path, data: bytes = b"x"):
         f.write(data)
 
 
-def _make_model(tmp: Path, *, fabric: bool, with_index: bool = False, active_profile: bool = False):
+def _make_model(
+    tmp: Path, *, fabric: bool, with_index: bool = False, active_profile: bool = False
+):
     root = tmp / "pkg"
     mdir = root / "User_Data" / "models" / "hero"
     mdir.mkdir(parents=True)
@@ -72,26 +74,35 @@ def _make_model(tmp: Path, *, fabric: bool, with_index: bool = False, active_pro
 
 class ConsultPackTests(unittest.TestCase):
     def test_is_fabric_model(self):
-        self.assertTrue(is_fabric_model({"online_id": "x"}))
+        # 仅有 online_id、不在官方清单 → 不算官方（防第三方 tp-* 误判）
+        self.assertFalse(is_fabric_model({"online_id": "x"}))
         self.assertTrue(is_fabric_model({"source": "online_pack"}))
         self.assertTrue(is_fabric_model({"source": "online_files"}))
         self.assertTrue(is_fabric_model({"publisher": "rvc_fabric"}))
         self.assertTrue(is_fabric_model({"fabric_official": True}))
         self.assertTrue(
-            is_fabric_model(
-                {"online_id": "kiki"}, catalog_ids={"kiki", "guanguan"}
-            )
+            is_fabric_model({"online_id": "kiki"}, catalog_ids={"kiki", "guanguan"})
         )
         self.assertIn(
             "catalog_id_match",
-            fabric_match_reasons(
-                {"online_id": "kiki"}, catalog_ids={"kiki"}
-            ),
+            fabric_match_reasons({"online_id": "kiki"}, catalog_ids={"kiki"}),
         )
         self.assertTrue(has_fabric_publisher_mark({"publisher": "RVC-Fabric"}))
         self.assertFalse(is_fabric_model({"source": "user_import"}))
         self.assertFalse(is_fabric_model({}))
         self.assertFalse(is_fabric_model(None))
+        # 社区/第三方：显式非官方一票否决
+        self.assertFalse(
+            is_fabric_model(
+                {
+                    "online_id": "tp-miku",
+                    "fabric_official": False,
+                    "publisher": "community",
+                    "source": "thirdparty_files",
+                },
+                catalog_ids={"tp-miku", "kiki"},
+            )
+        )
 
     def test_build_model_meta_fabric(self):
         import tempfile
@@ -229,7 +240,9 @@ class ConsultPackTests(unittest.TestCase):
             root, mdir, dry, wet = _make_model(Path(td), fabric=True)
             perf_dir = os.path.join(root, "User_Data", "perf_reports")
             os.makedirs(perf_dir, exist_ok=True)
-            with open(os.path.join(perf_dir, "perf_test.json"), "w", encoding="utf-8") as f:
+            with open(
+                os.path.join(perf_dir, "perf_test.json"), "w", encoding="utf-8"
+            ) as f:
                 json.dump({"summary": {"n": 1}}, f)
             zpath = pack_consult_zip(
                 root,

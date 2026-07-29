@@ -225,6 +225,107 @@ def parse_git_lfs_pointer_oid(data: bytes) -> str:
     return ""
 
 
+# Hugging Face 模型托管站（国外常用，国内默认同源镜像 hf-mirror.com）
+_HF_HOSTS = frozenset(
+    {
+        "huggingface.co",
+        "www.huggingface.co",
+        "hf-mirror.com",
+        "www.hf-mirror.com",
+    }
+)
+DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
+OFFICIAL_HF_HOST = "https://huggingface.co"
+
+
+def is_huggingface_url(url: str) -> bool:
+    """True when host is huggingface.co / hf-mirror / configured endpoint."""
+    u = (url or "").strip()
+    if not u:
+        return False
+    try:
+        host = (urlparse(u).hostname or "").lower()
+    except Exception:
+        return False
+    if host in _HF_HOSTS:
+        return True
+    # 自定义镜像：与配置端点主机一致也算
+    try:
+        ep = get_hf_endpoint()
+        ep_host = (urlparse(ep).hostname or "").lower()
+        if ep_host and host == ep_host:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def normalize_huggingface_url(url: str) -> str:
+    """blob/<rev>/<path> → resolve/<rev>/<path>（浏览器预览链改成直链）。"""
+    u = (url or "").strip()
+    if not u or not is_huggingface_url(u):
+        return u
+    m = re.match(
+        r"(https?://[^/]+)/([^/]+)/([^/]+)/blob/([^/]+)/(.*)$",
+        u,
+        re.I,
+    )
+    if m:
+        base, org, repo, rev, path = m.groups()
+        return f"{base}/{org}/{repo}/resolve/{rev}/{path}"
+    return u
+
+
+def get_hf_endpoint() -> str:
+    """国内默认同源镜像；app_config.hf_endpoint 可覆盖。
+
+    - 空/缺省 → https://hf-mirror.com
+    - \"official\" → https://huggingface.co（不走镜像）
+    - 其它完整 URL → 自定义镜像根
+    """
+    try:
+        from launcher.config_store import load_config
+
+        raw = str((load_config() or {}).get("hf_endpoint") or "").strip()
+    except Exception:
+        raw = ""
+    if not raw:
+        return DEFAULT_HF_ENDPOINT
+    if raw.lower() in ("official", "huggingface", "hf.co", "origin"):
+        return OFFICIAL_HF_HOST
+    if not raw.lower().startswith(("http://", "https://")):
+        raw = "https://" + raw
+    return raw.rstrip("/")
+
+
+def apply_hf_endpoint(url: str) -> str:
+    """把 huggingface.co 主机换成配置的镜像端点；其它主机原样。"""
+    u = (url or "").strip()
+    if not u:
+        return u
+    try:
+        p = urlparse(u)
+        host = (p.hostname or "").lower()
+    except Exception:
+        return u
+    if host not in ("huggingface.co", "www.huggingface.co"):
+        return u
+    ep = get_hf_endpoint()
+    if not ep or ep.rstrip("/") in (OFFICIAL_HF_HOST, OFFICIAL_HF_HOST + "/"):
+        return u
+    # 保留 path/query/fragment，只换 scheme+netloc
+    ep_p = urlparse(ep if "://" in ep else f"https://{ep}")
+    scheme = ep_p.scheme or "https"
+    netloc = ep_p.netloc or ep_p.path
+    if not netloc:
+        return u
+    return (
+        f"{scheme}://{netloc}{p.path}"
+        + (f"?{p.query}" if p.query else "")
+        + (f"#{p.fragment}" if p.fragment else "")
+    )
+
+
 def resolve_download_url(url: str, session=None) -> str:
     """Turn a share/page URL into a streamable download URL when possible."""
     u = (url or "").strip()
@@ -232,11 +333,15 @@ def resolve_download_url(url: str, session=None) -> str:
         raise DownloadError("空下载地址")
     u = normalize_github_url(u)
     u = normalize_cnb_url(u)
+    # 社区音色：HF 预览链 → 直链，再按配置走国内镜像
+    if is_huggingface_url(u):
+        u = normalize_huggingface_url(u)
+        u = apply_hf_endpoint(u)
 
     # Already force-download
     if "download=1" in u or "download.aspx" in u.lower():
         return u
-    if is_github_url(u) or not is_sharepoint_or_onedrive(u):
+    if is_github_url(u) or is_huggingface_url(u) or not is_sharepoint_or_onedrive(u):
         return u
 
     # SharePoint / OneDrive public share: follow redirects, rewrite to download.aspx
@@ -436,7 +541,9 @@ def download_file(
                         # 污染的 .part（下载完整但内容哈希不符）必须清掉，
                         # 否则之后每次重试都秒续传到 done 再失败，永远无法自愈
                         try:
-                            from launcher.online.multipart import discard_multipart_shell
+                            from launcher.online.multipart import (
+                                discard_multipart_shell,
+                            )
 
                             discard_multipart_shell(tmp)
                         except Exception:

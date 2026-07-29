@@ -355,8 +355,32 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             if str(v["id"]) != p.stem:
                 rep.warn(f"voices/{p.name}: id={v['id']} 与文件名不一致")
             out["voices"].append(v)
+            # 官方源授权记录：建议 YAML 注释或 authorization 字段（不阻断）
+            try:
+                raw_txt = p.read_text(encoding="utf-8")
+            except OSError:
+                raw_txt = ""
+            if "# 授权" not in raw_txt and "authorization:" not in raw_txt:
+                rep.warn(
+                    f"voices/{p.name}: 建议补录授权注释（# 授权: …）或 authorization 字段"
+                )
     else:
         rep.error("缺源目录: catalog-src/voices/")
+
+    # 第三方源：目录不存在 = 空列表（老仓/最小 fixture 兼容）
+    out["thirdparty"] = []
+    tpdir = src / "thirdparty"
+    if tpdir.is_dir():
+        for p in sorted(tpdir.glob("*.yaml")):
+            try:
+                v = _load_yaml(p)
+            except Exception as e:
+                rep.error(f"thirdparty/{p.name}: 解析失败: {e}")
+                continue
+            v.setdefault("id", p.stem)
+            if str(v["id"]) != p.stem:
+                rep.warn(f"thirdparty/{p.name}: id={v['id']} 与文件名不一致")
+            out["thirdparty"].append(v)
     return out
 
 
@@ -451,6 +475,106 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     for k, val in v.items():
         if k not in known and k not in item:
             item[k] = val
+    return item
+
+
+def _compile_thirdparty_voice(
+    v: dict, paths: Paths, rep: Report, *, official_ids: set[str]
+) -> Optional[dict]:
+    """编译第三方源音色：直链托管在社区站，不进 CNB LFS。"""
+    vid = str(v.get("id") or "").strip()
+    who = f"thirdparty/{vid or '?'}"
+    if not vid:
+        rep.error(f"{who}: 缺 id")
+        return None
+    if not vid.startswith("tp-"):
+        rep.error(f"{who}: id 必须以 tp- 前缀（避免与官方目录冲突）")
+        return None
+    if vid in official_ids:
+        rep.error(f"{who}: id 与官方 voices 冲突: {vid}")
+        return None
+    if v.get("fabric_official") is True or str(
+        v.get("publisher") or ""
+    ).strip().lower() in ("rvc_fabric", "rvc-fabric"):
+        rep.error(
+            f"{who}: 禁止写 fabric_official/publisher=rvc_fabric（第三方不得盖官方章）"
+        )
+        return None
+
+    date = _yymmdd(v.get("date") or v.get("released"))
+    if not date:
+        rep.error(f"{who}: date 必须是 YYMMDD")
+        return None
+
+    pth_url = str(v.get("pth_url") or "").strip()
+    pack_url = str(v.get("pack_url") or "").strip()
+    if not pth_url and not pack_url:
+        rep.error(f"{who}: 需要 pth_url 或 pack_url（http/https）")
+        return None
+    for label, u in (("pth_url", pth_url), ("pack_url", pack_url)):
+        if u and not u.lower().startswith(("http://", "https://")):
+            rep.error(f"{who}: {label} 必须是 http(s) 直链")
+            return None
+
+    sha = str(v.get("sha256") or "").strip().lower()
+    if sha and (len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha)):
+        rep.error(f"{who}: sha256 须为 64 位 hex")
+        return None
+    if not sha:
+        rep.warn(f"{who}: 无 sha256（非 LFS 文件常见；客户端将跳过校验）")
+
+    cover = str(v.get("cover") or "").strip().replace("\\", "/")
+    cover_url = ""
+    if cover:
+        if cover.lower().startswith(("http://", "https://")):
+            cover_url = cover
+            cover = ""
+        else:
+            if not (paths.cnb / cover).is_file():
+                rep.warn(f"{who}: 封面文件不存在: {cover}")
+            cover_url = cnb_raw_url(cover)
+
+    pkg = str(v.get("package_type") or "").strip()
+    if not pkg:
+        pkg = "voice_pack" if pack_url and not pth_url else "voice_files"
+
+    item: dict[str, Any] = {
+        "id": vid,
+        "name": str(v.get("name") or vid),
+        "tag": str(v.get("tag") or "音色"),
+        "origin": str(v.get("origin") or "huggingface"),
+        "source_url": str(v.get("source_url") or "").strip(),
+        "author": str(v.get("author") or "").strip(),
+        "author_url": str(v.get("author_url") or "").strip(),
+        "package_type": pkg,
+        "sha256": sha,
+        "size_bytes": int(v.get("size_bytes") or 0),
+        "released": date,
+        "date": date,
+        "description": str(
+            v.get("description")
+            or "收录自公开社区站点；非 RVC Fabric 官方音色，风险与官方无关。"
+        ),
+        "official": False,
+        "publisher": "community",
+        "fabric_official": False,
+    }
+    if pth_url:
+        item["pth_url"] = pth_url
+    if pack_url:
+        item["pack_url"] = pack_url
+    if v.get("index_url"):
+        item["index_url"] = str(v.get("index_url")).strip()
+    if cover:
+        item["cover"] = cover
+    if cover_url:
+        item["cover_url"] = cover_url
+    series = str(v.get("series") or "").strip()
+    if series:
+        item["series"] = series  # 仅搜索，不进系列专区
+    for k in ("hf_downloads", "hf_likes", "snapshot_date", "real_person"):
+        if k in v and v[k] is not None and v[k] != "":
+            item[k] = v[k]
     return item
 
 
@@ -664,6 +788,21 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         voices.append(item)
     voices.sort(key=lambda x: (x.get("date") or "", str(x.get("id") or "").lower()))
 
+    thirdparty_voices: list[dict] = []
+    tp_ids: set[str] = set()
+    for v in src.get("thirdparty") or []:
+        item = _compile_thirdparty_voice(v, paths, rep, official_ids=seen_ids)
+        if not item:
+            continue
+        if item["id"] in tp_ids or item["id"] in seen_ids:
+            rep.error(f"thirdparty_voices: id 重复: {item['id']}")
+            continue
+        tp_ids.add(item["id"])
+        thirdparty_voices.append(item)
+    thirdparty_voices.sort(
+        key=lambda x: (x.get("date") or "", str(x.get("id") or "").lower())
+    )
+
     setup_src = src.get("setup") or {}
     setup_blob = _compile_blob(setup_src, paths, rep, who="setup", extract_root=".")
     packages = {
@@ -719,6 +858,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "app": app,
         "community": community,
         "voices": voices,
+        "thirdparty_voices": thirdparty_voices,
         "runtime_release_tag": runtime_release_tag,
         "runtimes": runtimes,
         "manifest_urls": list(meta.get("manifest_urls") or MANIFEST_URLS),
@@ -735,6 +875,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "app": app,
         "community": community,
         "voices": voices,
+        "thirdparty_voices": thirdparty_voices,
         "runtime_release_tag": runtime_release_tag,
         "runtimes": runtimes,
         "engine_core": engine_core,
@@ -751,6 +892,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "manifest_urls": index["manifest_urls"],
         "runtimes": runtimes,
         "voices": voices,
+        "thirdparty_voices": thirdparty_voices,
     }
     return {"index": index, "snippet": snippet, "bundled": bundled}
 
@@ -1052,6 +1194,7 @@ def _roundtrip_check(outputs: dict, src: dict, rep: Report) -> None:
     """把产物喂给真实客户端解析器 — schema 对但客户端读不出 = 直接报错。"""
     index = outputs["index"]
     n_src = len(src.get("voices") or [])
+    n_tp = len(index.get("thirdparty_voices") or [])
     try:
         from launcher.online.catalog import OnlineCatalog
 
@@ -1064,6 +1207,14 @@ def _roundtrip_check(outputs: dict, src: dict, rep: Report) -> None:
                     f"回环[A/{name}]: 客户端只解析出 {len(cat.voices)}/{n_src} 个音色"
                     "（有音色缺 id 或下载地址被静默丢弃）"
                 )
+            n_tp_client = len(getattr(cat, "thirdparty_voices", None) or [])
+            if n_tp_client != n_tp:
+                rep.error(
+                    f"回环[A/{name}]: 客户端只解析出 {n_tp_client}/{n_tp} 个第三方音色"
+                )
+            for tv in getattr(cat, "thirdparty_voices", None) or []:
+                if getattr(tv, "official", True):
+                    rep.error(f"回环[A/{name}]: 第三方 {tv.id} 未被强制 official=False")
         gui = index["app"]["gui"]
         if gui.get("url") and not gui.get("sha256"):
             rep.error("回环[A]: gui.url 存在但 sha256 为空")

@@ -32,6 +32,10 @@ _KEEP_BUNDLES = 10
 AUDIO_EXTS = frozenset({".wav", ".mp3", ".flac", ".ogg", ".m4a"})
 
 _FABRIC_SOURCES = frozenset({"online_pack", "online_files"})
+# 社区/第三方安装通道 — 一律不当作 RVC Fabric 官方音色
+_THIRDPARTY_SOURCES = frozenset(
+    {"thirdparty_pack", "thirdparty_files", "community", "user_import"}
+)
 # Written into official packs / config.json so clients can recognize without network.
 FABRIC_PUBLISHER = "rvc_fabric"
 _FABRIC_PUBLISHER_ALIASES = frozenset(
@@ -137,13 +141,38 @@ def load_fabric_catalog_ids() -> set[str]:
     return ids
 
 
+def _explicitly_not_official(side: dict) -> bool:
+    """fabric_official 显式为假，或 publisher=community → 绝不当官方。"""
+    fo = side.get("fabric_official")
+    if fo is False:
+        return True
+    if isinstance(fo, (int, float)) and fo == 0:
+        return True
+    if str(fo or "").strip().lower() in ("0", "false", "no", "n"):
+        return True
+    pub = str(side.get("publisher") or side.get("provider") or "").strip().lower()
+    if pub in ("community", "thirdparty", "third_party", "user"):
+        return True
+    src = str(side.get("source") or "").strip().lower()
+    if src in _THIRDPARTY_SOURCES or src.startswith("thirdparty"):
+        return True
+    return False
+
+
 def fabric_match_reasons(
     side: Optional[dict],
     *,
     catalog_ids: Optional[set[str]] = None,
 ) -> list[str]:
-    """Why we treat this sidecar as Fabric official (may be empty = not official)."""
+    """Why we treat this sidecar as Fabric official (may be empty = not official).
+
+    人话：只有图灵镜源装的官方音色才算官方。社区音色即使写了 online_id，
+    只要盖了「非官方」章或来自第三方通道，就绝不算官方。
+    """
     if not isinstance(side, dict):
+        return []
+    # 一票否决：显式非官方 / 社区通道
+    if _explicitly_not_official(side):
         return []
     reasons: list[str] = []
     if has_fabric_publisher_mark(side):
@@ -153,10 +182,10 @@ def fabric_match_reasons(
         reasons.append("install_source")
     oid = str(side.get("online_id") or "").strip()
     if oid:
-        reasons.append("online_id")
         ids = catalog_ids if catalog_ids is not None else load_fabric_catalog_ids()
         if oid in ids:
             reasons.append("catalog_id_match")
+        # 注意：仅有 online_id、不在官方清单里 → 不算官方（防第三方 tp-* 误判）
     return reasons
 
 
@@ -167,12 +196,13 @@ def is_fabric_model(
 ) -> bool:
     """True when the voice is treated as RVC Fabric official for consult packs.
 
-    Recognition (any one is enough)::
+    Recognition (any one is enough, unless explicitly non-official)::
 
-      1. config.json / pack mark: publisher=rvc_fabric | fabric_official
-      2. installed from online library: source online_pack|online_files
-      3. online_id present (from library install) — metadata always kept
-      4. online_id listed in local/remote catalog (bundled + cache)
+      1. config.json mark: publisher=rvc_fabric | fabric_official=true
+      2. installed from 图灵镜源: source online_pack|online_files
+      3. online_id listed in official catalog voices[] (bundled + cache)
+
+    Veto: fabric_official=false / publisher=community / thirdparty_* source.
 
     Official → consult pack defaults to *metadata only* (no large pth).
     """
@@ -212,8 +242,10 @@ def _resolve_index_path(model_dir: str, side: dict) -> str:
 def build_model_meta(model_dir: str, side: Optional[dict] = None) -> dict:
     """Identity record always written into the pack (never omitted)."""
     model_dir = os.path.abspath(str(model_dir))
-    side = side if isinstance(side, dict) else _read_json(
-        os.path.join(model_dir, "config.json")
+    side = (
+        side
+        if isinstance(side, dict)
+        else _read_json(os.path.join(model_dir, "config.json"))
     )
     pth = _find_pth(model_dir)
     file_name = str(side.get("file") or "")
@@ -305,9 +337,7 @@ def _latest_perf_path(root: str) -> Optional[str]:
     d = os.path.join(root, "User_Data", "perf_reports")
     try:
         names = [
-            n
-            for n in os.listdir(d)
-            if n.startswith("perf_") and n.endswith(".json")
+            n for n in os.listdir(d) if n.startswith("perf_") and n.endswith(".json")
         ]
     except OSError:
         return None
@@ -457,9 +487,7 @@ def pack_consult_zip(
 
     side = _read_json(os.path.join(model_dir, "config.json"))
     model_meta = build_model_meta(model_dir, side)
-    prof, profile_from = resolve_profile(
-        model_dir, cfg, character_name=character_name
-    )
+    prof, profile_from = resolve_profile(model_dir, cfg, character_name=character_name)
     dry_ext = _audio_ext(dry)
     wet_ext = _audio_ext(wet)
     dry_arc = "samples/dry_original" + dry_ext

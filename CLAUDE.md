@@ -214,11 +214,8 @@ see home/store UI + `launcher/ui/store_page.py`.
 - Other agents (glm / TRAE / Grok) may edit the same worktree while Claude is mid-session.
   Before committing, `git status` + per-file `git diff`, split ownership, then commit by logic.
   Temp dirs (`.trae/`, `TEMP_*`) stay out of git.
-- **2026-07-27 full-shell adversarial review** (plaza intentionally excluded) finished find/verify:
-  38 confirmed / 3 refuted. **No fix commits were made** (session limit + login expiry). Do not
-  re-run the whole multi-agent review; pick items from `docs/审查缺陷清单.md` when fixing.
-  High items (pid identity, voice_pack validate-before-wipe, open_bootstrap, global hotkeys)
-  were fixed 2026-07-28. Do not add dated SESSION_*/PLAN_*/REVIEW_* scatter docs — update
+- Shell review backlog: `docs/审查缺陷清单.md` (high items fixed 2026-07-28). Pick items when
+  fixing. Do not add dated SESSION_*/PLAN_*/REVIEW_* scatter docs — update
   `docs/CONTEXT_HANDOFF.md` instead.
 
 ## Conventions

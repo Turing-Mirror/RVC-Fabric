@@ -156,7 +156,7 @@
 | `docs/UI-AESTHETIC-DESIGN.md` | UI 约束（Schale 浅蓝） |
 | `docs/LAUNCHER_DECOMPOSITION.md` | main_app 拆分规则 |
 | `docs/PERF_NOTES.md` | 性能基准 + 后续推理路线 |
-| `docs/审查缺陷清单.md` | 壳层审查 backlog（按条修；勿重跑审查） |
+| `docs/审查缺陷清单.md` | 壳层审查 backlog（按条修） |
 | `docs/大众版使用说明.md` | 用户说明 |
 | `CLAUDE.md` | 协作者英文架构指引（与 handoff 同步） |
 
@@ -182,7 +182,7 @@
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28）：worker.pid 身份校验 / 音色包先校验再覆盖 / open_bootstrap→启动器.exe / 全局热键独立线程 |
-| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；**勿重跑**整轮对抗审查；#29 status.json 竞态写已修（2026-07-29，diag_20260727） |
+| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；#29 status.json 竞态写已修（2026-07-29，diag_20260727） |
 | 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 中 | 三变体全量/Setup 实机验收矩阵（启停/切音色/热更/监听/强杀） |

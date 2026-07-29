@@ -6,7 +6,7 @@
 > **最后大更新**：2026-07-28  
 > **工作区**：`L:\My Project\Grok`  
 > **当前分支**：`tm-release`（相对 `fabric/tm-release` 可能超前：广场页 `0800079` 等）  
-> **壳版本**：1.2.0  
+> **壳版本**：1.2.1  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  

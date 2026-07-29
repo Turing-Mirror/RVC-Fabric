@@ -357,10 +357,21 @@ class SettingsDevicesMixin:
                     host = self.var_hostapi.get()
                 except Exception:
                     host = self.cfg.get("sg_hostapi") or ""
-                # Save hostapi into config file path worker reads for list
-                rt_client.send_command("list_devices", sg_hostapi=host)
-                time.sleep(0.5)
-                st = rt_client.poll_status()
+                # Wait for worker to ack list_devices (review #26) — fixed 0.5s
+                # sleep often showed a stale device list.
+                seq = rt_client.send_command(
+                    "list_devices", sg_hostapi=host, wait_seq=True, timeout_s=15
+                )
+                st = {}
+                deadline = time.time() + 15.0
+                while time.time() < deadline:
+                    st = rt_client.poll_status()
+                    if int(st.get("last_cmd_seq") or 0) >= int(seq or 0):
+                        if st.get("input_devices") is not None or st.get("hostapis"):
+                            break
+                    if not rt_client.is_worker_alive():
+                        break
+                    time.sleep(0.1)
                 self.root.after(0, lambda: self._apply_device_status(st, toast=True))
             except Exception as e:
                 self.root.after(0, lambda e=e: messagebox.showerror("重载失败", str(e)))

@@ -656,6 +656,7 @@ def import_model_to_catalog(
     cover_src: Optional[Path] = None,
     index_src: Optional[Path] = None,
     move: bool = False,
+    move_index: Optional[bool] = None,
 ) -> dict[str, Any]:
     """Copy (or move) a .pth into User_Data/models/<name>/ + write config.json.
 
@@ -664,7 +665,11 @@ def import_model_to_catalog(
 
     ``move=True`` removes the source files after a successful import — the
     user chose 「移动」 so the software folder becomes the single home.
+    ``move_index`` defaults to ``move``; set False when multiple .pth share one
+    .index so only the last consumer unlinks the source (review #23).
     """
+    if move_index is None:
+        move_index = move
     src_pth = Path(src_pth)
     if not src_pth.is_file() or src_pth.suffix.lower() != ".pth":
         raise ValueError(f"not a .pth file: {src_pth}")
@@ -733,10 +738,7 @@ def import_model_to_catalog(
                   "rms_mix_rate", "threhold", "f0method", "active_profile", "cover"):
             if k in old and k not in cfg:
                 cfg[k] = old[k]
-        (dest_dir / "config.json").write_text(
-            json.dumps(cfg, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        _write_sidecar(dest_dir, cfg)
     if move:
         # Source files have a safe copy inside dest_dir — remove the originals
         try:
@@ -744,9 +746,11 @@ def import_model_to_catalog(
                 src_pth.unlink()
         except Exception:
             pass
+        # move_index may be False when several .pth share one .index (review #23)
         try:
             if (
-                index_src
+                move_index
+                and index_src
                 and Path(index_src).is_file()
                 and index_path
                 and Path(index_path).resolve() != Path(index_src).resolve()
@@ -839,16 +843,39 @@ def import_user_files(
     used_indices: set[str] = set()
     used_covers: set[str] = set()
 
+    # Pre-resolve matches so shared .index consumers are known before any move
+    planned: list[tuple[Path, Optional[Path], Optional[Path]]] = []
+    index_consumers: dict[str, list[Path]] = {}
     for pth in pths:
+        idx = match_index_for_pth(pth, indices)
+        cov = match_cover_for_pth(pth, covers)
+        planned.append((pth, idx, cov))
+        if idx is not None:
+            try:
+                key = str(Path(idx).resolve())
+            except Exception:
+                key = str(idx)
+            index_consumers.setdefault(key, []).append(Path(pth))
+
+    for pth, idx, cov in planned:
         try:
-            idx = match_index_for_pth(pth, indices)
-            cov = match_cover_for_pth(pth, covers)
+            move_index = move
+            if move and idx is not None:
+                try:
+                    key = str(Path(idx).resolve())
+                except Exception:
+                    key = str(idx)
+                consumers = index_consumers.get(key) or []
+                # Only the last consumer may unlink the shared index source
+                if consumers and Path(pth).resolve() != consumers[-1].resolve():
+                    move_index = False
             info = import_model_to_catalog(
                 pth,
                 models_root,
                 cover_src=cov,
                 index_src=idx,
                 move=move,
+                move_index=move_index,
             )
             summary["models"].append(info)
             if idx is not None:
@@ -962,10 +989,7 @@ def bind_index_to_model_dir(
     if pth is not None:
         side.setdefault("file", pth.name)
     side.setdefault("tag", guess_tag(str(side.get("name") or model_dir.name)))
-    (model_dir / "config.json").write_text(
-        json.dumps(side, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_sidecar(model_dir, side)
     return index_path
 
 
@@ -978,10 +1002,7 @@ def clear_model_index(model_dir: Path) -> None:
     side.pop("index", None)
     if "name" not in side:
         side["name"] = model_dir.name
-    (model_dir / "config.json").write_text(
-        json.dumps(side, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_sidecar(model_dir, side)
 
 
 # --------------------------------------------------------------------------
@@ -998,10 +1019,17 @@ def _write_sidecar(model_dir: Path, side: dict) -> None:
     model_dir.mkdir(parents=True, exist_ok=True)
     if "name" not in side:
         side["name"] = model_dir.name
-    (model_dir / "config.json").write_text(
-        json.dumps(side, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _atomic_write_json(model_dir / "config.json", side)
+
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Atomic config.json write (review #24) — crash mid-write must not wipe."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(str(tmp), str(path))
 
 
 def _path_inside_dir(path: Path, folder: Path) -> bool:
@@ -1366,9 +1394,5 @@ def save_model_voice_params(
         else:
             side[k] = float(v)
 
-    cfg_path = model_dir / "config.json"
-    cfg_path.write_text(
-        json.dumps(side, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _atomic_write_json(Path(model_dir) / "config.json", side)
     return side

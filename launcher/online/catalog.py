@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -382,9 +384,13 @@ def fetch_catalog(
             candidates.append(u)
 
     last_err = ""
+    cache_dir = USER_DATA / "update_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     for url in candidates:
+        # Unique temp per call so concurrent refresh threads cannot clobber
+        # each other's catalog_fetch.json (review #32)
+        tmp = cache_dir / f"catalog_fetch_{os.getpid()}_{threading.get_ident()}_{int(time.time()*1000)}.json"
         try:
-            tmp = USER_DATA / "update_cache" / "catalog_fetch.json"
             download_file(url, tmp, timeout=timeout)
             data = json.loads(tmp.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
@@ -395,6 +401,12 @@ def fetch_catalog(
         except Exception as e:
             last_err = str(e)
             continue
+        finally:
+            try:
+                if tmp.is_file():
+                    tmp.unlink()
+            except OSError:
+                pass
 
     cached = load_cached_catalog()
     if cached and cached.voices:

@@ -219,16 +219,21 @@ class SampleRecorder:
             self._timer.start()
 
     def _auto_stop(self) -> None:
+        cb = self._on_auto_stop
         try:
-            path = self.stop()
-            cb = self._on_auto_stop
+            path = self.stop(save=True)
             if cb and path:
                 cb(path)
         except Exception:
-            pass
+            # Still notify UI so the button leaves 停止 (review #30)
+            if cb:
+                try:
+                    cb("")
+                except Exception:
+                    pass
 
-    def stop(self) -> str:
-        """Stop capture and write WAV; returns path."""
+    def stop(self, save: bool = True) -> str:
+        """Stop capture; write WAV when *save* is True. Returns path or ""."""
         with self._lock:
             stream = self._stream
             self._stream = None
@@ -249,6 +254,17 @@ class SampleRecorder:
                 stream.close()
             except Exception:
                 pass
+        self._started_at = 0.0
+        self._role = ""
+        if not save:
+            # Discard without writing (review #31 cancel path)
+            if path:
+                try:
+                    if os.path.isfile(path):
+                        os.unlink(path)
+                except OSError:
+                    pass
+            return ""
         if not path:
             raise SampleRecordError("内部错误：未设置保存路径。")
         elapsed = time.time() - started if started else 0.0
@@ -269,14 +285,13 @@ class SampleRecorder:
                     pass
             data = flat
         write_wav_int16(path, data, sr)
-        self._started_at = 0.0
-        self._role = ""
         return path
 
     def cancel(self) -> None:
+        """Stop without saving; discard any in-progress sample (review #31)."""
         try:
             if self.recording:
-                self.stop()
+                self.stop(save=False)
         except Exception:
             pass
         with self._lock:

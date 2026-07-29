@@ -194,6 +194,52 @@ def find_python(prefer_windowed: bool = False) -> str:
 
 
 def desktop_dir() -> Path:
+    """User Desktop, including OneDrive/KFM redirected folders (review #27)."""
+    if sys.platform == "win32":
+        # User Shell Folders expands %USERPROFILE% and OneDrive redirects
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+            ) as k:
+                val, _ = winreg.QueryValueEx(k, "Desktop")
+                expanded = os.path.expandvars(str(val))
+                p = Path(expanded)
+                if p.is_dir():
+                    return p
+        except Exception:
+            pass
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", wintypes.DWORD),
+                    ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD),
+                    ("Data4", wintypes.BYTE * 8),
+                ]
+
+            # FOLDERID_Desktop
+            fid = GUID(
+                0xB4BFCC3A,
+                0xDB2C,
+                0x424C,
+                (wintypes.BYTE * 8)(0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41),
+            )
+            path_ptr = ctypes.c_wchar_p()
+            hr = ctypes.windll.shell32.SHGetKnownFolderPath(
+                ctypes.byref(fid), 0, None, ctypes.byref(path_ptr)
+            )
+            if hr == 0 and path_ptr.value:
+                p = Path(path_ptr.value)
+                if p.is_dir():
+                    return p
+        except Exception:
+            pass
     home = Path.home()
     for desk in (
         home / "Desktop",

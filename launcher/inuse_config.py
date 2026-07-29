@@ -42,6 +42,8 @@ CLEAN_INUSE: dict[str, Any] = {
     "O_noise_reduce": False,
     "function": "vc",
     "fx_enabled": False,
+    # Mic pre-gain (dB); plain float — must survive sanitize (review #8)
+    "in_gain_db": 0.0,
 }
 
 _ABS_WIN = re.compile(r"^[A-Za-z]:[\\/]")

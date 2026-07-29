@@ -63,6 +63,28 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(compare_versions("1.1.2-part1", "1.1.1"), 1)
         self.assertEqual(compare_versions("1.1.2-part9", "1.1.3"), -1)
 
+    def test_legacy_digit_only_client_sees_pure_patch(self):
+        """Old shells without -partN semantics: re.findall(r'\\d+') only.
+
+        1.1.2-part1 → [1,1,2,1] looked *newer* than 1.1.2, so users stuck.
+        Shipping pure 1.1.4 → [1,1,4] still wins under digit-only compare.
+        """
+        import re
+
+        def legacy(a: str, b: str) -> int:
+            pa = [int(x) for x in re.findall(r"\d+", a or "0")] or [0]
+            pb = [int(x) for x in re.findall(r"\d+", b or "0")] or [0]
+            n = max(len(pa), len(pb))
+            pa += [0] * (n - len(pa))
+            pb += [0] * (n - len(pb))
+            return (pa > pb) - (pa < pb)
+
+        # Why part1 users never saw 1.1.2
+        self.assertEqual(legacy("1.1.2-part1", "1.1.2"), 1)
+        # Pure next release unblocks them without upgrading the comparator
+        self.assertEqual(legacy("1.1.2-part1", "1.1.4"), -1)
+        self.assertEqual(compare_versions("1.1.2-part1", "1.1.4"), -1)
+
 
 class CnbUrlTests(unittest.TestCase):
     def test_blob_to_git_raw(self):

@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.3",
+    "version": "1.1.4",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.2",
+      "version": "1.1.4",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/c97b59aba55a4d043bcec94e21945bdd5e6860b32e9a542590d51cc43188d538",
-      "sha256": "c97b59aba55a4d043bcec94e21945bdd5e6860b32e9a542590d51cc43188d538",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/641a48de0e96f8b749ecaeb2fa720d9623c3a10a80d41130e7e868b0d55c7313",
+      "sha256": "641a48de0e96f8b749ecaeb2fa720d9623c3a10a80d41130e7e868b0d55c7313",
       "min_app_version": "1.1.0",
-      "notes": "v1.1.2 增量包仍可用；完整壳层请装最新 Setup（固定链接 setup/RVC_Fabric_Setup.exe，当前 1.1.3：自动检查更新、任务栏不再误进托盘、启动防卡、worker.pid/音色包/热键/启动器修复）。"
+      "notes": "v1.1.4：status.json 并发写、nvidia 空探测、其他页 Magia 列表、in_gain_db 消毒、EQ 热推无咔嗒、engine-core 名净化；纯正式号可让仍停在 1.1.2-part1 的旧比较器收到更新。发布：上传 dist/gui_patch_1.1.4.zip 至 CNB LFS（oid=此 sha256）并同步 index。"
     }
   },
   "community": {

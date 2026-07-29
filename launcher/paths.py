@@ -72,6 +72,13 @@ WEIGHTS = ENGINE_WEIGHTS
 HUBERT = ROOT / "assets" / "hubert" / "hubert_base.pt"
 RMVPE = ROOT / "assets" / "rmvpe" / "rmvpe.pt"
 
+# Product brand art (window icon + in-app logo)
+BRAND_DIR = ROOT / "assets" / "brand"
+BRAND_ICO = BRAND_DIR / "app.ico"
+BRAND_LOGO = BRAND_DIR / "RVC_Fabric.png"  # square mark for stage / tray
+BRAND_LOGO_UI = BRAND_DIR / "logo_ui.png"  # ~256px home stage
+BRAND_LOGO_NAV = BRAND_DIR / "logo_nav.png"  # ~64px chrome
+
 CONFIG_PATH = USER_DATA / "app_config.json"
 SHORTCUT_NAME = "RVC Fabric.lnk"
 APP_TITLE = APP_PRODUCT_NAME

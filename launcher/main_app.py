@@ -198,6 +198,12 @@ class MainApp(
         self.root.geometry(f"{px(DEFAULT_WIN_W)}x{px(DEFAULT_WIN_H)}")
         self.root.minsize(px(MIN_WIN_W), px(MIN_WIN_H))
         self.root.configure(bg=TM_BG)
+        try:
+            from launcher.branding import apply_window_icon
+
+            apply_window_icon(self.root)
+        except Exception:
+            pass
         self._place_and_raise(force_size=True)
 
         # Shared hot-control vars (bottom dock + settings page)
@@ -224,8 +230,10 @@ class MainApp(
         self.show_page("home")
         self._tick_status()
         self._setup_hotkeys()
-        self.root.after(200, lambda: self._place_and_raise(force_size=False))
-        self.root.after(800, lambda: self._place_and_raise(force_size=False))
+        # Do NOT re-raise / re-geometry after first place — that interrupted
+        # user drag and re-applied maximize, causing flash + snap-back.
+        # Only un-withdraw if somehow hidden (tray restore is separate).
+        self.root.after(400, self._ensure_not_stuck_withdrawn)
         self.root.after(400, self._init_gpu_backend)
         self.root.after(600, self._bootstrap_devices_async)
         self.root.after(350, self._poll_global_hotkeys)
@@ -235,6 +243,18 @@ class MainApp(
         self.root.after(1200, self._maybe_show_onboarding)
         # Wallpaper after first layout so size is real (also re-applies glass key)
         self.root.after(350, self._wallpaper.apply_from_config)
+        # Geometry / drag guard — see _on_root_configure
+        self._was_zoomed = False
+        self._geometry_busy = False
+        self._geometry_settle_job = None
+        self._drag_guard_job = None
+        self._drag_guard_active = False  # title-bar drag after leave-maximize
+        self._unmax_title_drag = False  # True once pure-move seen after unmax
+        self._unmax_apply_job = None
+        self._scrollregion_jobs: dict = {}
+        self._last_root_size = None
+        self.root.after(200, self._sync_zoomed_tracking)
+        self.root.after(600, self._sync_zoomed_tracking)
         self._gpu_info: dict = {}
         self._update_badge_on = False
 
@@ -258,13 +278,8 @@ class MainApp(
         """Show window on primary screen. Only set default size once (allow user resize)."""
         try:
             if not force_size and self._placed_once:
-                # Already up and focused (user may even be dragging it) —
-                # re-raising would interrupt them for no benefit.
-                try:
-                    if self.root.focus_displayof() is not None:
-                        return
-                except Exception:
-                    pass
+                # Already laid out — never lift/geometry again (breaks drag / zoom).
+                return
             self.root.update_idletasks()
             if force_size or not self._placed_once:
                 sw = self.root.winfo_screenwidth()
@@ -278,6 +293,14 @@ class MainApp(
                     y = max(0, (sh - h) // 2)
                     self.root.geometry(f"{w}x{h}+{x}+{y}")
                 self._placed_once = True
+                try:
+                    self._was_zoomed = str(self.root.state()) == "zoomed"
+                    w0 = int(self.root.winfo_width())
+                    h0 = int(self.root.winfo_height())
+                    if w0 > 1 and h0 > 1:
+                        self._last_root_size = (w0, h0)
+                except Exception:
+                    self._was_zoomed = False
             # Show + raise ONCE, without forcing topmost — pinning the window
             # above everything on launch covered whatever the user was doing.
             self.root.deiconify()
@@ -285,6 +308,23 @@ class MainApp(
                 self.root.lift()
                 self.root.focus_force()
                 self._raised_once = True
+            # Zoomed geometry can finish mapping a frame later — re-sync flag
+            if force_size:
+                try:
+                    self.root.after(50, self._sync_zoomed_tracking)
+                    self.root.after(300, self._sync_zoomed_tracking)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _ensure_not_stuck_withdrawn(self) -> None:
+        """If root is still withdrawn after startup (rare), show it once."""
+        try:
+            # state() for withdrawn Tk window is often 'withdrawn'
+            st = str(self.root.state())
+            if st == "withdrawn":
+                self.root.deiconify()
         except Exception:
             pass
 
@@ -333,50 +373,358 @@ class MainApp(
         except Exception:
             pass
 
-    def _on_root_configure(self, event) -> None:
-        if event.widget is not self.root:
-            return
-        # <Configure> also fires while the window is being MOVED. Rebuilding
-        # widgets mid-drag makes Windows cancel the drag and snap the window
-        # back, so only reflow when the size actually changed.
-        size = (int(event.width), int(event.height))
-        if size == getattr(self, "_last_root_size", None):
-            return
-        prev = getattr(self, "_last_root_size", None)
-        self._last_root_size = size
-        # Debounce reflow: maximize / large jumps need longer settle so we
-        # do not rebuild models grid + wallpaper mid-transition (stutter).
-        if self._resize_job is not None:
-            try:
-                self.root.after_cancel(self._resize_job)
-            except Exception:
-                pass
-        delay = 160
+    def _layout_is_frozen(self) -> bool:
+        """Child Configure handlers must no-op when True."""
+        return bool(
+            getattr(self, "_geometry_busy", False)
+            or getattr(self, "_drag_guard_active", False)
+        )
+
+    def _sync_zoomed_tracking(self) -> None:
+        """Keep zoom flag + size baseline in sync (first title-bar drag fix)."""
         try:
-            if str(self.root.state()) == "zoomed":
-                delay = 220
-            elif prev is not None:
-                dw = abs(int(size[0]) - int(prev[0]))
-                dh = abs(int(size[1]) - int(prev[1]))
-                if dw > 80 or dh > 80:
-                    delay = 200
-        except Exception:
-            pass
-        self._resize_job = self.root.after(delay, self._reflow_current_page)
-        # Wallpaper cover-scale follows the window (Pillow re-render, longer debounce)
-        try:
-            self._wallpaper.on_resize()
+            self._was_zoomed = str(self.root.state()) == "zoomed"
+            w = int(self.root.winfo_width())
+            h = int(self.root.winfo_height())
+            if w > 1 and h > 1:
+                self._last_root_size = (w, h)
         except Exception:
             pass
 
+    def schedule_scrollregion(self, canvas) -> None:
+        """Debounced scrollregion — never bbox on the Configure hot path."""
+        if canvas is None or self._layout_is_frozen():
+            return
+        jobs = getattr(self, "_scrollregion_jobs", None)
+        if jobs is None:
+            self._scrollregion_jobs = {}
+            jobs = self._scrollregion_jobs
+        key = id(canvas)
+        old = jobs.get(key)
+        if old is not None:
+            try:
+                self.root.after_cancel(old)
+            except Exception:
+                pass
+
+        def _go(c=canvas, k=key) -> None:
+            jobs.pop(k, None)
+            if self._layout_is_frozen():
+                return
+            try:
+                c.configure(scrollregion=c.bbox("all"))
+            except Exception:
+                pass
+
+        try:
+            jobs[key] = self.root.after(250, _go)
+        except Exception:
+            pass
+
+    def _sync_scroll_canvas_widths(self) -> None:
+        """Force every page canvas inner to current canvas width (maximize fix)."""
+        for name in (
+            "_models_canvas",
+            "_settings_canvas",
+            "_plaza_canvas",
+            "_help_canvas",
+            "_more_canvas",
+        ):
+            canvas = getattr(self, name, None)
+            # Help page may only expose canvas on HelpPage instance
+            if canvas is None and name == "_help_canvas":
+                hp = getattr(self, "_help_page", None)
+                canvas = getattr(hp, "_help_canvas", None) if hp is not None else None
+            if canvas is None:
+                continue
+            try:
+                w = int(canvas.winfo_width())
+                if w <= 1:
+                    continue
+                for item in canvas.find_all():
+                    try:
+                        if canvas.type(item) == "window":
+                            canvas.itemconfigure(item, width=w)
+                    except Exception:
+                        continue
+                try:
+                    canvas.configure(scrollregion=canvas.bbox("all"))
+                except Exception:
+                    pass
+            except Exception:
+                continue
+        # Page-specific stretch (text widths / list card full-width)
+        try:
+            hp = getattr(self, "_help_page", None)
+            if hp is not None and getattr(hp, "apply_canvas_width", None):
+                c = getattr(hp, "_help_canvas", None)
+                if c is not None:
+                    ww = int(c.winfo_width())
+                    if ww > 1:
+                        hp.apply_canvas_width(ww)
+        except Exception:
+            pass
+        try:
+            apply_more = getattr(self, "_apply_more_canvas_width", None)
+            c = getattr(self, "_more_canvas", None)
+            if apply_more is not None and c is not None:
+                ww = int(c.winfo_width())
+                if ww > 1:
+                    apply_more(ww)
+        except Exception:
+            pass
+        try:
+            mc = getattr(self, "_models_canvas", None)
+            if mc is not None:
+                self._models_canvas_last_w = int(mc.winfo_width())
+        except Exception:
+            pass
+
+    def _cancel_rebuild_timers(self) -> None:
+        for attr in ("_resize_job", "_models_job", "_carousel_job", "_plaza_job"):
+            job = getattr(self, attr, None)
+            if job is not None:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+        try:
+            wp = getattr(self, "_wallpaper", None)
+            if wp is not None and getattr(wp, "_resize_job", None) is not None:
+                self.root.after_cancel(wp._resize_job)
+                wp._resize_job = None
+            if wp is not None:
+                wp._gen = int(getattr(wp, "_gen", 0) or 0) + 1
+        except Exception:
+            pass
+
+    def _apply_geometry_layout(self, *, reflow: bool = True) -> None:
+        """Stretch canvas widths + optional soft reflow (safe after settle)."""
+        try:
+            self._was_zoomed = str(self.root.state()) == "zoomed"
+        except Exception:
+            pass
+        try:
+            w = int(self.root.winfo_width())
+            h = int(self.root.winfo_height())
+            if w > 1 and h > 1:
+                self._last_root_size = (w, h)
+        except Exception:
+            pass
+        try:
+            self._sync_scroll_canvas_widths()
+        except Exception:
+            pass
+        if not reflow:
+            return
+        try:
+            self._reflow_current_page()
+        except Exception:
+            pass
+        try:
+            self._wallpaper.on_resize(delay_ms=60)
+        except Exception:
+            pass
+
+    def _soft_reflow_after_geometry(self) -> None:
+        if self._layout_is_frozen():
+            return
+        try:
+            self._reflow_current_page()
+        except Exception:
+            pass
+        try:
+            self._wallpaper.on_resize(delay_ms=60)
+        except Exception:
+            pass
+
+    def _begin_leave_maximize(self) -> None:
+        """Unmaximize: Windows button vs title-bar drag need different timing.
+
+        - Button restore: no pure-move Configure → apply layout quickly (~70ms)
+        - Title-bar drag: pure-move Configure arrives → delay layout until drag ends
+          (immediate reflow mid-drag snaps back to maximized).
+        """
+        self._drag_guard_active = True
+        self._unmax_title_drag = False
+        self._geometry_busy = True
+        self._cancel_rebuild_timers()
+        # Tentative: if no title-drag signal, treat as button restore
+        job = getattr(self, "_unmax_apply_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        try:
+            self._unmax_apply_job = self.root.after(
+                70, self._apply_unmaximize_if_button
+            )
+        except Exception:
+            self._unmax_apply_job = None
+        self._arm_drag_guard_end(2200)
+
+    def _apply_unmaximize_if_button(self) -> None:
+        """~70ms after unmax with no pure-move → Windows 还原 button path."""
+        self._unmax_apply_job = None
+        if getattr(self, "_unmax_title_drag", False):
+            return  # title-bar drag owns the finish via _end_drag_guard
+        if getattr(self, "_drag_guard_job", None) is not None:
+            try:
+                self.root.after_cancel(self._drag_guard_job)
+            except Exception:
+                pass
+            self._drag_guard_job = None
+        self._drag_guard_active = False
+        self._geometry_busy = False
+        # Fast adapt to windowed size (fixes "UI stays maximized layout")
+        self._apply_geometry_layout(reflow=True)
+
+    def _arm_drag_guard_end(self, idle_ms: int = 1600) -> None:
+        job = getattr(self, "_drag_guard_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        try:
+            self._drag_guard_job = self.root.after(
+                max(400, int(idle_ms)), self._end_drag_guard
+            )
+        except Exception:
+            self._drag_guard_job = None
+
+    def _end_drag_guard(self) -> None:
+        """Title-bar drag after unmaximize finished."""
+        self._drag_guard_job = None
+        self._drag_guard_active = False
+        self._geometry_busy = False
+        self._unmax_title_drag = False
+        job = getattr(self, "_unmax_apply_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+            self._unmax_apply_job = None
+        # Width first, reflow slightly later (do not interrupt late mouse release)
+        try:
+            self._sync_scroll_canvas_widths()
+        except Exception:
+            pass
+        try:
+            self.root.after(350, self._soft_reflow_after_geometry)
+        except Exception:
+            pass
+
+    def _mark_geometry_busy(self, settle_ms: int = 150) -> None:
+        """Maximize or edge-resize: freeze mid-stream; apply after quiet."""
+        entering = not bool(getattr(self, "_geometry_busy", False))
+        self._geometry_busy = True
+        if entering and not getattr(self, "_drag_guard_active", False):
+            self._cancel_rebuild_timers()
+        job = getattr(self, "_geometry_settle_job", None)
+        if job is not None:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        try:
+            self._geometry_settle_job = self.root.after(
+                max(40, int(settle_ms)), self._on_geometry_settled
+            )
+        except Exception:
+            self._geometry_settle_job = None
+
+    def _on_geometry_settled(self) -> None:
+        """Size stopped changing — adapt layout promptly (max button / resize)."""
+        self._geometry_settle_job = None
+        if getattr(self, "_drag_guard_active", False):
+            return
+        self._geometry_busy = False
+        # Immediate width + reflow so maximize/restore buttons feel adaptive
+        # (was: +400ms deferred reflow → visible "卡一下才重建")
+        self._apply_geometry_layout(reflow=True)
+
+    def _on_root_configure(self, event) -> None:
+        if event.widget is not self.root:
+            return
+        size = (int(event.width), int(event.height))
+        last = getattr(self, "_last_root_size", None)
+
+        # Pure move (same client size)
+        if size == last:
+            if getattr(self, "_drag_guard_active", False):
+                # Title-bar drag after unmaximize — delay layout until idle
+                self._unmax_title_drag = True
+                job = getattr(self, "_unmax_apply_job", None)
+                if job is not None:
+                    try:
+                        self.root.after_cancel(job)
+                    except Exception:
+                        pass
+                    self._unmax_apply_job = None
+                self._arm_drag_guard_end(2000)
+            return
+
+        self._last_root_size = size
+
+        try:
+            is_zoomed = str(self.root.state()) == "zoomed"
+        except Exception:
+            is_zoomed = False
+        was_zoomed = bool(getattr(self, "_was_zoomed", False))
+        self._was_zoomed = is_zoomed
+
+        # Leave maximized
+        if was_zoomed and not is_zoomed:
+            self._begin_leave_maximize()
+            return
+
+        # Enter maximized (Windows 最大化 button) — short settle, fast adapt
+        if (not was_zoomed) and is_zoomed:
+            self._mark_geometry_busy(50)
+            return
+
+        # Normal resize / still under unmax drag guard
+        if getattr(self, "_drag_guard_active", False):
+            self._unmax_title_drag = True
+            self._arm_drag_guard_end(2000)
+            return
+        self._mark_geometry_busy(120)
+
     def _reflow_current_page(self) -> None:
-        self._resize_job = None
+        if self._layout_is_frozen():
+            return
         if self._current_page == "home":
+            # Bust size snap so restore-from-maximize rebuilds at new host size
+            self._home_render_snap = None
             self._render_carousel()
         elif self._current_page == "models":
-            # Resize only: reflow grid from in-memory list (no disk rescan)
+            try:
+                cw = int(self._models_canvas.winfo_width())
+            except Exception:
+                cw = 0
+            # Force width into snap baseline before cols check
+            if cw > 1:
+                try:
+                    self._models_canvas_last_w = cw
+                except Exception:
+                    pass
+            if cw > 1 and self._models_cols_match(cw):
+                try:
+                    prev = getattr(self, "_models_render_snap", None)
+                    if prev is not None and len(prev) >= 3:
+                        # Update width in snap even when skipping rebuild
+                        self._models_render_snap = (cw, prev[1], prev[2])
+                except Exception:
+                    pass
+                return
             self.refresh_models(rescan=False, keep_scroll=True)
         elif self._current_page == "settings":
+            # Bust cached width so wraplengths recompute for windowed size
+            self._settings_reflow_w = None
             self._reflow_settings_page()
 
     def _build_chrome(self) -> None:
@@ -387,22 +735,34 @@ class MainApp(
 
         brand = tk.Frame(top, bg=TM_SURFACE)
         brand.pack(side="left", padx=PAD_X, pady=10)
+        # Small mark next to wordmark (taskbar icon is separate)
+        try:
+            from launcher.branding import load_logo_photo
+
+            nav_logo = load_logo_photo(self.root, max_side=px(28), prefer="nav")
+            if nav_logo is not None:
+                self._nav_logo_photo = nav_logo
+                tk.Label(brand, image=nav_logo, bg=TM_SURFACE, bd=0).pack(
+                    side="left", padx=(0, 8)
+                )
+        except Exception:
+            pass
         tk.Label(
             brand,
             text=APP_WORDMARK,
             font=title_font(14, "bold"),
             bg=TM_SURFACE,
             fg=TM_INK,
-        ).pack(anchor="w")
+        ).pack(side="left", anchor="w")
 
-        # Segment control rail
+        # Segment control rail — product order: 首页 · 广场 · 模型 · …
         nav_rail = tk.Frame(top, bg=TM_INSET, padx=4, pady=4)
         nav_rail.pack(side="right", padx=PAD_X, pady=12)
         self.nav_btns: dict[str, NavItem] = {}
         for key, label in (
             ("home", "首页"),
-            ("models", "模型"),
             ("plaza", "广场"),
+            ("models", "模型"),
             ("settings", "设置"),
             ("help", "说明"),
             ("more", "其他"),
@@ -643,8 +1003,8 @@ class MainApp(
         self._help_page = HelpPage(self, self.body)
         self.pages = {
             "home": self._page_home(),
-            "models": self._page_models(),
             "plaza": self._page_plaza(),
+            "models": self._page_models(),
             "settings": self._page_settings(),
             "help": self._help_page.frame,
             "more": self._page_more(),
@@ -699,6 +1059,11 @@ class MainApp(
         if key == "help":
             try:
                 self._help_page.on_show()
+            except Exception:
+                pass
+        if key == "more":
+            try:
+                self._show_more_page()
             except Exception:
                 pass
         self.pages[key].tkraise()

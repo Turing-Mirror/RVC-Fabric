@@ -354,6 +354,10 @@ def shell_pyinstaller_args(
         "--paths",
         str(REPO),
     ]
+    # Product icon (taskbar / title bar / shortcut default)
+    ico = REPO / "assets" / "brand" / "app.ico"
+    if ico.is_file():
+        args.extend(["--icon", str(ico)])
     for mod in shell_hidden_imports():
         args.extend(["--hidden-import", mod])
     # 入口是 stub（runpy 动态启动 launcher.*），静态分析不到 launcher 依赖树，
@@ -374,7 +378,10 @@ def assert_pyinstaller_collected_tkinter(work_name_dir: Path, exe_name: str) -> 
         warn = cands[0] if cands else warn
     if warn.is_file():
         text = warn.read_text(encoding="utf-8", errors="replace")
-        if "missing module named tkinter" in text or "missing module named _tkinter" in text:
+        if (
+            "missing module named tkinter" in text
+            or "missing module named _tkinter" in text
+        ):
             raise RuntimeError(
                 f"PyInstaller 未打进 tkinter（见 {warn}）。\n"
                 "不要用无 Tcl/Tk 的精简 Python 打包。请换完整 CPython 后重打。"
@@ -444,11 +451,15 @@ def copy_engine(out: Path) -> None:
     for d in ENGINE_DIRS:
         src = REPO / d
         if src.is_dir():
-            copy_tree(src, out / d, ignore=shutil.ignore_patterns(
-                "__pycache__",
-                "*.pyc",
-                ".git",
-            ))
+            copy_tree(
+                src,
+                out / d,
+                ignore=shutil.ignore_patterns(
+                    "__pycache__",
+                    "*.pyc",
+                    ".git",
+                ),
+            )
     for f in ENGINE_FILES:
         src = REPO / f
         if src.is_file():
@@ -523,11 +534,15 @@ def merge_rvcmax_engine_bits(out: Path) -> None:
                 log(f"  skip: {dst.relative_to(out)}")
                 return
             shutil.copy2(src, dst)
-            log(f"  + {dst.relative_to(out)} ({src.stat().st_size // 1024 // 1024} MB) from {core.parent.name}")
+            log(
+                f"  + {dst.relative_to(out)} ({src.stat().st_size // 1024 // 1024} MB) from {core.parent.name}"
+            )
             return
         log(f"  missing: {rel}")
 
-    _cf_first("assets/hubert/hubert_base.pt", out / "assets" / "hubert" / "hubert_base.pt")
+    _cf_first(
+        "assets/hubert/hubert_base.pt", out / "assets" / "hubert" / "hubert_base.pt"
+    )
     for n in ("rmvpe.pt", "rmvpe.onnx"):
         _cf_first(f"assets/rmvpe/{n}", out / "assets" / "rmvpe" / n)
     for n in ("ffmpeg.exe", "ffprobe.exe"):
@@ -623,7 +638,9 @@ def copy_models(out: Path, models_src: Path | None) -> None:
                     log(f"  + repo model {child.name}")
 
 
-def write_readme(out: Path, *, variant: str = "nvidia", label: str = "NVIDIA CUDA") -> None:
+def write_readme(
+    out: Path, *, variant: str = "nvidia", label: str = "NVIDIA CUDA"
+) -> None:
     accel_line = {
         "nvidia": "本包为 NVIDIA CUDA（对齐官方 N 卡整合包）。",
         "amd": (

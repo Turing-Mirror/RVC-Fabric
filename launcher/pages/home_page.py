@@ -36,39 +36,60 @@ class HomePageMixin:
         fr.rowconfigure(1, weight=1)
 
         # Full-width stage band (LyricsKara “band” hierarchy)
+        # Logo sits on the right of the stage (see docs/reference-screenshots/position.png)
         stage = tk.Frame(fr, bg=TM_STAGE)
         stage.grid(row=0, column=0, sticky="ew")
         stage_inner = tk.Frame(stage, bg=TM_STAGE)
         stage_inner.pack(fill="x", padx=GUTTER, pady=(22, 18))
         stage_inner.columnconfigure(0, weight=1)
+        stage_inner.columnconfigure(1, weight=0)
+
+        left_col = tk.Frame(stage_inner, bg=TM_STAGE)
+        left_col.grid(row=0, column=0, sticky="nsew")
 
         tk.Label(
-            stage_inner,
+            left_col,
             text="选择音色，开始变声",
             font=title_font(24, "bold"),
             bg=TM_STAGE,
             fg=TM_INK,
             anchor="w",
-        ).grid(row=1, column=0, sticky="w", pady=(10, 6))
+        ).pack(anchor="w", pady=(10, 6))
 
         self.home_current_lbl = tk.Label(
-            stage_inner,
+            left_col,
             text="当前音色：—",
             font=title_font(15, "bold"),
             bg=TM_STAGE,
             fg=TM_ACCENT,
             anchor="w",
         )
-        self.home_current_lbl.grid(row=2, column=0, sticky="w", pady=(4, 2))
+        self.home_current_lbl.pack(anchor="w", pady=(4, 2))
         self.home_hint_lbl = tk.Label(
-            stage_inner,
+            left_col,
             text="点卡片切换音色 · F5 启停变声 · F1 快捷键",
             font=sans_font(10),
             bg=TM_STAGE,
             fg=TM_INK_MUTED,
             anchor="w",
         )
-        self.home_hint_lbl.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        self.home_hint_lbl.pack(anchor="w", pady=(2, 0))
+
+        # Product logo (right of stage — circled area in position.png)
+        logo_host = tk.Frame(stage_inner, bg=TM_STAGE)
+        logo_host.grid(row=0, column=1, sticky="e", padx=(16, 4))
+        try:
+            from launcher.branding import load_logo_photo
+
+            photo = load_logo_photo(self.root, max_side=px(132), prefer="ui")
+            if photo is not None:
+                self._home_logo_photo = photo
+                tk.Label(logo_host, image=photo, bg=TM_STAGE, bd=0).pack(
+                    anchor="e", pady=(4, 4)
+                )
+        except Exception:
+            pass
+
         tk.Frame(fr, bg=TM_HAIRLINE, height=1).grid(row=0, column=0, sticky="sew")
 
         # Recent voices (最近使用的三个) — click to switch
@@ -86,9 +107,13 @@ class HomePageMixin:
         ).grid(row=0, column=0, sticky="w", pady=(4, 0))
         self.carousel_host = tk.Frame(mid, bg=TM_BG)
         self.carousel_host.grid(row=1, column=0, sticky="nsew")
-        self.carousel_host.bind(
-            "<Configure>", lambda e: self._schedule_carousel_reflow()
-        )
+
+        def _on_carousel_cfg(_e=None):
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            self._schedule_carousel_reflow()
+
+        self.carousel_host.bind("<Configure>", _on_carousel_cfg)
 
         self.home_toast = tk.Label(
             fr,
@@ -128,12 +153,17 @@ class HomePageMixin:
         return order[:limit]
 
     def _schedule_carousel_reflow(self) -> None:
+        # During maximize/restore drag freeze, do not arm rebuild timers
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            return
         if getattr(self, "_carousel_job", None):
             try:
                 self.root.after_cancel(self._carousel_job)
             except Exception:
                 pass
-        self._carousel_job = self.root.after(80, self._carousel_reflow_tick)
+        # Longer debounce: rapid Configure during max/restore was rebuilding
+        # cards every 80ms (flash + lag). Snapshot still short-circuits.
+        self._carousel_job = self.root.after(160, self._carousel_reflow_tick)
 
     def _carousel_reflow_tick(self) -> None:
         self._carousel_job = None
@@ -141,10 +171,14 @@ class HomePageMixin:
         # mismatch) catches up on the next visit
         if getattr(self, "_current_page", "") != "home":
             return
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            return
         self._render_carousel()
 
     def _render_carousel(self) -> None:
         if not hasattr(self, "carousel_host"):
+            return
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
             return
         if self.carousel_host.winfo_width() <= 1:
             # Startup only: the first show_page("home") runs before mainloop's
@@ -160,9 +194,14 @@ class HomePageMixin:
         s = scale()
         host_w = max(int(self.carousel_host.winfo_width() / s), 400)
         host_h = max(int(self.carousel_host.winfo_height() / s), 240)
+        # Quantize geometry so maximize/restore pixel jitter does not force a
+        # full destroy/rebuild (black empty frame while cards re-create).
+        q_step = 48
+        host_w_q = max(q_step, (host_w // q_step) * q_step)
+        host_h_q = max(q_step, (host_h // q_step) * q_step)
         snap = (
-            host_w,
-            host_h,
+            host_w_q,
+            host_h_q,
             self._current_model_key(),
             tuple((self.cfg.get("recent_models") or [])[:3]),
             len(self.models),
@@ -189,8 +228,9 @@ class HomePageMixin:
             return
 
         # First card (current) dominates; the other recents are smaller
-        focus_w = max(200, min(320, int(host_w * 0.34)))
-        focus_h = max(240, min(360, int(host_h * 0.88)))
+        # Layout math uses quantized host size (matches snap short-circuit)
+        focus_w = max(200, min(320, int(host_w_q * 0.34)))
+        focus_h = max(240, min(360, int(host_h_q * 0.88)))
         side_w = max(130, int(focus_w * 0.62))
         side_h = max(180, int(focus_h * 0.72))
 
@@ -233,7 +273,7 @@ class HomePageMixin:
                     ix, feedback=True, maybe_restart=True
                 ),
             )
-            card.pack(side="left", padx=px(max(10, int(host_w * 0.016))), pady=12)
+            card.pack(side="left", padx=px(max(10, int(host_w_q * 0.016))), pady=12)
         self._home_render_snap = snap
 
     def _update_home_current_label(self) -> None:

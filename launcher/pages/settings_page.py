@@ -47,11 +47,20 @@ class SettingsPageMixin:
         self._settings_wrap_labels: list = []
 
         def _sync_scroll(_event=None) -> None:
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if getattr(self, "schedule_scrollregion", None):
+                self.schedule_scrollregion(canvas)
 
         def _on_canvas_width(event) -> None:
-            if event.width > 1:
-                canvas.itemconfigure(win_id, width=event.width)
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if event.width <= 1:
+                return
+            try:
+                canvas.itemconfigure(win_id, width=int(event.width))
+            except Exception:
+                pass
 
         wrap.bind("<Configure>", _sync_scroll)
         canvas.bind("<Configure>", _on_canvas_width)
@@ -216,7 +225,10 @@ class SettingsPageMixin:
                     lbl.configure(wraplength=inner)
                 except Exception:
                     pass
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            if getattr(self, "schedule_scrollregion", None):
+                self.schedule_scrollregion(canvas)
+            else:
+                canvas.configure(scrollregion=canvas.bbox("all"))
             self._settings_reflow_w = w
         except Exception:
             pass
@@ -387,5 +399,3 @@ class SettingsPageMixin:
             )
         except Exception:
             pass
-
-

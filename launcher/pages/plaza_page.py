@@ -76,21 +76,28 @@ class PlazaPageMixin:
         self._plaza_canvas = canvas
 
         def _sync(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if getattr(self, "schedule_scrollregion", None):
+                self.schedule_scrollregion(canvas)
 
         def _width(e):
-            if e.width > 1:
-                canvas.itemconfigure(win_id, width=e.width)
-                # Re-render only when the width actually changed since the
-                # last render — tkraise-era Configure echoes are just noise
-                snap = getattr(self, "_plaza_render_snap", None)
-                if snap is None or int(e.width) != snap[0]:
-                    if getattr(self, "_plaza_job", None):
-                        try:
-                            self.root.after_cancel(self._plaza_job)
-                        except Exception:
-                            pass
-                    self._plaza_job = self.root.after(100, self._plaza_reflow_tick)
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if e.width <= 1:
+                return
+            try:
+                canvas.itemconfigure(win_id, width=int(e.width))
+            except Exception:
+                return
+            snap = getattr(self, "_plaza_render_snap", None)
+            if snap is None or int(e.width) != snap[0]:
+                if getattr(self, "_plaza_job", None):
+                    try:
+                        self.root.after_cancel(self._plaza_job)
+                    except Exception:
+                        pass
+                self._plaza_job = self.root.after(120, self._plaza_reflow_tick)
 
         wrap.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)

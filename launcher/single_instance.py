@@ -9,6 +9,14 @@ tree while the first still holds ``python313.dll`` — a common cause of::
     being used by another process.
 
 Dev (non-frozen) always allows multiple instances.
+
+Tray caveat
+-----------
+When the main window is *withdrawn* to the tray it is **not**
+``IsWindowVisible``. The first version of this guard only enumerated
+visible windows, so a second desktop click found the mutex, found no
+window, and ``os._exit``'d — user sees "nothing starts, no process".
+We now restore hidden / iconic windows too.
 """
 
 from __future__ import annotations
@@ -21,6 +29,14 @@ _MUTEX_VOICE = "Local\\RVCFabric_MainApp_v1"
 _MUTEX_BOOTSTRAP = "Local\\RVCFabric_Bootstrap_v1"
 
 _held_mutex = None  # keep alive for process lifetime
+
+# Titles we own (main app / bootstrap / legacy)
+_TITLE_HINTS = (
+    "RVC Fabric",
+    "图灵镜",
+    "启动器",
+    "变声器",
+)
 
 
 def _is_frozen() -> bool:
@@ -69,7 +85,11 @@ def acquire_single_instance(*, kind: str = "voice") -> bool:
 
 
 def focus_existing_main_window(title_substr: str = "RVC Fabric") -> bool:
-    """Bring an existing main/bootstrap window to the foreground (best-effort)."""
+    """Bring an existing main/bootstrap window to the foreground (best-effort).
+
+    Includes **hidden / tray-withdrawn / minimized** windows — critical when
+    the user re-clicks the desktop shortcut while the app is in the tray.
+    """
     if sys.platform != "win32":
         return False
     try:
@@ -83,35 +103,79 @@ def focus_existing_main_window(title_substr: str = "RVC Fabric") -> bool:
             wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
         )
 
+        hints = list(_TITLE_HINTS)
+        if title_substr and title_substr not in hints:
+            hints.insert(0, title_substr)
+
         def _cb(hwnd, _lparam):
-            if not user32.IsWindowVisible(hwnd):
-                return True
+            # Do NOT require IsWindowVisible — tray withdraw hides the root.
             buf = ctypes.create_unicode_buffer(512)
             user32.GetWindowTextW(hwnd, buf, 512)
             title = buf.value or ""
-            if title_substr in title or "图灵镜" in title or "启动器" in title:
-                found.append(hwnd)
+            if not title:
+                return True
+            for h in hints:
+                if h and h in title:
+                    found.append(hwnd)
+                    break
             return True
 
         user32.EnumWindows(EnumWindowsProc(_cb), 0)
         if not found:
             return False
+
+        # Prefer a visible window if any; else first match (tray-hidden)
         hwnd = found[0]
-        # Restore if minimized
+        for h in found:
+            if user32.IsWindowVisible(h):
+                hwnd = h
+                break
+
         SW_RESTORE = 9
+        SW_SHOW = 5
+        # Restore from minimized / re-show from tray-hidden
         user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.ShowWindow(hwnd, SW_SHOW)
         user32.SetForegroundWindow(hwnd)
+        # Nudge: some Windows builds ignore SetForegroundWindow without this
+        try:
+            user32.BringWindowToTop(hwnd)
+        except Exception:
+            pass
         return True
     except Exception:
         return False
 
 
 def ensure_single_instance_or_exit(*, kind: str = "voice") -> None:
-    """If another instance is running, focus it and terminate this process."""
+    """If another instance is running, focus it and terminate this process.
+
+    If the mutex is held but no window can be found (crashed UI / stuck tray),
+    show a short message so the user is not left with a silent no-op click.
+    """
     if acquire_single_instance(kind=kind):
         return
     title = "启动器" if kind == "bootstrap" else "RVC Fabric"
-    focus_existing_main_window(title)
+    ok = focus_existing_main_window(title)
+    if not ok:
+        # Mutex held, no window — tell the user what to do (frozen shell only)
+        try:
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                (
+                    "RVC Fabric 似乎已在运行（可能在右下角托盘），但找不到窗口。\n\n"
+                    "请尝试：\n"
+                    "1. 点任务栏 / 托盘区的 RVC Fabric 图标恢复窗口\n"
+                    "2. 或打开任务管理器结束「变声器.exe / 启动器.exe」后再开\n\n"
+                    "（安装版进程名不是 python.exe）"
+                ),
+                "RVC Fabric 已在运行",
+                0x00000030,  # MB_ICONWARNING
+            )
+        except Exception:
+            pass
     # Hard exit — do not unpack further / touch MEI longer than needed
     try:
         sys.exit(0)

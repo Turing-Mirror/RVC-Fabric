@@ -27,6 +27,23 @@ def tray_available() -> bool:
 
 
 def _make_icon_image():
+    """Tray icon: product mark when available, else solid blue disc."""
+    try:
+        from PIL import Image
+
+        from launcher.branding import brand_logo_path
+
+        path = brand_logo_path(prefer="nav")
+        if path is not None and path.is_file():
+            im = Image.open(path).convert("RGBA")
+            im.thumbnail((64, 64), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+            ox = (64 - im.size[0]) // 2
+            oy = (64 - im.size[1]) // 2
+            canvas.paste(im, (ox, oy), im)
+            return canvas
+    except Exception:
+        pass
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (64, 64), "#1289f0")
@@ -94,9 +111,7 @@ class TrayController:
                     menu,
                 )
                 self._icon = icon
-                threading.Thread(
-                    target=icon.run, daemon=True, name="tm-tray"
-                ).start()
+                threading.Thread(target=icon.run, daemon=True, name="tm-tray").start()
                 return True
             except Exception:
                 self._icon = None
@@ -124,13 +139,16 @@ class TrayController:
                 pass
 
     def restore(self) -> None:
-        """Show main window again; tray icon stays."""
+        """Show main window again; tray icon stays.
+
+        Do not force ``state('normal')`` / ``zoomed`` — thrashing state mid-session
+        caused maximize flash and cancelled title-bar drag.
+        """
         root = self.app.root
 
         def _show():
             try:
                 root.deiconify()
-                root.state("normal")
                 root.lift()
                 root.focus_force()
             except Exception:

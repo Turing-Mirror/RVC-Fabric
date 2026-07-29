@@ -226,7 +226,8 @@ class ModelsPageMixin:
         # nothing; the show_page snapshot re-renders on next visit instead
         if getattr(self, "_current_page", "") != "models":
             return
-        self.refresh_models()
+        # Width-only reflow: keep in-memory list (no disk scan)
+        self.refresh_models(rescan=False, keep_scroll=True)
 
     def _models_catalog_stamp(self):
         """Cheap dirty-stamp of the model roots. None on error — None never
@@ -272,14 +273,26 @@ class ModelsPageMixin:
             except Exception:
                 pass
             self._models_job = None
+        try:
+            cw = int(self._models_canvas.winfo_width())
+        except Exception:
+            cw = 0
         snap_now = (
-            int(self._models_canvas.winfo_width()),
+            cw,
             self._current_model_key(),
             self._models_catalog_stamp(),
         )
         prev = getattr(self, "_models_render_snap", None)
-        if prev is None or prev[2] is None or snap_now != prev:
-            self.refresh_models()
+        if prev is None or prev[2] is None:
+            self.refresh_models(rescan=True)
+        elif snap_now[1] != prev[1] or snap_now[2] != prev[2]:
+            # Selection or catalog changed — full refresh
+            self.refresh_models(rescan=True)
+        elif snap_now[0] != prev[0] and cw > 1:
+            # Width only (e.g. after maximize) — reflow cards, no disk scan
+            if not self._models_cols_match(cw):
+                self.refresh_models(rescan=False, keep_scroll=True)
+            # else: column count unchanged — leave grid as-is (fast page switch)
         # Ad banner renders independently of the grid (own id-level snapshot;
         # covers the feed-arrived-before-page-built case)
         try:
@@ -287,21 +300,33 @@ class ModelsPageMixin:
         except Exception:
             pass
 
+    def _models_cols_match(self, canvas_w: int) -> bool:
+        """True when current canvas width yields the same card column count."""
+        try:
+            cw = max(int(canvas_w) - 2 * (GUTTER - 8), 320)
+            card_min = px(180)
+            cols = max(1, min(5, cw // (card_min + 20)))
+            prev = getattr(self, "_models_last_cols", None)
+            return prev is not None and int(prev) == int(cols)
+        except Exception:
+            return False
+
     def _apply_models_filter(self) -> None:
         """Re-render the grid for the current search/sort without a disk rescan."""
         if not hasattr(self, "model_grid"):
             return
         self._models_page = 0  # a new filter starts from its first page
-        # refresh_models re-lists from disk; that's cheap and keeps things simple,
-        # but debounce so fast typing doesn't rescan on every keystroke
+        # Debounce so fast typing doesn't rebuild on every keystroke
         if getattr(self, "_models_filter_job", None):
             try:
                 self.root.after_cancel(self._models_filter_job)
             except Exception:
                 pass
-        self._models_filter_job = self.root.after(120, self.refresh_models)
+        self._models_filter_job = self.root.after(
+            120, lambda: self.refresh_models(rescan=False)
+        )
 
-    def refresh_models(self, keep_scroll: bool = False) -> None:
+    def refresh_models(self, keep_scroll: bool = False, rescan: bool = True) -> None:
         if not hasattr(self, "model_grid"):
             return
         # Selecting a voice shouldn't jump the page back to the top
@@ -311,7 +336,8 @@ class ModelsPageMixin:
                 self._models_saved_scroll = self._models_canvas.yview()[0]
             except Exception:
                 self._models_saved_scroll = None
-        self.models = list_voice_models()
+        if rescan or not getattr(self, "models", None):
+            self.models = list_voice_models()
         if self.model_idx >= len(self.models):
             self.model_idx = max(0, len(self.models) - 1)
 
@@ -373,7 +399,7 @@ class ModelsPageMixin:
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
             self._render_models_pager(0, 0)
-            self._models_after_refresh()
+            self._models_after_refresh(side_panels=rescan)
             return
 
         if not view:
@@ -385,7 +411,7 @@ class ModelsPageMixin:
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
             self._render_models_pager(0, 0)
-            self._models_after_refresh()
+            self._models_after_refresh(side_panels=rescan)
             return
 
         # Columns adapt to width — cover-first cards need more width.
@@ -396,6 +422,7 @@ class ModelsPageMixin:
         cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
         card_min = px(180)
         cols = max(1, min(5, cw // (card_min + 20)))
+        self._models_last_cols = cols
         for c in range(cols):
             self.model_grid.columnconfigure(c, weight=1, uniform="m")
 
@@ -447,9 +474,9 @@ class ModelsPageMixin:
             self._attach_model_menu(card, m, full_ix)
 
         self._render_models_pager(total_pages, len(view))
-        self._models_after_refresh()
+        self._models_after_refresh(side_panels=rescan)
 
-    def _models_after_refresh(self) -> None:
+    def _models_after_refresh(self, *, side_panels: bool = True) -> None:
         # Render snapshot gates the next show_page / reflow (width, selected
         # voice, catalog stamp). Recorded on every refresh path.
         try:
@@ -461,14 +488,17 @@ class ModelsPageMixin:
         except Exception:
             self._models_render_snap = None
         self._sync_bottom()
-        try:
-            self.refresh_index_panel_ui()
-        except Exception:
-            pass
-        try:
-            self.refresh_profiles_ui()
-        except Exception:
-            pass
+        # Index/profiles panels only need rebuild when catalog/selection may
+        # have changed — pure width reflow skips them (major lag source).
+        if side_panels:
+            try:
+                self.refresh_index_panel_ui()
+            except Exception:
+                pass
+            try:
+                self.refresh_profiles_ui()
+            except Exception:
+                pass
         # New cards/panels need the page-scroll wheel binding again
         try:
             self.root.after(30, self._models_bind_wheel)

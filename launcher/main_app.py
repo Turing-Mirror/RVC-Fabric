@@ -342,15 +342,28 @@ class MainApp(
         size = (int(event.width), int(event.height))
         if size == getattr(self, "_last_root_size", None):
             return
+        prev = getattr(self, "_last_root_size", None)
         self._last_root_size = size
-        # Debounce reflow on resize
+        # Debounce reflow: maximize / large jumps need longer settle so we
+        # do not rebuild models grid + wallpaper mid-transition (stutter).
         if self._resize_job is not None:
             try:
                 self.root.after_cancel(self._resize_job)
             except Exception:
                 pass
-        self._resize_job = self.root.after(120, self._reflow_current_page)
-        # Wallpaper cover-scale follows the window (Pillow re-render, debounced)
+        delay = 160
+        try:
+            if str(self.root.state()) == "zoomed":
+                delay = 220
+            elif prev is not None:
+                dw = abs(int(size[0]) - int(prev[0]))
+                dh = abs(int(size[1]) - int(prev[1]))
+                if dw > 80 or dh > 80:
+                    delay = 200
+        except Exception:
+            pass
+        self._resize_job = self.root.after(delay, self._reflow_current_page)
+        # Wallpaper cover-scale follows the window (Pillow re-render, longer debounce)
         try:
             self._wallpaper.on_resize()
         except Exception:
@@ -361,7 +374,8 @@ class MainApp(
         if self._current_page == "home":
             self._render_carousel()
         elif self._current_page == "models":
-            self.refresh_models()
+            # Resize only: reflow grid from in-memory list (no disk rescan)
+            self.refresh_models(rescan=False, keep_scroll=True)
         elif self._current_page == "settings":
             self._reflow_settings_page()
 
@@ -690,10 +704,14 @@ class MainApp(
         self.pages[key].tkraise()
         # Wallpaper chromakey only on the visible page (see wallpaper.py) —
         # otherwise transparent TM_BG on 首页 shows 其他 stacked underneath.
+        # Defer so models grid rebuild paints first (continuous switch lag).
         try:
-            self._wallpaper.on_page_changed()
+            self.root.after_idle(self._wallpaper.on_page_changed)
         except Exception:
-            pass
+            try:
+                self._wallpaper.on_page_changed()
+            except Exception:
+                pass
 
     def _shift_model(self, delta: int) -> None:
         if not self.models:

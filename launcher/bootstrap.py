@@ -1108,6 +1108,14 @@ class BootstrapApp:
 
 
 def main() -> None:
+    try:
+        from launcher.single_instance import ensure_single_instance_or_exit
+
+        ensure_single_instance_or_exit(kind="bootstrap")
+    except SystemExit:
+        raise
+    except Exception:
+        pass
     # Must run before tk.Tk() — see main_app.main()
     dpi_level = enable_dpi_awareness()
     log = Path(__file__).resolve().parent.parent / "TEMP" / "gui_alive.log"

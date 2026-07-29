@@ -225,6 +225,11 @@
 - **原因**：壳 exe 曾用 **TRAE SOLO 等 IDE agent 内嵌精简 Python 3.10** 打包（路径含 `ModularData\ai-agent\vm\tools\python`），**无 tkinter/_tkinter**；PyInstaller 仅在 warn 写 missing 仍生成 exe。UPX 压 DLL + onefile 解压占用会加剧 DLL 加载失败。
 - **修复**：`ensure_shell_ui_deps()` 打包前硬校验 tkinter；拒绝 agent 精简解释器；hidden-import 全量 tkinter 栈；warn 仍缺 tkinter 则中止；`--noupx`。必须用完整 CPython（如 `py -3.13`）重打 `RVC_Fabric_Setup.exe` 再发用户。
 
+- **现象**（`docs/reference-screenshots/error.png`）：重启/再开主界面偶发  
+  `Failed to load Python DLL '…\Temp\_MEI…\python313.dll' … being used by another process`；关变声后再开也可能起不来。
+- **原因**：PyInstaller **onefile** 每次解压到 `%TEMP%\_MEI*`；托盘仍驻留时再点快捷方式会起**第二进程**，或退出后线程未干净导致 DLL 仍被占用。
+- **修复（1.2.1+）**：`launcher/single_instance.py` 命名互斥——第二实例只激活已有窗口并退出；真正退出时 `os._exit(0)` 强制释放 MEI。需重打 **变声器.exe / 启动器.exe**（gui_patch  alone 不换 bootloader 行为，但 `main_app` 单例与退出路径可经磁盘 launcher 生效）。
+
 ---
 
 ## 9. 新对话建议开场

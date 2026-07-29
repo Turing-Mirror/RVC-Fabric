@@ -4,6 +4,17 @@
 机制与救援开关（TM_NO_DISK_LAUNCHER=1）见 scripts/_disk_first.py。
 """
 
+import sys
+
+try:
+    from launcher.single_instance import ensure_single_instance_or_exit
+
+    ensure_single_instance_or_exit(kind="bootstrap")
+except SystemExit:
+    raise
+except Exception:
+    pass
+
 import runpy
 
 from _disk_first import install_disk_first

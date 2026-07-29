@@ -1241,8 +1241,26 @@ class MainApp(
         except Exception:
             pass
 
+        # Force process end: pystray / leftover threads otherwise keep the
+        # PyInstaller _MEI tree mapped, so the next launch fails with
+        # LoadLibrary "python313.dll is being used by another process".
+        try:
+            os._exit(0)
+        except Exception:
+            pass
+
 
 def main() -> None:
+    # Frozen double-start (tray still running + desktop shortcut) races
+    # PyInstaller _MEI extract → "Failed to load Python DLL … being used".
+    try:
+        from launcher.single_instance import ensure_single_instance_or_exit
+
+        ensure_single_instance_or_exit(kind="voice")
+    except SystemExit:
+        raise
+    except Exception:
+        pass
     # Must run before tk.Tk(): neither shell exe nor Runtime pythonw carries
     # a dpiAware manifest, so scaled displays bitmap-stretch us otherwise
     dpi_level = enable_dpi_awareness()
@@ -1271,7 +1289,16 @@ def main() -> None:
         )
     except Exception:
         pass
-    app.run()
+    try:
+        app.run()
+    finally:
+        # If mainloop ended without _on_close's os._exit, still force-quit frozen
+        # so Temp\_MEI is not left mapped by zombie threads.
+        if getattr(sys, "frozen", False):
+            try:
+                os._exit(0)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

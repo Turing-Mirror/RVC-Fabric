@@ -211,6 +211,20 @@ def cover_resize(im, tw: int, th: int):
     return im.crop((left, top, left + tw, top + th))
 
 
+def _load_wallpaper_rgb(path: Path, fill_rgb: tuple[int, int, int]):
+    """Decode wallpaper to RGB once (any thread). Caller may cache the result."""
+    from PIL import Image
+
+    im = Image.open(path)
+    im.load()
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGBA")
+        base = Image.new("RGB", im.size, fill_rgb)
+        base.paste(im, mask=im.split()[-1] if im.mode == "RGBA" else None)
+        return base
+    return im.convert("RGB")
+
+
 def process_wallpaper(
     path: Path,
     size: tuple[int, int],
@@ -218,8 +232,12 @@ def process_wallpaper(
     opacity: int = 40,
     blur: int = 16,
     fill_rgb: Optional[tuple[int, int, int]] = None,
+    source_rgb=None,
 ):
-    """Load → cover *size* → blur → blend with theme fill. Pure PIL (any thread)."""
+    """Load → cover *size* → blur → blend with theme fill. Pure PIL (any thread).
+
+    Pass *source_rgb* (cached RGB PIL image) to skip disk decode on resize.
+    """
     from PIL import Image, ImageFilter
 
     fill = fill_rgb if fill_rgb is not None else _theme_fill_rgb()
@@ -227,19 +245,16 @@ def process_wallpaper(
     op = clamp_opacity(opacity) / 100.0
     br = clamp_blur(blur)
 
-    im = Image.open(path)
-    im.load()
-    if im.mode not in ("RGB", "L"):
-        im = im.convert("RGBA")
-        base = Image.new("RGB", im.size, fill)
-        base.paste(im, mask=im.split()[-1] if im.mode == "RGBA" else None)
-        im = base
+    if source_rgb is not None:
+        im = source_rgb
     else:
-        im = im.convert("RGB")
+        im = _load_wallpaper_rgb(path, fill)
 
     im = cover_resize(im, tw, th)
     if br > 0:
+        # Cap blur radius so maximize-to-4K does not spend seconds in GaussianBlur
         radius = float(br) * max(1.0, min(tw, th) / 900.0)
+        radius = min(radius, 28.0)
         im = im.filter(ImageFilter.GaussianBlur(radius=radius))
 
     if op <= 0.001:
@@ -248,6 +263,14 @@ def process_wallpaper(
         return im
     fill_im = Image.new("RGB", (tw, th), fill)
     return Image.blend(fill_im, im, op)
+
+
+def quantize_wallpaper_size(w: int, h: int, step: int = 32) -> tuple[int, int]:
+    """Snap window size so tiny drag resizes do not thrash PIL (perf)."""
+    step = max(8, int(step))
+    w = max(320, int(w))
+    h = max(240, int(h))
+    return (max(step, (w // step) * step), max(step, (h // step) * step))
 
 
 def process_wallpaper_photo(
@@ -349,6 +372,10 @@ class WallpaperController:
         self._glass_on = False
         self._glass_targets: list = []
         self._saved_bgs: dict[int, str] = {}  # id(widget) -> previous bg
+        # Cached decoded source (path, mtime_ns) → RGB PIL image
+        self._src_cache_key: tuple = ()
+        self._src_cache_im = None
+        self._glass_page_key: str = ""
 
     def setup(self) -> None:
         import tkinter as tk
@@ -365,6 +392,8 @@ class WallpaperController:
 
     def apply_from_config(self) -> None:
         self.setup()
+        self._src_cache_key = ()
+        self._src_cache_im = None
         self.refresh(force=True)
 
     def refresh(self, force: bool = False) -> None:
@@ -388,13 +417,16 @@ class WallpaperController:
             return
 
         try:
-            root.update_idletasks()
+            # Avoid update_idletasks here — it flushes the whole UI mid-drag
+            # and is a major source of "maximize stutters".
             w = max(int(root.winfo_width()), 320)
             h = max(int(root.winfo_height()), 240)
         except Exception:
             w, h = 1100, 720
 
-        sig = (str(path), w, h, opacity, blur)
+        # Quantize so continuous resize / zoom settle does not re-blur every pixel
+        qw, qh = quantize_wallpaper_size(w, h, step=32)
+        sig = (str(path), qw, qh, opacity, blur)
         if not force and sig == self._last_sig:
             return
 
@@ -402,15 +434,28 @@ class WallpaperController:
         gen = self._gen
         path_s = str(path)
         fill = _theme_fill_rgb()
+        try:
+            mtime = path.stat().st_mtime_ns
+        except OSError:
+            mtime = 0
+        src_key = (path_s, mtime)
 
         def work() -> None:
             try:
+                src = None
+                if self._src_cache_key == src_key and self._src_cache_im is not None:
+                    src = self._src_cache_im
+                else:
+                    src = _load_wallpaper_rgb(Path(path_s), fill)
+                    self._src_cache_key = src_key
+                    self._src_cache_im = src
                 im = process_wallpaper(
                     Path(path_s),
-                    (w, h),
+                    (qw, qh),
                     opacity=opacity,
                     blur=blur,
                     fill_rgb=fill,
+                    source_rgb=src,
                 )
             except Exception:
                 def _fail() -> None:
@@ -444,7 +489,12 @@ class WallpaperController:
                     self._label.lower()
                 except Exception:
                     return
-                self._schedule_glass(enabled=True)
+                # Glass already applied for this page — only enable if missing
+                if not self._glass_on:
+                    self._schedule_glass(enabled=True)
+                else:
+                    # Ensure chromakey still matches current page after resize
+                    self._schedule_glass(enabled=True)
 
             try:
                 root.after(0, apply)
@@ -460,8 +510,15 @@ class WallpaperController:
                 root.after_cancel(self._resize_job)
             except Exception:
                 pass
-        # Slightly longer debounce than page reflow — full-frame blur is expensive
-        self._resize_job = root.after(200, lambda: self.refresh(force=False))
+        # Full-frame GaussianBlur is expensive — wait until size settles
+        # (maximize / continuous drag). 120ms reflow stays on page widgets only.
+        delay_ms = 400
+        try:
+            if str(root.state()) == "zoomed":
+                delay_ms = 450
+        except Exception:
+            pass
+        self._resize_job = root.after(delay_ms, lambda: self.refresh(force=False))
 
     def set_image_from_dialog(self) -> bool:
         from tkinter import filedialog, messagebox
@@ -540,6 +597,15 @@ class WallpaperController:
         """Re-bind chromakey to the newly visible page only (show_page hook)."""
         if self._photo is None and not self._glass_on:
             return
+        key = str(getattr(self.app, "_current_page", "") or "")
+        # Same page re-entry (e.g. hotkey spam) — skip full glass rebind
+        if (
+            self._glass_on
+            and key
+            and key == self._glass_page_key
+            and self._photo is not None
+        ):
+            return
         self._schedule_glass(enabled=self._photo is not None)
 
     # -- internals ----------------------------------------------------------
@@ -547,6 +613,9 @@ class WallpaperController:
     def _clear_visual(self) -> None:
         self._last_sig = ()
         self._photo = None
+        self._src_cache_key = ()
+        self._src_cache_im = None
+        self._glass_page_key = ""
         if self._label is not None:
             try:
                 self._label.place_forget()
@@ -570,44 +639,63 @@ class WallpaperController:
             self._glass_job = None
             self._apply_glass_panels(enabled=enabled)
 
+        # After page render settles — avoids fighting model-grid rebuild
         try:
-            self._glass_job = root.after(40, _go)
+            self._glass_job = root.after(80, _go)
         except Exception:
             _go()
 
     def _apply_glass_panels(self, *, enabled: bool) -> None:
         """Chromakey only the *visible* page shell + body — never all pages.
 
-        Stacking all pages with TM_BG color-key made the top page transparent
-        so the last-gridded page (其他) showed through until ready.
+        Diff-only updates: continuous page switching used to clear+rebind every
+        layered window, which felt laggy on Windows.
         """
         from launcher.theme import TM_BG
 
-        # Always clear previous glass targets first (inactive pages go solid)
-        for w in list(self._glass_targets):
-            try:
-                clear_widget_colorkey(w)
-            except Exception:
-                pass
-            self._restore_bg(w, TM_BG)
-        self._glass_targets = []
-
         if not enabled:
+            for w in list(self._glass_targets):
+                try:
+                    clear_widget_colorkey(w)
+                except Exception:
+                    pass
+                self._restore_bg(w, TM_BG)
+            self._glass_targets = []
             self._glass_on = False
+            self._glass_page_key = ""
             self._saved_bgs.clear()
             return
 
         targets = self._collect_glass_targets()
+        page_key = str(getattr(self.app, "_current_page", "") or "")
+        old_set = {id(w): w for w in self._glass_targets}
+        new_set = {id(w): w for w in targets}
+
+        # Remove glass from widgets no longer in the set
+        for i, w in list(old_set.items()):
+            if i not in new_set:
+                try:
+                    clear_widget_colorkey(w)
+                except Exception:
+                    pass
+                self._restore_bg(w, TM_BG)
+
         ok_any = False
-        for w in targets:
+        for i, w in new_set.items():
+            if i in old_set and self._glass_on:
+                # Already chromakeyed — keep
+                ok_any = True
+                continue
             try:
                 self._paint_chromakey(w)
                 if set_widget_colorkey(w, WALLPAPER_CHROMAKEY):
                     ok_any = True
             except Exception:
                 pass
+
         self._glass_targets = targets if ok_any else []
         self._glass_on = ok_any
+        self._glass_page_key = page_key if ok_any else ""
         if not ok_any:
             for w in targets:
                 self._restore_bg(w, TM_BG)

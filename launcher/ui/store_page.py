@@ -536,22 +536,24 @@ class StorePage:
             highlightbackground=TM_HAIRLINE,
         )
         box.pack(fill="x", pady=(0, 8))
+        # 每行对应源码一句；用 \n 固定换行，避免 Tk 按像素把中文从词中腰斩
+        # （显示应与下列字符串一致，改文案时保持「一句一行 + \\n」）
         tk.Label(
             box,
             text=(
-                "第三方音色收录自公开社区站点（如 Hugging Face 等模型托管站），"
-                "本软件仅提供索引与下载直链，不做官方制作、审核或授权。"
-                "模型授权、音质、版权与使用后果由来源站点及上传者负责，"
-                "与 RVC Fabric / 图灵镜官方无关。请勿将他人声音用于冒充、诈骗等用途。"
+                "第三方音色收录自公开社区站点（如 Hugging Face 等模型托管站），\n"
+                "本软件仅提供索引与下载直链，不做官方制作、审核或授权。\n"
+                "模型授权、音质、版权与使用后果由来源站点及上传者负责，\n"
+                "与 RVC Fabric / 图灵镜官方无关。请勿将他人声音用于冒充、诈骗等用途。\n"
                 "每个条目均附来源链接，下载前请自行判断。"
             ),
             font=sans_font(9),
             bg=TM_SURFACE,
             fg=TM_WARN,
-            wraplength=px(580),
+            wraplength=px(620),
             justify="left",
             anchor="w",
-        ).pack(anchor="w", padx=10, pady=8)
+        ).pack(anchor="w", fill="x", padx=10, pady=8)
 
     def _render_flat_paged(self, voices: list, *, empty_text: str) -> None:
         """平铺列表：最新在前，底部页码分页（每页 5 个）。"""

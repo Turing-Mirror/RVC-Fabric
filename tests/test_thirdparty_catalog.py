@@ -144,6 +144,43 @@ class ThirdpartyCatalogParseTests(unittest.TestCase):
         self.assertEqual(origin_display("HF"), "Hugging Face")
         self.assertEqual(origin_display("weird-site"), "weird-site")
 
+    def test_origin_not_hijacked_by_install_source(self):
+        """安装通道 source=online_files 不得写进 origin 徽标。"""
+        v = VoiceEntry.from_dict(
+            {
+                "id": "x",
+                "name": "x",
+                "pth_url": "https://example.com/a.pth",
+                "source": "online_files",
+            }
+        )
+        self.assertEqual(v.origin, "")
+        self.assertEqual(origin_display(v.origin), "图灵镜")
+
+    def test_source_url_http_alias_only(self):
+        v = VoiceEntry.from_dict(
+            {
+                "id": "x",
+                "name": "x",
+                "pth_url": "https://example.com/a.pth",
+                "source": "https://huggingface.co/a/b",
+            }
+        )
+        self.assertEqual(v.source_url, "https://huggingface.co/a/b")
+        self.assertEqual(v.origin, "")
+
+    def test_bad_size_bytes_does_not_drop_entry(self):
+        cat = OnlineCatalog.from_dict(
+            {
+                "thirdparty_voices": [
+                    _tp_item(size_bytes="not-a-number", hf_downloads="12.5"),
+                ]
+            }
+        )
+        self.assertEqual(len(cat.thirdparty_voices), 1)
+        self.assertEqual(cat.thirdparty_voices[0].size_bytes, 0)
+        self.assertEqual(cat.thirdparty_voices[0].popularity, 12)
+
 
 class HfEndpointTests(unittest.TestCase):
     def test_normalize_blob_to_resolve(self):

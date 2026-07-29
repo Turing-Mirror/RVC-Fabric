@@ -343,6 +343,7 @@ def load_sources(paths: Paths, rep: Report) -> dict:
         )
 
     out["voices"] = []
+    missing_auth: list[str] = []
     vdir = src / "voices"
     if vdir.is_dir():
         for p in sorted(vdir.glob("*.yaml")):
@@ -361,9 +362,15 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             except OSError:
                 raw_txt = ""
             if "# 授权" not in raw_txt and "authorization:" not in raw_txt:
-                rep.warn(
-                    f"voices/{p.name}: 建议补录授权注释（# 授权: …）或 authorization 字段"
-                )
+                missing_auth.append(p.stem)
+        if missing_auth:
+            # 一条汇总，避免每色一条刷屏（fixture/CI 日志）
+            sample = "、".join(missing_auth[:6])
+            more = f" 等{len(missing_auth)}个" if len(missing_auth) > 6 else ""
+            rep.warn(
+                f"官方音色建议补录授权注释（# 授权: …）或 authorization 字段："
+                f"{sample}{more}"
+            )
     else:
         rep.error("缺源目录: catalog-src/voices/")
 

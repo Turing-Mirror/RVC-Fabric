@@ -1050,8 +1050,24 @@ class StorePage:
             if nxt is not None:
                 self._start_voice_download(nxt)
         if err:
+            hint = ""
+            try:
+                from launcher.online.downloader import is_huggingface_url
+
+                urls = [
+                    getattr(entry, "pth_url", "") or "",
+                    getattr(entry, "pack_url", "") or "",
+                ]
+                if any(is_huggingface_url(u) for u in urls):
+                    hint = (
+                        "\n\n（该音色来自社区模型站。若反复失败，可检查网络，"
+                        "或在 User_Data/app_config.json 中设置 hf_endpoint 为 "
+                        "official / 其它镜像地址后重试。）"
+                    )
+            except Exception:
+                pass
             self._set_progress(f"「{entry.name}」下载失败:{err}", TM_WARN)
-            messagebox.showerror("下载失败", f"{entry.name}\n{err}")
+            messagebox.showerror("下载失败", f"{entry.name}\n{err}{hint}")
         else:
             self._set_progress(
                 f"已安装:{info and info.get('name')}（可在首页 / 模型页选用）", TM_OK

@@ -442,9 +442,14 @@ def install_voice_pack_zip(
 
         if identity_extra:
             for k, val in identity_extra.items():
+                # fabric_official=False 必须能覆盖包内 True
+                if k == "fabric_official":
+                    if val is not None:
+                        extra[k] = val
+                    continue
                 if val is not None and val != "" and k not in extra:
                     extra[k] = val
-                elif k in ("origin", "source_url", "publisher", "fabric_official"):
+                elif k in ("origin", "source_url", "publisher"):
                     # 第三方身份字段以后传入为准（覆盖包内伪装）
                     if val is not None and val != "":
                         extra[k] = val
@@ -494,7 +499,10 @@ def _find_first(root: Path, pattern: str) -> Optional[Path]:
 
 
 def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
-    """If installed config lacks author/date, copy from catalog entry."""
+    """If installed config lacks author/date, copy from catalog entry.
+
+    第三方条目在合并后再次强制 community 章（防 zip 盖章后被其它字段写回）。
+    """
     d = Path(info.get("dir") or "")
     if not d.is_dir():
         return
@@ -511,7 +519,13 @@ def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
         cfg = {}
     changed = False
     for k, v in _entry_identity_extra(entry).items():
-        if v and not cfg.get(k):
+        # fabric_official=False 是合法值，不能用 `if v` 判断
+        if k == "fabric_official":
+            if "fabric_official" not in cfg and v is not None:
+                cfg[k] = v
+                changed = True
+            continue
+        if v not in (None, "") and not cfg.get(k):
             cfg[k] = v
             changed = True
     # 清单中文标题优先：zip 内 config 只有拉丁名时，用目录里的中文名作展示名
@@ -525,6 +539,22 @@ def _merge_entry_identity_into_installed(info: dict, entry: VoiceEntry) -> None:
         cfg["name"] = entry.name
         info["name"] = entry.name
         changed = True
+    # 第三方：合并后仍强制非官方章（identity_extra 的 False 以前会被 `if v` 丢掉）
+    if not bool(getattr(entry, "official", True)):
+        if (
+            cfg.get("publisher") != "community"
+            or cfg.get("fabric_official") is not False
+        ):
+            cfg["publisher"] = "community"
+            cfg["fabric_official"] = False
+            changed = True
+        src = str(cfg.get("source") or "")
+        if src in (SRC_ONLINE_PACK, SRC_ONLINE_FILES, ""):
+            # 不应残留官方安装通道（本函数目前仅 pack 安装后调用，空/online_pack→thirdparty_pack）
+            cfg["source"] = (
+                SRC_THIRDPARTY_FILES if src == SRC_ONLINE_FILES else SRC_THIRDPARTY_PACK
+            )
+            changed = True
     if changed:
         cfg_path.write_text(
             json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"

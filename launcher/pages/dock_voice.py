@@ -148,14 +148,22 @@ class DockVoiceMixin:
                 except Exception:
                     disk = {}
             def pick(key, cast, default):
+                """Tolerate bad community/hand-edited config.json casts (review #12)."""
+                sources = []
                 if key in disk and disk[key] is not None:
-                    return cast(disk[key])
+                    sources.append(disk[key])
                 if m.get(key) is not None:
-                    return cast(m.get(key))
+                    sources.append(m.get(key))
                 v = self.cfg.get(key)
-                if v is None or v == "":
-                    return cast(default)
-                return cast(v)
+                if v is not None and v != "":
+                    sources.append(v)
+                sources.append(default)
+                for cand in sources:
+                    try:
+                        return cast(cand)
+                    except (TypeError, ValueError):
+                        continue
+                return default
 
             pitch = pick("pitch", lambda x: int(round(float(x))), 0)
             formant = pick("formant", float, 0.0)

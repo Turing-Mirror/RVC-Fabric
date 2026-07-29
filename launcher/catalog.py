@@ -20,6 +20,7 @@ Legacy fallback: flat ``assets/weights/*.pth`` still listed, tagged as legacy.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -1242,12 +1243,30 @@ def rename_model_display(model_dir: Path, new_name: str) -> str:
 
 def delete_model_dir(model_dir: Path, models_root: Path) -> None:
     """Delete a voice folder (model + sidecar + profiles). Guarded to the
-    catalog root so a bad path can never wipe anything else."""
+    catalog root so a bad path can never wipe anything else.
+
+    Uses onerror/onexc so read-only files from copy2 imports still delete
+    (review #7).
+    """
+    import stat
+
     md = Path(model_dir).resolve()
     root = Path(models_root).resolve()
     if root not in md.parents:
         raise ValueError(f"refuse to delete outside models root: {md}")
-    shutil.rmtree(md)
+
+    def _force_writable_and_retry(func, path, _exc=None):  # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    # Python 3.12+ onexc; 3.9–3.11 onerror
+    try:
+        shutil.rmtree(md, onexc=lambda f, p, e: _force_writable_and_retry(f, p, e))
+    except TypeError:
+        shutil.rmtree(md, onerror=lambda f, p, e: _force_writable_and_retry(f, p, e))
 
 
 def set_active_index(model_dir: Path, index_path: str) -> None:

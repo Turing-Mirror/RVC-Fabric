@@ -59,14 +59,32 @@ def gather_files(root: str) -> list[tuple[str, str]]:
         if not os.path.isfile(path):
             return
         try:
-            if os.path.getsize(path) > _MAX_FILE_BYTES:
-                return
+            size = os.path.getsize(path)
         except OSError:
             return
         arc = os.path.relpath(path, root).replace(os.sep, "/")
         # the explicit list below overlaps with the newest-N directory sweep;
         # duplicate arcnames make ZipFile warn and bloat the bundle
         if arc in seen:
+            return
+        # Oversized logs: keep a tail so field diags never silently drop
+        # realtime_worker.log (review #21)
+        if size > _MAX_FILE_BYTES:
+            try:
+                with open(path, "rb") as f:
+                    f.seek(-_MAX_FILE_BYTES, os.SEEK_END)
+                    tail = f.read()
+                # Drop partial first line so tail is readable
+                nl = tail.find(b"\n")
+                if 0 <= nl < 4096:
+                    tail = tail[nl + 1 :]
+                tail_path = path + ".diag_tail"
+                with open(tail_path, "wb") as f:
+                    f.write(tail)
+                seen.add(arc)
+                out.append((arc + ".tail", tail_path))
+            except OSError:
+                return
             return
         seen.add(arc)
         out.append((arc, path))

@@ -757,7 +757,10 @@ class StorePage:
 
         from launcher.theme import TM_INSET
 
-        box = tk.Frame(row, bg=TM_INSET, width=px(56), height=px(56))
+        # Physical pixel box once on Tk side (review #33) — avoid logical 56
+        # vs px(56) mismatch on HiDPI.
+        box_px = int(px(56))
+        box = tk.Frame(row, bg=TM_INSET, width=box_px, height=box_px)
         box.pack(side="left", padx=(10, 0), pady=10)
         box.pack_propagate(False)
         lbl = tk.Label(box, text="", bg=TM_INSET)
@@ -799,7 +802,7 @@ class StorePage:
 
                 # Contain (not crop): full standing art stays visible in the square
                 im = Image.open(io.BytesIO(raw)).convert("RGBA")
-                box_s = 56
+                box_s = box_px
                 w, h = im.size
                 scale = min(box_s / max(w, 1), box_s / max(h, 1))
                 nw = max(1, int(round(w * scale)))

@@ -277,7 +277,7 @@ Where-Object {{ $_.CommandLine }} | ForEach-Object {{
   if ($keep) {{ return }}
   $isOurs = (
     $cl -like ('*' + $root + '*Runtime*') -or
-    $cl -like '*realtime_worker*' -or
+    ($cl -like '*realtime_worker*' -and $cl -like ('*' + $root + '*')) -or
     ($cl -like '*gui_v1.py*' -and $cl -like ('*' + $root + '*')) -or
     ($cl -like '*spawn_main*' -and $cl -like ('*' + $root + '*'))
   )

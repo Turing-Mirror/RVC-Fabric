@@ -172,7 +172,8 @@ def _remove_runtime_dst(dst: Path) -> None:
         shutil.rmtree(dst)
 
 
-def link_or_copy_runtime(variant: str, *, copy: bool, force: bool) -> None:
+def link_or_copy_runtime(variant: str, *, copy: bool, force: bool) -> str:
+    """Link/copy Runtime. Returns status: 'linked' | 'copied' | 'skipped'."""
     ref_rt = pack_root(variant) / "Runtime"
     must_exist(ref_rt / "python.exe", f"{variant} Runtime/python.exe")
     dst = REPO / "Runtime"
@@ -180,7 +181,7 @@ def link_or_copy_runtime(variant: str, *, copy: bool, force: bool) -> None:
     if (dst / "python.exe").is_file() and not force and not copy:
         # Re-point junction if force not set: still allow refresh when force
         log(f"[Runtime] already present: {dst} (use --force-runtime to re-link)")
-        return
+        return "skipped"
 
     if dst.is_dir() or dst.is_symlink() or _is_junction(dst):
         _remove_runtime_dst(dst)
@@ -225,6 +226,7 @@ def link_or_copy_runtime(variant: str, *, copy: bool, force: bool) -> None:
                     "Retry with --copy-runtime"
                 )
     log(f"  ok python: {(dst / 'python.exe').is_file()}")
+    return "copied" if copy else "linked"
 
 
 def write_dev_variant(variant: str) -> None:
@@ -293,10 +295,20 @@ def main() -> int:
         sync_models(variant)
     sync_vbcable(variant)
     if not args.skip_runtime:
-        link_or_copy_runtime(
+        runtime_status = link_or_copy_runtime(
             variant, copy=args.copy_runtime, force=args.force_runtime
         )
-    write_dev_variant(variant)
+        # Only stamp DML/CUDA flags when Runtime actually matches this variant
+        # (review #36) — skipped re-link must not arm wrong accel flags.
+        if runtime_status in ("linked", "copied"):
+            write_dev_variant(variant)
+        else:
+            log(
+                f"[dev_variant] not updated (Runtime {runtime_status}); "
+                "existing junction may still be another variant — use --force-runtime"
+            )
+    else:
+        log("[dev_variant] not updated (--skip-runtime)")
 
     missing = verify()
     # treat rmvpe.onnx as soft if only that missing for nvidia (still warn)

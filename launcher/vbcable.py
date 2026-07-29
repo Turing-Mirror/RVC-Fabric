@@ -97,6 +97,8 @@ def _run_elevated(setup: Path) -> None:
 
     errors: list[str] = []
 
+    # ShellExecuteW return: >32 success; SE_ERR_ACCESSDENIED=5 often = UAC cancel
+    SE_ERR_ACCESSDENIED = 5
     try:
         import ctypes
 
@@ -113,6 +115,11 @@ def _run_elevated(setup: Path) -> None:
         if rc > 32:
             return
         errors.append(f"ShellExecute={rc}")
+        if rc == SE_ERR_ACCESSDENIED:
+            # User declined UAC — do NOT fall back to unelevated install (review #34)
+            raise PermissionError("需要管理员权限安装 VB-Cable（已取消 UAC）")
+    except PermissionError:
+        raise
     except Exception as e:
         errors.append(f"ShellExecute: {e}")
 
@@ -140,16 +147,20 @@ def _run_elevated(setup: Path) -> None:
             return
         err = (r.stderr or r.stdout or "").strip() or f"exit={r.returncode}"
         errors.append(f"PowerShell: {err}")
+        # 1223 = ERROR_CANCELLED (user declined elevation)
+        if r.returncode in (1223, 5) or "canceled" in err.lower() or "cancelled" in err.lower():
+            raise PermissionError("需要管理员权限安装 VB-Cable（已取消 UAC）")
+    except PermissionError:
+        raise
     except Exception as e:
         errors.append(f"PowerShell: {e}")
 
-    try:
-        subprocess.Popen([str(setup)], cwd=work, shell=False)
-        return
-    except Exception as e3:
-        raise OSError(
-            "无法启动安装程序：" + "; ".join(errors) + f"; Popen: {e3}"
-        ) from e3
+    # Do not launch Setup unelevated after UAC denial — that used to report success
+    # while the driver never installed (review #34).
+    raise OSError(
+        "无法以管理员身份启动 VB-Cable 安装程序（需要管理员权限）。"
+        + ((" 详情：" + "; ".join(errors)) if errors else "")
+    )
 
 
 def _log(cb: Optional[LogCb], msg: str) -> None:

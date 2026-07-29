@@ -6,7 +6,7 @@
 > **最后大更新**：2026-07-28  
 > **工作区**：`L:\My Project\Grok`  
 > **当前分支**：`tm-release`（相对 `fabric/tm-release` 可能超前：广场页 `0800079` 等）  
-> **壳版本**：1.2.1  
+> **壳版本**：1.2.2  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  
@@ -112,6 +112,7 @@
 - **广场页（2026-07-27）**：新增「广场」导航页（TRM/RVC Fabric 资讯 + 引流 + 赞助卡片）与模型页至多一条可关闭广告横幅；feed 为 CNB 仓根 `plaza.json`，独立于 index.json，运营改内容不发版（源 `catalog-src/plaza.yaml`，build_catalog 编译回环校验）。ad/sponsor 强制可关闭并带「广告」角标；点击统计只靠编译期给 url 盖 utm 参数，客户端**零遥测**。详见 `docs/广场页与内容运营.md`。  
 - **自定义背景图（2026-07-28，P0/P1 跟进 07-29）**：设置 →「外观（背景图）」；不透明度/磨砂。PIL cover + GaussianBlur + blend（相对 `theme.TM_BG`）。Windows 透出用**专用 chromakey `#010203`**（禁止用 `TM_BG` 作色键，避免按钮被打穿）；仅 body/页根/滚动画布上色键。全窗重算后台线程，滑条 debounce 280ms。安装限 20MB / 最长边 4096，只认 `User_Data/wallpaper/`。UI：`WallpaperSettingsMixin`。实现：`launcher/ui/wallpaper.py`。P2 待办见 §8。  
 - **v1.1.4（2026-07-29）**：`gui_patch_1.1.4` 已本地打包；其他页 Magia 列表行；status.json 写竞态；nvidia 空探测；审查 #8/#22/#25/#35/#37；用纯 `1.1.4` 解开旧壳 partN 更新尾巴。  
+- **社区音色 + 第三方源（1.2.2）**：「社区下载」更名 **社区音色**；双源清单 `voices[]`（图灵镜源）+ `thirdparty_voices[]`（公开社区站直链，如 Hugging Face）；对话框四视图：最新 / 图灵镜源 / 第三方 / 系列专区；第三方免责声明（风险与 RVC Fabric 官方无关）；安装盖 `publisher=community`、永不官方章；下载默认走 hf-mirror 镜像（`app_config.hf_endpoint` 可改）。运营：`catalog-src/thirdparty/*.yaml` + `scripts/add_thirdparty_voice.py` + `build_catalog`。方案见 `docs/第三方音色下载方案.md`。  
 
 
 ---

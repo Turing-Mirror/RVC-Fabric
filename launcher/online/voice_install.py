@@ -32,6 +32,14 @@ from launcher.paths import MODELS_DIR, USER_DATA
 ProgressCb = Callable[[str, int, int], None]  # phase, done, total
 MIN_PTH_BYTES = 50_000
 
+# 安装来源：图灵镜源 vs 第三方社区源（盖章与咨询包判定依赖此字段）
+SRC_ONLINE_PACK = "online_pack"
+SRC_ONLINE_FILES = "online_files"
+SRC_THIRDPARTY_PACK = "thirdparty_pack"
+SRC_THIRDPARTY_FILES = "thirdparty_files"
+SRC_USER_IMPORT = "user_import"
+THIRDPARTY_SOURCES = frozenset({SRC_THIRDPARTY_PACK, SRC_THIRDPARTY_FILES})
+
 
 def install_voice_from_entry(
     entry: VoiceEntry,
@@ -41,6 +49,7 @@ def install_voice_from_entry(
 ) -> dict:
     """Install by package_type: voice_pack (zip) or voice_files (urls)."""
     models_root = Path(models_root or MODELS_DIR)
+    is_official = bool(getattr(entry, "official", True))
     pkg = normalize_package_type(
         entry.package_type or "",
         default=PKG_VOICE_PACK if entry.pack_url else PKG_VOICE_FILES,
@@ -58,6 +67,9 @@ def install_voice_from_entry(
             models_root=models_root,
             progress=progress,
             expected_sha256=entry.sha256 or "",
+            official=is_official,
+            source=SRC_ONLINE_PACK if is_official else SRC_THIRDPARTY_PACK,
+            identity_extra=_entry_identity_extra(entry),
         )
         # Catalog author/date fill gaps when pack config omitted them
         _merge_entry_identity_into_installed(info, entry)
@@ -71,6 +83,7 @@ def install_voice_from_entry(
         entry,
         models_root=models_root,
         progress=progress,
+        source=SRC_ONLINE_FILES if is_official else SRC_THIRDPARTY_FILES,
     )
 
 
@@ -79,6 +92,7 @@ def install_voice_files(
     *,
     models_root: Path,
     progress: Optional[ProgressCb] = None,
+    source: str = SRC_ONLINE_FILES,
 ) -> dict:
     """Download separate pth / index / cover into User_Data/models/<id>/."""
     vid = safe_model_dir_name(entry.id or entry.name)
@@ -156,6 +170,7 @@ def install_voice_files(
     extra = _entry_identity_extra(entry)
     if cover_cfg:
         extra["cover"] = cover_cfg
+    src = source or SRC_ONLINE_FILES
     return _write_voice_config(
         dest_dir,
         dest_pth=dest_pth,
@@ -166,8 +181,9 @@ def install_voice_files(
         index_path=index_path,
         cover_path=cover_path,
         cover_cfg=cover_cfg,
-        source="online_files",
+        source=src,
         extra=extra or None,
+        official=src in (SRC_ONLINE_FILES, SRC_ONLINE_PACK),
     )
 
 
@@ -181,6 +197,9 @@ def install_voice_pack_url(
     models_root: Optional[Path] = None,
     progress: Optional[ProgressCb] = None,
     expected_sha256: str = "",
+    official: bool = True,
+    source: str = "",
+    identity_extra: Optional[dict] = None,
 ) -> dict:
     """Download voice zip and install."""
     models_root = Path(models_root or MODELS_DIR)
@@ -193,6 +212,7 @@ def install_voice_pack_url(
             progress("pack", done, total)
 
     download_file(pack_url, zpath, progress=_p, expected_sha256=expected_sha256)
+    src = source or (SRC_ONLINE_PACK if official else SRC_USER_IMPORT)
     return install_voice_pack_zip(
         zpath,
         voice_id=voice_id,
@@ -200,7 +220,9 @@ def install_voice_pack_url(
         tag=tag,
         version=version,
         models_root=models_root,
-        official=True,
+        official=official,
+        source=src,
+        identity_extra=identity_extra,
     )
 
 
@@ -215,6 +237,16 @@ def _entry_identity_extra(entry: VoiceEntry) -> dict:
         extra["date"] = entry.date
     if getattr(entry, "series", ""):
         extra["series"] = entry.series
+    origin = str(getattr(entry, "origin", "") or "").strip()
+    if origin:
+        extra["origin"] = origin
+    source_url = str(getattr(entry, "source_url", "") or "").strip()
+    if source_url:
+        extra["source_url"] = source_url
+    if not getattr(entry, "official", True):
+        # 写入身份提示，最终盖章仍由 _write_voice_config 强制
+        extra["publisher"] = "community"
+        extra["fabric_official"] = False
     return extra
 
 
@@ -227,11 +259,13 @@ def install_voice_pack_zip(
     version: str = "1",
     models_root: Optional[Path] = None,
     official: bool = False,
+    source: str = "",
+    identity_extra: Optional[dict] = None,
 ) -> dict:
     """Extract voice_pack zip into User_Data/models/<id>/.
 
-    ``official=True`` only for catalog / Fabric library installs (review #11).
-    Local user imports must leave fabric_official false.
+    ``official=True`` only for 图灵镜源 catalog installs (review #11).
+    Local user imports and 第三方源 must leave fabric_official false.
     """
     models_root = Path(models_root or MODELS_DIR)
     zip_path = Path(zip_path)
@@ -406,6 +440,15 @@ def install_voice_pack_zip(
         if cover_cfg:
             extra["cover"] = cover_cfg
 
+        if identity_extra:
+            for k, val in identity_extra.items():
+                if val is not None and val != "" and k not in extra:
+                    extra[k] = val
+                elif k in ("origin", "source_url", "publisher", "fabric_official"):
+                    # 第三方身份字段以后传入为准（覆盖包内伪装）
+                    if val is not None and val != "":
+                        extra[k] = val
+        src = source or (SRC_ONLINE_PACK if official else SRC_USER_IMPORT)
         return _write_voice_config(
             dest_dir,
             dest_pth=dest_pth,
@@ -416,9 +459,9 @@ def install_voice_pack_zip(
             index_path=index_path or str(pack_cfg.get("index") or ""),
             cover_path=cover_path,
             cover_cfg=cover_cfg,
-            source="online_pack" if official else "user_import",
+            source=src,
             extra=extra,
-            official=official,
+            official=official and src not in THIRDPARTY_SOURCES,
         )
 
 
@@ -547,18 +590,32 @@ def _write_voice_config(
     cover_cfg: str = "",
     official: bool = False,
 ) -> dict:
-    # Official RVC Fabric library installs stamp publisher so consult
-    # pack / free-vs-paid paths recognize them offline (review #11).
-    # Local user zip imports must NOT get fabric_official=true.
-    is_official = bool(official) or source in ("online_pack", "online_files")
+    """Write model config.json with official / thirdparty / local stamp.
+
+    三分支盖章（后写覆盖，防 zip 内 config 伪装官方）::
+
+      - online_pack / online_files → 图灵镜官方章
+      - thirdparty_pack / thirdparty_files → community + fabric_official=false
+      - 其它（本地导入）→ user + fabric_official=false
+    """
+    is_thirdparty = source in THIRDPARTY_SOURCES or str(source).startswith("thirdparty")
+    is_official = (
+        bool(official) or source in (SRC_ONLINE_PACK, SRC_ONLINE_FILES)
+    ) and not is_thirdparty
+    if is_thirdparty:
+        pub = "community"
+    elif is_official:
+        pub = "rvc_fabric"
+    else:
+        pub = "user"
     cfg = {
         "name": name,
         "tag": tag or guess_tag(name),
         "file": dest_pth.name,
         "version": version,
         "source": source,
-        "online_id": online_id if is_official else (online_id or ""),
-        "publisher": "rvc_fabric" if is_official else "user",
+        "online_id": online_id or "",
+        "publisher": pub,
         "fabric_official": bool(is_official),
     }
     if index_path and Path(index_path).is_file():
@@ -575,20 +632,31 @@ def _write_voice_config(
             cfg["cover"] = _portable_cover_rel(str(cfg["cover"]), dest_dir)
         elif cover_cfg:
             cfg["cover"] = _portable_cover_rel(cover_cfg, dest_dir)
-    # Do not let pack config wipe / forge official stamps
-    if is_official:
+    # 最终盖章：包内伪装章必须被压掉
+    if is_thirdparty:
+        cfg["publisher"] = "community"
+        cfg["fabric_official"] = False
+        if online_id:
+            cfg["online_id"] = online_id
+        # 保留 origin / source_url（若有）
+    elif is_official:
         cfg["publisher"] = "rvc_fabric"
         cfg["fabric_official"] = True
         if online_id:
             cfg["online_id"] = online_id
     else:
         cfg["publisher"] = str(cfg.get("publisher") or "user")
-        if cfg.get("publisher") == "rvc_fabric" and not is_official:
+        if cfg.get("publisher") == "rvc_fabric":
             cfg["publisher"] = "user"
         cfg["fabric_official"] = False
     (dest_dir / "config.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",
+    )
+    pkg_type = (
+        PKG_VOICE_PACK
+        if source in (SRC_ONLINE_PACK, SRC_THIRDPARTY_PACK)
+        else PKG_VOICE_FILES
     )
     return {
         "name": cfg["name"],
@@ -597,5 +665,5 @@ def _write_voice_config(
         "index": cfg.get("index") or "",
         "cover": cover_path or None,
         "id": online_id,
-        "package_type": PKG_VOICE_PACK if source == "online_pack" else PKG_VOICE_FILES,
+        "package_type": pkg_type,
     }

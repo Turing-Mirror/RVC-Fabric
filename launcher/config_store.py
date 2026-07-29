@@ -75,6 +75,9 @@ DEFAULTS: dict[str, Any] = {
     "close_action": "ask",
     # Online update / voice library (SharePoint or GitHub raw catalog JSON)
     "update_manifest_url": "",
+    # 社区音色下载镜像（Hugging Face 模型站）。空=默认 hf-mirror.com；
+    # official=直连 huggingface.co；也可填完整镜像根 URL。一般无需改。
+    "hf_endpoint": "",
     # Keyboard shortcuts (merged with launcher.hotkeys.DEFAULT_HOTKEYS)
     "hotkeys": {},
     # Windows global hotkeys (work while game is focused)
@@ -125,9 +128,7 @@ def _normalize_cfg(data: dict[str, Any]) -> dict[str, Any]:
     try:
         from launcher.ui.wallpaper import clamp_blur, clamp_opacity
 
-        out["ui_wallpaper_opacity"] = clamp_opacity(
-            out.get("ui_wallpaper_opacity", 40)
-        )
+        out["ui_wallpaper_opacity"] = clamp_opacity(out.get("ui_wallpaper_opacity", 40))
         out["ui_wallpaper_blur"] = clamp_blur(out.get("ui_wallpaper_blur", 16))
     except Exception:
         try:
@@ -348,7 +349,9 @@ def sync_realtime_gui_model(
     return GUI_CONFIG_PATH
 
 
-def sync_full_config(cfg: dict[str, Any], pth_path: str = "", index_path: str = "") -> Path:
+def sync_full_config(
+    cfg: dict[str, Any], pth_path: str = "", index_path: str = ""
+) -> Path:
     """Save app config and mirror everything to inuse/config.json."""
     save_config(cfg)
     pth = pth_path or str(cfg.get("last_model_path") or "")

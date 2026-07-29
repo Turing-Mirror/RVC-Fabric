@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.2.1",
+    "version": "1.2.2",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/d7dccac390c8a8c6def099be0aea17b1ad78fb1f7e897580103e638e0e281cbb",
-      "sha256": "d7dccac390c8a8c6def099be0aea17b1ad78fb1f7e897580103e638e0e281cbb",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/cac4961d7ebaefa40a2532da55d21f03068c53306ae3b48759dd20a8ed59bcb0",
+      "sha256": "cac4961d7ebaefa40a2532da55d21f03068c53306ae3b48759dd20a8ed59bcb0",
       "min_app_version": "1.1.0",
-      "notes": "v1.2.1：与 Setup 同版本。修复重启偶发 Failed to load Python DLL _MEI（单实例+退出释放）； 窗口化全屏/模型页切页卡顿；壳层审查 backlog 已清。"
+      "notes": "v1.2.2：社区音色（原社区下载）双源上线——图灵镜源 + 第三方公开模型； 第三方免责与非官方盖章；默认国内镜像下载；「最新/图灵镜源/第三方/系列专区」四视图。"
     }
   },
   "community": {
@@ -306,6 +306,57 @@
       "fabric_official": true,
       "date": "260723",
       "series": "MyGO!!!!!"
+    }
+  ],
+  "thirdparty_voices": [
+    {
+      "id": "tp-miku",
+      "name": "初音未来",
+      "tag": "二次元",
+      "origin": "huggingface",
+      "source_url": "https://huggingface.co/binant/Hatsune_Miku__RVC_v2_",
+      "author": "binant",
+      "author_url": "https://huggingface.co/binant",
+      "package_type": "voice_files",
+      "sha256": "ed8522a71c0985fd6825d7c91330dea5b8dc036ec4a2d5cad89fdebe4002a37c",
+      "size_bytes": 57587165,
+      "released": "260729",
+      "date": "260729",
+      "description": "收录自 Hugging Face 公开仓库；非 RVC Fabric 官方音色，授权/音质/版权由来源站点与上传者负责，与官方无关。",
+      "official": false,
+      "publisher": "community",
+      "fabric_official": false,
+      "pth_url": "https://huggingface.co/binant/Hatsune_Miku__RVC_v2_/resolve/main/model.pth",
+      "index_url": "https://huggingface.co/binant/Hatsune_Miku__RVC_v2_/resolve/main/model.index",
+      "series": "VOCALOID",
+      "hf_downloads": 23,
+      "hf_likes": 0,
+      "snapshot_date": "260729",
+      "real_person": false
+    },
+    {
+      "id": "tp-trump",
+      "name": "Donald Trump",
+      "tag": "真人",
+      "origin": "huggingface",
+      "source_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_",
+      "author": "binant",
+      "author_url": "https://huggingface.co/binant",
+      "package_type": "voice_files",
+      "sha256": "5f20a511548d0f496b379d8702124e2dc86eefe691d457c0a1c8791f327d06ae",
+      "size_bytes": 55193670,
+      "released": "260729",
+      "date": "260729",
+      "description": "收录自 Hugging Face 公开仓库（真人声音）；非 RVC Fabric 官方音色。请合法合规使用，勿用于冒充、诈骗等；一切风险与 RVC Fabric 官方无关。",
+      "official": false,
+      "publisher": "community",
+      "fabric_official": false,
+      "pth_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.pth",
+      "index_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.index",
+      "hf_downloads": 18,
+      "hf_likes": 0,
+      "snapshot_date": "260729",
+      "real_person": true
     }
   ]
 }

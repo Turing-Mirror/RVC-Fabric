@@ -129,7 +129,7 @@ class ModelsPageMixin:
         ).pack(side="right", padx=4)
         PrimaryButton(
             actions,
-            "社区下载",
+            "社区音色",
             command=lambda: self._store_page.open_voices_dialog(),
             padx=14,
             pady=6,
@@ -393,7 +393,7 @@ class ModelsPageMixin:
         if not self.models:
             tk.Label(
                 self.model_grid,
-                text="还没有音色。点「社区下载」在线获取，或点「导入音色」添加 .pth / .index / .zip 包。",
+                text="还没有音色。点「社区音色」在线获取，或点「导入音色」添加 .pth / .index / .zip 包。",
                 bg=TM_BG,
                 fg=TM_INK_MUTED,
                 font=sans_font(11),

@@ -3,5 +3,5 @@
 
 from __future__ import annotations
 
-APP_VERSION: str = "1.2.0"
+APP_VERSION: str = "1.2.1"
 APP_CHANNEL: str = "stable"

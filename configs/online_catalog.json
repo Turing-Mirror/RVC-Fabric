@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.2.0",
+    "version": "1.2.1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/a6429622135a4a9770e5c72439bb57d6793df8954f07b1cb76acfdcd3e292c04",
-      "sha256": "a6429622135a4a9770e5c72439bb57d6793df8954f07b1cb76acfdcd3e292c04",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/d7dccac390c8a8c6def099be0aea17b1ad78fb1f7e897580103e638e0e281cbb",
+      "sha256": "d7dccac390c8a8c6def099be0aea17b1ad78fb1f7e897580103e638e0e281cbb",
       "min_app_version": "1.1.0",
-      "notes": "v1.2.0：壳层审查 high/medium/low 清零；Setup 与 gui_patch 同版本。 含 status 写竞态、Magia 其他页、VC 启动可停、gui_patch 暂存回滚、 设备刷新 wait_seq、诊断 log tail、只读音色删除、官方章、原子 config 等。"
+      "notes": "v1.2.1：与 Setup 同版本。修复重启偶发 Failed to load Python DLL _MEI（单实例+退出释放）； 窗口化全屏/模型页切页卡顿；壳层审查 backlog 已清。"
     }
   },
   "community": {

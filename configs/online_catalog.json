@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.4",
+    "version": "1.1.5",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.4",
+      "version": "1.1.5",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/641a48de0e96f8b749ecaeb2fa720d9623c3a10a80d41130e7e868b0d55c7313",
-      "sha256": "641a48de0e96f8b749ecaeb2fa720d9623c3a10a80d41130e7e868b0d55c7313",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/cbbcfd396ff23f80a18d90c4bb413855b9d3b53b1de80d19bce4eee6501d6fd3",
+      "sha256": "cbbcfd396ff23f80a18d90c4bb413855b9d3b53b1de80d19bce4eee6501d6fd3",
       "min_app_version": "1.1.0",
-      "notes": "v1.1.4：status.json 并发写、nvidia 空探测、其他页 Magia 列表、in_gain_db 消毒、 EQ 热推无咔嗒、engine-core 名净化；纯正式号可让仍停在 1.1.2-part1 的旧比较器收到更新。"
+      "notes": "v1.1.5：启动中可停止、min_app 门禁、本地音色不再盖官方章、只读音色可删、 诊断包日志 tail、启动器下载互斥；在 1.1.4 之上的壳层 medium 修复。"
     }
   },
   "community": {

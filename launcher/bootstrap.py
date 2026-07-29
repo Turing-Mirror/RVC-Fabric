@@ -299,6 +299,12 @@ class BootstrapApp:
         except Exception:
             pass
         self.root.title(f"{APP_TITLE} · 启动器")
+        try:
+            from launcher.branding import apply_window_icon
+
+            apply_window_icon(self.root)
+        except Exception:
+            pass
         # Fixed-size window: must scale or 125%/150% content gets clipped
         self.root.geometry(f"{px(640)}x{px(720)}")
         self.root.configure(bg=TM_BG)
@@ -972,7 +978,9 @@ class BootstrapApp:
         # 先说明即将出现 UAC / 安装窗；成功启动后不要再弹窗或置顶，
         # 否则会把 UAC 和 VB-Cable 安装界面盖住，看起来像“没有安装提示”。
         if self._provision_busy or self._deploy_busy:
-            messagebox.showinfo("请稍候", "正在下载或补全其他组件，请完成后再装虚拟声卡。")
+            messagebox.showinfo(
+                "请稍候", "正在下载或补全其他组件，请完成后再装虚拟声卡。"
+            )
             return
         from launcher.vbcable import vbcable_pack_ready
 

@@ -458,6 +458,7 @@ class WallpaperController:
                     source_rgb=src,
                 )
             except Exception:
+
                 def _fail() -> None:
                     if gen != self._gen:
                         return
@@ -503,22 +504,48 @@ class WallpaperController:
 
         threading.Thread(target=work, daemon=True, name="tm-wallpaper").start()
 
-    def on_resize(self) -> None:
+    def on_resize(self, delay_ms: Optional[int] = None) -> None:
         root = self.app.root
+        # Maximize/restore freeze: never start a re-blur mid-drag
+        try:
+            if (
+                getattr(self.app, "_layout_is_frozen", None)
+                and self.app._layout_is_frozen()
+            ):
+                return
+        except Exception:
+            pass
+        # No wallpaper path → nothing to re-render (skip timer churn)
+        try:
+            from launcher.paths import ROOT, USER_DATA
+
+            path = resolve_wallpaper_path(
+                str(self.app.cfg.get("ui_wallpaper_path") or ""),
+                user_data=USER_DATA,
+                root=ROOT,
+            )
+            if (
+                path is None
+                or clamp_opacity(self.app.cfg.get("ui_wallpaper_opacity", 40)) <= 0
+            ):
+                return
+        except Exception:
+            pass
         if self._resize_job is not None:
             try:
                 root.after_cancel(self._resize_job)
             except Exception:
                 pass
         # Full-frame GaussianBlur is expensive — wait until size settles
-        # (maximize / continuous drag). 120ms reflow stays on page widgets only.
-        delay_ms = 400
-        try:
-            if str(root.state()) == "zoomed":
-                delay_ms = 450
-        except Exception:
-            pass
-        self._resize_job = root.after(delay_ms, lambda: self.refresh(force=False))
+        # (maximize / continuous drag). Un-maximize drag needs even longer.
+        if delay_ms is None:
+            delay_ms = 400
+            try:
+                if str(root.state()) == "zoomed":
+                    delay_ms = 500
+            except Exception:
+                pass
+        self._resize_job = root.after(int(delay_ms), lambda: self.refresh(force=False))
 
     def set_image_from_dialog(self) -> bool:
         from tkinter import filedialog, messagebox

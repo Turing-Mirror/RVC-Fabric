@@ -229,6 +229,14 @@ class RealtimeControlMixin:
         so the meter can move ~3×/s while everything else stays at 1s)."""
         if getattr(self, "_closing", False):
             return
+        # During maximize/restore drag freeze: skip draw work entirely so the
+        # title-bar drag stays on the UI thread (was a source of stutter/flash).
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            try:
+                self.root.after(400, self._tick_mic_level)
+            except Exception:
+                pass
+            return
         delay = 800
         try:
             if self.vc_running:
@@ -270,6 +278,12 @@ class RealtimeControlMixin:
     def _tick_status(self) -> None:
         if getattr(self, "_closing", False):
             return
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            try:
+                self.root.after(500, self._tick_status)
+            except Exception:
+                pass
+            return
         try:
             st = rt_client.poll_status()
             state = str(st.get("state") or "")
@@ -301,4 +315,3 @@ class RealtimeControlMixin:
             pass
         if not getattr(self, "_closing", False):
             self.root.after(1000, self._tick_status)
-

@@ -60,16 +60,32 @@ class ModelsPageMixin:
         self._models_page = 0
 
         def _sync(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Geometry busy: zero work (OS owns resize/drag). Settle path
+            # will stretch width + scrollregion once.
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if getattr(self, "schedule_scrollregion", None):
+                self.schedule_scrollregion(canvas)
 
         def _width(e):
-            if e.width > 1:
-                canvas.itemconfigure(win_id, width=e.width)
-                # Reflow only when the width actually changed since the last
-                # render — pack/tkraise-era Configure echoes are just noise
-                snap = getattr(self, "_models_render_snap", None)
-                if snap is None or int(e.width) != snap[0]:
-                    self._schedule_models_reflow()
+            # CRITICAL: do NOT itemconfigure during live resize — relayout of
+            # the whole card tree is the resize-lag root cause. Width is set
+            # once in MainApp._sync_scroll_canvas_widths after geometry settles.
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if e.width <= 1:
+                return
+            prev_w = getattr(self, "_models_canvas_last_w", 0)
+            w = int(e.width)
+            if prev_w and abs(w - int(prev_w)) < 4:
+                return
+            self._models_canvas_last_w = w
+            try:
+                canvas.itemconfigure(win_id, width=w)
+            except Exception:
+                return
+            if not self._models_cols_match(w):
+                self._schedule_models_reflow()
 
         wrap.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)
@@ -213,12 +229,14 @@ class ModelsPageMixin:
         ).pack(side="left", padx=(8, 0))
 
     def _schedule_models_reflow(self) -> None:
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            return
         if getattr(self, "_models_job", None):
             try:
                 self.root.after_cancel(self._models_job)
             except Exception:
                 pass
-        self._models_job = self.root.after(100, self._models_reflow_tick)
+        self._models_job = self.root.after(120, self._models_reflow_tick)
 
     def _models_reflow_tick(self) -> None:
         self._models_job = None
@@ -226,7 +244,15 @@ class ModelsPageMixin:
         # nothing; the show_page snapshot re-renders on next visit instead
         if getattr(self, "_current_page", "") != "models":
             return
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            return
         # Width-only reflow: keep in-memory list (no disk scan)
+        try:
+            cw = int(self._models_canvas.winfo_width())
+        except Exception:
+            cw = 0
+        if cw > 1 and self._models_cols_match(cw):
+            return
         self.refresh_models(rescan=False, keep_scroll=True)
 
     def _models_catalog_stamp(self):
@@ -238,7 +264,17 @@ class ModelsPageMixin:
         models/kiki/ moves kiki's mtime but not MODELS_DIR's. One stat per
         voice folder keeps external file drops visible on the next visit.
         (In-place overwrite of an existing filename still isn't seen — the
-        manual refresh button covers that edge.)"""
+        manual refresh button covers that edge.)
+
+        Cached ~1.2s so rapid page switches / reflow do not re-stat the whole
+        tree on every call (was a measurable hitch with many voices).
+        """
+        import time as _time
+
+        now = _time.monotonic()
+        cache = getattr(self, "_models_stamp_cache", None)
+        if cache is not None and (now - cache[0]) < 1.2:
+            return cache[1]
         try:
             from launcher.paths import ENGINE_WEIGHTS, MODELS_DIR
 
@@ -254,9 +290,11 @@ class ModelsPageMixin:
                         parts.append(child.stat().st_mtime_ns)
             except OSError:
                 parts.append(-2)
-            return tuple(parts)
+            stamp = tuple(parts)
         except Exception:
-            return None
+            stamp = None
+        self._models_stamp_cache = (now, stamp)
+        return stamp
 
     def _invalidate_catalog_views(self) -> None:
         """Force home carousel + models grid to re-render on next visit.
@@ -264,6 +302,8 @@ class ModelsPageMixin:
         (index bind/unbind) and after any voice install/rename/delete."""
         self._models_render_snap = None
         self._home_render_snap = None
+        self._models_stamp_cache = None
+        self._models_grid_content_key = None
 
     def _show_models_page(self) -> None:
         """show_page hook: skip the full rebuild when nothing changed."""
@@ -277,8 +317,10 @@ class ModelsPageMixin:
             cw = int(self._models_canvas.winfo_width())
         except Exception:
             cw = 0
+        # Quantize width for snap so 1–2px maximize jitter is ignored
+        cw_q = max(0, (int(cw) // 32) * 32) if cw > 1 else 0
         snap_now = (
-            cw,
+            cw_q,
             self._current_model_key(),
             self._models_catalog_stamp(),
         )
@@ -288,11 +330,13 @@ class ModelsPageMixin:
         elif snap_now[1] != prev[1] or snap_now[2] != prev[2]:
             # Selection or catalog changed — full refresh
             self.refresh_models(rescan=True)
-        elif snap_now[0] != prev[0] and cw > 1:
-            # Width only (e.g. after maximize) — reflow cards, no disk scan
-            if not self._models_cols_match(cw):
-                self.refresh_models(rescan=False, keep_scroll=True)
-            # else: column count unchanged — leave grid as-is (fast page switch)
+        elif cw > 1 and not self._models_cols_match(cw):
+            # Column count would change — reflow cards, no disk scan
+            self.refresh_models(rescan=False, keep_scroll=True)
+        else:
+            # Same catalog + same cols: keep existing widgets (no flash)
+            if cw > 1 and prev is not None and len(prev) >= 3:
+                self._models_render_snap = (cw_q or prev[0], prev[1], prev[2])
         # Ad banner renders independently of the grid (own id-level snapshot;
         # covers the feed-arrived-before-page-built case)
         try:
@@ -311,6 +355,23 @@ class ModelsPageMixin:
         except Exception:
             return False
 
+    def _models_grid_identity(
+        self, view: list, cols: int, page: int, page_view: list
+    ) -> tuple:
+        """Identity of what the grid would draw — used to skip destroy/rebuild."""
+        keys = tuple(
+            (
+                m.get("path") or "",
+                m.get("dir") or "",
+                m.get("name") or "",
+                bool(self._is_active_model(m)),
+                bool(m.get("missing")),
+                bool(m.get("index")),
+            )
+            for m in page_view
+        )
+        return (cols, page, len(view), keys)
+
     def _apply_models_filter(self) -> None:
         """Re-render the grid for the current search/sort without a disk rescan."""
         if not hasattr(self, "model_grid"):
@@ -328,6 +389,13 @@ class ModelsPageMixin:
 
     def refresh_models(self, keep_scroll: bool = False, rescan: bool = True) -> None:
         if not hasattr(self, "model_grid"):
+            return
+        # Never destroy cards during maximize/restore drag freeze
+        if (
+            not rescan
+            and getattr(self, "_layout_is_frozen", None)
+            and self._layout_is_frozen()
+        ):
             return
         # Selecting a voice shouldn't jump the page back to the top
         self._models_saved_scroll = None
@@ -352,9 +420,6 @@ class ModelsPageMixin:
                 ):
                     self.model_idx = i
                     break
-
-        for w in self.model_grid.winfo_children():
-            w.destroy()
 
         # Search + sort view (self.models stays the full list — carousel,
         # hotkeys and model_idx all index into it)
@@ -390,7 +455,22 @@ class ModelsPageMixin:
                     text=f"共 {len(self.models)} 个 · 使用中：{cur}"
                 )
 
+        # Columns adapt to width — cover-first cards need more width.
+        # Compute layout BEFORE destroy so we can skip rebuild when identical.
+        cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
+        card_min = px(180)
+        cols = max(1, min(5, cw // (card_min + 20)))
+
         if not self.models:
+            empty_key = ("empty",)
+            if (
+                getattr(self, "_models_grid_content_key", None) == empty_key
+                and self.model_grid.winfo_children()
+            ):
+                self._models_after_refresh(side_panels=rescan)
+                return
+            for w in self.model_grid.winfo_children():
+                w.destroy()
             tk.Label(
                 self.model_grid,
                 text="还没有音色。点「社区音色」在线获取，或点「导入音色」添加 .pth / .index / .zip 包。",
@@ -398,11 +478,21 @@ class ModelsPageMixin:
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
+            self._models_grid_content_key = empty_key
             self._render_models_pager(0, 0)
             self._models_after_refresh(side_panels=rescan)
             return
 
         if not view:
+            empty_q = ("empty_q", query)
+            if (
+                getattr(self, "_models_grid_content_key", None) == empty_q
+                and self.model_grid.winfo_children()
+            ):
+                self._models_after_refresh(side_panels=rescan)
+                return
+            for w in self.model_grid.winfo_children():
+                w.destroy()
             tk.Label(
                 self.model_grid,
                 text=f"没有匹配「{query}」的音色。清空搜索可看全部。",
@@ -410,30 +500,38 @@ class ModelsPageMixin:
                 fg=TM_INK_MUTED,
                 font=sans_font(11),
             ).grid(row=0, column=0, padx=20, pady=40, sticky="w")
+            self._models_grid_content_key = empty_q
             self._render_models_pager(0, 0)
             self._models_after_refresh(side_panels=rescan)
             return
 
-        # Columns adapt to width — cover-first cards need more width.
-        # (No update_idletasks here: it painted the just-cleared grid — a
-        # white flash. Pages stay mapped under grid stacking, so the width
-        # below is always current.)
-        # cw is physical pixels (measured), so the column math needs px too
-        cw = max(self._models_canvas.winfo_width() - 2 * (GUTTER - 8), 320)
-        card_min = px(180)
-        cols = max(1, min(5, cw // (card_min + 20)))
-        self._models_last_cols = cols
-        for c in range(cols):
-            self.model_grid.columnconfigure(c, weight=1, uniform="m")
-
         # Pagination: at most 3 card rows per page; fewer rows = shorter page
         page_size = cols * 3
-        total_pages = (len(view) + page_size - 1) // page_size
+        total_pages = max(1, (len(view) + page_size - 1) // page_size)
         self._models_page = min(
             max(0, int(getattr(self, "_models_page", 0))), total_pages - 1
         )
         start = self._models_page * page_size
         page_view = view[start : start + page_size]
+        content_key = self._models_grid_identity(
+            view, cols, self._models_page, page_view
+        )
+        if (
+            content_key == getattr(self, "_models_grid_content_key", None)
+            and self.model_grid.winfo_children()
+        ):
+            # Same cards already on screen — do not destroy (no black flash)
+            self._models_last_cols = cols
+            self._models_after_refresh(side_panels=rescan)
+            return
+
+        for w in self.model_grid.winfo_children():
+            w.destroy()
+
+        self._models_last_cols = cols
+        self._models_grid_content_key = content_key
+        for c in range(cols):
+            self.model_grid.columnconfigure(c, weight=1, uniform="m")
 
         for pos, m in enumerate(page_view):
             r, c = divmod(pos, cols)

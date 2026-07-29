@@ -110,15 +110,20 @@ class HotkeysMixin:
     def _poll_global_hotkeys(self) -> None:
         if getattr(self, "_closing", False):
             return
-        try:
-            aid = self._global_hk.poll_once()
-            if aid:
-                self._dispatch_hotkey(aid, from_global=True)
-        except Exception:
-            pass
+        # While layout is frozen (max/restore drag), poll less often
+        poll_ms = 80
+        if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+            poll_ms = 250
+        else:
+            try:
+                aid = self._global_hk.poll_once()
+                if aid:
+                    self._dispatch_hotkey(aid, from_global=True)
+            except Exception:
+                pass
         try:
             if not getattr(self, "_closing", False):
-                self.root.after(80, self._poll_global_hotkeys)
+                self.root.after(poll_ms, self._poll_global_hotkeys)
         except Exception:
             pass
 

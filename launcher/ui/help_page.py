@@ -75,19 +75,42 @@ class HelpPage:
         canvas.configure(yscrollcommand=sb.set)
         canvas.grid(row=0, column=0, sticky="nsew")
         sb.grid(row=0, column=1, sticky="ns")
+        # Register on both HelpPage and MainApp so maximize width-sync finds us
+        self._help_canvas = canvas
+        self._help_canvas_win = win
+        self._help_inner = inner
+        try:
+            self.app._help_canvas = canvas
+        except Exception:
+            pass
 
         def _sync(_e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+            app = getattr(self, "app", None)
+            if app is not None and getattr(app, "_layout_is_frozen", None):
+                try:
+                    if app._layout_is_frozen():
+                        return
+                except Exception:
+                    pass
+            if app is not None and getattr(app, "schedule_scrollregion", None):
+                app.schedule_scrollregion(canvas)
+                return
+            try:
+                canvas.configure(scrollregion=canvas.bbox("all"))
+            except Exception:
+                pass
 
         def _width(e):
-            if e.width > 1:
-                canvas.itemconfigure(win, width=e.width)
-                tw = max(int(e.width) - 100, 280)
-                for t in self._body_texts:
-                    try:
-                        t.configure(width=max(tw // 8, 36))
-                    except Exception:
-                        pass
+            if e.width <= 1:
+                return
+            app = getattr(self, "app", None)
+            if app is not None and getattr(app, "_layout_is_frozen", None):
+                try:
+                    if app._layout_is_frozen():
+                        return
+                except Exception:
+                    pass
+            self.apply_canvas_width(int(e.width))
 
         inner.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)
@@ -146,8 +169,52 @@ class HelpPage:
 
         fr.after(
             100,
-            lambda: _width(type("E", (), {"width": max(canvas.winfo_width(), 600)})()),
+            lambda: self.apply_canvas_width(max(int(canvas.winfo_width() or 0), 600)),
         )
+
+    def apply_canvas_width(self, width: int) -> None:
+        """Stretch scroll inner + body texts to *width* (maximize / restore)."""
+        w = int(width or 0)
+        if w <= 1:
+            return
+        canvas = getattr(self, "_help_canvas", None)
+        win = getattr(self, "_help_canvas_win", None)
+        if canvas is None or win is None:
+            return
+        try:
+            canvas.itemconfigure(win, width=w)
+        except Exception:
+            return
+        tw = max(w - 100, 280)
+        char_w = max(tw // 8, 36)
+        for t in self._body_texts:
+            try:
+                t.configure(width=char_w)
+                self._autosize_text(t)
+            except Exception:
+                pass
+        try:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        except Exception:
+            pass
+
+    def on_show(self) -> None:
+        """Called from show_page('help') — re-stretch if geometry settled while hidden."""
+        try:
+            c = self._help_canvas
+            w = int(c.winfo_width())
+            if w > 1:
+                self.apply_canvas_width(w)
+            else:
+                # Not laid out yet
+                self.fr.after(
+                    30,
+                    lambda: self.apply_canvas_width(
+                        max(int(c.winfo_width() or 0), 600)
+                    ),
+                )
+        except Exception:
+            pass
 
     @staticmethod
     def _autosize_text(t: tk.Text) -> None:

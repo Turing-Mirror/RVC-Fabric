@@ -267,14 +267,35 @@ class StorePage:
         sb.grid(row=0, column=1, sticky="ns")
 
         def _sync(_e=None):
+            app = getattr(self, "app", None)
+            if app is not None and getattr(app, "_layout_is_frozen", None):
+                try:
+                    if app._layout_is_frozen():
+                        return
+                except Exception:
+                    pass
+            if app is not None and getattr(app, "schedule_scrollregion", None):
+                app.schedule_scrollregion(canvas)
+                return
             try:
                 canvas.configure(scrollregion=canvas.bbox("all"))
             except Exception:
                 pass
 
         def _width(e):
-            if e.width > 1:
-                canvas.itemconfigure(win, width=e.width)
+            if e.width <= 1:
+                return
+            app = getattr(self, "app", None)
+            if app is not None and getattr(app, "_layout_is_frozen", None):
+                try:
+                    if app._layout_is_frozen():
+                        return
+                except Exception:
+                    pass
+            try:
+                canvas.itemconfigure(win, width=int(e.width))
+            except Exception:
+                pass
 
         inner.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)

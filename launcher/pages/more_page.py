@@ -37,16 +37,28 @@ class MorePageMixin:
         canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        # Register for MainApp._sync_scroll_canvas_widths after maximize
+        self._more_canvas = canvas
+        self._more_canvas_win = win
+        self._more_inner = wrap
 
         def _sync(_e=None):
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if getattr(self, "schedule_scrollregion", None):
+                self.schedule_scrollregion(canvas)
+                return
             try:
                 canvas.configure(scrollregion=canvas.bbox("all"))
             except Exception:
                 pass
 
         def _width(e):
-            if e.width > 1:
-                canvas.itemconfigure(win, width=e.width)
+            if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
+                return
+            if e.width <= 1:
+                return
+            self._apply_more_canvas_width(int(e.width))
 
         wrap.bind("<Configure>", _sync)
         canvas.bind("<Configure>", _width)
@@ -61,9 +73,9 @@ class MorePageMixin:
             eyebrow="",
             title="其他",
             lead="高级入口与紧急操作。",
-        ).pack(anchor="w", padx=GUTTER, pady=(18, 12))
+        ).pack(anchor="w", fill="x", padx=GUTTER, pady=(18, 12))
 
-        # Single surface card; rows = Magia list (title + ›)
+        # Single surface card; rows = Magia list (title + ›) — fill full width
         box = tk.Frame(
             wrap,
             bg=TM_SURFACE,
@@ -154,7 +166,50 @@ class MorePageMixin:
         except Exception:
             pass
         fr.after(80, _sync)
+        fr.after(
+            100,
+            lambda: self._apply_more_canvas_width(
+                max(int(canvas.winfo_width() or 0), 600)
+            ),
+        )
         return fr
+
+    def _apply_more_canvas_width(self, width: int) -> None:
+        """Stretch 其他 page scroll inner to full canvas width (maximize fix)."""
+        w = int(width or 0)
+        if w <= 1:
+            return
+        canvas = getattr(self, "_more_canvas", None)
+        win = getattr(self, "_more_canvas_win", None)
+        if canvas is None or win is None:
+            return
+        try:
+            canvas.itemconfigure(win, width=w)
+        except Exception:
+            return
+        try:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        except Exception:
+            pass
+
+    def _show_more_page(self) -> None:
+        """show_page hook: re-stretch if maximized while another page was visible."""
+        try:
+            c = getattr(self, "_more_canvas", None)
+            if c is None:
+                return
+            w = int(c.winfo_width())
+            if w > 1:
+                self._apply_more_canvas_width(w)
+            else:
+                self.root.after(
+                    30,
+                    lambda: self._apply_more_canvas_width(
+                        max(int(c.winfo_width() or 0), 600)
+                    ),
+                )
+        except Exception:
+            pass
 
     def open_bootstrap(self) -> None:
         """Open the first-run helper (启动器).

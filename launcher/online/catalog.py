@@ -25,6 +25,16 @@ DEFAULT_MANIFEST_URLS: list[str] = [
 CNB_RAW_MAIN = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main"
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Parse size/count fields without raising (bad JSON must not drop the entry)."""
+    try:
+        if value is None or value == "":
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass
 class VoiceEntry:
     id: str
@@ -65,7 +75,7 @@ class VoiceEntry:
             or d.get("release_date")
             or ""
         )
-        # author：勿把 publisher: community 误当成展示作者
+        # author：勿把 publisher: community/rvc_fabric 误当成展示作者
         author_raw = d.get("author") or d.get("creator") or ""
         if not author_raw and d.get("publisher") not in (
             None,
@@ -80,15 +90,14 @@ class VoiceEntry:
             if d.get("hf_downloads") is not None
             else d.get("downloads")
         )
-        try:
-            popularity = int(pop or 0)
-        except (TypeError, ValueError):
-            popularity = 0
+        popularity = _safe_int(pop, 0)
         official_raw = d.get("official")
         if official_raw is None:
             official_raw = d.get("fabric_official")
         if official_raw is None:
             official = True
+        elif isinstance(official_raw, bool):
+            official = official_raw
         else:
             official = str(official_raw).strip().lower() not in (
                 "0",
@@ -97,6 +106,28 @@ class VoiceEntry:
                 "n",
                 "",
             )
+        # origin 只认 origin 键；勿用 source（安装通道字段 online_files 等会污染源徽标）
+        origin = str(d.get("origin") or "").strip()
+        # source_url：计划别名 source/repo_url，但 source 仅在像 URL 时采纳
+        source_url = str(
+            d.get("source_url") or d.get("repo_url") or d.get("page_url") or ""
+        ).strip()
+        if not source_url:
+            maybe_src = str(d.get("source") or "").strip()
+            if maybe_src.lower().startswith(("http://", "https://")):
+                source_url = maybe_src
+        # index_url：勿把裸 "index" 路径键与数值字段混淆；仅 http 或明确 index_url
+        index_raw = d.get("index_url")
+        if index_raw is None:
+            idx = d.get("index")
+            # 安装 config 里 index 常是本地路径；清单里才是 URL
+            if isinstance(idx, str) and (
+                idx.lower().startswith(("http://", "https://"))
+                or idx.endswith(".index")
+            ):
+                index_raw = idx
+            else:
+                index_raw = ""
         return cls(
             id=str(d.get("id") or d.get("name") or "").strip(),
             name=str(d.get("name") or d.get("id") or "未命名").strip(),
@@ -107,9 +138,16 @@ class VoiceEntry:
             ),
             pack_url=str(d.get("pack_url") or d.get("zip_url") or d.get("pack") or ""),
             pth_url=str(d.get("pth_url") or d.get("pth") or ""),
-            index_url=str(d.get("index_url") or d.get("index") or ""),
+            index_url=str(index_raw or ""),
             cover_url=cover,
-            size_bytes=int(d.get("size_bytes") or d.get("size") or 0),
+            size_bytes=_safe_int(
+                (
+                    d.get("size_bytes")
+                    if d.get("size_bytes") is not None
+                    else d.get("size")
+                ),
+                0,
+            ),
             sha256=str(d.get("sha256") or ""),
             description=str(d.get("description") or d.get("desc") or ""),
             author=str(author_raw or "").strip(),
@@ -118,10 +156,8 @@ class VoiceEntry:
             series=str(
                 d.get("series") or d.get("series_name") or d.get("collection") or ""
             ).strip(),
-            origin=str(d.get("origin") or d.get("source") or "").strip(),
-            source_url=str(
-                d.get("source_url") or d.get("repo_url") or d.get("page_url") or ""
-            ).strip(),
+            origin=origin,
+            source_url=source_url,
             official=bool(official),
             popularity=popularity,
         )

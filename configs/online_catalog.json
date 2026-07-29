@@ -7,8 +7,8 @@
       "package_type": "gui_patch",
       "version": "1.2.2",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/cac4961d7ebaefa40a2532da55d21f03068c53306ae3b48759dd20a8ed59bcb0",
-      "sha256": "cac4961d7ebaefa40a2532da55d21f03068c53306ae3b48759dd20a8ed59bcb0",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/d6b035762ba1bc217ef7617181ac87b7edb3c2c1740d59a344174645bdfd7553",
+      "sha256": "d6b035762ba1bc217ef7617181ac87b7edb3c2c1740d59a344174645bdfd7553",
       "min_app_version": "1.1.0",
       "notes": "v1.2.2：社区音色（原社区下载）双源上线——图灵镜源 + 第三方公开模型； 第三方免责与非官方盖章；默认国内镜像下载；「最新/图灵镜源/第三方/系列专区」四视图。"
     }

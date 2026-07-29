@@ -227,6 +227,117 @@ class GhostButton(tk.Button):
         )
 
 
+class ActionListRow(tk.Frame):
+    """Magia-style list row: title (+ optional subtitle) + › chevron.
+
+    Used on the More page for a quieter, library-like action list without
+    changing product palette tokens.
+    """
+
+    def __init__(
+        self,
+        master,
+        title: str,
+        command: Optional[Callable] = None,
+        *,
+        subtitle: str = "",
+        primary: bool = False,
+        **kw,
+    ):
+        super().__init__(
+            master,
+            bg=TM_SURFACE,
+            highlightthickness=0,
+            cursor="hand2",
+            **kw,
+        )
+        self._command = command
+        self._primary = primary
+        self._bg = TM_SURFACE
+        self._bg_hover = TM_SURFACE_HOVER
+        pad_y = px(12) if not subtitle else px(10)
+
+        inner = tk.Frame(self, bg=self._bg)
+        inner.pack(fill="x", padx=px(14), pady=pad_y)
+
+        text_col = tk.Frame(inner, bg=self._bg)
+        text_col.pack(side="left", fill="x", expand=True)
+
+        title_fg = TM_ACCENT if primary else TM_INK
+        title_font_use = title_font(11, "bold") if primary else sans_font(11)
+        self._title = tk.Label(
+            text_col,
+            text=title,
+            font=title_font_use,
+            bg=self._bg,
+            fg=title_fg,
+            anchor="w",
+            justify="left",
+        )
+        self._title.pack(anchor="w")
+        self._subtitle = None
+        if subtitle:
+            self._subtitle = tk.Label(
+                text_col,
+                text=subtitle,
+                font=sans_font(9),
+                bg=self._bg,
+                fg=TM_META,
+                anchor="w",
+                justify="left",
+            )
+            self._subtitle.pack(anchor="w", pady=(2, 0))
+
+        self._chev = tk.Label(
+            inner,
+            text="›",
+            font=mono_font(14),
+            bg=self._bg,
+            fg=TM_META,
+            anchor="e",
+            padx=px(4),
+        )
+        self._chev.pack(side="right")
+
+        for w in (self, inner, text_col, self._title, self._chev):
+            w.bind("<Button-1>", self._on_click)
+            w.bind("<Enter>", self._enter)
+            w.bind("<Leave>", self._leave)
+        if self._subtitle is not None:
+            self._subtitle.bind("<Button-1>", self._on_click)
+            self._subtitle.bind("<Enter>", self._enter)
+            self._subtitle.bind("<Leave>", self._leave)
+
+        # Hairline under the row (last sibling can hide if needed)
+        self._rule = tk.Frame(self, bg=TM_HAIRLINE, height=1)
+        self._rule.pack(fill="x", side="bottom")
+
+    def _paint(self, bg: str) -> None:
+        self.configure(bg=bg)
+        for w in self.winfo_children():
+            try:
+                if w is self._rule:
+                    continue
+                w.configure(bg=bg)
+                for c in w.winfo_children():
+                    try:
+                        c.configure(bg=bg)
+                    except tk.TclError:
+                        pass
+            except tk.TclError:
+                pass
+
+    def _enter(self, _e=None) -> None:
+        self._paint(self._bg_hover)
+
+    def _leave(self, _e=None) -> None:
+        self._paint(self._bg)
+
+    def _on_click(self, _e=None) -> None:
+        if self._command:
+            self._command()
+
+
 class SectionCard(tk.Frame):
     """Flat panel with optional mono eyebrow + title (no accent rail)."""
 

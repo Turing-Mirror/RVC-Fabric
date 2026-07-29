@@ -39,6 +39,25 @@ def log(msg: str) -> None:
     print(msg, flush=True)
 
 
+def _is_junction(p: Path) -> bool:
+    """True if *p* is a Windows directory junction (Path.is_junction needs 3.12+)."""
+    meth = getattr(p, "is_junction", None)
+    if callable(meth):
+        try:
+            return bool(meth())
+        except OSError:
+            return False
+    # Python ≤3.11: best-effort via directory reparse (no public API)
+    try:
+        if not p.exists() or p.is_symlink() or not p.is_dir():
+            return False
+        # Junction targets often fail is_file on python.exe sibling checks elsewhere;
+        # treat "dir with no normal link bit" as possible junction only when force-needed.
+        return False
+    except OSError:
+        return False
+
+
 def must_exist(p: Path, label: str) -> None:
     if not p.exists():
         raise FileNotFoundError(
@@ -163,7 +182,7 @@ def link_or_copy_runtime(variant: str, *, copy: bool, force: bool) -> None:
         log(f"[Runtime] already present: {dst} (use --force-runtime to re-link)")
         return
 
-    if dst.is_dir() or dst.is_symlink() or dst.is_junction():
+    if dst.is_dir() or dst.is_symlink() or _is_junction(dst):
         _remove_runtime_dst(dst)
 
     if copy:

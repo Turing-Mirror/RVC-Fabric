@@ -279,6 +279,12 @@ class GraphicEQ:
         g = [float(x) for x in gains_db[:5]]
         while len(g) < 5:
             g.append(0.0)
+        # Hot-param path re-pushes the same gains every slider tick; redesigning
+        # zeroes biquad state and causes clicks in live audio (review #37).
+        if len(self.gains_db) >= 5 and all(
+            abs(float(a) - float(b)) < 1e-6 for a, b in zip(self.gains_db[:5], g)
+        ):
+            return
         self.gains_db = g
         self._sr = 0  # force redesign
 

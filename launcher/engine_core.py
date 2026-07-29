@@ -104,7 +104,11 @@ def ensure_engine_core(
     if root is not None:
         cache = Path(root) / "User_Data" / "update_cache" / "engine_core"
     cache.mkdir(parents=True, exist_ok=True)
-    dest = cache / (spec.name or "engine-core.zip")
+    # Catalog-controlled name → basename only (review #25)
+    safe_name = Path(str(spec.name or "engine-core.zip")).name
+    if not safe_name or safe_name in (".", "..") or ".." in safe_name:
+        safe_name = "engine-core.zip"
+    dest = cache / safe_name
 
     size_hint = format_size(spec.size_bytes) if spec.size_bytes else "约 800 MB"
     _log(log, f"准备下载引擎资源包 {spec.name}（{size_hint}）…")

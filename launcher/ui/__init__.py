@@ -4,6 +4,7 @@
 from launcher.ui.covers import CoverCache, load_cover_photo
 from launcher.ui.help_content import SETTING_TIPS, HELP_SECTIONS, help_plain_text
 from launcher.ui.widgets import (
+    ActionListRow,
     GhostButton,
     HoverTip,
     ask_choice,
@@ -22,6 +23,7 @@ from launcher.ui.widgets import (
 )
 
 __all__ = [
+    "ActionListRow",
     "CoverCache",
     "GhostButton",
     "ask_choice",

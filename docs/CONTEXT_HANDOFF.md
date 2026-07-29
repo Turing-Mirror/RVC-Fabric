@@ -6,7 +6,7 @@
 > **最后大更新**：2026-07-28  
 > **工作区**：`L:\My Project\Grok`  
 > **当前分支**：`tm-release`（相对 `fabric/tm-release` 可能超前：广场页 `0800079` 等）  
-> **壳版本**：1.1.2  
+> **壳版本**：1.1.4  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  
@@ -110,7 +110,9 @@
 - **设置页整理（2026-07-27）**：设置页「声卡接线说明」改为「实体声卡连接说明」（虚拟声卡选法在设置页各项旁与「说明」页已覆盖，弹窗改讲 USB 直播声卡 / 调音台）；「打开原版实时面板」从设置页移到「其他」页（高级入口不再吸引新手）；全项目用词「接线」统一改为「连接」
 - **文字清晰度 + 切页防闪（2026-07-27，6 提交 56aefac..bcb98a1）**：(a) 壳与启动器启动时声明 PMv2 DPI awareness + `tk scaling`（此前完全没有 → 125%/150% 屏整窗位图拉伸发糊）；像素常量统一过 `theme.px()`（100% 屏逐位零变化），控件 width/height 形参为设计单位由控件内部 px（防双重缩放契约写在 theme.py docstring）；win_geometry 持久化带 `win_dpi` 迁移。(b) 中文小字全部撤离 Cascadia Mono（无 CJK 字形逐字回退是截图发糊主因）；7pt 全部抬 8pt；≤9pt bold 抬 10pt；Combobox 配 sans 10；ASCII/CJK 双态文本走新 `theme.meta_font`。(c) `show_page` 由 pack_forget/pack 改 grid 叠放 + `tkraise`（消 unmap 白帧）；models/home 切页用渲染快照短路（宽度+选中音色+目录 mtime 戳，含每个音色子目录），数据变更点调 `_invalidate_catalog_views()`；settings `<Map>` 全树滚轮重绑改 show_page after_idle；help 首次 show 才自适应高度并解除 Configure 自激。**改动仅进 launcher/ 源码，需重打 exe 或发 gui_patch 才到用户**；125%/150% 实机验收待做（本机 96dpi 仅验证了零变化基线）。新增「广场」页时须遵守 grid+tkraise 与 px() 新架构（见 tests/test_dpi_scale.py 与 theme.py 注释）。  
 - **广场页（2026-07-27）**：新增「广场」导航页（TRM/RVC Fabric 资讯 + 引流 + 赞助卡片）与模型页至多一条可关闭广告横幅；feed 为 CNB 仓根 `plaza.json`，独立于 index.json，运营改内容不发版（源 `catalog-src/plaza.yaml`，build_catalog 编译回环校验）。ad/sponsor 强制可关闭并带「广告」角标；点击统计只靠编译期给 url 盖 utm 参数，客户端**零遥测**。详见 `docs/广场页与内容运营.md`。  
-- **自定义背景图（2026-07-28，P0/P1 跟进 07-29）**：设置 →「外观（背景图）」；不透明度/磨砂。PIL cover + GaussianBlur + blend（相对 `theme.TM_BG`）。Windows 透出用**专用 chromakey `#010203`**（禁止用 `TM_BG` 作色键，避免按钮被打穿）；仅 body/页根/滚动画布上色键。全窗重算后台线程，滑条 debounce 280ms。安装限 20MB / 最长边 4096，只认 `User_Data/wallpaper/`。UI：`WallpaperSettingsMixin`。实现：`launcher/ui/wallpaper.py`。P2 待办见 §8。
+- **自定义背景图（2026-07-28，P0/P1 跟进 07-29）**：设置 →「外观（背景图）」；不透明度/磨砂。PIL cover + GaussianBlur + blend（相对 `theme.TM_BG`）。Windows 透出用**专用 chromakey `#010203`**（禁止用 `TM_BG` 作色键，避免按钮被打穿）；仅 body/页根/滚动画布上色键。全窗重算后台线程，滑条 debounce 280ms。安装限 20MB / 最长边 4096，只认 `User_Data/wallpaper/`。UI：`WallpaperSettingsMixin`。实现：`launcher/ui/wallpaper.py`。P2 待办见 §8。  
+- **v1.1.4（2026-07-29）**：`gui_patch_1.1.4` 已本地打包；其他页 Magia 列表行；status.json 写竞态；nvidia 空探测；审查 #8/#22/#25/#35/#37；用纯 `1.1.4` 解开旧壳 partN 更新尾巴。  
+
 
 ---
 
@@ -181,13 +183,13 @@
 | 优先级 | 项 |
 |--------|-----|
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
-| 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28）：worker.pid 身份校验 / 音色包先校验再覆盖 / open_bootstrap→启动器.exe / 全局热键独立线程 |
-| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；#29 status.json 竞态写已修（2026-07-29，diag_20260727） |
-| 中 | 改 launcher 后需重打 exe 或发 gui_patch 才能在发行包看到（含 DPI/广场） |
+| 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28） |
+| 中 | 审查清单其余 medium/low（见 `docs/审查缺陷清单.md`）；本轮已修 #8/#22/#25/#29/#35/#37 |
+| 中 | ~~改 launcher 后需 gui_patch~~ **已打** `dist/gui_patch_1.1.4.zip`（sha256 见 `configs/online_catalog.json`）；**待** 上传 CNB LFS + 推 index |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 中 | 三变体全量/Setup 实机验收矩阵（启停/切音色/热更/监听/强杀） |
-| 低 | MagiaDC 向 UX 打磨（排在验收之后） |
-| 低 | 旧壳 `compare_versions` 无 `-partN` 时可能收不到更新提示（已知小尾巴） |
+| 低 | ~~MagiaDC UX 起步~~ **其他页** 已改为 ActionListRow 列表（2026-07-29）；其余区块仍可继续 |
+| 低 | ~~旧壳 partN~~ **1.1.4 纯正式号** 解法（digit-only 旧比较器也能升）；见 `compare_versions` 文档与单测 |
 | 低 | 推理侧可选路线见 `PERF_NOTES.md` §5（ONNX/DML 等） |
 | 低 | **壁纸 P2**（见下） |
 

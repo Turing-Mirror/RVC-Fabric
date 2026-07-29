@@ -975,9 +975,15 @@ class BootstrapApp:
             def log(m: str) -> None:
                 self.root.after(0, lambda s=m: self._set_status(s, ok=True))
 
-            if need_dl:
-                log("正在下载虚拟声卡安装包…")
-            ok, msg = install_vbcable(download_if_missing=True, log=log)
+            ok, msg = False, ""
+            try:
+                if need_dl:
+                    log("正在下载虚拟声卡安装包…")
+                ok, msg = install_vbcable(download_if_missing=True, log=log)
+            except Exception as e:
+                # Always surface failure — bare OSError used to kill the thread
+                # and leave the status line wedged (review #22).
+                ok, msg = False, str(e)
 
             def done() -> None:
                 self._set_status(msg, ok=ok)

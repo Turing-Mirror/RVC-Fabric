@@ -103,6 +103,19 @@ class EQTests(unittest.TestCase):
         # flat peaking filters are bypass
         np.testing.assert_allclose(y, x, rtol=1e-5, atol=1e-5)
 
+    def test_set_gains_noop_keeps_filter_state(self):
+        """Hot re-push of identical gains must not force redesign (review #37)."""
+        eq = GraphicEQ([1.0, 0, 0, 0, 0])
+        eq.process(np.zeros(64, dtype=np.float32), 48000)
+        self.assertNotEqual(eq._sr, 0)
+        sr_before = eq._sr
+        filters_before = eq._filters
+        eq.set_gains([1.0, 0, 0, 0, 0])
+        self.assertEqual(eq._sr, sr_before)
+        self.assertIs(eq._filters, filters_before)
+        eq.set_gains([2.0, 0, 0, 0, 0])
+        self.assertEqual(eq._sr, 0)
+
 
 @unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
 class ChainTests(unittest.TestCase):

@@ -14,22 +14,21 @@ from launcher import realtime_client as rt_client
 from launcher.features import CONSULT_ENTRY_ENABLED
 from launcher.paths import ROOT, USER_DATA
 from launcher.theme import (
-    APP_PRODUCT_TAGLINE,
     GUTTER,
-    TM_ACCENT,
     TM_BG,
+    TM_HAIRLINE,
     TM_META,
+    TM_SURFACE,
     mono_font,
 )
-from launcher.ui import GhostButton, PageHeader, PrimaryButton
+from launcher.ui import ActionListRow, PageHeader
 from launcher.version import APP_VERSION
 from launcher.win_util import open_path
 
 
 class MorePageMixin:
     def _page_more(self) -> tk.Frame:
-        """Same chrome as the other pages: left-aligned header at the page
-        gutter, then a full-width 3-per-row button grid."""
+        """Magia-style action list: full-width rows with › chevron."""
         fr = tk.Frame(self.body, bg=TM_BG)
         canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
         sb = tk.Scrollbar(fr, orient="vertical", command=canvas.yview)
@@ -63,32 +62,79 @@ class MorePageMixin:
             title="其他",
             lead="高级入口与紧急操作。",
         ).pack(anchor="w", padx=GUTTER, pady=(18, 12))
-        box = tk.Frame(wrap, bg=TM_BG)
-        box.pack(fill="x", padx=GUTTER)
-        for c in range(3):
-            box.columnconfigure(c, weight=1, uniform="more")
 
-        entries = [
-            # (文本, 回调, 是否主按钮)
-            ("根据本机表现自动优化性能", self._auto_perf_from_history, False),
-            ("重新观看新手引导", lambda: self.show_onboarding(first_run=False), False),
-            ("使用说明", lambda: self.show_page("help"), False),
-            ("快捷键说明", self.show_hotkeys_help, False),
-            ("生成诊断包（反馈问题）", self._collect_diagnostics, False),
-            ("校验 Runtime 完整性", self._verify_runtime_integrity, False),
-            ("打开性能信息文件夹", self._open_perf_reports, False),
-            ("打开 User_Data", lambda: open_path(USER_DATA), False),
-            ("打开安装目录", lambda: open_path(ROOT), False),
-            ("训练 / 翻唱 WebUI（高级）", self.open_webui, False),
-            ("原版实时面板（高级）", self.open_legacy_gui, False),
-            ("强制结束变声引擎（卡音频时点）", self._force_kill_engine, False),
+        # Single surface card; rows = Magia list (title + ›)
+        box = tk.Frame(
+            wrap,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        box.pack(fill="x", padx=GUTTER)
+
+        # (title, command, primary, optional subtitle)
+        entries: list[tuple[str, object, bool, str]] = [
+            (
+                "根据本机表现自动优化性能",
+                self._auto_perf_from_history,
+                False,
+                "按本机历史延迟报告调整块长等预设",
+            ),
+            (
+                "重新观看新手引导",
+                lambda: self.show_onboarding(first_run=False),
+                False,
+                "",
+            ),
+            ("使用说明", lambda: self.show_page("help"), False, ""),
+            ("快捷键说明", self.show_hotkeys_help, False, ""),
+            (
+                "生成诊断包（反馈问题）",
+                self._collect_diagnostics,
+                False,
+                "日志 · 配置 · 可选性能测试",
+            ),
+            ("校验 Runtime 完整性", self._verify_runtime_integrity, False, ""),
+            ("打开性能信息文件夹", self._open_perf_reports, False, ""),
+            ("打开 User_Data", lambda: open_path(USER_DATA), False, ""),
+            ("打开安装目录", lambda: open_path(ROOT), False, ""),
+            (
+                "训练 / 翻唱 WebUI（高级）",
+                self.open_webui,
+                False,
+                "原版 RVC 训练与推理界面",
+            ),
+            (
+                "原版实时面板（高级）",
+                self.open_legacy_gui,
+                False,
+                "gui_v1 窗口版实时变声",
+            ),
+            (
+                "强制结束变声引擎（卡音频时点）",
+                self._force_kill_engine,
+                False,
+                "结束残留 worker，不关主界面",
+            ),
         ]
         if CONSULT_ENTRY_ENABLED:
-            entries.insert(0, ("性能&参数优化服务", self.open_consult_wizard, True))
-        for i, (text, cmd, primary) in enumerate(entries):
-            cls = PrimaryButton if primary else GhostButton
-            b = cls(box, text, command=cmd, padx=10, pady=14)
-            b.grid(row=i // 3, column=i % 3, sticky="nsew", padx=6, pady=6)
+            entries.insert(
+                0,
+                (
+                    "性能&参数优化服务",
+                    self.open_consult_wizard,
+                    True,
+                    "提交样本与配置档案给调参服务",
+                ),
+            )
+        for title, cmd, primary, subtitle in entries:
+            ActionListRow(
+                box,
+                title=title,
+                command=cmd,
+                subtitle=subtitle,
+                primary=primary,
+            ).pack(fill="x")
 
         tk.Label(
             wrap,

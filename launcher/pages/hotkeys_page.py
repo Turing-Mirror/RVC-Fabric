@@ -454,8 +454,29 @@ class HotkeysMixin:
                 text=f"请按下要绑定到「{label}」的键…（Esc 取消）",
                 fg=TM_WARN,
             )
-        # Bind once on root
-        self.root.bind("<KeyPress>", self._on_capture_key, add="+")
+        # Tear down normal hotkey binds first so an already-bound key is
+        # *recorded*, not dispatched as its action (review #13).
+        for seq in list(getattr(self, "_tk_hotkey_binds", []) or []):
+            try:
+                self.root.unbind(seq)
+            except Exception:
+                pass
+        try:
+            self._tk_hotkey_binds.clear()
+        except Exception:
+            self._tk_hotkey_binds = []
+        # Suspend Windows global hotkeys during capture too
+        try:
+            if hasattr(self, "_global_hk") and self._global_hk is not None:
+                self._global_hk.unregister_all()
+        except Exception:
+            pass
+        # Capture bind only (not add="+" on top of action binds)
+        try:
+            self.root.unbind("<KeyPress>")
+        except Exception:
+            pass
+        self.root.bind("<KeyPress>", self._on_capture_key)
 
     def _on_capture_key(self, event) -> Optional[str]:
         if not self._capture_action_id:

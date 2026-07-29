@@ -273,7 +273,11 @@ def load_profile(model_dir: str, profile_id: str) -> Optional[dict]:
 
 
 def list_profiles(model_dir: str) -> list[dict]:
-    """All saved profiles for a model, validated, newest-created last."""
+    """All saved profiles for a model, validated, newest-created last.
+
+    On-disk **filename stem** is the identity used for load/delete (review #17).
+    JSON ``id`` is overwritten with the stem so a renamed ``.tmvp`` still applies.
+    """
     d = profiles_dir(model_dir)
     out: list[dict] = []
     try:
@@ -281,8 +285,11 @@ def list_profiles(model_dir: str) -> list[dict]:
     except OSError:
         return out
     for n in names:
+        stem = n[: -len(PROFILE_EXT)] if n.endswith(PROFILE_EXT) else n
         prof = validate_profile(_read_json_strict(os.path.join(d, n)))
         if prof is not None:
+            # Filename wins over internal id (renamed files must still load)
+            prof["id"] = re.sub(r"[^A-Za-z0-9_-]+", "", stem) or stem or prof.get("id")
             out.append(prof)
     out.sort(key=lambda p: (str(p.get("meta", {}).get("created") or ""), p.get("name", "")))
     return out

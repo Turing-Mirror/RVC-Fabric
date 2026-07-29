@@ -646,8 +646,11 @@ class BootstrapApp:
         if not choice:
             return None
         var = str(choice).lower()
+        # Size hint only — never hit CNB on the Tk main thread (review #5).
+        # prefer_remote=False uses bundled/local catalog; network fetch is for
+        # the actual download worker after the user confirms.
         try:
-            spec = resolve_runtime_spec(var, prefer_remote=True)
+            spec = resolve_runtime_spec(var, prefer_remote=False)
             size_s = format_size(spec.size_bytes or spec.primary.size_bytes)
             url_hint = (spec.primary.urls[0] if spec.primary.urls else "")[:72]
         except Exception:

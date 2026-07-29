@@ -56,6 +56,38 @@ class ResolveBackendTests(unittest.TestCase):
         r = resolve_backend("cuda", probe={"cuda": False, "dml": True}, wmi={})
         self.assertEqual(r["backend"], "cpu")
 
+    def test_nvidia_pack_trusts_cuda_when_probe_empty(self):
+        """diag_20260727: empty probe on nvidia pack must not force CPU."""
+        empty = {
+            "cuda": False,
+            "dml": False,
+            "error": "empty probe rc=1 | pe=python.exe",
+        }
+        r = resolve_backend(
+            "cuda", probe=empty, wmi={}, package_variant="nvidia"
+        )
+        self.assertEqual(r["backend"], "cuda")
+        self.assertIn("探测未确认", r["detail"])
+        r_auto = resolve_backend(
+            "auto", probe=empty, wmi={}, package_variant="nvidia"
+        )
+        self.assertEqual(r_auto["backend"], "cuda")
+
+    def test_nvidia_pack_still_rejects_capability_mismatch(self):
+        bad = {
+            "cuda": False,
+            "dml": False,
+            "error": (
+                "NVIDIA GeForce RTX 5060 (sm_120) incompatible with PyTorch "
+                "(supports sm_37, sm_50, sm_60, sm_61, sm_70, sm_75, sm_80, "
+                "sm_86, sm_90); 50-series needs nvidia50 variant"
+            ),
+        }
+        r = resolve_backend(
+            "cuda", probe=bad, wmi={}, package_variant="nvidia"
+        )
+        self.assertEqual(r["backend"], "cpu")
+
     def test_cpu(self):
         r = resolve_backend("cpu", probe={"cuda": True, "dml": True}, wmi={})
         self.assertEqual(r["backend"], "cpu")

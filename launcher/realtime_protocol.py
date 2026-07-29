@@ -9,6 +9,8 @@ User_Data/runtime_control/
 from __future__ import annotations
 
 import json
+import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -20,6 +22,11 @@ COMMAND_PATH = CONTROL_DIR / "command.json"
 STATUS_PATH = CONTROL_DIR / "status.json"
 SEQ_PATH = CONTROL_DIR / "command.seq"
 PID_PATH = CONTROL_DIR / "worker.pid"
+
+# Windows readers holding status.json open make Path.replace raise WinError 5/32.
+# Shell + worker both write status; concurrent .tmp clobber was common in field logs.
+_WRITE_RETRIES = 8
+_WRITE_RETRY_BASE_S = 0.01
 
 # Hot-updatable keys (match gui_v1 event_handler)
 HOT_KEYS = frozenset(
@@ -72,12 +79,64 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _is_retryable_replace_error(exc: BaseException) -> bool:
+    """PermissionError / sharing violation while replacing on Windows NTFS."""
+    if isinstance(exc, PermissionError):
+        return True
+    if isinstance(exc, OSError):
+        winerr = getattr(exc, "winerror", None)
+        if winerr in (5, 32):  # ACCESS_DENIED / SHARING_VIOLATION
+            return True
+        if exc.errno in (13, 11, 16):  # EACCES / EAGAIN / EBUSY
+            return True
+    return False
+
+
 def _write_json(path: Path, data: dict[str, Any]) -> None:
+    """Atomic JSON write with unique temp name + retries (Windows-safe).
+
+    Field diag (diag_20260727_151048) showed::
+
+        PermissionError: [WinError 5] Access is denied:
+          '...\\status.json.tmp' -> '...\\status.json'
+
+    Causes: (1) shell and worker both write status.json; fixed basename .tmp
+    races; (2) concurrent readers keep the destination open during replace.
+    """
     ensure_control_dir()
-    tmp = path.with_suffix(path.suffix + ".tmp")
     text = json.dumps(data, ensure_ascii=False, indent=2)
+    unique = f".{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp"
+    tmp = path.with_name(path.name + unique)
     tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    last_err: Optional[BaseException] = None
+    for attempt in range(_WRITE_RETRIES):
+        try:
+            os.replace(str(tmp), str(path))
+            return
+        except OSError as e:
+            last_err = e
+            if not _is_retryable_replace_error(e):
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
+            time.sleep(_WRITE_RETRY_BASE_S * (attempt + 1))
+    # Last resort: non-atomic overwrite so status is not stuck forever
+    try:
+        path.write_text(text, encoding="utf-8")
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if last_err is not None:
+            raise last_err
+        raise
+    try:
+        tmp.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def next_seq() -> int:

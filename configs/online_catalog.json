@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.1.5",
+    "version": "1.2.0",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.1.5",
+      "version": "1.2.0",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/cbbcfd396ff23f80a18d90c4bb413855b9d3b53b1de80d19bce4eee6501d6fd3",
-      "sha256": "cbbcfd396ff23f80a18d90c4bb413855b9d3b53b1de80d19bce4eee6501d6fd3",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/a6429622135a4a9770e5c72439bb57d6793df8954f07b1cb76acfdcd3e292c04",
+      "sha256": "a6429622135a4a9770e5c72439bb57d6793df8954f07b1cb76acfdcd3e292c04",
       "min_app_version": "1.1.0",
-      "notes": "v1.1.5：启动中可停止、min_app 门禁、本地音色不再盖官方章、只读音色可删、 诊断包日志 tail、启动器下载互斥；在 1.1.4 之上的壳层 medium 修复。"
+      "notes": "v1.2.0：壳层审查 high/medium/low 清零；Setup 与 gui_patch 同版本。 含 status 写竞态、Magia 其他页、VC 启动可停、gui_patch 暂存回滚、 设备刷新 wait_seq、诊断 log tail、只读音色删除、官方章、原子 config 等。"
     }
   },
   "community": {

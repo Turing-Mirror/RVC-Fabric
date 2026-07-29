@@ -231,6 +231,14 @@ def download_and_apply_gui(
     if not gui.url:
         raise DownloadError("没有 GUI 更新地址")
 
+    # Catalog min_app_version gate on the download path (review #10)
+    min_v = str(getattr(gui, "min_app_version", None) or "").strip()
+    if min_v and compare_versions(APP_VERSION, min_v) < 0:
+        raise DownloadError(
+            f"此增量包要求软件版本 ≥ {min_v}，当前为 {APP_VERSION}。"
+            "请先安装中间版本或下载全量包。"
+        )
+
     pkg_type = normalize_package_type(gui.package_type or PKG_GUI_PATCH)
 
     if pkg_type == PKG_FULL:

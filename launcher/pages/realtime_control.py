@@ -99,6 +99,9 @@ class RealtimeControlMixin:
         m = self.models[self.model_idx]
         self.save_settings_silent()
         self._sync_model_to_realtime_gui(m)
+        # Generation counter: Stop during startup invalidates in-flight work (#14)
+        gen = int(getattr(self, "_vc_gen", 0) or 0) + 1
+        self._vc_gen = gen
         self._vc_starting = True
         self.vc_running = False
         self.btn_start.configure(bg=TM_OK)
@@ -112,10 +115,16 @@ class RealtimeControlMixin:
         def work():
             err = ""
             try:
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return  # cancelled by stop
                 # Ensure single healthy worker; wipe orphans from previous crash
                 if not rt_client.is_worker_alive():
                     rt_client.start_worker_process(clean_orphans=True)
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return
                 st0 = rt_client.wait_worker_ready(timeout_s=100)
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return
                 if str(st0.get("state")) == "error" and st0.get("error"):
                     err = str(st0.get("error"))
                     self.root.after(0, lambda e=err: self._on_vc_start_failed(e))
@@ -124,15 +133,30 @@ class RealtimeControlMixin:
                     rt_client.stop_vc_remote(force=False, timeout_s=4.0)
                 except Exception:
                     pass
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return
                 time.sleep(0.25)
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return
                 rt_client.start_vc_remote()
                 st = rt_client.wait_vc_running(timeout_s=180)
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    # User stopped while we were starting — soft-stop the stream
+                    try:
+                        rt_client.stop_vc_remote(force=True, timeout_s=6.0)
+                    except Exception:
+                        pass
+                    return
                 if str(st.get("state")) == "running":
                     self.root.after(0, lambda s=st: self._on_vc_started(m, s))
                     return
                 err = str(st.get("error") or st.get("message") or "启动失败")
             except Exception as e:
+                if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                    return
                 err = str(e)
+            if int(getattr(self, "_vc_gen", 0) or 0) != gen:
+                return
             self.root.after(0, lambda e=err: self._on_vc_start_failed(e))
 
         threading.Thread(target=work, daemon=True).start()
@@ -170,6 +194,14 @@ class RealtimeControlMixin:
         )
 
     def _stop_vc(self) -> None:
+        # Invalidate any in-flight _start_vc work thread (review #14)
+        self._vc_gen = int(getattr(self, "_vc_gen", 0) or 0) + 1
+        if getattr(self, "_model_restart_job", None) is not None:
+            try:
+                self.root.after_cancel(self._model_restart_job)
+            except Exception:
+                pass
+            self._model_restart_job = None
         self.btn_start.configure(text="停止中…", bg=TM_META)
         self._set_status_visual("busy", "正在停止…", "释放声卡中")
 

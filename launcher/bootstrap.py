@@ -265,7 +265,25 @@ class ProvisionProgressPanel(tk.Frame):
 
 class BootstrapApp:
     def __init__(self) -> None:
-        ensure_dirs()
+        # Install dir may be non-writable (Program Files without admin) — never
+        # crash windowless before Tk exists (review #4).
+        try:
+            ensure_dirs()
+        except Exception as e:
+            try:
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror(
+                    "无法写入安装目录",
+                    "当前安装目录不可写，启动器无法创建用户数据目录。\n"
+                    "请把软件安装到有写权限的路径（例如用户目录下），"
+                    "或以管理员身份重装/运行。\n\n"
+                    f"详情：{e}",
+                )
+                root.destroy()
+            except Exception:
+                pass
+            raise SystemExit(1) from e
         try:
             from launcher.install_health import ensure_install_health
 
@@ -950,6 +968,9 @@ class BootstrapApp:
     def on_vbcable(self) -> None:
         # 先说明即将出现 UAC / 安装窗；成功启动后不要再弹窗或置顶，
         # 否则会把 UAC 和 VB-Cable 安装界面盖住，看起来像“没有安装提示”。
+        if self._provision_busy or self._deploy_busy:
+            messagebox.showinfo("请稍候", "正在下载或补全其他组件，请完成后再装虚拟声卡。")
+            return
         from launcher.vbcable import vbcable_pack_ready
 
         need_dl = not vbcable_pack_ready()
@@ -1009,6 +1030,9 @@ class BootstrapApp:
             self._set_status(f"打开声音面板失败：{e}", ok=False)
 
     def _run_download(self, scope: str) -> None:
+        if self._provision_busy or self._deploy_busy:
+            messagebox.showinfo("请稍候", "已有下载或补全任务进行中，请稍后再试。")
+            return
         self._download_running = True
         self._deploy_busy = True
 
@@ -1046,8 +1070,8 @@ class BootstrapApp:
         self._run_download("core")
 
     def on_start_app(self) -> None:
-        if self._provision_busy:
-            messagebox.showinfo("请稍候", "正在补全运行环境，完成后再打开主界面。")
+        if self._provision_busy or self._deploy_busy:
+            messagebox.showinfo("请稍候", "正在补全或下载组件，完成后再打开主界面。")
             return
         if not runtime_ready(RROOT):
             if messagebox.askyesno(

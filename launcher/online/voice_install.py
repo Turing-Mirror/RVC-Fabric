@@ -200,6 +200,7 @@ def install_voice_pack_url(
         tag=tag,
         version=version,
         models_root=models_root,
+        official=True,
     )
 
 
@@ -225,8 +226,13 @@ def install_voice_pack_zip(
     tag: str = "音色",
     version: str = "1",
     models_root: Optional[Path] = None,
+    official: bool = False,
 ) -> dict:
-    """Extract voice_pack zip into User_Data/models/<id>/."""
+    """Extract voice_pack zip into User_Data/models/<id>/.
+
+    ``official=True`` only for catalog / Fabric library installs (review #11).
+    Local user imports must leave fabric_official false.
+    """
     models_root = Path(models_root or MODELS_DIR)
     zip_path = Path(zip_path)
     if not zip_path.is_file():
@@ -410,8 +416,9 @@ def install_voice_pack_zip(
             index_path=index_path or str(pack_cfg.get("index") or ""),
             cover_path=cover_path,
             cover_cfg=cover_cfg,
-            source="online_pack",
+            source="online_pack" if official else "user_import",
             extra=extra,
+            official=official,
         )
 
 
@@ -538,18 +545,21 @@ def _write_voice_config(
     source: str,
     extra: Optional[dict] = None,
     cover_cfg: str = "",
+    official: bool = False,
 ) -> dict:
-    # Official RVC Fabric library installs always stamp publisher so consult
-    # pack / free-vs-paid paths recognize them offline (also matches catalog id).
+    # Official RVC Fabric library installs stamp publisher so consult
+    # pack / free-vs-paid paths recognize them offline (review #11).
+    # Local user zip imports must NOT get fabric_official=true.
+    is_official = bool(official) or source in ("online_pack", "online_files")
     cfg = {
         "name": name,
         "tag": tag or guess_tag(name),
         "file": dest_pth.name,
         "version": version,
         "source": source,
-        "online_id": online_id,
-        "publisher": "rvc_fabric",
-        "fabric_official": True,
+        "online_id": online_id if is_official else (online_id or ""),
+        "publisher": "rvc_fabric" if is_official else "user",
+        "fabric_official": bool(is_official),
     }
     if index_path and Path(index_path).is_file():
         cfg["index"] = str(Path(index_path).resolve())
@@ -565,12 +575,17 @@ def _write_voice_config(
             cfg["cover"] = _portable_cover_rel(str(cfg["cover"]), dest_dir)
         elif cover_cfg:
             cfg["cover"] = _portable_cover_rel(cover_cfg, dest_dir)
-    # Do not let pack config wipe official stamps unless pack is not fabric
-    if source in ("online_pack", "online_files"):
+    # Do not let pack config wipe / forge official stamps
+    if is_official:
         cfg["publisher"] = "rvc_fabric"
         cfg["fabric_official"] = True
         if online_id:
             cfg["online_id"] = online_id
+    else:
+        cfg["publisher"] = str(cfg.get("publisher") or "user")
+        if cfg.get("publisher") == "rvc_fabric" and not is_official:
+            cfg["publisher"] = "user"
+        cfg["fabric_official"] = False
     (dest_dir / "config.json").write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2),
         encoding="utf-8",

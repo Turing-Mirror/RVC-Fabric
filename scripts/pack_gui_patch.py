@@ -5,7 +5,7 @@ Example::
 
     python scripts/pack_gui_patch.py --version 1.2.3-hotfix1 --out dist/gui_patch_1.2.3-hotfix1.zip
 
-Stable ``--version`` must be ``X.Y.Z`` or ``X.Y.Z-hotfixN`` (see docs/在线更新与音色库.md).
+Stable ``--version`` must be ``X.Y.Z`` (see docs/项目白皮书.md §5.1; legacy -hotfixN only for old clients).
 Optional ``--build-id`` is metadata only (not used for update ordering).
 
 Includes launcher/, selected tools, configs/online_catalog.json, version.py path, etc.

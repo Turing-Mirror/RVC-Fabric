@@ -69,10 +69,11 @@ RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音
 ### 目录归属
 
 - 上游为主：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`（其中实时相关部分见上表）
-- 本项目自有：`launcher/`（产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`
+- 本项目自有：`app/`（Tauri + React 产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`
+- 制品暂存（gitignore）：`CNB-GIT-RELEASE/` → 对应 CNB 仓 [RVC-Fabric-Releases](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
 上游仓库：**https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI**
-上游多语言文档保留在 `docs/en`、`docs/jp`、`docs/kr`、`docs/fr`、`docs/pt`、`docs/tr`。
+上游多语言文档保留在 `docs/en`、`docs/jp`、`docs/kr`、`docs/fr`、`docs/pt`、`docs/tr`、`docs/cn`。
 
 ## 主要功能
 
@@ -100,11 +101,11 @@ NVIDIA（CUDA）、AMD / Intel（DirectML）。启动器自动识别你的显卡
 
 从 [Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases) 或图灵镜发布渠道下载 `RVC_Fabric_Setup.exe`。
 
-**只有一个通用安装包**，不用自己分辨显卡型号。安装包是薄包，只含程序本体和引擎源码。首次打开时启动器会引导你：
+**只有一个通用安装包**，不用自己分辨显卡型号。安装包是薄包，只含程序本体（`RVC Fabric.exe`）和引擎源码。首次打开时程序会引导你：
 
 1. **自动识别你的显卡**，推荐对应的运行时（Python + PyTorch，数 GB，来自 CNB）。推荐项已经选好并说明了理由，你也可以自己改选
 2. 下载引擎核心（hubert、rmvpe、ffmpeg）
-3. 安装虚拟声卡 VB-Cable（想让游戏里的人听到变声，这一步必需）
+3. 安装虚拟声卡 VB-Cable（想让游戏里的人听到变声，这一步必需；失败也可稍后在「说明」页再装）
 
 装到英文路径下更稳妥。
 
@@ -131,19 +132,23 @@ NVIDIA（CUDA）、AMD / Intel（DirectML）。启动器自动识别你的显卡
 ### 环境
 
 - Windows，PowerShell
-- 完整 CPython 3.13（打包机必需，要带 tkinter）
+- Node 20+、Rust stable（开发 / 打包 Tauri 壳）
+- 完整 CPython 3.13（打包机与清单脚本；运行时推理用下载的 3.9 Runtime）
 - 所有文件 UTF-8
 
 ### 启动
 
 ```bat
-OpenApp.vbs      :: 主界面（launcher/main_app.py）
-OpenSetup.vbs    :: 启动器（launcher/bootstrap.py）
-scripts\dev\go-web.bat             :: 上游训练 / 推理 WebUI
-scripts\dev\go-realtime-gui.bat    :: 上游实时面板
+cd app
+npm install
+npm run tauri:dev              :: 桌面壳开发（需 WebView2 + MSVC）
+npm run dev                    :: 仅浏览器预览 UI
+
+scripts\dev\go-web.bat         :: 上游训练 / 推理 WebUI
+scripts\dev\go-realtime-gui.bat :: 上游实时面板（需本机 Runtime）
 ```
 
-不要直接 `python launcher/main_app.py`，除非在调试。
+说明见 `app/README.md`。
 
 ### 测试
 

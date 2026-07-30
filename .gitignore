@@ -85,7 +85,8 @@ ffprobe.*
 /RVCMAX/
 
 # CNB releases staging (sync to https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases via Git LFS)
-# Multi-GB Runtime / voice artifacts — never commit into the product source repo
+# Multi-GB Runtime / voice artifacts — never commit into the product source repo.
+# Long-form docs live under docs/ (below); this tree is YAML + artifacts only.
 /CNB-GIT-RELEASE/
 
 # One-off local sync backups (multi-GB possible)
@@ -135,10 +136,29 @@ Desktop.ini
 *secret*
 
 # ---------------------------------------------------------------------------
-# Private planning / product-vision materials (repo is public on GitHub + CNB)
-# Keep internal handoff, roadmaps, and ops-only notes off the remote.
+# Private planning / product-vision / ops materials
+# (repo is public on GitHub + CNB — keep handoff & ops notes off the remote)
+#
+# 权威布局（全部在 docs/ 根下，不再使用 RVC-Fabric-界面迁移交接包/ 子目录）：
+#   docs/项目白皮书.md
+#   docs/GUI迁移计划书.md
+#   docs/界面迁移-交接说明.md
+#   docs/界面预览.html
+#   docs/CNB发布仓与制品布局.md
+#   docs/CNB-SYNC_COMMANDS.txt
+#   docs/音色仓库维护手册.md
+#   docs/RVC Fabric Plan B *.md
+# 公开仍提交：docs/en|jp|kr|fr|pt|tr|cn|legal/
 # ---------------------------------------------------------------------------
-/docs/RVC-Fabric-界面迁移交接包/
+/docs/项目白皮书.md
+/docs/GUI迁移计划书.md
+/docs/界面迁移-交接说明.md
+/docs/界面预览.html
+/docs/CNB发布仓与制品布局.md
+/docs/CNB-SYNC_COMMANDS.txt
+/docs/CNB*.md
+/docs/CNB*.txt
+/docs/音色仓库维护手册.md
 /docs/RVC Fabric Plan B*.md
 /docs/*交接*
 /docs/*白皮*
@@ -148,7 +168,6 @@ Desktop.ini
 /docs/*计划书*
 /docs/*运营手册*
 /docs/*维护手册*
-/docs/音色仓库维护手册.md
 /docs/CONTEXT_HANDOFF.md
 /docs/SESSION_*
 /docs/PLAN_*

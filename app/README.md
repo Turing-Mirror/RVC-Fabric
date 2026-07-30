@@ -3,7 +3,8 @@
 Tauri 2 + React + TypeScript + Tailwind UI host for RVC Fabric.
 Realtime inference still runs in the embedded Runtime (`pythonw` + `tools/realtime_worker.py`).
 
-The classic Tk shell remains under `launcher/` until this host is feature-complete.
+This host **is** the product shell (Tk / `launcher/` UI removed). Only the realtime
+worker stays on Python under `Runtime\pythonw.exe`.
 
 ## Requirements
 
@@ -44,7 +45,7 @@ Vite writes static assets to `app/frontend/`.
 | `src-tauri/` | Rust host |
 | `frontend/` | Production UI build output (gitignored) |
 
-Product behaviour should stay aligned with the existing shell under `launcher/`.
+Product behaviour and decisions: see internal `docs/项目白皮书.md` (gitignored).
 
 ## Worker bridge
 

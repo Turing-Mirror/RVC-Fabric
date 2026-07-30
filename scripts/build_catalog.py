@@ -25,7 +25,7 @@ sha256_urls 全部由本脚本从本地制品自动补全。JSON 产物为**生�
 防止「本地重打包未发布」把索引改成用户下不到的哈希。
 新条目不写锁定值，由本地制品自动填充。
 
-客户端契约（勿破坏）见 docs/CNB-index索引与封面.md 与本文件 _roundtrip_check。
+客户端契约（勿破坏）见 docs/CNB发布仓与制品布局.md、docs/音色仓库维护手册.md 与本文件 _roundtrip_check。
 """
 
 from __future__ import annotations
@@ -1098,10 +1098,10 @@ items:
 
 _CHANGELOG_YAML_TEMPLATE = """\
 # 壳层更新日志（唯一维护源）— 编译产物 CNB 根目录 changelog.json
-# 规则见 docs/在线更新与音色库.md §0 与 docs/广场页与内容运营.md §2.1
-# 只记正式 Base + hotfix 全文；正向积累。编译: python scripts/build_catalog.py build --diff
+# 规则见 docs/项目白皮书.md §5–§6 与 docs/CNB发布仓与制品布局.md
+# 稳定通道只记 X.Y.Z；正向积累。编译: python scripts/build_catalog.py build --diff
 #
-# version     必填 X.Y.Z 或 X.Y.Z-hotfixN
+# version     必填 X.Y.Z（稳定通道；历史 -hotfixN 勿新发）
 # date        可选 YYMMDD
 # title       可选
 # highlights  可选短要点（广场主卡摘要）

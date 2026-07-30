@@ -80,14 +80,30 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
         _ => random_id(),
     };
 
+    let t = today();
+    // Already counted for today and nothing is queued — the day bucket is the
+    // unit, so restarting the app five times must not mean five requests and
+    // five config writes.
+    let last_sent = cfg
+        .get("telemetry_last_sent")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let queued_empty = cfg
+        .get("telemetry_pending_days")
+        .and_then(|v| v.as_array())
+        .map(|a| a.is_empty())
+        .unwrap_or(true);
+    if last_sent == t && queued_empty {
+        return json!({"sent": false, "reason": "already-counted-today"});
+    }
+
     let mut days: Vec<String> = cfg
         .get("telemetry_pending_days")
         .and_then(|v| v.as_array())
         .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
         .unwrap_or_default();
-    let t = today();
     if !days.contains(&t) {
-        days.push(t);
+        days.push(t.clone());
     }
     days.sort();
     days.dedup();
@@ -105,6 +121,9 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
         "telemetry_pending_days".into(),
         if ok { json!([]) } else { json!(days) },
     );
+    if ok {
+        patch.insert("telemetry_last_sent".into(), json!(t));
+    }
     let _ = config::update(root, patch);
 
     json!({"sent": ok, "days": body["days"].clone()})
@@ -158,5 +177,30 @@ mod tests {
     #[test]
     fn endpoint_is_hard_coded_https() {
         assert!(ENDPOINT.starts_with("https://"));
+    }
+
+    #[test]
+    fn a_second_start_on_the_same_day_does_not_ping_again() {
+        let root = std::env::temp_dir().join("rvcf-telemetry-test");
+        let _ = std::fs::remove_dir_all(&root);
+        let mut patch = serde_json::Map::new();
+        patch.insert("telemetry_opt_in".into(), json!(true));
+        patch.insert("telemetry_last_sent".into(), json!(today()));
+        patch.insert("telemetry_pending_days".into(), json!([]));
+        config::update(&root, patch).unwrap();
+
+        let out = tick(&root, "1.3.0", "nvidia");
+        assert_eq!(out["sent"], json!(false));
+        assert_eq!(out["reason"], json!("already-counted-today"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn opting_out_never_pings() {
+        let root = std::env::temp_dir().join("rvcf-telemetry-optout");
+        let _ = std::fs::remove_dir_all(&root);
+        let out = tick(&root, "1.3.0", "nvidia");
+        assert_eq!(out["reason"], json!("opt-out"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

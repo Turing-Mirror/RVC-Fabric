@@ -24,9 +24,9 @@ RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音
 - 音色库、社区音色下载、配置档案、快捷键、托盘常驻、虚拟声卡引导都在界面里
 - 推理跑在后台无窗进程，主界面卡不卡不影响出声
 
-**推理算法完全来自上游 RVC，我们没有改动模型结构或推理数学。** 我们做的是产品外壳、分发链路、用户体验，以及推理热路径上的工程优化（GPU 检索、向量化解码、常量张量复用等）。
-
 ## 与上游的关系
+
+这是一个**深度魔改**的 fork，不只是套了个壳。
 
 | | 上游 RVC WebUI | RVC Fabric |
 |---|---|---|
@@ -34,10 +34,36 @@ RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音
 | 交互 | 浏览器里的 Gradio 页面 | 原生 Windows 桌面程序 |
 | 环境 | 自己装 Python + PyTorch | 安装包 + 自动补全运行时 |
 | 音色来源 | 自己训练 / 自己找 | 内置音色库 + 社区下载 + 自己导入 |
-| 实时变声 | `gui_v1.py`，需手动配置 | 主界面一键，参数随音色保存 |
+| 实时变声 | `gui_v1.py`，需手动配置 | 主界面一键，参数随音色保存，后台无窗进程 |
 
-上游代码在本仓库中的位置：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`。
-本项目自有代码：`launcher/`（产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`。
+### 沿用上游的部分
+
+**网络结构与底模没有改动，也没有重新训练。** `infer/lib/infer_pack/`（VITS 网络、attention、F0 预测器等）与上游一致。检索式音色转换的核心思路、hubert 特征提取、RMVPE 音高提取模型本身都来自上游。
+
+### 我们改了什么
+
+**实时推理链路做了大量改造**（相对初始 fork）：
+
+| 文件 | 改动 | 内容 |
+|---|---|---|
+| `gui_v1.py` | +2939 / −314 | 无窗 worker 模式、文件协议驱动、真实延迟指标、参数热更 |
+| `infer/lib/rtrvc.py` | +692 / −68 | GPU 上做检索、常量控制张量复用、fp32 强制卡的 dtype 处理、推理期关梯度、引擎预热 |
+| `infer/lib/rmvpe.py` | +676 / −15 | 解码向量化、f0 后处理去分支、cudnn autotune |
+
+**新增的引擎侧功能**（上游没有的）：
+
+- 麦克风输入增益 `in_gain_db`，可运行中热更
+- 变声后的 DSP 效果链：噪声门、压缩器、五段 EQ
+- 「监听自己」——变声后的声音同时送一份到耳机
+- 无窗后台 worker 架构，单实例保证与孤儿进程清理
+- Python 3.9 兼容性改造（发行运行时是 3.9）
+
+其余上游代码（`infer-web.py` 训练与推理 WebUI、UVR5、ONNX 导出、IPEX 支持）基本保持原样，作为高级功能保留。
+
+### 目录归属
+
+- 上游为主：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`（其中实时相关部分见上表）
+- 本项目自有：`launcher/`（产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`
 
 上游仓库：**https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI**
 上游多语言文档保留在 `docs/en`、`docs/jp`、`docs/kr`、`docs/fr`、`docs/pt`、`docs/tr`。

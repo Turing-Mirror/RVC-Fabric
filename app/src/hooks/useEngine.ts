@@ -17,6 +17,8 @@ export function useEngine() {
   const [status, setStatus] = useState<EngineStatus>({});
   const [provision, setProvision] = useState<ProvisionStatus>({});
   const [busy, setBusy] = useState(false);
+  // Read by the adaptive poll without making it a dependency.
+  const stateRef = useRef<string>("idle");
   const [lastError, setLastError] = useState("");
   const pitchRef = useRef(15);
   const formantRef = useRef(1.2);
@@ -27,6 +29,7 @@ export function useEngine() {
   const refresh = useCallback(async () => {
     try {
       const st = await getEngineStatus();
+      stateRef.current = String(st.state || "idle");
       setStatus(st);
       if (st.state === "error" && st.error) {
         setLastError(String(st.error));
@@ -63,12 +66,35 @@ export function useEngine() {
         if (!cancelled) setLastError(String(e));
       }
     })();
-    const id = window.setInterval(() => {
-      void refresh();
-    }, 400);
+    // Adaptive poll. A fixed 400ms meant ~9000 status.json reads an hour even
+    // with the window hidden in the tray and nothing running. The Tk shell used
+    // 1s normally and only sped up to ~300ms while converting, because the mic
+    // meter is the sole thing that needs to be live.
+    let id = 0;
+    let currentMs = 0;
+    const pick = () =>
+      document.visibilityState === "hidden"
+        ? 2000
+        : stateRef.current === "running"
+          ? 400
+          : 1000;
+    const arm = () => {
+      const ms = pick();
+      if (ms === currentMs && id) return;
+      currentMs = ms;
+      if (id) window.clearInterval(id);
+      id = window.setInterval(() => {
+        void refresh();
+        arm(); // re-evaluate after each tick
+      }, ms);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", arm);
+      if (id) window.clearInterval(id);
       if (hotTimer.current) window.clearTimeout(hotTimer.current);
     };
   }, [refresh]);

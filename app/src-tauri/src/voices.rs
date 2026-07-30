@@ -780,6 +780,13 @@ fn guard_model_dir(root: &Path, md: &Path) -> Result<(), String> {
     if !md_c.starts_with(&root_c) {
         return Err("路径不在音色库内".into());
     }
+    // starts_with is also true when the paths are equal, so without this a
+    // delete_voice(models_dir) would recursively wipe the whole library. The UI
+    // never passes it today, but this is the most destructive operation in the
+    // app and it should not be one bad argument away.
+    if md_c == root_c {
+        return Err("不能操作音色库根目录".into());
+    }
     Ok(())
 }
 
@@ -1582,4 +1589,29 @@ pub fn current_selection_summary(root: &Path) -> Value {
         "profile_summary": profile_summary_from_cfg(&cfg2),
         "catalog": cat,
     })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guard_rejects_the_library_root_itself() {
+        let root = std::env::temp_dir().join("rvcf-guard-test");
+        let models = paths::models_dir(&root);
+        let one = models.join("anon");
+        std::fs::create_dir_all(&one).unwrap();
+
+        // A real voice directory is fine.
+        assert!(guard_model_dir(&root, &one).is_ok());
+        // The library root is not — starts_with() alone would have allowed it
+        // and delete_voice would have wiped every installed voice.
+        let err = guard_model_dir(&root, &models).unwrap_err();
+        assert!(err.contains("根目录"), "got {err}");
+        // Anything outside stays rejected.
+        assert!(guard_model_dir(&root, &root).is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

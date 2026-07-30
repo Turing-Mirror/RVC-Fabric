@@ -242,9 +242,10 @@ export async function installStoreVoice(entry: StoreVoice) {
   return invoke("store_install", { entry });
 }
 
-export async function cancelStoreDownload() {
+/** Cancel one voice's download, or all of them when `voiceId` is omitted. */
+export async function cancelStoreDownload(voiceId?: string) {
   if (!isTauri()) return;
-  return invoke("store_cancel");
+  return invoke("store_cancel", { voiceId: voiceId ?? "" });
 }
 
 export function filterSortModels(

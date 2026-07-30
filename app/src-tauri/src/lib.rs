@@ -589,8 +589,9 @@ fn store_install(
 }
 
 #[tauri::command]
-fn store_cancel() -> Result<(), String> {
-    store::cancel_store_download();
+fn store_cancel(voice_id: Option<String>) -> Result<(), String> {
+    // Empty / omitted id cancels everything in flight.
+    store::cancel_store_download(voice_id.as_deref().unwrap_or(""));
     Ok(())
 }
 

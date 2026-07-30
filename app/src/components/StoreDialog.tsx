@@ -26,7 +26,11 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
   const [view, setView] = useState<View>("latest");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // Two concurrent installs plus a queue — same as the Tk shell. Each download
+  // now has its own cancel flag in Rust, so one cancel no longer kills the rest.
+  const MAX_CONCURRENT = 2;
+  const [running, setRunning] = useState<string[]>([]);
+  const [queued, setQueued] = useState<string[]>([]);
   const [progress, setProgress] = useState("");
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -122,8 +126,31 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
       ? []
       : list.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
 
+  const startOne = async (v: StoreVoice) => {
+    setRunning((r) => [...r, v.id]);
+    setErr("");
+    try {
+      await installStoreVoice(v);
+      onInstalled();
+      await refresh(false);
+    } catch (e) {
+      setErr(`${v.name || v.id}：${String(e)}`);
+    } finally {
+      setRunning((r) => r.filter((x) => x !== v.id));
+      // Promote the next queued item, if any.
+      setQueued((q) => {
+        const [next, ...rest] = q;
+        if (next) {
+          const nv = list.find((x) => x.id === next);
+          if (nv) void startOne(nv);
+        }
+        return rest;
+      });
+    }
+  };
+
   const install = async (v: StoreVoice) => {
-    if (v.installed || busyId) return;
+    if (v.installed || running.includes(v.id) || queued.includes(v.id)) return;
     if (v.official === false && !thirdAck) {
       const ok = window.confirm(
         "第三方音色免责声明\n\n" +
@@ -134,20 +161,11 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
       if (!ok) return;
       setThirdAck(true);
     }
-    setBusyId(v.id);
-    setProgress("排队…");
-    setErr("");
-    try {
-      await installStoreVoice(v);
-      setProgress("安装完成");
-      onInstalled();
-      await refresh(false);
-    } catch (e) {
-      setErr(String(e));
-      setProgress("");
-    } finally {
-      setBusyId(null);
+    if (running.length >= MAX_CONCURRENT) {
+      setQueued((q) => [...q, v.id]);
+      return;
     }
+    void startOne(v);
   };
 
   if (!open) return null;
@@ -219,12 +237,13 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                 {err}
               </span>
             ) : null}
-            {busyId ? (
+            {running.length ? (
               <Btn
                 className="mt-1"
                 onClick={() => {
                   void cancelStoreDownload();
-                  setBusyId(null);
+                  setRunning([]);
+                  setQueued([]);
                   setProgress("已取消");
                 }}
               >
@@ -266,8 +285,8 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                           <VoiceRow
                             key={v.id}
                             v={v}
-                            busy={busyId === v.id}
-                            blocked={busyId !== null && busyId !== v.id}
+                            busy={running.includes(v.id)}
+                            queued={queued.includes(v.id)}
                             onInstall={() => void install(v)}
                           />
                         ))}
@@ -285,8 +304,8 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                 <VoiceRow
                   key={v.id}
                   v={v}
-                  busy={busyId === v.id}
-                  blocked={busyId !== null && busyId !== v.id}
+                  busy={running.includes(v.id)}
+                  queued={queued.includes(v.id)}
                   onInstall={() => void install(v)}
                 />
               ))}
@@ -331,15 +350,13 @@ function Empty() {
 function VoiceRow({
   v,
   busy,
-  blocked = false,
+  queued = false,
   onInstall,
 }: {
   v: StoreVoice;
   busy: boolean;
-  /** Another install is in flight. The backend cancel flag is global, so a
-   *  second concurrent install would let one cancel kill both — one at a
-   *  time is what the engine actually supports, so say so in the UI. */
-  blocked?: boolean;
+  /** Waiting behind the two running downloads. */
+  queued?: boolean;
   onInstall: () => void;
 }) {
   return (
@@ -361,8 +378,8 @@ function VoiceRow({
             已安装
           </Btn>
         ) : (
-          <Btn primary uw disabled={busy || blocked} onClick={onInstall}>
-            {busy ? "安装中…" : "下载"}
+          <Btn primary uw disabled={busy || queued} onClick={onInstall}>
+            {busy ? "安装中…" : queued ? "待下载" : "下载"}
           </Btn>
         )
       }

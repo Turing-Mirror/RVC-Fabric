@@ -1,6 +1,7 @@
 //! Community voice store: catalog fetch + zip/files install.
 //! Mirrors launcher/online/catalog.py + voice_install.py (subset for stage 4).
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,7 +17,30 @@ use crate::voices::safe_model_dir_name;
 const CNB_RAW_MAIN: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main";
 const MIN_PTH_BYTES: u64 = 50_000;
 
-static STORE_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Per-voice cancel flags. A single global flag meant that cancelling one
+/// download killed every other in-flight one, and that starting a second
+/// install reset the first one's cancel state — so concurrent installs were
+/// unsafe and the UI had to serialise them.
+static STORE_CANCELS: std::sync::Mutex<Option<HashMap<String, Arc<AtomicBool>>>> =
+    std::sync::Mutex::new(None);
+
+fn cancel_flag_for(id: &str) -> Arc<AtomicBool> {
+    let mut g = STORE_CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = g.get_or_insert_with(HashMap::new);
+    let flag = map
+        .entry(id.to_string())
+        .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+        .clone();
+    flag.store(false, Ordering::SeqCst);
+    flag
+}
+
+fn drop_cancel_flag(id: &str) {
+    let mut g = STORE_CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = g.as_mut() {
+        map.remove(id);
+    }
+}
 
 fn bundled_catalog_path(root: &Path) -> PathBuf {
     root.join("configs").join("online_catalog.json")
@@ -588,7 +612,6 @@ pub fn install_voice_entry(
     root: PathBuf,
     entry: Value,
 ) -> Result<Value, String> {
-    STORE_CANCEL.store(false, Ordering::SeqCst);
     let id = entry
         .get("id")
         .and_then(|v| v.as_str())
@@ -656,21 +679,9 @@ pub fn install_voice_entry(
         fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
         let vid = safe_model_dir_name(if id.is_empty() { &name } else { &id })?;
         let zpath = cache.join(format!("{vid}.zip"));
-        let cancel = Arc::new(AtomicBool::new(false));
+        // This download's own flag — cancelling another voice must not touch it.
+        let cancel = cancel_flag_for(&id);
         let cancel_flag = cancel.clone();
-        // poll STORE_CANCEL into this flag
-        let poll = std::thread::spawn({
-            let cancel = cancel.clone();
-            move || {
-                while !cancel.load(Ordering::SeqCst) {
-                    if STORE_CANCEL.load(Ordering::SeqCst) {
-                        cancel.store(true, Ordering::SeqCst);
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(200));
-                }
-            }
-        });
 
         let app2 = app.clone();
         let id2 = id.clone();
@@ -700,8 +711,7 @@ pub fn install_voice_entry(
             cancel_flag,
             Some(progress),
         );
-        cancel.store(true, Ordering::SeqCst);
-        let _ = poll.join();
+        drop_cancel_flag(&id);
         res?;
         emit("extract", 0, 1, "正在解压安装…");
         let info = install_voice_pack_zip(&root, &zpath, &id, &name, &tag, official)?;
@@ -817,8 +827,54 @@ pub fn install_voice_entry(
     Ok(info)
 }
 
-pub fn cancel_store_download() {
-    STORE_CANCEL.store(true, Ordering::SeqCst);
+/// Cancel one voice's download, or every in-flight one when `id` is empty.
+pub fn cancel_store_download(id: &str) {
+    let g = STORE_CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(map) = g.as_ref() else { return };
+    if id.is_empty() {
+        for f in map.values() {
+            f.store(true, Ordering::SeqCst);
+        }
+    } else if let Some(f) = map.get(id) {
+        f.store(true, Ordering::SeqCst);
+    }
 }
 
 
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cancelling_one_voice_leaves_the_others_running() {
+        // A single global flag used to mean one cancel killed every in-flight
+        // download, and that starting a second install reset the first one's
+        // cancel state. Per-voice flags are what make 2-at-a-time safe.
+        let a = cancel_flag_for("anon");
+        let b = cancel_flag_for("soyo");
+        assert!(!a.load(Ordering::SeqCst) && !b.load(Ordering::SeqCst));
+
+        cancel_store_download("anon");
+        assert!(a.load(Ordering::SeqCst), "target cancelled");
+        assert!(!b.load(Ordering::SeqCst), "bystander untouched");
+
+        cancel_store_download("");
+        assert!(b.load(Ordering::SeqCst), "empty id cancels all");
+
+        drop_cancel_flag("anon");
+        drop_cancel_flag("soyo");
+    }
+
+    #[test]
+    fn starting_a_second_install_does_not_reset_the_first() {
+        let a = cancel_flag_for("v1");
+        cancel_store_download("v1");
+        assert!(a.load(Ordering::SeqCst));
+        let _b = cancel_flag_for("v2"); // second install starts
+        assert!(a.load(Ordering::SeqCst), "v1 stays cancelled");
+        drop_cancel_flag("v1");
+        drop_cancel_flag("v2");
+    }
+}

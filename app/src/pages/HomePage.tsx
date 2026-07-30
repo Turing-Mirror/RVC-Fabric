@@ -1,18 +1,6 @@
+import { useEffect, useState } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
-
-type Voice = {
-  id: string;
-  name: string;
-  tag: string;
-  author: string;
-  hasIndex?: boolean;
-};
-
-const DEMO: Voice[] = [
-  { id: "soyo", name: "Soyo", tag: "少女音", author: "望月星逸", hasIndex: true },
-  { id: "anon", name: "Anon", tag: "少女音", author: "望月星逸", hasIndex: true },
-  { id: "rana", name: "Rana", tag: "少女音", author: "望月星逸", hasIndex: true },
-];
+import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 
 type Props = {
   currentId?: string;
@@ -20,19 +8,80 @@ type Props = {
   onSelect?: (id: string) => void;
 };
 
+const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
+
 /**
- * Home — stage band + 3 recent cards; current voice in center (larger).
- * Demo data until local catalog is bound.
+ * Home — stage band + 3 recent cards, current voice in the centre (larger).
+ *
+ * Recency comes from `recent_keys` (app_config `recent_models`), which
+ * `voices_select` maintains — the same ordering the Tk shell used.
  */
-export function HomePage({
-  currentId = "anon",
-  onOpenModels,
-  onSelect,
-}: Props) {
-  const current = DEMO.find((v) => v.id === currentId) ?? DEMO[1];
-  // C-position layout: left · current(center) · right
-  const others = DEMO.filter((v) => v.id !== current.id);
-  const ordered = [others[0], current, others[1]].filter(Boolean) as Voice[];
+export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
+  const [models, setModels] = useState<VoiceModel[]>([]);
+  const [recentKeys, setRecentKeys] = useState<string[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(-1);
+
+  const load = async () => {
+    try {
+      const cat = await listVoices();
+      setModels(cat.models || []);
+      setSelectedIdx(Number(cat.selected_idx ?? -1));
+      const rk = (cat as unknown as { recent_keys?: unknown }).recent_keys;
+      setRecentKeys(Array.isArray(rk) ? rk.map(String) : []);
+    } catch {
+      setModels([]);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, [currentId]);
+
+  const current =
+    (selectedIdx >= 0 ? models[selectedIdx] : undefined) ?? models[0];
+
+  // Most-recent first, current excluded — it always takes the centre slot.
+  const rest = [...models]
+    .filter((m) => m !== current)
+    .sort((a, b) => {
+      const ia = recentKeys.indexOf(keyOf(a));
+      const ib = recentKeys.indexOf(keyOf(b));
+      return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
+    });
+  const ordered = current
+    ? ([rest[0], current, rest[1]].filter(Boolean) as VoiceModel[])
+    : [];
+
+  const pick = async (m: VoiceModel) => {
+    try {
+      await selectVoice({ path: m.path, dir: m.dir, name: m.name });
+      onSelect?.(keyOf(m));
+      await load();
+    } catch {
+      /* selection failed; catalog reload will show the real state */
+    }
+  };
+
+  if (!current) {
+    return (
+      <div>
+        <div className="bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">
+            选择音色，开始变声
+          </h2>
+          <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
+            还没有本地音色。到「模型」页导入，或从社区音色下载。
+          </p>
+        </div>
+        <PagePad>
+          <Block title="最近使用">
+            <div className="flex justify-center">
+              <Btn onClick={onOpenModels}>去「模型」页</Btn>
+            </div>
+          </Block>
+        </PagePad>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -44,7 +93,11 @@ export function HomePage({
           {current.name}
         </p>
         <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {current.tag} · {current.author} · 260723 · 切换立即生效 · 运行中会自动重载
+          {[current.tag, current.author ? `作者 · ${current.author}` : ""]
+            .filter(Boolean)
+            .join(" · ")}
+          {current.tag || current.author ? " · " : ""}
+          切换立即生效 · 运行中会自动重载
         </p>
         {/* Right-side brand logo slot intentionally empty */}
       </div>
@@ -56,12 +109,12 @@ export function HomePage({
         >
           <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
             {ordered.map((v) => {
-              const cur = v.id === current.id;
+              const cur = v === current;
               return (
                 <button
-                  key={v.id}
+                  key={keyOf(v)}
                   type="button"
-                  onClick={() => onSelect?.(v.id)}
+                  onClick={() => void pick(v)}
                   className="border-0 bg-transparent p-0 text-left cursor-pointer"
                 >
                   <div
@@ -76,19 +129,29 @@ export function HomePage({
                         : "w-[156px] h-[122px] text-[26px] max-[1020px]:w-[138px] max-[1020px]:h-[110px] max-[720px]:w-[112px] max-[720px]:h-[92px]",
                     ].join(" ")}
                   >
-                    {v.name}
+                    {v.cover ? (
+                      <img
+                        src={coverSrc(v.cover)}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover rounded-[var(--r)]"
+                      />
+                    ) : (
+                      <span>{(v.name || "?").slice(0, 4)}</span>
+                    )}
                     {cur ? (
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">
                         使用中
                       </span>
                     ) : null}
-                    {v.hasIndex ? (
+                    {v.has_index ? (
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">
                         ✓ 检索库
                       </span>
                     ) : null}
                   </div>
-                  <div className="text-[11.5px] text-[var(--meta)] mt-3">{v.tag}</div>
+                  <div className="text-[11.5px] text-[var(--meta)] mt-3">
+                    {v.tag || "音色"}
+                  </div>
                   <div
                     className={[
                       "font-semibold mt-0.5 leading-snug",
@@ -98,7 +161,7 @@ export function HomePage({
                     {v.name}
                   </div>
                   <div className="text-xs text-[var(--meta)] mt-0.5">
-                    作者 · {v.author}
+                    {v.author ? `作者 · ${v.author}` : "\u00a0"}
                   </div>
                 </button>
               );

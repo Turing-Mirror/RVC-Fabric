@@ -20,6 +20,11 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
+  // Distinguish "no voices installed" from "could not read the catalog" —
+  // showing 「还没有本地音色」 after a failed call sends the user off to import
+  // something they may already have.
+  const [loadError, setLoadError] = useState("");
+  const [msg, setMsg] = useState("");
 
   const load = async () => {
     try {
@@ -28,8 +33,10 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
       setSelectedIdx(Number(cat.selected_idx ?? -1));
       const rk = (cat as unknown as { recent_keys?: unknown }).recent_keys;
       setRecentKeys(Array.isArray(rk) ? rk.map(String) : []);
-    } catch {
+      setLoadError("");
+    } catch (e) {
       setModels([]);
+      setLoadError(String(e));
     }
   };
   useEffect(() => {
@@ -53,11 +60,13 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
 
   const pick = async (m: VoiceModel) => {
     try {
+      setMsg("");
       await selectVoice({ path: m.path, dir: m.dir, name: m.name });
       onSelect?.(keyOf(m));
       await load();
-    } catch {
-      /* selection failed; catalog reload will show the real state */
+    } catch (e) {
+      // Clicking a card and having nothing happen is the worst outcome.
+      setMsg(`切换失败：${String(e)}`);
     }
   };
 
@@ -69,7 +78,9 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
             选择音色，开始变声
           </h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-            还没有本地音色。到「模型」页导入，或从社区音色下载。
+            {loadError
+              ? `读取音色目录失败：${loadError}`
+              : "还没有本地音色。到「模型」页导入，或从社区音色下载。"}
           </p>
         </div>
         <PagePad>
@@ -107,6 +118,9 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
           title="最近使用"
           action={<Btn onClick={onOpenModels}>全部音色</Btn>}
         >
+          {msg ? (
+            <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
+          ) : null}
           <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
             {ordered.map((v) => {
               const cur = v === current;

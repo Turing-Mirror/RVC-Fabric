@@ -685,8 +685,6 @@ pub fn run() {
             .build()?;
             eprintln!("[rvc-fabric] UI source: {}", ui_assets::source_label());
 
-            // Tray always exists: closing to tray is what keeps conversion
-            // running while the window is away.
             // Regenerate configs/inuse/config.json from app_config on every
             // start. Setup ships a clean template that overwrites the installed
             // one, so without this an upgrade looks like "my devices were
@@ -700,6 +698,8 @@ pub fn run() {
             }
 
             shell_extras::install_close_handler(app.handle());
+            // Tray always exists: closing to tray is what keeps conversion
+            // running while the window is away.
             if let Err(e) = shell_extras::install_tray(app.handle()) {
                 eprintln!("[rvc-fabric] tray unavailable: {e}");
             }

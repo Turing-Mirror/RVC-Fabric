@@ -9,9 +9,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
-  // Hot-update strategy A: emit UI assets to `frontend/` (next to the
-  // shipped exe in release packaging). Tauri loads this folder via
-  // `frontendDist` — do not embed a second copy under a different name.
+  // Ship UI as a replaceable `frontend/` pack (see tauri.conf frontendDist).
   build: {
     outDir: "frontend",
     emptyOutDir: true,

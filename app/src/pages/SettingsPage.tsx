@@ -15,7 +15,7 @@ const TABS = [
 
 type Tab = (typeof TABS)[number];
 
-/** Settings shell — full field wiring + SETTING_TIPS is stage 5. */
+/** Settings page shell (fields wire to config/store later). */
 export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("设备与音频");
 
@@ -36,8 +36,7 @@ export function SettingsPage() {
         {tab !== "设备与音频" && tab !== "变声参数" ? (
           <Block title={tab}>
             <p className="text-[12.5px] text-[var(--help)] m-0 leading-relaxed max-w-[76ch]">
-              本标签页字段将在阶段五按 `launcher/pages/settings_*` 与 SETTING_TIPS
-              逐项落地；布局与问号规则已按交接规范预留。
+              本标签页字段与现有设置页一致，将按项接入配置与帮助文案。
             </p>
           </Block>
         ) : null}

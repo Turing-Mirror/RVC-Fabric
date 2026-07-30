@@ -18,14 +18,14 @@ type Props = {
   onToggleRun: () => void;
   statusTitle?: string;
   statusSub?: string;
-  /** 0..1 mock meter until worker is wired (stage 2). */
+  /** 0..1 level; mock until worker meter is bound. */
   meterLevel?: number;
   threshold?: number;
 };
 
 /**
- * Persistent bottom dock — layout matches handoff preview.
- * Engine actions are stubs until stage 2 (worker bridge).
+ * Persistent bottom dock (voice summary, mode, pitch/formant, start/stop).
+ * Engine actions are stubs until the worker bridge is connected.
  */
 export function Dock({
   voiceName = "Anon",

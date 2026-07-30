@@ -32,8 +32,12 @@ pub fn product_root() -> PathBuf {
                     return p.clone();
                 }
                 // cargo run: .../app/src-tauri/target/debug → climb to repo
-                if p.join("src-tauri").is_dir() && p.parent().map(looks_like_root) == Some(true) {
-                    return p.parent().unwrap().to_path_buf();
+                if p.join("src-tauri").is_dir() {
+                    if let Some(parent) = p.parent() {
+                        if looks_like_root(parent) {
+                            return parent.to_path_buf();
+                        }
+                    }
                 }
             }
             cur = cur.and_then(|p| p.parent().map(|x| x.to_path_buf()));

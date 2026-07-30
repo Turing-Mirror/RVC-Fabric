@@ -283,7 +283,23 @@ fn parse_spec(variant: &str, data: &Value) -> RuntimeSpec {
             .and_then(|p| normalize_part(p, &var, &channel, &release_tag));
         blob = fb;
     }
-    let part = part.expect("fallback always has part");
+    let part = match part {
+        Some(p) => p,
+        None => {
+            // Last-resort: synthesize from hardcoded nvidia fallback
+            let fb = fallback_blob("nvidia");
+            normalize_part(
+                fb.get("parts")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .unwrap_or(&fb),
+                "nvidia",
+                "release",
+                DEFAULT_RELEASE_TAG,
+            )
+            .expect("embedded nvidia fallback is valid")
+        }
+    };
     let size = blob
         .get("size_bytes")
         .and_then(|v| v.as_u64())

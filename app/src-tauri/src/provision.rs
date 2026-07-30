@@ -333,7 +333,13 @@ pub fn run_provision(
                     "download",
                     size.max(1),
                     size.max(1),
-                    &format!("使用本地缓存：{}", dest_file.file_name().unwrap().to_string_lossy()),
+                    &format!(
+                        "使用本地缓存：{}",
+                        dest_file
+                            .file_name()
+                            .map(|s| s.to_string_lossy())
+                            .unwrap_or_default()
+                    ),
                 );
             } else {
                 let _ = fs::remove_file(&dest_file);

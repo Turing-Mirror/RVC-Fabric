@@ -135,11 +135,16 @@ pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), Strin
     let mut candidate = staging.join("Runtime");
     if !(candidate.join("python.exe")).is_file() {
         if let Some(py) = find_python_exe(&staging) {
-            let parent = py.parent().unwrap().to_path_buf();
-            if parent.file_name().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("runtime")).unwrap_or(false)
-                || parent.join("Lib").join("site-packages").is_dir()
-            {
-                candidate = parent;
+            if let Some(parent) = py.parent().map(|p| p.to_path_buf()) {
+                if parent
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.eq_ignore_ascii_case("runtime"))
+                    .unwrap_or(false)
+                    || parent.join("Lib").join("site-packages").is_dir()
+                {
+                    candidate = parent;
+                }
             }
         }
     }

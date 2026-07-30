@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for launcher.realtime_protocol atomic JSON writes."""
+"""Unit tests for tools.worker_protocol atomic JSON writes."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
-from launcher import realtime_protocol as rp
+from tools import worker_protocol as rp
 
 
 class WriteJsonTests(unittest.TestCase):

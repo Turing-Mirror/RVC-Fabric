@@ -2,19 +2,20 @@
 //!
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
-mod catalog;
+pub mod catalog;
 mod config;
 mod download;
 mod engine_assets;
 mod extract;
-mod paths;
+pub mod paths;
+pub mod plaza;
 mod protocol;
 mod provision;
 mod shell_extras;
 mod store;
 mod telemetry;
 mod ui_assets;
-mod update;
+pub mod update;
 mod voices;
 mod worker;
 

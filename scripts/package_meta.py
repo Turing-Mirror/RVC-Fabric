@@ -18,7 +18,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from launcher.paths import ROOT
+# Packaging-side only; no product-shell import.
+ROOT = Path(__file__).resolve().parents[1]
 
 META_NAME = "package_meta.json"
 

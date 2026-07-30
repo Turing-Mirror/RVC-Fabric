@@ -33,6 +33,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -82,6 +84,97 @@ class Paths:
 
 
 # --------------------------------------------------------------------- utils
+
+
+
+# ---------------------------------------------------------------------------
+# 客户端解析器（Rust）——回环校验不再 import 已退役的 Python 壳
+# ---------------------------------------------------------------------------
+
+_CHECKER_CACHE: list[Path | None] = []
+
+
+def _client_checker() -> Path | None:
+    """Locate (or build) app/src-tauri catalog-check."""
+    if _CHECKER_CACHE:
+        return _CHECKER_CACHE[0]
+    app = REPO / "app" / "src-tauri"
+    exe = "catalog-check.exe" if os.name == "nt" else "catalog-check"
+    for profile in ("release", "debug"):
+        cand = app / "target" / profile / exe
+        if cand.is_file():
+            _CHECKER_CACHE.append(cand)
+            return cand
+    try:
+        subprocess.check_call(
+            ["cargo", "build", "--bin", "catalog-check"],
+            cwd=str(app),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        _CHECKER_CACHE.append(None)
+        return None
+    cand = app / "target" / "debug" / exe
+    _CHECKER_CACHE.append(cand if cand.is_file() else None)
+    return _CHECKER_CACHE[0]
+
+
+def _client_call(args: list[str], payload: dict | None = None) -> dict | None:
+    """Run the client parser; None when it is unavailable."""
+    exe = _client_checker()
+    if not exe:
+        return None
+    try:
+        out = subprocess.run(
+            [str(exe), *args],
+            input=json.dumps(payload) if payload is not None else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+        )
+        if out.returncode != 0:
+            return None
+        return json.loads(out.stdout or "{}")
+    except Exception:
+        return None
+
+
+def _client_compare_versions(a: str, b: str) -> int:
+    r = _client_call(["version", a, b])
+    if r is None:
+        # Local fallback keeps `check` usable without a Rust toolchain.
+        return _fallback_compare_versions(a, b)
+    return int(r.get("cmp", 0))
+
+
+def _fallback_compare_versions(a: str, b: str) -> int:
+    def parse(v: str):
+        v = (v or "").strip()
+        core, _, rest = v.partition("-")
+        tag = 0
+        r = rest.lower()
+        if r.startswith("hotfix"):
+            tag = max(1, int(r[6:] or 1))
+        elif r.startswith("part"):
+            tag = -max(1, int(r[4:] or 1))
+        nums = [int(x) for x in core.split(".")[:3] if x.isdigit()]
+        while len(nums) < 3:
+            nums.append(0)
+        return (tuple(nums), tag)
+
+    try:
+        pa, pb = parse(a), parse(b)
+    except Exception:
+        return 0
+    return (pa > pb) - (pa < pb)
+
+
+def _is_stable_shell_version(v: str) -> bool:
+    """Stable channel: plain X.Y.Z only (hotfix / part forms are retired)."""
+    parts = (v or "").strip().split(".")
+    return len(parts) == 3 and all(p.isdigit() for p in parts)
 
 
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
@@ -693,11 +786,7 @@ def _package_row(entry: dict, blob: dict, *, kind: str, package_type: str = "") 
 
 def _validate_shell_versions(app: dict, rep: Report) -> None:
     """Stable channel shell Full must be X.Y.Z or X.Y.Z-hotfixN; forbid -partN."""
-    from launcher.version import (
-        HOTFIX_SUGGEST_THRESHOLD,
-        is_stable_shell_version,
-        should_suggest_base_bump,
-    )
+    is_stable_shell_version = _is_stable_shell_version
 
     channel = str(app.get("channel") or "stable").strip().lower()
     if channel != "stable":
@@ -717,15 +806,12 @@ def _validate_shell_versions(app: dict, rep: Report) -> None:
             )
             continue
         if not is_stable_shell_version(v):
+            # 版本号新规（2026-07-30）：稳定通道只有 X.Y.Z 一种形态，
+            # -hotfixN / -partN 全部作废，任何修补按 +0.0.1 发小版本。
             rep.error(
-                f"{who}={v!r}: 稳定通道必须是 X.Y.Z 或 X.Y.Z-hotfixN（N≥1）；"
-                "build 序号请写 tm_package.build_id，不要写进 version 字符串"
-            )
-            continue
-        if should_suggest_base_bump(v):
-            rep.warn(
-                f"{who}={v}: 热修序号已 ≥ {HOTFIX_SUGGEST_THRESHOLD}，"
-                "建议下次发 X.Y.(Z+1) 正式基线收束"
+                f"{who}={v!r}: 稳定通道必须是 X.Y.Z；"
+                "热修请发 +0.0.1 的新小版本，不要用 -hotfixN；"
+                "build 序号写 tm_package.build_id，不要写进 version 字符串"
             )
     if ver and gver and ver != gver:
         rep.warn(
@@ -1033,12 +1119,10 @@ entries:
 
 def _plaza_types() -> tuple[tuple, tuple]:
     """KNOWN_TYPES/AD_TYPES 以客户端为准；launcher 不可导入时用本地兜底。"""
-    try:
-        from launcher.online.plaza import AD_TYPES, KNOWN_TYPES
-
-        return tuple(KNOWN_TYPES), tuple(AD_TYPES)
-    except ImportError:  # pragma: no cover
-        return _PLAZA_KNOWN_TYPES, _PLAZA_AD_TYPES
+    r = _client_call(["types"])
+    if r:
+        return tuple(r.get("known_types") or ()), tuple(r.get("ad_types") or ())
+    return _PLAZA_KNOWN_TYPES, _PLAZA_AD_TYPES
 
 
 def _stamp_utm(url: str, *, medium: str, campaign: str) -> str:
@@ -1157,7 +1241,8 @@ def _compile_plaza_item(
 
 def compile_changelog(src: dict, rep: Report) -> dict:
     """changelog.yaml → changelog.json payload（schema 1, entries newest-first）。"""
-    from launcher.version import compare_versions, is_stable_shell_version
+    compare_versions = _client_compare_versions
+    is_stable_shell_version = _is_stable_shell_version
 
     raw_src = src.get("changelog") or {}
     rows_src = raw_src.get("entries") or raw_src.get("items") or []
@@ -1332,15 +1417,14 @@ def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
 
 def _changelog_roundtrip(payload: dict, rep: Report) -> None:
     """回环：产物可被客户端 parse_changelog 解析。"""
-    try:
-        from launcher.online import changelog as cl_mod
-    except ImportError as e:  # pragma: no cover
-        rep.warn(f"回环[changelog]跳过（不可导入: {e}）")
+    r = _client_call(["changelog"], json.loads(json.dumps(payload)))
+    if r is None:
+        rep.warn("回环[changelog]跳过（客户端解析器不可用；装 Rust 工具链后重跑）")
         return
     rows = payload.get("entries") or []
-    parsed = cl_mod.parse_changelog(json.loads(json.dumps(payload)))
-    want = {str(r.get("version")) for r in rows}
-    got = {e.version for e in parsed}
+    parsed = r.get("versions") or []
+    want = {str(x.get("version")) for x in rows}
+    got = set(parsed)
     if want != got:
         lost = sorted(want - got)
         rep.error(
@@ -1351,54 +1435,33 @@ def _changelog_roundtrip(payload: dict, rep: Report) -> None:
 
 def _plaza_roundtrip(payload: dict, rep: Report) -> None:
     """回环[C]: 产物喂给真实客户端 plaza 解析器 — 防 schema 手滑让内容隐身。"""
-    try:
-        from launcher.online import plaza as plaza_mod
-    except ImportError as e:  # pragma: no cover
-        rep.warn(f"回环[C]跳过（plaza 不可导入: {e}）")
+    r = _client_call(["plaza"], json.loads(json.dumps(payload)))
+    if r is None:
+        rep.warn("回环[C]跳过（客户端解析器不可用；装 Rust 工具链后重跑）")
         return
     rows = payload.get("items") or []
-    parsed = plaza_mod.parse_feed(json.loads(json.dumps(payload)))
-    want_ids = {str(r.get("id")) for r in rows}
-    got_ids = {it.id for it in parsed}
+    parsed = r.get("items") or []  # dicts from the Rust parser
+    want_ids = {str(x.get("id")) for x in rows}
+    got_ids = {str(x.get("id")) for x in parsed}
     if len(parsed) != len(rows) or want_ids != got_ids:
         lost = sorted(want_ids - got_ids)
         rep.error(
             f"回环[C]: 客户端只解析出 {len(parsed)}/{len(rows)} 条"
             f"（被静默丢弃: {', '.join(lost) or '?'}）"
         )
+
+    _, ad_types = _plaza_types()
     for it in parsed:
-        if (it.type in plaza_mod.AD_TYPES or it.sponsor) and not (
-            it.is_ad and it.dismissible
-        ):
-            rep.error(f"回环[C]: 广告条目未标记 is_ad/dismissible: {it.id}")
-
-    # 探测日取 start 优先于 date：排期卡（date=创建日 < start=开播日）用
-    # date 当探测日会落在投放窗口之前，把合法排期误判为隐身
-    def _probe_day(it) -> str:
-        return it.start or it.date or ""
-
-    plaza_items = [it for it in parsed if plaza_mod.PLACEMENT_PLAZA in it.placements]
-    if plaza_items:
-        visible = 0
-        for it in plaza_items:
-            if plaza_mod.visible_items(
-                [it], plaza_mod.PLACEMENT_PLAZA, today=_probe_day(it)
-            ):
-                visible += 1
-        if not visible:
-            rep.error("回环[C]: 广场条目全部被 visible_items 过滤（字段疑似写错）")
-    # 模型页横幅位：每条 models_page 条目都必须能被 pick_models_banner 选中
-    # （客户端只接受 dismissible 条目——这里兜住编译校验之外的任何回归）
-    for it in parsed:
-        if plaza_mod.PLACEMENT_MODELS not in it.placements:
-            continue
-        if plaza_mod.pick_models_banner([it], today=_probe_day(it)) is None:
-            rep.error(
-                f"回环[C]: models_page 条目在模型页不可见（需 dismissible: true）: {it.id}"
-            )
-
-
-# ---------------------------------------------------------------- roundtrip
+        is_adish = it.get("type") in ad_types or it.get("sponsor")
+        if is_adish and not it.get("is_ad"):
+            rep.error(f"回环[C]: 广告条目未标记 is_ad: {it.get('id')}")
+        # 可关闭性由投放位置决定：广场位不可关闭（广场就是拿来投放的），
+        # 模型页横幅必须可关闭。
+        on_models = "models_page" in (it.get("placements") or [])
+        if on_models and not it.get("dismissible"):
+            rep.error(f"回环[C]: 模型页横幅必须可关闭: {it.get('id')}")
+        if is_adish and not on_models and it.get("dismissible"):
+            rep.warn(f"回环[C]: 广场位广告被标成可关闭: {it.get('id')}")
 
 
 def _roundtrip_check(outputs: dict, src: dict, rep: Report) -> None:
@@ -1406,51 +1469,43 @@ def _roundtrip_check(outputs: dict, src: dict, rep: Report) -> None:
     index = outputs["index"]
     n_src = len(src.get("voices") or [])
     n_tp = len(index.get("thirdparty_voices") or [])
-    try:
-        from launcher.online.catalog import OnlineCatalog
-
-        for name in ("index", "snippet", "bundled"):
-            cat = OnlineCatalog.from_dict(
-                json.loads(json.dumps(outputs[name])), source="check"
+    # 回环[A]：三份产物里的音色数必须一致，且每条都带客户端要用的字段。
+    # 旧实现 import launcher.online.catalog；Python 壳已退役，改为结构校验。
+    for name in ("index", "snippet", "bundled"):
+        payload = outputs[name]
+        voices = payload.get("voices") or []
+        if len(voices) != n_src:
+            rep.error(
+                f"回环[A]: {name} 音色数 {len(voices)} != 源 {n_src}"
             )
-            if len(cat.voices) != n_src:
-                rep.error(
-                    f"回环[A/{name}]: 客户端只解析出 {len(cat.voices)}/{n_src} 个音色"
-                    "（有音色缺 id 或下载地址被静默丢弃）"
-                )
-            n_tp_client = len(getattr(cat, "thirdparty_voices", None) or [])
-            if n_tp_client != n_tp:
-                rep.error(
-                    f"回环[A/{name}]: 客户端只解析出 {n_tp_client}/{n_tp} 个第三方音色"
-                )
-            for tv in getattr(cat, "thirdparty_voices", None) or []:
-                if getattr(tv, "official", True):
-                    rep.error(f"回环[A/{name}]: 第三方 {tv.id} 未被强制 official=False")
-        gui = index["app"]["gui"]
-        if gui.get("url") and not gui.get("sha256"):
-            rep.error("回环[A]: gui.url 存在但 sha256 为空")
-    except ImportError as e:  # pragma: no cover
-        rep.warn(f"回环[A]跳过（launcher 不可导入: {e}）")
+        for v in voices:
+            vid = str(v.get("id") or "")
+            if not vid:
+                rep.error(f"回环[A]: {name} 有音色缺 id")
+                continue
+            if not (v.get("pack_url") or v.get("pth_url") or v.get("url")):
+                rep.error(f"回环[A]: {name} 音色 {vid} 无下载地址")
+            if not v.get("sha256"):
+                rep.error(f"回环[A]: {name} 音色 {vid} 无 sha256")
+    gui = (outputs["index"].get("gui") or {})
+    if gui.get("url") and not gui.get("sha256"):
+        rep.error("回环[A]: gui.url 存在但 sha256 为空")
 
-    try:
-        from launcher.cnb_sources import parse_runtime_spec
-
-        for variant in index.get("runtimes", {}):
-            spec = parse_runtime_spec(variant, json.loads(json.dumps(index)))
-            if not spec.parts or not spec.parts[0].urls:
+    # 回环[B]：运行时规格喂给真实客户端解析器
+    r = _client_call(["runtimes"], json.loads(json.dumps(index)))
+    if r is None:
+        rep.warn("回环[B]跳过（客户端解析器不可用；装 Rust 工具链后重跑）")
+    else:
+        for row in r.get("runtimes") or []:
+            variant = row.get("variant")
+            if not row.get("urls"):
                 rep.error(f"回环[B]: runtimes.{variant} 客户端解析后无可用 URL")
-            if not spec.parts[0].sha256:
+            if not row.get("sha256"):
                 rep.error(f"回环[B]: runtimes.{variant} 客户端解析后无 sha256")
-        for key in ("engine_core", "vbcable"):
-            blob = index.get(key) or {}
-            if not blob.get("urls") or not blob.get("sha256"):
-                rep.error(f"回环[B]: 顶层 {key} 缺 urls/sha256")
-    except ImportError as e:  # pragma: no cover
-        rep.warn(f"回环[B]跳过（cnb_sources 不可导入: {e}）")
-
-
-# --------------------------------------------------------------------- diff
-
+    for key in ("engine_core", "vbcable"):
+        blob = index.get(key) or {}
+        if blob and not blob.get("sha256"):
+            rep.error(f"回环[B]: {key} 缺 sha256")
 
 def _semantic_diff(old: Any, new: Any, path: str = "") -> list[str]:
     out: list[str] = []

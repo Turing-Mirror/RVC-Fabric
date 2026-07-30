@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from launcher.online.package_spec import (
+from pack_spec import (
     PKG_VOICE_PACK,
     TM_PACKAGE_JSON,
     normalize_yymmdd,

@@ -73,7 +73,8 @@ GUI_BLOCKED_PREFIXES = (
 )
 
 GUI_ALLOWED_PREFIXES = (
-    "launcher/",
+    "app/frontend/",
+    "launcher/",  # 旧 Python 壳补丁（历史包识别用）
     "configs/",
     "i18n/",
     "scripts/",
@@ -181,7 +182,13 @@ def detect_zip_package_type(zip_path: Path) -> str:
 
     # Voice pack: has pth, no launcher/
     has_pth = any(n.endswith(".pth") for n in names)
-    has_launcher = any(n.startswith("launcher/") or "/launcher/" in n for n in names)
+    # Tauri 版界面补丁装的是 app/frontend/；旧 Python 补丁装 launcher/
+    has_launcher = any(
+        n.startswith(("launcher/", "app/frontend/", "frontend/"))
+        or "/launcher/" in n
+        or "/frontend/" in n
+        for n in names
+    )
     if has_pth and not has_launcher:
         return PKG_VOICE_PACK
 

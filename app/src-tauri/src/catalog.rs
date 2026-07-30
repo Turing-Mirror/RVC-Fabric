@@ -228,7 +228,7 @@ fn normalize_part(
     })
 }
 
-fn parse_spec(variant: &str, data: &Value) -> RuntimeSpec {
+pub fn parse_spec(variant: &str, data: &Value) -> RuntimeSpec {
     let mut var = variant.trim().to_ascii_lowercase();
     if var != "nvidia" && var != "amd" && var != "nvidia50" {
         var = "nvidia".into();

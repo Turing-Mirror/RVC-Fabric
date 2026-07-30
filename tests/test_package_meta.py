@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for launcher.package_meta (no GPU)."""
+"""Unit tests for package_meta (no GPU)."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
-from launcher.package_meta import (
+from package_meta import (
     VARIANT_DEFAULTS,
     default_accel_for_package,
     load_package_meta,

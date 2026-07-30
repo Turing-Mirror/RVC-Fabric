@@ -191,7 +191,7 @@ def strip_heavy_from_payload(out: Path) -> None:
 def sanitize_inuse_config(out: Path) -> None:
     """Never ship developer absolute paths in configs/inuse/config.json."""
     sys.path.insert(0, str(REPO))
-    from launcher.inuse_config import write_clean_inuse
+    from inuse_template import write_clean_inuse
 
     write_clean_inuse(out)
     log("[payload] sanitized configs/inuse/config.json (clean template, no absolute paths)")

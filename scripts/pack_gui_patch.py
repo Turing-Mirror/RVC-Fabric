@@ -23,8 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from launcher.online.package_spec import PKG_GUI_PATCH, TM_PACKAGE_JSON, tm_package_template
-from launcher.version import (
+from pack_spec import PKG_GUI_PATCH, TM_PACKAGE_JSON, tm_package_template
+from shell_version import (
     HOTFIX_SUGGEST_THRESHOLD,
     should_suggest_base_bump,
     validate_stable_shell_version,

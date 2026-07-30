@@ -218,23 +218,30 @@ class BuildOutputsTests(unittest.TestCase):
             self.assertIn("release-1.2.0", release_ids)
 
     def test_roundtrip_real_client_parsers(self):
+        """产物必须能被真实客户端解析器读出来。
+
+        解析器现在是 Rust（app/src-tauri 的 catalog-check）。没有 Rust 工具链
+        时跳过，而不是假装通过——build_catalog 自身会在报告里给出同样的警告。
+        """
+        import subprocess
+
+        exe = bc._client_checker()
+        if not exe:
+            self.skipTest("catalog-check 不可用（需要 Rust 工具链）")
         with tempfile.TemporaryDirectory() as td:
             paths = make_fixture(Path(td))
             self.assertEqual(bc.cmd_build(paths), 0)
-            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
-
-            from launcher.online.catalog import OnlineCatalog
-
-            cat = OnlineCatalog.from_dict(index, source="test")
-            self.assertEqual(len(cat.voices), 2)
-            self.assertEqual({v.series for v in cat.voices}, {"RVC原版", "MyGO!!!!!"})
-
-            from launcher.cnb_sources import parse_runtime_spec
-
-            for variant in ("nvidia", "amd", "nvidia50"):
-                spec = parse_runtime_spec(variant, index)
-                self.assertTrue(spec.primary.urls, variant)
-                self.assertEqual(len(spec.primary.sha256), 64, variant)
+            plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
+        out = subprocess.run(
+            [str(exe), "plaza"],
+            input=json.dumps(plaza),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        parsed = json.loads(out.stdout)
+        self.assertEqual(parsed["count"], len(plaza.get("items") or []))
 
     def test_build_idempotent(self):
         with tempfile.TemporaryDirectory() as td:

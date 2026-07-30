@@ -86,7 +86,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     last: BaseException | None = None
     for attempt in range(_WRITE_RETRIES):
         try:
-            tmp.replace(path)
+            os.replace(tmp, path)
             return
         except Exception as e:  # noqa: BLE001 — must never kill the worker
             last = e

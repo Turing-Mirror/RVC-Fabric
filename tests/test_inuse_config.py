@@ -10,8 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
-from launcher.inuse_config import CLEAN_INUSE, sanitize_inuse_dict
+from inuse_template import CLEAN_INUSE, sanitize_inuse_dict
 
 
 class InuseSanitizeTests(unittest.TestCase):

@@ -13,7 +13,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from launcher.paths import ROOT
+# Packaging-side only; no product-shell import.
+ROOT = Path(__file__).resolve().parents[1]
 
 # Default shape for release + repair (relative paths only; empty model ok)
 CLEAN_INUSE: dict[str, Any] = {

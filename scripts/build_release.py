@@ -517,7 +517,7 @@ def copy_engine(out: Path) -> None:
     # Never ship developer absolute paths in configs/inuse
     try:
         sys.path.insert(0, str(REPO))
-        from launcher.inuse_config import write_clean_inuse
+        from inuse_template import write_clean_inuse
 
         write_clean_inuse(out)
         log("[engine] sanitized configs/inuse/config.json")
@@ -879,7 +879,7 @@ def main() -> int:
     try:
         if str(REPO) not in sys.path:
             sys.path.insert(0, str(REPO))
-        from launcher.package_meta import write_package_meta
+        from package_meta import write_package_meta
 
         write_package_meta(
             out,

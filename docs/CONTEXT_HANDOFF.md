@@ -3,10 +3,10 @@
 > **用途**  
 > 1. 新开 Grok / 协作者对话：先读本文再动代码。  
 > 2. 在 GitHub 上看仓库的人：了解产品定位、架构、已做事项与坑。  
-> **最后大更新**：2026-07-28  
+> **最后大更新**：2026-07-30  
 > **工作区**：`L:\My Project\Grok`  
-> **当前分支**：`tm-release`（相对 `fabric/tm-release` 可能超前：广场页 `0800079` 等）  
-> **壳版本**：1.2.2  
+> **当前分支**：`tm-release`（与 `fabric/tm-release` 对齐；以 `git log` 为准）  
+> **壳版本**：1.2.3（Full；热修形态见下「版本号规范」）  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  
@@ -112,7 +112,9 @@
 - **广场页（2026-07-27）**：新增「广场」导航页（TRM/RVC Fabric 资讯 + 引流 + 赞助卡片）与模型页至多一条可关闭广告横幅；feed 为 CNB 仓根 `plaza.json`，独立于 index.json，运营改内容不发版（源 `catalog-src/plaza.yaml`，build_catalog 编译回环校验）。ad/sponsor 强制可关闭并带「广告」角标；点击统计只靠编译期给 url 盖 utm 参数，客户端**零遥测**。详见 `docs/广场页与内容运营.md`。  
 - **自定义背景图（2026-07-28，P0/P1 跟进 07-29）**：设置 →「外观（背景图）」；不透明度/磨砂。PIL cover + GaussianBlur + blend（相对 `theme.TM_BG`）。Windows 透出用**专用 chromakey `#010203`**（禁止用 `TM_BG` 作色键，避免按钮被打穿）；仅 body/页根/滚动画布上色键。全窗重算后台线程，滑条 debounce 280ms。安装限 20MB / 最长边 4096，只认 `User_Data/wallpaper/`。UI：`WallpaperSettingsMixin`。实现：`launcher/ui/wallpaper.py`。P2 待办见 §8。  
 - **v1.1.4（2026-07-29）**：`gui_patch_1.1.4` 已本地打包；其他页 Magia 列表行；status.json 写竞态；nvidia 空探测；审查 #8/#22/#25/#35/#37；用纯 `1.1.4` 解开旧壳 partN 更新尾巴。  
-- **社区音色 + 第三方源（1.2.2）**：「社区下载」更名 **社区音色**；双源清单 `voices[]`（图灵镜源）+ `thirdparty_voices[]`（公开社区站直链，如 Hugging Face）；对话框四视图：最新 / 图灵镜源 / 第三方 / 系列专区；第三方免责声明（风险与 RVC Fabric 官方无关）；安装盖 `publisher=community`、永不官方章；下载默认走 hf-mirror 镜像（`app_config.hf_endpoint` 可改）。运营：`catalog-src/thirdparty/*.yaml` + `scripts/add_thirdparty_voice.py` + `build_catalog`。方案见 `docs/第三方音色下载方案.md`。  
+- **社区音色 + 第三方源（1.2.x）**：「社区下载」更名 **社区音色**；双源清单 `voices[]`（图灵镜源）+ `thirdparty_voices[]`（公开社区站直链，如 Hugging Face）；对话框四视图：最新 / 图灵镜源 / 第三方 / 系列专区；第三方免责声明（风险与 RVC Fabric 官方无关）；安装盖 `publisher=community`、永不官方章；下载默认走 hf-mirror 镜像（`app_config.hf_endpoint` 可改）。运营：`catalog-src/thirdparty/*.yaml` + `scripts/add_thirdparty_voice.py` + `build_catalog`。方案见 `docs/第三方音色下载方案.md`。  
+- **v1.2.3（2026-07-30）**：误报「已在运行」、检查更新超时与启动弹窗等热修（git 曾出现同号多次交付；**起用下方版本规范后禁止同 Full OTA**）。  
+- **壳层版本号规范（2026-07-30）**：稳定通道 Full = `X.Y.Z` 或 `X.Y.Z-hotfixN`；界面展示「1.2.3 热修N」；`build_id` 仅元数据；同 Base 热修建议上限 5 后抬 Z；禁止新发 `-partN` / 同号换包。权威：`docs/在线更新与音色库.md` §0；实现 `launcher/version.py` + `pack_gui_patch` / `build_catalog` 校验。  
 
 
 ---
@@ -186,11 +188,11 @@
 | 高 | Setup → 启动器补全 → 主界面 实机验收 |
 | 高 | ~~壳层审查 high×4~~ **已修**（2026-07-28） |
 | 中 | ~~审查 medium~~ **已全部修完**（2026-07-29）；**low 按 `docs/审查缺陷清单.md` L1–L5 批次** |
-| 中 | ~~改 launcher 后需 gui_patch~~ **已打** `dist/gui_patch_1.1.4.zip`（sha256 见 `configs/online_catalog.json`）；**待** 上传 CNB LFS + 推 index |
+| 中 | 改 launcher 后按 **§0 版本规范** 打 gui_patch（热修用 `-hotfixN`，勿同号覆盖）；上传 CNB LFS + `build_catalog` 推 index |
 | 中 | 125%/150% HiDPI 实机验收（96dpi 仅验了零变化基线） |
 | 中 | 三变体全量/Setup 实机验收矩阵（启停/切音色/热更/监听/强杀） |
 | 低 | ~~MagiaDC UX 起步~~ **其他页** 已改为 ActionListRow 列表（2026-07-29）；其余区块仍可继续 |
-| 低 | ~~旧壳 partN~~ **1.1.4 纯正式号** 解法（digit-only 旧比较器也能升）；见 `compare_versions` 文档与单测 |
+| 低 | 旧壳 partN：已用纯正式号 + 现规范禁止新 part；比较器见 `launcher/version.py` |
 | 低 | 推理侧可选路线见 `PERF_NOTES.md` §5（ONNX/DML 等） |
 | 低 | **壁纸 P2**（见下） |
 

@@ -348,6 +348,10 @@ def tm_package_template(package_type: str, **extra: Any) -> dict[str, Any]:
         "min_app_version": extra.get("min_app_version") or "",
         "notes": extra.get("notes") or "",
     }
+    # Optional support/build stamp — not part of version compare (see version.py).
+    build_id = str(extra.get("build_id") or "").strip()
+    if build_id:
+        base["build_id"] = build_id
     if t == PKG_GUI_PATCH:
         base["applies"] = "merge_allowlist"
         base["description"] = "Incremental shell/GUI patch for in-app apply"

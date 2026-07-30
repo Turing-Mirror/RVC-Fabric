@@ -439,11 +439,13 @@ class StorePage:
         st = check_gui_update(cat)
         ptype = st.get("package_type") or PKG_GUI_PATCH
         type_line = f"包类型:{describe_package_type(ptype)}"
+        loc_d = st.get("local_display") or st.get("local") or "?"
+        rem_d = st.get("remote_display") or st.get("remote") or "?"
         if st["available"]:
             if ptype == PKG_FULL or st.get("action") == "external":
                 self.lbl_gui_status.configure(
                     text=(
-                        f"发现【全量】更新提示:{st['local']} → {st['remote']}\n"
+                        f"发现【全量】更新提示:{loc_d} → {rem_d}\n"
                         f"{type_line}\n"
                         f"{st['notes'] or ''}\n"
                         "全量包不会在软件内覆盖 Runtime，请用「全量包说明」按钮打开下载链接，"
@@ -455,7 +457,7 @@ class StorePage:
             else:
                 self.lbl_gui_status.configure(
                     text=(
-                        f"发现【增量】软件更新:{st['local']} → {st['remote']}\n"
+                        f"发现【增量】软件更新:{loc_d} → {rem_d}\n"
                         f"{type_line}\n"
                         f"{st['notes'] or '（无更新说明）'}"
                     ),
@@ -465,7 +467,7 @@ class StorePage:
         elif st["url"]:
             self.lbl_gui_status.configure(
                 text=(
-                    f"已是最新或同版本（本地 {st['local']} · 远程 {st['remote']}）\n"
+                    f"已是最新或同版本（本地 {loc_d} · 远程 {rem_d}）\n"
                     f"{type_line}"
                 ),
                 fg=TM_INK_MUTED,
@@ -988,10 +990,12 @@ class StorePage:
                 "请使用「全量包说明 / 打开链接」。",
             )
             return
+        loc_d = st.get("local_display") or st.get("local") or "?"
+        rem_d = st.get("remote_display") or st.get("remote") or "?"
         if not messagebox.askyesno(
             "应用增量更新",
             f"将下载增量更新包并覆盖软件文件（不动 Runtime / User_Data / 模型）。\n"
-            f"{st['local']} → {st['remote']}\n\n完成后请重启软件。继续？",
+            f"{loc_d} → {rem_d}\n\n完成后请重启软件。继续？",
         ):
             return
         self._busy = True

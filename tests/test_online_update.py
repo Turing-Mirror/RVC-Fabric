@@ -19,6 +19,15 @@ from launcher.online.catalog import (
     compare_versions,
     load_bundled_catalog,
 )
+from launcher.version import (
+    base_version,
+    display_version,
+    hotfix_revision,
+    is_stable_shell_version,
+    next_hotfix_version,
+    should_suggest_base_bump,
+    validate_stable_shell_version,
+)
 from launcher.online.downloader import (
     _has_requests,
     _session,
@@ -102,11 +111,45 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(compare_versions("1.1.2-part1", "1.1.1"), 1)
         self.assertEqual(compare_versions("1.1.2-part9", "1.1.3"), -1)
 
+    def test_hotfix_suffix_is_post_release(self):
+        # Full order: base < hotfix1 < hotfix2 < next base
+        self.assertEqual(compare_versions("1.2.3", "1.2.3-hotfix1"), -1)
+        self.assertEqual(compare_versions("1.2.3-hotfix1", "1.2.3"), 1)
+        self.assertEqual(compare_versions("1.2.3-hotfix1", "1.2.3-hotfix2"), -1)
+        self.assertEqual(compare_versions("1.2.3-hotfix2", "1.2.3-hotfix1"), 1)
+        self.assertEqual(compare_versions("1.2.3-hotfix99", "1.2.4"), -1)
+        self.assertEqual(compare_versions("1.2.4", "1.2.3-hotfix99"), 1)
+        # Historical part still below bare base and below hotfix
+        self.assertEqual(compare_versions("1.2.3-part1", "1.2.3-hotfix1"), -1)
+        self.assertEqual(compare_versions("1.2.3-hotfix1", "1.2.3-hotfix1"), 0)
+
+    def test_display_and_base_helpers(self):
+        self.assertEqual(base_version("1.2.3-hotfix2"), "1.2.3")
+        self.assertEqual(display_version("1.2.3"), "1.2.3")
+        self.assertEqual(display_version("1.2.3-hotfix2"), "1.2.3 热修2")
+        self.assertEqual(hotfix_revision("1.2.3-hotfix5"), 5)
+        self.assertEqual(hotfix_revision("1.2.3"), 0)
+        self.assertFalse(should_suggest_base_bump("1.2.3-hotfix4"))
+        self.assertTrue(should_suggest_base_bump("1.2.3-hotfix5"))
+        self.assertEqual(next_hotfix_version("1.2.3"), "1.2.3-hotfix1")
+        self.assertEqual(next_hotfix_version("1.2.3-hotfix2"), "1.2.3-hotfix3")
+
+    def test_stable_shell_validation(self):
+        self.assertTrue(is_stable_shell_version("1.2.3"))
+        self.assertTrue(is_stable_shell_version("1.2.3-hotfix1"))
+        self.assertFalse(is_stable_shell_version("1.2.3-part1"))
+        self.assertFalse(is_stable_shell_version("1.2.3-build1"))
+        self.assertFalse(is_stable_shell_version("1.2.3-hotfix0"))
+        self.assertEqual(validate_stable_shell_version("1.2.3-HOTFIX2"), "1.2.3-hotfix2")
+        with self.assertRaises(ValueError):
+            validate_stable_shell_version("1.2.3-part1")
+
     def test_legacy_digit_only_client_sees_pure_patch(self):
         """Old shells without -partN semantics: re.findall(r'\\d+') only.
 
         1.1.2-part1 → [1,1,2,1] looked *newer* than 1.1.2, so users stuck.
         Shipping pure 1.1.4 → [1,1,4] still wins under digit-only compare.
+        Hotfix digits also look newer than bare base under legacy.
         """
         import re
 
@@ -123,6 +166,9 @@ class VersionTests(unittest.TestCase):
         # Pure next release unblocks them without upgrading the comparator
         self.assertEqual(legacy("1.1.2-part1", "1.1.4"), -1)
         self.assertEqual(compare_versions("1.1.2-part1", "1.1.4"), -1)
+        # Hotfix after formal release: legacy digit path also upgrades
+        self.assertEqual(legacy("1.2.3", "1.2.3-hotfix1"), -1)
+        self.assertEqual(legacy("1.2.3-hotfix1", "1.2.4"), -1)
 
 
 class CnbUrlTests(unittest.TestCase):

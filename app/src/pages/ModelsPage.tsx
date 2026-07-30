@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoreDialog } from "../components/StoreDialog";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
-import { openExternal } from "../lib/plaza";
+import { openExternal, type PlazaItem } from "../lib/plaza";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import {
@@ -33,6 +33,8 @@ import {
 } from "../lib/voices";
 
 export type ModelsPageProps = {
+  /** Models-page placement, owned by App so the feed is fetched once. */
+  banner?: PlazaItem | null;
   onVoiceChange?: (info: {
     model: VoiceModel;
     pitch?: number;
@@ -43,7 +45,7 @@ export type ModelsPageProps = {
 
 type SortKey = "default" | "name" | "index";
 
-export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
+export function ModelsPage({ banner = null, onVoiceChange }: ModelsPageProps) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -265,7 +267,7 @@ export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
         <div className="text-[12.5px] text-[var(--meta)] mt-2">{msg}</div>
       ) : null}
 
-      <AdBanner />
+      <AdBanner banner={banner} />
 
       <Block>
         <div className="flex items-center gap-3 flex-wrap mb-[18px]">

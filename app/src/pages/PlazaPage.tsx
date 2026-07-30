@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import {
-  fetchPlaza,
   formatDate,
   openExternal,
   type ChangelogEntry,
@@ -15,31 +14,16 @@ import {
  * Plaza cards are **not** dismissible — carrying placements is what this page
  * is for. The dismissible one is the single models-page banner, handled there.
  */
-export function PlazaPage() {
-  const [feed, setFeed] = useState<PlazaFeed | null>(null);
-  const [loading, setLoading] = useState(true);
+export function PlazaPage({
+  feed,
+  loading = false,
+  onReload,
+}: {
+  feed: PlazaFeed;
+  loading?: boolean;
+  onReload?: () => void;
+}) {
   const [allNotes, setAllNotes] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setFeed(await fetchPlaza());
-    } catch (e) {
-      setFeed({
-        items: [],
-        banner: null,
-        changelog: [],
-        errors: [String(e)],
-        app_version: "",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const changelog = feed?.changelog ?? [];
   const shown = allNotes ? changelog : changelog.slice(0, 1);
@@ -51,7 +35,7 @@ export function PlazaPage() {
         title="广场"
         sub="图灵镜 · 更新与投放"
         actions={
-          <Btn onClick={() => void load()} disabled={loading}>
+          <Btn onClick={() => onReload?.()} disabled={loading}>
             {loading ? "刷新中" : "刷新"}
           </Btn>
         }

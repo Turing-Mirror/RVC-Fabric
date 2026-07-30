@@ -4,6 +4,7 @@ import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
+import { usePlaza } from "./hooks/usePlaza";
 import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
@@ -92,6 +93,7 @@ export default function App() {
   const [provisionDismissed, setProvisionDismissed] = useState(false);
 
   const engine = useEngine();
+  const plaza = usePlaza();
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -243,8 +245,13 @@ export default function App() {
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">
       <TitleBar
         page={page}
-        onPage={setPage}
-        plazaUnread
+        onPage={(id) => {
+          // Opening the plaza is what clears its dot — it used to be hardcoded
+          // on, so it meant nothing.
+          if (id === "plaza") plaza.markSeen();
+          setPage(id);
+        }}
+        plazaUnread={plaza.unread}
         compactNav={compactNav}
       />
 
@@ -280,10 +287,17 @@ export default function App() {
                 />
               );
             case "plaza":
-              return <PlazaPage />;
+              return (
+                <PlazaPage
+                  feed={plaza.feed}
+                  loading={plaza.loading}
+                  onReload={() => void plaza.reload()}
+                />
+              );
             case "models":
               return (
                 <ModelsPage
+                  banner={plaza.feed.banner}
                   onVoiceChange={({ model, pitch: p, formant: f, profileSummary: ps }) => {
                     setVoiceName(model.name || "未选择模型");
                     setVoiceId(model.path || model.dir || model.name || "");

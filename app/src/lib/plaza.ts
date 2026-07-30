@@ -34,6 +34,9 @@ export type PlazaFeed = {
   /** Per-feed failures. One feed being down must not blank the other. */
   errors: string[];
   app_version: string;
+  /** Newest dated row; what "seen" is recorded against. */
+  newest: string;
+  unread: boolean;
 };
 
 const EMPTY: PlazaFeed = {
@@ -42,6 +45,8 @@ const EMPTY: PlazaFeed = {
   changelog: [],
   errors: [],
   app_version: "",
+  newest: "",
+  unread: false,
 };
 
 function isTauri(): boolean {

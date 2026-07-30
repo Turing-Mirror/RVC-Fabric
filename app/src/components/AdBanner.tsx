@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { dismissAd, fetchPlaza, openExternal, type PlazaItem } from "../lib/plaza";
+import { useState } from "react";
+import { dismissAd, openExternal, type PlazaItem } from "../lib/plaza";
 
 /**
  * The one dismissible placement.
@@ -9,22 +9,9 @@ import { dismissAd, fetchPlaza, openExternal, type PlazaItem } from "../lib/plaz
  * user came to do, so it closes, and the choice is remembered across restarts.
  * At most one is ever shown (`plaza::pick_models_banner`).
  */
-export function AdBanner() {
-  const [item, setItem] = useState<PlazaItem | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void fetchPlaza()
-      .then((f) => {
-        if (alive) setItem(f.banner ?? null);
-      })
-      .catch(() => {
-        /* a placement that cannot load is simply not shown */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+export function AdBanner({ banner }: { banner: PlazaItem | null }) {
+  const [closed, setClosed] = useState(false);
+  const item = closed ? null : banner;
 
   if (!item) return null;
   const clickable = Boolean(item.url);
@@ -67,7 +54,7 @@ export function AdBanner() {
         title="不再显示"
         onClick={() => {
           void dismissAd(item.id);
-          setItem(null);
+          setClosed(true);
         }}
         className="flex-none border-0 bg-transparent cursor-pointer text-[15px] leading-none text-[var(--meta)] px-2 py-1 rounded-[var(--rs)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)]"
       >

@@ -258,16 +258,35 @@ async fn plaza_fetch(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
             &dismissed,
         );
         let banner = plaza::pick_models_banner(&items, update::APP_VERSION, &today, &dismissed);
+        // Newest dated row decides the tab dot. Undated rows carry no "new"
+        // signal — otherwise an evergreen sponsor slot would keep the dot lit
+        // forever, which is exactly the old hardcoded behaviour.
+        let newest = feed
+            .iter()
+            .map(|it| it.date.as_str())
+            .filter(|d| !d.is_empty())
+            .max()
+            .unwrap_or("")
+            .to_string();
+        let unread = !newest.is_empty() && newest > config::plaza_seen(&root);
         Ok(json!({
             "items": feed,
             "banner": banner,
             "changelog": changelog,
             "errors": errors,
             "app_version": update::APP_VERSION,
+            "newest": newest,
+            "unread": unread,
         }))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The user opened the plaza — clear the tab dot up to `newest`.
+#[tauri::command]
+fn plaza_mark_seen(state: State<'_, Mutex<AppState>>, newest: String) -> Result<(), String> {
+    config::set_plaza_seen(&root_clone(&state)?, &newest)
 }
 
 /// Remember a dismissed models-page banner so it stays gone across restarts.
@@ -731,6 +750,7 @@ pub fn run() {
             legacy_open_webui,
             plaza_fetch,
             plaza_dismiss,
+            plaza_mark_seen,
             open_external,
             config_get,
             config_describe,

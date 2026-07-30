@@ -237,6 +237,31 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     }))
 }
 
+/// Newest plaza date (`YYMMDD`) the user has actually looked at. Drives the
+/// dot on the 广场 tab, which was previously hardcoded on and therefore never
+/// meant anything.
+const PLAZA_SEEN: &str = "plaza_seen";
+
+pub fn plaza_seen(root: &Path) -> String {
+    read_json(&paths::app_config_path(root))
+        .get(PLAZA_SEEN)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+pub fn set_plaza_seen(root: &Path, newest: &str) -> Result<(), String> {
+    // Only ever move forward: an older feed (a cached response, a rollback)
+    // must not resurrect the dot for content already read.
+    if newest.is_empty() || newest <= plaza_seen(root).as_str() {
+        return Ok(());
+    }
+    let mut saved = read_json(&paths::app_config_path(root));
+    saved.insert(PLAZA_SEEN.into(), json!(newest));
+    let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
+    write_atomic(&paths::app_config_path(root), &text).map_err(|e| format!("保存失败：{e}"))
+}
+
 /// Key holding dismissed models-page banner ids. Not a settings key: it never
 /// appears in the settings UI and must not reach the engine's config.
 const DISMISSED_ADS: &str = "dismissed_ads";

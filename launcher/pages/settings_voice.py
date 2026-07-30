@@ -15,7 +15,7 @@ from launcher.ui.help_content import SETTING_TIPS
 class SettingsVoiceParamsMixin:
     def _build_settings_voice_section(self, kit: SettingsUiKit) -> None:
         # Voice params (also on bottom dock; saved per model under User_Data/models)
-        right = kit.card( "变声参数（运行中可热更新 · 按音色保存）")
+        right = kit.card("变声参数（运行中可热更新 · 按音色保存）")
         voice_note = tk.Label(
             right,
             text=(
@@ -64,7 +64,9 @@ class SettingsVoiceParamsMixin:
             hot=True,
             tip_key="index_rate",
         )
-        kit.scale_row(right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True, tip_key="rms")
+        kit.scale_row(
+            right, "响度因子", self.var_rms, 0, 1, 0.01, hot=True, tip_key="rms"
+        )
 
         # .index 文件的绑定/切换在「模型」页管理；这里只保留内部变量
         # （Index Rate 滑杆仍在上方 — 它是参数，不是文件选择）。
@@ -90,6 +92,7 @@ class SettingsVoiceParamsMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        kit.help_mark(f0f, SETTING_TIPS["f0"])
         cmb_f0 = ttk.Combobox(
             f0f,
             textvariable=self.var_f0,
@@ -100,7 +103,6 @@ class SettingsVoiceParamsMixin:
         )
         cmb_f0.pack(side="left")
         cmb_f0.bind("<<ComboboxSelected>>", lambda e: self._on_hot_param())
-        kit.help_mark(f0f, SETTING_TIPS["f0"])
 
         modef = tk.Frame(right, bg=TM_SURFACE)
         modef.pack(fill="x", pady=4)
@@ -113,6 +115,14 @@ class SettingsVoiceParamsMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        _mode_tip = (
+            "【输出变声】日常开黑/语音用这个。\n"
+            "麦克风 → 变成所选音色 → 从「输出设备」出去（一般选 CABLE Input）。\n"
+            "\n"
+            "【输入监听】不进行变声，只把麦克风原声送到输出。\n"
+            "用来检查麦是否正常、声卡连接对不对；听完记得切回「输出变声」。"
+        )
+        kit.help_mark(modef, _mode_tip)
         rb_vc = tk.Radiobutton(
             modef,
             text="输出变声",
@@ -135,15 +145,5 @@ class SettingsVoiceParamsMixin:
             activebackground=TM_SURFACE,
         )
         rb_im.pack(side="left", padx=(8, 0))
-        _mode_tip = (
-            "【输出变声】日常开黑/语音用这个。\n"
-            "麦克风 → 变成所选音色 → 从「输出设备」出去（一般选 CABLE Input）。\n"
-            "\n"
-            "【输入监听】不进行变声，只把麦克风原声送到输出。\n"
-            "用来检查麦是否正常、声卡连接对不对；听完记得切回「输出变声」。"
-        )
-        kit.help_mark(modef, _mode_tip)
         HoverTip(rb_vc, "输出变声：把麦克风变成所选音色再输出（日常变声用这个）。")
         HoverTip(rb_im, "输入监听：不改变声音，只输出麦克风原声（测麦/测连接）。")
-
-

@@ -30,7 +30,7 @@ from launcher.ui.help_content import SETTING_TIPS
 class SettingsDevicesMixin:
     def _build_settings_devices_section(self, kit: SettingsUiKit) -> None:
         # Device card
-        left = kit.card( "设备与音频")
+        left = kit.card("设备与音频")
         intro = tk.Label(
             left,
             text=(
@@ -59,6 +59,7 @@ class SettingsDevicesMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        kit.help_mark(row, SETTING_TIPS["accel"])
         self.cmb_accel = ttk.Combobox(
             row,
             textvariable=self.var_accel,
@@ -69,7 +70,6 @@ class SettingsDevicesMixin:
         )
         self.cmb_accel.pack(side="left")
         self.cmb_accel.bind("<<ComboboxSelected>>", lambda e: self._on_accel_changed())
-        kit.help_mark(row, SETTING_TIPS["accel"])
         self.lbl_accel_status = tk.Label(
             left,
             text="加速：检测中…",
@@ -113,6 +113,7 @@ class SettingsDevicesMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        kit.help_mark(row, SETTING_TIPS["hostapi"])
         self.cmb_hostapi = ttk.Combobox(
             row,
             textvariable=self.var_hostapi,
@@ -125,7 +126,6 @@ class SettingsDevicesMixin:
         self.cmb_hostapi.bind(
             "<<ComboboxSelected>>", lambda e: self._on_hostapi_change()
         )
-        kit.help_mark(row, SETTING_TIPS["hostapi"])
 
         row = tk.Frame(left, bg=TM_SURFACE)
         row.pack(fill="x", pady=3)
@@ -138,6 +138,7 @@ class SettingsDevicesMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        kit.help_mark(row, SETTING_TIPS["input"])
         self.cmb_input = ttk.Combobox(
             row,
             textvariable=self.var_input_dev,
@@ -147,7 +148,6 @@ class SettingsDevicesMixin:
             font=sans_font(10),
         )
         self.cmb_input.pack(side="left", fill="x", expand=True)
-        kit.help_mark(row, SETTING_TIPS["input"])
 
         # 麦克风增益：门限/电平表之前的输入前置增益，运行中可热调
         self.var_in_gain = tk.DoubleVar(value=float(self.cfg.get("in_gain_db") or 0.0))
@@ -173,6 +173,7 @@ class SettingsDevicesMixin:
             fg=TM_INK_MUTED,
             font=sans_font(10),
         ).pack(side="left")
+        kit.help_mark(row, SETTING_TIPS["output"])
         self.cmb_output = ttk.Combobox(
             row,
             textvariable=self.var_output_dev,
@@ -182,11 +183,19 @@ class SettingsDevicesMixin:
             font=sans_font(10),
         )
         self.cmb_output.pack(side="left", fill="x", expand=True)
-        kit.help_mark(row, SETTING_TIPS["output"])
 
         # Self-monitor: hear converted voice on headphones while CABLE goes to game
         mon_row = tk.Frame(left, bg=TM_SURFACE)
         mon_row.pack(fill="x", pady=(6, 2))
+        # ? left of the control (same column as other rows)
+        kit.help_mark(
+            mon_row,
+            "开启后：游戏/语音仍走「输出设备」（一般是 CABLE Input），\n"
+            "同时在「监听设备」再放一份变声后的声音给你听。\n"
+            "监听请选真实耳机/音箱（如「耳机 KM-HIFI」），\n"
+            "不要选 CABLE、Steam Streaming、虚拟声卡。\n"
+            "运行中可开关；若仍无声：停一次变声再开，并确认系统默认播放设备。",
+        )
         tk.Checkbutton(
             mon_row,
             text="变声时监听自己",
@@ -197,14 +206,6 @@ class SettingsDevicesMixin:
             font=sans_font(9),
             command=self._on_monitor_toggle,
         ).pack(side="left")
-        kit.help_mark(
-            mon_row,
-            "开启后：游戏/语音仍走「输出设备」（一般是 CABLE Input），\n"
-            "同时在「监听设备」再放一份变声后的声音给你听。\n"
-            "监听请选真实耳机/音箱（如「耳机 KM-HIFI」），\n"
-            "不要选 CABLE、Steam Streaming、虚拟声卡。\n"
-            "运行中可开关；若仍无声：停一次变声再开，并确认系统默认播放设备。",
-        )
         mon_row2 = tk.Frame(left, bg=TM_SURFACE)
         mon_row2.pack(fill="x", pady=3)
         tk.Label(
@@ -290,7 +291,6 @@ class SettingsDevicesMixin:
             padx=10,
             pady=4,
         ).pack(side="left")
-
 
     def _bootstrap_devices_async(self) -> None:
         """Fill device lists + prewarm worker (引擎待命). No Runtime\\python.exe probe."""
@@ -463,4 +463,3 @@ class SettingsDevicesMixin:
             self._refresh_monitor_hint()
         except Exception:
             pass
-

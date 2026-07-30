@@ -17,7 +17,7 @@ from launcher.ui.help_content import SETTING_TIPS
 class SettingsPerfDspMixin:
     def _build_settings_perf_section(self, kit: SettingsUiKit) -> None:
         # Performance
-        perf = kit.card( "性能设置（改后需重新「开启变声」）")
+        perf = kit.card("性能设置（改后需重新「开启变声」）")
         preset_row = tk.Frame(perf, bg=TM_SURFACE)
         preset_row.pack(fill="x", pady=(0, 8))
         tk.Label(
@@ -29,6 +29,11 @@ class SettingsPerfDspMixin:
             fg=TM_INK_MUTED,
             font=sans_font(9),
         ).pack(side="left")
+        kit.help_mark(
+            preset_row,
+            "一键设置采样长度/淡入淡出/额外推理时长。"
+            "低延迟更跟嘴、对机器要求高；稳定更扛卡顿、延迟更高。改后需重新开启变声。",
+        )
         for label, key in (
             ("低延迟", "low_latency"),
             ("均衡", "balanced"),
@@ -41,12 +46,9 @@ class SettingsPerfDspMixin:
                 padx=10,
                 pady=4,
             ).pack(side="left", padx=3)
-        kit.help_mark(
-            preset_row,
-            "一键设置采样长度/淡入淡出/额外推理时长。"
-            "低延迟更跟嘴、对机器要求高；稳定更扛卡顿、延迟更高。改后需重新开启变声。",
+        kit.scale_row(
+            perf, "采样长度", self.var_block, 0.02, 1.5, 0.01, tip_key="block"
         )
-        kit.scale_row(perf, "采样长度", self.var_block, 0.02, 1.5, 0.01, tip_key="block")
         kit.scale_row(
             perf, "淡入淡出", self.var_crossfade, 0.01, 0.15, 0.01, tip_key="crossfade"
         )
@@ -56,6 +58,8 @@ class SettingsPerfDspMixin:
         kit.scale_row(perf, "harvest进程数", self.var_n_cpu, 1, 8, 1, tip_key="n_cpu")
         nrf = tk.Frame(perf, bg=TM_SURFACE)
         nrf.pack(fill="x", pady=4)
+        # Each ? sits immediately left of its checkbox
+        kit.help_mark(nrf, SETTING_TIPS["i_nr"])
         tk.Checkbutton(
             nrf,
             text="输入降噪",
@@ -64,7 +68,7 @@ class SettingsPerfDspMixin:
             command=self._on_hot_param,
             font=sans_font(9),
         ).pack(side="left")
-        kit.help_mark(nrf, SETTING_TIPS["i_nr"])
+        kit.help_mark(nrf, SETTING_TIPS["o_nr"])
         tk.Checkbutton(
             nrf,
             text="输出降噪",
@@ -73,7 +77,7 @@ class SettingsPerfDspMixin:
             command=self._on_hot_param,
             font=sans_font(9),
         ).pack(side="left", padx=(8, 0))
-        kit.help_mark(nrf, SETTING_TIPS["o_nr"])
+        kit.help_mark(nrf, SETTING_TIPS["use_pv"])
         tk.Checkbutton(
             nrf,
             text="相位声码器",
@@ -82,8 +86,6 @@ class SettingsPerfDspMixin:
             command=self._on_hot_param,
             font=sans_font(9),
         ).pack(side="left", padx=(8, 0))
-        kit.help_mark(nrf, SETTING_TIPS["use_pv"])
-
 
     def _build_settings_dsp_section(self, kit: SettingsUiKit) -> None:
         # ----- Post-RVC DSP (noise gate / compressor / EQ) -----
@@ -159,9 +161,10 @@ class SettingsPerfDspMixin:
             value=float(self.cfg.get("fx_out_gain_db") or 0)
         )
 
-        fx = kit.card( "声音效果（变声后 · 可选）")
+        fx = kit.card("声音效果（变声后 · 可选）")
         fx_en_row = tk.Frame(fx, bg=TM_SURFACE)
         fx_en_row.pack(anchor="w", fill="x")
+        kit.help_mark(fx_en_row, SETTING_TIPS["fx_en"])
         tk.Checkbutton(
             fx_en_row,
             text="启用声音效果",
@@ -170,13 +173,13 @@ class SettingsPerfDspMixin:
             font=sans_font(10, "bold"),
             command=self._on_hot_param,
         ).pack(side="left")
-        kit.help_mark(fx_en_row, SETTING_TIPS["fx_en"])
 
         # Gate
         gbox = tk.Frame(fx, bg=TM_SURFACE)
         gbox.pack(fill="x", pady=(8, 4))
         gate_row = tk.Frame(gbox, bg=TM_SURFACE)
         gate_row.pack(anchor="w", fill="x")
+        kit.help_mark(gate_row, SETTING_TIPS["fx_gate"])
         tk.Checkbutton(
             gate_row,
             text="噪声门",
@@ -185,7 +188,6 @@ class SettingsPerfDspMixin:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(side="left")
-        kit.help_mark(gate_row, SETTING_TIPS["fx_gate"])
         kit.scale_row(
             gbox,
             "门限 dB",
@@ -232,6 +234,7 @@ class SettingsPerfDspMixin:
         cbox.pack(fill="x", pady=(8, 4))
         comp_row = tk.Frame(cbox, bg=TM_SURFACE)
         comp_row.pack(anchor="w", fill="x")
+        kit.help_mark(comp_row, SETTING_TIPS["fx_comp"])
         tk.Checkbutton(
             comp_row,
             text="压缩器",
@@ -240,7 +243,6 @@ class SettingsPerfDspMixin:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(side="left")
-        kit.help_mark(comp_row, SETTING_TIPS["fx_comp"])
         kit.scale_row(
             cbox,
             "阈值 dB",
@@ -297,6 +299,7 @@ class SettingsPerfDspMixin:
         ebox.pack(fill="x", pady=(8, 4))
         erow = tk.Frame(ebox, bg=TM_SURFACE)
         erow.pack(fill="x")
+        kit.help_mark(erow, SETTING_TIPS["fx_eq"])
         tk.Checkbutton(
             erow,
             text="均衡 EQ",
@@ -305,7 +308,6 @@ class SettingsPerfDspMixin:
             font=sans_font(9),
             command=self._on_hot_param,
         ).pack(side="left")
-        kit.help_mark(erow, SETTING_TIPS["fx_eq"])
         tk.Label(
             erow, text="预设", bg=TM_SURFACE, fg=TM_INK_MUTED, font=sans_font(10)
         ).pack(side="left", padx=(16, 4))
@@ -362,7 +364,6 @@ class SettingsPerfDspMixin:
             tip_key="fx_out",
         )
 
-
     def _apply_perf_preset(self, key: str) -> None:
         """Map quality/latency presets (inspired by realtime VC chunk tradeoffs)."""
         block, crossfade, extra = perf_preset_values(key)
@@ -382,5 +383,3 @@ class SettingsPerfDspMixin:
             f"性能预设：{name}",
             "请重新「开启变声」后生效",
         )
-
-

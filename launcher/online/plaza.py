@@ -192,7 +192,7 @@ def visible_items(
     """Filter + order for one placement.
 
     未知类型剔除；投放窗口按本地日期（YYMMDD 字符串比较）；版本门槛用
-    compare_versions（含 -partN 语义）；已关闭 id 只对 dismissible 条目生效。
+    compare_versions（含 -hotfixN / 历史 -partN）；已关闭 id 只对 dismissible 条目生效。
     排序：pinned 置顶 → priority 降序 → date 新在前 → id 升序（确定性）。
     """
     ver = app_version or APP_VERSION

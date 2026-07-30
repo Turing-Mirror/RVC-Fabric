@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Working branch is `tm-release`; the primary remote is `fabric` (`Turing-Mirror/RVC-Fabric`), not `origin`.
 Release artifacts live on CNB (`Turing-Mirror/RVC-Fabric-Releases`, mirrored locally as `CNB-GIT-RELEASE/`).
-Current shipping shell version: **1.1.2** (gui_patch / online catalog).
+Current shipping shell version: **1.2.3** (Full; stable forms `X.Y.Z` or `X.Y.Z-hotfixN` — see `docs/在线更新与音色库.md` §0).
 
 Project docs are Chinese and live in `docs/`. Read `docs/CONTEXT_HANDOFF.md` first — it is the
 maintained handoff doc. Also relevant:
@@ -178,8 +178,9 @@ with an offline fallback in `configs/runtime_integrity/<variant>.json`.
 In-app update packages are typed in `launcher/online/package_spec.py` (the authority for the
 whitelist): `gui_patch` merges into the install, `voice_pack` installs under `User_Data/models/<id>/`,
 `full_package` is **never** merged in-process — it only opens a browser link.
-`compare_versions` supports `-partN` pre-release semantics (old clients with pre-partN compare code
-may miss a newer full version — known small tail after v1.1.2).
+`compare_versions` (`launcher/version.py`): base `X.Y.Z`, post-release `-hotfixN` (newer than bare base),
+historical `-partN` prerelease (older than bare base; **do not ship new part on stable**). Same Full
+never OTAs — always bump hotfix or base. Optional `build_id` is metadata only.
 
 `build_release.py --variant` builds full offline packs; `build_setup.py` reuses its helpers
 (`copy_engine`, `shell_pyinstaller_args`, …) for the thin installer.

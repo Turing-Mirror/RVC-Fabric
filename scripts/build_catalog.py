@@ -681,6 +681,49 @@ def _package_row(entry: dict, blob: dict, *, kind: str, package_type: str = "") 
     return row
 
 
+def _validate_shell_versions(app: dict, rep: Report) -> None:
+    """Stable channel shell Full must be X.Y.Z or X.Y.Z-hotfixN; forbid -partN."""
+    from launcher.version import (
+        HOTFIX_SUGGEST_THRESHOLD,
+        is_stable_shell_version,
+        should_suggest_base_bump,
+    )
+
+    channel = str(app.get("channel") or "stable").strip().lower()
+    if channel != "stable":
+        return
+    ver = str(app.get("version") or "").strip()
+    gui = app.get("gui") if isinstance(app.get("gui"), dict) else {}
+    gver = str(gui.get("version") or ver).strip()
+    for who, v in (("app.version", ver), ("app.gui.version", gver)):
+        if not v:
+            rep.error(f"{who}: 稳定通道不能为空")
+            continue
+        low = v.lower()
+        if "-part" in low:
+            rep.error(
+                f"{who}={v!r}: 稳定通道禁止 -partN（历史预发布）；"
+                "热修用 X.Y.Z-hotfixN，或抬升正式基线 X.Y.(Z+1)"
+            )
+            continue
+        if not is_stable_shell_version(v):
+            rep.error(
+                f"{who}={v!r}: 稳定通道必须是 X.Y.Z 或 X.Y.Z-hotfixN（N≥1）；"
+                "build 序号请写 tm_package.build_id，不要写进 version 字符串"
+            )
+            continue
+        if should_suggest_base_bump(v):
+            rep.warn(
+                f"{who}={v}: 热修序号已 ≥ {HOTFIX_SUGGEST_THRESHOLD}，"
+                "建议下次发 X.Y.(Z+1) 正式基线收束"
+            )
+    if ver and gver and ver != gver:
+        rep.warn(
+            f"app.version ({ver}) 与 app.gui.version ({gver}) 不一致；"
+            "OTA 以 gui.version 为准，发布时建议对齐为同一 Full"
+        )
+
+
 def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
     gui_src = app.get("gui") if isinstance(app.get("gui"), dict) else {}
     gui: dict[str, Any] = {
@@ -727,6 +770,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "channel": str(app_src.get("channel") or "stable"),
         "gui": gui,
     }
+    _validate_shell_versions(app, rep)
 
     engine_core = _compile_blob(
         src.get("engine_core") or {}, paths, rep, who="engine-core", extract_root="."

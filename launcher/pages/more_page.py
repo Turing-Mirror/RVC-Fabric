@@ -22,7 +22,7 @@ from launcher.theme import (
     mono_font,
 )
 from launcher.ui import ActionListRow, PageHeader
-from launcher.version import APP_VERSION
+from launcher.version import APP_VERSION, display_version
 from launcher.win_util import open_path
 
 
@@ -150,7 +150,7 @@ class MorePageMixin:
 
         tk.Label(
             wrap,
-            text=f"v{APP_VERSION}",
+            text=f"v{display_version(APP_VERSION)}",
             bg=TM_BG,
             fg=TM_META,
             font=mono_font(8),

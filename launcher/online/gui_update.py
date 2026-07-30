@@ -28,7 +28,7 @@ from launcher.online.package_spec import (
     read_zip_tm_package,
 )
 from launcher.paths import ROOT, USER_DATA
-from launcher.version import APP_VERSION
+from launcher.version import APP_VERSION, display_version
 
 ProgressCb = Callable[[str, int, int], None]
 
@@ -49,10 +49,13 @@ def check_gui_update(catalog: OnlineCatalog, local_version: str = "") -> dict:
     else:
         action = "apply_patch"
 
+    remote_out = remote or "—"
     return {
         "available": available,
         "local": local,
-        "remote": remote or "—",
+        "remote": remote_out,
+        "local_display": display_version(local),
+        "remote_display": display_version(remote) if remote else "—",
         "notes": catalog.gui.notes or "",
         "url": url,
         "sha256": catalog.gui.sha256 or "",

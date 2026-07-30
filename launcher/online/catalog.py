@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from launcher.paths import ROOT, USER_DATA
-from launcher.version import APP_CHANNEL, APP_VERSION
+from launcher.version import (
+    APP_CHANNEL,
+    APP_VERSION,
+    compare_versions,
+    display_version,
+)
 
 BUNDLED_CATALOG = ROOT / "configs" / "online_catalog.json"
 CACHE_PATH = USER_DATA / "update_cache" / "catalog.json"
@@ -556,7 +561,8 @@ def fetch_catalog(
 
 
 def local_app_version() -> str:
-    return APP_VERSION
+    """Human-facing local shell version (e.g. ``1.2.3 热修1``)."""
+    return display_version(APP_VERSION)
 
 
 def local_channel() -> str:
@@ -686,52 +692,12 @@ def is_voice_installed(voice_id: str, models_dir: Path) -> bool:
     return any(d.glob("*.pth"))
 
 
-def compare_versions(a: str, b: str) -> int:
-    """Return -1 if a<b, 0 if equal, 1 if a>b. Non-semver → digit compare.
-
-    ``X.Y.Z-partN`` 是预发布：同基础版本时排在正式版 ``X.Y.Z`` 之前
-    （否则纯数字提取会把 1.1.2-part1 判得比 1.1.2 新，正式版发不出去）。
-
-    **旧壳兼容**：未带 partN 语义的客户端会把 ``1.1.2-part1`` 拆成
-    ``[1,1,2,1]``，从而永远收不到同基础正式版。解法是发 **纯正式号**
-    ``X.Y.(Z+1)``（如 1.1.4）：digit-only 比较下亦大于 part 预发布，无需旧壳升级比较器。
-    """
-    import re
-
-    def split(v: str) -> tuple[list[int], Optional[int]]:
-        s = str(v or "")
-        m = re.search(r"-part(\d+)\s*$", s, flags=re.IGNORECASE)
-        pre = int(m.group(1)) if m else None
-        if m:
-            s = s[: m.start()]
-        digits: list[int] = []
-        for p in re_split(s):
-            try:
-                digits.append(int(p))
-            except ValueError:
-                digits.append(0)
-        return digits or [0], pre
-
-    pa, pre_a = split(a)
-    pb, pre_b = split(b)
-    n = max(len(pa), len(pb))
-    pa += [0] * (n - len(pa))
-    pb += [0] * (n - len(pb))
-    if pa < pb:
-        return -1
-    if pa > pb:
-        return 1
-    # 基础版本相同：无 part 后缀 = 正式版 = 最新；part 序号大者较新
-    ka = (1 << 30) if pre_a is None else pre_a
-    kb = (1 << 30) if pre_b is None else pre_b
-    if ka < kb:
-        return -1
-    if ka > kb:
-        return 1
-    return 0
+# compare_versions lives in launcher.version (shell Full: X.Y.Z / X.Y.Z-hotfixN).
+# Re-exported here so existing ``from launcher.online.catalog import compare_versions`` keeps working.
 
 
 def re_split(v: str) -> list[str]:
+    """Extract digit runs (legacy helper; prefer parse_version / compare_versions)."""
     import re
 
     return re.findall(r"\d+", v or "") or [v or "0"]

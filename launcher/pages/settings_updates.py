@@ -7,6 +7,7 @@ import threading
 import time
 
 from launcher.theme import TM_ACCENT, TM_META, TM_WARN
+from launcher.version import display_version
 
 
 class SettingsUpdatesMixin:
@@ -126,18 +127,29 @@ class SettingsUpdatesMixin:
                 if has_new:
                     remote = str(status.get("remote") or "").strip()
                     notes = str(status.get("notes") or "").strip()
+                    rem_d = str(
+                        status.get("remote_display")
+                        or display_version(remote)
+                        or remote
+                    ).strip()
+                    loc_d = str(
+                        status.get("local_display")
+                        or display_version(str(status.get("local") or ""))
+                        or status.get("local")
+                        or ""
+                    ).strip()
                     try:
                         self._set_status_visual(
                             "idle",
-                            "发现软件更新" + (f" {remote}" if remote else ""),
+                            "发现软件更新" + (f" {rem_d}" if rem_d else ""),
                             "打开「设置 → 在线更新」可下载应用",
                         )
                     except Exception:
                         pass
                     self._prompt_update_available(
-                        remote=remote,
+                        remote=rem_d,
                         notes=notes,
-                        local=str(status.get("local") or ""),
+                        local=loc_d,
                     )
                 elif error and not catalog:
                     try:

@@ -3,7 +3,10 @@
 
 Example::
 
-    python scripts/pack_gui_patch.py --version 1.2.0 --out dist/gui_patch_1.2.0.zip
+    python scripts/pack_gui_patch.py --version 1.2.3-hotfix1 --out dist/gui_patch_1.2.3-hotfix1.zip
+
+Stable ``--version`` must be ``X.Y.Z`` or ``X.Y.Z-hotfixN`` (see docs/在线更新与音色库.md).
+Optional ``--build-id`` is metadata only (not used for update ordering).
 
 Includes launcher/, selected tools, configs/online_catalog.json, version.py path, etc.
 Never packs Runtime/ or User_Data/.
@@ -21,6 +24,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from launcher.online.package_spec import PKG_GUI_PATCH, TM_PACKAGE_JSON, tm_package_template
+from launcher.version import (
+    HOTFIX_SUGGEST_THRESHOLD,
+    should_suggest_base_bump,
+    validate_stable_shell_version,
+)
 
 # Relative paths or globs under ROOT
 DEFAULT_PATHS = [
@@ -59,10 +67,19 @@ def _add_path(zf: zipfile.ZipFile, root: Path, rel: Path) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Pack gui_patch zip")
-    ap.add_argument("--version", required=True, help="Patch version e.g. 1.2.0")
+    ap.add_argument(
+        "--version",
+        required=True,
+        help="Full shell version: X.Y.Z or X.Y.Z-hotfixN",
+    )
     ap.add_argument("--out", required=True, help="Output zip path")
     ap.add_argument("--min-app-version", default="", help="Optional min APP_VERSION")
     ap.add_argument("--notes", default="", help="Changelog / notes")
+    ap.add_argument(
+        "--build-id",
+        default="",
+        help="Optional build stamp for support (metadata only, not compared)",
+    )
     ap.add_argument(
         "--extra",
         action="append",
@@ -71,6 +88,18 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    try:
+        version = validate_stable_shell_version(args.version)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    if should_suggest_base_bump(version):
+        print(
+            f"note: {version} 已达热修建议上限 "
+            f"({HOTFIX_SUGGEST_THRESHOLD})，下次优先发 X.Y.(Z+1) 正式基线。",
+            file=sys.stderr,
+        )
+
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     paths = list(DEFAULT_PATHS) + list(args.extra or [])
@@ -78,9 +107,10 @@ def main() -> int:
     meta = tm_package_template(
         PKG_GUI_PATCH,
         name="Turing Mirror GUI Patch",
-        version=args.version,
+        version=version,
         min_app_version=args.min_app_version,
-        notes=args.notes or f"GUI patch {args.version}",
+        notes=args.notes or f"GUI patch {version}",
+        build_id=str(args.build_id or "").strip(),
     )
 
     count = 0
@@ -101,9 +131,14 @@ def main() -> int:
             h.update(block)
     digest = h.hexdigest()
     print(f"Wrote {out} ({count} files + {TM_PACKAGE_JSON})")
-    print(f"package_type={PKG_GUI_PATCH} version={args.version}")
+    print(f"package_type={PKG_GUI_PATCH} version={version}")
+    if meta.get("build_id"):
+        print(f"build_id={meta['build_id']}")
     print(f"sha256={digest}")
-    print("Put this sha256 into online_catalog app.gui.sha256 before publishing.")
+    print(
+        "Put this sha256 into CNB-GIT-RELEASE/catalog-src/app.yaml "
+        "(gui.sha256); keep version/gui.version = this Full version."
+    )
     return 0
 
 

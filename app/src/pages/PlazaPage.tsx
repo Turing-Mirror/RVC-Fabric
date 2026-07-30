@@ -1,87 +1,181 @@
+import { useCallback, useEffect, useState } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
+import {
+  fetchPlaza,
+  formatDate,
+  openExternal,
+  type ChangelogEntry,
+  type PlazaFeed,
+  type PlazaItem,
+} from "../lib/plaza";
 
-/** Plaza page shell (feed/changelog bind later). Plaza cards are not dismissible. */
+/**
+ * Plaza: changelog + placements, both from the CNB release repo.
+ *
+ * Plaza cards are **not** dismissible — carrying placements is what this page
+ * is for. The dismissible one is the single models-page banner, handled there.
+ */
 export function PlazaPage() {
+  const [feed, setFeed] = useState<PlazaFeed | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [allNotes, setAllNotes] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setFeed(await fetchPlaza());
+    } catch (e) {
+      setFeed({
+        items: [],
+        banner: null,
+        changelog: [],
+        errors: [String(e)],
+        app_version: "",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const changelog = feed?.changelog ?? [];
+  const shown = allNotes ? changelog : changelog.slice(0, 1);
+  const items = feed?.items ?? [];
+
   return (
     <PagePad>
       <PageHead
         title="广场"
         sub="图灵镜 · 更新与投放"
-        actions={<Btn>刷新</Btn>}
+        actions={
+          <Btn onClick={() => void load()} disabled={loading}>
+            {loading ? "刷新中" : "刷新"}
+          </Btn>
+        }
       />
+
+      {feed?.errors?.length ? (
+        <p className="text-[12.5px] text-[var(--notify)] m-0 mb-4">
+          {feed.errors.join("；")}
+        </p>
+      ) : null}
 
       <Block
         title="更新日志"
-        note="1.2.4"
-        action={<Btn>查看全部</Btn>}
+        note={changelog[0]?.version || feed?.app_version || ""}
+        action={
+          changelog.length > 1 ? (
+            <Btn onClick={() => setAllNotes((v) => !v)}>
+              {allNotes ? "只看最新" : "查看全部"}
+            </Btn>
+          ) : undefined
+        }
       >
         <Group>
-          <div className="py-3">
-            <div className="text-[15px] font-semibold">
-              1.2.4
-              <span className="font-normal text-[var(--meta)] text-[12.5px] ml-2.5">
-                2026-07-30
-              </span>
-            </div>
-            <ul className="m-2.5 ml-0 p-0 list-none">
-              {[
-                "修复「其他」页生成诊断包成功后没有反馈的问题",
-                "设置页的详细帮助问号统一放到标签左侧",
-                "安装包改为通用包，运行时由启动器自动鉴别显卡后推荐",
-              ].map((t) => (
-                <li
-                  key={t}
-                  className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['·'] before:absolute before:left-1.5 before:text-[var(--meta)]"
-                >
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {loading && !changelog.length ? (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
+          ) : shown.length ? (
+            shown.map((e) => <Notes key={e.version} entry={e} />)
+          ) : (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
+              暂时取不到更新日志。
+            </p>
+          )}
         </Group>
       </Block>
 
-      <Block title="投放" note="3">
+      <Block title="投放" note={items.length ? String(items.length) : ""}>
         <Group>
-          <Feed
-            title="MyGO!!!!! 五音色已上架"
-            tags={[{ label: "图灵镜推荐" }]}
-            body="千早爱音、高松灯、长崎爽世、椎名立希、要乐奈，都带检索库和推荐参数，可在「模型 → 社区音色」下载。"
-          />
-          <Feed
-            title="想让声音更像这个角色"
-            tags={[
-              { label: "图灵镜推荐" },
-              { label: "商业推广", ad: true },
-            ]}
-            body="把样本和当前配置打包发过来，我们做一次针对性调参。"
-          />
-          <Feed
-            title="某声卡品牌直播套装"
-            tags={[{ label: "商业推广", ad: true }]}
-            body="USB 直播声卡，即插即用，支持独占低延迟。"
-          />
+          {loading && !items.length ? (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
+          ) : items.length ? (
+            items.map((it) => <Feed key={it.id} item={it} />)
+          ) : (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
+              暂时没有内容。
+            </p>
+          )}
         </Group>
       </Block>
     </PagePad>
   );
 }
 
-function Feed({
-  title,
-  tags,
-  body,
-}: {
-  title: string;
-  tags: { label: string; ad?: boolean }[];
-  body: string;
-}) {
+function Notes({ entry }: { entry: ChangelogEntry }) {
   return (
-    <div className="flex gap-[18px] items-start py-4 -mx-3.5 px-3.5 rounded-[var(--rs)] cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]">
-      <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none grayscale bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
+    <div className="py-3">
+      <div className="text-[15px] font-semibold">
+        {entry.version}
+        {entry.date ? (
+          <span className="font-normal text-[var(--meta)] text-[12.5px] ml-2.5">
+            {formatDate(entry.date)}
+          </span>
+        ) : null}
+      </div>
+      {entry.title ? (
+        <div className="text-[13px] text-[var(--ink-muted)] mt-1">{entry.title}</div>
+      ) : null}
+      <ul className="m-2.5 ml-0 p-0 list-none">
+        {entry.notes.map((t) => (
+          <li
+            key={t}
+            className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['·'] before:absolute before:left-1.5 before:text-[var(--meta)]"
+          >
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Feed({ item }: { item: PlazaItem }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const clickable = Boolean(item.url);
+  // Three shapes, decided by the parser: 图灵镜推荐, 商业推广, or both.
+  const tags: { label: string; ad?: boolean }[] = [];
+  if (item.recommended) tags.push({ label: "图灵镜推荐" });
+  if (item.is_ad) tags.push({ label: "商业推广", ad: true });
+
+  return (
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? () => void openExternal(item.url) : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                void openExternal(item.url);
+              }
+            }
+          : undefined
+      }
+      className={[
+        "flex gap-[18px] items-start py-4 -mx-3.5 px-3.5 rounded-[var(--rs)] transition-colors",
+        clickable
+          ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-2px]"
+          : "",
+      ].join(" ")}
+    >
+      {item.image_url && !imgFailed ? (
+        <img
+          src={item.image_url}
+          alt=""
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+          className="w-[104px] h-16 rounded-[var(--rs)] flex-none grayscale object-cover max-[720px]:w-[76px] max-[720px]:h-[50px]"
+        />
+      ) : (
+        <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none grayscale bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
+      )}
       <div>
         <h4 className="m-0 mb-1.5 text-[14.5px] font-semibold flex items-center gap-2 flex-wrap">
-          {title}
+          {item.title}
           {tags.map((t) => (
             <span
               key={t.label}
@@ -96,7 +190,10 @@ function Feed({
             </span>
           ))}
         </h4>
-        <p className="m-0 text-[12.5px] text-[var(--help)] leading-relaxed">{body}</p>
+        <p className="m-0 text-[12.5px] text-[var(--help)] leading-relaxed">{item.body}</p>
+        {item.sponsor ? (
+          <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)]">由 {item.sponsor} 投放</p>
+        ) : null}
       </div>
     </div>
   );

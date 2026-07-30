@@ -237,6 +237,46 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     }))
 }
 
+/// Key holding dismissed models-page banner ids. Not a settings key: it never
+/// appears in the settings UI and must not reach the engine's config.
+const DISMISSED_ADS: &str = "dismissed_ads";
+/// Cap so a long-lived install cannot grow this list without bound.
+const DISMISSED_MAX: usize = 200;
+
+pub fn dismissed_ads(root: &Path) -> Vec<String> {
+    read_json(&paths::app_config_path(root))
+        .get(DISMISSED_ADS)
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn dismiss_ad(root: &Path, id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Ok(());
+    }
+    let mut saved = read_json(&paths::app_config_path(root));
+    let mut list = dismissed_ads(root);
+    if list.iter().any(|x| x == id) {
+        return Ok(());
+    }
+    list.push(id.to_string());
+    // Oldest out first: a banner from two years ago will not come back.
+    if list.len() > DISMISSED_MAX {
+        let drop = list.len() - DISMISSED_MAX;
+        list.drain(..drop);
+    }
+    saved.insert(DISMISSED_ADS.into(), json!(list));
+    let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
+    // Deliberately no sync_inuse: this is not an engine key.
+    write_atomic(&paths::app_config_path(root), &text)
+        .map_err(|e| format!("保存失败：{e}"))
+}
+
 /// Grouped view used by the settings page, so the UI does not hard-code which
 /// keys belong to which tab.
 pub fn describe() -> Value {

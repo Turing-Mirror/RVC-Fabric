@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoreDialog } from "../components/StoreDialog";
 import { SegmentControl } from "../components/SegmentControl";
+import { AdBanner } from "../components/AdBanner";
+import { openExternal } from "../lib/plaza";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import {
@@ -262,6 +264,8 @@ export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
       {msg ? (
         <div className="text-[12.5px] text-[var(--meta)] mt-2">{msg}</div>
       ) : null}
+
+      <AdBanner />
 
       <Block>
         <div className="flex items-center gap-3 flex-wrap mb-[18px]">
@@ -695,10 +699,13 @@ function ContextMenu({
     });
   }
   if (model.author_url) {
+    const authorUrl = model.author_url;
     items.push({
       label: "打开作者链接",
       action: () => {
-        window.open(model.author_url, "_blank", "noopener,noreferrer");
+        // Through the shell so it lands in the user's own browser, and so the
+        // http/https check applies — a catalog-supplied URL is untrusted.
+        void openExternal(authorUrl);
         onClose();
       },
     });

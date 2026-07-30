@@ -111,7 +111,7 @@ fn fallback_blob(variant: &str) -> Value {
     })
 }
 
-fn http_get_json(url: &str, timeout_secs: u64) -> Result<Value, String> {
+pub(crate) fn http_get_json(url: &str, timeout_secs: u64) -> Result<Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .user_agent(UA)

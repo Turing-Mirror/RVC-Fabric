@@ -155,7 +155,7 @@ fn kill_tree(pid: u32) {
 }
 
 /// Build env for Runtime python: strip host Python pollution (see win_util._env_for_runtime_python).
-fn env_for_runtime(root: &Path) -> HashMap<String, String> {
+pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     let drop_exact = [
         "_MEIPASS",
         "_PYI_APPLICATION_HOME_DIR",

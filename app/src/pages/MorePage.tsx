@@ -25,6 +25,28 @@ export function MorePage({
   const [uiSource, setUiSource] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
 
+  // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
+  // itself; a button that looks like it did nothing gets clicked again.
+  const [legacyMsg, setLegacyMsg] = useState<{ panel?: string; webui?: string }>({});
+  const openLegacy = async (which: "panel" | "webui") => {
+    setLegacyMsg((m) => ({ ...m, [which]: "正在启动…" }));
+    try {
+      const r = await invoke<{ message?: string; url?: string }>(
+        which === "panel" ? "legacy_open_panel" : "legacy_open_webui",
+      );
+      setLegacyMsg((m) => ({ ...m, [which]: r?.message || "已启动" }));
+      if (which === "webui" && r?.url) {
+        // Gradio needs a few seconds to bind the port; opening immediately
+        // lands on a connection-refused page.
+        setTimeout(() => {
+          void invoke("open_external", { url: r.url }).catch(() => {});
+        }, 4000);
+      }
+    } catch (e) {
+      setLegacyMsg((m) => ({ ...m, [which]: `启动失败：${String(e)}` }));
+    }
+  };
+
   const run = async (label: string, cmd: string, args?: Record<string, unknown>) => {
     setBusyMsg(`${label}…`);
     try {
@@ -164,9 +186,25 @@ export function MorePage({
             }
           />
           <ListItem
+            title="打开日志"
+            desc="shell.log 记录启动、界面加载与出错原因，报问题时把它一起发来"
+            right={
+              <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>
+                打开
+              </Btn>
+            }
+          />
+          <ListItem
             title="打开原版实时面板"
-            desc="高级功能，一般用不到"
-            right={<Btn>打开</Btn>}
+            desc={legacyMsg.panel || "gui_v1 窗口版实时变声。高级功能，一般用不到"}
+            right={
+              <Btn onClick={() => void openLegacy("panel")}>打开</Btn>
+            }
+          />
+          <ListItem
+            title="打开原版 WebUI"
+            desc={legacyMsg.webui || "原版 RVC 训练与推理界面（127.0.0.1:7897）"}
+            right={<Btn onClick={() => void openLegacy("webui")}>打开</Btn>}
           />
           <ListItem
             title="申请专业优化"

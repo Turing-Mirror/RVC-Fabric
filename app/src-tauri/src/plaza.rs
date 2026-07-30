@@ -51,6 +51,10 @@ pub struct PlazaItem {
     pub sponsor: String,
     /// True when the UI must show an ad badge.
     pub is_ad: bool,
+    /// True when the UI must show the 图灵镜推荐 badge. Independent of `is_ad`:
+    /// an editorial pick that a sponsor also paid for carries **both**, which
+    /// is one of the three shapes the feed is specified to support.
+    pub recommended: bool,
 }
 
 fn s(v: Option<&Value>) -> String {
@@ -149,7 +153,12 @@ impl PlazaItem {
             .unwrap_or(0);
 
         let sponsor = first(d, &["sponsor", "advertiser"]);
-        let is_ad = AD_TYPES.contains(&kind.as_str()) || !sponsor.is_empty();
+        // `ad` / `sponsor` are pure placements. Any other type is something we
+        // chose to show, so it is a recommendation — and it is *also* an ad
+        // whenever a sponsor is named.
+        let paid_type = AD_TYPES.contains(&kind.as_str());
+        let is_ad = paid_type || !sponsor.is_empty();
+        let recommended = !paid_type;
 
         // Placement decides dismissibility. The plaza exists to carry ads and
         // they are not dismissible there; the models-page banner always is.
@@ -179,6 +188,7 @@ impl PlazaItem {
             max_app_version: s(d.get("max_app_version")),
             sponsor,
             is_ad,
+            recommended,
         })
     }
 }
@@ -307,10 +317,68 @@ pub fn parse_changelog(data: &Value) -> Vec<ChangelogEntry> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// Fetch
+// ---------------------------------------------------------------------------
+
+/// Today as `YYMMDD`, the form the feed's `start` / `end` windows use.
+pub fn today_yymmdd() -> String {
+    chrono::Local::now().format("%y%m%d").to_string()
+}
+
+/// Pull `plaza.json` + `changelog.json` from the release repo.
+///
+/// One network round each, failures reported per-feed: a broken changelog must
+/// not blank the ad placements, and vice versa — the plaza carries paid slots
+/// and a partial outage should not read to a sponsor as "not shown at all".
+pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<String>) {
+    let mut errors = Vec::new();
+    let items = match crate::catalog::http_get_json(
+        &format!("{CNB_RAW_MAIN}/plaza.json"),
+        timeout_secs,
+    ) {
+        Ok(v) => parse_feed(&v),
+        Err(e) => {
+            errors.push(format!("广场内容：{e}"));
+            Vec::new()
+        }
+    };
+    let changelog = match crate::catalog::http_get_json(
+        &format!("{CNB_RAW_MAIN}/changelog.json"),
+        timeout_secs,
+    ) {
+        Ok(v) => parse_changelog(&v),
+        Err(e) => {
+            errors.push(format!("更新日志：{e}"));
+            Vec::new()
+        }
+    };
+    (items, changelog, errors)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn the_three_badge_shapes() {
+        let mk = |kind: &str, sponsor: &str| {
+            PlazaItem::from_value(&serde_json::json!({
+                "id": "x", "title": "t", "type": kind, "sponsor": sponsor
+            }))
+            .unwrap()
+        };
+        // 图灵镜推荐 only
+        let a = mk("news", "");
+        assert!(a.recommended && !a.is_ad);
+        // 商业推广 only
+        let b = mk("ad", "");
+        assert!(!b.recommended && b.is_ad);
+        // both — our pick, someone paid for the slot
+        let c = mk("news", "某声卡品牌");
+        assert!(c.recommended && c.is_ad);
+    }
 
     #[test]
     fn drops_entries_without_id_or_title() {

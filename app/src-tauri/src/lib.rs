@@ -7,6 +7,7 @@ mod config;
 mod download;
 mod engine_assets;
 mod extract;
+mod legacy;
 mod logging;
 pub mod paths;
 pub mod plaza;
@@ -232,6 +233,79 @@ fn ui_log(line: String) {
     // a time.
     let line: String = line.chars().take(2000).collect();
     logging::shell_log!("[ui] {line}");
+}
+
+/// Plaza feed + changelog, already filtered for this version and today's date.
+///
+/// `plaza.rs` had no caller at all: the page shipped hardcoded placeholder
+/// cards and a stale 1.2.4 changelog while the parser, the cnb.cool image
+/// restriction and the placement rules all sat unused.
+#[tauri::command]
+async fn plaza_fetch(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (items, changelog, errors) = plaza::fetch(12);
+        let today = plaza::today_yymmdd();
+        let dismissed = config::dismissed_ads(&root);
+        // Plaza placements are never dismissible — that rule lives in the
+        // parser, so an empty `dismissed` list here would be equivalent. Pass
+        // it anyway so the two placements go through one code path.
+        let feed = plaza::visible_items(
+            &items,
+            plaza::PLACEMENT_PLAZA,
+            update::APP_VERSION,
+            &today,
+            &dismissed,
+        );
+        let banner = plaza::pick_models_banner(&items, update::APP_VERSION, &today, &dismissed);
+        Ok(json!({
+            "items": feed,
+            "banner": banner,
+            "changelog": changelog,
+            "errors": errors,
+            "app_version": update::APP_VERSION,
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Remember a dismissed models-page banner so it stays gone across restarts.
+#[tauri::command]
+fn plaza_dismiss(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
+    config::dismiss_ad(&root_clone(&state)?, &id)
+}
+
+/// Open a link in the user's own browser. Restricted to http/https so a feed
+/// can never hand us a `file://` or a shell scheme to launch.
+#[tauri::command]
+fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    let ok = url.starts_with("https://") || url.starts_with("http://");
+    if !ok {
+        return Err("只允许打开 http/https 链接".into());
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// 「其他」page → 打开原版实时面板（gui_v1）。
+#[tauri::command]
+async fn legacy_open_panel(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || legacy::open_realtime_panel(&root))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// 「其他」page → 打开原版 WebUI（infer-web.py）。
+#[tauri::command]
+async fn legacy_open_webui(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || legacy::open_webui(&root))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Path of the shell log, for the 「其他」page's "打开日志" action.
@@ -653,6 +727,11 @@ pub fn run() {
             ui_ready,
             ui_log,
             log_path,
+            legacy_open_panel,
+            legacy_open_webui,
+            plaza_fetch,
+            plaza_dismiss,
+            open_external,
             config_get,
             config_describe,
             config_set,

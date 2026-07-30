@@ -13,7 +13,7 @@
 
 **社媒**　[哔哩哔哩 @图灵镜](https://space.bilibili.com/3546871148579062)　·　抖音 @图灵镜（抖音号 `TuringMirror`）　·　[小红书 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小红书号 `TuringMirror`）
 
-<sub>赞助商　[雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric) — 性价比云服务器 / 游戏云 / 面板服<br>本链接为推广链接，通过它注册可支持图灵镜继续开发</sub>
+**赞助推广**　首月五折　·　性价比云服务器 / 游戏云 / 面板服　·　[雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 

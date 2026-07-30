@@ -6,6 +6,11 @@
 
 import sys
 
+import runpy
+
+from _disk_first import install_disk_first
+
+install_disk_first()
 try:
     from launcher.single_instance import ensure_single_instance_or_exit
 
@@ -15,9 +20,4 @@ except SystemExit:
 except Exception:
     pass
 
-import runpy
-
-from _disk_first import install_disk_first
-
-install_disk_first()
 runpy.run_module("launcher.bootstrap", run_name="__main__", alter_sys=True)

@@ -9,6 +9,7 @@ mod paths;
 mod protocol;
 mod provision;
 mod store;
+mod ui_assets;
 mod voices;
 mod worker;
 
@@ -29,14 +30,13 @@ fn root_clone(state: &State<'_, Mutex<AppState>>) -> Result<PathBuf, String> {
 
 #[tauri::command]
 fn frontend_dir() -> Option<String> {
-    let mut dir = std::env::current_exe().ok()?;
-    dir.pop();
-    let fe = dir.join("frontend");
-    if fe.join("index.html").is_file() {
-        Some(fe.to_string_lossy().into_owned())
-    } else {
-        None
-    }
+    ui_assets::external_dir().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Human-readable "where is the UI loaded from" for the 「其他」page.
+#[tauri::command]
+fn ui_source() -> String {
+    ui_assets::source_label()
 }
 
 #[tauri::command]
@@ -429,9 +429,15 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // OTA strategy A: serve the UI through fabric:// so the frontend/ dir
+        // next to the exe can replace the shipped UI without a new exe.
+        .register_uri_scheme_protocol(ui_assets::SCHEME, |ctx, req| {
+            ui_assets::serve(ctx.app_handle(), req)
+        })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
             frontend_dir,
+            ui_source,
             product_root,
             engine_status,
             engine_ensure,
@@ -466,7 +472,24 @@ pub fn run() {
             store_install,
             store_cancel,
         ])
-        .setup(move |_app| {
+        .setup(move |app| {
+            // Window is built here (not in tauri.conf.json) because its URL must
+            // be the fabric:// scheme registered above.
+            let url = format!("{}://localhost/index.html", ui_assets::SCHEME);
+            tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::CustomProtocol(url.parse().expect("fabric url")),
+            )
+            .title("RVC Fabric")
+            .inner_size(1180.0, 780.0)
+            .min_inner_size(880.0, 640.0)
+            .resizable(true)
+            .decorations(false)
+            .center()
+            .build()?;
+            eprintln!("[rvc-fabric] UI source: {}", ui_assets::source_label());
+
             let root_bg = root.clone();
             std::thread::spawn(move || {
                 if paths::runtime_ready(&root_bg) {

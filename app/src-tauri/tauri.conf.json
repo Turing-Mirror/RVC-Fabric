@@ -10,26 +10,14 @@
     "frontendDist": "../frontend"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "RVC Fabric",
-        "width": 1180,
-        "height": 780,
-        "minWidth": 880,
-        "minHeight": 640,
-        "resizable": true,
-        "fullscreen": false,
-        "decorations": false,
-        "transparent": false,
-        "center": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },

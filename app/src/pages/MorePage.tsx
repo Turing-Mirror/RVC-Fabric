@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 
@@ -14,6 +16,19 @@ export function MorePage({
   onForceKill,
   onOpenProvision,
 }: Props = {}) {
+  // Where the UI itself is served from. Surfaced so a UI patch that did not
+  // take effect is diagnosable instead of invisible (OTA strategy A).
+  const [uiSource, setUiSource] = useState("—");
+  useEffect(() => {
+    let alive = true;
+    invoke<string>("ui_source")
+      .then((v) => alive && setUiSource(v || "—"))
+      .catch(() => alive && setUiSource("—"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const delay = Number(status?.delay_ms || 0);
   const infer = Number(status?.infer_ms || 0);
   const latency =
@@ -41,6 +56,18 @@ export function MorePage({
             title="壳版本"
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">1.3.0 · Tauri</span>
+            }
+          />
+          <ListItem
+            title="界面来源"
+            desc="外部目录可被界面补丁替换；显示「内置」说明补丁未生效"
+            right={
+              <span
+                className="text-[13.5px] text-[var(--ink-muted)] max-w-[280px] text-right truncate"
+                title={uiSource}
+              >
+                {uiSource.startsWith("外部目录") ? "外部目录（可热更）" : uiSource}
+              </span>
             }
           />
           <ListItem

@@ -312,41 +312,13 @@ fn format_size(n: u64) -> String {
 // safe zip extract
 // ---------------------------------------------------------------------------
 
+/// Voice packs go through the same extractor as every other archive.
+///
+/// This used to be a second, near-identical implementation. Two copies of a
+/// path-safety check is one copy too many — the one in `extract` is the one
+/// with tests.
 fn safe_extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
-    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    let file = fs::File::open(zip_path).map_err(|e| format!("打开 zip: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无效 zip: {e}"))?;
-    for i in 0..archive.len() {
-        let mut entry = archive
-            .by_index(i)
-            .map_err(|e| format!("zip 条目: {e}"))?;
-        let name = entry.name().replace('\\', "/");
-        if name.is_empty()
-            || name.starts_with('/')
-            || name.starts_with("../")
-            || name.contains("/../")
-        {
-            return Err(format!("音色包路径不安全：{name}"));
-        }
-        if name.split('/').any(|p| p == "..") {
-            return Err(format!("音色包路径不安全：{name}"));
-        }
-        // skip absolute / drive
-        if name.len() > 1 && name.as_bytes().get(1) == Some(&b':') {
-            return Err(format!("音色包含盘符路径：{name}"));
-        }
-        let out_path = dest.join(&name);
-        if entry.is_dir() || name.ends_with('/') {
-            fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
-            continue;
-        }
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        let mut outfile = fs::File::create(&out_path).map_err(|e| e.to_string())?;
-        std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    crate::extract::extract_zip(zip_path, dest).map_err(|e| format!("音色包{e}"))
 }
 
 fn find_content_root(tmp: &Path) -> PathBuf {

@@ -914,6 +914,26 @@ fn profiles_dir(model_dir: &Path) -> PathBuf {
     model_dir.join(PROFILES_DIR)
 }
 
+/// Resolve `<model>/profiles/<id>.tmvp`, refusing anything that is not a plain
+/// file name.
+///
+/// Every profile path is built by pasting a caller-supplied id into a filename.
+/// `join("../../x")` walks straight out of the model directory, and
+/// `delete_profile` then calls `remove_file` on the result. Ids only ever come
+/// from a directory listing today, but that is a property of the current UI,
+/// not of this function.
+fn profile_path(model_dir: &Path, profile_id: &str) -> Result<PathBuf, String> {
+    let bad = profile_id.is_empty()
+        || profile_id.contains('/')
+        || profile_id.contains('\\')
+        || profile_id.contains(':')
+        || profile_id.contains("..");
+    if bad {
+        return Err(format!("档案名不合法：{profile_id:?}"));
+    }
+    Ok(profiles_dir(model_dir).join(format!("{profile_id}{PROFILE_EXT}")))
+}
+
 fn source_label(src: &str) -> String {
     match src {
         "default" => "原始".into(),
@@ -945,7 +965,10 @@ fn apply_profile_to_cfg(model_dir: &str, cfg: &mut Map<String, Value>) {
         }
         return;
     }
-    let path = profiles_dir(&md).join(format!("{pid}{PROFILE_EXT}"));
+    let Ok(path) = profile_path(&md, &pid) else {
+        cfg.insert("_active_profile_name".into(), json!(""));
+        return;
+    };
     let prof = read_json(&path);
     if !prof.is_object() {
         cfg.insert("_active_profile_name".into(), json!(""));
@@ -1173,9 +1196,9 @@ pub fn save_current_as_profile(
             "created": now,
         }
     });
-    let dir = profiles_dir(&md);
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    write_json_atomic(&dir.join(format!("{id}{PROFILE_EXT}")), &prof)?;
+    let dest = profile_path(&md, id)?;
+    fs::create_dir_all(profiles_dir(&md)).map_err(|e| e.to_string())?;
+    write_json_atomic(&dest, &prof)?;
     set_active_profile(root, model_dir, id)
 }
 
@@ -1218,7 +1241,7 @@ pub fn delete_profile(root: &Path, model_dir: &str, profile_id: &str) -> Result<
     if profile_id.is_empty() {
         return Err("不能删除默认档案".into());
     }
-    let path = profiles_dir(&md).join(format!("{profile_id}{PROFILE_EXT}"));
+    let path = profile_path(&md, profile_id)?;
     let _ = fs::remove_file(&path);
     let side = read_sidecar(&md);
     if side
@@ -1243,20 +1266,27 @@ pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
     if !data.is_object() {
         return Err("档案格式无效".into());
     }
+    let fresh_id = || {
+        format!(
+            "{:x}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+                % 0xffff_ffff
+        )
+    };
+    // The id is read out of the imported file, and .tmvp files are made to be
+    // passed around — a shared profile carrying `"id": "../../../evil"` would
+    // otherwise have us write outside the model directory entirely. Anything
+    // that is not a plain name gets replaced rather than rejected: the profile
+    // itself is still perfectly usable under a new id.
     let id = data
         .get("id")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            format!(
-                "{:x}",
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0)
-                    % 0xffff_ffff
-            )
-        });
+        .map(str::to_string)
+        .filter(|s| profile_path(Path::new("x"), s).is_ok())
+        .unwrap_or_else(fresh_id);
     if let Some(obj) = data.as_object_mut() {
         obj.insert("id".into(), json!(id));
         if let Some(meta) = obj.get_mut("meta").and_then(|v| v.as_object_mut()) {
@@ -1270,9 +1300,9 @@ pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
     }
     let md = PathBuf::from(model_dir);
     guard_model_dir(root, &md)?;
-    let dir = profiles_dir(&md);
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    write_json_atomic(&dir.join(format!("{id}{PROFILE_EXT}")), &data)?;
+    let dest = profile_path(&md, &id)?;
+    fs::create_dir_all(profiles_dir(&md)).map_err(|e| e.to_string())?;
+    write_json_atomic(&dest, &data)?;
     set_active_profile(root, model_dir, &id)
 }
 
@@ -1288,7 +1318,7 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
     if pid.is_empty() {
         return Err("当前是默认参数，没有可导出的档案。请先「另存当前为档案」。".into());
     }
-    let src = profiles_dir(&md).join(format!("{pid}{PROFILE_EXT}"));
+    let src = profile_path(&md, &pid)?;
     if !src.is_file() {
         return Err("活动档案文件不存在".into());
     }
@@ -1613,5 +1643,34 @@ mod tests {
         assert!(guard_model_dir(&root, &root).is_err());
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn profile_ids_cannot_escape_the_profiles_dir() {
+        let md = Path::new("/tmp/model");
+        for bad in [
+            "",
+            "..",
+            "../x",
+            "../../../../evil",
+            "a/b",
+            "a\\b",
+            "C:evil",
+            "sub/../../out",
+        ] {
+            assert!(
+                profile_path(md, bad).is_err(),
+                "should have rejected {bad:?}"
+            );
+        }
+        let ok = profile_path(md, "1a2b3c").unwrap();
+        assert_eq!(ok, md.join(PROFILES_DIR).join(format!("1a2b3c{PROFILE_EXT}")));
+    }
+
+    #[test]
+    fn an_imported_profile_cannot_choose_a_traversing_id() {
+        // .tmvp files are shared between users; the id inside one is untrusted.
+        let hostile = "../../../../evil";
+        assert!(profile_path(Path::new("x"), hostile).is_err());
     }
 }

@@ -7,45 +7,51 @@ use std::path::{Path, PathBuf};
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-fn is_safe_member(name: &str, dest_root: &Path) -> Result<bool, String> {
-    let name = name.replace('\\', "/").trim_start_matches('/').to_string();
-    if name.is_empty() || name.starts_with("../") || name.contains("/../") {
-        return Err(format!("tar 含非法路径：{name}"));
+/// Reject a member whose path would land outside `dest_root`.
+///
+/// Traversal safety only — it says nothing about whether the entry is *wanted*.
+/// Those two questions used to be one function, and the answer for "not wanted"
+/// (`Ok(false)`) was read by `extract_zip` as "unsafe", so every zip whose paths
+/// did not mention `runtime/` was refused outright. That broke the engine-core
+/// pack, the VB-Cable pack and every UI patch — three unrelated features, one
+/// overloaded return value.
+fn check_path_safety(name: &str) -> Result<(), String> {
+    let name = name.replace('\\', "/");
+    let name = name.trim_start_matches('/');
+    if name.is_empty() {
+        return Err("压缩包含空路径".into());
     }
-    if name.starts_with('/') || (name.len() > 1 && name.as_bytes().get(1) == Some(&b':')) {
-        return Err(format!("tar 含绝对路径：{name}"));
+    if name.len() > 1 && name.as_bytes().get(1) == Some(&b':') {
+        return Err(format!("含盘符路径：{name}"));
     }
-    let target = dest_root.join(&name);
-    let dest_c = dest_root
-        .canonicalize()
-        .unwrap_or_else(|_| dest_root.to_path_buf());
-    // Parent may not exist yet — check prefix logically
-    let mut cur = PathBuf::new();
-    for c in Path::new(&name).components() {
+    for c in Path::new(name).components() {
         use std::path::Component;
         match c {
-            Component::ParentDir => return Err(format!("tar 路径越界：{name}")),
-            Component::Normal(s) => cur.push(s),
-            Component::CurDir => {}
-            _ => return Err(format!("tar 路径非法：{name}")),
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir => return Err(format!("路径越界：{name}")),
+            _ => return Err(format!("路径非法：{name}")),
         }
     }
-    let _ = target;
-    let _ = dest_c;
+    Ok(())
+}
 
-    let top = name.split('/').next().unwrap_or("").to_ascii_lowercase();
+/// Is this tar member part of the Runtime tree we actually want?
+///
+/// The Runtime tarballs carry build scratch alongside `Runtime/`; anything
+/// outside it is skipped rather than treated as an error.
+fn is_runtime_member(name: &str) -> bool {
+    let name = name.replace('\\', "/");
+    let name = name.trim_start_matches('/');
     let lower = name.to_ascii_lowercase();
-    if top == "runtime" || lower.starts_with("runtime/") || top == "." {
-        return Ok(true);
+    let top = lower.split('/').next().unwrap_or("");
+    if top == "runtime" || top == "." {
+        return true;
     }
-    // Allow single wrapper folder; skip junk outside Runtime tree
+    // A single wrapper folder, or a loose top-level file, may hold the tree.
     if !name.contains('/') {
-        return Ok(true); // top-level dir/file
+        return true;
     }
-    if lower.split('/').any(|p| p == "runtime") {
-        return Ok(true);
-    }
-    Ok(false) // skip
+    lower.split('/').any(|p| p == "runtime")
 }
 
 fn open_archive(path: &Path) -> Result<Archive<Box<dyn Read + Send>>, String> {
@@ -122,14 +128,13 @@ pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), Strin
             .map_err(|e| e.to_string())?
             .to_string_lossy()
             .to_string();
-        match is_safe_member(&path, &staging)? {
-            true => {
-                entry
-                    .unpack_in(&staging)
-                    .map_err(|e| format!("解压失败 {path}: {e}"))?;
-            }
-            false => continue,
+        check_path_safety(&path).map_err(|e| format!("tar {e}"))?;
+        if !is_runtime_member(&path) {
+            continue;
         }
+        entry
+            .unpack_in(&staging)
+            .map_err(|e| format!("解压失败 {path}: {e}"))?;
     }
 
     let mut candidate = staging.join("Runtime");
@@ -179,10 +184,13 @@ pub fn extract_zip(archive: &Path, dest_root: &Path) -> Result<(), String> {
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         let name = entry.name().replace('\\', "/");
-        if !is_safe_member(&name, dest_root)? {
-            return Err(format!("压缩包含有不安全路径：{name}"));
-        }
-        let out = dest_root.join(&name);
+        check_path_safety(&name).map_err(|e| format!("压缩包{e}"))?;
+        // Second, independent check: the zip crate refuses anything it cannot
+        // prove stays inside the destination.
+        let rel = entry
+            .enclosed_name()
+            .ok_or_else(|| format!("压缩包路径不安全：{name}"))?;
+        let out = dest_root.join(&rel);
         if entry.is_dir() || name.ends_with('/') {
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             continue;
@@ -195,4 +203,71 @@ pub fn extract_zip(archive: &Path, dest_root: &Path) -> Result<(), String> {
         std::io::copy(&mut entry, &mut dst).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn traversal_and_absolute_are_refused() {
+        for bad in [
+            "../etc/passwd",
+            "a/../../b",
+            "C:/windows/system32/x.dll",
+            "",
+        ] {
+            assert!(check_path_safety(bad).is_err(), "should refuse {bad:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_nested_paths_are_allowed() {
+        // The regression: these are exactly the shapes a gui_patch, the
+        // engine-core pack and the VB-Cable pack are made of, and the old
+        // combined check reported every one of them as "unsafe".
+        for ok in [
+            "index.html",
+            "assets/index-Bs5dQX0_.js",
+            "assets/rmvpe/rmvpe.pt",
+            "VBCABLE/VBCABLE_Setup_x64.exe",
+            "./assets/a.css",
+        ] {
+            assert!(check_path_safety(ok).is_ok(), "should allow {ok:?}");
+        }
+    }
+
+    #[test]
+    fn runtime_filter_keeps_the_tree_and_drops_the_rest() {
+        assert!(is_runtime_member("Runtime/python.exe"));
+        assert!(is_runtime_member("wrapper/Runtime/python.exe"));
+        assert!(is_runtime_member("readme.txt")); // loose top-level
+        assert!(!is_runtime_member("build_scratch/obj/foo.o"));
+    }
+
+    #[test]
+    fn a_normal_zip_round_trips() {
+        let dir = std::env::temp_dir().join("rvcf-extract-zip-test");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let zip_path = dir.join("ui.zip");
+
+        {
+            let f = fs::File::create(&zip_path).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            z.start_file("index.html", opts).unwrap();
+            z.write_all(b"<!doctype html>").unwrap();
+            z.start_file("assets/app.js", opts).unwrap();
+            z.write_all(b"console.log(1)").unwrap();
+            z.finish().unwrap();
+        }
+
+        let out = dir.join("out");
+        extract_zip(&zip_path, &out).expect("a plain UI zip must extract");
+        assert!(out.join("index.html").is_file());
+        assert!(out.join("assets").join("app.js").is_file());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

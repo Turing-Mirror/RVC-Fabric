@@ -44,6 +44,8 @@ DEFAULT_PATHS = [
     "tools/benchmark_realtime.py",
     "tools/perf_report.py",
     "gui_v1.py",
+    # Window / Start Menu / chrome marks (wordmark + app.ico + logo_nav)
+    "assets/brand",
 ]
 
 

@@ -225,9 +225,3 @@ Runtime\pythonw.exe tools/realtime_worker.py（Python 3.9 + CUDA / DirectML）
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虚拟声卡，游戏里听到变声靠它
 
 感谢上游及以上所有项目的作者与贡献者。
-
----
-
-<div align="center">
-<sub>Turing Mirror · Veritas, Claritas, Amor</sub>
-</div>

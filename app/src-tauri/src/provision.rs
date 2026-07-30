@@ -1,14 +1,22 @@
-//! Runtime presence + GPU variant recommendation (stage 3 foundation).
-//!
-//! Download/extract of multi-GB Runtime comes next; this module reports what
-//! is missing and which variant to fetch, without torch (works before Runtime).
+//! Runtime presence, GPU recommendation, download + extract (stage 3).
 
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
 
+use crate::catalog;
+use crate::download::{self, ProgressFn};
+use crate::extract;
 use crate::paths;
+
+static PROVISION_BUSY: Mutex<bool> = Mutex::new(false);
+static CANCEL: AtomicBool = AtomicBool::new(false);
 
 /// nvidia | nvidia50 | amd | unknown
 pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
@@ -19,7 +27,6 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
             "未检测到显卡，请手动选择运行时版本".into(),
         );
     }
-    // 50-series needs sm_120-capable pack
     if joined.contains("rtx 50")
         || joined.contains("rtx50")
         || joined.contains("5060")
@@ -64,7 +71,6 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     )
 }
 
-/// Enumerate display adapters via WMI (no torch, no Runtime required).
 #[cfg(windows)]
 pub fn list_gpus() -> Vec<String> {
     use std::os::windows::process::CommandExt;
@@ -74,13 +80,7 @@ Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
   ForEach-Object { $_.Name }
 "#;
     let out = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            ps,
-        ])
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps])
         .creation_flags(0x08000000)
         .output();
     match out {
@@ -111,7 +111,62 @@ pub fn read_package_meta_variant(root: &Path) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Full provision snapshot for UI / first-run gate.
+fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) -> Result<(), String> {
+    let (accel, use_dml, summary) = match variant {
+        "amd" => (
+            "dml",
+            true,
+            "官方 A/I 卡路径：DirectML Runtime",
+        ),
+        "nvidia50" => (
+            "cuda",
+            false,
+            "NVIDIA 50 系 CUDA Runtime",
+        ),
+        _ => ("cuda", false, "NVIDIA CUDA Runtime"),
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let data = json!({
+        "variant": variant,
+        "label": label,
+        "accel_default": accel,
+        "use_dml": use_dml,
+        "summary": summary,
+        "runtime_version": version,
+        "runtime_source": "cnb_release",
+        "provisioned_at_unix": now,
+        "tagged": true,
+    });
+    let path = paths::package_meta_path(root);
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn cache_dir(root: &Path) -> PathBuf {
+    let d = paths::user_data(root)
+        .join("update_cache")
+        .join("runtime");
+    let _ = fs::create_dir_all(&d);
+    d
+}
+
+fn format_size(n: u64) -> String {
+    if n >= 1_000_000_000 {
+        format!("{:.2} GB", n as f64 / 1e9)
+    } else if n >= 1_000_000 {
+        format!("{:.1} MB", n as f64 / 1e6)
+    } else {
+        format!("{n} B")
+    }
+}
+
 pub fn provision_status(root: &Path) -> Value {
     let ready = paths::runtime_ready(root);
     let pyw = paths::runtime_pythonw(root);
@@ -120,6 +175,22 @@ pub fn provision_status(root: &Path) -> Value {
     let installed = read_package_meta_variant(root);
     let worker_script = paths::worker_script(root).is_file();
     let need_provision = !ready;
+    let busy = *PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
+
+    // Resolve recommended size for UI (best-effort, may use fallback)
+    let mut size_hint = 0u64;
+    let mut label = recommended.clone();
+    if let Ok(spec) = catalog::resolve_runtime_spec(
+        if recommended == "unknown" {
+            "nvidia"
+        } else {
+            &recommended
+        },
+        true,
+    ) {
+        size_hint = spec.size_bytes.max(spec.part.size_bytes);
+        label = spec.label;
+    }
 
     json!({
         "runtime_ready": ready,
@@ -130,15 +201,186 @@ pub fn provision_status(root: &Path) -> Value {
         "gpus": gpus,
         "recommended_variant": recommended,
         "recommend_reason": reason,
+        "recommended_label": label,
+        "recommended_size_bytes": size_hint,
+        "recommended_size_label": format_size(size_hint),
         "installed_variant": installed,
-        // Download not implemented yet — UI can show plan only
-        "download_supported": false,
+        "download_supported": true,
+        "busy": busy,
+        "variants": [
+            {"id": "nvidia", "label": "NVIDIA（推荐大多数 N 卡）"},
+            {"id": "nvidia50", "label": "NVIDIA 50 系（RTX 50xx）"},
+            {"id": "amd", "label": "AMD / Intel（DirectML）"},
+        ],
         "message": if need_provision {
-            "未检测到完整 Runtime（需含 torch）。首次使用请用启动器补全，或等待壳内下载上线。"
+            "未检测到完整 Runtime（需含 torch）。可在本页下载补全。"
         } else if !worker_script {
             "Runtime 就绪，但缺少 tools/realtime_worker.py"
         } else {
             "Runtime 就绪"
         },
     })
+}
+
+fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
+    let pct = if total > 0 {
+        ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    let _ = app.emit(
+        "provision-progress",
+        json!({
+            "phase": phase,
+            "done": done,
+            "total": total,
+            "percent": pct,
+            "message": message,
+        }),
+    );
+}
+
+pub fn cancel_provision() {
+    CANCEL.store(true, Ordering::SeqCst);
+}
+
+/// Download + extract Runtime for *variant*. Emits `provision-progress` events.
+pub fn run_provision(
+    app: AppHandle,
+    root: PathBuf,
+    variant: String,
+    force: bool,
+) -> Result<Value, String> {
+    {
+        let mut g = PROVISION_BUSY.lock().map_err(|e| e.to_string())?;
+        if *g {
+            return Err("已有补全任务在进行".into());
+        }
+        *g = true;
+    }
+    CANCEL.store(false, Ordering::SeqCst);
+
+    let result: Result<Value, String> = (|| {
+        let mut var = variant.trim().to_ascii_lowercase();
+        if var != "nvidia" && var != "amd" && var != "nvidia50" {
+            var = "nvidia".to_string();
+        }
+
+        if paths::runtime_ready(&root) && !force {
+            write_package_meta(&root, &var, &var, "").ok();
+            emit_progress(&app, "done", 1, 1, "Runtime 已就绪，跳过下载");
+            return Ok(json!({
+                "ok": true,
+                "message": "Runtime 已就绪，跳过下载。",
+                "variant": var,
+            }));
+        }
+
+        if force {
+            let rt = root.join("Runtime");
+            if rt.exists() {
+                emit_progress(&app, "prepare", 0, 1, "移除旧 Runtime…");
+                let _ = fs::remove_dir_all(&rt);
+            }
+        }
+
+        emit_progress(&app, "catalog", 0, 1, "解析 CNB 运行时清单…");
+        let spec = catalog::resolve_runtime_spec(&var, true)?;
+        let part = &spec.part;
+        if part.urls.is_empty() {
+            return Err("清单中没有可用的 Runtime 下载地址。".to_string());
+        }
+
+        let size = spec.size_bytes.max(part.size_bytes);
+        emit_progress(
+            &app,
+            "download",
+            0,
+            size.max(1),
+            &format!(
+                "下载 {} Runtime v{}（约 {}）",
+                spec.label,
+                if spec.version.is_empty() {
+                    "?"
+                } else {
+                    &spec.version
+                },
+                format_size(size)
+            ),
+        );
+
+        let cache = cache_dir(&root);
+        let dest_file = cache.join(if part.name.is_empty() {
+            format!("runtime-{var}.tar")
+        } else {
+            part.name.clone()
+        });
+
+        // Reuse verified cache
+        if dest_file.is_file() && !part.sha256.is_empty() {
+            if download::verify_sha256(&dest_file, &part.sha256).is_ok() {
+                emit_progress(
+                    &app,
+                    "download",
+                    size.max(1),
+                    size.max(1),
+                    &format!("使用本地缓存：{}", dest_file.file_name().unwrap().to_string_lossy()),
+                );
+            } else {
+                let _ = fs::remove_file(&dest_file);
+            }
+        }
+
+        if !dest_file.is_file() {
+            let app_cb = app.clone();
+            let msg = format!("下载中… {}", part.urls.first().map(|s| s.as_str()).unwrap_or(""));
+            let progress: ProgressFn = Arc::new(move |done, total, phase| {
+                let m = if phase == "verify" {
+                    "校验 sha256…"
+                } else {
+                    msg.as_str()
+                };
+                emit_progress(&app_cb, phase, done, total.max(1), m);
+            });
+            download::download_file(
+                &part.urls,
+                &dest_file,
+                &part.sha256,
+                &CANCEL,
+                Some(progress),
+            )?;
+        }
+
+        if CANCEL.load(Ordering::SeqCst) {
+            return Err("已取消".to_string());
+        }
+
+        emit_progress(&app, "extract", 0, 1, "解压 Runtime…");
+        extract::extract_runtime_tar(&dest_file, &root)?;
+        emit_progress(&app, "extract", 1, 1, "解压完成");
+
+        write_package_meta(&root, &var, &spec.label, &spec.version)?;
+
+        if !paths::runtime_ready(&root) {
+            return Err("解压完成但未检测到 torch，Runtime 可能不完整。".to_string());
+        }
+
+        emit_progress(&app, "done", 1, 1, "Runtime 补全完成");
+        Ok(json!({
+            "ok": true,
+            "message": format!("{} Runtime 已安装", spec.label),
+            "variant": var,
+            "version": spec.version,
+        }))
+    })();
+
+    if let Ok(mut g) = PROVISION_BUSY.lock() {
+        *g = false;
+    }
+    CANCEL.store(false, Ordering::SeqCst);
+
+    if let Err(ref e) = result {
+        emit_progress(&app, "error", 0, 1, e);
+    }
+    result
 }

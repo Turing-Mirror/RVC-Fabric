@@ -5,9 +5,15 @@ type Props = {
   status?: EngineStatus;
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
+  onOpenProvision?: () => void;
 };
 
-export function MorePage({ status, provision, onForceKill }: Props = {}) {
+export function MorePage({
+  status,
+  provision,
+  onForceKill,
+  onOpenProvision,
+}: Props = {}) {
   const delay = Number(status?.delay_ms || 0);
   const infer = Number(status?.infer_ms || 0);
   const latency =
@@ -60,12 +66,21 @@ export function MorePage({ status, provision, onForceKill }: Props = {}) {
             title="推荐运行时"
             desc={
               provision?.download_supported
-                ? "可在壳内下载"
-                : "下载能力尚未接入；请用启动器补全"
+                ? provision.need_provision
+                  ? "可在壳内下载补全"
+                  : "已就绪；可强制重装"
+                : "请用启动器补全"
             }
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">
-                {provision?.recommended_variant || "—"}
+              <span className="flex items-center gap-2">
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {provision?.recommended_variant || "—"}
+                </span>
+                {onOpenProvision ? (
+                  <Btn onClick={onOpenProvision}>
+                    {provision?.need_provision ? "补全…" : "重装…"}
+                  </Btn>
+                ) : null}
               </span>
             }
           />

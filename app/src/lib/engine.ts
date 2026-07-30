@@ -33,8 +33,21 @@ export type ProvisionStatus = {
   gpus?: string[];
   recommended_variant?: string;
   recommend_reason?: string;
+  recommended_label?: string;
+  recommended_size_bytes?: number;
+  recommended_size_label?: string;
   installed_variant?: string | null;
   download_supported?: boolean;
+  busy?: boolean;
+  variants?: { id: string; label: string }[];
+  message?: string;
+};
+
+export type ProvisionProgress = {
+  phase?: string;
+  done?: number;
+  total?: number;
+  percent?: number;
   message?: string;
 };
 
@@ -115,6 +128,21 @@ export async function getProvisionStatus(): Promise<ProvisionStatus> {
     };
   }
   return invoke<ProvisionStatus>("provision_status");
+}
+
+export async function startProvision(
+  variant: string,
+  force = false,
+): Promise<{ ok?: boolean; message?: string; variant?: string }> {
+  if (!isTauri()) {
+    return { ok: false, message: "浏览器预览无法下载 Runtime" };
+  }
+  return invoke("provision_start", { variant, force });
+}
+
+export async function cancelProvision(): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("provision_cancel");
 }
 
 export function statusTitle(st: EngineStatus): string {

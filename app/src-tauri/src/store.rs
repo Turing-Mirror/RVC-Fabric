@@ -628,6 +628,13 @@ pub fn install_voice_entry(
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
 
+    // download_request skips verification when the expected hash is empty.
+    // A .pth is an untrusted pickle — it must never be installed unverified,
+    // whatever the catalog happens to contain.
+    if sha.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
+        return Err(format!("音色 {id} 缺少有效的 sha256，已拒绝安装"));
+    }
+
     let emit = |phase: &str, done: u64, total: u64, message: &str| {
         let _ = app.emit(
             "store-progress",

@@ -151,12 +151,49 @@ fn fetch_and_extract(
     Ok(())
 }
 
+/// Hoist `<dir>/<name>/*` up into `<dir>` when the zip carried a single
+/// top-level folder of that name.
+///
+/// The VB-Cable pack ships this way about half the time; without the hoist the
+/// installer lands at `VBCABLE/VBCABLE/VBCABLE_Setup_x64.exe`, nothing finds
+/// it, and the user simply cannot install the virtual cable. The Python shell
+/// had this same guard.
+fn hoist_nested(dir: &Path, name: &str) {
+    let nested = dir.join(name);
+    if !nested.is_dir() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(&nested) else {
+        return;
+    };
+    for e in entries.filter_map(|e| e.ok()) {
+        let from = e.path();
+        let to = dir.join(e.file_name());
+        if to.exists() {
+            let _ = if to.is_dir() {
+                std::fs::remove_dir_all(&to)
+            } else {
+                std::fs::remove_file(&to)
+            };
+        }
+        let _ = std::fs::rename(&from, &to);
+    }
+    let _ = std::fs::remove_dir(&nested);
+}
+
 /// Download + extract engine-core into the install root.
 pub fn ensure_engine_core(root: &Path, cancel: Arc<AtomicBool>) -> Result<(), String> {
     if engine_core_ready(root) {
         return Ok(());
     }
     fetch_and_extract(ENGINE_CORE_NAME, ENGINE_CORE_SHA, root, root, cancel)?;
+    if !engine_core_ready(root) {
+        // Same guard: a single top-level folder in the zip would put
+        // assets/ and ffmpeg.exe one level too deep.
+        for name in ["engine-core", "engine_core"] {
+            hoist_nested(root, name);
+        }
+    }
     let missing = engine_core_missing(root);
     if missing.is_empty() {
         Ok(())
@@ -171,7 +208,12 @@ pub fn ensure_vbcable_pack(root: &Path, cancel: Arc<AtomicBool>) -> Result<(), S
     if vbcable_pack_ready(root) {
         return Ok(());
     }
-    fetch_and_extract(VBCABLE_NAME, VBCABLE_SHA, &vbcable_dir(root), root, cancel)?;
+    let dir = vbcable_dir(root);
+    fetch_and_extract(VBCABLE_NAME, VBCABLE_SHA, &dir, root, cancel)?;
+    if !vbcable_pack_ready(root) {
+        // Some builds of the pack have a single top-level VBCABLE/ folder.
+        hoist_nested(&dir, "VBCABLE");
+    }
     if vbcable_pack_ready(root) {
         Ok(())
     } else {
@@ -234,6 +276,26 @@ mod tests {
         assert!(engine_core_missing(&tmp)
             .iter()
             .any(|m| m.contains("hubert_base.pt")));
+    }
+
+    #[test]
+    fn hoists_a_single_nested_folder() {
+        // The VB-Cable pack sometimes ships with a top-level VBCABLE/ folder.
+        // Without the hoist the installer ends up one level too deep and the
+        // user simply cannot install the virtual cable.
+        let base = std::env::temp_dir().join("rvcf-hoist-test");
+        let _ = std::fs::remove_dir_all(&base);
+        let nested = base.join("VBCABLE");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("VBCABLE_Setup_x64.exe"), b"x".repeat(60_000)).unwrap();
+        std::fs::write(nested.join("vbcable.inf"), b"inf").unwrap();
+
+        assert!(find_vbcable_setup(&base).is_none(), "before hoist: nothing at top");
+        hoist_nested(&base, "VBCABLE");
+        assert!(find_vbcable_setup(&base).is_some(), "after hoist: setup found");
+        assert!(has_driver_files(&base), "after hoist: inf found");
+        assert!(!nested.exists(), "nested dir removed");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

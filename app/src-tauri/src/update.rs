@@ -138,6 +138,13 @@ pub fn apply_gui_patch(
     if url.is_empty() {
         return Err("更新地址为空".into());
     }
+    // download_file skips verification when the expected hash is empty, so an
+    // absent sha256 in the catalog would mean "apply whatever this URL
+    // returns" — for code that becomes the UI. Refuse instead of trusting the
+    // feed to always be well-formed.
+    if sha256.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
+        return Err("更新包缺少有效的 sha256，已拒绝应用".into());
+    }
     let target = ui_assets::external_dir()
         .ok_or("找不到可替换的 frontend 目录，本次安装无法热更界面")?;
 
@@ -213,6 +220,20 @@ mod tests {
     fn old_clients_can_jump_straight_to_current() {
         // The whole point: no chaining through intermediate releases.
         assert!(compare_versions("1.2.3-hotfix3", APP_VERSION) < 0);
+    }
+
+    #[test]
+    fn refuses_a_patch_without_a_valid_sha256() {
+        // download_file skips verification on an empty hash, so this guard is
+        // the only thing standing between a malformed catalog and arbitrary
+        // code becoming the UI.
+        let root = std::env::temp_dir();
+        let cancel = Arc::new(AtomicBool::new(false));
+        for bad in ["", "abc", "not-a-hash"] {
+            let err = apply_gui_patch(&root, "https://x/y.zip", bad, cancel.clone())
+                .unwrap_err();
+            assert!(err.contains("sha256"), "expected sha256 refusal, got {err}");
+        }
     }
 
     #[test]

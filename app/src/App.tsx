@@ -97,17 +97,30 @@ export default function App() {
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
   const [askTelemetry, setAskTelemetry] = useState(false);
+
+  // The daily ping belongs to app start, not to every start/stop of the
+  // stream. The Rust side dedupes by day, but firing it on each toggle still
+  // meant a network attempt and a config write every time.
   useEffect(() => {
+    void (async () => {
+      const cfg = await invoke<Record<string, unknown>>("config_get").catch(() => null);
+      if (cfg?.telemetry_opt_in === true) {
+        void invoke("telemetry_tick").catch(() => {});
+      }
+    })();
+  }, []);
+
+  // Ask only after the user has actually got value out of the product —
+  // 60 s of clean conversion — not at first launch.
+  useEffect(() => {
+    if (!engine.running) return;
     let timer: number | null = null;
     let cancelled = false;
     void (async () => {
       const cfg = await invoke<Record<string, unknown>>("config_get").catch(() => null);
       if (!cfg || cancelled) return;
-      if (cfg.telemetry_opt_in !== null && cfg.telemetry_opt_in !== undefined) {
-        if (cfg.telemetry_opt_in === true) void invoke("telemetry_tick").catch(() => {});
-        return;
-      }
-      if (!engine.running) return;
+      // null/undefined = never answered. false = declined, do not ask again.
+      if (cfg.telemetry_opt_in !== null && cfg.telemetry_opt_in !== undefined) return;
       timer = window.setTimeout(() => !cancelled && setAskTelemetry(true), 60_000);
     })();
     return () => {

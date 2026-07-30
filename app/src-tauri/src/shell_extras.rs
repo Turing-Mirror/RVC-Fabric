@@ -334,6 +334,9 @@ pub fn install_close_handler(app: &AppHandle) {
     };
     let handle = app.clone();
     let w = win.clone();
+    // Tracks the previous unanswered close prompt (see the "ask" branch).
+    let last_ask: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
     win.on_window_event(move |event| {
         let tauri::WindowEvent::CloseRequested { api, .. } = event else {
             return;
@@ -359,7 +362,24 @@ pub fn install_close_handler(app: &AppHandle) {
                 let _ = w.hide();
             }
             _ => {
+                // If the UI is wedged it can never answer, and the user would
+                // be unable to close the window at all. Second attempt within
+                // 10s falls back to a plain exit.
                 api.prevent_close();
+                let now = std::time::Instant::now();
+                let mut last = last_ask.lock().unwrap_or_else(|e| e.into_inner());
+                let stuck = last
+                    .map(|t: std::time::Instant| now.duration_since(t).as_secs() < 10)
+                    .unwrap_or(false);
+                *last = Some(now);
+                drop(last);
+                if stuck {
+                    if let Some(root) = root_of(&handle) {
+                        let _ = worker::stop_vc(&root, true);
+                    }
+                    handle.exit(0);
+                    return;
+                }
                 let _ = handle.emit("app://close-requested", ());
             }
         }

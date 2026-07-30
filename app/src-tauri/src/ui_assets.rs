@@ -26,7 +26,15 @@ const INDEX: &str = "index.html";
 ///
 /// Release layout is `<install>/frontend/`, next to the exe. The cwd variants
 /// keep `cargo run` from src-tauri working against a local `npm run build`.
+/// Resolved once — the directory does not move while the app runs, and this is
+/// on the path of every single asset request.
+static EXTERNAL_DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+
 pub fn external_dir() -> Option<PathBuf> {
+    EXTERNAL_DIR.get_or_init(resolve_external_dir).clone()
+}
+
+fn resolve_external_dir() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(mut exe) = std::env::current_exe() {
         exe.pop();

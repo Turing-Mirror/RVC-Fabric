@@ -66,7 +66,14 @@ export default function App() {
         return;
       }
       if (r.action === "external") {
-        setUpdateLine(`有新版本 ${String(r.remote)}，需要重新下载安装包`);
+        // Rust side changed → replace the exe through the signed updater.
+        setUpdateLine(`有新版本 ${String(r.remote)}，正在下载程序更新…`);
+        const b = await invoke<Record<string, unknown>>("update_app");
+        setUpdateLine(
+          b.installed
+            ? `已更新到 ${String(b.version ?? r.remote)}，重启程序后生效`
+            : `暂时取不到程序更新包，可先到发布页手动下载`,
+        );
         return;
       }
       setUpdateLine(`发现 ${String(r.remote)}，正在下载界面更新…`);

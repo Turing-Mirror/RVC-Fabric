@@ -198,12 +198,15 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     let mut saved = read_json(&paths::app_config_path(root));
     let mut hot = Map::new();
     let mut needs_restart: Vec<String> = Vec::new();
+    let mut touched_engine = false;
 
     for (k, v) in patch {
         if is_hot(&k) {
             hot.insert(k.clone(), v.clone());
+            touched_engine = true;
         } else if is_cold(&k) {
             needs_restart.push(k.clone());
+            touched_engine = true;
         }
         saved.insert(k, v);
     }
@@ -213,7 +216,12 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         .map_err(|e| format!("保存设置失败：{e}"))?;
 
     let cfg = read(root);
-    sync_inuse(root, &cfg)?;
+    // Only touch the engine's config file when an engine key actually changed.
+    // The worker may be reading it, and theme / wallpaper / telemetry writes
+    // have no business rewriting it.
+    if touched_engine {
+        sync_inuse(root, &cfg)?;
+    }
 
     Ok(json!({
         "config": Value::Object(cfg),

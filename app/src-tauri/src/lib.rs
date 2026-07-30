@@ -204,6 +204,12 @@ fn close_finish(app: AppHandle, to_tray: bool) {
     shell_extras::finish_close(&app, to_tray);
 }
 
+/// Strategy B: replace the exe through the signed updater feed.
+#[tauri::command]
+async fn update_app(app: AppHandle) -> Result<Value, String> {
+    update::run_app_updater(&app).await
+}
+
 #[tauri::command]
 fn ui_source() -> String {
     ui_assets::source_label()
@@ -600,6 +606,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // OTA strategy A: serve the UI through fabric:// so the frontend/ dir
         // next to the exe can replace the shipped UI without a new exe.
         .register_uri_scheme_protocol(ui_assets::SCHEME, |ctx, req| {
@@ -615,6 +622,7 @@ pub fn run() {
             pick_wallpaper,
             update_check,
             update_apply,
+            update_app,
             hotkeys_apply,
             diagnostics_build,
             consult_build,

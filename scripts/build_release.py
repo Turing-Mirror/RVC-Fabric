@@ -439,6 +439,9 @@ def build_tauri_shell(out: Path) -> None:
     n = sum(1 for f in fe_dst.rglob("*") if f.is_file())
     log(f"  frontend/: {n} files (swappable — do not embed only)")
 
+    # Strategy B artifacts (signed installer + .sig) live next to the exe in
+    # the bundle dir; build_setup does not ship them, they go to CNB alongside
+    # updater.json.
     for extra in ("WebView2Loader.dll",):
         src = release / extra
         if src.is_file():

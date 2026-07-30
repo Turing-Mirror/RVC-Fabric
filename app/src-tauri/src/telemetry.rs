@@ -73,15 +73,11 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
         return json!({"sent": false, "reason": "opt-out"});
     }
 
+    // Generated here but persisted in the single write at the end — telemetry
+    // must not rewrite the engine config, and two writes per tick was waste.
     let id = match cfg.get("telemetry_id").and_then(|v| v.as_str()) {
         Some(s) if !s.is_empty() => s.to_string(),
-        _ => {
-            let fresh = random_id();
-            let mut p = Map::new();
-            p.insert("telemetry_id".into(), json!(fresh));
-            let _ = config::update(root, p);
-            fresh
-        }
+        _ => random_id(),
     };
 
     let mut days: Vec<String> = cfg
@@ -104,6 +100,7 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
     let ok = post(&body);
 
     let mut patch = Map::new();
+    patch.insert("telemetry_id".into(), json!(id));
     patch.insert(
         "telemetry_pending_days".into(),
         if ok { json!([]) } else { json!(days) },

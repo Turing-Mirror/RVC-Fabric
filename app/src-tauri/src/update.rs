@@ -6,9 +6,10 @@
 //!
 //! * **`gui_patch`** — a zip of the frontend. Downloaded, verified, staged, and
 //!   swapped in atomically. Takes effect on restart. No new exe.
-//! * **`full_package`** — never merged in-process. We only open the download
-//!   page, because replacing the running exe is not something to attempt from
-//!   inside it.
+//! * **`full_package`** — the Rust side changed, so the exe must be replaced.
+//!   Handled by the Tauri updater (strategy B), which verifies a detached
+//!   signature against the public key baked into the build. We never merge an
+//!   exe in-process.
 //!
 //! Versions are plain `X.Y.Z`. `-hotfixN` / `-partN` are recognised only so
 //! that clients still running an old build compare correctly; nothing new is
@@ -220,4 +221,35 @@ mod tests {
         assert_eq!(compare_versions("", "1.3.0"), 0);
         assert_eq!(compare_versions("1.2.3.4", "1.3.0"), 0);
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Strategy B — replace the executable via the Tauri updater
+// ---------------------------------------------------------------------------
+
+/// Check the signed updater feed and install if a newer build is published.
+///
+/// Signature verification is done by the plugin against the pubkey compiled
+/// into the binary; an unsigned or wrongly-signed package is rejected before a
+/// single byte is written. That is the difference from strategy A, where the
+/// only integrity check is the sha256 carried in the catalog.
+pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Ok(json!({"available": false, "local": APP_VERSION}));
+    };
+    let version = update.version.clone();
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| format!("安装更新失败：{e}"))?;
+    Ok(json!({
+        "available": true,
+        "installed": true,
+        "version": version,
+        "restart_required": true,
+    }))
 }

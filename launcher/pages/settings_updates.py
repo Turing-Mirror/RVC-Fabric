@@ -142,7 +142,7 @@ class SettingsUpdatesMixin:
                         self._set_status_visual(
                             "idle",
                             "发现软件更新" + (f" {rem_d}" if rem_d else ""),
-                            "打开「设置 → 在线更新」可下载应用",
+                            "可立即下载应用，完成后可自动重启",
                         )
                     except Exception:
                         pass
@@ -150,6 +150,8 @@ class SettingsUpdatesMixin:
                         remote=rem_d,
                         notes=notes,
                         local=loc_d,
+                        package_type=str(status.get("package_type") or ""),
+                        action=str(status.get("action") or ""),
                     )
                 elif error and not catalog:
                     try:
@@ -204,17 +206,36 @@ class SettingsUpdatesMixin:
         remote: str = "",
         notes: str = "",
         local: str = "",
+        package_type: str = "",
+        action: str = "",
     ) -> None:
-        """One-shot session popup when auto-check finds a newer package."""
+        """One-shot session popup when auto-check finds a newer package.
+
+        Yes → jump to 设置 and start download/apply (skip second confirm).
+        After apply, user is asked whether to auto-restart (see MainApp).
+        """
         if getattr(self, "_update_prompt_shown", False):
             return
         self._update_prompt_shown = True
         ver_line = f"{local or '?'} → {remote or '?'}" if remote else "有可用增量更新"
-        body = (
-            f"发现软件更新：{ver_line}\n\n"
-            f"{(notes[:280] + '…') if len(notes) > 280 else notes}\n\n"
-            "是否前往「设置 → 在线更新」下载并应用？"
-        ).strip()
+        note_part = (notes[:320] + "…") if len(notes) > 320 else (notes or "（无更新说明）")
+        is_full = (
+            str(package_type or "").lower() in ("full_package", "full")
+            or str(action or "") == "external"
+        )
+        if is_full:
+            body = (
+                f"发现全量更新提示：{ver_line}\n\n"
+                f"{note_part}\n\n"
+                "全量包不能在软件内覆盖安装。是否打开「设置 → 在线更新」查看说明？"
+            ).strip()
+        else:
+            body = (
+                f"发现软件更新：{ver_line}\n\n"
+                f"{note_part}\n\n"
+                "是否立即下载并应用增量更新？\n"
+                "（应用完成后可选择自动重启，或稍后手动重启）"
+            ).strip()
 
         def ask():
             try:
@@ -229,33 +250,99 @@ class SettingsUpdatesMixin:
                 self.show_page("settings")
             except Exception:
                 pass
-            # Offer apply after page switch (card already has catalog)
+
             def _offer_apply():
                 try:
-                    if hasattr(self, "_store_page") and self._store_page is not None:
-                        st_ok = True
+                    if not hasattr(self, "_store_page") or self._store_page is None:
+                        return
+                    if is_full:
+                        # Open external full-package help if available
                         try:
-                            from launcher.online.gui_update import check_gui_update
-
-                            st = check_gui_update(self._store_page.catalog)
-                            st_ok = bool(st.get("available"))
+                            self._store_page.open_full_package_help()
                         except Exception:
-                            st_ok = True
-                        if st_ok:
-                            self._store_page.apply_gui()
+                            pass
+                        return
+                    try:
+                        from launcher.online.gui_update import check_gui_update
+
+                        st = check_gui_update(self._store_page.catalog)
+                        if not st.get("available"):
+                            return
+                    except Exception:
+                        pass
+                    self._store_page.apply_gui(skip_confirm=True)
                 except Exception:
                     pass
 
             try:
-                self.root.after(200, _offer_apply)
+                self.root.after(220, _offer_apply)
             except Exception:
                 pass
 
         try:
-            self.root.after(0, ask)
+            # Slight delay so first paint / onboarding don't cover the dialog
+            self.root.after(400, ask)
         except Exception:
             pass
 
+    def _prompt_restart_after_update(self, *, n_files: int = 0) -> None:
+        """After gui_patch apply: ask auto-restart vs manual."""
+        try:
+            from tkinter import messagebox
+
+            yes = messagebox.askyesno(
+                "更新完成",
+                (
+                    f"更新已应用（{n_files} 个文件）。\n\n"
+                    "需要重启软件后新版本才会完全生效。\n\n"
+                    "是否立即自动重启？\n\n"
+                    "选「否」可稍后自行关闭并重新打开。"
+                ),
+                parent=self.root,
+            )
+        except Exception:
+            return
+        if yes:
+            self._restart_app_now()
+        else:
+            try:
+                from tkinter import messagebox
+
+                messagebox.showinfo(
+                    "更新完成",
+                    "已选择稍后手动重启。\n请在方便时关闭并重新打开软件。",
+                    parent=self.root,
+                )
+            except Exception:
+                pass
+
+    def _restart_app_now(self) -> None:
+        """Schedule delayed relaunch then force-exit (releases single-instance mutex)."""
+        try:
+            from launcher.app_relaunch import schedule_self_relaunch
+
+            schedule_self_relaunch(delay_s=1.6)
+        except Exception as e:
+            try:
+                from tkinter import messagebox
+
+                messagebox.showwarning(
+                    "自动重启失败",
+                    f"无法安排自动重启：{e}\n\n请手动关闭并重新打开软件。",
+                    parent=self.root,
+                )
+            except Exception:
+                pass
+            return
+        try:
+            self._on_close(force_exit=True)
+        except Exception:
+            try:
+                import os
+
+                os._exit(0)
+            except Exception:
+                pass
 
     def _apply_update_nav_badge(self) -> None:
         # 在线更新 now lives inside 设置 — badge the 设置 nav item instead

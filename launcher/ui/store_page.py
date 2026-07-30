@@ -976,7 +976,8 @@ class StorePage:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def apply_gui(self) -> None:
+    def apply_gui(self, *, skip_confirm: bool = False) -> None:
+        """Download and merge gui_patch. skip_confirm: startup popup already agreed."""
         if self._busy:
             return
         st = check_gui_update(self.catalog)
@@ -992,12 +993,15 @@ class StorePage:
             return
         loc_d = st.get("local_display") or st.get("local") or "?"
         rem_d = st.get("remote_display") or st.get("remote") or "?"
-        if not messagebox.askyesno(
-            "应用增量更新",
-            f"将下载增量更新包并覆盖软件文件（不动 Runtime / User_Data / 模型）。\n"
-            f"{loc_d} → {rem_d}\n\n完成后请重启软件。继续？",
-        ):
-            return
+        if not skip_confirm:
+            if not messagebox.askyesno(
+                "应用增量更新",
+                f"将下载增量更新包并覆盖软件文件（不动 Runtime / User_Data / 模型）。\n"
+                f"{loc_d} → {rem_d}\n\n"
+                "完成后可选择自动重启或稍后手动重启。继续？",
+                parent=self.root,
+            ):
+                return
         self._busy = True
         self._set_progress("正在下载增量更新包…", TM_ACCENT)
 
@@ -1021,21 +1025,32 @@ class StorePage:
                 self._busy = False
                 if err:
                     self._set_progress(f"更新失败:{err}", TM_WARN)
-                    messagebox.showerror("更新失败", err)
-                else:
-                    written = result.get("written") or []
-                    self._set_progress(
-                        f"增量包已应用（{len(written)} 个文件），请重启。", TM_OK
-                    )
+                    messagebox.showerror("更新失败", err, parent=self.root)
+                    return
+                written = result.get("written") or []
+                n = len(written)
+                self._set_progress(
+                    f"增量包已应用（{n} 个文件）。可选择立即重启。", TM_OK
+                )
+                # Clear settings nav badge — package is applied (restart still needed)
+                try:
+                    if hasattr(self.app, "_update_badge_on"):
+                        self.app._update_badge_on = False
+                        self.app._apply_update_nav_badge()
+                except Exception:
+                    pass
+                try:
+                    self.app._prompt_restart_after_update(n_files=n)
+                except Exception:
                     messagebox.showinfo(
-                        "完成",
-                        f"更新已应用（{len(written)} 个文件）。\n"
-                        "请关闭并重新打开软件。",
+                        "更新完成",
+                        f"更新已应用（{n} 个文件）。\n请关闭并重新打开软件。",
+                        parent=self.root,
                     )
 
             self.root.after(0, done)
 
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work, daemon=True, name="tm-apply-gui").start()
 
     def _dl_button_label(self, vid: str, installed: bool) -> str:
         """Download-button text doubles as the download state display."""

@@ -6,7 +6,7 @@
 > **最后大更新**：2026-07-30  
 > **工作区**：`L:\My Project\Grok`  
 > **当前分支**：`tm-release`（与 `fabric/tm-release` 对齐；以 `git log` 为准）  
-> **壳版本**：1.2.3-hotfix1（Full；热修形态见「版本号规范」）  
+> **壳版本**：1.2.3-hotfix2（Full；热修形态见「版本号规范」）  
 > **主推 remote**：`fabric` → https://github.com/Turing-Mirror/RVC-Fabric.git  
 > **组织旧仓**：`org` → TuringMirror-Voice（历史；以 fabric 为准）  
 > **个人镜像**：`origin` → xiaoyanjiee/TuringMirror-Voice  

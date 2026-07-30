@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
-"""CNB 在线清单编译器 — YAML 源文件 → index.json / snippet / bundled catalog / plaza.
+"""CNB 在线清单编译器 — YAML 源文件 → index / snippet / bundled / plaza / changelog.
 
 维护者只改 ``CNB-GIT-RELEASE/catalog-src/`` 下的 YAML（每音色一个文件，
 只写人话字段与制品相对路径）；sha256 / size_bytes / pack_url / cover_url /
-sha256_urls 全部由本脚本从本地制品自动补全。四份 JSON 产物为**生成物，
-禁止手改**::
+sha256_urls 全部由本脚本从本地制品自动补全。JSON 产物为**生成物，禁止手改**::
 
     CNB-GIT-RELEASE/index.json                          主索引（schema 2）
     CNB-GIT-RELEASE/catalog/online_catalog.snippet.json 兼容清单（schema 1）
     configs/online_catalog.json                         app 内置兜底（schema 1）
-    CNB-GIT-RELEASE/plaza.json                          广场 feed（独立管线，不进 index.json）
+    CNB-GIT-RELEASE/plaza.json                          广场 feed（独立管线）
+    CNB-GIT-RELEASE/changelog.json                      壳层更新日志（独立管线）
 
-广场源文件 ``catalog-src/plaza.yaml`` 是**可选**的：不存在或为空时
-plaza.json 仍会生成（内容 = 从 app.yaml 自动派生的版本资讯）。
+广场 ``catalog-src/plaza.yaml``、更新日志 ``catalog-src/changelog.yaml`` 均可选。
+有 changelog 条目时：最新条写入 ``app.gui.notes``；默认仍派生 plaza release 资讯。
 
 用法（仓库根目录，宿主 Python，需 PyYAML）::
 
     python scripts/build_catalog.py init            # 一次性：从线上 index.json 反向生成 YAML 源
     python scripts/build_catalog.py check           # 只校验（契约 + 回环过真实客户端解析器）
-    python scripts/build_catalog.py build --diff    # 校验 + 打印语义 diff + 写出四份产物
+    python scripts/build_catalog.py build --diff    # 校验 + 打印语义 diff + 写出产物
 
 锁定值语义：YAML 里的 ``sha256`` / ``size_bytes`` = 已发布的线上真值；
 与本地制品不一致时**警告并以锁定值为准**（--strict 升级为错误），
@@ -74,6 +74,7 @@ class Paths:
         self.src = self.cnb / "catalog-src"
         self.index_out = self.cnb / "index.json"
         self.plaza_out = self.cnb / "plaza.json"
+        self.changelog_out = self.cnb / "changelog.json"
         self.snippet_out = self.cnb / "catalog" / "online_catalog.snippet.json"
         self.bundled_out = (
             Path(bundled) if bundled else REPO / "configs" / "online_catalog.json"
@@ -317,6 +318,15 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             out["plaza"] = _load_yaml(p)
         except Exception as e:
             rep.error(f"catalog-src/plaza.yaml: 解析失败: {e}")
+
+    # changelog.yaml 可选：壳层更新日志单一源 → changelog.json + gui.notes
+    out["changelog"] = {}
+    p = src / "changelog.yaml"
+    if p.is_file():
+        try:
+            out["changelog"] = _load_yaml(p)
+        except Exception as e:
+            rep.error(f"catalog-src/changelog.yaml: 解析失败: {e}")
 
     out["runtimes"] = {}
     for variant in VALID_VARIANTS:
@@ -749,11 +759,17 @@ def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
 
 
 def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
-    """源字典 → {index, snippet, bundled} 产物 dict（广场走 compile_plaza 独立管线）。"""
+    """源字典 → {index, snippet, bundled} 产物 dict（广场/日志走独立管线）。"""
     if rep.errors:
         return None
     meta = src.get("meta") or {}
-    app_src = src.get("app") or {}
+    # Deep-copy app so changelog can override notes without mutating YAML load cache
+    app_src = dict(src.get("app") or {})
+    if isinstance(app_src.get("gui"), dict):
+        app_src["gui"] = dict(app_src["gui"])
+    changelog_payload = compile_changelog(src, rep)
+    src["_changelog_compiled"] = changelog_payload
+    _apply_changelog_notes(app_src, changelog_payload, rep)
     community = {
         "qq_group": str((src.get("community") or {}).get("qq_group") or ""),
         "qq_link": str((src.get("community") or {}).get("qq_link") or ""),
@@ -992,17 +1008,26 @@ items:
 #     date: 260801
 #     pinned: true
 #     utm: true
-#   - id: ad-example-260801
-#     type: ad
-#     sponsor: 示例广告主
-#     title: 示例推广卡片
-#     body: 广告条目强制可关闭，UI 显示「广告」角标；url 自动追加 utm 参数。
-#     image: ch-banner/example.jpg
-#     url: https://example.com/landing?ref=abc
-#     action_label: 了解详情
-#     placements: [plaza, models_page]
-#     start: 260801
-#     end: 260831
+"""
+
+_CHANGELOG_YAML_TEMPLATE = """\
+# 壳层更新日志（唯一维护源）— 编译产物 CNB 根目录 changelog.json
+# 规则见 docs/在线更新与音色库.md §0 与 docs/广场页与内容运营.md §2.1
+# 只记正式 Base + hotfix 全文；正向积累。编译: python scripts/build_catalog.py build --diff
+#
+# version     必填 X.Y.Z 或 X.Y.Z-hotfixN
+# date        可选 YYMMDD
+# title       可选
+# highlights  可选短要点（广场主卡摘要）
+# body        建议填写；gui.notes 取最新条 body（无则 highlights 拼接）
+entries:
+#   - version: 1.2.3
+#     date: '260730'
+#     title: 1.2.3
+#     highlights:
+#       - 修复某某
+#     body: >
+#       完整说明……
 """
 
 
@@ -1130,23 +1155,139 @@ def _compile_plaza_item(
     return row
 
 
-def _auto_release_news(app_src: dict) -> Optional[dict]:
-    """从 app.yaml 派生一条版本资讯（id=release-<version>）。"""
-    version = str(app_src.get("version") or "").strip()
+def compile_changelog(src: dict, rep: Report) -> dict:
+    """changelog.yaml → changelog.json payload（schema 1, entries newest-first）。"""
+    from launcher.version import compare_versions, is_stable_shell_version
+
+    raw_src = src.get("changelog") or {}
+    rows_src = raw_src.get("entries") or raw_src.get("items") or []
+    if raw_src and not isinstance(rows_src, list):
+        rep.error("changelog: entries 必须是列表")
+        rows_src = []
+
+    entries: list[dict] = []
+    seen: set[str] = set()
+    for i, raw in enumerate(rows_src):
+        who = f"changelog.entries[{i}]"
+        if not isinstance(raw, dict):
+            rep.error(f"{who}: 必须是映射")
+            continue
+        version = str(raw.get("version") or raw.get("ver") or "").strip()
+        if not version:
+            rep.error(f"{who}: 缺 version")
+            continue
+        if not is_stable_shell_version(version):
+            rep.error(
+                f"{who}: version={version!r} 必须是 X.Y.Z 或 X.Y.Z-hotfixN"
+            )
+            continue
+        if version in seen:
+            rep.error(f"changelog: version 重复: {version}")
+            continue
+        seen.add(version)
+        highlights: list[str] = []
+        hl = raw.get("highlights") or raw.get("bullets") or []
+        if isinstance(hl, str) and hl.strip():
+            highlights = [hl.strip()]
+        elif isinstance(hl, list):
+            for x in hl:
+                s = str(x or "").strip()
+                if s:
+                    highlights.append(s)
+        body = str(raw.get("body") or raw.get("notes") or raw.get("text") or "").strip()
+        if not body and not highlights:
+            rep.error(f"{who} ({version}): body 与 highlights 至少填一项")
+            continue
+        row: dict[str, Any] = {"version": version}
+        date = _yymmdd(raw.get("date") or raw.get("released"))
+        if date:
+            row["date"] = date
+        title = str(raw.get("title") or "").strip()
+        if title:
+            row["title"] = title
+        if highlights:
+            row["highlights"] = highlights
+        if body:
+            row["body"] = body
+        entries.append(row)
+
+    from functools import cmp_to_key
+
+    def _cmp(a: dict, b: dict) -> int:
+        c = compare_versions(str(a.get("version") or ""), str(b.get("version") or ""))
+        if c != 0:
+            return -c
+        da, db = str(a.get("date") or ""), str(b.get("date") or "")
+        if da != db:
+            return (da < db) - (da > db)
+        return 0
+
+    entries.sort(key=cmp_to_key(_cmp))
+    return {"schema": 1, "entries": entries}
+
+
+def _notes_from_changelog_row(row: dict) -> str:
+    body = str(row.get("body") or "").strip()
+    if body:
+        return body
+    hl = row.get("highlights") or []
+    if isinstance(hl, list) and hl:
+        return "；".join(str(x).strip() for x in hl if str(x).strip())
+    return ""
+
+
+def _apply_changelog_notes(app_src: dict, changelog: dict, rep: Report) -> None:
+    """Single source: latest changelog entry overwrites app.gui.notes."""
+    entries = changelog.get("entries") if isinstance(changelog, dict) else None
+    if not entries:
+        return
+    latest = entries[0]
+    notes = _notes_from_changelog_row(latest)
+    if not notes:
+        return
+    gui = app_src.get("gui") if isinstance(app_src.get("gui"), dict) else {}
+    if not isinstance(gui, dict):
+        gui = {}
+        app_src["gui"] = gui
+    old = str(gui.get("notes") or app_src.get("notes") or "").strip()
+    if old and old != notes:
+        rep.warn(
+            "app.gui.notes 已被 changelog.yaml 最新条覆盖（请只维护 changelog.yaml）"
+        )
+    gui["notes"] = notes
+    app_src["gui"] = gui
+    app_src["notes"] = notes
+
+
+def _auto_release_news(
+    app_src: dict, changelog: Optional[dict] = None
+) -> Optional[dict]:
+    """从 changelog 最新条（优先）或 app.yaml 派生版本资讯 id=release-<version>。"""
+    entries = (changelog or {}).get("entries") if isinstance(changelog, dict) else None
+    if entries:
+        latest = entries[0]
+        version = str(latest.get("version") or "").strip()
+        body = _notes_from_changelog_row(latest)
+        date = _yymmdd(latest.get("date")) or _yymmdd(app_src.get("released"))
+        # Fixed wording for old clients; changelog has its own display_title
+        title = f"RVC Fabric v{version} 发布" if version else ""
+    else:
+        version = str(app_src.get("version") or "").strip()
+        gui = app_src.get("gui") if isinstance(app_src.get("gui"), dict) else {}
+        body = str(app_src.get("notes") or gui.get("notes") or "").strip()
+        date = _yymmdd(app_src.get("released"))
+        title = f"RVC Fabric v{version} 发布" if version else ""
     if not version:
         return None
-    gui = app_src.get("gui") if isinstance(app_src.get("gui"), dict) else {}
-    body = str(app_src.get("notes") or gui.get("notes") or "").strip()
     if len(body) > _PLAZA_BODY_CAP:
         body = body[:_PLAZA_BODY_CAP] + "……"
     row: dict[str, Any] = {
         "id": f"release-{version}",
         "type": "news",
-        "title": f"RVC Fabric v{version} 发布",
+        "title": title or f"RVC Fabric v{version} 发布",
     }
     if body:
         row["body"] = body
-    date = _yymmdd(app_src.get("released"))
     if date:
         row["date"] = date
     row["priority"] = 50
@@ -1155,9 +1296,10 @@ def _auto_release_news(app_src: dict) -> Optional[dict]:
 
 
 def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
-    """plaza.yaml（可选）+ app.yaml → plaza.json payload（schema 1）。"""
+    """plaza.yaml（可选）+ changelog/app 派生 → plaza.json payload（schema 1）。"""
     plaza_src = src.get("plaza") or {}
     known, ads = _plaza_types()
+    changelog = src.get("_changelog_compiled") or compile_changelog(src, rep)
 
     rows_src = plaza_src.get("items") or []
     if not isinstance(rows_src, list):
@@ -1178,15 +1320,33 @@ def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
         seen.add(row["id"])
         items.append(row)
 
-    # 自动派生版本资讯附在数组末尾（显示顺序由 pinned/priority/date 决定，
-    # 数组顺序不影响客户端展示）；同 id 已存在则不重复生成
+    # 自动派生版本资讯（changelog 优先）；新客户端广场主列表会隐藏 release-*
     if plaza_src.get("auto_release_news", True):
-        auto = _auto_release_news(src.get("app") or {})
+        auto = _auto_release_news(src.get("app") or {}, changelog)
         if auto and auto["id"] not in seen:
             seen.add(auto["id"])
             items.append(auto)
 
     return {"schema": 1, "items": items}
+
+
+def _changelog_roundtrip(payload: dict, rep: Report) -> None:
+    """回环：产物可被客户端 parse_changelog 解析。"""
+    try:
+        from launcher.online import changelog as cl_mod
+    except ImportError as e:  # pragma: no cover
+        rep.warn(f"回环[changelog]跳过（不可导入: {e}）")
+        return
+    rows = payload.get("entries") or []
+    parsed = cl_mod.parse_changelog(json.loads(json.dumps(payload)))
+    want = {str(r.get("version")) for r in rows}
+    got = {e.version for e in parsed}
+    if want != got:
+        lost = sorted(want - got)
+        rep.error(
+            f"回环[changelog]: 客户端解析 {len(parsed)}/{len(rows)} 条"
+            f"（丢弃: {', '.join(lost) or '?'}）"
+        )
 
 
 def _plaza_roundtrip(payload: dict, rep: Report) -> None:
@@ -1560,6 +1720,9 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         _dump_yaml(paths.src / "voices" / f"{vid}.yaml", data, hdr)
 
     (paths.src / "plaza.yaml").write_text(_PLAZA_YAML_TEMPLATE, encoding="utf-8")
+    (paths.src / "changelog.yaml").write_text(
+        _CHANGELOG_YAML_TEMPLATE, encoding="utf-8"
+    )
 
     n = len(list((paths.src / "voices").glob("*.yaml")))
     print(
@@ -1581,9 +1744,13 @@ def _compile_all(paths: Paths) -> tuple[Optional[dict], Report]:
     if outputs:
         _roundtrip_check(outputs, src, rep)
         n_err = len(rep.errors)
+        outputs["changelog"] = src.get("_changelog_compiled") or compile_changelog(
+            src, rep
+        )
         outputs["plaza"] = compile_plaza(src, paths, rep)
         if len(rep.errors) == n_err:  # 编译干净才回环，避免级联报错
             _plaza_roundtrip(outputs["plaza"], rep)
+            _changelog_roundtrip(outputs["changelog"], rep)
     return outputs, rep
 
 
@@ -1593,9 +1760,10 @@ def cmd_check(paths: Paths, *, strict: bool = False) -> int:
     if rep.failed(strict) or outputs is None:
         print(f"check 失败（错误 {len(rep.errors)}，警告 {len(rep.warnings)}）")
         return 1
+    n_cl = len((outputs.get("changelog") or {}).get("entries") or [])
     print(
         f"check 通过（警告 {len(rep.warnings)}，音色 {len(outputs['index']['voices'])} 个，"
-        f"广场 {len(outputs['plaza']['items'])} 条）"
+        f"广场 {len(outputs['plaza']['items'])} 条，更新日志 {n_cl} 条）"
     )
     return 0
 
@@ -1640,6 +1808,7 @@ def cmd_build(paths: Paths, *, strict: bool = False, show_diff: bool = False) ->
         print("---")
 
     plaza = outputs["plaza"]
+    changelog = outputs.get("changelog") or {"schema": 1, "entries": []}
     if show_diff and paths.plaza_out.is_file():
         old_plaza: dict = {}
         try:
@@ -1654,18 +1823,33 @@ def cmd_build(paths: Paths, *, strict: bool = False, show_diff: bool = False) ->
         else:
             print("  （无变化）")
         print("---")
+    if show_diff and paths.changelog_out.is_file():
+        old_cl: dict = {}
+        try:
+            old_cl = json.loads(paths.changelog_out.read_text(encoding="utf-8"))
+        except Exception:
+            old_cl = {}
+        lines = _semantic_diff(old_cl, changelog)
+        print("--- changelog.json 语义 diff ---")
+        if lines:
+            for ln in lines:
+                print(" ", ln)
+        else:
+            print("  （无变化）")
+        print("---")
 
     _write_json(paths.index_out, index)
     _write_json(paths.snippet_out, outputs["snippet"])
     _write_json(paths.bundled_out, outputs["bundled"])
     _write_json(paths.plaza_out, plaza)
+    _write_json(paths.changelog_out, changelog)
     print(
         f"已写出:\n  {paths.index_out}\n  {paths.snippet_out}\n"
-        f"  {paths.bundled_out}\n  {paths.plaza_out}"
+        f"  {paths.bundled_out}\n  {paths.plaza_out}\n  {paths.changelog_out}"
     )
     print(
         f"（音色 {len(index['voices'])} 个，广场 {len(plaza['items'])} 条，"
-        f"警告 {len(rep.warnings)}）"
+        f"更新日志 {len(changelog.get('entries') or [])} 条，警告 {len(rep.warnings)}）"
     )
     return 0
 

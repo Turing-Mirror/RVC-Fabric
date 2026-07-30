@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""广场 page + models-page ad banner (UI mixin).
+"""广场 page + models-page ad banner + 更新日志子页 (UI mixin).
 
-Split out of main_app. Pure consumer of launcher.online.plaza (parse / filter /
-cache / user actions all live there); this module only renders. Uses MainApp
-state (self.body, self.root, self.cfg, self._cover_cache, self.nav_btns,
-self._invalidate_catalog_views, …) present on the composed instance.
+Split out of main_app. Pure consumer of launcher.online.plaza / changelog
+(parse / filter / cache / user actions live there); this module only renders.
+Uses MainApp state (self.body, self.root, self.cfg, …) on the composed instance.
 
 Shell-import safe: stdlib + tkinter + launcher pure modules only — no numpy /
 torch anywhere in the import chain (the frozen shell has neither).
@@ -18,6 +17,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from launcher.config_store import save_config
+from launcher.online import changelog as cl_mod
 from launcher.online import plaza
 from launcher.theme import (
     GUTTER,
@@ -34,6 +34,7 @@ from launcher.theme import (
     title_font,
 )
 from launcher.ui import GhostButton
+from launcher.version import APP_VERSION, display_version
 
 
 def _fmt_plaza_date(d: str) -> str:
@@ -53,7 +54,10 @@ class PlazaPageMixin:
         # never clobber state those early calls already produced.
         if not hasattr(self, "_plaza_items"):
             self._plaza_items = plaza.load_cached_feed()
+        if not hasattr(self, "_changelog_entries"):
+            self._changelog_entries = cl_mod.load_cached_changelog()
         self._plaza_render_snap = None
+        self._plaza_subview = "main"  # main | changelog
         if not hasattr(self, "_plaza_job"):
             self._plaza_job = None
         if not hasattr(self, "_plaza_fetching"):
@@ -64,6 +68,8 @@ class PlazaPageMixin:
             self._plaza_img_inflight = set()
         if not hasattr(self, "_plaza_feed_source"):
             self._plaza_feed_source = ""
+        if not hasattr(self, "_changelog_feed_source"):
+            self._changelog_feed_source = ""
 
         fr = tk.Frame(self.body, bg=TM_BG)
         canvas = tk.Canvas(fr, bg=TM_BG, highlightthickness=0)
@@ -74,6 +80,7 @@ class PlazaPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
         self._plaza_canvas = canvas
+        self._plaza_wrap = wrap
 
         def _sync(_e=None):
             if getattr(self, "_layout_is_frozen", None) and self._layout_is_frozen():
@@ -113,18 +120,24 @@ class PlazaPageMixin:
         canvas.bind("<MouseWheel>", _wheel)
         self._plaza_bind_wheel = lambda: _bind_wheel_tree(wrap)
 
-        # --- Header: title + status line; refresh on the right ---
+        # --- Header: back (changelog subview) + title + refresh ---
         bar = tk.Frame(wrap, bg=TM_BG)
         bar.pack(fill="x", padx=GUTTER, pady=(18, 8))
+        self._plaza_header_bar = bar
         left = tk.Frame(bar, bg=TM_BG)
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(
-            left,
+        title_row = tk.Frame(left, bg=TM_BG)
+        title_row.pack(anchor="w", fill="x")
+        self._plaza_back_host = tk.Frame(title_row, bg=TM_BG)
+        # back host packed only in changelog subview
+        self._plaza_title_lbl = tk.Label(
+            title_row,
             text="广场",
             font=title_font(22, "bold"),
             bg=TM_BG,
             fg=TM_INK,
-        ).pack(anchor="w")
+        )
+        self._plaza_title_lbl.pack(side="left", anchor="w")
         self._plaza_status_lbl = tk.Label(
             left,
             text="",
@@ -135,27 +148,37 @@ class PlazaPageMixin:
         self._plaza_status_lbl.pack(anchor="w", pady=(6, 0))
         actions = tk.Frame(bar, bg=TM_BG)
         actions.pack(side="right", anchor="n", pady=(8, 0))
-        GhostButton(
+        self._plaza_refresh_btn = GhostButton(
             actions, "刷新", command=self._silent_fetch_plaza, padx=12, pady=6
-        ).pack(side="right")
+        )
+        self._plaza_refresh_btn.pack(side="right")
 
-        # --- Card list host ---
+        # Main feed host (changelog teaser + plaza cards)
         self._plaza_list_host = tk.Frame(wrap, bg=TM_BG)
         self._plaza_list_host.pack(fill="x", padx=GUTTER, pady=(4, 16))
+        # Full changelog host (hidden until subview)
+        self._plaza_changelog_host = tk.Frame(wrap, bg=TM_BG)
         return fr
 
     # -------------------------------------------------------------- helpers
 
     def _plaza_visible(self) -> list:
-        """Currently visible plaza-placement items (dismissals applied)."""
-        return plaza.visible_items(
+        """Plaza-placement items; hide auto release-* when changelog is present."""
+        items = plaza.visible_items(
             getattr(self, "_plaza_items", None) or [],
             plaza.PLACEMENT_PLAZA,
             dismissed=plaza.dismissed_ids(self.cfg),
         )
+        if getattr(self, "_changelog_entries", None):
+            items = [
+                it
+                for it in items
+                if not str(it.id or "").startswith("release-")
+            ]
+        return items
 
     def _plaza_snap_now(self):
-        """Render snapshot: (canvas width, feed stamp, dismissed set)."""
+        """Render snapshot: (width, feed stamp, dismissed, cl stamp, subview)."""
         canvas = getattr(self, "_plaza_canvas", None)
         if canvas is None:
             return None
@@ -164,10 +187,13 @@ class PlazaPageMixin:
         except Exception:
             w = 0
         dismissed = plaza.dismissed_ids(self.cfg)
+        cl = getattr(self, "_changelog_entries", None) or []
         return (
             w,
             plaza.feed_stamp(self._plaza_visible()),
             tuple(sorted(dismissed)),
+            cl_mod.feed_stamp(cl),
+            getattr(self, "_plaza_subview", "main"),
         )
 
     def _plaza_update_status(self) -> None:
@@ -180,6 +206,19 @@ class PlazaPageMixin:
             if getattr(self, "_plaza_fetching", False):
                 lbl.configure(text="正在刷新…")
                 return
+            if getattr(self, "_plaza_subview", "main") == "changelog":
+                n = len(getattr(self, "_changelog_entries", None) or [])
+                src = getattr(self, "_changelog_feed_source", "") or getattr(
+                    self, "_plaza_feed_source", ""
+                )
+                name = {
+                    "remote": "在线",
+                    "cache": "缓存",
+                    "none": "离线",
+                }.get(src, "本地")
+                cur = display_version(APP_VERSION)
+                lbl.configure(text=f"{name} · {n} 个版本 · 当前已装 {cur}")
+                return
             src = getattr(self, "_plaza_feed_source", "")
             name = {
                 "remote": "在线内容",
@@ -189,6 +228,62 @@ class PlazaPageMixin:
             lbl.configure(text=f"{name} · 共 {len(self._plaza_visible())} 条")
         except Exception:
             pass
+
+    def _plaza_set_subview(self, view: str) -> None:
+        """Switch plaza main feed vs full changelog (same page stack)."""
+        view = "changelog" if view == "changelog" else "main"
+        prev = getattr(self, "_plaza_subview", "main")
+        self._plaza_subview = view
+        if prev != view:
+            self._plaza_render_snap = None
+        if view == "changelog":
+            self._render_plaza_changelog()
+        else:
+            self._render_plaza()
+        try:
+            canvas = getattr(self, "_plaza_canvas", None)
+            if canvas is not None:
+                canvas.yview_moveto(0)
+        except Exception:
+            pass
+
+    def _plaza_apply_subview_chrome(self) -> None:
+        """Title / back button / which body host is packed."""
+        view = getattr(self, "_plaza_subview", "main")
+        title = getattr(self, "_plaza_title_lbl", None)
+        back_host = getattr(self, "_plaza_back_host", None)
+        main_host = getattr(self, "_plaza_list_host", None)
+        cl_host = getattr(self, "_plaza_changelog_host", None)
+        try:
+            if title is not None:
+                title.configure(text="更新日志" if view == "changelog" else "广场")
+            if back_host is not None:
+                for w in back_host.winfo_children():
+                    w.destroy()
+                if view == "changelog":
+                    back_host.pack(side="left", before=title, padx=(0, 8))
+                    GhostButton(
+                        back_host,
+                        "返回",
+                        command=lambda: self._plaza_set_subview("main"),
+                        padx=10,
+                        pady=4,
+                    ).pack(side="left")
+                else:
+                    back_host.pack_forget()
+            if view == "changelog":
+                if main_host is not None:
+                    main_host.pack_forget()
+                if cl_host is not None:
+                    cl_host.pack(fill="x", padx=GUTTER, pady=(4, 16))
+            else:
+                if cl_host is not None:
+                    cl_host.pack_forget()
+                if main_host is not None:
+                    main_host.pack(fill="x", padx=GUTTER, pady=(4, 16))
+        except Exception:
+            pass
+        self._plaza_update_status()
 
     def _plaza_bind_card_click(self, widget, item, skip=()) -> None:
         """Whole-card click-through — buttons and the close × stay excluded."""
@@ -228,7 +323,11 @@ class PlazaPageMixin:
     # ------------------------------------------------------------ page render
 
     def _render_plaza(self) -> None:
-        """Full re-render of the card list (no update_idletasks — render path)."""
+        """Full re-render of main plaza feed (changelog teaser + cards)."""
+        if getattr(self, "_plaza_subview", "main") == "changelog":
+            self._render_plaza_changelog()
+            return
+        self._plaza_apply_subview_chrome()
         host = getattr(self, "_plaza_list_host", None)
         canvas = getattr(self, "_plaza_canvas", None)
         if host is None or canvas is None:
@@ -237,36 +336,188 @@ class PlazaPageMixin:
             w.destroy()
 
         dismissed = plaza.dismissed_ids(self.cfg)
-        items = plaza.visible_items(
-            getattr(self, "_plaza_items", None) or [],
-            plaza.PLACEMENT_PLAZA,
-            dismissed=dismissed,
-        )
+        items = self._plaza_visible()
         self._plaza_update_status()
 
         cw = max(int(canvas.winfo_width()) - 2 * GUTTER, 320)
 
+        # --- 更新日志区块：仅最新一条 + 进入全文 ---
+        self._plaza_build_changelog_teaser(host, cw)
+
         if not items:
             tk.Label(
                 host,
-                text="暂无内容，点右上角刷新试试",
+                text="暂无其它内容，点右上角刷新试试",
                 font=sans_font(11),
                 bg=TM_BG,
                 fg=TM_INK_MUTED,
-            ).pack(pady=px(60))
+            ).pack(pady=px(40))
         for it in items:
             self._plaza_build_card(host, it, cw)
 
-        self._plaza_render_snap = (
-            int(canvas.winfo_width()),
-            plaza.feed_stamp(items),
-            tuple(sorted(dismissed)),
-        )
-        # Fresh cards need the page-scroll wheel binding again
+        self._plaza_render_snap = self._plaza_snap_now()
         try:
             self.root.after(30, self._plaza_bind_wheel)
         except Exception:
             pass
+
+    def _plaza_build_changelog_teaser(self, host: tk.Frame, cw: int) -> None:
+        """Pinned section: latest shell notes + open full changelog."""
+        entries = getattr(self, "_changelog_entries", None) or []
+        latest = cl_mod.latest_entry(entries)
+        section = tk.Frame(host, bg=TM_BG)
+        section.pack(fill="x", pady=(0, 14))
+        head = tk.Frame(section, bg=TM_BG)
+        head.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            head,
+            text="更新日志",
+            font=title_font(13, "bold"),
+            bg=TM_BG,
+            fg=TM_INK,
+        ).pack(side="left")
+        GhostButton(
+            head,
+            "查看全部",
+            command=lambda: self._plaza_set_subview("changelog"),
+            padx=10,
+            pady=4,
+        ).pack(side="right")
+
+        card = tk.Frame(
+            section,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        card.pack(fill="x")
+        wrap_w = max(cw - px(28), px(200))
+        if latest is None:
+            tk.Label(
+                card,
+                text="暂无版本记录，刷新后重试（或等待运营发布 changelog）",
+                font=sans_font(10),
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                wraplength=wrap_w,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", padx=14, pady=14)
+            return
+        top = tk.Frame(card, bg=TM_SURFACE)
+        top.pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(
+            top,
+            text=latest.display_title,
+            font=title_font(12, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="w",
+        ).pack(side="left")
+        if latest.date:
+            tk.Label(
+                top,
+                text=_fmt_plaza_date(latest.date),
+                font=meta_font(_fmt_plaza_date(latest.date), 8),
+                bg=TM_SURFACE,
+                fg=TM_META,
+            ).pack(side="right")
+        summary = latest.summary
+        if summary:
+            tk.Label(
+                card,
+                text=summary,
+                font=sans_font(10),
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                anchor="w",
+                justify="left",
+                wraplength=wrap_w,
+            ).pack(fill="x", padx=14, pady=(6, 4))
+        foot = tk.Frame(card, bg=TM_SURFACE)
+        foot.pack(fill="x", padx=14, pady=(0, 12))
+        GhostButton(
+            foot,
+            "查看全部更新日志",
+            command=lambda: self._plaza_set_subview("changelog"),
+            padx=12,
+            pady=5,
+        ).pack(side="right")
+
+    def _render_plaza_changelog(self) -> None:
+        """Full-page changelog list inside the plaza stack (with back chrome)."""
+        self._plaza_apply_subview_chrome()
+        host = getattr(self, "_plaza_changelog_host", None)
+        canvas = getattr(self, "_plaza_canvas", None)
+        if host is None or canvas is None:
+            return
+        for w in host.winfo_children():
+            w.destroy()
+        self._plaza_update_status()
+        entries = list(getattr(self, "_changelog_entries", None) or [])
+        cw = max(int(canvas.winfo_width()) - 2 * GUTTER, 320)
+        wrap_w = max(cw - px(28), px(200))
+        if not entries:
+            tk.Label(
+                host,
+                text="暂无更新日志，点右上角刷新试试",
+                font=sans_font(11),
+                bg=TM_BG,
+                fg=TM_INK_MUTED,
+            ).pack(pady=px(60))
+        for ent in entries:
+            self._plaza_build_changelog_entry_card(host, ent, wrap_w)
+        self._plaza_render_snap = self._plaza_snap_now()
+        try:
+            self.root.after(30, self._plaza_bind_wheel)
+        except Exception:
+            pass
+
+    def _plaza_build_changelog_entry_card(
+        self, host: tk.Frame, ent, wrap_w: int
+    ) -> None:
+        card = tk.Frame(
+            host,
+            bg=TM_SURFACE,
+            highlightthickness=1,
+            highlightbackground=TM_HAIRLINE,
+        )
+        card.pack(fill="x", pady=(0, 12))
+        head = tk.Frame(card, bg=TM_SURFACE)
+        head.pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(
+            head,
+            text=ent.display_title,
+            font=title_font(12, "bold"),
+            bg=TM_SURFACE,
+            fg=TM_INK,
+            anchor="w",
+        ).pack(side="left")
+        meta_bits = []
+        if ent.date:
+            meta_bits.append(_fmt_plaza_date(ent.date))
+        meta_bits.append(ent.version)
+        tk.Label(
+            head,
+            text=" · ".join(meta_bits),
+            font=meta_font(" · ".join(meta_bits), 8),
+            bg=TM_SURFACE,
+            fg=TM_META,
+        ).pack(side="right")
+        detail = ent.detail_text
+        if detail:
+            tk.Label(
+                card,
+                text=detail,
+                font=sans_font(10),
+                bg=TM_SURFACE,
+                fg=TM_INK_MUTED,
+                anchor="w",
+                justify="left",
+                wraplength=wrap_w,
+            ).pack(fill="x", padx=14, pady=(8, 14))
+        else:
+            tk.Frame(card, bg=TM_SURFACE, height=12).pack()
 
     def _plaza_build_card(self, host: tk.Frame, it, cw: int) -> None:
         big = bool(it.image_url) and (it.pinned or it.type == "banner")
@@ -405,6 +656,10 @@ class PlazaPageMixin:
             except Exception:
                 pass
             self._plaza_job = None
+        # Leaving other nav tabs returns to main plaza feed (not stuck in changelog)
+        if getattr(self, "_plaza_subview", "main") != "main":
+            self._plaza_subview = "main"
+            self._plaza_render_snap = None
         if not getattr(self, "_plaza_fetched_once", False):
             self._silent_fetch_plaza()
         snap_now = self._plaza_snap_now()
@@ -439,7 +694,7 @@ class PlazaPageMixin:
     # ---------------------------------------------------------------- fetch
 
     def _silent_fetch_plaza(self) -> None:
-        """Background feed fetch; never raises, never blocks the UI thread.
+        """Background plaza + changelog fetch; never raises / never blocks UI.
 
         May run from a startup timer before _page_plaza built anything —
         every attribute access goes through getattr with a default.
@@ -452,14 +707,25 @@ class PlazaPageMixin:
         def work():
             try:
                 items, source = plaza.fetch_feed()
-            except Exception:  # fetch_feed promises not to raise; belt+braces
+            except Exception:
                 items, source = [], "none"
+            try:
+                cl_entries, cl_source = cl_mod.fetch_changelog()
+            except Exception:
+                cl_entries, cl_source = [], "none"
 
-            def done(items=items, source=source):
+            def done(
+                items=items,
+                source=source,
+                cl_entries=cl_entries,
+                cl_source=cl_source,
+            ):
                 self._plaza_fetching = False
                 self._plaza_fetched_once = True
                 self._plaza_items = items
                 self._plaza_feed_source = source
+                self._changelog_entries = cl_entries
+                self._changelog_feed_source = cl_source
                 self._apply_plaza_nav_badge()
                 self._render_models_ad()
                 if getattr(self, "_current_page", "") == "plaza":

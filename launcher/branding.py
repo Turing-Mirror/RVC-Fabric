@@ -20,13 +20,19 @@ from launcher.paths import (
 
 
 def brand_logo_path(*, prefer: str = "ui") -> Optional[Path]:
-    """Best available logo file. prefer: ui | nav | full | wordmark."""
+    """Best available logo file. prefer: ui | nav | full | wordmark.
+
+    ``wordmark`` is the horizontal chrome mark only (next to APP_WORDMARK).
+    Tray / window / home stage must stay on the square circular mark — never
+    fall back to the wordmark for those slots.
+    """
     order = {
-        "ui": (BRAND_LOGO_UI, BRAND_LOGO, BRAND_LOGO_NAV, BRAND_LOGO_WORDMARK),
-        "nav": (BRAND_LOGO_NAV, BRAND_LOGO_UI, BRAND_LOGO, BRAND_LOGO_WORDMARK),
-        "full": (BRAND_LOGO, BRAND_LOGO_UI, BRAND_LOGO_NAV, BRAND_LOGO_WORDMARK),
-        "wordmark": (BRAND_LOGO_WORDMARK, BRAND_LOGO_NAV, BRAND_LOGO_UI, BRAND_LOGO),
-    }.get(prefer, (BRAND_LOGO_UI, BRAND_LOGO, BRAND_LOGO_NAV, BRAND_LOGO_WORDMARK))
+        "ui": (BRAND_LOGO_UI, BRAND_LOGO, BRAND_LOGO_NAV),
+        "nav": (BRAND_LOGO_NAV, BRAND_LOGO_UI, BRAND_LOGO),
+        "full": (BRAND_LOGO, BRAND_LOGO_UI, BRAND_LOGO_NAV),
+        # Wordmark only; no square fallback that would hide a missing file wrongly
+        "wordmark": (BRAND_LOGO_WORDMARK,),
+    }.get(prefer, (BRAND_LOGO_UI, BRAND_LOGO, BRAND_LOGO_NAV))
     for p in order:
         try:
             if p.is_file():

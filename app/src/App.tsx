@@ -8,6 +8,7 @@ import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine"
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -54,6 +55,27 @@ export default function App() {
   const [provisionDismissed, setProvisionDismissed] = useState(false);
 
   const engine = useEngine();
+
+  // Tray menu and global hotkeys drive the same actions as the dock, so the
+  // shortcuts keep working while the window is hidden.
+  useEffect(() => {
+    const offs: Array<() => void> = [];
+    const wire = async () => {
+      offs.push(await listen("tray://toggle-vc", () => void engine.toggleRun()));
+      offs.push(await listen("hotkey://toggle-vc", () => void engine.toggleRun()));
+      offs.push(
+        await listen("hotkey://toggle-mode", () => {
+          setMode((m) => {
+            const next: OutputMode = m === "vc" ? "bypass" : "vc";
+            void engine.onMode(next);
+            return next;
+          });
+        }),
+      );
+    };
+    void wire();
+    return () => offs.forEach((f) => f());
+  }, [engine]);
 
   useEffect(() => {
     if (engine.provision.need_provision && !provisionDismissed) {

@@ -496,7 +496,10 @@ export function SettingsPage({
                 label="启用全局快捷键"
                 tip={TIPS.hotkeys_enabled}
                 checked={c.bool("hotkeys_enabled")}
-                onChange={(v) => c.set("hotkeys_enabled", v, true)}
+                onChange={(v) => {
+                  c.set("hotkeys_enabled", v, true);
+                  void invoke("hotkeys_apply", { enabled: v });
+                }}
               />
               <div className="flex flex-col gap-3 text-[13px] text-[var(--ink-muted)]">
                 <div className="flex items-center">

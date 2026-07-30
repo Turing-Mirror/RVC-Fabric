@@ -10,6 +10,7 @@ mod extract;
 mod paths;
 mod protocol;
 mod provision;
+mod shell_extras;
 mod store;
 mod ui_assets;
 mod update;
@@ -135,6 +136,52 @@ async fn update_apply(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Register / unregister the global hotkeys.
+#[tauri::command]
+fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
+    shell_extras::apply_hotkeys(&app, enabled)
+}
+
+/// Zip logs + machine info + settings for support.
+#[tauri::command]
+async fn diagnostics_build(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        shell_extras::build_diagnostics(&root).map(|p| {
+            let _ = shell_extras::reveal(&p);
+            json!({"ok": true, "path": p.to_string_lossy()})
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Bundle the current voice's config + profiles for paid tuning.
+#[tauri::command]
+async fn consult_build(
+    state: State<'_, Mutex<AppState>>,
+    note: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        shell_extras::build_consult_pack(&root, &note).map(|p| {
+            let _ = shell_extras::reveal(&p);
+            json!({"ok": true, "path": p.to_string_lossy()})
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Open a folder under User_Data in the file manager.
+#[tauri::command]
+fn reveal_user_dir(state: State<'_, Mutex<AppState>>, name: String) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    let dir = paths::user_data(&root).join(name);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    shell_extras::reveal(&dir.join("x"))
 }
 
 #[tauri::command]
@@ -532,6 +579,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // OTA strategy A: serve the UI through fabric:// so the frontend/ dir
         // next to the exe can replace the shipped UI without a new exe.
         .register_uri_scheme_protocol(ui_assets::SCHEME, |ctx, req| {
@@ -547,6 +595,10 @@ pub fn run() {
             pick_wallpaper,
             update_check,
             update_apply,
+            hotkeys_apply,
+            diagnostics_build,
+            consult_build,
+            reveal_user_dir,
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,
@@ -602,6 +654,18 @@ pub fn run() {
             .center()
             .build()?;
             eprintln!("[rvc-fabric] UI source: {}", ui_assets::source_label());
+
+            // Tray always exists: closing to tray is what keeps conversion
+            // running while the window is away.
+            if let Err(e) = shell_extras::install_tray(app.handle()) {
+                eprintln!("[rvc-fabric] tray unavailable: {e}");
+            }
+            // Restore the saved hotkey preference.
+            let want_hotkeys = config::read(&root)
+                .get("hotkeys_enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let _ = shell_extras::apply_hotkeys(app.handle(), want_hotkeys);
 
             let root_bg = root.clone();
             std::thread::spawn(move || {

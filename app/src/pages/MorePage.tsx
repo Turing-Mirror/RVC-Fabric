@@ -23,6 +23,17 @@ export function MorePage({
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
+  const [busyMsg, setBusyMsg] = useState("");
+
+  const run = async (label: string, cmd: string, args?: Record<string, unknown>) => {
+    setBusyMsg(`${label}…`);
+    try {
+      const r = await invoke<{ path?: string }>(cmd, args);
+      setBusyMsg(`${label}完成：${r?.path ?? ""}`);
+    } catch (e) {
+      setBusyMsg(`${label}失败：${String(e)}`);
+    }
+  };
   useEffect(() => {
     let alive = true;
     invoke<string>("ui_source")
@@ -134,15 +145,24 @@ export function MorePage({
         <Group>
           <ListItem
             title="生成诊断包"
-            desc="先跑一次约一分钟的性能测试，再把日志和机型信息打包"
-            right={<Btn>生成</Btn>}
+            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "把日志、机型信息与当前设置打包，生成后自动打开所在文件夹"}
+            right={
+              <Btn onClick={() => void run("生成诊断包", "diagnostics_build")}>生成</Btn>
+            }
           />
           <ListItem
             title="检查更新"
             desc={updateLine || "从 CNB 检查是否有新版本"}
             right={<Btn onClick={onCheckUpdate}>检查</Btn>}
           />
-          <ListItem title="打开性能报告文件夹" right={<Btn>打开</Btn>} />
+          <ListItem
+            title="打开性能报告文件夹"
+            right={
+              <Btn onClick={() => void invoke("reveal_user_dir", { name: "perf_reports" })}>
+                打开
+              </Btn>
+            }
+          />
           <ListItem
             title="打开原版实时面板"
             desc="高级功能，一般用不到"
@@ -150,8 +170,12 @@ export function MorePage({
           />
           <ListItem
             title="申请专业优化"
-            desc="打包样本与档案，我们做针对性调参"
-            right={<Btn>生成咨询包</Btn>}
+            desc={busyMsg.startsWith("生成咨询包") ? busyMsg : "打包当前音色的配置与档案，我们做针对性调参（不含模型文件）"}
+            right={
+              <Btn onClick={() => void run("生成咨询包", "consult_build", { note: "" })}>
+                生成咨询包
+              </Btn>
+            }
           />
           <ListItem
             title="强制结束变声引擎"

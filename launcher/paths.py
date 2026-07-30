@@ -75,10 +75,11 @@ RMVPE = ROOT / "assets" / "rmvpe" / "rmvpe.pt"
 # Product brand art (window icon + in-app logo)
 BRAND_DIR = ROOT / "assets" / "brand"
 BRAND_ICO = BRAND_DIR / "app.ico"
-BRAND_LOGO = BRAND_DIR / "RVC_Fabric.png"  # square mark for stage / tray
+BRAND_LOGO = BRAND_DIR / "RVC_Fabric.png"  # square circular mark (stage / tray / ico)
 BRAND_LOGO_UI = BRAND_DIR / "logo_ui.png"  # ~256px home stage
-BRAND_LOGO_NAV = BRAND_DIR / "logo_nav.png"  # ~64px square mark (tray / window)
-BRAND_LOGO_WORDMARK = BRAND_DIR / "logo_wordmark.png"  # horizontal chrome wordmark
+BRAND_LOGO_NAV = BRAND_DIR / "logo_nav.png"  # ~64px tray / window iconphoto
+# Horizontal wordmark: chrome next to APP_WORDMARK only — nowhere else
+BRAND_LOGO_WORDMARK = BRAND_DIR / "logo_wordmark.png"
 
 CONFIG_PATH = USER_DATA / "app_config.json"
 SHORTCUT_NAME = "RVC Fabric.lnk"

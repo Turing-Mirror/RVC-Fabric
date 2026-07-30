@@ -736,7 +736,8 @@ class MainApp(
 
         brand = tk.Frame(top, bg=TM_SURFACE)
         brand.pack(side="left", padx=PAD_X, pady=10)
-        # Horizontal wordmark (assets/brand/logo_wordmark.png); taskbar uses app.ico
+        # Horizontal wordmark ONLY here (next to APP_WORDMARK). Tray / taskbar /
+        # Start Menu / home stage keep the square circular mark (app.ico / logo_nav).
         try:
             from launcher.branding import load_logo_photo
 

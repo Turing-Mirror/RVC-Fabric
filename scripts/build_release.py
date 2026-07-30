@@ -74,12 +74,12 @@ SERIES50_KEYS = ("50", "5xxx", "50x0", "rtx50", "blackwell")
 
 # Engine files/dirs to ship (lean but runnable).
 # docs/ is NOT shipped whole (dev paths / session notes); legal only via strip step.
+# launcher/ 已退役（Tk 壳删除）；引擎只依赖 tools/ + gui_v1 + infer。
 ENGINE_DIRS = (
     "assets",
     "configs",
     "i18n",
     "infer",
-    "launcher",
     "tools",
 )
 ENGINE_FILES = (

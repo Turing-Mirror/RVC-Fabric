@@ -177,12 +177,12 @@ def strip_heavy_from_payload(out: Path) -> None:
         out / "assets" / "weights",
     ):
         d.mkdir(parents=True, exist_ok=True)
-    (out / "assets" / "hubert" / "请由启动器下载engine-core.txt").write_text(
-        "hubert_base.pt 由启动器从 CNB engine-core 包下载。\n",
+    (out / "assets" / "hubert" / "请由程序下载engine-core.txt").write_text(
+        "hubert_base.pt 由程序首次启动时从 CNB engine-core 包下载。\n",
         encoding="utf-8",
     )
-    (out / "assets" / "rmvpe" / "请由启动器下载engine-core.txt").write_text(
-        "rmvpe.pt / rmvpe.onnx 由启动器从 CNB engine-core 包下载。\n",
+    (out / "assets" / "rmvpe" / "请由程序下载engine-core.txt").write_text(
+        "rmvpe.pt / rmvpe.onnx 由程序首次启动时从 CNB engine-core 包下载。\n",
         encoding="utf-8",
     )
     log(f"[strip] removed ~{removed // 1024 // 1024} MB heavy assets from payload")
@@ -204,29 +204,24 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     sanitize_inuse_config(out)
     ensure_no_runtime(out)
     strip_heavy_from_payload(out)
-    for dead in (
-        out / "launcher" / "setup_app.py",
-        out / "launcher" / "_setup_shell.py",
-    ):
-        if dead.is_file():
-            try:
-                dead.unlink()
-                log(f"  strip deprecated: {dead.name}")
-            except OSError:
-                pass
+    # 确保旧壳目录不会被误拷进 payload（ENGINE_DIRS 已不含 launcher）
+    legacy_launcher = out / "launcher"
+    if legacy_launcher.exists():
+        shutil.rmtree(legacy_launcher, ignore_errors=True)
+        log("  strip: launcher/ (legacy Tk shell)")
 
     (out / "User_Data" / "models").mkdir(parents=True, exist_ok=True)
     dst_vb = out / "VBCABLE"
     if dst_vb.exists():
         shutil.rmtree(dst_vb, ignore_errors=True)
     dst_vb.mkdir(parents=True, exist_ok=True)
-    (dst_vb / "虚拟声卡由启动器下载.txt").write_text(
+    (dst_vb / "虚拟声卡由程序下载.txt").write_text(
         "VB-Cable 安装包不随 Setup 安装。\n\n"
         "流程：\n"
-        "1. 启动器「补全运行环境」下载 Runtime\n"
+        "1. 首次启动「补全运行环境」下载 Runtime\n"
         "2. 下载 engine-core（hubert/rmvpe/ffmpeg）\n"
         "3. 下载 VB-Cable 安装包到本目录\n"
-        "4. 点「安装虚拟声卡」启动官方安装程序（需 UAC）\n\n"
+        "4. 在「说明」页点「安装虚拟声卡」（需 UAC）\n\n"
         "CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases\n",
         encoding="utf-8",
     )
@@ -260,11 +255,8 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     build_payload_exes(out)
     ensure_no_runtime(out)
     strip_heavy_from_payload(out)
+    # Tauri 单一壳：RVC Fabric.exe + frontend/（assert_payload_shape 已校验）
     assert_payload_shape(out)
-    if not (out / "启动器.exe").is_file():
-        raise FileNotFoundError("payload missing 启动器.exe")
-    if not (out / "变声器.exe").is_file():
-        raise FileNotFoundError("payload missing 变声器.exe")
 
 
 def compile_inno(payload: Path, output_dir: Path) -> Path:
@@ -363,7 +355,7 @@ def main() -> int:
     out_dir = args.out.resolve()
 
     log("=== RVC Fabric Setup (Inno Setup · thin shell) ===")
-    log("  payload: 启动器 + 变声器 + 源码/配置")
+    log("  payload: RVC Fabric.exe + frontend/ + 引擎源码/配置")
     log("  NOT in payload: Runtime / engine-core / VB-Cable (CNB)")
 
     if args.clean:

@@ -47,11 +47,21 @@ def acquire_single_instance(*, kind: str = "voice") -> bool:
     """Return True if this process is the sole instance; False if another owns it.
 
     On False, caller should try to focus the existing window and exit.
+
+    Important: shell_entry_*.py calls this **before** runpy into main_app /
+    bootstrap, and those modules call it again in ``main()``. The second call
+    in the **same process** must still return True (we already hold the mutex).
+    Without that, CreateMutex reports ERROR_ALREADY_EXISTS against ourselves
+    and the UI shows “已在运行” then exits — including after a clean reboot.
     """
     global _held_mutex
     if not _is_frozen():
         return True
     if sys.platform != "win32":
+        return True
+
+    # Same process re-entry (shell_entry → main_app.main / bootstrap.main)
+    if _held_mutex is not None:
         return True
 
     name = _MUTEX_BOOTSTRAP if kind == "bootstrap" else _MUTEX_VOICE
@@ -66,8 +76,14 @@ def acquire_single_instance(*, kind: str = "voice") -> bool:
             wintypes.LPCWSTR,
         ]
         kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.GetLastError.argtypes = []
         kernel32.GetLastError.restype = wintypes.DWORD
+        kernel32.SetLastError.argtypes = [wintypes.DWORD]
+        kernel32.SetLastError.restype = None
 
+        # CreateMutex does not always clear last-error on success; a stale
+        # ERROR_ALREADY_EXISTS from an earlier Win32 call would false-positive.
+        kernel32.SetLastError(0)
         handle = kernel32.CreateMutexW(None, False, name)
         if not handle:
             return True  # fail open — better start twice than not at all
@@ -113,6 +129,9 @@ def focus_existing_main_window(title_substr: str = "RVC Fabric") -> bool:
             user32.GetWindowTextW(hwnd, buf, 512)
             title = buf.value or ""
             if not title:
+                return True
+            # Skip our own "already running" MessageBox (title contains "RVC Fabric")
+            if "已在运行" in title:
                 return True
             for h in hints:
                 if h and h in title:

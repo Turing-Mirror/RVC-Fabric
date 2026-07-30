@@ -1616,16 +1616,11 @@ class MainApp(
 
 
 def main() -> None:
-    # Frozen double-start (tray still running + desktop shortcut) races
-    # PyInstaller _MEI extract → "Failed to load Python DLL … being used".
-    try:
-        from launcher.single_instance import ensure_single_instance_or_exit
-
-        ensure_single_instance_or_exit(kind="voice")
-    except SystemExit:
-        raise
-    except Exception:
-        pass
+    # Single-instance for frozen 变声器.exe is taken in scripts/shell_entry_app.py
+    # *before* runpy into this module. Do NOT call ensure_single_instance again
+    # here: the same process already owns the mutex, and a second CreateMutex
+    # would report ERROR_ALREADY_EXISTS → false “已在运行” and exit (including
+    # after a clean reboot). Dev / non-frozen does not need the guard.
     # Must run before tk.Tk(): neither shell exe nor Runtime pythonw carries
     # a dpiAware manifest, so scaled displays bitmap-stretch us otherwise
     dpi_level = enable_dpi_awareness()

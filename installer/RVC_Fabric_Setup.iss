@@ -51,7 +51,9 @@ PrivilegesRequiredOverridesAllowed=dialog
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBase}
 SetupIconFile=..\assets\brand\app.ico
-UninstallDisplayIcon={app}\变声器.exe
+; Point uninstall + Start Menu icons at the shipped .ico (not only the exe resource).
+; gui_patch can refresh assets/brand/app.ico without re-embedding PyInstaller icons.
+UninstallDisplayIcon={app}\assets\brand\app.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -98,11 +100,13 @@ Name: "gpu_nvidia50"; Description: "NVIDIA 50 系（RTX 50xx / Blackwell）"; Gr
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; Comment: "首次补全环境 / 快捷设置"
-Name: "{group}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; Comment: "RVC Fabric 主界面"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+; IconFilename must be the loose .ico — Windows Start Menu caches exe resources and
+; will keep the old swirl mark after gui_patch unless shortcuts pin app.ico explicitly.
+Name: "{group}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Comment: "首次补全环境 / 快捷设置"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Comment: "RVC Fabric 主界面"
+Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\assets\brand\app.ico"
+Name: "{autodesktop}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\启动器.exe"; Description: "打开启动器（自动补全 Runtime 运行环境）"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"

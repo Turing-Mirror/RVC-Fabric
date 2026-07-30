@@ -966,10 +966,19 @@ class BootstrapApp:
             cfg = load_config()
             cfg["desktop_shortcut_done"] = True
             save_config(cfg)
+            # Best-effort: also re-pin Start Menu icons to assets/brand/app.ico
+            n_sm = 0
+            try:
+                from launcher.win_util import refresh_start_menu_icons
+
+                n_sm = refresh_start_menu_icons()
+            except Exception:
+                pass
+            extra = f"\n已同步开始菜单图标 {n_sm} 个。" if n_sm else ""
             self._set_status(f"已创建桌面快捷方式：{path.name}")
             messagebox.showinfo(
                 "完成",
-                f"桌面快捷方式已创建：\n{path}\n\n之后双击即可打开主界面（无黑框）。",
+                f"桌面快捷方式已创建：\n{path}\n\n之后双击即可打开主界面（无黑框）。{extra}",
             )
         except Exception as e:
             messagebox.showerror("失败", str(e))

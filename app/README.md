@@ -45,3 +45,16 @@ Vite writes static assets to `app/frontend/`.
 | `frontend/` | Production UI build output (gitignored) |
 
 Product behaviour should stay aligned with the existing shell under `launcher/`.
+
+## Worker bridge
+
+The shell talks to `Runtime\\pythonw.exe tools\\realtime_worker.py` through the same
+JSON files as the Tk shell (`User_Data/runtime_control/`). On Windows use the F: MSVC
+env when building the native host:
+
+```bat
+call F:\VS2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat
+set CARGO_TARGET_DIR=F:\VS2022\cargo-target
+cd /d path\to\repo\app
+npm run tauri:dev
+```

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
+import type { EngineStatus } from "../lib/engine";
 
 const TABS = [
   "设备与音频",
@@ -15,8 +16,13 @@ const TABS = [
 
 type Tab = (typeof TABS)[number];
 
+type Props = {
+  status?: EngineStatus;
+  onReloadDevices?: () => void;
+};
+
 /** Settings page shell (fields wire to config/store later). */
-export function SettingsPage() {
+export function SettingsPage({ status, onReloadDevices }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
 
   return (
@@ -31,7 +37,9 @@ export function SettingsPage() {
       </div>
 
       <PagePad>
-        {tab === "设备与音频" ? <DeviceAudio /> : null}
+        {tab === "设备与音频" ? (
+          <DeviceAudio status={status} onReloadDevices={onReloadDevices} />
+        ) : null}
         {tab === "变声参数" ? <VoiceParams /> : null}
         {tab !== "设备与音频" && tab !== "变声参数" ? (
           <Block title={tab}>
@@ -45,7 +53,32 @@ export function SettingsPage() {
   );
 }
 
-function DeviceAudio() {
+function DeviceAudio({
+  status,
+  onReloadDevices,
+}: {
+  status?: EngineStatus;
+  onReloadDevices?: () => void;
+}) {
+  const host =
+    (status?.sg_hostapi as string) ||
+    (Array.isArray(status?.hostapis) && status!.hostapis![0]) ||
+    "MME";
+  const input =
+    (status?.sg_input_device as string) ||
+    (Array.isArray(status?.input_devices) && status!.input_devices![0]) ||
+    "（等待 worker 上报设备）";
+  const output =
+    (status?.sg_output_device as string) ||
+    (Array.isArray(status?.output_devices) &&
+      status!.output_devices!.find((d) => /cable/i.test(d))) ||
+    (Array.isArray(status?.output_devices) && status!.output_devices![0]) ||
+    "（等待 worker 上报设备）";
+  const nIn = Array.isArray(status?.input_devices) ? status!.input_devices!.length : 0;
+  const nOut = Array.isArray(status?.output_devices)
+    ? status!.output_devices!.length
+    : 0;
+
   return (
     <Block title="设备与音频" className="!mt-6">
       <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
@@ -59,13 +92,13 @@ function DeviceAudio() {
           tip="加速后端说明"
           inline
           control={<FakeSelect value="cuda" width={170} />}
-          note="加速：NVIDIA CUDA · 探测未确认（偏好 cuda → cuda）· 未检出 CUDA，确认使用了对应显卡发行包 Runtime\n发行包：NVIDIA CUDA"
+          note={`Worker：${status?.worker_alive ? "在线" : "离线"} · 状态 ${status?.state || "—"} · 输入 ${nIn} / 输出 ${nOut}`}
         />
-        <Field label="设备类型" tip="设备类型说明" control={<FakeSelect value="MME" full />} />
+        <Field label="设备类型" tip="设备类型说明" control={<FakeSelect value={host} full />} />
         <Field
           label="输入设备"
           tip="输入设备说明"
-          control={<FakeSelect value="麦克风 (Realtek(R) Audio)" full />}
+          control={<FakeSelect value={String(input)} full />}
         />
         <Field
           label="麦克风增益 dB"
@@ -75,7 +108,7 @@ function DeviceAudio() {
         <Field
           label="输出设备"
           tip="输出设备说明"
-          control={<FakeSelect value="CABLE Input (VB-Audio Virtual Cable)" full />}
+          control={<FakeSelect value={String(output)} full />}
         />
         <label className="flex items-center gap-[11px] cursor-pointer">
           <HelpMark title="监听自己说明" />
@@ -93,7 +126,7 @@ function DeviceAudio() {
           <span className="ml-auto flex items-center gap-2.5 flex-wrap">
             <span className="text-[12.5px] text-[var(--meta)]">采样率</span>
             <FakeSelect value="sr_device" width={140} />
-            <Btn>重载设备列表</Btn>
+            <Btn onClick={onReloadDevices}>重载设备列表</Btn>
           </span>
         </div>
         <div className="flex">

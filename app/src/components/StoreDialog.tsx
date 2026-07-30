@@ -267,6 +267,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                             key={v.id}
                             v={v}
                             busy={busyId === v.id}
+                            blocked={busyId !== null && busyId !== v.id}
                             onInstall={() => void install(v)}
                           />
                         ))}
@@ -285,6 +286,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                   key={v.id}
                   v={v}
                   busy={busyId === v.id}
+                  blocked={busyId !== null && busyId !== v.id}
                   onInstall={() => void install(v)}
                 />
               ))}
@@ -329,10 +331,15 @@ function Empty() {
 function VoiceRow({
   v,
   busy,
+  blocked = false,
   onInstall,
 }: {
   v: StoreVoice;
   busy: boolean;
+  /** Another install is in flight. The backend cancel flag is global, so a
+   *  second concurrent install would let one cancel kill both — one at a
+   *  time is what the engine actually supports, so say so in the UI. */
+  blocked?: boolean;
   onInstall: () => void;
 }) {
   return (
@@ -354,7 +361,7 @@ function VoiceRow({
             已安装
           </Btn>
         ) : (
-          <Btn primary uw disabled={busy} onClick={onInstall}>
+          <Btn primary uw disabled={busy || blocked} onClick={onInstall}>
             {busy ? "安装中…" : "下载"}
           </Btn>
         )

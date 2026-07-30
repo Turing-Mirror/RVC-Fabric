@@ -301,6 +301,13 @@ pub fn run_provision(
         if part.urls.is_empty() {
             return Err("清单中没有可用的 Runtime 下载地址。".to_string());
         }
+        // The Runtime tar unpacks into python.exe and its libraries — running
+        // it unverified is arbitrary code execution. download_request skips
+        // verification on an empty hash, and the cache-reuse branch below would
+        // also accept whatever is already on disk, so refuse up front.
+        if part.sha256.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
+            return Err("运行时清单缺少有效的 sha256，已拒绝下载。".to_string());
+        }
 
         let size = spec.size_bytes.max(part.size_bytes);
         let conns_preview = download::auto_connections(size);
@@ -329,8 +336,9 @@ pub fn run_provision(
             part.name.clone()
         });
 
-        // Reuse verified cache
-        if dest_file.is_file() && !part.sha256.is_empty() {
+        // Reuse the cache only after verifying it. A stale or truncated file
+        // must be dropped, never trusted because it happens to exist.
+        if dest_file.is_file() {
             if download::verify_sha256(&dest_file, &part.sha256).is_ok() {
                 emit_progress(
                     &app,

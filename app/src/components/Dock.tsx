@@ -18,9 +18,10 @@ type Props = {
   onToggleRun: () => void;
   statusTitle?: string;
   statusSub?: string;
-  /** 0..1 level; mock until worker meter is bound. */
-  meterLevel?: number;
-  threshold?: number;
+  /** Mic level in dBFS from the worker; null when the engine is idle. */
+  micDb?: number | null;
+  /** Response gate in dBFS. Bar stays muted until the level reaches it. */
+  thresholdDb?: number;
 };
 
 /**
@@ -42,9 +43,18 @@ export function Dock({
   onToggleRun,
   statusTitle = "引擎待命",
   statusSub = "就绪",
-  meterLevel = 0.2,
-  threshold = 0.26,
+  micDb = null,
+  thresholdDb = -60,
 }: Props) {
+  // Same mapping as the Tk shell's _draw_mic_meter: -60..0 dBFS over the bar.
+  const frac = (db: number) =>
+    (Math.max(-60, Math.min(0, db)) + 60) / 60;
+  const levelPct = micDb === null ? 0 : Math.round(frac(micDb) * 100);
+  const gatePct = Math.round(frac(thresholdDb) * 100);
+  // Below the gate the input is treated as silence and not converted — show
+  // that by keeping the bar muted until it crosses the marker.
+  const over = micDb !== null && micDb >= thresholdDb;
+
   return (
     <footer className="flex-none relative px-[30px] py-4 flex items-center gap-[30px] flex-wrap max-[1020px]:px-[22px] max-[1020px]:gap-[22px] max-[720px]:px-4 max-[720px]:gap-4">
       {/* Hairline: inset ends, not full-width border-top */}
@@ -91,12 +101,17 @@ export function Dock({
             title="麦克风电平；竖线为响应阈值"
           >
             <div
-              className="absolute inset-y-0 left-0 bg-[var(--accent)] rounded-sm transition-[width] duration-75 linear"
-              style={{ width: `${Math.round(meterLevel * 100)}%` }}
+              className={
+                "absolute inset-y-0 left-0 rounded-sm transition-[width,background-color] duration-75 linear " +
+                (over
+                  ? "bg-[var(--accent)]"
+                  : "bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]")
+              }
+              style={{ width: `${levelPct}%` }}
             />
             <div
-              className="absolute top-0 bottom-0 w-px bg-[color-mix(in_srgb,var(--ink)_45%,transparent)]"
-              style={{ left: `${Math.round(threshold * 100)}%` }}
+              className="absolute top-0 bottom-0 w-px bg-[var(--notify)]"
+              style={{ left: `${gatePct}%` }}
             />
           </div>
         </div>

@@ -172,7 +172,12 @@ export function useEngine() {
     refresh,
     title: statusTitle(status),
     sub,
-    meterLevel: Number(status.meter_level ?? 0),
-    threshold: Number(status.threshold_meter ?? 0.25),
+    // Worker writes `input_db` (dBFS) and carries the gate as `threhold`
+    // (upstream spelling). Map both with the Tk shell's formula so the meter
+    // reads identically: frac = (clamp(db, -60, 0) + 60) / 60.
+    micDb: status.input_db === undefined || status.input_db === null
+      ? null
+      : Number(status.input_db),
+    thresholdDb: Number(status.threhold ?? -60),
   };
 }

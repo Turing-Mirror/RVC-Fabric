@@ -166,8 +166,8 @@ export default function App() {
         profileSummary={profileSummary}
         statusTitle={engine.title}
         statusSub={engine.sub}
-        meterLevel={engine.meterLevel}
-        threshold={engine.threshold}
+        micDb={engine.micDb}
+        thresholdDb={engine.thresholdDb}
       />
     </div>
   );

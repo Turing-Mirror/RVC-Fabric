@@ -259,9 +259,11 @@ class OnlineCatalog:
         "软件内仅更新 GUI 本体与音色模型。"
     )
     manifest_urls: list[str] = field(default_factory=list)
-    source: str = "bundled"  # bundled | remote | merged
+    source: str = "bundled"  # bundled | remote | merged | cache
     fetched_at: float = 0.0
     raw: dict[str, Any] = field(default_factory=dict)
+    # Set when remote fetch failed / timed out (UI can show timeout hint)
+    fetch_error: str = ""
 
     @classmethod
     def from_dict(
@@ -476,10 +478,17 @@ def merge_catalogs(base: OnlineCatalog, remote: OnlineCatalog) -> OnlineCatalog:
 def fetch_catalog(
     urls: Optional[list[str]] = None,
     *,
-    timeout: int = 30,
+    timeout: int = 12,
+    overall_timeout: Optional[float] = None,
 ) -> OnlineCatalog:
-    """Fetch first successful remote catalog; fall back to bundled + cache."""
-    from launcher.online.downloader import DownloadError, download_file
+    """Fetch first successful remote catalog; fall back to bundled + cache.
+
+    Catalog JSON is small (tens of KB). Uses ``fetch_bytes_simple`` (single GET,
+    no multipart/Range probe) so a slow HEAD/Range path cannot stall the UI for
+    minutes. ``timeout`` is per-URL socket budget; ``overall_timeout`` caps the
+    whole candidate walk (default ≈ timeout + 3s, min 8s).
+    """
+    from launcher.online.downloader import DownloadError, fetch_bytes_simple
 
     bundled = load_bundled_catalog()
     candidates: list[str] = []
@@ -492,44 +501,54 @@ def fetch_catalog(
         if u and u not in candidates:
             candidates.append(u)
 
+    per = max(3, int(timeout))
+    # Wall-clock budget for the whole loop (all URLs + parse)
+    if overall_timeout is None:
+        overall = float(max(8, per + 3))
+    else:
+        overall = float(max(3.0, overall_timeout))
+    deadline = time.monotonic() + overall
+
     last_err = ""
-    cache_dir = USER_DATA / "update_cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
     for url in candidates:
-        # Unique temp per call so concurrent refresh threads cannot clobber
-        # each other's catalog_fetch.json (review #32)
-        tmp = (
-            cache_dir
-            / f"catalog_fetch_{os.getpid()}_{threading.get_ident()}_{int(time.time()*1000)}.json"
-        )
+        remain = deadline - time.monotonic()
+        if remain <= 0.5:
+            last_err = f"检查更新超时（{overall:.0f}s 内未拉到清单）"
+            break
         try:
-            download_file(url, tmp, timeout=timeout)
-            data = json.loads(tmp.read_text(encoding="utf-8"))
+            raw = fetch_bytes_simple(url, timeout=min(float(per), remain))
+            text = raw.decode("utf-8-sig")
+            data = json.loads(text)
             if not isinstance(data, dict):
                 raise DownloadError("清单不是 JSON 对象")
             remote = OnlineCatalog.from_dict(data, source="remote")
+            remote.fetch_error = ""
             save_catalog_cache(remote)
-            return merge_catalogs(bundled, remote)
+            merged = merge_catalogs(bundled, remote)
+            merged.fetch_error = ""
+            return merged
         except Exception as e:
             last_err = str(e)
             continue
-        finally:
-            try:
-                if tmp.is_file():
-                    tmp.unlink()
-            except OSError:
-                pass
+
+    if not last_err and time.monotonic() >= deadline:
+        last_err = f"检查更新超时（{overall:.0f}s 内未拉到清单）"
 
     cached = load_cached_catalog()
-    if cached and cached.voices:
+    if cached and (cached.voices or cached.gui.url):
         cached.source = "cache"
         if last_err:
+            cached.fetch_error = last_err
             cached.full_package_note = (
                 f"{cached.full_package_note}\n（远程清单失败：{last_err}，使用缓存）"
             )
-        return merge_catalogs(bundled, cached)
+        out = merge_catalogs(bundled, cached)
+        out.fetch_error = last_err
+        out.source = "cache"
+        return out
 
     if last_err:
+        bundled.fetch_error = last_err
         bundled.full_package_note = (
             f"{bundled.full_package_note}\n（远程拉取失败：{last_err}）"
         )

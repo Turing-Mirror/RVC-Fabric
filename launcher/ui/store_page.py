@@ -343,40 +343,69 @@ class StorePage:
 
     # ---------------------------------------------------------------- catalog
     def refresh_catalog(self) -> None:
-        # 刷新用独立 _refreshing 标志：打开对话框自动刷新期间（弱网可达数十秒）
-        # 不占 _busy（_busy 现仅用于 gui 增量包应用；音色下载走 _dlq 队列）
+        # 刷新用独立 _refreshing 标志：不占 _busy（音色下载走 _dlq）
         if self._refreshing:
             return
         self._refreshing = True
-        self._set_progress("正在拉取在线清单…", TM_ACCENT)
+        overall_s = 12.0
+        self._set_progress(
+            f"正在拉取在线清单…（限时约 {overall_s:.0f}s，超时会提示）",
+            TM_ACCENT,
+        )
+        try:
+            if self.lbl_gui_status is not None:
+                self.lbl_gui_status.configure(
+                    text="正在检查更新…",
+                    fg=TM_ACCENT,
+                )
+        except Exception:
+            pass
         urls = []
         u = str(load_config().get("update_manifest_url") or "").strip()
         if u:
             urls.append(u)
 
         def work():
+            import time as _time
+
+            t0 = _time.monotonic()
             try:
-                cat = fetch_catalog(urls)
-                err = None
+                cat = fetch_catalog(
+                    urls,
+                    timeout=max(4, int(overall_s) - 2),
+                    overall_timeout=overall_s,
+                )
+                err = (getattr(cat, "fetch_error", None) or "").strip() or None
             except Exception as e:
                 cat = load_bundled_catalog()
                 err = str(e)
+            took = _time.monotonic() - t0
 
             def done():
                 self._refreshing = False
                 self.catalog = cat
                 self._render_catalog()
                 if err:
-                    self._set_progress(f"拉取失败，已用本地清单:{err}", TM_WARN)
+                    tip = err
+                    if "超时" in err or "timeout" in err.lower():
+                        tip = (
+                            f"检查更新超时（{overall_s:.0f}s）。"
+                            "国内 CNB 通常几秒内完成；请重试或检查网络/代理。"
+                        )
+                    self._set_progress(
+                        f"拉取失败（{took:.1f}s），已用本地清单：{tip}",
+                        TM_WARN,
+                    )
                 else:
                     self._set_progress(
-                        f"清单已更新（来源:{cat.source}，音色 {len(cat.voices)} 个）",
+                        f"清单已更新（{took:.1f}s · 来源:{cat.source} · "
+                        f"音色 {len(cat.voices)} 个）",
                         TM_OK,
                     )
 
             self.root.after(0, done)
 
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work, daemon=True, name="tm-refresh-catalog").start()
 
     def _on_voices_search(self, q: str) -> None:
         self._voices_search_q = (q or "").strip()

@@ -69,6 +69,54 @@ def _urlopen_get(url: str, *, timeout: int = 120):
     return urlopen(req, timeout=timeout)
 
 
+def fetch_bytes_simple(url: str, *, timeout: float = 12.0) -> bytes:
+    """Lightweight single-shot GET for small payloads (catalog JSON, etc.).
+
+    Does **not** use multi-connection / Range probe paths used by
+    ``download_file`` (those can hang for minutes on a few-KB index.json when
+    HEAD/Range is slow). One attempt, hard socket timeout.
+    """
+    u = (url or "").strip()
+    if not u:
+        raise DownloadError("空下载地址")
+    # Normalize only — skip SharePoint resolve (would open a 60s stream probe)
+    u = normalize_github_url(u)
+    u = normalize_cnb_url(u)
+    if is_huggingface_url(u):
+        u = normalize_huggingface_url(u)
+        u = apply_hf_endpoint(u)
+    t = max(2.0, float(timeout))
+    session = _session()
+    try:
+        if session is not None:
+            r = session.get(u, allow_redirects=True, timeout=t)
+            try:
+                if r.status_code >= 400:
+                    raise DownloadError(f"HTTP {r.status_code}：{u[:120]}")
+                data = r.content or b""
+            finally:
+                try:
+                    r.close()
+                except Exception:
+                    pass
+        else:
+            with _urlopen_get(u, timeout=int(t) if t >= 1 else 1) as resp:
+                status = int(getattr(resp, "status", 200) or 200)
+                if status >= 400:
+                    raise DownloadError(f"HTTP {status}：{u[:120]}")
+                data = resp.read() or b""
+    except DownloadError:
+        raise
+    except Exception as e:
+        raise DownloadError(f"拉取失败（{type(e).__name__}）：{e}") from e
+    if not data:
+        raise DownloadError("空响应")
+    # Cap accidental huge bodies (catalogs are small)
+    if len(data) > 8 * 1024 * 1024:
+        raise DownloadError(f"响应过大（{len(data)} bytes），不像在线清单")
+    return data
+
+
 def is_sharepoint_or_onedrive(url: str) -> bool:
     u = (url or "").lower()
     return any(

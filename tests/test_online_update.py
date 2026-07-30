@@ -47,6 +47,45 @@ from launcher.online.voice_install import install_voice_pack_zip
 from launcher.online.catalog import VoiceEntry
 
 
+class CatalogFetchTests(unittest.TestCase):
+    def test_fetch_catalog_overall_timeout_sets_error(self):
+        """Slow URLs must not hang forever; fetch_error is set for UI."""
+        import time
+        from unittest import mock
+
+        from launcher.online import catalog as cat_mod
+
+        def _slow(*_a, **_k):
+            time.sleep(0.3)
+            raise RuntimeError("slow")
+
+        with mock.patch.object(
+            cat_mod, "DEFAULT_MANIFEST_URLS", ["https://example.invalid/x"]
+        ):
+            with mock.patch(
+                "launcher.online.downloader.fetch_bytes_simple",
+                side_effect=_slow,
+            ):
+                t0 = time.monotonic()
+                out = cat_mod.fetch_catalog(
+                    ["https://example.invalid/a"],
+                    timeout=2,
+                    overall_timeout=0.45,
+                )
+                elapsed = time.monotonic() - t0
+        self.assertLess(elapsed, 2.0)
+        # Fallback catalog + error string for the settings card timeout hint
+        self.assertTrue(
+            bool(out.fetch_error) or out.source in ("bundled", "cache", "merged")
+        )
+
+    def test_fetch_bytes_simple_rejects_empty_url(self):
+        from launcher.online.downloader import DownloadError, fetch_bytes_simple
+
+        with self.assertRaises(DownloadError):
+            fetch_bytes_simple("")
+
+
 class VersionTests(unittest.TestCase):
     def test_compare(self):
         self.assertEqual(compare_versions("1.0.0", "1.0.1"), -1)

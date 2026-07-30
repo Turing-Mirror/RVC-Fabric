@@ -14,7 +14,9 @@ from launcher import realtime_client as rt_client
 from launcher.features import CONSULT_ENTRY_ENABLED
 from launcher.paths import ROOT, USER_DATA
 from launcher.theme import (
+    APP_PRODUCT_TAGLINE,
     GUTTER,
+    TM_ACCENT,
     TM_BG,
     TM_HAIRLINE,
     TM_META,
@@ -300,6 +302,10 @@ class MorePageMixin:
         from this machine — that is how the team gathers per-GPU data for
         further optimization. Benchmark and packing run off the Tk thread."""
         if getattr(self, "_diag_busy", False):
+            messagebox.showinfo(
+                "生成诊断包",
+                "正在生成中，请稍候（性能测试约 1 分钟）。",
+            )
             return
         from launcher import perf_bench
 
@@ -314,7 +320,14 @@ class MorePageMixin:
                 "如需附带全新的性能测试数据，请先停止变声再生成。",
             )
         else:
-            m = self.models[self.model_idx] if getattr(self, "models", None) else {}
+            models = getattr(self, "models", None) or []
+            try:
+                idx = int(getattr(self, "model_idx", 0) or 0)
+            except (TypeError, ValueError):
+                idx = 0
+            m = models[idx] if 0 <= idx < len(models) else {}
+            if not isinstance(m, dict):
+                m = {}
             bench_pth = str(m.get("path") or "")
             bench_index = str(m.get("index") or "")
             ready, why = perf_bench.bench_ready(ROOT, bench_pth)
@@ -338,7 +351,10 @@ class MorePageMixin:
             self._set_status_visual("busy", "正在生成诊断包…", "")
         # Snapshot on the Tk thread: settings sliders mutate self.cfg live, and
         # copying a dict while it grows raises RuntimeError on the worker thread
-        bench_cfg = dict(self.cfg or {})
+        try:
+            bench_cfg = dict(self.cfg or {})
+        except Exception:
+            bench_cfg = {}
 
         def work() -> None:
             note = bench_note
@@ -346,6 +362,16 @@ class MorePageMixin:
             path = ""
             try:
                 if run_bench:
+                    # Free GPU VRAM held by the standby worker so the offline
+                    # bench can load the model (low-VRAM cards otherwise hang/OOM).
+                    try:
+                        if rt_client.is_worker_alive():
+                            rt_client.quit_worker(force=True)
+                    except Exception:
+                        try:
+                            rt_client.kill_all_project_workers()
+                        except Exception:
+                            pass
                     res = perf_bench.run_benchmark(
                         ROOT, bench_pth, bench_index, bench_cfg
                     )
@@ -358,35 +384,59 @@ class MorePageMixin:
                         note = f"性能测试未完成（{res['error']}），已打包其余信息。"
                 import importlib.util
 
+                script = ROOT / "tools" / "collect_diagnostics.py"
+                if not script.is_file():
+                    raise FileNotFoundError(
+                        f"缺少诊断脚本：{script}\n请确认安装完整或通过启动器更新。"
+                    )
                 spec = importlib.util.spec_from_file_location(
                     "tm_collect_diagnostics",
-                    str(ROOT / "tools" / "collect_diagnostics.py"),
+                    str(script),
                 )
+                if spec is None or spec.loader is None:
+                    raise RuntimeError("无法加载 tools/collect_diagnostics.py")
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 path = mod.collect(str(ROOT))
+                if not path:
+                    raise RuntimeError("诊断包路径为空")
             except Exception as e:
-                err = str(e)
+                err = str(e) or repr(e)
 
             def done() -> None:
+                try:
+                    if err:
+                        self._set_status_visual("error", "诊断包生成失败", err[:48])
+                        messagebox.showerror("失败", err)
+                        return
+                    self._set_status_visual("idle", "诊断包已生成", APP_PRODUCT_TAGLINE)
+                    try:
+                        open_path(USER_DATA / "diagnostics")
+                    except Exception:
+                        pass
+                    messagebox.showinfo(
+                        "诊断包已生成",
+                        f"已生成：\n{path}\n\n{note}\n\n"
+                        "内容仅含日志、配置、机器环境与性能记录，"
+                        "不含音频或音色模型，也不会自动上传。\n"
+                        "反馈问题时把这个 zip 发给团队即可。",
+                    )
+                except Exception as e2:
+                    try:
+                        messagebox.showerror(
+                            "失败", f"诊断包可能已生成，但界面提示失败：{e2}"
+                        )
+                    except Exception:
+                        pass
+                finally:
+                    self._diag_busy = False
+
+            try:
+                self.root.after(0, done)
+            except Exception:
                 self._diag_busy = False
-                if err:
-                    self._set_status_visual("error", "诊断包生成失败", err[:48])
-                    messagebox.showerror("失败", err)
-                    return
-                self._set_status_visual("idle", "诊断包已生成", APP_PRODUCT_TAGLINE)
-                open_path(USER_DATA / "diagnostics")
-                messagebox.showinfo(
-                    "诊断包已生成",
-                    f"已生成：\n{path}\n\n{note}\n\n"
-                    "内容仅含日志、配置、机器环境与性能记录，"
-                    "不含音频或音色模型，也不会自动上传。\n"
-                    "反馈问题时把这个 zip 发给团队即可。",
-                )
 
-            self.root.after(0, done)
-
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work, daemon=True, name="tm-diagnostics").start()
 
     def _verify_runtime_integrity(self) -> None:
         """Compare local Runtime to CNB integrity JSON + import smoke."""

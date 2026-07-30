@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
+import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 
 type Props = {
   currentId?: string;
   onOpenModels?: () => void;
-  onSelect?: (id: string) => void;
+  /** Same payload the models page reports, so the dock agrees either way. */
+  onVoiceChange?: (info: {
+    model: VoiceModel;
+    pitch?: number;
+    formant?: number;
+    profileSummary?: string;
+  }) => void;
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
@@ -16,7 +23,7 @@ const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
  * Recency comes from `recent_keys` (app_config `recent_models`), which
  * `voices_select` maintains — the same ordering the Tk shell used.
  */
-export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
+export function HomePage({ currentId, onOpenModels, onVoiceChange }: Props) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -59,10 +66,33 @@ export function HomePage({ currentId, onOpenModels, onSelect }: Props) {
     : [];
 
   const pick = async (m: VoiceModel) => {
+    if (m.missing) {
+      setMsg("这个音色的模型文件缺失或没下载完整");
+      return;
+    }
     try {
       setMsg("");
-      await selectVoice({ path: m.path, dir: m.dir, name: m.name });
-      onSelect?.(keyOf(m));
+      const res = await selectVoice({ path: m.path, dir: m.dir, name: m.name });
+      // Picking here used to only record the selection: the voice's saved
+      // pitch / formant were never pushed to a running stream and the dock kept
+      // showing the previous voice's name and numbers. Same handling as the
+      // models page now.
+      if (res.pitch != null || res.formant != null) {
+        try {
+          await setHot({
+            pitch: Number(res.pitch ?? 0),
+            formant: Number(res.formant ?? 0),
+          });
+        } catch {
+          /* worker may be idle */
+        }
+      }
+      onVoiceChange?.({
+        model: (res.model as VoiceModel) || m,
+        pitch: res.pitch as number | undefined,
+        formant: res.formant as number | undefined,
+        profileSummary: res.profile_summary,
+      });
       await load();
     } catch (e) {
       // Clicking a card and having nothing happen is the worst outcome.

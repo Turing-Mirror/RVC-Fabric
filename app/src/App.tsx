@@ -241,6 +241,26 @@ export default function App() {
     engine.onMode(m);
   };
 
+  // One place where "the user picked a different voice" is applied, so the
+  // home page and the models page can never drift apart on what the dock shows.
+  const applyVoiceChange = ({
+    model,
+    pitch: p,
+    formant: f,
+    profileSummary: ps,
+  }: {
+    model: { name?: string; path?: string; dir?: string };
+    pitch?: number;
+    formant?: number;
+    profileSummary?: string;
+  }) => {
+    setVoiceName(model.name || "未选择模型");
+    setVoiceId(model.path || model.dir || model.name || "");
+    if (p != null) setPitch(Number(p));
+    if (f != null) setFormant(Number(f));
+    if (ps) setProfileSummary(ps);
+  };
+
   return (
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">
       <TitleBar
@@ -283,7 +303,7 @@ export default function App() {
                 <HomePage
                   currentId={voiceId}
                   onOpenModels={() => setPage("models")}
-                  onSelect={(id) => setVoiceId(id)}
+                  onVoiceChange={applyVoiceChange}
                 />
               );
             case "plaza":
@@ -298,13 +318,7 @@ export default function App() {
               return (
                 <ModelsPage
                   banner={plaza.feed.banner}
-                  onVoiceChange={({ model, pitch: p, formant: f, profileSummary: ps }) => {
-                    setVoiceName(model.name || "未选择模型");
-                    setVoiceId(model.path || model.dir || model.name || "");
-                    if (p != null) setPitch(Number(p));
-                    if (f != null) setFormant(Number(f));
-                    if (ps) setProfileSummary(ps);
-                  }}
+                  onVoiceChange={applyVoiceChange}
                 />
               );
             case "settings":

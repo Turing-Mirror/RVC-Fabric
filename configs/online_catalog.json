@@ -7,10 +7,10 @@
       "package_type": "gui_patch",
       "version": "1.2.3",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/43ee1cfff3cd79055261a28de9d1694cde5da3781c5f26627484e45c953047bd",
-      "sha256": "43ee1cfff3cd79055261a28de9d1694cde5da3781c5f26627484e45c953047bd",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/81ca0d1d663e387cf49d9100a73bbed75b5a651a9cb1c136575d1923cb83a0c3",
+      "sha256": "81ca0d1d663e387cf49d9100a73bbed75b5a651a9cb1c136575d1923cb83a0c3",
       "min_app_version": "1.1.0",
-      "notes": "v1.2.3：产品图标与导航 logo；广场移至首页与模型之间； 第三方免责声明按句换行显示；窗口布局与最大化/拖动体验修缮。"
+      "notes": "v1.2.3 热修：修复误报「变声器已在运行」无法启动（同进程重复抢锁）； 另含产品图标/logo、广场导航顺序、第三方免责按句换行、窗口布局修缮。"
     }
   },
   "community": {

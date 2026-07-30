@@ -1,8 +1,10 @@
 //! RVC Fabric shell (Tauri).
 //!
-//! Worker bridge uses User_Data/runtime_control JSON (same as Tk shell).
-//! Long ops clone the product root and **must not** hold AppState mutex.
+//! Stages 1–3: window/UI, worker bridge, Runtime provision (download/extract).
 
+mod catalog;
+mod download;
+mod extract;
 mod paths;
 mod protocol;
 mod provision;
@@ -12,18 +14,10 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 struct AppState {
     root: PathBuf,
-}
-
-fn with_root<F, T>(state: &State<'_, Mutex<AppState>>, f: F) -> Result<T, String>
-where
-    F: FnOnce(&PathBuf) -> Result<T, String>,
-{
-    let g = state.lock().map_err(|e| e.to_string())?;
-    f(&g.root)
 }
 
 fn root_clone(state: &State<'_, Mutex<AppState>>) -> Result<PathBuf, String> {
@@ -45,17 +39,15 @@ fn frontend_dir() -> Option<String> {
 
 #[tauri::command]
 fn product_root(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
-    with_root(&state, |root| Ok(root.to_string_lossy().into_owned()))
+    Ok(root_clone(&state)?.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    // Fast path: clone root, drop lock, then read status
     let root = root_clone(&state)?;
     Ok(worker::status_for_ui(&root))
 }
 
-/// Lightweight: do not wait for devices; start worker only if missing Runtime gate.
 #[tauri::command]
 fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
@@ -63,15 +55,11 @@ fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
         let mut st = worker::status_for_ui(&root);
         if let Some(obj) = st.as_object_mut() {
             obj.insert("state".into(), json!("idle"));
-            obj.insert(
-                "error".into(),
-                json!("Runtime 未就绪，请先补全运行时"),
-            );
+            obj.insert("error".into(), json!("Runtime 未就绪，请先补全运行时"));
             obj.insert("worker_alive".into(), json!(false));
         }
         return Ok(st);
     }
-    // Background-friendly: start if needed, wait ready, list devices
     Ok(worker::ensure_worker_and_devices(&root, 90_000))
 }
 
@@ -79,11 +67,7 @@ fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
-        return Ok(json!({
-            "state": "error",
-            "error": "Runtime 未就绪（缺少 torch）",
-            "pid": 0
-        }));
+        return Ok(json!({"state": "error", "error": "Runtime 未就绪（缺少 torch）", "pid": 0}));
     }
     worker::start_worker(&root)?;
     Ok(worker::wait_worker_ready(&root, 90_000))
@@ -93,11 +77,7 @@ fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
 fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
-        return Ok(json!({
-            "state": "error",
-            "error": "Runtime 未就绪，无法开启变声",
-            "pid": 0
-        }));
+        return Ok(json!({"state": "error", "error": "Runtime 未就绪，无法开启变声", "pid": 0}));
     }
     worker::start_vc(&root)?;
     Ok(worker::wait_vc_running(&root, 180_000))
@@ -200,6 +180,26 @@ fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> 
     Ok(provision::provision_status(&root))
 }
 
+#[tauri::command]
+fn provision_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    variant: String,
+    force: Option<bool>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // Long-running: spawn so command returns after completion without blocking other
+    // invokes on the same thread — Tauri runs commands async; we still do work here
+    // but never hold AppState.
+    provision::run_provision(app, root, variant, force.unwrap_or(false))
+}
+
+#[tauri::command]
+fn provision_cancel() -> Result<(), String> {
+    provision::cancel_provision();
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = paths::product_root();
@@ -224,9 +224,10 @@ pub fn run() {
             engine_set_hot,
             engine_list_devices,
             provision_status,
+            provision_start,
+            provision_cancel,
         ])
         .setup(move |_app| {
-            // Pre-warm only when Runtime is complete — never block UI thread.
             let root_bg = root.clone();
             std::thread::spawn(move || {
                 if paths::runtime_ready(&root_bg) {

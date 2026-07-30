@@ -59,6 +59,10 @@ cd /d path\to\repo\app
 npm run tauri:dev
 ```
 
-`provision_status` reports whether Runtime+torch is present and recommends a GPU
-variant via Windows adapter names (no torch). Multi-GB download/extract is not
-wired yet (`download_supported: false`).
+## Runtime provision (stage 3)
+
+- `provision_status` — Runtime ready? GPU recommend (WMI, no torch).
+- `provision_start` / `provision_cancel` — download from CNB (Range resume +
+  sha256) into `User_Data/update_cache/runtime`, safe-extract to `Runtime/`,
+  write `package_meta.json`. Progress events: `provision-progress`.
+- First-run UI: `ProvisionGate` when Runtime is missing.

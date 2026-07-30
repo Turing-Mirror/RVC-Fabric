@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { PageHost } from "./components/PageHost";
+import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
-import { forceKillEngine } from "./lib/engine";
+import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
@@ -19,8 +20,16 @@ export default function App() {
   const [formant, setFormant] = useState(1.2);
   const [mode, setMode] = useState<OutputMode>("vc");
   const [voiceId, setVoiceId] = useState("anon");
+  const [showProvision, setShowProvision] = useState(false);
+  const [provisionDismissed, setProvisionDismissed] = useState(false);
 
   const engine = useEngine();
+
+  useEffect(() => {
+    if (engine.provision.need_provision && !provisionDismissed) {
+      setShowProvision(true);
+    }
+  }, [engine.provision.need_provision, provisionDismissed]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 520px)");
@@ -49,12 +58,32 @@ export default function App() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden">
+    <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">
       <TitleBar
         page={page}
         onPage={setPage}
         plazaUnread
         compactNav={compactNav}
+      />
+
+      <ProvisionGate
+        open={showProvision}
+        initial={engine.provision}
+        onDone={async () => {
+          setShowProvision(false);
+          setProvisionDismissed(false);
+          try {
+            await getProvisionStatus();
+            await ensureEngine();
+          } catch {
+            /* refresh via hook poll */
+          }
+          await engine.refresh();
+        }}
+        onDismiss={() => {
+          setShowProvision(false);
+          setProvisionDismissed(true);
+        }}
       />
 
       <PageHost page={page}>
@@ -89,6 +118,10 @@ export default function App() {
                   onForceKill={async () => {
                     await forceKillEngine();
                     await engine.refresh();
+                  }}
+                  onOpenProvision={() => {
+                    setProvisionDismissed(false);
+                    setShowProvision(true);
                   }}
                 />
               );

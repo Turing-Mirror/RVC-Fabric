@@ -74,6 +74,10 @@ export function Select({
   width?: number;
   disabled?: boolean;
 }) {
+  // A saved device that is not in the current list (unplugged, driver reset)
+  // otherwise renders as a blank box: the row looks unset while the engine is
+  // still configured to use it. Keep it visible and say what happened.
+  const missing = Boolean(value) && !options.some((o) => o.id === value);
   return (
     <select
       value={value}
@@ -87,7 +91,10 @@ export function Select({
         full ? "w-full" : "",
       ].join(" ")}
     >
-      {options.length === 0 ? <option value="">（无可用项）</option> : null}
+      {options.length === 0 && !missing ? (
+        <option value="">（无可用项）</option>
+      ) : null}
+      {missing ? <option value={value}>{value}（当前不可用）</option> : null}
       {options.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}

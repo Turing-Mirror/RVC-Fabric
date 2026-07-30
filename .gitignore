@@ -72,6 +72,7 @@ ffprobe.*
 # Local build/debug scratch (keep off git — can be multi-GB logs + probes)
 /TEMP_BUILD/
 /TEMP/
+/TEMP_*/
 *.log
 !docs/**/*.md
 
@@ -98,6 +99,7 @@ ffprobe.*
 /User_Data/consult_packs/
 /User_Data/consult_samples/
 /User_Data/dev_variant.txt
+/User_Data/wallpaper/
 
 # Dev-only noise
 /scripts/dev/_env_trace.bat
@@ -111,29 +113,56 @@ ffprobe.*
 htmlcov/
 *.py[cod]
 
-# IDE / OS
+# IDE / OS / agent workspaces (never public)
 .idea/
 .vscode/
+.claude/
+.trae/
+.cursor/
+.codex/
+.grok/
 *.swp
 Thumbs.db
 Desktop.ini
 
+# Secrets / local env
 .env
+.env.*
+!.env.example
+*.pem
+*.p12
+*credentials*
+*secret*
 
-# Private migration handoff pack (local only; not for public repo)
+# ---------------------------------------------------------------------------
+# Private planning / product-vision materials (repo is public on GitHub + CNB)
+# Keep internal handoff, roadmaps, and ops-only notes off the remote.
+# ---------------------------------------------------------------------------
 /docs/RVC-Fabric-界面迁移交接包/
-/docs/RVC Fabric Plan B 0721.md
-
-# Local ops notes (not product docs)
+/docs/RVC Fabric Plan B*.md
+/docs/*交接*
+/docs/*白皮*
+/docs/*迁移*
+/docs/*愿景*
+/docs/*路线*
+/docs/*计划书*
+/docs/*运营手册*
+/docs/*维护手册*
 /docs/音色仓库维护手册.md
+/docs/CONTEXT_HANDOFF.md
+/docs/SESSION_*
+/docs/PLAN_*
+/docs/REVIEW_*
+CLAUDE.md
+AGENTS.md
+/Claude.md
+/_plans/
+/_notes/
+/_private/
 
-# AI / agent scratch
-.trae/
-/TEMP_diag_extract/
-
-# Tauri / React shell (app/)
+# Tauri / React shell build artifacts
 /app/node_modules/
 /app/dist/
 /app/src-tauri/target/
 /app/frontend/
-
+/app/.vscode/

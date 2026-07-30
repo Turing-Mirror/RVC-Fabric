@@ -1,6 +1,6 @@
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 
-/** Plaza shell — feed/changelog wire-up is stage 5. Ads are NOT dismissible here. */
+/** Plaza page shell (feed/changelog bind later). Plaza cards are not dismissible. */
 export function PlazaPage() {
   return (
     <PagePad>

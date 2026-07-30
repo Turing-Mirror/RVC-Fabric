@@ -8,7 +8,7 @@ const DEMO = [
   { id: "teio", name: "TokaiTeio", tag: "少女音", author: "RVC", index: false, cur: false },
 ];
 
-/** Models page shell — 5-col grid / index panel / profiles. Stage 4 fills real data. */
+/** Models page shell — grid, index panel, profiles (demo data until catalog binds). */
 export function ModelsPage() {
   return (
     <PagePad>

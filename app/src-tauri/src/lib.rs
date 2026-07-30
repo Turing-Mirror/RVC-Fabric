@@ -1,20 +1,13 @@
 //! RVC Fabric shell (Tauri).
 //!
-//! Stage 1: window + React UI host.
-//! Stage 2+: spawn Runtime pythonw worker, provision, catalog, etc.
-//!
-//! ## Hot-update strategy A (frontend out-of-band)
-//!
-//! - Vite builds into `app/frontend/` (`build.outDir`).
-//! - `tauri.conf.json` → `build.frontendDist = "../frontend"`.
-//! - Bundle resources also copy that tree as install-dir `frontend/`, so a
-//!   later `gui_patch`-style drop can replace the UI folder without a full
-//!   Rust rebuild. Packaging scripts (stage 6) own the ship layout.
-//! - `frontend_dir` command reports the preferred on-disk folder for diagnostics.
+//! Hosts the React UI and will manage the Runtime inference worker.
+//! UI assets are built into `frontend/` (`frontendDist`); packaging may ship
+//! that folder next to the exe so the UI pack can be replaced without a full
+//! binary rebuild.
 
 use std::path::PathBuf;
 
-/// Preferred on-disk UI folder: `<exe_dir>/frontend` when present.
+/// On-disk UI folder next to the exe when present: `<exe_dir>/frontend`.
 #[tauri::command]
 fn frontend_dir() -> Option<String> {
     external_frontend_dir().map(|p| p.to_string_lossy().into_owned())
@@ -38,9 +31,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![frontend_dir])
         .setup(|_app| {
             if let Some(dir) = external_frontend_dir() {
-                eprintln!("[rvc-fabric] strategy-A frontend present: {}", dir.display());
-            } else {
-                eprintln!("[rvc-fabric] UI via bundled frontendDist (../frontend)");
+                eprintln!("[rvc-fabric] frontend dir: {}", dir.display());
             }
             Ok(())
         })

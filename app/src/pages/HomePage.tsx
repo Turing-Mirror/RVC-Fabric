@@ -21,8 +21,8 @@ type Props = {
 };
 
 /**
- * Home — stage band + 3 recent cards with current in C position (center, larger).
- * Demo data only until catalog is wired (stage 4).
+ * Home — stage band + 3 recent cards; current voice in center (larger).
+ * Demo data until local catalog is bound.
  */
 export function HomePage({
   currentId = "anon",

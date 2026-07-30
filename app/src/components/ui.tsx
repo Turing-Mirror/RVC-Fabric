@@ -112,20 +112,48 @@ export function ListItem({
   desc,
   meta,
   right,
+  children,
   clickable = false,
+  expanded,
+  onClick,
 }: {
   title?: string;
   desc?: string;
   meta?: string;
   right?: ReactNode;
+  /** Body revealed under the row; only rendered when `expanded`. */
+  children?: ReactNode;
   clickable?: boolean;
+  expanded?: boolean;
+  onClick?: () => void;
 }) {
-  return (
+  // `clickable` used to be styling only — rows could look interactive and be
+  // completely inert, which is what the four 「展开」 rows on the help page were.
+  const act = onClick;
+  const isBtn = Boolean(act);
+  const body = (
     <div
+      role={isBtn ? "button" : undefined}
+      tabIndex={isBtn ? 0 : undefined}
+      aria-expanded={isBtn && expanded !== undefined ? expanded : undefined}
+      onClick={act}
+      onKeyDown={
+        isBtn
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                act?.();
+              }
+            }
+          : undefined
+      }
       className={[
         "flex items-center gap-3.5 py-3.5 rounded-[var(--rs)]",
-        clickable
+        clickable || isBtn
           ? "cursor-pointer -mx-3.5 px-3.5 hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-colors"
+          : "",
+        isBtn
+          ? "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-2px]"
           : "",
       ].join(" ")}
     >
@@ -142,6 +170,17 @@ export function ListItem({
       </div>
       {right ? (
         <div className="ml-auto flex-none flex items-center gap-2">{right}</div>
+      ) : null}
+    </div>
+  );
+  if (!children) return body;
+  return (
+    <div>
+      {body}
+      {expanded ? (
+        <div className="pb-3.5 -mt-1 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line max-w-[74ch]">
+          {children}
+        </div>
       ) : null}
     </div>
   );

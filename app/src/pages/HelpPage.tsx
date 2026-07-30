@@ -2,18 +2,93 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 
+/**
+ * Answers carried over verbatim from the Tk shell's `help_content.py` and its
+ * 「实体声卡连接」 dialog. The rows already said 「展开」; they just had nothing
+ * behind them.
+ */
+const FAQ: { q: string; hint: string; a: string }[] = [
+  {
+    q: "对方说听不到我",
+    hint: "先看游戏里的麦克风是不是选成了 CABLE Output",
+    a: [
+      "· 游戏 / QQ 的麦克风要选 CABLE Output",
+      "· 本软件的输出设备要选 CABLE Input",
+      "· 确认已「开启变声」，并且模式是「输出变声」而不是「原声旁路」",
+    ].join("\n"),
+  },
+  {
+    q: "我自己听不到变声",
+    hint: "在设置里勾「变声时监听自己」，选你的耳机",
+    a: [
+      "· 设置 → 勾选「变声时监听自己」",
+      "· 监听设备选真实耳机，不要选 CABLE —— 选了 CABLE 就等于没监听",
+    ].join("\n"),
+  },
+  {
+    q: "声音断断续续",
+    hint: "把响应阈值调低，或把采样块时长调大",
+    a: [
+      "· 把「采样长度」略调大（越大越稳，延迟也越高）",
+      "· 关掉输入或输出降噪其中一项，降噪很吃显卡",
+      "· 音高算法换 fcpe 试试",
+      "· 关掉其他占用麦克风的软件",
+      "· 确认装的是和自己显卡对应的运行时分版",
+    ].join("\n"),
+  },
+  {
+    q: "实体声卡怎么连",
+    hint: "USB 直播声卡 / 调音台的接法",
+    a: [
+      "【麦克风走实体声卡】",
+      "· 输入设备 = 实体声卡的录音设备（名字里带声卡型号）",
+      "· 输出设备 = 仍然选 CABLE Input，对面听到变声还是靠虚拟声卡",
+      "· 监听：耳机插在声卡上，监听设备选实体声卡的播放",
+      "",
+      "【声卡带「内录 / 立体声混音」通道】",
+      "· 也可以不用 CABLE：输出设备 = 实体声卡的播放，",
+      "  游戏 / QQ 的麦克风 = 声卡的内录通道（叫法以声卡说明书为准）",
+      "",
+      "【注意】",
+      "· 先关掉声卡驱动自带的降噪 / 混响 / 变声，避免和本软件叠加",
+      "· 列表里没设备：点「重载设备列表」或重启软件",
+    ].join("\n"),
+  },
+  {
+    q: "停不干净、声卡一直被占",
+    hint: "用「其他 → 强制结束变声引擎」",
+    a: "到「其他」页点「强制结束变声引擎」，再重开软件。这只结束残留的 worker，不会关掉主界面。",
+  },
+  {
+    q: "第一次开启特别慢",
+    hint: "正常，冷启动要加载模型和 Runtime",
+    a: "第一次开启变声要加载 PyTorch 和音色模型，通常 20–40 秒。之后再开会快很多。",
+  },
+  {
+    q: "中文路径报错",
+    hint: "把整个软件放到英文路径再试",
+    a: "部分依赖对非 ASCII 路径处理不好。把整个安装目录移到纯英文路径（例如 D:\\RVCFabric）后重试。",
+  },
+];
+
 export function HelpPage() {
+  const [open, setOpen] = useState<string>("");
   // Installing the driver needs UAC, so it can only ever be user-initiated.
   // Without this entry the pack is downloaded but never actually installed.
-  const [vbReady, setVbReady] = useState<boolean | null>(null);
+  // "checking" and "we could not check" used to be the same state (null), so a
+  // failed status call showed 「正在检查…」 forever.
+  const [vbReady, setVbReady] = useState<boolean | "checking" | "unknown">(
+    "checking",
+  );
   const [vbMsg, setVbMsg] = useState("");
+  const [vbBusy, setVbBusy] = useState(false);
 
   const refreshVb = async () => {
     try {
       const st = await invoke<{ vbcable_pack_ready?: boolean }>("assets_status");
       setVbReady(!!st.vbcable_pack_ready);
     } catch {
-      setVbReady(null);
+      setVbReady("unknown");
     }
   };
   useEffect(() => {
@@ -21,17 +96,23 @@ export function HelpPage() {
   }, []);
 
   const installVb = async () => {
+    if (vbBusy) return;
+    setVbBusy(true);
     setVbMsg("");
     try {
-      if (!vbReady) {
+      if (vbReady !== true) {
         setVbMsg("正在下载安装包…");
         await invoke("assets_ensure_vbcable");
         await refreshVb();
       }
-      setVbMsg("已启动官方安装程序，请在弹出的窗口里确认（需要管理员权限）");
+      setVbMsg("正在启动官方安装程序…");
       await invoke("assets_install_vbcable");
+      // Only say it launched once it actually did.
+      setVbMsg("已启动官方安装程序，请在弹出的窗口里确认（需要管理员权限）");
     } catch (e) {
       setVbMsg(`失败：${String(e)}`);
+    } finally {
+      setVbBusy(false);
     }
   };
 
@@ -49,13 +130,19 @@ export function HelpPage() {
             title="VB-Cable"
             desc={
               vbMsg ||
-              (vbReady === null
+              (vbReady === "checking"
                 ? "正在检查…"
-                : vbReady
-                  ? "安装包已就绪，点右侧开始安装（会弹管理员确认）"
-                  : "尚未下载安装包，点右侧会先下载再安装")
+                : vbReady === "unknown"
+                  ? "查不到安装包状态，点右侧仍可尝试下载并安装"
+                  : vbReady
+                    ? "安装包已就绪，点右侧开始安装（会弹管理员确认）"
+                    : "尚未下载安装包，点右侧会先下载再安装")
             }
-            right={<Btn onClick={() => void installVb()}>安装虚拟声卡</Btn>}
+            right={
+              <Btn disabled={vbBusy} onClick={() => void installVb()}>
+                {vbBusy ? "处理中…" : "安装虚拟声卡"}
+              </Btn>
+            }
           />
         </Group>
       </Block>
@@ -89,32 +176,24 @@ export function HelpPage() {
           />
         </Group>
       </Block>
-      <Block title="常见情况" note="4">
+      <Block title="常见情况" note={String(FAQ.length)}>
         <Group>
-          <ListItem
-            clickable
-            title="对方说听不到我"
-            desc="先看游戏里的麦克风是不是选成了 CABLE Output"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">展开</span>}
-          />
-          <ListItem
-            clickable
-            title="我自己听不到变声"
-            desc="在设置里勾「变声时监听自己」，选你的耳机"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">展开</span>}
-          />
-          <ListItem
-            clickable
-            title="声音断断续续"
-            desc="把响应阈值调低，或把采样块时长调大"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">展开</span>}
-          />
-          <ListItem
-            clickable
-            title="实体声卡怎么连"
-            desc="USB 直播声卡 / 调音台的接法"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">展开</span>}
-          />
+          {FAQ.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? "收起" : "展开"}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
         </Group>
       </Block>
     </PagePad>

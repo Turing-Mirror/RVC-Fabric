@@ -23,6 +23,12 @@ export function MorePage({
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
+  // Where the app thinks it is installed. The row below used to only describe
+  // that this is resolved automatically, without ever showing the answer —
+  // which is the first thing worth knowing when a report says "找不到 Runtime".
+  const [root, setRoot] = useState("—");
+  const [logFile, setLogFile] = useState("");
+  const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
@@ -61,6 +67,15 @@ export function MorePage({
     invoke<string>("ui_source")
       .then((v) => alive && setUiSource(v || "—"))
       .catch(() => alive && setUiSource("—"));
+    invoke<string>("product_root")
+      .then((v) => alive && setRoot(v || "—"))
+      .catch(() => alive && setRoot("—"));
+    invoke<string>("shell_version")
+      .then((v) => alive && setVersion(v || "—"))
+      .catch(() => alive && setVersion("—"));
+    invoke<string | null>("log_path")
+      .then((v) => alive && setLogFile(v || ""))
+      .catch(() => alive && setLogFile(""));
     return () => {
       alive = false;
     };
@@ -92,7 +107,19 @@ export function MorePage({
           <ListItem
             title="壳版本"
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">1.3.0</span>
+              <span className="text-[13.5px] text-[var(--ink-muted)]">{version}</span>
+            }
+          />
+          <ListItem
+            title="产品根目录"
+            desc="Runtime、User_Data、引擎源码都在这里"
+            right={
+              <span
+                className="text-[13.5px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
+                title={root}
+              >
+                {root}
+              </span>
             }
           />
           <ListItem
@@ -187,7 +214,10 @@ export function MorePage({
           />
           <ListItem
             title="打开日志"
-            desc="shell.log 记录启动、界面加载与出错原因，报问题时把它一起发来"
+            desc={
+              logFile ||
+              "shell.log 记录启动、界面加载与出错原因，报问题时把它一起发来"
+            }
             right={
               <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>
                 打开

@@ -217,6 +217,13 @@ fn ui_source() -> String {
     ui_assets::source_label()
 }
 
+/// Shipping version. The 「其他」page had this typed in as a literal, so it
+/// would quietly disagree with the binary after any bump.
+#[tauri::command]
+fn shell_version() -> &'static str {
+    update::APP_VERSION
+}
+
 /// Reported by the UI on first paint. Turns "the window is blank" from an
 /// unfalsifiable user report into a line in `shell.log`.
 #[tauri::command]
@@ -743,6 +750,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_dir,
             ui_source,
+            shell_version,
             ui_ready,
             ui_log,
             log_path,

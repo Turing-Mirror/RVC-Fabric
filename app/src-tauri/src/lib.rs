@@ -1,6 +1,6 @@
 //! RVC Fabric shell (Tauri).
 //!
-//! Stages 1–3: window/UI, worker bridge, Runtime provision (download/extract).
+//! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 mod catalog;
 mod download;
@@ -8,6 +8,8 @@ mod extract;
 mod paths;
 mod protocol;
 mod provision;
+mod store;
+mod voices;
 mod worker;
 
 use std::path::PathBuf;
@@ -200,6 +202,222 @@ fn provision_cancel() -> Result<(), String> {
     Ok(())
 }
 
+// ----- Stage 4: voices + store ------------------------------------------------
+
+#[tauri::command]
+fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    Ok(voices::list_voices(&root))
+}
+
+#[tauri::command]
+fn voices_select(
+    state: State<'_, Mutex<AppState>>,
+    path: Option<String>,
+    dir: Option<String>,
+    name: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::select_voice(
+        &root,
+        path.as_deref().unwrap_or(""),
+        dir.as_deref().unwrap_or(""),
+        name.as_deref().unwrap_or(""),
+    )
+}
+
+#[tauri::command]
+fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    Ok(voices::current_selection_summary(&root))
+}
+
+#[tauri::command]
+fn voices_index_list(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::list_index_bindings(&root, &model_dir)
+}
+
+#[tauri::command]
+fn voices_index_use(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    index_path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::set_active_index(&root, &model_dir, &index_path)
+}
+
+#[tauri::command]
+fn voices_index_bind(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    index_src: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let src = match index_src.filter(|s| !s.is_empty()) {
+        Some(s) => s,
+        None => voices::pick_index_file().ok_or_else(|| "已取消".to_string())?,
+    };
+    voices::bind_index_file(&root, &model_dir, &src)
+}
+
+#[tauri::command]
+fn voices_index_unbind(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    index_path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::unbind_index(&root, &model_dir, &index_path)
+}
+
+#[tauri::command]
+fn voices_profiles_list(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::list_profiles(&root, &model_dir)
+}
+
+#[tauri::command]
+fn voices_profile_use(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    profile_id: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::set_active_profile(&root, &model_dir, &profile_id)
+}
+
+#[tauri::command]
+fn voices_profile_save(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    name: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::save_current_as_profile(&root, &model_dir, &name)
+}
+
+#[tauri::command]
+fn voices_profile_delete(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    profile_id: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::delete_profile(&root, &model_dir, &profile_id)
+}
+
+#[tauri::command]
+fn voices_profile_import(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::import_profile(&root, &model_dir)
+}
+
+#[tauri::command]
+fn voices_profile_export(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::export_active_profile(&root, &model_dir)
+}
+
+#[tauri::command]
+fn voices_import(
+    state: State<'_, Mutex<AppState>>,
+    paths: Option<Vec<String>>,
+    current_model_dir: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let files = match paths.filter(|p| !p.is_empty()) {
+        Some(p) => p,
+        None => {
+            let picked = voices::pick_import_files();
+            if picked.is_empty() {
+                return Err("已取消".into());
+            }
+            picked
+        }
+    };
+    voices::import_files(
+        &root,
+        &files,
+        current_model_dir.as_deref(),
+    )
+}
+
+#[tauri::command]
+fn voices_delete(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::delete_voice(&root, &model_dir)
+}
+
+#[tauri::command]
+fn voices_rename(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    new_name: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::rename_voice(&root, &model_dir, &new_name)
+}
+
+#[tauri::command]
+fn voices_promote(
+    state: State<'_, Mutex<AppState>>,
+    pth_path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::promote_legacy(&root, &pth_path)
+}
+
+#[tauri::command]
+fn voices_open_dir(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    voices::open_models_dir(&root)
+}
+
+#[tauri::command]
+fn store_catalog(
+    state: State<'_, Mutex<AppState>>,
+    prefer_remote: Option<bool>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    Ok(store::fetch_store_catalog(
+        &root,
+        prefer_remote.unwrap_or(true),
+    ))
+}
+
+#[tauri::command]
+fn store_install(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    entry: Value,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    store::install_voice_entry(app, root, entry)
+}
+
+#[tauri::command]
+fn store_cancel() -> Result<(), String> {
+    store::cancel_store_download();
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = paths::product_root();
@@ -226,6 +444,27 @@ pub fn run() {
             provision_status,
             provision_start,
             provision_cancel,
+            voices_list,
+            voices_select,
+            voices_current,
+            voices_index_list,
+            voices_index_use,
+            voices_index_bind,
+            voices_index_unbind,
+            voices_profiles_list,
+            voices_profile_use,
+            voices_profile_save,
+            voices_profile_delete,
+            voices_profile_import,
+            voices_profile_export,
+            voices_import,
+            voices_delete,
+            voices_rename,
+            voices_promote,
+            voices_open_dir,
+            store_catalog,
+            store_install,
+            store_cancel,
         ])
         .setup(move |_app| {
             let root_bg = root.clone();

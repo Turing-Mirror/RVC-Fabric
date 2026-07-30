@@ -16,7 +16,14 @@ use crate::extract;
 use crate::paths;
 
 static PROVISION_BUSY: Mutex<bool> = Mutex::new(false);
-static CANCEL: AtomicBool = AtomicBool::new(false);
+/// Shared with download layer (async-fetcher shutdown).
+static CANCEL: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
+
+fn cancel_flag() -> Arc<AtomicBool> {
+    CANCEL
+        .get_or_init(|| Arc::new(AtomicBool::new(false)))
+        .clone()
+}
 
 /// nvidia | nvidia50 | amd | unknown
 pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
@@ -241,7 +248,7 @@ fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &
 }
 
 pub fn cancel_provision() {
-    CANCEL.store(true, Ordering::SeqCst);
+    cancel_flag().store(true, Ordering::SeqCst);
 }
 
 /// Download + extract Runtime for *variant*. Emits `provision-progress` events.
@@ -258,7 +265,7 @@ pub fn run_provision(
         }
         *g = true;
     }
-    CANCEL.store(false, Ordering::SeqCst);
+    cancel_flag().store(false, Ordering::SeqCst);
 
     let result: Result<Value, String> = (|| {
         let mut var = variant.trim().to_ascii_lowercase();
@@ -292,20 +299,22 @@ pub fn run_provision(
         }
 
         let size = spec.size_bytes.max(part.size_bytes);
+        let conns_preview = download::auto_connections(size);
         emit_progress(
             &app,
             "download",
             0,
             size.max(1),
             &format!(
-                "下载 {} Runtime v{}（约 {}）",
+                "下载 {} Runtime v{}（约 {} · {} 连接）",
                 spec.label,
                 if spec.version.is_empty() {
                     "?"
                 } else {
                     &spec.version
                 },
-                format_size(size)
+                format_size(size),
+                conns_preview
             ),
         );
 
@@ -333,25 +342,32 @@ pub fn run_provision(
 
         if !dest_file.is_file() {
             let app_cb = app.clone();
-            let msg = format!("下载中… {}", part.urls.first().map(|s| s.as_str()).unwrap_or(""));
+            let conns = download::auto_connections(size);
             let progress: ProgressFn = Arc::new(move |done, total, phase| {
-                let m = if phase == "verify" {
-                    "校验 sha256…"
-                } else {
-                    msg.as_str()
+                let m = match phase {
+                    "verify" => "校验 sha256…",
+                    "retry" => "网络重试…",
+                    other if other.starts_with("download:") => other,
+                    _ => "多连接下载中…",
                 };
                 emit_progress(&app_cb, phase, done, total.max(1), m);
             });
-            download::download_file(
-                &part.urls,
-                &dest_file,
-                &part.sha256,
-                &CANCEL,
+            // Shared pipeline (async-fetcher): same path for voice_pack / gui_patch later.
+            download::download_request(
+                download::DownloadRequest {
+                    urls: part.urls.clone(),
+                    dest: dest_file.clone(),
+                    expected_sha256: part.sha256.clone(),
+                    size_hint: size,
+                    connections: Some(conns),
+                    kind: download::DownloadKind::Runtime,
+                },
+                cancel_flag(),
                 Some(progress),
             )?;
         }
 
-        if CANCEL.load(Ordering::SeqCst) {
+        if cancel_flag().load(Ordering::SeqCst) {
             return Err("已取消".to_string());
         }
 
@@ -377,7 +393,7 @@ pub fn run_provision(
     if let Ok(mut g) = PROVISION_BUSY.lock() {
         *g = false;
     }
-    CANCEL.store(false, Ordering::SeqCst);
+    cancel_flag().store(false, Ordering::SeqCst);
 
     if let Err(ref e) = result {
         emit_progress(&app, "error", 0, 1, e);

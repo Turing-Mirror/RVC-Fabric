@@ -62,7 +62,37 @@ npm run tauri:dev
 ## Runtime provision (stage 3)
 
 - `provision_status` — Runtime ready? GPU recommend (WMI, no torch).
-- `provision_start` / `provision_cancel` — download from CNB (Range resume +
-  sha256) into `User_Data/update_cache/runtime`, safe-extract to `Runtime/`,
-  write `package_meta.json`. Progress events: `provision-progress`.
+- `provision_start` / `provision_cancel` — download from CNB into
+  `User_Data/update_cache/runtime`, safe-extract to `Runtime/`, write
+  `package_meta.json`. Progress events: `provision-progress`.
 - First-run UI: `ProvisionGate` when Runtime is missing.
+
+### Shared downloader (`src-tauri/src/download.rs`)
+
+Engine: **[ripget](https://github.com/sam0x17/ripget)** (MIT/Apache-2.0) —
+multi-part HTTP Range downloads with retries and idle reconnect (aria2-style).
+We do **not** reimplement range splitting; only adaptive thread count + product
+glue (mirrors, sha256, cancel, `DownloadKind`).
+
+Adaptive threads (`auto_connections`, same spirit as `launcher/online/multipart.py`):
+
+| Size | Connections |
+|------|-------------|
+| &lt; 16 MiB | 1 |
+| &lt; 64 MiB | 8 |
+| ≥ 1 GiB | 16 (cap 32) |
+
+`DownloadKind` — same API for all product artifacts:
+
+| Kind | Use |
+|------|-----|
+| `Runtime` | provision (now) |
+| `VoicePack` | community / official voice zip |
+| `GuiPatch` | shell update packages |
+| `Generic` | engine-core, VB-Cable, … |
+
+```rust
+download::download_request(DownloadRequest {
+    urls, dest, expected_sha256, size_hint, connections: None, kind: DownloadKind::VoicePack,
+}, cancel, Some(progress))?;
+```

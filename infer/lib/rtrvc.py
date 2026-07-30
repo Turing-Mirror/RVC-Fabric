@@ -34,7 +34,7 @@ def _shared_mm():
     global _mm
     if _mm is None:
         try:
-            from launcher.win_util import force_windowed_multiprocessing
+            from tools.worker_protocol import force_windowed_multiprocessing
 
             force_windowed_multiprocessing()
         except Exception:

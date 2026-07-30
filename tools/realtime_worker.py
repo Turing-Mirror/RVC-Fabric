@@ -88,7 +88,7 @@ def _write_status_early(root: Path, **fields) -> None:
     try:
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
-        from launcher.realtime_protocol import write_status, write_worker_pid_file
+        from tools.worker_protocol import write_status, write_worker_pid_file
 
         pid = os.getpid()
         write_worker_pid_file(pid)
@@ -137,7 +137,7 @@ def main() -> None:
         tb = traceback.format_exc()
         _append_log(root, "WORKER FATAL:\n" + tb)
         try:
-            from launcher.realtime_protocol import write_status
+            from tools.worker_protocol import write_status
 
             write_status(
                 state="error",

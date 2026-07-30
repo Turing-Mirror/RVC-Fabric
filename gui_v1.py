@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     # Multiprocessing children must use pythonw (no Runtime\\python.exe flash)
     try:
-        from launcher.win_util import force_windowed_multiprocessing
+        from tools.worker_protocol import force_windowed_multiprocessing
 
         force_windowed_multiprocessing()
     except Exception:
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         if _harvest_workers:
             return
         try:
-            from launcher.win_util import force_windowed_multiprocessing
+            from tools.worker_protocol import force_windowed_multiprocessing
 
             force_windowed_multiprocessing()
         except Exception:
@@ -2075,7 +2075,7 @@ if __name__ == "__main__":
 
         def _worker_write_status(self, **fields):
             try:
-                from launcher.realtime_protocol import write_status
+                from tools.worker_protocol import write_status
 
                 write_status(**fields)
             except Exception:
@@ -2496,7 +2496,7 @@ if __name__ == "__main__":
 
         def worker_main(self):
             """No FreeSimpleGUI window — poll User_Data/runtime_control/command.json."""
-            from launcher.realtime_protocol import (
+            from tools.worker_protocol import (
                 default_status,
                 read_command,
                 write_status,

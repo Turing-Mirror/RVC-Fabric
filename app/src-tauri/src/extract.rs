@@ -168,3 +168,31 @@ pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), Strin
     }
     Ok(())
 }
+
+/// Extract a zip into `dest_root`, reusing the same traversal guard as the tar
+/// path (equivalent of the Python shell's `safe_zip`).
+pub fn extract_zip(archive: &Path, dest_root: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(archive).map_err(|e| format!("打开压缩包失败：{e}"))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("读取压缩包失败：{e}"))?;
+    std::fs::create_dir_all(dest_root).map_err(|e| e.to_string())?;
+
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        let name = entry.name().replace('\\', "/");
+        if !is_safe_member(&name, dest_root)? {
+            return Err(format!("压缩包含有不安全路径：{name}"));
+        }
+        let out = dest_root.join(&name);
+        if entry.is_dir() || name.ends_with('/') {
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut dst = std::fs::File::create(&out)
+            .map_err(|e| format!("写入 {} 失败：{e}", out.display()))?;
+        std::io::copy(&mut entry, &mut dst).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

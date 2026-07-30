@@ -4,6 +4,7 @@
 
 mod catalog;
 mod download;
+mod engine_assets;
 mod extract;
 mod paths;
 mod protocol;
@@ -33,7 +34,42 @@ fn frontend_dir() -> Option<String> {
     ui_assets::external_dir().map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Human-readable "where is the UI loaded from" for the 「其他」page.
+/// engine-core / VB-Cable readiness for the first-run gate.
+#[tauri::command]
+fn assets_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(engine_assets::assets_status(&root_clone(&state)?))
+}
+
+#[tauri::command]
+async fn assets_ensure_engine_core(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_assets::ensure_engine_core(&root, cancel).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn assets_ensure_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_assets::ensure_vbcable_pack(&root, cancel).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    engine_assets::install_vbcable(&root_clone(&state)?)?;
+    Ok(json!({"ok": true}))
+}
+
 #[tauri::command]
 fn ui_source() -> String {
     ui_assets::source_label()
@@ -438,6 +474,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_dir,
             ui_source,
+            assets_status,
+            assets_ensure_engine_core,
+            assets_ensure_vbcable,
+            assets_install_vbcable,
             product_root,
             engine_status,
             engine_ensure,

@@ -155,7 +155,7 @@ export function Dock({
             "text-sm font-semibold bg-[var(--accent)] text-[var(--accent-ink)]",
             "shadow-[0_1px_3px_color-mix(in_srgb,var(--accent)_30%,transparent)]",
             "transition-[transform,background,box-shadow] duration-200 ease-[var(--spring)]",
-            "hover:shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_34%,transparent)] hover:-translate-y-px",
+            "hover:shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_34%,transparent)]",
             "active:scale-[0.965]",
             "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
           ].join(" ")}

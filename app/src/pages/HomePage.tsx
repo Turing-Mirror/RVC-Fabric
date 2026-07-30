@@ -70,7 +70,7 @@ export function HomePage({
                       "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)]",
                       "text-[color-mix(in_srgb,var(--ink)_32%,transparent)]",
                       "grayscale transition-[filter,transform,box-shadow] duration-300 ease-[var(--spring)]",
-                      "hover:grayscale-[0.3] hover:-translate-y-1 active:translate-y-px active:scale-[0.985]",
+                      "hover:grayscale-[0.3] active:scale-[0.985]",
                       cur
                         ? "w-[236px] h-[176px] text-[30px] grayscale-0 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[208px] max-[1020px]:h-[158px] max-[720px]:w-[170px] max-[720px]:h-[130px]"
                         : "w-[156px] h-[122px] text-[26px] max-[1020px]:w-[138px] max-[1020px]:h-[110px] max-[720px]:w-[112px] max-[720px]:h-[92px]",

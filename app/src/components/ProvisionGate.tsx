@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -74,6 +75,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     try {
       const r = await startProvision(variant, false);
       if (r.ok) {
+        // Runtime is only step one; engine-core and VB-Cable follow before the
+        // gate is allowed to close.
+        await runExtras();
         onDone();
       } else {
         setError(r.message || "补全失败");
@@ -86,6 +90,23 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   };
 
   const pct = Math.round(Number(progress?.percent || 0));
+
+  // Runtime alone is not a usable install: the worker needs engine-core
+  // (hubert / rmvpe / ffmpeg) and the user needs VB-Cable for anyone to hear
+  // the converted voice. Chain both right after the Runtime step.
+  const [extra, setExtra] = useState<string>("");
+  async function runExtras() {
+    try {
+      setExtra("正在补全引擎资源（hubert / rmvpe / ffmpeg）…");
+      await invoke("assets_ensure_engine_core");
+      setExtra("正在准备虚拟声卡安装包…");
+      await invoke("assets_ensure_vbcable");
+      setExtra("");
+    } catch (e) {
+      setExtra(`补全失败：${String(e)}`);
+      throw e;
+    }
+  }
 
   return (
     <div className="absolute inset-0 z-[50] flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
@@ -127,6 +148,10 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           <p className="text-[12px] text-[var(--meta)] m-0 mb-4">
             检测到显卡：{info.gpus.join(" · ")}
           </p>
+        ) : null}
+
+        {extra ? (
+          <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-3">{extra}</p>
         ) : null}
 
         {busy && progress ? (

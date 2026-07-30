@@ -312,7 +312,7 @@ export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
                     setMenu({ x: e.clientX, y: e.clientY, model: v });
                   }}
                 >
-                  <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl grayscale hover:grayscale-[0.3] transition-[filter,transform] duration-300 ease-[var(--spring)] hover:-translate-y-1">
+                  <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl grayscale hover:grayscale-[0.3] transition-[filter] duration-300 ease-[var(--spring)]">
                     {src ? (
                       <img
                         src={src}

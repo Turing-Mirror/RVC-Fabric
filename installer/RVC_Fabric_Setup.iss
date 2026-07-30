@@ -10,15 +10,18 @@
 ;   默认路径: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
 ;
 ; 用户动线：
-;   Setup.exe（本安装器）安装薄包：启动器 + 主界面 + 源码配置
-;   → 启动器从 CNB 补全 Runtime（分版）+ engine-core（共用）+ VB-Cable
-;   → 主界面 / 社区音色（LFS）
+;   Setup.exe（本安装器）安装通用薄包：RVC Fabric.exe + 可替换的 frontend/ + 引擎源码
+;   → 首次打开由程序自身鉴别显卡、补全 Runtime + engine-core + VB-Cable
+;   → 社区音色（LFS）
+;
+; 通用包：不再按显卡分版，运行时类型由程序自动鉴别后推荐，用户可改选。
+; 单一程序：原「启动器.exe」已被 Tauri 版内置的首次引导取代，不再安装。
 
 #define MyAppName "RVC Fabric"
 #define MyAppNameCN "RVC Fabric · 图灵镜"
-#define MyAppVersion "1.2.3-hotfix3"
+#define MyAppVersion "1.3.0"
 ; Windows 版本资源只接受纯数字 a.b.c.d
-#define MyAppVerNum "1.2.3.0"
+#define MyAppVerNum "1.3.0.0"
 #define MyAppPublisher "Turing-Mirror"
 #define MyAppURL "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases"
 #define MyAppId "{{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}"
@@ -90,26 +93,21 @@ chinesesimplified.BeveledLabel=RVC Fabric 安装程序
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce
-; 显卡分版：互斥，写入 package_meta 供启动器下载对应 Runtime
-Name: "gpu_nvidia"; Description: "NVIDIA 显卡（CUDA，推荐大多数 N 卡）"; GroupDescription: "选择显卡分版（安装后启动器将下载对应 Runtime）:"; Flags: exclusive checkedonce
-Name: "gpu_amd"; Description: "AMD / Intel 显卡（DirectML）"; GroupDescription: "选择显卡分版（安装后启动器将下载对应 Runtime）:"; Flags: exclusive
-Name: "gpu_nvidia50"; Description: "NVIDIA 50 系（RTX 50xx / Blackwell）"; GroupDescription: "选择显卡分版（安装后启动器将下载对应 Runtime）:"; Flags: exclusive
 
 [Files]
-; 薄包：壳层 + 启动器 + 主界面；不含 Runtime / engine-core / VB-Cable
+; 通用薄包：RVC Fabric.exe + 可替换的 frontend/ + 引擎源码
+; 不含 Runtime / engine-core / VB-Cable，这三样首次运行时下载
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 ; IconFilename must be the loose .ico — Windows Start Menu caches exe resources and
 ; will keep the old swirl mark after gui_patch unless shortcuts pin app.ico explicitly.
-Name: "{group}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Comment: "首次补全环境 / 快捷设置"
-Name: "{group}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Comment: "RVC Fabric 主界面"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\RVC Fabric.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Comment: "RVC Fabric"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\assets\brand\app.ico"
-Name: "{autodesktop}\{#MyAppName} 启动器"; Filename: "{app}\启动器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Tasks: desktopicon
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\变声器.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\RVC Fabric.exe"; WorkingDir: "{app}"; IconFilename: "{app}\assets\brand\app.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\启动器.exe"; Description: "打开启动器（自动补全 Runtime 运行环境）"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
+Filename: "{app}\RVC Fabric.exe"; Description: "打开 RVC Fabric（首次运行会自动补全环境）"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
 
 [UninstallDelete]
 ; 用户下载的 Runtime / 音色体积大，默认不在卸载时删除 User_Data 与 Runtime
@@ -118,14 +116,12 @@ Filename: "{app}\启动器.exe"; Description: "打开启动器（自动补全 Ru
 ; Type: filesandordirs; Name: "{app}\User_Data"
 
 [Code]
+// 通用安装包：安装时不再让用户选显卡分版。
+// 运行时类型由程序首次启动时鉴别主显卡后推荐（可自行改选），
+// 所以这里写空串，package_meta 不预先钉死任何变体。
 function GpuVariant: String;
 begin
-  if WizardIsTaskSelected('gpu_amd') then
-    Result := 'amd'
-  else if WizardIsTaskSelected('gpu_nvidia50') then
-    Result := 'nvidia50'
-  else
-    Result := 'nvidia';
+  Result := '';
 end;
 
 function GpuLabel(const V: String): String;
@@ -161,10 +157,7 @@ var
   V, Path, Json, UseDml: String;
 begin
   V := GpuVariant;
-  if V = 'amd' then
-    UseDml := 'true'
-  else
-    UseDml := 'false';
+  UseDml := 'false';
   Path := ExpandConstant('{app}\package_meta.json');
   Json :=
     '{' + #13#10 +
@@ -172,7 +165,7 @@ begin
     '  "label": "' + GpuLabel(V) + '",' + #13#10 +
     '  "accel_default": "' + AccelDefault(V) + '",' + #13#10 +
     '  "use_dml": ' + UseDml + ',' + #13#10 +
-    '  "tagged": true,' + #13#10 +
+    '  "tagged": false,' + #13#10 +
     '  "install_via": "inno_setup",' + #13#10 +
     '  "runtime_channel": "cnb_release",' + #13#10 +
     '  "runtime_release_tag": "RVC-runtime",' + #13#10 +

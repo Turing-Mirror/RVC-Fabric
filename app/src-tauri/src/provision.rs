@@ -115,7 +115,11 @@ pub fn read_package_meta_variant(root: &Path) -> Option<String> {
     v.get("variant")
         .or_else(|| v.get("runtime_variant"))
         .and_then(|x| x.as_str())
-        .map(|s| s.to_string())
+        .map(|s| s.trim().to_string())
+        // The universal Setup writes an empty variant on purpose: the app picks
+        // it after detecting the GPU. Empty must read as "not chosen", not as a
+        // variant named "".
+        .filter(|s| !s.is_empty())
 }
 
 fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) -> Result<(), String> {

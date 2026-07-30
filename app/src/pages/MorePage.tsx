@@ -55,7 +55,7 @@ export function MorePage({
           <ListItem
             title="壳版本"
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">1.3.0 · Tauri</span>
+              <span className="text-[13.5px] text-[var(--ink-muted)]">1.3.0</span>
             }
           />
           <ListItem

@@ -7,6 +7,7 @@ import { useEngine } from "./hooks/useEngine";
 import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
+import { invoke } from "@tauri-apps/api/core";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -17,6 +18,32 @@ import { SettingsPage } from "./pages/SettingsPage";
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
+  // Self-update: check reports the catalog's latest; applying swaps the
+  // external frontend/ dir and takes effect on restart.
+  const [updateLine, setUpdateLine] = useState("");
+  const checkUpdate = async () => {
+    setUpdateLine("正在检查…");
+    try {
+      const r = await invoke<Record<string, unknown>>("update_check");
+      if (r.blocked_by_min_version) {
+        setUpdateLine(`需要先更新到 ${String(r.min_app_version)} 才能继续`);
+        return;
+      }
+      if (!r.available) {
+        setUpdateLine(`已是最新（${String(r.local)}）`);
+        return;
+      }
+      if (r.action === "external") {
+        setUpdateLine(`有新版本 ${String(r.remote)}，需要重新下载安装包`);
+        return;
+      }
+      setUpdateLine(`发现 ${String(r.remote)}，正在下载界面更新…`);
+      await invoke("update_apply", { url: String(r.url), sha256: String(r.sha256 || "") });
+      setUpdateLine(`已更新到 ${String(r.remote)}，重启程序后生效`);
+    } catch (e) {
+      setUpdateLine(`检查更新失败：${String(e)}`);
+    }
+  };
   const [pitch, setPitch] = useState(0);
   const [formant, setFormant] = useState(0);
   const [mode, setMode] = useState<OutputMode>("vc");
@@ -130,6 +157,8 @@ export default function App() {
                 <SettingsPage
                   status={engine.status}
                   onReloadDevices={() => void engine.refresh()}
+                  onCheckUpdate={() => void checkUpdate()}
+                  updateLine={updateLine}
                 />
               );
             case "help":
@@ -137,6 +166,8 @@ export default function App() {
             case "more":
               return (
                 <MorePage
+                  onCheckUpdate={() => void checkUpdate()}
+                  updateLine={updateLine}
                   status={engine.status}
                   provision={engine.provision}
                   onForceKill={async () => {

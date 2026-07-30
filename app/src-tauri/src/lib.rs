@@ -12,6 +12,7 @@ mod protocol;
 mod provision;
 mod store;
 mod ui_assets;
+mod update;
 mod voices;
 mod worker;
 
@@ -109,6 +110,31 @@ fn pick_wallpaper() -> Option<String> {
         .set_title("选择背景图")
         .pick_file()
         .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Ask the catalog whether a newer build exists.
+#[tauri::command]
+async fn update_check() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| update::check(12))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Download a gui_patch and swap the external frontend/ directory.
+#[tauri::command]
+async fn update_apply(
+    state: State<'_, Mutex<AppState>>,
+    url: String,
+    sha256: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    tauri::async_runtime::spawn_blocking(move || {
+        update::apply_gui_patch(&root, &url, &sha256, cancel)
+            .map(|p| json!({"ok": true, "path": p.to_string_lossy(), "restart_required": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -519,6 +545,8 @@ pub fn run() {
             config_describe,
             config_set,
             pick_wallpaper,
+            update_check,
+            update_apply,
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,

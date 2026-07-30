@@ -7,6 +7,8 @@ type Props = {
   status?: EngineStatus;
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
+  onCheckUpdate?: () => void;
+  updateLine?: string;
   onOpenProvision?: () => void;
 };
 
@@ -15,6 +17,8 @@ export function MorePage({
   provision,
   onForceKill,
   onOpenProvision,
+  onCheckUpdate,
+  updateLine,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
@@ -135,8 +139,8 @@ export function MorePage({
           />
           <ListItem
             title="检查更新"
-            desc="尚未连接更新服务"
-            right={<Btn>检查</Btn>}
+            desc={updateLine || "从 CNB 检查是否有新版本"}
+            right={<Btn onClick={onCheckUpdate}>检查</Btn>}
           />
           <ListItem title="打开性能报告文件夹" right={<Btn>打开</Btn>} />
           <ListItem

@@ -30,8 +30,14 @@ from launcher.version import (
     validate_stable_shell_version,
 )
 
-# Relative paths or globs under ROOT
+# Relative paths or globs under ROOT.
+#
+# Tauri 版的界面补丁打的是 app/frontend/（Vite 构建产物），安装目录下
+# 那份可替换的 frontend/ 就是它。Rust 侧的改动换不了，必须重发安装包。
+#
+# launcher/ 是旧 Python 壳的界面层，迁移完成前保留以便还能给老版本发补丁。
 DEFAULT_PATHS = [
+    "app/frontend",
     "launcher",
     "configs/online_catalog.json",
     "tools/realtime_worker.py",

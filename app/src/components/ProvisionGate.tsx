@@ -96,15 +96,26 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   // the converted voice. Chain both right after the Runtime step.
   const [extra, setExtra] = useState<string>("");
   async function runExtras() {
+    // engine-core is required: without hubert / rmvpe the worker cannot start
+    // at all, so a failure here has to block.
+    setExtra("正在补全引擎资源（hubert / rmvpe / ffmpeg）…");
     try {
-      setExtra("正在补全引擎资源（hubert / rmvpe / ffmpeg）…");
       await invoke("assets_ensure_engine_core");
-      setExtra("正在准备虚拟声卡安装包…");
+    } catch (e) {
+      setExtra(`引擎资源补全失败：${String(e)}`);
+      throw e;
+    }
+
+    // VB-Cable is not required to open the app — without it you simply cannot
+    // be heard in games, and 「监听自己」 still works. Blocking the whole
+    // install on it would trap users behind a flaky download for something
+    // they can fetch later from 「说明」.
+    setExtra("正在准备虚拟声卡安装包…");
+    try {
       await invoke("assets_ensure_vbcable");
       setExtra("");
     } catch (e) {
-      setExtra(`补全失败：${String(e)}`);
-      throw e;
+      setExtra(`虚拟声卡包稍后再装：${String(e)}`);
     }
   }
 

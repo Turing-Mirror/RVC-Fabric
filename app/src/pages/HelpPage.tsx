@@ -1,9 +1,65 @@
-import { Block, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 
 export function HelpPage() {
+  // Installing the driver needs UAC, so it can only ever be user-initiated.
+  // Without this entry the pack is downloaded but never actually installed.
+  const [vbReady, setVbReady] = useState<boolean | null>(null);
+  const [vbMsg, setVbMsg] = useState("");
+
+  const refreshVb = async () => {
+    try {
+      const st = await invoke<{ vbcable_pack_ready?: boolean }>("assets_status");
+      setVbReady(!!st.vbcable_pack_ready);
+    } catch {
+      setVbReady(null);
+    }
+  };
+  useEffect(() => {
+    void refreshVb();
+  }, []);
+
+  const installVb = async () => {
+    setVbMsg("");
+    try {
+      if (!vbReady) {
+        setVbMsg("正在下载安装包…");
+        await invoke("assets_ensure_vbcable");
+        await refreshVb();
+      }
+      setVbMsg("已启动官方安装程序，请在弹出的窗口里确认（需要管理员权限）");
+      await invoke("assets_install_vbcable");
+    } catch (e) {
+      setVbMsg(`失败：${String(e)}`);
+    }
+  };
+
   return (
     <PagePad>
       <PageHead title="说明" sub="虚拟声卡连接与常见情况" />
+
+      <Block title="安装虚拟声卡">
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+          想让游戏 / QQ 里的人听到变声，必须先装虚拟声卡（VB-Cable）。
+          装完重启一次电脑，设备列表里才会出现 CABLE Input / CABLE Output。
+        </p>
+        <Group>
+          <ListItem
+            title="VB-Cable"
+            desc={
+              vbMsg ||
+              (vbReady === null
+                ? "正在检查…"
+                : vbReady
+                  ? "安装包已就绪，点右侧开始安装（会弹管理员确认）"
+                  : "尚未下载安装包，点右侧会先下载再安装")
+            }
+            right={<Btn onClick={() => void installVb()}>安装虚拟声卡</Btn>}
+          />
+        </Group>
+      </Block>
+
       <Block title="虚拟声卡怎么连">
         <Group>
           <ListItem

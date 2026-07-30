@@ -74,7 +74,14 @@ fn focus_main(app: &AppHandle) {
 
 fn root_of(app: &AppHandle) -> Option<PathBuf> {
     app.try_state::<std::sync::Mutex<crate::AppState>>()
-        .and_then(|s| s.lock().ok().map(|g| g.root.clone()))
+        // Poison-safe: on a poisoned state we still want the tray quit item to
+        // be able to stop the worker.
+        .map(|s| {
+            s.lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .root
+                .clone()
+        })
 }
 
 // ---------------------------------------------------------------------------

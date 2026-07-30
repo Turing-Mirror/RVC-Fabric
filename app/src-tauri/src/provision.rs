@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -263,7 +262,9 @@ pub fn run_provision(
     force: bool,
 ) -> Result<Value, String> {
     {
-        let mut g = PROVISION_BUSY.lock().map_err(|e| e.to_string())?;
+        // Poison recovery: a panic here would otherwise leave the flag stuck
+        // and every later provision would report 「已有补全任务在进行」.
+        let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
             return Err("已有补全任务在进行".into());
         }
@@ -408,7 +409,8 @@ pub fn run_provision(
         }))
     })();
 
-    if let Ok(mut g) = PROVISION_BUSY.lock() {
+    {
+        let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
         *g = false;
     }
     cancel_flag().store(false, Ordering::SeqCst);

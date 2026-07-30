@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 
@@ -27,11 +27,10 @@ fn append_log(root: &Path, line: &str) {
     }
 }
 
+/// Local `YYYY-MM-DD HH:MM:SS` — these lines end up in the diagnostics bundle
+/// and get correlated against user reports, so epoch seconds are useless.
 fn stamp() -> String {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(d) => format!("{}", d.as_secs()),
-        Err(_) => "?".into(),
-    }
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 /// True if *pid* is still running (exact PID, no substring false positives).
@@ -302,9 +301,11 @@ pub fn kill_known_workers(root: &Path) {
 }
 
 pub fn start_worker(root: &Path) -> Result<(), String> {
-    let _guard = START_LOCK
-        .lock()
-        .map_err(|_| "start lock poisoned".to_string())?;
+    // Recover from poisoning instead of failing forever: one panic while
+    // starting would otherwise make the engine unstartable for the rest of the
+    // session, with a restart as the only way out. The lock guards a re-check
+    // that is idempotent, so a poisoned state is safe to continue from.
+    let _guard = START_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     if is_worker_alive(root) {
         return Ok(());

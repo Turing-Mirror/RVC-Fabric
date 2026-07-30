@@ -13,7 +13,7 @@
 //!   nothing.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{json, Map, Value};
 
@@ -280,10 +280,6 @@ pub fn describe() -> Value {
         "hot": HOT_KEYS,
         "cold": COLD_KEYS,
     })
-}
-
-pub fn inuse_path(root: &Path) -> PathBuf {
-    paths::inuse_config_path(root)
 }
 
 #[cfg(test)]

@@ -16,7 +16,13 @@ export function TitleBar({
   plazaUnread = true,
   compactNav = false,
 }: Props) {
-  const win = () => getCurrentWindow();
+  const win = () => {
+    try {
+      return getCurrentWindow();
+    } catch {
+      return null;
+    }
+  };
 
   const options = NAV_PAGES.map((p) => ({
     id: p.id as PageId,
@@ -61,20 +67,20 @@ export function TitleBar({
         >
           <WinBtn
             label="最小化"
-            onClick={() => void win().minimize()}
+            onClick={() => void win()?.minimize()}
           >
             —
           </WinBtn>
           <WinBtn
             label="最大化"
-            onClick={() => void win().toggleMaximize()}
+            onClick={() => void win()?.toggleMaximize()}
           >
             □
           </WinBtn>
           <WinBtn
             label="关闭"
             danger
-            onClick={() => void win().close()}
+            onClick={() => void win()?.close()}
           >
             ✕
           </WinBtn>

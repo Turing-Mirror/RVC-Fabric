@@ -135,3 +135,40 @@ pub fn worker_script(root: &Path) -> PathBuf {
 pub fn package_meta_path(root: &Path) -> PathBuf {
     root.join("package_meta.json")
 }
+
+pub fn models_dir(root: &Path) -> PathBuf {
+    user_data(root).join("models")
+}
+
+pub fn engine_weights(root: &Path) -> PathBuf {
+    root.join("assets").join("weights")
+}
+
+pub fn ch_banner_dir(root: &Path) -> PathBuf {
+    user_data(root).join("ch-banner")
+}
+
+pub fn app_config_path(root: &Path) -> PathBuf {
+    user_data(root).join("app_config.json")
+}
+
+pub fn update_cache(root: &Path) -> PathBuf {
+    user_data(root).join("update_cache")
+}
+
+pub fn ensure_user_dirs(root: &Path) -> std::io::Result<()> {
+    fs_create_all(&user_data(root))?;
+    fs_create_all(&models_dir(root))?;
+    fs_create_all(&ch_banner_dir(root))?;
+    fs_create_all(&update_cache(root))?;
+    fs_create_all(&control_dir(root))?;
+    fs_create_all(&logs_dir(root))?;
+    Ok(())
+}
+
+fn fs_create_all(p: &Path) -> std::io::Result<()> {
+    if !p.is_dir() {
+        std::fs::create_dir_all(p)?;
+    }
+    Ok(())
+}

@@ -6,6 +6,7 @@ import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
 import type { PageId } from "./lib/nav";
+import { currentVoice } from "./lib/voices";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -16,10 +17,12 @@ import { SettingsPage } from "./pages/SettingsPage";
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
-  const [pitch, setPitch] = useState(15);
-  const [formant, setFormant] = useState(1.2);
+  const [pitch, setPitch] = useState(0);
+  const [formant, setFormant] = useState(0);
   const [mode, setMode] = useState<OutputMode>("vc");
-  const [voiceId, setVoiceId] = useState("anon");
+  const [voiceName, setVoiceName] = useState("未选择模型");
+  const [voiceId, setVoiceId] = useState("");
+  const [profileSummary, setProfileSummary] = useState("默认（原始参数）");
   const [showProvision, setShowProvision] = useState(false);
   const [provisionDismissed, setProvisionDismissed] = useState(false);
 
@@ -39,10 +42,21 @@ export default function App() {
     return () => mq.removeEventListener("change", fn);
   }, []);
 
-  const profileSummary =
-    pitch === 0 && formant === 0
-      ? "默认（原始参数）"
-      : `当前 · 音高 ${pitch >= 0 ? "+" : ""}${pitch} 共鸣 ${formant.toFixed(2)}`;
+  useEffect(() => {
+    void currentVoice()
+      .then((c) => {
+        if (c.model) {
+          setVoiceName(String(c.model.name || "未选择模型"));
+          setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
+        }
+        if (c.pitch != null) setPitch(Number(c.pitch));
+        if (c.formant != null) setFormant(Number(c.formant));
+        if (c.profile_summary) setProfileSummary(c.profile_summary);
+      })
+      .catch(() => {
+        /* browser preview */
+      });
+  }, []);
 
   const handlePitch = (v: number) => {
     setPitch(v);
@@ -94,13 +108,23 @@ export default function App() {
                 <HomePage
                   currentId={voiceId}
                   onOpenModels={() => setPage("models")}
-                  onSelect={setVoiceId}
+                  onSelect={(id) => setVoiceId(id)}
                 />
               );
             case "plaza":
               return <PlazaPage />;
             case "models":
-              return <ModelsPage />;
+              return (
+                <ModelsPage
+                  onVoiceChange={({ model, pitch: p, formant: f, profileSummary: ps }) => {
+                    setVoiceName(model.name || "未选择模型");
+                    setVoiceId(model.path || model.dir || model.name || "");
+                    if (p != null) setPitch(Number(p));
+                    if (f != null) setFormant(Number(f));
+                    if (ps) setProfileSummary(ps);
+                  }}
+                />
+              );
             case "settings":
               return (
                 <SettingsPage
@@ -130,9 +154,7 @@ export default function App() {
       </PageHost>
 
       <Dock
-        voiceName={
-          voiceId === "anon" ? "Anon" : voiceId === "soyo" ? "Soyo" : "Rana"
-        }
+        voiceName={voiceName}
         pitch={pitch}
         formant={formant}
         onPitch={handlePitch}

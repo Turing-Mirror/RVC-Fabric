@@ -59,6 +59,15 @@ cd /d path\to\repo\app
 npm run tauri:dev
 ```
 
+## Voice catalog & community store (stage 4)
+
+- `voices_list` / `voices_select` — local `User_Data/models` + legacy weights
+- Index panel: bind / use / unbind `.index` (copied next to `.pth`)
+- Profiles: list / switch / save / import / export `.tmvp`
+- Import `.pth` / `.index` / `.zip`; delete / rename / promote legacy
+- Community store dialog: dual-source catalog, series zone, third-party disclaimer,
+  multi-connection download via shared `download.rs` (`DownloadKind::VoicePack`)
+
 ## Runtime provision (stage 3)
 
 - `provision_status` — Runtime ready? GPU recommend (WMI, no torch).

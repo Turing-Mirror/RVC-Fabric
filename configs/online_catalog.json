@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.2.3",
+    "version": "1.2.3-hotfix1",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.2.3",
+      "version": "1.2.3-hotfix1",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/e33555f2b30ff6b70cf093afd6cfec8e3403b0fd0320bed892259d95c97047e2",
-      "sha256": "e33555f2b30ff6b70cf093afd6cfec8e3403b0fd0320bed892259d95c97047e2",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/4536a5a08ea2bba614252fb34cfc14861863cab53ad7d9c0b09302e92a3e05cc",
+      "sha256": "4536a5a08ea2bba614252fb34cfc14861863cab53ad7d9c0b09302e92a3e05cc",
       "min_app_version": "1.1.0",
-      "notes": "v1.2.3 热修：修复误报「已在运行」；检查更新加速与超时提示； 启动自动检查有更新时弹窗；另含图标/logo、广场导航、第三方免责换行。"
+      "notes": "v1.2.3 热修1：广场新增更新日志区块与全文页（可返回）； 壳层版本规范与 changelog.yaml 单一源（自动生成 gui.notes）； 另含 1.2.3：修复误报「已在运行」、检查更新加速与超时提示、 启动有更新时弹窗、图标/logo、广场导航、第三方免责换行等。"
     }
   },
   "community": {

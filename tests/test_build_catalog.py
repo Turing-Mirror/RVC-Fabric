@@ -181,8 +181,41 @@ class BuildOutputsTests(unittest.TestCase):
             # gui：url 由锁定 sha256 推导
             self.assertEqual(index["app"]["gui"]["url"], f"{bc.LFS}/{'a' * 64}")
 
+            # 无 changelog.yaml 时仍写出空 changelog.json
+            cl = json.loads(paths.changelog_out.read_text(encoding="utf-8"))
+            self.assertEqual(cl.get("schema"), 1)
+            self.assertEqual(cl.get("entries"), [])
+
             # 音色排序：date 升序
             self.assertEqual([v["id"] for v in index["voices"]], ["kiki", "tomori"])
+
+    def test_changelog_overrides_gui_notes(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            _y(
+                paths.src / "changelog.yaml",
+                {
+                    "entries": [
+                        {
+                            "version": "1.2.0",
+                            "date": "260723",
+                            "highlights": ["h1"],
+                            "body": "from-changelog-body",
+                        }
+                    ]
+                },
+            )
+            self.assertEqual(bc.cmd_build(paths), 0)
+            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+            self.assertEqual(index["app"]["gui"]["notes"], "from-changelog-body")
+            cl = json.loads(paths.changelog_out.read_text(encoding="utf-8"))
+            self.assertEqual(len(cl["entries"]), 1)
+            self.assertEqual(cl["entries"][0]["version"], "1.2.0")
+            plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
+            release_ids = [
+                it["id"] for it in plaza["items"] if str(it["id"]).startswith("release-")
+            ]
+            self.assertIn("release-1.2.0", release_ids)
 
     def test_roundtrip_real_client_parsers(self):
         with tempfile.TemporaryDirectory() as td:

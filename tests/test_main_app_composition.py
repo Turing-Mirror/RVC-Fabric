@@ -89,6 +89,8 @@ class MainAppCompositionTests(unittest.TestCase):
             "_silent_fetch_plaza",
             "_apply_plaza_nav_badge",
             "_render_plaza",
+            "_plaza_set_subview",
+            "_render_plaza_changelog",
             "_render_models_ad",
             # wallpaper (settings → 外观)
             "_build_wallpaper_settings_section",

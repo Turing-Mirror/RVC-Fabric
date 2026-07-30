@@ -115,6 +115,7 @@
 - **社区音色 + 第三方源（1.2.x）**：「社区下载」更名 **社区音色**；双源清单 `voices[]`（图灵镜源）+ `thirdparty_voices[]`（公开社区站直链，如 Hugging Face）；对话框四视图：最新 / 图灵镜源 / 第三方 / 系列专区；第三方免责声明（风险与 RVC Fabric 官方无关）；安装盖 `publisher=community`、永不官方章；下载默认走 hf-mirror 镜像（`app_config.hf_endpoint` 可改）。运营：`catalog-src/thirdparty/*.yaml` + `scripts/add_thirdparty_voice.py` + `build_catalog`。方案见 `docs/第三方音色下载方案.md`。  
 - **v1.2.3（2026-07-30）**：误报「已在运行」、检查更新超时与启动弹窗等热修（git 曾出现同号多次交付；**起用下方版本规范后禁止同 Full OTA**）。  
 - **壳层版本号规范（2026-07-30）**：稳定通道 Full = `X.Y.Z` 或 `X.Y.Z-hotfixN`；界面展示「1.2.3 热修N」；`build_id` 仅元数据；同 Base 热修建议上限 5 后抬 Z；禁止新发 `-partN` / 同号换包。权威：`docs/在线更新与音色库.md` §0；实现 `launcher/version.py` + `pack_gui_patch` / `build_catalog` 校验。  
+- **广场更新日志（2026-07-30）**：`catalog-src/changelog.yaml` → `changelog.json`；广场主列表固定区块只露最新一条，点进二级页看全文（可返回）；`gui.notes` 与可选 plaza `release-*` 由最新条派生；新客户端隐藏 `release-*` 避免双份。见 `docs/广场页与内容运营.md` §2.1。  
 
 
 ---

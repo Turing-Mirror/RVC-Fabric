@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { PageHost } from "./components/PageHost";
 import { TitleBar } from "./components/TitleBar";
+import { useEngine } from "./hooks/useEngine";
+import { forceKillEngine } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
@@ -16,8 +18,9 @@ export default function App() {
   const [pitch, setPitch] = useState(15);
   const [formant, setFormant] = useState(1.2);
   const [mode, setMode] = useState<OutputMode>("vc");
-  const [running, setRunning] = useState(false);
   const [voiceId, setVoiceId] = useState("anon");
+
+  const engine = useEngine();
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 520px)");
@@ -30,7 +33,20 @@ export default function App() {
   const profileSummary =
     pitch === 0 && formant === 0
       ? "默认（原始参数）"
-      : `开黑日常 · 音高 ${pitch >= 0 ? "+" : ""}${pitch} 共鸣 ${formant.toFixed(2)}`;
+      : `当前 · 音高 ${pitch >= 0 ? "+" : ""}${pitch} 共鸣 ${formant.toFixed(2)}`;
+
+  const handlePitch = (v: number) => {
+    setPitch(v);
+    engine.onPitch(v);
+  };
+  const handleFormant = (v: number) => {
+    setFormant(v);
+    engine.onFormant(v);
+  };
+  const handleMode = (m: OutputMode) => {
+    setMode(m);
+    engine.onMode(m);
+  };
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden">
@@ -57,28 +73,45 @@ export default function App() {
             case "models":
               return <ModelsPage />;
             case "settings":
-              return <SettingsPage />;
+              return (
+                <SettingsPage
+                  status={engine.status}
+                  onReloadDevices={() => void engine.refresh()}
+                />
+              );
             case "help":
               return <HelpPage />;
             case "more":
-              return <MorePage />;
+              return (
+                <MorePage
+                  status={engine.status}
+                  onForceKill={async () => {
+                    await forceKillEngine();
+                    await engine.refresh();
+                  }}
+                />
+              );
           }
         }}
       </PageHost>
 
       <Dock
-        voiceName={voiceId === "anon" ? "Anon" : voiceId === "soyo" ? "Soyo" : "Rana"}
+        voiceName={
+          voiceId === "anon" ? "Anon" : voiceId === "soyo" ? "Soyo" : "Rana"
+        }
         pitch={pitch}
         formant={formant}
-        onPitch={setPitch}
-        onFormant={setFormant}
+        onPitch={handlePitch}
+        onFormant={handleFormant}
         mode={mode}
-        onMode={setMode}
-        running={running}
-        onToggleRun={() => setRunning((r) => !r)}
+        onMode={handleMode}
+        running={engine.running || engine.starting}
+        onToggleRun={() => void engine.toggleRun()}
         profileSummary={profileSummary}
-        statusTitle={running ? "变声中" : "引擎待命"}
-        statusSub={running ? "（演示 · 未接 worker）" : "就绪"}
+        statusTitle={engine.title}
+        statusSub={engine.sub}
+        meterLevel={engine.meterLevel}
+        threshold={engine.threshold}
       />
     </div>
   );

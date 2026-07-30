@@ -25,7 +25,7 @@ type Props = {
 
 /**
  * Persistent bottom dock (voice summary, mode, pitch/formant, start/stop).
- * Engine actions are stubs until the worker bridge is connected.
+ * Wired to Runtime worker via Tauri when available.
  */
 export function Dock({
   voiceName = "Anon",

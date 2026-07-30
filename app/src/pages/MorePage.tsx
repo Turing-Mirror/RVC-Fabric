@@ -1,6 +1,21 @@
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import type { EngineStatus } from "../lib/engine";
 
-export function MorePage() {
+type Props = {
+  status?: EngineStatus;
+  onForceKill?: () => void | Promise<void>;
+};
+
+export function MorePage({ status, onForceKill }: Props = {}) {
+  const delay = Number(status?.delay_ms || 0);
+  const infer = Number(status?.infer_ms || 0);
+  const latency =
+    status?.state === "running"
+      ? `${delay} ms（推理 ${infer} ms）`
+      : status?.worker_alive
+        ? "待命"
+        : "—";
+
   return (
     <PagePad>
       <PageHead title="其他" sub="状态与维护" />
@@ -8,26 +23,31 @@ export function MorePage() {
         <Group>
           <ListItem
             title="壳版本"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">1.2.4</span>}
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)]">1.3.0 · Tauri</span>
+            }
           />
           <ListItem
             title="Runtime"
-            desc="启动器自动鉴别显卡后推荐"
+            desc={status?.product_root ? String(status.product_root) : "产品根目录自动解析"}
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">
-                NVIDIA CUDA · 2026.07.14
+                {status?.worker_alive ? "worker 在线" : "worker 离线"}
               </span>
             }
           />
           <ListItem
-            title="加速方式"
+            title="引擎状态"
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">CUDA · RTX 4070</span>
+              <span className="text-[13.5px] text-[var(--ink-muted)]">
+                {status?.state || "—"}
+                {status?.pid ? ` · pid ${status.pid}` : ""}
+              </span>
             }
           />
           <ListItem
             title="往返延迟"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">—</span>}
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{latency}</span>}
           />
         </Group>
       </Block>
@@ -57,7 +77,15 @@ export function MorePage() {
           <ListItem
             title="强制结束变声引擎"
             desc="卡住了才用"
-            right={<Btn>结束</Btn>}
+            right={
+              <Btn
+                onClick={() => {
+                  void onForceKill?.();
+                }}
+              >
+                结束
+              </Btn>
+            }
           />
         </Group>
       </Block>

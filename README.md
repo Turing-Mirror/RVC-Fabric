@@ -57,7 +57,7 @@ RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音
 双源音色库：图灵镜自有源 + 第三方公开源（如 Hugging Face 直链）。支持并发下载、断点续传、系列专区、按上传时间分页。第三方内容与官方无关，安装前请自行判断。
 
 **显卡支持**
-NVIDIA（CUDA）、AMD / Intel（DirectML）。运行时按显卡分版下载，不用手动装驱动依赖。
+NVIDIA（CUDA）、AMD / Intel（DirectML）。启动器自动识别你的显卡并下载对应运行时，不用手动装驱动依赖，也不用自己挑安装包。
 
 **其他**
 全局快捷键、托盘常驻、自定义背景图、诊断包一键生成（含性能测试）、在线更新。
@@ -68,9 +68,9 @@ NVIDIA（CUDA）、AMD / Intel（DirectML）。运行时按显卡分版下载，
 
 从 [Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases) 或图灵镜发布渠道下载 `RVC_Fabric_Setup.exe`。
 
-安装包是**薄包**，只含程序本体和引擎源码。首次打开会引导你：
+**只有一个通用安装包**，不用自己分辨显卡型号。安装包是薄包，只含程序本体和引擎源码。首次打开时启动器会引导你：
 
-1. 按显卡下载运行时（Python + PyTorch，数 GB，来自 CNB）
+1. **自动识别你的显卡**，推荐对应的运行时（Python + PyTorch，数 GB，来自 CNB）。推荐项已经选好并说明了理由，你也可以自己改选
 2. 下载引擎核心（hubert、rmvpe、ffmpeg）
 3. 安装虚拟声卡 VB-Cable（想让游戏里的人听到变声，这一步必需）
 
@@ -124,10 +124,12 @@ scripts\run_tests.bat
 ### 打包
 
 ```bat
-python scripts\build_setup.py --clean                          :: 薄安装包
-python scripts\build_release.py --variant nvidia|amd|nvidia50  :: 全量离线包
+python scripts\build_setup.py --clean                          :: 通用薄安装包
+python scripts\build_release.py --variant nvidia|amd|nvidia50  :: 全量离线包（按显卡分版）
 python scripts\build_catalog.py build --diff                   :: 在线清单
 ```
+
+安装包只有一个通用版本；分显卡的只有全量离线包和 CNB 上的运行时。
 
 ### 架构
 

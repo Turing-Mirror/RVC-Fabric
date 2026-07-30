@@ -31,6 +31,10 @@ export default defineConfig(async () => ({
 
   // Ship UI as a replaceable `frontend/` pack (see tauri.conf frontendDist).
   build: {
+    // Shipped: the shell forwards UI crashes into shell.log, and without maps
+    // a stack from a user's machine is nothing but minified letters. ~1.3 MB
+    // of .map next to a 290 KB bundle is worth being able to read a report.
+    sourcemap: true,
     outDir: "frontend",
     emptyOutDir: true,
   },

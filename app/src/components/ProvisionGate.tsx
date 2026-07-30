@@ -31,6 +31,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<ProvisionProgress | null>(null);
+  // Must stay above the `if (!open) return null` below. Declared after it, the
+  // hook count changed the moment the gate opened, React threw #310 and tore
+  // down the whole tree — a blank window on exactly the machines that need the
+  // gate (a fresh install with no Runtime yet).
+  const [extra, setExtra] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +99,6 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   // Runtime alone is not a usable install: the worker needs engine-core
   // (hubert / rmvpe / ffmpeg) and the user needs VB-Cable for anyone to hear
   // the converted voice. Chain both right after the Runtime step.
-  const [extra, setExtra] = useState<string>("");
   async function runExtras() {
     // engine-core is required: without hubert / rmvpe the worker cannot start
     // at all, so a failure here has to block.

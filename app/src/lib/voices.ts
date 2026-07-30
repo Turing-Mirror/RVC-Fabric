@@ -130,7 +130,7 @@ export async function listIndex(modelDir: string) {
   });
 }
 
-export async function useIndex(modelDir: string, indexPath: string) {
+export async function applyIndex(modelDir: string, indexPath: string) {
   if (!isTauri()) return { items: [] as IndexItem[] };
   return invoke<{ items: IndexItem[] }>("voices_index_use", {
     modelDir,
@@ -162,7 +162,7 @@ export async function listProfiles(modelDir: string) {
   );
 }
 
-export async function useProfile(modelDir: string, profileId: string) {
+export async function applyProfile(modelDir: string, profileId: string) {
   if (!isTauri()) return {};
   return invoke<{
     pitch?: number;

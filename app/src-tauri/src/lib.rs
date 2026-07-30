@@ -7,6 +7,7 @@ mod config;
 mod download;
 mod engine_assets;
 mod extract;
+mod logging;
 pub mod paths;
 pub mod plaza;
 mod protocol;
@@ -23,7 +24,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 struct AppState {
     root: PathBuf,
@@ -213,6 +214,30 @@ async fn update_app(app: AppHandle) -> Result<Value, String> {
 #[tauri::command]
 fn ui_source() -> String {
     ui_assets::source_label()
+}
+
+/// Reported by the UI on first paint. Turns "the window is blank" from an
+/// unfalsifiable user report into a line in `shell.log`.
+#[tauri::command]
+fn ui_ready() {
+    ui_assets::mark_ui_ready();
+}
+
+/// Anything the UI's own error screen wants to show, written to `shell.log`.
+/// Frontend exceptions otherwise die inside the webview console, which nobody
+/// on a user's machine can open.
+#[tauri::command]
+fn ui_log(line: String) {
+    // Bound it: an error loop must not be able to fill the disk one message at
+    // a time.
+    let line: String = line.chars().take(2000).collect();
+    logging::shell_log!("[ui] {line}");
+}
+
+/// Path of the shell log, for the 「其他」page's "打开日志" action.
+#[tauri::command]
+fn log_path() -> Option<String> {
+    logging::path().map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -598,11 +623,19 @@ fn store_cancel(voice_id: Option<String>) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = paths::product_root();
-    eprintln!("[rvc-fabric] product root: {}", root.display());
-    eprintln!(
-        "[rvc-fabric] runtime_ready={}",
-        paths::runtime_ready(&root)
+    // Before anything else: a release build has no console, so without this the
+    // rest of these lines would go nowhere.
+    logging::init(&root);
+    logging::shell_log!("=== RVC Fabric {} 启动 ===", update::APP_VERSION);
+    logging::shell_log!("product root: {}", root.display());
+    logging::shell_log!("runtime_ready={}", paths::runtime_ready(&root));
+    logging::shell_log!(
+        "exe: {}",
+        std::env::current_exe()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|e| format!("<unknown: {e}>"))
     );
+    logging::shell_log!("UI source: {}", ui_assets::source_label());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -617,6 +650,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_dir,
             ui_source,
+            ui_ready,
+            ui_log,
+            log_path,
             config_get,
             config_describe,
             config_set,
@@ -670,13 +706,15 @@ pub fn run() {
         ])
         .setup(move |app| {
             // Window URL must use the custom scheme registered above.
-            // On Windows, WebView2 treats bare custom schemes poorly for ES
-            // modules (not a secure context / odd CORS). Tauri maps
-            // `http://{scheme}.localhost/` onto the same protocol handler.
+            // WebView2 cannot register non-standard schemes at all, so wry
+            // rewrites `fabric://localhost/x` to `http://fabric.localhost/x`
+            // and intercepts that; Windows is spelled out here to match what
+            // the webview will actually report as its origin.
             #[cfg(windows)]
             let url = format!("http://{}.localhost/index.html", ui_assets::SCHEME);
             #[cfg(not(windows))]
             let url = format!("{}://localhost/index.html", ui_assets::SCHEME);
+            logging::shell_log!("window url: {url}");
             tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
@@ -689,7 +727,25 @@ pub fn run() {
             .decorations(false)
             .center()
             .build()?;
-            eprintln!("[rvc-fabric] UI source: {}", ui_assets::source_label());
+
+            // A blank window is the one failure the user cannot describe and we
+            // cannot see. If the UI never reports back, say so in the log with
+            // everything needed to tell "assets missing" from "script threw".
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(12));
+                    if !ui_assets::ui_reported_ready() {
+                        logging::shell_log!(
+                            "警告：12 秒内界面没有挂载（白屏）。UI 来源 {} · 已处理 {} 个资源请求 · 404 {} 次",
+                            ui_assets::source_label(),
+                            ui_assets::served_count(),
+                            ui_assets::not_found_count(),
+                        );
+                        let _ = h.emit("app://ui-stalled", ());
+                    }
+                });
+            }
 
             // Regenerate configs/inuse/config.json from app_config on every
             // start. Setup ships a clean template that overwrites the installed
@@ -699,7 +755,7 @@ pub fn run() {
             {
                 let cfg = config::read(&root);
                 if let Err(e) = config::sync_inuse(&root, &cfg) {
-                    eprintln!("[rvc-fabric] inuse sync failed: {e}");
+                    logging::shell_log!("inuse sync failed: {e}");
                 }
             }
 
@@ -707,7 +763,7 @@ pub fn run() {
             // Tray always exists: closing to tray is what keeps conversion
             // running while the window is away.
             if let Err(e) = shell_extras::install_tray(app.handle()) {
-                eprintln!("[rvc-fabric] tray unavailable: {e}");
+                logging::shell_log!("tray unavailable: {e}");
             }
             // Restore the saved hotkey preference.
             let want_hotkeys = config::read(&root)
@@ -721,7 +777,7 @@ pub fn run() {
                 if paths::runtime_ready(&root_bg) {
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
                 } else {
-                    eprintln!("[rvc-fabric] skip worker prewarm: Runtime not ready");
+                    logging::shell_log!("skip worker prewarm: Runtime not ready");
                 }
             });
             Ok(())

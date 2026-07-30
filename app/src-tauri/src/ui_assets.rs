@@ -12,6 +12,7 @@
 //! Rust-side changes still require replacing the exe (update strategy B).
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use tauri::http::{Request, Response, StatusCode};
 use tauri::AppHandle;
@@ -76,20 +77,55 @@ fn mime_for(rel: &str) -> &'static str {
     }
 }
 
+/// How many asset requests we answered, and how many we could not. Read by the
+/// blank-window watchdog in `lib.rs`: "0 served" and "12 served, 1 missing" are
+/// completely different bugs and the log has to be able to tell them apart.
+static SERVED: AtomicUsize = AtomicUsize::new(0);
+static NOT_FOUND: AtomicUsize = AtomicUsize::new(0);
+/// Set by the `ui_ready` command once React has painted.
+static UI_READY: AtomicBool = AtomicBool::new(false);
+
+pub fn served_count() -> usize {
+    SERVED.load(Ordering::Relaxed)
+}
+
+pub fn not_found_count() -> usize {
+    NOT_FOUND.load(Ordering::Relaxed)
+}
+
+pub fn ui_reported_ready() -> bool {
+    UI_READY.load(Ordering::Relaxed)
+}
+
+/// Called from the UI's first effect. Also the only positive signal that the
+/// webview got as far as running our JavaScript.
+pub fn mark_ui_ready() {
+    if !UI_READY.swap(true, Ordering::Relaxed) {
+        crate::logging::shell_log!("界面已挂载（共 {} 个资源请求）", served_count());
+    }
+}
+
 fn ok(mime: &str, bytes: Vec<u8>) -> Response<Vec<u8>> {
+    SERVED.fetch_add(1, Ordering::Relaxed);
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", mime)
         // The swappable copy changes without the URL changing, so never cache.
         .header("Cache-Control", "no-store")
+        // Everything here is local, read-only UI. Saying so avoids the whole
+        // class of custom-protocol CORS refusals (module scripts, fonts and
+        // workers are fetched in cors mode) that show up only as a blank page.
+        .header("Access-Control-Allow-Origin", "*")
         .body(bytes)
         .unwrap_or_else(|_| not_found())
 }
 
 fn not_found() -> Response<Vec<u8>> {
+    NOT_FOUND.fetch_add(1, Ordering::Relaxed);
     Response::builder()
         .status(StatusCode::NOT_FOUND)
         .header("Content-Type", "text/plain; charset=utf-8")
+        .header("Access-Control-Allow-Origin", "*")
         .body(b"not found".to_vec())
         .expect("static 404 response")
 }
@@ -103,23 +139,43 @@ fn safe_rel(rel: &str) -> bool {
         && !rel.contains(':')
 }
 
+/// Decode `%XX` escapes. Vite emits ASCII filenames, but a hand-edited
+/// `frontend/` may not, and a half-decoder (the previous `%20`-only replace)
+/// turns a working file name into a 404.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let hex = |c: u8| (c as char).to_digit(16);
+            if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Normalize a request path into a relative frontend path.
 ///
 /// Handles: leading slashes, query/hash, Windows `http://fabric.localhost/`
 /// rewrites, and accidental host segments.
 fn path_to_rel(uri_path: &str) -> String {
-    let mut rel = uri_path.trim().to_string();
+    let mut rel = uri_path.trim();
     if let Some((p, _)) = rel.split_once('?') {
-        rel = p.to_string();
+        rel = p;
     }
     if let Some((p, _)) = rel.split_once('#') {
-        rel = p.to_string();
+        rel = p;
     }
-    // percent-decode common cases (%20 etc.) without pulling in a full crate
-    rel = rel.replace("%20", " ");
-    while rel.starts_with('/') {
-        rel = rel[1..].to_string();
-    }
+    // Decode before the safety check below, so an escaped `..%2f` cannot slip
+    // past `safe_rel` and then be decoded by the filesystem.
+    let mut rel = percent_decode(rel.trim_start_matches('/'));
     // Some stacks pass "localhost/index.html" or "fabric.localhost/assets/…"
     for prefix in ["localhost/", "fabric.localhost/"] {
         if let Some(rest) = rel.strip_prefix(prefix) {
@@ -137,7 +193,7 @@ fn path_to_rel(uri_path: &str) -> String {
 pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let rel = path_to_rel(req.uri().path());
     if !safe_rel(&rel) {
-        eprintln!("[rvc-fabric] ui 404 unsafe path: {:?}", req.uri());
+        crate::logging::shell_log!("界面资源被拒绝（路径不安全）：{:?}", req.uri());
         return not_found();
     }
 
@@ -145,25 +201,27 @@ pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     if let Some(dir) = external_dir() {
         let path = dir.join(&rel);
         if path.is_file() {
-            if let Ok(bytes) = std::fs::read(&path) {
-                return ok(mime_for(&rel), bytes);
+            match std::fs::read(&path) {
+                Ok(bytes) => return ok(mime_for(&rel), bytes),
+                Err(e) => {
+                    // Unreadable-but-present is its own failure (permissions on
+                    // a Program Files install, a half-applied UI patch). Silently
+                    // falling through to the embedded copy would hide it.
+                    crate::logging::shell_log!("界面资源读取失败 {}：{e}", path.display());
+                }
             }
         }
     }
 
     // 2) copy embedded at build time (several path shapes Tauri has used)
-    for key in [
-        format!("/{rel}"),
-        format!("/frontend/{rel}"),
-        rel.clone(),
-    ] {
+    for key in [format!("/{rel}"), format!("/frontend/{rel}"), rel.clone()] {
         if let Some(asset) = app.asset_resolver().get(key) {
             return ok(mime_for(&rel), asset.bytes);
         }
     }
 
-    eprintln!(
-        "[rvc-fabric] ui 404 rel={rel:?} uri={:?} external={:?}",
+    crate::logging::shell_log!(
+        "界面资源缺失 404 rel={rel:?} uri={:?} 外部目录={:?}",
         req.uri(),
         external_dir()
     );
@@ -211,6 +269,34 @@ mod tests {
         assert_eq!(path_to_rel("/assets/a.js?v=1"), "assets/a.js");
         assert_eq!(path_to_rel("/localhost/assets/a.js"), "assets/a.js");
         assert_eq!(path_to_rel("/fabric.localhost/index.html"), "index.html");
+    }
+
+    #[test]
+    fn escaped_traversal_is_decoded_before_the_safety_check() {
+        // %2e%2e%2f is "../". Decoding after safe_rel would let it through and
+        // the filesystem would then do the traversal for us.
+        assert_eq!(path_to_rel("/%2e%2e%2fsecret"), "../secret");
+        assert!(!safe_rel(&path_to_rel("/%2e%2e%2fsecret")));
+        assert_eq!(path_to_rel("/assets/%2e%2e%5cwin.js"), "assets/..\\win.js");
+        assert!(!safe_rel(&path_to_rel("/assets/%2e%2e%5cwin.js")));
+    }
+
+    #[test]
+    fn percent_decode_handles_multibyte_and_malformed() {
+        assert_eq!(percent_decode("a%20b"), "a b");
+        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87.js"), "中文.js");
+        // A stray '%' must survive rather than eat the following bytes.
+        assert_eq!(percent_decode("100%.css"), "100%.css");
+        assert_eq!(percent_decode("%zz"), "%zz");
+    }
+
+    #[test]
+    fn ui_ready_flag_latches() {
+        // Watchdog correctness depends on this never going back to false.
+        mark_ui_ready();
+        assert!(ui_reported_ready());
+        mark_ui_ready();
+        assert!(ui_reported_ready());
     }
 
     #[test]

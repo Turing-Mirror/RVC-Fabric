@@ -7,7 +7,7 @@ import { useEngine } from "./hooks/useEngine";
 import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
@@ -40,7 +40,6 @@ export default function App() {
         el.style.setProperty("--wp-blur", `${Number(cfg.wallpaper_blur ?? 40) / 100 * 24}px`);
         el.style.setProperty("--wp-opacity", String(Number(cfg.wallpaper_opacity ?? 70) / 100));
         if (path) {
-          const { convertFileSrc } = await import("@tauri-apps/api/core");
           el.style.setProperty("--wp-image", `url("${convertFileSrc(path)}")`);
         } else {
           el.style.removeProperty("--wp-image");

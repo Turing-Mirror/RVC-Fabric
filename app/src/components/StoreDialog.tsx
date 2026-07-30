@@ -82,10 +82,12 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     };
   }, [open]);
 
-  const official = cat?.voices || [];
-  const third = cat?.thirdparty_voices || [];
-
   const list = useMemo(() => {
+    // Derived inside the memo on purpose: `cat?.voices || []` allocates a fresh
+    // array every render, so listing them as dependencies meant this filter and
+    // sort re-ran on every keystroke elsewhere in the dialog.
+    const official = cat?.voices || [];
+    const third = cat?.thirdparty_voices || [];
     let base: StoreVoice[] = [];
     if (view === "official") base = official;
     else if (view === "thirdparty") base = third;
@@ -106,7 +108,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
       );
     }
     return base;
-  }, [view, official, third, q]);
+  }, [view, cat, q]);
 
   const seriesGroups = useMemo(() => {
     if (view !== "series") return null;

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{config, paths, worker};
@@ -55,7 +55,20 @@ pub fn install_tray(app: &AppHandle) -> Result<(), String> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { .. } = event {
+            // Only the *left* button opens the window, and only on release.
+            //
+            // `TrayIconEvent::Click` fires for every button, right-click
+            // included. On Windows the right-click menu is a tracked popup
+            // owned by a hidden message window: focusing another window while
+            // it is up makes Windows dismiss it. Reacting to the right-click
+            // here is what made the menu flash and vanish. Matching on Down as
+            // well would fire twice per click.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 focus_main(&tray.app_handle().clone());
             }
         })
@@ -170,7 +183,7 @@ pub fn build_diagnostics(root: &Path) -> Result<PathBuf, String> {
     // sample from *this* machine, not whatever happened to be lying around.
     // Best-effort: a machine without a Runtime still gets a usable bundle.
     if let Err(e) = run_perf_bench(root) {
-        eprintln!("[rvc-fabric] perf bench skipped: {e}");
+        crate::logging::shell_log!("perf bench skipped: {e}");
     }
     let out_dir = paths::user_data(root).join("diagnostics");
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;

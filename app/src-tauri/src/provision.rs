@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -80,7 +79,10 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
 
 #[cfg(windows)]
 pub fn list_gpus() -> Vec<String> {
+    // Kept inside the cfg(windows) body: at module scope it is an unused-import
+    // warning on every other platform.
     use std::os::windows::process::CommandExt;
+    use std::process::Command;
     let ps = r#"
 Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
   Where-Object { $_.Name } |

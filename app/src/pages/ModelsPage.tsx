@@ -23,8 +23,8 @@ import {
   saveProfile,
   selectVoice,
   unbindIndex,
-  useIndex,
-  useProfile,
+  applyIndex,
+  applyProfile,
   type IndexItem,
   type ProfileItem,
   type VoiceModel,
@@ -453,7 +453,7 @@ export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
                       <Btn
                         uw
                         onClick={async () => {
-                          const r = await useIndex(selected!.dir, it.path);
+                          const r = await applyIndex(selected!.dir, it.path);
                           setIndexItems(r.items || []);
                           await reload();
                         }}
@@ -505,7 +505,7 @@ export function ModelsPage({ onVoiceChange }: ModelsPageProps) {
                         <Btn
                           uw
                           onClick={async () => {
-                            const r = await useProfile(selected!.dir, p.id);
+                            const r = await applyProfile(selected!.dir, p.id);
                             if (r.profiles?.items) setProfiles(r.profiles.items);
                             else {
                               const pr = await listProfiles(selected!.dir);

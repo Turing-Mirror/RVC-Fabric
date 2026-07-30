@@ -197,6 +197,12 @@ async fn telemetry_tick(state: State<'_, Mutex<AppState>>) -> Result<Value, Stri
     .map_err(|e| e.to_string())?
 }
 
+/// The UI answered the close prompt.
+#[tauri::command]
+fn close_finish(app: AppHandle, to_tray: bool) {
+    shell_extras::finish_close(&app, to_tray);
+}
+
 #[tauri::command]
 fn ui_source() -> String {
     ui_assets::source_label()
@@ -613,6 +619,7 @@ pub fn run() {
             consult_build,
             reveal_user_dir,
             telemetry_tick,
+            close_finish,
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,
@@ -671,6 +678,7 @@ pub fn run() {
 
             // Tray always exists: closing to tray is what keeps conversion
             // running while the window is away.
+            shell_extras::install_close_handler(app.handle());
             if let Err(e) = shell_extras::install_tray(app.handle()) {
                 eprintln!("[rvc-fabric] tray unavailable: {e}");
             }

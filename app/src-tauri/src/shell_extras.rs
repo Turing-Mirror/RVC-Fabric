@@ -117,6 +117,35 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
 // Diagnostics bundle
 // ---------------------------------------------------------------------------
 
+/// Run `tools/benchmark_realtime.py` in the Runtime, writing into
+/// `User_Data/perf_reports/`. Takes roughly a minute; callers must say so.
+pub fn run_perf_bench(root: &Path) -> Result<(), String> {
+    let py = paths::runtime_pythonw(root)
+        .or_else(|| paths::runtime_python(root))
+        .ok_or("Runtime 未就绪，跳过性能测试")?;
+    let script = root.join("tools").join("benchmark_realtime.py");
+    if !script.is_file() {
+        return Err("找不到 benchmark_realtime.py".into());
+    }
+    let out_dir = paths::user_data(root).join("perf_reports");
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+
+    let mut cmd = std::process::Command::new(py);
+    cmd.arg(&script).arg("--out").arg(&out_dir).current_dir(root);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW — never flash a console at the user.
+        cmd.creation_flags(0x0800_0000);
+    }
+    let status = cmd.status().map_err(|e| format!("性能测试启动失败：{e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("性能测试退出码 {:?}", status.code()))
+    }
+}
+
 fn tail_bytes(path: &Path, max: usize) -> String {
     let Ok(data) = std::fs::read(path) else {
         return String::new();
@@ -130,6 +159,12 @@ fn tail_bytes(path: &Path, max: usize) -> String {
 /// Log tails are capped: `realtime_worker.log` grows large and a multi-hundred-MB
 /// bundle is useless to everyone.
 pub fn build_diagnostics(root: &Path) -> Result<PathBuf, String> {
+    // The Tk shell ran a short benchmark first so the bundle carries a fresh
+    // sample from *this* machine, not whatever happened to be lying around.
+    // Best-effort: a machine without a Runtime still gets a usable bundle.
+    if let Err(e) = run_perf_bench(root) {
+        eprintln!("[rvc-fabric] perf bench skipped: {e}");
+    }
     let out_dir = paths::user_data(root).join("diagnostics");
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let stamp = now_stamp();
@@ -252,13 +287,11 @@ pub fn build_consult_pack(root: &Path, note: &str) -> Result<PathBuf, String> {
     Ok(out)
 }
 
+/// `YYYYMMDD_HHMMSS` in local time — same shape as the Python shell's
+/// `diag_20260727_151048`. Support staff read these filenames; a unix epoch
+/// integer tells them nothing.
 fn now_stamp() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    // Compact, sortable, no external date crate.
-    format!("{secs}")
+    chrono::Local::now().format("%Y%m%d_%H%M%S").to_string()
 }
 
 /// Reveal a file in the OS file manager.
@@ -283,6 +316,68 @@ pub fn reveal(path: &Path) -> Result<(), String> {
         let _ = dir;
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Window close behaviour
+// ---------------------------------------------------------------------------
+
+/// Apply the saved `close_action` when the user closes the window.
+///
+/// * `tray` — hide, keep converting. That is the point of having a tray.
+/// * `exit` — stop the stream, then quit.
+/// * `ask`  — hand it to the UI, which offers the same two choices plus
+///            「记住我的选择」, like the Tk shell.
+pub fn install_close_handler(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    let handle = app.clone();
+    let w = win.clone();
+    win.on_window_event(move |event| {
+        let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+            return;
+        };
+        let action = root_of(&handle)
+            .map(|r| {
+                config::read(&r)
+                    .get("close_action")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("ask")
+                    .to_string()
+            })
+            .unwrap_or_else(|| "ask".into());
+
+        match action.as_str() {
+            "exit" => {
+                if let Some(root) = root_of(&handle) {
+                    let _ = worker::stop_vc(&root, true);
+                }
+            }
+            "tray" => {
+                api.prevent_close();
+                let _ = w.hide();
+            }
+            _ => {
+                api.prevent_close();
+                let _ = handle.emit("app://close-requested", ());
+            }
+        }
+    });
+}
+
+/// Called by the UI once the user answered the close prompt.
+pub fn finish_close(app: &AppHandle, to_tray: bool) {
+    if to_tray {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.hide();
+        }
+        return;
+    }
+    if let Some(root) = root_of(app) {
+        let _ = worker::stop_vc(&root, true);
+    }
+    app.exit(0);
 }
 
 #[cfg(test)]

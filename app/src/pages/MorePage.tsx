@@ -145,7 +145,7 @@ export function MorePage({
         <Group>
           <ListItem
             title="生成诊断包"
-            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "把日志、机型信息与当前设置打包，生成后自动打开所在文件夹"}
+            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "先跑一次约一分钟的性能测试，再把日志、机型信息与当前设置打包"}
             right={
               <Btn onClick={() => void run("生成诊断包", "diagnostics_build")}>生成</Btn>
             }

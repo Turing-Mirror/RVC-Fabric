@@ -115,6 +115,44 @@ export default function App() {
     if (yes) void invoke("telemetry_tick").catch(() => {});
   };
 
+  // Close prompt (close_action = "ask"). Same two choices as the Tk shell,
+  // plus 「记住我的选择」 which writes close_action so we stop asking.
+  const [closeAsk, setCloseAsk] = useState(false);
+  const [closeRemember, setCloseRemember] = useState(false);
+  const answerClose = async (toTray: boolean) => {
+    setCloseAsk(false);
+    if (closeRemember) {
+      await invoke("config_set", {
+        patch: { close_action: toTray ? "tray" : "exit" },
+      }).catch(() => {});
+    }
+    await invoke("close_finish", { toTray }).catch(() => {});
+  };
+
+  // Ctrl+F5 / F6 step through the catalog, same as the old shell.
+  const shiftVoice = async (delta: number) => {
+    try {
+      const cat = await invoke<{
+        models?: Array<Record<string, unknown>>;
+        selected_idx?: number;
+      }>("voices_list");
+      const list = cat.models || [];
+      if (!list.length) return;
+      const cur = Number(cat.selected_idx ?? -1);
+      const next = ((cur < 0 ? 0 : cur) + delta + list.length) % list.length;
+      const m = list[next];
+      await invoke("voices_select", {
+        path: String(m.path ?? ""),
+        dir: String(m.dir ?? ""),
+        name: String(m.name ?? ""),
+      });
+      setVoiceName(String(m.name ?? "未选择模型"));
+      setVoiceId(String(m.dir ?? m.path ?? m.name ?? ""));
+    } catch {
+      /* catalog unavailable */
+    }
+  };
+
   // Tray menu and global hotkeys drive the same actions as the dock, so the
   // shortcuts keep working while the window is hidden.
   useEffect(() => {
@@ -122,6 +160,9 @@ export default function App() {
     const wire = async () => {
       offs.push(await listen("tray://toggle-vc", () => void engine.toggleRun()));
       offs.push(await listen("hotkey://toggle-vc", () => void engine.toggleRun()));
+      offs.push(await listen("hotkey://prev-voice", () => void shiftVoice(-1)));
+      offs.push(await listen("hotkey://next-voice", () => void shiftVoice(1)));
+      offs.push(await listen("app://close-requested", () => setCloseAsk(true)));
       offs.push(
         await listen("hotkey://toggle-mode", () => {
           setMode((m) => {
@@ -264,6 +305,42 @@ export default function App() {
           }
         }}
       </PageHost>
+
+      {closeAsk ? (
+        <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
+          <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
+            <h2 className="text-[19px] font-semibold m-0 mb-2">关闭 RVC Fabric</h2>
+            <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">
+              最小化到托盘可以让变声继续；直接关闭会停止变声并退出。
+            </p>
+            <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
+              <input
+                type="checkbox"
+                checked={closeRemember}
+                onChange={(e) => setCloseRemember(e.target.checked)}
+                className="accent-[var(--accent)]"
+              />
+              记住我的选择（可在「设置 → 常规」改回）
+            </label>
+            <div className="flex gap-2.5 justify-end">
+              <button
+                type="button"
+                onClick={() => void answerClose(false)}
+                className="text-[13px] px-3.5 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] border-0 cursor-pointer shadow-[inset_0_0_0_1px_var(--line)]"
+              >
+                直接关闭
+              </button>
+              <button
+                type="button"
+                onClick={() => void answerClose(true)}
+                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+              >
+                最小化到托盘
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {askTelemetry ? (
         <div className="mx-[30px] mb-2 rounded-[var(--r)] bg-[var(--group)] px-4 py-3 flex items-start gap-3 flex-wrap max-[720px]:mx-4">

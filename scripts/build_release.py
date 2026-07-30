@@ -390,39 +390,65 @@ def assert_pyinstaller_collected_tkinter(work_name_dir: Path, exe_name: str) -> 
     # 真正保证靠上面的 warn + 打包前 ensure_shell_ui_deps。
 
 
-def build_exes(out: Path) -> None:
-    ensure_pyinstaller()
-    ensure_shell_download_deps()
-    ensure_shell_ui_deps()
-    work = REPO / "build" / "release_work"
-    work.mkdir(parents=True, exist_ok=True)
+APP_DIR = REPO / "app"
+TAURI_EXE_NAME = "RVC Fabric.exe"
 
-    # ASCII names for PyInstaller (Windows code-page safe); Chinese aliases copied after
-    # 入口为 stub：frozen 后 launcher 包磁盘优先加载，gui_patch 才能更新壳层
-    specs = [
-        ("TM_Setup", REPO / "scripts" / "shell_entry_setup.py", "启动器.exe"),
-        ("TM_Voice", REPO / "scripts" / "shell_entry_app.py", "变声器.exe"),
-    ]
-    for name, script, alias in specs:
-        log(f"[exe] building {name}.exe from {script.name}")
-        run(
-            shell_pyinstaller_args(
-                name=name,
-                script=script,
-                distpath=out,
-                workpath=work / name,
-                specpath=work / "spec",
+
+def build_tauri_shell(out: Path) -> None:
+    """Build the Tauri shell into ``out``.
+
+    Replaces the old PyInstaller pair. The launcher is now the app's own
+    first-run gate, so there is exactly one executable.
+
+    ``frontend/`` is copied **next to the exe** on purpose: that directory is
+    what a UI-only update replaces (OTA strategy A). Leaving it only embedded
+    in the binary would make界面热更失效.
+
+    Shared by build_release.py (full offline pack) and build_setup.py (thin
+    universal Setup) so the two can never drift apart again.
+    """
+    if not APP_DIR.is_dir():
+        raise FileNotFoundError(f"missing Tauri app dir: {APP_DIR}")
+
+    log("[app] npm install")
+    run(["npm", "install", "--no-audit", "--no-fund"], cwd=APP_DIR)
+    log("[app] npm run build (vite -> app/frontend)")
+    run(["npm", "run", "build"], cwd=APP_DIR)
+    log("[app] cargo tauri build")
+    run(["npm", "run", "tauri", "--", "build"], cwd=APP_DIR)
+
+    release = APP_DIR / "src-tauri" / "target" / "release"
+    exe = release / TAURI_EXE_NAME
+    if not exe.is_file():
+        alt = release / "rvc-fabric.exe"
+        if not alt.is_file():
+            raise FileNotFoundError(
+                f"expected {exe} or {alt} — did `cargo tauri build` fail?"
             )
-        )
-        assert_pyinstaller_collected_tkinter(work / name / name, name)
-        exe = out / f"{name}.exe"
-        if not exe.is_file():
-            raise FileNotFoundError(f"expected {exe}")
-        log(f"  ok: {exe} ({exe.stat().st_size // 1024} KB)")
-        # Chinese display name for end users (Python handles Unicode paths)
-        alias_path = out / alias
-        shutil.copy2(exe, alias_path)
-        log(f"  alias: {alias_path.name}")
+        exe = alt
+    out.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(exe, out / TAURI_EXE_NAME)
+    log(f"  exe: {TAURI_EXE_NAME} ({exe.stat().st_size // 1024} KB)")
+
+    fe_src = APP_DIR / "frontend"
+    if not (fe_src / "index.html").is_file():
+        raise FileNotFoundError(f"missing built frontend: {fe_src}")
+    fe_dst = out / "frontend"
+    shutil.rmtree(fe_dst, ignore_errors=True)
+    shutil.copytree(fe_src, fe_dst)
+    n = sum(1 for f in fe_dst.rglob("*") if f.is_file())
+    log(f"  frontend/: {n} files (swappable — do not embed only)")
+
+    for extra in ("WebView2Loader.dll",):
+        src = release / extra
+        if src.is_file():
+            shutil.copy2(src, out / extra)
+            log(f"  extra: {extra}")
+
+
+def build_exes(out: Path) -> None:
+    """Back-compat alias — the shell is the Tauri app now."""
+    build_tauri_shell(out)
 
 
 def copy_engine(out: Path) -> None:

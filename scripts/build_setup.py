@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """Build RVC Fabric Setup with Inno Setup 6.
 
-What goes into Setup (payload) — **thin shell** (plan B)::
+What goes into Setup (payload) — **thin, universal shell**::
 
-  - 软件壳：启动器.exe / 变声器.exe / launcher / gui_v1 / infer / configs …
+  - Tauri 壳：RVC Fabric.exe + 可替换的 frontend/（OTA 策略 A 依赖它在磁盘上）
+  - 引擎源码与配置：gui_v1 / infer / configs / tools / launcher 支撑模块
   - **不含** Runtime（CNB Release，按显卡分版）
   - **不含** engine-core（hubert / rmvpe / ffmpeg / ffprobe — CNB LFS 共用包）
   - **不含** VB-Cable（CNB LFS）
 
-安装后启动器顺序：Runtime → engine-core → VB-Cable。
+首次运行由程序自身补全：Runtime（自动鉴别显卡后推荐）→ engine-core → VB-Cable。
+通用包：不按显卡分版，Setup 只有一个。
 
 Usage::
 
@@ -35,14 +37,10 @@ SETUP_EXE_NAME = "RVC_Fabric_Setup.exe"
 
 sys.path.insert(0, str(REPO / "scripts"))
 from build_release import (  # noqa: E402
-    assert_pyinstaller_collected_tkinter,
+    TAURI_EXE_NAME,
+    build_tauri_shell,
     copy_engine,
-    ensure_pyinstaller,
-    ensure_shell_download_deps,
-    ensure_shell_ui_deps,
     log,
-    run,
-    shell_pyinstaller_args,
 )
 
 
@@ -81,48 +79,35 @@ def ensure_no_runtime(out: Path) -> None:
 
 
 def build_payload_exes(out: Path) -> None:
-    """启动器 = bootstrap，变声器 = main_app（与全量包相同 PyInstaller 目标）。
+    """Thin Setup uses the same shell builder as the full pack."""
+    build_tauri_shell(out)
 
-    用户机不需要装 Python：exe 自带解释器 + 下载依赖 + tkinter。
-    打包机必须用完整 CPython（含 Tcl/Tk），且已装 requests / Pillow。
-    """
-    ensure_pyinstaller()
-    ensure_shell_download_deps()
-    ensure_shell_ui_deps()
-    work = REPO / "build" / "setup_work"
-    work.mkdir(parents=True, exist_ok=True)
 
-    # 入口为 stub：frozen 后 launcher 包磁盘优先加载，gui_patch 才能更新壳层
-    specs = [
-        ("TM_Setup", REPO / "scripts" / "shell_entry_setup.py", "启动器.exe"),
-        ("TM_Voice", REPO / "scripts" / "shell_entry_app.py", "变声器.exe"),
+def assert_payload_shape(out: Path) -> None:
+    """Fail loudly rather than shipping a payload the .iss cannot install."""
+    must_exist = [out / TAURI_EXE_NAME, out / "frontend" / "index.html"]
+    for p in must_exist:
+        if not p.is_file():
+            raise RuntimeError(f"SAFETY: payload missing {p.relative_to(out)}")
+    must_not_exist = [
+        out / "启动器.exe",
+        out / "变声器.exe",
+        out / "launcher" / "main_app.py",
+        out / "launcher" / "pages",
+        out / "launcher" / "ui",
     ]
-    for name, script, alias in specs:
-        log(f"[exe] building {name}.exe from {script.name}")
-        run(
-            shell_pyinstaller_args(
-                name=name,
-                script=script,
-                distpath=out,
-                workpath=work / name,
-                specpath=work / "spec",
-            )
-        )
-        assert_pyinstaller_collected_tkinter(work / name / name, name)
-        exe = out / f"{name}.exe"
-        if not exe.is_file():
-            raise FileNotFoundError(f"expected {exe}")
-        log(f"  ok: {exe} ({exe.stat().st_size // 1024} KB)")
-        shutil.copy2(exe, out / alias)
-        log(f"  alias: {alias}")
+    for p in must_not_exist:
+        if p.exists():
+            raise RuntimeError(f"SAFETY: payload still contains legacy shell: {p.name}")
+    log("[payload] shape ok (Tauri exe + swappable frontend, no legacy shell)")
 
 
 def write_payload_readme(out: Path) -> None:
     text = """RVC Fabric · Setup 薄包
 ========================================
 
-本包含：软件壳（启动器 + 主界面）、引擎源码与配置。
-本包不含（安装后由启动器从 CNB 下载）：
+本包含：RVC Fabric 主程序、界面资源（frontend/）、引擎源码与配置。
+本包不含（首次运行时由程序从 CNB 下载）：
   1. Runtime（绿色 Python，按显卡分版）
   2. engine-core（hubert / rmvpe / ffmpeg / ffprobe，全卡共用）
   3. VB-Cable 虚拟声卡安装包
@@ -275,14 +260,7 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     build_payload_exes(out)
     ensure_no_runtime(out)
     strip_heavy_from_payload(out)
-    for name in ("TM_Setup.exe", "TM_Voice.exe"):
-        p = out / name
-        if p.is_file():
-            try:
-                p.unlink()
-                log(f"  strip duplicate exe: {name}")
-            except OSError:
-                pass
+    assert_payload_shape(out)
     if not (out / "启动器.exe").is_file():
         raise FileNotFoundError("payload missing 启动器.exe")
     if not (out / "变声器.exe").is_file():

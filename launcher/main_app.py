@@ -736,11 +736,13 @@ class MainApp(
 
         brand = tk.Frame(top, bg=TM_SURFACE)
         brand.pack(side="left", padx=PAD_X, pady=10)
-        # Small mark next to wordmark (taskbar icon is separate)
+        # Horizontal wordmark (assets/brand/logo_wordmark.png); taskbar uses app.ico
         try:
             from launcher.branding import load_logo_photo
 
-            nav_logo = load_logo_photo(self.root, max_side=px(28), prefer="nav")
+            nav_logo = load_logo_photo(
+                self.root, max_height=px(28), max_width=px(160), prefer="wordmark"
+            )
             if nav_logo is not None:
                 self._nav_logo_photo = nav_logo
                 tk.Label(brand, image=nav_logo, bg=TM_SURFACE, bd=0).pack(

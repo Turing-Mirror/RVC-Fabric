@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from launcher.paths import (
+    APP_TITLE,
     ROOT,
     SHORTCUT_NAME,
     USER_LOGS,
@@ -419,21 +420,30 @@ def create_desktop_shortcut(
         os.chmod(sh, 0o755)
         return sh
 
+    # Prefer loose brand .ico so Start Menu / desktop icons update with
+    # assets/brand/app.ico (gui_patch) without re-embedding the exe resource.
+    try:
+        from launcher.paths import BRAND_ICO
+
+        brand_ico = str(BRAND_ICO) if BRAND_ICO.is_file() else ""
+    except Exception:
+        brand_ico = ""
+
     if app_exe is not None and target_script is None:
         target_path = str(app_exe)
         arguments = ""
         workdir = str(ROOT)
-        icon_path = target_path
+        icon_path = brand_ico or target_path
     elif vbs.is_file() and target_script is None:
         target_path = r"C:\Windows\System32\wscript.exe"
         arguments = f'//nologo "{vbs}" app'
         workdir = str(ROOT)
-        icon_path = target_path
+        icon_path = brand_ico or target_path
     else:
         target_path = pyw
         arguments = f'"{script}"'
         workdir = str(ROOT)
-        icon_path = pyw
+        icon_path = brand_ico or pyw
 
     def _esc(s: str) -> str:
         return s.replace("'", "''")
@@ -484,7 +494,115 @@ $sc.Save()
             errors="replace",
         )
         return bat
+    # Also re-pin Start Menu icons to brand .ico (old installs inherit exe resource).
+    try:
+        refresh_start_menu_icons()
+    except Exception:
+        pass
     return lnk
+
+
+def _brand_ico_path(install_root: Path | None = None) -> str:
+    """Resolve app.ico for an install root (default: current ROOT)."""
+    try:
+        if install_root is not None:
+            cand = install_root / "assets" / "brand" / "app.ico"
+            if cand.is_file():
+                return str(cand)
+        from launcher.paths import BRAND_ICO
+
+        if BRAND_ICO.is_file():
+            return str(BRAND_ICO)
+    except Exception:
+        pass
+    return ""
+
+
+def refresh_start_menu_icons() -> int:
+    """Repoint Start Menu RVC Fabric .lnk icons to that install's app.ico.
+
+    Icon path is derived from each shortcut's *target* directory
+    (``<install>\\assets\\brand\\app.ico``), never from the current process
+    ROOT — so running this from a dev checkout does not rewrite user
+    Start Menu entries to the repo path.
+
+    Returns how many shortcuts were updated.
+    """
+    if sys.platform != "win32":
+        return 0
+
+    candidates: list[Path] = []
+    for env_key in ("APPDATA", "ProgramData"):
+        base = os.environ.get(env_key) or ""
+        if not base:
+            continue
+        group = (
+            Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / APP_TITLE
+        )
+        if group.is_dir():
+            candidates.append(group)
+        programs = Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        if programs.is_dir():
+            candidates.append(programs)
+
+    seen: set[Path] = set()
+    lnks: list[Path] = []
+    for folder in candidates:
+        try:
+            for p in folder.rglob("*.lnk"):
+                name = p.name
+                if "RVC Fabric" in name or "RVC-Fabric" in name or "变声器" in name:
+                    try:
+                        rp = p.resolve()
+                    except OSError:
+                        rp = p
+                    if rp not in seen:
+                        seen.add(rp)
+                        lnks.append(p)
+        except OSError:
+            continue
+    if not lnks:
+        return 0
+
+    def _esc(s: str) -> str:
+        return s.replace("'", "''")
+
+    # Read target first, pin icon next to *that* install root.
+    lines = [
+        "$ws = New-Object -ComObject WScript.Shell",
+        "$updated = 0",
+    ]
+    for p in lnks:
+        lines.append(f"$sc = $ws.CreateShortcut('{_esc(str(p))}')")
+        lines.append("$t = $sc.TargetPath")
+        lines.append(
+            "if ($t -and (Test-Path $t)) { "
+            "$root = Split-Path -Parent $t; "
+            "$ico = Join-Path $root 'assets\\brand\\app.ico'; "
+            "if (Test-Path $ico) { "
+            '$sc.IconLocation = "$ico,0"; $sc.Save(); $updated++ '
+            "} }"
+        )
+    lines.append("Write-Output $updated")
+    ps = "\n".join(lines)
+    r = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            ps,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        creationflags=CREATE_NO_WINDOW,
+    )
+    try:
+        return int((r.stdout or "").strip().splitlines()[-1])
+    except Exception:
+        return 0
 
 
 def start_main_app() -> subprocess.Popen:

@@ -139,8 +139,28 @@ def robocopy(src: Path, dst: Path) -> None:
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
-    log("  $ " + " ".join(cmd))
-    subprocess.check_call(cmd, cwd=str(cwd or REPO))
+    """Run a command; on Windows resolve npm/npx to *.cmd (CreateProcess cannot run bare npm)."""
+    args = list(cmd)
+    if sys.platform == "win32" and args:
+        head = args[0]
+        if head in ("npm", "npx", "cargo", "tauri"):
+            which = shutil.which(head) or shutil.which(f"{head}.cmd")
+            if which:
+                args[0] = which
+            elif head == "npm":
+                # Common install layout when PATH only has the extensionless shim
+                for cand in (
+                    Path(r"K:\nodejs\npm.cmd"),
+                    Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                    / "nodejs"
+                    / "npm.cmd",
+                    Path(os.environ.get("APPDATA", "")) / "npm" / "npm.cmd",
+                ):
+                    if cand.is_file():
+                        args[0] = str(cand)
+                        break
+    log("  $ " + " ".join(args))
+    subprocess.check_call(args, cwd=str(cwd or REPO))
 
 
 def ensure_pyinstaller() -> None:

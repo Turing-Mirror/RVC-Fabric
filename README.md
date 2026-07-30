@@ -187,14 +187,38 @@ Runtime\pythonw.exe tools/realtime_worker.py（Python 3.9 + CUDA / DirectML）
 
 ## 致谢
 
-RVC Fabric 建立在这些工作之上：
+**项目基础**
 
-- [Retrieval-based-Voice-Conversion-WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 本项目的基础
-- [ContentVec](https://github.com/auspicious3000/contentvec/) · [VITS](https://github.com/jaywalnut310/vits) · [HIFIGAN](https://github.com/jik876/hifi-gan)
-- [RMVPE](https://github.com/Dream-High/RMVPE) — 音高提取
-- [FFmpeg](https://github.com/FFmpeg/FFmpeg) · [VB-Audio Virtual Cable](https://vb-audio.com/Cable/)
+- [Retrieval-based-Voice-Conversion-WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 本项目由此 fork 而来
 
-感谢上游所有贡献者。
+**模型与架构**
+
+- [ContentVec](https://github.com/auspicious3000/contentvec/) — 内容特征提取（`hubert_base.pt`，经 [fairseq](https://github.com/facebookresearch/fairseq) 加载）
+- [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) — 合成器与解码器架构来源（沿用上游实现与致谢）
+- [RMVPE](https://github.com/Dream-High/RMVPE) — 默认音高提取；预训练权重由 [yxlllc](https://github.com/yxlllc/RMVPE) 与 [RVC-Boss](https://github.com/RVC-Boss) 训练与测试
+
+**实时链路**
+
+- [faiss](https://github.com/facebookresearch/faiss) — top1 特征检索，「检索式」这三个字就靠它
+- [TorchGate](https://github.com/timsainb/noisereduce) — 实时降噪（谱门控的 PyTorch 实现，作者 Asaf Zorea，vendored 在 `tools/torchgate/`）
+- [FreeSimpleGUI](https://github.com/spyoungtech/FreeSimpleGUI) — 上游实时面板的界面框架
+
+**可选音高算法**
+
+- [pyworld](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder)（harvest）· [praat-parselmouth](https://github.com/YannickJadoul/Parselmouth)（pm）· [torchcrepe](https://github.com/maxrmorrison/torchcrepe) · [FCPE](https://github.com/CNChTu/FCPE)
+
+**随包的高级功能**
+
+- [Gradio](https://github.com/gradio-app/gradio) — 训练 / 推理 WebUI 界面
+- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — UVR5 人声伴奏分离
+- [audio-slicer](https://github.com/openvpi/audio-slicer) — 训练数据切片预处理
+
+**外部组件**
+
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 音频转码
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虚拟声卡，游戏里听到变声靠它
+
+感谢上游及以上所有项目的作者与贡献者。
 
 ---
 

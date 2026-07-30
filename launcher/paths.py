@@ -21,7 +21,10 @@ import sys
 from pathlib import Path
 
 from launcher.catalog import list_voice_catalog
-from launcher.theme import APP_PRODUCT_NAME, APP_PRODUCT_TAGLINE
+# The Tk shell (and its theme module) is gone; the UI lives in app/ now.
+# These two strings are all paths.py ever needed from it.
+APP_PRODUCT_NAME = "RVC Fabric"
+APP_PRODUCT_TAGLINE = "就绪"
 
 
 def _detect_root() -> Path:

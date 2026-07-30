@@ -609,8 +609,12 @@ pub fn status_for_ui(root: &Path) -> Value {
         obj.insert("worker_alive".into(), json!(alive));
         obj.insert("product_root".into(), json!(root.to_string_lossy()));
         // last_input_db ~ -90..0 → meter 0..1 (floor -60 matches common dock range)
+        // gui_v1 writes the status field as `input_db`; `last_input_db` is its
+        // own internal attribute name and never appears in status.json, so the
+        // old lookup always fell back to -90 and pinned the meter at 0.
         let db = obj
-            .get("last_input_db")
+            .get("input_db")
+            .or_else(|| obj.get("last_input_db"))
             .and_then(|v| v.as_f64())
             .unwrap_or(-90.0);
         let meter = ((db + 60.0) / 60.0).clamp(0.0, 1.0);

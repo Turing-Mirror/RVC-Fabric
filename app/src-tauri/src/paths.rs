@@ -152,6 +152,12 @@ pub fn app_config_path(root: &Path) -> PathBuf {
     user_data(root).join("app_config.json")
 }
 
+/// Engine-facing config the worker reads. Must never contain absolute paths
+/// from a build machine — see config::sanitize_inuse.
+pub fn inuse_config_path(root: &Path) -> PathBuf {
+    root.join("configs").join("inuse").join("config.json")
+}
+
 pub fn update_cache(root: &Path) -> PathBuf {
     user_data(root).join("update_cache")
 }

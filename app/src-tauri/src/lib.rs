@@ -3,6 +3,7 @@
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 mod catalog;
+mod config;
 mod download;
 mod engine_assets;
 mod extract;
@@ -68,6 +69,46 @@ async fn assets_ensure_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Valu
 fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     engine_assets::install_vbcable(&root_clone(&state)?)?;
     Ok(json!({"ok": true}))
+}
+
+/// Full effective settings (defaults overlaid with saved values).
+#[tauri::command]
+fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(Value::Object(config::read(&root_clone(&state)?)))
+}
+
+/// Which keys belong to which settings group, and which are hot vs cold.
+#[tauri::command]
+fn config_describe() -> Value {
+    config::describe()
+}
+
+/// Merge a patch, persist, mirror into inuse, and push hot keys to a running
+/// stream. Returns `needs_restart` for the cold keys the UI must warn about.
+#[tauri::command]
+fn config_set(
+    state: State<'_, Mutex<AppState>>,
+    patch: Map<String, Value>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let out = config::update(&root, patch)?;
+    if let Some(hot) = out.get("hot").and_then(|v| v.as_object()) {
+        if !hot.is_empty() && worker::is_worker_alive(&root) {
+            let _ = worker::set_hot(&root, hot.clone());
+        }
+    }
+    Ok(out)
+}
+
+/// Native image picker for the wallpaper setting. Returns the chosen path or
+/// null when the user cancels; size/dimension limits are enforced on apply.
+#[tauri::command]
+fn pick_wallpaper() -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter("图片", &["jpg", "jpeg", "png", "webp", "bmp"])
+        .set_title("选择背景图")
+        .pick_file()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -474,6 +515,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_dir,
             ui_source,
+            config_get,
+            config_describe,
+            config_set,
+            pick_wallpaper,
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,

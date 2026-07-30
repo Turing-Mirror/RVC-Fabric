@@ -1,225 +1,175 @@
-> **RVC Fabric（本仓库定制 · 基于 RVC WebUI）**  
-> - **仓库含什么 / 不含什么**：[`docs/仓库内容说明.md`](docs/仓库内容说明.md)（源码仓 ≠ 完整安装包）  
-> - 目录说明：[`docs/项目结构.md`](docs/项目结构.md)  
-> - 开发启动：`OpenApp.vbs` / `start_app.bat`（详见 `scripts/dev/`）  
-> - 发行打包：`scripts/build_release.bat` → `dist/`（需本机 Runtime 与权重）  
-> - 界面美学：[`docs/UI-AESTHETIC-DESIGN.md`](docs/UI-AESTHETIC-DESIGN.md)  
-> - 交接：[`docs/CONTEXT_HANDOFF.md`](docs/CONTEXT_HANDOFF.md)  
-> - 组织仓库：`Turing-Mirror/RVC-Fabric`（分支 `tm-release`）  
-> 以下为上游 RVC WebUI 原文说明。
+<div align="center">
+
+# RVC Fabric
+
+**Windows 桌面实时变声器**
+
+基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 深度定制 · 由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 开发维护
+
+[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
+[![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
+
+</div>
+
+---
+
+## 这是什么
+
+RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音色、选好声卡、点「开启变声」，游戏、QQ、Discord 里的人听到的就是变声后的你。
+
+它**不是**原版 RVC WebUI 的换皮版。原版是给会调参的人用的网页工具链——要自己配 Python 环境、装 PyTorch、下预训练模型、开浏览器点 Gradio 页面。RVC Fabric 把这一整套包成了普通用户能用的桌面程序：
+
+- 一个安装包，装完点图标就开始用，不碰命令行、不配环境
+- Python 运行时和模型权重由启动器按你的显卡自动下载补全
+- 音色库、社区音色下载、配置档案、快捷键、托盘常驻、虚拟声卡引导都在界面里
+- 推理跑在后台无窗进程，主界面卡不卡不影响出声
+
+**推理算法完全来自上游 RVC，我们没有改动模型结构或推理数学。** 我们做的是产品外壳、分发链路、用户体验，以及推理热路径上的工程优化（GPU 检索、向量化解码、常量张量复用等）。
+
+## 与上游的关系
+
+| | 上游 RVC WebUI | RVC Fabric |
+|---|---|---|
+| 定位 | 训练 / 推理研究工具链 | 面向普通用户的成品软件 |
+| 交互 | 浏览器里的 Gradio 页面 | 原生 Windows 桌面程序 |
+| 环境 | 自己装 Python + PyTorch | 安装包 + 自动补全运行时 |
+| 音色来源 | 自己训练 / 自己找 | 内置音色库 + 社区下载 + 自己导入 |
+| 实时变声 | `gui_v1.py`，需手动配置 | 主界面一键，参数随音色保存 |
+
+上游代码在本仓库中的位置：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`。
+本项目自有代码：`launcher/`（产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`。
+
+上游仓库：**https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI**
+上游多语言文档保留在 `docs/en`、`docs/jp`、`docs/kr`、`docs/fr`、`docs/pt`、`docs/tr`。
+
+## 主要功能
+
+**日常变声**
+选音色 → 选设备 → 开启变声。音高、共鸣可以边说边调，立即生效。「原声旁路」模式不变声只透传，用来测麦克风和接线。麦克风电平表带响应阈值刻度，一眼看出软件有没有听到你。
+
+**音色管理**
+本地音色网格浏览、搜索、排序。每个音色可以绑定特征索引文件（`.index`，检索库），也可以不绑——没有 index 一样能用。参数按音色单独保存，切回来还是上次那套。
+
+**配置档案**
+同一个音色可以存多套参数（音高 / 音效 / 性能），点「使用」即切换。档案可以导出分享，也能导入别人调好的。
+
+**社区音色**
+双源音色库：图灵镜自有源 + 第三方公开源（如 Hugging Face 直链）。支持并发下载、断点续传、系列专区、按上传时间分页。第三方内容与官方无关，安装前请自行判断。
+
+**显卡支持**
+NVIDIA（CUDA）、AMD / Intel（DirectML）。运行时按显卡分版下载，不用手动装驱动依赖。
+
+**其他**
+全局快捷键、托盘常驻、自定义背景图、诊断包一键生成（含性能测试）、在线更新。
+
+## 安装与使用
+
+### 安装
+
+从 [Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases) 或图灵镜发布渠道下载 `RVC_Fabric_Setup.exe`。
+
+安装包是**薄包**，只含程序本体和引擎源码。首次打开会引导你：
+
+1. 按显卡下载运行时（Python + PyTorch，数 GB，来自 CNB）
+2. 下载引擎核心（hubert、rmvpe、ffmpeg）
+3. 安装虚拟声卡 VB-Cable（想让游戏里的人听到变声，这一步必需）
+
+装到英文路径下更稳妥。
+
+### 接线
+
+变声软件改不了游戏的麦克风，中间要靠虚拟声卡转一手：
+
+| 位置 | 选什么 |
+|---|---|
+| 软件输入 | 你真实的麦克风 |
+| 软件输出 | **CABLE Input** |
+| 监听（可选） | 你的耳机，只有你自己听得到 |
+| 游戏 / QQ 麦克风 | **CABLE Output** |
+| Windows 默认播放 | 耳机，**不要**选 CABLE |
+
+软件内「说明」页有完整版本，包含实体声卡 / 调音台的接法。
+
+### 版本号
+
+稳定版本号只有 `X.Y.Z` 一种形态。任何修补都按 `+0.0.1` 发新的小版本，不存在 `-hotfix` 之类的后缀，同一个版本号不会二次投递。
+
+## 参与开发
+
+### 环境
+
+- Windows，PowerShell
+- 完整 CPython 3.13（打包机必需，要带 tkinter）
+- 所有文件 UTF-8
+
+### 启动
+
+```bat
+OpenApp.vbs      :: 主界面（launcher/main_app.py）
+OpenSetup.vbs    :: 启动器（launcher/bootstrap.py）
+scripts\dev\go-web.bat             :: 上游训练 / 推理 WebUI
+scripts\dev\go-realtime-gui.bat    :: 上游实时面板
+```
+
+不要直接 `python launcher/main_app.py`，除非在调试。
+
+### 测试
+
+```bat
+scripts\run_tests.bat
+```
+
+测试同时存在 `unittest.TestCase` 和 pytest 函数式两种风格，`unittest discover` 收集不到后者，两个都要跑。需要 numpy / torch 的用例在缺依赖时自动跳过。
+
+### 打包
+
+```bat
+python scripts\build_setup.py --clean                          :: 薄安装包
+python scripts\build_release.py --variant nvidia|amd|nvidia50  :: 全量离线包
+python scripts\build_catalog.py build --diff                   :: 在线清单
+```
+
+### 架构
+
+主程序是 PyInstaller 冻结的 Python 3.13 外壳，**里面没有 torch 和 numpy**；推理跑在下载来的 Python 3.9 运行时里，两者通过 `User_Data/runtime_control/` 下的 JSON 文件通信。
+
+```
+变声器.exe（外壳，Tk 界面）
+   │  JSON 文件协议
+   ▼
+Runtime\pythonw.exe tools/realtime_worker.py（Python 3.9 + CUDA / DirectML）
+   → gui_v1.py → rtrvc + AudioIoProcess
+```
+
+因此外壳里 import 的任何模块都必须在没有 numpy / torch 的情况下能干净导入。
+
+> 界面层正在迁移到 Tauri + React。迁移期间以 `git log` 和源码为准。
+
+### 仓库不含什么
+
+运行时、模型权重、ffmpeg 二进制、`dist/`、`build/`、用户数据都不进 Git。发布制品在 CNB（`Turing-Mirror/RVC-Fabric-Releases`）。
+
+## 许可
+
+本项目在 [MIT 许可证](./LICENSE)下发布，与上游 RVC WebUI 一致。
+
+模型权重、音色包、第三方内容各自遵循其原始许可与使用条款。社区音色由各自作者提供，与图灵镜官方无关。
+
+**请勿将本软件用于伪造他人身份、诈骗、骚扰或任何未获对方同意的用途。** 使用他人声音训练或转换前请取得授权。
+
+## 致谢
+
+RVC Fabric 建立在这些工作之上：
+
+- [Retrieval-based-Voice-Conversion-WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 本项目的基础
+- [ContentVec](https://github.com/auspicious3000/contentvec/) · [VITS](https://github.com/jaywalnut310/vits) · [HIFIGAN](https://github.com/jik876/hifi-gan)
+- [RMVPE](https://github.com/Dream-High/RMVPE) — 音高提取
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg) · [VB-Audio Virtual Cable](https://vb-audio.com/Cable/)
+
+感谢上游所有贡献者。
 
 ---
 
 <div align="center">
-
-<h1>Retrieval-based-Voice-Conversion-WebUI</h1>
-一个基于VITS的简单易用的变声框架<br><br>
-
-[![madewithlove](https://img.shields.io/badge/made_with-%E2%9D%A4-red?style=for-the-badge&labelColor=orange
-)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
-
-<img src="https://counter.seku.su/cmoe?name=rvc&theme=r34" /><br>
-
-[![Open In Colab](https://img.shields.io/badge/Colab-F9AB00?style=for-the-badge&logo=googlecolab&color=525252)](https://colab.research.google.com/github/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/blob/main/Retrieval_based_Voice_Conversion_WebUI.ipynb)
-[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=for-the-badge)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/blob/main/LICENSE)
-[![Huggingface](https://img.shields.io/badge/🤗%20-Spaces-yellow.svg?style=for-the-badge)](https://huggingface.co/lj1995/VoiceConversionWebUI/tree/main/)
-
-[![Discord](https://img.shields.io/badge/RVC%20Developers-Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/HcsmBBGyVk)
-
-[**更新日志**](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/blob/main/docs/Changelog_CN.md) | [**常见问题解答**](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/wiki/%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94) | [**AutoDL·5毛钱训练AI歌手**](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/wiki/Autodl%E8%AE%AD%E7%BB%83RVC%C2%B7AI%E6%AD%8C%E6%89%8B%E6%95%99%E7%A8%8B) | [**对照实验记录**](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/wiki/Autodl%E8%AE%AD%E7%BB%83RVC%C2%B7AI%E6%AD%8C%E6%89%8B%E6%95%99%E7%A8%8B](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/wiki/%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C%C2%B7%E5%AE%9E%E9%AA%8C%E8%AE%B0%E5%BD%95)) | [**在线演示**](https://modelscope.cn/studios/FlowerCry/RVCv2demo)
-
-[**English**](./docs/en/README.en.md) | [**中文简体**](./README.md) | [**日本語**](./docs/jp/README.ja.md) | [**한국어**](./docs/kr/README.ko.md) ([**韓國語**](./docs/kr/README.ko.han.md)) | [**Français**](./docs/fr/README.fr.md) | [**Türkçe**](./docs/tr/README.tr.md) | [**Português**](./docs/pt/README.pt.md)
-
+<sub>Turing Mirror · Veritas, Claritas, Amor</sub>
 </div>
-
-> 底模使用接近50小时的开源高质量VCTK训练集训练，无版权方面的顾虑，请大家放心使用
-
-> 请期待RVCv3的底模，参数更大，数据更大，效果更好，基本持平的推理速度，需要训练数据量更少。
-
-<table>
-   <tr>
-		<td align="center">训练推理界面</td>
-		<td align="center">实时变声界面</td>
-	</tr>
-  <tr>
-		<td align="center"><img src="https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/assets/129054828/092e5c12-0d49-4168-a590-0b0ef6a4f630"></td>
-    <td align="center"><img src="https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/assets/129054828/730b4114-8805-44a1-ab1a-04668f3c30a6"></td>
-	</tr>
-	<tr>
-		<td align="center">go-web.bat</td>
-		<td align="center">go-realtime-gui.bat</td>
-	</tr>
-  <tr>
-    <td align="center">可以自由选择想要执行的操作。</td>
-		<td align="center">我们已经实现端到端170ms延迟。如使用ASIO输入输出设备，已能实现端到端90ms延迟，但非常依赖硬件驱动支持。</td>
-	</tr>
-</table>
-
-## 简介
-本仓库具有以下特点
-+ 使用top1检索替换输入源特征为训练集特征来杜绝音色泄漏
-+ 即便在相对较差的显卡上也能快速训练
-+ 使用少量数据进行训练也能得到较好结果(推荐至少收集10分钟低底噪语音数据)
-+ 可以通过模型融合来改变音色(借助ckpt处理选项卡中的ckpt-merge)
-+ 简单易用的网页界面
-+ 可调用UVR5模型来快速分离人声和伴奏
-+ 使用最先进的[人声音高提取算法InterSpeech2023-RMVPE](#参考项目)根绝哑音问题。效果最好（显著地）但比crepe_full更快、资源占用更小
-+ A卡I卡加速支持
-
-点此查看我们的[演示视频](https://www.bilibili.com/video/BV1pm4y1z7Gm/) !
-
-## 环境配置
-以下指令需在 Python 版本大于3.8的环境中执行。  
-
-### Windows/Linux/MacOS等平台通用方法
-下列方法任选其一。
-#### 1. 通过 pip 安装依赖
-1. 安装Pytorch及其核心依赖，若已安装则跳过。参考自: https://pytorch.org/get-started/locally/
-```bash
-pip install torch torchvision torchaudio
-```
-2. 如果是 win 系统 + Nvidia Ampere 架构(RTX30xx)，根据 #21 的经验，需要指定 pytorch 对应的 cuda 版本
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
-```
-3. 根据自己的显卡安装对应依赖
-- N卡
-```bash
-pip install -r requirements.txt
-```
-- A卡/I卡
-```bash
-pip install -r requirements-dml.txt
-```
-- A卡ROCM(Linux)
-```bash
-pip install -r requirements-amd.txt
-```
-- I卡IPEX(Linux)
-```bash
-pip install -r requirements-ipex.txt
-```
-
-#### 2. 通过 poetry 来安装依赖
-安装 Poetry 依赖管理工具，若已安装则跳过。参考自: https://python-poetry.org/docs/#installation
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-通过 Poetry 安装依赖时，python 建议使用 3.7-3.10 版本，其余版本在安装 llvmlite==0.39.0 时会出现冲突
-```bash
-poetry init -n
-poetry env use "path to your python.exe"
-poetry run pip install -r requirments.txt
-```
-
-### MacOS
-可以通过 `run.sh` 来安装依赖
-```bash
-sh ./run.sh
-```
-
-## 其他预模型准备
-RVC需要其他一些预模型来推理和训练。
-
-你可以从我们的[Hugging Face space](https://huggingface.co/lj1995/VoiceConversionWebUI/tree/main/)下载到这些模型。
-
-### 1. 下载 assets
-以下是一份清单，包括了所有RVC所需的预模型和其他文件的名称。你可以在`tools`文件夹找到下载它们的脚本。
-
-- ./assets/hubert/hubert_base.pt
-
-- ./assets/pretrained 
-
-- ./assets/uvr5_weights
-
-想使用v2版本模型的话，需要额外下载
-
-- ./assets/pretrained_v2
-
-### 2. 安装 ffmpeg
-若ffmpeg和ffprobe已安装则跳过。
-
-#### Ubuntu/Debian 用户
-```bash
-sudo apt install ffmpeg
-```
-#### MacOS 用户
-```bash
-brew install ffmpeg
-```
-#### Windows 用户
-下载后放置在根目录。
-- 下载[ffmpeg.exe](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/ffmpeg.exe)
-
-- 下载[ffprobe.exe](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/ffprobe.exe)
-
-### 3. 下载 rmvpe 人声音高提取算法所需文件
-
-如果你想使用最新的RMVPE人声音高提取算法，则你需要下载音高提取模型参数并放置于RVC根目录。
-
-- 下载[rmvpe.pt](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/rmvpe.pt)
-
-#### 下载 rmvpe 的 dml 环境(可选, A卡/I卡用户)
-
-- 下载[rmvpe.onnx](https://huggingface.co/lj1995/VoiceConversionWebUI/blob/main/rmvpe.onnx)
-
-### 4. AMD显卡Rocm(可选, 仅Linux)
-
-如果你想基于AMD的Rocm技术在Linux系统上运行RVC，请先在[这里](https://rocm.docs.amd.com/en/latest/deploy/linux/os-native/install.html)安装所需的驱动。
-
-若你使用的是Arch Linux，可以使用pacman来安装所需驱动：
-````
-pacman -S rocm-hip-sdk rocm-opencl-sdk
-````
-对于某些型号的显卡，你可能需要额外配置如下的环境变量（如：RX6700XT）：
-````
-export ROCM_PATH=/opt/rocm
-export HSA_OVERRIDE_GFX_VERSION=10.3.0
-````
-同时确保你的当前用户处于`render`与`video`用户组内：
-````
-sudo usermod -aG render $USERNAME
-sudo usermod -aG video $USERNAME
-````
-
-## 开始使用
-### 直接启动
-使用以下指令来启动 WebUI
-```bash
-python infer-web.py
-```
-
-若先前使用 Poetry 安装依赖，则可以通过以下方式启动WebUI
-```bash
-poetry run python infer-web.py
-```
-
-### 使用整合包
-下载并解压`RVC-beta.7z`
-#### Windows 用户
-双击`go-web.bat`
-#### MacOS 用户
-```bash
-sh ./run.sh
-```
-### 对于需要使用IPEX技术的I卡用户(仅Linux)
-```bash
-source /opt/intel/oneapi/setvars.sh
-```
-
-## 参考项目
-+ [ContentVec](https://github.com/auspicious3000/contentvec/)
-+ [VITS](https://github.com/jaywalnut310/vits)
-+ [HIFIGAN](https://github.com/jik876/hifi-gan)
-+ [Gradio](https://github.com/gradio-app/gradio)
-+ [FFmpeg](https://github.com/FFmpeg/FFmpeg)
-+ [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui)
-+ [audio-slicer](https://github.com/openvpi/audio-slicer)
-+ [Vocal pitch extraction:RMVPE](https://github.com/Dream-High/RMVPE)
-  + The pretrained model is trained and tested by [yxlllc](https://github.com/yxlllc/RMVPE) and [RVC-Boss](https://github.com/RVC-Boss).
-
-## 感谢所有贡献者作出的努力
-<a href="https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/graphs/contributors" target="_blank">
-  <img src="https://contrib.rocks/image?repo=RVC-Project/Retrieval-based-Voice-Conversion-WebUI" />
-</a>

@@ -34,7 +34,6 @@ pub fn install_tray(app: &AppHandle) -> Result<(), String> {
     let menu =
         Menu::with_items(app, &[&show, &toggle, &quit]).map_err(|e| e.to_string())?;
 
-    let handle = app.clone();
     TrayIconBuilder::with_id("main")
         .tooltip("RVC Fabric")
         .icon(app.default_window_icon().cloned().ok_or("缺少托盘图标")?)

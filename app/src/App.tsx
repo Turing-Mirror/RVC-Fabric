@@ -22,6 +22,37 @@ export default function App() {
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
+
+  // Wallpaper + theme come from app_config and are applied to the shell root.
+  // Blur/opacity are plain CSS here — the Tk shell needed a chroma-key hack
+  // (#010203) to fake transparency; a webview does not.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const cfg = await invoke<Record<string, unknown>>("config_get");
+        if (!alive) return;
+        const mode = String(cfg.theme_mode ?? "system");
+        const el = document.documentElement;
+        if (mode === "system") el.removeAttribute("data-theme");
+        else el.setAttribute("data-theme", mode);
+        const path = String(cfg.wallpaper_path ?? "");
+        el.style.setProperty("--wp-blur", `${Number(cfg.wallpaper_blur ?? 40) / 100 * 24}px`);
+        el.style.setProperty("--wp-opacity", String(Number(cfg.wallpaper_opacity ?? 70) / 100));
+        if (path) {
+          const { convertFileSrc } = await import("@tauri-apps/api/core");
+          el.style.setProperty("--wp-image", `url("${convertFileSrc(path)}")`);
+        } else {
+          el.style.removeProperty("--wp-image");
+        }
+      } catch {
+        /* config unavailable outside Tauri */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [page]);
   const checkUpdate = async () => {
     setUpdateLine("正在检查…");
     try {
@@ -55,6 +86,34 @@ export default function App() {
   const [provisionDismissed, setProvisionDismissed] = useState(false);
 
   const engine = useEngine();
+
+  // Telemetry consent: ask only after the user has actually got value out of
+  // the product — 60 s of clean conversion — not at first launch.
+  const [askTelemetry, setAskTelemetry] = useState(false);
+  useEffect(() => {
+    let timer: number | null = null;
+    let cancelled = false;
+    void (async () => {
+      const cfg = await invoke<Record<string, unknown>>("config_get").catch(() => null);
+      if (!cfg || cancelled) return;
+      if (cfg.telemetry_opt_in !== null && cfg.telemetry_opt_in !== undefined) {
+        if (cfg.telemetry_opt_in === true) void invoke("telemetry_tick").catch(() => {});
+        return;
+      }
+      if (!engine.running) return;
+      timer = window.setTimeout(() => !cancelled && setAskTelemetry(true), 60_000);
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [engine.running]);
+
+  const answerTelemetry = async (yes: boolean) => {
+    setAskTelemetry(false);
+    await invoke("config_set", { patch: { telemetry_opt_in: yes } }).catch(() => {});
+    if (yes) void invoke("telemetry_tick").catch(() => {});
+  };
 
   // Tray menu and global hotkeys drive the same actions as the dock, so the
   // shortcuts keep working while the window is hidden.
@@ -205,6 +264,35 @@ export default function App() {
           }
         }}
       </PageHost>
+
+      {askTelemetry ? (
+        <div className="mx-[30px] mb-2 rounded-[var(--r)] bg-[var(--group)] px-4 py-3 flex items-start gap-3 flex-wrap max-[720px]:mx-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold mb-1">参与用户统计（可选）</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              每天检查更新时附带一个随机匿名编号、软件版本、显卡加速方式。
+              不会发送账号、音色文件、录音，或任何能定位到你的信息。
+              规模数据用于和赞助商谈合作，这是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            <button
+              type="button"
+              onClick={() => void answerTelemetry(true)}
+              className="text-[12.5px] font-semibold px-3.5 py-1.5 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+            >
+              参与
+            </button>
+            <button
+              type="button"
+              onClick={() => void answerTelemetry(false)}
+              className="text-[12.5px] px-3.5 py-1.5 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] cursor-pointer border-0 shadow-[inset_0_0_0_1px_var(--line)]"
+            >
+              暂不参与
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <Dock
         voiceName={voiceName}

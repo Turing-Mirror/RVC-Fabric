@@ -12,6 +12,7 @@ mod protocol;
 mod provision;
 mod shell_extras;
 mod store;
+mod telemetry;
 mod ui_assets;
 mod update;
 mod voices;
@@ -182,6 +183,18 @@ fn reveal_user_dir(state: State<'_, Mutex<AppState>>, name: String) -> Result<()
     let dir = paths::user_data(&root).join(name);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     shell_extras::reveal(&dir.join("x"))
+}
+
+/// Opt-in daily ping. No-op when the user has not agreed.
+#[tauri::command]
+async fn telemetry_tick(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let accel = provision::read_package_meta_variant(&root).unwrap_or_else(|| "unknown".into());
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(telemetry::tick(&root, update::APP_VERSION, &accel))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -599,6 +612,7 @@ pub fn run() {
             diagnostics_build,
             consult_build,
             reveal_user_dir,
+            telemetry_tick,
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,

@@ -168,3 +168,19 @@ button {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Wallpaper layer. Set by App from app_config; absent means no background. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--wp-image, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(var(--wp-blur, 0px));
+  opacity: var(--wp-opacity, 0);
+  transform: scale(1.06); /* hide blur edges */
+}
+

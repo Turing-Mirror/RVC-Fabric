@@ -81,14 +81,19 @@ pub fn logs_dir(root: &Path) -> PathBuf {
     user_data(root).join("logs")
 }
 
+pub fn runtime_dir(root: &Path) -> PathBuf {
+    if root.join("Runtime").is_dir() {
+        root.join("Runtime")
+    } else {
+        root.join("runtime")
+    }
+}
+
+/// Prefer pythonw (no console). Fall back to python.exe only if needed.
 pub fn runtime_pythonw(root: &Path) -> Option<PathBuf> {
-    for rel in [
-        "Runtime/pythonw.exe",
-        "runtime/pythonw.exe",
-        "Runtime/python.exe",
-        "runtime/python.exe",
-    ] {
-        let p = root.join(rel);
+    let rt = runtime_dir(root);
+    for name in ["pythonw.exe", "python.exe"] {
+        let p = rt.join(name);
         if p.is_file() {
             return Some(p);
         }
@@ -96,6 +101,33 @@ pub fn runtime_pythonw(root: &Path) -> Option<PathBuf> {
     None
 }
 
+pub fn runtime_python(root: &Path) -> Option<PathBuf> {
+    let rt = runtime_dir(root);
+    for name in ["python.exe", "pythonw.exe"] {
+        let p = rt.join(name);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// True when Runtime looks usable (python + torch present), same spirit as
+/// launcher.runtime_provision.runtime_ready.
+pub fn runtime_ready(root: &Path) -> bool {
+    let Some(py) = runtime_python(root) else {
+        return false;
+    };
+    let site = py
+        .parent()
+        .map(|p| p.join("Lib").join("site-packages").join("torch").join("__init__.py"));
+    site.map(|p| p.is_file()).unwrap_or(false)
+}
+
 pub fn worker_script(root: &Path) -> PathBuf {
     root.join("tools").join("realtime_worker.py")
+}
+
+pub fn package_meta_path(root: &Path) -> PathBuf {
+    root.join("package_meta.json")
 }

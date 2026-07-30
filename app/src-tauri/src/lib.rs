@@ -1,21 +1,36 @@
 //! RVC Fabric shell (Tauri).
 //!
-//! Stage 2: manage Runtime realtime_worker via the existing JSON file protocol.
+//! Worker bridge uses User_Data/runtime_control JSON (same as Tk shell).
+//! Long ops clone the product root and **must not** hold AppState mutex.
 
 mod paths;
 mod protocol;
+mod provision;
 mod worker;
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
 use tauri::State;
 
 struct AppState {
-    root: std::path::PathBuf,
+    root: PathBuf,
 }
 
-/// On-disk UI folder next to the exe when present: `<exe_dir>/frontend`.
+fn with_root<F, T>(state: &State<'_, Mutex<AppState>>, f: F) -> Result<T, String>
+where
+    F: FnOnce(&PathBuf) -> Result<T, String>,
+{
+    let g = state.lock().map_err(|e| e.to_string())?;
+    f(&g.root)
+}
+
+fn root_clone(state: &State<'_, Mutex<AppState>>) -> Result<PathBuf, String> {
+    let g = state.lock().map_err(|e| e.to_string())?;
+    Ok(g.root.clone())
+}
+
 #[tauri::command]
 fn frontend_dir() -> Option<String> {
     let mut dir = std::env::current_exe().ok()?;
@@ -30,60 +45,76 @@ fn frontend_dir() -> Option<String> {
 
 #[tauri::command]
 fn product_root(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    Ok(g.root.to_string_lossy().into_owned())
+    with_root(&state, |root| Ok(root.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
 fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    Ok(worker::status_for_ui(&g.root))
+    // Fast path: clone root, drop lock, then read status
+    let root = root_clone(&state)?;
+    Ok(worker::status_for_ui(&root))
 }
 
+/// Lightweight: do not wait for devices; start worker only if missing Runtime gate.
 #[tauri::command]
 fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    Ok(worker::ensure_worker_and_devices(&g.root, 90_000))
+    let root = root_clone(&state)?;
+    if !paths::runtime_ready(&root) {
+        let mut st = worker::status_for_ui(&root);
+        if let Some(obj) = st.as_object_mut() {
+            obj.insert("state".into(), json!("idle"));
+            obj.insert(
+                "error".into(),
+                json!("Runtime 未就绪，请先补全运行时"),
+            );
+            obj.insert("worker_alive".into(), json!(false));
+        }
+        return Ok(st);
+    }
+    // Background-friendly: start if needed, wait ready, list devices
+    Ok(worker::ensure_worker_and_devices(&root, 90_000))
 }
 
 #[tauri::command]
 fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    worker::start_worker(&g.root)?;
-    Ok(worker::wait_worker_ready(&g.root, 90_000))
+    let root = root_clone(&state)?;
+    if !paths::runtime_ready(&root) {
+        return Ok(json!({
+            "state": "error",
+            "error": "Runtime 未就绪（缺少 torch）",
+            "pid": 0
+        }));
+    }
+    worker::start_worker(&root)?;
+    Ok(worker::wait_worker_ready(&root, 90_000))
 }
 
 #[tauri::command]
 fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    worker::start_vc(&g.root)?;
-    // Poll briefly for running / error
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
-    loop {
-        let st = worker::status_for_ui(&g.root);
-        let state_s = st.get("state").and_then(|v| v.as_str()).unwrap_or("");
-        if state_s == "running" || state_s == "error" {
-            return Ok(st);
-        }
-        if std::time::Instant::now() > deadline {
-            return Ok(st);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(300));
+    let root = root_clone(&state)?;
+    if !paths::runtime_ready(&root) {
+        return Ok(json!({
+            "state": "error",
+            "error": "Runtime 未就绪，无法开启变声",
+            "pid": 0
+        }));
     }
+    worker::start_vc(&root)?;
+    Ok(worker::wait_vc_running(&root, 180_000))
 }
 
 #[tauri::command]
 fn engine_stop_vc(state: State<'_, Mutex<AppState>>, force: Option<bool>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    worker::stop_vc(&g.root, force.unwrap_or(true))?;
-    Ok(worker::status_for_ui(&g.root))
+    let root = root_clone(&state)?;
+    worker::stop_vc(&root, force.unwrap_or(true))?;
+    Ok(worker::status_for_ui(&root))
 }
 
 #[tauri::command]
 fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    worker::kill_known_workers(&g.root);
-    Ok(worker::status_for_ui(&g.root))
+    let root = root_clone(&state)?;
+    worker::kill_known_workers(&root);
+    Ok(worker::status_for_ui(&root))
 }
 
 #[tauri::command]
@@ -96,7 +127,7 @@ fn engine_set_hot(
     index_rate: Option<f64>,
     rms_mix_rate: Option<f64>,
 ) -> Result<u64, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
+    let root = root_clone(&state)?;
     let mut payload = Map::new();
     if let Some(v) = pitch {
         payload.insert("pitch".into(), json!(v));
@@ -105,7 +136,6 @@ fn engine_set_hot(
         payload.insert("formant".into(), json!(v));
     }
     if let Some(v) = function {
-        // UI: "vc" | "bypass" → engine "vc" | "im"
         let f = if v == "bypass" || v == "im" {
             "im"
         } else {
@@ -125,35 +155,59 @@ fn engine_set_hot(
     if payload.is_empty() {
         return Err("no hot keys".into());
     }
-    worker::set_hot(&g.root, payload)
+    worker::set_hot(&root, payload)
 }
 
 #[tauri::command]
 fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let g = state.lock().map_err(|e| e.to_string())?;
-    if !worker::is_worker_alive(&g.root) {
-        worker::start_worker(&g.root)?;
-        let st = worker::wait_worker_ready(&g.root, 90_000);
+    let root = root_clone(&state)?;
+    if !paths::runtime_ready(&root) {
+        return Ok(json!({
+            "state": "error",
+            "error": "Runtime 未就绪",
+            "input_devices": [],
+            "output_devices": [],
+            "hostapis": []
+        }));
+    }
+    if !worker::is_worker_alive(&root) {
+        worker::start_worker(&root)?;
+        let st = worker::wait_worker_ready(&root, 90_000);
         if st.get("state").and_then(|v| v.as_str()) == Some("error") {
             return Ok(st);
         }
     }
-    let _ = worker::send_command(&g.root, "list_devices", Map::new());
+    let _ = worker::send_command(&root, "list_devices", Map::new());
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
     while std::time::Instant::now() < deadline {
-        let st = worker::status_for_ui(&g.root);
-        if st.get("input_devices").is_some() {
+        let st = worker::status_for_ui(&root);
+        let has = st
+            .get("input_devices")
+            .and_then(|v| v.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        if has {
             return Ok(st);
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
-    Ok(worker::status_for_ui(&g.root))
+    Ok(worker::status_for_ui(&root))
+}
+
+#[tauri::command]
+fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    Ok(provision::provision_status(&root))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = paths::product_root();
     eprintln!("[rvc-fabric] product root: {}", root.display());
+    eprintln!(
+        "[rvc-fabric] runtime_ready={}",
+        paths::runtime_ready(&root)
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -169,12 +223,17 @@ pub fn run() {
             engine_force_kill,
             engine_set_hot,
             engine_list_devices,
+            provision_status,
         ])
         .setup(move |_app| {
-            // Pre-warm worker in background so device list is ready sooner.
+            // Pre-warm only when Runtime is complete — never block UI thread.
             let root_bg = root.clone();
             std::thread::spawn(move || {
-                let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
+                if paths::runtime_ready(&root_bg) {
+                    let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
+                } else {
+                    eprintln!("[rvc-fabric] skip worker prewarm: Runtime not ready");
+                }
             });
             Ok(())
         })

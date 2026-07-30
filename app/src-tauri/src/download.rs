@@ -1,20 +1,62 @@
-//! HTTP download with optional Range resume + sha256 verify.
+//! Shared multi-connection downloader for Runtime / voice packs / gui updates.
+//!
+//! Core engine: **[ripget](https://github.com/sam0x17/ripget)** — open-source
+//! multi-part HTTP range downloader (aria2c-style), with retries, idle reconnect,
+//! and configurable parallelism. We only add product glue:
+//! adaptive thread count, mirror URL fallback, sha256 verify, cancel, and a
+//! blocking API for Tauri commands.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
-// AtomicU64 used for progress
-
+use ripget::{DownloadOptions, ProgressReporter};
 use sha2::{Digest, Sha256};
 
-const UA: &str = "Mozilla/5.0 RVCFabric/1.3";
-const CHUNK: usize = 64 * 1024;
+const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RVCFabric/1.3";
+const MIN_MULTIPART_BYTES: u64 = 16 * 1024 * 1024; // 16 MiB — same as launcher/online/multipart.py
+const MAX_CONNECTIONS: usize = 32;
+
+/// What is being downloaded — same pipeline for all product artifacts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // VoicePack / GuiPatch used when store & update land
+pub enum DownloadKind {
+    Runtime,
+    VoicePack,
+    GuiPatch,
+    Generic,
+}
+
+impl DownloadKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Runtime => "runtime",
+            Self::VoicePack => "voice_pack",
+            Self::GuiPatch => "gui_patch",
+            Self::Generic => "file",
+        }
+    }
+}
 
 pub type ProgressFn = Arc<dyn Fn(u64, u64, &str) + Send + Sync>;
+
+/// Adaptive connection count (mirrors `launcher/online/multipart.auto_connections`).
+pub fn auto_connections(size: u64) -> usize {
+    if size == 0 {
+        return 1;
+    }
+    if size < MIN_MULTIPART_BYTES {
+        return 1;
+    }
+    if size < 64 * 1024 * 1024 {
+        return 8;
+    }
+    // Multi-GB Runtime: 16 connections; never exceed 32
+    let preferred = if size >= 1024 * 1024 * 1024 { 16 } else { 12 };
+    // Also keep ~1 MiB minimum per thread for very large sizes
+    let by_mb = (size / (1024 * 1024)).clamp(1, MAX_CONNECTIONS as u64) as usize;
+    preferred.min(by_mb).clamp(1, MAX_CONNECTIONS)
+}
 
 pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     let exp = expected
@@ -25,9 +67,10 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     if exp.len() != 64 {
         return Err("sha256 格式无效".into());
     }
-    let mut f = File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
+    let mut f = std::fs::File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
     let mut hasher = Sha256::new();
-    let mut buf = [0u8; CHUNK];
+    let mut buf = [0u8; 1024 * 1024];
+    use std::io::Read;
     loop {
         let n = f.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
@@ -42,234 +85,242 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn client(timeout_secs: u64) -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .connect_timeout(Duration::from_secs(30))
-        .user_agent(UA)
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .build()
-        .map_err(|e| e.to_string())
+/// Options for a single product download (Runtime / voice / patch).
+#[derive(Clone)]
+pub struct DownloadRequest {
+    pub urls: Vec<String>,
+    pub dest: PathBuf,
+    pub expected_sha256: String,
+    /// Known size from catalog (feeds auto_connections when HEAD is slow).
+    pub size_hint: u64,
+    /// None = auto_connections(size)
+    pub connections: Option<usize>,
+    pub kind: DownloadKind,
 }
 
-/// Probe total size; 0 if unknown.
-fn probe_size(client: &reqwest::blocking::Client, url: &str) -> u64 {
-    if let Ok(r) = client.head(url).send() {
-        if r.status().is_success() {
-            if let Some(len) = r.content_length() {
-                return len;
-            }
-            if let Some(h) = r.headers().get(reqwest::header::CONTENT_LENGTH) {
-                if let Ok(s) = h.to_str() {
-                    if let Ok(n) = s.parse::<u64>() {
-                        return n;
-                    }
-                }
-            }
-        }
-    }
-    // Some hosts reject HEAD — try Range 0-0
-    if let Ok(r) = client
-        .get(url)
-        .header(reqwest::header::RANGE, "bytes=0-0")
-        .send()
-    {
-        if let Some(cr) = r.headers().get(reqwest::header::CONTENT_RANGE) {
-            if let Ok(s) = cr.to_str() {
-                // bytes 0-0/12345
-                if let Some(total) = s.split('/').nth(1) {
-                    if let Ok(n) = total.trim().parse::<u64>() {
-                        return n;
-                    }
-                }
-            }
-        }
-    }
-    0
+/// Bridge product progress callbacks into ripget's ProgressReporter.
+struct ProgressBridge {
+    cb: ProgressFn,
+    total: AtomicU64,
+    done: AtomicU64,
+    threads: AtomicU64,
+    kind: DownloadKind,
+    cancel: Arc<AtomicBool>,
 }
 
-/// Download *url* to *dest*, resuming via existing .part size when possible.
+impl ProgressReporter for ProgressBridge {
+    fn init(&self, total: u64) {
+        self.total.store(total, Ordering::SeqCst);
+        self.done.store(0, Ordering::SeqCst);
+        let t = self.threads.load(Ordering::SeqCst).max(1);
+        (self.cb)(
+            0,
+            total.max(1),
+            &format!(
+                "download:{} · {} 连接",
+                self.kind.as_str(),
+                t
+            ),
+        );
+    }
+
+    fn set_threads(&self, threads: usize) {
+        self.threads.store(threads as u64, Ordering::SeqCst);
+    }
+
+    fn add(&self, delta: u64) {
+        if self.cancel.load(Ordering::SeqCst) {
+            return;
+        }
+        let d = self.done.fetch_add(delta, Ordering::SeqCst) + delta;
+        let total = self.total.load(Ordering::SeqCst).max(1);
+        (self.cb)(d, total, "download");
+    }
+}
+
+/// Blocking entry used by provision / future voice & update modules.
+#[allow(dead_code)]
 pub fn download_file(
     urls: &[String],
     dest: &Path,
     expected_sha256: &str,
-    cancel: &AtomicBool,
+    cancel: Arc<AtomicBool>,
     progress: Option<ProgressFn>,
 ) -> Result<(), String> {
-    if urls.is_empty() {
+    download_request(
+        DownloadRequest {
+            urls: urls.to_vec(),
+            dest: dest.to_path_buf(),
+            expected_sha256: expected_sha256.to_string(),
+            size_hint: 0,
+            connections: None,
+            kind: DownloadKind::Generic,
+        },
+        cancel,
+        progress,
+    )
+}
+
+pub fn download_request(
+    req: DownloadRequest,
+    cancel: Arc<AtomicBool>,
+    progress: Option<ProgressFn>,
+) -> Result<(), String> {
+    if req.urls.is_empty() {
         return Err("没有下载地址".into());
     }
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    if let Some(parent) = req.dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
     // Already complete + verified
-    if dest.is_file() && !expected_sha256.is_empty() {
-        if verify_sha256(dest, expected_sha256).is_ok() {
+    if req.dest.is_file() && !req.expected_sha256.is_empty() {
+        if verify_sha256(&req.dest, &req.expected_sha256).is_ok() {
             if let Some(ref cb) = progress {
-                let len = dest.metadata().map(|m| m.len()).unwrap_or(0);
+                let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
                 cb(len, len, "download");
             }
             return Ok(());
         }
-        let _ = fs::remove_file(dest);
+        let _ = std::fs::remove_file(&req.dest);
     }
 
-    let part = dest.with_extension(format!(
-        "{}part",
-        dest.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| format!("{e}."))
-            .unwrap_or_default()
-    ));
-    // Prefer dest.part next to dest
+    if cancel.load(Ordering::SeqCst) {
+        return Err("已取消".into());
+    }
+
+    let threads = req
+        .connections
+        .unwrap_or_else(|| auto_connections(req.size_hint))
+        .clamp(1, MAX_CONNECTIONS);
+
+    // Download to .part then rename after verify
     let part_path = {
-        let mut p = dest.as_os_str().to_os_string();
+        let mut p = req.dest.as_os_str().to_os_string();
         p.push(".part");
-        std::path::PathBuf::from(p)
+        PathBuf::from(p)
     };
-    let _ = part; // silence
+    if part_path.is_file() {
+        // ripget overwrites destination; drop stale partial
+        let _ = std::fs::remove_file(&part_path);
+    }
 
-    let client = client(7200)?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(2.max(threads.min(8)))
+        .thread_name("rvc-dl")
+        .build()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
+
     let mut last_err = String::new();
-
-    for url in urls {
+    for url in &req.urls {
         if cancel.load(Ordering::SeqCst) {
             return Err("已取消".into());
         }
-        match download_one(
-            &client,
+        match rt.block_on(download_one_url(
             url,
-            dest,
             &part_path,
-            expected_sha256,
-            cancel,
+            threads,
+            req.kind,
+            cancel.clone(),
             progress.clone(),
-        ) {
-            Ok(()) => return Ok(()),
+        )) {
+            Ok(()) => {
+                if !req.expected_sha256.is_empty() {
+                    if let Some(ref cb) = progress {
+                        let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+                        cb(len, len.max(1), "verify");
+                    }
+                    if let Err(e) = verify_sha256(&part_path, &req.expected_sha256) {
+                        let _ = std::fs::remove_file(&part_path);
+                        last_err = e;
+                        continue;
+                    }
+                }
+                if req.dest.is_file() {
+                    let _ = std::fs::remove_file(&req.dest);
+                }
+                std::fs::rename(&part_path, &req.dest)
+                    .map_err(|e| format!("完成重命名失败: {e}"))?;
+                if let Some(ref cb) = progress {
+                    let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
+                    cb(len, len.max(1), "download");
+                }
+                return Ok(());
+            }
             Err(e) => {
                 last_err = e;
-                // keep .part for resume across mirrors
+                let _ = std::fs::remove_file(&part_path);
             }
         }
     }
-    Err(last_err)
+    Err(if last_err.is_empty() {
+        "下载失败".into()
+    } else {
+        last_err
+    })
 }
 
-fn download_one(
-    client: &reqwest::blocking::Client,
+async fn download_one_url(
     url: &str,
     dest: &Path,
-    part_path: &Path,
-    expected_sha256: &str,
-    cancel: &AtomicBool,
+    threads: usize,
+    kind: DownloadKind,
+    cancel: Arc<AtomicBool>,
     progress: Option<ProgressFn>,
 ) -> Result<(), String> {
-    let total_hint = probe_size(client, url);
-    let mut existing = if part_path.is_file() {
-        part_path.metadata().map(|m| m.len()).unwrap_or(0)
-    } else {
-        0
-    };
-    // If complete size known and part already full, just rename + verify
-    if total_hint > 0 && existing >= total_hint {
-        fs::rename(part_path, dest).map_err(|e| e.to_string())?;
-        if !expected_sha256.is_empty() {
-            verify_sha256(dest, expected_sha256)?;
-        }
-        return Ok(());
+    let progress_handle: Option<ripget::Progress> = progress.map(|cb| {
+        Arc::new(ProgressBridge {
+            cb,
+            total: AtomicU64::new(0),
+            done: AtomicU64::new(0),
+            threads: AtomicU64::new(threads as u64),
+            kind,
+            cancel: cancel.clone(),
+        }) as ripget::Progress
+    });
+
+    let mut options = DownloadOptions::new()
+        .threads(threads)
+        .user_agent(UA.to_string());
+    if let Some(p) = progress_handle {
+        options = options.progress(p);
     }
 
-    let mut req = client.get(url);
-    if existing > 0 {
-        req = req.header(reqwest::header::RANGE, format!("bytes={existing}-"));
-    }
-    let mut resp = req.send().map_err(|e| format!("请求失败: {e}"))?;
-    let status = resp.status();
-    if status.as_u16() == 416 {
-        // Range not satisfiable — file complete on server side
-        if part_path.is_file() {
-            fs::rename(part_path, dest).map_err(|e| e.to_string())?;
-            if !expected_sha256.is_empty() {
-                verify_sha256(dest, expected_sha256)?;
+    // Cancel: poll and abort by dropping the future via select
+    let download = ripget::download_url_with_options(url, dest, options);
+    tokio::pin!(download);
+
+    let cancel_wait = async {
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                break;
             }
-            return Ok(());
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        return Err("HTTP 416".into());
-    }
-    if status.as_u16() == 200 && existing > 0 {
-        // Server ignored Range — restart
-        existing = 0;
-        let _ = fs::remove_file(part_path);
-    } else if !status.is_success() && status.as_u16() != 206 {
-        return Err(format!("HTTP {status}：{}", &url[..url.len().min(120)]));
-    }
-
-    let total = if status.as_u16() == 206 {
-        // Content-Range: bytes start-end/total
-        resp.headers()
-            .get(reqwest::header::CONTENT_RANGE)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.split('/').nth(1))
-            .and_then(|t| t.trim().parse().ok())
-            .unwrap_or(total_hint)
-    } else {
-        resp.content_length()
-            .map(|l| l + existing)
-            .unwrap_or(total_hint)
     };
+    tokio::pin!(cancel_wait);
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .read(true)
-        .open(part_path)
-        .map_err(|e| format!("无法创建临时文件: {e}"))?;
-    if existing > 0 {
-        file.seek(SeekFrom::Start(existing))
-            .map_err(|e| e.to_string())?;
-    } else {
-        file.set_len(0).ok();
-    }
-
-    let done = Arc::new(AtomicU64::new(existing));
-    let mut buf = [0u8; CHUNK];
-    let mut last_emit = std::time::Instant::now();
-    loop {
-        if cancel.load(Ordering::SeqCst) {
-            return Err("已取消".into());
+    tokio::select! {
+        biased;
+        _ = &mut cancel_wait => {
+            Err("已取消".into())
         }
-        let n = resp.read(&mut buf).map_err(|e| format!("读取失败: {e}"))?;
-        if n == 0 {
-            break;
-        }
-        file.write_all(&buf[..n])
-            .map_err(|e| format!("写入失败: {e}"))?;
-        let d = done.fetch_add(n as u64, Ordering::SeqCst) + n as u64;
-        if let Some(ref cb) = progress {
-            if last_emit.elapsed() >= Duration::from_millis(200) {
-                cb(d, total, "download");
-                last_emit = std::time::Instant::now();
-            }
+        res = &mut download => {
+            res.map(|_| ()).map_err(|e| format!("ripget: {e}"))
         }
     }
-    file.flush().ok();
-    drop(file);
+}
 
-    if let Some(ref cb) = progress {
-        let d = done.load(Ordering::SeqCst);
-        cb(d, if total > 0 { total } else { d }, "download");
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    fs::rename(part_path, dest).map_err(|e| format!("完成重命名失败: {e}"))?;
-    if !expected_sha256.is_empty() {
-        if let Some(ref cb) = progress {
-            cb(total, total, "verify");
-        }
-        verify_sha256(dest, expected_sha256).map_err(|e| {
-            let _ = fs::remove_file(dest);
-            e
-        })?;
+    #[test]
+    fn auto_connections_scales() {
+        assert_eq!(auto_connections(1024), 1);
+        assert_eq!(auto_connections(20 * 1024 * 1024), 8);
+        assert!(auto_connections(2 * 1024 * 1024 * 1024) >= 12);
+        assert!(auto_connections(8 * 1024 * 1024 * 1024) <= MAX_CONNECTIONS);
     }
-    Ok(())
 }

@@ -29,10 +29,13 @@ type Props = {
  * Wired to Runtime worker via Tauri when available.
  */
 export function Dock({
-  voiceName = "Anon",
-  voiceTag = "少女音",
-  voiceIndex = "1/3",
-  profileSummary = "开黑日常 · 音高 +15 共鸣 1.20",
+  // No invented defaults. These used to read "少女音 · 1/3" and
+  // "开黑日常 · 音高 +15 共鸣 1.20" on every install, for every voice, because
+  // nothing ever passed them.
+  voiceName = "未选择模型",
+  voiceTag = "",
+  voiceIndex = "",
+  profileSummary = "默认（原始参数）",
   pitch,
   formant,
   onPitch,
@@ -65,9 +68,11 @@ export function Dock({
 
       <div className="min-w-[190px] max-w-[240px] max-[720px]:min-w-0 max-[720px]:max-w-none max-[720px]:flex-1 max-[720px]:basis-full">
         <div className="text-[15px] font-semibold">当前：{voiceName}</div>
-        <div className="text-xs text-[var(--meta)] mt-0.5">
-          {voiceTag} · {voiceIndex}
-        </div>
+        {voiceTag || voiceIndex ? (
+          <div className="text-xs text-[var(--meta)] mt-0.5">
+            {[voiceTag, voiceIndex].filter(Boolean).join(" · ")}
+          </div>
+        ) : null}
         <div
           className="text-[11.5px] text-[var(--meta)] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap"
           title={profileSummary}

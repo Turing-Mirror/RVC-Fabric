@@ -1597,10 +1597,8 @@ pub fn current_selection_summary(root: &Path) -> Value {
                     .get("active_profile")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                if !pid.is_empty() {
-                    let prof = read_json(&Path::new(dir).join(PROFILES_DIR).join(format!(
-                        "{pid}{PROFILE_EXT}"
-                    )));
+                if let Ok(pp) = profile_path(Path::new(dir), pid) {
+                    let prof = read_json(&pp);
                     profile_name = prof
                         .get("name")
                         .and_then(|v| v.as_str())
@@ -1612,11 +1610,16 @@ pub fn current_selection_summary(root: &Path) -> Value {
     }
     let mut cfg2 = cfg.clone();
     cfg2.insert("_active_profile_name".into(), json!(profile_name));
+    // Position in the library, for the dock's "少女音 · 2/7" line. The UI had
+    // no source for this and shipped a hardcoded "1/3" to every user.
+    let total = models.map(|a| a.len()).unwrap_or(0);
     json!({
         "model": model,
         "pitch": cfg.get("pitch").cloned().unwrap_or(json!(0)),
         "formant": cfg.get("formant").cloned().unwrap_or(json!(0.0)),
         "profile_summary": profile_summary_from_cfg(&cfg2),
+        "index": if idx >= 0 { idx + 1 } else { 0 },
+        "total": total,
         "catalog": cat,
     })
 }

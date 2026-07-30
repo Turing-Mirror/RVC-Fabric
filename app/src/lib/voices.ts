@@ -112,13 +112,23 @@ export async function selectVoice(m: Pick<VoiceModel, "path" | "dir" | "name">) 
 
 export async function currentVoice() {
   if (!isTauri()) {
-    return { model: null, pitch: 0, formant: 0, profile_summary: "默认（原始参数）" };
+    return {
+      model: null,
+      pitch: 0,
+      formant: 0,
+      profile_summary: "默认（原始参数）",
+      index: 0,
+      total: 0,
+    };
   }
   return invoke<{
     model?: VoiceModel | null;
     pitch?: number;
     formant?: number;
     profile_summary?: string;
+    /** 1-based position in the library, 0 when nothing is selected. */
+    index?: number;
+    total?: number;
     catalog?: VoicesCatalog;
   }>("voices_current");
 }

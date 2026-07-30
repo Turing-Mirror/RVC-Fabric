@@ -89,6 +89,8 @@ export default function App() {
   const [voiceName, setVoiceName] = useState("未选择模型");
   const [voiceId, setVoiceId] = useState("");
   const [profileSummary, setProfileSummary] = useState("默认（原始参数）");
+  const [voiceTag, setVoiceTag] = useState("");
+  const [voicePos, setVoicePos] = useState("");
   const [showProvision, setShowProvision] = useState(false);
   const [provisionDismissed, setProvisionDismissed] = useState(false);
 
@@ -219,7 +221,9 @@ export default function App() {
         if (c.model) {
           setVoiceName(String(c.model.name || "未选择模型"));
           setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
+          setVoiceTag(String(c.model.tag || ""));
         }
+        setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
         if (c.pitch != null) setPitch(Number(c.pitch));
         if (c.formant != null) setFormant(Number(c.formant));
         if (c.profile_summary) setProfileSummary(c.profile_summary);
@@ -265,11 +269,18 @@ export default function App() {
     if (p != null) setPitch(Number(p));
     if (f != null) setFormant(Number(f));
     if (ps) setProfileSummary(ps);
+    setVoiceTag(String((model as { tag?: string }).tag || ""));
     // Keep what a later start will send in step with what the dock shows.
     engine.syncParams({
       pitch: p != null ? Number(p) : undefined,
       formant: f != null ? Number(f) : undefined,
     });
+    // The library position moves with the selection; only the shell knows it.
+    void currentVoice()
+      .then((c) => setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : ""))
+      .catch(() => {
+        /* browser preview */
+      });
   };
 
   return (
@@ -431,6 +442,8 @@ export default function App() {
 
       <Dock
         voiceName={voiceName}
+        voiceTag={voiceTag}
+        voiceIndex={voicePos}
         pitch={pitch}
         formant={formant}
         onPitch={handlePitch}

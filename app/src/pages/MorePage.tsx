@@ -1,0 +1,66 @@
+import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+
+export function MorePage() {
+  return (
+    <PagePad>
+      <PageHead title="其他" sub="状态与维护" />
+      <Block title="运行状态">
+        <Group>
+          <ListItem
+            title="壳版本"
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">1.2.4</span>}
+          />
+          <ListItem
+            title="Runtime"
+            desc="启动器自动鉴别显卡后推荐"
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)]">
+                NVIDIA CUDA · 2026.07.14
+              </span>
+            }
+          />
+          <ListItem
+            title="加速方式"
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)]">CUDA · RTX 4070</span>
+            }
+          />
+          <ListItem
+            title="往返延迟"
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">—</span>}
+          />
+        </Group>
+      </Block>
+      <Block title="维护">
+        <Group>
+          <ListItem
+            title="生成诊断包"
+            desc="先跑一次约一分钟的性能测试，再把日志和机型信息打包"
+            right={<Btn>生成</Btn>}
+          />
+          <ListItem
+            title="检查更新"
+            desc="尚未连接更新服务"
+            right={<Btn>检查</Btn>}
+          />
+          <ListItem title="打开性能报告文件夹" right={<Btn>打开</Btn>} />
+          <ListItem
+            title="打开原版实时面板"
+            desc="高级功能，一般用不到"
+            right={<Btn>打开</Btn>}
+          />
+          <ListItem
+            title="申请专业优化"
+            desc="打包样本与档案，我们做针对性调参"
+            right={<Btn>生成咨询包</Btn>}
+          />
+          <ListItem
+            title="强制结束变声引擎"
+            desc="卡住了才用"
+            right={<Btn>结束</Btn>}
+          />
+        </Group>
+      </Block>
+    </PagePad>
+  );
+}

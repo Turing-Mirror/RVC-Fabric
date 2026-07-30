@@ -120,3 +120,20 @@ Desktop.ini
 
 .env
 
+# Private migration handoff pack (local only; not for public repo)
+/docs/RVC-Fabric-界面迁移交接包/
+/docs/RVC Fabric Plan B 0721.md
+
+# Local ops notes (not product docs)
+/docs/音色仓库维护手册.md
+
+# AI / agent scratch
+.trae/
+/TEMP_diag_extract/
+
+# Tauri / React shell (app/)
+/app/node_modules/
+/app/dist/
+/app/src-tauri/target/
+/app/frontend/
+

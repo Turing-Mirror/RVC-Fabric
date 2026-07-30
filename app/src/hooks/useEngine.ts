@@ -20,8 +20,14 @@ export function useEngine() {
   // Read by the adaptive poll without making it a dependency.
   const stateRef = useRef<string>("idle");
   const [lastError, setLastError] = useState("");
-  const pitchRef = useRef(15);
-  const formantRef = useRef(1.2);
+  // What the next start will send. Seeded from the saved config via
+  // `syncParams`, not guessed: these used to default to 15 / 1.2 and were only
+  // ever written when the user dragged a slider, so a first 开启变声 pushed a
+  // +15 semitone shift while the dock read +0 — and overwrote the parameters
+  // the selected voice's own profile had just applied. 0 / 0 is the neutral
+  // value, so a missed sync is now a no-op instead of a surprise.
+  const pitchRef = useRef(0);
+  const formantRef = useRef(0);
   const modeRef = useRef<OutputMode>("vc");
   const hotTimer = useRef<number | null>(null);
   const startingRef = useRef(false);
@@ -178,6 +184,22 @@ export function useEngine() {
     [scheduleHot],
   );
 
+  /**
+   * Adopt values that changed outside the sliders — the saved config on start,
+   * and the selected voice's profile on every switch. Does not push anything to
+   * the worker: the caller already did, or `voices_select` wrote them.
+   */
+  const syncParams = useCallback(
+    (p: { pitch?: number; formant?: number; mode?: OutputMode }) => {
+      if (p.pitch != null && Number.isFinite(p.pitch)) pitchRef.current = p.pitch;
+      if (p.formant != null && Number.isFinite(p.formant)) {
+        formantRef.current = p.formant;
+      }
+      if (p.mode) modeRef.current = p.mode;
+    },
+    [],
+  );
+
   const sub =
     lastError ||
     (provision.need_provision
@@ -195,6 +217,7 @@ export function useEngine() {
     onPitch,
     onFormant,
     onMode,
+    syncParams,
     refresh,
     title: statusTitle(status),
     sub,

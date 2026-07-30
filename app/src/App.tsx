@@ -94,6 +94,7 @@ export default function App() {
 
   const engine = useEngine();
   const plaza = usePlaza();
+  const { syncParams } = engine;
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -222,11 +223,16 @@ export default function App() {
         if (c.pitch != null) setPitch(Number(c.pitch));
         if (c.formant != null) setFormant(Number(c.formant));
         if (c.profile_summary) setProfileSummary(c.profile_summary);
+        syncParams({
+          pitch: c.pitch != null ? Number(c.pitch) : undefined,
+          formant: c.formant != null ? Number(c.formant) : undefined,
+        });
       })
       .catch(() => {
         /* browser preview */
       });
-  }, []);
+    // Runs once on mount; syncParams is stable (useCallback with no deps).
+  }, [syncParams]);
 
   const handlePitch = (v: number) => {
     setPitch(v);
@@ -259,6 +265,11 @@ export default function App() {
     if (p != null) setPitch(Number(p));
     if (f != null) setFormant(Number(f));
     if (ps) setProfileSummary(ps);
+    // Keep what a later start will send in step with what the dock shows.
+    engine.syncParams({
+      pitch: p != null ? Number(p) : undefined,
+      formant: f != null ? Number(f) : undefined,
+    });
   };
 
   return (

@@ -94,6 +94,35 @@ chinesesimplified.BeveledLabel=RVC Fabric 安装程序
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce
 
+[InstallDelete]
+; 从旧的 Python 双程序版本升级：Inno 的 [Files] 只覆盖不删除，不清理的话
+; 旧的 启动器.exe / 变声器.exe / launcher\ 会留在安装目录，而且旧快捷方式
+; 还能把老启动器拉起来——两个程序共用 User_Data、互斥锁又不是同一个，
+; 可能同时起两个 worker 抢音频设备。
+; 注意：Runtime\ 与 User_Data\ 绝不能进这一段，那是用户的运行时和音色。
+Type: files; Name: "{app}\启动器.exe"
+Type: files; Name: "{app}\变声器.exe"
+Type: files; Name: "{app}\TM_Setup.exe"
+Type: files; Name: "{app}\TM_Voice.exe"
+Type: files; Name: "{app}\OpenApp.vbs"
+Type: files; Name: "{app}\OpenSetup.vbs"
+Type: files; Name: "{app}\start.bat"
+Type: files; Name: "{app}\start_app.bat"
+Type: files; Name: "{app}\启动器.vbs"
+Type: files; Name: "{app}\启动软件.vbs"
+Type: filesandordirs; Name: "{app}\launcher\pages"
+Type: filesandordirs; Name: "{app}\launcher\ui"
+Type: files; Name: "{app}\launcher\main_app.py"
+Type: files; Name: "{app}\launcher\bootstrap.py"
+Type: files; Name: "{app}\launcher\theme.py"
+Type: files; Name: "{app}\launcher\tray.py"
+Type: files; Name: "{app}\launcher\setup_app.py"
+Type: files; Name: "{app}\launcher\_setup_shell.py"
+Type: files; Name: "{app}\launcher\rvc_launcher.py"
+; 旧快捷方式（新版只建一个）
+Type: files; Name: "{group}\{#MyAppName} 启动器.lnk"
+Type: files; Name: "{autodesktop}\{#MyAppName} 启动器.lnk"
+
 [Files]
 ; 通用薄包：RVC Fabric.exe + 可替换的 frontend/ + 引擎源码
 ; 不含 Runtime / engine-core / VB-Cable，这三样首次运行时下载
@@ -155,10 +184,25 @@ end;
 procedure WritePackageMeta;
 var
   V, Path, Json, UseDml: String;
+  Existing: AnsiString;
 begin
   V := GpuVariant;
   UseDml := 'false';
   Path := ExpandConstant('{app}\package_meta.json');
+  { 覆盖升级：老装机已经补好过 Runtime，package_meta 里有变体。通用包
+    这里写的是空串，直接覆盖会让程序以为从没选过变体，进而要求重新补全。
+    已有内容且带 variant 就整份保留，不动它。 }
+  if FileExists(Path) then
+  begin
+    if LoadStringFromFile(Path, Existing) then
+    begin
+      if Pos('"variant": ""', Existing) = 0 then
+      begin
+        Log('package_meta.json already has a provisioned variant — keeping it');
+        Exit;
+      end;
+    end;
+  end;
   Json :=
     '{' + #13#10 +
     '  "variant": "' + V + '",' + #13#10 +

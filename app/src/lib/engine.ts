@@ -24,6 +24,20 @@ export type EngineStatus = {
   [key: string]: unknown;
 };
 
+export type ProvisionStatus = {
+  runtime_ready?: boolean;
+  need_provision?: boolean;
+  runtime_python?: string | null;
+  worker_script_ok?: boolean;
+  product_root?: string;
+  gpus?: string[];
+  recommended_variant?: string;
+  recommend_reason?: string;
+  installed_variant?: string | null;
+  download_supported?: boolean;
+  message?: string;
+};
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -55,7 +69,11 @@ export async function startWorker(): Promise<EngineStatus> {
 
 export async function startVc(): Promise<EngineStatus> {
   if (!isTauri()) {
-    return { state: "error", error: "请在 Tauri 窗口中启动变声", worker_alive: false };
+    return {
+      state: "error",
+      error: "请在 Tauri 窗口中启动变声",
+      worker_alive: false,
+    };
   }
   return invoke<EngineStatus>("engine_start_vc");
 }
@@ -87,6 +105,18 @@ export async function listDevices(): Promise<EngineStatus> {
   return invoke<EngineStatus>("engine_list_devices");
 }
 
+export async function getProvisionStatus(): Promise<ProvisionStatus> {
+  if (!isTauri()) {
+    return {
+      runtime_ready: false,
+      need_provision: true,
+      message: "浏览器预览无法探测 Runtime",
+      download_supported: false,
+    };
+  }
+  return invoke<ProvisionStatus>("provision_status");
+}
+
 export function statusTitle(st: EngineStatus): string {
   const s = st.state || "idle";
   if (s === "running") return "变声中";
@@ -98,7 +128,7 @@ export function statusTitle(st: EngineStatus): string {
 }
 
 export function statusSub(st: EngineStatus): string {
-  if (st.error) return String(st.error).slice(0, 48);
+  if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
   if (st.message) return String(st.message).slice(0, 48);
   const delay = Number(st.delay_ms || 0);
   const infer = Number(st.infer_ms || 0);

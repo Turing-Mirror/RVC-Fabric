@@ -85,6 +85,7 @@ export default function App() {
               return (
                 <MorePage
                   status={engine.status}
+                  provision={engine.provision}
                   onForceKill={async () => {
                     await forceKillEngine();
                     await engine.refresh();

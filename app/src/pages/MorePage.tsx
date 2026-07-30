@@ -1,12 +1,13 @@
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
-import type { EngineStatus } from "../lib/engine";
+import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 
 type Props = {
   status?: EngineStatus;
+  provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
 };
 
-export function MorePage({ status, onForceKill }: Props = {}) {
+export function MorePage({ status, provision, onForceKill }: Props = {}) {
   const delay = Number(status?.delay_ms || 0);
   const infer = Number(status?.infer_ms || 0);
   const latency =
@@ -15,6 +16,15 @@ export function MorePage({ status, onForceKill }: Props = {}) {
       : status?.worker_alive
         ? "待命"
         : "—";
+
+  const gpus = provision?.gpus?.length
+    ? provision.gpus.join(" · ")
+    : "未检测";
+  const runtimeLine = provision?.runtime_ready
+    ? provision.installed_variant
+      ? `已就绪 · ${provision.installed_variant}`
+      : "已就绪"
+    : "未就绪（需补全）";
 
   return (
     <PagePad>
@@ -29,10 +39,33 @@ export function MorePage({ status, onForceKill }: Props = {}) {
           />
           <ListItem
             title="Runtime"
-            desc={status?.product_root ? String(status.product_root) : "产品根目录自动解析"}
+            desc={
+              provision?.recommend_reason ||
+              (status?.product_root ? String(status.product_root) : "产品根目录自动解析")
+            }
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)]">{runtimeLine}</span>
+            }
+          />
+          <ListItem
+            title="显卡（系统枚举）"
+            desc="不依赖 torch；用于推荐运行时分版"
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
+                {gpus}
+              </span>
+            }
+          />
+          <ListItem
+            title="推荐运行时"
+            desc={
+              provision?.download_supported
+                ? "可在壳内下载"
+                : "下载能力尚未接入；请用启动器补全"
+            }
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">
-                {status?.worker_alive ? "worker 在线" : "worker 离线"}
+                {provision?.recommended_variant || "—"}
               </span>
             }
           />

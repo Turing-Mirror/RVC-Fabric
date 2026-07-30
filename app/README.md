@@ -58,3 +58,7 @@ set CARGO_TARGET_DIR=F:\VS2022\cargo-target
 cd /d path\to\repo\app
 npm run tauri:dev
 ```
+
+`provision_status` reports whether Runtime+torch is present and recommends a GPU
+variant via Windows adapter names (no torch). Multi-GB download/extract is not
+wired yet (`download_supported: false`).

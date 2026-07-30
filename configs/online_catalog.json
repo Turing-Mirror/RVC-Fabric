@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.2.3-hotfix1",
+    "version": "1.2.3-hotfix2",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.2.3-hotfix1",
+      "version": "1.2.3-hotfix2",
       "kind": "zip",
-      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/4536a5a08ea2bba614252fb34cfc14861863cab53ad7d9c0b09302e92a3e05cc",
-      "sha256": "4536a5a08ea2bba614252fb34cfc14861863cab53ad7d9c0b09302e92a3e05cc",
+      "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/66e8b1fb93131792269b996650a7c01b5b04a2717767e9f382857342e4063176",
+      "sha256": "66e8b1fb93131792269b996650a7c01b5b04a2717767e9f382857342e4063176",
       "min_app_version": "1.1.0",
-      "notes": "v1.2.3 热修1：广场新增更新日志区块与全文页（可返回）； 壳层版本规范与 changelog.yaml 单一源（自动生成 gui.notes）； 另含 1.2.3：修复误报「已在运行」、检查更新加速与超时提示、 启动有更新时弹窗、图标/logo、广场导航、第三方免责换行等。"
+      "notes": "v1.2.3 热修2：启动后自动检查更新并弹窗，确认后可直接下载应用增量包； 应用完成后弹窗询问是否自动重启（否=稍后手动重启）。 另含热修1：广场更新日志区块与全文页、壳层版本规范与 changelog 单一源。"
     }
   },
   "community": {

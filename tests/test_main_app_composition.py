@@ -72,6 +72,8 @@ class MainAppCompositionTests(unittest.TestCase):
             "reload_devices",
             "_init_gpu_backend",
             "_silent_check_updates",
+            "_prompt_restart_after_update",
+            "_restart_app_now",
             "save_settings_silent",
             "show_page",
             "_select_model",

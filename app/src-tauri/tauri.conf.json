@@ -47,7 +47,7 @@
         "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/updater.json"
       ],
       "dialog": false,
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRENkZCNjE2NTA4OUIxQkEKUldTNnNZbFFGclp2VFV6NEhEcE9ueXZaWnpEaE4xb2x2WldHOGp1dnBrR0xna05HZXBSZEg5c0oK",
       "windows": {
         "installMode": "passive"
       }

@@ -669,8 +669,13 @@ pub fn run() {
             store_cancel,
         ])
         .setup(move |app| {
-            // Window is built here (not in tauri.conf.json) because its URL must
-            // be the fabric:// scheme registered above.
+            // Window URL must use the custom scheme registered above.
+            // On Windows, WebView2 treats bare custom schemes poorly for ES
+            // modules (not a secure context / odd CORS). Tauri maps
+            // `http://{scheme}.localhost/` onto the same protocol handler.
+            #[cfg(windows)]
+            let url = format!("http://{}.localhost/index.html", ui_assets::SCHEME);
+            #[cfg(not(windows))]
             let url = format!("{}://localhost/index.html", ui_assets::SCHEME);
             tauri::WebviewWindowBuilder::new(
                 app,

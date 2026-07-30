@@ -103,14 +103,41 @@ fn safe_rel(rel: &str) -> bool {
         && !rel.contains(':')
 }
 
-/// Serve one `fabric://` request.
-pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
-    let raw = req.uri().path();
-    let mut rel = raw.trim_start_matches('/').to_string();
-    if rel.is_empty() {
+/// Normalize a request path into a relative frontend path.
+///
+/// Handles: leading slashes, query/hash, Windows `http://fabric.localhost/`
+/// rewrites, and accidental host segments.
+fn path_to_rel(uri_path: &str) -> String {
+    let mut rel = uri_path.trim().to_string();
+    if let Some((p, _)) = rel.split_once('?') {
+        rel = p.to_string();
+    }
+    if let Some((p, _)) = rel.split_once('#') {
+        rel = p.to_string();
+    }
+    // percent-decode common cases (%20 etc.) without pulling in a full crate
+    rel = rel.replace("%20", " ");
+    while rel.starts_with('/') {
+        rel = rel[1..].to_string();
+    }
+    // Some stacks pass "localhost/index.html" or "fabric.localhost/assets/…"
+    for prefix in ["localhost/", "fabric.localhost/"] {
+        if let Some(rest) = rel.strip_prefix(prefix) {
+            rel = rest.to_string();
+            break;
+        }
+    }
+    if rel.is_empty() || rel.ends_with('/') {
         rel = INDEX.to_string();
     }
+    rel
+}
+
+/// Serve one `fabric://` (or `http://fabric.localhost/`) request.
+pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
+    let rel = path_to_rel(req.uri().path());
     if !safe_rel(&rel) {
+        eprintln!("[rvc-fabric] ui 404 unsafe path: {:?}", req.uri());
         return not_found();
     }
 
@@ -124,11 +151,22 @@ pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
         }
     }
 
-    // 2) copy embedded at build time
-    if let Some(asset) = app.asset_resolver().get(format!("/{rel}")) {
-        return ok(mime_for(&rel), asset.bytes);
+    // 2) copy embedded at build time (several path shapes Tauri has used)
+    for key in [
+        format!("/{rel}"),
+        format!("/frontend/{rel}"),
+        rel.clone(),
+    ] {
+        if let Some(asset) = app.asset_resolver().get(key) {
+            return ok(mime_for(&rel), asset.bytes);
+        }
     }
 
+    eprintln!(
+        "[rvc-fabric] ui 404 rel={rel:?} uri={:?} external={:?}",
+        req.uri(),
+        external_dir()
+    );
     not_found()
 }
 
@@ -163,6 +201,16 @@ mod tests {
         assert_eq!(mime_for("assets/a.css"), "text/css; charset=utf-8");
         assert_eq!(mime_for("x.woff2"), "font/woff2");
         assert_eq!(mime_for("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn path_to_rel_strips_query_and_host() {
+        assert_eq!(path_to_rel("/"), "index.html");
+        assert_eq!(path_to_rel("/index.html"), "index.html");
+        assert_eq!(path_to_rel("/assets/a.js"), "assets/a.js");
+        assert_eq!(path_to_rel("/assets/a.js?v=1"), "assets/a.js");
+        assert_eq!(path_to_rel("/localhost/assets/a.js"), "assets/a.js");
+        assert_eq!(path_to_rel("/fabric.localhost/index.html"), "index.html");
     }
 
     #[test]

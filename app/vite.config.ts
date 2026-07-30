@@ -1,13 +1,33 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import type { Plugin } from "vite";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+/**
+ * Production UI is served via custom protocol `fabric://` (swappable frontend/).
+ * Absolute `/assets/...` + `crossorigin` breaks on Windows WebView2 custom
+ * schemes (CORS / wrong origin) → blank white window. Relative base + no
+ * crossorigin keeps scripts loadable from fabric:// and http://fabric.localhost.
+ */
+function stripCrossorigin(): Plugin {
+  return {
+    name: "strip-crossorigin",
+    enforce: "post",
+    transformIndexHtml(html) {
+      return html.replace(/\s+crossorigin(?:="[^"]*")?/gi, "");
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), stripCrossorigin()],
+
+  // Relative asset URLs so custom-protocol pages resolve next to index.html.
+  base: "./",
 
   // Ship UI as a replaceable `frontend/` pack (see tauri.conf frontendDist).
   build: {

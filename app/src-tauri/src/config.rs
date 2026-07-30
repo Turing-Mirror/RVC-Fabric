@@ -183,9 +183,16 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
     let path = paths::inuse_config_path(root);
     let mut out = read_json(&path);
     for k in engine_keys() {
-        if let Some(v) = cfg.get(k) {
-            out.insert(k.to_string(), v.clone());
+        let Some(v) = cfg.get(k) else { continue };
+        // Never let an empty model path overwrite one that is already set:
+        // losing pth_path means the worker starts with no model at all.
+        if matches!(k, "pth_path" | "index_path")
+            && v.as_str().map(str::is_empty).unwrap_or(false)
+            && out.get(k).and_then(|x| x.as_str()).map(|s| !s.is_empty()) == Some(true)
+        {
+            continue;
         }
+        out.insert(k.to_string(), v.clone());
     }
     sanitize_inuse(root, &mut out);
     let text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| e.to_string())?;
@@ -308,6 +315,33 @@ mod tests {
         sanitize_inuse(root, &mut m);
         assert_eq!(m["pth_path"], json!(""));
         assert_eq!(m["index_path"], json!("User_Data\\a.index"));
+    }
+
+    #[test]
+    fn empty_model_path_never_clobbers_a_real_one() {
+        // The shell rewrites inuse from app_config at startup. If app_config
+        // has not caught up yet, an empty pth_path must not wipe the model the
+        // worker is actually using.
+        let root = std::env::temp_dir().join("rvcf-inuse-guard");
+        let inuse = root.join("configs").join("inuse");
+        std::fs::create_dir_all(&inuse).unwrap();
+        std::fs::write(
+            inuse.join("config.json"),
+            r#"{"pth_path":"User_Data/models/anon/anon.pth","index_path":"a.index"}"#,
+        )
+        .unwrap();
+
+        let mut cfg = defaults(); // pth_path / index_path default to ""
+        cfg.insert("pitch".into(), json!(5));
+        sync_inuse(&root, &cfg).unwrap();
+
+        let after = read_json(&paths::inuse_config_path(&root));
+        assert_eq!(
+            after["pth_path"], json!("User_Data/models/anon/anon.pth"),
+            "empty default must not clear the selected model"
+        );
+        assert_eq!(after["pitch"], json!(5), "other keys still sync");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

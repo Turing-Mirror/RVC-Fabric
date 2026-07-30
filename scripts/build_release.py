@@ -414,8 +414,16 @@ def build_tauri_shell(out: Path) -> None:
     run(["npm", "install", "--no-audit", "--no-fund"], cwd=APP_DIR)
     log("[app] npm run build (vite -> app/frontend)")
     run(["npm", "run", "build"], cwd=APP_DIR)
-    log("[app] cargo tauri build")
-    run(["npm", "run", "tauri", "--", "build"], cwd=APP_DIR)
+    # Signed updater artifacts (strategy B) need a private key. Without one
+    # `tauri build` fails outright, so only ask for them when the key is set.
+    signed = bool(os.environ.get("TAURI_SIGNING_PRIVATE_KEY"))
+    cmd = ["npm", "run", "tauri", "--", "build"]
+    if signed:
+        cmd += ["--config", '{"bundle":{"createUpdaterArtifacts":true}}']
+        log("[app] cargo tauri build (signed updater artifacts)")
+    else:
+        log("[app] cargo tauri build (no TAURI_SIGNING_PRIVATE_KEY — 不产更新签名包)")
+    run(cmd, cwd=APP_DIR)
 
     release = APP_DIR / "src-tauri" / "target" / "release"
     exe = release / TAURI_EXE_NAME

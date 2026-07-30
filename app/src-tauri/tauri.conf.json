@@ -39,7 +39,7 @@
         "type": "downloadBootstrapper"
       }
     },
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": false
   },
   "plugins": {
     "updater": {
@@ -47,7 +47,7 @@
         "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/updater.json"
       ],
       "dialog": false,
-      "pubkey": "REPLACE_WITH_TAURI_SIGNING_PUBLIC_KEY",
+      "pubkey": "",
       "windows": {
         "installMode": "passive"
       }

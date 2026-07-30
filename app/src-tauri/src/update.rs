@@ -258,7 +258,12 @@ mod tests {
 pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
     use tauri_plugin_updater::UpdaterExt;
 
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    // Without a signing key pair there is nothing to verify against, and
+    // shipping an unverified exe replacement is worse than not having the
+    // feature. Say so plainly instead of failing with a plugin error.
+    let updater = app
+        .updater()
+        .map_err(|_| "尚未配置更新签名密钥，请到发布页手动下载新版本".to_string())?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         return Ok(json!({"available": false, "local": APP_VERSION}));
     };

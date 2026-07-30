@@ -643,20 +643,20 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
     }))
 }
 
+/// Persist the selected model.
+///
+/// **app_config is the source of truth**, not inuse: the shell rewrites inuse
+/// from app_config at startup, so a selection that only landed in inuse would
+/// be wiped on the next launch. Write both.
 fn sync_inuse_model(root: &Path, pth: &str, index: &str) -> Result<(), String> {
     if pth.is_empty() {
         return Ok(());
     }
-    let path = root.join("configs").join("inuse").join("config.json");
-    if !path.is_file() {
-        return Ok(());
-    }
-    let mut data = read_json(&path);
-    if let Some(obj) = data.as_object_mut() {
-        obj.insert("pth_path".into(), json!(pth));
-        obj.insert("index_path".into(), json!(index));
-    }
-    write_json_atomic(&path, &data)
+    let mut patch = serde_json::Map::new();
+    patch.insert("pth_path".into(), json!(pth));
+    patch.insert("index_path".into(), json!(index));
+    // This also mirrors into inuse (both keys are COLD engine keys).
+    crate::config::update(root, patch).map(|_| ())
 }
 
 fn profile_summary_from_cfg(cfg: &Map<String, Value>) -> String {

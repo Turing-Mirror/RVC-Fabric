@@ -58,7 +58,12 @@ class SettingsUiKit:
     def help_mark(
         self, parent, tip: str, *, pack_side: str = "left"
     ) -> Optional[tk.Label]:
-        """Prominent ? badge; hover shows full tip."""
+        """Prominent ? badge; hover shows full tip.
+
+        Always pack **immediately after the field label** (and before the
+        combobox / slider / other control) so every row has the mark on the
+        left — never trailing at the far right of an expanding control.
+        """
         if not tip:
             return None
         q = tk.Label(
@@ -73,7 +78,8 @@ class SettingsUiKit:
             highlightthickness=1,
             highlightbackground=TM_ACCENT,
         )
-        q.pack(side=pack_side, padx=(6, 0))
+        # Slight gap after the label; keep side=left so pack order controls column
+        q.pack(side=pack_side, padx=(4, 6))
         HoverTip(q, tip)
         return q
 

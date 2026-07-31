@@ -669,6 +669,27 @@ def _compile_thirdparty_voice(
         )
         return None
 
+    # 未验证的不发布。
+    #
+    # 第三方直链指向的那串字节，在 verify_voice_pack.py 跑过之前没有人打开过：
+    # 可能是空壳 zip、只有训练中间产物、也可能整个是 SoVITS —— 这三种都能正常
+    # 下载解压、里面也确实有 .pth，用户要等到点「开启变声」才发现不对。既然
+    # 商店里第三方和官方音色长得一模一样，就不能让没验过的东西混进去。
+    ver = v.get("verified") if isinstance(v.get("verified"), dict) else None
+    if not ver:
+        rep.error(
+            f"{who}: 缺 verified —— 先跑 "
+            f"python scripts/verify_voice_pack.py 验证并把结果写进 YAML"
+        )
+        return None
+    checks = [str(c) for c in (ver.get("checks") or [])]
+    if "pth_struct_ok" not in checks:
+        rep.error(
+            f"{who}: verified.checks 里没有 pth_struct_ok —— "
+            f"只确认了文件能下载，没确认里面真是 RVC 模型。实际: {checks}"
+        )
+        return None
+
     date = _yymmdd(v.get("date") or v.get("released"))
     if not date:
         rep.error(f"{who}: date 必须是 YYMMDD")

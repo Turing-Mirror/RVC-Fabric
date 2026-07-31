@@ -127,6 +127,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "pack_url": pack_url,
         "pth_url": pth_url,
         "index_url": d.get("index_url").and_then(|v| v.as_str()).unwrap_or(""),
+        "index_sha256": d.get("index_sha256").and_then(|v| v.as_str()).unwrap_or(""),
         "cover_url": cover,
         "size_bytes": size,
         "sha256": d.get("sha256").and_then(|v| v.as_str()).unwrap_or(""),
@@ -727,7 +728,10 @@ pub fn install_voice_entry(
             urls: vec![pth_url],
             dest: pth_tmp.clone(),
             expected_sha256: sha,
-            size_hint: size,
+            // 0 而不是 size：voice_files 的 size_bytes 是 pth + index 的合计
+            // （商店要显示用户实际下载的总量），拿它当单个 pth 的进度分母，
+            // 进度会一直卡在一成左右然后突然跳完。Content-Length 有，够用。
+            size_hint: 0,
             connections: None,
             kind: DownloadKind::VoicePack,
         },
@@ -757,11 +761,19 @@ pub fn install_voice_entry(
     if let Some(iu) = entry.get("index_url").and_then(|v| v.as_str()) {
         if !iu.is_empty() {
             let idx_tmp = cache.join(format!("{vid}.index"));
+            // 清单带了 index 的哈希就校验。index 不是 pickle，风险比 pth 低，
+            // 所以缺哈希时不像 pth 那样硬拒；但既然发布前验证过、值也记下来了，
+            // 就没有理由不比对。
+            let idx_sha = entry
+                .get("index_sha256")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let _ = download::download_request(
                 DownloadRequest {
                     urls: vec![iu.to_string()],
                     dest: idx_tmp.clone(),
-                    expected_sha256: String::new(),
+                    expected_sha256: idx_sha,
                     size_hint: 0,
                     connections: Some(1),
                     kind: DownloadKind::Generic,

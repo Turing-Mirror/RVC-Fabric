@@ -185,3 +185,9 @@ AGENTS.md
 /app/src-tauri/target/
 /app/frontend/
 /app/.vscode/
+
+# 验证第三方音色用的 CPU torch 环境（scripts/verify_voice_pack.py）
+/.venv-verify/
+
+# 验证第三方音色时下载的制品缓存（几个 GB，跑完可删）
+/.verify-cache/

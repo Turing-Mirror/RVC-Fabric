@@ -35,6 +35,10 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [thirdAck, setThirdAck] = useState(false);
+  // 官方源同样要过一次须知。第三方那条讲的是「来源不可信、pickle 有风险」，
+  // 是安全问题；这一条讲的是声音权利，跟音色从哪来无关 —— 图灵镜自己训练的
+  // 音色一样是拿别人的声音训出来的。两条内容不同，但都只弹一次。
+  const [officialAck, setOfficialAck] = useState(false);
 
   const refresh = useCallback(async (remote = true) => {
     setLoading(true);
@@ -57,6 +61,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     setQ("");
     setView("latest");
     setThirdAck(false);
+    setOfficialAck(false);
   }, [open, refresh]);
 
   useEffect(() => {
@@ -158,6 +163,17 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
 
   const install = async (v: StoreVoice) => {
     if (v.installed || running.includes(v.id) || queued.includes(v.id)) return;
+    if (v.official !== false && !officialAck) {
+      const ok = window.confirm(
+        "音色使用须知\n\n" +
+          "音色模型由声音素材训练而来，相关权利属于原声的权利人。\n" +
+          "请勿用于冒充他人、欺诈、造谣或其他侵害他人权益的用途；\n" +
+          "商用前请自行确认授权。\n\n" +
+          "继续安装即表示你已了解。",
+      );
+      if (!ok) return;
+      setOfficialAck(true);
+    }
     if (v.official === false && !thirdAck) {
       const ok = window.confirm(
         "第三方音色免责声明\n\n" +

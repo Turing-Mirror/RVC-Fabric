@@ -3,6 +3,7 @@ import {
   ensureEngine,
   getEngineStatus,
   getProvisionStatus,
+  listDevices,
   setHot,
   startVc,
   statusSub,
@@ -151,6 +152,29 @@ export function useEngine() {
     }
   }, [running, refresh, provision, status.state]);
 
+  /**
+   * Ask the worker to re-enumerate audio devices.
+   *
+   * 「重载设备列表」 was wired to `refresh()`, which only re-reads status.json —
+   * it never asked the worker for anything. The lists therefore stayed empty
+   * until the worker happened to enumerate on its own (part of the 20–40 s
+   * cold start), and clicking the button only appeared to work because by then
+   * enough time had passed.
+   */
+  const [devicesBusy, setDevicesBusy] = useState(false);
+  const reloadDevices = useCallback(async () => {
+    setDevicesBusy(true);
+    try {
+      const st = await listDevices();
+      setStatus(st);
+      if (st.state === "error" && st.error) setLastError(String(st.error));
+    } catch (e) {
+      setLastError(String(e));
+    } finally {
+      setDevicesBusy(false);
+    }
+  }, []);
+
   const scheduleHot = useCallback((patch: Parameters<typeof setHot>[0]) => {
     if (hotTimer.current) window.clearTimeout(hotTimer.current);
     hotTimer.current = window.setTimeout(() => {
@@ -219,6 +243,8 @@ export function useEngine() {
     onMode,
     syncParams,
     refresh,
+    reloadDevices,
+    devicesBusy,
     title: statusTitle(status),
     sub,
     // Worker writes `input_db` (dBFS) and carries the gate as `threhold`

@@ -866,6 +866,11 @@ if __name__ == "__main__":
 
         def _notify(self, msg: str) -> None:
             printt("%s", msg)
+            # Remembered so _worker_start can report the actual reason. It used
+            # to write the specific message here and overwrite it one line
+            # later with a generic「模型路径 / 设备」, which told the user
+            # nothing about which of the four checks had failed.
+            self._last_invalid_reason = str(msg)
             if self.worker_mode:
                 try:
                     self._worker_write_status(error=str(msg), message=str(msg))
@@ -896,13 +901,30 @@ if __name__ == "__main__":
             if not index_path:
                 # Force rate 0 so rtrvc never calls faiss.read_index
                 values["index_rate"] = 0
+            # Non-ASCII paths.
+            #
+            # The model checkpoint is fine: get_synthesizer goes through
+            # torch.load, which opens the file with Python and handles a
+            # Unicode path on Windows without trouble. This check only ever
+            # existed because faiss does not — and rejecting the whole start
+            # meant every voice whose folder carries a Chinese name (which is
+            # most of the store catalog, and most of what people import) came
+            # back as「设置无效」 and could not be used at all.
+            #
+            # So: keep the check for the index only, and treat a non-ASCII
+            # index the same way a missing one is already treated — drop it and
+            # carry on, rather than blocking the voice.
             pattern = re.compile("[^\x00-\x7F]+")
-            if pattern.findall(pth):
-                self._notify(i18n("pth文件路径不可包含中文"))
-                return False
             if index_path and pattern.findall(index_path):
-                self._notify(i18n("index文件路径不可包含中文"))
-                return False
+                printt("index path is not ASCII, disable index: %s", index_path)
+                index_path = ""
+                values["index_path"] = ""
+                values["index_rate"] = 0
+                if self.window is not None:
+                    try:
+                        self.window["index_path"].update("")
+                    except Exception:
+                        pass
             if not os.path.isfile(pth):
                 self._notify(i18n("pth文件不存在") + f"\n{pth}")
                 return False
@@ -2373,11 +2395,15 @@ if __name__ == "__main__":
             )
             try:
                 values = self._values_from_config_file()
+                self._last_invalid_reason = ""
                 ok = self.set_values(values)
                 if ok is not True:
                     self._worker_write_status(
                         state="error",
-                        error="invalid settings (model path / devices)",
+                        error=(
+                            getattr(self, "_last_invalid_reason", "")
+                            or "设置无效（模型路径 / 设备）"
+                        ),
                         message="set_values failed",
                     )
                     return

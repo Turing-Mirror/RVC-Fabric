@@ -3,9 +3,31 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use flate2::read::GzDecoder;
 use tar::Archive;
+
+/// Counts bytes pulled off the archive so the caller can show progress.
+///
+/// The Runtime tar is several GB and the gate used to sit on a single
+/// 「解压 Runtime…」 line for minutes with a bar that never moved — from the
+/// user's side indistinguishable from a hang. Counting the *archive* bytes is
+/// the right measure: it is exact for a plain tar and still monotonic for a
+/// gzip one, where it tracks how far into the file we have read.
+struct CountingReader<R> {
+    inner: R,
+    read: Arc<AtomicU64>,
+}
+
+impl<R: Read> Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
+}
 
 /// Reject a member whose path would land outside `dest_root`.
 ///
@@ -54,8 +76,15 @@ fn is_runtime_member(name: &str) -> bool {
     lower.split('/').any(|p| p == "runtime")
 }
 
-fn open_archive(path: &Path) -> Result<Archive<Box<dyn Read + Send>>, String> {
+fn open_archive(
+    path: &Path,
+    counter: Arc<AtomicU64>,
+) -> Result<Archive<Box<dyn Read + Send>>, String> {
     let f = fs::File::open(path).map_err(|e| format!("打开 tar 失败: {e}"))?;
+    let f = CountingReader {
+        inner: f,
+        read: counter,
+    };
     let name = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -92,8 +121,19 @@ fn find_python_exe(dir: &Path) -> Option<PathBuf> {
     walk(dir, 0)
 }
 
-/// Extract so that *dest_root*/Runtime/python.exe exists.
-pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), String> {
+/// Extract so that *dest_root*/Runtime/python.exe exists, calling
+/// `on_progress(done_bytes, total_bytes)` as it goes.
+///
+/// Throttled to ~5 Hz: a multi-GB tar reads in 8 KB chunks, and an unthrottled
+/// callback would emit hundreds of thousands of IPC events.
+pub fn extract_runtime_tar_with_progress(
+    archive: &Path,
+    dest_root: &Path,
+    on_progress: &dyn Fn(u64, u64),
+) -> Result<(), String> {
+    let total = fs::metadata(archive).map(|m| m.len()).unwrap_or(0);
+    let counter = Arc::new(AtomicU64::new(0));
+    let mut last_emit = std::time::Instant::now();
     dest_root
         .canonicalize()
         .or_else(|_| {
@@ -116,7 +156,7 @@ pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), Strin
     }
     fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
 
-    let mut archive = open_archive(archive)?;
+    let mut archive = open_archive(archive, counter.clone())?;
     let entries = archive
         .entries()
         .map_err(|e| format!("读取 tar 失败: {e}"))?;
@@ -135,7 +175,12 @@ pub fn extract_runtime_tar(archive: &Path, dest_root: &Path) -> Result<(), Strin
         entry
             .unpack_in(&staging)
             .map_err(|e| format!("解压失败 {path}: {e}"))?;
+        if last_emit.elapsed() >= std::time::Duration::from_millis(200) {
+            last_emit = std::time::Instant::now();
+            on_progress(counter.load(Ordering::Relaxed).min(total), total);
+        }
     }
+    on_progress(total, total);
 
     let mut candidate = staging.join("Runtime");
     if !(candidate.join("python.exe")).is_file() {

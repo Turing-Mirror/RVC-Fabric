@@ -47,6 +47,14 @@ pub const COLD_KEYS: &[&str] = &[
     "crossfade_length",
     "extra_time",
     "n_cpu",
+    // 「变声时监听自己」 and its device. These were in neither list, so
+    // `update()` never set `touched_engine` and `sync_inuse` was never called
+    // for them — the toggle wrote app_config and stopped there. The worker
+    // reads `monitor_enabled` / `monitor_device` out of inuse, so monitoring
+    // could not be switched on at all. Cold because the shell's hot channel
+    // (`engine_set_hot`) has a fixed parameter list with no monitor in it.
+    "monitor_self",
+    "monitor_device",
 ];
 
 /// Keys the worker consumes — only these are mirrored into `inuse`.
@@ -194,6 +202,16 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
         }
         out.insert(k.to_string(), v.clone());
     }
+    // The shell calls it `monitor_self`; the worker reads `monitor_enabled`.
+    // Nothing translated between the two, so 「变声时监听自己」 was always
+    // false on the engine side no matter what the settings page showed.
+    out.insert(
+        "monitor_enabled".into(),
+        json!(cfg
+            .get("monitor_self")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)),
+    );
     sanitize_inuse(root, &mut out);
     let text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| e.to_string())?;
     write_atomic(&path, &text).map_err(|e| format!("写入 inuse 配置失败：{e}"))
@@ -356,6 +374,37 @@ mod tests {
         for k in HOT_KEYS {
             assert!(!COLD_KEYS.contains(k), "{k} in both sets");
         }
+    }
+
+    #[test]
+    fn monitor_toggle_reaches_the_worker() {
+        // The settings page writes `monitor_self`; the worker only ever looks
+        // at `monitor_enabled`. If this mapping goes missing again,
+        // 「变声时监听自己」 silently does nothing.
+        let root = std::env::temp_dir().join("rvcf-monitor-sync-test");
+        let _ = std::fs::remove_dir_all(&root);
+        let mut cfg = defaults();
+        cfg.insert("monitor_self".into(), json!(true));
+        cfg.insert("monitor_device".into(), json!("耳机 (Realtek)"));
+        sync_inuse(&root, &cfg).unwrap();
+
+        let out = read_json(&paths::inuse_config_path(&root));
+        assert_eq!(out.get("monitor_enabled"), Some(&json!(true)));
+        assert_eq!(out.get("monitor_device"), Some(&json!("耳机 (Realtek)")));
+
+        cfg.insert("monitor_self".into(), json!(false));
+        sync_inuse(&root, &cfg).unwrap();
+        let out = read_json(&paths::inuse_config_path(&root));
+        assert_eq!(out.get("monitor_enabled"), Some(&json!(false)));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn monitor_keys_force_an_inuse_write() {
+        // `update()` only touches inuse when a key is hot or cold. Monitoring
+        // was in neither list, so the toggle never got as far as the engine.
+        assert!(is_cold("monitor_self"));
+        assert!(is_cold("monitor_device"));
     }
 
     #[test]

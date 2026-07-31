@@ -23,6 +23,11 @@ type Tab = (typeof TABS)[number];
 type Props = {
   status?: EngineStatus;
   onReloadDevices?: () => void;
+  /** True while the worker is re-enumerating. */
+  devicesBusy?: boolean;
+  /** False until the worker finishes its cold start, which is when device
+   *  names first exist. Drives the empty-state line below. */
+  workerAlive?: boolean;
   onCheckUpdate?: () => void;
   updateLine?: string;
 };
@@ -44,6 +49,8 @@ const CARD =
 function SettingsPageImpl({
   status,
   onReloadDevices,
+  devicesBusy = false,
+  workerAlive = false,
   onCheckUpdate,
   updateLine,
 }: Props = {}) {
@@ -54,6 +61,17 @@ function SettingsPageImpl({
   const inputs = deviceOptions(raw?.input_devices);
   const outputs = deviceOptions(raw?.output_devices);
   const hostapis = deviceOptions(raw?.hostapis);
+  // Device names come from the worker, and the worker needs 20-40s to boot
+  // torch on a cold start. Until then every dropdown here is an empty box with
+  // no explanation, which reads as broken rather than as "not yet".
+  const devicesReady = inputs.length > 0 || outputs.length > 0;
+  const deviceHint = devicesBusy
+    ? "正在读取设备…"
+    : devicesReady
+      ? ""
+      : workerAlive
+        ? "还没读到设备，点右边「重载设备列表」"
+        : "引擎正在启动，设备列表稍后出现";
 
   return (
     <div>
@@ -183,9 +201,14 @@ function SettingsPageImpl({
                     ]}
                     onChange={(v) => c.set("sr_type", v, true)}
                   />
-                  <Btn onClick={onReloadDevices}>重载设备列表</Btn>
+                  <Btn onClick={onReloadDevices} disabled={devicesBusy}>
+                    {devicesBusy ? "读取中…" : "重载设备列表"}
+                  </Btn>
                 </span>
               </div>
+              {deviceHint ? (
+                <div className="text-[12.5px] text-[var(--help)]">{deviceHint}</div>
+              ) : null}
             </div>
           </Block>
         ) : null}

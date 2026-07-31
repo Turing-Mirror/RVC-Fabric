@@ -575,8 +575,21 @@ pub fn run_provision(
             return Err("已取消".to_string());
         }
 
+        // Several GB of tar takes minutes. A single static line with a bar that
+        // never moves is indistinguishable from a hang, so report bytes read.
         emit_progress(&app, "extract", 0, 1, "解压 Runtime…");
-        extract::extract_runtime_tar(&dest_file, &root)?;
+        {
+            let app_x = app.clone();
+            extract::extract_runtime_tar_with_progress(&dest_file, &root, &|done, total| {
+                emit_progress(
+                    &app_x,
+                    "extract",
+                    done,
+                    total.max(1),
+                    &format!("解压 Runtime… {} / {}", format_size(done), format_size(total)),
+                );
+            })?;
+        }
         emit_progress(&app, "extract", 1, 1, "解压完成");
 
         write_package_meta(&root, &var, &spec.label, &spec.version)?;

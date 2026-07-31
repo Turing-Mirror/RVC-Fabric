@@ -56,6 +56,14 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   // down the whole tree — a blank window on exactly the machines that need the
   // gate (a fresh install with no Runtime yet).
   const [extra, setExtra] = useState<string>("");
+  // Last step of first-run setup. The gate used to fetch the VB-Cable package
+  // and then close on the spot, so the one thing the user still had to do —
+  // actually run the driver installer — was never offered and the window just
+  // disappeared. `null` means we are not at that step yet.
+  const [vbcable, setVbcable] = useState<null | "ready" | "installing" | "failed">(
+    null,
+  );
+  const [vbcableMsg, setVbcableMsg] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -133,9 +141,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
       const r = await startProvision(variant, false);
       if (r.ok) {
         // Runtime is only step one; engine-core and VB-Cable follow before the
-        // gate is allowed to close.
+        // gate is allowed to close. runExtras leaves the VB-Cable step on
+        // screen, and that step's own buttons close the gate.
         await runExtras();
-        onDone();
       } else if (isCancelError(r.message)) {
         finishCancel();
       } else {
@@ -190,6 +198,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const barWidth =
     done > 0 && pct < 0.5 ? Math.max(pct, 0.5) : Math.min(100, pct);
   const showBar = busy && progress && progress.phase !== "error";
+  // Only the download phase reports bytes. Extract / engine-core / vbcable all
+  // emit done=0 total=1, which the byte line below used to read as "no bytes
+  // yet" and answer with 「正在连接服务器」 — while the user was in fact
+  // watching an unpack that had nothing to do with the network.
+  const isDownload = String(progress?.phase || "") === "download";
   const connecting =
     showBar &&
     done <= 0 &&
@@ -232,8 +245,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     try {
       await invoke("assets_ensure_vbcable");
       setExtra("");
+      setVbcable("ready");
     } catch (e) {
-      setExtra(`虚拟声卡包稍后再装：${String(e)}`);
+      setExtra("");
+      setVbcableMsg(String(e));
+      setVbcable("failed");
     }
   }
 
@@ -317,18 +333,18 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 />
               )}
             </div>
-            {done > 0 || total > 1 ? (
+            {isDownload && done > 0 ? (
               <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums flex justify-between gap-2">
                 <span>
                   {formatBytes(done)} / {formatBytes(total)}
                 </span>
                 {speedLabel ? <span>{speedLabel}</span> : null}
               </div>
-            ) : (
+            ) : isDownload ? (
               <div className="mt-1.5 text-[11.5px] text-[var(--meta)]">
                 正在连接服务器，稍后显示进度…
               </div>
-            )}
+            ) : null}
           </div>
         ) : null}
 
@@ -336,8 +352,39 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           <p className="text-[12.5px] text-[#c43] m-0 mb-3 leading-relaxed">{error}</p>
         ) : null}
 
+        {vbcable ? (
+          <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
+            <div className="text-[13.5px] mb-1">最后一步：安装虚拟声卡</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              {vbcable === "failed"
+                ? `安装包没准备好：${vbcableMsg}。可以稍后在「说明」页重试。`
+                : vbcable === "installing"
+                  ? "已启动官方安装程序，请在弹出的窗口里确认（需要管理员权限）"
+                  : "没有它，游戏和语音软件里的人听不到变声后的你。点「安装」会弹出官方安装程序和管理员确认。"}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2 justify-end">
-          {busy ? (
+          {vbcable ? (
+            <>
+              <Btn onClick={onDone}>{vbcable === "ready" ? "跳过" : "完成"}</Btn>
+              {vbcable === "ready" ? (
+                <Btn
+                  primary
+                  onClick={() => {
+                    setVbcable("installing");
+                    void invoke("assets_install_vbcable").catch((e) => {
+                      setVbcableMsg(String(e));
+                      setVbcable("failed");
+                    });
+                  }}
+                >
+                  安装
+                </Btn>
+              ) : null}
+            </>
+          ) : busy ? (
             <Btn onClick={onCancelClick}>取消</Btn>
           ) : (
             <>

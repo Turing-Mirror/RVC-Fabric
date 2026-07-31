@@ -431,7 +431,9 @@ export default function App() {
               return (
                 <SettingsPage
                   status={deviceStatus as never}
-                  onReloadDevices={() => void engine.refresh()}
+                  onReloadDevices={() => void engine.reloadDevices()}
+                  devicesBusy={engine.devicesBusy}
+                  workerAlive={Boolean(engine.status.worker_alive)}
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
                 />

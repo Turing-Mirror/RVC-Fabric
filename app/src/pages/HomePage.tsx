@@ -2,6 +2,7 @@ import { useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
+import emblem from "../assets/logo_ui.png";
 
 type Props = {
   currentId?: string;
@@ -16,6 +17,24 @@ type Props = {
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
+
+/**
+ * Brand mark in the hero band. Decorative, so no alt text and no pointer
+ * target. Dropped below 720px, where it would land on top of the copy instead
+ * of beside it.
+ */
+function HeroEmblem() {
+  return (
+    <img
+      src={emblem}
+      alt=""
+      aria-hidden
+      draggable={false}
+      className="pointer-events-none select-none absolute right-[30px] top-1/2 -translate-y-1/2 h-[104px] w-auto opacity-[var(--emblem-opacity)] max-[1020px]:right-[22px] max-[1020px]:h-[88px] max-[720px]:hidden"
+      style={{ filter: "var(--logo-filter)" }}
+    />
+  );
+}
 
 /**
  * Home — stage band + 3 recent cards, current voice in the centre (larger).
@@ -103,7 +122,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
   if (!current) {
     return (
       <div>
-        <div className="bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
+        <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
           <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">
             选择音色，开始变声
           </h2>
@@ -112,6 +131,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
               ? `读取音色目录失败：${loadError}`
               : "还没有本地音色。到「模型」页导入，或从社区音色下载。"}
           </p>
+          <HeroEmblem />
         </div>
         <PagePad>
           <Block title="最近使用">
@@ -126,7 +146,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
 
   return (
     <div>
-      <div className="bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
+      <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
         <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">
           选择音色，开始变声
         </h2>
@@ -140,7 +160,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
           {current.tag || current.author ? " · " : ""}
           切换立即生效 · 运行中会自动重载
         </p>
-        {/* Right-side brand logo slot intentionally empty */}
+        <HeroEmblem />
       </div>
 
       <PagePad>

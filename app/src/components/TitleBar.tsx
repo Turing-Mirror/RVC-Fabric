@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SegmentControl } from "./SegmentControl";
 import { NAV_PAGES, type PageId } from "../lib/nav";
+import wordmark from "../assets/logo_wordmark.png";
 
 type Props = {
   page: PageId;
@@ -44,8 +45,14 @@ export function TitleBar({
       className="flex-none h-[54px] flex items-center pl-[22px] pr-2"
       data-tauri-drag-region
     >
-      {/* Logo slot intentionally empty — brand wordmark lands later */}
-      <div className="w-0" data-tauri-drag-region aria-hidden />
+      <img
+        src={wordmark}
+        alt="RVC Fabric"
+        draggable={false}
+        data-tauri-drag-region
+        className="h-[19px] w-auto select-none flex-none"
+        style={{ filter: "var(--logo-filter)" }}
+      />
 
       <div className="ml-auto flex items-center min-w-0" data-tauri-drag-region>
         <div

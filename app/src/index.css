@@ -26,10 +26,21 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass:
     0 2px 10px rgba(0, 0, 0, 0.1), inset 0 0 0 0.5px rgba(255, 255, 255, 0.6);
+  /* The wordmark's script half is near-black. On the dark ground it has to be
+     flattened to a white silhouette; inverting instead would drag the blue
+     half to orange. */
+  --logo-filter: none;
+  /* Watermark strength in the home hero band. The dark ground takes a flattened
+     white silhouette, which needs a touch less opacity than the ink-on-light
+     original to read as the same weight. */
+  --emblem-opacity: 0.18;
 }
 
+/* 设置 → 界面配色 writes `theme_mode` and App stamps it on <html> as
+   data-theme. Without these two blocks the attribute matched nothing, so
+   「浅色」/「深色」 were inert and the app always followed the OS. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #171b22;
     --surface: #1f242d;
     --group: rgba(232, 240, 248, 0.045);
@@ -47,7 +58,31 @@
     --page-bg: #0c0f13;
     --glass:
       0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+    --logo-filter: brightness(0) invert(1);
+    --emblem-opacity: 0.14;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171b22;
+  --surface: #1f242d;
+  --group: rgba(232, 240, 248, 0.045);
+  --stage: #1e2837;
+  --ink: #e4e9ef;
+  --ink-muted: #a9b3be;
+  --help: #828c96;
+  --meta: #6e7883;
+  --hairline: rgba(232, 240, 248, 0.1);
+  --line: rgba(232, 240, 248, 0.15);
+  --accent: #4aa3f0;
+  --accent-ink: #0f1319;
+  --accent-soft: rgba(74, 163, 240, 0.14);
+  --notify: #e0ae3d;
+  --page-bg: #0c0f13;
+  --glass:
+    0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --logo-filter: brightness(0) invert(1);
+  --emblem-opacity: 0.14;
 }
 
 *,

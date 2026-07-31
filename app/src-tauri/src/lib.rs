@@ -19,13 +19,14 @@ mod telemetry;
 mod ui_assets;
 pub mod update;
 mod voices;
+mod window_watch;
 mod worker;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct AppState {
     root: PathBuf,
@@ -823,7 +824,13 @@ pub fn run() {
     // Before anything else: a release build has no console, so without this the
     // rest of these lines would go nowhere.
     logging::init(&root);
-    logging::shell_log!("=== RVC Fabric {} 启动 ===", update::APP_VERSION);
+    // pid 在横幅里，是因为 shell.log 是跨启动追加的：报告「进程还在但看不见
+    // 窗口」时，得先能确认手上这段日志和任务管理器里那个进程是同一次运行。
+    logging::shell_log!(
+        "=== RVC Fabric {} 启动（pid {}）===",
+        update::APP_VERSION,
+        std::process::id()
+    );
     logging::shell_log!("product root: {}", root.display());
     logging::shell_log!("runtime_ready={}", paths::runtime_ready(&root));
     logging::shell_log!(
@@ -918,7 +925,7 @@ pub fn run() {
             #[cfg(not(windows))]
             let url = format!("{}://localhost/index.html", ui_assets::SCHEME);
             logging::shell_log!("window url: {url}");
-            tauri::WebviewWindowBuilder::new(
+            let main_window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::CustomProtocol(url.parse().expect("fabric url")),
@@ -930,10 +937,17 @@ pub fn run() {
             .decorations(false)
             .center()
             .build()?;
+            window_watch::report_and_rescue(&main_window, "创建后");
 
             // A blank window is the one failure the user cannot describe and we
             // cannot see. If the UI never reports back, say so in the log with
             // everything needed to tell "assets missing" from "script threw".
+            //
+            // The window state goes in unconditionally, not just on failure:
+            // "界面已挂载" plus "看不见窗口" is a real combination — the HWND
+            // exists and WebView2 is painting into it, it is just somewhere the
+            // user cannot see. Guessing between "no window" and "window off
+            // screen" from the outside is impossible, so let the window say.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -946,6 +960,9 @@ pub fn run() {
                             ui_assets::not_found_count(),
                         );
                         let _ = h.emit("app://ui-stalled", ());
+                    }
+                    if let Some(w) = h.get_webview_window("main") {
+                        window_watch::report_and_rescue(&w, "启动 12 秒后");
                     }
                 });
             }

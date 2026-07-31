@@ -46,7 +46,12 @@ export function SegmentControl<T extends string>({
       const root = rootRef.current;
       const btn = btnRefs.current.get(value);
       if (!root || !btn) return;
-      const x = btn.offsetLeft - 3;
+      // `offsetLeft` is measured from the container's padding box, which is
+      // the same origin `left: 0` uses for the absolutely-positioned thumb —
+      // so no padding correction belongs here. Subtracting the 3px padding put
+      // the thumb 3px left of its button: flush against the container on the
+      // left, 6px of slack on the right. That is the lopsided pill.
+      const x = btn.offsetLeft;
       const w = btn.offsetWidth;
       setThumb({ x, w });
       if (animate && !first.current) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { openExternal } from "../lib/plaza";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 
 type Props = {
@@ -11,6 +12,66 @@ type Props = {
   updateLine?: string;
   onOpenProvision?: () => void;
 };
+
+/**
+ * Repos and socials. Plain list rows, opened in the user's own browser through
+ * the shell's http/https-only `open_external`.
+ *
+ * 抖音 has no stable profile URL, only the account name, so that row copies the
+ * name instead of pretending to be a link.
+ */
+const LINKS: { title: string; desc: string; url?: string; copy?: string }[] = [
+  {
+    title: "GitHub 源码",
+    desc: "Turing-Mirror/RVC-Fabric",
+    url: "https://github.com/Turing-Mirror/RVC-Fabric",
+  },
+  {
+    title: "CNB 发布与制品",
+    desc: "Turing-Mirror/RVC-Fabric-Releases",
+    url: "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
+  },
+  {
+    title: "哔哩哔哩 @图灵镜",
+    desc: "更新演示与教程",
+    url: "https://space.bilibili.com/3546871148579062",
+  },
+  {
+    title: "抖音 @图灵镜",
+    desc: "抖音号 TuringMirror",
+    copy: "TuringMirror",
+  },
+  {
+    title: "小红书 @图灵镜",
+    desc: "小红书号 TuringMirror",
+    url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
+  },
+];
+
+/** Clipboard API needs a secure context; a custom scheme may not be one. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 export function MorePage({
   status,
@@ -29,6 +90,7 @@ export function MorePage({
   const [root, setRoot] = useState("—");
   const [logFile, setLogFile] = useState("");
   const [version, setVersion] = useState("—");
+  const [copied, setCopied] = useState("");
   const [busyMsg, setBusyMsg] = useState("");
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
@@ -258,6 +320,32 @@ export function MorePage({
               </Btn>
             }
           />
+        </Group>
+      </Block>
+      <Block title="仓库与社媒">
+        <Group>
+          {LINKS.map((l) => (
+            <ListItem
+              key={l.title}
+              title={l.title}
+              desc={copied === l.title ? "已复制到剪贴板" : l.desc}
+              right={
+                l.url ? (
+                  <Btn onClick={() => void openExternal(l.url!)}>打开</Btn>
+                ) : (
+                  <Btn
+                    onClick={async () => {
+                      const ok = await copyText(l.copy || "");
+                      setCopied(ok ? l.title : "");
+                      if (ok) window.setTimeout(() => setCopied(""), 2000);
+                    }}
+                  >
+                    复制账号
+                  </Btn>
+                )
+              }
+            />
+          ))}
         </Group>
       </Block>
     </PagePad>

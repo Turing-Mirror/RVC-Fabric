@@ -168,15 +168,33 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
   const done = Number(progress?.done || 0);
   const total = Math.max(Number(progress?.total || 0), 1);
-  const pct = Math.min(
-    100,
-    Math.round(
-      progress?.percent != null && !Number.isNaN(Number(progress.percent))
-        ? Number(progress.percent)
-        : (done / total) * 100,
-    ),
-  );
+  const pctRaw =
+    progress?.percent != null && !Number.isNaN(Number(progress.percent))
+      ? Number(progress.percent)
+      : (done / total) * 100;
+  const pct = Math.min(100, Math.max(0, pctRaw));
+  // Multi-GB packages stay under 0.5% for a long time; never show bare "0%" once
+  // any bytes have landed, and keep one decimal under 10%.
+  const pctLabel =
+    done > 0 && pct < 0.1
+      ? "<0.1%"
+      : pct < 10
+        ? `${pct.toFixed(1)}%`
+        : `${Math.round(pct)}%`;
+  const speedLabel =
+    progress?.speed_label && progress.speed_label !== "—"
+      ? progress.speed_label
+      : progress?.speed_bps && progress.speed_bps > 0
+        ? formatBytes(progress.speed_bps) + "/s"
+        : "";
+  const barWidth =
+    done > 0 && pct < 0.5 ? Math.max(pct, 0.5) : Math.min(100, pct);
   const showBar = busy && progress && progress.phase !== "error";
+  const connecting =
+    showBar &&
+    done <= 0 &&
+    (String(progress?.phase || "").startsWith("connecting") ||
+      String(progress?.message || "").includes("连接"));
 
   // Runtime alone is not a usable install: the worker needs engine-core
   // (hubert / rmvpe / ffmpeg) and the user needs VB-Cable for anyone to hear
@@ -282,19 +300,35 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               <span className="min-w-0 flex-1 truncate">
                 {progress?.message || progress?.phase || "下载中…"}
               </span>
-              <span className="shrink-0 tabular-nums">{pct}%</span>
+              <span className="shrink-0 tabular-nums flex items-center gap-2">
+                {speedLabel ? (
+                  <span className="text-[var(--accent)]">{speedLabel}</span>
+                ) : null}
+                <span>{connecting ? "…" : pctLabel}</span>
+              </span>
             </div>
             <div className="h-1.5 rounded-full bg-[color-mix(in_srgb,var(--ink)_10%,transparent)] overflow-hidden">
-              <div
-                className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-200"
-                style={{ width: `${pct}%` }}
-              />
+              {connecting ? (
+                <div className="h-full w-1/3 bg-[var(--accent)] rounded-full animate-pulse" />
+              ) : (
+                <div
+                  className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-200"
+                  style={{ width: `${barWidth}%` }}
+                />
+              )}
             </div>
             {done > 0 || total > 1 ? (
-              <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums">
-                {formatBytes(done)} / {formatBytes(total)}
+              <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums flex justify-between gap-2">
+                <span>
+                  {formatBytes(done)} / {formatBytes(total)}
+                </span>
+                {speedLabel ? <span>{speedLabel}</span> : null}
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-1.5 text-[11.5px] text-[var(--meta)]">
+                正在连接服务器，稍后显示进度…
+              </div>
+            )}
           </div>
         ) : null}
 

@@ -99,6 +99,11 @@ pub struct DownloadRequest {
 }
 
 /// Bridge product progress callbacks into ripget's ProgressReporter.
+///
+/// Emits are throttled (~150 ms) so the UI keeps up, but the first non-zero
+/// byte and completion always fire immediately — otherwise multi-GB Runtime
+/// downloads can show 0% for a long time even while the network is busy
+/// (percent rounds down until done/total ≥ 0.5%).
 struct ProgressBridge {
     cb: ProgressFn,
     total: AtomicU64,
@@ -106,21 +111,59 @@ struct ProgressBridge {
     threads: AtomicU64,
     kind: DownloadKind,
     cancel: Arc<AtomicBool>,
+    /// size_hint from catalog when Content-Length is late / missing
+    size_hint: u64,
+    last_emit_ms: AtomicU64,
+    started_ms: AtomicU64,
+}
+
+impl ProgressBridge {
+    fn now_ms() -> u64 {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    fn effective_total(&self) -> u64 {
+        self.total
+            .load(Ordering::SeqCst)
+            .max(self.size_hint)
+            .max(1)
+    }
+
+    fn emit(&self, done: u64, phase: &str, force: bool) {
+        let now = Self::now_ms();
+        let last = self.last_emit_ms.load(Ordering::SeqCst);
+        if !force && last != 0 && now.saturating_sub(last) < 150 {
+            return;
+        }
+        self.last_emit_ms.store(now, Ordering::SeqCst);
+        if self.started_ms.load(Ordering::SeqCst) == 0 {
+            self.started_ms.store(now, Ordering::SeqCst);
+        }
+        let total = self.effective_total();
+        (self.cb)(done, total, phase);
+    }
 }
 
 impl ProgressReporter for ProgressBridge {
     fn init(&self, total: u64) {
-        self.total.store(total, Ordering::SeqCst);
+        // Prefer the larger of HEAD length and catalog hint so the bar has a
+        // real denominator from the first paint.
+        let t = total.max(self.size_hint).max(1);
+        self.total.store(t, Ordering::SeqCst);
         self.done.store(0, Ordering::SeqCst);
-        let t = self.threads.load(Ordering::SeqCst).max(1);
-        (self.cb)(
+        let threads = self.threads.load(Ordering::SeqCst).max(1);
+        self.emit(
             0,
-            total.max(1),
             &format!(
-                "download:{} · {} 连接",
+                "download:{} · {} 连接 · 已连接",
                 self.kind.as_str(),
-                t
+                threads
             ),
+            true,
         );
     }
 
@@ -132,9 +175,11 @@ impl ProgressReporter for ProgressBridge {
         if self.cancel.load(Ordering::SeqCst) {
             return;
         }
-        let d = self.done.fetch_add(delta, Ordering::SeqCst) + delta;
-        let total = self.total.load(Ordering::SeqCst).max(1);
-        (self.cb)(d, total, "download");
+        let prev = self.done.fetch_add(delta, Ordering::SeqCst);
+        let d = prev + delta;
+        // First bytes always notify; then throttle.
+        let force = prev == 0 || d >= self.effective_total();
+        self.emit(d, "download", force);
     }
 }
 
@@ -194,6 +239,21 @@ pub fn download_request(
         .unwrap_or_else(|| auto_connections(req.size_hint))
         .clamp(1, MAX_CONNECTIONS);
 
+    // Tell the UI we are past "idle" before HEAD/TLS/handshake so the bar is
+    // not stuck at 0% while the NIC is already moving packets.
+    if let Some(ref cb) = progress {
+        let total = req.size_hint.max(1);
+        cb(
+            0,
+            total,
+            &format!(
+                "connecting:{} · {} 连接 · 建立连接…",
+                req.kind.as_str(),
+                threads
+            ),
+        );
+    }
+
     // Download to .part then rename after verify
     let part_path = {
         let mut p = req.dest.as_os_str().to_os_string();
@@ -217,11 +277,19 @@ pub fn download_request(
         if cancel.load(Ordering::SeqCst) {
             return Err("已取消".into());
         }
+        if let Some(ref cb) = progress {
+            cb(
+                0,
+                req.size_hint.max(1),
+                &format!("connecting:{} · 请求服务器…", req.kind.as_str()),
+            );
+        }
         match rt.block_on(download_one_url(
             url,
             &part_path,
             threads,
             req.kind,
+            req.size_hint,
             cancel.clone(),
             progress.clone(),
         )) {
@@ -266,17 +334,21 @@ async fn download_one_url(
     dest: &Path,
     threads: usize,
     kind: DownloadKind,
+    size_hint: u64,
     cancel: Arc<AtomicBool>,
     progress: Option<ProgressFn>,
 ) -> Result<(), String> {
     let progress_handle: Option<ripget::Progress> = progress.map(|cb| {
         Arc::new(ProgressBridge {
             cb,
-            total: AtomicU64::new(0),
+            total: AtomicU64::new(size_hint),
             done: AtomicU64::new(0),
             threads: AtomicU64::new(threads as u64),
             kind,
             cancel: cancel.clone(),
+            size_hint,
+            last_emit_ms: AtomicU64::new(0),
+            started_ms: AtomicU64::new(0),
         }) as ripget::Progress
     });
 

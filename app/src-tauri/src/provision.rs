@@ -349,12 +349,37 @@ pub fn provision_status(root: &Path) -> Value {
     })
 }
 
-fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
-    let pct = if total > 0 {
-        ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
+fn format_speed(bps: u64) -> String {
+    if bps == 0 {
+        return "—".into();
+    }
+    if bps >= 1_000_000_000 {
+        format!("{:.2} GB/s", bps as f64 / 1e9)
+    } else if bps >= 1_000_000 {
+        format!("{:.1} MB/s", bps as f64 / 1e6)
+    } else if bps >= 1_000 {
+        format!("{:.0} KB/s", bps as f64 / 1e3)
     } else {
-        0.0
-    };
+        format!("{bps} B/s")
+    }
+}
+
+fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
+    emit_progress_speed(app, phase, done, total, 0, message);
+}
+
+fn emit_progress_speed(
+    app: &AppHandle,
+    phase: &str,
+    done: u64,
+    total: u64,
+    speed_bps: u64,
+    message: &str,
+) {
+    let total = total.max(1);
+    // Keep a fractional percent so multi-GB downloads do not sit at "0%" until
+    // hundreds of MB have landed (round(0.4) == 0).
+    let pct = ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0);
     let _ = app.emit(
         "provision-progress",
         json!({
@@ -362,6 +387,8 @@ fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &
             "done": done,
             "total": total,
             "percent": pct,
+            "speed_bps": speed_bps,
+            "speed_label": format_speed(speed_bps),
             "message": message,
         }),
     );
@@ -480,27 +507,54 @@ pub fn run_provision(
             let app_cb = app.clone();
             let size_hint = size.max(1);
             let conns = download::auto_connections(size);
+            // Wall-clock + last sample for average / near-instant speed.
+            let t0 = std::sync::Mutex::new(std::time::Instant::now());
+            let last = std::sync::Mutex::new((std::time::Instant::now(), 0u64));
             let progress: ProgressFn = Arc::new(move |done, total, phase| {
-                // Prefer the larger of catalog hint and reporter total so the
-                // bar never sits at 0% when HEAD failed but size_hint is known.
                 let total = total.max(size_hint).max(1);
+                let now = std::time::Instant::now();
+                let started = *t0.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = last.lock().unwrap_or_else(|e| e.into_inner());
+                let (t_prev, d_prev) = *guard;
+                let dt = now.duration_since(t_prev).as_secs_f64();
+                // Prefer short-window speed once we have a real interval; else overall.
+                let speed = if dt >= 0.12 && done >= d_prev {
+                    ((done - d_prev) as f64 / dt) as u64
+                } else {
+                    let elapsed = now.duration_since(started).as_secs_f64().max(0.001);
+                    (done as f64 / elapsed) as u64
+                };
+                if dt >= 0.12 || done < d_prev {
+                    *guard = (now, done);
+                }
+                drop(guard);
+
+                let pct = ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0);
                 let m = match phase {
-                    "verify" => format!("校验 sha256…（{}）", format_size(done.max(total))),
-                    "retry" => "网络重试…".to_string(),
-                    other if other.starts_with("download:") => format!(
-                        "{} · {} / {}",
-                        other,
-                        format_size(done),
-                        format_size(total)
+                    "verify" => format!(
+                        "校验 sha256…（{}）",
+                        format_size(done.max(total))
                     ),
-                    _ => format!(
-                        "下载中 {} / {}（{}%）",
+                    "retry" => "网络重试…".to_string(),
+                    other if other.starts_with("connecting:") => {
+                        format!("连接中… · 准备下载约 {}", format_size(total))
+                    }
+                    other if other.starts_with("download:") => format!(
+                        "下载中 {} / {} · {}",
                         format_size(done),
                         format_size(total),
-                        ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0) as u64
+                        format_speed(speed)
+                    ),
+                    _ if done == 0 => format!("连接中… · 约 {}", format_size(total)),
+                    _ => format!(
+                        "下载中 {} / {}（{:.1}%）· {}",
+                        format_size(done),
+                        format_size(total),
+                        pct,
+                        format_speed(speed)
                     ),
                 };
-                emit_progress(&app_cb, phase, done, total, &m);
+                emit_progress_speed(&app_cb, phase, done, total, speed, &m);
             });
             // Shared pipeline (async-fetcher): same path for voice_pack / gui_patch later.
             download::download_request(

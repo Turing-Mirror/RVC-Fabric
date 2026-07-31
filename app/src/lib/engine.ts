@@ -54,6 +54,9 @@ export type ProvisionProgress = {
   done?: number;
   total?: number;
   percent?: number;
+  /** Instantaneous / short-window bytes per second (when known). */
+  speed_bps?: number;
+  speed_label?: string;
   message?: string;
 };
 

@@ -36,11 +36,6 @@ fn root_clone(state: &State<'_, Mutex<AppState>>) -> Result<PathBuf, String> {
     Ok(g.root.clone())
 }
 
-#[tauri::command]
-fn frontend_dir() -> Option<String> {
-    ui_assets::external_dir().map(|p| p.to_string_lossy().into_owned())
-}
-
 /// engine-core / VB-Cable readiness for the first-run gate.
 #[tauri::command]
 fn assets_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -820,7 +815,6 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
-            frontend_dir,
             ui_source,
             shell_version,
             ui_ready,

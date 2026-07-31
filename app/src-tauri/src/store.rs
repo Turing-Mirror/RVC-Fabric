@@ -226,7 +226,11 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
     }
 
     if prefer_remote {
-        match crate::catalog::fetch_remote_catalog(25) {
+        // Cached: the dialog refetches on every open, and this is the same
+        // index.json the runtime specs come from. Five minutes is short enough
+        // that a newly published voice shows up promptly, and it means
+        // reopening the store is instant instead of another 25s round trip.
+        match crate::catalog::fetch_remote_catalog_cached(25) {
             Ok(remote) => {
                 data = remote;
                 source = "remote";

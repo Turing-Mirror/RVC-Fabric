@@ -183,21 +183,30 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                 >
                   <div
                     className={[
-                      "rounded-[var(--r)] grid place-items-center relative",
+                      "rounded-[var(--r)] grid place-items-center relative overflow-hidden",
+                      // 只给宽度，高度交给 aspect-square。以前选中和未选中各写
+                      // 一组 w/h，三个断点下算出六种不同的长宽比 —— 同一张图在
+                      // 选中前后、拉窗口前后被裁掉的部分都不一样，看着就像图在
+                      // 乱缩放。比例由结构保证，就不会再飘。
+                      "aspect-square",
                       "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)]",
                       "text-[color-mix(in_srgb,var(--ink)_32%,transparent)]",
                       "grayscale transition-[filter,transform,box-shadow] duration-300 ease-[var(--spring)]",
                       "hover:grayscale-[0.3] active:scale-[0.985]",
                       cur
-                        ? "w-[236px] h-[176px] text-[30px] grayscale-0 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[208px] max-[1020px]:h-[158px] max-[720px]:w-[170px] max-[720px]:h-[130px]"
-                        : "w-[156px] h-[122px] text-[26px] max-[1020px]:w-[138px] max-[1020px]:h-[110px] max-[720px]:w-[112px] max-[720px]:h-[92px]",
+                        ? "w-[176px] text-[30px] grayscale-0 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[158px] max-[720px]:w-[130px]"
+                        : "w-[122px] text-[26px] max-[1020px]:w-[110px] max-[720px]:w-[92px]",
                     ].join(" ")}
                   >
                     {v.cover ? (
                       <img
                         src={coverSrc(v.cover)}
                         alt=""
-                        className="absolute inset-0 w-full h-full object-cover rounded-[var(--r)]"
+                        draggable={false}
+                        // contain 而不是 cover：官方封面全是 1:1，在方形框里
+                        // 两者结果一样、都不裁；第三方是竖图（最极端 0.395），
+                        // cover 会切掉七成。宁可两边留出底色，也别把人裁没。
+                        className="absolute inset-0 w-full h-full object-contain"
                       />
                     ) : (
                       <span>{(v.name || "?").slice(0, 4)}</span>

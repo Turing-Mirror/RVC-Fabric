@@ -1,16 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.2.3-hotfix3",
+    "version": "1.2.4",
     "channel": "stable",
     "gui": {
       "package_type": "gui_patch",
-      "version": "1.2.3-hotfix3",
+      "version": "1.2.4",
       "kind": "zip",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/b47787b74a72ba9dea99c1da1dc4fa575281ddebf75e3b4548d41ebd41be57af",
       "sha256": "b47787b74a72ba9dea99c1da1dc4fa575281ddebf75e3b4548d41ebd41be57af",
+      "size_bytes": 740899,
       "min_app_version": "1.1.0",
-      "notes": "v1.2.3 热修3：修复「其他」页生成诊断包成功后因缺导入导致界面无反馈； 设置页问号教程统一靠左；顶栏使用横版 wordmark（其余仍用圆形标）； 开始菜单/桌面快捷方式固定 assets/brand/app.ico。 另含热修2：启动检查更新弹窗、更新后可选自动重启。"
+      "notes": "启动后自动检查更新并弹窗，确认可直接下载应用增量包，应用完成后询问是否 自动重启；广场新增更新日志区块与全文页；修复「其他」页生成诊断包成功后 因缺导入而界面无反馈；设置页问号教程统一靠左；顶栏改用横版 wordmark （其余位置仍用圆形标）；开始菜单与桌面快捷方式固定 assets/brand/app.ico。"
     }
   },
   "community": {

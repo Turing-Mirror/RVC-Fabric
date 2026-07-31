@@ -196,6 +196,40 @@ def _is_stable_shell_version(v: str) -> bool:
     return len(parts) == 3 and all(p.isdigit() for p in parts)
 
 
+def read_lfs_pointer(path: Path) -> Optional[tuple[str, int]]:
+    """Git LFS 指针里的 (sha256, size)；不是指针就返回 None。
+
+    没跑过 `git lfs pull` 的克隆里，制品文件是一个一百来字节的指针文本，
+    真身在 LFS 服务器上。直接 stat / sha256 这个文件，量到的是指针自己 ——
+    Setup 的体积就会被写成 133 字节发出去，客户端下完校验必然对不上。
+
+    指针文本里本来就写着真身的 sha256 和字节数（LFS 的 oid 就是 sha256），
+    所以不用把几个 GB 拉下来也能拿到正确的值。格式见
+    https://github.com/git-lfs/git-lfs/blob/main/docs/spec.md
+    """
+    try:
+        if path.stat().st_size > 512:
+            return None
+        head = path.read_text(encoding="utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not head.startswith("version https://git-lfs.github.com/spec/v1"):
+        return None
+    oid = ""
+    size = -1
+    for line in head.splitlines():
+        if line.startswith("oid sha256:"):
+            oid = line.split(":", 1)[1].strip().lower()
+        elif line.startswith("size "):
+            try:
+                size = int(line.split(" ", 1)[1].strip())
+            except ValueError:
+                return None
+    if len(oid) != 64 or size < 0:
+        return None
+    return oid, size
+
+
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -325,8 +359,13 @@ def _resolve_artifact(
     if rel_file:
         f = paths.cnb / rel_file
         if f.is_file():
-            local_sha = local_artifact_hash(f)
-            local_size = f.stat().st_size
+            ptr = read_lfs_pointer(f)
+            if ptr:
+                # 指针即权威：它记的就是真身的 sha256 与字节数。
+                local_sha, local_size = ptr
+            else:
+                local_sha = local_artifact_hash(f)
+                local_size = f.stat().st_size
         elif not pinned_sha:
             rep.error(f"{who}: 制品不存在且无锁定 sha256: {rel_file}")
         else:
@@ -848,14 +887,20 @@ def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
     }
     url = str(gui_src.get("url") or "").strip()
     sha = str(gui_src.get("sha256") or "").strip().lower()
+    size = int(gui_src.get("size_bytes") or 0)
     if gui_src.get("file"):
         art = _resolve_artifact(dict(gui_src), paths, rep, who="app.gui", channel="lfs")
         sha = sha or art["sha256"]
         url = url or (art["urls"][0] if art["urls"] else "")
+        # _resolve_artifact 已经算好了体积，这里以前直接丢掉，下游又把
+        # packages.gui_patch.size_bytes 写死成 0 —— 界面增量包在清单里一直是
+        # 「0 字节」，客户端既显示不出大小，也没法用体积做完整性兜底。
+        size = size or int(art.get("size_bytes") or 0)
     if not url and sha:
         url = cnb_lfs_url(sha)
     gui["url"] = url
     gui["sha256"] = sha
+    gui["size_bytes"] = size
     gui["min_app_version"] = str(gui_src.get("min_app_version") or "")
     gui["notes"] = str(gui_src.get("notes") or "")
     if url and not sha:
@@ -1004,7 +1049,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
                 "version": gui["version"],
                 "url": gui["url"],
                 "sha256": gui["sha256"],
-                "size_bytes": 0,
+                "size_bytes": int(gui.get("size_bytes") or 0),
                 "channel": "lfs",
                 "notes": gui["notes"],
             }

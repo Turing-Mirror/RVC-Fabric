@@ -336,6 +336,19 @@ class Report:
 # ---------------------------------------------------------------- artifacts
 
 
+def _release_tag_of(entry: dict, rep: Report, *, who: str, channel: str) -> str:
+    """条目自己的 release_tag。channel=release 却没写就是错——别退默认值。
+
+    退默认值正是上一次出事的方式：漏传之后一路默认成 RVC-runtime，生成的
+    URL 语法完全正确、指向的 tag 下却没有这个附件，`check` 看不出来，只有
+    用户下载时才 404。宁可在这里拦住。
+    """
+    tag = str(entry.get("release_tag") or "").strip()
+    if channel == "release" and not tag:
+        rep.error(f"{who}: channel=release 但没写 release_tag，下载地址会指错")
+    return tag or "RVC-runtime"
+
+
 def _resolve_artifact(
     entry: dict,
     paths: Paths,
@@ -368,7 +381,12 @@ def _resolve_artifact(
                 local_size = f.stat().st_size
         elif not pinned_sha:
             rep.error(f"{who}: 制品不存在且无锁定 sha256: {rel_file}")
-        else:
+        elif channel != "release":
+            # 还挂在 git/LFS 上却本地没有 —— 多半是忘了 git lfs pull，值得提醒。
+            #
+            # channel: release 就不提了：制品已经搬到 Release 附件，仓库里本来就
+            # 没有这个文件，缺席才是常态。留着的话每条制品都要报一次，17 条警告
+            # 里 16 条是它，check --strict 从此永远红着，也就没法当 CI 门禁用了。
             rep.warn(f"{who}: 本地缺制品文件（用锁定值继续）: {rel_file}")
 
     sha = pinned_sha or local_sha
@@ -406,12 +424,17 @@ def _resolve_artifact(
             [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}"] if name else []
         )
 
+    # 边车（.sha256）是 65 字节纯文本，本来就该留在 git 里 —— 制品搬去 Release
+    # 不代表边车也搬了。所以按「仓库里有没有这个文件」来选，不按 channel 猜：
+    # 猜错的代价是清单里挂着一条 404，而且没人会发现，因为边车只是二次校验。
     if entry.get("sha256_urls"):
         sha_urls = [str(u) for u in entry["sha256_urls"] if u]
-    elif channel == "lfs" and rel_file:
+    elif rel_file and (paths.cnb / (rel_file + ".sha256")).is_file():
         sha_urls = [cnb_raw_url(rel_file + ".sha256")]
     elif channel == "release" and name:
         sha_urls = [f"{CNB_REPO_URL}/-/releases/download/{release_tag}/{name}.sha256"]
+    elif channel == "lfs" and rel_file:
+        sha_urls = [cnb_raw_url(rel_file + ".sha256")]
     else:
         sha_urls = []
 
@@ -579,8 +602,29 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         }
         pack_url = ""
     else:
-        art = _resolve_artifact(v, paths, rep, who=who, channel="lfs")
-        pack_url = explicit_pack or cnb_lfs_url(art["sha256"])
+        # channel 以前在这里写死成 lfs，条目 YAML 里写的 release 被无视，
+        # pack_url 也总是照 sha256 拼 LFS 地址。制品搬走之后，官方音色的下载
+        # 地址还全指着 LFS —— 眼下还能下，只是因为 git 里删掉指针并不会删掉
+        # LFS 对象；等 CNB 回收无引用对象，就是一次性全挂。
+        v_channel = str(v.get("channel") or "lfs").strip().lower()
+        # 只把制品字段递进去。整条音色递进去的话，`name` 会被当成下载文件名
+        # —— 音色条目里的 name 是显示名（kikiV1、千早爱音），拼出来就是
+        # /releases/download/voices/千早爱音，404。LFS 时代 URL 只认 sha256，
+        # 从来用不到 name，所以这个重名一直没暴露。
+        art_src = {
+            k: v[k]
+            for k in ("file", "sha256", "size_bytes", "url", "urls", "sha256_urls")
+            if k in v
+        }
+        art = _resolve_artifact(
+            art_src,
+            paths,
+            rep,
+            who=who,
+            channel=v_channel,
+            release_tag=_release_tag_of(v, rep, who=who, channel=v_channel),
+        )
+        pack_url = explicit_pack or (art["urls"][0] if art["urls"] else "")
         if not pack_url:
             rep.error(f"{who}: 无法得到 pack_url（缺 sha256）")
             return None
@@ -818,9 +862,21 @@ def _compile_runtime(
 def _compile_blob(
     entry: dict, paths: Paths, rep: Report, *, who: str, extract_root: str
 ) -> dict:
-    """engine_core / vbcable 顶层 blob（管线 B 的直接输入）。"""
+    """engine_core / vbcable / setup 顶层 blob（管线 B 的直接输入）。"""
     channel = str(entry.get("channel") or "lfs")
-    art = _resolve_artifact(entry, paths, rep, who=who, channel=channel)
+    # release_tag 必须跟着 channel 一起传下去。以前这里漏了，_resolve_artifact
+    # 就退回默认的 RVC-runtime，于是 setup / engine-core / vbcable 的下载地址
+    # 全被写成 /releases/download/RVC-runtime/<文件名> —— 那个 tag 下根本没有
+    # 这些附件，线上 404。runtime 三条恰好 tag 就叫 RVC-runtime，所以一直没
+    # 露馅，制品从 LFS 搬到 Release 之后才炸出来。
+    art = _resolve_artifact(
+        entry,
+        paths,
+        rep,
+        who=who,
+        channel=channel,
+        release_tag=_release_tag_of(entry, rep, who=who, channel=channel),
+    )
     return {
         "name": art["name"],
         "version": str(entry.get("version") or ""),
@@ -910,7 +966,20 @@ def _compile_gui(app: dict, paths: Paths, rep: Report) -> dict:
     sha = str(gui_src.get("sha256") or "").strip().lower()
     size = int(gui_src.get("size_bytes") or 0)
     if gui_src.get("file"):
-        art = _resolve_artifact(dict(gui_src), paths, rep, who="app.gui", channel="lfs")
+        # 同样别写死 channel：界面增量包也跟着搬到了 Release 附件。
+        # 只认 gui 自己的 channel —— app 顶层那个 channel 是更新通道
+        # （stable/beta），和制品通道（lfs/release）同名不同义，串了就全错。
+        g_channel = str(gui_src.get("channel") or "lfs").strip().lower()
+        art = _resolve_artifact(
+            dict(gui_src),
+            paths,
+            rep,
+            who="app.gui",
+            channel=g_channel,
+            release_tag=_release_tag_of(
+                dict(gui_src), rep, who="app.gui", channel=g_channel
+            ),
+        )
         sha = sha or art["sha256"]
         url = url or (art["urls"][0] if art["urls"] else "")
         # _resolve_artifact 已经算好了体积，这里以前直接丢掉，下游又把
@@ -1894,8 +1963,70 @@ def _compile_all(paths: Paths) -> tuple[Optional[dict], Report]:
     return outputs, rep
 
 
-def cmd_check(paths: Paths, *, strict: bool = False) -> int:
+def _collect_urls(node: Any, out: set[str]) -> None:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in ("url", "pack_url", "sha256_url") and isinstance(v, str):
+                if v.startswith("http"):
+                    out.add(v)
+            elif k in ("urls", "sha256_urls") and isinstance(v, list):
+                out.update(u for u in v if isinstance(u, str) and u.startswith("http"))
+            else:
+                _collect_urls(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_urls(v, out)
+
+
+def probe_urls(outputs: dict, rep: Report, *, include_external: bool = False) -> None:
+    """把清单里每条下载地址真的拉一下头 8 字节。
+
+    加这个是因为迁移之后出过一次：`check` 全绿，线上 engine-core / VB-Cable /
+    Setup 三条全是 404 —— URL 语法完全正确，只是指向的 release tag 里没有那个
+    附件。静态校验永远看不出这种错，只有真去拉一次才知道。
+
+    HEAD 在 CNB 的 LFS 端点上不可靠（GET 能下的对象 HEAD 会回 404），所以统一
+    用 Range 拉前 8 字节。CNB 的错误响应是 JSON，开头 `{"er`，据此和真制品区分。
+    """
+    import urllib.error
+    import urllib.request
+
+    urls: set[str] = set()
+    _collect_urls(outputs, urls)
+    targets = sorted(
+        u for u in urls if include_external or "cnb.cool" in u
+    )
+    if not targets:
+        return
+    print(f"--- 链接探活（{len(targets)} 条）---")
+    for u in targets:
+        req = urllib.request.Request(
+            u,
+            headers={
+                "Range": "bytes=0-7",
+                "User-Agent": "Turing-Mirror/RVC-Fabric build_catalog",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                head = r.read(8)
+                if head.startswith(b'{"er'):
+                    rep.error(f"下载地址返回错误 JSON（附件不存在？）: {u}")
+                    print(f"  坏  {u}")
+                else:
+                    print(f"  OK  {u}")
+        except urllib.error.HTTPError as e:
+            rep.error(f"下载地址 HTTP {e.code}: {u}")
+            print(f"  坏  HTTP {e.code}  {u}")
+        except Exception as e:  # 网络抖动不该把 check 判死，但要说出来
+            rep.warn(f"下载地址探活失败（网络？）: {u} — {e}")
+            print(f"  ？  {u}")
+
+
+def cmd_check(paths: Paths, *, strict: bool = False, urls: bool = False) -> int:
     outputs, rep = _compile_all(paths)
+    if urls and outputs is not None:
+        probe_urls(outputs, rep)
     rep.print()
     if rep.failed(strict) or outputs is None:
         print(f"check 失败（错误 {len(rep.errors)}，警告 {len(rep.warnings)}）")
@@ -2010,6 +2141,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_init.add_argument("--force", action="store_true")
     p_check = sub.add_parser("check", help="只校验，不写文件（CI 可用）")
     p_check.add_argument("--strict", action="store_true", help="警告也算失败")
+    p_check.add_argument(
+        "--urls", action="store_true", help="真去拉一次每条下载地址（要联网，慢）"
+    )
     p_build = sub.add_parser("build", help="校验并写出四份 JSON 产物")
     p_build.add_argument("--strict", action="store_true")
     p_build.add_argument("--diff", action="store_true", help="写出前打印语义 diff")
@@ -2019,7 +2153,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "init":
         return cmd_init(paths, force=args.force)
     if args.cmd == "check":
-        return cmd_check(paths, strict=args.strict)
+        return cmd_check(paths, strict=args.strict, urls=args.urls)
     return cmd_build(paths, strict=args.strict, show_diff=args.diff)
 
 

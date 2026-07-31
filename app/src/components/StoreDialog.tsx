@@ -10,7 +10,13 @@ import {
 import { Btn, Group } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 
-type View = "latest" | "official" | "thirdparty" | "series";
+// 来源和组织方式是两个独立维度。原本压在一个 SegmentControl 里（最新合流 /
+// 图灵镜源 / 第三方 / 系列专区），结果「原神系列里的第三方音色」这种组合根本
+// 表达不出来 —— 选了系列就没法筛来源，选了第三方就没有系列分组。
+type Source = "all" | "official" | "thirdparty";
+type Grouping = "time" | "series";
+/** 一个系列默认展开多少条，再多要点「查看全部」。 */
+const SERIES_PREVIEW = 6;
 
 type Props = {
   open: boolean;
@@ -23,7 +29,11 @@ const PER_PAGE = 8;
 export function StoreDialog({ open, onClose, onInstalled }: Props) {
   const [cat, setCat] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<View>("latest");
+  const [source, setSource] = useState<Source>("all");
+  const [grouping, setGrouping] = useState<Grouping>("time");
+  const [hideInstalled, setHideInstalled] = useState(false);
+  /** 哪些系列被点了「查看全部」。 */
+  const [seriesFull, setSeriesFull] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   // Two concurrent installs plus a queue — same as the Tk shell. Each download
@@ -59,7 +69,10 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     void refresh(true);
     setPage(1);
     setQ("");
-    setView("latest");
+    setSource("all");
+    setGrouping("time");
+    setHideInstalled(false);
+    setSeriesFull(new Set());
     setThirdAck(false);
     setOfficialAck(false);
   }, [open, refresh]);
@@ -98,17 +111,15 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     // sort re-ran on every keystroke elsewhere in the dialog.
     const official = cat?.voices || [];
     const third = cat?.thirdparty_voices || [];
-    let base: StoreVoice[] = [];
-    if (view === "official") base = official;
-    else if (view === "thirdparty") base = third;
-    else if (view === "series") {
-      base = [...official, ...third].filter((v) => (v.series || "").trim());
-    } else {
-      // latest: merge by date desc
-      base = [...official, ...third].sort((a, b) =>
-        String(b.date || "").localeCompare(String(a.date || "")),
-      );
-    }
+    let base: StoreVoice[] =
+      source === "official"
+        ? [...official]
+        : source === "thirdparty"
+          ? [...third]
+          : [...official, ...third];
+    // 一律按收录日期倒序。分组视图也排，这样每个系列内部顺序是稳定的。
+    base.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    if (hideInstalled) base = base.filter((v) => !v.installed);
     const qq = q.trim().toLowerCase();
     if (qq) {
       base = base.filter((v) =>
@@ -118,23 +129,30 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
       );
     }
     return base;
-  }, [view, cat, q]);
+  }, [source, hideInstalled, cat, q]);
 
   const seriesGroups = useMemo(() => {
-    if (view !== "series") return null;
+    if (grouping !== "series") return null;
+    // 没填 series 的落进「其他」。上游原本先 filter 掉空 series，所以这里的
+    // 「其他」是死代码，而那些音色在系列视图里是直接消失 —— 消失比归错类
+    // 难查得多。
     const map = new Map<string, StoreVoice[]>();
     for (const v of list) {
-      const s = (v.series || "其他").trim() || "其他";
+      const s = (v.series || "").trim() || "其他";
       if (!map.has(s)) map.set(s, []);
       map.get(s)!.push(v);
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
-  }, [view, list]);
+    return [...map.entries()].sort((a, b) => {
+      if (a[0] === "其他") return 1;
+      if (b[0] === "其他") return -1;
+      return a[0].localeCompare(b[0], "zh");
+    });
+  }, [grouping, list]);
 
   const totalPages = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const pageClamped = Math.min(page, totalPages);
   const pageItems =
-    view === "series"
+    grouping === "series"
       ? []
       : list.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
 
@@ -228,22 +246,43 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
             placeholder="搜索音色 / 标签 / 作者…"
             className="min-w-[200px] flex-1 px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           />
-          <SegmentControl<View>
-            value={view}
+          <SegmentControl<Source>
+            value={source}
             onChange={(v) => {
-              setView(v);
+              setSource(v);
               setPage(1);
             }}
             options={[
-              { id: "latest", label: "最新合流" },
+              { id: "all", label: "全部" },
               { id: "official", label: "图灵镜源" },
               { id: "thirdparty", label: "第三方" },
-              { id: "series", label: "系列专区" },
             ]}
           />
+          <SegmentControl<Grouping>
+            value={grouping}
+            onChange={(v) => {
+              setGrouping(v);
+              setPage(1);
+            }}
+            options={[
+              { id: "time", label: "按时间" },
+              { id: "series", label: "按系列" },
+            ]}
+          />
+          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hideInstalled}
+              onChange={(e) => {
+                setHideInstalled(e.target.checked);
+                setPage(1);
+              }}
+            />
+            只看未安装
+          </label>
         </div>
 
-        {view === "thirdparty" || view === "latest" ? (
+        {source !== "official" ? (
           <div className="mx-5 mb-2 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">
             第三方音色未经图灵镜审核，请自行判断来源与安全性。模型为
             pickle，仅从信任渠道安装。
@@ -277,7 +316,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
         )}
 
         <div className="flex-1 overflow-y-auto px-5 pb-4">
-          {view === "series" && seriesGroups ? (
+          {grouping === "series" && seriesGroups ? (
             seriesGroups.length === 0 ? (
               <Empty />
             ) : (
@@ -303,17 +342,38 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                       </span>
                     </button>
                     {openS ? (
-                      <Group>
-                        {voices.map((v) => (
-                          <VoiceRow
-                            key={v.id}
-                            v={v}
-                            busy={running.includes(v.id)}
-                            queued={queued.includes(v.id)}
-                            onInstall={() => void install(v)}
-                          />
-                        ))}
-                      </Group>
+                      <>
+                        <Group>
+                          {(seriesFull.has(series)
+                            ? voices
+                            : voices.slice(0, SERIES_PREVIEW)
+                          ).map((v) => (
+                            <VoiceRow
+                              key={v.id}
+                              v={v}
+                              busy={running.includes(v.id)}
+                              queued={queued.includes(v.id)}
+                              onInstall={() => void install(v)}
+                            />
+                          ))}
+                        </Group>
+                        {/* 一个系列可能有八十多个角色（赛马娘、蔚蓝档案）。
+                            展开就全渲染会当场卡住，先给前几条。 */}
+                        {voices.length > SERIES_PREVIEW &&
+                        !seriesFull.has(series) ? (
+                          <div className="mt-1.5 flex justify-center">
+                            <Btn
+                              onClick={() =>
+                                setSeriesFull((prev) =>
+                                  new Set(prev).add(series),
+                                )
+                              }
+                            >
+                              查看全部 {voices.length} 条
+                            </Btn>
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 );
@@ -335,7 +395,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
             </Group>
           )}
 
-          {view !== "series" && totalPages > 1 ? (
+          {grouping !== "series" && totalPages > 1 ? (
             <div className="flex items-center justify-center gap-3 mt-4 text-[12.5px] text-[var(--meta)]">
               <Btn
                 disabled={pageClamped <= 1}

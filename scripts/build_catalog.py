@@ -59,6 +59,8 @@ CNB_ORG_REPO = "Turing-Mirror/RVC-Fabric-Releases"
 CNB_REPO_URL = f"{CNB_HOST}/{CNB_ORG_REPO}"
 RAW = f"{CNB_REPO_URL}/-/git/raw/main"
 LFS = f"{CNB_REPO_URL}/-/lfs"
+# 封面所在的 Release tag。见 cnb_cover_url() 里为什么不能用 git raw。
+COVER_TAG = "covers"
 MANIFEST_URLS = [
     f"{RAW}/index.json",
     f"{RAW}/catalog/online_catalog.snippet.json",
@@ -271,6 +273,21 @@ def cnb_lfs_url(sha256: str) -> str:
 
 def cnb_raw_url(rel_path: str) -> str:
     return f"{RAW}/{(rel_path or '').replace(chr(92), '/').lstrip('/')}"
+
+
+def cnb_cover_url(rel_path: str) -> str:
+    """封面走 Release 附件，不走 git raw。
+
+    CNB 的 git-raw 返回的响应**不带 Content-Type，却带 X-Content-Type-Options:
+    nosniff**。浏览器于是既不知道这是图片、又不许自己嗅探，`<img>` 直接不渲染
+    —— 「社区音色不显示封面、模型页正常」就是这么来的：模型页读的是本地文件，
+    MIME 由我们自己给。
+
+    Release 附件按扩展名给 Content-Type（实测 image/jpeg），也没有 nosniff。
+    所以封面统一传到 `covers` tag 下，文件名就是 ch-banner 里的文件名。
+    """
+    name = (rel_path or "").replace(chr(92), "/").rsplit("/", 1)[-1]
+    return f"{CNB_REPO_URL}/-/releases/download/{COVER_TAG}/{name}" if name else ""
 
 
 def _yymmdd(raw: Any) -> str:
@@ -666,7 +683,7 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "version": str(v.get("version") or "1"),
         "package_type": str(v.get("package_type") or "voice_pack"),
         "cover": cover,
-        "cover_url": cnb_raw_url(cover),
+        "cover_url": cnb_cover_url(cover),
     }
     if explicit_pth:
         item["pth_url"] = explicit_pth
@@ -765,7 +782,7 @@ def _compile_thirdparty_voice(
         else:
             if not (paths.cnb / cover).is_file():
                 rep.warn(f"{who}: 封面文件不存在: {cover}")
-            cover_url = cnb_raw_url(cover)
+            cover_url = cnb_cover_url(cover)
 
     pkg = str(v.get("package_type") or "").strip()
     if not pkg:

@@ -414,6 +414,14 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
     // Run it off the IPC thread or the window is frozen for that whole time —
     // no status updates, no way to press 停止.
     tauri::async_runtime::spawn_blocking(move || {
+        // 重新把 app_config 刷进 inuse 再启动。app_config 才是选中音色的权威，
+        // 而 worker 冷启动只认 inuse 那个文件。「其他」页强制结束引擎之后，
+        // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
+        // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
+        // 也就是手动干这里该干的事。
+        if let Err(e) = config::sync_inuse(&root, &config::read(&root)) {
+            logging::shell_log!("启动前同步 inuse 失败: {e}");
+        }
         worker::start_vc(&root)?;
         Ok(worker::wait_vc_running(&root, 180_000))
     })

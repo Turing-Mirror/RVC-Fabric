@@ -598,6 +598,23 @@ pub fn run_provision(
             return Err("解压完成但未检测到 torch，Runtime 可能不完整。".to_string());
         }
 
+        // 起 worker 并把设备列表读出来。以前这一步只在应用启动时做过一次，
+        // 而首装的用户那时候 Runtime 还没有，于是补全完什么也不会发生：设备
+        // 下拉是空的、变声起不来，必须重启软件。补全刚结束正是该做这件事的
+        // 时候。放后台线程，别把补全流程的收尾卡在 90 秒的等待上。
+        {
+            let root_bg = root.clone();
+            std::thread::spawn(move || {
+                let r = crate::worker::ensure_worker_and_devices(&root_bg, 90_000);
+                let n = r
+                    .get("input_devices")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                crate::logging::shell_log!("补全后预热 worker：读到 {n} 个输入设备");
+            });
+        }
+
         emit_progress(&app, "done", 1, 1, "Runtime 补全完成");
         Ok(json!({
             "ok": true,

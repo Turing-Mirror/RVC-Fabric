@@ -166,13 +166,28 @@ fn looks_absolute(s: &str) -> bool {
         || s.starts_with('/')
 }
 
+/// Windows `canonicalize()` hands back extended-length paths (`\\?\E:\…`).
+///
+/// That prefix is invisible to the user and meaningless to the comparison
+/// below, but it makes `strip_prefix(root)` fail — the path looks like it is
+/// outside the install, so it gets blanked. `index_path` is canonicalised in
+/// several places in `voices.rs`, so the index of a perfectly local model was
+/// being thrown away every time inuse was rewritten.
+fn strip_verbatim(p: &str) -> &str {
+    p.strip_prefix(r"\\?\UNC\")
+        .map(|_| p)
+        .unwrap_or_else(|| p.strip_prefix(r"\\?\").unwrap_or(p))
+}
+
 /// Strip anything that would pin the worker to this machine's layout.
 fn sanitize_inuse(root: &Path, m: &mut Map<String, Value>) {
     let root_s = root.to_string_lossy().to_string();
+    let root_s = strip_verbatim(&root_s).to_string();
     for key in ["pth_path", "index_path"] {
-        let Some(Value::String(p)) = m.get(key).cloned() else {
+        let Some(Value::String(p0)) = m.get(key).cloned() else {
             continue;
         };
+        let p = strip_verbatim(&p0).to_string();
         if !looks_absolute(&p) {
             continue;
         }
@@ -224,6 +239,7 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     let mut hot = Map::new();
     let mut needs_restart: Vec<String> = Vec::new();
     let mut touched_engine = false;
+    let mut touched_monitor = false;
 
     for (k, v) in patch {
         if is_hot(&k) {
@@ -232,6 +248,9 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         } else if is_cold(&k) {
             needs_restart.push(k.clone());
             touched_engine = true;
+        }
+        if k == "monitor_self" || k == "monitor_device" {
+            touched_monitor = true;
         }
         saved.insert(k, v);
     }
@@ -246,6 +265,33 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     // have no business rewriting it.
     if touched_engine {
         sync_inuse(root, &cfg)?;
+    }
+
+    // 监听是唯一「冷键但其实能热切」的东西。worker 的 _worker_apply_hot 早就
+    // 认 monitor_enabled / monitor_device，转着的时候会自己开关监听流；只是
+    // shell 从来没把它推过去，于是用户点完监听要重启变声才生效。
+    //
+    // 仍然留在 COLD_KEYS 里：inuse 得写进去，新起的 worker 才知道该不该监听。
+    // 这里只是额外补一次热推送。
+    if touched_monitor {
+        let mut p = Map::new();
+        p.insert(
+            "monitor_enabled".into(),
+            json!(cfg
+                .get("monitor_self")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)),
+        );
+        p.insert(
+            "monitor_device".into(),
+            json!(cfg
+                .get("monitor_device")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")),
+        );
+        // worker 没起来就算了 —— inuse 已经写好，下次启动自然生效。
+        let _ = crate::worker::set_hot(root, p);
+        needs_restart.retain(|k| k != "monitor_self" && k != "monitor_device");
     }
 
     Ok(json!({
@@ -405,6 +451,40 @@ mod tests {
         // was in neither list, so the toggle never got as far as the engine.
         assert!(is_cold("monitor_self"));
         assert!(is_cold("monitor_device"));
+    }
+
+    #[test]
+    fn verbatim_prefixed_paths_survive_sanitize() {
+        // Windows canonicalize() 返回 \\?\ 开头的扩展长度路径，voices.rs 里
+        // index 全是这么来的。以前 strip_prefix(root) 匹配不上，于是本机模型的
+        // 检索库每次重写 inuse 都被清空 —— 用户看到的是「检索库没了」。
+        let root = Path::new(r"E:\Dev\RVC-Fabric");
+        let mut m = Map::new();
+        m.insert(
+            "pth_path".into(),
+            json!(r"\\?\E:\Dev\RVC-Fabric\User_Data\models\anon\anon.pth"),
+        );
+        m.insert(
+            "index_path".into(),
+            json!(r"\\?\E:\Dev\RVC-Fabric\User_Data\models\anon\a.index"),
+        );
+        sanitize_inuse(root, &mut m);
+        assert_eq!(
+            m["pth_path"],
+            json!(r"User_Data\models\anon\anon.pth"),
+            "带 \\\\?\\ 前缀的本机路径不该被清空"
+        );
+        assert_eq!(m["index_path"], json!(r"User_Data\models\anon\a.index"));
+    }
+
+    #[test]
+    fn verbatim_paths_outside_the_install_are_still_dropped() {
+        // 去前缀只是为了能正确比较，不是放行：别的盘上的路径照样得清掉。
+        let root = Path::new(r"E:\Dev\RVC-Fabric");
+        let mut m = Map::new();
+        m.insert("pth_path".into(), json!(r"\\?\L:\somebody-else\x.pth"));
+        sanitize_inuse(root, &mut m);
+        assert_eq!(m["pth_path"], json!(""));
     }
 
     #[test]

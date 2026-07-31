@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { navDirection, type PageId } from "../lib/nav";
 
 type Props = {
@@ -47,6 +53,19 @@ export function PageHost({ page, children }: Props) {
     [],
   );
 
+  // Scroll to the top when the *page* changes — not on every render.
+  //
+  // This used to be an inline `ref={(el) => { if (el) el.scrollTop = 0 }}`.
+  // An inline callback has a new identity every render, so React detached and
+  // reattached it every time, running the reset each pass. The engine status
+  // poll re-renders App 2.5x a second while converting, which meant the
+  // settings and models pages snapped back to the top continuously and could
+  // not be scrolled at all with the voice changer running.
+  const paneRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (paneRef.current) paneRef.current.scrollTop = 0;
+  }, [phase.current]);
+
   const enterCls =
     phase.dir === 1 ? "page-enter-l" : phase.dir === -1 ? "page-enter-r" : "";
   const leaveCls =
@@ -64,10 +83,8 @@ export function PageHost({ page, children }: Props) {
       ) : null}
       <div
         key={`cur-${phase.current}`}
+        ref={paneRef}
         className={`absolute inset-0 overflow-y-auto z-[2] ${enterCls}`}
-        ref={(el) => {
-          if (el) el.scrollTop = 0;
-        }}
       >
         {children(phase.current)}
       </div>

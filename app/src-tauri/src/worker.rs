@@ -33,34 +33,33 @@ fn stamp() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-/// True if *pid* is still running (exact PID, no substring false positives).
+/// True if *pid* is still running.
+///
+/// Win32 directly, no child process. This is on the status-poll path, which
+/// runs every 400 ms while converting — the previous `tasklist.exe` spawn cost
+/// far more CPU than the check was worth, and it competed with the realtime
+/// audio thread on exactly the machines that can least afford it.
 #[cfg(windows)]
 fn pid_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
     if pid == 0 {
         return false;
     }
-    use std::os::windows::process::CommandExt;
-    // CSV: "Image Name","PID",...
-    let out = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-        .creation_flags(0x08000000)
-        .output();
-    match out {
-        Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            for line in s.lines() {
-                // "pythonw.exe","1234",...
-                let cols: Vec<&str> = line.split(',').collect();
-                if cols.len() >= 2 {
-                    let p = cols[1].trim().trim_matches('"');
-                    if p == pid.to_string() {
-                        return true;
-                    }
-                }
-            }
-            false
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            // Access denied also lands here. A process we cannot open is not
+            // one we could have spawned, so treating it as gone is correct for
+            // our purposes and never kills someone else's process.
+            return false;
         }
-        Err(_) => false,
+        let mut code: u32 = 0;
+        let ok = GetExitCodeProcess(h, &mut code);
+        CloseHandle(h);
+        ok != 0 && code == STILL_ACTIVE as u32
     }
 }
 
@@ -100,11 +99,51 @@ fn pid_image_path(_pid: u32) -> String {
     String::new()
 }
 
+/// Remembers the verdict for one pid so the expensive identity lookup runs once
+/// per process rather than once per poll.
+///
+/// A pid's image cannot change while the process lives, so the only way the
+/// answer goes stale is the process dying and the number being recycled — and
+/// that is exactly what the liveness check catches before the cache is read.
+static IDENTITY_CACHE: Mutex<Option<(u32, bool)>> = Mutex::new(None);
+
+fn cached_identity(pid: u32) -> Option<bool> {
+    IDENTITY_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .and_then(|(p, ours)| if p == pid { Some(ours) } else { None })
+}
+
+fn remember_identity(pid: u32, ours: bool) {
+    *IDENTITY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some((pid, ours));
+}
+
+/// Drop the memo. Called when we stop or kill a worker, so a recycled pid is
+/// never trusted on the strength of the previous occupant's identity.
+pub fn forget_identity_cache() {
+    *IDENTITY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 /// Only treat as our worker if image is Runtime/product python (avoids recycled-PID kill).
 fn pid_is_our_worker(root: &Path, pid: u32) -> bool {
+    // Liveness first, every time: cheap, and it is what makes the memo below
+    // safe against pid recycling.
     if pid == 0 || !pid_alive(pid) {
+        if pid != 0 {
+            forget_identity_cache();
+        }
         return false;
     }
+    if let Some(ours) = cached_identity(pid) {
+        return ours;
+    }
+    let ours = verify_identity(root, pid);
+    remember_identity(pid, ours);
+    ours
+}
+
+/// The expensive half: ask the OS what image a pid is running.
+fn verify_identity(root: &Path, pid: u32) -> bool {
     let img = pid_image_path(pid).replace('/', "\\").to_ascii_lowercase();
     if img.is_empty() {
         // No path (rare): trust only if status.pid matches and process is python*
@@ -259,6 +298,7 @@ pub fn get_live_pid(root: &Path) -> u32 {
         // Stale dead entry
         if pid > 0 && !pid_alive(pid) {
             protocol::clear_worker_pid(root);
+            forget_identity_cache();
         }
     }
     0
@@ -290,6 +330,7 @@ pub fn kill_known_workers(root: &Path) {
         }
     }
     protocol::clear_worker_pid(root);
+    forget_identity_cache();
     let mut fields = Map::new();
     fields.insert("state".into(), json!("idle"));
     fields.insert("pid".into(), json!(0));
@@ -422,6 +463,7 @@ pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
             }
         } else if pid > 0 && !pid_alive(pid) && (saw_live || state == "starting") {
             protocol::clear_worker_pid(root);
+            forget_identity_cache();
             return json!({
                 "state": "error",
                 "error": last.get("error").and_then(|v| v.as_str()).unwrap_or("worker died during load"),
@@ -577,6 +619,7 @@ pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {
                 kill_tree(pid);
             }
             protocol::clear_worker_pid(root);
+            forget_identity_cache();
             return Ok(());
         }
         let st = protocol::read_status(root);
@@ -637,4 +680,29 @@ pub fn status_for_ui(root: &Path) -> Value {
         }
     }
     st
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_memo_is_keyed_to_one_pid() {
+        forget_identity_cache();
+        assert_eq!(cached_identity(1234), None);
+        remember_identity(1234, true);
+        assert_eq!(cached_identity(1234), Some(true));
+        // A different pid must never be answered from another pid's entry.
+        assert_eq!(cached_identity(5678), None);
+        remember_identity(5678, false);
+        assert_eq!(cached_identity(5678), Some(false));
+        assert_eq!(cached_identity(1234), None);
+        forget_identity_cache();
+        assert_eq!(cached_identity(5678), None);
+    }
+
+    #[test]
+    fn pid_zero_is_never_alive() {
+        assert!(!pid_alive(0));
+    }
 }

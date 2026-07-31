@@ -43,3 +43,12 @@ rfd = "0.15"
 regex = "1"
 # Local-time stamps for diagnostics / consult filenames (support reads these)
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+# Process liveness without spawning a helper process. The status poll runs
+# every 400 ms while converting; shelling out to tasklist / powershell there
+# was costing more CPU than the conversion itself.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }

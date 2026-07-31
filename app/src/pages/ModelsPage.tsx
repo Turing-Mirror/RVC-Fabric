@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { StoreDialog } from "../components/StoreDialog";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
@@ -45,7 +45,7 @@ export type ModelsPageProps = {
 
 type SortKey = "default" | "name" | "index";
 
-export function ModelsPage({ banner = null, onVoiceChange }: ModelsPageProps) {
+function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -756,3 +756,10 @@ function ContextMenu({
     </div>
   );
 }
+
+/**
+ * Memoised: App re-renders on every engine status tick (2.5x a second while
+ * converting). Without this the whole page tree was rebuilt each time for a
+ * mic-level change that only the dock cares about.
+ */
+export const ModelsPage = memo(ModelsPageImpl);

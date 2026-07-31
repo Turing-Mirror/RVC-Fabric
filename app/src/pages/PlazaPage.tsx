@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import {
   formatDate,
@@ -14,7 +14,7 @@ import {
  * Plaza cards are **not** dismissible — carrying placements is what this page
  * is for. The dismissible one is the single models-page banner, handled there.
  */
-export function PlazaPage({
+function PlazaPageImpl({
   feed,
   loading = false,
   onReload,
@@ -182,3 +182,10 @@ function Feed({ item }: { item: PlazaItem }) {
     </div>
   );
 }
+
+/**
+ * Memoised: App re-renders on every engine status tick (2.5x a second while
+ * converting). Without this the whole page tree was rebuilt each time for a
+ * mic-level change that only the dock cares about.
+ */
+export const PlazaPage = memo(PlazaPageImpl);

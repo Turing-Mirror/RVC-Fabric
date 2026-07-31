@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 
@@ -71,7 +71,7 @@ const FAQ: { q: string; hint: string; a: string }[] = [
   },
 ];
 
-export function HelpPage() {
+function HelpPageImpl() {
   const [open, setOpen] = useState<string>("");
   // Installing the driver needs UAC, so it can only ever be user-initiated.
   // Without this entry the pack is downloaded but never actually installed.
@@ -199,3 +199,10 @@ export function HelpPage() {
     </PagePad>
   );
 }
+
+/**
+ * Memoised: App re-renders on every engine status tick (2.5x a second while
+ * converting). Without this the whole page tree was rebuilt each time for a
+ * mic-level change that only the dock cares about.
+ */
+export const HelpPage = memo(HelpPageImpl);

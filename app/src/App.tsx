@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
@@ -238,22 +238,56 @@ export default function App() {
     // Runs once on mount; syncParams is stable (useCallback with no deps).
   }, [syncParams]);
 
-  const handlePitch = (v: number) => {
-    setPitch(v);
-    engine.onPitch(v);
-  };
-  const handleFormant = (v: number) => {
-    setFormant(v);
-    engine.onFormant(v);
-  };
-  const handleMode = (m: OutputMode) => {
-    setMode(m);
-    engine.onMode(m);
-  };
+  // The settings page reads only the device lists out of engine status, but the
+  // whole status object changes every poll tick (mic level, latency), so
+  // passing it straight through re-rendered that page 2.5x a second while
+  // converting. Narrow it to the parts that actually change rarely.
+  const st = engine.status as unknown as Record<string, unknown> | undefined;
+  const deviceKey = JSON.stringify([
+    st?.input_devices,
+    st?.output_devices,
+    st?.hostapis,
+  ]);
+  const deviceStatus = useMemo(
+    () => ({
+      input_devices: st?.input_devices,
+      output_devices: st?.output_devices,
+      hostapis: st?.hostapis,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content, not identity
+    [deviceKey],
+  );
+
+  const { onPitch, onFormant, onMode } = engine;
+  const handlePitch = useCallback(
+    (v: number) => {
+      setPitch(v);
+      onPitch(v);
+    },
+    [onPitch],
+  );
+  const handleFormant = useCallback(
+    (v: number) => {
+      setFormant(v);
+      onFormant(v);
+    },
+    [onFormant],
+  );
+  const handleMode = useCallback(
+    (m: OutputMode) => {
+      setMode(m);
+      onMode(m);
+    },
+    [onMode],
+  );
 
   // One place where "the user picked a different voice" is applied, so the
   // home page and the models page can never drift apart on what the dock shows.
-  const applyVoiceChange = ({
+  const openModels = useCallback(() => setPage("models"), []);
+  const { reload: plazaReload } = plaza;
+  const reloadPlaza = useCallback(() => void plazaReload(), [plazaReload]);
+
+  const applyVoiceChange = useCallback(({
     model,
     pitch: p,
     formant: f,
@@ -281,7 +315,7 @@ export default function App() {
       .catch(() => {
         /* browser preview */
       });
-  };
+  }, [syncParams]);
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">
@@ -324,7 +358,7 @@ export default function App() {
               return (
                 <HomePage
                   currentId={voiceId}
-                  onOpenModels={() => setPage("models")}
+                  onOpenModels={openModels}
                   onVoiceChange={applyVoiceChange}
                 />
               );
@@ -333,7 +367,7 @@ export default function App() {
                 <PlazaPage
                   feed={plaza.feed}
                   loading={plaza.loading}
-                  onReload={() => void plaza.reload()}
+                  onReload={reloadPlaza}
                 />
               );
             case "models":
@@ -346,7 +380,7 @@ export default function App() {
             case "settings":
               return (
                 <SettingsPage
-                  status={engine.status}
+                  status={deviceStatus as never}
                   onReloadDevices={() => void engine.refresh()}
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}

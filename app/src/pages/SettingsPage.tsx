@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
@@ -41,7 +41,7 @@ function deviceOptions(list: unknown): { id: string; label: string }[] {
 const CARD =
   "bg-[var(--group)] rounded-[var(--r)] px-5 py-[22px] flex flex-col gap-6";
 
-export function SettingsPage({
+function SettingsPageImpl({
   status,
   onReloadDevices,
   onCheckUpdate,
@@ -554,3 +554,10 @@ async function pickWallpaper(set: (k: string, v: unknown, now?: boolean) => void
     /* cancelled */
   }
 }
+
+/**
+ * Memoised: App re-renders on every engine status tick (2.5x a second while
+ * converting). Without this the whole page tree was rebuilt each time for a
+ * mic-level change that only the dock cares about.
+ */
+export const SettingsPage = memo(SettingsPageImpl);

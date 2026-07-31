@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
@@ -23,7 +23,7 @@ const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
  * Recency comes from `recent_keys` (app_config `recent_models`), which
  * `voices_select` maintains — the same ordering the Tk shell used.
  */
-export function HomePage({ currentId, onOpenModels, onVoiceChange }: Props) {
+function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -216,3 +216,10 @@ export function HomePage({ currentId, onOpenModels, onVoiceChange }: Props) {
     </div>
   );
 }
+
+/**
+ * Memoised: App re-renders on every engine status tick (2.5x a second while
+ * converting). Without this the whole page tree was rebuilt each time for a
+ * mic-level change that only the dock cares about.
+ */
+export const HomePage = memo(HomePageImpl);

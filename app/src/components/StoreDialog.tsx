@@ -367,14 +367,12 @@ function VoiceRow({
   onInstall: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
-  // Catalog always normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
-  // Fall back to cover for older caches that only stored a relative path.
-  const cover =
-    (v.cover_url || "").trim() ||
-    (typeof (v as { cover?: string }).cover === "string"
-      ? String((v as { cover?: string }).cover)
-      : "");
-  const coverHttp = /^https?:\/\//i.test(cover) ? cover : "";
+  // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
+  // Older caches may only have a relative cover path — skip those (no convert).
+  const coverHttp = (() => {
+    const raw = (v.cover_url || v.cover || "").trim();
+    return /^https?:\/\//i.test(raw) ? raw : "";
+  })();
   const showImg = Boolean(coverHttp) && !imgFailed;
   const initials = (v.name || v.id || "?").slice(0, 2);
 

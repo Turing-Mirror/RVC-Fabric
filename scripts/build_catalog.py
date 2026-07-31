@@ -68,11 +68,30 @@ VALID_VARIANTS = ("nvidia", "amd", "nvidia50")
 VALID_CHANNELS = ("release", "lfs")
 
 
+def default_cnb_dir() -> Path:
+    """发布仓工作区的位置。
+
+    优先级：环境变量 RVCF_CNB_DIR → 与产品仓同级的 RVC-Fabric-Release →
+    仓内旧位置 CNB-GIT-RELEASE。
+
+    发布仓现在独立放在产品仓旁边，不再塞进产品仓目录里。默认值写死成仓内路径
+    的话，忘记加 --cnb 就会在产品源码仓里凭空长出一个 CNB-GIT-RELEASE，两个
+    仓的内容混在一起。
+    """
+    env = os.environ.get("RVCF_CNB_DIR")
+    if env:
+        return Path(env).expanduser()
+    sibling = REPO.parent / "RVC-Fabric-Release"
+    if (sibling / ".git").exists():
+        return sibling
+    return REPO / "CNB-GIT-RELEASE"
+
+
 class Paths:
     """所有输入/输出路径；测试可指向 tmpdir。"""
 
     def __init__(self, cnb: Path | None = None, bundled: Path | None = None) -> None:
-        self.cnb = Path(cnb) if cnb else REPO / "CNB-GIT-RELEASE"
+        self.cnb = Path(cnb) if cnb else default_cnb_dir()
         self.src = self.cnb / "catalog-src"
         self.index_out = self.cnb / "index.json"
         self.plaza_out = self.cnb / "plaza.json"

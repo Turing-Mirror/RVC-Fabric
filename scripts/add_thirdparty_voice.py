@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -25,7 +26,23 @@ from pathlib import Path
 from typing import Any, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CNB = ROOT / "CNB-GIT-RELEASE"
+
+
+def _default_cnb() -> Path:
+    """发布仓工作区。见 build_catalog.default_cnb_dir —— 两处必须一致。
+
+    环境变量 RVCF_CNB_DIR → 同级的 RVC-Fabric-Release → 仓内旧位置。
+    """
+    env = os.environ.get("RVCF_CNB_DIR")
+    if env:
+        return Path(env).expanduser()
+    sibling = ROOT.parent / "RVC-Fabric-Release"
+    if (sibling / ".git").exists():
+        return sibling
+    return ROOT / "CNB-GIT-RELEASE"
+
+
+DEFAULT_CNB = _default_cnb()
 DEFAULT_ENDPOINT = "https://hf-mirror.com"
 UA = "Turing-Mirror/RVC-Fabric (https://github.com/Turing-Mirror/RVC-Fabric)"
 TIMEOUT = 15

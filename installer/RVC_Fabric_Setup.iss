@@ -235,10 +235,63 @@ begin
   Log('Wrote ' + Path);
 end;
 
+{ WebView2 运行时。
+  界面跑在 WebView2 里，没有它主程序打不开窗口 —— 而且什么都不会显示，
+  用户只会看到「双击没反应」。Win11 和更新过的 Win10 自带；LTSC、精简版、
+  长期没更新的 Win10 可能没有。tauri.conf.json 里的 downloadBootstrapper
+  只对 Tauri 自带的 NSIS/MSI 打包生效，我们发的是这个 Inno 包，走不到。
+  官方 Evergreen 运行时的注册表标记（HKLM 为全机器安装，HKCU 为单用户）。 }
+function WebView2Installed: Boolean;
+var
+  V: String;
+begin
+  Result :=
+    (RegQueryStringValue(HKEY_LOCAL_MACHINE,
+      'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', V) and (V <> '') and (V <> '0.0.0.0')) or
+    (RegQueryStringValue(HKEY_LOCAL_MACHINE,
+      'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', V) and (V <> '') and (V <> '0.0.0.0')) or
+    (RegQueryStringValue(HKEY_CURRENT_USER,
+      'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+      'pv', V) and (V <> '') and (V <> '0.0.0.0'));
+end;
+
+procedure EnsureWebView2;
+var
+  Boot: String;
+  Code: Integer;
+  Got: Boolean;
+begin
+  if WebView2Installed then
+    Exit;
+  Boot := ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe');
+  Got := False;
+  { 下载或安装失败都不挡这次安装：主程序装完了，用户还能自己补 WebView2，
+    在这里硬拦住只会更糟。 }
+  try
+    DownloadTemporaryFile('https://go.microsoft.com/fwlink/p/?LinkId=2124703',
+      'MicrosoftEdgeWebview2Setup.exe', '', nil);
+    Got := FileExists(Boot);
+  except
+    Log('WebView2 bootstrapper download failed: ' + GetExceptionMessage);
+  end;
+  if Got then
+    if Exec(Boot, '/silent /install', '', SW_SHOW, ewWaitUntilTerminated, Code) then
+      if WebView2Installed then
+        Exit;
+  MsgBox('这台电脑缺少 WebView2 运行时，RVC Fabric 的界面需要它。' + #13#10 + #13#10 +
+    '如果装完之后双击没反应，请到微软官网安装「Microsoft Edge WebView2 Runtime」' +
+    '（Evergreen 版）后重开：' + #13#10 +
+    'https://go.microsoft.com/fwlink/p/?LinkId=2124703',
+    mbInformation, MB_OK);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    EnsureWebView2;
     WritePackageMeta;
     WriteSetupPending;
   end;

@@ -15,12 +15,10 @@ type Props = {
 
 /**
  * Repos and socials. Plain list rows, opened in the user's own browser through
- * the shell's http/https-only `open_external`.
- *
- * 抖音 has no stable profile URL, only the account name, so that row copies the
- * name instead of pretending to be a link.
+ * the shell's http/https-only `open_external`. `desc` carries the account's own
+ * identifier and nothing else.
  */
-const LINKS: { title: string; desc: string; url?: string; copy?: string }[] = [
+const LINKS: { title: string; desc?: string; url: string }[] = [
   {
     title: "GitHub 源码",
     desc: "Turing-Mirror/RVC-Fabric",
@@ -33,13 +31,12 @@ const LINKS: { title: string; desc: string; url?: string; copy?: string }[] = [
   },
   {
     title: "哔哩哔哩 @图灵镜",
-    desc: "更新演示与教程",
     url: "https://space.bilibili.com/3546871148579062",
   },
   {
     title: "抖音 @图灵镜",
     desc: "抖音号 TuringMirror",
-    copy: "TuringMirror",
+    url: "https://v.douyin.com/6NxXcrKK9cc",
   },
   {
     title: "小红书 @图灵镜",
@@ -47,31 +44,6 @@ const LINKS: { title: string; desc: string; url?: string; copy?: string }[] = [
     url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
   },
 ];
-
-/** Clipboard API needs a secure context; a custom scheme may not be one. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to the legacy path */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
 
 export function MorePage({
   status,
@@ -90,7 +62,6 @@ export function MorePage({
   const [root, setRoot] = useState("—");
   const [logFile, setLogFile] = useState("");
   const [version, setVersion] = useState("—");
-  const [copied, setCopied] = useState("");
   const [busyMsg, setBusyMsg] = useState("");
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
@@ -174,7 +145,6 @@ export function MorePage({
           />
           <ListItem
             title="产品根目录"
-            desc="Runtime、User_Data、引擎源码都在这里"
             right={
               <span
                 className="text-[13.5px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
@@ -186,13 +156,12 @@ export function MorePage({
           />
           <ListItem
             title="界面来源"
-            desc="外部目录可被界面补丁替换；显示「内置」说明补丁未生效"
             right={
               <span
                 className="text-[13.5px] text-[var(--ink-muted)] max-w-[280px] text-right truncate"
                 title={uiSource}
               >
-                {uiSource.startsWith("外部目录") ? "外部目录（可热更）" : uiSource}
+                {uiSource}
               </span>
             }
           />
@@ -276,10 +245,7 @@ export function MorePage({
           />
           <ListItem
             title="打开日志"
-            desc={
-              logFile ||
-              "shell.log 记录启动、界面加载与出错原因，报问题时把它一起发来"
-            }
+            desc={logFile || undefined}
             right={
               <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>
                 打开
@@ -288,14 +254,14 @@ export function MorePage({
           />
           <ListItem
             title="打开原版实时面板"
-            desc={legacyMsg.panel || "gui_v1 窗口版实时变声。高级功能，一般用不到"}
+            desc={legacyMsg.panel || "高级功能，一般用不到"}
             right={
               <Btn onClick={() => void openLegacy("panel")}>打开</Btn>
             }
           />
           <ListItem
             title="打开原版 WebUI"
-            desc={legacyMsg.webui || "原版 RVC 训练与推理界面（127.0.0.1:7897）"}
+            desc={legacyMsg.webui || "高级功能，一般用不到"}
             right={<Btn onClick={() => void openLegacy("webui")}>打开</Btn>}
           />
           <ListItem
@@ -328,22 +294,8 @@ export function MorePage({
             <ListItem
               key={l.title}
               title={l.title}
-              desc={copied === l.title ? "已复制到剪贴板" : l.desc}
-              right={
-                l.url ? (
-                  <Btn onClick={() => void openExternal(l.url!)}>打开</Btn>
-                ) : (
-                  <Btn
-                    onClick={async () => {
-                      const ok = await copyText(l.copy || "");
-                      setCopied(ok ? l.title : "");
-                      if (ok) window.setTimeout(() => setCopied(""), 2000);
-                    }}
-                  >
-                    复制账号
-                  </Btn>
-                )
-              }
+              desc={l.desc}
+              right={<Btn onClick={() => void openExternal(l.url)}>打开</Btn>}
             />
           ))}
         </Group>

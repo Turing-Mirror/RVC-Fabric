@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/brand/logo_wordmark.png" alt="RVC Fabric" width="300">
+
 # RVC Fabric
 
 **Windows 桌面实时变声器**
@@ -11,7 +13,7 @@
 
 **仓库**　[GitHub 源码](https://github.com/Turing-Mirror/RVC-Fabric)　·　[CNB 发布与制品](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**社媒**　[哔哩哔哩 @图灵镜](https://space.bilibili.com/3546871148579062)　·　抖音 @图灵镜（抖音号 `TuringMirror`）　·　[小红书 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小红书号 `TuringMirror`）
+**社媒**　[哔哩哔哩 @图灵镜](https://space.bilibili.com/3546871148579062)　·　[抖音 @图灵镜](https://v.douyin.com/6NxXcrKK9cc)（抖音号 `TuringMirror`）　·　[小红书 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小红书号 `TuringMirror`）
 
 **赞助推广**　[首月五折　·　性价比云服务器 / 游戏云 / 面板服　·　雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 

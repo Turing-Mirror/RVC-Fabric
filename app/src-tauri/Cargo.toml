@@ -51,4 +51,5 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_System_Threading",
+  "Win32_System_Registry",
 ] }

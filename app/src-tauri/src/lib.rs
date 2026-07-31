@@ -234,7 +234,27 @@ fn ui_log(line: String) {
     // Bound it: an error loop must not be able to fill the disk one message at
     // a time.
     let line: String = line.chars().take(2000).collect();
-    logging::shell_log!("[ui] {line}");
+    // Rate-limit too. This command is synchronous, which means it runs inline
+    // on the thread that receives IPC — the window's own UI thread on Windows —
+    // and it touches the disk. A frontend stuck in an error loop calling it
+    // would freeze the window rather than report the problem.
+    static GATE: Mutex<Option<(std::time::Instant, u32)>> = Mutex::new(None);
+    const PER_WINDOW: u32 = 30;
+    let window = std::time::Duration::from_secs(10);
+    let mut g = GATE.lock().unwrap_or_else(|e| e.into_inner());
+    let (since, count) = match *g {
+        Some((t, n)) if t.elapsed() < window => (t, n),
+        _ => (std::time::Instant::now(), 0),
+    };
+    *g = Some((since, count + 1));
+    drop(g);
+    match count {
+        n if n < PER_WINDOW => logging::shell_log!("[ui] {line}"),
+        n if n == PER_WINDOW => {
+            logging::shell_log!("[ui] 前端日志过快（10 秒内超过 {PER_WINDOW} 条），本轮后续省略")
+        }
+        _ => {}
+    }
 }
 
 /// Plaza feed + changelog, already filtered for this version and today's date.
@@ -517,9 +537,19 @@ async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, St
     // Async + spawn_blocking because this resolves a runtime spec, which can
     // reach CNB. A sync command runs on the IPC thread, so an unreachable or
     // slow host froze the window on startup for as long as the request took.
-    tauri::async_runtime::spawn_blocking(move || Ok(provision::provision_status(&root)))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let t = std::time::Instant::now();
+        let v = provision::provision_status(&root);
+        // This is the first thing a fresh install calls and the gate cannot
+        // draw without it, so a slow answer looks exactly like a hang. Say so.
+        let ms = t.elapsed().as_millis();
+        if ms > 1500 {
+            logging::shell_log!("provision_status 用了 {ms} ms");
+        }
+        Ok(v)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -916,6 +946,42 @@ pub fn run() {
                             ui_assets::not_found_count(),
                         );
                         let _ = h.emit("app://ui-stalled", ());
+                    }
+                });
+            }
+
+            // "打开就未响应" is the one report that carries no information: the
+            // window is frozen, so the UI cannot say anything and neither can
+            // any command it would have called. Ping the event loop from a
+            // plain thread instead. If these lines are absent from a log that
+            // ends mid-session, the loop stopped pumping and the cause is on
+            // the Rust side; if they keep appearing, the shell is alive and the
+            // webview is what wedged. Either way the next report starts from a
+            // fact instead of a guess.
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    let mut stalled = false;
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_secs(15));
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        if h.run_on_main_thread(move || {
+                            let _ = tx.send(());
+                        })
+                        .is_err()
+                        {
+                            return; // app is shutting down
+                        }
+                        let ok = rx
+                            .recv_timeout(std::time::Duration::from_secs(10))
+                            .is_ok();
+                        if !ok && !stalled {
+                            logging::shell_log!("警告：主线程 10 秒没有响应，窗口此刻是卡住的");
+                            stalled = true;
+                        } else if ok && stalled {
+                            logging::shell_log!("主线程已恢复");
+                            stalled = false;
+                        }
                     }
                 });
             }

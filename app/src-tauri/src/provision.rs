@@ -78,38 +78,121 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
 }
 
 /// Enumerated once per run. The video controller set does not change while the
-/// app is open, and each enumeration is a PowerShell launch (300–800 ms) that
-/// otherwise happened every time the provision gate opened or a diagnostics
-/// bundle was built.
+/// app is open, and this used to be a PowerShell launch that ran every time the
+/// provision gate opened or a diagnostics bundle was built.
 static GPUS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
 pub fn list_gpus() -> Vec<String> {
-    GPUS.get_or_init(enumerate_gpus).clone()
+    GPUS.get_or_init(|| {
+        let t = std::time::Instant::now();
+        let g = enumerate_gpus();
+        crate::logging::shell_log!("gpu enumeration: {:?} in {} ms", g, t.elapsed().as_millis());
+        g
+    })
+    .clone()
 }
 
+/// Display adapters, read straight out of the class key Device Manager lists.
+///
+/// This was `Get-CimInstance Win32_VideoController` through PowerShell. Two
+/// problems with that on a user's machine: a PowerShell cold start is 300–800
+/// ms, and on a box with a damaged WMI repository the query does not return at
+/// all. `Command::output()` has no timeout, and the result is memoised behind a
+/// `OnceLock` — so one wedged WMI call blocked the initialiser forever and
+/// every later caller with it, which is a first-run app that opens and then
+/// never finishes drawing the provision gate. A registry read cannot hang and
+/// needs no child process.
 #[cfg(windows)]
 fn enumerate_gpus() -> Vec<String> {
-    // Kept inside the cfg(windows) body: at module scope it is an unused-import
-    // warning on every other platform.
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-    let ps = r#"
-Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
-  Where-Object { $_.Name } |
-  ForEach-Object { $_.Name }
-"#;
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps])
-        .creation_flags(0x08000000)
-        .output();
-    match out {
-        Ok(o) => String::from_utf8_lossy(&o.stdout)
-            .lines()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect(),
-        Err(_) => vec![],
+    use std::ffi::{OsStr, OsString};
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE,
+        KEY_READ,
+    };
+
+    fn wide(s: &str) -> Vec<u16> {
+        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
     }
+
+    // GUID_DEVCLASS_DISPLAY.
+    const CLASS: &str =
+        r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+
+    let mut out: Vec<String> = Vec::new();
+    unsafe {
+        let mut class_key: HKEY = std::ptr::null_mut();
+        if RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            wide(CLASS).as_ptr(),
+            0,
+            KEY_READ,
+            &mut class_key,
+        ) != ERROR_SUCCESS
+        {
+            return out;
+        }
+        let mut i: u32 = 0;
+        loop {
+            let mut name = [0u16; 256];
+            let mut len: u32 = name.len() as u32;
+            if RegEnumKeyExW(
+                class_key,
+                i,
+                name.as_mut_ptr(),
+                &mut len,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ) != ERROR_SUCCESS
+            {
+                break;
+            }
+            i += 1;
+            // Adapters are the numbered subkeys (0000, 0001, …); siblings like
+            // "Properties" are not devices.
+            let sub = OsString::from_wide(&name[..len as usize])
+                .to_string_lossy()
+                .to_string();
+            if sub.is_empty() || !sub.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            let mut dev: HKEY = std::ptr::null_mut();
+            if RegOpenKeyExW(class_key, wide(&sub).as_ptr(), 0, KEY_READ, &mut dev)
+                != ERROR_SUCCESS
+            {
+                continue;
+            }
+            let mut buf = [0u16; 512];
+            let mut cb: u32 = std::mem::size_of_val(&buf) as u32;
+            let rc = RegQueryValueExW(
+                dev,
+                wide("DriverDesc").as_ptr(),
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                buf.as_mut_ptr() as *mut u8,
+                &mut cb,
+            );
+            RegCloseKey(dev);
+            if rc != ERROR_SUCCESS {
+                continue;
+            }
+            // cb is bytes and includes the terminating NUL.
+            let chars = (cb as usize / 2).min(buf.len());
+            let s = OsString::from_wide(&buf[..chars])
+                .to_string_lossy()
+                .trim_end_matches('\0')
+                .trim()
+                .to_string();
+            if !s.is_empty() && !out.contains(&s) {
+                out.push(s);
+            }
+        }
+        RegCloseKey(class_key);
+    }
+    out
 }
 
 #[cfg(not(windows))]

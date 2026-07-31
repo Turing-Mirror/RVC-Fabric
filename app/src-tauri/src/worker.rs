@@ -69,28 +69,41 @@ fn pid_alive(pid: u32) -> bool {
 }
 
 /// Full image path for *pid*, or empty.
+///
+/// Was a `Get-CimInstance Win32_Process` call through PowerShell — a cold start
+/// per lookup, and no return at all on a machine whose WMI repository is
+/// damaged. `Command::output()` has no timeout, so that stalled the caller
+/// indefinitely. The Win32 call cannot hang and spawns nothing.
 #[cfg(windows)]
 fn pid_image_path(pid: u32) -> String {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
     if pid == 0 {
         return String::new();
     }
-    use std::os::windows::process::CommandExt;
-    let ps = format!(
-        "$p=Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" -ErrorAction SilentlyContinue; if($p){{$p.ExecutablePath}}"
-    );
-    let out = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &ps,
-        ])
-        .creation_flags(0x08000000)
-        .output();
-    match out {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        Err(_) => String::new(),
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return String::new();
+        }
+        // MAX_PATH is not enough: a long-path-enabled system can exceed it, and
+        // the call fails rather than truncating.
+        let mut buf = [0u16; 32768];
+        let mut len: u32 = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut len);
+        CloseHandle(h);
+        if ok == 0 {
+            return String::new();
+        }
+        OsString::from_wide(&buf[..len as usize])
+            .to_string_lossy()
+            .trim()
+            .to_string()
     }
 }
 

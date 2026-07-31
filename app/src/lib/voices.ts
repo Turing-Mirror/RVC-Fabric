@@ -54,7 +54,10 @@ export type StoreVoice = {
   version?: string;
   pack_url?: string;
   pth_url?: string;
+  /** Absolute https URL (preferred; filled by store.rs from cover/banner). */
   cover_url?: string;
+  /** Relative path leftover from older caches, e.g. ch-banner/foo.jpg */
+  cover?: string;
   size_bytes?: number;
   size_label?: string;
   sha256?: string;

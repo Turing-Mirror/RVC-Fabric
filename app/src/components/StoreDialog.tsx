@@ -7,7 +7,7 @@ import {
   type StoreCatalog,
   type StoreVoice,
 } from "../lib/voices";
-import { Btn, Group, ListItem } from "./ui";
+import { Btn, Group } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 
 type View = "latest" | "official" | "thirdparty" | "series";
@@ -366,21 +366,54 @@ function VoiceRow({
   queued?: boolean;
   onInstall: () => void;
 }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  // Catalog always normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
+  // Fall back to cover for older caches that only stored a relative path.
+  const cover =
+    (v.cover_url || "").trim() ||
+    (typeof (v as { cover?: string }).cover === "string"
+      ? String((v as { cover?: string }).cover)
+      : "");
+  const coverHttp = /^https?:\/\//i.test(cover) ? cover : "";
+  const showImg = Boolean(coverHttp) && !imgFailed;
+  const initials = (v.name || v.id || "?").slice(0, 2);
+
   return (
-    <ListItem
-      meta={v.origin_label || (v.official === false ? "第三方" : "图灵镜")}
-      title={v.name}
-      desc={[
-        v.tag,
-        v.author ? `作者 · ${v.author}` : "",
-        v.size_label,
-        v.series ? `系列 · ${v.series}` : "",
-        v.date,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
-      right={
-        v.installed ? (
+    <div className="flex items-center gap-3.5 py-3.5">
+      <div className="w-14 h-14 rounded-[var(--rs)] flex-none overflow-hidden relative bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] grid place-items-center text-[13px] text-[color-mix(in_srgb,var(--ink)_36%,transparent)] font-semibold grayscale">
+        {showImg ? (
+          <img
+            src={coverHttp}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            draggable={false}
+            onError={() => setImgFailed(true)}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <span>{initials}</span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <span className="block text-[11.5px] text-[var(--meta)] mb-0.5">
+          {v.origin_label || (v.official === false ? "第三方" : "图灵镜")}
+        </span>
+        <span className="block text-sm leading-snug">{v.name}</span>
+        <span className="block text-[12.5px] text-[var(--help)] mt-0.5 leading-relaxed">
+          {[
+            v.tag,
+            v.author ? `作者 · ${v.author}` : "",
+            v.size_label,
+            v.series ? `系列 · ${v.series}` : "",
+            v.date,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </div>
+      <div className="flex-none flex items-center gap-2">
+        {v.installed ? (
           <Btn on uw disabled>
             已安装
           </Btn>
@@ -388,8 +421,8 @@ function VoiceRow({
           <Btn primary uw disabled={busy || queued} onClick={onInstall}>
             {busy ? "安装中…" : queued ? "待下载" : "下载"}
           </Btn>
-        )
-      }
-    />
+        )}
+      </div>
+    </div>
   );
 }

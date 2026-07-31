@@ -81,6 +81,10 @@ fn focus_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
+        // 显示器拔掉之后窗口会留在一块已经不存在的屏上。这时候「打开主界面」
+        // 什么都不会发生，而托盘是用户此刻唯一的入口——先把它拉回来。只在整个
+        // 窗口都不在任何屏上时才动，用户自己把窗口摆在哪块屏是他的事。
+        crate::window_watch::rescue_if_offscreen(&w);
         let _ = w.set_focus();
     }
 }

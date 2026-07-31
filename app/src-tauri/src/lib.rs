@@ -937,6 +937,10 @@ pub fn run() {
             .decorations(false)
             .center()
             .build()?;
+            // `.center()` 只认主显示器。多显示器的人主屏未必是他正在看的那
+            // 块，窗口连同任务栏按钮一起去了另一块屏，这头看起来就跟没启动
+            // 一样。摆到光标所在的屏上。
+            window_watch::place_on_active_monitor(&main_window);
             window_watch::report_and_rescue(&main_window, "创建后");
 
             // A blank window is the one failure the user cannot describe and we

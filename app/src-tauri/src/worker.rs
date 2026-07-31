@@ -155,6 +155,19 @@ fn pid_is_our_worker(root: &Path, pid: u32) -> bool {
     ours
 }
 
+/// 只问「这是不是一个 python 进程」，不管它在哪个目录。
+///
+/// 用于我们自己记录过的 pid：路径可能因为 8.3 短名、盘符大小写、符号链接而对不
+/// 上，但只要它是 python 就该按我们的 worker 处理，而不是既不认也不杀。
+fn pid_looks_like_python(pid: u32) -> bool {
+    let img = pid_image_path(pid).replace('/', "\\").to_ascii_lowercase();
+    let base = Path::new(&img)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    base == "python.exe" || base == "pythonw.exe"
+}
+
 /// The expensive half: ask the OS what image a pid is running.
 fn verify_identity(root: &Path, pid: u32) -> bool {
     let img = pid_image_path(pid).replace('/', "\\").to_ascii_lowercase();
@@ -335,10 +348,24 @@ pub fn kill_known_workers(root: &Path) {
             kill_tree(pid);
         } else if !pid_alive(pid) {
             // stale
+        } else if pid_looks_like_python(pid) {
+            // 活着、是个 python 进程，但镜像路径没匹配上我们的目录。
+            //
+            // 这个 pid 是我们自己 spawn 的时候写进 pid 文件的，所以它就是我们的
+            // —— 镜像路径比对只是防 pid 复用的第二道保险，不该反过来让我们认不出
+            // 自己的进程。以前这里只记一行日志就放过：进程还活着占着声卡，
+            // is_worker_alive 又因为同一个判断返回 false，于是 start_worker 再开
+            // 一个。开几次就有几个 worker 同时往同一个输出设备写 —— 用户听到的
+            // 就是「好几个模型的声音一起响」。
+            append_log(
+                root,
+                &format!("kill_tree pid={pid} (我们记录的 pid，镜像路径没匹配上)"),
+            );
+            kill_tree(pid);
         } else {
             append_log(
                 root,
-                &format!("skip kill pid={pid} (not our worker image)"),
+                &format!("skip kill pid={pid} (不是 python 进程，可能是复用的 pid)"),
             );
         }
     }

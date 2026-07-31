@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
@@ -320,27 +320,52 @@ export default function App() {
 
   // Tray menu and global hotkeys drive the same actions as the dock, so the
   // shortcuts keep working while the window is hidden.
+  //
+  // The handlers close over `engine` and `shiftVoice`, and `useEngine` returns
+  // a fresh object on every render — which the status poll causes once a
+  // second. With those in the dependency array this effect re-ran that often,
+  // and because `listen()` is async its cleanup ran while the promises were
+  // still pending: it unregistered nothing. Six listeners leaked per second,
+  // each one a live IPC registration on the Rust side, for as long as the app
+  // stayed open. Register once and reach the current closures through a ref.
+  const actionsRef = useRef({
+    toggleRun: () => {},
+    shiftVoice: (_d: number) => {},
+    toggleMode: () => {},
+  });
   useEffect(() => {
-    const offs: Array<() => void> = [];
-    const wire = async () => {
-      offs.push(await listen("tray://toggle-vc", () => void engine.toggleRun()));
-      offs.push(await listen("hotkey://toggle-vc", () => void engine.toggleRun()));
-      offs.push(await listen("hotkey://prev-voice", () => void shiftVoice(-1)));
-      offs.push(await listen("hotkey://next-voice", () => void shiftVoice(1)));
-      offs.push(await listen("app://close-requested", () => setCloseAsk(true)));
-      offs.push(
-        await listen("hotkey://toggle-mode", () => {
-          setMode((m) => {
-            const next: OutputMode = m === "vc" ? "bypass" : "vc";
-            void engine.onMode(next);
-            return next;
-          });
+    actionsRef.current = {
+      toggleRun: () => void engine.toggleRun(),
+      shiftVoice: (d: number) => void shiftVoice(d),
+      toggleMode: () =>
+        setMode((m) => {
+          const next: OutputMode = m === "vc" ? "bypass" : "vc";
+          void engine.onMode(next);
+          return next;
         }),
-      );
     };
-    void wire();
-    return () => offs.forEach((f) => f());
-  }, [engine, shiftVoice]);
+  });
+
+  useEffect(() => {
+    let disposed = false;
+    const offs: Array<() => void> = [];
+    const add = async (event: string, fn: () => void) => {
+      const un = await listen(event, fn);
+      // Cleanup may have already run while this was in flight.
+      if (disposed) un();
+      else offs.push(un);
+    };
+    void add("tray://toggle-vc", () => actionsRef.current.toggleRun());
+    void add("hotkey://toggle-vc", () => actionsRef.current.toggleRun());
+    void add("hotkey://prev-voice", () => actionsRef.current.shiftVoice(-1));
+    void add("hotkey://next-voice", () => actionsRef.current.shiftVoice(1));
+    void add("hotkey://toggle-mode", () => actionsRef.current.toggleMode());
+    void add("app://close-requested", () => setCloseAsk(true));
+    return () => {
+      disposed = true;
+      offs.forEach((f) => f());
+    };
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">

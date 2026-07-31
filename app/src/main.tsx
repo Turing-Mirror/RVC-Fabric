@@ -16,9 +16,18 @@ ReactDOM.createRoot(root).render(
   </React.StrictMode>,
 );
 
-// Tell the shell the UI actually painted. Without this the shell cannot
-// distinguish "window is blank" from "window is fine but the user is looking
-// at an empty page", and shell.log is what a bug report is built from.
-requestAnimationFrame(() => {
+// Tell the shell the UI came up. Without this the shell cannot distinguish
+// "window is blank" from "window is fine but the user is looking at an empty
+// page", and shell.log is what a bug report is built from.
+//
+// rAF alone was not enough: a webview whose window is occluded, minimised or
+// started to tray may never get a frame, and the shell then logged a 白屏
+// warning about a UI that was in fact running. The timer is the floor.
+let told = false;
+const tellShell = () => {
+  if (told) return;
+  told = true;
   void invoke("ui_ready").catch(() => {});
-});
+};
+requestAnimationFrame(tellShell);
+setTimeout(tellShell, 1500);

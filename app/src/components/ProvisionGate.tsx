@@ -49,6 +49,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    // `listen` resolves asynchronously; closing the gate before it does used to
+    // drop the unlisten handle on the floor and leak the registration.
+    let disposed = false;
     let un: (() => void) | undefined;
     void listen<ProvisionProgress>("provision-progress", (ev) => {
       setProgress(ev.payload);
@@ -56,9 +59,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         setError(ev.payload.message || "补全失败");
       }
     }).then((fn) => {
-      un = fn;
+      if (disposed) fn();
+      else un = fn;
     });
     return () => {
+      disposed = true;
       un?.();
     };
   }, [open]);

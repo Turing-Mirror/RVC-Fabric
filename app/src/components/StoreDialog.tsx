@@ -61,6 +61,9 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    // Closing the dialog before `listen` resolves used to drop the unlisten
+    // handle, leaking the registration for the life of the app.
+    let disposed = false;
     let un: (() => void) | undefined;
     void listen<{
       voice_id?: string;
@@ -75,9 +78,11 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
         }`,
       );
     }).then((fn) => {
-      un = fn;
+      if (disposed) fn();
+      else un = fn;
     });
     return () => {
+      disposed = true;
       un?.();
     };
   }, [open]);

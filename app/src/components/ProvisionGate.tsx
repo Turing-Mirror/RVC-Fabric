@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   getProvisionStatus,
@@ -10,12 +10,32 @@ import {
 } from "../lib/engine";
 import { Btn } from "./ui";
 
+type VariantRow = {
+  id: string;
+  label: string;
+  size_bytes?: number;
+  size_label?: string;
+};
+
 type Props = {
   open: boolean;
   initial?: ProvisionStatus;
   onDone: () => void;
   onDismiss?: () => void;
 };
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(0)} KB`;
+  return `${Math.round(n)} B`;
+}
+
+function isCancelError(e: unknown): boolean {
+  const s = String(e ?? "");
+  return s.includes("已取消") || s.toLowerCase().includes("cancel");
+}
 
 /**
  * First-run / missing-Runtime gate: pick variant, download + extract.
@@ -56,7 +76,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     void listen<ProvisionProgress>("provision-progress", (ev) => {
       setProgress(ev.payload);
       if (ev.payload.phase === "error") {
-        setError(ev.payload.message || "补全失败");
+        const msg = ev.payload.message || "补全失败";
+        if (isCancelError(msg)) {
+          // Cancel is not a failure to display; start()'s catch also handles it.
+          return;
+        }
+        setError(msg);
       }
     }).then((fn) => {
       if (disposed) fn();
@@ -68,15 +93,37 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     };
   }, [open]);
 
-  if (!open) return null;
-
-  const variants =
-    info.variants ||
-    [
+  const variants: VariantRow[] = useMemo(() => {
+    const list = (info.variants || []) as VariantRow[];
+    if (list.length > 0) return list;
+    return [
       { id: "nvidia", label: "NVIDIA（推荐大多数 N 卡）" },
       { id: "nvidia50", label: "NVIDIA 50 系（RTX 50xx）" },
       { id: "amd", label: "AMD / Intel（DirectML）" },
     ];
+  }, [info.variants]);
+
+  const selectedSizeLabel = useMemo(() => {
+    const row = variants.find((v) => v.id === variant);
+    if (row?.size_label && row.size_label !== "0 B") return row.size_label;
+    if (row?.size_bytes && row.size_bytes > 0) return formatBytes(row.size_bytes);
+    // Fallback only when catalog had nothing for this id
+    if (variant === info.recommended_variant && info.recommended_size_label) {
+      return info.recommended_size_label;
+    }
+    return "";
+  }, [variants, variant, info.recommended_variant, info.recommended_size_label]);
+
+  if (!open) return null;
+
+  const finishCancel = () => {
+    setBusy(false);
+    setProgress(null);
+    setError("");
+    setExtra("");
+    // User asked to leave the gate after cancel (task already stopped).
+    onDismiss?.();
+  };
 
   const start = async () => {
     setBusy(true);
@@ -89,17 +136,47 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         // gate is allowed to close.
         await runExtras();
         onDone();
+      } else if (isCancelError(r.message)) {
+        finishCancel();
       } else {
         setError(r.message || "补全失败");
       }
     } catch (e) {
-      setError(String(e));
+      if (isCancelError(e)) {
+        finishCancel();
+      } else {
+        setError(String(e));
+      }
     } finally {
       setBusy(false);
     }
   };
 
-  const pct = Math.round(Number(progress?.percent || 0));
+  const onCancelClick = () => {
+    // Set the cancel flag first so the download stops, then leave the gate.
+    // start()'s catch will also hit finishCancel (idempotent) when the long
+    // invoke returns 「已取消」.
+    void (async () => {
+      try {
+        await cancelProvision();
+      } catch {
+        /* cancel is best-effort */
+      }
+      finishCancel();
+    })();
+  };
+
+  const done = Number(progress?.done || 0);
+  const total = Math.max(Number(progress?.total || 0), 1);
+  const pct = Math.min(
+    100,
+    Math.round(
+      progress?.percent != null && !Number.isNaN(Number(progress.percent))
+        ? Number(progress.percent)
+        : (done / total) * 100,
+    ),
+  );
+  const showBar = busy && progress && progress.phase !== "error";
 
   // Runtime alone is not a usable install: the worker needs engine-core
   // (hubert / rmvpe / ffmpeg) and the user needs VB-Cable for anyone to hear
@@ -108,6 +185,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     // engine-core is required: without hubert / rmvpe the worker cannot start
     // at all, so a failure here has to block.
     setExtra("正在补全引擎资源（hubert / rmvpe / ffmpeg）…");
+    setProgress({
+      phase: "engine-core",
+      done: 0,
+      total: 1,
+      percent: 0,
+      message: "正在补全引擎资源（hubert / rmvpe / ffmpeg）…",
+    });
     try {
       await invoke("assets_ensure_engine_core");
     } catch (e) {
@@ -120,6 +204,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     // install on it would trap users behind a flaky download for something
     // they can fetch later from 「说明」.
     setExtra("正在准备虚拟声卡安装包…");
+    setProgress({
+      phase: "vbcable",
+      done: 0,
+      total: 1,
+      percent: 0,
+      message: "正在准备虚拟声卡安装包…",
+    });
     try {
       await invoke("assets_ensure_vbcable");
       setExtra("");
@@ -141,6 +232,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         <div className="flex flex-col gap-2 mb-5">
           {variants.map((v) => {
             const on = v.id === variant;
+            const sizeText =
+              v.size_label && v.size_label !== "0 B"
+                ? v.size_label
+                : v.size_bytes && v.size_bytes > 0
+                  ? formatBytes(v.size_bytes)
+                  : "";
             return (
               <button
                 key={v.id}
@@ -155,10 +252,15 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                     : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] text-[var(--ink-muted)]",
                 ].join(" ")}
               >
-                {v.label}
-                {info.recommended_variant === v.id ? (
-                  <span className="text-[11.5px] text-[var(--accent)] ml-2">推荐</span>
-                ) : null}
+                <span className="inline-flex items-center flex-wrap gap-x-2 gap-y-0.5">
+                  <span>{v.label}</span>
+                  {info.recommended_variant === v.id ? (
+                    <span className="text-[11.5px] text-[var(--accent)]">推荐</span>
+                  ) : null}
+                  {sizeText ? (
+                    <span className="text-[11.5px] text-[var(--meta)]">约 {sizeText}</span>
+                  ) : null}
+                </span>
               </button>
             );
           })}
@@ -174,11 +276,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-3">{extra}</p>
         ) : null}
 
-        {busy && progress ? (
+        {showBar ? (
           <div className="mb-4">
-            <div className="flex justify-between text-[12px] text-[var(--meta)] mb-1.5">
-              <span>{progress.message || progress.phase}</span>
-              <span>{pct}%</span>
+            <div className="flex justify-between gap-3 text-[12px] text-[var(--meta)] mb-1.5">
+              <span className="min-w-0 flex-1 truncate">
+                {progress?.message || progress?.phase || "下载中…"}
+              </span>
+              <span className="shrink-0 tabular-nums">{pct}%</span>
             </div>
             <div className="h-1.5 rounded-full bg-[color-mix(in_srgb,var(--ink)_10%,transparent)] overflow-hidden">
               <div
@@ -186,6 +290,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 style={{ width: `${pct}%` }}
               />
             </div>
+            {done > 0 || total > 1 ? (
+              <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums">
+                {formatBytes(done)} / {formatBytes(total)}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -195,15 +304,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
         <div className="flex items-center gap-2 justify-end">
           {busy ? (
-            <Btn onClick={() => void cancelProvision()}>取消</Btn>
+            <Btn onClick={onCancelClick}>取消</Btn>
           ) : (
             <>
               {onDismiss ? <Btn onClick={onDismiss}>稍后</Btn> : null}
               <Btn primary onClick={() => void start()}>
                 开始下载
-                {info.recommended_size_label
-                  ? `（约 ${info.recommended_size_label}）`
-                  : ""}
+                {selectedSizeLabel ? `（约 ${selectedSizeLabel}）` : ""}
               </Btn>
             </>
           )}

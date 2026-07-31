@@ -39,7 +39,13 @@ export type ProvisionStatus = {
   installed_variant?: string | null;
   download_supported?: boolean;
   busy?: boolean;
-  variants?: { id: string; label: string }[];
+  /** Per-variant size so the start button tracks the user's selection. */
+  variants?: {
+    id: string;
+    label: string;
+    size_bytes?: number;
+    size_label?: string;
+  }[];
   message?: string;
 };
 

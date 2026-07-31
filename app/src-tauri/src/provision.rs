@@ -283,19 +283,44 @@ pub fn provision_status(root: &Path) -> Value {
     let need_provision = !ready;
     let busy = *PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
 
-    // Resolve recommended size for UI (best-effort, may use fallback)
+    // Per-variant sizes so the UI can follow the user's selection, not only
+    // the recommended package. One catalog fetch is cached for ~5 minutes.
+    let variant_defs = [
+        ("nvidia", "NVIDIA（推荐大多数 N 卡）"),
+        ("nvidia50", "NVIDIA 50 系（RTX 50xx）"),
+        ("amd", "AMD / Intel（DirectML）"),
+    ];
+    let mut variants = Vec::with_capacity(3);
     let mut size_hint = 0u64;
     let mut label = recommended.clone();
-    if let Ok(spec) = catalog::resolve_runtime_spec(
-        if recommended == "unknown" {
-            "nvidia"
-        } else {
-            &recommended
-        },
-        true,
-    ) {
-        size_hint = spec.size_bytes.max(spec.part.size_bytes);
-        label = spec.label;
+    let rec_key = if recommended == "unknown" {
+        "nvidia"
+    } else {
+        recommended.as_str()
+    };
+    for (id, fallback_label) in variant_defs {
+        let (sz, lab) = match catalog::resolve_runtime_spec(id, true) {
+            Ok(spec) => {
+                let s = spec.size_bytes.max(spec.part.size_bytes);
+                let l = if spec.label.is_empty() {
+                    fallback_label.to_string()
+                } else {
+                    spec.label
+                };
+                (s, l)
+            }
+            Err(_) => (0u64, fallback_label.to_string()),
+        };
+        if id == rec_key {
+            size_hint = sz;
+            label = lab.clone();
+        }
+        variants.push(json!({
+            "id": id,
+            "label": fallback_label,
+            "size_bytes": sz,
+            "size_label": format_size(sz),
+        }));
     }
 
     json!({
@@ -313,11 +338,7 @@ pub fn provision_status(root: &Path) -> Value {
         "installed_variant": installed,
         "download_supported": true,
         "busy": busy,
-        "variants": [
-            {"id": "nvidia", "label": "NVIDIA（推荐大多数 N 卡）"},
-            {"id": "nvidia50", "label": "NVIDIA 50 系（RTX 50xx）"},
-            {"id": "amd", "label": "AMD / Intel（DirectML）"},
-        ],
+        "variants": variants,
         "message": if need_provision {
             "未检测到完整 Runtime（需含 torch）。可在本页下载补全。"
         } else if !worker_script {
@@ -457,15 +478,29 @@ pub fn run_provision(
 
         if !dest_file.is_file() {
             let app_cb = app.clone();
+            let size_hint = size.max(1);
             let conns = download::auto_connections(size);
             let progress: ProgressFn = Arc::new(move |done, total, phase| {
+                // Prefer the larger of catalog hint and reporter total so the
+                // bar never sits at 0% when HEAD failed but size_hint is known.
+                let total = total.max(size_hint).max(1);
                 let m = match phase {
-                    "verify" => "校验 sha256…",
-                    "retry" => "网络重试…",
-                    other if other.starts_with("download:") => other,
-                    _ => "多连接下载中…",
+                    "verify" => format!("校验 sha256…（{}）", format_size(done.max(total))),
+                    "retry" => "网络重试…".to_string(),
+                    other if other.starts_with("download:") => format!(
+                        "{} · {} / {}",
+                        other,
+                        format_size(done),
+                        format_size(total)
+                    ),
+                    _ => format!(
+                        "下载中 {} / {}（{}%）",
+                        format_size(done),
+                        format_size(total),
+                        ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0) as u64
+                    ),
                 };
-                emit_progress(&app_cb, phase, done, total.max(1), m);
+                emit_progress(&app_cb, phase, done, total, &m);
             });
             // Shared pipeline (async-fetcher): same path for voice_pack / gui_patch later.
             download::download_request(

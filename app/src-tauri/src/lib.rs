@@ -352,7 +352,7 @@ fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         let mut st = worker::status_for_ui(&root);
@@ -363,41 +363,72 @@ fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
         }
         return Ok(st);
     }
-    Ok(worker::ensure_worker_and_devices(&root, 90_000))
+    // Called on app start and waits up to 90s for the worker. Inline, that is
+    // a 90-second freeze on the first launch after an install.
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(worker::ensure_worker_and_devices(&root, 90_000))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         return Ok(json!({"state": "error", "error": "Runtime 未就绪（缺少 torch）", "pid": 0}));
     }
-    worker::start_worker(&root)?;
-    Ok(worker::wait_worker_ready(&root, 90_000))
+    // Waits up to 90s for the worker to come up. A sync command runs inline on
+    // the IPC thread, so that wait froze the whole window.
+    tauri::async_runtime::spawn_blocking(move || {
+        worker::start_worker(&root)?;
+        Ok(worker::wait_worker_ready(&root, 90_000))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
         return Ok(json!({"state": "error", "error": "Runtime 未就绪，无法开启变声", "pid": 0}));
     }
-    worker::start_vc(&root)?;
-    Ok(worker::wait_vc_running(&root, 180_000))
+    // The cold start is 20–40s (torch/CUDA) and the wait allows up to 180s.
+    // Run it off the IPC thread or the window is frozen for that whole time —
+    // no status updates, no way to press 停止.
+    tauri::async_runtime::spawn_blocking(move || {
+        worker::start_vc(&root)?;
+        Ok(worker::wait_vc_running(&root, 180_000))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn engine_stop_vc(state: State<'_, Mutex<AppState>>, force: Option<bool>) -> Result<Value, String> {
+async fn engine_stop_vc(
+    state: State<'_, Mutex<AppState>>,
+    force: Option<bool>,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    worker::stop_vc(&root, force.unwrap_or(true))?;
-    Ok(worker::status_for_ui(&root))
+    let f = force.unwrap_or(true);
+    tauri::async_runtime::spawn_blocking(move || {
+        worker::stop_vc(&root, f)?;
+        Ok(worker::status_for_ui(&root))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    worker::kill_known_workers(&root);
-    Ok(worker::status_for_ui(&root))
+    tauri::async_runtime::spawn_blocking(move || {
+        worker::kill_known_workers(&root);
+        Ok(worker::status_for_ui(&root))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -442,8 +473,16 @@ fn engine_set_hot(
 }
 
 #[tauri::command]
-fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    // Starts the worker if needed (up to 90s) and then polls for up to 20s.
+    tauri::async_runtime::spawn_blocking(move || list_devices_blocking(root))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn list_devices_blocking(root: std::path::PathBuf) -> Result<Value, String> {
+    let root = &root;
     if !paths::runtime_ready(&root) {
         return Ok(json!({
             "state": "error",
@@ -478,23 +517,34 @@ fn engine_list_devices(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
 }
 
 #[tauri::command]
-fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    Ok(provision::provision_status(&root))
+    // Async + spawn_blocking because this resolves a runtime spec, which can
+    // reach CNB. A sync command runs on the IPC thread, so an unreachable or
+    // slow host froze the window on startup for as long as the request took.
+    tauri::async_runtime::spawn_blocking(move || Ok(provision::provision_status(&root)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn provision_start(
+async fn provision_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     variant: String,
     force: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    // Long-running: spawn so command returns after completion without blocking other
-    // invokes on the same thread — Tauri runs commands async; we still do work here
-    // but never hold AppState.
-    provision::run_provision(app, root, variant, force.unwrap_or(false))
+    let f = force.unwrap_or(false);
+    // This downloads and extracts several GB. Run inline it occupied the IPC
+    // path for the whole transfer, which meant the 取消 button's own invoke
+    // could not be delivered — the user could watch the progress bar but not
+    // stop it.
+    tauri::async_runtime::spawn_blocking(move || {
+        provision::run_provision(app, root, variant, f)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -506,9 +556,13 @@ fn provision_cancel() -> Result<(), String> {
 // ----- Stage 4: voices + store ------------------------------------------------
 
 #[tauri::command]
-fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    Ok(voices::list_voices(&root))
+    // Walks the whole voice library; a large one is a visible stall on the IPC
+    // thread.
+    tauri::async_runtime::spawn_blocking(move || Ok(voices::list_voices(&root)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -528,9 +582,13 @@ fn voices_select(
 }
 
 #[tauri::command]
-fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    Ok(voices::current_selection_summary(&root))
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(voices::current_selection_summary(&root))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -634,12 +692,14 @@ fn voices_profile_export(
 }
 
 #[tauri::command]
-fn voices_import(
+async fn voices_import(
     state: State<'_, Mutex<AppState>>,
     paths: Option<Vec<String>>,
     current_model_dir: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    // The picker stays here (native dialogs want the main thread); only the
+    // copying, which can be gigabytes, moves off.
     let files = match paths.filter(|p| !p.is_empty()) {
         Some(p) => p,
         None => {
@@ -650,20 +710,22 @@ fn voices_import(
             picked
         }
     };
-    voices::import_files(
-        &root,
-        &files,
-        current_model_dir.as_deref(),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        voices::import_files(&root, &files, current_model_dir.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn voices_delete(
+async fn voices_delete(
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::delete_voice(&root, &model_dir)
+    tauri::async_runtime::spawn_blocking(move || voices::delete_voice(&root, &model_dir))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -677,12 +739,15 @@ fn voices_rename(
 }
 
 #[tauri::command]
-fn voices_promote(
+async fn voices_promote(
     state: State<'_, Mutex<AppState>>,
     pth_path: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::promote_legacy(&root, &pth_path)
+    // Copies a multi-hundred-MB .pth.
+    tauri::async_runtime::spawn_blocking(move || voices::promote_legacy(&root, &pth_path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -692,25 +757,32 @@ fn voices_open_dir(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn store_catalog(
+async fn store_catalog(
     state: State<'_, Mutex<AppState>>,
     prefer_remote: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    Ok(store::fetch_store_catalog(
-        &root,
-        prefer_remote.unwrap_or(true),
-    ))
+    let remote = prefer_remote.unwrap_or(true);
+    // Network fetch — never on the IPC thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(store::fetch_store_catalog(&root, remote))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn store_install(
+async fn store_install(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     entry: Value,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    store::install_voice_entry(app, root, entry)
+    // Downloads and unpacks a voice pack. Same reason as provision_start: the
+    // per-voice 取消 is its own invoke and has to be able to get through.
+    tauri::async_runtime::spawn_blocking(move || store::install_voice_entry(app, root, entry))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

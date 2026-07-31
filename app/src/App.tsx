@@ -5,7 +5,7 @@ import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
-import { ensureEngine, forceKillEngine, getProvisionStatus } from "./lib/engine";
+import { ensureEngine, forceKillEngine, getProvisionStatus, setHot } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -153,53 +153,7 @@ export default function App() {
     await invoke("close_finish", { toTray }).catch(() => {});
   };
 
-  // Ctrl+F5 / F6 step through the catalog, same as the old shell.
-  const shiftVoice = async (delta: number) => {
-    try {
-      const cat = await invoke<{
-        models?: Array<Record<string, unknown>>;
-        selected_idx?: number;
-      }>("voices_list");
-      const list = cat.models || [];
-      if (!list.length) return;
-      const cur = Number(cat.selected_idx ?? -1);
-      const next = ((cur < 0 ? 0 : cur) + delta + list.length) % list.length;
-      const m = list[next];
-      await invoke("voices_select", {
-        path: String(m.path ?? ""),
-        dir: String(m.dir ?? ""),
-        name: String(m.name ?? ""),
-      });
-      setVoiceName(String(m.name ?? "未选择模型"));
-      setVoiceId(String(m.dir ?? m.path ?? m.name ?? ""));
-    } catch {
-      /* catalog unavailable */
-    }
-  };
 
-  // Tray menu and global hotkeys drive the same actions as the dock, so the
-  // shortcuts keep working while the window is hidden.
-  useEffect(() => {
-    const offs: Array<() => void> = [];
-    const wire = async () => {
-      offs.push(await listen("tray://toggle-vc", () => void engine.toggleRun()));
-      offs.push(await listen("hotkey://toggle-vc", () => void engine.toggleRun()));
-      offs.push(await listen("hotkey://prev-voice", () => void shiftVoice(-1)));
-      offs.push(await listen("hotkey://next-voice", () => void shiftVoice(1)));
-      offs.push(await listen("app://close-requested", () => setCloseAsk(true)));
-      offs.push(
-        await listen("hotkey://toggle-mode", () => {
-          setMode((m) => {
-            const next: OutputMode = m === "vc" ? "bypass" : "vc";
-            void engine.onMode(next);
-            return next;
-          });
-        }),
-      );
-    };
-    void wire();
-    return () => offs.forEach((f) => f());
-  }, [engine]);
 
   useEffect(() => {
     if (engine.provision.need_provision && !provisionDismissed) {
@@ -305,7 +259,7 @@ export default function App() {
     if (ps) setProfileSummary(ps);
     setVoiceTag(String((model as { tag?: string }).tag || ""));
     // Keep what a later start will send in step with what the dock shows.
-    engine.syncParams({
+    syncParams({
       pitch: p != null ? Number(p) : undefined,
       formant: f != null ? Number(f) : undefined,
     });
@@ -316,6 +270,77 @@ export default function App() {
         /* browser preview */
       });
   }, [syncParams]);
+
+  // Ctrl+F5 / F6 step through the catalog, same as the old shell.
+  const shiftVoice = useCallback(async (delta: number) => {
+    try {
+      const cat = await invoke<{
+        models?: Array<Record<string, unknown>>;
+        selected_idx?: number;
+      }>("voices_list");
+      const list = cat.models || [];
+      if (!list.length) return;
+      const cur = Number(cat.selected_idx ?? -1);
+      const next = ((cur < 0 ? 0 : cur) + delta + list.length) % list.length;
+      const m = list[next];
+      const res = await invoke<{
+        model?: Record<string, unknown>;
+        pitch?: number;
+        formant?: number;
+        profile_summary?: string;
+      }>("voices_select", {
+        path: String(m.path ?? ""),
+        dir: String(m.dir ?? ""),
+        name: String(m.name ?? ""),
+      });
+      // Through the shared handler: the hotkeys used to set only the name, so
+      // stepping voices with Ctrl+F5/F6 left the dock's tag, position, pitch
+      // and profile showing the previous voice — and never pushed the new
+      // voice's parameters to a running stream.
+      applyVoiceChange({
+        model: (res.model as { name?: string; path?: string; dir?: string }) || m,
+        pitch: res.pitch,
+        formant: res.formant,
+        profileSummary: res.profile_summary,
+      });
+      if (res.pitch != null || res.formant != null) {
+        try {
+          await setHot({
+            pitch: Number(res.pitch ?? 0),
+            formant: Number(res.formant ?? 0),
+          });
+        } catch {
+          /* worker may be idle */
+        }
+      }
+    } catch {
+      /* catalog unavailable */
+    }
+  }, [applyVoiceChange]);
+
+  // Tray menu and global hotkeys drive the same actions as the dock, so the
+  // shortcuts keep working while the window is hidden.
+  useEffect(() => {
+    const offs: Array<() => void> = [];
+    const wire = async () => {
+      offs.push(await listen("tray://toggle-vc", () => void engine.toggleRun()));
+      offs.push(await listen("hotkey://toggle-vc", () => void engine.toggleRun()));
+      offs.push(await listen("hotkey://prev-voice", () => void shiftVoice(-1)));
+      offs.push(await listen("hotkey://next-voice", () => void shiftVoice(1)));
+      offs.push(await listen("app://close-requested", () => setCloseAsk(true)));
+      offs.push(
+        await listen("hotkey://toggle-mode", () => {
+          setMode((m) => {
+            const next: OutputMode = m === "vc" ? "bypass" : "vc";
+            void engine.onMode(next);
+            return next;
+          });
+        }),
+      );
+    };
+    void wire();
+    return () => offs.forEach((f) => f());
+  }, [engine, shiftVoice]);
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">

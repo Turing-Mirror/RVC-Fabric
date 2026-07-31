@@ -13,7 +13,8 @@ type Props = {
 };
 
 type Phase = {
-  current: PageId;
+  /** Named `page`, not `current`: `x.current` reads as a ref. */
+  page: PageId;
   leaving: PageId | null;
   dir: 1 | -1 | 0;
 };
@@ -24,7 +25,7 @@ type Phase = {
  */
 export function PageHost({ page, children }: Props) {
   const [phase, setPhase] = useState<Phase>({
-    current: page,
+    page,
     leaving: null,
     dir: 0,
   });
@@ -32,13 +33,13 @@ export function PageHost({ page, children }: Props) {
   const leaveTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (page === phase.current) return;
-    const dir = navDirection(phase.current, page);
+    if (page === phase.page) return;
+    const dir = navDirection(phase.page, page);
     if (reduce || dir === 0) {
-      setPhase({ current: page, leaving: null, dir: 0 });
+      setPhase({ page, leaving: null, dir: 0 });
       return;
     }
-    setPhase({ current: page, leaving: phase.current, dir });
+    setPhase({ page, leaving: phase.page, dir });
     if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
     leaveTimer.current = window.setTimeout(() => {
       setPhase((p) => ({ ...p, leaving: null }));
@@ -64,7 +65,7 @@ export function PageHost({ page, children }: Props) {
   const paneRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = 0;
-  }, [phase.current]);
+  }, [phase.page]);
 
   const enterCls =
     phase.dir === 1 ? "page-enter-l" : phase.dir === -1 ? "page-enter-r" : "";
@@ -82,11 +83,11 @@ export function PageHost({ page, children }: Props) {
         </div>
       ) : null}
       <div
-        key={`cur-${phase.current}`}
+        key={`cur-${phase.page}`}
         ref={paneRef}
         className={`absolute inset-0 overflow-y-auto z-[2] ${enterCls}`}
       >
-        {children(phase.current)}
+        {children(phase.page)}
       </div>
     </div>
   );

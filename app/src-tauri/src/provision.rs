@@ -77,8 +77,18 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     )
 }
 
-#[cfg(windows)]
+/// Enumerated once per run. The video controller set does not change while the
+/// app is open, and each enumeration is a PowerShell launch (300–800 ms) that
+/// otherwise happened every time the provision gate opened or a diagnostics
+/// bundle was built.
+static GPUS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
 pub fn list_gpus() -> Vec<String> {
+    GPUS.get_or_init(enumerate_gpus).clone()
+}
+
+#[cfg(windows)]
+fn enumerate_gpus() -> Vec<String> {
     // Kept inside the cfg(windows) body: at module scope it is an unused-import
     // warning on every other platform.
     use std::os::windows::process::CommandExt;
@@ -103,7 +113,7 @@ Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
 }
 
 #[cfg(not(windows))]
-pub fn list_gpus() -> Vec<String> {
+fn enumerate_gpus() -> Vec<String> {
     vec![]
 }
 

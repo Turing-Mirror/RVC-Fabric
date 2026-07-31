@@ -1,6 +1,9 @@
 //! Resolve Runtime download specs from CNB index / embedded fallback.
 //! Mirrors launcher/cnb_sources.py (URLs + channels).
 
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
 use serde_json::Value;
 
 const CNB_HOST: &str = "https://cnb.cool";
@@ -129,6 +132,33 @@ pub(crate) fn http_get_json(url: &str, timeout_secs: u64) -> Result<Value, Strin
     serde_json::from_str(&text).map_err(|e| format!("JSON {url}: {e}"))
 }
 
+/// Short-lived memo of the remote catalog.
+///
+/// `provision_status` resolves a runtime spec, which fetches this. That command
+/// runs on app start and again every time the provision gate opens, so without
+/// a memo an offline or slow CNB meant repeating a 20-second request. Explicit
+/// user actions ("检查更新") deliberately bypass it — see `fetch_remote_catalog`.
+static CATALOG_MEMO: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
+const CATALOG_TTL: Duration = Duration::from_secs(300);
+
+/// Cached variant for background/status callers.
+pub fn fetch_remote_catalog_cached(timeout_secs: u64) -> Result<Value, String> {
+    if let Some((at, v)) = CATALOG_MEMO
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+    {
+        if at.elapsed() < CATALOG_TTL {
+            return Ok(v);
+        }
+    }
+    let fresh = fetch_remote_catalog(timeout_secs)?;
+    *CATALOG_MEMO.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some((Instant::now(), fresh.clone()));
+    Ok(fresh)
+}
+
+/// Always hits the network. Use for actions the user explicitly asked for.
 pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
     let mut errors = Vec::new();
     for url in MANIFEST_URLS {
@@ -337,7 +367,7 @@ pub fn resolve_runtime_spec(variant: &str, prefer_remote: bool) -> Result<Runtim
         }
     });
     if prefer_remote {
-        if let Ok(remote) = fetch_remote_catalog(20) {
+        if let Ok(remote) = fetch_remote_catalog_cached(20) {
             if let Some(rem_rt) = remote.get("runtimes").and_then(|v| v.as_object()) {
                 let mut merged = data
                     .get("runtimes")

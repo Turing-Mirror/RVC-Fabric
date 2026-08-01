@@ -33,7 +33,14 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../frontend": "frontend"
+      "../frontend": "frontend",
+      "../../assets": "assets",
+      "../../configs": "configs",
+      "../../i18n": "i18n",
+      "../../infer": "infer",
+      "../../tools": "tools",
+      "../../gui_v1.py": "gui_v1.py",
+      "../../infer-web.py": "infer-web.py"
     },
     "windows": {
       "webviewInstallMode": {
@@ -42,6 +49,12 @@
       },
       "wix": {
         "language": "zh-CN"
+      },
+      "nsis": {
+        "languages": [
+          "SimpChinese"
+        ],
+        "displayLanguageSelector": false
       }
     },
     "createUpdaterArtifacts": true

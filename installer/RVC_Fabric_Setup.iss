@@ -128,7 +128,16 @@ Type: files; Name: "{autodesktop}\{#MyAppName} 启动器.lnk"
 ; HKCU\Software\Turing-Mirror\RVC Fabric 的默认值当作「上次安装目录」。
 ; Setup 装到自定义目录的用户靠它让 OTA 装回同一目录，否则 NSIS 会按
 ; 全新安装落到 %LOCALAPPDATA%\RVC Fabric，Runtime / engine-core 全部重下。
-; 与 NSIS 写入位置一致（installer.nsi 的 MANUPRODUCTKEY），值 = 安装目录。
+;
+; 键名里的「Turing-Mirror」必须和 NSIS 的 MANUFACTURER 一模一样，而
+; MANUFACTURER 不是随便起的名字，tauri-bundler 是这么算的：
+;
+;   settings.publisher().unwrap_or_else(|| bundle_id.split('.').nth(1)...)
+;
+; publisher 不填的话就取 identifier 的第二段 —— com.turingmirror.rvcfabric
+; 会算出「turingmirror」，和这里的「Turing-Mirror」差一个连字符，注册表
+; 当成两个不同的键，这条就白写了。所以 tauri.conf.json 里显式写了
+; "publisher": "Turing-Mirror"。改任何一边都要同时改另一边。
 Root: HKCU; Subkey: "Software\Turing-Mirror\RVC Fabric"; ValueType: string; ValueName: ""; ValueData: "{app}"; Flags: uninsdeletevalue
 
 [Files]

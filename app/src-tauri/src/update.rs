@@ -24,7 +24,7 @@ use serde_json::{json, Value};
 use crate::{catalog, download, extract, paths, ui_assets};
 
 /// Shipping version. Keep in step with tauri.conf.json and package.json.
-pub const APP_VERSION: &str = "1.3.0";
+pub const APP_VERSION: &str = "1.3.2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Ver {

@@ -198,6 +198,34 @@ def write_yaml(yaml_path: Path, res: dict[str, Any], tag: str) -> None:
             out.append(f"{k}: {v}")
     yaml_path.write_text("\n".join(out) + "\n", encoding="utf-8")
     print(f"  已写回 {yaml_path.name}")
+    _write_sidecar(yaml_path, out, res["sha256"])
+
+
+def _write_sidecar(yaml_path: Path, lines: list[str], sha: str) -> None:
+    """同步清单旁边那个 <制品>.sha256 边车。
+
+    这一步以前是漏掉的，于是每发一版边车就旧一版：build_catalog 会把它的地址
+    写进 index.json 的 sha256_url，客户端照着那个地址校验 Setup，拿到的却是
+    上一版的哈希 —— 制品明明是好的，校验却过不了。1.3.1、1.3.2 连着踩了两次，
+    所以放在这里自动做，不靠人记。
+
+    发布仓已经退化成纯清单仓，制品本身不在 git 里，因此边车只能按 YAML 里
+    `file:` 声明的路径去写。
+    """
+    rel = ""
+    for line in lines:
+        if line.startswith("file:"):
+            rel = line.split(":", 1)[1].strip().strip("'\"")
+            break
+    if not rel:
+        return
+    # catalog-src/setup.yaml -> 发布仓根 -> setup/RVC_Fabric_Setup.exe.sha256
+    sidecar = yaml_path.parents[1] / (rel + ".sha256")
+    if not sidecar.parent.is_dir():
+        print(f"  [跳过边车] 没有目录 {sidecar.parent}")
+        return
+    sidecar.write_text(f"{sha}  {Path(rel).name}\n", encoding="utf-8")
+    print(f"  已写回 {sidecar.relative_to(yaml_path.parents[1])}")
 
 
 def main() -> int:

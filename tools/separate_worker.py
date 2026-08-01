@@ -59,7 +59,7 @@ def main(argv: list[str]) -> int:
     device = str(req.get("device") or "auto").strip()
     fmt = str(req.get("format") or "wav").strip()
     if not (model and inp and out):
-        emit(phase="error", message="model / input / output 不能为空")
+        emit(phase="error", message="模型 / 输入 / 输出 都不能为空")
         return 2
 
     # PyMSS 默认把权重放 ~/.cache/pymss；我们要它只认安装目录里的那份，

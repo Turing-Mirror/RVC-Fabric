@@ -598,7 +598,7 @@ fn engine_set_hot(
         payload.insert("rms_mix_rate".into(), json!(v));
     }
     if payload.is_empty() {
-        return Err("no hot keys".into());
+        return Err("没有可热更新的参数".into());
     }
     worker::set_hot(&root, payload)
 }

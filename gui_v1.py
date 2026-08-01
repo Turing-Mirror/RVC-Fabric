@@ -2312,7 +2312,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="idle" if not flag_vc else "running",
                     error="",
-                    message="devices refreshed",
+                    message="设备列表已刷新",
                     **payload,
                 )
             except Exception as e:
@@ -2320,6 +2320,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"list_devices: {type(e).__name__}: {e}",
+                    message="读取设备失败",
                 )
 
         def _worker_apply_hot(self, payload: dict):
@@ -2420,7 +2421,7 @@ if __name__ == "__main__":
             self._worker_write_status(
                 state="starting",
                 error="",
-                message="loading model…",
+                message="正在加载音色模型…",
                 pid=os.getpid(),
                 **self._worker_device_payload(),
             )
@@ -2435,7 +2436,7 @@ if __name__ == "__main__":
                             getattr(self, "_last_invalid_reason", "")
                             or "设置无效（模型路径 / 设备）"
                         ),
-                        message="set_values failed",
+                        message="设置无效，无法开始变声",
                     )
                     return
                 try:
@@ -2511,7 +2512,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="running",
                     error="",
-                    message="vc running",
+                    message="变声中",
                     delay_ms=int(np.round(self.delay_time * 1000)),
                     infer_ms=0,
                     samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
@@ -2528,7 +2529,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"{type(e).__name__}: {e}",
-                    message="start failed",
+                    message="启动失败",
                 )
 
         def _worker_stop(self):
@@ -2539,13 +2540,14 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"stop: {type(e).__name__}: {e}",
+                    message="停止失败",
                     pid=os.getpid(),
                 )
                 return
             self._worker_write_status(
                 state="idle",
                 error="",
-                message="stopped",
+                message="已停止",
                 delay_ms=0,
                 infer_ms=0,
                 pid=os.getpid(),
@@ -2590,7 +2592,7 @@ if __name__ == "__main__":
             base.update(self._worker_device_payload())
             base["state"] = "idle"
             base["pid"] = os.getpid()
-            base["message"] = "worker ready"
+            base["message"] = "引擎就绪"
             write_status(**base)
 
             # Ignore stale commands left from previous sessions
@@ -2614,7 +2616,7 @@ if __name__ == "__main__":
                                 self._worker_stop()
                                 write_status(
                                     state="idle",
-                                    message="quit",
+                                    message="已退出",
                                     pid=0,
                                     last_cmd_seq=seq,
                                 )
@@ -2637,7 +2639,7 @@ if __name__ == "__main__":
                                 self._worker_apply_hot(params)
                                 self._worker_write_status(
                                     state="running" if flag_vc else "idle",
-                                    message="params applied",
+                                    message="参数已应用",
                                     delay_ms=int(np.round(self.delay_time * 1000)),
                                     infer_ms=self.last_infer_ms,
                                     pid=os.getpid(),
@@ -2645,7 +2647,7 @@ if __name__ == "__main__":
                                 )
                             else:
                                 self._worker_write_status(
-                                    message=f"unknown cmd: {action}",
+                                    message=f"无法识别的指令：{action}",
                                     last_cmd_seq=seq,
                                     pid=os.getpid(),
                                 )
@@ -2669,6 +2671,7 @@ if __name__ == "__main__":
                         self._worker_write_status(
                             state="error",
                             error=f"loop: {type(e).__name__}: {e}",
+                            message="引擎内部错误，详见日志",
                             pid=os.getpid(),
                         )
                     time.sleep(0.08)

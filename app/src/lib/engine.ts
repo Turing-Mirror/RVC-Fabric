@@ -165,13 +165,21 @@ export function statusTitle(st: EngineStatus): string {
 }
 
 export function statusSub(st: EngineStatus): string {
-  if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
-  if (st.message) return String(st.message).slice(0, 48);
+  // 变声跑起来之后，副标题的位置留给延迟读数 —— 标题那行已经写着「变声中」，
+  // 再把 message 重复一遍就是浪费。status.json 是合并写的，message 会一直
+  // 停在最后一次设置的值上，所以这条必须排在 message 前面，否则延迟永远
+  // 显示不出来。
   const delay = Number(st.delay_ms || 0);
   const infer = Number(st.infer_ms || 0);
   if (st.state === "running" && (delay > 0 || infer > 0)) {
     return `延迟 ${delay} ms · 推理 ${infer} ms`;
   }
+  // message 在前、error 在后。引擎的 error 里装的是 Python 异常原文
+  // （`RuntimeError: CUDA out of memory` 之类），那是给日志和诊断包看的；
+  // 用户在底栏该看到的是同一次失败对应的中文 message。两者都没有才退回
+  // error —— 有原文总比一片空白强。
+  if (st.message) return String(st.message).slice(0, 48);
+  if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
   if (st.worker_alive) return "就绪";
   return "等待引擎启动";
 }

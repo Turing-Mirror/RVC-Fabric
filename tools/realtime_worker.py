@@ -118,7 +118,7 @@ def main() -> None:
     _write_status_early(
         root,
         state="starting",
-        message="worker process up, loading engine…",
+        message="引擎进程已启动，正在加载…",
         error="",
     )
 
@@ -126,7 +126,9 @@ def main() -> None:
     if not gui.is_file():
         msg = f"gui_v1.py not found: {gui}"
         _append_log(root, msg)
-        _write_status_early(root, state="error", error=msg, message=msg)
+        _write_status_early(
+            root, state="error", error=msg, message="安装不完整：缺少引擎主程序"
+        )
         raise SystemExit(msg)
 
     try:
@@ -142,7 +144,7 @@ def main() -> None:
             write_status(
                 state="error",
                 error=f"{type(e).__name__}: {e}"[:200],
-                message="worker crashed during load",
+                message="引擎加载时崩溃，详见日志",
                 pid=0,
             )
         except Exception:

@@ -80,7 +80,9 @@ export function SegmentControl<T extends string>({
       ref={rootRef}
       role={role}
       className={[
-        "relative flex p-[3px] rounded-full",
+        // inline-flex + w-fit：块级的 flex 容器会撑满父元素，于是字变短之后
+        // 药丸还是原来那么长（「变声 / 原声」四个字，条子却按八个字的宽度画）。
+        "relative inline-flex w-fit p-[3px] rounded-full",
         "bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]",
         className,
       ].join(" ")}

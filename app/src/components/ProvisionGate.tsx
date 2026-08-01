@@ -397,7 +397,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           )}
         </div>
         <p className="text-[11.5px] text-[var(--meta)] m-0 mt-4 leading-relaxed">
-          下载支持断点续传；文件缓存在 User_Data/update_cache/runtime。请保持网络畅通。
+          下到一半断了没关系，重开会接着下。请保持网络畅通。
         </p>
       </div>
     </div>

@@ -338,8 +338,8 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
 
         {source !== "official" ? (
           <div className="mx-5 mb-2 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">
-            第三方音色未经图灵镜审核，请自行判断来源与安全性。模型为
-            pickle，仅从信任渠道安装。
+            第三方音色未经图灵镜审核，请自行判断来源是否可靠，
+            不要安装来路不明的音色。
           </div>
         ) : null}
 

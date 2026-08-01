@@ -55,4 +55,7 @@ windows-sys = { version = "0.59", features = [
   # 无边框窗口的圆角靠 DWM 属性，不靠透明窗口 + CSS 圆角 —— 后者会连系统
   # 投影一起丢掉，四角还会露出锯齿。
   "Win32_Graphics_Dwm",
+  # Win10 上 DWM 那条属性不存在，兜底靠 SetWindowRgn 自己裁圆角。
+  "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
 ] }

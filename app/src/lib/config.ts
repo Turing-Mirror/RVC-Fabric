@@ -35,7 +35,7 @@ export const TIPS: Record<string, string> = {
   sg_wasapi_exclusive:
     "WASAPI 独占模式：延迟更低，但会占住整块声卡，其他程序可能出不了声。\n一般不勾。",
   sr_type:
-    "采样率来源。sr_device 跟随设备，sr_model 跟随模型。\n不确定就保持 sr_device。",
+    "决定用哪个采样率工作。\n跟随设备：用你声卡的采样率；跟随模型：用音色模型自带的。\n不确定就保持「跟随设备」。",
   threhold:
     "响应阈值（噪声门）。比这个还轻的声音被判定为安静，不做变声。\n用来滤掉键盘声和风扇声。说话时底栏电平条应明显越过这条竖线。",
   pitch:

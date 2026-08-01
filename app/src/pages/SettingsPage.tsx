@@ -150,7 +150,7 @@ function SettingsPageImpl({
         {c.loaded && tab === "设备与音频" ? (
           <Block title="设备与音频" className="!mt-6">
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
-              输入＝真实麦克风 · 输出＝CABLE Input · 游戏麦克风＝CABLE Output。
+              输入选你的麦克风，输出选 CABLE Input，再把游戏里的麦克风设成 CABLE Output。
               <br />
               勾选「变声时监听自己」并选耳机，可以一边开黑一边听自己的变声效果。
             </p>
@@ -166,7 +166,7 @@ function SettingsPageImpl({
                     onChange={(v) => c.set("sg_hostapi", v, true)}
                   />
                 }
-                note={`Worker：${status?.worker_alive ? "在线" : "离线"} · 输入 ${inputs.length} / 输出 ${outputs.length}`}
+                note={`读到 ${inputs.length} 个录音设备、${outputs.length} 个播放设备`}
               />
               <Field
                 label="输入设备"
@@ -239,8 +239,8 @@ function SettingsPageImpl({
                     width={140}
                     value={c.str("sr_type", "sr_device")}
                     options={[
-                      { id: "sr_device", label: "sr_device" },
-                      { id: "sr_model", label: "sr_model" },
+                      { id: "sr_device", label: "跟随设备" },
+                      { id: "sr_model", label: "跟随模型" },
                     ]}
                     onChange={(v) => c.set("sr_type", v, true)}
                   />
@@ -259,8 +259,8 @@ function SettingsPageImpl({
         {c.loaded && tab === "变声参数" ? (
           <Block title="变声参数" note="运行中可热更新 · 按音色保存" className="!mt-6">
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">
-              音高 / 共鸣 / 阈值 / Index / 响度 / 算法会写入当前音色目录的
-              config.json；切换音色时自动恢复该音色上次的参数。底栏可快速调节。
+              这里的调整会跟着当前音色一起记住，下次选回这个音色就是你上次调好的样子。
+              底栏也能快速调音高和共鸣。
             </p>
             <div className={CARD}>
               <Field
@@ -721,24 +721,24 @@ function SettingsPageImpl({
                   void invoke("hotkeys_apply", { enabled: v });
                 }}
               />
-              <div className="flex flex-col gap-3 text-[13px] text-[var(--ink-muted)]">
-                <div className="flex items-center">
-                  <span>开启 / 停止变声</span>
-                  <span className="ml-auto tabular-nums text-[var(--meta)]">Ctrl + F2</span>
-                </div>
-                <div className="flex items-center">
-                  <span>变声 / 原声</span>
-                  <span className="ml-auto tabular-nums text-[var(--meta)]">Ctrl + F3</span>
-                </div>
-                <div className="flex items-center">
-                  <span>上一个 / 下一个音色</span>
-                  <span className="ml-auto tabular-nums text-[var(--meta)]">
-                    Ctrl + F5 / F6
-                  </span>
-                </div>
+              <div className="flex flex-col">
+                {HOTKEYS.map((h) => (
+                  <HotkeyRow
+                    key={h.key}
+                    label={h.label}
+                    value={c.str(h.key, h.fallback)}
+                    onChange={(v) => {
+                      c.set(h.key, v, true);
+                      void invoke("hotkeys_apply", {
+                        enabled: c.bool("hotkeys_enabled"),
+                      });
+                    }}
+                  />
+                ))}
               </div>
               <p className="text-xs text-[var(--help)] m-0">
-                组合键暂不可自定义，与旧版保持一致。
+                点右侧的组合键再按新的键就能改。可以带 Ctrl / Alt / Shift。
+                被别的软件占用的组合会注册失败，换一个即可。
               </p>
             </div>
           </Block>
@@ -758,13 +758,91 @@ function SettingsPageImpl({
                 }
               />
               <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">
-                界面更新会替换安装目录下的 frontend 文件夹，重启程序即生效；
-                涉及程序本体的更新需要重新下载安装包。
+                有新版本时会自动下载并安装，重启软件后生效。
               </p>
             </div>
           </Block>
         ) : null}
       </PagePad>
+    </div>
+  );
+}
+
+const HOTKEYS = [
+  { key: "hotkey_toggle_vc", label: "开启 / 停止变声", fallback: "CmdOrCtrl+F2" },
+  { key: "hotkey_toggle_mode", label: "变声 / 原声", fallback: "CmdOrCtrl+F3" },
+  { key: "hotkey_prev_voice", label: "上一个音色", fallback: "CmdOrCtrl+F5" },
+  { key: "hotkey_next_voice", label: "下一个音色", fallback: "CmdOrCtrl+F6" },
+];
+
+/** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
+function prettyCombo(v: string): string {
+  return v
+    .split("+")
+    .map((p) => (p === "CmdOrCtrl" ? "Ctrl" : p === "Super" ? "Win" : p))
+    .join(" + ");
+}
+
+/**
+ * 按一下开始录，再按组合键就存下来。
+ *
+ * 只按修饰键不算 —— 按 Ctrl 的那一刻就存下「Ctrl」的话，用户永远录不出
+ * Ctrl+F2：手指还没够到 F2 就已经存完了。
+ */
+function HotkeyRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [recording, setRecording] = useState(false);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      setRecording(false);
+      return;
+    }
+    const mods: string[] = [];
+    if (e.ctrlKey || e.metaKey) mods.push("CmdOrCtrl");
+    if (e.altKey) mods.push("Alt");
+    if (e.shiftKey) mods.push("Shift");
+
+    const code = e.code;
+    let main = "";
+    if (/^Key[A-Z]$/.test(code)) main = code.slice(3);
+    else if (/^Digit[0-9]$/.test(code)) main = code.slice(5);
+    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) main = code;
+    if (!main) return; // 还只按着修饰键，继续等
+
+    setRecording(false);
+    onChange([...mods, main].join("+"));
+  };
+
+  return (
+    <div className="flex items-center py-2.5 border-b border-[var(--hairline)] last:border-b-0">
+      <span className="text-[13px]">{label}</span>
+      <button
+        type="button"
+        onClick={() => setRecording(true)}
+        onBlur={() => setRecording(false)}
+        onKeyDown={recording ? onKeyDown : undefined}
+        className={[
+          "ml-auto px-2.5 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
+          "text-[12.5px] tabular-nums bg-transparent",
+          "shadow-[inset_0_0_0_1px_var(--line)] transition-colors duration-200",
+          "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
+          recording
+            ? "text-[var(--accent)] shadow-[inset_0_0_0_1px_var(--accent)]"
+            : "text-[var(--meta)] hover:text-[var(--ink)]",
+        ].join(" ")}
+      >
+        {recording ? "按下组合键…" : prettyCombo(value)}
+      </button>
     </div>
   );
 }

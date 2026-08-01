@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { SegmentControl } from "./SegmentControl";
+import { RangeBar } from "./controls";
 
 export type OutputMode = "vc" | "bypass";
 
@@ -158,9 +158,10 @@ export function Dock({
           className={[
             "border-0 rounded-[var(--rs)] px-7 py-3 cursor-pointer whitespace-nowrap",
             "text-sm font-semibold bg-[var(--accent)] text-[var(--accent-ink)]",
-            "shadow-[0_1px_3px_color-mix(in_srgb,var(--accent)_30%,transparent)]",
-            "transition-[transform,background,box-shadow] duration-200 ease-[var(--spring)]",
-            "hover:shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_34%,transparent)]",
+            // 不加彩色光晕。悬停只是稍微压暗一点 —— 按钮周围散出一圈强调色的
+            // 光是纯装饰，跟状态没有任何关系。
+            "transition-[transform,filter] duration-200 ease-[var(--spring)]",
+            "hover:brightness-95",
             "active:scale-[0.965]",
             "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
           ].join(" ")}
@@ -189,44 +190,20 @@ function SliderTile({
   value: number;
   onChange: (v: number) => void;
 }) {
-  const [hover, setHover] = useState(false);
-  const pct = ((value - min) / (max - min)) * 100;
-
   return (
-    <div className="flex-1 min-w-[100px]">
-      <div className="flex justify-between items-baseline mb-2.5">
+    <div className="flex-1 min-w-[100px] max-w-[210px]">
+      <div className="flex justify-between items-baseline mb-2">
         <span className="text-xs text-[var(--meta)]">{label}</span>
-        <b className="text-[15px] font-semibold">{display}</b>
+        <b className="text-[15px] font-semibold tabular-nums">{display}</b>
       </div>
-      <div
-        className="flex items-center gap-3 w-full"
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-      >
-        <div className="relative flex-1 h-[3px] rounded-sm bg-[color-mix(in_srgb,var(--ink)_11%,transparent)]">
-          <div
-            className="absolute inset-y-0 left-0 bg-[var(--accent)] rounded-sm"
-            style={{ width: `${pct}%` }}
-          />
-          <div
-            className="absolute top-1/2 w-3 h-3 -mt-1.5 -ml-1.5 rounded-full bg-[var(--surface)] shadow-[0_1px_4px_rgba(0,0,0,.24),inset_0_0_0_1px_var(--line)] transition-transform duration-300 ease-[var(--spring)]"
-            style={{
-              left: `${pct}%`,
-              transform: hover ? "scale(1.3)" : "scale(1)",
-            }}
-          />
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={(e) => onChange(Number(e.target.value))}
-            className="absolute inset-0 w-full opacity-0 cursor-pointer"
-            aria-label={label}
-          />
-        </div>
-      </div>
+      <RangeBar
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={onChange}
+        ariaLabel={label}
+      />
     </div>
   );
 }

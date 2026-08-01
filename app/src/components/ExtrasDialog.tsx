@@ -120,7 +120,7 @@ export function ExtrasDialog({
       >
         <h3 className="m-0 mb-1 text-[17px] font-semibold">{title || "下载模型"}</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          都是大文件，走我们自己的发布仓下载，下完会校验完整性。
+          这些模型体积较大，下载完成后会自动校验，中断了可以重新下。
         </p>
 
         {list === null ? (
@@ -128,8 +128,8 @@ export function ExtrasDialog({
         ) : items.length === 0 ? (
           <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">
             {list.available === false
-              ? "暂时无法获取下载清单，检查网络后再试。"
-              : "清单里目前没有可下载的项目。"}
+              ? "连不上服务器，检查网络后再试。"
+              : "暂时没有可下载的模型。"}
           </p>
         ) : (
           <div className="border-t border-[var(--hairline)]">

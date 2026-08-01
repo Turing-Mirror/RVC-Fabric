@@ -300,8 +300,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
         >
           {!models.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              还没有音色。点「社区音色」在线获取，或点「导入音色」添加 .pth /
-              .index / .zip 包。
+              还没有音色。点「社区音色」在线下载，或点「导入音色」添加你自己的音色文件。
             </div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">

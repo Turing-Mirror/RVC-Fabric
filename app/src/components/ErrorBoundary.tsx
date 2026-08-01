@@ -51,7 +51,8 @@ export class ErrorBoundary extends Component<Props, State> {
       >
         <div style={{ fontSize: 17, color: "var(--ink, #1e242b)" }}>界面出错了</div>
         <div>
-          变声本身不受影响，可以从托盘继续控制。请把 User_Data\logs\shell.log 发给我们。
+          变声本身不受影响，可以从右下角托盘图标继续控制。
+          把「其他」页生成的诊断包发给我们，我们来看是哪出了问题。
         </div>
         <pre
           style={{

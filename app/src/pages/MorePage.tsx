@@ -16,9 +16,6 @@ type Props = {
   status?: EngineStatus;
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
-  onCheckUpdate?: () => void;
-  updateLine?: string;
-  updateBusy?: boolean;
   onOpenProvision?: () => void;
 };
 
@@ -59,9 +56,6 @@ export function MorePage({
   provision,
   onForceKill,
   onOpenProvision,
-  onCheckUpdate,
-  updateLine,
-  updateBusy = false,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
@@ -271,15 +265,6 @@ export function MorePage({
             }
           />
           <ListItem
-            title="检查更新"
-            desc={updateLine || "检查是否有新版本"}
-            right={
-              <Btn onClick={onCheckUpdate} disabled={updateBusy}>
-                {updateBusy ? "检查中…" : "检查"}
-              </Btn>
-            }
-          />
-          <ListItem
             title="打开性能报告文件夹"
             right={
               <Btn onClick={() => void invoke("reveal_user_dir", { name: "perf_reports" })}>
@@ -297,14 +282,14 @@ export function MorePage({
             }
           />
           <ListItem
-            title="打开原版实时面板"
+            title="打开旧版控制面板"
             desc={legacyMsg.panel || "高级功能，一般不用"}
             right={
               <Btn onClick={() => void openLegacy("panel")}>打开</Btn>
             }
           />
           <ListItem
-            title="打开原版 WebUI"
+            title="打开网页版控制台"
             desc={legacyMsg.webui || "高级功能，一般不用"}
             right={<Btn onClick={() => void openLegacy("webui")}>打开</Btn>}
           />

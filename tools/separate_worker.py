@@ -99,8 +99,9 @@ def main(argv: list[str]) -> int:
         emit(phase="done", files=[str(f) for f in (files or [])])
         return 0
     except Exception as e:
+        # 原始异常进 stderr（壳会收进日志），界面上只给中文。
         traceback.print_exc(file=sys.stderr)
-        emit(phase="error", message=f"{type(e).__name__}: {e}")
+        emit(phase="error", message="分离失败，详见日志", detail=f"{type(e).__name__}: {e}")
         return 1
 
 

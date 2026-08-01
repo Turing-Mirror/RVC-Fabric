@@ -105,13 +105,48 @@ fn root_of(app: &AppHandle) -> Option<PathBuf> {
 // Global hotkeys
 // ---------------------------------------------------------------------------
 
-/// Same combos as the Python shell.
-pub const HOTKEYS: &[(&str, &str)] = &[
-    ("CmdOrCtrl+F2", "toggle-vc"),
-    ("CmdOrCtrl+F3", "toggle-mode"),
-    ("CmdOrCtrl+F5", "prev-voice"),
-    ("CmdOrCtrl+F6", "next-voice"),
+/// 四个快捷键：配置键名、动作名、默认组合。
+///
+/// 默认值和旧的 Python 壳一样，用户有肌肉记忆。用户改过的话存在配置里，
+/// 这里只是缺省。
+pub const HOTKEYS: &[(&str, &str, &str)] = &[
+    ("hotkey_toggle_vc", "toggle-vc", "CmdOrCtrl+F2"),
+    ("hotkey_toggle_mode", "toggle-mode", "CmdOrCtrl+F3"),
+    ("hotkey_prev_voice", "prev-voice", "CmdOrCtrl+F5"),
+    ("hotkey_next_voice", "next-voice", "CmdOrCtrl+F6"),
 ];
+
+/// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。
+///
+/// 注册失败的组合会被 Tauri 直接拒掉，但一个乱七八糟的字符串还可能让
+/// on_shortcut 直接 panic —— 先自己筛一道。
+fn combo_ok(s: &str) -> bool {
+    let s = s.trim();
+    if s.is_empty() || s.len() > 48 {
+        return false;
+    }
+    let parts: Vec<&str> = s.split('+').map(str::trim).collect();
+    if parts.len() > 5 || parts.iter().any(|p| p.is_empty()) {
+        return false;
+    }
+    parts
+        .iter()
+        .all(|p| p.chars().all(|c| c.is_ascii_alphanumeric()))
+}
+
+/// 用户配的组合键，没配或配得不合法就用默认值。
+fn combo_for(root: Option<&Path>, key: &str, fallback: &str) -> String {
+    let Some(root) = root else {
+        return fallback.to_string();
+    };
+    let v = config::read(root);
+    let raw = v.get(key).and_then(|x| x.as_str()).unwrap_or("").trim();
+    if combo_ok(raw) {
+        raw.to_string()
+    } else {
+        fallback.to_string()
+    }
+}
 
 /// Register or unregister the global hotkeys. Failing to grab a combo (another
 /// app already owns it) must not break the rest — report and carry on.
@@ -122,15 +157,19 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
     if !enabled {
         return json!({"enabled": false, "registered": [], "failed": []});
     }
-    let mut ok: Vec<&str> = Vec::new();
-    let mut failed: Vec<&str> = Vec::new();
-    for (combo, action) in HOTKEYS {
+    let root = root_of(app);
+    let mut ok: Vec<String> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    for (key, action, default) in HOTKEYS {
+        let combo = combo_for(root.as_deref(), key, default);
         let handle = app.clone();
         let act = action.to_string();
-        match gs.on_shortcut(*combo, move |_a, _s, _e| {
+        match gs.on_shortcut(combo.as_str(), move |_a, _s, _e| {
             let _ = handle.emit(&format!("hotkey://{act}"), ());
         }) {
             Ok(()) => ok.push(combo),
+            // 组合被别的程序占了就跳过这一个，其余的照常注册 —— 一个冲突
+            // 不该让四个快捷键全废。界面上会把失败的那个标出来。
             Err(_) => failed.push(combo),
         }
     }
@@ -362,6 +401,11 @@ pub fn install_close_handler(app: &AppHandle) {
     let last_ask: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     win.on_window_event(move |event| {
+        // 圆角走兜底（Win10）时是按像素裁的区域，窗口一改大小就得重新裁，
+        // 不然放大之后四角会被裁在旧尺寸的位置上。DWM 那条路下这是空操作。
+        if matches!(event, tauri::WindowEvent::Resized(_)) {
+            crate::window_watch::refresh_corners(&w);
+        }
         let tauri::WindowEvent::CloseRequested { api, .. } = event else {
             return;
         };
@@ -428,13 +472,35 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 mod tests {
     use super::*;
 
+    /// 默认组合要和旧 Python 壳一样 —— 用户有肌肉记忆。用户改过之后存配置里，
+    /// 这里只管默认值。
     #[test]
-    fn hotkey_combos_match_the_old_shell() {
-        let combos: Vec<&str> = HOTKEYS.iter().map(|(c, _)| *c).collect();
+    fn default_hotkey_combos_match_the_old_shell() {
+        let combos: Vec<&str> = HOTKEYS.iter().map(|(_, _, d)| *d).collect();
         assert_eq!(
             combos,
             vec!["CmdOrCtrl+F2", "CmdOrCtrl+F3", "CmdOrCtrl+F5", "CmdOrCtrl+F6"]
         );
+    }
+
+    /// 配置里存的组合键要先筛一道再交给系统注册。
+    #[test]
+    fn combo_shapes_are_checked() {
+        assert!(combo_ok("CmdOrCtrl+F2"));
+        assert!(combo_ok("Alt+Shift+K"));
+        assert!(combo_ok("F9"));
+        assert!(!combo_ok(""), "空串不能拿去注册");
+        assert!(!combo_ok("Ctrl+"), "尾巴上挂个空段");
+        assert!(!combo_ok("Ctrl++A"), "中间空段");
+        assert!(!combo_ok("Ctrl+A+B+C+D+E"), "段数超上限");
+        assert!(!combo_ok("Ctrl+<script>"), "非字母数字");
+        assert!(!combo_ok(&"A".repeat(60)), "长度超上限");
+    }
+
+    /// 配置里是垃圾值时必须退回默认，而不是注册一个乱七八糟的组合。
+    #[test]
+    fn bad_config_falls_back_to_default() {
+        assert_eq!(combo_for(None, "hotkey_toggle_vc", "CmdOrCtrl+F2"), "CmdOrCtrl+F2");
     }
 
     #[test]

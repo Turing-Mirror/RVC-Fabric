@@ -191,22 +191,69 @@ pub fn round_corners(win: &WebviewWindow) {
         logging::shell_log!("圆角：拿不到 HWND，跳过");
         return;
     };
+    let hwnd = hwnd.0 as HWND;
     let pref = DWMWCP_ROUND;
     // SAFETY: hwnd 来自 Tauri 刚建好的窗口；传的是一个 i32 大小的枚举值，
     // 长度如实给出。属性不支持时函数只是返回错误，不会写回任何东西。
     let hr = unsafe {
         DwmSetWindowAttribute(
-            hwnd.0 as HWND,
+            hwnd,
             DWMWA_WINDOW_CORNER_PREFERENCE as u32,
             &pref as *const _ as *const core::ffi::c_void,
             std::mem::size_of_val(&pref) as u32,
         )
     };
-    if hr != 0 {
-        // Win10 走到这里是正常的，不当错误报。
-        logging::shell_log!("圆角：系统不支持（Win10 正常），HRESULT={hr:#x}");
+    if hr == 0 {
+        logging::shell_log!("圆角：DWM 已生效");
+        return;
+    }
+    // Win10 没有这个属性，DWM 这条路走不通。系统不给画就自己画：给窗口套一个
+    // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
+    // 调用方在 Resized 时会再调一次。
+    logging::shell_log!("圆角：DWM 不支持（Win10 正常，HRESULT={hr:#x}），改用窗口区域裁切");
+    apply_corner_region(win);
+}
+
+/// Win10 的兜底：SetWindowRgn 把四角裁圆。
+///
+/// 缺点是硬边、没有抗锯齿，所以半径取小一点（8px）不至于难看。DWM 能用的时候
+/// 绝不走这条 —— 那条是系统合成时画的，带抗锯齿也不影响投影。
+#[cfg(windows)]
+fn apply_corner_region(win: &WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SetWindowRgn;
+
+    let (Ok(hwnd), Ok(size)) = (win.hwnd(), win.inner_size()) else {
+        return;
+    };
+    // 最小化时尺寸是 0，套上去会得到一个空区域 —— 整个窗口都被裁没。
+    if size.width == 0 || size.height == 0 {
+        return;
+    }
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let r = (8.0 * scale).round() as i32 + 1;
+    // SAFETY: 尺寸来自窗口自己，非零；区域交给 SetWindowRgn 之后由系统接管，
+    // 成功时不能再 Delete，失败时必须自己删掉，下面按返回值分了。
+    unsafe {
+        let rgn = CreateRoundRectRgn(0, 0, size.width as i32 + 1, size.height as i32 + 1, r, r);
+        if rgn.is_null() {
+            return;
+        }
+        if SetWindowRgn(hwnd.0 as HWND, rgn, 1) == 0 {
+            DeleteObject(rgn);
+        }
     }
 }
+
+/// 窗口尺寸变了之后重新套一次圆角区域（只有走兜底那条路时才有意义）。
+#[cfg(windows)]
+pub fn refresh_corners(win: &WebviewWindow) {
+    apply_corner_region(win);
+}
+
+#[cfg(not(windows))]
+pub fn refresh_corners(_win: &WebviewWindow) {}
 
 #[cfg(not(windows))]
 pub fn round_corners(_win: &WebviewWindow) {}

@@ -451,9 +451,6 @@ export default function App() {
             case "more":
               return (
                 <MorePage
-                  onCheckUpdate={() => void checkUpdate()}
-                  updateLine={updateLine}
-                  updateBusy={updateBusy}
                   status={engine.status}
                   provision={engine.provision}
                   onForceKill={async () => {

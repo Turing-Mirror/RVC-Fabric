@@ -154,6 +154,12 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("wallpaper_blur".into(), json!(40));
     m.insert("wallpaper_opacity".into(), json!(70));
     m.insert("hotkeys_enabled".into(), json!(false));
+    // 快捷键组合。默认沿用旧 Python 壳的那四个，用户有肌肉记忆；
+    // 键名要和 shell_extras::HOTKEYS 对上。
+    m.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F2"));
+    m.insert("hotkey_toggle_mode".into(), json!("CmdOrCtrl+F3"));
+    m.insert("hotkey_prev_voice".into(), json!("CmdOrCtrl+F5"));
+    m.insert("hotkey_next_voice".into(), json!("CmdOrCtrl+F6"));
     m.insert("telemetry_opt_in".into(), json!(Value::Null));
     m
 }

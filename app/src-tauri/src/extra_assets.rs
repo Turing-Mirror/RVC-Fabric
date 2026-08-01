@@ -206,10 +206,16 @@ fn extras_from(data: &Value) -> Vec<ExtraSpec> {
     out
 }
 
-/// 线上清单里的全部附加资源。拉不到清单就返回空 —— 界面会显示「暂时取不到
-/// 下载信息」，而不是一个空白的列表让人以为没东西可下。
+/// 线上清单里的全部附加资源。
+///
+/// `available` 说的是**清单拿到没有**，不是**清单里有没有东西**。以前这两件
+/// 事被合成一个判断（`!specs.is_empty()`），结果清单明明拉下来了、只是里面
+/// 一个模型都没登记，界面却报「暂时无法获取下载清单，检查网络后再试」——
+/// 让用户去查一个根本没坏的网络。
 pub fn list(root: &Path) -> Value {
-    let data = catalog::fetch_remote_catalog_cached(12).unwrap_or_else(|_| json!({}));
+    let fetched = catalog::fetch_remote_catalog_cached(12);
+    let reachable = fetched.is_ok();
+    let data = fetched.unwrap_or_else(|_| json!({}));
     let specs = extras_from(&data);
     let items: Vec<Value> = specs
         .iter()
@@ -230,7 +236,7 @@ pub fn list(root: &Path) -> Value {
         })
         .collect();
     json!({
-        "available": !specs.is_empty(),
+        "available": reachable,
         "items": items,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })

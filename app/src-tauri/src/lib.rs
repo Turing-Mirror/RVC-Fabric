@@ -13,6 +13,7 @@ pub mod paths;
 pub mod plaza;
 mod protocol;
 mod provision;
+mod separate;
 mod shell_extras;
 mod store;
 mod telemetry;
@@ -442,6 +443,48 @@ async fn engine_stop_vc(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(separate::status(&root_clone(&state)?))
+}
+
+/// 选音频文件 / 选输出目录。原生对话框要主线程，所以留在同步命令里 ——
+/// 它本来就只阻塞到用户点完为止。
+#[tauri::command]
+fn separate_pick(dir: bool) -> Option<String> {
+    let d = rfd::FileDialog::new();
+    if dir {
+        d.set_title("选择输出目录").pick_folder()
+    } else {
+        d.add_filter("音频", &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
+            .set_title("选择要分离的音频")
+            .pick_file()
+    }
+    .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn separate_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+    output: String,
+    model: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 一次分离是几十秒到几分钟，绝不能占着 IPC 线程 —— 那就是窗口全程卡死。
+    tauri::async_runtime::spawn_blocking(move || {
+        separate::run(&app, &root, &input, &output, &model)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn separate_cancel() {
+    separate::cancel();
 }
 
 #[tauri::command]
@@ -921,6 +964,10 @@ pub fn run() {
             store_catalog,
             store_install,
             store_cancel,
+            separate_status,
+            separate_pick,
+            separate_start,
+            separate_cancel,
         ])
         .setup(move |app| {
             // Window URL must use the custom scheme registered above.

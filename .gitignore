@@ -191,3 +191,6 @@ AGENTS.md
 
 # 验证第三方音色时下载的制品缓存（几个 GB，跑完可删）
 /.verify-cache/
+
+# 分离模型权重按需下载，不进 git
+/assets/pymss/

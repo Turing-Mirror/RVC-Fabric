@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { SeparateDialog } from "../components/SeparateDialog";
 import { openExternal } from "../lib/plaza";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 
@@ -56,6 +57,7 @@ export function MorePage({
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
+  const [sepOpen, setSepOpen] = useState(false);
   // Where the app thinks it is installed. The row below used to only describe
   // that this is resolved automatically, without ever showing the answer —
   // which is the first thing worth knowing when a report says "找不到 Runtime".
@@ -221,6 +223,17 @@ export function MorePage({
           />
         </Group>
       </Block>
+      <Block title="音频工具">
+        <Group>
+          <ListItem
+            title="人声分离"
+            desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐"
+            right={<Btn onClick={() => setSepOpen(true)}>打开</Btn>}
+          />
+        </Group>
+      </Block>
+      <SeparateDialog open={sepOpen} onClose={() => setSepOpen(false)} />
+
       <Block title="维护">
         <Group>
           <ListItem

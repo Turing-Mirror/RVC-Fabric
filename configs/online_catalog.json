@@ -8,8 +8,8 @@
       "version": "1.3.1",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "2a497e07e8648c5b214294fcc7975274bdc53531836d54f2fac073715b0766fa",
-      "size_bytes": 7811359,
+      "sha256": "9c37069f7f5afa5cb84a620401abf45744a56206721f01dfe6138653e119433e",
+      "size_bytes": 8142568,
       "min_app_version": "1.3.0",
       "notes": "修复首次开启变声时音高被改成 +15、共鸣 1.2 的问题；修复首页换音色后 底部仪表盘不变且不下发该音色参数；修复两处白屏（ProvisionGate 条件调用 Hook、自定义协议下前端资源加载失败）；修复商店清单不缓存与状态轮询每秒 新开进程导致滚动条反复跳顶；修复多个 worker 同时出声（识别逻辑改为 pid 本会话写的 + 活着 + python*.exe 就杀）；修复窗口永远开在主屏与 无边框窗口跑到屏幕外无法拖回；接回广场投放与更新日志，修复通知红点常亮 与投放数据被拉三次；修复解压安全检查被误用为内容过滤导致 Runtime / 音色 / 更新三条链路中断、档案 ID 可穿越目录。"
     }

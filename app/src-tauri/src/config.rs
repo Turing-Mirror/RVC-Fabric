@@ -55,6 +55,8 @@ pub const COLD_KEYS: &[&str] = &[
     // (`engine_set_hot`) has a fixed parameter list with no monitor in it.
     "monitor_self",
     "monitor_device",
+    // CUDA Graph 推理加速。冷键：要在模型加载前就定下来，转着的时候切不了。
+    "cuda_graph",
 ];
 
 /// Keys the worker consumes — only these are mirrored into `inuse`.
@@ -102,6 +104,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("crossfade_length".into(), json!(0.08));
     m.insert("extra_time".into(), json!(2.5));
     m.insert("n_cpu".into(), json!(4));
+    // 默认关。这东西改的是推理核心，先让人自己开、量过再谈默认值。
+    m.insert("cuda_graph".into(), json!(false));
     // shell-only
     m.insert("monitor_self".into(), json!(false));
     m.insert("monitor_device".into(), json!(""));

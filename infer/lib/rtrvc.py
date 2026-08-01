@@ -17,6 +17,8 @@ import torch.nn.functional as F
 import torchcrepe
 from torchaudio.transforms import Resample
 
+from tools.cuda_graph import configure_cuda_graph, run_cuda_graph
+
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 from multiprocessing import Manager as M
@@ -84,6 +86,14 @@ class RVC:
             self.opt_q = opt_q
             # device="cpu"########强制cpu测试
             self.device = config.device
+            # 探测 CUDA Graph 可用性。gui_v1 会先按用户设置把 RVC_CUDA_GRAPH
+            # 置 0/1；置 0 时这里直接返回，run_cuda_graph 退化成普通调用。
+            # 非 N 卡（DirectML / CPU）恒为关，探测本身也不会跑。
+            try:
+                on = configure_cuda_graph(self.device)
+                printt("cuda graph: %s", "启用" if on else "关闭")
+            except Exception:
+                traceback.print_exc()
             self.f0_up_key = key
             self.formant_shift = formant
             self.f0_min = 50
@@ -494,15 +504,19 @@ class RVC:
             else:
                 feats = input_wav.float().view(1, -1)
             padding_mask = self._padding_mask_for(feats.shape)
-            inputs = {
-                "source": feats,
-                "padding_mask": padding_mask,
-                "output_layer": 9 if self.version == "v1" else 12,
-            }
-            logits = self.model.extract_features(**inputs)
-            feats = (
-                self.model.final_proj(logits[0]) if self.version == "v1" else logits[0]
+            layer = 9 if self.version == "v1" else 12
+            # 每个 block 的形状都一样，正好是 CUDA Graph 的适用场景：把整段
+            # kernel 序列录下来重放，省掉每次几百次 kernel launch 的开销。
+            # output_layer 是 int，不能当图输入，闭包捕获，同时进 key。
+            def _hubert(source, mask):
+                return self.model.extract_features(
+                    source=source, padding_mask=mask, output_layer=layer
+                )[0]
+
+            logits0 = run_cuda_graph(
+                self.model, "rtrvc-hubert-%s" % layer, _hubert, feats, padding_mask
             )
+            feats = self.model.final_proj(logits0) if self.version == "v1" else logits0
             feats = torch.cat((feats, feats[:, -1:, :]), 1)
         self._bench_sync()
         t2 = ttime()
@@ -574,24 +588,52 @@ class RVC:
         feats = feats[:, :p_len, :]
         p_len = self._long_dev(p_len)
         sid = self._long_dev(0)
+        # 这三个是块几何，一个流跑起来之后就不变了。原样保留张量形式给 eager
+        # 路径（TorchScript 的签名认张量），另外留一份 int 进 CUDA Graph 的
+        # key —— 几何一变就重新录一张图，不会拿旧图算错。
+        head_i, ret_i, ret2_i = int(skip_head), int(return_length), int(return_length2)
         skip_head = self._long_cpu(skip_head)
         return_length2 = self._long_cpu(return_length2)
         return_length = self._long_cpu(return_length)
         with torch.no_grad():
             if self.if_f0 == 1:
-                infered_audio, _, _ = self.net_g.infer(
+
+                def _net_g_f0(phone, lengths, coarse, continuous, speaker):
+                    return self.net_g.infer(
+                        phone,
+                        lengths,
+                        coarse,
+                        continuous,
+                        speaker,
+                        skip_head,
+                        return_length,
+                        return_length2,
+                    )[0]
+
+                infered_audio = run_cuda_graph(
+                    self.net_g,
+                    "rtrvc-f0-%s-%s-%s" % (head_i, ret_i, ret2_i),
+                    _net_g_f0,
                     feats,
                     p_len,
                     cache_pitch,
                     cache_pitchf,
                     sid,
-                    skip_head,
-                    return_length,
-                    return_length2,
                 )
             else:
-                infered_audio, _, _ = self.net_g.infer(
-                    feats, p_len, sid, skip_head, return_length, return_length2
+
+                def _net_g_nof0(phone, lengths, speaker):
+                    return self.net_g.infer(
+                        phone, lengths, speaker, skip_head, return_length, return_length2
+                    )[0]
+
+                infered_audio = run_cuda_graph(
+                    self.net_g,
+                    "rtrvc-nof0-%s-%s-%s" % (head_i, ret_i, ret2_i),
+                    _net_g_nof0,
+                    feats,
+                    p_len,
+                    sid,
                 )
         infered_audio = infered_audio.squeeze(1).float()
         upp_res = int(np.floor(factor * self.tgt_sr // 100))

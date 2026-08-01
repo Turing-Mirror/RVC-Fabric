@@ -52,6 +52,8 @@ export const TIPS: Record<string, string> = {
   extra_time:
     "额外推理时长。给算法更多上下文，音质更稳但延迟增加。",
   n_cpu: "用于 harvest 等 CPU 算法的线程数。用 rmvpe 时基本无影响。",
+  cuda_graph:
+    "把每一块的推理过程录制下来重放，省掉反复下发指令的开销，能降低延迟、减少显卡占用。仅 NVIDIA 显卡有效；A 卡 / I 卡开了也不起作用。不生效时会自动退回原来的算法，不会出错。",
   I_noise_reduce: "输入降噪。更干净，代价是多几毫秒延迟。",
   O_noise_reduce: "输出降噪。对变声后的声音再降一次噪，一般不需要。",
   use_pv: "相位声码器。某些音色上衔接更自然，可以开着试听对比。",

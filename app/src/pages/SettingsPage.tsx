@@ -370,6 +370,12 @@ function SettingsPageImpl({
                   />
                 }
               />
+              <Toggle
+                label="CUDA Graph 加速（仅 N 卡）"
+                tip={TIPS.cuda_graph}
+                checked={c.bool("cuda_graph")}
+                onChange={(v) => c.set("cuda_graph", v)}
+              />
             </div>
           </Block>
         ) : null}

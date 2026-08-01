@@ -2141,6 +2141,31 @@ if __name__ == "__main__":
                 "sg_output_device": self.gui_config.sg_output_device,
             }
 
+        def _cuda_graph_payload(self):
+            """录了几张图、重放了多少次、退回 eager 多少次。
+
+            没有这个就没法判断加速到底有没有生效：CUDA Graph 抓不住的时候是
+            静默退回普通调用的，延迟数字看起来只是「没变快」，和没开一模一样。
+            """
+            try:
+                from tools.cuda_graph import cuda_graph_enabled, get_cuda_graph_stats
+
+                if not cuda_graph_enabled(self.config.device):
+                    return {"cuda_graph": "off"}
+                rvc = getattr(self, "rvc", None)
+                if rvc is None:
+                    return {"cuda_graph": "on"}
+                a = get_cuda_graph_stats(getattr(rvc, "net_g", None))
+                b = get_cuda_graph_stats(getattr(rvc, "model", None))
+                return {
+                    "cuda_graph": "on",
+                    "cuda_graph_captures": a["captures"] + b["captures"],
+                    "cuda_graph_replays": a["replays"] + b["replays"],
+                    "cuda_graph_fallbacks": a["fallbacks"] + b["fallbacks"],
+                }
+            except Exception:
+                return {"cuda_graph": "?"}
+
         def _values_from_config_file(self):
             """Build set_values-compatible dict from configs/inuse/config.json."""
             path = "configs/inuse/config.json"
@@ -2237,6 +2262,12 @@ if __name__ == "__main__":
                 "fx_eq_preset": str(data.get("fx_eq_preset") or "flat"),
                 "fx_out_gain_db": float(data.get("fx_out_gain_db") or 0),
             }
+            # CUDA Graph 加速。设 0/1 到环境变量里，rtrvc 起模型时读它决定探不
+            # 探测；只有 N 卡吃得到，A/I 卡和 CPU 那边探测函数自己会返回 False。
+            # 默认关：这是改推理核心的东西，先让用户自己开，量过再谈默认值。
+            os.environ["RVC_CUDA_GRAPH"] = (
+                "1" if bool(data.get("cuda_graph", False)) else "0"
+            )
             # Fill missing devices with defaults
             if (
                 values["sg_input_device"] not in (self.input_devices or [])
@@ -2485,6 +2516,7 @@ if __name__ == "__main__":
                     infer_ms=0,
                     samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
                     **self._worker_device_payload(),
+                    **self._cuda_graph_payload(),
                 )
             except Exception as e:
                 traceback.print_exc()

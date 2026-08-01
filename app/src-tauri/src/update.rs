@@ -23,8 +23,17 @@ use serde_json::{json, Value};
 
 use crate::{catalog, download, extract, paths, ui_assets};
 
-/// Shipping version. Keep in step with tauri.conf.json and package.json.
-pub const APP_VERSION: &str = "1.3.2";
+/// 本机版本号，编译期从 Cargo.toml 取。
+///
+/// 别改回手写字符串。1.3.1 就是这么翻的车：版本号 bump 改了 5 个地方，漏了
+/// 这一个，于是发出去的 1.3.1 对外自称 1.3.0 —— 「其他」页显示错、遥测把
+/// 一整批用户记成上一版、广场的版本定向全部落空。这几处都读 APP_VERSION：
+/// shell_version / telemetry::tick / plaza 定向 / 更新检查 / min_app_version。
+///
+/// 现在它跟着 Cargo.toml 走，漏不掉。剩下四处手写的版本号（Cargo.toml、
+/// tauri.conf.json、package.json、Inno 的 .iss）由 tests/test_version_sync.py
+/// 盯着，对不上就测试挂，不用等发版之后才发现。
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Ver {

@@ -114,7 +114,7 @@ export function SeparateDialog({
     : !st.worker_present
       ? "缺分离脚本，安装可能不完整"
       : !st.models?.length
-        ? "还没有分离模型，先下载"
+        ? "还没有分离模型，先在「音频工具 → 下载模型」里下载"
         : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;

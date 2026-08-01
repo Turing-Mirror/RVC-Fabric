@@ -161,7 +161,12 @@ class BuildOutputsTests(unittest.TestCase):
             self.assertEqual(voices["kiki"]["sha256"], want)
             self.assertEqual(voices["kiki"]["size_bytes"], kiki_zip.stat().st_size)
             self.assertEqual(voices["kiki"]["pack_url"], f"{bc.LFS}/{want}")
-            self.assertIn("ch-banner/kiki.jpg", voices["kiki"]["cover_url"])
+            # 封面走 Release 附件而不是 git raw：CNB 的 git-raw 不给 Content-Type
+            # 却给 nosniff，浏览器直接不渲染 <img>。
+            self.assertEqual(
+                voices["kiki"]["cover_url"],
+                f"{bc.CNB_REPO_URL}/-/releases/download/{bc.COVER_TAG}/kiki.jpg",
+            )
             # series 透传三份产物
             self.assertEqual(voices["kiki"]["series"], "RVC原版")
             self.assertEqual(
@@ -332,6 +337,87 @@ class CheckFailureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             paths = make_fixture(Path(td))
             self.assertEqual(bc.cmd_check(paths), 0)
+
+
+class ExtrasTests(unittest.TestCase):
+    """附加资源（分离模型 / 训练底模）。
+
+    这些权重只在 Release 附件里，发布仓的 git 里没有对应文件，所以 sha256 和
+    size_bytes 只能在 YAML 里写死 —— 校验必须在这里做，客户端拿到的清单已经
+    没有兜底的余地了。
+    """
+
+    GOOD = {
+        "key": "pymss_vocals",
+        "label": "人声分离模型",
+        "dest": "assets/pymss",
+        "release_tag": "pymss",
+        "channel": "release",
+        "files": [{"name": "a.ckpt", "sha256": "a" * 64, "size_bytes": 639254584}],
+    }
+
+    def _check_with(self, tmp: Path, entry: dict) -> int:
+        paths = make_fixture(tmp)
+        _y(paths.src / "extras" / f"{entry.get('key', 'x')}.yaml", entry)
+        return bc.cmd_check(paths)
+
+    def test_good_entry_lands_in_the_index(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            _y(paths.src / "extras" / "pymss_vocals.yaml", self.GOOD)
+            self.assertEqual(bc.cmd_build(paths), 0)
+            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+            e = index["extras"]["pymss_vocals"]
+            self.assertEqual(e["dest"], "assets/pymss")
+            self.assertEqual(e["size_bytes"], 639254584)
+            self.assertEqual(
+                e["files"][0]["urls"],
+                [f"{bc.CNB_REPO_URL}/-/releases/download/pymss/a.ckpt"],
+            )
+
+    def test_a_dest_outside_the_install_fails(self):
+        # 清单是客户端从网上拉的。放行绝对路径或 .. 等于交出任意写文件的能力。
+        for bad in ("", "/etc", "C:/Windows", "../../evil", "assets/../../evil"):
+            with tempfile.TemporaryDirectory() as td:
+                entry = dict(self.GOOD, dest=bad)
+                self.assertEqual(self._check_with(Path(td), entry), 1, f"dest={bad!r}")
+
+    def test_missing_sha_or_size_fails(self):
+        # 六百 MB 下错了没人看得出来；没有 size 客户端也判断不了下全没有。
+        with tempfile.TemporaryDirectory() as td:
+            f = [{"name": "a.ckpt", "size_bytes": 10}]
+            self.assertEqual(self._check_with(Path(td), dict(self.GOOD, files=f)), 1)
+        with tempfile.TemporaryDirectory() as td:
+            f = [{"name": "a.ckpt", "sha256": "a" * 64}]
+            self.assertEqual(self._check_with(Path(td), dict(self.GOOD, files=f)), 1)
+
+    def test_release_channel_without_a_tag_fails(self):
+        # 上次出事就是这么来的：漏了 tag，地址语法正确但指向的 tag 下没这个附件。
+        with tempfile.TemporaryDirectory() as td:
+            entry = dict(self.GOOD)
+            entry.pop("release_tag")
+            self.assertEqual(self._check_with(Path(td), entry), 1)
+
+    def test_lfs_channel_addresses_by_hash(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            entry = dict(self.GOOD, channel="lfs")
+            entry.pop("release_tag")
+            _y(paths.src / "extras" / "pymss_vocals.yaml", entry)
+            self.assertEqual(bc.cmd_build(paths), 0)
+            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+            url = index["extras"]["pymss_vocals"]["files"][0]["urls"][0]
+            self.assertIn("/-/lfs/", url)
+
+    def test_no_extras_dir_is_fine(self):
+        # 老仓没有这个目录，不能因此判失败。
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            self.assertEqual(bc.cmd_check(paths), 0)
+            index_ok = bc.cmd_build(paths) == 0
+            self.assertTrue(index_ok)
+            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+            self.assertEqual(index["extras"], {})
 
 
 class InitTests(unittest.TestCase):

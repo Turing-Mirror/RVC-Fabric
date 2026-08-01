@@ -6,6 +6,7 @@ pub mod catalog;
 mod config;
 mod download;
 mod engine_assets;
+mod extra_assets;
 mod extract;
 mod legacy;
 mod logging;
@@ -17,6 +18,7 @@ mod separate;
 mod shell_extras;
 mod store;
 mod telemetry;
+mod train;
 mod ui_assets;
 pub mod update;
 mod voices;
@@ -485,6 +487,68 @@ async fn separate_start(
 #[tauri::command]
 fn separate_cancel() {
     separate::cancel();
+}
+
+// --- 附加资源（分离模型 / 训练底模）-----------------------------------------
+
+#[tauri::command]
+async fn extra_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 要拉线上清单，可能等十几秒。同步命令会把 IPC 线程堵死。
+    tauri::async_runtime::spawn_blocking(move || extra_assets::list(&root))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn extra_download(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    key: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || extra_assets::download(&app, &root, &key))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn extra_cancel() {
+    extra_assets::cancel();
+}
+
+// --- 训练 -------------------------------------------------------------------
+
+#[tauri::command]
+fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(train::status(&root_clone(&state)?))
+}
+
+/// 选数据集目录。原生对话框要主线程。
+#[tauri::command]
+fn train_pick_dataset() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("选择数据集目录（里面放这个人的干声音频）")
+        .pick_folder()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn train_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    req: train::TrainReq,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 训练动辄几小时。放 IPC 线程上等于窗口从此不动。
+    tauri::async_runtime::spawn_blocking(move || train::run(&app, &root, req))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn train_cancel() {
+    train::cancel();
 }
 
 #[tauri::command]
@@ -968,6 +1032,13 @@ pub fn run() {
             separate_pick,
             separate_start,
             separate_cancel,
+            extra_list,
+            extra_download,
+            extra_cancel,
+            train_status,
+            train_pick_dataset,
+            train_start,
+            train_cancel,
         ])
         .setup(move |app| {
             // Window URL must use the custom scheme registered above.

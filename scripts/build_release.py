@@ -542,6 +542,14 @@ def copy_engine(out: Path) -> None:
     if dev_src.is_dir():
         copy_tree(dev_src, out / "scripts" / "dev")
 
+    # logs/ 整个不进包（那是用户的训练实验目录），但 logs/mute 必须进：
+    # 训练的 filelist 末尾要补两条静音样本，缺了训练在最后一步才会炸。
+    # 1.4 MB，只有这一个子目录。
+    mute_src = REPO / "logs" / "mute"
+    if mute_src.is_dir():
+        copy_tree(mute_src, out / "logs" / "mute")
+        log("  keep: logs/mute (训练用静音样本)")
+
     # Merge critical weights/ffmpeg from RVCMAX if repo placeholders are empty
     merge_rvcmax_engine_bits(out)
 

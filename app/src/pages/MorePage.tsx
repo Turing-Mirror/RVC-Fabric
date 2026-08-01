@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { SeparateDialog } from "../components/SeparateDialog";
+import { TrainDialog } from "../components/TrainDialog";
+import { ExtrasDialog } from "../components/ExtrasDialog";
 import { openExternal } from "../lib/plaza";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 
@@ -58,6 +60,8 @@ export function MorePage({
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
   const [sepOpen, setSepOpen] = useState(false);
+  const [trainOpen, setTrainOpen] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   // Where the app thinks it is installed. The row below used to only describe
   // that this is resolved automatically, without ever showing the answer —
   // which is the first thing worth knowing when a report says "找不到 Runtime".
@@ -230,9 +234,25 @@ export function MorePage({
             desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐"
             right={<Btn onClick={() => setSepOpen(true)}>打开</Btn>}
           />
+          <ListItem
+            title="训练音色"
+            desc="用一个人的干声素材训一个新音色。要 N 卡，要几小时。"
+            right={<Btn onClick={() => setTrainOpen(true)}>打开</Btn>}
+          />
+          <ListItem
+            title="下载模型"
+            desc="分离模型与训练底模，按需下载"
+            right={<Btn onClick={() => setExtrasOpen(true)}>打开</Btn>}
+          />
         </Group>
       </Block>
       <SeparateDialog open={sepOpen} onClose={() => setSepOpen(false)} />
+      <TrainDialog open={trainOpen} onClose={() => setTrainOpen(false)} />
+      <ExtrasDialog
+        open={extrasOpen}
+        onClose={() => setExtrasOpen(false)}
+        title="下载模型"
+      />
 
       <Block title="维护">
         <Group>

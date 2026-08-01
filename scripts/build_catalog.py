@@ -275,6 +275,10 @@ def cnb_raw_url(rel_path: str) -> str:
     return f"{RAW}/{(rel_path or '').replace(chr(92), '/').lstrip('/')}"
 
 
+def cnb_release_url(tag: str, name: str) -> str:
+    return f"{CNB_REPO_URL}/-/releases/download/{tag}/{name}"
+
+
 def cnb_cover_url(rel_path: str) -> str:
     """封面走 Release 附件，不走 git raw。
 
@@ -287,7 +291,7 @@ def cnb_cover_url(rel_path: str) -> str:
     所以封面统一传到 `covers` tag 下，文件名就是 ch-banner 里的文件名。
     """
     name = (rel_path or "").replace(chr(92), "/").rsplit("/", 1)[-1]
-    return f"{CNB_REPO_URL}/-/releases/download/{COVER_TAG}/{name}" if name else ""
+    return cnb_release_url(COVER_TAG, name) if name else ""
 
 
 def _yymmdd(raw: Any) -> str:
@@ -574,6 +578,22 @@ def load_sources(paths: Paths, rep: Report) -> dict:
             )
     else:
         rep.error("缺源目录: catalog-src/voices/")
+
+    # 附加资源（分离模型 / 训练底模）：目录不存在 = 空（老仓兼容）。
+    # 这些不像 runtime 那样人人都要，客户端也不写死规格 —— 加一个模型只改这里。
+    out["extras"] = []
+    edir = src / "extras"
+    if edir.is_dir():
+        for p in sorted(edir.glob("*.yaml")):
+            try:
+                v = _load_yaml(p)
+            except Exception as e:
+                rep.error(f"extras/{p.name}: 解析失败: {e}")
+                continue
+            v.setdefault("key", p.stem)
+            if str(v["key"]) != p.stem:
+                rep.warn(f"extras/{p.name}: key={v['key']} 与文件名不一致")
+            out["extras"].append(v)
 
     # 第三方源：目录不存在 = 空列表（老仓/最小 fixture 兼容）
     out["thirdparty"] = []
@@ -907,6 +927,99 @@ def _compile_blob(
     }
 
 
+_HEX = set("0123456789abcdef")
+
+
+def _safe_dest(dest: str) -> bool:
+    """`dest` 只能是安装目录下的相对路径。
+
+    客户端 `extra_assets.rs::safe_dest` 会再拦一次，两边规则必须一致 —— 但
+    在这里拦住的意义是：错误的清单根本发不出去，而不是发出去了靠客户端救。
+    """
+    d = str(dest or "").strip().replace("\\", "/")
+    if not d or d.startswith("/") or ":" in d:
+        return False
+    return all(part not in ("", ".", "..") for part in d.split("/"))
+
+
+def _compile_extras(entries: list, rep: Report) -> dict:
+    """附加资源 → index.extras。
+
+    和 runtime 不同，这里**不查本地文件**：这些权重不进发布仓的 git，只在
+    Release 附件里。所以 sha256 和 size_bytes 必须在 YAML 里写死 —— 写不出来
+    就说明还没传上去，那就不该出现在清单里。
+    """
+    out: dict[str, Any] = {}
+    for e in entries:
+        key = str(e.get("key") or "").strip()
+        who = f"extras/{key or '?'}"
+        if not key:
+            rep.error(f"{who}: 缺 key")
+            continue
+        dest = str(e.get("dest") or "").strip()
+        if not _safe_dest(dest):
+            rep.error(f"{who}: dest 必须是安装目录下的相对路径，且不能含 ..（当前：{dest!r}）")
+            continue
+
+        default_tag = str(e.get("release_tag") or "").strip()
+        default_channel = str(e.get("channel") or "release").strip().lower()
+        files = []
+        ok = True
+        for f in e.get("files") or []:
+            name = str(f.get("name") or "").strip()
+            if not name or "/" in name or "\\" in name or ":" in name:
+                rep.error(f"{who}: 文件名非法：{name!r}")
+                ok = False
+                continue
+            sha = str(f.get("sha256") or "").strip().lower()
+            if len(sha) != 64 or not set(sha) <= _HEX:
+                rep.error(f"{who}/{name}: sha256 必须是 64 位十六进制（还没传上去？）")
+                ok = False
+                continue
+            size = int(f.get("size_bytes") or 0)
+            if size <= 0:
+                rep.error(f"{who}/{name}: 缺 size_bytes，客户端靠它判断有没有下全")
+                ok = False
+                continue
+            channel = str(f.get("channel") or default_channel).strip().lower()
+            if channel not in ("release", "lfs"):
+                rep.error(f"{who}/{name}: channel 只能是 release 或 lfs")
+                ok = False
+                continue
+            tag = str(f.get("release_tag") or default_tag).strip()
+            if channel == "release" and not tag:
+                rep.error(f"{who}/{name}: channel=release 但没写 release_tag，地址会指错")
+                ok = False
+                continue
+            urls = [cnb_lfs_url(sha)] if channel == "lfs" else [cnb_release_url(tag, name)]
+            row = {
+                "name": name,
+                "sha256": sha,
+                "size_bytes": size,
+                "channel": channel,
+                "urls": urls,
+            }
+            if channel == "release":
+                row["release_tag"] = tag
+            files.append(row)
+        if not ok:
+            continue
+        if not files:
+            rep.error(f"{who}: 一个文件都没有")
+            continue
+        out[key] = {
+            "key": key,
+            "label": str(e.get("label") or key),
+            "dest": dest.replace("\\", "/"),
+            "notes": str(e.get("notes") or ""),
+            "size_bytes": sum(f["size_bytes"] for f in files),
+            "files": files,
+        }
+        if default_tag:
+            out[key]["release_tag"] = default_tag
+    return out
+
+
 def _package_row(entry: dict, blob: dict, *, kind: str, package_type: str = "") -> dict:
     released = _yymmdd(
         entry.get("released") or entry.get("date")
@@ -1044,6 +1157,8 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "gui": gui,
     }
     _validate_shell_versions(app, rep)
+
+    extras = _compile_extras(src.get("extras") or [], rep)
 
     engine_core = _compile_blob(
         src.get("engine_core") or {}, paths, rep, who="engine-core", extract_root="."
@@ -1188,6 +1303,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "manifest_urls": list(meta.get("manifest_urls") or MANIFEST_URLS),
         "engine_core": engine_core,
         "vbcable": vbcable_top,
+        "extras": extras,
     }
     snippet = {
         "schema": 1,
@@ -1204,6 +1320,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "runtimes": runtimes,
         "engine_core": engine_core,
         "vbcable": vbcable_top,
+        "extras": extras,
     }
     bundled = {
         "schema": 1,

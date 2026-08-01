@@ -123,6 +123,14 @@ Type: files; Name: "{app}\launcher\rvc_launcher.py"
 Type: files; Name: "{group}\{#MyAppName} 启动器.lnk"
 Type: files; Name: "{autodesktop}\{#MyAppName} 启动器.lnk"
 
+[Registry]
+; NSIS OTA 定位键：Tauri 的 NSIS 安装器（OTA 签名包）安装前会读
+; HKCU\Software\Turing-Mirror\RVC Fabric 的默认值当作「上次安装目录」。
+; Setup 装到自定义目录的用户靠它让 OTA 装回同一目录，否则 NSIS 会按
+; 全新安装落到 %LOCALAPPDATA%\RVC Fabric，Runtime / engine-core 全部重下。
+; 与 NSIS 写入位置一致（installer.nsi 的 MANUPRODUCTKEY），值 = 安装目录。
+Root: HKCU; Subkey: "Software\Turing-Mirror\RVC Fabric"; ValueType: string; ValueName: ""; ValueData: "{app}"; Flags: uninsdeletevalue
+
 [Files]
 ; 通用薄包：RVC Fabric.exe + 可替换的 frontend/ + 引擎源码
 ; 不含 Runtime / engine-core / VB-Cable，这三样首次运行时下载

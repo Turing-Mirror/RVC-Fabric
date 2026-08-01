@@ -31,10 +31,13 @@ export default defineConfig(async () => ({
 
   // Ship UI as a replaceable `frontend/` pack (see tauri.conf frontendDist).
   build: {
-    // Shipped: the shell forwards UI crashes into shell.log, and without maps
-    // a stack from a user's machine is nothing but minified letters. ~1.3 MB
-    // of .map next to a 290 KB bundle is worth being able to read a report.
-    sourcemap: true,
+    // 不发 sourcemap。以前是发的，理由是「用户机器上的崩溃栈没有 map 就是
+    // 一堆压缩后的字母」—— 那个理由本身没错，但 1.4 MB 的 .map 会跟着界面
+    // 补丁一起推给每个用户，而补丁本体才 290 KB。
+    //
+    // 要重新拿回可读的崩溃栈，别直接改回 true：把 map 留在本地构建产物里、
+    // 只在 pack_gui_patch 的打包清单里排除 *.map，两头都能要。
+    sourcemap: false,
     outDir: "frontend",
     emptyOutDir: true,
   },

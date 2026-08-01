@@ -89,6 +89,40 @@ fn field<'a>(v: &'a Value, key: &str) -> &'a str {
     v.get(key).and_then(|x| x.as_str()).unwrap_or("")
 }
 
+/// 已经打上的界面补丁版本，读不到就是空串。
+///
+/// 补丁只换 `frontend/`，换不了 exe，所以打完补丁 APP_VERSION 还是旧的。
+/// 光看 APP_VERSION 的话，同一个补丁会被无限次提示「有新版本」—— 装了、
+/// 重启了、再问一次还是有。补丁里带了 `tm_package.json`，版本号跟着界面
+/// 走，读它才知道界面到底到哪一版了。
+fn applied_ui_version() -> String {
+    let Some(dir) = ui_assets::external_dir() else {
+        return String::new();
+    };
+    let Ok(text) = std::fs::read_to_string(dir.join("tm_package.json")) else {
+        return String::new();
+    };
+    let Ok(v) = serde_json::from_str::<Value>(&text) else {
+        return String::new();
+    };
+    field(&v, "version").to_string()
+}
+
+/// 本机的「有效版本」：exe 和界面里更新的那一个。
+///
+/// 装了整包就是 exe 的版本；之后又打了界面补丁，就是补丁的版本。反过来，
+/// 整包更新之后 exe 比界面新，这时要以 exe 为准 —— 整包里自带的 frontend
+/// 会把旧补丁覆盖掉，但如果没覆盖干净，也不能让旧的 tm_package.json 把
+/// 版本号拉回去。
+fn effective_version() -> String {
+    let ui = applied_ui_version();
+    if !ui.is_empty() && compare_versions(APP_VERSION, &ui) < 0 {
+        ui
+    } else {
+        APP_VERSION.to_string()
+    }
+}
+
 /// Ask the catalog whether a newer build exists.
 pub fn check(timeout_secs: u64) -> Result<Value, String> {
     let cat = catalog::fetch_remote_catalog(timeout_secs)?;
@@ -111,12 +145,16 @@ pub fn check(timeout_secs: u64) -> Result<Value, String> {
     };
     let min_app = field(&gui, "min_app_version").to_string();
 
-    let newer = !remote.is_empty() && compare_versions(APP_VERSION, &remote) < 0;
+    // 拿有效版本比，不是 APP_VERSION —— 否则打过的界面补丁会一直重复提示。
+    let local = effective_version();
+    let newer = !remote.is_empty() && compare_versions(&local, &remote) < 0;
     // A min_app_version above ours means we cannot jump straight there.
+    // 这里要用 exe 的版本：min_app_version 卡的是 Rust 侧的能力（有没有那些
+    // 命令），换了界面并不会让老 exe 多出命令来。
     let blocked = !min_app.is_empty() && compare_versions(APP_VERSION, &min_app) < 0;
 
     Ok(json!({
-        "local": APP_VERSION,
+        "local": local,
         "remote": if remote.is_empty() { "—".into() } else { remote },
         "available": newer && !url.is_empty(),
         "blocked_by_min_version": blocked,

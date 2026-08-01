@@ -30,13 +30,28 @@ from shell_version import (
     validate_stable_shell_version,
 )
 
-# Relative paths or globs under ROOT.
+# 打包的是 app/frontend/ 里的**内容**，直接放在 zip 根目录。
 #
-# Tauri 版的界面补丁打的是 app/frontend/（Vite 构建产物），安装目录下
-# 那份可替换的 frontend/ 就是它。Rust 侧的改动换不了，必须重发安装包。
+# 这是壳里 update::apply_gui_patch 唯一认的形状：它把 zip 解到暂存目录，
+# 检查根部（或唯一的顶层目录）有没有 index.html，然后整个替换掉安装目录
+# 下的 frontend/。所以：
 #
-# launcher/ 是旧 Python 壳的界面层，迁移完成前保留以便还能给老版本发补丁。
-DEFAULT_PATHS = [
+#   ✅  index.html / assets/... / tm_package.json  在 zip 根
+#   ❌  app/frontend/index.html                    —— 根部没有 index.html，
+#                                                     壳会直接拒绝这个包
+#
+# 之前这里打的是旧 Python 壳那套布局（launcher/ + gui_v1.py + tools/*.py，
+# 各自带路径），靠 Tk 壳按白名单合并。launcher/ 已经删了，Tauri 壳只换
+# frontend/ 一个目录 —— **引擎侧的 .py 换不了，Rust 侧也换不了，那些改动
+# 只能重发安装包**。别再往这个包里塞它们，塞了也会被丢掉。
+FRONTEND_DIR = ROOT / "app" / "frontend"
+
+# 留着给 --extra 用：真要额外塞点什么进 frontend/ 的时候。
+DEFAULT_PATHS: list[str] = [
+    # 空。历史上这里列过 launcher/ 和 tools/*.py，见上面的注释。
+]
+
+_LEGACY_PATHS = [
     "app/frontend",
     "launcher",
     "configs/online_catalog.json",
@@ -112,6 +127,14 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     paths = list(DEFAULT_PATHS) + list(args.extra or [])
 
+    if not (FRONTEND_DIR / "index.html").is_file():
+        print(
+            f"error: 找不到 {FRONTEND_DIR}/index.html —— 先在 app/ 里跑一次"
+            " `npm run build`。",
+            file=sys.stderr,
+        )
+        return 2
+
     meta = tm_package_template(
         PKG_GUI_PATCH,
         name="Turing Mirror GUI Patch",
@@ -127,6 +150,14 @@ def main() -> int:
             TM_PACKAGE_JSON,
             json.dumps(meta, ensure_ascii=False, indent=2),
         )
+        # frontend/ 的内容平铺到 zip 根，不带 app/frontend 前缀。
+        for f in sorted(FRONTEND_DIR.rglob("*")):
+            if not f.is_file():
+                continue
+            if f.suffix == ".map":
+                continue  # sourcemap 不发给用户，见 vite.config.ts
+            zf.write(f, f.relative_to(FRONTEND_DIR).as_posix())
+            count += 1
         for p in paths:
             count += _add_path(zf, ROOT, Path(p))
 

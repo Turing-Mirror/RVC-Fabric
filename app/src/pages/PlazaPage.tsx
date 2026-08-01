@@ -152,10 +152,10 @@ function Feed({ item }: { item: PlazaItem }) {
           alt=""
           loading="lazy"
           onError={() => setImgFailed(true)}
-          className="w-[104px] h-16 rounded-[var(--rs)] flex-none grayscale object-cover max-[720px]:w-[76px] max-[720px]:h-[50px]"
+          className="w-[104px] h-16 rounded-[var(--rs)] flex-none object-cover max-[720px]:w-[76px] max-[720px]:h-[50px]"
         />
       ) : (
-        <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none grayscale bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
+        <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
       )}
       <div>
         <h4 className="m-0 mb-1.5 text-[14.5px] font-semibold flex items-center gap-2 flex-wrap">

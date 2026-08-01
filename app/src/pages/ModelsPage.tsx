@@ -318,7 +318,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
                     setMenu({ x: e.clientX, y: e.clientY, model: v });
                   }}
                 >
-                  <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl grayscale hover:grayscale-[0.3] transition-[filter] duration-300 ease-[var(--spring)]">
+                  <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
                       <img
                         src={src}

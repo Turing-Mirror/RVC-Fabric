@@ -46,6 +46,28 @@ function deviceOptions(list: unknown): { id: string; label: string }[] {
 const CARD =
   "bg-[var(--group)] rounded-[var(--r)] px-5 py-[22px] flex flex-col gap-6";
 
+/** 五段 EQ 的中心频率，必须和 `tools/dsp_fx.EQ_LABELS` 一致（引擎按下标取值）。 */
+const EQ_BANDS = ["60Hz", "250Hz", "1kHz", "4kHz", "8kHz"] as const;
+
+/** 与 `tools/dsp_fx.EQ_PRESETS` / `EQ_PRESET_LABELS` 一一对应。 */
+const EQ_PRESETS: { id: string; label: string; gains: number[] }[] = [
+  { id: "flat", label: "平直", gains: [0, 0, 0, 0, 0] },
+  { id: "vocal_front", label: "人声前倾", gains: [-2, 1, 3, 2.5, 1] },
+  { id: "warm", label: "温暖饱满", gains: [2, 1.5, 0, -1, -2] },
+  { id: "bright", label: "清晰明亮", gains: [-1.5, 0, 1, 3, 2.5] },
+  { id: "de_nasal", label: "消除鼻音", gains: [0, -3.5, -1, 1.5, 0.5] },
+  { id: "thick", label: "低沉厚实", gains: [3, 1.5, 0, -0.5, -1.5] },
+];
+
+/** 存进配置的是长度 5 的数组；缺项补 0，别让下标越界变成 NaN 推给引擎。 */
+function readGains(v: unknown): number[] {
+  const arr = Array.isArray(v) ? v : [];
+  return Array.from({ length: 5 }, (_, i) => {
+    const n = Number(arr[i]);
+    return Number.isFinite(n) ? n : 0;
+  });
+}
+
 function SettingsPageImpl({
   status,
   onReloadDevices,
@@ -56,6 +78,25 @@ function SettingsPageImpl({
 }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
   const c = useConfig();
+
+  const fxOn = c.bool("fx_enabled");
+  const eqGains = readGains(c.cfg["fx_eq_gains"]);
+  // 拖一根推子只改那一段，其余原样送回去 —— 引擎收的是整条数组。
+  const setBand = (i: number, v: number) => {
+    const next = eqGains.slice();
+    next[i] = v;
+    c.set("fx_eq_gains", next);
+    // 手动改过就不再是任何预设了。留着旧预设名，下次开设置页会以为还是那个音色。
+    if (c.str("fx_eq_preset", "flat") !== "custom") {
+      c.set("fx_eq_preset", "custom");
+    }
+  };
+  const applyPreset = (id: string) => {
+    const p = EQ_PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    c.set("fx_eq_preset", id, true);
+    c.set("fx_eq_gains", p.gains.slice(), true);
+  };
 
   const raw = status as unknown as Record<string, unknown> | undefined;
   const inputs = deviceOptions(raw?.input_devices);
@@ -401,6 +442,154 @@ function SettingsPageImpl({
                 checked={c.bool("use_pv")}
                 onChange={(v) => c.set("use_pv", v, true)}
               />
+            </div>
+
+            {/* 变声后的 DSP 链。引擎侧一直有，迁到 Tauri 时壳层漏掉了整节。 */}
+            <div className={`${CARD} mt-4`}>
+              <Toggle
+                label="后期处理"
+                tip={TIPS.fx_enabled}
+                checked={c.bool("fx_enabled")}
+                onChange={(v) => c.set("fx_enabled", v, true)}
+              />
+              {fxOn ? (
+                <>
+                  <Field
+                    label="音色均衡 EQ"
+                    tip={TIPS.fx_eq_enabled}
+                    inline
+                    control={
+                      <Toggle
+                        label=""
+                        checked={c.bool("fx_eq_enabled")}
+                        onChange={(v) => c.set("fx_eq_enabled", v, true)}
+                      />
+                    }
+                  />
+                  <Field
+                    label="EQ 预设"
+                    tip={TIPS.fx_eq_preset}
+                    control={
+                      <Select
+                        value={c.str("fx_eq_preset", "flat")}
+                        options={[
+                          ...EQ_PRESETS.map((p) => ({
+                            id: p.id,
+                            label: p.label,
+                          })),
+                          // 只用来显示「推子被手动动过了」。选它不做任何事，
+                          // applyPreset 找不到就直接返回。引擎那边 gains 优先于
+                          // preset，所以 custom 传下去也不会被当成 flat 复位。
+                          ...(c.str("fx_eq_preset", "flat") === "custom"
+                            ? [{ id: "custom", label: "自定义" }]
+                            : []),
+                        ]}
+                        onChange={applyPreset}
+                      />
+                    }
+                  />
+                  {EQ_BANDS.map((band, i) => (
+                    <Field
+                      key={band}
+                      label={band}
+                      control={
+                        <Slider
+                          value={eqGains[i]}
+                          min={-12}
+                          max={12}
+                          step={0.5}
+                          onChange={(v) => setBand(i, v)}
+                          format={(v) =>
+                            `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
+                          }
+                        />
+                      }
+                    />
+                  ))}
+                  <Field
+                    label="噪声门"
+                    tip={TIPS.fx_gate_enabled}
+                    inline
+                    control={
+                      <Toggle
+                        label=""
+                        checked={c.bool("fx_gate_enabled")}
+                        onChange={(v) => c.set("fx_gate_enabled", v, true)}
+                      />
+                    }
+                  />
+                  <Field
+                    label="噪声门阈值"
+                    tip={TIPS.fx_gate_threshold_db}
+                    control={
+                      <Slider
+                        value={c.num("fx_gate_threshold_db", -50)}
+                        min={-80}
+                        max={-20}
+                        step={1}
+                        onChange={(v) => c.set("fx_gate_threshold_db", v)}
+                        format={(v) => `${v} dB`}
+                      />
+                    }
+                  />
+                  <Field
+                    label="压缩器"
+                    tip={TIPS.fx_comp_enabled}
+                    inline
+                    control={
+                      <Toggle
+                        label=""
+                        checked={c.bool("fx_comp_enabled")}
+                        onChange={(v) => c.set("fx_comp_enabled", v, true)}
+                      />
+                    }
+                  />
+                  <Field
+                    label="压缩阈值"
+                    tip={TIPS.fx_comp_threshold_db}
+                    control={
+                      <Slider
+                        value={c.num("fx_comp_threshold_db", -20)}
+                        min={-60}
+                        max={0}
+                        step={1}
+                        onChange={(v) => c.set("fx_comp_threshold_db", v)}
+                        format={(v) => `${v} dB`}
+                      />
+                    }
+                  />
+                  <Field
+                    label="压缩比"
+                    tip={TIPS.fx_comp_ratio}
+                    control={
+                      <Slider
+                        value={c.num("fx_comp_ratio", 4)}
+                        min={1}
+                        max={20}
+                        step={0.5}
+                        onChange={(v) => c.set("fx_comp_ratio", v)}
+                        format={(v) => `${v.toFixed(1)} : 1`}
+                      />
+                    }
+                  />
+                  <Field
+                    label="输出增益"
+                    tip={TIPS.fx_out_gain_db}
+                    control={
+                      <Slider
+                        value={c.num("fx_out_gain_db", 0)}
+                        min={-12}
+                        max={12}
+                        step={0.5}
+                        onChange={(v) => c.set("fx_out_gain_db", v)}
+                        format={(v) =>
+                          `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`
+                        }
+                      />
+                    }
+                  />
+                </>
+              ) : null}
             </div>
           </Block>
         ) : null}

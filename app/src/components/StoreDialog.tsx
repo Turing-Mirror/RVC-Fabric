@@ -454,7 +454,7 @@ function VoiceRow({
 
   return (
     <div className="flex items-center gap-3.5 py-3.5">
-      <div className="w-14 h-14 rounded-[var(--rs)] flex-none overflow-hidden relative bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] grid place-items-center text-[13px] text-[color-mix(in_srgb,var(--ink)_36%,transparent)] font-semibold grayscale">
+      <div className="w-14 h-14 rounded-[var(--rs)] flex-none overflow-hidden relative bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] grid place-items-center text-[13px] text-[color-mix(in_srgb,var(--ink)_36%,transparent)] font-semibold">
         {showImg ? (
           <img
             src={coverHttp}

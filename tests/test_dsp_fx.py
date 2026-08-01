@@ -93,6 +93,58 @@ class CompressorTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_HAS_NP, "numpy / Runtime required for DSP tests")
+class ShellContractTests(unittest.TestCase):
+    """壳层必须认得引擎的每一个 fx 键。
+
+    加这个是因为迁到 Tauri 的时候整条 DSP 链掉了：引擎侧一直支持 EQ、压缩器、
+    噪声门，`gui_v1._worker_apply_hot` 也一直在热更新它们，但新壳的 HOT_KEYS
+    里一个 fx 键都没有 —— 于是设置写进去了、永远推不到 worker，界面上索性没有
+    这一节。静态看两边都「正常」，只有对着列表比才看得出来。
+    """
+
+    def _rust_hot_keys(self) -> set[str]:
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        head = "pub const HOT_KEYS: &[&str] = &["
+        start = src.index(head) + len(head)
+        body = src[start : src.index("];", start)]
+        return {
+            part.split('"')[1]
+            for part in body.splitlines()
+            if part.count('"') >= 2
+        }
+
+    def test_every_engine_fx_key_is_a_shell_hot_key(self):
+        rust = self._rust_hot_keys()
+        missing = sorted(k for k in DEFAULT_FX_CONFIG if k not in rust)
+        self.assertEqual(missing, [], f"壳层 HOT_KEYS 缺这些 fx 键：{missing}")
+
+    def test_shell_has_no_fx_key_the_engine_ignores(self):
+        # 反向也要成立：壳里多写一个键，用户会看到一个调了没反应的开关。
+        rust_fx = {k for k in self._rust_hot_keys() if k.startswith("fx_")}
+        extra = sorted(rust_fx - set(DEFAULT_FX_CONFIG))
+        self.assertEqual(extra, [], f"壳层多了引擎不认的 fx 键：{extra}")
+
+    def test_shell_defaults_match_the_engine_defaults(self):
+        # 默认值不一致 = 用户没动过任何开关，声音却和引擎预期的不一样。
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        for key, want in DEFAULT_FX_CONFIG.items():
+            if key == "fx_eq_gains":
+                continue  # 数组单独看
+            line = [ln for ln in src.splitlines() if f'"{key}".into()' in ln]
+            self.assertTrue(line, f"config.rs defaults() 里没有 {key}")
+            got = line[0].split("json!(")[1].strip().rstrip(";").rstrip(")").strip()
+            if isinstance(want, bool):
+                self.assertEqual(got, "true" if want else "false", key)
+            elif isinstance(want, str):
+                self.assertEqual(got.strip('"'), want, key)
+            else:
+                self.assertAlmostEqual(float(got), float(want), places=6, msg=key)
+
+
 class EQTests(unittest.TestCase):
     def test_flat_near_unity(self):
         eq = GraphicEQ([0, 0, 0, 0, 0])

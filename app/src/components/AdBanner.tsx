@@ -23,7 +23,7 @@ export function AdBanner({ banner }: { banner: PlazaItem | null }) {
           src={item.image_url}
           alt=""
           loading="lazy"
-          className="w-[72px] h-11 rounded-[var(--rs)] flex-none grayscale object-cover"
+          className="w-[72px] h-11 rounded-[var(--rs)] flex-none object-cover"
         />
       ) : null}
       <div className="min-w-0 flex-1">

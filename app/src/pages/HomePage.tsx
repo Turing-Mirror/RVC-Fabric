@@ -191,10 +191,13 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                       "aspect-square",
                       "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)]",
                       "text-[color-mix(in_srgb,var(--ink)_32%,transparent)]",
-                      "grayscale transition-[filter,transform,box-shadow] duration-300 ease-[var(--spring)]",
-                      "hover:grayscale-[0.3] active:scale-[0.985]",
+                      // 封面按原色显示。以前未选中的一律去色、选中才恢复，
+                      // 那是拿画师的画当状态指示器用 —— 选中状态由描边和尺寸
+                      // 表达就够了。
+                      "transition-[transform,box-shadow] duration-300 ease-[var(--spring)]",
+                      "active:scale-[0.985]",
                       cur
-                        ? "w-[176px] text-[30px] grayscale-0 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[158px] max-[720px]:w-[130px]"
+                        ? "w-[176px] text-[30px] shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[158px] max-[720px]:w-[130px]"
                         : "w-[122px] text-[26px] max-[1020px]:w-[110px] max-[720px]:w-[92px]",
                     ].join(" ")}
                   >

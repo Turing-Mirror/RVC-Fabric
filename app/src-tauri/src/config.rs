@@ -32,6 +32,27 @@ pub const HOT_KEYS: &[&str] = &[
     "O_noise_reduce",
     "use_pv",
     "function",
+    // 变声后的 DSP 链：噪声门 → 压缩器 → 五段 EQ → 输出增益。
+    //
+    // 引擎侧（tools/dsp_fx.py + gui_v1 的 _worker_apply_hot）一直支持这些键，
+    // 只是迁到 Tauri 之后壳层没把它们列进来，于是整条链在新界面上消失了 ——
+    // 老的 Python 壳有 EQ，新壳没有。全是热键，转着的时候能调。
+    "fx_enabled",
+    "fx_gate_enabled",
+    "fx_gate_threshold_db",
+    "fx_gate_release_ms",
+    "fx_gate_hold_ms",
+    "fx_gate_range_db",
+    "fx_comp_enabled",
+    "fx_comp_threshold_db",
+    "fx_comp_ratio",
+    "fx_comp_attack_ms",
+    "fx_comp_release_ms",
+    "fx_comp_makeup_db",
+    "fx_eq_enabled",
+    "fx_eq_gains",
+    "fx_eq_preset",
+    "fx_out_gain_db",
 ];
 
 /// Needs stop + start (mirrors `realtime_protocol.COLD_KEYS`).
@@ -90,6 +111,24 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("O_noise_reduce".into(), json!(false));
     m.insert("use_pv".into(), json!(false));
     m.insert("function".into(), json!("vc"));
+    // DSP 链（热）。默认整条关掉 —— 开着就改变了所有人听到的声音，
+    // 那不该是升级一次软件就默默发生的事。数值与 dsp_fx.DEFAULT_FX_CONFIG 对齐。
+    m.insert("fx_enabled".into(), json!(false));
+    m.insert("fx_gate_enabled".into(), json!(true));
+    m.insert("fx_gate_threshold_db".into(), json!(-50.0));
+    m.insert("fx_gate_release_ms".into(), json!(50.0));
+    m.insert("fx_gate_hold_ms".into(), json!(20.0));
+    m.insert("fx_gate_range_db".into(), json!(20.0));
+    m.insert("fx_comp_enabled".into(), json!(true));
+    m.insert("fx_comp_threshold_db".into(), json!(-20.0));
+    m.insert("fx_comp_ratio".into(), json!(4.0));
+    m.insert("fx_comp_attack_ms".into(), json!(5.0));
+    m.insert("fx_comp_release_ms".into(), json!(100.0));
+    m.insert("fx_comp_makeup_db".into(), json!(0.0));
+    m.insert("fx_eq_enabled".into(), json!(true));
+    m.insert("fx_eq_gains".into(), json!([0.0, 0.0, 0.0, 0.0, 0.0]));
+    m.insert("fx_eq_preset".into(), json!("flat"));
+    m.insert("fx_out_gain_db".into(), json!(0.0));
     // model binding (cold) — written by voice selection, not by the settings
     // page, but the worker expects the keys to exist.
     m.insert("pth_path".into(), json!(""));

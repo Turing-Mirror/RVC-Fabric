@@ -88,7 +88,7 @@ export default function App() {
   const [mode, setMode] = useState<OutputMode>("vc");
   const [voiceName, setVoiceName] = useState("未选择模型");
   const [voiceId, setVoiceId] = useState("");
-  const [profileSummary, setProfileSummary] = useState("默认（原始参数）");
+  const [profileSummary, setProfileSummary] = useState("无");
   const [voiceTag, setVoiceTag] = useState("");
   const [voicePos, setVoicePos] = useState("");
   const [showProvision, setShowProvision] = useState(false);

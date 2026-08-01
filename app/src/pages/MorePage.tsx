@@ -5,7 +5,12 @@ import { SeparateDialog } from "../components/SeparateDialog";
 import { TrainDialog } from "../components/TrainDialog";
 import { ExtrasDialog } from "../components/ExtrasDialog";
 import { openExternal } from "../lib/plaza";
+import { tip } from "../lib/glossary";
+import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
+
+/** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
+const SHOW_CONSULT = false;
 
 type Props = {
   status?: EngineStatus;
@@ -144,7 +149,7 @@ export function MorePage({
       <Block title="运行状态">
         <Group>
           <ListItem
-            title="壳版本"
+            title="RVC Fabric 版本"
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">{version}</span>
             }
@@ -172,7 +177,8 @@ export function MorePage({
             }
           />
           <ListItem
-            title="Runtime"
+            title="运行时"
+            titleTip={tip("运行时")}
             desc={
               provision?.recommend_reason ||
               (status?.product_root ? String(status.product_root) : "产品根目录自动解析")
@@ -183,7 +189,6 @@ export function MorePage({
           />
           <ListItem
             title="显卡（系统枚举）"
-            desc="不依赖 torch；用于推荐运行时分版"
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
                 {gpus}
@@ -195,7 +200,7 @@ export function MorePage({
             desc={
               provision?.download_supported
                 ? provision.need_provision
-                  ? "可在壳内下载补全"
+                  ? "可在软件内下载补全"
                   : "已就绪；可强制重装"
                 : "请用启动器补全"
             }
@@ -216,7 +221,7 @@ export function MorePage({
             title="引擎状态"
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">
-                {status?.state || "—"}
+                {status ? statusTitle(status) : "—"}
                 {status?.pid ? ` · pid ${status.pid}` : ""}
               </span>
             }
@@ -231,12 +236,12 @@ export function MorePage({
         <Group>
           <ListItem
             title="人声分离"
-            desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐"
+            desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐或噪音"
             right={<Btn onClick={() => setSepOpen(true)}>打开</Btn>}
           />
           <ListItem
             title="训练音色"
-            desc="用一个人的干声素材训一个新音色。要 N 卡，要几小时。"
+            desc="用一个人的干声素材训一个新音色。需要 N 卡，可能需要几小时，由硬件配置决定。"
             right={<Btn onClick={() => setTrainOpen(true)}>打开</Btn>}
           />
           <ListItem
@@ -258,14 +263,14 @@ export function MorePage({
         <Group>
           <ListItem
             title="生成诊断包"
-            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "先跑一次约一分钟的性能测试，再把日志、机型信息与当前设置打包"}
+            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "进行一次约一分钟的性能测试，打包日志、机型信息与当前设置"}
             right={
               <Btn onClick={() => void run("生成诊断包", "diagnostics_build")}>生成</Btn>
             }
           />
           <ListItem
             title="检查更新"
-            desc={updateLine || "从 CNB 检查是否有新版本"}
+            desc={updateLine || "检查是否有新版本"}
             right={<Btn onClick={onCheckUpdate}>检查</Btn>}
           />
           <ListItem
@@ -287,28 +292,32 @@ export function MorePage({
           />
           <ListItem
             title="打开原版实时面板"
-            desc={legacyMsg.panel || "高级功能，一般用不到"}
+            desc={legacyMsg.panel || "高级功能，一般不用"}
             right={
               <Btn onClick={() => void openLegacy("panel")}>打开</Btn>
             }
           />
           <ListItem
             title="打开原版 WebUI"
-            desc={legacyMsg.webui || "高级功能，一般用不到"}
+            desc={legacyMsg.webui || "高级功能，一般不用"}
             right={<Btn onClick={() => void openLegacy("webui")}>打开</Btn>}
           />
-          <ListItem
-            title="申请专业优化"
-            desc={busyMsg.startsWith("生成咨询包") ? busyMsg : "打包当前音色的配置与档案，我们做针对性调参（不含模型文件）"}
-            right={
-              <Btn onClick={() => void run("生成咨询包", "consult_build", { note: "" })}>
-                生成咨询包
-              </Btn>
-            }
-          />
+          {/* 「申请专业优化」暂时隐藏（服务还没开）。后端 consult_build 保留，
+              开放时把 SHOW_CONSULT 改成 true 就行，不要删代码。 */}
+          {SHOW_CONSULT ? (
+            <ListItem
+              title="申请专业优化"
+              desc={busyMsg.startsWith("生成咨询包") ? busyMsg : "打包当前音色的配置与档案，我们做针对性调参（不含模型文件）"}
+              right={
+                <Btn onClick={() => void run("生成咨询包", "consult_build", { note: "" })}>
+                  生成咨询包
+                </Btn>
+              }
+            />
+          ) : null}
           <ListItem
             title="强制结束变声引擎"
-            desc="卡住了才用"
+            desc="解决卡死"
             right={
               <Btn
                 onClick={() => {

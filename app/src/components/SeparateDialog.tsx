@@ -110,11 +110,11 @@ export function SeparateDialog({
   };
 
   const blocked = !st.runtime_ready
-    ? "Runtime 未就绪，先到「其他」页补全运行时"
+    ? "运行时未就绪，先到「其他」页补全运行时"
     : !st.worker_present
-      ? "缺分离脚本，安装可能不完整"
+      ? "缺少分离脚本，安装可能不完整"
       : !st.models?.length
-        ? "还没有分离模型，先在「音频工具 → 下载模型」里下载"
+        ? "还没有分离模型，可在「音频工具 → 下载模型」里下载"
         : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;

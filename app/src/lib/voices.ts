@@ -119,7 +119,7 @@ export async function currentVoice() {
       model: null,
       pitch: 0,
       formant: 0,
-      profile_summary: "默认（原始参数）",
+      profile_summary: "无",
       index: 0,
       total: 0,
     };

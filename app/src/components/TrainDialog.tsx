@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Btn } from "./ui";
+import { Btn, HelpMark } from "./ui";
+import { tip } from "../lib/glossary";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -109,17 +110,24 @@ export function TrainDialog({
   const resume = !!existing?.resumable;
   const srReady = st.pretrained?.find((p) => p.sample_rate === sr)?.ready ?? false;
 
-  const blocked = !st.runtime_ready
-    ? "Runtime 未就绪，先到「其他」页补全运行环境"
+  // 拦住训练的原因，外加这句话里那个专有名词的解释（渲染成一个小问号）。
+  const blocked: { text: string; term?: string } = !st.runtime_ready
+    ? { text: "运行时未就绪，先到「其他」页补全运行时", term: "运行时" }
     : !st.worker_present || !st.mute_present
-      ? "训练组件不全，安装可能不完整"
+      ? { text: "训练组件不全，安装可能不完整" }
       : !st.hubert_present
-        ? "缺 hubert 模型，先补全引擎资源"
+        ? { text: "缺 Hubert 模型，先补全引擎资源", term: "Hubert 模型" }
         : !st.nvidia
-          ? "训练只支持 N 卡。A 卡 / 核显的 DirectML 不支持训练用到的算子，会退到 CPU，那是几百小时。"
+          ? {
+              text: "训练只支持 N 卡。A 卡 / 核显的 DirectML 不支持训练用到的算子。",
+              term: "DirectML",
+            }
           : !srReady
-            ? `缺 ${sr} 的训练底模，先在「音频工具 → 下载模型」里下载`
-            : "";
+            ? {
+                text: `缺 ${sr} 的训练底模，先在「音频工具 → 下载模型」里下载`,
+                term: "底模",
+              }
+            : { text: "" };
 
   const start = async () => {
     if (runningRef.current) return;
@@ -173,8 +181,11 @@ export function TrainDialog({
           有背景音乐的先用「人声分离」清掉。
         </p>
 
-        {blocked ? (
-          <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
+        {blocked.text ? (
+          <p className="m-0 mb-4 text-[13px] text-[#b8534f] flex items-center gap-1.5">
+            {blocked.text}
+            {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
+          </p>
         ) : null}
 
         <div className="border-t border-[var(--hairline)]">
@@ -201,7 +212,10 @@ export function TrainDialog({
             />
           </div>
           <div className={ROW}>
-            <span className={LABEL}>采样率</span>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              采样率
+              <HelpMark title={tip("底模")} />
+            </span>
             <select
               className={FIELD}
               value={sr}
@@ -271,7 +285,7 @@ export function TrainDialog({
           )}
           <Btn
             primary
-            disabled={running || !!blocked || !name.trim() || (!dataset && !resume)}
+            disabled={running || !!blocked.text || !name.trim() || (!dataset && !resume)}
             onClick={() => void start()}
           >
             {running ? "训练中…" : resume ? "继续训练" : "开始训练"}

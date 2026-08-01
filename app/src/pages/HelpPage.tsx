@@ -1,6 +1,7 @@
 import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { GLOSSARY, tip } from "../lib/glossary";
 
 /**
  * Answers carried over verbatim from the Tk shell's `help_content.py` and its
@@ -10,11 +11,11 @@ import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui
 const FAQ: { q: string; hint: string; a: string }[] = [
   {
     q: "对方说听不到我",
-    hint: "先看游戏里的麦克风是不是选成了 CABLE Output",
+    hint: "若使用的是本软件提供的虚拟声卡，检查游戏里的麦克风是不是选成了 CABLE Output",
     a: [
-      "· 游戏 / QQ 的麦克风要选 CABLE Output",
+      "· 游戏 / 语音 的麦克风要选 CABLE Output",
       "· 本软件的输出设备要选 CABLE Input",
-      "· 确认已「开启变声」，并且模式是「输出变声」而不是「原声旁路」",
+      "· 确认已「开启变声」，并且模式是「变声」而非「原声」",
     ].join("\n"),
   },
   {
@@ -47,21 +48,21 @@ const FAQ: { q: string; hint: string; a: string }[] = [
       "",
       "【声卡带「内录 / 立体声混音」通道】",
       "· 也可以不用 CABLE：输出设备 = 实体声卡的播放，",
-      "  游戏 / QQ 的麦克风 = 声卡的内录通道（叫法以声卡说明书为准）",
+      "  游戏 / 语音 的麦克风 = 声卡的内录通道（叫法以声卡说明书为准）",
       "",
       "【注意】",
-      "· 先关掉声卡驱动自带的降噪 / 混响 / 变声，避免和本软件叠加",
+      "· 先关掉声卡驱动自带的降噪 / 混响 / 变声，避免和本软件冲突",
       "· 列表里没设备：点「重载设备列表」或重启软件",
     ].join("\n"),
   },
   {
     q: "停不干净、声卡一直被占",
-    hint: "用「其他 → 强制结束变声引擎」",
-    a: "到「其他」页点「强制结束变声引擎」，再重开软件。这只结束残留的 worker，不会关掉主界面。",
+    hint: "「其他 → 强制结束变声引擎」",
+    a: "到「其他」页点「强制结束变声引擎」，再重开软件。这只结束残留的引擎进程，不会关掉主界面。",
   },
   {
     q: "第一次开启特别慢",
-    hint: "正常，冷启动要加载模型和 Runtime",
+    hint: "正常，冷启动要加载模型和运行时",
     a: "第一次开启变声要加载 PyTorch 和音色模型，通常 20–40 秒。之后再开会快很多。",
   },
   {
@@ -73,6 +74,8 @@ const FAQ: { q: string; hint: string; a: string }[] = [
 
 function HelpPageImpl() {
   const [open, setOpen] = useState<string>("");
+  // 名词表和常见情况各自独立展开，互不影响。
+  const [openTerm, setOpenTerm] = useState<string>("");
   // Installing the driver needs UAC, so it can only ever be user-initiated.
   // Without this entry the pack is downloaded but never actually installed.
   // "checking" and "we could not check" used to be the same state (null), so a
@@ -118,22 +121,23 @@ function HelpPageImpl() {
 
   return (
     <PagePad>
-      <PageHead title="说明" sub="虚拟声卡连接与常见情况" />
+      <PageHead title="说明" sub="虚拟声卡连接、常见情况与专有名词" />
 
       <Block title="安装虚拟声卡">
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
-          想让游戏 / QQ 里的人听到变声，必须先装虚拟声卡（VB-Cable）。
+          想让游戏 / 语音 里的人听到变声，必须先装虚拟声卡（VB-Cable）。
           装完重启一次电脑，设备列表里才会出现 CABLE Input / CABLE Output。
         </p>
         <Group>
           <ListItem
             title="VB-Cable"
+            titleTip={tip("虚拟声卡")}
             desc={
               vbMsg ||
               (vbReady === "checking"
                 ? "正在检查…"
                 : vbReady === "unknown"
-                  ? "查不到安装包状态，点右侧仍可尝试下载并安装"
+                  ? "无法查询安装包状态，点右侧仍可尝试下载并安装"
                   : vbReady
                     ? "安装包已就绪，点右侧开始安装（会弹管理员确认）"
                     : "尚未下载安装包，点右侧会先下载再安装")
@@ -165,13 +169,13 @@ function HelpPageImpl() {
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">耳机</span>}
           />
           <ListItem
-            title="游戏 / QQ 麦克风"
+            title="游戏 / 语音 麦克风"
             desc="选 CABLE Output"
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
           />
           <ListItem
             title="Windows 默认播放"
-            desc="保持耳机，不要选 CABLE"
+            desc="保持选择耳机，不要选 CABLE"
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">耳机</span>}
           />
         </Group>
@@ -192,6 +196,26 @@ function HelpPageImpl() {
               }
             >
               {f.a}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
+      <Block title="专有名词" note={String(GLOSSARY.length)}>
+        <Group>
+          {GLOSSARY.map((t) => (
+            <ListItem
+              key={t.term}
+              title={t.term}
+              desc={t.brief}
+              expanded={openTerm === t.term}
+              onClick={() => setOpenTerm((cur) => (cur === t.term ? "" : t.term))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {openTerm === t.term ? "收起" : "展开"}
+                </span>
+              }
+            >
+              {t.detail}
             </ListItem>
           ))}
         </Group>

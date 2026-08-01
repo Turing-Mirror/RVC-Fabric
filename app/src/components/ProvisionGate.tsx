@@ -259,7 +259,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         <h2 className="text-[22px] font-semibold m-0 mb-2">补全运行时</h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
           {info.recommend_reason ||
-            "首次使用需要下载 Python 运行时（含 PyTorch，体积数 GB）。安装包本身不含 Runtime。"}
+            "首次使用需要下载 Python 运行时（含 PyTorch，体积数 GB）。安装包本身不含运行时。"}
         </p>
 
         <div className="text-[12.5px] text-[var(--meta)] mb-2">运行时版本</div>

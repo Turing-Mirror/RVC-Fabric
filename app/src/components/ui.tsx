@@ -34,12 +34,15 @@ export function PageHead({
 
 export function Block({
   title,
+  titleTip,
   note,
   action,
   children,
   className = "",
 }: {
   title?: string;
+  /** 标题后面的小问号。专有名词的解释统一从 lib/glossary 取。 */
+  titleTip?: string;
   note?: string;
   action?: ReactNode;
   children: ReactNode;
@@ -49,7 +52,12 @@ export function Block({
     <section className={`mt-[30px] ${className}`}>
       {(title || note || action) && (
         <div className="flex items-baseline gap-[11px] mb-[15px] flex-wrap">
-          {title ? <h3 className="text-[15.5px] font-semibold m-0">{title}</h3> : null}
+          {title ? (
+            <h3 className="text-[15.5px] font-semibold m-0 flex items-center gap-1.5">
+              {title}
+              {titleTip ? <HelpMark title={titleTip} /> : null}
+            </h3>
+          ) : null}
           {note ? <span className="text-xs text-[var(--meta)]">{note}</span> : null}
           {action ? <span className="ml-auto">{action}</span> : null}
         </div>
@@ -109,6 +117,7 @@ export function Btn({
 
 export function ListItem({
   title,
+  titleTip,
   desc,
   meta,
   right,
@@ -118,6 +127,8 @@ export function ListItem({
   onClick,
 }: {
   title?: string;
+  /** 标题后面的小问号。专有名词的解释统一从 lib/glossary 取。 */
+  titleTip?: string;
   desc?: string;
   meta?: string;
   right?: ReactNode;
@@ -161,7 +172,12 @@ export function ListItem({
         {meta ? (
           <span className="block text-[11.5px] text-[var(--meta)] mb-0.5">{meta}</span>
         ) : null}
-        {title ? <span className="block text-sm leading-snug">{title}</span> : null}
+        {title ? (
+          <span className="flex items-center gap-1.5 text-sm leading-snug">
+            {title}
+            {titleTip ? <HelpMark title={titleTip} /> : null}
+          </span>
+        ) : null}
         {desc ? (
           <span className="block text-[12.5px] text-[var(--help)] mt-0.5 leading-relaxed">
             {desc}

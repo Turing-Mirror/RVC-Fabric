@@ -154,7 +154,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
           {current.name}
         </p>
         <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {[current.tag, current.author ? `作者 · ${current.author}` : ""]
+          {[current.tag, current.author ? `作者 : ${current.author}` : ""]
             .filter(Boolean)
             .join(" · ")}
           {current.tag || current.author ? " · " : ""}
@@ -237,7 +237,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                     {v.name}
                   </div>
                   <div className="text-xs text-[var(--meta)] mt-0.5">
-                    {v.author ? `作者 · ${v.author}` : "\u00a0"}
+                    {v.author ? `作者 : ${v.author}` : "\u00a0"}
                   </div>
                 </button>
               );

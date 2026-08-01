@@ -40,6 +40,7 @@ SECTIONS: list[tuple[str, str]] = [
     ("components/AdBanner.tsx", "广场投放条"),
     ("pages/SettingsPage.tsx", "设置页"),
     ("lib/config.ts", "设置页 · 问号里的说明"),
+    ("lib/glossary.ts", "专有名词表"),
     ("pages/MorePage.tsx", "其他页"),
     ("components/SeparateDialog.tsx", "人声分离弹窗"),
     ("components/TrainDialog.tsx", "训练音色弹窗"),
@@ -74,8 +75,23 @@ def strip_comments(text: str) -> str:
 
 # 字符串字面量：单引号 / 双引号 / 反引号
 LITERAL = re.compile(r"""(?<![\w$])(['"`])((?:\\.|(?!\1)[^\\])*)\1""", re.S)
+
 # JSX 里裸露的文字：>文字<
-JSX_TEXT = re.compile(r">([^<>{}\n][^<>{}]*)<")
+#
+# 这条正则栽过两次，改之前先看清楚：
+#   1. 首字符不能排除换行。JSX 里 `<p ...>` 之后几乎总是先换行再写正文，
+#      排除掉换行等于把所有多行正文全漏掉（说明页那段虚拟声卡说明就是这么
+#      丢的）。所以这里允许跨行。
+#   2. 允许跨行之后，`a.length > 0;` 到下一个 `<` 之间的整段代码也会被当成
+#      文案捞进来。所以捞到之后必须再判一次「这看着像不像代码」。
+JSX_TEXT = re.compile(r">([^<>{}]+)<")
+
+# 出现这些就是代码，不是给用户看的句子。
+CODE_SMELL = re.compile(r"[;=]|=>|\?\s*[\"'`]")
+
+
+def looks_like_code(s: str) -> bool:
+    return bool(CODE_SMELL.search(s))
 
 
 def extract(path: Path) -> list[tuple[int, str]]:
@@ -98,7 +114,11 @@ def extract(path: Path) -> list[tuple[int, str]]:
     for m in LITERAL.finditer(text):
         add(m.start(), m.group(2))
     for m in JSX_TEXT.finditer(text):
-        add(m.start(), m.group(1))
+        body = m.group(1)
+        if looks_like_code(body):
+            continue
+        # JSX 里为了排版换的行，在界面上是连着一句话，合成一行再记。
+        add(m.start(), " ".join(body.split()))
 
     found.sort(key=lambda x: x[0])
     return found

@@ -3,6 +3,7 @@ import { StoreDialog } from "../components/StoreDialog";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { openExternal, type PlazaItem } from "../lib/plaza";
+import { tip } from "../lib/glossary";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import {
@@ -352,7 +353,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
                     {v.name}
                   </div>
                   <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
-                    {v.author ? `作者 · ${v.author}` : "作者 · —"}
+                    {v.author ? `作者 : ${v.author}` : "作者 : —"}
                   </div>
                   <div className="mt-2.5">
                     {cur ? (
@@ -402,6 +403,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
 
       <Block
         title="特征索引文件（.index）"
+        titleTip={tip("检索库")}
         note={manageable ? "检索库可选；无 index 也能用" : undefined}
         action={
           manageable ? (
@@ -488,7 +490,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
 
       <Block
         title="配置档案"
-        note="同一个音色可存多套参数（音高／音效／性能），点「使用」即切换；可导出分享，也能导入别人调好的档案"
+        note="同一个音色可存多套参数（音高／音效／性能），点「使用」即切换；可导出分享，也能导入其他档案"
       >
         {!manageable ? (
           <div className="text-[13px] text-[var(--meta)]">{blockReason}</div>

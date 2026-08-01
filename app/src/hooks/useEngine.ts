@@ -66,7 +66,7 @@ export function useEngine() {
           const st = await getEngineStatus();
           if (!cancelled) {
             setStatus(st);
-            setLastError(String(p.message || "Runtime 未就绪"));
+            setLastError(String(p.message || "运行时未就绪"));
           }
         }
       } catch (e) {
@@ -113,7 +113,7 @@ export function useEngine() {
   const toggleRun = useCallback(async () => {
     if (provision.need_provision || provision.runtime_ready === false) {
       setLastError(
-        String(provision.message || "Runtime 未就绪，请先补全运行时"),
+        String(provision.message || "运行时未就绪，请先补全运行时"),
       );
       return;
     }
@@ -227,7 +227,7 @@ export function useEngine() {
   const sub =
     lastError ||
     (provision.need_provision
-      ? String(provision.message || "需补全 Runtime")
+      ? String(provision.message || "需补全运行时")
       : statusSub(status));
 
   return {

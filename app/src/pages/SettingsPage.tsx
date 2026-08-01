@@ -111,7 +111,7 @@ function SettingsPageImpl({
     : devicesReady
       ? ""
       : workerAlive
-        ? "还没读到设备，点右边「重载设备列表」"
+        ? "还没读到设备，点右边「重载设备列表」以重试"
         : "引擎正在启动，设备列表稍后出现";
 
   return (
@@ -225,7 +225,7 @@ function SettingsPageImpl({
               />
               <div className="flex items-center gap-[11px] flex-wrap">
                 <Toggle
-                  label="WASAPI 独占（一般不要勾）"
+                  label="WASAPI 独占（一般无需开启，只在你清楚自己在做什么时开启）"
                   tip={TIPS.sg_wasapi_exclusive}
                   checked={c.bool("sg_wasapi_exclusive")}
                   onChange={(v) => c.set("sg_wasapi_exclusive", v, true)}
@@ -275,7 +275,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="音高 Pitch"
+                label="音高"
                 tip={TIPS.pitch}
                 control={
                   <Slider
@@ -289,7 +289,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="共鸣 Formant"
+                label="共鸣"
                 tip={TIPS.formant}
                 control={
                   <Slider
@@ -303,7 +303,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="Index 检索强度"
+                label="检索强度"
                 tip={TIPS.index_rate}
                 control={
                   <Slider
@@ -455,7 +455,7 @@ function SettingsPageImpl({
               {fxOn ? (
                 <>
                   <Field
-                    label="音色均衡 EQ"
+                    label="音色均衡"
                     tip={TIPS.fx_eq_enabled}
                     inline
                     control={
@@ -467,7 +467,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="EQ 预设"
+                    label="均衡预设"
                     tip={TIPS.fx_eq_preset}
                     control={
                       <Select
@@ -725,7 +725,7 @@ function SettingsPageImpl({
                   <span className="ml-auto tabular-nums text-[var(--meta)]">Ctrl + F2</span>
                 </div>
                 <div className="flex items-center">
-                  <span>输出变声 / 原声旁路</span>
+                  <span>变声 / 原声</span>
                   <span className="ml-auto tabular-nums text-[var(--meta)]">Ctrl + F3</span>
                 </div>
                 <div className="flex items-center">
@@ -747,7 +747,7 @@ function SettingsPageImpl({
             <div className={CARD}>
               <Field
                 label="检查更新"
-                desc={updateLine || "从 CNB 检查是否有新版本"}
+                desc={updateLine || "检查是否有新版本"}
                 inline
                 control={<Btn onClick={onCheckUpdate}>立即检查</Btn>}
               />

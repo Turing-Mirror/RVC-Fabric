@@ -128,7 +128,7 @@ export function ExtrasDialog({
         ) : items.length === 0 ? (
           <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">
             {list.available === false
-              ? "暂时取不到下载清单，检查网络后再试。"
+              ? "暂时无法获取下载清单，检查网络后再试。"
               : "清单里目前没有可下载的项目。"}
           </p>
         ) : (

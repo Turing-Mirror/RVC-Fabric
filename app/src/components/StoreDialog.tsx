@@ -224,7 +224,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
 
   const discard = async (v: StoreVoice) => {
     const s = staged[v.id];
-    if (!window.confirm(`删除已下载的文件？\n\n${s?.file || v.name}\n\n删掉之后要装还得重新下。`)) return;
+    if (!window.confirm(`删除已下载的文件？\n\n${s?.file || v.name}\n\n删除后需要重新安装。`)) return;
     try {
       await discardStagedVoice(v.id);
       await loadStaged();
@@ -249,8 +249,8 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     if (v.official === false && !thirdAck) {
       const ok = window.confirm(
         "第三方音色免责声明\n\n" +
-          "该音色来自第三方社区，图灵镜未做安全与质量保证。\n" +
-          "模型文件为 pickle 格式，请只从你信任的来源下载。\n\n" +
+          "该音色来自第三方社区，图灵镜不做安全与质量保证。\n" +
+          "请只从你信任的来源下载。\n\n" +
           "继续安装即表示你了解风险。",
       );
       if (!ok) return;
@@ -548,9 +548,9 @@ function VoiceRow({
         <span className="block text-[12.5px] text-[var(--help)] mt-0.5 leading-relaxed">
           {[
             v.tag,
-            v.author ? `作者 · ${v.author}` : "",
+            v.author ? `作者 : ${v.author}` : "",
             v.size_label,
-            v.series ? `系列 · ${v.series}` : "",
+            v.series ? `系列 : ${v.series}` : "",
             v.date,
           ]
             .filter(Boolean)

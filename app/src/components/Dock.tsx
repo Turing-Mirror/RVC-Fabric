@@ -35,7 +35,7 @@ export function Dock({
   voiceName = "未选择模型",
   voiceTag = "",
   voiceIndex = "",
-  profileSummary = "默认（原始参数）",
+  profileSummary = "无",
   pitch,
   formant,
   onPitch,
@@ -86,12 +86,12 @@ export function Dock({
           options={[
             {
               id: "vc" as const,
-              label: "输出变声",
+              label: "变声",
               title: "麦克风 → 变成所选音色再输出（日常开黑）",
             },
             {
               id: "bypass" as const,
-              label: "原声旁路",
+              label: "原声",
               title: "不改变声音，只输出麦克风原声，用来测麦 / 连接",
             },
           ]}

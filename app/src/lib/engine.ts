@@ -68,7 +68,7 @@ export async function getEngineStatus(): Promise<EngineStatus> {
   if (!isTauri()) {
     return {
       state: "idle",
-      message: "浏览器预览（无 worker）",
+      message: "浏览器预览（引擎未接入）",
       worker_alive: false,
       meter_level: 0,
       threshold_meter: 0.25,
@@ -93,7 +93,7 @@ export async function startVc(): Promise<EngineStatus> {
   if (!isTauri()) {
     return {
       state: "error",
-      error: "请在 Tauri 窗口中启动变声",
+      error: "请在软件窗口中启动变声",
       worker_alive: false,
     };
   }
@@ -132,7 +132,7 @@ export async function getProvisionStatus(): Promise<ProvisionStatus> {
     return {
       runtime_ready: false,
       need_provision: true,
-      message: "浏览器预览无法探测 Runtime",
+      message: "浏览器预览无法探测运行时",
       download_supported: false,
     };
   }
@@ -144,7 +144,7 @@ export async function startProvision(
   force = false,
 ): Promise<{ ok?: boolean; message?: string; variant?: string }> {
   if (!isTauri()) {
-    return { ok: false, message: "浏览器预览无法下载 Runtime" };
+    return { ok: false, message: "浏览器预览无法下载运行时" };
   }
   return invoke("provision_start", { variant, force });
 }
@@ -173,5 +173,5 @@ export function statusSub(st: EngineStatus): string {
     return `延迟 ${delay} ms · 推理 ${infer} ms`;
   }
   if (st.worker_alive) return "就绪";
-  return "等待 Runtime worker";
+  return "等待引擎启动";
 }

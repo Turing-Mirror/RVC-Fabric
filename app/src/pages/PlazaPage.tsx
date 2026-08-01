@@ -89,7 +89,6 @@ function PlazaPageImpl({
     <PagePad>
       <PageHead
         title="广场"
-        sub="图灵镜 · 更新与投放"
         actions={
           <Btn onClick={() => onReload?.()} disabled={loading}>
             {loading ? "刷新中" : "刷新"}

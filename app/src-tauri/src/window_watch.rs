@@ -171,6 +171,46 @@ pub fn rescue_if_offscreen(win: &WebviewWindow) -> bool {
 ///
 /// 只在建完窗口后调用一次。之后不再动——用户自己把窗口拖到哪块屏是他的事，
 /// 隔一会儿被程序挪回来比开错屏还烦。
+/// 给无边框窗口要回系统圆角。
+///
+/// 走 DWM 的 `DWMWA_WINDOW_CORNER_PREFERENCE`，不走「透明窗口 + CSS 圆角」：
+/// 后者要把窗口设成 transparent，于是系统投影一起没了，四角还会露出锯齿边
+/// （WebView2 不做窗口级抗锯齿），而且拖动缩放时角上会闪。DWM 这条是系统自己
+/// 画的圆角，投影、动画、贴边分屏全都照旧。
+///
+/// Windows 10 上这个属性不存在，`DwmSetWindowAttribute` 会回一个错误码，
+/// 我们直接忽略 —— W10 系统级就是直角，窗口跟着直角才对。
+#[cfg(windows)]
+pub fn round_corners(win: &WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    };
+
+    let Ok(hwnd) = win.hwnd() else {
+        logging::shell_log!("圆角：拿不到 HWND，跳过");
+        return;
+    };
+    let pref = DWMWCP_ROUND;
+    // SAFETY: hwnd 来自 Tauri 刚建好的窗口；传的是一个 i32 大小的枚举值，
+    // 长度如实给出。属性不支持时函数只是返回错误，不会写回任何东西。
+    let hr = unsafe {
+        DwmSetWindowAttribute(
+            hwnd.0 as HWND,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            &pref as *const _ as *const core::ffi::c_void,
+            std::mem::size_of_val(&pref) as u32,
+        )
+    };
+    if hr != 0 {
+        // Win10 走到这里是正常的，不当错误报。
+        logging::shell_log!("圆角：系统不支持（Win10 正常），HRESULT={hr:#x}");
+    }
+}
+
+#[cfg(not(windows))]
+pub fn round_corners(_win: &WebviewWindow) {}
+
 pub fn place_on_active_monitor(win: &WebviewWindow) {
     let monitors = win.available_monitors().unwrap_or_default();
     if monitors.len() < 2 {

@@ -14,6 +14,9 @@ import {
  * Plaza cards are **not** dismissible — carrying placements is what this page
  * is for. The dismissible one is the single models-page banner, handled there.
  */
+/** 更新日志二级页每页几条。够看又不至于把滚动条拉成一条线。 */
+const PER_PAGE = 5;
+
 function PlazaPageImpl({
   feed,
   loading = false,
@@ -23,11 +26,64 @@ function PlazaPageImpl({
   loading?: boolean;
   onReload?: () => void;
 }) {
-  const [allNotes, setAllNotes] = useState(false);
+  // 「查看全部」进的是独立一页，不是在原地展开一条长列表 —— 版本多了以后
+  // 原地展开会把「投放」挤到看不见的地方，而且没有尽头。
+  const [showAll, setShowAll] = useState(false);
+  const [pageNo, setPageNo] = useState(0);
 
   const changelog = feed?.changelog ?? [];
-  const shown = allNotes ? changelog : changelog.slice(0, 1);
   const items = feed?.items ?? [];
+
+  if (showAll) {
+    const total = Math.max(1, Math.ceil(changelog.length / PER_PAGE));
+    // 数据刷新后条目变少，页码可能已经越界；夹住而不是显示空白页。
+    const cur = Math.min(pageNo, total - 1);
+    const slice = changelog.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+    return (
+      <PagePad>
+        <PageHead
+          title="更新日志"
+          sub={`共 ${changelog.length} 个版本`}
+          actions={
+            <Btn
+              onClick={() => {
+                setShowAll(false);
+                setPageNo(0);
+              }}
+            >
+              返回广场
+            </Btn>
+          }
+        />
+        <Block title={`第 ${cur + 1} / ${total} 页`}>
+          <Group>
+            {slice.length ? (
+              slice.map((e) => <Notes key={e.version} entry={e} />)
+            ) : (
+              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
+                暂时取不到更新日志。
+              </p>
+            )}
+          </Group>
+        </Block>
+        {total > 1 ? (
+          <div className="flex items-center justify-center gap-3 py-5">
+            <Btn disabled={cur <= 0} onClick={() => setPageNo(cur - 1)}>
+              上一页
+            </Btn>
+            <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
+              {cur + 1} / {total}
+            </span>
+            <Btn disabled={cur >= total - 1} onClick={() => setPageNo(cur + 1)}>
+              下一页
+            </Btn>
+          </div>
+        ) : null}
+      </PagePad>
+    );
+  }
+
+  const shown = changelog.slice(0, 1);
 
   return (
     <PagePad>
@@ -52,8 +108,13 @@ function PlazaPageImpl({
         note={changelog[0]?.version || feed?.app_version || ""}
         action={
           changelog.length > 1 ? (
-            <Btn onClick={() => setAllNotes((v) => !v)}>
-              {allNotes ? "只看最新" : "查看全部"}
+            <Btn
+              onClick={() => {
+                setPageNo(0);
+                setShowAll(true);
+              }}
+            >
+              查看全部
             </Btn>
           ) : undefined
         }

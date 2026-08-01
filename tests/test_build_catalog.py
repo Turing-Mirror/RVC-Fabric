@@ -216,11 +216,32 @@ class BuildOutputsTests(unittest.TestCase):
             cl = json.loads(paths.changelog_out.read_text(encoding="utf-8"))
             self.assertEqual(len(cl["entries"]), 1)
             self.assertEqual(cl["entries"][0]["version"], "1.2.0")
+            # 版本资讯默认**不再**派生：广场自己有更新日志区块，再派生一条
+            # 「RVC Fabric vX 发布」是同一件事说两遍，而且会落进「投放」区。
             plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
             release_ids = [
                 it["id"] for it in plaza["items"] if str(it["id"]).startswith("release-")
             ]
-            self.assertIn("release-1.2.0", release_ids)
+            self.assertEqual(release_ids, [])
+
+    def test_auto_release_news_can_still_be_opted_into(self):
+        """默认关，但要能开 —— 万一哪次发布真想单独投放一条。"""
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            _y(paths.src / "plaza.yaml", {"auto_release_news": True, "items": []})
+            _y(
+                paths.src / "changelog.yaml",
+                {
+                    "entries": [
+                        {"version": "1.2.0", "date": "260723",
+                         "highlights": ["h1"], "body": "b"}
+                    ]
+                },
+            )
+            self.assertEqual(bc.cmd_build(paths), 0)
+            plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
+            ids = [it["id"] for it in plaza["items"]]
+            self.assertIn("release-1.2.0", ids)
 
     def test_roundtrip_real_client_parsers(self):
         """产物必须能被真实客户端解析器读出来。

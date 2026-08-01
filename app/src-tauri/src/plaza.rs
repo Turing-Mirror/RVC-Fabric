@@ -226,6 +226,11 @@ pub fn visible_items(
     let mut out: Vec<PlazaItem> = items
         .iter()
         .filter(|it| KNOWN_TYPES.contains(&it.kind.as_str()))
+        // `release-*` 是清单侧自动派生的版本资讯，给没有更新日志区块的老客户端
+        // 用的。现在广场自己就有「更新日志」，再在「投放」里挂一条
+        // 「RVC Fabric v1.2.4 发布」既重复、又把一条不是投放的东西放进了投放位。
+        // 清单那边也已经不再派生，这里挡一道是为了已经发布出去的 plaza.json。
+        .filter(|it| !it.id.starts_with("release-"))
         .filter(|it| it.placements.iter().any(|p| p == placement))
         .filter(|it| it.start.is_empty() || today >= it.start.as_str())
         .filter(|it| it.end.is_empty() || today <= it.end.as_str())
@@ -292,8 +297,13 @@ pub fn parse_changelog(data: &Value) -> Vec<ChangelogEntry> {
                     if version.is_empty() {
                         return None;
                     }
-                    let notes = d
+                    // `highlights` 是 build_catalog 实际写出来的字段名。
+                    // 这里以前只认 notes / items，于是线上 changelog.json 的
+                    // 每一条都解析成空列表 —— 版本号和日期照常显示，正文一个
+                    // 字没有，看着像「更新日志坏了」。
+                    let mut notes: Vec<String> = d
                         .get("notes")
+                        .or_else(|| d.get("highlights"))
                         .or_else(|| d.get("items"))
                         .and_then(|v| v.as_array())
                         .map(|a| {
@@ -303,6 +313,13 @@ pub fn parse_changelog(data: &Value) -> Vec<ChangelogEntry> {
                                 .collect()
                         })
                         .unwrap_or_default();
+                    // 一条要点都没有就退回整段 body，总比一片空白强。
+                    if notes.is_empty() {
+                        let body = s(d.get("body"));
+                        if !body.is_empty() {
+                            notes.push(body);
+                        }
+                    }
                     Some(ChangelogEntry {
                         version,
                         date: normalize_yymmdd(&first(d, &["date", "released"])),
@@ -461,6 +478,42 @@ mod tests {
         let rows = parse_changelog(&data);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].version, "1.3.0");
+    }
+
+    #[test]
+    fn highlights_is_the_field_the_generator_actually_writes() {
+        // 线上 changelog.json 写的是 highlights，解析器以前只认 notes/items，
+        // 于是每条都解析成空列表：版本号和日期照常显示，正文一个字没有。
+        let data = json!({"entries": [
+            {"version": "1.2.4", "date": "260730",
+             "highlights": ["启动自动检查更新", "修复诊断包无反馈"],
+             "body": "整段正文"},
+        ]});
+        let rows = parse_changelog(&data);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].notes.len(), 2);
+        assert_eq!(rows[0].notes[0], "启动自动检查更新");
+    }
+
+    #[test]
+    fn body_is_the_last_resort_so_the_entry_is_never_blank() {
+        let data = json!({"entries": [{"version": "1.2.3", "body": "只有一段正文"}]});
+        let rows = parse_changelog(&data);
+        assert_eq!(rows[0].notes, vec!["只有一段正文".to_string()]);
+    }
+
+    #[test]
+    fn auto_derived_release_news_never_shows_in_placements() {
+        // 「RVC Fabric v1.2.4 发布」是清单自动派生给老客户端的，不是投放内容。
+        // 广场自己已经有更新日志区块，再挂一条就是同一件事说两遍。
+        let feed = json!({"items": [
+            {"id": "release-1.2.4", "type": "news", "title": "RVC Fabric v1.2.4 发布"},
+            {"id": "ad-1", "type": "ad", "title": "真·投放"},
+        ]});
+        let items = parse_feed(&feed);
+        let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);
+        let ids: Vec<&str> = vis.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["ad-1"]);
     }
 
     #[test]

@@ -1067,6 +1067,8 @@ pub fn run() {
             // 块，窗口连同任务栏按钮一起去了另一块屏，这头看起来就跟没启动
             // 一样。摆到光标所在的屏上。
             window_watch::place_on_active_monitor(&main_window);
+            // 无边框窗口默认是直角的，Win11 上跟系统其他窗口格格不入。
+            window_watch::round_corners(&main_window);
             window_watch::report_and_rescue(&main_window, "创建后");
 
             // A blank window is the one failure the user cannot describe and we

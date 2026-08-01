@@ -1693,8 +1693,13 @@ def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
         seen.add(row["id"])
         items.append(row)
 
-    # 自动派生版本资讯（changelog 优先）；新客户端广场主列表会隐藏 release-*
-    if plaza_src.get("auto_release_news", True):
+    # 自动派生版本资讯（changelog 优先）。
+    #
+    # 默认关掉了：这条本来是给「没有更新日志区块」的老客户端用的，现在广场
+    # 自己就有更新日志，再派生一条「RVC Fabric vX 发布」等于把同一件事说两遍，
+    # 而且它会落进「投放」区 —— 版本发布不是投放内容。真要单独投放某次发布，
+    # 在 plaza.yaml 里手写一条，别靠自动派生。
+    if plaza_src.get("auto_release_news", False):
         auto = _auto_release_news(src.get("app") or {}, changelog)
         if auto and auto["id"] not in seen:
             seen.add(auto["id"])

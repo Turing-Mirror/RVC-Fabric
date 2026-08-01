@@ -194,3 +194,7 @@ AGENTS.md
 
 # 分离模型权重按需下载，不进 git
 /assets/pymss/
+
+# wrangler 的本地状态：缓存里有 CF 账号邮箱和账号 ID，state/ 里有本地测试库，
+# tmp/ 里有带本机绝对路径的构建产物。一样都不该进仓库。
+.wrangler/

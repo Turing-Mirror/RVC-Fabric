@@ -436,7 +436,10 @@ def build_tauri_shell(out: Path) -> None:
     run(["npm", "run", "build"], cwd=APP_DIR)
     # Signed updater artifacts (strategy B) need a private key. Without one
     # `tauri build` fails outright, so only ask for them when the key is set.
-    signed = bool(os.environ.get("TAURI_SIGNING_PRIVATE_KEY"))
+    signed = bool(
+        os.environ.get("TAURI_SIGNING_PRIVATE_KEY")
+        or os.environ.get("TAURI_SIGNING_PRIVATE_KEY_PATH")
+    )
     cmd = ["npm", "run", "tauri", "--", "build"]
     if signed:
         cmd += ["--config", '{"bundle":{"createUpdaterArtifacts":true}}']

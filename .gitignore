@@ -104,7 +104,9 @@ ffprobe.*
 
 # Dev-only noise
 /scripts/dev/_env_trace.bat
+/scripts/dev/_run_build.bat
 /scripts/dev/*.log
+build_setup.log
 
 # Test / lint caches
 .pytest_cache/

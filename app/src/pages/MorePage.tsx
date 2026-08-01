@@ -18,6 +18,7 @@ type Props = {
   onForceKill?: () => void | Promise<void>;
   onCheckUpdate?: () => void;
   updateLine?: string;
+  updateBusy?: boolean;
   onOpenProvision?: () => void;
 };
 
@@ -60,6 +61,7 @@ export function MorePage({
   onOpenProvision,
   onCheckUpdate,
   updateLine,
+  updateBusy = false,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
@@ -271,7 +273,11 @@ export function MorePage({
           <ListItem
             title="检查更新"
             desc={updateLine || "检查是否有新版本"}
-            right={<Btn onClick={onCheckUpdate}>检查</Btn>}
+            right={
+              <Btn onClick={onCheckUpdate} disabled={updateBusy}>
+                {updateBusy ? "检查中…" : "检查"}
+              </Btn>
+            }
           />
           <ListItem
             title="打开性能报告文件夹"

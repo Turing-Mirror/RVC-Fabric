@@ -23,6 +23,9 @@ export default function App() {
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
+  // 检查更新唯一的反馈原来只有一行灰色小字，用户点完看不出点没点上，
+  // 会以为按钮坏了。按钮自己也要进入「检查中…」并禁用。
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   // Wallpaper + theme come from app_config and are applied to the shell root.
   // Blur/opacity are plain CSS here — the Tk shell needed a chroma-key hack
@@ -54,6 +57,8 @@ export default function App() {
     };
   }, [page]);
   const checkUpdate = async () => {
+    if (updateBusy) return;
+    setUpdateBusy(true);
     setUpdateLine("正在检查…");
     try {
       const r = await invoke<Record<string, unknown>>("update_check");
@@ -81,6 +86,8 @@ export default function App() {
       setUpdateLine(`已更新到 ${String(r.remote)}，重启程序后生效`);
     } catch (e) {
       setUpdateLine(`检查更新失败：${String(e)}`);
+    } finally {
+      setUpdateBusy(false);
     }
   };
   const [pitch, setPitch] = useState(0);
@@ -436,6 +443,7 @@ export default function App() {
                   workerAlive={Boolean(engine.status.worker_alive)}
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
+                  updateBusy={updateBusy}
                 />
               );
             case "help":
@@ -445,6 +453,7 @@ export default function App() {
                 <MorePage
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
+                  updateBusy={updateBusy}
                   status={engine.status}
                   provision={engine.provision}
                   onForceKill={async () => {

@@ -123,19 +123,51 @@ fn effective_version() -> String {
     }
 }
 
-/// Ask the catalog whether a newer build exists.
-pub fn check(timeout_secs: u64) -> Result<Value, String> {
-    let cat = catalog::fetch_remote_catalog(timeout_secs)?;
-    let gui = cat.get("gui").cloned().unwrap_or(Value::Null);
-    let remote = {
-        let v = field(&gui, "version");
-        if v.is_empty() {
-            field(&cat, "app_version")
-        } else {
-            v
+/// 从清单里挑出「该装哪个包」的那一段。
+///
+/// 清单实际长这样（build_catalog.py 生成的 index.json）：
+///
+/// ```json
+/// { "app": { "version": "1.3.3", "gui": { "package_type": …, "url": … } } }
+/// ```
+///
+/// 以前这里读的是**顶层**的 `gui` 和 `app_version` —— 那两个键在清单里根本
+/// 不存在。于是版本号取到空串，`newer` 恒为 false，「检查更新」永远回答
+/// 「已是最新」，不管远端发了什么。整条更新链路就是这么断的，而且断得很安静：
+/// 没有报错，只有一句听起来很正常的「已是最新」。
+///
+/// 顶层的 `gui` / `app_version` 仍然兜底读一次，万一以后清单换形状。
+fn gui_entry(cat: &Value) -> Value {
+    cat.get("app")
+        .and_then(|a| a.get("gui"))
+        .or_else(|| cat.get("gui"))
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+/// 远端版本号：先看 gui 段自己的，再看 `app.version`，最后兜底顶层。
+fn remote_version(cat: &Value, gui: &Value) -> String {
+    for v in [
+        field(gui, "version"),
+        cat.get("app")
+            .map(|a| field(a, "version"))
+            .unwrap_or_default(),
+        field(cat, "app_version"),
+    ] {
+        if !v.is_empty() {
+            return v.to_string();
         }
     }
-    .to_string();
+    String::new()
+}
+
+/// 纯函数版的 check：给定清单和本机版本，算出该回什么。
+///
+/// 抽出来是为了能测 —— 上面那个「读错键」的 bug 活了整整一个大版本，就是因为
+/// check() 全程要联网，没人能给它写用例。tests 里拿真实形状的清单钉住了。
+fn decide(cat: &Value, local: &str, exe_version: &str) -> Value {
+    let gui = gui_entry(cat);
+    let remote = remote_version(cat, &gui);
     let url = field(&gui, "url").to_string();
     let sha = field(&gui, "sha256").to_string();
     let notes = field(&gui, "notes").to_string();
@@ -145,18 +177,16 @@ pub fn check(timeout_secs: u64) -> Result<Value, String> {
     };
     let min_app = field(&gui, "min_app_version").to_string();
 
-    // 拿有效版本比，不是 APP_VERSION —— 否则打过的界面补丁会一直重复提示。
-    let local = effective_version();
-    let newer = !remote.is_empty() && compare_versions(&local, &remote) < 0;
-    // A min_app_version above ours means we cannot jump straight there.
-    // 这里要用 exe 的版本：min_app_version 卡的是 Rust 侧的能力（有没有那些
-    // 命令），换了界面并不会让老 exe 多出命令来。
-    let blocked = !min_app.is_empty() && compare_versions(APP_VERSION, &min_app) < 0;
+    // 拿有效版本比，不是 exe 版本 —— 否则打过的界面补丁会一直重复提示。
+    let newer = !remote.is_empty() && compare_versions(local, &remote) < 0;
+    // min_app_version 卡的是 Rust 侧的能力（有没有那些命令），所以用 exe 的
+    // 版本比：换了界面并不会让老 exe 多出命令来。
+    let blocked = !min_app.is_empty() && compare_versions(exe_version, &min_app) < 0;
 
-    Ok(json!({
+    json!({
         "local": local,
         "remote": if remote.is_empty() { "—".into() } else { remote },
-        "available": newer && !url.is_empty(),
+        "available": newer && !url.is_empty() && !blocked,
         "blocked_by_min_version": blocked,
         "min_app_version": min_app,
         "package_type": pkg,
@@ -164,7 +194,13 @@ pub fn check(timeout_secs: u64) -> Result<Value, String> {
         "url": url,
         "sha256": sha,
         "notes": notes,
-    }))
+    })
+}
+
+/// Ask the catalog whether a newer build exists.
+pub fn check(timeout_secs: u64) -> Result<Value, String> {
+    let cat = catalog::fetch_remote_catalog(timeout_secs)?;
+    Ok(decide(&cat, &effective_version(), APP_VERSION))
 }
 
 fn staging_dir(root: &Path) -> PathBuf {
@@ -247,6 +283,83 @@ fn single_child_dir(dir: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// index.json 的真实形状（build_catalog.py 生成的那种）。
+    fn real_catalog(version: &str, pkg: &str, url: &str) -> Value {
+        json!({
+            "schema": 1,
+            "packages": { "setup": [], "gui_patch": [] },
+            "app": {
+                "version": version,
+                "channel": "stable",
+                "gui": {
+                    "package_type": pkg,
+                    "version": version,
+                    "url": url,
+                    "sha256": "a".repeat(64),
+                    "min_app_version": "1.3.0",
+                    "notes": "x"
+                }
+            }
+        })
+    }
+
+    /// 这条用例钉的就是「检查更新永远说已是最新」那个 bug：清单里的 gui 在
+    /// app 底下，以前读的是顶层，取不到版本号就永远不更新。
+    #[test]
+    fn reads_gui_from_app_section() {
+        let cat = real_catalog("1.3.3", "full_package", "https://x/setup.exe");
+        let r = decide(&cat, "1.3.1", "1.3.1");
+        assert_eq!(r["remote"], "1.3.3");
+        assert_eq!(r["available"], true);
+        assert_eq!(r["action"], "external");
+    }
+
+    #[test]
+    fn top_level_gui_still_works() {
+        let cat = json!({
+            "gui": { "package_type": "gui_patch", "version": "9.9.9",
+                     "url": "https://x/p.zip", "sha256": "b".repeat(64) }
+        });
+        let r = decide(&cat, "1.3.3", "1.3.3");
+        assert_eq!(r["remote"], "9.9.9");
+        assert_eq!(r["available"], true);
+        assert_eq!(r["action"], "apply_patch");
+    }
+
+    #[test]
+    fn same_version_is_not_an_update() {
+        let cat = real_catalog("1.3.3", "full_package", "https://x/setup.exe");
+        let r = decide(&cat, "1.3.3", "1.3.3");
+        assert_eq!(r["available"], false);
+    }
+
+    /// 打完界面补丁之后，exe 还是旧的，但界面已经是新的 —— 不能再提示一次。
+    #[test]
+    fn applied_ui_patch_stops_the_nag() {
+        let cat = real_catalog("1.3.4", "gui_patch", "https://x/p.zip");
+        // 界面已经打到 1.3.4，exe 仍是 1.3.3
+        let r = decide(&cat, "1.3.4", "1.3.3");
+        assert_eq!(r["available"], false, "补丁装过了还提示 = 无限循环");
+    }
+
+    /// exe 太老、装不了目标版本时，不该让用户去下一个装不上的包。
+    #[test]
+    fn blocked_by_min_version_is_not_offered() {
+        let mut cat = real_catalog("1.4.0", "full_package", "https://x/setup.exe");
+        cat["app"]["gui"]["min_app_version"] = json!("1.3.5");
+        let r = decide(&cat, "1.3.1", "1.3.1");
+        assert_eq!(r["blocked_by_min_version"], true);
+        assert_eq!(r["available"], false);
+    }
+
+    /// 清单缺字段 / 拿到个空对象时，绝不能凭空说有更新。
+    #[test]
+    fn empty_catalog_offers_nothing() {
+        let r = decide(&json!({}), "1.3.3", "1.3.3");
+        assert_eq!(r["available"], false);
+        assert_eq!(r["remote"], "—");
+    }
 
     #[test]
     fn plain_versions_order() {

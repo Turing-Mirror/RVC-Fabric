@@ -30,6 +30,7 @@ type Props = {
   workerAlive?: boolean;
   onCheckUpdate?: () => void;
   updateLine?: string;
+  updateBusy?: boolean;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -75,6 +76,7 @@ function SettingsPageImpl({
   workerAlive = false,
   onCheckUpdate,
   updateLine,
+  updateBusy = false,
 }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
   const c = useConfig();
@@ -749,7 +751,11 @@ function SettingsPageImpl({
                 label="检查更新"
                 desc={updateLine || "检查是否有新版本"}
                 inline
-                control={<Btn onClick={onCheckUpdate}>立即检查</Btn>}
+                control={
+                  <Btn onClick={onCheckUpdate} disabled={updateBusy}>
+                    {updateBusy ? "检查中…" : "立即检查"}
+                  </Btn>
+                }
               />
               <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">
                 界面更新会替换安装目录下的 frontend 文件夹，重启程序即生效；

@@ -36,7 +36,11 @@
     },
     "windows": {
       "webviewInstallMode": {
-        "type": "downloadBootstrapper"
+        "type": "embedBootstrapper",
+        "silent": true
+      },
+      "wix": {
+        "language": "zh-CN"
       }
     },
     "createUpdaterArtifacts": true

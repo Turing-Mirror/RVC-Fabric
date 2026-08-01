@@ -21,7 +21,6 @@ logger.debug(big_npy.shape)  # (6196072, 192)#fp32#4.43G
 np.save("infer/big_src_feature_mi.npy", big_npy)
 
 ##################train+add
-# big_npy=np.load("/bili-coeus/jupyter/jupyterhub-liujing04/vits_ch/inference_f0/big_src_feature_mi.npy")
 logger.debug(big_npy.shape)
 index = faiss.index_factory(256, "IVF512,Flat")  # mi
 logger.info("Training...")

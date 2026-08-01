@@ -52,7 +52,6 @@ if big_npy.shape[0] > 2e5:
 np.save("tools/infer/big_src_feature_mi.npy", big_npy)
 
 ##################train+add
-# big_npy=np.load("/bili-coeus/jupyter/jupyterhub-liujing04/vits_ch/inference_f0/big_src_feature_mi.npy")
 n_ivf = min(int(16 * np.sqrt(big_npy.shape[0])), big_npy.shape[0] // 39)
 index = faiss.index_factory(768, "IVF%s,Flat" % n_ivf)  # mi
 logger.info("Training...")

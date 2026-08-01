@@ -4,6 +4,11 @@ import {
   cancelStoreDownload,
   fetchStoreCatalog,
   installStoreVoice,
+  installStagedVoice,
+  stagedVoices,
+  revealStagedVoice,
+  discardStagedVoice,
+  type StagedVoice,
   type StoreCatalog,
   type StoreVoice,
 } from "../lib/voices";
@@ -49,6 +54,17 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
   // 是安全问题；这一条讲的是声音权利，跟音色从哪来无关 —— 图灵镜自己训练的
   // 音色一样是拿别人的声音训出来的。两条内容不同，但都只弹一次。
   const [officialAck, setOfficialAck] = useState(false);
+  // 已下载但还没装的第三方音色。第三方 .pth 是 pickle，加载即执行代码，
+  // 所以下完停在这里，让用户先自己看一眼再决定装不装。
+  const [staged, setStaged] = useState<Record<string, StagedVoice>>({});
+
+  const loadStaged = useCallback(async () => {
+    try {
+      setStaged(await stagedVoices());
+    } catch {
+      /* 拿不到就当没有暂存，不影响下载本身 */
+    }
+  }, []);
 
   const refresh = useCallback(async (remote = true) => {
     setLoading(true);
@@ -67,6 +83,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
   useEffect(() => {
     if (!open) return;
     void refresh(true);
+    void loadStaged();
     setPage(1);
     setQ("");
     setSource("all");
@@ -75,7 +92,7 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     setSeriesFull(new Set());
     setThirdAck(false);
     setOfficialAck(false);
-  }, [open, refresh]);
+  }, [open, refresh, loadStaged]);
 
   useEffect(() => {
     if (!open) return;
@@ -161,6 +178,9 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
     setErr("");
     try {
       await installStoreVoice(v);
+      // 第三方到这里只是「下完了」，还没装。刷新暂存表让按钮换成
+      // 「查看 / 安装」；官方源才是真的装好了。
+      await loadStaged();
       onInstalled();
       await refresh(false);
     } catch (e) {
@@ -176,6 +196,40 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
         }
         return rest;
       });
+    }
+  };
+
+  const installStaged = async (v: StoreVoice) => {
+    setRunning((r) => [...r, v.id]);
+    setErr("");
+    try {
+      await installStagedVoice(v);
+      await loadStaged();
+      onInstalled();
+      await refresh(false);
+    } catch (e) {
+      setErr(`${v.name || v.id}：${String(e)}`);
+    } finally {
+      setRunning((r) => r.filter((x) => x !== v.id));
+    }
+  };
+
+  const viewStaged = async (v: StoreVoice) => {
+    try {
+      await revealStagedVoice(v.id);
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const discard = async (v: StoreVoice) => {
+    const s = staged[v.id];
+    if (!window.confirm(`删除已下载的文件？\n\n${s?.file || v.name}\n\n删掉之后要装还得重新下。`)) return;
+    try {
+      await discardStagedVoice(v.id);
+      await loadStaged();
+    } catch (e) {
+      setErr(String(e));
     }
   };
 
@@ -354,6 +408,10 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                               busy={running.includes(v.id)}
                               queued={queued.includes(v.id)}
                               onInstall={() => void install(v)}
+                              staged={staged[v.id]}
+                              onView={() => void viewStaged(v)}
+                              onInstallStaged={() => void installStaged(v)}
+                              onDiscard={() => void discard(v)}
                             />
                           ))}
                         </Group>
@@ -390,6 +448,10 @@ export function StoreDialog({ open, onClose, onInstalled }: Props) {
                   busy={running.includes(v.id)}
                   queued={queued.includes(v.id)}
                   onInstall={() => void install(v)}
+                  staged={staged[v.id]}
+                  onView={() => void viewStaged(v)}
+                  onInstallStaged={() => void installStaged(v)}
+                  onDiscard={() => void discard(v)}
                 />
               ))}
             </Group>
@@ -435,12 +497,21 @@ function VoiceRow({
   busy,
   queued = false,
   onInstall,
+  staged,
+  onView,
+  onInstallStaged,
+  onDiscard,
 }: {
   v: StoreVoice;
   busy: boolean;
   /** Waiting behind the two running downloads. */
   queued?: boolean;
   onInstall: () => void;
+  /** 已下载待确认的文件信息；没有就是还没下。 */
+  staged?: StagedVoice;
+  onView: () => void;
+  onInstallStaged: () => void;
+  onDiscard: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
@@ -491,9 +562,23 @@ function VoiceRow({
           <Btn on uw disabled>
             已安装
           </Btn>
+        ) : staged ? (
+          // 第三方下完不自动装：先给「查看」让用户自己开资源管理器看文件、
+          // 要删也在那儿删，确认没问题再点「安装」。
+          <>
+            <Btn uw onClick={onView}>
+              查看
+            </Btn>
+            <Btn uw onClick={onDiscard}>
+              删除
+            </Btn>
+            <Btn primary uw disabled={busy} onClick={onInstallStaged}>
+              {busy ? "安装中…" : "安装"}
+            </Btn>
+          </>
         ) : (
           <Btn primary uw disabled={busy || queued} onClick={onInstall}>
-            {busy ? "安装中…" : queued ? "待下载" : "下载"}
+            {busy ? "下载中…" : queued ? "待下载" : "下载"}
           </Btn>
         )}
       </div>

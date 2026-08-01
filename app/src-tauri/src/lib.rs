@@ -933,6 +933,42 @@ fn store_cancel(voice_id: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// 已下载但还没装的第三方音色。商店据此把按钮换成「查看 / 安装」。
+#[tauri::command]
+fn store_staged(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(store::staged_status(&root_clone(&state)?))
+}
+
+/// 在资源管理器里打开暂存目录，用户自己看文件、自己删。
+#[tauri::command]
+fn store_reveal_staged(
+    state: State<'_, Mutex<AppState>>,
+    voice_id: String,
+) -> Result<(), String> {
+    store::reveal_staged(&root_clone(&state)?, &voice_id)
+}
+
+#[tauri::command]
+fn store_discard_staged(
+    state: State<'_, Mutex<AppState>>,
+    voice_id: String,
+) -> Result<(), String> {
+    store::discard_staged(&root_clone(&state)?, &voice_id)
+}
+
+#[tauri::command]
+async fn store_install_staged(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    entry: Value,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 解压几百 MB 的包，同样不能占 IPC 线程。
+    tauri::async_runtime::spawn_blocking(move || store::install_staged(app, root, entry))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let root = paths::product_root();
@@ -1028,6 +1064,10 @@ pub fn run() {
             store_catalog,
             store_install,
             store_cancel,
+            store_staged,
+            store_reveal_staged,
+            store_discard_staged,
+            store_install_staged,
             separate_status,
             separate_pick,
             separate_start,

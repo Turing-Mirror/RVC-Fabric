@@ -255,6 +255,31 @@ export async function installStoreVoice(entry: StoreVoice) {
   return invoke("store_install", { entry });
 }
 
+/** 已下载但还没安装的第三方音色：{ voiceId: { dir, file, size_bytes } }。 */
+export type StagedVoice = { dir: string; file: string; size_bytes: number };
+
+export async function stagedVoices(): Promise<Record<string, StagedVoice>> {
+  if (!isTauri()) return {};
+  return (await invoke<Record<string, StagedVoice>>("store_staged")) || {};
+}
+
+/** 在资源管理器里打开暂存目录，用户自己看、自己删。 */
+export async function revealStagedVoice(voiceId: string) {
+  if (!isTauri()) return;
+  return invoke("store_reveal_staged", { voiceId });
+}
+
+export async function discardStagedVoice(voiceId: string) {
+  if (!isTauri()) return;
+  return invoke("store_discard_staged", { voiceId });
+}
+
+/** 把已下载的第三方音色真正装进音色库。 */
+export async function installStagedVoice(entry: StoreVoice) {
+  if (!isTauri()) return { ok: false };
+  return invoke("store_install_staged", { entry });
+}
+
 /** Cancel one voice's download, or all of them when `voiceId` is omitted. */
 export async function cancelStoreDownload(voiceId?: string) {
   if (!isTauri()) return;

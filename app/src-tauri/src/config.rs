@@ -543,7 +543,7 @@ mod tests {
     fn inuse_strips_foreign_absolute_paths() {
         let root = Path::new("C:\\App");
         let mut m = Map::new();
-        m.insert("pth_path".into(), json!("L:\\dev\\anon.pth"));
+        m.insert("pth_path".into(), json!("Z:\\somewhere\\anon.pth"));
         m.insert("index_path".into(), json!("C:\\App\\User_Data\\a.index"));
         sanitize_inuse(root, &mut m);
         assert_eq!(m["pth_path"], json!(""));

@@ -51,8 +51,10 @@ def find_iscc() -> Path | None:
     which = shutil.which("ISCC") or shutil.which("ISCC.exe")
     if which:
         return Path(which)
+    # 只找标准安装位置。装在别处就设 ISCC 环境变量指过去 —— 以前这里写死了
+    # 一条某台开发机的绝对路径，对别人没有任何用，只是把那台机器的目录结构
+    # 印在公开仓库里。
     candidates = (
-        Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"),
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
         / "Inno Setup 6"
         / "ISCC.exe",
@@ -264,7 +266,7 @@ def compile_inno(payload: Path, output_dir: Path) -> Path:
     if iscc is None:
         raise FileNotFoundError(
             "未找到 ISCC.exe。\n"
-            "本机路径示例：C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe\n"
+            "默认位置：C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe\n"
             "或设置环境变量 ISCC=完整路径\\ISCC.exe"
         )
     if not ISS_FILE.is_file():

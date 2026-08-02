@@ -539,10 +539,12 @@ def copy_engine(out: Path) -> None:
         shutil.rmtree(docs_out, ignore_errors=True)
         log("  strip: docs/ (internal handoff/session notes)")
 
-    # dev launchers (not for end-users)
-    dev_src = REPO / "scripts" / "dev"
-    if dev_src.is_dir():
-        copy_tree(dev_src, out / "scripts" / "dev")
+    # scripts/dev 不进包。
+    #
+    # 这里原来写着「dev launchers (not for end-users)」，然后把它整个拷进了
+    # 用户装的目录 —— 注释和动作正好相反。里面剩下的是 Windows 上的调试
+    # 批处理和测试清单，用户拿到既不会用也用不上，而且它引用的那套老
+    # Python 启动器早就不存在了。
 
     # logs/ 整个不进包（那是用户的训练实验目录），但 logs/mute 必须进：
     # 训练的 filelist 末尾要补两条静音样本，缺了训练在最后一步才会炸。

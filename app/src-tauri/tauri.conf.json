@@ -39,7 +39,6 @@
       "engine-payload/i18n": "i18n",
       "engine-payload/infer": "infer",
       "engine-payload/logs": "logs",
-      "engine-payload/scripts": "scripts",
       "engine-payload/tools": "tools",
       "engine-payload/legal": "legal",
       "engine-payload/VBCABLE": "VBCABLE",

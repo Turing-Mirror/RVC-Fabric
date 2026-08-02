@@ -17,6 +17,12 @@ use tauri::{Monitor, PhysicalPosition, WebviewWindow};
 
 use crate::logging;
 
+/// 圆角是不是得靠自己裁。DWM 那条能走通就一直是 false，Resized 时什么都不做。
+#[cfg(windows)]
+static NEEDS_REGION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(windows)]
+use std::sync::atomic::Ordering;
+
 /// 屏幕坐标里的一个矩形。几何判断全部收在这里，好单测。
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Rect {
@@ -178,8 +184,8 @@ pub fn rescue_if_offscreen(win: &WebviewWindow) -> bool {
 /// （WebView2 不做窗口级抗锯齿），而且拖动缩放时角上会闪。DWM 这条是系统自己
 /// 画的圆角，投影、动画、贴边分屏全都照旧。
 ///
-/// Windows 10 上这个属性不存在，`DwmSetWindowAttribute` 会回一个错误码，
-/// 我们直接忽略 —— W10 系统级就是直角，窗口跟着直角才对。
+/// Windows 10 上这个属性不存在，`DwmSetWindowAttribute` 会回一个错误码。
+/// 那时候退到 `apply_corner_region`：自己拿 GDI 区域把四角裁掉。
 #[cfg(windows)]
 pub fn round_corners(win: &WebviewWindow) {
     use windows_sys::Win32::Foundation::HWND;
@@ -207,6 +213,9 @@ pub fn round_corners(win: &WebviewWindow) {
         logging::shell_log!("圆角：DWM 已生效");
         return;
     }
+    // 记下走的是兜底那条，之后 Resized 才知道该不该重新裁。DWM 生效的机器上
+    // 再去裁一刀，等于拿硬边盖掉系统画好的抗锯齿圆角。
+    NEEDS_REGION.store(true, Ordering::Relaxed);
     // Win10 没有这个属性，DWM 这条路走不通。系统不给画就自己画：给窗口套一个
     // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
     // 调用方在 Resized 时会再调一次。
@@ -221,14 +230,23 @@ pub fn round_corners(win: &WebviewWindow) {
 #[cfg(windows)]
 fn apply_corner_region(win: &WebviewWindow) {
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject};
-    use windows_sys::Win32::UI::WindowsAndMessaging::SetWindowRgn;
+    // SetWindowRgn 挂在 user32 上，但 windows-sys 把它归在 Graphics::Gdi 里
+    // （跟 HRGN 放一起），不在 UI::WindowsAndMessaging。
+    use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
 
     let (Ok(hwnd), Ok(size)) = (win.hwnd(), win.inner_size()) else {
         return;
     };
     // 最小化时尺寸是 0，套上去会得到一个空区域 —— 整个窗口都被裁没。
     if size.width == 0 || size.height == 0 {
+        return;
+    }
+    // 最大化／全屏时窗口是要贴满屏幕的，四角切一刀会在角上露出桌面。这两种
+    // 状态下把区域撤掉（传 null），窗口恢复成完整矩形。
+    let filling = win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
+    if filling {
+        // SAFETY: 传 null 表示清除区域，是这个 API 明确支持的用法。
+        unsafe { SetWindowRgn(hwnd.0 as HWND, std::ptr::null_mut(), 1) };
         return;
     }
     let scale = win.scale_factor().unwrap_or(1.0);
@@ -249,6 +267,9 @@ fn apply_corner_region(win: &WebviewWindow) {
 /// 窗口尺寸变了之后重新套一次圆角区域（只有走兜底那条路时才有意义）。
 #[cfg(windows)]
 pub fn refresh_corners(win: &WebviewWindow) {
+    if !NEEDS_REGION.load(Ordering::Relaxed) {
+        return;
+    }
     apply_corner_region(win);
 }
 

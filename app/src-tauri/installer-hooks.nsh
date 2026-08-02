@@ -1,0 +1,74 @@
+﻿; RVC Fabric —— NSIS 安装器钩子
+;
+; 为什么有这个文件：以前手动下载走 Inno 打的包、自动更新走 Tauri 打的 NSIS 包，
+; 两套安装程序并存。现在统一到 NSIS 一套，Inno 那边独有的清理动作必须搬过来，
+; 否则从老版本升级的用户会留下一堆残骸。
+;
+; Tauri 的 NSIS 模板本来就做的事，这里不要重复做：
+;   - 目录选择页（正常安装显示，OTA 静默安装自动跳过）
+;   - 把安装目录写进 HKCU\Software\Turing-Mirror\RVC Fabric，下次升级读回来
+;   - 默认装到 %LOCALAPPDATA%\RVC Fabric，不要管理员权限
+;   - 卸载时只删自己装的文件，RMDir 不带 /r —— Runtime\ 和 User_Data\ 不会被删
+;
+; 绝对不要在这里碰 Runtime\ 和 User_Data\：前者是用户下了几个 GB 的运行时，
+; 后者是用户自己的音色。删了没法找回来。
+
+!macro NSIS_HOOK_PREINSTALL
+  ; ── 一、清掉更早的「Python 双程序版」残骸 ────────────────────────────
+  ; 那一版装的是 启动器.exe + 变声器.exe 两个程序。装新版只覆盖不删除的话，
+  ; 旧的启动器还留在目录里，旧快捷方式还能把它拉起来 —— 两个程序共用
+  ; User_Data、互斥锁又不是同一个，可能同时起两个 worker 抢音频设备。
+  Delete "$INSTDIR\启动器.exe"
+  Delete "$INSTDIR\变声器.exe"
+  Delete "$INSTDIR\TM_Setup.exe"
+  Delete "$INSTDIR\TM_Voice.exe"
+  Delete "$INSTDIR\OpenApp.vbs"
+  Delete "$INSTDIR\OpenSetup.vbs"
+  Delete "$INSTDIR\start.bat"
+  Delete "$INSTDIR\start_app.bat"
+  Delete "$INSTDIR\启动器.vbs"
+  Delete "$INSTDIR\启动软件.vbs"
+
+  RMDir /r "$INSTDIR\launcher\pages"
+  RMDir /r "$INSTDIR\launcher\ui"
+  Delete "$INSTDIR\launcher\main_app.py"
+  Delete "$INSTDIR\launcher\bootstrap.py"
+  Delete "$INSTDIR\launcher\theme.py"
+  Delete "$INSTDIR\launcher\tray.py"
+  Delete "$INSTDIR\launcher\setup_app.py"
+  Delete "$INSTDIR\launcher\_setup_shell.py"
+  Delete "$INSTDIR\launcher\rvc_launcher.py"
+  RMDir "$INSTDIR\launcher"
+
+  ; 旧快捷方式（新版只建一个，名字里没有「启动器」）
+  Delete "$SMPROGRAMS\RVC Fabric 启动器.lnk"
+  Delete "$DESKTOP\RVC Fabric 启动器.lnk"
+
+  ; ── 二、拆掉 Inno 那一套的痕迹 ───────────────────────────────────────
+  ; 不拆的话「添加/删除程序」里会同时出现两个 RVC Fabric：一个是 Inno 留的，
+  ; 点它会走 Inno 的卸载流程，把 NSIS 装的文件删一半，剩一个装不上也卸不掉的
+  ; 半残安装。Inno 是 PrivilegesRequired=lowest，条目通常在 HKCU，但它允许用户
+  ; 提权安装，所以 HKLM 也要清。
+  ; 这串 GUID 是 Inno 脚本里的 AppId，`_is1` 后缀是 Inno 自己加的。改 AppId
+  ; 就要同步改这里，不过 Inno 那套马上要退役，正常不会再动。
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}_is1"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}_is1"
+
+  ; Inno 的卸载程序本体。留着它没有入口能调用，纯粹占地方，而且用户手动双击
+  ; 它一样会把新装的文件删坏。
+  Delete "$INSTDIR\unins000.exe"
+  Delete "$INSTDIR\unins000.dat"
+  Delete "$INSTDIR\unins000.msg"
+!macroend
+
+!macro NSIS_HOOK_POSTINSTALL
+  ; 安装目录的注册表键由 Tauri 的模板自己写（WriteRegStr SHCTX MANUPRODUCTKEY），
+  ; 这里不用重复写。重复写反而危险：写歪一个字符，下次 OTA 就找不到安装目录，
+  ; 当成全新安装落到 %LOCALAPPDATA%，用户几个 GB 的运行时要重下一遍。
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+!macroend

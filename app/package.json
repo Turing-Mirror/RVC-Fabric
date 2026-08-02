@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "postbuild": "python ../scripts/prepare_engine_payload.py || python3 ../scripts/prepare_engine_payload.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -34,13 +34,21 @@
     ],
     "resources": {
       "../frontend": "frontend",
-      "../../assets": "assets",
-      "../../configs": "configs",
-      "../../i18n": "i18n",
-      "../../infer": "infer",
-      "../../tools": "tools",
-      "../../gui_v1.py": "gui_v1.py",
-      "../../infer-web.py": "infer-web.py"
+      "engine-payload/assets": "assets",
+      "engine-payload/configs": "configs",
+      "engine-payload/i18n": "i18n",
+      "engine-payload/infer": "infer",
+      "engine-payload/logs": "logs",
+      "engine-payload/scripts": "scripts",
+      "engine-payload/tools": "tools",
+      "engine-payload/legal": "legal",
+      "engine-payload/VBCABLE": "VBCABLE",
+      "engine-payload/gui_v1.py": "gui_v1.py",
+      "engine-payload/infer-web.py": "infer-web.py",
+      "engine-payload/setup_package.json": "setup_package.json",
+      "engine-payload/LICENSE": "LICENSE",
+      "engine-payload/README.md": "README.md",
+      "engine-payload/使用说明.txt": "使用说明.txt"
     },
     "windows": {
       "webviewInstallMode": {
@@ -54,7 +62,10 @@
         "languages": [
           "SimpChinese"
         ],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installMode": "currentUser",
+        "installerIcon": "../../assets/brand/app.ico",
+        "installerHooks": "installer-hooks.nsh"
       }
     },
     "createUpdaterArtifacts": true

@@ -469,8 +469,6 @@ pub fn install_close_handler(app: &AppHandle) {
         // 不然放大之后四角会被裁在旧尺寸的位置上。DWM 那条路下这是空操作。
         if matches!(event, tauri::WindowEvent::Resized(_)) {
             crate::window_watch::refresh_corners(&w);
-            // 拖过大小之后窗口边上会留一条没人重画的竖带（见 force_repaint）。
-            crate::window_watch::force_repaint(&w);
         }
         let tauri::WindowEvent::CloseRequested { api, .. } = event else {
             return;

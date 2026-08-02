@@ -72,13 +72,26 @@ export function useConfig() {
     }
   }, []);
 
-  /** Coalesce rapid changes (slider drags) into one write. */
+  /**
+   * Coalesce rapid changes (slider drags) into one write.
+   *
+   * `immediate` 时**同步**开始写盘并把那个 promise 交出来。以前它也是走
+   * `setTimeout(…, 0)` 的，于是调用方紧接着做的事（比如快捷键那边 `set` 完
+   * 立刻 `hotkeys_apply`）永远排在写盘前面 —— Rust 是从配置文件里读组合键的，
+   * 读到的还是上一个值，注册的就永远慢一步：界面显示 F2，实际生效的还是 F1。
+   * 需要「存完再做下一步」的地方 await 这个返回值。
+   */
   const set = useCallback(
-    (key: string, value: unknown, immediate = false) => {
+    (key: string, value: unknown, immediate = false): Promise<void> => {
       setCfg((c) => ({ ...c, [key]: value }));
       pending.current[key] = value;
       if (timer.current) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void flush(), immediate ? 0 : 220);
+      if (immediate) {
+        timer.current = null;
+        return flush();
+      }
+      timer.current = window.setTimeout(() => void flush(), 220);
+      return Promise.resolve();
     },
     [flush],
   );

@@ -73,6 +73,21 @@ function readGains(v: unknown): number[] {
   });
 }
 
+/**
+ * 调后端，没有后端就当没这回事。
+ *
+ * 浏览器预览里 `window.__TAURI_INTERNALS__` 不存在，`invoke` 是**同步抛**的，
+ * 不是返回一个失败的 promise —— 挂在后面的 `.catch()` 根本轮不到执行，异常
+ * 一路冒到 ErrorBoundary，整个设置页变成一行红字。
+ */
+function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    return invoke<T>(cmd, args).catch(() => null);
+  } catch {
+    return Promise.resolve(null);
+  }
+}
+
 function SettingsPageImpl({
   status,
   onReloadDevices,
@@ -90,15 +105,38 @@ function SettingsPageImpl({
   const [appVersion, setAppVersion] = useState("");
   useEffect(() => {
     let alive = true;
-    invoke<string>("shell_version")
-      .then((v) => alive && setAppVersion(v || ""))
-      .catch(() => {
-        /* 浏览器预览下没有后端 */
-      });
+    void safeInvoke<string>("shell_version").then(
+      (v) => alive && setAppVersion(v || ""),
+    );
     return () => {
       alive = false;
     };
   }, []);
+
+  /**
+   * 改一条快捷键：**先把配置写进盘里，再让 Rust 重新注册**。
+   *
+   * Rust 那边的 `apply_hotkeys` 是从配置文件里读组合键的，不是从参数里拿的。
+   * 所以这两步的顺序不能反 —— 反了就注册到旧值上，界面写着 F2、真正能用的
+   * 还是上一次那个 F1，而且每改一次就再错一次，永远差一步。
+   */
+  const saveHotkey = async (key: string, v: unknown) => {
+    await c.set(key, v, true);
+    await safeInvoke("hotkeys_apply", { enabled: c.bool("hotkeys_enabled") });
+  };
+
+  /**
+   * 录组合键的这段时间里，把已经注册的全局快捷键**整个摘掉**。
+   *
+   * 全局快捷键是系统级的：录制框拿到的只是 webview 里的 keydown，拦不住系统
+   * 那一层。于是用户为了确认现在是哪个组合而按一下 Ctrl+F2，变声就真的被打开
+   * 了 —— 他只是想改个键，结果软件开始出声。松开录制就按当前配置装回去。
+   */
+  const setRecordingHotkey = (active: boolean) => {
+    void safeInvoke("hotkeys_apply", {
+      enabled: active ? false : c.bool("hotkeys_enabled"),
+    });
+  };
 
   const fxOn = c.bool("fx_enabled");
   const eqGains = readGains(c.cfg["fx_eq_gains"]);
@@ -744,8 +782,9 @@ function SettingsPageImpl({
                 tip={TIPS.hotkeys_enabled}
                 checked={c.bool("hotkeys_enabled")}
                 onChange={(v) => {
-                  c.set("hotkeys_enabled", v, true);
-                  void invoke("hotkeys_apply", { enabled: v });
+                  void c
+                    .set("hotkeys_enabled", v, true)
+                    .then(() => safeInvoke("hotkeys_apply", { enabled: v }));
                 }}
               />
               <div className="flex flex-col">
@@ -754,19 +793,10 @@ function SettingsPageImpl({
                     key={h.key}
                     label={HOTKEY_LABELS[h.action] ?? h.action}
                     value={c.str(h.key, h.fallback)}
-                    onChange={(v) => {
-                      c.set(h.key, v, true);
-                      void invoke("hotkeys_apply", {
-                        enabled: c.bool("hotkeys_enabled"),
-                      });
-                    }}
+                    onChange={(v) => void saveHotkey(h.key, v)}
                     global={c.cfg[`${h.key}_global`] !== false}
-                    onGlobalChange={(v) => {
-                      c.set(`${h.key}_global`, v, true);
-                      void invoke("hotkeys_apply", {
-                        enabled: c.bool("hotkeys_enabled"),
-                      });
-                    }}
+                    onGlobalChange={(v) => void saveHotkey(`${h.key}_global`, v)}
+                    onRecording={setRecordingHotkey}
                   />
                 ))}
               </div>
@@ -854,6 +884,7 @@ function HotkeyRow({
   onChange,
   global: isGlobal,
   onGlobalChange,
+  onRecording,
 }: {
   label: string;
   value: string;
@@ -861,14 +892,21 @@ function HotkeyRow({
   /** 抢成全局（任何软件在前台都生效），还是只在本软件窗口里生效。 */
   global: boolean;
   onGlobalChange: (v: boolean) => void;
+  /** 进入 / 退出录制。录制期间全局快捷键要摘掉，否则按一下就真触发了。 */
+  onRecording: (active: boolean) => void;
 }) {
   const [recording, setRecording] = useState(false);
+
+  const stopRecording = () => {
+    setRecording(false);
+    onRecording(false);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.key === "Escape") {
-      setRecording(false);
+      stopRecording();
       return;
     }
     const mods: string[] = [];
@@ -883,6 +921,8 @@ function HotkeyRow({
     else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) main = code;
     if (!main) return; // 还只按着修饰键，继续等
 
+    // 只 setRecording(false)，不走 stopRecording：onChange 存完盘会自己按新
+    // 配置重装一遍，这里再装一次是拿旧值多注册一轮。
     setRecording(false);
     onChange([...mods, main].join("+"));
   };
@@ -904,8 +944,11 @@ function HotkeyRow({
       </label>
       <button
         type="button"
-        onClick={() => setRecording(true)}
-        onBlur={() => setRecording(false)}
+        onClick={() => {
+          setRecording(true);
+          onRecording(true);
+        }}
+        onBlur={stopRecording}
         onKeyDown={recording ? onKeyDown : undefined}
         className={[
           "px-2.5 py-1 rounded-[var(--rs)] border-0 cursor-pointer",

@@ -107,13 +107,14 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .map_err(|e| format!("建不了工具窗口：{e}"))?;
 
     crate::window_watch::round_corners(&win);
-    // 和主窗口一样：改完大小要重新裁圆角（Win10 兜底那条路），还要把整窗连同
-    // WebView2 的子窗口刷一遍，不然边上会留一条搬移后没人重画的竖带。
+    // 和主窗口一样：改完大小要重新裁圆角（Win10 兜底那条路）。
+    // 这个回调跑在 UI 线程上，里面只能做「标记 + 返回」这类立刻结束的事——
+    // 任何会等别的线程/进程的调用都会把整个软件卡死，参见 window_watch 里
+    // 那段关于 force_repaint 的注释。
     let w = win.clone();
     win.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Resized(_)) {
             crate::window_watch::refresh_corners(&w);
-            crate::window_watch::force_repaint(&w);
         }
     });
     Ok(())

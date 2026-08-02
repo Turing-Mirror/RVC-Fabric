@@ -135,6 +135,11 @@ body,
  * 没设壁纸时 --wp-opacity 是 0，这一层完全透明，观感和以前一模一样。 */
 html {
   background: var(--bg);
+  /* 根元素自己也不许滚。以前只有 body 是 overflow:hidden，可根滚动容器是
+     视口（html），不是 body —— 只要有任何一个元素撑出视口，画的就是**根**
+     滚动条，body 上那句管不着。软件是定高布局，根本不该有根滚动这回事。 */
+  height: 100%;
+  overflow: hidden;
 }
 
 body {

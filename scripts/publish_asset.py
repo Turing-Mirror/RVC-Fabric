@@ -79,6 +79,30 @@ def _field(text: str, key: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+# setup 标签是固定下载位（固定名 + OTA 包都在这里）。Release 页面的标题/正文
+# 统一用静态说明，**不写版本号**：版本权威在 catalog-src/ 与附件文件名。
+# 历史教训：建 release 时写了 "RVC Fabric 1.3.1"，之后发版只传附件、从不更新
+# release 本体，页面永远停在 1.3.1。所以每次上传 setup 都把它归一成静态说明，
+# 「页面旧一版」这种事从机制上不可能发生。其他 tag 的页面不管。
+SETUP_RELEASE_TITLE = "RVC Fabric 安装包"
+SETUP_RELEASE_BODY = """# RVC Fabric 安装包（固定下载位）
+
+本页是安装包的固定下载位。**页面标题与描述不维护版本号**——版本以附件文件名与发布仓在线清单为准，避免两处漂移。
+
+## 制品
+
+- `RVC_Fabric_Setup.exe` — 手动下载安装（固定名，文件名永不改）
+- `RVC Fabric_<版本>_x64-setup.exe` — 自动更新下载包（文件名带当前版本号）
+
+## 版本与更新日志
+
+当前版本、sha256、更新日志统一以发布仓 `catalog-src/`（setup.yaml / app.yaml / changelog.yaml）为准；客户端「检查更新」读取 updater.json。
+
+## 校验
+
+发布仓 `setup/` 目录有各制品的 `.sha256` 边车，下载后可自行核对。"""
+
+
 def ensure_release(repo: str, tag: str, title: str) -> str:
     """返回 release id；已存在就复用。"""
     try:
@@ -86,6 +110,13 @@ def ensure_release(repo: str, tag: str, title: str) -> str:
         rid = _field(out, "id")
         if rid:
             print(f"  复用已有 release {tag} (id={rid})")
+            if tag == "setup":
+                cnb(
+                    "releases", "patch-release", "--repo", repo,
+                    "--release-id", rid,
+                    "--name", SETUP_RELEASE_TITLE, "--body", SETUP_RELEASE_BODY,
+                )
+                print("  setup 页面已归一为静态说明（不写版本号）")
             return rid
     except RuntimeError:
         pass

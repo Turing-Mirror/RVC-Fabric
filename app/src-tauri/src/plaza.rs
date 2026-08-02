@@ -26,6 +26,16 @@ pub const AD_TYPES: &[&str] = &["ad", "sponsor"];
 pub const PLACEMENT_PLAZA: &str = "plaza";
 pub const PLACEMENT_MODELS: &str = "models_page";
 
+/// 广场顶部「置顶」那一排最多放几个。
+///
+/// 五个是排版定的，不是随手取的：置顶区和模型页用同一套卡片，默认窗口下一行
+/// 正好五张。多出来的一张会换行，一排变两排，「置顶」就从一条横幅变成了一个
+/// 列表 —— 那样它和下面的「投放」就没区别了，置顶也就不成其为置顶。
+///
+/// 清单里标了六个以上也不会报错：排序在前的五个进置顶区，其余的照常留在
+/// 「投放」里。发布侧 `build_catalog.py` 会先警告一次。
+pub const MAX_PINNED: usize = 5;
+
 const CNB_RAW_MAIN: &str =
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main";
 
@@ -42,6 +52,12 @@ pub struct PlazaItem {
     pub date: String,
     pub priority: i64,
     pub pinned: bool,
+    /// 置顶卡片上单独写的标题；空则退回 `title`。
+    ///
+    /// 置顶卡是封面加一行字，宽度只有一张卡；投放条目的标题是按一整行排的，
+    /// 常常十几二十个字，塞进卡片里要么截断要么挤成三行。给置顶留一个短标题
+    /// 的口子，封面和跳转目标仍然共用同一条 —— 一条内容，两处展示。
+    pub pin_title: String,
     pub dismissible: bool,
     pub placements: Vec<String>,
     pub start: String,
@@ -180,6 +196,7 @@ impl PlazaItem {
             date: normalize_yymmdd(&first(d, &["date", "released"])),
             priority,
             pinned: d.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false),
+            pin_title: first(d, &["pin_title", "pinned_title"]),
             dismissible,
             placements,
             start: normalize_yymmdd(&s(d.get("start"))),
@@ -254,6 +271,16 @@ pub fn visible_items(
             b.id.clone(),
         ))
     });
+    // 排序已经把置顶的排在最前，所以「留前五个」= 留优先级最高的五个。
+    //
+    // 在这里削而不是留给界面自己数：置顶是**发布侧**的一条规则，界面只负责
+    // 把 pinned 为真的画出来。真让界面 slice(0,5)，模型页横幅、以后可能有的
+    // 别的展示位就各自要再数一遍，早晚数不一致。
+    for (n, it) in out.iter_mut().filter(|it| it.pinned).enumerate() {
+        if n >= MAX_PINNED {
+            it.pinned = false;
+        }
+    }
     out
 }
 
@@ -466,6 +493,39 @@ mod tests {
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260730", &[]);
         let ids: Vec<&str> = vis.iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "b", "d", "c"]);
+    }
+
+    #[test]
+    fn only_five_rows_can_hold_a_pin_the_rest_stay_in_the_feed() {
+        // 清单里标了七个置顶。置顶区一行放五张卡，第六张会换行，
+        // 「置顶」就变成了第二个投放列表。多出来的照常出现在投放里。
+        let rows: Vec<Value> = (0..7)
+            .map(|i| json!({"id": format!("p{i}"), "title": "t", "pinned": true,
+                            "priority": 100 - i}))
+            .collect();
+        let items = parse_feed(&json!({ "items": rows }));
+        let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);
+        assert_eq!(vis.len(), 7, "一条都不能少，只是不再置顶");
+        let pinned: Vec<&str> = vis
+            .iter()
+            .filter(|i| i.pinned)
+            .map(|i| i.id.as_str())
+            .collect();
+        assert_eq!(pinned, vec!["p0", "p1", "p2", "p3", "p4"], "留优先级最高的五个");
+    }
+
+    #[test]
+    fn the_pin_can_carry_its_own_shorter_title() {
+        // 封面和跳转目标共用一条内容，卡片上的字可以另写。
+        let items = parse_feed(&json!({"items": [
+            {"id": "a", "title": "一条很长的投放标题，排一整行都嫌挤",
+             "pinned": true, "pin_title": "短标题"},
+            {"id": "b", "title": "没另写就退回原标题", "pinned": true},
+        ]}));
+        let a = items.iter().find(|i| i.id == "a").unwrap();
+        let b = items.iter().find(|i| i.id == "b").unwrap();
+        assert_eq!(a.pin_title, "短标题");
+        assert_eq!(b.pin_title, "", "空串 = 界面退回 title");
     }
 
     #[test]

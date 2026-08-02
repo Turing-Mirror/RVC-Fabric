@@ -1,4 +1,4 @@
-import { useState, memo } from "react";
+import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
@@ -84,6 +84,20 @@ function SettingsPageImpl({
 }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
   const c = useConfig();
+  // 「在线更新」里那行当前版本。和「其他」页读的是同一个命令，也就是同一个
+  // APP_VERSION —— 两处显示不一致的话，一定是有人又手写了版本号。
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    let alive = true;
+    invoke<string>("shell_version")
+      .then((v) => alive && setAppVersion(v || ""))
+      .catch(() => {
+        /* 浏览器预览下没有后端 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const fxOn = c.bool("fx_enabled");
   const eqGains = readGains(c.cfg["fx_eq_gains"]);
@@ -759,9 +773,22 @@ function SettingsPageImpl({
         {c.loaded && tab === "在线更新" ? (
           <Block title="在线更新" className="!mt-6">
             <div className={CARD}>
+              {/* 当前版本单独一行，常驻。
+                  以前这一整块只有一个按钮，点完什么都不变（desc 被 inline 版
+                  吞了），于是「我到底是不是最新的」这个问题在设置页里根本
+                  没有答案。版本号摆出来，起码有一半答案是白纸黑字的。 */}
+              <Field
+                label="当前版本"
+                inline
+                control={
+                  <span className="text-[13px] text-[var(--ink-muted)] tabular-nums">
+                    {appVersion || "—"}
+                  </span>
+                }
+              />
               <Field
                 label="检查更新"
-                desc={updateLine || "检查是否有新版本"}
+                desc={updateLine || "还没查过。开机时会自动查一次。"}
                 inline
                 control={
                   <Btn onClick={onCheckUpdate} disabled={updateBusy}>
@@ -770,7 +797,9 @@ function SettingsPageImpl({
                 }
               />
               <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">
-                有新版本时会自动下载并安装，重启软件后生效。
+                每次打开软件会自动查一次，查到新版本会在底栏问你装不装 ——
+                不问就不会自己下。这里点「立即检查」则是查到就直接装，
+                装完重启软件生效。
               </p>
             </div>
           </Block>

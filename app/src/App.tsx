@@ -29,6 +29,29 @@ import { SettingsPage } from "./pages/SettingsPage";
  */
 const FOLLOW_AFTER_RUNS = 10;
 
+/** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
+type UpdateInfo = {
+  local: string;
+  remote: string;
+  available: boolean;
+  blocked_by_min_version: boolean;
+  min_app_version: string;
+  package_type: string;
+  /** `external` = 换 exe，走签名更新器；否则是界面补丁。 */
+  action: string;
+  url: string;
+  sha256: string;
+  notes: string;
+};
+
+/** `14:07`。状态行里带个时间，才看得出这句话是刚查的还是上次留下的。 */
+function clockNow(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
@@ -68,36 +91,111 @@ export default function App() {
       alive = false;
     };
   }, [page]);
+  // 启动时自动查到的新版本。非空 = 弹一条「要不要现在装」。
+  const [updateOffer, setUpdateOffer] = useState<UpdateInfo | null>(null);
+
+  /** 只查，不装。返回后端那份原样的结果，顺手把状态行写好。 */
+  const probeUpdate = async (): Promise<UpdateInfo | null> => {
+    const r = (await invoke<Record<string, unknown>>(
+      "update_check",
+    )) as UpdateInfo;
+    if (r.blocked_by_min_version) {
+      setUpdateLine(
+        `当前版本 ${String(r.local)}，需要先更新到 ${String(
+          r.min_app_version,
+        )} 才能继续`,
+      );
+      return null;
+    }
+    if (!r.available) {
+      // 「已是最新」必须带上版本号和时间。只说一句「已是最新」，用户分不清
+      // 是真查过了还是根本没查动。
+      setUpdateLine(`已是最新版本 ${String(r.local)}（${clockNow()} 查过）`);
+      return null;
+    }
+    setUpdateLine(
+      `发现新版本 ${String(r.remote)}，当前 ${String(r.local)}`,
+    );
+    return r;
+  };
+
+  /** 真正下载并安装。整包走签名更新器，界面补丁走 update_apply。 */
+  const installUpdate = async (r: UpdateInfo) => {
+    if (r.action === "external") {
+      // Rust side changed → replace the exe through the signed updater.
+      setUpdateLine(`正在下载程序更新 ${String(r.remote)}…`);
+      const b = await invoke<Record<string, unknown>>("update_app");
+      setUpdateLine(
+        b.installed
+          ? `已更新到 ${String(b.version ?? r.remote)}，重启程序后生效`
+          : "暂时取不到程序更新包，可先到发布页手动下载",
+      );
+      return;
+    }
+    setUpdateLine(`正在下载界面更新 ${String(r.remote)}…`);
+    await invoke("update_apply", {
+      url: String(r.url),
+      sha256: String(r.sha256 || ""),
+    });
+    setUpdateLine(`已更新到 ${String(r.remote)}，重启程序后生效`);
+  };
+
+  /** 设置页那个「立即检查」：查到了就直接装，这是用户主动点的。 */
   const checkUpdate = async () => {
     if (updateBusy) return;
     setUpdateBusy(true);
     setUpdateLine("正在检查…");
     try {
-      const r = await invoke<Record<string, unknown>>("update_check");
-      if (r.blocked_by_min_version) {
-        setUpdateLine(`需要先更新到 ${String(r.min_app_version)} 才能继续`);
-        return;
-      }
-      if (!r.available) {
-        setUpdateLine(`已是最新（${String(r.local)}）`);
-        return;
-      }
-      if (r.action === "external") {
-        // Rust side changed → replace the exe through the signed updater.
-        setUpdateLine(`有新版本 ${String(r.remote)}，正在下载程序更新…`);
-        const b = await invoke<Record<string, unknown>>("update_app");
-        setUpdateLine(
-          b.installed
-            ? `已更新到 ${String(b.version ?? r.remote)}，重启程序后生效`
-            : `暂时取不到程序更新包，可先到发布页手动下载`,
-        );
-        return;
-      }
-      setUpdateLine(`发现 ${String(r.remote)}，正在下载界面更新…`);
-      await invoke("update_apply", { url: String(r.url), sha256: String(r.sha256 || "") });
-      setUpdateLine(`已更新到 ${String(r.remote)}，重启程序后生效`);
+      const r = await probeUpdate();
+      if (r) await installUpdate(r);
     } catch (e) {
       setUpdateLine(`检查更新失败：${String(e)}`);
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  // 开机自动查一次。
+  //
+  // 查到了**不直接装** —— 用户刚点开软件多半是要马上用，后台自作主张占着网
+  // 下几 MB 到几十 MB，是别人的软件才干的事。弹一条问一句，他说装才装。
+  //
+  // 没查到也要把「已是最新（版本号 + 时间）」写进状态行：这样进设置页时那行
+  // 字已经在了，不用先点一下才知道自己是不是最新的。
+  //
+  // 延后 4 秒：启动那几秒 CPU 和磁盘都在忙着起引擎、扫音色，这一发网络请求
+  // 挤进去只会让开屏更卡，而更新这件事晚四秒没有任何损失。
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const r = await probeUpdate();
+          if (!cancelled && r) setUpdateOffer(r);
+        } catch {
+          // 开机没网是常态，不要为此弹窗打扰。状态行留空，用户进设置页
+          // 手点「立即检查」时才会看到具体的失败原因。
+        }
+      })();
+    }, 4000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  // 答应更新之后，那条提示**留在原地**变成进度，不跳页也不换地方看。
+  // 把人扔到设置页去找进度条，等于让他自己去确认「我刚才点的那下算数了吗」。
+  const [updateWorking, setUpdateWorking] = useState(false);
+  const acceptUpdate = async () => {
+    const r = updateOffer;
+    if (!r) return;
+    setUpdateWorking(true);
+    setUpdateBusy(true);
+    try {
+      await installUpdate(r);
+    } catch (e) {
+      setUpdateLine(`更新失败：${String(e)}`);
     } finally {
       setUpdateBusy(false);
     }
@@ -590,9 +688,41 @@ export default function App() {
         </div>
       ) : null}
 
-      {/* 同时最多出现一条。统计邀请先来（它有 60 秒的触发条件，比十次变声早），
-          两条撞在一起会把底栏顶掉半个屏。 */}
-      {askTelemetry ? (
+      {/* 同时最多出现一条。更新排最前 —— 它是开机 4 秒就出来的，那会儿另外
+          两条的触发条件（用满 60 秒 / 变声十次）都还远没到。
+          统计邀请次之，两条撞在一起会把底栏顶掉半个屏。 */}
+      {updateOffer ? (
+        <Nudge
+          title={
+            updateWorking
+              ? "正在更新"
+              : `有新版本 ${updateOffer.remote}，现在装吗？`
+          }
+          actions={
+            updateWorking ? (
+              <Btn onClick={() => setUpdateOffer(null)} disabled={updateBusy}>
+                {updateBusy ? "下载中…" : "知道了"}
+              </Btn>
+            ) : (
+              <>
+                <Btn onClick={() => setUpdateOffer(null)}>稍后</Btn>
+                <Btn primary onClick={() => void acceptUpdate()}>
+                  下载并安装
+                </Btn>
+              </>
+            )
+          }
+        >
+          {updateWorking
+            ? updateLine
+            : `当前 ${updateOffer.local}。${
+                updateOffer.notes ||
+                (updateOffer.action === "external"
+                  ? "这次要换程序本体，装完重启一次就好。"
+                  : "这次只换界面，装完重启一次就好。")
+              }下载期间可以照常用，不影响变声。`}
+        </Nudge>
+      ) : askTelemetry ? (
         <Nudge
           title="参与用户统计（可选）"
           actions={

@@ -1346,6 +1346,9 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
 _PLAZA_KNOWN_TYPES = ("news", "notice", "banner", "ad", "sponsor")
 _PLAZA_AD_TYPES = ("ad", "sponsor")
 _PLAZA_BODY_CAP = 220  # 自动派生资讯正文截断长度
+# 广场置顶区最多几条。必须和客户端 `plaza::MAX_PINNED` 一致 ——
+# 那边是硬削，这边只警告，两个数对不上的话警告就成了假消息。
+_PLAZA_MAX_PINNED = 5
 
 _PLAZA_YAML_TEMPLATE = """\
 # 广场 feed 源文件（可选）— 编译产物为 CNB 根目录 plaza.json，独立于 index.json。
@@ -1367,7 +1370,12 @@ auto_release_news: true
 #   url           点击跳转链接，仅 http(s)
 #   action_label  按钮文案（如「查看详情」）
 #   date          YYMMDD；start / end 为投放窗口（含当天）
-#   priority      数字越大越靠前（默认 0）；pinned: true 置顶
+#   priority      数字越大越靠前（默认 0）
+#   pinned: true  同时进广场顶部「置顶」那一排（封面 + 一行标题，点了滚到本条并高亮）
+#                 最多五条 —— 那一排一行放五张卡，多的客户端会削掉，编译时先警告
+#   pin_title     只在 pinned 时有用：置顶卡上单独写的短标题（不写就用 title）
+#                 投放标题按整行排，十几二十字塞进一张卡只能截断，所以留这个口子
+#                 封面和跳转目标共用同一条内容 —— 一条内容，两处展示
 #   dismissible   是否可关闭（资讯默认 false；ad/sponsor 编译时强制 true）
 #   placements    [plaza] 和/或 [models_page]（模型页至多显示一条且必须可关闭）
 #   min_app_version / max_app_version  版本门槛（含 -partN 语义）
@@ -1380,7 +1388,9 @@ items:
 #     body: CNB 下载源 8 月 1 日 02:00-04:00 维护，期间社区下载可能失败。
 #     url: https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases
 #     date: 260801
+#     image: ch-banner/example.jpg   # 置顶卡要有封面，没有就只剩四个字的占位
 #     pinned: true
+#     pin_title: 下载源维护          # 置顶卡上那一行；不写就用上面的 title
 #     utm: true
 """
 
@@ -1501,6 +1511,14 @@ def _compile_plaza_item(
         row["priority"] = priority
     if raw.get("pinned"):
         row["pinned"] = True
+        # 置顶卡片上单独写的短标题。封面和跳转目标仍然共用同一条内容，
+        # 只是卡片那一行字可以另写 —— 投放标题按整行排，塞进卡片会截断。
+        pin_title = str(raw.get("pin_title") or "").strip()
+        if pin_title:
+            row["pin_title"] = pin_title
+    elif str(raw.get("pin_title") or "").strip():
+        # 写了短标题却没置顶 = 这条永远不会出现在置顶区，那行字白写了。
+        rep.warn(f"{who}: 写了 pin_title 但没有 pinned: true，该标题不会被用到")
     # 广告必须可关闭——编译时强制写 true，feed 无权关掉这个开关
     if bool(raw.get("dismissible", False)) or is_ad:
         row["dismissible"] = True
@@ -1692,6 +1710,18 @@ def compile_plaza(src: dict, paths: Paths, rep: Report) -> dict:
             continue
         seen.add(row["id"])
         items.append(row)
+
+    # 置顶最多五条 —— 广场置顶区一行五张卡，第六张会换行，那一排就从横幅变成
+    # 了第二个投放列表。客户端 `plaza::MAX_PINNED` 会把多出来的削掉（内容照常
+    # 留在「投放」里），所以这里只是警告：发布的人应该知道自己标多了。
+    pinned_ids = [r["id"] for r in items if r.get("pinned")]
+    if len(pinned_ids) > _PLAZA_MAX_PINNED:
+        dropped = pinned_ids[_PLAZA_MAX_PINNED:]
+        rep.warn(
+            f"plaza: 标了 {len(pinned_ids)} 条 pinned，客户端只展示前 "
+            f"{_PLAZA_MAX_PINNED} 条（按 priority / 日期排序）；"
+            f"这几条不会出现在置顶区: {', '.join(dropped)}"
+        )
 
     # 自动派生版本资讯（changelog 优先）。
     #

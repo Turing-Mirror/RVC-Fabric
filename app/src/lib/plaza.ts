@@ -11,7 +11,10 @@ export type PlazaItem = {
   action_label: string;
   date: string;
   priority: number;
+  /** 后端已经削到最多 `MAX_PINNED` 条，界面直接筛这个字段就行，不用再数。 */
   pinned: boolean;
+  /** 置顶卡上单独写的短标题；空则用 `title`。 */
+  pin_title: string;
   /** Plaza rows are always false — the plaza exists to carry placements. */
   dismissible: boolean;
   placements: string[];

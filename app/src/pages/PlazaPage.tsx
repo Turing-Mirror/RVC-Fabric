@@ -1,6 +1,7 @@
-import { useState, memo } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
+import { PinnedRow } from "../components/PinnedRow";
 import {
   formatDate,
   openExternal,
@@ -41,9 +42,36 @@ function PlazaPageImpl({
   const [pageNo, setPageNo] = useState(0);
   // 加一就是「再拉一次音色清单」。父组件不需要拿到 StoreSection 的方法。
   const [reloadToken, setReloadToken] = useState(0);
+  // 被置顶卡片点中的那条投放。高亮完就清掉，不是持久状态。
+  const [spotlight, setSpotlight] = useState("");
+  const spotTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (spotTimer.current) window.clearTimeout(spotTimer.current);
+    },
+    [],
+  );
 
   const changelog = feed?.changelog ?? [];
   const items = feed?.items ?? [];
+  // 后端已经把置顶削到最多五条，这里筛一下就行，不用再 slice。
+  const pinned = items.filter((it) => it.pinned);
+
+  // 点置顶卡 → 滚到下面那条投放，并让它亮一下。
+  //
+  // 只滚不亮不行：投放区可能有十几条，滚过去之后用户还得自己找「刚才点的是
+  // 哪条」。亮一下是**告诉他落点在哪**，所以 1.6 秒后自动灭 —— 一个一直亮着
+  // 的高亮会被当成「选中状态」，而这里没有选中这回事。
+  const pick = useCallback((id: string) => {
+    setSpotlight(id);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById(`plaza-item-${id}`)?.scrollIntoView({
+      behavior: reduce ? "auto" : "smooth",
+      block: "center",
+    });
+    if (spotTimer.current) window.clearTimeout(spotTimer.current);
+    spotTimer.current = window.setTimeout(() => setSpotlight(""), 1600);
+  }, []);
 
   if (showAll) {
     const total = Math.max(1, Math.ceil(changelog.length / PER_PAGE));
@@ -119,6 +147,15 @@ function PlazaPageImpl({
         </p>
       ) : null}
 
+      {/* 置顶排在社区音色之上。它只有一排卡片高，压不住下面的东西，而它指向的
+          就是这一页最该被看到的几条 —— 排在第一屏才有意义。
+          一条都没置顶时整块不出现，不留一个空标题在那儿。 */}
+      {pinned.length ? (
+        <Block title="置顶">
+          <PinnedRow items={pinned} onPick={pick} />
+        </Block>
+      ) : null}
+
       <Block title="社区音色" note="下载图灵镜源与第三方源的音色">
         <StoreSection reloadToken={reloadToken} />
       </Block>
@@ -128,7 +165,9 @@ function PlazaPageImpl({
           {loading && !items.length ? (
             <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
           ) : items.length ? (
-            items.map((it) => <Feed key={it.id} item={it} />)
+            items.map((it) => (
+              <Feed key={it.id} item={it} spotlight={spotlight === it.id} />
+            ))
           ) : (
             <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
               暂时没有内容。
@@ -198,7 +237,14 @@ function Notes({ entry }: { entry: ChangelogEntry }) {
   );
 }
 
-function Feed({ item }: { item: PlazaItem }) {
+function Feed({
+  item,
+  spotlight = false,
+}: {
+  item: PlazaItem;
+  /** 刚被上面的置顶卡点中，亮一下。 */
+  spotlight?: boolean;
+}) {
   const [imgFailed, setImgFailed] = useState(false);
   const clickable = Boolean(item.url);
   // Three shapes, decided by the parser: 图灵镜推荐, 商业推广, or both.
@@ -208,6 +254,8 @@ function Feed({ item }: { item: PlazaItem }) {
 
   return (
     <div
+      // 置顶卡片靠这个 id 找到落点。
+      id={`plaza-item-${item.id}`}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? () => void openExternal(item.url) : undefined}
@@ -226,6 +274,7 @@ function Feed({ item }: { item: PlazaItem }) {
         clickable
           ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-2px]"
           : "",
+        spotlight ? "spotlight" : "",
       ].join(" ")}
     >
       {item.image_url && !imgFailed ? (

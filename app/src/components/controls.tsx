@@ -30,6 +30,15 @@ export function Field({
           </div>
           <div className="ml-auto">{control}</div>
         </div>
+        {/* inline 版以前**不画 desc**，传了也当没传。「在线更新」正是这么栽的：
+            点完「立即检查」，「已是最新（1.3.5）」写进了 desc，然后被这里默默
+            吞掉 —— 界面上一个字都没变，看着就像按钮坏了。少画一个 prop 不会
+            报错，所以这种漏洞只能靠不留死角来防。 */}
+        {desc ? (
+          <div className="text-[12.5px] text-[var(--help)] mt-[7px] leading-relaxed">
+            {desc}
+          </div>
+        ) : null}
         {note ? (
           <div className="text-xs text-[var(--help)] mt-[9px] leading-[1.75] whitespace-pre-line">
             {note}
@@ -125,8 +134,14 @@ const GLIDE_IDLE_MS = 190;
  * 数值条。一条较粗的轨道 + 一个把手，把手推到哪里就是多少。
  *
  * 位置算法：把手左边缘 = `pct% - KNOB_W*pct/100`。这样 0% 时贴左边、100% 时
- * 贴右边，中间线性 —— 把手永远不会探出轨道。填充条的右边缘对齐把手中心，
- * 所以看上去是「推着走」而不是「拉一条线」。
+ * 贴右边，中间线性 —— 把手永远不会探出轨道。
+ *
+ * 填充条一直画到**把手的右边缘**，整个压在把手底下。以前它只画到把手中心，
+ * 两头都是 rounded-full：填充的圆头半径 13（轨道高的一半）比把手的 10.5 大，
+ * 两段圆弧对不上，上下各露出一小块轨道底色 —— 就是那条「缝」。现在填充的收口
+ * 全被不透明的把手盖住，看到的边界只有「把手 | 轨道」这一条，颜色和把手是连着的。
+ *
+ * 0% 时填充宽度正好等于把手宽度，被把手完全盖住，不会在最左边留一坨色。
  *
  * 把手和填充必须用**同一套过渡**。以前把手有 100ms 的 left 过渡、填充的
  * width 一点过渡都没有：点一下轨道，颜色瞬间到位、把手还在慢慢挪，两者
@@ -159,7 +174,7 @@ export function RangeBar({
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
   const knobX = `calc(${pct}% - ${(KNOB_W * pct) / 100}px)`;
-  const fillW = `calc(${pct}% - ${(KNOB_W * pct) / 100 - KNOB_W / 2}px)`;
+  const fillW = `calc(${pct}% - ${(KNOB_W * pct) / 100 - KNOB_W}px)`;
 
   const [dragging, setDragging] = useState(false);
   // 光标在条子外面松开时，pointerup 不一定回到这个元素上（原生 range 会
@@ -197,10 +212,12 @@ export function RangeBar({
       style={{ height: TRACK_H }}
     >
       {/* 渐变从左到右由浅到深：越推到右边颜色越实，一眼能看出推到了哪。
-          原来两端分别是 10% / 30%，整条淡得几乎看不出是填充。 */}
+          原来两端分别是 10% / 30%，整条淡得几乎看不出是填充。
+          右端的圆角去掉：那一截本来就在把手底下，留着圆角只会在把手边上
+          切出一道弧，把「填充和把手是一体的」这个观感又破坏掉。 */}
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
+        className="absolute inset-y-0 left-0 rounded-l-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
         style={{ width: fillW, ...glide }}
       />
       {/* 左右各留半个把手宽，刻度才和把手中心的行程对齐。 */}
@@ -267,9 +284,10 @@ export function Slider({
   const shown = format ? format(value) : String(value);
   return (
     <div className="flex items-center gap-[15px] w-full">
-      {/* 条子越长，同样的一格数值占的像素越多，越好精调。上限放宽到 460，
-          窄窗口下 flex-1 自己会缩。 */}
-      <div className="flex-1 max-w-[460px]">
+      {/* 条子占满整行，不设上限：一格数值分到的像素最多，最好精调，看着也
+          大方。右边只留数值那一列。以前卡了 460px 上限，宽窗口下条子缩在
+          左半边，右边空一大片，反而显得小家子气。 */}
+      <div className="flex-1">
         <RangeBar value={value} min={min} max={max} step={step} onChange={onChange} />
       </div>
       <div className="text-[13px] min-w-[56px] text-right tabular-nums">{shown}</div>

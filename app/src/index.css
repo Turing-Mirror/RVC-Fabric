@@ -226,17 +226,29 @@ option {
   }
 }
 
+/* 切页的四条动画一律用 --ease，**不要**换回 --spring。
+ *
+ * --spring 是 cubic-bezier(0.34, 1.42, 0.64, 1)，控制点 y=1.42 会冲过终点：
+ * 采样下来在 62% 处进度到 1.058，也就是整个页面层会越过静止位置约 5% × 5.8%
+ * ≈ 0.29% 宽。1185px 的窗口下就是 3.4px，窗口越大越宽。
+ *
+ * 页面层是 absolute inset-0 的透明层，冲过头的那几个像素等于在窗口边上开了
+ * 一条缝：往左翻页时缝在左边，往右翻页时在右边，缝里露出的是底下正在淡出的
+ * 上一页 —— 一条竖直的细线，里面还带着上一页的字。看上去就像「滚动条没删干净」。
+ *
+ * 小元件（分段控件的滑块、邀请浮层）可以继续用 --spring：它们不贴着窗口边，
+ * 冲过头也没有边可露。 */
 .page-leave-l {
   animation: leaveL 0.3s var(--ease) forwards;
 }
 .page-enter-l {
-  animation: enterL 0.46s var(--spring);
+  animation: enterL 0.46s var(--ease);
 }
 .page-leave-r {
   animation: leaveR 0.3s var(--ease) forwards;
 }
 .page-enter-r {
-  animation: enterR 0.46s var(--spring);
+  animation: enterR 0.46s var(--ease);
 }
 
 .seg-thumb-move {
@@ -246,6 +258,27 @@ option {
 /* 邀请式提示的入场：从底下托上来，带一点点回弹。
    页面上别的东西都是静的，一个动起来的东西自然会被看到 —— 靠这个吸引注意，
    不靠颜色。放一次就停，不循环、不闪。 */
+/* 从广场置顶点下来之后，落点那条投放亮一下。
+   亮的是一圈线和一层很淡的底，不是强调色铺满 —— 这是「你点的是这条」，
+   不是警告。1.6 秒后组件自己把 class 摘掉，不会留成选中态。 */
+@keyframes spotlight {
+  0% {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  70% {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  100% {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+}
+.spotlight {
+  animation: spotlight 1.6s var(--ease) both;
+}
+
 @keyframes nudge-in {
   from {
     opacity: 0;

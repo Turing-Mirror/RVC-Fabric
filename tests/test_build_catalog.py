@@ -243,6 +243,56 @@ class BuildOutputsTests(unittest.TestCase):
             ids = [it["id"] for it in plaza["items"]]
             self.assertIn("release-1.2.0", ids)
 
+    def test_pin_title_rides_along_and_only_five_pins_are_useful(self):
+        """置顶：短标题要进产物，标超过五条要先警告一次。
+
+        客户端 `plaza::MAX_PINNED` 是硬削（第六条起 pinned 变 false，内容仍留在
+        「投放」里）。编译期不拦，只提醒——发布的人应该知道自己标多了，而不是
+        等发出去之后才发现有两条没露脸。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            _y(
+                paths.src / "plaza.yaml",
+                {
+                    "auto_release_news": False,
+                    "items": [
+                        {
+                            "id": f"p{i}",
+                            "title": f"一条排一整行都嫌挤的投放标题 {i}",
+                            "pinned": True,
+                            "pin_title": f"短{i}",
+                            "priority": 100 - i,
+                        }
+                        for i in range(7)
+                    ],
+                },
+            )
+            self.assertEqual(bc.cmd_build(paths), 0)
+            plaza = json.loads(paths.plaza_out.read_text(encoding="utf-8"))
+            rows = {it["id"]: it for it in plaza["items"]}
+            self.assertEqual(len(rows), 7, "多标的条目不能被丢掉，只是不置顶")
+            self.assertEqual(rows["p0"]["pin_title"], "短0")
+            self.assertTrue(all(rows[f"p{i}"]["pinned"] for i in range(7)))
+
+    def test_pin_title_without_pinned_is_flagged(self):
+        """写了短标题却没置顶 = 那行字永远不会被用到，得说一声。"""
+        rep = bc.Report()
+        row = bc._compile_plaza_item(
+            {"id": "a", "title": "t", "pin_title": "短"},
+            make_fixture(Path(tempfile.mkdtemp())),
+            rep,
+            who="plaza.items[0]",
+            known=("news",),
+            ads=("ad",),
+        )
+        self.assertIsNotNone(row)
+        self.assertNotIn("pin_title", row)
+        self.assertTrue(
+            any("pin_title" in w for w in rep.warnings),
+            f"应该警告，实际: {rep.warnings}",
+        )
+
     def test_roundtrip_real_client_parsers(self):
         """产物必须能被真实客户端解析器读出来。
 

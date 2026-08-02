@@ -191,7 +191,10 @@ function SliderTile({
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="flex-1 min-w-[100px] max-w-[210px]">
+    // 上限从 210 放到 300：音高一整条是 −24~+24 共 49 格，210px 下一格 4px，
+    // 拖过去基本靠猜。宽窗口下这一档能吃到 300px，一格 6px，好瞄不少。
+    // 还是留个上限 —— 底栏右边还有状态和「开启变声」，条子无限长会把它们挤走。
+    <div className="flex-1 min-w-[100px] max-w-[300px]">
       <div className="flex justify-between items-baseline mb-2">
         <span className="text-xs text-[var(--meta)]">{label}</span>
         <b className="text-[15px] font-semibold tabular-nums">{display}</b>

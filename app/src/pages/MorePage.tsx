@@ -4,7 +4,9 @@ import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui
 import { SeparateDialog } from "../components/SeparateDialog";
 import { TrainDialog } from "../components/TrainDialog";
 import { ExtrasDialog } from "../components/ExtrasDialog";
+import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
+import { ALL_LINKS } from "../lib/links";
 import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
@@ -18,38 +20,6 @@ type Props = {
   onForceKill?: () => void | Promise<void>;
   onOpenProvision?: () => void;
 };
-
-/**
- * Repos and socials. Plain list rows, opened in the user's own browser through
- * the shell's http/https-only `open_external`. `desc` carries the account's own
- * identifier and nothing else.
- */
-const LINKS: { title: string; desc?: string; url: string }[] = [
-  {
-    title: "GitHub 源码",
-    desc: "Turing-Mirror/RVC-Fabric",
-    url: "https://github.com/Turing-Mirror/RVC-Fabric",
-  },
-  {
-    title: "CNB 发布与制品",
-    desc: "Turing-Mirror/RVC-Fabric-Releases",
-    url: "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
-  },
-  {
-    title: "哔哩哔哩 @图灵镜",
-    url: "https://space.bilibili.com/3546871148579062",
-  },
-  {
-    title: "抖音 @图灵镜",
-    desc: "抖音号 TuringMirror",
-    url: "https://v.douyin.com/6NxXcrKK9cc",
-  },
-  {
-    title: "小红书 @图灵镜",
-    desc: "小红书号 TuringMirror",
-    url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
-  },
-];
 
 export function MorePage({
   status,
@@ -70,6 +40,19 @@ export function MorePage({
   const [logFile, setLogFile] = useState("");
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
+  // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
+  // 而这一整块讲的就是「这台机器拿什么在跑」。
+  const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
+  const [gpuMsg, setGpuMsg] = useState("");
+  const nvGpus = provision?.nvidia_gpus || [];
+
+  const pickMainGpu = (v: number) => {
+    setMainGpu(v);
+    setGpuMsg("");
+    void invoke("config_set", { patch: { main_gpu: v } })
+      .then(() => setGpuMsg("已保存，重新「开启变声」后生效"))
+      .catch((e) => setGpuMsg(`保存失败：${String(e)}`));
+  };
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
   // itself; a button that looks like it did nothing gets clicked again.
@@ -116,6 +99,11 @@ export function MorePage({
     invoke<string | null>("log_path")
       .then((v) => alive && setLogFile(v || ""))
       .catch(() => alive && setLogFile(""));
+    invoke<Record<string, unknown>>("config_get")
+      .then((c) => alive && setMainGpu(Number(c.main_gpu ?? MAIN_GPU_AUTO)))
+      .catch(() => {
+        /* 浏览器预览下没有配置 */
+      });
     return () => {
       alive = false;
     };
@@ -191,6 +179,24 @@ export function MorePage({
               </span>
             }
           />
+          {/* 只有一块 N 卡时不显示：那时候「选哪块」是个假选择。 */}
+          {nvGpus.length > 1 ? (
+            <ListItem
+              title="主显卡"
+              titleTip={MAIN_GPU_TIP}
+              desc={
+                gpuMsg ||
+                "多块 N 卡时指定用哪一块计算。不指定就用排在第一的那块，不一定是最快的"
+              }
+              right={
+                <MainGpuPicker
+                  gpus={nvGpus}
+                  value={mainGpu}
+                  onChange={pickMainGpu}
+                />
+              }
+            />
+          ) : null}
           <ListItem
             title="推荐运行时"
             desc={
@@ -323,7 +329,7 @@ export function MorePage({
       </Block>
       <Block title="仓库与社媒">
         <Group>
-          {LINKS.map((l) => (
+          {ALL_LINKS.map((l) => (
             <ListItem
               key={l.title}
               title={l.title}

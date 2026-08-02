@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
+import { Nudge } from "./components/Nudge";
+import { Btn } from "./components/ui";
+import { FOLLOW_LINKS } from "./lib/links";
+import { openExternal } from "./lib/plaza";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
@@ -16,6 +20,14 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
+
+/**
+ * 变声多少次之后问一句「要不要关注」。
+ *
+ * 十次的意思是：这人已经把软件用起来了，不是打开看两眼就走的。太早问等于
+ * 拦路要东西，太晚问他早就忘了这软件是谁做的。
+ */
+const FOLLOW_AFTER_RUNS = 10;
 
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
@@ -146,6 +158,38 @@ export default function App() {
     if (yes) void invoke("telemetry_tick").catch(() => {});
   };
 
+  // 「喜欢的话关注一下」——攒够 FOLLOW_AFTER_RUNS 次变声之后问一次。
+  //
+  // 数的是**完成**的次数（开启→停止算一次），不是点了几次开启：起了又立刻
+  // 报错停掉的不该算数，那种时候用户正在烦躁，问他要不要关注是最糟的时机。
+  const [askFollow, setAskFollow] = useState(false);
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    const was = wasRunning.current;
+    wasRunning.current = engine.running;
+    if (!was || engine.running) return; // 只在 running: true → false 那一下计数
+    void (async () => {
+      try {
+        const cfg = await invoke<Record<string, unknown>>("config_get");
+        if (cfg.follow_prompt_done === true) return;
+        const n = Number(cfg.vc_run_count ?? 0) + 1;
+        await invoke("config_set", { patch: { vc_run_count: n } });
+        if (n >= FOLLOW_AFTER_RUNS) setAskFollow(true);
+      } catch {
+        /* 配置读不到就算了，这不是要紧事 */
+      }
+    })();
+  }, [engine.running]);
+
+  // 不管点的是哪个社媒还是「以后再说」，都不再问第二次。反复问一件用户
+  // 已经表过态的事，比不问更让人反感。
+  const closeFollow = () => {
+    setAskFollow(false);
+    void invoke("config_set", { patch: { follow_prompt_done: true } }).catch(
+      () => {},
+    );
+  };
+
   // Close prompt (close_action = "ask"). Same two choices as the Tk shell,
   // plus 「记住我的选择」 which writes close_action so we stop asking.
   const [closeAsk, setCloseAsk] = useState(false);
@@ -245,6 +289,13 @@ export default function App() {
   // One place where "the user picked a different voice" is applied, so the
   // home page and the models page can never drift apart on what the dock shows.
   const openModels = useCallback(() => setPage("models"), []);
+  const openHelp = useCallback(() => setPage("help"), []);
+  // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
+  // 清红点，否则从模型页进来的用户那个点永远亮着。
+  const openPlaza = useCallback(() => {
+    plaza.markSeen();
+    setPage("plaza");
+  }, [plaza]);
   const { reload: plazaReload } = plaza;
   const reloadPlaza = useCallback(() => void plazaReload(), [plazaReload]);
 
@@ -339,6 +390,8 @@ export default function App() {
     toggleRun: () => {},
     shiftVoice: (_d: number) => {},
     toggleMode: () => {},
+    shiftPitch: (_d: number) => {},
+    toggleCfgFlag: (_key: string) => {},
   });
   useEffect(() => {
     actionsRef.current = {
@@ -350,6 +403,26 @@ export default function App() {
           void engine.onMode(next);
           return next;
         }),
+      // 底栏那根音高条的范围，两处必须一致 —— 快捷键推到 25 而条子最多 24，
+      // 界面和引擎就对不上了。
+      shiftPitch: (d: number) =>
+        setPitch((p) => {
+          const next = Math.min(24, Math.max(-24, p + d));
+          if (next !== p) onPitch(next);
+          return next;
+        }),
+      // 监听自己 / 音效总开关。两个都是布尔配置项，读一次翻一次写回去。
+      // config_set 那边会负责推给正在跑的引擎（监听是热推，音效本来就是热键）。
+      toggleCfgFlag: (key: string) => {
+        void (async () => {
+          try {
+            const cfg = await invoke<Record<string, unknown>>("config_get");
+            await invoke("config_set", { patch: { [key]: cfg[key] !== true } });
+          } catch {
+            /* 引擎没起来时按了也不该炸 */
+          }
+        })();
+      },
     };
   });
 
@@ -367,6 +440,16 @@ export default function App() {
     void add("hotkey://prev-voice", () => actionsRef.current.shiftVoice(-1));
     void add("hotkey://next-voice", () => actionsRef.current.shiftVoice(1));
     void add("hotkey://toggle-mode", () => actionsRef.current.toggleMode());
+    void add("hotkey://pitch-up", () => actionsRef.current.shiftPitch(1));
+    void add("hotkey://pitch-down", () => actionsRef.current.shiftPitch(-1));
+    void add("hotkey://toggle-monitor", () =>
+      actionsRef.current.toggleCfgFlag("monitor_self"),
+    );
+    void add("hotkey://toggle-fx", () =>
+      actionsRef.current.toggleCfgFlag("fx_enabled"),
+    );
+    // hotkey://toggle-window 没有前端处理：窗口藏起来时 webview 可能被系统
+    // 挂起，事件根本到不了这里。那个动作在 Rust 里就地做完了。
     void add("app://close-requested", () => setCloseAsk(true));
     return () => {
       disposed = true;
@@ -432,6 +515,7 @@ export default function App() {
                 <ModelsPage
                   banner={plaza.feed.banner}
                   onVoiceChange={applyVoiceChange}
+                  onOpenPlaza={openPlaza}
                 />
               );
             case "settings":
@@ -444,10 +528,13 @@ export default function App() {
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
                   updateBusy={updateBusy}
+                  onOpenHelp={openHelp}
                 />
               );
             case "help":
-              return <HelpPage />;
+              // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
+              // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
+              return <HelpPage status={deviceStatus} />;
             case "more":
               return (
                 <MorePage
@@ -503,33 +590,47 @@ export default function App() {
         </div>
       ) : null}
 
+      {/* 同时最多出现一条。统计邀请先来（它有 60 秒的触发条件，比十次变声早），
+          两条撞在一起会把底栏顶掉半个屏。 */}
       {askTelemetry ? (
-        <div className="mx-[30px] mb-2 rounded-[var(--r)] bg-[var(--group)] px-4 py-3 flex items-start gap-3 flex-wrap max-[720px]:mx-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold mb-1">参与用户统计（可选）</div>
-            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
-              每天检查更新时附带一个随机匿名编号、软件版本、显卡加速方式。
-              不会发送账号、音色文件、录音，或任何能定位到你的信息。
-              规模数据用于和赞助商谈合作，这是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
-            </div>
-          </div>
-          <div className="flex gap-2 items-center">
-            <button
-              type="button"
-              onClick={() => void answerTelemetry(true)}
-              className="text-[12.5px] font-semibold px-3.5 py-1.5 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
-            >
-              参与
-            </button>
-            <button
-              type="button"
-              onClick={() => void answerTelemetry(false)}
-              className="text-[12.5px] px-3.5 py-1.5 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] cursor-pointer border-0 shadow-[inset_0_0_0_1px_var(--line)]"
-            >
-              暂不参与
-            </button>
-          </div>
-        </div>
+        <Nudge
+          title="参与用户统计（可选）"
+          actions={
+            <>
+              <Btn onClick={() => void answerTelemetry(false)}>暂不参与</Btn>
+              <Btn primary onClick={() => void answerTelemetry(true)}>
+                参与
+              </Btn>
+            </>
+          }
+        >
+          每天检查更新时附带一个随机匿名编号、软件版本、显卡加速方式。
+          不会发送账号、音色文件、录音，或任何能定位到你的信息。
+          规模数据用于和赞助商谈合作，这是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
+        </Nudge>
+      ) : askFollow ? (
+        <Nudge
+          title="喜欢 RVC Fabric 吗？关注一下我们呗"
+          actions={
+            <>
+              <Btn onClick={closeFollow}>以后再说</Btn>
+              {FOLLOW_LINKS.map((l) => (
+                <Btn
+                  key={l.url}
+                  onClick={() => {
+                    void openExternal(l.url);
+                    closeFollow();
+                  }}
+                >
+                  {l.short}
+                </Btn>
+              ))}
+            </>
+          }
+        >
+          你已经用它变声十次了。软件是免费的，更新全靠有人看见 ——
+          点一下就到，关不关注都随你，这句话只说这一次。
+        </Nudge>
       ) : null}
 
       <Dock

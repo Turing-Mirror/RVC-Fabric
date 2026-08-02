@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { StoreDialog } from "../components/StoreDialog";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { openExternal, type PlazaItem } from "../lib/plaza";
@@ -34,6 +33,8 @@ import {
 } from "../lib/voices";
 
 export type ModelsPageProps = {
+  /** 跳到广场。社区音色现在住在那儿。 */
+  onOpenPlaza?: () => void;
   /** Models-page placement, owned by App so the feed is fetched once. */
   banner?: PlazaItem | null;
   onVoiceChange?: (info: {
@@ -46,7 +47,7 @@ export type ModelsPageProps = {
 
 type SortKey = "default" | "name" | "index";
 
-function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
+function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPageProps) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -55,7 +56,6 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
   const [cols, setCols] = useState(5);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [storeOpen, setStoreOpen] = useState(false);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [menu, setMenu] = useState<{
@@ -223,7 +223,10 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
         sub={statusSub}
         actions={
           <>
-            <Btn primary onClick={() => setStoreOpen(true)}>
+            {/* 社区音色搬到广场了（那边是整页，放得下封面网格；这里的
+                对话框最宽 720px，只塞得下一列文字行）。入口留着 —— 用户
+                找音色的第一反应是来模型页，不该让他自己猜要去广场。 */}
+            <Btn primary onClick={() => onOpenPlaza?.()}>
               社区音色
             </Btn>
             <Btn
@@ -300,7 +303,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
         >
           {!models.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              还没有音色。点「社区音色」在线下载，或点「导入音色」添加你自己的音色文件。
+              还没有音色。点「社区音色」去广场在线下载，或点「导入音色」添加你自己的音色文件。
             </div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
@@ -641,13 +644,6 @@ function ModelsPageImpl({ banner = null, onVoiceChange }: ModelsPageProps) {
         />
       ) : null}
 
-      <StoreDialog
-        open={storeOpen}
-        onClose={() => setStoreOpen(false)}
-        onInstalled={() => {
-          void reload();
-        }}
-      />
     </PagePad>
   );
 }

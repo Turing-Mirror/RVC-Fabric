@@ -193,8 +193,11 @@ export function ListItem({
   return (
     <div>
       {body}
+      {/* 正文和标题行之间要留出气口。原来是 -mt-1，正文顶边正好压在标题行
+          悬停灰底的底边上 —— 鼠标停在标题上时，灰块下沿和文字挨成一条，
+          看着像文字被切了一刀。 */}
       {expanded ? (
-        <div className="pb-3.5 -mt-1 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line max-w-[74ch]">
+        <div className="pt-2 pb-4 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line max-w-[74ch]">
           {children}
         </div>
       ) : null}

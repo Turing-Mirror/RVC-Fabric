@@ -31,6 +31,9 @@ type Props = {
   onCheckUpdate?: () => void;
   updateLine?: string;
   updateBusy?: boolean;
+  /** 跳到说明页。设备这一套（虚拟声卡怎么连）的解释全在那边，
+   *  这里只放一个入口，不把同一段话再抄一遍。 */
+  onOpenHelp?: () => void;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -77,6 +80,7 @@ function SettingsPageImpl({
   onCheckUpdate,
   updateLine,
   updateBusy = false,
+  onOpenHelp,
 }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
   const c = useConfig();
@@ -148,7 +152,15 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "设备与音频" ? (
-          <Block title="设备与音频" className="!mt-6">
+          <Block
+            title="设备与音频"
+            className="!mt-6"
+            action={
+              onOpenHelp ? (
+                <Btn onClick={onOpenHelp}>不会用？转至说明页</Btn>
+              ) : undefined
+            }
+          >
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
               输入选你的麦克风，输出选 CABLE Input，再把游戏里的麦克风设成 CABLE Output。
               <br />
@@ -768,11 +780,17 @@ function SettingsPageImpl({
   );
 }
 
+/** 顺序、键名、默认值必须和 `shell_extras::HOTKEYS` 对得上。 */
 const HOTKEYS = [
   { key: "hotkey_toggle_vc", label: "开启 / 停止变声", fallback: "CmdOrCtrl+F2" },
   { key: "hotkey_toggle_mode", label: "变声 / 原声", fallback: "CmdOrCtrl+F3" },
   { key: "hotkey_prev_voice", label: "上一个音色", fallback: "CmdOrCtrl+F5" },
   { key: "hotkey_next_voice", label: "下一个音色", fallback: "CmdOrCtrl+F6" },
+  { key: "hotkey_pitch_up", label: "音高 +1", fallback: "CmdOrCtrl+F7" },
+  { key: "hotkey_pitch_down", label: "音高 −1", fallback: "CmdOrCtrl+F8" },
+  { key: "hotkey_toggle_monitor", label: "监听自己 开 / 关", fallback: "CmdOrCtrl+F9" },
+  { key: "hotkey_toggle_fx", label: "后期音效 开 / 关", fallback: "CmdOrCtrl+F10" },
+  { key: "hotkey_toggle_window", label: "显示 / 隐藏主界面", fallback: "CmdOrCtrl+F11" },
 ];
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */

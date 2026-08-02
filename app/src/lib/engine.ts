@@ -31,6 +31,8 @@ export type ProvisionStatus = {
   worker_script_ok?: boolean;
   product_root?: string;
   gpus?: string[];
+  /** 只含 N 卡，保持系统枚举顺序。下标就是 CUDA 序号，「主显卡」下拉用它。 */
+  nvidia_gpus?: string[];
   recommended_variant?: string;
   recommend_reason?: string;
   recommended_label?: string;

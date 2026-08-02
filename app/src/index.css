@@ -34,6 +34,15 @@
      white silhouette, which needs a touch less opacity than the ink-on-light
      original to read as the same weight. */
   --emblem-opacity: 0.18;
+  /* 数值条把手的颜色。浅色下就是纸白 —— 比轨道亮，一眼看出是"能抓的那个"。 */
+  --knob: var(--surface);
+  /* 分段控件（设置页顶部那排标签）的滑块底色。浅色下半透明的白就够亮了。 */
+  --seg-thumb: color-mix(in srgb, var(--surface) 86%, transparent);
+  /* 原生控件（<select> 展开的那张列表、右键菜单、日期选择器）的配色由这一项
+     决定，不由我们的 CSS 决定 —— 那张列表是系统画的，画在页面之外。
+     不声明的话 WebView2 一律按浅色画：深色模式下白底列表配我们设的浅色文字，
+     等于白底白字。data-theme 切换时下面两块会跟着改。 */
+  color-scheme: light;
 }
 
 /* 设置 → 界面配色 writes `theme_mode` and App stamps it on <html> as
@@ -43,14 +52,16 @@
   :root:not([data-theme="light"]) {
     --bg: #171b22;
     --surface: #1f242d;
-    --group: rgba(232, 240, 248, 0.045);
+    /* 卡片/分组底色。0.045 在深色底上几乎和背景一样，一屏设置看下来分不出
+       哪些项是一组的。抬到 0.075 刚好能看出边界，又不至于变成一块块灰砖。 */
+    --group: rgba(232, 240, 248, 0.075);
     --stage: #1e2837;
     --ink: #e4e9ef;
     --ink-muted: #a9b3be;
     --help: #828c96;
     --meta: #6e7883;
-    --hairline: rgba(232, 240, 248, 0.1);
-    --line: rgba(232, 240, 248, 0.15);
+    --hairline: rgba(232, 240, 248, 0.14);
+    --line: rgba(232, 240, 248, 0.22);
     --accent: #4aa3f0;
     --accent-ink: #0f1319;
     --accent-soft: rgba(74, 163, 240, 0.14);
@@ -60,20 +71,27 @@
       0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --logo-filter: brightness(0) invert(1);
     --emblem-opacity: 0.14;
+    /* 深色下不能照抄 --surface：#1f242d 比轨道(≈#2b2f36)还暗，把手看着
+       不像把手，像轨道上破了个洞。要比轨道亮才抓得住。 */
+    --knob: #7c8794;
+    /* 深色下 --surface(#1f242d) 和 --bg(#171b22) 只差一点点，半透明之后滑块
+       几乎看不见 —— 选中的是哪个标签得靠猜。抬一档并且不再透。 */
+    --seg-thumb: #2b323e;
+    color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
   --bg: #171b22;
   --surface: #1f242d;
-  --group: rgba(232, 240, 248, 0.045);
+  --group: rgba(232, 240, 248, 0.075);
   --stage: #1e2837;
   --ink: #e4e9ef;
   --ink-muted: #a9b3be;
   --help: #828c96;
   --meta: #6e7883;
-  --hairline: rgba(232, 240, 248, 0.1);
-  --line: rgba(232, 240, 248, 0.15);
+  --hairline: rgba(232, 240, 248, 0.14);
+  --line: rgba(232, 240, 248, 0.22);
   --accent: #4aa3f0;
   --accent-ink: #0f1319;
   --accent-soft: rgba(74, 163, 240, 0.14);
@@ -83,6 +101,9 @@
     0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --logo-filter: brightness(0) invert(1);
   --emblem-opacity: 0.14;
+  --knob: #7c8794;
+  --seg-thumb: #2b323e;
+  color-scheme: dark;
 }
 
 *,
@@ -111,6 +132,34 @@ body {
 
 button {
   font: inherit;
+}
+
+/* <select> 展开的那张列表由浏览器画，不继承 select 上的 class。
+   深色下如果只有 color-scheme 而没有这两行，某些 WebView2 版本仍按浅底画，
+   配上我们设的浅色文字就是白底白字。写死一份和主题一致的底色兜底。 */
+option {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* 滚动条一条都不留 —— 滚动本身照旧，只是不画那根轨道。
+ *
+ * 为什么是全局而不是逐个容器：可滚的容器不止一个（页面容器、商店弹窗、
+ * 设置页的横向标签条），漏掉一个就多一根条子。而且页面切换的那 0.3 秒里，
+ * 离场页和入场页是两个各自可滚的图层叠在一起，会同时画出两根 —— 离场页那根
+ * 因为整层在做位移，看上去就是「左边也冒出一根上下滚动条」。
+ *
+ * 键盘、滚轮、触控板、拖动全部不受影响；被隐藏的只有那根指示条。
+ */
+* {
+  scrollbar-width: none; /* Firefox / 新版 Chromium */
+  -ms-overflow-style: none; /* 老 Edge */
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* Liquid-glass segment thumb */
@@ -192,6 +241,24 @@ button {
 
 .seg-thumb-move {
   animation: squish 0.52s var(--spring);
+}
+
+/* 邀请式提示的入场：从底下托上来，带一点点回弹。
+   页面上别的东西都是静的，一个动起来的东西自然会被看到 —— 靠这个吸引注意，
+   不靠颜色。放一次就停，不循环、不闪。 */
+@keyframes nudge-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.nudge-in {
+  animation: nudge-in 0.44s var(--spring) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

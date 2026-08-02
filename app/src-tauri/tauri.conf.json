@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RVC Fabric",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "identifier": "com.turingmirror.rvcfabric",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -39,7 +39,6 @@
       "engine-payload/i18n": "i18n",
       "engine-payload/infer": "infer",
       "engine-payload/logs": "logs",
-      "engine-payload/scripts": "scripts",
       "engine-payload/tools": "tools",
       "engine-payload/legal": "legal",
       "engine-payload/VBCABLE": "VBCABLE",

@@ -92,7 +92,7 @@ export function SegmentControl<T extends string>({
           aria-hidden
           className={[
             "absolute top-[3px] bottom-[3px] left-0 rounded-full pointer-events-none",
-            "bg-[color-mix(in_srgb,var(--surface)_86%,transparent)]",
+            "bg-[var(--seg-thumb)]",
             "backdrop-blur-[10px] backdrop-saturate-150",
             "shadow-[var(--glass)]",
             "transition-[transform,width] duration-[520ms] ease-[var(--spring)]",
@@ -126,7 +126,7 @@ export function SegmentControl<T extends string>({
               "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
               on ? "text-[var(--ink)]" : "hover:text-[var(--ink)]",
               compact && on
-                ? "bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] shadow-[var(--glass)]"
+                ? "bg-[var(--seg-thumb)] shadow-[var(--glass)]"
                 : "",
             ].join(" ")}
           >

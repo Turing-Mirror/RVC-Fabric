@@ -297,7 +297,37 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     if !env.contains_key("TM_ACCEL") {
         env.insert("TM_ACCEL".into(), "auto".into());
     }
+    apply_main_gpu(root, &mut env);
     env
+}
+
+/// 把「主显卡」选择变成 worker 进程的环境变量。
+///
+/// 引擎全线写死 `cuda:0`（configs/config.py 的 `Config.device`，还有 rtrvc /
+/// rmvpe / train_worker 里的一堆 0）。双卡机器上这就是「谁排第一用谁」——
+/// 一块 5060 一块 5090，很可能整场都在用 5060 算。
+///
+/// 不去改引擎那一堆 0，而是在这里遮住其他卡：`CUDA_VISIBLE_DEVICES=n` 之后，
+/// torch 眼里就只剩一块卡，`cuda:0` 自然落到用户选的那块上。训练、分离走的是
+/// 同一个 `env_for_runtime`，所以三边行为一致。
+///
+/// `CUDA_DEVICE_ORDER=PCI_BUS_ID` 是为了让序号稳定：CUDA 默认按
+/// FASTEST_FIRST 排，换一次驱动、插一块新卡都可能让同一个序号指向另一块卡，
+/// 那样用户选过的设置会莫名其妙失效。
+///
+/// DirectML（A 卡 / 核显）不认这两个变量，那条路径上这个设置不生效 ——
+/// 界面上写清楚了。
+fn apply_main_gpu(root: &Path, env: &mut HashMap<String, String>) {
+    let cfg = crate::config::read(root);
+    let idx = cfg.get("main_gpu").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if idx < 0 {
+        // 「自动」。用户机器上本来就设了这个变量的话别动它 —— 那是他自己的
+        // 环境，不是我们该覆盖的东西。
+        return;
+    }
+    env.insert("CUDA_VISIBLE_DEVICES".into(), idx.to_string());
+    env.insert("CUDA_DEVICE_ORDER".into(), "PCI_BUS_ID".into());
+    crate::logging::shell_log!("main_gpu={idx} → CUDA_VISIBLE_DEVICES");
 }
 
 fn status_looks_ready(st: &Value) -> bool {

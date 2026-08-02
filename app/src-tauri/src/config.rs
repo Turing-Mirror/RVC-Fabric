@@ -148,6 +148,12 @@ pub fn defaults() -> Map<String, Value> {
     // shell-only
     m.insert("monitor_self".into(), json!(false));
     m.insert("monitor_device".into(), json!(""));
+    // 主显卡序号。-1 = 自动（交给 torch 自己挑）。
+    //
+    // 不进 COLD_KEYS：worker 不读这个键，它是通过进程环境变量
+    // CUDA_VISIBLE_DEVICES 生效的（见 worker::env_for_runtime）。写进 inuse
+    // 只会多一个没人看的键。needs_restart 在 update() 里单独补。
+    m.insert("main_gpu".into(), json!(-1));
     m.insert("close_action".into(), json!("ask"));
     m.insert("theme_mode".into(), json!("system"));
     m.insert("wallpaper_path".into(), json!(""));
@@ -160,7 +166,16 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("hotkey_toggle_mode".into(), json!("CmdOrCtrl+F3"));
     m.insert("hotkey_prev_voice".into(), json!("CmdOrCtrl+F5"));
     m.insert("hotkey_next_voice".into(), json!("CmdOrCtrl+F6"));
+    m.insert("hotkey_pitch_up".into(), json!("CmdOrCtrl+F7"));
+    m.insert("hotkey_pitch_down".into(), json!("CmdOrCtrl+F8"));
+    m.insert("hotkey_toggle_monitor".into(), json!("CmdOrCtrl+F9"));
+    m.insert("hotkey_toggle_fx".into(), json!("CmdOrCtrl+F10"));
+    m.insert("hotkey_toggle_window".into(), json!("CmdOrCtrl+F11"));
     m.insert("telemetry_opt_in".into(), json!(Value::Null));
+    // 完成过多少次变声（开启→停止算一次）。攒够十次问一句要不要关注我们。
+    // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。
+    m.insert("vc_run_count".into(), json!(0));
+    m.insert("follow_prompt_done".into(), json!(false));
     m
 }
 
@@ -300,6 +315,12 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         }
         if k == "monitor_self" || k == "monitor_device" {
             touched_monitor = true;
+        }
+        // 主显卡不是引擎配置键，它改的是 worker 进程的环境变量，所以既不该
+        // 进 inuse（touched_engine），也不能靠 is_cold 拿到重启提示 ——
+        // 但它确实要重开变声才换得过去，提示得补上。
+        if k == "main_gpu" {
+            needs_restart.push(k.clone());
         }
         saved.insert(k, v);
     }
@@ -581,6 +602,47 @@ mod tests {
         );
         assert_eq!(after["pitch"], json!(5), "other keys still sync");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 「主显卡」是个特例：它不是引擎配置键，改的是 worker 进程的环境变量。
+    ///
+    /// 所以它既不能进 COLD_KEYS（那会把一个 worker 根本不读的键写进 inuse），
+    /// 又必须给出重启提示 —— 换卡不重开变声是换不过去的。以前有人顺手把这类
+    /// 键塞进 COLD_KEYS 或者干脆忘了提示，用户改完毫无反应，只会以为功能坏了。
+    #[test]
+    fn main_gpu_asks_for_a_restart_without_pretending_to_be_an_engine_key() {
+        assert!(!is_hot("main_gpu"));
+        assert!(!is_cold("main_gpu"));
+        assert!(!engine_keys().contains(&"main_gpu"), "main_gpu 不该被写进 inuse");
+
+        let root = std::env::temp_dir().join("rvcf-main-gpu-test");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let mut patch = Map::new();
+        patch.insert("main_gpu".into(), json!(1));
+        let out = update(&root, patch).unwrap();
+
+        let restart = out["needs_restart"].as_array().unwrap();
+        assert!(
+            restart.iter().any(|v| v == "main_gpu"),
+            "改主显卡必须提示重开变声，实际 needs_restart = {restart:?}"
+        );
+        assert_eq!(out["config"]["main_gpu"], json!(1));
+
+        // 不是引擎键，就不该顺手去改引擎的配置文件 —— worker 可能正在读它。
+        assert!(
+            !paths::inuse_config_path(&root).is_file(),
+            "只改主显卡不该重写 inuse"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn main_gpu_defaults_to_auto() {
+        // -1 才是「自动」。写成 0 的话所有单卡用户会被静默钉在 0 号卡上，
+        // 表面看不出区别，出问题时也查不到。
+        assert_eq!(defaults()["main_gpu"], json!(-1));
     }
 
     #[test]

@@ -105,15 +105,28 @@ fn root_of(app: &AppHandle) -> Option<PathBuf> {
 // Global hotkeys
 // ---------------------------------------------------------------------------
 
-/// 四个快捷键：配置键名、动作名、默认组合。
+/// 全局快捷键：配置键名、动作名、默认组合。
 ///
-/// 默认值和旧的 Python 壳一样，用户有肌肉记忆。用户改过的话存在配置里，
-/// 这里只是缺省。
+/// 前四个的默认值和旧的 Python 壳一样，用户有肌肉记忆，不能改。用户改过的
+/// 组合存在配置里，这里只是缺省。
+///
+/// 收录标准只有一条：**这件事值不值得在窗口看不见的时候做**。全局快捷键是给
+/// 正在游戏、正在直播、主界面缩在托盘里的人用的。改设置、翻音色库这些非得看着
+/// 界面才能做的事，给它配快捷键没有意义。
 pub const HOTKEYS: &[(&str, &str, &str)] = &[
     ("hotkey_toggle_vc", "toggle-vc", "CmdOrCtrl+F2"),
     ("hotkey_toggle_mode", "toggle-mode", "CmdOrCtrl+F3"),
     ("hotkey_prev_voice", "prev-voice", "CmdOrCtrl+F5"),
     ("hotkey_next_voice", "next-voice", "CmdOrCtrl+F6"),
+    // 音高一次一个半音。开着黑发现音色偏高偏低，不用退出游戏调。
+    ("hotkey_pitch_up", "pitch-up", "CmdOrCtrl+F7"),
+    ("hotkey_pitch_down", "pitch-down", "CmdOrCtrl+F8"),
+    // 监听自己。队友说你声音怪，想立刻听一耳朵自己现在是什么效果。
+    ("hotkey_toggle_monitor", "toggle-monitor", "CmdOrCtrl+F9"),
+    // 后期音效总开关。怀疑是压缩/均衡把声音搞糊了，一键旁路对比。
+    ("hotkey_toggle_fx", "toggle-fx", "CmdOrCtrl+F10"),
+    // 显示 / 隐藏主界面。缩在托盘里时这是唯一不用去点托盘图标的入口。
+    ("hotkey_toggle_window", "toggle-window", "CmdOrCtrl+F11"),
 ];
 
 /// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。
@@ -148,6 +161,24 @@ fn combo_for(root: Option<&Path>, key: &str, fallback: &str) -> String {
     }
 }
 
+/// 藏着就叫出来，已经在前面就收回托盘。
+///
+/// 「已经在前面」用 is_focused 判断，不用 is_visible：窗口可能可见但被游戏
+/// 全屏盖住，那时候用户按这个键是想把它调出来，不是想让它消失。
+fn toggle_main_window(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("main") else {
+        return;
+    };
+    let up = w.is_visible().unwrap_or(false)
+        && !w.is_minimized().unwrap_or(false)
+        && w.is_focused().unwrap_or(false);
+    if up {
+        let _ = w.hide();
+    } else {
+        focus_main(app);
+    }
+}
+
 /// Register or unregister the global hotkeys. Failing to grab a combo (another
 /// app already owns it) must not break the rest — report and carry on.
 pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
@@ -165,11 +196,20 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
         let handle = app.clone();
         let act = action.to_string();
         match gs.on_shortcut(combo.as_str(), move |_a, _s, _e| {
+            // 显示 / 隐藏窗口在这里就地做完，不往前端发事件。
+            //
+            // 窗口藏起来的时候 webview 有可能被系统挂起，事件到不了前端 ——
+            // 而「窗口是藏着的」恰恰是最需要这个快捷键的时候。发事件让前端
+            // 把自己显示出来，等于让一个睡着的人自己叫醒自己。
+            if act == "toggle-window" {
+                toggle_main_window(&handle);
+                return;
+            }
             let _ = handle.emit(&format!("hotkey://{act}"), ());
         }) {
             Ok(()) => ok.push(combo),
             // 组合被别的程序占了就跳过这一个，其余的照常注册 —— 一个冲突
-            // 不该让四个快捷键全废。界面上会把失败的那个标出来。
+            // 不该让所有快捷键全废。界面上会把失败的那个标出来。
             Err(_) => failed.push(combo),
         }
     }
@@ -472,14 +512,21 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 mod tests {
     use super::*;
 
-    /// 默认组合要和旧 Python 壳一样 —— 用户有肌肉记忆。用户改过之后存配置里，
-    /// 这里只管默认值。
+    /// 旧 Python 壳那四个的默认组合和顺序不许动 —— 用户有肌肉记忆。
+    ///
+    /// 后面新加的不在这条约束里（所以这里比的是前四个，不是整张表），但
+    /// 新加的也不许挤到前面去，否则等于把老用户的键改了。
     #[test]
-    fn default_hotkey_combos_match_the_old_shell() {
-        let combos: Vec<&str> = HOTKEYS.iter().map(|(_, _, d)| *d).collect();
+    fn the_original_four_hotkeys_keep_their_combos() {
+        let combos: Vec<&str> = HOTKEYS.iter().take(4).map(|(_, _, d)| *d).collect();
         assert_eq!(
             combos,
             vec!["CmdOrCtrl+F2", "CmdOrCtrl+F3", "CmdOrCtrl+F5", "CmdOrCtrl+F6"]
+        );
+        let actions: Vec<&str> = HOTKEYS.iter().take(4).map(|(_, a, _)| *a).collect();
+        assert_eq!(
+            actions,
+            vec!["toggle-vc", "toggle-mode", "prev-voice", "next-voice"]
         );
     }
 
@@ -509,5 +556,48 @@ mod tests {
         std::fs::write(&p, "x".repeat(50_000)).unwrap();
         assert_eq!(tail_bytes(&p, 1000).len(), 1000);
         let _ = std::fs::remove_file(&p);
+    }
+
+    /// 快捷键的默认组合有三份拷贝：这里的 HOTKEYS、config::defaults()、
+    /// 以及设置页 SettingsPage.tsx 的 HOTKEYS 数组。前两份能在这里对上，
+    /// 第三份只能靠注释。
+    ///
+    /// 对不上的后果很隐蔽：设置页显示 F7，实际注册的是别的键，用户按着没反应
+    /// 又看不出哪里错了。
+    #[test]
+    fn hotkey_defaults_match_the_config_defaults() {
+        let d = crate::config::defaults();
+        for (key, _action, default) in HOTKEYS {
+            let got = d
+                .get(*key)
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("config::defaults() 里没有 {key}"));
+            assert_eq!(got, *default, "{key} 两处默认组合不一致");
+        }
+    }
+
+    /// 组合键必须过得了自己的校验。写错一个字符（比如 "Ctrl+F7" 而不是
+    /// "CmdOrCtrl+F7"）会被 combo_for 当成非法值悄悄换成 fallback ——
+    /// 而 fallback 就是它自己，于是永远注册不上，也没人报错。
+    #[test]
+    fn every_default_combo_is_well_formed() {
+        for (key, _action, default) in HOTKEYS {
+            assert!(combo_ok(default), "{key} 的默认组合 {default} 形状不合法");
+        }
+    }
+
+    /// 动作名不能撞：撞了就是两个快捷键触发同一件事，另一件永远做不了。
+    #[test]
+    fn hotkey_keys_and_actions_are_unique() {
+        let mut keys: Vec<&str> = HOTKEYS.iter().map(|h| h.0).collect();
+        let n = keys.len();
+        keys.sort_unstable();
+        keys.dedup();
+        assert_eq!(keys.len(), n, "配置键名有重复");
+
+        let mut acts: Vec<&str> = HOTKEYS.iter().map(|h| h.1).collect();
+        acts.sort_unstable();
+        acts.dedup();
+        assert_eq!(acts.len(), n, "动作名有重复");
     }
 }

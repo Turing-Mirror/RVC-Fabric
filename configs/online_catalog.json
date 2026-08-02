@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.3.6",
+    "version": "1.3.7",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.3.6",
+      "version": "1.3.7",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "bfa8ab05b72e97440a65eeb07a01c8223a1d79be70c7595f85120d0de91c4c74",
-      "size_bytes": 8387250,
+      "sha256": "13788b5fd99fcd80fbbf40efa69dd9147e382c50d2bfc8ed44bba417816f256b",
+      "size_bytes": 8419670,
       "min_app_version": "1.3.0",
-      "notes": "1.3.6 是 1.3.5 之后的修复整合版。四个真 bug 一起修：壁纸系三个设置 （壁纸/磨砂/不透明度）因为图层层级全没反应；补全 Runtime 后要重启才认； 变声中切模型不生效（热更新不认模型路径）；强杀引擎后模型选择错乱 （同名模型误匹配）。广场新增「置顶」投放区；开机 4 秒自动查一次更新 （查到只问不装）。手感与观感：推子跟手、换页动效重做、设置页在线更新 修好并常驻当前版本、全局快捷键可逐个取消。"
+      "notes": "1.3.7 是 1.3.6 之后的功能版。无缝换模型：变声中切音色从二三十秒 变成零点几秒的接缝，采样率不同才退回重开流。人声分离、训练音色 从弹窗改成独立窗口，能挪能拉能最小化。新增语音合成，系统 SAPI 吐字 + 换成用户选的音色，零新增依赖。外观改动当场生效、数值条 填充溢出、窗口拖动竖带三个观感问题一并修了。"
     }
   },
   "community": {

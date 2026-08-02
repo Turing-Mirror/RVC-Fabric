@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.3.2",
+    "version": "1.3.4",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.3.2",
+      "version": "1.3.4",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "26ac9adc6d9d96bbd82811906d02a1fc94b7c2d12b7819f1dfb6366c60d30830",
-      "size_bytes": 8153076,
+      "sha256": "7a2e4cd990fc5a9cf5779d925f90b7a42dac43c20cd33ee5a90d32ef044fadce",
+      "size_bytes": 8404902,
       "min_app_version": "1.3.0",
-      "notes": "1.3.1 发版时漏改壳层内置版本常量（Rust update.rs 的 APP_VERSION）， 导致「其他」页版本号仍显示 1.3.0，且更新插件按编译版本 1.3.1 与 清单 1.3.1 相同而拒装，OTA 自动更新不可用。1.3.2 已修正常量、 对齐全部版本号（tauri.conf / Cargo / package.json / Inno）， Setup 与 OTA 双通道恢复正常。"
+      "notes": "1.3.4 是 1.3.2 之后的整合版。安装程序统一为 Tauri NSIS 一套， 自动更新包和手动下载包内容完全一致（引擎源码现在进安装包， 引擎侧的修复不再传不到用户手上）。更新链路修了两处：检查更新 读错清单键导致永远「已是最新」，以及策略 A 补丁打包器打的是旧 壳布局导致补丁一律被拒。界面侧快捷键可自定义、数值条与选择条 重做、文案按总表更新并去技术黑话。版本号改为编译期常量并新增 一致性测试，防止 1.3.1 那种「漏改一处整版自称上一版」再犯。"
     }
   },
   "community": {

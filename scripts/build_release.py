@@ -83,7 +83,6 @@ ENGINE_DIRS = (
     "tools",
 )
 ENGINE_FILES = (
-    ".env",
     "infer-web.py",
     "gui_v1.py",
     "LICENSE",

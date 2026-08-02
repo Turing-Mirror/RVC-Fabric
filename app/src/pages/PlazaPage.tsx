@@ -1,5 +1,6 @@
 import { useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
+import { StoreSection } from "../components/StoreSection";
 import {
   formatDate,
   openExternal,
@@ -9,10 +10,18 @@ import {
 } from "../lib/plaza";
 
 /**
- * Plaza: changelog + placements, both from the CNB release repo.
+ * 广场：社区音色、投放、更新日志，从上往下就是这个顺序。
  *
- * Plaza cards are **not** dismissible — carrying placements is what this page
- * is for. The dismissible one is the single models-page banner, handled there.
+ * 社区音色排第一，因为这是用户主动进广场的唯一理由 —— 投放和更新日志是我们
+ * 想让他看的，音色是他想看的。把想让人看的东西摆在人想看的东西前面，结果是
+ * 两个都没人看。
+ *
+ * 投放卡片**不可关闭**：承载投放正是这一页存在的意义。可关闭的是模型页顶部
+ * 那一条横幅，在那边单独处理。
+ *
+ * 刷新只有一个：右上角那个。一次点击把三块内容全刷了 —— 音色清单走
+ * StoreSection 的 reloadToken，投放和更新日志走 onReload。三个各自的刷新
+ * 按钮只会让人猜「我该点哪个」。
  */
 /** 更新日志二级页每页几条。够看又不至于把滚动条拉成一条线。 */
 const PER_PAGE = 5;
@@ -30,6 +39,8 @@ function PlazaPageImpl({
   // 原地展开会把「投放」挤到看不见的地方，而且没有尽头。
   const [showAll, setShowAll] = useState(false);
   const [pageNo, setPageNo] = useState(0);
+  // 加一就是「再拉一次音色清单」。父组件不需要拿到 StoreSection 的方法。
+  const [reloadToken, setReloadToken] = useState(0);
 
   const changelog = feed?.changelog ?? [];
   const items = feed?.items ?? [];
@@ -90,7 +101,13 @@ function PlazaPageImpl({
       <PageHead
         title="广场"
         actions={
-          <Btn onClick={() => onReload?.()} disabled={loading}>
+          <Btn
+            onClick={() => {
+              onReload?.();
+              setReloadToken((n) => n + 1);
+            }}
+            disabled={loading}
+          >
             {loading ? "刷新中" : "刷新"}
           </Btn>
         }
@@ -101,6 +118,24 @@ function PlazaPageImpl({
           {feed.errors.join("；")}
         </p>
       ) : null}
+
+      <Block title="社区音色" note="下载图灵镜源与第三方源的音色">
+        <StoreSection reloadToken={reloadToken} />
+      </Block>
+
+      <Block title="投放" note={items.length ? String(items.length) : ""}>
+        <Group>
+          {loading && !items.length ? (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
+          ) : items.length ? (
+            items.map((it) => <Feed key={it.id} item={it} />)
+          ) : (
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
+              暂时没有内容。
+            </p>
+          )}
+        </Group>
+      </Block>
 
       <Block
         title="更新日志"
@@ -131,19 +166,6 @@ function PlazaPageImpl({
         </Group>
       </Block>
 
-      <Block title="投放" note={items.length ? String(items.length) : ""}>
-        <Group>
-          {loading && !items.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
-          ) : items.length ? (
-            items.map((it) => <Feed key={it.id} item={it} />)
-          ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-              暂时没有内容。
-            </p>
-          )}
-        </Group>
-      </Block>
     </PagePad>
   );
 }

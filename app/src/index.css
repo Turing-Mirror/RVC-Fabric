@@ -243,6 +243,24 @@ option {
   animation: squish 0.52s var(--spring);
 }
 
+/* 邀请式提示的入场：从底下托上来，带一点点回弹。
+   页面上别的东西都是静的，一个动起来的东西自然会被看到 —— 靠这个吸引注意，
+   不靠颜色。放一次就停，不循环、不闪。 */
+@keyframes nudge-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.nudge-in {
+  animation: nudge-in 0.44s var(--spring) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

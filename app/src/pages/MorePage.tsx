@@ -6,6 +6,7 @@ import { TrainDialog } from "../components/TrainDialog";
 import { ExtrasDialog } from "../components/ExtrasDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
+import { ALL_LINKS } from "../lib/links";
 import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
@@ -19,38 +20,6 @@ type Props = {
   onForceKill?: () => void | Promise<void>;
   onOpenProvision?: () => void;
 };
-
-/**
- * Repos and socials. Plain list rows, opened in the user's own browser through
- * the shell's http/https-only `open_external`. `desc` carries the account's own
- * identifier and nothing else.
- */
-const LINKS: { title: string; desc?: string; url: string }[] = [
-  {
-    title: "GitHub 源码",
-    desc: "Turing-Mirror/RVC-Fabric",
-    url: "https://github.com/Turing-Mirror/RVC-Fabric",
-  },
-  {
-    title: "CNB 发布与制品",
-    desc: "Turing-Mirror/RVC-Fabric-Releases",
-    url: "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
-  },
-  {
-    title: "哔哩哔哩 @图灵镜",
-    url: "https://space.bilibili.com/3546871148579062",
-  },
-  {
-    title: "抖音 @图灵镜",
-    desc: "抖音号 TuringMirror",
-    url: "https://v.douyin.com/6NxXcrKK9cc",
-  },
-  {
-    title: "小红书 @图灵镜",
-    desc: "小红书号 TuringMirror",
-    url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
-  },
-];
 
 export function MorePage({
   status,
@@ -360,7 +329,7 @@ export function MorePage({
       </Block>
       <Block title="仓库与社媒">
         <Group>
-          {LINKS.map((l) => (
+          {ALL_LINKS.map((l) => (
             <ListItem
               key={l.title}
               title={l.title}

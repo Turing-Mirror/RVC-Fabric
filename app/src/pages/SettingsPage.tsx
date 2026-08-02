@@ -780,11 +780,17 @@ function SettingsPageImpl({
   );
 }
 
+/** 顺序、键名、默认值必须和 `shell_extras::HOTKEYS` 对得上。 */
 const HOTKEYS = [
   { key: "hotkey_toggle_vc", label: "开启 / 停止变声", fallback: "CmdOrCtrl+F2" },
   { key: "hotkey_toggle_mode", label: "变声 / 原声", fallback: "CmdOrCtrl+F3" },
   { key: "hotkey_prev_voice", label: "上一个音色", fallback: "CmdOrCtrl+F5" },
   { key: "hotkey_next_voice", label: "下一个音色", fallback: "CmdOrCtrl+F6" },
+  { key: "hotkey_pitch_up", label: "音高 +1", fallback: "CmdOrCtrl+F7" },
+  { key: "hotkey_pitch_down", label: "音高 −1", fallback: "CmdOrCtrl+F8" },
+  { key: "hotkey_toggle_monitor", label: "监听自己 开 / 关", fallback: "CmdOrCtrl+F9" },
+  { key: "hotkey_toggle_fx", label: "后期音效 开 / 关", fallback: "CmdOrCtrl+F10" },
+  { key: "hotkey_toggle_window", label: "显示 / 隐藏主界面", fallback: "CmdOrCtrl+F11" },
 ];
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */

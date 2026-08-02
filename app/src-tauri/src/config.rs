@@ -166,7 +166,16 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("hotkey_toggle_mode".into(), json!("CmdOrCtrl+F3"));
     m.insert("hotkey_prev_voice".into(), json!("CmdOrCtrl+F5"));
     m.insert("hotkey_next_voice".into(), json!("CmdOrCtrl+F6"));
+    m.insert("hotkey_pitch_up".into(), json!("CmdOrCtrl+F7"));
+    m.insert("hotkey_pitch_down".into(), json!("CmdOrCtrl+F8"));
+    m.insert("hotkey_toggle_monitor".into(), json!("CmdOrCtrl+F9"));
+    m.insert("hotkey_toggle_fx".into(), json!("CmdOrCtrl+F10"));
+    m.insert("hotkey_toggle_window".into(), json!("CmdOrCtrl+F11"));
     m.insert("telemetry_opt_in".into(), json!(Value::Null));
+    // 完成过多少次变声（开启→停止算一次）。攒够十次问一句要不要关注我们。
+    // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。
+    m.insert("vc_run_count".into(), json!(0));
+    m.insert("follow_prompt_done".into(), json!(false));
     m
 }
 

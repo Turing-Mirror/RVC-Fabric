@@ -23,9 +23,9 @@
 
 ## 这是什么
 
-RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音色、选好声卡、点「开启变声」，游戏、QQ、Discord 里的人听到的就是变声后的你。
+RVC Fabric 是一个 Windows 实时变声软件。选一个音色、选好声卡、点「开启变声」，游戏、QQ、Discord 里的人听到的就是变声后的你。
 
-它**不是**原版 RVC WebUI 的换皮版。原版是给会调参的人用的网页工具链——要自己配 Python 环境、装 PyTorch、下预训练模型、开浏览器点 Gradio 页面。RVC Fabric 把这一整套包成了普通用户能用的桌面程序：
+它**不是**原版 RVC WebUI 的换皮版。原版是给会调参的人用的网页工具链——自己配 Python 环境、装 PyTorch、下预训练模型、开浏览器点 Gradio 页面。RVC Fabric 把这一整套包成了普通用户能用的桌面程序：
 
 - 一个安装包，装完点图标就开始用，不碰命令行、不配环境
 - Python 运行时和模型权重由启动器按你的显卡自动下载补全
@@ -44,62 +44,35 @@ RVC Fabric 是一个装完就能用的 Windows 实时变声软件。选一个音
 | 音色来源 | 自己训练 / 自己找 | 内置音色库 + 社区下载 + 自己导入 |
 | 实时变声 | `gui_v1.py`，需手动配置 | 主界面一键，参数随音色保存，后台无窗进程 |
 
-### 沿用上游的部分
-
-**网络结构与底模没有改动，也没有重新训练。** `infer/lib/infer_pack/`（VITS 网络、attention、F0 预测器等）与上游一致。检索式音色转换的核心思路、hubert 特征提取、RMVPE 音高提取模型本身都来自上游。
-
-### 我们改了什么
+**沿用上游的部分：** 网络结构与底模没有改动，也没有重新训练。`infer/lib/infer_pack/`（VITS 网络、attention、F0 预测器）与上游一致。检索式音色转换的核心思路、hubert 特征提取、RMVPE 音高提取模型本身都来自上游。
 
 **实时推理链路做了大量改造**（相对初始 fork）：
 
-| 文件 | 改动 | 内容 |
-|---|---|---|
-| `gui_v1.py` | +2939 / −314 | 无窗 worker 模式、文件协议驱动、真实延迟指标、参数热更 |
-| `infer/lib/rtrvc.py` | +692 / −68 | GPU 上做检索、常量控制张量复用、fp32 强制卡的 dtype 处理、推理期关梯度、引擎预热 |
-| `infer/lib/rmvpe.py` | +676 / −15 | 解码向量化、f0 后处理去分支、cudnn autotune |
+| 文件 | 改动 |
+|---|---|
+| `gui_v1.py` | 无窗 worker 模式、文件协议驱动、真实延迟指标、参数热更 |
+| `infer/lib/rtrvc.py` | GPU 上做检索、常量控制张量复用、fp32 强制卡的 dtype 处理、推理期关梯度、引擎预热 |
+| `infer/lib/rmvpe.py` | 解码向量化、f0 后处理去分支、cudnn autotune |
 
-**新增的引擎侧功能**（上游没有的）：
-
-- 麦克风输入增益 `in_gain_db`，可运行中热更
-- 变声后的 DSP 效果链：噪声门、压缩器、五段 EQ
-- 「监听自己」——变声后的声音同时送一份到耳机
-- 无窗后台 worker 架构，单实例保证与孤儿进程清理
-- Python 3.9 兼容性改造（发行运行时是 3.9）
+引擎侧新增（上游没有的）：麦克风输入增益 `in_gain_db`（可运行中热更）、变声后 DSP 效果链（噪声门、压缩器、五段 EQ）、「监听自己」（变声后声音同时送一份到耳机）、无窗后台 worker + 单实例 + 孤儿进程清理、Python 3.9 兼容（发行运行时是 3.9）。
 
 其余上游代码（`infer-web.py` 训练与推理 WebUI、UVR5、ONNX 导出、IPEX 支持）基本保持原样，作为高级功能保留。
 
-### 目录归属
+## 功能
 
-- 上游为主：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`（其中实时相关部分见上表）
-- 本项目自有：`app/`（Tauri + React 产品外壳）、`scripts/`（打包与运营）、`installer/`、`tests/`
-- 制品暂存（gitignore）：`CNB-GIT-RELEASE/` → 对应 CNB 仓 [RVC-Fabric-Releases](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
+**日常变声** — 选音色 → 选设备 → 开启变声。音高、共鸣边说边调，立即生效。「原声旁路」模式不变声只透传，用来测麦克风和接线。麦克风电平表带响应阈值刻度，一眼看出软件有没有听到你。
 
-上游仓库：**https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI**
-上游多语言文档保留在 `docs/en`、`docs/jp`、`docs/kr`、`docs/fr`、`docs/pt`、`docs/tr`、`docs/cn`。
+**音色管理** — 本地音色网格浏览、搜索、排序。每个音色可以绑定特征索引文件（`.index`，检索库），也可以不绑——没有 index 一样能用。参数按音色单独保存，切回来还是上次那套。
 
-## 主要功能
+**配置档案** — 同一个音色可以存多套参数（音高 / 音效 / 性能），点「使用」即切换。档案可以导出分享，也能导入别人调好的。
 
-**日常变声**
-选音色 → 选设备 → 开启变声。音高、共鸣可以边说边调，立即生效。「原声旁路」模式不变声只透传，用来测麦克风和接线。麦克风电平表带响应阈值刻度，一眼看出软件有没有听到你。
+**社区音色** — 双源音色库：图灵镜自有源 + 第三方公开源（如 Hugging Face 直链）。支持并发下载、断点续传、系列专区、按上传时间分页。第三方内容与官方无关，安装前请自行判断。
 
-**音色管理**
-本地音色网格浏览、搜索、排序。每个音色可以绑定特征索引文件（`.index`，检索库），也可以不绑——没有 index 一样能用。参数按音色单独保存，切回来还是上次那套。
+**显卡支持** — NVIDIA（CUDA）、AMD / Intel（DirectML）。启动器自动识别你的显卡并下载对应运行时，不用手动装驱动依赖，也不用自己挑安装包。
 
-**配置档案**
-同一个音色可以存多套参数（音高 / 音效 / 性能），点「使用」即切换。档案可以导出分享，也能导入别人调好的。
-
-**社区音色**
-双源音色库：图灵镜自有源 + 第三方公开源（如 Hugging Face 直链）。支持并发下载、断点续传、系列专区、按上传时间分页。第三方内容与官方无关，安装前请自行判断。
-
-**显卡支持**
-NVIDIA（CUDA）、AMD / Intel（DirectML）。启动器自动识别你的显卡并下载对应运行时，不用手动装驱动依赖，也不用自己挑安装包。
-
-**其他**
-全局快捷键、托盘常驻、自定义背景图、诊断包一键生成（含性能测试）、在线更新。
+**其他** — 全局快捷键（可自定义）、托盘常驻、自定义背景图、诊断包一键生成（含性能测试）、在线更新。
 
 ## 安装与使用
-
-### 安装
 
 从 [Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases) 或图灵镜发布渠道下载 `RVC_Fabric_Setup.exe`。
 
@@ -172,19 +145,23 @@ python scripts\build_catalog.py build --diff                   :: 在线清单
 
 ### 架构
 
-主程序是 PyInstaller 冻结的 Python 3.13 外壳，**里面没有 torch 和 numpy**；推理跑在下载来的 Python 3.9 运行时里，两者通过 `User_Data/runtime_control/` 下的 JSON 文件通信。
+外壳是 Tauri + Rust + React（单一 `RVC Fabric.exe`），推理跑在下载来的 Python 3.9 运行时里，两者通过 `User_Data/runtime_control/` 下的 JSON 文件通信。
 
 ```
-变声器.exe（外壳，Tk 界面）
-   │  JSON 文件协议
+RVC Fabric.exe（Tauri + Rust + React）
+   │  JSON 文件协议（command.json / status.json / worker.pid）
    ▼
 Runtime\pythonw.exe tools/realtime_worker.py（Python 3.9 + CUDA / DirectML）
-   → gui_v1.py → rtrvc + AudioIoProcess
+   → runpy gui_v1.py → rtrvc + AudioIoProcess
 ```
 
-因此外壳里 import 的任何模块都必须在没有 numpy / torch 的情况下能干净导入。
+两个进程是刻意拆的：Rust 外壳里塞不进 torch，推理只能在下载来的 3.9 运行时里跑。需要 torch 或 sounddevice 的事（音频设备枚举、加速能力探测）都留给 worker，Rust 去问它。
 
-> 界面层正在迁移到 Tauri + React。迁移期间以 `git log` 和源码为准。
+### 目录归属
+
+- 上游为主：`infer/`、`configs/`、`tools/`、`gui_v1.py`、`infer-web.py`（其中实时相关部分见上表）
+- 本项目自有：`app/`（Tauri + React 产品外壳）、`scripts/`（打包与运营）、`installer/`（Inno 安装脚本，待 NSIS 验证后撤）、`tests/`
+- 制品暂存（gitignore）：`CNB-GIT-RELEASE/` → 对应 CNB 仓 [RVC-Fabric-Releases](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
 ### 仓库不含什么
 

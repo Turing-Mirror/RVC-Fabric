@@ -12,10 +12,19 @@ const CNB_RAW_MAIN: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-
 const CNB_LFS_BASE: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs";
 const DEFAULT_RELEASE_TAG: &str = "RVC-runtime";
 
+/// 清单来源，按顺序试，第一个能解析成对象的就用。
+///
+/// 第三条以前是 `manifest.json` —— LFS 时代的老清单。**它不是兜底，是个陷阱：**
+/// 里面的 runtime 条目根本没有 url，只有 `runtime\amd\...` 这种本地路径，客户端
+/// 只好按 lfs 通道拿 sha256 拼出 `/-/lfs/<sha>`；而那批 LFS 对象在 173a573
+/// 清仓时就删干净了，实测那个地址返回 404。也就是说前两条一旦抖一下，用户拿到
+/// 的不是「旧一点的清单」，而是一个下不动的地址。它也没有 app 段，更新检查
+/// 落到它头上只会永远回答「已是最新」。
+///
+/// 已经从发布仓删掉了。少一条 404 的退路，比多一条假的强。
 const MANIFEST_URLS: &[&str] = &[
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/index.json",
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/catalog/online_catalog.snippet.json",
-    "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/manifest.json",
 ];
 
 const UA: &str = "RVCFabric-Shell/1.3";

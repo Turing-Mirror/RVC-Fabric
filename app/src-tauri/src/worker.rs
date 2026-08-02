@@ -715,6 +715,37 @@ pub fn set_hot(root: &Path, payload: Map<String, Value>) -> Result<u64, String> 
     send_command(root, "set", payload)
 }
 
+/// 把「当前选中的音色」热推给引擎，不重开流。
+///
+/// 路径从配置里读，不从界面传进来 —— `voices_select` 刚刚才把它写进去，而且
+/// 那条路径是经过音色库校验的。让界面直接递一个路径给引擎，等于把「让引擎去
+/// torch.load 任意文件」这件事开放给了前端。
+///
+/// worker 没在跑的时候直接报错走人：那时候配置已经是新的，下次开启自然就对，
+/// 没有任何要热更新的东西。
+pub fn swap_model(root: &Path) -> Result<u64, String> {
+    let cfg = crate::config::read(root);
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if pth.is_empty() {
+        return Err("还没有选中的音色".into());
+    }
+    let mut payload = Map::new();
+    payload.insert("pth_path".into(), json!(pth));
+    payload.insert(
+        "index_path".into(),
+        json!(cfg.get("index_path").and_then(|v| v.as_str()).unwrap_or("")),
+    );
+    if let Some(r) = cfg.get("index_rate") {
+        payload.insert("index_rate".into(), r.clone());
+    }
+    set_hot(root, payload)
+}
+
 /// Snapshot for the UI (status + derived meter 0..1).
 pub fn status_for_ui(root: &Path) -> Value {
     let mut st = protocol::read_status(root);

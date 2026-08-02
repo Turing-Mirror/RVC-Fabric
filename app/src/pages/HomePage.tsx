@@ -2,6 +2,8 @@ import { useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
+import { ExtrasDialog } from "../components/ExtrasDialog";
+import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
 
 type Props = {
@@ -139,6 +141,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
               <Btn onClick={onOpenModels}>去「模型」页</Btn>
             </div>
           </Block>
+          <ToolShortcuts />
         </PagePad>
       </div>
     );
@@ -244,8 +247,71 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
             })}
           </div>
         </Block>
+        <ToolShortcuts />
       </PagePad>
     </div>
+  );
+}
+
+/**
+ * 首页底下那三个直达按钮。
+ *
+ * 这三件事以前只有一条路：「其他」页 → 往下翻到「音频工具」→ 点「打开」。
+ * 而它们和首页在做的事是连着的 —— 想要一个新音色，就是「分离出干声 → 训练」；
+ * 分离模型和训练底模又要先下载。放在最近使用的正下方，是把这条路接上。
+ *
+ * 三个都开独立窗口 / 弹窗，首页本身不跳转：用户点完还站在原地，回头就能接着
+ * 挑音色。
+ */
+function ToolShortcuts() {
+  const [extras, setExtras] = useState(false);
+  const items: Array<{ label: string; desc: string; go: () => void }> = [
+    {
+      label: "人声分离",
+      desc: "从歌曲里抠出干声",
+      go: () => openTool("separate"),
+    },
+    {
+      label: "训练音色",
+      desc: "用干声训一个新音色",
+      go: () => openTool("train"),
+    },
+    {
+      label: "下载模型",
+      desc: "分离模型与训练底模",
+      go: () => setExtras(true),
+    },
+  ];
+  return (
+    <Block title="音频工具">
+      <div className="flex gap-3 flex-wrap max-[520px]:flex-col">
+        {items.map((it) => (
+          <button
+            key={it.label}
+            type="button"
+            onClick={it.go}
+            className={[
+              "flex-1 min-w-[180px] text-left border-0 cursor-pointer",
+              "rounded-[var(--r)] px-4 py-3.5",
+              "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+              "transition-[transform,background] duration-200 ease-[var(--ease)]",
+              "hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)]",
+              "active:scale-[0.985]",
+            ].join(" ")}
+          >
+            <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+              {it.label}
+            </div>
+            <div className="text-[12px] text-[var(--meta)] mt-1">{it.desc}</div>
+          </button>
+        ))}
+      </div>
+      <ExtrasDialog
+        open={extras}
+        onClose={() => setExtras(false)}
+        title="下载模型"
+      />
+    </Block>
   );
 }
 

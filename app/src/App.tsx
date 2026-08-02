@@ -10,10 +10,11 @@ import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
-import { forceKillEngine, setHot } from "./lib/engine";
+import { forceKillEngine, setHot, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { applyAppearance } from "./lib/appearance";
 import { listen } from "@tauri-apps/api/event";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
@@ -63,27 +64,15 @@ export default function App() {
   // 会以为按钮坏了。按钮自己也要进入「检查中…」并禁用。
   const [updateBusy, setUpdateBusy] = useState(false);
 
-  // Wallpaper + theme come from app_config and are applied to the shell root.
-  // Blur/opacity are plain CSS here — the Tk shell needed a chroma-key hack
-  // (#010203) to fake transparency; a webview does not.
+  // 开机时把外观（配色 / 背景图 / 磨砂 / 不透明度）套上。之后用户在设置页
+  // 每改一下都由 useConfig 就地再套一次，所以这里只跑一次就够 —— 以前依赖数组
+  // 写的是 [page]，等于「换页才刷新外观」，改完当场毫无反应。
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
         const cfg = await invoke<Record<string, unknown>>("config_get");
-        if (!alive) return;
-        const mode = String(cfg.theme_mode ?? "system");
-        const el = document.documentElement;
-        if (mode === "system") el.removeAttribute("data-theme");
-        else el.setAttribute("data-theme", mode);
-        const path = String(cfg.wallpaper_path ?? "");
-        el.style.setProperty("--wp-blur", `${Number(cfg.wallpaper_blur ?? 40) / 100 * 24}px`);
-        el.style.setProperty("--wp-opacity", String(Number(cfg.wallpaper_opacity ?? 70) / 100));
-        if (path) {
-          el.style.setProperty("--wp-image", `url("${convertFileSrc(path)}")`);
-        } else {
-          el.style.removeProperty("--wp-image");
-        }
+        if (alive) applyAppearance(cfg);
       } catch {
         /* config unavailable outside Tauri */
       }
@@ -91,7 +80,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [page]);
+  }, []);
   // 启动时自动查到的新版本。非空 = 弹一条「要不要现在装」。
   const [updateOffer, setUpdateOffer] = useState<UpdateInfo | null>(null);
 
@@ -214,7 +203,7 @@ export default function App() {
 
   const engine = useEngine();
   const plaza = usePlaza();
-  const { syncParams, restart: restartEngine, refreshProvision } = engine;
+  const { syncParams, refreshProvision } = engine;
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -426,15 +415,19 @@ export default function App() {
       .catch(() => {
         /* browser preview */
       });
-    // 正在变声的时候换模型，必须重开一次流。
+    // 正在变声的时候换模型：热换，不重开流。
     //
-    // 换模型只写了配置文件；引擎的热更新不认模型路径（`_worker_apply_hot`
-    // 里没有 pth_path 这一项），正在跑的 worker 手里还攥着上一个模型。
-    // 于是底栏名字换了、耳朵里的声音没换 —— 「显示切换了但实际没切」。
+    // 引擎现在认 pth_path 这个热更新键了 —— 音频线程在两块之间把 RVC 实例
+    // 换掉，设备、缓冲区、延迟设置全都不动。用户听到的是零点几秒的接缝，
+    // 而不是停流重开的那二三十秒。
     //
-    // restart 在没跑的时候是空操作：那时候配置已经是新的，下次开启自然就对。
-    void restartEngine();
-  }, [syncParams, restartEngine]);
+    // 采样率跟随模型、而新模型的采样率又不一样时，引擎自己退回重开流 ——
+    // 那种情况下整条流水线的尺寸都变了，换不了。
+    //
+    // 没在跑的时候后端会报「worker 未运行」，那不是故障：配置已经是新的，
+    // 下次开启自然就对，所以吞掉。
+    void swapModel().catch(() => {});
+  }, [syncParams]);
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {

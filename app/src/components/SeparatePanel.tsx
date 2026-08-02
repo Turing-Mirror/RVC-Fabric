@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
+import { ToolBody } from "./ToolWindow";
 
 type Status = {
   runtime_ready?: boolean;
@@ -28,13 +29,7 @@ const PATH =
  * 一次一个文件，没有队列 —— 分离很吃显存，排队跑只会让人以为卡死了。要批量
  * 的话再说，先把单个跑通。
  */
-export function SeparateDialog({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+export function SeparatePanel() {
   const [st, setSt] = useState<Status>({});
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
@@ -55,7 +50,6 @@ export function SeparateDialog({
   };
 
   useEffect(() => {
-    if (!open) return;
     void load();
     // listen() 是异步的，弹窗在它 resolve 之前关掉就会把注销句柄丢掉，
     // 每开一次泄漏一个监听。和 App.tsx 里一样的处理。
@@ -72,10 +66,8 @@ export function SeparateDialog({
       disposed = true;
       un?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  if (!open) return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 开一次窗只挂一次
+  }, []);
 
   const pick = async (dir: boolean) => {
     try {
@@ -120,14 +112,7 @@ export function SeparateDialog({
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[560px] rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ToolBody>
         <h3 className="m-0 mb-1 text-[17px] font-semibold">人声分离</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
           把歌曲拆成人声和伴奏。训练音色前用它清掉背景音乐。
@@ -186,9 +171,7 @@ export function SeparateDialog({
         <div className="mt-5 flex justify-end gap-2.5">
           {running ? (
             <Btn onClick={() => void invoke("separate_cancel")}>取消</Btn>
-          ) : (
-            <Btn onClick={onClose}>关闭</Btn>
-          )}
+          ) : null}
           <Btn
             primary
             disabled={running || !!blocked || !input || !output}
@@ -197,7 +180,6 @@ export function SeparateDialog({
             {running ? "分离中…" : "开始分离"}
           </Btn>
         </div>
-      </div>
-    </div>
+    </ToolBody>
   );
 }

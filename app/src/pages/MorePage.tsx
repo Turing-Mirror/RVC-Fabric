@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
-import { SeparateDialog } from "../components/SeparateDialog";
-import { TrainDialog } from "../components/TrainDialog";
+import { openTool } from "../components/ToolWindow";
 import { ExtrasDialog } from "../components/ExtrasDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
@@ -30,8 +29,6 @@ export function MorePage({
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
-  const [sepOpen, setSepOpen] = useState(false);
-  const [trainOpen, setTrainOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
   // Where the app thinks it is installed. The row below used to only describe
   // that this is resolved automatically, without ever showing the answer —
@@ -239,12 +236,17 @@ export function MorePage({
           <ListItem
             title="人声分离"
             desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐或噪音"
-            right={<Btn onClick={() => setSepOpen(true)}>打开</Btn>}
+            right={<Btn onClick={() => openTool("separate")}>打开</Btn>}
           />
           <ListItem
             title="训练音色"
             desc="用一个人的干声素材训一个新音色。需要 N 卡，可能需要几小时，由硬件配置决定。"
-            right={<Btn onClick={() => setTrainOpen(true)}>打开</Btn>}
+            right={<Btn onClick={() => openTool("train")}>打开</Btn>}
+          />
+          <ListItem
+            title="语音合成"
+            desc="打一段字，用当前音色念出来。系统语音负责吐字，音色由你选的模型决定。"
+            right={<Btn onClick={() => openTool("tts")}>打开</Btn>}
           />
           <ListItem
             title="下载模型"
@@ -253,8 +255,6 @@ export function MorePage({
           />
         </Group>
       </Block>
-      <SeparateDialog open={sepOpen} onClose={() => setSepOpen(false)} />
-      <TrainDialog open={trainOpen} onClose={() => setTrainOpen(false)} />
       <ExtrasDialog
         open={extrasOpen}
         onClose={() => setExtrasOpen(false)}

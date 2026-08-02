@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
+import { ToolBody } from "./ToolWindow";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -57,13 +58,7 @@ const FIELD =
  * batch size、缓存进显存、多卡拆分、是否保存中间权重 —— 那些是给训练农场
  * 调的，我们的用户是一台家用机，多给一个开关就多一种训废的方式。
  */
-export function TrainDialog({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+export function TrainPanel() {
   const [st, setSt] = useState<Status>({});
   const [name, setName] = useState("");
   const [dataset, setDataset] = useState("");
@@ -83,7 +78,6 @@ export function TrainDialog({
   };
 
   useEffect(() => {
-    if (!open) return;
     void load();
     // listen() 是异步的，弹窗在它 resolve 之前关掉就会把注销句柄丢掉，
     // 每开一次泄漏一个监听。和 SeparateDialog 一样的处理。
@@ -100,10 +94,7 @@ export function TrainDialog({
       disposed = true;
       un?.();
     };
-     
-  }, [open]);
-
-  if (!open) return null;
+  }, []);
 
   const existing = st.experiments?.find((e) => e.name === name.trim());
   // 有切片就能续跑，预处理是最慢的一步（几十分钟），能跳过就跳过。
@@ -167,14 +158,7 @@ export function TrainDialog({
       : "";
 
   return (
-    <div
-      className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={running ? undefined : onClose}
-    >
-      <div
-        className="w-full max-w-[620px] rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ToolBody>
         <h3 className="m-0 mb-1 text-[17px] font-semibold">训练音色</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
           用一个人的干声素材训一个属于他的音色。10 分钟以上的干净人声就够，
@@ -280,9 +264,7 @@ export function TrainDialog({
         <div className="mt-5 flex justify-end gap-2.5">
           {running ? (
             <Btn onClick={() => void invoke("train_cancel")}>中断</Btn>
-          ) : (
-            <Btn onClick={onClose}>关闭</Btn>
-          )}
+          ) : null}
           <Btn
             primary
             disabled={running || !!blocked.text || !name.trim() || (!dataset && !resume)}
@@ -298,7 +280,6 @@ export function TrainDialog({
             下次选同一个名字就接着来。
           </p>
         ) : null}
-      </div>
-    </div>
+    </ToolBody>
   );
 }

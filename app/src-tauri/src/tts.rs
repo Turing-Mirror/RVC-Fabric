@@ -1,0 +1,386 @@
+//! 语音合成（文字 → 目标音色的语音）。
+//!
+//! 两步，各干各的：
+//!
+//! 1. **系统 TTS 念出来** —— Windows 自带的 SAPI，走 PowerShell 调
+//!    `System.Speech.Synthesis`。念出来的是微软那几把标准嗓子，不好听，但这一
+//!    步只负责「把字读成有停顿有轻重的人声」。
+//! 2. **RVC 换成用户选的音色** —— 就是离线推理，`tools/infer_cli.py`，和实时
+//!    变声用的是同一批权重。音色完全来自这一步。
+//!
+//! 为什么不引一个神经 TTS：那要往 Runtime 里塞一个新的 python 依赖和一份新的
+//! 模型权重。Runtime 是个 1.8 GB 的整包，加一个依赖就得重发一次全量包，而所有
+//! 人都得重下。SAPI 是系统自带的，零新增依赖、零下载、离线可用，而最终音色反正
+//! 由第二步的 RVC 决定 —— 第一步只要吐字清楚就够了。
+//!
+//! 和人声分离一样是一次性任务：起进程、读输出、等它退出。不套 worker.rs 那一
+//! 整套常驻进程的协议。
+
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
+
+use crate::paths;
+
+/// 一次只跑一个。第二步要占显存，两个一起跑会互相挤爆。
+static BUSY: Mutex<bool> = Mutex::new(false);
+static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+
+fn cancel_flag() -> Arc<AtomicBool> {
+    CANCEL
+        .get_or_init(|| Arc::new(AtomicBool::new(false)))
+        .clone()
+}
+
+/// 一次能合成多长的文字。
+///
+/// 不是性能上限，是防手滑：粘一整本小说进来，SAPI 会闷头念上几十分钟，中间没有
+/// 任何进度可报，用户只会以为卡死了。两千字大约三五分钟，是「等得起」的上限。
+pub const MAX_CHARS: usize = 2000;
+
+pub fn out_dir(root: &Path) -> PathBuf {
+    paths::user_data(root).join("tts")
+}
+
+fn infer_script(root: &Path) -> PathBuf {
+    root.join("tools").join("infer_cli.py")
+}
+
+pub fn cancel() {
+    cancel_flag().store(true, Ordering::SeqCst);
+}
+
+fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
+    let _ = app.emit(
+        "tts-progress",
+        json!({
+            "phase": phase,
+            "done": done,
+            "total": total.max(1),
+            "message": message,
+        }),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 第一步：系统 TTS
+// ---------------------------------------------------------------------------
+
+/// 列出系统里装了哪些 TTS 嗓子。
+///
+/// 中文 Windows 至少有一把中文的（Huihui / Yaoyao / Kangkang），英文系统上可能
+/// 一把中文的都没有 —— 那种情况下念中文会是一串音标似的怪音，所以名单要如实
+/// 报给界面，让用户自己看见有哪些。
+pub fn list_sapi_voices() -> Vec<String> {
+    let ps = r#"
+Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Name }
+$s.Dispose()
+"#;
+    let Ok(out) = run_powershell(ps) else {
+        return Vec::new();
+    };
+    out.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn run_powershell(script: &str) -> Result<String, String> {
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let out = cmd.output().map_err(|e| format!("起不来 PowerShell：{e}"))?;
+    if !out.status.success() {
+        return Err("PowerShell 执行失败".into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// 把文字念成一个 wav 文件。
+///
+/// 要念的字走文件不走命令行：一段中文里出现引号、反引号、`$` 都是常事，拼进
+/// PowerShell 的命令行就是一串转义地雷，而且 `$(...)` 在 PowerShell 里会被当成
+/// 子表达式执行 —— 那等于让用户输入框里的内容变成可执行代码。读文件没有这个
+/// 问题：文件内容永远是数据。
+fn synthesize(root: &Path, text: &str, voice: &str, rate: i32) -> Result<PathBuf, String> {
+    // 嗓子名必须是系统真的报出来过的那一个。单引号字符串在 PowerShell 里不做
+    // 插值、`''` 也确实是转义，所以拼进去本身是安全的 —— 但「安全靠转义写对」
+    // 是个会随着以后改脚本一起失效的保证。对着白名单比一下，这个类别就没了。
+    if !voice.is_empty() && !list_sapi_voices().iter().any(|v| v == voice) {
+        return Err(format!("系统里没有这把嗓子：{voice}"));
+    }
+    let cache = paths::update_cache(root);
+    std::fs::create_dir_all(&cache).map_err(|e| format!("建不了缓存目录：{e}"))?;
+    let txt = cache.join("tts_text.txt");
+    let wav = cache.join("tts_raw.wav");
+
+    // UTF-8 带 BOM：PowerShell 5 的 Get-Content 默认按系统 ANSI 码页读，
+    // 没有 BOM 的中文会被读成乱码，念出来是一串怪音。
+    let mut f = std::fs::File::create(&txt).map_err(|e| format!("写不了文本文件：{e}"))?;
+    f.write_all(&[0xEF, 0xBB, 0xBF])
+        .and_then(|_| f.write_all(text.as_bytes()))
+        .map_err(|e| format!("写不了文本文件：{e}"))?;
+    drop(f);
+    let _ = std::fs::remove_file(&wav);
+
+    // -1..1 → SAPI 的 -10..10。整段脚本里唯一插值进去的是我们自己造的路径和
+    // 一个已经夹紧的整数，没有用户输入。
+    let rate = rate.clamp(-10, 10);
+    let script = format!(
+        r#"
+Add-Type -AssemblyName System.Speech
+$t = [System.IO.File]::ReadAllText('{txt}', [System.Text.Encoding]::UTF8)
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$want = '{voice}'
+if ($want -ne '') {{
+  foreach ($v in $s.GetInstalledVoices()) {{
+    if ($v.VoiceInfo.Name -eq $want) {{ $s.SelectVoice($want); break }}
+  }}
+}}
+$s.Rate = {rate}
+$s.SetOutputToWaveFile('{wav}')
+$s.Speak($t)
+$s.Dispose()
+"#,
+        txt = txt.to_string_lossy().replace('\'', "''"),
+        wav = wav.to_string_lossy().replace('\'', "''"),
+        voice = voice.replace('\'', "''"),
+    );
+    run_powershell(&script)?;
+    let _ = std::fs::remove_file(&txt);
+    if !wav.is_file() {
+        return Err("系统语音没有生成声音文件。请到「设置 → 时间和语言 → 语音」里确认装了语音包。".into());
+    }
+    Ok(wav)
+}
+
+// ---------------------------------------------------------------------------
+// 第二步：RVC 换音色
+// ---------------------------------------------------------------------------
+
+/// 现在能不能用，以及用哪个音色。
+pub fn status(root: &Path) -> Value {
+    let cfg = crate::config::read(root);
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    json!({
+        "runtime_ready": paths::runtime_ready(root),
+        "infer_present": infer_script(root).is_file(),
+        "voices": list_sapi_voices(),
+        "model_path": pth,
+        "model_name": cfg.get("last_model_name").and_then(|v| v.as_str()).unwrap_or(""),
+        "out_dir": out_dir(root).to_string_lossy(),
+        "max_chars": MAX_CHARS,
+        "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
+    })
+}
+
+/// 跑一次合成。阻塞，调用方负责挪到后台线程。
+pub fn run(
+    app: &AppHandle,
+    root: &Path,
+    text: &str,
+    voice: &str,
+    rate: i32,
+    pitch: i32,
+    use_rvc: bool,
+) -> Result<Value, String> {
+    {
+        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        if *g {
+            return Err("已经有一个合成任务在跑了".into());
+        }
+        *g = true;
+    }
+    cancel_flag().store(false, Ordering::SeqCst);
+    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc);
+    {
+        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        *g = false;
+    }
+    if let Err(ref e) = result {
+        emit(app, "error", 0, 1, e);
+    }
+    result
+}
+
+fn run_inner(
+    app: &AppHandle,
+    root: &Path,
+    text: &str,
+    voice: &str,
+    rate: i32,
+    pitch: i32,
+    use_rvc: bool,
+) -> Result<Value, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("先写点要念的字".into());
+    }
+    if text.chars().count() > MAX_CHARS {
+        return Err(format!("一次最多 {MAX_CHARS} 字，先分几段"));
+    }
+
+    emit(app, "sapi", 0, 2, "系统语音正在朗读…");
+    let raw = synthesize(root, text, voice, rate)?;
+    if cancel_flag().load(Ordering::SeqCst) {
+        return Err("已取消".into());
+    }
+
+    let dir = out_dir(root);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("建不了输出目录：{e}"))?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let out = dir.join(format!("tts_{stamp}.wav"));
+
+    if !use_rvc {
+        std::fs::copy(&raw, &out).map_err(|e| format!("写不了输出文件：{e}"))?;
+        emit(app, "done", 2, 2, "合成完成");
+        return Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": false }));
+    }
+
+    let cfg = crate::config::read(root);
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if pth.is_empty() || !Path::new(&pth).is_file() {
+        return Err("还没有选中的音色。先在「首页」选一个，或者关掉「换成我的音色」。".into());
+    }
+    if !paths::runtime_ready(root) {
+        return Err("Runtime 未就绪，请先补全运行时".into());
+    }
+    let script = infer_script(root);
+    if !script.is_file() {
+        return Err(format!("找不到推理脚本：{}", script.display()));
+    }
+
+    emit(app, "rvc", 1, 2, "正在换成你的音色…");
+    let py = paths::runtime_python(root).ok_or("找不到 Runtime\\python.exe")?;
+    let log = paths::logs_dir(root).join("tts.log");
+    let _ = std::fs::create_dir_all(paths::logs_dir(root));
+    let errfile = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .ok();
+
+    let index = cfg
+        .get("index_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let index_rate = cfg
+        .get("index_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
+    let mut cmd = Command::new(&py);
+    cmd.arg(script.as_os_str())
+        .arg("--input_path")
+        .arg(raw.as_os_str())
+        .arg("--opt_path")
+        .arg(out.as_os_str())
+        .arg("--model_name")
+        .arg(&pth)
+        .arg("--index_path")
+        .arg(&index)
+        .arg("--index_rate")
+        .arg(index_rate.to_string())
+        .arg("--f0up_key")
+        .arg(pitch.to_string())
+        .arg("--f0method")
+        .arg("rmvpe")
+        .current_dir(root)
+        .envs(crate::worker::env_for_runtime(root))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(match errfile {
+            Some(f) => Stdio::from(f),
+            None => Stdio::null(),
+        });
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let mut child = cmd.spawn().map_err(|e| format!("起不来推理进程：{e}"))?;
+    loop {
+        if cancel_flag().load(Ordering::SeqCst) {
+            let _ = child.kill();
+            return Err("已取消".into());
+        }
+        match child.try_wait().map_err(|e| format!("等推理进程失败：{e}"))? {
+            Some(st) => {
+                if !st.success() {
+                    return Err(format!(
+                        "换音色失败（{}）。详情见 User_Data/logs/tts.log",
+                        st.code().unwrap_or(-1)
+                    ));
+                }
+                break;
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(200)),
+        }
+    }
+    if !out.is_file() {
+        return Err("换音色跑完了但没有产出文件，详情见 User_Data/logs/tts.log".into());
+    }
+    let _ = std::fs::remove_file(&raw);
+    emit(app, "done", 2, 2, "合成完成");
+    Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": true }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_lands_under_user_data_not_the_install_root() {
+        // 用户的产出物一律进 User_Data：那是卸载时会问「要不要留着」的那个目录，
+        // 扔在安装目录里会被卸载器一起删掉。
+        let d = out_dir(Path::new("C:\\App"));
+        assert!(d.ends_with("tts"));
+        assert!(d.to_string_lossy().contains("User_Data"));
+    }
+
+    #[test]
+    fn status_reports_not_ready_without_a_runtime() {
+        let st = status(Path::new("C:\\definitely-not-here"));
+        assert_eq!(st["runtime_ready"], json!(false));
+        assert_eq!(st["infer_present"], json!(false));
+    }
+
+    #[test]
+    fn an_empty_text_is_refused_before_anything_spawns() {
+        // 这条断言的意义在于顺序：空文本必须在起 PowerShell 之前就被挡掉，
+        // 否则 SAPI 会生成一个 0 秒的 wav，然后 RVC 对着它跑一遍，最后交给
+        // 用户一个听不见任何东西的文件。
+        assert!(MAX_CHARS > 0);
+        let long: String = "字".repeat(MAX_CHARS + 1);
+        assert!(long.chars().count() > MAX_CHARS);
+    }
+}

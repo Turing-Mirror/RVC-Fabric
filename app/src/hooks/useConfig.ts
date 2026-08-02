@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getConfig, setConfig, type Config } from "../lib/config";
+import { applyAppearance } from "../lib/appearance";
 
 /**
  * Settings state. Writes are optimistic so sliders feel live, then reconciled
@@ -30,6 +31,28 @@ export function useConfig() {
       alive = false;
     };
   }, []);
+
+  /**
+   * 外观改一下就套一下，不等写盘、不等换页。
+   *
+   * `set` 是乐观更新，cfg 里立刻就是新值，所以磨砂和不透明度是**拖着就在变**
+   * 的 —— 这两项本来就该当场看效果，否则用户根本没法调。写盘那边照旧 220ms
+   * 合并一次，跟这里没关系。
+   *
+   * 依赖只列这四个键：别的设置（音频参数之类）每次改都重建 cfg 对象，写整个
+   * cfg 会让这段跟着白跑。
+   */
+  useEffect(() => {
+    if (!loaded) return;
+    applyAppearance(cfg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只认外观那几个键
+  }, [
+    loaded,
+    cfg.theme_mode,
+    cfg.wallpaper_path,
+    cfg.wallpaper_blur,
+    cfg.wallpaper_opacity,
+  ]);
 
   const flush = useCallback(async () => {
     const patch = pending.current;

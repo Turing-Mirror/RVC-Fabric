@@ -276,6 +276,43 @@ pub fn refresh_corners(win: &WebviewWindow) {
 #[cfg(not(windows))]
 pub fn refresh_corners(_win: &WebviewWindow) {}
 
+/// 改完大小之后，把整个窗口连同 WebView2 的子窗口一起重画一遍。
+///
+/// 拖窗口边框的时候，Windows 是先把已经画好的那块像素整体搬一下，再让程序去补
+/// 新露出来的那一条。WebView2 画在自己的子窗口上、走自己的合成，补那一条的时机
+/// 不一定跟得上父窗口——赶不上的时候，边上会留下一条一直没人画的竖带，看着像
+/// 凭空多出来一根灰色的条子，而且它**不会自己消失**：没有新的重画请求，那块
+/// 像素就一直是搬移时留下的旧内容。
+///
+/// `RDW_ALLCHILDREN` 是关键：只刷父窗口的话，那条带子恰恰是在子窗口上，刷不到。
+/// `RDW_UPDATENOW` 让它当场画完，不排到消息队列后面去。
+///
+/// 一次拖动会连着来很多个 Resized，但这个调用本身只是标脏加一次同步重画，
+/// 拖动手感上量不出差别。
+#[cfg(windows)]
+pub fn force_repaint(win: &WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Gdi::{
+        RedrawWindow, RDW_ALLCHILDREN, RDW_INVALIDATE, RDW_UPDATENOW,
+    };
+    let Ok(hwnd) = win.hwnd() else {
+        return;
+    };
+    // SAFETY: hwnd 来自 Tauri 的窗口；两个 null 表示「整个窗口、没有额外区域」，
+    // 是这个 API 明确支持的用法。它只标脏和重画，不改任何窗口状态。
+    unsafe {
+        RedrawWindow(
+            hwnd.0 as HWND,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn force_repaint(_win: &WebviewWindow) {}
+
 #[cfg(not(windows))]
 pub fn round_corners(_win: &WebviewWindow) {}
 

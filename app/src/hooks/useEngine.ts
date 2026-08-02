@@ -190,36 +190,6 @@ export function useEngine() {
   }, [running, refresh, provision, status.state]);
 
   /**
-   * 重开一次变声流，用当前的引擎配置。
-   *
-   * 换模型必须走这条路：引擎的热更新（`set` 指令）只认音高、共鸣、索引比例、
-   * 噪声门这些参数，**不认模型路径** —— `_worker_apply_hot` 里根本没有
-   * pth_path 这一项。换模型只写了配置文件，正在跑的那个 worker 手里还攥着
-   * 上一个模型，于是界面名字变了、声音没变。
-   *
-   * 重开流时 `_worker_start` 会重新读 `configs/inuse/config.json` 并
-   * `set_values`，新模型就是这时候装进去的。要几秒，但这是唯一真的换得过去的
-   * 办法；在引擎里做热换模型要在音频回调还在跑的时候换掉 RVC 实例，那是另一
-   * 个量级的风险。
-   *
-   * 没在跑的时候调用是空操作 —— 那时候配置文件已经是新的，下次开启自然就对。
-   */
-  const restart = useCallback(async () => {
-    if (stateRef.current !== "running") return;
-    setBusy(true);
-    try {
-      await stopVc(false);
-      const st = await startVc();
-      setStatus(st);
-      setLastError(st.state === "error" && st.error ? String(st.error) : "");
-    } catch (e) {
-      setLastError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  /**
    * Ask the worker to re-enumerate audio devices.
    *
    * 「重载设备列表」 was wired to `refresh()`, which only re-reads status.json —
@@ -311,7 +281,6 @@ export function useEngine() {
     syncParams,
     refresh,
     refreshProvision,
-    restart,
     reloadDevices,
     devicesBusy,
     title: statusTitle(status),

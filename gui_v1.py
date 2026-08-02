@@ -221,6 +221,14 @@ if __name__ == "__main__":
             self.delay_time = 0
             self.last_infer_ms = 0
             self.last_input_db = -90.0  # mic level for the launcher meter
+            # 变声中换模型：命令线程把新模型放这儿，音频线程在两块之间取走并装上。
+            # 用「排队 + 由音频线程自己动手」而不是加锁，是因为 audio_infer 从头到
+            # 尾都在读 self.rvc / self.resampler2；只要换的动作发生在它自己手里，
+            # 就不存在「一块音频用了新模型的采样率、旧模型的重采样器」这种半截状态。
+            self._pending_model = None
+            self._pending_model_lock = threading.Lock()
+            # 换模型失败时留一句话给状态栏，成功就清空。
+            self._model_swap_error = ""
             self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
                 "1",
                 "true",
@@ -1748,7 +1756,13 @@ if __name__ == "__main__":
                 return
             rptr = self.in_ptr.value
             self.in_evt.clear()
-            
+
+            # 换音色就在这儿发生 —— 两块音频之间，这条线程自己动手。
+            # 读权重要零点几秒，这一块会晚交货、输出上有一小段接不上，但设备、
+            # 缓冲区、延迟设置一样都没动，比停流重开省掉的是二三十秒。
+            if self._pending_model is not None:
+                self._apply_pending_model()
+
             start_time = time.perf_counter()
 
             rend = rptr + self.block_frame
@@ -2410,9 +2424,158 @@ if __name__ == "__main__":
                     if k in payload and payload[k] is not None:
                         merged[k] = payload[k]
                 self._load_fx_from_values(merged)
+            # 换音色放在最后：上面那些（音高、共鸣、检索强度）已经落到
+            # gui_config 上了，新的 RVC 实例正好用这些值建起来，不会先用旧参数
+            # 建好再补一遍。
+            if "pth_path" in payload and str(payload["pth_path"] or "").strip():
+                self._worker_swap_model(
+                    payload["pth_path"],
+                    payload.get("index_path"),
+                    payload.get("index_rate"),
+                )
+
+        def _ckpt_tgt_sr(self, pth: str):
+            """只读出这个权重的目标采样率，不建模型。
+
+            换模型要不要重开流，只取决于采样率会不会变。为这一个数把整套
+            RVC 建起来太贵，而 torch.load 出来的 cpt["config"][-1] 就是它。
+
+            weights_only=True 是硬性的：.pth 是 pickle，允许它执行代码等于
+            让任何一个从广场下下来的音色包在用户机器上跑任意程序。
+            """
+            try:
+                cpt = torch.load(pth, map_location="cpu", weights_only=True)
+                return int(cpt["config"][-1])
+            except Exception:
+                printt("读不出 %s 的采样率：%s", pth, traceback.format_exc())
+                return None
+
+        def _worker_swap_model(self, pth: str, index_path=None, index_rate=None):
+            """变声中换音色。
+
+            引擎原来根本不认 pth_path 这个热更新键：换模型只写了配置文件，正在跑
+            的这个 worker 手里还攥着上一个模型，于是界面上名字变了、声音没变。
+            上一版的做法是「停流再开流」—— 能换过去，但要几秒，设备重开，
+            延迟设置重算，用户听到的是一段静音加一次咔哒。
+
+            现在只换该换的那一件东西：RVC 实例。缓冲区的尺寸、音频进程、设备、
+            SOLA 的窗口全都不动，因为它们只跟采样率有关，跟哪个音色无关。
+
+            唯一换不了的情况是采样率真的会变 —— 只有「跟随模型」那档才可能，
+            这时候整条流水线的几何尺寸都变了，老老实实重开。
+            """
+            global flag_vc
+            pth = str(pth or "").strip()
+            if not pth or not os.path.isfile(pth):
+                self._model_swap_error = "音色文件不在了，仍在用上一个音色"
+                printt("换模型：文件不存在 %s", pth)
+                return
+            idx = (
+                str(index_path or "").strip()
+                if index_path is not None
+                else str(getattr(self.gui_config, "index_path", "") or "")
+            )
+            if idx and not os.path.isfile(idx):
+                idx = ""
+            rate = (
+                float(index_rate)
+                if index_rate is not None
+                else float(getattr(self.gui_config, "index_rate", 0.0) or 0.0)
+            )
+            if not idx:
+                rate = 0.0
+
+            # 没在跑：配置文件里已经是新模型了，下次开启自然就对，这里只把
+            # 内存里的那份对齐，免得随后的热更新拿旧路径去比。
+            if not flag_vc:
+                self.gui_config.pth_path = pth
+                self.gui_config.index_path = idx
+                self.gui_config.index_rate = rate
+                return
+
+            if pth == str(getattr(self.gui_config, "pth_path", "") or ""):
+                return  # 同一个模型，没什么可换的
+
+            if str(getattr(self.gui_config, "sr_type", "") or "") == "sr_model":
+                sr = self._ckpt_tgt_sr(pth)
+                if sr is None or sr != int(getattr(self.gui_config, "samplerate", 0) or 0):
+                    printt("换模型：采样率要从 %s 变，重开流", self.gui_config.samplerate)
+                    self.gui_config.pth_path = pth
+                    self.gui_config.index_path = idx
+                    self.gui_config.index_rate = rate
+                    self._worker_start()
+                    return
+
+            with self._pending_model_lock:
+                self._pending_model = (pth, idx, rate)
+            printt("换模型：已排队 %s", pth)
+
+        def _apply_pending_model(self):
+            """装上排队中的新模型。**只在音频线程里调用。**"""
+            with self._pending_model_lock:
+                job = self._pending_model
+                self._pending_model = None
+            if not job:
+                return
+            pth, idx, rate = job
+            old = getattr(self, "rvc", None)
+            try:
+                # 把当前这个当 last_rvc 传进去：hubert、rmvpe、fcpe 都是跟音色无关
+                # 的公共模型，RVC 的构造函数会直接沿用，只重新读合成器权重。
+                # 这就是「换模型只要零点几秒」和「跟冷启动一样等二三十秒」的差别。
+                new = rvc_for_realtime.RVC(
+                    self.gui_config.pitch,
+                    self.gui_config.formant,
+                    pth,
+                    idx,
+                    rate,
+                    self.gui_config.n_cpu,
+                    inp_q,
+                    opt_q,
+                    self.config,
+                    old,
+                )
+            except Exception:
+                printt("换模型失败：%s", traceback.format_exc())
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                return
+            # RVC 的构造函数把异常全吞了（只打日志），失败时返回的是个半成品。
+            # 不验一下就换上去，下一块推理会拿 None 去做卷积，整条流当场炸掉。
+            if getattr(new, "net_g", None) is None or not getattr(new, "tgt_sr", 0):
+                printt("换模型失败：新模型没建起来，保持原样")
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                return
+
+            self.rvc = new
+            self.gui_config.pth_path = pth
+            self.gui_config.index_path = idx
+            self.gui_config.index_rate = rate
+            # 新旧模型的目标采样率可以不一样（32k/40k/48k），出口那级重采样得跟着换。
+            if new.tgt_sr != self.gui_config.samplerate:
+                self.resampler2 = tat.Resample(
+                    orig_freq=new.tgt_sr,
+                    new_freq=self.gui_config.samplerate,
+                    dtype=torch.float32,
+                ).to(self.config.device)
+            else:
+                self.resampler2 = None
+            # SOLA 拿上一块的尾巴和这一块做相关来找拼接点。跨音色的两块本来就
+            # 接不上，留着旧尾巴只会让它在噪声里挑一个随机偏移，听感是「咔」的
+            # 一声加半个字的重影。清零等于让这一块直接淡入。
+            try:
+                self.sola_buffer.zero_()
+            except Exception:
+                pass
+            self._model_swap_error = ""
+            printt("换模型完成：%s（tgt_sr=%s）", pth, new.tgt_sr)
 
         def _worker_start(self):
             global flag_vc
+            # 排在半路的换模型请求作废：重开流会照配置文件重新建 RVC，那份配置
+            # 里已经是新模型了。留着它只会在新流刚起来时再白换一次。
+            with self._pending_model_lock:
+                self._pending_model = None
+            self._model_swap_error = ""
             # Always stop previous stream before start (device change / restart)
             try:
                 self.stop_stream()
@@ -2656,6 +2819,10 @@ if __name__ == "__main__":
                             self._refresh_delay_time()
                             self._worker_write_status(
                                 state="running",
+                                # 换模型是异步的：命令线程排好队就返回了，真正装上
+                                # 是音频线程的事。失败只能在这条心跳上说，不然
+                                # 用户看到名字变了、声音没变，还是不知道出了什么事。
+                                message=self._model_swap_error or "",
                                 delay_ms=int(np.round(self.delay_time * 1000)),
                                 infer_ms=self.last_infer_ms,
                                 input_db=round(

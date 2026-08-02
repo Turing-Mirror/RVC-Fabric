@@ -18,7 +18,9 @@ mod separate;
 mod shell_extras;
 mod store;
 mod telemetry;
+mod tool_window;
 mod train;
+mod tts;
 mod ui_assets;
 pub mod update;
 mod voices;
@@ -213,6 +215,12 @@ fn close_finish(app: AppHandle, to_tray: bool) {
 #[tauri::command]
 async fn update_app(app: AppHandle) -> Result<Value, String> {
     update::run_app_updater(&app).await
+}
+
+/// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音合成）。
+#[tauri::command]
+fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
+    tool_window::open(&app, &kind)
 }
 
 #[tauri::command]
@@ -493,6 +501,49 @@ fn separate_cancel() {
     separate::cancel();
 }
 
+// --- 语音合成 ---------------------------------------------------------------
+
+#[tauri::command]
+async fn tts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 列系统嗓子要起一次 PowerShell，几百毫秒。放在 IPC 线程上就是开窗那一下
+    // 界面先白半秒。
+    tauri::async_runtime::spawn_blocking(move || Ok(tts::status(&root)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn tts_speak(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    text: String,
+    voice: String,
+    rate: i32,
+    pitch: i32,
+    use_rvc: bool,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        tts::run(&app, &root, &text, &voice, rate, pitch, use_rvc)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn tts_cancel() {
+    tts::cancel();
+}
+
+/// 在文件管理器里打开合成结果所在的目录。
+#[tauri::command]
+fn tts_reveal(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let dir = tts::out_dir(&root_clone(&state)?);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    shell_extras::reveal(&dir.join("x"))
+}
+
 // --- 附加资源（分离模型 / 训练底模）-----------------------------------------
 
 #[tauri::command]
@@ -617,6 +668,13 @@ fn engine_set_hot(
         return Err("没有可热更新的参数".into());
     }
     worker::set_hot(&root, payload)
+}
+
+/// 变声中换音色。不重开流，只把新模型推给引擎。
+#[tauri::command]
+fn engine_swap_model(state: State<'_, Mutex<AppState>>) -> Result<u64, String> {
+    let root = root_clone(&state)?;
+    worker::swap_model(&root)
 }
 
 #[tauri::command]
@@ -1019,6 +1077,7 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
+            tools_open,
             ui_source,
             shell_version,
             ui_ready,
@@ -1055,6 +1114,7 @@ pub fn run() {
             engine_stop_vc,
             engine_force_kill,
             engine_set_hot,
+            engine_swap_model,
             engine_list_devices,
             provision_status,
             provision_start,
@@ -1088,6 +1148,10 @@ pub fn run() {
             separate_pick,
             separate_start,
             separate_cancel,
+            tts_status,
+            tts_speak,
+            tts_cancel,
+            tts_reveal,
             extra_list,
             extra_download,
             extra_cancel,

@@ -124,6 +124,20 @@ export async function setHot(params: {
   return invoke<number>("engine_set_hot", params);
 }
 
+/**
+ * 变声中换音色，不重开流。
+ *
+ * 不传路径：要换成哪个，`voices_select` 刚写进配置里了，shell 自己读得到。
+ * 引擎在两块音频之间把 RVC 实例换掉，设备、缓冲区、延迟设置一样不动。
+ *
+ * worker 没在跑时后端会报错 —— 那不是故障，是「没什么可热更新的」，
+ * 调用方按无害处理。
+ */
+export async function swapModel(): Promise<number> {
+  if (!isTauri()) return 0;
+  return invoke<number>("engine_swap_model");
+}
+
 export async function listDevices(): Promise<EngineStatus> {
   if (!isTauri()) return getEngineStatus();
   return invoke<EngineStatus>("engine_list_devices");

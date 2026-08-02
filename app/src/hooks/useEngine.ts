@@ -33,7 +33,42 @@ export function useEngine() {
   const hotTimer = useRef<number | null>(null);
   const startingRef = useRef(false);
 
+  // 运行时是不是已经补全了。用 ref 是因为轮询回调要读它，又不能让它进依赖 ——
+  // 进了依赖每次翻转都会重建定时器。
+  const runtimeReadyRef = useRef<boolean | undefined>(undefined);
+
+  /**
+   * 重新问一次运行时状态；补全完成的那一刻自动把引擎拉起来。
+   *
+   * 以前这个只在挂载时问一次。于是「下载 → 解压 → 装好」之后，
+   * `provision.runtime_ready` 还停在 false，「开启变声」照样被
+   * `toggleRun` 开头那道闸拦下来说「运行时未就绪」—— 用户唯一的出路是重启
+   * 软件，因为重启才会重新问一次。装完就该能用，不该要重启。
+   */
+  const refreshProvision = useCallback(async () => {
+    try {
+      const p = await getProvisionStatus();
+      setProvision(p);
+      const wasReady = runtimeReadyRef.current;
+      runtimeReadyRef.current = p.runtime_ready;
+      // false → true 的那一下：worker 还从来没起来过，现在可以起了。
+      if (wasReady === false && p.runtime_ready !== false) {
+        setLastError("");
+        const st = await ensureEngine();
+        setStatus(st);
+      }
+      return p;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
+    // 运行时还没就绪时，顺带盯着它 —— 补全是在另一个组件里跑的，装完那一刻
+    // 没有事件通知这里。就绪之后就不再问了，免得每秒一次白跑文件检查。
+    if (runtimeReadyRef.current === false) {
+      void refreshProvision();
+    }
     try {
       const st = await getEngineStatus();
       stateRef.current = String(st.state || "idle");
@@ -50,7 +85,7 @@ export function useEngine() {
     } catch (e) {
       setLastError(String(e));
     }
-  }, []);
+  }, [refreshProvision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +93,8 @@ export function useEngine() {
       try {
         const p = await getProvisionStatus();
         if (!cancelled) setProvision(p);
+        // 记下开局状态。refresh 的轮询靠它决定要不要继续盯着运行时。
+        runtimeReadyRef.current = p.runtime_ready;
         // Only ensure worker when Runtime is complete
         if (p.runtime_ready !== false) {
           const st = await ensureEngine();
@@ -153,6 +190,36 @@ export function useEngine() {
   }, [running, refresh, provision, status.state]);
 
   /**
+   * 重开一次变声流，用当前的引擎配置。
+   *
+   * 换模型必须走这条路：引擎的热更新（`set` 指令）只认音高、共鸣、索引比例、
+   * 噪声门这些参数，**不认模型路径** —— `_worker_apply_hot` 里根本没有
+   * pth_path 这一项。换模型只写了配置文件，正在跑的那个 worker 手里还攥着
+   * 上一个模型，于是界面名字变了、声音没变。
+   *
+   * 重开流时 `_worker_start` 会重新读 `configs/inuse/config.json` 并
+   * `set_values`，新模型就是这时候装进去的。要几秒，但这是唯一真的换得过去的
+   * 办法；在引擎里做热换模型要在音频回调还在跑的时候换掉 RVC 实例，那是另一
+   * 个量级的风险。
+   *
+   * 没在跑的时候调用是空操作 —— 那时候配置文件已经是新的，下次开启自然就对。
+   */
+  const restart = useCallback(async () => {
+    if (stateRef.current !== "running") return;
+    setBusy(true);
+    try {
+      await stopVc(false);
+      const st = await startVc();
+      setStatus(st);
+      setLastError(st.state === "error" && st.error ? String(st.error) : "");
+    } catch (e) {
+      setLastError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  /**
    * Ask the worker to re-enumerate audio devices.
    *
    * 「重载设备列表」 was wired to `refresh()`, which only re-reads status.json —
@@ -243,6 +310,8 @@ export function useEngine() {
     onMode,
     syncParams,
     refresh,
+    refreshProvision,
+    restart,
     reloadDevices,
     devicesBusy,
     title: statusTitle(status),

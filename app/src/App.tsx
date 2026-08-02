@@ -4,12 +4,13 @@ import { Nudge } from "./components/Nudge";
 import { Btn } from "./components/ui";
 import { FOLLOW_LINKS } from "./lib/links";
 import { openExternal } from "./lib/plaza";
+import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
-import { ensureEngine, forceKillEngine, getProvisionStatus, setHot } from "./lib/engine";
+import { forceKillEngine, setHot } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -213,7 +214,7 @@ export default function App() {
 
   const engine = useEngine();
   const plaza = usePlaza();
-  const { syncParams } = engine;
+  const { syncParams, restart: restartEngine, refreshProvision } = engine;
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -425,7 +426,15 @@ export default function App() {
       .catch(() => {
         /* browser preview */
       });
-  }, [syncParams]);
+    // 正在变声的时候换模型，必须重开一次流。
+    //
+    // 换模型只写了配置文件；引擎的热更新不认模型路径（`_worker_apply_hot`
+    // 里没有 pth_path 这一项），正在跑的 worker 手里还攥着上一个模型。
+    // 于是底栏名字换了、耳朵里的声音没换 —— 「显示切换了但实际没切」。
+    //
+    // restart 在没跑的时候是空操作：那时候配置已经是新的，下次开启自然就对。
+    void restartEngine();
+  }, [syncParams, restartEngine]);
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {
@@ -555,8 +564,77 @@ export default function App() {
     };
   }, []);
 
+  // 取消了「全局」的那些快捷键，在这里接。
+  //
+  // Rust 只注册勾了「全局」的组合 —— 全局快捷键是独占的，被抢走的组合用户在
+  // 别的软件里就按不出原本的功能了，所以每个都可以单独关掉。关掉的那些改由
+  // 本窗口的 keydown 接住：只在 RVC Fabric 是当前窗口时生效，正好是用户要的。
+  //
+  // 不会和全局的重复触发：localHotkeyMap 只收 `_global` 为 false 的。
+  useEffect(() => {
+    let map = new Map<string, string>();
+    let alive = true;
+    const reload = () => {
+      void invoke<Record<string, unknown>>("config_get")
+        .then((cfg) => {
+          if (alive) map = localHotkeyMap(cfg);
+        })
+        .catch(() => {
+          /* 浏览器预览下没有配置 */
+        });
+    };
+    reload();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || typingInto(e.target)) return;
+      const action = map.get(comboFromEvent(e));
+      if (!action) return;
+      e.preventDefault();
+      const a = actionsRef.current;
+      switch (action) {
+        case "toggle-vc":
+          a.toggleRun();
+          break;
+        case "toggle-mode":
+          a.toggleMode();
+          break;
+        case "prev-voice":
+          a.shiftVoice(-1);
+          break;
+        case "next-voice":
+          a.shiftVoice(1);
+          break;
+        case "pitch-up":
+          a.shiftPitch(1);
+          break;
+        case "pitch-down":
+          a.shiftPitch(-1);
+          break;
+        case "toggle-monitor":
+          a.toggleCfgFlag("monitor_self");
+          break;
+        case "toggle-fx":
+          a.toggleCfgFlag("fx_enabled");
+          break;
+        // toggle-window 非全局时没有意义：窗口就在眼前，用不着「显示」它，
+        // 而藏起来之后这个监听器也就收不到键了。忽略。
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    // 设置页改完会重新注册一次全局快捷键；借同一个时机把这份表也重读。
+    const un = listen("hotkeys://changed", reload);
+    return () => {
+      alive = false;
+      window.removeEventListener("keydown", onKey);
+      void un.then((f) => f());
+    };
+  }, []);
+
   return (
-    <div className="h-full flex flex-col bg-[var(--bg)] text-[var(--ink)] overflow-hidden relative">
+    // 根容器不铺底色：底色在 html 上，壁纸层夹在中间。这里再铺一层不透明的
+    // --bg 会把壁纸盖死 —— 这正是「背景图设了没反应」的另一半原因。
+    <div className="h-full flex flex-col text-[var(--ink)] overflow-hidden relative">
       <TitleBar
         page={page}
         onPage={(id) => {
@@ -575,11 +653,15 @@ export default function App() {
         onDone={async () => {
           setShowProvision(false);
           setProvisionDismissed(false);
+          // 这里以前调的是 getProvisionStatus()，**结果直接扔掉** —— 问了等于
+          // 没问，engine.provision 还是补全之前那份 runtime_ready: false。
+          // 于是运行时装好了，「开启变声」照样被 toggleRun 开头那道闸拦下来
+          // 说「运行时未就绪」，只能重启软件。refreshProvision 会把结果写回
+          // 状态，并且在 false → true 的那一下顺手把引擎拉起来。
           try {
-            await getProvisionStatus();
-            await ensureEngine();
+            await refreshProvision();
           } catch {
-            /* refresh via hook poll */
+            /* 轮询兜底 */
           }
           await engine.refresh();
         }}

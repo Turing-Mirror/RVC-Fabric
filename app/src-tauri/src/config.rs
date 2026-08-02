@@ -171,6 +171,14 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("hotkey_toggle_monitor".into(), json!("CmdOrCtrl+F9"));
     m.insert("hotkey_toggle_fx".into(), json!("CmdOrCtrl+F10"));
     m.insert("hotkey_toggle_window".into(), json!("CmdOrCtrl+F11"));
+    // 每个快捷键单独决定要不要抢成全局。默认全开 —— 以前九个一律全局，
+    // 改默认值等于悄悄拿走用户已经在用的功能。
+    //
+    // 关掉的那些只在软件是当前窗口时有效。意义在于全局快捷键是**独占**的：
+    // 被我们抢走的组合，用户在别的软件里就再也按不出原本的功能了。
+    for (key, _, _) in crate::shell_extras::HOTKEYS {
+        m.insert(format!("{key}_global"), json!(true));
+    }
     m.insert("telemetry_opt_in".into(), json!(Value::Null));
     // 完成过多少次变声（开启→停止算一次）。攒够十次问一句要不要关注我们。
     // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。

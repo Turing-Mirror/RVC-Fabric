@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HelpMark } from "./ui";
 
 /**
@@ -120,14 +120,11 @@ const TRACK_H = 26;
 const KNOB_W = 21;
 
 /**
- * 拖动中的过渡时长。
+ * 松手之后位移用的过渡：点轨道、按方向键、切档案带来的跳变，还有松手时把手
+ * 从光标位置归到刻度上的那一下。
  *
- * 拖动时不能用长过渡：把手会落在光标后面，手感像拖着一块橡皮。但也不能干脆
- * 关掉 —— 步长粗的条子（比如音高，−12~+12 在 460px 上一步就是 19px）会一格
- * 一格地跳。70ms 只够抹平这个跳格，短到看不出滞后。
+ * 拖动中**没有过渡**，一帧都不留 —— 见下面 dragPct 的说明。
  */
-const GLIDE_DRAG_MS = 70;
-/** 松手后的位移：点轨道、按方向键、切档案带来的跳变，走这条长一点的曲线。 */
 const GLIDE_IDLE_MS = 190;
 
 /**
@@ -145,13 +142,21 @@ const GLIDE_IDLE_MS = 190;
  *
  * 把手和填充必须用**同一套过渡**。以前把手有 100ms 的 left 过渡、填充的
  * width 一点过渡都没有：点一下轨道，颜色瞬间到位、把手还在慢慢挪，两者
- * 分家；拖动时反过来，颜色跟着光标、把手拖在后面。看着就是「推动和颜色
- * 走得不连贯」。
+ * 分家；拖动时反过来，颜色跟着光标、把手拖在后面。
  *
- * 把手走 transform 不走 left：transform 由合成器处理，不会每帧触发布局。
+ * **跟手是靠位置和数值解耦做到的，不是靠调过渡时长。**
  *
- * 真正接受输入的是盖在上面那个透明的原生 range：键盘、触屏、无障碍都由它
- * 负责，上面画的东西只是外观。
+ * 数值是量化的（音高一步一个半音），可把手要跟着手指走。这两件事没法用同一个
+ * 数表示：让把手画在量化后的位置上，粗步长的条子就一格一格地跳；给它加个过渡
+ * 把跳格抹平，把手就永远落在光标后面 —— 之前那个 70ms 就是在这两个毛病之间
+ * 各挨一半。
+ *
+ * 现在拖动时把手画在**光标的真实位置**（dragPct），过渡时长为 0，一帧都不差；
+ * 抛给外面的仍然是量化后的值。松手时 dragPct 清空，把手用 GLIDE_IDLE_MS 那条
+ * 曲线滑到刻度上 —— 这一下「归位」本身就是在告诉用户「实际取到的是这一格」。
+ *
+ * 真正接受输入的是盖在上面那个透明的原生 range：键盘、触屏、无障碍、以及数值
+ * 的量化全都由它负责。我们只是额外记一下光标在哪，用来画把手。
  */
 export function RangeBar({
   value,
@@ -173,20 +178,37 @@ export function RangeBar({
 }) {
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
-  const knobX = `calc(${pct}% - ${(KNOB_W * pct) / 100}px)`;
-  const fillW = `calc(${pct}% - ${(KNOB_W * pct) / 100 - KNOB_W}px)`;
 
-  const [dragging, setDragging] = useState(false);
-  // 光标在条子外面松开时，pointerup 不一定回到这个元素上（原生 range 会
-  // 捕获指针，但触屏被打断、窗口失焦这些情况不保证）。挂一个窗口级的兜底，
-  // 否则一次意外就把条子永久锁在「拖动中」的短过渡上。
+  const trackRef = useRef<HTMLDivElement>(null);
+  // 拖动中光标所在的百分比。null = 没在拖，把手画在量化后的位置上。
+  const [dragPct, setDragPct] = useState<number | null>(null);
+  const dragging = dragPct !== null;
+
+  // 光标落在轨道哪儿（0..100）。把手中心的行程比轨道窄一个把手宽，所以要
+  // 按「可走的那段」换算，否则推到两头时把手和光标会差半个把手。
+  const pctFromClientX = (clientX: number): number => {
+    const r = trackRef.current?.getBoundingClientRect();
+    if (!r || r.width <= KNOB_W) return 0;
+    const travel = r.width - KNOB_W;
+    const x = clientX - r.left - KNOB_W / 2;
+    return Math.min(100, Math.max(0, (x / travel) * 100));
+  };
+
+  // 光标在条子外面松开时，pointerup 不一定回到这个元素上（原生 range 会捕获
+  // 指针，但触屏被打断、窗口失焦这些情况不保证）。挂一个窗口级的兜底，否则
+  // 一次意外就把把手永久钉在光标最后出现的地方，再也不跟着数值走。
   useEffect(() => {
     if (!dragging) return;
-    const stop = () => setDragging(false);
+    const move = (e: PointerEvent) => setDragPct(pctFromClientX(e.clientX));
+    const stop = () => setDragPct(null);
+    // 在 window 上跟，不在元素上：手指拖出条子外面之后仍然算数，
+    // 这是所有原生推子的行为。
+    window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);
     window.addEventListener("pointercancel", stop);
     window.addEventListener("blur", stop);
     return () => {
+      window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
       window.removeEventListener("blur", stop);
@@ -195,19 +217,25 @@ export function RangeBar({
 
   // 一份过渡，两个元素共用 —— 这是「连贯」的全部内容。
   //
+  // 拖动中时长为 0：把手画的就是光标位置，再加过渡只会让它追不上自己。
+  //
   // 把手走 left 不走 transform：transform 的百分比是按**自己的宽度**算的
   // （21px），不是按轨道宽度，translateX(50%) 只有 10.5px，位置全错。
   // 这里只有一个绝对定位的小元素在动，动 left 的开销可以接受。
   const glide = {
     transitionProperty: "left, width, box-shadow",
-    transitionDuration: `${dragging ? GLIDE_DRAG_MS : GLIDE_IDLE_MS}ms`,
-    transitionTimingFunction: dragging
-      ? "linear"
-      : "var(--ease)",
+    transitionDuration: dragging ? "0ms" : `${GLIDE_IDLE_MS}ms`,
+    transitionTimingFunction: "var(--ease)",
   } as const;
+
+  // 画在哪：拖动中用光标位置，其余时候用数值算出来的位置。
+  const draw = dragPct ?? pct;
+  const knobX = `calc(${draw}% - ${(KNOB_W * draw) / 100}px)`;
+  const fillW = `calc(${draw}% - ${(KNOB_W * draw) / 100 - KNOB_W}px)`;
 
   return (
     <div
+      ref={trackRef}
       className="relative w-full rounded-full bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] overflow-hidden"
       style={{ height: TRACK_H }}
     >
@@ -256,9 +284,7 @@ export function RangeBar({
         value={value}
         aria-label={ariaLabel}
         onChange={(e) => onChange(Number(e.target.value))}
-        onPointerDown={() => setDragging(true)}
-        onPointerUp={() => setDragging(false)}
-        onPointerCancel={() => setDragging(false)}
+        onPointerDown={(e) => setDragPct(pctFromClientX(e.clientX))}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
     </div>

@@ -5,6 +5,7 @@ import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { useConfig } from "../hooks/useConfig";
 import { TIPS } from "../lib/config";
+import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
 
 const TABS = [
@@ -751,10 +752,17 @@ function SettingsPageImpl({
                 {HOTKEYS.map((h) => (
                   <HotkeyRow
                     key={h.key}
-                    label={h.label}
+                    label={HOTKEY_LABELS[h.action] ?? h.action}
                     value={c.str(h.key, h.fallback)}
                     onChange={(v) => {
                       c.set(h.key, v, true);
+                      void invoke("hotkeys_apply", {
+                        enabled: c.bool("hotkeys_enabled"),
+                      });
+                    }}
+                    global={c.cfg[`${h.key}_global`] !== false}
+                    onGlobalChange={(v) => {
+                      c.set(`${h.key}_global`, v, true);
                       void invoke("hotkeys_apply", {
                         enabled: c.bool("hotkeys_enabled"),
                       });
@@ -765,6 +773,9 @@ function SettingsPageImpl({
               <p className="text-xs text-[var(--help)] m-0">
                 点右侧的组合键再按新的键就能改。可以带 Ctrl / Alt / Shift。
                 被别的软件占用的组合会注册失败，换一个即可。
+                勾着「全局」= 任何时候按都生效，代价是这个组合被本软件独占，
+                别的软件里就按不出它原本的功能了；取消勾选则只在本软件是当前
+                窗口时生效。
               </p>
             </div>
           </Block>
@@ -809,18 +820,19 @@ function SettingsPageImpl({
   );
 }
 
-/** 顺序、键名、默认值必须和 `shell_extras::HOTKEYS` 对得上。 */
-const HOTKEYS = [
-  { key: "hotkey_toggle_vc", label: "开启 / 停止变声", fallback: "CmdOrCtrl+F2" },
-  { key: "hotkey_toggle_mode", label: "变声 / 原声", fallback: "CmdOrCtrl+F3" },
-  { key: "hotkey_prev_voice", label: "上一个音色", fallback: "CmdOrCtrl+F5" },
-  { key: "hotkey_next_voice", label: "下一个音色", fallback: "CmdOrCtrl+F6" },
-  { key: "hotkey_pitch_up", label: "音高 +1", fallback: "CmdOrCtrl+F7" },
-  { key: "hotkey_pitch_down", label: "音高 −1", fallback: "CmdOrCtrl+F8" },
-  { key: "hotkey_toggle_monitor", label: "监听自己 开 / 关", fallback: "CmdOrCtrl+F9" },
-  { key: "hotkey_toggle_fx", label: "后期音效 开 / 关", fallback: "CmdOrCtrl+F10" },
-  { key: "hotkey_toggle_window", label: "显示 / 隐藏主界面", fallback: "CmdOrCtrl+F11" },
-];
+/** 每个动作在设置页里怎么称呼。键名和默认组合来自 `lib/hotkeys`，
+ *  那份表和 `shell_extras::HOTKEYS` 一一对应 —— 三处抄三遍迟早对不上。 */
+const HOTKEY_LABELS: Record<string, string> = {
+  "toggle-vc": "开启 / 停止变声",
+  "toggle-mode": "变声 / 原声",
+  "prev-voice": "上一个音色",
+  "next-voice": "下一个音色",
+  "pitch-up": "音高 +1",
+  "pitch-down": "音高 −1",
+  "toggle-monitor": "监听自己 开 / 关",
+  "toggle-fx": "后期音效 开 / 关",
+  "toggle-window": "显示 / 隐藏主界面",
+};
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
 function prettyCombo(v: string): string {
@@ -840,10 +852,15 @@ function HotkeyRow({
   label,
   value,
   onChange,
+  global: isGlobal,
+  onGlobalChange,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  /** 抢成全局（任何软件在前台都生效），还是只在本软件窗口里生效。 */
+  global: boolean;
+  onGlobalChange: (v: boolean) => void;
 }) {
   const [recording, setRecording] = useState(false);
 
@@ -873,13 +890,25 @@ function HotkeyRow({
   return (
     <div className="flex items-center py-2.5 border-b border-[var(--hairline)] last:border-b-0">
       <span className="text-[13px]">{label}</span>
+      {/* 「全局」逐个可关。全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
+          用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在
+          RVC Fabric 是当前窗口时有效，机器上其他软件照常用得着。 */}
+      <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12px] text-[var(--meta)] cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={isGlobal}
+          onChange={(e) => onGlobalChange(e.target.checked)}
+          className="accent-[var(--accent)] w-[13px] h-[13px]"
+        />
+        全局
+      </label>
       <button
         type="button"
         onClick={() => setRecording(true)}
         onBlur={() => setRecording(false)}
         onKeyDown={recording ? onKeyDown : undefined}
         className={[
-          "ml-auto px-2.5 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
+          "px-2.5 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
           "text-[12.5px] tabular-nums bg-transparent",
           "shadow-[inset_0_0_0_1px_var(--line)] transition-colors duration-200",
           "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",

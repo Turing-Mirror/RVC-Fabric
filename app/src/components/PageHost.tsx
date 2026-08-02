@@ -20,6 +20,15 @@ type Phase = {
 };
 
 /**
+ * 离场层挂多久。**必须和 index.css 里 `.page-leave-*` 的动画时长一致。**
+ *
+ * 短了就是动画放到一半节点被拔掉，旧页「啪」一下消失；长了则是一个已经看不见
+ * 的图层继续占着，白白多一层。以前这里写死 300ms 而动画是 420ms，旧页在
+ * 淡出到七成的时候被砍掉。
+ */
+const LEAVE_MS = 420;
+
+/**
  * Directional page wipe following nav order.
  * Entering page from the right when navigating right, etc.
  */
@@ -43,7 +52,7 @@ export function PageHost({ page, children }: Props) {
     if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
     leaveTimer.current = window.setTimeout(() => {
       setPhase((p) => ({ ...p, leaving: null }));
-    }, 300);
+    }, LEAVE_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on page id change
   }, [page, reduce]);
 

@@ -460,6 +460,39 @@ fn list_legacy(root: &Path) -> Vec<Value> {
 }
 
 /// Full local catalog (User_Data first, then legacy weights not already present).
+/// 在音色列表里定位「当前选中的那一条」，返回下标；一条都没有时返回 -1。
+///
+/// 三个键**按可靠性依次匹配**，不是「或」在一起谁先撞上算谁：
+///
+/// * `path` —— 全路径，唯一，最可信
+/// * `file` —— 只是文件名（`model.pth`、`added.pth` 这种），社区音色包里重名是常态
+/// * `name` —— 显示名，也可能重复
+///
+/// 以前是一趟循环里把三个或起来，第一个命中的模型就赢。于是排在前面的某个
+/// **同名文件**会把真正选中的那条顶掉：界面显示的「使用中」是别人，重开变声
+/// 也跟着用错。而随手切一次别的模型会把三个键一起改写，看上去就成了
+/// 「切到另一个再切回来就好了」。
+///
+/// 一档一档地问，问到为止 —— 最弱的键不该有机会抢在最强的前面。
+fn resolve_selected(models: &[Value], path: &str, file: &str, name: &str) -> i64 {
+    let find = |key: &str, want: &str| -> Option<usize> {
+        if want.is_empty() {
+            return None;
+        }
+        models
+            .iter()
+            .position(|m| m.get(key).and_then(|v| v.as_str()).unwrap_or("") == want)
+    };
+    find("path", path)
+        .or_else(|| find("file", file))
+        .or_else(|| find("name", name))
+        // 三个键都没对上（配置是新的、或者选中的音色被删了）：退回第一条，
+        // 总比「一条都没选中」强 —— 那会让底栏显示「未选择模型」。
+        .or(if models.is_empty() { None } else { Some(0) })
+        .map(|i| i as i64)
+        .unwrap_or(-1)
+}
+
 pub fn list_voices(root: &Path) -> Value {
     let _ = paths::ensure_user_dirs(root);
     let mut primary = list_user_data(root);
@@ -513,22 +546,12 @@ pub fn list_voices(root: &Path) -> Value {
         .unwrap_or("")
         .to_string();
 
-    let mut selected_idx: i64 = -1;
-    for (i, m) in primary.iter().enumerate() {
-        let path = m.get("path").and_then(|v| v.as_str()).unwrap_or("");
-        let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let file = m.get("file").and_then(|v| v.as_str()).unwrap_or("");
-        if (!selected_path.is_empty() && path == selected_path)
-            || (!selected_file.is_empty() && file == selected_file)
-            || (!selected_name.is_empty() && name == selected_name)
-        {
-            selected_idx = i as i64;
-            break;
-        }
-    }
-    if selected_idx < 0 && !primary.is_empty() {
-        selected_idx = 0;
-    }
+    let selected_idx = resolve_selected(
+        &primary,
+        &selected_path,
+        &selected_file,
+        &selected_name,
+    );
 
     let recents = cfg
         .get("recent_models")
@@ -648,6 +671,37 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
 /// **app_config is the source of truth**, not inuse: the shell rewrites inuse
 /// from app_config at startup, so a selection that only landed in inuse would
 /// be wiped on the next launch. Write both.
+/// 把「当前选中的音色」原样重写进引擎配置。
+///
+/// 不改选择，只是把界面认定的那一条重新落到 `configs/inuse` 里 —— 相当于
+/// 替用户做了一次「切到别的再切回来」。强制结束引擎之后调用：那时候引擎配置
+/// 可能是被打断的写入留下的半截状态，而下一次开启变声只读那份文件。
+///
+/// 找不到选中项（音色库是空的、或者选中的那个被删了）就什么都不做：这时候
+/// 没有「正确答案」可写，凭空写一条只会让状态更乱。
+pub fn resync_selected_model(root: &Path) -> Result<(), String> {
+    let cat = list_voices(root);
+    let idx = cat.get("selected_idx").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if idx < 0 {
+        return Ok(());
+    }
+    let Some(m) = cat
+        .get("models")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.get(idx as usize))
+    else {
+        return Ok(());
+    };
+    if m.get("missing").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Ok(());
+    }
+    sync_inuse_model(
+        root,
+        m.get("path").and_then(|v| v.as_str()).unwrap_or(""),
+        m.get("index").and_then(|v| v.as_str()).unwrap_or(""),
+    )
+}
+
 fn sync_inuse_model(root: &Path, pth: &str, index: &str) -> Result<(), String> {
     if pth.is_empty() {
         return Ok(());
@@ -1628,6 +1682,45 @@ pub fn current_selection_summary(root: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn model(name: &str, file: &str, path: &str) -> Value {
+        json!({"name": name, "file": file, "path": path})
+    }
+
+    #[test]
+    fn a_shared_pth_filename_cannot_hijack_the_selection() {
+        // 社区音色包里 `model.pth` 这种文件名重名是常态。以前三个键或在一起、
+        // 第一个撞上的赢，于是排在前面的同名模型把真正选中的那条顶掉了：
+        // 界面「使用中」是别人，重开变声也用错模型 —— 而随手切一次别的再切
+        // 回来就好了，因为那一下会把三个键一起改写。
+        let models = vec![
+            model("别人家的音色", "model.pth", "C:\\rvc\\models\\other\\model.pth"),
+            model("我选的音色", "model.pth", "C:\\rvc\\models\\mine\\model.pth"),
+        ];
+        let idx = resolve_selected(
+            &models,
+            "C:\\rvc\\models\\mine\\model.pth", // 全路径，唯一，必须赢
+            "model.pth",                        // 文件名，两条都对得上
+            "我选的音色",
+        );
+        assert_eq!(idx, 1, "全路径对得上时不能被同名文件抢走");
+    }
+
+    #[test]
+    fn falls_back_through_file_then_name() {
+        let models = vec![
+            model("甲", "a.pth", "/lib/a/a.pth"),
+            model("乙", "b.pth", "/lib/b/b.pth"),
+        ];
+        // 路径变了（换了安装目录），文件名还在
+        assert_eq!(resolve_selected(&models, "/old/b.pth", "b.pth", ""), 1);
+        // 文件也重命名了，只剩显示名
+        assert_eq!(resolve_selected(&models, "/old/x.pth", "x.pth", "乙"), 1);
+        // 三个都对不上：退回第一条，而不是「未选择模型」
+        assert_eq!(resolve_selected(&models, "/x", "x.pth", "丙"), 0);
+        // 一条音色都没有
+        assert_eq!(resolve_selected(&[], "/x", "x.pth", "丙"), -1);
+    }
 
     #[test]
     fn guard_rejects_the_library_root_itself() {

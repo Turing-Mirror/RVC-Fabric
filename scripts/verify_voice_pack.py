@@ -36,7 +36,7 @@
     python scripts/verify_voice_pack.py --yaml <发布仓>/catalog-src/thirdparty/tp-atri.yaml --write
 
 torch 不在时只做第 1、2 两层，结论会标成 ``pth_struct_unchecked``；这种条目
-不应该发布。装法见 docs/第三方音色收编与验证.md。
+不应该发布。整条收编流程见发布仓的 docs-发布流程.md 第 4 节。
 """
 
 from __future__ import annotations

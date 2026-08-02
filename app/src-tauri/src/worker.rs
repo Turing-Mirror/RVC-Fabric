@@ -19,7 +19,7 @@ use crate::protocol;
 
 static START_LOCK: Mutex<()> = Mutex::new(());
 
-fn append_log(root: &Path, line: &str) {
+pub(crate) fn append_log(root: &Path, line: &str) {
     let path = paths::logs_dir(root).join("realtime_worker.log");
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(root));
     if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {

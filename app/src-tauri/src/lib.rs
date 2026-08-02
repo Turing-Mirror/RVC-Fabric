@@ -144,7 +144,11 @@ async fn update_apply(
 /// Register / unregister the global hotkeys.
 #[tauri::command]
 fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
-    shell_extras::apply_hotkeys(&app, enabled)
+    let out = shell_extras::apply_hotkeys(&app, enabled);
+    // 取消了「全局」的那些组合由前端的 keydown 接住，前端得知道改了什么。
+    // 设置页每改一次快捷键都会调到这里，正好是通知的时机。
+    let _ = app.emit("hotkeys://changed", ());
+    out
 }
 
 /// Zip logs + machine info + settings for support.
@@ -556,6 +560,18 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         worker::kill_known_workers(&root);
+        // 杀完把「当前音色」重新写回引擎配置。
+        //
+        // 强杀是在引擎已经不正常的时候按的，它中途可能正在写 configs/inuse，
+        // 也可能写了一半就没了。下一次「开启变声」读的就是那份配置，读到
+        // 半截的 pth_path 就会用错模型或者干脆起不来 —— 用户的解法是「切到
+        // 另一个音色再切回来」，因为那一下会把模型路径整个重写一遍。
+        //
+        // 那一下现在由强杀自己做。它本来就该是「恢复到已知good状态」的按钮，
+        // 而不是只负责杀进程。
+        if let Err(e) = voices::resync_selected_model(&root) {
+            worker::append_log(&root, &format!("force_kill: 重写音色配置失败：{e}"));
+        }
         Ok(worker::status_for_ui(&root))
     })
     .await

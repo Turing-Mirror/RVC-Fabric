@@ -24,6 +24,11 @@
   --rs: 8px;
   --spring: cubic-bezier(0.34, 1.42, 0.64, 1);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* 换页专用曲线。起步快、收尾长，全程不冲过终点。
+     苹果自家的推入/面板动画就是这条形状：动作一开始就已经走掉一大半，
+     剩下的距离用很长的时间贴上去 —— 看着「快」，但停下来的那一刻没有硬边。
+     不要换成 --spring：那条会冲过终点，页面层贴着窗口边，冲过头就是一条缝。 */
+  --ease-nav: cubic-bezier(0.32, 0.72, 0, 1);
   --glass:
     0 2px 10px rgba(0, 0, 0, 0.1), inset 0 0 0 0.5px rgba(255, 255, 255, 0.6);
   /* The wordmark's script half is near-black. On the dark ground it has to be
@@ -119,8 +124,21 @@ body,
   margin: 0;
 }
 
-body {
+/* 底色画在 html 上，不画在 body 上。
+ *
+ * 壁纸是 `body::before` 加 `z-index: -1`：负层级只能画在**画布背景**之上、
+ * 正常内容之下。以前 body 自己带着不透明的 --bg，于是壁纸被压在 body 的
+ * 底色底下，画了等于没画 —— 磨砂和不透明度自然也跟着一起没反应，因为那
+ * 三个设置改的是同一个看不见的图层。
+ *
+ * 底色搬到 html（会传播成画布背景），body 透明，壁纸这一层才有地方待。
+ * 没设壁纸时 --wp-opacity 是 0，这一层完全透明，观感和以前一模一样。 */
+html {
   background: var(--bg);
+}
+
+body {
+  background: transparent;
   color: var(--ink);
   font-family: var(--ui);
   font-size: 15px;
@@ -185,6 +203,21 @@ option {
   }
 }
 
+/* 换页的四条动画。
+ *
+ * 两层同时在动：离场的旧页往「后面」退，入场的新页从边上推进来。做法上抄的是
+ * 苹果那套推入动画的三个要点：
+ *
+ * 1. **两层走的距离不一样。** 新页走 6%，旧页只走 2.5%，而且带一点缩小。
+ *    等距离平移是一张纸横着拖过去，差速才有前后关系 —— 旧的退到后面去了，
+ *    新的盖上来。这是「耐看」的来源，不是速度也不是缓动。
+ * 2. **两层时长一样（0.42s）。** 以前入场 0.46s、离场 0.3s，中间那 0.16s
+ *    旧页已经没了、新页还在走，画面上是一层孤零零地滑 —— 动作断成两截。
+ * 3. **曲线不冲过终点。** --ease-nav 起步快收尾长；--spring 那种冲过头的
+ *    曲线放在整页平移上会在窗口边露出一条缝（见下面 --spring 的注释）。
+ *
+ * 位移只有 6%，不是整屏：这是同级页签之间的切换，不是层级推进。整屏推拉会
+ * 让「首页 → 广场」显得像进了下一层，而它们是平级的。 */
 @keyframes leaveL {
   from {
     opacity: 1;
@@ -192,13 +225,13 @@ option {
   }
   to {
     opacity: 0;
-    transform: translateX(-5%);
+    transform: translateX(-2.5%) scale(0.985);
   }
 }
 @keyframes enterL {
   from {
     opacity: 0;
-    transform: translateX(5%);
+    transform: translateX(6%);
   }
   to {
     opacity: 1;
@@ -212,13 +245,13 @@ option {
   }
   to {
     opacity: 0;
-    transform: translateX(5%);
+    transform: translateX(2.5%) scale(0.985);
   }
 }
 @keyframes enterR {
   from {
     opacity: 0;
-    transform: translateX(-5%);
+    transform: translateX(-6%);
   }
   to {
     opacity: 1;
@@ -226,11 +259,11 @@ option {
   }
 }
 
-/* 切页的四条动画一律用 --ease，**不要**换回 --spring。
+/* 切页的四条动画一律用 --ease-nav，**不要**换回 --spring。
  *
  * --spring 是 cubic-bezier(0.34, 1.42, 0.64, 1)，控制点 y=1.42 会冲过终点：
- * 采样下来在 62% 处进度到 1.058，也就是整个页面层会越过静止位置约 5% × 5.8%
- * ≈ 0.29% 宽。1185px 的窗口下就是 3.4px，窗口越大越宽。
+ * 采样下来在 62% 处进度到 1.058，也就是整个页面层会越过静止位置约 6% × 5.8%
+ * ≈ 0.35% 宽。1185px 的窗口下就是 4px，窗口越大越宽。
  *
  * 页面层是 absolute inset-0 的透明层，冲过头的那几个像素等于在窗口边上开了
  * 一条缝：往左翻页时缝在左边，往右翻页时在右边，缝里露出的是底下正在淡出的
@@ -239,16 +272,16 @@ option {
  * 小元件（分段控件的滑块、邀请浮层）可以继续用 --spring：它们不贴着窗口边，
  * 冲过头也没有边可露。 */
 .page-leave-l {
-  animation: leaveL 0.3s var(--ease) forwards;
+  animation: leaveL 0.42s var(--ease-nav) forwards;
 }
 .page-enter-l {
-  animation: enterL 0.46s var(--ease);
+  animation: enterL 0.42s var(--ease-nav);
 }
 .page-leave-r {
-  animation: leaveR 0.3s var(--ease) forwards;
+  animation: leaveR 0.42s var(--ease-nav) forwards;
 }
 .page-enter-r {
-  animation: enterR 0.46s var(--ease);
+  animation: enterR 0.42s var(--ease-nav);
 }
 
 .seg-thumb-move {
@@ -277,6 +310,22 @@ option {
 }
 .spotlight {
   animation: spotlight 1.6s var(--ease) both;
+}
+
+/* 提示框入场。很短很轻 —— 提示是用户移过去就要看到的东西，
+   动画只是让它「浮上来」而不是「啪一下出现」，不能变成等待。 */
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tooltip-in {
+  animation: tooltip-in 0.13s var(--ease) both;
 }
 
 @keyframes nudge-in {

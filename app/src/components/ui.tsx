@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HelpMark } from "./Tooltip";
 
 export function PagePad({ children }: { children: ReactNode }) {
   return (
@@ -205,13 +206,12 @@ export function ListItem({
   );
 }
 
-export function HelpMark({ title }: { title: string }) {
-  return (
-    <span
-      title={title}
-      className="w-[17px] h-[17px] rounded-full text-[var(--meta)] text-[11px] inline-grid place-items-center cursor-help shadow-[inset_0_0_0_1px_var(--line)] transition-[color,box-shadow,transform] duration-200 ease-[var(--spring)] hover:text-[var(--accent)] hover:shadow-[inset_0_0_0_1px_var(--accent)] hover:scale-110"
-    >
-      ?
-    </span>
-  );
-}
+/**
+ * 小问号。真身在 `Tooltip.tsx` —— 这里只是把名字接着导出，免得十几个
+ * 引用处全部改 import。
+ *
+ * 它以前是个带原生 `title` 的 `<span>`：要悬停一秒多才出提示、样式由操作
+ * 系统画、而且在 `<label>` 里会把点击转给它管的开关（点一下说明，功能被
+ * 切了）。三件事都在 Tooltip 里治好了。
+ */
+export { HelpMark };

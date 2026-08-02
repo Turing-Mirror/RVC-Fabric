@@ -161,6 +161,24 @@ fn combo_for(root: Option<&Path>, key: &str, fallback: &str) -> String {
     }
 }
 
+/// 某个快捷键要不要抢成全局的。配置键是组合键的键名加 `_global`。
+///
+/// 默认 true —— 以前九个一律全局，改默认值等于悄悄拿走用户已经在用的功能。
+///
+/// 关掉之后这个组合就只在 RVC Fabric 是当前窗口时有效（由前端的 keydown
+/// 兜着）。这件事有意义是因为全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
+/// 用户在别的软件里就再也按不出它原本的功能了。有人只想在切回本软件时用一下，
+/// 不想为此把这个组合从整台机器上让出来。
+pub fn global_for(root: Option<&Path>, key: &str) -> bool {
+    let Some(root) = root else {
+        return true;
+    };
+    config::read(root)
+        .get(&format!("{key}_global"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(true)
+}
+
 /// 藏着就叫出来，已经在前面就收回托盘。
 ///
 /// 「已经在前面」用 is_focused 判断，不用 is_visible：窗口可能可见但被游戏
@@ -191,8 +209,14 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
     let root = root_of(app);
     let mut ok: Vec<String> = Vec::new();
     let mut failed: Vec<String> = Vec::new();
+    // 用户特地设成「只在软件内」的那些。不注册全局，交给前端的 keydown。
+    let mut local: Vec<String> = Vec::new();
     for (key, action, default) in HOTKEYS {
         let combo = combo_for(root.as_deref(), key, default);
+        if !global_for(root.as_deref(), key) {
+            local.push(combo);
+            continue;
+        }
         let handle = app.clone();
         let act = action.to_string();
         match gs.on_shortcut(combo.as_str(), move |_a, _s, _e| {
@@ -213,7 +237,7 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
             Err(_) => failed.push(combo),
         }
     }
-    json!({"enabled": true, "registered": ok, "failed": failed})
+    json!({"enabled": true, "registered": ok, "failed": failed, "local": local})
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +597,23 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .unwrap_or_else(|| panic!("config::defaults() 里没有 {key}"));
             assert_eq!(got, *default, "{key} 两处默认组合不一致");
+        }
+    }
+
+    /// 每个快捷键都要有自己的 `_global` 开关，而且默认必须是 true。
+    ///
+    /// 默认值写错成 false 是个静默事故：九个快捷键一夜之间全变成「只在软件内
+    /// 生效」，用户在游戏里按 Ctrl+F2 没反应，而界面上什么错都不会报。
+    #[test]
+    fn every_hotkey_has_a_global_switch_defaulting_to_on() {
+        let d = crate::config::defaults();
+        for (key, _action, _default) in HOTKEYS {
+            let k = format!("{key}_global");
+            let got = d
+                .get(&k)
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| panic!("config::defaults() 里没有 {k}"));
+            assert!(got, "{k} 默认必须是 true，否则等于悄悄关掉全局快捷键");
         }
     }
 

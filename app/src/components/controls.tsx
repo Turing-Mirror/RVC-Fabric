@@ -104,8 +104,11 @@ export function Select({
   );
 }
 
-/** 把手宽度。位置计算要用到它的具体数值，所以写死在这里而不是 CSS 里。 */
-const KNOB_W = 26;
+/** 轨道高度。把手上下贴齐轨道，所以两者共用这一个数。 */
+const TRACK_H = 26;
+/** 把手宽度。位置计算要用到它的具体数值，所以写死在这里而不是 CSS 里。
+ *  比轨道高度窄一截：又高又细的竖条不好看，也不好瞄。 */
+const KNOB_W = 21;
 
 /**
  * 数值条。一条较粗的轨道 + 一个白色把手，把手推到哪里就是多少。
@@ -141,14 +144,24 @@ export function RangeBar({
   const fillW = `calc(${pct}% - ${(KNOB_W * pct) / 100 - KNOB_W / 2}px)`;
 
   return (
-    <div className="relative h-[26px] w-full rounded-full bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] overflow-hidden">
+    <div
+      className="relative w-full rounded-full bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] overflow-hidden"
+      style={{ height: TRACK_H }}
+    >
+      {/* 渐变从左到右由浅到深：越推到右边颜色越实，一眼能看出推到了哪。
+          原来两端分别是 10% / 30%，整条淡得几乎看不出是填充。 */}
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_10%,transparent),color-mix(in_srgb,var(--accent)_30%,transparent))]"
+        className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
         style={{ width: fillW }}
       />
+      {/* 左右各留半个把手宽，刻度才和把手中心的行程对齐。 */}
       {ticks > 0 ? (
-        <div aria-hidden className="absolute inset-0 flex items-center justify-between px-[13px]">
+        <div
+          aria-hidden
+          className="absolute inset-0 flex items-center justify-between"
+          style={{ paddingInline: KNOB_W / 2 }}
+        >
           {Array.from({ length: ticks }, (_, i) => (
             <span
               key={i}
@@ -157,9 +170,11 @@ export function RangeBar({
           ))}
         </div>
       ) : null}
+      {/* 上下贴齐轨道外框。以前上下各缩 3px，把手看着又细又短，
+          而且缩进那两条把轨道背景露出来，边缘显脏。 */}
       <div
         aria-hidden
-        className="absolute top-[3px] bottom-[3px] rounded-full bg-[var(--surface)] shadow-[0_1px_3px_rgba(0,0,0,.18)] transition-[left] duration-100 ease-out"
+        className="absolute inset-y-0 rounded-full bg-[var(--knob)] shadow-[0_1px_3px_rgba(0,0,0,.2),inset_0_0_0_1px_color-mix(in_srgb,var(--ink)_12%,transparent)] transition-[left] duration-100 ease-out"
         style={{ left: knobLeft, width: KNOB_W }}
       />
       <input
@@ -195,8 +210,9 @@ export function Slider({
   const shown = format ? format(value) : String(value);
   return (
     <div className="flex items-center gap-[15px] w-full">
-      {/* 窄一点：铺满整行的条子既难瞄准也不好看 */}
-      <div className="flex-1 max-w-[300px]">
+      {/* 条子越长，同样的一格数值占的像素越多，越好精调。上限放宽到 460，
+          窄窗口下 flex-1 自己会缩。 */}
+      <div className="flex-1 max-w-[460px]">
         <RangeBar value={value} min={min} max={max} step={step} onChange={onChange} />
       </div>
       <div className="text-[13px] min-w-[56px] text-right tabular-nums">{shown}</div>

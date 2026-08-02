@@ -245,6 +245,7 @@ export default function App() {
   // One place where "the user picked a different voice" is applied, so the
   // home page and the models page can never drift apart on what the dock shows.
   const openModels = useCallback(() => setPage("models"), []);
+  const openHelp = useCallback(() => setPage("help"), []);
   const { reload: plazaReload } = plaza;
   const reloadPlaza = useCallback(() => void plazaReload(), [plazaReload]);
 
@@ -444,10 +445,13 @@ export default function App() {
                   onCheckUpdate={() => void checkUpdate()}
                   updateLine={updateLine}
                   updateBusy={updateBusy}
+                  onOpenHelp={openHelp}
                 />
               );
             case "help":
-              return <HelpPage />;
+              // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
+              // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
+              return <HelpPage status={deviceStatus} />;
             case "more":
               return (
                 <MorePage

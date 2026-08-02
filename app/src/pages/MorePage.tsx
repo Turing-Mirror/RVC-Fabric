@@ -4,6 +4,7 @@ import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui
 import { SeparateDialog } from "../components/SeparateDialog";
 import { TrainDialog } from "../components/TrainDialog";
 import { ExtrasDialog } from "../components/ExtrasDialog";
+import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
@@ -70,6 +71,19 @@ export function MorePage({
   const [logFile, setLogFile] = useState("");
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
+  // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
+  // 而这一整块讲的就是「这台机器拿什么在跑」。
+  const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
+  const [gpuMsg, setGpuMsg] = useState("");
+  const nvGpus = provision?.nvidia_gpus || [];
+
+  const pickMainGpu = (v: number) => {
+    setMainGpu(v);
+    setGpuMsg("");
+    void invoke("config_set", { patch: { main_gpu: v } })
+      .then(() => setGpuMsg("已保存，重新「开启变声」后生效"))
+      .catch((e) => setGpuMsg(`保存失败：${String(e)}`));
+  };
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
   // itself; a button that looks like it did nothing gets clicked again.
@@ -116,6 +130,11 @@ export function MorePage({
     invoke<string | null>("log_path")
       .then((v) => alive && setLogFile(v || ""))
       .catch(() => alive && setLogFile(""));
+    invoke<Record<string, unknown>>("config_get")
+      .then((c) => alive && setMainGpu(Number(c.main_gpu ?? MAIN_GPU_AUTO)))
+      .catch(() => {
+        /* 浏览器预览下没有配置 */
+      });
     return () => {
       alive = false;
     };
@@ -191,6 +210,24 @@ export function MorePage({
               </span>
             }
           />
+          {/* 只有一块 N 卡时不显示：那时候「选哪块」是个假选择。 */}
+          {nvGpus.length > 1 ? (
+            <ListItem
+              title="主显卡"
+              titleTip={MAIN_GPU_TIP}
+              desc={
+                gpuMsg ||
+                "多块 N 卡时指定用哪一块计算。不指定就用排在第一的那块，不一定是最快的"
+              }
+              right={
+                <MainGpuPicker
+                  gpus={nvGpus}
+                  value={mainGpu}
+                  onChange={pickMainGpu}
+                />
+              }
+            />
+          ) : null}
           <ListItem
             title="推荐运行时"
             desc={

@@ -77,7 +77,10 @@ export function PageHost({ page, children }: Props) {
       {phase.leaving ? (
         <div
           key={`leave-${phase.leaving}`}
-          className={`absolute inset-0 overflow-y-auto pointer-events-none z-[1] ${leaveCls}`}
+          // 离场层不需要能滚：它是新挂上去的节点，scrollTop 本来就是 0，
+          // 300ms 后就卸载了。留着 overflow-y-auto 只是多一个滚动容器，
+          // 切页那一瞬间会跟着画出第二根滚动条。
+          className={`absolute inset-0 overflow-hidden pointer-events-none z-[1] ${leaveCls}`}
         >
           {children(phase.leaving)}
         </div>

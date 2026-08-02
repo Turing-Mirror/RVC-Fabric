@@ -72,7 +72,74 @@ const FAQ: { q: string; hint: string; a: string }[] = [
   },
 ];
 
-function HelpPageImpl() {
+/**
+ * 设备列表里认得出来的「能把变声送进游戏」的通道。
+ *
+ * 不是只认 CABLE：装了 VoiceMeeter 的人已经有虚拟声卡了，让他再装一个
+ * VB-Cable 只会多两个设备、多一层能接错的地方。带内录/立体声混音的实体声卡
+ * 同样能走通（说明页「实体声卡怎么连」那条讲的就是这个）。
+ *
+ * `kind` 决定给出什么建议，所以分开写而不是合成一个正则。
+ */
+const ROUTES: { kind: "virtual" | "physical"; label: string; keys: string[] }[] = [
+  {
+    kind: "virtual",
+    label: "VB-Cable",
+    // 不能拿厂商名「vb-audio」当特征：VoiceMeeter 也是 VB-Audio 出的，
+    // 它的设备名叫「VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)」，
+    // 照厂商名匹配会把只装了 VoiceMeeter 的人判成「VB-Cable 已装好」，
+    // 然后让他照着 CABLE Input 去接一个根本不存在的设备。
+    // 认设备名本身：VB-Cable 装出来的就叫 CABLE Input / CABLE Output。
+    keys: ["cable input", "cable output", "vb-audio virtual cable"],
+  },
+  {
+    kind: "virtual",
+    label: "VoiceMeeter",
+    keys: ["voicemeeter", "voice meeter"],
+  },
+  {
+    kind: "virtual",
+    label: "其他虚拟声卡",
+    keys: ["virtual audio", "virtual cable", "虚拟声卡", "synchronous audio"],
+  },
+  {
+    kind: "physical",
+    label: "声卡内录 / 立体声混音",
+    keys: ["立体声混音", "stereo mix", "what u hear", "wave out mix", "内录"],
+  },
+];
+
+/** 设备名可能是字符串，也可能是 `{name}`，两边都得认。 */
+function deviceNames(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((d) => (typeof d === "string" ? d : String((d as { name?: string })?.name ?? "")))
+    .filter(Boolean);
+}
+
+function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: string }[] {
+  const lower = names.map((n) => n.toLowerCase());
+  const hits: { kind: "virtual" | "physical"; label: string }[] = [];
+  for (const r of ROUTES) {
+    // 「其他虚拟声卡」是兜底桶，已经认出具体是哪一款就别再报一遍：
+    // VB-Cable 的设备名是「VB-Audio Virtual Cable」，两条都能命中，
+    // 报成「VB-Cable、其他虚拟声卡」会让人以为自己装了两套。
+    if (r.label === "其他虚拟声卡" && hits.some((h) => h.kind === "virtual")) {
+      continue;
+    }
+    if (r.keys.some((k) => lower.some((n) => n.includes(k)))) {
+      hits.push({ kind: r.kind, label: r.label });
+    }
+  }
+  return hits;
+}
+
+type HelpProps = {
+  /** 引擎报的设备列表。空的时候是引擎还没起来，不代表用户没装声卡。 */
+  status?: { input_devices?: unknown; output_devices?: unknown };
+};
+
+function HelpPageImpl({ status }: HelpProps = {}) {
   const [open, setOpen] = useState<string>("");
   // 名词表和常见情况各自独立展开，互不影响。
   const [openTerm, setOpenTerm] = useState<string>("");
@@ -119,6 +186,15 @@ function HelpPageImpl() {
     }
   };
 
+  const names = [
+    ...deviceNames(status?.input_devices),
+    ...deviceNames(status?.output_devices),
+  ];
+  const known = names.length > 0;
+  const found = detectRoutes(names);
+  const hasVirtual = found.some((f) => f.kind === "virtual");
+  const hasCable = found.some((f) => f.label === "VB-Cable");
+
   return (
     <PagePad>
       <PageHead title="说明" sub="虚拟声卡连接、常见情况与专有名词" />
@@ -128,13 +204,42 @@ function HelpPageImpl() {
           想让游戏 / 语音 里的人听到变声，必须先装虚拟声卡（VB-Cable）。
           装完重启一次电脑，设备列表里才会出现 CABLE Input / CABLE Output。
         </p>
+        {/* 先照着用户机器上真实的设备列表说一句话。
+            已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
+            多一层能接错的地方 —— 那不是帮忙。 */}
+        <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed max-w-[74ch]">
+          {!known ? (
+            <span className="text-[var(--help)]">
+              还没读到设备列表，暂时没法判断你装没装声卡。
+              引擎启动后（或在「设置 → 设备与音频」点一次「重载设备列表」）再回来看。
+            </span>
+          ) : found.length === 0 ? (
+            <span className="text-[var(--ink-muted)]">
+              在你的 {names.length} 个设备里没找到可用的转发通道，
+              需要装虚拟声卡。点下面的「安装虚拟声卡」即可。
+            </span>
+          ) : (
+            <span className="text-[var(--ink-muted)]">
+              已在你的设备列表里找到：
+              <b className="font-semibold">{found.map((f) => f.label).join("、")}</b>。
+              <br />
+              {hasVirtual
+                ? hasCable
+                  ? "VB-Cable 已经装好了，不用再装一遍。直接照下面「虚拟声卡怎么连」接线就行。"
+                  : "你已经有虚拟声卡了，不必再装 VB-Cable —— 多装一套只会多出几个容易接错的设备。把软件输出选到它的输入端，游戏麦克风选到它的输出端即可。"
+                : "这是实体声卡的内录通道，也能走通：软件输出选实体声卡的播放，游戏麦克风选这个内录通道。展开下面「实体声卡怎么连」有详细接法。"}
+            </span>
+          )}
+        </div>
         <Group>
           <ListItem
             title="VB-Cable"
             titleTip={tip("虚拟声卡")}
             desc={
               vbMsg ||
-              (vbReady === "checking"
+              (hasCable
+                ? "系统里已经有 CABLE 设备，不用再装。重装只在设备损坏时才需要"
+                : vbReady === "checking"
                 ? "正在检查…"
                 : vbReady === "unknown"
                   ? "无法查询安装包状态，点右侧仍可尝试下载并安装"

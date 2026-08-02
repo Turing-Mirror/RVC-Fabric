@@ -31,6 +31,9 @@ type Props = {
   onCheckUpdate?: () => void;
   updateLine?: string;
   updateBusy?: boolean;
+  /** 跳到说明页。设备这一套（虚拟声卡怎么连）的解释全在那边，
+   *  这里只放一个入口，不把同一段话再抄一遍。 */
+  onOpenHelp?: () => void;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -77,6 +80,7 @@ function SettingsPageImpl({
   onCheckUpdate,
   updateLine,
   updateBusy = false,
+  onOpenHelp,
 }: Props = {}) {
   const [tab, setTab] = useState<Tab>("设备与音频");
   const c = useConfig();
@@ -148,7 +152,15 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "设备与音频" ? (
-          <Block title="设备与音频" className="!mt-6">
+          <Block
+            title="设备与音频"
+            className="!mt-6"
+            action={
+              onOpenHelp ? (
+                <Btn onClick={onOpenHelp}>不会用？转至说明页</Btn>
+              ) : undefined
+            }
+          >
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
               输入选你的麦克风，输出选 CABLE Input，再把游戏里的麦克风设成 CABLE Output。
               <br />

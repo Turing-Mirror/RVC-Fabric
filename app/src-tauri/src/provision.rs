@@ -77,6 +77,29 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     )
 }
 
+/// 名字看起来是不是一块 N 卡。
+///
+/// 只用来筛「主显卡」那个下拉里能选的项：CUDA 只看得见 N 卡，把核显和 A 卡也
+/// 列进去，用户选了之后序号还会往后错一位，等于给自己挖坑。
+pub(crate) fn looks_like_nvidia(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    ["nvidia", "geforce", "rtx", "gtx", "quadro", "tesla"]
+        .iter()
+        .any(|k| n.contains(k))
+}
+
+/// 系统里枚举到的 N 卡，保持枚举顺序。
+///
+/// 下标就是给 `CUDA_VISIBLE_DEVICES` 用的序号。注册表枚举顺序和 CUDA 的排序
+/// 不保证一一对应 —— 所以界面上写明了「选完不对就换一个」，而不是假装这里
+/// 算出来的一定准。
+pub fn list_nvidia_gpus() -> Vec<String> {
+    list_gpus()
+        .into_iter()
+        .filter(|g| looks_like_nvidia(g))
+        .collect()
+}
+
 /// Enumerated once per run. The video controller set does not change while the
 /// app is open, and this used to be a PowerShell launch that ran every time the
 /// provision gate opened or a diagnostics bundle was built.
@@ -330,6 +353,8 @@ pub fn provision_status(root: &Path) -> Value {
         "worker_script_ok": worker_script,
         "product_root": root.to_string_lossy(),
         "gpus": gpus,
+        // 「主显卡」下拉的候选项。下标即 CUDA 序号。
+        "nvidia_gpus": list_nvidia_gpus(),
         "recommended_variant": recommended,
         "recommend_reason": reason,
         "recommended_label": label,
@@ -634,4 +659,33 @@ pub fn run_provision(
         emit_progress(&app, "error", 0, 1, e);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 「主显卡」的序号最后是给 `CUDA_VISIBLE_DEVICES` 用的，而 CUDA 只看得见
+    /// N 卡。核显或 A 卡混进候选列表，用户选「1」拿到的就不是他看到的那块。
+    #[test]
+    fn only_nvidia_adapters_can_be_picked_as_the_main_gpu() {
+        for good in [
+            "NVIDIA GeForce RTX 5090",
+            "NVIDIA GeForce RTX 5060 Ti",
+            "GeForce GTX 1660 SUPER",
+            "Quadro P2000",
+            "Tesla T4",
+        ] {
+            assert!(looks_like_nvidia(good), "{good} 应该算 N 卡");
+        }
+        for bad in [
+            "Intel(R) UHD Graphics 770",
+            "AMD Radeon RX 7900 XTX",
+            "Intel(R) Arc(TM) A770",
+            "Microsoft Basic Display Adapter",
+            "Parsec Virtual Display Adapter",
+        ] {
+            assert!(!looks_like_nvidia(bad), "{bad} 不该出现在主显卡候选里");
+        }
+    }
 }

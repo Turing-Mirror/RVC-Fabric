@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   getProvisionStatus,
@@ -8,7 +8,8 @@ import {
   type ProvisionStatus,
   type ProvisionProgress,
 } from "../lib/engine";
-import { Btn } from "./ui";
+import { Btn, HelpMark } from "./ui";
+import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "./MainGpuPicker";
 
 type VariantRow = {
   id: string;
@@ -31,6 +32,22 @@ function formatBytes(n: number): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(0)} KB`;
   return `${Math.round(n)} B`;
 }
+
+function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} 分 ${s % 60} 秒`;
+  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+}
+
+/**
+ * 多久没有新字节就算「卡住了」。
+ *
+ * 下载是分段并发的，单段重连、服务器限速抖动都会让字节暂停几秒，太短会天天
+ * 误报。12 秒足够长到不误报，又足够短到用户还没开始怀疑软件坏了。
+ */
+const STALL_AFTER_MS = 12_000;
 
 function isCancelError(e: unknown): boolean {
   const s = String(e ?? "");
@@ -64,6 +81,49 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     null,
   );
   const [vbcableMsg, setVbcableMsg] = useState("");
+  // 主显卡。-1 = 自动。只有多块 N 卡时才有得选，所以下面按需渲染。
+  const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
+
+  useEffect(() => {
+    if (!open) return;
+    void invoke<Record<string, unknown>>("config_get")
+      .then((c) => setMainGpu(Number(c.main_gpu ?? MAIN_GPU_AUTO)))
+      .catch(() => {
+        /* 浏览器预览下没有配置，保持自动 */
+      });
+  }, [open]);
+
+  const pickMainGpu = (v: number) => {
+    setMainGpu(v);
+    void invoke("config_set", { patch: { main_gpu: v } }).catch(() => {});
+  };
+
+  // 「进度条不动」这件事本身，用户是没法判断的：可能真在下（大包前几个百分点
+  // 走得很慢），也可能连不上服务器，也可能下着下着断了。下载线程只在真的收到
+  // 字节时才发事件，所以「没有事件」是有信息量的 —— 把它显式说出来。
+  //
+  // now 每秒推一次，用来把「已用时间」和「静默了多久」算出来；lastMove 记的是
+  // 最后一次进度真正变化的时刻，重渲染不该重置它，所以放 ref 不放 state。
+  const [now, setNow] = useState(() => Date.now());
+  const lastMove = useRef({ at: 0, done: -1, phase: "" });
+  const startedAt = useRef(0);
+
+  useEffect(() => {
+    if (!busy) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [busy]);
+
+  useEffect(() => {
+    const d = Number(progress?.done || 0);
+    const ph = String(progress?.phase || "");
+    // 换阶段（下载完转解压、转补引擎资源）同样算「有动静」，否则解压一开始
+    // 就会因为不再有字节而被判成卡住。
+    if (d !== lastMove.current.done || ph !== lastMove.current.phase) {
+      lastMove.current = { at: Date.now(), done: d, phase: ph };
+      setNow(Date.now());
+    }
+  }, [progress]);
 
   useEffect(() => {
     if (!open) return;
@@ -136,6 +196,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const start = async () => {
     setBusy(true);
     setError("");
+    startedAt.current = Date.now();
+    lastMove.current = { at: Date.now(), done: -1, phase: "" };
+    setNow(Date.now());
     setProgress({ phase: "prepare", done: 0, total: 1, percent: 0, message: "准备…" });
     try {
       const r = await startProvision(variant, false);
@@ -208,6 +271,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     done <= 0 &&
     (String(progress?.phase || "").startsWith("connecting") ||
       String(progress?.message || "").includes("连接"));
+
+  // 静默多久了。lastMove.at 为 0 表示这一轮还没开始，别把它当成静默了 55 年。
+  const idleMs = lastMove.current.at ? now - lastMove.current.at : 0;
+  const stalled = Boolean(showBar) && idleMs > STALL_AFTER_MS;
+  const elapsedMs = startedAt.current ? now - startedAt.current : 0;
 
   // Runtime alone is not a usable install: the worker needs engine-core
   // (hubert / rmvpe / ffmpeg) and the user needs VB-Cable for anyone to hear
@@ -306,6 +374,28 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           </p>
         ) : null}
 
+        {/* 多块 N 卡才问。只有一块的时候「主显卡」是个没有意义的问题，
+            摆在首次安装的流程里只会让人卡住。 */}
+        {(info.nvidia_gpus?.length ?? 0) > 1 ? (
+          <div className="mb-5">
+            <div className="text-[12.5px] text-[var(--meta)] mb-2 flex items-center gap-[9px]">
+              主显卡
+              <HelpMark title={MAIN_GPU_TIP} />
+            </div>
+            <MainGpuPicker
+              full
+              gpus={info.nvidia_gpus || []}
+              value={mainGpu}
+              onChange={pickMainGpu}
+              disabled={busy}
+            />
+            <p className="text-[11.5px] text-[var(--meta)] m-0 mt-2 leading-relaxed">
+              你有多块 N 卡。不指定的话引擎用排在第一的那块，不一定是最快的那块。
+              以后也可以在「其他 → 运行状态」里改。
+            </p>
+          </div>
+        ) : null}
+
         {extra ? (
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-3">{extra}</p>
         ) : null}
@@ -343,6 +433,28 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             ) : isDownload ? (
               <div className="mt-1.5 text-[11.5px] text-[var(--meta)]">
                 正在连接服务器，稍后显示进度…
+              </div>
+            ) : null}
+
+            {/* 已用时间。一条不动的进度条配上「已用 6 分 20 秒」，至少能看出
+                软件还活着、这一轮跑了多久。 */}
+            {elapsedMs > 3000 ? (
+              <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums">
+                已用 {formatDuration(elapsedMs)}
+              </div>
+            ) : null}
+
+            {/* 真的卡住了就直说。不说的话用户面对的是一条不动的进度条，
+                只能干等或者强退 —— 强退之前下的那部分其实是留着的。 */}
+            {stalled ? (
+              <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed">
+                已经 {formatDuration(idleMs)} 没有收到新数据。
+                {isDownload
+                  ? "多半是网络不通或者服务器没响应，不是软件卡死。"
+                  : "这一步不报进度，通常是在解压或校验，耐心等一下。"}
+                <br />
+                可以继续等；也可以点「取消」再重来一次 ——
+                已经下好的部分留在本地，重开会接着下，不会白下。
               </div>
             ) : null}
           </div>

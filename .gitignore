@@ -203,3 +203,9 @@ AGENTS.md
 
 # Tauri 安装包的引擎负载：由 scripts/prepare_engine_payload.py 每次构建重新生成
 /app/src-tauri/engine-payload/
+
+# UI 文案对照表（gitignore，不随代码提交）
+/docs/ui_text_comparison.md
+
+# 文案实施计划书（gitignore，实施完成后可删）
+/docs/ui_copy_plan.md

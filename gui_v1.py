@@ -309,16 +309,21 @@ if __name__ == "__main__":
         def load(self):
             try:
                 if not os.path.exists("configs/inuse/config.json"):
-                    shutil.copy("configs/config.json", "configs/inuse/config.json")
-                with open("configs/inuse/config.json", "r") as j:
-                    data = json.load(j)
-                    data["sr_model"] = data["sr_type"] == "sr_model"
-                    data["sr_device"] = data["sr_type"] == "sr_device"
-                    data["pm"] = data["f0method"] == "pm"
-                    data["harvest"] = data["f0method"] == "harvest"
-                    data["crepe"] = data["f0method"] == "crepe"
-                    data["rmvpe"] = data["f0method"] == "rmvpe"
-                    data["fcpe"] = data["f0method"] == "fcpe"
+                    # 不复制模板：configs/config.json 是开发机示例配置
+                    # （pitch=12、设备名全是别的机器上的），拿它当用户配置会把
+                    # 音高/共鸣/设备全部顶成模板值。inuse 缺失时由 Tauri 壳每次
+                    # 启动从 User_Data/app_config.json 重建，这里返回默认即可。
+                    data = {}
+                else:
+                    with open("configs/inuse/config.json", "r") as j:
+                        data = json.load(j)
+                    data["sr_model"] = data.get("sr_type", "sr_model") == "sr_model"
+                    data["sr_device"] = data.get("sr_type", "sr_model") == "sr_device"
+                    data["pm"] = data.get("f0method", "") == "pm"
+                    data["harvest"] = data.get("f0method", "") == "harvest"
+                    data["crepe"] = data.get("f0method", "") == "crepe"
+                    data["rmvpe"] = data.get("f0method", "") == "rmvpe"
+                    data["fcpe"] = data.get("f0method", "") == "fcpe"
                     # Drop broken index (stale logs/*.index) so start won't crash
                     ip = str(data.get("index_path") or "").strip()
                     if ip and not os.path.isfile(ip):
@@ -326,57 +331,67 @@ if __name__ == "__main__":
                         data["index_rate"] = 0
                     elif not ip:
                         data["index_rate"] = 0
-                    if data.get("sg_hostapi") in self.hostapis:
-                        self.update_devices(hostapi_name=data["sg_hostapi"])
-                        if (
-                            data.get("sg_input_device") not in self.input_devices
-                            or data.get("sg_output_device") not in self.output_devices
-                        ):
+                    # 设备枚举失败不能毁配置：以前这一段一抛异常，外面的 except
+                    # 就用 "w" 打开 inuse/config.json —— 文件被截断成 0 字节，
+                    # 用户保存的音高/共鸣等参数全部蒸发，下次开变声还会回退到
+                    # 示例模板。设备问题只影响本次启动的设备选择，配置必须保留。
+                    try:
+                        if data.get("sg_hostapi") in self.hostapis:
                             self.update_devices(hostapi_name=data["sg_hostapi"])
-                            data = self._pick_default_devices(data)
-                    else:
-                        # Prefer MME for Cable compatibility when present
-                        if "MME" in self.hostapis:
-                            data["sg_hostapi"] = "MME"
-                            self.update_devices(hostapi_name="MME")
+                            if (
+                                data.get("sg_input_device") not in self.input_devices
+                                or data.get("sg_output_device") not in self.output_devices
+                            ):
+                                self.update_devices(hostapi_name=data["sg_hostapi"])
+                                data = self._pick_default_devices(data)
                         else:
-                            data["sg_hostapi"] = self.hostapis[0]
-                            self.update_devices(hostapi_name=self.hostapis[0])
-                        data = self._pick_default_devices(data)
-            except:
-                with open("configs/inuse/config.json", "w") as j:
-                    data = {
-                        "pth_path": "",
-                        "index_path": "",
-                        "sg_hostapi": self.hostapis[0],
-                        "sg_wasapi_exclusive": False,
-                        "sg_input_device": self.input_devices[
-                            self.input_devices_indices.index(sd.default.device[0])
-                        ],
-                        "sg_output_device": self.output_devices[
-                            self.output_devices_indices.index(sd.default.device[1])
-                        ],
-                        "sr_type": "sr_model",
-                        "threhold": -48,
-                        "pitch": 0,
-                        "formant": 0.0,
-                        "index_rate": 0,
-                        "rms_mix_rate": 0.25,
-                        "block_time": 0.22,
-                        "crossfade_length": 0.05,
-                        "extra_time": 2.5,
-                        "n_cpu": 4,
-                        "f0method": "fcpe",
-                        "use_jit": False,
-                        "use_pv": False,
-                    }
-                    data["sr_model"] = data["sr_type"] == "sr_model"
-                    data["sr_device"] = data["sr_type"] == "sr_device"
-                    data["pm"] = data["f0method"] == "pm"
-                    data["harvest"] = data["f0method"] == "harvest"
-                    data["crepe"] = data["f0method"] == "crepe"
-                    data["rmvpe"] = data["f0method"] == "rmvpe"
-                    data["fcpe"] = data["f0method"] == "fcpe"
+                            # Prefer MME for Cable compatibility when present
+                            if "MME" in self.hostapis:
+                                data["sg_hostapi"] = "MME"
+                                self.update_devices(hostapi_name="MME")
+                            else:
+                                data["sg_hostapi"] = self.hostapis[0]
+                                self.update_devices(hostapi_name=self.hostapis[0])
+                            data = self._pick_default_devices(data)
+                    except Exception:
+                        printt("load: 设备刷新失败，保留已保存的配置")
+                        traceback.print_exc()
+            except Exception:
+                # 读配置失败只影响本次启动：返回默认值，但绝不写文件。
+                # 以前这里 open(..., "w") 会截断 inuse，用户参数全丢。
+                printt("load failed, using defaults (%s)", traceback.format_exc())
+                data = {
+                    "pth_path": "",
+                    "index_path": "",
+                    "sg_hostapi": self.hostapis[0] if self.hostapis else "",
+                    "sg_wasapi_exclusive": False,
+                    "sg_input_device": (
+                        self.input_devices[0] if self.input_devices else ""
+                    ),
+                    "sg_output_device": (
+                        self.output_devices[0] if self.output_devices else ""
+                    ),
+                    "sr_type": "sr_model",
+                    "threhold": -48,
+                    "pitch": 0,
+                    "formant": 0.0,
+                    "index_rate": 0,
+                    "rms_mix_rate": 0.25,
+                    "block_time": 0.22,
+                    "crossfade_length": 0.05,
+                    "extra_time": 2.5,
+                    "n_cpu": 4,
+                    "f0method": "fcpe",
+                    "use_jit": False,
+                    "use_pv": False,
+                }
+                data["sr_model"] = data["sr_type"] == "sr_model"
+                data["sr_device"] = data["sr_type"] == "sr_device"
+                data["pm"] = data["f0method"] == "pm"
+                data["harvest"] = data["f0method"] == "harvest"
+                data["crepe"] = data["f0method"] == "crepe"
+                data["rmvpe"] = data["f0method"] == "rmvpe"
+                data["fcpe"] = data["f0method"] == "fcpe"
             return data
 
         def launcher(self):
@@ -2185,30 +2200,20 @@ if __name__ == "__main__":
             path = "configs/inuse/config.json"
             data = {}
             try:
-                if (not os.path.isfile(path)) or os.path.getsize(path) == 0:
-                    if os.path.isfile("configs/config.json"):
-                        shutil.copy("configs/config.json", path)
-                with open(path, "r", encoding="utf-8") as j:
-                    raw = j.read().strip()
-                if not raw:
-                    raise ValueError("empty inuse config")
-                data = json.loads(raw)
-                if not isinstance(data, dict):
-                    data = {}
+                # 空/缺失时**不**复制 configs/config.json：那是开发机示例配置
+                # （pitch=12、别的机器上的设备名），拿来当用户配置等于把用户
+                # 参数全顶成模板值。inuse 由 Tauri 壳从 User_Data/app_config.json
+                # 重建，缺失时先用空字典（下面的 data.get 全部有默认值）。
+                if os.path.isfile(path) and os.path.getsize(path) > 0:
+                    with open(path, "r", encoding="utf-8") as j:
+                        raw = j.read().strip()
+                    if raw:
+                        data = json.loads(raw)
+                        if not isinstance(data, dict):
+                            data = {}
             except Exception as e:
                 printt("config read failed (%s), using defaults", e)
-                # Repair empty/corrupt file so next start works
-                try:
-                    if os.path.isfile("configs/config.json"):
-                        shutil.copy("configs/config.json", path)
-                        with open(path, "r", encoding="utf-8") as j:
-                            data = json.load(j)
-                    else:
-                        data = {}
-                        with open(path, "w", encoding="utf-8") as j:
-                            json.dump(data, j)
-                except Exception:
-                    data = {}
+                data = {}
             f0 = data.get("f0method") or "fcpe"
             sr = data.get("sr_type") or "sr_model"
             # Ensure devices are refreshed for hostapi

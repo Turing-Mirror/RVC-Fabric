@@ -108,7 +108,9 @@ fn config_set(
 }
 
 /// Native image picker for the wallpaper setting. Returns the chosen path or
-/// null when the user cancels; size/dimension limits are enforced on apply.
+/// null when the user cancels. No size/dimension limits: the file is only
+/// referenced by path and decoded by the webview on its own time — a huge
+/// image merely loads slowly, it cannot break anything.
 #[tauri::command]
 fn pick_wallpaper() -> Option<String> {
     rfd::FileDialog::new()
@@ -218,8 +220,14 @@ async fn update_app(app: AppHandle) -> Result<Value, String> {
 }
 
 /// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音合成）。
+///
+/// 必须是 async：同步 command 跑在 WebView2 的 IPC 消息回调里，在那里同步建
+/// 第二个 webview，wry 会泵消息等 controller 创建完成（wait_with_pump），
+/// 而完成回调要等外层 IPC 回调先返回才能送达——两边互等，窗口永远白屏，
+/// 之后所有命令全部挂起（wry#583 同款死锁）。改成 async 后命令体跑在
+/// tokio 线程上，建窗经事件循环顶层派发，回调能正常送达。
 #[tauri::command]
-fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
+async fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
     tool_window::open(&app, &kind)
 }
 

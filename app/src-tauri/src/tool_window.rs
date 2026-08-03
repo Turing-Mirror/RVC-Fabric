@@ -12,6 +12,8 @@
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
+use crate::logging;
+
 /// 一个工具窗口的全部参数：标题、初始大小、最小大小。
 struct Spec {
     title: &'static str,
@@ -105,6 +107,7 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .center()
     .build()
     .map_err(|e| format!("建不了工具窗口：{e}"))?;
+    logging::shell_log!("工具窗口（{kind}）已建好，开始处理圆角");
 
     crate::window_watch::round_corners(&win);
     // 和主窗口一样：改完大小要重新裁圆角（Win10 兜底那条路）。

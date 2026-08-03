@@ -110,6 +110,9 @@ build_setup.log
 
 # Test / lint caches
 .pytest_cache/
+# 自动化界面实测的临时截图 / 脚本残留（ComputerUse 测试代理产物）
+/.cu_test/
+/.qa/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -185,6 +188,7 @@ AGENTS.md
 /app/node_modules/
 /app/dist/
 /app/src-tauri/target/
+/app/src-tauri/target2/
 /app/frontend/
 /app/.vscode/
 

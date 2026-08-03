@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.3.7",
+    "version": "1.3.8",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.3.7",
+      "version": "1.3.8",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
       "sha256": "13788b5fd99fcd80fbbf40efa69dd9147e382c50d2bfc8ed44bba417816f256b",
       "size_bytes": 8419670,
       "min_app_version": "1.3.0",
-      "notes": "1.3.7 是 1.3.6 之后的功能版。无缝换模型：变声中切音色从二三十秒 变成零点几秒的接缝，采样率不同才退回重开流。人声分离、训练音色 从弹窗改成独立窗口，能挪能拉能最小化。新增语音合成，系统 SAPI 吐字 + 换成用户选的音色，零新增依赖。外观改动当场生效、数值条 填充溢出、窗口拖动竖带三个观感问题一并修了。"
+      "notes": "1.3.8 是修复 + 文案整合版。三个真问题一起修：工具窗口打开即白屏假死 （Resized 回调里的同步重画跨进程等 WebView2，建窗互等死锁，整段删掉）； 快捷键改完不生效（前端写盘走 setTimeout 排队，注册永远读到旧值， 改为同步写盘、await 之后再注册）；录制快捷键期间按确认组合会真的触发 变声（先摘掉全局快捷键再录）。界面文案按定稿全量重写：小问号、专有 名词、FAQ、浮层弹窗统一去 AI 腔，修掉事实错误（音高算法是 5 个选项、 README 打包命令对齐 NSIS 流程），README 同步重写为结构化版本。"
     }
   },
   "community": {

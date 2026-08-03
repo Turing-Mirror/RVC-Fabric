@@ -32,7 +32,7 @@ export function Dock({
   // No invented defaults. These used to read "少女音 · 1/3" and
   // "开黑日常 · 音高 +15 共鸣 1.20" on every install, for every voice, because
   // nothing ever passed them.
-  voiceName = "未选择模型",
+  voiceName = "未选择音色",
   voiceTag = "",
   voiceIndex = "",
   profileSummary = "无",
@@ -44,8 +44,8 @@ export function Dock({
   onMode,
   running,
   onToggleRun,
-  statusTitle = "引擎待命",
-  statusSub = "就绪",
+  statusTitle = "引擎就绪",
+  statusSub = "待命",
   micDb = null,
   thresholdDb = -60,
 }: Props) {
@@ -86,13 +86,13 @@ export function Dock({
           options={[
             {
               id: "vc" as const,
-              label: "变声",
-              title: "麦克风 → 变成所选音色再输出（日常开黑）",
+              label: "实时变声",
+              title: "麦克风输入 → 变为所选音色 → 输出（日常使用模式）",
             },
             {
               id: "bypass" as const,
-              label: "原声",
-              title: "不改变声音，只输出麦克风原声，用来测麦 / 连接",
+              label: "旁路原声",
+              title: "绕过变声处理直接输出，用于测试麦克风或排查连接问题",
             },
           ]}
           value={mode}

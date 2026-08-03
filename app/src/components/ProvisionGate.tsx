@@ -327,7 +327,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         <h2 className="text-[22px] font-semibold m-0 mb-2">补全运行时</h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
           {info.recommend_reason ||
-            "首次使用需要下载 Python 运行时（含 PyTorch，体积数 GB）。安装包本身不含运行时。"}
+            "首次使用需下载运行时环境（含 PyTorch，需几 GB 空间），下载后自动部署。"}
         </p>
 
         <div className="text-[12.5px] text-[var(--meta)] mb-2">运行时版本</div>
@@ -450,8 +450,8 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed">
                 已经 {formatDuration(idleMs)} 没有收到新数据。
                 {isDownload
-                  ? "多半是网络不通或者服务器没响应，不是软件卡死。"
-                  : "这一步不报进度，通常是在解压或校验，耐心等一下。"}
+                  ? "可能是网络波动或服务器无响应，不是软件卡死。"
+                  : "这一步不报进度，通常是在解压或校验文件，请耐心等待。"}
                 <br />
                 可以继续等；也可以点「取消」再重来一次 ——
                 已经下好的部分留在本地，重开会接着下，不会白下。
@@ -471,7 +471,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               {vbcable === "failed"
                 ? `安装包没准备好：${vbcableMsg}。可以稍后在「说明」页重试。`
                 : vbcable === "installing"
-                  ? "已启动官方安装程序，请在弹出的窗口里确认（需要管理员权限）"
+                  ? "已启动官方安装程序，请在弹窗中确认（需要管理员权限）"
                   : "没有它，游戏和语音软件里的人听不到变声后的你。点「安装」会弹出官方安装程序和管理员确认。"}
             </div>
           </div>
@@ -509,7 +509,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           )}
         </div>
         <p className="text-[11.5px] text-[var(--meta)] m-0 mt-4 leading-relaxed">
-          下到一半断了没关系，重开会接着下。请保持网络畅通。
+          支持断点续传，中断后重新开始即可。请保持网络畅通。
         </p>
       </div>
     </div>

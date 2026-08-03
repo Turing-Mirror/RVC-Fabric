@@ -192,7 +192,7 @@ function SettingsPageImpl({
         {c.restartKeys.length ? (
           <div className="mt-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_14%,transparent)] px-3.5 py-2.5 flex items-center gap-3 flex-wrap">
             <span className="text-[12.5px] text-[var(--ink-muted)]">
-              设备与性能类改动需要重新「开启变声」才会生效。
+              设备与性能设置已改动，重新「开启变声」后生效。
             </span>
             <Btn className="!ml-auto" onClick={c.clearRestartNotice}>
               知道了
@@ -215,9 +215,9 @@ function SettingsPageImpl({
             }
           >
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
-              输入选你的麦克风，输出选 CABLE Input，再把游戏里的麦克风设成 CABLE Output。
+              输入选真实麦克风，输出选 CABLE Input（游戏内的麦克风设为 CABLE Output）。
               <br />
-              勾选「变声时监听自己」并选耳机，可以一边开黑一边听自己的变声效果。
+              想实时听到自己的变声效果，勾选「变声时监听自己」并选择耳机。
             </p>
             <div className={CARD}>
               <Field
@@ -322,10 +322,9 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "变声参数" ? (
-          <Block title="变声参数" note="运行中可热更新 · 按音色保存" className="!mt-6">
+          <Block title="变声参数" note="运行中可热更新 · 按音色自动保存" className="!mt-6">
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">
-              这里的调整会跟着当前音色一起记住，下次选回这个音色就是你上次调好的样子。
-              底栏也能快速调音高和共鸣。
+              这里的调整会随当前音色自动保存，下次选回就是上次的状态。底栏也能快速调音高和共鸣。
             </p>
             <div className={CARD}>
               <Field
@@ -801,11 +800,11 @@ function SettingsPageImpl({
                 ))}
               </div>
               <p className="text-xs text-[var(--help)] m-0">
-                点右侧的组合键再按新的键就能改。可以带 Ctrl / Alt / Shift。
-                被别的软件占用的组合会注册失败，换一个即可。
-                勾着「全局」= 任何时候按都生效，代价是这个组合被本软件独占，
-                别的软件里就按不出它原本的功能了；取消勾选则只在本软件是当前
-                窗口时生效。
+                <b>快捷键说明</b>：<br />
+                1. 点击按键框，再按下新的组合键（支持 Ctrl / Alt / Shift）；<br />
+                2. 勾选「全局」：在任何软件中都生效，但该组合会被本软件独占；<br />
+                3. 取消勾选：只在软件窗口处于前台时生效。<br />
+                组合键被其他软件占用时会注册失败，换一个即可。
               </p>
             </div>
           </Block>
@@ -838,9 +837,8 @@ function SettingsPageImpl({
                 }
               />
               <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">
-                每次打开软件会自动查一次，查到新版本会在底栏问你装不装 ——
-                不问就不会自己下。这里点「立即检查」则是查到就直接装，
-                装完重启软件生效。
+                每次启动时自动检查新版本，查到会在底栏询问是否安装，不会自己下载。<br />
+                点「立即检查」则查到就直接下载安装，重启后生效。
               </p>
             </div>
           </Block>

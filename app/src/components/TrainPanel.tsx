@@ -110,7 +110,7 @@ export function TrainPanel() {
         ? { text: "缺 Hubert 模型，先补全引擎资源", term: "Hubert 模型" }
         : !st.nvidia
           ? {
-              text: "训练只支持 N 卡。A 卡 / 核显的 DirectML 不支持训练用到的算子。",
+              text: "训练仅支持 NVIDIA 显卡。当前系统的 DirectML 环境暂不支持相关训练算子。",
               term: "DirectML",
             }
           : !srReady
@@ -161,8 +161,8 @@ export function TrainPanel() {
     <ToolBody>
         <h3 className="m-0 mb-1 text-[17px] font-semibold">训练音色</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          用一个人的干声素材训一个属于他的音色。10 分钟以上的干净人声就够，
-          有背景音乐的先用「人声分离」清掉。
+          使用人声干声素材训练专属音色。推荐 10 分钟以上的高质量录音，
+          含背景音乐的素材请先使用「人声分离」进行处理。
         </p>
 
         {blocked.text ? (
@@ -213,7 +213,7 @@ export function TrainPanel() {
               ))}
             </select>
             <span className="text-[12px] text-[var(--meta)]">
-              48k 音质最好，也最吃显存
+              48k 音质最佳，但显存占用更高
             </span>
           </div>
           <div className={ROW}>
@@ -227,7 +227,7 @@ export function TrainPanel() {
               onChange={(e) => setEpochs(Number(e.target.value) || 1)}
             />
             <span className="text-[12px] text-[var(--meta)]">
-              200 轮是常用值。轮数越多越像，过头会学到杂音。
+              通常设为 200。轮数越多还原度越高，但过高可能产生电音或杂音。
             </span>
           </div>
         </div>
@@ -276,8 +276,8 @@ export function TrainPanel() {
 
         {running ? (
           <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">
-            训练要几小时。中断不会白跑 —— 已经切好的片和已经训到的轮次都留着，
-            下次选同一个名字就接着来。
+            训练过程可能需要数小时。中断后进度将保留（含已处理的切片与已完成的轮次），
+            下次使用相同名称即可恢复训练。
           </p>
         ) : null}
     </ToolBody>

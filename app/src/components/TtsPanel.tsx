@@ -79,7 +79,7 @@ export function TtsPanel() {
   const blocked = !st.voices?.length
     ? "系统里没有可用的语音。到「Windows 设置 → 时间和语言 → 语音」里添加一个语音包。"
     : useRvc && !st.model_path
-      ? "还没有选中的音色。到主窗口首页选一个，或者关掉下面的「换成我的音色」。"
+      ? "未选择目标音色。请到首页选择一个音色，或关闭下方的「使用变声」。"
       : useRvc && !st.runtime_ready
         ? "运行时未就绪，先到「其他」页补全运行时"
         : useRvc && !st.infer_present
@@ -115,7 +115,7 @@ export function TtsPanel() {
     <ToolBody>
       <h3 className="m-0 mb-1 text-[17px] font-semibold">语音合成</h3>
       <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-        打一段字，用你选中的音色念出来。产出的 wav 存在 User_Data\tts 里。
+        输入文本，使用所选音色进行语音合成。输出的 wav 文件保存在 User_Data\tts 目录下。
       </p>
 
       {blocked ? (
@@ -128,7 +128,7 @@ export function TtsPanel() {
           "bg-transparent text-[var(--ink)] resize-y",
           over ? "border-[#b8534f]" : "border-[var(--hairline)]",
         ].join(" ")}
-        placeholder="要念的话写在这里。"
+        placeholder="请输入需要合成的文本…"
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
@@ -190,17 +190,17 @@ export function TtsPanel() {
           </span>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>换成我的音色</span>
+          <span className={LABEL}>使用变声</span>
           <label className="flex items-center gap-2 text-[13px] cursor-pointer">
             <input
               type="checkbox"
               checked={useRvc}
               onChange={(e) => setUseRvc(e.target.checked)}
             />
-            {st.model_name || "未选择模型"}
+            {st.model_name || "未选择音色"}
           </label>
           <span className="text-[12px] text-[var(--meta)]">
-            关掉就只留系统嗓音，快很多
+            关闭后仅输出系统原声，速度更快
           </span>
         </div>
       </div>

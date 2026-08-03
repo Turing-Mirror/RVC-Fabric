@@ -256,7 +256,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const s = staged[v.id];
     if (
       !window.confirm(
-        `删除已下载的文件？\n\n${s?.file || v.name}\n\n删除后需要重新安装。`,
+        `确定删除已下载的音色文件吗？\n\n${s?.file || v.name}\n\n删除后如需使用需重新下载。`,
       )
     )
       return;
@@ -273,10 +273,10 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     if (v.official !== false && !officialAck) {
       const ok = window.confirm(
         "音色使用须知\n\n" +
-          "音色模型由声音素材训练而来，相关权利属于原声的权利人。\n" +
+          "音色模型由声音素材训练而来，相关权利属于原声权利人。\n" +
           "请勿用于冒充他人、欺诈、造谣或其他侵害他人权益的用途；\n" +
           "商用前请自行确认授权。\n\n" +
-          "继续安装即表示你已了解。",
+          "继续安装即表示您已了解并同意上述内容。",
       );
       if (!ok) return;
       setOfficialAck(true);
@@ -284,9 +284,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     if (v.official === false && !thirdAck) {
       const ok = window.confirm(
         "第三方音色免责声明\n\n" +
-          "该音色来自第三方社区，图灵镜不做安全与质量保证。\n" +
-          "请只从你信任的来源下载。\n\n" +
-          "继续安装即表示你了解风险。",
+          "该音色来自第三方社区，图灵镜不对其安全性与质量做任何保证。\n" +
+          "请仅从您信任的来源进行下载。\n\n" +
+          "继续安装即表示您知晓并愿意承担相关风险。",
       );
       if (!ok) return;
       setThirdAck(true);
@@ -362,7 +362,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
       {source !== "official" ? (
         <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">
-          第三方音色未经图灵镜审核，请自行判断来源是否可靠，不要安装来路不明的音色。
+          第三方音色未经图灵镜官方审核，请自行甄别来源可靠性，切勿盲目安装来路不明的音色。
         </div>
       ) : null}
 

@@ -91,7 +91,7 @@ export default function App() {
     )) as UpdateInfo;
     if (r.blocked_by_min_version) {
       setUpdateLine(
-        `当前版本 ${String(r.local)}，需要先更新到 ${String(
+        `当前版本 ${String(r.local)}，需先更新至 ${String(
           r.min_app_version,
         )} 才能继续`,
       );
@@ -100,7 +100,7 @@ export default function App() {
     if (!r.available) {
       // 「已是最新」必须带上版本号和时间。只说一句「已是最新」，用户分不清
       // 是真查过了还是根本没查动。
-      setUpdateLine(`已是最新版本 ${String(r.local)}（${clockNow()} 查过）`);
+      setUpdateLine(`已是最新版本 ${String(r.local)}（${clockNow()} 检查）`);
       return null;
     }
     setUpdateLine(
@@ -117,8 +117,8 @@ export default function App() {
       const b = await invoke<Record<string, unknown>>("update_app");
       setUpdateLine(
         b.installed
-          ? `已更新到 ${String(b.version ?? r.remote)}，重启程序后生效`
-          : "暂时取不到程序更新包，可先到发布页手动下载",
+          ? `已更新至 ${String(b.version ?? r.remote)}，重启程序后生效`
+          : "暂未获取到程序更新包，可先前往发布页手动下载",
       );
       return;
     }
@@ -127,7 +127,7 @@ export default function App() {
       url: String(r.url),
       sha256: String(r.sha256 || ""),
     });
-    setUpdateLine(`已更新到 ${String(r.remote)}，重启程序后生效`);
+    setUpdateLine(`已更新至 ${String(r.remote)}，重启程序后生效`);
   };
 
   /** 设置页那个「立即检查」：查到了就直接装，这是用户主动点的。 */
@@ -732,7 +732,7 @@ export default function App() {
           <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
             <h2 className="text-[19px] font-semibold m-0 mb-2">关闭 RVC Fabric</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">
-              最小化到托盘可以让变声继续；直接关闭会停止变声并退出。
+              最小化到托盘可保持后台运行；直接关闭将停止变声并退出程序。
             </p>
             <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
               <input
@@ -741,7 +741,7 @@ export default function App() {
                 onChange={(e) => setCloseRemember(e.target.checked)}
                 className="accent-[var(--accent)]"
               />
-              记住我的选择（可在「设置 → 常规」改回）
+              记住选择（可在「设置 → 常规」中修改）
             </label>
             <div className="flex gap-2.5 justify-end">
               <button
@@ -771,7 +771,7 @@ export default function App() {
           title={
             updateWorking
               ? "正在更新"
-              : `有新版本 ${updateOffer.remote}，现在装吗？`
+              : `有新版本 ${updateOffer.remote}，是否立即更新？`
           }
           actions={
             updateWorking ? (
@@ -790,12 +790,10 @@ export default function App() {
         >
           {updateWorking
             ? updateLine
-            : `当前 ${updateOffer.local}。${
+            : `当前版本 ${updateOffer.local}。${
                 updateOffer.notes ||
-                (updateOffer.action === "external"
-                  ? "这次要换程序本体，装完重启一次就好。"
-                  : "这次只换界面，装完重启一次就好。")
-              }下载期间可以照常用，不影响变声。`}
+                "更新会在后台下载，不影响变声使用；下载完成后重启软件即可生效。"
+              }`}
         </Nudge>
       ) : askTelemetry ? (
         <Nudge
@@ -809,13 +807,13 @@ export default function App() {
             </>
           }
         >
-          每天检查更新时附带一个随机匿名编号、软件版本、显卡加速方式。
-          不会发送账号、音色文件、录音，或任何能定位到你的信息。
-          规模数据用于和赞助商谈合作，这是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
+          每天检查更新时，附带发送随机匿名编号、软件版本、显卡加速方式。
+          这不包含账号、音色、录音或任何定位信息。
+          这类规模数据主要用于向赞助商证明活跃度，是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
         </Nudge>
       ) : askFollow ? (
         <Nudge
-          title="喜欢 RVC Fabric 吗？关注一下我们呗"
+          title="觉得 RVC Fabric 好用吗？关注我们呗"
           actions={
             <>
               <Btn onClick={closeFollow}>以后再说</Btn>
@@ -833,8 +831,8 @@ export default function App() {
             </>
           }
         >
-          你已经用它变声十次了。软件是免费的，更新全靠有人看见 ——
-          点一下就到，关不关注都随你，这句话只说这一次。
+          不知不觉您已经变声 10 次啦！本软件完全免费，持续更新离不开大家的支持——
+          只需一键即可直达，关不关注随您心意，且本提示仅出现这一次。
         </Nudge>
       ) : null}
 

@@ -100,7 +100,7 @@ function PlazaPageImpl({
               slice.map((e) => <Notes key={e.version} entry={e} />)
             ) : (
               <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-                暂时取不到更新日志。
+                暂未获取到更新日志。
               </p>
             )}
           </Group>
@@ -170,7 +170,7 @@ function PlazaPageImpl({
             ))
           ) : (
             <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-              暂时没有内容。
+              暂无投放内容。
             </p>
           )}
         </Group>
@@ -199,7 +199,7 @@ function PlazaPageImpl({
             shown.map((e) => <Notes key={e.version} entry={e} />)
           ) : (
             <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-              暂时取不到更新日志。
+              暂未获取到更新日志。
             </p>
           )}
         </Group>

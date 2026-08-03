@@ -106,7 +106,7 @@ export function SeparatePanel() {
     : !st.worker_present
       ? "缺少分离脚本，安装可能不完整"
       : !st.models?.length
-        ? "还没有分离模型，可在「音频工具 → 下载模型」里下载"
+        ? "未检测到分离模型，请先到「音频工具 → 下载模型」下载。"
         : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
@@ -115,7 +115,7 @@ export function SeparatePanel() {
     <ToolBody>
         <h3 className="m-0 mb-1 text-[17px] font-semibold">人声分离</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          把歌曲拆成人声和伴奏。训练音色前用它清掉背景音乐。
+          提取音频中的人声干声与伴奏，可用于清理音色训练素材里的背景音乐。
         </p>
 
         {blocked ? (

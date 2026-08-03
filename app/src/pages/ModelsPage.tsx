@@ -89,7 +89,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
       return `共 ${models.length} 个 · 匹配 ${view.length} 个`;
     }
     const cur = selected?.name || models[0]?.name || "—";
-    return `共 ${models.length} 个 · 使用中：${cur}`;
+    return `共 ${models.length} 个音色 · 当前使用：${cur}`;
   }, [models, query, view.length, selected]);
 
   const reload = useCallback(async () => {
@@ -164,7 +164,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
 
   const onUse = async (m: VoiceModel) => {
     if (m.missing) {
-      setMsg("这个音色的模型文件缺失或没下载完整");
+      setMsg("这个音色的模型文件缺失或不完整，请重新下载或修复。");
       return;
     }
     setBusy(true);
@@ -209,9 +209,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   const blockReason = !selected
     ? "还没有选择音色。"
     : selected.missing
-      ? "这个音色的模型文件缺失或没下载完整，先修好或删除后再绑定。"
+      ? "这个音色的模型文件缺失或不完整，请重新下载或修复，先修好或删除后再绑定。"
       : promotable
-        ? "这是旧版散装音色，先「转为可管理音色」就能绑定检索库和配置档案。"
+        ? "旧版单文件音色：转为「可管理音色」后，即可绑定检索库与预设。"
         : !manageable
           ? "这个音色不支持绑定。"
           : "";
@@ -278,7 +278,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索音色 / 标签…"
+            placeholder="搜索音色名称或标签…"
             className="inline-flex min-w-[230px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           />
           <span className="ml-auto">
@@ -303,11 +303,11 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
         >
           {!models.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              还没有音色。点「社区音色」去广场在线下载，或点「导入音色」添加你自己的音色文件。
+              还没有音色~ 点「社区音色」去广场下载，或点「导入音色」添加本地音色。
             </div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              没有匹配「{query}」的音色。清空搜索可看全部。
+              没有找到匹配「{query}」的音色，清空搜索即可查看全部。
             </div>
           ) : (
             pageView.map((v) => {
@@ -404,9 +404,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
       </Block>
 
       <Block
-        title="特征索引文件（.index）"
+        title="检索特征库 (.index)"
         titleTip={tip("检索库")}
-        note={manageable ? "检索库可选；无 index 也能用" : undefined}
+        note={manageable ? "可选绑定 · 提升音色还原度" : undefined}
         action={
           manageable ? (
             <Btn
@@ -492,7 +492,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
 
       <Block
         title="配置档案"
-        note="同一个音色可存多套参数（音高／音效／性能），点「使用」即切换；可导出分享，也能导入其他档案"
+        note="可为音色保存多套参数预设（音高/音效/性能），一键切换，也能导出分享、导入他人预设。"
       >
         {!manageable ? (
           <div className="text-[13px] text-[var(--meta)]">{blockReason}</div>
@@ -567,7 +567,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                           onClick={async () => {
                             if (
                               !window.confirm(
-                                `删除档案「${p.name}」？此操作无法撤销。`,
+                                `确认删除预设「${p.name}」？该操作不可撤销。`,
                               )
                             )
                               return;
@@ -595,7 +595,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                         setProfiles(pr.items || []);
                       }}
                     >
-                      另存当前为档案
+                      保存当前参数为新预设
                     </Btn>
                     <Btn
                       onClick={async () => {
@@ -620,7 +620,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                         }
                       }}
                     >
-                      导出当前档案（可分享）…
+                      导出当前预设文件…
                     </Btn>
                   </>
                 }
@@ -684,7 +684,7 @@ function ContextMenu({
       action: async () => {
         if (
           !window.confirm(
-            "模型文件、绑定的配置档案会一起删除，无法撤销。\n\n确认删除？",
+            "该音色的模型文件与绑定预设将一并删除，无法恢复。\n\n确认删除？",
           )
         )
           return;

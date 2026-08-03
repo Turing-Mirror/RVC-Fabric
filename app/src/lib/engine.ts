@@ -176,7 +176,7 @@ export function statusTitle(st: EngineStatus): string {
   if (s === "starting") return "启动中";
   if (s === "stopping") return "停止中";
   if (s === "error") return "引擎错误";
-  if (st.worker_alive) return "引擎待命";
+  if (st.worker_alive) return "引擎就绪";
   return "引擎未启动";
 }
 
@@ -196,6 +196,6 @@ export function statusSub(st: EngineStatus): string {
   // error —— 有原文总比一片空白强。
   if (st.message) return String(st.message).slice(0, 48);
   if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
-  if (st.worker_alive) return "就绪";
+  if (st.worker_alive) return "待命";
   return "等待引擎启动";
 }

@@ -88,7 +88,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
 
   const pick = async (m: VoiceModel) => {
     if (m.missing) {
-      setMsg("这个音色的模型文件缺失或没下载完整");
+      setMsg("这个音色的模型文件缺失或不完整，请重新下载或修复。");
       return;
     }
     try {
@@ -117,7 +117,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
       await load();
     } catch (e) {
       // Clicking a card and having nothing happen is the worst outcome.
-      setMsg(`切换失败：${String(e)}`);
+      setMsg(`音色切换失败：${String(e)}`);
     }
   };
 
@@ -131,7 +131,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? `读取音色目录失败：${loadError}`
-              : "还没有本地音色。到「模型」页导入，或从社区音色下载。"}
+              : "还没有本地音色呢~ 去「模型」页导入，或到「广场」逛逛吧！"}
           </p>
           <HeroEmblem />
         </div>
@@ -161,7 +161,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
             .filter(Boolean)
             .join(" · ")}
           {current.tag || current.author ? " · " : ""}
-          切换立即生效 · 运行中会自动重载
+          切换立即生效 · 运行中可无缝换音色
         </p>
         <HeroEmblem />
       </div>
@@ -268,17 +268,17 @@ function ToolShortcuts() {
   const items: Array<{ label: string; desc: string; go: () => void }> = [
     {
       label: "人声分离",
-      desc: "从歌曲里抠出干声",
+      desc: "提取歌曲中的人声干声与伴奏",
       go: () => openTool("separate"),
     },
     {
       label: "训练音色",
-      desc: "用干声训一个新音色",
+      desc: "用干声素材训练专属音色模型",
       go: () => openTool("train"),
     },
     {
       label: "下载模型",
-      desc: "分离模型与训练底模",
+      desc: "下载人声分离模型与训练底模",
       go: () => setExtras(true),
     },
   ];

@@ -120,7 +120,7 @@ export function ExtrasDialog({
       >
         <h3 className="m-0 mb-1 text-[17px] font-semibold">{title || "下载模型"}</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          这些模型体积较大，下载完成后会自动校验，中断了可以重新下。
+          这些模型体积较大，下载后将自动校验。支持断点续传。
         </p>
 
         {list === null ? (

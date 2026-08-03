@@ -134,6 +134,7 @@ fn fetch_and_extract(
     dest_root: &Path,
     root: &Path,
     cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
 ) -> Result<(), String> {
     let cache = paths::update_cache(root);
     std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
@@ -142,7 +143,9 @@ fn fetch_and_extract(
     // Reuse a previously completed download, but only after verifying it.
     let cached_ok = archive.is_file() && download::verify_sha256(&archive, sha).is_ok();
     if !cached_ok {
-        download::download_file(&lfs_urls(sha), &archive, sha, cancel, None)
+        // Passing progress through is what keeps the first-run gate honest:
+        // without it the bar sits still while the NIC is busy for minutes.
+        download::download_file(&lfs_urls(sha), &archive, sha, cancel, progress)
             .map_err(|e| format!("下载失败：{e}"))?;
     }
 
@@ -182,11 +185,20 @@ fn hoist_nested(dir: &Path, name: &str) {
 }
 
 /// Download + extract engine-core into the install root.
-pub fn ensure_engine_core(root: &Path, cancel: Arc<AtomicBool>) -> Result<(), String> {
+///
+/// `progress` mirrors the shared downloader's (done, total, phase) so the
+/// caller can forward it to the UI. Before it existed, the first-run gate
+/// showed a frozen bar during this step — several hundred MB of hubert / rmvpe
+/// / ffmpeg with no event at all, which reads exactly like a hang.
+pub fn ensure_engine_core(
+    root: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
+) -> Result<(), String> {
     if engine_core_ready(root) {
         return Ok(());
     }
-    fetch_and_extract(ENGINE_CORE_NAME, ENGINE_CORE_SHA, root, root, cancel)?;
+    fetch_and_extract(ENGINE_CORE_NAME, ENGINE_CORE_SHA, root, root, cancel, progress)?;
     if !engine_core_ready(root) {
         // Same guard: a single top-level folder in the zip would put
         // assets/ and ffmpeg.exe one level too deep.
@@ -204,12 +216,16 @@ pub fn ensure_engine_core(root: &Path, cancel: Arc<AtomicBool>) -> Result<(), St
 
 /// Download + extract the VB-Cable pack into `VBCABLE/`. Does **not** run the
 /// installer — that needs UAC and is a separate, user-initiated step.
-pub fn ensure_vbcable_pack(root: &Path, cancel: Arc<AtomicBool>) -> Result<(), String> {
+pub fn ensure_vbcable_pack(
+    root: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
+) -> Result<(), String> {
     if vbcable_pack_ready(root) {
         return Ok(());
     }
     let dir = vbcable_dir(root);
-    fetch_and_extract(VBCABLE_NAME, VBCABLE_SHA, &dir, root, cancel)?;
+    fetch_and_extract(VBCABLE_NAME, VBCABLE_SHA, &dir, root, cancel, progress)?;
     if !vbcable_pack_ready(root) {
         // Some builds of the pack have a single top-level VBCABLE/ folder.
         hoist_nested(&dir, "VBCABLE");

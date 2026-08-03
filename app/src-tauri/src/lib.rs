@@ -28,7 +28,7 @@ mod window_watch;
 mod worker;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -48,25 +48,90 @@ fn assets_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     Ok(engine_assets::assets_status(&root_clone(&state)?))
 }
 
+/// 下载进度文案用的体积格式（与 provision 侧保持一致）。
+fn fmt_size(n: u64) -> String {
+    if n >= 1_000_000_000 {
+        format!("{:.2} GB", n as f64 / 1e9)
+    } else if n >= 1_000_000 {
+        format!("{:.1} MB", n as f64 / 1e6)
+    } else if n >= 1_000 {
+        format!("{:.0} KB", n as f64 / 1e3)
+    } else {
+        format!("{n} B")
+    }
+}
+
+/// 补全引擎资源（hubert / rmvpe / ffmpeg）。
+///
+/// 下载进度转发到 `provision-progress` 事件（phase=engine-core）。以前这里
+/// 不传进度回调，首次安装的进度条在 Runtime 下完后停在原地不动 —— 而引擎
+/// 资源几百 MB 正在下载，看起来和卡死一模一样。
 #[tauri::command]
 async fn assets_ensure_engine_core(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
-        engine_assets::ensure_engine_core(&root, cancel).map(|_| json!({"ok": true}))
+        let cb: download::ProgressFn = Arc::new(move |done, total, phase| {
+            let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
+            let m = match phase {
+                "verify" => format!("校验引擎资源…"),
+                other if other.starts_with("connecting:") => {
+                    format!("连接中… · 准备下载引擎资源约 {}", fmt_size(total))
+                }
+                _ if done == 0 => "连接中… · 准备下载引擎资源".to_string(),
+                _ => format!("下载引擎资源 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
+            };
+            let _ = app.emit(
+                "provision-progress",
+                json!({
+                    "phase": "engine-core",
+                    "done": done,
+                    "total": total.max(1),
+                    "percent": pct,
+                    "message": m,
+                }),
+            );
+        });
+        engine_assets::ensure_engine_core(&root, cancel, Some(cb)).map(|_| json!({"ok": true}))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
+/// 补全 VB-Cable 安装包。进度同样走 `provision-progress`（phase=vbcable）。
 #[tauri::command]
-async fn assets_ensure_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn assets_ensure_vbcable(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
-        engine_assets::ensure_vbcable_pack(&root, cancel).map(|_| json!({"ok": true}))
+        let cb: download::ProgressFn = Arc::new(move |done, total, phase| {
+            let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
+            let m = match phase {
+                "verify" => format!("校验声卡安装包…"),
+                other if other.starts_with("connecting:") => {
+                    format!("连接中… · 准备下载声卡安装包约 {}", fmt_size(total))
+                }
+                _ if done == 0 => "连接中… · 准备下载声卡安装包".to_string(),
+                _ => format!("下载声卡安装包 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
+            };
+            let _ = app.emit(
+                "provision-progress",
+                json!({
+                    "phase": "vbcable",
+                    "done": done,
+                    "total": total.max(1),
+                    "percent": pct,
+                    "message": m,
+                }),
+            );
+        });
+        engine_assets::ensure_vbcable_pack(&root, cancel, Some(cb)).map(|_| json!({"ok": true}))
     })
     .await
     .map_err(|e| e.to_string())?

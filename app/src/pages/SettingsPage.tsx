@@ -688,7 +688,7 @@ function SettingsPageImpl({
               <Field
                 label="背景图"
                 tip={TIPS.wallpaper_path}
-                desc="静态图，最大 20 MB，最长边 4096"
+                desc="静态图，无大小限制，过大的图片会拖慢加载"
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <Btn onClick={() => void pickWallpaper(c.set)}>选择图片</Btn>

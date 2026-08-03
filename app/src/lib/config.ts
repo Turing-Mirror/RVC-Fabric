@@ -73,7 +73,8 @@ export const TIPS: Record<string, string> = {
     "压缩强度，4:1 是常用值。比例越大越「平」，过大会发闷、失去起伏。",
   fx_out_gain_db: "压缩或均衡处理后整体音量偏小的话，在这里补回来。",
   theme_mode: "跟随系统，或固定浅色 / 深色。",
-  wallpaper_path: "本地 PNG/JPG 静态图片，最大 20 MB，最长边 4096 像素。",
+  wallpaper_path:
+    "本地 PNG/JPG 静态图片。没有大小限制，但图片越大加载越慢，建议别超过 4K 分辨率。",
   wallpaper_blur: "背景图的模糊（高斯模糊）强度。",
   wallpaper_opacity: "背景图的显示透明度，越低越淡。",
   close_action:

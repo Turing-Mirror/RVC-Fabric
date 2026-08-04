@@ -465,9 +465,11 @@ pub fn install_close_handler(app: &AppHandle) {
     let last_ask: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     win.on_window_event(move |event| {
-        // 圆角走兜底（Win10）时是按像素裁的区域，窗口一改大小就得重新裁，
-        // 不然放大之后四角会被裁在旧尺寸的位置上。DWM 那条路下这是空操作。
-        if matches!(event, tauri::WindowEvent::Resized(_)) {
+        // 尺寸变了：Win10 重裁圆角区域；最大化时拆掉系统厚框/描边（Vista 边）。
+        if matches!(
+            event,
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
+        ) {
             crate::window_watch::refresh_corners(&w);
         }
         let tauri::WindowEvent::CloseRequested { api, .. } = event else {

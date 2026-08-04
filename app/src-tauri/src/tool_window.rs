@@ -116,7 +116,10 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     // 那段关于 force_repaint 的注释。
     let w = win.clone();
     win.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Resized(_)) {
+        if matches!(
+            event,
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
+        ) {
             crate::window_watch::refresh_corners(&w);
         }
     });

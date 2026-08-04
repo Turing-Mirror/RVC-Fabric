@@ -1147,6 +1147,13 @@ pub fn run() {
     );
     logging::shell_log!("UI source: {}", ui_assets::source_label());
 
+    // 尽早清 TEMP：放在 setup 之前，避免建窗/预热 worker 占着文件删不掉。
+    // 官方 WebUI 也是一启动就 rmtree(TEMP)。
+    {
+        let stats = paths::clean_temps(&root);
+        paths::log_clean_stats("启动", &root, &stats);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -1351,8 +1358,11 @@ pub fn run() {
                 }
             }
 
-            // 清 TEMP / 半截下载，避免中间文件越积越大（官方 WebUI 启动也清 TEMP）。
-            paths::clean_temps(&root);
+            // setup 末尾再清一次：中间步骤若又写下临时文件，这里兜底。
+            {
+                let stats = paths::clean_temps(&root);
+                paths::log_clean_stats("setup", &root, &stats);
+            }
 
             shell_extras::install_close_handler(app.handle());
             // Tray always exists: closing to tray is what keeps conversion
@@ -1377,6 +1387,15 @@ pub fn run() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running RVC Fabric");
+        .build(tauri::generate_context!())
+        .expect("error while running RVC Fabric")
+        .run(|app, event| {
+            // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
+            if let tauri::RunEvent::Exit = event {
+                if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
+                    let stats = paths::clean_temps(&g.root);
+                    paths::log_clean_stats("退出", &g.root, &stats);
+                }
+            }
+        });
 }

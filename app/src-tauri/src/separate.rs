@@ -242,6 +242,9 @@ fn run_inner(
         ));
     }
     emit(app, "done", 1, 1, "分离完成");
+    // 分离会在 TEMP 里落 reformatted.wav 等中间文件，用完就清。
+    let stats = crate::paths::clean_temps(root);
+    crate::paths::log_clean_stats("分离后", root, &stats);
     Ok(json!({ "ok": true, "files": files, "output": output }))
 }
 

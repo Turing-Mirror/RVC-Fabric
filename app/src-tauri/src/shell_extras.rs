@@ -530,6 +530,9 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
     }
     if let Some(root) = root_of(app) {
         let _ = worker::stop_vc(&root, true);
+        // 退出前清 TEMP：先停 worker 再删，避免文件被占用删不掉。
+        let stats = crate::paths::clean_temps(&root);
+        crate::paths::log_clean_stats("关闭前", &root, &stats);
     }
     app.exit(0);
 }

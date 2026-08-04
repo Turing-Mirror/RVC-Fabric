@@ -289,12 +289,14 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     env.insert("PYTHONNOUSERSITE".into(), "1".into());
     env.insert("no_proxy".into(), "localhost,127.0.0.1,::1".into());
     env.insert("NO_PROXY".into(), "localhost,127.0.0.1,::1".into());
-    // 与官方 WebUI 一致：把 TEMP 指到安装目录下的 TEMP，中间文件可被启动清理。
+    // 与官方 WebUI 一致：把 TEMP/TMP/TMPDIR 指到安装目录下的 TEMP，
+    // 中间文件统一落这里，启动/退出/任务结束时清理。
     let temp = paths::temp_dir(root);
     let _ = std::fs::create_dir_all(&temp);
     let temp_s = temp.to_string_lossy().to_string();
     env.insert("TEMP".into(), temp_s.clone());
-    env.insert("TMP".into(), temp_s);
+    env.insert("TMP".into(), temp_s.clone());
+    env.insert("TMPDIR".into(), temp_s);
     for k in ["TM_ACCEL", "TM_ACCEL_RESOLVED", "TM_USE_DML"] {
         if let Ok(v) = std::env::var(k) {
             env.insert(k.into(), v);

@@ -179,55 +179,220 @@ pub fn ensure_user_dirs(root: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// 启动时清一次临时垃圾。
-///
-/// - `TEMP/`：引擎/UVR 中间产物（wav/npy/tmp 等）。整目录按官方 WebUI 一样
-///   在启动时清空再重建，避免越积越大。
-/// - `User_Data/update_cache/**/*.part`：中断下载留下的半截文件。
-/// - 一次性任务请求 json（separate/train 等）若残留也清掉。
-///
-/// 绝不碰 Runtime / models / app_config。
-pub fn clean_temps(root: &Path) {
-    let temp = temp_dir(root);
-    if temp.is_dir() {
-        // 官方 infer-web 启动时 rmtree(TEMP)；这里同样整清，再重建空目录。
-        let _ = std::fs::remove_dir_all(&temp);
-    }
-    let _ = std::fs::create_dir_all(&temp);
+/// 清理结果，方便日志核对「有没有真的清」。
+#[derive(Debug, Default, Clone)]
+pub struct CleanStats {
+    pub removed_files: u64,
+    pub removed_dirs: u64,
+    pub failed: u64,
+    pub freed_bytes: u64,
+}
 
-    // 半截下载
+impl CleanStats {
+    fn merge(&mut self, o: CleanStats) {
+        self.removed_files += o.removed_files;
+        self.removed_dirs += o.removed_dirs;
+        self.failed += o.failed;
+        self.freed_bytes += o.freed_bytes;
+    }
+}
+
+/// 清临时垃圾。启动、退出、分离/训练结束都应调。
+///
+/// - `TEMP/`：引擎/UVR 中间产物。先整目录删，失败再逐文件删（锁占用时常见）。
+/// - `User_Data/update_cache`：半截下载、OTA 暂存、一次性请求 json。
+/// - 绝不碰 Runtime / models / app_config / 已装音色。
+pub fn clean_temps(root: &Path) -> CleanStats {
+    let mut stats = CleanStats::default();
+
+    let temp = temp_dir(root);
+    stats.merge(wipe_dir_contents(&temp, /*recreate*/ true));
+
     let cache = update_cache(root);
-    remove_matching_files(&cache, |name| {
-        name.ends_with(".part") || name.ends_with(".tmp") || name.ends_with(".download")
-    });
+    // 半截下载 / 临时名
+    stats.merge(remove_matching_files(&cache, |name| {
+        let lower = name.to_ascii_lowercase();
+        lower.ends_with(".part")
+            || lower.ends_with(".tmp")
+            || lower.ends_with(".download")
+            || lower.ends_with(".reformatted.wav")
+            || lower.ends_with(".crdownload")
+    }));
+    // OTA 暂存目录整清（装完就没用了）
+    for sub in ["gui_stage", "frontend_stage", "runtime"] {
+        let p = cache.join(sub);
+        if p.is_dir() {
+            stats.merge(wipe_dir_contents(&p, /*recreate*/ false));
+            match std::fs::remove_dir_all(&p) {
+                Ok(()) => stats.removed_dirs += 1,
+                Err(_) => {
+                    // 非空或占用：上面已尽量清空内容
+                }
+            }
+        }
+    }
     // 一次性工具请求
     for name in [
         "separate_request.json",
         "train_request.json",
         "tts_request.json",
+        "tts_sapi.wav",
+        "tts_out.wav",
     ] {
         let p = cache.join(name);
-        let _ = std::fs::remove_file(p);
+        if p.is_file() {
+            let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
+            match std::fs::remove_file(&p) {
+                Ok(()) => {
+                    stats.removed_files += 1;
+                    stats.freed_bytes += sz;
+                }
+                Err(_) => stats.failed += 1,
+            }
+        }
     }
+
+    // 系统 TEMP 里可能残留我们以前没改 TEMP 环境时留下的文件
+    stats.merge(clean_system_temp_leftovers());
+
+    stats
 }
 
-fn remove_matching_files(dir: &Path, pred: impl Fn(&str) -> bool + Copy) {
+/// 记录一次清理结果（启动/退出日志里能看见有没有真清）。
+pub fn log_clean_stats(phase: &str, root: &Path, stats: &CleanStats) {
+    crate::logging::shell_log!(
+        "临时清理（{phase}）root={}：删文件 {} 个、目录 {} 个，失败 {}，约 {:.1} MB",
+        root.display(),
+        stats.removed_files,
+        stats.removed_dirs,
+        stats.failed,
+        stats.freed_bytes as f64 / (1024.0 * 1024.0),
+    );
+}
+
+/// 清空目录内容。`recreate=true` 时保证目录存在（TEMP 用）。
+fn wipe_dir_contents(dir: &Path, recreate: bool) -> CleanStats {
+    let mut stats = CleanStats::default();
+    if dir.is_dir() {
+        // 先尝试整棵拔掉（最快，和官方 WebUI 一样）。
+        match std::fs::remove_dir_all(dir) {
+            Ok(()) => {
+                // 整目录算作一次目录删除；具体文件数不必精确。
+                stats.removed_dirs += 1;
+            }
+            Err(_) => {
+                // 有文件被占用：逐个删，删不掉的留下记 failed。
+                stats.merge(remove_tree_best_effort(dir));
+            }
+        }
+    }
+    if recreate {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    stats
+}
+
+/// 逐文件/子目录删除，锁住的跳过。
+fn remove_tree_best_effort(dir: &Path) -> CleanStats {
+    let mut stats = CleanStats::default();
     let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
+        stats.failed += 1;
+        return stats;
     };
     for e in rd.flatten() {
         let p = e.path();
         if p.is_dir() {
-            remove_matching_files(&p, pred);
+            stats.merge(remove_tree_best_effort(&p));
+            match std::fs::remove_dir(&p) {
+                Ok(()) => stats.removed_dirs += 1,
+                Err(_) => {
+                    // 非空：子项可能删失败
+                    if std::fs::remove_dir_all(&p).is_ok() {
+                        stats.removed_dirs += 1;
+                    } else {
+                        stats.failed += 1;
+                    }
+                }
+            }
+        } else {
+            let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
+            match std::fs::remove_file(&p) {
+                Ok(()) => {
+                    stats.removed_files += 1;
+                    stats.freed_bytes += sz;
+                }
+                Err(_) => stats.failed += 1,
+            }
+        }
+    }
+    stats
+}
+
+fn remove_matching_files(dir: &Path, pred: impl Fn(&str) -> bool + Copy) -> CleanStats {
+    let mut stats = CleanStats::default();
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return stats;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            stats.merge(remove_matching_files(&p, pred));
             continue;
         }
         let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
         if pred(name) {
-            let _ = std::fs::remove_file(p);
+            let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
+            match std::fs::remove_file(&p) {
+                Ok(()) => {
+                    stats.removed_files += 1;
+                    stats.freed_bytes += sz;
+                }
+                Err(_) => stats.failed += 1,
+            }
         }
     }
+    stats
+}
+
+/// 系统 TEMP 里带我们特征的残留（改 TEMP 环境之前写进去的）。
+fn clean_system_temp_leftovers() -> CleanStats {
+    let mut stats = CleanStats::default();
+    let sys = std::env::temp_dir();
+    let Ok(rd) = std::fs::read_dir(&sys) else {
+        return stats;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        let ours = lower.starts_with("rvcf-")
+            || lower.starts_with("rvc-fabric")
+            || lower.ends_with(".reformatted.wav")
+            || (lower.contains("rvc") && (lower.ends_with(".tmp") || lower.ends_with(".part")));
+        if !ours {
+            continue;
+        }
+        if p.is_dir() {
+            match std::fs::remove_dir_all(&p) {
+                Ok(()) => stats.removed_dirs += 1,
+                Err(_) => stats.failed += 1,
+            }
+        } else {
+            let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
+            match std::fs::remove_file(&p) {
+                Ok(()) => {
+                    stats.removed_files += 1;
+                    stats.freed_bytes += sz;
+                }
+                Err(_) => stats.failed += 1,
+            }
+        }
+    }
+    stats
 }
 
 fn fs_create_all(p: &Path) -> std::io::Result<()> {

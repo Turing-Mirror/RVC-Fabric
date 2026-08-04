@@ -359,6 +359,9 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         ));
     }
     let d = done.ok_or("训练进程结束了但没报告结果")?;
+    // 预处理/特征提取可能在 TEMP 落中间文件。
+    let stats = crate::paths::clean_temps(root);
+    crate::paths::log_clean_stats("训练后", root, &stats);
     Ok(json!({
         "ok": true,
         "weights": d.get("weights").cloned().unwrap_or(Value::Null),

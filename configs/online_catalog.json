@@ -664,7 +664,7 @@
       "group": "separate",
       "recommended": false,
       "order": 80,
-      "size_bytes": 223651506,
+      "size_bytes": 223650277,
       "files": [
         {
           "name": "legacy_vr/vr_backing_vocal/UVR-BVE-4B_SN-44100-1.pth",
@@ -673,16 +673,6 @@
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-BVE-4B_SN-44100-1.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_backing_vocal/UVR-BVE-4B_SN-44100-1.yaml",
-          "sha256": "f244a586fcd8ecebbea41de46129cc03a8ec4d081baafbf27c7334bcf025b379",
-          "size_bytes": 1229,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-BVE-4B_SN-44100-1.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -697,7 +687,7 @@
       "group": "separate",
       "recommended": true,
       "order": 30,
-      "size_bytes": 477932548,
+      "size_bytes": 477929007,
       "files": [
         {
           "name": "legacy_vr/vr_deecho/UVR-De-Echo-Normal.pth",
@@ -706,16 +696,6 @@
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-De-Echo-Normal.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_deecho/UVR-De-Echo-Normal.yaml",
-          "sha256": "07e57251e2430c368555683e051cf99d6d0983ffbdced743d36eb2b6ba856d61",
-          "size_bytes": 1178,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-De-Echo-Normal.yaml"
           ],
           "release_tag": "pymss"
         },
@@ -730,32 +710,12 @@
           "release_tag": "pymss"
         },
         {
-          "name": "legacy_vr/vr_deecho/UVR-De-Echo-Aggressive.yaml",
-          "sha256": "07e57251e2430c368555683e051cf99d6d0983ffbdced743d36eb2b6ba856d61",
-          "size_bytes": 1178,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-De-Echo-Aggressive.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
           "name": "legacy_vr/vr_deecho_dereverb/UVR-DeEcho-DeReverb.pth",
           "sha256": "e644028ec82865dc0fe082bc6fea85a43f7c71cfe375caee2da2d154aa661ee7",
           "size_bytes": 223650277,
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeEcho-DeReverb.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_deecho_dereverb/UVR-DeEcho-DeReverb.yaml",
-          "sha256": "cee1aed65596dd00eecbad9577e2ee69f07eb670f295b4566d9894d44ce11949",
-          "size_bytes": 1185,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeEcho-DeReverb.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -770,7 +730,7 @@
       "group": "separate",
       "recommended": true,
       "order": 20,
-      "size_bytes": 145063515,
+      "size_bytes": 145061642,
       "files": [
         {
           "name": "legacy_vr/vr_denoise/UVR-DeNoise.pth",
@@ -783,32 +743,12 @@
           "release_tag": "pymss"
         },
         {
-          "name": "legacy_vr/vr_denoise/UVR-DeNoise.yaml",
-          "sha256": "55d88e731497eecca37ecb3852058b51cf1a0ba0d5eeae8e09471e5da42c2e92",
-          "size_bytes": 1180,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
           "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.pth",
           "sha256": "0023492fe98c406817b5253965de19ede65d1c147db015a3a428f07602e99571",
           "size_bytes": 17922277,
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise-Lite.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_denoise/UVR-DeNoise-Lite.yaml",
-          "sha256": "554c5ee8d72c8a05836d452c8495fc51836282feb8a480d5cb11d328562cc071",
-          "size_bytes": 693,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeNoise-Lite.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -823,7 +763,7 @@
       "group": "separate",
       "recommended": false,
       "order": 40,
-      "size_bytes": 58929669,
+      "size_bytes": 58928133,
       "files": [
         {
           "name": "legacy_vr/vr_dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth",
@@ -832,16 +772,6 @@
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_dereverb/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.yaml",
-          "sha256": "c702f8f7230bbd62b9b431c1ef8344eb3f6e63962b049b976d016abba856ef8a",
-          "size_bytes": 1536,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/UVR-DeReverb-aufr33-jarredou_4band_v4_ms_fullband.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -856,7 +786,7 @@
       "group": "separate",
       "recommended": false,
       "order": 90,
-      "size_bytes": 59320881,
+      "size_bytes": 59320122,
       "files": [
         {
           "name": "legacy_vr/vr_harmonic_noise/Harmonic_Noise_Separation_yxlllc.pth",
@@ -865,16 +795,6 @@
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/Harmonic_Noise_Separation_yxlllc.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_harmonic_noise/Harmonic_Noise_Separation_yxlllc.yaml",
-          "sha256": "2294424b89599d2a31d7314cfc450999448005e3089bf600e95f018e424bd0cd",
-          "size_bytes": 759,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/Harmonic_Noise_Separation_yxlllc.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -889,7 +809,7 @@
       "group": "separate",
       "recommended": false,
       "order": 70,
-      "size_bytes": 1650385701,
+      "size_bytes": 1650382281,
       "files": [
         {
           "name": "legacy_vr/vr_hp2/7_HP2-UVR.pth",
@@ -920,36 +840,6 @@
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/9_HP2-UVR.pth"
           ],
           "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_hp2/7_HP2-UVR.yaml",
-          "sha256": "c8958ab538cee5158945e79b9d7c890eaa27641b9a13e9678a23ddd77f9172e2",
-          "size_bytes": 1024,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/7_HP2-UVR.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_hp2/8_HP2-UVR.yaml",
-          "sha256": "d563b6982bfdf43706e7b7f95d96306fb4efda71fe99fee579179d5fa2a1b005",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/8_HP2-UVR.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_hp2/9_HP2-UVR.yaml",
-          "sha256": "d563b6982bfdf43706e7b7f95d96306fb4efda71fe99fee579179d5fa2a1b005",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/9_HP2-UVR.yaml"
-          ],
-          "release_tag": "pymss"
         }
       ],
       "release_tag": "pymss"
@@ -962,7 +852,7 @@
       "group": "separate",
       "recommended": false,
       "order": 50,
-      "size_bytes": 253577732,
+      "size_bytes": 253575346,
       "files": [
         {
           "name": "legacy_vr/vr_instrumental_extraction/1_HP-UVR.pth",
@@ -975,32 +865,12 @@
           "release_tag": "pymss"
         },
         {
-          "name": "legacy_vr/vr_instrumental_extraction/1_HP-UVR.yaml",
-          "sha256": "d563b6982bfdf43706e7b7f95d96306fb4efda71fe99fee579179d5fa2a1b005",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/1_HP-UVR.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
           "name": "legacy_vr/vr_instrumental_extraction/2_HP-UVR.pth",
           "sha256": "26d6400d2d2e90811ba2381828c8c3519196097375af524c3d0edd969acf5356",
           "size_bytes": 126782699,
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/2_HP-UVR.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_instrumental_extraction/2_HP-UVR.yaml",
-          "sha256": "742476644e8f98c4f4831004f6411d040cc2f224900624f2bdf8c118acd0cfc2",
-          "size_bytes": 1188,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/2_HP-UVR.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -1015,7 +885,7 @@
       "group": "separate",
       "recommended": false,
       "order": 60,
-      "size_bytes": 253567642,
+      "size_bytes": 253565398,
       "files": [
         {
           "name": "legacy_vr/vr_karaoke/5_HP-Karaoke-UVR.pth",
@@ -1028,32 +898,12 @@
           "release_tag": "pymss"
         },
         {
-          "name": "legacy_vr/vr_karaoke/5_HP-Karaoke-UVR.yaml",
-          "sha256": "2875da6dac23956774be3ad433c35391637e5227b9c85060a4f2a791b35cb05e",
-          "size_bytes": 1220,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/5_HP-Karaoke-UVR.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
           "name": "legacy_vr/vr_karaoke/6_HP-Karaoke-UVR.pth",
           "sha256": "4ce7eaaa9e56f09366b788aebf6d3a72aec8145692c56f1e090e4e7e2d7ce65f",
           "size_bytes": 126782699,
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/6_HP-Karaoke-UVR.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_karaoke/6_HP-Karaoke-UVR.yaml",
-          "sha256": "c8958ab538cee5158945e79b9d7c890eaa27641b9a13e9678a23ddd77f9172e2",
-          "size_bytes": 1024,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/6_HP-Karaoke-UVR.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -1068,7 +918,7 @@
       "group": "separate",
       "recommended": false,
       "order": 100,
-      "size_bytes": 127681185,
+      "size_bytes": 127678382,
       "files": [
         {
           "name": "legacy_vr/vr_mgm/MGM_MAIN_v4.pth",
@@ -1109,46 +959,6 @@
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_LOWEND_B_v4.pth"
           ],
           "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_mgm/MGM_MAIN_v4.yaml",
-          "sha256": "797c6f008e58ab62e81bff6b2d36be73bf33878379a3ffbb9d206880351a5474",
-          "size_bytes": 700,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_MAIN_v4.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_mgm/MGM_HIGHEND_v4.yaml",
-          "sha256": "0604d85c14332572bdef399d0460f6f88357cc566cd298af6a514a44ae975ee9",
-          "size_bytes": 701,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_HIGHEND_v4.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_mgm/MGM_LOWEND_A_v4.yaml",
-          "sha256": "1cfa760e872e7bf3bcdec53edecd22d5f8a777e79a7a103ff9c64fe77b5a3d02",
-          "size_bytes": 702,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_LOWEND_A_v4.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_mgm/MGM_LOWEND_B_v4.yaml",
-          "sha256": "321600d6f7ec3de88b505085de37ee0ca4acfd5c1d8ce9ced1c9b5dc49bf928a",
-          "size_bytes": 700,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/MGM_LOWEND_B_v4.yaml"
-          ],
-          "release_tag": "pymss"
         }
       ],
       "release_tag": "pymss"
@@ -1161,7 +971,7 @@
       "group": "separate",
       "recommended": false,
       "order": 110,
-      "size_bytes": 223579845,
+      "size_bytes": 223572657,
       "files": [
         {
           "name": "legacy_vr/vr_sp/10_SP-UVR-2B-32000-1.pth",
@@ -1232,76 +1042,6 @@
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/16_SP-UVR-MID-44100-2.pth"
           ],
           "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/10_SP-UVR-2B-32000-1.yaml",
-          "sha256": "b55ed0e46430f7904c5bed1a711bac4dcd0181abd4edbea3ffe7d8a156968a92",
-          "size_bytes": 855,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/10_SP-UVR-2B-32000-1.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/11_SP-UVR-2B-32000-2.yaml",
-          "sha256": "b55ed0e46430f7904c5bed1a711bac4dcd0181abd4edbea3ffe7d8a156968a92",
-          "size_bytes": 855,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/11_SP-UVR-2B-32000-2.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/12_SP-UVR-3B-44100.yaml",
-          "sha256": "9bbb18a008b2126d5601f8959cf9b53d9c5ce1bea9ab78a3382566a240934e77",
-          "size_bytes": 1028,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/12_SP-UVR-3B-44100.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/13_SP-UVR-4B-44100-1.yaml",
-          "sha256": "d563b6982bfdf43706e7b7f95d96306fb4efda71fe99fee579179d5fa2a1b005",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/13_SP-UVR-4B-44100-1.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/14_SP-UVR-4B-44100-2.yaml",
-          "sha256": "d563b6982bfdf43706e7b7f95d96306fb4efda71fe99fee579179d5fa2a1b005",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/14_SP-UVR-4B-44100-2.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/15_SP-UVR-MID-44100-1.yaml",
-          "sha256": "33e81effcb97411d77251c66857d0dc24425af7cac3cfccb70ede051bcf90cd1",
-          "size_bytes": 1027,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/15_SP-UVR-MID-44100-1.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_sp/16_SP-UVR-MID-44100-2.yaml",
-          "sha256": "33e81effcb97411d77251c66857d0dc24425af7cac3cfccb70ede051bcf90cd1",
-          "size_bytes": 1027,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/16_SP-UVR-MID-44100-2.yaml"
-          ],
-          "release_tag": "pymss"
         }
       ],
       "release_tag": "pymss"
@@ -1314,7 +1054,7 @@
       "group": "separate",
       "recommended": true,
       "order": 10,
-      "size_bytes": 253587690,
+      "size_bytes": 253585294,
       "files": [
         {
           "name": "legacy_vr/vr_vocal_extraction/3_HP-Vocal-UVR.pth",
@@ -1327,32 +1067,12 @@
           "release_tag": "pymss"
         },
         {
-          "name": "legacy_vr/vr_vocal_extraction/3_HP-Vocal-UVR.yaml",
-          "sha256": "5e660882e5b2dd82414a605d360716a54415d2836116cdd902432c4eaae1d134",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/3_HP-Vocal-UVR.yaml"
-          ],
-          "release_tag": "pymss"
-        },
-        {
           "name": "legacy_vr/vr_vocal_extraction/4_HP-Vocal-UVR.pth",
           "sha256": "295d1e1e3a52c17a040a4a6fe390214ad8ca0797f091b7c6d8db97d247a27271",
           "size_bytes": 126792647,
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/4_HP-Vocal-UVR.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_vocal_extraction/4_HP-Vocal-UVR.yaml",
-          "sha256": "5e660882e5b2dd82414a605d360716a54415d2836116cdd902432c4eaae1d134",
-          "size_bytes": 1198,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/4_HP-Vocal-UVR.yaml"
           ],
           "release_tag": "pymss"
         }
@@ -1367,7 +1087,7 @@
       "group": "separate",
       "recommended": false,
       "order": 120,
-      "size_bytes": 223662476,
+      "size_bytes": 223661285,
       "files": [
         {
           "name": "legacy_vr/vr_wind_instrumental/17_HP-Wind_Inst-UVR.pth",
@@ -1376,16 +1096,6 @@
           "channel": "release",
           "urls": [
             "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/17_HP-Wind_Inst-UVR.pth"
-          ],
-          "release_tag": "pymss"
-        },
-        {
-          "name": "legacy_vr/vr_wind_instrumental/17_HP-Wind_Inst-UVR.yaml",
-          "sha256": "14673ec54031486a930d19342f087d786d2d8f0c16010155cd24cab10a86a920",
-          "size_bytes": 1191,
-          "channel": "release",
-          "urls": [
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/pymss/17_HP-Wind_Inst-UVR.yaml"
           ],
           "release_tag": "pymss"
         }

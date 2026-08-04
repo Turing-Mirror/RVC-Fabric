@@ -1,0 +1,19 @@
+model:
+  model_params: {'bins': 768, 'unstable_bins': 7, 'reduction_bins': 705, 'band': {1: {'sr': 6000, 'hl': 66, 'n_fft': 512, 'crop_start': 0, 'crop_stop': 240, 'lpf_start': 60, 'lpf_stop': 118, 'res_type': 'sinc_fastest'}, 2: {'sr': 32000, 'hl': 352, 'n_fft': 1024, 'crop_start': 22, 'crop_stop': 505, 'hpf_start': 44, 'hpf_stop': 23, 'res_type': 'sinc_medium'}}, 'sr': 32000, 'pre_filter_start': 710, 'pre_filter_stop': 731, 'mid_side': False, 'mid_side_b': False, 'mid_side_b2': False, 'stereo_w': False, 'stereo_n': False, 'reverse': False}
+  nout: null
+  nout_lstm: null
+
+training:
+  target_instrument: null
+  instruments: ['Instrumental', 'Vocals'] # [primary_stem, secondary_stem]
+  use_amp: false
+
+inference:
+  batch_size: 1
+  aggression: 5
+  high_end_process: false
+  post_process_threshold: 0.2
+  window_size: 512
+
+audio:
+  sample_rate: 44100

@@ -198,8 +198,10 @@ AGENTS.md
 # 验证第三方音色时下载的制品缓存（几个 GB，跑完可删）
 /.verify-cache/
 
-# 分离模型权重按需下载，不进 git
-/assets/pymss/
+# 分离模型权重按需下载，不进 git；同名 .yaml 运行配置随包发布（见 assets/pymss/）
+/assets/pymss/**/*
+!/assets/pymss/**/
+!/assets/pymss/**/*.yaml
 
 # wrangler 的本地状态：缓存里有 CF 账号邮箱和账号 ID，state/ 里有本地测试库，
 # tmp/ 里有带本机绝对路径的构建产物。一样都不该进仓库。

@@ -1,0 +1,40 @@
+model:
+  model_params:
+    bins: 1024
+    unstable_bins: 0
+    reduction_bins: 0
+    band:
+      1:
+        sr: 44100
+        hl: 1024
+        n_fft: 2048
+        crop_start: 0
+        crop_stop: 1024
+        hpf_start: -1
+        res_type: sinc_best
+    sr: 44100
+    pre_filter_start: 1023
+    pre_filter_stop: 1024
+    mid_side: false
+    mid_side_b: false
+    mid_side_b2: false
+    stereo_w: false
+    stereo_n: false
+    reverse: false
+  vr_model_param: 1band_sr44100_hl1024
+  nout: null
+  nout_lstm: null
+training:
+  target_instrument: null
+  instruments:
+  - No Aspiration
+  - Aspiration
+  use_amp: false
+inference:
+  batch_size: 1
+  aggression: 5
+  high_end_process: false
+  post_process_threshold: 0.2
+  window_size: 512
+audio:
+  sample_rate: 44100

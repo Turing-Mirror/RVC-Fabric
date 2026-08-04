@@ -26,17 +26,17 @@ use crate::{config, paths, worker};
 /// the window is out of the way, so the tray must always exist — not only when
 /// the user picked "minimise to tray".
 pub fn install_tray(app: &AppHandle) -> Result<(), String> {
-    let show = MenuItem::with_id(app, "show", crate::i18n::t("tray.show"), true, None::<&str>)
+    let show = MenuItem::with_id(app, "show", &crate::i18n::t("tray.show"), true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let toggle = MenuItem::with_id(
         app,
         "toggle",
-        crate::i18n::t("tray.toggle"),
+        &crate::i18n::t("tray.toggle"),
         true,
         None::<&str>,
     )
     .map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(app, "quit", crate::i18n::t("tray.quit"), true, None::<&str>)
+    let quit = MenuItem::with_id(app, "quit", &crate::i18n::t("tray.quit"), true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let menu =
         Menu::with_items(app, &[&show, &toggle, &quit]).map_err(|e| e.to_string())?;
@@ -266,7 +266,7 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
         .ok_or("Runtime 未就绪，无法跑性能测试")?;
     let script = root.join("tools").join("benchmark_realtime.py");
     if !script.is_file() {
-        return Err("找不到 benchmark_realtime.py".into());
+        return Err(crate::i18n::t("s.c41c6ca117").into());
     }
 
     let cfg = config::read(root);
@@ -287,7 +287,7 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
             .trim()
             .to_string();
         if alt.is_empty() || !Path::new(&alt).is_file() {
-            return Err("没有可用的音色模型，请先在首页选一个音色再跑性能测试".into());
+            return Err(crate::i18n::t("s.40019094c0").into());
         }
         alt
     };
@@ -399,7 +399,7 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
         ));
     }
     if !json_out.is_file() {
-        return Err("性能测试跑完了但没有写出报告文件".into());
+        return Err(crate::i18n::t("s.f9e62f8c38").into());
     }
     Ok(json_out)
 }
@@ -429,7 +429,7 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
             }
         }
     } else {
-        "用户跳过了性能测试".into()
+        crate::i18n::t("s.733f7e7b3f")
     };
 
     let out_dir = paths::user_data(root).join("diagnostics");
@@ -678,7 +678,7 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
         let _ = worker::stop_vc(&root, true);
         // 退出前清 TEMP：先停 worker 再删，避免文件被占用删不掉。
         let stats = crate::paths::clean_temps(&root);
-        crate::paths::log_clean_stats("关闭前", &root, &stats);
+        crate::paths::log_clean_stats(&crate::i18n::t("s.c5fcd5c0a9"), &root, &stats);
     }
     app.exit(0);
 }
@@ -711,12 +711,12 @@ mod tests {
         assert!(combo_ok("CmdOrCtrl+F2"));
         assert!(combo_ok("Alt+Shift+K"));
         assert!(combo_ok("F9"));
-        assert!(!combo_ok(""), "空串不能拿去注册");
-        assert!(!combo_ok("Ctrl+"), "尾巴上挂个空段");
-        assert!(!combo_ok("Ctrl++A"), "中间空段");
-        assert!(!combo_ok("Ctrl+A+B+C+D+E"), "段数超上限");
-        assert!(!combo_ok("Ctrl+<script>"), "非字母数字");
-        assert!(!combo_ok(&"A".repeat(60)), "长度超上限");
+        assert!(!combo_ok(""), &crate::i18n::t("s.4d568e3db9"));
+        assert!(!combo_ok("Ctrl+"), &crate::i18n::t("s.6b25a5378d"));
+        assert!(!combo_ok("Ctrl++A"), &crate::i18n::t("s.5ff8d648a8"));
+        assert!(!combo_ok("Ctrl+A+B+C+D+E"), &crate::i18n::t("s.b78ead0b6a"));
+        assert!(!combo_ok("Ctrl+<script>"), &crate::i18n::t("s.36c2e47b48"));
+        assert!(!combo_ok(&"A".repeat(60)), &crate::i18n::t("s.e110cd6caf"));
     }
 
     /// 配置里是垃圾值时必须退回默认，而不是注册一个乱七八糟的组合。
@@ -746,8 +746,8 @@ mod tests {
             let got = d
                 .get(*key)
                 .and_then(|v| v.as_str())
-                .unwrap_or_else(|| panic!("config::defaults() 里没有 {key}"));
-            assert_eq!(got, *default, "{key} 两处默认组合不一致");
+                .unwrap_or_else(|| panic!(&crate::i18n::t("s.e64959c277")));
+            assert_eq!(got, *default, &crate::i18n::t("s.a76352090e"));
         }
     }
 
@@ -763,8 +763,8 @@ mod tests {
             let got = d
                 .get(&k)
                 .and_then(|v| v.as_bool())
-                .unwrap_or_else(|| panic!("config::defaults() 里没有 {k}"));
-            assert!(got, "{k} 默认必须是 true，否则等于悄悄关掉全局快捷键");
+                .unwrap_or_else(|| panic!(&crate::i18n::t("s.735eb4e9fd")));
+            assert!(got, &crate::i18n::t("s.d4efcb94da"));
         }
     }
 
@@ -774,7 +774,7 @@ mod tests {
     #[test]
     fn every_default_combo_is_well_formed() {
         for (key, _action, default) in HOTKEYS {
-            assert!(combo_ok(default), "{key} 的默认组合 {default} 形状不合法");
+            assert!(combo_ok(default), &crate::i18n::t("s.d50071676d"));
         }
     }
 
@@ -785,11 +785,11 @@ mod tests {
         let n = keys.len();
         keys.sort_unstable();
         keys.dedup();
-        assert_eq!(keys.len(), n, "配置键名有重复");
+        assert_eq!(keys.len(), n, &crate::i18n::t("s.da544f6e8b"));
 
         let mut acts: Vec<&str> = HOTKEYS.iter().map(|h| h.1).collect();
         acts.sort_unstable();
         acts.dedup();
-        assert_eq!(acts.len(), n, "动作名有重复");
+        assert_eq!(acts.len(), n, &crate::i18n::t("s.4dae253817"));
     }
 }

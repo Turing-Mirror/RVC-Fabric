@@ -261,8 +261,7 @@ pub fn clean_temps(root: &Path) -> CleanStats {
 
 /// 记录一次清理结果（启动/退出日志里能看见有没有真清）。
 pub fn log_clean_stats(phase: &str, root: &Path, stats: &CleanStats) {
-    crate::logging::shell_log!(
-        "临时清理（{phase}）root={}：删文件 {} 个、目录 {} 个，失败 {}，约 {:.1} MB",
+    crate::logging::shell_log!("临时清理（{phase}）root={}：删文件 {} 个、目录 {} 个，失败 {}，约 {:.1} MB",
         root.display(),
         stats.removed_files,
         stats.removed_dirs,

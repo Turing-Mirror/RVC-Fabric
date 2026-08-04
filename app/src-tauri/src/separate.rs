@@ -110,7 +110,7 @@ pub fn run(app: &AppHandle, root: &Path, input: &str, output: &str, model: &str)
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已经有一个分离任务在跑了".into());
+            return Err(crate::i18n::t("s.38d4c44c83").into());
         }
         *g = true;
     }
@@ -141,11 +141,11 @@ fn run_inner(
         return Err(format!("找不到分离脚本：{}", script.display()));
     }
     if input.trim().is_empty() || output.trim().is_empty() {
-        return Err("请先选好输入文件和输出目录".into());
+        return Err(crate::i18n::t("s.494f3ed5a0").into());
     }
     let mdir = model_dir(root);
     if !any_model_present(&mdir) {
-        return Err("缺分离模型，请先下载".to_string());
+        return Err(crate::i18n::t("s.e38da2e4e6"));
     }
     std::fs::create_dir_all(output).map_err(|e| format!("建不了输出目录：{e}"))?;
 
@@ -168,7 +168,7 @@ fn run_inner(
 
     // python.exe 而不是 pythonw：我们要读它的 stdout。窗口用 CREATE_NO_WINDOW
     // 压掉，不然每次分离都会闪一个黑框。
-    let py = paths::runtime_python(root).ok_or("找不到 Runtime\\python.exe")?;
+    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let log = paths::logs_dir(root).join("separate.log");
     let _ = std::fs::create_dir_all(paths::logs_dir(root));
     let errfile = std::fs::OpenOptions::new()
@@ -195,14 +195,14 @@ fn run_inner(
     }
 
     let mut child = cmd.spawn().map_err(|e| format!("起不来分离进程：{e}"))?;
-    let stdout = child.stdout.take().ok_or("拿不到分离进程的输出")?;
+    let stdout = child.stdout.take().ok_or(crate::i18n::t("s.1a66c860cd"))?;
     let mut files: Vec<String> = Vec::new();
     let mut fail: Option<String> = None;
 
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
-            return Err("已取消".into());
+            return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue; // 不是我们的协议行，忽略
@@ -210,14 +210,24 @@ fn run_inner(
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
         let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
         match phase {
-            "start" => emit(app, "start", 0, 1, "正在加载分离模型…"),
-            "run" => emit(
-                app,
-                "run",
-                v.get("done").and_then(|x| x.as_u64()).unwrap_or(0),
-                v.get("total").and_then(|x| x.as_u64()).unwrap_or(1),
-                if msg.is_empty() { "分离中…" } else { msg },
-            ),
+            "start" => {
+                let m = crate::i18n::t("s.07bbf0331b");
+                emit(app, "start", 0, 1, &m);
+            }
+            "run" => {
+                let fallback = crate::i18n::t("s.2282c91c77");
+                emit(
+                    app,
+                    "run",
+                    v.get("done").and_then(|x| x.as_u64()).unwrap_or(0),
+                    v.get("total").and_then(|x| x.as_u64()).unwrap_or(1),
+                    if msg.is_empty() {
+                        &fallback
+                    } else {
+                        msg
+                    },
+                );
+            }
             "done" => {
                 if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
                     files = arr
@@ -241,10 +251,10 @@ fn run_inner(
             st.code().unwrap_or(-1)
         ));
     }
-    emit(app, "done", 1, 1, "分离完成");
+    emit(app, "done", 1, 1, &crate::i18n::t("s.104ec2bbf7"));
     // 分离会在 TEMP 里落 reformatted.wav 等中间文件，用完就清。
     let stats = crate::paths::clean_temps(root);
-    crate::paths::log_clean_stats("分离后", root, &stats);
+    crate::paths::log_clean_stats(&crate::i18n::t("s.b0cf745781"), root, &stats);
     Ok(json!({ "ok": true, "files": files, "output": output }))
 }
 

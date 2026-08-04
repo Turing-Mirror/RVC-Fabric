@@ -5,6 +5,7 @@ import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
 import { ExtrasDialog } from "./ExtrasDialog";
 import { ToolBody } from "./ToolWindow";
+import { t } from "../i18n/t";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -38,11 +39,11 @@ type Progress = {
 };
 
 const STAGE_NAMES: Record<string, string> = {
-  preprocess: "切片",
-  f0: "音高",
-  feature: "特征",
-  train: "训练",
-  index: "索引",
+  preprocess: t("s.1a37ffe775"),
+  f0: t("s.bda11a3c2d"),
+  feature: t("s.672c1db9d8"),
+  train: t("s.796e01d5af"),
+  index: t("s.79f9110607"),
 };
 
 const ROW = "flex items-center gap-3 py-2.5";
@@ -87,7 +88,7 @@ export function TrainPanel() {
     let un: (() => void) | undefined;
     void listen<Progress>("train-progress", (ev) => {
       setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message || "训练失败");
+      if (ev.payload.phase === "error") setMsg(ev.payload.message || t("s.60a21a8105"));
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;
@@ -112,20 +113,20 @@ export function TrainPanel() {
     !!st.nvidia &&
     !srReady;
   const blocked: { text: string; term?: string } = !st.runtime_ready
-    ? { text: "运行时未就绪，先到「其他」页补全运行时", term: "运行时" }
+    ? { text: t("s.bc45fc14b1"), term: t("s.cef8154370") }
     : !st.worker_present || !st.mute_present
-      ? { text: "训练组件不全，安装可能不完整" }
+      ? { text: t("s.946a92f5a2") }
       : !st.hubert_present
-        ? { text: "缺 Hubert 模型，先补全引擎资源", term: "Hubert 模型" }
+        ? { text: t("s.e700c7ba47"), term: t("s.b269c54674") }
         : !st.nvidia
           ? {
-              text: "训练仅支持 NVIDIA 显卡。当前系统的 DirectML 环境暂不支持相关训练算子。",
+              text: t("s.8f5fdb1c8a"),
               term: "DirectML",
             }
           : !srReady
             ? {
-                text: `缺 ${sr} 的训练底模。只需下载与采样率对应的那一套（与 RVC 原版 pretrained_v2 一致）。`,
-                term: "底模",
+                text: t("s.b453debe2c", { v0: sr }),
+                term: t("s.4bdd408f42"),
               }
             : { text: "" };
 
@@ -163,16 +164,13 @@ export function TrainPanel() {
   const stageLabel = prog?.stage ? STAGE_NAMES[prog.stage] || prog.stage : "";
   const stepLine =
     prog?.index && prog?.total_stages
-      ? `第 ${prog.index}/${prog.total_stages} 步 · ${stageLabel}`
+      ? t("s.588a754143", { v0: prog.index, v1: prog.total_stages, v2: stageLabel })
       : "";
 
   return (
     <ToolBody>
-        <h3 className="m-0 mb-1 text-[17px] font-semibold">训练音色</h3>
-        <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          使用人声干声素材训练专属音色。推荐 10 分钟以上的高质量录音，
-          含背景音乐的素材请先使用「人声分离」进行处理。
-        </p>
+        <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.ba65bd5595")}</h3>
+        <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.42667034ec")}</p>
 
         {blocked.text ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -181,42 +179,38 @@ export function TrainPanel() {
               {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
             </p>
             {needPretrained ? (
-              <Btn onClick={() => setExtrasOpen(true)}>下载训练底模</Btn>
+              <Btn onClick={() => setExtrasOpen(true)}>{t("s.0c593a479c")}</Btn>
             ) : null}
           </div>
         ) : (
           <div className="mb-3 flex justify-end">
-            <Btn onClick={() => setExtrasOpen(true)}>下载底模</Btn>
+            <Btn onClick={() => setExtrasOpen(true)}>{t("s.aac4f88e84")}</Btn>
           </div>
         )}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>
-            <span className={LABEL}>素材目录</span>
-            <span className={PATH}>{dataset || "未选择"}</span>
+            <span className={LABEL}>{t("s.10c5cf2954")}</span>
+            <span className={PATH}>{dataset || t("s.53e2db7016")}</span>
             <Btn
               onClick={() => {
                 void invoke<string | null>("train_pick_dataset").then(
                   (p) => p && setDataset(p),
                 );
               }}
-            >
-              选择
-            </Btn>
+            >{t("s.70b208202c")}</Btn>
           </div>
           <div className={ROW}>
-            <span className={LABEL}>音色名</span>
+            <span className={LABEL}>{t("s.4eea655d6f")}</span>
             <input
               className={`flex-1 min-w-0 ${FIELD}`}
               value={name}
-              placeholder="训完就是这个名字"
+              placeholder={t("s.b27dd877b1")}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className={ROW}>
-            <span className={`${LABEL} flex items-center gap-1.5`}>
-              采样率
-              <HelpMark title={tip("底模")} />
+            <span className={`${LABEL} flex items-center gap-1.5`}>{t("s.ab4dae189d")}<HelpMark title={tip(t("s.4bdd408f42"))} />
             </span>
             <select
               className={FIELD}
@@ -226,16 +220,14 @@ export function TrainPanel() {
               {(st.pretrained || [{ sample_rate: "48k", ready: false }]).map((p) => (
                 <option key={p.sample_rate} value={p.sample_rate}>
                   {p.sample_rate}
-                  {p.ready ? "" : "（缺底模）"}
+                  {p.ready ? "" : t("s.3d19649847")}
                 </option>
               ))}
             </select>
-            <span className="text-[12px] text-[var(--meta)]">
-              48k 音质最佳，但显存占用更高
-            </span>
+            <span className="text-[12px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
           </div>
           <div className={ROW}>
-            <span className={LABEL}>训练轮数</span>
+            <span className={LABEL}>{t("s.61fdf63b84")}</span>
             <input
               className={`w-[100px] ${FIELD}`}
               type="number"
@@ -244,9 +236,7 @@ export function TrainPanel() {
               value={epochs}
               onChange={(e) => setEpochs(Number(e.target.value) || 1)}
             />
-            <span className="text-[12px] text-[var(--meta)]">
-              通常设为 200。轮数越多还原度越高，但过高可能产生电音或杂音。
-            </span>
+            <span className="text-[12px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
           </div>
         </div>
 
@@ -281,22 +271,19 @@ export function TrainPanel() {
 
         <div className="mt-5 flex justify-end gap-2.5">
           {running ? (
-            <Btn onClick={() => void invoke("train_cancel")}>中断</Btn>
+            <Btn onClick={() => void invoke("train_cancel")}>{t("s.44e681a374")}</Btn>
           ) : null}
           <Btn
             primary
             disabled={running || !!blocked.text || !name.trim() || (!dataset && !resume)}
             onClick={() => void start()}
           >
-            {running ? "训练中…" : resume ? "继续训练" : "开始训练"}
+            {running ? t("s.3e6b1657c7") : resume ? t("s.3166554c46") : t("s.be24590d21")}
           </Btn>
         </div>
 
         {running ? (
-          <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">
-            训练过程可能需要数小时。中断后进度将保留（含已处理的切片与已完成的轮次），
-            下次使用相同名称即可恢复训练。
-          </p>
+          <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
         ) : null}
 
         <ExtrasDialog
@@ -306,7 +293,7 @@ export function TrainPanel() {
             void load();
           }}
           filter="train"
-          title="下载训练底模"
+          title={t("s.0c593a479c")}
         />
     </ToolBody>
   );

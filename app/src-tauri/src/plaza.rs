@@ -420,7 +420,7 @@ mod tests {
         let b = mk("ad", "");
         assert!(!b.recommended && b.is_ad);
         // both — our pick, someone paid for the slot
-        let c = mk("news", "某声卡品牌");
+        let c = mk("news", &crate::i18n::t("s.b4ce6178be"));
         assert!(c.recommended && c.is_ad);
     }
 
@@ -456,24 +456,24 @@ mod tests {
     #[test]
     fn plaza_ads_are_not_dismissible_models_banner_is() {
         let feed = json!({"items": [
-            {"id": "p", "title": "广场广告", "type": "ad"},
-            {"id": "m", "title": "模型页横幅", "type": "ad",
+            {"id": "p", "title": &crate::i18n::t("s.800d82ff2e"), "type": "ad"},
+            {"id": "m", "title": &crate::i18n::t("s.d06eb20450"), "type": "ad",
              "placements": ["models_page"]},
         ]});
         let items = parse_feed(&feed);
         let plaza = items.iter().find(|i| i.id == "p").unwrap();
         let models = items.iter().find(|i| i.id == "m").unwrap();
-        assert!(plaza.is_ad && !plaza.dismissible, "广场广告不可关闭");
-        assert!(models.is_ad && models.dismissible, "模型页横幅必须可关闭");
+        assert!(plaza.is_ad && !plaza.dismissible, &crate::i18n::t("s.0881863106"));
+        assert!(models.is_ad && models.dismissible, &crate::i18n::t("s.5515dc7709"));
     }
 
     #[test]
     fn schedule_window_and_version_gate() {
         let feed = json!({"items": [
-            {"id": "past", "title": "过期", "end": "260101"},
-            {"id": "future", "title": "未开始", "start": "991231"},
-            {"id": "old", "title": "旧客户端", "max_app_version": "1.0.0"},
-            {"id": "ok", "title": "可见"},
+            {"id": "past", "title": &crate::i18n::t("s.7cf7bfff3c"), "end": "260101"},
+            {"id": "future", "title": &crate::i18n::t("s.062e5e670f"), "start": "991231"},
+            {"id": "old", "title": &crate::i18n::t("s.a3af639cfd"), "max_app_version": "1.0.0"},
+            {"id": "ok", "title": &crate::i18n::t("s.fcafc66aea")},
         ]});
         let items = parse_feed(&feed);
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260730", &[]);
@@ -505,27 +505,27 @@ mod tests {
             .collect();
         let items = parse_feed(&json!({ "items": rows }));
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);
-        assert_eq!(vis.len(), 7, "一条都不能少，只是不再置顶");
+        assert_eq!(vis.len(), 7, &crate::i18n::t("s.9e361609ec"));
         let pinned: Vec<&str> = vis
             .iter()
             .filter(|i| i.pinned)
             .map(|i| i.id.as_str())
             .collect();
-        assert_eq!(pinned, vec!["p0", "p1", "p2", "p3", "p4"], "留优先级最高的五个");
+        assert_eq!(pinned, vec!["p0", "p1", "p2", "p3", "p4"], &crate::i18n::t("s.04be9e513a"));
     }
 
     #[test]
     fn the_pin_can_carry_its_own_shorter_title() {
         // 封面和跳转目标共用一条内容，卡片上的字可以另写。
         let items = parse_feed(&json!({"items": [
-            {"id": "a", "title": "一条很长的投放标题，排一整行都嫌挤",
-             "pinned": true, "pin_title": "短标题"},
-            {"id": "b", "title": "没另写就退回原标题", "pinned": true},
+            {"id": "a", "title": &crate::i18n::t("s.c7f1de0914"),
+             "pinned": true, "pin_title": &crate::i18n::t("s.4f35061e6d")},
+            {"id": "b", "title": &crate::i18n::t("s.15ada3dd1b"), "pinned": true},
         ]}));
         let a = items.iter().find(|i| i.id == "a").unwrap();
         let b = items.iter().find(|i| i.id == "b").unwrap();
-        assert_eq!(a.pin_title, "短标题");
-        assert_eq!(b.pin_title, "", "空串 = 界面退回 title");
+        assert_eq!(a.pin_title, &crate::i18n::t("s.4f35061e6d"));
+        assert_eq!(b.pin_title, "", &crate::i18n::t("s.9528c02056"));
     }
 
     #[test]
@@ -546,20 +546,20 @@ mod tests {
         // 于是每条都解析成空列表：版本号和日期照常显示，正文一个字没有。
         let data = json!({"entries": [
             {"version": "1.2.4", "date": "260730",
-             "highlights": ["启动自动检查更新", "修复诊断包无反馈"],
-             "body": "整段正文"},
+             "highlights": [&crate::i18n::t("s.1937f75369"), &crate::i18n::t("s.754db380c0")],
+             "body": &crate::i18n::t("s.5ba1f75537")},
         ]});
         let rows = parse_changelog(&data);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].notes.len(), 2);
-        assert_eq!(rows[0].notes[0], "启动自动检查更新");
+        assert_eq!(rows[0].notes[0], &crate::i18n::t("s.1937f75369"));
     }
 
     #[test]
     fn body_is_the_last_resort_so_the_entry_is_never_blank() {
-        let data = json!({"entries": [{"version": "1.2.3", "body": "只有一段正文"}]});
+        let data = json!({"entries": [{"version": "1.2.3", "body": &crate::i18n::t("s.39cb51599c")}]});
         let rows = parse_changelog(&data);
-        assert_eq!(rows[0].notes, vec!["只有一段正文".to_string()]);
+        assert_eq!(rows[0].notes, vec![crate::i18n::t("s.39cb51599c")]);
     }
 
     #[test]
@@ -567,8 +567,8 @@ mod tests {
         // 「RVC Fabric v1.2.4 发布」是清单自动派生给老客户端的，不是投放内容。
         // 广场自己已经有更新日志区块，再挂一条就是同一件事说两遍。
         let feed = json!({"items": [
-            {"id": "release-1.2.4", "type": "news", "title": "RVC Fabric v1.2.4 发布"},
-            {"id": "ad-1", "type": "ad", "title": "真·投放"},
+            {"id": "release-1.2.4", "type": "news", "title": &crate::i18n::t("s.772fad9699")},
+            {"id": "ad-1", "type": "ad", "title": &crate::i18n::t("s.ca8050f45e")},
         ]});
         let items = parse_feed(&feed);
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);

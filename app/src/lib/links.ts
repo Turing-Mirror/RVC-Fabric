@@ -1,3 +1,4 @@
+import { t } from "../i18n/t";
 /**
  * 对外的仓库与社媒地址，一处定义。
  *
@@ -17,13 +18,13 @@ export type LinkEntry = {
 
 export const REPO_LINKS: LinkEntry[] = [
   {
-    title: "GitHub 源码",
+    title: t("s.8d93847089"),
     short: "GitHub",
     desc: "Turing-Mirror/RVC-Fabric",
     url: "https://github.com/Turing-Mirror/RVC-Fabric",
   },
   {
-    title: "CNB 发布与制品",
+    title: t("s.71031cc3ad"),
     short: "CNB",
     desc: "Turing-Mirror/RVC-Fabric-Releases",
     url: "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
@@ -32,20 +33,20 @@ export const REPO_LINKS: LinkEntry[] = [
 
 export const SOCIAL_LINKS: LinkEntry[] = [
   {
-    title: "哔哩哔哩 @图灵镜",
-    short: "哔哩哔哩",
+    title: t("s.a11c1a6602"),
+    short: t("s.da1fd957dc"),
     url: "https://space.bilibili.com/3546871148579062",
   },
   {
-    title: "抖音 @图灵镜",
-    short: "抖音",
-    desc: "抖音号 TuringMirror",
+    title: t("s.a3480a2554"),
+    short: t("s.21a8e41cf6"),
+    desc: t("s.881ebae122"),
     url: "https://v.douyin.com/6NxXcrKK9cc",
   },
   {
-    title: "小红书 @图灵镜",
-    short: "小红书",
-    desc: "小红书号 TuringMirror",
+    title: t("s.efbfd16623"),
+    short: t("s.e2866d0815"),
+    desc: t("s.84ccf9394c"),
     url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
   },
 ];

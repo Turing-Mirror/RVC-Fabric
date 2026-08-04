@@ -2,6 +2,7 @@ import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
+import { t } from "../i18n/t";
 
 /**
  * Answers carried over verbatim from the Tk shell's `help_content.py` and its
@@ -10,65 +11,65 @@ import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
  */
 const FAQ: { q: string; hint: string; a: string }[] = [
   {
-    q: "对方说听不到我",
-    hint: "检查游戏/语音里的麦克风是否选成了 CABLE Output",
+    q: t("s.73996ce817"),
+    hint: t("s.8152d450a3"),
     a: [
-      "1. 游戏/语音的麦克风设为 CABLE Output",
-      "2. 本软件的输出设备设为 CABLE Input",
-      "3. 确认已「开启变声」，且模式是「实时变声」而非「旁路原声」",
+      t("s.d8e4f74b8b"),
+      t("s.ac66eb660d"),
+      t("s.ab4550db36"),
     ].join("\n"),
   },
   {
-    q: "我自己听不到变声",
-    hint: "在设置里开启「变声时监听自己」，监听设备选真实耳机",
+    q: t("s.e410af7f1f"),
+    hint: t("s.ad0e3472be"),
     a: [
-      "1. 设置 → 设备与音频 → 勾选「变声时监听自己」",
-      "2. 监听设备选真实耳机或音箱，不要选 CABLE 等虚拟声卡",
+      t("s.d02e026f75"),
+      t("s.52c469558c"),
     ].join("\n"),
   },
   {
-    q: "声音断断续续",
-    hint: "可尝试调低响应阈值，或调大采样块时长",
+    q: t("s.ca98fe8db7"),
+    hint: t("s.68458a0d6c"),
     a: [
-      "1. 适当调大「采样块时长」（越大越稳，延迟也越高）",
-      "2. 关闭输入或输出降噪中的一项（降噪较吃显卡）",
-      "3. 音高算法换 FCPE 或 RMVPE 试听",
-      "4. 关闭其他占用麦克风的软件",
-      "5. 确认安装的是与显卡匹配的运行时版本",
+      t("s.d9cb071850"),
+      t("s.504a366966"),
+      t("s.4bbfde15f2"),
+      t("s.e6408f03f4"),
+      t("s.561d709070"),
     ].join("\n"),
   },
   {
-    q: "实体声卡怎么连",
-    hint: "硬件声卡、USB 直播声卡及调音台的路由接法",
+    q: t("s.c96a64f150"),
+    hint: t("s.8d5976502c"),
     a: [
-      "**模式 A：麦克风走实体声卡**",
-      "1. 输入设备：实体声卡的录音通道（名字里带声卡型号）",
-      "2. 输出设备：仍选 CABLE Input，对面听到变声仍靠虚拟声卡",
-      "3. 监听：耳机插在声卡上，监听设备选实体声卡的播放通道",
+      t("s.b5fba7b794"),
+      t("s.49c4c2a8bb"),
+      t("s.e7181ea0d6"),
+      t("s.60d612146d"),
       "",
-      "**模式 B：走声卡内录 / 立体声混音**",
-      "1. 输出设备：实体声卡的播放通道",
-      "2. 游戏/语音麦克风：声卡的内录通道（叫法以声卡说明书为准）",
+      t("s.c777a891cf"),
+      t("s.1a3fe8f826"),
+      t("s.efc83ad78c"),
       "",
-      "**注意**",
-      "1. 先关掉声卡驱动自带的降噪/混响/变声，避免与本软件冲突",
-      "2. 设备列表里没有设备时，点「重载设备列表」或重启软件",
+      t("s.ea5083770c"),
+      t("s.983328d89b"),
+      t("s.3800ff2864"),
     ].join("\n"),
   },
   {
-    q: "停不干净、声卡一直被占",
-    hint: "到「其他」页用「强制结束变声引擎」",
-    a: "「其他」页点「强制结束变声引擎」，再重新开启变声即可。该操作只结束残留的引擎进程，不会关闭主界面。",
+    q: t("s.0ec38407bc"),
+    hint: t("s.cd8301f295"),
+    a: t("s.83d8ae170a"),
   },
   {
-    q: "第一次开启特别慢",
-    hint: "正常，冷启动需要加载模型和运行时",
-    a: "首次开启变声需加载 PyTorch 和音色模型，通常 20–40 秒；之后再开会快很多。",
+    q: t("s.29a29efed7"),
+    hint: t("s.7cdb0a7622"),
+    a: t("s.23cb78c4b5"),
   },
   {
-    q: "中文路径报错",
-    hint: "把软件放到纯英文路径再试",
-    a: "部分底层依赖对中文/非 ASCII 路径兼容性较差。把安装目录移到纯英文路径（如 `D:\\RVCFabric`）后重试。",
+    q: t("s.8e6b1ba01b"),
+    hint: t("s.55e39bd8d0"),
+    a: t("s.d69e96920e"),
   },
 ];
 
@@ -99,13 +100,13 @@ const ROUTES: { kind: "virtual" | "physical"; label: string; keys: string[] }[] 
   },
   {
     kind: "virtual",
-    label: "其他虚拟声卡",
-    keys: ["virtual audio", "virtual cable", "虚拟声卡", "synchronous audio"],
+    label: t("s.1d2f7d6189"),
+    keys: ["virtual audio", "virtual cable", t("s.7d7d710ba5"), "synchronous audio"],
   },
   {
     kind: "physical",
-    label: "声卡内录 / 立体声混音",
-    keys: ["立体声混音", "stereo mix", "what u hear", "wave out mix", "内录"],
+    label: t("s.402fd697c1"),
+    keys: [t("s.75df86cca5"), "stereo mix", "what u hear", "wave out mix", t("s.bd52e3bc24")],
   },
 ];
 
@@ -124,7 +125,7 @@ function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: s
     // 「其他虚拟声卡」是兜底桶，已经认出具体是哪一款就别再报一遍：
     // VB-Cable 的设备名是「VB-Audio Virtual Cable」，两条都能命中，
     // 报成「VB-Cable、其他虚拟声卡」会让人以为自己装了两套。
-    if (r.label === "其他虚拟声卡" && hits.some((h) => h.kind === "virtual")) {
+    if (r.label === t("s.1d2f7d6189") && hits.some((h) => h.kind === "virtual")) {
       continue;
     }
     if (r.keys.some((k) => lower.some((n) => n.includes(k)))) {
@@ -173,14 +174,14 @@ function HelpPageImpl({ status }: HelpProps = {}) {
     setVbMsg("");
     try {
       if (vbReady !== true) {
-        setVbMsg("正在下载安装包…");
+        setVbMsg(t("s.3076e38c53"));
         await invoke("assets_ensure_vbcable");
         await refreshVb();
       }
-      setVbMsg("正在启动官方安装程序…");
+      setVbMsg(t("s.17d9ff0c09"));
       await invoke("assets_install_vbcable");
       // Only say it launched once it actually did.
-      setVbMsg("已启动官方安装程序，请在弹窗中确认（需要管理员权限）");
+      setVbMsg(t("s.65c66af000"));
     } catch (e) {
       setVbMsg(`失败：${String(e)}`);
     } finally {
@@ -199,95 +200,87 @@ function HelpPageImpl({ status }: HelpProps = {}) {
 
   return (
     <PagePad>
-      <PageHead title="说明" sub="虚拟声卡连接、常见情况与专有名词" />
+      <PageHead title={t("s.26670dda42")} sub={t("s.e137006ffd")} />
 
-      <Block title="安装虚拟声卡">
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
-          想让游戏 / 语音 里的人听到变声，必须先装虚拟声卡（VB-Cable）。
-          装完重启一次电脑，设备列表里才会出现 CABLE Input / CABLE Output。
-        </p>
+      <Block title={t("s.b386a7fb53")}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">{t("s.5695956a42")}</p>
         {/* 先照着用户机器上真实的设备列表说一句话。
             已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
             多一层能接错的地方 —— 那不是帮忙。 */}
         <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed max-w-[74ch]">
           {!known ? (
-            <span className="text-[var(--help)]">
-              还没读到设备列表，暂时没法判断你装没装声卡。
-              引擎启动后（或在「设置 → 设备与音频」点一次「重载设备列表」）再回来看。
-            </span>
+            <span className="text-[var(--help)]">{t("s.60f0f911ec")}</span>
           ) : found.length === 0 ? (
             <span className="text-[var(--ink-muted)]">
               在你的 {names.length} 个设备里没找到可用的转发通道，
               需要装虚拟声卡。点下面的「安装虚拟声卡」即可。
             </span>
           ) : (
-            <span className="text-[var(--ink-muted)]">
-              已在你的设备列表里找到：
-              <b className="font-semibold">{found.map((f) => f.label).join("、")}</b>。
+            <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{found.map((f) => f.label).join("、")}</b>。
               <br />
               {hasVirtual
                 ? hasCable
-                  ? "VB-Cable 已经装好了，不用再装一遍。直接照下面「虚拟声卡怎么连」接线就行。"
-                  : "你已经有虚拟声卡了，不必再装 VB-Cable —— 多装一套只会多出几个容易接错的设备。把软件输出选到它的输入端，游戏麦克风选到它的输出端即可。"
-                : "这是实体声卡的内录通道，也能走通：软件输出选实体声卡的播放，游戏麦克风选这个内录通道。展开下面「实体声卡怎么连」有详细接法。"}
+                  ? t("s.a8bd2d876d")
+                  : t("s.10481886ca")
+                : t("s.4951a916f7")}
             </span>
           )}
         </div>
         <Group>
           <ListItem
             title="VB-Cable"
-            titleTip={tip("虚拟声卡")}
+            titleTip={tip(t("s.7d7d710ba5"))}
             desc={
               vbMsg ||
               (hasCable
-                ? "系统里已经有 CABLE 设备，不用再装。重装只在设备损坏时才需要"
+                ? t("s.3d2c784f94")
                 : vbReady === "checking"
-                ? "正在检查…"
+                ? t("s.481ee2d4bc")
                 : vbReady === "unknown"
-                  ? "无法查询安装包状态，点右侧仍可尝试下载并安装"
+                  ? t("s.1b94ca3bf5")
                   : vbReady
-                    ? "安装包已就绪，点右侧开始安装（会弹管理员确认）"
-                    : "尚未下载安装包，点右侧会先下载再安装")
+                    ? t("s.71c000a0a8")
+                    : t("s.7be46937d4"))
             }
             right={
               <Btn disabled={vbBusy} onClick={() => void installVb()}>
-                {vbBusy ? "处理中…" : "安装虚拟声卡"}
+                {vbBusy ? t("s.1cac8ac7f5") : t("s.b386a7fb53")}
               </Btn>
             }
           />
         </Group>
       </Block>
 
-      <Block title="虚拟声卡怎么连">
+      <Block title={t("s.149ab7bf0a")}>
         <Group>
           <ListItem
-            title="软件输入"
-            desc="选你真实的麦克风"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">麦克风</span>}
+            title={t("s.69f4bc1200")}
+            desc={t("s.0f14377cdd")}
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
           />
           <ListItem
-            title="软件输出"
-            desc="选 CABLE Input，游戏里才收得到"
+            title={t("s.b4b5016e9f")}
+            desc={t("s.0709bd6ae7")}
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Input</span>}
           />
           <ListItem
-            title="监听（可选）"
-            desc="耳机，只有你自己听得到"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">耳机</span>}
+            title={t("s.6f63f33852")}
+            desc={t("s.2898cbf891")}
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
           />
           <ListItem
-            title="游戏 / 语音 麦克风"
-            desc="选 CABLE Output"
+            title={t("s.d0a420e1ca")}
+            desc={t("s.cad046a475")}
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
           />
           <ListItem
-            title="Windows 默认播放"
-            desc="保持选择耳机，不要选 CABLE"
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">耳机</span>}
+            title={t("s.364b26a260")}
+            desc={t("s.26ad7c406b")}
+            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
           />
         </Group>
       </Block>
-      <Block title="常见情况" note={String(FAQ.length)}>
+      <Block title={t("s.209d309d58")} note={String(FAQ.length)}>
         <Group>
           {FAQ.map((f) => (
             <ListItem
@@ -298,7 +291,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
               onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
               right={
                 <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? "收起" : "展开"}
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
                 </span>
               }
             >
@@ -320,7 +313,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
               }
               right={
                 <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {openTerm === term.term ? "收起" : "展开"}
+                  {openTerm === term.term ? t("s.5d5815647c") : t("s.b0e24833f7")}
                 </span>
               }
             >

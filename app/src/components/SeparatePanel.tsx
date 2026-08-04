@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { ExtrasDialog } from "./ExtrasDialog";
 import { ToolBody } from "./ToolWindow";
+import { t } from "../i18n/t";
 
 type Status = {
   runtime_ready?: boolean;
@@ -105,22 +106,19 @@ export function SeparatePanel() {
 
   const needModels = !!st.runtime_ready && !!st.worker_present && !st.models?.length;
   const blocked = !st.runtime_ready
-    ? "运行时未就绪，先到「其他」页补全运行时"
+    ? t("s.bc45fc14b1")
     : !st.worker_present
-      ? "缺少分离脚本，安装可能不完整"
+      ? t("s.92ba5de60f")
       : needModels
-        ? "还没装分离模型。优先下载「人声提取」，清训练素材用它就够了。"
+        ? t("s.f8893054c2")
         : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
 
   return (
     <ToolBody>
-        <h3 className="m-0 mb-1 text-[17px] font-semibold">人声分离</h3>
-        <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          提取音频中的人声干声与伴奏，可用于清理音色训练素材里的背景音乐。
-          模型按需下载，与 RVC/UVR 官方权重同源。
-        </p>
+        <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.8fd038283b")}</h3>
+        <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.497e7d9af6")}</p>
 
         {blocked ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -128,30 +126,28 @@ export function SeparatePanel() {
             {needModels ? (
               <Btn
                 onClick={() => setExtrasOpen(true)}
-              >
-                下载分离模型
-              </Btn>
+              >{t("s.7a218555fd")}</Btn>
             ) : null}
           </div>
         ) : (
           <div className="mb-3 flex justify-end">
-            <Btn onClick={() => setExtrasOpen(true)}>下载模型</Btn>
+            <Btn onClick={() => setExtrasOpen(true)}>{t("s.1252c81119")}</Btn>
           </div>
         )}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">输入</span>
-            <span className={PATH}>{input || "未选择"}</span>
-            <Btn onClick={() => void pick(false)}>选择</Btn>
+            <span className="w-[64px] shrink-0 text-[13px]">{t("s.e8850440f2")}</span>
+            <span className={PATH}>{input || t("s.53e2db7016")}</span>
+            <Btn onClick={() => void pick(false)}>{t("s.70b208202c")}</Btn>
           </div>
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">输出到</span>
-            <span className={PATH}>{output || "未选择"}</span>
-            <Btn onClick={() => void pick(true)}>选择</Btn>
+            <span className="w-[64px] shrink-0 text-[13px]">{t("s.a0bc984876")}</span>
+            <span className={PATH}>{output || t("s.53e2db7016")}</span>
+            <Btn onClick={() => void pick(true)}>{t("s.70b208202c")}</Btn>
           </div>
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">模型</span>
+            <span className="w-[64px] shrink-0 text-[13px]">{t("s.98fd0cbd9c")}</span>
             <select
               className="flex-1 min-w-0 rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]"
               value={model}
@@ -162,7 +158,7 @@ export function SeparatePanel() {
                   {m}
                 </option>
               ))}
-              {!st.models?.length ? <option value="">（无）</option> : null}
+              {!st.models?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}
             </select>
           </div>
         </div>
@@ -187,14 +183,14 @@ export function SeparatePanel() {
 
         <div className="mt-5 flex justify-end gap-2.5">
           {running ? (
-            <Btn onClick={() => void invoke("separate_cancel")}>取消</Btn>
+            <Btn onClick={() => void invoke("separate_cancel")}>{t("s.4d0b4688c7")}</Btn>
           ) : null}
           <Btn
             primary
             disabled={running || !!blocked || !input || !output}
             onClick={() => void start()}
           >
-            {running ? "分离中…" : "开始分离"}
+            {running ? t("s.2282c91c77") : t("s.8c57156c9d")}
           </Btn>
         </div>
 
@@ -205,7 +201,7 @@ export function SeparatePanel() {
             void load();
           }}
           filter="separate"
-          title="下载分离模型"
+          title={t("s.7a218555fd")}
         />
     </ToolBody>
   );

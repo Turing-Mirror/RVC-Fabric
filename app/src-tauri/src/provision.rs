@@ -30,7 +30,7 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     if joined.is_empty() {
         return (
             "unknown".into(),
-            "未检测到显卡，请手动选择运行时版本".into(),
+            crate::i18n::t("s.47c37d6efa"),
         );
     }
     if joined.contains("rtx 50")
@@ -242,17 +242,9 @@ pub fn read_package_meta_variant(root: &Path) -> Option<String> {
 
 fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) -> Result<(), String> {
     let (accel, use_dml, summary) = match variant {
-        "amd" => (
-            "dml",
-            true,
-            "官方 A/I 卡路径：DirectML Runtime",
-        ),
-        "nvidia50" => (
-            "cuda",
-            false,
-            "NVIDIA 50 系 CUDA Runtime",
-        ),
-        _ => ("cuda", false, "NVIDIA CUDA Runtime"),
+        "amd" => ("dml", true, crate::i18n::t("s.ab31cc9ebb")),
+        "nvidia50" => ("cuda", false, crate::i18n::t("s.083e3aad12")),
+        _ => ("cuda", false, "NVIDIA CUDA Runtime".to_string()),
     };
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -309,9 +301,9 @@ pub fn provision_status(root: &Path) -> Value {
     // Per-variant sizes so the UI can follow the user's selection, not only
     // the recommended package. One catalog fetch is cached for ~5 minutes.
     let variant_defs = [
-        ("nvidia", "NVIDIA（推荐大多数 N 卡）"),
-        ("nvidia50", "NVIDIA 50 系（RTX 50xx）"),
-        ("amd", "AMD / Intel（DirectML）"),
+        ("nvidia", crate::i18n::t("s.4c65a5e25e")),
+        ("nvidia50", crate::i18n::t("s.e7a64d4aaf")),
+        ("amd", "AMD / Intel（DirectML）".to_string()),
     ];
     let mut variants = Vec::with_capacity(3);
     let mut size_hint = 0u64;
@@ -321,20 +313,20 @@ pub fn provision_status(root: &Path) -> Value {
     } else {
         recommended.as_str()
     };
-    for (id, fallback_label) in variant_defs {
+    for (id, fallback_label) in &variant_defs {
         let (sz, lab) = match catalog::resolve_runtime_spec(id, true) {
             Ok(spec) => {
                 let s = spec.size_bytes.max(spec.part.size_bytes);
                 let l = if spec.label.is_empty() {
-                    fallback_label.to_string()
+                    fallback_label.clone()
                 } else {
                     spec.label
                 };
                 (s, l)
             }
-            Err(_) => (0u64, fallback_label.to_string()),
+            Err(_) => (0u64, fallback_label.clone()),
         };
-        if id == rec_key {
+        if *id == rec_key {
             size_hint = sz;
             label = lab.clone();
         }
@@ -365,11 +357,11 @@ pub fn provision_status(root: &Path) -> Value {
         "busy": busy,
         "variants": variants,
         "message": if need_provision {
-            "未检测到完整 Runtime（需含 torch）。可在本页下载补全。"
+            crate::i18n::t("s.2ae4c43ac6")
         } else if !worker_script {
-            "Runtime 就绪，但缺少 tools/realtime_worker.py"
+            "Runtime 就绪，但缺少 tools/realtime_worker.py".to_string()
         } else {
-            "Runtime 就绪"
+            "Runtime 就绪".to_string()
         },
     })
 }
@@ -435,7 +427,7 @@ pub fn run_provision(
         // and every later provision would report 「已有补全任务在进行」.
         let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已有补全任务在进行".into());
+            return Err(crate::i18n::t("s.eca157a71e").into());
         }
         *g = true;
     }
@@ -460,23 +452,23 @@ pub fn run_provision(
         if force {
             let rt = root.join("Runtime");
             if rt.exists() {
-                emit_progress(&app, "prepare", 0, 1, "移除旧 Runtime…");
+                emit_progress(&app, "prepare", 0, 1, &crate::i18n::t("s.7a048346cb"));
                 let _ = fs::remove_dir_all(&rt);
             }
         }
 
-        emit_progress(&app, "catalog", 0, 1, "解析 CNB 运行时清单…");
+        emit_progress(&app, "catalog", 0, 1, &crate::i18n::t("s.bd45f9d523"));
         let spec = catalog::resolve_runtime_spec(&var, true)?;
         let part = &spec.part;
         if part.urls.is_empty() {
-            return Err("清单中没有可用的 Runtime 下载地址。".to_string());
+            return Err(crate::i18n::t("s.33d04e20c0"));
         }
         // The Runtime tar unpacks into python.exe and its libraries — running
         // it unverified is arbitrary code execution. download_request skips
         // verification on an empty hash, and the cache-reuse branch below would
         // also accept whatever is already on disk, so refuse up front.
         if part.sha256.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
-            return Err("运行时清单缺少有效的 sha256，已拒绝下载。".to_string());
+            return Err(crate::i18n::t("s.09dfaea8c0"));
         }
 
         let size = spec.size_bytes.max(part.size_bytes);
@@ -560,7 +552,7 @@ pub fn run_provision(
                         "校验 sha256…（{}）",
                         format_size(done.max(total))
                     ),
-                    "retry" => "网络重试…".to_string(),
+                    "retry" => crate::i18n::t("s.a24d69a01d"),
                     other if other.starts_with("connecting:") => {
                         format!("连接中… · 准备下载约 {}", format_size(total))
                     }
@@ -597,12 +589,12 @@ pub fn run_provision(
         }
 
         if cancel_flag().load(Ordering::SeqCst) {
-            return Err("已取消".to_string());
+            return Err(crate::i18n::t("s.a5ffdc95ee"));
         }
 
         // Several GB of tar takes minutes. A single static line with a bar that
         // never moves is indistinguishable from a hang, so report bytes read.
-        emit_progress(&app, "extract", 0, 1, "解压 Runtime…");
+        emit_progress(&app, "extract", 0, 1, &crate::i18n::t("s.e5d3918de2"));
         {
             let app_x = app.clone();
             extract::extract_runtime_tar_with_progress(&dest_file, &root, &|done, total| {
@@ -615,12 +607,12 @@ pub fn run_provision(
                 );
             })?;
         }
-        emit_progress(&app, "extract", 1, 1, "解压完成");
+        emit_progress(&app, "extract", 1, 1, &crate::i18n::t("s.58a0882f6f"));
 
         write_package_meta(&root, &var, &spec.label, &spec.version)?;
 
         if !paths::runtime_ready(&root) {
-            return Err("解压完成但未检测到 torch，Runtime 可能不完整。".to_string());
+            return Err(crate::i18n::t("s.74aef4af02"));
         }
 
         // 起 worker 并把设备列表读出来。以前这一步只在应用启动时做过一次，
@@ -636,7 +628,7 @@ pub fn run_provision(
                     .and_then(|v| v.as_array())
                     .map(|a| a.len())
                     .unwrap_or(0);
-                crate::logging::shell_log!("补全后预热 worker：读到 {n} 个输入设备");
+                crate::logging::shell_log!(crate::i18n::t("s.5c5f9ed8e4"));
             });
         }
 
@@ -676,7 +668,7 @@ mod tests {
             "Quadro P2000",
             "Tesla T4",
         ] {
-            assert!(looks_like_nvidia(good), "{good} 应该算 N 卡");
+            assert!(looks_like_nvidia(good), &crate::i18n::t("s.ee1fb6f221"));
         }
         for bad in [
             "Intel(R) UHD Graphics 770",
@@ -685,7 +677,7 @@ mod tests {
             "Microsoft Basic Display Adapter",
             "Parsec Virtual Display Adapter",
         ] {
-            assert!(!looks_like_nvidia(bad), "{bad} 不该出现在主显卡候选里");
+            assert!(!looks_like_nvidia(bad), &crate::i18n::t("s.309e44c96e"));
         }
     }
 }

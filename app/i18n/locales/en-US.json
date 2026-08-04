@@ -263,5 +263,6 @@
     "vc": {
       "need_model": "Select a voice model first"
     }
-  }
+  },
+  "s": {}
 }

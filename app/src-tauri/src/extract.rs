@@ -41,7 +41,7 @@ fn check_path_safety(name: &str) -> Result<(), String> {
     let name = name.replace('\\', "/");
     let name = name.trim_start_matches('/');
     if name.is_empty() {
-        return Err("压缩包含空路径".into());
+        return Err(crate::i18n::t("s.70f6a74f68").into());
     }
     if name.len() > 1 && name.as_bytes().get(1) == Some(&b':') {
         return Err(format!("含盘符路径：{name}"));
@@ -200,7 +200,7 @@ pub fn extract_runtime_tar_with_progress(
     }
     if !(candidate.join("python.exe")).is_file() {
         let _ = fs::remove_dir_all(&staging);
-        return Err("解压后未找到 Runtime\\python.exe。请检查 tar 是否完整或重试。".into());
+        return Err(crate::i18n::t("s.b4817b7fdf").into());
     }
 
     let final_rt = dest_root.join("Runtime");
@@ -214,7 +214,7 @@ pub fn extract_runtime_tar_with_progress(
     let _ = fs::remove_dir_all(&staging);
 
     if !(final_rt.join("python.exe")).is_file() {
-        return Err("解压后未找到 Runtime\\python.exe。".into());
+        return Err(crate::i18n::t("s.101fd24d34").into());
     }
     Ok(())
 }

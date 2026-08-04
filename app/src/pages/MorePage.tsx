@@ -9,6 +9,7 @@ import { ALL_LINKS } from "../lib/links";
 import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
+import { t } from "../i18n/t";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
 const SHOW_CONSULT = false;
@@ -65,7 +66,7 @@ export function MorePage({
     setMainGpu(v);
     setGpuMsg("");
     void invoke("config_set", { patch: { main_gpu: v } })
-      .then(() => setGpuMsg("已保存，重新「开启变声」后生效"))
+      .then(() => setGpuMsg(t("s.9249d39bac")))
       .catch((e) => setGpuMsg(`保存失败：${String(e)}`));
   };
 
@@ -73,12 +74,12 @@ export function MorePage({
   // itself; a button that looks like it did nothing gets clicked again.
   const [legacyMsg, setLegacyMsg] = useState<{ panel?: string; webui?: string }>({});
   const openLegacy = async (which: "panel" | "webui") => {
-    setLegacyMsg((m) => ({ ...m, [which]: "正在启动…" }));
+    setLegacyMsg((m) => ({ ...m, [which]: t("s.4fe38132a0") }));
     try {
       const r = await invoke<{ message?: string; url?: string }>(
         which === "panel" ? "legacy_open_panel" : "legacy_open_webui",
       );
-      setLegacyMsg((m) => ({ ...m, [which]: r?.message || "已启动" }));
+      setLegacyMsg((m) => ({ ...m, [which]: r?.message || t("s.0eeffdd75b") }));
       if (which === "webui" && r?.url) {
         // Gradio needs a few seconds to bind the port; opening immediately
         // lands on a connection-refused page.
@@ -106,15 +107,15 @@ export function MorePage({
   const runDiagnostics = async () => {
     // 确定 = 先 bench；取消 = 只打日志与设置。
     const withPerf = window.confirm(
-      "生成诊断包前，是否先跑一次性能测试？\n\n" +
-        "约需一分钟，结果会打进诊断包，便于排查卡顿与延迟。\n" +
-        "需要已选中音色且 Runtime 已就绪。\n\n" +
-        "选「确定」跑测试；选「取消」跳过测试，只打包日志与设置。",
+      t("s.dd3c9cc8db") +
+        t("s.50b717c880") +
+        t("s.a9094fb530") +
+        t("s.8ba72769d6"),
     );
     setBusyMsg(
       withPerf
-        ? "生成诊断包：性能测试进行中（约一分钟）…"
-        : "生成诊断包…",
+        ? t("s.d7ae8f757e")
+        : t("s.56ce781723"),
     );
     try {
       const r = await invoke<{ path?: string; perf_note?: string }>(
@@ -155,33 +156,33 @@ export function MorePage({
   const infer = Number(status?.infer_ms || 0);
   const latency =
     status?.state === "running"
-      ? `${delay} ms（推理 ${infer} ms）`
+      ? t("s.4461ca9594", { v0: delay, v1: infer })
       : status?.worker_alive
-        ? "待命"
+        ? t("s.1a0db8dc43")
         : "—";
 
   const gpus = provision?.gpus?.length
     ? provision.gpus.join(" · ")
-    : "未检测";
+    : t("s.90b74980e4");
   const runtimeLine = provision?.runtime_ready
     ? provision.installed_variant
-      ? `已就绪 · ${provision.installed_variant}`
-      : "已就绪"
-    : "未就绪（需补全）";
+      ? t("s.7dd9064298", { v0: provision.installed_variant })
+      : t("s.f2afde8960")
+    : t("s.5abed96e7d");
 
   return (
     <PagePad>
-      <PageHead title="其他" sub="状态与维护" />
-      <Block title="运行状态">
+      <PageHead title={t("s.1a26edf94a")} sub={t("s.d0b65d2fd2")} />
+      <Block title={t("s.2a4080ad9f")}>
         <Group>
           <ListItem
-            title="RVC Fabric 版本"
+            title={t("s.a8f48b775b")}
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">{version}</span>
             }
           />
           <ListItem
-            title="产品根目录"
+            title={t("s.2a4b19a6b1")}
             right={
               <span
                 className="text-[13.5px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
@@ -192,7 +193,7 @@ export function MorePage({
             }
           />
           <ListItem
-            title="界面来源"
+            title={t("s.fe0eb943d7")}
             right={
               <span
                 className="text-[13.5px] text-[var(--ink-muted)] max-w-[280px] text-right truncate"
@@ -203,18 +204,18 @@ export function MorePage({
             }
           />
           <ListItem
-            title="运行时"
-            titleTip={tip("运行时")}
+            title={t("s.cef8154370")}
+            titleTip={tip(t("s.cef8154370"))}
             desc={
               provision?.recommend_reason ||
-              (status?.product_root ? String(status.product_root) : "产品根目录自动解析")
+              (status?.product_root ? String(status.product_root) : t("s.002dcbcd28"))
             }
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">{runtimeLine}</span>
             }
           />
           <ListItem
-            title="显卡（系统枚举）"
+            title={t("s.f41830a38d")}
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
                 {gpus}
@@ -224,11 +225,11 @@ export function MorePage({
           {/* 只有一块 N 卡时不显示：那时候「选哪块」是个假选择。 */}
           {nvGpus.length > 1 ? (
             <ListItem
-              title="主显卡"
+              title={t("s.6b26feecc1")}
               titleTip={MAIN_GPU_TIP}
               desc={
                 gpuMsg ||
-                "多块 N 卡时指定用哪一块计算。不指定就用排在第一的那块，不一定是最快的"
+                t("s.63d89cdb5c")
               }
               right={
                 <MainGpuPicker
@@ -240,13 +241,13 @@ export function MorePage({
             />
           ) : null}
           <ListItem
-            title="推荐运行时"
+            title={t("s.07a1fa9790")}
             desc={
               provision?.download_supported
                 ? provision.need_provision
-                  ? "可在软件内下载补全"
-                  : "已就绪；可强制重装"
-                : "请用启动器补全"
+                  ? t("s.eb033e6340")
+                  : t("s.1148b67ccc")
+                : t("s.63e829016e")
             }
             right={
               <span className="flex items-center gap-2">
@@ -255,14 +256,14 @@ export function MorePage({
                 </span>
                 {onOpenProvision ? (
                   <Btn onClick={onOpenProvision}>
-                    {provision?.need_provision ? "补全…" : "重装…"}
+                    {provision?.need_provision ? t("s.d5c27cb2ba") : t("s.69f5974b47")}
                   </Btn>
                 ) : null}
               </span>
             }
           />
           <ListItem
-            title="引擎状态"
+            title={t("s.fbb8ddd570")}
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">
                 {status ? statusTitle(status) : "—"}
@@ -271,32 +272,32 @@ export function MorePage({
             }
           />
           <ListItem
-            title="往返延迟"
+            title={t("s.746fcbb99c")}
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">{latency}</span>}
           />
         </Group>
       </Block>
-      <Block title="音频工具">
+      <Block title={t("s.21093d185d")}>
         <Group>
           <ListItem
-            title="人声分离"
-            desc="把歌曲拆成人声和伴奏，训练音色前用它清掉背景音乐或噪音"
-            right={<Btn onClick={() => openTool("separate")}>打开</Btn>}
+            title={t("s.8fd038283b")}
+            desc={t("s.be70b437af")}
+            right={<Btn onClick={() => openTool("separate")}>{t("s.65fc81e161")}</Btn>}
           />
           <ListItem
-            title="训练音色"
-            desc="用一个人的干声素材训一个新音色。需要 N 卡，可能需要几小时，由硬件配置决定。"
-            right={<Btn onClick={() => openTool("train")}>打开</Btn>}
+            title={t("s.ba65bd5595")}
+            desc={t("s.6a71c2fde0")}
+            right={<Btn onClick={() => openTool("train")}>{t("s.65fc81e161")}</Btn>}
           />
           <ListItem
-            title="语音转换"
-            desc="音频变声（官方推理）或文字合成：把录音/文本换成当前音色。"
-            right={<Btn onClick={() => openTool("tts")}>打开</Btn>}
+            title={t("s.6f311c47fe")}
+            desc={t("s.ba7bd6e071")}
+            right={<Btn onClick={() => openTool("tts")}>{t("s.65fc81e161")}</Btn>}
           />
           <ListItem
-            title="下载模型"
-            desc="引擎资源（hubert/rmvpe）+ 训练底模 / 人声分离模型"
-            right={<Btn onClick={() => openExtras()}>打开</Btn>}
+            title={t("s.1252c81119")}
+            desc={t("s.e197a257da")}
+            right={<Btn onClick={() => openExtras()}>{t("s.65fc81e161")}</Btn>}
           />
         </Group>
       </Block>
@@ -304,88 +305,80 @@ export function MorePage({
         open={extrasOpen}
         onClose={() => setExtrasOpen(false)}
         filter="all"
-        title="下载模型"
+        title={t("s.1252c81119")}
         reason={extrasReason}
       />
 
-      <Block title="维护">
+      <Block title={t("s.72527e2f0e")}>
         <Group>
           <ListItem
-            title="生成诊断包"
+            title={t("s.8b720e5330")}
             desc={
-              busyMsg.startsWith("生成诊断包")
+              busyMsg.startsWith(t("s.8b720e5330"))
                 ? busyMsg
-                : "可选先跑约一分钟的性能测试，再打包日志、机型信息与当前设置"
+                : t("s.df51787548")
             }
             right={
-              <Btn onClick={() => void runDiagnostics()}>生成</Btn>
+              <Btn onClick={() => void runDiagnostics()}>{t("s.4aa2306395")}</Btn>
             }
           />
           <ListItem
-            title="打开性能报告文件夹"
+            title={t("s.a5f158e6bc")}
             right={
-              <Btn onClick={() => void invoke("reveal_user_dir", { name: "perf_reports" })}>
-                打开
-              </Btn>
+              <Btn onClick={() => void invoke("reveal_user_dir", { name: "perf_reports" })}>{t("s.65fc81e161")}</Btn>
             }
           />
           <ListItem
-            title="打开日志"
+            title={t("s.bc20b5032f")}
             desc={logFile || undefined}
             right={
-              <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>
-                打开
-              </Btn>
+              <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>{t("s.65fc81e161")}</Btn>
             }
           />
           <ListItem
-            title="打开旧版控制面板"
-            desc={legacyMsg.panel || "高级功能，一般不用"}
+            title={t("s.91e6c9b862")}
+            desc={legacyMsg.panel || t("s.bc94a9c280")}
             right={
-              <Btn onClick={() => void openLegacy("panel")}>打开</Btn>
+              <Btn onClick={() => void openLegacy("panel")}>{t("s.65fc81e161")}</Btn>
             }
           />
           <ListItem
-            title="打开网页版控制台"
-            desc={legacyMsg.webui || "高级功能，一般不用"}
-            right={<Btn onClick={() => void openLegacy("webui")}>打开</Btn>}
+            title={t("s.a636b86646")}
+            desc={legacyMsg.webui || t("s.bc94a9c280")}
+            right={<Btn onClick={() => void openLegacy("webui")}>{t("s.65fc81e161")}</Btn>}
           />
           {/* 「申请专业优化」暂时隐藏（服务还没开）。后端 consult_build 保留，
               开放时把 SHOW_CONSULT 改成 true 就行，不要删代码。 */}
           {SHOW_CONSULT ? (
             <ListItem
-              title="申请专业优化"
-              desc={busyMsg.startsWith("生成咨询包") ? busyMsg : "打包当前音色的配置与档案，我们做针对性调参（不含模型文件）"}
+              title={t("s.dd41f552d6")}
+              desc={busyMsg.startsWith(t("s.1a2edaedf8")) ? busyMsg : t("s.db1fdebf6f")}
               right={
-                <Btn onClick={() => void run("生成咨询包", "consult_build", { note: "" })}>
-                  生成咨询包
-                </Btn>
+                <Btn onClick={() => void run(t("s.1a2edaedf8"), "consult_build", { note: "" })}>{t("s.1a2edaedf8")}</Btn>
               }
             />
           ) : null}
           <ListItem
-            title="强制结束变声引擎"
-            desc="解决卡死"
+            title={t("s.e327258774")}
+            desc={t("s.5258b304cc")}
             right={
               <Btn
                 onClick={() => {
                   void onForceKill?.();
                 }}
-              >
-                结束
-              </Btn>
+              >{t("s.76b9880829")}</Btn>
             }
           />
         </Group>
       </Block>
-      <Block title="仓库与社媒">
+      <Block title={t("s.2bd28fc9c2")}>
         <Group>
           {ALL_LINKS.map((l) => (
             <ListItem
               key={l.title}
               title={l.title}
               desc={l.desc}
-              right={<Btn onClick={() => void openExternal(l.url)}>打开</Btn>}
+              right={<Btn onClick={() => void openExternal(l.url)}>{t("s.65fc81e161")}</Btn>}
             />
           ))}
         </Group>

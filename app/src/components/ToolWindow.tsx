@@ -4,14 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { SeparatePanel } from "./SeparatePanel";
 import { TrainPanel } from "./TrainPanel";
 import { TtsPanel } from "./TtsPanel";
+import { t } from "../i18n/t";
 
 /** 地址里带的 `#/tool/<kind>` —— 主窗口和工具窗口用的是同一份前端。 */
 export type ToolKind = "separate" | "train" | "tts";
 
 const TITLES: Record<ToolKind, string> = {
-  separate: "人声分离",
-  train: "训练音色",
-  tts: "语音转换",
+  separate: t("s.8fd038283b"),
+  train: t("s.ba65bd5595"),
+  tts: t("s.6f311c47fe"),
 };
 
 /**
@@ -87,13 +88,13 @@ function ToolTitleBar({ title }: { title: string }) {
         className="ml-auto flex text-[var(--meta)]"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <ToolWinBtn label="最小化" onClick={() => void win()?.minimize()}>
+        <ToolWinBtn label={t("s.ca8223c5fc")} onClick={() => void win()?.minimize()}>
           —
         </ToolWinBtn>
-        <ToolWinBtn label="最大化" onClick={() => void win()?.toggleMaximize()}>
+        <ToolWinBtn label={t("s.da2d806e5f")} onClick={() => void win()?.toggleMaximize()}>
           □
         </ToolWinBtn>
-        <ToolWinBtn label="关闭" danger onClick={() => void win()?.close()}>
+        <ToolWinBtn label={t("s.6c14bd7f6f")} danger onClick={() => void win()?.close()}>
           ✕
         </ToolWinBtn>
       </div>

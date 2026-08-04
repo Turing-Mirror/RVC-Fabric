@@ -77,7 +77,7 @@ fn release_url(tag: &str, name: &str) -> String {
 fn fallback_blob(variant: &str) -> Value {
     let (label, version, size, sha, name, channel) = match variant {
         "amd" => (
-            "AMD/Intel DirectML",
+            "AMD/Intel DirectML".to_string(),
             "2026.07.21",
             1801268224u64,
             "5d5e4437c70ac1cf368232829381170d5a88f457eed20d14d35b1ef155dd0274",
@@ -85,7 +85,7 @@ fn fallback_blob(variant: &str) -> Value {
             "lfs",
         ),
         "nvidia50" => (
-            "NVIDIA 50 系 CUDA",
+            crate::i18n::t("s.bf312fa098"),
             "2026.07.21",
             6698774016u64,
             "a828e13e23589447f25b16b9314b6d730a1a7701e973613bc97d80a026102489",
@@ -93,7 +93,7 @@ fn fallback_blob(variant: &str) -> Value {
             "release",
         ),
         _ => (
-            "NVIDIA CUDA",
+            "NVIDIA CUDA".to_string(),
             "2026.07.21",
             6077133824u64,
             "d76ac4e8140490bda1abac8df2718bfec95f8a696c8a5ba730a5e7e901421d9b",

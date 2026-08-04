@@ -37,10 +37,12 @@ import {
   tip as glossaryTip,
   type GlossaryTerm,
 } from "./glossary";
+import { setTLocale, t as tStaticExport } from "./t";
 
 export type { LocaleCode, GlossaryTerm };
 export { LOCALES, DEFAULT_LOCALE };
 export { tip } from "./glossary";
+export { t } from "./t";
 
 export type TranslateFn = (
   key: string,
@@ -98,6 +100,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
           setLocaleState(raw);
           setStaticLocale(raw);
           setGlossaryLocale(raw);
+          setTLocale(raw);
         }
       } catch {
         /* browser preview */
@@ -114,6 +117,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLocaleState(code);
     setStaticLocale(code);
     setGlossaryLocale(code);
+    setTLocale(code);
     document.documentElement.lang = code === "zh-CN" ? "zh-CN" : "en";
     try {
       void invoke("config_set", { patch: { ui_locale: code } });
@@ -126,6 +130,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setStaticLocale(locale);
     setGlossaryLocale(locale);
+    setTLocale(locale);
     document.documentElement.lang = locale === "zh-CN" ? "zh-CN" : "en";
   }, [locale]);
 
@@ -169,7 +174,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale, setLocale, t, tMsg, glossary, ready],
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  // Remount the tree when language changes so modules that call `t()` /
+  // `tStatic` without subscribing to context still refresh labels.
+  return (
+    <Ctx.Provider value={value}>
+      <div key={locale} className="contents">
+        {children}
+      </div>
+    </Ctx.Provider>
+  );
 }
 
 export function useI18n(): I18nCtx {
@@ -199,17 +212,15 @@ export function useI18n(): I18nCtx {
 }
 
 /** Non-hook translate for modules that cannot use hooks (engine.ts helpers). */
-let _staticLocale: LocaleCode = DEFAULT_LOCALE;
-
 export function setStaticLocale(code: LocaleCode) {
-  _staticLocale = code;
+  setTLocale(code);
 }
 
 export function tStatic(
   key: string,
   vars?: Record<string, string | number | undefined | null>,
 ): string {
-  return translate(packOf(_staticLocale), fallbackPack(), key, vars);
+  return tStaticExport(key, vars);
 }
 
 /** Hook: glossary for current locale. */

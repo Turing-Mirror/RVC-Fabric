@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n/t";
 
 /** One feed row. Mirrors `plaza::PlazaItem`. */
 export type PlazaItem = {
@@ -57,7 +58,7 @@ function isTauri(): boolean {
 }
 
 export async function fetchPlaza(): Promise<PlazaFeed> {
-  if (!isTauri()) return { ...EMPTY, errors: ["浏览器预览无法联网拉取广场内容"] };
+  if (!isTauri()) return { ...EMPTY, errors: [t("s.bea562b0a7")] };
   return invoke<PlazaFeed>("plaza_fetch");
 }
 

@@ -72,24 +72,31 @@ pub fn safe_model_dir_name(name: &str) -> Result<String, String> {
     Ok(n.chars().take(80).collect())
 }
 
-fn guess_tag(name: &str) -> &'static str {
+fn guess_tag(name: &str) -> String {
     let n = name.to_lowercase();
-    if ["女", "girl", "loli", "萝莉", "少女"]
+    let k_girl = crate::i18n::t("s.26bc84961c");
+    let k_loli = crate::i18n::t("s.2eb8caf80a");
+    let k_shao = crate::i18n::t("s.22d9b9afb9");
+    if [k_girl.as_str(), "girl", "loli", k_loli.as_str(), k_shao.as_str()]
         .iter()
         .any(|k| n.contains(k) || name.contains(k))
     {
-        return "少女音";
+        return crate::i18n::t("s.bacc87084d");
     }
-    if ["男", "boy", "男声", "青年"]
+    let k_boy = crate::i18n::t("s.51625d909c");
+    let k_nan = crate::i18n::t("s.3c689400b4");
+    let k_shu = crate::i18n::t("s.a0c5fa2d9f");
+    if [k_boy.as_str(), "boy", k_nan.as_str(), k_shu.as_str()]
         .iter()
         .any(|k| n.contains(k) || name.contains(k))
     {
-        return "男声";
+        return crate::i18n::t("s.3c689400b4");
     }
-    if name.contains("御姐") {
-        return "御姐音";
+    let k_other = crate::i18n::t("s.b0684a167c");
+    if name.contains(&k_other) {
+        return crate::i18n::t("s.1bf4a01d78");
     }
-    "音色"
+    crate::i18n::t("s.c4301894a2")
 }
 
 fn find_pth(folder: &Path) -> Option<PathBuf> {
@@ -600,9 +607,9 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
             break;
         }
     }
-    let m = found.ok_or_else(|| "未找到该音色".to_string())?;
+    let m = found.ok_or_else(|| crate::i18n::t("s.8cfc8f198c"))?;
     if m.get("missing").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Err("音色文件缺失或不完整".into());
+        return Err(crate::i18n::t("s.01eba6e7b6").into());
     }
     let mut cfg = load_app_config(root);
     cfg.insert(
@@ -725,7 +732,7 @@ fn profile_summary_from_cfg(cfg: &Map<String, Value>) -> String {
         .unwrap_or(0);
     let formant = cfg.get("formant").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let label = if name.is_empty() {
-        "默认（原始参数）".to_string()
+        crate::i18n::t("s.8923a00d0b")
     } else {
         name.to_string()
     };
@@ -789,7 +796,7 @@ pub fn list_index_bindings(root: &Path, model_dir: &str) -> Result<Value, String
 
     let items: Vec<Value> = std::iter::once(json!({
         "path": "",
-        "label": "不用检索库（仅 .pth）",
+        "label": &crate::i18n::t("s.76bf90ae3e"),
         "badge": "",
         "active": active.is_empty(),
     }))
@@ -801,7 +808,7 @@ pub fn list_index_bindings(root: &Path, model_dir: &str) -> Result<Value, String
             .unwrap_or(p)
             .to_string();
         let badge = if path_inside_dir(&pb, &md) {
-            "当前音色目录".to_string()
+            crate::i18n::t("s.a7018f695e")
         } else {
             pb.parent()
                 .map(|x| x.to_string_lossy().into_owned())
@@ -826,20 +833,20 @@ pub fn list_index_bindings(root: &Path, model_dir: &str) -> Result<Value, String
 fn guard_model_dir(root: &Path, md: &Path) -> Result<(), String> {
     let models = paths::models_dir(root);
     let Ok(md_c) = md.canonicalize() else {
-        return Err("音色目录不存在".into());
+        return Err(crate::i18n::t("s.3c07b16355").into());
     };
     let Ok(root_c) = models.canonicalize() else {
-        return Err("models 目录不存在".into());
+        return Err(crate::i18n::t("s.3ba595eced").into());
     };
     if !md_c.starts_with(&root_c) {
-        return Err("路径不在音色库内".into());
+        return Err(crate::i18n::t("s.899c21edd3").into());
     }
     // starts_with is also true when the paths are equal, so without this a
     // delete_voice(models_dir) would recursively wipe the whole library. The UI
     // never passes it today, but this is the most destructive operation in the
     // app and it should not be one bad argument away.
     if md_c == root_c {
-        return Err("不能操作音色库根目录".into());
+        return Err(crate::i18n::t("s.b43921940c").into());
     }
     Ok(())
 }
@@ -953,9 +960,9 @@ pub fn unbind_index(root: &Path, model_dir: &str, index_path: &str) -> Result<Va
 
 pub fn pick_index_file() -> Option<String> {
     rfd::FileDialog::new()
-        .add_filter("特征索引", &["index"])
-        .add_filter("全部", &["*"])
-        .set_title("选择特征索引文件 (.index)")
+        .add_filter(&crate::i18n::t("s.dc66c55a2e"), &["index"])
+        .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
+        .set_title(&crate::i18n::t("s.6832505652"))
         .pick_file()
         .map(|p| p.to_string_lossy().into_owned())
 }
@@ -990,10 +997,10 @@ fn profile_path(model_dir: &Path, profile_id: &str) -> Result<PathBuf, String> {
 
 fn source_label(src: &str) -> String {
     match src {
-        "default" => "原始".into(),
-        "self" => "自建".into(),
-        "import" => "导入".into(),
-        "official" => "官方优化".into(),
+        "default" => crate::i18n::t("s.a55afe4b5f"),
+        "self" => crate::i18n::t("s.b5f0bfe1d8"),
+        "import" => crate::i18n::t("s.60e2bcad85"),
+        "official" => crate::i18n::t("s.291eab062c"),
         other => other.to_string(),
     }
 }
@@ -1031,7 +1038,7 @@ fn apply_profile_to_cfg(model_dir: &str, cfg: &mut Map<String, Value>) {
     let name = prof
         .get("name")
         .and_then(|v| v.as_str())
-        .unwrap_or("档案")
+        .unwrap_or(&crate::i18n::t("s.3ca928cd40"))
         .to_string();
     cfg.insert("_active_profile_name".into(), json!(name));
     for group in ["voice", "fx", "perf"] {
@@ -1055,9 +1062,9 @@ pub fn list_profiles(root: &Path, model_dir: &str) -> Result<Value, String> {
 
     let mut items = vec![json!({
         "id": "",
-        "name": "默认（原始参数）",
+        "name": &crate::i18n::t("s.8923a00d0b"),
         "source": "default",
-        "source_label": "原始",
+        "source_label": &crate::i18n::t("s.a55afe4b5f"),
         "score": null,
         "active": active.is_empty(),
         "desc": "",
@@ -1226,7 +1233,7 @@ pub fn save_current_as_profile(
         }
     }
     let display = if name.trim().is_empty() {
-        "未命名档案"
+        &crate::i18n::t("s.6cdd7fc584")
     } else {
         name.trim()
     };
@@ -1293,7 +1300,7 @@ pub fn delete_profile(root: &Path, model_dir: &str, profile_id: &str) -> Result<
     let md = PathBuf::from(model_dir);
     guard_model_dir(root, &md)?;
     if profile_id.is_empty() {
-        return Err("不能删除默认档案".into());
+        return Err(crate::i18n::t("s.5584cc4752").into());
     }
     let path = profile_path(&md, profile_id)?;
     let _ = fs::remove_file(&path);
@@ -1311,14 +1318,14 @@ pub fn delete_profile(root: &Path, model_dir: &str, profile_id: &str) -> Result<
 
 pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
     let path = rfd::FileDialog::new()
-        .add_filter("配置档案", &["tmvp", "json"])
-        .set_title("导入配置档案")
+        .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp", "json"])
+        .set_title(&crate::i18n::t("s.a49f8d4a05"))
         .pick_file()
-        .ok_or_else(|| "已取消".to_string())?;
+        .ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?;
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut data: Value = serde_json::from_str(&raw).map_err(|e| format!("无效档案: {e}"))?;
     if !data.is_object() {
-        return Err("档案格式无效".into());
+        return Err(crate::i18n::t("s.dab1a19c29").into());
     }
     let fresh_id = || {
         format!(
@@ -1370,11 +1377,11 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
         .unwrap_or("")
         .to_string();
     if pid.is_empty() {
-        return Err("当前是默认参数，没有可导出的档案。请先「另存当前为档案」。".into());
+        return Err(crate::i18n::t("s.fffda47f1e").into());
     }
     let src = profile_path(&md, &pid)?;
     if !src.is_file() {
-        return Err("活动档案文件不存在".into());
+        return Err(crate::i18n::t("s.8af26d69aa").into());
     }
     let name = read_json(&src)
         .get("name")
@@ -1394,10 +1401,10 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
         .collect();
     let dest = rfd::FileDialog::new()
         .set_file_name(format!("{safe}.tmvp"))
-        .add_filter("配置档案", &["tmvp"])
-        .set_title("导出当前档案（可分享）")
+        .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp"])
+        .set_title(&crate::i18n::t("s.217b12a5cb"))
         .save_file()
-        .ok_or_else(|| "已取消".to_string())?;
+        .ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?;
     fs::copy(&src, &dest).map_err(|e| e.to_string())?;
     Ok(json!({ "ok": true, "path": dest.to_string_lossy() }))
 }
@@ -1408,9 +1415,9 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
 
 pub fn pick_import_files() -> Vec<String> {
     rfd::FileDialog::new()
-        .add_filter("音色", &["pth", "index", "zip"])
-        .add_filter("全部", &["*"])
-        .set_title("导入音色…")
+        .add_filter(&crate::i18n::t("s.c4301894a2"), &["pth", "index", "zip"])
+        .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
+        .set_title(&crate::i18n::t("s.54b3625b92"))
         .pick_files()
         .unwrap_or_default()
         .into_iter()
@@ -1433,7 +1440,7 @@ pub fn import_files(
     for p in paths {
         let path = PathBuf::from(p);
         if !path.is_file() {
-            errors.push(json!({"path": p, "error": "文件不存在"}));
+            errors.push(json!({"path": p, "error": &crate::i18n::t("s.ffcf0a1eb0")}));
             continue;
         }
         let ext = path
@@ -1447,7 +1454,7 @@ pub fn import_files(
                 &path,
                 "",
                 "",
-                "音色",
+                &crate::i18n::t("s.c4301894a2"),
                 false, // local user import — never mark as 图灵镜 official
             ) {
                 Ok(info) => models.push(info),
@@ -1461,7 +1468,7 @@ pub fn import_files(
                 let md = current_model_dir
                     .filter(|s| !s.is_empty())
                     .map(PathBuf::from)
-                    .ok_or_else(|| "导入 .index 需要先选中一个可管理音色".to_string());
+                    .ok_or_else(|| crate::i18n::t("s.acaebc442f"));
                 match md {
                     Ok(md) => match guard_model_dir(root, &md)
                         .and_then(|_| ensure_index_in_model_dir(&md, &path))
@@ -1595,7 +1602,7 @@ pub fn rename_voice(root: &Path, model_dir: &str, new_name: &str) -> Result<Valu
     guard_model_dir(root, &md)?;
     let name = new_name.trim();
     if name.is_empty() {
-        return Err("名称不能为空".into());
+        return Err(crate::i18n::t("s.ca898456b2").into());
     }
     let mut side = read_sidecar(&md);
     side.insert("name".into(), json!(name));
@@ -1606,7 +1613,7 @@ pub fn rename_voice(root: &Path, model_dir: &str, new_name: &str) -> Result<Valu
 pub fn promote_legacy(root: &Path, pth_path: &str) -> Result<Value, String> {
     let src = PathBuf::from(pth_path);
     if !src.is_file() {
-        return Err("源 .pth 不存在".into());
+        return Err(crate::i18n::t("s.6f0a06a10f").into());
     }
     import_pth(root, &src)
 }
@@ -1694,32 +1701,32 @@ mod tests {
         // 界面「使用中」是别人，重开变声也用错模型 —— 而随手切一次别的再切
         // 回来就好了，因为那一下会把三个键一起改写。
         let models = vec![
-            model("别人家的音色", "model.pth", "C:\\rvc\\models\\other\\model.pth"),
-            model("我选的音色", "model.pth", "C:\\rvc\\models\\mine\\model.pth"),
+            model(&crate::i18n::t("s.3d9fe9e5d0"), "model.pth", "C:\\rvc\\models\\other\\model.pth"),
+            model(&crate::i18n::t("s.8fd94350c5"), "model.pth", "C:\\rvc\\models\\mine\\model.pth"),
         ];
         let idx = resolve_selected(
             &models,
             "C:\\rvc\\models\\mine\\model.pth", // 全路径，唯一，必须赢
             "model.pth",                        // 文件名，两条都对得上
-            "我选的音色",
+            &crate::i18n::t("s.8fd94350c5"),
         );
-        assert_eq!(idx, 1, "全路径对得上时不能被同名文件抢走");
+        assert_eq!(idx, 1, &crate::i18n::t("s.090dc6f57d"));
     }
 
     #[test]
     fn falls_back_through_file_then_name() {
         let models = vec![
-            model("甲", "a.pth", "/lib/a/a.pth"),
-            model("乙", "b.pth", "/lib/b/b.pth"),
+            model(&crate::i18n::t("s.1b85dd8d61"), "a.pth", "/lib/a/a.pth"),
+            model(&crate::i18n::t("s.3458316756"), "b.pth", "/lib/b/b.pth"),
         ];
         // 路径变了（换了安装目录），文件名还在
         assert_eq!(resolve_selected(&models, "/old/b.pth", "b.pth", ""), 1);
         // 文件也重命名了，只剩显示名
-        assert_eq!(resolve_selected(&models, "/old/x.pth", "x.pth", "乙"), 1);
+        assert_eq!(resolve_selected(&models, "/old/x.pth", "x.pth", &crate::i18n::t("s.3458316756")), 1);
         // 三个都对不上：退回第一条，而不是「未选择模型」
-        assert_eq!(resolve_selected(&models, "/x", "x.pth", "丙"), 0);
+        assert_eq!(resolve_selected(&models, "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")), 0);
         // 一条音色都没有
-        assert_eq!(resolve_selected(&[], "/x", "x.pth", "丙"), -1);
+        assert_eq!(resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")), -1);
     }
 
     #[test]
@@ -1734,7 +1741,7 @@ mod tests {
         // The library root is not — starts_with() alone would have allowed it
         // and delete_voice would have wiped every installed voice.
         let err = guard_model_dir(&root, &models).unwrap_err();
-        assert!(err.contains("根目录"), "got {err}");
+        assert!(err.contains(&crate::i18n::t("s.18755acbbb")), "got {err}");
         // Anything outside stays rejected.
         assert!(guard_model_dir(&root, &root).is_err());
 

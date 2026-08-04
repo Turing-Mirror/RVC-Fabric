@@ -121,7 +121,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
     Some(json!({
         "id": id,
         "name": d.get("name").and_then(|v| v.as_str()).unwrap_or(&id),
-        "tag": d.get("tag").and_then(|v| v.as_str()).unwrap_or("音色"),
+        "tag": d.get("tag").and_then(|v| v.as_str()).unwrap_or(&crate::i18n::t("s.c4301894a2")),
         "version": d.get("version").and_then(|v| v.as_str()).unwrap_or("1"),
         "package_type": d.get("package_type").or_else(|| d.get("type")).and_then(|v| v.as_str()).unwrap_or(""),
         "pack_url": pack_url,
@@ -278,12 +278,12 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                         .unwrap_or(true);
                     let origin_label = if !official {
                         if origin.is_empty() {
-                            "第三方".to_string()
+                            crate::i18n::t("s.4500b5dfc7")
                         } else {
                             format!("第三方 · {origin}")
                         }
                     } else if origin.is_empty() {
-                        "图灵镜".to_string()
+                        crate::i18n::t("s.7c134b6e64")
                     } else {
                         origin
                     };
@@ -451,10 +451,10 @@ pub fn install_voice_pack_zip(
         safe_extract_zip(zip_path, &tmp)?;
         let content = find_content_root(&tmp);
         let pth = find_first(&content, "pth")
-            .ok_or_else(|| "音色包内没有 .pth 文件".to_string())?;
+            .ok_or_else(|| crate::i18n::t("s.41e7454584"))?;
         let size = pth.metadata().map(|m| m.len()).unwrap_or(0);
         if size < MIN_PTH_BYTES {
-            return Err("音色包内 .pth 过小，可能损坏".into());
+            return Err(crate::i18n::t("s.713173a2d7").into());
         }
         // optional pack config
         let pack_cfg = {
@@ -500,7 +500,7 @@ pub fn install_voice_pack_zip(
             pack_cfg
                 .get("tag")
                 .and_then(|v| v.as_str())
-                .unwrap_or("音色")
+                .unwrap_or(&crate::i18n::t("s.c4301894a2"))
                 .to_string()
         } else {
             tag.to_string()
@@ -602,7 +602,7 @@ pub fn install_voice_entry(
     let tag = entry
         .get("tag")
         .and_then(|v| v.as_str())
-        .unwrap_or("音色")
+        .unwrap_or(&crate::i18n::t("s.c4301894a2"))
         .to_string();
     let official = entry
         .get("official")
@@ -700,7 +700,7 @@ pub fn install_voice_entry(
         drop_cancel_flag(&id);
         res?;
         if stage_only {
-            emit("staged", 1, 1, "已下载，待你确认后安装");
+            emit("staged", 1, 1, &crate::i18n::t("s.1245a7db42"));
             return Ok(json!({
                 "staged": true,
                 "voice_id": id,
@@ -708,14 +708,14 @@ pub fn install_voice_entry(
                 "file": zpath.file_name().and_then(|s| s.to_str()).unwrap_or(""),
             }));
         }
-        emit("extract", 0, 1, "正在解压安装…");
+        emit("extract", 0, 1, &crate::i18n::t("s.6b42cff431"));
         let info = install_voice_pack_zip(&root, &zpath, &id, &name, &tag, official)?;
-        emit("done", 1, 1, "安装完成");
+        emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
         return Ok(info);
     }
 
     if pth_url.is_empty() {
-        return Err("音色未配置下载地址".into());
+        return Err(crate::i18n::t("s.5ca65185f2").into());
     }
     // multi-file install
     let vid = safe_model_dir_name(if id.is_empty() { &name } else { &id })?;
@@ -765,7 +765,7 @@ pub fn install_voice_entry(
         Some(progress),
     )?;
     if pth_tmp.metadata().map(|m| m.len()).unwrap_or(0) < MIN_PTH_BYTES {
-        return Err("下载的模型文件过小，可能不是有效 .pth".into());
+        return Err(crate::i18n::t("s.281cb87781").into());
     }
 
     if stage_only {
@@ -791,7 +791,7 @@ pub fn install_voice_entry(
                 );
             }
         }
-        emit("staged", 1, 1, "已下载，待你确认后安装");
+        emit("staged", 1, 1, &crate::i18n::t("s.1245a7db42"));
         return Ok(json!({
             "staged": true,
             "voice_id": id,
@@ -870,7 +870,7 @@ pub fn install_voice_entry(
         official,
         &extra,
     );
-    emit("done", 1, 1, "安装完成");
+    emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
     Ok(info)
 }
 
@@ -942,7 +942,7 @@ pub fn staged_status(root: &Path) -> Value {
 pub fn reveal_staged(root: &Path, voice_id: &str) -> Result<(), String> {
     let dir = staged_dir(root, voice_id)?;
     if !dir.is_dir() {
-        return Err("这个音色还没有下载好的文件".into());
+        return Err(crate::i18n::t("s.0c6c58c683").into());
     }
     crate::shell_extras::reveal(&dir.join("x"))
 }
@@ -966,11 +966,11 @@ pub fn install_staged(
 ) -> Result<Value, String> {
     let id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
-    let tag = entry.get("tag").and_then(|v| v.as_str()).unwrap_or("音色").to_string();
+    let tag = entry.get("tag").and_then(|v| v.as_str()).unwrap_or(&crate::i18n::t("s.c4301894a2")).to_string();
     let official = entry.get("official").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let dir = staged_dir(&root, if id.is_empty() { &name } else { &id })?;
-    let payload = staged_payload(&dir).ok_or("暂存目录里没有可安装的文件")?;
+    let payload = staged_payload(&dir).ok_or(crate::i18n::t("s.361cb27e7b"))?;
 
     let emit = |phase: &str, message: &str| {
         let _ = app.emit(
@@ -979,7 +979,7 @@ pub fn install_staged(
                     "percent": 100, "message": message }),
         );
     };
-    emit("extract", "正在安装…");
+    emit("extract", &crate::i18n::t("s.e0ce99ef5b"));
 
     let is_zip = payload
         .extension()
@@ -994,7 +994,7 @@ pub fn install_staged(
     };
     // 装完就把暂存清掉，不然用户的 User_Data 会慢慢堆满几百 MB 的重复文件。
     let _ = fs::remove_dir_all(&dir);
-    emit("done", "安装完成");
+    emit("done", &crate::i18n::t("s.f423573349"));
     Ok(info)
 }
 
@@ -1121,15 +1121,15 @@ mod tests {
         // 且不含任何能往上跳的成分。
         let root = Path::new("C:\\App");
         for bad in ["../../evil", "a/b", "..\\..\\evil", "./x"] {
-            let d = staged_dir(root, bad).expect("应当被清洗而不是报错");
+            let d = staged_dir(root, bad).expect(&crate::i18n::t("s.ab16acefd8"));
             let s = d.to_string_lossy().to_string();
             assert!(s.contains("downloads"), "{bad:?} -> {s}");
-            assert!(!s.contains(".."), "{bad:?} 逃出了 downloads: {s}");
+            assert!(!s.contains(".."), &crate::i18n::t("s.8d31697e4e"));
             assert!(d.starts_with(root), "{bad:?} -> {s}");
         }
         // 洗完啥也不剩的必须报错，否则会建一个空名字的目录。
         for bad in ["", "..", "   ", "..."] {
-            assert!(staged_dir(root, bad).is_err(), "{bad:?} 应当被拒绝");
+            assert!(staged_dir(root, bad).is_err(), &crate::i18n::t("s.0d53652ff2"));
         }
     }
 
@@ -1138,11 +1138,11 @@ mod tests {
         let base = std::env::temp_dir().join("rvcf-staged-payload");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
-        assert!(staged_payload(&base).is_none(), "空目录没有可安装的东西");
+        assert!(staged_payload(&base).is_none(), &crate::i18n::t("s.1cfc5eb379"));
 
         std::fs::write(base.join("readme.txt"), b"x").unwrap();
         std::fs::write(base.join("m.index"), b"x").unwrap();
-        assert!(staged_payload(&base).is_none(), "只有 index 装不了");
+        assert!(staged_payload(&base).is_none(), &crate::i18n::t("s.f5c9f3fce5"));
 
         std::fs::write(base.join("m.pth"), b"x").unwrap();
         assert!(staged_payload(&base).unwrap().ends_with("m.pth"));
@@ -1165,7 +1165,7 @@ mod tests {
         let st = staged_status(&base);
         let o = st.as_object().unwrap();
         assert!(o.contains_key("ready"));
-        assert!(!o.contains_key("empty"), "空目录不该显示成「待安装」");
+        assert!(!o.contains_key("empty"), &crate::i18n::t("s.20ac2e2a0c"));
         assert_eq!(st["ready"]["file"], json!("a.pth"));
         assert_eq!(st["ready"]["size_bytes"], json!(4));
         let _ = std::fs::remove_dir_all(&base);
@@ -1181,7 +1181,7 @@ mod tests {
         std::fs::write(d.join("a.pth"), b"x").unwrap();
         assert!(discard_staged(&base, "v1").is_ok());
         assert!(!d.exists());
-        assert!(discard_staged(&base, "v1").is_ok(), "再删一次也不该报错");
+        assert!(discard_staged(&base, "v1").is_ok(), &crate::i18n::t("s.86cbf0fb3f"));
         let _ = std::fs::remove_dir_all(&base);
     }
 }

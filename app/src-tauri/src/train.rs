@@ -189,19 +189,19 @@ pub struct TrainReq {
 pub fn validate_name(name: &str) -> Result<(), String> {
     let n = name.trim();
     if n.is_empty() {
-        return Err("音色名不能为空".into());
+        return Err(crate::i18n::t("s.0dabaf60ef").into());
     }
     if n.len() > 60 {
-        return Err("音色名太长了".into());
+        return Err(crate::i18n::t("s.950d0895e7").into());
     }
     if n.chars().any(|c| "\\/:*?\"<>|".contains(c)) {
-        return Err("音色名不能含 \\ / : * ? \" < > | 这些字符".into());
+        return Err(crate::i18n::t("s.2633fe7d2f").into());
     }
     if n == "mute" {
-        return Err("mute 是保留名字，换一个".into());
+        return Err(crate::i18n::t("s.2a330f81d4").into());
     }
     if n.starts_with('.') {
-        return Err("音色名不能以点开头".into());
+        return Err(crate::i18n::t("s.09d3c05d6b").into());
     }
     Ok(())
 }
@@ -212,7 +212,7 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
         return Err("Runtime 未就绪，请先补全运行环境".into());
     }
     if !worker_script(root).is_file() {
-        return Err("缺少 tools/train_worker.py，安装不完整".into());
+        return Err(crate::i18n::t("s.5164f3e0db").into());
     }
     if !SAMPLE_RATES.contains(&req.sample_rate.as_str()) {
         return Err(format!("不支持的采样率：{}", req.sample_rate));
@@ -229,15 +229,15 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
         .join("hubert_base.pt")
         .is_file()
     {
-        return Err("缺少 hubert_base.pt，请先补全引擎资源".into());
+        return Err(crate::i18n::t("s.c2b2787278").into());
     }
     if !root.join("logs").join("mute").join("0_gt_wavs").is_dir() {
-        return Err("缺少 logs/mute 静音样本，安装不完整".into());
+        return Err(crate::i18n::t("s.625da2c547").into());
     }
     // resume 的时候数据集可以不在了 —— 切片已经在实验目录里，原始素材删掉也无妨。
     let have_slices = count_dir(&exp_root(root).join(&req.exp).join("1_16k_wavs")) > 0;
     if !(req.resume && have_slices) && !Path::new(&req.dataset).is_dir() {
-        return Err("请先选好数据集目录".into());
+        return Err(crate::i18n::t("s.6c4b38602a").into());
     }
     Ok(())
 }
@@ -247,7 +247,7 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已经有一个训练在跑了".into());
+            return Err(crate::i18n::t("s.fce4b463c1").into());
         }
         *g = true;
     }
@@ -288,7 +288,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
     )
     .map_err(|e| format!("写请求文件失败：{e}"))?;
 
-    let py = paths::runtime_python(root).ok_or("找不到 Runtime\\python.exe")?;
+    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let logdir = paths::logs_dir(root);
     let _ = std::fs::create_dir_all(&logdir);
     let errfile = std::fs::OpenOptions::new()
@@ -316,7 +316,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
 
     let mut child: Child = cmd.spawn().map_err(|e| format!("起不来训练进程：{e}"))?;
     *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child.id());
-    let stdout = child.stdout.take().ok_or("拿不到训练进程的输出")?;
+    let stdout = child.stdout.take().ok_or(crate::i18n::t("s.c73d43b29b"))?;
 
     let mut done: Option<Value> = None;
     let mut fail: Option<String> = None;
@@ -324,7 +324,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         if cancel_flag().load(Ordering::SeqCst) {
             kill_tree(child.id());
             let _ = child.wait();
-            return Err("已取消".into());
+            return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue; // 不是协议行（tqdm 之类），忽略
@@ -334,7 +334,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
                 fail = Some(
                     v.get("message")
                         .and_then(|x| x.as_str())
-                        .unwrap_or("训练失败")
+                        .unwrap_or(&crate::i18n::t("s.60a21a8105"))
                         .to_string(),
                 )
             }
@@ -346,7 +346,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
 
     let st = child.wait().map_err(|e| format!("等训练进程失败：{e}"))?;
     if cancel_flag().load(Ordering::SeqCst) {
-        return Err("已取消".into());
+        return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
     if let Some(e) = fail {
         return Err(e);
@@ -358,10 +358,10 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
             req.exp.trim()
         ));
     }
-    let d = done.ok_or("训练进程结束了但没报告结果")?;
+    let d = done.ok_or(crate::i18n::t("s.7dc4ea39fd"))?;
     // 预处理/特征提取可能在 TEMP 落中间文件。
     let stats = crate::paths::clean_temps(root);
-    crate::paths::log_clean_stats("训练后", root, &stats);
+    crate::paths::log_clean_stats(&crate::i18n::t("s.4546433411"), root, &stats);
     Ok(json!({
         "ok": true,
         "weights": d.get("weights").cloned().unwrap_or(Value::Null),
@@ -379,7 +379,7 @@ mod tests {
         for bad in ["", "  ", "a/b", "a\\b", "c:d", "x?y", "*", ".hidden", "mute"] {
             assert!(validate_name(bad).is_err(), "should reject {bad:?}");
         }
-        for ok in ["小明", "my voice", "voice-2026_v2"] {
+        for ok in [&crate::i18n::t("s.6ca6738e54"), "my voice", "voice-2026_v2"] {
             assert!(validate_name(ok).is_ok(), "should accept {ok:?}");
         }
     }
@@ -390,15 +390,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("assets").join("pretrained_v2");
         std::fs::create_dir_all(&d).unwrap();
-        assert!(!pretrained_ready(&base, "48k"), "空目录不该算就绪");
+        assert!(!pretrained_ready(&base, "48k"), &crate::i18n::t("s.f7b505e766"));
 
         let big = vec![0u8; 10_000_001];
         std::fs::write(d.join("f0G48k.pth"), &big).unwrap();
-        assert!(!pretrained_ready(&base, "48k"), "只有 G 没有 D 训不起来");
+        assert!(!pretrained_ready(&base, "48k"), &crate::i18n::t("s.5b06a8fa54"));
 
         std::fs::write(d.join("f0D48k.pth"), &big).unwrap();
         assert!(pretrained_ready(&base, "48k"));
-        assert!(!pretrained_ready(&base, "40k"), "别的采样率不该跟着变就绪");
+        assert!(!pretrained_ready(&base, "40k"), &crate::i18n::t("s.575b2cd0cf"));
         let _ = std::fs::remove_dir_all(&base);
     }
 
@@ -421,16 +421,16 @@ mod tests {
         let base = std::env::temp_dir().join("rvcf-train-exps");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("logs").join("mute")).unwrap();
-        std::fs::create_dir_all(base.join("logs").join("小明").join("1_16k_wavs")).unwrap();
+        std::fs::create_dir_all(base.join("logs").join(&crate::i18n::t("s.6ca6738e54")).join("1_16k_wavs")).unwrap();
         std::fs::write(
-            base.join("logs").join("小明").join("1_16k_wavs").join("a.wav"),
+            base.join("logs").join(&crate::i18n::t("s.6ca6738e54")).join("1_16k_wavs").join("a.wav"),
             b"x",
         )
         .unwrap();
 
         let exps = experiments(&base);
         assert_eq!(exps.len(), 1);
-        assert_eq!(exps[0]["name"], json!("小明"));
+        assert_eq!(exps[0]["name"], json!(crate::i18n::t("s.6ca6738e54")));
         assert_eq!(exps[0]["slices"], json!(1));
         assert_eq!(exps[0]["resumable"], json!(true));
         let _ = std::fs::remove_dir_all(&base);

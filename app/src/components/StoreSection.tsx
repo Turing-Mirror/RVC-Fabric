@@ -15,6 +15,7 @@ import {
 } from "../lib/voices";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import { t } from "../i18n/t";
 
 /**
  * 社区音色。原来是模型页上弹出来的一个对话框，现在是广场的第一块。
@@ -179,13 +180,13 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     // 难查得多。
     const map = new Map<string, StoreVoice[]>();
     for (const v of list) {
-      const s = (v.series || "").trim() || "其他";
+      const s = (v.series || "").trim() || t("s.1a26edf94a");
       if (!map.has(s)) map.set(s, []);
       map.get(s)!.push(v);
     }
     return [...map.entries()].sort((a, b) => {
-      if (a[0] === "其他") return 1;
-      if (b[0] === "其他") return -1;
+      if (a[0] === t("s.1a26edf94a")) return 1;
+      if (b[0] === t("s.1a26edf94a")) return -1;
       return a[0].localeCompare(b[0], "zh");
     });
   }, [grouping, list]);
@@ -272,21 +273,21 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     if (v.installed || running.includes(v.id) || queued.includes(v.id)) return;
     if (v.official !== false && !officialAck) {
       const ok = window.confirm(
-        "音色使用须知\n\n" +
-          "音色模型由声音素材训练而来，相关权利属于原声权利人。\n" +
-          "请勿用于冒充他人、欺诈、造谣或其他侵害他人权益的用途；\n" +
-          "商用前请自行确认授权。\n\n" +
-          "继续安装即表示您已了解并同意上述内容。",
+        t("s.9a9349a407") +
+          t("s.0ea68258a8") +
+          t("s.f6453bbaae") +
+          t("s.8ab59cc845") +
+          t("s.63a937a39e"),
       );
       if (!ok) return;
       setOfficialAck(true);
     }
     if (v.official === false && !thirdAck) {
       const ok = window.confirm(
-        "第三方音色免责声明\n\n" +
-          "该音色来自第三方社区，图灵镜不对其安全性与质量做任何保证。\n" +
-          "请仅从您信任的来源进行下载。\n\n" +
-          "继续安装即表示您知晓并愿意承担相关风险。",
+        t("s.ba1368fee3") +
+          t("s.1229f8d52c") +
+          t("s.60d30d777c") +
+          t("s.6c908a4301"),
       );
       if (!ok) return;
       setThirdAck(true);
@@ -320,7 +321,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             setQ(e.target.value);
             setPage(1);
           }}
-          placeholder="搜索音色 / 标签 / 作者…"
+          placeholder={t("s.87eb0743be")}
           className="min-w-[200px] flex-1 max-w-[320px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
         />
         <SegmentControl<Source>
@@ -330,9 +331,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             setPage(1);
           }}
           options={[
-            { id: "all", label: "全部" },
-            { id: "official", label: "图灵镜源" },
-            { id: "thirdparty", label: "第三方" },
+            { id: "all", label: t("s.778fc8f994") },
+            { id: "official", label: t("s.ef00eb8f3b") },
+            { id: "thirdparty", label: t("s.4500b5dfc7") },
           ]}
         />
         <SegmentControl<Grouping>
@@ -342,8 +343,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             setPage(1);
           }}
           options={[
-            { id: "time", label: "按时间" },
-            { id: "series", label: "按系列" },
+            { id: "time", label: t("s.3d136b7951") },
+            { id: "series", label: t("s.1ae90bfb23") },
           ]}
         />
         <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
@@ -355,15 +356,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               setPage(1);
             }}
             className="accent-[var(--accent)]"
-          />
-          只看未安装
-        </label>
+          />{t("s.85b3f0512b")}</label>
       </div>
 
       {source !== "official" ? (
-        <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">
-          第三方音色未经图灵镜官方审核，请自行甄别来源可靠性，切勿盲目安装来路不明的音色。
-        </div>
+        <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">{t("s.7fe9bcf336")}</div>
       ) : null}
 
       {err || progress ? (
@@ -381,11 +378,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                 void cancelStoreDownload();
                 setRunning([]);
                 setQueued([]);
-                setProgress("已取消");
+                setProgress(t("s.a5ffdc95ee"));
               }}
-            >
-              取消下载
-            </Btn>
+            >{t("s.7115f2e29d")}</Btn>
           ) : null}
         </div>
       ) : null}
@@ -419,7 +414,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                   >
                     <span className="font-semibold text-[14px]">{series}</span>
                     <span className="text-[12px] text-[var(--meta)]">
-                      {voices.length} 个 · {openS ? "收起" : "展开"}
+                      {voices.length} 个 · {openS ? t("s.5d5815647c") : t("s.b0e24833f7")}
                     </span>
                   </button>
                   {openS ? (
@@ -467,20 +462,14 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           <Btn
             disabled={pageClamped <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            上一页
-          </Btn>
-          <span className="tabular-nums">
-            第 <b className="text-[var(--ink)]">{pageClamped}</b> /{" "}
+          >{t("s.b41561d807")}</Btn>
+          <span className="tabular-nums">{t("s.dae828fe4f")}<b className="text-[var(--ink)]">{pageClamped}</b> /{" "}
             <b className="text-[var(--ink)]">{totalPages}</b> 页 · 共{" "}
-            <b className="text-[var(--ink)]">{list.length}</b> 个
-          </span>
+            <b className="text-[var(--ink)]">{list.length}</b>{t("s.f7b2a6ee68")}</span>
           <Btn
             disabled={pageClamped >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            下一页
-          </Btn>
+          >{t("s.67a246a344")}</Btn>
         </div>
       ) : null}
     </div>
@@ -490,7 +479,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 function Empty({ loading }: { loading: boolean }) {
   return (
     <div className="text-[13px] text-[var(--meta)] py-10 text-center">
-      {loading ? "读取中…" : "暂无音色条目。检查网络后点右上角「刷新」。"}
+      {loading ? t("s.f950213ab7") : t("s.83bc4b2a5f")}
     </div>
   );
 }
@@ -530,7 +519,7 @@ function VoiceCard({
     return /^https?:\/\//i.test(raw) ? raw : "";
   })();
   const showImg = Boolean(coverHttp) && !imgFailed;
-  const meta = [v.tag, v.author ? `作者 : ${v.author}` : "", v.size_label]
+  const meta = [v.tag, v.author ? t("s.7feea73fa3", { v0: v.author }) : "", v.size_label]
     .filter(Boolean)
     .join(" · ");
 
@@ -551,12 +540,10 @@ function VoiceCard({
           <span>{(v.name || v.id || "?").slice(0, 4)}</span>
         )}
         {v.installed ? (
-          <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">
-            已安装
-          </span>
+          <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.eb88ff57c9")}</span>
         ) : null}
         <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--meta)] drop-shadow">
-          {v.origin_label || (v.official === false ? "第三方" : "图灵镜")}
+          {v.origin_label || (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"))}
         </span>
       </div>
       <div className="mt-2 text-[13.5px] leading-snug truncate" title={v.name}>
@@ -570,21 +557,19 @@ function VoiceCard({
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
         {v.installed ? (
           <Btn on disabled>
-            已安装
+            {t("s.eb88ff57c9")}
           </Btn>
         ) : staged ? (
-          // 第三方下完不自动装：先给「查看」让用户自己开资源管理器看文件、
-          // 要删也在那儿删，确认没问题再点「安装」。
           <>
             <Btn primary disabled={busy} onClick={onInstallStaged}>
-              {busy ? "安装中…" : "安装"}
+              {busy ? t("s.b2c6913616") : t("s.087db63ab1")}
             </Btn>
-            <Btn onClick={onView}>查看</Btn>
-            <Btn onClick={onDiscard}>删除</Btn>
+            <Btn onClick={onView}>{t("s.f7acefd2d4")}</Btn>
+            <Btn onClick={onDiscard}>{t("s.3755f56f2f")}</Btn>
           </>
         ) : (
           <Btn primary disabled={busy || queued} onClick={onInstall}>
-            {busy ? "下载中…" : queued ? "待下载" : "下载"}
+            {busy ? t("s.65188d08a2") : queued ? t("s.531e3e438f") : t("s.2b9d013177")}
           </Btn>
         )}
       </div>

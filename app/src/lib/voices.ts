@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n/t";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -119,7 +120,7 @@ export async function currentVoice() {
       model: null,
       pitch: 0,
       formant: 0,
-      profile_summary: "无",
+      profile_summary: t("s.72077749f7"),
       index: 0,
       total: 0,
     };
@@ -244,7 +245,7 @@ export async function fetchStoreCatalog(preferRemote = true) {
       source: "demo",
       voices: [],
       thirdparty_voices: [],
-      fetch_error: "浏览器预览无法拉清单",
+      fetch_error: t("s.d15a7a3da1"),
     } satisfies StoreCatalog;
   }
   return invoke<StoreCatalog>("store_catalog", { preferRemote });

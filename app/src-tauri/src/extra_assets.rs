@@ -377,7 +377,7 @@ pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已经有一个下载在跑了".into());
+            return Err(crate::i18n::t("s.42b898eb36").into());
         }
         *g = true;
     }
@@ -448,7 +448,7 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
     let _ = app.emit(
         "extra-progress",
         json!({ "key": key, "phase": "done", "done": total.max(1),
-                "total": total.max(1), "message": "下载完成" }),
+                "total": total.max(1), "message": &crate::i18n::t("s.4bbcf94739") }),
     );
     Ok(json!({ "ok": true, "dest": dir.to_string_lossy() }))
 }
@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn urls_default_to_the_release_attachment() {
         let blob = json!({
-            "label": "人声分离模型",
+            "label": &crate::i18n::t("s.f6bccbff47"),
             "dest": "assets/pymss",
             "release_tag": "pymss",
             "files": [{"name": "a.ckpt", "sha256": sha('a'), "size_bytes": 10}]

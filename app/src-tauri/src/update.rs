@@ -219,17 +219,17 @@ pub fn apply_gui_patch(
     cancel: Arc<AtomicBool>,
 ) -> Result<PathBuf, String> {
     if url.is_empty() {
-        return Err("更新地址为空".into());
+        return Err(crate::i18n::t("s.099b3eb863").into());
     }
     // download_file skips verification when the expected hash is empty, so an
     // absent sha256 in the catalog would mean "apply whatever this URL
     // returns" — for code that becomes the UI. Refuse instead of trusting the
     // feed to always be well-formed.
     if sha256.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
-        return Err("更新包缺少有效的 sha256，已拒绝应用".into());
+        return Err(crate::i18n::t("s.a6af760282").into());
     }
     let target = ui_assets::external_dir()
-        .ok_or("找不到可替换的 frontend 目录，本次安装无法热更界面")?;
+        .ok_or(crate::i18n::t("s.6462f5c407"))?;
 
     let cache = paths::update_cache(root);
     std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
@@ -245,7 +245,7 @@ pub fn apply_gui_patch(
     let payload = single_child_dir(&stage).unwrap_or_else(|| stage.clone());
     if !payload.join("index.html").is_file() {
         let _ = std::fs::remove_dir_all(&stage);
-        return Err("更新包里没有 index.html，已放弃应用".into());
+        return Err(crate::i18n::t("s.f0098a67e2").into());
     }
 
     // Keep the previous UI next to the new one until the swap succeeds.
@@ -340,7 +340,7 @@ mod tests {
         let cat = real_catalog("1.3.4", "gui_patch", "https://x/p.zip");
         // 界面已经打到 1.3.4，exe 仍是 1.3.3
         let r = decide(&cat, "1.3.4", "1.3.3");
-        assert_eq!(r["available"], false, "补丁装过了还提示 = 无限循环");
+        assert_eq!(r["available"], false, &crate::i18n::t("s.8cdca7ff61"));
     }
 
     /// exe 太老、装不了目标版本时，不该让用户去下一个装不上的包。
@@ -423,7 +423,7 @@ pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
     // feature. Say so plainly instead of failing with a plugin error.
     let updater = app
         .updater()
-        .map_err(|_| "尚未配置更新签名密钥，请到发布页手动下载新版本".to_string())?;
+        .map_err(|_| crate::i18n::t("s.6a3b354477"))?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         return Ok(json!({"available": false, "local": APP_VERSION}));
     };

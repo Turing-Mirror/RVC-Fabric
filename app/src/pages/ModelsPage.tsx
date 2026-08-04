@@ -5,6 +5,7 @@ import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
+import { t } from "../i18n/t";
 import {
   bindIndex,
   colsForWidth,
@@ -84,12 +85,12 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   );
 
   const statusSub = useMemo(() => {
-    if (!models.length) return "共 0 个音色";
+    if (!models.length) return t("s.b4ac696046");
     if (query.trim() && view.length !== models.length) {
-      return `共 ${models.length} 个 · 匹配 ${view.length} 个`;
+      return t("s.e5323dcb69", { v0: models.length, v1: view.length });
     }
     const cur = selected?.name || models[0]?.name || "—";
-    return `共 ${models.length} 个音色 · 当前使用：${cur}`;
+    return t("s.425fb93e79", { v0: models.length, v1: cur });
   }, [models, query, view.length, selected]);
 
   const reload = useCallback(async () => {
@@ -164,7 +165,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
 
   const onUse = async (m: VoiceModel) => {
     if (m.missing) {
-      setMsg("这个音色的模型文件缺失或不完整，请重新下载或修复。");
+      setMsg(t("s.314a72cba4"));
       return;
     }
     setBusy(true);
@@ -207,28 +208,26 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
     !!selected.path &&
     !selected.missing;
   const blockReason = !selected
-    ? "还没有选择音色。"
+    ? t("s.279450164a")
     : selected.missing
-      ? "这个音色的模型文件缺失或不完整，请重新下载或修复，先修好或删除后再绑定。"
+      ? t("s.8f61254fa2")
       : promotable
-        ? "旧版单文件音色：转为「可管理音色」后，即可绑定检索库与预设。"
+        ? t("s.57da23c608")
         : !manageable
-          ? "这个音色不支持绑定。"
+          ? t("s.3620fe63a3")
           : "";
 
   return (
     <PagePad>
       <PageHead
-        title="音色目录"
+        title={t("s.0d63fa301f")}
         sub={statusSub}
         actions={
           <>
             {/* 社区音色搬到广场了（那边是整页，放得下封面网格；这里的
                 对话框最宽 720px，只塞得下一列文字行）。入口留着 —— 用户
                 找音色的第一反应是来模型页，不该让他自己猜要去广场。 */}
-            <Btn primary onClick={() => onOpenPlaza?.()}>
-              社区音色
-            </Btn>
+            <Btn primary onClick={() => onOpenPlaza?.()}>{t("s.b2be174f0f")}</Btn>
             <Btn
               disabled={busy}
               onClick={async () => {
@@ -240,29 +239,23 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   }
                   await reload();
                 } catch (e) {
-                  if (String(e) !== "已取消") setMsg(String(e));
+                  if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
                 } finally {
                   setBusy(false);
                 }
               }}
-            >
-              导入音色…
-            </Btn>
+            >{t("s.54b3625b92")}</Btn>
             <Btn
               onClick={async () => {
                 await reload();
-                setMsg("已刷新");
+                setMsg(t("s.58b4af2771"));
               }}
-            >
-              刷新
-            </Btn>
+            >{t("s.38108eaa1d")}</Btn>
             <Btn
               onClick={() => {
                 void openModelsDir().catch((e) => setMsg(String(e)));
               }}
-            >
-              打开目录
-            </Btn>
+            >{t("s.031c105578")}</Btn>
           </>
         }
       />
@@ -278,7 +271,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索音色名称或标签…"
+            placeholder={t("s.fc3bad4cea")}
             className="inline-flex min-w-[230px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           />
           <span className="ml-auto">
@@ -286,9 +279,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
               value={sort}
               onChange={setSort}
               options={[
-                { id: "default", label: "默认" },
-                { id: "name", label: "名称" },
-                { id: "index", label: "检索库" },
+                { id: "default", label: t("s.c8d09cf955") },
+                { id: "name", label: t("s.1be7ae4fc2") },
+                { id: "index", label: t("s.225f6a39ca") },
               ]}
             />
           </span>
@@ -302,9 +295,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
           }}
         >
           {!models.length ? (
-            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              还没有音色~ 点「社区音色」去广场下载，或点「导入音色」添加本地音色。
-            </div>
+            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
               没有找到匹配「{query}」的音色，清空搜索即可查看全部。
@@ -333,39 +324,29 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                       <span>{(v.name || "?").slice(0, 4)}</span>
                     )}
                     {cur ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">
-                        使用中
-                      </span>
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">
-                        ✓ 检索库
-                      </span>
+                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                     {v.missing ? (
-                      <span className="absolute left-2.5 top-2.5 text-[11px] text-[#c44]">
-                        缺失
-                      </span>
+                      <span className="absolute left-2.5 top-2.5 text-[11px] text-[#c44]">{t("s.2fe9b75856")}</span>
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
-                    {v.tag || "音色"}
+                    {v.tag || t("s.c4301894a2")}
                   </div>
                   <div className="text-[14.5px] font-semibold mt-0.5 truncate">
                     {v.name}
                   </div>
                   <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
-                    {v.author ? `作者 : ${v.author}` : "作者 : —"}
+                    {v.author ? t("s.7feea73fa3", { v0: v.author }) : t("s.2af26573b0")}
                   </div>
                   <div className="mt-2.5">
                     {cur ? (
-                      <Btn on uw disabled>
-                        使用中
-                      </Btn>
+                      <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
                     ) : (
-                      <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>
-                        使用
-                      </Btn>
+                      <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
                     )}
                   </div>
                 </div>
@@ -379,9 +360,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
             <Btn
               disabled={pageClamped <= 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              上一页
-            </Btn>
+            >{t("s.b41561d807")}</Btn>
             <span>
               第{" "}
               <b className="text-[var(--ink)] font-semibold">
@@ -396,17 +375,15 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
             <Btn
               disabled={pageClamped >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            >
-              下一页
-            </Btn>
+            >{t("s.67a246a344")}</Btn>
           </div>
         ) : null}
       </Block>
 
       <Block
-        title="检索特征库 (.index)"
-        titleTip={tip("检索库")}
-        note={manageable ? "可选绑定 · 提升音色还原度" : undefined}
+        title={t("s.713782084c")}
+        titleTip={tip(t("s.225f6a39ca"))}
+        note={manageable ? t("s.22b8661995") : undefined}
         action={
           manageable ? (
             <Btn
@@ -416,12 +393,10 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   setIndexItems(r.items || []);
                   await reload();
                 } catch (e) {
-                  if (String(e) !== "已取消") setMsg(String(e));
+                  if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
                 }
               }}
-            >
-              绑定 index 文件…
-            </Btn>
+            >{t("s.8f84a93f91")}</Btn>
           ) : undefined
         }
       >
@@ -435,14 +410,12 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                     try {
                       await promoteLegacy(selected!.path);
                       await reload();
-                      setMsg("已转为可管理音色");
+                      setMsg(t("s.1784a97067"));
                     } catch (e) {
                       setMsg(String(e));
                     }
                   }}
-                >
-                  转为可管理音色
-                </Btn>
+                >{t("s.4e504ca0d3")}</Btn>
               </div>
             ) : null}
           </div>
@@ -456,9 +429,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                 right={
                   <>
                     {it.active ? (
-                      <Btn on uw disabled>
-                        使用中
-                      </Btn>
+                      <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
                     ) : (
                       <Btn
                         uw
@@ -467,9 +438,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                           setIndexItems(r.items || []);
                           await reload();
                         }}
-                      >
-                        使用
-                      </Btn>
+                      >{t("s.0e2d3a3c09")}</Btn>
                     )}
                     {it.path && !it.active ? (
                       <Btn
@@ -478,9 +447,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                           setIndexItems(r.items || []);
                           await reload();
                         }}
-                      >
-                        解绑
-                      </Btn>
+                      >{t("s.80d59b5959")}</Btn>
                     ) : null}
                   </>
                 }
@@ -491,8 +458,8 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
       </Block>
 
       <Block
-        title="配置档案"
-        note="可为音色保存多套参数预设（音高/音效/性能），一键切换，也能导出分享、导入他人预设。"
+        title={t("s.5ec6f626c3")}
+        note={t("s.0096454995")}
       >
         {!manageable ? (
           <div className="text-[13px] text-[var(--meta)]">{blockReason}</div>
@@ -508,9 +475,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   right={
                     <>
                       {p.active ? (
-                        <Btn on uw disabled>
-                          使用中
-                        </Btn>
+                        <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
                       ) : (
                         <Btn
                           uw
@@ -558,16 +523,14 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                               });
                             }
                           }}
-                        >
-                          使用
-                        </Btn>
+                        >{t("s.0e2d3a3c09")}</Btn>
                       )}
                       {p.id ? (
                         <Btn
                           onClick={async () => {
                             if (
                               !window.confirm(
-                                `确认删除预设「${p.name}」？该操作不可撤销。`,
+                                t("s.b8863a5222", { v0: p.name }),
                               )
                             )
                               return;
@@ -575,9 +538,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                             const pr = await listProfiles(selected!.dir);
                             setProfiles(pr.items || []);
                           }}
-                        >
-                          删除
-                        </Btn>
+                        >{t("s.3755f56f2f")}</Btn>
                       ) : null}
                     </>
                   }
@@ -588,15 +549,13 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   <>
                     <Btn
                       onClick={async () => {
-                        const name = window.prompt("档案名称", "我的档案");
+                        const name = window.prompt(t("s.6b863e8f98"), t("s.b0bef96a4b"));
                         if (name == null) return;
                         await saveProfile(selected!.dir, name);
                         const pr = await listProfiles(selected!.dir);
                         setProfiles(pr.items || []);
                       }}
-                    >
-                      保存当前参数为新预设
-                    </Btn>
+                    >{t("s.e5e9953e15")}</Btn>
                     <Btn
                       onClick={async () => {
                         try {
@@ -604,24 +563,20 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                           const pr = await listProfiles(selected!.dir);
                           setProfiles(pr.items || []);
                         } catch (e) {
-                          if (String(e) !== "已取消") setMsg(String(e));
+                          if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
                         }
                       }}
-                    >
-                      导入档案…
-                    </Btn>
+                    >{t("s.93ccffa7cc")}</Btn>
                     <Btn
                       onClick={async () => {
                         try {
                           await exportProfile(selected!.dir);
-                          setMsg("档案已导出");
+                          setMsg(t("s.fc70c44b85"));
                         } catch (e) {
-                          if (String(e) !== "已取消") setMsg(String(e));
+                          if (String(e) !== t("s.a5ffdc95ee")) setMsg(String(e));
                         }
                       }}
-                    >
-                      导出当前预设文件…
-                    </Btn>
+                    >{t("s.7213716bfe")}</Btn>
                   </>
                 }
               />
@@ -666,9 +621,9 @@ function ContextMenu({
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
   if (model.source === "user_data" && model.dir) {
     items.push({
-      label: "重命名",
+      label: t("s.1cd80fd7a8"),
       action: async () => {
-        const n = window.prompt("新名称", model.name);
+        const n = window.prompt(t("s.b8659855b0"), model.name);
         if (!n) return;
         try {
           await renameVoice(model.dir, n);
@@ -679,12 +634,12 @@ function ContextMenu({
       },
     });
     items.push({
-      label: "删除",
+      label: t("s.3755f56f2f"),
       danger: true,
       action: async () => {
         if (
           !window.confirm(
-            "该音色的模型文件与绑定预设将一并删除，无法恢复。\n\n确认删除？",
+            t("s.29abc60b6f"),
           )
         )
           return;
@@ -700,7 +655,7 @@ function ContextMenu({
   if (model.author_url) {
     const authorUrl = model.author_url;
     items.push({
-      label: "打开作者链接",
+      label: t("s.468c96d425"),
       action: () => {
         // Through the shell so it lands in the user's own browser, and so the
         // http/https check applies — a catalog-supplied URL is untrusted.
@@ -711,7 +666,7 @@ function ContextMenu({
   }
   if (model.source === "legacy_weights" && model.path) {
     items.push({
-      label: "转为可管理音色",
+      label: t("s.4e504ca0d3"),
       action: async () => {
         try {
           await promoteLegacy(model.path);
@@ -724,7 +679,7 @@ function ContextMenu({
   }
   if (!items.length) {
     items.push({
-      label: "无可用操作",
+      label: t("s.730dcfbdae"),
       action: onClose,
     });
   }

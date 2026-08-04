@@ -5,6 +5,7 @@ import { Btn } from "./ui";
 import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
+import { t } from "../i18n/t";
 
 /** 工具窗两个模式：官方语义的音频推理 + 保留的文字合成。 */
 type Mode = "sts" | "tts";
@@ -61,18 +62,15 @@ export function TtsPanel() {
 
   return (
     <ToolBody>
-      <h3 className="m-0 mb-1 text-[17px] font-semibold">语音转换</h3>
-      <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">
-        音频变声把已有录音换成目标音色；文字合成用系统语音念字后再换音色。
-        二者都使用首页当前选中的 RVC 模型。
-      </p>
+      <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.6f311c47fe")}</h3>
+      <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
       <div className="mb-4">
         <SegmentControl<Mode>
           value={mode}
           onChange={setMode}
           options={[
-            { id: "sts", label: "音频变声" },
-            { id: "tts", label: "文字合成" },
+            { id: "sts", label: t("s.9035f9b6d1") },
+            { id: "tts", label: t("s.90872a6528") },
           ]}
         />
       </div>
@@ -128,13 +126,13 @@ function StsSection() {
   }, []);
 
   const blocked = !st.runtime_ready
-    ? "运行时未就绪，先到「其他」页补全运行时"
+    ? t("s.bc45fc14b1")
     : st.engine_core_ready === false
       ? `引擎资源未补全（缺 ${(st.engine_core_missing || []).join("、") || "hubert/rmvpe"}）。请先在主界面完成引擎资源下载。`
       : !st.worker_present
-        ? "缺少转换脚本，安装可能不完整"
+        ? t("s.84b7d7b6b0")
         : !st.model_path
-          ? "未选择目标音色。请到首页或「模型」页先选一个音色。"
+          ? t("s.03877888b6")
           : "";
 
   const start = async () => {
@@ -171,48 +169,42 @@ function StsSection() {
       ) : (
         <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">
           当前音色：{st.model_name || "—"}
-          {st.index_path ? " · 已绑定检索库" : ""}
+          {st.index_path ? t("s.0ca99fa9f1") : ""}
         </p>
       )}
 
       <div className="border-t border-[var(--hairline)]">
         <div className={ROW}>
-          <span className={LABEL}>输入</span>
-          <span className={PATH}>{input || "未选择（文件或文件夹）"}</span>
+          <span className={LABEL}>{t("s.e8850440f2")}</span>
+          <span className={PATH}>{input || t("s.245826185c")}</span>
           <Btn
             onClick={() => {
               void invoke<string | null>("sts_pick_input", { folder: false }).then(
                 (p) => p && setInput(p),
               );
             }}
-          >
-            文件
-          </Btn>
+          >{t("s.49deaf7da2")}</Btn>
           <Btn
             onClick={() => {
               void invoke<string | null>("sts_pick_input", { folder: true }).then(
                 (p) => p && setInput(p),
               );
             }}
-          >
-            文件夹
-          </Btn>
+          >{t("s.46ecac2910")}</Btn>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>输出到</span>
-          <span className={PATH}>{output || "未选择"}</span>
+          <span className={LABEL}>{t("s.a0bc984876")}</span>
+          <span className={PATH}>{output || t("s.53e2db7016")}</span>
           <Btn
             onClick={() => {
               void invoke<string | null>("sts_pick_output").then(
                 (p) => p && setOutput(p),
               );
             }}
-          >
-            选择
-          </Btn>
+          >{t("s.70b208202c")}</Btn>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>音高</span>
+          <span className={LABEL}>{t("s.bda11a3c2d")}</span>
           <div className="flex-1">
             <RangeBar
               value={pitch}
@@ -221,7 +213,7 @@ function StsSection() {
               step={1}
               defaultValue={0}
               onChange={setPitch}
-              ariaLabel="音高"
+              ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
           <span className="w-[52px] text-right text-[13px] tabular-nums">
@@ -229,7 +221,7 @@ function StsSection() {
           </span>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>音高算法</span>
+          <span className={LABEL}>{t("s.3579ac474b")}</span>
           <select
             className={`flex-1 min-w-0 ${FIELD}`}
             value={f0method}
@@ -243,7 +235,7 @@ function StsSection() {
           </select>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>检索强度</span>
+          <span className={LABEL}>{t("s.389bc211b2")}</span>
           <div className="flex-1">
             <RangeBar
               value={indexRate}
@@ -252,7 +244,7 @@ function StsSection() {
               step={0.01}
               defaultValue={0.75}
               onChange={setIndexRate}
-              ariaLabel="检索强度"
+              ariaLabel={t("s.389bc211b2")}
             />
           </div>
           <span className="w-[52px] text-right text-[13px] tabular-nums">
@@ -283,16 +275,16 @@ function StsSection() {
 
       <div className="mt-5 flex justify-end gap-2.5">
         {running ? (
-          <Btn onClick={() => void invoke("sts_cancel")}>取消</Btn>
+          <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>
         ) : (
-          <Btn onClick={() => void invoke("sts_reveal")}>打开输出目录</Btn>
+          <Btn onClick={() => void invoke("sts_reveal")}>{t("s.344a481fa0")}</Btn>
         )}
         <Btn
           primary
           disabled={running || !!blocked || !input}
           onClick={() => void start()}
         >
-          {running ? "转换中…" : "开始转换"}
+          {running ? t("s.090840132b") : t("s.31e9cad169")}
         </Btn>
       </div>
     </>
@@ -344,13 +336,13 @@ function TtsSection() {
   const over = text.length > max;
 
   const blocked = !st.voices?.length
-    ? "系统里没有可用的语音。到「Windows 设置 → 时间和语言 → 语音」里添加一个语音包。"
+    ? t("s.42d0633ac9")
     : useRvc && !st.model_path
-      ? "未选择目标音色。请到首页选择一个音色，或关闭下方的「使用变声」。"
+      ? t("s.bb1d8d1da8")
       : useRvc && !st.runtime_ready
-        ? "运行时未就绪，先到「其他」页补全运行时"
+        ? t("s.bc45fc14b1")
         : useRvc && !st.infer_present
-          ? "缺少推理脚本，安装可能不完整"
+          ? t("s.68cf604e87")
           : "";
 
   const start = async () => {
@@ -378,9 +370,7 @@ function TtsSection() {
 
   return (
     <>
-      <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">
-        系统语音负责吐字，可选再经 RVC 换成目标音色。结果在 User_Data\tts。
-      </p>
+      <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">{t("s.b052ea8cb8")}</p>
 
       {blocked ? (
         <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
@@ -392,7 +382,7 @@ function TtsSection() {
           "bg-transparent text-[var(--ink)] resize-y",
           over ? "border-[#b8534f]" : "border-[var(--hairline)]",
         ].join(" ")}
-        placeholder="请输入需要合成的文本…"
+        placeholder={t("s.f2f07193b8")}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
@@ -407,7 +397,7 @@ function TtsSection() {
 
       <div className="mt-3 border-t border-[var(--hairline)]">
         <div className={ROW}>
-          <span className={LABEL}>朗读嗓音</span>
+          <span className={LABEL}>{t("s.09febb1c95")}</span>
           <select
             className={`flex-1 min-w-0 ${FIELD}`}
             value={voice}
@@ -418,11 +408,11 @@ function TtsSection() {
                 {v}
               </option>
             ))}
-            {!st.voices?.length ? <option value="">（无）</option> : null}
+            {!st.voices?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}
           </select>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>语速</span>
+          <span className={LABEL}>{t("s.747374775d")}</span>
           <div className="flex-1">
             <RangeBar
               value={rate}
@@ -430,7 +420,7 @@ function TtsSection() {
               max={6}
               step={1}
               onChange={setRate}
-              ariaLabel="语速"
+              ariaLabel={t("s.747374775d")}
             />
           </div>
           <span className="w-[52px] text-right text-[13px] tabular-nums">
@@ -438,7 +428,7 @@ function TtsSection() {
           </span>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>音高</span>
+          <span className={LABEL}>{t("s.bda11a3c2d")}</span>
           <div className="flex-1">
             <RangeBar
               value={pitch}
@@ -447,7 +437,7 @@ function TtsSection() {
               step={1}
               defaultValue={0}
               onChange={setPitch}
-              ariaLabel="音高"
+              ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
           <span className="w-[52px] text-right text-[13px] tabular-nums">
@@ -455,18 +445,16 @@ function TtsSection() {
           </span>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>使用变声</span>
+          <span className={LABEL}>{t("s.a46919fc8e")}</span>
           <label className="flex items-center gap-2 text-[13px] cursor-pointer">
             <input
               type="checkbox"
               checked={useRvc}
               onChange={(e) => setUseRvc(e.target.checked)}
             />
-            {st.model_name || "未选择音色"}
+            {st.model_name || t("s.9bbf6a5dce")}
           </label>
-          <span className="text-[12px] text-[var(--meta)]">
-            关闭后仅输出系统原声
-          </span>
+          <span className="text-[12px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
         </div>
       </div>
 
@@ -490,16 +478,16 @@ function TtsSection() {
 
       <div className="mt-5 flex justify-end gap-2.5">
         {running ? (
-          <Btn onClick={() => void invoke("tts_cancel")}>取消</Btn>
+          <Btn onClick={() => void invoke("tts_cancel")}>{t("s.4d0b4688c7")}</Btn>
         ) : (
-          <Btn onClick={() => void invoke("tts_reveal")}>打开输出目录</Btn>
+          <Btn onClick={() => void invoke("tts_reveal")}>{t("s.344a481fa0")}</Btn>
         )}
         <Btn
           primary
           disabled={running || !!blocked || !text.trim() || over}
           onClick={() => void start()}
         >
-          {running ? "合成中…" : "开始合成"}
+          {running ? t("s.ec35cdf525") : t("s.74a000b7ac")}
         </Btn>
       </div>
     </>

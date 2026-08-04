@@ -79,11 +79,11 @@ async fn assets_ensure_engine_core(
         let cb: download::ProgressFn = Arc::new(move |done, total, phase| {
             let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
             let m = match phase {
-                "verify" => format!("校验引擎资源…"),
+                "verify" => crate::i18n::t("s.34e863a12e"),
                 other if other.starts_with("connecting:") => {
                     format!("连接中… · 准备下载引擎资源约 {}", fmt_size(total))
                 }
-                _ if done == 0 => "连接中… · 准备下载引擎资源".to_string(),
+                _ if done == 0 => crate::i18n::t("s.6bde20da46"),
                 _ => format!("下载引擎资源 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
             };
             let _ = app.emit(
@@ -115,11 +115,11 @@ async fn assets_ensure_vbcable(
         let cb: download::ProgressFn = Arc::new(move |done, total, phase| {
             let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
             let m = match phase {
-                "verify" => format!("校验声卡安装包…"),
+                "verify" => crate::i18n::t("s.3b227dfa30"),
                 other if other.starts_with("connecting:") => {
                     format!("连接中… · 准备下载声卡安装包约 {}", fmt_size(total))
                 }
-                _ if done == 0 => "连接中… · 准备下载声卡安装包".to_string(),
+                _ if done == 0 => crate::i18n::t("s.3a05d4d51e"),
                 _ => format!("下载声卡安装包 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
             };
             let _ = app.emit(
@@ -196,8 +196,8 @@ fn config_set(
 #[tauri::command]
 fn pick_wallpaper() -> Option<String> {
     rfd::FileDialog::new()
-        .add_filter("图片", &["jpg", "jpeg", "png", "webp", "bmp"])
-        .set_title("选择背景图")
+        .add_filter(&crate::i18n::t("s.be8da62ea1"), &["jpg", "jpeg", "png", "webp", "bmp"])
+        .set_title(&crate::i18n::t("s.501fdcd3ef"))
         .pick_file()
         .map(|p| p.to_string_lossy().into_owned())
 }
@@ -366,7 +366,7 @@ fn ui_log(line: String) {
     match count {
         n if n < PER_WINDOW => logging::shell_log!("[ui] {line}"),
         n if n == PER_WINDOW => {
-            logging::shell_log!("[ui] 前端日志过快（10 秒内超过 {PER_WINDOW} 条），本轮后续省略")
+            logging::shell_log!(crate::i18n::t("s.b76d1399ec"))
         }
         _ => {}
     }
@@ -438,7 +438,7 @@ fn plaza_dismiss(state: State<'_, Mutex<AppState>>, id: String) -> Result<(), St
 fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     let ok = url.starts_with("https://") || url.starts_with("http://");
     if !ok {
-        return Err("只允许打开 http/https 链接".into());
+        return Err(crate::i18n::t("s.88d3b1cad9").into());
     }
     use tauri_plugin_opener::OpenerExt;
     app.opener()
@@ -534,7 +534,7 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
         if let Err(e) = config::sync_inuse(&root, &config::read(&root)) {
-            logging::shell_log!("启动前同步 inuse 失败: {e}");
+            logging::shell_log!(crate::i18n::t("s.5a7c8b5a25"));
         }
         worker::start_vc(&root)?;
         Ok(worker::wait_vc_running(&root, 180_000))
@@ -569,10 +569,10 @@ fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 fn separate_pick(dir: bool) -> Option<String> {
     let d = rfd::FileDialog::new();
     if dir {
-        d.set_title("选择输出目录").pick_folder()
+        d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
-        d.add_filter("音频", &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
-            .set_title("选择要分离的音频")
+        d.add_filter(&crate::i18n::t("s.461189f186"), &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
+            .set_title(&crate::i18n::t("s.7ba52d2bf3"))
             .pick_file()
     }
     .map(|p| p.to_string_lossy().into_owned())
@@ -732,7 +732,7 @@ fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 #[tauri::command]
 fn train_pick_dataset() -> Option<String> {
     rfd::FileDialog::new()
-        .set_title("选择数据集目录（里面放这个人的干声音频）")
+        .set_title(&crate::i18n::t("s.612dddefc4"))
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
 }
@@ -814,7 +814,7 @@ fn engine_set_hot(
         payload.insert("rms_mix_rate".into(), json!(v));
     }
     if payload.is_empty() {
-        return Err("没有可热更新的参数".into());
+        return Err(crate::i18n::t("s.40018c2fe1").into());
     }
     // 底栏拖音高/共鸣以前只 set_hot、不写盘：界面重启后仍显示旧数（来自
     // app_config），但 inuse 还是 0，引擎按默认起 —— 显示对、声音不对。
@@ -822,7 +822,7 @@ fn engine_set_hot(
     let _ = config::update(&root, payload.clone());
     match worker::set_hot(&root, payload) {
         Ok(seq) => Ok(seq),
-        Err(e) if e.contains("未运行") => Ok(0),
+        Err(e) if e.contains(&crate::i18n::t("s.b2ba9634d9")) => Ok(0),
         Err(e) => Err(e),
     }
 }
@@ -891,7 +891,7 @@ async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, St
         // draw without it, so a slow answer looks exactly like a hang. Say so.
         let ms = t.elapsed().as_millis();
         if ms > 1500 {
-            logging::shell_log!("provision_status 用了 {ms} ms");
+            logging::shell_log!(crate::i18n::t("s.7fdbc694cb"));
         }
         Ok(v)
     })
@@ -991,7 +991,7 @@ fn voices_index_bind(
     let root = root_clone(&state)?;
     let src = match index_src.filter(|s| !s.is_empty()) {
         Some(s) => s,
-        None => voices::pick_index_file().ok_or_else(|| "已取消".to_string())?,
+        None => voices::pick_index_file().ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?,
     };
     voices::bind_index_file(&root, &model_dir, &src)
 }
@@ -1077,7 +1077,7 @@ async fn voices_import(
         None => {
             let picked = voices::pick_import_files();
             if picked.is_empty() {
-                return Err("已取消".into());
+                return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }
             picked
         }
@@ -1209,8 +1209,7 @@ pub fn run() {
     i18n::init_from_config(&root);
     // pid 在横幅里，是因为 shell.log 是跨启动追加的：报告「进程还在但看不见
     // 窗口」时，得先能确认手上这段日志和任务管理器里那个进程是同一次运行。
-    logging::shell_log!(
-        "=== RVC Fabric {} 启动（pid {}）===",
+    logging::shell_log!("=== RVC Fabric {} 启动（pid {}）===",
         update::APP_VERSION,
         std::process::id()
     );
@@ -1228,7 +1227,7 @@ pub fn run() {
     // 官方 WebUI 也是一启动就 rmtree(TEMP)。
     {
         let stats = paths::clean_temps(&root);
-        paths::log_clean_stats("启动", &root, &stats);
+        paths::log_clean_stats(&crate::i18n::t("s.ebd26da421"), &root, &stats);
     }
 
     tauri::Builder::default()
@@ -1365,7 +1364,7 @@ pub fn run() {
             window_watch::place_on_active_monitor(&main_window);
             // 无边框窗口默认是直角的，Win11 上跟系统其他窗口格格不入。
             window_watch::round_corners(&main_window);
-            window_watch::report_and_rescue(&main_window, "创建后");
+            window_watch::report_and_rescue(&main_window, &crate::i18n::t("s.ad667e5e16"));
 
             // A blank window is the one failure the user cannot describe and we
             // cannot see. If the UI never reports back, say so in the log with
@@ -1381,8 +1380,7 @@ pub fn run() {
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(12));
                     if !ui_assets::ui_reported_ready() {
-                        logging::shell_log!(
-                            "警告：12 秒内界面没有挂载（白屏）。UI 来源 {} · 已处理 {} 个资源请求 · 404 {} 次",
+                        logging::shell_log!("警告：12 秒内界面没有挂载（白屏）。UI 来源 {} · 已处理 {} 个资源请求 · 404 {} 次",
                             ui_assets::source_label(),
                             ui_assets::served_count(),
                             ui_assets::not_found_count(),
@@ -1390,7 +1388,7 @@ pub fn run() {
                         let _ = h.emit("app://ui-stalled", ());
                     }
                     if let Some(w) = h.get_webview_window("main") {
-                        window_watch::report_and_rescue(&w, "启动 12 秒后");
+                        window_watch::report_and_rescue(&w, &crate::i18n::t("s.6c0434f6f2"));
                     }
                 });
             }
@@ -1421,10 +1419,10 @@ pub fn run() {
                             .recv_timeout(std::time::Duration::from_secs(10))
                             .is_ok();
                         if !ok && !stalled {
-                            logging::shell_log!("警告：主线程 10 秒没有响应，窗口此刻是卡住的");
+                            logging::shell_log!(crate::i18n::t("s.03b08ed8b0"));
                             stalled = true;
                         } else if ok && stalled {
-                            logging::shell_log!("主线程已恢复");
+                            logging::shell_log!(crate::i18n::t("s.4df93f64ef"));
                             stalled = false;
                         }
                     }
@@ -1479,7 +1477,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
                     let stats = paths::clean_temps(&g.root);
-                    paths::log_clean_stats("退出", &g.root, &stats);
+                    paths::log_clean_stats(&crate::i18n::t("s.feecb1e6ad"), &g.root, &stats);
                 }
             }
         });

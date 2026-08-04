@@ -106,7 +106,7 @@ fn run_powershell(script: &str) -> Result<String, String> {
     }
     let out = cmd.output().map_err(|e| format!("起不来 PowerShell：{e}"))?;
     if !out.status.success() {
-        return Err("PowerShell 执行失败".into());
+        return Err(crate::i18n::t("s.787332269e").into());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -164,7 +164,7 @@ $s.Dispose()
     run_powershell(&script)?;
     let _ = std::fs::remove_file(&txt);
     if !wav.is_file() {
-        return Err("系统语音没有生成声音文件。请到「设置 → 时间和语言 → 语音」里确认装了语音包。".into());
+        return Err(crate::i18n::t("s.0b2b13c141").into());
     }
     Ok(wav)
 }
@@ -206,7 +206,7 @@ pub fn run(
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已经有一个合成任务在跑了".into());
+            return Err(crate::i18n::t("s.47baa6fbb7").into());
         }
         *g = true;
     }
@@ -233,16 +233,16 @@ fn run_inner(
 ) -> Result<Value, String> {
     let text = text.trim();
     if text.is_empty() {
-        return Err("先写点要念的字".into());
+        return Err(crate::i18n::t("s.4e723e58f7").into());
     }
     if text.chars().count() > MAX_CHARS {
         return Err(format!("一次最多 {MAX_CHARS} 字，先分几段"));
     }
 
-    emit(app, "sapi", 0, 2, "系统语音正在朗读…");
+    emit(app, "sapi", 0, 2, &crate::i18n::t("s.b99cbcbcd3"));
     let raw = synthesize(root, text, voice, rate)?;
     if cancel_flag().load(Ordering::SeqCst) {
-        return Err("已取消".into());
+        return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
 
     let dir = out_dir(root);
@@ -255,7 +255,7 @@ fn run_inner(
 
     if !use_rvc {
         std::fs::copy(&raw, &out).map_err(|e| format!("写不了输出文件：{e}"))?;
-        emit(app, "done", 2, 2, "合成完成");
+        emit(app, "done", 2, 2, &crate::i18n::t("s.2e33db9056"));
         return Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": false }));
     }
 
@@ -267,7 +267,7 @@ fn run_inner(
         .trim()
         .to_string();
     if pth.is_empty() || !Path::new(&pth).is_file() {
-        return Err("还没有选中的音色。先在「首页」选一个，或者关掉「换成我的音色」。".into());
+        return Err(crate::i18n::t("s.ab63502dd7").into());
     }
     if !paths::runtime_ready(root) {
         return Err("Runtime 未就绪，请先补全运行时".into());
@@ -277,8 +277,8 @@ fn run_inner(
         return Err(format!("找不到推理脚本：{}", script.display()));
     }
 
-    emit(app, "rvc", 1, 2, "正在换成你的音色…");
-    let py = paths::runtime_python(root).ok_or("找不到 Runtime\\python.exe")?;
+    emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
+    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let log = paths::logs_dir(root).join("tts.log");
     let _ = std::fs::create_dir_all(paths::logs_dir(root));
     let errfile = std::fs::OpenOptions::new()
@@ -331,7 +331,7 @@ fn run_inner(
     loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
-            return Err("已取消".into());
+            return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         match child.try_wait().map_err(|e| format!("等推理进程失败：{e}"))? {
             Some(st) => {
@@ -347,10 +347,10 @@ fn run_inner(
         }
     }
     if !out.is_file() {
-        return Err("换音色跑完了但没有产出文件，详情见 User_Data/logs/tts.log".into());
+        return Err(crate::i18n::t("s.f7271a7905").into());
     }
     let _ = std::fs::remove_file(&raw);
-    emit(app, "done", 2, 2, "合成完成");
+    emit(app, "done", 2, 2, &crate::i18n::t("s.2e33db9056"));
     Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": true }))
 }
 
@@ -380,7 +380,7 @@ mod tests {
         // 否则 SAPI 会生成一个 0 秒的 wav，然后 RVC 对着它跑一遍，最后交给
         // 用户一个听不见任何东西的文件。
         assert!(MAX_CHARS > 0);
-        let long: String = "字".repeat(MAX_CHARS + 1);
+        let long: String = &crate::i18n::t("s.582c50066c").repeat(MAX_CHARS + 1);
         assert!(long.chars().count() > MAX_CHARS);
     }
 }

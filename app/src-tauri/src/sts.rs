@@ -85,16 +85,18 @@ pub fn status(root: &Path) -> Value {
 
 /// 选输入：`folder=false` 选单个音频，`true` 选文件夹（批量）。
 pub fn pick_input(folder: bool) -> Option<String> {
-    let dlg = rfd::FileDialog::new().set_title(if folder {
-        "选择待转换音频所在文件夹"
+    let title = if folder {
+        crate::i18n::t("s.46ffa5479e")
     } else {
-        "选择待转换的音频"
-    });
+        crate::i18n::t("s.79b552d700")
+    };
+    let dlg = rfd::FileDialog::new().set_title(&title);
     if folder {
         dlg.pick_folder().map(|p| p.to_string_lossy().into_owned())
     } else {
+        let filter = crate::i18n::t("s.461189f186");
         dlg.add_filter(
-            "音频",
+            &filter,
             &["wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus"],
         )
         .pick_file()
@@ -103,8 +105,9 @@ pub fn pick_input(folder: bool) -> Option<String> {
 }
 
 pub fn pick_output() -> Option<String> {
+    let title = crate::i18n::t("s.cb12ce77e7");
     rfd::FileDialog::new()
-        .set_title("选择输出目录")
+        .set_title(&title)
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
 }
@@ -122,7 +125,7 @@ pub fn run(
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
-            return Err("已经有一个转换任务在跑了".into());
+            return Err(crate::i18n::t("s.6a025ac81b").into());
         }
         *g = true;
     }
@@ -158,7 +161,7 @@ fn run_inner(
         return Err(format!("找不到转换脚本：{}", script.display()));
     }
     if input.trim().is_empty() {
-        return Err("请先选好输入文件或文件夹".into());
+        return Err(crate::i18n::t("s.e9c01e81cb").into());
     }
     let out = if output.trim().is_empty() {
         out_dir(root)
@@ -175,7 +178,7 @@ fn run_inner(
         .trim()
         .to_string();
     if pth.is_empty() || !Path::new(&pth).is_file() {
-        return Err("还没有选中的音色。先在「首页」或「模型」页选一个。".into());
+        return Err(crate::i18n::t("s.e84378f99a").into());
     }
     let index = cfg
         .get("index_path")
@@ -203,7 +206,7 @@ fn run_inner(
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| format!("写请求文件失败：{e}"))?;
 
-    let py = paths::runtime_python(root).ok_or("找不到 Runtime\\python.exe")?;
+    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let log = paths::logs_dir(root).join("sts.log");
     let _ = std::fs::create_dir_all(paths::logs_dir(root));
     let errfile = std::fs::OpenOptions::new()
@@ -230,7 +233,7 @@ fn run_inner(
     }
 
     let mut child = cmd.spawn().map_err(|e| format!("起不来转换进程：{e}"))?;
-    let stdout = child.stdout.take().ok_or("拿不到转换进程的输出")?;
+    let stdout = child.stdout.take().ok_or(crate::i18n::t("s.68759edc4b"))?;
     let mut files: Vec<String> = Vec::new();
     let mut fail: Option<String> = None;
     let mut total: u64 = 1;
@@ -238,7 +241,7 @@ fn run_inner(
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
-            return Err("已取消".into());
+            return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
@@ -248,17 +251,25 @@ fn run_inner(
         match phase {
             "start" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
-                emit(app, "start", 0, total, if msg.is_empty() { "正在加载音色…" } else { msg });
+                let fallback = crate::i18n::t("s.6b3e0028b8");
+                emit(
+                    app,
+                    "start",
+                    0,
+                    total,
+                    if msg.is_empty() { &fallback } else { msg },
+                );
             }
             "run" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
+                let fallback = crate::i18n::t("s.090840132b");
                 emit(
                     app,
                     "run",
                     done,
                     total,
-                    if msg.is_empty() { "转换中…" } else { msg },
+                    if msg.is_empty() { &fallback } else { msg },
                 );
             }
             "done" => {
@@ -284,9 +295,9 @@ fn run_inner(
             st.code().unwrap_or(-1)
         ));
     }
-    emit(app, "done", total, total, "转换完成");
+    emit(app, "done", total, total, &crate::i18n::t("s.e43ef3d56a"));
     let stats = crate::paths::clean_temps(root);
-    crate::paths::log_clean_stats("语音转换后", root, &stats);
+    crate::paths::log_clean_stats(&crate::i18n::t("s.e246e3bafa"), root, &stats);
     Ok(json!({
         "ok": true,
         "files": files,

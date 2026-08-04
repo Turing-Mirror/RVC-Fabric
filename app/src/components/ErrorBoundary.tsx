@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n/t";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null; stack: string };
@@ -29,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ stack });
     // Fire-and-forget: if the shell is unreachable there is nothing better to
     // do, and throwing here would replace one blank screen with another.
-    void invoke("ui_log", { line: `render 崩溃：${stack}` }).catch(() => {});
+    void invoke("ui_log", { line: t("s.1db2e283ac", { v0: stack }) }).catch(() => {});
   }
 
   render() {
@@ -49,11 +50,8 @@ export class ErrorBoundary extends Component<Props, State> {
           userSelect: "text",
         }}
       >
-        <div style={{ fontSize: 17, color: "var(--ink, #1e242b)" }}>界面出错了</div>
-        <div>
-          后台变声不受影响，可从系统托盘右键菜单继续控制。
-          请将「其他 → 运行状态」生成的诊断包发给我们，以便排查。
-        </div>
+        <div style={{ fontSize: 17, color: "var(--ink, #1e242b)" }}>{t("s.61f43bf584")}</div>
+        <div>{t("s.d851b62cf4")}</div>
         <pre
           style={{
             margin: 0,

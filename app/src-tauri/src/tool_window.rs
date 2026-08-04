@@ -16,7 +16,7 @@ use crate::logging;
 
 /// 一个工具窗口的全部参数：标题、初始大小、最小大小。
 struct Spec {
-    title: &'static str,
+    title: String,
     w: f64,
     h: f64,
     min_w: f64,
@@ -28,14 +28,14 @@ struct Spec {
 fn spec_for(kind: &str) -> Option<Spec> {
     Some(match kind {
         "separate" => Spec {
-            title: "人声分离",
+            title: crate::i18n::t("s.8fd038283b"),
             w: 660.0,
             h: 540.0,
             min_w: 520.0,
             min_h: 420.0,
         },
         "train" => Spec {
-            title: "训练音色",
+            title: crate::i18n::t("s.ba65bd5595"),
             w: 720.0,
             h: 640.0,
             min_w: 560.0,
@@ -43,7 +43,7 @@ fn spec_for(kind: &str) -> Option<Spec> {
         },
         "tts" => Spec {
             // 标签仍用 tts 兼容旧入口；窗体标题是「语音转换」（含音频变声 + 文字合成）。
-            title: "语音转换",
+            title: crate::i18n::t("s.6f311c47fe"),
             w: 720.0,
             h: 700.0,
             min_w: 560.0,
@@ -110,7 +110,7 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .center()
     .build()
     .map_err(|e| format!("建不了工具窗口：{e}"))?;
-    logging::shell_log!("工具窗口（{kind}）已建好，开始处理圆角");
+    logging::shell_log!(crate::i18n::t("s.e1e2bc3a99"));
 
     crate::window_watch::round_corners(&win);
     // 和主窗口一样：改完大小要重新裁圆角（Win10 兜底那条路）。
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn only_the_three_known_tools_have_a_window() {
         for k in ["separate", "train", "tts"] {
-            assert!(spec_for(k).is_some(), "{k} 应该有窗口规格");
+            assert!(spec_for(k).is_some(), &crate::i18n::t("s.89f4473a33"));
         }
         // 前端传什么过来都可能，没登记的一律拒绝 —— 否则一个拼错的名字会开出
         // 一扇加载 `#/tool/whatever` 的空白窗，用户以为软件坏了。
@@ -161,7 +161,7 @@ mod tests {
     fn a_tool_window_is_never_smaller_than_its_content_needs() {
         for k in ["separate", "train", "tts"] {
             let s = spec_for(k).unwrap();
-            assert!(s.min_w <= s.w && s.min_h <= s.h, "{k} 的初始尺寸比最小尺寸还小");
+            assert!(s.min_w <= s.w && s.min_h <= s.h, &crate::i18n::t("s.93b36c5670"));
         }
     }
 }

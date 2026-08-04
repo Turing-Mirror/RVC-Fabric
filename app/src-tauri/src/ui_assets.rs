@@ -220,8 +220,7 @@ pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
         }
     }
 
-    crate::logging::shell_log!(
-        "界面资源缺失 404 rel={rel:?} uri={:?} 外部目录={:?}",
+    crate::logging::shell_log!("界面资源缺失 404 rel={rel:?} uri={:?} 外部目录={:?}",
         req.uri(),
         external_dir()
     );
@@ -233,7 +232,7 @@ pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 pub fn source_label() -> String {
     match external_dir() {
         Some(dir) => format!("外部目录 {}", dir.to_string_lossy()),
-        None => "内置（随程序打包）".to_string(),
+        None => crate::i18n::t("s.66cf378dad"),
     }
 }
 
@@ -284,7 +283,7 @@ mod tests {
     #[test]
     fn percent_decode_handles_multibyte_and_malformed() {
         assert_eq!(percent_decode("a%20b"), "a b");
-        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87.js"), "中文.js");
+        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87.js"), &crate::i18n::t("s.c5be4a3312"));
         // A stray '%' must survive rather than eat the following bytes.
         assert_eq!(percent_decode("100%.css"), "100%.css");
         assert_eq!(percent_decode("%zz"), "%zz");

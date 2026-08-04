@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { tStatic } from "../i18n";
+import {  tStatic as t, tStatic  } from "../i18n";
 
 /** Mirrors User_Data/runtime_control/status.json + shell extras. */
 export type EngineStatus = {
@@ -71,7 +71,7 @@ export async function getEngineStatus(): Promise<EngineStatus> {
   if (!isTauri()) {
     return {
       state: "idle",
-      message: "浏览器预览（引擎未接入）",
+      message: t("s.265e64c266"),
       worker_alive: false,
       meter_level: 0,
       threshold_meter: 0.25,

@@ -23,6 +23,7 @@ import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { registerDownloadModelsOpener } from "./lib/downloadModels";
+import { t } from "./i18n/t";
 
 /**
  * 变声多少次之后问一句「要不要关注」。
@@ -122,7 +123,7 @@ export default function App() {
       setUpdateLine(
         b.installed
           ? `已更新至 ${String(b.version ?? r.remote)}，重启程序后生效`
-          : "暂未获取到程序更新包，可先前往发布页手动下载",
+          : t("s.3d1fde4601"),
       );
       return;
     }
@@ -138,7 +139,7 @@ export default function App() {
   const checkUpdate = async () => {
     if (updateBusy) return;
     setUpdateBusy(true);
-    setUpdateLine("正在检查…");
+    setUpdateLine(t("s.481ee2d4bc"));
     try {
       const r = await probeUpdate();
       if (r) await installUpdate(r);
@@ -197,9 +198,9 @@ export default function App() {
   const [pitch, setPitch] = useState(0);
   const [formant, setFormant] = useState(0);
   const [mode, setMode] = useState<OutputMode>("vc");
-  const [voiceName, setVoiceName] = useState("未选择模型");
+  const [voiceName, setVoiceName] = useState(t("s.262d11e2d6"));
   const [voiceId, setVoiceId] = useState("");
-  const [profileSummary, setProfileSummary] = useState("无");
+  const [profileSummary, setProfileSummary] = useState(t("s.72077749f7"));
   const [voiceTag, setVoiceTag] = useState("");
   const [voicePos, setVoicePos] = useState("");
   const [showProvision, setShowProvision] = useState(false);
@@ -316,7 +317,7 @@ export default function App() {
     void currentVoice()
       .then((c) => {
         if (c.model) {
-          setVoiceName(String(c.model.name || "未选择模型"));
+          setVoiceName(String(c.model.name || t("s.262d11e2d6")));
           setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
           setVoiceTag(String(c.model.tag || ""));
         }
@@ -414,7 +415,7 @@ export default function App() {
     formant?: number;
     profileSummary?: string;
   }) => {
-    setVoiceName(model.name || "未选择模型");
+    setVoiceName(model.name || t("s.262d11e2d6"));
     setVoiceId(model.path || model.dir || model.name || "");
     if (p != null) setPitch(Number(p));
     if (f != null) setFormant(Number(f));
@@ -753,34 +754,26 @@ export default function App() {
       {closeAsk ? (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
           <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
-            <h2 className="text-[19px] font-semibold m-0 mb-2">关闭 RVC Fabric</h2>
-            <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">
-              最小化到托盘可保持后台运行；直接关闭将停止变声并退出程序。
-            </p>
+            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
+            <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
             <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
               <input
                 type="checkbox"
                 checked={closeRemember}
                 onChange={(e) => setCloseRemember(e.target.checked)}
                 className="accent-[var(--accent)]"
-              />
-              记住选择（可在「设置 → 常规」中修改）
-            </label>
+              />{t("s.f75c86ad46")}</label>
             <div className="flex gap-2.5 justify-end">
               <button
                 type="button"
                 onClick={() => void answerClose(false)}
                 className="text-[13px] px-3.5 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] border-0 cursor-pointer shadow-[inset_0_0_0_1px_var(--line)]"
-              >
-                直接关闭
-              </button>
+              >{t("s.3a070016e2")}</button>
               <button
                 type="button"
                 onClick={() => void answerClose(true)}
                 className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
-              >
-                最小化到托盘
-              </button>
+              >{t("s.aea56dcdfe")}</button>
             </div>
           </div>
         </div>
@@ -793,20 +786,18 @@ export default function App() {
         <Nudge
           title={
             updateWorking
-              ? "正在更新"
-              : `有新版本 ${updateOffer.remote}，是否立即更新？`
+              ? t("s.87c1bc6fe6")
+              : t("s.a462205ca5", { v0: updateOffer.remote })
           }
           actions={
             updateWorking ? (
               <Btn onClick={() => setUpdateOffer(null)} disabled={updateBusy}>
-                {updateBusy ? "下载中…" : "知道了"}
+                {updateBusy ? t("s.65188d08a2") : t("s.cb63c62e50")}
               </Btn>
             ) : (
               <>
-                <Btn onClick={() => setUpdateOffer(null)}>稍后</Btn>
-                <Btn primary onClick={() => void acceptUpdate()}>
-                  下载并安装
-                </Btn>
+                <Btn onClick={() => setUpdateOffer(null)}>{t("s.479fcc1cc0")}</Btn>
+                <Btn primary onClick={() => void acceptUpdate()}>{t("s.f4df9977ea")}</Btn>
               </>
             )
           }
@@ -820,26 +811,20 @@ export default function App() {
         </Nudge>
       ) : askTelemetry ? (
         <Nudge
-          title="参与用户统计（可选）"
+          title={t("s.b9feeeb3a8")}
           actions={
             <>
-              <Btn onClick={() => void answerTelemetry(false)}>暂不参与</Btn>
-              <Btn primary onClick={() => void answerTelemetry(true)}>
-                参与
-              </Btn>
+              <Btn onClick={() => void answerTelemetry(false)}>{t("s.206f264868")}</Btn>
+              <Btn primary onClick={() => void answerTelemetry(true)}>{t("s.d9702f047c")}</Btn>
             </>
           }
-        >
-          每天检查更新时，附带发送随机匿名编号、软件版本、显卡加速方式。
-          这不包含账号、音色、录音或任何定位信息。
-          这类规模数据主要用于向赞助商证明活跃度，是我们维持开发的方式之一。随时可在「设置 → 常规」关闭。
-        </Nudge>
+        >{t("s.9546e0b7e2")}</Nudge>
       ) : askFollow ? (
         <Nudge
-          title="觉得 RVC Fabric 好用吗？关注我们呗"
+          title={t("s.d359cf1384")}
           actions={
             <>
-              <Btn onClick={closeFollow}>以后再说</Btn>
+              <Btn onClick={closeFollow}>{t("s.6aa652ccb5")}</Btn>
               {FOLLOW_LINKS.map((l) => (
                 <Btn
                   key={l.url}
@@ -853,10 +838,7 @@ export default function App() {
               ))}
             </>
           }
-        >
-          不知不觉您已经变声 10 次啦！本软件完全免费，持续更新离不开大家的支持——
-          只需一键即可直达，关不关注随您心意，且本提示仅出现这一次。
-        </Nudge>
+        >{t("s.7f3ebfb67b")}</Nudge>
       ) : null}
 
       <Dock

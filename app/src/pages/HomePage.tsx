@@ -4,6 +4,7 @@ import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
+import { t } from "../i18n/t";
 
 type Props = {
   currentId?: string;
@@ -87,7 +88,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
 
   const pick = async (m: VoiceModel) => {
     if (m.missing) {
-      setMsg("这个音色的模型文件缺失或不完整，请重新下载或修复。");
+      setMsg(t("s.314a72cba4"));
       return;
     }
     try {
@@ -124,20 +125,18 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
     return (
       <div>
         <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">
-            选择音色，开始变声
-          </h2>
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
-              ? `读取音色目录失败：${loadError}`
-              : "还没有本地音色呢~ 去「模型」页导入，或到「广场」逛逛吧！"}
+              ? t("s.c4a98bd0e6", { v0: loadError })
+              : t("s.2a26295b90")}
           </p>
           <HeroEmblem />
         </div>
         <PagePad>
-          <Block title="最近使用">
+          <Block title={t("s.71265fc4cb")}>
             <div className="flex justify-center">
-              <Btn onClick={onOpenModels}>去「模型」页</Btn>
+              <Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>
             </div>
           </Block>
           <ToolShortcuts />
@@ -149,14 +148,12 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
   return (
     <div>
       <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">
-          选择音色，开始变声
-        </h2>
+        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0 mb-1.5">
           {current.name}
         </p>
         <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {[current.tag, current.author ? `作者 : ${current.author}` : ""]
+          {[current.tag, current.author ? t("s.7feea73fa3", { v0: current.author }) : ""]
             .filter(Boolean)
             .join(" · ")}
           {current.tag || current.author ? " · " : ""}
@@ -167,8 +164,8 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
 
       <PagePad>
         <Block
-          title="最近使用"
-          action={<Btn onClick={onOpenModels}>全部音色</Btn>}
+          title={t("s.71265fc4cb")}
+          action={<Btn onClick={onOpenModels}>{t("s.35e4afb47d")}</Btn>}
         >
           {msg ? (
             <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
@@ -217,18 +214,14 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                       <span>{(v.name || "?").slice(0, 4)}</span>
                     )}
                     {cur ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">
-                        使用中
-                      </span>
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">
-                        ✓ 检索库
-                      </span>
+                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-3">
-                    {v.tag || "音色"}
+                    {v.tag || t("s.c4301894a2")}
                   </div>
                   <div
                     className={[
@@ -239,7 +232,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                     {v.name}
                   </div>
                   <div className="text-xs text-[var(--meta)] mt-0.5">
-                    {v.author ? `作者 : ${v.author}` : "\u00a0"}
+                    {v.author ? t("s.7feea73fa3", { v0: v.author }) : "\u00a0"}
                   </div>
                 </button>
               );
@@ -262,23 +255,23 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
 function ToolShortcuts() {
   const items: Array<{ label: string; desc: string; go: () => void }> = [
     {
-      label: "人声分离",
-      desc: "提取歌曲中的人声干声与伴奏",
+      label: t("s.8fd038283b"),
+      desc: t("s.2d5f93d547"),
       go: () => openTool("separate"),
     },
     {
-      label: "训练音色",
-      desc: "用干声素材训练专属音色模型",
+      label: t("s.ba65bd5595"),
+      desc: t("s.30e91c9e4d"),
       go: () => openTool("train"),
     },
     {
-      label: "语音转换",
-      desc: "音频变声 / 文字合成，换成目标音色",
+      label: t("s.6f311c47fe"),
+      desc: t("s.3bf3d98458"),
       go: () => openTool("tts"),
     },
   ];
   return (
-    <Block title="音频工具">
+    <Block title={t("s.21093d185d")}>
       <div className="flex gap-3 flex-wrap max-[520px]:flex-col">
         {items.map((it) => (
           <button

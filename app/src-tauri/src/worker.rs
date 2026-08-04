@@ -696,7 +696,7 @@ pub fn wait_vc_running(root: &Path, timeout_ms: u64) -> Value {
             kill_known_workers(root);
             return json!({
                 "state": "error",
-                "error": "变声引擎进程意外退出（常见：显存不足、声卡被占用）。已清理残留，请再试。",
+                "error": &crate::i18n::t("s.496951c554"),
                 "message": "worker died during start",
                 "pid": 0
             });
@@ -707,7 +707,7 @@ pub fn wait_vc_running(root: &Path, timeout_ms: u64) -> Value {
         kill_known_workers(root);
         return json!({
             "state": "error",
-            "error": "启动超时且引擎已退出，请查看 User_Data/logs/realtime_worker.log",
+            "error": &crate::i18n::t("s.7da520ca1f"),
             "pid": 0
         });
     }
@@ -752,7 +752,7 @@ pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {
 
 pub fn set_hot(root: &Path, payload: Map<String, Value>) -> Result<u64, String> {
     if !is_worker_alive(root) {
-        return Err("worker 未运行".into());
+        return Err(crate::i18n::t("s.7764d6bdd2").into());
     }
     send_command(root, "set", payload)
 }
@@ -774,7 +774,7 @@ pub fn swap_model(root: &Path) -> Result<u64, String> {
         .trim()
         .to_string();
     if pth.is_empty() {
-        return Err("还没有选中的音色".into());
+        return Err(crate::i18n::t("s.b3b2c06973").into());
     }
     let mut payload = Map::new();
     payload.insert("pth_path".into(), json!(pth));

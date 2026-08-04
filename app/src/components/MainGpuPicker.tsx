@@ -1,15 +1,16 @@
 import { Select } from "./controls";
+import { t } from "../i18n/t";
 
 /** 「自动」在配置里存 -1，不是空字符串 —— 0 是一块真实存在的显卡。 */
 export const MAIN_GPU_AUTO = -1;
 
 export const MAIN_GPU_TIP =
-  "多块 N 卡时指定用哪一块计算。\n" +
-  "引擎默认永远用排在第一的那块：一块 5060 一块 5090，很可能整场都在用 5060。\n" +
-  "改完要重新「开启变声」才生效。\n" +
-  "选完如果引擎用的还不是你要的那块，换一个序号再试 —— " +
-  "显卡在系统里的排序和显卡驱动的排序不保证一致。\n" +
-  "A 卡 / 核显（DirectML）路径上这一项不生效。";
+  t("s.c4c4673f74") +
+  t("s.c21f67d167") +
+  t("s.750e6a370f") +
+  t("s.7cb4f28eb2") +
+  t("s.12579f2917") +
+  t("s.310f4d242c");
 
 /**
  * 主显卡选择。
@@ -32,7 +33,7 @@ export function MainGpuPicker({
   full?: boolean;
 }) {
   const options = [
-    { id: String(MAIN_GPU_AUTO), label: "自动（不指定）" },
+    { id: String(MAIN_GPU_AUTO), label: t("s.74982a8e00") },
     ...gpus.map((name, i) => ({ id: String(i), label: `${i} · ${name}` })),
   ];
   return (

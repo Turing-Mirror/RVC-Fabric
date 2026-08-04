@@ -519,12 +519,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let mut cfg = defaults();
         cfg.insert("monitor_self".into(), json!(true));
-        cfg.insert("monitor_device".into(), json!("耳机 (Realtek)"));
+        cfg.insert("monitor_device".into(), json!(crate::i18n::t("s.a593781b23")));
         sync_inuse(&root, &cfg).unwrap();
 
         let out = read_json(&paths::inuse_config_path(&root));
         assert_eq!(out.get("monitor_enabled"), Some(&json!(true)));
-        assert_eq!(out.get("monitor_device"), Some(&json!("耳机 (Realtek)")));
+        assert_eq!(out.get("monitor_device"), Some(&json!(crate::i18n::t("s.a593781b23"))));
 
         cfg.insert("monitor_self".into(), json!(false));
         sync_inuse(&root, &cfg).unwrap();
@@ -560,7 +560,7 @@ mod tests {
         assert_eq!(
             m["pth_path"],
             json!(r"User_Data\models\anon\anon.pth"),
-            "带 \\\\?\\ 前缀的本机路径不该被清空"
+            &crate::i18n::t("s.f204de859a")
         );
         assert_eq!(m["index_path"], json!(r"User_Data\models\anon\a.index"));
     }
@@ -631,7 +631,7 @@ mod tests {
     fn main_gpu_asks_for_a_restart_without_pretending_to_be_an_engine_key() {
         assert!(!is_hot("main_gpu"));
         assert!(!is_cold("main_gpu"));
-        assert!(!engine_keys().contains(&"main_gpu"), "main_gpu 不该被写进 inuse");
+        assert!(!engine_keys().contains(&"main_gpu"), &crate::i18n::t("s.26afc09bec"));
 
         let root = std::env::temp_dir().join("rvcf-main-gpu-test");
         let _ = std::fs::remove_dir_all(&root);
@@ -644,14 +644,14 @@ mod tests {
         let restart = out["needs_restart"].as_array().unwrap();
         assert!(
             restart.iter().any(|v| v == "main_gpu"),
-            "改主显卡必须提示重开变声，实际 needs_restart = {restart:?}"
+            &crate::i18n::t("s.5122640939")
         );
         assert_eq!(out["config"]["main_gpu"], json!(1));
 
         // 不是引擎键，就不该顺手去改引擎的配置文件 —— worker 可能正在读它。
         assert!(
             !paths::inuse_config_path(&root).is_file(),
-            "只改主显卡不该重写 inuse"
+            &crate::i18n::t("s.e56c3aa66a")
         );
         let _ = std::fs::remove_dir_all(&root);
     }

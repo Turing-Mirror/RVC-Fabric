@@ -7,7 +7,7 @@ import { useConfig } from "../hooks/useConfig";
 import { TIPS } from "../lib/config";
 import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
-import { LOCALES, useI18n, type LocaleCode } from "../i18n";
+import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
 
 const TAB_KEYS = [
   "device",
@@ -57,12 +57,12 @@ const EQ_BANDS = ["60Hz", "250Hz", "1kHz", "4kHz", "8kHz"] as const;
 
 /** 与 `tools/dsp_fx.EQ_PRESETS` / `EQ_PRESET_LABELS` 一一对应。 */
 const EQ_PRESETS: { id: string; label: string; gains: number[] }[] = [
-  { id: "flat", label: "平直", gains: [0, 0, 0, 0, 0] },
-  { id: "vocal_front", label: "人声前倾", gains: [-2, 1, 3, 2.5, 1] },
-  { id: "warm", label: "温暖饱满", gains: [2, 1.5, 0, -1, -2] },
-  { id: "bright", label: "清晰明亮", gains: [-1.5, 0, 1, 3, 2.5] },
-  { id: "de_nasal", label: "消除鼻音", gains: [0, -3.5, -1, 1.5, 0.5] },
-  { id: "thick", label: "低沉厚实", gains: [3, 1.5, 0, -0.5, -1.5] },
+  { id: "flat", label: t("s.64ca1ffc2e"), gains: [0, 0, 0, 0, 0] },
+  { id: "vocal_front", label: t("s.0df76209a8"), gains: [-2, 1, 3, 2.5, 1] },
+  { id: "warm", label: t("s.80d341c40a"), gains: [2, 1.5, 0, -1, -2] },
+  { id: "bright", label: t("s.7b470c4e5f"), gains: [-1.5, 0, 1, 3, 2.5] },
+  { id: "de_nasal", label: t("s.89dd7d9dec"), gains: [0, -3.5, -1, 1.5, 0.5] },
+  { id: "thick", label: t("s.c8e3bafbb7"), gains: [3, 1.5, 0, -0.5, -1.5] },
 ];
 
 /** 存进配置的是长度 5 的数组；缺项补 0，别让下标越界变成 NaN 推给引擎。 */
@@ -175,12 +175,12 @@ function SettingsPageImpl({
   // no explanation, which reads as broken rather than as "not yet".
   const devicesReady = inputs.length > 0 || outputs.length > 0;
   const deviceHint = devicesBusy
-    ? "正在读取设备…"
+    ? t("s.abd52d0c37")
     : devicesReady
       ? ""
       : workerAlive
-        ? "还没读到设备，点右边「重载设备列表」以重试"
-        : "引擎正在启动，设备列表稍后出现";
+        ? t("s.1831f7eb53")
+        : t("s.95af7bd399");
 
   return (
     <div>
@@ -200,37 +200,29 @@ function SettingsPageImpl({
 
         {c.restartKeys.length ? (
           <div className="mt-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_14%,transparent)] px-3.5 py-2.5 flex items-center gap-3 flex-wrap">
-            <span className="text-[12.5px] text-[var(--ink-muted)]">
-              设备与性能设置已改动，重新「开启变声」后生效。
-            </span>
-            <Btn className="!ml-auto" onClick={c.clearRestartNotice}>
-              知道了
-            </Btn>
+            <span className="text-[12.5px] text-[var(--ink-muted)]">{t("s.63bb17a9d2")}</span>
+            <Btn className="!ml-auto" onClick={c.clearRestartNotice}>{t("s.cb63c62e50")}</Btn>
           </div>
         ) : null}
 
         {!c.loaded ? (
-          <p className="text-[12.5px] text-[var(--meta)] mt-6">读取设置…</p>
+          <p className="text-[12.5px] text-[var(--meta)] mt-6">{t("s.49fd445d8b")}</p>
         ) : null}
 
         {c.loaded && tab === "device" ? (
           <Block
-            title="设备与音频"
+            title={t("s.9bef06a1f5")}
             className="!mt-6"
             action={
               onOpenHelp ? (
-                <Btn onClick={onOpenHelp}>不会用？转至说明页</Btn>
+                <Btn onClick={onOpenHelp}>{t("s.004a3a2b67")}</Btn>
               ) : undefined
             }
           >
-            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">
-              输入选真实麦克风，输出选 CABLE Input（游戏内的麦克风设为 CABLE Output）。
-              <br />
-              想实时听到自己的变声效果，勾选「变声时监听自己」并选择耳机。
-            </p>
+            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">{t("s.d4b9d6c80f")}<br />{t("s.6c4698ee82")}</p>
             <div className={CARD}>
               <Field
-                label="设备类型"
+                label={t("s.47a991d18c")}
                 tip={TIPS.sg_hostapi}
                 control={
                   <Select
@@ -240,10 +232,10 @@ function SettingsPageImpl({
                     onChange={(v) => c.set("sg_hostapi", v, true)}
                   />
                 }
-                note={`读到 ${inputs.length} 个录音设备、${outputs.length} 个播放设备`}
+                note={t("s.b663153cef", { v0: inputs.length, v1: outputs.length })}
               />
               <Field
-                label="输入设备"
+                label={t("s.c15e33676a")}
                 tip={TIPS.sg_input_device}
                 control={
                   <Select
@@ -255,7 +247,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="麦克风增益 dB"
+                label={t("s.02942ba343")}
                 tip={TIPS.in_gain_db}
                 control={
                   <Slider
@@ -269,7 +261,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="输出设备"
+                label={t("s.3aa83c304c")}
                 tip={TIPS.sg_output_device}
                 control={
                   <Select
@@ -281,15 +273,15 @@ function SettingsPageImpl({
                 }
               />
               <Toggle
-                label="变声时监听自己"
+                label={t("s.dcf690b953")}
                 tip={TIPS.monitor_self}
                 checked={c.bool("monitor_self")}
                 onChange={(v) => c.set("monitor_self", v, true)}
               />
               <Field
-                label="监听设备"
+                label={t("s.550c08627b")}
                 tip={TIPS.monitor_device}
-                desc="关闭时只走「输出设备」（通常 CABLE）；开启后在耳机里听变声"
+                desc={t("s.1bce2ccca4")}
                 control={
                   <Select
                     full
@@ -301,25 +293,25 @@ function SettingsPageImpl({
               />
               <div className="flex items-center gap-[11px] flex-wrap">
                 <Toggle
-                  label="WASAPI 独占（一般无需开启，只在你清楚自己在做什么时开启）"
+                  label={t("s.1747a288fd")}
                   tip={TIPS.sg_wasapi_exclusive}
                   checked={c.bool("sg_wasapi_exclusive")}
                   onChange={(v) => c.set("sg_wasapi_exclusive", v, true)}
                 />
                 <span className="ml-auto flex items-center gap-2.5 flex-wrap">
-                  <span className="text-[12.5px] text-[var(--meta)]">采样率</span>
+                  <span className="text-[12.5px] text-[var(--meta)]">{t("s.ab4dae189d")}</span>
                   <HelpMark title={TIPS.sr_type} />
                   <Select
                     width={140}
                     value={c.str("sr_type", "sr_device")}
                     options={[
-                      { id: "sr_device", label: "跟随设备" },
-                      { id: "sr_model", label: "跟随模型" },
+                      { id: "sr_device", label: t("s.71ea75cd1f") },
+                      { id: "sr_model", label: t("s.ca872f619e") },
                     ]}
                     onChange={(v) => c.set("sr_type", v, true)}
                   />
                   <Btn onClick={onReloadDevices} disabled={devicesBusy}>
-                    {devicesBusy ? "读取中…" : "重载设备列表"}
+                    {devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}
                   </Btn>
                 </span>
               </div>
@@ -331,13 +323,11 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "voice" ? (
-          <Block title="变声参数" note="运行中可热更新 · 按音色自动保存" className="!mt-6">
-            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">
-              这里的调整会随当前音色自动保存，下次选回就是上次的状态。底栏也能快速调音高和共鸣。
-            </p>
+          <Block title={t("s.ae7cbbecbc")} note={t("s.d48a0bf3c8")} className="!mt-6">
+            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">{t("s.a9e4eb7a51")}</p>
             <div className={CARD}>
               <Field
-                label="响应阈值"
+                label={t("s.75e7326c34")}
                 tip={TIPS.threhold}
                 control={
                   <Slider
@@ -350,7 +340,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="音高"
+                label={t("s.bda11a3c2d")}
                 tip={TIPS.pitch}
                 control={
                   <Slider
@@ -365,7 +355,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="共鸣"
+                label={t("s.7c4a58ca1b")}
                 tip={TIPS.formant}
                 control={
                   <Slider
@@ -380,7 +370,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="检索强度"
+                label={t("s.389bc211b2")}
                 tip={TIPS.index_rate}
                 control={
                   <Slider
@@ -395,7 +385,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="响度包络"
+                label={t("s.02791c87b8")}
                 tip={TIPS.rms_mix_rate}
                 control={
                   <Slider
@@ -410,7 +400,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="音高算法"
+                label={t("s.3579ac474b")}
                 tip={TIPS.f0method}
                 inline
                 control={
@@ -433,10 +423,10 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "perf" ? (
-          <Block title="性能设置" note="改后需重新「开启变声」" className="!mt-6">
+          <Block title={t("s.eb1f3e5ef6")} note={t("s.9ad8c4b79c")} className="!mt-6">
             <div className={CARD}>
               <Field
-                label="采样块时长"
+                label={t("s.2f2caa6a62")}
                 tip={TIPS.block_time}
                 control={
                   <Slider
@@ -451,7 +441,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="交叉淡化"
+                label={t("s.98454ca754")}
                 tip={TIPS.crossfade_length}
                 control={
                   <Slider
@@ -466,7 +456,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="额外推理时长"
+                label={t("s.5ecc71c141")}
                 tip={TIPS.extra_time}
                 control={
                   <Slider
@@ -481,7 +471,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="CPU 线程数"
+                label={t("s.1e48570a18")}
                 tip={TIPS.n_cpu}
                 control={
                   <Slider
@@ -495,7 +485,7 @@ function SettingsPageImpl({
                 }
               />
               <Toggle
-                label="CUDA Graph 加速（仅 N 卡）"
+                label={t("s.5b833d9334")}
                 tip={TIPS.cuda_graph}
                 checked={c.bool("cuda_graph")}
                 onChange={(v) => c.set("cuda_graph", v)}
@@ -505,22 +495,22 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "fx" ? (
-          <Block title="声音效果" note="变声后 · 可选" className="!mt-6">
+          <Block title={t("s.d66ab479e1")} note={t("s.eb434c8c24")} className="!mt-6">
             <div className={CARD}>
               <Toggle
-                label="输入降噪"
+                label={t("s.18b35795d9")}
                 tip={TIPS.I_noise_reduce}
                 checked={c.bool("I_noise_reduce")}
                 onChange={(v) => c.set("I_noise_reduce", v, true)}
               />
               <Toggle
-                label="输出降噪"
+                label={t("s.b5b981b099")}
                 tip={TIPS.O_noise_reduce}
                 checked={c.bool("O_noise_reduce")}
                 onChange={(v) => c.set("O_noise_reduce", v, true)}
               />
               <Toggle
-                label="相位声码器"
+                label={t("s.9e03f8df04")}
                 tip={TIPS.use_pv}
                 checked={c.bool("use_pv")}
                 onChange={(v) => c.set("use_pv", v, true)}
@@ -530,7 +520,7 @@ function SettingsPageImpl({
             {/* 变声后的 DSP 链。引擎侧一直有，迁到 Tauri 时壳层漏掉了整节。 */}
             <div className={`${CARD} mt-4`}>
               <Toggle
-                label="后期处理"
+                label={t("s.19e933ad2a")}
                 tip={TIPS.fx_enabled}
                 checked={c.bool("fx_enabled")}
                 onChange={(v) => c.set("fx_enabled", v, true)}
@@ -538,7 +528,7 @@ function SettingsPageImpl({
               {fxOn ? (
                 <>
                   <Field
-                    label="音色均衡"
+                    label={t("s.c193661369")}
                     tip={TIPS.fx_eq_enabled}
                     inline
                     control={
@@ -550,7 +540,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="均衡预设"
+                    label={t("s.65d7aca5f1")}
                     tip={TIPS.fx_eq_preset}
                     control={
                       <Select
@@ -564,7 +554,7 @@ function SettingsPageImpl({
                           // applyPreset 找不到就直接返回。引擎那边 gains 优先于
                           // preset，所以 custom 传下去也不会被当成 flat 复位。
                           ...(c.str("fx_eq_preset", "flat") === "custom"
-                            ? [{ id: "custom", label: "自定义" }]
+                            ? [{ id: "custom", label: t("s.c493338e8c") }]
                             : []),
                         ]}
                         onChange={applyPreset}
@@ -590,7 +580,7 @@ function SettingsPageImpl({
                     />
                   ))}
                   <Field
-                    label="噪声门"
+                    label={t("s.038c681d8c")}
                     tip={TIPS.fx_gate_enabled}
                     inline
                     control={
@@ -602,7 +592,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="噪声门阈值"
+                    label={t("s.55adfb8c3f")}
                     tip={TIPS.fx_gate_threshold_db}
                     control={
                       <Slider
@@ -616,7 +606,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="压缩器"
+                    label={t("s.690ac0b101")}
                     tip={TIPS.fx_comp_enabled}
                     inline
                     control={
@@ -628,7 +618,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="压缩阈值"
+                    label={t("s.ecf753d9da")}
                     tip={TIPS.fx_comp_threshold_db}
                     control={
                       <Slider
@@ -642,7 +632,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="压缩比"
+                    label={t("s.3a23a85820")}
                     tip={TIPS.fx_comp_ratio}
                     control={
                       <Slider
@@ -656,7 +646,7 @@ function SettingsPageImpl({
                     }
                   />
                   <Field
-                    label="输出增益"
+                    label={t("s.60e69dd480")}
                     tip={TIPS.fx_out_gain_db}
                     control={
                       <Slider
@@ -724,27 +714,27 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="背景图"
+                label={t("s.e5c12c3be5")}
                 tip={TIPS.wallpaper_path}
-                desc="静态图，无大小限制，过大的图片会拖慢加载"
+                desc={t("s.3451ca742f")}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <Btn onClick={() => void pickWallpaper(c.set)}>选择图片</Btn>
+                    <Btn onClick={() => void pickWallpaper(c.set)}>{t("s.18104edf89")}</Btn>
                     {c.str("wallpaper_path") ? (
                       <>
                         <span className="text-[12.5px] text-[var(--meta)] max-w-[280px] truncate">
                           {c.str("wallpaper_path")}
                         </span>
-                        <Btn onClick={() => c.set("wallpaper_path", "", true)}>清除</Btn>
+                        <Btn onClick={() => c.set("wallpaper_path", "", true)}>{t("s.7b15e5e8e7")}</Btn>
                       </>
                     ) : (
-                      <span className="text-[12.5px] text-[var(--meta)]">未设置</span>
+                      <span className="text-[12.5px] text-[var(--meta)]">{t("s.55a04b58cd")}</span>
                     )}
                   </div>
                 }
               />
               <Field
-                label="磨砂强度"
+                label={t("s.910adcad16")}
                 tip={TIPS.wallpaper_blur}
                 control={
                   <Slider
@@ -758,7 +748,7 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="不透明度"
+                label={t("s.b4efb6cdcf")}
                 tip={TIPS.wallpaper_opacity}
                 control={
                   <Slider
@@ -776,10 +766,10 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "general" ? (
-          <Block title="常规" className="!mt-6">
+          <Block title={t("s.f1484fa78b")} className="!mt-6">
             <div className={CARD}>
               <Field
-                label="关闭窗口时"
+                label={t("s.f0ace6ccbe")}
                 tip={TIPS.close_action}
                 inline
                 control={
@@ -787,21 +777,21 @@ function SettingsPageImpl({
                     width={170}
                     value={c.str("close_action", "ask")}
                     options={[
-                      { id: "ask", label: "每次询问" },
-                      { id: "tray", label: "最小化到托盘" },
-                      { id: "exit", label: "直接退出" },
+                      { id: "ask", label: t("s.393704c0f8") },
+                      { id: "tray", label: t("s.aea56dcdfe") },
+                      { id: "exit", label: t("s.0dd68a51dd") },
                     ]}
                     onChange={(v) => c.set("close_action", v, true)}
                   />
                 }
               />
               <Field
-                label="参与用户统计"
+                label={t("s.3ff3e5ff9b")}
                 tip={TIPS.telemetry_opt_in}
-                desc="只发送随机匿名编号、软件版本、显卡加速方式；不发送账号、音色、录音或任何能定位到你的信息"
+                desc={t("s.dc3f6fc6fd")}
                 control={
                   <Toggle
-                    label={c.cfg.telemetry_opt_in === true ? "已参与" : "未参与"}
+                    label={c.cfg.telemetry_opt_in === true ? t("s.a056bc39f4") : t("s.ef92935b07")}
                     checked={c.cfg.telemetry_opt_in === true}
                     onChange={(v) => c.set("telemetry_opt_in", v, true)}
                   />
@@ -812,10 +802,10 @@ function SettingsPageImpl({
         ) : null}
 
         {c.loaded && tab === "hotkeys" ? (
-          <Block title="快捷键" className="!mt-6">
+          <Block title={t("s.31e3310765")} className="!mt-6">
             <div className={CARD}>
               <Toggle
-                label="启用全局快捷键"
+                label={t("s.8ef23e2698")}
                 tip={TIPS.hotkeys_enabled}
                 checked={c.bool("hotkeys_enabled")}
                 onChange={(v) => {
@@ -838,25 +828,20 @@ function SettingsPageImpl({
                 ))}
               </div>
               <p className="text-xs text-[var(--help)] m-0">
-                <b>快捷键说明</b>：<br />
-                1. 点击按键框，再按下新的组合键（支持 Ctrl / Alt / Shift）；<br />
-                2. 勾选「全局」：在任何软件中都生效，但该组合会被本软件独占；<br />
-                3. 取消勾选：只在软件窗口处于前台时生效。<br />
-                组合键被其他软件占用时会注册失败，换一个即可。
-              </p>
+                <b>{t("s.d15328af87")}</b>：<br />{t("s.b8d74a5e97")}<br />{t("s.d7278f3458")}<br />{t("s.5ece668b53")}<br />{t("s.e6eed3ec41")}</p>
             </div>
           </Block>
         ) : null}
 
         {c.loaded && tab === "update" ? (
-          <Block title="在线更新" className="!mt-6">
+          <Block title={t("s.f0332ff72a")} className="!mt-6">
             <div className={CARD}>
               {/* 当前版本单独一行，常驻。
                   以前这一整块只有一个按钮，点完什么都不变（desc 被 inline 版
                   吞了），于是「我到底是不是最新的」这个问题在设置页里根本
                   没有答案。版本号摆出来，起码有一半答案是白纸黑字的。 */}
               <Field
-                label="当前版本"
+                label={t("s.46e66f6321")}
                 inline
                 control={
                   <span className="text-[13px] text-[var(--ink-muted)] tabular-nums">
@@ -865,19 +850,16 @@ function SettingsPageImpl({
                 }
               />
               <Field
-                label="检查更新"
-                desc={updateLine || "还没查过。开机时会自动查一次。"}
+                label={t("s.a6df38586d")}
+                desc={updateLine || t("s.1fd4658c44")}
                 inline
                 control={
                   <Btn onClick={onCheckUpdate} disabled={updateBusy}>
-                    {updateBusy ? "检查中…" : "立即检查"}
+                    {updateBusy ? t("s.5fc65af5b3") : t("s.72523c6421")}
                   </Btn>
                 }
               />
-              <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">
-                每次启动时自动检查新版本，查到会在底栏询问是否安装，不会自己下载。<br />
-                点「立即检查」则查到就直接下载安装，重启后生效。
-              </p>
+              <p className="text-xs text-[var(--help)] m-0 leading-[1.75]">{t("s.5fe7a5211b")}<br />{t("s.6c26ecbfb3")}</p>
             </div>
           </Block>
         ) : null}
@@ -889,15 +871,15 @@ function SettingsPageImpl({
 /** 每个动作在设置页里怎么称呼。键名和默认组合来自 `lib/hotkeys`，
  *  那份表和 `shell_extras::HOTKEYS` 一一对应 —— 三处抄三遍迟早对不上。 */
 const HOTKEY_LABELS: Record<string, string> = {
-  "toggle-vc": "开启 / 停止变声",
-  "toggle-mode": "变声 / 原声",
-  "prev-voice": "上一个音色",
-  "next-voice": "下一个音色",
-  "pitch-up": "音高 +1",
-  "pitch-down": "音高 −1",
-  "toggle-monitor": "监听自己 开 / 关",
-  "toggle-fx": "后期音效 开 / 关",
-  "toggle-window": "显示 / 隐藏主界面",
+  "toggle-vc": t("s.de2b71244c"),
+  "toggle-mode": t("s.3848444f8c"),
+  "prev-voice": t("s.6053ffffee"),
+  "next-voice": t("s.5b6259b315"),
+  "pitch-up": t("s.9f97186ee0"),
+  "pitch-down": t("s.9c74c2a45e"),
+  "toggle-monitor": t("s.6eb438dd5b"),
+  "toggle-fx": t("s.bfdefad36e"),
+  "toggle-window": t("s.22067787e1"),
 };
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
@@ -975,9 +957,7 @@ function HotkeyRow({
           checked={isGlobal}
           onChange={(e) => onGlobalChange(e.target.checked)}
           className="accent-[var(--accent)] w-[13px] h-[13px]"
-        />
-        全局
-      </label>
+        />{t("s.a5644f4bbf")}</label>
       <button
         type="button"
         onClick={() => {
@@ -996,7 +976,7 @@ function HotkeyRow({
             : "text-[var(--meta)] hover:text-[var(--ink)]",
         ].join(" ")}
       >
-        {recording ? "按下组合键…" : prettyCombo(value)}
+        {recording ? t("s.31469944aa") : prettyCombo(value)}
       </button>
     </div>
   );

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import { t } from "../i18n/t";
 import {
   getAssetsStatus,
   type AssetsStatus,
@@ -77,9 +78,9 @@ function shortLabel(it: Item, cat: Category): string {
 
 const CATEGORY_BLURB: Record<Category, string> = {
   separate:
-    "训练前清理素材优先下「人声提取」。其余按场景按需下载；标「进阶」的体积大，日常一般用不到。",
+    t("s.63fa37071e"),
   train:
-    "按采样率下一套底模即可（三选一）。先补全上方的引擎资源（hubert / rmvpe），再下底模。",
+    t("s.5b422f44dd"),
 };
 
 /**
@@ -146,7 +147,7 @@ export function ExtrasDialog({
     const unsubs: Array<() => void> = [];
     void listen<Progress>("extra-progress", (ev) => {
       setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message || "下载失败");
+      if (ev.payload.phase === "error") setMsg(ev.payload.message || t("s.e0dab22b1a"));
     }).then((fn) => {
       if (disposed) fn();
       else unsubs.push(fn);
@@ -191,11 +192,11 @@ export function ExtrasDialog({
       done: 0,
       total: 1,
       percent: 0,
-      message: "准备下载引擎资源…",
+      message: t("s.c7ea0cf156"),
     });
     try {
       await invoke("assets_ensure_engine_core");
-      setMsg("引擎资源已就绪");
+      setMsg(t("s.33dadd8dd6"));
       setAssets(await getAssetsStatus());
       setCoreProg(null);
     } catch (e) {
@@ -209,7 +210,7 @@ export function ExtrasDialog({
   const start = async (key: string) => {
     if (busyRef.current || coreBusy) return;
     if (engineReady === false) {
-      setMsg("请先下载引擎资源，再下载具体模型。");
+      setMsg(t("s.e8a77f003d"));
       return;
     }
     busyRef.current = true;
@@ -218,7 +219,7 @@ export function ExtrasDialog({
     setProg(null);
     try {
       await invoke("extra_download", { key });
-      setMsg("下载完成");
+      setMsg(t("s.4bbcf94739"));
       void load();
     } catch (e) {
       setMsg(String(e));
@@ -235,14 +236,14 @@ export function ExtrasDialog({
       : coreProg?.total
         ? Math.round(((coreProg.done ?? 0) / Math.max(coreProg.total, 1)) * 100)
         : 0;
-  const heading = title || "下载模型";
+  const heading = title || t("s.1252c81119");
 
   const emptyHint =
     list?.available === false
-      ? "连不上服务器，检查网络后再试。"
+      ? t("s.122abe360d")
       : category === "train"
-        ? "暂时没有可下载的训练底模。"
-        : "暂时没有可下载的分离模型。";
+        ? t("s.2b9ddc0b69")
+        : t("s.7e9782377b");
 
   const locked = engineReady === false;
   const anyBusy = !!busyKey || coreBusy;
@@ -265,8 +266,8 @@ export function ExtrasDialog({
               setPage(0);
             }}
             options={[
-              { id: "separate", label: "人声分离" },
-              { id: "train", label: "训练音色" },
+              { id: "separate", label: t("s.8fd038283b") },
+              { id: "train", label: t("s.ba65bd5595") },
             ]}
           />
         </div>
@@ -294,17 +295,11 @@ export function ExtrasDialog({
               <div className="text-[13.5px] font-semibold">
                 引擎资源
                 {engineReady === true ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">
-                    已就绪
-                  </span>
+                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
                 ) : engineReady === false ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--accent)]">
-                    未安装 · 约 720 MB
-                  </span>
+                  <span className="ml-2 text-[12px] font-normal text-[var(--accent)]">{t("s.f9cbb1e0c6")}</span>
                 ) : (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">
-                    检查中…
-                  </span>
+                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
                 )}
               </div>
               <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
@@ -323,7 +318,7 @@ export function ExtrasDialog({
                     />
                   </div>
                   <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
-                    {coreProg.message || "下载中…"}
+                    {coreProg.message || t("s.65188d08a2")}
                     {coreProg.speed_label ? ` · ${coreProg.speed_label}` : ""}
                     {corePct > 0 ? ` · ${Math.round(corePct)}%` : ""}
                   </p>
@@ -337,25 +332,21 @@ export function ExtrasDialog({
                 disabled={coreBusy || !!busyKey}
                 onClick={() => void downloadEngineCore()}
               >
-                {coreBusy ? "下载中…" : "下载引擎资源"}
+                {coreBusy ? t("s.65188d08a2") : t("s.cbf7f4dada")}
               </Btn>
             ) : engineReady === true ? (
-              <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2 py-1">
-                已安装
-              </span>
+              <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2 py-1">{t("s.eb88ff57c9")}</span>
             ) : null}
           </div>
         </div>
 
         {locked ? (
           <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)] leading-relaxed">
-              请先下载引擎资源，完成后即可选择下方的人声分离模型或训练底模。
-            </p>
+            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)] leading-relaxed">{t("s.70927369db")}</p>
           </div>
         ) : list === null ? (
           <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--meta)]">正在读取清单…</p>
+            <p className="m-0 py-4 text-[13px] text-[var(--meta)]">{t("s.cd178d24a2")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="min-h-[200px] flex items-center">
@@ -381,18 +372,14 @@ export function ExtrasDialog({
                 <Btn
                   disabled={pageClamped <= 0 || anyBusy}
                   onClick={() => setPage(pageClamped - 1)}
-                >
-                  上一页
-                </Btn>
+                >{t("s.b41561d807")}</Btn>
                 <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
                   {pageClamped + 1} / {totalPages}
                 </span>
                 <Btn
                   disabled={pageClamped >= totalPages - 1 || anyBusy}
                   onClick={() => setPage(pageClamped + 1)}
-                >
-                  下一页
-                </Btn>
+                >{t("s.67a246a344")}</Btn>
               </div>
             ) : (
               <p className="m-0 pt-3 text-[12px] text-[var(--meta)] text-center tabular-nums">
@@ -424,11 +411,9 @@ export function ExtrasDialog({
 
         <div className="mt-5 flex justify-end gap-2.5">
           {busyKey ? (
-            <Btn onClick={() => void invoke("extra_cancel")}>取消下载</Btn>
+            <Btn onClick={() => void invoke("extra_cancel")}>{t("s.7115f2e29d")}</Btn>
           ) : (
-            <Btn onClick={onClose} disabled={coreBusy}>
-              关闭
-            </Btn>
+            <Btn onClick={onClose} disabled={coreBusy}>{t("s.6c14bd7f6f")}</Btn>
           )}
         </div>
       </div>
@@ -455,9 +440,7 @@ function ItemRow({
         <span className="block text-[14px] leading-snug">
           {shortLabel(it, category)}
           {it.recommended ? (
-            <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">
-              推荐
-            </span>
+            <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
           ) : null}
         </span>
         {it.notes?.trim() ? (
@@ -467,21 +450,19 @@ function ItemRow({
         ) : null}
         <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
           {mb(it.size_bytes)}
-          {it.files?.length ? ` · ${it.files.length} 个文件` : ""}
-          {it.installed ? " · 已安装" : ""}
+          {it.files?.length ? t("s.8e7dddc185", { v0: it.files.length }) : ""}
+          {it.installed ? t("s.f7b11922f6") : ""}
         </span>
       </span>
       {it.installed ? (
-        <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2">
-          已安装
-        </span>
+        <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2">{t("s.eb88ff57c9")}</span>
       ) : (
         <Btn
           className="shrink-0 min-w-[72px]"
           disabled={!!busyKey || !!disabled}
           onClick={() => void onStart(it.key)}
         >
-          {busyKey === it.key ? "下载中…" : "下载"}
+          {busyKey === it.key ? t("s.65188d08a2") : t("s.2b9d013177")}
         </Btn>
       )}
     </div>

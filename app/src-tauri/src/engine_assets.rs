@@ -233,7 +233,7 @@ pub fn ensure_vbcable_pack(
     if vbcable_pack_ready(root) {
         Ok(())
     } else {
-        Err("VB-Cable 安装包解压后不完整".into())
+        Err(crate::i18n::t("s.c27b7a6c33").into())
     }
 }
 
@@ -242,7 +242,7 @@ pub fn ensure_vbcable_pack(
 #[cfg(target_os = "windows")]
 pub fn install_vbcable(root: &Path) -> Result<(), String> {
     let dir = vbcable_dir(root);
-    let setup = find_vbcable_setup(&dir).ok_or("没有找到 VB-Cable 安装程序")?;
+    let setup = find_vbcable_setup(&dir).ok_or(crate::i18n::t("s.da3e899c12"))?;
     let ps = format!(
         "Start-Process -FilePath '{}' -WorkingDirectory '{}' -Verb RunAs",
         setup.to_string_lossy().replace('\'', "''"),
@@ -257,7 +257,7 @@ pub fn install_vbcable(root: &Path) -> Result<(), String> {
 
 #[cfg(not(target_os = "windows"))]
 pub fn install_vbcable(_root: &Path) -> Result<(), String> {
-    Err("VB-Cable 只在 Windows 上安装".into())
+    Err(crate::i18n::t("s.1ea736bcac").into())
 }
 
 /// Status for the first-run gate and the 「其他」page.

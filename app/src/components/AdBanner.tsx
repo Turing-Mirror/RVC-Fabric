@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { dismissAd, openExternal, type PlazaItem } from "../lib/plaza";
+import { t } from "../i18n/t";
 
 /**
  * The one dismissible placement.
@@ -30,9 +31,7 @@ export function AdBanner({ banner }: { banner: PlazaItem | null }) {
         <div className="text-[13.5px] font-semibold flex items-center gap-2 flex-wrap">
           {item.title}
           {item.is_ad ? (
-            <span className="text-[11.5px] px-2 py-0.5 rounded-[5px] whitespace-nowrap text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]">
-              商业推广
-            </span>
+            <span className="text-[11.5px] px-2 py-0.5 rounded-[5px] whitespace-nowrap text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]">{t("s.3d13883b98")}</span>
           ) : null}
         </div>
         {item.body ? (
@@ -45,13 +44,13 @@ export function AdBanner({ banner }: { banner: PlazaItem | null }) {
           onClick={() => void openExternal(item.url)}
           className="flex-none border-0 bg-transparent cursor-pointer text-[13px] text-[var(--accent)] px-2 py-1 rounded-[var(--rs)] hover:bg-[var(--accent-soft)]"
         >
-          {item.action_label || "查看"}
+          {item.action_label || t("s.f7acefd2d4")}
         </button>
       ) : null}
       <button
         type="button"
-        aria-label="不再显示"
-        title="不再显示"
+        aria-label={t("s.291c041b0a")}
+        title={t("s.291c041b0a")}
         onClick={() => {
           void dismissAd(item.id);
           setClosed(true);

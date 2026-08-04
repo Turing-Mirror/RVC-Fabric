@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
 import { PinnedRow } from "../components/PinnedRow";
+import { t } from "../i18n/t";
 import {
   formatDate,
   openExternal,
@@ -81,17 +82,15 @@ function PlazaPageImpl({
     return (
       <PagePad>
         <PageHead
-          title="更新日志"
-          sub={`共 ${changelog.length} 个版本`}
+          title={t("s.185368440e")}
+          sub={t("s.6ca99d2c45", { v0: changelog.length })}
           actions={
             <Btn
               onClick={() => {
                 setShowAll(false);
                 setPageNo(0);
               }}
-            >
-              返回广场
-            </Btn>
+            >{t("s.5b254c438b")}</Btn>
           }
         />
         <Block title={`第 ${cur + 1} / ${total} 页`}>
@@ -99,23 +98,17 @@ function PlazaPageImpl({
             {slice.length ? (
               slice.map((e) => <Notes key={e.version} entry={e} />)
             ) : (
-              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-                暂未获取到更新日志。
-              </p>
+              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
             )}
           </Group>
         </Block>
         {total > 1 ? (
           <div className="flex items-center justify-center gap-3 py-5">
-            <Btn disabled={cur <= 0} onClick={() => setPageNo(cur - 1)}>
-              上一页
-            </Btn>
+            <Btn disabled={cur <= 0} onClick={() => setPageNo(cur - 1)}>{t("s.b41561d807")}</Btn>
             <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
               {cur + 1} / {total}
             </span>
-            <Btn disabled={cur >= total - 1} onClick={() => setPageNo(cur + 1)}>
-              下一页
-            </Btn>
+            <Btn disabled={cur >= total - 1} onClick={() => setPageNo(cur + 1)}>{t("s.67a246a344")}</Btn>
           </div>
         ) : null}
       </PagePad>
@@ -127,7 +120,7 @@ function PlazaPageImpl({
   return (
     <PagePad>
       <PageHead
-        title="广场"
+        title={t("s.a8776899a4")}
         actions={
           <Btn
             onClick={() => {
@@ -136,7 +129,7 @@ function PlazaPageImpl({
             }}
             disabled={loading}
           >
-            {loading ? "刷新中" : "刷新"}
+            {loading ? t("s.d47379f917") : t("s.38108eaa1d")}
           </Btn>
         }
       />
@@ -151,33 +144,31 @@ function PlazaPageImpl({
           就是这一页最该被看到的几条 —— 排在第一屏才有意义。
           一条都没置顶时整块不出现，不留一个空标题在那儿。 */}
       {pinned.length ? (
-        <Block title="置顶">
+        <Block title={t("s.7bcf18641f")}>
           <PinnedRow items={pinned} onPick={pick} />
         </Block>
       ) : null}
 
-      <Block title="社区音色" note="下载图灵镜源与第三方源的音色">
+      <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
         <StoreSection reloadToken={reloadToken} />
       </Block>
 
-      <Block title="投放" note={items.length ? String(items.length) : ""}>
+      <Block title={t("s.aff4b0df8a")} note={items.length ? String(items.length) : ""}>
         <Group>
           {loading && !items.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
           ) : items.length ? (
             items.map((it) => (
               <Feed key={it.id} item={it} spotlight={spotlight === it.id} />
             ))
           ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-              暂无投放内容。
-            </p>
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f9f2a78f9f")}</p>
           )}
         </Group>
       </Block>
 
       <Block
-        title="更新日志"
+        title={t("s.185368440e")}
         note={changelog[0]?.version || feed?.app_version || ""}
         action={
           changelog.length > 1 ? (
@@ -186,21 +177,17 @@ function PlazaPageImpl({
                 setPageNo(0);
                 setShowAll(true);
               }}
-            >
-              查看全部
-            </Btn>
+            >{t("s.ed2172fd78")}</Btn>
           ) : undefined
         }
       >
         <Group>
           {loading && !changelog.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">读取中…</p>
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
           ) : shown.length ? (
             shown.map((e) => <Notes key={e.version} entry={e} />)
           ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">
-              暂未获取到更新日志。
-            </p>
+            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
           )}
         </Group>
       </Block>
@@ -249,8 +236,8 @@ function Feed({
   const clickable = Boolean(item.url);
   // Three shapes, decided by the parser: 图灵镜推荐, 商业推广, or both.
   const tags: { label: string; ad?: boolean }[] = [];
-  if (item.recommended) tags.push({ label: "图灵镜推荐" });
-  if (item.is_ad) tags.push({ label: "商业推广", ad: true });
+  if (item.recommended) tags.push({ label: t("s.d077c504cc") });
+  if (item.is_ad) tags.push({ label: t("s.3d13883b98"), ad: true });
 
   return (
     <div

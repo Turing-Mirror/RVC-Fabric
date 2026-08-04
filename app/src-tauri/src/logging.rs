@@ -59,8 +59,13 @@ pub fn write(line: &str) {
 
 /// `log!("…{x}")` — same formatting as `format!`.
 macro_rules! shell_log {
-    ($($arg:tt)*) => {
-        $crate::logging::write(&format!($($arg)*))
+    // Literal format (original style)
+    ($fmt:literal $($arg:tt)*) => {
+        $crate::logging::write(&format!($fmt $($arg)*))
+    };
+    // Runtime string (i18n::t / String / &str) — no extra format args
+    ($msg:expr) => {
+        $crate::logging::write(&format!("{}", $msg))
     };
 }
 pub(crate) use shell_log;

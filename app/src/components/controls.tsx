@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HelpMark } from "./ui";
+import { t } from "../i18n/t";
 
 /**
  * Settings field: label (+ the detailed-help ?) above, control below.
@@ -101,7 +102,7 @@ export function Select({
       ].join(" ")}
     >
       {options.length === 0 && !missing ? (
-        <option value="">（无可用项）</option>
+        <option value="">{t("s.e6b7c3d266")}</option>
       ) : null}
       {missing ? <option value={value}>{value}（当前不可用）</option> : null}
       {options.map((o) => (
@@ -300,7 +301,7 @@ export function RangeBar({
       {defaultMarkLeft != null ? (
         <div
           aria-hidden
-          title="初始值"
+          title={t("s.4b829fbdac")}
           className="absolute top-[4px] bottom-[4px] w-[2px] rounded-sm bg-[color-mix(in_srgb,var(--ink)_38%,transparent)] pointer-events-none"
           style={{ left: defaultMarkLeft, transform: "translateX(-50%)" }}
         />

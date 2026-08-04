@@ -65,7 +65,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
         .collect::<String>()
         .to_ascii_lowercase();
     if exp.len() != 64 {
-        return Err("sha256 格式无效".into());
+        return Err(crate::i18n::t("s.5ca337dd03").into());
     }
     let mut f = std::fs::File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
     let mut hasher = Sha256::new();
@@ -212,7 +212,7 @@ pub fn download_request(
     progress: Option<ProgressFn>,
 ) -> Result<(), String> {
     if req.urls.is_empty() {
-        return Err("没有下载地址".into());
+        return Err(crate::i18n::t("s.d08e45e275").into());
     }
     if let Some(parent) = req.dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -231,7 +231,7 @@ pub fn download_request(
     }
 
     if cancel.load(Ordering::SeqCst) {
-        return Err("已取消".into());
+        return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
 
     let threads = req
@@ -275,7 +275,7 @@ pub fn download_request(
     let mut last_err = String::new();
     for url in &req.urls {
         if cancel.load(Ordering::SeqCst) {
-            return Err("已取消".into());
+            return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         if let Some(ref cb) = progress {
             cb(
@@ -323,7 +323,7 @@ pub fn download_request(
         }
     }
     Err(if last_err.is_empty() {
-        "下载失败".into()
+        crate::i18n::t("s.e0dab22b1a")
     } else {
         last_err
     })
@@ -376,7 +376,7 @@ async fn download_one_url(
     tokio::select! {
         biased;
         _ = &mut cancel_wait => {
-            Err("已取消".into())
+            Err(crate::i18n::t("s.a5ffdc95ee").into())
         }
         res = &mut download => {
             res.map(|_| ()).map_err(|e| format!("ripget: {e}"))

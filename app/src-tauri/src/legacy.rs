@@ -92,7 +92,7 @@ pub fn open_realtime_panel(root: &Path) -> Result<serde_json::Value, String> {
     // shell's save_settings_silent() + _sync_model_to_realtime_gui().
     let cfg = config::read(root);
     if let Err(e) = config::sync_inuse(root, &cfg) {
-        logging::shell_log!("实时面板启动前同步 inuse 失败：{e}");
+        logging::shell_log!(crate::i18n::t("s.324ed94533"));
     }
     let py = runtime_python(root, true)?;
     let pid = spawn_detached(
@@ -105,7 +105,7 @@ pub fn open_realtime_panel(root: &Path) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "ok": true,
         "pid": pid,
-        "message": "原版实时面板启动中，冷启动约 20–40 秒（要加载 torch/CUDA）。",
+        "message": &crate::i18n::t("s.2bd41b71bb"),
     }))
 }
 
@@ -143,7 +143,7 @@ pub fn open_webui(root: &Path) -> Result<serde_json::Value, String> {
         "ok": true,
         "pid": pid,
         "url": WEBUI_URL,
-        "message": "WebUI 正在后台启动，约 20–40 秒后浏览器可以打开。",
+        "message": &crate::i18n::t("s.c75f611a0a"),
     }))
 }
 

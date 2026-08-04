@@ -121,19 +121,18 @@ fn pack() -> Value {
 }
 
 fn lookup(v: &Value, key: &str) -> Option<String> {
-    // Prefer dotted path segments (msg.engine.starting → obj.msg.engine.starting).
-    // Also try the remainder as a single key when nested objects use dotted names.
+    // Prefer dotted path segments (msg.engine.starting → obj.msg.engine.starting,
+    // s.ab12cd → obj.s.ab12cd). Also try the remainder as a single key.
     let parts: Vec<&str> = key.split('.').filter(|p| !p.is_empty()).collect();
     if parts.is_empty() {
         return None;
     }
     let mut cur = v;
     for (i, part) in parts.iter().enumerate() {
-        if let Some(next) = cur.get(part) {
+        if let Some(next) = cur.get(*part) {
             cur = next;
             continue;
         }
-        // fallback: rest joined as one key under current object
         let rest = parts[i..].join(".");
         cur = cur.get(&rest)?;
         break;

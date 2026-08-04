@@ -13,6 +13,7 @@ import {
   type ProvisionStatus,
 } from "../lib/engine";
 import type { OutputMode } from "../components/Dock";
+import { t } from "../i18n/t";
 
 export function useEngine() {
   const [status, setStatus] = useState<EngineStatus>({});
@@ -103,7 +104,7 @@ export function useEngine() {
           const st = await getEngineStatus();
           if (!cancelled) {
             setStatus(st);
-            setLastError(String(p.message || "运行时未就绪"));
+            setLastError(String(p.message || t("s.14b8f39742")));
           }
         }
       } catch (e) {
@@ -150,7 +151,7 @@ export function useEngine() {
   const toggleRun = useCallback(async () => {
     if (provision.need_provision || provision.runtime_ready === false) {
       setLastError(
-        String(provision.message || "运行时未就绪，请先补全运行时"),
+        String(provision.message || t("s.6aa0d5bedd")),
       );
       return;
     }
@@ -158,10 +159,10 @@ export function useEngine() {
     try {
       const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
       const ok = await ensureEngineCoreOrPrompt(
-        "开启变声前，需要先下载引擎资源（hubert / rmvpe / ffmpeg）。请到「其他 → 下载模型」补全。",
+        t("s.481ec6c2df"),
       );
       if (!ok) {
-        setLastError("引擎资源未补全，请先到「其他 → 下载模型」下载引擎资源");
+        setLastError(t("s.489b99d4d7"));
         return;
       }
     } catch {
@@ -277,7 +278,7 @@ export function useEngine() {
   const sub =
     lastError ||
     (provision.need_provision
-      ? String(provision.message || "需补全运行时")
+      ? String(provision.message || t("s.d725011356"))
       : statusSub(status));
 
   return {

@@ -93,8 +93,7 @@ pub fn report_and_rescue(win: &WebviewWindow, phase: &str) {
     let minimized = win.is_minimized();
     let rect = win_rect(win);
 
-    logging::shell_log!(
-        "窗口状态（{phase}）：可见={} 最小化={} 位置={} 尺寸={} 缩放={}",
+    logging::shell_log!("窗口状态（{phase}）：可见={} 最小化={} 位置={} 尺寸={} 缩放={}",
         opt(&visible),
         opt(&minimized),
         rect.map(|r| format!("{},{}", r.x, r.y))
@@ -110,20 +109,23 @@ pub fn report_and_rescue(win: &WebviewWindow, phase: &str) {
     if monitors.is_empty() {
         // 远程桌面断开、显卡驱动刚崩过、只挂虚拟显示器的机器上会出现。
         // 这时候 center() 算不出位置，窗口会停在系统给的默认坐标上。
-        logging::shell_log!("警告：系统报告 0 个显示器，窗口位置无法校正");
+        logging::shell_log!(crate::i18n::t("s.27ecfba771"));
     }
     let primary = win.primary_monitor().ok().flatten();
+    let unnamed = crate::i18n::t("s.dca24a94ac");
+    let primary_mark = crate::i18n::t("s.1029edff5a");
     for m in &monitors {
         let f = full(m);
         let w = work(m);
-        logging::shell_log!(
-            "显示器 {}{}：位置 {},{} 尺寸 {}x{} 工作区 {},{} {}x{} 缩放 {:.2}",
-            m.name().map(String::as_str).unwrap_or("(无名)"),
-            if primary.as_ref().and_then(|p| p.name()) == m.name() {
-                "（主）"
-            } else {
-                ""
-            },
+        let name = m.name().map(String::as_str).unwrap_or(unnamed.as_str());
+        let mark = if primary.as_ref().and_then(|p| p.name()) == m.name() {
+            primary_mark.as_str()
+        } else {
+            ""
+        };
+        logging::shell_log!("显示器 {}{}：位置 {},{} 尺寸 {}x{} 工作区 {},{} {}x{} 缩放 {:.2}",
+            name,
+            mark,
             f.x,
             f.y,
             f.w,
@@ -145,7 +147,7 @@ pub fn report_and_rescue(win: &WebviewWindow, phase: &str) {
         let _ = win.unminimize();
     }
     if !visible.unwrap_or(true) {
-        logging::shell_log!("窗口是隐藏的，显示出来");
+        logging::shell_log!(crate::i18n::t("s.4401758653"));
         let _ = win.show();
     }
     rescue_if_offscreen(win);
@@ -300,7 +302,7 @@ fn sync_maximized_frame(win: &WebviewWindow) {
             set_thickframe(hwnd, false);
             // 摘厚框后必须钳到工作区，否则盖住任务栏（看起来像任务栏变黑）。
             fit_maximized_to_work_area(win);
-            logging::shell_log!("最大化：已摘厚框并钳到工作区（不碰 DWM NC 策略）");
+            logging::shell_log!(crate::i18n::t("s.30858683aa"));
         }
         // 区域裁切在最大化时必须撤掉，否则四角露桌面。
         if NEEDS_REGION.load(Ordering::Relaxed) {
@@ -315,7 +317,7 @@ fn sync_maximized_frame(win: &WebviewWindow) {
         if NEEDS_REGION.load(Ordering::Relaxed) {
             apply_corner_region(win);
         }
-        logging::shell_log!("还原：已恢复 WS_THICKFRAME（仍无系统描边）");
+        logging::shell_log!(crate::i18n::t("s.13b868078a"));
     } else if NEEDS_REGION.load(Ordering::Relaxed) {
         apply_corner_region(win);
     }
@@ -338,7 +340,7 @@ pub fn round_corners(win: &WebviewWindow) {
     };
 
     let Ok(hwnd) = win.hwnd() else {
-        logging::shell_log!("圆角：拿不到 HWND，跳过");
+        logging::shell_log!(crate::i18n::t("s.75af179e2d"));
         return;
     };
     let hwnd = hwnd.0 as HWND;
@@ -359,7 +361,7 @@ pub fn round_corners(win: &WebviewWindow) {
     // set_shadow(true) 把 1px 白边加回来。
     let _ = win.set_shadow(false);
     if hr == 0 {
-        logging::shell_log!("圆角：DWM 已生效（无系统描边）");
+        logging::shell_log!(crate::i18n::t("s.3db536a84d"));
         // 建窗时若已是最大化（少见），立刻铺满，别等第一次 Resized。
         sync_maximized_frame(win);
         return;
@@ -370,7 +372,7 @@ pub fn round_corners(win: &WebviewWindow) {
     // Win10 没有这个属性，DWM 这条路走不通。系统不给画就自己画：给窗口套一个
     // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
     // 调用方在 Resized 时会再调一次。
-    logging::shell_log!("圆角：DWM 不支持（Win10 正常，HRESULT={hr:#x}），改用窗口区域裁切");
+    logging::shell_log!(crate::i18n::t("s.2d0c1739e0"));
     // Win10 上「拖动窗口后左缘留一条永不消失的竖带」也在这条分支里一并治掉。
     // 注意：必须延后到后台线程做，绝不能在建窗现场同步改框架（见函数注释）。
     kill_undecorated_shadow_inset_deferred(win);
@@ -414,13 +416,13 @@ fn kill_undecorated_shadow_inset_deferred(win: &WebviewWindow) {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         if !ready {
-            logging::shell_log!("竖带修复：渲染器 15 秒内未就绪，放弃动框架");
+            logging::shell_log!(crate::i18n::t("s.6ec08cc8d9"));
             return;
         }
         // 渲染器出现后再宽限半秒，让它把首帧提交完。
         std::thread::sleep(std::time::Duration::from_millis(500));
         if let Err(e) = win.set_shadow(false) {
-            logging::shell_log!("竖带修复：关投影标志失败（{e}）");
+            logging::shell_log!(crate::i18n::t("s.e4476ca669"));
             return;
         }
         // set_shadow 把活派给 tao 的另一个线程，等它改完：标志生效后客户区会和
@@ -441,7 +443,7 @@ fn kill_undecorated_shadow_inset_deferred(win: &WebviewWindow) {
         let _ = win.run_on_main_thread(move || {
             apply_corner_region(&for_region);
         });
-        logging::shell_log!("竖带修复：已关闭无装饰投影内缩，客户区铺满全窗");
+        logging::shell_log!(crate::i18n::t("s.b5e27d4505"));
     });
 }
 
@@ -571,8 +573,7 @@ pub fn place_on_active_monitor(win: &WebviewWindow) {
         return;
     }
     let to = work(&target).center_for(r.w, r.h);
-    logging::shell_log!(
-        "窗口开在了非当前显示器上（{},{}），挪到光标所在屏 {},{}",
+    logging::shell_log!("窗口开在了非当前显示器上（{},{}），挪到光标所在屏 {},{}",
         r.x,
         r.y,
         to.x,

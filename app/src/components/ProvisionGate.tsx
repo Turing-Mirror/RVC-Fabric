@@ -10,6 +10,7 @@ import {
 } from "../lib/engine";
 import { Btn, HelpMark } from "./ui";
 import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "./MainGpuPicker";
+import { t } from "../i18n/t";
 
 type VariantRow = {
   id: string;
@@ -35,7 +36,7 @@ function formatBytes(n: number): string {
 
 function formatDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return t("s.0cc05a38ad", { v0: s });
   const m = Math.floor(s / 60);
   if (m < 60) return `${m} 分 ${s % 60} 秒`;
   return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
@@ -51,7 +52,7 @@ const STALL_AFTER_MS = 12_000;
 
 function isCancelError(e: unknown): boolean {
   const s = String(e ?? "");
-  return s.includes("已取消") || s.toLowerCase().includes("cancel");
+  return s.includes(t("s.a5ffdc95ee")) || s.toLowerCase().includes("cancel");
 }
 
 /**
@@ -143,7 +144,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     void listen<ProvisionProgress>("provision-progress", (ev) => {
       setProgress(ev.payload);
       if (ev.payload.phase === "error") {
-        const msg = ev.payload.message || "补全失败";
+        const msg = ev.payload.message || t("s.44c7946c76");
         if (isCancelError(msg)) {
           // Cancel is not a failure to display; start()'s catch also handles it.
           return;
@@ -164,8 +165,8 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     const list = (info.variants || []) as VariantRow[];
     if (list.length > 0) return list;
     return [
-      { id: "nvidia", label: "NVIDIA（推荐大多数 N 卡）" },
-      { id: "nvidia50", label: "NVIDIA 50 系（RTX 50xx）" },
+      { id: "nvidia", label: t("s.4c65a5e25e") },
+      { id: "nvidia50", label: t("s.e7a64d4aaf") },
       { id: "amd", label: "AMD / Intel（DirectML）" },
     ];
   }, [info.variants]);
@@ -194,13 +195,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
   /** Runtime 之后：下 VB-Cable 安装包（软失败可跳过），再让用户点安装。 */
   async function prepareVbcable() {
-    setExtra("正在准备虚拟声卡安装包…");
+    setExtra(t("s.094beaeab9"));
     setProgress({
       phase: "vbcable",
       done: 0,
       total: 1,
       percent: 0,
-      message: "正在准备虚拟声卡安装包…",
+      message: t("s.094beaeab9"),
     });
     try {
       await invoke("assets_ensure_vbcable");
@@ -221,7 +222,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     startedAt.current = Date.now();
     lastMove.current = { at: Date.now(), done: -1, phase: "" };
     setNow(Date.now());
-    setProgress({ phase: "prepare", done: 0, total: 1, percent: 0, message: "准备…" });
+    setProgress({ phase: "prepare", done: 0, total: 1, percent: 0, message: t("s.2105061e3e") });
     try {
       const r = await startProvision(variant, false);
       if (r.ok) {
@@ -231,7 +232,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
       } else if (isCancelError(r.message)) {
         finishCancel();
       } else {
-        setError(r.message || "补全失败");
+        setError(r.message || t("s.44c7946c76"));
       }
     } catch (e) {
       if (isCancelError(e)) {
@@ -288,7 +289,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     showBar &&
     done <= 0 &&
     (String(progress?.phase || "").startsWith("connecting") ||
-      String(progress?.message || "").includes("连接"));
+      String(progress?.message || "").includes(t("s.7328deebb5")));
 
   // 静默多久了。lastMove.at 为 0 表示这一轮还没开始，别把它当成静默了 55 年。
   const idleMs = lastMove.current.at ? now - lastMove.current.at : 0;
@@ -298,15 +299,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   return (
     <div className="absolute inset-0 z-[50] flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
       <div className="w-full max-w-[520px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
-        <h2 className="text-[22px] font-semibold m-0 mb-2">补全运行时</h2>
+        <h2 className="text-[22px] font-semibold m-0 mb-2">{t("s.405125fb37")}</h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
           {info.recommend_reason ||
-            "首次使用需下载运行时环境（含 PyTorch，需几 GB 空间），下载后自动部署。"}
-          <br />
-          完成后会准备 VB-Cable 虚拟声卡安装包。引擎资源（hubert / rmvpe / ffmpeg）改在「其他 → 下载模型」里按需补全。
-        </p>
+            t("s.1e1016e5c8")}
+          <br />{t("s.7d4cfa5986")}</p>
 
-        <div className="text-[12.5px] text-[var(--meta)] mb-2">运行时版本</div>
+        <div className="text-[12.5px] text-[var(--meta)] mb-2">{t("s.6a6564705b")}</div>
         <div className="flex flex-col gap-2 mb-5">
           {variants.map((v) => {
             const on = v.id === variant;
@@ -333,7 +332,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 <span className="inline-flex items-center flex-wrap gap-x-2 gap-y-0.5">
                   <span>{v.label}</span>
                   {info.recommended_variant === v.id ? (
-                    <span className="text-[11.5px] text-[var(--accent)]">推荐</span>
+                    <span className="text-[11.5px] text-[var(--accent)]">{t("s.62b46f24ae")}</span>
                   ) : null}
                   {sizeText ? (
                     <span className="text-[11.5px] text-[var(--meta)]">约 {sizeText}</span>
@@ -354,9 +353,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             摆在首次安装的流程里只会让人卡住。 */}
         {(info.nvidia_gpus?.length ?? 0) > 1 ? (
           <div className="mb-5">
-            <div className="text-[12.5px] text-[var(--meta)] mb-2 flex items-center gap-[9px]">
-              主显卡
-              <HelpMark title={MAIN_GPU_TIP} />
+            <div className="text-[12.5px] text-[var(--meta)] mb-2 flex items-center gap-[9px]">{t("s.6b26feecc1")}<HelpMark title={MAIN_GPU_TIP} />
             </div>
             <MainGpuPicker
               full
@@ -365,10 +362,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               onChange={pickMainGpu}
               disabled={busy}
             />
-            <p className="text-[11.5px] text-[var(--meta)] m-0 mt-2 leading-relaxed">
-              你有多块 N 卡。不指定的话引擎用排在第一的那块，不一定是最快的那块。
-              以后也可以在「其他 → 运行状态」里改。
-            </p>
+            <p className="text-[11.5px] text-[var(--meta)] m-0 mt-2 leading-relaxed">{t("s.2de72cf04d")}</p>
           </div>
         ) : null}
 
@@ -376,7 +370,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           <div className="mb-4">
             <div className="flex justify-between gap-3 text-[12px] text-[var(--meta)] mb-1.5">
               <span className="min-w-0 flex-1 truncate">
-                {progress?.message || progress?.phase || "下载中…"}
+                {progress?.message || progress?.phase || t("s.65188d08a2")}
               </span>
               <span className="shrink-0 tabular-nums flex items-center gap-2">
                 {speedLabel ? (
@@ -403,9 +397,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 {speedLabel ? <span>{speedLabel}</span> : null}
               </div>
             ) : isDownload ? (
-              <div className="mt-1.5 text-[11.5px] text-[var(--meta)]">
-                正在连接服务器，稍后显示进度…
-              </div>
+              <div className="mt-1.5 text-[11.5px] text-[var(--meta)]">{t("s.502c5adda6")}</div>
             ) : null}
 
             {/* 已用时间。一条不动的进度条配上「已用 6 分 20 秒」，至少能看出
@@ -422,12 +414,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed">
                 已经 {formatDuration(idleMs)} 没有收到新数据。
                 {isDownload
-                  ? "可能是网络波动或服务器无响应，不是软件卡死。"
-                  : "这一步不报进度，通常是在解压或校验文件，请耐心等待。"}
-                <br />
-                可以继续等；也可以点「取消」再重来一次 ——
-                已经下好的部分留在本地，重开会接着下，不会白下。
-              </div>
+                  ? t("s.7d2fe2ae0a")
+                  : t("s.703e6f531a")}
+                <br />{t("s.de5de9e783")}</div>
             ) : null}
           </div>
         ) : null}
@@ -442,13 +431,13 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
         {vbcable ? (
           <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
-            <div className="text-[13.5px] mb-1">最后一步：安装虚拟声卡</div>
+            <div className="text-[13.5px] mb-1">{t("s.3d4e683008")}</div>
             <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
               {vbcable === "failed"
-                ? `安装包没准备好：${vbcableMsg}。可以稍后在「说明」页重试。`
+                ? t("s.d80c650a49", { v0: vbcableMsg })
                 : vbcable === "installing"
-                  ? "已启动官方安装程序，请在弹窗中确认（需要管理员权限）"
-                  : "没有它，游戏和语音软件里的人听不到变声后的你。点「安装」会弹出官方安装程序和管理员确认。"}
+                  ? t("s.65c66af000")
+                  : t("s.c946d45a63")}
             </div>
           </div>
         ) : null}
@@ -456,7 +445,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         <div className="flex items-center gap-2 justify-end">
           {vbcable ? (
             <>
-              <Btn onClick={onDone}>{vbcable === "ready" ? "跳过" : "完成"}</Btn>
+              <Btn onClick={onDone}>{vbcable === "ready" ? t("s.31a98593f1") : t("s.33246f6a5e")}</Btn>
               {vbcable === "ready" ? (
                 <Btn
                   primary
@@ -467,26 +456,22 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                       setVbcable("failed");
                     });
                   }}
-                >
-                  安装
-                </Btn>
+                >{t("s.087db63ab1")}</Btn>
               ) : null}
             </>
           ) : busy ? (
-            <Btn onClick={onCancelClick}>取消</Btn>
+            <Btn onClick={onCancelClick}>{t("s.4d0b4688c7")}</Btn>
           ) : (
             <>
-              {onDismiss ? <Btn onClick={onDismiss}>稍后</Btn> : null}
+              {onDismiss ? <Btn onClick={onDismiss}>{t("s.479fcc1cc0")}</Btn> : null}
               <Btn primary onClick={() => void start()}>
                 开始下载
-                {selectedSizeLabel ? `（约 ${selectedSizeLabel}）` : ""}
+                {selectedSizeLabel ? t("s.e592773b6a", { v0: selectedSizeLabel }) : ""}
               </Btn>
             </>
           )}
         </div>
-        <p className="text-[11.5px] text-[var(--meta)] m-0 mt-4 leading-relaxed">
-          支持断点续传，中断后重新开始即可。请保持网络畅通。
-        </p>
+        <p className="text-[11.5px] text-[var(--meta)] m-0 mt-4 leading-relaxed">{t("s.9a79ee8bcd")}</p>
       </div>
     </div>
   );

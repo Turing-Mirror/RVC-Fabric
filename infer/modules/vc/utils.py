@@ -1,6 +1,19 @@
 import os
 
 
+def product_root() -> str:
+    """Install / repo root. Prefer TM_VOICE_ROOT (shell sets it); else cwd."""
+    env = (os.environ.get("TM_VOICE_ROOT") or "").strip()
+    if env and os.path.isdir(env):
+        return env
+    return os.getcwd()
+
+
+def resolve_under_product(*parts: str) -> str:
+    """Join relative asset paths under product root (absolute)."""
+    return os.path.normpath(os.path.join(product_root(), *parts))
+
+
 def get_index_path_from_model(sid):
     """Find a matching .index under index_root for the given model id/path.
 
@@ -10,6 +23,8 @@ def get_index_path_from_model(sid):
     can rely on an explicit index path from config instead.
     """
     index_root = os.getenv("index_root") or ""
+    if index_root and not os.path.isabs(index_root):
+        index_root = resolve_under_product(index_root)
     if not index_root or not os.path.isdir(index_root):
         return ""
 
@@ -36,8 +51,16 @@ def get_index_path_from_model(sid):
 def load_hubert(config):
     from fairseq import checkpoint_utils
 
+    # Relative "assets/hubert/..." fails when cwd is not the product root, and
+    # fairseq only says "Model file not found". Resolve under TM_VOICE_ROOT.
+    path = resolve_under_product("assets", "hubert", "hubert_base.pt")
+    if not os.path.isfile(path) or os.path.getsize(path) < 1_000_000:
+        raise FileNotFoundError(
+            f"找不到 hubert 模型（引擎资源未补全）：{path}\n"
+            "请回到主界面完成「引擎资源」下载（hubert / rmvpe / ffmpeg）。"
+        )
     models, _, _ = checkpoint_utils.load_model_ensemble_and_task(
-        ["assets/hubert/hubert_base.pt"],
+        [path],
         suffix="",
     )
     hubert_model = models[0]

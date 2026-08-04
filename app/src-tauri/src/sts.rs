@@ -61,8 +61,16 @@ pub fn status(root: &Path) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let engine_ready = crate::engine_assets::engine_core_ready(root);
+    let missing = if engine_ready {
+        Vec::new()
+    } else {
+        crate::engine_assets::engine_core_missing(root)
+    };
     json!({
         "runtime_ready": paths::runtime_ready(root),
+        "engine_core_ready": engine_ready,
+        "engine_core_missing": missing,
         "worker_present": worker_script(root).is_file(),
         "model_path": pth,
         "model_name": cfg.get("last_model_name").and_then(|v| v.as_str()).unwrap_or(""),
@@ -138,6 +146,12 @@ fn run_inner(
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err("Runtime 未就绪，请先补全运行时".into());
+    }
+    if !crate::engine_assets::engine_core_ready(root) {
+        let miss = crate::engine_assets::engine_core_missing(root).join("、");
+        return Err(format!(
+            "引擎资源不完整（缺 {miss}）。请先在主界面完成「引擎资源」下载（hubert / rmvpe / ffmpeg）。"
+        ));
     }
     let script = worker_script(root);
     if !script.is_file() {

@@ -11,6 +11,8 @@ type Mode = "sts" | "tts";
 
 type StsStatus = {
   runtime_ready?: boolean;
+  engine_core_ready?: boolean;
+  engine_core_missing?: string[];
   worker_present?: boolean;
   model_path?: string;
   model_name?: string;
@@ -127,11 +129,13 @@ function StsSection() {
 
   const blocked = !st.runtime_ready
     ? "运行时未就绪，先到「其他」页补全运行时"
-    : !st.worker_present
-      ? "缺少转换脚本，安装可能不完整"
-      : !st.model_path
-        ? "未选择目标音色。请到首页或「模型」页先选一个音色。"
-        : "";
+    : st.engine_core_ready === false
+      ? `引擎资源未补全（缺 ${(st.engine_core_missing || []).join("、") || "hubert/rmvpe"}）。请先在主界面完成引擎资源下载。`
+      : !st.worker_present
+        ? "缺少转换脚本，安装可能不完整"
+        : !st.model_path
+          ? "未选择目标音色。请到首页或「模型」页先选一个音色。"
+          : "";
 
   const start = async () => {
     if (runningRef.current) return;

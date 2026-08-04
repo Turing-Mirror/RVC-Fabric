@@ -67,17 +67,53 @@ def _ensure_stdio_utf8() -> None:
 
 
 def _ensure_rvc_env() -> None:
-    """加载产品根 .env（若有），并补齐缺失的 RVC 路径变量。"""
+    """cwd 切到产品根、加载 .env、补齐 RVC 路径（相对路径改成绝对路径）。"""
+    try:
+        os.chdir(ROOT)
+    except OSError:
+        pass
+    os.environ["TM_VOICE_ROOT"] = str(ROOT)
     try:
         from dotenv import load_dotenv
 
-        # 先 cwd（Rust 会 current_dir=产品根），再脚本所在产品根，双保险。
-        load_dotenv()
         load_dotenv(ROOT / ".env")
+        load_dotenv()
     except Exception:
         pass
     for key, val in _RVC_ENV_DEFAULTS.items():
         os.environ.setdefault(key, val)
+    # 相对路径一律钉死在产品根，避免 fairseq / rmvpe 找不到文件。
+    for key in (
+        "weight_root",
+        "weight_uvr5_root",
+        "index_root",
+        "outside_index_root",
+        "rmvpe_root",
+    ):
+        cur = (os.environ.get(key) or "").strip()
+        if not cur:
+            continue
+        p = Path(cur)
+        if not p.is_absolute():
+            os.environ[key] = str((ROOT / p).resolve())
+
+
+def _preflight_engine(f0method: str) -> str | None:
+    """引擎资源缺了就直接说清楚，别进 torch 后再炸一长串 traceback。"""
+    hubert = ROOT / "assets" / "hubert" / "hubert_base.pt"
+    if not hubert.is_file() or hubert.stat().st_size < 1_000_000:
+        return (
+            f"缺少 hubert_base.pt（引擎资源未补全）。期望路径：{hubert}\n"
+            "请回到主界面完成「引擎资源」下载后再试。"
+        )
+    if f0method.lower() == "rmvpe":
+        rmvpe = ROOT / "assets" / "rmvpe" / "rmvpe.pt"
+        if not rmvpe.is_file() or rmvpe.stat().st_size < 1_000_000:
+            return (
+                f"缺少 rmvpe.pt（引擎资源未补全）。期望路径：{rmvpe}\n"
+                "请回到主界面完成「引擎资源」下载后再试。"
+            )
+    return None
 
 
 def emit(**kw) -> None:
@@ -144,6 +180,13 @@ def main(argv: list[str]) -> int:
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     total = len(files)
+
+    _ensure_rvc_env()
+    miss = _preflight_engine(f0method)
+    if miss:
+        emit(phase="error", message=miss)
+        return 1
+
     emit(phase="start", total=total, message=f"共 {total} 个文件")
 
     try:
@@ -152,7 +195,6 @@ def main(argv: list[str]) -> int:
         from configs.config import Config
         from infer.modules.vc.modules import VC
 
-        _ensure_rvc_env()
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
         sys.argv = [sys.argv[0]]
         config = Config()

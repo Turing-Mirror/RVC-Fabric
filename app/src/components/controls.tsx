@@ -171,6 +171,9 @@ export function RangeBar({
   max,
   step,
   onChange,
+  ticks = 5,
+  /** 初始/中性值位置（如音高 0）。画成竖线；与之重合的刻度小点会跳过不画。 */
+  defaultValue,
   ariaLabel,
 }: {
   value: number;
@@ -178,18 +181,17 @@ export function RangeBar({
   max: number;
   step: number;
   onChange: (v: number) => void;
-  /**
-   * @deprecated 不再绘制刻度/初始值标记；保留参数以免调用方报错。
-   */
+  /** 轨道上的刻度点数量，0 表示不画。 */
   ticks?: number;
-  /**
-   * @deprecated 不再绘制初始值竖线；保留参数以免调用方报错。
-   */
   defaultValue?: number;
   ariaLabel?: string;
 }) {
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
+  const defaultPct =
+    defaultValue != null && Number.isFinite(defaultValue)
+      ? Math.min(100, Math.max(0, ((defaultValue - min) / span) * 100))
+      : null;
 
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动中光标所在的百分比。null = 没在拖，把手画在量化后的位置上。
@@ -245,6 +247,20 @@ export function RangeBar({
   const knobX = `calc(${draw}% - ${(KNOB_W * draw) / 100}px)`;
   const fillW = `calc(${draw}% - ${(KNOB_W * draw) / 100 - KNOB_W / 2}px)`;
 
+  // 初始值竖线：把手行程与光标一致，左右各缩半个把手宽。
+  const defaultMarkLeft =
+    defaultPct != null
+      ? `calc(${KNOB_W / 2}px + (100% - ${KNOB_W}px) * ${defaultPct / 100})`
+      : null;
+
+  // 刻度点均匀分位。与初始值竖线重合的那一颗不画，避免「竖线旁多一颗点」。
+  const tickPcts =
+    ticks > 1
+      ? Array.from({ length: ticks }, (_, i) => (i / (ticks - 1)) * 100)
+      : ticks === 1
+        ? [50]
+        : [];
+
   return (
     <div
       ref={trackRef}
@@ -258,7 +274,38 @@ export function RangeBar({
         className="absolute inset-y-0 left-0 rounded-l-md bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
         style={{ width: fillW, ...glide }}
       />
-      {/* 圆角方块把手（不是椭圆/胶囊）。不画刻度点 / 初始值竖线：界面更干净。 */}
+      {/* 刻度小点：均匀分位；与 defaultValue 重合的跳过（竖线已表示该位置）。 */}
+      {tickPcts.length > 0 ? (
+        <div aria-hidden className="absolute inset-0 pointer-events-none">
+          {tickPcts.map((tickPct, i) => {
+            if (
+              defaultPct != null &&
+              Math.abs(tickPct - defaultPct) < 0.75
+            ) {
+              return null;
+            }
+            // 与把手中心行程一致：左右各缩半个把手，和 default 竖线同一套坐标。
+            const left = `calc(${KNOB_W / 2}px + (100% - ${KNOB_W}px) * ${tickPct / 100})`;
+            return (
+              <span
+                key={i}
+                className="absolute top-1/2 w-[3px] h-[3px] -mt-[1.5px] -ml-[1.5px] rounded-full bg-[color-mix(in_srgb,var(--ink)_22%,transparent)]"
+                style={{ left }}
+              />
+            );
+          })}
+        </div>
+      ) : null}
+      {/* 初始值标记：短竖线。 */}
+      {defaultMarkLeft != null ? (
+        <div
+          aria-hidden
+          title="初始值"
+          className="absolute top-[4px] bottom-[4px] w-[2px] rounded-sm bg-[color-mix(in_srgb,var(--ink)_38%,transparent)] pointer-events-none"
+          style={{ left: defaultMarkLeft, transform: "translateX(-50%)" }}
+        />
+      ) : null}
+      {/* 圆角方块把手（不是椭圆/胶囊）。 */}
       <div
         aria-hidden
         className={[
@@ -291,7 +338,7 @@ export function Slider({
   step,
   onChange,
   format,
-  defaultValue: _defaultValue,
+  defaultValue,
 }: {
   value: number;
   min: number;
@@ -299,10 +346,9 @@ export function Slider({
   step: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
-  /** @deprecated 不再绘制初始值标记；保留以免调用方报错。 */
+  /** 初始/中性值标记，见 RangeBar。 */
   defaultValue?: number;
 }) {
-  void _defaultValue;
   const shown = format ? format(value) : String(value);
   return (
     <div className="flex items-center gap-[15px] w-full">
@@ -316,6 +362,7 @@ export function Slider({
           max={max}
           step={step}
           onChange={onChange}
+          defaultValue={defaultValue}
         />
       </div>
       <div className="text-[13px] min-w-[56px] text-right tabular-nums">{shown}</div>

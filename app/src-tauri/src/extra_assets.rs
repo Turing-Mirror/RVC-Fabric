@@ -354,8 +354,6 @@ pub fn list(root: &Path) -> Value {
         "available": reachable,
         "items": items,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
-        // 语音合成不吃 extras：系统 SAPI 吐字 + 已装音色做 RVC，零附加下载。
-        "tts_needs_download": false,
     })
 }
 

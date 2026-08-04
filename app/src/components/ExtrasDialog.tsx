@@ -22,7 +22,6 @@ type List = {
   available?: boolean;
   items?: Item[];
   busy?: boolean;
-  tts_needs_download?: boolean;
 };
 
 type Progress = {
@@ -67,7 +66,7 @@ const GROUP_META: Record<
  * 附加资源下载：分离模型、训练底模。
  *
  * 列表按「功能」分组（训练 / 分离），每条带用途说明，避免用户面对一长串
- * pymss-xxx / pretrained-xxx 不知道该下哪个。TTS 不需要额外模型，弹窗底部写清。
+ * pymss-xxx / pretrained-xxx 不知道该下哪个。
  */
 export function ExtrasDialog({
   open,
@@ -280,18 +279,6 @@ export function ExtrasDialog({
                       />
                     ))
                   : null}
-              </div>
-            ) : null}
-
-            {filter === "all" || filter === "train" ? (
-              <div className="pt-3 pb-2">
-                <div className="text-[13px] font-semibold text-[var(--ink)]">
-                  语音合成
-                </div>
-                <p className="m-0 mt-0.5 text-[12px] text-[var(--meta)] leading-snug">
-                  不需要额外下载模型。系统自带语音负责吐字，音色来自你已安装的
-                  RVC 模型——装好音色后直接打开「语音合成」即可。
-                </p>
               </div>
             ) : null}
           </div>

@@ -55,7 +55,7 @@ function isCancelError(e: unknown): boolean {
 }
 
 /**
- * First-run / missing-Runtime gate: pick variant, download + extract Runtime only.
+ * First-run / missing-Runtime gate: Runtime + VB-Cable 安装包。
  *
  * 引擎资源（hubert / rmvpe / ffmpeg）不在这里下，改到「其他 → 下载模型」按需补。
  * Only shown when need_provision; does not change everyday VC flow once ready.
@@ -74,6 +74,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   // hook count changed the moment the gate opened, React threw #310 and tore
   // down the whole tree — a blank window on exactly the machines that need the
   // gate (a fresh install with no Runtime yet).
+  const [extra, setExtra] = useState("");
+  // Runtime 下完后准备 VB-Cable：ready=可点安装，failed=下载失败仍可跳过。
+  const [vbcable, setVbcable] = useState<null | "ready" | "installing" | "failed">(
+    null,
+  );
+  const [vbcableMsg, setVbcableMsg] = useState("");
   // 主显卡。-1 = 自动。只有多块 N 卡时才有得选，所以下面按需渲染。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
 
@@ -181,13 +187,37 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     setBusy(false);
     setProgress(null);
     setError("");
+    setExtra("");
     // User asked to leave the gate after cancel (task already stopped).
     onDismiss?.();
   };
 
+  /** Runtime 之后：下 VB-Cable 安装包（软失败可跳过），再让用户点安装。 */
+  async function prepareVbcable() {
+    setExtra("正在准备虚拟声卡安装包…");
+    setProgress({
+      phase: "vbcable",
+      done: 0,
+      total: 1,
+      percent: 0,
+      message: "正在准备虚拟声卡安装包…",
+    });
+    try {
+      await invoke("assets_ensure_vbcable");
+      setExtra("");
+      setVbcable("ready");
+    } catch (e) {
+      setExtra("");
+      setVbcableMsg(String(e));
+      setVbcable("failed");
+    }
+  }
+
   const start = async () => {
     setBusy(true);
     setError("");
+    setVbcable(null);
+    setVbcableMsg("");
     startedAt.current = Date.now();
     lastMove.current = { at: Date.now(), done: -1, phase: "" };
     setNow(Date.now());
@@ -195,14 +225,10 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     try {
       const r = await startProvision(variant, false);
       if (r.ok) {
-        // 首次门禁只补 Runtime。引擎资源（hubert/rmvpe/ffmpeg）改到
-        // 「其他 → 下载模型」按需下载；VB-Cable 仍在「说明」页装。
-        setBusy(false);
-        setProgress(null);
-        onDone();
-        return;
-      }
-      if (isCancelError(r.message)) {
+        // 引擎资源（hubert/rmvpe/ffmpeg）不在首次补全里，改到「下载模型」按需下。
+        // VB-Cable 仍随首次补全准备，否则游戏里听不到变声。
+        await prepareVbcable();
+      } else if (isCancelError(r.message)) {
         finishCancel();
       } else {
         setError(r.message || "补全失败");
@@ -256,7 +282,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const barWidth =
     done > 0 && pct < 0.5 ? Math.max(pct, 0.5) : Math.min(100, pct);
   const showBar = busy && progress && progress.phase !== "error";
-  // Only the download phase reports bytes. Extract emits done=0 total=1.
+  // Only the download phase reports bytes. Extract / vbcable emit done=0 total=1.
   const isDownload = String(progress?.phase || "") === "download";
   const connecting =
     showBar &&
@@ -277,7 +303,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           {info.recommend_reason ||
             "首次使用需下载运行时环境（含 PyTorch，需几 GB 空间），下载后自动部署。"}
           <br />
-          引擎资源（hubert / rmvpe / ffmpeg）改在「其他 → 下载模型」里按需补全。
+          完成后会准备 VB-Cable 虚拟声卡安装包。引擎资源（hubert / rmvpe / ffmpeg）改在「其他 → 下载模型」里按需补全。
         </p>
 
         <div className="text-[12.5px] text-[var(--meta)] mb-2">运行时版本</div>
@@ -406,12 +432,47 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           </div>
         ) : null}
 
+        {extra ? (
+          <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-3">{extra}</p>
+        ) : null}
+
         {error ? (
           <p className="text-[12.5px] text-[#c43] m-0 mb-3 leading-relaxed">{error}</p>
         ) : null}
 
+        {vbcable ? (
+          <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
+            <div className="text-[13.5px] mb-1">最后一步：安装虚拟声卡</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              {vbcable === "failed"
+                ? `安装包没准备好：${vbcableMsg}。可以稍后在「说明」页重试。`
+                : vbcable === "installing"
+                  ? "已启动官方安装程序，请在弹窗中确认（需要管理员权限）"
+                  : "没有它，游戏和语音软件里的人听不到变声后的你。点「安装」会弹出官方安装程序和管理员确认。"}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2 justify-end">
-          {busy ? (
+          {vbcable ? (
+            <>
+              <Btn onClick={onDone}>{vbcable === "ready" ? "跳过" : "完成"}</Btn>
+              {vbcable === "ready" ? (
+                <Btn
+                  primary
+                  onClick={() => {
+                    setVbcable("installing");
+                    void invoke("assets_install_vbcable").catch((e) => {
+                      setVbcableMsg(String(e));
+                      setVbcable("failed");
+                    });
+                  }}
+                >
+                  安装
+                </Btn>
+              ) : null}
+            </>
+          ) : busy ? (
             <Btn onClick={onCancelClick}>取消</Btn>
           ) : (
             <>

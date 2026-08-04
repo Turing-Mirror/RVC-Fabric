@@ -14,17 +14,19 @@ Shared by **React UI** and **Rust host** (tray, `message_code` status).
 - Glossary: `glossary.terms[]` with stable `id`
 - Engine status codes: `msg.<code>` — Python writes `message_code`, shell localizes
 
-## Add a language
+## Translation workflow (MD only for translators)
 
-1. Copy `locales/zh-CN.json` → `locales/<code>.json` and translate values  
-2. Add code to `app/src/i18n/types.ts` (`LocaleCode` + `LOCALES`)  
-3. Add to Rust `i18n::supported`  
-4. Ship file via `tauri.conf.json` resources (`../i18n/locales` → `shell-i18n/locales`)
+1. Export sheet: `python scripts/dev/export_i18n_sheet.py` → `docs/i18n/sheets/source.md`  
+2. Give translator: `docs/i18n/给翻译AI.md` + `source.md`  
+3. Translator returns `docs/i18n/sheets/<locale>.md` (table: key | zh-CN | translation)  
+4. Merge: `python scripts/dev/merge_i18n_sheet.py --locale en-US --md docs/i18n/sheets/en-US.md`  
+5. New locale: also register in `app/src/i18n/types.ts` + Rust `i18n::supported`
 
-## Migrate more UI strings
+Translators must **not** hand-edit JSON.
 
-1. Add keys to both locale JSON files  
-2. Replace hard-coded Chinese with `t("…")` / `useI18n()`  
-3. Re-run `python scripts/dev/build_i18n_catalog.py` — migrated lines leave the draft  
+## Add a language (engineering)
 
-Full inventory: `docs/i18n/`.
+1. Merge MD → `locales/<code>.json` (step above)  
+2. `app/src/i18n/types.ts` (`LocaleCode` + `LOCALES`)  
+3. Rust `i18n::supported`  
+4. Resources already pack whole `../i18n/locales` → `shell-i18n/locales`  

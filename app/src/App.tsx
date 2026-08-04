@@ -22,6 +22,7 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { registerDownloadModelsOpener } from "./lib/downloadModels";
 
 /**
  * 变声多少次之后问一句「要不要关注」。
@@ -57,6 +58,9 @@ function clockNow(): string {
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
+  // 「下载模型」弹窗：音频工具 / 开启变声缺引擎资源时也会跳到这里。
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const [extrasReason, setExtrasReason] = useState("");
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
@@ -378,6 +382,18 @@ export default function App() {
   // home page and the models page can never drift apart on what the dock shows.
   const openModels = useCallback(() => setPage("models"), []);
   const openHelp = useCallback(() => setPage("help"), []);
+  const openDownloadModels = useCallback((reason?: string) => {
+    setPage("more");
+    setExtrasReason(reason || "");
+    setExtrasOpen(true);
+  }, []);
+
+  useEffect(() => {
+    registerDownloadModelsOpener((opts) => {
+      openDownloadModels(opts?.reason);
+    });
+    return () => registerDownloadModelsOpener(null);
+  }, [openDownloadModels]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const openPlaza = useCallback(() => {
@@ -721,6 +737,13 @@ export default function App() {
                     setProvisionDismissed(false);
                     setShowProvision(true);
                   }}
+                  extrasOpen={extrasOpen}
+                  extrasReason={extrasReason}
+                  onExtrasOpenChange={(open) => {
+                    setExtrasOpen(open);
+                    if (!open) setExtrasReason("");
+                  }}
+                  onOpenDownloadModels={openDownloadModels}
                 />
               );
           }

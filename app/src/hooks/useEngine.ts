@@ -154,6 +154,19 @@ export function useEngine() {
       );
       return;
     }
+    // 引擎资源不在首次 Runtime 补全里；开变声前再查一次。
+    try {
+      const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
+      const ok = await ensureEngineCoreOrPrompt(
+        "开启变声前，需要先下载引擎资源（hubert / rmvpe / ffmpeg）。请到「其他 → 下载模型」补全。",
+      );
+      if (!ok) {
+        setLastError("引擎资源未补全，请先到「其他 → 下载模型」下载引擎资源");
+        return;
+      }
+    } catch {
+      /* 预览模式忽略 */
+    }
     setBusy(true);
     setLastError("");
     try {

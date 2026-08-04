@@ -18,6 +18,11 @@ type Props = {
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
   onOpenProvision?: () => void;
+  /** 由 App 托管「下载模型」弹窗时传入；不传则本页本地开。 */
+  extrasOpen?: boolean;
+  extrasReason?: string;
+  onExtrasOpenChange?: (open: boolean) => void;
+  onOpenDownloadModels?: (reason?: string) => void;
 };
 
 export function MorePage({
@@ -25,11 +30,24 @@ export function MorePage({
   provision,
   onForceKill,
   onOpenProvision,
+  extrasOpen: extrasOpenProp,
+  extrasReason = "",
+  onExtrasOpenChange,
+  onOpenDownloadModels,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
-  const [extrasOpen, setExtrasOpen] = useState(false);
+  const [extrasOpenLocal, setExtrasOpenLocal] = useState(false);
+  const extrasOpen = extrasOpenProp ?? extrasOpenLocal;
+  const setExtrasOpen = (open: boolean) => {
+    if (onExtrasOpenChange) onExtrasOpenChange(open);
+    else setExtrasOpenLocal(open);
+  };
+  const openExtras = (reason?: string) => {
+    if (onOpenDownloadModels) onOpenDownloadModels(reason);
+    else setExtrasOpen(true);
+  };
   // Where the app thinks it is installed. The row below used to only describe
   // that this is resolved automatically, without ever showing the answer —
   // which is the first thing worth knowing when a report says "找不到 Runtime".
@@ -277,8 +295,8 @@ export function MorePage({
           />
           <ListItem
             title="下载模型"
-            desc="按功能分组：训练底模 / 人声分离模型"
-            right={<Btn onClick={() => setExtrasOpen(true)}>打开</Btn>}
+            desc="引擎资源（hubert/rmvpe）+ 训练底模 / 人声分离模型"
+            right={<Btn onClick={() => openExtras()}>打开</Btn>}
           />
         </Group>
       </Block>
@@ -287,6 +305,7 @@ export function MorePage({
         onClose={() => setExtrasOpen(false)}
         filter="all"
         title="下载模型"
+        reason={extrasReason}
       />
 
       <Block title="维护">

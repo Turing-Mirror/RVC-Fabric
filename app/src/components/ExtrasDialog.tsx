@@ -3,6 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import {
+  getAssetsStatus,
+  type AssetsStatus,
+} from "../lib/downloadModels";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -31,6 +35,15 @@ type Progress = {
   done?: number;
   total?: number;
   message?: string;
+};
+
+type ProvProgress = {
+  phase?: string;
+  done?: number;
+  total?: number;
+  percent?: number;
+  message?: string;
+  speed_label?: string;
 };
 
 /** 打开下载弹窗时预选哪一类；弹窗内仍可切换。 */
@@ -66,41 +79,55 @@ const CATEGORY_BLURB: Record<Category, string> = {
   separate:
     "训练前清理素材优先下「人声提取」。其余按场景按需下载；标「进阶」的体积大，日常一般用不到。",
   train:
-    "按采样率下一套底模即可（三选一）。Hubert / RMVPE 已在补全引擎资源时装好，这里不用重复下。",
+    "按采样率下一套底模即可（三选一）。先补全上方的引擎资源（hubert / rmvpe），再下底模。",
 };
 
 /**
- * 附加资源下载：分离模型、训练底模。
+ * 附加资源下载：引擎资源 + 分离模型 + 训练底模。
  *
- * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色，
- * 对应那边的「图灵镜源 / 第三方」），列表分页每页 5 条，不做无限滚动。
- * 弹窗本身加宽，否则用途说明一行字都折成三行。
+ * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色），
+ * 列表分页每页 5 条。引擎资源是前置依赖：未就绪时先下载它，再选模型。
  */
 export function ExtrasDialog({
   open,
   onClose,
   filter = "all",
   title,
+  reason,
 }: {
   open: boolean;
   onClose: () => void;
   filter?: ExtrasFilter;
   title?: string;
+  /** 从工具入口跳转时的说明（缺引擎资源等）。 */
+  reason?: string;
 }) {
   const [list, setList] = useState<List | null>(null);
+  const [assets, setAssets] = useState<AssetsStatus | null>(null);
   const [prog, setProg] = useState<Progress | null>(null);
+  const [coreProg, setCoreProg] = useState<ProvProgress | null>(null);
   const [msg, setMsg] = useState("");
   const [busyKey, setBusyKey] = useState("");
+  const [coreBusy, setCoreBusy] = useState(false);
   const [category, setCategory] = useState<Category>(
     filter === "train" ? "train" : "separate",
   );
   const [page, setPage] = useState(0);
   const busyRef = useRef(false);
 
+  /** null = 还在查；false = 缺引擎资源；true = 已就绪 */
+  const engineReady: boolean | null =
+    assets == null ? null : Boolean(assets.engine_core_ready);
+
   const load = async () => {
     setMsg("");
     try {
-      setList(await invoke<List>("extra_list"));
+      const [a, l] = await Promise.all([
+        getAssetsStatus(),
+        invoke<List>("extra_list"),
+      ]);
+      setAssets(a);
+      setList(l);
     } catch (e) {
       setList({ available: false, items: [] });
       setMsg(String(e));
@@ -110,21 +137,32 @@ export function ExtrasDialog({
   useEffect(() => {
     if (!open) return;
     setList(null);
+    setAssets(null);
     setPage(0);
     setCategory(filter === "train" ? "train" : "separate");
+    setCoreProg(null);
     void load();
     let disposed = false;
-    let un: (() => void) | undefined;
+    const unsubs: Array<() => void> = [];
     void listen<Progress>("extra-progress", (ev) => {
       setProg(ev.payload);
       if (ev.payload.phase === "error") setMsg(ev.payload.message || "下载失败");
     }).then((fn) => {
       if (disposed) fn();
-      else un = fn;
+      else unsubs.push(fn);
+    });
+    // 引擎资源下载复用 provision-progress（phase=engine-core）
+    void listen<ProvProgress>("provision-progress", (ev) => {
+      if (ev.payload?.phase === "engine-core" || String(ev.payload?.phase || "").includes("engine")) {
+        setCoreProg(ev.payload);
+      }
+    }).then((fn) => {
+      if (disposed) fn();
+      else unsubs.push(fn);
     });
     return () => {
       disposed = true;
-      un?.();
+      unsubs.forEach((f) => f());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 开窗一次拉清单
   }, [open, filter]);
@@ -143,8 +181,37 @@ export function ExtrasDialog({
 
   if (!open) return null;
 
+  const downloadEngineCore = async () => {
+    if (busyRef.current || coreBusy) return;
+    busyRef.current = true;
+    setCoreBusy(true);
+    setMsg("");
+    setCoreProg({
+      phase: "engine-core",
+      done: 0,
+      total: 1,
+      percent: 0,
+      message: "准备下载引擎资源…",
+    });
+    try {
+      await invoke("assets_ensure_engine_core");
+      setMsg("引擎资源已就绪");
+      setAssets(await getAssetsStatus());
+      setCoreProg(null);
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      busyRef.current = false;
+      setCoreBusy(false);
+    }
+  };
+
   const start = async (key: string) => {
-    if (busyRef.current) return;
+    if (busyRef.current || coreBusy) return;
+    if (engineReady === false) {
+      setMsg("请先下载引擎资源，再下载具体模型。");
+      return;
+    }
     busyRef.current = true;
     setBusyKey(key);
     setMsg("");
@@ -162,6 +229,12 @@ export function ExtrasDialog({
   };
 
   const pct = prog?.total ? Math.round(((prog.done ?? 0) / prog.total) * 100) : 0;
+  const corePct =
+    coreProg?.percent != null
+      ? Math.min(100, Math.max(0, Number(coreProg.percent)))
+      : coreProg?.total
+        ? Math.round(((coreProg.done ?? 0) / Math.max(coreProg.total, 1)) * 100)
+        : 0;
   const heading = title || "下载模型";
 
   const emptyHint =
@@ -171,10 +244,13 @@ export function ExtrasDialog({
         ? "暂时没有可下载的训练底模。"
         : "暂时没有可下载的分离模型。";
 
+  const locked = engineReady === false;
+  const anyBusy = !!busyKey || coreBusy;
+
   return (
     <div
       className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={busyKey ? undefined : onClose}
+      onClick={anyBusy ? undefined : onClose}
     >
       <div
         className="flex max-h-[min(88vh,720px)] w-full max-w-[min(920px,96vw)] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
@@ -198,17 +274,95 @@ export function ExtrasDialog({
           {CATEGORY_BLURB[category]}
         </p>
 
-        {list === null ? (
-          <div className="min-h-[280px] flex items-center">
+        {reason ? (
+          <p className="m-0 mb-3 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_14%,transparent)] px-3 py-2 text-[12.5px] text-[var(--ink-muted)] leading-relaxed">
+            {reason}
+          </p>
+        ) : null}
+
+        {/* 引擎资源前置卡：CNB engine-core，约 720MB */}
+        <div
+          className={[
+            "mb-4 rounded-[var(--rs)] px-3.5 py-3",
+            locked
+              ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_28%,transparent)]"
+              : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+          ].join(" ")}
+        >
+          <div className="flex items-start gap-3 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="text-[13.5px] font-semibold">
+                引擎资源
+                {engineReady === true ? (
+                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">
+                    已就绪
+                  </span>
+                ) : engineReady === false ? (
+                  <span className="ml-2 text-[12px] font-normal text-[var(--accent)]">
+                    未安装 · 约 720 MB
+                  </span>
+                ) : (
+                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">
+                    检查中…
+                  </span>
+                )}
+              </div>
+              <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
+                hubert / rmvpe / ffmpeg。实时变声、语音转换、训练音色都需要。
+                首次补全只下 Runtime，这项在用到时再下。
+                {assets?.engine_core_missing?.length
+                  ? ` 当前缺少：${assets.engine_core_missing.join("、")}`
+                  : ""}
+              </p>
+              {coreBusy && coreProg ? (
+                <div className="mt-2">
+                  <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
+                    <div
+                      className="h-full bg-[var(--accent)] transition-[width] duration-200"
+                      style={{ width: `${corePct}%` }}
+                    />
+                  </div>
+                  <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
+                    {coreProg.message || "下载中…"}
+                    {coreProg.speed_label ? ` · ${coreProg.speed_label}` : ""}
+                    {corePct > 0 ? ` · ${Math.round(corePct)}%` : ""}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            {engineReady === false ? (
+              <Btn
+                primary
+                className="shrink-0"
+                disabled={coreBusy || !!busyKey}
+                onClick={() => void downloadEngineCore()}
+              >
+                {coreBusy ? "下载中…" : "下载引擎资源"}
+              </Btn>
+            ) : engineReady === true ? (
+              <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2 py-1">
+                已安装
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {locked ? (
+          <div className="min-h-[200px] flex items-center">
+            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)] leading-relaxed">
+              请先下载引擎资源，完成后即可选择下方的人声分离模型或训练底模。
+            </p>
+          </div>
+        ) : list === null ? (
+          <div className="min-h-[200px] flex items-center">
             <p className="m-0 py-4 text-[13px] text-[var(--meta)]">正在读取清单…</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="min-h-[280px] flex items-center">
+          <div className="min-h-[200px] flex items-center">
             <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
           </div>
         ) : (
-          <div className="min-h-[280px] flex flex-col border-t border-[var(--hairline)]">
-            {/* 固定 5 行区域，页脚分页，整窗不滚列表。 */}
+          <div className="min-h-[200px] flex flex-col border-t border-[var(--hairline)]">
             <div className="flex-1">
               {pageItems.map((it) => (
                 <ItemRow
@@ -216,6 +370,7 @@ export function ExtrasDialog({
                   it={it}
                   category={category}
                   busyKey={busyKey}
+                  disabled={coreBusy}
                   onStart={start}
                 />
               ))}
@@ -224,7 +379,7 @@ export function ExtrasDialog({
             {totalPages > 1 ? (
               <div className="flex items-center justify-center gap-3 pt-4 pb-1">
                 <Btn
-                  disabled={pageClamped <= 0 || !!busyKey}
+                  disabled={pageClamped <= 0 || anyBusy}
                   onClick={() => setPage(pageClamped - 1)}
                 >
                   上一页
@@ -233,7 +388,7 @@ export function ExtrasDialog({
                   {pageClamped + 1} / {totalPages}
                 </span>
                 <Btn
-                  disabled={pageClamped >= totalPages - 1 || !!busyKey}
+                  disabled={pageClamped >= totalPages - 1 || anyBusy}
                   onClick={() => setPage(pageClamped + 1)}
                 >
                   下一页
@@ -271,7 +426,9 @@ export function ExtrasDialog({
           {busyKey ? (
             <Btn onClick={() => void invoke("extra_cancel")}>取消下载</Btn>
           ) : (
-            <Btn onClick={onClose}>关闭</Btn>
+            <Btn onClick={onClose} disabled={coreBusy}>
+              关闭
+            </Btn>
           )}
         </div>
       </div>
@@ -283,11 +440,13 @@ function ItemRow({
   it,
   category,
   busyKey,
+  disabled,
   onStart,
 }: {
   it: Item;
   category: Category;
   busyKey: string;
+  disabled?: boolean;
   onStart: (key: string) => void;
 }) {
   return (
@@ -319,7 +478,7 @@ function ItemRow({
       ) : (
         <Btn
           className="shrink-0 min-w-[72px]"
-          disabled={!!busyKey}
+          disabled={!!busyKey || !!disabled}
           onClick={() => void onStart(it.key)}
         >
           {busyKey === it.key ? "下载中…" : "下载"}

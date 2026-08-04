@@ -29,9 +29,20 @@ export function toolFromHash(hash: string): ToolKind | null {
 
 /** 从主窗口把某个工具窗口开起来（已经开着就拉到前面）。 */
 export function openTool(kind: ToolKind): void {
-  void invoke("tools_open", { kind }).catch(() => {
-    /* 浏览器预览里没有 shell */
-  });
+  void (async () => {
+    try {
+      const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
+      const ok = await ensureEngineCoreOrPrompt(
+        `使用「${TITLES[kind]}」前，需要先下载引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。下载完成后即可打开工具。`,
+      );
+      if (!ok) return;
+    } catch {
+      /* 浏览器预览或 assets_status 失败：仍尝试打开，由工具内再拦 */
+    }
+    void invoke("tools_open", { kind }).catch(() => {
+      /* 浏览器预览里没有 shell */
+    });
+  })();
 }
 
 /**

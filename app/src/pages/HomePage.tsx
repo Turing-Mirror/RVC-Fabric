@@ -272,8 +272,8 @@ function ToolShortcuts() {
       go: () => openTool("train"),
     },
     {
-      label: "语音合成",
-      desc: "输入文本，用当前音色念出来",
+      label: "语音转换",
+      desc: "音频变声 / 文字合成，换成目标音色",
       go: () => openTool("tts"),
     },
   ];

@@ -11,7 +11,7 @@ export type ToolKind = "separate" | "train" | "tts";
 const TITLES: Record<ToolKind, string> = {
   separate: "人声分离",
   train: "训练音色",
-  tts: "语音合成",
+  tts: "语音转换",
 };
 
 /**

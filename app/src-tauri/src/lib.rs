@@ -16,6 +16,7 @@ mod protocol;
 mod provision;
 mod separate;
 mod shell_extras;
+mod sts;
 mod store;
 mod telemetry;
 mod tool_window;
@@ -284,7 +285,7 @@ async fn update_app(app: AppHandle) -> Result<Value, String> {
     update::run_app_updater(&app).await
 }
 
-/// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音合成）。
+/// 打开一个独立工具窗口（人声分离 / 训练音色 / 语音转换）。
 ///
 /// 必须是 async：同步 command 跑在 WebView2 的 IPC 消息回调里，在那里同步建
 /// 第二个 webview，wry 会泵消息等 controller 创建完成（wait_with_pump），
@@ -574,7 +575,57 @@ fn separate_cancel() {
     separate::cancel();
 }
 
-// --- 语音合成 ---------------------------------------------------------------
+// --- 离线语音转换 STS（音频 → 目标音色）------------------------------------
+
+#[tauri::command]
+async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(sts::status(&root)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn sts_pick_input(folder: bool) -> Option<String> {
+    sts::pick_input(folder)
+}
+
+#[tauri::command]
+fn sts_pick_output() -> Option<String> {
+    sts::pick_output()
+}
+
+#[tauri::command]
+async fn sts_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+    output: String,
+    pitch: i32,
+    f0method: String,
+    index_rate: f64,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        sts::run(&app, &root, &input, &output, pitch, &f0method, index_rate)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn sts_cancel() {
+    sts::cancel();
+}
+
+#[tauri::command]
+fn sts_reveal(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let dir = sts::out_dir(&root_clone(&state)?);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    shell_extras::reveal(&dir.join("x"))
+}
+
+// --- 文字合成 TTS（文字 → SAPI → 可选 RVC）--------------------------------
 
 #[tauri::command]
 async fn tts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1236,6 +1287,12 @@ pub fn run() {
             separate_pick,
             separate_start,
             separate_cancel,
+            sts_status,
+            sts_pick_input,
+            sts_pick_output,
+            sts_start,
+            sts_cancel,
+            sts_reveal,
             tts_status,
             tts_speak,
             tts_cancel,

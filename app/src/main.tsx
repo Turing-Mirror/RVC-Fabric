@@ -10,7 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
 
-// 主窗口和工具窗口（人声分离 / 训练音色 / 语音合成）用的是同一份前端，
+// 主窗口和工具窗口（人声分离 / 训练音色 / 语音转换）用的是同一份前端，
 // 靠地址后面的 `#/tool/<kind>` 分流。分不出来就是主窗口。
 const tool = toolFromHash(window.location.hash);
 

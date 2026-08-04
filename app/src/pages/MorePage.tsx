@@ -244,8 +244,8 @@ export function MorePage({
             right={<Btn onClick={() => openTool("train")}>打开</Btn>}
           />
           <ListItem
-            title="语音合成"
-            desc="打一段字，用当前音色念出来。系统语音负责吐字，音色由你选的模型决定。"
+            title="语音转换"
+            desc="音频变声（官方推理）或文字合成：把录音/文本换成当前音色。"
             right={<Btn onClick={() => openTool("tts")}>打开</Btn>}
           />
           <ListItem

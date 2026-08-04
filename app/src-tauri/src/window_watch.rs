@@ -177,78 +177,127 @@ pub fn rescue_if_offscreen(win: &WebviewWindow) -> bool {
 ///
 /// 只在建完窗口后调用一次。之后不再动——用户自己把窗口拖到哪块屏是他的事，
 /// 隔一会儿被程序挪回来比开错屏还烦。
-/// 去掉 DWM 给无边框窗口画的 1px 系统边框（Win11 上常是浅色「Aero/Vista」描边）。
-///
-/// 圆角属性之后还得单独关边框色：两者是不同的 DWM 开关。失败就忽略——
-/// 旧系统没有这个属性，本来也画不出那条边。
+/// 去掉 DWM 1px 系统描边色（始终关）。
 #[cfg(windows)]
-fn hide_dwm_system_border(hwnd: windows_sys::Win32::Foundation::HWND) {
+fn hide_dwm_border_color(hwnd: windows_sys::Win32::Foundation::HWND) {
     use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
-    // windows-sys 里未必导出这两个常量；数值来自 WinSDK dwmapi.h。
     const DWMWA_BORDER_COLOR: u32 = 34;
     const DWMWA_COLOR_NONE: u32 = 0xFFFFFFFE;
     let color = DWMWA_COLOR_NONE;
-    // SAFETY: 长度与 u32 一致；不支持的属性只返回错误。
-    let _ = unsafe {
-        DwmSetWindowAttribute(
+    unsafe {
+        let _ = DwmSetWindowAttribute(
             hwnd,
             DWMWA_BORDER_COLOR,
             &color as *const _ as *const core::ffi::c_void,
             std::mem::size_of_val(&color) as u32,
-        )
-    };
+        );
+    }
 }
 
-/// 上一次是不是最大化。只在状态翻转时动 shadow，避免每次 Resized 都
-/// `SetWindowLong` 一通，又慢又容易跟 WebView2 抢消息。
+/// 最大化时关掉非客户区绘制；还原时交回 DWM（否则 Win11 圆角也会没了）。
+#[cfg(windows)]
+fn set_dwm_nc_rendering(hwnd: windows_sys::Win32::Foundation::HWND, enabled: bool) {
+    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+    const DWMWA_NCRENDERING_POLICY: u32 = 2;
+    const DWMNCRP_ENABLED: u32 = 2;
+    const DWMNCRP_DISABLED: u32 = 1;
+    let policy = if enabled {
+        DWMNCRP_ENABLED
+    } else {
+        DWMNCRP_DISABLED
+    };
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_NCRENDERING_POLICY,
+            &policy as *const _ as *const core::ffi::c_void,
+            std::mem::size_of_val(&policy) as u32,
+        );
+    }
+}
+
+/// 最大化时摘掉 `WS_THICKFRAME`；还原时加回，否则拖边缩放会坏。
+///
+/// 无边框 + resizable 的窗口仍带着厚框：平常是隐形命中区；最大化后那圈
+/// 非客户区会露成 Aero/Vista 描边。只关 shadow / 边框色不够，必须动窗口样式
+/// 并 `SWP_FRAMECHANGED` 让 `WM_NCCALCSIZE` 重算客户区。
+#[cfg(windows)]
+fn set_thickframe(hwnd: windows_sys::Win32::Foundation::HWND, enable: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    };
+    const WS_THICKFRAME: u32 = 0x0004_0000;
+    const WS_BORDER: u32 = 0x0080_0000;
+    // SAFETY: hwnd 是我们自己的窗口。
+    unsafe {
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        let new_style = if enable {
+            (style | WS_THICKFRAME) & !WS_BORDER
+        } else {
+            style & !WS_THICKFRAME & !WS_BORDER
+        };
+        if new_style == style {
+            return;
+        }
+        SetWindowLongW(hwnd, GWL_STYLE, new_style as i32);
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+}
+
+/// 上一次是不是最大化。状态翻转时才动样式，避免每次 Resized 都 FRAMECHANGED。
 #[cfg(windows)]
 static WAS_MAXIMIZED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-/// 最大化时去掉系统给无边框窗口留的「厚框 / 投影内缩」，避免套一层 Vista 边。
+/// 最大化时拆掉系统厚框/描边，还原时恢复可缩放。
 ///
-/// 无边框 + 可缩放窗口仍带着 `WS_THICKFRAME`。正常尺寸时它是隐形命中区；
-/// 一最大化，那圈非客户区会露成浅色/Aero 边框，叠在自绘标题栏外面。
-/// 关掉 shadow 标志后 `WM_NCCALCSIZE` 不再内缩，客户区铺满工作区，边框消失。
-/// 还原窗口时若走 DWM 圆角，再把 shadow 开回去（Win11 要投影）；Win10 区域
-/// 裁切分支本来就一直关着 shadow。
+/// 注意：**永远不要**在无边框窗口上再 `set_shadow(true)`。
+/// Tauri 文档写明：undecorated + shadow=true 在 Windows 上会画出 1px 白边，
+/// 那就是用户看到的 Aero 边。投影宁可不要，边框必须干净。
 #[cfg(windows)]
 fn sync_maximized_frame(win: &WebviewWindow) {
     let maximized = win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
     let was = WAS_MAXIMIZED.swap(maximized, Ordering::Relaxed);
+    let Ok(hwnd_raw) = win.hwnd() else {
+        return;
+    };
+    let hwnd = hwnd_raw.0 as windows_sys::Win32::Foundation::HWND;
+
+    // 始终关 shadow + 关边框色（幂等）。shadow=true 在 Windows 无边框上 = 1px 白边。
+    let _ = win.set_shadow(false);
+    hide_dwm_border_color(hwnd);
 
     if maximized {
+        set_thickframe(hwnd, false);
+        set_dwm_nc_rendering(hwnd, false);
         if !was {
-            // 最大化不需要投影内缩，关掉才能铺满。
-            let _ = win.set_shadow(false);
-            logging::shell_log!("最大化：已关投影内缩，去掉系统描边");
-        }
-        if let Ok(hwnd) = win.hwnd() {
-            hide_dwm_system_border(hwnd.0 as windows_sys::Win32::Foundation::HWND);
+            logging::shell_log!("最大化：已摘 WS_THICKFRAME + 关 NC 绘制");
         }
         // 区域裁切在最大化时必须撤掉，否则四角露桌面。
         if NEEDS_REGION.load(Ordering::Relaxed) {
-            if let Ok(hwnd) = win.hwnd() {
-                use windows_sys::Win32::Foundation::HWND;
-                use windows_sys::Win32::Graphics::Gdi::SetWindowRgn;
-                unsafe {
-                    SetWindowRgn(hwnd.0 as HWND, std::ptr::null_mut(), 1);
-                }
+            use windows_sys::Win32::Graphics::Gdi::SetWindowRgn;
+            unsafe {
+                SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
             }
         }
     } else if was {
-        // 刚从最大化还原。
-        if !NEEDS_REGION.load(Ordering::Relaxed) {
-            let _ = win.set_shadow(true);
-            if let Ok(hwnd) = win.hwnd() {
-                hide_dwm_system_border(hwnd.0 as windows_sys::Win32::Foundation::HWND);
-            }
-            logging::shell_log!("还原：已恢复窗口投影");
-        } else {
+        set_thickframe(hwnd, true);
+        set_dwm_nc_rendering(hwnd, true);
+        hide_dwm_border_color(hwnd);
+        if NEEDS_REGION.load(Ordering::Relaxed) {
             apply_corner_region(win);
         }
+        logging::shell_log!("还原：已恢复 WS_THICKFRAME（仍无系统描边）");
     } else if NEEDS_REGION.load(Ordering::Relaxed) {
-        // 普通缩放：只重裁圆角。
         apply_corner_region(win);
     }
 }
@@ -274,8 +323,8 @@ pub fn round_corners(win: &WebviewWindow) {
         return;
     };
     let hwnd = hwnd.0 as HWND;
-    // 先关系统描边，避免最大化时再套一层浅色框。
-    hide_dwm_system_border(hwnd);
+    // 先关系统描边色，避免一启动就有 1px Aero 框。
+    hide_dwm_border_color(hwnd);
     let pref = DWMWCP_ROUND;
     // SAFETY: hwnd 来自 Tauri 刚建好的窗口；传的是一个 i32 大小的枚举值，
     // 长度如实给出。属性不支持时函数只是返回错误，不会写回任何东西。
@@ -287,8 +336,11 @@ pub fn round_corners(win: &WebviewWindow) {
             std::mem::size_of_val(&pref) as u32,
         )
     };
+    // 建窗即关 shadow：与 builder 的 shadow(false) 双保险，避免后续某次
+    // set_shadow(true) 把 1px 白边加回来。
+    let _ = win.set_shadow(false);
     if hr == 0 {
-        logging::shell_log!("圆角：DWM 已生效");
+        logging::shell_log!("圆角：DWM 已生效（无系统描边）");
         // 建窗时若已是最大化（少见），立刻铺满，别等第一次 Resized。
         sync_maximized_frame(win);
         return;

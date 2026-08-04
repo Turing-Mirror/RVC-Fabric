@@ -1262,6 +1262,9 @@ pub fn run() {
             .min_inner_size(880.0, 640.0)
             .resizable(true)
             .decorations(false)
+            // 无边框 + shadow=true 在 Windows 上会强制 1px 系统白边（Aero 描边）。
+            // 最大化时更明显。投影宁可不要，边必须干净。
+            .shadow(false)
             .center()
             .build()?;
             // `.center()` 只认主显示器。多显示器的人主屏未必是他正在看的那

@@ -104,6 +104,8 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     // 和主窗口一样无边框 + 自己画标题栏。这里用系统标题栏的话，同一个软件里
     // 会同时出现两种窗口长相。
     .decorations(false)
+    // 与主窗一致：无边框不带系统 1px 白边。
+    .shadow(false)
     .center()
     .build()
     .map_err(|e| format!("建不了工具窗口：{e}"))?;

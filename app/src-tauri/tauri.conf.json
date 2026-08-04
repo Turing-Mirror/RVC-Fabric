@@ -44,6 +44,7 @@
       "engine-payload/VBCABLE": "VBCABLE",
       "engine-payload/gui_v1.py": "gui_v1.py",
       "engine-payload/infer-web.py": "infer-web.py",
+      "engine-payload/.env": ".env",
       "engine-payload/setup_package.json": "setup_package.json",
       "engine-payload/LICENSE": "LICENSE",
       "engine-payload/README.md": "README.md",

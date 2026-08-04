@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from infer.lib.safe_load import resolve_under_root, safe_model_path
+from infer.modules.vc.utils import get_index_path_from_model
 
 
 def str2bool(value):
@@ -76,6 +77,45 @@ class Str2BoolTests(unittest.TestCase):
     def test_invalid(self):
         with self.assertRaises(ValueError):
             str2bool("maybe")
+
+
+class GetIndexPathFromModelTests(unittest.TestCase):
+    """STS/offline load used to crash when index_root env was missing."""
+
+    def test_none_index_root_returns_empty(self):
+        old = os.environ.pop("index_root", None)
+        try:
+            self.assertEqual(get_index_path_from_model("Anon-local.pth"), "")
+            self.assertEqual(
+                get_index_path_from_model(r"F:\RVC\User_Data\models\Anon\Anon-local.pth"),
+                "",
+            )
+        finally:
+            if old is not None:
+                os.environ["index_root"] = old
+
+    def test_missing_dir_returns_empty(self):
+        os.environ["index_root"] = r"Z:\does\not\exist\index_root_test"
+        try:
+            self.assertEqual(get_index_path_from_model("foo.pth"), "")
+        finally:
+            os.environ.pop("index_root", None)
+
+    def test_matches_stem_under_index_root(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            nested = root / "exp" / "Anon"
+            nested.mkdir(parents=True)
+            idx = nested / "added_IVF_Anon-local.index"
+            idx.write_bytes(b"x")
+            os.environ["index_root"] = str(root)
+            try:
+                found = get_index_path_from_model(
+                    r"F:\models\Anon\Anon-local.pth"
+                )
+                self.assertEqual(Path(found).resolve(), idx.resolve())
+            finally:
+                os.environ.pop("index_root", None)
 
 
 if __name__ == "__main__":

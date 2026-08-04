@@ -40,14 +40,58 @@ import sys
 import traceback
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
 
+# 与仓库根 .env / 官方 RVC 一致。安装包历史上未带 .env，worker 必须自带默认值。
+_RVC_ENV_DEFAULTS = {
+    "weight_root": "assets/weights",
+    "weight_uvr5_root": "assets/uvr5_weights",
+    "index_root": "logs",
+    "outside_index_root": "assets/indices",
+    "rmvpe_root": "assets/rmvpe",
+    "OPENBLAS_NUM_THREADS": "1",
+}
+
+
+def _ensure_stdio_utf8() -> None:
+    """Windows 管道下 stdout 常是系统代码页，中文 JSON 会 OSError 22。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
+def _ensure_rvc_env() -> None:
+    """加载产品根 .env（若有），并补齐缺失的 RVC 路径变量。"""
+    try:
+        from dotenv import load_dotenv
+
+        # 先 cwd（Rust 会 current_dir=产品根），再脚本所在产品根，双保险。
+        load_dotenv()
+        load_dotenv(ROOT / ".env")
+    except Exception:
+        pass
+    for key, val in _RVC_ENV_DEFAULTS.items():
+        os.environ.setdefault(key, val)
+
 
 def emit(**kw) -> None:
-    sys.stdout.write(json.dumps(kw, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+    line = json.dumps(kw, ensure_ascii=False) + "\n"
+    try:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+    except (OSError, UnicodeEncodeError):
+        # 管道/控制台编码异常时退到 binary UTF-8，避免二次崩溃吞掉真实错误。
+        try:
+            sys.stdout.buffer.write(line.encode("utf-8", errors="replace"))
+            sys.stdout.buffer.flush()
+        except Exception:
+            pass
 
 
 def collect_inputs(path: str) -> list[Path]:
@@ -64,6 +108,7 @@ def collect_inputs(path: str) -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
+    _ensure_stdio_utf8()
     if len(argv) < 2:
         emit(phase="error", message="缺请求文件参数")
         return 2
@@ -102,13 +147,12 @@ def main(argv: list[str]) -> int:
     emit(phase="start", total=total, message=f"共 {total} 个文件")
 
     try:
-        from dotenv import load_dotenv
         from scipy.io import wavfile
 
         from configs.config import Config
         from infer.modules.vc.modules import VC
 
-        load_dotenv()
+        _ensure_rvc_env()
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
         sys.argv = [sys.argv[0]]
         config = Config()

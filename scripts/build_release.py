@@ -87,6 +87,9 @@ ENGINE_FILES = (
     "gui_v1.py",
     "LICENSE",
     "README.md",
+    # 上游 RVC 靠 dotenv 读 weight_root / index_root；不进包则 STS/推理 CLI
+    # 会在 get_index_path_from_model 里 os.walk(None) 崩掉。
+    ".env",
 )
 
 

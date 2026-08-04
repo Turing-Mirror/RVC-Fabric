@@ -287,8 +287,22 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     env.insert("TM_REALTIME_WORKER".into(), "1".into());
     env.insert("PYTHONUNBUFFERED".into(), "1".into());
     env.insert("PYTHONNOUSERSITE".into(), "1".into());
+    // 管道里的 worker stdout 走 UTF-8，避免中文进度/报错 OSError 22。
+    env.insert("PYTHONIOENCODING".into(), "utf-8".into());
+    env.insert("PYTHONUTF8".into(), "1".into());
     env.insert("no_proxy".into(), "localhost,127.0.0.1,::1".into());
     env.insert("NO_PROXY".into(), "localhost,127.0.0.1,::1".into());
+    // 官方 RVC 靠产品根 .env；安装包历史上未带该文件。路径相对 cwd=产品根。
+    // 已有值（用户/壳层显式设置）不覆盖。
+    for (k, v) in [
+        ("weight_root", "assets/weights"),
+        ("weight_uvr5_root", "assets/uvr5_weights"),
+        ("index_root", "logs"),
+        ("outside_index_root", "assets/indices"),
+        ("rmvpe_root", "assets/rmvpe"),
+    ] {
+        env.entry(k.into()).or_insert_with(|| v.into());
+    }
     // 与官方 WebUI 一致：把 TEMP/TMP/TMPDIR 指到安装目录下的 TEMP，
     // 中间文件统一落这里，启动/退出/任务结束时清理。
     let temp = paths::temp_dir(root);

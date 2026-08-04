@@ -76,10 +76,37 @@ export function MorePage({
   const run = async (label: string, cmd: string, args?: Record<string, unknown>) => {
     setBusyMsg(`${label}…`);
     try {
-      const r = await invoke<{ path?: string }>(cmd, args);
-      setBusyMsg(`${label}完成：${r?.path ?? ""}`);
+      const r = await invoke<{ path?: string; perf_note?: string }>(cmd, args);
+      const note = r?.perf_note ? ` · ${r.perf_note}` : "";
+      setBusyMsg(`${label}完成：${r?.path ?? ""}${note}`);
     } catch (e) {
       setBusyMsg(`${label}失败：${String(e)}`);
+    }
+  };
+
+  /** 生成诊断包：先问要不要跑约一分钟的性能测试。 */
+  const runDiagnostics = async () => {
+    // 确定 = 先 bench；取消 = 只打日志与设置。
+    const withPerf = window.confirm(
+      "生成诊断包前，是否先跑一次性能测试？\n\n" +
+        "约需一分钟，结果会打进诊断包，便于排查卡顿与延迟。\n" +
+        "需要已选中音色且 Runtime 已就绪。\n\n" +
+        "选「确定」跑测试；选「取消」跳过测试，只打包日志与设置。",
+    );
+    setBusyMsg(
+      withPerf
+        ? "生成诊断包：性能测试进行中（约一分钟）…"
+        : "生成诊断包…",
+    );
+    try {
+      const r = await invoke<{ path?: string; perf_note?: string }>(
+        "diagnostics_build",
+        { withPerf },
+      );
+      const note = r?.perf_note ? ` · ${r.perf_note}` : "";
+      setBusyMsg(`生成诊断包完成：${r?.path ?? ""}${note}`);
+    } catch (e) {
+      setBusyMsg(`生成诊断包失败：${String(e)}`);
     }
   };
   useEffect(() => {
@@ -266,9 +293,13 @@ export function MorePage({
         <Group>
           <ListItem
             title="生成诊断包"
-            desc={busyMsg.startsWith("生成诊断包") ? busyMsg : "进行一次约一分钟的性能测试，打包日志、机型信息与当前设置"}
+            desc={
+              busyMsg.startsWith("生成诊断包")
+                ? busyMsg
+                : "可选先跑约一分钟的性能测试，再打包日志、机型信息与当前设置"
+            }
             right={
-              <Btn onClick={() => void run("生成诊断包", "diagnostics_build")}>生成</Btn>
+              <Btn onClick={() => void runDiagnostics()}>生成</Btn>
             }
           />
           <ListItem

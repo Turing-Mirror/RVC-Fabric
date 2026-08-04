@@ -9,6 +9,7 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use serde_json::{json, Value};
 use tauri::menu::{Menu, MenuItem};
@@ -244,33 +245,153 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
 // Diagnostics bundle
 // ---------------------------------------------------------------------------
 
-/// Run `tools/benchmark_realtime.py` in the Runtime, writing into
+/// Run `tools/benchmark_realtime.py` in the Runtime, writing a JSON report into
 /// `User_Data/perf_reports/`. Takes roughly a minute; callers must say so.
-pub fn run_perf_bench(root: &Path) -> Result<(), String> {
-    let py = paths::runtime_pythonw(root)
-        .or_else(|| paths::runtime_python(root))
-        .ok_or("Runtime 未就绪，跳过性能测试")?;
+///
+/// 以前写成 `--out <目录>` 且没传必填的 `--pth`，脚本一启动就 argparse 失败，
+/// 诊断包里永远没有新性能报告——等于「直接生成诊断包」。
+pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
+    let py = paths::runtime_python(root)
+        .or_else(|| paths::runtime_pythonw(root))
+        .ok_or("Runtime 未就绪，无法跑性能测试")?;
     let script = root.join("tools").join("benchmark_realtime.py");
     if !script.is_file() {
         return Err("找不到 benchmark_realtime.py".into());
     }
+
+    let cfg = config::read(root);
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let pth = if !pth.is_empty() && Path::new(&pth).is_file() {
+        pth
+    } else {
+        // 兜底 last_model_path（有时 pth_path 是相对路径或空）
+        let alt = cfg
+            .get("last_model_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if alt.is_empty() || !Path::new(&alt).is_file() {
+            return Err("没有可用的音色模型，请先在首页选一个音色再跑性能测试".into());
+        }
+        alt
+    };
+    let index = cfg
+        .get("index_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let pitch = cfg
+        .get("pitch")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let formant = cfg
+        .get("formant")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let f0method = cfg
+        .get("f0method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("rmvpe");
+    // harvest 在 bench 里不支持
+    let f0method = if f0method == "harvest" {
+        "rmvpe"
+    } else {
+        f0method
+    };
+    let block_time = cfg
+        .get("block_time")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.25);
+    let crossfade = cfg
+        .get("crossfade_length")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.05);
+    let extra = cfg
+        .get("extra_time")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(2.5);
+    let index_rate = cfg
+        .get("index_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
     let out_dir = paths::user_data(root).join("perf_reports");
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let stamp = now_stamp();
+    let json_out = out_dir.join(format!("bench_{stamp}.json"));
+    let log_path = paths::logs_dir(root).join("perf_bench.log");
+    let _ = std::fs::create_dir_all(paths::logs_dir(root));
+    let errfile = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .ok();
 
     let mut cmd = std::process::Command::new(py);
-    cmd.arg(&script).arg("--out").arg(&out_dir).current_dir(root);
+    cmd.arg(&script)
+        .arg("--pth")
+        .arg(&pth)
+        .arg("--json-out")
+        .arg(&json_out)
+        .arg("--f0method")
+        .arg(f0method)
+        .arg("--pitch")
+        .arg(pitch.to_string())
+        .arg("--formant")
+        .arg(formant.to_string())
+        .arg("--block-time")
+        .arg(block_time.to_string())
+        .arg("--crossfade-time")
+        .arg(crossfade.to_string())
+        .arg("--extra-time")
+        .arg(extra.to_string())
+        // 诊断场景略减块数，控制在约一分钟内
+        .arg("--n-blocks")
+        .arg("120")
+        .arg("--warmup")
+        .arg("8")
+        .current_dir(root)
+        .envs(worker::env_for_runtime(root))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(match errfile {
+            Some(f) => Stdio::from(f),
+            None => Stdio::null(),
+        });
+    if !index.is_empty() && Path::new(&index).is_file() {
+        cmd.arg("--index").arg(&index);
+        if index_rate > 0.0 {
+            cmd.arg("--index-rate").arg(index_rate.to_string());
+        }
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        // CREATE_NO_WINDOW — never flash a console at the user.
-        cmd.creation_flags(0x0800_0000);
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
+    crate::logging::shell_log!(
+        "perf bench: pth={} json={}",
+        pth,
+        json_out.display()
+    );
     let status = cmd.status().map_err(|e| format!("性能测试启动失败：{e}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("性能测试退出码 {:?}", status.code()))
+    if !status.success() {
+        return Err(format!(
+            "性能测试失败（退出码 {:?}），详见 User_Data/logs/perf_bench.log",
+            status.code()
+        ));
     }
+    if !json_out.is_file() {
+        return Err("性能测试跑完了但没有写出报告文件".into());
+    }
+    Ok(json_out)
 }
 
 fn tail_bytes(path: &Path, max: usize) -> String {
@@ -283,15 +404,24 @@ fn tail_bytes(path: &Path, max: usize) -> String {
 
 /// Zip logs + machine info + effective settings into `User_Data/diagnostics/`.
 ///
-/// Log tails are capped: `realtime_worker.log` grows large and a multi-hundred-MB
-/// bundle is useless to everyone.
-pub fn build_diagnostics(root: &Path) -> Result<PathBuf, String> {
-    // The Tk shell ran a short benchmark first so the bundle carries a fresh
-    // sample from *this* machine, not whatever happened to be lying around.
-    // Best-effort: a machine without a Runtime still gets a usable bundle.
-    if let Err(e) = run_perf_bench(root) {
-        crate::logging::shell_log!("perf bench skipped: {e}");
-    }
+/// `with_perf`：用户确认后才跑 bench。Log tails 有上限，避免几百 MB 的废包。
+/// 返回 (zip 路径, 性能测试说明)。
+pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, String), String> {
+    let perf_note = if with_perf {
+        match run_perf_bench(root) {
+            Ok(p) => format!(
+                "已跑性能测试：{}",
+                p.file_name().unwrap_or_default().to_string_lossy()
+            ),
+            Err(e) => {
+                crate::logging::shell_log!("perf bench failed: {e}");
+                format!("性能测试未完成：{e}")
+            }
+        }
+    } else {
+        "用户跳过了性能测试".into()
+    };
+
     let out_dir = paths::user_data(root).join("diagnostics");
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let stamp = now_stamp();
@@ -316,15 +446,21 @@ pub fn build_diagnostics(root: &Path) -> Result<PathBuf, String> {
         "worker_alive": worker::is_worker_alive(root),
         "status": worker::status_for_ui(root),
         "config": Value::Object(config::read(root)),
+        "perf_note": perf_note,
         "generated_at": stamp,
     });
     zip.start_file("info.json", opts).map_err(|e| e.to_string())?;
     zip.write_all(serde_json::to_string_pretty(&info).unwrap_or_default().as_bytes())
         .map_err(|e| e.to_string())?;
 
-    // log tails
+    // log tails（含性能测试日志）
     let logs = paths::logs_dir(root);
-    for name in ["realtime_worker.log", "provision.log", "shell.log"] {
+    for name in [
+        "realtime_worker.log",
+        "provision.log",
+        "shell.log",
+        "perf_bench.log",
+    ] {
         let p = logs.join(name);
         if p.is_file() {
             let text = tail_bytes(&p, 512 * 1024);
@@ -353,7 +489,7 @@ pub fn build_diagnostics(root: &Path) -> Result<PathBuf, String> {
     }
 
     zip.finish().map_err(|e| e.to_string())?;
-    Ok(out)
+    Ok((out, perf_note))
 }
 
 // ---------------------------------------------------------------------------

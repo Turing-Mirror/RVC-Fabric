@@ -222,13 +222,22 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
 }
 
 /// Zip logs + machine info + settings for support.
+///
+/// `with_perf`：前端先问用户是否跑约一分钟的性能测试。
 #[tauri::command]
-async fn diagnostics_build(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn diagnostics_build(
+    state: State<'_, Mutex<AppState>>,
+    with_perf: bool,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        shell_extras::build_diagnostics(&root).map(|p| {
+        shell_extras::build_diagnostics(&root, with_perf).map(|(p, perf_note)| {
             let _ = shell_extras::reveal(&p);
-            json!({"ok": true, "path": p.to_string_lossy()})
+            json!({
+                "ok": true,
+                "path": p.to_string_lossy(),
+                "perf_note": perf_note,
+            })
         })
     })
     .await

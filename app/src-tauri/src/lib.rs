@@ -8,6 +8,7 @@ mod download;
 mod engine_assets;
 mod extra_assets;
 mod extract;
+mod i18n;
 mod legacy;
 mod logging;
 pub mod paths;
@@ -148,6 +149,21 @@ fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, St
 #[tauri::command]
 fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     Ok(Value::Object(config::read(&root_clone(&state)?)))
+}
+
+/// Switch shell locale (tray / status message_code). Frontend keeps its own pack.
+#[tauri::command]
+fn i18n_set_locale(locale: String) -> Result<Value, String> {
+    if !i18n::supported(&locale) {
+        return Err(format!("unsupported locale: {locale}"));
+    }
+    i18n::set_locale(&locale);
+    Ok(json!({"ok": true, "locale": locale}))
+}
+
+#[tauri::command]
+fn i18n_get_locale() -> String {
+    i18n::current()
 }
 
 /// Which keys belong to which settings group, and which are hot vs cold.
@@ -1190,6 +1206,7 @@ pub fn run() {
     // Before anything else: a release build has no console, so without this the
     // rest of these lines would go nowhere.
     logging::init(&root);
+    i18n::init_from_config(&root);
     // pid 在横幅里，是因为 shell.log 是跨启动追加的：报告「进程还在但看不见
     // 窗口」时，得先能确认手上这段日志和任务管理器里那个进程是同一次运行。
     logging::shell_log!(
@@ -1240,6 +1257,8 @@ pub fn run() {
             config_get,
             config_describe,
             config_set,
+            i18n_set_locale,
+            i18n_get_locale,
             pick_wallpaper,
             update_check,
             update_apply,

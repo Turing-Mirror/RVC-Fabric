@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "code": "en-US",
+    "name": "English",
+    "englishName": "English"
+  },
+  "nav": {
+    "home": "Home",
+    "plaza": "Plaza",
+    "models": "Voices",
+    "settings": "Settings",
+    "help": "Help",
+    "more": "More",
+    "newContent": "New content"
+  },
+  "window": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "close": "Close"
+  },
+  "dock": {
+    "noVoice": "No voice selected",
+    "none": "None",
+    "current": "Current: {name}",
+    "modeVc": "Live convert",
+    "modeVcTip": "Mic → convert to selected voice → output (normal use)",
+    "modeBypass": "Bypass",
+    "modeBypassTip": "Pass through the mic without conversion — for testing the mic or routing",
+    "mic": "Mic",
+    "micLevelTip": "Mic level; the vertical line is the response threshold",
+    "pitch": "Pitch",
+    "formant": "Formant",
+    "start": "Start",
+    "stop": "Stop",
+    "engineReady": "Engine ready",
+    "engineIdle": "Idle",
+    "converting": "Converting",
+    "starting": "Starting",
+    "stopping": "Stopping",
+    "engineError": "Engine error",
+    "engineDown": "Engine not running",
+    "waitStart": "Waiting for engine",
+    "delayLine": "Latency {delay} ms · Infer {infer} ms"
+  },
+  "settings": {
+    "tabs": {
+      "device": "Devices & audio",
+      "voice": "Voice params",
+      "perf": "Performance",
+      "fx": "Effects",
+      "appearance": "Appearance",
+      "general": "General",
+      "hotkeys": "Hotkeys",
+      "update": "Updates"
+    },
+    "language": "Language",
+    "languageTip": "UI language. Some engine logs and the legacy WebUI may still be Chinese.",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "wallpaper": "Wallpaper",
+    "wallpaperPick": "Choose image",
+    "wallpaperClear": "Clear",
+    "wallpaperNone": "Not set",
+    "wallpaperDesc": "Static image, no size limit; very large files load slowly",
+    "blur": "Blur",
+    "opacity": "Opacity",
+    "closeAction": "When closing the window",
+    "closeAsk": "Ask every time",
+    "closeTray": "Minimize to tray",
+    "closeExit": "Quit"
+  },
+  "locale": {
+    "zh-CN": "简体中文",
+    "en-US": "English"
+  },
+  "tray": {
+    "show": "Open main window",
+    "toggle": "Start / stop conversion",
+    "quit": "Quit",
+    "missingIcon": "Tray icon missing"
+  },
+  "engine": {
+    "starting": "Engine process started, loading…",
+    "missingGui": "Incomplete install: engine main script missing",
+    "crashLoad": "Engine crashed while loading — see log",
+    "browserNoRuntime": "Browser preview cannot detect the runtime",
+    "browserNoDownload": "Browser preview cannot download the runtime",
+    "browserNoVc": "Start conversion from the desktop app window"
+  },
+  "home": {
+    "pickVoice": "Pick a voice to start",
+    "noLocal": "No local voices yet. Import on Voices, or download from the community.",
+    "recent": "Recent",
+    "goModels": "Go to Voices",
+    "allVoices": "All voices",
+    "inUse": "In use",
+    "hasIndex": "✓ Index",
+    "voice": "Voice",
+    "author": "Author: {author}",
+    "tools": "Audio tools",
+    "separate": "Vocal separate",
+    "separateDesc": "Pull dry vocals from a song",
+    "train": "Train voice",
+    "trainDesc": "Train a new voice from dry audio",
+    "tts": "Speech convert",
+    "ttsDesc": "Text or audio into the target voice",
+    "downloadModels": "Download models",
+    "downloadModelsDesc": "Separation models and training bases",
+    "missingModel": "This voice’s model file is missing or incomplete",
+    "switchFail": "Switch failed: {error}"
+  },
+  "glossary": {
+    "sectionTitle": "Glossary",
+    "terms": [
+      {
+        "id": "runtime",
+        "term": "Runtime",
+        "brief": "Python/PyTorch environment the engine needs",
+        "detail": "Python compute stack (including PyTorch) used by the voice engine. Not in the installer; the first launch downloads the build for your GPU."
+      },
+      {
+        "id": "hubert",
+        "term": "HuBERT model",
+        "brief": "Shared model that turns audio into content features",
+        "detail": "HuBERT extracts what you said so the voice model can re-voice it. One global file for all voices; without it no voice works."
+      },
+      {
+        "id": "pretrained",
+        "term": "Base model",
+        "brief": "Pretrained base required to train a custom voice",
+        "detail": "Official pretrained acoustic bases. Training from them is much faster than from scratch; pick 32k / 40k / 48k to match your training sample rate."
+      },
+      {
+        "id": "index",
+        "term": "Index",
+        "brief": "Optional .index feature file for closer tone match",
+        "detail": "Stores training-audio features for closer tone. Optional; conversion works without it. Strength is “Index rate” in Settings."
+      },
+      {
+        "id": "directml",
+        "term": "DirectML",
+        "brief": "GPU path for AMD/iGPU — convert yes, train no",
+        "detail": "Windows GPU acceleration for non-NVIDIA cards. Missing some ops needed for training, so training still needs NVIDIA."
+      },
+      {
+        "id": "cuda_graph",
+        "term": "CUDA Graph",
+        "brief": "NVIDIA-only inference speedup; falls back if unsupported",
+        "detail": "Pre-records GPU work to cut CPU↔GPU overhead, often lowering latency and VRAM. NVIDIA only; auto-falls back when unsupported."
+      },
+      {
+        "id": "f0",
+        "term": "Pitch algorithm",
+        "brief": "rmvpe / harvest / pm / fcpe / crepe — rmvpe by default",
+        "detail": "How pitch is tracked. RMVPE is usually best and fastest; Harvest more stable but slower; PM fastest but fragile; FCPE/Crepe optional high-accuracy modes."
+      },
+      {
+        "id": "formant",
+        "term": "Formant",
+        "brief": "Timbre thickness; labeled “Formant” in the dock",
+        "detail": "Controls how thick or thin the voice sounds without changing pitch. Tune with pitch to match a character."
+      },
+      {
+        "id": "threshold",
+        "term": "Response threshold",
+        "brief": "Input gate: quieter than this counts as silence",
+        "detail": "Levels below this (keyboard, fan, etc.) are treated as silence and not converted. When you speak, the dock meter should clearly cross the line."
+      },
+      {
+        "id": "rms",
+        "term": "Loudness envelope",
+        "brief": "How much output loudness follows your mic vs the voice model",
+        "detail": "Lower keeps the trained voice’s dynamics; higher keeps more of your speech dynamics."
+      },
+      {
+        "id": "pv",
+        "term": "Phase vocoder",
+        "brief": "How adjacent audio blocks are joined",
+        "detail": "Alternate crossfade join. Helps some voices, no change on others — A/B listen and decide."
+      },
+      {
+        "id": "sr",
+        "term": "Sample rate",
+        "brief": "Samples per second (often 32k / 40k / 48k)",
+        "detail": "Usually follow the device, or follow the voice model. Prefer “follow device” if unsure."
+      },
+      {
+        "id": "mme",
+        "term": "MME",
+        "brief": "Classic Windows audio API — most compatible",
+        "detail": "Oldest Windows path; works with almost everything, higher latency. Default if unsure. Restart conversion after change."
+      },
+      {
+        "id": "wasapi",
+        "term": "WASAPI",
+        "brief": "Lower latency than MME, pickier devices",
+        "detail": "Newer Windows path with lower latency; some cards fail — switch back to MME. Exclusive mode is lower latency but locks the device."
+      },
+      {
+        "id": "asio",
+        "term": "ASIO",
+        "brief": "Pro-audio low-latency path when a driver is installed",
+        "detail": "Lowest latency for pro interfaces (or ASIO4ALL). Only listed if a driver exists. One app at a time."
+      },
+      {
+        "id": "monitor",
+        "term": "Monitor",
+        "brief": "Hear the converted voice yourself",
+        "detail": "By default only games/chat hear conversion. Monitor plays a copy to your headphones — use a real device, not a virtual cable."
+      },
+      {
+        "id": "block",
+        "term": "Block size",
+        "brief": "Audio chunk length: shorter is faster and heavier",
+        "detail": "Shorter blocks lower latency but cost more GPU; too short stutters. Restart conversion after change."
+      },
+      {
+        "id": "crossfade",
+        "term": "Crossfade",
+        "brief": "Overlap between adjacent blocks",
+        "detail": "Softens joins. Too short clicks; too long blurs. Defaults are fine."
+      },
+      {
+        "id": "comp",
+        "term": "Compressor",
+        "brief": "Evens out loud and quiet speech",
+        "detail": "Pulls loud peaks down for steadier level. Too much sounds dull."
+      },
+      {
+        "id": "eq",
+        "term": "Equalizer",
+        "brief": "Band-level tone shaping",
+        "detail": "Boost or cut low/mid/high. Use presets if unsure."
+      },
+      {
+        "id": "vbcable",
+        "term": "Virtual cable",
+        "brief": "Virtual audio line between this app and games (VB-Cable)",
+        "detail": "This app outputs to CABLE Input; games/chat use CABLE Output as mic. Reboot after install so devices appear."
+      },
+      {
+        "id": "rvc",
+        "term": "RVC",
+        "brief": "Voice conversion stack this app uses",
+        "detail": "Retrieval-based Voice Conversion: each voice is its own model file; switching voices switches models."
+      }
+    ]
+  },
+  "msg": {
+    "engine": {
+      "starting": "Engine process started, loading…",
+      "missing_gui": "Incomplete install: engine main script missing",
+      "crash_load": "Engine crashed while loading — see log",
+      "ready": "Engine ready",
+      "idle": "Idle"
+    },
+    "runtime": {
+      "not_ready": "Runtime not ready — finish setup first",
+      "missing_python": "Runtime\\python.exe not found"
+    },
+    "vc": {
+      "need_model": "Select a voice model first"
+    }
+  }
+}

@@ -1,17 +1,48 @@
 /** Navigation order — must match product shell (首页 广场 模型 设置 说明 其他). */
-export const NAV_PAGES = [
-  { id: "home", label: "首页" },
-  { id: "plaza", label: "广场", badge: true },
-  { id: "models", label: "模型" },
-  { id: "settings", label: "设置" },
-  { id: "help", label: "说明" },
-  { id: "more", label: "其他" },
+
+import { tStatic } from "../i18n";
+
+export type PageId = "home" | "plaza" | "models" | "settings" | "help" | "more";
+
+type NavDef = {
+  id: PageId;
+  /** i18n key under nav.* */
+  labelKey: string;
+  badge?: boolean;
+};
+
+const NAV_DEFS: readonly NavDef[] = [
+  { id: "home", labelKey: "nav.home" },
+  { id: "plaza", labelKey: "nav.plaza", badge: true },
+  { id: "models", labelKey: "nav.models" },
+  { id: "settings", labelKey: "nav.settings" },
+  { id: "help", labelKey: "nav.help" },
+  { id: "more", labelKey: "nav.more" },
 ] as const;
 
-export type PageId = (typeof NAV_PAGES)[number]["id"];
+/** Resolved labels for the current static locale (call after locale is set). */
+export function navPages(): { id: PageId; label: string; badge?: boolean }[] {
+  return NAV_DEFS.map((p) => ({
+    id: p.id,
+    label: tStatic(p.labelKey),
+    ...(p.badge ? { badge: true as const } : {}),
+  }));
+}
+
+/**
+ * @deprecated Prefer navPages() so labels follow locale.
+ * Kept for modules that only need ids; labels may be zh-CN until locale loads.
+ */
+export const NAV_PAGES = NAV_DEFS.map((p) => ({
+  id: p.id,
+  get label() {
+    return tStatic(p.labelKey);
+  },
+  ...(p.badge ? { badge: true as const } : {}),
+}));
 
 export function pageIndex(id: PageId): number {
-  return NAV_PAGES.findIndex((p) => p.id === id);
+  return NAV_DEFS.findIndex((p) => p.id === id);
 }
 
 /** Direction of page wipe: positive = navigate right in nav order. */

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToolWindow, toolFromHash } from "./components/ToolWindow";
+import { I18nProvider } from "./i18n";
 import { applyAppearance } from "./lib/appearance";
 import "./index.css";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,7 +27,11 @@ if (tool) {
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <ErrorBoundary>{tool ? <ToolWindow kind={tool} /> : <App />}</ErrorBoundary>
+    <I18nProvider>
+      <ErrorBoundary>
+        {tool ? <ToolWindow kind={tool} /> : <App />}
+      </ErrorBoundary>
+    </I18nProvider>
   </React.StrictMode>,
 );
 

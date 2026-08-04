@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "code": "zh-CN",
+    "name": "简体中文",
+    "englishName": "Simplified Chinese"
+  },
+  "nav": {
+    "home": "首页",
+    "plaza": "广场",
+    "models": "模型",
+    "settings": "设置",
+    "help": "说明",
+    "more": "其他",
+    "newContent": "有新内容"
+  },
+  "window": {
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "close": "关闭"
+  },
+  "dock": {
+    "noVoice": "未选择音色",
+    "none": "无",
+    "current": "当前：{name}",
+    "modeVc": "实时变声",
+    "modeVcTip": "麦克风输入 → 变为所选音色 → 输出（日常使用模式）",
+    "modeBypass": "旁路原声",
+    "modeBypassTip": "绕过变声处理直接输出，用于测试麦克风或排查连接问题",
+    "mic": "麦克风",
+    "micLevelTip": "麦克风电平；竖线为响应阈值",
+    "pitch": "音高",
+    "formant": "共鸣",
+    "start": "开启变声",
+    "stop": "停止变声",
+    "engineReady": "引擎就绪",
+    "engineIdle": "待命",
+    "converting": "变声中",
+    "starting": "启动中",
+    "stopping": "停止中",
+    "engineError": "引擎错误",
+    "engineDown": "引擎未启动",
+    "waitStart": "等待引擎启动",
+    "delayLine": "延迟 {delay} ms · 推理 {infer} ms"
+  },
+  "settings": {
+    "tabs": {
+      "device": "设备与音频",
+      "voice": "变声参数",
+      "perf": "性能设置",
+      "fx": "声音效果",
+      "appearance": "外观",
+      "general": "常规",
+      "hotkeys": "快捷键",
+      "update": "在线更新"
+    },
+    "language": "界面语言",
+    "languageTip": "切换软件界面显示语言。部分引擎日志与上游 WebUI 仍为中文。",
+    "theme": "界面配色",
+    "themeSystem": "跟随系统",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "wallpaper": "背景图",
+    "wallpaperPick": "选择图片",
+    "wallpaperClear": "清除",
+    "wallpaperNone": "未设置",
+    "wallpaperDesc": "静态图，无大小限制，过大的图片会拖慢加载",
+    "blur": "磨砂强度",
+    "opacity": "不透明度",
+    "closeAction": "关闭窗口时",
+    "closeAsk": "每次询问",
+    "closeTray": "最小化到托盘",
+    "closeExit": "直接退出"
+  },
+  "locale": {
+    "zh-CN": "简体中文",
+    "en-US": "English"
+  },
+  "tray": {
+    "show": "打开主界面",
+    "toggle": "开启 / 停止变声",
+    "quit": "退出",
+    "missingIcon": "缺少托盘图标"
+  },
+  "engine": {
+    "starting": "引擎进程已启动，正在加载…",
+    "missingGui": "安装不完整：缺少引擎主程序",
+    "crashLoad": "引擎加载时崩溃，详见日志",
+    "browserNoRuntime": "浏览器预览无法探测运行时",
+    "browserNoDownload": "浏览器预览无法下载运行时",
+    "browserNoVc": "请在软件窗口中启动变声"
+  },
+  "home": {
+    "pickVoice": "选择音色，开始变声",
+    "noLocal": "还没有本地音色。到「模型」页导入，或从社区音色下载。",
+    "recent": "最近使用",
+    "goModels": "去「模型」页",
+    "allVoices": "全部音色",
+    "inUse": "使用中",
+    "hasIndex": "✓ 检索库",
+    "voice": "音色",
+    "author": "作者 : {author}",
+    "tools": "音频工具",
+    "separate": "人声分离",
+    "separateDesc": "从歌曲里抠出干声",
+    "train": "训练音色",
+    "trainDesc": "用干声训一个新音色",
+    "tts": "语音转换",
+    "ttsDesc": "文字或音频转成目标音色",
+    "downloadModels": "下载模型",
+    "downloadModelsDesc": "分离模型与训练底模",
+    "missingModel": "这个音色的模型文件缺失或没下载完整",
+    "switchFail": "切换失败：{error}"
+  },
+  "glossary": {
+    "sectionTitle": "专有名词",
+    "terms": [
+      {
+        "id": "runtime",
+        "term": "运行时",
+        "brief": "软件运行所需的 Python/PyTorch 计算环境",
+        "detail": "变声引擎依赖的 Python 计算环境（含 PyTorch 等）。安装包不含它，首次启动会按你的显卡自动下载对应版本。"
+      },
+      {
+        "id": "hubert",
+        "term": "Hubert 模型",
+        "brief": "把声音转成内容特征的基础模型（全局共用）",
+        "detail": "Hubert 负责把你说的话拆成「说了什么」，再交给音色模型换成目标音色。它与具体音色无关，全软件共用一个文件，缺了它任何音色都用不了。"
+      },
+      {
+        "id": "pretrained",
+        "term": "底模",
+        "brief": "训练专属音色所需的基础预训练模型",
+        "detail": "官方预训练好的通用声学模型。从它开始训练比从零开始快得多；按采样率分 32k / 40k / 48k，训练前需下载对应的版本。"
+      },
+      {
+        "id": "index",
+        "term": "检索库",
+        "brief": "音色附带的 .index 特征文件，提升还原度",
+        "detail": "检索库记录了训练音频的特征，启用后输出更贴近原音色，但吐字可能略糊。可选项，缺失也能正常变声；强度在设置页「检索强度」调整。"
+      },
+      {
+        "id": "directml",
+        "term": "DirectML",
+        "brief": "A 卡 / 核显的通用加速方案，能变声不能训练",
+        "detail": "DirectML 是 Windows 上非 NVIDIA 显卡（AMD、Intel 核显）的 GPU 加速方案。它缺少训练所需的部分算子，训练音色仍需 N 卡。"
+      },
+      {
+        "id": "cuda_graph",
+        "term": "CUDA Graph",
+        "brief": "N 卡专属的推理提速开关，不兼容会自动退回",
+        "detail": "预录制 GPU 推理指令，减少 CPU 与 GPU 之间的交互开销，可降低延迟、减少显存占用。仅 NVIDIA 显卡有效；环境不兼容时自动退回传统模式。"
+      },
+      {
+        "id": "f0",
+        "term": "音高算法",
+        "brief": "rmvpe / harvest / pm / fcpe / crepe，一般保持 rmvpe",
+        "detail": "决定软件如何识别你说话的音高。RMVPE 效果最好也最快，一般不用改；Harvest 更稳但较慢；PM 最快但容易破音；FCPE、Crepe 是可选的高精度算法。"
+      },
+      {
+        "id": "formant",
+        "term": "共振峰",
+        "brief": "决定音色粗细的特性，界面上叫「共鸣」",
+        "detail": "共振峰决定声音听起来粗还是细。在不变音高的前提下微调它，配合音高一起调，让声音更贴近目标角色。"
+      },
+      {
+        "id": "threshold",
+        "term": "响应阈值",
+        "brief": "输入端噪声门：低于它的声音当没说话",
+        "detail": "低于此响度的声音（键盘声、风扇声等）被判定为安静，不做变声。说话时底栏电平条应明显越过竖线，否则就是调太高了。"
+      },
+      {
+        "id": "rms",
+        "term": "响度包络",
+        "brief": "控制输出音量跟原声走还是跟音色走",
+        "detail": "控制输出音量跟随你原声的程度：越低越接近训练音色本身的响度，越高越保留你说话的强弱起伏。"
+      },
+      {
+        "id": "pv",
+        "term": "相位声码器",
+        "brief": "音频块之间的衔接方式，部分音色上更自然",
+        "detail": "换一种方式拼接相邻音频块。部分音色上衔接更自然，有些则没区别。开着对比听一下就知道留不留。"
+      },
+      {
+        "id": "sr",
+        "term": "采样率",
+        "brief": "音频每秒采样次数（常见 32k / 40k / 48k）",
+        "detail": "音频每秒采样的次数，常见 32k / 40k / 48k。可以跟着声卡走，也可以跟着音色模型走；不确定就保持「跟随设备」。"
+      },
+      {
+        "id": "mme",
+        "term": "MME",
+        "brief": "Windows 经典音频接口，兼容性最好",
+        "detail": "Windows 上历史最久的音频接口，兼容性最好，几乎不挑设备；代价是延迟偏高。不知道选什么就选它。改后需重新「开启变声」。"
+      },
+      {
+        "id": "wasapi",
+        "term": "WASAPI",
+        "brief": "比 MME 延迟低，但对设备更挑",
+        "detail": "比 MME 新的音频接口，延迟明显更低，适合对反应速度敏感的场合；但对设备与驱动更挑，个别声卡会无声或报错，出问题换回 MME 即可。它还有「独占」开关，开启后延迟更低，但会占住整块声卡。"
+      },
+      {
+        "id": "asio",
+        "term": "ASIO",
+        "brief": "专业声卡的低延迟通道，装了驱动才出现",
+        "detail": "专业录音声卡（以及 ASIO4ALL 之类驱动）提供的接口，延迟最低；装了对应驱动才会出现在列表里，没有就说明设备不支持。一次只能被一个程序占用，别的软件在用就连不上。"
+      },
+      {
+        "id": "monitor",
+        "term": "监听",
+        "brief": "让你自己也听见变声后的声音",
+        "detail": "默认变声声音只送给游戏/语音，自己听不到。开启监听后会在耳机里再放一份；监听设备选真实耳机或音箱，选到虚拟声卡会听不到，还可能回环啸叫。"
+      },
+      {
+        "id": "block",
+        "term": "采样块时长",
+        "brief": "每次处理多长一段声音：越短越快也越吃性能",
+        "detail": "软件把声音切成小段实时处理。段越短延迟越低，但越吃显卡，太短会断断续续。改后需重新「开启变声」。"
+      },
+      {
+        "id": "crossfade",
+        "term": "交叉淡化",
+        "brief": "相邻音频块接缝处的过渡时长",
+        "detail": "相邻两段声音拼接时互相叠一点点，避免接缝处「咔哒」响。太短会咔哒，太长会发糊。保持默认即可。"
+      },
+      {
+        "id": "comp",
+        "term": "压缩器",
+        "brief": "把忽大忽小的音量压平",
+        "detail": "说话声音时大时小时，把响的部分压下来，听感更稳。压得越狠越平，但太狠会发闷、失去起伏。"
+      },
+      {
+        "id": "eq",
+        "term": "均衡器",
+        "brief": "分频段调整音色的明暗厚薄",
+        "detail": "把声音按高中低频分成几段，分别调大调小。觉得闷就抬高频，觉得薄就抬低频；不确定怎么调先用预设。"
+      },
+      {
+        "id": "vbcable",
+        "term": "虚拟声卡",
+        "brief": "软件与游戏之间的音频「虚拟线路」（VB-Cable）",
+        "detail": "虚拟声卡是一根「软件里的线」：本软件把变声送进 CABLE Input，游戏/语音把麦克风选成 CABLE Output，对面就能听到。装完需重启电脑，设备列表里才会出现这两个名字。"
+      },
+      {
+        "id": "rvc",
+        "term": "RVC",
+        "brief": "本软件采用的变声技术路线",
+        "detail": "RVC（Retrieval-based Voice Conversion，基于检索的声线转换）：每个音色由独立模型驱动，切换音色就是切换模型文件。"
+      }
+    ]
+  },
+  "msg": {
+    "engine": {
+      "starting": "引擎进程已启动，正在加载…",
+      "missing_gui": "安装不完整：缺少引擎主程序",
+      "crash_load": "引擎加载时崩溃，详见日志",
+      "ready": "引擎就绪",
+      "idle": "待命"
+    },
+    "runtime": {
+      "not_ready": "运行时未就绪，请先完成补全",
+      "missing_python": "找不到 Runtime\\python.exe"
+    },
+    "vc": {
+      "need_model": "请先选择音色模型"
+    }
+  }
+}

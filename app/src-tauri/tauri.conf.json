@@ -34,6 +34,7 @@
     ],
     "resources": {
       "../frontend": "frontend",
+      "../i18n/locales": "shell-i18n/locales",
       "engine-payload/assets": "assets",
       "engine-payload/configs": "configs",
       "engine-payload/i18n": "i18n",

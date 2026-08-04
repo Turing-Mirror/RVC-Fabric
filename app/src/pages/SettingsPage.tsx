@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
@@ -7,19 +7,20 @@ import { useConfig } from "../hooks/useConfig";
 import { TIPS } from "../lib/config";
 import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
+import { LOCALES, useI18n, type LocaleCode } from "../i18n";
 
-const TABS = [
-  "设备与音频",
-  "变声参数",
-  "性能设置",
-  "声音效果",
-  "外观",
-  "常规",
-  "快捷键",
-  "在线更新",
+const TAB_KEYS = [
+  "device",
+  "voice",
+  "perf",
+  "fx",
+  "appearance",
+  "general",
+  "hotkeys",
+  "update",
 ] as const;
 
-type Tab = (typeof TABS)[number];
+type TabKey = (typeof TAB_KEYS)[number];
 
 type Props = {
   status?: EngineStatus;
@@ -98,7 +99,15 @@ function SettingsPageImpl({
   updateBusy = false,
   onOpenHelp,
 }: Props = {}) {
-  const [tab, setTab] = useState<Tab>("设备与音频");
+  const { t, locale, setLocale } = useI18n();
+  const tabLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        TAB_KEYS.map((k) => [k, t(`settings.tabs.${k}`)]),
+      ) as Record<TabKey, string>,
+    [t],
+  );
+  const [tab, setTab] = useState<TabKey>("device");
   const c = useConfig();
   // 「在线更新」里那行当前版本。和「其他」页读的是同一个命令，也就是同一个
   // APP_VERSION —— 两处显示不一致的话，一定是有人又手写了版本号。
@@ -177,7 +186,7 @@ function SettingsPageImpl({
     <div>
       <div className="px-[30px] pt-4 max-[1020px]:px-[22px] max-[720px]:px-4 overflow-x-auto">
         <SegmentControl
-          options={TABS.map((t) => ({ id: t, label: t }))}
+          options={TAB_KEYS.map((k) => ({ id: k, label: tabLabels[k] }))}
           value={tab}
           onChange={setTab}
           className="!inline-flex !ml-0 max-w-full"
@@ -204,7 +213,7 @@ function SettingsPageImpl({
           <p className="text-[12.5px] text-[var(--meta)] mt-6">读取设置…</p>
         ) : null}
 
-        {c.loaded && tab === "设备与音频" ? (
+        {c.loaded && tab === "device" ? (
           <Block
             title="设备与音频"
             className="!mt-6"
@@ -321,7 +330,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "变声参数" ? (
+        {c.loaded && tab === "voice" ? (
           <Block title="变声参数" note="运行中可热更新 · 按音色自动保存" className="!mt-6">
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">
               这里的调整会随当前音色自动保存，下次选回就是上次的状态。底栏也能快速调音高和共鸣。
@@ -423,7 +432,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "性能设置" ? (
+        {c.loaded && tab === "perf" ? (
           <Block title="性能设置" note="改后需重新「开启变声」" className="!mt-6">
             <div className={CARD}>
               <Field
@@ -495,7 +504,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "声音效果" ? (
+        {c.loaded && tab === "fx" ? (
           <Block title="声音效果" note="变声后 · 可选" className="!mt-6">
             <div className={CARD}>
               <Toggle
@@ -668,11 +677,32 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "外观" ? (
-          <Block title="外观" className="!mt-6">
+        {c.loaded && tab === "appearance" ? (
+          <Block title={tabLabels.appearance} className="!mt-6">
             <div className={CARD}>
               <Field
-                label="界面配色"
+                label={t("settings.language")}
+                tip={t("settings.languageTip")}
+                inline
+                control={
+                  <Select
+                    width={150}
+                    value={locale}
+                    options={LOCALES.map((l) => ({
+                      id: l.id,
+                      label: t(l.labelKey),
+                    }))}
+                    onChange={(v) => {
+                      if (v === "zh-CN" || v === "en-US") {
+                        setLocale(v as LocaleCode);
+                        c.set("ui_locale", v, true);
+                      }
+                    }}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.theme")}
                 tip={TIPS.theme_mode}
                 inline
                 control={
@@ -680,9 +710,9 @@ function SettingsPageImpl({
                     width={150}
                     value={c.str("theme_mode", "system")}
                     options={[
-                      { id: "system", label: "跟随系统" },
-                      { id: "light", label: "浅色" },
-                      { id: "dark", label: "深色" },
+                      { id: "system", label: t("settings.themeSystem") },
+                      { id: "light", label: t("settings.themeLight") },
+                      { id: "dark", label: t("settings.themeDark") },
                     ]}
                     onChange={(v) => {
                       c.set("theme_mode", v, true);
@@ -745,7 +775,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "常规" ? (
+        {c.loaded && tab === "general" ? (
           <Block title="常规" className="!mt-6">
             <div className={CARD}>
               <Field
@@ -781,7 +811,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "快捷键" ? (
+        {c.loaded && tab === "hotkeys" ? (
           <Block title="快捷键" className="!mt-6">
             <div className={CARD}>
               <Toggle
@@ -818,7 +848,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
 
-        {c.loaded && tab === "在线更新" ? (
+        {c.loaded && tab === "update" ? (
           <Block title="在线更新" className="!mt-6">
             <div className={CARD}>
               {/* 当前版本单独一行，常驻。

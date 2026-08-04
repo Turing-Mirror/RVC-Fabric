@@ -1,5 +1,6 @@
 import { SegmentControl } from "./SegmentControl";
 import { RangeBar } from "./controls";
+import { useI18n } from "../i18n";
 
 export type OutputMode = "vc" | "bypass";
 
@@ -29,13 +30,11 @@ type Props = {
  * Wired to Runtime worker via Tauri when available.
  */
 export function Dock({
-  // No invented defaults. These used to read "少女音 · 1/3" and
-  // "开黑日常 · 音高 +15 共鸣 1.20" on every install, for every voice, because
-  // nothing ever passed them.
-  voiceName = "未选择音色",
+  // No invented defaults for voice — empty means not selected.
+  voiceName,
   voiceTag = "",
   voiceIndex = "",
-  profileSummary = "无",
+  profileSummary,
   pitch,
   formant,
   onPitch,
@@ -44,11 +43,17 @@ export function Dock({
   onMode,
   running,
   onToggleRun,
-  statusTitle = "引擎就绪",
-  statusSub = "待命",
+  statusTitle,
+  statusSub,
   micDb = null,
   thresholdDb = -60,
 }: Props) {
+  const { t } = useI18n();
+  const name = voiceName ?? t("dock.noVoice");
+  const profile = profileSummary ?? t("dock.none");
+  const title = statusTitle ?? t("dock.engineReady");
+  const sub = statusSub ?? t("dock.engineIdle");
+
   // Same mapping as the Tk shell's _draw_mic_meter: -60..0 dBFS over the bar.
   const frac = (db: number) =>
     (Math.max(-60, Math.min(0, db)) + 60) / 60;
@@ -67,7 +72,9 @@ export function Dock({
       />
 
       <div className="min-w-[190px] max-w-[240px] max-[720px]:min-w-0 max-[720px]:max-w-none max-[720px]:flex-1 max-[720px]:basis-full">
-        <div className="text-[15px] font-semibold">当前：{voiceName}</div>
+        <div className="text-[15px] font-semibold">
+          {t("dock.current", { name })}
+        </div>
         {voiceTag || voiceIndex ? (
           <div className="text-xs text-[var(--meta)] mt-0.5">
             {[voiceTag, voiceIndex].filter(Boolean).join(" · ")}
@@ -75,9 +82,9 @@ export function Dock({
         ) : null}
         <div
           className="text-[11.5px] text-[var(--meta)] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap"
-          title={profileSummary}
+          title={profile}
         >
-          {profileSummary}
+          {profile}
         </div>
       </div>
 
@@ -86,13 +93,13 @@ export function Dock({
           options={[
             {
               id: "vc" as const,
-              label: "实时变声",
-              title: "麦克风输入 → 变为所选音色 → 输出（日常使用模式）",
+              label: t("dock.modeVc"),
+              title: t("dock.modeVcTip"),
             },
             {
               id: "bypass" as const,
-              label: "旁路原声",
-              title: "绕过变声处理直接输出，用于测试麦克风或排查连接问题",
+              label: t("dock.modeBypass"),
+              title: t("dock.modeBypassTip"),
             },
           ]}
           value={mode}
@@ -100,10 +107,10 @@ export function Dock({
           className="!ml-0"
         />
         <div className="flex items-center gap-2.5">
-          <span className="text-[11.5px] text-[var(--meta)]">麦克风</span>
+          <span className="text-[11.5px] text-[var(--meta)]">{t("dock.mic")}</span>
           <div
             className="relative w-[152px] h-1.5 rounded-sm overflow-hidden bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]"
-            title="麦克风电平；竖线为响应阈值"
+            title={t("dock.micLevelTip")}
           >
             <div
               className={
@@ -124,7 +131,7 @@ export function Dock({
 
       <div className="flex gap-[30px] flex-[1_1_250px] min-w-[210px] max-[860px]:flex-[1_1_100%] max-[860px]:order-3">
         <SliderTile
-          label="音高"
+          label={t("dock.pitch")}
           display={pitch >= 0 ? `+${pitch}` : `${pitch}`}
           min={-24}
           max={24}
@@ -134,7 +141,7 @@ export function Dock({
           onChange={onPitch}
         />
         <SliderTile
-          label="共鸣"
+          label={t("dock.formant")}
           display={formant >= 0 ? `+${formant.toFixed(2)}` : formant.toFixed(2)}
           min={-2}
           max={2}
@@ -148,10 +155,10 @@ export function Dock({
       <div className="ml-auto flex items-center gap-[18px] max-[860px]:order-4">
         <div className="text-right">
           <div className="text-[13px] font-semibold text-[var(--ink-muted)]">
-            {statusTitle}
+            {title}
           </div>
           <div className="text-[11.5px] text-[var(--meta)] mt-0.5">
-            {statusSub}
+            {sub}
           </div>
         </div>
         <button
@@ -168,7 +175,7 @@ export function Dock({
             "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
           ].join(" ")}
         >
-          {running ? "停止变声" : "开启变声"}
+          {running ? t("dock.stop") : t("dock.start")}
         </button>
       </div>
     </footer>

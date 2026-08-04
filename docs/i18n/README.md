@@ -11,11 +11,11 @@ python scripts\dev\extract_i18n_strings.py
 
 | 文件 | 范围 | 本次数 |
 |---|---|---:|
-| [01-frontend.md](./01-frontend.md) | React 界面 `app/src` | 741 |
-| [02-shell-rust.md](./02-shell-rust.md) | Tauri/Rust 壳 `app/src-tauri/src` | 401 |
+| [01-frontend.md](./01-frontend.md) | React 界面 `app/src` | 639 |
+| [02-shell-rust.md](./02-shell-rust.md) | Tauri/Rust 壳 `app/src-tauri/src` | 400 |
 | [03-engine-python.md](./03-engine-python.md) | 引擎 / worker 入口（Python） | 264 |
-| [04-unique-index.md](./04-unique-index.md) | 去重原文索引（翻译主表） | 1238 |
-| **分册合计（可重复）** | | **1406** |
+| [04-unique-index.md](./04-unique-index.md) | 去重原文索引（翻译主表） | 1166 |
+| **分册合计（可重复）** | | **1303** |
 
 兼容旧路径：[界面文案总表.md](../界面文案总表.md)（仅前端，格式含「改成」列）。
 

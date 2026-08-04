@@ -1,135 +1,32 @@
 /**
- * 专有名词表。
- *
- * 界面上躲不掉的技术词（Hubert、DirectML、检索库……）在这里统一解释一次，
- * 说明页的「专有名词」整块直接渲染这份表，界面各处的小问号也从这里取文案。
- * 两边共用一份，避免同一个词在两个地方说法不一样。
- *
- * 写法：一句话说清它是什么，第二句说清用户该怎么办。不要写用户做不了主的事。
+ * Compatibility shim — terms live in `app/i18n/locales/*.json`.
+ * Prefer `useGlossary` / `tip` from `../i18n` in new code.
  */
-export type Term = {
-  /** 界面上出现的写法，也是说明页的条目标题。 */
-  term: string;
-  /** 一行摘要，说明页折叠时显示。 */
-  brief: string;
-  /** 完整解释，小问号的悬停文案，也是说明页展开后的正文。 */
-  detail: string;
-};
+export {
+  tip,
+  getGlossary,
+  termsFrom,
+  type GlossaryTerm,
+} from "../i18n/glossary";
+export { useGlossary, useGlossarySectionTitle } from "../i18n/index";
 
-export const GLOSSARY: Term[] = [
-  {
-    term: "运行时",
-    brief: "软件运行所需的 Python/PyTorch 计算环境",
-    detail: "变声引擎依赖的 Python 计算环境（含 PyTorch 等）。安装包不含它，首次启动会按你的显卡自动下载对应版本。",
-  },
-  {
-    term: "Hubert 模型",
-    brief: "把声音转成内容特征的基础模型（全局共用）",
-    detail: "Hubert 负责把你说的话拆成「说了什么」，再交给音色模型换成目标音色。它与具体音色无关，全软件共用一个文件，缺了它任何音色都用不了。",
-  },
-  {
-    term: "底模",
-    brief: "训练专属音色所需的基础预训练模型",
-    detail: "官方预训练好的通用声学模型。从它开始训练比从零开始快得多；按采样率分 32k / 40k / 48k，训练前需下载对应的版本。",
-  },
-  {
-    term: "检索库",
-    brief: "音色附带的 .index 特征文件，提升还原度",
-    detail: "检索库记录了训练音频的特征，启用后输出更贴近原音色，但吐字可能略糊。可选项，缺失也能正常变声；强度在设置页「检索强度」调整。",
-  },
-  {
-    term: "DirectML",
-    brief: "A 卡 / 核显的通用加速方案，能变声不能训练",
-    detail: "DirectML 是 Windows 上非 NVIDIA 显卡（AMD、Intel 核显）的 GPU 加速方案。它缺少训练所需的部分算子，训练音色仍需 N 卡。",
-  },
-  {
-    term: "CUDA Graph",
-    brief: "N 卡专属的推理提速开关，不兼容会自动退回",
-    detail: "预录制 GPU 推理指令，减少 CPU 与 GPU 之间的交互开销，可降低延迟、减少显存占用。仅 NVIDIA 显卡有效；环境不兼容时自动退回传统模式。",
-  },
-  {
-    term: "音高算法",
-    brief: "rmvpe / harvest / pm / fcpe / crepe，一般保持 rmvpe",
-    detail: "决定软件如何识别你说话的音高。RMVPE 效果最好也最快，一般不用改；Harvest 更稳但较慢；PM 最快但容易破音；FCPE、Crepe 是可选的高精度算法。",
-  },
-  {
-    term: "共振峰",
-    brief: "决定音色粗细的特性，界面上叫「共鸣」",
-    detail: "共振峰决定声音听起来粗还是细。在不变音高的前提下微调它，配合音高一起调，让声音更贴近目标角色。",
-  },
-  {
-    term: "响应阈值",
-    brief: "输入端噪声门：低于它的声音当没说话",
-    detail: "低于此响度的声音（键盘声、风扇声等）被判定为安静，不做变声。说话时底栏电平条应明显越过竖线，否则就是调太高了。",
-  },
-  {
-    term: "响度包络",
-    brief: "控制输出音量跟原声走还是跟音色走",
-    detail: "控制输出音量跟随你原声的程度：越低越接近训练音色本身的响度，越高越保留你说话的强弱起伏。",
-  },
-  {
-    term: "相位声码器",
-    brief: "音频块之间的衔接方式，部分音色上更自然",
-    detail: "换一种方式拼接相邻音频块。部分音色上衔接更自然，有些则没区别。开着对比听一下就知道留不留。",
-  },
-  {
-    term: "采样率",
-    brief: "音频每秒采样次数（常见 32k / 40k / 48k）",
-    detail: "音频每秒采样的次数，常见 32k / 40k / 48k。可以跟着声卡走，也可以跟着音色模型走；不确定就保持「跟随设备」。",
-  },
-  {
-    term: "MME",
-    brief: "Windows 经典音频接口，兼容性最好",
-    detail: "Windows 上历史最久的音频接口，兼容性最好，几乎不挑设备；代价是延迟偏高。不知道选什么就选它。改后需重新「开启变声」。",
-  },
-  {
-    term: "WASAPI",
-    brief: "比 MME 延迟低，但对设备更挑",
-    detail: "比 MME 新的音频接口，延迟明显更低，适合对反应速度敏感的场合；但对设备与驱动更挑，个别声卡会无声或报错，出问题换回 MME 即可。它还有「独占」开关，开启后延迟更低，但会占住整块声卡。",
-  },
-  {
-    term: "ASIO",
-    brief: "专业声卡的低延迟通道，装了驱动才出现",
-    detail: "专业录音声卡（以及 ASIO4ALL 之类驱动）提供的接口，延迟最低；装了对应驱动才会出现在列表里，没有就说明设备不支持。一次只能被一个程序占用，别的软件在用就连不上。",
-  },
-  {
-    term: "监听",
-    brief: "让你自己也听见变声后的声音",
-    detail: "默认变声声音只送给游戏/语音，自己听不到。开启监听后会在耳机里再放一份；监听设备选真实耳机或音箱，选到虚拟声卡会听不到，还可能回环啸叫。",
-  },
-  {
-    term: "采样块时长",
-    brief: "每次处理多长一段声音：越短越快也越吃性能",
-    detail: "软件把声音切成小段实时处理。段越短延迟越低，但越吃显卡，太短会断断续续。改后需重新「开启变声」。",
-  },
-  {
-    term: "交叉淡化",
-    brief: "相邻音频块接缝处的过渡时长",
-    detail: "相邻两段声音拼接时互相叠一点点，避免接缝处「咔哒」响。太短会咔哒，太长会发糊。保持默认即可。",
-  },
-  {
-    term: "压缩器",
-    brief: "把忽大忽小的音量压平",
-    detail: "说话声音时大时小时，把响的部分压下来，听感更稳。压得越狠越平，但太狠会发闷、失去起伏。",
-  },
-  {
-    term: "均衡器",
-    brief: "分频段调整音色的明暗厚薄",
-    detail: "把声音按高中低频分成几段，分别调大调小。觉得闷就抬高频，觉得薄就抬低频；不确定怎么调先用预设。",
-  },
-  {
-    term: "虚拟声卡",
-    brief: "软件与游戏之间的音频「虚拟线路」（VB-Cable）",
-    detail: "虚拟声卡是一根「软件里的线」：本软件把变声送进 CABLE Input，游戏/语音把麦克风选成 CABLE Output，对面就能听到。装完需重启电脑，设备列表里才会出现这两个名字。",
-  },
-  {
-    term: "RVC",
-    brief: "本软件采用的变声技术路线",
-    detail: "RVC（Retrieval-based Voice Conversion，基于检索的声线转换）：每个音色由独立模型驱动，切换音色就是切换模型文件。",
-  },
-];
+import { getGlossary } from "../i18n/glossary";
 
-/** 按词取解释，给界面上的小问号用。找不到返回空串（HelpMark 不渲染）。 */
-export function tip(term: string): string {
-  return GLOSSARY.find((t) => t.term === term)?.detail ?? "";
-}
+/**
+ * @deprecated Snapshot of zh-CN terms at first access. Prefer useGlossary().
+ * Help pages that still import GLOSSARY get a live getter via this proxy.
+ */
+export const GLOSSARY = new Proxy([] as import("../i18n/glossary").GlossaryTerm[], {
+  get(_target, prop, receiver) {
+    const list = getGlossary();
+    if (prop === "length") return list.length;
+    if (prop === Symbol.iterator) {
+      return list[Symbol.iterator].bind(list);
+    }
+    if (typeof prop === "string" && /^\d+$/.test(prop)) {
+      return list[Number(prop)];
+    }
+    const v = Reflect.get(list, prop, receiver);
+    return typeof v === "function" ? v.bind(list) : v;
+  },
+});

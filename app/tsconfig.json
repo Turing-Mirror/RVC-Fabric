@@ -20,6 +20,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src", "i18n/locales/*.json"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

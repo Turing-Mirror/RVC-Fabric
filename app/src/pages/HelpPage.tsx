@@ -1,7 +1,7 @@
 import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
-import { GLOSSARY, tip } from "../lib/glossary";
+import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 
 /**
  * Answers carried over verbatim from the Tk shell's `help_content.py` and its
@@ -140,6 +140,8 @@ type HelpProps = {
 };
 
 function HelpPageImpl({ status }: HelpProps = {}) {
+  const glossary = useGlossary();
+  const glossaryTitle = useGlossarySectionTitle();
   const [open, setOpen] = useState<string>("");
   // 名词表和常见情况各自独立展开，互不影响。
   const [openTerm, setOpenTerm] = useState<string>("");
@@ -305,22 +307,24 @@ function HelpPageImpl({ status }: HelpProps = {}) {
           ))}
         </Group>
       </Block>
-      <Block title="专有名词" note={String(GLOSSARY.length)}>
+      <Block title={glossaryTitle} note={String(glossary.length)}>
         <Group>
-          {GLOSSARY.map((t) => (
+          {glossary.map((term) => (
             <ListItem
-              key={t.term}
-              title={t.term}
-              desc={t.brief}
-              expanded={openTerm === t.term}
-              onClick={() => setOpenTerm((cur) => (cur === t.term ? "" : t.term))}
+              key={term.id || term.term}
+              title={term.term}
+              desc={term.brief}
+              expanded={openTerm === term.term}
+              onClick={() =>
+                setOpenTerm((cur) => (cur === term.term ? "" : term.term))
+              }
               right={
                 <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {openTerm === t.term ? "收起" : "展开"}
+                  {openTerm === term.term ? "收起" : "展开"}
                 </span>
               }
             >
-              {t.detail}
+              {term.detail}
             </ListItem>
           ))}
         </Group>

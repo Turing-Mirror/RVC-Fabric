@@ -156,6 +156,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("main_gpu".into(), json!(-1));
     m.insert("close_action".into(), json!("ask"));
     m.insert("theme_mode".into(), json!("system"));
+    // UI language (React + Rust tray/errors). Engine logs may stay Chinese.
+    m.insert("ui_locale".into(), json!("zh-CN"));
     m.insert("wallpaper_path".into(), json!(""));
     m.insert("wallpaper_blur".into(), json!(40));
     m.insert("wallpaper_opacity".into(), json!(70));
@@ -330,6 +332,11 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         if k == "main_gpu" {
             needs_restart.push(k.clone());
         }
+        if k == "ui_locale" {
+            if let Some(code) = v.as_str() {
+                crate::i18n::set_locale(code);
+            }
+        }
         saved.insert(k, v);
     }
 
@@ -481,7 +488,10 @@ pub fn describe() -> Value {
         "appearance",
         vec!["theme_mode", "wallpaper_path", "wallpaper_blur", "wallpaper_opacity"],
     );
-    groups.insert("general", vec!["close_action", "telemetry_opt_in"]);
+    groups.insert(
+        "general",
+        vec!["close_action", "ui_locale", "telemetry_opt_in"],
+    );
     json!({
         "groups": groups,
         "hot": HOT_KEYS,

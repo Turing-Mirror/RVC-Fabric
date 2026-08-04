@@ -26,18 +26,28 @@ use crate::{config, paths, worker};
 /// the window is out of the way, so the tray must always exist — not only when
 /// the user picked "minimise to tray".
 pub fn install_tray(app: &AppHandle) -> Result<(), String> {
-    let show = MenuItem::with_id(app, "show", "打开主界面", true, None::<&str>)
+    let show = MenuItem::with_id(app, "show", crate::i18n::t("tray.show"), true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let toggle = MenuItem::with_id(app, "toggle", "开启 / 停止变声", true, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)
+    let toggle = MenuItem::with_id(
+        app,
+        "toggle",
+        crate::i18n::t("tray.toggle"),
+        true,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let quit = MenuItem::with_id(app, "quit", crate::i18n::t("tray.quit"), true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let menu =
         Menu::with_items(app, &[&show, &toggle, &quit]).map_err(|e| e.to_string())?;
 
     TrayIconBuilder::with_id("main")
         .tooltip("RVC Fabric")
-        .icon(app.default_window_icon().cloned().ok_or("缺少托盘图标")?)
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .ok_or_else(|| crate::i18n::t("tray.missingIcon"))?,
+        )
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {

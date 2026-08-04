@@ -115,20 +115,38 @@ def main() -> None:
         f"TM_ACCEL_RESOLVED={os.environ.get('TM_ACCEL_RESOLVED')} "
         f"TM_USE_DML={os.environ.get('TM_USE_DML')}\n",
     )
+    try:
+        from tools.msg_codes import ENGINE_STARTING, status_fields
+    except Exception:
+        ENGINE_STARTING = "engine.starting"
+
+        def status_fields(code, **extra):  # type: ignore[misc]
+            return {"message_code": code, "message": "引擎进程已启动，正在加载…", **extra}
+
     _write_status_early(
         root,
         state="starting",
-        message="引擎进程已启动，正在加载…",
         error="",
+        **status_fields(ENGINE_STARTING),
     )
 
     gui = root / "gui_v1.py"
     if not gui.is_file():
         msg = f"gui_v1.py not found: {gui}"
         _append_log(root, msg)
-        _write_status_early(
-            root, state="error", error=msg, message="安装不完整：缺少引擎主程序"
-        )
+        try:
+            from tools.msg_codes import ENGINE_MISSING_GUI, status_fields as _sf
+        except Exception:
+            ENGINE_MISSING_GUI = "engine.missing_gui"
+
+            def _sf(code, **extra):  # type: ignore[misc]
+                return {
+                    "message_code": code,
+                    "message": "安装不完整：缺少引擎主程序",
+                    **extra,
+                }
+
+        _write_status_early(root, state="error", error=msg, **_sf(ENGINE_MISSING_GUI))
         raise SystemExit(msg)
 
     try:
@@ -140,15 +158,27 @@ def main() -> None:
         _append_log(root, "WORKER FATAL:\n" + tb)
         try:
             from tools.worker_protocol import write_status
+            from tools.msg_codes import ENGINE_CRASH_LOAD, status_fields as _sf2
 
             write_status(
                 state="error",
                 error=f"{type(e).__name__}: {e}"[:200],
-                message="引擎加载时崩溃，详见日志",
                 pid=0,
+                **_sf2(ENGINE_CRASH_LOAD),
             )
         except Exception:
-            pass
+            try:
+                from tools.worker_protocol import write_status
+
+                write_status(
+                    state="error",
+                    error=f"{type(e).__name__}: {e}"[:200],
+                    message="引擎加载时崩溃，详见日志",
+                    message_code="engine.crash_load",
+                    pid=0,
+                )
+            except Exception:
+                pass
         raise
 
 

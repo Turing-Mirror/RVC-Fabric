@@ -40,7 +40,10 @@ class EngineShipsWithTheInstaller(unittest.TestCase):
         """
         res = conf()["bundle"]["resources"]
         for src in res:
-            if src == "../frontend":
+            # frontend UI pack + shell locale JSON (not engine weights)
+            if src in ("../frontend", "../i18n/locales") or src.startswith(
+                "../i18n/"
+            ):
                 continue
             self.assertTrue(
                 src.startswith("engine-payload/"),

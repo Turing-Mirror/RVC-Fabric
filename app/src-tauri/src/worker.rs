@@ -791,6 +791,8 @@ pub fn swap_model(root: &Path) -> Result<u64, String> {
 /// Snapshot for the UI (status + derived meter 0..1).
 pub fn status_for_ui(root: &Path) -> Value {
     let mut st = protocol::read_status(root);
+    // Prefer localized message when worker sent a stable message_code.
+    crate::i18n::localize_status(&mut st);
     let alive = is_worker_alive(root);
     if let Some(obj) = st.as_object_mut() {
         obj.insert("worker_alive".into(), json!(alive));

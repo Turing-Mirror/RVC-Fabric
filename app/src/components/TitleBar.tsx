@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SegmentControl } from "./SegmentControl";
-import { NAV_PAGES, type PageId } from "../lib/nav";
+import { navPages, type PageId } from "../lib/nav";
+import { useI18n } from "../i18n";
 import wordmark from "../assets/logo_wordmark.png";
 
 type Props = {
@@ -17,6 +18,7 @@ export function TitleBar({
   plazaUnread = true,
   compactNav = false,
 }: Props) {
+  const { t, locale } = useI18n();
   const win = () => {
     try {
       return getCurrentWindow();
@@ -25,7 +27,11 @@ export function TitleBar({
     }
   };
 
-  const options = NAV_PAGES.map((p) => ({
+  // locale in deps so labels re-resolve when language changes
+  const pages = navPages();
+  void locale;
+
+  const options = pages.map((p) => ({
     id: p.id as PageId,
     label: (
       <span className="inline-flex items-center">
@@ -33,7 +39,7 @@ export function TitleBar({
         {"badge" in p && p.badge && plazaUnread ? (
           <span
             className="inline-block w-[5px] h-[5px] rounded-full bg-[var(--notify)] ml-1.5 align-middle animate-[pulse_2.4s_var(--ease)_infinite]"
-            aria-label="有新内容"
+            aria-label={t("nav.newContent")}
           />
         ) : null}
       </span>
@@ -73,19 +79,19 @@ export function TitleBar({
           onPointerDown={(e) => e.stopPropagation()}
         >
           <WinBtn
-            label="最小化"
+            label={t("window.minimize")}
             onClick={() => void win()?.minimize()}
           >
             —
           </WinBtn>
           <WinBtn
-            label="最大化"
+            label={t("window.maximize")}
             onClick={() => void win()?.toggleMaximize()}
           >
             □
           </WinBtn>
           <WinBtn
-            label="关闭"
+            label={t("window.close")}
             danger
             onClick={() => void win()?.close()}
           >

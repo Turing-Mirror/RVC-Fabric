@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { tStatic } from "../i18n";
 
 /** Mirrors User_Data/runtime_control/status.json + shell extras. */
 export type EngineStatus = {
@@ -95,7 +96,7 @@ export async function startVc(): Promise<EngineStatus> {
   if (!isTauri()) {
     return {
       state: "error",
-      error: "请在软件窗口中启动变声",
+      error: tStatic("engine.browserNoVc"),
       worker_alive: false,
     };
   }
@@ -148,7 +149,7 @@ export async function getProvisionStatus(): Promise<ProvisionStatus> {
     return {
       runtime_ready: false,
       need_provision: true,
-      message: "浏览器预览无法探测运行时",
+      message: tStatic("engine.browserNoRuntime"),
       download_supported: false,
     };
   }
@@ -160,7 +161,7 @@ export async function startProvision(
   force = false,
 ): Promise<{ ok?: boolean; message?: string; variant?: string }> {
   if (!isTauri()) {
-    return { ok: false, message: "浏览器预览无法下载运行时" };
+    return { ok: false, message: tStatic("engine.browserNoDownload") };
   }
   return invoke("provision_start", { variant, force });
 }
@@ -172,12 +173,12 @@ export async function cancelProvision(): Promise<void> {
 
 export function statusTitle(st: EngineStatus): string {
   const s = st.state || "idle";
-  if (s === "running") return "变声中";
-  if (s === "starting") return "启动中";
-  if (s === "stopping") return "停止中";
-  if (s === "error") return "引擎错误";
-  if (st.worker_alive) return "引擎就绪";
-  return "引擎未启动";
+  if (s === "running") return tStatic("dock.converting");
+  if (s === "starting") return tStatic("dock.starting");
+  if (s === "stopping") return tStatic("dock.stopping");
+  if (s === "error") return tStatic("dock.engineError");
+  if (st.worker_alive) return tStatic("dock.engineReady");
+  return tStatic("dock.engineDown");
 }
 
 export function statusSub(st: EngineStatus): string {
@@ -188,14 +189,12 @@ export function statusSub(st: EngineStatus): string {
   const delay = Number(st.delay_ms || 0);
   const infer = Number(st.infer_ms || 0);
   if (st.state === "running" && (delay > 0 || infer > 0)) {
-    return `延迟 ${delay} ms · 推理 ${infer} ms`;
+    return tStatic("dock.delayLine", { delay, infer });
   }
-  // message 在前、error 在后。引擎的 error 里装的是 Python 异常原文
-  // （`RuntimeError: CUDA out of memory` 之类），那是给日志和诊断包看的；
-  // 用户在底栏该看到的是同一次失败对应的中文 message。两者都没有才退回
-  // error —— 有原文总比一片空白强。
+  // Prefer shell-localized message (worker message_code resolved in Rust).
+  // Fallback to raw message / error / idle labels.
   if (st.message) return String(st.message).slice(0, 48);
   if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
-  if (st.worker_alive) return "待命";
-  return "等待引擎启动";
+  if (st.worker_alive) return tStatic("dock.engineIdle");
+  return tStatic("dock.waitStart");
 }

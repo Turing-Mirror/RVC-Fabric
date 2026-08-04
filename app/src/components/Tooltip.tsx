@@ -78,7 +78,7 @@ export function Tooltip({
     <>
       <span
         ref={anchor}
-        className="inline-flex"
+        className="inline-flex items-center shrink-0 align-middle"
         onPointerEnter={() => setOpen(true)}
         onPointerLeave={() => setOpen(false)}
         // 键盘走到这里也要看得到说明，不是只有鼠标用户配看。
@@ -135,9 +135,22 @@ export function HelpMark({ title }: { title: string }) {
           e.preventDefault();
           e.stopPropagation();
         }}
-        className="w-[17px] h-[17px] p-0 bg-transparent rounded-full text-[var(--meta)] text-[11px] inline-grid place-items-center cursor-help border-0 shadow-[inset_0_0_0_1px_var(--line)] transition-[color,box-shadow,transform] duration-200 ease-[var(--spring)] hover:text-[var(--accent)] hover:shadow-[inset_0_0_0_1px_var(--accent)] hover:scale-110 focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+        className={[
+          // shrink-0 + align-middle：跟同行中文标题垂直居中，不被基线往下拽
+          "relative shrink-0 align-middle",
+          "w-[17px] h-[17px] p-0 border-0 bg-transparent rounded-full",
+          "inline-flex items-center justify-center",
+          "text-[var(--meta)] text-[11px] leading-none font-medium",
+          "cursor-help shadow-[inset_0_0_0_1px_var(--line)]",
+          "transition-[color,box-shadow,transform] duration-200 ease-[var(--spring)]",
+          "hover:text-[var(--accent)] hover:shadow-[inset_0_0_0_1px_var(--accent)] hover:scale-110",
+          "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
+        ].join(" ")}
       >
-        ?
+        {/* 「?」字形视觉重心偏低，微抬 1px 做光学居中 */}
+        <span className="relative -top-px leading-none" aria-hidden>
+          ?
+        </span>
       </button>
     </Tooltip>
   );

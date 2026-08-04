@@ -24,8 +24,8 @@ export function Field({
     return (
       <div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-[9px] text-sm">
-            {label}
+          <div className="flex items-center gap-[9px] text-sm leading-none">
+            <span className="leading-normal">{label}</span>
             {tip ? <HelpMark title={tip} /> : null}
           </div>
           <div className="ml-auto">{control}</div>
@@ -49,8 +49,8 @@ export function Field({
   }
   return (
     <div>
-      <div className="flex items-center gap-[9px] text-sm mb-[9px]">
-        {label}
+      <div className="flex items-center gap-[9px] text-sm mb-[9px] leading-none">
+        <span className="leading-normal">{label}</span>
         {tip ? <HelpMark title={tip} /> : null}
       </div>
       {desc ? (
@@ -171,9 +171,6 @@ export function RangeBar({
   max,
   step,
   onChange,
-  ticks = 5,
-  /** 初始/中性值位置（如音高 0）。与轨道上的刻度小点不同：画成竖线标记。 */
-  defaultValue,
   ariaLabel,
 }: {
   value: number;
@@ -181,17 +178,18 @@ export function RangeBar({
   max: number;
   step: number;
   onChange: (v: number) => void;
-  /** 轨道上的刻度点数量，0 表示不画。 */
+  /**
+   * @deprecated 不再绘制刻度/初始值标记；保留参数以免调用方报错。
+   */
   ticks?: number;
+  /**
+   * @deprecated 不再绘制初始值竖线；保留参数以免调用方报错。
+   */
   defaultValue?: number;
   ariaLabel?: string;
 }) {
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
-  const defaultPct =
-    defaultValue != null && Number.isFinite(defaultValue)
-      ? Math.min(100, Math.max(0, ((defaultValue - min) / span) * 100))
-      : null;
 
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动中光标所在的百分比。null = 没在拖，把手画在量化后的位置上。
@@ -247,12 +245,6 @@ export function RangeBar({
   const knobX = `calc(${draw}% - ${(KNOB_W * draw) / 100}px)`;
   const fillW = `calc(${draw}% - ${(KNOB_W * draw) / 100 - KNOB_W / 2}px)`;
 
-  // 初始值竖线：把手行程与光标一致，左右各缩半个把手宽。
-  const defaultMarkLeft =
-    defaultPct != null
-      ? `calc(${KNOB_W / 2}px + (100% - ${KNOB_W}px) * ${defaultPct / 100})`
-      : null;
-
   return (
     <div
       ref={trackRef}
@@ -266,31 +258,7 @@ export function RangeBar({
         className="absolute inset-y-0 left-0 rounded-l-md bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
         style={{ width: fillW, ...glide }}
       />
-      {/* 刻度小点：均匀分位，不是初始值。初始值另画竖线。 */}
-      {ticks > 0 ? (
-        <div
-          aria-hidden
-          className="absolute inset-0 flex items-center justify-between"
-          style={{ paddingInline: KNOB_W / 2 }}
-        >
-          {Array.from({ length: ticks }, (_, i) => (
-            <span
-              key={i}
-              className="w-[3px] h-[3px] rounded-full bg-[color-mix(in_srgb,var(--ink)_22%,transparent)]"
-            />
-          ))}
-        </div>
-      ) : null}
-      {/* 初始值标记：短竖线，与小圆点刻度区分开。 */}
-      {defaultMarkLeft != null ? (
-        <div
-          aria-hidden
-          title="初始值"
-          className="absolute top-[4px] bottom-[4px] w-[2px] rounded-sm bg-[color-mix(in_srgb,var(--ink)_38%,transparent)] pointer-events-none"
-          style={{ left: defaultMarkLeft, transform: "translateX(-50%)" }}
-        />
-      ) : null}
-      {/* 圆角方块把手（不是椭圆/胶囊）。 */}
+      {/* 圆角方块把手（不是椭圆/胶囊）。不画刻度点 / 初始值竖线：界面更干净。 */}
       <div
         aria-hidden
         className={[
@@ -323,7 +291,7 @@ export function Slider({
   step,
   onChange,
   format,
-  defaultValue,
+  defaultValue: _defaultValue,
 }: {
   value: number;
   min: number;
@@ -331,9 +299,10 @@ export function Slider({
   step: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
-  /** 初始/中性值标记，见 RangeBar。 */
+  /** @deprecated 不再绘制初始值标记；保留以免调用方报错。 */
   defaultValue?: number;
 }) {
+  void _defaultValue;
   const shown = format ? format(value) : String(value);
   return (
     <div className="flex items-center gap-[15px] w-full">
@@ -347,7 +316,6 @@ export function Slider({
           max={max}
           step={step}
           onChange={onChange}
-          defaultValue={defaultValue}
         />
       </div>
       <div className="text-[13px] min-w-[56px] text-right tabular-nums">{shown}</div>

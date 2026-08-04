@@ -52,6 +52,14 @@ pub struct ExtraFile {
     pub urls: Vec<String>,
 }
 
+impl ExtraFile {
+    /// Release 附件按平铺文件名寻址（上传时就是按 base name 传的），
+    /// 清单里的 `name` 可以是嵌套相对路径（只决定本地摆哪），拼 URL 只用末段。
+    pub fn base_name(&self) -> &str {
+        self.name.rsplit('/').next().unwrap_or(&self.name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtraSpec {
     pub key: String,
@@ -90,16 +98,23 @@ fn safe_dest(root: &Path, dest: &str) -> Option<PathBuf> {
     Some(out)
 }
 
-/// 文件名同理：清单说了算的名字会被拼进路径。
+/// 清单里的文件名同样是拼进路径的字符串，但允许嵌套相对路径：PyMSS 的模型
+/// 要按 `vocal/vocal_extraction/xxx.ckpt` 这种目录摆放才能被引擎解析到。
+/// 规则与 `safe_dest` 同源：只放行普通目录段，`.` 与 `..` 一律拒绝。
 fn safe_name(name: &str) -> Option<String> {
-    let n = name.trim();
-    if n.is_empty() || n == "." || n == ".." {
+    let n = name.trim().replace('\\', "/");
+    if n.is_empty() || n.contains(':') || n.starts_with('/') {
         return None;
     }
-    if n.contains('/') || n.contains('\\') || n.contains(':') {
-        return None;
+    let mut out: Vec<&str> = Vec::new();
+    for part in n.split('/') {
+        match part {
+            // 空段 = `a//b` 或结尾斜杠，无意义且可能让路径解析出歧义，拒绝。
+            "" | "." | ".." => return None,
+            s => out.push(s),
+        }
     }
-    Some(n.to_string())
+    Some(out.join("/"))
 }
 
 fn normalize_sha(s: &str) -> String {
@@ -168,12 +183,13 @@ pub fn parse_spec(key: &str, blob: &Value) -> Option<ExtraSpec> {
             })
             .unwrap_or_default();
         if urls.is_empty() {
+            let base = name.rsplit('/').next().unwrap_or(&name);
             urls.push(if channel == "lfs" {
                 lfs_url(&sha)
             } else if tag.trim().is_empty() {
                 return None;
             } else {
-                release_url(&tag, &name)
+                release_url(&tag, base)
             });
         }
         files.push(ExtraFile {
@@ -230,7 +246,7 @@ pub fn list(root: &Path) -> Value {
                 "label": s.label,
                 "dest": s.dest,
                 "size_bytes": s.total_bytes(),
-                "files": s.files.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+                "files": s.files.iter().map(|f| f.base_name().to_string()).collect::<Vec<_>>(),
                 "installed": installed,
             })
         })
@@ -295,6 +311,9 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
         if file_ok(&dest, f) {
             before += f.size_bytes;
             continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("建不了目录：{e}"))?;
         }
         let app2 = app.clone();
         let key2 = key.to_string();
@@ -364,10 +383,30 @@ mod tests {
 
     #[test]
     fn a_hostile_filename_cannot_escape_either() {
-        for bad in ["", " ", "..", ".", "a/b", "a\\b", "C:evil"] {
+        for bad in ["", " ", "..", ".", "C:evil", "a/../b", "/abs", "a//b", "a/"] {
             assert!(safe_name(bad).is_none(), "should reject {bad:?}");
         }
         assert_eq!(safe_name(" model.ckpt "), Some("model.ckpt".into()));
+    }
+
+    #[test]
+    fn nested_relative_paths_are_allowed() {
+        // PyMSS 的模型必须按 catalog relpath 的子目录摆放，引擎才解析得到。
+        assert_eq!(
+            safe_name("vocal/vocal_extraction/x.ckpt"),
+            Some("vocal/vocal_extraction/x.ckpt".into())
+        );
+        // 反斜杠写法归一成 /，与 dest 同规则。
+        assert_eq!(
+            safe_name("legacy_vr\\vr_hp2\\7_HP2-UVR.pth"),
+            Some("legacy_vr/vr_hp2/7_HP2-UVR.pth".into())
+        );
+        let root = Path::new("C:\\App");
+        let d = safe_dest(root, "assets/pymss").unwrap();
+        assert_eq!(
+            d.join("vocal/vocal_extraction/x.ckpt"),
+            root.join("assets/pymss/vocal/vocal_extraction/x.ckpt")
+        );
     }
 
     fn sha(c: char) -> String {
@@ -400,6 +439,22 @@ mod tests {
         assert_eq!(
             s.files[0].urls,
             vec![format!("{CNB_REPO}/-/releases/download/pymss/a.ckpt")]
+        );
+    }
+
+    #[test]
+    fn nested_names_use_the_flat_base_name_in_urls() {
+        // 附件在 CNB 上是平铺的（上传时就是按 base name 传的），目录只决定本地摆哪。
+        let blob = json!({
+            "dest": "assets/pymss",
+            "release_tag": "pymss",
+            "files": [{"name": "legacy_vr/vr_hp2/7_HP2-UVR.pth", "sha256": sha('a')}]
+        });
+        let s = parse_spec("pymss", &blob).expect("spec");
+        assert_eq!(s.files[0].base_name(), "7_HP2-UVR.pth");
+        assert_eq!(
+            s.files[0].urls,
+            vec![format!("{CNB_REPO}/-/releases/download/pymss/7_HP2-UVR.pth")]
         );
     }
 

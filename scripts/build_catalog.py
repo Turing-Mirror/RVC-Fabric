@@ -942,6 +942,18 @@ def _safe_dest(dest: str) -> bool:
     return all(part not in ("", ".", "..") for part in d.split("/"))
 
 
+def _safe_extra_name(name: str) -> bool:
+    """附加资源的文件名，与客户端 `extra_assets.rs::safe_name` 同规则。
+
+    PyMSS 的模型要按 catalog relpath 摆在子目录里（vocal/vocal_extraction/…），
+    所以放行嵌套相对路径；`.`/`..`/绝对路径/盘符照旧拒绝。
+    """
+    n = str(name or "").strip().replace("\\", "/")
+    if not n or ":" in n or n.startswith("/"):
+        return False
+    return all(part not in ("", ".", "..") for part in n.split("/"))
+
+
 def _compile_extras(entries: list, rep: Report) -> dict:
     """附加资源 → index.extras。
 
@@ -966,9 +978,9 @@ def _compile_extras(entries: list, rep: Report) -> dict:
         files = []
         ok = True
         for f in e.get("files") or []:
-            name = str(f.get("name") or "").strip()
-            if not name or "/" in name or "\\" in name or ":" in name:
-                rep.error(f"{who}: 文件名非法：{name!r}")
+            name = str(f.get("name") or "").strip().replace("\\", "/")
+            if not _safe_extra_name(name):
+                rep.error(f"{who}: 文件名非法（只允许嵌套相对路径，不许 .. / 绝对路径）：{name!r}")
                 ok = False
                 continue
             sha = str(f.get("sha256") or "").strip().lower()
@@ -991,7 +1003,10 @@ def _compile_extras(entries: list, rep: Report) -> dict:
                 rep.error(f"{who}/{name}: channel=release 但没写 release_tag，地址会指错")
                 ok = False
                 continue
-            urls = [cnb_lfs_url(sha)] if channel == "lfs" else [cnb_release_url(tag, name)]
+            # Release 附件按平铺 base name 寻址（上传时就是按 base name 传的）；
+            # 清单里的嵌套相对路径只决定客户端本地摆哪，与客户端同规则。
+            base = name.rsplit("/", 1)[-1]
+            urls = [cnb_lfs_url(sha)] if channel == "lfs" else [cnb_release_url(tag, base)]
             row = {
                 "name": name,
                 "sha256": sha,

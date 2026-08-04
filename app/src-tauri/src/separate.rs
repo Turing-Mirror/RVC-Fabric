@@ -40,25 +40,14 @@ fn worker_script(root: &Path) -> PathBuf {
 }
 
 /// 分离能不能用：要 Runtime、要 worker 脚本、要至少一个权重文件。
+/// 权重按 PyMSS catalog 的 relpath 摆在子目录里，所以要递归扫；界面下拉框
+/// 里列文件名（模型名/别名），PyMSS 解析器自己按名字找到子目录里的那份。
 pub fn status(root: &Path) -> Value {
     let dir = model_dir(root);
     let mut models: Vec<String> = Vec::new();
-    if let Ok(rd) = std::fs::read_dir(&dir) {
-        for e in rd.flatten() {
-            let p = e.path();
-            let ok = p
-                .extension()
-                .and_then(|s| s.to_str())
-                .map(|s| s.eq_ignore_ascii_case("ckpt") || s.eq_ignore_ascii_case("pth"))
-                .unwrap_or(false);
-            if ok {
-                if let Some(n) = p.file_name().and_then(|s| s.to_str()) {
-                    models.push(n.to_string());
-                }
-            }
-        }
-    }
+    collect_models(&dir, &mut models);
     models.sort();
+    models.dedup();
     json!({
         "runtime_ready": paths::runtime_ready(root),
         "worker_present": worker_script(root).is_file(),
@@ -66,6 +55,38 @@ pub fn status(root: &Path) -> Value {
         "models": models,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
+}
+
+fn collect_models(dir: &Path, out: &mut Vec<String>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_models(&p, out);
+            continue;
+        }
+        let ok = p
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.eq_ignore_ascii_case("ckpt") || s.eq_ignore_ascii_case("pth"))
+            .unwrap_or(false);
+        if ok {
+            if let Some(n) = p.file_name().and_then(|s| s.to_str()) {
+                out.push(n.to_string());
+            }
+        }
+    }
+}
+
+/// 目录里（含子目录）有没有至少一个权重。防的是「一个都没下」，不是校验
+/// 用户选的这一个 —— 具体哪个名字能用由 PyMSS 解析器说了算，它会给出
+/// 更准确的错误。
+fn any_model_present(dir: &Path) -> bool {
+    let mut models: Vec<String> = Vec::new();
+    collect_models(dir, &mut models);
+    !models.is_empty()
 }
 
 pub fn cancel() {
@@ -123,8 +144,8 @@ fn run_inner(
         return Err("请先选好输入文件和输出目录".into());
     }
     let mdir = model_dir(root);
-    if !mdir.join(model).is_file() {
-        return Err(format!("缺分离模型 {model}，请先下载"));
+    if !any_model_present(&mdir) {
+        return Err("缺分离模型，请先下载".to_string());
     }
     std::fs::create_dir_all(output).map_err(|e| format!("建不了输出目录：{e}"))?;
 
@@ -241,5 +262,20 @@ mod tests {
         let st = status(Path::new("C:\\definitely-not-here"));
         assert_eq!(st["runtime_ready"], json!(false));
         assert_eq!(st["models"], json!([]));
+    }
+
+    #[test]
+    fn models_in_nested_catalog_dirs_are_found() {
+        // PyMSS 按 relpath 摆子目录（legacy_vr/vr_hp2/…），平铺扫描会扫不到。
+        let base = std::env::temp_dir().join("rvcf-separate-nested");
+        let _ = std::fs::remove_dir_all(&base);
+        let nested = base.join("legacy_vr").join("vr_hp2");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("7_HP2-UVR.pth"), b"x").unwrap();
+        let mut models = Vec::new();
+        collect_models(&base, &mut models);
+        assert_eq!(models, vec!["7_HP2-UVR.pth"]);
+        assert!(any_model_present(&base));
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.3.10",
+    "version": "1.4.0",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.3.10",
+      "version": "1.4.0",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "3a4b29ac22d556079325b26d98c492407b2247374ac295af4a303a2844dadc6a",
-      "size_bytes": 8494634,
+      "sha256": "3d88afabe99b19d137a3f4ea7fb5fe37175fc5c836a011e3892dc2ce9621e7fd",
+      "size_bytes": 8498142,
       "min_app_version": "1.3.0",
-      "notes": "1.3.10 主要让人声分离按需下载链路与安装包对齐：UVR/PyMSS 模型的同名 .yaml 运行配置（约 30 KB）随 NSIS 包落到 assets/pymss/，线上清单与 pymss Release 只保留 .pth 权重。另修音频变声 index_root 为空崩溃， 以及诊断包 bench 参数与是否跑性能测试的交互。"
+      "notes": "1.4.0 聚焦补全链路与窗口体验。引擎核心资源不再和 Runtime 绑死同一次下载， 可按需补全；未补全时相关功能会明确报错而不是静默失败。首次补全再次准备 VB-Cable 安装包。最大化窗口可正常还原；底栏/设置滑条去掉多余初始值刻度 与标记，问号对齐修正。"
     }
   },
   "community": {

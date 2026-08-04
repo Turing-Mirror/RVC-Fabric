@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
+import { SegmentControl } from "./SegmentControl";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -32,8 +33,13 @@ type Progress = {
   message?: string;
 };
 
-/** 打开下载弹窗时指定只看哪一类功能依赖。 */
+/** 打开下载弹窗时预选哪一类；弹窗内仍可切换。 */
 export type ExtrasFilter = "all" | ExtraGroup;
+
+/** 单页条数。和广场更新日志一样固定 5，不做无限滚。 */
+const PER_PAGE = 5;
+
+type Category = "separate" | "train";
 
 function mb(n: number) {
   if (!n) return "";
@@ -42,31 +48,33 @@ function mb(n: number) {
     : `${Math.round(n / 1024 / 1024)} MB`;
 }
 
-const GROUP_META: Record<
-  string,
-  { title: string; blurb: string }
-> = {
-  train: {
-    title: "训练音色",
-    blurb:
-      "按你要训的采样率下一套底模即可（三选一，不必全下）。Hubert / RMVPE 已在首次「补全引擎资源」时装好，这里不用重复下。",
-  },
-  separate: {
-    title: "人声分离",
-    blurb:
-      "做训练素材清理时，优先下「人声提取」。其余按场景按需下载；标「进阶」的体积大，日常一般用不到。",
-  },
-  other: {
-    title: "其他资源",
-    blurb: "未归入训练或分离的附加资源。",
-  },
+function inferGroup(key: string): string {
+  if (key.startsWith("pretrained")) return "train";
+  if (key.startsWith("pymss") || key.startsWith("uvr")) return "separate";
+  return "other";
+}
+
+/** 分类已经写在分段控件上，行内标题去掉重复前缀。 */
+function shortLabel(it: Item, cat: Category): string {
+  let l = it.label || it.key;
+  if (cat === "separate") l = l.replace(/^人声分离\s*[·•]\s*/, "");
+  if (cat === "train") l = l.replace(/^训练音色\s*[·•]\s*/, "");
+  return l;
+}
+
+const CATEGORY_BLURB: Record<Category, string> = {
+  separate:
+    "训练前清理素材优先下「人声提取」。其余按场景按需下载；标「进阶」的体积大，日常一般用不到。",
+  train:
+    "按采样率下一套底模即可（三选一）。Hubert / RMVPE 已在补全引擎资源时装好，这里不用重复下。",
 };
 
 /**
  * 附加资源下载：分离模型、训练底模。
  *
- * 列表按「功能」分组（训练 / 分离），每条带用途说明，避免用户面对一长串
- * pymss-xxx / pretrained-xxx 不知道该下哪个。
+ * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色，
+ * 对应那边的「图灵镜源 / 第三方」），列表分页每页 5 条，不做无限滚动。
+ * 弹窗本身加宽，否则用途说明一行字都折成三行。
  */
 export function ExtrasDialog({
   open,
@@ -76,7 +84,6 @@ export function ExtrasDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  /** 只显示某一功能分组；默认全部。 */
   filter?: ExtrasFilter;
   title?: string;
 }) {
@@ -84,7 +91,10 @@ export function ExtrasDialog({
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [busyKey, setBusyKey] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [category, setCategory] = useState<Category>(
+    filter === "train" ? "train" : "separate",
+  );
+  const [page, setPage] = useState(0);
   const busyRef = useRef(false);
 
   const load = async () => {
@@ -100,7 +110,8 @@ export function ExtrasDialog({
   useEffect(() => {
     if (!open) return;
     setList(null);
-    setShowAdvanced(false);
+    setPage(0);
+    setCategory(filter === "train" ? "train" : "separate");
     void load();
     let disposed = false;
     let un: (() => void) | undefined;
@@ -115,51 +126,20 @@ export function ExtrasDialog({
       disposed = true;
       un?.();
     };
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 开窗一次拉清单
+  }, [open, filter]);
 
-  const items = useMemo(() => {
+  const filtered = useMemo(() => {
     const all = list?.items || [];
-    if (filter === "all") return all;
-    return all.filter((i) => (i.group || inferGroup(i.key)) === filter);
-  }, [list, filter]);
+    return all.filter((i) => (i.group || inferGroup(i.key)) === category);
+  }, [list, category]);
 
-  // 分离组里：推荐/常用 vs 进阶。
-  // 老清单没有 recommended 时绝不整组塞进进阶，否则用户只看到「显示进阶」按钮。
-  const { primary, advanced } = useMemo(() => {
-    if (filter === "train") {
-      return { primary: items, advanced: [] as Item[] };
-    }
-    const hasRec = items.some((i) => i.recommended);
-    const primary: Item[] = [];
-    const advanced: Item[] = [];
-    for (const it of items) {
-      const g = it.group || inferGroup(it.key);
-      if (g !== "separate") {
-        primary.push(it);
-        continue;
-      }
-      const byLabel = String(it.label).includes("进阶");
-      const byMeta =
-        hasRec && !it.recommended && (it.order ?? 100) >= 70;
-      if (byLabel || byMeta) advanced.push(it);
-      else primary.push(it);
-    }
-    return { primary, advanced };
-  }, [items, filter]);
-
-  const sections = useMemo(() => {
-    // filter 指定了某一组 → 单段；否则按 train / separate / other 拆。
-    if (filter !== "all") {
-      return [{ group: filter, items: primary }];
-    }
-    const order = ["train", "separate", "other"] as const;
-    return order
-      .map((g) => ({
-        group: g,
-        items: primary.filter((i) => (i.group || inferGroup(i.key)) === g),
-      }))
-      .filter((s) => s.items.length > 0);
-  }, [filter, primary]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE) || 1);
+  const pageClamped = Math.min(page, totalPages - 1);
+  const pageItems = filtered.slice(
+    pageClamped * PER_PAGE,
+    pageClamped * PER_PAGE + PER_PAGE,
+  );
 
   if (!open) return null;
 
@@ -182,22 +162,14 @@ export function ExtrasDialog({
   };
 
   const pct = prog?.total ? Math.round(((prog.done ?? 0) / prog.total) * 100) : 0;
-  const heading =
-    title ||
-    (filter === "train"
-      ? "下载训练底模"
-      : filter === "separate"
-        ? "下载分离模型"
-        : "下载模型");
+  const heading = title || "下载模型";
 
   const emptyHint =
     list?.available === false
       ? "连不上服务器，检查网络后再试。"
-      : filter === "train"
+      : category === "train"
         ? "暂时没有可下载的训练底模。"
-        : filter === "separate"
-          ? "暂时没有可下载的分离模型。"
-          : "暂时没有可下载的模型。";
+        : "暂时没有可下载的分离模型。";
 
   return (
     <div
@@ -205,82 +177,73 @@ export function ExtrasDialog({
       onClick={busyKey ? undefined : onClose}
     >
       <div
-        className="flex max-h-[min(80vh,640px)] w-full max-w-[560px] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
+        className="flex max-h-[min(88vh,720px)] w-full max-w-[min(920px,96vw)] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="m-0 mb-1 text-[17px] font-semibold">{heading}</h3>
-        <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-          {filter === "all"
-            ? "按功能分组：训练音色下一套底模，人声分离优先下「人声提取」。体积较大，下载后自动校验，支持断点续传。"
-            : filter === "train"
-              ? "训练前只需下载与采样率对应的一套底模。体积较大，下载后自动校验。"
-              : "分离模型按用途下载；训练前清伴奏优先「人声提取」。体积较大，下载后自动校验。"}
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+          <h3 className="m-0 text-[17px] font-semibold">{heading}</h3>
+          <SegmentControl<Category>
+            value={category}
+            onChange={(v) => {
+              setCategory(v);
+              setPage(0);
+            }}
+            options={[
+              { id: "separate", label: "人声分离" },
+              { id: "train", label: "训练音色" },
+            ]}
+          />
+        </div>
+        <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)] leading-snug">
+          {CATEGORY_BLURB[category]}
         </p>
 
         {list === null ? (
-          <div className="min-h-0 flex-1">
+          <div className="min-h-[280px] flex items-center">
             <p className="m-0 py-4 text-[13px] text-[var(--meta)]">正在读取清单…</p>
           </div>
-        ) : items.length === 0 ? (
-          <div className="min-h-0 flex-1">
+        ) : filtered.length === 0 ? (
+          <div className="min-h-[280px] flex items-center">
             <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto border-t border-[var(--hairline)]">
-            {sections.map((sec) => {
-              const meta = GROUP_META[sec.group] || GROUP_META.other;
-              const showHeader = filter === "all";
-              return (
-                <div key={sec.group}>
-                  {showHeader ? (
-                    <div className="sticky top-0 z-[1] bg-[var(--surface)] pt-3 pb-1">
-                      <div className="text-[13px] font-semibold text-[var(--ink)]">
-                        {meta.title}
-                      </div>
-                      <p className="m-0 mt-0.5 mb-1 text-[12px] text-[var(--meta)] leading-snug">
-                        {meta.blurb}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="m-0 pt-3 pb-1 text-[12px] text-[var(--meta)] leading-snug">
-                      {meta.blurb}
-                    </p>
-                  )}
-                  {sec.items.map((it) => (
-                    <ItemRow
-                      key={it.key}
-                      it={it}
-                      busyKey={busyKey}
-                      onStart={start}
-                    />
-                  ))}
-                </div>
-              );
-            })}
+          <div className="min-h-[280px] flex flex-col border-t border-[var(--hairline)]">
+            {/* 固定 5 行区域，页脚分页，整窗不滚列表。 */}
+            <div className="flex-1">
+              {pageItems.map((it) => (
+                <ItemRow
+                  key={it.key}
+                  it={it}
+                  category={category}
+                  busyKey={busyKey}
+                  onStart={start}
+                />
+              ))}
+            </div>
 
-            {advanced.length > 0 ? (
-              <div className="pt-2 pb-1">
-                <button
-                  type="button"
-                  className="border-0 bg-transparent p-0 cursor-pointer text-[12.5px] text-[var(--accent)]"
-                  onClick={() => setShowAdvanced((v) => !v)}
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-center gap-3 pt-4 pb-1">
+                <Btn
+                  disabled={pageClamped <= 0 || !!busyKey}
+                  onClick={() => setPage(pageClamped - 1)}
                 >
-                  {showAdvanced
-                    ? "收起进阶模型"
-                    : `显示进阶模型（${advanced.length}）`}
-                </button>
-                {showAdvanced
-                  ? advanced.map((it) => (
-                      <ItemRow
-                        key={it.key}
-                        it={it}
-                        busyKey={busyKey}
-                        onStart={start}
-                      />
-                    ))
-                  : null}
+                  上一页
+                </Btn>
+                <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
+                  {pageClamped + 1} / {totalPages}
+                </span>
+                <Btn
+                  disabled={pageClamped >= totalPages - 1 || !!busyKey}
+                  onClick={() => setPage(pageClamped + 1)}
+                >
+                  下一页
+                </Btn>
               </div>
-            ) : null}
+            ) : (
+              <p className="m-0 pt-3 text-[12px] text-[var(--meta)] text-center tabular-nums">
+                共 {filtered.length} 项
+              </p>
+            )}
           </div>
         )}
 
@@ -316,48 +279,46 @@ export function ExtrasDialog({
   );
 }
 
-function inferGroup(key: string): string {
-  if (key.startsWith("pretrained")) return "train";
-  if (key.startsWith("pymss") || key.startsWith("uvr")) return "separate";
-  return "other";
-}
-
 function ItemRow({
   it,
+  category,
   busyKey,
   onStart,
 }: {
   it: Item;
+  category: Category;
   busyKey: string;
   onStart: (key: string) => void;
 }) {
   return (
-    <div className="flex items-start gap-3 border-b border-[var(--hairline)] py-3">
+    <div className="flex items-center gap-4 border-b border-[var(--hairline)] py-3.5">
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] leading-snug">
-          {it.label}
+        <span className="block text-[14px] leading-snug">
+          {shortLabel(it, category)}
           {it.recommended ? (
             <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">
               推荐
             </span>
           ) : null}
         </span>
-        <span className="block mt-0.5 text-[12px] text-[var(--meta)] leading-snug">
-          {it.notes?.trim()
-            ? it.notes
-            : `${mb(it.size_bytes)}${it.files?.length ? ` · ${it.files.length} 个文件` : ""}`}
-        </span>
-        <span className="block mt-0.5 text-[11.5px] text-[var(--meta)]">
+        {it.notes?.trim() ? (
+          <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
+            {it.notes}
+          </span>
+        ) : null}
+        <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
           {mb(it.size_bytes)}
+          {it.files?.length ? ` · ${it.files.length} 个文件` : ""}
           {it.installed ? " · 已安装" : ""}
         </span>
       </span>
       {it.installed ? (
-        <span className="shrink-0 pt-0.5 text-[12.5px] text-[var(--ink-muted)]">
+        <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2">
           已安装
         </span>
       ) : (
         <Btn
+          className="shrink-0 min-w-[72px]"
           disabled={!!busyKey}
           onClick={() => void onStart(it.key)}
         >

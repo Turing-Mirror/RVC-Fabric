@@ -278,7 +278,7 @@ function ToolShortcuts() {
     },
     {
       label: "下载模型",
-      desc: "下载人声分离模型与训练底模",
+      desc: "训练底模 / 分离模型，按功能选下",
       go: () => setExtras(true),
     },
   ];
@@ -309,6 +309,7 @@ function ToolShortcuts() {
       <ExtrasDialog
         open={extras}
         onClose={() => setExtras(false)}
+        filter="all"
         title="下载模型"
       />
     </Block>

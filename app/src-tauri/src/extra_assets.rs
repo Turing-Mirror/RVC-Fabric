@@ -65,12 +65,43 @@ pub struct ExtraSpec {
     pub key: String,
     pub label: String,
     pub dest: String,
+    /// 客户端分组：`train` 训练音色 / `separate` 人声分离 / `other`。
+    pub group: String,
+    /// 对应功能的推荐项（列表里排前、标「推荐」）。
+    pub recommended: bool,
+    /// 组内排序，越小越靠前。
+    pub order: i32,
+    /// 给用户看的用途说明，不是路径。
+    pub notes: String,
     pub files: Vec<ExtraFile>,
 }
 
 impl ExtraSpec {
     pub fn total_bytes(&self) -> u64 {
         self.files.iter().map(|f| f.size_bytes).sum()
+    }
+}
+
+/// 老清单没写 group 时按 key 兜底，避免下载列表又堆成一坨无意义名字。
+fn infer_group(key: &str, raw: &str) -> String {
+    let g = raw.trim().to_ascii_lowercase();
+    if g == "train" || g == "separate" || g == "other" {
+        return g;
+    }
+    if key.starts_with("pretrained") {
+        "train".into()
+    } else if key.starts_with("pymss") || key.starts_with("uvr") {
+        "separate".into()
+    } else {
+        "other".into()
+    }
+}
+
+fn group_rank(g: &str) -> u8 {
+    match g {
+        "train" => 0,
+        "separate" => 1,
+        _ => 2,
     }
 }
 
@@ -144,6 +175,23 @@ pub fn parse_spec(key: &str, blob: &Value) -> Option<ExtraSpec> {
         .and_then(|v| v.as_str())
         .unwrap_or(key)
         .to_string();
+    let notes = blob
+        .get("notes")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let group = infer_group(
+        key,
+        blob.get("group").and_then(|v| v.as_str()).unwrap_or(""),
+    );
+    let recommended = blob
+        .get("recommended")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let order = blob
+        .get("order")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(100) as i32;
     let default_tag = blob
         .get("release_tag")
         .and_then(|v| v.as_str())
@@ -206,6 +254,10 @@ pub fn parse_spec(key: &str, blob: &Value) -> Option<ExtraSpec> {
         key: key.to_string(),
         label,
         dest,
+        group,
+        recommended,
+        order,
+        notes,
         files,
     })
 }
@@ -218,8 +270,53 @@ fn extras_from(data: &Value) -> Vec<ExtraSpec> {
         .iter()
         .filter_map(|(k, v)| parse_spec(k, v))
         .collect();
-    out.sort_by(|a, b| a.key.cmp(&b.key));
+    // 训练 → 分离 → 其它；组内推荐优先，再按 order / key。
+    out.sort_by(|a, b| {
+        group_rank(&a.group)
+            .cmp(&group_rank(&b.group))
+            .then_with(|| b.recommended.cmp(&a.recommended))
+            .then_with(|| a.order.cmp(&b.order))
+            .then_with(|| a.key.cmp(&b.key))
+    });
     out
+}
+
+/// 读安装目录里的内置清单 `configs/online_catalog.json`（离线兜底）。
+fn local_catalog(root: &Path) -> Value {
+    let p = root.join("configs").join("online_catalog.json");
+    match std::fs::read_to_string(&p) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|_| json!({})),
+        Err(_) => json!({}),
+    }
+}
+
+fn extras_nonempty(data: &Value) -> bool {
+    data.get("extras")
+        .and_then(|v| v.as_object())
+        .map(|m| !m.is_empty())
+        .unwrap_or(false)
+}
+
+/// 优先线上，拿不到或 extras 为空时用内置清单顶上。
+///
+/// 下载 URL 仍指向 CNB，所以「能列清单」≠「能下下来」；但至少用户能看清
+/// 训练 / 分离分别该下什么，而不是对着空列表发呆。
+fn catalog_for_extras(root: &Path, prefer_remote: bool) -> (Value, bool) {
+    if prefer_remote {
+        match catalog::fetch_remote_catalog_cached(12) {
+            Ok(remote) if extras_nonempty(&remote) => return (remote, true),
+            Ok(_remote) => {
+                // 线上通了但还没登记 extras（老 index）→ 用内置补。
+                let local = local_catalog(root);
+                if extras_nonempty(&local) {
+                    return (local, true);
+                }
+                return (local, true);
+            }
+            Err(_) => return (local_catalog(root), false),
+        }
+    }
+    (local_catalog(root), false)
 }
 
 /// 线上清单里的全部附加资源。
@@ -229,9 +326,7 @@ fn extras_from(data: &Value) -> Vec<ExtraSpec> {
 /// 一个模型都没登记，界面却报「暂时无法获取下载清单，检查网络后再试」——
 /// 让用户去查一个根本没坏的网络。
 pub fn list(root: &Path) -> Value {
-    let fetched = catalog::fetch_remote_catalog_cached(12);
-    let reachable = fetched.is_ok();
-    let data = fetched.unwrap_or_else(|_| json!({}));
+    let (data, reachable) = catalog_for_extras(root, true);
     let specs = extras_from(&data);
     let items: Vec<Value> = specs
         .iter()
@@ -245,6 +340,10 @@ pub fn list(root: &Path) -> Value {
                 "key": s.key,
                 "label": s.label,
                 "dest": s.dest,
+                "group": s.group,
+                "recommended": s.recommended,
+                "order": s.order,
+                "notes": s.notes,
                 "size_bytes": s.total_bytes(),
                 "files": s.files.iter().map(|f| f.base_name().to_string()).collect::<Vec<_>>(),
                 "installed": installed,
@@ -255,6 +354,8 @@ pub fn list(root: &Path) -> Value {
         "available": reachable,
         "items": items,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
+        // 语音合成不吃 extras：系统 SAPI 吐字 + 已装音色做 RVC，零附加下载。
+        "tts_needs_download": false,
     })
 }
 
@@ -295,7 +396,10 @@ pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String
 }
 
 fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String> {
-    let data = catalog::fetch_remote_catalog(20)?;
+    // 下载也允许内置清单：规格里已经带了 sha256 和 CNB URL，不依赖 index 在线。
+    let (data, _) = catalog_for_extras(root, true);
+    // 用户主动点下载时再硬拉一次线上，避免内置过旧；失败就用刚才那份。
+    let data = catalog::fetch_remote_catalog(20).unwrap_or(data);
     let spec = extras_from(&data)
         .into_iter()
         .find(|s| s.key == key)

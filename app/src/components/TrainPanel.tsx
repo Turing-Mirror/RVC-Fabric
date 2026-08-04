@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
+import { ExtrasDialog } from "./ExtrasDialog";
 import { ToolBody } from "./ToolWindow";
 
 type Pretrained = { sample_rate: string; ready: boolean };
@@ -67,6 +68,7 @@ export function TrainPanel() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -102,6 +104,13 @@ export function TrainPanel() {
   const srReady = st.pretrained?.find((p) => p.sample_rate === sr)?.ready ?? false;
 
   // 拦住训练的原因，外加这句话里那个专有名词的解释（渲染成一个小问号）。
+  const needPretrained =
+    !!st.runtime_ready &&
+    !!st.worker_present &&
+    !!st.mute_present &&
+    !!st.hubert_present &&
+    !!st.nvidia &&
+    !srReady;
   const blocked: { text: string; term?: string } = !st.runtime_ready
     ? { text: "运行时未就绪，先到「其他」页补全运行时", term: "运行时" }
     : !st.worker_present || !st.mute_present
@@ -115,7 +124,7 @@ export function TrainPanel() {
             }
           : !srReady
             ? {
-                text: `缺 ${sr} 的训练底模，先在「音频工具 → 下载模型」里下载`,
+                text: `缺 ${sr} 的训练底模。只需下载与采样率对应的那一套（与 RVC 原版 pretrained_v2 一致）。`,
                 term: "底模",
               }
             : { text: "" };
@@ -166,11 +175,20 @@ export function TrainPanel() {
         </p>
 
         {blocked.text ? (
-          <p className="m-0 mb-4 text-[13px] text-[#b8534f] flex items-center gap-1.5">
-            {blocked.text}
-            {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
-          </p>
-        ) : null}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <p className="m-0 text-[13px] text-[#b8534f] flex items-center gap-1.5">
+              {blocked.text}
+              {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
+            </p>
+            {needPretrained ? (
+              <Btn onClick={() => setExtrasOpen(true)}>下载训练底模</Btn>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mb-3 flex justify-end">
+            <Btn onClick={() => setExtrasOpen(true)}>下载底模</Btn>
+          </div>
+        )}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>
@@ -280,6 +298,16 @@ export function TrainPanel() {
             下次使用相同名称即可恢复训练。
           </p>
         ) : null}
+
+        <ExtrasDialog
+          open={extrasOpen}
+          onClose={() => {
+            setExtrasOpen(false);
+            void load();
+          }}
+          filter="train"
+          title="下载训练底模"
+        />
     </ToolBody>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
+import { ExtrasDialog } from "./ExtrasDialog";
 import { ToolBody } from "./ToolWindow";
 
 type Status = {
@@ -37,6 +38,7 @@ export function SeparatePanel() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -101,12 +103,13 @@ export function SeparatePanel() {
     }
   };
 
+  const needModels = !!st.runtime_ready && !!st.worker_present && !st.models?.length;
   const blocked = !st.runtime_ready
     ? "运行时未就绪，先到「其他」页补全运行时"
     : !st.worker_present
       ? "缺少分离脚本，安装可能不完整"
-      : !st.models?.length
-        ? "未检测到分离模型，请先到「音频工具 → 下载模型」下载。"
+      : needModels
+        ? "还没装分离模型。优先下载「人声提取」，清训练素材用它就够了。"
         : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
@@ -116,11 +119,25 @@ export function SeparatePanel() {
         <h3 className="m-0 mb-1 text-[17px] font-semibold">人声分离</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
           提取音频中的人声干声与伴奏，可用于清理音色训练素材里的背景音乐。
+          模型按需下载，与 RVC/UVR 官方权重同源。
         </p>
 
         {blocked ? (
-          <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
-        ) : null}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+            {needModels ? (
+              <Btn
+                onClick={() => setExtrasOpen(true)}
+              >
+                下载分离模型
+              </Btn>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mb-3 flex justify-end">
+            <Btn onClick={() => setExtrasOpen(true)}>下载模型</Btn>
+          </div>
+        )}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>
@@ -180,6 +197,16 @@ export function SeparatePanel() {
             {running ? "分离中…" : "开始分离"}
           </Btn>
         </div>
+
+        <ExtrasDialog
+          open={extrasOpen}
+          onClose={() => {
+            setExtrasOpen(false);
+            void load();
+          }}
+          filter="separate"
+          title="下载分离模型"
+        />
     </ToolBody>
   );
 }

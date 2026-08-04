@@ -1022,11 +1022,29 @@ def _compile_extras(entries: list, rep: Report) -> dict:
         if not files:
             rep.error(f"{who}: 一个文件都没有")
             continue
+        # group 决定客户端下载列表怎么分组：train=训练音色 / separate=人声分离。
+        # 老 YAML 没写时按 key 前缀兜底，避免清单一发布客户端就全堆成一坨。
+        group = str(e.get("group") or "").strip().lower()
+        if group not in ("train", "separate", "other"):
+            if key.startswith("pretrained"):
+                group = "train"
+            elif key.startswith("pymss") or key.startswith("uvr"):
+                group = "separate"
+            else:
+                group = "other"
+        try:
+            order = int(e.get("order") or 100)
+        except (TypeError, ValueError):
+            order = 100
+        recommended = bool(e.get("recommended"))
         out[key] = {
             "key": key,
             "label": str(e.get("label") or key),
             "dest": dest.replace("\\", "/"),
             "notes": str(e.get("notes") or ""),
+            "group": group,
+            "recommended": recommended,
+            "order": order,
             "size_bytes": sum(f["size_bytes"] for f in files),
             "files": files,
         }
@@ -1349,6 +1367,9 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "runtimes": runtimes,
         "voices": voices,
         "thirdparty_voices": thirdparty_voices,
+        # 附加资源（训练底模 / 分离模型）也进内置兜底：离线或 CNB 抽风时
+        # extra_list 仍能列出「该下什么」，下载 URL 仍指向 CNB Release。
+        "extras": extras,
     }
     return {"index": index, "snippet": snippet, "bundled": bundled}
 

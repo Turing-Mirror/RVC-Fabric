@@ -75,7 +75,7 @@ export function TtsPanel() {
   const over = text.length > max;
 
   // 拦住合成的原因。没嗓子是最要命的一条，而且用户完全不知道那是系统的事，
-  // 所以要把去哪儿装说清楚。
+  // 所以要把去哪儿装说清楚。语音合成本身不需要下 extras 模型。
   const blocked = !st.voices?.length
     ? "系统里没有可用的语音。到「Windows 设置 → 时间和语言 → 语音」里添加一个语音包。"
     : useRvc && !st.model_path
@@ -115,7 +115,8 @@ export function TtsPanel() {
     <ToolBody>
       <h3 className="m-0 mb-1 text-[17px] font-semibold">语音合成</h3>
       <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">
-        输入文本，使用所选音色进行语音合成。输出的 wav 文件保存在 User_Data\tts 目录下。
+        输入文本，用当前音色念出来。系统语音负责吐字，音色来自已装的 RVC
+        模型——不需要额外下载分离/训练模型。输出 wav 在 User_Data\tts。
       </p>
 
       {blocked ? (

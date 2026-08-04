@@ -250,7 +250,7 @@ export function MorePage({
           />
           <ListItem
             title="下载模型"
-            desc="分离模型与训练底模，按需下载"
+            desc="按功能分组：训练底模 / 人声分离模型。语音合成不需要额外下载。"
             right={<Btn onClick={() => setExtrasOpen(true)}>打开</Btn>}
           />
         </Group>
@@ -258,6 +258,7 @@ export function MorePage({
       <ExtrasDialog
         open={extrasOpen}
         onClose={() => setExtrasOpen(false)}
+        filter="all"
         title="下载模型"
       />
 

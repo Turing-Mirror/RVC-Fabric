@@ -215,3 +215,7 @@ AGENTS.md
 
 # 文案实施计划书（gitignore，实施完成后可删）
 /docs/ui_copy_plan.md
+
+# i18n 工作文档与抽取表（本机/翻译用，不进 Git；语言包在 app/i18n/locales/）
+/docs/i18n/
+/docs/界面文案总表.md

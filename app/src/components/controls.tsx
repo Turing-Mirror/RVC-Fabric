@@ -172,6 +172,8 @@ export function RangeBar({
   step,
   onChange,
   ticks = 5,
+  /** 初始/中性值位置（如音高 0）。与轨道上的刻度小点不同：画成竖线标记。 */
+  defaultValue,
   ariaLabel,
 }: {
   value: number;
@@ -181,10 +183,15 @@ export function RangeBar({
   onChange: (v: number) => void;
   /** 轨道上的刻度点数量，0 表示不画。 */
   ticks?: number;
+  defaultValue?: number;
   ariaLabel?: string;
 }) {
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
+  const defaultPct =
+    defaultValue != null && Number.isFinite(defaultValue)
+      ? Math.min(100, Math.max(0, ((defaultValue - min) / span) * 100))
+      : null;
 
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动中光标所在的百分比。null = 没在拖，把手画在量化后的位置上。
@@ -240,22 +247,26 @@ export function RangeBar({
   const knobX = `calc(${draw}% - ${(KNOB_W * draw) / 100}px)`;
   const fillW = `calc(${draw}% - ${(KNOB_W * draw) / 100 - KNOB_W / 2}px)`;
 
+  // 初始值竖线：把手行程与光标一致，左右各缩半个把手宽。
+  const defaultMarkLeft =
+    defaultPct != null
+      ? `calc(${KNOB_W / 2}px + (100% - ${KNOB_W}px) * ${defaultPct / 100})`
+      : null;
+
   return (
     <div
       ref={trackRef}
-      className="relative w-full rounded-full bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] overflow-hidden"
+      className="relative w-full rounded-md bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] overflow-hidden"
       style={{ height: TRACK_H }}
     >
       {/* 渐变从左到右由浅到深：越推到右边颜色越实，一眼能看出推到了哪。
-          原来两端分别是 10% / 30%，整条淡得几乎看不出是填充。
-          右端的圆角去掉：那一截本来就在把手底下，留着圆角只会在把手边上
-          切出一道弧，把「填充和把手是一体的」这个观感又破坏掉。 */}
+          右端直角：那一截在把手底下，圆角只会在把手边切出弧。 */}
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 rounded-l-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
+        className="absolute inset-y-0 left-0 rounded-l-md bg-[linear-gradient(90deg,color-mix(in_srgb,var(--accent)_24%,transparent),color-mix(in_srgb,var(--accent)_66%,transparent))]"
         style={{ width: fillW, ...glide }}
       />
-      {/* 左右各留半个把手宽，刻度才和把手中心的行程对齐。 */}
+      {/* 刻度小点：均匀分位，不是初始值。初始值另画竖线。 */}
       {ticks > 0 ? (
         <div
           aria-hidden
@@ -270,15 +281,21 @@ export function RangeBar({
           ))}
         </div>
       ) : null}
-      {/* 上下贴齐轨道外框。以前上下各缩 3px，把手看着又细又短，
-          而且缩进那两条把轨道背景露出来，边缘显脏。 */}
+      {/* 初始值标记：短竖线，与小圆点刻度区分开。 */}
+      {defaultMarkLeft != null ? (
+        <div
+          aria-hidden
+          title="初始值"
+          className="absolute top-[4px] bottom-[4px] w-[2px] rounded-sm bg-[color-mix(in_srgb,var(--ink)_38%,transparent)] pointer-events-none"
+          style={{ left: defaultMarkLeft, transform: "translateX(-50%)" }}
+        />
+      ) : null}
+      {/* 圆角方块把手（不是椭圆/胶囊）。 */}
       <div
         aria-hidden
         className={[
-          "absolute inset-y-0 rounded-full bg-[var(--knob)]",
+          "absolute inset-y-0 rounded-md bg-[var(--knob)]",
           "shadow-[0_1px_3px_rgba(0,0,0,.2),inset_0_0_0_1px_color-mix(in_srgb,var(--ink)_12%,transparent)]",
-          // 抓住的时候压深一点影子。只有这一点反馈，不放大不变色 ——
-          // 一个会长大的把手在密密麻麻的设置页里只会显得聒噪。
           dragging ? "!shadow-[0_2px_7px_rgba(0,0,0,.32)]" : "",
         ].join(" ")}
         style={{ left: knobX, width: KNOB_W, ...glide }}
@@ -306,6 +323,7 @@ export function Slider({
   step,
   onChange,
   format,
+  defaultValue,
 }: {
   value: number;
   min: number;
@@ -313,6 +331,8 @@ export function Slider({
   step: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
+  /** 初始/中性值标记，见 RangeBar。 */
+  defaultValue?: number;
 }) {
   const shown = format ? format(value) : String(value);
   return (
@@ -321,7 +341,14 @@ export function Slider({
           大方。右边只留数值那一列。以前卡了 460px 上限，宽窗口下条子缩在
           左半边，右边空一大片，反而显得小家子气。 */}
       <div className="flex-1">
-        <RangeBar value={value} min={min} max={max} step={step} onChange={onChange} />
+        <RangeBar
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          onChange={onChange}
+          defaultValue={defaultValue}
+        />
       </div>
       <div className="text-[13px] min-w-[56px] text-right tabular-nums">{shown}</div>
     </div>

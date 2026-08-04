@@ -130,6 +130,7 @@ export function Dock({
           max={24}
           step={1}
           value={pitch}
+          defaultValue={0}
           onChange={onPitch}
         />
         <SliderTile
@@ -139,6 +140,7 @@ export function Dock({
           max={2}
           step={0.05}
           value={formant}
+          defaultValue={0}
           onChange={onFormant}
         />
       </div>
@@ -181,6 +183,7 @@ function SliderTile({
   step,
   value,
   onChange,
+  defaultValue,
 }: {
   label: string;
   display: string;
@@ -189,6 +192,8 @@ function SliderTile({
   step: number;
   value: number;
   onChange: (v: number) => void;
+  /** 中性/初始值位置（音高 0、共鸣 0）。 */
+  defaultValue?: number;
 }) {
   return (
     // 上限从 210 放到 300：音高一整条是 −24~+24 共 49 格，210px 下一格 4px，
@@ -205,6 +210,7 @@ function SliderTile({
         max={max}
         step={step}
         onChange={onChange}
+        defaultValue={defaultValue}
         ariaLabel={label}
       />
     </div>

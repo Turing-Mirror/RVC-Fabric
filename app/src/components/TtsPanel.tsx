@@ -181,6 +181,7 @@ export function TtsPanel() {
               min={-12}
               max={12}
               step={1}
+              defaultValue={0}
               onChange={setPitch}
               ariaLabel="音高"
             />

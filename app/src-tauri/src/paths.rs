@@ -162,6 +162,12 @@ pub fn update_cache(root: &Path) -> PathBuf {
     user_data(root).join("update_cache")
 }
 
+/// 安装根下的 TEMP：上游 RVC WebUI 把 `os.environ["TEMP"]` 指到这里，
+/// 分离/转码中间文件会堆在里面；不清理就会一直涨。
+pub fn temp_dir(root: &Path) -> PathBuf {
+    root.join("TEMP")
+}
+
 pub fn ensure_user_dirs(root: &Path) -> std::io::Result<()> {
     fs_create_all(&user_data(root))?;
     fs_create_all(&models_dir(root))?;
@@ -169,7 +175,59 @@ pub fn ensure_user_dirs(root: &Path) -> std::io::Result<()> {
     fs_create_all(&update_cache(root))?;
     fs_create_all(&control_dir(root))?;
     fs_create_all(&logs_dir(root))?;
+    fs_create_all(&temp_dir(root))?;
     Ok(())
+}
+
+/// 启动时清一次临时垃圾。
+///
+/// - `TEMP/`：引擎/UVR 中间产物（wav/npy/tmp 等）。整目录按官方 WebUI 一样
+///   在启动时清空再重建，避免越积越大。
+/// - `User_Data/update_cache/**/*.part`：中断下载留下的半截文件。
+/// - 一次性任务请求 json（separate/train 等）若残留也清掉。
+///
+/// 绝不碰 Runtime / models / app_config。
+pub fn clean_temps(root: &Path) {
+    let temp = temp_dir(root);
+    if temp.is_dir() {
+        // 官方 infer-web 启动时 rmtree(TEMP)；这里同样整清，再重建空目录。
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+    let _ = std::fs::create_dir_all(&temp);
+
+    // 半截下载
+    let cache = update_cache(root);
+    remove_matching_files(&cache, |name| {
+        name.ends_with(".part") || name.ends_with(".tmp") || name.ends_with(".download")
+    });
+    // 一次性工具请求
+    for name in [
+        "separate_request.json",
+        "train_request.json",
+        "tts_request.json",
+    ] {
+        let p = cache.join(name);
+        let _ = std::fs::remove_file(p);
+    }
+}
+
+fn remove_matching_files(dir: &Path, pred: impl Fn(&str) -> bool + Copy) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            remove_matching_files(&p, pred);
+            continue;
+        }
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if pred(name) {
+            let _ = std::fs::remove_file(p);
+        }
+    }
 }
 
 fn fs_create_all(p: &Path) -> std::io::Result<()> {

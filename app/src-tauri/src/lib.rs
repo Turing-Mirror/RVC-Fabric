@@ -740,7 +740,15 @@ fn engine_set_hot(
     if payload.is_empty() {
         return Err("没有可热更新的参数".into());
     }
-    worker::set_hot(&root, payload)
+    // 底栏拖音高/共鸣以前只 set_hot、不写盘：界面重启后仍显示旧数（来自
+    // app_config），但 inuse 还是 0，引擎按默认起 —— 显示对、声音不对。
+    // 这里顺手落盘并同步 inuse；worker 没起来时只落盘，不算失败。
+    let _ = config::update(&root, payload.clone());
+    match worker::set_hot(&root, payload) {
+        Ok(seq) => Ok(seq),
+        Err(e) if e.contains("未运行") => Ok(0),
+        Err(e) => Err(e),
+    }
 }
 
 /// 变声中换音色。不重开流，只把新模型推给引擎。
@@ -1339,6 +1347,9 @@ pub fn run() {
                     logging::shell_log!("inuse sync failed: {e}");
                 }
             }
+
+            // 清 TEMP / 半截下载，避免中间文件越积越大（官方 WebUI 启动也清 TEMP）。
+            paths::clean_temps(&root);
 
             shell_extras::install_close_handler(app.handle());
             // Tray always exists: closing to tray is what keeps conversion

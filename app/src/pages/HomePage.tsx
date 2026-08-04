@@ -2,7 +2,6 @@ import { useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
-import { ExtrasDialog } from "../components/ExtrasDialog";
 import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
 
@@ -257,14 +256,10 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
  * 首页底下那三个直达按钮。
  *
  * 这三件事以前只有一条路：「其他」页 → 往下翻到「音频工具」→ 点「打开」。
- * 而它们和首页在做的事是连着的 —— 想要一个新音色，就是「分离出干声 → 训练」；
- * 分离模型和训练底模又要先下载。放在最近使用的正下方，是把这条路接上。
- *
- * 三个都开独立窗口 / 弹窗，首页本身不跳转：用户点完还站在原地，回头就能接着
- * 挑音色。
+ * 分离 → 训练 → 合成是同一条「做音色」的链路，放在最近使用的正下方。
+ * 下载模型仍在「其他」页，不占首页入口。
  */
 function ToolShortcuts() {
-  const [extras, setExtras] = useState(false);
   const items: Array<{ label: string; desc: string; go: () => void }> = [
     {
       label: "人声分离",
@@ -277,9 +272,9 @@ function ToolShortcuts() {
       go: () => openTool("train"),
     },
     {
-      label: "下载模型",
-      desc: "训练底模 / 分离模型，按功能选下",
-      go: () => setExtras(true),
+      label: "语音合成",
+      desc: "输入文本，用当前音色念出来",
+      go: () => openTool("tts"),
     },
   ];
   return (
@@ -306,12 +301,6 @@ function ToolShortcuts() {
           </button>
         ))}
       </div>
-      <ExtrasDialog
-        open={extras}
-        onClose={() => setExtras(false)}
-        filter="all"
-        title="下载模型"
-      />
     </Block>
   );
 }

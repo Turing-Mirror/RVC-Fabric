@@ -289,6 +289,12 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     env.insert("PYTHONNOUSERSITE".into(), "1".into());
     env.insert("no_proxy".into(), "localhost,127.0.0.1,::1".into());
     env.insert("NO_PROXY".into(), "localhost,127.0.0.1,::1".into());
+    // 与官方 WebUI 一致：把 TEMP 指到安装目录下的 TEMP，中间文件可被启动清理。
+    let temp = paths::temp_dir(root);
+    let _ = std::fs::create_dir_all(&temp);
+    let temp_s = temp.to_string_lossy().to_string();
+    env.insert("TEMP".into(), temp_s.clone());
+    env.insert("TMP".into(), temp_s);
     for k in ["TM_ACCEL", "TM_ACCEL_RESOLVED", "TM_USE_DML"] {
         if let Ok(v) = std::env::var(k) {
             env.insert(k.into(), v);
@@ -608,6 +614,11 @@ pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
 
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
 pub fn start_vc(root: &Path) -> Result<u64, String> {
+    // 开启前把 app_config 再刷进 inuse：底栏热更若只改了内存，或安装包覆盖了
+    // 干净 inuse，这里兜一次，避免引擎按 pitch=0 起流而界面仍显示 +11。
+    let cfg = crate::config::read(root);
+    let _ = crate::config::sync_inuse(root, &cfg);
+
     if !is_worker_alive(root) {
         start_worker(root)?;
         let st = wait_worker_ready(root, 100_000);
@@ -634,7 +645,22 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             thread::sleep(Duration::from_millis(250));
         }
     }
-    send_command(root, "start", Map::new())
+    let seq = send_command(root, "start", Map::new())?;
+    // 再热推一次音高/共鸣：worker 读 inuse 起流后，若进程内仍是旧默认值，补上。
+    let mut hot = Map::new();
+    if let Some(v) = cfg.get("pitch") {
+        hot.insert("pitch".into(), v.clone());
+    }
+    if let Some(v) = cfg.get("formant") {
+        hot.insert("formant".into(), v.clone());
+    }
+    if let Some(v) = cfg.get("function") {
+        hot.insert("function".into(), v.clone());
+    }
+    if !hot.is_empty() {
+        let _ = set_hot(root, hot);
+    }
+    Ok(seq)
 }
 
 pub fn wait_vc_running(root: &Path, timeout_ms: u64) -> Value {

@@ -349,6 +349,7 @@ function SettingsPageImpl({
                     min={-24}
                     max={24}
                     step={1}
+                    defaultValue={0}
                     onChange={(v) => c.set("pitch", v)}
                     format={(v) => (v > 0 ? `+${v}` : `${v}`)}
                   />
@@ -363,6 +364,7 @@ function SettingsPageImpl({
                     min={-2}
                     max={2}
                     step={0.05}
+                    defaultValue={0}
                     onChange={(v) => c.set("formant", v)}
                     format={(v) => v.toFixed(2)}
                   />
@@ -377,6 +379,7 @@ function SettingsPageImpl({
                     min={0}
                     max={1}
                     step={0.01}
+                    defaultValue={0.75}
                     onChange={(v) => c.set("index_rate", v)}
                     format={(v) => v.toFixed(2)}
                   />
@@ -391,6 +394,7 @@ function SettingsPageImpl({
                     min={0}
                     max={1}
                     step={0.01}
+                    defaultValue={0.25}
                     onChange={(v) => c.set("rms_mix_rate", v)}
                     format={(v) => v.toFixed(2)}
                   />
@@ -431,6 +435,7 @@ function SettingsPageImpl({
                     min={0.05}
                     max={1}
                     step={0.01}
+                    defaultValue={0.25}
                     onChange={(v) => c.set("block_time", v)}
                     format={(v) => `${v.toFixed(2)} s`}
                   />
@@ -445,6 +450,7 @@ function SettingsPageImpl({
                     min={0.01}
                     max={0.5}
                     step={0.01}
+                    defaultValue={0.08}
                     onChange={(v) => c.set("crossfade_length", v)}
                     format={(v) => `${v.toFixed(2)} s`}
                   />
@@ -459,6 +465,7 @@ function SettingsPageImpl({
                     min={0.5}
                     max={5}
                     step={0.1}
+                    defaultValue={2.5}
                     onChange={(v) => c.set("extra_time", v)}
                     format={(v) => `${v.toFixed(1)} s`}
                   />
@@ -473,6 +480,7 @@ function SettingsPageImpl({
                     min={1}
                     max={16}
                     step={1}
+                    defaultValue={4}
                     onChange={(v) => c.set("n_cpu", v)}
                   />
                 }

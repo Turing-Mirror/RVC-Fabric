@@ -236,20 +236,39 @@ fn set_thickframe(hwnd: windows_sys::Win32::Foundation::HWND, enable: bool) {
     }
 }
 
-/// 把最大化窗口外框钳到当前显示器**工作区**（不含任务栏）。
+/// 摘掉厚框后，按**当前样式**重新套一次最大化，把外框落到工作区。
 ///
-/// Windows 最大化带厚框的窗口时，外框会略大于工作区（边框探出屏幕）。
-/// 我们随后摘掉厚框却不改尺寸 → 窗口盖住任务栏 → 任务栏变黑/点不到。
+/// 为什么不用 `set_size` / `set_position`：
+/// Tauri 那两条最终会改窗口的「普通尺寸」（`WINDOWPLACEMENT.rcNormalPosition`），
+/// 或者直接清掉 `WS_MAXIMIZE`。结果是：看起来已经铺满工作区，但系统眼里
+/// 「还原矩形」已经变成工作区本身——再点最大化按钮等于还原到同样大小，
+/// 用户感觉「最大化后再点回不去」。
+///
+/// 正确做法：先 `set_thickframe(false)`，再 `SetWindowPlacement(SW_SHOWMAXIMIZED)`。
+/// 系统按当前样式重算最大化矩形（无厚框就不探出任务栏），同时**保留**进最大化
+/// 之前写好的 `rcNormalPosition`，还原按钮才能回到原来的尺寸和位置。
 #[cfg(windows)]
 fn fit_maximized_to_work_area(win: &WebviewWindow) {
-    use tauri::{PhysicalPosition, PhysicalSize};
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowPlacement, SetWindowPlacement, WINDOWPLACEMENT, SW_SHOWMAXIMIZED,
+    };
 
-    let Ok(Some(mon)) = win.current_monitor() else {
+    let Ok(hwnd_raw) = win.hwnd() else {
         return;
     };
-    let wa = mon.work_area();
-    let _ = win.set_position(PhysicalPosition::new(wa.position.x, wa.position.y));
-    let _ = win.set_size(PhysicalSize::new(wa.size.width, wa.size.height));
+    let hwnd = hwnd_raw.0 as HWND;
+    // SAFETY: hwnd 是本窗口；length 必须先填对，否则 API 直接失败。
+    unsafe {
+        let mut place: WINDOWPLACEMENT = std::mem::zeroed();
+        place.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+        if GetWindowPlacement(hwnd, &mut place) == 0 {
+            return;
+        }
+        // 只重放「最大化」指令，不改 rcNormalPosition。
+        place.showCmd = SW_SHOWMAXIMIZED as u32;
+        let _ = SetWindowPlacement(hwnd, &place);
+    }
 }
 
 /// 上一次是不是最大化。状态翻转时才动样式，避免每次 Resized 都 FRAMECHANGED。

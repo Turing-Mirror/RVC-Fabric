@@ -178,6 +178,9 @@ pub fn rescue_if_offscreen(win: &WebviewWindow) -> bool {
 /// 只在建完窗口后调用一次。之后不再动——用户自己把窗口拖到哪块屏是他的事，
 /// 隔一会儿被程序挪回来比开错屏还烦。
 /// 去掉 DWM 1px 系统描边色（始终关）。
+///
+/// 只动边框色，**绝不**关 `DWMWA_NCRENDERING_POLICY`：关掉 NC 绘制会把
+/// 任务栏也带成黑条（本机实测）。
 #[cfg(windows)]
 fn hide_dwm_border_color(hwnd: windows_sys::Win32::Foundation::HWND) {
     use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
@@ -194,33 +197,13 @@ fn hide_dwm_border_color(hwnd: windows_sys::Win32::Foundation::HWND) {
     }
 }
 
-/// 最大化时关掉非客户区绘制；还原时交回 DWM（否则 Win11 圆角也会没了）。
-#[cfg(windows)]
-fn set_dwm_nc_rendering(hwnd: windows_sys::Win32::Foundation::HWND, enabled: bool) {
-    use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
-    const DWMWA_NCRENDERING_POLICY: u32 = 2;
-    const DWMNCRP_ENABLED: u32 = 2;
-    const DWMNCRP_DISABLED: u32 = 1;
-    let policy = if enabled {
-        DWMNCRP_ENABLED
-    } else {
-        DWMNCRP_DISABLED
-    };
-    unsafe {
-        let _ = DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_NCRENDERING_POLICY,
-            &policy as *const _ as *const core::ffi::c_void,
-            std::mem::size_of_val(&policy) as u32,
-        );
-    }
-}
-
 /// 最大化时摘掉 `WS_THICKFRAME`；还原时加回，否则拖边缩放会坏。
 ///
 /// 无边框 + resizable 的窗口仍带着厚框：平常是隐形命中区；最大化后那圈
-/// 非客户区会露成 Aero/Vista 描边。只关 shadow / 边框色不够，必须动窗口样式
-/// 并 `SWP_FRAMECHANGED` 让 `WM_NCCALCSIZE` 重算客户区。
+/// 非客户区会露成 Aero 描边。动样式后必须 `SWP_FRAMECHANGED`。
+///
+/// 注意：摘掉厚框后若仍保持「含边框的全屏外框」尺寸，窗口会盖住任务栏，
+/// 任务栏看起来像变黑。调用方必须再钳到工作区（见 `fit_maximized_to_work_area`）。
 #[cfg(windows)]
 fn set_thickframe(hwnd: windows_sys::Win32::Foundation::HWND, enable: bool) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -253,6 +236,22 @@ fn set_thickframe(hwnd: windows_sys::Win32::Foundation::HWND, enable: bool) {
     }
 }
 
+/// 把最大化窗口外框钳到当前显示器**工作区**（不含任务栏）。
+///
+/// Windows 最大化带厚框的窗口时，外框会略大于工作区（边框探出屏幕）。
+/// 我们随后摘掉厚框却不改尺寸 → 窗口盖住任务栏 → 任务栏变黑/点不到。
+#[cfg(windows)]
+fn fit_maximized_to_work_area(win: &WebviewWindow) {
+    use tauri::{PhysicalPosition, PhysicalSize};
+
+    let Ok(Some(mon)) = win.current_monitor() else {
+        return;
+    };
+    let wa = mon.work_area();
+    let _ = win.set_position(PhysicalPosition::new(wa.position.x, wa.position.y));
+    let _ = win.set_size(PhysicalSize::new(wa.size.width, wa.size.height));
+}
+
 /// 上一次是不是最大化。状态翻转时才动样式，避免每次 Resized 都 FRAMECHANGED。
 #[cfg(windows)]
 static WAS_MAXIMIZED: std::sync::atomic::AtomicBool =
@@ -260,9 +259,8 @@ static WAS_MAXIMIZED: std::sync::atomic::AtomicBool =
 
 /// 最大化时拆掉系统厚框/描边，还原时恢复可缩放。
 ///
-/// 注意：**永远不要**在无边框窗口上再 `set_shadow(true)`。
-/// Tauri 文档写明：undecorated + shadow=true 在 Windows 上会画出 1px 白边，
-/// 那就是用户看到的 Aero 边。投影宁可不要，边框必须干净。
+/// **永远不要** `set_shadow(true)`（无边框 + shadow=true = 1px 白边）。
+/// **永远不要** 关 `DWMWA_NCRENDERING_POLICY`（会搞黑任务栏）。
 #[cfg(windows)]
 fn sync_maximized_frame(win: &WebviewWindow) {
     let maximized = win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
@@ -272,15 +270,18 @@ fn sync_maximized_frame(win: &WebviewWindow) {
     };
     let hwnd = hwnd_raw.0 as windows_sys::Win32::Foundation::HWND;
 
-    // 始终关 shadow + 关边框色（幂等）。shadow=true 在 Windows 无边框上 = 1px 白边。
+    // 始终关 shadow + 关边框色（幂等）。
     let _ = win.set_shadow(false);
     hide_dwm_border_color(hwnd);
 
     if maximized {
-        set_thickframe(hwnd, false);
-        set_dwm_nc_rendering(hwnd, false);
+        // 只在进入最大化时改一次：再 Resized（钳尺寸触发的）会 was=true，
+        // 若再 fit 会尺寸抖动循环。
         if !was {
-            logging::shell_log!("最大化：已摘 WS_THICKFRAME + 关 NC 绘制");
+            set_thickframe(hwnd, false);
+            // 摘厚框后必须钳到工作区，否则盖住任务栏（看起来像任务栏变黑）。
+            fit_maximized_to_work_area(win);
+            logging::shell_log!("最大化：已摘厚框并钳到工作区（不碰 DWM NC 策略）");
         }
         // 区域裁切在最大化时必须撤掉，否则四角露桌面。
         if NEEDS_REGION.load(Ordering::Relaxed) {
@@ -291,7 +292,6 @@ fn sync_maximized_frame(win: &WebviewWindow) {
         }
     } else if was {
         set_thickframe(hwnd, true);
-        set_dwm_nc_rendering(hwnd, true);
         hide_dwm_border_color(hwnd);
         if NEEDS_REGION.load(Ordering::Relaxed) {
             apply_corner_region(win);

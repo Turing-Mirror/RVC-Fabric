@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.3.9",
+    "version": "1.3.10",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.3.9",
+      "version": "1.3.10",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "4a8566d7e686f8bb08b28289357b5873ec92a9e3c9f6854c110215f8006b005a",
-      "size_bytes": 8441391,
+      "sha256": "3a4b29ac22d556079325b26d98c492407b2247374ac295af4a303a2844dadc6a",
+      "size_bytes": 8494634,
       "min_app_version": "1.3.0",
-      "notes": "1.3.9 是 1.3.8 之后的修复版。工具窗口白屏的残余路径修掉：打开工具窗口 的命令原来在界面回调里同步建第二个窗口，两边互等会永久白屏并挂起后续 所有命令，改为异步建窗；工具窗口补齐关闭/事件权限，自绘标题栏的关闭 按钮恢复可用。Win10 拖动窗口后左缘残留竖带一并修复。首次安装补全 引擎资源与 VB-Cable 的下载阶段接上真实进度，进度条不再装死。引擎配置 异常时不再截断配置文件或套示例模板，用户设置的音高/共鸣不会被悄悄 重置。另修正背景图大小限制的不实文案。"
+      "notes": "1.3.10 主要让人声分离按需下载链路与安装包对齐：UVR/PyMSS 模型的同名 .yaml 运行配置（约 30 KB）随 NSIS 包落到 assets/pymss/，线上清单与 pymss Release 只保留 .pth 权重。另修音频变声 index_root 为空崩溃， 以及诊断包 bench 参数与是否跑性能测试的交互。"
     }
   },
   "community": {

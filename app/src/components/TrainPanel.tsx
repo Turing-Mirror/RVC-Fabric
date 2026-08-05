@@ -153,7 +153,7 @@ export function TrainPanel() {
           resume,
         },
       });
-      setMsg(`训练完成：${r.weights ?? ""}`);
+      setMsg(t("s.2b30598b60", { v0: r.weights ?? "" }));
       void load();
     } catch (e) {
       setMsg(String(e));
@@ -245,8 +245,10 @@ export function TrainPanel() {
 
         {resume ? (
           <p className="m-0 mt-3 text-[12.5px] text-[var(--meta)]">
-            「{name.trim()}」已经有 {existing?.slices} 条切片，这次会接着上次跑，
-            不用重新切片。
+            {t("s.0340e37d88", {
+              v0: name.trim(),
+              v1: existing?.slices ?? 0,
+            })}
           </p>
         ) : null}
 

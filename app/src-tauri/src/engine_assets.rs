@@ -146,10 +146,10 @@ fn fetch_and_extract(
         // Passing progress through is what keeps the first-run gate honest:
         // without it the bar sits still while the NIC is busy for minutes.
         download::download_file(&lfs_urls(sha), &archive, sha, cancel, progress)
-            .map_err(|e| format!("下载失败：{e}"))?;
+            .map_err(|e| crate::i18n::te("s.04c4e3b2b3", &(e)))?;
     }
 
-    extract::extract_zip(&archive, dest_root).map_err(|e| format!("解压失败：{e}"))?;
+    extract::extract_zip(&archive, dest_root).map_err(|e| crate::i18n::te("s.0707e8af4e", &(e)))?;
     let _ = std::fs::remove_file(&archive);
     Ok(())
 }
@@ -210,7 +210,7 @@ pub fn ensure_engine_core(
     if missing.is_empty() {
         Ok(())
     } else {
-        Err(format!("引擎资源仍缺少：{}", missing.join("、")))
+        Err(crate::i18n::te("s.f36aff2870", &(missing.join("、"))))
     }
 }
 
@@ -251,7 +251,7 @@ pub fn install_vbcable(root: &Path) -> Result<(), String> {
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
         .spawn()
-        .map_err(|e| format!("启动安装程序失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.23220ab448", &(e)))?;
     Ok(())
 }
 

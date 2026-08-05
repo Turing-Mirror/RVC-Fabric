@@ -80,7 +80,7 @@ fn url_for(kind: &str) -> String {
 }
 
 pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
-    let sp = spec_for(kind).ok_or_else(|| format!("没有这个工具窗口：{kind}"))?;
+    let sp = spec_for(kind).ok_or_else(|| crate::i18n::te("s.22a95f37e3", &(kind)))?;
     let label = label_for(kind);
 
     // 已经开着就拉到前面。unminimize 要在 show 之前 —— 一个最小化的窗口
@@ -96,7 +96,7 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     let win = WebviewWindowBuilder::new(
         app,
         &label,
-        WebviewUrl::CustomProtocol(url.parse().map_err(|e| format!("工具窗口地址不合法：{e}"))?),
+        WebviewUrl::CustomProtocol(url.parse().map_err(|e| crate::i18n::te("s.c1c11dd8f6", &(e)))?),
     )
     .title(sp.title)
     .inner_size(sp.w, sp.h)
@@ -109,7 +109,7 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .shadow(false)
     .center()
     .build()
-    .map_err(|e| format!("建不了工具窗口：{e}"))?;
+    .map_err(|e| crate::i18n::te("s.79a71841b6", &(e)))?;
     logging::shell_log!(crate::i18n::t("s.e1e2bc3a99"));
 
     crate::window_watch::round_corners(&win);

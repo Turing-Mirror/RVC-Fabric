@@ -38,8 +38,8 @@ function formatDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   if (s < 60) return t("s.0cc05a38ad", { v0: s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} 分 ${s % 60} 秒`;
-  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+  if (m < 60) return t("s.2a94e5c93f", { v0: m, v1: s % 60 });
+  return t("s.f7c13500d5", { v0: Math.floor(m / 60), v1: m % 60 });
 }
 
 /**
@@ -335,7 +335,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                     <span className="text-[11.5px] text-[var(--accent)]">{t("s.62b46f24ae")}</span>
                   ) : null}
                   {sizeText ? (
-                    <span className="text-[11.5px] text-[var(--meta)]">约 {sizeText}</span>
+                    <span className="text-[11.5px] text-[var(--meta)]">
+                      {t("s.244d1be15c", { v0: sizeText })}
+                    </span>
                   ) : null}
                 </span>
               </button>
@@ -345,7 +347,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
         {info.gpus && info.gpus.length > 0 ? (
           <p className="text-[12px] text-[var(--meta)] m-0 mb-4">
-            检测到显卡：{info.gpus.join(" · ")}
+            {t("s.af8a2d5711", { v0: info.gpus.join(" · ") })}
           </p>
         ) : null}
 
@@ -404,7 +406,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 软件还活着、这一轮跑了多久。 */}
             {elapsedMs > 3000 ? (
               <div className="mt-1.5 text-[11.5px] text-[var(--meta)] tabular-nums">
-                已用 {formatDuration(elapsedMs)}
+                {t("s.fa2f7e5279", { v0: formatDuration(elapsedMs) })}
               </div>
             ) : null}
 
@@ -412,7 +414,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                 只能干等或者强退 —— 强退之前下的那部分其实是留着的。 */}
             {stalled ? (
               <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed">
-                已经 {formatDuration(idleMs)} 没有收到新数据。
+                {t("s.2a4fa38f1e", { v0: formatDuration(idleMs) })}
                 {isDownload
                   ? t("s.7d2fe2ae0a")
                   : t("s.703e6f531a")}
@@ -465,7 +467,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             <>
               {onDismiss ? <Btn onClick={onDismiss}>{t("s.479fcc1cc0")}</Btn> : null}
               <Btn primary onClick={() => void start()}>
-                开始下载
+                {t("s.92f35590d5")}
                 {selectedSizeLabel ? t("s.e592773b6a", { v0: selectedSizeLabel }) : ""}
               </Btn>
             </>

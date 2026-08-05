@@ -231,7 +231,7 @@ pub fn serve(app: &AppHandle, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 /// misapplied UI patch is diagnosable instead of invisible.
 pub fn source_label() -> String {
     match external_dir() {
-        Some(dir) => format!("外部目录 {}", dir.to_string_lossy()),
+        Some(dir) => crate::i18n::te("s.fdfc605e38", &(dir.to_string_lossy())),
         None => crate::i18n::t("s.66cf378dad"),
     }
 }

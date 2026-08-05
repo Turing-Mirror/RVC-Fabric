@@ -148,17 +148,15 @@ fn run_inner(
     index_rate: f64,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
-        return Err("Runtime 未就绪，请先补全运行时".into());
+        return Err(crate::i18n::t("s.75b84a31d6").into());
     }
     if !crate::engine_assets::engine_core_ready(root) {
         let miss = crate::engine_assets::engine_core_missing(root).join("、");
-        return Err(format!(
-            "引擎资源不完整（缺 {miss}）。请先在主界面完成「引擎资源」下载（hubert / rmvpe / ffmpeg）。"
-        ));
+        return Err(crate::i18n::te("s.5eb32f1350", &miss));
     }
     let script = worker_script(root);
     if !script.is_file() {
-        return Err(format!("找不到转换脚本：{}", script.display()));
+        return Err(crate::i18n::te("s.bc197d22e5", &(script.display())));
     }
     if input.trim().is_empty() {
         return Err(crate::i18n::t("s.e9c01e81cb").into());
@@ -168,7 +166,7 @@ fn run_inner(
     } else {
         PathBuf::from(output.trim())
     };
-    std::fs::create_dir_all(&out).map_err(|e| format!("建不了输出目录：{e}"))?;
+    std::fs::create_dir_all(&out).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
 
     let cfg = crate::config::read(root);
     let pth = cfg
@@ -204,7 +202,7 @@ fn run_inner(
         "protect": 0.33,
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
-        .map_err(|e| format!("写请求文件失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let log = paths::logs_dir(root).join("sts.log");
@@ -232,7 +230,7 @@ fn run_inner(
         cmd.creation_flags(0x08000000);
     }
 
-    let mut child = cmd.spawn().map_err(|e| format!("起不来转换进程：{e}"))?;
+    let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.4f592d4fc2", &(e)))?;
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.68759edc4b"))?;
     let mut files: Vec<String> = Vec::new();
     let mut fail: Option<String> = None;
@@ -285,15 +283,12 @@ fn run_inner(
         }
     }
 
-    let st = child.wait().map_err(|e| format!("等转换进程失败：{e}"))?;
+    let st = child.wait().map_err(|e| crate::i18n::te("s.cdad0c927d", &(e)))?;
     if let Some(e) = fail {
         return Err(e);
     }
     if !st.success() {
-        return Err(format!(
-            "转换进程异常退出（{}）。详情见 User_Data/logs/sts.log",
-            st.code().unwrap_or(-1)
-        ));
+        return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
     }
     emit(app, "done", total, total, &crate::i18n::t("s.e43ef3d56a"));
     let stats = crate::paths::clean_temps(root);

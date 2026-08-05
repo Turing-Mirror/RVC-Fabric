@@ -128,7 +128,9 @@ function StsSection() {
   const blocked = !st.runtime_ready
     ? t("s.bc45fc14b1")
     : st.engine_core_ready === false
-      ? `引擎资源未补全（缺 ${(st.engine_core_missing || []).join("、") || "hubert/rmvpe"}）。请先在主界面完成引擎资源下载。`
+      ? t("s.156ff9271b", {
+          v0: (st.engine_core_missing || []).join("、") || "hubert/rmvpe",
+        })
       : !st.worker_present
         ? t("s.84b7d7b6b0")
         : !st.model_path
@@ -150,7 +152,12 @@ function StsSection() {
         indexRate,
       });
       setMsg(
-        `完成 ${r.files?.length ?? 0} 个文件${r.output ? ` → ${r.output}` : ""}`,
+        r.output
+          ? t("s.6a17eda1b7", {
+              v0: r.files?.length ?? 0,
+              v1: r.output,
+            })
+          : t("s.4d8ef8514f", { v0: r.files?.length ?? 0 }),
       );
     } catch (e) {
       setMsg(String(e));
@@ -168,7 +175,7 @@ function StsSection() {
         <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
       ) : (
         <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">
-          当前音色：{st.model_name || "—"}
+          {t("s.6c415e91bb", { v0: st.model_name || "—" })}
           {st.index_path ? t("s.0ca99fa9f1") : ""}
         </p>
       )}
@@ -359,7 +366,7 @@ function TtsSection() {
         pitch,
         useRvc,
       });
-      setMsg(`合成完成：${r.file ?? ""}`);
+      setMsg(t("s.c7cbedc8f6", { v0: r.file ?? "" }));
     } catch (e) {
       setMsg(String(e));
     } finally {

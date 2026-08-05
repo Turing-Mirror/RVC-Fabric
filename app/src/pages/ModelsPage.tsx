@@ -298,7 +298,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
-              没有找到匹配「{query}」的音色，清空搜索即可查看全部。
+              {t("s.041c85897b", { v0: query })}
             </div>
           ) : (
             pageView.map((v) => {
@@ -362,15 +362,11 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
               onClick={() => setPage((p) => Math.max(0, p - 1))}
             >{t("s.b41561d807")}</Btn>
             <span>
-              第{" "}
-              <b className="text-[var(--ink)] font-semibold">
-                {pageClamped + 1}
-              </b>{" "}
-              /{" "}
-              <b className="text-[var(--ink)] font-semibold">{totalPages}</b>{" "}
-              页 · 共{" "}
-              <b className="text-[var(--ink)] font-semibold">{view.length}</b>{" "}
-              个
+              {t("s.40a021ed44", {
+                v0: pageClamped + 1,
+                v1: totalPages,
+                v2: view.length,
+              })}
             </span>
             <Btn
               disabled={pageClamped >= totalPages - 1}

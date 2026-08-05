@@ -327,7 +327,7 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                         if origin.is_empty() {
                             crate::i18n::t("s.4500b5dfc7")
                         } else {
-                            format!("第三方 · {origin}")
+                            crate::i18n::te("s.d03c6cb553", &(origin))
                         }
                     } else if origin.is_empty() {
                         crate::i18n::t("s.7c134b6e64")
@@ -370,7 +370,7 @@ fn format_size(n: u64) -> String {
 /// path-safety check is one copy too many — the one in `extract` is the one
 /// with tests.
 fn safe_extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
-    crate::extract::extract_zip(zip_path, dest).map_err(|e| format!("音色包{e}"))
+    crate::extract::extract_zip(zip_path, dest).map_err(|e| crate::i18n::te("s.007e8f085e", &(e)))
 }
 
 fn find_content_root(tmp: &Path) -> PathBuf {
@@ -486,7 +486,7 @@ pub fn install_voice_pack_zip(
     official: bool,
 ) -> Result<Value, String> {
     if !zip_path.is_file() {
-        return Err(format!("找不到音色包：{}", zip_path.display()));
+        return Err(crate::i18n::te("s.760364197e", &(zip_path.display())));
     }
     let tmp = paths::update_cache(root).join(format!(
         "voice_extract_{}",
@@ -566,7 +566,7 @@ pub fn install_voice_pack_zip(
         }
         fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
         let dest_pth = dest_dir.join(pth.file_name().unwrap_or_default());
-        fs::copy(&pth, &dest_pth).map_err(|e| format!("复制 pth: {e}"))?;
+        fs::copy(&pth, &dest_pth).map_err(|e| crate::i18n::te("s.8c8dade1e1", &(e)))?;
 
         let mut index_path = String::new();
         if let Some(idx) = find_first(&content, "index") {
@@ -679,7 +679,7 @@ pub fn install_voice_entry(
     // A .pth is an untrusted pickle — it must never be installed unverified,
     // whatever the catalog happens to contain.
     if sha.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
-        return Err(format!("音色 {id} 缺少有效的 sha256，已拒绝安装"));
+        return Err(crate::i18n::te("s.40dc667415", &(id)));
     }
 
     let emit = |phase: &str, done: u64, total: u64, message: &str| {
@@ -696,7 +696,7 @@ pub fn install_voice_entry(
         );
     };
 
-    emit("start", 0, size.max(1), &format!("开始下载 {name}…"));
+    emit("start", 0, size.max(1), &crate::i18n::te("s.1cf582864a", &(name)));
 
     // 第三方一律先落暂存区，下完不装 —— .pth 是 pickle，加载即执行代码，
     // 而它来自社区站点不是我们的仓库。哈希只能证明「下到的就是清单里那个」，
@@ -998,7 +998,7 @@ pub fn reveal_staged(root: &Path, voice_id: &str) -> Result<(), String> {
 pub fn discard_staged(root: &Path, voice_id: &str) -> Result<(), String> {
     let dir = staged_dir(root, voice_id)?;
     if dir.is_dir() {
-        fs::remove_dir_all(&dir).map_err(|e| format!("删除失败：{e}"))?;
+        fs::remove_dir_all(&dir).map_err(|e| crate::i18n::te("s.80b25fdbcd", &(e)))?;
     }
     Ok(())
 }
@@ -1071,7 +1071,7 @@ fn install_staged_files(
         }
     }
     let dest_pth = dest_dir.join(format!("{vid}.pth"));
-    fs::copy(pth, &dest_pth).map_err(|e| format!("复制模型失败：{e}"))?;
+    fs::copy(pth, &dest_pth).map_err(|e| crate::i18n::te("s.afcf23635f", &(e)))?;
 
     let mut index_path = String::new();
     if let Ok(rd) = fs::read_dir(dir) {

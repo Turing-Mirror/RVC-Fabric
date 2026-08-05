@@ -453,13 +453,10 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
 
     let script = paths::worker_script(root);
     if !script.is_file() {
-        return Err(format!("找不到实时 worker: {}", script.display()));
+        return Err(crate::i18n::te("s.fd40e2e936", &script.display()));
     }
     let pyw = paths::runtime_pythonw(root).ok_or_else(|| {
-        format!(
-            "找不到 Runtime\\pythonw.exe（根目录 {}）。请先补全 Runtime。",
-            root.display()
-        )
+        crate::i18n::te("s.e8edbd3cce", &root.display())
     })?;
 
     protocol::ensure_control_dir(root).map_err(|e| e.to_string())?;
@@ -514,7 +511,7 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
             .creation_flags(flags);
         let child = cmd
             .spawn()
-            .map_err(|e| format!("无法启动 worker: {e}"))?;
+            .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
         append_log(root, &format!("spawned shell-side pid={}", child.id()));
         // Do not wait; worker re-parents as Runtime process and writes its own pid
         std::mem::forget(child);
@@ -529,7 +526,7 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("无法启动 worker: {e}"))?;
+            .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
         std::mem::forget(child);
     }
 

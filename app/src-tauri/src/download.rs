@@ -67,7 +67,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     if exp.len() != 64 {
         return Err(crate::i18n::t("s.5ca337dd03").into());
     }
-    let mut f = std::fs::File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
+    let mut f = std::fs::File::open(path).map_err(|e| crate::i18n::te("s.21ce93c732", &(e)))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 1024 * 1024];
     use std::io::Read;
@@ -80,7 +80,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     }
     let got = hex::encode(hasher.finalize());
     if got != exp {
-        return Err(format!("sha256 不匹配\n期望 {exp}\n实际 {got}"));
+        return Err(crate::i18n::t2("s.73a397a7fd", &exp, &got));
     }
     Ok(())
 }
@@ -158,11 +158,7 @@ impl ProgressReporter for ProgressBridge {
         let threads = self.threads.load(Ordering::SeqCst).max(1);
         self.emit(
             0,
-            &format!(
-                "download:{} · {} 连接 · 已连接",
-                self.kind.as_str(),
-                threads
-            ),
+            &crate::i18n::t2("s.364fa9e6bf", &self.kind.as_str(), &threads),
             true,
         );
     }
@@ -246,11 +242,7 @@ pub fn download_request(
         cb(
             0,
             total,
-            &format!(
-                "connecting:{} · {} 连接 · 建立连接…",
-                req.kind.as_str(),
-                threads
-            ),
+            &crate::i18n::t2("s.a32e5d5c37", &req.kind.as_str(), &threads),
         );
     }
 
@@ -281,7 +273,7 @@ pub fn download_request(
             cb(
                 0,
                 req.size_hint.max(1),
-                &format!("connecting:{} · 请求服务器…", req.kind.as_str()),
+                &crate::i18n::te("s.9d7d0dbc49", &(req.kind.as_str())),
             );
         }
         match rt.block_on(download_one_url(
@@ -309,7 +301,7 @@ pub fn download_request(
                     let _ = std::fs::remove_file(&req.dest);
                 }
                 std::fs::rename(&part_path, &req.dest)
-                    .map_err(|e| format!("完成重命名失败: {e}"))?;
+                    .map_err(|e| crate::i18n::te("s.fe9e98a65c", &(e)))?;
                 if let Some(ref cb) = progress {
                     let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
                     cb(len, len.max(1), "download");

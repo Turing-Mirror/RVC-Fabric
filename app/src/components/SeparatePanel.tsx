@@ -95,7 +95,7 @@ export function SeparatePanel() {
         output,
         model,
       });
-      setMsg(`完成，输出 ${r.files?.length ?? 0} 个文件`);
+      setMsg(t("s.8efd7ca6b1", { v0: r.files?.length ?? 0 }));
     } catch (e) {
       setMsg(String(e));
     } finally {

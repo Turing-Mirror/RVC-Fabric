@@ -104,7 +104,12 @@ export function Select({
       {options.length === 0 && !missing ? (
         <option value="">{t("s.e6b7c3d266")}</option>
       ) : null}
-      {missing ? <option value={value}>{value}（当前不可用）</option> : null}
+      {missing ? (
+        <option value={value}>
+          {value}
+          {t("s.1cab0503c2")}
+        </option>
+      ) : null}
       {options.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}

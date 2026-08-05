@@ -383,7 +383,7 @@ pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<Str
     ) {
         Ok(v) => parse_feed(&v),
         Err(e) => {
-            errors.push(format!("广场内容：{e}"));
+            errors.push(crate::i18n::te("s.a005e42321", &(e)));
             Vec::new()
         }
     };
@@ -393,7 +393,7 @@ pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<Str
     ) {
         Ok(v) => parse_changelog(&v),
         Err(e) => {
-            errors.push(format!("更新日志：{e}"));
+            errors.push(crate::i18n::te("s.d2620f4b90", &(e)));
             Vec::new()
         }
     };

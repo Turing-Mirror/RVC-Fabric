@@ -294,7 +294,9 @@ function Feed({
         </h4>
         <p className="m-0 text-[12.5px] text-[var(--help)] leading-relaxed">{item.body}</p>
         {item.sponsor ? (
-          <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)]">由 {item.sponsor} 投放</p>
+          <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)]">
+            {t("s.0b38f69017", { v0: item.sponsor })}
+          </p>
         ) : null}
       </div>
     </div>

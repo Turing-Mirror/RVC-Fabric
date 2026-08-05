@@ -209,19 +209,16 @@ pub fn validate_name(name: &str) -> Result<(), String> {
 fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
     validate_name(&req.exp)?;
     if !paths::runtime_ready(root) {
-        return Err("Runtime 未就绪，请先补全运行环境".into());
+        return Err(crate::i18n::t("s.dc92f52f68").into());
     }
     if !worker_script(root).is_file() {
         return Err(crate::i18n::t("s.5164f3e0db").into());
     }
     if !SAMPLE_RATES.contains(&req.sample_rate.as_str()) {
-        return Err(format!("不支持的采样率：{}", req.sample_rate));
+        return Err(crate::i18n::te("s.ab1660b1a1", &(req.sample_rate)));
     }
     if !pretrained_ready(root, &req.sample_rate) {
-        return Err(format!(
-            "缺少 {} 的训练底模，请先下载",
-            req.sample_rate
-        ));
+        return Err(crate::i18n::te("s.c7a9f88925", &req.sample_rate));
     }
     if !root
         .join("assets")
@@ -286,7 +283,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         &reqfile,
         serde_json::to_string_pretty(&payload).unwrap_or_default(),
     )
-    .map_err(|e| format!("写请求文件失败：{e}"))?;
+    .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let logdir = paths::logs_dir(root);
@@ -314,7 +311,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let mut child: Child = cmd.spawn().map_err(|e| format!("起不来训练进程：{e}"))?;
+    let mut child: Child = cmd.spawn().map_err(|e| crate::i18n::te("s.217047672d", &(e)))?;
     *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child.id());
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.c73d43b29b"))?;
 
@@ -344,7 +341,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         emit(app, v);
     }
 
-    let st = child.wait().map_err(|e| format!("等训练进程失败：{e}"))?;
+    let st = child.wait().map_err(|e| crate::i18n::te("s.d21a4981b7", &(e)))?;
     if cancel_flag().load(Ordering::SeqCst) {
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
@@ -352,11 +349,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
         return Err(e);
     }
     if !st.success() {
-        return Err(format!(
-            "训练进程异常退出（{}）。详情见 logs/{}/train.log",
-            st.code().unwrap_or(-1),
-            req.exp.trim()
-        ));
+        return Err(crate::i18n::t2("s.7803aff201", &st.code().unwrap_or(-1), &req.exp.trim()));
     }
     let d = done.ok_or(crate::i18n::t("s.7dc4ea39fd"))?;
     // 预处理/特征提取可能在 TEMP 落中间文件。

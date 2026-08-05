@@ -303,7 +303,7 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
     );
     sanitize_inuse(root, &mut out);
     let text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| e.to_string())?;
-    write_atomic(&path, &text).map_err(|e| format!("写入 inuse 配置失败：{e}"))
+    write_atomic(&path, &text).map_err(|e| crate::i18n::te("s.4ad9fdccd9", &(e)))
 }
 
 /// Merge `patch` into the saved config; returns the new effective config plus
@@ -342,7 +342,7 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
 
     let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
     write_atomic(&paths::app_config_path(root), &text)
-        .map_err(|e| format!("保存设置失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
 
     let cfg = read(root);
     // Only touch the engine's config file when an engine key actually changed.
@@ -408,7 +408,7 @@ pub fn set_plaza_seen(root: &Path, newest: &str) -> Result<(), String> {
     let mut saved = read_json(&paths::app_config_path(root));
     saved.insert(PLAZA_SEEN.into(), json!(newest));
     let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
-    write_atomic(&paths::app_config_path(root), &text).map_err(|e| format!("保存失败：{e}"))
+    write_atomic(&paths::app_config_path(root), &text).map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
 }
 
 /// Key holding dismissed models-page banner ids. Not a settings key: it never
@@ -448,7 +448,7 @@ pub fn dismiss_ad(root: &Path, id: &str) -> Result<(), String> {
     let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
     // Deliberately no sync_inuse: this is not an engine key.
     write_atomic(&paths::app_config_path(root), &text)
-        .map_err(|e| format!("保存失败：{e}"))
+        .map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
 }
 
 /// Grouped view used by the settings page, so the UI does not hard-code which

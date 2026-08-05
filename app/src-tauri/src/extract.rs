@@ -44,14 +44,14 @@ fn check_path_safety(name: &str) -> Result<(), String> {
         return Err(crate::i18n::t("s.70f6a74f68").into());
     }
     if name.len() > 1 && name.as_bytes().get(1) == Some(&b':') {
-        return Err(format!("含盘符路径：{name}"));
+        return Err(crate::i18n::te("s.099b711760", &(name)));
     }
     for c in Path::new(name).components() {
         use std::path::Component;
         match c {
             Component::Normal(_) | Component::CurDir => {}
-            Component::ParentDir => return Err(format!("路径越界：{name}")),
-            _ => return Err(format!("路径非法：{name}")),
+            Component::ParentDir => return Err(crate::i18n::te("s.7801d82550", &(name))),
+            _ => return Err(crate::i18n::te("s.38ad9afc9b", &(name))),
         }
     }
     Ok(())
@@ -80,7 +80,7 @@ fn open_archive(
     path: &Path,
     counter: Arc<AtomicU64>,
 ) -> Result<Archive<Box<dyn Read + Send>>, String> {
-    let f = fs::File::open(path).map_err(|e| format!("打开 tar 失败: {e}"))?;
+    let f = fs::File::open(path).map_err(|e| crate::i18n::te("s.9f44b201ee", &(e)))?;
     let f = CountingReader {
         inner: f,
         read: counter,
@@ -159,10 +159,10 @@ pub fn extract_runtime_tar_with_progress(
     let mut archive = open_archive(archive, counter.clone())?;
     let entries = archive
         .entries()
-        .map_err(|e| format!("读取 tar 失败: {e}"))?;
+        .map_err(|e| crate::i18n::te("s.79a3d2ebab", &(e)))?;
 
     for entry in entries {
-        let mut entry = entry.map_err(|e| format!("tar 条目错误: {e}"))?;
+        let mut entry = entry.map_err(|e| crate::i18n::te("s.f456299616", &(e)))?;
         let path = entry
             .path()
             .map_err(|e| e.to_string())?
@@ -174,7 +174,7 @@ pub fn extract_runtime_tar_with_progress(
         }
         entry
             .unpack_in(&staging)
-            .map_err(|e| format!("解压失败 {path}: {e}"))?;
+            .map_err(|e| crate::i18n::t2("s.646bbce5a0", &path, &e))?;
         if last_emit.elapsed() >= std::time::Duration::from_millis(200) {
             last_emit = std::time::Instant::now();
             on_progress(counter.load(Ordering::Relaxed).min(total), total);
@@ -209,7 +209,7 @@ pub fn extract_runtime_tar_with_progress(
     }
     fs::rename(&candidate, &final_rt).map_err(|e| {
         let _ = fs::remove_dir_all(&staging);
-        format!("移动 Runtime 失败: {e}")
+        crate::i18n::te("s.90e6bba99d", &(e))
     })?;
     let _ = fs::remove_dir_all(&staging);
 
@@ -222,19 +222,19 @@ pub fn extract_runtime_tar_with_progress(
 /// Extract a zip into `dest_root`, reusing the same traversal guard as the tar
 /// path (equivalent of the Python shell's `safe_zip`).
 pub fn extract_zip(archive: &Path, dest_root: &Path) -> Result<(), String> {
-    let file = std::fs::File::open(archive).map_err(|e| format!("打开压缩包失败：{e}"))?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("读取压缩包失败：{e}"))?;
+    let file = std::fs::File::open(archive).map_err(|e| crate::i18n::te("s.e32a4f9295", &(e)))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| crate::i18n::te("s.c9aafa74d7", &(e)))?;
     std::fs::create_dir_all(dest_root).map_err(|e| e.to_string())?;
 
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         let name = entry.name().replace('\\', "/");
-        check_path_safety(&name).map_err(|e| format!("压缩包{e}"))?;
+        check_path_safety(&name).map_err(|e| crate::i18n::te("s.242a3a8640", &(e)))?;
         // Second, independent check: the zip crate refuses anything it cannot
         // prove stays inside the destination.
         let rel = entry
             .enclosed_name()
-            .ok_or_else(|| format!("压缩包路径不安全：{name}"))?;
+            .ok_or_else(|| crate::i18n::te("s.4a02ebe151", &(name)))?;
         let out = dest_root.join(&rel);
         if entry.is_dir() || name.ends_with('/') {
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
@@ -244,7 +244,7 @@ pub fn extract_zip(archive: &Path, dest_root: &Path) -> Result<(), String> {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let mut dst = std::fs::File::create(&out)
-            .map_err(|e| format!("写入 {} 失败：{e}", out.display()))?;
+            .map_err(|e| crate::i18n::t2("s.a4462e4266", &out.display(), &e))?;
         std::io::copy(&mut entry, &mut dst).map_err(|e| e.to_string())?;
     }
     Ok(())

@@ -126,7 +126,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     }>("store-progress", (ev) => {
       const p = ev.payload;
       setProgress(
-        `${p.message || p.phase || "下载中"} ${
+        `${p.message || p.phase || t("s.327d59b5bd")} ${
           p.percent != null ? `· ${p.percent}%` : ""
         }`,
       );
@@ -267,7 +267,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const s = staged[v.id];
     if (
       !window.confirm(
-        `确定删除已下载的音色文件吗？\n\n${s?.file || v.name}\n\n删除后如需使用需重新下载。`,
+        t("s.de94f39aff", { v0: s?.file || v.name }),
       )
     )
       return;
@@ -424,7 +424,10 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                   >
                     <span className="font-semibold text-[14px]">{series}</span>
                     <span className="text-[12px] text-[var(--meta)]">
-                      {voices.length} 个 · {openS ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                      {t("s.c8542337dc", {
+                        v0: voices.length,
+                        v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
+                      })}
                     </span>
                   </button>
                   {openS ? (
@@ -446,7 +449,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                               setSeriesFull((prev) => new Set(prev).add(series))
                             }
                           >
-                            查看全部 {voices.length} 条
+                            {t("s.9d38fc19bb", { v0: voices.length })}
                           </Btn>
                         </div>
                       ) : null}
@@ -473,9 +476,13 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             disabled={pageClamped <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >{t("s.b41561d807")}</Btn>
-          <span className="tabular-nums">{t("s.dae828fe4f")}<b className="text-[var(--ink)]">{pageClamped}</b> /{" "}
-            <b className="text-[var(--ink)]">{totalPages}</b> 页 · 共{" "}
-            <b className="text-[var(--ink)]">{list.length}</b>{t("s.f7b2a6ee68")}</span>
+          <span className="tabular-nums">
+            {t("s.40a021ed44", {
+              v0: pageClamped,
+              v1: totalPages,
+              v2: list.length,
+            })}
+          </span>
           <Btn
             disabled={pageClamped >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

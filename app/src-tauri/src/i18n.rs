@@ -180,6 +180,37 @@ pub fn t_vars(key: &str, vars: &HashMap<String, String>) -> String {
     key.to_string()
 }
 
+/// Single display arg: replaces {e}, {a0}, and first {}.
+pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
+    let v = e.to_string();
+    t(key)
+        .replace("{e}", &v)
+        .replace("{a0}", &v)
+        .replacen("{}", &v, 1)
+}
+
+/// Two display args: {a0}/{a1} or first two {}.
+pub fn t2(key: &str, a0: &impl std::fmt::Display, a1: &impl std::fmt::Display) -> String {
+    let v0 = a0.to_string();
+    let v1 = a1.to_string();
+    let mut s = t(key).replace("{a0}", &v0).replace("{a1}", &v1);
+    s = s.replacen("{}", &v0, 1);
+    s = s.replacen("{}", &v1, 1);
+    s
+}
+
+/// N display args: replace `{a0}`… then remaining `{}` left-to-right.
+pub fn tn(key: &str, args: &[&str]) -> String {
+    let mut s = t(key);
+    for (i, a) in args.iter().enumerate() {
+        s = s.replace(&format!("{{a{i}}}"), a);
+    }
+    for a in args {
+        s = s.replacen("{}", a, 1);
+    }
+    s
+}
+
 /// Resolve `message_code` from status.json (e.g. `engine.starting` → msg.engine.starting).
 #[allow(dead_code)] // used by status localization & future command errors
 pub fn t_msg(code: &str) -> String {

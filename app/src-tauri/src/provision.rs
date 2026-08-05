@@ -356,9 +356,9 @@ pub fn provision_status(root: &Path) -> Value {
         "message": if need_provision {
             crate::i18n::t("s.2ae4c43ac6")
         } else if !worker_script {
-            "Runtime 就绪，但缺少 tools/realtime_worker.py".to_string()
+            crate::i18n::t("s.ee7e83d91d")
         } else {
-            "Runtime 就绪".to_string()
+            crate::i18n::t("s.f2e88c071e")
         },
     })
 }
@@ -438,10 +438,10 @@ pub fn run_provision(
 
         if paths::runtime_ready(&root) && !force {
             write_package_meta(&root, &var, &var, "").ok();
-            emit_progress(&app, "done", 1, 1, "Runtime 已就绪，跳过下载");
+            emit_progress(&app, "done", 1, 1, &crate::i18n::t("s.e1b39abf92"));
             return Ok(json!({
                 "ok": true,
-                "message": "Runtime 已就绪，跳过下载。",
+                "message": crate::i18n::t("s.227d108a35"),
                 "variant": var,
             }));
         }
@@ -475,16 +475,14 @@ pub fn run_provision(
             "download",
             0,
             size.max(1),
-            &format!(
-                "下载 {} Runtime v{}（约 {} · {} 连接）",
-                spec.label,
-                if spec.version.is_empty() {
-                    "?"
-                } else {
-                    &spec.version
-                },
-                format_size(size),
-                conns_preview
+            &crate::i18n::tn(
+                "s.c5f9b6cc72",
+                &[
+                    &spec.label,
+                    if spec.version.is_empty() { "?" } else { &spec.version },
+                    &format_size(size),
+                    &conns_preview.to_string(),
+                ],
             ),
         );
 
@@ -504,12 +502,12 @@ pub fn run_provision(
                     "download",
                     size.max(1),
                     size.max(1),
-                    &format!(
-                        "使用本地缓存：{}",
-                        dest_file
+                    &crate::i18n::te(
+                        "s.31eac83efc",
+                        &dest_file
                             .file_name()
                             .map(|s| s.to_string_lossy())
-                            .unwrap_or_default()
+                            .unwrap_or_default(),
                     ),
                 );
             } else {
@@ -545,27 +543,24 @@ pub fn run_provision(
 
                 let pct = ((done as f64 / total as f64) * 100.0).clamp(0.0, 100.0);
                 let m = match phase {
-                    "verify" => format!(
-                        "校验 sha256…（{}）",
-                        format_size(done.max(total))
-                    ),
+                    "verify" => crate::i18n::te("s.af05b41a37", &format_size(done.max(total))),
                     "retry" => crate::i18n::t("s.a24d69a01d"),
                     other if other.starts_with("connecting:") => {
-                        format!("连接中… · 准备下载约 {}", format_size(total))
+                        crate::i18n::te("s.d28fcd74d0", &(format_size(total)))
                     }
-                    other if other.starts_with("download:") => format!(
-                        "下载中 {} / {} · {}",
-                        format_size(done),
-                        format_size(total),
-                        format_speed(speed)
+                    other if other.starts_with("download:") => crate::i18n::tn(
+                        "s.3de4870b5b",
+                        &[&format_size(done), &format_size(total), &format_speed(speed)],
                     ),
-                    _ if done == 0 => format!("连接中… · 约 {}", format_size(total)),
-                    _ => format!(
-                        "下载中 {} / {}（{:.1}%）· {}",
-                        format_size(done),
-                        format_size(total),
-                        pct,
-                        format_speed(speed)
+                    _ if done == 0 => crate::i18n::te("s.11a39009ac", &(format_size(total))),
+                    _ => crate::i18n::tn(
+                        "s.c77af9b599",
+                        &[
+                            &format_size(done),
+                            &format_size(total),
+                            &format!("{:.1}", pct),
+                            &format_speed(speed),
+                        ],
                     ),
                 };
                 emit_progress_speed(&app_cb, phase, done, total, speed, &m);
@@ -600,7 +595,7 @@ pub fn run_provision(
                     "extract",
                     done,
                     total.max(1),
-                    &format!("解压 Runtime… {} / {}", format_size(done), format_size(total)),
+                    &crate::i18n::t2("s.6aa1e213af", &format_size(done), &format_size(total)),
                 );
             })?;
         }
@@ -629,10 +624,10 @@ pub fn run_provision(
             });
         }
 
-        emit_progress(&app, "done", 1, 1, "Runtime 补全完成");
+        emit_progress(&app, "done", 1, 1, &crate::i18n::t("s.a64a986f63"));
         Ok(json!({
             "ok": true,
-            "message": format!("{} Runtime 已安装", spec.label),
+            "message": crate::i18n::te("s.3c5bbe47d1", &(spec.label)),
             "variant": var,
             "version": spec.version,
         }))

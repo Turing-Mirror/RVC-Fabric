@@ -104,7 +104,7 @@ fn run_powershell(script: &str) -> Result<String, String> {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let out = cmd.output().map_err(|e| format!("起不来 PowerShell：{e}"))?;
+    let out = cmd.output().map_err(|e| crate::i18n::te("s.6fe5607f45", &(e)))?;
     if !out.status.success() {
         return Err(crate::i18n::t("s.787332269e").into());
     }
@@ -122,19 +122,19 @@ fn synthesize(root: &Path, text: &str, voice: &str, rate: i32) -> Result<PathBuf
     // 插值、`''` 也确实是转义，所以拼进去本身是安全的 —— 但「安全靠转义写对」
     // 是个会随着以后改脚本一起失效的保证。对着白名单比一下，这个类别就没了。
     if !voice.is_empty() && !list_sapi_voices().iter().any(|v| v == voice) {
-        return Err(format!("系统里没有这把嗓子：{voice}"));
+        return Err(crate::i18n::te("s.74d5d45130", &(voice)));
     }
     let cache = paths::update_cache(root);
-    std::fs::create_dir_all(&cache).map_err(|e| format!("建不了缓存目录：{e}"))?;
+    std::fs::create_dir_all(&cache).map_err(|e| crate::i18n::te("s.9273991f94", &(e)))?;
     let txt = cache.join("tts_text.txt");
     let wav = cache.join("tts_raw.wav");
 
     // UTF-8 带 BOM：PowerShell 5 的 Get-Content 默认按系统 ANSI 码页读，
     // 没有 BOM 的中文会被读成乱码，念出来是一串怪音。
-    let mut f = std::fs::File::create(&txt).map_err(|e| format!("写不了文本文件：{e}"))?;
+    let mut f = std::fs::File::create(&txt).map_err(|e| crate::i18n::te("s.6619dda8e2", &(e)))?;
     f.write_all(&[0xEF, 0xBB, 0xBF])
         .and_then(|_| f.write_all(text.as_bytes()))
-        .map_err(|e| format!("写不了文本文件：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.6619dda8e2", &(e)))?;
     drop(f);
     let _ = std::fs::remove_file(&wav);
 
@@ -236,7 +236,7 @@ fn run_inner(
         return Err(crate::i18n::t("s.4e723e58f7").into());
     }
     if text.chars().count() > MAX_CHARS {
-        return Err(format!("一次最多 {MAX_CHARS} 字，先分几段"));
+        return Err(crate::i18n::te("s.1bedd33b11", &(MAX_CHARS)));
     }
 
     emit(app, "sapi", 0, 2, &crate::i18n::t("s.b99cbcbcd3"));
@@ -246,7 +246,7 @@ fn run_inner(
     }
 
     let dir = out_dir(root);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("建不了输出目录：{e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -254,7 +254,7 @@ fn run_inner(
     let out = dir.join(format!("tts_{stamp}.wav"));
 
     if !use_rvc {
-        std::fs::copy(&raw, &out).map_err(|e| format!("写不了输出文件：{e}"))?;
+        std::fs::copy(&raw, &out).map_err(|e| crate::i18n::te("s.9f8084f7cb", &(e)))?;
         emit(app, "done", 2, 2, &crate::i18n::t("s.2e33db9056"));
         return Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": false }));
     }
@@ -270,11 +270,11 @@ fn run_inner(
         return Err(crate::i18n::t("s.ab63502dd7").into());
     }
     if !paths::runtime_ready(root) {
-        return Err("Runtime 未就绪，请先补全运行时".into());
+        return Err(crate::i18n::t("s.75b84a31d6").into());
     }
     let script = infer_script(root);
     if !script.is_file() {
-        return Err(format!("找不到推理脚本：{}", script.display()));
+        return Err(crate::i18n::te("s.77c5c75ab1", &(script.display())));
     }
 
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
@@ -327,19 +327,16 @@ fn run_inner(
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let mut child = cmd.spawn().map_err(|e| format!("起不来推理进程：{e}"))?;
+    let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.dd5660b4da", &(e)))?;
     loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
-        match child.try_wait().map_err(|e| format!("等推理进程失败：{e}"))? {
+        match child.try_wait().map_err(|e| crate::i18n::te("s.50b4ac5f07", &(e)))? {
             Some(st) => {
                 if !st.success() {
-                    return Err(format!(
-                        "换音色失败（{}）。详情见 User_Data/logs/tts.log",
-                        st.code().unwrap_or(-1)
-                    ));
+                    return Err(crate::i18n::te("s.b640c89ee3", &st.code().unwrap_or(-1)));
                 }
                 break;
             }

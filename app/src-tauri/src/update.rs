@@ -235,11 +235,11 @@ pub fn apply_gui_patch(
     std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
     let zip = cache.join("gui_patch.zip");
     download::download_file(&[url.to_string()], &zip, sha256, cancel, None)
-        .map_err(|e| format!("下载更新失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.acc7dfe816", &(e)))?;
 
     let stage = staging_dir(root);
     let _ = std::fs::remove_dir_all(&stage);
-    extract::extract_zip(&zip, &stage).map_err(|e| format!("解压更新失败：{e}"))?;
+    extract::extract_zip(&zip, &stage).map_err(|e| crate::i18n::te("s.0350fdf3a0", &(e)))?;
 
     // The zip may or may not have a single top-level folder.
     let payload = single_child_dir(&stage).unwrap_or_else(|| stage.clone());
@@ -252,13 +252,13 @@ pub fn apply_gui_patch(
     let backup = target.with_extension("prev");
     let _ = std::fs::remove_dir_all(&backup);
     if target.exists() {
-        std::fs::rename(&target, &backup).map_err(|e| format!("备份旧界面失败：{e}"))?;
+        std::fs::rename(&target, &backup).map_err(|e| crate::i18n::te("s.a9fa441818", &(e)))?;
     }
     if let Err(e) = std::fs::rename(&payload, &target) {
         // Put the old one back rather than leaving the app with no UI at all.
         let _ = std::fs::rename(&backup, &target);
         let _ = std::fs::remove_dir_all(&stage);
-        return Err(format!("替换界面失败：{e}"));
+        return Err(crate::i18n::te("s.7935e3dd3e", &(e)));
     }
     let _ = std::fs::remove_dir_all(&backup);
     let _ = std::fs::remove_dir_all(&stage);
@@ -431,7 +431,7 @@ pub async fn run_app_updater(app: &tauri::AppHandle) -> Result<Value, String> {
     update
         .download_and_install(|_chunk, _total| {}, || {})
         .await
-        .map_err(|e| format!("安装更新失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.90d174c86a", &(e)))?;
     Ok(json!({
         "available": true,
         "installed": true,

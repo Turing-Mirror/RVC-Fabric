@@ -177,10 +177,7 @@ pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
             Err(e) => errors.push(e),
         }
     }
-    Err(format!(
-        "无法拉取 CNB 清单：{}",
-        errors.into_iter().take(3).collect::<Vec<_>>().join(" | ")
-    ))
+    Err(crate::i18n::te("s.af72a27185", &errors.into_iter().take(3).collect::<Vec<_>>().join(" | ")))
 }
 
 fn normalize_part(

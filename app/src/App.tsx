@@ -96,20 +96,26 @@ export default function App() {
     )) as UpdateInfo;
     if (r.blocked_by_min_version) {
       setUpdateLine(
-        `当前版本 ${String(r.local)}，需先更新至 ${String(
-          r.min_app_version,
-        )} 才能继续`,
+        t("s.214fe7bcad", {
+          v0: String(r.local),
+          v1: String(r.min_app_version),
+        }),
       );
       return null;
     }
     if (!r.available) {
       // 「已是最新」必须带上版本号和时间。只说一句「已是最新」，用户分不清
       // 是真查过了还是根本没查动。
-      setUpdateLine(`已是最新版本 ${String(r.local)}（${clockNow()} 检查）`);
+      setUpdateLine(
+        t("s.7ccca92d5e", { v0: String(r.local), v1: clockNow() }),
+      );
       return null;
     }
     setUpdateLine(
-      `发现新版本 ${String(r.remote)}，当前 ${String(r.local)}`,
+      t("s.622a22349e", {
+        v0: String(r.remote),
+        v1: String(r.local),
+      }),
     );
     return r;
   };
@@ -118,21 +124,23 @@ export default function App() {
   const installUpdate = async (r: UpdateInfo) => {
     if (r.action === "external") {
       // Rust side changed → replace the exe through the signed updater.
-      setUpdateLine(`正在下载程序更新 ${String(r.remote)}…`);
+      setUpdateLine(t("s.b22f6e52ac", { v0: String(r.remote) }));
       const b = await invoke<Record<string, unknown>>("update_app");
       setUpdateLine(
         b.installed
-          ? `已更新至 ${String(b.version ?? r.remote)}，重启程序后生效`
+          ? t("s.995e0f4c81", {
+              v0: String(b.version ?? r.remote),
+            })
           : t("s.3d1fde4601"),
       );
       return;
     }
-    setUpdateLine(`正在下载界面更新 ${String(r.remote)}…`);
+    setUpdateLine(t("s.5b3dc1999a", { v0: String(r.remote) }));
     await invoke("update_apply", {
       url: String(r.url),
       sha256: String(r.sha256 || ""),
     });
-    setUpdateLine(`已更新至 ${String(r.remote)}，重启程序后生效`);
+    setUpdateLine(t("s.995e0f4c81", { v0: String(r.remote) }));
   };
 
   /** 设置页那个「立即检查」：查到了就直接装，这是用户主动点的。 */
@@ -144,7 +152,7 @@ export default function App() {
       const r = await probeUpdate();
       if (r) await installUpdate(r);
     } catch (e) {
-      setUpdateLine(`检查更新失败：${String(e)}`);
+      setUpdateLine(t("s.ac3a85a9c1", { v0: String(e) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -190,7 +198,7 @@ export default function App() {
     try {
       await installUpdate(r);
     } catch (e) {
-      setUpdateLine(`更新失败：${String(e)}`);
+      setUpdateLine(t("s.bac68ea7db", { v0: String(e) }));
     } finally {
       setUpdateBusy(false);
     }
@@ -804,10 +812,12 @@ export default function App() {
         >
           {updateWorking
             ? updateLine
-            : `当前版本 ${updateOffer.local}。${
-                updateOffer.notes ||
-                "更新会在后台下载，不影响变声使用；下载完成后重启软件即可生效。"
-              }`}
+            : t("s.3956a2d8bb", {
+                v0: updateOffer.local,
+                v1:
+                  updateOffer.notes ||
+                  t("s.58941d30b7"),
+              })}
         </Nudge>
       ) : askTelemetry ? (
         <Nudge

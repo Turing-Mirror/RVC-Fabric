@@ -263,7 +263,7 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
 pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
     let py = paths::runtime_python(root)
         .or_else(|| paths::runtime_pythonw(root))
-        .ok_or("Runtime 未就绪，无法跑性能测试")?;
+        .ok_or_else(|| crate::i18n::t("s.c8c05e7db7"))?;
     let script = root.join("tools").join("benchmark_realtime.py");
     if !script.is_file() {
         return Err(crate::i18n::t("s.c41c6ca117").into());
@@ -391,11 +391,11 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
         pth,
         json_out.display()
     );
-    let status = cmd.status().map_err(|e| format!("性能测试启动失败：{e}"))?;
+    let status = cmd.status().map_err(|e| crate::i18n::te("s.84256012c6", &(e)))?;
     if !status.success() {
-        return Err(format!(
-            "性能测试失败（退出码 {:?}），详见 User_Data/logs/perf_bench.log",
-            status.code()
+        return Err(crate::i18n::te(
+            "s.470a002848",
+            &status.code().map(|c| c.to_string()).unwrap_or_else(|| "?".into()),
         ));
     }
     if !json_out.is_file() {
@@ -419,13 +419,10 @@ fn tail_bytes(path: &Path, max: usize) -> String {
 pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, String), String> {
     let perf_note = if with_perf {
         match run_perf_bench(root) {
-            Ok(p) => format!(
-                "已跑性能测试：{}",
-                p.file_name().unwrap_or_default().to_string_lossy()
-            ),
+            Ok(p) => crate::i18n::te("s.37f36c5824", &p.file_name().unwrap_or_default().to_string_lossy()),
             Err(e) => {
                 crate::logging::shell_log!("perf bench failed: {e}");
-                format!("性能测试未完成：{e}")
+                crate::i18n::te("s.eea9655c7b", &(e))
             }
         }
     } else {

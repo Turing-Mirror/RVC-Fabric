@@ -401,10 +401,10 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
     let spec = extras_from(&data)
         .into_iter()
         .find(|s| s.key == key)
-        .ok_or_else(|| format!("清单里没有 {key} 这条资源"))?;
+        .ok_or_else(|| crate::i18n::te("s.ae3f0d2168", &(key)))?;
     let dir = safe_dest(root, &spec.dest)
-        .ok_or_else(|| format!("清单给的落地路径不安全：{}", spec.dest))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("建不了目录：{e}"))?;
+        .ok_or_else(|| crate::i18n::te("s.341bc35cbf", &(spec.dest)))?;
+    std::fs::create_dir_all(&dir).map_err(|e| crate::i18n::te("s.ec982d9c98", &(e)))?;
 
     let total: u64 = spec.total_bytes();
     let mut before: u64 = 0;
@@ -415,7 +415,7 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
             continue;
         }
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("建不了目录：{e}"))?;
+            std::fs::create_dir_all(parent).map_err(|e| crate::i18n::te("s.ec982d9c98", &(e)))?;
         }
         let app2 = app.clone();
         let key2 = key.to_string();
@@ -429,7 +429,7 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
                     "phase": "run",
                     "done": base + got,
                     "total": total.max(1),
-                    "message": format!("正在下载 {label}"),
+                    "message": crate::i18n::te("s.407187444b", &(label)),
                 }),
             );
         });
@@ -437,11 +437,11 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
         // 下次开界面会被 file_ok 当成已装好（大小刚好撞上就更糟）。
         let tmp = dir.join(format!("{}.part", f.name));
         download::download_file(&f.urls, &tmp, &f.sha256, cancel_flag(), Some(cb))
-            .map_err(|e| format!("{} 下载失败：{e}", f.name))?;
+            .map_err(|e| crate::i18n::t2("s.0df1f31a67", &f.name, &e))?;
         if dest.exists() {
             let _ = std::fs::remove_file(&dest);
         }
-        std::fs::rename(&tmp, &dest).map_err(|e| format!("{} 落地失败：{e}", f.name))?;
+        std::fs::rename(&tmp, &dest).map_err(|e| crate::i18n::t2("s.538ff61331", &f.name, &e))?;
         before += f.size_bytes;
     }
 

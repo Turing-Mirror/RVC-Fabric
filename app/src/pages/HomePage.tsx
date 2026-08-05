@@ -157,7 +157,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
             .filter(Boolean)
             .join(" · ")}
           {current.tag || current.author ? " · " : ""}
-          切换立即生效 · 运行中可无缝换音色
+          {t("s.856b4d0ba9")}
         </p>
         <HeroEmblem />
       </div>

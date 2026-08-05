@@ -67,7 +67,7 @@ export function MorePage({
     setGpuMsg("");
     void invoke("config_set", { patch: { main_gpu: v } })
       .then(() => setGpuMsg(t("s.9249d39bac")))
-      .catch((e) => setGpuMsg(`保存失败：${String(e)}`));
+      .catch((e) => setGpuMsg(t("s.e0125710be", { v0: String(e) })));
   };
 
   // Both of these are 20–40s cold starts (torch/CUDA). Say so on the row
@@ -88,7 +88,10 @@ export function MorePage({
         }, 4000);
       }
     } catch (e) {
-      setLegacyMsg((m) => ({ ...m, [which]: `启动失败：${String(e)}` }));
+      setLegacyMsg((m) => ({
+        ...m,
+        [which]: t("s.ea582ad463", { v0: String(e) }),
+      }));
     }
   };
 
@@ -97,9 +100,15 @@ export function MorePage({
     try {
       const r = await invoke<{ path?: string; perf_note?: string }>(cmd, args);
       const note = r?.perf_note ? ` · ${r.perf_note}` : "";
-      setBusyMsg(`${label}完成：${r?.path ?? ""}${note}`);
+      setBusyMsg(
+        t("s.05d0e1e672", {
+          v0: label,
+          v1: r?.path ?? "",
+          v2: note,
+        }),
+      );
     } catch (e) {
-      setBusyMsg(`${label}失败：${String(e)}`);
+      setBusyMsg(t("s.179ee96e83", { v0: label, v1: String(e) }));
     }
   };
 
@@ -123,9 +132,11 @@ export function MorePage({
         { withPerf },
       );
       const note = r?.perf_note ? ` · ${r.perf_note}` : "";
-      setBusyMsg(`生成诊断包完成：${r?.path ?? ""}${note}`);
+      setBusyMsg(
+        t("s.ae82b8cc23", { v0: r?.path ?? "", v1: note }),
+      );
     } catch (e) {
-      setBusyMsg(`生成诊断包失败：${String(e)}`);
+      setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
     }
   };
   useEffect(() => {

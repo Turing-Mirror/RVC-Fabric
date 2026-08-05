@@ -81,10 +81,10 @@ async fn assets_ensure_engine_core(
             let m = match phase {
                 "verify" => crate::i18n::t("s.34e863a12e"),
                 other if other.starts_with("connecting:") => {
-                    format!("连接中… · 准备下载引擎资源约 {}", fmt_size(total))
+                    crate::i18n::te("s.727e8c1993", &(fmt_size(total)))
                 }
                 _ if done == 0 => crate::i18n::t("s.6bde20da46"),
-                _ => format!("下载引擎资源 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
+                _ => crate::i18n::tn("s.1342ffb704", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
             };
             let _ = app.emit(
                 "provision-progress",
@@ -117,10 +117,10 @@ async fn assets_ensure_vbcable(
             let m = match phase {
                 "verify" => crate::i18n::t("s.3b227dfa30"),
                 other if other.starts_with("connecting:") => {
-                    format!("连接中… · 准备下载声卡安装包约 {}", fmt_size(total))
+                    crate::i18n::te("s.c86b0f4fc1", &(fmt_size(total)))
                 }
                 _ if done == 0 => crate::i18n::t("s.3a05d4d51e"),
-                _ => format!("下载声卡安装包 {} / {}（{:.1}%）", fmt_size(done), fmt_size(total), pct),
+                _ => crate::i18n::tn("s.350261fb86", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
             };
             let _ = app.emit(
                 "provision-progress",
@@ -488,7 +488,7 @@ async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
         let mut st = worker::status_for_ui(&root);
         if let Some(obj) = st.as_object_mut() {
             obj.insert("state".into(), json!("idle"));
-            obj.insert("error".into(), json!("Runtime 未就绪，请先补全运行时"));
+            obj.insert("error".into(), json!(crate::i18n::t("s.75b84a31d6")));
             obj.insert("worker_alive".into(), json!(false));
         }
         return Ok(st);
@@ -506,7 +506,7 @@ async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
 async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
-        return Ok(json!({"state": "error", "error": "Runtime 未就绪（缺少 torch）", "pid": 0}));
+        return Ok(json!({"state": "error", "error": crate::i18n::t("s.a36cb645c2"), "pid": 0}));
     }
     // Waits up to 90s for the worker to come up. A sync command runs inline on
     // the IPC thread, so that wait froze the whole window.
@@ -522,7 +522,7 @@ async fn engine_start_worker(state: State<'_, Mutex<AppState>>) -> Result<Value,
 async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     if !paths::runtime_ready(&root) {
-        return Ok(json!({"state": "error", "error": "Runtime 未就绪，无法开启变声", "pid": 0}));
+        return Ok(json!({"state": "error", "error": crate::i18n::t("s.45309ba4c5"), "pid": 0}));
     }
     // The cold start is 20–40s (torch/CUDA) and the wait allows up to 180s.
     // Run it off the IPC thread or the window is frozen for that whole time —
@@ -770,7 +770,7 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
         // 那一下现在由强杀自己做。它本来就该是「恢复到已知good状态」的按钮，
         // 而不是只负责杀进程。
         if let Err(e) = voices::resync_selected_model(&root) {
-            worker::append_log(&root, &format!("force_kill: 重写音色配置失败：{e}"));
+            worker::append_log(&root, &crate::i18n::te("s.298dd55e6d", &(e)));
         }
         Ok(worker::status_for_ui(&root))
     })
@@ -848,7 +848,7 @@ fn list_devices_blocking(root: std::path::PathBuf) -> Result<Value, String> {
     if !paths::runtime_ready(&root) {
         return Ok(json!({
             "state": "error",
-            "error": "Runtime 未就绪",
+            "error": crate::i18n::t("s.9f39847f54"),
             "input_devices": [],
             "output_devices": [],
             "hostapis": []

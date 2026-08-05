@@ -997,7 +997,7 @@ fn profile_path(model_dir: &Path, profile_id: &str) -> Result<PathBuf, String> {
         || profile_id.contains(':')
         || profile_id.contains("..");
     if bad {
-        return Err(format!("档案名不合法：{profile_id:?}"));
+        return Err(crate::i18n::te("s.e178207ec7", &(profile_id)));
     }
     Ok(profiles_dir(model_dir).join(format!("{profile_id}{PROFILE_EXT}")))
 }
@@ -1126,9 +1126,9 @@ pub fn list_profiles(root: &Path, model_dir: &str) -> Result<Value, String> {
                 .and_then(|v| v.get("formant"))
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
-            let mut desc = format!("音高 {pitch:+} · 共鸣 {formant:.2}");
+            let mut desc = crate::i18n::t2("s.8ece88dffe", &format!("{:+}", pitch), &format!("{:.2}", formant));
             if let Some(s) = score.as_f64() {
-                desc = format!("{desc} · 相似度 {s:.2}");
+                desc = crate::i18n::t2("s.c67426f74d", &desc, &format!("{:.2}", s));
             }
             items.push(json!({
                 "id": stem,
@@ -1330,7 +1330,7 @@ pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
         .pick_file()
         .ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?;
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut data: Value = serde_json::from_str(&raw).map_err(|e| format!("无效档案: {e}"))?;
+    let mut data: Value = serde_json::from_str(&raw).map_err(|e| crate::i18n::te("s.a5a2f91ea1", &(e)))?;
     if !data.is_object() {
         return Err(crate::i18n::t("s.dab1a19c29").into());
     }
@@ -1526,7 +1526,7 @@ fn import_pth(root: &Path, src: &Path) -> Result<Value, String> {
     fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
     let dest_pth = dest_dir.join(src.file_name().unwrap_or_default());
     if dest_pth.canonicalize().ok() != src.canonicalize().ok() {
-        fs::copy(src, &dest_pth).map_err(|e| format!("复制 .pth 失败: {e}"))?;
+        fs::copy(src, &dest_pth).map_err(|e| crate::i18n::te("s.1090b966ea", &(e)))?;
     }
     // sibling index
     let mut index_path = String::new();

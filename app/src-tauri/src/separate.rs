@@ -134,11 +134,11 @@ fn run_inner(
     model: &str,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
-        return Err("Runtime 未就绪，请先补全运行时".into());
+        return Err(crate::i18n::t("s.75b84a31d6").into());
     }
     let script = worker_script(root);
     if !script.is_file() {
-        return Err(format!("找不到分离脚本：{}", script.display()));
+        return Err(crate::i18n::te("s.271fa82d5c", &(script.display())));
     }
     if input.trim().is_empty() || output.trim().is_empty() {
         return Err(crate::i18n::t("s.494f3ed5a0").into());
@@ -147,7 +147,7 @@ fn run_inner(
     if !any_model_present(&mdir) {
         return Err(crate::i18n::t("s.e38da2e4e6"));
     }
-    std::fs::create_dir_all(output).map_err(|e| format!("建不了输出目录：{e}"))?;
+    std::fs::create_dir_all(output).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
 
     // 参数走临时文件而不是命令行：输入路径里有中文、空格、引号都很常见，
     // 拼进命令行就是一串转义地雷。
@@ -164,7 +164,7 @@ fn run_inner(
         "format": "wav",
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
-        .map_err(|e| format!("写请求文件失败：{e}"))?;
+        .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     // python.exe 而不是 pythonw：我们要读它的 stdout。窗口用 CREATE_NO_WINDOW
     // 压掉，不然每次分离都会闪一个黑框。
@@ -194,7 +194,7 @@ fn run_inner(
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let mut child = cmd.spawn().map_err(|e| format!("起不来分离进程：{e}"))?;
+    let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.c727da1f5b", &(e)))?;
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.1a66c860cd"))?;
     let mut files: Vec<String> = Vec::new();
     let mut fail: Option<String> = None;
@@ -241,15 +241,12 @@ fn run_inner(
         }
     }
 
-    let st = child.wait().map_err(|e| format!("等分离进程失败：{e}"))?;
+    let st = child.wait().map_err(|e| crate::i18n::te("s.a4abecd0fe", &(e)))?;
     if let Some(e) = fail {
         return Err(e);
     }
     if !st.success() {
-        return Err(format!(
-            "分离进程异常退出（{}）。详情见 User_Data/logs/separate.log",
-            st.code().unwrap_or(-1)
-        ));
+        return Err(crate::i18n::te("s.6b7047af91", &st.code().unwrap_or(-1)));
     }
     emit(app, "done", 1, 1, &crate::i18n::t("s.104ec2bbf7"));
     // 分离会在 TEMP 里落 reformatted.wav 等中间文件，用完就清。

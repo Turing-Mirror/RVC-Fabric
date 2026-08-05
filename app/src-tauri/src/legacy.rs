@@ -26,7 +26,7 @@ fn runtime_python(root: &Path, windowed: bool) -> Result<std::path::PathBuf, Str
     } else {
         paths::runtime_python(root).or_else(|| paths::runtime_pythonw(root))
     };
-    p.ok_or_else(|| "Runtime 未就绪，请先在首次运行向导里补全运行时".to_string())
+    p.ok_or_else(|| crate::i18n::t("s.4f09ae24cf"))
 }
 
 /// Spawn a Runtime-python process detached, with the shell's own Python-related
@@ -73,7 +73,7 @@ fn spawn_detached(
     #[cfg(not(windows))]
     let _ = show_window;
 
-    let child = cmd.spawn().map_err(|e| format!("启动失败：{e}"))?;
+    let child = cmd.spawn().map_err(|e| crate::i18n::te("s.f1f3d2302b", &(e)))?;
     let pid = child.id();
     logging::shell_log!("启动 {}（pid {pid}），日志 {}", exe.display(), log_path.display());
     // Detached on purpose: it outlives us, and we never wait on it.
@@ -85,7 +85,7 @@ fn spawn_detached(
 pub fn open_realtime_panel(root: &Path) -> Result<serde_json::Value, String> {
     let script = root.join("gui_v1.py");
     if !script.is_file() {
-        return Err(format!("找不到实时面板脚本：{}", script.display()));
+        return Err(crate::i18n::te("s.0c5475c6d8", &(script.display())));
     }
     // The panel reads configs/inuse/config.json, so the current voice and
     // parameters have to be on disk before it starts — same order as the Tk
@@ -113,7 +113,7 @@ pub fn open_realtime_panel(root: &Path) -> Result<serde_json::Value, String> {
 pub fn open_webui(root: &Path) -> Result<serde_json::Value, String> {
     let script = root.join("infer-web.py");
     if !script.is_file() {
-        return Err(format!("找不到 WebUI 脚本：{}", script.display()));
+        return Err(crate::i18n::te("s.fb5c249625", &(script.display())));
     }
     let pyw = runtime_python(root, true)?;
     let py = runtime_python(root, false)?;

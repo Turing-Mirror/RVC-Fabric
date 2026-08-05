@@ -739,8 +739,15 @@ fn profile_summary_from_cfg(cfg: &Map<String, Value>) -> String {
     if pitch == 0 && (formant - 0.0).abs() < 0.001 {
         label
     } else {
+        // Template s.6aaa2fc9a9: "{label} · 音高 {sign}{pitch} 共鸣 {formant:.2}"
+        // Pass preformatted keys so locale packs keep format specs.
         let sign = if pitch >= 0 { "+" } else { "" };
-        format!("{label} · 音高 {sign}{pitch} 共鸣 {formant:.2}")
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("label".into(), label);
+        vars.insert("sign".into(), sign.to_string());
+        vars.insert("pitch".into(), pitch.to_string());
+        vars.insert("formant:.2".into(), format!("{formant:.2}"));
+        crate::i18n::t_vars("s.6aaa2fc9a9", &vars)
     }
 }
 

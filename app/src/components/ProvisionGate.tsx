@@ -9,7 +9,7 @@ import {
   type ProvisionProgress,
 } from "../lib/engine";
 import { Btn, HelpMark } from "./ui";
-import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "./MainGpuPicker";
+import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "./MainGpuPicker";
 import { t } from "../i18n/t";
 
 type VariantRow = {
@@ -353,7 +353,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             摆在首次安装的流程里只会让人卡住。 */}
         {(info.nvidia_gpus?.length ?? 0) > 1 ? (
           <div className="mb-5">
-            <div className="text-[12.5px] text-[var(--meta)] mb-2 flex items-center gap-[9px]">{t("s.6b26feecc1")}<HelpMark title={MAIN_GPU_TIP} />
+            <div className="text-[12.5px] text-[var(--meta)] mb-2 flex items-center gap-[9px]">{t("s.6b26feecc1")}<HelpMark title={mainGpuTip()} />
             </div>
             <MainGpuPicker
               full

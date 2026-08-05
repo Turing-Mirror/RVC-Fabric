@@ -42,7 +42,7 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     {
         return (
             "nvidia50".into(),
-            format!("检测到 NVIDIA 50 系：{}，推荐 nvidia50 运行时", gpu_names[0]),
+            crate::i18n::t("s.8289d5d0bc").replacen("{}", &gpu_names[0], 1),
         );
     }
     if joined.contains("nvidia")
@@ -53,7 +53,7 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     {
         return (
             "nvidia".into(),
-            format!("检测到 NVIDIA：{}，推荐 nvidia（CUDA）运行时", gpu_names[0]),
+            crate::i18n::t("s.3967a4b124").replacen("{}", &gpu_names[0], 1),
         );
     }
     if joined.contains("amd")
@@ -65,15 +65,12 @@ pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     {
         return (
             "amd".into(),
-            format!(
-                "检测到 AMD/Intel：{}，推荐 amd（DirectML）运行时",
-                gpu_names[0]
-            ),
+            crate::i18n::t("s.c0b4d5c2f4").replacen("{}", &gpu_names[0], 1),
         );
     }
     (
         "unknown".into(),
-        format!("未能识别显卡类型：{}，请手动选择", gpu_names.join(", ")),
+        crate::i18n::t("s.e12d8322af").replacen("{}", &gpu_names.join(", "), 1),
     )
 }
 

@@ -38,13 +38,16 @@ type Progress = {
   message?: string;
 };
 
-const STAGE_NAMES: Record<string, string> = {
-  preprocess: t("s.1a37ffe775"),
-  f0: t("s.bda11a3c2d"),
-  feature: t("s.672c1db9d8"),
-  train: t("s.796e01d5af"),
-  index: t("s.79f9110607"),
-};
+function stageName(id: string): string {
+  const map: Record<string, string> = {
+    preprocess: t("s.1a37ffe775"),
+    f0: t("s.bda11a3c2d"),
+    feature: t("s.672c1db9d8"),
+    train: t("s.796e01d5af"),
+    index: t("s.79f9110607"),
+  };
+  return map[id] || id;
+}
 
 const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[76px] shrink-0 text-[13px]";
@@ -161,7 +164,7 @@ export function TrainPanel() {
   };
 
   const pct = prog?.total ? Math.round(((prog.done ?? 0) / prog.total) * 100) : 0;
-  const stageLabel = prog?.stage ? STAGE_NAMES[prog.stage] || prog.stage : "";
+  const stageLabel = prog?.stage ? stageName(prog.stage) : "";
   const stepLine =
     prog?.index && prog?.total_stages
       ? t("s.588a754143", { v0: prog.index, v1: prog.total_stages, v2: stageLabel })

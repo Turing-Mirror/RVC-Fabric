@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openTool } from "../components/ToolWindow";
 import { ExtrasDialog } from "../components/ExtrasDialog";
-import { MainGpuPicker, MAIN_GPU_AUTO, MAIN_GPU_TIP } from "../components/MainGpuPicker";
+import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
 import { ALL_LINKS } from "../lib/links";
 import { tip } from "../lib/glossary";
@@ -226,7 +226,7 @@ export function MorePage({
           {nvGpus.length > 1 ? (
             <ListItem
               title={t("s.6b26feecc1")}
-              titleTip={MAIN_GPU_TIP}
+              titleTip={mainGpuTip()}
               desc={
                 gpuMsg ||
                 t("s.63d89cdb5c")

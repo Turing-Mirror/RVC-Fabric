@@ -93,7 +93,7 @@ function PlazaPageImpl({
             >{t("s.5b254c438b")}</Btn>
           }
         />
-        <Block title={`第 ${cur + 1} / ${total} 页`}>
+        <Block title={t("s.pageOf", { cur: cur + 1, total })}>
           <Group>
             {slice.length ? (
               slice.map((e) => <Notes key={e.version} entry={e} />)

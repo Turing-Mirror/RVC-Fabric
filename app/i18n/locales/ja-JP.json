@@ -1153,6 +1153,77 @@
     "ff175008d6": "ピッチ抽出アルゴリズム（F0）：\n• RMVPE：最も品質が良く最速。通常は変更不要；\n• Harvest：より安定しているが遅い；\n• PM：最速だが音割れしやすい；\n• FCPE / Crepe：任意の高精度アルゴリズム。",
     "ffa02ab8a7": "システムに従うか、ライト / ダークに固定します。",
     "ffcf0a1eb0": "ファイルが存在しません",
-    "fffda47f1e": "現在はデフォルトパラメータのため、エクスポートできるプロファイルがありません。先に「現在をプロファイルとして保存」してください。"
+    "fffda47f1e": "現在はデフォルトパラメータのため、エクスポートできるプロファイルがありません。先に「現在をプロファイルとして保存」してください。",
+    "helpNoRoute": "お使いの {n} 台のデバイスに利用可能な転送経路が見つかりません。仮想オーディオをインストールしてください。下の「仮想サウンドカードをインストール」を押してください。",
+    "toolNeedEngine": "「{name}」を使う前に、基本エンジンリソース（hubert / rmvpe / ffmpeg）を補完してください。完了後に分離/学習モデルをダウンロードしてから本ツールを開けます。",
+    "pageOf": "{cur} / {total} ページ"
+  },
+  "extras": {
+    "engineTitle": "エンジンリソース",
+    "engineDesc": "hubert / rmvpe / ffmpeg。リアルタイム変換・音声変換・音色学習に必要です。初回補完では Runtime のみ。必要になったらここから取得します。",
+    "missingList": " 不足：{list}",
+    "countItems": "全 {n} 件",
+    "items": {
+      "pymss-vocal": {
+        "label": "ボーカル抽出",
+        "notes": "学習前の素材整理の第一候補：曲からボーカル乾音を抽出。RVC/UVR 公式 HP3/HP4 Vocal に対応。"
+      },
+      "pymss-denoise": {
+        "label": "ノイズ除去",
+        "notes": "環境ノイズやハムを除去。乾音が汚れているとき。UVR DeNoise 対応。"
+      },
+      "pymss-deecho": {
+        "label": "エコー除去",
+        "notes": "部屋のエコーやディレイの尾を除去。広い部屋で有用。UVR De-Echo。"
+      },
+      "pymss-dereverb": {
+        "label": "残響除去",
+        "notes": "残響を抑え、ボーカルをよりドライに。UVR DeReverb。"
+      },
+      "pymss-inst": {
+        "label": "伴奏抽出",
+        "notes": "伴奏トラックを抽出（ボーカル抽出の逆）。UVR HP1/HP2 伴奏対応。"
+      },
+      "pymss-karaoke": {
+        "label": "カラオケ（ボーカル除去）",
+        "notes": "主唱を消し伴奏を残す。UVR HP5/HP6 Karaoke。"
+      },
+      "pymss-bve": {
+        "label": "背景コーラス（上級）",
+        "notes": "背景コーラスを分離。通常の学習素材では不要。"
+      },
+      "pymss-harmonic": {
+        "label": "ハーモニック/ノイズ（上級）",
+        "notes": "ハーモニックとノイズを分離。上級用途。"
+      },
+      "pymss-hp2": {
+        "label": "HP2 高品質（上級）",
+        "notes": "より大きく重い HP2 系列。品質高・容量大（約 1.5GB）。日常は「ボーカル抽出」で十分。"
+      },
+      "pymss-mgm": {
+        "label": "MGM 融合（上級）",
+        "notes": "MGM v4 多帯域融合モデル。上級用途。"
+      },
+      "pymss-sp": {
+        "label": "SP スペクトル系列（上級）",
+        "notes": "UVR 10〜16_SP スペクトル系列。容量が大きく特殊用途のみ。"
+      },
+      "pymss-wind": {
+        "label": "管弦伴奏（上級）",
+        "notes": "管弦・吹奏系伴奏の分離。通常は不要。"
+      },
+      "pretrained-v2-32k": {
+        "label": "ベースモデル 32k",
+        "notes": "32k サンプルレート学習に必要。VRAM 節約、品質は 48k よりやや低い。"
+      },
+      "pretrained-v2-40k": {
+        "label": "ベースモデル 40k",
+        "notes": "40k 学習に必要。32k/40k/48k のいずれか一つで可。"
+      },
+      "pretrained-v2-48k": {
+        "label": "ベースモデル 48k",
+        "notes": "専用音色の学習に必要。使うサンプルレートだけ取得。48k は最高品質で VRAM 多め。G/D/f0G/f0D を含み RVC pretrained_v2 と同等。"
+      }
+    }
   }
 }

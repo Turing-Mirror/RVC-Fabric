@@ -1153,6 +1153,77 @@
     "ff175008d6": "Algorithme d'extraction de hauteur (F0) :\n• RMVPE : le meilleur et le plus rapide, on n'y touche pas ;\n• Harvest : plus stable, mais lent ;\n• PM : le plus rapide, mais peut casser la voix ;\n• FCPE / Crepe : options haute précision.",
     "ffa02ab8a7": "Suivre le système, ou fixer clair / sombre.",
     "ffcf0a1eb0": "Le fichier n'existe pas",
-    "fffda47f1e": "Ce sont les paramètres par défaut : rien à exporter. Utilisez d'abord « Enregistrer l'actuel comme profil »."
+    "fffda47f1e": "Ce sont les paramètres par défaut : rien à exporter. Utilisez d'abord « Enregistrer l'actuel comme profil ».",
+    "helpNoRoute": "Aucun canal de routage utilisable parmi vos {n} périphériques. Installez une carte son virtuelle via le bouton ci-dessous.",
+    "toolNeedEngine": "Avant d’utiliser « {name} », téléchargez les ressources moteur (hubert / rmvpe / ffmpeg). Ensuite vous pourrez télécharger les modèles et ouvrir cet outil.",
+    "pageOf": "Page {cur} / {total}"
+  },
+  "extras": {
+    "engineTitle": "Ressources moteur",
+    "engineDesc": "hubert / rmvpe / ffmpeg. Requis pour la VC temps réel, la conversion et l’entraînement. La 1re installation ne prend que le Runtime ; téléchargez ceci à l’usage.",
+    "missingList": " Manque : {list}",
+    "countItems": "{n} éléments",
+    "items": {
+      "pymss-vocal": {
+        "label": "Extraction vocale",
+        "notes": "Premier choix pour nettoyer le matériel d’entraînement : extraire la voix sèche. Équivaut à RVC/UVR HP3/HP4 Vocal."
+      },
+      "pymss-denoise": {
+        "label": "Débruitage",
+        "notes": "Supprime le bruit de fond et le ronflement. Si le dry est sale. UVR DeNoise."
+      },
+      "pymss-deecho": {
+        "label": "Anti-écho",
+        "notes": "Supprime l’écho de pièce et les queues. Utile en pièce vide. UVR De-Echo."
+      },
+      "pymss-dereverb": {
+        "label": "Déréverbération",
+        "notes": "Réduit la réverb pour une voix plus sèche. UVR DeReverb."
+      },
+      "pymss-inst": {
+        "label": "Extraction instrumentale",
+        "notes": "Extrait la piste instrumentale (inverse de la voix). UVR HP1/HP2."
+      },
+      "pymss-karaoke": {
+        "label": "Karaoké (retirer voix)",
+        "notes": "Retire la voix principale, garde l’accompagnement. UVR HP5/HP6 Karaoke."
+      },
+      "pymss-bve": {
+        "label": "Chœurs de fond (avancé)",
+        "notes": "Sépare les chœurs de fond. Rarement utile pour l’entraînement."
+      },
+      "pymss-harmonic": {
+        "label": "Harmonique/bruit (avancé)",
+        "notes": "Sépare harmoniques et bruit. Usage avancé."
+      },
+      "pymss-hp2": {
+        "label": "HP2 haute qualité (avancé)",
+        "notes": "Série HP2 plus lourde, meilleure qualité (~1,5 Go). Au quotidien, l’extraction vocale suffit."
+      },
+      "pymss-mgm": {
+        "label": "Fusion MGM (avancé)",
+        "notes": "Modèle de fusion multi-bandes MGM v4. Usage avancé."
+      },
+      "pymss-sp": {
+        "label": "Série spectre SP (avancé)",
+        "notes": "Série spectre UVR 10–16_SP. Volumineuse ; cas particuliers seulement."
+      },
+      "pymss-wind": {
+        "label": "Orchestre/vents (avancé)",
+        "notes": "Sépare l’accompagnement orchestral/vents. Rarement utile."
+      },
+      "pretrained-v2-32k": {
+        "label": "Modèle de base 32k",
+        "notes": "Requis pour entraîner en 32k. Moins de VRAM ; qualité un peu inférieure au 48k."
+      },
+      "pretrained-v2-40k": {
+        "label": "Modèle de base 40k",
+        "notes": "Requis pour 40k. Choisissez l’un de 32k/40k/48k."
+      },
+      "pretrained-v2-48k": {
+        "label": "Modèle de base 48k",
+        "notes": "Pour entraîner des voix perso. Ne prenez que le sample rate utile ; 48k = meilleure qualité, plus de VRAM. Inclut G/D/f0G/f0D comme RVC pretrained_v2."
+      }
+    }
   }
 }

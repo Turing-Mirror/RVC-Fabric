@@ -9,11 +9,13 @@ import { t } from "../i18n/t";
 /** 地址里带的 `#/tool/<kind>` —— 主窗口和工具窗口用的是同一份前端。 */
 export type ToolKind = "separate" | "train" | "tts";
 
-const TITLES: Record<ToolKind, string> = {
-  separate: t("s.8fd038283b"),
-  train: t("s.ba65bd5595"),
-  tts: t("s.6f311c47fe"),
-};
+function toolTitle(kind: ToolKind): string {
+  if (kind === "separate") return t("s.8fd038283b");
+  if (kind === "train") return t("s.ba65bd5595");
+  return t("s.6f311c47fe");
+}
+
+const TOOL_KINDS = new Set<string>(["separate", "train", "tts"]);
 
 /**
  * 这个 webview 是不是一扇工具窗口，是的话是哪一个。
@@ -25,7 +27,7 @@ const TITLES: Record<ToolKind, string> = {
 export function toolFromHash(hash: string): ToolKind | null {
   const m = /^#\/tool\/([a-z]+)$/.exec(hash);
   const k = m?.[1];
-  return k && k in TITLES ? (k as ToolKind) : null;
+  return k && TOOL_KINDS.has(k) ? (k as ToolKind) : null;
 }
 
 /** 从主窗口把某个工具窗口开起来（已经开着就拉到前面）。 */
@@ -36,7 +38,7 @@ export function openTool(kind: ToolKind): void {
       // 弹窗：先下基础依赖，再下分离/训练附加包。底栏「开启变声」不走这里。
       const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
       const ok = await ensureEngineCoreOrPrompt(
-        `使用「${TITLES[kind]}」前，需要先补全基础引擎资源（hubert / rmvpe / ffmpeg）。补全后可继续下载分离/训练模型，再打开本工具。`,
+        t("s.toolNeedEngine", { name: toolTitle(kind) }),
       );
       if (!ok) return;
     } catch {
@@ -57,7 +59,7 @@ export function openTool(kind: ToolKind): void {
 export function ToolWindow({ kind }: { kind: ToolKind }) {
   return (
     <div className="h-full flex flex-col text-[var(--ink)] overflow-hidden">
-      <ToolTitleBar title={TITLES[kind]} />
+      <ToolTitleBar title={toolTitle(kind)} />
       <div className="flex-1 overflow-y-auto">
         {kind === "separate" ? <SeparatePanel /> : null}
         {kind === "train" ? <TrainPanel /> : null}

@@ -1153,6 +1153,77 @@
     "ff175008d6": "Pitch extraction (F0):\n• RMVPE: best and fastest — keep it;\n• Harvest: steadier but slower;\n• PM: fastest but prone to cracking;\n• FCPE / Crepe: optional high-accuracy algorithms.",
     "ffa02ab8a7": "Follow the system, or pin light / dark.",
     "ffcf0a1eb0": "File doesn't exist",
-    "fffda47f1e": "These are the default settings — nothing to export yet. \"Save current as profile\" first."
+    "fffda47f1e": "These are the default settings — nothing to export yet. \"Save current as profile\" first.",
+    "helpNoRoute": "No usable routing channel among your {n} devices. Install a virtual cable — use Install virtual sound card below.",
+    "toolNeedEngine": "Before using \"{name}\", download engine resources (hubert / rmvpe / ffmpeg). Then you can download separation/training models and open this tool.",
+    "pageOf": "Page {cur} / {total}"
+  },
+  "extras": {
+    "engineTitle": "Engine resources",
+    "engineDesc": "hubert / rmvpe / ffmpeg. Required for real-time VC, speech conversion, and training. First setup only downloads Runtime; get this when you need it.",
+    "missingList": " Missing: {list}",
+    "countItems": "{n} items",
+    "items": {
+      "pymss-vocal": {
+        "label": "Vocal extraction",
+        "notes": "Best first pick for cleaning training material: extract dry vocals from songs. Maps to RVC/UVR HP3/HP4 Vocal."
+      },
+      "pymss-denoise": {
+        "label": "Denoise",
+        "notes": "Remove ambient hiss and hum. Download when dry takes are noisy. UVR DeNoise."
+      },
+      "pymss-deecho": {
+        "label": "De-echo",
+        "notes": "Remove room echo / delay tails. Useful in empty rooms. UVR De-Echo."
+      },
+      "pymss-dereverb": {
+        "label": "De-reverb",
+        "notes": "Reduce reverb for drier vocals. UVR DeReverb."
+      },
+      "pymss-inst": {
+        "label": "Instrumental extract",
+        "notes": "Extract instrumental track (opposite of vocal extraction). UVR HP1/HP2 instrumental."
+      },
+      "pymss-karaoke": {
+        "label": "Karaoke (remove vocal)",
+        "notes": "Remove lead vocal, keep accompaniment. UVR HP5/HP6 Karaoke."
+      },
+      "pymss-bve": {
+        "label": "Background vocals (advanced)",
+        "notes": "Separate background harmony tracks. Rarely needed for training material."
+      },
+      "pymss-harmonic": {
+        "label": "Harmonic/noise (advanced)",
+        "notes": "Separate harmonics and noise. Advanced use."
+      },
+      "pymss-hp2": {
+        "label": "HP2 high quality (advanced)",
+        "notes": "Heavier HP2 series, higher quality, larger (~1.5GB). Daily use: Vocal extraction is enough."
+      },
+      "pymss-mgm": {
+        "label": "MGM fusion (advanced)",
+        "notes": "MGM v4 multi-band fusion model. Advanced use."
+      },
+      "pymss-sp": {
+        "label": "SP spectrum series (advanced)",
+        "notes": "UVR 10–16_SP spectrum series. Large; only for special cases."
+      },
+      "pymss-wind": {
+        "label": "Orchestral/wind (advanced)",
+        "notes": "Separate orchestral/wind accompaniment. Rarely needed."
+      },
+      "pretrained-v2-32k": {
+        "label": "Base model 32k",
+        "notes": "Needed to train 32k voices. Less VRAM; slightly lower quality than 48k."
+      },
+      "pretrained-v2-40k": {
+        "label": "Base model 40k",
+        "notes": "Needed to train 40k voices. Pick one of 32k/40k/48k — no need for all."
+      },
+      "pretrained-v2-48k": {
+        "label": "Base model 48k",
+        "notes": "For training custom voices. Download only the sample rate you use; 48k is best quality, more VRAM. Includes G/D/f0G/f0D like RVC pretrained_v2."
+      }
+    }
   }
 }

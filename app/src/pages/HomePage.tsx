@@ -117,7 +117,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
       await load();
     } catch (e) {
       // Clicking a card and having nothing happen is the worst outcome.
-      setMsg(`音色切换失败：${String(e)}`);
+      setMsg(t("home.switchFail", { error: String(e) }));
     }
   };
 

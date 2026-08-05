@@ -1153,6 +1153,77 @@
     "ff175008d6": "音高提取算法（F0）：\n• RMVPE：效果最好也最快，一般不用改；\n• Harvest：更稳但较慢；\n• PM：最快但容易破音；\n• FCPE / Crepe：可选的高精度算法。",
     "ffa02ab8a7": "跟随系统，或固定浅色 / 深色。",
     "ffcf0a1eb0": "文件不存在",
-    "fffda47f1e": "当前是默认参数，没有可导出的档案。请先「另存当前为档案」。"
+    "fffda47f1e": "当前是默认参数，没有可导出的档案。请先「另存当前为档案」。",
+    "helpNoRoute": "在你的 {n} 个设备里没找到可用的转发通道，需要装虚拟声卡。点下面的「安装虚拟声卡」即可。",
+    "toolNeedEngine": "使用「{name}」前，需要先补全基础引擎资源（hubert / rmvpe / ffmpeg）。补全后可继续下载分离/训练模型，再打开本工具。",
+    "pageOf": "第 {cur} / {total} 页"
+  },
+  "extras": {
+    "engineTitle": "引擎资源",
+    "engineDesc": "hubert / rmvpe / ffmpeg。实时变声、语音转换、训练音色都需要。首次补全只下 Runtime，这项在用到时再下。",
+    "missingList": " 当前缺少：{list}",
+    "countItems": "共 {n} 项",
+    "items": {
+      "pymss-vocal": {
+        "label": "人声提取",
+        "notes": "训练前清理素材的首选：从歌曲里抽出人声干声。对应 RVC/UVR 官方 HP3/HP4 Vocal。"
+      },
+      "pymss-denoise": {
+        "label": "降噪",
+        "notes": "去掉环境底噪、电流声。干声素材偏脏时再下。对应 UVR DeNoise。"
+      },
+      "pymss-deecho": {
+        "label": "去回声",
+        "notes": "去掉房间回声/延迟尾巴。录音环境空旷时有用。对应 UVR De-Echo。"
+      },
+      "pymss-dereverb": {
+        "label": "去混响",
+        "notes": "压掉混响感，让人声更干。对应 UVR DeReverb。"
+      },
+      "pymss-inst": {
+        "label": "伴奏提取",
+        "notes": "抽出伴奏轨道（与人声提取相反用途）。对应 UVR HP1/HP2 伴奏。"
+      },
+      "pymss-karaoke": {
+        "label": "卡拉OK 消人声",
+        "notes": "尽量去掉主唱保留伴奏，做伴奏轨用。对应 UVR HP5/HP6 Karaoke。"
+      },
+      "pymss-bve": {
+        "label": "背景和声（进阶）",
+        "notes": "分离背景和声轨。一般训练素材用不到。"
+      },
+      "pymss-harmonic": {
+        "label": "和声/噪声（进阶）",
+        "notes": "谐波与噪声分离。进阶用途。"
+      },
+      "pymss-hp2": {
+        "label": "HP2 高质量（进阶）",
+        "notes": "更大更重的 HP2 系列，质量更高、体积也大（约 1.5GB）。日常用「人声提取」即可。"
+      },
+      "pymss-mgm": {
+        "label": "MGM 融合（进阶）",
+        "notes": "MGM v4 多频段融合模型。进阶用途。"
+      },
+      "pymss-sp": {
+        "label": "SP 频谱系列（进阶）",
+        "notes": "UVR 10~16_SP 频谱系列。体积不小，仅特殊场景需要。"
+      },
+      "pymss-wind": {
+        "label": "管弦伴奏（进阶）",
+        "notes": "管弦/吹管类伴奏分离。一般用不到。"
+      },
+      "pretrained-v2-32k": {
+        "label": "底模 32k",
+        "notes": "训练 32k 采样率音色时需要。显存更省，音质相对 48k 略低。"
+      },
+      "pretrained-v2-40k": {
+        "label": "底模 40k",
+        "notes": "训练 40k 采样率音色时需要。与 32k/48k 三选一即可，不必全下。"
+      },
+      "pretrained-v2-48k": {
+        "label": "底模 48k",
+        "notes": "训练专属音色时需要。只下你选的采样率那一套即可；48k 音质最好、显存占用更高。含 G/D/f0G/f0D，与 RVC 原版 pretrained_v2 一致。"
+      }
+    }
   }
 }

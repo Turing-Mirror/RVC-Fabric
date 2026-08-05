@@ -5,110 +5,112 @@ import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { t } from "../i18n/t";
 
 /**
- * Answers carried over verbatim from the Tk shell's `help_content.py` and its
- * 「实体声卡连接」 dialog. The rows already said 「展开」; they just had nothing
- * behind them.
+ * FAQ / route tables must call t() at use time — module-level t() freezes
+ * zh-CN because locale packs load after first import (DEFAULT_LOCALE).
  */
-const FAQ: { q: string; hint: string; a: string }[] = [
-  {
-    q: t("s.73996ce817"),
-    hint: t("s.8152d450a3"),
-    a: [
-      t("s.d8e4f74b8b"),
-      t("s.ac66eb660d"),
-      t("s.ab4550db36"),
-    ].join("\n"),
-  },
-  {
-    q: t("s.e410af7f1f"),
-    hint: t("s.ad0e3472be"),
-    a: [
-      t("s.d02e026f75"),
-      t("s.52c469558c"),
-    ].join("\n"),
-  },
-  {
-    q: t("s.ca98fe8db7"),
-    hint: t("s.68458a0d6c"),
-    a: [
-      t("s.d9cb071850"),
-      t("s.504a366966"),
-      t("s.4bbfde15f2"),
-      t("s.e6408f03f4"),
-      t("s.561d709070"),
-    ].join("\n"),
-  },
-  {
-    q: t("s.c96a64f150"),
-    hint: t("s.8d5976502c"),
-    a: [
-      t("s.b5fba7b794"),
-      t("s.49c4c2a8bb"),
-      t("s.e7181ea0d6"),
-      t("s.60d612146d"),
-      "",
-      t("s.c777a891cf"),
-      t("s.1a3fe8f826"),
-      t("s.efc83ad78c"),
-      "",
-      t("s.ea5083770c"),
-      t("s.983328d89b"),
-      t("s.3800ff2864"),
-    ].join("\n"),
-  },
-  {
-    q: t("s.0ec38407bc"),
-    hint: t("s.cd8301f295"),
-    a: t("s.83d8ae170a"),
-  },
-  {
-    q: t("s.29a29efed7"),
-    hint: t("s.7cdb0a7622"),
-    a: t("s.23cb78c4b5"),
-  },
-  {
-    q: t("s.8e6b1ba01b"),
-    hint: t("s.55e39bd8d0"),
-    a: t("s.d69e96920e"),
-  },
-];
+function buildFaq(): { q: string; hint: string; a: string }[] {
+  return [
+    {
+      q: t("s.73996ce817"),
+      hint: t("s.8152d450a3"),
+      a: [t("s.d8e4f74b8b"), t("s.ac66eb660d"), t("s.ab4550db36")].join("\n"),
+    },
+    {
+      q: t("s.e410af7f1f"),
+      hint: t("s.ad0e3472be"),
+      a: [t("s.d02e026f75"), t("s.52c469558c")].join("\n"),
+    },
+    {
+      q: t("s.ca98fe8db7"),
+      hint: t("s.68458a0d6c"),
+      a: [
+        t("s.d9cb071850"),
+        t("s.504a366966"),
+        t("s.4bbfde15f2"),
+        t("s.e6408f03f4"),
+        t("s.561d709070"),
+      ].join("\n"),
+    },
+    {
+      q: t("s.c96a64f150"),
+      hint: t("s.8d5976502c"),
+      a: [
+        t("s.b5fba7b794"),
+        t("s.49c4c2a8bb"),
+        t("s.e7181ea0d6"),
+        t("s.60d612146d"),
+        "",
+        t("s.c777a891cf"),
+        t("s.1a3fe8f826"),
+        t("s.efc83ad78c"),
+        "",
+        t("s.ea5083770c"),
+        t("s.983328d89b"),
+        t("s.3800ff2864"),
+      ].join("\n"),
+    },
+    {
+      q: t("s.0ec38407bc"),
+      hint: t("s.cd8301f295"),
+      a: t("s.83d8ae170a"),
+    },
+    {
+      q: t("s.29a29efed7"),
+      hint: t("s.7cdb0a7622"),
+      a: t("s.23cb78c4b5"),
+    },
+    {
+      q: t("s.8e6b1ba01b"),
+      hint: t("s.55e39bd8d0"),
+      a: t("s.d69e96920e"),
+    },
+  ];
+}
 
 /**
  * 设备列表里认得出来的「能把变声送进游戏」的通道。
- *
- * 不是只认 CABLE：装了 VoiceMeeter 的人已经有虚拟声卡了，让他再装一个
- * VB-Cable 只会多两个设备、多一层能接错的地方。带内录/立体声混音的实体声卡
- * 同样能走通（说明页「实体声卡怎么连」那条讲的就是这个）。
- *
- * `kind` 决定给出什么建议，所以分开写而不是合成一个正则。
+ * 匹配键保持中英双语字面量（设备名可能是中文系统），label 走 t()。
  */
-const ROUTES: { kind: "virtual" | "physical"; label: string; keys: string[] }[] = [
-  {
-    kind: "virtual",
-    label: "VB-Cable",
-    // 不能拿厂商名「vb-audio」当特征：VoiceMeeter 也是 VB-Audio 出的，
-    // 它的设备名叫「VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)」，
-    // 照厂商名匹配会把只装了 VoiceMeeter 的人判成「VB-Cable 已装好」，
-    // 然后让他照着 CABLE Input 去接一个根本不存在的设备。
-    // 认设备名本身：VB-Cable 装出来的就叫 CABLE Input / CABLE Output。
-    keys: ["cable input", "cable output", "vb-audio virtual cable"],
-  },
-  {
-    kind: "virtual",
-    label: "VoiceMeeter",
-    keys: ["voicemeeter", "voice meeter"],
-  },
-  {
-    kind: "virtual",
-    label: t("s.1d2f7d6189"),
-    keys: ["virtual audio", "virtual cable", t("s.7d7d710ba5"), "synchronous audio"],
-  },
-  {
-    kind: "physical",
-    label: t("s.402fd697c1"),
-    keys: [t("s.75df86cca5"), "stereo mix", "what u hear", "wave out mix", t("s.bd52e3bc24")],
-  },
-];
+function buildRoutes(): {
+  kind: "virtual" | "physical";
+  label: string;
+  keys: string[];
+}[] {
+  return [
+    {
+      kind: "virtual",
+      label: "VB-Cable",
+      keys: ["cable input", "cable output", "vb-audio virtual cable"],
+    },
+    {
+      kind: "virtual",
+      label: "VoiceMeeter",
+      keys: ["voicemeeter", "voice meeter"],
+    },
+    {
+      kind: "virtual",
+      label: t("s.1d2f7d6189"),
+      // Device-name match tokens: keep Chinese + English literals always.
+      keys: [
+        "virtual audio",
+        "virtual cable",
+        "虚拟音频",
+        "synchronous audio",
+      ],
+    },
+    {
+      kind: "physical",
+      label: t("s.402fd697c1"),
+      keys: [
+        "立体声混音",
+        "stereo mix",
+        "what u hear",
+        "wave out mix",
+        "波输出混合",
+      ],
+    },
+  ];
+}
 
 /** 设备名可能是字符串，也可能是 `{name}`，两边都得认。 */
 function deviceNames(list: unknown): string[] {
@@ -121,14 +123,14 @@ function deviceNames(list: unknown): string[] {
 function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: string }[] {
   const lower = names.map((n) => n.toLowerCase());
   const hits: { kind: "virtual" | "physical"; label: string }[] = [];
-  for (const r of ROUTES) {
+  for (const r of buildRoutes()) {
     // 「其他虚拟声卡」是兜底桶，已经认出具体是哪一款就别再报一遍：
     // VB-Cable 的设备名是「VB-Audio Virtual Cable」，两条都能命中，
     // 报成「VB-Cable、其他虚拟声卡」会让人以为自己装了两套。
     if (r.label === t("s.1d2f7d6189") && hits.some((h) => h.kind === "virtual")) {
       continue;
     }
-    if (r.keys.some((k) => lower.some((n) => n.includes(k)))) {
+    if (r.keys.some((k) => lower.some((n) => n.includes(k.toLowerCase())))) {
       hits.push({ kind: r.kind, label: r.label });
     }
   }
@@ -183,7 +185,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
       // Only say it launched once it actually did.
       setVbMsg(t("s.65c66af000"));
     } catch (e) {
-      setVbMsg(`失败：${String(e)}`);
+      setVbMsg(t("s.04c4e3b2b3", { e: String(e) }));
     } finally {
       setVbBusy(false);
     }
@@ -197,6 +199,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
   const found = detectRoutes(names);
   const hasVirtual = found.some((f) => f.kind === "virtual");
   const hasCable = found.some((f) => f.label === "VB-Cable");
+  const faq = buildFaq();
 
   return (
     <PagePad>
@@ -212,8 +215,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
             <span className="text-[var(--help)]">{t("s.60f0f911ec")}</span>
           ) : found.length === 0 ? (
             <span className="text-[var(--ink-muted)]">
-              在你的 {names.length} 个设备里没找到可用的转发通道，
-              需要装虚拟声卡。点下面的「安装虚拟声卡」即可。
+              {t("s.helpNoRoute", { n: names.length })}
             </span>
           ) : (
             <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{found.map((f) => f.label).join("、")}</b>。
@@ -280,9 +282,9 @@ function HelpPageImpl({ status }: HelpProps = {}) {
           />
         </Group>
       </Block>
-      <Block title={t("s.209d309d58")} note={String(FAQ.length)}>
+      <Block title={t("s.209d309d58")} note={String(faq.length)}>
         <Group>
-          {FAQ.map((f) => (
+          {faq.map((f) => (
             <ListItem
               key={f.q}
               title={f.q}

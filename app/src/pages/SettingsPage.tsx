@@ -55,15 +55,17 @@ const CARD =
 /** 五段 EQ 的中心频率，必须和 `tools/dsp_fx.EQ_LABELS` 一致（引擎按下标取值）。 */
 const EQ_BANDS = ["60Hz", "250Hz", "1kHz", "4kHz", "8kHz"] as const;
 
-/** 与 `tools/dsp_fx.EQ_PRESETS` / `EQ_PRESET_LABELS` 一一对应。 */
-const EQ_PRESETS: { id: string; label: string; gains: number[] }[] = [
-  { id: "flat", label: t("s.64ca1ffc2e"), gains: [0, 0, 0, 0, 0] },
-  { id: "vocal_front", label: t("s.0df76209a8"), gains: [-2, 1, 3, 2.5, 1] },
-  { id: "warm", label: t("s.80d341c40a"), gains: [2, 1.5, 0, -1, -2] },
-  { id: "bright", label: t("s.7b470c4e5f"), gains: [-1.5, 0, 1, 3, 2.5] },
-  { id: "de_nasal", label: t("s.89dd7d9dec"), gains: [0, -3.5, -1, 1.5, 0.5] },
-  { id: "thick", label: t("s.c8e3bafbb7"), gains: [3, 1.5, 0, -0.5, -1.5] },
-];
+/** 与 `tools/dsp_fx.EQ_PRESETS` / `EQ_PRESET_LABELS` 一一对应。标签必须在调用时 t()，不可模块级冻结。 */
+function eqPresets(): { id: string; label: string; gains: number[] }[] {
+  return [
+    { id: "flat", label: t("s.64ca1ffc2e"), gains: [0, 0, 0, 0, 0] },
+    { id: "vocal_front", label: t("s.0df76209a8"), gains: [-2, 1, 3, 2.5, 1] },
+    { id: "warm", label: t("s.80d341c40a"), gains: [2, 1.5, 0, -1, -2] },
+    { id: "bright", label: t("s.7b470c4e5f"), gains: [-1.5, 0, 1, 3, 2.5] },
+    { id: "de_nasal", label: t("s.89dd7d9dec"), gains: [0, -3.5, -1, 1.5, 0.5] },
+    { id: "thick", label: t("s.c8e3bafbb7"), gains: [3, 1.5, 0, -0.5, -1.5] },
+  ];
+}
 
 /** 存进配置的是长度 5 的数组；缺项补 0，别让下标越界变成 NaN 推给引擎。 */
 function readGains(v: unknown): number[] {
@@ -160,7 +162,7 @@ function SettingsPageImpl({
     }
   };
   const applyPreset = (id: string) => {
-    const p = EQ_PRESETS.find((x) => x.id === id);
+    const p = eqPresets().find((x) => x.id === id);
     if (!p) return;
     c.set("fx_eq_preset", id, true);
     c.set("fx_eq_gains", p.gains.slice(), true);
@@ -546,7 +548,7 @@ function SettingsPageImpl({
                       <Select
                         value={c.str("fx_eq_preset", "flat")}
                         options={[
-                          ...EQ_PRESETS.map((p) => ({
+                          ...eqPresets().map((p) => ({
                             id: p.id,
                             label: p.label,
                           })),
@@ -819,7 +821,7 @@ function SettingsPageImpl({
                 {HOTKEYS.map((h) => (
                   <HotkeyRow
                     key={h.key}
-                    label={HOTKEY_LABELS[h.action] ?? h.action}
+                    label={hotkeyLabels()[h.action] ?? h.action}
                     value={c.str(h.key, h.fallback)}
                     onChange={(v) => void saveHotkey(h.key, v)}
                     global={c.cfg[`${h.key}_global`] !== false}
@@ -870,18 +872,21 @@ function SettingsPageImpl({
 }
 
 /** 每个动作在设置页里怎么称呼。键名和默认组合来自 `lib/hotkeys`，
- *  那份表和 `shell_extras::HOTKEYS` 一一对应 —— 三处抄三遍迟早对不上。 */
-const HOTKEY_LABELS: Record<string, string> = {
-  "toggle-vc": t("s.de2b71244c"),
-  "toggle-mode": t("s.3848444f8c"),
-  "prev-voice": t("s.6053ffffee"),
-  "next-voice": t("s.5b6259b315"),
-  "pitch-up": t("s.9f97186ee0"),
-  "pitch-down": t("s.9c74c2a45e"),
-  "toggle-monitor": t("s.6eb438dd5b"),
-  "toggle-fx": t("s.bfdefad36e"),
-  "toggle-window": t("s.22067787e1"),
-};
+ *  那份表和 `shell_extras::HOTKEYS` 一一对应 —— 三处抄三遍迟早对不上。
+ *  必须调用时 t()，模块级会冻成默认中文。 */
+function hotkeyLabels(): Record<string, string> {
+  return {
+    "toggle-vc": t("s.de2b71244c"),
+    "toggle-mode": t("s.3848444f8c"),
+    "prev-voice": t("s.6053ffffee"),
+    "next-voice": t("s.5b6259b315"),
+    "pitch-up": t("s.9f97186ee0"),
+    "pitch-down": t("s.9c74c2a45e"),
+    "toggle-monitor": t("s.6eb438dd5b"),
+    "toggle-fx": t("s.bfdefad36e"),
+    "toggle-window": t("s.22067787e1"),
+  };
+}
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
 function prettyCombo(v: string): string {

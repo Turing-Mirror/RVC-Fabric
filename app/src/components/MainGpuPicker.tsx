@@ -4,13 +4,17 @@ import { t } from "../i18n/t";
 /** 「自动」在配置里存 -1，不是空字符串 —— 0 是一块真实存在的显卡。 */
 export const MAIN_GPU_AUTO = -1;
 
-export const MAIN_GPU_TIP =
-  t("s.c4c4673f74") +
-  t("s.c21f67d167") +
-  t("s.750e6a370f") +
-  t("s.7cb4f28eb2") +
-  t("s.12579f2917") +
-  t("s.310f4d242c");
+/** Call at use time — module-level t() freezes default locale. */
+export function mainGpuTip(): string {
+  return (
+    t("s.c4c4673f74") +
+    t("s.c21f67d167") +
+    t("s.750e6a370f") +
+    t("s.7cb4f28eb2") +
+    t("s.12579f2917") +
+    t("s.310f4d242c")
+  );
+}
 
 /**
  * 主显卡选择。

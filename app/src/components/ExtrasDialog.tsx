@@ -68,20 +68,25 @@ function inferGroup(key: string): string {
   return "other";
 }
 
-/** 分类已经写在分段控件上，行内标题去掉重复前缀。 */
-function shortLabel(it: Item, cat: Category): string {
+/** Prefer locale pack extras.items.<key>; fall back to catalog Chinese with prefix strip. */
+function extraLabel(it: Item, cat: Category): string {
+  const localized = t(`extras.items.${it.key}.label`);
+  if (localized && !localized.startsWith("extras.items.")) return localized;
   let l = it.label || it.key;
   if (cat === "separate") l = l.replace(/^人声分离\s*[·•]\s*/, "");
   if (cat === "train") l = l.replace(/^训练音色\s*[·•]\s*/, "");
   return l;
 }
 
-const CATEGORY_BLURB: Record<Category, string> = {
-  separate:
-    t("s.63fa37071e"),
-  train:
-    t("s.5b422f44dd"),
-};
+function extraNotes(it: Item): string {
+  const localized = t(`extras.items.${it.key}.notes`);
+  if (localized && !localized.startsWith("extras.items.")) return localized;
+  return (it.notes || "").trim();
+}
+
+function categoryBlurb(cat: Category): string {
+  return cat === "separate" ? t("s.63fa37071e") : t("s.5b422f44dd");
+}
 
 /**
  * 附加资源下载：引擎资源 + 分离模型 + 训练底模。
@@ -272,7 +277,7 @@ export function ExtrasDialog({
           />
         </div>
         <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)] leading-snug">
-          {CATEGORY_BLURB[category]}
+          {categoryBlurb(category)}
         </p>
 
         {reason ? (
@@ -293,7 +298,7 @@ export function ExtrasDialog({
           <div className="flex items-start gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <div className="text-[13.5px] font-semibold">
-                引擎资源
+                {t("extras.engineTitle")}
                 {engineReady === true ? (
                   <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
                 ) : engineReady === false ? (
@@ -303,10 +308,11 @@ export function ExtrasDialog({
                 )}
               </div>
               <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
-                hubert / rmvpe / ffmpeg。实时变声、语音转换、训练音色都需要。
-                首次补全只下 Runtime，这项在用到时再下。
+                {t("extras.engineDesc")}
                 {assets?.engine_core_missing?.length
-                  ? ` 当前缺少：${assets.engine_core_missing.join("、")}`
+                  ? t("extras.missingList", {
+                      list: assets.engine_core_missing.join("、"),
+                    })
                   : ""}
               </p>
               {coreBusy && coreProg ? (
@@ -383,7 +389,7 @@ export function ExtrasDialog({
               </div>
             ) : (
               <p className="m-0 pt-3 text-[12px] text-[var(--meta)] text-center tabular-nums">
-                共 {filtered.length} 项
+                {t("extras.countItems", { n: filtered.length })}
               </p>
             )}
           </div>
@@ -438,14 +444,14 @@ function ItemRow({
     <div className="flex items-center gap-4 border-b border-[var(--hairline)] py-3.5">
       <span className="min-w-0 flex-1">
         <span className="block text-[14px] leading-snug">
-          {shortLabel(it, category)}
+          {extraLabel(it, category)}
           {it.recommended ? (
             <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
           ) : null}
         </span>
-        {it.notes?.trim() ? (
+        {extraNotes(it) ? (
           <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
-            {it.notes}
+            {extraNotes(it)}
           </span>
         ) : null}
         <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">

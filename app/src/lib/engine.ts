@@ -193,7 +193,23 @@ export function statusSub(st: EngineStatus): string {
   }
   // Prefer shell-localized message (worker message_code resolved in Rust).
   // Fallback to raw message / error / idle labels.
-  if (st.message) return String(st.message).slice(0, 48);
+  // Skip duplicate "engine ready" as subtitle — title already says it.
+  if (st.message) {
+    const msg = String(st.message).slice(0, 48);
+    const ready = tStatic("dock.engineReady");
+    const readyMsg = tStatic("msg.engine.ready");
+    if (
+      st.state !== "running" &&
+      st.state !== "error" &&
+      (msg === ready ||
+        msg === readyMsg ||
+        msg === "引擎就绪" ||
+        msg === "Engine ready")
+    ) {
+      return tStatic("dock.engineIdle");
+    }
+    return msg;
+  }
   if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
   if (st.worker_alive) return tStatic("dock.engineIdle");
   return tStatic("dock.waitStart");

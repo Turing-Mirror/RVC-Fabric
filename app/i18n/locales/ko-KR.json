@@ -1153,6 +1153,77 @@
     "ff175008d6": "피치 추출 알고리즘(F0):\n• RMVPE: 가장 좋고 빠름. 보통 그대로 둠;\n• Harvest: 더 안정적이지만 느림;\n• PM: 가장 빠르지만 소리가 깨지기 쉬움;\n• FCPE / Crepe: 선택 가능한 고정밀 알고리즘.",
     "ffa02ab8a7": "시스템을 따르거나 밝은 / 어두운 테마로 고정합니다.",
     "ffcf0a1eb0": "파일이 없습니다",
-    "fffda47f1e": "현재 기본 매개변수라 내보낼 프로필이 없습니다. 먼저 '현재를 프로필로 저장'을 실행하세요."
+    "fffda47f1e": "현재 기본 매개변수라 내보낼 프로필이 없습니다. 먼저 '현재를 프로필로 저장'을 실행하세요.",
+    "helpNoRoute": "사용 중인 {n}개 장치에서 사용 가능한 라우팅 채널을 찾지 못했습니다. 가상 사운드 카드를 설치하세요. 아래 「가상 사운드 카드 설치」를 누르세요.",
+    "toolNeedEngine": "「{name}」을(를) 사용하기 전에 엔진 리소스(hubert / rmvpe / ffmpeg)를 먼저 받으세요. 이후 분리/학습 모델을 받고 이 도구를 열 수 있습니다.",
+    "pageOf": "{cur} / {total} 페이지"
+  },
+  "extras": {
+    "engineTitle": "엔진 리소스",
+    "engineDesc": "hubert / rmvpe / ffmpeg. 실시간 변환·음성 변환·학습에 필요합니다. 최초 보완은 Runtime만 받으며, 필요할 때 여기서 받습니다.",
+    "missingList": " 부족: {list}",
+    "countItems": "총 {n}개",
+    "items": {
+      "pymss-vocal": {
+        "label": "보컬 추출",
+        "notes": "학습 전 소재 정리 1순위: 곡에서 드라이 보컬 추출. RVC/UVR 공식 HP3/HP4 Vocal 대응."
+      },
+      "pymss-denoise": {
+        "label": "노이즈 제거",
+        "notes": "환경 노이즈·험 제거. 드라이 소스가 더러울 때. UVR DeNoise."
+      },
+      "pymss-deecho": {
+        "label": "에코 제거",
+        "notes": "룸 에코/딜레이 테일 제거. 넓은 공간에서 유용. UVR De-Echo."
+      },
+      "pymss-dereverb": {
+        "label": "잔향 제거",
+        "notes": "잔향을 줄여 보컬을 더 드라이하게. UVR DeReverb."
+      },
+      "pymss-inst": {
+        "label": "반주 추출",
+        "notes": "반주 트랙 추출(보컬 추출의 반대). UVR HP1/HP2 반주."
+      },
+      "pymss-karaoke": {
+        "label": "노래방(보컬 제거)",
+        "notes": "메인 보컬 제거, 반주 유지. UVR HP5/HP6 Karaoke."
+      },
+      "pymss-bve": {
+        "label": "배경 코러스(고급)",
+        "notes": "배경 코러스 분리. 일반 학습 소재에는 거의 불필요."
+      },
+      "pymss-harmonic": {
+        "label": "하모닉/노이즈(고급)",
+        "notes": "하모닉과 노이즈 분리. 고급 용도."
+      },
+      "pymss-hp2": {
+        "label": "HP2 고품질(고급)",
+        "notes": "더 크고 무거운 HP2 시리즈. 품질 높고 용량 큼(~1.5GB). 일상은 보컬 추출이면 충분."
+      },
+      "pymss-mgm": {
+        "label": "MGM 융합(고급)",
+        "notes": "MGM v4 다중 대역 융합 모델. 고급 용도."
+      },
+      "pymss-sp": {
+        "label": "SP 스펙트럼 시리즈(고급)",
+        "notes": "UVR 10~16_SP 스펙트럼 시리즈. 용량 큼, 특수 상황용."
+      },
+      "pymss-wind": {
+        "label": "관현/관악기(고급)",
+        "notes": "관현/관악기 반주 분리. 보통 불필요."
+      },
+      "pretrained-v2-32k": {
+        "label": "베이스 모델 32k",
+        "notes": "32k 샘플링 학습에 필요. VRAM 절약, 품질은 48k보다 약간 낮음."
+      },
+      "pretrained-v2-40k": {
+        "label": "베이스 모델 40k",
+        "notes": "40k 학습에 필요. 32k/40k/48k 중 하나만 받으면 됨."
+      },
+      "pretrained-v2-48k": {
+        "label": "베이스 모델 48k",
+        "notes": "전용 보이스 학습용. 쓰는 샘플링만 받으세요. 48k 품질 최고·VRAM 더 큼. G/D/f0G/f0D 포함, RVC pretrained_v2와 동일."
+      }
+    }
   }
 }

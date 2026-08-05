@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.4.0",
+    "version": "1.4.1",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "3d88afabe99b19d137a3f4ea7fb5fe37175fc5c836a011e3892dc2ce9621e7fd",
-      "size_bytes": 8498142,
+      "sha256": "4c0c8fb0058b7c21b3147c4ec14bb9555bf1c4817dddbbb62e6245fa9c1f237f",
+      "size_bytes": 8924098,
       "min_app_version": "1.3.0",
-      "notes": "1.4.0 聚焦补全链路与窗口体验。引擎核心资源不再和 Runtime 绑死同一次下载， 可按需补全；未补全时相关功能会明确报错而不是静默失败。首次补全再次准备 VB-Cable 安装包。最大化窗口可正常还原；底栏/设置滑条去掉多余初始值刻度 与标记，问号对齐修正。"
+      "notes": "1.4.1 为界面与商店补齐多语言：内置八种语言包，可在设置中切换； 社区/官方音色展示名支持中日英等对照；托盘菜单与部分引擎状态句随语言变化。"
     }
   },
   "community": {
@@ -149,11 +149,7 @@
       "date": "260721",
       "series": "RVC原版",
       "channel": "release",
-      "release_tag": "voices",
-      "name_en": "guanguanV1",
-      "series_en": "RVC Original",
-      "series_ja": "RVCオリジナル",
-      "series_zh_Hant": "RVC原版"
+      "release_tag": "voices"
     },
     {
       "id": "keruan",
@@ -175,11 +171,7 @@
       "date": "260721",
       "series": "RVC原版",
       "channel": "release",
-      "release_tag": "voices",
-      "name_en": "keruanV1",
-      "series_en": "RVC Original",
-      "series_ja": "RVCオリジナル",
-      "series_zh_Hant": "RVC原版"
+      "release_tag": "voices"
     },
     {
       "id": "kiki",
@@ -201,11 +193,7 @@
       "date": "260721",
       "series": "RVC原版",
       "channel": "release",
-      "release_tag": "voices",
-      "name_en": "kikiV1",
-      "series_en": "RVC Original",
-      "series_ja": "RVCオリジナル",
-      "series_zh_Hant": "RVC原版"
+      "release_tag": "voices"
     },
     {
       "id": "youzhanv2-xi",
@@ -227,11 +215,7 @@
       "date": "260721",
       "series": "RVC原版",
       "channel": "release",
-      "release_tag": "voices",
-      "name_en": "youzhanv2-xi",
-      "series_en": "RVC Original",
-      "series_ja": "RVCオリジナル",
-      "series_zh_Hant": "RVC原版"
+      "release_tag": "voices"
     },
     {
       "id": "Anon",
@@ -253,10 +237,7 @@
       "date": "260723",
       "series": "MyGO!!!!!",
       "channel": "release",
-      "release_tag": "voices",
-      "name_ja": "千早愛音",
-      "name_en": "Chihaya Anon",
-      "name_zh_Hant": "千早愛音"
+      "release_tag": "voices"
     },
     {
       "id": "Rana",
@@ -278,10 +259,7 @@
       "date": "260723",
       "series": "MyGO!!!!!",
       "channel": "release",
-      "release_tag": "voices",
-      "name_ja": "要楽奈",
-      "name_en": "Kaname Raana",
-      "name_zh_Hant": "要樂奈"
+      "release_tag": "voices"
     },
     {
       "id": "Soyo",
@@ -303,10 +281,7 @@
       "date": "260723",
       "series": "MyGO!!!!!",
       "channel": "release",
-      "release_tag": "voices",
-      "name_ja": "長崎そよ",
-      "name_en": "Nagasaki Soyo",
-      "name_zh_Hant": "長崎爽世"
+      "release_tag": "voices"
     },
     {
       "id": "Taki",
@@ -328,10 +303,7 @@
       "date": "260723",
       "series": "MyGO!!!!!",
       "channel": "release",
-      "release_tag": "voices",
-      "name_ja": "椎名立希",
-      "name_en": "Shiina Taki",
-      "name_zh_Hant": "椎名立希"
+      "release_tag": "voices"
     },
     {
       "id": "Tomori",
@@ -353,10 +325,7 @@
       "date": "260723",
       "series": "MyGO!!!!!",
       "channel": "release",
-      "release_tag": "voices",
-      "name_ja": "高松燈",
-      "name_en": "Takamatsu Tomori",
-      "name_zh_Hant": "高松燈"
+      "release_tag": "voices"
     }
   ],
   "thirdparty_voices": [
@@ -385,10 +354,7 @@
       "hf_downloads": 23,
       "hf_likes": 0,
       "snapshot_date": "260729",
-      "real_person": false,
-      "name_ja": "初音ミク",
-      "name_en": "Hatsune Miku",
-      "name_zh_Hant": "初音未來"
+      "real_person": false
     },
     {
       "id": "tp-trump",
@@ -412,10 +378,7 @@
       "hf_downloads": 18,
       "hf_likes": 0,
       "snapshot_date": "260729",
-      "real_person": true,
-      "name_ja": "ドナルド・トランプ",
-      "name_en": "Donald Trump",
-      "name_zh_Hant": "唐納·川普"
+      "real_person": true
     },
     {
       "id": "tp-furina",
@@ -438,13 +401,7 @@
       "cover": "ch-banner/tp-furina.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-furina.jpg",
       "series": "原神",
-      "real_person": false,
-      "name_ja": "フリーナ",
-      "name_en": "Furina",
-      "name_zh_Hant": "芙寧娜",
-      "series_en": "Genshin Impact",
-      "series_ja": "原神",
-      "series_zh_Hant": "原神"
+      "real_person": false
     },
     {
       "id": "tp-miku-power",
@@ -467,10 +424,7 @@
       "cover": "ch-banner/tp-miku-power.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku-power.jpg",
       "series": "VOCALOID",
-      "real_person": false,
-      "name_ja": "初音ミク（Power）",
-      "name_en": "Hatsune Miku (Power)",
-      "name_zh_Hant": "初音未來（Power）"
+      "real_person": false
     },
     {
       "id": "tp-nahida",
@@ -493,13 +447,7 @@
       "cover": "ch-banner/tp-nahida.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-nahida.jpg",
       "series": "原神",
-      "real_person": false,
-      "name_ja": "ナヒーダ",
-      "name_en": "Nahida",
-      "name_zh_Hant": "納西妲",
-      "series_en": "Genshin Impact",
-      "series_ja": "原神",
-      "series_zh_Hant": "原神"
+      "real_person": false
     },
     {
       "id": "tp-raiden",
@@ -522,13 +470,7 @@
       "cover": "ch-banner/tp-raiden.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-raiden.jpg",
       "series": "原神",
-      "real_person": false,
-      "name_ja": "雷電将軍",
-      "name_en": "Raiden Shogun",
-      "name_zh_Hant": "雷電將軍",
-      "series_en": "Genshin Impact",
-      "series_ja": "原神",
-      "series_zh_Hant": "原神"
+      "real_person": false
     },
     {
       "id": "tp-zhongli",
@@ -551,13 +493,7 @@
       "cover": "ch-banner/tp-zhongli.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-zhongli.jpg",
       "series": "原神",
-      "real_person": false,
-      "name_ja": "鍾離",
-      "name_en": "Zhongli",
-      "name_zh_Hant": "鍾離",
-      "series_en": "Genshin Impact",
-      "series_ja": "原神",
-      "series_zh_Hant": "原神"
+      "real_person": false
     }
   ],
   "extras": {

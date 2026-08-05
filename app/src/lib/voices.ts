@@ -51,6 +51,12 @@ export type ProfileItem = {
 export type StoreVoice = {
   id: string;
   name: string;
+  /** Japanese display name when different from name */
+  name_ja?: string;
+  /** English / romanization */
+  name_en?: string;
+  /** Traditional Chinese */
+  name_zh_Hant?: string;
   tag?: string;
   version?: string;
   pack_url?: string;
@@ -67,6 +73,9 @@ export type StoreVoice = {
   author_url?: string;
   date?: string;
   series?: string;
+  series_ja?: string;
+  series_en?: string;
+  series_zh_Hant?: string;
   origin?: string;
   origin_label?: string;
   source_url?: string;

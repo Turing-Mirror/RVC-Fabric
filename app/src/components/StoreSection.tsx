@@ -15,7 +15,12 @@ import {
 } from "../lib/voices";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
-import { t } from "../i18n/t";
+import { t, getTLocale } from "../i18n/t";
+import {
+  displayVoiceName,
+  displayVoiceSeries,
+  voiceSearchText,
+} from "../lib/voiceDisplay";
 
 /**
  * 社区音色。原来是模型页上弹出来的一个对话框，现在是广场的第一块。
@@ -165,9 +170,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const qq = q.trim().toLowerCase();
     if (qq) {
       base = base.filter((v) =>
-        [v.name, v.tag, v.author, v.series, v.id]
-          .map((x) => String(x || "").toLowerCase())
-          .some((s) => s.includes(qq)),
+        voiceSearchText(v).toLowerCase().includes(qq),
       );
     }
     return base;
@@ -179,8 +182,12 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     // 「其他」是死代码，而那些音色在系列视图里是直接消失 —— 消失比归错类
     // 难查得多。
     const map = new Map<string, StoreVoice[]>();
+    const loc = getTLocale();
     for (const v of list) {
-      const s = (v.series || "").trim() || t("s.1a26edf94a");
+      const s =
+        displayVoiceSeries(v, loc).trim() ||
+        (v.series || "").trim() ||
+        t("s.1a26edf94a");
       if (!map.has(s)) map.set(s, []);
       map.get(s)!.push(v);
     }
@@ -207,15 +214,17 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const startOne = async (v: StoreVoice) => {
     setRunning((r) => [...r, v.id]);
     setErr("");
+    const label = displayVoiceName(v);
     try {
-      await installStoreVoice(v);
+      // 装进本地库的显示名跟当前界面语言一致（仍保留清单里的多语字段作缓存）
+      await installStoreVoice({ ...v, name: label });
       // 第三方到这里只是「下完了」，还没装。刷新暂存表让按钮换成
       // 「查看 / 安装」；官方源才是真的装好了。
       await loadStaged();
       onInstalled?.();
       await refresh(false);
     } catch (e) {
-      setErr(`${v.name || v.id}：${String(e)}`);
+      setErr(`${label || v.id}：${String(e)}`);
     } finally {
       setRunning((r) => r.filter((x) => x !== v.id));
       // Promote the next queued item, if any.
@@ -233,13 +242,14 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const installStaged = async (v: StoreVoice) => {
     setRunning((r) => [...r, v.id]);
     setErr("");
+    const label = displayVoiceName(v);
     try {
-      await installStagedVoice(v);
+      await installStagedVoice({ ...v, name: label });
       await loadStaged();
       onInstalled?.();
       await refresh(false);
     } catch (e) {
-      setErr(`${v.name || v.id}：${String(e)}`);
+      setErr(`${label || v.id}：${String(e)}`);
     } finally {
       setRunning((r) => r.filter((x) => x !== v.id));
     }
@@ -512,6 +522,9 @@ function VoiceCard({
   onDiscard: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const loc = getTLocale();
+  const title = displayVoiceName(v, loc);
+  const seriesLabel = displayVoiceSeries(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
   // Older caches may only have a relative cover path — skip those (no convert).
   const coverHttp = (() => {
@@ -519,7 +532,11 @@ function VoiceCard({
     return /^https?:\/\//i.test(raw) ? raw : "";
   })();
   const showImg = Boolean(coverHttp) && !imgFailed;
-  const meta = [v.tag, v.author ? t("s.7feea73fa3", { v0: v.author }) : "", v.size_label]
+  const meta = [
+    seriesLabel || v.tag,
+    v.author ? t("s.7feea73fa3", { v0: v.author }) : "",
+    v.size_label,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -537,7 +554,7 @@ function VoiceCard({
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <span>{(v.name || v.id || "?").slice(0, 4)}</span>
+          <span>{(title || v.id || "?").slice(0, 4)}</span>
         )}
         {v.installed ? (
           <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.eb88ff57c9")}</span>
@@ -546,8 +563,8 @@ function VoiceCard({
           {v.origin_label || (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"))}
         </span>
       </div>
-      <div className="mt-2 text-[13.5px] leading-snug truncate" title={v.name}>
-        {v.name}
+      <div className="mt-2 text-[13.5px] leading-snug truncate" title={title}>
+        {title}
       </div>
       {meta ? (
         <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>

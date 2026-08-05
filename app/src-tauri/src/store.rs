@@ -118,9 +118,53 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         .or_else(|| d.get("size"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
+    // Multilingual labels (optional). Frontend picks by ui_locale; English UI
+    // shows "name_ja name_en" when both exist.
+    let name_ja = d
+        .get("name_ja")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let name_en = d
+        .get("name_en")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let name_zh_hant = d
+        .get("name_zh_Hant")
+        .or_else(|| d.get("name_zh_hant"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let series = d
+        .get("series")
+        .or_else(|| d.get("series_name"))
+        .or_else(|| d.get("collection"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let series_ja = d
+        .get("series_ja")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let series_en = d
+        .get("series_en")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let series_zh_hant = d
+        .get("series_zh_Hant")
+        .or_else(|| d.get("series_zh_hant"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     Some(json!({
         "id": id,
         "name": d.get("name").and_then(|v| v.as_str()).unwrap_or(&id),
+        "name_ja": name_ja,
+        "name_en": name_en,
+        "name_zh_Hant": name_zh_hant,
         "tag": d.get("tag").and_then(|v| v.as_str()).unwrap_or(&crate::i18n::t("s.c4301894a2")),
         "version": d.get("version").and_then(|v| v.as_str()).unwrap_or("1"),
         "package_type": d.get("package_type").or_else(|| d.get("type")).and_then(|v| v.as_str()).unwrap_or(""),
@@ -135,7 +179,10 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "author": author,
         "author_url": d.get("author_url").or_else(|| d.get("author_link")).and_then(|v| v.as_str()).unwrap_or(""),
         "date": d.get("date").or_else(|| d.get("released")).and_then(|v| v.as_str()).unwrap_or(""),
-        "series": d.get("series").or_else(|| d.get("series_name")).or_else(|| d.get("collection")).and_then(|v| v.as_str()).unwrap_or(""),
+        "series": series,
+        "series_ja": series_ja,
+        "series_en": series_en,
+        "series_zh_Hant": series_zh_hant,
         "origin": d.get("origin").and_then(|v| v.as_str()).unwrap_or(""),
         "source_url": d.get("source_url").or_else(|| d.get("repo_url")).and_then(|v| v.as_str()).unwrap_or(""),
         "official": official,

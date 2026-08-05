@@ -691,6 +691,12 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "url",
         "sha256_urls",
         "name_display",
+        "name_ja",
+        "name_en",
+        "name_zh_Hant",
+        "series_ja",
+        "series_en",
+        "series_zh_Hant",
         "notes",
     }
     item: dict[str, Any] = {

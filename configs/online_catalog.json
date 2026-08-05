@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.4.1",
+    "version": "1.4.2",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "4c0c8fb0058b7c21b3147c4ec14bb9555bf1c4817dddbbb62e6245fa9c1f237f",
-      "size_bytes": 8924098,
+      "sha256": "ff9d2f1c89ff9ebc4d32b16025d5c7b314fa892b1f4feef51c0bdbd3a39a00e6",
+      "size_bytes": 8975161,
       "min_app_version": "1.3.0",
-      "notes": "1.4.1 为界面与商店补齐多语言：内置八种语言包，可在设置中切换； 社区/官方音色展示名支持中日英等对照；托盘菜单与部分引擎状态句随语言变化。"
+      "notes": "1.4.2 打通远端清单多语言：changelog / plaza / 音色 tag 与 description 可通过 *_i18n 字段按 ui_locale 展示，缺省回退中文。壳层用户可见硬编码已全部接线，并合并续作翻译。"
     }
   },
   "community": {
@@ -144,13 +144,50 @@
       "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "size_bytes": 51006395,
       "description": "guanguanV1 · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "guanguanV1 · Source from official download",
+        "ja-JP": "guanguanV1 · 公式ダウンロードから",
+        "ko-KR": "guanguanV1 · 공식 다운로드 제공",
+        "zh-TW": "guanguanV1 · 來源於官方下載",
+        "es-ES": "guanguanV1 · Descargado desde fuentes oficiales",
+        "fr-FR": "guanguanV1 · Téléchargé depuis la source officielle",
+        "ru-RU": "guanguanV1 · Загружено из официальных источников"
+      },
       "name_i18n": {
-        "en-US": "guanguanV1"
+        "en-US": "guanguanV1",
+        "ja-JP": "guanguanV1",
+        "ko-KR": "guanguanV1",
+        "zh-TW": "guanguanV1",
+        "es-ES": "guanguanV1",
+        "fr-FR": "guanguanV1",
+        "ru-RU": "guanguanV1"
       },
       "series_i18n": {
         "en-US": "RVC Original",
         "ja-JP": "RVCオリジナル",
-        "zh-TW": "RVC原版"
+        "ko-KR": "RVC 원본",
+        "zh-TW": "RVC原版",
+        "es-ES": "RVC Original",
+        "fr-FR": "RVC original",
+        "ru-RU": "RVC Оригинал"
+      },
+      "author_i18n": {
+        "en-US": "RVC",
+        "ja-JP": "RVC",
+        "ko-KR": "RVC",
+        "zh-TW": "RVC",
+        "es-ES": "RVC",
+        "fr-FR": "RVC",
+        "ru-RU": "RVC"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -174,13 +211,50 @@
       "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "size_bytes": 51012498,
       "description": "keruanV1 · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "keruanV1 · Source from official download",
+        "ja-JP": "keruanV1 · 公式ダウンロードから",
+        "ko-KR": "keruanV1 · 공식 다운로드 제공",
+        "zh-TW": "keruanV1 · 來源於官方下載",
+        "es-ES": "keruanV1 · Descargado desde fuentes oficiales",
+        "fr-FR": "keruanV1 · Téléchargé depuis la source officielle",
+        "ru-RU": "keruanV1 · Загружено из официальных источников"
+      },
       "name_i18n": {
-        "en-US": "keruanV1"
+        "en-US": "keruanV1",
+        "ja-JP": "keruanV1",
+        "ko-KR": "keruanV1",
+        "zh-TW": "keruanV1",
+        "es-ES": "keruanV1",
+        "fr-FR": "keruanV1",
+        "ru-RU": "keruanV1"
       },
       "series_i18n": {
         "en-US": "RVC Original",
         "ja-JP": "RVCオリジナル",
-        "zh-TW": "RVC原版"
+        "ko-KR": "RVC 원본",
+        "zh-TW": "RVC原版",
+        "es-ES": "RVC Original",
+        "fr-FR": "RVC original",
+        "ru-RU": "RVC Оригинал"
+      },
+      "author_i18n": {
+        "en-US": "RVC",
+        "ja-JP": "RVC",
+        "ko-KR": "RVC",
+        "zh-TW": "RVC",
+        "es-ES": "RVC",
+        "fr-FR": "RVC",
+        "ru-RU": "RVC"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -204,13 +278,50 @@
       "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "size_bytes": 51021019,
       "description": "kikiV1 · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "kikiV1 · Source from official download",
+        "ja-JP": "kikiV1 · 公式ダウンロードから",
+        "ko-KR": "kikiV1 · 공식 다운로드 제공",
+        "zh-TW": "kikiV1 · 來源於官方下載",
+        "es-ES": "kikiV1 · Descargado desde fuentes oficiales",
+        "fr-FR": "kikiV1 · Téléchargé depuis la source officielle",
+        "ru-RU": "kikiV1 · Загружено из official sources"
+      },
       "name_i18n": {
-        "en-US": "kikiV1"
+        "en-US": "kikiV1",
+        "ja-JP": "kikiV1",
+        "ko-KR": "kikiV1",
+        "zh-TW": "kikiV1",
+        "es-ES": "kikiV1",
+        "fr-FR": "kikiV1",
+        "ru-RU": "kikiV1"
       },
       "series_i18n": {
         "en-US": "RVC Original",
         "ja-JP": "RVCオリジナル",
-        "zh-TW": "RVC原版"
+        "ko-KR": "RVC 원본",
+        "zh-TW": "RVC原版",
+        "es-ES": "RVC Original",
+        "fr-FR": "RVC original",
+        "ru-RU": "RVC Оригинал"
+      },
+      "author_i18n": {
+        "en-US": "RVC",
+        "ja-JP": "RVC",
+        "ko-KR": "RVC",
+        "zh-TW": "RVC",
+        "es-ES": "RVC",
+        "fr-FR": "RVC",
+        "ru-RU": "RVC"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -234,13 +345,50 @@
       "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "size_bytes": 53357394,
       "description": "youzhanv2-xi · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Voice",
+        "ja-JP": "音声",
+        "ko-KR": "음색",
+        "zh-TW": "音色",
+        "es-ES": "Voz",
+        "fr-FR": "Voix",
+        "ru-RU": "Голос"
+      },
+      "description_i18n": {
+        "en-US": "youzhanv2-xi · Source from official download",
+        "ja-JP": "youzhanv2-xi · 公式ダウンロードから",
+        "ko-KR": "youzhanv2-xi · 공식 다운로드 제공",
+        "zh-TW": "youzhanv2-xi · 來源於官方下載",
+        "es-ES": "youzhanv2-xi · Descargado desde fuentes oficiales",
+        "fr-FR": "youzhanv2-xi · Téléchargé depuis la source officielle",
+        "ru-RU": "youzhanv2-xi · Загружено из официальных источников"
+      },
       "name_i18n": {
-        "en-US": "youzhanv2-xi"
+        "en-US": "youzhanv2-xi",
+        "ja-JP": "youzhanv2-xi",
+        "ko-KR": "youzhanv2-xi",
+        "zh-TW": "youzhanv2-xi",
+        "es-ES": "youzhanv2-xi",
+        "fr-FR": "youzhanv2-xi",
+        "ru-RU": "youzhanv2-xi"
       },
       "series_i18n": {
         "en-US": "RVC Original",
         "ja-JP": "RVCオリジナル",
-        "zh-TW": "RVC原版"
+        "ko-KR": "RVC 원본",
+        "zh-TW": "RVC原版",
+        "es-ES": "RVC Original",
+        "fr-FR": "RVC original",
+        "ru-RU": "RVC Оригинал"
+      },
+      "author_i18n": {
+        "en-US": "RVC",
+        "ja-JP": "RVC",
+        "ko-KR": "RVC",
+        "zh-TW": "RVC",
+        "es-ES": "RVC",
+        "fr-FR": "RVC",
+        "ru-RU": "RVC"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -264,10 +412,50 @@
       "sha256": "35916208f204b4c48f5e3e27df11976d2b9175bec93afe90ae5ce2b4ec649458",
       "size_bytes": 82531532,
       "description": "Anon · MyGO!!!!! · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Anon · MyGO!!!!! · Source from official download",
+        "ja-JP": "Anon · MyGO!!!!! · 公式ダウンロードから",
+        "ko-KR": "Anon · MyGO!!!!! · 공식 다운로드 제공",
+        "zh-TW": "Anon · MyGO!!!!! · 來源於官方下載",
+        "es-ES": "Anon · MyGO!!!!! · Descargado desde fuentes oficiales",
+        "fr-FR": "Anon · MyGO!!!!! · Téléchargé depuis la source officielle",
+        "ru-RU": "Anon · MyGO!!!!! · Загружено из официальных источников"
+      },
       "name_i18n": {
         "en-US": "Chihaya Anon",
         "ja-JP": "千早愛音",
-        "zh-TW": "千早愛音"
+        "ko-KR": "치하야 아논",
+        "zh-TW": "千早愛音",
+        "es-ES": "Chihaya Anon",
+        "fr-FR": "Chihaya Anon",
+        "ru-RU": "千早爱音"
+      },
+      "series_i18n": {
+        "en-US": "MyGO!!!!!",
+        "ja-JP": "MyGO!!!!!",
+        "ko-KR": "MyGO!!!!!",
+        "zh-TW": "MyGO!!!!!",
+        "es-ES": "MyGO!!!!!",
+        "fr-FR": "MyGO!!!!!",
+        "ru-RU": "MyGO!!!!!"
+      },
+      "author_i18n": {
+        "en-US": "Mochizuki Seiyi",
+        "ja-JP": "望月星逸",
+        "ko-KR": "望月星逸",
+        "zh-TW": "望月星逸",
+        "es-ES": "望月星逸",
+        "fr-FR": "Mochizuki Hoshiitsu",
+        "ru-RU": "望月星逸"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -291,10 +479,50 @@
       "sha256": "6891050421a66bb526b5fceae6dec2521191b37cfb4b0d358a80a315c52b88c1",
       "size_bytes": 129503551,
       "description": "Rana · MyGO!!!!! · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Rana · MyGO!!!!! · Source from official download",
+        "ja-JP": "Rana · MyGO!!!!! · 公式ダウンロードから",
+        "ko-KR": "Rana · MyGO!!!!! · 공식 다운로드 제공",
+        "zh-TW": "Rana · MyGO!!!!! · 來源於官方下載",
+        "es-ES": "Rana · MyGO!!!!! · Descargado desde fuentes oficiales",
+        "fr-FR": "Rana · MyGO!!!!! · Téléchargé depuis la source officielle",
+        "ru-RU": "Rana · MyGO!!!!! · Загружено из официальных источников"
+      },
       "name_i18n": {
-        "en-US": "Kaname Raana",
+        "en-US": "Kaname Rana",
         "ja-JP": "要楽奈",
-        "zh-TW": "要樂奈"
+        "ko-KR": "카나메 라나",
+        "zh-TW": "要樂奈",
+        "es-ES": "Kaname Rana",
+        "fr-FR": "Kaname Rana",
+        "ru-RU": "要乐奈"
+      },
+      "series_i18n": {
+        "en-US": "MyGO!!!!!",
+        "ja-JP": "MyGO!!!!!",
+        "ko-KR": "MyGO!!!!!",
+        "zh-TW": "MyGO!!!!!",
+        "es-ES": "MyGO!!!!!",
+        "fr-FR": "MyGO!!!!!",
+        "ru-RU": "MyGO!!!!!"
+      },
+      "author_i18n": {
+        "en-US": "Mochizuki Seiyi",
+        "ja-JP": "望月星逸",
+        "ko-KR": "望月星逸",
+        "zh-TW": "望月星逸",
+        "es-ES": "望月星逸",
+        "fr-FR": "Mochizuki Hoshiitsu",
+        "ru-RU": "望月星逸"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -318,10 +546,50 @@
       "sha256": "8c8e78f7ee4255bffa9b8b00e651fb42bc143cf2460e5b12a787f723eae9e2fd",
       "size_bytes": 207948470,
       "description": "Soyo · MyGO!!!!! · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Soyo · MyGO!!!!! · Source from official download",
+        "ja-JP": "Soyo · MyGO!!!!! · 公式ダウンロードから",
+        "ko-KR": "Soyo · MyGO!!!!! · 공식 다운로드 제공",
+        "zh-TW": "Soyo · MyGO!!!!! · 來源於官方下載",
+        "es-ES": "Soyo · MyGO!!!!! · Descargado desde fuentes oficiales",
+        "fr-FR": "Soyo · MyGO!!!!! · Téléchargé depuis la source officielle",
+        "ru-RU": "Soyo · MyGO!!!!! · Загружено из официальных источников"
+      },
       "name_i18n": {
         "en-US": "Nagasaki Soyo",
         "ja-JP": "長崎そよ",
-        "zh-TW": "長崎爽世"
+        "ko-KR": "나가사키 소요",
+        "zh-TW": "長崎爽世",
+        "es-ES": "Nagasaki Soyo",
+        "fr-FR": "Nagasaki Soyo",
+        "ru-RU": "长崎爽世"
+      },
+      "series_i18n": {
+        "en-US": "MyGO!!!!!",
+        "ja-JP": "MyGO!!!!!",
+        "ko-KR": "MyGO!!!!!",
+        "zh-TW": "MyGO!!!!!",
+        "es-ES": "MyGO!!!!!",
+        "fr-FR": "MyGO!!!!!",
+        "ru-RU": "MyGO!!!!!"
+      },
+      "author_i18n": {
+        "en-US": "Mochizuki Seiyi",
+        "ja-JP": "望月星逸",
+        "ko-KR": "望月星逸",
+        "zh-TW": "望月星逸",
+        "es-ES": "望月星逸",
+        "fr-FR": "Mochizuki Hoshiitsu",
+        "ru-RU": "望月星逸"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -345,10 +613,50 @@
       "sha256": "9c53e8964737d534e558bf7339d393ccd9f82b35ec5d0d37c6d74b6e1374d96b",
       "size_bytes": 333192756,
       "description": "Taki · MyGO!!!!! · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Taki · MyGO!!!!! · Source from official download",
+        "ja-JP": "Taki · MyGO!!!!! · 公式ダウンロードから",
+        "ko-KR": "Taki · MyGO!!!!! · 공식 다운로드 제공",
+        "zh-TW": "Taki · MyGO!!!!! · 來源於官方下載",
+        "es-ES": "Taki · MyGO!!!!! · Descargado desde fuentes oficiales",
+        "fr-FR": "Taki · MyGO!!!!! · Téléchargé depuis la source officielle",
+        "ru-RU": "Taki · MyGO!!!!! · Загружено из официальных источников"
+      },
       "name_i18n": {
         "en-US": "Shiina Taki",
         "ja-JP": "椎名立希",
-        "zh-TW": "椎名立希"
+        "ko-KR": "시이나 타키",
+        "zh-TW": "椎名立希",
+        "es-ES": "Shiina Taki",
+        "fr-FR": "Shiina Taki",
+        "ru-RU": "椎名立希"
+      },
+      "series_i18n": {
+        "en-US": "MyGO!!!!!",
+        "ja-JP": "MyGO!!!!!",
+        "ko-KR": "MyGO!!!!!",
+        "zh-TW": "MyGO!!!!!",
+        "es-ES": "MyGO!!!!!",
+        "fr-FR": "MyGO!!!!!",
+        "ru-RU": "MyGO!!!!!"
+      },
+      "author_i18n": {
+        "en-US": "Mochizuki Seiyi",
+        "ja-JP": "望月星逸",
+        "ko-KR": "望月星逸",
+        "zh-TW": "望月星逸",
+        "es-ES": "望月星逸",
+        "fr-FR": "Mochizuki Hoshiitsu",
+        "ru-RU": "望月星逸"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -372,10 +680,50 @@
       "sha256": "c64a9446328ed8c2d57056d07d6b6ac909e04c9717efcfb02280cbcd90969112",
       "size_bytes": 430166654,
       "description": "Tomori · MyGO!!!!! · 来源于官方下载",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Tomori · MyGO!!!!! · Source from official download",
+        "ja-JP": "Tomori · MyGO!!!!! · 公式ダウンロードから",
+        "ko-KR": "Tomori · MyGO!!!!! · 공식 다운로드 제공",
+        "zh-TW": "Tomori · MyGO!!!!! · 來源於官方下載",
+        "es-ES": "Tomori · MyGO!!!!! · Descargado desde fuentes oficiales",
+        "fr-FR": "Tomori · MyGO!!!!! · Téléchargé depuis la source officielle",
+        "ru-RU": "Tomori · MyGO!!!!! · Загружено из официальных источников"
+      },
       "name_i18n": {
         "en-US": "Takamatsu Tomori",
         "ja-JP": "高松燈",
-        "zh-TW": "高松燈"
+        "ko-KR": "타카마츠 토모리",
+        "zh-TW": "高松燈",
+        "es-ES": "Takamatsu Tomori",
+        "fr-FR": "Takamatsu Tomori",
+        "ru-RU": "高松灯"
+      },
+      "series_i18n": {
+        "en-US": "MyGO!!!!!",
+        "ja-JP": "MyGO!!!!!",
+        "ko-KR": "MyGO!!!!!",
+        "zh-TW": "MyGO!!!!!",
+        "es-ES": "MyGO!!!!!",
+        "fr-FR": "MyGO!!!!!",
+        "ru-RU": "MyGO!!!!!"
+      },
+      "author_i18n": {
+        "en-US": "Mochizuki Seiyi",
+        "ja-JP": "望月星逸",
+        "ko-KR": "望月星逸",
+        "zh-TW": "望月星逸",
+        "es-ES": "望月星逸",
+        "fr-FR": "Mochizuki Hoshiitsu",
+        "ru-RU": "望月星逸"
       },
       "publisher": "rvc_fabric",
       "fabric_official": true,
@@ -408,10 +756,50 @@
       "cover": "ch-banner/tp-miku.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku.jpg",
       "series": "VOCALOID",
+      "tag_i18n": {
+        "en-US": "Anime",
+        "ja-JP": "二次元",
+        "ko-KR": "2D 캐릭터",
+        "zh-TW": "二次元",
+        "es-ES": "Anime",
+        "fr-FR": "Anime",
+        "ru-RU": "2D (Аниме)"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Hatsune Miku",
         "ja-JP": "初音ミク",
-        "zh-TW": "初音未來"
+        "ko-KR": "하츠네 미쿠",
+        "zh-TW": "初音未來",
+        "es-ES": "Hatsune Miku",
+        "fr-FR": "Hatsune Miku",
+        "ru-RU": "初音未来"
+      },
+      "series_i18n": {
+        "en-US": "VOCALOID",
+        "ja-JP": "VOCALOID",
+        "ko-KR": "VOCALOID",
+        "zh-TW": "VOCALOID",
+        "es-ES": "VOCALOID",
+        "fr-FR": "VOCALOID",
+        "ru-RU": "VOCALOID"
+      },
+      "author_i18n": {
+        "en-US": "binant",
+        "ja-JP": "binant",
+        "ko-KR": "binant",
+        "zh-TW": "binant",
+        "es-ES": "binant",
+        "fr-FR": "binant",
+        "ru-RU": "binant"
       },
       "hf_downloads": 23,
       "hf_likes": 0,
@@ -437,10 +825,41 @@
       "fabric_official": false,
       "pth_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.pth",
       "index_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.index",
+      "tag_i18n": {
+        "en-US": "Real Person",
+        "ja-JP": "リアル",
+        "ko-KR": "실제 인물",
+        "zh-TW": "真人",
+        "es-ES": "Persona real",
+        "fr-FR": "Personne réelle",
+        "ru-RU": "Реальный человек"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository (real person voice); not an official RVC Fabric voice. Please use legally and compliantly, do not use for impersonation, fraud, etc.; all risks are not affiliated with RVC Fabric official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録（実在の人物の音声）。RVC Fabric 公式音声ではありません。合法かつ適切に使用し、なりすましや詐欺などに使用しないでください。すべてのリスクは RVC Fabric 公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨(실제 인물 음성); RVC Fabric 공식 음색이 아님. 합법적 규정을 준수하여 사용하고 사칭, 사기 등에 사용하지 마십시오. 모든 위험은 RVC Fabric 공식 측과 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫（真人聲音）；非 RVC Fabric 官方音色。請合法合規使用，勿用於冒充、詐騙等；一切風險與 RVC Fabric 官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face (voz real); no es una voz oficial de RVC Fabric. Úselo legal y adecuadamente, no para suplantación, fraude, etc.; todo riesgo es independiente de RVC Fabric oficial.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face (voix de personne réelle) ; ceci n'est pas une voix officielle de RVC Fabric. Veuillez l'utiliser légalement et conformément à la loi, ne l'utilisez pas pour l'usurpation d'identité, la fraude, etc. ; tous les risques sont sans lien avec l'équipe officielle RVC Fabric.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face (голос реального человека); не официальный голос RVC Fabric. Пожалуйста, используйте легально, не используйте для выдачи себя за другого лица или мошенничества; все риски не связаны с официальными разработчиками RVC Fabric."
+      },
       "name_i18n": {
         "en-US": "Donald Trump",
         "ja-JP": "ドナルド・トランプ",
-        "zh-TW": "唐納·川普"
+        "ko-KR": "도널드 트럼프",
+        "zh-TW": "唐納德·特朗普",
+        "es-ES": "Donald Trump",
+        "fr-FR": "Donald Trump",
+        "ru-RU": "唐纳德·特朗普"
+      },
+      "author_i18n": {
+        "en-US": "binant",
+        "ja-JP": "binant",
+        "ko-KR": "binant",
+        "zh-TW": "binant",
+        "es-ES": "binant",
+        "fr-FR": "binant",
+        "ru-RU": "binant"
       },
       "hf_downloads": 18,
       "hf_likes": 0,
@@ -468,15 +887,50 @@
       "cover": "ch-banner/tp-furina.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-furina.jpg",
       "series": "原神",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Furina",
         "ja-JP": "フリーナ",
-        "zh-TW": "芙寧娜"
+        "ko-KR": "푸리나",
+        "zh-TW": "芙寧娜",
+        "es-ES": "Furina",
+        "fr-FR": "Furina",
+        "ru-RU": "芙宁娜"
       },
       "series_i18n": {
         "en-US": "Genshin Impact",
         "ja-JP": "原神",
-        "zh-TW": "原神"
+        "ko-KR": "원신",
+        "zh-TW": "原神",
+        "es-ES": "Genshin Impact",
+        "fr-FR": "Genshin Impact",
+        "ru-RU": "原神"
+      },
+      "author_i18n": {
+        "en-US": "ArkanDash",
+        "ja-JP": "ArkanDash",
+        "ko-KR": "ArkanDash",
+        "zh-TW": "ArkanDash",
+        "es-ES": "ArkanDash",
+        "fr-FR": "ArkanDash",
+        "ru-RU": "ArkanDash"
       },
       "real_person": false
     },
@@ -501,10 +955,50 @@
       "cover": "ch-banner/tp-miku-power.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku-power.jpg",
       "series": "VOCALOID",
+      "tag_i18n": {
+        "en-US": "Anime",
+        "ja-JP": "二次元",
+        "ko-KR": "2D 캐릭터",
+        "zh-TW": "二次元",
+        "es-ES": "Anime",
+        "fr-FR": "Anime",
+        "ru-RU": "2D (Аниме)"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Hatsune Miku (Power)",
         "ja-JP": "初音ミク（Power）",
-        "zh-TW": "初音未來（Power）"
+        "ko-KR": "하츠네 미쿠 (Power)",
+        "zh-TW": "初音未來（Power）",
+        "es-ES": "Hatsune Miku (Power)",
+        "fr-FR": "Hatsune Miku (Power)",
+        "ru-RU": "初音未来 (Power)"
+      },
+      "series_i18n": {
+        "en-US": "VOCALOID",
+        "ja-JP": "VOCALOID",
+        "ko-KR": "VOCALOID",
+        "zh-TW": "VOCALOID",
+        "es-ES": "VOCALOID",
+        "fr-FR": "VOCALOID",
+        "ru-RU": "VOCALOID"
+      },
+      "author_i18n": {
+        "en-US": "aple",
+        "ja-JP": "aple",
+        "ko-KR": "aple",
+        "zh-TW": "aple",
+        "es-ES": "aple",
+        "fr-FR": "aple",
+        "ru-RU": "aple"
       },
       "real_person": false
     },
@@ -529,15 +1023,50 @@
       "cover": "ch-banner/tp-nahida.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-nahida.jpg",
       "series": "原神",
+      "tag_i18n": {
+        "en-US": "Young Girl Voice",
+        "ja-JP": "少女ボイス",
+        "ko-KR": "소녀 음성",
+        "zh-TW": "少女音",
+        "es-ES": "Chica",
+        "fr-FR": "Voix de jeune fille",
+        "ru-RU": "Девичий голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Nahida",
         "ja-JP": "ナヒーダ",
-        "zh-TW": "納西妲"
+        "ko-KR": "나히다",
+        "zh-TW": "納西妲",
+        "es-ES": "Nahida",
+        "fr-FR": "Nahida",
+        "ru-RU": "纳西妲"
       },
       "series_i18n": {
         "en-US": "Genshin Impact",
         "ja-JP": "原神",
-        "zh-TW": "原神"
+        "ko-KR": "원신",
+        "zh-TW": "原神",
+        "es-ES": "Genshin Impact",
+        "fr-FR": "Genshin Impact",
+        "ru-RU": "原神"
+      },
+      "author_i18n": {
+        "en-US": "ArkanDash",
+        "ja-JP": "ArkanDash",
+        "ko-KR": "ArkanDash",
+        "zh-TW": "ArkanDash",
+        "es-ES": "ArkanDash",
+        "fr-FR": "ArkanDash",
+        "ru-RU": "ArkanDash"
       },
       "real_person": false
     },
@@ -562,15 +1091,50 @@
       "cover": "ch-banner/tp-raiden.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-raiden.jpg",
       "series": "原神",
+      "tag_i18n": {
+        "en-US": "Mature Female Voice",
+        "ja-JP": "お姉さんボイス",
+        "ko-KR": "누님 음성",
+        "zh-TW": "御姐音",
+        "es-ES": "Mujer Madura",
+        "fr-FR": "Voix de femme mature",
+        "ru-RU": "Зрелый женский голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Raiden Shogun",
         "ja-JP": "雷電将軍",
-        "zh-TW": "雷電將軍"
+        "ko-KR": "라이덴 쇼군",
+        "zh-TW": "雷電將軍",
+        "es-ES": "Raiden Shogun",
+        "fr-FR": "Raiden Shogun",
+        "ru-RU": "雷电将军"
       },
       "series_i18n": {
         "en-US": "Genshin Impact",
         "ja-JP": "原神",
-        "zh-TW": "原神"
+        "ko-KR": "원신",
+        "zh-TW": "原神",
+        "es-ES": "Genshin Impact",
+        "fr-FR": "Genshin Impact",
+        "ru-RU": "原神"
+      },
+      "author_i18n": {
+        "en-US": "ArkanDash",
+        "ja-JP": "ArkanDash",
+        "ko-KR": "ArkanDash",
+        "zh-TW": "ArkanDash",
+        "es-ES": "ArkanDash",
+        "fr-FR": "ArkanDash",
+        "ru-RU": "ArkanDash"
       },
       "real_person": false
     },
@@ -595,15 +1159,50 @@
       "cover": "ch-banner/tp-zhongli.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-zhongli.jpg",
       "series": "原神",
+      "tag_i18n": {
+        "en-US": "Male Voice",
+        "ja-JP": "男性ボイス",
+        "ko-KR": "남성 음성",
+        "zh-TW": "男聲",
+        "es-ES": "Hombre",
+        "fr-FR": "Voix d'homme",
+        "ru-RU": "Мужской голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
       "name_i18n": {
         "en-US": "Zhongli",
         "ja-JP": "鍾離",
-        "zh-TW": "鍾離"
+        "ko-KR": "종려",
+        "zh-TW": "鐘離",
+        "es-ES": "Zhongli",
+        "fr-FR": "Zhongli",
+        "ru-RU": "钟离"
       },
       "series_i18n": {
         "en-US": "Genshin Impact",
         "ja-JP": "原神",
-        "zh-TW": "原神"
+        "ko-KR": "원신",
+        "zh-TW": "原神",
+        "es-ES": "Genshin Impact",
+        "fr-FR": "Genshin Impact",
+        "ru-RU": "原神"
+      },
+      "author_i18n": {
+        "en-US": "ArkanDash",
+        "ja-JP": "ArkanDash",
+        "ko-KR": "ArkanDash",
+        "zh-TW": "ArkanDash",
+        "es-ES": "ArkanDash",
+        "fr-FR": "ArkanDash",
+        "ru-RU": "ArkanDash"
       },
       "real_person": false
     }

@@ -158,15 +158,20 @@ def main() -> int:
     if hdr_locale and hdr_locale != locale:
         print(f"警告：MD 文首 locale={hdr_locale}，命令行 --locale={locale}，以命令行为准")
 
-    skeleton = deepcopy(zh)
-    # meta
-    if isinstance(skeleton.get("meta"), dict):
-        skeleton["meta"]["code"] = locale
+    # Prefer patching existing locale so prior translations are not wiped.
+    # Fall back to zh-CN skeleton only when the target file is missing.
+    out_path = LOCALE_DIR / f"{locale}.json"
+    if out_path.is_file():
+        base = json.loads(out_path.read_text(encoding="utf-8"))
+    else:
+        base = deepcopy(zh)
+    if isinstance(base.get("meta"), dict):
+        base["meta"]["code"] = locale
 
     missing_in_zh: list[str] = []
     applied = 0
     for key, val in trans.items():
-        if set_path(skeleton, key, val):
+        if set_path(base, key, val):
             applied += 1
         else:
             missing_in_zh.append(key)
@@ -175,27 +180,25 @@ def main() -> int:
     untranslated = sorted(p for p in all_paths if p not in trans)
 
     print(f"MD 译文条数：{len(trans)}")
-    print(f"成功写入骨架：{applied}")
+    print(f"成功写入：{applied}")
     if missing_in_zh:
-        print(f"MD 有但中文包无此路径（{len(missing_in_zh)}）：")
+        print(f"MD 有但无法写入路径（{len(missing_in_zh)}）：")
         for k in missing_in_zh[:20]:
             print(f"  - {k}")
         if len(missing_in_zh) > 20:
             print(f"  … 另 {len(missing_in_zh) - 20} 条")
     if untranslated:
-        print(f"中文包有但 MD 未译（{len(untranslated)}）：")
-        for k in untranslated[:20]:
+        print(f"中文包有但本次 MD 未覆盖（{len(untranslated)}，保留原译文/中文）：")
+        for k in untranslated[:10]:
             print(f"  - {k}")
-        if len(untranslated) > 20:
-            print(f"  … 另 {len(untranslated) - 20} 条")
+        if len(untranslated) > 10:
+            print(f"  … 另 {len(untranslated) - 10} 条")
 
     if args.check:
-        return 1 if missing_in_zh or untranslated else 0
+        return 1 if missing_in_zh else 0
 
-    # 未译的叶子保留中文（回退），与运行时 fallback 一致
-    out_path = LOCALE_DIR / f"{locale}.json"
     out_path.write_text(
-        json.dumps(skeleton, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(base, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(f"已写出 {out_path.relative_to(ROOT)}")

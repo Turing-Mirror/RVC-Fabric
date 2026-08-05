@@ -1,8 +1,10 @@
 /**
- * 「下载模型」统一入口：引擎资源（hubert / rmvpe / ffmpeg）按需补全也挂在这里。
+ * 引擎资源 / 下载模型 入口分流。
  *
- * 首页 / 其他页的音频工具、底栏开启变声若发现缺引擎资源，会跳到「其他」并打开
- * 本对话框，而不是把几百 MB 绑在首次 Runtime 补全里。
+ * - **引擎资源**（hubert / rmvpe / ffmpeg）：开启变声、打开音频工具时若缺失，
+ *   弹专用「补全引擎资源」窗，不跳「其他」、不进训练底模列表。
+ * - **下载模型**：用户主动点「其他 → 下载模型」时打开 ExtrasDialog
+ *   （引擎资源卡 + 分离/训练模型列表）。
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -15,23 +17,43 @@ export type AssetsStatus = {
 };
 
 export type OpenDownloadModelsOpts = {
-  /** 顶部提示，例如「使用语音转换前需先下载引擎资源」。 */
   reason?: string;
   filter?: ExtrasFilter;
 };
 
-type Opener = (opts?: OpenDownloadModelsOpts) => void;
+export type OpenEngineCoreOpts = {
+  reason?: string;
+};
 
-let opener: Opener | null = null;
+type ModelsOpener = (opts?: OpenDownloadModelsOpts) => void;
+type EngineOpener = (opts?: OpenEngineCoreOpts) => void;
 
-/** App 挂载时注册，卸载时清掉。 */
-export function registerDownloadModelsOpener(fn: Opener | null): void {
-  opener = fn;
+let modelsOpener: ModelsOpener | null = null;
+let engineOpener: EngineOpener | null = null;
+
+/** App 挂载时注册「下载模型」弹窗。 */
+export function registerDownloadModelsOpener(fn: ModelsOpener | null): void {
+  modelsOpener = fn;
 }
 
-/** 跳到「其他」页并打开「下载模型」弹窗（由 App 注册的实现负责）。 */
+/** App 挂载时注册「仅引擎资源」弹窗。 */
+export function registerEngineCoreOpener(fn: EngineOpener | null): void {
+  engineOpener = fn;
+}
+
+/** 打开「其他 → 下载模型」（含分离/训练列表）。 */
 export function openDownloadModels(opts?: OpenDownloadModelsOpts): void {
-  opener?.(opts);
+  modelsOpener?.(opts);
+}
+
+/** 打开「补全引擎资源」专用窗（不切页、不展示训练底模）。 */
+export function openEngineCorePrompt(opts?: OpenEngineCoreOpts): void {
+  if (engineOpener) {
+    engineOpener(opts);
+    return;
+  }
+  // 兜底：旧壳只注册了下载模型时，至少别静默失败。
+  modelsOpener?.({ reason: opts?.reason });
 }
 
 export async function getAssetsStatus(): Promise<AssetsStatus> {
@@ -47,11 +69,14 @@ export async function isEngineCoreReady(): Promise<boolean> {
   return st.engine_core_ready !== false;
 }
 
-/** 缺引擎资源时打开下载模型页并返回 false；已就绪返回 true。 */
+/**
+ * 缺引擎资源时弹「补全引擎资源」窗并返回 false；已就绪返回 true。
+ * 给开启变声 / 打开音频工具用，不要进下载模型页。
+ */
 export async function ensureEngineCoreOrPrompt(
   reason: string,
 ): Promise<boolean> {
   if (await isEngineCoreReady()) return true;
-  openDownloadModels({ reason });
+  openEngineCorePrompt({ reason });
   return false;
 }

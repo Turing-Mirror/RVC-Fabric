@@ -156,13 +156,14 @@ export function useEngine() {
       return;
     }
     // 引擎资源不在首次 Runtime 补全里；开变声前再查一次。
+    // 弹的是专用「补全引擎资源」窗，不跳「下载模型」（那是分离/训练底模）。
     try {
       const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
       const ok = await ensureEngineCoreOrPrompt(
-        t("s.481ec6c2df"),
+        "开启实时变声需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。与训练底模、人声分离模型无关，下完后再次点「开启变声」即可。",
       );
       if (!ok) {
-        setLastError(t("s.489b99d4d7"));
+        setLastError("请先补全引擎资源，再开启变声");
         return;
       }
     } catch {

@@ -34,7 +34,7 @@ export function openTool(kind: ToolKind): void {
     try {
       const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
       const ok = await ensureEngineCoreOrPrompt(
-        `使用「${TITLES[kind]}」前，需要先下载引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。下载完成后即可打开工具。`,
+        `使用「${TITLES[kind]}」需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。与训练底模无关，下完后即可打开工具。`,
       );
       if (!ok) return;
     } catch {

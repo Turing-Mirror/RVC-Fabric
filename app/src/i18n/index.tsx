@@ -28,6 +28,7 @@ import {
 import {
   DEFAULT_LOCALE,
   LOCALES,
+  isLocaleCode,
   type Dict,
   type LocaleCode,
 } from "./types";
@@ -65,10 +66,6 @@ type I18nCtx = {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
-function isLocale(v: unknown): v is LocaleCode {
-  return v === "zh-CN" || v === "en-US";
-}
-
 function translate(
   primary: Dict,
   fallback: Dict,
@@ -96,7 +93,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       try {
         const cfg = await invoke<Record<string, unknown>>("config_get");
         const raw = cfg.ui_locale;
-        if (alive && isLocale(raw)) {
+        if (alive && isLocaleCode(raw)) {
           setLocaleState(raw);
           setStaticLocale(raw);
           setGlossaryLocale(raw);
@@ -118,7 +115,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setStaticLocale(code);
     setGlossaryLocale(code);
     setTLocale(code);
-    document.documentElement.lang = code === "zh-CN" ? "zh-CN" : "en";
+    document.documentElement.lang = code;
     try {
       void invoke("config_set", { patch: { ui_locale: code } });
       void invoke("i18n_set_locale", { locale: code });
@@ -131,7 +128,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setStaticLocale(locale);
     setGlossaryLocale(locale);
     setTLocale(locale);
-    document.documentElement.lang = locale === "zh-CN" ? "zh-CN" : "en";
+    document.documentElement.lang = locale;
   }, [locale]);
 
   const primary = useMemo(() => packOf(locale), [locale]);

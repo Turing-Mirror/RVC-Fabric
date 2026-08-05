@@ -12,8 +12,14 @@ use serde_json::Value;
 
 use crate::paths;
 
-const EMBEDDED_ZH: &str = include_str!("../../i18n/locales/zh-CN.json");
-const EMBEDDED_EN: &str = include_str!("../../i18n/locales/en-US.json");
+const EMBEDDED_ZH_CN: &str = include_str!("../../i18n/locales/zh-CN.json");
+const EMBEDDED_EN_US: &str = include_str!("../../i18n/locales/en-US.json");
+const EMBEDDED_ES_ES: &str = include_str!("../../i18n/locales/es-ES.json");
+const EMBEDDED_FR_FR: &str = include_str!("../../i18n/locales/fr-FR.json");
+const EMBEDDED_JA_JP: &str = include_str!("../../i18n/locales/ja-JP.json");
+const EMBEDDED_KO_KR: &str = include_str!("../../i18n/locales/ko-KR.json");
+const EMBEDDED_RU_RU: &str = include_str!("../../i18n/locales/ru-RU.json");
+const EMBEDDED_ZH_TW: &str = include_str!("../../i18n/locales/zh-TW.json");
 
 struct I18nState {
     locale: String,
@@ -30,7 +36,10 @@ fn default_locale() -> String {
 }
 
 pub fn supported(code: &str) -> bool {
-    matches!(code, "zh-CN" | "en-US")
+    matches!(
+        code,
+        "zh-CN" | "en-US" | "es-ES" | "fr-FR" | "ja-JP" | "ko-KR" | "ru-RU" | "zh-TW"
+    )
 }
 
 /// Current locale (from config or last set). Empty until init.
@@ -86,10 +95,15 @@ fn locales_dir(root: &Path) -> PathBuf {
 }
 
 fn embedded(code: &str) -> Value {
-    let raw = if code == "en-US" {
-        EMBEDDED_EN
-    } else {
-        EMBEDDED_ZH
+    let raw = match code {
+        "en-US" => EMBEDDED_EN_US,
+        "es-ES" => EMBEDDED_ES_ES,
+        "fr-FR" => EMBEDDED_FR_FR,
+        "ja-JP" => EMBEDDED_JA_JP,
+        "ko-KR" => EMBEDDED_KO_KR,
+        "ru-RU" => EMBEDDED_RU_RU,
+        "zh-TW" => EMBEDDED_ZH_TW,
+        _ => EMBEDDED_ZH_CN,
     };
     serde_json::from_str(raw).unwrap_or_else(|_| Value::Object(Default::default()))
 }
@@ -243,5 +257,13 @@ mod tests {
             "got {:?}",
             t_msg("engine.starting")
         );
+
+        // Non-English packs must resolve (embedded), not fall back to the key.
+        for code in ["ja-JP", "zh-TW", "es-ES", "fr-FR", "ko-KR", "ru-RU"] {
+            set_locale(code);
+            let s = t("tray.show");
+            assert!(!s.is_empty() && s != "tray.show", "{code}: {s}");
+            assert!(supported(code), "{code} should be supported");
+        }
     }
 }

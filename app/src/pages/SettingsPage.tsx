@@ -683,7 +683,8 @@ function SettingsPageImpl({
                       label: t(l.labelKey),
                     }))}
                     onChange={(v) => {
-                      if (v === "zh-CN" || v === "en-US") {
+                      // LOCALES 已列全量；非法值忽略
+                      if (LOCALES.some((l) => l.id === v)) {
                         setLocale(v as LocaleCode);
                         c.set("ui_locale", v, true);
                       }

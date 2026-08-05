@@ -1,11 +1,23 @@
 import type { Dict, LocaleCode } from "./types";
 import zh from "../../i18n/locales/zh-CN.json";
 import en from "../../i18n/locales/en-US.json";
+import es from "../../i18n/locales/es-ES.json";
+import fr from "../../i18n/locales/fr-FR.json";
+import ja from "../../i18n/locales/ja-JP.json";
+import ko from "../../i18n/locales/ko-KR.json";
+import ru from "../../i18n/locales/ru-RU.json";
+import tw from "../../i18n/locales/zh-TW.json";
 
 /** Bundled packs (Vite imports JSON at build time). */
 const PACKS: Record<LocaleCode, Dict> = {
   "zh-CN": zh as Dict,
   "en-US": en as Dict,
+  "es-ES": es as Dict,
+  "fr-FR": fr as Dict,
+  "ja-JP": ja as Dict,
+  "ko-KR": ko as Dict,
+  "ru-RU": ru as Dict,
+  "zh-TW": tw as Dict,
 };
 
 export function packOf(locale: LocaleCode): Dict {
@@ -29,7 +41,6 @@ export function lookup(dict: Dict, key: string): unknown {
       cur = obj[part];
       continue;
     }
-    // remainder as a single key (msg codes / dotted leaf names)
     const rest = parts.slice(i).join(".");
     return obj[rest];
   }

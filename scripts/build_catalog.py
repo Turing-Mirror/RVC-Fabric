@@ -275,6 +275,71 @@ def cnb_raw_url(rel_path: str) -> str:
     return f"{RAW}/{(rel_path or '').replace(chr(92), '/').lstrip('/')}"
 
 
+
+def _attach_i18n_fields(src: dict, dst: dict, fields: list[str]) -> None:
+    """Copy optional localized maps and flat aliases into compiled JSON.
+
+    Supported shapes (all optional; Chinese primary fields stay authoritative):
+
+      title_i18n:
+        en-US: Hello
+        ja-JP: こんにちは
+      # or flat:
+      title_en: Hello
+      title_ja: こんにちは
+
+    Array fields (highlights) use the same map of locale → list[str].
+    """
+    if not isinstance(src, dict) or not isinstance(dst, dict):
+        return
+    short_map = {
+        "en": "en-US",
+        "ja": "ja-JP",
+        "ko": "ko-KR",
+        "es": "es-ES",
+        "fr": "fr-FR",
+        "ru": "ru-RU",
+        "zh_Hant": "zh-TW",
+        "zh-Hant": "zh-TW",
+        "zh_TW": "zh-TW",
+        "zh-TW": "zh-TW",
+    }
+    for f in fields:
+        map_key = f"{f}_i18n"
+        bucket: dict = {}
+        raw_map = src.get(map_key)
+        if isinstance(raw_map, dict):
+            for loc, val in raw_map.items():
+                loc_s = str(loc).strip()
+                if not loc_s:
+                    continue
+                if isinstance(val, list):
+                    items = [str(x).strip() for x in val if str(x).strip()]
+                    if items:
+                        bucket[loc_s] = items
+                else:
+                    s = str(val or "").strip()
+                    if s:
+                        bucket[loc_s] = s
+        # flat aliases: title_en / body_ja / highlights_en
+        for short, full in short_map.items():
+            flat = f"{f}_{short}"
+            if flat not in src:
+                continue
+            val = src[flat]
+            if isinstance(val, list):
+                items = [str(x).strip() for x in val if str(x).strip()]
+                if items:
+                    bucket.setdefault(full, items)
+            else:
+                s = str(val or "").strip()
+                if s:
+                    bucket.setdefault(full, s)
+        if bucket:
+            dst[map_key] = bucket
+
+
+
 def cnb_release_url(tag: str, name: str) -> str:
     return f"{CNB_REPO_URL}/-/releases/download/{tag}/{name}"
 
@@ -694,6 +759,8 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "name_ja",
         "name_en",
         "name_zh_Hant",
+        "tag_i18n",
+        "description_i18n",
         "series_ja",
         "series_en",
         "series_zh_Hant",
@@ -720,6 +787,7 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     item["sha256"] = art["sha256"]
     item["size_bytes"] = int(art["size_bytes"] or 0)
     item["description"] = str(v.get("description") or "")
+    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author"])
     item["publisher"] = str(v.get("publisher") or "rvc_fabric")
     item["fabric_official"] = bool(v.get("fabric_official", True))
     item["date"] = date
@@ -848,6 +916,7 @@ def _compile_thirdparty_voice(
     series = str(v.get("series") or "").strip()
     if series:
         item["series"] = series  # 仅搜索，不进系列专区
+    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author"])
     for k in ("hf_downloads", "hf_likes", "snapshot_date", "real_person"):
         if k in v and v[k] is not None and v[k] != "":
             item[k] = v[k]
@@ -1584,7 +1653,15 @@ def _compile_plaza_item(
             row[key] = v
     if sponsor:
         row["sponsor"] = sponsor
+    _attach_i18n_fields(
+        raw,
+        row,
+        ["title", "body", "pin_title", "action_label", "sponsor"],
+    )
     return row
+
+
+
 
 
 def compile_changelog(src: dict, rep: Report) -> dict:
@@ -1642,6 +1719,7 @@ def compile_changelog(src: dict, rep: Report) -> dict:
             row["highlights"] = highlights
         if body:
             row["body"] = body
+        _attach_i18n_fields(raw, row, ["title", "body", "highlights", "notes"])
         entries.append(row)
 
     from functools import cmp_to_key
@@ -1688,6 +1766,19 @@ def _apply_changelog_notes(app_src: dict, changelog: dict, rep: Report) -> None:
             "app.gui.notes 已被 changelog.yaml 最新条覆盖（请只维护 changelog.yaml）"
         )
     gui["notes"] = notes
+    # Carry multi-language notes for OTA dialog (client picks by ui_locale).
+    if isinstance(latest, dict):
+        _attach_i18n_fields(latest, gui, ["notes", "body"])
+        # body_i18n maps onto notes_i18n for the update banner.
+        bi = gui.get("body_i18n")
+        if isinstance(bi, dict) and bi:
+            ni = gui.setdefault("notes_i18n", {})
+            if isinstance(ni, dict):
+                for loc, val in bi.items():
+                    ni.setdefault(loc, val)
+            if "body_i18n" in gui:
+                # keep body_i18n too for clients that look there
+                pass
     app_src["gui"] = gui
     app_src["notes"] = notes
 

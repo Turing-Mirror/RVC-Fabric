@@ -559,9 +559,7 @@ mod tests {
         sanitize_inuse(root, &mut m);
         assert_eq!(
             m["pth_path"],
-            json!(r"User_Data\models\anon\anon.pth"),
-            &crate::i18n::t("s.f204de859a")
-        );
+            json!(r"User_Data\models\anon\anon.pth"));
         assert_eq!(m["index_path"], json!(r"User_Data\models\anon\a.index"));
     }
 
@@ -631,7 +629,7 @@ mod tests {
     fn main_gpu_asks_for_a_restart_without_pretending_to_be_an_engine_key() {
         assert!(!is_hot("main_gpu"));
         assert!(!is_cold("main_gpu"));
-        assert!(!engine_keys().contains(&"main_gpu"), &crate::i18n::t("s.26afc09bec"));
+        assert!(!engine_keys().contains(&"main_gpu"));
 
         let root = std::env::temp_dir().join("rvcf-main-gpu-test");
         let _ = std::fs::remove_dir_all(&root);
@@ -643,16 +641,12 @@ mod tests {
 
         let restart = out["needs_restart"].as_array().unwrap();
         assert!(
-            restart.iter().any(|v| v == "main_gpu"),
-            &crate::i18n::t("s.5122640939")
-        );
+            restart.iter().any(|v| v == "main_gpu"));
         assert_eq!(out["config"]["main_gpu"], json!(1));
 
         // 不是引擎键，就不该顺手去改引擎的配置文件 —— worker 可能正在读它。
         assert!(
-            !paths::inuse_config_path(&root).is_file(),
-            &crate::i18n::t("s.e56c3aa66a")
-        );
+            !paths::inuse_config_path(&root).is_file());
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -140,10 +140,17 @@ impl PlazaItem {
             return None;
         }
         let id = s(d.get("id"));
-        let title = s(d.get("title"));
-        if id.is_empty() || title.is_empty() {
+        // Prefer localized title; fall back to Chinese primary for id check.
+        let title = crate::i18n::pick_str(d, "title");
+        let title_primary = s(d.get("title"));
+        if id.is_empty() || (title.is_empty() && title_primary.is_empty()) {
             return None;
         }
+        let title = if title.is_empty() {
+            title_primary
+        } else {
+            title
+        };
         let kind = {
             let k = first(d, &["type", "kind"]).to_ascii_lowercase();
             if k.is_empty() { "news".to_string() } else { k }
@@ -185,18 +192,52 @@ impl PlazaItem {
             d.get("dismissible").and_then(|v| v.as_bool()).unwrap_or(false)
         };
 
+        let body = {
+            let b = crate::i18n::pick_str(d, "body");
+            if !b.is_empty() {
+                b
+            } else {
+                first(d, &["text", "desc"])
+            }
+        };
+        let action_label = {
+            let a = crate::i18n::pick_str(d, "action_label");
+            if !a.is_empty() {
+                a
+            } else {
+                first(d, &["action"])
+            }
+        };
+        let pin_title = {
+            let p = crate::i18n::pick_str(d, "pin_title");
+            if !p.is_empty() {
+                p
+            } else {
+                first(d, &["pinned_title"])
+            }
+        };
+        // Sponsor name is usually a brand — still allow i18n map.
+        let sponsor = {
+            let sp = crate::i18n::pick_str(d, "sponsor");
+            if !sp.is_empty() {
+                sp
+            } else {
+                first(d, &["advertiser"])
+            }
+        };
+
         Some(Self {
             id,
             kind,
             title,
-            body: first(d, &["body", "text", "desc"]),
+            body,
             image_url: resolve_image_url(&first(d, &["image", "image_url", "cover"])),
             url: safe_link(&first(d, &["url", "link"])),
-            action_label: first(d, &["action_label", "action"]),
+            action_label,
             date: normalize_yymmdd(&first(d, &["date", "released"])),
             priority,
             pinned: d.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false),
-            pin_title: first(d, &["pin_title", "pinned_title"]),
+            pin_title,
             dismissible,
             placements,
             start: normalize_yymmdd(&s(d.get("start"))),
@@ -324,33 +365,34 @@ pub fn parse_changelog(data: &Value) -> Vec<ChangelogEntry> {
                     if version.is_empty() {
                         return None;
                     }
-                    // `highlights` 是 build_catalog 实际写出来的字段名。
-                    // 这里以前只认 notes / items，于是线上 changelog.json 的
-                    // 每一条都解析成空列表 —— 版本号和日期照常显示，正文一个
-                    // 字没有，看着像「更新日志坏了」。
-                    let mut notes: Vec<String> = d
-                        .get("notes")
-                        .or_else(|| d.get("highlights"))
-                        .or_else(|| d.get("items"))
-                        .and_then(|v| v.as_array())
-                        .map(|a| {
-                            a.iter()
-                                .filter_map(|x| x.as_str().map(|s| s.trim().to_string()))
-                                .filter(|s| !s.is_empty())
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                    // Prefer localized highlights/notes, then Chinese primary.
+                    // `highlights` is what build_catalog writes; older feeds used notes/items.
+                    let mut notes = crate::i18n::pick_str_list(d, "highlights");
+                    if notes.is_empty() {
+                        notes = crate::i18n::pick_str_list(d, "notes");
+                    }
+                    if notes.is_empty() {
+                        notes = crate::i18n::pick_str_list(d, "items");
+                    }
                     // 一条要点都没有就退回整段 body，总比一片空白强。
                     if notes.is_empty() {
-                        let body = s(d.get("body"));
+                        let body = crate::i18n::pick_str(d, "body");
                         if !body.is_empty() {
                             notes.push(body);
                         }
                     }
+                    let title = {
+                        let t = crate::i18n::pick_str(d, "title");
+                        if t.is_empty() {
+                            s(d.get("title"))
+                        } else {
+                            t
+                        }
+                    };
                     Some(ChangelogEntry {
                         version,
                         date: normalize_yymmdd(&first(d, &["date", "released"])),
-                        title: s(d.get("title")),
+                        title,
                         notes,
                     })
                 })
@@ -463,8 +505,8 @@ mod tests {
         let items = parse_feed(&feed);
         let plaza = items.iter().find(|i| i.id == "p").unwrap();
         let models = items.iter().find(|i| i.id == "m").unwrap();
-        assert!(plaza.is_ad && !plaza.dismissible, &crate::i18n::t("s.0881863106"));
-        assert!(models.is_ad && models.dismissible, &crate::i18n::t("s.5515dc7709"));
+        assert!(plaza.is_ad && !plaza.dismissible);
+        assert!(models.is_ad && models.dismissible);
     }
 
     #[test]
@@ -505,13 +547,13 @@ mod tests {
             .collect();
         let items = parse_feed(&json!({ "items": rows }));
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);
-        assert_eq!(vis.len(), 7, &crate::i18n::t("s.9e361609ec"));
+        assert_eq!(vis.len(), 7);
         let pinned: Vec<&str> = vis
             .iter()
             .filter(|i| i.pinned)
             .map(|i| i.id.as_str())
             .collect();
-        assert_eq!(pinned, vec!["p0", "p1", "p2", "p3", "p4"], &crate::i18n::t("s.04be9e513a"));
+        assert_eq!(pinned, vec!["p0", "p1", "p2", "p3", "p4"]);
     }
 
     #[test]
@@ -524,8 +566,8 @@ mod tests {
         ]}));
         let a = items.iter().find(|i| i.id == "a").unwrap();
         let b = items.iter().find(|i| i.id == "b").unwrap();
-        assert_eq!(a.pin_title, &crate::i18n::t("s.4f35061e6d"));
-        assert_eq!(b.pin_title, "", &crate::i18n::t("s.9528c02056"));
+        assert_eq!(a.pin_title, crate::i18n::t("s.4f35061e6d"));
+        assert_eq!(b.pin_title, "");
     }
 
     #[test]
@@ -552,7 +594,7 @@ mod tests {
         let rows = parse_changelog(&data);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].notes.len(), 2);
-        assert_eq!(rows[0].notes[0], &crate::i18n::t("s.1937f75369"));
+        assert_eq!(rows[0].notes[0], crate::i18n::t("s.1937f75369"));
     }
 
     #[test]

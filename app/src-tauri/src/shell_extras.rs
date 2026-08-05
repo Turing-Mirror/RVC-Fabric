@@ -708,12 +708,12 @@ mod tests {
         assert!(combo_ok("CmdOrCtrl+F2"));
         assert!(combo_ok("Alt+Shift+K"));
         assert!(combo_ok("F9"));
-        assert!(!combo_ok(""), &crate::i18n::t("s.4d568e3db9"));
-        assert!(!combo_ok("Ctrl+"), &crate::i18n::t("s.6b25a5378d"));
-        assert!(!combo_ok("Ctrl++A"), &crate::i18n::t("s.5ff8d648a8"));
-        assert!(!combo_ok("Ctrl+A+B+C+D+E"), &crate::i18n::t("s.b78ead0b6a"));
-        assert!(!combo_ok("Ctrl+<script>"), &crate::i18n::t("s.36c2e47b48"));
-        assert!(!combo_ok(&"A".repeat(60)), &crate::i18n::t("s.e110cd6caf"));
+        assert!(!combo_ok(""));
+        assert!(!combo_ok("Ctrl+"));
+        assert!(!combo_ok("Ctrl++A"));
+        assert!(!combo_ok("Ctrl+A+B+C+D+E"));
+        assert!(!combo_ok("Ctrl+<script>"));
+        assert!(!combo_ok(&"A".repeat(60)));
     }
 
     /// 配置里是垃圾值时必须退回默认，而不是注册一个乱七八糟的组合。
@@ -743,8 +743,8 @@ mod tests {
             let got = d
                 .get(*key)
                 .and_then(|v| v.as_str())
-                .unwrap_or_else(|| panic!(&crate::i18n::t("s.e64959c277")));
-            assert_eq!(got, *default, &crate::i18n::t("s.a76352090e"));
+                .unwrap_or_else(|| panic!("{}", crate::i18n::t("s.e64959c277")));
+            assert_eq!(got, *default);
         }
     }
 
@@ -760,8 +760,8 @@ mod tests {
             let got = d
                 .get(&k)
                 .and_then(|v| v.as_bool())
-                .unwrap_or_else(|| panic!(&crate::i18n::t("s.735eb4e9fd")));
-            assert!(got, &crate::i18n::t("s.d4efcb94da"));
+                .unwrap_or_else(|| panic!("{}", crate::i18n::t("s.735eb4e9fd")));
+            assert!(got);
         }
     }
 
@@ -771,7 +771,7 @@ mod tests {
     #[test]
     fn every_default_combo_is_well_formed() {
         for (key, _action, default) in HOTKEYS {
-            assert!(combo_ok(default), &crate::i18n::t("s.d50071676d"));
+            assert!(combo_ok(default));
         }
     }
 
@@ -782,11 +782,11 @@ mod tests {
         let n = keys.len();
         keys.sort_unstable();
         keys.dedup();
-        assert_eq!(keys.len(), n, &crate::i18n::t("s.da544f6e8b"));
+        assert_eq!(keys.len(), n);
 
         let mut acts: Vec<&str> = HOTKEYS.iter().map(|h| h.1).collect();
         acts.sort_unstable();
         acts.dedup();
-        assert_eq!(acts.len(), n, &crate::i18n::t("s.4dae253817"));
+        assert_eq!(acts.len(), n);
     }
 }

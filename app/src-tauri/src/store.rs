@@ -1171,12 +1171,12 @@ mod tests {
             let d = staged_dir(root, bad).expect(&crate::i18n::t("s.ab16acefd8"));
             let s = d.to_string_lossy().to_string();
             assert!(s.contains("downloads"), "{bad:?} -> {s}");
-            assert!(!s.contains(".."), &crate::i18n::t("s.8d31697e4e"));
+            assert!(!s.contains(".."));
             assert!(d.starts_with(root), "{bad:?} -> {s}");
         }
         // 洗完啥也不剩的必须报错，否则会建一个空名字的目录。
         for bad in ["", "..", "   ", "..."] {
-            assert!(staged_dir(root, bad).is_err(), &crate::i18n::t("s.0d53652ff2"));
+            assert!(staged_dir(root, bad).is_err());
         }
     }
 
@@ -1185,11 +1185,11 @@ mod tests {
         let base = std::env::temp_dir().join("rvcf-staged-payload");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
-        assert!(staged_payload(&base).is_none(), &crate::i18n::t("s.1cfc5eb379"));
+        assert!(staged_payload(&base).is_none());
 
         std::fs::write(base.join("readme.txt"), b"x").unwrap();
         std::fs::write(base.join("m.index"), b"x").unwrap();
-        assert!(staged_payload(&base).is_none(), &crate::i18n::t("s.f5c9f3fce5"));
+        assert!(staged_payload(&base).is_none());
 
         std::fs::write(base.join("m.pth"), b"x").unwrap();
         assert!(staged_payload(&base).unwrap().ends_with("m.pth"));
@@ -1212,7 +1212,7 @@ mod tests {
         let st = staged_status(&base);
         let o = st.as_object().unwrap();
         assert!(o.contains_key("ready"));
-        assert!(!o.contains_key("empty"), &crate::i18n::t("s.20ac2e2a0c"));
+        assert!(!o.contains_key("empty"));
         assert_eq!(st["ready"]["file"], json!("a.pth"));
         assert_eq!(st["ready"]["size_bytes"], json!(4));
         let _ = std::fs::remove_dir_all(&base);
@@ -1228,7 +1228,7 @@ mod tests {
         std::fs::write(d.join("a.pth"), b"x").unwrap();
         assert!(discard_staged(&base, "v1").is_ok());
         assert!(!d.exists());
-        assert!(discard_staged(&base, "v1").is_ok(), &crate::i18n::t("s.86cbf0fb3f"));
+        assert!(discard_staged(&base, "v1").is_ok());
         let _ = std::fs::remove_dir_all(&base);
     }
 }

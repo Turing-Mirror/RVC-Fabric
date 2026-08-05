@@ -211,6 +211,146 @@ pub fn tn(key: &str, args: &[&str]) -> String {
     s
 }
 
+// ---------------------------------------------------------------------------
+// Catalog / remote JSON localization
+// ---------------------------------------------------------------------------
+// Remote feeds keep Chinese primary fields and optional maps:
+//   title_i18n: { "en-US": "…", "ja-JP": "…" }
+// Resolution: full locale → language prefix → flat aliases → primary field.
+
+/// Locale lookup candidates for a UI locale code.
+pub fn locale_candidates(locale: &str) -> Vec<String> {
+    let loc = locale.trim();
+    if loc.is_empty() {
+        return vec!["zh-CN".into()];
+    }
+    let mut out = vec![loc.to_string()];
+    if let Some((lang, _)) = loc.split_once('-') {
+        if !lang.is_empty() && lang != loc {
+            out.push(lang.to_string());
+        }
+        match lang {
+            "en" => {
+                if !out.iter().any(|x| x == "en-US") {
+                    out.push("en-US".into());
+                }
+            }
+            "ja" => {
+                if !out.iter().any(|x| x == "ja-JP") {
+                    out.push("ja-JP".into());
+                }
+            }
+            "ko" => {
+                if !out.iter().any(|x| x == "ko-KR") {
+                    out.push("ko-KR".into());
+                }
+            }
+            "es" => {
+                if !out.iter().any(|x| x == "es-ES") {
+                    out.push("es-ES".into());
+                }
+            }
+            "fr" => {
+                if !out.iter().any(|x| x == "fr-FR") {
+                    out.push("fr-FR".into());
+                }
+            }
+            "ru" => {
+                if !out.iter().any(|x| x == "ru-RU") {
+                    out.push("ru-RU".into());
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn map_get_str(map: &serde_json::Map<String, Value>, cand: &str) -> Option<String> {
+    map.get(cand)
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Pick a localized string: `{field}_i18n[locale]` → flat aliases → `{field}`.
+pub fn pick_str(obj: &Value, field: &str) -> String {
+    pick_str_locale(obj, field, &current())
+}
+
+pub fn pick_str_locale(obj: &Value, field: &str, locale: &str) -> String {
+    let Some(root) = obj.as_object() else {
+        return String::new();
+    };
+    let map_key = format!("{field}_i18n");
+    if let Some(map) = root.get(&map_key).and_then(|v| v.as_object()) {
+        for cand in locale_candidates(locale) {
+            if let Some(s) = map_get_str(map, &cand) {
+                return s;
+            }
+        }
+    }
+    for cand in locale_candidates(locale) {
+        let short = cand
+            .split_once('-')
+            .map(|(a, _)| a)
+            .unwrap_or(cand.as_str());
+        for key in [
+            format!("{field}_{cand}"),
+            format!("{field}_{short}"),
+            format!("{field}_{}", cand.replace('-', "_")),
+        ] {
+            if let Some(s) = map_get_str(root, &key) {
+                return s;
+            }
+        }
+        if cand == "zh-TW" {
+            if let Some(s) = map_get_str(root, &format!("{field}_zh_Hant")) {
+                return s;
+            }
+        }
+    }
+    root.get(field)
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// Localized string list (`highlights` / `notes` arrays).
+pub fn pick_str_list(obj: &Value, field: &str) -> Vec<String> {
+    pick_str_list_locale(obj, field, &current())
+}
+
+pub fn pick_str_list_locale(obj: &Value, field: &str, locale: &str) -> Vec<String> {
+    let Some(root) = obj.as_object() else {
+        return vec![];
+    };
+    let map_key = format!("{field}_i18n");
+    if let Some(map) = root.get(&map_key).and_then(|v| v.as_object()) {
+        for cand in locale_candidates(locale) {
+            if let Some(arr) = map.get(&cand).and_then(|v| v.as_array()) {
+                let list: Vec<String> = arr
+                    .iter()
+                    .filter_map(|x| x.as_str().map(|s| s.trim().to_string()))
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !list.is_empty() {
+                    return list;
+                }
+            }
+        }
+    }
+    root.get(field)
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(|s| s.trim().to_string()))
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Resolve `message_code` from status.json (e.g. `engine.starting` → msg.engine.starting).
 #[allow(dead_code)] // used by status localization & future command errors
 pub fn t_msg(code: &str) -> String {
@@ -297,4 +437,20 @@ mod tests {
             assert!(supported(code), "{code} should be supported");
         }
     }
+    #[test]
+    fn pick_str_prefers_locale_map() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        set_locale("en-US");
+        let obj = serde_json::json!({
+            "title": "中文标题",
+            "title_i18n": { "en-US": "English title", "ja-JP": "日本語" },
+            "highlights": ["中文要点"],
+            "highlights_i18n": { "en-US": ["English bullet"] }
+        });
+        assert_eq!(pick_str(&obj, "title"), "English title");
+        assert_eq!(pick_str_list(&obj, "highlights"), vec!["English bullet".to_string()]);
+        set_locale("zh-CN");
+        assert_eq!(pick_str(&obj, "title"), "中文标题");
+    }
+
 }

@@ -144,6 +144,14 @@
       "sha256": "dfb9a54afe78a95b32f1742090bd55541c28a205f3f958884247e4a454e2aeb3",
       "size_bytes": 51006395,
       "description": "guanguanV1 · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "guanguanV1"
+      },
+      "series_i18n": {
+        "en-US": "RVC Original",
+        "ja-JP": "RVCオリジナル",
+        "zh-TW": "RVC原版"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721",
@@ -166,6 +174,14 @@
       "sha256": "c7cf492fcf0f39d62dbbab6fae6524a68368e8df7568e289cf6336d717432cc6",
       "size_bytes": 51012498,
       "description": "keruanV1 · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "keruanV1"
+      },
+      "series_i18n": {
+        "en-US": "RVC Original",
+        "ja-JP": "RVCオリジナル",
+        "zh-TW": "RVC原版"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721",
@@ -188,6 +204,14 @@
       "sha256": "1b6e11604e16dba50398b514dae8729d274d430edac2f08874d587c5bb6bd926",
       "size_bytes": 51021019,
       "description": "kikiV1 · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "kikiV1"
+      },
+      "series_i18n": {
+        "en-US": "RVC Original",
+        "ja-JP": "RVCオリジナル",
+        "zh-TW": "RVC原版"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721",
@@ -210,6 +234,14 @@
       "sha256": "6ff5a598f728c116c8c4001b81ed32cc81f46754f6833970920aea0f445b91e1",
       "size_bytes": 53357394,
       "description": "youzhanv2-xi · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "youzhanv2-xi"
+      },
+      "series_i18n": {
+        "en-US": "RVC Original",
+        "ja-JP": "RVCオリジナル",
+        "zh-TW": "RVC原版"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260721",
@@ -232,6 +264,11 @@
       "sha256": "35916208f204b4c48f5e3e27df11976d2b9175bec93afe90ae5ce2b4ec649458",
       "size_bytes": 82531532,
       "description": "Anon · MyGO!!!!! · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "Chihaya Anon",
+        "ja-JP": "千早愛音",
+        "zh-TW": "千早愛音"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260723",
@@ -254,6 +291,11 @@
       "sha256": "6891050421a66bb526b5fceae6dec2521191b37cfb4b0d358a80a315c52b88c1",
       "size_bytes": 129503551,
       "description": "Rana · MyGO!!!!! · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "Kaname Raana",
+        "ja-JP": "要楽奈",
+        "zh-TW": "要樂奈"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260723",
@@ -276,6 +318,11 @@
       "sha256": "8c8e78f7ee4255bffa9b8b00e651fb42bc143cf2460e5b12a787f723eae9e2fd",
       "size_bytes": 207948470,
       "description": "Soyo · MyGO!!!!! · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "Nagasaki Soyo",
+        "ja-JP": "長崎そよ",
+        "zh-TW": "長崎爽世"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260723",
@@ -298,6 +345,11 @@
       "sha256": "9c53e8964737d534e558bf7339d393ccd9f82b35ec5d0d37c6d74b6e1374d96b",
       "size_bytes": 333192756,
       "description": "Taki · MyGO!!!!! · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "Shiina Taki",
+        "ja-JP": "椎名立希",
+        "zh-TW": "椎名立希"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260723",
@@ -320,6 +372,11 @@
       "sha256": "c64a9446328ed8c2d57056d07d6b6ac909e04c9717efcfb02280cbcd90969112",
       "size_bytes": 430166654,
       "description": "Tomori · MyGO!!!!! · 来源于官方下载",
+      "name_i18n": {
+        "en-US": "Takamatsu Tomori",
+        "ja-JP": "高松燈",
+        "zh-TW": "高松燈"
+      },
       "publisher": "rvc_fabric",
       "fabric_official": true,
       "date": "260723",
@@ -351,6 +408,11 @@
       "cover": "ch-banner/tp-miku.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku.jpg",
       "series": "VOCALOID",
+      "name_i18n": {
+        "en-US": "Hatsune Miku",
+        "ja-JP": "初音ミク",
+        "zh-TW": "初音未來"
+      },
       "hf_downloads": 23,
       "hf_likes": 0,
       "snapshot_date": "260729",
@@ -375,6 +437,11 @@
       "fabric_official": false,
       "pth_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.pth",
       "index_url": "https://huggingface.co/binant/Donald_Trump__RVC_v2_/resolve/main/model.index",
+      "name_i18n": {
+        "en-US": "Donald Trump",
+        "ja-JP": "ドナルド・トランプ",
+        "zh-TW": "唐納·川普"
+      },
       "hf_downloads": 18,
       "hf_likes": 0,
       "snapshot_date": "260729",
@@ -401,6 +468,16 @@
       "cover": "ch-banner/tp-furina.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-furina.jpg",
       "series": "原神",
+      "name_i18n": {
+        "en-US": "Furina",
+        "ja-JP": "フリーナ",
+        "zh-TW": "芙寧娜"
+      },
+      "series_i18n": {
+        "en-US": "Genshin Impact",
+        "ja-JP": "原神",
+        "zh-TW": "原神"
+      },
       "real_person": false
     },
     {
@@ -424,6 +501,11 @@
       "cover": "ch-banner/tp-miku-power.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku-power.jpg",
       "series": "VOCALOID",
+      "name_i18n": {
+        "en-US": "Hatsune Miku (Power)",
+        "ja-JP": "初音ミク（Power）",
+        "zh-TW": "初音未來（Power）"
+      },
       "real_person": false
     },
     {
@@ -447,6 +529,16 @@
       "cover": "ch-banner/tp-nahida.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-nahida.jpg",
       "series": "原神",
+      "name_i18n": {
+        "en-US": "Nahida",
+        "ja-JP": "ナヒーダ",
+        "zh-TW": "納西妲"
+      },
+      "series_i18n": {
+        "en-US": "Genshin Impact",
+        "ja-JP": "原神",
+        "zh-TW": "原神"
+      },
       "real_person": false
     },
     {
@@ -470,6 +562,16 @@
       "cover": "ch-banner/tp-raiden.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-raiden.jpg",
       "series": "原神",
+      "name_i18n": {
+        "en-US": "Raiden Shogun",
+        "ja-JP": "雷電将軍",
+        "zh-TW": "雷電將軍"
+      },
+      "series_i18n": {
+        "en-US": "Genshin Impact",
+        "ja-JP": "原神",
+        "zh-TW": "原神"
+      },
       "real_person": false
     },
     {
@@ -493,6 +595,16 @@
       "cover": "ch-banner/tp-zhongli.jpg",
       "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-zhongli.jpg",
       "series": "原神",
+      "name_i18n": {
+        "en-US": "Zhongli",
+        "ja-JP": "鍾離",
+        "zh-TW": "鍾離"
+      },
+      "series_i18n": {
+        "en-US": "Genshin Impact",
+        "ja-JP": "原神",
+        "zh-TW": "原神"
+      },
       "real_person": false
     }
   ],

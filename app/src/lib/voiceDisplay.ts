@@ -205,6 +205,58 @@ export function displayVoiceName(
   return native;
 }
 
+/** Pick from `field_i18n` map / flat aliases, then primary field. */
+function pickFieldI18n(
+  v: NamedVoice,
+  field: string,
+  locale: string,
+): string {
+  const map = v[`${field}_i18n`];
+  if (map && typeof map === "object" && !Array.isArray(map)) {
+    const m = map as Record<string, unknown>;
+    const cands = [locale, locale.split("-")[0] || ""];
+    if (locale.startsWith("en")) cands.push("en-US", "en");
+    if (locale.startsWith("ja")) cands.push("ja-JP", "ja");
+    if (locale.startsWith("ko")) cands.push("ko-KR", "ko");
+    if (locale === "zh-TW") cands.push("zh_Hant", "zh-Hant");
+    for (const c of cands) {
+      if (!c) continue;
+      const hit = str(m[c]);
+      if (hit) return hit;
+    }
+  }
+  const short = locale.split("-")[0] || "";
+  for (const k of [
+    `${field}_${locale}`,
+    `${field}_${short}`,
+    `${field}_${locale.replace(/-/g, "_")}`,
+    locale === "zh-TW" ? `${field}_zh_Hant` : "",
+  ]) {
+    if (!k) continue;
+    const hit = str(v[k]);
+    if (hit) return hit;
+  }
+  return str(v[field]);
+}
+
+/** Store card tag line (少女音 / Girl voice / …). */
+export function displayVoiceTag(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  return pickFieldI18n(v, "tag", loc);
+}
+
+/** Longer description under the card / detail. */
+export function displayVoiceDescription(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  return pickFieldI18n(v, "description", loc);
+}
+
 export function displayVoiceSeries(
   v: NamedVoice,
   locale?: LocaleCode | string,

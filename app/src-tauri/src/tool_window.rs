@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn only_the_three_known_tools_have_a_window() {
         for k in ["separate", "train", "tts"] {
-            assert!(spec_for(k).is_some(), &crate::i18n::t("s.89f4473a33"));
+            assert!(spec_for(k).is_some());
         }
         // 前端传什么过来都可能，没登记的一律拒绝 —— 否则一个拼错的名字会开出
         // 一扇加载 `#/tool/whatever` 的空白窗，用户以为软件坏了。
@@ -161,7 +161,7 @@ mod tests {
     fn a_tool_window_is_never_smaller_than_its_content_needs() {
         for k in ["separate", "train", "tts"] {
             let s = spec_for(k).unwrap();
-            assert!(s.min_w <= s.w && s.min_h <= s.h, &crate::i18n::t("s.93b36c5670"));
+            assert!(s.min_w <= s.w && s.min_h <= s.h);
         }
     }
 }

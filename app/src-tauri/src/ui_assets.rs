@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn percent_decode_handles_multibyte_and_malformed() {
         assert_eq!(percent_decode("a%20b"), "a b");
-        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87.js"), &crate::i18n::t("s.c5be4a3312"));
+        assert_eq!(percent_decode("%E4%B8%AD%E6%96%87.js"), "中文.js");
         // A stray '%' must survive rather than eat the following bytes.
         assert_eq!(percent_decode("100%.css"), "100%.css");
         assert_eq!(percent_decode("%zz"), "%zz");

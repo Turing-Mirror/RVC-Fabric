@@ -19,6 +19,7 @@ import { t, getTLocale } from "../i18n/t";
 import {
   displayVoiceName,
   displayVoiceSeries,
+  displayVoiceTag,
   voiceSearchText,
 } from "../lib/voiceDisplay";
 
@@ -540,7 +541,7 @@ function VoiceCard({
   })();
   const showImg = Boolean(coverHttp) && !imgFailed;
   const meta = [
-    seriesLabel || v.tag,
+    seriesLabel || displayVoiceTag(v, loc),
     v.author ? t("s.7feea73fa3", { v0: v.author }) : "",
     v.size_label,
   ]

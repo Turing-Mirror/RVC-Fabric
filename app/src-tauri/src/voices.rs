@@ -1717,7 +1717,7 @@ mod tests {
             "model.pth",                        // 文件名，两条都对得上
             &crate::i18n::t("s.8fd94350c5"),
         );
-        assert_eq!(idx, 1, &crate::i18n::t("s.090dc6f57d"));
+        assert_eq!(idx, 1);
     }
 
     #[test]
@@ -1729,11 +1729,25 @@ mod tests {
         // 路径变了（换了安装目录），文件名还在
         assert_eq!(resolve_selected(&models, "/old/b.pth", "b.pth", ""), 1);
         // 文件也重命名了，只剩显示名
-        assert_eq!(resolve_selected(&models, "/old/x.pth", "x.pth", &crate::i18n::t("s.3458316756")), 1);
+        assert_eq!(
+            resolve_selected(
+                &models,
+                "/old/x.pth",
+                "x.pth",
+                &crate::i18n::t("s.3458316756")
+            ),
+            1
+        );
         // 三个都对不上：退回第一条，而不是「未选择模型」
-        assert_eq!(resolve_selected(&models, "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")), 0);
+        assert_eq!(
+            resolve_selected(&models, "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
+            0
+        );
         // 一条音色都没有
-        assert_eq!(resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")), -1);
+        assert_eq!(
+            resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
+            -1
+        );
     }
 
     #[test]

@@ -383,15 +383,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("assets").join("pretrained_v2");
         std::fs::create_dir_all(&d).unwrap();
-        assert!(!pretrained_ready(&base, "48k"), &crate::i18n::t("s.f7b505e766"));
+        assert!(!pretrained_ready(&base, "48k"));
 
         let big = vec![0u8; 10_000_001];
         std::fs::write(d.join("f0G48k.pth"), &big).unwrap();
-        assert!(!pretrained_ready(&base, "48k"), &crate::i18n::t("s.5b06a8fa54"));
+        assert!(!pretrained_ready(&base, "48k"));
 
         std::fs::write(d.join("f0D48k.pth"), &big).unwrap();
         assert!(pretrained_ready(&base, "48k"));
-        assert!(!pretrained_ready(&base, "40k"), &crate::i18n::t("s.575b2cd0cf"));
+        assert!(!pretrained_ready(&base, "40k"));
         let _ = std::fs::remove_dir_all(&base);
     }
 

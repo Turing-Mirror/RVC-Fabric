@@ -377,7 +377,7 @@ mod tests {
         // 否则 SAPI 会生成一个 0 秒的 wav，然后 RVC 对着它跑一遍，最后交给
         // 用户一个听不见任何东西的文件。
         assert!(MAX_CHARS > 0);
-        let long: String = &crate::i18n::t("s.582c50066c").repeat(MAX_CHARS + 1);
+        let long: String = crate::i18n::t("s.582c50066c").repeat(MAX_CHARS + 1);
         assert!(long.chars().count() > MAX_CHARS);
     }
 }

@@ -660,7 +660,7 @@ mod tests {
             "Quadro P2000",
             "Tesla T4",
         ] {
-            assert!(looks_like_nvidia(good), &crate::i18n::t("s.ee1fb6f221"));
+            assert!(looks_like_nvidia(good));
         }
         for bad in [
             "Intel(R) UHD Graphics 770",
@@ -669,7 +669,7 @@ mod tests {
             "Microsoft Basic Display Adapter",
             "Parsec Virtual Display Adapter",
         ] {
-            assert!(!looks_like_nvidia(bad), &crate::i18n::t("s.309e44c96e"));
+            assert!(!looks_like_nvidia(bad));
         }
     }
 }

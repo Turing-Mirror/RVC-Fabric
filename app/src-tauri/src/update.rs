@@ -170,7 +170,15 @@ fn decide(cat: &Value, local: &str, exe_version: &str) -> Value {
     let remote = remote_version(cat, &gui);
     let url = field(&gui, "url").to_string();
     let sha = field(&gui, "sha256").to_string();
-    let notes = field(&gui, "notes").to_string();
+    // Prefer notes_i18n[locale] from catalog; fall back to Chinese notes.
+    let notes = {
+        let n = crate::i18n::pick_str(&gui, "notes");
+        if n.is_empty() {
+            field(&gui, "notes").to_string()
+        } else {
+            n
+        }
+    };
     let pkg = {
         let p = field(&gui, "package_type");
         if p.is_empty() { "gui_patch" } else { p }.to_string()
@@ -340,7 +348,7 @@ mod tests {
         let cat = real_catalog("1.3.4", "gui_patch", "https://x/p.zip");
         // 界面已经打到 1.3.4，exe 仍是 1.3.3
         let r = decide(&cat, "1.3.4", "1.3.3");
-        assert_eq!(r["available"], false, &crate::i18n::t("s.8cdca7ff61"));
+        assert_eq!(r["available"], false);
     }
 
     /// exe 太老、装不了目标版本时，不该让用户去下一个装不上的包。

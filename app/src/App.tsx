@@ -22,11 +22,7 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import {
-  registerDownloadModelsOpener,
-  registerEngineCoreOpener,
-} from "./lib/downloadModels";
-import { EngineCoreDialog } from "./components/EngineCoreDialog";
+import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { t } from "./i18n/t";
 
 /**
@@ -63,12 +59,9 @@ function clockNow(): string {
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
-  // 「下载模型」：用户主动打开（分离/训练附加包）。
+  // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [extrasReason, setExtrasReason] = useState("");
-  // 「补全引擎资源」：开启变声 / 音频工具缺 hubert 时，不跳「其他」页。
-  const [engineCoreOpen, setEngineCoreOpen] = useState(false);
-  const [engineCoreReason, setEngineCoreReason] = useState("");
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
@@ -400,14 +393,7 @@ export default function App() {
     registerDownloadModelsOpener((opts) => {
       openDownloadModels(opts?.reason);
     });
-    registerEngineCoreOpener((opts) => {
-      setEngineCoreReason(opts?.reason || "");
-      setEngineCoreOpen(true);
-    });
-    return () => {
-      registerDownloadModelsOpener(null);
-      registerEngineCoreOpener(null);
-    };
+    return () => registerDownloadModelsOpener(null);
   }, [openDownloadModels]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
@@ -764,15 +750,6 @@ export default function App() {
           }
         }}
       </PageHost>
-
-      <EngineCoreDialog
-        open={engineCoreOpen}
-        reason={engineCoreReason}
-        onClose={() => {
-          setEngineCoreOpen(false);
-          setEngineCoreReason("");
-        }}
-      />
 
       {closeAsk ? (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">

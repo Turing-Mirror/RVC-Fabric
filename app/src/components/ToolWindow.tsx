@@ -32,9 +32,11 @@ export function toolFromHash(hash: string): ToolKind | null {
 export function openTool(kind: ToolKind): void {
   void (async () => {
     try {
+      // 音频工具需要引擎资源（hubert/rmvpe/ffmpeg）。缺了就打开「下载模型」
+      // 弹窗：先下基础依赖，再下分离/训练附加包。底栏「开启变声」不走这里。
       const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
       const ok = await ensureEngineCoreOrPrompt(
-        `使用「${TITLES[kind]}」需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。与训练底模无关，下完后即可打开工具。`,
+        `使用「${TITLES[kind]}」前，需要先补全基础引擎资源（hubert / rmvpe / ffmpeg）。补全后可继续下载分离/训练模型，再打开本工具。`,
       );
       if (!ok) return;
     } catch {

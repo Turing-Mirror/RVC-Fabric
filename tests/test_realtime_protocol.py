@@ -93,6 +93,36 @@ class WriteJsonTests(unittest.TestCase):
             self.assertIn("i", data)
             self.assertIn("j", data)
 
+    def test_write_status_clears_stale_message_code(self):
+        """Boot leaves engine.starting; idle/ready must not keep that code."""
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STATUS_PATH", td_path / "status.json"
+            ):
+                rp.write_status(
+                    state="starting",
+                    message_code="engine.starting",
+                    message="引擎进程已启动，正在加载…",
+                )
+                rp.write_status(state="idle", message="引擎就绪")
+                data = json.loads(
+                    (td_path / "status.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(data["state"], "idle")
+                self.assertEqual(data["message"], "引擎就绪")
+                self.assertEqual(data.get("message_code", ""), "")
+                # Explicit code still wins when provided with the update.
+                rp.write_status(
+                    state="starting",
+                    message_code="vc.loading_model",
+                    message="正在加载音色模型…",
+                )
+                data = json.loads(
+                    (td_path / "status.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(data["message_code"], "vc.loading_model")
+
 
 if __name__ == "__main__":
     unittest.main()

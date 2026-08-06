@@ -2586,12 +2586,24 @@ if __name__ == "__main__":
                 self.stop_stream()
             except Exception:
                 traceback.print_exc()
+            try:
+                from tools.msg_codes import VC_LOADING_MODEL, status_fields as _sf_start
+
+                _load_fields = _sf_start(VC_LOADING_MODEL)
+            except Exception:
+                _load_fields = {
+                    "message_code": "vc.loading_model",
+                    "message": "正在加载音色模型…",
+                }
+
             self._worker_write_status(
                 state="starting",
                 error="",
-                message="正在加载音色模型…",
                 pid=os.getpid(),
                 **self._worker_device_payload(),
+                # Distinct from process boot (engine.starting) so a sticky code
+                # cannot freeze the dock on “引擎进程已启动，正在加载…”.
+                **_load_fields,
             )
             try:
                 values = self._values_from_config_file()
@@ -2712,14 +2724,24 @@ if __name__ == "__main__":
                     pid=os.getpid(),
                 )
                 return
+            try:
+                from tools.msg_codes import ENGINE_IDLE, status_fields as _sf_idle
+
+                _idle_fields = _sf_idle(ENGINE_IDLE, message="已停止")
+            except Exception:
+                _idle_fields = {
+                    "message_code": "engine.idle",
+                    "message": "已停止",
+                }
+
             self._worker_write_status(
                 state="idle",
                 error="",
-                message="已停止",
                 delay_ms=0,
                 infer_ms=0,
                 pid=os.getpid(),
                 **self._worker_device_payload(),
+                **_idle_fields,
             )
 
         def worker_main(self):
@@ -2760,7 +2782,13 @@ if __name__ == "__main__":
             base.update(self._worker_device_payload())
             base["state"] = "idle"
             base["pid"] = os.getpid()
-            base["message"] = "引擎就绪"
+            try:
+                from tools.msg_codes import ENGINE_READY, status_fields as _sf_ready
+
+                base.update(_sf_ready(ENGINE_READY))
+            except Exception:
+                base["message"] = "引擎就绪"
+                base["message_code"] = "engine.ready"
             write_status(**base)
 
             # Ignore stale commands left from previous sessions

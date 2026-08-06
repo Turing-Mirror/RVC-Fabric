@@ -267,7 +267,8 @@
       "missing_python": "Runtime\\python.exe not found"
     },
     "vc": {
-      "need_model": "Pick a voice model first"
+      "need_model": "Pick a voice model first",
+      "loading_model": "Loading voice model…"
     }
   },
   "s": {

@@ -375,6 +375,21 @@ pub fn localize_status(status: &mut Value) {
     if code.is_empty() {
         return;
     }
+    // Stale boot code: worker used to leave `engine.starting` in status.json
+    // after becoming idle (merge write never cleared message_code). Prefer the
+    // free-form `message` / state when the process is clearly past boot.
+    let state = status
+        .get("state")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if code == "engine.starting"
+        && matches!(state, "idle" | "running" | "error" | "stopping")
+    {
+        if let Some(obj) = status.as_object_mut() {
+            obj.insert("message_code".into(), Value::String(String::new()));
+        }
+        return;
+    }
     let mut vars = HashMap::new();
     if let Some(obj) = status.get("message_params").and_then(|v| v.as_object()) {
         for (k, v) in obj {

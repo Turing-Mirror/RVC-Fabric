@@ -24,6 +24,7 @@ RUNTIME_MISSING_PYTHON = "runtime.missing_python"
 
 # voice conversion
 VC_NEED_MODEL = "vc.need_model"
+VC_LOADING_MODEL = "vc.loading_model"
 
 # Chinese fallbacks (zh-CN). Must match app/i18n/locales/zh-CN.json msg.*
 _FALLBACK_ZH: dict[str, str] = {
@@ -35,6 +36,7 @@ _FALLBACK_ZH: dict[str, str] = {
     RUNTIME_NOT_READY: "运行时未就绪，请先完成补全",
     RUNTIME_MISSING_PYTHON: "找不到 Runtime\\python.exe",
     VC_NEED_MODEL: "请先选择音色模型",
+    VC_LOADING_MODEL: "正在加载音色模型…",
 }
 
 

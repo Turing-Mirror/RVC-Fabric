@@ -267,7 +267,8 @@
       "missing_python": "Runtime\\python.exe が見つかりません"
     },
     "vc": {
-      "need_model": "先に音声モデルを選択してください"
+      "need_model": "先に音声モデルを選択してください",
+      "loading_model": "ボイスモデルを読み込み中…"
     }
   },
   "s": {

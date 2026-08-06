@@ -114,7 +114,24 @@ def read_status() -> dict[str, Any]:
 
 
 def write_status(**fields: Any) -> None:
+    """Merge fields into status.json.
+
+    ``message_code`` sticks across merges. Early boot writes ``engine.starting``;
+    later updates often only set ``message``/``state``. The shell localizes by
+    ``message_code`` first, so a leftover code freezes the dock on
+    「引擎进程已启动，正在加载…」 forever even when the worker is idle.
+
+    Rule: any write that sets ``message`` or ``state`` without a new
+    ``message_code`` clears the old code (empty string). Callers that want a
+    code must pass ``message_code`` explicitly (see ``msg_codes.status_fields``).
+    """
     cur = _read_json(STATUS_PATH)
+    if (
+        ("message" in fields or "state" in fields)
+        and "message_code" not in fields
+        and cur.get("message_code")
+    ):
+        fields = {**fields, "message_code": ""}
     cur.update(fields)
     cur["ts"] = time.time()
     _write_json(STATUS_PATH, cur)
@@ -152,6 +169,8 @@ def default_status() -> dict[str, Any]:
         "pid": 0,
         "last_cmd_seq": 0,
         "message": "",
+        # Explicit empty so a full default write does not keep a stale code.
+        "message_code": "",
     }
 
 

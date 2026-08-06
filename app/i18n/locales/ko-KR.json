@@ -267,7 +267,8 @@
       "missing_python": "Runtime\\python.exe를 찾을 수 없습니다"
     },
     "vc": {
-      "need_model": "먼저 음색 모델을 선택하세요"
+      "need_model": "먼저 음색 모델을 선택하세요",
+      "loading_model": "음성 모델 로드 중…"
     }
   },
   "s": {

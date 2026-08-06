@@ -267,7 +267,8 @@
       "missing_python": "找不到 Runtime\\python.exe"
     },
     "vc": {
-      "need_model": "請先選擇音色模型"
+      "need_model": "請先選擇音色模型",
+      "loading_model": "正在載入音色模型…"
     }
   },
   "s": {

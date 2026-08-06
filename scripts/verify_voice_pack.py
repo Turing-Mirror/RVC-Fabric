@@ -79,8 +79,28 @@ def _cache_dir() -> Path:
     return d
 
 
+def _quote_hf_url(url: str) -> str:
+    """确保 path 段已 percent-encode（空格/中文）。已编码的不二次编码。"""
+    try:
+        parts = urllib.parse.urlsplit(url)
+        # 分段 quote：避免把已有 %20 再变成 %2520
+        segs = []
+        for s in parts.path.split("/"):
+            if not s:
+                segs.append(s)
+                continue
+            segs.append(urllib.parse.quote(urllib.parse.unquote(s), safe=""))
+        path = "/".join(segs)
+        return urllib.parse.urlunsplit(
+            (parts.scheme, parts.netloc, path, parts.query, parts.fragment)
+        )
+    except Exception:
+        return url
+
+
 def _to_endpoint(url: str, endpoint: str) -> str:
     """清单里存 huggingface.co 规范形态；下载走镜像。"""
+    url = _quote_hf_url(url)
     if endpoint and url.startswith(CANONICAL):
         return endpoint.rstrip("/") + url[len(CANONICAL) :]
     return url

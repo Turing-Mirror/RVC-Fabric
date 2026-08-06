@@ -157,8 +157,13 @@ def _pick_artifacts(tree: list) -> dict[str, Any]:
 
 
 def _resolve_url(endpoint: str, repo: str, path: str) -> str:
-    # 清单统一存 huggingface.co 规范形态；客户端再按镜像重写
-    return f"https://huggingface.co/{repo}/resolve/main/{path}"
+    # 清单统一存 huggingface.co 规范形态；客户端再按镜像重写。
+    # 路径里的空格/中文必须 percent-encode，否则 urllib / 部分下载器直接拒。
+    import urllib.parse
+
+    segs = [urllib.parse.quote(s, safe="") for s in path.replace("\\", "/").split("/")]
+    quoted = "/".join(segs)
+    return f"https://huggingface.co/{repo}/resolve/main/{quoted}"
 
 
 def _bangumi_search(keyword: str) -> list[dict]:
@@ -226,7 +231,8 @@ def _write_yaml(path: Path, data: dict) -> None:
                 continue
             else:
                 s = str(v).replace('"', '\\"')
-                if any(c in s for c in ":#\n") or s == "":
+                # 空格也必须引号：否则 YAML 可能把 `...ayaka-jp 101 epochs` 折成多行
+                if any(c in s for c in ":#\n ") or s == "":
                     lines.append(f'{k}: "{s}"')
                 else:
                     lines.append(f"{k}: {s}")
@@ -360,14 +366,34 @@ def main(argv: Optional[list[str]] = None) -> int:
             "candidates": [],
         }
         stem = Path(args.pth_path).stem
+        pth_dir = str(Path(args.pth_path).parent).replace("\\", "/")
+        if pth_dir == ".":
+            pth_dir = ""
+        # 优先：同目录 + 同 stem；其次同目录任意 index；再退回全仓
+        same_dir: list[str] = []
         for x in tree:
             if not isinstance(x, dict):
                 continue
-            p = str(x.get("path") or "")
-            if p.lower().endswith(".index") and (
-                Path(p).stem == stem or not art["index"]
-            ):
-                art["index"] = p
+            p = str(x.get("path") or "").replace("\\", "/")
+            if not p.lower().endswith(".index"):
+                continue
+            parent = str(Path(p).parent).replace("\\", "/")
+            if parent == ".":
+                parent = ""
+            if pth_dir and parent != pth_dir:
+                continue
+            same_dir.append(p)
+        if same_dir:
+            exact = [p for p in same_dir if Path(p).stem == stem]
+            art["index"] = exact[0] if exact else same_dir[0]
+        else:
+            for x in tree:
+                if not isinstance(x, dict):
+                    continue
+                p = str(x.get("path") or "")
+                if p.lower().endswith(".index") and Path(p).stem == stem:
+                    art["index"] = p
+                    break
     else:
         art = _pick_artifacts(tree)
         if len(art.get("candidates") or []) > 1:

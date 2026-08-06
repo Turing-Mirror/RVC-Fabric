@@ -67,15 +67,87 @@ fn path_after_host(url: &str) -> Option<&str> {
     None
 }
 
+/// Percent-encode path segments that still contain raw spaces / non-ASCII.
+/// Already-encoded `%XX` sequences are left intact (decode then re-encode).
+pub fn encode_path(url: &str) -> String {
+    let url = url.trim();
+    let Some(scheme_end) = url.find("://") else {
+        return url.to_string();
+    };
+    let scheme = &url[..scheme_end];
+    let after = &url[scheme_end + 3..];
+    let slash = after.find('/').unwrap_or(after.len());
+    let host = &after[..slash];
+    let rest = if slash < after.len() {
+        &after[slash..]
+    } else {
+        ""
+    };
+    let (path, query) = match rest.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (rest, None),
+    };
+    let encoded: String = path
+        .split('/')
+        .map(|seg| {
+            if seg.is_empty() {
+                return String::new();
+            }
+            let decoded = percent_decode(seg);
+            percent_encode(&decoded)
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    match query {
+        Some(q) => format!("{scheme}://{host}{encoded}?{q}"),
+        None => format!("{scheme}://{host}{encoded}"),
+    }
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Ok(hi), Ok(lo)) = (
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 2]).unwrap_or(""), 16),
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 2..i + 3]).unwrap_or(""), 16),
+            ) {
+                out.push((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
 /// Rewrite an HF URL onto `endpoint` (scheme+host, no trailing slash required).
 pub fn rewrite(url: &str, endpoint: &str) -> String {
+    let url = encode_path(url.trim());
     let ep = endpoint.trim().trim_end_matches('/');
     if ep.is_empty() {
-        return url.to_string();
+        return url;
     }
-    match path_after_host(url.trim()) {
+    match path_after_host(&url) {
         Some(path) => format!("{ep}{path}"),
-        None => url.to_string(),
+        None => url,
     }
 }
 
@@ -91,6 +163,7 @@ pub fn download_urls(url: &str, user_endpoint: &str) -> Vec<String> {
         return vec![url.to_string()];
     }
 
+    let url = encode_path(url);
     let mut out: Vec<String> = Vec::with_capacity(4);
     let mut push = |u: String| {
         if u.is_empty() {
@@ -103,23 +176,16 @@ pub fn download_urls(url: &str, user_endpoint: &str) -> Vec<String> {
 
     let user = user_endpoint.trim();
     if !user.is_empty() {
-        push(rewrite(url, user));
+        push(rewrite(&url, user));
     }
     for m in DEFAULT_MIRRORS {
-        push(rewrite(url, m));
+        push(rewrite(&url, m));
     }
     // Canonical last — overseas / when both mirrors fail.
-    push(rewrite(url, CANONICAL));
-    // If the catalog somehow already pointed at a mirror, keep the original
-    // order's first rewrite but also try the raw catalog URL near the front
-    // when it is not already covered.
-    if !out.iter().any(|x| x == url) {
-        // Insert after user endpoint (if any), before defaults would have… actually
-        // original mirror URL is already rewritten into defaults. Skip.
-    }
+    push(rewrite(&url, CANONICAL));
 
     if out.is_empty() {
-        out.push(url.to_string());
+        out.push(url);
     }
     out
 }
@@ -183,5 +249,13 @@ mod tests {
         assert!(is_hf_url("https://huggingface.co/x/y"));
         assert!(is_hf_url("https://hf-mirror.com/x/y"));
         assert!(!is_hf_url("https://cnb.cool/x"));
+    }
+
+    #[test]
+    fn encodes_spaces_in_path() {
+        let u = "https://huggingface.co/org/repo/resolve/main/prezipped/v2/ayaka-jp 101 epochs.zip";
+        let list = download_urls(u, "");
+        assert!(list[0].contains("ayaka-jp%20101%20epochs.zip"));
+        assert!(!list[0].contains("ayaka-jp 101"));
     }
 }

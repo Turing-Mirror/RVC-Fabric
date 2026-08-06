@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openTool } from "../components/ToolWindow";
 import { ExtrasDialog } from "../components/ExtrasDialog";
+import { QrDialog } from "../components/QrDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
 import { allLinks } from "../lib/links";
@@ -40,6 +41,8 @@ export function MorePage({
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
   const [extrasOpenLocal, setExtrasOpenLocal] = useState(false);
+  // 有二维码的社媒条目（QQ 群）点开的是图片，不是外链。
+  const [qr, setQr] = useState<{ src: string; label: string } | null>(null);
   const extrasOpen = extrasOpenProp ?? extrasOpenLocal;
   const setExtrasOpen = (open: boolean) => {
     if (onExtrasOpenChange) onExtrasOpenChange(open);
@@ -389,11 +392,22 @@ export function MorePage({
               key={l.url}
               title={l.title}
               desc={l.desc}
-              right={<Btn onClick={() => void openExternal(l.url)}>{t("s.65fc81e161")}</Btn>}
+              right={
+                l.qr ? (
+                  <Btn onClick={() => setQr({ src: l.qr!, label: l.title })}>
+                    {t("social.qr")}
+                  </Btn>
+                ) : (
+                  <Btn onClick={() => void openExternal(l.url)}>{t("s.65fc81e161")}</Btn>
+                )
+              }
             />
           ))}
         </Group>
       </Block>
+      {qr ? (
+        <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
+      ) : null}
     </PagePad>
   );
 }

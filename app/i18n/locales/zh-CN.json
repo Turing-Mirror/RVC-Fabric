@@ -1356,5 +1356,11 @@
     "languageSystemHint": "已按系统语言预选：{lang}",
     "languageSystemBadge": "系统",
     "languageContinue": "继续"
+  },
+  "social": {
+    "qqTitle": "QQ 群 @图灵镜社区",
+    "qqShort": "QQ 群",
+    "qqNumber": "群号 1077458748",
+    "qr": "二维码"
   }
 }

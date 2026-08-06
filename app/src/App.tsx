@@ -3,6 +3,7 @@ import { Dock, type OutputMode } from "./components/Dock";
 import { Nudge } from "./components/Nudge";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
+import { QrDialog } from "./components/QrDialog";
 import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
@@ -274,6 +275,8 @@ export default function App() {
   // 数的是**完成**的次数（开启→停止算一次），不是点了几次开启：起了又立刻
   // 报错停掉的不该算数，那种时候用户正在烦躁，问他要不要关注是最糟的时机。
   const [askFollow, setAskFollow] = useState(false);
+  // 有二维码的社媒（QQ 群）点开的是图片，不是外链。
+  const [qr, setQr] = useState<{ src: string; label: string } | null>(null);
   const wasRunning = useRef(false);
   useEffect(() => {
     const was = wasRunning.current;
@@ -881,6 +884,13 @@ export default function App() {
                 <Btn
                   key={l.url}
                   onClick={() => {
+                    // 二维码那条（QQ 群）没有能跳的地址，点开是图片。
+                    // 浮层留着不关：关掉它这条邀请就不会再出现，用户扫完码
+                    // 想再看一眼群名都没地方看了。
+                    if (l.qr) {
+                      setQr({ src: l.qr, label: l.title });
+                      return;
+                    }
                     void openExternal(l.url);
                     closeFollow();
                   }}
@@ -891,6 +901,10 @@ export default function App() {
             </>
           }
         >{t("s.7f3ebfb67b")}</Nudge>
+      ) : null}
+
+      {qr ? (
+        <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
       ) : null}
 
       <Dock

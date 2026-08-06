@@ -1356,5 +1356,11 @@
     "languageSystemHint": "시스템 언어로 미리 선택됨: {lang}",
     "languageSystemBadge": "시스템",
     "languageContinue": "계속"
+  },
+  "social": {
+    "qqTitle": "QQ 그룹 @Turing Mirror 커뮤니티",
+    "qqShort": "QQ 그룹",
+    "qqNumber": "그룹 번호 1077458748",
+    "qr": "QR 코드"
   }
 }

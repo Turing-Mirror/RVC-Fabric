@@ -1356,5 +1356,11 @@
     "languageSystemHint": "Présélectionné selon le système : {lang}",
     "languageSystemBadge": "Système",
     "languageContinue": "Continuer"
+  },
+  "social": {
+    "qqTitle": "Groupe QQ @Communauté Turing Mirror",
+    "qqShort": "Groupe QQ",
+    "qqNumber": "N° de groupe 1077458748",
+    "qr": "Code QR"
   }
 }

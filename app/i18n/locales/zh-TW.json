@@ -1356,5 +1356,11 @@
     "languageSystemHint": "已依系統語言預選：{lang}",
     "languageSystemBadge": "系統",
     "languageContinue": "繼續"
+  },
+  "social": {
+    "qqTitle": "QQ 群 @圖靈鏡社區",
+    "qqShort": "QQ 群",
+    "qqNumber": "群號 1077458748",
+    "qr": "二維碼"
   }
 }

@@ -1,4 +1,5 @@
 import { t } from "../i18n/t";
+import qqGroup from "../assets/qq_group.jpg";
 /**
  * 对外的仓库与社媒地址，一处定义。
  *
@@ -13,6 +14,14 @@ export type LinkEntry = {
   /** 账号自己的标识，除此之外不写别的。 */
   desc?: string;
   url: string;
+  /**
+   * 二维码图片。有这个的条目不跳外链 —— 按钮点开图片，用户拿手机扫。
+   *
+   * QQ 群没有「用浏览器打开就能加群」的地址：`qq.com` 那种加群链接在桌面端
+   * 会跳去下载 QQ，扫码才是真能进群的路。所以 `url` 对这类条目只是个稳定的
+   * key（列表 key、去重用），点它不会有任何跳转。
+   */
+  qr?: string;
 };
 
 export function repoLinks(): LinkEntry[] {
@@ -50,6 +59,14 @@ export function socialLinks(): LinkEntry[] {
       short: t("s.e2866d0815"),
       desc: t("s.84ccf9394c"),
       url: "https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094",
+    },
+    {
+      title: t("social.qqTitle"),
+      short: t("social.qqShort"),
+      desc: t("social.qqNumber"),
+      // 见 `qr` 的说明：这条不跳转，这个地址只当稳定 key 用。
+      url: "qq-group://1077458748",
+      qr: qqGroup,
     },
   ];
 }

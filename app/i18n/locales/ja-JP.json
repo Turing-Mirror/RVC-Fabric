@@ -1356,5 +1356,11 @@
     "languageSystemHint": "システム言語から事前選択：{lang}",
     "languageSystemBadge": "システム",
     "languageContinue": "続ける"
+  },
+  "social": {
+    "qqTitle": "QQ グループ @Turing Mirror コミュニティ",
+    "qqShort": "QQ グループ",
+    "qqNumber": "グループ番号 1077458748",
+    "qr": "QR コード"
   }
 }

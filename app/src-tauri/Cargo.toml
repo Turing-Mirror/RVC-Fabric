@@ -61,4 +61,6 @@ windows-sys = { version = "0.59", features = [
   # 竖带修复要等 WebView2 渲染器子窗口出现才能动框架，靠 EnumChildWindows /
   # GetClassName 探测。
   "Win32_UI_WindowsAndMessaging",
+  # 无边框最大化：WM_GETMINMAXINFO 子类化，把最大化矩形钳到工作区（不含任务栏）。
+  "Win32_UI_Shell",
 ] }

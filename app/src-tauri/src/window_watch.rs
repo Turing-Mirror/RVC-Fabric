@@ -238,45 +238,245 @@ fn set_thickframe(hwnd: windows_sys::Win32::Foundation::HWND, enable: bool) {
     }
 }
 
-/// 摘掉厚框后，按**当前样式**重新套一次最大化，把外框落到工作区。
-///
-/// 为什么不用 `set_size` / `set_position`：
-/// Tauri 那两条最终会改窗口的「普通尺寸」（`WINDOWPLACEMENT.rcNormalPosition`），
-/// 或者直接清掉 `WS_MAXIMIZE`。结果是：看起来已经铺满工作区，但系统眼里
-/// 「还原矩形」已经变成工作区本身——再点最大化按钮等于还原到同样大小，
-/// 用户感觉「最大化后再点回不去」。
-///
-/// 正确做法：先 `set_thickframe(false)`，再 `SetWindowPlacement(SW_SHOWMAXIMIZED)`。
-/// 系统按当前样式重算最大化矩形（无厚框就不探出任务栏），同时**保留**进最大化
-/// 之前写好的 `rcNormalPosition`，还原按钮才能回到原来的尺寸和位置。
+/// 每个窗口自己的最大化状态（主窗 / 工具窗不能共用一个 AtomicBool）。
 #[cfg(windows)]
-fn fit_maximized_to_work_area(win: &WebviewWindow) {
-    use windows_sys::Win32::Foundation::HWND;
+static MAX_BY_LABEL: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, bool>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// 进入最大化前系统记下的还原矩形（屏幕坐标 left/top/right/bottom）。
+/// `SetWindowPos` 钳工作区时会毁掉 `rcNormalPosition`，还原时要靠这份缓存。
+#[cfg(windows)]
+static RESTORE_BY_LABEL: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, (i32, i32, i32, i32)>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// `fit` 里 `SetWindowPos` 会同步抛 `Resized`，必须防重入，否则会把「正在最大化」
+/// 误判成「已还原」：先 `swap(true)` 再被嵌套调用看到 was=true/maximized=false，
+/// 厚框加回、尺寸乱跳，任务栏仍被盖住，最大化按钮也回不去。
+#[cfg(windows)]
+static IN_MAX_SYNC: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
+fn max_was(label: &str) -> bool {
+    MAX_BY_LABEL
+        .lock()
+        .ok()
+        .and_then(|g| g.get(label).copied())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn set_max_was(label: &str, v: bool) {
+    if let Ok(mut g) = MAX_BY_LABEL.lock() {
+        g.insert(label.to_string(), v);
+    }
+}
+
+#[cfg(windows)]
+fn save_restore_rect(label: &str, left: i32, top: i32, right: i32, bottom: i32) {
+    if right <= left || bottom <= top {
+        return;
+    }
+    if let Ok(mut g) = RESTORE_BY_LABEL.lock() {
+        // 只记第一次进入最大化时的矩形；再钳工作区时 placement 可能已脏，不能覆盖。
+        g.entry(label.to_string())
+            .or_insert((left, top, right, bottom));
+    }
+}
+
+#[cfg(windows)]
+fn take_restore_rect(label: &str) -> Option<(i32, i32, i32, i32)> {
+    RESTORE_BY_LABEL
+        .lock()
+        .ok()
+        .and_then(|mut g| g.remove(label))
+}
+
+/// 当前外框是否铺满（或超过）工作区 / 整块显示器——用来判断「假还原」。
+#[cfg(windows)]
+fn fills_monitor_or_work(win: &WebviewWindow) -> bool {
+    let Some(r) = win_rect(win) else {
+        return false;
+    };
+    let Ok(Some(mon)) = win.current_monitor() else {
+        return false;
+    };
+    let wa = work(&mon);
+    let full_r = full(&mon);
+    let near = |a: i32, b: i32| (a - b).abs() <= 4;
+    let covers = |area: Rect| {
+        near(r.x, area.x)
+            && near(r.y, area.y)
+            && r.w + 4 >= area.w
+            && r.h + 4 >= area.h
+    };
+    covers(wa) || covers(full_r)
+}
+
+/// 把外框钳到当前显示器工作区，并保持 `WS_MAXIMIZE`，同时写回还原矩形。
+///
+/// 无边框窗口系统最大化常用 **整块显示器**（盖住任务栏 → 任务栏发黑）。
+/// 只用 `SetWindowPlacement(SW_SHOWMAXIMIZED)` 不够：无标题栏时它仍按全屏算。
+///
+/// 也不走 Tauri `set_size` / `set_position`：那两条会改 `rcNormalPosition` 或清掉
+/// `WS_MAXIMIZE`，再点最大化等于「还原到工作区大小」，看起来像回不去。
+#[cfg(windows)]
+fn fit_maximized_to_work_area(win: &WebviewWindow, label: &str) {
+    use windows_sys::Win32::Foundation::{HWND, RECT};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowPlacement, SetWindowPlacement, WINDOWPLACEMENT, SW_SHOWMAXIMIZED,
+        GetWindowLongW, GetWindowPlacement, SetWindowLongW, SetWindowPlacement, SetWindowPos,
+        WINDOWPLACEMENT, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOZORDER,
+        SW_SHOWMAXIMIZED, WS_MAXIMIZE,
     };
 
     let Ok(hwnd_raw) = win.hwnd() else {
         return;
     };
     let hwnd = hwnd_raw.0 as HWND;
-    // SAFETY: hwnd 是本窗口；length 必须先填对，否则 API 直接失败。
-    unsafe {
-        let mut place: WINDOWPLACEMENT = std::mem::zeroed();
-        place.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+
+    // 先记下系统在最大化瞬间保存的还原矩形（此时一般仍有效）。
+    let mut place: WINDOWPLACEMENT = unsafe { std::mem::zeroed() };
+    place.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+    let saved: RECT = unsafe {
         if GetWindowPlacement(hwnd, &mut place) == 0 {
             return;
         }
-        // 只重放「最大化」指令，不改 rcNormalPosition。
-        place.showCmd = SW_SHOWMAXIMIZED as u32;
-        let _ = SetWindowPlacement(hwnd, &place);
+        place.rcNormalPosition
+    };
+    save_restore_rect(
+        label,
+        saved.left,
+        saved.top,
+        saved.right,
+        saved.bottom,
+    );
+
+    let Ok(Some(mon)) = win.current_monitor() else {
+        return;
+    };
+    let wa = work(&mon);
+    if wa.w <= 0 || wa.h <= 0 {
+        return;
+    }
+
+    // SAFETY: 本窗口 HWND；只动位置尺寸与样式位。
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            wa.x,
+            wa.y,
+            wa.w,
+            wa.h,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+
+        // SetWindowPos 经常清掉 WS_MAXIMIZE；不加回则 is_maximized=false，
+        // 标题栏再点会「再次最大化」而不是还原。
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_MAXIMIZE == 0 {
+            SetWindowLongW(hwnd, GWL_STYLE, (style | WS_MAXIMIZE) as i32);
+        }
+
+        // 把还原矩形写回 placement（供系统 unmaximize 使用）。
+        let mut place2: WINDOWPLACEMENT = std::mem::zeroed();
+        place2.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+        if GetWindowPlacement(hwnd, &mut place2) != 0 {
+            place2.rcNormalPosition = saved;
+            place2.showCmd = SW_SHOWMAXIMIZED as u32;
+            let _ = SetWindowPlacement(hwnd, &place2);
+        }
+
+        // SetWindowPlacement 对无边框窗可能再次铺满整屏——再钳一次工作区。
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            wa.x,
+            wa.y,
+            wa.w,
+            wa.h,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_MAXIMIZE == 0 {
+            SetWindowLongW(hwnd, GWL_STYLE, (style | WS_MAXIMIZE) as i32);
+        }
+
+        // 最后只修补 rcNormalPosition，尽量避免再触发全屏化。
+        let mut place3: WINDOWPLACEMENT = std::mem::zeroed();
+        place3.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+        if GetWindowPlacement(hwnd, &mut place3) != 0 {
+            place3.rcNormalPosition = saved;
+            place3.showCmd = SW_SHOWMAXIMIZED as u32;
+            let _ = SetWindowPlacement(hwnd, &place3);
+            // 若 placement 又撑满整屏，最终以工作区为准（样式位仍保持最大化）。
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                wa.x,
+                wa.y,
+                wa.w,
+                wa.h,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+            let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+            if style & WS_MAXIMIZE == 0 {
+                SetWindowLongW(hwnd, GWL_STYLE, (style | WS_MAXIMIZE) as i32);
+            }
+        }
     }
 }
 
-/// 上一次是不是最大化。状态翻转时才动样式，避免每次 Resized 都 FRAMECHANGED。
+/// 系统还原失败时（仍铺满工作区/屏幕），用缓存矩形强制还原。
 #[cfg(windows)]
-static WAS_MAXIMIZED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+fn force_restore_from_cache(win: &WebviewWindow, label: &str) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOZORDER, WS_MAXIMIZE,
+    };
+
+    let Some((left, top, right, bottom)) = take_restore_rect(label) else {
+        return;
+    };
+    let w = right - left;
+    let h = bottom - top;
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    if !fills_monitor_or_work(win) {
+        // 系统已经还原到别的尺寸，缓存作废即可。
+        return;
+    }
+    let Ok(hwnd_raw) = win.hwnd() else {
+        return;
+    };
+    let hwnd = hwnd_raw.0 as HWND;
+    unsafe {
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_MAXIMIZE != 0 {
+            SetWindowLongW(hwnd, GWL_STYLE, (style & !WS_MAXIMIZE) as i32);
+        }
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            left,
+            top,
+            w,
+            h,
+            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+    logging::shell_log!(
+        "窗口还原：系统未回到原尺寸，已用缓存矩形 {},{} {}x{}",
+        left,
+        top,
+        w,
+        h
+    );
+}
 
 /// 最大化时拆掉系统厚框/描边，还原时恢复可缩放。
 ///
@@ -284,9 +484,18 @@ static WAS_MAXIMIZED: std::sync::atomic::AtomicBool =
 /// **永远不要** 关 `DWMWA_NCRENDERING_POLICY`（会搞黑任务栏）。
 #[cfg(windows)]
 fn sync_maximized_frame(win: &WebviewWindow) {
-    let maximized = win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
-    let was = WAS_MAXIMIZED.swap(maximized, Ordering::Relaxed);
+    // fit 内部 SetWindowPos 会同步 Resized → 再进本函数；直接忽略嵌套调用。
+    if IN_MAX_SYNC.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    let label = win.label().to_string();
+    let maximized =
+        win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
+    let was = max_was(&label);
+
     let Ok(hwnd_raw) = win.hwnd() else {
+        IN_MAX_SYNC.store(false, Ordering::Release);
         return;
     };
     let hwnd = hwnd_raw.0 as windows_sys::Win32::Foundation::HWND;
@@ -296,13 +505,23 @@ fn sync_maximized_frame(win: &WebviewWindow) {
     hide_dwm_border_color(hwnd);
 
     if maximized {
-        // 只在进入最大化时改一次：再 Resized（钳尺寸触发的）会 was=true，
-        // 若再 fit 会尺寸抖动循环。
         if !was {
             set_thickframe(hwnd, false);
-            // 摘厚框后必须钳到工作区，否则盖住任务栏（看起来像任务栏变黑）。
-            fit_maximized_to_work_area(win);
+            fit_maximized_to_work_area(win, &label);
+            set_max_was(&label, true);
             logging::shell_log!(crate::i18n::t("s.30858683aa"));
+        } else if fills_monitor_or_work(win) {
+            // 已在最大化态但仍盖住任务栏（placement 又撑满）→ 再钳一次。
+            let Ok(Some(mon)) = win.current_monitor() else {
+                IN_MAX_SYNC.store(false, Ordering::Release);
+                return;
+            };
+            let wa = work(&mon);
+            if let Some(r) = win_rect(win) {
+                if r.h + 2 > wa.h || r.y < wa.y - 2 || r.w + 2 > wa.w {
+                    fit_maximized_to_work_area(win, &label);
+                }
+            }
         }
         // 区域裁切在最大化时必须撤掉，否则四角露桌面。
         if NEEDS_REGION.load(Ordering::Relaxed) {
@@ -314,6 +533,8 @@ fn sync_maximized_frame(win: &WebviewWindow) {
     } else if was {
         set_thickframe(hwnd, true);
         hide_dwm_border_color(hwnd);
+        force_restore_from_cache(win, &label);
+        set_max_was(&label, false);
         if NEEDS_REGION.load(Ordering::Relaxed) {
             apply_corner_region(win);
         }
@@ -321,6 +542,58 @@ fn sync_maximized_frame(win: &WebviewWindow) {
     } else if NEEDS_REGION.load(Ordering::Relaxed) {
         apply_corner_region(win);
     }
+
+    IN_MAX_SYNC.store(false, Ordering::Release);
+}
+
+/// 子类化：最大化尺寸用工作区，而不是整块显示器（无边框窗默认会盖任务栏）。
+#[cfg(windows)]
+fn install_work_area_minmax(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::UI::Shell::SetWindowSubclass;
+
+    // SAFETY: 本窗 HWND；子类过程只改 MINMAXINFO，其余交给 DefSubclassProc。
+    unsafe {
+        let _ = SetWindowSubclass(hwnd, Some(work_area_subclass_proc), 0x5246_4357, 0);
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn work_area_subclass_proc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    msg: u32,
+    wparam: windows_sys::Win32::Foundation::WPARAM,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+    _id: usize,
+    _data: usize,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows_sys::Win32::UI::Shell::DefSubclassProc;
+    use windows_sys::Win32::UI::WindowsAndMessaging::MINMAXINFO;
+
+    const WM_GETMINMAXINFO: u32 = 0x0024;
+
+    if msg == WM_GETMINMAXINFO && lparam != 0 {
+        // 先拿默认值，再覆盖最大化矩形。
+        let ret = DefSubclassProc(hwnd, msg, wparam, lparam);
+        let mmi = lparam as *mut MINMAXINFO;
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut mi: MONITORINFO = std::mem::zeroed();
+        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(monitor, &mut mi) != 0 {
+            let work = mi.rcWork;
+            let mon = mi.rcMonitor;
+            (*mmi).ptMaxPosition.x = work.left - mon.left;
+            (*mmi).ptMaxPosition.y = work.top - mon.top;
+            (*mmi).ptMaxSize.x = work.right - work.left;
+            (*mmi).ptMaxSize.y = work.bottom - work.top;
+            (*mmi).ptMaxTrackSize.x = (*mmi).ptMaxSize.x;
+            (*mmi).ptMaxTrackSize.y = (*mmi).ptMaxSize.y;
+        }
+        return ret;
+    }
+    DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
 /// 给无边框窗口要回系统圆角。
@@ -346,6 +619,8 @@ pub fn round_corners(win: &WebviewWindow) {
     let hwnd = hwnd.0 as HWND;
     // 先关系统描边色，避免一启动就有 1px Aero 框。
     hide_dwm_border_color(hwnd);
+    // 最大化矩形钳到工作区（无边框默认会盖任务栏）。
+    install_work_area_minmax(hwnd);
     let pref = DWMWCP_ROUND;
     // SAFETY: hwnd 来自 Tauri 刚建好的窗口；传的是一个 i32 大小的枚举值，
     // 长度如实给出。属性不支持时函数只是返回错误，不会写回任何东西。

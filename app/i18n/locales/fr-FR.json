@@ -260,7 +260,10 @@
       "missing_gui": "Installation incomplète : fichier du moteur manquant",
       "crash_load": "Le moteur a planté au chargement ; voir les journaux",
       "ready": "Moteur prêt",
-      "idle": "En attente"
+      "idle": "En attente",
+      "stopped": "Arrêté",
+      "quit": "Quitté",
+      "loop_error": "Erreur interne du moteur — voir le journal"
     },
     "runtime": {
       "not_ready": "Runtime pas prêt : terminez d'abord l'installation",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "Choisissez d'abord un modèle de voix",
-      "loading_model": "Chargement du modèle vocal…"
+      "loading_model": "Chargement du modèle vocal…",
+      "pth_missing": "Fichier .pth introuvable : {path}",
+      "running": "Conversion en cours",
+      "bad_settings": "Réglages non valides, démarrage impossible",
+      "start_failed": "Échec du démarrage",
+      "stop_failed": "Échec de l'arrêt",
+      "params_applied": "Réglages appliqués",
+      "unknown_cmd": "Commande inconnue : {action}"
+    },
+    "dev": {
+      "refreshed": "Liste des périphériques actualisée",
+      "list_failed": "Impossible de lire les périphériques",
+      "invalid": "Périphérique non valide : {detail}"
     }
   },
   "s": {

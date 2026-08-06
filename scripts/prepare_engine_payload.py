@@ -134,9 +134,33 @@ def check_conf_coverage() -> list[str]:
     return problems
 
 
+def write_env_file() -> None:
+    """官方 RVC 靠产品根 `.env` 找权重目录，负载必须带一份。
+
+    这个文件不在仓库里（`.gitignore` 把 `.env` 整个挡掉了，那条规则是拦密钥
+    的，拦对了），而 `tauri.conf.json` 的 resources 又列着它 —— 于是干净 clone
+    出来的仓库根本 build 不了，报「resource path engine-payload/.env doesn't
+    exist」。这里按固定内容生成：里面全是相对路径，没有任何机密。
+
+    值要和 `app/src-tauri/src/worker.rs` 的 `env_for_runtime` 那五条兜底一致，
+    改一边就得改另一边。
+    """
+    lines = [
+        "# 由 scripts/prepare_engine_payload.py 生成，不要手改。",
+        "# 路径相对产品根（worker 的 cwd）。",
+        "weight_root=assets/weights",
+        "weight_uvr5_root=assets/uvr5_weights",
+        "index_root=logs",
+        "outside_index_root=assets/indices",
+        "rmvpe_root=assets/rmvpe",
+    ]
+    (PAYLOAD / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     build()
     mark_installer_kind()
+    write_env_file()
 
     problems = check_forbidden()
     problems = [f"负载里混进了不该有的 {x}" for x in problems]

@@ -4,7 +4,17 @@
 
 # RVC Fabric
 
+<!-- lang-nav -->
+[简体中文](./README.md)　·　繁體中文　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+<!-- lang-nav -->
+
 **高效能即時 AI 變聲桌面用戶端**
+
+<!-- screenshots -->
+<img src="assets/screenshots/home.png" alt="Home" width="32%">
+<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
+<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<!-- screenshots -->
 
 基於 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 深度客製化 · 由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 開發維護
 

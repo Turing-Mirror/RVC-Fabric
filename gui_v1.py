@@ -32,6 +32,61 @@ if any(ord(_c) > 127 for _c in os.getcwd()):
     printt("WARNING: 安装路径含中文/特殊字符，部分组件可能异常，建议移到纯英文路径")
 
 
+try:
+    from tools.msg_codes import (  # noqa: F401
+        DEV_INVALID,
+        DEV_LIST_FAILED,
+        DEV_REFRESHED,
+        ENGINE_LOOP_ERROR,
+        ENGINE_QUIT,
+        VC_BAD_SETTINGS,
+        VC_NEED_MODEL,
+        VC_PARAMS_APPLIED,
+        VC_PTH_MISSING,
+        VC_RUNNING,
+        VC_START_FAILED,
+        VC_STOP_FAILED,
+        VC_UNKNOWN_CMD,
+    )
+except Exception:
+    # `tools` 不在 path 上（脚本被单独跑起来）。码本身就是字符串常量，
+    # 抄一份不会漂 —— 真漂了 tests/test_realtime_protocol.py 会当场报出来。
+    DEV_INVALID = "dev.invalid"
+    DEV_LIST_FAILED = "dev.list_failed"
+    DEV_REFRESHED = "dev.refreshed"
+    ENGINE_LOOP_ERROR = "engine.loop_error"
+    ENGINE_QUIT = "engine.quit"
+    VC_BAD_SETTINGS = "vc.bad_settings"
+    VC_NEED_MODEL = "vc.need_model"
+    VC_PARAMS_APPLIED = "vc.params_applied"
+    VC_PTH_MISSING = "vc.pth_missing"
+    VC_RUNNING = "vc.running"
+    VC_START_FAILED = "vc.start_failed"
+    VC_STOP_FAILED = "vc.stop_failed"
+    VC_UNKNOWN_CMD = "vc.unknown_cmd"
+
+
+def _msg(code: str, **params):
+    """状态消息的一套字段：`message_code` + zh-CN 兜底 `message`（+ `message_params`）。
+
+    状态栏那行小字以前是直接写中文的，界面切到别的语言也照样是中文 —— 壳层
+    只会翻译带 `message_code` 的消息。这里统一走 msg_codes，每条消息都带上码，
+    壳层按当前界面语言取译文，取不到才落回这里的中文。
+
+    `tools` 不在 path 上时（脚本被单独跑起来）退回只有中文的那份，不让一个
+    import 失败把整条状态写没了。
+    """
+    try:
+        from tools.msg_codes import status_fields
+
+        return status_fields(code, params or None)
+    except Exception:
+        out = {"message_code": code, "message": code}
+        if params:
+            out["message_params"] = dict(params)
+        return out
+
+
 def soft_clip_np(data: "np.ndarray", ceiling: float = 0.97) -> "np.ndarray":
     """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
     import numpy as np
@@ -887,7 +942,12 @@ if __name__ == "__main__":
                     # Other parameters do not support hot update
                     self.stop_stream()
 
-        def _notify(self, msg: str) -> None:
+        def _notify(self, msg: str, code: str = "", **params) -> None:
+            """把一条「检查没过」的原因同时送去日志和状态栏。
+
+            `code` 是给状态栏用的：壳层按当前界面语言翻译它。日志和 `error`
+            字段仍旧写 `msg` 那份原文（带路径、带异常文本），排障要看的是它。
+            """
             printt("%s", msg)
             # Remembered so _worker_start can report the actual reason. It used
             # to write the specific message here and overwrite it one line
@@ -896,7 +956,12 @@ if __name__ == "__main__":
             self._last_invalid_reason = str(msg)
             if self.worker_mode:
                 try:
-                    self._worker_write_status(error=str(msg), message=str(msg))
+                    if code:
+                        self._worker_write_status(
+                            error=str(msg), **_msg(code, **params)
+                        )
+                    else:
+                        self._worker_write_status(error=str(msg), message=str(msg))
                 except Exception:
                     pass
                 return
@@ -907,7 +972,7 @@ if __name__ == "__main__":
 
         def set_values(self, values):
             if len(values["pth_path"].strip()) == 0:
-                self._notify(i18n("请选择pth文件"))
+                self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
                 return False
             pth = values["pth_path"].strip()
             index_path = (values.get("index_path") or "").strip()
@@ -949,13 +1014,13 @@ if __name__ == "__main__":
                     except Exception:
                         pass
             if not os.path.isfile(pth):
-                self._notify(i18n("pth文件不存在") + f"\n{pth}")
+                self._notify(i18n("pth文件不存在") + f"\n{pth}", VC_PTH_MISSING, path=pth)
                 return False
             # Devices must exist for current hostapi list
             try:
                 self.set_devices(values["sg_input_device"], values["sg_output_device"])
             except Exception as e:
-                self._notify(f"设备无效: {e}")
+                self._notify(f"设备无效: {e}", DEV_INVALID, detail=str(e))
                 return False
             self.config.use_jit = False  # values["use_jit"]
             # self.device_latency = values["device_latency"]
@@ -2331,7 +2396,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="idle" if not flag_vc else "running",
                     error="",
-                    message="设备列表已刷新",
+                    **_msg(DEV_REFRESHED),
                     **payload,
                 )
             except Exception as e:
@@ -2339,7 +2404,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"list_devices: {type(e).__name__}: {e}",
-                    message="读取设备失败",
+                    **_msg(DEV_LIST_FAILED),
                 )
 
         def _worker_apply_hot(self, payload: dict):
@@ -2616,7 +2681,7 @@ if __name__ == "__main__":
                             getattr(self, "_last_invalid_reason", "")
                             or "设置无效（模型路径 / 设备）"
                         ),
-                        message="设置无效，无法开始变声",
+                        **_msg(VC_BAD_SETTINGS),
                     )
                     return
                 try:
@@ -2692,7 +2757,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="running",
                     error="",
-                    message="变声中",
+                    **_msg(VC_RUNNING),
                     delay_ms=int(np.round(self.delay_time * 1000)),
                     infer_ms=0,
                     samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
@@ -2709,7 +2774,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"{type(e).__name__}: {e}",
-                    message="启动失败",
+                    **_msg(VC_START_FAILED),
                 )
 
         def _worker_stop(self):
@@ -2720,14 +2785,14 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"stop: {type(e).__name__}: {e}",
-                    message="停止失败",
+                    **_msg(VC_STOP_FAILED),
                     pid=os.getpid(),
                 )
                 return
             try:
-                from tools.msg_codes import ENGINE_IDLE, status_fields as _sf_idle
+                from tools.msg_codes import ENGINE_STOPPED, status_fields as _sf_idle
 
-                _idle_fields = _sf_idle(ENGINE_IDLE, message="已停止")
+                _idle_fields = _sf_idle(ENGINE_STOPPED)
             except Exception:
                 _idle_fields = {
                     "message_code": "engine.idle",
@@ -2812,7 +2877,7 @@ if __name__ == "__main__":
                                 self._worker_stop()
                                 write_status(
                                     state="idle",
-                                    message="已退出",
+                                    **_msg(ENGINE_QUIT),
                                     pid=0,
                                     last_cmd_seq=seq,
                                 )
@@ -2835,7 +2900,7 @@ if __name__ == "__main__":
                                 self._worker_apply_hot(params)
                                 self._worker_write_status(
                                     state="running" if flag_vc else "idle",
-                                    message="参数已应用",
+                                    **_msg(VC_PARAMS_APPLIED),
                                     delay_ms=int(np.round(self.delay_time * 1000)),
                                     infer_ms=self.last_infer_ms,
                                     pid=os.getpid(),
@@ -2843,7 +2908,7 @@ if __name__ == "__main__":
                                 )
                             else:
                                 self._worker_write_status(
-                                    message=f"无法识别的指令：{action}",
+                                    **_msg(VC_UNKNOWN_CMD, action=action),
                                     last_cmd_seq=seq,
                                     pid=os.getpid(),
                                 )
@@ -2871,7 +2936,7 @@ if __name__ == "__main__":
                         self._worker_write_status(
                             state="error",
                             error=f"loop: {type(e).__name__}: {e}",
-                            message="引擎内部错误，详见日志",
+                            **_msg(ENGINE_LOOP_ERROR),
                             pid=os.getpid(),
                         )
                     time.sleep(0.08)

@@ -260,7 +260,10 @@
       "missing_gui": "Incomplete install: engine binary missing",
       "crash_load": "Engine crashed while loading, see the logs",
       "ready": "Engine ready",
-      "idle": "Standby"
+      "idle": "Standby",
+      "stopped": "Stopped",
+      "quit": "Exited",
+      "loop_error": "Engine internal error — see the log"
     },
     "runtime": {
       "not_ready": "Runtime not ready — finish setup first",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "Pick a voice model first",
-      "loading_model": "Loading voice model…"
+      "loading_model": "Loading voice model…",
+      "pth_missing": "No such .pth file: {path}",
+      "running": "Converting",
+      "bad_settings": "Invalid settings — cannot start",
+      "start_failed": "Failed to start",
+      "stop_failed": "Failed to stop",
+      "params_applied": "Settings applied",
+      "unknown_cmd": "Unknown command: {action}"
+    },
+    "dev": {
+      "refreshed": "Device list refreshed",
+      "list_failed": "Could not read devices",
+      "invalid": "Invalid device: {detail}"
     }
   },
   "s": {

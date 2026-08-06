@@ -4,7 +4,17 @@
 
 # RVC Fabric
 
+<!-- lang-nav -->
+[简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　Русский
+<!-- lang-nav -->
+
 **Высокопроизводительный настольный клиент для изменения голоса с помощью ИИ в реальном времени**
+
+<!-- screenshots -->
+<img src="assets/screenshots/home.png" alt="Home" width="32%">
+<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
+<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<!-- screenshots -->
 
 Глубоко настроен на основе [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Разработано и поддерживается [Turing Mirror](https://github.com/Turing-Mirror)
 

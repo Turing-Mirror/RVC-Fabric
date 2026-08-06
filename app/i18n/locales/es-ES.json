@@ -260,7 +260,10 @@
       "missing_gui": "Instalación incompleta: falta el ejecutable del motor",
       "crash_load": "El motor falló al cargar; consulta los registros",
       "ready": "Motor listo",
-      "idle": "En espera"
+      "idle": "En espera",
+      "stopped": "Detenido",
+      "quit": "Cerrado",
+      "loop_error": "Error interno del motor: consulta el registro"
     },
     "runtime": {
       "not_ready": "El Runtime no está listo: completa la instalación primero",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "Elige primero un modelo de voz",
-      "loading_model": "Cargando modelo de voz…"
+      "loading_model": "Cargando modelo de voz…",
+      "pth_missing": "No existe el archivo .pth: {path}",
+      "running": "Convirtiendo",
+      "bad_settings": "Ajustes no válidos; no se puede iniciar",
+      "start_failed": "No se pudo iniciar",
+      "stop_failed": "No se pudo detener",
+      "params_applied": "Ajustes aplicados",
+      "unknown_cmd": "Comando desconocido: {action}"
+    },
+    "dev": {
+      "refreshed": "Lista de dispositivos actualizada",
+      "list_failed": "No se pudieron leer los dispositivos",
+      "invalid": "Dispositivo no válido: {detail}"
     }
   },
   "s": {

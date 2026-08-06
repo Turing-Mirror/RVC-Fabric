@@ -410,6 +410,8 @@ mod tests {
 
     #[test]
     fn mute_is_not_listed_as_a_user_experiment() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // logs/mute 是随包发的静音样本。列出来用户会以为那是自己的音色。
         let base = std::env::temp_dir().join("rvcf-train-exps");
         let _ = std::fs::remove_dir_all(&base);

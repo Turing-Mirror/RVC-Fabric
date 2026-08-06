@@ -520,6 +520,8 @@ mod tests {
 
     #[test]
     fn monitor_toggle_reaches_the_worker() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // The settings page writes `monitor_self`; the worker only ever looks
         // at `monitor_enabled`. If this mapping goes missing again,
         // 「变声时监听自己」 silently does nothing.

@@ -159,7 +159,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    Some(json!({
+    let mut out = json!({
         "id": id,
         "name": d.get("name").and_then(|v| v.as_str()).unwrap_or(&id),
         "name_ja": name_ja,
@@ -186,7 +186,24 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "origin": d.get("origin").and_then(|v| v.as_str()).unwrap_or(""),
         "source_url": d.get("source_url").or_else(|| d.get("repo_url")).and_then(|v| v.as_str()).unwrap_or(""),
         "official": official,
-    }))
+    });
+    // 上面那张表是**白名单**：没列的字段一律丢掉。清单里的 `name_i18n` /
+    // `tag_i18n` / `description_i18n` 就是这么被吃掉的 —— 广场页拿不到译名，
+    // 装到本地的 config.json 里更没有，于是英文界面下载 Chihaya Anon，
+    // 模型页显示的还是「千早爱音」。
+    //
+    // ko / es / fr / ru 也一样：上面只单挑了 ja / en / zh_Hant 三个扁平别名，
+    // 剩下四种语言压根没往下传。
+    //
+    // 这里把所有多语言字段整段搬过去，不再一个个列。
+    if let Some(obj) = out.as_object_mut() {
+        let mut extra = Map::new();
+        copy_i18n_fields(d, &mut extra);
+        for (k, v) in extra {
+            obj.entry(k).or_insert(v);
+        }
+    }
+    Some(out)
 }
 
 fn parse_voice_list(raw: &Value, force_official: Option<bool>) -> Vec<Value> {
@@ -430,6 +447,35 @@ fn find_first(dir: &Path, ext: &str) -> Option<PathBuf> {
     walk(dir, ext, 0)
 }
 
+/// 清单条目里所有多语言字段，原样搬进本地音色的 `config.json`。
+///
+/// 清单里 `name` 是中文主名（千早爱音），`name_i18n` 才是各语言的写法。装的时候
+/// 只留下 `name`，模型页就只能显示中文 —— 用户在英文环境下下载 Chihaya Anon，
+/// 装完看到的是「千早爱音」。
+///
+/// 存整张表而不是「按下载时的语言挑一个存下来」：用户之后换语言，模型页要跟着
+/// 变。挑一个存等于把当时的语言焊死在磁盘上。
+///
+/// `pick_str` 除了 `x_i18n` 这种表，还认 `name_en` / `name_zh_Hant` 这类扁平写法
+/// （第三方源手写 YAML 常用），所以这里两种都搬。
+fn copy_i18n_fields(entry: &Value, extra: &mut Map<String, Value>) {
+    let Some(obj) = entry.as_object() else { return };
+    const FIELDS: [&str; 5] = ["name", "tag", "series", "author", "description"];
+    for (k, v) in obj {
+        let Some((field, rest)) = k.split_once('_') else {
+            continue;
+        };
+        if rest.is_empty() || !FIELDS.contains(&field) {
+            continue;
+        }
+        // `author_url` 是地址不是译名，上面那个循环已经单独搬过了。
+        if k == "author_url" {
+            continue;
+        }
+        extra.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+}
+
 fn write_voice_config(
     dest_dir: &Path,
     dest_pth: &Path,
@@ -477,6 +523,10 @@ fn write_voice_config(
 }
 
 /// Install a local voice_pack zip into User_Data/models/<id>/.
+/// `entry` 是清单里那条（广场下载时有，本地导入 zip 时没有）。它带着
+/// `name_i18n` 之类的多语言字段，装进本地 `config.json` 才能让模型页按当前
+/// 语言显示名字。
+#[allow(clippy::too_many_arguments)]
 pub fn install_voice_pack_zip(
     root: &Path,
     zip_path: &Path,
@@ -484,6 +534,7 @@ pub fn install_voice_pack_zip(
     display_name: &str,
     tag: &str,
     official: bool,
+    entry: Option<&Value>,
 ) -> Result<Value, String> {
     if !zip_path.is_file() {
         return Err(crate::i18n::te("s.760364197e", &(zip_path.display())));
@@ -609,6 +660,12 @@ pub fn install_voice_pack_zip(
                 extra.insert(k.to_string(), v.clone());
             }
         }
+        // 多语言字段：清单里那条优先（广场下载走这条），包里自带的兜底
+        // （第三方 zip 自己写的 config.json）。
+        if let Some(e) = entry {
+            copy_i18n_fields(e, &mut extra);
+        }
+        copy_i18n_fields(&Value::Object(pack_cfg.clone()), &mut extra);
         let source = if official {
             "online_pack"
         } else {
@@ -756,7 +813,7 @@ pub fn install_voice_entry(
             }));
         }
         emit("extract", 0, 1, &crate::i18n::t("s.6b42cff431"));
-        let info = install_voice_pack_zip(&root, &zpath, &id, &name, &tag, official)?;
+        let info = install_voice_pack_zip(&root, &zpath, &id, &name, &tag, official, Some(&entry))?;
         emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
         return Ok(info);
     }
@@ -1035,7 +1092,7 @@ pub fn install_staged(
         .unwrap_or(false);
 
     let info = if is_zip {
-        install_voice_pack_zip(&root, &payload, &id, &name, &tag, official)?
+        install_voice_pack_zip(&root, &payload, &id, &name, &tag, official, Some(&entry))?
     } else {
         install_staged_files(&root, &dir, &payload, &id, &name, &tag, official, &entry)?
     };
@@ -1093,6 +1150,7 @@ fn install_staged_files(
             extra.insert(k.to_string(), v.clone());
         }
     }
+    copy_i18n_fields(entry, &mut extra);
     let source = if official { "online_files" } else { "thirdparty_files" };
     Ok(write_voice_config(
         &dest_dir, &dest_pth, name, tag, &vid, &index_path, source, official, &extra,
@@ -1118,6 +1176,62 @@ pub fn cancel_store_download(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 清单条目里的多语言字段必须一路走到本地 `config.json`。
+    ///
+    /// 英文环境下载 Chihaya Anon，模型页显示「千早爱音」就是因为这里断了。
+    #[test]
+    fn install_keeps_every_translated_name() {
+        let entry = json!({
+            "id": "Anon",
+            "name": "千早爱音",
+            "name_i18n": { "en-US": "Chihaya Anon", "ko-KR": "치하야 아논" },
+            "name_en": "Chihaya Anon",
+            "tag_i18n": { "en-US": "Young Girl Voice" },
+            "author": "望月星逸",
+            "author_url": "https://example.invalid/u",
+            "sha256": "deadbeef",
+        });
+        let mut extra = Map::new();
+        copy_i18n_fields(&entry, &mut extra);
+
+        assert!(extra.contains_key("name_i18n"), "少了 name_i18n：{extra:?}");
+        assert!(extra.contains_key("name_en"));
+        assert!(extra.contains_key("tag_i18n"));
+        // 地址不是译名，`author_url` 不该被当成 author 的一个语言变体带走。
+        assert!(!extra.contains_key("author_url"));
+        // 白名单外的字段一个都不许混进来。
+        assert!(!extra.contains_key("sha256"));
+    }
+
+    /// 清单解析那张 json! 表是白名单，多语言字段以前全被它吃掉。
+    #[test]
+    fn catalog_entry_carries_all_locales_through() {
+        let raw = json!({
+            "id": "Anon",
+            "name": "千早爱音",
+            "pth_url": "https://example.invalid/a.pth",
+            "name_i18n": { "en-US": "Chihaya Anon", "ru-RU": "Тихая Анон" },
+            "description_i18n": { "en-US": "From the official download" },
+        });
+        let out = parse_voice_entry(&raw, None).expect("条目应该解析得出来");
+
+        assert_eq!(
+            crate::i18n::pick_str_locale(&out, "name", "en-US"),
+            "Chihaya Anon"
+        );
+        // ru / ko / es / fr 以前根本没往下传 —— 只挑了 ja / en / zh_Hant 三个。
+        assert_eq!(
+            crate::i18n::pick_str_locale(&out, "name", "ru-RU"),
+            "Тихая Анон"
+        );
+        // 没有译文的语言落回中文主名，不是空字符串。
+        assert_eq!(crate::i18n::pick_str_locale(&out, "name", "zh-CN"), "千早爱音");
+        assert_eq!(
+            crate::i18n::pick_str_locale(&out, "description", "en-US"),
+            "From the official download"
+        );
+    }
 
     #[test]
     fn cancelling_one_voice_leaves_the_others_running() {

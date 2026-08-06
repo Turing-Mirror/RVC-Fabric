@@ -112,6 +112,12 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .map_err(|e| crate::i18n::te("s.79a71841b6", &(e)))?;
     logging::shell_log!(crate::i18n::t("s.e1e2bc3a99"));
 
+    // `.center()` 居的是**主显示器**的中。用户把主窗口拖到副屏上用的时候，
+    // 工具窗口会开到另一块屏上去 —— 点了按钮，什么都没看见。
+    if let Some(main) = app.get_webview_window("main") {
+        crate::window_watch::place_next_to(&win, &main);
+    }
+
     crate::window_watch::round_corners(&win);
     // 和主窗口一样：改完大小要重新裁圆角（Win10 兜底那条路）。
     // 这个回调跑在 UI 线程上，里面只能做「标记 + 返回」这类立刻结束的事——

@@ -558,6 +558,8 @@ mod tests {
 
     #[test]
     fn the_pin_can_carry_its_own_shorter_title() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 封面和跳转目标共用一条内容，卡片上的字可以另写。
         let items = parse_feed(&json!({"items": [
             {"id": "a", "title": &crate::i18n::t("s.c7f1de0914"),
@@ -584,6 +586,8 @@ mod tests {
 
     #[test]
     fn highlights_is_the_field_the_generator_actually_writes() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 线上 changelog.json 写的是 highlights，解析器以前只认 notes/items，
         // 于是每条都解析成空列表：版本号和日期照常显示，正文一个字没有。
         let data = json!({"entries": [
@@ -599,6 +603,8 @@ mod tests {
 
     #[test]
     fn body_is_the_last_resort_so_the_entry_is_never_blank() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let data = json!({"entries": [{"version": "1.2.3", "body": &crate::i18n::t("s.39cb51599c")}]});
         let rows = parse_changelog(&data);
         assert_eq!(rows[0].notes, vec![crate::i18n::t("s.39cb51599c")]);

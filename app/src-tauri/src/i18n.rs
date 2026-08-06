@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::paths;
 
@@ -282,6 +282,16 @@ pub fn pick_str_locale(obj: &Value, field: &str, locale: &str) -> String {
     let Some(root) = obj.as_object() else {
         return String::new();
     };
+    pick_str_obj_locale(root, field, locale)
+}
+
+/// 同 [`pick_str`]，但直接吃 `Map` —— 调用方手上是 `Map` 时不用先包一层
+/// `Value::Object`（那会把整张表克隆一遍，而遍历音色目录时这是每个模型一次）。
+pub fn pick_str_obj(obj: &Map<String, Value>, field: &str) -> String {
+    pick_str_obj_locale(obj, field, &current())
+}
+
+pub fn pick_str_obj_locale(root: &Map<String, Value>, field: &str, locale: &str) -> String {
     let map_key = format!("{field}_i18n");
     if let Some(map) = root.get(&map_key).and_then(|v| v.as_object()) {
         for cand in locale_candidates(locale) {
@@ -415,19 +425,49 @@ pub fn localize_status(status: &mut Value) {
     }
 }
 
+/// 测试里改语言用的闸门。
+///
+/// 当前语言是**进程级**的一份全局状态。谁在测试里 `set_locale` 一下就走人，
+/// 后面所有断言中文文案的测试都会莫名其妙拿到俄语/法语 —— 而且因为 cargo
+/// 默认多线程跑测试，谁踩谁还是随机的，同一份代码这次过下次挂。
+///
+/// 所以：凡是要改语言、或者要断言某个语言下的文案的测试，一律先
+/// `let _g = i18n::testing::pin("zh-CN");`。它拿一把全局锁（互相排队），
+/// 并在离开作用域时把语言还原成原来那个。
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::sync::{Mutex, MutexGuard};
+
+    static LOCALE_LOCK: Mutex<()> = Mutex::new(());
+
+    pub struct LocaleGuard {
+        _lock: MutexGuard<'static, ()>,
+        prev: String,
+    }
+
+    impl Drop for LocaleGuard {
+        fn drop(&mut self) {
+            super::set_locale(&self.prev);
+        }
+    }
+
+    /// 把当前语言钉成 `code`，返回的 guard 活多久就钉多久。
+    pub fn pin(code: &str) -> LocaleGuard {
+        let lock = LOCALE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let prev = super::current();
+        super::set_locale(code);
+        LocaleGuard { _lock: lock, prev }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    // Global STATE is process-wide; serialize these tests.
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn tray_and_msg_locales() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = testing::pin("zh-CN");
 
-        set_locale("zh-CN");
         assert_eq!(t("tray.show"), "打开主界面");
         assert_eq!(t("tray.quit"), "退出");
         assert!(
@@ -454,8 +494,7 @@ mod tests {
     }
     #[test]
     fn pick_str_prefers_locale_map() {
-        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        set_locale("en-US");
+        let _g = testing::pin("en-US");
         let obj = serde_json::json!({
             "title": "中文标题",
             "title_i18n": { "en-US": "English title", "ja-JP": "日本語" },

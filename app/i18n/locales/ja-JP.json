@@ -260,7 +260,10 @@
       "missing_gui": "インストール不完全：エンジン本体がありません",
       "crash_load": "エンジン読み込み中にクラッシュしました。ログを確認してください",
       "ready": "エンジン準備完了",
-      "idle": "待機中"
+      "idle": "待機中",
+      "stopped": "停止しました",
+      "quit": "終了しました",
+      "loop_error": "エンジン内部エラー。ログを確認してください"
     },
     "runtime": {
       "not_ready": "Runtime の準備ができていません。先に補完を完了してください",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "先に音声モデルを選択してください",
-      "loading_model": "ボイスモデルを読み込み中…"
+      "loading_model": "ボイスモデルを読み込み中…",
+      "pth_missing": "pth ファイルが見つかりません：{path}",
+      "running": "変換中",
+      "bad_settings": "設定が無効です。開始できません",
+      "start_failed": "開始に失敗しました",
+      "stop_failed": "停止に失敗しました",
+      "params_applied": "設定を適用しました",
+      "unknown_cmd": "不明なコマンド：{action}"
+    },
+    "dev": {
+      "refreshed": "デバイス一覧を更新しました",
+      "list_failed": "デバイスを取得できません",
+      "invalid": "無効なデバイス：{detail}"
     }
   },
   "s": {

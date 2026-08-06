@@ -260,7 +260,10 @@
       "missing_gui": "安裝不完整：缺少引擎主程式",
       "crash_load": "引擎載入時當機，詳見日誌",
       "ready": "引擎就緒",
-      "idle": "待命"
+      "idle": "待命",
+      "stopped": "已停止",
+      "quit": "已結束",
+      "loop_error": "引擎內部錯誤，詳見日誌"
     },
     "runtime": {
       "not_ready": "Runtime 未就緒，請先完成補齊",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "請先選擇音色模型",
-      "loading_model": "正在載入音色模型…"
+      "loading_model": "正在載入音色模型…",
+      "pth_missing": "pth 檔案不存在：{path}",
+      "running": "變聲中",
+      "bad_settings": "設定無效，無法開始變聲",
+      "start_failed": "啟動失敗",
+      "stop_failed": "停止失敗",
+      "params_applied": "參數已套用",
+      "unknown_cmd": "無法辨識的指令：{action}"
+    },
+    "dev": {
+      "refreshed": "裝置清單已重新整理",
+      "list_failed": "讀取裝置失敗",
+      "invalid": "裝置無效：{detail}"
     }
   },
   "s": {

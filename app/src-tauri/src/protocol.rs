@@ -26,6 +26,49 @@ pub fn pid_path(root: &Path) -> PathBuf {
     paths::control_dir(root).join("worker.pid")
 }
 
+/// 我们 spawn 过的每一个 worker pid，一行一个。
+///
+/// `worker.pid` 只有一行，谁后写就是谁 —— 一旦同时活着两个 worker，先写的那个
+/// 就再也没人记得，退出时也就杀不掉它。它会一直占着声卡活到用户重启电脑。
+/// 这个台账是补上那条记忆：只记我们自己 spawn 出来的 pid，不做进程枚举，
+/// 所以永远不会误伤别人的进程。
+pub fn pids_path(root: &Path) -> PathBuf {
+    paths::control_dir(root).join("worker.pids")
+}
+
+/// 记一个 spawn 出来的 pid。文件不存在就建，重复的不再写第二遍。
+pub fn remember_spawned_pid(root: &Path, pid: u32) -> std::io::Result<()> {
+    if pid == 0 {
+        return Ok(());
+    }
+    ensure_control_dir(root)?;
+    let mut pids = read_spawned_pids(root);
+    if pids.contains(&pid) {
+        return Ok(());
+    }
+    pids.push(pid);
+    // 只留最近 32 个：这是台账不是历史，早就死透的 pid 留着只会让每次启动
+    // 多做几十次无用的存活检查，还会因为 pid 复用而误判。
+    let start = pids.len().saturating_sub(32);
+    let text = pids[start..]
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(pids_path(root), text)
+}
+
+pub fn read_spawned_pids(root: &Path) -> Vec<u32> {
+    fs::read_to_string(pids_path(root))
+        .ok()
+        .map(|s| s.lines().filter_map(|l| l.trim().parse().ok()).collect())
+        .unwrap_or_default()
+}
+
+pub fn clear_spawned_pids(root: &Path) {
+    let _ = fs::remove_file(pids_path(root));
+}
+
 pub fn ensure_control_dir(root: &Path) -> std::io::Result<()> {
     fs::create_dir_all(paths::control_dir(root))?;
     fs::create_dir_all(paths::logs_dir(root))?;
@@ -107,6 +150,14 @@ pub fn write_status_merge(root: &Path, fields: Map<String, Value>) -> std::io::R
         cur = json!({});
     }
     if let Some(obj) = cur.as_object_mut() {
+        // 和 tools/worker_protocol.write_status 同一条规矩：谁改了 message/state
+        // 又没给新的 message_code，就把旧 code 清掉。status.json 是合并写的，
+        // 开机那句 `engine.starting` 不清就会一直粘着 —— 界面按 code 翻译，
+        // 于是引擎早就 idle 了，副标题还写着「正在加载…」。
+        let touches_text = fields.contains_key("message") || fields.contains_key("state");
+        if touches_text && !fields.contains_key("message_code") {
+            obj.insert("message_code".into(), json!(""));
+        }
         for (k, v) in fields {
             obj.insert(k, v);
         }

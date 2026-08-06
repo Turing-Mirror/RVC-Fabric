@@ -386,12 +386,23 @@ pub fn is_worker_alive(root: &Path) -> bool {
     get_live_pid(root) > 0
 }
 
-/// Kill only PIDs that still look like this product's worker.
-pub fn kill_known_workers(root: &Path) {
-    for pid in [
+/// 所有可能是我们 worker 的 pid：当前 pid 文件、status 里的、以及我们自己
+/// spawn 过的那本台账。去重后返回。
+fn known_worker_pids(root: &Path) -> Vec<u32> {
+    let mut out = vec![
         protocol::read_worker_pid_file(root),
         protocol::status_pid(root),
-    ] {
+    ];
+    out.extend(protocol::read_spawned_pids(root));
+    out.retain(|p| *p != 0);
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// Kill only PIDs that still look like this product's worker.
+pub fn kill_known_workers(root: &Path) {
+    for pid in known_worker_pids(root) {
         if pid == 0 {
             continue;
         }
@@ -422,6 +433,7 @@ pub fn kill_known_workers(root: &Path) {
         }
     }
     protocol::clear_worker_pid(root);
+    protocol::clear_spawned_pids(root);
     forget_identity_cache();
     let mut fields = Map::new();
     fields.insert("state".into(), json!("idle"));
@@ -431,6 +443,37 @@ pub fn kill_known_workers(root: &Path) {
     fields.insert("delay_ms".into(), json!(0));
     fields.insert("infer_ms".into(), json!(0));
     let _ = protocol::write_status_merge(root, fields);
+}
+
+/// 启动时收掉上几次留下的孤儿 worker，保留当前这个。
+///
+/// 退出时我们是**故意**不杀 worker 的：关到托盘还要接着变声，下次打开也能省掉
+/// 几十秒冷启动。代价是一旦某次开出了两个 worker，多出来的那个没人认领，
+/// 就会一直活下去 —— 它照样在写 status.json、照样占着输出设备，于是新一次启动
+/// 认领的那个 worker 发出去的音频进不了声卡。
+///
+/// 这里只碰台账里记过的 pid（都是我们自己 spawn 的），不做全系统进程枚举。
+pub fn reap_orphan_workers(root: &Path) {
+    let keep = protocol::read_worker_pid_file(root);
+    let mut reaped = 0usize;
+    for pid in known_worker_pids(root) {
+        if pid == keep || !pid_is_our_worker(root, pid) {
+            continue;
+        }
+        append_log(root, &format!("kill_tree 孤儿 worker pid={pid}（上次启动留下的）"));
+        kill_tree(pid);
+        reaped += 1;
+    }
+    // 台账重置成「只有当前这个」。留着死 pid 除了让下次启动白检查一遍，
+    // 还会在 pid 被系统复用之后指向别人的进程。
+    protocol::clear_spawned_pids(root);
+    if keep != 0 {
+        let _ = protocol::remember_spawned_pid(root, keep);
+    }
+    if reaped > 0 {
+        forget_identity_cache();
+        crate::logging::shell_log!("清掉 {reaped} 个孤儿 worker（保留 pid={keep}）");
+    }
 }
 
 pub fn start_worker(root: &Path) -> Result<(), String> {
@@ -513,6 +556,7 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
             .spawn()
             .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
         append_log(root, &format!("spawned shell-side pid={}", child.id()));
+        adopt_spawned(root, child.id());
         // Do not wait; worker re-parents as Runtime process and writes its own pid
         std::mem::forget(child);
     }
@@ -527,10 +571,44 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
+        adopt_spawned(root, child.id());
         std::mem::forget(child);
     }
 
     Ok(())
+}
+
+/// spawn 完立刻认领这个 pid，别等 python 自己写 `worker.pid`。
+///
+/// worker 冷启动要几十秒（torch/faiss/CUDA），这段时间里 `worker.pid` 还是空的、
+/// status 里的 pid 还是 0，`is_worker_alive` 于是一路返回 false。而启动预热
+/// （lib.rs 的后台线程）和界面拉设备列表（list_devices_blocking）是两条并行的
+/// 路，各自都会调 `start_worker` —— START_LOCK 只保证它们不同时进函数，
+/// 保证不了后进来的那个看见前一个的成果。结果就是**一次启动开出两个 worker**：
+/// 两个进程抢同一个声卡、抢着往同一份 status.json 里写，界面显示「引擎就绪」
+/// 但变声根本出不了声。
+///
+/// 更糟的是退出时只按 `worker.pid` 杀，那里只记得住后写的那个，另一个就此变成
+/// 孤儿 —— 它会活过软件的每一次重启，直到用户重启电脑或者装新版本。用户报的
+/// 「除非彻底重启电脑否则不会自己好」就是这个。
+fn adopt_spawned(root: &Path, pid: u32) {
+    if pid == 0 {
+        return;
+    }
+    let _ = protocol::write_worker_pid(root, pid);
+    let _ = protocol::remember_spawned_pid(root, pid);
+    // 直接记成「是我们的」，别让它去走镜像路径比对。
+    //
+    // 那条比对是防 pid 复用的，对刚 spawn 出来的进程既没必要也不安全：进程刚
+    // 建好的头几毫秒 `QueryFullProcessImageNameW` 可能还问不出路径，而结论会被
+    // 缓存住 —— 一次「不是我们的」就会粘住这个 pid 的一辈子，于是我们自己刚开
+    // 的 worker 从此认不出来，退出时也杀不掉。
+    //
+    // 我们是拿产品 Runtime 里的 pythonw 启的它，这件事不需要再问操作系统。
+    remember_identity(pid, true);
+    let mut fields = Map::new();
+    fields.insert("pid".into(), json!(pid));
+    let _ = protocol::write_status_merge(root, fields);
 }
 
 pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
@@ -846,5 +924,44 @@ mod tests {
     #[test]
     fn pid_zero_is_never_alive() {
         assert!(!pid_alive(0));
+    }
+
+    /// 一次启动开出两个 worker 的时候，多出来那个必须留下痕迹。
+    ///
+    /// `worker.pid` 只有一行，后写的盖掉先写的 —— 于是先起来那个再也没人认识，
+    /// 退出时杀不掉，它会一直占着声卡活到用户重启电脑。台账就是补这条记忆。
+    #[test]
+    fn every_spawned_pid_stays_on_the_ledger() {
+        let dir = std::env::temp_dir().join(format!("rvcf_pids_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.as_path();
+
+        protocol::remember_spawned_pid(root, 111).unwrap();
+        protocol::remember_spawned_pid(root, 222).unwrap();
+        // 同一个 pid 记两次不该变成两行。
+        protocol::remember_spawned_pid(root, 111).unwrap();
+        assert_eq!(protocol::read_spawned_pids(root), vec![111, 222]);
+
+        // 后写的 worker.pid 盖掉了 111，但台账里还留着它。
+        protocol::write_worker_pid(root, 222).unwrap();
+        let known = known_worker_pids(root);
+        assert!(known.contains(&111), "孤儿 pid 丢了：{known:?}");
+        assert!(known.contains(&222));
+
+        protocol::clear_spawned_pids(root);
+        assert!(protocol::read_spawned_pids(root).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// pid 0 是「没有 worker」的意思，不能进台账、不能进待杀名单。
+    #[test]
+    fn pid_zero_never_enters_the_ledger() {
+        let dir = std::env::temp_dir().join(format!("rvcf_pid0_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.as_path();
+        protocol::remember_spawned_pid(root, 0).unwrap();
+        assert!(protocol::read_spawned_pids(root).is_empty());
+        assert!(!known_worker_pids(root).contains(&0));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1463,6 +1463,9 @@ pub fn run() {
             let root_bg = root.clone();
             std::thread::spawn(move || {
                 if paths::runtime_ready(&root_bg) {
+                    // 预热之前先收孤儿：上次留下的多余 worker 还占着输出设备，
+                    // 不收掉的话这次认领的那个发不出声。
+                    worker::reap_orphan_workers(&root_bg);
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
                 } else {
                     logging::shell_log!("skip worker prewarm: Runtime not ready");

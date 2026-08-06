@@ -323,23 +323,16 @@ fn list_user_data(root: &Path) -> Vec<Value> {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
-        let name = side
-            .get("name")
-            .and_then(|v| v.as_str())
+        // 名字/标签/作者按当前界面语言取：`config.json` 里存着下载时一并带下来
+        // 的整张多语言表（store::copy_i18n_fields），`pick_str` 取不到译名才落回
+        // 中文主名。所以换语言不用重新下载，模型页跟着变。
+        let name = Some(crate::i18n::pick_str_obj(&side, "name"))
             .filter(|s| !s.is_empty())
-            .unwrap_or(&vid)
-            .to_string();
-        let tag = side
-            .get("tag")
-            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| vid.clone());
+        let tag = Some(crate::i18n::pick_str_obj(&side, "tag"))
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
             .unwrap_or_else(|| guess_tag(&name).to_string());
-        let author = side
-            .get("author")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let author = crate::i18n::pick_str_obj(&side, "author");
         let author_url = side
             .get("author_url")
             .and_then(|v| v.as_str())
@@ -1463,6 +1456,7 @@ pub fn import_files(
                 "",
                 &crate::i18n::t("s.c4301894a2"),
                 false, // local user import — never mark as 图灵镜 official
+                None,  // 本地导入没有清单条目，多语言信息只能靠包里自带的
             ) {
                 Ok(info) => models.push(info),
                 Err(e) => errors.push(json!({"path": p, "error": e})),
@@ -1752,6 +1746,8 @@ mod tests {
 
     #[test]
     fn guard_rejects_the_library_root_itself() {
+        // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let root = std::env::temp_dir().join("rvcf-guard-test");
         let models = paths::models_dir(&root);
         let one = models.join("anon");

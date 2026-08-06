@@ -260,7 +260,10 @@
       "missing_gui": "安装不完整：缺少引擎主程序",
       "crash_load": "引擎加载时崩溃，详见日志",
       "ready": "引擎就绪",
-      "idle": "待命"
+      "idle": "待命",
+      "stopped": "已停止",
+      "quit": "已退出",
+      "loop_error": "引擎内部错误，详见日志"
     },
     "runtime": {
       "not_ready": "运行时未就绪，请先完成补全",
@@ -268,7 +271,19 @@
     },
     "vc": {
       "need_model": "请先选择音色模型",
-      "loading_model": "正在加载音色模型…"
+      "loading_model": "正在加载音色模型…",
+      "pth_missing": "pth 文件不存在：{path}",
+      "running": "变声中",
+      "bad_settings": "设置无效，无法开始变声",
+      "start_failed": "启动失败",
+      "stop_failed": "停止失败",
+      "params_applied": "参数已应用",
+      "unknown_cmd": "无法识别的指令：{action}"
+    },
+    "dev": {
+      "refreshed": "设备列表已刷新",
+      "list_failed": "读取设备失败",
+      "invalid": "设备无效：{detail}"
     }
   },
   "s": {

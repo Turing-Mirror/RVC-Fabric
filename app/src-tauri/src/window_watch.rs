@@ -857,6 +857,52 @@ pub fn place_on_active_monitor(win: &WebviewWindow) {
     let _ = win.set_position(to);
 }
 
+/// 把 `win` 摆到 `anchor` 所在的那块显示器上，居中。
+///
+/// 工具窗口（人声分离/训练音色/语音合成）建窗时用的是 `.center()`，而 Tauri 的
+/// center 算的是**主显示器**。用户把主窗口拖到副屏上用，点一下「训练音色」，
+/// 窗口开在了另一块屏 —— 甚至在他视野之外。
+///
+/// 只按 anchor 的位置算，不看光标：用户点完按钮手可能已经挪开了，而窗口在哪
+/// 是确定的。
+pub fn place_next_to(win: &WebviewWindow, anchor: &WebviewWindow) {
+    let monitors = win.available_monitors().unwrap_or_default();
+    if monitors.len() < 2 {
+        return; // 单屏没有「开错屏」这回事
+    }
+    let (Some(r), Some(a)) = (win_rect(win), win_rect(anchor)) else {
+        return;
+    };
+    let center = (a.x + a.w / 2, a.y + a.h / 2);
+    let target = win
+        .monitor_from_point(center.0 as f64, center.1 as f64)
+        .ok()
+        .flatten()
+        // monitor_from_point 在某些驱动上返回 None，自己按坐标找一遍。
+        .or_else(|| {
+            monitors
+                .iter()
+                .find(|m| full(m).contains(center.0, center.1))
+                .cloned()
+        });
+    let Some(target) = target else {
+        return;
+    };
+    // 已经在同一块屏上就别动，免得把 center() 算好的位置又推一遍。
+    if full(&target).contains(r.x + r.w / 2, r.y + r.h / 2) {
+        return;
+    }
+    let to = work(&target).center_for(r.w, r.h);
+    logging::shell_log!(
+        "工具窗口开在了主窗口以外的屏（{},{}），挪到主窗口那块屏 {},{}",
+        r.x,
+        r.y,
+        to.x,
+        to.y
+    );
+    let _ = win.set_position(to);
+}
+
 /// 用户此刻在用的显示器：光标所在那块，取不到就退回主屏，再不行取第一块。
 fn active_monitor(win: &WebviewWindow, monitors: &[Monitor]) -> Option<Monitor> {
     if let Ok(c) = win.cursor_position() {

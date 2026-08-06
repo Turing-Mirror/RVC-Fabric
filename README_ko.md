@@ -4,7 +4,17 @@
 
 # RVC Fabric
 
+<!-- lang-nav -->
+[简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　한국어　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+<!-- lang-nav -->
+
 **고성능 실시간 AI 변조 데스크톱 클라이언트**
+
+<!-- screenshots -->
+<img src="assets/screenshots/home.png" alt="Home" width="32%">
+<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
+<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<!-- screenshots -->
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 기반 딥 커스터마이징 · [Turing Mirror](https://github.com/Turing-Mirror) 개발 및 유지보수
 

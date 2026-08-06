@@ -157,6 +157,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("close_action".into(), json!("ask"));
     m.insert("theme_mode".into(), json!("system"));
     // UI language (React + Rust tray/errors). Engine logs may stay Chinese.
+    // ui_locale_picked 不进 defaults：老配置缺该键时不能被默认 false 盖成「未选过」，
+    // 否则老用户升级后会再弹一次语言引导。新装在 read() 里文件不存在时再写 false。
     m.insert("ui_locale".into(), json!("zh-CN"));
     m.insert("wallpaper_path".into(), json!(""));
     m.insert("wallpaper_blur".into(), json!(40));
@@ -200,8 +202,14 @@ fn read_json(path: &Path) -> Map<String, Value> {
 /// Full effective config: defaults overlaid with what the user has saved.
 pub fn read(root: &Path) -> Map<String, Value> {
     let mut cfg = defaults();
-    for (k, v) in read_json(&paths::app_config_path(root)) {
-        cfg.insert(k, v);
+    let path = paths::app_config_path(root);
+    if path.is_file() {
+        for (k, v) in read_json(&path) {
+            cfg.insert(k, v);
+        }
+    } else {
+        // 全新安装：尚无 app_config，标记语言未确认，前端弹首次语言引导。
+        cfg.insert("ui_locale_picked".into(), json!(false));
     }
     cfg
 }

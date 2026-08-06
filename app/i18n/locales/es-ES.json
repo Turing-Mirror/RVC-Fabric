@@ -1334,5 +1334,12 @@
         "notes": "Para entrenar voces propias. Baja solo el sample rate que uses; 48k mejor calidad, más VRAM. Incluye G/D/f0G/f0D como RVC pretrained_v2."
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "Elegir idioma",
+    "languageDesc": "Elige el idioma de la interfaz. Puedes cambiarlo después en Ajustes → Apariencia.",
+    "languageSystemHint": "Preseleccionado según el sistema: {lang}",
+    "languageSystemBadge": "Sistema",
+    "languageContinue": "Continuar"
   }
 }

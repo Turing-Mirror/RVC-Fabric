@@ -691,6 +691,8 @@ function SettingsPageImpl({
                       if (LOCALES.some((l) => l.id === v)) {
                         setLocale(v as LocaleCode);
                         c.set("ui_locale", v, true);
+                        // 设置里改过语言也算确认过，避免误触发首次引导。
+                        c.set("ui_locale_picked", true, true);
                       }
                     }}
                   />

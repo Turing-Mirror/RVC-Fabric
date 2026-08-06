@@ -1334,5 +1334,12 @@
         "notes": "訓練專屬音色時需要。只下你選的取樣率那一套即可；48k 音質最好、顯存占用更高。含 G/D/f0G/f0D，與 RVC 原版 pretrained_v2 一致。"
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "選擇介面語言",
+    "languageDesc": "請選擇軟體介面使用的語言。之後可在「設定 → 外觀」中修改。",
+    "languageSystemHint": "已依系統語言預選：{lang}",
+    "languageSystemBadge": "系統",
+    "languageContinue": "繼續"
   }
 }

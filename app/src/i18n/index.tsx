@@ -28,6 +28,7 @@ import {
 import {
   DEFAULT_LOCALE,
   LOCALES,
+  detectSystemLocale,
   isLocaleCode,
   type Dict,
   type LocaleCode,
@@ -41,7 +42,7 @@ import {
 import { setTLocale, t as tStaticExport } from "./t";
 
 export type { LocaleCode, GlossaryTerm };
-export { LOCALES, DEFAULT_LOCALE };
+export { LOCALES, DEFAULT_LOCALE, detectSystemLocale, isLocaleCode };
 export { tip } from "./glossary";
 export { t } from "./t";
 
@@ -92,15 +93,32 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const cfg = await invoke<Record<string, unknown>>("config_get");
-        const raw = cfg.ui_locale;
-        if (alive && isLocaleCode(raw)) {
-          setLocaleState(raw);
-          setStaticLocale(raw);
-          setGlossaryLocale(raw);
-          setTLocale(raw);
+        const picked = cfg.ui_locale_picked;
+        // 未确认过语言（新装）：按系统语言预选，引导里可再改。
+        // 已确认或老配置（无 ui_locale_picked 键）：用配置里的 ui_locale。
+        let code: LocaleCode;
+        if (picked === false) {
+          code = detectSystemLocale();
+        } else if (isLocaleCode(cfg.ui_locale)) {
+          code = cfg.ui_locale;
+        } else {
+          code = detectSystemLocale();
+        }
+        if (alive) {
+          setLocaleState(code);
+          setStaticLocale(code);
+          setGlossaryLocale(code);
+          setTLocale(code);
         }
       } catch {
-        /* browser preview */
+        /* browser preview — follow system */
+        if (alive) {
+          const code = detectSystemLocale();
+          setLocaleState(code);
+          setStaticLocale(code);
+          setGlossaryLocale(code);
+          setTLocale(code);
+        }
       } finally {
         if (alive) setReady(true);
       }

@@ -1334,5 +1334,12 @@
         "notes": "専用音色の学習に必要。使うサンプルレートだけ取得。48k は最高品質で VRAM 多め。G/D/f0G/f0D を含み RVC pretrained_v2 と同等。"
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "言語を選択",
+    "languageDesc": "アプリの表示言語を選んでください。後から「設定 → 外観」で変更できます。",
+    "languageSystemHint": "システム言語から事前選択：{lang}",
+    "languageSystemBadge": "システム",
+    "languageContinue": "続ける"
   }
 }

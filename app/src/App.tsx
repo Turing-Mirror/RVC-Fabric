@@ -7,6 +7,7 @@ import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
+import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
@@ -219,6 +220,9 @@ export default function App() {
   const [voicePos, setVoicePos] = useState("");
   const [showProvision, setShowProvision] = useState(false);
   const [provisionDismissed, setProvisionDismissed] = useState(false);
+  // 新装 ui_locale_picked===false 时先选语言，再走 Runtime 补全。
+  const [showLangGate, setShowLangGate] = useState(false);
+  const [langGateChecked, setLangGateChecked] = useState(false);
 
   const engine = useEngine();
   const plaza = usePlaza();
@@ -314,10 +318,37 @@ export default function App() {
 
 
   useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const cfg = await invoke<Record<string, unknown>>("config_get");
+        // 仅新装默认 false 弹引导；老配置没有该键 → 不弹。
+        if (alive && cfg.ui_locale_picked === false) {
+          setShowLangGate(true);
+        }
+      } catch {
+        /* 预览 */
+      } finally {
+        if (alive) setLangGateChecked(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // 语言引导优先于 Runtime 补全，避免补全窗还是默认中文。
+    if (!langGateChecked || showLangGate) return;
     if (engine.provision.need_provision && !provisionDismissed) {
       setShowProvision(true);
     }
-  }, [engine.provision.need_provision, provisionDismissed]);
+  }, [
+    engine.provision.need_provision,
+    provisionDismissed,
+    langGateChecked,
+    showLangGate,
+  ]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 520px)");
@@ -671,8 +702,13 @@ export default function App() {
         compactNav={compactNav}
       />
 
+      <LanguageGate
+        open={showLangGate}
+        onDone={() => setShowLangGate(false)}
+      />
+
       <ProvisionGate
-        open={showProvision}
+        open={showProvision && !showLangGate}
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);

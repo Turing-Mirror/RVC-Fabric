@@ -1334,5 +1334,12 @@
         "notes": "For training custom voices. Download only the sample rate you use; 48k is best quality, more VRAM. Includes G/D/f0G/f0D like RVC pretrained_v2."
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "Choose language",
+    "languageDesc": "Pick the UI language. You can change it later in Settings → Appearance.",
+    "languageSystemHint": "Pre-selected from system language: {lang}",
+    "languageSystemBadge": "System",
+    "languageContinue": "Continue"
   }
 }

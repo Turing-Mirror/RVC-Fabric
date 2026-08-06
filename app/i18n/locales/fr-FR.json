@@ -1334,5 +1334,12 @@
         "notes": "Pour entraîner des voix perso. Ne prenez que le sample rate utile ; 48k = meilleure qualité, plus de VRAM. Inclut G/D/f0G/f0D comme RVC pretrained_v2."
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "Choisir la langue",
+    "languageDesc": "Choisissez la langue de l'interface. Modifiable plus tard dans Réglages → Apparence.",
+    "languageSystemHint": "Présélectionné selon le système : {lang}",
+    "languageSystemBadge": "Système",
+    "languageContinue": "Continuer"
   }
 }

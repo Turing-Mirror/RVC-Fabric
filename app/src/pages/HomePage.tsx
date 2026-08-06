@@ -26,14 +26,14 @@ const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
  * of beside it.
  */
 function HeroEmblem() {
+  // 新竖向 LOGO 自带色（青字 + 黑底），不要套 dark 模式的 invert，否则会串色。
   return (
     <img
       src={emblem}
       alt=""
       aria-hidden
       draggable={false}
-      className="pointer-events-none select-none absolute right-[30px] top-1/2 -translate-y-1/2 h-[104px] w-auto opacity-[var(--emblem-opacity)] max-[1020px]:right-[22px] max-[1020px]:h-[88px] max-[720px]:hidden"
-      style={{ filter: "var(--logo-filter)" }}
+      className="pointer-events-none select-none absolute right-[30px] top-1/2 -translate-y-1/2 h-[112px] w-auto opacity-[var(--emblem-opacity)] max-[1020px]:right-[22px] max-[1020px]:h-[96px] max-[720px]:hidden"
     />
   );
 }

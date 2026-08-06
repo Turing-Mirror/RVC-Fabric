@@ -1334,5 +1334,12 @@
         "notes": "Для обучения своих голосов. Качайте только нужный sample rate; 48k — лучшее качество, больше VRAM. Есть G/D/f0G/f0D, как RVC pretrained_v2."
       }
     }
+  },
+  "onboarding": {
+    "languageTitle": "Выбор языка",
+    "languageDesc": "Выберите язык интерфейса. Позже можно изменить в «Настройки → Оформление».",
+    "languageSystemHint": "Предвыбрано по языку системы: {lang}",
+    "languageSystemBadge": "Система",
+    "languageContinue": "Продолжить"
   }
 }

@@ -149,13 +149,29 @@ export function useEngine() {
     startingRef.current || status.state === "starting" || busy;
 
   const toggleRun = useCallback(async () => {
-    // 开启变声只认 Runtime 是否就绪；hubert/rmvpe 等引擎资源是音频工具
-    // （分离 / 训练 / 离线转换）那条线的前置，不拦底栏启停。
     if (provision.need_provision || provision.runtime_ready === false) {
       setLastError(
         String(provision.message || t("s.6aa0d5bedd")),
       );
       return;
+    }
+    // 实时推理链路（rtrvc）加载 hubert_base.pt + rmvpe.pt；缺了会在引擎里炸。
+    // 停变声不需要查；只有要「开启」时才引导补全。
+    const stopping =
+      running || status.state === "starting" || startingRef.current;
+    if (!stopping) {
+      try {
+        const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
+        const ok = await ensureEngineCoreOrPrompt(
+          "实时变声需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。请先下载补全，完成后再点「开启变声」。",
+        );
+        if (!ok) {
+          setLastError("请先补全引擎资源，再开启变声");
+          return;
+        }
+      } catch {
+        /* 预览模式忽略 */
+      }
     }
     setBusy(true);
     setLastError("");

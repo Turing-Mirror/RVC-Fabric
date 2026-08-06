@@ -1,9 +1,11 @@
 /**
- * 音频工具前置依赖 / 「下载模型」入口。
+ * 引擎资源 / 「下载模型」入口。
  *
- * - **开启变声**：只查 Runtime，不走这里。
- * - **音频工具**（人声分离 / 训练 / 语音转换）：缺引擎资源时打开「下载模型」
- *   弹窗——先补 hubert/rmvpe/ffmpeg，再允许下分离/训练附加包。
+ * 实时变声（rtrvc）与离线工具都依赖 hubert / rmvpe（及 ffmpeg）。
+ * 缺了就打开「下载模型」弹窗：先补引擎资源，再允许下分离/训练附加包。
+ *
+ * - 底栏「开启变声」：Runtime 就绪后，若缺引擎资源 → 弹窗补全
+ * - 音频工具入口：同上
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -48,8 +50,7 @@ export async function isEngineCoreReady(): Promise<boolean> {
 }
 
 /**
- * 音频工具入口用：缺引擎资源则打开「下载模型」弹窗并返回 false；
- * 已就绪返回 true，调用方再打开工具窗。
+ * 缺引擎资源则打开「下载模型」弹窗并返回 false；已就绪返回 true。
  */
 export async function ensureEngineCoreOrPrompt(
   reason: string,

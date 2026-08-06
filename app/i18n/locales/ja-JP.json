@@ -276,6 +276,7 @@
       "running": "変換中",
       "bad_settings": "設定が無効です。開始できません",
       "start_failed": "開始に失敗しました",
+      "start_timeout": "起動タイムアウト：エンジンが音声変換に入りませんでした。再試行するか User_Data/logs/realtime_worker.log を確認してください",
       "stop_failed": "停止に失敗しました",
       "params_applied": "設定を適用しました",
       "unknown_cmd": "不明なコマンド：{action}"

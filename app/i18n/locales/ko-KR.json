@@ -276,6 +276,7 @@
       "running": "변조 중",
       "bad_settings": "설정이 잘못되어 시작할 수 없습니다",
       "start_failed": "시작 실패",
+      "start_timeout": "시작 시간 초과: 엔진이 보이스 변환에 들어가지 않았습니다. 다시 시도하거나 User_Data/logs/realtime_worker.log를 확인하세요",
       "stop_failed": "중지 실패",
       "params_applied": "설정이 적용되었습니다",
       "unknown_cmd": "알 수 없는 명령: {action}"

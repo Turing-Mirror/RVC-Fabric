@@ -662,6 +662,31 @@ pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
 }
 
 pub fn send_command(root: &Path, cmd: &str, payload: Map<String, Value>) -> Result<u64, String> {
+    // command.json is a single-slot mailbox. The worker polls ~every 80 ms and
+    // only keeps the latest file contents. If the shell writes set → start → set
+    // faster than that poll, `start` is overwritten and never runs — the dock
+    // freezes on「引擎就绪 / 参数已应用」(diag 26.8.6/bug/1: many set/stop,
+    // zero start after relaunch). Wait for the previous command to be claimed
+    // (status.last_cmd_seq) before replacing the mailbox.
+    let pending = protocol::read_command(root);
+    let pending_seq = pending
+        .get("seq")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .unwrap_or(0);
+    let last_ack = protocol::last_cmd_seq(root);
+    if pending_seq > last_ack {
+        // Worker loop is 80 ms; 3 s covers a busy GC / disk hiccup. Past that
+        // we still write so the UI cannot deadlock on a dead worker.
+        let acked = protocol::wait_cmd_acked(root, pending_seq, 3_000);
+        if !acked {
+            append_log(
+                root,
+                &format!(
+                    "send_command: previous seq={pending_seq} not acked before writing {cmd} (last_ack={last_ack})"
+                ),
+            );
+        }
+    }
     protocol::write_command(root, cmd, payload).map_err(|e| e.to_string())
 }
 
@@ -744,6 +769,15 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
         }
     }
     let seq = send_command(root, "start", Map::new())?;
+    // Claim start before any follow-up set. Worker acks last_cmd_seq as soon as
+    // it dequeues start (before model load), so this is usually <100 ms. Without
+    // it, the hot set below races the 80 ms poll and erases start.
+    if !protocol::wait_cmd_acked(root, seq, 5_000) {
+        append_log(
+            root,
+            &format!("start_vc: start seq={seq} not acked within 5s — hot set may race"),
+        );
+    }
     // 再热推一次音高/共鸣：worker 读 inuse 起流后，若进程内仍是旧默认值，补上。
     let mut hot = Map::new();
     if let Some(v) = cfg.get("pitch") {
@@ -793,7 +827,29 @@ pub fn wait_vc_running(root: &Path, timeout_ms: u64) -> Value {
             "pid": 0
         });
     }
-    last
+    // Worker still alive but never reached running — do not leave the dock on
+    // a silent idle「参数已应用」after a full wait.
+    let mut out = last;
+    if let Some(obj) = out.as_object_mut() {
+        let state = obj
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if state != "running" && state != "error" {
+            obj.insert("state".into(), json!("error"));
+            obj.insert(
+                "error".into(),
+                json!(crate::i18n::t("msg.vc.start_timeout")),
+            );
+            obj.insert(
+                "message".into(),
+                json!(crate::i18n::t("msg.vc.start_timeout")),
+            );
+            obj.insert("message_code".into(), json!(""));
+        }
+    }
+    out
 }
 
 pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {

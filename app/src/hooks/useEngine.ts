@@ -194,6 +194,10 @@ export function useEngine() {
         setStatus(st);
       } else {
         startingRef.current = true;
+        // Push slider values into config/worker first. Safe now: shell waits
+        // for each command to be acked before overwriting command.json
+        // (previously set→start→set could erase `start` and freeze the dock
+        // on「引擎就绪 / 参数已应用」).
         try {
           await setHot({
             pitch: pitchRef.current,
@@ -201,7 +205,7 @@ export function useEngine() {
             function: modeRef.current,
           });
         } catch {
-          /* worker may still be coming up */
+          /* worker may still be coming up; start_vc still syncs from config */
         }
         const st = await startVc();
         setStatus(st);

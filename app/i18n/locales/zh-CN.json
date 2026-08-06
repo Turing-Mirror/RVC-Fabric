@@ -276,6 +276,7 @@
       "running": "变声中",
       "bad_settings": "设置无效，无法开始变声",
       "start_failed": "启动失败",
+      "start_timeout": "启动超时：引擎未进入变声。请再试一次，或查看 User_Data/logs/realtime_worker.log",
       "stop_failed": "停止失败",
       "params_applied": "参数已应用",
       "unknown_cmd": "无法识别的指令：{action}"

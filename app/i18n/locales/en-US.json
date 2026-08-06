@@ -276,6 +276,7 @@
       "running": "Converting",
       "bad_settings": "Invalid settings — cannot start",
       "start_failed": "Failed to start",
+      "start_timeout": "Start timed out: engine never entered voice conversion. Try again, or check User_Data/logs/realtime_worker.log",
       "stop_failed": "Failed to stop",
       "params_applied": "Settings applied",
       "unknown_cmd": "Unknown command: {action}"

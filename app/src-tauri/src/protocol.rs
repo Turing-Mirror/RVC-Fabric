@@ -178,6 +178,33 @@ pub fn next_seq(root: &Path) -> std::io::Result<u64> {
     Ok(next)
 }
 
+pub fn read_command(root: &Path) -> Value {
+    read_json(&command_path(root))
+}
+
+/// Worker writes this after accepting a command (before long work finishes).
+pub fn last_cmd_seq(root: &Path) -> u64 {
+    read_status(root)
+        .get("last_cmd_seq")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .unwrap_or(0)
+}
+
+/// Wait until `status.last_cmd_seq >= seq` (worker has claimed that command).
+pub fn wait_cmd_acked(root: &Path, seq: u64, timeout_ms: u64) -> bool {
+    if seq == 0 {
+        return true;
+    }
+    let deadline = SystemTime::now() + Duration::from_millis(timeout_ms);
+    while SystemTime::now() < deadline {
+        if last_cmd_seq(root) >= seq {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    last_cmd_seq(root) >= seq
+}
+
 pub fn write_command(root: &Path, cmd: &str, payload: Map<String, Value>) -> std::io::Result<u64> {
     ensure_control_dir(root)?;
     let seq = next_seq(root)?;

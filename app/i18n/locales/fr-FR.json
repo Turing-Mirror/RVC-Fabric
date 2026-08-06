@@ -276,6 +276,7 @@
       "running": "Conversion en cours",
       "bad_settings": "Réglages non valides, démarrage impossible",
       "start_failed": "Échec du démarrage",
+      "start_timeout": "Démarrage expiré : le moteur n'est pas passé en conversion. Réessayez ou consultez User_Data/logs/realtime_worker.log",
       "stop_failed": "Échec de l'arrêt",
       "params_applied": "Réglages appliqués",
       "unknown_cmd": "Commande inconnue : {action}"

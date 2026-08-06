@@ -276,6 +276,7 @@
       "running": "Convirtiendo",
       "bad_settings": "Ajustes no válidos; no se puede iniciar",
       "start_failed": "No se pudo iniciar",
+      "start_timeout": "Tiempo de inicio agotado: el motor no entró en conversión. Inténtalo de nuevo o revisa User_Data/logs/realtime_worker.log",
       "stop_failed": "No se pudo detener",
       "params_applied": "Ajustes aplicados",
       "unknown_cmd": "Comando desconocido: {action}"

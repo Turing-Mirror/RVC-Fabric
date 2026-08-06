@@ -5,7 +5,7 @@ import { openTool } from "../components/ToolWindow";
 import { ExtrasDialog } from "../components/ExtrasDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
-import { ALL_LINKS } from "../lib/links";
+import { allLinks } from "../lib/links";
 import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
@@ -384,9 +384,9 @@ export function MorePage({
       </Block>
       <Block title={t("s.2bd28fc9c2")}>
         <Group>
-          {ALL_LINKS.map((l) => (
+          {allLinks().map((l) => (
             <ListItem
-              key={l.title}
+              key={l.url}
               title={l.title}
               desc={l.desc}
               right={<Btn onClick={() => void openExternal(l.url)}>{t("s.65fc81e161")}</Btn>}

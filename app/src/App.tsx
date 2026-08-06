@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { Nudge } from "./components/Nudge";
 import { Btn } from "./components/ui";
-import { FOLLOW_LINKS } from "./lib/links";
+import { followLinks } from "./lib/links";
 import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
@@ -835,7 +835,7 @@ export default function App() {
           actions={
             <>
               <Btn onClick={closeFollow}>{t("s.6aa652ccb5")}</Btn>
-              {FOLLOW_LINKS.map((l) => (
+              {followLinks().map((l) => (
                 <Btn
                   key={l.url}
                   onClick={() => {

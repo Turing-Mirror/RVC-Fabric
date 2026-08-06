@@ -4,7 +4,7 @@ import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { useConfig } from "../hooks/useConfig";
-import { TIPS } from "../lib/config";
+import { tips } from "../lib/config";
 import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
@@ -102,6 +102,8 @@ function SettingsPageImpl({
   onOpenHelp,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
+  // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
+  const TIPS = useMemo(() => tips(), [locale]);
   const tabLabels = useMemo(
     () =>
       Object.fromEntries(

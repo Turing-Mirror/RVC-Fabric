@@ -171,15 +171,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale, setLocale, t, tMsg, glossary, ready],
   );
 
-  // Remount the tree when language changes so modules that call `t()` /
-  // `tStatic` without subscribing to context still refresh labels.
-  return (
-    <Ctx.Provider value={value}>
-      <div key={locale} className="contents">
-        {children}
-      </div>
-    </Ctx.Provider>
-  );
+  // Do NOT remount children with key={locale}.
+  // That tore down App/useEngine, re-ran ensureEngine, and made the dock look
+  // like the model was reloading — language is not an engine restart.
+  // Labels refresh via context (useI18n) + setTLocale for static t() callers;
+  // App (and other roots) must subscribe with useI18n so they re-render.
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useI18n(): I18nCtx {

@@ -23,6 +23,7 @@ import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { registerDownloadModelsOpener } from "./lib/downloadModels";
+import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
 
 /**
@@ -57,6 +58,11 @@ function clockNow(): string {
 }
 
 export default function App() {
+  // Subscribe so locale change re-renders App (static t() labels) without
+  // remounting the tree / re-running useEngine.
+  const { locale } = useI18n();
+  void locale;
+
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。

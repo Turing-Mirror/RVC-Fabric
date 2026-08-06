@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.4.2",
+    "version": "1.4.3",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.4.2",
+      "version": "1.4.3",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "ff9d2f1c89ff9ebc4d32b16025d5c7b314fa892b1f4feef51c0bdbd3a39a00e6",
-      "size_bytes": 8975161,
+      "sha256": "656361e265647a7b90760e3547789f744e06a214b6e72653c32267b9e999b223",
+      "size_bytes": 9511939,
       "min_app_version": "1.3.0",
-      "notes": "1.4.2 打通远端清单多语言：changelog / plaza / 音色 tag 与 description 可通过 *_i18n 字段按 ui_locale 展示，缺省回退中文。壳层用户可见硬编码已全部接线，并合并续作翻译。"
+      "notes": "1.4.3 更新品牌竖向 LOGO 与图标；新装首次启动可选择界面语言（按系统语言预选）。 引擎资源与 Runtime 解耦，用到实时变声或音频工具时再补全；首次补全仍包含 VB-Cable。 另修 STS 离线转换在缺少引擎资源时的失败提示，以及若干界面细节。"
     }
   },
   "community": {

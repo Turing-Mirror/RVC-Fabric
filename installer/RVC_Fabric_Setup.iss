@@ -1,4 +1,4 @@
-﻿; RVC Fabric — Windows installer (Inno Setup 6)
+; RVC Fabric — Windows installer (Inno Setup 6)
 ; 企业/独立软件常用安装器技术，不要用自写 Tk 向导替代本脚本。
 ;
 ; 构建（在仓库根，先打出 payload）：
@@ -19,9 +19,9 @@
 
 #define MyAppName "RVC Fabric"
 #define MyAppNameCN "RVC Fabric · 图灵镜"
-#define MyAppVersion "1.4.2"
+#define MyAppVersion "1.4.3"
 ; Windows 版本资源只接受纯数字 a.b.c.d
-#define MyAppVerNum "1.4.1.0"
+#define MyAppVerNum "1.4.3.0"
 #define MyAppPublisher "Turing-Mirror"
 #define MyAppURL "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases"
 #define MyAppId "{{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}"

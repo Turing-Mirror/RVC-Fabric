@@ -71,7 +71,19 @@ export function useEngine() {
       void refreshProvision();
     }
     try {
-      const st = await getEngineStatus();
+      const raw = await getEngineStatus();
+      const state = String(raw.state || "idle");
+      // 假启动：后端已把 starting 摊成 idle，前端 startingRef 也要松掉，
+      // 否则底栏主按钮仍显示「启动中」且点不动。
+      if (state !== "starting" && startingRef.current) {
+        startingRef.current = false;
+      }
+      const st: EngineStatus =
+        state === "starting" &&
+        raw.worker_alive === false &&
+        !startingRef.current
+          ? { ...raw, state: "idle" } // 没有活 worker 的 starting 是陈旧 status
+          : raw;
       stateRef.current = String(st.state || "idle");
       setStatus(st);
       if (st.state === "error" && st.error) {

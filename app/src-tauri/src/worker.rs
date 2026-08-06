@@ -366,15 +366,22 @@ fn status_looks_ready(st: &Value) -> bool {
 }
 
 pub fn get_live_pid(root: &Path) -> u32 {
-    for pid in [
-        protocol::read_worker_pid_file(root),
-        protocol::status_pid(root),
-    ] {
+    // 台账里的 pid 必须参与判定。只看 worker.pid / status.pid 时：
+    // adopt 之后若文件被清掉、或 python 还没回写，is_worker_alive 会变 false，
+    // 另一路 start_worker 就会再开一个 —— 这就是「假启动 / 双 worker」的残留口子。
+    for pid in known_worker_pids(root) {
+        if pid == 0 {
+            continue;
+        }
         if pid_is_our_worker(root, pid) {
+            // 进程还活着但 pid 文件丢了：补回，免得下一秒又被当成没 worker。
+            if protocol::read_worker_pid_file(root) != pid {
+                let _ = protocol::write_worker_pid(root, pid);
+            }
             return pid;
         }
-        // Stale dead entry
-        if pid > 0 && !pid_alive(pid) {
+        // Stale dead entry in the primary pid file
+        if !pid_alive(pid) && protocol::read_worker_pid_file(root) == pid {
             protocol::clear_worker_pid(root);
             forget_identity_cache();
         }
@@ -890,11 +897,33 @@ pub fn status_for_ui(root: &Path) -> Value {
             .unwrap_or(-45.0);
         let th_meter = ((th + 60.0) / 60.0).clamp(0.0, 1.0);
         obj.insert("threshold_meter".into(), json!(th_meter));
-        // If status claims a pid that is not ours / dead, surface it
-        if !alive {
+
+        let state = obj
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        // 假启动：status 仍写 starting，但已经没有活着的 worker。
+        // 底栏会一直「启动中…」，用户点开启也像没反应。直接摊成 idle。
+        if state == "starting" && !alive {
+            obj.insert("state".into(), json!("idle"));
+            obj.insert("message".into(), json!(""));
+            obj.insert("message_code".into(), json!(""));
+            obj.insert("pid".into(), json!(0));
+        } else if !alive {
+            // If status claims a pid that is not ours / dead, surface it
             if let Some(p) = obj.get("pid").and_then(|v| v.as_u64()) {
                 if p > 0 {
                     obj.insert("pid".into(), json!(0));
+                }
+            }
+        } else if state == "starting" {
+            // worker 已活着：把台账 pid 回填，避免界面 pid=0 的「半就绪」
+            let live = get_live_pid(root);
+            if live > 0 {
+                let cur = obj.get("pid").and_then(|v| v.as_u64()).unwrap_or(0);
+                if cur == 0 {
+                    obj.insert("pid".into(), json!(live));
                 }
             }
         }
@@ -962,6 +991,22 @@ mod tests {
         protocol::remember_spawned_pid(root, 0).unwrap();
         assert!(protocol::read_spawned_pids(root).is_empty());
         assert!(!known_worker_pids(root).contains(&0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 台账里的 pid 必须进入 known 列表（get_live_pid 靠它防双开）。
+    #[test]
+    fn ledger_pids_are_known_even_without_pid_file() {
+        let dir = std::env::temp_dir().join(format!("rvcf_live_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(paths::control_dir(dir.as_path())).unwrap();
+        let root = dir.as_path();
+        protocol::clear_worker_pid(root);
+        protocol::remember_spawned_pid(root, 424242).unwrap();
+        assert!(
+            known_worker_pids(root).contains(&424242),
+            "台账 pid 必须被 known_worker_pids 看见"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

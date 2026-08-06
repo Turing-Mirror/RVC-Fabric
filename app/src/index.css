@@ -35,10 +35,10 @@
      flattened to a white silhouette; inverting instead would drag the blue
      half to orange. */
   --logo-filter: none;
-  /* Watermark strength in the home hero band. The dark ground takes a flattened
-     white silhouette, which needs a touch less opacity than the ink-on-light
-     original to read as the same weight. */
-  --emblem-opacity: 0.18;
+  /* Watermark strength in the home hero band. 0.18 was too ghostly on the light
+     stage (barely readable). Keep it softer than solid brand chrome, but
+     legible. Dark ground uses a slightly lower value so weight matches. */
+  --emblem-opacity: 0.34;
   /* 数值条把手的颜色。浅色下就是纸白 —— 比轨道亮，一眼看出是"能抓的那个"。 */
   --knob: var(--surface);
   /* 分段控件（设置页顶部那排标签）的滑块底色。浅色下半透明的白就够亮了。 */
@@ -75,7 +75,7 @@
     --glass:
       0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --logo-filter: brightness(0) invert(1);
-    --emblem-opacity: 0.14;
+    --emblem-opacity: 0.28;
     /* 深色下不能照抄 --surface：#1f242d 比轨道(≈#2b2f36)还暗，把手看着
        不像把手，像轨道上破了个洞。要比轨道亮才抓得住。 */
     --knob: #7c8794;
@@ -105,7 +105,7 @@
   --glass:
     0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --logo-filter: brightness(0) invert(1);
-  --emblem-opacity: 0.14;
+  --emblem-opacity: 0.28;
   --knob: #7c8794;
   --seg-thumb: #2b323e;
   color-scheme: dark;

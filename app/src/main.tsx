@@ -11,6 +11,23 @@ import { invoke } from "@tauri-apps/api/core";
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
 
+// 右键一律不弹菜单。
+//
+// 这是个桌面软件，不是网页。WebView2 默认那套「重新加载 / 另存为图片 / 检查」
+// 在这里没有一条是用户想要的，而它一弹出来就把「这其实是个浏览器」这件事写在
+// 了脸上。
+//
+// 软件自己那些藏在右键里的功能（改名、删除、看作者主页）也一并取消了 ——
+// 藏在右键里等于没做，绝大多数人根本不会去点。它们现在是模型卡片上「使用」
+// 旁边那个「…」按钮，看得见才用得上。
+//
+// 输入框留着：那里的剪切 / 复制 / 粘贴是系统给的，删掉是纯粹的损失。
+window.addEventListener("contextmenu", (e) => {
+  const el = e.target as HTMLElement | null;
+  if (el?.closest("input, textarea, [contenteditable='true']")) return;
+  e.preventDefault();
+});
+
 // 主窗口和工具窗口（人声分离 / 训练音色 / 语音转换）用的是同一份前端，
 // 靠地址后面的 `#/tool/<kind>` 分流。分不出来就是主窗口。
 const tool = toolFromHash(window.location.hash);

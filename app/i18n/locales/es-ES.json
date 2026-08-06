@@ -542,9 +542,9 @@
     "47baa6fbb7": "Ya hay una síntesis en curso",
     "47c37d6efa": "No se detecta tarjeta gráfica; elige la versión del Runtime manualmente",
     "47e57cab60": "No se encuentra Runtime\\python.exe",
-    "481ec6c2df": "Antes de iniciar necesitas los recursos del motor (hubert / rmvpe / ffmpeg). Consíguelos en Otros → Descargar modelos.",
+    "481ec6c2df": "Antes de iniciar necesitas los recursos del motor (hubert / rmvpe / ffmpeg). Consíguelos en Plaza → Descargar modelos.",
     "481ee2d4bc": "Comprobando…",
-    "489b99d4d7": "Faltan recursos del motor: descárgalos en Otros → Descargar modelos",
+    "489b99d4d7": "Faltan recursos del motor: descárgalos en Plaza → Descargar modelos",
     "494f3ed5a0": "Elige primero el archivo de entrada y la carpeta de salida",
     "4951a916f7": "Este es el canal de bucle interno de la tarjeta física y también vale: pon la salida del programa en la reproducción de la tarjeta y el micrófono del juego en este canal. Detalles en «Cómo conectar la tarjeta física» abajo.",
     "496951c554": "El proceso del motor terminó de forma inesperada (normalmente: poca VRAM o tarjeta ocupada). Restos limpiados; inténtalo de nuevo.",
@@ -765,7 +765,7 @@
     "7cf7bfff3c": "Caducado",
     "7d1c1ee831": "Aviso: la interfaz no montó en 12 s (pantalla blanca). Origen de UI {} · {} solicitudes procesadas · 404 ×{}",
     "7d2fe2ae0a": "Probablemente inestabilidad de red o un servidor que no responde; el programa no está congelado.",
-    "7d4cfa5986": "Al terminar se prepara el instalador de VB-Cable. Los recursos del motor (hubert / rmvpe / ffmpeg) ahora se descargan bajo demanda en Otros → Descargar modelos.",
+    "7d4cfa5986": "Al terminar se prepara el instalador de VB-Cable. Los recursos del motor (hubert / rmvpe / ffmpeg) ahora se descargan bajo demanda en Plaza → Descargar modelos.",
     "7d7d710ba5": "Tarjeta de sonido virtual",
     "7da520ca1f": "Tiempo de inicio agotado y el motor terminó; revisa User_Data/logs/realtime_worker.log",
     "7dc4ea39fd": "El proceso de entrenamiento terminó sin informar del resultado",
@@ -1362,5 +1362,8 @@
     "qqShort": "Grupo de QQ",
     "qqNumber": "N.º de grupo 1077458748",
     "qr": "Código QR"
+  },
+  "models": {
+    "more": "Más acciones"
   }
 }

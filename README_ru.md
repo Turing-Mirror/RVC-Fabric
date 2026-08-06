@@ -23,7 +23,11 @@
 
 [Репозиторий GitHub](https://github.com/Turing-Mirror/RVC-Fabric) · [Загрузка артефактов CNB](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**Социальные сети**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)
+**Социальные сети**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　Группа QQ @Сообщество Turing Mirror (Номер группы `1077458748`)
+
+<!-- qq-group -->
+<img src="assets/brand/qq_group.jpg" alt="QR-код группы QQ" width="200">
+<!-- qq-group -->
 
 **Спонсорство и продвижение**　[Скидка 50% на первый месяц · Облачный сервер с высокой производительностью / Игровое облако / Панельный сервер · Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 

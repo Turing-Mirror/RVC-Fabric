@@ -23,7 +23,11 @@
 
 [GitHub リポジトリ](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB成果物ダウンロード](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**ソーシャルメディア**　[bilibili @图灵镜](https://space.bilibili.com/3546871148579062)　·　[抖音 @图灵镜](https://v.douyin.com/6NxXcrKK9cc)（抖音ID `TuringMirror`）　·　[小紅書 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小紅書ID `TuringMirror`）
+**ソーシャルメディア**　[bilibili @图灵镜](https://space.bilibili.com/3546871148579062)　·　[抖音 @图灵镜](https://v.douyin.com/6NxXcrKK9cc)（抖音ID `TuringMirror`）　·　[小紅書 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小紅書ID `TuringMirror`）　·　QQ グループ @图灵镜社区（グループ番号 `1077458748`）
+
+<!-- qq-group -->
+<img src="assets/brand/qq_group.jpg" alt="QQ グループの QR コード" width="200">
+<!-- qq-group -->
 
 **スポンサープロモーション**　[初月半額　·　高コスパクラウドサーバー / ゲームクラウド / パネルサーバー　·　雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 

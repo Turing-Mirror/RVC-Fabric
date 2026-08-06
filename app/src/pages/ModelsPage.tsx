@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { openExternal, type PlazaItem } from "../lib/plaza";
@@ -157,11 +157,38 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
     if (page > totalPages - 1) setPage(Math.max(0, totalPages - 1));
   }, [page, totalPages]);
 
+  // 点别处、按 Esc 都关。菜单自己 stopPropagation，所以点菜单里的项不会
+  // 先被这条关掉。
   useEffect(() => {
     const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
     window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
+
+  /**
+   * 「⋯」按钮打开菜单。位置从按钮量，不是从鼠标量。
+   *
+   * 菜单右边缘对齐按钮右边缘：卡片在最后一列时，从按钮左边缘往右展开会顶出
+   * 窗口。宽度和 MoreMenu 里的 min-w 对上。
+   */
+  const openMenu = (e: MouseEvent<HTMLButtonElement>, model: VoiceModel) => {
+    // 不让这一下冒泡到上面那个「点别处就关」，否则刚开就被关掉。
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    const w = 168;
+    setMenu({
+      x: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
+      y: r.bottom + 6,
+      model,
+    });
+  };
 
   const onUse = async (m: VoiceModel) => {
     if (m.missing) {
@@ -305,13 +332,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
               const cur = modelKey(v) === selectedKey;
               const src = coverSrc(v.cover);
               return (
-                <div
-                  key={modelKey(v)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setMenu({ x: e.clientX, y: e.clientY, model: v });
-                  }}
-                >
+                <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
                       <img
@@ -342,12 +363,24 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
                     {v.author ? t("s.7feea73fa3", { v0: v.author }) : t("s.2af26573b0")}
                   </div>
-                  <div className="mt-2.5">
+                  <div className="mt-2.5 flex items-center gap-1.5">
                     {cur ? (
                       <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
                     ) : (
                       <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
                     )}
+                    {/* 改名 / 删除 / 看作者主页原来藏在右键里，没人找得到。
+                        一条都没有的模型不画这个按钮 —— 点开只写着「无可用
+                        操作」的菜单，比没有按钮更让人恼火。 */}
+                    {hasMoreActions(v) ? (
+                      <Btn
+                        className="px-2.5"
+                        ariaLabel={t("models.more")}
+                        onClick={(e) => openMenu(e, v)}
+                      >
+                        ⋯
+                      </Btn>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -582,7 +615,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
       </Block>
 
       {menu ? (
-        <ContextMenu
+        <MoreMenu
           x={menu.x}
           y={menu.y}
           model={menu.model}
@@ -599,7 +632,26 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   );
 }
 
-function ContextMenu({
+/**
+ * 这个模型有没有「⋯」里能做的事。
+ *
+ * 条件要和 `MoreMenu` 里往 items 塞东西的判断逐条对上：这边多判一个，用户
+ * 会点开一个空菜单；这边少判一个，某些模型的改名 / 删除就再也没有入口了。
+ */
+function hasMoreActions(m: VoiceModel): boolean {
+  if (m.source === "user_data" && m.dir) return true;
+  if (m.author_url) return true;
+  if (m.source === "legacy_weights" && m.path) return true;
+  return false;
+}
+
+/**
+ * 模型卡片上「⋯」按钮弹的菜单：改名、删除、看作者主页、把老权重收进音色库。
+ *
+ * 这些以前是右键菜单。右键在桌面软件里是个没人会去试的入口——用户不知道有，
+ * 就等于没做。现在它挂在「使用」旁边一个看得见的按钮上。
+ */
+function MoreMenu({
   x,
   y,
   model,
@@ -673,13 +725,6 @@ function ContextMenu({
       },
     });
   }
-  if (!items.length) {
-    items.push({
-      label: t("s.730dcfbdae"),
-      action: onClose,
-    });
-  }
-
   return (
     <div
       className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)]"

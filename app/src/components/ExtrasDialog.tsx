@@ -93,20 +93,29 @@ function categoryBlurb(cat: Category): string {
  *
  * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色），
  * 列表分页每页 5 条。引擎资源是前置依赖：未就绪时先下载它，再选模型。
+ *
+ * 这里只有内容，没有弹窗那层壳。两个地方用它：
+ *
+ * * 广场「下载模型」区块 —— 主窗口里这是唯一的入口，直接铺在页面上；
+ * * `ExtrasDialog` —— 工具窗口（人声分离 / 训练音色）里缺资源时弹的那个框。
+ *   那是独立的窗口，没有广场可去，只能就地弹。
  */
-export function ExtrasDialog({
-  open,
+export function ExtrasPanel({
   onClose,
   filter = "all",
   title,
   reason,
+  onBusyChange,
 }: {
-  open: boolean;
-  onClose: () => void;
+  /** 给了才画「关闭」按钮。嵌在页面里时没有可关的东西。 */
+  onClose?: () => void;
   filter?: ExtrasFilter;
+  /** 给了才画标题。嵌在 Block 里时标题由 Block 出，这里再写一遍就重了。 */
   title?: string;
   /** 从工具入口跳转时的说明（缺引擎资源等）。 */
   reason?: string;
+  /** 正在下载时告诉外面的弹窗别让点空白关掉。 */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [list, setList] = useState<List | null>(null);
   const [assets, setAssets] = useState<AssetsStatus | null>(null);
@@ -141,7 +150,6 @@ export function ExtrasDialog({
   };
 
   useEffect(() => {
-    if (!open) return;
     setList(null);
     setAssets(null);
     setPage(0);
@@ -170,8 +178,9 @@ export function ExtrasDialog({
       disposed = true;
       unsubs.forEach((f) => f());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 开窗一次拉清单
-  }, [open, filter]);
+    // `load` 每次渲染都是新函数，列进依赖会变成「渲染一次拉一次清单」。
+    // 这个 effect 要的是「挂载时拉一次，filter 变了再拉一次」。
+  }, [filter]);
 
   const filtered = useMemo(() => {
     const all = list?.items || [];
@@ -184,8 +193,6 @@ export function ExtrasDialog({
     pageClamped * PER_PAGE,
     pageClamped * PER_PAGE + PER_PAGE,
   );
-
-  if (!open) return null;
 
   const downloadEngineCore = async () => {
     if (busyRef.current || coreBusy) return;
@@ -241,7 +248,6 @@ export function ExtrasDialog({
       : coreProg?.total
         ? Math.round(((coreProg.done ?? 0) / Math.max(coreProg.total, 1)) * 100)
         : 0;
-  const heading = title || t("s.1252c81119");
 
   const emptyHint =
     list?.available === false
@@ -252,19 +258,18 @@ export function ExtrasDialog({
 
   const locked = engineReady === false;
   const anyBusy = !!busyKey || coreBusy;
+  useEffect(() => {
+    onBusyChange?.(anyBusy);
+  }, [anyBusy, onBusyChange]);
 
   return (
-    <div
-      className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={anyBusy ? undefined : onClose}
-    >
-      <div
-        className="flex max-h-[min(88vh,720px)] w-full max-w-[min(920px,96vw)] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <>
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-          <h3 className="m-0 text-[17px] font-semibold">{heading}</h3>
+          {title ? (
+            <h3 className="m-0 text-[17px] font-semibold">{title}</h3>
+          ) : null}
           <SegmentControl<Category>
+            className={title ? "" : "ml-auto"}
             value={category}
             onChange={(v) => {
               setCategory(v);
@@ -415,13 +420,56 @@ export function ExtrasDialog({
           </p>
         ) : null}
 
-        <div className="mt-5 flex justify-end gap-2.5">
-          {busyKey ? (
-            <Btn onClick={() => void invoke("extra_cancel")}>{t("s.7115f2e29d")}</Btn>
-          ) : (
-            <Btn onClick={onClose} disabled={coreBusy}>{t("s.6c14bd7f6f")}</Btn>
-          )}
-        </div>
+        {busyKey || onClose ? (
+          <div className="mt-5 flex justify-end gap-2.5">
+            {busyKey ? (
+              <Btn onClick={() => void invoke("extra_cancel")}>{t("s.7115f2e29d")}</Btn>
+            ) : onClose ? (
+              <Btn onClick={onClose} disabled={coreBusy}>{t("s.6c14bd7f6f")}</Btn>
+            ) : null}
+          </div>
+        ) : null}
+    </>
+  );
+}
+
+/**
+ * 弹窗形态。只剩工具窗口在用 —— 主窗口那份已经搬进广场了。
+ *
+ * 下载中不许点空白关掉：那一下会把面板卸载，下载虽然还在后台跑，但进度条
+ * 没了，用户会以为自己把它取消了。
+ */
+export function ExtrasDialog({
+  open,
+  onClose,
+  filter = "all",
+  title,
+  reason,
+}: {
+  open: boolean;
+  onClose: () => void;
+  filter?: ExtrasFilter;
+  title?: string;
+  reason?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
+      onClick={busy ? undefined : onClose}
+    >
+      <div
+        className="flex max-h-[min(88vh,720px)] w-full max-w-[min(920px,96vw)] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ExtrasPanel
+          onClose={onClose}
+          filter={filter}
+          title={title || t("s.1252c81119")}
+          reason={reason}
+          onBusyChange={setBusy}
+        />
       </div>
     </div>
   );

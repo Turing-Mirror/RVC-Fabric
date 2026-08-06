@@ -23,7 +23,11 @@
 
 [GitHub 저장소](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB 아티팩트 다운로드](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**소셜 미디어**　[Bilibili @TuringMirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @TuringMirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @TuringMirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)
+**소셜 미디어**　[Bilibili @TuringMirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @TuringMirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @TuringMirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　QQ 그룹 @TuringMirror 커뮤니티 (그룹 번호 `1077458748`)
+
+<!-- qq-group -->
+<img src="assets/brand/qq_group.jpg" alt="QQ 그룹 QR 코드" width="200">
+<!-- qq-group -->
 
 **후원 프로모션**　[첫 달 50% 할인　·　가성비 클라우드 서버 / 게임 클라우드 / 패널 서버　·　Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 

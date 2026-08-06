@@ -23,7 +23,11 @@ Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Proj
 
 [Dépôt GitHub](https://github.com/Turing-Mirror/RVC-Fabric) · [Téléchargement CNB](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**Réseaux sociaux**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (ID Douyin `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (ID Xiaohongshu `TuringMirror`)
+**Réseaux sociaux**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (ID Douyin `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (ID Xiaohongshu `TuringMirror`)　·　Groupe QQ @Communauté Turing Mirror (N° de groupe `1077458748`)
+
+<!-- qq-group -->
+<img src="assets/brand/qq_group.jpg" alt="Code QR du groupe QQ" width="200">
+<!-- qq-group -->
 
 **Sponsorisation et promotion**　[Moitié prix le premier mois · Serveur cloud / Cloud de jeu / Serveur panel avec un bon rapport qualité-prix · Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 

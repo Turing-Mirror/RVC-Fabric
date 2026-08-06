@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
+import { ExtrasPanel } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
 import {
@@ -12,7 +13,7 @@ import {
 } from "../lib/plaza";
 
 /**
- * 广场：社区音色、投放、更新日志，从上往下就是这个顺序。
+ * 广场：社区音色、投放、下载模型、更新日志，从上往下就是这个顺序。
  *
  * 社区音色排第一，因为这是用户主动进广场的唯一理由 —— 投放和更新日志是我们
  * 想让他看的，音色是他想看的。把想让人看的东西摆在人想看的东西前面，结果是
@@ -24,6 +25,13 @@ import {
  * 刷新只有一个：右上角那个。一次点击把三块内容全刷了 —— 音色清单走
  * StoreSection 的 reloadToken，投放和更新日志走 onReload。三个各自的刷新
  * 按钮只会让人猜「我该点哪个」。
+ *
+ * 「下载模型」排在投放下面：它和社区音色是同一类事（都是往本机装东西），
+ * 但用户主动来找它的次数少得多 —— 一台机器装一次引擎资源就完了。所以不跟
+ * 社区音色抢第一屏，但也不能压到更新日志后面去。
+ *
+ * 它原来是「其他」页上弹出来的一个框。「其他」页现在只留一个入口，点了跳
+ * 到这儿来 —— 和「模型」页的「社区音色」是一样的处理。
  */
 /** 更新日志二级页每页几条。够看又不至于把滚动条拉成一条线。 */
 const PER_PAGE = 5;
@@ -32,10 +40,16 @@ function PlazaPageImpl({
   feed,
   loading = false,
   onReload,
+  downloadReason = "",
+  scrollToDownloads = 0,
 }: {
   feed: PlazaFeed;
   loading?: boolean;
   onReload?: () => void;
+  /** 从工具入口跳过来时的说明（缺引擎资源等）。 */
+  downloadReason?: string;
+  /** 加一就滚到「下载模型」。用计数而不是布尔：连着跳两次也得再滚一次。 */
+  scrollToDownloads?: number;
 }) {
   // 「查看全部」进的是独立一页，不是在原地展开一条长列表 —— 版本多了以后
   // 原地展开会把「投放」挤到看不见的地方，而且没有尽头。
@@ -46,6 +60,12 @@ function PlazaPageImpl({
   // 被置顶卡片点中的那条投放。高亮完就清掉，不是持久状态。
   const [spotlight, setSpotlight] = useState("");
   const spotTimer = useRef<number | null>(null);
+  // 从别处跳过来找「下载模型」的：这一页很长，不滚过去等于没跳。
+  const extrasRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!scrollToDownloads) return;
+    extrasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [scrollToDownloads]);
   useEffect(
     () => () => {
       if (spotTimer.current) window.clearTimeout(spotTimer.current);
@@ -165,6 +185,12 @@ function PlazaPageImpl({
             <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f9f2a78f9f")}</p>
           )}
         </Group>
+      </Block>
+
+      <Block title={t("s.1252c81119")}>
+        <div id="download-models" ref={extrasRef} className="scroll-mt-4">
+          <ExtrasPanel filter="all" reason={downloadReason} />
+        </div>
       </Block>
 
       <Block

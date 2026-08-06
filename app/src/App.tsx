@@ -68,8 +68,8 @@ export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
-  const [extrasOpen, setExtrasOpen] = useState(false);
   const [extrasReason, setExtrasReason] = useState("");
+  const [scrollToDownloads, setScrollToDownloads] = useState(0);
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
@@ -431,11 +431,18 @@ export default function App() {
   // home page and the models page can never drift apart on what the dock shows.
   const openModels = useCallback(() => setPage("models"), []);
   const openHelp = useCallback(() => setPage("help"), []);
+  // 「下载模型」现在住在广场，「其他」页和工具入口都是跳过来。
+  //
+  // 以前它是「其他」页上弹的一个框。同一件事在两个地方各有一份实现，改一个
+  // 忘一个是迟早的；而且用户在弹框里下完东西，关掉之后回到的还是「其他」页，
+  // 跟他刚做的事没有任何关系。
   const openDownloadModels = useCallback((reason?: string) => {
-    setPage("more");
+    plaza.markSeen();
+    setPage("plaza");
     setExtrasReason(reason || "");
-    setExtrasOpen(true);
-  }, []);
+    // 加一 = 「再滚一次」。广场很长，不滚过去用户看不见自己被带到哪了。
+    setScrollToDownloads((n) => n + 1);
+  }, [plaza]);
 
   useEffect(() => {
     registerDownloadModelsOpener((opts) => {
@@ -751,6 +758,8 @@ export default function App() {
                   feed={plaza.feed}
                   loading={plaza.loading}
                   onReload={reloadPlaza}
+                  downloadReason={extrasReason}
+                  scrollToDownloads={scrollToDownloads}
                 />
               );
             case "models":
@@ -790,12 +799,6 @@ export default function App() {
                   onOpenProvision={() => {
                     setProvisionDismissed(false);
                     setShowProvision(true);
-                  }}
-                  extrasOpen={extrasOpen}
-                  extrasReason={extrasReason}
-                  onExtrasOpenChange={(open) => {
-                    setExtrasOpen(open);
-                    if (!open) setExtrasReason("");
                   }}
                   onOpenDownloadModels={openDownloadModels}
                 />

@@ -542,9 +542,9 @@
     "47baa6fbb7": "Une synthèse est déjà en cours",
     "47c37d6efa": "Carte graphique non détectée : choisissez la version du Runtime manuellement",
     "47e57cab60": "Runtime\\python.exe introuvable",
-    "481ec6c2df": "Avant de lancer, il faut les ressources du moteur (hubert / rmvpe / ffmpeg). Récupérez-les dans Autres → Télécharger des modèles.",
+    "481ec6c2df": "Avant de lancer, il faut les ressources du moteur (hubert / rmvpe / ffmpeg). Récupérez-les dans Place → Télécharger des modèles.",
     "481ee2d4bc": "Vérification…",
-    "489b99d4d7": "Ressources du moteur manquantes : téléchargez-les dans Autres → Télécharger des modèles",
+    "489b99d4d7": "Ressources du moteur manquantes : téléchargez-les dans Place → Télécharger des modèles",
     "494f3ed5a0": "Choisissez d'abord le fichier d'entrée et le dossier de sortie",
     "4951a916f7": "C'est le canal de boucle interne de la carte physique, et ça marche aussi : sortie du logiciel sur la lecture de la carte, micro du jeu sur ce canal. Détails dans « Brancher une carte physique » plus bas.",
     "496951c554": "Le processus du moteur s'est arrêté de façon inattendue (souvent : VRAM insuffisante ou carte occupée). Résidus nettoyés ; réessayez.",
@@ -765,7 +765,7 @@
     "7cf7bfff3c": "Expiré",
     "7d1c1ee831": "Avertissement : interface non montée en 12 s (écran blanc). Source UI {} · {} requêtes traitées · 404 ×{}",
     "7d2fe2ae0a": "Sûrement une fluctuation réseau ou un serveur muet ; le logiciel n'est pas figé.",
-    "7d4cfa5986": "À la fin, l'installateur de VB-Cable est préparé. Les ressources du moteur (hubert / rmvpe / ffmpeg) se téléchargent désormais à la demande dans Autres → Télécharger des modèles.",
+    "7d4cfa5986": "À la fin, l'installateur de VB-Cable est préparé. Les ressources du moteur (hubert / rmvpe / ffmpeg) se téléchargent désormais à la demande dans Place → Télécharger des modèles.",
     "7d7d710ba5": "Carte son virtuelle",
     "7da520ca1f": "Démarrage en timeout et moteur arrêté : consultez User_Data/logs/realtime_worker.log",
     "7dc4ea39fd": "Le processus d'entraînement s'est terminé sans rapporter de résultat",
@@ -1362,5 +1362,8 @@
     "qqShort": "Groupe QQ",
     "qqNumber": "N° de groupe 1077458748",
     "qr": "Code QR"
+  },
+  "models": {
+    "more": "Plus d'actions"
   }
 }

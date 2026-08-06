@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { HelpMark } from "./Tooltip";
 
 export function PagePad({ children }: { children: ReactNode }) {
@@ -86,6 +86,7 @@ export function Btn({
   disabled = false,
   onClick,
   className = "",
+  ariaLabel,
 }: {
   children: ReactNode;
   primary?: boolean;
@@ -93,13 +94,17 @@ export function Btn({
   /** Equal width for 使用 / 使用中 */
   uw?: boolean;
   disabled?: boolean;
-  onClick?: () => void;
+  /** 事件是可选的：只写 `() => …` 的调用方照旧能用。 */
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
+  /** 按钮上只有图形没有字时（比如「⋯」）必须给，否则读屏读不出这是什么。 */
+  ariaLabel?: string;
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
+      aria-label={ariaLabel}
       onClick={onClick}
       className={[
         "text-[12.5px] border-0 rounded-[var(--rs)] cursor-pointer",

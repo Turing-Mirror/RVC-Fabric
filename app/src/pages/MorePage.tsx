@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openTool } from "../components/ToolWindow";
-import { ExtrasDialog } from "../components/ExtrasDialog";
 import { QrDialog } from "../components/QrDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
@@ -20,10 +19,7 @@ type Props = {
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
   onOpenProvision?: () => void;
-  /** 由 App 托管「下载模型」弹窗时传入；不传则本页本地开。 */
-  extrasOpen?: boolean;
-  extrasReason?: string;
-  onExtrasOpenChange?: (open: boolean) => void;
+  /** 「下载模型」住在广场，这里只有一个跳过去的入口。 */
   onOpenDownloadModels?: (reason?: string) => void;
 };
 
@@ -32,26 +28,13 @@ export function MorePage({
   provision,
   onForceKill,
   onOpenProvision,
-  extrasOpen: extrasOpenProp,
-  extrasReason = "",
-  onExtrasOpenChange,
   onOpenDownloadModels,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   const [uiSource, setUiSource] = useState("—");
-  const [extrasOpenLocal, setExtrasOpenLocal] = useState(false);
   // 有二维码的社媒条目（QQ 群）点开的是图片，不是外链。
   const [qr, setQr] = useState<{ src: string; label: string } | null>(null);
-  const extrasOpen = extrasOpenProp ?? extrasOpenLocal;
-  const setExtrasOpen = (open: boolean) => {
-    if (onExtrasOpenChange) onExtrasOpenChange(open);
-    else setExtrasOpenLocal(open);
-  };
-  const openExtras = (reason?: string) => {
-    if (onOpenDownloadModels) onOpenDownloadModels(reason);
-    else setExtrasOpen(true);
-  };
   // Where the app thinks it is installed. The row below used to only describe
   // that this is resolved automatically, without ever showing the answer —
   // which is the first thing worth knowing when a report says "找不到 Runtime".
@@ -308,20 +291,16 @@ export function MorePage({
             desc={t("s.ba7bd6e071")}
             right={<Btn onClick={() => openTool("tts")}>{t("s.65fc81e161")}</Btn>}
           />
+          {/* 入口留着（老用户是从这儿找它的），功能已经搬去广场了。 */}
           <ListItem
             title={t("s.1252c81119")}
             desc={t("s.e197a257da")}
-            right={<Btn onClick={() => openExtras()}>{t("s.65fc81e161")}</Btn>}
+            right={
+              <Btn onClick={() => onOpenDownloadModels?.()}>{t("s.65fc81e161")}</Btn>
+            }
           />
         </Group>
       </Block>
-      <ExtrasDialog
-        open={extrasOpen}
-        onClose={() => setExtrasOpen(false)}
-        filter="all"
-        title={t("s.1252c81119")}
-        reason={extrasReason}
-      />
 
       <Block title={t("s.72527e2f0e")}>
         <Group>

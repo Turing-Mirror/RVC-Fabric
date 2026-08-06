@@ -542,9 +542,9 @@
     "47baa6fbb7": "A synthesis job is already running",
     "47c37d6efa": "No GPU detected — pick the Runtime version manually",
     "47e57cab60": "Runtime\\python.exe not found",
-    "481ec6c2df": "The engine resources (hubert / rmvpe / ffmpeg) are required before starting. Get them under Other → Download models.",
+    "481ec6c2df": "The engine resources (hubert / rmvpe / ffmpeg) are required before starting. Get them under Plaza → Download models.",
     "481ee2d4bc": "Checking…",
-    "489b99d4d7": "Engine resources incomplete — download them under Other → Download models first",
+    "489b99d4d7": "Engine resources incomplete — download them under Plaza → Download models first",
     "494f3ed5a0": "Pick the input file and output folder first",
     "4951a916f7": "This is the physical card's loopback channel, and it works: set the app's output to the card's playback and the game mic to this channel. Expand \"Physical sound card routing\" below for the full setup.",
     "496951c554": "The voice changer process quit unexpectedly (usually out of VRAM or a busy sound card). Leftovers cleaned — try again.",
@@ -765,7 +765,7 @@
     "7cf7bfff3c": "Expired",
     "7d1c1ee831": "Warning: UI not mounted in 12 s (white screen). UI source {} · {} requests handled · 404 ×{}",
     "7d2fe2ae0a": "Likely a network blip or an unresponsive server — the app isn't frozen.",
-    "7d4cfa5986": "When done, the VB-Cable installer is prepared. Engine resources (hubert / rmvpe / ffmpeg) are now downloaded on demand under Other → Download models.",
+    "7d4cfa5986": "When done, the VB-Cable installer is prepared. Engine resources (hubert / rmvpe / ffmpeg) are now downloaded on demand under Plaza → Download models.",
     "7d7d710ba5": "Virtual sound card",
     "7da520ca1f": "Startup timed out and the engine exited — check User_Data/logs/realtime_worker.log",
     "7dc4ea39fd": "Training process ended without reporting a result",
@@ -1362,5 +1362,8 @@
     "qqShort": "QQ group",
     "qqNumber": "Group ID 1077458748",
     "qr": "QR code"
+  },
+  "models": {
+    "more": "More actions"
   }
 }

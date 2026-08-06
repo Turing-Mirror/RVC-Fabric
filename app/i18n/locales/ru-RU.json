@@ -69,7 +69,11 @@
     "closeAction": "При закрытии окна",
     "closeAsk": "Спрашивать каждый раз",
     "closeTray": "Сворачивать в трей",
-    "closeExit": "Выход"
+    "closeExit": "Выход",
+    "hfEndpoint": "Зеркало Hugging Face",
+    "hfEndpointTip": "Влияет только на сторонние голоса с Hugging Face. Пусто: сначала hf-cdn.sufy.com, затем hf-mirror.com, затем официальный хост.",
+    "hfEndpointPlaceholder": "Пусто = зеркала по умолчанию",
+    "hfEndpointDefault": "Двойные зеркала по умолчанию"
   },
   "locale": {
     "zh-CN": "简体中文",

@@ -69,7 +69,11 @@
     "closeAction": "창을 닫을 때",
     "closeAsk": "매번 묻기",
     "closeTray": "트레이로 최소화",
-    "closeExit": "바로 종료"
+    "closeExit": "바로 종료",
+    "hfEndpoint": "Hugging Face 미러",
+    "hfEndpointTip": "Hugging Face에서 받는 서드파티 음색에만 적용됩니다. 비우면 hf-cdn.sufy.com → hf-mirror.com → 공식 순으로 시도합니다.",
+    "hfEndpointPlaceholder": "비움 = 기본 미러",
+    "hfEndpointDefault": "기본 이중 미러"
   },
   "locale": {
     "zh-CN": "简体中文",

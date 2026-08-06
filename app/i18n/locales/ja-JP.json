@@ -69,7 +69,11 @@
     "closeAction": "ウィンドウを閉じる時",
     "closeAsk": "毎回尋ねる",
     "closeTray": "トレイに最小化",
-    "closeExit": "直接終了"
+    "closeExit": "直接終了",
+    "hfEndpoint": "Hugging Face ミラー",
+    "hfEndpointTip": "Hugging Face から取得するサードパーティ音声のみに影響します。空欄の場合は hf-cdn.sufy.com → hf-mirror.com → 公式の順で試します。",
+    "hfEndpointPlaceholder": "空 = デフォルトミラー",
+    "hfEndpointDefault": "デフォルト二重ミラー"
   },
   "locale": {
     "zh-CN": "简体中文",

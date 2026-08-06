@@ -6,6 +6,7 @@ pub mod catalog;
 mod config;
 mod download;
 mod engine_assets;
+mod hf;
 mod extra_assets;
 mod extract;
 mod i18n;

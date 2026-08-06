@@ -79,7 +79,7 @@ function PinCard({ item, onPick }: { item: PlazaItem; onPick: () => void }) {
             referrerPolicy="no-referrer"
             draggable={false}
             onError={() => setImgFailed(true)}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-contain"
           />
         ) : (
           <span>{label.slice(0, 4)}</span>

@@ -69,7 +69,11 @@
     "closeAction": "Al cerrar la ventana",
     "closeAsk": "Preguntar siempre",
     "closeTray": "Minimizar a la bandeja",
-    "closeExit": "Salir"
+    "closeExit": "Salir",
+    "hfEndpoint": "Espejo de Hugging Face",
+    "hfEndpointTip": "Solo afecta a voces de terceros descargadas de Hugging Face. Vacío: hf-cdn.sufy.com, luego hf-mirror.com, luego el host oficial.",
+    "hfEndpointPlaceholder": "Vacío = espejos por defecto",
+    "hfEndpointDefault": "Espejos duales por defecto"
   },
   "locale": {
     "zh-CN": "简体中文",

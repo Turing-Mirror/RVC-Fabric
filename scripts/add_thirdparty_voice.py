@@ -256,6 +256,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--bangumi-id", type=int, default=0, help="指定 Bangumi 角色 id")
     ap.add_argument("--pth-path", default="", help="多候选时指定仓库内 .pth 相对路径")
     ap.add_argument(
+        "--pack-path",
+        default="",
+        help="大合集仓内指定 zip 相对路径（与 --pth-path 二选一）",
+    )
+    ap.add_argument(
         "--endpoint",
         default=DEFAULT_ENDPOINT,
         help="查询 API 用的镜像根（默认 hf-mirror.com）",
@@ -306,7 +311,32 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"错误: 文件树格式异常: {tree}", file=sys.stderr)
         return 1
 
-    if args.pth_path:
+    if args.pth_path and args.pack_path:
+        print("错误: --pth-path 与 --pack-path 只能选一个", file=sys.stderr)
+        return 2
+
+    if args.pack_path:
+        hit = next(
+            (
+                x
+                for x in tree
+                if isinstance(x, dict) and str(x.get("path")) == args.pack_path
+            ),
+            None,
+        )
+        if not hit:
+            print(f"错误: 找不到 --pack-path {args.pack_path}", file=sys.stderr)
+            return 1
+        art = {
+            "kind": "voice_pack",
+            "pack": args.pack_path,
+            "sha256": str((hit.get("lfs") or {}).get("oid") or "").lower(),
+            "size_bytes": int(
+                (hit.get("lfs") or {}).get("size") or hit.get("size") or 0
+            ),
+            "candidates": [],
+        }
+    elif args.pth_path:
         # 人工指定路径
         hit = next(
             (
@@ -345,7 +375,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             for c in art["candidates"]:
                 mark = " *" if c == art.get("pth") or c == art.get("pack") else ""
                 print(f"  {c}{mark}")
-            print("（可用 --pth-path 指定）")
+            print("（可用 --pth-path / --pack-path 指定）")
 
     vid = _slug_id(repo, args.id)
     guess = _guess_name(

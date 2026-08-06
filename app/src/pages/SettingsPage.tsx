@@ -804,6 +804,46 @@ function SettingsPageImpl({
                   />
                 }
               />
+              <Field
+                label={t("settings.hfEndpoint")}
+                tip={t("settings.hfEndpointTip")}
+                inline
+                control={
+                  <Select
+                    width={220}
+                    value={(() => {
+                      const v = c.str("hf_endpoint", "");
+                      if (
+                        v === "" ||
+                        v === "https://hf-mirror.com" ||
+                        v === "https://hf-cdn.sufy.com"
+                      ) {
+                        return v;
+                      }
+                      // 旧自定义值仍可选中显示
+                      return v;
+                    })()}
+                    options={[
+                      { id: "", label: t("settings.hfEndpointDefault") },
+                      { id: "https://hf-cdn.sufy.com", label: "hf-cdn.sufy.com" },
+                      { id: "https://hf-mirror.com", label: "hf-mirror.com" },
+                      // 若用户 app_config 里有非预设值，补进列表避免 Select 空白
+                      ...(() => {
+                        const v = c.str("hf_endpoint", "");
+                        if (
+                          v &&
+                          v !== "https://hf-mirror.com" &&
+                          v !== "https://hf-cdn.sufy.com"
+                        ) {
+                          return [{ id: v, label: v }];
+                        }
+                        return [] as { id: string; label: string }[];
+                      })(),
+                    ]}
+                    onChange={(v) => c.set("hf_endpoint", v, true)}
+                  />
+                }
+              />
             </div>
           </Block>
         ) : null}

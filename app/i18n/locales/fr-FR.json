@@ -69,7 +69,11 @@
     "closeAction": "À la fermeture de la fenêtre",
     "closeAsk": "Demander à chaque fois",
     "closeTray": "Réduire dans la zone de notification",
-    "closeExit": "Quitter"
+    "closeExit": "Quitter",
+    "hfEndpoint": "Miroir Hugging Face",
+    "hfEndpointTip": "Affecte uniquement les voix tierces téléchargées depuis Hugging Face. Vide : hf-cdn.sufy.com, puis hf-mirror.com, puis l’hôte officiel.",
+    "hfEndpointPlaceholder": "Vide = miroirs par défaut",
+    "hfEndpointDefault": "Miroirs doubles par défaut"
   },
   "locale": {
     "zh-CN": "简体中文",

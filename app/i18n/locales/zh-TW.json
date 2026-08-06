@@ -69,7 +69,11 @@
     "closeAction": "關閉視窗時",
     "closeAsk": "每次詢問",
     "closeTray": "最小化到系統匣",
-    "closeExit": "直接退出"
+    "closeExit": "直接退出",
+    "hfEndpoint": "Hugging Face 鏡像",
+    "hfEndpointTip": "僅影響從 Hugging Face 下載的第三方音色。留空則依序嘗試 hf-cdn.sufy.com 與 hf-mirror.com，最後回退官方網域。",
+    "hfEndpointPlaceholder": "留空 = 預設雙鏡像",
+    "hfEndpointDefault": "預設雙鏡像"
   },
   "locale": {
     "zh-CN": "简体中文",

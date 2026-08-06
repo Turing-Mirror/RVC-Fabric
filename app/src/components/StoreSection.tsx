@@ -559,7 +559,8 @@ function VoiceCard({
             referrerPolicy="no-referrer"
             draggable={false}
             onError={() => setImgFailed(true)}
-            className="absolute inset-0 w-full h-full object-cover"
+            // contain：竖向立绘在 4:3 卡里用 cover 会裁成胸口/腿；完整展示优先。
+            className="absolute inset-0 w-full h-full object-contain"
           />
         ) : (
           <span>{(title || v.id || "?").slice(0, 4)}</span>

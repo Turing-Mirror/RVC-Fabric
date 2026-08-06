@@ -338,7 +338,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                       <img
                         src={src}
                         alt=""
-                        className="absolute inset-0 w-full h-full object-cover"
+                        // contain：官方 1:1 与框内一致不裁；第三方竖立绘用 cover 会
+                        // 只剩胸口或腿。与首页 HomePage 一致。
+                        className="absolute inset-0 w-full h-full object-contain"
                         draggable={false}
                       />
                     ) : (

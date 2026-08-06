@@ -69,7 +69,11 @@
     "closeAction": "When closing the window",
     "closeAsk": "Ask each time",
     "closeTray": "Minimize to tray",
-    "closeExit": "Quit"
+    "closeExit": "Quit",
+    "hfEndpoint": "Hugging Face mirror",
+    "hfEndpointTip": "Only affects third-party voices downloaded from Hugging Face. Leave empty to try hf-cdn.sufy.com, then hf-mirror.com, then the official host.",
+    "hfEndpointPlaceholder": "Empty = default mirrors",
+    "hfEndpointDefault": "Default dual mirrors"
   },
   "locale": {
     "zh-CN": "简体中文",

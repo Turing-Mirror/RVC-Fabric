@@ -760,6 +760,13 @@ pub fn install_voice_entry(
     // 证明不了那个文件本身干净。让用户自己先看一眼。
     let stage_only = !official;
 
+    // HF 清单写规范域；下载时扩成镜像列表（用户可在设置里改优先根）。
+    let hf_endpoint = crate::config::read(&root)
+        .get("hf_endpoint")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     if !pack_url.is_empty() {
         let vid = safe_model_dir_name(if id.is_empty() { &name } else { &id })?;
         let cache = if stage_only {
@@ -789,9 +796,10 @@ pub fn install_voice_entry(
             );
         });
 
+        let urls = crate::hf::download_urls(&pack_url, &hf_endpoint);
         let res = download::download_request(
             DownloadRequest {
-                urls: vec![pack_url],
+                urls,
                 dest: zpath.clone(),
                 expected_sha256: sha,
                 size_hint: size,
@@ -855,7 +863,7 @@ pub fn install_voice_entry(
     });
     download::download_request(
         DownloadRequest {
-            urls: vec![pth_url],
+            urls: crate::hf::download_urls(&pth_url, &hf_endpoint),
             dest: pth_tmp.clone(),
             expected_sha256: sha,
             // 0 而不是 size：voice_files 的 size_bytes 是 pth + index 的合计
@@ -883,7 +891,7 @@ pub fn install_voice_entry(
                     .to_string();
                 let _ = download::download_request(
                     DownloadRequest {
-                        urls: vec![iu.to_string()],
+                        urls: crate::hf::download_urls(iu, &hf_endpoint),
                         dest: cache.join(format!("{vid}.index")),
                         expected_sha256: idx_sha,
                         size_hint: 0,
@@ -934,7 +942,7 @@ pub fn install_voice_entry(
                 .to_string();
             let _ = download::download_request(
                 DownloadRequest {
-                    urls: vec![iu.to_string()],
+                    urls: crate::hf::download_urls(iu, &hf_endpoint),
                     dest: idx_tmp.clone(),
                     expected_sha256: idx_sha,
                     size_hint: 0,

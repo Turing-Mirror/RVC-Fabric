@@ -56,10 +56,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ENDPOINT = "https://hf-mirror.com"
+DEFAULT_ENDPOINT = "https://hf-cdn.sufy.com"
+# 与客户端 hf::DEFAULT_MIRRORS 对齐；下载失败时按序换源。
+# sufy 优先：hf-mirror 对大文件常回 308，Python 3.9 urllib 不会跟。
+DEFAULT_ENDPOINTS = (
+    "https://hf-cdn.sufy.com",
+    "https://hf-mirror.com",
+)
 CANONICAL = "https://huggingface.co"
 UA = "Turing-Mirror/RVC-Fabric (https://github.com/Turing-Mirror/RVC-Fabric)"
-TIMEOUT = 60
+TIMEOUT = 120
 
 # 与客户端 store.rs 保持一致：小于这个体积的 .pth 视为损坏。
 MIN_PTH_BYTES = 1_000_000
@@ -92,32 +98,84 @@ def cache_path(url: str) -> Path:
     return _cache_dir() / f"{digest}-{name}"
 
 
+class _Redirect308(urllib.request.HTTPRedirectHandler):
+    """Python 3.9 默认不跟 308；hf-mirror 大文件常回 308。"""
+
+    def http_error_308(self, req, fp, code, msg, headers):  # noqa: ANN001
+        return self.http_error_302(req, fp, code, msg, headers)
+
+
+_URL_OPENER = urllib.request.build_opener(_Redirect308)
+
+
 def download(url: str, dest: Path, *, quiet: bool = False) -> Path:
-    """下载到 dest（已存在且非空则复用）。"""
+    """下载到 dest（已存在且非空则复用）。
+
+    ``url`` 可以是规范域或任意镜像；按 DEFAULT_ENDPOINTS 扩列表回退。
+    """
     if dest.is_file() and dest.stat().st_size > 0:
         if not quiet:
             print(f"  复用缓存 {dest.name} ({dest.stat().st_size / 1e6:.1f} MB)")
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        total = int(resp.headers.get("Content-Length") or 0)
-        done = 0
-        with tmp.open("wb") as f:
-            while True:
-                chunk = resp.read(1 << 20)
-                if not chunk:
-                    break
-                f.write(chunk)
-                done += len(chunk)
-                if not quiet and total:
-                    pct = done * 100 // total
-                    print(f"\r  下载 {dest.name} {pct:3d}%", end="", flush=True)
-    if not quiet:
-        print()
-    tmp.replace(dest)
-    return dest
+
+    # 规范域形态，再按默认镜像顺序展开
+    canonical = url
+    for host in (
+        "https://hf-mirror.com",
+        "http://hf-mirror.com",
+        "https://hf-cdn.sufy.com",
+        "http://hf-cdn.sufy.com",
+    ):
+        if canonical.startswith(host):
+            canonical = CANONICAL + canonical[len(host) :]
+            break
+
+    candidates: list[str] = []
+    for ep in DEFAULT_ENDPOINTS:
+        alt = _to_endpoint(canonical, ep)
+        if alt not in candidates:
+            candidates.append(alt)
+    if canonical not in candidates:
+        candidates.append(canonical)
+
+    last_err: Optional[Exception] = None
+    for try_url in candidates:
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        try:
+            if not quiet:
+                host = try_url.split("/")[2] if "://" in try_url else try_url
+                print(f"  下载 {dest.name} ← {host}")
+            req = urllib.request.Request(
+                try_url, headers={"User-Agent": UA, "Accept": "*/*"}
+            )
+            with _URL_OPENER.open(req, timeout=TIMEOUT) as resp:
+                total = int(resp.headers.get("Content-Length") or 0)
+                done = 0
+                with tmp.open("wb") as f:
+                    while True:
+                        chunk = resp.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        done += len(chunk)
+                        if not quiet and total:
+                            pct = done * 100 // total
+                            print(f"\r  下载 {dest.name} {pct:3d}%", end="", flush=True)
+            if not quiet:
+                print()
+            tmp.replace(dest)
+            return dest
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            if not quiet:
+                print(f"  失败: {e}")
+            try:
+                if tmp.is_file():
+                    tmp.unlink()
+            except Exception:
+                pass
+    raise RuntimeError(f"全部镜像下载失败: {last_err}")
 
 
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
@@ -354,8 +412,85 @@ def _yaml_block(res: dict[str, Any]) -> str:
         lines.append(f"  index: {res['index']}")
     if res.get("version"):
         lines.append(f"  rvc_version: '{res['version']}'")
-    lines.append("  checks: [" + ", ".join(res.get("checks", [])) + "]")
+    lines.append("  checks:")
+    for c in res.get("checks") or []:
+        lines.append(f"  - {c}")
     return "\n".join(lines)
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore
+
+        data = yaml.safe_load(text)
+        if not isinstance(data, dict):
+            raise ValueError("YAML 根不是 mapping")
+        return data
+    except ImportError:
+        # 极简回退：只够读我们自己写出的扁平 thirdparty 条目
+        data: dict[str, Any] = {}
+        for line in text.splitlines():
+            if not line or line.lstrip().startswith("#") or ":" not in line:
+                continue
+            if line.startswith(" ") or line.startswith("\t"):
+                continue
+            k, _, v = line.partition(":")
+            k = k.strip()
+            v = v.strip().strip("'\"")
+            if v.lower() in ("true", "false"):
+                data[k] = v.lower() == "true"
+            elif v.isdigit():
+                data[k] = int(v)
+            else:
+                data[k] = v
+        return data
+
+
+def write_yaml_verified(path: Path, res: dict[str, Any]) -> None:
+    """把验证结果写回 thirdparty YAML（sha256 / size / verified 块）。"""
+    data = _load_yaml(path)
+    if res.get("sha256"):
+        data["sha256"] = res["sha256"]
+    if res.get("size_bytes"):
+        data["size_bytes"] = int(res["size_bytes"])
+    if res.get("index_sha256"):
+        data["index_sha256"] = res["index_sha256"]
+    data["verified"] = {
+        "at": res.get("at") or datetime.now().strftime("%y%m%d"),
+        "checks": list(res.get("checks") or []),
+    }
+    if res.get("pth"):
+        data["verified"]["pth"] = res["pth"]
+    if res.get("index"):
+        data["verified"]["index"] = res["index"]
+    if res.get("version"):
+        data["verified"]["rvc_version"] = str(res["version"])
+
+    try:
+        import yaml  # type: ignore
+
+        body = yaml.safe_dump(
+            data, allow_unicode=True, sort_keys=False, default_flow_style=False
+        )
+    except ImportError:
+        # 无 PyYAML：在原文件末尾替换 verified 块不靠谱，直接失败提示安装
+        raise SystemExit("写回 YAML 需要 PyYAML：pip install pyyaml") from None
+
+    header = ""
+    raw = path.read_text(encoding="utf-8")
+    if raw.lstrip().startswith("#"):
+        # 保留开头注释行
+        lines = raw.splitlines()
+        keep: list[str] = []
+        for ln in lines:
+            if ln.startswith("#") or not ln.strip():
+                keep.append(ln)
+            else:
+                break
+        if keep:
+            header = "\n".join(keep) + "\n"
+    path.write_text(header + body, encoding="utf-8")
 
 
 def main() -> int:
@@ -369,7 +504,17 @@ def main() -> int:
     ap.add_argument("--pack-url", default="", help="直接给 zip 完整 URL")
     ap.add_argument("--pth-url", default="", help="直接给 pth 完整 URL")
     ap.add_argument("--index-url", default="", help="直接给 index 完整 URL")
-    ap.add_argument("--endpoint", default=DEFAULT_ENDPOINT, help="下载镜像根")
+    ap.add_argument(
+        "--yaml",
+        default="",
+        help="直接读 catalog-src/thirdparty/*.yaml 里的 URL",
+    )
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="验证通过后把 sha256 / verified 写回 --yaml",
+    )
+    ap.add_argument("--endpoint", default=DEFAULT_ENDPOINT, help="下载优先镜像根")
     ap.add_argument("--json", action="store_true", help="只输出 JSON")
     ap.add_argument("--keep", action="store_true", help="保留解压内容供人工过目")
     args = ap.parse_args()
@@ -383,12 +528,23 @@ def main() -> int:
     pack_url = args.pack_url or hf_url(args.pack)
     pth_url = args.pth_url or hf_url(args.pth)
     index_url = args.index_url or hf_url(args.index)
+    yaml_path: Optional[Path] = None
+
+    if args.yaml:
+        yaml_path = Path(args.yaml)
+        if not yaml_path.is_file():
+            print(f"错误: 找不到 YAML {yaml_path}", file=sys.stderr)
+            return 2
+        data = _load_yaml(yaml_path)
+        pack_url = str(data.get("pack_url") or pack_url or "")
+        pth_url = str(data.get("pth_url") or pth_url or "")
+        index_url = str(data.get("index_url") or index_url or "")
 
     if not (pack_url or pth_url):
-        ap.error("需要 --pack / --pth（配合 --hf）或 --pack-url / --pth-url")
+        ap.error("需要 --yaml 或 --pack / --pth（配合 --hf）或 --pack-url / --pth-url")
 
     if not args.json:
-        print(f"验证 {args.hf or pack_url or pth_url}")
+        print(f"验证 {yaml_path or args.hf or pack_url or pth_url}")
     res = verify(
         pack_url=pack_url,
         pth_url=pth_url,
@@ -398,6 +554,9 @@ def main() -> int:
     )
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=2))
+        if res["ok"] and args.write and yaml_path:
+            write_yaml_verified(yaml_path, res)
+            print(f"已写回 {yaml_path}", file=sys.stderr)
         return 0 if res["ok"] else 1
 
     print()
@@ -411,6 +570,9 @@ def main() -> int:
             print(f"  index_sha256 {res['index_sha256']}")
         print()
         print(_yaml_block(res))
+        if args.write and yaml_path:
+            write_yaml_verified(yaml_path, res)
+            print(f"\n已写回 {yaml_path}")
     return 0 if res["ok"] else 1
 
 

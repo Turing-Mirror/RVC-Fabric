@@ -188,6 +188,10 @@ pub fn defaults() -> Map<String, Value> {
     // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。
     m.insert("vc_run_count".into(), json!(0));
     m.insert("follow_prompt_done".into(), json!(false));
+    // 第三方 Hugging Face 下载镜像根。空 = 产品默认双镜像
+    // （hf-mirror.com → hf-cdn.sufy.com → 规范域）。见 `hf::download_urls`。
+    // 不进 worker / inuse。
+    m.insert("hf_endpoint".into(), json!(""));
     m
 }
 

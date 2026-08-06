@@ -58,7 +58,7 @@ function isCancelError(e: unknown): boolean {
 /**
  * First-run / missing-Runtime gate: Runtime + VB-Cable 安装包。
  *
- * 引擎资源（hubert / rmvpe / ffmpeg）不在这里下，改到「其他 → 下载模型」按需补。
+ * 引擎资源（hubert / rmvpe / ffmpeg）不在这里下，改到「广场 → 下载模型」按需补。
  * Only shown when need_provision; does not change everyday VC flow once ready.
  */
 export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {

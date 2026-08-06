@@ -60,22 +60,25 @@ cd /d path\to\repo\app
 npm run tauri:dev
 ```
 
-## Voice catalog & community store (stage 4)
+## Voice catalog & community store
 
 - `voices_list` / `voices_select` — local `User_Data/models` + legacy weights
 - Index panel: bind / use / unbind `.index` (copied next to `.pth`)
 - Profiles: list / switch / save / import / export `.tmvp`
 - Import `.pth` / `.index` / `.zip`; delete / rename / promote legacy
-- Community store dialog: dual-source catalog, series zone, third-party disclaimer,
-  multi-connection download via shared `download.rs` (`DownloadKind::VoicePack`)
+- Community voices live on the **Plaza** page (dual-source catalog, series zone,
+  third-party disclaimer). Multi-connection download via shared `download.rs`
+  (`DownloadKind::VoicePack`). Display names follow `name_i18n` + UI locale.
 
-## Runtime provision (stage 3)
+## Runtime provision
 
 - `provision_status` — Runtime ready? GPU recommend (WMI, no torch).
 - `provision_start` / `provision_cancel` — download from CNB into
   `User_Data/update_cache/runtime`, safe-extract to `Runtime/`, write
   `package_meta.json`. Progress events: `provision-progress`.
-- First-run UI: `ProvisionGate` when Runtime is missing.
+- First-run UI: `LanguageGate` (locale) then `ProvisionGate` (Runtime + VB-Cable pack).
+- **engine-core** (hubert / rmvpe / ffmpeg) is **on-demand** via Plaza → 下载模型
+  (`assets_ensure_engine_core`), not part of the first Runtime gate.
 
 ### Shared downloader (`src-tauri/src/download.rs`)
 

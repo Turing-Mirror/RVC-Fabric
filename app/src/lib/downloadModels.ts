@@ -4,7 +4,7 @@
  * 实时变声（rtrvc）与离线工具都依赖 hubert / rmvpe（及 ffmpeg）。
  * 缺了就打开「下载模型」弹窗：先补引擎资源，再允许下分离/训练附加包。
  *
- * - 底栏「开启变声」：Runtime 就绪后，若缺引擎资源 → 弹窗补全
+ * - 底栏「开启变声」：Runtime 就绪后，若缺引擎资源 → 跳转广场「下载模型」
  * - 音频工具入口：同上
  */
 
@@ -31,7 +31,7 @@ export function registerDownloadModelsOpener(fn: ModelsOpener | null): void {
   modelsOpener = fn;
 }
 
-/** 打开「其他 → 下载模型」（引擎资源卡 + 分离/训练列表）。 */
+/** 打开「广场 → 下载模型」（引擎资源卡 + 分离/训练列表）。 */
 export function openDownloadModels(opts?: OpenDownloadModelsOpts): void {
   modelsOpener?.(opts);
 }

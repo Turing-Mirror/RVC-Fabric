@@ -370,7 +370,7 @@ if __name__ == "__main__":
                     # 启动从 User_Data/app_config.json 重建，这里返回默认即可。
                     data = {}
                 else:
-                    with open("configs/inuse/config.json", "r") as j:
+                    with open("configs/inuse/config.json", "r", encoding="utf-8") as j:
                         data = json.load(j)
                     data["sr_model"] = data.get("sr_type", "sr_model") == "sr_model"
                     data["sr_device"] = data.get("sr_type", "sr_model") == "sr_device"

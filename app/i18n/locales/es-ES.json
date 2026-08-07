@@ -1285,7 +1285,8 @@
     "041c85897b": "No se encontraron voces que coincidan con \"{v0}\", borre la búsqueda para ver todas.",
     "0b38f69017": "Distribuido por {v0}",
     "7611f15dff": "No se pudo iniciar el worker: {a0}",
-    "c8542337dc": "{v0} · {v1}"
+    "c8542337dc": "{v0} · {v1}",
+    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

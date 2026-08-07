@@ -39,6 +39,13 @@ fn worker_script(root: &Path) -> PathBuf {
     root.join("tools").join("separate_worker.py")
 }
 
+/// PyMSS 拆成 tools/pymss + tools/pymss_core 两半，`pymss` 顶层 import
+/// `pymss_core`，缺任意一半都是同样的崩溃。这里只查后半 —— 前半缺了
+/// 会在 import 时报错，但报的是另一条链路；后半缺失时给用户能读懂的提示。
+fn core_present(root: &Path) -> bool {
+    root.join("tools").join("pymss_core").join("__init__.py").is_file()
+}
+
 /// 分离能不能用：要 Runtime、要 worker 脚本、要至少一个权重文件。
 /// 权重按 PyMSS catalog 的 relpath 摆在子目录里，所以要递归扫；界面下拉框
 /// 里列文件名（模型名/别名），PyMSS 解析器自己按名字找到子目录里的那份。
@@ -51,6 +58,7 @@ pub fn status(root: &Path) -> Value {
     json!({
         "runtime_ready": paths::runtime_ready(root),
         "worker_present": worker_script(root).is_file(),
+        "core_present": core_present(root),
         "model_dir": dir.to_string_lossy(),
         "models": models,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
@@ -139,6 +147,9 @@ fn run_inner(
     let script = worker_script(root);
     if !script.is_file() {
         return Err(crate::i18n::te("s.271fa82d5c", &(script.display())));
+    }
+    if !core_present(root) {
+        return Err(crate::i18n::t("s.6ff3d83b8f"));
     }
     if input.trim().is_empty() || output.trim().is_empty() {
         return Err(crate::i18n::t("s.494f3ed5a0").into());
@@ -272,6 +283,23 @@ mod tests {
         let st = status(Path::new("C:\\definitely-not-here"));
         assert_eq!(st["runtime_ready"], json!(false));
         assert_eq!(st["models"], json!([]));
+    }
+
+    #[test]
+    fn core_present_detects_missing_pymss_core() {
+        // 部署树缺 tools/pymss_core 时分离会崩在 import 上，预检要认得出来。
+        let base = std::env::temp_dir().join("rvcf-separate-core");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("tools").join("pymss")).unwrap();
+        assert!(!core_present(&base));
+        std::fs::create_dir_all(base.join("tools").join("pymss_core")).unwrap();
+        std::fs::write(
+            base.join("tools").join("pymss_core").join("__init__.py"),
+            b"",
+        )
+        .unwrap();
+        assert!(core_present(&base));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

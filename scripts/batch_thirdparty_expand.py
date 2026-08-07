@@ -507,8 +507,8 @@ def bangdream_extra() -> list[dict[str, str]]:
         # skip training junk
         name = path.split("/")[0] if "/" in path else Path(path).stem
         low = name.lower()
-        # MyGO 官方重叠
-        if any(m in low for m in MYGO_SKIP):
+        # MyGO 官方重叠（词首精确匹配；子串匹配曾把 Kanon 误杀：k-a**non** ⊃ "anon"）
+        if any(low.startswith(m) for m in MYGO_SKIP):
             continue
         # 只取「主」模型：跳过 chanter / mixte 变体以控数量
         if "chanter" in low or "mixte" in low:

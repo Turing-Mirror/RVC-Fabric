@@ -1308,7 +1308,7 @@
     },
     {
       "id": "tp-bd-chiyu",
-      "name": "通云千雪",
+      "name": "珠手知由",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1335,7 +1335,7 @@
     },
     {
       "id": "tp-bd-eve",
-      "name": "若叶睦",
+      "name": "若宫伊芙",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1551,7 +1551,7 @@
     },
     {
       "id": "tp-bd-lisa1",
-      "name": "今井丽莎",
+      "name": "今井莉莎",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1632,7 +1632,7 @@
     },
     {
       "id": "tp-bd-masuki",
-      "name": "PAREO/MASKING",
+      "name": "佐藤益木",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1767,7 +1767,7 @@
     },
     {
       "id": "tp-bd-rei",
-      "name": "若叶睦",
+      "name": "和奏瑞依",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1794,7 +1794,7 @@
     },
     {
       "id": "tp-bd-reona",
-      "name": "和奏瑞依",
+      "name": "鳰原令王那",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1875,7 +1875,7 @@
     },
     {
       "id": "tp-bd-rokka",
-      "name": "广町七深",
+      "name": "朝日六花",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -1902,7 +1902,7 @@
     },
     {
       "id": "tp-bd-rui",
-      "name": "若宫伊织",
+      "name": "八潮瑠唯",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -2010,7 +2010,7 @@
     },
     {
       "id": "tp-bd-toko",
-      "name": "二叶筑紫",
+      "name": "桐谷透子",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",
@@ -2064,7 +2064,7 @@
     },
     {
       "id": "tp-bd-tsugumi",
-      "name": "濑田椿",
+      "name": "羽泽鸫",
       "tag": "女声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Wanlau/RVC_BanGDream",

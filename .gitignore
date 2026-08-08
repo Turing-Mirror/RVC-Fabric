@@ -105,8 +105,16 @@ ffprobe.*
 # Dev-only noise
 /scripts/dev/_env_trace.bat
 /scripts/dev/_run_build.bat
+/scripts/dev/_build_test.bat
 /scripts/dev/*.log
 build_setup.log
+
+# Tauri 自动生成的移动端图标（桌面产品不用，勿提交）
+/app/src-tauri/icons/android/
+/app/src-tauri/icons/ios/
+
+# docs 内部文档图（本机维护，不进 Git）
+/docs/logo*.png
 
 # Test / lint caches
 .pytest_cache/

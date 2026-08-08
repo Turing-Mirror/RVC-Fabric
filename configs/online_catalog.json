@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.4.5",
+    "version": "1.4.6",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.4.5",
+      "version": "1.4.6",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "836be1626628fbaecd0e535cf5d3b4f9a39c4106e04ec16ff8bc3e5772ff7516",
-      "size_bytes": 9963089,
+      "sha256": "8e198cc8ec42929dfd28a20cc0b1180a247395b515ee3c686f38385a61547cac",
+      "size_bytes": 10000494,
       "min_app_version": "1.3.0",
-      "notes": "1.4.5 重点修「点开启变声后状态停在引擎就绪 / 参数已应用却没声」： 命令邮箱是单槽，参数命令写快于 worker 轮询时会把 start 冲掉， 现改为写命令前等上一条被认领。第三方音色下载改为国内双镜像回退， 设置页可切换；封面改完整显示。第三方音色库扩充至 83 条： BanG Dream 全员补齐，新增原神/鸣潮/星穹铁道/绝区零/明日方舟/蔚蓝档案/赛马娘等。"
+      "notes": "1.4.6 把 VB-Cable 安装改成静默：PowerShell 带官方 -i -h 静默参数， 等安装程序跑完才返回结果，取消管理员授权（1223）与安装失败（其他退出码） 分别给明确文案，3010（重启生效）当成功；安装过程不再闪黑框。 说明页虚拟声卡区下方新增一行 VB-Audio Donationware 捐助提示， 官网链接可点、走系统浏览器打开。首次补全弹窗在 VB-Cable 装完后 显示「已安装」，不再停在「正在安装」。VB-Cable 的报错文案补齐 八语翻译，不再把 s.xxxxxxxx 技术编号直接丢给用户。"
     }
   },
   "community": {

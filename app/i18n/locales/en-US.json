@@ -1000,7 +1000,7 @@
     "c7f1de0914": "A very long campaign title that barely fits one line",
     "c8d09cf955": "Default",
     "c8e3bafbb7": "Deep & full",
-    "c946d45a63": "Without it, no one in games or voice apps hears your converted voice. \"Install\" launches the official installer and an admin prompt.",
+    "c946d45a63": "Without it, people in games and voice chat cannot hear your converted voice. Install shows one administrator prompt, then installs silently.",
     "c96a64f150": "Physical sound card routing",
     "c9aafa74d7": "Failed to read archive: {e}",
     "c9efc20514": "No voices yet — hit \"Community voices\" to browse the Plaza, or \"Import voice\" to add a local one.",
@@ -1286,7 +1286,15 @@
     "0b38f69017": "Submitted by {v0}",
     "7611f15dff": "Failed to start worker: {a0}",
     "c8542337dc": "{v0} items · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件"
+    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "vbcableDonate": "VB-Cable is donationware from the VB-Audio team ({site}). If you can, please donate to support its development.",
+    "vbcableInstalling": "Installing — click Yes in the system prompt…",
+    "vbcableDone": "Virtual sound card installed. Restart your PC for it to take effect.",
+    "vbcableCancelled": "Cancelled: installing the driver needs administrator rights.",
+    "vbcableFailedCode": "Install failed (error code {e})",
+    "vbcableNoSetup": "VB-Cable installer not found — download the package first.",
+    "vbcablePackBroken": "The extracted package is incomplete. Please download it again.",
+    "vbcableWindowsOnly": "The virtual sound card can only be installed on Windows."
   },
   "extras": {
     "engineTitle": "Engine resources",

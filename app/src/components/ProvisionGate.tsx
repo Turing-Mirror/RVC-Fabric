@@ -76,10 +76,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   // down the whole tree — a blank window on exactly the machines that need the
   // gate (a fresh install with no Runtime yet).
   const [extra, setExtra] = useState("");
-  // Runtime 下完后准备 VB-Cable：ready=可点安装，failed=下载失败仍可跳过。
-  const [vbcable, setVbcable] = useState<null | "ready" | "installing" | "failed">(
-    null,
-  );
+  // Runtime 下完后准备 VB-Cable：ready=可点安装，installed=装完了，
+  // failed=下载或安装失败，仍可跳过。
+  const [vbcable, setVbcable] = useState<
+    null | "ready" | "installing" | "installed" | "failed"
+  >(null);
   const [vbcableMsg, setVbcableMsg] = useState("");
   // 主显卡。-1 = 自动。只有多块 N 卡时才有得选，所以下面按需渲染。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
@@ -438,8 +439,10 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
               {vbcable === "failed"
                 ? t("s.d80c650a49", { v0: vbcableMsg })
                 : vbcable === "installing"
-                  ? t("s.65c66af000")
-                  : t("s.c946d45a63")}
+                  ? t("s.vbcableInstalling")
+                  : vbcable === "installed"
+                    ? t("s.vbcableDone")
+                    : t("s.c946d45a63")}
             </div>
           </div>
         ) : null}
@@ -453,10 +456,14 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                   primary
                   onClick={() => {
                     setVbcable("installing");
-                    void invoke("assets_install_vbcable").catch((e) => {
-                      setVbcableMsg(String(e));
-                      setVbcable("failed");
-                    });
+                    // 静默安装，装完才 resolve —— 状态得跟到底，否则界面会
+                    // 一直停在「正在安装」，用户不知道能不能关。
+                    void invoke("assets_install_vbcable")
+                      .then(() => setVbcable("installed"))
+                      .catch((e) => {
+                        setVbcableMsg(String(e));
+                        setVbcable("failed");
+                      });
                   }}
                 >{t("s.087db63ab1")}</Btn>
               ) : null}

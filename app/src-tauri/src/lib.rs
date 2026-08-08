@@ -140,10 +140,16 @@ async fn assets_ensure_vbcable(
     .map_err(|e| e.to_string())?
 }
 
+/// 静默安装虚拟声卡。装驱动能跑十几秒，同步命令会把界面卡死，所以丢到
+/// 阻塞线程池里等。
 #[tauri::command]
-fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    engine_assets::install_vbcable(&root_clone(&state)?)?;
-    Ok(json!({"ok": true}))
+async fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_assets::install_vbcable(&root).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Full effective settings (defaults overlaid with saved values).

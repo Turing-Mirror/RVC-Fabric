@@ -233,31 +233,58 @@ pub fn ensure_vbcable_pack(
     if vbcable_pack_ready(root) {
         Ok(())
     } else {
-        Err(crate::i18n::t("s.c27b7a6c33").into())
+        Err(crate::i18n::t("s.vbcablePackBroken").into())
     }
 }
 
-/// Launch the VB-Cable installer elevated, with cwd = VBCABLE (the INF/SYS must
-/// be resolvable from the working directory or the driver install fails).
+/// 静默安装 VB-Cable：不弹官方安装界面，装完才返回。
+///
+/// `-i -h` 是 VB-Audio 官方支持的静默参数（i=install，h=不显示界面）。
+/// 提权躲不掉 —— 装的是驱动，系统那道 UAC 必须由用户点确认。
+///
+/// cwd 必须是 VBCABLE 目录：安装程序要从工作目录里找 INF/SYS，找不到就装不上。
+///
+/// `-Wait -PassThru` 之后把安装程序的退出码原样带回来。以前是 spawn 完就
+/// 返回，界面只能说「已启动安装程序」，装成没装成谁都不知道。
 #[cfg(target_os = "windows")]
 pub fn install_vbcable(root: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
     let dir = vbcable_dir(root);
-    let setup = find_vbcable_setup(&dir).ok_or(crate::i18n::t("s.da3e899c12"))?;
+    let setup = find_vbcable_setup(&dir).ok_or(crate::i18n::t("s.vbcableNoSetup"))?;
+    // UAC 被用户点「否」时 Start-Process 抛异常，单靠退出码分不出「拒绝提权」
+    // 和「装失败」。这里把它归一成 1223（ERROR_CANCELLED）。
     let ps = format!(
-        "Start-Process -FilePath '{}' -WorkingDirectory '{}' -Verb RunAs",
+        "try {{ $p = Start-Process -FilePath '{}' -ArgumentList '-i','-h' \
+         -WorkingDirectory '{}' -Verb RunAs -Wait -PassThru }} catch {{ exit 1223 }}; \
+         exit $p.ExitCode",
         setup.to_string_lossy().replace('\'', "''"),
         dir.to_string_lossy().replace('\'', "''"),
     );
-    std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-        .spawn()
+    let status = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &ps,
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW：别闪一下黑框
+        .status()
         .map_err(|e| crate::i18n::te("s.23220ab448", &(e)))?;
-    Ok(())
+    match status.code() {
+        // 3010 = 装好了，等重启生效。对用户来说是成功。
+        Some(0) | Some(3010) => Ok(()),
+        Some(1223) => Err(crate::i18n::t("s.vbcableCancelled")),
+        Some(c) => Err(crate::i18n::te("s.vbcableFailedCode", &c)),
+        None => Err(crate::i18n::te("s.vbcableFailedCode", &"?")),
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn install_vbcable(_root: &Path) -> Result<(), String> {
-    Err(crate::i18n::t("s.1ea736bcac").into())
+    Err(crate::i18n::t("s.vbcableWindowsOnly").into())
 }
 
 /// Status for the first-run gate and the 「其他」page.

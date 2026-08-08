@@ -1000,7 +1000,7 @@
     "c7f1de0914": "Un titular de publicidad tan largo que no cabe ni en una línea entera",
     "c8d09cf955": "Por defecto",
     "c8e3bafbb7": "Grave y denso",
-    "c946d45a63": "Sin ella, en el juego o en las apps de voz no oirán tu voz convertida. «Instalar» abre el instalador oficial y pide permisos de administrador.",
+    "c946d45a63": "Sin ella, nadie en juegos o programas de voz oye tu voz transformada. «Instalar» solo muestra una confirmación de administrador y luego instala en silencio.",
     "c96a64f150": "Cómo conectar la tarjeta física",
     "c9aafa74d7": "Error al leer el archivo: {e}",
     "c9efc20514": "Aún no tienes voces: «Voces de la comunidad» para bajar de la Plaza, o «Importar voz» para añadir una local.",
@@ -1286,7 +1286,15 @@
     "0b38f69017": "Distribuido por {v0}",
     "7611f15dff": "No se pudo iniciar el worker: {a0}",
     "c8542337dc": "{v0} · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件"
+    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "vbcableDonate": "VB-Cable es donationware del equipo VB-Audio ({site}). Si puedes, dona para apoyar su desarrollo.",
+    "vbcableInstalling": "Instalando: pulsa Sí en la ventana del sistema…",
+    "vbcableDone": "Tarjeta de sonido virtual instalada. Reinicia el PC para que surta efecto.",
+    "vbcableCancelled": "Cancelado: instalar el controlador requiere permisos de administrador.",
+    "vbcableFailedCode": "Error de instalación (código {e})",
+    "vbcableNoSetup": "No se encuentra el instalador de VB-Cable: descarga primero el paquete.",
+    "vbcablePackBroken": "El paquete extraído está incompleto. Descárgalo de nuevo.",
+    "vbcableWindowsOnly": "La tarjeta de sonido virtual solo se puede instalar en Windows."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

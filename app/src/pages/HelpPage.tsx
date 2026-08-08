@@ -2,7 +2,41 @@ import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
+import { openExternal } from "../lib/plaza";
 import { t } from "../i18n/t";
+
+/** VB-Cable 的官网。捐助提示里唯一该出现的地址。 */
+const VBCABLE_SITE = "www.vb-cable.com";
+const VBCABLE_URL = "https://www.vb-cable.com";
+
+/**
+ * 捐助提示。固定显示，跟安装状态无关 —— 这是来源与版权，不是进度。
+ *
+ * 文案里的 `{site}` 那一段要变成可点的链接，所以不走 interpolate：先按占位符
+ * 切开，中间塞真的 <a>。译文漏了 `{site}` 也不会丢地址，链接接到句尾。
+ *
+ * href + preventDefault：软件里点链接得交给系统浏览器开，不能让 webview 自己
+ * 跳走 —— 那样用户就再也回不到软件界面了。href 留着是为了键盘和读屏。
+ */
+function DonateNote() {
+  const [before, after] = t("s.vbcableDonate").split("{site}");
+  return (
+    <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mt-3 max-w-[74ch]">
+      {before}
+      <a
+        href={VBCABLE_URL}
+        onClick={(e) => {
+          e.preventDefault();
+          void openExternal(VBCABLE_URL);
+        }}
+        className="text-[var(--accent)] underline underline-offset-2 rounded-[2px] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+      >
+        {VBCABLE_SITE}
+      </a>
+      {after ?? ""}
+    </p>
+  );
+}
 
 /**
  * FAQ / route tables must call t() at use time — module-level t() freezes
@@ -177,15 +211,21 @@ function HelpPageImpl({ status }: HelpProps = {}) {
     try {
       if (vbReady !== true) {
         setVbMsg(t("s.3076e38c53"));
-        await invoke("assets_ensure_vbcable");
+        try {
+          await invoke("assets_ensure_vbcable");
+        } catch (e) {
+          // 下载失败和安装失败是两回事，报错也得分开说：壳那边给的安装
+          // 失败原因已经是整句了，再套一层「下载失败：」只会指错方向。
+          throw new Error(t("s.04c4e3b2b3", { e: String(e) }));
+        }
         await refreshVb();
       }
-      setVbMsg(t("s.17d9ff0c09"));
+      setVbMsg(t("s.vbcableInstalling"));
+      // 静默安装，装完才返回。这里的等待就是驱动真正在装的那段时间。
       await invoke("assets_install_vbcable");
-      // Only say it launched once it actually did.
-      setVbMsg(t("s.65c66af000"));
+      setVbMsg(t("s.vbcableDone"));
     } catch (e) {
-      setVbMsg(t("s.04c4e3b2b3", { e: String(e) }));
+      setVbMsg(e instanceof Error ? e.message : String(e));
     } finally {
       setVbBusy(false);
     }
@@ -251,6 +291,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
             }
           />
         </Group>
+        <DonateNote />
       </Block>
 
       <Block title={t("s.149ab7bf0a")}>

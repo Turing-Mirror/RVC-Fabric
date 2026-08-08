@@ -1000,7 +1000,7 @@
     "c7f1de0914": "Un titre de pub si long qu'il est à l'étroit même sur une ligne entière",
     "c8d09cf955": "Par défaut",
     "c8e3bafbb7": "Grave et dense",
-    "c946d45a63": "Sans elle, personne dans le jeu ou les applis vocales n'entend votre voix convertie. « Installer » lance l'installateur officiel et demande les droits admin.",
+    "c946d45a63": "Sans elle, personne dans les jeux ou les logiciels vocaux n'entend votre voix transformée. « Installer » n'affiche qu'une confirmation administrateur, puis l'installation se fait en silence.",
     "c96a64f150": "Brancher une carte son physique",
     "c9aafa74d7": "Échec de lecture de l'archive : {e}",
     "c9efc20514": "Pas encore de voix : « Voix de la communauté » pour télécharger depuis la Place, ou « Importer une voix » pour ajouter une voix locale.",
@@ -1286,7 +1286,15 @@
     "0b38f69017": "Fourni par {v0}",
     "7611f15dff": "Impossible de démarrer le worker : {a0}",
     "c8542337dc": "{v0} éléments · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件"
+    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "vbcableDonate": "VB-Cable est un donationware de l'équipe VB-Audio ({site}). Si vous le pouvez, faites un don pour soutenir son développement.",
+    "vbcableInstalling": "Installation en cours — cliquez sur Oui dans la fenêtre système…",
+    "vbcableDone": "Carte son virtuelle installée. Redémarrez le PC pour l'activer.",
+    "vbcableCancelled": "Annulé : l'installation du pilote nécessite les droits administrateur.",
+    "vbcableFailedCode": "Échec de l'installation (code d'erreur {e})",
+    "vbcableNoSetup": "Programme d'installation VB-Cable introuvable — téléchargez d'abord le paquet.",
+    "vbcablePackBroken": "Le paquet extrait est incomplet. Téléchargez-le à nouveau.",
+    "vbcableWindowsOnly": "La carte son virtuelle ne peut être installée que sous Windows."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

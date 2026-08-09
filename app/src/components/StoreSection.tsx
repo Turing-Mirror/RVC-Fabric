@@ -553,6 +553,11 @@ function VoiceCard({
   // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
   const coverHttp = resolveCover((v.cover_url || v.cover || "").trim(), coverMap ?? {});
   const showImg = Boolean(coverHttp) && !imgFailed;
+  // src 变化（如重试成功后换成本地缓存路径）时解除失败占位，
+  // img 换 src 会自动重新加载 —— 不被 imgFailed 永久卡死。
+  useEffect(() => {
+    setImgFailed(false);
+  }, [coverHttp]);
   const meta = [
     seriesLabel || displayVoiceTag(v, loc),
     v.author ? t("s.7feea73fa3", { v0: v.author }) : "",

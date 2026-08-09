@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
+use sha2::Digest;
 use tauri::{AppHandle, Emitter};
 
 use crate::download::{self, DownloadKind, DownloadRequest};
@@ -359,6 +360,64 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
         }
     }
     cat
+}
+
+/// 封面本地化缓存：批量把远程封面 URL 下载到 `User_Data/cover_cache/`，
+/// 键 = URL 的 sha256 前缀。一次成功永久可用 —— WebView 不再每次打开商店
+/// 全量重拉远程封面，国内访问 CNB 间歇失败导致的随机缺图在这里根治。
+/// 返回 url → 本地缓存路径；下载失败的条目是空串，前端回退远程直连。
+pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
+    let out: Mutex<Map<String, Value>> = Mutex::new(Map::new());
+    let next = AtomicUsize::new(0);
+    let lanes = urls.len().clamp(1, 8); // 封面是小图，8 路并行加快批次返回，少拖后腿
+    std::thread::scope(|s| {
+        for _ in 0..lanes {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                if i >= urls.len() {
+                    break;
+                }
+                let r = resolve_cover_url(root, &urls[i]);
+                out.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(urls[i].clone(), json!(r.unwrap_or_default()));
+            });
+        }
+    });
+    out.into_inner().unwrap_or_default()
+}
+
+fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Ok(url.to_string()); // 非 http（如 asset://）原样返回
+    }
+    let dir = paths::user_data(root).join("cover_cache");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let key = hex::encode(sha2::Sha256::digest(url.as_bytes()));
+    let dest = dir.join(format!("{}.jpg", &key[..24]));
+    if dest.is_file() && dest.metadata().map(|m| m.len()).unwrap_or(0) > 100 {
+        return Ok(dest.to_string_lossy().into_owned());
+    }
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8)) // 封面几十 KB，8 秒足够；挂了快速失败交给前端重试
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(url).send().map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().map_err(|e| e.to_string())?;
+    // 封面是几十 KB 的 jpg；小于 100B 不像图，大于 8MB 不像封面。
+    if bytes.len() < 100 || bytes.len() > 8 * 1024 * 1024 {
+        return Err(format!("unexpected size {}", bytes.len()));
+    }
+    // 原子写：先写临时名再 rename，崩溃也不会留半个文件。
+    let tmp = dir.join(format!("{}.tmp", &key[..24]));
+    fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
 }
 
 fn format_size(n: u64) -> String {

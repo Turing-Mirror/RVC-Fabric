@@ -1,7 +1,8 @@
 import { useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
-import { coverSrc, listVoices, selectVoice, type VoiceModel } from "../lib/voices";
+import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
+import { resolveCover, useCoverCache } from "../lib/cover";
 import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
 import { t } from "../i18n/t";
@@ -53,6 +54,10 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
   // something they may already have.
   const [loadError, setLoadError] = useState("");
   const [msg, setMsg] = useState("");
+  // 封面本地化：已装第三方音色的远程封面走本地缓存（见 lib/cover.ts）。
+  const coverCache = useCoverCache(
+    models.map((m) => m.cover || "").filter(Boolean),
+  );
 
   const load = async () => {
     try {
@@ -202,7 +207,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                   >
                     {v.cover ? (
                       <img
-                        src={coverSrc(v.cover)}
+                        src={resolveCover(v.cover, coverCache)}
                         alt=""
                         draggable={false}
                         // contain 而不是 cover：官方封面全是 1:1，在方形框里

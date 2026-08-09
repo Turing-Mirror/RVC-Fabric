@@ -209,6 +209,21 @@ fn autostart_set(enabled: bool) -> Result<(), String> {
     autostart::set(enabled)
 }
 
+/// 封面批量本地化（商店 / 模型页 / 首页共用）。返回 url → 本地缓存路径；
+/// 失败的条目为空串，前端回退远程直连。
+#[tauri::command]
+async fn cover_resolve_many(
+    state: State<'_, Mutex<AppState>>,
+    urls: Vec<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok::<Value, String>(Value::Object(store::resolve_covers(&root, &urls)))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Native image picker for the wallpaper setting. Returns the chosen path or
 /// null when the user cancels. No size/dimension limits: the file is only
 /// referenced by path and decoded by the webview on its own time — a huge
@@ -1278,6 +1293,7 @@ pub fn run() {
             config_set,
             autostart_get,
             autostart_set,
+            cover_resolve_many,
             i18n_set_locale,
             i18n_get_locale,
             pick_wallpaper,

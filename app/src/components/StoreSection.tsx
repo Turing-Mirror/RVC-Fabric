@@ -15,6 +15,7 @@ import {
 } from "../lib/voices";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
   displayVoiceName,
@@ -85,6 +86,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   // 所以下完停在这里，让用户先自己看一眼再决定装不装。
   const [staged, setStaged] = useState<Record<string, StagedVoice>>({});
   const gridRef = useRef<HTMLDivElement>(null);
+  // 封面本地化：全部远程封面一次性交给 Rust 下载缓存，卡片走本地，
+  // 不再每次打开商店全量重拉（国内访问 CNB 间歇失败曾导致随机缺图）。
+  const coverCache = useCoverCache(
+    useMemo(() => {
+      if (!cat) return [];
+      return [...(cat.voices ?? []), ...(cat.thirdparty_voices ?? [])]
+        .map((v) => (v.cover_url || v.cover || "").trim())
+        .filter(Boolean);
+    }, [cat]),
+  );
 
   const loadStaged = useCallback(async () => {
     try {
@@ -319,6 +330,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     onView: () => void viewStaged(v),
     onInstallStaged: () => void installStaged(v),
     onDiscard: () => void discard(v),
+    coverMap: coverCache,
   });
 
   const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
@@ -517,6 +529,7 @@ function VoiceCard({
   onView,
   onInstallStaged,
   onDiscard,
+  coverMap,
 }: {
   v: StoreVoice;
   busy: boolean;
@@ -528,6 +541,8 @@ function VoiceCard({
   onView: () => void;
   onInstallStaged: () => void;
   onDiscard: () => void;
+  /** 封面本地化缓存（url → 本地路径），见 lib/cover.ts。 */
+  coverMap?: Record<string, string>;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const loc = getTLocale();
@@ -535,10 +550,8 @@ function VoiceCard({
   const seriesLabel = displayVoiceSeries(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
   // Older caches may only have a relative cover path — skip those (no convert).
-  const coverHttp = (() => {
-    const raw = (v.cover_url || v.cover || "").trim();
-    return /^https?:\/\//i.test(raw) ? raw : "";
-  })();
+  // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
+  const coverHttp = resolveCover((v.cover_url || v.cover || "").trim(), coverMap ?? {});
   const showImg = Boolean(coverHttp) && !imgFailed;
   const meta = [
     seriesLabel || displayVoiceTag(v, loc),

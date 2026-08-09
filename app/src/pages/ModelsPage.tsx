@@ -3,13 +3,13 @@ import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
+import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { t } from "../i18n/t";
 import {
   bindIndex,
   colsForWidth,
-  coverSrc,
   deleteProfile,
   deleteVoice,
   exportProfile,
@@ -59,6 +59,10 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   const [msg, setMsg] = useState("");
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
+  // 封面本地化：已装第三方音色的远程封面走本地缓存，不再每次全量重拉。
+  const coverCache = useCoverCache(
+    useMemo(() => models.map((m) => m.cover || "").filter(Boolean), [models]),
+  );
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -330,7 +334,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
           ) : (
             pageView.map((v) => {
               const cur = modelKey(v) === selectedKey;
-              const src = coverSrc(v.cover);
+              const src = resolveCover(v.cover, coverCache);
               return (
                 <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">

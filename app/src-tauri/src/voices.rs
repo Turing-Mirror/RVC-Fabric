@@ -15,6 +15,29 @@ const MIN_MODEL_BYTES: u64 = 200 * 1024;
 const PROFILE_EXT: &str = ".tmvp";
 const PROFILES_DIR: &str = "profiles";
 
+/// 从内置清单（bundled，离线可用）按 id 找封面 URL。
+/// 只在 sidecar 与包内都没有封面时查 —— 覆盖旧版本装的第三方音色
+/// （安装时漏写 cover），一次文件读的代价可接受，不加跨 root 的缓存。
+fn catalog_cover(root: &Path, id: &str) -> String {
+    let cat = crate::store::fetch_store_catalog(root, false);
+    for key in ["voices", "thirdparty_voices"] {
+        let Some(arr) = cat.get(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        if let Some(item) = arr
+            .iter()
+            .find(|x| x.get("id").and_then(|i| i.as_str()) == Some(id))
+        {
+            return item
+                .get("cover_url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+        }
+    }
+    String::new()
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
@@ -346,6 +369,16 @@ fn list_user_data(root: &Path) -> Vec<Value> {
         cover = resolve_cover(&cover, Some(&folder), &vid, root);
         if cover.is_empty() {
             cover = find_cover(&folder).unwrap_or_default();
+        }
+        if cover.is_empty() {
+            // 旧版本装的第三方音色，sidecar 里没有 cover（安装时漏写）。
+            // 按 online_id 从内置清单回补封面 URL —— 用户不用重下也有封面。
+            let oid = side
+                .get("online_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&vid)
+                .to_string();
+            cover = catalog_cover(root, &oid);
         }
 
         if pth.is_none() {

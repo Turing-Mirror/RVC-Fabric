@@ -458,6 +458,18 @@ fn find_first(dir: &Path, ext: &str) -> Option<PathBuf> {
 ///
 /// `pick_str` 除了 `x_i18n` 这种表，还认 `name_en` / `name_zh_Hant` 这类扁平写法
 /// （第三方源手写 YAML 常用），所以这里两种都搬。
+/// 清单封面（`cover_url` / `cover`）—— 第三方包自己不带封面文件，封面
+/// URL 只在清单里。装进 sidecar 的 `cover` 字段后，`voices` 列表的
+/// `resolve_cover` 对 http(s) 直通，模型页/首页直接 `<img src>` 拉远程。
+fn entry_cover(entry: &Value) -> Option<Value> {
+    let v = entry.get("cover_url").or_else(|| entry.get("cover"))?;
+    let s = v.as_str().unwrap_or("").trim();
+    if s.is_empty() {
+        return None;
+    }
+    Some(v.clone())
+}
+
 fn copy_i18n_fields(entry: &Value, extra: &mut Map<String, Value>) {
     let Some(obj) = entry.as_object() else { return };
     const FIELDS: [&str; 5] = ["name", "tag", "series", "author", "description"];
@@ -658,6 +670,13 @@ pub fn install_voice_pack_zip(
         for k in ["author", "author_url", "date", "series", "cover"] {
             if let Some(v) = pack_cfg.get(k) {
                 extra.insert(k.to_string(), v.clone());
+            }
+        }
+        // 第三方 zip 里没有 cover，封面 URL 只在清单 —— 不补上，安装后的
+        // 模型页/首页就永远没有封面（官方包自带 cover 已优先，不受影响）。
+        if !extra.contains_key("cover") {
+            if let Some(v) = entry.and_then(entry_cover) {
+                extra.insert("cover".into(), v);
             }
         }
         // 多语言字段：清单里那条优先（广场下载走这条），包里自带的兜底
@@ -966,6 +985,10 @@ pub fn install_voice_entry(
             extra.insert(k.to_string(), v.clone());
         }
     }
+    // 清单封面（voice_files 形态的第三方也没有包内 cover，全靠这一行）。
+    if let Some(v) = entry_cover(&entry) {
+        extra.insert("cover".into(), v);
+    }
     let source = if official {
         "online_files"
     } else {
@@ -1159,6 +1182,10 @@ fn install_staged_files(
         }
     }
     copy_i18n_fields(entry, &mut extra);
+    // 暂存安装走的也是清单 entry —— 封面同样要补，否则装完没封面。
+    if let Some(v) = entry_cover(entry) {
+        extra.insert("cover".into(), v);
+    }
     let source = if official { "online_files" } else { "thirdparty_files" };
     Ok(write_voice_config(
         &dest_dir, &dest_pth, name, tag, &vid, &index_path, source, official, &extra,
@@ -1210,6 +1237,33 @@ mod tests {
         assert!(!extra.contains_key("author_url"));
         // 白名单外的字段一个都不许混进来。
         assert!(!extra.contains_key("sha256"));
+    }
+
+    /// 第三方条目的封面 URL 必须落进 sidecar 的 `cover` —— 漏掉这条，
+    /// 装完的模型页/首页永远没有封面（第三方 zip 里没有 cover 文件，
+    /// 官方包自带 cover 走的是另一条路）。曾整条漏写（1.4.6 起修的回归）。
+    #[test]
+    fn install_writes_catalog_cover() {
+        let entry = json!({
+            "id": "tp-miku",
+            "name": "初音未来",
+            "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku.jpg",
+        });
+        let mut extra = Map::new();
+        if let Some(v) = entry_cover(&entry) {
+            extra.insert("cover".into(), v);
+        }
+        assert_eq!(
+            extra.get("cover").and_then(|v| v.as_str()).unwrap_or(""),
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-miku.jpg"
+        );
+
+        // 清单没有封面字段时不得产出空 cover。
+        let mut none = Map::new();
+        if let Some(v) = entry_cover(&json!({"id": "tp-x"})) {
+            none.insert("cover".into(), v);
+        }
+        assert!(!none.contains_key("cover"), "空封面不该写进 sidecar");
     }
 
     /// 清单解析那张 json! 表是白名单，多语言字段以前全被它吃掉。

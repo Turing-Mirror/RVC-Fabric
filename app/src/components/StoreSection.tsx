@@ -571,6 +571,9 @@ function VoiceCard({
       <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
         {showImg ? (
           <img
+            // src 变化时重建 img：避免旧 src（远程直连）的 onError 晚到，
+            // 把已经换成本地缓存路径的图错误地置回失败占位。
+            key={coverHttp}
             src={coverHttp}
             alt=""
             loading="lazy"

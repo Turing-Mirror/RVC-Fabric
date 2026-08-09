@@ -3,6 +3,7 @@
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 pub mod catalog;
+mod autostart;
 mod config;
 mod download;
 mod engine_assets;
@@ -194,6 +195,18 @@ fn config_set(
         }
     }
     Ok(out)
+}
+
+/// 开机自启状态（读 HKCU Run 键）。状态以注册表为准，不走 app_config：
+/// 自启是这台机器的行为，不该跟着配置档案走。
+#[tauri::command]
+fn autostart_get() -> autostart::AutostartStatus {
+    autostart::get()
+}
+
+#[tauri::command]
+fn autostart_set(enabled: bool) -> Result<(), String> {
+    autostart::set(enabled)
 }
 
 /// Native image picker for the wallpaper setting. Returns the chosen path or
@@ -1263,6 +1276,8 @@ pub fn run() {
             config_get,
             config_describe,
             config_set,
+            autostart_get,
+            autostart_set,
             i18n_set_locale,
             i18n_get_locale,
             pick_wallpaper,

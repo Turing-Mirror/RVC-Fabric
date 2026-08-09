@@ -113,6 +113,18 @@ function SettingsPageImpl({
   );
   const [tab, setTab] = useState<TabKey>("device");
   const c = useConfig();
+  // 开机自启：状态以注册表为准（autostart_get），不进 app_config。
+  const [autoStart, setAutoStart] = useState(false);
+  const [autoStartBusy, setAutoStartBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void safeInvoke<{ enabled: boolean }>("autostart_get").then((s) => {
+      if (alive && s) setAutoStart(s.enabled);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   // 「在线更新」里那行当前版本。和「其他」页读的是同一个命令，也就是同一个
   // APP_VERSION —— 两处显示不一致的话，一定是有人又手写了版本号。
   const [appVersion, setAppVersion] = useState("");
@@ -789,6 +801,35 @@ function SettingsPageImpl({
                       { id: "exit", label: t("s.0dd68a51dd") },
                     ]}
                     onChange={(v) => c.set("close_action", v, true)}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.autoStart")}
+                tip={t("settings.autoStartTip")}
+                control={
+                  <Toggle
+                    label={autoStart ? t("settings.autoStartOn") : t("settings.autoStartOff")}
+                    checked={autoStart}
+                    onChange={(v) => {
+                      if (autoStartBusy) return;
+                      setAutoStartBusy(true);
+                      try {
+                        invoke("autostart_set", { enabled: v })
+                          .then(() => setAutoStart(v))
+                          // 写失败（权限/注册表异常）回读真实状态，开关跟着
+                          // 注册表走，不假装改成了。
+                          .catch(() => {
+                            void invoke<{ enabled: boolean }>("autostart_get").then((s) =>
+                              setAutoStart(s.enabled),
+                            );
+                          })
+                          .finally(() => setAutoStartBusy(false));
+                      } catch {
+                        // 浏览器预览没有 Tauri 后端，开关保持原样即可。
+                        setAutoStartBusy(false);
+                      }
+                    }}
                   />
                 }
               />

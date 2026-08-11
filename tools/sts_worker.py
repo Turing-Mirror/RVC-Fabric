@@ -166,6 +166,16 @@ def _cuda_empty_cache() -> None:
         pass
 
 
+def _tune_torch() -> None:
+    """Offline conversion knobs — see infer.lib.torch_runtime.tune_for_inference."""
+    try:
+        from infer.lib.torch_runtime import tune_for_inference
+
+        tune_for_inference()
+    except Exception:
+        pass
+
+
 def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     """返回 (源文件, 相对路径)。
 
@@ -491,12 +501,14 @@ def main(argv: list[str]) -> int:
     else:
         start_msg = f"共 {total} 个文件（按体积加权进度），准备开始"
     emit(phase="start", total=total, pct=0, current=0, ok=0, skip=0, message=start_msg)
+    _tune_torch()
     _cuda_empty_cache()
 
     try:
         from scipy.io import wavfile
 
         from configs.config import Config
+        from infer.lib.torch_runtime import empty_cache_if_needed, inference_context
         from infer.modules.vc.modules import VC
 
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
@@ -504,6 +516,8 @@ def main(argv: list[str]) -> int:
         prog.load("config", 0.0)
         config = Config()
         prog.load("config", 1.0)
+        # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
+        _tune_torch()
         vc = VC(config)
         # get_vc 认绝对路径（User_Data/models/...）
         prog.load("model", 0.0)
@@ -511,6 +525,7 @@ def main(argv: list[str]) -> int:
         prog.load("model", 1.0)
         # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
         _preload_side_models(vc, config, f0method, prog)
+        # 只在显存紧时清；加载后强清一次把碎片归还给池，后面尽量不碰。
         _cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
@@ -520,76 +535,80 @@ def main(argv: list[str]) -> int:
     out_files: list[str] = []
     skipped: list[dict] = []
     index_path = index if index and Path(index).is_file() else None
-    # 每文件 empty_cache 会拖慢批量；每 N 个或 OOM 后再清。
-    cache_every = 1 if total == 1 else 4
-    for i, (src, rel) in enumerate(files, start=1):
-        prog.begin_file(i, src.name)
+    # 批量：尽量不 empty_cache；OOM 或显存吃紧时才清。末尾清一次即可。
+    cache_every = 1 if total == 1 else 8
 
-        def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
-            # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
-            prog._file_i = _i - 1
-            prog._file_name = _name
-            prog.stage(stage, frac)
+    with inference_context():
+        for i, (src, rel) in enumerate(files, start=1):
+            prog.begin_file(i, src.name)
 
-        hit_oom = False
-        try:
-            # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
-            sub = Path(out_dir) / rel.parent
-            sub.mkdir(parents=True, exist_ok=True)
-            stem = src.stem
-            dest = sub / f"{stem}_rvc.wav"
-            # 重名则加序号
-            n = 1
-            while dest.exists():
-                dest = sub / f"{stem}_rvc_{n}.wav"
-                n += 1
+            def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
+                # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
+                prog._file_i = _i - 1
+                prog._file_name = _name
+                prog.stage(stage, frac)
 
-            info, wav_opt = vc.vc_single(
-                0,
-                str(src),
-                pitch,
-                None,
-                f0method,
-                index_path,
-                None,
-                index_rate,
-                filter_radius,
-                resample_sr,
-                rms_mix_rate,
-                protect,
-                progress_cb=on_stage,
-            )
-            if wav_opt is None or wav_opt[0] is None:
-                # vc_single 吞掉异常后把 traceback 塞进 info；OOM 也走这条。
-                raise RuntimeError(_friendly_error(info or "未知错误"))
-            prog.stage("write", 0.0)
-            wavfile.write(str(dest), wav_opt[0], wav_opt[1])
-            prog.stage("write", 1.0)
-            out_files.append(str(dest))
-            prog.file_done(i, src.name, ok=True)
-        except Exception as e:
-            # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
-            # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
-            traceback.print_exc()
-            reason = _friendly_error(e)
-            hit_oom = "显存不够" in reason or "out of memory" in str(e).lower()
-            skipped.append({"file": str(src), "name": src.name, "reason": reason})
-            prog.file_done(i, src.name, ok=False)
-            emit(
-                phase="skip",
-                done=i,
-                total=total,
-                pct=prog.last_pct,
-                current=i,
-                ok=prog.ok_count,
-                skip=prog.skip_count,
-                file=src.name,
-                message=f"跳过 {src.name}：{reason}",
-            )
-        finally:
-            # 单文件 / 每 cache_every 个 / OOM / 最后一个：清显存碎片。
-            if hit_oom or total == 1 or i % cache_every == 0 or i == total:
-                _cuda_empty_cache()
+            hit_oom = False
+            try:
+                # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
+                sub = Path(out_dir) / rel.parent
+                sub.mkdir(parents=True, exist_ok=True)
+                stem = src.stem
+                dest = sub / f"{stem}_rvc.wav"
+                # 重名则加序号
+                n = 1
+                while dest.exists():
+                    dest = sub / f"{stem}_rvc_{n}.wav"
+                    n += 1
+
+                info, wav_opt = vc.vc_single(
+                    0,
+                    str(src),
+                    pitch,
+                    None,
+                    f0method,
+                    index_path,
+                    None,
+                    index_rate,
+                    filter_radius,
+                    resample_sr,
+                    rms_mix_rate,
+                    protect,
+                    progress_cb=on_stage,
+                )
+                if wav_opt is None or wav_opt[0] is None:
+                    # vc_single 吞掉异常后把 traceback 塞进 info；OOM 也走这条。
+                    raise RuntimeError(_friendly_error(info or "未知错误"))
+                prog.stage("write", 0.0)
+                wavfile.write(str(dest), wav_opt[0], wav_opt[1])
+                prog.stage("write", 1.0)
+                out_files.append(str(dest))
+                prog.file_done(i, src.name, ok=True)
+            except Exception as e:
+                # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
+                # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
+                traceback.print_exc()
+                reason = _friendly_error(e)
+                hit_oom = "显存不够" in reason or "out of memory" in str(e).lower()
+                skipped.append({"file": str(src), "name": src.name, "reason": reason})
+                prog.file_done(i, src.name, ok=False)
+                emit(
+                    phase="skip",
+                    done=i,
+                    total=total,
+                    pct=prog.last_pct,
+                    current=i,
+                    ok=prog.ok_count,
+                    skip=prog.skip_count,
+                    file=src.name,
+                    message=f"跳过 {src.name}：{reason}",
+                )
+            finally:
+                if hit_oom:
+                    _cuda_empty_cache()
+                elif i == total or (total > 1 and i % cache_every == 0):
+                    empty_cache_if_needed(min_free_mb=512)
+                # 单文件结束时若显存仍充裕就不动，交给进程退出回收。
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。

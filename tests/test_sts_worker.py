@@ -218,5 +218,27 @@ class StsProgressTests(unittest.TestCase):
         self.assertEqual(f0_pcts, sorted(f0_pcts))
 
 
+class TorchRuntimeTests(unittest.TestCase):
+    def test_rmvpe_chunk_cpu_default(self):
+        from infer.lib.torch_runtime import rmvpe_max_mel_frames
+
+        self.assertEqual(rmvpe_max_mel_frames(False, "cpu"), 1024)
+        self.assertEqual(rmvpe_max_mel_frames(True, "cpu"), 1024)
+
+    def test_empty_cache_if_needed_no_cuda_returns_false(self):
+        from infer.lib.torch_runtime import empty_cache_if_needed
+
+        # 无 GPU 或不可用时不应抛异常。
+        self.assertFalse(empty_cache_if_needed(min_free_mb=1))
+
+    def test_tune_for_inference_is_safe(self):
+        from infer.lib.torch_runtime import inference_context, tune_for_inference
+
+        tune_for_inference()
+        with inference_context():
+            pass
+
+
 if __name__ == "__main__":
     unittest.main()
+

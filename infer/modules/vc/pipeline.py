@@ -314,8 +314,14 @@ class Pipeline(object):
             audio1 = (net_g.infer(*arg)[0][0, 0]).data.cpu().float().numpy()
             del hasp, arg
         del feats, p_len, padding_mask
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        # empty_cache every segment was the biggest offline slowdown (device sync).
+        # Only free the allocator when free VRAM is actually tight.
+        try:
+            from infer.lib.torch_runtime import empty_cache_if_needed
+
+            empty_cache_if_needed(min_free_mb=384)
+        except Exception:
+            pass
         t2 = ttime()
         times[0] += t1 - t0
         times[2] += t2 - t1
@@ -536,6 +542,10 @@ class Pipeline(object):
             max_int16 /= audio_max
         audio_opt = (audio_opt * max_int16).astype(np.int16)
         del pitch, pitchf, sid
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        try:
+            from infer.lib.torch_runtime import empty_cache_if_needed
+
+            empty_cache_if_needed(min_free_mb=384)
+        except Exception:
+            pass
         return audio_opt

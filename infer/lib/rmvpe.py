@@ -612,15 +612,16 @@ class RMVPE:
             n_pad = 32 * ((n_frames - 1) // 32 + 1) - n_frames
             if n_pad > 0:
                 mel = F.pad(mel, (0, n_pad), mode="constant")
-            # 1024 mel frames ≈ 10.24 s @ hop=160 / 16 kHz. Keeps UNet peak
-            # well under 1 GiB in fp32; short clips keep the single-shot path.
-            # May be raised by rmvpe_max_mel_frames when VRAM allows (later).
+            # Chunk length scales with VRAM (see torch_runtime.rmvpe_max_mel_frames).
+            # 1024 frames ≈ 10.24 s @ hop=160 / 16 kHz — OOM-safe default for 3–4 GB.
             try:
                 from infer.lib.torch_runtime import rmvpe_max_mel_frames
 
                 max_chunk = rmvpe_max_mel_frames(self.is_half, self.device)
             except Exception:
                 max_chunk = 1024
+            # Keep max_chunk a multiple of 32 so it lines up with context/UNet.
+            max_chunk = max(32, int(max_chunk) // 32 * 32)
             # 128 frames ≈ 1.28 s of warm-up each side — well past the point a
             # GRU hidden state stops depending on where it started. Multiple of
             # 32 so the context never breaks the UNet's stride alignment.
@@ -650,6 +651,7 @@ class RMVPE:
                     # Drop the context margins; keep only [start, end).
                     # Do NOT empty_cache every chunk — parts may share storage
                     # with out, and the allocator reuses same-shaped blocks.
+                    # Peak lives inside _mel2hidden_chunk and is freed on return.
                     parts.append(out[:, start - lo : start - lo + (end - start)])
                     _p((ci + 1) / n_chunks)
                 if parts and isinstance(parts[0], np.ndarray):

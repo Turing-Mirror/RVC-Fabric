@@ -168,6 +168,23 @@ fn run_inner(
     };
     std::fs::create_dir_all(&out).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
 
+    // 离线转换要独占显存：hubert + net_g + rmvpe 同时上卡。实时 worker 若还
+    // 活着（尤其是 3GB 级小卡），两边一抢就是 CUDA OOM。训练路径同理——工具
+    // 窗开跑就先腾出 GPU；用户之后再点「开启变声」即可。
+    if crate::worker::is_worker_alive(root) {
+        emit(
+            app,
+            "run",
+            0,
+            1,
+            "正在停止实时变声以释放显存…",
+        );
+        crate::worker::kill_known_workers(root);
+        // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python 时
+        // 偶发还能看见「reserved >> free」。
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+
     let cfg = crate::config::read(root);
     let pth = cfg
         .get("pth_path")

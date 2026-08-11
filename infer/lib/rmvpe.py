@@ -566,22 +566,60 @@ class RMVPE:
         cents_mapping = 20 * np.arange(360) + 1997.3794084376191
         self.cents_mapping = np.pad(cents_mapping, (4, 4))  # 368
 
+    def _mel2hidden_chunk(self, mel):
+        """Run the UNet on one mel chunk (time dim already a multiple of 32)."""
+        if "privateuseone" in str(self.device):
+            onnx_input_name = self.model.get_inputs()[0].name
+            onnx_outputs_names = self.model.get_outputs()[0].name
+            return self.model.run(
+                [onnx_outputs_names],
+                input_feed={onnx_input_name: mel.cpu().numpy()},
+            )[0]
+        mel = mel.half() if self.is_half else mel.float()
+        return self.model(mel)
+
     def mel2hidden(self, mel):
+        """Mel → latent.
+
+        Long clips used to go through the UNet in one shot. On low-VRAM cards
+        (e.g. GTX 1060 3GB, forced fp32) that single forward can try to allocate
+        2+ GiB of activations and die with CUDA OOM. Chunk along time; each
+        chunk is independent frame-wise so boundaries need no overlap.
+        """
         with torch.no_grad():
             n_frames = mel.shape[-1]
             n_pad = 32 * ((n_frames - 1) // 32 + 1) - n_frames
             if n_pad > 0:
                 mel = F.pad(mel, (0, n_pad), mode="constant")
-            if "privateuseone" in str(self.device):
-                onnx_input_name = self.model.get_inputs()[0].name
-                onnx_outputs_names = self.model.get_outputs()[0].name
-                hidden = self.model.run(
-                    [onnx_outputs_names],
-                    input_feed={onnx_input_name: mel.cpu().numpy()},
-                )[0]
+            # 1024 mel frames ≈ 10.24 s @ hop=160 / 16 kHz. Keeps UNet peak
+            # well under 1 GiB in fp32; short clips keep the single-shot path.
+            max_chunk = 1024
+            total = mel.shape[-1]
+            if total <= max_chunk:
+                hidden = self._mel2hidden_chunk(mel)
             else:
-                mel = mel.half() if self.is_half else mel.float()
-                hidden = self.model(mel)
+                parts = []
+                for start in range(0, total, max_chunk):
+                    # Align each chunk end up to 32 frames so the CNN downsamples cleanly.
+                    end = min(start + max_chunk, total)
+                    aligned = 32 * ((end - start - 1) // 32 + 1)
+                    piece = mel[..., start : start + aligned]
+                    if piece.shape[-1] < aligned:
+                        piece = F.pad(
+                            piece, (0, aligned - piece.shape[-1]), mode="constant"
+                        )
+                    out = self._mel2hidden_chunk(piece)
+                    # Keep only the real frames that fell in [start, end).
+                    keep = end - start
+                    parts.append(out[:, :keep])
+                    # Free the just-finished chunk before the next allocates.
+                    if torch.cuda.is_available() and "cuda" in str(self.device):
+                        del out
+                        torch.cuda.empty_cache()
+                if parts and isinstance(parts[0], np.ndarray):
+                    hidden = np.concatenate(parts, axis=1)
+                else:
+                    hidden = torch.cat(parts, dim=1)
             return hidden[:, :n_frames]
 
     def decode(self, hidden, thred=0.03):

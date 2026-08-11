@@ -130,6 +130,35 @@ def emit(**kw) -> None:
             pass
 
 
+def _friendly_error(exc: BaseException | str) -> str:
+    """把 torch / CUDA 的长 traceback 收成用户能照着做的中文提示。
+
+    vc_single 失败时会把整段 traceback 塞进 info 字符串，所以参数既可能是
+    Exception 也可能是那串文本。
+    """
+    text = str(exc) if not isinstance(exc, BaseException) else (str(exc) or type(exc).__name__)
+    low = text.lower()
+    if "out of memory" in low or "cuda out of memory" in low:
+        return (
+            "显存不够（CUDA OOM）。常见原因：实时变声还在跑、音频太长、或显卡显存较小（如 3GB）。\n"
+            "请先在主界面停止变声，关闭其他占 GPU 的程序后重试；"
+            "仍失败可把音高算法改成 harvest 或 pm（更省显存），或把长音频切短再转。"
+        )
+    if "显存不够" in text or "缺少 hubert" in text:
+        return text
+    return text
+
+
+def _cuda_empty_cache() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     """返回 (源文件, 相对路径)。
 
@@ -198,6 +227,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     emit(phase="start", total=total, message=f"共 {total} 个文件")
+    _cuda_empty_cache()
 
     try:
         from scipy.io import wavfile
@@ -211,9 +241,10 @@ def main(argv: list[str]) -> int:
         vc = VC(config)
         # get_vc 认绝对路径（User_Data/models/...）
         vc.get_vc(model)
+        _cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
-        emit(phase="error", message=f"加载模型失败：{e}")
+        emit(phase="error", message=f"加载模型失败：{_friendly_error(e)}")
         return 1
 
     out_files: list[str] = []
@@ -252,7 +283,8 @@ def main(argv: list[str]) -> int:
                 protect,
             )
             if wav_opt is None or wav_opt[0] is None:
-                raise RuntimeError(info or "未知错误")
+                # vc_single 吞掉异常后把 traceback 塞进 info；OOM 也走这条。
+                raise RuntimeError(_friendly_error(info or "未知错误"))
             wavfile.write(str(dest), wav_opt[0], wav_opt[1])
             out_files.append(str(dest))
             emit(
@@ -265,13 +297,16 @@ def main(argv: list[str]) -> int:
             # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
             # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
             traceback.print_exc()
-            skipped.append({"file": str(src), "name": src.name, "reason": str(e)})
+            reason = _friendly_error(e)
+            skipped.append({"file": str(src), "name": src.name, "reason": reason})
             emit(
                 phase="skip",
                 done=i,
                 total=total,
-                message=f"跳过 {src.name}：{e}",
+                message=f"跳过 {src.name}：{reason}",
             )
+        finally:
+            _cuda_empty_cache()
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。

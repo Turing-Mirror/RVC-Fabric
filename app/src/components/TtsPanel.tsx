@@ -43,6 +43,13 @@ type Progress = {
   message: string;
 };
 
+/** 批量转换里没转出来的那几个：哪个文件、为什么。 */
+type Skipped = {
+  file: string;
+  name: string;
+  reason: string;
+};
+
 const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[86px] shrink-0 text-[13px]";
 const PATH =
@@ -92,6 +99,9 @@ function StsSection() {
   const [indexRate, setIndexRate] = useState(0.75);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
+  // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
+  // 到底是哪几个没转出来。
+  const [skipped, setSkipped] = useState<Skipped[]>([]);
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
 
@@ -141,23 +151,35 @@ function StsSection() {
     if (runningRef.current) return;
     setMsg("");
     setProg(null);
+    setSkipped([]);
     runningRef.current = true;
     setRunning(true);
     try {
-      const r = await invoke<{ files?: string[]; output?: string }>("sts_start", {
+      const r = await invoke<{
+        files?: string[];
+        skipped?: Skipped[];
+        output?: string;
+      }>("sts_start", {
         input,
         output,
         pitch,
         f0method,
         indexRate,
       });
+      const ok = r.files?.length ?? 0;
+      const bad = r.skipped ?? [];
+      setSkipped(bad);
+      // 有跳过的就必须在总结里说出来，不然「完成 8 个文件」会被当成全转完了。
       setMsg(
-        r.output
-          ? t("s.6a17eda1b7", {
-              v0: r.files?.length ?? 0,
-              v1: r.output,
+        bad.length
+          ? t("s.stsDoneSkipped", {
+              v0: ok,
+              v1: bad.length,
+              v2: r.output || "",
             })
-          : t("s.4d8ef8514f", { v0: r.files?.length ?? 0 }),
+          : r.output
+            ? t("s.6a17eda1b7", { v0: ok, v1: r.output })
+            : t("s.4d8ef8514f", { v0: ok }),
       );
     } catch (e) {
       setMsg(String(e));
@@ -278,6 +300,25 @@ function StsSection() {
         <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all">
           {msg}
         </p>
+      ) : null}
+
+      {skipped.length ? (
+        <div className="mt-3 border-t border-[var(--hairline)] pt-2">
+          <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
+            {t("s.stsSkippedTitle", { v0: skipped.length })}
+          </p>
+          <ul className="m-0 list-none p-0">
+            {skipped.map((s) => (
+              <li
+                key={s.file}
+                className="py-0.5 text-[12px] text-[var(--meta)] break-all"
+              >
+                <span className="font-mono">{s.name}</span>
+                {` — ${s.reason}`}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="mt-5 flex justify-end gap-2.5">

@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "Échec de l'installation (code d'erreur {e})",
     "vbcableNoSetup": "Programme d'installation VB-Cable introuvable — téléchargez d'abord le paquet.",
     "vbcablePackBroken": "Le paquet extrait est incomplet. Téléchargez-le à nouveau.",
-    "vbcableWindowsOnly": "La carte son virtuelle ne peut être installée que sous Windows."
+    "vbcableWindowsOnly": "La carte son virtuelle ne peut être installée que sous Windows.",
+    "stsDoneSkipped": "{v0} fichier(s) converti(s), {v1} ignoré(s) → {v2}",
+    "stsSkippedTitle": "Ces {v0} fichier(s) n'ont pas été convertis :"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

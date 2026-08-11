@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "Ошибка установки (код {e})",
     "vbcableNoSetup": "Установщик VB-Cable не найден — сначала скачайте пакет.",
     "vbcablePackBroken": "Распакованный пакет неполный. Скачайте его заново.",
-    "vbcableWindowsOnly": "Виртуальную звуковую карту можно установить только в Windows."
+    "vbcableWindowsOnly": "Виртуальную звуковую карту можно установить только в Windows.",
+    "stsDoneSkipped": "Готово: {v0}, пропущено: {v1} → {v2}",
+    "stsSkippedTitle": "Эти файлы не удалось преобразовать ({v0}):"
   },
   "extras": {
     "engineTitle": "Ресурсы движка",

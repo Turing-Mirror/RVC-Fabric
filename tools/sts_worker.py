@@ -130,16 +130,26 @@ def emit(**kw) -> None:
             pass
 
 
-def collect_inputs(path: str) -> list[Path]:
+def collect_inputs(path: str) -> list[tuple[Path, Path]]:
+    """返回 (源文件, 相对路径)。
+
+    相对路径决定输出落在哪：文件夹输入时按原目录层级还原到输出目录，
+    不然 `A/vocal.wav` 和 `B/vocal.wav` 会被铺平成 `vocal_rvc.wav` 和
+    `vocal_rvc_1.wav`，谁是谁分不出来。
+    """
     p = Path(path)
     if p.is_file():
-        return [p]
+        return [(p, Path(p.name))]
     if not p.is_dir():
         return []
-    files: list[Path] = []
+    files: list[tuple[Path, Path]] = []
     for f in sorted(p.rglob("*")):
         if f.is_file() and f.suffix.lower() in AUDIO_EXT:
-            files.append(f)
+            try:
+                rel = f.relative_to(p)
+            except ValueError:
+                rel = Path(f.name)
+            files.append((f, rel))
     return files
 
 
@@ -207,7 +217,8 @@ def main(argv: list[str]) -> int:
         return 1
 
     out_files: list[str] = []
-    for i, src in enumerate(files, start=1):
+    skipped: list[dict] = []
+    for i, (src, rel) in enumerate(files, start=1):
         emit(
             phase="run",
             done=i - 1,
@@ -215,13 +226,15 @@ def main(argv: list[str]) -> int:
             message=f"正在转换 {src.name}（{i}/{total}）",
         )
         try:
-            # 单文件输入：输出到目录下同名 wav；文件夹输入：保持相对路径扁平到文件名
+            # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
+            sub = Path(out_dir) / rel.parent
+            sub.mkdir(parents=True, exist_ok=True)
             stem = src.stem
-            dest = Path(out_dir) / f"{stem}_rvc.wav"
+            dest = sub / f"{stem}_rvc.wav"
             # 重名则加序号
             n = 1
             while dest.exists():
-                dest = Path(out_dir) / f"{stem}_rvc_{n}.wav"
+                dest = sub / f"{stem}_rvc_{n}.wav"
                 n += 1
 
             info, wav_opt = vc.vc_single(
@@ -239,11 +252,7 @@ def main(argv: list[str]) -> int:
                 protect,
             )
             if wav_opt is None or wav_opt[0] is None:
-                emit(
-                    phase="error",
-                    message=f"{src.name} 转换失败：{info or '未知错误'}",
-                )
-                return 1
+                raise RuntimeError(info or "未知错误")
             wavfile.write(str(dest), wav_opt[0], wav_opt[1])
             out_files.append(str(dest))
             emit(
@@ -253,11 +262,30 @@ def main(argv: list[str]) -> int:
                 message=f"完成 {src.name}",
             )
         except Exception as e:
+            # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
+            # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
             traceback.print_exc()
-            emit(phase="error", message=f"{src.name} 失败：{e}")
-            return 1
+            skipped.append({"file": str(src), "name": src.name, "reason": str(e)})
+            emit(
+                phase="skip",
+                done=i,
+                total=total,
+                message=f"跳过 {src.name}：{e}",
+            )
 
-    emit(phase="done", files=out_files, total=total, message=f"全部完成，共 {len(out_files)} 个")
+    if not out_files:
+        # 一个都没成，这就是失败，不能报「全部完成 0 个」。
+        first = skipped[0]["reason"] if skipped else "未知错误"
+        emit(phase="error", message=f"{total} 个文件全部转换失败。第一个原因：{first}")
+        return 1
+
+    emit(
+        phase="done",
+        files=out_files,
+        skipped=skipped,
+        total=total,
+        message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
+    )
     return 0
 
 

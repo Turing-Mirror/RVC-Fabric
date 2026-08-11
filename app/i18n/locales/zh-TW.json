@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "安裝失敗（錯誤碼 {e}）",
     "vbcableNoSetup": "找不到 VB-Cable 安裝程式，請先下載安裝包",
     "vbcablePackBroken": "安裝包解壓後不完整，請重新下載",
-    "vbcableWindowsOnly": "只有 Windows 能安裝虛擬音效卡"
+    "vbcableWindowsOnly": "只有 Windows 能安裝虛擬音效卡",
+    "stsDoneSkipped": "完成 {v0} 個檔案，略過 {v1} 個 → {v2}",
+    "stsSkippedTitle": "以下 {v0} 個檔案沒有轉出來："
   },
   "extras": {
     "engineTitle": "引擎資源",

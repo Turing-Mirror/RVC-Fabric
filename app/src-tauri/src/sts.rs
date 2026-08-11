@@ -233,6 +233,7 @@ fn run_inner(
     let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.4f592d4fc2", &(e)))?;
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.68759edc4b"))?;
     let mut files: Vec<String> = Vec::new();
+    let mut skipped: Vec<Value> = Vec::new();
     let mut fail: Option<String> = None;
     let mut total: u64 = 1;
 
@@ -270,12 +271,22 @@ fn run_inner(
                     if msg.is_empty() { &fallback } else { msg },
                 );
             }
+            // 单个文件被跳过。照样往界面上推，用户当场就能看到是哪个坏了，
+            // 不用等整批跑完再翻日志。
+            "skip" => {
+                total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
+                let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
+                emit(app, "skip", done, total, msg);
+            }
             "done" => {
                 if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
                     files = arr
                         .iter()
                         .filter_map(|x| x.as_str().map(str::to_string))
                         .collect();
+                }
+                if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
+                    skipped = arr.clone();
                 }
             }
             "error" => fail = Some(msg.to_string()),
@@ -296,6 +307,7 @@ fn run_inner(
     Ok(json!({
         "ok": true,
         "files": files,
+        "skipped": skipped,
         "output": out.to_string_lossy(),
     }))
 }

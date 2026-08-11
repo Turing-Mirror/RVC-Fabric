@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "インストールに失敗しました（エラーコード {e}）",
     "vbcableNoSetup": "VB-Cable のインストーラーが見つかりません。先にパッケージをダウンロードしてください。",
     "vbcablePackBroken": "展開したパッケージが不完全です。もう一度ダウンロードしてください。",
-    "vbcableWindowsOnly": "仮想サウンドカードは Windows でのみインストールできます。"
+    "vbcableWindowsOnly": "仮想サウンドカードは Windows でのみインストールできます。",
+    "stsDoneSkipped": "{v0} 件を変換、{v1} 件をスキップ → {v2}",
+    "stsSkippedTitle": "次の {v0} 件は変換できませんでした："
   },
   "extras": {
     "engineTitle": "エンジンリソース",

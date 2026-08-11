@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "Error de instalación (código {e})",
     "vbcableNoSetup": "No se encuentra el instalador de VB-Cable: descarga primero el paquete.",
     "vbcablePackBroken": "El paquete extraído está incompleto. Descárgalo de nuevo.",
-    "vbcableWindowsOnly": "La tarjeta de sonido virtual solo se puede instalar en Windows."
+    "vbcableWindowsOnly": "La tarjeta de sonido virtual solo se puede instalar en Windows.",
+    "stsDoneSkipped": "{v0} archivo(s) convertido(s), {v1} omitido(s) → {v2}",
+    "stsSkippedTitle": "Estos {v0} archivo(s) no se convirtieron:"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

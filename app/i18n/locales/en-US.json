@@ -1298,7 +1298,9 @@
     "vbcableFailedCode": "Install failed (error code {e})",
     "vbcableNoSetup": "VB-Cable installer not found — download the package first.",
     "vbcablePackBroken": "The extracted package is incomplete. Please download it again.",
-    "vbcableWindowsOnly": "The virtual sound card can only be installed on Windows."
+    "vbcableWindowsOnly": "The virtual sound card can only be installed on Windows.",
+    "stsDoneSkipped": "Converted {v0} file(s), skipped {v1} → {v2}",
+    "stsSkippedTitle": "These {v0} file(s) were not converted:"
   },
   "extras": {
     "engineTitle": "Engine resources",

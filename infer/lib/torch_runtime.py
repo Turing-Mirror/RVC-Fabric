@@ -12,13 +12,24 @@ from contextlib import contextmanager, nullcontext
 
 logger = logging.getLogger(__name__)
 
+# Thread knobs can only be set once per process. After the interop thread pool
+# has started (e.g. Config() imports fairseq/torch deeper), a second
+# set_num_interop_threads() call is a NATIVE crash (STATUS_STACK_BUFFER_OVERRUN,
+# exit 0xC0000409) on torch 2.0 Windows — no Python exception, so try/except
+# cannot catch it. sts_worker calls tune_for_inference twice (before and after
+# Config), so guard the thread section with this flag.
+_THREADS_TUNED = False
+
 
 def tune_for_inference() -> None:
     """One-shot knobs that speed offline conversion without changing model math.
 
-    Safe to call multiple times. Failures are ignored (already-initialized
-    interop threads, missing CUDA, old torch, …).
+    Safe to call multiple times. Thread knobs are applied only on the first
+    call; CUDA switches are reapplied (idempotent). Failures are ignored
+    (missing CUDA, old torch, …).
     """
+    global _THREADS_TUNED
+
     try:
         import torch
     except Exception:
@@ -29,19 +40,21 @@ def tune_for_inference() -> None:
     except Exception:
         pass
 
-    # Intra-op threads: ffmpeg / numpy / torch CPU ops. Cap so we don't thrash
-    # on 16+ core machines while the GPU is the bottleneck.
-    try:
-        n = int(os.environ.get("TM_TORCH_NUM_THREADS") or 0)
-        if n <= 0:
-            n = max(1, min(8, (os.cpu_count() or 4)))
-        torch.set_num_threads(n)
-    except Exception:
-        pass
-    try:
-        torch.set_num_interop_threads(1)
-    except Exception:
-        pass
+    if not _THREADS_TUNED:
+        # Intra-op threads: ffmpeg / numpy / torch CPU ops. Cap so we don't
+        # thrash on 16+ core machines while the GPU is the bottleneck.
+        try:
+            n = int(os.environ.get("TM_TORCH_NUM_THREADS") or 0)
+            if n <= 0:
+                n = max(1, min(8, (os.cpu_count() or 4)))
+            torch.set_num_threads(n)
+        except Exception:
+            pass
+        try:
+            torch.set_num_interop_threads(1)
+        except Exception:
+            pass
+        _THREADS_TUNED = True
 
     if not torch.cuda.is_available():
         return

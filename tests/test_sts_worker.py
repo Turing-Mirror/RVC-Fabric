@@ -274,6 +274,55 @@ class TorchRuntimeTests(unittest.TestCase):
         with inference_context():
             pass
 
+    def test_tune_thread_knobs_applied_once(self):
+        """第二次 tune 不得再调 set_num_interop_threads。
+
+        Config() 之后 interop 线程池已启动，再调用会在 torch 2.0 Windows 上
+        原生崩溃（0xC0000409，exit -1073740791），try/except 拦不住。
+        """
+        import sys
+        import types
+
+        from infer.lib import torch_runtime as tr
+
+        class FakeTorch(types.ModuleType):
+            def __init__(self):
+                super().__init__("torch")
+                self._grad = True
+                self.thread_calls = 0
+                self.interop_calls = 0
+
+            def set_grad_enabled(self, v):
+                self._grad = v
+
+            def set_num_threads(self, n):
+                self.thread_calls += 1
+
+            def set_num_interop_threads(self, n):
+                self.interop_calls += 1
+
+            class cuda:
+                @staticmethod
+                def is_available():
+                    return False
+
+        fake = FakeTorch()
+        old = sys.modules.get("torch")
+        saved = tr._THREADS_TUNED
+        try:
+            sys.modules["torch"] = fake
+            tr._THREADS_TUNED = False
+            tr.tune_for_inference()
+            tr.tune_for_inference()
+            self.assertEqual(fake.interop_calls, 1)
+            self.assertEqual(fake.thread_calls, 1)
+        finally:
+            tr._THREADS_TUNED = saved
+            if old is None:
+                sys.modules.pop("torch", None)
+            else:
+                sys.modules["torch"] = old
+
 
 if __name__ == "__main__":
     unittest.main()

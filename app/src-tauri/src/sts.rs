@@ -54,6 +54,26 @@ fn emit_full(
     skip: Option<u64>,
     file: Option<&str>,
 ) {
+    emit_full_ex(
+        app, phase, done, total, message, pct, step, current, ok, skip, file, None,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_full_ex(
+    app: &AppHandle,
+    phase: &str,
+    done: u64,
+    total: u64,
+    message: &str,
+    pct: Option<u64>,
+    step: Option<&str>,
+    current: Option<u64>,
+    ok: Option<u64>,
+    skip: Option<u64>,
+    file: Option<&str>,
+    reason: Option<&str>,
+) {
     let mut body = json!({
         "phase": phase,
         "done": done,
@@ -80,6 +100,11 @@ fn emit_full(
     if let Some(f) = file {
         if !f.is_empty() {
             body["file"] = json!(f);
+        }
+    }
+    if let Some(r) = reason {
+        if !r.is_empty() {
+            body["reason"] = json!(r);
         }
     }
     let _ = app.emit("sts-progress", body);
@@ -211,11 +236,24 @@ fn run_inner(
     // 活着（尤其是 3GB 级小卡），两边一抢就是 CUDA OOM。训练路径同理——工具
     // 窗开跑就先腾出 GPU；用户之后再点「开启变声」即可。
     if crate::worker::is_worker_alive(root) {
-        emit(app, "run", 0, 1, &crate::i18n::t("s.stsFreeVram"));
+        let free_msg = crate::i18n::t("s.stsFreeVram");
+        emit_full(
+            app,
+            "run",
+            0,
+            1,
+            &free_msg,
+            Some(0),
+            Some("free_vram"),
+            Some(0),
+            Some(0),
+            Some(0),
+            None,
+        );
         crate::worker::kill_known_workers(root);
         // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python 时
-        // 偶发还能看见「reserved >> free」。
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        // 偶发还能看见「reserved >> free」。3GB 卡上 400ms 有时不够。
+        std::thread::sleep(std::time::Duration::from_millis(700));
     }
 
     let cfg = crate::config::read(root);
@@ -347,22 +385,32 @@ fn run_inner(
             "skip" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
-                // 从 message 里尽量抠出文件名（worker 也会带 file 字段）。
-                if let Some(arr_item) = v.get("name").and_then(|x| x.as_str()) {
-                    skipped.push(json!({
-                        "file": v.get("file").and_then(|x| x.as_str()).unwrap_or(arr_item),
-                        "name": arr_item,
-                        "reason": msg,
-                    }));
-                } else if let Some(fname) = file {
+                // 优先用 worker 的 reason 字段，避免列表里叠成「name — 跳过 name：…」。
+                let reason = v
+                    .get("reason")
+                    .and_then(|x| x.as_str())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(msg);
+                if let Some(fname) = file {
                     skipped.push(json!({
                         "file": fname,
                         "name": fname,
-                        "reason": msg,
+                        "reason": reason,
                     }));
                 }
-                emit_full(
-                    app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
+                emit_full_ex(
+                    app,
+                    "skip",
+                    done,
+                    total,
+                    msg,
+                    pct,
+                    step,
+                    current,
+                    ok_n,
+                    skip_n,
+                    file,
+                    Some(reason),
                 );
             }
             "done" => {

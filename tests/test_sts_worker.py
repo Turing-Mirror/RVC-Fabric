@@ -16,6 +16,8 @@ from tools.sts_worker import (  # noqa: E402
     StsProgress,
     _ensure_rvc_env,
     _friendly_error,
+    _is_oom,
+    _normalize_f0method,
     collect_inputs,
     file_weights,
 )
@@ -218,12 +220,46 @@ class StsProgressTests(unittest.TestCase):
         self.assertEqual(f0_pcts, sorted(f0_pcts))
 
 
+class NormalizeF0Tests(unittest.TestCase):
+    def test_fcpe_maps_to_rmvpe(self):
+        m, note = _normalize_f0method("fcpe")
+        self.assertEqual(m, "rmvpe")
+        self.assertTrue(note)
+
+    def test_known_passthrough(self):
+        for name in ("rmvpe", "harvest", "pm", "crepe"):
+            m, note = _normalize_f0method(name)
+            self.assertEqual(m, name)
+            self.assertIsNone(note)
+
+    def test_is_oom(self):
+        self.assertTrue(_is_oom("CUDA out of memory"))
+        self.assertTrue(_is_oom("显存不够（CUDA OOM）"))
+        self.assertFalse(_is_oom("file not found"))
+
+
 class TorchRuntimeTests(unittest.TestCase):
     def test_rmvpe_chunk_cpu_default(self):
         from infer.lib.torch_runtime import rmvpe_max_mel_frames
 
         self.assertEqual(rmvpe_max_mel_frames(False, "cpu"), 1024)
         self.assertEqual(rmvpe_max_mel_frames(True, "cpu"), 1024)
+
+    def test_rmvpe_chunk_env_override_aligned(self):
+        from infer.lib.torch_runtime import rmvpe_max_mel_frames
+
+        old = os.environ.get("TM_RMVPE_MAX_FRAMES")
+        try:
+            os.environ["TM_RMVPE_MAX_FRAMES"] = "500"
+            n = rmvpe_max_mel_frames(False, "cpu")
+            self.assertEqual(n % 32, 0)
+            self.assertLessEqual(n, 500)
+            self.assertGreaterEqual(n, 256)
+        finally:
+            if old is None:
+                os.environ.pop("TM_RMVPE_MAX_FRAMES", None)
+            else:
+                os.environ["TM_RMVPE_MAX_FRAMES"] = old
 
     def test_empty_cache_if_needed_no_cuda_returns_false(self):
         from infer.lib.torch_runtime import empty_cache_if_needed

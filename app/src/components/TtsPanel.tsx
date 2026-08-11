@@ -51,6 +51,8 @@ type Progress = {
   ok?: number;
   skip?: number;
   file?: string;
+  /** skip 事件的干净原因（不含「跳过 name：」前缀） */
+  reason?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -161,7 +163,7 @@ function StsSection() {
             {
               file: p.file || p.message,
               name: p.file || "?",
-              reason: p.message,
+              reason: p.reason || p.message,
             },
           ];
         });

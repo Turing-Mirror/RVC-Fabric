@@ -113,6 +113,16 @@ class Mel2HiddenChunkingTests(unittest.TestCase):
         self.assertEqual(tuple(got.shape), (1, 500, N_CLASS))
         self.assertTrue(torch.allclose(got, self._reference(rmvpe, mel), atol=1e-6))
 
+    def test_progress_cb_reaches_one(self):
+        torch.manual_seed(4)
+        rmvpe = _make_rmvpe(ConvStub().eval())
+        mel = self._mel()
+        fracs = []
+        rmvpe.mel2hidden(mel, progress_cb=fracs.append)
+        self.assertTrue(fracs)
+        self.assertAlmostEqual(fracs[-1], 1.0, places=5)
+        self.assertEqual(fracs, sorted(fracs))
+
 
 if __name__ == "__main__":
     unittest.main()

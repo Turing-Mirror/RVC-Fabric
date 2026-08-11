@@ -176,6 +176,68 @@ def _tune_torch() -> None:
         pass
 
 
+def _normalize_f0method(name: str) -> tuple[str, str | None]:
+    """Offline pipeline only implements a subset of realtime f0 methods.
+
+    Realtime UI offers ``fcpe``; offline ``get_f0`` does not. Quietly map to
+    rmvpe so a shared settings value does not crash the batch.
+    """
+    m = (name or "rmvpe").strip().lower() or "rmvpe"
+    if m == "fcpe":
+        return "rmvpe", "离线转换不支持 fcpe，已改用 rmvpe"
+    if m not in ("rmvpe", "harvest", "pm", "crepe"):
+        return "rmvpe", f"未知音高算法 {name!r}，已改用 rmvpe"
+    return m, None
+
+
+def _is_oom(text: str) -> bool:
+    low = (text or "").lower()
+    return "显存不够" in (text or "") or "out of memory" in low
+
+
+def _convert_one(vc, src: Path, dest: Path, *, pitch, f0method, index_path,
+                 index_rate, filter_radius, resample_sr, rms_mix_rate, protect,
+                 on_stage, wavfile) -> None:
+    """Run vc_single + write. On first CUDA OOM, shrink rmvpe chunks and retry once."""
+    attempts = 2
+    last_err: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            info, wav_opt = vc.vc_single(
+                0,
+                str(src),
+                pitch,
+                None,
+                f0method,
+                index_path,
+                None,
+                index_rate,
+                filter_radius,
+                resample_sr,
+                rms_mix_rate,
+                protect,
+                progress_cb=on_stage,
+            )
+            if wav_opt is None or wav_opt[0] is None:
+                raise RuntimeError(_friendly_error(info or "未知错误"))
+            on_stage("write", 0.0)
+            wavfile.write(str(dest), wav_opt[0], wav_opt[1])
+            on_stage("write", 1.0)
+            return
+        except Exception as e:
+            last_err = e
+            reason = _friendly_error(e)
+            if attempt + 1 < attempts and _is_oom(reason):
+                # Smaller mel chunks + free allocator, then one more try.
+                os.environ["TM_RMVPE_MAX_FRAMES"] = "512"
+                _cuda_empty_cache()
+                on_stage("f0", 0.0)
+                continue
+            raise RuntimeError(reason) from e
+    if last_err is not None:
+        raise RuntimeError(_friendly_error(last_err)) from last_err
+
+
 def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     """返回 (源文件, 相对路径)。
 
@@ -466,7 +528,8 @@ def main(argv: list[str]) -> int:
     model = str(req.get("model") or "").strip()
     index = str(req.get("index") or "").strip()
     pitch = int(req.get("pitch") or 0)
-    f0method = str(req.get("f0method") or "rmvpe").strip() or "rmvpe"
+    f0method_raw = str(req.get("f0method") or "rmvpe").strip() or "rmvpe"
+    f0method, f0_note = _normalize_f0method(f0method_raw)
     index_rate = float(req.get("index_rate") if req.get("index_rate") is not None else 0.75)
     filter_radius = int(req.get("filter_radius") if req.get("filter_radius") is not None else 3)
     resample_sr = int(req.get("resample_sr") or 0)
@@ -500,6 +563,8 @@ def main(argv: list[str]) -> int:
         start_msg = "共 1 个文件，准备开始"
     else:
         start_msg = f"共 {total} 个文件（按体积加权进度），准备开始"
+    if f0_note:
+        start_msg = f"{start_msg}（{f0_note}）"
     emit(phase="start", total=total, pct=0, current=0, ok=0, skip=0, message=start_msg)
     _tune_torch()
     _cuda_empty_cache()
@@ -561,27 +626,21 @@ def main(argv: list[str]) -> int:
                     dest = sub / f"{stem}_rvc_{n}.wav"
                     n += 1
 
-                info, wav_opt = vc.vc_single(
-                    0,
-                    str(src),
-                    pitch,
-                    None,
-                    f0method,
-                    index_path,
-                    None,
-                    index_rate,
-                    filter_radius,
-                    resample_sr,
-                    rms_mix_rate,
-                    protect,
-                    progress_cb=on_stage,
+                _convert_one(
+                    vc,
+                    src,
+                    dest,
+                    pitch=pitch,
+                    f0method=f0method,
+                    index_path=index_path,
+                    index_rate=index_rate,
+                    filter_radius=filter_radius,
+                    resample_sr=resample_sr,
+                    rms_mix_rate=rms_mix_rate,
+                    protect=protect,
+                    on_stage=on_stage,
+                    wavfile=wavfile,
                 )
-                if wav_opt is None or wav_opt[0] is None:
-                    # vc_single 吞掉异常后把 traceback 塞进 info；OOM 也走这条。
-                    raise RuntimeError(_friendly_error(info or "未知错误"))
-                prog.stage("write", 0.0)
-                wavfile.write(str(dest), wav_opt[0], wav_opt[1])
-                prog.stage("write", 1.0)
                 out_files.append(str(dest))
                 prog.file_done(i, src.name, ok=True)
             except Exception as e:
@@ -589,9 +648,10 @@ def main(argv: list[str]) -> int:
                 # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
                 traceback.print_exc()
                 reason = _friendly_error(e)
-                hit_oom = "显存不够" in reason or "out of memory" in str(e).lower()
+                hit_oom = _is_oom(reason)
                 skipped.append({"file": str(src), "name": src.name, "reason": reason})
                 prog.file_done(i, src.name, ok=False)
+                # reason 单独字段，界面列表不要再叠一层「跳过 name：」。
                 emit(
                     phase="skip",
                     done=i,
@@ -601,6 +661,7 @@ def main(argv: list[str]) -> int:
                     ok=prog.ok_count,
                     skip=prog.skip_count,
                     file=src.name,
+                    reason=reason,
                     message=f"跳过 {src.name}：{reason}",
                 )
             finally:

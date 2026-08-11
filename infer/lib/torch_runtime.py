@@ -88,8 +88,27 @@ def empty_cache_if_needed(min_free_mb: int = 384) -> bool:
     return False
 
 
+def _align32(n: int, minimum: int = 256) -> int:
+    """UNet / context (128) both need multiples of 32; floor to that grid."""
+    n = max(int(minimum), int(n))
+    return n // 32 * 32
+
+
 def rmvpe_max_mel_frames(is_half: bool, device) -> int:
-    """Pick RMVPE mel-chunk length by VRAM. Larger = fewer launches = faster."""
+    """Pick RMVPE mel-chunk length by VRAM. Larger = fewer launches = faster.
+
+    Always a multiple of 32 so it lines up with the 128-frame overlap context
+    (see RMVPE.mel2hidden). Override with env ``TM_RMVPE_MAX_FRAMES`` (e.g. OOM
+    retry shrinks to 512).
+    """
+    # Forced override (STS OOM retry / power users).
+    try:
+        forced = int((os.environ.get("TM_RMVPE_MAX_FRAMES") or "").strip() or "0")
+        if forced > 0:
+            return _align32(forced, minimum=256)
+    except Exception:
+        pass
+
     # Default matches the OOM-safe value we ship for 3–4 GB cards.
     base = 1024
     try:
@@ -100,14 +119,14 @@ def rmvpe_max_mel_frames(is_half: bool, device) -> int:
         total = int(torch.cuda.get_device_properties(0).total_memory)
         gb = total / (1024**3)
         if gb >= 10:
-            return 4096 if is_half else 3072
+            return _align32(4096 if is_half else 3072)
         if gb >= 6:
-            return 3072 if is_half else 2048
+            return _align32(3072 if is_half else 2048)
         if gb >= 4.5:
-            return 2048 if is_half else 1536
+            return _align32(2048 if is_half else 1536)
         # ≤4 GB: keep conservative; fp32 (1060) is hungrier.
         if not is_half and gb <= 3.5:
-            return 768
+            return _align32(768)
         return base
     except Exception:
         return base

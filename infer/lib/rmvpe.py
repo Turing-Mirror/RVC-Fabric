@@ -578,7 +578,7 @@ class RMVPE:
         mel = mel.half() if self.is_half else mel.float()
         return self.model(mel)
 
-    def mel2hidden(self, mel):
+    def mel2hidden(self, mel, progress_cb=None):
         """Mel → latent.
 
         Long clips used to go through the UNet in one shot. On low-VRAM cards
@@ -595,7 +595,18 @@ class RMVPE:
         frames of real audio on both sides and only its middle is kept, so the
         GRU has warmed up and the convolutions have real neighbours by the time
         the kept region starts.
+
+        progress_cb(frac) optional, frac in 0..1 after each chunk (offline STS UI).
         """
+
+        def _p(frac):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(float(max(0.0, min(1.0, frac))))
+            except Exception:
+                pass
+
         with torch.no_grad():
             n_frames = mel.shape[-1]
             n_pad = 32 * ((n_frames - 1) // 32 + 1) - n_frames
@@ -603,17 +614,27 @@ class RMVPE:
                 mel = F.pad(mel, (0, n_pad), mode="constant")
             # 1024 mel frames ≈ 10.24 s @ hop=160 / 16 kHz. Keeps UNet peak
             # well under 1 GiB in fp32; short clips keep the single-shot path.
-            max_chunk = 1024
+            # May be raised by rmvpe_max_mel_frames when VRAM allows (later).
+            try:
+                from infer.lib.torch_runtime import rmvpe_max_mel_frames
+
+                max_chunk = rmvpe_max_mel_frames(self.is_half, self.device)
+            except Exception:
+                max_chunk = 1024
             # 128 frames ≈ 1.28 s of warm-up each side — well past the point a
             # GRU hidden state stops depending on where it started. Multiple of
             # 32 so the context never breaks the UNet's stride alignment.
             context = 128
             total = mel.shape[-1]
             if total <= max_chunk:
+                _p(0.0)
                 hidden = self._mel2hidden_chunk(mel)
+                _p(1.0)
             else:
+                starts = list(range(0, total, max_chunk))
+                n_chunks = len(starts)
                 parts = []
-                for start in range(0, total, max_chunk):
+                for ci, start in enumerate(starts):
                     end = min(start + max_chunk, total)
                     lo = max(0, start - context)
                     hi = min(total, end + context)
@@ -627,7 +648,10 @@ class RMVPE:
                         )
                     out = self._mel2hidden_chunk(piece)
                     # Drop the context margins; keep only [start, end).
+                    # Do NOT empty_cache every chunk — parts may share storage
+                    # with out, and the allocator reuses same-shaped blocks.
                     parts.append(out[:, start - lo : start - lo + (end - start)])
+                    _p((ci + 1) / n_chunks)
                 if parts and isinstance(parts[0], np.ndarray):
                     hidden = np.concatenate(parts, axis=1)
                 else:
@@ -641,9 +665,18 @@ class RMVPE:
         # f0 = np.array([10 * (2 ** (cent_pred / 1200)) if cent_pred else 0 for cent_pred in cents_pred])
         return f0
 
-    def infer_from_audio(self, audio, thred=0.03):
+    def infer_from_audio(self, audio, thred=0.03, progress_cb=None):
         # torch.cuda.synchronize()
         # t0 = ttime()
+        def _p(frac):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(float(max(0.0, min(1.0, frac))))
+            except Exception:
+                pass
+
+        _p(0.0)
         if not torch.is_tensor(audio):
             audio = torch.from_numpy(audio)
         mel = self.mel_extractor(
@@ -652,7 +685,13 @@ class RMVPE:
         # print(123123123,mel.device.type)
         # torch.cuda.synchronize()
         # t1 = ttime()
-        hidden = self.mel2hidden(mel)
+        # Mel extract ~5%; UNet chunks 5%→95%; decode the rest.
+        _p(0.05)
+
+        def _on_mel(frac):
+            _p(0.05 + 0.90 * float(frac))
+
+        hidden = self.mel2hidden(mel, progress_cb=_on_mel if progress_cb else None)
         # torch.cuda.synchronize()
         # t2 = ttime()
         # print(234234,hidden.device.type)
@@ -664,6 +703,7 @@ class RMVPE:
             hidden = hidden.astype("float32")
 
         f0 = self.decode(hidden, thred=thred)
+        _p(1.0)
         # torch.cuda.synchronize()
         # t3 = ttime()
         # print("hmvpe:%s\t%s\t%s\t%s"%(t1-t0,t2-t1,t3-t2,t3-t0))

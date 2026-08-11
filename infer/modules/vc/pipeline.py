@@ -90,13 +90,24 @@ class Pipeline(object):
         f0_method,
         filter_radius,
         inp_f0=None,
+        progress_cb=None,
     ):
         global input_audio_path2wav
+
+        def _p(frac):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(float(max(0.0, min(1.0, frac))))
+            except Exception:
+                pass
+
         time_step = self.window / self.sr * 1000
         f0_min = 50
         f0_max = 1100
         f0_mel_min = 1127 * np.log(1 + f0_min / 700)
         f0_mel_max = 1127 * np.log(1 + f0_max / 700)
+        _p(0.0)
         if f0_method == "pm":
             f0 = (
                 parselmouth.Sound(x, self.sr)
@@ -146,17 +157,35 @@ class Pipeline(object):
                 logger.info(
                     "Loading rmvpe model,%s" % "%s/rmvpe.pt" % os.environ["rmvpe_root"]
                 )
+                _p(0.02)
                 self.model_rmvpe = RMVPE(
                     "%s/rmvpe.pt" % os.environ["rmvpe_root"],
                     is_half=self.is_half,
                     device=self.device,
                 )
-            f0 = self.model_rmvpe.infer_from_audio(x, thred=0.03)
+                _p(0.08)
+
+            def _rmvpe_prog(frac):
+                # 加载完权重后 8%→100% 跟 rmvpe 内部分块进度。
+                _p(0.08 + 0.92 * float(frac))
+
+            f0 = self.model_rmvpe.infer_from_audio(
+                x,
+                thred=0.03,
+                progress_cb=_rmvpe_prog if progress_cb else None,
+            )
 
             if "privateuseone" in str(self.device):  # clean ortruntime memory
                 del self.model_rmvpe.model
                 del self.model_rmvpe
                 logger.info("Cleaning ortruntime memory")
+        else:
+            # harvest / pm / crepe 等没有细粒度回调时至少给出起止。
+            pass
+
+        if f0_method != "rmvpe":
+            # 非 rmvpe：整段算完再推到 100%（中间无法安全打断模型）。
+            _p(0.95)
 
         f0 *= pow(2, f0_up_key / 12)
         # with open("test.txt","w")as f:f.write("\n".join([str(i)for i in f0.tolist()]))
@@ -181,6 +210,7 @@ class Pipeline(object):
         f0_mel[f0_mel <= 1] = 1
         f0_mel[f0_mel > 255] = 255
         f0_coarse = np.rint(f0_mel).astype(np.int32)
+        _p(1.0)
         return f0_coarse, f0bak  # 1-0
 
     def vc(
@@ -197,7 +227,17 @@ class Pipeline(object):
         index_rate,
         version,
         protect,
+        progress_cb=None,
     ):  # ,file_index,file_big_npy
+        def _p(frac):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(float(max(0.0, min(1.0, frac))))
+            except Exception:
+                pass
+
+        _p(0.0)
         feats = torch.from_numpy(audio0)
         if self.is_half:
             feats = feats.half()
@@ -218,6 +258,8 @@ class Pipeline(object):
         with torch.no_grad():
             logits = model.extract_features(**inputs)
             feats = model.final_proj(logits[0]) if version == "v1" else logits[0]
+        # Hubert 特征提取通常是片段内最重的一步。
+        _p(0.45)
         if protect < 0.5 and pitch is not None and pitchf is not None:
             feats0 = feats.clone()
         if (
@@ -243,6 +285,7 @@ class Pipeline(object):
                 torch.from_numpy(npy).unsqueeze(0).to(self.device) * index_rate
                 + (1 - index_rate) * feats
             )
+        _p(0.6)
 
         feats = F.interpolate(feats.permute(0, 2, 1), scale_factor=2).permute(0, 2, 1)
         if protect < 0.5 and pitch is not None and pitchf is not None:
@@ -276,6 +319,7 @@ class Pipeline(object):
         t2 = ttime()
         times[0] += t1 - t0
         times[2] += t2 - t1
+        _p(1.0)
         return audio1
 
     def pipeline(
@@ -360,7 +404,9 @@ class Pipeline(object):
         sid = torch.tensor(sid, device=self.device).unsqueeze(0).long()
         pitch, pitchf = None, None
         if if_f0 == 1:
-            _prog("f0", 0.0)
+            def _f0_prog(frac):
+                _prog("f0", frac)
+
             pitch, pitchf = self.get_f0(
                 input_audio_path,
                 audio_pad,
@@ -369,6 +415,7 @@ class Pipeline(object):
                 f0_method,
                 filter_radius,
                 inp_f0,
+                progress_cb=_f0_prog if progress_cb else None,
             )
             pitch = pitch[:p_len]
             pitchf = pitchf[:p_len]
@@ -384,9 +431,18 @@ class Pipeline(object):
         # +1 for the final tail segment after the opt_ts loop.
         n_parts = len(opt_ts) + 1
         part_i = 0
-        _prog("infer", 0.0)
+
+        def _infer_prog(part_idx, sub_frac=0.0):
+            # 片段进度 + 片段内 hubert/检索/net_g 子进度。
+            overall = (float(part_idx) + float(sub_frac)) / float(n_parts)
+            _prog("infer", max(0.0, min(1.0, overall)))
+
+        _infer_prog(0, 0.0)
         for t in opt_ts:
             t = t // self.window * self.window
+            def _seg_prog(sub, _pi=part_i):
+                _infer_prog(_pi, sub)
+
             if if_f0 == 1:
                 audio_opt.append(
                     self.vc(
@@ -402,6 +458,7 @@ class Pipeline(object):
                         index_rate,
                         version,
                         protect,
+                        progress_cb=_seg_prog if progress_cb else None,
                     )[self.t_pad_tgt : -self.t_pad_tgt]
                 )
             else:
@@ -419,11 +476,16 @@ class Pipeline(object):
                         index_rate,
                         version,
                         protect,
+                        progress_cb=_seg_prog if progress_cb else None,
                     )[self.t_pad_tgt : -self.t_pad_tgt]
                 )
             s = t
             part_i += 1
-            _prog("infer", part_i / n_parts)
+            _infer_prog(part_i, 0.0)
+
+        def _tail_prog(sub, _pi=part_i):
+            _infer_prog(_pi, sub)
+
         if if_f0 == 1:
             audio_opt.append(
                 self.vc(
@@ -439,6 +501,7 @@ class Pipeline(object):
                     index_rate,
                     version,
                     protect,
+                    progress_cb=_tail_prog if progress_cb else None,
                 )[self.t_pad_tgt : -self.t_pad_tgt]
             )
         else:
@@ -456,6 +519,7 @@ class Pipeline(object):
                     index_rate,
                     version,
                     protect,
+                    progress_cb=_tail_prog if progress_cb else None,
                 )[self.t_pad_tgt : -self.t_pad_tgt]
             )
         _prog("infer", 1.0)

@@ -214,6 +214,7 @@ class StsProgress:
     def _push(self, done_files: int, pct: float, message: str, step: str = "") -> None:
         pct_i = int(max(0, min(100, round(pct))))
         # 同百分比但文案变了（子步骤切换）必须推；文案和百分比都没变则节流。
+        # 推理/音高分块可能每块只动 1%，允许同 step 下 pct 连涨。
         if pct_i == self._last_pct and message == self._last_msg:
             return
         self._last_pct = pct_i
@@ -268,7 +269,11 @@ class StsProgress:
         elif stage == "hubert":
             msg = f"{prefix}加载特征模型（hubert）…"
         elif stage == "f0":
-            msg = f"{prefix}提取音高（{self.f0method}）…"
+            # rmvpe 会按 mel 分块回调 frac，这里把百分比写进文案。
+            if frac <= 0.02:
+                msg = f"{prefix}提取音高（{self.f0method}）…"
+            else:
+                msg = f"{prefix}提取音高（{self.f0method}）… {int(frac * 100)}%"
         elif stage == "infer":
             if frac <= 0.0:
                 msg = f"{prefix}音色转换中…"

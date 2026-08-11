@@ -140,6 +140,37 @@ class StsProgressTests(unittest.TestCase):
         self.assertGreaterEqual(second_start["pct"], 50)
         self.assertLess(second_start["pct"], 60)
 
+    def test_f0_and_infer_report_percent_in_message(self):
+        events = []
+
+        def capture(**kw):
+            events.append(kw)
+
+        import tools.sts_worker as sw
+
+        old = sw.emit
+        sw.emit = capture
+        try:
+            p = StsProgress(1, "rmvpe")
+            p.load("model", 1.0)
+            p.begin_file(1, "song.wav")
+            p.stage("f0", 0.0)
+            p.stage("f0", 0.33)
+            p.stage("f0", 0.67)
+            p.stage("infer", 0.0)
+            p.stage("infer", 0.4)
+            p.stage("infer", 0.9)
+        finally:
+            sw.emit = old
+
+        f0 = [e for e in events if e.get("step") == "f0"]
+        inf = [e for e in events if e.get("step") == "infer"]
+        self.assertTrue(any("33%" in e["message"] for e in f0))
+        self.assertTrue(any("40%" in e["message"] for e in inf))
+        # 同阶段百分比应往上走
+        f0_pcts = [e["pct"] for e in f0]
+        self.assertEqual(f0_pcts, sorted(f0_pcts))
+
 
 if __name__ == "__main__":
     unittest.main()

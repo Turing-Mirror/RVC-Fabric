@@ -17,6 +17,7 @@ from tools.sts_worker import (  # noqa: E402
     _ensure_rvc_env,
     _friendly_error,
     collect_inputs,
+    file_weights,
 )
 
 
@@ -135,10 +136,55 @@ class StsProgressTests(unittest.TestCase):
         finally:
             sw.emit = old
 
-        second_start = next(e for e in events if e.get("step") == "file_start" and "b.wav" in e["message"])
-        # 第二个文件起点应在 50% 附近（10% 加载 + 45% 第一个文件）
+        second_start = next(
+            e for e in events if e.get("step") == "file_start" and "b.wav" in e["message"]
+        )
+        # 等权两文件：加载 12% + 第一个文件约 44% → 第二文件起点约 56%
         self.assertGreaterEqual(second_start["pct"], 50)
-        self.assertLess(second_start["pct"], 60)
+        self.assertLess(second_start["pct"], 65)
+        self.assertEqual(second_start.get("ok"), 1)
+        self.assertEqual(second_start.get("current"), 2)
+
+    def test_size_weighted_big_file_gets_more_span(self):
+        events = []
+
+        def capture(**kw):
+            events.append(kw)
+
+        import tools.sts_worker as sw
+
+        old = sw.emit
+        sw.emit = capture
+        try:
+            # 小文件 1、大文件 9 → 大文件约占文件段 90%
+            p = StsProgress(2, "rmvpe", weights=[1, 9])
+            p.begin_file(1, "tiny.wav")
+            p.file_done(1, "tiny.wav", ok=True)
+            p.begin_file(2, "huge.wav")
+            p.file_done(2, "huge.wav", ok=True)
+        finally:
+            sw.emit = old
+
+        tiny_done = next(e for e in events if e.get("step") == "file_done" and "tiny" in e["message"])
+        huge_start = next(
+            e for e in events if e.get("step") == "file_start" and "huge" in e["message"]
+        )
+        # tiny 结束后 pct 应明显小于半程（加载 12 + 0.1*88 ≈ 21）
+        self.assertLess(tiny_done["pct"], 30)
+        self.assertEqual(huge_start["pct"], tiny_done["pct"])
+        self.assertEqual(events[-1]["pct"], 100)
+        self.assertEqual(events[-1].get("ok"), 2)
+
+    def test_file_weights_from_sizes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            a = root / "a.wav"
+            b = root / "b.wav"
+            a.write_bytes(b"x" * 100)
+            b.write_bytes(b"y" * 900)
+            w = file_weights([a, b])
+            self.assertEqual(w[0], 100.0)
+            self.assertEqual(w[1], 900.0)
 
     def test_f0_and_infer_report_percent_in_message(self):
         events = []

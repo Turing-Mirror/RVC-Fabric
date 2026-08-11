@@ -37,9 +37,10 @@ pub fn cancel() {
 }
 
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
-    emit_full(app, phase, done, total, message, None, None);
+    emit_full(app, phase, done, total, message, None, None, None, None, None, None);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_full(
     app: &AppHandle,
     phase: &str,
@@ -48,6 +49,10 @@ fn emit_full(
     message: &str,
     pct: Option<u64>,
     step: Option<&str>,
+    current: Option<u64>,
+    ok: Option<u64>,
+    skip: Option<u64>,
+    file: Option<&str>,
 ) {
     let mut body = json!({
         "phase": phase,
@@ -61,6 +66,20 @@ fn emit_full(
     if let Some(s) = step {
         if !s.is_empty() {
             body["step"] = json!(s);
+        }
+    }
+    if let Some(c) = current {
+        body["current"] = json!(c);
+    }
+    if let Some(o) = ok {
+        body["ok"] = json!(o);
+    }
+    if let Some(s) = skip {
+        body["skip"] = json!(s);
+    }
+    if let Some(f) = file {
+        if !f.is_empty() {
+            body["file"] = json!(f);
         }
     }
     let _ = app.emit("sts-progress", body);
@@ -283,6 +302,10 @@ fn run_inner(
             .get("pct")
             .and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)));
         let step = v.get("step").and_then(|x| x.as_str());
+        let current = v.get("current").and_then(|x| x.as_u64());
+        let ok_n = v.get("ok").and_then(|x| x.as_u64());
+        let skip_n = v.get("skip").and_then(|x| x.as_u64());
+        let file = v.get("file").and_then(|x| x.as_str());
         match phase {
             "start" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
@@ -295,6 +318,10 @@ fn run_inner(
                     if msg.is_empty() { &fallback } else { msg },
                     pct.or(Some(0)),
                     step,
+                    current.or(Some(0)),
+                    ok_n.or(Some(0)),
+                    skip_n.or(Some(0)),
+                    file,
                 );
             }
             "run" => {
@@ -309,6 +336,10 @@ fn run_inner(
                     if msg.is_empty() { &fallback } else { msg },
                     pct,
                     step,
+                    current,
+                    ok_n,
+                    skip_n,
+                    file,
                 );
             }
             // 单个文件被跳过。照样往界面上推，用户当场就能看到是哪个坏了，
@@ -316,7 +347,23 @@ fn run_inner(
             "skip" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
-                emit_full(app, "skip", done, total, msg, pct, step);
+                // 从 message 里尽量抠出文件名（worker 也会带 file 字段）。
+                if let Some(arr_item) = v.get("name").and_then(|x| x.as_str()) {
+                    skipped.push(json!({
+                        "file": v.get("file").and_then(|x| x.as_str()).unwrap_or(arr_item),
+                        "name": arr_item,
+                        "reason": msg,
+                    }));
+                } else if let Some(fname) = file {
+                    skipped.push(json!({
+                        "file": fname,
+                        "name": fname,
+                        "reason": msg,
+                    }));
+                }
+                emit_full(
+                    app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
+                );
             }
             "done" => {
                 if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
@@ -326,6 +373,7 @@ fn run_inner(
                         .collect();
                 }
                 if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
+                    // 终态清单为准；过程中 skip 事件可能已塞过。
                     skipped = arr.clone();
                 }
                 // 推一条 100% 完成，避免界面停在最后一个文件的中间百分比。
@@ -342,6 +390,10 @@ fn run_inner(
                     &done_msg,
                     Some(100),
                     Some("done"),
+                    Some(total),
+                    ok_n.or(Some(files.len() as u64)),
+                    skip_n.or(Some(skipped.len() as u64)),
+                    None,
                 );
             }
             "error" => fail = Some(msg.to_string()),
@@ -364,6 +416,10 @@ fn run_inner(
         &crate::i18n::t("s.e43ef3d56a"),
         Some(100),
         Some("done"),
+        Some(total),
+        Some(files.len() as u64),
+        Some(skipped.len() as u64),
+        None,
     );
     let stats = crate::paths::clean_temps(root);
     crate::paths::log_clean_stats(&crate::i18n::t("s.e246e3bafa"), root, &stats);

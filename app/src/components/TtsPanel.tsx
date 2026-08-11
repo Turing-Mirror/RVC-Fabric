@@ -45,6 +45,12 @@ type Progress = {
   /** 整次任务 0–100 细粒度进度（模型加载 + 文件内分步）；缺省时回退 done/total */
   pct?: number;
   step?: string;
+  /** 当前文件序号（1-based），批量时用 */
+  current?: number;
+  /** 已成功 / 已跳过 计数，批量实时看板 */
+  ok?: number;
+  skip?: number;
+  file?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -101,6 +107,14 @@ function formatElapsed(sec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** 根据已用时间和整体 pct 估剩余时间；pct 太低时不报，避免乱跳。 */
+function formatEta(elapsedSec: number, pct: number): string {
+  if (elapsedSec < 3 || pct < 5 || pct >= 100) return "";
+  const remain = Math.round((elapsedSec * (100 - pct)) / pct);
+  if (remain < 1) return "";
+  return `剩余约 ${formatElapsed(remain)}`;
+}
+
 function StsSection() {
   const [st, setSt] = useState<StsStatus>({});
   const [input, setInput] = useState("");
@@ -111,7 +125,7 @@ function StsSection() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
-  // 到底是哪几个没转出来。
+  // 到底是哪几个没转出来。过程中 skip 事件也会往这里塞，不用等整批结束。
   const [skipped, setSkipped] = useState<Skipped[]>([]);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -135,8 +149,23 @@ function StsSection() {
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<Progress>("sts-progress", (ev) => {
-      setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message);
+      const p = ev.payload;
+      setProg(p);
+      if (p.phase === "error") setMsg(p.message);
+      // 批量：跳过事件当场入列，方便边跑边看哪个坏了。
+      if (p.phase === "skip" && p.file) {
+        setSkipped((prev) => {
+          if (prev.some((x) => x.name === p.file || x.file === p.file)) return prev;
+          return [
+            ...prev,
+            {
+              file: p.file || p.message,
+              name: p.file || "?",
+              reason: p.message,
+            },
+          ];
+        });
+      }
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;
@@ -201,6 +230,7 @@ function StsSection() {
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
+      // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
       // 有跳过的就必须在总结里说出来，不然「完成 8 个文件」会被当成全转完了。
       setMsg(
@@ -229,10 +259,17 @@ function StsSection() {
       : prog?.total
         ? Math.round((prog.done / prog.total) * 100)
         : 0;
-  const fileHint =
-    prog && prog.total > 1
-      ? `${Math.min(prog.done + (prog.phase === "run" ? 1 : 0), prog.total)}/${prog.total}`
-      : "";
+  const multi = !!(prog && prog.total > 1);
+  const current =
+    prog?.current && prog.current > 0
+      ? prog.current
+      : prog
+        ? Math.min(prog.done + (prog.phase === "run" ? 1 : 0), prog.total)
+        : 0;
+  const fileHint = multi ? `${current}/${prog!.total}` : "";
+  const okN = prog?.ok ?? 0;
+  const skipN = prog?.skip ?? skipped.length;
+  const eta = running ? formatEta(elapsed, pct) : "";
 
   return (
     <>
@@ -337,12 +374,18 @@ function StsSection() {
             <p className="m-0 min-w-0 flex-1 break-all">
               {prog?.message || t("s.090840132b")}
             </p>
-            <p className="m-0 shrink-0 tabular-nums">
+            <p className="m-0 shrink-0 tabular-nums text-right">
               {fileHint ? `${fileHint} · ` : ""}
               {`${pct}%`}
               {running ? ` · ${formatElapsed(elapsed)}` : ""}
+              {eta ? ` · ${eta}` : ""}
             </p>
           </div>
+          {multi && running ? (
+            <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)] tabular-nums">
+              {`成功 ${okN} · 跳过 ${skipN} · 剩余 ${Math.max(0, (prog?.total ?? 0) - okN - skipN)}`}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

@@ -27,12 +27,15 @@
 stdout 每行一条 JSON（与 separate_worker 同形）::
 
     {"phase":"start","total":N,"message":"..."}
-    {"phase":"run","done":i,"total":N,"pct":0-100,"step":"...","message":"..."}
-    {"phase":"done","files":[...]}
+    {"phase":"run","done":i,"total":N,"pct":0-100,"step":"...","current":k,
+     "ok":a,"skip":b,"file":"name.wav","message":"..."}
+    {"phase":"skip","done":i,"total":N,"pct":..,"current":k,"ok":a,"skip":b,"message":"..."}
+    {"phase":"done","files":[...],"skipped":[...]}
     {"phase":"error","message":"..."}
 
 ``pct`` 是整次任务 0–100 的细粒度进度（含模型加载与单文件内分步），
-界面优先用它画条；``done/total`` 仍是文件级计数，批量时对照用。
+多文件时按文件体积加权，避免 10 秒小文件和 5 分钟长歌各占 1/N。
+``done/total`` 仍是文件级计数；``current/ok/skip`` 供批量界面实时看板。
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -185,15 +189,28 @@ def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     return files
 
 
+def file_weights(paths: list[Path]) -> list[float]:
+    """多文件进度按体积加权。读时长要解码，批量扫目录太贵；体积够用。"""
+    out: list[float] = []
+    for p in paths:
+        try:
+            out.append(float(max(1, p.stat().st_size)))
+        except OSError:
+            out.append(1.0)
+    return out
+
+
 class StsProgress:
     """把「加载模型 + 每个文件的子步骤」映射成 0–100 的整体进度。
 
     单文件时 done/total 只有 0→1，转换可能跑几分钟界面却一直 0%——所以必须
-    再发 ``pct`` 和分步 ``message``，用户才能知道卡在读音频 / 音高 / 推理哪一步。
+    再发 ``pct`` 和分步 ``message``。
+
+    多文件时按体积加权：10 秒小文件不该和 5 分钟长歌各占 1/N 进度条。
     """
 
-    # 加载模型占前 10%，其余 90% 均分给每个文件。
-    LOAD_END = 10.0
+    # 加载/预热占前 12%，其余 88% 按文件权重分。
+    LOAD_END = 12.0
     # 单文件内各阶段在文件份额中的起止（0..1）。
     STAGE_SPAN = {
         "read": (0.00, 0.08),
@@ -202,42 +219,110 @@ class StsProgress:
         "infer": (0.48, 0.92),
         "write": (0.92, 1.00),
     }
+    # 分块进度节流：同 step 下至少隔这么久，或 pct 至少涨 1。
+    _MIN_INTERVAL = 0.12
 
-    def __init__(self, total_files: int, f0method: str = "rmvpe"):
+    def __init__(
+        self,
+        total_files: int,
+        f0method: str = "rmvpe",
+        weights: list[float] | None = None,
+    ):
         self.total = max(1, int(total_files))
         self.f0method = (f0method or "rmvpe").strip() or "rmvpe"
+        if weights and len(weights) == self.total:
+            self._weights = [max(1.0, float(w)) for w in weights]
+        else:
+            self._weights = [1.0] * self.total
+        wsum = sum(self._weights) or float(self.total)
+        # cum[i] = 前 i 个文件权重占比（0..1），cum[total]=1
+        self._cum: list[float] = [0.0]
+        acc = 0.0
+        for w in self._weights:
+            acc += w
+            self._cum.append(acc / wsum)
+
         self._last_pct = -1
         self._last_msg = ""
+        self._last_step = ""
+        self._last_emit_t = 0.0
         self._file_i = 0  # 0-based，当前正在处理的文件
         self._file_name = ""
+        self.ok_count = 0
+        self.skip_count = 0
 
-    def _push(self, done_files: int, pct: float, message: str, step: str = "") -> None:
+    def _push(
+        self,
+        done_files: int,
+        pct: float,
+        message: str,
+        step: str = "",
+        *,
+        force: bool = False,
+        phase: str = "run",
+    ) -> None:
         pct_i = int(max(0, min(100, round(pct))))
-        # 同百分比但文案变了（子步骤切换）必须推；文案和百分比都没变则节流。
-        # 推理/音高分块可能每块只动 1%，允许同 step 下 pct 连涨。
-        if pct_i == self._last_pct and message == self._last_msg:
+        now = time.monotonic()
+        boundary = step in (
+            "file_start",
+            "file_done",
+            "file_skip",
+            "load_config",
+            "load_model",
+            "load_hubert",
+            "load_rmvpe",
+            "write",
+        ) or step.startswith("load_")
+        if not force and not boundary:
+            if pct_i == self._last_pct and message == self._last_msg:
+                return
+            # 同一步骤内节流，批量长任务时少打爆管道；pct 涨了仍放行。
+            if (
+                step == self._last_step
+                and (now - self._last_emit_t) < self._MIN_INTERVAL
+                and pct_i <= self._last_pct
+            ):
+                return
+            if (
+                step == self._last_step
+                and (now - self._last_emit_t) < self._MIN_INTERVAL
+                and pct_i == self._last_pct
+            ):
+                return
+        elif pct_i == self._last_pct and message == self._last_msg and not force:
             return
+
         self._last_pct = pct_i
         self._last_msg = message
+        self._last_step = step
+        self._last_emit_t = now
+        current = self._file_i + 1 if self._file_name else 0
         emit(
-            phase="run",
+            phase=phase,
             done=max(0, int(done_files)),
             total=self.total,
             pct=pct_i,
             step=step,
+            current=current,
+            ok=self.ok_count,
+            skip=self.skip_count,
+            file=self._file_name or "",
             message=message,
         )
 
     def load(self, phase: str, frac: float = 0.0) -> None:
-        """phase: config | model；frac 0..1。"""
+        """phase: config | model | hubert | rmvpe；frac 0..1。"""
         frac = max(0.0, min(1.0, float(frac)))
-        if phase == "config":
-            pct = self.LOAD_END * 0.35 * frac
-            msg = "正在初始化引擎…"
-        else:
-            pct = self.LOAD_END * (0.35 + 0.65 * frac)
-            msg = "正在加载音色模型…"
-        self._push(0, pct, msg, step=f"load_{phase}")
+        # 预热段：config 20% / model 40% / hubert 20% / rmvpe 20% of LOAD_END
+        bands = {
+            "config": (0.00, 0.20, "正在初始化引擎…"),
+            "model": (0.20, 0.55, "正在加载音色模型…"),
+            "hubert": (0.55, 0.78, "正在预热特征模型（hubert）…"),
+            "rmvpe": (0.78, 1.00, f"正在预热音高模型（{self.f0method}）…"),
+        }
+        a, b, msg = bands.get(phase, (0.0, 1.0, "准备中…"))
+        pct = self.LOAD_END * (a + (b - a) * frac)
+        self._push(0, pct, msg, step=f"load_{phase}", force=True)
 
     def begin_file(self, index: int, name: str) -> None:
         """index 为 1-based 序号。"""
@@ -247,13 +332,17 @@ class StsProgress:
         if self.total == 1:
             msg = f"开始转换 {name}"
         else:
-            msg = f"开始转换 {name}（{index}/{self.total}）"
-        self._push(self._file_i, start, msg, step="file_start")
+            msg = (
+                f"[{index}/{self.total}] {name} · 开始"
+                f"（已完成 {self.ok_count}，跳过 {self.skip_count}）"
+            )
+        self._push(self._file_i, start, msg, step="file_start", force=True)
 
     def _file_bounds(self, file_i: int) -> tuple[float, float]:
+        i = max(0, min(int(file_i), self.total - 1))
         span = 100.0 - self.LOAD_END
-        start = self.LOAD_END + span * file_i / self.total
-        end = self.LOAD_END + span * (file_i + 1) / self.total
+        start = self.LOAD_END + span * self._cum[i]
+        end = self.LOAD_END + span * self._cum[i + 1]
         return start, end
 
     def stage(self, stage: str, frac: float = 0.0) -> None:
@@ -263,13 +352,15 @@ class StsProgress:
         start, end = self._file_bounds(self._file_i)
         pct = start + (end - start) * (a + (b - a) * frac)
         name = self._file_name or "音频"
-        prefix = f"{name} · " if self.total > 1 else ""
+        if self.total > 1:
+            prefix = f"[{self._file_i + 1}/{self.total}] {name} · "
+        else:
+            prefix = ""
         if stage == "read":
             msg = f"{prefix}读取音频…"
         elif stage == "hubert":
-            msg = f"{prefix}加载特征模型（hubert）…"
+            msg = f"{prefix}提取特征（hubert）…"
         elif stage == "f0":
-            # rmvpe 会按 mel 分块回调 frac，这里把百分比写进文案。
             if frac <= 0.02:
                 msg = f"{prefix}提取音高（{self.f0method}）…"
             else:
@@ -288,22 +379,65 @@ class StsProgress:
     def file_done(self, index: int, name: str, ok: bool = True) -> None:
         _, end = self._file_bounds(max(0, int(index) - 1))
         if ok:
+            self.ok_count += 1
             msg = (
                 f"完成 {name}"
                 if self.total == 1
-                else f"完成 {name}（{index}/{self.total}）"
+                else f"[{index}/{self.total}] 完成 {name}（成功 {self.ok_count}，跳过 {self.skip_count}）"
             )
+            self._push(index, end, msg, step="file_done", force=True)
         else:
+            self.skip_count += 1
             msg = (
                 f"跳过 {name}"
                 if self.total == 1
-                else f"跳过 {name}（{index}/{self.total}）"
+                else f"[{index}/{self.total}] 跳过 {name}（成功 {self.ok_count}，跳过 {self.skip_count}）"
             )
-        self._push(index, end, msg, step="file_done" if ok else "file_skip")
+            self._push(index, end, msg, step="file_skip", force=True, phase="run")
 
     @property
     def last_pct(self) -> int:
         return self._last_pct if self._last_pct >= 0 else 0
+
+
+def _preload_side_models(vc, config, f0method: str, prog: StsProgress) -> None:
+    """批量前一次性拉起 hubert / rmvpe，避免摊在第一个文件里看不出预热。"""
+    try:
+        if getattr(vc, "hubert_model", None) is None:
+            prog.load("hubert", 0.0)
+            from infer.modules.vc.utils import load_hubert
+
+            vc.hubert_model = load_hubert(config)
+            prog.load("hubert", 1.0)
+        else:
+            prog.load("hubert", 1.0)
+    except Exception:
+        # 预热失败不挡主流程；真正转换时还会再试并给出错误。
+        traceback.print_exc()
+        prog.load("hubert", 1.0)
+
+    if f0method.lower() != "rmvpe":
+        return
+    try:
+        pipe = getattr(vc, "pipeline", None)
+        if pipe is None:
+            return
+        if hasattr(pipe, "model_rmvpe"):
+            prog.load("rmvpe", 1.0)
+            return
+        prog.load("rmvpe", 0.0)
+        from infer.lib.rmvpe import RMVPE
+
+        root = os.environ.get("rmvpe_root") or str(ROOT / "assets" / "rmvpe")
+        pipe.model_rmvpe = RMVPE(
+            os.path.join(root, "rmvpe.pt"),
+            is_half=pipe.is_half,
+            device=pipe.device,
+        )
+        prog.load("rmvpe", 1.0)
+    except Exception:
+        traceback.print_exc()
+        prog.load("rmvpe", 1.0)
 
 
 def main(argv: list[str]) -> int:
@@ -343,7 +477,8 @@ def main(argv: list[str]) -> int:
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     total = len(files)
-    prog = StsProgress(total, f0method)
+    weights = file_weights([p for p, _ in files])
+    prog = StsProgress(total, f0method, weights=weights)
 
     _ensure_rvc_env()
     miss = _preflight_engine(f0method)
@@ -351,7 +486,11 @@ def main(argv: list[str]) -> int:
         emit(phase="error", message=miss)
         return 1
 
-    emit(phase="start", total=total, pct=0, message=f"共 {total} 个文件，准备开始")
+    if total == 1:
+        start_msg = "共 1 个文件，准备开始"
+    else:
+        start_msg = f"共 {total} 个文件（按体积加权进度），准备开始"
+    emit(phase="start", total=total, pct=0, current=0, ok=0, skip=0, message=start_msg)
     _cuda_empty_cache()
 
     try:
@@ -370,6 +509,8 @@ def main(argv: list[str]) -> int:
         prog.load("model", 0.0)
         vc.get_vc(model)
         prog.load("model", 1.0)
+        # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
+        _preload_side_models(vc, config, f0method, prog)
         _cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
@@ -378,6 +519,9 @@ def main(argv: list[str]) -> int:
 
     out_files: list[str] = []
     skipped: list[dict] = []
+    index_path = index if index and Path(index).is_file() else None
+    # 每文件 empty_cache 会拖慢批量；每 N 个或 OOM 后再清。
+    cache_every = 1 if total == 1 else 4
     for i, (src, rel) in enumerate(files, start=1):
         prog.begin_file(i, src.name)
 
@@ -387,6 +531,7 @@ def main(argv: list[str]) -> int:
             prog._file_name = _name
             prog.stage(stage, frac)
 
+        hit_oom = False
         try:
             # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
             sub = Path(out_dir) / rel.parent
@@ -405,7 +550,7 @@ def main(argv: list[str]) -> int:
                 pitch,
                 None,
                 f0method,
-                index if index and Path(index).is_file() else None,
+                index_path,
                 None,
                 index_rate,
                 filter_radius,
@@ -427,6 +572,7 @@ def main(argv: list[str]) -> int:
             # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
             traceback.print_exc()
             reason = _friendly_error(e)
+            hit_oom = "显存不够" in reason or "out of memory" in str(e).lower()
             skipped.append({"file": str(src), "name": src.name, "reason": reason})
             prog.file_done(i, src.name, ok=False)
             emit(
@@ -434,10 +580,16 @@ def main(argv: list[str]) -> int:
                 done=i,
                 total=total,
                 pct=prog.last_pct,
+                current=i,
+                ok=prog.ok_count,
+                skip=prog.skip_count,
+                file=src.name,
                 message=f"跳过 {src.name}：{reason}",
             )
         finally:
-            _cuda_empty_cache()
+            # 单文件 / 每 cache_every 个 / OOM / 最后一个：清显存碎片。
+            if hit_oom or total == 1 or i % cache_every == 0 or i == total:
+                _cuda_empty_cache()
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。
@@ -451,6 +603,9 @@ def main(argv: list[str]) -> int:
         skipped=skipped,
         total=total,
         pct=100,
+        current=total,
+        ok=len(out_files),
+        skip=len(skipped),
         message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
     )
     return 0

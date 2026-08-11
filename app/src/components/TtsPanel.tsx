@@ -22,6 +22,7 @@ type StsStatus = {
   f0method?: string;
   index_rate?: number;
   out_dir?: string;
+  worker_alive?: boolean;
   busy?: boolean;
 };
 
@@ -149,6 +150,14 @@ function StsSection() {
 
   const start = async () => {
     if (runningRef.current) return;
+    // 离线转换要独占显存，后端会先杀掉实时变声。那是用户正在用的东西，不能
+    // 不打招呼就停——现问一次状态，别拿进面板时的旧值判断。
+    try {
+      const now = await invoke<StsStatus>("sts_status");
+      if (now.worker_alive && !window.confirm(t("s.stsStopWorkerConfirm"))) return;
+    } catch {
+      // 状态问不到就照原样往下走，后端还会再判一次。
+    }
     setMsg("");
     setProg(null);
     setSkipped([]);

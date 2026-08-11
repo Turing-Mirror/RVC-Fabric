@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "Le paquet extrait est incomplet. Téléchargez-le à nouveau.",
     "vbcableWindowsOnly": "La carte son virtuelle ne peut être installée que sous Windows.",
     "stsDoneSkipped": "{v0} fichier(s) converti(s), {v1} ignoré(s) → {v2}",
-    "stsSkippedTitle": "Ces {v0} fichier(s) n'ont pas été convertis :"
+    "stsSkippedTitle": "Ces {v0} fichier(s) n'ont pas été convertis :",
+    "stsFreeVram": "Arrêt du changeur de voix en temps réel pour libérer la VRAM…",
+    "stsStopWorkerConfirm": "La conversion nécessite tout le GPU : le changeur de voix en temps réel en cours va être arrêté. Continuer ?"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

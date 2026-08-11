@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "압축을 푼 설치 패키지가 불완전합니다. 다시 내려받으세요.",
     "vbcableWindowsOnly": "가상 사운드카드는 Windows에서만 설치할 수 있습니다.",
     "stsDoneSkipped": "{v0}개 변환 완료, {v1}개 건너뜀 → {v2}",
-    "stsSkippedTitle": "다음 {v0}개 파일은 변환되지 않았습니다:"
+    "stsSkippedTitle": "다음 {v0}개 파일은 변환되지 않았습니다:",
+    "stsFreeVram": "VRAM 확보를 위해 실시간 음성 변조를 중지하는 중…",
+    "stsStopWorkerConfirm": "변환에는 GPU 전체가 필요하므로 실행 중인 실시간 음성 변조를 먼저 중지합니다. 계속할까요?"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

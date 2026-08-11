@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "The extracted package is incomplete. Please download it again.",
     "vbcableWindowsOnly": "The virtual sound card can only be installed on Windows.",
     "stsDoneSkipped": "Converted {v0} file(s), skipped {v1} → {v2}",
-    "stsSkippedTitle": "These {v0} file(s) were not converted:"
+    "stsSkippedTitle": "These {v0} file(s) were not converted:",
+    "stsFreeVram": "Stopping the realtime voice changer to free VRAM…",
+    "stsStopWorkerConfirm": "Conversion needs the whole GPU, so the running realtime voice changer will be stopped first. Continue?"
   },
   "extras": {
     "engineTitle": "Engine resources",

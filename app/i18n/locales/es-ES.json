@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "El paquete extraído está incompleto. Descárgalo de nuevo.",
     "vbcableWindowsOnly": "La tarjeta de sonido virtual solo se puede instalar en Windows.",
     "stsDoneSkipped": "{v0} archivo(s) convertido(s), {v1} omitido(s) → {v2}",
-    "stsSkippedTitle": "Estos {v0} archivo(s) no se convirtieron:"
+    "stsSkippedTitle": "Estos {v0} archivo(s) no se convirtieron:",
+    "stsFreeVram": "Deteniendo el cambiador de voz en tiempo real para liberar VRAM…",
+    "stsStopWorkerConfirm": "La conversión necesita toda la GPU, por lo que se detendrá el cambiador de voz en tiempo real en ejecución. ¿Continuar?"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

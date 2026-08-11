@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "安裝包解壓後不完整，請重新下載",
     "vbcableWindowsOnly": "只有 Windows 能安裝虛擬音效卡",
     "stsDoneSkipped": "完成 {v0} 個檔案，略過 {v1} 個 → {v2}",
-    "stsSkippedTitle": "以下 {v0} 個檔案沒有轉出來："
+    "stsSkippedTitle": "以下 {v0} 個檔案沒有轉出來：",
+    "stsFreeVram": "正在停止即時變聲以釋放顯示記憶體…",
+    "stsStopWorkerConfirm": "轉換需要獨佔顯示記憶體，將先停止正在執行的即時變聲。要繼續嗎？"
   },
   "extras": {
     "engineTitle": "引擎資源",

@@ -1300,7 +1300,9 @@
     "vbcablePackBroken": "展開したパッケージが不完全です。もう一度ダウンロードしてください。",
     "vbcableWindowsOnly": "仮想サウンドカードは Windows でのみインストールできます。",
     "stsDoneSkipped": "{v0} 件を変換、{v1} 件をスキップ → {v2}",
-    "stsSkippedTitle": "次の {v0} 件は変換できませんでした："
+    "stsSkippedTitle": "次の {v0} 件は変換できませんでした：",
+    "stsFreeVram": "VRAM を解放するためリアルタイム変声を停止しています…",
+    "stsStopWorkerConfirm": "変換には GPU を占有する必要があるため、実行中のリアルタイム変声を先に停止します。続行しますか？"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

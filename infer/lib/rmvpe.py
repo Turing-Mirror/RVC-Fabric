@@ -583,8 +583,18 @@ class RMVPE:
 
         Long clips used to go through the UNet in one shot. On low-VRAM cards
         (e.g. GTX 1060 3GB, forced fp32) that single forward can try to allocate
-        2+ GiB of activations and die with CUDA OOM. Chunk along time; each
-        chunk is independent frame-wise so boundaries need no overlap.
+        2+ GiB of activations and die with CUDA OOM, so chunk along time.
+
+        Chunks are NOT frame-independent, so they must overlap. `E2E.fc` starts
+        with a bidirectional GRU over time: cut the tape and the forward pass
+        restarts from a zeroed hidden state while the backward pass loses its
+        future context, and the UNet convolutions see zero padding instead of
+        the real neighbouring frames. Splitting on a bare boundary therefore
+        puts an f0 glitch every chunk — roughly one every 10 s of audio, which
+        is audible as periodic pitch wobble. Each chunk is fed CONTEXT extra
+        frames of real audio on both sides and only its middle is kept, so the
+        GRU has warmed up and the convolutions have real neighbours by the time
+        the kept region starts.
         """
         with torch.no_grad():
             n_frames = mel.shape[-1]
@@ -594,28 +604,30 @@ class RMVPE:
             # 1024 mel frames ≈ 10.24 s @ hop=160 / 16 kHz. Keeps UNet peak
             # well under 1 GiB in fp32; short clips keep the single-shot path.
             max_chunk = 1024
+            # 128 frames ≈ 1.28 s of warm-up each side — well past the point a
+            # GRU hidden state stops depending on where it started. Multiple of
+            # 32 so the context never breaks the UNet's stride alignment.
+            context = 128
             total = mel.shape[-1]
             if total <= max_chunk:
                 hidden = self._mel2hidden_chunk(mel)
             else:
                 parts = []
                 for start in range(0, total, max_chunk):
-                    # Align each chunk end up to 32 frames so the CNN downsamples cleanly.
                     end = min(start + max_chunk, total)
-                    aligned = 32 * ((end - start - 1) // 32 + 1)
-                    piece = mel[..., start : start + aligned]
+                    lo = max(0, start - context)
+                    hi = min(total, end + context)
+                    piece = mel[..., lo:hi]
+                    # total, max_chunk and context are all multiples of 32, so
+                    # this only ever fires if one of them is retuned.
+                    aligned = 32 * ((piece.shape[-1] - 1) // 32 + 1)
                     if piece.shape[-1] < aligned:
                         piece = F.pad(
                             piece, (0, aligned - piece.shape[-1]), mode="constant"
                         )
                     out = self._mel2hidden_chunk(piece)
-                    # Keep only the real frames that fell in [start, end).
-                    keep = end - start
-                    parts.append(out[:, :keep])
-                    # Free the just-finished chunk before the next allocates.
-                    if torch.cuda.is_available() and "cuda" in str(self.device):
-                        del out
-                        torch.cuda.empty_cache()
+                    # Drop the context margins; keep only [start, end).
+                    parts.append(out[:, start - lo : start - lo + (end - start)])
                 if parts and isinstance(parts[0], np.ndarray):
                     hidden = np.concatenate(parts, axis=1)
                 else:

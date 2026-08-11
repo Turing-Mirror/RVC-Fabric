@@ -79,6 +79,8 @@ pub fn status(root: &Path) -> Value {
         "f0method": cfg.get("f0method").and_then(|v| v.as_str()).unwrap_or("rmvpe"),
         "index_rate": cfg.get("index_rate").and_then(|v| v.as_f64()).unwrap_or(0.75),
         "out_dir": out_dir(root).to_string_lossy(),
+        // 实时变声是否还占着显存。面板拿它决定要不要先问一句再开转。
+        "worker_alive": crate::worker::is_worker_alive(root),
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
 }
@@ -172,13 +174,7 @@ fn run_inner(
     // 活着（尤其是 3GB 级小卡），两边一抢就是 CUDA OOM。训练路径同理——工具
     // 窗开跑就先腾出 GPU；用户之后再点「开启变声」即可。
     if crate::worker::is_worker_alive(root) {
-        emit(
-            app,
-            "run",
-            0,
-            1,
-            "正在停止实时变声以释放显存…",
-        );
+        emit(app, "run", 0, 1, &crate::i18n::t("s.stsFreeVram"));
         crate::worker::kill_known_workers(root);
         // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python 时
         // 偶发还能看见「reserved >> free」。

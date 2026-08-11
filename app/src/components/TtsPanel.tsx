@@ -42,6 +42,9 @@ type Progress = {
   done: number;
   total: number;
   message: string;
+  /** 整次任务 0–100 细粒度进度（模型加载 + 文件内分步）；缺省时回退 done/total */
+  pct?: number;
+  step?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -91,6 +94,13 @@ export function TtsPanel() {
 // 音频变声（Speech-to-Speech）
 // ---------------------------------------------------------------------------
 
+function formatElapsed(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function StsSection() {
   const [st, setSt] = useState<StsStatus>({});
   const [input, setInput] = useState("");
@@ -104,6 +114,7 @@ function StsSection() {
   // 到底是哪几个没转出来。
   const [skipped, setSkipped] = useState<Skipped[]>([]);
   const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -136,6 +147,19 @@ function StsSection() {
     };
   }, []);
 
+  // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
+  useEffect(() => {
+    if (!running) {
+      setElapsed(0);
+      return;
+    }
+    const t0 = Date.now();
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((Date.now() - t0) / 1000));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [running]);
+
   const blocked = !st.runtime_ready
     ? t("s.bc45fc14b1")
     : st.engine_core_ready === false
@@ -159,7 +183,7 @@ function StsSection() {
       // 状态问不到就照原样往下走，后端还会再判一次。
     }
     setMsg("");
-    setProg(null);
+    setProg({ phase: "start", done: 0, total: 1, pct: 0, message: t("s.090840132b") });
     setSkipped([]);
     runningRef.current = true;
     setRunning(true);
@@ -198,7 +222,17 @@ function StsSection() {
     }
   };
 
-  const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
+  // 优先用 worker 细粒度 pct；旧 worker 没有 pct 时回退文件计数。
+  const pct =
+    prog?.pct != null && Number.isFinite(prog.pct)
+      ? Math.max(0, Math.min(100, Math.round(Number(prog.pct))))
+      : prog?.total
+        ? Math.round((prog.done / prog.total) * 100)
+        : 0;
+  const fileHint =
+    prog && prog.total > 1
+      ? `${Math.min(prog.done + (prog.phase === "run" ? 1 : 0), prog.total)}/${prog.total}`
+      : "";
 
   return (
     <>
@@ -291,17 +325,24 @@ function StsSection() {
         </div>
       </div>
 
-      {prog ? (
+      {prog || running ? (
         <div className="mt-4">
-          <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
+          <div className="h-1.5 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
             <div
               className="h-full bg-[var(--accent)] transition-[width] duration-200"
-              style={{ width: `${pct}%` }}
+              style={{ width: `${running && pct < 2 ? 2 : pct}%` }}
             />
           </div>
-          <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
-            {prog.message} {prog.phase === "run" ? `${pct}%` : ""}
-          </p>
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12px] text-[var(--meta)]">
+            <p className="m-0 min-w-0 flex-1 break-all">
+              {prog?.message || t("s.090840132b")}
+            </p>
+            <p className="m-0 shrink-0 tabular-nums">
+              {fileHint ? `${fileHint} · ` : ""}
+              {`${pct}%`}
+              {running ? ` · ${formatElapsed(elapsed)}` : ""}
+            </p>
+          </div>
         </div>
       ) : null}
 

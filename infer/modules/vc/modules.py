@@ -153,19 +153,41 @@ class VC:
         resample_sr,
         rms_mix_rate,
         protect,
+        progress_cb=None,
     ):
+        """Convert one audio file.
+
+        progress_cb(stage, frac) is optional. stage is one of
+        ``read`` / ``hubert`` / ``f0`` / ``infer``; frac is 0..1 within that stage.
+        Used by the offline STS worker so the UI can show more than file count.
+        """
         if input_audio_path is None:
             return "You need to upload an audio", None
         f0_up_key = int(f0_up_key)
+
+        def _prog(stage, frac=0.0):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(stage, float(frac))
+            except Exception:
+                pass
+
         try:
+            _prog("read", 0.0)
             audio = load_audio(input_audio_path, 16000)
             audio_max = np.abs(audio).max() / 0.95
             if audio_max > 1:
                 audio /= audio_max
             times = [0, 0, 0]
+            _prog("read", 1.0)
 
             if self.hubert_model is None:
+                _prog("hubert", 0.0)
                 self.hubert_model = load_hubert(self.config)
+                _prog("hubert", 1.0)
+            else:
+                _prog("hubert", 1.0)
 
             if file_index:
                 file_index = (
@@ -200,6 +222,7 @@ class VC:
                 self.version,
                 protect,
                 f0_file,
+                progress_cb=progress_cb,
             )
             if self.tgt_sr != resample_sr >= 16000:
                 tgt_sr = resample_sr

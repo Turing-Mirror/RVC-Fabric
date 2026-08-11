@@ -26,10 +26,13 @@
 
 stdout 每行一条 JSON（与 separate_worker 同形）::
 
-    {"phase":"start","total":N}
-    {"phase":"run","done":i,"total":N,"message":"..."}
+    {"phase":"start","total":N,"message":"..."}
+    {"phase":"run","done":i,"total":N,"pct":0-100,"step":"...","message":"..."}
     {"phase":"done","files":[...]}
     {"phase":"error","message":"..."}
+
+``pct`` 是整次任务 0–100 的细粒度进度（含模型加载与单文件内分步），
+界面优先用它画条；``done/total`` 仍是文件级计数，批量时对照用。
 """
 
 from __future__ import annotations
@@ -182,6 +185,122 @@ def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     return files
 
 
+class StsProgress:
+    """把「加载模型 + 每个文件的子步骤」映射成 0–100 的整体进度。
+
+    单文件时 done/total 只有 0→1，转换可能跑几分钟界面却一直 0%——所以必须
+    再发 ``pct`` 和分步 ``message``，用户才能知道卡在读音频 / 音高 / 推理哪一步。
+    """
+
+    # 加载模型占前 10%，其余 90% 均分给每个文件。
+    LOAD_END = 10.0
+    # 单文件内各阶段在文件份额中的起止（0..1）。
+    STAGE_SPAN = {
+        "read": (0.00, 0.08),
+        "hubert": (0.08, 0.16),
+        "f0": (0.16, 0.48),
+        "infer": (0.48, 0.92),
+        "write": (0.92, 1.00),
+    }
+
+    def __init__(self, total_files: int, f0method: str = "rmvpe"):
+        self.total = max(1, int(total_files))
+        self.f0method = (f0method or "rmvpe").strip() or "rmvpe"
+        self._last_pct = -1
+        self._last_msg = ""
+        self._file_i = 0  # 0-based，当前正在处理的文件
+        self._file_name = ""
+
+    def _push(self, done_files: int, pct: float, message: str, step: str = "") -> None:
+        pct_i = int(max(0, min(100, round(pct))))
+        # 同百分比但文案变了（子步骤切换）必须推；文案和百分比都没变则节流。
+        if pct_i == self._last_pct and message == self._last_msg:
+            return
+        self._last_pct = pct_i
+        self._last_msg = message
+        emit(
+            phase="run",
+            done=max(0, int(done_files)),
+            total=self.total,
+            pct=pct_i,
+            step=step,
+            message=message,
+        )
+
+    def load(self, phase: str, frac: float = 0.0) -> None:
+        """phase: config | model；frac 0..1。"""
+        frac = max(0.0, min(1.0, float(frac)))
+        if phase == "config":
+            pct = self.LOAD_END * 0.35 * frac
+            msg = "正在初始化引擎…"
+        else:
+            pct = self.LOAD_END * (0.35 + 0.65 * frac)
+            msg = "正在加载音色模型…"
+        self._push(0, pct, msg, step=f"load_{phase}")
+
+    def begin_file(self, index: int, name: str) -> None:
+        """index 为 1-based 序号。"""
+        self._file_i = max(0, int(index) - 1)
+        self._file_name = name
+        start, _ = self._file_bounds(self._file_i)
+        if self.total == 1:
+            msg = f"开始转换 {name}"
+        else:
+            msg = f"开始转换 {name}（{index}/{self.total}）"
+        self._push(self._file_i, start, msg, step="file_start")
+
+    def _file_bounds(self, file_i: int) -> tuple[float, float]:
+        span = 100.0 - self.LOAD_END
+        start = self.LOAD_END + span * file_i / self.total
+        end = self.LOAD_END + span * (file_i + 1) / self.total
+        return start, end
+
+    def stage(self, stage: str, frac: float = 0.0) -> None:
+        """文件内子步骤。stage: read/hubert/f0/infer/write；frac 0..1。"""
+        frac = max(0.0, min(1.0, float(frac)))
+        a, b = self.STAGE_SPAN.get(stage, (0.0, 1.0))
+        start, end = self._file_bounds(self._file_i)
+        pct = start + (end - start) * (a + (b - a) * frac)
+        name = self._file_name or "音频"
+        prefix = f"{name} · " if self.total > 1 else ""
+        if stage == "read":
+            msg = f"{prefix}读取音频…"
+        elif stage == "hubert":
+            msg = f"{prefix}加载特征模型（hubert）…"
+        elif stage == "f0":
+            msg = f"{prefix}提取音高（{self.f0method}）…"
+        elif stage == "infer":
+            if frac <= 0.0:
+                msg = f"{prefix}音色转换中…"
+            else:
+                msg = f"{prefix}音色转换中… {int(frac * 100)}%"
+        elif stage == "write":
+            msg = f"{prefix}写入输出文件…"
+        else:
+            msg = f"{prefix}处理中…"
+        self._push(self._file_i, pct, msg, step=stage)
+
+    def file_done(self, index: int, name: str, ok: bool = True) -> None:
+        _, end = self._file_bounds(max(0, int(index) - 1))
+        if ok:
+            msg = (
+                f"完成 {name}"
+                if self.total == 1
+                else f"完成 {name}（{index}/{self.total}）"
+            )
+        else:
+            msg = (
+                f"跳过 {name}"
+                if self.total == 1
+                else f"跳过 {name}（{index}/{self.total}）"
+            )
+        self._push(index, end, msg, step="file_done" if ok else "file_skip")
+
+    @property
+    def last_pct(self) -> int:
+        return self._last_pct if self._last_pct >= 0 else 0
+
+
 def main(argv: list[str]) -> int:
     _ensure_stdio_utf8()
     if len(argv) < 2:
@@ -219,6 +338,7 @@ def main(argv: list[str]) -> int:
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     total = len(files)
+    prog = StsProgress(total, f0method)
 
     _ensure_rvc_env()
     miss = _preflight_engine(f0method)
@@ -226,7 +346,7 @@ def main(argv: list[str]) -> int:
         emit(phase="error", message=miss)
         return 1
 
-    emit(phase="start", total=total, message=f"共 {total} 个文件")
+    emit(phase="start", total=total, pct=0, message=f"共 {total} 个文件，准备开始")
     _cuda_empty_cache()
 
     try:
@@ -237,10 +357,14 @@ def main(argv: list[str]) -> int:
 
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
         sys.argv = [sys.argv[0]]
+        prog.load("config", 0.0)
         config = Config()
+        prog.load("config", 1.0)
         vc = VC(config)
         # get_vc 认绝对路径（User_Data/models/...）
+        prog.load("model", 0.0)
         vc.get_vc(model)
+        prog.load("model", 1.0)
         _cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
@@ -250,12 +374,14 @@ def main(argv: list[str]) -> int:
     out_files: list[str] = []
     skipped: list[dict] = []
     for i, (src, rel) in enumerate(files, start=1):
-        emit(
-            phase="run",
-            done=i - 1,
-            total=total,
-            message=f"正在转换 {src.name}（{i}/{total}）",
-        )
+        prog.begin_file(i, src.name)
+
+        def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
+            # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
+            prog._file_i = _i - 1
+            prog._file_name = _name
+            prog.stage(stage, frac)
+
         try:
             # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
             sub = Path(out_dir) / rel.parent
@@ -281,28 +407,28 @@ def main(argv: list[str]) -> int:
                 resample_sr,
                 rms_mix_rate,
                 protect,
+                progress_cb=on_stage,
             )
             if wav_opt is None or wav_opt[0] is None:
                 # vc_single 吞掉异常后把 traceback 塞进 info；OOM 也走这条。
                 raise RuntimeError(_friendly_error(info or "未知错误"))
+            prog.stage("write", 0.0)
             wavfile.write(str(dest), wav_opt[0], wav_opt[1])
+            prog.stage("write", 1.0)
             out_files.append(str(dest))
-            emit(
-                phase="run",
-                done=i,
-                total=total,
-                message=f"完成 {src.name}",
-            )
+            prog.file_done(i, src.name, ok=True)
         except Exception as e:
             # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
             # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
             traceback.print_exc()
             reason = _friendly_error(e)
             skipped.append({"file": str(src), "name": src.name, "reason": reason})
+            prog.file_done(i, src.name, ok=False)
             emit(
                 phase="skip",
                 done=i,
                 total=total,
+                pct=prog.last_pct,
                 message=f"跳过 {src.name}：{reason}",
             )
         finally:
@@ -319,6 +445,7 @@ def main(argv: list[str]) -> int:
         files=out_files,
         skipped=skipped,
         total=total,
+        pct=100,
         message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
     )
     return 0

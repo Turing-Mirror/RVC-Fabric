@@ -298,7 +298,16 @@ class Pipeline(object):
         version,
         protect,
         f0_file=None,
+        progress_cb=None,
     ):
+        def _prog(stage, frac=0.0):
+            if progress_cb is None:
+                return
+            try:
+                progress_cb(stage, float(frac))
+            except Exception:
+                pass
+
         if (
             file_index != ""
             # and file_big_npy != ""
@@ -351,6 +360,7 @@ class Pipeline(object):
         sid = torch.tensor(sid, device=self.device).unsqueeze(0).long()
         pitch, pitchf = None, None
         if if_f0 == 1:
+            _prog("f0", 0.0)
             pitch, pitchf = self.get_f0(
                 input_audio_path,
                 audio_pad,
@@ -366,8 +376,15 @@ class Pipeline(object):
                 pitchf = pitchf.astype(np.float32)
             pitch = torch.tensor(pitch, device=self.device).unsqueeze(0).long()
             pitchf = torch.tensor(pitchf, device=self.device).unsqueeze(0).float()
+            _prog("f0", 1.0)
+        else:
+            _prog("f0", 1.0)
         t2 = ttime()
         times[1] += t2 - t1
+        # +1 for the final tail segment after the opt_ts loop.
+        n_parts = len(opt_ts) + 1
+        part_i = 0
+        _prog("infer", 0.0)
         for t in opt_ts:
             t = t // self.window * self.window
             if if_f0 == 1:
@@ -405,6 +422,8 @@ class Pipeline(object):
                     )[self.t_pad_tgt : -self.t_pad_tgt]
                 )
             s = t
+            part_i += 1
+            _prog("infer", part_i / n_parts)
         if if_f0 == 1:
             audio_opt.append(
                 self.vc(
@@ -439,6 +458,7 @@ class Pipeline(object):
                     protect,
                 )[self.t_pad_tgt : -self.t_pad_tgt]
             )
+        _prog("infer", 1.0)
         audio_opt = np.concatenate(audio_opt)
         if rms_mix_rate != 1:
             audio_opt = change_rms(audio, 16000, audio_opt, tgt_sr, rms_mix_rate)

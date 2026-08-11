@@ -37,15 +37,33 @@ pub fn cancel() {
 }
 
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
-    let _ = app.emit(
-        "sts-progress",
-        json!({
-            "phase": phase,
-            "done": done,
-            "total": total.max(1),
-            "message": message,
-        }),
-    );
+    emit_full(app, phase, done, total, message, None, None);
+}
+
+fn emit_full(
+    app: &AppHandle,
+    phase: &str,
+    done: u64,
+    total: u64,
+    message: &str,
+    pct: Option<u64>,
+    step: Option<&str>,
+) {
+    let mut body = json!({
+        "phase": phase,
+        "done": done,
+        "total": total.max(1),
+        "message": message,
+    });
+    if let Some(p) = pct {
+        body["pct"] = json!(p.min(100));
+    }
+    if let Some(s) = step {
+        if !s.is_empty() {
+            body["step"] = json!(s);
+        }
+    }
+    let _ = app.emit("sts-progress", body);
 }
 
 /// 当前能不能转、用哪个音色。
@@ -260,28 +278,37 @@ fn run_inner(
         };
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
         let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        // 细粒度 0–100；worker 旧版可能不带，界面回退到 done/total。
+        let pct = v
+            .get("pct")
+            .and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)));
+        let step = v.get("step").and_then(|x| x.as_str());
         match phase {
             "start" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
                 let fallback = crate::i18n::t("s.6b3e0028b8");
-                emit(
+                emit_full(
                     app,
                     "start",
                     0,
                     total,
                     if msg.is_empty() { &fallback } else { msg },
+                    pct.or(Some(0)),
+                    step,
                 );
             }
             "run" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
                 let fallback = crate::i18n::t("s.090840132b");
-                emit(
+                emit_full(
                     app,
                     "run",
                     done,
                     total,
                     if msg.is_empty() { &fallback } else { msg },
+                    pct,
+                    step,
                 );
             }
             // 单个文件被跳过。照样往界面上推，用户当场就能看到是哪个坏了，
@@ -289,7 +316,7 @@ fn run_inner(
             "skip" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(total).max(1);
                 let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
-                emit(app, "skip", done, total, msg);
+                emit_full(app, "skip", done, total, msg, pct, step);
             }
             "done" => {
                 if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
@@ -301,6 +328,21 @@ fn run_inner(
                 if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
                     skipped = arr.clone();
                 }
+                // 推一条 100% 完成，避免界面停在最后一个文件的中间百分比。
+                let done_msg = if msg.is_empty() {
+                    crate::i18n::t("s.e43ef3d56a")
+                } else {
+                    msg.to_string()
+                };
+                emit_full(
+                    app,
+                    "done",
+                    total,
+                    total,
+                    &done_msg,
+                    Some(100),
+                    Some("done"),
+                );
             }
             "error" => fail = Some(msg.to_string()),
             _ => {}
@@ -314,7 +356,15 @@ fn run_inner(
     if !st.success() {
         return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
     }
-    emit(app, "done", total, total, &crate::i18n::t("s.e43ef3d56a"));
+    emit_full(
+        app,
+        "done",
+        total,
+        total,
+        &crate::i18n::t("s.e43ef3d56a"),
+        Some(100),
+        Some("done"),
+    );
     let stats = crate::paths::clean_temps(root);
     crate::paths::log_clean_stats(&crate::i18n::t("s.e246e3bafa"), root, &stats);
     Ok(json!({

@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.sts_worker import (  # noqa: E402
+    StsProgress,
     _ensure_rvc_env,
     _friendly_error,
     collect_inputs,
@@ -79,6 +80,65 @@ class EnsureRvcEnvTests(unittest.TestCase):
                 os.environ["index_root"] = old
             else:
                 os.environ.pop("index_root", None)
+
+
+class StsProgressTests(unittest.TestCase):
+    def test_single_file_stages_increase(self):
+        events = []
+
+        def capture(**kw):
+            events.append(kw)
+
+        import tools.sts_worker as sw
+
+        old = sw.emit
+        sw.emit = capture
+        try:
+            p = StsProgress(1, "rmvpe")
+            p.load("config", 1.0)
+            p.load("model", 1.0)
+            p.begin_file(1, "a.wav")
+            p.stage("read", 1.0)
+            p.stage("f0", 0.0)
+            p.stage("f0", 1.0)
+            p.stage("infer", 0.5)
+            p.stage("write", 1.0)
+            p.file_done(1, "a.wav", ok=True)
+        finally:
+            sw.emit = old
+
+        pcts = [e["pct"] for e in events if "pct" in e]
+        self.assertTrue(pcts)
+        # 单调不减，单文件结束应到 100
+        self.assertEqual(pcts, sorted(pcts))
+        self.assertEqual(pcts[-1], 100)
+        # 音高步骤文案要带算法名，用户才知道卡在哪
+        f0_msgs = [e["message"] for e in events if e.get("step") == "f0"]
+        self.assertTrue(any("rmvpe" in m for m in f0_msgs))
+
+    def test_multi_file_second_starts_after_first_half(self):
+        events = []
+
+        def capture(**kw):
+            events.append(kw)
+
+        import tools.sts_worker as sw
+
+        old = sw.emit
+        sw.emit = capture
+        try:
+            p = StsProgress(2, "harvest")
+            p.load("model", 1.0)
+            p.begin_file(1, "a.wav")
+            p.file_done(1, "a.wav", ok=True)
+            p.begin_file(2, "b.wav")
+        finally:
+            sw.emit = old
+
+        second_start = next(e for e in events if e.get("step") == "file_start" and "b.wav" in e["message"])
+        # 第二个文件起点应在 50% 附近（10% 加载 + 45% 第一个文件）
+        self.assertGreaterEqual(second_start["pct"], 50)
+        self.assertLess(second_start["pct"], 60)
 
 
 if __name__ == "__main__":

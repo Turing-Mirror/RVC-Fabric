@@ -175,7 +175,8 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
           {msg ? (
             <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
           ) : null}
-          <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
+          {/* 封面边长在旧值上整体 +25%（176→220 / 122→153），大窗/最大化时三卡更撑得住。 */}
+          <div className="flex gap-6 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3.5">
             {ordered.map((v) => {
               const cur = v === current;
               return (
@@ -201,8 +202,8 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                       "transition-[transform,box-shadow] duration-300 ease-[var(--spring)]",
                       "active:scale-[0.985]",
                       cur
-                        ? "w-[176px] text-[30px] shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[158px] max-[720px]:w-[130px]"
-                        : "w-[122px] text-[26px] max-[1020px]:w-[110px] max-[720px]:w-[92px]",
+                        ? "w-[220px] text-[38px] shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[198px] max-[720px]:w-[163px]"
+                        : "w-[153px] text-[33px] max-[1020px]:w-[138px] max-[720px]:w-[115px]",
                     ].join(" ")}
                   >
                     {v.cover ? (

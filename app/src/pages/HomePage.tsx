@@ -22,6 +22,84 @@ type Props = {
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
 
 /**
+ * 最近使用三卡封面边长：随窗口宽自适应。
+ *
+ * - 基准 = 默认窗宽（tauri `inner_size` 1180）下的 176 / 122
+ * - 窗比默认更大 → 线性放大，**最大 +25%**（220 / 152.5）
+ * - 窗比默认更小 → 沿用原来的 1020 / 720 两档收缩
+ */
+const DEFAULT_WIN_W = 1180;
+const BASE_CUR = 176;
+const BASE_SIDE = 122;
+const BASE_FONT_CUR = 30;
+const BASE_FONT_SIDE = 26;
+const MAX_GROW = 0.25;
+
+type RecentCardMetrics = {
+  cur: number;
+  side: number;
+  fontCur: number;
+  fontSide: number;
+};
+
+function recentCardMetrics(vw: number): RecentCardMetrics {
+  // 窄窗：回到原先断点尺寸（略做连续插值，避免跳变）
+  if (vw <= 720) {
+    return { cur: 130, side: 92, fontCur: 22, fontSide: 19 };
+  }
+  if (vw <= 1020) {
+    const t = (vw - 720) / (1020 - 720);
+    const cur = Math.round(130 + t * (158 - 130));
+    const side = Math.round(92 + t * (110 - 92));
+    return {
+      cur,
+      side,
+      fontCur: Math.round(BASE_FONT_CUR * (cur / BASE_CUR)),
+      fontSide: Math.round(BASE_FONT_SIDE * (side / BASE_SIDE)),
+    };
+  }
+  if (vw <= DEFAULT_WIN_W) {
+    const t = (vw - 1020) / (DEFAULT_WIN_W - 1020);
+    const cur = Math.round(158 + t * (BASE_CUR - 158));
+    const side = Math.round(110 + t * (BASE_SIDE - 110));
+    return {
+      cur,
+      side,
+      fontCur: Math.round(BASE_FONT_CUR * (cur / BASE_CUR)),
+      fontSide: Math.round(BASE_FONT_SIDE * (side / BASE_SIDE)),
+    };
+  }
+  // 宽于默认窗：向「默认 × 1.25」爬，到屏幕可用宽为止
+  const maxW = Math.max(
+    DEFAULT_WIN_W + 1,
+    typeof window !== "undefined" ? window.screen?.availWidth || 1920 : 1920,
+  );
+  const t = Math.min(1, (vw - DEFAULT_WIN_W) / (maxW - DEFAULT_WIN_W));
+  const grow = 1 + MAX_GROW * t;
+  return {
+    cur: Math.round(BASE_CUR * grow),
+    side: Math.round(BASE_SIDE * grow),
+    fontCur: Math.round(BASE_FONT_CUR * grow),
+    fontSide: Math.round(BASE_FONT_SIDE * grow),
+  };
+}
+
+function useRecentCardMetrics(): RecentCardMetrics {
+  const [m, setM] = useState<RecentCardMetrics>(() =>
+    recentCardMetrics(
+      typeof window !== "undefined" ? window.innerWidth : DEFAULT_WIN_W,
+    ),
+  );
+  useEffect(() => {
+    const onResize = () => setM(recentCardMetrics(window.innerWidth));
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return m;
+}
+
+/**
  * Brand mark in the hero band. Decorative, so no alt text and no pointer
  * target. Dropped below 720px, where it would land on top of the copy instead
  * of beside it.
@@ -54,6 +132,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
   // something they may already have.
   const [loadError, setLoadError] = useState("");
   const [msg, setMsg] = useState("");
+  const cardPx = useRecentCardMetrics();
   // 封面本地化：已装第三方音色的远程封面走本地缓存（见 lib/cover.ts）。
   const coverCache = useCoverCache(
     models.map((m) => m.cover || "").filter(Boolean),
@@ -175,10 +254,11 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
           {msg ? (
             <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
           ) : null}
-          {/* 封面边长在旧值上整体 +25%（176→220 / 122→153），大窗/最大化时三卡更撑得住。 */}
-          <div className="flex gap-6 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3.5">
+          <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
             {ordered.map((v) => {
               const cur = v === current;
+              const edge = cur ? cardPx.cur : cardPx.side;
+              const fontPx = cur ? cardPx.fontCur : cardPx.fontSide;
               return (
                 <button
                   key={keyOf(v)}
@@ -187,6 +267,7 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                   className="border-0 bg-transparent p-0 text-left cursor-pointer"
                 >
                   <div
+                    style={{ width: edge, fontSize: fontPx }}
                     className={[
                       "rounded-[var(--r)] grid place-items-center relative overflow-hidden",
                       // 只给宽度，高度交给 aspect-square。以前选中和未选中各写
@@ -199,11 +280,11 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
                       // 封面按原色显示。以前未选中的一律去色、选中才恢复，
                       // 那是拿画师的画当状态指示器用 —— 选中状态由描边和尺寸
                       // 表达就够了。
-                      "transition-[transform,box-shadow] duration-300 ease-[var(--spring)]",
+                      "transition-[width,font-size,transform,box-shadow] duration-300 ease-[var(--spring)]",
                       "active:scale-[0.985]",
                       cur
-                        ? "w-[220px] text-[38px] shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)] max-[1020px]:w-[198px] max-[720px]:w-[163px]"
-                        : "w-[153px] text-[33px] max-[1020px]:w-[138px] max-[720px]:w-[115px]",
+                        ? "shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)]"
+                        : "",
                     ].join(" ")}
                   >
                     {v.cover ? (

@@ -664,9 +664,9 @@ async fn sts_start(
     pitch: i32,
     f0method: String,
     index_rate: f64,
-    /// Optional override: offline conversion target voice (.pth). Empty = homepage current.
+    // Optional override: offline conversion target voice (.pth). Empty = homepage current.
     model_path: Option<String>,
-    /// Optional .index for that voice. Empty = library binding / config.
+    // Optional .index for that voice. Empty = library binding / config.
     index_path: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;

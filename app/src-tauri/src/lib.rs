@@ -664,10 +664,26 @@ async fn sts_start(
     pitch: i32,
     f0method: String,
     index_rate: f64,
+    /// Optional override: offline conversion target voice (.pth). Empty = homepage current.
+    model_path: Option<String>,
+    /// Optional .index for that voice. Empty = library binding / config.
+    index_path: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    let model_path = model_path.unwrap_or_default();
+    let index_path = index_path.unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
-        sts::run(&app, &root, &input, &output, pitch, &f0method, index_rate)
+        sts::run(
+            &app,
+            &root,
+            &input,
+            &output,
+            pitch,
+            &f0method,
+            index_rate,
+            &model_path,
+            &index_path,
+        )
     })
     .await
     .map_err(|e| e.to_string())?

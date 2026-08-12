@@ -796,7 +796,7 @@
     "84256012c6": "Failed to start performance test: {e}",
     "84b7d7b6b0": "Conversion script missing — install may be incomplete",
     "84ccf9394c": "Xiaohongshu ID: TuringMirror",
-    "859b483004": "Audio conversion swaps a recording into the target voice; text-to-speech reads the text with a system voice, then converts. Both use the RVC model selected on Home.",
+    "859b483004": "Speech conversion turns a recording into the target voice; text-to-speech reads text with the system voice then optionally converts. Pick a target voice below (defaults to the one currently selected on Home).",
     "85b3f0512b": "Uninstalled only",
     "862abb3838": "External folder {}",
     "86cbf0fb3f": "Deleting again shouldn't error",
@@ -1302,7 +1302,9 @@
     "stsDoneSkipped": "Converted {v0} file(s), skipped {v1} → {v2}",
     "stsSkippedTitle": "These {v0} file(s) were not converted:",
     "stsFreeVram": "Stopping the realtime voice changer to free VRAM…",
-    "stsStopWorkerConfirm": "Conversion needs the whole GPU, so the running realtime voice changer will be stopped first. Continue?"
+    "stsStopWorkerConfirm": "Conversion needs the whole GPU, so the running realtime voice changer will be stopped first. Continue?",
+    "stsTargetVoice": "Target voice",
+    "stsModelMissing": "Voice model not found: {a0}"
   },
   "extras": {
     "engineTitle": "Engine resources",

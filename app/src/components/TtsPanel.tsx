@@ -6,6 +6,7 @@ import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { listVoices, type VoiceModel } from "../lib/voices";
 
 /** 工具窗两个模式：官方语义的音频推理 + 保留的文字合成。 */
 type Mode = "sts" | "tts";
@@ -119,6 +120,11 @@ function formatEta(elapsedSec: number, pct: number): string {
 
 function StsSection() {
   const [st, setSt] = useState<StsStatus>({});
+  const [voices, setVoices] = useState<VoiceModel[]>([]);
+  // 本窗选的目标音色；默认跟首页「当前变声音色」，改这里不改全局选中。
+  const [modelPath, setModelPath] = useState("");
+  const [indexPath, setIndexPath] = useState("");
+  const [modelName, setModelName] = useState("");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [pitch, setPitch] = useState(0);
@@ -133,14 +139,46 @@ function StsSection() {
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
 
+  const pickVoice = (m: VoiceModel | undefined) => {
+    if (!m || !m.path) return;
+    setModelPath(m.path);
+    setIndexPath(typeof m.index === "string" ? m.index : "");
+    setModelName(m.name || m.file || "");
+  };
+
   const load = async () => {
     try {
-      const s = await invoke<StsStatus>("sts_status");
+      const [s, cat] = await Promise.all([
+        invoke<StsStatus>("sts_status"),
+        listVoices(),
+      ]);
       setSt(s);
       if (s.pitch != null) setPitch(Number(s.pitch));
       if (s.f0method) setF0method(String(s.f0method));
       if (s.index_rate != null) setIndexRate(Number(s.index_rate));
       if (!output && s.out_dir) setOutput(String(s.out_dir));
+
+      const usable = (cat.models || []).filter(
+        (m) => m.path && !m.missing && String(m.path).length > 0,
+      );
+      setVoices(usable);
+
+      // 默认：配置里的当前变声音色 → 库 selected_idx → 列表第一项。
+      const byPath =
+        s.model_path && usable.find((m) => m.path === s.model_path);
+      const byIdx =
+        cat.selected_idx >= 0 ? cat.models?.[cat.selected_idx] : undefined;
+      const byIdxUsable =
+        byIdx && usable.some((m) => m.path === byIdx.path) ? byIdx : undefined;
+      const chosen = byPath || byIdxUsable || usable[0];
+      if (chosen) {
+        pickVoice(chosen);
+      } else if (s.model_path) {
+        // 库列表里暂时对不上，仍用状态里的路径，保证能转。
+        setModelPath(s.model_path);
+        setIndexPath(s.index_path || "");
+        setModelName(s.model_name || "");
+      }
     } catch (e) {
       setMsg(String(e));
     }
@@ -199,7 +237,7 @@ function StsSection() {
         })
       : !st.worker_present
         ? t("s.84b7d7b6b0")
-        : !st.model_path
+        : !modelPath
           ? t("s.03877888b6")
           : "";
 
@@ -229,6 +267,8 @@ function StsSection() {
         pitch,
         f0method,
         indexRate,
+        modelPath,
+        indexPath,
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
@@ -277,14 +317,36 @@ function StsSection() {
     <>
       {blocked ? (
         <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
-      ) : (
-        <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">
-          {t("s.6c415e91bb", { v0: st.model_name || "—" })}
-          {st.index_path ? t("s.0ca99fa9f1") : ""}
-        </p>
-      )}
+      ) : null}
 
       <div className="border-t border-[var(--hairline)]">
+        <div className={ROW}>
+          <span className={LABEL}>{t("s.stsTargetVoice")}</span>
+          <select
+            className={`flex-1 min-w-0 ${FIELD}`}
+            value={modelPath}
+            disabled={running || !voices.length}
+            onChange={(e) => {
+              const m = voices.find((v) => v.path === e.target.value);
+              pickVoice(m);
+            }}
+          >
+            {voices.map((m) => (
+              <option key={m.path} value={m.path}>
+                {m.name || m.file || m.path}
+              </option>
+            ))}
+            {!voices.length ? (
+              <option value="">{t("s.03877888b6")}</option>
+            ) : null}
+          </select>
+        </div>
+        {!blocked && modelName ? (
+          <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
+            {t("s.6c415e91bb", { v0: modelName })}
+            {indexPath ? t("s.0ca99fa9f1") : ""}
+          </p>
+        ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.e8850440f2")}</span>
           <span className={PATH}>{input || t("s.245826185c")}</span>

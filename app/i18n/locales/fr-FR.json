@@ -796,7 +796,7 @@
     "84256012c6": "Échec du lancement du test de performance : {e}",
     "84b7d7b6b0": "Script de conversion manquant ; installation peut-être incomplète",
     "84ccf9394c": "ID Xiaohongshu : TuringMirror",
-    "859b483004": "La conversion audio transforme un enregistrement en voix cible ; la synthèse de texte lit avec la voix système puis convertit. Les deux utilisent le modèle RVC sélectionné sur l'Accueil.",
+    "859b483004": "La conversion transforme un enregistrement en voix cible ; la synthèse lit le texte avec la voix système puis convertit. Choisissez la voix ci-dessous (par défaut celle sélectionnée sur l’accueil).",
     "85b3f0512b": "Non installées uniquement",
     "862abb3838": "Dossier externe {}",
     "86cbf0fb3f": "Le supprimer à nouveau ne devrait pas provoquer d'erreur",
@@ -1302,7 +1302,9 @@
     "stsDoneSkipped": "{v0} fichier(s) converti(s), {v1} ignoré(s) → {v2}",
     "stsSkippedTitle": "Ces {v0} fichier(s) n'ont pas été convertis :",
     "stsFreeVram": "Arrêt du changeur de voix en temps réel pour libérer la VRAM…",
-    "stsStopWorkerConfirm": "La conversion nécessite tout le GPU : le changeur de voix en temps réel en cours va être arrêté. Continuer ?"
+    "stsStopWorkerConfirm": "La conversion nécessite tout le GPU : le changeur de voix en temps réel en cours va être arrêté. Continuer ?",
+    "stsTargetVoice": "Voix cible",
+    "stsModelMissing": "Modèle de voix introuvable : {a0}"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

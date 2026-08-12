@@ -176,6 +176,69 @@ pub fn pick_output() -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Resolve which .pth / .index this job should use.
+///
+/// Explicit paths from the tool panel win; empty falls back to the homepage
+/// current voice in app_config. Does **not** rewrite the global selection —
+/// offline conversion can use a different voice without switching realtime.
+fn resolve_model(
+    root: &Path,
+    model_path: &str,
+    index_path: &str,
+) -> Result<(String, String), String> {
+    let explicit = model_path.trim();
+    if !explicit.is_empty() {
+        if !Path::new(explicit).is_file() {
+            return Err(crate::i18n::te("s.stsModelMissing", &explicit));
+        }
+        let idx = {
+            let raw = index_path.trim();
+            if !raw.is_empty() && Path::new(raw).is_file() {
+                raw.to_string()
+            } else {
+                // Prefer the voice library's bound index for this pth.
+                index_for_model_path(root, explicit)
+            }
+        };
+        return Ok((explicit.to_string(), idx));
+    }
+
+    let cfg = crate::config::read(root);
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if pth.is_empty() || !Path::new(&pth).is_file() {
+        return Err(crate::i18n::t("s.e84378f99a").into());
+    }
+    let idx = cfg
+        .get("index_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok((pth, idx))
+}
+
+fn index_for_model_path(root: &Path, pth: &str) -> String {
+    let cat = crate::voices::list_voices(root);
+    let Some(models) = cat.get("models").and_then(|v| v.as_array()) else {
+        return String::new();
+    };
+    for m in models {
+        let mp = m.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        if mp == pth {
+            let idx = m.get("index").and_then(|v| v.as_str()).unwrap_or("").trim();
+            if !idx.is_empty() && Path::new(idx).is_file() {
+                return idx.to_string();
+            }
+            break;
+        }
+    }
+    String::new()
+}
+
 /// 跑一次转换。阻塞。
 pub fn run(
     app: &AppHandle,
@@ -185,6 +248,8 @@ pub fn run(
     pitch: i32,
     f0method: &str,
     index_rate: f64,
+    model_path: &str,
+    index_path: &str,
 ) -> Result<Value, String> {
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
@@ -194,7 +259,17 @@ pub fn run(
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
-    let result = run_inner(app, root, input, output, pitch, f0method, index_rate);
+    let result = run_inner(
+        app,
+        root,
+        input,
+        output,
+        pitch,
+        f0method,
+        index_rate,
+        model_path,
+        index_path,
+    );
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
@@ -210,6 +285,8 @@ fn run_inner(
     pitch: i32,
     f0method: &str,
     index_rate: f64,
+    model_path: &str,
+    index_path: &str,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
@@ -256,21 +333,7 @@ fn run_inner(
         std::thread::sleep(std::time::Duration::from_millis(700));
     }
 
-    let cfg = crate::config::read(root);
-    let pth = cfg
-        .get("pth_path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    if pth.is_empty() || !Path::new(&pth).is_file() {
-        return Err(crate::i18n::t("s.e84378f99a").into());
-    }
-    let index = cfg
-        .get("index_path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let (pth, index) = resolve_model(root, model_path, index_path)?;
 
     let req = paths::update_cache(root).join("sts_request.json");
     if let Some(p) = req.parent() {

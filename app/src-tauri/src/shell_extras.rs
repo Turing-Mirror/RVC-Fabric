@@ -641,7 +641,7 @@ pub fn install_close_handler(app: &AppHandle) {
     let last_ask: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     win.on_window_event(move |event| {
-        // 尺寸变了：Win10 重裁圆角区域；最大化时拆掉系统厚框/描边（Vista 边）。
+        // 尺寸变了：Win10 重裁圆角区域；最大化状态只跟区域，尺寸由子类化落地前钳好。
         if matches!(
             event,
             tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }

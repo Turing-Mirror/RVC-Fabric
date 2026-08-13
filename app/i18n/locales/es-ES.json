@@ -1304,7 +1304,13 @@
     "stsFreeVram": "Deteniendo el cambiador de voz en tiempo real para liberar VRAM…",
     "stsStopWorkerConfirm": "La conversión necesita toda la GPU, por lo que se detendrá el cambiador de voz en tiempo real en ejecución. ¿Continuar?",
     "stsTargetVoice": "Voz objetivo",
-    "stsModelMissing": "No se encuentra el modelo de voz: {a0}"
+    "stsModelMissing": "No se encuentra el modelo de voz: {a0}",
+    "cacheClear": "Vaciar caché",
+    "cacheClearHint": "Borra registros, temporales de conversión y descargas a medias. Voces y ajustes se quedan.",
+    "cacheClearDesc": "Unos {v0} MB se pueden vaciar. Incluye registros, temporales y descargas incompletas.",
+    "cacheClearConfirm": "Se borrarán registros, archivos TEMP y descargas incompletas. La biblioteca de voces y los ajustes se conservan. ¿Continuar?",
+    "cacheClearDone": "Se vaciaron unos {v0} MB ({v1} archivos).",
+    "cacheClearFail": "No se pudo vaciar la caché: {v0}"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

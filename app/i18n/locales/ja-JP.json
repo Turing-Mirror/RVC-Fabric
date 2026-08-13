@@ -1304,7 +1304,13 @@
     "stsFreeVram": "VRAM を解放するためリアルタイム変声を停止しています…",
     "stsStopWorkerConfirm": "変換には GPU を占有する必要があるため、実行中のリアルタイム変声を先に停止します。続行しますか？",
     "stsTargetVoice": "目標音色",
-    "stsModelMissing": "音色モデルが見つかりません：{a0}"
+    "stsModelMissing": "音色モデルが見つかりません：{a0}",
+    "cacheClear": "キャッシュを削除",
+    "cacheClearHint": "ログ・変換の一時ファイル・未完了ダウンロードを削除します。音色と設定は残ります。",
+    "cacheClearDesc": "約 {v0} MB を削除できます。ログ・変換一時ファイル・未完了ダウンロードが対象です。",
+    "cacheClearConfirm": "ログ、TEMP の中間ファイル、未完了のダウンロードを削除します。音色ライブラリと設定は残します。続行しますか？",
+    "cacheClearDone": "約 {v0} MB（{v1} ファイル）を削除しました。",
+    "cacheClearFail": "削除に失敗しました：{v0}"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

@@ -40,6 +40,7 @@ export function MorePage({
   // which is the first thing worth knowing when a report says "找不到 Runtime".
   const [root, setRoot] = useState("—");
   const [logFile, setLogFile] = useState("");
+  const [cacheMb, setCacheMb] = useState("");
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
   // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
@@ -139,6 +140,9 @@ export function MorePage({
     invoke<string | null>("log_path")
       .then((v) => alive && setLogFile(v || ""))
       .catch(() => alive && setLogFile(""));
+    invoke<{ mb?: string }>("cache_status")
+      .then((v) => alive && setCacheMb(v?.mb || "0"))
+      .catch(() => alive && setCacheMb(""));
     invoke<Record<string, unknown>>("config_get")
       .then((c) => alive && setMainGpu(Number(c.main_gpu ?? MAIN_GPU_AUTO)))
       .catch(() => {
@@ -326,6 +330,37 @@ export function MorePage({
             desc={logFile || undefined}
             right={
               <Btn onClick={() => void invoke("reveal_user_dir", { name: "logs" })}>{t("s.65fc81e161")}</Btn>
+            }
+          />
+          <ListItem
+            title={t("s.cacheClear")}
+            desc={
+              busyMsg.startsWith(t("s.cacheClear"))
+                ? busyMsg
+                : cacheMb
+                  ? t("s.cacheClearDesc", { v0: cacheMb })
+                  : t("s.cacheClearHint")
+            }
+            right={
+              <Btn
+                onClick={() => {
+                  if (!window.confirm(t("s.cacheClearConfirm"))) return;
+                  setBusyMsg(t("s.cacheClear") + "…");
+                  void invoke<{ freed_mb?: string; removed_files?: number }>("cache_clear")
+                    .then((r) => {
+                      setBusyMsg(
+                        t("s.cacheClearDone", {
+                          v0: r.freed_mb ?? "0",
+                          v1: r.removed_files ?? 0,
+                        }),
+                      );
+                      setCacheMb("0");
+                    })
+                    .catch((e) => setBusyMsg(t("s.cacheClearFail", { v0: String(e) })));
+                }}
+              >
+                {t("s.cacheClear")}
+              </Btn>
             }
           />
           <ListItem

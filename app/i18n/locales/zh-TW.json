@@ -1304,7 +1304,13 @@
     "stsFreeVram": "正在停止即時變聲以釋放顯示記憶體…",
     "stsStopWorkerConfirm": "轉換需要獨佔顯示記憶體，將先停止正在執行的即時變聲。要繼續嗎？",
     "stsTargetVoice": "目標音色",
-    "stsModelMissing": "找不到音色模型：{a0}"
+    "stsModelMissing": "找不到音色模型：{a0}",
+    "cacheClear": "清理快取",
+    "cacheClearHint": "刪除日誌、轉換暫存與下載殘留，不影響音色與設定。",
+    "cacheClearDesc": "約 {v0} MB 可清理。刪除日誌、轉換暫存與下載殘留，不影響音色與設定。",
+    "cacheClearConfirm": "將刪除日誌、TEMP 中間檔與未完成下載，不影響音色庫和設定。確定清理？",
+    "cacheClearDone": "已清理約 {v0} MB（{v1} 個檔案）。",
+    "cacheClearFail": "清理失敗：{v0}"
   },
   "extras": {
     "engineTitle": "引擎資源",

@@ -1304,7 +1304,13 @@
     "stsFreeVram": "Arrêt du changeur de voix en temps réel pour libérer la VRAM…",
     "stsStopWorkerConfirm": "La conversion nécessite tout le GPU : le changeur de voix en temps réel en cours va être arrêté. Continuer ?",
     "stsTargetVoice": "Voix cible",
-    "stsModelMissing": "Modèle de voix introuvable : {a0}"
+    "stsModelMissing": "Modèle de voix introuvable : {a0}",
+    "cacheClear": "Vider le cache",
+    "cacheClearHint": "Supprime journaux, fichiers temporaires de conversion et téléchargements interrompus. Voix et réglages conservés.",
+    "cacheClearDesc": "Environ {v0} Mo peuvent être libérés : journaux, temporaires et téléchargements incomplets.",
+    "cacheClearConfirm": "Cela supprime les journaux, les fichiers TEMP et les téléchargements incomplets. La bibliothèque de voix et les réglages restent. Continuer ?",
+    "cacheClearDone": "Environ {v0} Mo ({v1} fichiers) ont été libérés.",
+    "cacheClearFail": "Impossible de vider le cache : {v0}"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

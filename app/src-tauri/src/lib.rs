@@ -312,6 +312,33 @@ async fn consult_build(
     .map_err(|e| e.to_string())?
 }
 
+/// More page: how much regenerable cache is sitting on disk.
+#[tauri::command]
+fn cache_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let bytes = paths::cache_footprint(&root);
+    Ok(json!({
+        "bytes": bytes,
+        "mb": format!("{:.1}", bytes as f64 / (1024.0 * 1024.0)),
+    }))
+}
+
+/// More page: wipe logs + TEMP + leftover downloads. Confirm in the UI first.
+#[tauri::command]
+fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let stats = paths::clear_user_cache(&root);
+    paths::log_clean_stats(&crate::i18n::t("s.cacheClear"), &root, &stats);
+    Ok(json!({
+        "ok": true,
+        "removed_files": stats.removed_files,
+        "removed_dirs": stats.removed_dirs,
+        "failed": stats.failed,
+        "freed_bytes": stats.freed_bytes,
+        "freed_mb": format!("{:.1}", stats.freed_bytes as f64 / (1024.0 * 1024.0)),
+    }))
+}
+
 /// Open a folder under User_Data in the file manager.
 #[tauri::command]
 fn reveal_user_dir(state: State<'_, Mutex<AppState>>, name: String) -> Result<(), String> {
@@ -1318,6 +1345,8 @@ pub fn run() {
             update_app,
             hotkeys_apply,
             diagnostics_build,
+            cache_status,
+            cache_clear,
             consult_build,
             reveal_user_dir,
             telemetry_tick,

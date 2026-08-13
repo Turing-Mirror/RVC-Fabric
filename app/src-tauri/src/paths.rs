@@ -395,9 +395,111 @@ fn clean_system_temp_leftovers() -> CleanStats {
     stats
 }
 
+/// User-triggered cache wipe from the More page.
+///
+/// Deletes **regenerable** junk only: conversion TEMP, leftover downloads,
+/// log files, and old diagnostic zips. Never touches Runtime, User_Data/models,
+/// app_config, wallpaper, or installed voices.
+pub fn clear_user_cache(root: &Path) -> CleanStats {
+    let mut stats = clean_temps(root);
+    stats.merge(clear_log_files(&logs_dir(root)));
+    let diag = user_data(root).join("diagnostics");
+    stats.merge(remove_matching_files(&diag, |name| {
+        let lower = name.to_ascii_lowercase();
+        lower.ends_with(".zip") || lower.ends_with(".tmp")
+    }));
+    // Recreate the log tree so the next write does not fail.
+    let _ = fs_create_all(&logs_dir(root));
+    stats
+}
+
+/// Approximate size of what [`clear_user_cache`] would remove.
+pub fn cache_footprint(root: &Path) -> u64 {
+    let mut n = dir_size_logs_only(&logs_dir(root));
+    n += dir_size_best_effort(&temp_dir(root));
+    n += dir_size_best_effort(&user_data(root).join("diagnostics"));
+    n
+}
+
+fn dir_size_best_effort(dir: &Path) -> u64 {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut n = 0u64;
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            n += dir_size_best_effort(&p);
+        } else {
+            n += p.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    n
+}
+
+fn dir_size_logs_only(dir: &Path) -> u64 {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut n = 0u64;
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            n += dir_size_logs_only(&p);
+            continue;
+        }
+        let name = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".log") || name.ends_with(".log.1") {
+            n += p.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    n
+}
+
+fn clear_log_files(dir: &Path) -> CleanStats {
+    remove_matching_files(dir, |name| {
+        let lower = name.to_ascii_lowercase();
+        lower.ends_with(".log") || lower.ends_with(".log.1")
+    })
+}
+
 fn fs_create_all(p: &Path) -> std::io::Result<()> {
     if !p.is_dir() {
         std::fs::create_dir_all(p)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod cache_clear_tests {
+    use super::*;
+
+    #[test]
+    fn clear_user_cache_drops_logs_keeps_models_and_config() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-cache-clear-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&td);
+        let logs = td.join("User_Data").join("logs").join("sts");
+        let models = td.join("User_Data").join("models").join("Anon");
+        std::fs::create_dir_all(&logs).unwrap();
+        std::fs::create_dir_all(&models).unwrap();
+        std::fs::write(logs.join("sts_fail.log"), b"boom").unwrap();
+        std::fs::write(td.join("User_Data").join("app_config.json"), b"{}").unwrap();
+        std::fs::write(models.join("a.pth"), b"pth").unwrap();
+        std::fs::create_dir_all(td.join("TEMP")).unwrap();
+        std::fs::write(td.join("TEMP").join("junk.bin"), b"xxxx").unwrap();
+
+        let stats = clear_user_cache(&td);
+        assert!(stats.removed_files >= 1);
+        assert!(!logs.join("sts_fail.log").exists());
+        assert!(models.join("a.pth").exists());
+        assert!(td.join("User_Data").join("app_config.json").exists());
+        let _ = std::fs::remove_dir_all(&td);
+    }
 }

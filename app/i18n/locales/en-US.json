@@ -1304,7 +1304,13 @@
     "stsFreeVram": "Stopping the realtime voice changer to free VRAM…",
     "stsStopWorkerConfirm": "Conversion needs the whole GPU, so the running realtime voice changer will be stopped first. Continue?",
     "stsTargetVoice": "Target voice",
-    "stsModelMissing": "Voice model not found: {a0}"
+    "stsModelMissing": "Voice model not found: {a0}",
+    "cacheClear": "Clear cache",
+    "cacheClearHint": "Remove logs, conversion temp files and leftover downloads. Voices and settings stay.",
+    "cacheClearDesc": "About {v0} MB can be cleared. Removes logs, conversion temp files and leftover downloads.",
+    "cacheClearConfirm": "This deletes logs, TEMP intermediates and partial downloads. Voice library and settings are kept. Continue?",
+    "cacheClearDone": "Cleared about {v0} MB ({v1} files).",
+    "cacheClearFail": "Could not clear cache: {v0}"
   },
   "extras": {
     "engineTitle": "Engine resources",

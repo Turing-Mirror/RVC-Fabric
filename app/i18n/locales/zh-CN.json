@@ -1304,7 +1304,13 @@
     "stsFreeVram": "正在停止实时变声以释放显存…",
     "stsStopWorkerConfirm": "转换需要独占显存，将先停止正在运行的实时变声。继续吗？",
     "stsTargetVoice": "目标音色",
-    "stsModelMissing": "找不到音色模型：{a0}"
+    "stsModelMissing": "找不到音色模型：{a0}",
+    "cacheClear": "清理缓存",
+    "cacheClearHint": "删除日志、转换临时文件和下载残留，不影响音色与设置。",
+    "cacheClearDesc": "约 {v0} MB 可清理。删除日志、转换临时文件和下载残留，不影响音色与设置。",
+    "cacheClearConfirm": "将删除日志、TEMP 中间文件和半截下载，不影响音色库和设置。确定清理？",
+    "cacheClearDone": "已清理约 {v0} MB（{v1} 个文件）。",
+    "cacheClearFail": "清理失败：{v0}"
   },
   "extras": {
     "engineTitle": "引擎资源",

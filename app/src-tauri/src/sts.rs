@@ -11,13 +11,25 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter};
 
 use crate::paths;
 
 static BUSY: Mutex<bool> = Mutex::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+static REC_BUSY: Mutex<bool> = Mutex::new(false);
+static REC_CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+static REC_STOP: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+const AUDIO_EXT: &[&str] = &[
+    "wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus", "webm",
+];
+const LIST_CAP: usize = 300;
+const WALK_CAP: usize = 2000;
+const LAST_INPUT: &str = "last_sts_input";
+const LAST_OUTPUT: &str = "last_sts_output";
+const MAX_RECORD_SEC: u64 = 30 * 60;
 
 fn cancel_flag() -> Arc<AtomicBool> {
     CANCEL
@@ -25,8 +37,18 @@ fn cancel_flag() -> Arc<AtomicBool> {
         .clone()
 }
 
+fn rec_cancel_flag() -> Arc<AtomicBool> {
+    REC_CANCEL
+        .get_or_init(|| Arc::new(AtomicBool::new(false)))
+        .clone()
+}
+
 fn worker_script(root: &Path) -> PathBuf {
     root.join("tools").join("sts_worker.py")
+}
+
+fn record_script(root: &Path) -> PathBuf {
+    root.join("tools").join("record_worker.py")
 }
 
 pub fn out_dir(root: &Path) -> PathBuf {
@@ -142,10 +164,88 @@ pub fn status(root: &Path) -> Value {
         "f0method": cfg.get("f0method").and_then(|v| v.as_str()).unwrap_or("rmvpe"),
         "index_rate": cfg.get("index_rate").and_then(|v| v.as_f64()).unwrap_or(0.75),
         "out_dir": out_dir(root).to_string_lossy(),
+        "default_input_dir": default_input_dir(root).to_string_lossy(),
+        "last_input": existing_path(cfg.get(LAST_INPUT).and_then(|v| v.as_str()).unwrap_or("")),
+        "last_output": existing_path(cfg.get(LAST_OUTPUT).and_then(|v| v.as_str()).unwrap_or("")),
+        "input_device": cfg.get("sg_input_device").and_then(|v| v.as_str()).unwrap_or(""),
+        "recorder_present": record_script(root).is_file(),
+        "recording": *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()),
         // 实时变声是否还占着显存。面板拿它决定要不要先问一句再开转。
         "worker_alive": crate::worker::is_worker_alive(root),
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
+}
+
+fn existing_path(raw: &str) -> String {
+    let p = raw.trim();
+    if p.is_empty() {
+        return String::new();
+    }
+    if Path::new(p).exists() {
+        p.to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn remember(root: &Path, key: &str, value: &str) {
+    let v = value.trim();
+    if v.is_empty() {
+        return;
+    }
+    let mut patch = Map::new();
+    patch.insert(key.to_string(), json!(v));
+    let _ = crate::config::update(root, patch);
+}
+
+pub fn remember_input(root: &Path, path: &str) {
+    remember(root, LAST_INPUT, path);
+}
+
+pub fn remember_output(root: &Path, path: &str) {
+    remember(root, LAST_OUTPUT, path);
+}
+
+pub fn default_input_dir(root: &Path) -> PathBuf {
+    paths::user_data(root).join("sts").join("input")
+}
+
+pub fn is_audio_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| AUDIO_EXT.iter().any(|x| e.eq_ignore_ascii_case(x)))
+        .unwrap_or(false)
+}
+
+/// 录音和管理用的文件夹：选了文件夹就用它，选了文件就用它所在目录，
+/// 都没选就落到默认输入目录。
+pub fn resolve_input_dir(root: &Path, input: &str) -> PathBuf {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return default_input_dir(root);
+    }
+    let p = Path::new(raw);
+    if p.is_dir() {
+        return p.to_path_buf();
+    }
+    if p.is_file() {
+        if let Some(parent) = p.parent() {
+            if !parent.as_os_str().is_empty() {
+                return parent.to_path_buf();
+            }
+        }
+    }
+    default_input_dir(root)
+}
+
+fn path_under(child: &Path, parent: &Path) -> bool {
+    let Ok(c) = child.canonicalize() else {
+        return false;
+    };
+    let Ok(p) = parent.canonicalize() else {
+        return false;
+    };
+    c.starts_with(p)
 }
 
 /// 选输入：`folder=false` 选单个音频，`true` 选文件夹（批量）。
@@ -175,6 +275,334 @@ pub fn pick_output() -> Option<String> {
         .set_title(&title)
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// 列出输入文件夹里的音频（含子目录），按修改时间新→旧，最多 LIST_CAP。
+pub fn list_input(root: &Path, input: &str) -> Value {
+    let dir = resolve_input_dir(root, input);
+    let exists = dir.is_dir();
+    let mut files: Vec<(u64, Value)> = Vec::new();
+    if exists {
+        if let Ok(walk) = walk_audio(&dir) {
+            files = walk;
+        }
+    }
+    files.sort_by(|a, b| b.0.cmp(&a.0));
+    let truncated = files.len() > LIST_CAP;
+    if truncated {
+        files.truncate(LIST_CAP);
+    }
+    json!({
+        "dir": dir.to_string_lossy(),
+        "exists": exists,
+        "truncated": truncated,
+        "files": files.into_iter().map(|(_, v)| v).collect::<Vec<_>>(),
+    })
+}
+
+fn walk_audio(dir: &Path) -> std::io::Result<Vec<(u64, Value)>> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(cur) = stack.pop() {
+        let rd = match std::fs::read_dir(&cur) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        for ent in rd.flatten() {
+            let path = ent.path();
+            let ft = match ent.file_type() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if ft.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !ft.is_file() || !is_audio_path(&path) {
+                continue;
+            }
+            let meta = match ent.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let rel = path
+                .strip_prefix(dir)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| {
+                    path.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                });
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| rel.clone());
+            out.push((
+                mtime,
+                json!({
+                    "name": name,
+                    "rel": rel,
+                    "path": path.to_string_lossy(),
+                    "size": meta.len(),
+                    "mtime": mtime,
+                }),
+            ));
+            if out.len() >= WALK_CAP {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub fn delete_input_file(root: &Path, input: &str, path: &str) -> Result<(), String> {
+    let dir = resolve_input_dir(root, input);
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Err(crate::i18n::t("s.stsInputDirMissing"));
+    }
+    if !is_audio_path(file) || !path_under(file, &dir) {
+        return Err(crate::i18n::t("s.stsDeleteUnsafe"));
+    }
+    std::fs::remove_file(file).map_err(|e| crate::i18n::te("s.stsDeleteFail", &e))?;
+    Ok(())
+}
+
+pub fn reveal_path(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    if p.is_dir() {
+        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+        return crate::shell_extras::reveal(&p.join("x"));
+    }
+    if p.is_file() {
+        return crate::shell_extras::reveal(p);
+    }
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        return crate::shell_extras::reveal(&parent.join("x"));
+    }
+    Err(crate::i18n::t("s.stsInputDirMissing"))
+}
+
+pub fn cancel_record() {
+    rec_cancel_flag().store(true, Ordering::SeqCst);
+    if let Ok(g) = REC_STOP.lock() {
+        if let Some(p) = g.as_ref() {
+            let _ = std::fs::write(p, b"stop");
+        }
+    }
+}
+
+/// 在输入文件夹录一段 wav。阻塞到用户停止或超时。
+pub fn record(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String> {
+    {
+        let conv = *BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        if conv {
+            return Err(crate::i18n::t("s.stsRecordBusy"));
+        }
+        let mut g = REC_BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        if *g {
+            return Err(crate::i18n::t("s.stsRecordAlready"));
+        }
+        *g = true;
+    }
+    rec_cancel_flag().store(false, Ordering::SeqCst);
+    let result = record_inner(app, root, input);
+    *REC_STOP.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    if let Err(ref e) = result {
+        emit_record(app, "error", None, None, e);
+    }
+    result
+}
+
+fn emit_record(app: &AppHandle, phase: &str, db: Option<f64>, sec: Option<f64>, message: &str) {
+    let mut body = json!({
+        "phase": phase,
+        "message": message,
+    });
+    if let Some(v) = db {
+        body["db"] = json!(v);
+    }
+    if let Some(v) = sec {
+        body["sec"] = json!(v);
+    }
+    let _ = app.emit("sts-record", body);
+}
+
+fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String> {
+    if !paths::runtime_ready(root) {
+        return Err(crate::i18n::t("s.stsRecordNeedRuntime"));
+    }
+    let script = record_script(root);
+    if !script.is_file() {
+        return Err(crate::i18n::t("s.stsRecordNeedWorker"));
+    }
+
+    let dir = resolve_input_dir(root, input);
+    std::fs::create_dir_all(&dir).map_err(|e| crate::i18n::te("s.stsRecordNoFolder", &e))?;
+    remember_input(root, &dir.to_string_lossy());
+
+    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let dest = unique_rec_path(&dir, &stamp);
+    let cfg = crate::config::read(root);
+    let device = cfg
+        .get("sg_input_device")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let hostapi = cfg
+        .get("sg_hostapi")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let cache = paths::update_cache(root);
+    let _ = std::fs::create_dir_all(&cache);
+    let req = cache.join("record_request.json");
+    let stop = cache.join("record_stop");
+    let _ = std::fs::remove_file(&stop);
+    *REC_STOP.lock().unwrap_or_else(|e| e.into_inner()) = Some(stop.clone());
+    let payload = json!({
+        "output": dest.to_string_lossy(),
+        "device": device,
+        "hostapi": hostapi,
+        "stop_file": stop.to_string_lossy(),
+        "max_sec": MAX_RECORD_SEC,
+    });
+    std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
+        .map_err(|e| crate::i18n::te("s.5ee0565f28", &e))?;
+
+    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+    emit_record(app, "start", None, Some(0.0), &crate::i18n::t("s.stsRecordOpening"));
+
+    let mut cmd = Command::new(&py);
+    cmd.arg(script.as_os_str())
+        .arg(req.as_os_str())
+        .current_dir(root)
+        .envs(crate::worker::env_for_runtime(root))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| crate::i18n::te("s.4f592d4fc2", &e))?;
+    let stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => {
+            let _ = child.kill();
+            return Err(crate::i18n::t("s.68759edc4b").into());
+        }
+    };
+
+    let mut file_out = dest.to_string_lossy().into_owned();
+    let mut sec_out = 0.0_f64;
+    let mut fail: Option<String> = None;
+
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if rec_cancel_flag().load(Ordering::SeqCst) {
+            let _ = std::fs::write(&stop, b"stop");
+            // 给 worker 一点时间把 wav 头写完；还不退再杀。
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = child.kill();
+            let _ = child.wait();
+            break;
+        }
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
+        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let db = v.get("db").and_then(|x| x.as_f64());
+        let sec = v.get("sec").and_then(|x| x.as_f64());
+        match phase {
+            "start" => {
+                let fallback = crate::i18n::t("s.stsRecording");
+                let text = if msg.is_empty() { fallback.as_str() } else { msg };
+                emit_record(app, "start", None, sec.or(Some(0.0)), text);
+            }
+            "level" => {
+                emit_record(app, "level", db, sec, msg);
+            }
+            "done" => {
+                if let Some(f) = v.get("file").and_then(|x| x.as_str()) {
+                    file_out = f.to_string();
+                }
+                if let Some(s) = sec {
+                    sec_out = s;
+                }
+            }
+            "error" => fail = Some(msg.to_string()),
+            _ => {}
+        }
+    }
+
+    if rec_cancel_flag().load(Ordering::SeqCst) {
+        let _ = std::fs::write(&stop, b"stop");
+    }
+    let _ = child.wait();
+    let _ = std::fs::remove_file(&stop);
+    *REC_STOP.lock().unwrap_or_else(|e| e.into_inner()) = None;
+
+    let cancelled = rec_cancel_flag().load(Ordering::SeqCst);
+    if let Some(e) = fail {
+        if cancelled {
+            return Ok(json!({
+                "ok": true,
+                "file": "",
+                "dir": dir.to_string_lossy(),
+                "sec": 0,
+                "cancelled": true,
+            }));
+        }
+        return Err(e);
+    }
+    if !Path::new(&file_out).is_file() {
+        if cancelled {
+            return Ok(json!({
+                "ok": true,
+                "file": "",
+                "dir": dir.to_string_lossy(),
+                "sec": 0,
+                "cancelled": true,
+            }));
+        }
+        return Err(crate::i18n::t("s.stsRecordEmpty"));
+    }
+    remember_input(root, &dir.to_string_lossy());
+    emit_record(app, "done", None, Some(sec_out), &file_out);
+    Ok(json!({
+        "ok": true,
+        "file": file_out,
+        "dir": dir.to_string_lossy(),
+        "sec": sec_out,
+    }))
+}
+
+fn unique_rec_path(dir: &Path, stamp: &str) -> PathBuf {
+    let mut dest = dir.join(format!("rec_{stamp}.wav"));
+    if !dest.exists() {
+        return dest;
+    }
+    for n in 2..1000 {
+        dest = dir.join(format!("rec_{stamp}_{n}.wav"));
+        if !dest.exists() {
+            return dest;
+        }
+    }
+    dir.join(format!("rec_{stamp}_{}.wav", std::process::id()))
 }
 
 /// Resolve which .pth / .index this job should use.
@@ -258,6 +686,9 @@ pub fn run(
     index_path: &str,
 ) -> Result<Value, String> {
     {
+        if *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
+            return Err(crate::i18n::t("s.stsRecordConvertBusy").into());
+        }
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
             return Err(crate::i18n::t("s.6a025ac81b").into());
@@ -618,4 +1049,102 @@ fn run_inner(
         "skipped": skipped,
         "output": out.to_string_lossy(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn tmp_root() -> PathBuf {
+        let n = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("rvcf-sts-rec-{n}"));
+        fs::create_dir_all(dir.join("User_Data")).unwrap();
+        dir
+    }
+
+    #[test]
+    fn audio_ext_accepts_common_and_rejects_other() {
+        assert!(is_audio_path(Path::new("a.WAV")));
+        assert!(is_audio_path(Path::new("b.opus")));
+        assert!(!is_audio_path(Path::new("c.txt")));
+        assert!(!is_audio_path(Path::new("noext")));
+    }
+
+    #[test]
+    fn resolve_dir_file_parent_and_empty_default() {
+        let root = tmp_root();
+        let folder = root.join("clips");
+        fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("v.wav");
+        fs::write(&file, b"x").unwrap();
+
+        assert_eq!(resolve_input_dir(&root, &folder.to_string_lossy()), folder);
+        assert_eq!(resolve_input_dir(&root, &file.to_string_lossy()), folder);
+        assert_eq!(resolve_input_dir(&root, ""), default_input_dir(&root));
+        assert_eq!(
+            resolve_input_dir(&root, r"Z:\no\such\sts_input"),
+            default_input_dir(&root)
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn list_skips_non_audio_and_sorts_new_first() {
+        let root = tmp_root();
+        let dir = root.join("in");
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("skip.txt"), b"no").unwrap();
+        fs::write(dir.join("a.wav"), b"1").unwrap();
+        fs::write(dir.join("sub").join("b.mp3"), b"2").unwrap();
+
+        let v = list_input(&root, &dir.to_string_lossy());
+        let files = v.get("files").and_then(|x| x.as_array()).unwrap();
+        assert_eq!(files.len(), 2);
+        let rels: Vec<&str> = files
+            .iter()
+            .filter_map(|f| f.get("rel").and_then(|x| x.as_str()))
+            .collect();
+        assert!(rels.iter().any(|r| *r == "a.wav" || *r == "sub/b.mp3"));
+        assert!(!rels.iter().any(|r| r.contains("skip")));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn delete_rejects_outside_and_non_audio() {
+        let root = tmp_root();
+        let dir = root.join("in");
+        fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("ok.wav");
+        fs::write(&wav, b"1").unwrap();
+        let outside = root.join("secret.wav");
+        fs::write(&outside, b"2").unwrap();
+        let txt = dir.join("note.txt");
+        fs::write(&txt, b"3").unwrap();
+
+        assert!(delete_input_file(&root, &dir.to_string_lossy(), &outside.to_string_lossy()).is_err());
+        assert!(delete_input_file(&root, &dir.to_string_lossy(), &txt.to_string_lossy()).is_err());
+        assert!(delete_input_file(&root, &dir.to_string_lossy(), &wav.to_string_lossy()).is_ok());
+        assert!(!wav.exists());
+        assert!(outside.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unique_rec_path_adds_suffix() {
+        let root = tmp_root();
+        let dir = root.join("in");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("rec_20260813_120000.wav"), b"x").unwrap();
+        let p = unique_rec_path(&dir, "20260813_120000");
+        assert_eq!(
+            p.file_name().unwrap().to_string_lossy(),
+            "rec_20260813_120000_2.wav"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
 }

@@ -45,9 +45,9 @@ fn spec_for(kind: &str) -> Option<Spec> {
             // 标签仍用 tts 兼容旧入口；窗体标题是「语音转换」（含音频变声 + 文字合成）。
             title: crate::i18n::t("s.6f311c47fe"),
             w: 720.0,
-            h: 700.0,
+            h: 780.0,
             min_w: 560.0,
-            min_h: 520.0,
+            min_h: 560.0,
         },
         _ => return None,
     })

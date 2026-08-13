@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { RangeBar } from "./controls";
@@ -25,6 +25,34 @@ type StsStatus = {
   out_dir?: string;
   worker_alive?: boolean;
   busy?: boolean;
+  last_input?: string;
+  last_output?: string;
+  default_input_dir?: string;
+  input_device?: string;
+  recorder_present?: boolean;
+  recording?: boolean;
+};
+
+type RecProgress = {
+  phase: string;
+  db?: number;
+  sec?: number;
+  message?: string;
+};
+
+type InputFile = {
+  name: string;
+  rel: string;
+  path: string;
+  size: number;
+  mtime: number;
+};
+
+type InputList = {
+  dir: string;
+  exists?: boolean;
+  truncated?: boolean;
+  files?: InputFile[];
 };
 
 type TtsStatus = {
@@ -65,6 +93,7 @@ type Skipped = {
 
 const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[86px] shrink-0 text-[13px]";
+const LIST_CAP_UI = 300;
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FIELD =
@@ -115,7 +144,27 @@ function formatEta(elapsedSec: number, pct: number): string {
   if (elapsedSec < 3 || pct < 5 || pct >= 100) return "";
   const remain = Math.round((elapsedSec * (100 - pct)) / pct);
   if (remain < 1) return "";
-  return `剩余约 ${formatElapsed(remain)}`;
+  return t("s.stsEta", { v0: formatElapsed(remain) });
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)} KB`;
+  return `${n} B`;
+}
+
+function formatMtime(sec: number): string {
+  if (!sec) return "";
+  const d = new Date(sec * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function formatRecSec(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function StsSection() {
@@ -138,6 +187,14 @@ function StsSection() {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
+  const [lib, setLib] = useState<InputList | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [rec, setRec] = useState<RecProgress | null>(null);
+  const [playing, setPlaying] = useState("");
+  const recordingRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const inputRef = useRef(input);
+  inputRef.current = input;
 
   const pickVoice = (m: VoiceModel | undefined) => {
     if (!m || !m.path) return;
@@ -156,7 +213,13 @@ function StsSection() {
       if (s.pitch != null) setPitch(Number(s.pitch));
       if (s.f0method) setF0method(String(s.f0method));
       if (s.index_rate != null) setIndexRate(Number(s.index_rate));
-      if (!output && s.out_dir) setOutput(String(s.out_dir));
+      if (!input && s.last_input) setInput(String(s.last_input));
+      if (!output && s.last_output) setOutput(String(s.last_output));
+      else if (!output && s.out_dir) setOutput(String(s.out_dir));
+      if (s.recording) {
+        recordingRef.current = true;
+        setRecording(true);
+      }
 
       const usable = (cat.models || []).filter(
         (m) => m.path && !m.missing && String(m.path).length > 0,
@@ -210,11 +273,42 @@ function StsSection() {
       if (disposed) fn();
       else un = fn;
     });
+    let unRec: (() => void) | undefined;
+    void listen<RecProgress>("sts-record", (ev) => {
+      setRec(ev.payload);
+      if (ev.payload.phase === "done" || ev.payload.phase === "error") {
+        recordingRef.current = false;
+        setRecording(false);
+        void invoke<InputList>("sts_list_input", {
+          input: inputRef.current,
+        }).then(setLib)
+          .catch(() => undefined);
+      }
+    }).then((fn) => {
+      if (disposed) fn();
+      else unRec = fn;
+    });
     return () => {
       disposed = true;
       un?.();
+      unRec?.();
+      audioRef.current?.pause();
     };
   }, []);
+
+  const refreshList = async (path: string) => {
+    try {
+      const r = await invoke<InputList>("sts_list_input", { input: path });
+      setLib(r);
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
+
+  useEffect(() => {
+    void refreshList(input);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只跟输入路径走
+  }, [input]);
 
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
   useEffect(() => {
@@ -229,6 +323,11 @@ function StsSection() {
     return () => window.clearInterval(id);
   }, [running]);
 
+  const recBlocked = !st.runtime_ready
+    ? t("s.bc45fc14b1")
+    : st.recorder_present === false
+      ? t("s.stsRecordNeedWorker")
+      : "";
   const blocked = !st.runtime_ready
     ? t("s.bc45fc14b1")
     : st.engine_core_ready === false
@@ -241,8 +340,83 @@ function StsSection() {
           ? t("s.03877888b6")
           : "";
 
+  const stopPlay = () => {
+    audioRef.current?.pause();
+    setPlaying("");
+  };
+
+  const playFile = (path: string) => {
+    if (playing === path) {
+      stopPlay();
+      return;
+    }
+    stopPlay();
+    try {
+      const el = audioRef.current ?? new Audio();
+      audioRef.current = el;
+      el.src = convertFileSrc(path);
+      el.onended = () => setPlaying("");
+      el.onerror = () => {
+        setPlaying("");
+        setMsg(t("s.stsPlayFail"));
+      };
+      void el.play().then(() => setPlaying(path));
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
+
+  const startRec = async () => {
+    if (recordingRef.current || runningRef.current) return;
+    stopPlay();
+    setMsg("");
+    setRec({ phase: "start", sec: 0, message: t("s.stsRecordOpening") });
+    recordingRef.current = true;
+    setRecording(true);
+    const prior = input;
+    try {
+      let folder = prior;
+      if (!folder) {
+        folder = await invoke<string>("sts_default_input");
+        setInput(folder);
+      }
+      const r = await invoke<{
+        file?: string;
+        dir?: string;
+        cancelled?: boolean;
+      }>("sts_record_start", { input: folder });
+      if (r.dir) {
+        const wasSingle = !!(prior && lib?.dir && prior !== lib.dir);
+        if (wasSingle && r.file && !r.cancelled) setInput(r.file);
+        else if (!prior) setInput(r.dir);
+      }
+      if (r.file && !r.cancelled) {
+        setMsg(t("s.stsRecordSaved", { v0: r.file }));
+      }
+      await refreshList(r.dir || folder);
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      recordingRef.current = false;
+      setRecording(false);
+      setRec(null);
+    }
+  };
+
+  const removeFile = async (f: InputFile) => {
+    if (!window.confirm(t("s.stsDeleteConfirm", { v0: f.name }))) return;
+    if (playing === f.path) stopPlay();
+    try {
+      await invoke("sts_delete_input", { input, path: f.path });
+      if (input === f.path) setInput(lib?.dir || "");
+      await refreshList(input === f.path ? lib?.dir || "" : input);
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
+
   const start = async () => {
-    if (runningRef.current) return;
+    if (runningRef.current || recordingRef.current) return;
     // 离线转换要独占显存，后端会先杀掉实时变声。那是用户正在用的东西，不能
     // 不打招呼就停——现问一次状态，别拿进面板时的旧值判断。
     try {
@@ -351,6 +525,7 @@ function StsSection() {
           <span className={LABEL}>{t("s.e8850440f2")}</span>
           <span className={PATH}>{input || t("s.245826185c")}</span>
           <Btn
+            disabled={running || recording}
             onClick={() => {
               void invoke<string | null>("sts_pick_input", { folder: false }).then(
                 (p) => p && setInput(p),
@@ -358,6 +533,7 @@ function StsSection() {
             }}
           >{t("s.49deaf7da2")}</Btn>
           <Btn
+            disabled={running || recording}
             onClick={() => {
               void invoke<string | null>("sts_pick_input", { folder: true }).then(
                 (p) => p && setInput(p),
@@ -376,6 +552,147 @@ function StsSection() {
             }}
           >{t("s.70b208202c")}</Btn>
         </div>
+        <div className={ROW}>
+          <span className={LABEL}>{t("s.stsRecord")}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="relative h-1.5 w-[120px] shrink-0 overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]"
+                title={t("s.stsRecord")}
+              >
+                <div
+                  className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-75"
+                  style={{
+                    width: `${
+                      recording
+                        ? Math.round(
+                            ((Math.max(-60, Math.min(0, rec?.db ?? -60)) + 60) /
+                              60) *
+                              100,
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <span className="w-[44px] shrink-0 tabular-nums text-[12.5px] text-[var(--meta)]">
+                {formatRecSec(rec?.sec ?? 0)}
+              </span>
+              {recording ? (
+                <Btn onClick={() => void invoke("sts_record_stop")}>
+                  {t("s.stsRecordStop")}
+                </Btn>
+              ) : (
+                <Btn
+                  disabled={running || !!recBlocked}
+                  onClick={() => void startRec()}
+                >
+                  {t("s.stsRecordStart")}
+                </Btn>
+              )}
+            </div>
+            <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)] truncate">
+              {recording
+                ? rec?.message || t("s.stsRecording")
+                : t("s.stsRecordDevice", {
+                    v0: st.input_device || t("s.stsRecordDeviceDefault"),
+                  })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-[var(--hairline)] pt-3">
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <span className="text-[13px] font-medium">{t("s.stsInputLibrary")}</span>
+          <span className="text-[11.5px] text-[var(--meta)]">
+            {lib?.truncated
+              ? t("s.stsInputTruncated", { v0: LIST_CAP_UI })
+              : t("s.stsInputCount", { v0: lib?.files?.length ?? 0 })}
+          </span>
+        </div>
+        <div className="mb-2 flex flex-wrap justify-end gap-2">
+          {!input ? (
+            <Btn
+              disabled={running || recording}
+              onClick={() => {
+                void invoke<string>("sts_default_input").then((p) => {
+                  if (p) setInput(p);
+                });
+              }}
+            >
+              {t("s.stsDefaultFolder")}
+            </Btn>
+          ) : null}
+          {input && lib?.dir && input !== lib.dir ? (
+            <Btn
+              disabled={running || recording}
+              onClick={() => setInput(lib.dir)}
+            >
+              {t("s.stsUseFolder")}
+            </Btn>
+          ) : null}
+          <Btn
+            disabled={!lib?.dir}
+            onClick={() => {
+              if (lib?.dir) void invoke("sts_reveal_input", { path: lib.dir });
+            }}
+          >
+            {t("s.stsOpenInput")}
+          </Btn>
+        </div>
+        {(lib?.files?.length ?? 0) === 0 ? (
+          <p className="m-0 text-[12.5px] text-[var(--meta)]">
+            {t("s.stsInputEmpty")}
+          </p>
+        ) : (
+          <ul className="m-0 max-h-[220px] list-none overflow-y-auto p-0">
+            {(lib?.files ?? []).map((f) => {
+              const on = input === f.path;
+              return (
+                <li
+                  key={f.path}
+                  className={[
+                    "flex items-center gap-2 rounded-[var(--rs)] px-2 py-1.5",
+                    on
+                      ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+                      : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+                  ].join(" ")}
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer"
+                    disabled={running || recording}
+                    onClick={() => setInput(f.path)}
+                    title={f.path}
+                  >
+                    <span className="block truncate text-[12.5px] font-mono">
+                      {f.rel || f.name}
+                    </span>
+                    <span className="block text-[11px] text-[var(--meta)] tabular-nums">
+                      {`${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
+                    </span>
+                  </button>
+                  <Btn
+                    disabled={recording}
+                    onClick={() => playFile(f.path)}
+                  >
+                    {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
+                  </Btn>
+                  <Btn
+                    disabled={running || recording}
+                    onClick={() => void removeFile(f)}
+                  >
+                    {t("s.stsDelete")}
+                  </Btn>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-1 border-t border-[var(--hairline)]">
         <div className={ROW}>
           <span className={LABEL}>{t("s.bda11a3c2d")}</span>
           <div className="flex-1">
@@ -447,7 +764,11 @@ function StsSection() {
           </div>
           {multi && running ? (
             <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)] tabular-nums">
-              {`成功 ${okN} · 跳过 ${skipN} · 剩余 ${Math.max(0, (prog?.total ?? 0) - okN - skipN)}`}
+              {t("s.stsBatchStats", {
+                v0: okN,
+                v1: skipN,
+                v2: Math.max(0, (prog?.total ?? 0) - okN - skipN),
+              })}
             </p>
           ) : null}
         </div>
@@ -486,7 +807,7 @@ function StsSection() {
         )}
         <Btn
           primary
-          disabled={running || !!blocked || !input}
+          disabled={running || recording || !!blocked || !input}
           onClick={() => void start()}
         >
           {running ? t("s.090840132b") : t("s.31e9cad169")}

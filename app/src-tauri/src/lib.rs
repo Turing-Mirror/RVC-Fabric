@@ -673,13 +673,72 @@ async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> 
 }
 
 #[tauri::command]
-fn sts_pick_input(folder: bool) -> Option<String> {
-    sts::pick_input(folder)
+fn sts_pick_input(state: State<'_, Mutex<AppState>>, folder: bool) -> Option<String> {
+    let p = sts::pick_input(folder)?;
+    if let Ok(root) = root_clone(&state) {
+        sts::remember_input(&root, &p);
+    }
+    Some(p)
 }
 
 #[tauri::command]
-fn sts_pick_output() -> Option<String> {
-    sts::pick_output()
+fn sts_pick_output(state: State<'_, Mutex<AppState>>) -> Option<String> {
+    let p = sts::pick_output()?;
+    if let Ok(root) = root_clone(&state) {
+        sts::remember_output(&root, &p);
+    }
+    Some(p)
+}
+
+#[tauri::command]
+async fn sts_list_input(
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(sts::list_input(&root, &input)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn sts_delete_input(
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+    path: String,
+) -> Result<(), String> {
+    sts::delete_input_file(&root_clone(&state)?, &input, &path)
+}
+
+#[tauri::command]
+fn sts_reveal_input(path: String) -> Result<(), String> {
+    sts::reveal_path(&path)
+}
+
+#[tauri::command]
+fn sts_default_input(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    let root = root_clone(&state)?;
+    let dir = sts::default_input_dir(&root);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    sts::remember_input(&root, &dir.to_string_lossy());
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn sts_record_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts::record(&app, &root, &input))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn sts_record_stop() {
+    sts::cancel_record();
 }
 
 #[tauri::command]
@@ -1400,6 +1459,12 @@ pub fn run() {
             sts_status,
             sts_pick_input,
             sts_pick_output,
+            sts_list_input,
+            sts_delete_input,
+            sts_reveal_input,
+            sts_default_input,
+            sts_record_start,
+            sts_record_stop,
             sts_start,
             sts_cancel,
             sts_reveal,

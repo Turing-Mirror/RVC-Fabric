@@ -239,6 +239,8 @@ pub fn clean_temps(root: &Path) -> CleanStats {
         "tts_sapi.wav",
         "tts_out.wav",
         "sts_request.json",
+        "record_request.json",
+        "record_stop",
     ] {
         let p = cache.join(name);
         if p.is_file() {

@@ -18,6 +18,10 @@
     "maximize": "最大化",
     "close": "閉じる"
   },
+  "store": {
+    "allSeries": "すべてのシリーズ",
+    "searchHint": "音色・シリーズ・部活・作者で検索…"
+  },
   "dock": {
     "noVoice": "音声未選択",
     "none": "なし",

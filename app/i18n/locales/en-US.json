@@ -18,6 +18,10 @@
     "maximize": "Maximize",
     "close": "Close"
   },
+  "store": {
+    "allSeries": "All series",
+    "searchHint": "Search voices / series / clubs / authors…"
+  },
   "dock": {
     "noVoice": "No voice selected",
     "none": "None",

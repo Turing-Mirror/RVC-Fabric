@@ -257,6 +257,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--name", default="", help="展示名")
     ap.add_argument("--tag", default="二次元", help="标签，如 二次元 / 真人")
     ap.add_argument("--series", default="", help="系列名（仅搜索，不进系列专区）")
+    ap.add_argument("--group", default="", help="系列内社团/部门，如 研讨会")
     ap.add_argument("--real-person", action="store_true", help="真人条目，跳过 Bangumi")
     ap.add_argument("--no-cover", action="store_true", help="不下载封面")
     ap.add_argument("--bangumi-id", type=int, default=0, help="指定 Bangumi 角色 id")
@@ -440,6 +441,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     }
     if args.series:
         data["series"] = args.series
+    if args.group:
+        data["group"] = args.group.strip()
     if art["kind"] == "voice_files":
         data["pth_url"] = _resolve_url(endpoint, repo, art["pth"])
         if art.get("index"):

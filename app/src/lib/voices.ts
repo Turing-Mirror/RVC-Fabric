@@ -76,6 +76,9 @@ export type StoreVoice = {
   series_ja?: string;
   series_en?: string;
   series_zh_Hant?: string;
+  /** Club / department inside a series (e.g. 研讨会). */
+  group?: string;
+  group_i18n?: Record<string, string>;
   origin?: string;
   origin_label?: string;
   source_url?: string;

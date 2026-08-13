@@ -25,6 +25,8 @@ export type NamedVoice = {
   series_ja?: string;
   series_en?: string;
   series_zh_Hant?: string;
+  /** Club / department inside a series, e.g. 研讨会. */
+  group?: string;
   [key: string]: unknown;
 };
 
@@ -158,6 +160,24 @@ const SERIES_FALLBACK: Record<
   "RVC原版": { en: "RVC Original", ja: "RVCオリジナル", hant: "RVC原版", ko: "RVC 오리지널" },
   "MyGO!!!!!": { en: "MyGO!!!!!", ja: "MyGO!!!!!", hant: "MyGO!!!!!" },
   VOCALOID: { en: "VOCALOID", ja: "VOCALOID", hant: "VOCALOID" },
+  "蔚蓝档案": { en: "Blue Archive", ja: "ブルーアーカイブ", hant: "蔚藍檔案", ko: "블루 아카이브" },
+};
+
+const GROUP_FALLBACK: Record<
+  string,
+  { en?: string; ja?: string; hant?: string }
+> = {
+  "真理部": { en: "Veritas", ja: "ヴェリタス", hant: "真理部" },
+  "工程部": { en: "Engineering", ja: "エンジニア部", hant: "工程部" },
+  "研讨会": { en: "Seminar", ja: "セミナー", hant: "研討會" },
+  "游戏开发部": { en: "Game Development", ja: "ゲーム開発部", hant: "遊戲開發部" },
+  "特异现象搜查部": {
+    en: "Super Phenomenon Task Force",
+    ja: "特異現象特捜部",
+    hant: "特異現象搜查部",
+  },
+  "阴阳部": { en: "Yin-Yang Club", ja: "陰陽部", hant: "陰陽部" },
+  "图书委员会": { en: "Library Committee", ja: "図書委員会", hant: "圖書委員會" },
 };
 
 function str(v: unknown): string {
@@ -282,10 +302,40 @@ export function displayVoiceSeries(
   return seriesEn || primary;
 }
 
+/** Club / department label inside a series (研讨会, Veritas, …). */
+export function displayVoiceGroup(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const primary = pickFieldI18n(v, "group", loc) || str(v.group);
+  if (!primary) return "";
+  const fb = GROUP_FALLBACK[str(v.group)] || GROUP_FALLBACK[primary];
+  if (loc === "ja-JP") return fb?.ja || primary;
+  if (loc === "zh-CN") return primary;
+  if (loc === "zh-TW") return fb?.hant || primary;
+  return fb?.en || primary;
+}
+
 /** Search haystack: all name variants so filtering works in any language. */
 export function voiceSearchText(v: NamedVoice): string {
   const { zh, ja, en, hant, id } = resolveParts(v);
-  return [zh, ja, en, hant, id, str(v.series), str(v.author), str(v.tag)]
+  const group = str(v.group);
+  const gf = GROUP_FALLBACK[group];
+  return [
+    zh,
+    ja,
+    en,
+    hant,
+    id,
+    str(v.series),
+    str(v.author),
+    str(v.tag),
+    group,
+    gf?.en,
+    gf?.ja,
+    gf?.hant,
+  ]
     .filter(Boolean)
     .join(" ");
 }

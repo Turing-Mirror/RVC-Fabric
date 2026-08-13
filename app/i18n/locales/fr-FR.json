@@ -18,6 +18,10 @@
     "maximize": "Agrandir",
     "close": "Fermer"
   },
+  "store": {
+    "allSeries": "Toutes les séries",
+    "searchHint": "Rechercher voix / séries / clubs / auteurs…"
+  },
   "dock": {
     "noVoice": "Aucune voix sélectionnée",
     "none": "Aucun",

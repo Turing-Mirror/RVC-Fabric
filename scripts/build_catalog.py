@@ -736,6 +736,7 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "name",
         "tag",
         "series",
+        "group",
         "author",
         "author_url",
         "date",
@@ -764,6 +765,7 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "series_ja",
         "series_en",
         "series_zh_Hant",
+        "group",
         "notes",
     }
     item: dict[str, Any] = {
@@ -787,13 +789,16 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     item["sha256"] = art["sha256"]
     item["size_bytes"] = int(art["size_bytes"] or 0)
     item["description"] = str(v.get("description") or "")
-    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author"])
+    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author", "group"])
     item["publisher"] = str(v.get("publisher") or "rvc_fabric")
     item["fabric_official"] = bool(v.get("fabric_official", True))
     item["date"] = date
     series = str(v.get("series") or "").strip()
     if series:
         item["series"] = series
+    group = str(v.get("group") or "").strip()
+    if group:
+        item["group"] = group
     # 未识别字段原样透传（客户端容忍额外键）
     for k, val in v.items():
         if k not in known and k not in item:
@@ -915,8 +920,11 @@ def _compile_thirdparty_voice(
         item["cover_url"] = cover_url
     series = str(v.get("series") or "").strip()
     if series:
-        item["series"] = series  # 仅搜索，不进系列专区
-    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author"])
+        item["series"] = series
+    group = str(v.get("group") or "").strip()
+    if group:
+        item["group"] = group
+    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author", "group"])
     for k in ("hf_downloads", "hf_likes", "snapshot_date", "real_person"):
         if k in v and v[k] is not None and v[k] != "":
             item[k] = v[k]

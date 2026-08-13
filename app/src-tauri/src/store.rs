@@ -184,6 +184,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "series_ja": series_ja,
         "series_en": series_en,
         "series_zh_Hant": series_zh_hant,
+        "group": d.get("group").and_then(|v| v.as_str()).unwrap_or(""),
         "origin": d.get("origin").and_then(|v| v.as_str()).unwrap_or(""),
         "source_url": d.get("source_url").or_else(|| d.get("repo_url")).and_then(|v| v.as_str()).unwrap_or(""),
         "official": official,
@@ -531,7 +532,7 @@ fn entry_cover(entry: &Value) -> Option<Value> {
 
 fn copy_i18n_fields(entry: &Value, extra: &mut Map<String, Value>) {
     let Some(obj) = entry.as_object() else { return };
-    const FIELDS: [&str; 5] = ["name", "tag", "series", "author", "description"];
+    const FIELDS: [&str; 6] = ["name", "tag", "series", "author", "description", "group"];
     for (k, v) in obj {
         let Some((field, rest)) = k.split_once('_') else {
             continue;
@@ -726,7 +727,7 @@ pub fn install_voice_pack_zip(
         }
 
         let mut extra = Map::new();
-        for k in ["author", "author_url", "date", "series", "cover"] {
+        for k in ["author", "author_url", "date", "series", "group", "cover"] {
             if let Some(v) = pack_cfg.get(k) {
                 extra.insert(k.to_string(), v.clone());
             }
@@ -1039,7 +1040,7 @@ pub fn install_voice_entry(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "date", "series"] {
+    for k in ["author", "author_url", "date", "series", "group"] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1235,7 +1236,7 @@ fn install_staged_files(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "date", "series"] {
+    for k in ["author", "author_url", "date", "series", "group"] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1332,10 +1333,17 @@ mod tests {
             "id": "Anon",
             "name": "千早爱音",
             "pth_url": "https://example.invalid/a.pth",
+            "group": "研讨会",
+            "group_i18n": { "en-US": "Seminar" },
             "name_i18n": { "en-US": "Chihaya Anon", "ru-RU": "Тихая Анон" },
             "description_i18n": { "en-US": "From the official download" },
         });
         let out = parse_voice_entry(&raw, None).expect("条目应该解析得出来");
+        assert_eq!(out.get("group").and_then(|v| v.as_str()), Some("研讨会"));
+        assert_eq!(
+            crate::i18n::pick_str_locale(&out, "group", "en-US"),
+            "Seminar"
+        );
 
         assert_eq!(
             crate::i18n::pick_str_locale(&out, "name", "en-US"),

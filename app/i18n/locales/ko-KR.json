@@ -18,6 +18,10 @@
     "maximize": "최대화",
     "close": "닫기"
   },
+  "store": {
+    "allSeries": "모든 시리즈",
+    "searchHint": "보이스 / 시리즈 / 동아리 / 제작자 검색…"
+  },
   "dock": {
     "noVoice": "음색 미선택",
     "none": "없음",

@@ -18,6 +18,7 @@ import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
+  displayVoiceGroup,
   displayVoiceName,
   displayVoiceSeries,
   displayVoiceTag,
@@ -67,6 +68,10 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   /** 哪些系列被点了「查看全部」。 */
   const [seriesFull, setSeriesFull] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** 系列视图里定位到某一个系列；空 = 列出全部折叠项。 */
+  const [seriesFocus, setSeriesFocus] = useState("");
+  /** 某个系列「查看全部」之后的页码。 */
+  const [seriesPage, setSeriesPage] = useState<Record<string, number>>({});
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [cols, setCols] = useState(5);
@@ -223,6 +228,23 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  // 筛完之后焦点系列没了，退回「全部系列」。
+  useEffect(() => {
+    if (
+      seriesFocus &&
+      seriesGroups &&
+      !seriesGroups.some(([s]) => s === seriesFocus)
+    ) {
+      setSeriesFocus("");
+    }
+  }, [seriesFocus, seriesGroups]);
+
+  // 搜索时把命中的系列都展开，免得人还要一个个点开找。
+  useEffect(() => {
+    if (!q.trim() || !seriesGroups?.length) return;
+    setExpanded(new Set(seriesGroups.map(([s]) => s)));
+  }, [q, seriesGroups]);
+
   const startOne = async (v: StoreVoice) => {
     setRunning((r) => [...r, v.id]);
     setErr("");
@@ -344,7 +366,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             setQ(e.target.value);
             setPage(1);
           }}
-          placeholder={t("s.87eb0743be")}
+          placeholder={t("store.searchHint")}
           className="min-w-[200px] flex-1 max-w-[320px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
         />
         <SegmentControl<Source>
@@ -352,6 +374,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           onChange={(v) => {
             setSource(v);
             setPage(1);
+            setSeriesFocus("");
           }}
           options={[
             { id: "all", label: t("s.778fc8f994") },
@@ -364,12 +387,34 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           onChange={(v) => {
             setGrouping(v);
             setPage(1);
+            setSeriesFocus("");
           }}
           options={[
             { id: "time", label: t("s.3d136b7951") },
             { id: "series", label: t("s.1ae90bfb23") },
           ]}
         />
+        {grouping === "series" && seriesGroups && seriesGroups.length > 0 ? (
+          <select
+            value={seriesFocus}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSeriesFocus(next);
+              if (next) {
+                setExpanded((prev) => new Set(prev).add(next));
+                setSeriesFull((prev) => new Set(prev).add(next));
+              }
+            }}
+            className="min-w-[160px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+          >
+            <option value="">{t("store.allSeries")}</option>
+            {seriesGroups.map(([s, vs]) => (
+              <option key={s} value={s}>
+                {s} ({vs.length})
+              </option>
+            ))}
+          </select>
+        ) : null}
         <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
           <input
             type="checkbox"
@@ -415,47 +460,52 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           seriesGroups.length === 0 ? (
             <Empty loading={loading} />
           ) : (
-            seriesGroups.map(([series, voices]) => {
-              const openS = expanded.has(series);
+            (seriesFocus
+              ? seriesGroups.filter(([s]) => s === seriesFocus)
+              : seriesGroups
+            ).map(([series, voices]) => {
+              const openS = seriesFocus ? true : expanded.has(series);
               const preview = cols * SERIES_PREVIEW_ROWS;
-              const shown = seriesFull.has(series)
-                ? voices
+              const paged = seriesFocus || seriesFull.has(series);
+              const totalS = Math.max(1, Math.ceil(voices.length / perPage));
+              const curS = Math.min(seriesPage[series] || 1, totalS);
+              const shown = paged
+                ? voices.slice((curS - 1) * perPage, curS * perPage)
                 : voices.slice(0, preview);
               return (
                 <div key={series} className="mb-3">
-                  <button
-                    type="button"
-                    className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2.5 cursor-pointer flex justify-between items-center"
-                    onClick={() =>
-                      setExpanded((prev) => {
-                        const n = new Set(prev);
-                        if (n.has(series)) n.delete(series);
-                        else n.add(series);
-                        return n;
-                      })
-                    }
-                  >
-                    <span className="font-semibold text-[14px]">{series}</span>
-                    <span className="text-[12px] text-[var(--meta)]">
-                      {t("s.c8542337dc", {
-                        v0: voices.length,
-                        v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
-                      })}
-                    </span>
-                  </button>
+                  {seriesFocus ? null : (
+                    <button
+                      type="button"
+                      className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() =>
+                        setExpanded((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(series)) n.delete(series);
+                          else n.add(series);
+                          return n;
+                        })
+                      }
+                    >
+                      <span className="font-semibold text-[14px]">{series}</span>
+                      <span className="text-[12px] text-[var(--meta)]">
+                        {t("s.c8542337dc", {
+                          v0: voices.length,
+                          v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
+                        })}
+                      </span>
+                    </button>
+                  )}
                   {openS ? (
                     <>
-                      <div
-                        className="grid gap-x-4 gap-y-[22px] mt-4"
-                        style={gridStyle}
-                      >
-                        {shown.map((v) => (
-                          <VoiceCard key={v.id} {...cardProps(v)} />
-                        ))}
-                      </div>
-                      {/* 一个系列可能有八十多个角色（赛马娘、蔚蓝档案）。
-                          展开就全渲染会当场卡住，先给一行。 */}
-                      {voices.length > preview && !seriesFull.has(series) ? (
+                      <SeriesCards
+                        voices={shown}
+                        cardProps={cardProps}
+                        gridStyle={gridStyle}
+                      />
+                      {/* 一个系列可能有八十多个角色。先给一行，再分页，
+                          不要一次全渲染。 */}
+                      {voices.length > preview && !paged ? (
                         <div className="mt-3 flex justify-center">
                           <Btn
                             onClick={() =>
@@ -464,6 +514,35 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                           >
                             {t("s.9d38fc19bb", { v0: voices.length })}
                           </Btn>
+                        </div>
+                      ) : null}
+                      {paged && totalS > 1 ? (
+                        <div className="flex items-center justify-center gap-3 pt-5 text-[12.5px] text-[var(--meta)]">
+                          <Btn
+                            disabled={curS <= 1}
+                            onClick={() =>
+                              setSeriesPage((prev) => ({
+                                ...prev,
+                                [series]: Math.max(1, curS - 1),
+                              }))
+                            }
+                          >{t("s.b41561d807")}</Btn>
+                          <span className="tabular-nums">
+                            {t("s.40a021ed44", {
+                              v0: curS,
+                              v1: totalS,
+                              v2: voices.length,
+                            })}
+                          </span>
+                          <Btn
+                            disabled={curS >= totalS}
+                            onClick={() =>
+                              setSeriesPage((prev) => ({
+                                ...prev,
+                                [series]: Math.min(totalS, curS + 1),
+                              }))
+                            }
+                          >{t("s.67a246a344")}</Btn>
                         </div>
                       ) : null}
                     </>
@@ -515,6 +594,60 @@ function Empty({ loading }: { loading: boolean }) {
 }
 
 /**
+ * 系列展开后的卡片网格。有社团字段时按社团分段，免得八十个人平铺在一起。
+ */
+function SeriesCards({
+  voices,
+  cardProps,
+  gridStyle,
+}: {
+  voices: StoreVoice[];
+  cardProps: (v: StoreVoice) => {
+    v: StoreVoice;
+    busy: boolean;
+    queued?: boolean;
+    onInstall: () => void;
+    staged?: StagedVoice;
+    onView: () => void;
+    onInstallStaged: () => void;
+    onDiscard: () => void;
+    coverMap?: Record<string, string>;
+  };
+  gridStyle: { gridTemplateColumns: string };
+}) {
+  const loc = getTLocale();
+  const other = t("s.1a26edf94a");
+  const chunks: { label: string; items: StoreVoice[] }[] = [];
+  for (const v of voices) {
+    const label = displayVoiceGroup(v, loc) || (v.group ? other : "");
+    const last = chunks[chunks.length - 1];
+    if (last && last.label === label) last.items.push(v);
+    else chunks.push({ label, items: [v] });
+  }
+  return (
+    <>
+      {chunks.map((c, i) => (
+        <div key={`${c.label || "_"}-${i}`}>
+          {c.label ? (
+            <div className="mt-4 mb-2 text-[12.5px] text-[var(--meta)]">
+              {c.label}
+            </div>
+          ) : null}
+          <div
+            className={`grid gap-x-4 gap-y-[22px] ${c.label ? "" : "mt-4"}`}
+            style={gridStyle}
+          >
+            {c.items.map((v) => (
+              <VoiceCard key={v.id} {...cardProps(v)} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
  * 一张音色卡。形状和模型页的卡一致：4:3 封面 + 名字 + 一行元信息。
  *
  * 按钮放在卡里而不是悬浮出现：悬浮按钮在触屏和「先扫一眼有哪些能下」的场景
@@ -558,8 +691,10 @@ function VoiceCard({
   useEffect(() => {
     setImgFailed(false);
   }, [coverHttp]);
+  const groupLabel = displayVoiceGroup(v, loc);
   const meta = [
-    seriesLabel || displayVoiceTag(v, loc),
+    [seriesLabel, groupLabel].filter(Boolean).join(" · ") ||
+      displayVoiceTag(v, loc),
     v.author ? t("s.7feea73fa3", { v0: v.author }) : "",
     v.size_label,
   ]

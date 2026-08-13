@@ -331,6 +331,7 @@ fn run_inner(
     }
 
     let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.dd5660b4da", &(e)))?;
+    let _keep = crate::worker::ToolPidGuard::new(child.id());
     loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();

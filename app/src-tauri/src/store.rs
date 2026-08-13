@@ -363,10 +363,11 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
 /// `te()` 只替换 `{e}`/`{a0}`/`{}`，旧代码拿它填 `{origin}`，卡片上就印着
 /// 「第三方 · {origin}」。
 fn origin_display_name(origin: &str) -> String {
-    match origin.trim().to_ascii_lowercase().as_str() {
+    let trimmed = origin.trim();
+    match trimmed.to_ascii_lowercase().as_str() {
         "huggingface" | "hf" | "hugging-face" => "Hugging Face".into(),
         "cnb" => "CNB".into(),
-        other if !other.is_empty() => other.to_string(),
+        other if !other.is_empty() => trimmed.to_string(),
         _ => String::new(),
     }
 }
@@ -418,9 +419,6 @@ pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
 fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Ok(url.to_string()); // 非 http（如 asset://）原样返回
-    }
-    if let Some(local) = local_banner_for_url(root, url) {
-        return Ok(local);
     }
     let dir = paths::user_data(root).join("cover_cache");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -1536,6 +1534,8 @@ mod tests {
         assert!(s.contains("Hugging Face"), "{s}");
         assert_eq!(origin_label_for("", false), crate::i18n::t("s.4500b5dfc7"));
         assert_eq!(origin_label_for("", true), crate::i18n::t("s.7c134b6e64"));
+        assert!(origin_label_for("GitHub", false).contains("GitHub"));
+        assert!(!origin_label_for("GitHub", false).contains("github"));
     }
 
     #[test]
@@ -1548,7 +1548,7 @@ mod tests {
         let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-yuuka.jpg";
         let got = local_banner_for_url(&root, url).expect("should find local yuuka");
         assert!(got.ends_with("tp-yuuka.jpg"), "{got}");
-        assert!(local_banner_for_url(&root, "https://x/covers/../evil.jpg").is_none());
+        assert!(local_banner_for_url(&root, "https://x/covers/..").is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -499,6 +499,7 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
     let mut child = cmd
         .spawn()
         .map_err(|e| crate::i18n::te("s.4f592d4fc2", &e))?;
+    let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = match child.stdout.take() {
         Some(s) => s,
         None => {
@@ -861,6 +862,7 @@ fn run_inner(
             return Err(crate::i18n::te("s.4f592d4fc2", &(e)));
         }
     };
+    let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = match child.stdout.take() {
         Some(s) => s,
         None => {

@@ -29,31 +29,19 @@ export function useConfig() {
       })
       .catch((e) => alive && setError(String(e)));
     let unCfg: (() => void) | undefined;
-    let unVoice: (() => void) | undefined;
     void listen<{ config?: Config }>("config-changed", (ev) => {
       if (!alive) return;
       const next = ev.payload?.config;
-      if (next && typeof next === "object") setCfg(next);
+      if (next && typeof next === "object") {
+        setCfg({ ...next, ...pending.current });
+      }
     }).then((fn) => {
       if (!alive) fn();
       else unCfg = fn;
     });
-    // 切音色会把该音色档案里的音高/共鸣写进配置，设置页要跟着换。
-    void listen("voices-changed", () => {
-      if (!alive) return;
-      void getConfig()
-        .then((c) => {
-          if (alive) setCfg(c);
-        })
-        .catch(() => undefined);
-    }).then((fn) => {
-      if (!alive) fn();
-      else unVoice = fn;
-    });
     return () => {
       alive = false;
       unCfg?.();
-      unVoice?.();
     };
   }, []);
 
@@ -85,7 +73,7 @@ export function useConfig() {
     if (!Object.keys(patch).length) return;
     try {
       const out = await setConfig(patch);
-      setCfg(out.config);
+      setCfg({ ...out.config, ...pending.current });
       if (out.needs_restart.length) {
         setRestartKeys((prev) =>
           Array.from(new Set([...prev, ...out.needs_restart])),

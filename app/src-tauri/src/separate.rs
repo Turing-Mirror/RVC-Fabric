@@ -205,6 +205,7 @@ fn run_inner(
     }
 
     let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.c727da1f5b", &(e)))?;
+    let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.1a66c860cd"))?;
     let mut files: Vec<String> = Vec::new();
     let mut fail: Option<String> = None;

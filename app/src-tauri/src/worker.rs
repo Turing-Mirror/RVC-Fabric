@@ -464,21 +464,67 @@ fn iter_python_procs() -> Vec<(u32, u32, String)> {
     Vec::new()
 }
 
+/// 壳自己拉起来的一次性任务（STS / 训练 / 分离 / TTS）。关变声时不能杀它们。
+static TOOL_PIDS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// 记住一个工具子进程，函数返回时自动忘掉。
+pub struct ToolPidGuard {
+    pid: u32,
+}
+
+impl ToolPidGuard {
+    pub fn new(pid: u32) -> Self {
+        if pid != 0 {
+            let mut g = TOOL_PIDS.lock().unwrap_or_else(|e| e.into_inner());
+            if !g.contains(&pid) {
+                g.push(pid);
+            }
+        }
+        Self { pid }
+    }
+}
+
+impl Drop for ToolPidGuard {
+    fn drop(&mut self) {
+        if self.pid == 0 {
+            return;
+        }
+        let mut g = TOOL_PIDS.lock().unwrap_or_else(|e| e.into_inner());
+        g.retain(|p| *p != self.pid);
+    }
+}
+
+fn protected_tool_pids() -> Vec<u32> {
+    TOOL_PIDS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 /// Kill Runtime python processes.
 ///
-/// * `orphans_only` — only those whose parent is already dead. Used after
-///   关闭变声 so a leftover AudioIoProcess is reaped without touching an
-///   in-flight STS / train / separate job (those are children of the shell).
+/// * `orphans_only` — leftovers after 关闭变声. Parent-dead **or** reparented
+///   onto this shell (Windows does that when the worker dies). STS / train /
+///   separate / TTS pids the shell itself spawned are skipped.
 /// * otherwise — every python whose image lives under Runtime. Used on
 ///   关闭应用 so nothing is left behind.
 pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) {
     let rt = paths::runtime_dir(root);
+    let shell = std::process::id();
+    let tools = protected_tool_pids();
     for (pid, parent, img) in iter_python_procs() {
         if !path_is_under(&rt, &img) {
             continue;
         }
-        if orphans_only && pid_alive(parent) {
-            continue;
+        if orphans_only {
+            if tools.contains(&pid) {
+                continue;
+            }
+            // 父进程还活着，且不是本壳：别人的 python，别动。
+            // 父进程已死，或已被 Windows 过继到本壳：worker 留下的 AudioIo。
+            if pid_alive(parent) && parent != shell {
+                continue;
+            }
         }
         append_log(
             root,
@@ -1091,6 +1137,17 @@ mod tests {
     #[test]
     fn pid_zero_is_never_alive() {
         assert!(!pid_alive(0));
+    }
+
+    #[test]
+    fn tool_pid_guard_tracks_and_drops() {
+        let pid = 4_242_424;
+        assert!(!protected_tool_pids().contains(&pid));
+        {
+            let _g = ToolPidGuard::new(pid);
+            assert!(protected_tool_pids().contains(&pid));
+        }
+        assert!(!protected_tool_pids().contains(&pid));
     }
 
     #[test]

@@ -312,6 +312,7 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
 
     let mut child: Child = cmd.spawn().map_err(|e| crate::i18n::te("s.217047672d", &(e)))?;
     *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child.id());
+    let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.c73d43b29b"))?;
 
     let mut done: Option<Value> = None;

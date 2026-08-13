@@ -692,12 +692,10 @@ function VoiceCard({
     setImgFailed(false);
   }, [coverHttp]);
   const groupLabel = displayVoiceGroup(v, loc);
-  const meta = [
+  const line1 =
     [seriesLabel, groupLabel].filter(Boolean).join(" · ") ||
-      displayVoiceTag(v, loc),
-    v.author ? t("s.7feea73fa3", { v0: v.author }) : "",
-    v.size_label,
-  ]
+    displayVoiceTag(v, loc);
+  const line2 = [v.author ? t("s.7feea73fa3", { v0: v.author }) : "", v.size_label]
     .filter(Boolean)
     .join(" · ");
 
@@ -731,9 +729,14 @@ function VoiceCard({
       <div className="mt-2 text-[13.5px] leading-snug truncate" title={title}>
         {title}
       </div>
-      {meta ? (
-        <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
-          {meta}
+      {line1 ? (
+        <div className="text-[11.5px] text-[var(--meta)] truncate" title={line1}>
+          {line1}
+        </div>
+      ) : null}
+      {line2 ? (
+        <div className="text-[11.5px] text-[var(--meta)] truncate" title={line2}>
+          {line2}
         </div>
       ) : null}
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">

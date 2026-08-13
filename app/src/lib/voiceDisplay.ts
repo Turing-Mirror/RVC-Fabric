@@ -49,35 +49,35 @@ const BY_ID: Record<
     ja: "千早愛音",
     en: "Chihaya Anon",
     hant: "千早愛音",
-    series: "MyGO!!!!!",
+    series: "BanG Dream",
   },
   Tomori: {
     zh: "高松灯",
     ja: "高松燈",
     en: "Takamatsu Tomori",
     hant: "高松燈",
-    series: "MyGO!!!!!",
+    series: "BanG Dream",
   },
   Rana: {
     zh: "要乐奈",
     ja: "要楽奈",
     en: "Kaname Raana",
     hant: "要樂奈",
-    series: "MyGO!!!!!",
+    series: "BanG Dream",
   },
   Soyo: {
     zh: "长崎爽世",
     ja: "長崎そよ",
     en: "Nagasaki Soyo",
     hant: "長崎爽世",
-    series: "MyGO!!!!!",
+    series: "BanG Dream",
   },
   Taki: {
     zh: "椎名立希",
     ja: "椎名立希",
     en: "Shiina Taki",
     hant: "椎名立希",
-    series: "MyGO!!!!!",
+    series: "BanG Dream",
   },
   "tp-nahida": {
     zh: "纳西妲",
@@ -159,9 +159,47 @@ const SERIES_FALLBACK: Record<
   "原神": { en: "Genshin Impact", ja: "原神", hant: "原神", ko: "원신" },
   "RVC原版": { en: "RVC Original", ja: "RVCオリジナル", hant: "RVC原版", ko: "RVC 오리지널" },
   "MyGO!!!!!": { en: "MyGO!!!!!", ja: "MyGO!!!!!", hant: "MyGO!!!!!" },
+  "BanG Dream": { en: "BanG Dream", ja: "BanG Dream", hant: "BanG Dream", ko: "뱅드림" },
   VOCALOID: { en: "VOCALOID", ja: "VOCALOID", hant: "VOCALOID" },
   "蔚蓝档案": { en: "Blue Archive", ja: "ブルーアーカイブ", hant: "蔚藍檔案", ko: "블루 아카이브" },
 };
+
+/**
+ * Band / club leftover that used to be a top-level `series`.
+ * Old catalogs still ship those values; new ones write them as `group`
+ * under the franchise. Both shapes must nest the same way in the store.
+ */
+const SERIES_PARENT: Record<string, string> = {
+  Afterglow: "BanG Dream",
+  "Hello, Happy World!": "BanG Dream",
+  Morfonica: "BanG Dream",
+  "Pastel＊Palettes": "BanG Dream",
+  "Poppin'Party": "BanG Dream",
+  "RAISE A SUILEN": "BanG Dream",
+  Roselia: "BanG Dream",
+  "MyGO!!!!!": "BanG Dream",
+  "Ave Mujica": "BanG Dream",
+};
+
+/** Franchise-typical child order. Unknown labels sort after these, 「其他」 last. */
+const GROUP_ORDER: string[] = [
+  "研讨会",
+  "真理部",
+  "工程部",
+  "游戏开发部",
+  "特异现象搜查部",
+  "阴阳部",
+  "图书委员会",
+  "Poppin'Party",
+  "Afterglow",
+  "Pastel＊Palettes",
+  "Hello, Happy World!",
+  "Roselia",
+  "RAISE A SUILEN",
+  "Morfonica",
+  "MyGO!!!!!",
+  "Ave Mujica",
+];
 
 const GROUP_FALLBACK: Record<
   string,
@@ -178,6 +216,27 @@ const GROUP_FALLBACK: Record<
   },
   "阴阳部": { en: "Yin-Yang Club", ja: "陰陽部", hant: "陰陽部" },
   "图书委员会": { en: "Library Committee", ja: "図書委員会", hant: "圖書委員會" },
+  Afterglow: { en: "Afterglow", ja: "Afterglow", hant: "Afterglow" },
+  "Hello, Happy World!": {
+    en: "Hello, Happy World!",
+    ja: "ハロー、ハッピーワールド！",
+    hant: "Hello, Happy World!",
+  },
+  Morfonica: { en: "Morfonica", ja: "Morfonica", hant: "Morfonica" },
+  "Pastel＊Palettes": {
+    en: "Pastel＊Palettes",
+    ja: "Pastel＊Palettes",
+    hant: "Pastel＊Palettes",
+  },
+  "Poppin'Party": { en: "Poppin'Party", ja: "Poppin'Party", hant: "Poppin'Party" },
+  "RAISE A SUILEN": {
+    en: "RAISE A SUILEN",
+    ja: "RAISE A SUILEN",
+    hant: "RAISE A SUILEN",
+  },
+  Roselia: { en: "Roselia", ja: "Roselia", hant: "Roselia" },
+  "MyGO!!!!!": { en: "MyGO!!!!!", ja: "MyGO!!!!!", hant: "MyGO!!!!!" },
+  "Ave Mujica": { en: "Ave Mujica", ja: "Ave Mujica", hant: "Ave Mujica" },
 };
 
 function str(v: unknown): string {
@@ -277,29 +336,96 @@ export function displayVoiceDescription(
   return pickFieldI18n(v, "description", loc);
 }
 
+function seriesLabelOf(primary: string, locale: string, v?: NamedVoice): string {
+  if (!primary) return "";
+  const id = v ? str(v.id) : "";
+  const fb = id ? BY_ID[id] : undefined;
+  const seriesEn = str(v?.series_en) || fb?.series_en || SERIES_FALLBACK[primary]?.en || "";
+  const seriesJa = str(v?.series_ja) || fb?.series_ja || SERIES_FALLBACK[primary]?.ja || "";
+  const seriesHant =
+    str(v?.series_zh_Hant) || fb?.series_hant || SERIES_FALLBACK[primary]?.hant || primary;
+
+  if (locale === "ja-JP") return seriesJa || primary;
+  if (locale === "zh-CN") return primary;
+  if (locale === "zh-TW") return seriesHant;
+  if (locale === "ko-KR") {
+    return SERIES_FALLBACK[primary]?.ko || seriesEn || primary;
+  }
+  return seriesEn || primary;
+}
+
+function catalogSeriesRaw(v: NamedVoice): string {
+  const id = str(v.id);
+  const fb = id ? BY_ID[id] : undefined;
+  return str(v.series) || fb?.series || "";
+}
+
 export function displayVoiceSeries(
   v: NamedVoice,
   locale?: LocaleCode | string,
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  const id = str(v.id);
-  const fb = id ? BY_ID[id] : undefined;
-  const primary = str(v.series) || fb?.series || "";
-  if (!primary) return "";
+  return seriesLabelOf(catalogSeriesRaw(v), loc, v);
+}
 
-  const seriesEn = str(v.series_en) || fb?.series_en || SERIES_FALLBACK[primary]?.en || "";
-  const seriesJa = str(v.series_ja) || fb?.series_ja || SERIES_FALLBACK[primary]?.ja || "";
-  const seriesHant =
-    str(v.series_zh_Hant) || fb?.series_hant || SERIES_FALLBACK[primary]?.hant || primary;
+/** Franchise / IP the voice belongs to (蔚蓝档案, BanG Dream, …). */
+export function voiceParentSeries(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const raw = catalogSeriesRaw(v);
+  const parent = SERIES_PARENT[raw] || raw;
+  return seriesLabelOf(parent, loc, SERIES_PARENT[raw] ? undefined : v);
+}
 
-  if (loc === "ja-JP") return seriesJa || primary;
-  if (loc === "zh-CN") return primary;
-  if (loc === "zh-TW") return seriesHant;
-  if (loc === "ko-KR") {
-    return SERIES_FALLBACK[primary]?.ko || seriesEn || primary;
+/** Club / band raw key used for sorting and stable focus ids. */
+export function voiceGroupRaw(v: NamedVoice): string {
+  const g = str(v.group);
+  if (g) return g;
+  const raw = catalogSeriesRaw(v);
+  if (SERIES_PARENT[raw]) return raw;
+  return "";
+}
+
+/** Club / band label under the parent series. Empty when the series is flat. */
+export function voiceChildGroup(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const g = displayVoiceGroup(v, loc);
+  if (g) return g;
+  const raw = catalogSeriesRaw(v);
+  if (SERIES_PARENT[raw]) return seriesLabelOf(raw, loc);
+  return "";
+}
+
+export function compareVoiceGroups(aRaw: string, bRaw: string, other = ""): number {
+  const rank = (raw: string) => {
+    if (!raw || raw === other) return 1000;
+    const i = GROUP_ORDER.indexOf(raw);
+    return i < 0 ? 500 + raw.charCodeAt(0) : i;
+  };
+  const d = rank(aRaw) - rank(bRaw);
+  if (d !== 0) return d;
+  return aRaw.localeCompare(bRaw, "zh");
+}
+
+/** Author line for store / library cards. Picks locale from author_i18n when present. */
+export function displayVoiceAuthor(
+  v: NamedVoice,
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const fromI18n = pickFieldI18n(v, "author", loc);
+  if (fromI18n) return fromI18n;
+  const a = v.author;
+  if (a && typeof a === "object" && !Array.isArray(a)) {
+    const m = a as Record<string, unknown>;
+    return str(m[loc]) || str(m["zh-CN"]) || str(m.zh) || "";
   }
-  // Latin locales
-  return seriesEn || primary;
+  return str(a);
 }
 
 /** Club / department label inside a series (研讨会, Veritas, …). */
@@ -322,13 +448,21 @@ export function voiceSearchText(v: NamedVoice): string {
   const { zh, ja, en, hant, id } = resolveParts(v);
   const group = str(v.group);
   const gf = GROUP_FALLBACK[group];
+  const rawSeries = catalogSeriesRaw(v);
+  const parent = SERIES_PARENT[rawSeries] || "";
+  const pf = parent ? SERIES_FALLBACK[parent] : undefined;
   return [
     zh,
     ja,
     en,
     hant,
     id,
-    str(v.series),
+    rawSeries,
+    parent,
+    pf?.en,
+    pf?.ja,
+    pf?.hant,
+    pf?.ko,
     str(v.author),
     str(v.tag),
     group,

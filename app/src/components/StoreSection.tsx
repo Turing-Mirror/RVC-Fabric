@@ -1,5 +1,13 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   cancelStoreDownload,
   colsForWidth,
@@ -18,12 +26,35 @@ import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
-  displayVoiceGroup,
+  compareVoiceGroups,
+  displayVoiceAuthor,
   displayVoiceName,
-  displayVoiceSeries,
   displayVoiceTag,
+  voiceChildGroup,
+  voiceGroupRaw,
+  voiceParentSeries,
   voiceSearchText,
 } from "../lib/voiceDisplay";
+
+/** Parent + child focus key. Tab never appears in series / group labels. */
+const FOCUS_SEP = "\t";
+
+type SeriesNode = {
+  key: string;
+  voices: StoreVoice[];
+  groups: { raw: string; label: string; voices: StoreVoice[] }[];
+};
+
+function focusParts(focus: string): { parent: string; group: string } {
+  if (!focus) return { parent: "", group: "" };
+  const i = focus.indexOf(FOCUS_SEP);
+  if (i < 0) return { parent: focus, group: "" };
+  return { parent: focus.slice(0, i), group: focus.slice(i + FOCUS_SEP.length) };
+}
+
+function groupFocusKey(parent: string, group: string): string {
+  return `${parent}${FOCUS_SEP}${group}`;
+}
 
 /**
  * 社区音色。原来是模型页上弹出来的一个对话框，现在是广场的第一块。
@@ -68,7 +99,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   /** 哪些系列被点了「查看全部」。 */
   const [seriesFull, setSeriesFull] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  /** 系列视图里定位到某一个系列；空 = 列出全部折叠项。 */
+  /** 父系列下展开的子类（社团 / 乐队）。 */
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  /** 系列视图里定位到某一个系列或子类；空 = 列出全部折叠项。 */
   const [seriesFocus, setSeriesFocus] = useState("");
   /** 某个系列「查看全部」之后的页码。 */
   const [seriesPage, setSeriesPage] = useState<Record<string, number>>({});
@@ -193,26 +226,47 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     return base;
   }, [source, hideInstalled, cat, q]);
 
-  const seriesGroups = useMemo(() => {
+  const seriesGroups = useMemo((): SeriesNode[] | null => {
     if (grouping !== "series") return null;
-    // 没填 series 的落进「其他」。上游原本先 filter 掉空 series，所以这里的
-    // 「其他」是死代码，而那些音色在系列视图里是直接消失 —— 消失比归错类
-    // 难查得多。
-    const map = new Map<string, StoreVoice[]>();
+    // 父系列 → 子类（社团 / 乐队）。没填 series 的落进「其他」；
+    // 旧清单把乐队写成顶层 series，这里一并收到父类下面。
+    const other = t("s.1a26edf94a");
     const loc = getTLocale();
+    const map = new Map<string, Map<string, StoreVoice[]>>();
     for (const v of list) {
-      const s =
-        displayVoiceSeries(v, loc).trim() ||
+      const parent =
+        voiceParentSeries(v, loc).trim() ||
         (v.series || "").trim() ||
-        t("s.1a26edf94a");
-      if (!map.has(s)) map.set(s, []);
-      map.get(s)!.push(v);
+        other;
+      const raw = voiceGroupRaw(v);
+      if (!map.has(parent)) map.set(parent, new Map());
+      const gm = map.get(parent)!;
+      if (!gm.has(raw)) gm.set(raw, []);
+      gm.get(raw)!.push(v);
     }
-    return [...map.entries()].sort((a, b) => {
-      if (a[0] === t("s.1a26edf94a")) return 1;
-      if (b[0] === t("s.1a26edf94a")) return -1;
-      return a[0].localeCompare(b[0], "zh");
-    });
+    return [...map.entries()]
+      .sort((a, b) => {
+        if (a[0] === other) return 1;
+        if (b[0] === other) return -1;
+        return a[0].localeCompare(b[0], "zh");
+      })
+      .map(([key, gm]) => {
+        const named = [...gm.keys()].some((r) => r);
+        const groups = [...gm.entries()]
+          .sort((a, b) => compareVoiceGroups(a[0], b[0], other))
+          .map(([raw, voices]) => ({
+            raw,
+            label: named
+              ? voiceChildGroup(voices[0], loc) || (raw ? raw : other)
+              : "",
+            voices,
+          }));
+        return {
+          key,
+          voices: groups.flatMap((g) => g.voices),
+          groups,
+        };
+      });
   }, [grouping, list]);
 
   const perPage = cols * PAGE_ROWS;
@@ -230,19 +284,31 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
   // 筛完之后焦点系列没了，退回「全部系列」。
   useEffect(() => {
-    if (
-      seriesFocus &&
-      seriesGroups &&
-      !seriesGroups.some(([s]) => s === seriesFocus)
-    ) {
+    if (!seriesFocus || !seriesGroups) return;
+    const { parent, group } = focusParts(seriesFocus);
+    const node = seriesGroups.find((s) => s.key === parent);
+    if (!node) {
+      setSeriesFocus("");
+      return;
+    }
+    if (group && !node.groups.some((g) => g.label === group)) {
       setSeriesFocus("");
     }
   }, [seriesFocus, seriesGroups]);
 
-  // 搜索时把命中的系列都展开，免得人还要一个个点开找。
+  // 搜索时把命中的系列和子类都展开，免得人还要一个个点开找。
   useEffect(() => {
     if (!q.trim() || !seriesGroups?.length) return;
-    setExpanded(new Set(seriesGroups.map(([s]) => s)));
+    setExpanded(new Set(seriesGroups.map((s) => s.key)));
+    setExpandedGroups(
+      new Set(
+        seriesGroups.flatMap((s) =>
+          s.groups
+            .filter((g) => g.label)
+            .map((g) => groupFocusKey(s.key, g.label)),
+        ),
+      ),
+    );
   }, [q, seriesGroups]);
 
   const startOne = async (v: StoreVoice) => {
@@ -400,19 +466,51 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             onChange={(e) => {
               const next = e.target.value;
               setSeriesFocus(next);
-              if (next) {
-                setExpanded((prev) => new Set(prev).add(next));
-                setSeriesFull((prev) => new Set(prev).add(next));
-              }
+              if (!next) return;
+              const { parent, group } = focusParts(next);
+              setExpanded((prev) => new Set(prev).add(parent));
+              setSeriesFull((prev) => new Set(prev).add(parent));
+              setExpandedGroups((prev) => {
+                const n = new Set(prev);
+                const node = seriesGroups.find((s) => s.key === parent);
+                if (!node) return n;
+                if (group) n.add(groupFocusKey(parent, group));
+                else {
+                  for (const g of node.groups) {
+                    if (g.label) n.add(groupFocusKey(parent, g.label));
+                  }
+                }
+                return n;
+              });
             }}
             className="min-w-[160px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           >
             <option value="">{t("store.allSeries")}</option>
-            {seriesGroups.map(([s, vs]) => (
-              <option key={s} value={s}>
-                {s} ({vs.length})
-              </option>
-            ))}
+            {seriesGroups.map((node) => {
+              const nested = node.groups.some((g) => g.label);
+              if (!nested) {
+                return (
+                  <option key={node.key} value={node.key}>
+                    {node.key} ({node.voices.length})
+                  </option>
+                );
+              }
+              return (
+                <optgroup key={node.key} label={`${node.key} (${node.voices.length})`}>
+                  <option value={node.key}>
+                    {node.key} ({node.voices.length})
+                  </option>
+                  {node.groups.map((g) => (
+                    <option
+                      key={groupFocusKey(node.key, g.label)}
+                      value={groupFocusKey(node.key, g.label)}
+                    >
+                      {g.label} ({g.voices.length})
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
         ) : null}
         <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
@@ -460,20 +558,18 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           seriesGroups.length === 0 ? (
             <Empty loading={loading} />
           ) : (
-            (seriesFocus
-              ? seriesGroups.filter(([s]) => s === seriesFocus)
+            (focusParts(seriesFocus).parent
+              ? seriesGroups.filter((s) => s.key === focusParts(seriesFocus).parent)
               : seriesGroups
-            ).map(([series, voices]) => {
-              const openS = seriesFocus ? true : expanded.has(series);
-              const preview = cols * SERIES_PREVIEW_ROWS;
-              const paged = seriesFocus || seriesFull.has(series);
-              const totalS = Math.max(1, Math.ceil(voices.length / perPage));
-              const curS = Math.min(seriesPage[series] || 1, totalS);
-              const shown = paged
-                ? voices.slice((curS - 1) * perPage, curS * perPage)
-                : voices.slice(0, preview);
+            ).map((node) => {
+              const { group: focusGroup } = focusParts(seriesFocus);
+              const openS = seriesFocus ? true : expanded.has(node.key);
+              const nested = node.groups.some((g) => g.label);
+              const groups = focusGroup
+                ? node.groups.filter((g) => g.label === focusGroup)
+                : node.groups;
               return (
-                <div key={series} className="mb-3">
+                <div key={node.key} className="mb-3">
                   {seriesFocus ? null : (
                     <button
                       type="button"
@@ -481,71 +577,85 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                       onClick={() =>
                         setExpanded((prev) => {
                           const n = new Set(prev);
-                          if (n.has(series)) n.delete(series);
-                          else n.add(series);
+                          if (n.has(node.key)) n.delete(node.key);
+                          else n.add(node.key);
                           return n;
                         })
                       }
                     >
-                      <span className="font-semibold text-[14px]">{series}</span>
+                      <span className="font-semibold text-[14px]">{node.key}</span>
                       <span className="text-[12px] text-[var(--meta)]">
                         {t("s.c8542337dc", {
-                          v0: voices.length,
+                          v0: node.voices.length,
                           v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
                         })}
                       </span>
                     </button>
                   )}
                   {openS ? (
-                    <>
-                      <SeriesCards
-                        voices={shown}
+                    nested ? (
+                      groups.map((g) => {
+                        const gk = groupFocusKey(node.key, g.label);
+                        const openG = !!focusGroup || expandedGroups.has(gk);
+                        return (
+                          <div key={gk} className="pl-3 mt-1.5">
+                            {focusGroup ? null : (
+                              <button
+                                type="button"
+                                className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2 cursor-pointer flex justify-between items-center"
+                                onClick={() =>
+                                  setExpandedGroups((prev) => {
+                                    const n = new Set(prev);
+                                    if (n.has(gk)) n.delete(gk);
+                                    else n.add(gk);
+                                    return n;
+                                  })
+                                }
+                              >
+                                <span className="text-[13px]">{g.label}</span>
+                                <span className="text-[12px] text-[var(--meta)]">
+                                  {t("s.c8542337dc", {
+                                    v0: g.voices.length,
+                                    v1: openG
+                                      ? t("s.5d5815647c")
+                                      : t("s.b0e24833f7"),
+                                  })}
+                                </span>
+                              </button>
+                            )}
+                            {openG ? (
+                              <SeriesPageGrid
+                                seriesKey={gk}
+                                voices={g.voices}
+                                cols={cols}
+                                perPage={perPage}
+                                forcedFull={!!focusGroup}
+                                seriesFull={seriesFull}
+                                setSeriesFull={setSeriesFull}
+                                seriesPage={seriesPage}
+                                setSeriesPage={setSeriesPage}
+                                cardProps={cardProps}
+                                gridStyle={gridStyle}
+                              />
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <SeriesPageGrid
+                        seriesKey={node.key}
+                        voices={node.voices}
+                        cols={cols}
+                        perPage={perPage}
+                        forcedFull={!!seriesFocus}
+                        seriesFull={seriesFull}
+                        setSeriesFull={setSeriesFull}
+                        seriesPage={seriesPage}
+                        setSeriesPage={setSeriesPage}
                         cardProps={cardProps}
                         gridStyle={gridStyle}
                       />
-                      {/* 一个系列可能有八十多个角色。先给一行，再分页，
-                          不要一次全渲染。 */}
-                      {voices.length > preview && !paged ? (
-                        <div className="mt-3 flex justify-center">
-                          <Btn
-                            onClick={() =>
-                              setSeriesFull((prev) => new Set(prev).add(series))
-                            }
-                          >
-                            {t("s.9d38fc19bb", { v0: voices.length })}
-                          </Btn>
-                        </div>
-                      ) : null}
-                      {paged && totalS > 1 ? (
-                        <div className="flex items-center justify-center gap-3 pt-5 text-[12.5px] text-[var(--meta)]">
-                          <Btn
-                            disabled={curS <= 1}
-                            onClick={() =>
-                              setSeriesPage((prev) => ({
-                                ...prev,
-                                [series]: Math.max(1, curS - 1),
-                              }))
-                            }
-                          >{t("s.b41561d807")}</Btn>
-                          <span className="tabular-nums">
-                            {t("s.40a021ed44", {
-                              v0: curS,
-                              v1: totalS,
-                              v2: voices.length,
-                            })}
-                          </span>
-                          <Btn
-                            disabled={curS >= totalS}
-                            onClick={() =>
-                              setSeriesPage((prev) => ({
-                                ...prev,
-                                [series]: Math.min(totalS, curS + 1),
-                              }))
-                            }
-                          >{t("s.67a246a344")}</Btn>
-                        </div>
-                      ) : null}
-                    </>
+                    )
                   ) : null}
                 </div>
               );
@@ -593,56 +703,102 @@ function Empty({ loading }: { loading: boolean }) {
   );
 }
 
-/**
- * 系列展开后的卡片网格。有社团字段时按社团分段，免得八十个人平铺在一起。
- */
-function SeriesCards({
+type CardPropsFn = (v: StoreVoice) => {
+  v: StoreVoice;
+  busy: boolean;
+  queued?: boolean;
+  onInstall: () => void;
+  staged?: StagedVoice;
+  onView: () => void;
+  onInstallStaged: () => void;
+  onDiscard: () => void;
+  coverMap?: Record<string, string>;
+};
+
+/** 一组卡片：先铺一行，再「查看全部」或分页。 */
+function SeriesPageGrid({
+  seriesKey,
   voices,
+  cols,
+  perPage,
+  forcedFull,
+  seriesFull,
+  setSeriesFull,
+  seriesPage,
+  setSeriesPage,
   cardProps,
   gridStyle,
 }: {
+  seriesKey: string;
   voices: StoreVoice[];
-  cardProps: (v: StoreVoice) => {
-    v: StoreVoice;
-    busy: boolean;
-    queued?: boolean;
-    onInstall: () => void;
-    staged?: StagedVoice;
-    onView: () => void;
-    onInstallStaged: () => void;
-    onDiscard: () => void;
-    coverMap?: Record<string, string>;
-  };
+  cols: number;
+  perPage: number;
+  forcedFull: boolean;
+  seriesFull: Set<string>;
+  setSeriesFull: Dispatch<SetStateAction<Set<string>>>;
+  seriesPage: Record<string, number>;
+  setSeriesPage: Dispatch<SetStateAction<Record<string, number>>>;
+  cardProps: CardPropsFn;
   gridStyle: { gridTemplateColumns: string };
 }) {
-  const loc = getTLocale();
-  const other = t("s.1a26edf94a");
-  const chunks: { label: string; items: StoreVoice[] }[] = [];
-  for (const v of voices) {
-    const label = displayVoiceGroup(v, loc) || (v.group ? other : "");
-    const last = chunks[chunks.length - 1];
-    if (last && last.label === label) last.items.push(v);
-    else chunks.push({ label, items: [v] });
-  }
+  const preview = cols * SERIES_PREVIEW_ROWS;
+  const paged = forcedFull || seriesFull.has(seriesKey);
+  const totalS = Math.max(1, Math.ceil(voices.length / perPage));
+  const curS = Math.min(seriesPage[seriesKey] || 1, totalS);
+  const shown = paged
+    ? voices.slice((curS - 1) * perPage, curS * perPage)
+    : voices.slice(0, preview);
   return (
     <>
-      {chunks.map((c, i) => (
-        <div key={`${c.label || "_"}-${i}`}>
-          {c.label ? (
-            <div className="mt-4 mb-2 text-[12.5px] text-[var(--meta)]">
-              {c.label}
-            </div>
-          ) : null}
-          <div
-            className={`grid gap-x-4 gap-y-[22px] ${c.label ? "" : "mt-4"}`}
-            style={gridStyle}
+      <div className="grid gap-x-4 gap-y-[22px] mt-4" style={gridStyle}>
+        {shown.map((v) => (
+          <VoiceCard key={v.id} {...cardProps(v)} />
+        ))}
+      </div>
+      {voices.length > preview && !paged ? (
+        <div className="mt-3 flex justify-center">
+          <Btn
+            onClick={() =>
+              setSeriesFull((prev) => new Set(prev).add(seriesKey))
+            }
           >
-            {c.items.map((v) => (
-              <VoiceCard key={v.id} {...cardProps(v)} />
-            ))}
-          </div>
+            {t("s.9d38fc19bb", { v0: voices.length })}
+          </Btn>
         </div>
-      ))}
+      ) : null}
+      {paged && totalS > 1 ? (
+        <div className="flex items-center justify-center gap-3 pt-5 text-[12.5px] text-[var(--meta)]">
+          <Btn
+            disabled={curS <= 1}
+            onClick={() =>
+              setSeriesPage((prev) => ({
+                ...prev,
+                [seriesKey]: Math.max(1, curS - 1),
+              }))
+            }
+          >
+            {t("s.b41561d807")}
+          </Btn>
+          <span className="tabular-nums">
+            {t("s.40a021ed44", {
+              v0: curS,
+              v1: totalS,
+              v2: voices.length,
+            })}
+          </span>
+          <Btn
+            disabled={curS >= totalS}
+            onClick={() =>
+              setSeriesPage((prev) => ({
+                ...prev,
+                [seriesKey]: Math.min(totalS, curS + 1),
+              }))
+            }
+          >
+            {t("s.67a246a344")}
+          </Btn>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -680,7 +836,6 @@ function VoiceCard({
   const [imgFailed, setImgFailed] = useState(false);
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
-  const seriesLabel = displayVoiceSeries(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
   // Older caches may only have a relative cover path — skip those (no convert).
   // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
@@ -691,13 +846,15 @@ function VoiceCard({
   useEffect(() => {
     setImgFailed(false);
   }, [coverHttp]);
-  const groupLabel = displayVoiceGroup(v, loc);
-  const line1 =
-    [seriesLabel, groupLabel].filter(Boolean).join(" · ") ||
+  const author = displayVoiceAuthor(v, loc);
+  const parentLabel = voiceParentSeries(v, loc);
+  const childLabel = voiceChildGroup(v, loc);
+  const meta =
+    [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ") ||
     displayVoiceTag(v, loc);
-  const line2 = [v.author ? t("s.7feea73fa3", { v0: v.author }) : "", v.size_label]
-    .filter(Boolean)
-    .join(" · ");
+  const coverBadge = author ||
+    v.origin_label ||
+    (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"));
 
   return (
     <div>
@@ -722,21 +879,22 @@ function VoiceCard({
         {v.installed ? (
           <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.eb88ff57c9")}</span>
         ) : null}
-        <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--meta)] drop-shadow">
-          {v.origin_label || (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"))}
+        <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--ink)] drop-shadow">
+          {coverBadge}
         </span>
       </div>
-      <div className="mt-2 text-[13.5px] leading-snug truncate" title={title}>
+      <div className="text-[14.5px] font-semibold mt-2.5 truncate" title={title}>
         {title}
       </div>
-      {line1 ? (
-        <div className="text-[11.5px] text-[var(--meta)] truncate" title={line1}>
-          {line1}
-        </div>
-      ) : null}
-      {line2 ? (
-        <div className="text-[11.5px] text-[var(--meta)] truncate" title={line2}>
-          {line2}
+      <div
+        className="text-xs text-[var(--meta)] mt-0.5 truncate"
+        title={author || undefined}
+      >
+        {author ? t("s.7feea73fa3", { v0: author }) : t("s.2af26573b0")}
+      </div>
+      {meta ? (
+        <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
+          {meta}
         </div>
       ) : null}
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">

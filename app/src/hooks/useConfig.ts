@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getConfig, setConfig, type Config } from "../lib/config";
+import { listen } from "@tauri-apps/api/event";
+import { getConfig, notifyConfigPatch, setConfig, type Config } from "../lib/config";
 import { applyAppearance } from "../lib/appearance";
 
 /**
@@ -27,8 +28,32 @@ export function useConfig() {
         }
       })
       .catch((e) => alive && setError(String(e)));
+    let unCfg: (() => void) | undefined;
+    let unVoice: (() => void) | undefined;
+    void listen<{ config?: Config }>("config-changed", (ev) => {
+      if (!alive) return;
+      const next = ev.payload?.config;
+      if (next && typeof next === "object") setCfg(next);
+    }).then((fn) => {
+      if (!alive) fn();
+      else unCfg = fn;
+    });
+    // 切音色会把该音色档案里的音高/共鸣写进配置，设置页要跟着换。
+    void listen("voices-changed", () => {
+      if (!alive) return;
+      void getConfig()
+        .then((c) => {
+          if (alive) setCfg(c);
+        })
+        .catch(() => undefined);
+    }).then((fn) => {
+      if (!alive) fn();
+      else unVoice = fn;
+    });
     return () => {
       alive = false;
+      unCfg?.();
+      unVoice?.();
     };
   }, []);
 
@@ -85,6 +110,7 @@ export function useConfig() {
     (key: string, value: unknown, immediate = false): Promise<void> => {
       setCfg((c) => ({ ...c, [key]: value }));
       pending.current[key] = value;
+      notifyConfigPatch({ [key]: value });
       if (timer.current) window.clearTimeout(timer.current);
       if (immediate) {
         timer.current = null;

@@ -348,17 +348,7 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                         .get("official")
                         .and_then(|x| x.as_bool())
                         .unwrap_or(true);
-                    let origin_label = if !official {
-                        if origin.is_empty() {
-                            crate::i18n::t("s.4500b5dfc7")
-                        } else {
-                            crate::i18n::te("s.d03c6cb553", &(origin))
-                        }
-                    } else if origin.is_empty() {
-                        crate::i18n::t("s.7c134b6e64")
-                    } else {
-                        origin
-                    };
+                    let origin_label = origin_label_for(&origin, official);
                     obj.insert("origin_label".into(), json!(origin_label));
                     let size = obj.get("size_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
                     obj.insert("size_label".into(), json!(format_size(size)));
@@ -367,6 +357,35 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
         }
     }
     cat
+}
+
+/// 清单 `origin` 是站点代号（huggingface），不能直接给人看。
+/// `te()` 只替换 `{e}`/`{a0}`/`{}`，旧代码拿它填 `{origin}`，卡片上就印着
+/// 「第三方 · {origin}」。
+fn origin_display_name(origin: &str) -> String {
+    match origin.trim().to_ascii_lowercase().as_str() {
+        "huggingface" | "hf" | "hugging-face" => "Hugging Face".into(),
+        "cnb" => "CNB".into(),
+        other if !other.is_empty() => other.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn origin_label_for(origin: &str, official: bool) -> String {
+    if official {
+        return if origin.trim().is_empty() {
+            crate::i18n::t("s.7c134b6e64")
+        } else {
+            origin_display_name(origin)
+        };
+    }
+    let shown = origin_display_name(origin);
+    if shown.is_empty() {
+        return crate::i18n::t("s.4500b5dfc7");
+    }
+    let mut vars = std::collections::HashMap::new();
+    vars.insert("origin".into(), shown);
+    crate::i18n::t_vars("s.d03c6cb553", &vars)
 }
 
 /// 封面本地化缓存：批量把远程封面 URL 下载到 `User_Data/cover_cache/`，
@@ -400,6 +419,9 @@ fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Ok(url.to_string()); // 非 http（如 asset://）原样返回
     }
+    if let Some(local) = local_banner_for_url(root, url) {
+        return Ok(local);
+    }
     let dir = paths::user_data(root).join("cover_cache");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let key = hex::encode(sha2::Sha256::digest(url.as_bytes()));
@@ -413,18 +435,44 @@ fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let resp = client.get(url).send().map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
+        return local_banner_for_url(root, url).ok_or_else(|| format!("HTTP {}", resp.status()));
     }
     let bytes = resp.bytes().map_err(|e| e.to_string())?;
     // 封面是几十 KB 的 jpg；小于 100B 不像图，大于 8MB 不像封面。
     if bytes.len() < 100 || bytes.len() > 8 * 1024 * 1024 {
-        return Err(format!("unexpected size {}", bytes.len()));
+        return local_banner_for_url(root, url)
+            .ok_or_else(|| format!("unexpected size {}", bytes.len()));
     }
     // 原子写：先写临时名再 rename，崩溃也不会留半个文件。
     let tmp = dir.join(format!("{}.tmp", &key[..24]));
     fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
     Ok(dest.to_string_lossy().into_owned())
+}
+
+/// 远程封面挂了时，用文件名去本机 ch-banner 里找（开发仓 / 已缓存的封面）。
+fn local_banner_for_url(root: &Path, url: &str) -> Option<String> {
+    let name = url
+        .rsplit('/')
+        .next()?
+        .split('?')
+        .next()?
+        .trim();
+    if name.is_empty() || name.contains("..") || name.contains('\\') {
+        return None;
+    }
+    let dirs = [
+        paths::ch_banner_dir(root),
+        root.join("ch-banner"),
+        root.join("CNB-GIT-RELEASE").join("ch-banner"),
+    ];
+    for base in dirs {
+        let p = base.join(name);
+        if p.is_file() && p.metadata().map(|m| m.len()).unwrap_or(0) > 100 {
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+    None
 }
 
 fn format_size(n: u64) -> String {
@@ -1479,5 +1527,28 @@ mod tests {
         assert!(!d.exists());
         assert!(discard_staged(&base, "v1").is_ok());
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn origin_label_fills_origin_not_the_placeholder() {
+        let s = origin_label_for("huggingface", false);
+        assert!(!s.contains("{origin}"), "{s}");
+        assert!(s.contains("Hugging Face"), "{s}");
+        assert_eq!(origin_label_for("", false), crate::i18n::t("s.4500b5dfc7"));
+        assert_eq!(origin_label_for("", true), crate::i18n::t("s.7c134b6e64"));
+    }
+
+    #[test]
+    fn cover_url_falls_back_to_local_banner_file() {
+        let root = std::env::temp_dir().join(format!("rvcf-cover-fb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("CNB-GIT-RELEASE").join("ch-banner");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("tp-yuuka.jpg"), vec![0u8; 200]).unwrap();
+        let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-yuuka.jpg";
+        let got = local_banner_for_url(&root, url).expect("should find local yuuka");
+        assert!(got.ends_with("tp-yuuka.jpg"), "{got}");
+        assert!(local_banner_for_url(&root, "https://x/covers/../evil.jpg").is_none());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

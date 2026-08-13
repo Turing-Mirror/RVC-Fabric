@@ -184,6 +184,7 @@ fn config_describe() -> Value {
 /// stream. Returns `needs_restart` for the cold keys the UI must warn about.
 #[tauri::command]
 fn config_set(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     patch: Map<String, Value>,
 ) -> Result<Value, String> {
@@ -194,6 +195,7 @@ fn config_set(
             let _ = worker::set_hot(&root, hot.clone());
         }
     }
+    let _ = app.emit("config-changed", &out);
     Ok(out)
 }
 
@@ -918,6 +920,7 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
 
 #[tauri::command]
 fn engine_set_hot(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     pitch: Option<i32>,
     formant: Option<f64>,
@@ -957,7 +960,9 @@ fn engine_set_hot(
     // 底栏拖音高/共鸣以前只 set_hot、不写盘：界面重启后仍显示旧数（来自
     // app_config），但 inuse 还是 0，引擎按默认起 —— 显示对、声音不对。
     // 这里顺手落盘并同步 inuse；worker 没起来时只落盘，不算失败。
-    let _ = config::update(&root, payload.clone());
+    if let Ok(out) = config::update(&root, payload.clone()) {
+        let _ = app.emit("config-changed", &out);
+    }
     match worker::set_hot(&root, payload) {
         Ok(seq) => Ok(seq),
         Err(e) if e.contains(&crate::i18n::t("s.b2ba9634d9")) => Ok(0),
@@ -1092,6 +1097,9 @@ fn voices_select(
     )?;
     // 工具窗是独立 webview，不广播的话语音转换的目标音色会停在打开时的那个。
     let _ = app.emit("voices-changed", &out);
+    // 音色档案里的音高/共鸣已经写进 app_config，设置页和底栏要一起跟上。
+    let cfg = config::read(&root);
+    let _ = app.emit("config-changed", json!({ "config": cfg }));
     Ok(out)
 }
 

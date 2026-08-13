@@ -18,6 +18,21 @@ export async function setConfig(patch: Config): Promise<ConfigWrite> {
   return await invoke<ConfigWrite>("config_set", { patch });
 }
 
+/** 设置页乐观写入时立刻通知底栏等订阅方，不等 220ms 落盘。 */
+const patchListeners = new Set<(patch: Config) => void>();
+
+export function onConfigPatch(fn: (patch: Config) => void): () => void {
+  patchListeners.add(fn);
+  return () => {
+    patchListeners.delete(fn);
+  };
+}
+
+export function notifyConfigPatch(patch: Config): void {
+  if (!Object.keys(patch).length) return;
+  patchListeners.forEach((fn) => fn(patch));
+}
+
 /**
  * Detailed help behind every ? on the settings page.
  * Must be a function: top-level t() freezes the default (zh-CN) locale at import.

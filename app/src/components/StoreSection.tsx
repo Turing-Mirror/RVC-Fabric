@@ -864,17 +864,24 @@ function VoiceCard({
   coverMap?: Record<string, string>;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [useLocalCover, setUseLocalCover] = useState(false);
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
   // Older caches may only have a relative cover path — skip those (no convert).
   // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
-  const coverHttp = resolveCover((v.cover_url || v.cover || "").trim(), coverMap ?? {});
-  const showImg = Boolean(coverHttp) && !imgFailed;
+  const coverRemote = (v.cover_url || "").trim();
+  const coverRel = (v.cover || "").trim();
+  const coverHttp = resolveCover(coverRemote || coverRel, coverMap ?? {});
+  const coverLocal =
+    coverRel && coverRel !== coverRemote ? resolveCover(coverRel, {}) : "";
+  const shownCover = useLocalCover && coverLocal ? coverLocal : coverHttp;
+  const showImg = Boolean(shownCover) && !imgFailed;
   // src 变化（如重试成功后换成本地缓存路径）时解除失败占位，
   // img 换 src 会自动重新加载 —— 不被 imgFailed 永久卡死。
   useEffect(() => {
     setImgFailed(false);
+    setUseLocalCover(false);
   }, [coverHttp]);
   const author = displayVoiceAuthor(v, loc);
   const parentLabel = voiceParentSeries(v, loc);
@@ -893,13 +900,16 @@ function VoiceCard({
           <img
             // src 变化时重建 img：避免旧 src（远程直连）的 onError 晚到，
             // 把已经换成本地缓存路径的图错误地置回失败占位。
-            key={coverHttp}
-            src={coverHttp}
+            key={shownCover}
+            src={shownCover}
             alt=""
             loading="lazy"
             referrerPolicy="no-referrer"
             draggable={false}
-            onError={() => setImgFailed(true)}
+            onError={() => {
+              if (!useLocalCover && coverLocal) setUseLocalCover(true);
+              else setImgFailed(true);
+            }}
             // contain：竖向立绘在 4:3 卡里用 cover 会裁成胸口/腿；完整展示优先。
             className="absolute inset-0 w-full h-full object-contain"
           />

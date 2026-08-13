@@ -12,6 +12,7 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
+import { onConfigPatch, type Config } from "./lib/config";
 import { forceKillEngine, setHot, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
@@ -383,6 +384,47 @@ export default function App() {
       });
     // Runs once on mount; syncParams is stable (useCallback with no deps).
   }, [syncParams]);
+
+  // 设置页 / 底栏 / 快捷键 / 切音色都会改配置。底栏自己的 state 以前只在
+  // 挂载和切音色时读一次，设置里拖音高底栏数字不动。
+  const applyConfigPatch = useCallback(
+    (c: Config) => {
+      if (c.pitch != null && Number.isFinite(Number(c.pitch))) {
+        const v = Number(c.pitch);
+        setPitch(v);
+        syncParams({ pitch: v });
+      }
+      if (c.formant != null && Number.isFinite(Number(c.formant))) {
+        const v = Number(c.formant);
+        setFormant(v);
+        syncParams({ formant: v });
+      }
+      const fn = c.function;
+      if (fn === "im" || fn === "bypass") setMode("bypass");
+      else if (fn === "vc") setMode("vc");
+    },
+    [syncParams],
+  );
+
+  useEffect(() => {
+    const off = onConfigPatch(applyConfigPatch);
+    let disposed = false;
+    let un: (() => void) | undefined;
+    void listen<{ config?: Config; hot?: Config }>("config-changed", (ev) => {
+      // 只跟热键走：主题/壁纸那类写入也会带完整 config，里面的音高可能
+      // 还是底栏 80ms 防抖还没落盘的旧值，拿来套会把滑块拽回去。
+      const hot = ev.payload?.hot;
+      if (hot && Object.keys(hot).length) applyConfigPatch(hot);
+    }).then((fn) => {
+      if (disposed) fn();
+      else un = fn;
+    });
+    return () => {
+      disposed = true;
+      off();
+      un?.();
+    };
+  }, [applyConfigPatch]);
 
   // The settings page reads only the device lists out of engine status, but the
   // whole status object changes every poll tick (mic level, latency), so

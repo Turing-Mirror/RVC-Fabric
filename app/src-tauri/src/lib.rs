@@ -897,6 +897,7 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         worker::kill_known_workers(&root);
+        worker::kill_runtime_pythons(&root, true);
         // 杀完把「当前音色」重新写回引擎配置。
         //
         // 强杀是在引擎已经不正常的时候按的，它中途可能正在写 configs/inuse，
@@ -1076,18 +1077,22 @@ async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
 
 #[tauri::command]
 fn voices_select(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     path: Option<String>,
     dir: Option<String>,
     name: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::select_voice(
+    let out = voices::select_voice(
         &root,
         path.as_deref().unwrap_or(""),
         dir.as_deref().unwrap_or(""),
         name.as_deref().unwrap_or(""),
-    )
+    )?;
+    // 工具窗是独立 webview，不广播的话语音转换的目标音色会停在打开时的那个。
+    let _ = app.emit("voices-changed", &out);
+    Ok(out)
 }
 
 #[tauri::command]
@@ -1627,6 +1632,8 @@ pub fn run() {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
+                    worker::kill_known_workers(&g.root);
+                    worker::kill_runtime_pythons(&g.root, false);
                     let stats = paths::clean_temps(&g.root);
                     paths::log_clean_stats(&crate::i18n::t("s.feecb1e6ad"), &g.root, &stats);
                 }

@@ -368,6 +368,45 @@ export function displayVoiceSeries(
   return seriesLabelOf(catalogSeriesRaw(v), loc, v);
 }
 
+function namesEqual(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * True when a series key is just the only voice's own name.
+ *
+ * Catalog rows sometimes put the character in `series` (ATRI / ATRI).
+ * Treating that as a franchise makes one character look like a category.
+ */
+export function isCharacterAsSeries(
+  seriesKey: string,
+  voices: NamedVoice[],
+  locale?: LocaleCode | string,
+): boolean {
+  const s = seriesKey.trim();
+  if (!s || voices.length !== 1) return false;
+  const loc = locale || getTLocale();
+  const v = voices[0];
+  return (
+    namesEqual(s, displayVoiceName(v, loc)) ||
+    namesEqual(s, str(v.name)) ||
+    namesEqual(s, str(v.id))
+  );
+}
+
+/** True when a child-group label is just that one voice's name. */
+export function isCharacterAsGroup(
+  groupLabel: string,
+  voices: NamedVoice[],
+  locale?: LocaleCode | string,
+): boolean {
+  const g = groupLabel.trim();
+  if (!g || voices.length !== 1) return false;
+  const loc = locale || getTLocale();
+  const v = voices[0];
+  return namesEqual(g, displayVoiceName(v, loc)) || namesEqual(g, str(v.name));
+}
+
 /** Franchise / IP the voice belongs to (蔚蓝档案, BanG Dream, …). */
 export function voiceParentSeries(
   v: NamedVoice,

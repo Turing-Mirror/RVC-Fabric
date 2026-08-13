@@ -21,7 +21,7 @@ const VBCABLE_URL = "https://www.vb-cable.com";
 function DonateNote() {
   const [before, after] = t("s.vbcableDonate").split("{site}");
   return (
-    <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mt-3 max-w-[74ch]">
+    <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mt-3 w-full min-w-0">
       {before}
       <a
         href={VBCABLE_URL}

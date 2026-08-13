@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn } from "./ui";
 import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { listVoices, type VoiceModel } from "../lib/voices";
+
+/** Windows path compare: slash / case must not hide a just-selected voice. */
+function samePath(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const n = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return n(a) === n(b);
+}
 
 /** 工具窗两个模式：官方语义的音频推理 + 保留的文字合成。 */
 type Mode = "sts" | "tts";
@@ -203,54 +211,61 @@ function StsSection() {
     setModelName(m.name || m.file || "");
   };
 
-  const load = async () => {
+  const applyCurrent = (
+    s: StsStatus,
+    cat: { models?: VoiceModel[]; selected_idx?: number },
+  ) => {
+    const usable = (cat.models || []).filter(
+      (m) => m.path && !m.missing && String(m.path).length > 0,
+    );
+    setVoices(usable);
+    const byPath =
+      s.model_path && usable.find((m) => samePath(m.path, s.model_path));
+    const byIdx =
+      cat.selected_idx != null && cat.selected_idx >= 0
+        ? cat.models?.[cat.selected_idx]
+        : undefined;
+    const byIdxUsable =
+      byIdx && usable.some((m) => samePath(m.path, byIdx.path)) ? byIdx : undefined;
+    const chosen = byPath || byIdxUsable || usable[0];
+    if (chosen) {
+      pickVoice(chosen);
+    } else if (s.model_path) {
+      setModelPath(s.model_path);
+      setIndexPath(s.index_path || "");
+      setModelName(s.model_name || "");
+    }
+  };
+
+  const load = async (full = true) => {
     try {
       const [s, cat] = await Promise.all([
         invoke<StsStatus>("sts_status"),
         listVoices(),
       ]);
       setSt(s);
-      if (s.pitch != null) setPitch(Number(s.pitch));
-      if (s.f0method) setF0method(String(s.f0method));
-      if (s.index_rate != null) setIndexRate(Number(s.index_rate));
-      if (!input && s.last_input) setInput(String(s.last_input));
-      if (!output && s.last_output) setOutput(String(s.last_output));
-      else if (!output && s.out_dir) setOutput(String(s.out_dir));
-      if (s.recording) {
-        recordingRef.current = true;
-        setRecording(true);
+      if (full) {
+        if (s.pitch != null) setPitch(Number(s.pitch));
+        if (s.f0method) setF0method(String(s.f0method));
+        if (s.index_rate != null) setIndexRate(Number(s.index_rate));
+        if (!input && s.last_input) setInput(String(s.last_input));
+        if (!output && s.last_output) setOutput(String(s.last_output));
+        else if (!output && s.out_dir) setOutput(String(s.out_dir));
+        if (s.recording) {
+          recordingRef.current = true;
+          setRecording(true);
+        }
       }
-
-      const usable = (cat.models || []).filter(
-        (m) => m.path && !m.missing && String(m.path).length > 0,
-      );
-      setVoices(usable);
-
-      // 默认：配置里的当前变声音色 → 库 selected_idx → 列表第一项。
-      const byPath =
-        s.model_path && usable.find((m) => m.path === s.model_path);
-      const byIdx =
-        cat.selected_idx >= 0 ? cat.models?.[cat.selected_idx] : undefined;
-      const byIdxUsable =
-        byIdx && usable.some((m) => m.path === byIdx.path) ? byIdx : undefined;
-      const chosen = byPath || byIdxUsable || usable[0];
-      if (chosen) {
-        pickVoice(chosen);
-      } else if (s.model_path) {
-        // 库列表里暂时对不上，仍用状态里的路径，保证能转。
-        setModelPath(s.model_path);
-        setIndexPath(s.index_path || "");
-        setModelName(s.model_name || "");
-      }
+      applyCurrent(s, cat);
     } catch (e) {
       setMsg(String(e));
     }
   };
 
   useEffect(() => {
-    void load();
+    void load(true);
     let disposed = false;
-    let un: (() => void) | undefined;
+    const unsubs: Array<() => void> = [];
     void listen<Progress>("sts-progress", (ev) => {
       const p = ev.payload;
       setProg(p);
@@ -271,9 +286,8 @@ function StsSection() {
       }
     }).then((fn) => {
       if (disposed) fn();
-      else un = fn;
+      else unsubs.push(fn);
     });
-    let unRec: (() => void) | undefined;
     void listen<RecProgress>("sts-record", (ev) => {
       setRec(ev.payload);
       if (ev.payload.phase === "done" || ev.payload.phase === "error") {
@@ -286,12 +300,58 @@ function StsSection() {
       }
     }).then((fn) => {
       if (disposed) fn();
-      else unRec = fn;
+      else unsubs.push(fn);
     });
+    // 首页换音色（含最近三卡）时本窗要跟过去。工具窗是独立 webview，
+    // 不听事件就一直停在打开时的那一个。
+    void listen<{ model?: VoiceModel }>("voices-changed", (ev) => {
+      const m = ev.payload?.model;
+      if (m?.path && !m.missing) {
+        pickVoice(m);
+        void listVoices()
+          .then((cat) => {
+            setVoices(
+              (cat.models || []).filter(
+                (x) => x.path && !x.missing && String(x.path).length > 0,
+              ),
+            );
+          })
+          .catch(() => undefined);
+        return;
+      }
+      void load(false);
+    }).then((fn) => {
+      if (disposed) fn();
+      else unsubs.push(fn);
+    });
+    let unFocus: (() => void) | undefined;
+    try {
+      const win = getCurrentWindow();
+      void win
+        .onFocusChanged((ev) => {
+          // 只把新装进库的音色补进下拉框；不要盖掉本窗刚选的目标。
+          if (!ev.payload) return;
+          void listVoices()
+            .then((cat) => {
+              setVoices(
+                (cat.models || []).filter(
+                  (x) => x.path && !x.missing && String(x.path).length > 0,
+                ),
+              );
+            })
+            .catch(() => undefined);
+        })
+        .then((fn) => {
+          if (disposed) fn();
+          else unFocus = fn;
+        });
+    } catch {
+      /* 浏览器预览没有 Tauri 窗口 */
+    }
     return () => {
       disposed = true;
-      un?.();
-      unRec?.();
+      unsubs.forEach((f) => f());
+      unFocus?.();
       audioRef.current?.pause();
     };
   }, []);
@@ -493,15 +553,15 @@ function StsSection() {
         <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
       ) : null}
 
-      <div className="border-t border-[var(--hairline)]">
+      <div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.stsTargetVoice")}</span>
           <select
             className={`flex-1 min-w-0 ${FIELD}`}
-            value={modelPath}
+            value={voices.find((v) => samePath(v.path, modelPath))?.path || modelPath}
             disabled={running || !voices.length}
             onChange={(e) => {
-              const m = voices.find((v) => v.path === e.target.value);
+              const m = voices.find((v) => samePath(v.path, e.target.value));
               pickVoice(m);
             }}
           >
@@ -602,7 +662,7 @@ function StsSection() {
         </div>
       </div>
 
-      <div className="mt-3 border-t border-[var(--hairline)] pt-3">
+      <div className="mt-3">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <span className="text-[13px] font-medium">{t("s.stsInputLibrary")}</span>
           <span className="text-[11.5px] text-[var(--meta)]">
@@ -692,7 +752,7 @@ function StsSection() {
         )}
       </div>
 
-      <div className="mt-1 border-t border-[var(--hairline)]">
+      <div className="mt-1">
         <div className={ROW}>
           <span className={LABEL}>{t("s.bda11a3c2d")}</span>
           <div className="flex-1">
@@ -781,7 +841,7 @@ function StsSection() {
       ) : null}
 
       {skipped.length ? (
-        <div className="mt-3 border-t border-[var(--hairline)] pt-2">
+        <div className="mt-3 pt-2">
           <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
             {t("s.stsSkippedTitle", { v0: skipped.length })}
           </p>
@@ -921,7 +981,7 @@ function TtsSection() {
         {text.length} / {max}
       </p>
 
-      <div className="mt-3 border-t border-[var(--hairline)]">
+      <div className="mt-3">
         <div className={ROW}>
           <span className={LABEL}>{t("s.09febb1c95")}</span>
           <select

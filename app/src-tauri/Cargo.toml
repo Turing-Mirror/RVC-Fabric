@@ -67,4 +67,6 @@ windows-sys = { version = "0.59", features = [
   # 无边框最大化：子类化 WM_GETMINMAXINFO / WM_WINDOWPOSCHANGING，
   # 落地前把矩形钳到工作区（不含任务栏），避免事后 SetWindowPos 毁掉还原尺寸。
   "Win32_UI_Shell",
+  # 退出/关变声时枚举 Runtime 下残留的 python*.exe（含 AudioIoProcess 孤儿）。
+  "Win32_System_Diagnostics_ToolHelp",
 ] }

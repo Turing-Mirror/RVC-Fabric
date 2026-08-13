@@ -402,6 +402,94 @@ fn known_worker_pids(root: &Path) -> Vec<u32> {
     out
 }
 
+/// True when *img* sits under *dir* (Windows path, case-insensitive).
+fn path_is_under(dir: &Path, img: &str) -> bool {
+    let d = dir
+        .to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_ascii_lowercase();
+    let i = img.replace('/', "\\").to_ascii_lowercase();
+    !d.is_empty() && (i == d || i.starts_with(&(d.clone() + "\\")))
+}
+
+/// (pid, parent_pid, image_path) for every live python.exe / pythonw.exe.
+#[cfg(windows)]
+fn iter_python_procs() -> Vec<(u32, u32, String)> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snap.is_null() || snap == INVALID_HANDLE_VALUE {
+        return Vec::new();
+    }
+    let mut pe: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    pe.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    let mut out = Vec::new();
+    unsafe {
+        if Process32FirstW(snap, &mut pe) != 0 {
+            loop {
+                let end = pe
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(pe.szExeFile.len());
+                let name = OsString::from_wide(&pe.szExeFile[..end])
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
+                if name == "python.exe" || name == "pythonw.exe" {
+                    let pid = pe.th32ProcessID;
+                    let parent = pe.th32ParentProcessID;
+                    let img = pid_image_path(pid);
+                    if !img.is_empty() {
+                        out.push((pid, parent, img));
+                    }
+                }
+                if Process32NextW(snap, &mut pe) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snap);
+    }
+    out
+}
+
+#[cfg(not(windows))]
+fn iter_python_procs() -> Vec<(u32, u32, String)> {
+    Vec::new()
+}
+
+/// Kill Runtime python processes.
+///
+/// * `orphans_only` — only those whose parent is already dead. Used after
+///   关闭变声 so a leftover AudioIoProcess is reaped without touching an
+///   in-flight STS / train / separate job (those are children of the shell).
+/// * otherwise — every python whose image lives under Runtime. Used on
+///   关闭应用 so nothing is left behind.
+pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) {
+    let rt = paths::runtime_dir(root);
+    for (pid, parent, img) in iter_python_procs() {
+        if !path_is_under(&rt, &img) {
+            continue;
+        }
+        if orphans_only && pid_alive(parent) {
+            continue;
+        }
+        append_log(
+            root,
+            &format!(
+                "kill_tree runtime python pid={pid} parent={parent} orphans_only={orphans_only}"
+            ),
+        );
+        kill_tree(pid);
+    }
+}
+
 /// Kill only PIDs that still look like this product's worker.
 pub fn kill_known_workers(root: &Path) {
     for pid in known_worker_pids(root) {
@@ -449,11 +537,8 @@ pub fn kill_known_workers(root: &Path) {
 
 /// 启动时收掉上几次留下的孤儿 worker，保留当前这个。
 ///
-/// 退出时我们是**故意**不杀 worker 的：关到托盘还要接着变声，下次打开也能省掉
-/// 几十秒冷启动。代价是一旦某次开出了两个 worker，多出来的那个没人认领，
-/// 就会一直活下去 —— 它照样在写 status.json、照样占着输出设备，于是新一次启动
-/// 认领的那个 worker 发出去的音频进不了声卡。
-///
+/// 关到托盘故意不杀 worker：还要接着变声，下次打开也省掉冷启动。
+/// 真正退出（Exit / 关闭应用）会走 `kill_known_workers` + Runtime python 清扫。
 /// 这里只碰台账里记过的 pid（都是我们自己 spawn 的），不做全系统进程枚举。
 pub fn reap_orphan_workers(root: &Path) {
     let keep = protocol::read_worker_pid_file(root);
@@ -852,33 +937,35 @@ pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {
     if pid == 0 {
         if force {
             kill_known_workers(root);
+            kill_runtime_pythons(root, true);
         }
         return Ok(());
     }
     let _ = send_command(root, "stop", Map::new());
-    let deadline = Instant::now() + Duration::from_secs(12);
+    // force：给 stop_stream / AudioIoProcess.join 几秒，再杀树。
+    // 软停：等 worker 自己落到 idle，进程留下给下次开启用。
+    let deadline = Instant::now() + Duration::from_secs(if force { 3 } else { 12 });
     while Instant::now() < deadline {
         if !pid_alive(pid) {
-            // Parent gone — clear bookkeeping (orphans may remain; force kills tree)
-            if force {
-                kill_tree(pid);
-            }
-            protocol::clear_worker_pid(root);
-            forget_identity_cache();
-            return Ok(());
+            break;
         }
         let st = protocol::read_status(root);
         if st.get("state").and_then(|v| v.as_str()) != Some("running") {
-            // Soft stop leaves worker alive in idle — correct
-            return Ok(());
+            if !force {
+                return Ok(());
+            }
+            break;
         }
         thread::sleep(Duration::from_millis(200));
     }
     if force {
-        if pid_is_our_worker(root, pid) {
+        if pid_alive(pid) && (pid_is_our_worker(root, pid) || pid_looks_like_python(pid)) {
             kill_tree(pid);
         }
         kill_known_workers(root);
+        // AudioIoProcess 是 multiprocessing 子进程；父进程死后若没跟上，
+        // 这里按「Runtime 下、父进程已死」收掉，不动正在跑的 STS/训练。
+        kill_runtime_pythons(root, true);
     }
     Ok(())
 }
@@ -1004,6 +1091,17 @@ mod tests {
     #[test]
     fn pid_zero_is_never_alive() {
         assert!(!pid_alive(0));
+    }
+
+    #[test]
+    fn path_is_under_matches_runtime_children_only() {
+        let rt = Path::new(r"C:\App\Runtime");
+        assert!(path_is_under(rt, r"C:\App\Runtime\pythonw.exe"));
+        assert!(path_is_under(rt, r"c:\app\runtime\python.exe"));
+        assert!(path_is_under(rt, r"C:/App/Runtime/Scripts/python.exe"));
+        assert!(!path_is_under(rt, r"C:\App\RuntimeX\python.exe"));
+        assert!(!path_is_under(rt, r"C:\Python39\python.exe"));
+        assert!(!path_is_under(Path::new(""), r"C:\App\Runtime\python.exe"));
     }
 
     /// 一次启动开出两个 worker 的时候，多出来那个必须留下痕迹。

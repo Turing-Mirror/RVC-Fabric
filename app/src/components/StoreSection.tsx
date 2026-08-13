@@ -30,6 +30,8 @@ import {
   displayVoiceAuthor,
   displayVoiceName,
   displayVoiceTag,
+  isCharacterAsGroup,
+  isCharacterAsSeries,
   voiceChildGroup,
   voiceGroupRaw,
   voiceParentSeries,
@@ -244,7 +246,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       if (!gm.has(raw)) gm.set(raw, []);
       gm.get(raw)!.push(v);
     }
-    return [...map.entries()]
+    const nodes: SeriesNode[] = [...map.entries()]
       .sort((a, b) => {
         if (a[0] === other) return 1;
         if (b[0] === other) return -1;
@@ -254,19 +256,47 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         const named = [...gm.keys()].some((r) => r);
         const groups = [...gm.entries()]
           .sort((a, b) => compareVoiceGroups(a[0], b[0], other))
-          .map(([raw, voices]) => ({
-            raw,
-            label: named
+          .map(([raw, voices]) => {
+            let label = named
               ? voiceChildGroup(voices[0], loc) || (raw ? raw : other)
-              : "",
-            voices,
-          }));
+              : "";
+            // 子类名就是角色名时，不要再套一层「分类」。
+            if (label && label !== other && isCharacterAsGroup(label, voices, loc)) {
+              label = "";
+            }
+            return { raw, label, voices };
+          });
         return {
           key,
           voices: groups.flatMap((g) => g.voices),
           groups,
         };
       });
+
+    // 系列名等于唯一角色名（如 ATRI / ATRI）时并进「其他」，
+    // 否则「按分类查看」会把一个角色画成一个分类。
+    const folded: StoreVoice[] = [];
+    const kept: SeriesNode[] = [];
+    for (const n of nodes) {
+      if (n.key !== other && isCharacterAsSeries(n.key, n.voices, loc)) {
+        folded.push(...n.voices);
+      } else {
+        kept.push(n);
+      }
+    }
+    if (folded.length) {
+      let extra = kept.find((n) => n.key === other);
+      if (!extra) {
+        extra = { key: other, voices: [], groups: [] };
+        kept.push(extra);
+      }
+      extra.voices = extra.voices.concat(folded);
+      const rawKey = "";
+      const hit = extra.groups.find((g) => g.raw === rawKey);
+      if (hit) hit.voices = hit.voices.concat(folded);
+      else extra.groups.push({ raw: rawKey, label: "", voices: folded });
+    }
+    return kept;
   }, [grouping, list]);
 
   const perPage = cols * PAGE_ROWS;

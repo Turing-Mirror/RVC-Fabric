@@ -279,25 +279,28 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
             }
         }
     }
-    // cache
+    // Last successful remote snapshot. Prefer it over the catalog baked into
+    // the exe: that one is frozen at build time, so a later store publish
+    // would never show up after install (refresh(false) used to reload
+    // bundled and wipe the just-fetched list).
     let cache_p = cache_catalog_path(root);
-    if cache_p.is_file() {
-        if let Ok(s) = fs::read_to_string(&cache_p) {
-            if let Ok(v) = serde_json::from_str::<Value>(&s) {
-                if source == "empty" {
-                    data = v;
-                    source = "cache";
-                }
-            }
-        }
+    let cached = if cache_p.is_file() {
+        fs::read_to_string(&cache_p)
+            .ok()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+    } else {
+        None
+    };
+    if let Some(v) = cached.clone() {
+        data = v;
+        source = "cache";
     }
 
     if prefer_remote {
-        // Cached: the dialog refetches on every open, and this is the same
-        // index.json the runtime specs come from. Five minutes is short enough
-        // that a newly published voice shows up promptly, and it means
-        // reopening the store is instant instead of another 25s round trip.
-        match crate::catalog::fetch_remote_catalog_cached(25) {
+        // 用户点了刷新：必须走不带 5 分钟内存缓存、并绕过 CDN 的那条。
+        // 以前用 fetch_remote_catalog_cached，启动时 provision 先拉一次旧清单，
+        // 五分钟内再点刷新还是那份，新上架的音色出不来。
+        match crate::catalog::fetch_remote_catalog(25) {
             Ok(remote) => {
                 data = remote;
                 source = "remote";
@@ -307,7 +310,10 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
             }
             Err(e) => {
                 fetch_error = e;
-                if source == "empty" {
+                if let Some(v) = cached {
+                    data = v;
+                    source = "cache";
+                } else if source == "empty" {
                     source = "error";
                 }
             }

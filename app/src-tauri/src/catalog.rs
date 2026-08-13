@@ -124,21 +124,41 @@ fn fallback_blob(variant: &str) -> Value {
 }
 
 pub(crate) fn http_get_json(url: &str, timeout_secs: u64) -> Result<Value, String> {
+    http_get_json_ex(url, timeout_secs, false)
+}
+
+fn http_get_json_ex(url: &str, timeout_secs: u64, no_cache: bool) -> Result<Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .user_agent(UA)
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = client
+    let mut req = client
         .get(url)
-        .header("Accept", "application/json,text/plain,*/*")
-        .send()
-        .map_err(|e| format!("{url}: {e}"))?;
+        .header("Accept", "application/json,text/plain,*/*");
+    if no_cache {
+        // CNB git-raw 前面有 CDN。用户点「刷新」时必须绕过，否则新上架的音色
+        // 要等缓存过期才看得见。
+        req = req
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache");
+    }
+    let resp = req.send().map_err(|e| format!("{url}: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("{url}: HTTP {}", resp.status()));
     }
     let text = resp.text().map_err(|e| e.to_string())?;
     serde_json::from_str(&text).map_err(|e| format!("JSON {url}: {e}"))
+}
+
+/// 给 URL 加时间戳，避免 CDN 把 `index.json` 钉死在旧版本。
+fn with_cache_bust(url: &str) -> String {
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("{url}{sep}_={ms}")
 }
 
 /// Short-lived memo of the remote catalog.
@@ -167,12 +187,18 @@ pub fn fetch_remote_catalog_cached(timeout_secs: u64) -> Result<Value, String> {
     Ok(fresh)
 }
 
-/// Always hits the network. Use for actions the user explicitly asked for.
+/// Always hits the network. Use for actions the user explicitly asked for
+/// (商店刷新、「检查更新」)。顺带绕过 CDN 缓存。
 pub fn fetch_remote_catalog(timeout_secs: u64) -> Result<Value, String> {
     let mut errors = Vec::new();
     for url in MANIFEST_URLS {
-        match http_get_json(url, timeout_secs) {
-            Ok(v) if v.is_object() => return Ok(v),
+        let u = with_cache_bust(url);
+        match http_get_json_ex(&u, timeout_secs, true) {
+            Ok(v) if v.is_object() => {
+                *CATALOG_MEMO.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some((Instant::now(), v.clone()));
+                return Ok(v);
+            }
             Ok(_) => errors.push(format!("{url}: not an object")),
             Err(e) => errors.push(e),
         }
@@ -417,4 +443,23 @@ pub fn resolve_runtime_spec(variant: &str, prefer_remote: bool) -> Result<Runtim
 #[allow(dead_code)]
 fn _raw_main() -> &'static str {
     CNB_RAW_MAIN
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_bust_adds_a_timestamp_query() {
+        let u = with_cache_bust("https://example.invalid/index.json");
+        assert!(u.starts_with("https://example.invalid/index.json?_="));
+        assert!(u.len() > "https://example.invalid/index.json?_=".len());
+    }
+
+    #[test]
+    fn cache_bust_appends_when_the_url_already_has_a_query() {
+        let u = with_cache_bust("https://example.invalid/index.json?x=1");
+        assert!(u.contains("&_="));
+        assert!(u.starts_with("https://example.invalid/index.json?x=1&_="));
+    }
 }

@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -517,28 +518,21 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           >
             <option value="">{t("store.allSeries")}</option>
             {seriesGroups.map((node) => {
-              const nested = node.groups.some((g) => g.label);
-              if (!nested) {
-                return (
-                  <option key={node.key} value={node.key}>
-                    {node.key} ({node.voices.length})
-                  </option>
-                );
-              }
+              const nested = node.groups.filter((g) => g.label);
               return (
-                <optgroup key={node.key} label={`${node.key} (${node.voices.length})`}>
+                <Fragment key={node.key}>
                   <option value={node.key}>
                     {node.key} ({node.voices.length})
                   </option>
-                  {node.groups.map((g) => (
+                  {nested.map((g) => (
                     <option
                       key={groupFocusKey(node.key, g.label)}
                       value={groupFocusKey(node.key, g.label)}
                     >
-                      {g.label} ({g.voices.length})
+                      {`\u00A0\u00A0${g.label} (${g.voices.length})`}
                     </option>
                   ))}
-                </optgroup>
+                </Fragment>
               );
             })}
           </select>
@@ -595,6 +589,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               const { group: focusGroup } = focusParts(seriesFocus);
               const openS = seriesFocus ? true : expanded.has(node.key);
               const nested = node.groups.some((g) => g.label);
+              // 下拉选中父类：整类平铺，不再先点一个同名子类。
+              const parentAll = !!seriesFocus && !focusGroup;
               const groups = focusGroup
                 ? node.groups.filter((g) => g.label === focusGroup)
                 : node.groups;
@@ -623,7 +619,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                     </button>
                   )}
                   {openS ? (
-                    nested ? (
+                    nested && !parentAll ? (
                       groups.map((g) => {
                         const gk = groupFocusKey(node.key, g.label);
                         const openG = !!focusGroup || expandedGroups.has(gk);

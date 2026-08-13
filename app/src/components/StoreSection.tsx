@@ -230,8 +230,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
   const seriesGroups = useMemo((): SeriesNode[] | null => {
     if (grouping !== "series") return null;
-    // 父系列 → 子类（社团 / 乐队）。没填 series 的落进「其他」；
-    // 旧清单把乐队写成顶层 series，这里一并收到父类下面。
+    // 父系列 → 子类。只有 BanG Dream 按乐队拆；蔚蓝档案和其他系列整类平铺。
+    // 没填 series 的落进「其他」；旧清单把乐队写成顶层 series，仍收到 BanG Dream 下。
     const other = t("s.1a26edf94a");
     const loc = getTLocale();
     const map = new Map<string, Map<string, StoreVoice[]>>();

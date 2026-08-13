@@ -418,8 +418,15 @@ export function voiceParentSeries(
   return seriesLabelOf(parent, loc, SERIES_PARENT[raw] ? undefined : v);
 }
 
+/** Only BanG Dream keeps band folders; 蔚蓝档案 and everyone else stay one list. */
+function isBangDreamSeries(v: NamedVoice): boolean {
+  const raw = catalogSeriesRaw(v);
+  return (SERIES_PARENT[raw] || raw) === "BanG Dream";
+}
+
 /** Club / band raw key used for sorting and stable focus ids. */
 export function voiceGroupRaw(v: NamedVoice): string {
+  if (!isBangDreamSeries(v)) return "";
   const g = str(v.group);
   if (g) return g;
   const raw = catalogSeriesRaw(v);
@@ -432,6 +439,7 @@ export function voiceChildGroup(
   v: NamedVoice,
   locale?: LocaleCode | string,
 ): string {
+  if (!isBangDreamSeries(v)) return "";
   const loc = (locale || getTLocale() || "zh-CN") as string;
   const g = displayVoiceGroup(v, loc);
   if (g) return g;

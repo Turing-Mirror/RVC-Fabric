@@ -336,7 +336,7 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let stamp = now_stamp();
     let json_out = out_dir.join(format!("bench_{stamp}.json"));
-    let log_path = paths::logs_dir(root).join("perf_bench.log");
+    let log_path = crate::logging::daily_path(root, crate::logging::CH_BENCH);
     let _ = std::fs::create_dir_all(paths::logs_dir(root));
     let errfile = std::fs::OpenOptions::new()
         .create(true)
@@ -404,6 +404,27 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
     Ok(json_out)
 }
 
+fn collect_log_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_log_files(&p, out);
+            continue;
+        }
+        let name = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.ends_with(".log") || name.ends_with(".log.1") {
+            out.push(p);
+        }
+    }
+}
+
 fn tail_bytes(path: &Path, max: usize) -> String {
     let Ok(data) = std::fs::read(path) else {
         return String::new();
@@ -460,21 +481,33 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
     zip.write_all(serde_json::to_string_pretty(&info).unwrap_or_default().as_bytes())
         .map_err(|e| e.to_string())?;
 
-    // log tails（含性能测试日志）
+    // log tails — channel folders (shell/worker/sts/…) plus leftover flat files
     let logs = paths::logs_dir(root);
-    for name in [
-        "realtime_worker.log",
-        "provision.log",
-        "shell.log",
-        "perf_bench.log",
-    ] {
-        let p = logs.join(name);
-        if p.is_file() {
-            let text = tail_bytes(&p, 512 * 1024);
-            zip.start_file(format!("logs/{name}"), opts)
-                .map_err(|e| e.to_string())?;
-            zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-        }
+    let mut log_files: Vec<PathBuf> = Vec::new();
+    collect_log_files(&logs, &mut log_files);
+    log_files.sort();
+    // Newest first, cap so a zip cannot balloon.
+    log_files.sort_by_key(|p| {
+        std::cmp::Reverse(
+            std::fs::metadata(p)
+                .and_then(|m| m.modified())
+                .ok(),
+        )
+    });
+    for p in log_files.into_iter().take(24) {
+        let rel = p
+            .strip_prefix(&logs)
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|_| {
+                p.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            });
+        let text = tail_bytes(&p, 512 * 1024);
+        zip.start_file(format!("logs/{rel}"), opts)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
     }
 
     // newest perf report, if any

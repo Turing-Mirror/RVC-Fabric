@@ -286,12 +286,11 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
     .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let logdir = paths::logs_dir(root);
-    let _ = std::fs::create_dir_all(&logdir);
+    let log = crate::logging::begin_run(root, crate::logging::CH_TRAIN, &payload);
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(logdir.join("train.log"))
+        .open(&log)
         .ok();
 
     let mut cmd = Command::new(&py);

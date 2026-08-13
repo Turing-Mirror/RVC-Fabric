@@ -38,12 +38,23 @@ _KEEP_BUNDLES = 10
 
 
 def _newest_files(dir_path: str, limit: int = _MAX_PER_DIR) -> list[str]:
+    """Newest files in dir_path, one level of subfolders (logs/shell, logs/sts, …)."""
+    names: list[str] = []
     try:
-        names = [
-            os.path.join(dir_path, n)
-            for n in os.listdir(dir_path)
-            if os.path.isfile(os.path.join(dir_path, n))
-        ]
+        for n in os.listdir(dir_path):
+            p = os.path.join(dir_path, n)
+            if os.path.isfile(p):
+                names.append(p)
+                continue
+            if not os.path.isdir(p):
+                continue
+            try:
+                for m in os.listdir(p):
+                    q = os.path.join(p, m)
+                    if os.path.isfile(q):
+                        names.append(q)
+            except OSError:
+                continue
     except OSError:
         return []
     names.sort(key=lambda p: os.path.getmtime(p), reverse=True)

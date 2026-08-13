@@ -5,7 +5,7 @@
 //! 工具窗，用分段控件切换。
 
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -240,54 +240,9 @@ fn index_for_model_path(root: &Path, pth: &str) -> String {
     String::new()
 }
 
-/// Per-run STS log under `User_Data/logs/sts/`.
-///
-/// One file per conversion attempt. On clean full success the shell deletes it;
-/// cancel / worker error / process crash / any skipped file keeps the file so
-/// support can read `User_Data/logs/sts/sts_*.log`.
-fn open_sts_run_log(root: &Path, payload: &Value) -> PathBuf {
-    let dir = paths::logs_dir(root).join("sts");
-    let _ = std::fs::create_dir_all(&dir);
-    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let mut path = dir.join(format!("sts_{stamp}.log"));
-    if path.exists() {
-        // Same-second double click: disambiguate.
-        path = dir.join(format!("sts_{stamp}_{}.log", std::process::id()));
-    }
-    if let Ok(mut f) = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&path)
-    {
-        let _ = writeln!(
-            f,
-            "=== STS run {} ===",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-        );
-        let _ = writeln!(
-            f,
-            "{}",
-            serde_json::to_string_pretty(payload).unwrap_or_else(|_| "{}".into())
-        );
-        let _ = writeln!(f, "=== worker stderr ===");
-        let _ = f.flush();
-    }
-    path
-}
-
-fn remove_sts_run_log(path: &Path) {
-    let _ = std::fs::remove_file(path);
-}
-
 /// Full success = process ok, no error phase, no skipped files, at least one output.
-fn sts_run_clean_success(
-    exit_ok: bool,
-    fail: &Option<String>,
-    files: &[String],
-    skipped: &[Value],
-) -> bool {
-    exit_ok && fail.is_none() && skipped.is_empty() && !files.is_empty()
+fn sts_run_clean_success(files: &[String], skipped: &[Value]) -> bool {
+    skipped.is_empty() && !files.is_empty()
 }
 
 /// 跑一次转换。阻塞。
@@ -310,6 +265,18 @@ pub fn run(
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
+    // Open the run log *before* preflight so a 22:00 "engine missing" still
+    // leaves a file with that timestamp. The old single sts.log never saw those.
+    let header = json!({
+        "input": input,
+        "output": output,
+        "pitch": pitch,
+        "f0method": f0method,
+        "index_rate": index_rate,
+        "model_path": model_path,
+        "index_path": index_path,
+    });
+    let log_path = crate::logging::begin_run(root, crate::logging::CH_STS, &header);
     let result = run_inner(
         app,
         root,
@@ -320,7 +287,36 @@ pub fn run(
         index_rate,
         model_path,
         index_path,
+        &log_path,
     );
+    match &result {
+        Ok(v) => {
+            let files = v
+                .get("files")
+                .and_then(|x| x.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            let skipped = v
+                .get("skipped")
+                .and_then(|x| x.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            let keep = skipped > 0 || files == 0;
+            crate::logging::finish_run(
+                &log_path,
+                keep,
+                if keep {
+                    "skipped or empty"
+                } else {
+                    "ok"
+                },
+            );
+        }
+        Err(e) => {
+            crate::logging::note_run(&log_path, &format!("ERROR {e}"));
+            crate::logging::finish_run(&log_path, true, "error");
+        }
+    }
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
@@ -338,6 +334,7 @@ fn run_inner(
     index_rate: f64,
     model_path: &str,
     index_path: &str,
+    log_path: &Path,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
@@ -407,9 +404,7 @@ fn run_inner(
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    // One log file per conversion. Clean full success deletes it; anything else keeps it.
-    let log_path = open_sts_run_log(root, &payload);
-    let errfile = OpenOptions::new().create(true).append(true).open(&log_path).ok();
+    let errfile = OpenOptions::new().create(true).append(true).open(log_path).ok();
 
     let mut cmd = Command::new(&py);
     cmd.arg(script.as_os_str())
@@ -431,10 +426,7 @@ fn run_inner(
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            // Spawn failed — keep the log (header already has the request).
-            if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "spawn failed: {e}");
-            }
+            crate::logging::note_run(log_path, &format!("spawn failed: {e}"));
             return Err(crate::i18n::te("s.4f592d4fc2", &(e)));
         }
     };
@@ -454,10 +446,7 @@ fn run_inner(
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
             let _ = child.wait();
-            // Cancelled mid-run: keep log for diagnosis.
-            if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "=== cancelled by user ===");
-            }
+            crate::logging::note_run(log_path, "cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
@@ -582,41 +571,30 @@ fn run_inner(
     let st = match child.wait() {
         Ok(s) => s,
         Err(e) => {
-            if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "wait failed: {e}");
-            }
+            crate::logging::note_run(log_path, &format!("wait failed: {e}"));
             return Err(crate::i18n::te("s.cdad0c927d", &(e)));
         }
     };
     if let Some(e) = fail {
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-            let _ = writeln!(f, "=== worker error ===\n{e}");
-        }
+        crate::logging::note_run(log_path, &format!("worker error: {e}"));
         return Err(e);
     }
     if !st.success() {
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-            let _ = writeln!(
-                f,
-                "=== process exit code {} ===",
-                st.code().unwrap_or(-1)
-            );
-        }
+        crate::logging::note_run(
+            log_path,
+            &format!("process exit code {}", st.code().unwrap_or(-1)),
+        );
         return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
     }
-    // Partial batch (some skips) still counts as "有问题" — keep the log.
-    if !skipped.is_empty() {
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-            let _ = writeln!(
-                f,
-                "=== finished with {} ok, {} skipped (log kept) ===",
+    if !sts_run_clean_success(&files, &skipped) {
+        crate::logging::note_run(
+            log_path,
+            &format!(
+                "finished with {} ok, {} skipped",
                 files.len(),
                 skipped.len()
-            );
-        }
-    } else if sts_run_clean_success(true, &None, &files, &skipped) {
-        // Head-to-tail success: drop this run's log so logs/sts/ only holds failures.
-        remove_sts_run_log(&log_path);
+            ),
+        );
     }
 
     emit_full(

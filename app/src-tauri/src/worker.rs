@@ -5,7 +5,6 @@
 
 use std::collections::HashMap;
 use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -20,11 +19,7 @@ use crate::protocol;
 static START_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn append_log(root: &Path, line: &str) {
-    let path = paths::logs_dir(root).join("realtime_worker.log");
-    let _ = std::fs::create_dir_all(path.parent().unwrap_or(root));
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(f, "{line}");
-    }
+    crate::logging::append_daily(root, crate::logging::CH_WORKER, line);
 }
 
 /// Local `YYYY-MM-DD HH:MM:SS` — these lines end up in the diagnostics bundle
@@ -532,7 +527,7 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        let log_path = paths::logs_dir(root).join("realtime_worker.log");
+        let log_path = crate::logging::daily_path(root, crate::logging::CH_WORKER);
         let log_file = OpenOptions::new()
             .create(true)
             .append(true)

@@ -279,8 +279,11 @@ fn run_inner(
 
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let log = paths::logs_dir(root).join("tts.log");
-    let _ = std::fs::create_dir_all(paths::logs_dir(root));
+    let log = crate::logging::begin_run(
+        root,
+        crate::logging::CH_TTS,
+        &json!({ "text_len": 0, "model": pth }),
+    );
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

@@ -24,11 +24,17 @@ def _root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _worker_log_path(root: Path) -> Path:
+    """Daily file under User_Data/logs/worker/ — same layout as the shell."""
+    day = datetime.now().strftime("%Y-%m-%d")
+    log_dir = root / "User_Data" / "logs" / "worker"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / f"{day}.log"
+
+
 def _append_log(root: Path, text: str) -> None:
     try:
-        log_dir = root / "User_Data" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / "realtime_worker.log"
+        path = _worker_log_path(root)
         with open(path, "a", encoding="utf-8", errors="replace") as f:
             f.write(text)
             if not text.endswith("\n"):
@@ -38,11 +44,9 @@ def _append_log(root: Path, text: str) -> None:
 
 
 def _tee_stdio(root: Path) -> None:
-    """Mirror print/traceback into realtime_worker.log (pythonw has no console)."""
+    """Mirror print/traceback into the daily worker log (pythonw has no console)."""
     try:
-        log_dir = root / "User_Data" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / "realtime_worker.log"
+        path = _worker_log_path(root)
         # line-buffered text file
         stream = open(path, "a", encoding="utf-8", errors="replace", buffering=1)
 

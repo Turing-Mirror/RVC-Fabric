@@ -686,6 +686,203 @@ fn sts_run_clean_success(files: &[String], skipped: &[Value]) -> bool {
     skipped.is_empty() && !files.is_empty()
 }
 
+/// 热路径没跑成的两种情况。
+enum HotError {
+    /// worker 没接住（没应答、模型还没加载好…）。可以退回冷路径重试。
+    Unavailable(String),
+    /// 转换本身失败（音频坏了、显存不够…）。冷路径重来一遍也是同样的结果，
+    /// 白等一分钟不说，还会把已经写出的输出再写一份。直接把错误报给用户。
+    Failed(String),
+}
+
+/// worker 多久没更新 sts.json 就认为它没接住这条命令。
+/// 转换途中每个文件都会推好几条进度，卡这么久基本等于死了。
+const HOT_STALL_MS: u128 = 20_000;
+/// 发出命令后等第一条进度的宽限。换目标音色时这里要读一个 55MB 的 pth。
+const HOT_FIRST_MS: u128 = 45_000;
+
+/// 让活着的实时 worker 就地把转换跑了。进度轮询 sts.json。
+#[allow(clippy::too_many_arguments)]
+fn run_hot(
+    app: &AppHandle,
+    root: &Path,
+    input: &str,
+    out: &Path,
+    pitch: i32,
+    f0method: &str,
+    index_rate: f64,
+    pth: &str,
+    index: &str,
+) -> Result<Value, HotError> {
+    crate::protocol::clear_sts(root);
+    let mut payload = serde_json::Map::new();
+    payload.insert("input".into(), json!(input));
+    payload.insert("output".into(), json!(out.to_string_lossy()));
+    payload.insert("model".into(), json!(pth));
+    payload.insert("index".into(), json!(index));
+    payload.insert("pitch".into(), json!(pitch));
+    payload.insert(
+        "f0method".into(),
+        json!(if f0method.trim().is_empty() { "rmvpe" } else { f0method }),
+    );
+    payload.insert("index_rate".into(), json!(index_rate.clamp(0.0, 1.0)));
+    payload.insert("filter_radius".into(), json!(3));
+    payload.insert("resample_sr".into(), json!(0));
+    payload.insert("rms_mix_rate".into(), json!(1.0));
+    payload.insert("protect".into(), json!(0.33));
+    let seq = crate::worker::send_command(root, "convert", payload)
+        .map_err(HotError::Unavailable)?;
+
+    let started = std::time::Instant::now();
+    let mut last_change = std::time::Instant::now();
+    let mut last_ts = 0.0_f64;
+    let mut saw_any = false;
+    let mut sent_cancel = false;
+
+    loop {
+        if cancel_flag().load(Ordering::SeqCst) && !sent_cancel {
+            sent_cancel = true;
+            let _ = crate::worker::send_command(root, "sts_cancel", serde_json::Map::new());
+        }
+        let v = crate::protocol::read_sts(root);
+        let ts = v.get("ts").and_then(|x| x.as_f64()).unwrap_or(0.0);
+        if ts > last_ts {
+            last_ts = ts;
+            last_change = std::time::Instant::now();
+            saw_any = true;
+            if let Some(done) = forward_sts_event(app, &v, out) {
+                return done;
+            }
+        } else {
+            // worker 死了就别再等了 —— 进程没了 sts.json 也不会再变。
+            if !crate::worker::is_worker_alive(root) {
+                return Err(if saw_any {
+                    HotError::Failed(crate::i18n::t("s.stsHotWorkerGone").into())
+                } else {
+                    HotError::Unavailable("worker exited".into())
+                });
+            }
+            let idle = last_change.elapsed().as_millis();
+            let budget = if saw_any { HOT_STALL_MS } else { HOT_FIRST_MS };
+            if idle > budget {
+                return Err(if saw_any {
+                    HotError::Failed(crate::i18n::t("s.stsHotStalled").into())
+                } else {
+                    HotError::Unavailable(format!(
+                        "no progress within {budget}ms (seq={seq})"
+                    ))
+                });
+            }
+            // 命令还没被认领，说明 worker 忙着别的（比如正在起流）。
+            if !saw_any
+                && started.elapsed().as_millis() > 3_000
+                && crate::protocol::last_cmd_seq(root) < seq
+            {
+                return Err(HotError::Unavailable("command not claimed".into()));
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(120));
+    }
+}
+
+/// 把 worker 写的一条进度转成界面事件。返回 Some(..) 表示这批活结束了。
+fn forward_sts_event(
+    app: &AppHandle,
+    v: &Value,
+    out: &Path,
+) -> Option<Result<Value, HotError>> {
+    let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
+    let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+    let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
+    let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
+    let pct = v
+        .get("pct")
+        .and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)));
+    let step = v.get("step").and_then(|x| x.as_str());
+    let current = v.get("current").and_then(|x| x.as_u64());
+    let ok_n = v.get("ok").and_then(|x| x.as_u64());
+    let skip_n = v.get("skip").and_then(|x| x.as_u64());
+    let file = v.get("file").and_then(|x| x.as_str());
+
+    match phase {
+        "error" => {
+            return Some(Err(HotError::Failed(if msg.is_empty() {
+                crate::i18n::t("s.stsHotFailed").into()
+            } else {
+                msg.to_string()
+            })))
+        }
+        "cancelled" => {
+            return Some(Err(HotError::Failed(
+                crate::i18n::t("s.a5ffdc95ee").into(),
+            )))
+        }
+        "done" => {
+            let files: Vec<String> = v
+                .get("files")
+                .and_then(|x| x.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let skipped: Vec<Value> = v
+                .get("skipped")
+                .and_then(|x| x.as_array())
+                .cloned()
+                .unwrap_or_default();
+            emit_full(
+                app,
+                "done",
+                total,
+                total,
+                &crate::i18n::t("s.e43ef3d56a"),
+                Some(100),
+                Some("done"),
+                Some(total),
+                Some(files.len() as u64),
+                Some(skipped.len() as u64),
+                None,
+            );
+            return Some(Ok(json!({
+                "ok": true,
+                "files": files,
+                "skipped": skipped,
+                "output": out.to_string_lossy(),
+            })));
+        }
+        "skip" => {
+            let reason = v
+                .get("reason")
+                .and_then(|x| x.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(msg);
+            emit_full_ex(
+                app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
+                Some(reason),
+            );
+        }
+        _ => {
+            let fallback = crate::i18n::t("s.090840132b");
+            emit_full(
+                app,
+                if phase == "start" { "start" } else { "run" },
+                done,
+                total,
+                if msg.is_empty() { &fallback } else { msg },
+                pct,
+                step,
+                current,
+                ok_n,
+                skip_n,
+                file,
+            );
+        }
+    }
+    None
+}
+
 /// 跑一次转换。阻塞。
 pub fn run(
     app: &AppHandle,
@@ -807,31 +1004,36 @@ fn run_inner(
     };
     std::fs::create_dir_all(&out).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
 
-    // 离线转换要独占显存：hubert + net_g + rmvpe 同时上卡。实时 worker 若还
-    // 活着（尤其是 3GB 级小卡），两边一抢就是 CUDA OOM。训练路径同理——工具
-    // 窗开跑就先腾出 GPU；用户之后再点「开启变声」即可。
-    if crate::worker::is_worker_alive(root) {
-        let free_msg = crate::i18n::t("s.stsFreeVram");
-        emit_full(
-            app,
-            "run",
-            0,
-            1,
-            &free_msg,
-            Some(0),
-            Some("free_vram"),
-            Some(0),
-            Some(0),
-            Some(0),
-            None,
-        );
-        crate::worker::kill_known_workers(root);
-        // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python 时
-        // 偶发还能看见「reserved >> free」。3GB 卡上 400ms 有时不够。
-        std::thread::sleep(std::time::Duration::from_millis(700));
-    }
-
     let (pth, index) = resolve_model(root, model_path, index_path)?;
+
+    // 实时 worker 还活着的话，hubert / net_g / rmvpe / faiss 全在它显存里躺着。
+    // 老做法是把它杀掉再起一个新 python 把这四样从盘上重读一遍——一条 5 秒语音
+    // 真正干活一两秒，其余全耗在这上面。现在直接让它兼职把活干了。
+    if crate::worker::is_worker_alive(root) {
+        crate::logging::note_run(log_path, "hot path: reusing live worker models");
+        match run_hot(app, root, input, &out, pitch, f0method, index_rate, &pth, &index) {
+            Ok(v) => {
+                let stats = crate::paths::clean_temps(root);
+                crate::paths::log_clean_stats(&crate::i18n::t("s.e246e3bafa"), root, &stats);
+                return Ok(v);
+            }
+            Err(HotError::Failed(e)) => return Err(e),
+            Err(HotError::Unavailable(why)) => {
+                // 热路径没接上（worker 半死、模型还没加载好…）。退回冷路径，
+                // 慢是慢，但不能因为提速的那条路没走通就干脆转不了。
+                crate::logging::note_run(log_path, &format!("hot path unavailable: {why}"));
+                let free_msg = crate::i18n::t("s.stsFreeVram");
+                emit_full(
+                    app, "run", 0, 1, &free_msg, Some(0), Some("free_vram"),
+                    Some(0), Some(0), Some(0), None,
+                );
+                crate::worker::kill_known_workers(root);
+                // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python
+                // 时偶发还能看见「reserved >> free」。3GB 卡上 400ms 有时不够。
+                std::thread::sleep(std::time::Duration::from_millis(700));
+            }
+        }
+    }
 
     let req = paths::update_cache(root).join("sts_request.json");
     if let Some(p) = req.parent() {

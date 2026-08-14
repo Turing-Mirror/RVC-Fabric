@@ -1356,7 +1356,10 @@
     "cacheClearDesc": "约 {v0} MB 可清理。删除日志、转换临时文件和下载残留，不影响音色与设置。",
     "cacheClearConfirm": "将删除日志、TEMP 中间文件和半截下载，不影响音色库和设置。确定清理？",
     "cacheClearDone": "已清理约 {v0} MB（{v1} 个文件）。",
-    "cacheClearFail": "清理失败：{v0}"
+    "cacheClearFail": "清理失败：{v0}",
+    "stsHotWorkerGone": "转换中途引擎进程退出了。请重试；反复出现请到「其他 - 收集诊断信息」导出日志。",
+    "stsHotStalled": "引擎长时间没有回应，转换已中断。请重试。",
+    "stsHotFailed": "转换失败。详情见 User_Data/logs/sts/ 下本次的日志。"
   },
   "extras": {
     "engineTitle": "引擎资源",

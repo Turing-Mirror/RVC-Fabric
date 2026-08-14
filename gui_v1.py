@@ -3034,7 +3034,7 @@ if __name__ == "__main__":
             except Exception:
                 return False
 
-        def _sts_resident_vc(self, config):
+        def _sts_resident_vc(self, config, model_path: str = ""):
             """把常驻的实时模型包成离线 `VC` 的样子。
 
             `rtrvc.RVC` 手里的 hubert / net_g / rmvpe / faiss 索引，正好就是离线
@@ -3042,6 +3042,10 @@ if __name__ == "__main__":
             塞进去就行——不新建 shim 类，`vc_single` 的行为跟冷路径一字不差。
 
             这就是热路径省掉几十秒的地方：一个字节都不读盘。
+
+            `model_path` 指向别的音色时（工具窗可以选跟首页不一样的目标音色），
+            只把那 55MB 的 pth 读进来，hubert(189MB) 和 rmvpe(181MB) 照样复用。
+            省不掉全部，但省掉大头——不然「换个音色转」就又要等一分钟。
             """
             from infer.modules.vc.modules import VC
             from infer.modules.vc.pipeline import Pipeline
@@ -3050,23 +3054,41 @@ if __name__ == "__main__":
             if rvc is None or getattr(rvc, "net_g", None) is None:
                 return None, "实时引擎里还没有加载好的音色模型"
 
-            vc = VC(config)
-            vc.hubert_model = getattr(rvc, "model", None)
-            vc.net_g = rvc.net_g
-            vc.tgt_sr = rvc.tgt_sr
-            vc.if_f0 = rvc.if_f0
-            vc.version = rvc.version
-            pipe = Pipeline(rvc.tgt_sr, config)
+            want = (model_path or "").strip()
+            cur = str(getattr(rvc, "pth_path", "") or "").strip()
+            same = not want or (
+                os.path.normcase(os.path.abspath(want))
+                == os.path.normcase(os.path.abspath(cur))
+            )
+
+            device = getattr(rvc, "device", config.device)
+            is_half = bool(getattr(rvc, "is_half", config.is_half))
+            hubert = getattr(rvc, "model", None)
+            rmvpe = getattr(rvc, "model_rmvpe", None)
+
+            if same:
+                vc = VC(config)
+                vc.net_g = rvc.net_g
+                vc.tgt_sr = rvc.tgt_sr
+                vc.if_f0 = rvc.if_f0
+                vc.version = rvc.version
+                vc.pipeline = Pipeline(rvc.tgt_sr, config)
+            else:
+                if not os.path.isfile(want):
+                    return None, f"找不到音色模型：{want}"
+                # get_vc 自己会建 net_g 和 Pipeline，且跟冷路径完全同一段代码。
+                vc = VC(config)
+                vc.get_vc(want)
+
             # 以常驻张量的实际精度/设备为准。config 是转换开始时才读的，可能跟
             # 当初建 net_g 时的那份不一致；对不上就是 half/float 混算直接炸。
-            pipe.is_half = bool(getattr(rvc, "is_half", pipe.is_half))
-            pipe.device = getattr(rvc, "device", pipe.device)
-            rmvpe = getattr(rvc, "model_rmvpe", None)
+            vc.pipeline.is_half = is_half
+            vc.pipeline.device = device
+            vc.hubert_model = hubert
             # DirectML 下 Pipeline.get_f0 会 del 掉 model_rmvpe 来收显存，那是
             # 实时那份，删了实时就没法用了。这条路上宁可让它自己再加载一份。
-            if rmvpe is not None and "privateuseone" not in str(pipe.device):
-                pipe.model_rmvpe = rmvpe
-            vc.pipeline = pipe
+            if rmvpe is not None and "privateuseone" not in str(device):
+                vc.pipeline.model_rmvpe = rmvpe
             return vc, ""
 
         def _worker_convert(self, payload):
@@ -3125,7 +3147,9 @@ if __name__ == "__main__":
                 return
 
             try:
-                vc, why = self._sts_resident_vc(self.config)
+                vc, why = self._sts_resident_vc(
+                    self.config, str(payload.get("model") or "")
+                )
             except Exception as e:
                 traceback.print_exc()
                 fail(f"复用实时模型失败：{sts_core.friendly_error(e)}")

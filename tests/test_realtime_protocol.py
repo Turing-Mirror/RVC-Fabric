@@ -148,6 +148,71 @@ class WriteJsonTests(unittest.TestCase):
                 self.assertEqual(data["message_code"], "vc.running")
 
 
+class StsProgressFileTests(unittest.TestCase):
+    """离线转换进度走独立的 sts.json，跟引擎状态互不干扰。"""
+
+    def test_write_sts_replaces_not_merges(self):
+        """上一轮的 files / error 不能漏到下一轮，不然界面一开转就跳完成。"""
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STS_PATH", td_path / "sts.json"
+            ):
+                rp.write_sts(phase="done", files=["a.wav"], pct=100)
+                rp.write_sts(phase="run", pct=3, message="开始")
+                data = rp.read_sts()
+                self.assertEqual(data["phase"], "run")
+                self.assertEqual(data["pct"], 3)
+                self.assertNotIn("files", data)
+
+    def test_write_sts_stamps_ts(self):
+        """Rust 侧靠 ts 变没变判断 worker 是不是卡住了。"""
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STS_PATH", td_path / "sts.json"
+            ):
+                rp.write_sts(phase="run", pct=1)
+                first = rp.read_sts()["ts"]
+                rp.write_sts(phase="run", pct=2)
+                self.assertGreaterEqual(rp.read_sts()["ts"], first)
+
+    def test_clear_sts_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STS_PATH", td_path / "sts.json"
+            ):
+                rp.clear_sts()  # 文件还不存在
+                rp.write_sts(phase="run")
+                rp.clear_sts()
+                self.assertEqual(rp.read_sts(), {})
+
+    def test_sts_does_not_touch_status(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STATUS_PATH", td_path / "status.json"
+            ), mock.patch.object(rp, "STS_PATH", td_path / "sts.json"):
+                rp.write_status(
+                    state="running", message_code="vc.running", message="变声中"
+                )
+                rp.write_sts(phase="run", pct=50, message="音色转换中…")
+                st = json.loads((td_path / "status.json").read_text(encoding="utf-8"))
+                self.assertEqual(st["state"], "running")
+                self.assertEqual(st["message_code"], "vc.running")
+                self.assertNotIn("pct", st)
+
+    def test_rust_and_python_agree_on_path(self):
+        """两边硬编码同一个文件名，改一边忘了另一边就永远读不到进度。"""
+        rust = (ROOT / "app" / "src-tauri" / "src" / "protocol.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('join("sts.json")', rust)
+        self.assertEqual(rp.STS_PATH.name, "sts.json")
+        self.assertEqual(rp.STS_PATH.parent, rp.CONTROL_DIR)
+
+
 class MsgCodeTests(unittest.TestCase):
     def test_new_load_codes_have_zh_fallback(self):
         from tools import msg_codes as mc

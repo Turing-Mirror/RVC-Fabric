@@ -1356,7 +1356,10 @@
     "cacheClearDesc": "Unos {v0} MB se pueden vaciar. Incluye registros, temporales y descargas incompletas.",
     "cacheClearConfirm": "Se borrarán registros, archivos TEMP y descargas incompletas. La biblioteca de voces y los ajustes se conservan. ¿Continuar?",
     "cacheClearDone": "Se vaciaron unos {v0} MB ({v1} archivos).",
-    "cacheClearFail": "No se pudo vaciar la caché: {v0}"
+    "cacheClearFail": "No se pudo vaciar la caché: {v0}",
+    "stsHotWorkerGone": "El proceso del motor se cerró durante la conversión. Inténtalo de nuevo; si se repite, exporta los registros desde Más - Recopilar diagnósticos.",
+    "stsHotStalled": "El motor dejó de responder, así que se interrumpió la conversión. Inténtalo de nuevo.",
+    "stsHotFailed": "La conversión falló. Consulta el registro de esta ejecución en User_Data/logs/sts/."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

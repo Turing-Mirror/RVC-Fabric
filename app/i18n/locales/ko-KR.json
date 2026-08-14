@@ -1356,7 +1356,10 @@
     "cacheClearDesc": "약 {v0} MB를 지울 수 있습니다. 로그·변환 임시 파일·남은 다운로드가 대상입니다.",
     "cacheClearConfirm": "로그, TEMP 중간 파일, 미완료 다운로드를 삭제합니다. 음색 라이브러리와 설정은 남깁니다. 계속할까요?",
     "cacheClearDone": "약 {v0} MB({v1}개 파일)를 지웠습니다.",
-    "cacheClearFail": "캐시를 지우지 못했습니다: {v0}"
+    "cacheClearFail": "캐시를 지우지 못했습니다: {v0}",
+    "stsHotWorkerGone": "변환 도중 엔진 프로세스가 종료되었습니다. 다시 시도하세요. 계속 발생하면 [기타 - 진단 정보 수집]에서 로그를 내보내세요.",
+    "stsHotStalled": "엔진이 오랫동안 응답하지 않아 변환을 중단했습니다. 다시 시도하세요.",
+    "stsHotFailed": "변환에 실패했습니다. 자세한 내용은 User_Data/logs/sts/ 의 이번 로그를 확인하세요."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

@@ -205,7 +205,9 @@ export function useEngine() {
     try {
       if (running || status.state === "starting" || startingRef.current) {
         startingRef.current = false;
-        const st = await stopVc(true);
+        // 软停：只停音频流，worker 进程留下。force 会杀掉整棵 Python，
+        // 下次开启还要再冷启动 torch/CUDA。
+        const st = await stopVc(false);
         setStatus(st);
       } else {
         startingRef.current = true;

@@ -18,6 +18,10 @@
     "maximize": "最大化",
     "close": "关闭"
   },
+  "dialog": {
+    "ok": "确定",
+    "cancel": "取消"
+  },
   "store": {
     "allSeries": "全部系列",
     "searchHint": "搜索音色 / 系列 / 社团 / 作者…",

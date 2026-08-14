@@ -18,6 +18,10 @@
     "maximize": "Maximizar",
     "close": "Cerrar"
   },
+  "dialog": {
+    "ok": "Aceptar",
+    "cancel": "Cancelar"
+  },
   "store": {
     "allSeries": "Todas las series",
     "searchHint": "Buscar voces / series / clubes / autores…",

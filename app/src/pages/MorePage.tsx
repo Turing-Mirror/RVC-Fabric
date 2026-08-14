@@ -10,6 +10,7 @@ import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
+import { askConfirm } from "../lib/webDialog";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
 const SHOW_CONSULT = false;
@@ -102,7 +103,7 @@ export function MorePage({
   /** 生成诊断包：先问要不要跑约一分钟的性能测试。 */
   const runDiagnostics = async () => {
     // 确定 = 先 bench；取消 = 只打日志与设置。
-    const withPerf = window.confirm(
+    const withPerf = await askConfirm(
       t("s.dd3c9cc8db") +
         t("s.50b717c880") +
         t("s.a9094fb530") +
@@ -343,8 +344,8 @@ export function MorePage({
             }
             right={
               <Btn
-                onClick={() => {
-                  if (!window.confirm(t("s.cacheClearConfirm"))) return;
+                onClick={async () => {
+                  if (!(await askConfirm(t("s.cacheClearConfirm")))) return;
                   setBusyMsg(t("s.cacheClear") + "…");
                   void invoke<{ freed_mb?: string; removed_files?: number }>("cache_clear")
                     .then((r) => {

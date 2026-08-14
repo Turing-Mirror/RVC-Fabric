@@ -4,6 +4,7 @@ import { Nudge } from "./components/Nudge";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
+import { WebDialogHost } from "./components/WebDialog";
 import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
@@ -944,6 +945,8 @@ export default function App() {
       {qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
       ) : null}
+
+      <WebDialogHost />
 
       <Dock
         voiceName={voiceName}

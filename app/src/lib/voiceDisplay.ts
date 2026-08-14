@@ -13,7 +13,7 @@
  * e.g. 若葉睦 Wakaba Mutsumi — user request.
  */
 import type { LocaleCode } from "../i18n/types";
-import { getTLocale } from "../i18n/t";
+import { getTLocale, t } from "../i18n/t";
 
 export type NamedVoice = {
   id?: string;
@@ -27,6 +27,9 @@ export type NamedVoice = {
   series_zh_Hant?: string;
   /** Club / department inside a series, e.g. 研讨会. */
   group?: string;
+  official?: boolean;
+  origin?: string;
+  origin_label?: string;
   [key: string]: unknown;
 };
 
@@ -488,6 +491,40 @@ export function displayVoiceGroup(
   if (loc === "zh-CN") return primary;
   if (loc === "zh-TW") return fb?.hant || primary;
   return fb?.en || primary;
+}
+
+/** 清单 `origin` 是站点代号；卡片上要写成「第三方 · Hugging Face」。 */
+function originDisplayName(origin: string): string {
+  const trimmed = origin.trim();
+  switch (trimmed.toLowerCase()) {
+    case "huggingface":
+    case "hf":
+    case "hugging-face":
+      return "Hugging Face";
+    case "cnb":
+      return "CNB";
+    default:
+      return trimmed;
+  }
+}
+
+/**
+ * 社区音色来源一行。后端会填 `origin_label`，但旧缓存 / 插值失败时会留下
+ * 「第三方 · {origin}」——前端再算一次，占位符不能露给用户。
+ */
+export function displayVoiceOrigin(v: NamedVoice): string {
+  const official = v.official !== false;
+  const origin = str(v.origin);
+  const label = str(v.origin_label);
+  if (label && !label.includes("{origin}") && !label.includes("${origin}")) {
+    return label;
+  }
+  if (official) {
+    return origin ? originDisplayName(origin) : t("s.7c134b6e64");
+  }
+  const shown = originDisplayName(origin);
+  if (!shown) return t("s.4500b5dfc7");
+  return t("s.d03c6cb553", { origin: shown });
 }
 
 /** Search haystack: all name variants so filtering works in any language. */

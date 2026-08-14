@@ -613,7 +613,7 @@ async fn engine_stop_vc(
     force: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let f = force.unwrap_or(true);
+    let f = force.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
         worker::stop_vc(&root, f)?;
         Ok(worker::status_for_ui(&root))

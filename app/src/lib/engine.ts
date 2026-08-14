@@ -106,7 +106,7 @@ export async function startVc(): Promise<EngineStatus> {
   return invoke<EngineStatus>("engine_start_vc");
 }
 
-export async function stopVc(force = true): Promise<EngineStatus> {
+export async function stopVc(force = false): Promise<EngineStatus> {
   if (!isTauri()) return getEngineStatus();
   return invoke<EngineStatus>("engine_stop_vc", { force });
 }

@@ -7,6 +7,7 @@ import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
 import { t } from "../i18n/t";
+import { askConfirm, askPrompt } from "../lib/webDialog";
 import {
   bindIndex,
   colsForWidth,
@@ -568,9 +569,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                         <Btn
                           onClick={async () => {
                             if (
-                              !window.confirm(
+                              !(await askConfirm(
                                 t("s.b8863a5222", { v0: p.name }),
-                              )
+                              ))
                             )
                               return;
                             await deleteProfile(selected!.dir, p.id);
@@ -588,7 +589,7 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
                   <>
                     <Btn
                       onClick={async () => {
-                        const name = window.prompt(t("s.6b863e8f98"), t("s.b0bef96a4b"));
+                        const name = await askPrompt(t("s.6b863e8f98"), t("s.b0bef96a4b"));
                         if (name == null) return;
                         await saveProfile(selected!.dir, name);
                         const pr = await listProfiles(selected!.dir);
@@ -681,7 +682,7 @@ function MoreMenu({
     items.push({
       label: t("s.1cd80fd7a8"),
       action: async () => {
-        const n = window.prompt(t("s.b8659855b0"), model.name);
+        const n = await askPrompt(t("s.b8659855b0"), model.name);
         if (!n) return;
         try {
           await renameVoice(model.dir, n);
@@ -696,9 +697,9 @@ function MoreMenu({
       danger: true,
       action: async () => {
         if (
-          !window.confirm(
+          !(await askConfirm(
             t("s.29abc60b6f"),
-          )
+          ))
         )
           return;
         try {

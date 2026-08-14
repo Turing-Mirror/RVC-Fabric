@@ -307,6 +307,11 @@ if __name__ == "__main__":
             self.fx_eq_gains: list = [0.0, 0.0, 0.0, 0.0, 0.0]
             self.fx_eq_preset: str = "flat"
             self.fx_out_gain_db: float = 0.0
+            # 无模型 DSP 变声（tools.dsp_voice）。dsp_enabled 打开时可以完全
+            # 不选音色就开声，function 走 "fx" 分支；跟 RVC 同时开就是叠加。
+            self.dsp_enabled: bool = False
+            self.dsp_preset: str = ""
+            self.dsp_params: dict = {}
 
     class GUI:
         def __init__(self) -> None:
@@ -314,6 +319,7 @@ if __name__ == "__main__":
             self.config = Config()
             self.function = "vc"
             self._fx_chain = None
+            self._voice_chain = None
             # 正在跑的离线转换是哪条命令发的。转换途中靠它认出后来的 sts_cancel。
             self._sts_seq = 0
             self.delay_time = 0
@@ -988,7 +994,10 @@ if __name__ == "__main__":
                 pass
 
         def set_values(self, values):
-            if len(values["pth_path"].strip()) == 0:
+            # DSP 变声不需要模型：没选音色但开了 DSP 预设，照样能开声。
+            # 这是 DSP 模式的意义所在——零显卡、零下载，装完就能玩。
+            dsp_only = bool(values.get("dsp_enabled")) and not values["pth_path"].strip()
+            if len(values["pth_path"].strip()) == 0 and not dsp_only:
                 self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
                 return False
             pth = values["pth_path"].strip()
@@ -1030,7 +1039,7 @@ if __name__ == "__main__":
                         self.window["index_path"].update("")
                     except Exception:
                         pass
-            if not os.path.isfile(pth):
+            if pth and not os.path.isfile(pth):
                 self._notify(i18n("pth文件不存在") + f"\n{pth}", VC_PTH_MISSING, path=pth)
                 return False
             # Devices must exist for current hostapi list
@@ -1107,7 +1116,52 @@ if __name__ == "__main__":
                 gc.fx_eq_gains.append(0.0)
             gc.fx_eq_preset = str(values.get("fx_eq_preset") or "flat")
             gc.fx_out_gain_db = float(values.get("fx_out_gain_db") or 0)
+            gc.dsp_enabled = bool(values.get("dsp_enabled", False))
+            gc.dsp_preset = str(values.get("dsp_preset") or "")
+            params = values.get("dsp_params")
+            gc.dsp_params = params if isinstance(params, dict) else {}
             self._rebuild_fx_chain()
+            self._rebuild_voice_chain()
+
+        def _rebuild_voice_chain(self) -> None:
+            """建 / 更新 DSP 变声链。参数热改，不重建实例——重建会清掉延迟线。"""
+            gc = self.gui_config
+            if not bool(getattr(gc, "dsp_enabled", False)):
+                self._voice_chain = None
+                return
+            try:
+                from tools.dsp_voice import VoiceChain
+
+                params = gc.dsp_params if isinstance(gc.dsp_params, dict) else {}
+                if self._voice_chain is None:
+                    self._voice_chain = VoiceChain(params)
+                else:
+                    self._voice_chain.apply(params)
+            except Exception:
+                traceback.print_exc()
+                self._voice_chain = None
+
+        def _apply_voice_chain(self, wav: torch.Tensor) -> torch.Tensor:
+            """DSP 变声跑在最后一块上（前面是 SOLA 要的重叠历史）。"""
+            if self._voice_chain is None:
+                self._rebuild_voice_chain()
+            if self._voice_chain is None:
+                return wav
+            sr = int(getattr(self.gui_config, "samplerate", 48000) or 48000)
+            n = int(getattr(self, "block_frame", 0) or 0)
+            if n <= 0 or wav.numel() < n:
+                x = wav.cpu().numpy()
+                y = self._voice_chain.process(x, sr)
+                return torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
+                    wav.device
+                ).type_as(wav)
+            head = wav[:-n]
+            tail = wav[-n:].cpu().numpy()
+            y = self._voice_chain.process(tail, sr)
+            tail_t = torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
+                wav.device
+            ).type_as(wav)
+            return torch.cat([head, tail_t], dim=0)
 
         def _fx_config_dict(self) -> dict:
             gc = self.gui_config
@@ -1179,34 +1233,48 @@ if __name__ == "__main__":
             except Exception:
                 pass
             self._report_load(VC_LOADING_MODEL, 18)
-            if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
-                try:
-                    ensure_harvest_workers(self.gui_config.n_cpu)
-                except Exception:
-                    pass
-            self.rvc = rvc_for_realtime.RVC(
-                self.gui_config.pitch,
-                self.gui_config.formant,
-                self.gui_config.pth_path,
-                self.gui_config.index_path,
-                self.gui_config.index_rate,
-                self.gui_config.n_cpu,
-                inp_q,
-                opt_q,
-                self.config,
-                self.rvc if hasattr(self, "rvc") else None,
-                on_progress=self._on_rvc_progress,
-            )
-            self.gui_config.samplerate = (
-                self.rvc.tgt_sr
-                if self.gui_config.sr_type == "sr_model"
-                else self.get_device_samplerate()
-            )
+            # 没选音色但开了 DSP 变声：整条 RVC 都不碰 —— 不加载 hubert、
+            # 不加载 net_g、不初始化 CUDA。这正是 DSP 模式存在的意义：
+            # 零显卡、零下载，装完就能出声，启动是即时的。
+            self.dsp_only = not str(self.gui_config.pth_path or "").strip()
+            if self.dsp_only:
+                self.rvc = None
+                self.function = "fx"
+                self.gui_config.samplerate = self.get_device_samplerate()
+            else:
+                if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
+                    try:
+                        ensure_harvest_workers(self.gui_config.n_cpu)
+                    except Exception:
+                        pass
+                self.rvc = rvc_for_realtime.RVC(
+                    self.gui_config.pitch,
+                    self.gui_config.formant,
+                    self.gui_config.pth_path,
+                    self.gui_config.index_path,
+                    self.gui_config.index_rate,
+                    self.gui_config.n_cpu,
+                    inp_q,
+                    opt_q,
+                    self.config,
+                    self.rvc if getattr(self, "rvc", None) is not None else None,
+                    on_progress=self._on_rvc_progress,
+                )
+                if self.function == "fx":
+                    self.function = "vc"
+                self.gui_config.samplerate = (
+                    self.rvc.tgt_sr
+                    if self.gui_config.sr_type == "sr_model"
+                    else self.get_device_samplerate()
+                )
             self.gui_config.channels = self.get_device_channels()
             try:
                 self._rebuild_fx_chain()
                 if self._fx_chain is not None:
                     self._fx_chain.reset()
+                self._rebuild_voice_chain()
+                if self._voice_chain is not None:
+                    self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
             self.zc = self.gui_config.samplerate // 100
@@ -1287,7 +1355,8 @@ if __name__ == "__main__":
                 new_freq=16000,
                 dtype=torch.float32,
             ).to(self.config.device)
-            if self.rvc.tgt_sr != self.gui_config.samplerate:
+            # DSP 模式没有模型，也就没有 tgt_sr，输入输出同一个采样率。
+            if self.rvc is not None and self.rvc.tgt_sr != self.gui_config.samplerate:
                 self.resampler2 = tat.Resample(
                     orig_freq=self.rvc.tgt_sr,
                     new_freq=self.gui_config.samplerate,
@@ -1333,6 +1402,9 @@ if __name__ == "__main__":
             return bool(getattr(self, "_swap_busy", False))
 
         def _warmup_engine(self):
+            # DSP 模式没有模型可预热，直接跳过——这也正是它启动即时的原因。
+            if self.rvc is None:
+                return
             dummy = torch.zeros_like(self.input_wav_res)
             # a short voiced tail so the f0 extractor runs its full path
             n = min(int(dummy.shape[0]), 4000)
@@ -1996,9 +2068,19 @@ if __name__ == "__main__":
                 infer_wav = self.tg(
                     infer_wav.unsqueeze(0), self.output_buffer.unsqueeze(0)
                 ).squeeze(0)
-            # Post-RVC DSP chain (gate / compressor / EQ) — numpy on CPU
+            # DSP 变声（tools.dsp_voice）。跟 RVC 是叠加关系，不是二选一：
+            # 有音色时它接在 RVC 之后（音色给音色、DSP 给性格），没音色时
+            # function 是 "fx"，上面直接走的干声，这里就是唯一的处理。
+            if self.function in ("vc", "fx") and bool(
+                getattr(self.gui_config, "dsp_enabled", False)
+            ):
+                try:
+                    infer_wav = self._apply_voice_chain(infer_wav)
+                except Exception:
+                    traceback.print_exc()
+            # DSP 修音链（gate / 压缩 / EQ）—— numpy on CPU
             if (
-                self.function == "vc"
+                self.function in ("vc", "fx")
                 and bool(getattr(self.gui_config, "fx_enabled", False))
             ):
                 try:
@@ -2389,6 +2471,10 @@ if __name__ == "__main__":
                 "fx_eq_gains": data.get("fx_eq_gains") or [0.0, 0.0, 0.0, 0.0, 0.0],
                 "fx_eq_preset": str(data.get("fx_eq_preset") or "flat"),
                 "fx_out_gain_db": float(data.get("fx_out_gain_db") or 0),
+                # 无模型 DSP 变声
+                "dsp_enabled": bool(data.get("dsp_enabled")),
+                "dsp_preset": str(data.get("dsp_preset") or ""),
+                "dsp_params": data.get("dsp_params") or {},
             }
             # CUDA Graph 加速。设 0/1 到环境变量里，rtrvc 起模型时读它决定探不
             # 探测；只有 N 卡吃得到，A/I 卡和 CPU 那边探测函数自己会返回 False。
@@ -2441,18 +2527,18 @@ if __name__ == "__main__":
             """Apply hot-updatable parameters while stream may be running."""
             if "pitch" in payload and payload["pitch"] is not None:
                 self.gui_config.pitch = payload["pitch"]
-                if hasattr(self, "rvc") and self.rvc is not None:
+                if getattr(self, "rvc", None) is not None:
                     self.rvc.change_key(payload["pitch"])
             if "formant" in payload and payload["formant"] is not None:
                 self.gui_config.formant = payload["formant"]
-                if hasattr(self, "rvc") and self.rvc is not None:
+                if getattr(self, "rvc", None) is not None:
                     self.rvc.change_formant(payload["formant"])
             if "index_rate" in payload and payload["index_rate"] is not None:
                 rate = float(payload["index_rate"])
                 if not self.gui_config.index_path:
                     rate = 0.0
                 self.gui_config.index_rate = rate
-                if hasattr(self, "rvc") and self.rvc is not None:
+                if getattr(self, "rvc", None) is not None:
                     try:
                         self.rvc.change_index_rate(rate)
                     except Exception:
@@ -2524,6 +2610,17 @@ if __name__ == "__main__":
                     if k in payload and payload[k] is not None:
                         merged[k] = payload[k]
                 self._load_fx_from_values(merged)
+            # DSP 变声热参数。只更新参数、不重建 VoiceChain —— 重建会清掉延迟线
+            # 和重叠缓冲，拖滑条就会一路咔哒。
+            if any(k in payload for k in ("dsp_enabled", "dsp_preset", "dsp_params")):
+                gc = self.gui_config
+                if payload.get("dsp_enabled") is not None:
+                    gc.dsp_enabled = bool(payload["dsp_enabled"])
+                if payload.get("dsp_preset") is not None:
+                    gc.dsp_preset = str(payload["dsp_preset"] or "")
+                if isinstance(payload.get("dsp_params"), dict):
+                    gc.dsp_params = payload["dsp_params"]
+                self._rebuild_voice_chain()
             # 换音色放在最后：上面那些（音高、共鸣、检索强度）已经落到
             # gui_config 上了，新的 RVC 实例正好用这些值建起来，不会先用旧参数
             # 建好再补一遍。
@@ -2873,7 +2970,7 @@ if __name__ == "__main__":
                     with open("configs/inuse/config.json", "r", encoding="utf-8") as jf:
                         raw = json.load(jf)
                     fn = str(raw.get("function") or "vc")
-                    if fn in ("vc", "im"):
+                    if fn in ("vc", "im", "fx"):
                         self.function = fn
                 except Exception:
                     self.function = "vc"
@@ -2940,6 +3037,14 @@ if __name__ == "__main__":
                         "monitor_device": str(
                             getattr(self.gui_config, "monitor_device", "") or ""
                         ),
+                        "dsp_enabled": bool(
+                            getattr(self.gui_config, "dsp_enabled", False)
+                        ),
+                        "dsp_preset": str(
+                            getattr(self.gui_config, "dsp_preset", "") or ""
+                        ),
+                        "dsp_params": getattr(self.gui_config, "dsp_params", {}) or {},
+                        "function": str(getattr(self, "function", "vc") or "vc"),
                     }
                     # Atomic write — plain "w" left 0-byte file when process killed mid-write
                     cfg_path = "configs/inuse/config.json"

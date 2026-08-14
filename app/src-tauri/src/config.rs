@@ -53,6 +53,11 @@ pub const HOT_KEYS: &[&str] = &[
     "fx_eq_gains",
     "fx_eq_preset",
     "fx_out_gain_db",
+    // 无模型 DSP 变声（tools/dsp_voice.py）。也是热键：换预设、拖参数都不该
+    // 重开流 —— 重开一次要几百毫秒，而 DSP 模式的卖点就是即时。
+    "dsp_enabled",
+    "dsp_preset",
+    "dsp_params",
 ];
 
 /// Needs stop + start (mirrors `realtime_protocol.COLD_KEYS`).
@@ -125,6 +130,9 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("fx_comp_attack_ms".into(), json!(5.0));
     m.insert("fx_comp_release_ms".into(), json!(100.0));
     m.insert("fx_comp_makeup_db".into(), json!(0.0));
+    m.insert("dsp_enabled".into(), json!(false));
+    m.insert("dsp_preset".into(), json!(""));
+    m.insert("dsp_params".into(), json!({}));
     m.insert("fx_eq_enabled".into(), json!(true));
     m.insert("fx_eq_gains".into(), json!([0.0, 0.0, 0.0, 0.0, 0.0]));
     m.insert("fx_eq_preset".into(), json!("flat"));

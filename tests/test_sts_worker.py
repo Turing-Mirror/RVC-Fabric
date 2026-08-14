@@ -92,23 +92,16 @@ class StsProgressTests(unittest.TestCase):
         def capture(**kw):
             events.append(kw)
 
-        import tools.sts_worker as sw
-
-        old = sw.emit
-        sw.emit = capture
-        try:
-            p = StsProgress(1, "rmvpe")
-            p.load("config", 1.0)
-            p.load("model", 1.0)
-            p.begin_file(1, "a.wav")
-            p.stage("read", 1.0)
-            p.stage("f0", 0.0)
-            p.stage("f0", 1.0)
-            p.stage("infer", 0.5)
-            p.stage("write", 1.0)
-            p.file_done(1, "a.wav", ok=True)
-        finally:
-            sw.emit = old
+        p = StsProgress(1, "rmvpe", emit=capture)
+        p.load("config", 1.0)
+        p.load("model", 1.0)
+        p.begin_file(1, "a.wav")
+        p.stage("read", 1.0)
+        p.stage("f0", 0.0)
+        p.stage("f0", 1.0)
+        p.stage("infer", 0.5)
+        p.stage("write", 1.0)
+        p.file_done(1, "a.wav", ok=True)
 
         pcts = [e["pct"] for e in events if "pct" in e]
         self.assertTrue(pcts)
@@ -125,18 +118,11 @@ class StsProgressTests(unittest.TestCase):
         def capture(**kw):
             events.append(kw)
 
-        import tools.sts_worker as sw
-
-        old = sw.emit
-        sw.emit = capture
-        try:
-            p = StsProgress(2, "harvest")
-            p.load("model", 1.0)
-            p.begin_file(1, "a.wav")
-            p.file_done(1, "a.wav", ok=True)
-            p.begin_file(2, "b.wav")
-        finally:
-            sw.emit = old
+        p = StsProgress(2, "harvest", emit=capture)
+        p.load("model", 1.0)
+        p.begin_file(1, "a.wav")
+        p.file_done(1, "a.wav", ok=True)
+        p.begin_file(2, "b.wav")
 
         second_start = next(
             e for e in events if e.get("step") == "file_start" and "b.wav" in e["message"]
@@ -153,19 +139,12 @@ class StsProgressTests(unittest.TestCase):
         def capture(**kw):
             events.append(kw)
 
-        import tools.sts_worker as sw
-
-        old = sw.emit
-        sw.emit = capture
-        try:
             # 小文件 1、大文件 9 → 大文件约占文件段 90%
-            p = StsProgress(2, "rmvpe", weights=[1, 9])
-            p.begin_file(1, "tiny.wav")
-            p.file_done(1, "tiny.wav", ok=True)
-            p.begin_file(2, "huge.wav")
-            p.file_done(2, "huge.wav", ok=True)
-        finally:
-            sw.emit = old
+        p = StsProgress(2, "rmvpe", weights=[1, 9], emit=capture)
+        p.begin_file(1, "tiny.wav")
+        p.file_done(1, "tiny.wav", ok=True)
+        p.begin_file(2, "huge.wav")
+        p.file_done(2, "huge.wav", ok=True)
 
         tiny_done = next(e for e in events if e.get("step") == "file_done" and "tiny" in e["message"])
         huge_start = next(
@@ -194,22 +173,15 @@ class StsProgressTests(unittest.TestCase):
         def capture(**kw):
             events.append(kw)
 
-        import tools.sts_worker as sw
-
-        old = sw.emit
-        sw.emit = capture
-        try:
-            p = StsProgress(1, "rmvpe")
-            p.load("model", 1.0)
-            p.begin_file(1, "song.wav")
-            p.stage("f0", 0.0)
-            p.stage("f0", 0.33)
-            p.stage("f0", 0.67)
-            p.stage("infer", 0.0)
-            p.stage("infer", 0.4)
-            p.stage("infer", 0.9)
-        finally:
-            sw.emit = old
+        p = StsProgress(1, "rmvpe", emit=capture)
+        p.load("model", 1.0)
+        p.begin_file(1, "song.wav")
+        p.stage("f0", 0.0)
+        p.stage("f0", 0.33)
+        p.stage("f0", 0.67)
+        p.stage("infer", 0.0)
+        p.stage("infer", 0.4)
+        p.stage("infer", 0.9)
 
         f0 = [e for e in events if e.get("step") == "f0"]
         inf = [e for e in events if e.get("step") == "infer"]

@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
-"""离线语音转换 worker（Speech-to-Speech / 音频 → 目标音色）。
+"""离线语音转换 worker（Speech-to-Speech / 音频 → 目标音色）——冷路径。
 
 对应官方 RVC WebUI「推理 / 批量推理」：用当前选中的 .pth 把人声音频换成
 目标音色。不是 TTS——输入必须是声音文件。
+
+这是**冷路径**：独立进程，从盘上把 hubert / net_g / rmvpe 全读一遍，代价是
+几十秒的冷启动。实时 worker 活着的时候，壳会走热路径（`gui_v1` 的 `convert`
+命令，直接用常驻模型），根本不起这个进程。两条路的转换循环都在
+`tools/sts_core.py`，这里只负责「把模型从盘上装起来」和「把进度写 stdout」。
 
 用法::
 
@@ -43,14 +48,24 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
+from tools import sts_core  # noqa: E402 — 上面要先把产品根塞进 sys.path
+from tools.sts_core import (  # noqa: E402
+    AUDIO_EXT,
+    StsProgress,
+    collect_inputs,
+    cuda_empty_cache,
+    file_weights,
+    friendly_error,
+    normalize_f0method,
+    preload_side_models,
+    run_batch,
+)
 
 # 与仓库根 .env / 官方 RVC 一致。安装包历史上未带 .env，worker 必须自带默认值。
 _RVC_ENV_DEFAULTS = {
@@ -61,6 +76,8 @@ _RVC_ENV_DEFAULTS = {
     "rmvpe_root": "assets/rmvpe",
     "OPENBLAS_NUM_THREADS": "1",
 }
+
+_ = AUDIO_EXT  # 兼容旧的 `from tools.sts_worker import AUDIO_EXT`
 
 
 def _ensure_stdio_utf8() -> None:
@@ -137,379 +154,39 @@ def emit(**kw) -> None:
             pass
 
 
-def _friendly_error(exc: BaseException | str) -> str:
-    """把 torch / CUDA 的长 traceback 收成用户能照着做的中文提示。
-
-    vc_single 失败时会把整段 traceback 塞进 info 字符串，所以参数既可能是
-    Exception 也可能是那串文本。
-    """
-    text = str(exc) if not isinstance(exc, BaseException) else (str(exc) or type(exc).__name__)
-    low = text.lower()
-    if "out of memory" in low or "cuda out of memory" in low:
-        return (
-            "显存不够（CUDA OOM）。常见原因：实时变声还在跑、音频太长、或显卡显存较小（如 3GB）。\n"
-            "请先在主界面停止变声，关闭其他占 GPU 的程序后重试；"
-            "仍失败可把音高算法改成 harvest 或 pm（更省显存），或把长音频切短再转。"
-        )
-    if "显存不够" in text or "缺少 hubert" in text:
-        return text
-    return text
-
-
-def _cuda_empty_cache() -> None:
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except Exception:
-        pass
-
-
-def _tune_torch() -> None:
+def _tune_torch(total_seconds: float = 0.0, total_files: int = 1) -> None:
     """Offline conversion knobs — see infer.lib.torch_runtime.tune_for_inference."""
     try:
         from infer.lib.torch_runtime import tune_for_inference
 
-        tune_for_inference()
+        tune_for_inference(total_seconds=total_seconds, total_files=total_files)
+    except TypeError:
+        # 旧签名（没有规模参数）也要能跑。
+        try:
+            from infer.lib.torch_runtime import tune_for_inference
+
+            tune_for_inference()
+        except Exception:
+            pass
     except Exception:
         pass
 
 
-def _normalize_f0method(name: str) -> tuple[str, str | None]:
-    """Offline pipeline only implements a subset of realtime f0 methods.
+def _estimate_seconds(paths: list[Path]) -> float:
+    """按体积粗估总时长，只用来决定要不要开 cudnn.benchmark。
 
-    Realtime UI offers ``fcpe``; offline ``get_f0`` does not. Quietly map to
-    rmvpe so a shared settings value does not crash the batch.
+    解码一遍拿准确时长对批量目录太贵。压缩音频按 16 KB/s（128kbps）估，wav
+    按 44.1kHz/16bit 单声道 88 KB/s 估。估错一倍也不影响这个二值决策。
     """
-    m = (name or "rmvpe").strip().lower() or "rmvpe"
-    if m == "fcpe":
-        return "rmvpe", "离线转换不支持 fcpe，已改用 rmvpe"
-    if m not in ("rmvpe", "harvest", "pm", "crepe"):
-        return "rmvpe", f"未知音高算法 {name!r}，已改用 rmvpe"
-    return m, None
-
-
-def _is_oom(text: str) -> bool:
-    low = (text or "").lower()
-    return "显存不够" in (text or "") or "out of memory" in low
-
-
-def _convert_one(vc, src: Path, dest: Path, *, pitch, f0method, index_path,
-                 index_rate, filter_radius, resample_sr, rms_mix_rate, protect,
-                 on_stage, wavfile) -> None:
-    """Run vc_single + write. On first CUDA OOM, shrink rmvpe chunks and retry once."""
-    attempts = 2
-    last_err: Exception | None = None
-    for attempt in range(attempts):
-        try:
-            info, wav_opt = vc.vc_single(
-                0,
-                str(src),
-                pitch,
-                None,
-                f0method,
-                index_path,
-                None,
-                index_rate,
-                filter_radius,
-                resample_sr,
-                rms_mix_rate,
-                protect,
-                progress_cb=on_stage,
-            )
-            if wav_opt is None or wav_opt[0] is None:
-                raise RuntimeError(_friendly_error(info or "未知错误"))
-            on_stage("write", 0.0)
-            wavfile.write(str(dest), wav_opt[0], wav_opt[1])
-            on_stage("write", 1.0)
-            return
-        except Exception as e:
-            last_err = e
-            reason = _friendly_error(e)
-            if attempt + 1 < attempts and _is_oom(reason):
-                # Smaller mel chunks + free allocator, then one more try.
-                os.environ["TM_RMVPE_MAX_FRAMES"] = "512"
-                _cuda_empty_cache()
-                on_stage("f0", 0.0)
-                continue
-            raise RuntimeError(reason) from e
-    if last_err is not None:
-        raise RuntimeError(_friendly_error(last_err)) from last_err
-
-
-def collect_inputs(path: str) -> list[tuple[Path, Path]]:
-    """返回 (源文件, 相对路径)。
-
-    相对路径决定输出落在哪：文件夹输入时按原目录层级还原到输出目录，
-    不然 `A/vocal.wav` 和 `B/vocal.wav` 会被铺平成 `vocal_rvc.wav` 和
-    `vocal_rvc_1.wav`，谁是谁分不出来。
-    """
-    p = Path(path)
-    if p.is_file():
-        return [(p, Path(p.name))]
-    if not p.is_dir():
-        return []
-    files: list[tuple[Path, Path]] = []
-    for f in sorted(p.rglob("*")):
-        if f.is_file() and f.suffix.lower() in AUDIO_EXT:
-            try:
-                rel = f.relative_to(p)
-            except ValueError:
-                rel = Path(f.name)
-            files.append((f, rel))
-    return files
-
-
-def file_weights(paths: list[Path]) -> list[float]:
-    """多文件进度按体积加权。读时长要解码，批量扫目录太贵；体积够用。"""
-    out: list[float] = []
+    total = 0.0
     for p in paths:
         try:
-            out.append(float(max(1, p.stat().st_size)))
+            size = p.stat().st_size
         except OSError:
-            out.append(1.0)
-    return out
-
-
-class StsProgress:
-    """把「加载模型 + 每个文件的子步骤」映射成 0–100 的整体进度。
-
-    单文件时 done/total 只有 0→1，转换可能跑几分钟界面却一直 0%——所以必须
-    再发 ``pct`` 和分步 ``message``。
-
-    多文件时按体积加权：10 秒小文件不该和 5 分钟长歌各占 1/N 进度条。
-    """
-
-    # 加载/预热占前 12%，其余 88% 按文件权重分。
-    LOAD_END = 12.0
-    # 单文件内各阶段在文件份额中的起止（0..1）。
-    STAGE_SPAN = {
-        "read": (0.00, 0.08),
-        "hubert": (0.08, 0.16),
-        "f0": (0.16, 0.48),
-        "infer": (0.48, 0.92),
-        "write": (0.92, 1.00),
-    }
-    # 分块进度节流：同 step 下至少隔这么久，或 pct 至少涨 1。
-    _MIN_INTERVAL = 0.12
-
-    def __init__(
-        self,
-        total_files: int,
-        f0method: str = "rmvpe",
-        weights: list[float] | None = None,
-    ):
-        self.total = max(1, int(total_files))
-        self.f0method = (f0method or "rmvpe").strip() or "rmvpe"
-        if weights and len(weights) == self.total:
-            self._weights = [max(1.0, float(w)) for w in weights]
-        else:
-            self._weights = [1.0] * self.total
-        wsum = sum(self._weights) or float(self.total)
-        # cum[i] = 前 i 个文件权重占比（0..1），cum[total]=1
-        self._cum: list[float] = [0.0]
-        acc = 0.0
-        for w in self._weights:
-            acc += w
-            self._cum.append(acc / wsum)
-
-        self._last_pct = -1
-        self._last_msg = ""
-        self._last_step = ""
-        self._last_emit_t = 0.0
-        self._file_i = 0  # 0-based，当前正在处理的文件
-        self._file_name = ""
-        self.ok_count = 0
-        self.skip_count = 0
-
-    def _push(
-        self,
-        done_files: int,
-        pct: float,
-        message: str,
-        step: str = "",
-        *,
-        force: bool = False,
-        phase: str = "run",
-    ) -> None:
-        pct_i = int(max(0, min(100, round(pct))))
-        now = time.monotonic()
-        boundary = step in (
-            "file_start",
-            "file_done",
-            "file_skip",
-            "load_config",
-            "load_model",
-            "load_hubert",
-            "load_rmvpe",
-            "write",
-        ) or step.startswith("load_")
-        if not force and not boundary:
-            if pct_i == self._last_pct and message == self._last_msg:
-                return
-            # 同一步骤内节流，批量长任务时少打爆管道；pct 涨了仍放行。
-            if (
-                step == self._last_step
-                and (now - self._last_emit_t) < self._MIN_INTERVAL
-                and pct_i <= self._last_pct
-            ):
-                return
-            if (
-                step == self._last_step
-                and (now - self._last_emit_t) < self._MIN_INTERVAL
-                and pct_i == self._last_pct
-            ):
-                return
-        elif pct_i == self._last_pct and message == self._last_msg and not force:
-            return
-
-        self._last_pct = pct_i
-        self._last_msg = message
-        self._last_step = step
-        self._last_emit_t = now
-        current = self._file_i + 1 if self._file_name else 0
-        emit(
-            phase=phase,
-            done=max(0, int(done_files)),
-            total=self.total,
-            pct=pct_i,
-            step=step,
-            current=current,
-            ok=self.ok_count,
-            skip=self.skip_count,
-            file=self._file_name or "",
-            message=message,
-        )
-
-    def load(self, phase: str, frac: float = 0.0) -> None:
-        """phase: config | model | hubert | rmvpe；frac 0..1。"""
-        frac = max(0.0, min(1.0, float(frac)))
-        # 预热段：config 20% / model 40% / hubert 20% / rmvpe 20% of LOAD_END
-        bands = {
-            "config": (0.00, 0.20, "正在初始化引擎…"),
-            "model": (0.20, 0.55, "正在加载音色模型…"),
-            "hubert": (0.55, 0.78, "正在预热特征模型（hubert）…"),
-            "rmvpe": (0.78, 1.00, f"正在预热音高模型（{self.f0method}）…"),
-        }
-        a, b, msg = bands.get(phase, (0.0, 1.0, "准备中…"))
-        pct = self.LOAD_END * (a + (b - a) * frac)
-        self._push(0, pct, msg, step=f"load_{phase}", force=True)
-
-    def begin_file(self, index: int, name: str) -> None:
-        """index 为 1-based 序号。"""
-        self._file_i = max(0, int(index) - 1)
-        self._file_name = name
-        start, _ = self._file_bounds(self._file_i)
-        if self.total == 1:
-            msg = f"开始转换 {name}"
-        else:
-            msg = (
-                f"[{index}/{self.total}] {name} · 开始"
-                f"（已完成 {self.ok_count}，跳过 {self.skip_count}）"
-            )
-        self._push(self._file_i, start, msg, step="file_start", force=True)
-
-    def _file_bounds(self, file_i: int) -> tuple[float, float]:
-        i = max(0, min(int(file_i), self.total - 1))
-        span = 100.0 - self.LOAD_END
-        start = self.LOAD_END + span * self._cum[i]
-        end = self.LOAD_END + span * self._cum[i + 1]
-        return start, end
-
-    def stage(self, stage: str, frac: float = 0.0) -> None:
-        """文件内子步骤。stage: read/hubert/f0/infer/write；frac 0..1。"""
-        frac = max(0.0, min(1.0, float(frac)))
-        a, b = self.STAGE_SPAN.get(stage, (0.0, 1.0))
-        start, end = self._file_bounds(self._file_i)
-        pct = start + (end - start) * (a + (b - a) * frac)
-        name = self._file_name or "音频"
-        if self.total > 1:
-            prefix = f"[{self._file_i + 1}/{self.total}] {name} · "
-        else:
-            prefix = ""
-        if stage == "read":
-            msg = f"{prefix}读取音频…"
-        elif stage == "hubert":
-            msg = f"{prefix}提取特征（hubert）…"
-        elif stage == "f0":
-            if frac <= 0.02:
-                msg = f"{prefix}提取音高（{self.f0method}）…"
-            else:
-                msg = f"{prefix}提取音高（{self.f0method}）… {int(frac * 100)}%"
-        elif stage == "infer":
-            if frac <= 0.0:
-                msg = f"{prefix}音色转换中…"
-            else:
-                msg = f"{prefix}音色转换中… {int(frac * 100)}%"
-        elif stage == "write":
-            msg = f"{prefix}写入输出文件…"
-        else:
-            msg = f"{prefix}处理中…"
-        self._push(self._file_i, pct, msg, step=stage)
-
-    def file_done(self, index: int, name: str, ok: bool = True) -> None:
-        _, end = self._file_bounds(max(0, int(index) - 1))
-        if ok:
-            self.ok_count += 1
-            msg = (
-                f"完成 {name}"
-                if self.total == 1
-                else f"[{index}/{self.total}] 完成 {name}（成功 {self.ok_count}，跳过 {self.skip_count}）"
-            )
-            self._push(index, end, msg, step="file_done", force=True)
-        else:
-            self.skip_count += 1
-            msg = (
-                f"跳过 {name}"
-                if self.total == 1
-                else f"[{index}/{self.total}] 跳过 {name}（成功 {self.ok_count}，跳过 {self.skip_count}）"
-            )
-            self._push(index, end, msg, step="file_skip", force=True, phase="run")
-
-    @property
-    def last_pct(self) -> int:
-        return self._last_pct if self._last_pct >= 0 else 0
-
-
-def _preload_side_models(vc, config, f0method: str, prog: StsProgress) -> None:
-    """批量前一次性拉起 hubert / rmvpe，避免摊在第一个文件里看不出预热。"""
-    try:
-        if getattr(vc, "hubert_model", None) is None:
-            prog.load("hubert", 0.0)
-            from infer.modules.vc.utils import load_hubert
-
-            vc.hubert_model = load_hubert(config)
-            prog.load("hubert", 1.0)
-        else:
-            prog.load("hubert", 1.0)
-    except Exception:
-        # 预热失败不挡主流程；真正转换时还会再试并给出错误。
-        traceback.print_exc()
-        prog.load("hubert", 1.0)
-
-    if f0method.lower() != "rmvpe":
-        return
-    try:
-        pipe = getattr(vc, "pipeline", None)
-        if pipe is None:
-            return
-        if hasattr(pipe, "model_rmvpe"):
-            prog.load("rmvpe", 1.0)
-            return
-        prog.load("rmvpe", 0.0)
-        from infer.lib.rmvpe import RMVPE
-
-        root = os.environ.get("rmvpe_root") or str(ROOT / "assets" / "rmvpe")
-        pipe.model_rmvpe = RMVPE(
-            os.path.join(root, "rmvpe.pt"),
-            is_half=pipe.is_half,
-            device=pipe.device,
-        )
-        prog.load("rmvpe", 1.0)
-    except Exception:
-        traceback.print_exc()
-        prog.load("rmvpe", 1.0)
+            continue
+        per_sec = 88_200.0 if p.suffix.lower() == ".wav" else 16_000.0
+        total += size / per_sec
+    return total
 
 
 def main(argv: list[str]) -> int:
@@ -529,7 +206,7 @@ def main(argv: list[str]) -> int:
     index = str(req.get("index") or "").strip()
     pitch = int(req.get("pitch") or 0)
     f0method_raw = str(req.get("f0method") or "rmvpe").strip() or "rmvpe"
-    f0method, f0_note = _normalize_f0method(f0method_raw)
+    f0method, f0_note = normalize_f0method(f0method_raw)
     index_rate = float(req.get("index_rate") if req.get("index_rate") is not None else 0.75)
     filter_radius = int(req.get("filter_radius") if req.get("filter_radius") is not None else 3)
     resample_sr = int(req.get("resample_sr") or 0)
@@ -550,8 +227,9 @@ def main(argv: list[str]) -> int:
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     total = len(files)
-    weights = file_weights([p for p, _ in files])
-    prog = StsProgress(total, f0method, weights=weights)
+    srcs = [p for p, _ in files]
+    weights = file_weights(srcs)
+    prog = StsProgress(total, f0method, weights=weights, emit=emit)
 
     _ensure_rvc_env()
     miss = _preflight_engine(f0method)
@@ -566,14 +244,13 @@ def main(argv: list[str]) -> int:
     if f0_note:
         start_msg = f"{start_msg}（{f0_note}）"
     emit(phase="start", total=total, pct=0, current=0, ok=0, skip=0, message=start_msg)
-    _tune_torch()
-    _cuda_empty_cache()
+
+    est_seconds = _estimate_seconds(srcs)
+    _tune_torch(total_seconds=est_seconds, total_files=total)
+    cuda_empty_cache()
 
     try:
-        from scipy.io import wavfile
-
         from configs.config import Config
-        from infer.lib.torch_runtime import empty_cache_if_needed, inference_context
         from infer.modules.vc.modules import VC
 
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
@@ -582,94 +259,40 @@ def main(argv: list[str]) -> int:
         config = Config()
         prog.load("config", 1.0)
         # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
-        _tune_torch()
+        _tune_torch(total_seconds=est_seconds, total_files=total)
         vc = VC(config)
         # get_vc 认绝对路径（User_Data/models/...）
         prog.load("model", 0.0)
         vc.get_vc(model)
         prog.load("model", 1.0)
         # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
-        _preload_side_models(vc, config, f0method, prog)
+        preload_side_models(vc, config, f0method, prog)
         # 只在显存紧时清；加载后强清一次把碎片归还给池，后面尽量不碰。
-        _cuda_empty_cache()
+        cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
-        emit(phase="error", message=f"加载模型失败：{_friendly_error(e)}")
+        emit(phase="error", message=f"加载模型失败：{friendly_error(e)}")
         return 1
 
-    out_files: list[str] = []
-    skipped: list[dict] = []
-    index_path = index if index and Path(index).is_file() else None
-    # 批量：尽量不 empty_cache；OOM 或显存吃紧时才清。末尾清一次即可。
-    cache_every = 1 if total == 1 else 8
-
-    with inference_context():
-        for i, (src, rel) in enumerate(files, start=1):
-            prog.begin_file(i, src.name)
-
-            def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
-                # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
-                prog._file_i = _i - 1
-                prog._file_name = _name
-                prog.stage(stage, frac)
-
-            hit_oom = False
-            try:
-                # 输出保持输入的目录层级：单文件时 rel 就是文件名，落在输出目录根下。
-                sub = Path(out_dir) / rel.parent
-                sub.mkdir(parents=True, exist_ok=True)
-                stem = src.stem
-                dest = sub / f"{stem}_rvc.wav"
-                # 重名则加序号
-                n = 1
-                while dest.exists():
-                    dest = sub / f"{stem}_rvc_{n}.wav"
-                    n += 1
-
-                _convert_one(
-                    vc,
-                    src,
-                    dest,
-                    pitch=pitch,
-                    f0method=f0method,
-                    index_path=index_path,
-                    index_rate=index_rate,
-                    filter_radius=filter_radius,
-                    resample_sr=resample_sr,
-                    rms_mix_rate=rms_mix_rate,
-                    protect=protect,
-                    on_stage=on_stage,
-                    wavfile=wavfile,
-                )
-                out_files.append(str(dest))
-                prog.file_done(i, src.name, ok=True)
-            except Exception as e:
-                # 单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。
-                # 批量转 50 个，第 3 个是段损坏的 mp3，剩下 47 个照样得转出来。
-                traceback.print_exc()
-                reason = _friendly_error(e)
-                hit_oom = _is_oom(reason)
-                skipped.append({"file": str(src), "name": src.name, "reason": reason})
-                prog.file_done(i, src.name, ok=False)
-                # reason 单独字段，界面列表不要再叠一层「跳过 name：」。
-                emit(
-                    phase="skip",
-                    done=i,
-                    total=total,
-                    pct=prog.last_pct,
-                    current=i,
-                    ok=prog.ok_count,
-                    skip=prog.skip_count,
-                    file=src.name,
-                    reason=reason,
-                    message=f"跳过 {src.name}：{reason}",
-                )
-            finally:
-                if hit_oom:
-                    _cuda_empty_cache()
-                elif i == total or (total > 1 and i % cache_every == 0):
-                    empty_cache_if_needed(min_free_mb=512)
-                # 单文件结束时若显存仍充裕就不动，交给进程退出回收。
+    out_files, skipped, _cancelled = run_batch(
+        vc,
+        files,
+        out_dir,
+        {
+            "pitch": pitch,
+            "f0method": f0method,
+            "index_path": index if index and Path(index).is_file() else None,
+            "index_rate": index_rate,
+            "filter_radius": filter_radius,
+            "resample_sr": resample_sr,
+            "rms_mix_rate": rms_mix_rate,
+            "protect": protect,
+        },
+        prog,
+        emit,
+        # 冷路径的取消是壳直接杀进程，不需要软取消。
+        should_cancel=None,
+    )
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。
@@ -689,6 +312,13 @@ def main(argv: list[str]) -> int:
         message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
     )
     return 0
+
+
+# 旧名字仍被 tests/test_sts_worker.py 和外部脚本引用，保留为别名。
+_friendly_error = friendly_error
+_normalize_f0method = normalize_f0method
+_is_oom = sts_core.is_oom
+_cuda_empty_cache = cuda_empty_cache
 
 
 if __name__ == "__main__":

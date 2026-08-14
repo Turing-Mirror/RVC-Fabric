@@ -314,6 +314,8 @@ if __name__ == "__main__":
             self.config = Config()
             self.function = "vc"
             self._fx_chain = None
+            # 正在跑的离线转换是哪条命令发的。转换途中靠它认出后来的 sts_cancel。
+            self._sts_seq = 0
             self.delay_time = 0
             self.last_infer_ms = 0
             self.last_input_db = -90.0  # mic level for the launcher meter
@@ -3004,6 +3006,213 @@ if __name__ == "__main__":
                 **_idle_fields,
             )
 
+        # ------------------------------------------------------------------
+        # 离线语音转换（热路径）
+        # ------------------------------------------------------------------
+
+        def _sts_emit(self, **fields):
+            try:
+                from tools.worker_protocol import write_sts
+
+                write_sts(**fields)
+            except Exception:
+                traceback.print_exc()
+
+        def _sts_cancelled(self) -> bool:
+            """转换途中壳有没有发过 sts_cancel。
+
+            读的是命令文件本身而不是等主循环派发——主循环这会儿正卡在
+            `_worker_convert` 里面，谁也不会来通知我们。
+            """
+            try:
+                from tools.worker_protocol import read_command
+
+                cmd = read_command()
+                if str(cmd.get("cmd") or "").strip().lower() != "sts_cancel":
+                    return False
+                return int(cmd.get("seq") or 0) > int(self._sts_seq or 0)
+            except Exception:
+                return False
+
+        def _sts_resident_vc(self, config):
+            """把常驻的实时模型包成离线 `VC` 的样子。
+
+            `rtrvc.RVC` 手里的 hubert / net_g / rmvpe / faiss 索引，正好就是离线
+            `Pipeline` 需要的全部。`VC.__init__` 只是把这几个字段置空，所以直接
+            塞进去就行——不新建 shim 类，`vc_single` 的行为跟冷路径一字不差。
+
+            这就是热路径省掉几十秒的地方：一个字节都不读盘。
+            """
+            from infer.modules.vc.modules import VC
+            from infer.modules.vc.pipeline import Pipeline
+
+            rvc = getattr(self, "rvc", None)
+            if rvc is None or getattr(rvc, "net_g", None) is None:
+                return None, "实时引擎里还没有加载好的音色模型"
+
+            vc = VC(config)
+            vc.hubert_model = getattr(rvc, "model", None)
+            vc.net_g = rvc.net_g
+            vc.tgt_sr = rvc.tgt_sr
+            vc.if_f0 = rvc.if_f0
+            vc.version = rvc.version
+            pipe = Pipeline(rvc.tgt_sr, config)
+            # 以常驻张量的实际精度/设备为准。config 是转换开始时才读的，可能跟
+            # 当初建 net_g 时的那份不一致；对不上就是 half/float 混算直接炸。
+            pipe.is_half = bool(getattr(rvc, "is_half", pipe.is_half))
+            pipe.device = getattr(rvc, "device", pipe.device)
+            rmvpe = getattr(rvc, "model_rmvpe", None)
+            # DirectML 下 Pipeline.get_f0 会 del 掉 model_rmvpe 来收显存，那是
+            # 实时那份，删了实时就没法用了。这条路上宁可让它自己再加载一份。
+            if rmvpe is not None and "privateuseone" not in str(pipe.device):
+                pipe.model_rmvpe = rmvpe
+            vc.pipeline = pipe
+            return vc, ""
+
+        def _worker_convert(self, payload):
+            """壳发来的 `convert`：用常驻模型跑离线转换，跳过全部冷启动。"""
+            from tools import sts_core
+
+            self._sts_seq = int(payload.get("seq") or 0)
+            inp = str(payload.get("input") or "").strip()
+            out_dir = str(payload.get("output") or "").strip()
+            f0method, f0_note = sts_core.normalize_f0method(
+                str(payload.get("f0method") or "rmvpe")
+            )
+
+            def fail(msg):
+                self._sts_emit(phase="error", message=msg, pct=0)
+
+            if not inp or not out_dir:
+                fail("输入 / 输出目录不能为空")
+                return
+            files = sts_core.collect_inputs(inp)
+            if not files:
+                fail("没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）")
+                return
+
+            # 离线转换要独占显存，实时流先停。停完不自动重开——用户自己点，
+            # 跟「关闭变声」的心智保持一致。
+            was_running = bool(flag_vc)
+            if was_running:
+                try:
+                    self.stop_stream()
+                except Exception:
+                    traceback.print_exc()
+
+            total = len(files)
+            srcs = [p for p, _ in files]
+            # 热路径没有加载阶段，进度从 0 就是第一个文件。
+            prog = sts_core.StsProgress(
+                total,
+                f0method,
+                weights=sts_core.file_weights(srcs),
+                emit=self._sts_emit,
+                load_end=0.0,
+            )
+            head = "共 1 个文件，准备开始" if total == 1 else f"共 {total} 个文件（按体积加权进度），准备开始"
+            if f0_note:
+                head = f"{head}（{f0_note}）"
+            self._sts_emit(
+                phase="start", total=total, done=0, pct=0, current=0, ok=0, skip=0,
+                message=head,
+            )
+
+            try:
+                os.makedirs(out_dir, exist_ok=True)
+            except OSError as e:
+                fail(f"输出目录建不了：{e}")
+                return
+
+            try:
+                vc, why = self._sts_resident_vc(self.config)
+            except Exception as e:
+                traceback.print_exc()
+                fail(f"复用实时模型失败：{sts_core.friendly_error(e)}")
+                return
+            if vc is None:
+                fail(why or "实时引擎里没有可用的模型")
+                return
+
+            index_path = str(payload.get("index") or "").strip()
+            if not index_path or not os.path.isfile(index_path):
+                index_path = str(getattr(self.gui_config, "index_path", "") or "").strip()
+            if index_path and not os.path.isfile(index_path):
+                index_path = ""
+
+            try:
+                out_files, skipped, cancelled = sts_core.run_batch(
+                    vc,
+                    files,
+                    out_dir,
+                    {
+                        "pitch": int(payload.get("pitch") or 0),
+                        "f0method": f0method,
+                        "index_path": index_path or None,
+                        "index_rate": float(
+                            payload.get("index_rate")
+                            if payload.get("index_rate") is not None
+                            else 0.75
+                        ),
+                        "filter_radius": int(
+                            payload.get("filter_radius")
+                            if payload.get("filter_radius") is not None
+                            else 3
+                        ),
+                        "resample_sr": int(payload.get("resample_sr") or 0),
+                        "rms_mix_rate": float(
+                            payload.get("rms_mix_rate")
+                            if payload.get("rms_mix_rate") is not None
+                            else 1.0
+                        ),
+                        "protect": float(
+                            payload.get("protect")
+                            if payload.get("protect") is not None
+                            else 0.33
+                        ),
+                    },
+                    prog,
+                    self._sts_emit,
+                    should_cancel=self._sts_cancelled,
+                )
+            except Exception as e:
+                traceback.print_exc()
+                fail(sts_core.friendly_error(e))
+                return
+            finally:
+                # 常驻模型不能动，只把这一轮的中间张量还给分配器。
+                sts_core.cuda_empty_cache()
+
+            if cancelled:
+                self._sts_emit(
+                    phase="cancelled",
+                    total=total,
+                    done=len(out_files),
+                    pct=prog.last_pct,
+                    files=out_files,
+                    skipped=skipped,
+                    ok=len(out_files),
+                    skip=len(skipped),
+                    message="已取消",
+                )
+                return
+            if not out_files:
+                first = skipped[0]["reason"] if skipped else "未知错误"
+                fail(f"{total} 个文件全部转换失败。第一个原因：{first}")
+                return
+            self._sts_emit(
+                phase="done",
+                files=out_files,
+                skipped=skipped,
+                total=total,
+                done=total,
+                pct=100,
+                current=total,
+                ok=len(out_files),
+                skip=len(skipped),
+                message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
+            )
+
         def worker_main(self):
             """No FreeSimpleGUI window — poll User_Data/runtime_control/command.json."""
             from tools.worker_protocol import (
@@ -3087,6 +3296,20 @@ if __name__ == "__main__":
                                 self._worker_start()
                             elif action == "stop":
                                 self._worker_stop()
+                            elif action == "convert":
+                                # 离线语音转换热路径：模型已经在手里，不重新加载。
+                                # 这一句会阻塞到整批转完，期间命令循环不派发新
+                                # 命令——取消靠 _sts_cancelled 自己去读命令文件。
+                                params = (
+                                    cmd.get("params")
+                                    if isinstance(cmd.get("params"), dict)
+                                    else cmd
+                                )
+                                self._worker_convert({**params, "seq": seq})
+                            elif action == "sts_cancel":
+                                # 转换途中由 _sts_cancelled 直接读命令文件认领；
+                                # 走到这儿说明转换早结束了，什么都不用做。
+                                pass
                             elif action == "set":
                                 params = (
                                     cmd.get("params")

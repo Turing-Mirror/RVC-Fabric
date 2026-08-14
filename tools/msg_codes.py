@@ -13,6 +13,7 @@ from __future__ import annotations
 
 # process lifecycle
 ENGINE_STARTING = "engine.starting"
+ENGINE_IMPORTING = "engine.importing"
 ENGINE_MISSING_GUI = "engine.missing_gui"
 ENGINE_CRASH_LOAD = "engine.crash_load"
 ENGINE_READY = "engine.ready"
@@ -34,6 +35,13 @@ DEV_INVALID = "dev.invalid"
 # voice conversion
 VC_NEED_MODEL = "vc.need_model"
 VC_LOADING_MODEL = "vc.loading_model"
+VC_LOADING_INDEX = "vc.loading_index"
+VC_LOADING_HUBERT = "vc.loading_hubert"
+VC_LOADING_NET = "vc.loading_net"
+VC_WARMUP = "vc.warmup"
+VC_OPENING_STREAM = "vc.opening_stream"
+VC_SWAPPING = "vc.swapping"
+VC_SWAP_FAILED = "vc.swap_failed"
 VC_PTH_MISSING = "vc.pth_missing"
 VC_RUNNING = "vc.running"
 VC_BAD_SETTINGS = "vc.bad_settings"
@@ -44,7 +52,8 @@ VC_UNKNOWN_CMD = "vc.unknown_cmd"
 
 # Chinese fallbacks (zh-CN). Must match app/i18n/locales/zh-CN.json msg.*
 _FALLBACK_ZH: dict[str, str] = {
-    ENGINE_STARTING: "引擎进程已启动，正在加载…",
+    ENGINE_STARTING: "引擎进程已启动，正在加载运行库…",
+    ENGINE_IMPORTING: "正在导入推理库（可能需要十几秒）…",
     ENGINE_MISSING_GUI: "安装不完整：缺少引擎主程序",
     ENGINE_CRASH_LOAD: "引擎加载时崩溃，详见日志",
     ENGINE_READY: "引擎就绪",
@@ -59,6 +68,13 @@ _FALLBACK_ZH: dict[str, str] = {
     DEV_INVALID: "设备无效：{detail}",
     VC_NEED_MODEL: "请先选择音色模型",
     VC_LOADING_MODEL: "正在加载音色模型…",
+    VC_LOADING_INDEX: "正在加载检索库…",
+    VC_LOADING_HUBERT: "正在加载特征模型（Hubert）…",
+    VC_LOADING_NET: "正在加载合成器权重…",
+    VC_WARMUP: "正在预热引擎（首次较慢）…",
+    VC_OPENING_STREAM: "正在打开音频设备…",
+    VC_SWAPPING: "正在切换音色，请稍候…",
+    VC_SWAP_FAILED: "切换失败，仍在使用上一音色",
     VC_PTH_MISSING: "pth 文件不存在：{path}",
     VC_RUNNING: "变声中",
     VC_BAD_SETTINGS: "设置无效，无法开始变声",

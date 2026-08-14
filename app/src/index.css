@@ -198,6 +198,19 @@ option {
   }
 }
 
+@keyframes dock-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.dock-bar-indeterminate {
+  animation: dock-indeterminate 1.1s ease-in-out infinite;
+}
+
 @keyframes pulse {
   0%,
   100% {

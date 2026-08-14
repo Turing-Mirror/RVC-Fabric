@@ -529,19 +529,12 @@ export default function App() {
       .catch(() => {
         /* browser preview */
       });
-    // 正在变声的时候换模型：热换，不重开流。
-    //
-    // 引擎现在认 pth_path 这个热更新键了 —— 音频线程在两块之间把 RVC 实例
-    // 换掉，设备、缓冲区、延迟设置全都不动。用户听到的是零点几秒的接缝，
-    // 而不是停流重开的那二三十秒。
-    //
-    // 采样率跟随模型、而新模型的采样率又不一样时，引擎自己退回重开流 ——
-    // 那种情况下整条流水线的尺寸都变了，换不了。
-    //
-    // 没在跑的时候后端会报「worker 未运行」，那不是故障：配置已经是新的，
-    // 下次开启自然就对，所以吞掉。
+    // 正在变声时热换模型：后台读新权重，旧音色继续出声；装上后只换指针。
+    // 采样率会变时引擎自己退回重开流。worker 没在跑时这里会失败，配置已是
+    // 新的，下次开启就对，所以吞掉。
+    if (engine.running) engine.noteSwap();
     void swapModel().catch(() => {});
-  }, [syncParams]);
+  }, [syncParams, engine.running, engine.noteSwap]);
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {
@@ -967,6 +960,8 @@ export default function App() {
         profileSummary={profileSummary}
         statusTitle={engine.title}
         statusSub={engine.sub}
+        progress={engine.progress}
+        loading={engine.starting && engine.progress == null}
         micDb={engine.micDb}
         thresholdDb={engine.thresholdDb}
       />

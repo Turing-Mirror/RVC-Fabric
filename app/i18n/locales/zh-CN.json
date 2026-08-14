@@ -40,6 +40,7 @@
     "engineReady": "引擎就绪",
     "engineIdle": "待命",
     "converting": "变声中",
+    "switching": "切换音色",
     "starting": "启动中",
     "stopping": "停止中",
     "engineError": "引擎错误",
@@ -269,7 +270,8 @@
   },
   "msg": {
     "engine": {
-      "starting": "引擎进程已启动，正在加载…",
+      "starting": "引擎进程已启动，正在加载运行库…",
+      "importing": "正在导入推理库（可能需要十几秒）…",
       "missing_gui": "安装不完整：缺少引擎主程序",
       "crash_load": "引擎加载时崩溃，详见日志",
       "ready": "引擎就绪",
@@ -285,6 +287,13 @@
     "vc": {
       "need_model": "请先选择音色模型",
       "loading_model": "正在加载音色模型…",
+      "loading_index": "正在加载检索库…",
+      "loading_hubert": "正在加载特征模型（Hubert）…",
+      "loading_net": "正在加载合成器权重…",
+      "warmup": "正在预热引擎（首次较慢）…",
+      "opening_stream": "正在打开音频设备…",
+      "swapping": "正在切换音色，请稍候…",
+      "swap_failed": "切换失败，仍在使用上一音色",
       "pth_missing": "pth 文件不存在：{path}",
       "running": "变声中",
       "bad_settings": "设置无效，无法开始变声",

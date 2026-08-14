@@ -477,6 +477,11 @@ mod tests {
             "got {:?}",
             t_msg("engine.starting")
         );
+        assert!(
+            t_msg("vc.swapping").contains("切换"),
+            "got {:?}",
+            t_msg("vc.swapping")
+        );
 
         set_locale("en-US");
         assert_eq!(t("tray.show"), "Open main window");

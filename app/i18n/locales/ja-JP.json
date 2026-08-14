@@ -40,6 +40,7 @@
     "engineReady": "エンジン準備完了",
     "engineIdle": "待機中",
     "converting": "変換中",
+    "switching": "音色を切替中",
     "starting": "起動中",
     "stopping": "停止中",
     "engineError": "エンジンエラー",
@@ -269,7 +270,8 @@
   },
   "msg": {
     "engine": {
-      "starting": "エンジンプロセスが起動しました。読み込み中…",
+      "starting": "エンジンプロセスが起動しました。ランタイムを読み込み中…",
+      "importing": "推論ライブラリを読み込み中（数十秒かかることがあります）…",
       "missing_gui": "インストール不完全：エンジン本体がありません",
       "crash_load": "エンジン読み込み中にクラッシュしました。ログを確認してください",
       "ready": "エンジン準備完了",
@@ -285,6 +287,13 @@
     "vc": {
       "need_model": "先に音声モデルを選択してください",
       "loading_model": "ボイスモデルを読み込み中…",
+      "loading_index": "検索インデックスを読み込み中…",
+      "loading_hubert": "特徴モデル（Hubert）を読み込み中…",
+      "loading_net": "合成器の重みを読み込み中…",
+      "warmup": "エンジンをウォームアップ中（初回は遅め）…",
+      "opening_stream": "オーディオデバイスを開いています…",
+      "swapping": "音色を切り替えています。しばらくお待ちください…",
+      "swap_failed": "切替に失敗しました。前の音色のままです",
       "pth_missing": "pth ファイルが見つかりません：{path}",
       "running": "変換中",
       "bad_settings": "設定が無効です。開始できません",

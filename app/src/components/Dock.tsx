@@ -19,6 +19,10 @@ type Props = {
   onToggleRun: () => void;
   statusTitle?: string;
   statusSub?: string;
+  /** 0–99 while the engine is loading or switching; null to hide the bar. */
+  progress?: number | null;
+  /** True while starting or switching without a numeric percent yet. */
+  loading?: boolean;
   /** Mic level in dBFS from the worker; null when the engine is idle. */
   micDb?: number | null;
   /** Response gate in dBFS. Bar stays muted until the level reaches it. */
@@ -45,6 +49,8 @@ export function Dock({
   onToggleRun,
   statusTitle,
   statusSub,
+  progress = null,
+  loading = false,
   micDb = null,
   thresholdDb = -60,
 }: Props) {
@@ -153,13 +159,31 @@ export function Dock({
       </div>
 
       <div className="ml-auto flex items-center gap-[18px] max-[860px]:order-4">
-        <div className="text-right">
+        <div className="text-right min-w-[148px]">
           <div className="text-[13px] font-semibold text-[var(--ink-muted)]">
             {title}
           </div>
           <div className="text-[11.5px] text-[var(--meta)] mt-0.5">
             {sub}
           </div>
+          {progress != null ? (
+            <div
+              className="ml-auto mt-1.5 h-1 w-[132px] overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress)}
+            >
+              <div
+                className="h-full bg-[var(--accent)] transition-[width] duration-200 ease-out"
+                style={{ width: `${Math.max(4, Math.min(100, progress))}%` }}
+              />
+            </div>
+          ) : loading ? (
+            <div className="relative ml-auto mt-1.5 h-1 w-[132px] overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
+              <div className="absolute inset-y-0 w-1/3 bg-[var(--accent)] dock-bar-indeterminate" />
+            </div>
+          ) : null}
         </div>
         <button
           type="button"

@@ -144,6 +144,7 @@ def main() -> None:
         root,
         state="starting",
         error="",
+        progress=8,
         **status_fields(ENGINE_STARTING),
     )
 
@@ -167,6 +168,25 @@ def main() -> None:
         raise SystemExit(msg)
 
     try:
+        try:
+            from tools.msg_codes import ENGINE_IMPORTING, status_fields as _sf_imp
+
+            _write_status_early(
+                root,
+                state="starting",
+                error="",
+                progress=14,
+                **_sf_imp(ENGINE_IMPORTING),
+            )
+        except Exception:
+            _write_status_early(
+                root,
+                state="starting",
+                error="",
+                progress=14,
+                message_code="engine.importing",
+                message="正在导入推理库（可能需要十几秒）…",
+            )
         runpy.run_path(str(gui), run_name="__main__")
     except SystemExit:
         raise

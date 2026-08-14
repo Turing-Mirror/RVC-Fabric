@@ -6,6 +6,9 @@ export type EngineStatus = {
   state?: string;
   error?: string;
   message?: string;
+  message_code?: string;
+  /** 0–100. <100 means a load/swap is in flight; 100 or missing means idle. */
+  progress?: number | null;
   delay_ms?: number;
   infer_ms?: number;
   samplerate?: number;
@@ -171,10 +174,39 @@ export async function cancelProvision(): Promise<void> {
   await invoke("provision_cancel");
 }
 
+const LOAD_CODES = new Set([
+  "engine.starting",
+  "engine.importing",
+  "vc.loading_model",
+  "vc.loading_index",
+  "vc.loading_hubert",
+  "vc.loading_net",
+  "vc.warmup",
+  "vc.opening_stream",
+  "vc.swapping",
+]);
+
+export function loadProgress(st: EngineStatus): number | null {
+  const p = Number(st.progress);
+  if (Number.isFinite(p) && p >= 0 && p < 100) return p;
+  return null;
+}
+
+export function isLoadPhase(st: EngineStatus): boolean {
+  const code = String(st.message_code || "");
+  if (LOAD_CODES.has(code)) return true;
+  if (st.state === "starting") return true;
+  return loadProgress(st) != null;
+}
+
 export function statusTitle(st: EngineStatus): string {
   const s = st.state || "idle";
+  const code = String(st.message_code || "");
+  if (code === "vc.swapping" || (s === "running" && isLoadPhase(st))) {
+    return tStatic("dock.switching");
+  }
   if (s === "running") return tStatic("dock.converting");
-  if (s === "starting") return tStatic("dock.starting");
+  if (s === "starting" || isLoadPhase(st)) return tStatic("dock.starting");
   if (s === "stopping") return tStatic("dock.stopping");
   if (s === "error") return tStatic("dock.engineError");
   if (st.worker_alive) return tStatic("dock.engineReady");
@@ -182,6 +214,13 @@ export function statusTitle(st: EngineStatus): string {
 }
 
 export function statusSub(st: EngineStatus): string {
+  // 加载/切换时优先展示分阶段说明，不要被延迟读数盖掉。
+  if (isLoadPhase(st) && st.message) {
+    return String(st.message).slice(0, 80);
+  }
+  if (String(st.message_code || "") === "vc.swap_failed" && st.message) {
+    return String(st.message).slice(0, 80);
+  }
   // 变声跑起来之后，副标题的位置留给延迟读数 —— 标题那行已经写着「变声中」，
   // 再把 message 重复一遍就是浪费。status.json 是合并写的，message 会一直
   // 停在最后一次设置的值上，所以这条必须排在 message 前面，否则延迟永远
@@ -195,7 +234,7 @@ export function statusSub(st: EngineStatus): string {
   // Fallback to raw message / error / idle labels.
   // Skip duplicate "engine ready" as subtitle — title already says it.
   if (st.message) {
-    const msg = String(st.message).slice(0, 48);
+    const msg = String(st.message).slice(0, 80);
     const ready = tStatic("dock.engineReady");
     const readyMsg = tStatic("msg.engine.ready");
     if (
@@ -210,7 +249,7 @@ export function statusSub(st: EngineStatus): string {
     }
     return msg;
   }
-  if (st.state === "error" && st.error) return String(st.error).slice(0, 48);
+  if (st.state === "error" && st.error) return String(st.error).slice(0, 80);
   if (st.worker_alive) return tStatic("dock.engineIdle");
   return tStatic("dock.waitStart");
 }

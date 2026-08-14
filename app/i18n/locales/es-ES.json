@@ -40,6 +40,7 @@
     "engineReady": "Motor listo",
     "engineIdle": "En espera",
     "converting": "Convirtiendo",
+    "switching": "Cambiando voz",
     "starting": "Iniciando",
     "stopping": "Deteniendo",
     "engineError": "Error del motor",
@@ -269,7 +270,8 @@
   },
   "msg": {
     "engine": {
-      "starting": "Proceso del motor iniciado, cargando…",
+      "starting": "Proceso del motor iniciado, cargando el entorno…",
+      "importing": "Importando bibliotecas de inferencia (puede tardar)…",
       "missing_gui": "Instalación incompleta: falta el ejecutable del motor",
       "crash_load": "El motor falló al cargar; consulta los registros",
       "ready": "Motor listo",
@@ -285,6 +287,13 @@
     "vc": {
       "need_model": "Elige primero un modelo de voz",
       "loading_model": "Cargando modelo de voz…",
+      "loading_index": "Cargando índice de búsqueda…",
+      "loading_hubert": "Cargando modelo de rasgos (Hubert)…",
+      "loading_net": "Cargando pesos del sintetizador…",
+      "warmup": "Calentando el motor (la primera vez es más lenta)…",
+      "opening_stream": "Abriendo dispositivos de audio…",
+      "swapping": "Cambiando de voz, espera un momento…",
+      "swap_failed": "El cambio falló: se sigue usando la voz anterior",
       "pth_missing": "No existe el archivo .pth: {path}",
       "running": "Convirtiendo",
       "bad_settings": "Ajustes no válidos; no se puede iniciar",

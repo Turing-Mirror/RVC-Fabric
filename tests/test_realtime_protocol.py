@@ -123,6 +123,69 @@ class WriteJsonTests(unittest.TestCase):
                 )
                 self.assertEqual(data["message_code"], "vc.loading_model")
 
+    def test_write_status_keeps_progress(self):
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            with mock.patch.object(rp, "CONTROL_DIR", td_path), mock.patch.object(
+                rp, "STATUS_PATH", td_path / "status.json"
+            ):
+                rp.write_status(
+                    state="starting",
+                    message_code="vc.warmup",
+                    message="正在预热引擎（首次较慢）…",
+                    progress=78,
+                )
+                data = json.loads(
+                    (td_path / "status.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(data["progress"], 78)
+                self.assertEqual(data["message_code"], "vc.warmup")
+                rp.write_status(state="running", progress=100, message_code="vc.running")
+                data = json.loads(
+                    (td_path / "status.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(data["progress"], 100)
+                self.assertEqual(data["message_code"], "vc.running")
+
+
+class MsgCodeTests(unittest.TestCase):
+    def test_new_load_codes_have_zh_fallback(self):
+        from tools import msg_codes as mc
+
+        for code in (
+            mc.ENGINE_IMPORTING,
+            mc.VC_LOADING_INDEX,
+            mc.VC_LOADING_HUBERT,
+            mc.VC_LOADING_NET,
+            mc.VC_WARMUP,
+            mc.VC_OPENING_STREAM,
+            mc.VC_SWAPPING,
+            mc.VC_SWAP_FAILED,
+        ):
+            text = mc.fallback_message(code)
+            self.assertTrue(text and text != code, code)
+            self.assertNotIn("{", text)
+
+    def test_locale_packs_have_load_keys(self):
+        root = ROOT / "app" / "i18n" / "locales"
+        keys = (
+            ("dock", "switching"),
+            ("msg", "engine", "importing"),
+            ("msg", "vc", "swapping"),
+            ("msg", "vc", "warmup"),
+            ("msg", "vc", "opening_stream"),
+            ("msg", "vc", "swap_failed"),
+        )
+        for path in sorted(root.glob("*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for parts in keys:
+                cur = data
+                for p in parts:
+                    self.assertIn(p, cur, f"{path.name} missing {'.'.join(parts)}")
+                    cur = cur[p]
+                self.assertIsInstance(cur, str)
+                self.assertTrue(cur.strip(), f"{path.name} empty {'.'.join(parts)}")
+
 
 if __name__ == "__main__":
     unittest.main()

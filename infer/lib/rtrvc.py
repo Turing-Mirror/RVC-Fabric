@@ -67,10 +67,19 @@ class RVC:
         opt_q,
         config: Config,
         last_rvc=None,
+        on_progress=None,
     ) -> None:
         """
         初始化
         """
+        def _progress(code: str, pct: int) -> None:
+            if on_progress is None:
+                return
+            try:
+                on_progress(code, pct)
+            except Exception:
+                pass
+
         try:
             if config.dml == True:
 
@@ -116,6 +125,7 @@ class RVC:
 
             # Missing / wrong index must not kill the process (common for catalog models)
             if index_rate != 0 and index_path and os.path.isfile(index_path):
+                _progress("vc.loading_index", 32)
                 try:
                     self.index = faiss.read_index(index_path)
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
@@ -140,6 +150,7 @@ class RVC:
             self.resample_kernel = {}
 
             if last_rvc is None:
+                _progress("vc.loading_hubert", 42)
                 models, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task(
                     ["assets/hubert/hubert_base.pt"],
                     suffix="",
@@ -214,6 +225,7 @@ class RVC:
                     set_default_model()
 
             if last_rvc is None or last_rvc.pth_path != self.pth_path:
+                _progress("vc.loading_net", 58)
                 set_synthesizer()
             else:
                 self.tgt_sr = last_rvc.tgt_sr

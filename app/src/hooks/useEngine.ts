@@ -3,7 +3,9 @@ import {
   ensureEngine,
   getEngineStatus,
   getProvisionStatus,
+  isLoadPhase,
   listDevices,
+  loadProgress,
   setHot,
   startVc,
   statusSub,
@@ -33,6 +35,8 @@ export function useEngine() {
   const modeRef = useRef<OutputMode>("vc");
   const hotTimer = useRef<number | null>(null);
   const startingRef = useRef(false);
+  const [swapHint, setSwapHint] = useState(false);
+  const progressRef = useRef<number | null>(null);
 
   // 运行时是不是已经补全了。用 ref 是因为轮询回调要读它，又不能让它进依赖 ——
   // 进了依赖每次翻转都会重建定时器。
@@ -85,6 +89,15 @@ export function useEngine() {
           ? { ...raw, state: "idle" } // 没有活 worker 的 starting 是陈旧 status
           : raw;
       stateRef.current = String(st.state || "idle");
+      progressRef.current = loadProgress(st);
+      if (
+        String(st.message_code || "") === "vc.swapping" ||
+        String(st.message_code || "") === "vc.swap_failed" ||
+        String(st.message_code || "") === "vc.running" ||
+        (st.state !== "running" && st.state !== "starting")
+      ) {
+        setSwapHint(false);
+      }
       setStatus(st);
       if (st.state === "error" && st.error) {
         setLastError(String(st.error));
@@ -132,9 +145,11 @@ export function useEngine() {
     const pick = () =>
       document.visibilityState === "hidden"
         ? 2000
-        : stateRef.current === "running"
-          ? 400
-          : 1000;
+        : stateRef.current === "starting" || progressRef.current != null
+          ? 250
+          : stateRef.current === "running"
+            ? 400
+            : 1000;
     const arm = () => {
       const ms = pick();
       if (ms === currentMs && id) return;
@@ -296,18 +311,35 @@ export function useEngine() {
     [],
   );
 
+  const noteSwap = useCallback(() => {
+    setSwapHint(true);
+  }, []);
+
+  const hinted: EngineStatus =
+    swapHint && !isLoadPhase(status)
+      ? {
+          ...status,
+          message_code: "vc.swapping",
+          message: status.message || t("msg.vc.swapping"),
+          progress:
+            loadProgress(status) != null ? status.progress : 15,
+        }
+      : status;
+
   const sub =
     lastError ||
     (provision.need_provision
       ? String(provision.message || t("s.d725011356"))
-      : statusSub(status));
+      : statusSub(hinted));
 
   return {
     status,
     provision,
     running,
-    starting,
+    starting: starting || swapHint,
     busy,
+    progress: loadProgress(hinted),
+    noteSwap,
     lastError,
     toggleRun,
     onPitch,
@@ -318,7 +350,7 @@ export function useEngine() {
     refreshProvision,
     reloadDevices,
     devicesBusy,
-    title: statusTitle(status),
+    title: statusTitle(hinted),
     sub,
     // Worker writes `input_db` (dBFS) and carries the gate as `threhold`
     // (upstream spelling). Map both with the Tk shell's formula so the meter

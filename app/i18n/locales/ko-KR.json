@@ -40,6 +40,7 @@
     "engineReady": "엔진 준비됨",
     "engineIdle": "대기 중",
     "converting": "변조 중",
+    "switching": "보이스 전환 중",
     "starting": "시작 중",
     "stopping": "중지 중",
     "engineError": "엔진 오류",
@@ -269,7 +270,8 @@
   },
   "msg": {
     "engine": {
-      "starting": "엔진 프로세스 시작됨. 로딩 중…",
+      "starting": "엔진 프로세스 시작됨. 런타임을 불러오는 중…",
+      "importing": "추론 라이브러리를 불러오는 중(수십 초 걸릴 수 있음)…",
       "missing_gui": "설치 불완전: 엔진 본체 없음",
       "crash_load": "엔진 로딩 중 충돌. 로그를 확인하세요",
       "ready": "엔진 준비됨",
@@ -285,6 +287,13 @@
     "vc": {
       "need_model": "먼저 음색 모델을 선택하세요",
       "loading_model": "음성 모델 로드 중…",
+      "loading_index": "검색 인덱스를 불러오는 중…",
+      "loading_hubert": "특징 모델(Hubert)을 불러오는 중…",
+      "loading_net": "합성기 가중치를 불러오는 중…",
+      "warmup": "엔진 예열 중(처음에는 더 오래 걸림)…",
+      "opening_stream": "오디오 장치를 여는 중…",
+      "swapping": "보이스를 전환하는 중입니다. 잠시만 기다려 주세요…",
+      "swap_failed": "전환 실패. 이전 보이스를 계속 사용합니다",
       "pth_missing": "pth 파일이 없습니다: {path}",
       "running": "변조 중",
       "bad_settings": "설정이 잘못되어 시작할 수 없습니다",

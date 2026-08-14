@@ -40,13 +40,21 @@ try:
         ENGINE_LOOP_ERROR,
         ENGINE_QUIT,
         VC_BAD_SETTINGS,
+        VC_LOADING_HUBERT,
+        VC_LOADING_INDEX,
+        VC_LOADING_MODEL,
+        VC_LOADING_NET,
         VC_NEED_MODEL,
+        VC_OPENING_STREAM,
         VC_PARAMS_APPLIED,
         VC_PTH_MISSING,
         VC_RUNNING,
         VC_START_FAILED,
         VC_STOP_FAILED,
+        VC_SWAP_FAILED,
+        VC_SWAPPING,
         VC_UNKNOWN_CMD,
+        VC_WARMUP,
     )
 except Exception:
     # `tools` 不在 path 上（脚本被单独跑起来）。码本身就是字符串常量，
@@ -57,13 +65,21 @@ except Exception:
     ENGINE_LOOP_ERROR = "engine.loop_error"
     ENGINE_QUIT = "engine.quit"
     VC_BAD_SETTINGS = "vc.bad_settings"
+    VC_LOADING_HUBERT = "vc.loading_hubert"
+    VC_LOADING_INDEX = "vc.loading_index"
+    VC_LOADING_MODEL = "vc.loading_model"
+    VC_LOADING_NET = "vc.loading_net"
     VC_NEED_MODEL = "vc.need_model"
+    VC_OPENING_STREAM = "vc.opening_stream"
     VC_PARAMS_APPLIED = "vc.params_applied"
     VC_PTH_MISSING = "vc.pth_missing"
     VC_RUNNING = "vc.running"
     VC_START_FAILED = "vc.start_failed"
     VC_STOP_FAILED = "vc.stop_failed"
+    VC_SWAP_FAILED = "vc.swap_failed"
+    VC_SWAPPING = "vc.swapping"
     VC_UNKNOWN_CMD = "vc.unknown_cmd"
+    VC_WARMUP = "vc.warmup"
 
 
 def _msg(code: str, **params):
@@ -178,9 +194,34 @@ if __name__ == "__main__":
     import numpy as np
     import FreeSimpleGUI as sg
     import sounddevice as sd
+    if os.environ.get("TM_REALTIME_WORKER", "").strip() in ("1", "true", "yes"):
+        try:
+            from tools.worker_protocol import write_status as _boot_status
+            from tools.msg_codes import ENGINE_IMPORTING, status_fields as _boot_sf
+
+            _boot_status(
+                state="starting",
+                progress=16,
+                **_boot_sf(ENGINE_IMPORTING),
+            )
+        except Exception:
+            pass
     import torch
     import torch.nn.functional as F
     import torchaudio.transforms as tat
+
+    if os.environ.get("TM_REALTIME_WORKER", "").strip() in ("1", "true", "yes"):
+        try:
+            from tools.worker_protocol import write_status as _boot_status2
+            from tools.msg_codes import ENGINE_IMPORTING, status_fields as _boot_sf2
+
+            _boot_status2(
+                state="starting",
+                progress=22,
+                **_boot_sf2(ENGINE_IMPORTING),
+            )
+        except Exception:
+            pass
 
     # realtime process is inference-only: skip autograd bookkeeping everywhere
     # (SOLA / noise gate / resample run outside the engine's no_grad blocks)
@@ -282,6 +323,11 @@ if __name__ == "__main__":
             # 就不存在「一块音频用了新模型的采样率、旧模型的重采样器」这种半截状态。
             self._pending_model = None
             self._pending_model_lock = threading.Lock()
+            # 后台线程建好的新 RVC；音频线程只做指针替换。
+            self._swap_ready = None
+            self._swap_busy = False
+            self._swap_progress = 0
+            self._swap_loader = None
             # 换模型失败时留一句话给状态栏，成功就清空。
             self._model_swap_error = ""
             self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
@@ -1130,6 +1176,7 @@ if __name__ == "__main__":
                     gc.collect()
             except Exception:
                 pass
+            self._report_load(VC_LOADING_MODEL, 18)
             if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
                 try:
                     ensure_harvest_workers(self.gui_config.n_cpu)
@@ -1146,6 +1193,7 @@ if __name__ == "__main__":
                 opt_q,
                 self.config,
                 self.rvc if hasattr(self, "rvc") else None,
+                on_progress=self._on_rvc_progress,
             )
             self.gui_config.samplerate = (
                 self.rvc.tgt_sr
@@ -1250,11 +1298,37 @@ if __name__ == "__main__":
             ).to(self.config.device)
             # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
             # here instead of inside the first audible blocks
+            self._report_load(VC_WARMUP, 78)
             try:
                 self._warmup_engine()
             except Exception:
                 traceback.print_exc()
+            self._report_load(VC_OPENING_STREAM, 92)
             self.start_stream()
+
+        def _on_rvc_progress(self, code, pct):
+            self._report_load(code, pct)
+
+        def _report_load(self, code, progress, **params):
+            """启动/预热分阶段写状态。progress 0–100，界面底栏画进度条。"""
+            try:
+                self._worker_write_status(
+                    state="starting",
+                    error="",
+                    pid=os.getpid(),
+                    progress=int(progress),
+                    **self._worker_device_payload(),
+                    **_msg(code, **params),
+                )
+            except Exception:
+                pass
+
+        def _swap_in_flight(self) -> bool:
+            if getattr(self, "_swap_ready", None) is not None:
+                return True
+            if getattr(self, "_pending_model", None) is not None:
+                return True
+            return bool(getattr(self, "_swap_busy", False))
 
         def _warmup_engine(self):
             dummy = torch.zeros_like(self.input_wav_res)
@@ -1806,10 +1880,10 @@ if __name__ == "__main__":
             rptr = self.in_ptr.value
             self.in_evt.clear()
 
-            # 换音色就在这儿发生 —— 两块音频之间，这条线程自己动手。
-            # 读权重要零点几秒，这一块会晚交货、输出上有一小段接不上，但设备、
-            # 缓冲区、延迟设置一样都没动，比停流重开省掉的是二三十秒。
-            if self._pending_model is not None:
+            # 换音色：后台线程把权重读好，这里只换指针。DML 仍在本线程现读。
+            if getattr(self, "_swap_ready", None) is not None:
+                self._install_ready_model()
+            elif self._pending_model is not None and not getattr(self, "_swap_busy", False):
                 self._apply_pending_model()
 
             start_time = time.perf_counter()
@@ -2530,23 +2604,47 @@ if __name__ == "__main__":
                     self._worker_start()
                     return
 
+            job = (pth, idx, rate)
             with self._pending_model_lock:
-                self._pending_model = (pth, idx, rate)
+                self._pending_model = job
+                self._swap_ready = None
+            self._swap_busy = True
+            self._swap_progress = 20
+            self._model_swap_error = ""
+            self._worker_write_status(
+                state="running",
+                error="",
+                progress=20,
+                pid=os.getpid(),
+                **_msg(VC_SWAPPING),
+            )
             printt("换模型：已排队 %s", pth)
-
-        def _apply_pending_model(self):
-            """装上排队中的新模型。**只在音频线程里调用。**"""
-            with self._pending_model_lock:
-                job = self._pending_model
-                self._pending_model = None
-            if not job:
+            # DirectML 跟音频线程抢设备容易炸；CUDA/CPU 后台读权重，旧音色继续出声。
+            if bool(getattr(self.config, "dml", False)):
+                self._swap_busy = False
                 return
+            t = threading.Thread(
+                target=self._preload_pending_model,
+                args=(job,),
+                name="swap-model",
+                daemon=True,
+            )
+            self._swap_loader = t
+            t.start()
+
+        def _preload_pending_model(self, job):
+            """在命令线程之外读新权重，音频线程只做指针替换。"""
             pth, idx, rate = job
-            old = getattr(self, "rvc", None)
             try:
-                # 把当前这个当 last_rvc 传进去：hubert、rmvpe、fcpe 都是跟音色无关
-                # 的公共模型，RVC 的构造函数会直接沿用，只重新读合成器权重。
-                # 这就是「换模型只要零点几秒」和「跟冷启动一样等二三十秒」的差别。
+                self._swap_progress = 45
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=45,
+                    pid=os.getpid(),
+                    **_msg(VC_LOADING_NET),
+                )
+                old = getattr(self, "rvc", None)
                 new = rvc_for_realtime.RVC(
                     self.gui_config.pitch,
                     self.gui_config.formant,
@@ -2558,23 +2656,80 @@ if __name__ == "__main__":
                     opt_q,
                     self.config,
                     old,
+                    on_progress=self._on_swap_progress,
+                )
+                if getattr(new, "net_g", None) is None or not getattr(new, "tgt_sr", 0):
+                    raise RuntimeError("incomplete rvc")
+                with self._pending_model_lock:
+                    if self._pending_model != job:
+                        return
+                    self._swap_ready = (new, pth, idx, rate)
+                self._swap_progress = 88
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=88,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAPPING),
                 )
             except Exception:
                 printt("换模型失败：%s", traceback.format_exc())
+                with self._pending_model_lock:
+                    if self._pending_model == job:
+                        self._pending_model = None
+                        self._swap_ready = None
+                self._swap_busy = False
+                self._swap_progress = 100
                 self._model_swap_error = "换模型失败，仍在用上一个音色"
-                return
-            # RVC 的构造函数把异常全吞了（只打日志），失败时返回的是个半成品。
-            # 不验一下就换上去，下一块推理会拿 None 去做卷积，整条流当场炸掉。
-            if getattr(new, "net_g", None) is None or not getattr(new, "tgt_sr", 0):
-                printt("换模型失败：新模型没建起来，保持原样")
-                self._model_swap_error = "换模型失败，仍在用上一个音色"
-                return
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=100,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAP_FAILED),
+                )
 
+        def _on_swap_progress(self, code, pct):
+            # 换模型期间不要把 state 写成 starting，否则底栏会变成「启动中」。
+            lo = max(25, min(85, int(pct)))
+            self._swap_progress = lo
+            try:
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=lo,
+                    pid=os.getpid(),
+                    **_msg(code if str(code or "").startswith("vc.") else VC_SWAPPING),
+                )
+            except Exception:
+                pass
+
+        def _install_ready_model(self):
+            """把预加载好的模型接到流上。**只在音频线程里调用。**"""
+            with self._pending_model_lock:
+                pack = self._swap_ready
+                self._swap_ready = None
+                self._pending_model = None
+            if not pack:
+                return
+            new, pth, idx, rate = pack
+            self._attach_rvc(new, pth, idx, rate)
+            self._swap_busy = False
+            self._swap_progress = 100
+            self._model_swap_error = ""
+            self._worker_write_status(
+                state="running",
+                error="",
+                progress=100,
+                pid=os.getpid(),
+                **_msg(VC_RUNNING),
+            )
+
+        def _attach_rvc(self, new, pth, idx, rate):
             self.rvc = new
             self.gui_config.pth_path = pth
             self.gui_config.index_path = idx
             self.gui_config.index_rate = rate
-            # 新旧模型的目标采样率可以不一样（32k/40k/48k），出口那级重采样得跟着换。
             if new.tgt_sr != self.gui_config.samplerate:
                 self.resampler2 = tat.Resample(
                     orig_freq=new.tgt_sr,
@@ -2583,15 +2738,85 @@ if __name__ == "__main__":
                 ).to(self.config.device)
             else:
                 self.resampler2 = None
-            # SOLA 拿上一块的尾巴和这一块做相关来找拼接点。跨音色的两块本来就
-            # 接不上，留着旧尾巴只会让它在噪声里挑一个随机偏移，听感是「咔」的
-            # 一声加半个字的重影。清零等于让这一块直接淡入。
             try:
                 self.sola_buffer.zero_()
             except Exception:
                 pass
-            self._model_swap_error = ""
             printt("换模型完成：%s（tgt_sr=%s）", pth, new.tgt_sr)
+
+        def _apply_pending_model(self):
+            """装上排队中的新模型。**只在音频线程里调用。**（DML 走这条）"""
+            with self._pending_model_lock:
+                job = self._pending_model
+                self._pending_model = None
+            if not job:
+                return
+            pth, idx, rate = job
+            old = getattr(self, "rvc", None)
+            self._swap_progress = 40
+            self._worker_write_status(
+                state="running",
+                error="",
+                progress=40,
+                pid=os.getpid(),
+                **_msg(VC_SWAPPING),
+            )
+            try:
+                # 把当前这个当 last_rvc 传进去：hubert、rmvpe、fcpe 都是跟音色无关
+                # 的公共模型，RVC 的构造函数会直接沿用，只重新读合成器权重。
+                new = rvc_for_realtime.RVC(
+                    self.gui_config.pitch,
+                    self.gui_config.formant,
+                    pth,
+                    idx,
+                    rate,
+                    self.gui_config.n_cpu,
+                    inp_q,
+                    opt_q,
+                    self.config,
+                    old,
+                    on_progress=self._on_swap_progress,
+                )
+            except Exception:
+                printt("换模型失败：%s", traceback.format_exc())
+                self._swap_busy = False
+                self._swap_progress = 100
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=100,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAP_FAILED),
+                )
+                return
+            # RVC 的构造函数把异常全吞了（只打日志），失败时返回的是个半成品。
+            # 不验一下就换上去，下一块推理会拿 None 去做卷积，整条流当场炸掉。
+            if getattr(new, "net_g", None) is None or not getattr(new, "tgt_sr", 0):
+                printt("换模型失败：新模型没建起来，保持原样")
+                self._swap_busy = False
+                self._swap_progress = 100
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                self._worker_write_status(
+                    state="running",
+                    error="",
+                    progress=100,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAP_FAILED),
+                )
+                return
+
+            self._attach_rvc(new, pth, idx, rate)
+            self._swap_busy = False
+            self._swap_progress = 100
+            self._model_swap_error = ""
+            self._worker_write_status(
+                state="running",
+                error="",
+                progress=100,
+                pid=os.getpid(),
+                **_msg(VC_RUNNING),
+            )
 
         def _worker_start(self):
             global flag_vc
@@ -2599,6 +2824,9 @@ if __name__ == "__main__":
             # 里已经是新模型了。留着它只会在新流刚起来时再白换一次。
             with self._pending_model_lock:
                 self._pending_model = None
+                self._swap_ready = None
+            self._swap_busy = False
+            self._swap_progress = 0
             self._model_swap_error = ""
             # Always stop previous stream before start (device change / restart)
             try:
@@ -2619,6 +2847,7 @@ if __name__ == "__main__":
                 state="starting",
                 error="",
                 pid=os.getpid(),
+                progress=12,
                 **self._worker_device_payload(),
                 # Distinct from process boot (engine.starting) so a sticky code
                 # cannot freeze the dock on “引擎进程已启动，正在加载…”.
@@ -2722,6 +2951,7 @@ if __name__ == "__main__":
                     state="running",
                     error="",
                     **_msg(VC_RUNNING),
+                    progress=100,
                     delay_ms=int(np.round(self.delay_time * 1000)),
                     infer_ms=0,
                     samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
@@ -2768,6 +2998,7 @@ if __name__ == "__main__":
                 error="",
                 delay_ms=0,
                 infer_ms=0,
+                progress=100,
                 pid=os.getpid(),
                 **self._worker_device_payload(),
                 **_idle_fields,
@@ -2811,6 +3042,7 @@ if __name__ == "__main__":
             base.update(self._worker_device_payload())
             base["state"] = "idle"
             base["pid"] = os.getpid()
+            base["progress"] = 100
             try:
                 from tools.msg_codes import ENGINE_READY, status_fields as _sf_ready
 
@@ -2862,14 +3094,28 @@ if __name__ == "__main__":
                                     else cmd
                                 )
                                 self._worker_apply_hot(params)
-                                self._worker_write_status(
-                                    state="running" if flag_vc else "idle",
-                                    **_msg(VC_PARAMS_APPLIED),
-                                    delay_ms=int(np.round(self.delay_time * 1000)),
-                                    infer_ms=self.last_infer_ms,
-                                    pid=os.getpid(),
-                                    **self._worker_device_payload(),
-                                )
+                                if flag_vc and self._swap_in_flight():
+                                    self._worker_write_status(
+                                        state="running",
+                                        **_msg(VC_SWAPPING),
+                                        progress=int(
+                                            getattr(self, "_swap_progress", 20) or 20
+                                        ),
+                                        delay_ms=int(np.round(self.delay_time * 1000)),
+                                        infer_ms=self.last_infer_ms,
+                                        pid=os.getpid(),
+                                        **self._worker_device_payload(),
+                                    )
+                                else:
+                                    self._worker_write_status(
+                                        state="running" if flag_vc else "idle",
+                                        **_msg(VC_PARAMS_APPLIED),
+                                        progress=100,
+                                        delay_ms=int(np.round(self.delay_time * 1000)),
+                                        infer_ms=self.last_infer_ms,
+                                        pid=os.getpid(),
+                                        **self._worker_device_payload(),
+                                    )
                             else:
                                 self._worker_write_status(
                                     **_msg(VC_UNKNOWN_CMD, action=action),
@@ -2879,22 +3125,29 @@ if __name__ == "__main__":
                         # heartbeat metrics — refresh delay (device latency may arrive late)
                         if flag_vc:
                             self._refresh_delay_time()
-                            self._worker_write_status(
-                                state="running",
-                                # 换模型是异步的：命令线程排好队就返回了，真正装上
-                                # 是音频线程的事。失败只能在这条心跳上说，不然
-                                # 用户看到名字变了、声音没变，还是不知道出了什么事。
-                                message=self._model_swap_error or "",
-                                delay_ms=int(np.round(self.delay_time * 1000)),
-                                infer_ms=self.last_infer_ms,
-                                input_db=round(
+                            hb = {
+                                "state": "running",
+                                "delay_ms": int(np.round(self.delay_time * 1000)),
+                                "infer_ms": self.last_infer_ms,
+                                "input_db": round(
                                     float(getattr(self, "last_input_db", -90.0)), 1
                                 ),
-                                samplerate=int(
+                                "samplerate": int(
                                     getattr(self.gui_config, "samplerate", 0) or 0
                                 ),
-                                pid=os.getpid(),
-                            )
+                                "pid": os.getpid(),
+                            }
+                            if self._swap_in_flight():
+                                hb["progress"] = int(
+                                    getattr(self, "_swap_progress", 20) or 20
+                                )
+                                hb.update(_msg(VC_SWAPPING))
+                            elif self._model_swap_error:
+                                hb["progress"] = 100
+                                hb.update(_msg(VC_SWAP_FAILED))
+                            else:
+                                hb["progress"] = 100
+                            self._worker_write_status(**hb)
                     except Exception as e:
                         traceback.print_exc()
                         self._worker_write_status(

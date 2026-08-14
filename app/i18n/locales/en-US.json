@@ -40,6 +40,7 @@
     "engineReady": "Engine ready",
     "engineIdle": "Standby",
     "converting": "Converting",
+    "switching": "Switching voice",
     "starting": "Starting",
     "stopping": "Stopping",
     "engineError": "Engine error",
@@ -269,7 +270,8 @@
   },
   "msg": {
     "engine": {
-      "starting": "Engine process started, loading…",
+      "starting": "Engine process started, loading runtime…",
+      "importing": "Importing inference libraries (this can take a while)…",
       "missing_gui": "Incomplete install: engine binary missing",
       "crash_load": "Engine crashed while loading, see the logs",
       "ready": "Engine ready",
@@ -285,6 +287,13 @@
     "vc": {
       "need_model": "Pick a voice model first",
       "loading_model": "Loading voice model…",
+      "loading_index": "Loading retrieval index…",
+      "loading_hubert": "Loading feature model (Hubert)…",
+      "loading_net": "Loading synthesizer weights…",
+      "warmup": "Warming up the engine (first time is slower)…",
+      "opening_stream": "Opening audio devices…",
+      "swapping": "Switching voice, please wait…",
+      "swap_failed": "Switch failed — still using the previous voice",
       "pth_missing": "No such .pth file: {path}",
       "running": "Converting",
       "bad_settings": "Invalid settings — cannot start",

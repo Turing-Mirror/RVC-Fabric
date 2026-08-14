@@ -20,7 +20,8 @@
   },
   "store": {
     "allSeries": "모든 시리즈",
-    "searchHint": "보이스 / 시리즈 / 동아리 / 제작자 검색…"
+    "searchHint": "보이스 / 시리즈 / 동아리 / 제작자 검색…",
+    "confirmInstall": "설치 확인"
   },
   "dock": {
     "noVoice": "음색 미선택",

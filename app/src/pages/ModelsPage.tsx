@@ -185,6 +185,10 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   const openMenu = (e: MouseEvent<HTMLButtonElement>, model: VoiceModel) => {
     // 不让这一下冒泡到上面那个「点别处就关」，否则刚开就被关掉。
     e.stopPropagation();
+    if (menu && modelKey(menu.model) === modelKey(model)) {
+      setMenu(null);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const w = 168;
     setMenu({

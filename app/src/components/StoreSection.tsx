@@ -119,6 +119,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const [progress, setProgress] = useState("");
   const [err, setErr] = useState("");
   const [thirdAck, setThirdAck] = useState(false);
+  /** 第三方下完后滚到「确认安装」那张卡。 */
+  const [scrollToId, setScrollToId] = useState("");
   // 官方源同样要过一次须知。第三方那条讲的是「来源不可信、pickle 有风险」，
   // 是安全问题；这一条讲的是声音权利，跟音色从哪来无关 —— 图灵镜自己训练的
   // 音色一样是拿别人的声音训出来的。两条内容不同，但都只弹一次。
@@ -166,6 +168,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     void refresh(true);
     void loadStaged();
   }, [reloadToken, refresh, loadStaged]);
+
+  useEffect(() => {
+    if (!scrollToId || !staged[scrollToId]) return;
+    const el = document.getElementById(`store-voice-${scrollToId}`);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    const btn = el?.querySelector<HTMLElement>(".confirm-install");
+    btn?.focus();
+    setScrollToId("");
+  }, [scrollToId, staged]);
 
   useEffect(() => {
     // 组件卸载早于 listen 兑现时，直接丢掉 unlisten 句柄会把注册泄漏到进程结束。
@@ -350,10 +362,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       // 装进本地库的显示名跟当前界面语言一致（仍保留清单里的多语字段作缓存）
       await installStoreVoice({ ...v, name: label });
       // 第三方到这里只是「下完了」，还没装。刷新暂存表让按钮换成
-      // 「查看 / 安装」；官方源才是真的装好了。
+      // 「查看 / 确认安装」；官方源才是真的装好了。
       await loadStaged();
       onInstalled?.();
       await refresh(false);
+      if (v.official === false) setScrollToId(v.id);
     } catch (e) {
       setErr(`${label || v.id}：${String(e)}`);
     } finally {
@@ -890,7 +903,7 @@ function VoiceCard({
     (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"));
 
   return (
-    <div>
+    <div id={v.id ? `store-voice-${v.id}` : undefined}>
       <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
         {showImg ? (
           <img
@@ -940,8 +953,13 @@ function VoiceCard({
           </Btn>
         ) : staged ? (
           <>
-            <Btn primary disabled={busy} onClick={onInstallStaged}>
-              {busy ? t("s.b2c6913616") : t("s.087db63ab1")}
+            <Btn
+              primary
+              disabled={busy}
+              className="confirm-install"
+              onClick={onInstallStaged}
+            >
+              {busy ? t("s.b2c6913616") : t("store.confirmInstall")}
             </Btn>
             <Btn onClick={onView}>{t("s.f7acefd2d4")}</Btn>
             <Btn onClick={onDiscard}>{t("s.3755f56f2f")}</Btn>

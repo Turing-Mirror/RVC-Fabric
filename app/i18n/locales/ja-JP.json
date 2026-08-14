@@ -20,7 +20,8 @@
   },
   "store": {
     "allSeries": "すべてのシリーズ",
-    "searchHint": "音色・シリーズ・部活・作者で検索…"
+    "searchHint": "音色・シリーズ・部活・作者で検索…",
+    "confirmInstall": "インストールを確認"
   },
   "dock": {
     "noVoice": "音声未選択",

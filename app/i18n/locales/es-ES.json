@@ -20,7 +20,8 @@
   },
   "store": {
     "allSeries": "Todas las series",
-    "searchHint": "Buscar voces / series / clubes / autores…"
+    "searchHint": "Buscar voces / series / clubes / autores…",
+    "confirmInstall": "Confirmar instalación"
   },
   "dock": {
     "noVoice": "Sin voz seleccionada",

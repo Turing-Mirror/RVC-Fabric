@@ -180,12 +180,14 @@ pub fn t_vars(key: &str, vars: &HashMap<String, String>) -> String {
     key.to_string()
 }
 
-/// Single display arg: replaces {e}, {a0}, and first {}.
+/// Single display arg: replaces `{e}`, `{a0}`, `{kind}`, `{v0}`, and first `{}`.
 pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
     let v = e.to_string();
     t(key)
         .replace("{e}", &v)
         .replace("{a0}", &v)
+        .replace("{kind}", &v)
+        .replace("{v0}", &v)
         .replacen("{}", &v, 1)
 }
 
@@ -505,6 +507,17 @@ mod tests {
         assert_eq!(pick_str_list(&obj, "highlights"), vec!["English bullet".to_string()]);
         set_locale("zh-CN");
         assert_eq!(pick_str(&obj, "title"), "中文标题");
+    }
+
+    #[test]
+    fn te_fills_kind_placeholder() {
+        let _g = testing::pin("zh-CN");
+        let s = te("s.e1e2bc3a99", &"tts");
+        assert!(s.contains("tts"), "got {s}");
+        assert!(!s.contains("{kind}"), "got {s}");
+        let missing = te("s.22a95f37e3", &"train");
+        assert!(missing.contains("train"), "got {missing}");
+        assert!(!missing.contains("{kind}"), "got {missing}");
     }
 
 }

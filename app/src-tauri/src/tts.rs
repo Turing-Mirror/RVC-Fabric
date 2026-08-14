@@ -211,7 +211,29 @@ pub fn run(
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
-    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc);
+    let log = crate::logging::begin_run(
+        root,
+        crate::logging::CH_TTS,
+        &json!({
+            "text_len": text.chars().count(),
+            "voice": voice,
+            "rate": rate,
+            "pitch": pitch,
+            "use_rvc": use_rvc,
+        }),
+    );
+    crate::logging::shell_log!(
+        "tts run log {}",
+        log.file_name().and_then(|s| s.to_str()).unwrap_or("tts")
+    );
+    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc, &log);
+    match &result {
+        Ok(_) => crate::logging::finish_run(&log, true, "ok"),
+        Err(e) => {
+            crate::logging::note_run(&log, &format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, "error");
+        }
+    }
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         *g = false;
@@ -230,6 +252,7 @@ fn run_inner(
     rate: i32,
     pitch: i32,
     use_rvc: bool,
+    log: &Path,
 ) -> Result<Value, String> {
     let text = text.trim();
     if text.is_empty() {
@@ -279,15 +302,11 @@ fn run_inner(
 
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let log = crate::logging::begin_run(
-        root,
-        crate::logging::CH_TTS,
-        &json!({ "text_len": 0, "model": pth }),
-    );
+    crate::logging::note_run(log, &format!("rvc model {pth}"));
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log)
+        .open(log)
         .ok();
 
     let index = cfg

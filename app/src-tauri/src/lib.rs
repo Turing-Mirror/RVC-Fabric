@@ -1596,6 +1596,7 @@ pub fn run() {
             // reset" — the real settings are in User_Data and just never got
             // written back down to the engine.
             {
+                config::persist_perf_caps(&root);
                 let cfg = config::read(&root);
                 if let Err(e) = config::sync_inuse(&root, &cfg) {
                     logging::shell_log!("inuse sync failed: {e}");

@@ -709,6 +709,13 @@ pub fn run(
         "index_path": index_path,
     });
     let log_path = crate::logging::begin_run(root, crate::logging::CH_STS, &header);
+    crate::logging::shell_log!(
+        "sts run log {}",
+        log_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("sts")
+    );
     let result = run_inner(
         app,
         root,
@@ -733,11 +740,10 @@ pub fn run(
                 .and_then(|x| x.as_array())
                 .map(|a| a.len())
                 .unwrap_or(0);
-            let keep = skipped > 0 || files == 0;
             crate::logging::finish_run(
                 &log_path,
-                keep,
-                if keep {
+                true,
+                if skipped > 0 || files == 0 {
                     "skipped or empty"
                 } else {
                     "ok"

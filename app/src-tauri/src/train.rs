@@ -249,7 +249,32 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
-    let result = run_inner(app, root, &req);
+    let log = crate::logging::begin_run(
+        root,
+        crate::logging::CH_TRAIN,
+        &json!({
+            "exp": req.exp,
+            "dataset": req.dataset,
+            "sample_rate": req.sample_rate,
+            "total_epoch": req.total_epoch,
+            "batch_size": req.batch_size,
+            "save_every": req.save_every,
+            "f0_method": req.f0_method,
+            "resume": req.resume,
+        }),
+    );
+    crate::logging::shell_log!(
+        "train run log {}",
+        log.file_name().and_then(|s| s.to_str()).unwrap_or("train")
+    );
+    let result = run_inner(app, root, &req, &log);
+    match &result {
+        Ok(_) => crate::logging::finish_run(&log, true, "ok"),
+        Err(e) => {
+            crate::logging::note_run(&log, &format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, "error");
+        }
+    }
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
     *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = None;
     if let Err(ref e) = result {
@@ -258,7 +283,12 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
     result
 }
 
-fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, String> {
+fn run_inner(
+    app: &AppHandle,
+    root: &Path,
+    req: &TrainReq,
+    log: &Path,
+) -> Result<Value, String> {
     preflight(root, req)?;
 
     // 参数走临时文件不走命令行：数据集路径里有中文和空格是常态。
@@ -286,11 +316,10 @@ fn run_inner(app: &AppHandle, root: &Path, req: &TrainReq) -> Result<Value, Stri
     .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let log = crate::logging::begin_run(root, crate::logging::CH_TRAIN, &payload);
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log)
+        .open(log)
         .ok();
 
     let mut cmd = Command::new(&py);

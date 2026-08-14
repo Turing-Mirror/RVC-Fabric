@@ -12,8 +12,9 @@
 //!   tts/   separate/   train/   bench/
 //! ```
 //!
-//! Retention is 48 hours by file mtime, swept on startup. Job runs that
-//! finish cleanly may delete their own file; failures stay until they age out.
+//! Retention is 48 hours by file mtime, swept on startup. Job logs are
+//! always kept until they age out — deleting successes left diagnostics
+//! packs with no record that STS/TTS/separate/train had been used.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 static LOG_PATH: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
 /// Serialises appends. Writes are small and rare; contention is not a concern.
@@ -39,6 +40,11 @@ pub const CH_TTS: &str = "tts";
 pub const CH_SEPARATE: &str = "separate";
 pub const CH_TRAIN: &str = "train";
 pub const CH_BENCH: &str = "bench";
+
+/// Every channel the packer and the 48h sweeper should know about.
+pub const CHANNELS: &[&str] = &[
+    CH_SHELL, CH_WORKER, CH_STS, CH_TTS, CH_SEPARATE, CH_TRAIN, CH_BENCH,
+];
 
 /// Point the logger at the product root. Safe to call once; later calls are
 /// ignored so a stray caller cannot redirect the log mid-session.
@@ -120,13 +126,75 @@ pub fn note_run(path: &Path, line: &str) {
     append_file(path, &format!("{stamp} {line}"));
 }
 
-/// End a job log. `keep` = failure / cancel / skipped files.
-pub fn finish_run(path: &Path, keep: bool, summary: &str) {
-    if keep {
-        note_run(path, &format!("=== kept ({summary}) ==="));
-        return;
+/// End a job log. Always keep the file; 48h sweep is the retention policy.
+/// `keep` is accepted so existing callers compile — it no longer deletes.
+pub fn finish_run(path: &Path, _keep: bool, summary: &str) {
+    note_run(path, &format!("=== done ({summary}) ==="));
+}
+
+fn is_log_name(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n.ends_with(".log") || n.ends_with(".log.1")
+}
+
+fn file_meta(p: &Path) -> Value {
+    let meta = fs::metadata(p).ok();
+    let bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+    let mtime = meta
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+    json!({
+        "name": p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+        "bytes": bytes,
+        "mtime": mtime,
+    })
+}
+
+fn list_log_files(dir: &Path) -> Vec<Value> {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && is_log_name(
+                    p.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(""),
+                )
+        })
+        .collect();
+    files.sort();
+    files.iter().map(|p| file_meta(p)).collect()
+}
+
+/// What is actually on disk under `User_Data/logs/`. Goes into the
+/// diagnostics `info.json` so an empty STS folder is visible as "empty"
+/// rather than "packer forgot the channel".
+pub fn inventory(root: &Path) -> Value {
+    let dir = crate::paths::logs_dir(root);
+    let mut channels = serde_json::Map::new();
+    for ch in CHANNELS {
+        let p = dir.join(ch);
+        let files = list_log_files(&p);
+        channels.insert(
+            (*ch).into(),
+            json!({
+                "dir_exists": p.is_dir(),
+                "count": files.len(),
+                "files": files,
+            }),
+        );
     }
-    let _ = fs::remove_file(path);
+    let leftover = list_log_files(&dir);
+    json!({
+        "retain_hours": RETAIN.as_secs() / 3600,
+        "channels": channels,
+        "leftover": leftover,
+    })
 }
 
 /// Delete `*.log` / `*.log.1` under `User_Data/logs` older than [`RETAIN`].
@@ -155,8 +223,7 @@ fn sweep_dir(dir: &Path, cutoff: std::time::SystemTime) -> usize {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        let is_log = name.ends_with(".log") || name.ends_with(".log.1");
-        if !is_log {
+        if !is_log_name(&name) {
             continue;
         }
         let older = fs::metadata(&p)
@@ -217,6 +284,46 @@ mod tests {
     #[test]
     fn retain_is_two_days() {
         assert_eq!(RETAIN, Duration::from_secs(2 * 24 * 3600));
+    }
+
+    #[test]
+    fn finish_run_always_keeps_the_file() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-log-keep-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(&td).unwrap();
+        let p = td.join("sts_ok.log");
+        fs::write(&p, b"header\n").unwrap();
+        finish_run(&p, false, "ok");
+        assert!(p.exists(), "successful job logs must stay for diagnostics");
+        let body = fs::read_to_string(&p).unwrap();
+        assert!(body.contains("done (ok)"));
+        let _ = fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn inventory_lists_empty_channels() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-log-inv-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(td.join("User_Data").join("logs").join("sts")).unwrap();
+        // inventory() joins user_data(root)/logs — fake a product root.
+        let root = &td;
+        fs::create_dir_all(root.join("User_Data").join("logs").join("sts")).unwrap();
+        fs::write(
+            root.join("User_Data").join("logs").join("sts").join("sts_1.log"),
+            b"x",
+        )
+        .unwrap();
+        let inv = inventory(root);
+        assert_eq!(inv["channels"]["sts"]["count"], 1);
+        assert_eq!(inv["channels"]["tts"]["count"], 0);
+        assert_eq!(inv["channels"]["tts"]["dir_exists"], false);
+        let _ = fs::remove_dir_all(&td);
     }
 
     #[test]

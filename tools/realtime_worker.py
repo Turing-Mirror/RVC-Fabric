@@ -16,8 +16,18 @@ import os
 import runpy
 import sys
 import traceback
+import warnings
 from datetime import datetime
 from pathlib import Path
+
+# torch 2.0 prints this on every TypedStorage touch. A single start_vc can
+# dump hundreds of KB and the diagnostics packer used to keep only the tail,
+# so the actual start_vc / delay lines disappeared.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*TypedStorage is deprecated.*",
+    category=UserWarning,
+)
 
 
 def _root() -> Path:
@@ -56,6 +66,9 @@ def _tee_stdio(root: Path) -> None:
                 self._s = secondary
 
             def write(self, data):
+                text = data if isinstance(data, str) else str(data)
+                if "TypedStorage is deprecated" in text or "untyped_storage()" in text:
+                    return
                 try:
                     if self._p is not None:
                         self._p.write(data)

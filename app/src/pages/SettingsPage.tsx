@@ -448,7 +448,7 @@ function SettingsPageImpl({
                   <Slider
                     value={c.num("block_time", 0.25)}
                     min={0.05}
-                    max={1}
+                    max={0.5}
                     step={0.01}
                     defaultValue={0.25}
                     onChange={(v) => c.set("block_time", v)}
@@ -478,7 +478,7 @@ function SettingsPageImpl({
                   <Slider
                     value={c.num("extra_time", 2.5)}
                     min={0.5}
-                    max={5}
+                    max={3}
                     step={0.1}
                     defaultValue={2.5}
                     onChange={(v) => c.set("extra_time", v)}

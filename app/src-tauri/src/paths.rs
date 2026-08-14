@@ -482,8 +482,10 @@ mod cache_clear_tests {
 
     #[test]
     fn clear_user_cache_drops_logs_keeps_models_and_config() {
+        // Must not start with `rvcf-`: clean_temps also sweeps system TEMP
+        // entries with that prefix, and would delete this fixture first.
         let td = std::env::temp_dir().join(format!(
-            "rvcf-cache-clear-{}",
+            "tm-cache-clear-test-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&td);

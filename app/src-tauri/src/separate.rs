@@ -123,7 +123,29 @@ pub fn run(app: &AppHandle, root: &Path, input: &str, output: &str, model: &str)
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
-    let result = run_inner(app, root, input, output, model);
+    let log = crate::logging::begin_run(
+        root,
+        crate::logging::CH_SEPARATE,
+        &json!({
+            "input": input,
+            "output": output,
+            "model": model,
+        }),
+    );
+    crate::logging::shell_log!(
+        "separate run log {}",
+        log.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("separate")
+    );
+    let result = run_inner(app, root, input, output, model, &log);
+    match &result {
+        Ok(_) => crate::logging::finish_run(&log, true, "ok"),
+        Err(e) => {
+            crate::logging::note_run(&log, &format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, "error");
+        }
+    }
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         *g = false;
@@ -140,6 +162,7 @@ fn run_inner(
     input: &str,
     output: &str,
     model: &str,
+    log: &Path,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
@@ -180,11 +203,10 @@ fn run_inner(
     // python.exe 而不是 pythonw：我们要读它的 stdout。窗口用 CREATE_NO_WINDOW
     // 压掉，不然每次分离都会闪一个黑框。
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let log = crate::logging::begin_run(root, crate::logging::CH_SEPARATE, &payload);
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log)
+        .open(log)
         .ok();
 
     let mut cmd = Command::new(&py);

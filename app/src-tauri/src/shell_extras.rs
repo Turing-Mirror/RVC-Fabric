@@ -404,6 +404,15 @@ pub fn run_perf_bench(root: &Path) -> Result<PathBuf, String> {
     Ok(json_out)
 }
 
+fn is_log_file(p: &Path) -> bool {
+    let name = p
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    name.ends_with(".log") || name.ends_with(".log.1")
+}
+
 fn collect_log_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
@@ -414,23 +423,143 @@ fn collect_log_files(dir: &Path, out: &mut Vec<PathBuf>) {
             collect_log_files(&p, out);
             continue;
         }
-        let name = p
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if name.ends_with(".log") || name.ends_with(".log.1") {
+        if is_log_file(&p) {
             out.push(p);
         }
     }
 }
 
-fn tail_bytes(path: &Path, max: usize) -> String {
-    let Ok(data) = std::fs::read(path) else {
-        return String::new();
+fn sort_newest(files: &mut [PathBuf]) {
+    files.sort_by_key(|p| {
+        std::cmp::Reverse(std::fs::metadata(p).and_then(|m| m.modified()).ok())
+    });
+}
+
+/// Newest `cap` logs per channel, plus leftover flat files in the logs root.
+/// A global newest-N list let one flooded worker file crowd out sts/tts.
+fn logs_for_zip(logs: &Path) -> Vec<PathBuf> {
+    const PER_CHANNEL: usize = 8;
+    let mut out = Vec::new();
+    for ch in crate::logging::CHANNELS {
+        let mut files = Vec::new();
+        collect_log_files(&logs.join(ch), &mut files);
+        sort_newest(&mut files);
+        out.extend(files.into_iter().take(PER_CHANNEL));
+    }
+    if let Ok(rd) = std::fs::read_dir(logs) {
+        let mut flat: Vec<PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && is_log_file(p))
+            .collect();
+        sort_newest(&mut flat);
+        out.extend(flat.into_iter().take(PER_CHANNEL));
+    }
+    out
+}
+
+fn read_range(path: &Path, start: u64, len: usize) -> Vec<u8> {
+    use std::io::{Read, Seek, SeekFrom};
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return Vec::new();
     };
-    let start = data.len().saturating_sub(max);
-    String::from_utf8_lossy(&data[start..]).to_string()
+    if f.seek(SeekFrom::Start(start)).is_err() {
+        return Vec::new();
+    }
+    let mut buf = vec![0u8; len];
+    let n = f.read(&mut buf).unwrap_or(0);
+    buf.truncate(n);
+    buf
+}
+
+fn tail_bytes(path: &Path, max: usize) -> String {
+    let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let start = len.saturating_sub(max as u64);
+    let data = read_range(path, start, max);
+    String::from_utf8_lossy(&data).into_owned()
+}
+
+/// Head + tail so a TypedStorage flood cannot erase the start_vc / delay lines.
+fn clip_log(path: &Path, head: usize, tail: usize) -> String {
+    let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0) as usize;
+    if len == 0 {
+        return String::new();
+    }
+    if len <= head.saturating_add(tail) {
+        let data = read_range(path, 0, len);
+        return String::from_utf8_lossy(&data).into_owned();
+    }
+    let head_buf = read_range(path, 0, head);
+    let mut out = String::from_utf8_lossy(&head_buf).into_owned();
+    if let Some(i) = out.rfind('\n') {
+        out.truncate(i + 1);
+    }
+    let skipped = len - head - tail;
+    out.push_str(&format!("\n--- truncated {skipped} bytes ---\n\n"));
+    let tail_buf = read_range(path, (len - tail) as u64, tail);
+    let tail_s = String::from_utf8_lossy(&tail_buf);
+    let tail_s = match tail_s.find('\n') {
+        Some(i) if i < 4096 => tail_s[i + 1..].to_string(),
+        _ => tail_s.into_owned(),
+    };
+    out.push_str(&tail_s);
+    out
+}
+
+fn zip_text(
+    zip: &mut zip::ZipWriter<std::fs::File>,
+    opts: zip::write::FileOptions<'_, ()>,
+    arc: &str,
+    text: &str,
+) -> Result<(), String> {
+    zip.start_file(arc, opts).map_err(|e| e.to_string())?;
+    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())
+}
+
+fn zip_existing(
+    zip: &mut zip::ZipWriter<std::fs::File>,
+    opts: zip::write::FileOptions<'_, ()>,
+    arc: &str,
+    path: &Path,
+) -> Result<(), String> {
+    if !path.is_file() {
+        return Ok(());
+    }
+    match std::fs::read_to_string(path) {
+        Ok(text) => zip_text(zip, opts, arc, &text),
+        Err(_) => Ok(()),
+    }
+}
+
+fn delay_estimate(cfg: &serde_json::Map<String, Value>) -> Value {
+    let block = cfg
+        .get("block_time")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.25);
+    let xf = cfg
+        .get("crossfade_length")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.08);
+    let extra = cfg
+        .get("extra_time")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(2.5);
+    let nr = cfg
+        .get("I_noise_reduce")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let mut algo = block + xf + 0.01;
+    if nr {
+        algo += xf.min(0.04);
+    }
+    json!({
+        "block_ms": (block * 1000.0).round() as i64,
+        "crossfade_ms": (xf * 1000.0).round() as i64,
+        "extra_time_s": extra,
+        "algo_ms_without_device": (algo * 1000.0).round() as i64,
+        "formula": "device_latency + block_time + crossfade + 10ms [+ denoise]",
+        "extra_time_note": "lookback only; not in delay_ms",
+    })
 }
 
 /// Zip logs + machine info + effective settings into `User_Data/diagnostics/`.
@@ -460,6 +589,7 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
     let opts: zip::write::FileOptions<'_, ()> =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
+    let cfg = config::read(root);
     // machine + app info
     let info = json!({
         "app_version": crate::update::APP_VERSION,
@@ -473,28 +603,46 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
         "ui_source": crate::ui_assets::source_label(),
         "worker_alive": worker::is_worker_alive(root),
         "status": worker::status_for_ui(root),
-        "config": Value::Object(config::read(root)),
+        "config": Value::Object(cfg.clone()),
+        "delay_estimate": delay_estimate(&cfg),
+        "log_inventory": crate::logging::inventory(root),
+        "tools": {
+            "sts": crate::sts::status(root),
+            "tts": {
+                "runtime_ready": paths::runtime_ready(root),
+                "model_path": cfg.get("pth_path").and_then(|v| v.as_str()).unwrap_or(""),
+            },
+            "separate": crate::separate::status(root),
+            "train": crate::train::status(root),
+        },
         "perf_note": perf_note,
         "generated_at": stamp,
     });
-    zip.start_file("info.json", opts).map_err(|e| e.to_string())?;
-    zip.write_all(serde_json::to_string_pretty(&info).unwrap_or_default().as_bytes())
-        .map_err(|e| e.to_string())?;
+    zip_text(
+        &mut zip,
+        opts,
+        "info.json",
+        &serde_json::to_string_pretty(&info).unwrap_or_default(),
+    )?;
 
-    // log tails — channel folders (shell/worker/sts/…) plus leftover flat files
+    zip_existing(
+        &mut zip,
+        opts,
+        "configs/inuse/config.json",
+        &paths::inuse_config_path(root),
+    )?;
+    zip_existing(
+        &mut zip,
+        opts,
+        "runtime_control/status.json",
+        &crate::protocol::status_path(root),
+    )?;
+
+    // Per-channel newest files; head+tail so a warning flood cannot drop start_vc.
     let logs = paths::logs_dir(root);
-    let mut log_files: Vec<PathBuf> = Vec::new();
-    collect_log_files(&logs, &mut log_files);
-    log_files.sort();
-    // Newest first, cap so a zip cannot balloon.
-    log_files.sort_by_key(|p| {
-        std::cmp::Reverse(
-            std::fs::metadata(p)
-                .and_then(|m| m.modified())
-                .ok(),
-        )
-    });
-    for p in log_files.into_iter().take(24) {
+    const LOG_HEAD: usize = 128 * 1024;
+    const LOG_TAIL: usize = 384 * 1024;
+    for p in logs_for_zip(&logs) {
         let rel = p
             .strip_prefix(&logs)
             .map(|r| r.to_string_lossy().replace('\\', "/"))
@@ -504,10 +652,8 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
                     .to_string_lossy()
                     .into_owned()
             });
-        let text = tail_bytes(&p, 512 * 1024);
-        zip.start_file(format!("logs/{rel}"), opts)
-            .map_err(|e| e.to_string())?;
-        zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        let text = clip_log(&p, LOG_HEAD, LOG_TAIL);
+        zip_text(&mut zip, opts, &format!("logs/{rel}"), &text)?;
     }
 
     // newest perf report, if any
@@ -760,6 +906,22 @@ mod tests {
         let p = std::env::temp_dir().join("rvcf-tail-test.log");
         std::fs::write(&p, "x".repeat(50_000)).unwrap();
         assert_eq!(tail_bytes(&p, 1000).len(), 1000);
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn clip_log_keeps_head_and_tail() {
+        let p = std::env::temp_dir().join("rvcf-clip-test.log");
+        let mut body = String::from("HEAD-LINE\n");
+        body.push_str(&"m".repeat(20_000));
+        body.push_str("\nTAIL-LINE\n");
+        std::fs::write(&p, &body).unwrap();
+        let clipped = clip_log(&p, 32, 32);
+        assert!(clipped.contains("HEAD-LINE"), "{clipped}");
+        assert!(clipped.contains("TAIL-LINE"), "{clipped}");
+        assert!(clipped.contains("truncated"), "{clipped}");
+        let small = clip_log(&p, 100_000, 100_000);
+        assert!(!small.contains("truncated"));
         let _ = std::fs::remove_file(&p);
     }
 

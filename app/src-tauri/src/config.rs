@@ -215,7 +215,58 @@ pub fn read(root: &Path) -> Map<String, Value> {
         // 全新安装：尚无 app_config，标记语言未确认，前端弹首次语言引导。
         cfg.insert("ui_locale_picked".into(), json!(false));
     }
+    let _ = clamp_realtime_perf(&mut cfg);
     cfg
+}
+
+/// Slider / worker ceiling. 1.0s block_time alone makes delay_ms ≥ 1000.
+pub const BLOCK_TIME_MAX: f64 = 0.50;
+pub const BLOCK_TIME_MIN: f64 = 0.05;
+pub const EXTRA_TIME_MAX: f64 = 3.0;
+pub const EXTRA_TIME_MIN: f64 = 0.5;
+
+fn clamp_key(cfg: &mut Map<String, Value>, key: &str, min: f64, max: f64) -> Option<String> {
+    let Some(v) = cfg.get(key).and_then(|x| x.as_f64()) else {
+        return None;
+    };
+    let c = v.clamp(min, max);
+    if (c - v).abs() < 1e-9 {
+        return None;
+    }
+    cfg.insert(key.to_string(), json!(c));
+    Some(format!("{key} {v} → {c}"))
+}
+
+/// Pull block_time / extra_time back into the range the sliders advertise.
+/// Returns a note per key that moved.
+pub fn clamp_realtime_perf(cfg: &mut Map<String, Value>) -> Vec<String> {
+    let mut notes = Vec::new();
+    if let Some(n) = clamp_key(cfg, "block_time", BLOCK_TIME_MIN, BLOCK_TIME_MAX) {
+        notes.push(n);
+    }
+    if let Some(n) = clamp_key(cfg, "extra_time", EXTRA_TIME_MIN, EXTRA_TIME_MAX) {
+        notes.push(n);
+    }
+    notes
+}
+
+/// Write clamped perf keys back to app_config so the next start matches the worker.
+pub fn persist_perf_caps(root: &Path) {
+    let path = paths::app_config_path(root);
+    if !path.is_file() {
+        return;
+    }
+    let mut raw = read_json(&path);
+    let notes = clamp_realtime_perf(&mut raw);
+    if notes.is_empty() {
+        return;
+    }
+    if let Ok(text) = serde_json::to_string_pretty(&Value::Object(raw)) {
+        let _ = write_atomic(&path, &text);
+    }
+    for n in notes {
+        crate::logging::shell_log!("perf cap: {n}");
+    }
 }
 
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
@@ -313,6 +364,7 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false)),
     );
+    let _ = clamp_realtime_perf(&mut out);
     sanitize_inuse(root, &mut out);
     let text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| e.to_string())?;
     write_atomic(&path, &text).map_err(|e| crate::i18n::te("s.4ad9fdccd9", &(e)))
@@ -514,6 +566,18 @@ pub fn describe() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn realtime_perf_caps_cut_one_second_blocks() {
+        let mut m = Map::new();
+        m.insert("block_time".into(), json!(1));
+        m.insert("extra_time".into(), json!(5));
+        let notes = clamp_realtime_perf(&mut m);
+        assert_eq!(notes.len(), 2);
+        assert_eq!(m["block_time"], json!(BLOCK_TIME_MAX));
+        assert_eq!(m["extra_time"], json!(EXTRA_TIME_MAX));
+        assert!(clamp_realtime_perf(&mut m).is_empty());
+    }
 
     #[test]
     fn hot_and_cold_do_not_overlap() {

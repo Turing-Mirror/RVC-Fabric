@@ -317,7 +317,7 @@
     "002dcbcd28": "Product root resolved automatically",
     "004a3a2b67": "Need help? Go to Help",
     "007e8f085e": "Voice pack {e}",
-    "0096454995": "Save multiple parameter presets (pitch / effects / performance) per voice, switch with one click, and export or import presets to share.",
+    "0096454995": "Each voice has its own default parameters; pitch / effects / performance edits save to the current profile. You can also save extra presets and switch, export, or import them.",
     "0196cf51cf": "Performance test done: {}",
     "01eba6e7b6": "Voice files missing or incomplete",
     "02791c87b8": "Loudness envelope",

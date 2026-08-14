@@ -317,7 +317,7 @@
     "002dcbcd28": "Racine du produit détectée automatiquement",
     "004a3a2b67": "Vous ne savez pas ? Allez dans l'Aide",
     "007e8f085e": "Pack de voix {e}",
-    "0096454995": "Enregistrez plusieurs préréglages de paramètres (hauteur/effets/performances) par voix, passez de l'un à l'autre en un clic, et exportez-les ou importez ceux des autres.",
+    "0096454995": "Chaque voix a ses propres paramètres par défaut ; les changements de hauteur/effets/performances s'enregistrent dans le profil actuel. Vous pouvez aussi enregistrer d'autres préréglages et les changer, les exporter ou les importer.",
     "0196cf51cf": "Test de performance effectué : {}",
     "01eba6e7b6": "Fichiers de la voix manquants ou incomplets",
     "02791c87b8": "Enveloppe de volume",

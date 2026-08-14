@@ -317,7 +317,7 @@
     "002dcbcd28": "Raíz del producto detectada automáticamente",
     "004a3a2b67": "¿No sabes usarlo? Ve a Ayuda",
     "007e8f085e": "Paquete de voz {e}",
-    "0096454995": "Guarda varios presets de parámetros (tono/efectos/rendimiento) por voz, cambia entre ellos con un clic y expórtalos o importa los de otros.",
+    "0096454995": "Cada voz tiene sus parámetros por defecto; los cambios de tono/efectos/rendimiento se guardan en el perfil actual. También puedes guardar más presets y cambiarlos, exportarlos o importarlos.",
     "0196cf51cf": "Prueba de rendimiento realizada: {}",
     "01eba6e7b6": "Faltan archivos de la voz o están incompletos",
     "02791c87b8": "Envolvente de volumen",

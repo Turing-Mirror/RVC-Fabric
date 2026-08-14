@@ -5,6 +5,7 @@ import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { listen } from "@tauri-apps/api/event";
 import { setHot } from "../lib/engine";
 import { t } from "../i18n/t";
 import { askConfirm, askPrompt } from "../lib/webDialog";
@@ -140,6 +141,25 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
 
   useEffect(() => {
     void reloadPanels(selected);
+  }, [selected, reloadPanels]);
+
+  useEffect(() => {
+    if (!selected?.dir) return;
+    let disposed = false;
+    let un: (() => void) | undefined;
+    void listen<{ hot?: Record<string, unknown> }>("config-changed", (ev) => {
+      const hot = ev.payload?.hot;
+      if (!hot) return;
+      if (hot.pitch == null && hot.formant == null) return;
+      void reloadPanels(selected);
+    }).then((fn) => {
+      if (disposed) fn();
+      else un = fn;
+    });
+    return () => {
+      disposed = true;
+      un?.();
+    };
   }, [selected, reloadPanels]);
 
   useEffect(() => {

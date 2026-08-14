@@ -541,10 +541,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             { id: "series", label: t("s.1ae90bfb23") },
           ]}
         />
-        {grouping === "series" &&
-        q.trim() &&
-        seriesGroups &&
-        seriesGroups.length > 0 ? (
+        {grouping === "series" && seriesGroups && seriesGroups.length > 0 ? (
           <select
             value={seriesFocus}
             onChange={(e) => {

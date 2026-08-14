@@ -394,7 +394,7 @@
     "1be7ae4fc2": "Nom",
     "1bedd33b11": "{MAX_CHARS} caractères max à la fois : découpez en plusieurs fois",
     "1bf4a01d78": "Voix de femme mûre",
-    "1ca9f4246d": "Taille du bloc : longueur du morceau d'audio traité à chaque fois. Plus petit = moins de latence mais plus de charge GPU/CPU ; trop petit, le son saccade. Défaut 0,25 s. À 0,5 s le bloc seul fait 500 ms ; avec la latence périphérique, le délai affiché peut approcher ou dépasser 1 s.\nRelancez le changement de voix pour appliquer.",
+    "1ca9f4246d": "Taille du bloc : longueur du morceau d'audio traité à chaque fois. Plus petit = moins de latence mais plus de charge GPU/CPU ; trop petit, le son saccade.\nRelancez le changement de voix pour appliquer.",
     "1cac8ac7f5": "Traitement…",
     "1cd12cf03d": "Abaisse doucement le bruit de fond pendant les pauses de parole ; plus délicat que le seuil de réponse.",
     "1cd80fd7a8": "Renommer",

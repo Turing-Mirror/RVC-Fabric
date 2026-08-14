@@ -394,7 +394,7 @@
     "1be7ae4fc2": "Name",
     "1bedd33b11": "{MAX_CHARS} characters max at a time — split it into chunks",
     "1bf4a01d78": "Mature female voice",
-    "1ca9f4246d": "Block size: how long each processed audio slice is. Smaller = lower latency but more GPU/CPU load; too small makes audio choppy. Default 0.25 s. At 0.5 s the block alone is 500 ms; plus device latency the on-screen delay can approach or exceed 1 s.\nRestart the voice changer for changes to take effect.",
+    "1ca9f4246d": "Block size: how long each processed audio slice is. Smaller = lower latency but more GPU/CPU load; too small makes audio choppy.\nRestart the voice changer for changes to take effect.",
     "1cac8ac7f5": "Processing…",
     "1cd12cf03d": "Gently ducks background noise between phrases — softer than the response threshold.",
     "1cd80fd7a8": "Rename",

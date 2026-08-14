@@ -2284,9 +2284,9 @@ if __name__ == "__main__":
                 "formant": data.get("formant", 0.0),
                 "index_rate": data.get("index_rate", 0),
                 "rms_mix_rate": data.get("rms_mix_rate", 0),
-                "block_time": min(0.50, max(0.05, float(data.get("block_time", 0.25) or 0.25))),
+                "block_time": data.get("block_time", 0.25),
                 "crossfade_length": data.get("crossfade_length", 0.05),
-                "extra_time": min(3.0, max(0.5, float(data.get("extra_time", 2.5) or 2.5))),
+                "extra_time": data.get("extra_time", 2.5),
                 "n_cpu": data.get("n_cpu", 4),
                 "I_noise_reduce": bool(data.get("I_noise_reduce")),
                 "O_noise_reduce": bool(data.get("O_noise_reduce")),
@@ -2676,11 +2676,6 @@ if __name__ == "__main__":
                     float(getattr(self.gui_config, "extra_time", 2.5) or 2.5),
                     getattr(self.gui_config, "sg_hostapi", ""),
                 )
-                if float(getattr(self.gui_config, "block_time", 0) or 0) >= 0.5:
-                    printt(
-                        "warning: block_time=%.2fs already ≥ 500ms before device latency",
-                        float(self.gui_config.block_time),
-                    )
                 # persist
                 try:
                     settings = {

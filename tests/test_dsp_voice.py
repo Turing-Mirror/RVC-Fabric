@@ -101,6 +101,69 @@ class ConstantsWithoutNumpyTests(unittest.TestCase):
         self.assertEqual(clamp_params("nope", {"x": 1}), {})
 
 
+class ShellContractTests(unittest.TestCase):
+    """壳层、引擎、模板三边必须认得同一批 dsp 键。
+
+    fx 那条链就是这么掉过一次的：引擎一直支持，壳的 HOT_KEYS 里一个都没有，
+    于是设置写进去了、永远推不到 worker。静态看两边都「正常」，只有对着列表
+    比才看得出来。
+    """
+
+    KEYS = ("dsp_enabled", "dsp_preset", "dsp_params")
+
+    def _rust_hot_keys(self):
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        head = "pub const HOT_KEYS: &[&str] = &["
+        start = src.index(head) + len(head)
+        body = src[start : src.index("];", start)]
+        return {p.split('"')[1] for p in body.splitlines() if p.count('"') >= 2}
+
+    def test_dsp_keys_are_shell_hot_keys(self):
+        """必须是热键：换预设不该重开流，DSP 模式的卖点就是即时。"""
+        rust = self._rust_hot_keys()
+        missing = [k for k in self.KEYS if k not in rust]
+        self.assertEqual(missing, [], f"壳层 HOT_KEYS 缺：{missing}")
+
+    def test_dsp_keys_are_not_cold_keys(self):
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        head = "pub const COLD_KEYS: &[&str] = &["
+        start = src.index(head) + len(head)
+        body = src[start : src.index("];", start)]
+        cold = {p.split('"')[1] for p in body.splitlines() if p.count('"') >= 2}
+        clash = [k for k in self.KEYS if k in cold]
+        self.assertEqual(clash, [], f"这些键同时被列成冷键：{clash}")
+
+    def test_rust_defaults_exist(self):
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        for key in self.KEYS:
+            self.assertIn(f'"{key}".into()', src, f"config.rs defaults() 里没有 {key}")
+
+    def test_inuse_template_has_them(self):
+        from scripts.inuse_template import CLEAN_INUSE as DEFAULTS
+
+        for key in self.KEYS:
+            self.assertIn(key, DEFAULTS, f"inuse 模板缺 {key}")
+        self.assertFalse(DEFAULTS["dsp_enabled"], "DSP 默认必须是关的")
+
+    def test_engine_reads_them(self):
+        """gui_v1 得真的从配置里读这三个键，光有默认值不算通。"""
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        for key in self.KEYS:
+            self.assertIn(f'data.get("{key}")', src, f"gui_v1 没从配置读 {key}")
+
+    def test_engine_allows_start_without_a_model(self):
+        """开了 DSP 就该能不选音色直接开声 —— 这是整个模式的前提。"""
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn("dsp_only", src)
+        self.assertIn('self.function = "fx"', src)
+
+
 def _tone(f0=200.0, secs=1.0, harmonics=25):
     """谐波丰富的周期信号 —— 基频和共振峰都能量出来。"""
     n = int(SR * secs)

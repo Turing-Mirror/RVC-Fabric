@@ -179,12 +179,9 @@ class Pipeline(object):
                 del self.model_rmvpe.model
                 del self.model_rmvpe
                 logger.info("Cleaning ortruntime memory")
-        else:
-            # harvest / pm / crepe 等没有细粒度回调时至少给出起止。
-            pass
 
         if f0_method != "rmvpe":
-            # 非 rmvpe：整段算完再推到 100%（中间无法安全打断模型）。
+            # harvest / pm / crepe 中途没法安全打断，只能整段算完再推到 95%。
             _p(0.95)
 
         f0 *= pow(2, f0_up_key / 12)

@@ -482,6 +482,15 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     emit_record(app, "start", None, Some(0.0), &crate::i18n::t("s.stsRecordOpening"));
 
+    // stderr 必须落文件，不能 piped 后不读：管道满了子进程就卡在 write 上，
+    // 再也不吐 stdout，这个循环于是永远等下去，连 stop 文件都读不到。
+    // sounddevice / PortAudio 开设备时本来就爱往 stderr 写警告。
+    let errfile = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crate::logging::daily_path(root, crate::logging::CH_STS))
+        .ok();
+
     let mut cmd = Command::new(&py);
     cmd.arg(script.as_os_str())
         .arg(req.as_os_str())
@@ -489,7 +498,10 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
         .envs(crate::worker::env_for_runtime(root))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(match errfile {
+            Some(f) => Stdio::from(f),
+            None => Stdio::null(),
+        });
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -982,25 +994,9 @@ fn run_inner(
                     // 终态清单为准；过程中 skip 事件可能已塞过。
                     skipped = arr.clone();
                 }
-                // 推一条 100% 完成，避免界面停在最后一个文件的中间百分比。
-                let done_msg = if msg.is_empty() {
-                    crate::i18n::t("s.e43ef3d56a")
-                } else {
-                    msg.to_string()
-                };
-                emit_full(
-                    app,
-                    "done",
-                    total,
-                    total,
-                    &done_msg,
-                    Some(100),
-                    Some("done"),
-                    Some(total),
-                    ok_n.or(Some(files.len() as u64)),
-                    skip_n.or(Some(skipped.len() as u64)),
-                    None,
-                );
+                // 这里**不**推 100%。worker 说完 done 之后还可能非零退出，
+                // 先亮一次「完成」再翻成红字，用户只会觉得程序在骗人。
+                // 收尾那条 done 在 child.wait() 和错误判定之后发。
             }
             "error" => fail = Some(msg.to_string()),
             _ => {}

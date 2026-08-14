@@ -42,6 +42,20 @@ import {
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
 
+type VoiceProg = { percent: number; message: string; phase: string };
+
+function clearVoiceProg(
+  setProg: Dispatch<SetStateAction<Record<string, VoiceProg>>>,
+  id: string,
+) {
+  setProg((prev) => {
+    if (!(id in prev)) return prev;
+    const next = { ...prev };
+    delete next[id];
+    return next;
+  });
+}
+
 type SeriesNode = {
   key: string;
   voices: StoreVoice[];
@@ -116,7 +130,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const MAX_CONCURRENT = 2;
   const [running, setRunning] = useState<string[]>([]);
   const [queued, setQueued] = useState<string[]>([]);
-  const [progress, setProgress] = useState("");
+  /** Per-voice download progress. The old single string at the top of the
+   *  section was overwritten when two downloads ran at once. */
+  const [prog, setProg] = useState<Record<string, VoiceProg>>({});
   const [err, setErr] = useState("");
   const [thirdAck, setThirdAck] = useState(false);
   /** 第三方下完后滚到「确认安装」那张卡。 */
@@ -190,11 +206,17 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       phase?: string;
     }>("store-progress", (ev) => {
       const p = ev.payload;
-      setProgress(
-        `${p.message || p.phase || t("s.327d59b5bd")} ${
-          p.percent != null ? `· ${p.percent}%` : ""
-        }`,
-      );
+      const id = (p.voice_id || "").trim();
+      if (!id) return;
+      const pct = p.percent != null ? Math.max(0, Math.min(100, p.percent)) : undefined;
+      setProg((prev) => ({
+        ...prev,
+        [id]: {
+          percent: pct ?? prev[id]?.percent ?? 0,
+          message: p.message || prev[id]?.message || "",
+          phase: p.phase || prev[id]?.phase || "",
+        },
+      }));
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;
@@ -371,6 +393,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       setErr(`${label || v.id}：${String(e)}`);
     } finally {
       setRunning((r) => r.filter((x) => x !== v.id));
+      clearVoiceProg(setProg, v.id);
       // Promote the next queued item, if any.
       setQueued((qq) => {
         const [next, ...rest] = qq;
@@ -396,7 +419,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       setErr(`${label || v.id}：${String(e)}`);
     } finally {
       setRunning((r) => r.filter((x) => x !== v.id));
+      clearVoiceProg(setProg, v.id);
     }
+  };
+
+  const cancelOne = (id: string) => {
+    if (queued.includes(id)) {
+      setQueued((qq) => qq.filter((x) => x !== id));
+      return;
+    }
+    void cancelStoreDownload(id);
   };
 
   const viewStaged = async (v: StoreVoice) => {
@@ -457,7 +489,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     v,
     busy: running.includes(v.id),
     queued: queued.includes(v.id),
+    progress: prog[v.id],
     onInstall: () => void install(v),
+    onCancel: () => cancelOne(v.id),
     staged: staged[v.id],
     onView: () => void viewStaged(v),
     onInstallStaged: () => void installStaged(v),
@@ -566,25 +600,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">{t("s.7fe9bcf336")}</div>
       ) : null}
 
-      {err || progress ? (
-        <div className="mb-3 text-[12px]">
-          {progress ? <span className="text-[var(--accent)]">{progress}</span> : null}
-          {err ? (
-            <span className="text-[color-mix(in_srgb,#c44_90%,var(--ink))] block mt-0.5">
-              {err}
-            </span>
-          ) : null}
-          {running.length ? (
-            <Btn
-              className="mt-1"
-              onClick={() => {
-                void cancelStoreDownload();
-                setRunning([]);
-                setQueued([]);
-                setProgress(t("s.a5ffdc95ee"));
-              }}
-            >{t("s.7115f2e29d")}</Btn>
-          ) : null}
+      {err ? (
+        <div className="mb-3 text-[12px] text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
+          {err}
         </div>
       ) : null}
 
@@ -746,7 +764,9 @@ type CardPropsFn = (v: StoreVoice) => {
   v: StoreVoice;
   busy: boolean;
   queued?: boolean;
+  progress?: VoiceProg;
   onInstall: () => void;
+  onCancel: () => void;
   staged?: StagedVoice;
   onView: () => void;
   onInstallStaged: () => void;
@@ -842,6 +862,28 @@ function SeriesPageGrid({
   );
 }
 
+/** Thin fill on the cover — stays on the card, no banner jumping around. */
+function CardProgressBar({ percent }: { percent: number }) {
+  const pct = Math.max(0, Math.min(100, percent));
+  const reduce =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return (
+    <div
+      className="absolute left-0 right-0 bottom-0 h-[3px] bg-[color-mix(in_srgb,var(--ink)_16%,transparent)]"
+      aria-hidden
+    >
+      <div
+        className="h-full bg-[var(--accent)]"
+        style={{
+          width: `${pct}%`,
+          transition: reduce ? undefined : "width 160ms var(--ease)",
+        }}
+      />
+    </div>
+  );
+}
+
 /**
  * 一张音色卡。形状和模型页的卡一致：4:3 封面 + 名字 + 一行元信息。
  *
@@ -852,7 +894,9 @@ function VoiceCard({
   v,
   busy,
   queued = false,
+  progress,
   onInstall,
+  onCancel,
   staged,
   onView,
   onInstallStaged,
@@ -863,7 +907,9 @@ function VoiceCard({
   busy: boolean;
   /** Waiting behind the two running downloads. */
   queued?: boolean;
+  progress?: VoiceProg;
   onInstall: () => void;
+  onCancel: () => void;
   /** 已下载待确认的文件信息；没有就是还没下。 */
   staged?: StagedVoice;
   onView: () => void;
@@ -931,6 +977,7 @@ function VoiceCard({
         <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--ink)] drop-shadow">
           {coverBadge}
         </span>
+        {busy && !staged ? <CardProgressBar percent={progress?.percent ?? 0} /> : null}
       </div>
       <div className="text-[14.5px] font-semibold mt-2.5 truncate" title={title}>
         {title}
@@ -964,9 +1011,26 @@ function VoiceCard({
             <Btn onClick={onView}>{t("s.f7acefd2d4")}</Btn>
             <Btn onClick={onDiscard}>{t("s.3755f56f2f")}</Btn>
           </>
+        ) : busy ? (
+          <>
+            <Btn primary disabled>
+              {t("s.65188d08a2")}
+            </Btn>
+            <Btn onClick={onCancel}>{t("s.4d0b4688c7")}</Btn>
+            <span className="text-[11.5px] text-[var(--meta)] tabular-nums">
+              {Math.round(progress?.percent ?? 0)}%
+            </span>
+          </>
+        ) : queued ? (
+          <>
+            <Btn primary disabled>
+              {t("s.531e3e438f")}
+            </Btn>
+            <Btn onClick={onCancel}>{t("s.4d0b4688c7")}</Btn>
+          </>
         ) : (
-          <Btn primary disabled={busy || queued} onClick={onInstall}>
-            {busy ? t("s.65188d08a2") : queued ? t("s.531e3e438f") : t("s.2b9d013177")}
+          <Btn primary onClick={onInstall}>
+            {t("s.2b9d013177")}
           </Btn>
         )}
       </div>

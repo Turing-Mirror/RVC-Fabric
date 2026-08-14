@@ -216,7 +216,52 @@ pub fn read(root: &Path) -> Map<String, Value> {
         cfg.insert("ui_locale_picked".into(), json!(false));
     }
     let _ = clamp_realtime_perf(&mut cfg);
+    let _ = apply_device_alias(&mut cfg);
     cfg
+}
+
+/// Old shells wrote `input_device`; the engine only reads `sg_input_device`.
+/// Fill the empty side. Never overwrite a non-empty sg_ value — Broadcast
+/// may be an intentional choice.
+fn apply_device_alias(cfg: &mut Map<String, Value>) -> Vec<String> {
+    let mut notes = Vec::new();
+    let sg = cfg
+        .get("sg_input_device")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let legacy = cfg
+        .get("input_device")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if sg.is_empty() && !legacy.is_empty() {
+        cfg.insert("sg_input_device".into(), json!(legacy.clone()));
+        notes.push(format!("sg_input_device ← input_device ({legacy})"));
+    } else if !sg.is_empty() && !legacy.is_empty() && sg != legacy {
+        notes.push(format!(
+            "input_device={legacy}  sg_input_device={sg} (engine uses sg_)"
+        ));
+    }
+    let sg_out = cfg
+        .get("sg_output_device")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let legacy_out = cfg
+        .get("output_device")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if sg_out.is_empty() && !legacy_out.is_empty() {
+        cfg.insert("sg_output_device".into(), json!(legacy_out.clone()));
+        notes.push(format!("sg_output_device ← output_device ({legacy_out})"));
+    }
+    notes
 }
 
 /// Slider / worker ceiling. 1.0s block_time alone makes delay_ms ≥ 1000.
@@ -250,22 +295,23 @@ pub fn clamp_realtime_perf(cfg: &mut Map<String, Value>) -> Vec<String> {
     notes
 }
 
-/// Write clamped perf keys back to app_config so the next start matches the worker.
+/// Write clamped perf keys and leftover device aliases back to app_config.
 pub fn persist_perf_caps(root: &Path) {
     let path = paths::app_config_path(root);
     if !path.is_file() {
         return;
     }
     let mut raw = read_json(&path);
-    let notes = clamp_realtime_perf(&mut raw);
-    if notes.is_empty() {
-        return;
-    }
-    if let Ok(text) = serde_json::to_string_pretty(&Value::Object(raw)) {
-        let _ = write_atomic(&path, &text);
+    let mut notes = clamp_realtime_perf(&mut raw);
+    notes.extend(apply_device_alias(&mut raw));
+    let changed = notes.iter().any(|n| n.contains('←') || n.contains('→'));
+    if changed {
+        if let Ok(text) = serde_json::to_string_pretty(&Value::Object(raw)) {
+            let _ = write_atomic(&path, &text);
+        }
     }
     for n in notes {
-        crate::logging::shell_log!("perf cap: {n}");
+        crate::logging::shell_log!("config: {n}");
     }
 }
 
@@ -389,6 +435,18 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         }
         if k == "monitor_self" || k == "monitor_device" {
             touched_monitor = true;
+        }
+        // Keep the leftover `input_device` alias in sync so old fields
+        // stop contradicting what the settings page just wrote.
+        if k == "sg_input_device" {
+            if let Some(s) = v.as_str() {
+                saved.insert("input_device".into(), json!(s));
+            }
+        }
+        if k == "sg_output_device" {
+            if let Some(s) = v.as_str() {
+                saved.insert("output_device".into(), json!(s));
+            }
         }
         // 主显卡不是引擎配置键，它改的是 worker 进程的环境变量，所以既不该
         // 进 inuse（touched_engine），也不能靠 is_cold 拿到重启提示 ——
@@ -566,6 +624,26 @@ pub fn describe() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leftover_input_device_fills_empty_sg_key() {
+        let mut m = Map::new();
+        m.insert("input_device".into(), json!("麦克风 (Realtek(R) Audio)"));
+        m.insert("sg_input_device".into(), json!(""));
+        let notes = apply_device_alias(&mut m);
+        assert_eq!(m["sg_input_device"], json!("麦克风 (Realtek(R) Audio)"));
+        assert!(notes.iter().any(|n| n.contains("←")));
+    }
+
+    #[test]
+    fn leftover_input_device_does_not_override_broadcast() {
+        let mut m = Map::new();
+        m.insert("input_device".into(), json!("麦克风 (Realtek(R) Audio)"));
+        m.insert("sg_input_device".into(), json!("麦克风 (NVIDIA Broadcast)"));
+        let notes = apply_device_alias(&mut m);
+        assert_eq!(m["sg_input_device"], json!("麦克风 (NVIDIA Broadcast)"));
+        assert!(notes.iter().any(|n| n.contains("engine uses sg_")));
+    }
 
     #[test]
     fn realtime_perf_caps_cut_one_second_blocks() {

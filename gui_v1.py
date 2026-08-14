@@ -318,47 +318,21 @@ if __name__ == "__main__":
                 self.launcher()
 
         def _pick_default_devices(self, data):
-            """Prefer real mic in + CABLE Input out (VB-Cable / VoiceMeeter path)."""
-            def _match(names, keywords, exclude=()):
-                for n in names:
-                    low = n.lower()
-                    if any(x in low for x in exclude):
-                        continue
-                    if any(k in low for k in keywords):
-                        return n
-                return None
+            """Fill only missing sides. Never treat NVIDIA Broadcast as a real mic."""
+            from tools.device_pick import fill_missing_devices
 
-            ins = list(self.input_devices or [])
-            outs = list(self.output_devices or [])
-            # Input: real mic — avoid cable/voicemeeter virtual outputs as mic
-            mic = _match(
-                ins,
-                ("microphone", "mic", "麦克风", "array"),
-                exclude=("cable", "voicemeeter", "vb-audio", "virtual"),
+            inn, out, notes = fill_missing_devices(
+                str(data.get("sg_input_device") or ""),
+                str(data.get("sg_output_device") or ""),
+                self.input_devices or [],
+                self.output_devices or [],
             )
-            if mic is None and ins:
-                mic = next(
-                    (
-                        n
-                        for n in ins
-                        if "cable" not in n.lower() and "voicemeeter" not in n.lower()
-                    ),
-                    ins[0],
-                )
-            # Output: CABLE Input / VoiceMeeter Input (game apps listen on CABLE Output)
-            cable_out = _match(
-                outs,
-                ("cable input", "voicemeeter input", "vb-audio"),
-                exclude=("output",),
-            )
-            if cable_out is None:
-                cable_out = _match(outs, ("cable input", "cable"))
-            if cable_out is None and outs:
-                cable_out = outs[0]
-            if mic:
-                data["sg_input_device"] = mic
-            if cable_out:
-                data["sg_output_device"] = cable_out
+            if inn:
+                data["sg_input_device"] = inn
+            if out:
+                data["sg_output_device"] = out
+            for n in notes:
+                printt("device pick: %s", n)
             return data
 
         def load(self):
@@ -393,12 +367,6 @@ if __name__ == "__main__":
                     try:
                         if data.get("sg_hostapi") in self.hostapis:
                             self.update_devices(hostapi_name=data["sg_hostapi"])
-                            if (
-                                data.get("sg_input_device") not in self.input_devices
-                                or data.get("sg_output_device") not in self.output_devices
-                            ):
-                                self.update_devices(hostapi_name=data["sg_hostapi"])
-                                data = self._pick_default_devices(data)
                         else:
                             # Prefer MME for Cable compatibility when present
                             if "MME" in self.hostapis:
@@ -407,7 +375,10 @@ if __name__ == "__main__":
                             else:
                                 data["sg_hostapi"] = self.hostapis[0]
                                 self.update_devices(hostapi_name=self.hostapis[0])
-                            data = self._pick_default_devices(data)
+                        # Resolve truncated names; only fill a side that is gone.
+                        # Used to re-pick BOTH when only the output name missed,
+                        # which swapped a saved Realtek mic for NVIDIA Broadcast.
+                        data = self._pick_default_devices(data)
                     except Exception:
                         printt("load: 设备刷新失败，保留已保存的配置")
                         traceback.print_exc()
@@ -415,17 +386,15 @@ if __name__ == "__main__":
                 # 读配置失败只影响本次启动：返回默认值，但绝不写文件。
                 # 以前这里 open(..., "w") 会截断 inuse，用户参数全丢。
                 printt("load failed, using defaults (%s)", traceback.format_exc())
+                from tools.device_pick import pick_default_input, pick_default_output
+
                 data = {
                     "pth_path": "",
                     "index_path": "",
                     "sg_hostapi": self.hostapis[0] if self.hostapis else "",
                     "sg_wasapi_exclusive": False,
-                    "sg_input_device": (
-                        self.input_devices[0] if self.input_devices else ""
-                    ),
-                    "sg_output_device": (
-                        self.output_devices[0] if self.output_devices else ""
-                    ),
+                    "sg_input_device": pick_default_input(self.input_devices or []),
+                    "sg_output_device": pick_default_output(self.output_devices or []),
                     "sr_type": "sr_model",
                     "threhold": -48,
                     "pitch": 0,
@@ -2138,21 +2107,10 @@ if __name__ == "__main__":
             ]
 
         def _resolve_device_name(self, name, names):
-            """Exact or prefix match (saved names are often truncated by UI/JSON)."""
-            if not name or not names:
-                return None
-            if name in names:
-                return name
-            # Prefix / contains match for truncated MME names
-            for n in names:
-                if n.startswith(name) or name.startswith(n[: max(8, len(name) - 2)]):
-                    return n
-            # Fuzzy: strip spaces compare head
-            head = name[:24].lower()
-            for n in names:
-                if n[:24].lower() == head or head in n.lower():
-                    return n
-            return None
+            """Exact or truncated-MME prefix. See tools.device_pick.resolve_device_name."""
+            from tools.device_pick import resolve_device_name
+
+            return resolve_device_name(name or "", names or [])
 
         def set_devices(self, input_device, output_device):
             """设置输入输出设备（允许截断的设备名）。"""
@@ -2170,8 +2128,18 @@ if __name__ == "__main__":
             ]
             self.gui_config.sg_input_device = in_name
             self.gui_config.sg_output_device = out_name
-            printt("Input device: %s:%s", str(sd.default.device[0]), in_name)
-            printt("Output device: %s:%s", str(sd.default.device[1]), out_name)
+            printt(
+                "Input device: %s:%s (requested=%r)",
+                str(sd.default.device[0]),
+                in_name,
+                input_device,
+            )
+            printt(
+                "Output device: %s:%s (requested=%r)",
+                str(sd.default.device[1]),
+                out_name,
+                output_device,
+            )
 
         def get_device_samplerate(self):
             return int(
@@ -2352,22 +2320,8 @@ if __name__ == "__main__":
             os.environ["RVC_CUDA_GRAPH"] = (
                 "1" if bool(data.get("cuda_graph", False)) else "0"
             )
-            # Fill missing devices with defaults
-            if (
-                values["sg_input_device"] not in (self.input_devices or [])
-                and self.input_devices
-            ):
-                values = self._pick_default_devices(values)
-                if "sg_input_device" not in values or not values["sg_input_device"]:
-                    values["sg_input_device"] = self.input_devices[0]
-            if (
-                values["sg_output_device"] not in (self.output_devices or [])
-                and self.output_devices
-            ):
-                if not values.get("sg_output_device"):
-                    values = self._pick_default_devices(values)
-                if values["sg_output_device"] not in self.output_devices:
-                    values["sg_output_device"] = self.output_devices[0]
+            # Resolve truncated names; only fill a side that is actually gone.
+            values = self._pick_default_devices(values)
             # Fix virtual monitor targets (Steam Speakers / CABLE / empty)
             if values.get("monitor_enabled"):
                 mon = str(values.get("monitor_device") or "")

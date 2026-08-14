@@ -1360,7 +1360,10 @@
     "cacheClearDesc": "Environ {v0} Mo peuvent être libérés : journaux, temporaires et téléchargements incomplets.",
     "cacheClearConfirm": "Cela supprime les journaux, les fichiers TEMP et les téléchargements incomplets. La bibliothèque de voix et les réglages restent. Continuer ?",
     "cacheClearDone": "Environ {v0} Mo ({v1} fichiers) ont été libérés.",
-    "cacheClearFail": "Impossible de vider le cache : {v0}"
+    "cacheClearFail": "Impossible de vider le cache : {v0}",
+    "stsHotWorkerGone": "Le processus du moteur s'est arrêté pendant la conversion. Réessayez ; si cela se reproduit, exportez les journaux depuis Autres - Collecter les diagnostics.",
+    "stsHotStalled": "Le moteur ne répond plus, la conversion a été interrompue. Réessayez.",
+    "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

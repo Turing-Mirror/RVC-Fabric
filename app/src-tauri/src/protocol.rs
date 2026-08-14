@@ -144,6 +144,23 @@ pub fn read_status(root: &Path) -> Value {
     read_json(&status_path(root))
 }
 
+/// 离线转换进度（`tools/worker_protocol.write_sts` 的另一头）。
+///
+/// 单独一个文件而不是塞进 status.json：进度一秒好几条，每条都顺带重写一遍
+/// 引擎状态不值当，还要跟上面那条 message_code 规矩打架。
+pub fn sts_path(root: &Path) -> PathBuf {
+    paths::control_dir(root).join("sts.json")
+}
+
+pub fn read_sts(root: &Path) -> Value {
+    read_json(&sts_path(root))
+}
+
+/// 开转前清干净。不清的话热路径第一次轮询会读到上一轮的 done，界面直接跳完成。
+pub fn clear_sts(root: &Path) {
+    let _ = fs::remove_file(sts_path(root));
+}
+
 pub fn write_status_merge(root: &Path, fields: Map<String, Value>) -> std::io::Result<()> {
     let mut cur = read_status(root);
     if !cur.is_object() {

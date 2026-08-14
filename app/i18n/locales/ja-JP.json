@@ -1360,7 +1360,10 @@
     "cacheClearDesc": "約 {v0} MB を削除できます。ログ・変換一時ファイル・未完了ダウンロードが対象です。",
     "cacheClearConfirm": "ログ、TEMP の中間ファイル、未完了のダウンロードを削除します。音色ライブラリと設定は残します。続行しますか？",
     "cacheClearDone": "約 {v0} MB（{v1} ファイル）を削除しました。",
-    "cacheClearFail": "削除に失敗しました：{v0}"
+    "cacheClearFail": "削除に失敗しました：{v0}",
+    "stsHotWorkerGone": "変換中にエンジンのプロセスが終了しました。もう一度お試しください。繰り返す場合は「その他 - 診断情報の収集」からログを書き出してください。",
+    "stsHotStalled": "エンジンが長時間応答しないため、変換を中断しました。もう一度お試しください。",
+    "stsHotFailed": "変換に失敗しました。詳細は User_Data/logs/sts/ の今回のログをご確認ください。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

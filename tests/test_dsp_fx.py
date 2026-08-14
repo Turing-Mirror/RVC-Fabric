@@ -8,6 +8,7 @@ Audio-processing tests require numpy (Runtime).
 from __future__ import annotations
 
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -205,8 +206,6 @@ class PerformanceTests(unittest.TestCase):
     """
 
     def test_full_chain_under_30ms(self):
-        import time
-
         ch = RealtimeFxChain(
             {
                 "fx_enabled": True,
@@ -239,6 +238,201 @@ class PerformanceTests(unittest.TestCase):
             median_ms,
             30.0,
             f"FX chain too slow: {median_ms:.1f}ms (budget 30ms for 220ms block)",
+        )
+
+
+# ---------------------------------------------------------------------------
+# 提速改造的守门测试
+#
+# gate / 压缩 / EQ 三个模块原来都是逐样本 Python 循环，实测占掉 21.3ms 块预算的
+# 16.3%，而这还是在 DSP 变声的十来个效果器加进来之前。改造的前提是**听感不能变**，
+# 所以这里把原实现按原样抄一份当基准，逐样本比对。
+# ---------------------------------------------------------------------------
+
+
+def _ref_gate(x, sr, gate):
+    """NoiseGate.process 的原始逐样本实现，作为回归基准。"""
+    from tools.dsp_fx import _db_to_lin, _ms_to_coef
+
+    thr = _db_to_lin(gate.threshold_db)
+    min_g = _db_to_lin(-abs(gate.range_db))
+    att_c = _ms_to_coef(2.0, sr)
+    rel_c = _ms_to_coef(gate.release_ms, sr)
+    hold_n = max(int(sr * gate.hold_ms * 0.001), 0)
+    x_arr = np.asarray(x, dtype=np.float64)
+    levels = np.abs(x_arr)
+    env, hold, g = 0.0, 0, 1.0
+    out = np.empty_like(x_arr, dtype=np.float32)
+    for i in range(x_arr.shape[0]):
+        level = levels[i]
+        env = att_c * env + (1.0 - att_c) * level if level > env \
+            else rel_c * env + (1.0 - rel_c) * level
+        if env >= thr:
+            hold, target = hold_n, 1.0
+        elif hold > 0:
+            hold -= 1
+            target = 1.0
+        else:
+            target = min_g
+        g = rel_c * g + (1.0 - rel_c) * target if target < g \
+            else att_c * g + (1.0 - att_c) * target
+        out[i] = np.float32(x_arr[i] * g)
+    return out
+
+
+def _ref_comp(x, sr, comp):
+    """Compressor.process 的原始逐样本实现，作为回归基准。"""
+    from tools.dsp_fx import _db_to_lin, _ms_to_coef
+
+    thr, ratio = comp.threshold_db, comp.ratio
+    att = _ms_to_coef(comp.attack_ms, sr)
+    rel = _ms_to_coef(comp.release_ms, sr)
+    makeup = _db_to_lin(comp.makeup_db)
+    env_db = -100.0
+    x_arr = np.asarray(x, dtype=np.float64)
+    levels_db = 20.0 * np.log10(np.abs(x_arr) + 1e-10)
+    out = np.empty_like(x_arr, dtype=np.float32)
+    for i in range(x_arr.shape[0]):
+        level_db = float(levels_db[i])
+        env_db = att * env_db + (1.0 - att) * level_db if level_db > env_db \
+            else rel * env_db + (1.0 - rel) * level_db
+        if env_db > thr:
+            gain = _db_to_lin(-(env_db - thr) * (1.0 - 1.0 / ratio)) * makeup
+        else:
+            gain = makeup
+        out[i] = np.float32(x_arr[i] * gain)
+    return out
+
+
+def _voice_like(n, sr, seed=7):
+    """突发 + 静音 + 瞬态：让 gate 开关、压缩器起落都真的动起来。"""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n) / sr
+    env = (np.sin(2 * np.pi * 1.7 * t) * 0.5 + 0.5) ** 3
+    x = (0.3 * np.sin(2 * np.pi * 220 * t) + 0.06 * rng.standard_normal(n)) * env
+    x[n // 4 : n // 4 + n // 12] *= 0.0005  # 静音段，gate 关
+    x[n // 2 : n // 2 + 64] = 0.95          # 瞬态，压缩器起
+    return x.astype(np.float32)
+
+
+@unittest.skipUnless(_HAS_NP, "needs numpy")
+class NoBehaviourChangeTests(unittest.TestCase):
+    """提速不许改声音。逐样本比对，允许的偏差只有 float32 舍入。"""
+
+    SR = 48000
+    N = 8192
+
+    def test_gate_matches_reference(self):
+        x = _voice_like(self.N, self.SR)
+        got = NoiseGate().process(x, self.SR)
+        want = _ref_gate(x, self.SR, NoiseGate())
+        self.assertEqual(got.shape, want.shape)
+        np.testing.assert_allclose(got, want, rtol=0, atol=1e-7)
+
+    def test_compressor_matches_reference(self):
+        x = _voice_like(self.N, self.SR, seed=11)
+        got = Compressor().process(x, self.SR)
+        want = _ref_comp(x, self.SR, Compressor())
+        np.testing.assert_allclose(got, want, rtol=0, atol=1e-7)
+
+    def test_state_carries_across_blocks(self):
+        """整块算一次 == 分四块连着算。块间状态断了就会在接缝处爆音。"""
+        x = _voice_like(self.N, self.SR, seed=13)
+        whole = Compressor().process(x, self.SR)
+        c = Compressor()
+        parts = np.concatenate(
+            [c.process(x[i : i + 2048], self.SR) for i in range(0, self.N, 2048)]
+        )
+        np.testing.assert_allclose(parts, whole, rtol=0, atol=1e-7)
+
+        whole_g = NoiseGate().process(x, self.SR)
+        g = NoiseGate()
+        parts_g = np.concatenate(
+            [g.process(x[i : i + 2048], self.SR) for i in range(0, self.N, 2048)]
+        )
+        np.testing.assert_allclose(parts_g, whole_g, rtol=0, atol=1e-7)
+
+
+@unittest.skipUnless(_HAS_NP, "needs numpy")
+class EqBackendAgreementTests(unittest.TestCase):
+    """EQ 有两条实现：scipy sosfilt 和纯 Python 双二阶。必须给出同一个结果。"""
+
+    SR = 48000
+    GAINS = [3.0, -2.0, 4.0, -1.0, 2.0]
+
+    def _run(self, use_scipy):
+        import tools.dsp_fx as fx
+
+        old = fx._SOSFILT_CACHE
+        fx._SOSFILT_CACHE = old if use_scipy else None
+        try:
+            eq = GraphicEQ(self.GAINS)
+            x = _voice_like(4096, self.SR, seed=17)
+            return np.concatenate(
+                [eq.process(x[i : i + 1024], self.SR) for i in range(0, 4096, 1024)]
+            )
+        finally:
+            fx._SOSFILT_CACHE = old
+
+    def test_backends_agree(self):
+        try:
+            import scipy.signal  # noqa: F401
+        except ImportError:
+            self.skipTest("no scipy — only the pure-Python path exists here")
+        import tools.dsp_fx as fx
+
+        fx._sosfilt()  # 填好缓存
+        np.testing.assert_allclose(
+            self._run(True), self._run(False), rtol=1e-4, atol=1e-5
+        )
+
+    def test_pure_python_path_still_filters(self):
+        """没有 scipy 时也得真的在滤波，不能悄悄变直通。"""
+        y = self._run(False)
+        x = _voice_like(4096, self.SR, seed=17)
+        self.assertGreater(float(np.abs(y - x).max()), 1e-3)
+
+    def test_flat_eq_is_transparent(self):
+        eq = GraphicEQ([0.0] * 5)
+        x = _voice_like(2048, self.SR, seed=19)
+        np.testing.assert_allclose(eq.process(x, self.SR), x, rtol=0, atol=1e-6)
+
+
+@unittest.skipUnless(_HAS_NP, "needs numpy")
+class BlockBudgetTests(unittest.TestCase):
+    """整条链必须留够余量给后面要加的十来个 DSP 变声效果器。
+
+    改造前实测 3.49ms / 21.33ms = 16.3%，那时候链上只有三个模块。
+    """
+
+    def test_chain_under_15_percent_of_block(self):
+        sr = 48000
+        n = 1024  # 21.33ms
+        budget_ms = n / sr * 1000.0
+        ch = RealtimeFxChain(
+            {
+                "fx_enabled": True,
+                "fx_gate_enabled": True,
+                "fx_comp_enabled": True,
+                "fx_eq_enabled": True,
+                "fx_eq_gains": [3.0, -2.0, 4.0, -1.0, 2.0],
+            }
+        )
+        x = _voice_like(n, sr, seed=23)
+        for _ in range(5):
+            ch.process(x, sr)
+        times = []
+        for _ in range(21):
+            t0 = time.perf_counter()
+            ch.process(x, sr)
+            times.append((time.perf_counter() - t0) * 1000.0)
+        median = sorted(times)[10]
+        self.assertLess(
+            median,
+            budget_ms * 0.15,
+            f"效果链占了块预算的 {median / budget_ms * 100:.1f}%"
+            f"（{median:.2f}ms / {budget_ms:.2f}ms），上限 15%。"
+            "DSP 变声还要往这条链上加十来个效果器，现在就超了后面没法做。",
         )
 
 

@@ -397,8 +397,8 @@ function StsSection() {
   };
 
   useEffect(() => {
+    // 只跟输入路径走
     void refreshList(input);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只跟输入路径走
   }, [input]);
 
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。

@@ -1360,7 +1360,10 @@
     "cacheClearDesc": "約 {v0} MB 可清理。刪除日誌、轉換暫存與下載殘留，不影響音色與設定。",
     "cacheClearConfirm": "將刪除日誌、TEMP 中間檔與未完成下載，不影響音色庫和設定。確定清理？",
     "cacheClearDone": "已清理約 {v0} MB（{v1} 個檔案）。",
-    "cacheClearFail": "清理失敗：{v0}"
+    "cacheClearFail": "清理失敗：{v0}",
+    "stsHotWorkerGone": "轉換中途引擎行程結束了。請重試；反覆出現請到「其他 - 收集診斷資訊」匯出記錄。",
+    "stsHotStalled": "引擎長時間沒有回應，轉換已中斷。請重試。",
+    "stsHotFailed": "轉換失敗。詳情請看 User_Data/logs/sts/ 下本次的記錄。"
   },
   "extras": {
     "engineTitle": "引擎資源",

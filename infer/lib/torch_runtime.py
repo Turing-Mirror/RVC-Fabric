@@ -21,12 +21,39 @@ logger = logging.getLogger(__name__)
 _THREADS_TUNED = False
 
 
-def tune_for_inference() -> None:
+# cudnn.benchmark 只有摊得平的时候才划算，见 tune_for_inference。
+BENCHMARK_MIN_SECONDS = 60.0
+BENCHMARK_MIN_FILES = 3
+
+
+def want_cudnn_benchmark(total_seconds: float = 0.0, total_files: int = 1) -> bool:
+    """这批活值不值得开 cudnn.benchmark。
+
+    benchmark 的做法是「每遇到一个没见过的张量形状，就把所有卷积算法各跑一遍
+    挑最快的」。批量长音频里这笔调优费摊得平；转一条 5 秒语音就是纯亏——调优
+    跑完，活也干完了，挑出来的算法一次都没复用上。实测这一项能占掉短任务好几秒。
+
+    环境变量 ``TM_CUDNN_BENCHMARK`` 可强制 1/0。
+    """
+    forced = (os.environ.get("TM_CUDNN_BENCHMARK") or "").strip()
+    if forced in ("1", "true", "on", "yes"):
+        return True
+    if forced in ("0", "false", "off", "no"):
+        return False
+    if int(total_files or 0) >= BENCHMARK_MIN_FILES:
+        return True
+    return float(total_seconds or 0.0) >= BENCHMARK_MIN_SECONDS
+
+
+def tune_for_inference(total_seconds: float = 0.0, total_files: int = 1) -> None:
     """One-shot knobs that speed offline conversion without changing model math.
 
     Safe to call multiple times. Thread knobs are applied only on the first
     call; CUDA switches are reapplied (idempotent). Failures are ignored
     (missing CUDA, old torch, …).
+
+    ``total_seconds`` / ``total_files`` 描述这批活有多大，只用来决定
+    cudnn.benchmark 开不开（见 want_cudnn_benchmark）。不传就按小任务处理。
     """
     global _THREADS_TUNED
 
@@ -60,8 +87,8 @@ def tune_for_inference() -> None:
         return
 
     try:
-        # Offline audio lengths vary; benchmark picks algorithms once shapes stabilize.
-        torch.backends.cudnn.benchmark = True
+        # 只有够大的批次才开；短任务上这是净亏。
+        torch.backends.cudnn.benchmark = want_cudnn_benchmark(total_seconds, total_files)
     except Exception:
         pass
     try:

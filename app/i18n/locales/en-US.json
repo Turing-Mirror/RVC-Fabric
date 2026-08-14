@@ -1360,7 +1360,10 @@
     "cacheClearDesc": "About {v0} MB can be cleared. Removes logs, conversion temp files and leftover downloads.",
     "cacheClearConfirm": "This deletes logs, TEMP intermediates and partial downloads. Voice library and settings are kept. Continue?",
     "cacheClearDone": "Cleared about {v0} MB ({v1} files).",
-    "cacheClearFail": "Could not clear cache: {v0}"
+    "cacheClearFail": "Could not clear cache: {v0}",
+    "stsHotWorkerGone": "The engine process exited during conversion. Try again; if it keeps happening, export the logs from More - Collect diagnostics.",
+    "stsHotStalled": "The engine stopped responding, so the conversion was aborted. Try again.",
+    "stsHotFailed": "Conversion failed. See this run's log under User_Data/logs/sts/ for details."
   },
   "extras": {
     "engineTitle": "Engine resources",

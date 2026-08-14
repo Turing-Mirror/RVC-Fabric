@@ -134,11 +134,23 @@ def pick_device(name: str, hostapi_name: str = "") -> tuple[object | None, str]:
 
 
 def rms_db(samples) -> float:
-    vals = [float(x) for x in samples]
-    if not vals:
-        return -90.0
-    mean_sq = sum(v * v for v in vals) / len(vals)
-    rms = math.sqrt(mean_sq)
+    """RMS 电平（dBFS）。
+
+    录音时每秒调十几次、每次一整块 1024 帧，纯 Python 逐帧平方是白扔的开销，
+    有 numpy 就走向量化。单元测试传的是普通 list，留一条回退路。
+    """
+    try:
+        import numpy as np
+
+        arr = np.asarray(samples, dtype=np.float64).reshape(-1)
+        if arr.size == 0:
+            return -90.0
+        rms = float(np.sqrt(np.mean(arr * arr)))
+    except Exception:
+        vals = [float(x) for x in samples]
+        if not vals:
+            return -90.0
+        rms = math.sqrt(sum(v * v for v in vals) / len(vals))
     if rms < 1e-9:
         return -90.0
     return 20.0 * math.log10(rms)
@@ -202,9 +214,8 @@ def record(req: dict) -> int:
     try:
         info = sd.query_devices(idx if idx is not None else None, "input")
         sr = int(info.get("default_samplerate") or 44100)
-        ch_in = int(info.get("max_input_channels") or 1)
         kwargs["samplerate"] = sr
-        kwargs["channels"] = 1 if ch_in >= 1 else max(1, ch_in)
+        # 始终按单声道开；多声道设备由 PortAudio 自己降混。
     except Exception:
         sr = 44100
         kwargs["samplerate"] = sr

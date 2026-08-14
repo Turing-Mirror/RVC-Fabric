@@ -10,6 +10,7 @@ Only what the worker needs lives here — the reader/commander side is in Rust
 
     command.json   shell → worker   {seq, cmd, ...}
     status.json    worker → shell   state / devices / metrics
+    sts.json       worker → shell   offline conversion progress
     worker.pid     worker → shell   pid for liveness checks
 
 Stdlib only.
@@ -33,6 +34,10 @@ USER_DATA = ROOT / "User_Data"
 CONTROL_DIR = USER_DATA / "runtime_control"
 COMMAND_PATH = CONTROL_DIR / "command.json"
 STATUS_PATH = CONTROL_DIR / "status.json"
+# 离线转换进度单独一个文件。塞进 status.json 的话，每秒好几条进度都会顺带
+# 重写一遍引擎状态，还要跟 write_status 那条「有 message 就清 message_code」
+# 的规则打架——转个音频把任务栏上的引擎状态冲掉，不值当。
+STS_PATH = CONTROL_DIR / "sts.json"
 PID_PATH = CONTROL_DIR / "worker.pid"
 
 # Windows readers holding status.json open make Path.replace raise WinError
@@ -135,6 +140,28 @@ def write_status(**fields: Any) -> None:
     cur.update(fields)
     cur["ts"] = time.time()
     _write_json(STATUS_PATH, cur)
+
+
+def read_sts() -> dict[str, Any]:
+    return _read_json(STS_PATH)
+
+
+def write_sts(**fields: Any) -> None:
+    """Replace sts.json wholesale.
+
+    与 write_status 不同，这里**不**合并：离线转换是一次性任务，上一轮的
+    files / skipped / error 留到下一轮只会让界面读到上次的结果。每次全量写。
+    """
+    fields["ts"] = time.time()
+    _write_json(STS_PATH, fields)
+
+
+def clear_sts() -> None:
+    try:
+        if STS_PATH.is_file():
+            STS_PATH.unlink()
+    except Exception:
+        pass
 
 
 def write_worker_pid_file(pid: int) -> None:

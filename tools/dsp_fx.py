@@ -52,6 +52,28 @@ def _numpy():
     return np
 
 
+def _sosfilt():
+    """scipy.signal.sosfilt if available, else None.
+
+    scipy 在 Runtime 里（requirements/requirements.txt），但冻结的主程序壳没有，
+    而且用户可能拿别的 Python 跑。拿不到就退回纯 Python 的双二阶循环——慢，
+    但结果一模一样。
+    """
+    global _SOSFILT_CACHE
+    if _SOSFILT_CACHE is _UNSET:
+        try:
+            from scipy.signal import sosfilt
+
+            _SOSFILT_CACHE = sosfilt
+        except Exception:
+            _SOSFILT_CACHE = None
+    return _SOSFILT_CACHE
+
+
+_UNSET = object()
+_SOSFILT_CACHE: Any = _UNSET
+
+
 def _db_to_lin(db: float) -> float:
     return float(10.0 ** (db / 20.0))
 
@@ -105,25 +127,43 @@ class BiquadPeak:
             a2=a2 / a0,
         )
 
+    def is_bypass(self) -> bool:
+        return (
+            self.b0 == 1.0
+            and self.b1 == 0.0
+            and self.b2 == 0.0
+            and self.a1 == 0.0
+            and self.a2 == 0.0
+        )
+
+    def sos_row(self) -> list[float]:
+        """[b0, b1, b2, 1, a1, a2] —— scipy.signal.sosfilt 的一段。
+
+        系数在 design 里已经除过 a0，所以这里 a0 恒为 1。
+        """
+        return [self.b0, self.b1, self.b2, 1.0, self.a1, self.a2]
+
     def process(self, x: "np.ndarray") -> "np.ndarray":
+        """没有 scipy 时的回退路径。GraphicEQ 有 scipy 就整条走 sosfilt。
+
+        差分方程是转置直接 II 型，跟 sosfilt 的状态约定一致，两条路结果相同。
+        """
         np = _numpy()
-        if self.b0 == 1.0 and self.b1 == 0.0 and self.b2 == 0.0 and self.a1 == 0.0:
+        if self.is_bypass():
             return x
-        # 向量化预计算:把整个输入一次性转 float64 数组,避免循环内逐帧转换
-        x_arr = np.asarray(x, dtype=np.float64)
-        y = np.empty_like(x_arr)
-        # 预计算 b0*x(向量化)— 循环内不再重复乘法
-        bx = self.b0 * x_arr
-        b1, b2, a1, a2 = self.b1, self.b2, self.a1, self.a2
+        # 逐样本递归没法向量化，但可以别在循环里碰 numpy：标量索引每次约 100ns，
+        # Python list 约 20ns。先整块转成 list，算完一次性转回数组。
+        xs = np.asarray(x, dtype=np.float64).tolist()
+        b0, b1, b2, a1, a2 = self.b0, self.b1, self.b2, self.a1, self.a2
         z1, z2 = self.z1, self.z2
-        # IIR 差分方程本质递归,无法纯向量化;但预计算 + 局部变量已显著降低开销
-        for i in range(x_arr.shape[0]):
-            yn = bx[i] + z1
-            z1 = b1 * x_arr[i] - a1 * yn + z2
-            z2 = b2 * x_arr[i] - a2 * yn
-            y[i] = yn
+        ys = [0.0] * len(xs)
+        for i, xn in enumerate(xs):
+            yn = b0 * xn + z1
+            z1 = b1 * xn - a1 * yn + z2
+            z2 = b2 * xn - a2 * yn
+            ys[i] = yn
         self.z1, self.z2 = float(z1), float(z2)
-        return y.astype(np.float32)
+        return np.asarray(ys, dtype=np.float32)
 
     def reset(self) -> None:
         self.z1 = 0.0
@@ -172,16 +212,18 @@ class NoiseGate:
         att_c = _ms_to_coef(2.0, sr)  # fast open
         rel_c = _ms_to_coef(self.release_ms, sr)
         hold_n = max(int(sr * self.hold_ms * 0.001), 0)
-        # 向量化:一次性算完整块 |x|(替代循环内逐帧 abs + float 转换)
         x_arr = np.asarray(x, dtype=np.float64)
-        levels = np.abs(x_arr)
+        # 包络和增益都是逐样本递归、而且系数按数据分支（快开慢关），没法向量化。
+        # 试过「快慢两条一阶滤波取 max」的常见近似，实测增益偏差最大 8.2 dB、
+        # 均值 2.7 dB —— 那不是同一个门了，不能用。
+        # 能做的是别在循环里碰 numpy：整块转 list 再算，算术一模一样，快三倍多。
+        levels = np.abs(x_arr).tolist()
+        xs = x_arr.tolist()
         env = self._env
         hold = self._hold_left
         g = self._gain
-        out = np.empty_like(x_arr, dtype=np.float32)
-        # envelope / gain 一阶 IIR 本质递归,无法纯向量化;但预计算已消除主要开销
-        for i in range(x_arr.shape[0]):
-            level = levels[i]
+        gains = [0.0] * len(xs)
+        for i, level in enumerate(levels):
             if level > env:
                 env = att_c * env + (1.0 - att_c) * level
             else:
@@ -199,11 +241,11 @@ class NoiseGate:
                 g = rel_c * g + (1.0 - rel_c) * target
             else:
                 g = att_c * g + (1.0 - att_c) * target
-            out[i] = np.float32(x_arr[i] * g)
+            gains[i] = g
         self._env = float(env)
         self._hold_left = int(hold)
         self._gain = float(g)
-        return out
+        return (x_arr * np.asarray(gains)).astype(np.float32)
 
 
 class Compressor:
@@ -241,27 +283,25 @@ class Compressor:
         rel = _ms_to_coef(self.release_ms, sr)
         makeup = _db_to_lin(self.makeup_db)
         env_db = self._env_db
-        # 向量化关键优化:一次性算完整块 level_db(替代循环内逐帧 math.log10)
-        # 这是 Compressor 的主要开销点:10560 次 math.log10 → 1 次 np.log10
+        # log10 一次性向量化算完（1 次 np.log10 替掉一块 1024 次 math.log10），
+        # 再转成 Python list 跑那段没法向量化的分支递归 —— 循环里不碰 numpy
+        # 标量索引，同样的算术快三倍多。
         x_arr = np.asarray(x, dtype=np.float64)
-        levels_db = 20.0 * np.log10(np.abs(x_arr) + 1e-10)
-        out = np.empty_like(x_arr, dtype=np.float32)
-        # envelope 一阶 IIR 仍需递归,但已消除 log10 调用开销
-        for i in range(x_arr.shape[0]):
-            level_db = float(levels_db[i])
+        levels_db = (20.0 * np.log10(np.abs(x_arr) + 1e-10)).tolist()
+        slope = 1.0 - 1.0 / ratio
+        gains = [0.0] * len(levels_db)
+        for i, level_db in enumerate(levels_db):
             if level_db > env_db:
                 env_db = att * env_db + (1.0 - att) * level_db
             else:
                 env_db = rel * env_db + (1.0 - rel) * level_db
             if env_db > thr:
                 # overshoot compressed
-                gr = (env_db - thr) * (1.0 - 1.0 / ratio)
-                gain = _db_to_lin(-gr) * makeup
+                gains[i] = _db_to_lin(-(env_db - thr) * slope) * makeup
             else:
-                gain = makeup
-            out[i] = np.float32(x_arr[i] * gain)
+                gains[i] = makeup
         self._env_db = float(env_db)
-        return out
+        return (x_arr * np.asarray(gains)).astype(np.float32)
 
 
 class GraphicEQ:
@@ -274,6 +314,9 @@ class GraphicEQ:
         self.gains_db = [float(x) for x in g[:5]]
         self._filters: List[BiquadPeak] = [BiquadPeak() for _ in range(5)]
         self._sr = 0
+        # sosfilt 路径的系数与状态。_sos 为 None 表示这一轮全是直通段。
+        self._sos: Any = None
+        self._zi: Any = None
 
     def set_gains(self, gains_db: Sequence[float]) -> None:
         g = [float(x) for x in gains_db[:5]]
@@ -308,14 +351,38 @@ class GraphicEQ:
             BiquadPeak.design(sr, EQ_FREQS[i], self.gains_db[i], q=1.1)
             for i in range(5)
         ]
+        self._sos = None
+        self._zi = None
+        if _sosfilt() is None:
+            return
+        rows = [f.sos_row() for f in self._filters if not f.is_bypass()]
+        if not rows:
+            return
+        np = _numpy()
+        self._sos = np.asarray(rows, dtype=np.float64)
+        self._zi = np.zeros((len(rows), 2), dtype=np.float64)
 
     def reset(self) -> None:
         for f in self._filters:
             f.reset()
+        if self._zi is not None:
+            self._zi[:] = 0.0
 
     def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
         np = _numpy()
         self._ensure(sr)
+        # 有 scipy 就整条链一次 sosfilt。差分方程和状态约定跟 BiquadPeak.process
+        # 完全一致（都是转置直接 II 型），只是递归跑在 C 里而不是 Python 里。
+        # 这一段原本占整条效果链六成开销。
+        sosfilt = _sosfilt()
+        if sosfilt is not None and self._sos is not None:
+            y, self._zi = sosfilt(
+                self._sos, np.asarray(x, dtype=np.float64), zi=self._zi
+            )
+            return y.astype(np.float32)
+        if sosfilt is not None:
+            # 五段全直通，别白跑一趟。
+            return x.astype(np.float32, copy=False)
         y = x.astype(np.float32, copy=False)
         for f in self._filters:
             y = f.process(y)

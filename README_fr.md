@@ -126,5 +126,5 @@ Merci aux excellents projets open source suivants pour leur support technique à
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — Modèles acoustiques de base et algorithmes de hauteur
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Récupération et réduction du bruit en temps réel
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Algorithmes de hauteur optionnels
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) (Modèles de séparation basés sur UVR, via PyMSS) · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Séparation vocale et traitement audio
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Moteur de séparation vocale (suit RVC en amont ; remplace UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Source des modèles de séparation · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Traitement audio
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Carte son virtuelle (Indispensable pour entendre la voix modifiée dans le jeu)

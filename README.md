@@ -126,5 +126,5 @@ npm run dev
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — 核心声学模型与音高算法
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — 检索与实时降噪
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — 可选音高算法
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui)（UVR 系分离模型，经 PyMSS 运行）· [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 人声分离与音频处理
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 人声分离引擎（跟随上游 RVC，已取代 UVR5）· [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 分离模型来源 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 音频处理
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虚拟声卡（游戏里听到变声靠它）

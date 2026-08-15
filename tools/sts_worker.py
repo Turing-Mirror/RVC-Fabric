@@ -70,7 +70,6 @@ from tools.sts_core import (  # noqa: E402
 # 与仓库根 .env / 官方 RVC 一致。安装包历史上未带 .env，worker 必须自带默认值。
 _RVC_ENV_DEFAULTS = {
     "weight_root": "assets/weights",
-    "weight_uvr5_root": "assets/uvr5_weights",
     "index_root": "logs",
     "outside_index_root": "assets/indices",
     "rmvpe_root": "assets/rmvpe",
@@ -109,7 +108,6 @@ def _ensure_rvc_env() -> None:
     # 相对路径一律钉死在产品根，避免 fairseq / rmvpe 找不到文件。
     for key in (
         "weight_root",
-        "weight_uvr5_root",
         "index_root",
         "outside_index_root",
         "rmvpe_root",

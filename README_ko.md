@@ -126,5 +126,5 @@ RVC Fabric에 기술적 지원을 제공한 훌륭한 오픈 소스 프로젝트
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — 핵심 음향 모델 및 피치 알고리즘
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — 검색 및 실시간 노이즈 감소
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — 선택적 피치 알고리즘
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) (UVR 계열 분리 모델, PyMSS를 통해 실행) · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 보컬 분리 및 오디오 처리
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 보컬 분리 엔진(상위 RVC를 따라 UVR5를 대체) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 분리 모델 출처 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 오디오 처리
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 가상 사운드 카드 (게임에서 변조된 목소리를 들을 수 있게 함)

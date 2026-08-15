@@ -126,5 +126,5 @@ RVC Fabric に技術的サポートを提供してくださった以下の素晴
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — コア音響モデルとピッチアルゴリズム
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — 検索とリアルタイムノイズリダクション
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — オプションのピッチアルゴリズム
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui)（PyMSSで動作するUVR系分離モデル）· [FFmpeg](https://github.com/FFmpeg/FFmpeg) — ボーカル分離とオーディオ処理
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — ボーカル分離エンジン（上流 RVC に追随し UVR5 を置き換え）· [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 分離モデルの提供元 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — オーディオ処理
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 仮想サウンドカード（ゲーム内でボイスチェンジした声を聞くために使用）

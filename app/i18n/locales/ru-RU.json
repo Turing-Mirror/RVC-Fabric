@@ -46,7 +46,8 @@
     "engineError": "Ошибка движка",
     "engineDown": "Движок не запущен",
     "waitStart": "Ожидание запуска движка",
-    "delayLine": "Задержка {delay} мс · Вывод {infer} мс"
+    "delayLine": "Задержка {delay} мс · Вывод {infer} мс",
+    "dspStopHint": "Нажмите, чтобы отключить DSP-эффект"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "Не удалось сохранить пресет: {0}",
     "dspPresetNotUser": "Встроенные пресеты нельзя удалить. Сохраните свой пресет с тем же именем, чтобы заменить его.",
     "dspPresetDeleteFail": "Не удалось удалить пресет: {0}",
-    "toolMainWindowGone": "Главное окно закрыто. Вернитесь в него, чтобы загрузить модели."
+    "toolMainWindowGone": "Главное окно закрыто. Вернитесь в него, чтобы загрузить модели.",
+    "dspKindRvc": "Голоса RVC",
+    "dspKindDsp": "Пресеты DSP",
+    "dspPresetTag": "Пресет DSP-изменения голоса",
+    "dspPresetMine": "Свой",
+    "dspPresetStop": "Выключить",
+    "dspPresetsLoading": "Загрузка пресетов…",
+    "dspNoPresets": "Пресетов DSP пока нет.",
+    "dspFxPitch": "Высота",
+    "dspFxFormant": "Форманта",
+    "dspFxWhisper": "Шёпот",
+    "dspFxRing": "Кольцевая модуляция",
+    "dspFxVibrato": "Вибрато",
+    "dspFxChorus": "Хорус",
+    "dspFxBitcrush": "Биткрашер",
+    "dspFxDrive": "Перегруз",
+    "dspFxRadio": "Полоса частот",
+    "dspFxEcho": "Эхо",
+    "dspFxReverb": "Реверберация",
+    "dspStackTitle": "Одновременно активны голос и пресет DSP",
+    "dspStackBody": "Звук сначала проходит преобразование голоса, затем эффекты DSP. Чтобы оставить только один слой, нажмите на имя пресета в цепочке внизу — DSP выключится.",
+    "dspStackOk": "Понятно"
   },
   "extras": {
     "engineTitle": "Ресурсы движка",

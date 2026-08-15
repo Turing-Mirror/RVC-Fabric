@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
+import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { setHot } from "../lib/engine";
+import { getConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import {
   bindIndex,
@@ -47,12 +49,47 @@ export type ModelsPageProps = {
 };
 
 type SortKey = "default" | "name" | "index";
+/** 列表看的是哪一种东西。RVC 音色和 DSP 预设不混排。 */
+type Kind = "rvc" | "dsp";
 
 function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPageProps) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("default");
+  const [kind, setKind] = useState<Kind>("rvc");
+  /** 当前生效的 DSP 预设 id；空串 = DSP 没开。 */
+  const [dspId, setDspId] = useState("");
+
+  // DSP 是热键，开关和换预设都不重开流。用完立刻回读配置，别让界面和引擎
+  // 各记各的 —— 那种不一致用户看不出原因，只会觉得「点了没反应」。
+  const applyDsp = useCallback(async (p: DspPreset | null) => {
+    const next = p ? p.id : "";
+    setDspId(next);
+    try {
+      await setHot(
+        p
+          ? { dsp_enabled: true, dsp_preset: p.id, dsp_params: p.params }
+          : { dsp_enabled: false, dsp_preset: "" },
+      );
+    } catch {
+      /* 引擎没开着也没关系：配置已经写下去了，下次开启变声就生效 */
+    }
+  }, []);
+
+  // 进页面时把当前预设读回来，不然切走再切回来「使用中」的标记就没了。
+  useEffect(() => {
+    let alive = true;
+    void getConfig()
+      .then((c) => {
+        if (!alive) return;
+        setDspId(c?.dsp_enabled ? String(c?.dsp_preset || "") : "");
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [page, setPage] = useState(0);
   const [cols, setCols] = useState(5);
   const [busy, setBusy] = useState(false);
@@ -309,19 +346,46 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
             placeholder={t("s.fc3bad4cea")}
             className="inline-flex min-w-[230px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
           />
-          <span className="ml-auto">
-            <SegmentControl<SortKey>
-              value={sort}
-              onChange={setSort}
-              options={[
-                { id: "default", label: t("s.c8d09cf955") },
-                { id: "name", label: t("s.1be7ae4fc2") },
-                { id: "index", label: t("s.225f6a39ca") },
-              ]}
-            />
-          </span>
+          {/* RVC 音色 / DSP 预设二选一。故意不给「全部」—— 两种东西混在
+              一个列表里，小白分不清自己点的是音色还是效果。 */}
+          <SegmentControl<Kind>
+            value={kind}
+            onChange={(v) => {
+              setKind(v);
+              setPage(0);
+            }}
+            options={[
+              { id: "rvc", label: t("s.dspKindRvc") },
+              { id: "dsp", label: t("s.dspKindDsp") },
+            ]}
+          />
+          {kind === "rvc" ? (
+            <span className="ml-auto">
+              <SegmentControl<SortKey>
+                value={sort}
+                onChange={setSort}
+                options={[
+                  { id: "default", label: t("s.c8d09cf955") },
+                  { id: "name", label: t("s.1be7ae4fc2") },
+                  { id: "index", label: t("s.225f6a39ca") },
+                ]}
+              />
+            </span>
+          ) : null}
         </div>
 
+        {kind === "dsp" ? (
+          <div ref={gridRef}>
+            <DspPresetGrid
+              cols={cols}
+              query={query}
+              activeId={dspId}
+              busy={busy}
+              onUse={(p) => void applyDsp(p)}
+              onStop={() => void applyDsp(null)}
+            />
+          </div>
+        ) : (
         <div
           ref={gridRef}
           className="grid gap-x-4 gap-y-[22px]"
@@ -398,7 +462,9 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
           )}
         </div>
 
-        {view.length > pageSize ? (
+        )}
+
+        {kind === "rvc" && view.length > pageSize ? (
           <div className="flex items-center justify-center gap-3 mt-[26px] text-[12.5px] text-[var(--meta)]">
             <Btn
               disabled={pageClamped <= 0}

@@ -46,7 +46,8 @@
     "engineError": "引擎錯誤",
     "engineDown": "引擎未啟動",
     "waitStart": "等待引擎啟動",
-    "delayLine": "延遲 {delay} ms · 推理 {infer} ms"
+    "delayLine": "延遲 {delay} ms · 推理 {infer} ms",
+    "dspStopHint": "點一下關閉 DSP 效果"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "預設儲存失敗：{0}",
     "dspPresetNotUser": "內建預設刪不掉。想改的話，存一個同名的自訂預設就會蓋住它。",
     "dspPresetDeleteFail": "預設刪除失敗：{0}",
-    "toolMainWindowGone": "主視窗已關閉，請先回到主畫面再下載模型。"
+    "toolMainWindowGone": "主視窗已關閉，請先回到主畫面再下載模型。",
+    "dspKindRvc": "RVC 音色",
+    "dspKindDsp": "DSP 預設",
+    "dspPresetTag": "DSP 變聲預設",
+    "dspPresetMine": "自訂",
+    "dspPresetStop": "停用",
+    "dspPresetsLoading": "正在讀取預設…",
+    "dspNoPresets": "還沒有 DSP 預設。",
+    "dspFxPitch": "變調",
+    "dspFxFormant": "共振峰",
+    "dspFxWhisper": "耳語",
+    "dspFxRing": "環形調變",
+    "dspFxVibrato": "顫音",
+    "dspFxChorus": "合唱",
+    "dspFxBitcrush": "位元深度壓縮",
+    "dspFxDrive": "過載",
+    "dspFxRadio": "限帶",
+    "dspFxEcho": "回聲",
+    "dspFxReverb": "混響",
+    "dspStackTitle": "音色與 DSP 預設正同時生效",
+    "dspStackBody": "訊號先經過音色轉換，再經過 DSP 效果。想只留一層，點底欄那條鏈上的名字就能關閉 DSP。",
+    "dspStackOk": "知道了"
   },
   "extras": {
     "engineTitle": "引擎資源",

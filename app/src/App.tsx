@@ -220,6 +220,48 @@ export default function App() {
   const [profileSummary, setProfileSummary] = useState(t("s.72077749f7"));
   const [voiceTag, setVoiceTag] = useState("");
   const [voicePos, setVoicePos] = useState("");
+  /** 生效中的 DSP 预设 id；空 = 没开。底栏靠它画那条「音色 → 预设」的链。 */
+  const [dspId, setDspId] = useState("");
+  /** id → 显示名。底栏要写「收音机」，不是写 radio。 */
+  const [dspNames, setDspNames] = useState<Record<string, string>>({});
+  const dspName = dspId ? dspNames[dspId] || dspId : "";
+
+  /**
+   * 两层第一次同时开着的时候说明一句顺序，说完就不再出现。
+   *
+   * 底栏那条链是常驻的，负责回答「现在叠了几层」；这条只回答一次
+   * 「为什么叠在一起是这个味道」。两件事分开，不必每次都念一遍。
+   */
+  const [askDspStack, setAskDspStack] = useState(false);
+  const dspStackNoted = useRef(false);
+  useEffect(() => {
+    if (!dspId || !voiceId || dspStackNoted.current) return;
+    dspStackNoted.current = true;
+    void invoke<Record<string, unknown>>("config_get")
+      .then((c) => {
+        if (c?.dsp_stack_noted !== true) setAskDspStack(true);
+      })
+      .catch(() => {});
+  }, [dspId, voiceId]);
+  const closeDspStack = useCallback(() => {
+    setAskDspStack(false);
+    void invoke("config_set", { patch: { dsp_stack_noted: true } }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void invoke<{ presets: { id: string; name: string }[] }>("dsp_presets")
+      .then((r) => {
+        if (!alive) return;
+        const m: Record<string, string> = {};
+        for (const p of r.presets || []) m[p.id] = p.name;
+        setDspNames(m);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [showProvision, setShowProvision] = useState(false);
   const [provisionDismissed, setProvisionDismissed] = useState(false);
   // 新装 ui_locale_picked===false 时先选语言，再走 Runtime 补全。
@@ -401,7 +443,11 @@ export default function App() {
       }
       const fn = c.function;
       if (fn === "im" || fn === "bypass") setMode("bypass");
-      else if (fn === "vc") setMode("vc");
+      else if (fn === "vc" || fn === "fx") setMode("vc");
+      // DSP 那一层从哪儿改的都行（模型页、设置页、别的窗口），底栏都得跟上。
+      if (c.dsp_enabled != null || c.dsp_preset != null) {
+        setDspId(c.dsp_enabled ? String(c.dsp_preset || "") : "");
+      }
     },
     [syncParams],
   );
@@ -506,6 +552,11 @@ export default function App() {
   }, [openDownloadModels]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
+  const stopDsp = useCallback(() => {
+    setDspId("");
+    void setHot({ dsp_enabled: false, dsp_preset: "" }).catch(() => {});
+  }, []);
+
   const openPlaza = useCallback(() => {
     plaza.markSeen();
     setPage("plaza");
@@ -951,6 +1002,11 @@ export default function App() {
             </>
           }
         >{t("s.7f3ebfb67b")}</Nudge>
+      ) : askDspStack ? (
+        <Nudge
+          title={t("s.dspStackTitle")}
+          actions={<Btn primary onClick={closeDspStack}>{t("s.dspStackOk")}</Btn>}
+        >{t("s.dspStackBody")}</Nudge>
       ) : null}
 
       {qr ? (
@@ -959,6 +1015,8 @@ export default function App() {
 
       <Dock
         voiceName={voiceName}
+        dspName={dspName}
+        onStopDsp={stopDsp}
         voiceTag={voiceTag}
         voiceIndex={voicePos}
         pitch={pitch}

@@ -165,6 +165,66 @@ class WatcherJoinTests(unittest.TestCase):
             self.assertFalse(t.is_alive())
 
 
+class TrainExitCodeTests(unittest.TestCase):
+    def test_train_py_done_is_success(self):
+        # train.py 正常结束是 os._exit(2333333)。当 0 以外全失败，
+        # 权重其实已经写好，整次训练却报失败，索引也建不成。
+        self.assertEqual(tw.TRAIN_PY_DONE, 2333333)
+        self.assertIn(tw.TRAIN_PY_DONE, (0, tw.TRAIN_PY_DONE))
+
+
+class MetaSrTests(unittest.TestCase):
+    def test_meta_roundtrip(self):
+        with tempfile.TemporaryDirectory() as td:
+            exp = Path(td)
+            tw.write_meta(exp, {"sample_rate": "40k", "exp": "v"})
+            self.assertEqual(tw.infer_sr(exp), "40k")
+
+    def test_infer_sr_from_config_json(self):
+        with tempfile.TemporaryDirectory() as td:
+            exp = Path(td)
+            (exp / "config.json").write_text(
+                json.dumps({"data": {"sampling_rate": 32000}}), encoding="utf-8"
+            )
+            self.assertEqual(tw.infer_sr(exp), "32k")
+
+    def test_infer_sr_from_gt_wav(self):
+        with tempfile.TemporaryDirectory() as td:
+            exp = Path(td)
+            gt = exp / "0_gt_wavs"
+            gt.mkdir()
+            import wave as _wave
+            with _wave.open(str(gt / "0_0.wav"), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(48000)
+                w.writeframes(b"\x00\x00" * 16)
+            self.assertEqual(tw.infer_sr(exp), "48k")
+
+    def test_wipe_removes_stage_dirs_and_meta(self):
+        with tempfile.TemporaryDirectory() as td:
+            exp = Path(td)
+            (exp / "1_16k_wavs").mkdir()
+            (exp / "1_16k_wavs" / "a.wav").write_text("x")
+            (exp / "filelist.txt").write_text("x")
+            tw.write_meta(exp, {"sample_rate": "48k", "exp": "v"})
+            tw.wipe_stage_dirs(exp)
+            self.assertFalse((exp / "1_16k_wavs").exists())
+            self.assertFalse((exp / "filelist.txt").exists())
+            self.assertFalse((exp / "tm_meta.json").exists())
+
+
+class CountAudioTests(unittest.TestCase):
+    def test_counts_nested_audio_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "sub").mkdir()
+            (d / "sub" / "a.wav").write_text("x")
+            (d / "sub" / "note.txt").write_text("x")
+            (d / "cover.jpg").write_text("x")
+            self.assertEqual(tw.count_audio(d), 1)
+
+
 class CountFilesTests(unittest.TestCase):
     def test_counts_only_files(self):
         with tempfile.TemporaryDirectory() as td:

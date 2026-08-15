@@ -23,17 +23,39 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
-import time
+import wave
 from pathlib import Path
 
-NOW_DIR = os.getcwd()
-sys.path.append(NOW_DIR)
+# 产品根：Rust 会把 cwd 设成这里，但脚本自己也认，免得有人从别处起。
+ROOT = Path(__file__).resolve().parent.parent
+NOW_DIR = str(ROOT)
+if os.getcwd() != NOW_DIR:
+    os.chdir(NOW_DIR)
+if NOW_DIR not in sys.path:
+    sys.path.insert(0, NOW_DIR)
 
 # 采样率字符串 → 整数。原版 infer-web.py 的 sr_dict。
 SR_MAP = {"32k": 32000, "40k": 40000, "48k": 48000}
+SR_FROM_HZ = {32000: "32k", 40000: "40k", 48000: "48k"}
+
+# train.py 正常结束走 os._exit(2333333)，不是失败。
+TRAIN_PY_DONE = 2333333
+
+# 跟 infer/modules/train/preprocess.py 的 _AUDIO_EXT 一致。
+AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
+
+STAGE_DIRS = (
+    "0_gt_wavs",
+    "1_16k_wavs",
+    "2a_f0",
+    "2b-f0nsf",
+    "3_feature256",
+    "3_feature768",
+)
 
 # v2 只有 32k/48k 两份 config；40k 走 v1 的那份（原版 click_train 的判断）。
 VERSION = "v2"
@@ -68,6 +90,73 @@ def count_files(d, suffix=None):
     if suffix is None:
         return sum(1 for x in p.iterdir() if x.is_file())
     return sum(1 for x in p.iterdir() if x.is_file() and x.name.endswith(suffix))
+
+
+def count_audio(d):
+    p = Path(d)
+    if not p.is_dir():
+        return 0
+    return sum(
+        1
+        for x in p.rglob("*")
+        if x.is_file() and x.suffix.lower() in AUDIO_EXT
+    )
+
+
+def write_meta(exp_dir, req):
+    (exp_dir / "tm_meta.json").write_text(
+        json.dumps({"sample_rate": req["sample_rate"], "exp": req["exp"]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def infer_sr(exp_dir):
+    """续跑时用已有切片的采样率，不能信界面当下选的那档。"""
+    meta = exp_dir / "tm_meta.json"
+    if meta.is_file():
+        try:
+            sr = json.loads(meta.read_text(encoding="utf-8")).get("sample_rate")
+            if sr in SR_MAP:
+                return sr
+        except (OSError, ValueError):
+            pass
+    cfg = exp_dir / "config.json"
+    if cfg.is_file():
+        try:
+            n = json.loads(cfg.read_text(encoding="utf-8")).get("data", {}).get(
+                "sampling_rate"
+            )
+            if n in SR_FROM_HZ:
+                return SR_FROM_HZ[n]
+        except (OSError, ValueError):
+            pass
+    gt = exp_dir / "0_gt_wavs"
+    if gt.is_dir():
+        for p in gt.iterdir():
+            if p.suffix.lower() != ".wav":
+                continue
+            try:
+                with wave.open(str(p), "rb") as w:
+                    n = w.getframerate()
+                if n in SR_FROM_HZ:
+                    return SR_FROM_HZ[n]
+            except Exception:
+                continue
+    return None
+
+
+def wipe_stage_dirs(exp_dir):
+    for name in STAGE_DIRS:
+        d = exp_dir / name
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+    for name in ("filelist.txt", "config.json", "tm_meta.json", "total_fea.npy"):
+        p = exp_dir / name
+        if p.is_file():
+            try:
+                p.unlink()
+            except OSError:
+                pass
 
 
 class StageProgress(threading.Thread):
@@ -202,7 +291,7 @@ def spawn(args, log_file, env=None):
         )
 
 
-def run_stage(args, log_file, watcher=None, env=None, what=""):
+def run_stage(args, log_file, watcher=None, env=None, what="", ok_codes=(0,)):
     p = spawn(args, log_file, env=env)
     try:
         code = p.wait()
@@ -213,7 +302,7 @@ def run_stage(args, log_file, watcher=None, env=None, what=""):
         if watcher is not None:
             watcher.stop()
             watcher.join(timeout=3)
-    if code != 0:
+    if code not in ok_codes:
         fail("%s失败（退出码 %s），详情见 %s" % (what or "该步骤", code, log_file))
     return code
 
@@ -225,7 +314,7 @@ def run_stage(args, log_file, watcher=None, env=None, what=""):
 
 def stage_preprocess(req, exp_dir, py, n_stages):
     dataset = req["dataset"]
-    n_files = sum(1 for x in Path(dataset).rglob("*") if x.is_file())
+    n_files = count_audio(dataset)
     log = exp_dir / "preprocess.log"
     log.write_text("", encoding="utf-8")
     emit(
@@ -264,7 +353,7 @@ def stage_f0(req, exp_dir, py, n_stages):
         args = [py, "infer/modules/train/extract/extract_f0_print.py",
                 str(exp_dir), str(req["n_cpu"]), method]
     run_stage(args, log, watcher=w, what="音高提取")
-    if count_files(exp_dir / "2a_f0") == 0:
+    if count_files(exp_dir / "2a_f0") == 0 or count_files(exp_dir / "2b-f0nsf") == 0:
         fail("音高提取没有产出。换一种音高算法再试。")
 
 
@@ -379,7 +468,8 @@ def stage_train(req, exp_dir, py, root, n_stages):
     # train.py 的 n_gpus 是 torch.cuda.device_count() 数出来的，不看 -g；-g 只
     # 用来设 CUDA_VISIBLE_DEVICES。所以非 N 卡传空串，让它数到 0 卡、走 CPU 分支。
     args += ["-g", "0" if req["device"] == "cuda" else ""]
-    run_stage(args, log, watcher=tail, what="训练")
+    (root / "assets" / "weights").mkdir(parents=True, exist_ok=True)
+    run_stage(args, log, watcher=tail, what="训练", ok_codes=(0, TRAIN_PY_DONE))
 
 
 def stage_index(req, exp_dir, py, n_stages):
@@ -387,60 +477,74 @@ def stage_index(req, exp_dir, py, n_stages):
 
     这段原版写在 infer-web.py 里且是 gradio generator，没法当脚本调用，所以在
     这里重写一遍 —— 逻辑就是 faiss IVF，几十行，比把 gradio 拖进来划算。
+
+    索引失败不能把已经训好的权重打成失败：没有 index 仍能变声。
     """
-    import numpy as np
+    try:
+        import numpy as np
 
-    emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-         done=0, total=3, message="收集特征…")
-    feat_dir = exp_dir / ("3_feature%d" % FEATURE_DIM)
-    names = sorted(x for x in feat_dir.iterdir() if x.is_file() and x.suffix == ".npy")
-    if not names:
-        fail("没有特征文件，建不了索引。")
-    big = np.concatenate([np.load(str(x)) for x in names], 0)
-    idx = np.arange(big.shape[0])
-    np.random.shuffle(idx)
-    big = big[idx]
-
-    if big.shape[0] > 2e5:
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-             done=1, total=3, message="特征过多，先聚类到 1 万个中心…")
-        try:
-            from sklearn.cluster import MiniBatchKMeans
-
-            big = (
-                MiniBatchKMeans(
-                    n_clusters=10000,
-                    verbose=False,
-                    batch_size=256 * max(req["n_cpu"], 1),
-                    compute_labels=False,
-                    init="random",
-                )
-                .fit(big)
-                .cluster_centers_
-            )
-        except Exception as e:  # 聚类失败不该让整次训练白跑
+             done=0, total=3, message="收集特征…")
+        feat_dir = exp_dir / ("3_feature%d" % FEATURE_DIM)
+        if not feat_dir.is_dir():
             emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-                 done=1, total=3, message="聚类失败，改用全量特征：%s" % e)
+                 done=3, total=3, message="没有特征目录，跳过索引")
+            return None
+        names = sorted(x for x in feat_dir.iterdir() if x.is_file() and x.suffix == ".npy")
+        if not names:
+            emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+                 done=3, total=3, message="没有特征文件，跳过索引")
+            return None
+        big = np.concatenate([np.load(str(x)) for x in names], 0)
+        idx = np.arange(big.shape[0])
+        np.random.shuffle(idx)
+        big = big[idx]
 
-    import faiss
+        if big.shape[0] > 2e5:
+            emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+                 done=1, total=3, message="特征过多，先聚类到 1 万个中心…")
+            try:
+                from sklearn.cluster import MiniBatchKMeans
 
-    np.save(str(exp_dir / "total_fea.npy"), big)
-    n_ivf = min(int(16 * np.sqrt(big.shape[0])), big.shape[0] // 39)
-    n_ivf = max(n_ivf, 1)
-    emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-         done=2, total=3, message="训练索引（%d 条特征）…" % big.shape[0])
-    index = faiss.index_factory(FEATURE_DIM, "IVF%s,Flat" % n_ivf)
-    ivf = faiss.extract_index_ivf(index)
-    ivf.nprobe = 1
-    index.train(big)
-    for i in range(0, big.shape[0], 8192):
-        index.add(big[i: i + 8192])
-    out = exp_dir / ("added_IVF%s_Flat_nprobe_%s_%s_%s.index"
-                     % (n_ivf, ivf.nprobe, req["exp"], VERSION))
-    faiss.write_index(index, str(out))
-    emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-         done=3, total=3, message="索引完成")
-    return out
+                big = (
+                    MiniBatchKMeans(
+                        n_clusters=10000,
+                        verbose=False,
+                        batch_size=256 * max(req["n_cpu"], 1),
+                        compute_labels=False,
+                        init="random",
+                    )
+                    .fit(big)
+                    .cluster_centers_
+                )
+            except Exception as e:  # 聚类失败不该让整次训练白跑
+                emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+                     done=1, total=3, message="聚类失败，改用全量特征：%s" % e)
+
+        import faiss
+
+        np.save(str(exp_dir / "total_fea.npy"), big)
+        n_ivf = min(int(16 * np.sqrt(big.shape[0])), big.shape[0] // 39)
+        n_ivf = max(n_ivf, 1)
+        emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+             done=2, total=3, message="训练索引（%d 条特征）…" % big.shape[0])
+        index = faiss.index_factory(FEATURE_DIM, "IVF%s,Flat" % n_ivf)
+        ivf = faiss.extract_index_ivf(index)
+        ivf.nprobe = 1
+        index.train(big)
+        for i in range(0, big.shape[0], 8192):
+            index.add(big[i: i + 8192])
+        out = exp_dir / ("added_IVF%s_Flat_nprobe_%s_%s_%s.index"
+                         % (n_ivf, ivf.nprobe, req["exp"], VERSION))
+        faiss.write_index(index, str(out))
+        emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+             done=3, total=3, message="索引完成")
+        return out
+    except Exception as e:
+        emit(phase="stage", stage="index", index=5, total_stages=n_stages,
+             done=3, total=3,
+             message="索引没建成（%s）。音色已经训好，仍可使用。" % e)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +602,7 @@ def main():
     root = Path(NOW_DIR)
     exp_dir = root / "logs" / req["exp"]
     exp_dir.mkdir(parents=True, exist_ok=True)
+    (root / "assets" / "weights").mkdir(parents=True, exist_ok=True)
     py = sys.executable
 
     n_stages = len(STAGES)
@@ -509,7 +614,24 @@ def main():
     have_slices = count_files(exp_dir / "1_16k_wavs") > 0
     have_f0 = count_files(exp_dir / "2a_f0") > 0
     have_feat = count_files(exp_dir / ("3_feature%d" % FEATURE_DIM)) > 0
-    resume = req["resume"]
+    resume = bool(req["resume"] and have_slices)
+
+    if resume:
+        stored = infer_sr(exp_dir)
+        if stored and stored != req["sample_rate"]:
+            emit(
+                phase="skip",
+                stage="preprocess",
+                message="沿用已有切片的采样率 %s（这次选的是 %s）" % (stored, req["sample_rate"]),
+            )
+        if stored:
+            req["sample_rate"] = stored
+    else:
+        if have_slices:
+            wipe_stage_dirs(exp_dir)
+            have_f0 = False
+            have_feat = False
+        write_meta(exp_dir, req)
 
     try:
         if resume and have_slices:
@@ -538,8 +660,10 @@ def main():
     weights = root / "assets" / "weights" / ("%s.pth" % req["exp"])
     if not weights.is_file():
         fail("训练结束但没找到 %s。查看 logs/%s/train.log。" % (weights, req["exp"]))
-    emit(phase="done", weights=str(weights), index=str(index_path),
-         message="训练完成")
+    msg = "训练完成" if index_path else "训练完成（索引没建成，音色仍可用）"
+    emit(phase="done", weights=str(weights),
+         index=str(index_path) if index_path else "",
+         message=msg)
 
 
 if __name__ == "__main__":

@@ -1,20 +1,12 @@
 import multiprocessing
 import os
 import sys
+import traceback
 
 from scipy import signal
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
-print(*sys.argv[1:])
-inp_root = sys.argv[1]
-sr = int(sys.argv[2])
-n_p = int(sys.argv[3])
-exp_dir = sys.argv[4]
-noparallel = sys.argv[5] == "True"
-per = float(sys.argv[6])
-import os
-import traceback
 
 import librosa
 import numpy as np
@@ -23,13 +15,35 @@ from scipy.io import wavfile
 from infer.lib.audio import load_audio
 from infer.lib.slicer2 import Slicer
 
-f = open("%s/preprocess.log" % exp_dir, "a+")
+# 跟 train_worker.AUDIO_EXT 保持一致：子目录里的歌也要扫到。
+_AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
+
+_log = None
 
 
 def println(strr):
     print(strr)
-    f.write("%s\n" % strr)
-    f.flush()
+    if _log is None:
+        return
+    try:
+        _log.write("%s\n" % strr)
+        _log.flush()
+    except Exception:
+        pass
+
+
+def iter_audio(inp_root):
+    """递归收集音频。只扫文件、不把子目录当输入（旧 listdir 会把文件夹喂给 load_audio）。"""
+    infos = []
+    idx = 0
+    for dirpath, _dirs, files in os.walk(inp_root):
+        for name in sorted(files):
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in _AUDIO_EXT:
+                continue
+            infos.append((os.path.join(dirpath, name), idx))
+            idx += 1
+    return infos
 
 
 class PreProcess:
@@ -108,12 +122,12 @@ class PreProcess:
         for path, idx0 in infos:
             self.pipeline(path, idx0)
 
-    def pipeline_mp_inp_dir(self, inp_root, n_p):
+    def pipeline_mp_inp_dir(self, inp_root, n_p, noparallel=False):
         try:
-            infos = [
-                ("%s/%s" % (inp_root, name), idx)
-                for idx, name in enumerate(sorted(list(os.listdir(inp_root))))
-            ]
+            infos = iter_audio(inp_root)
+            if not infos:
+                println("no-audio-in-%s" % inp_root)
+                return
             if noparallel:
                 for i in range(n_p):
                     self.pipeline_mp(infos[i::n_p])
@@ -131,12 +145,37 @@ class PreProcess:
             println("Fail. %s" % traceback.format_exc())
 
 
-def preprocess_trainset(inp_root, sr, n_p, exp_dir, per):
-    pp = PreProcess(sr, exp_dir, per)
-    println("start preprocess")
-    pp.pipeline_mp_inp_dir(inp_root, n_p)
-    println("end preprocess")
+def preprocess_trainset(inp_root, sr, n_p, exp_dir, per, noparallel=False):
+    global _log
+    os.makedirs(exp_dir, exist_ok=True)
+    _log = open(
+        os.path.join(exp_dir, "preprocess.log"),
+        "a+",
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        pp = PreProcess(sr, exp_dir, per)
+        println("start preprocess")
+        pp.pipeline_mp_inp_dir(inp_root, n_p, noparallel=noparallel)
+        println("end preprocess")
+    finally:
+        try:
+            _log.close()
+        except Exception:
+            pass
+        _log = None
 
 
 if __name__ == "__main__":
-    preprocess_trainset(inp_root, sr, n_p, exp_dir, per)
+    # argv 只能在这里读。Windows 下 multiprocessing 用 spawn 会重新 import
+    # 本模块，子进程的 sys.argv 是 `-c from multiprocessing.spawn…`，
+    # 放在模块顶层会把子进程直接砸死，切片数为 0。
+    print(*sys.argv[1:])
+    inp_root = sys.argv[1]
+    sr = int(sys.argv[2])
+    n_p = int(sys.argv[3])
+    exp_dir = sys.argv[4]
+    noparallel = sys.argv[5] == "True"
+    per = float(sys.argv[6])
+    preprocess_trainset(inp_root, sr, n_p, exp_dir, per, noparallel=noparallel)

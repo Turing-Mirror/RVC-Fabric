@@ -50,6 +50,17 @@ fn pretrained_dir(root: &Path) -> PathBuf {
     root.join("assets").join("pretrained_v2")
 }
 
+/// 静音样本：filelist 末尾要拼 `mute{sr}.wav`。只看目录在不在会让缺文件的
+/// 安装过了预检，训到最后一步才炸。
+fn mute_ready(root: &Path, sr: Option<&str>) -> bool {
+    let d = root.join("logs").join("mute").join("0_gt_wavs");
+    let check = |rate: &str| d.join(format!("mute{rate}.wav")).is_file();
+    match sr {
+        Some(rate) => check(rate),
+        None => SAMPLE_RATES.iter().all(|rate| check(rate)),
+    }
+}
+
 /// 某个采样率的底模齐不齐。两个文件缺一不可，只有 G 没有 D 训不起来。
 pub fn pretrained_ready(root: &Path, sr: &str) -> bool {
     let d = pretrained_dir(root);
@@ -135,7 +146,7 @@ pub fn status(root: &Path) -> Value {
     json!({
         "runtime_ready": paths::runtime_ready(root),
         "worker_present": worker_script(root).is_file(),
-        "mute_present": root.join("logs").join("mute").join("0_gt_wavs").is_dir(),
+        "mute_present": mute_ready(root, None),
         "hubert_present": root.join("assets").join("hubert").join("hubert_base.pt").is_file(),
         "nvidia": nvidia,
         "pretrained": pre,
@@ -228,7 +239,7 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
     {
         return Err(crate::i18n::t("s.c2b2787278").into());
     }
-    if !root.join("logs").join("mute").join("0_gt_wavs").is_dir() {
+    if !mute_ready(root, Some(&req.sample_rate)) {
         return Err(crate::i18n::t("s.625da2c547").into());
     }
     // resume 的时候数据集可以不在了 —— 切片已经在实验目录里，原始素材删掉也无妨。
@@ -407,6 +418,23 @@ mod tests {
         for ok in [&crate::i18n::t("s.6ca6738e54"), "my voice", "voice-2026_v2"] {
             assert!(validate_name(ok).is_ok(), "should accept {ok:?}");
         }
+    }
+
+    #[test]
+    fn mute_ready_needs_the_wav_not_just_the_folder() {
+        let base = std::env::temp_dir().join("rvcf-train-mute");
+        let _ = std::fs::remove_dir_all(&base);
+        let d = base.join("logs").join("mute").join("0_gt_wavs");
+        std::fs::create_dir_all(&d).unwrap();
+        assert!(!mute_ready(&base, None));
+        assert!(!mute_ready(&base, Some("48k")));
+        std::fs::write(d.join("mute48k.wav"), b"x").unwrap();
+        assert!(mute_ready(&base, Some("48k")));
+        assert!(!mute_ready(&base, None));
+        std::fs::write(d.join("mute32k.wav"), b"x").unwrap();
+        std::fs::write(d.join("mute40k.wav"), b"x").unwrap();
+        assert!(mute_ready(&base, None));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

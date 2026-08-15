@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from dotenv import load_dotenv
@@ -263,6 +264,16 @@ if __name__ == "__main__":
             p.daemon = True
             p.start()
             _harvest_workers.append(p)
+
+    @contextlib.contextmanager
+    def _sts_stage(timer, name: str):
+        """timer 可能是 None（sts_perf 导入失败），两种情况都要能用。"""
+        if timer is None:
+            yield
+            return
+        with timer.stage(name):
+            yield
+
 
     class GUIConfig:
         def __init__(self) -> None:
@@ -3115,6 +3126,15 @@ if __name__ == "__main__":
         # 离线语音转换（热路径）
         # ------------------------------------------------------------------
 
+        def _sts_timer(self):
+            """计时器拿不到就返回 None —— 计时永远不该让转换失败。"""
+            try:
+                from tools.sts_perf import StsTimer
+
+                return StsTimer(hot=True)
+            except Exception:
+                return None
+
         def _sts_emit(self, **fields):
             try:
                 from tools.worker_protocol import write_sts
@@ -3251,10 +3271,15 @@ if __name__ == "__main__":
                 fail(f"输出目录建不了：{e}")
                 return
 
+            # 热路径也计时。跟冷路径同一份格式，两条路的数字才好对着看 ——
+            # 「省掉了多少」这句话得有具体的秒数撑着。
+            timer = self._sts_timer()
+
             try:
-                vc, why = self._sts_resident_vc(
-                    self.config, str(payload.get("model") or "")
-                )
+                with _sts_stage(timer, "model"):
+                    vc, why = self._sts_resident_vc(
+                        self.config, str(payload.get("model") or "")
+                    )
             except Exception as e:
                 traceback.print_exc()
                 fail(f"复用实时模型失败：{sts_core.friendly_error(e)}")
@@ -3269,46 +3294,54 @@ if __name__ == "__main__":
             if index_path and not os.path.isfile(index_path):
                 index_path = ""
 
+            out_files: list = []
+            skipped: list = []
             try:
-                out_files, skipped, cancelled = sts_core.run_batch(
-                    vc,
-                    files,
-                    out_dir,
-                    {
-                        "pitch": int(payload.get("pitch") or 0),
-                        "f0method": f0method,
-                        "index_path": index_path or None,
-                        "index_rate": float(
-                            payload.get("index_rate")
-                            if payload.get("index_rate") is not None
-                            else 0.75
-                        ),
-                        "filter_radius": int(
-                            payload.get("filter_radius")
-                            if payload.get("filter_radius") is not None
-                            else 3
-                        ),
-                        "resample_sr": int(payload.get("resample_sr") or 0),
-                        "rms_mix_rate": float(
-                            payload.get("rms_mix_rate")
-                            if payload.get("rms_mix_rate") is not None
-                            else 1.0
-                        ),
-                        "protect": float(
-                            payload.get("protect")
-                            if payload.get("protect") is not None
-                            else 0.33
-                        ),
-                    },
-                    prog,
-                    self._sts_emit,
-                    should_cancel=self._sts_cancelled,
-                )
+                with _sts_stage(timer, "convert"):
+                    out_files, skipped, cancelled = sts_core.run_batch(
+                        vc,
+                        files,
+                        out_dir,
+                        {
+                            "pitch": int(payload.get("pitch") or 0),
+                            "f0method": f0method,
+                            "index_path": index_path or None,
+                            "index_rate": float(
+                                payload.get("index_rate")
+                                if payload.get("index_rate") is not None
+                                else 0.75
+                            ),
+                            "filter_radius": int(
+                                payload.get("filter_radius")
+                                if payload.get("filter_radius") is not None
+                                else 3
+                            ),
+                            "resample_sr": int(payload.get("resample_sr") or 0),
+                            "rms_mix_rate": float(
+                                payload.get("rms_mix_rate")
+                                if payload.get("rms_mix_rate") is not None
+                                else 1.0
+                            ),
+                            "protect": float(
+                                payload.get("protect")
+                                if payload.get("protect") is not None
+                                else 0.33
+                            ),
+                        },
+                        prog,
+                        self._sts_emit,
+                        should_cancel=self._sts_cancelled,
+                    )
             except Exception as e:
                 traceback.print_exc()
                 fail(sts_core.friendly_error(e))
                 return
             finally:
+                if timer is not None:
+                    timer.save(
+                        os.path.join("User_Data", "perf_reports"),
+                        extra={"total": total, "ok": len(out_files)},
+                    )
                 # 常驻模型不能动，只把这一轮的中间张量还给分配器。
                 sts_core.cuda_empty_cache()
 

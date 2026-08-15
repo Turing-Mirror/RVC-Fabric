@@ -45,6 +45,7 @@ stdout 每行一条 JSON（与 separate_worker 同形）::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -187,6 +188,41 @@ def _estimate_seconds(paths: list[Path]) -> float:
     return total
 
 
+def _new_timer(hot: bool):
+    """计时器拿不到就返回 None —— 计时永远不该让转换失败。"""
+    try:
+        from tools.sts_perf import StsTimer
+
+        return StsTimer(hot=hot)
+    except Exception:
+        return None
+
+
+@contextlib.contextmanager
+def _stage(timer, name: str):
+    if timer is None:
+        yield
+        return
+    with timer.stage(name):
+        yield
+
+
+def _save_timing(timer, **extra) -> None:
+    if timer is None:
+        return
+    try:
+        path = timer.save(str(ROOT / "User_Data" / "perf_reports"), extra=extra)
+        if path:
+            s = timer.summary(extra)
+            print(
+                f"[sts_perf] total={s['total_s']}s load={s['load_share'] * 100:.0f}% "
+                f"stages={s['stages_s']}",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass
+
+
 def main(argv: list[str]) -> int:
     _ensure_stdio_utf8()
     if len(argv) < 2:
@@ -247,24 +283,32 @@ def main(argv: list[str]) -> int:
     _tune_torch(total_seconds=est_seconds, total_files=total)
     cuda_empty_cache()
 
+    # 分段计时。「一条 5 秒语音要一两分钟」之前只能靠读代码估，估错了力气就
+    # 花在错的地方。落一份本地 JSON，用户发过来我们才有别人机器上的真数字。
+    timer = _new_timer(hot=False)
+
     try:
-        from configs.config import Config
-        from infer.modules.vc.modules import VC
+        with _stage(timer, "import"):
+            from configs.config import Config
+            from infer.modules.vc.modules import VC
 
         # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
         sys.argv = [sys.argv[0]]
         prog.load("config", 0.0)
-        config = Config()
+        with _stage(timer, "config"):
+            config = Config()
         prog.load("config", 1.0)
         # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
         _tune_torch(total_seconds=est_seconds, total_files=total)
         vc = VC(config)
         # get_vc 认绝对路径（User_Data/models/...）
         prog.load("model", 0.0)
-        vc.get_vc(model)
+        with _stage(timer, "model"):
+            vc.get_vc(model)
         prog.load("model", 1.0)
         # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
-        preload_side_models(vc, config, f0method, prog)
+        with _stage(timer, "hubert"):
+            preload_side_models(vc, config, f0method, prog)
         # 只在显存紧时清；加载后强清一次把碎片归还给池，后面尽量不碰。
         cuda_empty_cache()
     except Exception as e:
@@ -272,25 +316,27 @@ def main(argv: list[str]) -> int:
         emit(phase="error", message=f"加载模型失败：{friendly_error(e)}")
         return 1
 
-    out_files, skipped, _cancelled = run_batch(
-        vc,
-        files,
-        out_dir,
-        {
-            "pitch": pitch,
-            "f0method": f0method,
-            "index_path": index if index and Path(index).is_file() else None,
-            "index_rate": index_rate,
-            "filter_radius": filter_radius,
-            "resample_sr": resample_sr,
-            "rms_mix_rate": rms_mix_rate,
-            "protect": protect,
-        },
-        prog,
-        emit,
-        # 冷路径的取消是壳直接杀进程，不需要软取消。
-        should_cancel=None,
-    )
+    with _stage(timer, "convert"):
+        out_files, skipped, _cancelled = run_batch(
+            vc,
+            files,
+            out_dir,
+            {
+                "pitch": pitch,
+                "f0method": f0method,
+                "index_path": index if index and Path(index).is_file() else None,
+                "index_rate": index_rate,
+                "filter_radius": filter_radius,
+                "resample_sr": resample_sr,
+                "rms_mix_rate": rms_mix_rate,
+                "protect": protect,
+            },
+            prog,
+            emit,
+            # 冷路径的取消是壳直接杀进程，不需要软取消。
+            should_cancel=None,
+        )
+    _save_timing(timer, total=total, ok=len(out_files), seconds=est_seconds)
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。

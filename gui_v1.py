@@ -3405,12 +3405,15 @@ if __name__ == "__main__":
                             "rms_mix_rate": float(
                                 payload.get("rms_mix_rate")
                                 if payload.get("rms_mix_rate") is not None
-                                else 1.0
+                                else 0.25
                             ),
                             "protect": float(
                                 payload.get("protect")
                                 if payload.get("protect") is not None
                                 else 0.33
+                            ),
+                            "format": sts_core.normalize_format(
+                                str(payload.get("format") or "wav")
                             ),
                         },
                         prog,

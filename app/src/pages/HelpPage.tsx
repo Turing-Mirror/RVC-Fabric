@@ -171,6 +171,24 @@ function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: s
   return hits;
 }
 
+function buildInferGuide(): { q: string; hint: string; a: string }[] {
+  return [
+    { q: t("s.inferGuideQ1"), hint: t("s.inferGuideH1"), a: t("s.inferGuideA1") },
+    { q: t("s.inferGuideQ2"), hint: t("s.inferGuideH2"), a: t("s.inferGuideA2") },
+    { q: t("s.inferGuideQ3"), hint: t("s.inferGuideH3"), a: t("s.inferGuideA3") },
+    { q: t("s.inferGuideQ4"), hint: t("s.inferGuideH4"), a: t("s.inferGuideA4") },
+  ];
+}
+
+function buildSeparateGuide(): { q: string; hint: string; a: string }[] {
+  return [
+    { q: t("s.sepGuideQ1"), hint: t("s.sepGuideH1"), a: t("s.sepGuideA1") },
+    { q: t("s.sepGuideQ2"), hint: t("s.sepGuideH2"), a: t("s.sepGuideA2") },
+    { q: t("s.sepGuideQ3"), hint: t("s.sepGuideH3"), a: t("s.sepGuideA3") },
+    { q: t("s.sepGuideQ4"), hint: t("s.sepGuideH4"), a: t("s.sepGuideA4") },
+  ];
+}
+
 function buildTrainGuide(): { q: string; hint: string; a: string }[] {
   return [
     { q: t("s.trainGuideQ1"), hint: t("s.trainGuideH1"), a: t("s.trainGuideA1") },
@@ -185,7 +203,7 @@ function buildTrainGuide(): { q: string; hint: string; a: string }[] {
 type HelpProps = {
   /** 引擎报的设备列表。空的时候是引擎还没起来，不代表用户没装声卡。 */
   status?: { input_devices?: unknown; output_devices?: unknown };
-  /** 从训练窗跳过来时滚到这一段（现在只有 train）。 */
+  /** 从工具窗跳过来时滚到这一段（train / infer / separate）。 */
   focus?: string;
   /** 同一段再点一次也要再滚过去，不能只看 focus 字符串。 */
   focusNonce?: number;
@@ -226,10 +244,15 @@ function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
   }, []);
 
   useEffect(() => {
-    if (focus !== "train") return;
-    const el = document.getElementById("help-train");
+    if (focus !== "train" && focus !== "infer" && focus !== "separate") return;
+    const el = document.getElementById(`help-${focus}`);
     el?.scrollIntoView({ block: "start" });
-    const first = buildTrainGuide()[0]?.q;
+    const first =
+      focus === "train"
+        ? buildTrainGuide()[0]?.q
+        : focus === "infer"
+          ? buildInferGuide()[0]?.q
+          : buildSeparateGuide()[0]?.q;
     if (first) setOpen(first);
   }, [focus, focusNonce]);
 
@@ -293,6 +316,8 @@ function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
   const faq = buildFaq();
   const trainGuide = buildTrainGuide();
+  const inferGuide = buildInferGuide();
+  const separateGuide = buildSeparateGuide();
 
   return (
     <PagePad>
@@ -391,6 +416,52 @@ function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
             desc={t("s.26ad7c406b")}
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
           />
+        </Group>
+      </Block>
+      <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+          {t("s.sepGuideLead")}
+        </p>
+        <Group>
+          {separateGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
+      <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+          {t("s.inferGuideLead")}
+        </p>
+        <Group>
+          {inferGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
         </Group>
       </Block>
       <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>

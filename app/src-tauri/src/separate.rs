@@ -114,7 +114,15 @@ fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
 }
 
 /// 跑一次分离。阻塞，调用方负责挪到后台线程。
-pub fn run(app: &AppHandle, root: &Path, input: &str, output: &str, model: &str) -> Result<Value, String> {
+pub fn run(
+    app: &AppHandle,
+    root: &Path,
+    input: &str,
+    output: &str,
+    model: &str,
+    format: &str,
+    aggression: u32,
+) -> Result<Value, String> {
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
@@ -130,6 +138,8 @@ pub fn run(app: &AppHandle, root: &Path, input: &str, output: &str, model: &str)
             "input": input,
             "output": output,
             "model": model,
+            "format": format,
+            "aggression": aggression,
         }),
     );
     crate::logging::shell_log!(
@@ -138,7 +148,7 @@ pub fn run(app: &AppHandle, root: &Path, input: &str, output: &str, model: &str)
             .and_then(|s| s.to_str())
             .unwrap_or("separate")
     );
-    let result = run_inner(app, root, input, output, model, &log);
+    let result = run_inner(app, root, input, output, model, format, aggression, &log);
     match &result {
         Ok(_) => crate::logging::finish_run(&log, true, "ok"),
         Err(e) => {
@@ -162,6 +172,8 @@ fn run_inner(
     input: &str,
     output: &str,
     model: &str,
+    format: &str,
+    aggression: u32,
     log: &Path,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
@@ -189,13 +201,21 @@ fn run_inner(
     if let Some(p) = req.parent() {
         let _ = std::fs::create_dir_all(p);
     }
+    let fmt = match format.trim().to_ascii_lowercase().as_str() {
+        "flac" => "flac",
+        "mp3" => "mp3",
+        "m4a" => "m4a",
+        _ => "wav",
+    };
+    let agg = aggression.min(20);
     let payload = json!({
         "model": model,
         "model_dir": mdir.to_string_lossy(),
         "input": input,
         "output": output,
         "device": "auto",
-        "format": "wav",
+        "format": fmt,
+        "aggression": agg,
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;

@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from tools.sts_core import (  # noqa: E402
     ConversionCancelled,
     StsProgress,
+    normalize_format,
     unique_dest,
 )
 
@@ -99,6 +100,14 @@ class UniqueDestTests(unittest.TestCase):
             out = Path(td)
             got = unique_dest(out, Path("a.wav"), "a")
             self.assertEqual(got.parent, out)
+
+    def test_export_format_changes_suffix(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            got = unique_dest(out, Path("a.wav"), "a", "flac")
+            self.assertEqual(got.name, "a_rvc.flac")
+            self.assertEqual(normalize_format("MP3"), "mp3")
+            self.assertEqual(normalize_format("aac"), "wav")
 
 
 class CudnnBenchmarkGateTests(unittest.TestCase):

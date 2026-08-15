@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Btn } from "./ui";
+import { Btn, HelpMark } from "./ui";
 import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
@@ -108,6 +109,9 @@ const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FIELD =
   "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
+const STS_F0 = ["rmvpe", "harvest", "pm", "crepe"] as const;
+const STS_FMTS = ["wav", "flac", "mp3", "m4a"] as const;
+const STS_RATES = [0, 16000, 32000, 40000, 44100, 48000] as const;
 
 /**
  * 语音转换工具窗。
@@ -187,8 +191,13 @@ function StsSection() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [pitch, setPitch] = useState(0);
-  const [f0method, setF0method] = useState("rmvpe");
+  const [f0method, setF0method] = useState<(typeof STS_F0)[number]>("rmvpe");
   const [indexRate, setIndexRate] = useState(0.75);
+  const [protect, setProtect] = useState(0.33);
+  const [rms, setRms] = useState(0.25);
+  const [filterRadius, setFilterRadius] = useState(3);
+  const [resample, setResample] = useState(0);
+  const [fmt, setFmt] = useState<(typeof STS_FMTS)[number]>("wav");
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
@@ -251,7 +260,14 @@ function StsSection() {
       setSt(s);
       if (full) {
         if (s.pitch != null) setPitch(Number(s.pitch));
-        if (s.f0method) setF0method(String(s.f0method));
+        if (s.f0method) {
+          const m = String(s.f0method);
+          setF0method(
+            (STS_F0 as readonly string[]).includes(m)
+              ? (m as (typeof STS_F0)[number])
+              : "rmvpe",
+          );
+        }
         if (s.index_rate != null) setIndexRate(Number(s.index_rate));
         if (!input && s.last_input) setInput(String(s.last_input));
         if (!output && s.last_output) setOutput(String(s.last_output));
@@ -528,6 +544,11 @@ function StsSection() {
         indexRate,
         modelPath,
         indexPath,
+        filterRadius,
+        resampleSr: resample,
+        rmsMixRate: rms,
+        protect,
+        format: fmt,
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
@@ -574,6 +595,9 @@ function StsSection() {
 
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+      </div>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
@@ -801,13 +825,16 @@ function StsSection() {
           </span>
         </div>
         <div className={ROW}>
-          <span className={LABEL}>{t("s.3579ac474b")}</span>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.3579ac474b")}
+            <HelpMark title={t("s.stsF0Hint")} />
+          </span>
           <select
             className={`flex-1 min-w-0 ${FIELD}`}
             value={f0method}
-            onChange={(e) => setF0method(e.target.value)}
+            onChange={(e) => setF0method(e.target.value as (typeof STS_F0)[number])}
           >
-            {["rmvpe", "fcpe", "harvest", "pm", "crepe"].map((m) => (
+            {STS_F0.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
@@ -830,6 +857,100 @@ function StsSection() {
           <span className="w-[52px] text-right text-[13px] tabular-nums">
             {indexRate.toFixed(2)}
           </span>
+        </div>
+        <div className={ROW}>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.stsProtect")}
+            <HelpMark title={t("s.stsProtectHint")} />
+          </span>
+          <div className="flex-1">
+            <RangeBar
+              value={protect}
+              min={0}
+              max={0.5}
+              step={0.01}
+              defaultValue={0.33}
+              onChange={setProtect}
+              ariaLabel={t("s.stsProtect")}
+            />
+          </div>
+          <span className="w-[52px] text-right text-[13px] tabular-nums">
+            {protect.toFixed(2)}
+          </span>
+        </div>
+        <div className={ROW}>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.stsRms")}
+            <HelpMark title={t("s.stsRmsHint")} />
+          </span>
+          <div className="flex-1">
+            <RangeBar
+              value={rms}
+              min={0}
+              max={1}
+              step={0.01}
+              defaultValue={0.25}
+              onChange={setRms}
+              ariaLabel={t("s.stsRms")}
+            />
+          </div>
+          <span className="w-[52px] text-right text-[13px] tabular-nums">
+            {rms.toFixed(2)}
+          </span>
+        </div>
+        <div className={ROW}>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.stsFilter")}
+            <HelpMark title={t("s.stsFilterHint")} />
+          </span>
+          <div className="flex-1">
+            <RangeBar
+              value={filterRadius}
+              min={0}
+              max={7}
+              step={1}
+              defaultValue={3}
+              onChange={setFilterRadius}
+              ariaLabel={t("s.stsFilter")}
+            />
+          </div>
+          <span className="w-[52px] text-right text-[13px] tabular-nums">
+            {filterRadius}
+          </span>
+        </div>
+        <div className={ROW}>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.stsResample")}
+            <HelpMark title={t("s.stsResampleHint")} />
+          </span>
+          <select
+            className={`flex-1 min-w-0 ${FIELD}`}
+            value={resample}
+            onChange={(e) => setResample(Number(e.target.value) || 0)}
+          >
+            {STS_RATES.map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? t("s.stsResampleOff") : `${n}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={ROW}>
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            {t("s.stsFormat")}
+            <HelpMark title={t("s.stsFormatHint")} />
+          </span>
+          <select
+            className={`flex-1 min-w-0 ${FIELD}`}
+            value={fmt}
+            onChange={(e) => setFmt(e.target.value as (typeof STS_FMTS)[number])}
+          >
+            {STS_FMTS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -1,0 +1,19 @@
+{
+  "name": "对讲机",
+  "desc": "更窄的带宽，更狠的过载",
+  "params": {
+    "radio": {
+      "low": 500.0,
+      "high": 2400.0,
+      "mix": 1.0,
+      "noise": 0.2
+    },
+    "drive": {
+      "amount": 0.55
+    },
+    "bitcrush": {
+      "bits": 10,
+      "downsample": 1
+    }
+  }
+}

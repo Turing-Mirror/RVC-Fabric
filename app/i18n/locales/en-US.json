@@ -1359,7 +1359,12 @@
     "cacheClearFail": "Could not clear cache: {v0}",
     "stsHotWorkerGone": "The engine process exited during conversion. Try again; if it keeps happening, export the logs from More - Collect diagnostics.",
     "stsHotStalled": "The engine stopped responding, so the conversion was aborted. Try again.",
-    "stsHotFailed": "Conversion failed. See this run's log under User_Data/logs/sts/ for details."
+    "stsHotFailed": "Conversion failed. See this run's log under User_Data/logs/sts/ for details.",
+    "dspPresetBadId": "Preset names may only use lowercase letters, digits and underscores, up to 48 characters.",
+    "dspPresetBadParams": "The preset parameters are malformed.",
+    "dspPresetSaveFail": "Could not save the preset: {0}",
+    "dspPresetNotUser": "Built-in presets cannot be deleted. Save a custom preset with the same name to override it.",
+    "dspPresetDeleteFail": "Could not delete the preset: {0}"
   },
   "extras": {
     "engineTitle": "Engine resources",

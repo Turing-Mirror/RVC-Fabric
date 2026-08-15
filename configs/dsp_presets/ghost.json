@@ -1,0 +1,16 @@
+{
+  "name": "幽灵",
+  "desc": "耳语加长混响，贴着耳朵说话",
+  "params": {
+    "whisper": {
+      "amount": 0.75
+    },
+    "pitch": {
+      "semitones": -3.0
+    },
+    "reverb": {
+      "size": 0.85,
+      "mix": 0.45
+    }
+  }
+}

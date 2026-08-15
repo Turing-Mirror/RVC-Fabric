@@ -1,0 +1,13 @@
+{
+  "name": "8-bit",
+  "desc": "位深压到底，掉进老游戏机里",
+  "params": {
+    "bitcrush": {
+      "bits": 4,
+      "downsample": 8
+    },
+    "drive": {
+      "amount": 0.2
+    }
+  }
+}

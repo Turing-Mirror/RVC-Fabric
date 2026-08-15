@@ -1,0 +1,15 @@
+{
+  "name": "山洞",
+  "desc": "大混响加长回声",
+  "params": {
+    "reverb": {
+      "size": 0.95,
+      "mix": 0.5
+    },
+    "echo": {
+      "time_ms": 320.0,
+      "feedback": 0.45,
+      "mix": 0.35
+    }
+  }
+}

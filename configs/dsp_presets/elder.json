@@ -1,0 +1,16 @@
+{
+  "name": "老者",
+  "desc": "略降调 + 慢颤音，喉头有点抖",
+  "params": {
+    "pitch": {
+      "semitones": -2.0
+    },
+    "formant": {
+      "shift": -1.5
+    },
+    "vibrato": {
+      "rate": 4.5,
+      "depth": 9.0
+    }
+  }
+}

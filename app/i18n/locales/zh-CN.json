@@ -1359,7 +1359,12 @@
     "cacheClearFail": "清理失败：{v0}",
     "stsHotWorkerGone": "转换中途引擎进程退出了。请重试；反复出现请到「其他 - 收集诊断信息」导出日志。",
     "stsHotStalled": "引擎长时间没有回应，转换已中断。请重试。",
-    "stsHotFailed": "转换失败。详情见 User_Data/logs/sts/ 下本次的日志。"
+    "stsHotFailed": "转换失败。详情见 User_Data/logs/sts/ 下本次的日志。",
+    "dspPresetBadId": "预设名只能用小写字母、数字和下划线，最长 48 个字符。",
+    "dspPresetBadParams": "预设参数格式不对。",
+    "dspPresetSaveFail": "预设保存失败：{0}",
+    "dspPresetNotUser": "内置预设删不掉。想改的话，存一个同名的自定义预设就会盖住它。",
+    "dspPresetDeleteFail": "预设删除失败：{0}"
   },
   "extras": {
     "engineTitle": "引擎资源",

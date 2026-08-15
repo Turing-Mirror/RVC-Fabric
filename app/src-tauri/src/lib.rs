@@ -6,6 +6,7 @@ pub mod catalog;
 mod autostart;
 mod config;
 mod download;
+mod dsp;
 mod engine_assets;
 mod hf;
 mod extra_assets;
@@ -665,6 +666,39 @@ fn separate_cancel() {
 }
 
 // --- 离线语音转换 STS（音频 → 目标音色）------------------------------------
+
+/// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
+#[tauri::command]
+async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(dsp::list(&root)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn dsp_preset_save(
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    name: String,
+    params: Value,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || dsp::save(&root, &id, &name, &params))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn dsp_preset_delete(
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || dsp::delete(&root, &id))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1469,6 +1503,9 @@ pub fn run() {
             separate_pick,
             separate_start,
             separate_cancel,
+            dsp_presets,
+            dsp_preset_save,
+            dsp_preset_delete,
             sts_status,
             sts_pick_input,
             sts_pick_output,

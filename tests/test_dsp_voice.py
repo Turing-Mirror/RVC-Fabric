@@ -187,6 +187,13 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn('payload["function"] in ("vc", "im", "fx")', src)
         self.assertIn('nxt == "vc"', src)
         self.assertIn('nxt = "fx"', src)
+        # 有 RVC 实例时残留的 fx 必须折回 vc，否则叠不上
+        self.assertIn("nxt == \"fx\" and rvc is not None", src)
+
+    def test_start_falls_back_to_dsp_without_engine_core(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn("def _engine_core_ready", src)
+        self.assertIn("dsp_on and not _engine_core_ready()", src)
 
     def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
         src = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
@@ -196,6 +203,8 @@ class ShellContractTests(unittest.TestCase):
         body = src[start : src.index("pub fn wait_vc_running", start)]
         self.assertIn("dsp_only", body)
         self.assertIn('json!("fx")', body)
+        self.assertIn("engine_core_ready", body)
+        self.assertIn('json!("vc")', body)
 
     def test_toggle_run_skips_engine_core_for_dsp_only(self):
         src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(
@@ -204,6 +213,8 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("dspOnly", src)
         self.assertIn("!dspOnly", src)
         self.assertIn('function: dspOnly', src)
+        self.assertIn("isEngineCoreReady", src)
+        self.assertIn("!hasPth || !coreReady", src)
 
     def test_plaza_does_not_host_dsp(self):
         src = (ROOT / "app" / "src" / "pages" / "PlazaPage.tsx").read_text(

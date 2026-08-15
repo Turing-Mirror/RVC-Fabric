@@ -1410,6 +1410,8 @@
     "dspDelete": "Eliminar",
     "dspClearVoice": "Solo DSP",
     "dspClearVoiceHint": "Ahora se apila sobre la voz actual. Pulsa para quitar el modelo RVC y dejar solo el DSP.",
+    "dspOverlayHint": "Con el motor instalado, la voz y el DSP se apilan. Si falta, solo corre el DSP y la voz sigue seleccionada.",
+    "dspOnlyHint": "Sin voz: solo DSP. Al descargar el motor y elegir una voz, se apilan las dos capas.",
     "dspCleared": "Voz quitada. Vuelve a iniciar la conversión para usar solo DSP.",
     "dspAddEffect": "Añadir efecto",
     "dspRemoveEffect": "Quitar",

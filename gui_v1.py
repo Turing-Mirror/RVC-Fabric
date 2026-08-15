@@ -26,6 +26,29 @@ def printt(strr, *args):
         print(strr % args)
 
 
+# 和 Rust engine_assets.rs 同一套五件套。缺任何一件就别去建 RVC：
+# hubert/rmvpe 会炸，ffmpeg 是离线工具用的，产品层把它们绑成一份 engine-core。
+_ENGINE_CORE_FILES = (
+    (os.path.join("assets", "hubert", "hubert_base.pt"), 1_000_000),
+    (os.path.join("assets", "rmvpe", "rmvpe.pt"), 1_000_000),
+    (os.path.join("assets", "rmvpe", "rmvpe.onnx"), 100_000),
+    ("ffmpeg.exe", 1_000_000),
+    ("ffprobe.exe", 1_000_000),
+)
+
+
+def _engine_core_ready(root=None):
+    base = root or now_dir
+    for rel, min_sz in _ENGINE_CORE_FILES:
+        p = os.path.join(base, rel)
+        try:
+            if not os.path.isfile(p) or os.path.getsize(p) < min_sz:
+                return False
+        except OSError:
+            return False
+    return True
+
+
 # Upstream engine pieces (ffmpeg/faiss/model loaders) are unreliable on
 # non-ASCII install paths — warn early so support can spot it in the log
 if any(ord(_c) > 127 for _c in os.getcwd()):
@@ -1005,13 +1028,23 @@ if __name__ == "__main__":
                 pass
 
         def set_values(self, values):
-            # DSP 变声不需要模型：没选音色但开了 DSP 预设，照样能开声。
-            # 这是 DSP 模式的意义所在——零显卡、零下载，装完就能玩。
-            dsp_only = bool(values.get("dsp_enabled")) and not values["pth_path"].strip()
-            if len(values["pth_path"].strip()) == 0 and not dsp_only:
+            # 没引擎资源 → 只要开了 DSP 就走纯 fx，音色路径留着，下完资源再叠。
+            # 有资源 + 选了音色 + 开了 DSP → RVC 和 DSP 同时走。
+            pth = values["pth_path"].strip()
+            dsp_on = bool(values.get("dsp_enabled"))
+            core_ok = _engine_core_ready()
+            dsp_only = dsp_on and (not pth or not core_ok)
+            if not pth and not dsp_on:
                 self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
                 return False
-            pth = values["pth_path"].strip()
+            if pth and not core_ok and not dsp_on:
+                self._notify(
+                    i18n(
+                        "实时变声需要引擎资源。请到广场下载模型，或先选用一个 DSP 预设。"
+                    ),
+                    VC_NEED_MODEL,
+                )
+                return False
             index_path = (values.get("index_path") or "").strip()
             # Index is optional. Missing file used to hard-crash faiss on start.
             if index_path and not os.path.isfile(index_path):
@@ -1050,7 +1083,7 @@ if __name__ == "__main__":
                         self.window["index_path"].update("")
                     except Exception:
                         pass
-            if pth and not os.path.isfile(pth):
+            if pth and not os.path.isfile(pth) and not dsp_only:
                 self._notify(i18n("pth文件不存在") + f"\n{pth}", VC_PTH_MISSING, path=pth)
                 return False
             # Devices must exist for current hostapi list
@@ -1244,10 +1277,11 @@ if __name__ == "__main__":
             except Exception:
                 pass
             self._report_load(VC_LOADING_MODEL, 18)
-            # 没选音色但开了 DSP 变声：整条 RVC 都不碰 —— 不加载 hubert、
-            # 不加载 net_g、不初始化 CUDA。这正是 DSP 模式存在的意义：
-            # 零显卡、零下载，装完就能出声，启动是即时的。
-            self.dsp_only = not str(self.gui_config.pth_path or "").strip()
+            # 纯 DSP：没选音色，或开了 DSP 但 engine-core 还没齐。
+            # 后一种不把音色忘掉，只是这次不加载 RVC。
+            pth = str(self.gui_config.pth_path or "").strip()
+            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False))
+            self.dsp_only = (not pth) or (dsp_on and not _engine_core_ready())
             if self.dsp_only:
                 self.rvc = None
                 self.function = "fx"
@@ -2576,14 +2610,14 @@ if __name__ == "__main__":
                 self.gui_config.use_pv = bool(payload["use_pv"])
             if "function" in payload and payload["function"] in ("vc", "im", "fx"):
                 nxt = str(payload["function"])
-                # 底栏只有 vc/bypass。纯 DSP 起流后壳还会按配置再推一次
-                # function=vc；这时 rvc 是 None，改成 vc 下一帧 infer 会炸。
-                if (
-                    nxt == "vc"
-                    and getattr(self, "rvc", None) is None
-                    and bool(getattr(self.gui_config, "dsp_enabled", False))
-                ):
+                rvc = getattr(self, "rvc", None)
+                dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False))
+                # 底栏只有 vc/bypass。纯 DSP 时壳可能推来 vc，rvc 是 None 不能跟。
+                if nxt == "vc" and rvc is None and dsp_on:
                     nxt = "fx"
+                # 音色已经在跑：配置里残留的 fx 不能把 RVC 关掉，两层要叠着。
+                if nxt == "fx" and rvc is not None:
+                    nxt = "vc"
                 self.function = nxt
             # Self-monitor can toggle while running
             mon_changed = False

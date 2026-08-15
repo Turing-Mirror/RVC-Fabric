@@ -440,11 +440,15 @@ function ModelsPageImpl({
             {selectedKey ? (
               <div className="mb-4 flex items-center gap-3 flex-wrap">
                 <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug flex-1 min-w-[220px]">
-                  {t("s.dspClearVoiceHint")}
+                  {t("s.dspOverlayHint")}
                 </p>
                 <Btn onClick={() => void dropVoice()}>{t("s.dspClearVoice")}</Btn>
               </div>
-            ) : null}
+            ) : (
+              <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)] leading-snug">
+                {t("s.dspOnlyHint")}
+              </p>
+            )}
             <DspPresetGrid
               cols={cols}
               query={query}

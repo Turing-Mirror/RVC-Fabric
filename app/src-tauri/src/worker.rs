@@ -912,20 +912,23 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     if let Some(v) = cfg.get("formant") {
         hot.insert("formant".into(), v.clone());
     }
-    let dsp_only = cfg
+    let dsp_on = cfg
         .get("dsp_enabled")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        && cfg
-            .get("pth_path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .is_empty();
+        .unwrap_or(false);
+    let pth_empty = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .is_empty();
+    let core_ready = crate::engine_assets::engine_core_ready(root);
+    let dsp_only = dsp_on && (pth_empty || !core_ready);
     if dsp_only {
-        // 底栏 mode 只有 vc/bypass，配置里的 function 几乎总是 vc。
-        // 纯 DSP 必须推 fx，否则会把 start_vc 刚设的 fx 冲掉。
         hot.insert("function".into(), json!("fx"));
+    } else if dsp_on && !pth_empty {
+        // 有音色 + 有资源 + DSP：叠在 RVC 后面。别把上次纯 DSP 留下的 fx 推回去。
+        hot.insert("function".into(), json!("vc"));
     } else if let Some(v) = cfg.get("function") {
         hot.insert("function".into(), v.clone());
     }

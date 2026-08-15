@@ -120,70 +120,6 @@ pub fn effect_specs(root: &Path) -> Value {
         .unwrap_or_else(|| json!({ "order": [], "effects": {} }))
 }
 
-/// 广场上架的预设。
-///
-/// 直接内嵌在 online_catalog.json 里，不走单独下载 —— 一份预设几百字节，
-/// 为它开一次 HTTP、算一次 sha256、走一遍下载进度条，全是给 55MB 的模型
-/// 设计的流程，套在这上面纯属折腾。清单本来就会缓存，装一个预设就是把已经
-/// 在手里的那个对象写进 User_Data，离线也能装。
-pub fn catalog(root: &Path) -> Value {
-    let cat = crate::store::fetch_store_catalog(root, false);
-    let installed: Vec<String> = list(root)
-        .get("presets")
-        .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter(|p| p.get("source").and_then(|s| s.as_str()) == Some("user"))
-                .filter_map(|p| p.get("id").and_then(|i| i.as_str()).map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let mut items: Vec<Value> = Vec::new();
-    if let Some(arr) = cat.get("dsp_presets").and_then(|v| v.as_array()) {
-        for it in arr.iter().take(LIST_CAP) {
-            let Some(id) = it.get("id").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            if !is_valid_id(id) {
-                continue;
-            }
-            let Some(params) = it.get("params").cloned().filter(Value::is_object) else {
-                continue;
-            };
-            items.push(json!({
-                "id": id,
-                "name": it.get("name").and_then(|v| v.as_str()).unwrap_or(id),
-                "desc": it.get("desc").and_then(|v| v.as_str()).unwrap_or(""),
-                "author": it.get("author").and_then(|v| v.as_str()).unwrap_or(""),
-                "params": params,
-                "installed": installed.iter().any(|x| x == id),
-            }));
-        }
-    }
-    json!({ "presets": items })
-}
-
-/// 从清单装一个预设。写进 User_Data，跟用户自存的预设同一个目录。
-pub fn install_from_catalog(root: &Path, id: &str) -> Result<Value, String> {
-    if !is_valid_id(id) {
-        return Err(crate::i18n::t("s.dspPresetBadId"));
-    }
-    let cat = catalog(root);
-    let item = cat
-        .get("presets")
-        .and_then(|v| v.as_array())
-        .and_then(|a| {
-            a.iter()
-                .find(|p| p.get("id").and_then(|i| i.as_str()) == Some(id))
-        })
-        .cloned()
-        .ok_or_else(|| crate::i18n::t("s.dspPresetNotInCatalog"))?;
-    let name = item.get("name").and_then(|v| v.as_str()).unwrap_or(id);
-    let params = item.get("params").cloned().unwrap_or_else(|| json!({}));
-    save(root, id, name, &params)
-}
-
 pub fn save(root: &Path, id: &str, name: &str, params: &Value) -> Result<Value, String> {
     if !is_valid_id(id) {
         return Err(crate::i18n::t("s.dspPresetBadId"));
@@ -326,56 +262,6 @@ mod tests {
         assert_eq!(arr[0]["params"]["pitch"]["semitones"], 5.0);
         delete(root, "mine").unwrap();
         assert!(list(root).get("presets").unwrap().as_array().unwrap().is_empty());
-    }
-
-    #[test]
-    fn catalog_skips_malformed_entries() {
-        let root = &scratch("catalog");
-        fs::create_dir_all(root.join("configs")).unwrap();
-        fs::write(
-            root.join("configs").join("online_catalog.json"),
-            r#"{"dsp_presets":[
-                {"id":"good","name":"好的","params":{"pitch":{"semitones":3}}},
-                {"id":"Bad Id","name":"x","params":{}},
-                {"id":"noparams","name":"y"},
-                {"id":"badparams","name":"z","params":5},
-                {"name":"noid","params":{}}
-            ]}"#,
-        )
-        .unwrap();
-        let v = catalog(root);
-        let arr = v.get("presets").unwrap().as_array().unwrap();
-        let ids: Vec<&str> = arr
-            .iter()
-            .map(|p| p.get("id").unwrap().as_str().unwrap())
-            .collect();
-        assert_eq!(ids, vec!["good"]);
-        assert_eq!(arr[0]["installed"], false);
-    }
-
-    #[test]
-    fn install_from_catalog_marks_installed() {
-        let root = &scratch("cataloginstall");
-        fs::create_dir_all(root.join("configs")).unwrap();
-        fs::write(
-            root.join("configs").join("online_catalog.json"),
-            r#"{"dsp_presets":[{"id":"good","name":"好的","params":{"pitch":{"semitones":3}}}]}"#,
-        )
-        .unwrap();
-        install_from_catalog(root, "good").unwrap();
-        let arr = catalog(root).get("presets").unwrap().as_array().unwrap().clone();
-        assert_eq!(arr[0]["installed"], true, "装过之后要标成已安装");
-        // 装完就是一条普通的用户预设
-        let local = list(root).get("presets").unwrap().as_array().unwrap().clone();
-        assert_eq!(local[0]["id"], "good");
-        assert_eq!(local[0]["source"], "user");
-    }
-
-    #[test]
-    fn install_rejects_unknown_and_traversal() {
-        let root = &scratch("catalogbad");
-        assert!(install_from_catalog(root, "nope").is_err());
-        assert!(install_from_catalog(root, "../evil").is_err());
     }
 
     #[test]

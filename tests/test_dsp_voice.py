@@ -190,6 +190,42 @@ class ShellContractTests(unittest.TestCase):
         # 有 RVC 实例时残留的 fx 必须折回 vc，否则叠不上
         self.assertIn("nxt == \"fx\" and rvc is not None", src)
 
+    def test_attaching_a_model_leaves_pure_dsp_mode(self):
+        """纯 DSP 跑着的时候选音色：RVC 装上了，function 也要从 fx 翻回 vc。
+
+        音频线程只在 `function == "vc"` 时才调 `self.rvc.infer`。热换模型那条
+        路只换了 RVC 实例，不翻 function 的话，用户选完音色界面上名字变了、
+        耳朵里一点变化都没有 —— 跟当初「换模型不生效」是同一种病。
+        """
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        body = src[src.index("def _attach_rvc") : src.index("def _apply_pending_model")]
+        self.assertIn("self.dsp_only = False", body)
+        self.assertIn('self.function == "fx"', body)
+        self.assertIn('self.function = "vc"', body)
+
+    def test_dropping_the_voice_reaches_a_running_engine(self):
+        """丢掉音色是热操作，不能只写配置。
+
+        只清 app_config / inuse 的话，转着的 worker 手里还攥着 RVC 实例，
+        界面上音色没了、耳朵里还是那个音色。
+        """
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn('payload.get("drop_model")', src)
+        body = src[src.index("def _worker_drop_model") : src.index("def _ckpt_tgt_sr")]
+        self.assertIn("self.rvc = None", body)
+        self.assertIn("self._pending_model = None", body)  # 排队中的换模型也要取消
+        self.assertIn("self.dsp_only = True", body)
+
+        worker = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pub fn drop_model", worker)
+        voices = (ROOT / "app" / "src-tauri" / "src" / "voices.rs").read_text(
+            encoding="utf-8"
+        )
+        clear = voices[voices.index("pub fn clear_voice") :][:600]
+        self.assertIn("worker::drop_model", clear)
+
     def test_start_falls_back_to_dsp_without_engine_core(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         self.assertIn("def _engine_core_ready", src)

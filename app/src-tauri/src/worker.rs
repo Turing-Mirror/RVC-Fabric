@@ -1071,6 +1071,17 @@ pub fn swap_model(root: &Path) -> Result<u64, String> {
     set_hot(root, payload)
 }
 
+/// 「丢掉当前音色」热推给引擎，不重开流。`swap_model` 的反向操作。
+///
+/// 只清配置是不够的：转着的 worker 手里还攥着 RVC 实例，界面上音色没了、
+/// 耳朵里还是那个音色。worker 没在跑时 `set_hot` 自己会报错，调用方吞掉即可 ——
+/// 配置已经清干净，下次开启就是纯 DSP。
+pub fn drop_model(root: &Path) -> Result<u64, String> {
+    let mut payload = Map::new();
+    payload.insert("drop_model".into(), json!(true));
+    set_hot(root, payload)
+}
+
 /// Snapshot for the UI (status + derived meter 0..1).
 pub fn status_for_ui(root: &Path) -> Value {
     let mut st = protocol::read_status(root);

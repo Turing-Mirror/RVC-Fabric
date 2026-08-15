@@ -731,7 +731,10 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
 /// `sync_inuse` 不会把空 pth 写进 inuse，所以必须走 force_clear。
 pub fn clear_voice(root: &Path) -> Result<Value, String> {
     crate::config::force_clear_model_paths(root)?;
-    Ok(json!({ "ok": true }))
+    // 正在变声的话，还得让引擎当场把 RVC 放掉 —— 光清配置只改了下次开启。
+    // 没在跑就是 Err，那时候本来也没什么要热更新的。
+    let dropped = crate::worker::drop_model(root).is_ok();
+    Ok(json!({ "ok": true, "dropped": dropped }))
 }
 
 /// Persist the selected model.

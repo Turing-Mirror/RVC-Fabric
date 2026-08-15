@@ -694,26 +694,6 @@ async fn dsp_effects(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
         .map_err(|e| e.to_string())?
 }
 
-/// 广场上架的 DSP 预设（内嵌在清单里，不单独下载）。
-#[tauri::command]
-async fn dsp_catalog(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    let root = root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || Ok(dsp::catalog(&root)))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-async fn dsp_preset_install(
-    state: State<'_, Mutex<AppState>>,
-    id: String,
-) -> Result<Value, String> {
-    let root = root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || dsp::install_from_catalog(&root, &id))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
 #[tauri::command]
 async fn dsp_preset_save(
     state: State<'_, Mutex<AppState>>,
@@ -1576,9 +1556,7 @@ pub fn run() {
             separate_cancel,
             tools_open_downloads,
             dsp_presets,
-            dsp_catalog,
             dsp_effects,
-            dsp_preset_install,
             dsp_preset_save,
             dsp_preset_delete,
             sts_status,

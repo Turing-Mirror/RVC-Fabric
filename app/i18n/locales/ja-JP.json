@@ -1387,7 +1387,13 @@
     "dspFxReverb": "リバーブ",
     "dspStackTitle": "ボイスと DSP プリセットが同時に有効です",
     "dspStackBody": "音声はまずボイス変換を通り、その後 DSP エフェクトを通ります。片方だけにしたい場合は、下部のチェーンにあるプリセット名をクリックすると DSP をオフにできます。",
-    "dspStackOk": "了解"
+    "dspStackOk": "了解",
+    "dspPresetNotInCatalog": "このプリセットは広場のカタログにありません。更新してからお試しください。",
+    "dspPlazaTitle": "DSP 変声プリセット",
+    "dspPlazaBlurb": "モデルも GPU も不要、入れればすぐ使えます。1 つ数百バイトなので、クリックひとつで完了します。",
+    "dspPlazaInstalled": "インストール済み",
+    "dspPlazaInstall": "インストール",
+    "dspPlazaEmpty": "まだ公開されている DSP プリセットはありません。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

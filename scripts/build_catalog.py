@@ -1037,6 +1037,46 @@ def _safe_extra_name(name: str) -> bool:
     return all(part not in ("", ".", "..") for part in n.split("/"))
 
 
+def _compile_dsp_presets(entries: list, rep: Report) -> list:
+    """DSP 变声预设 → index.dsp_presets。
+
+    跟别的资源都不一样：预设本身就内嵌在清单里，没有 URL、没有 sha256、
+    没有体积 —— 一份几百字节的参数表，客户端拿到清单就等于拿到了它。
+
+    id 的规矩跟客户端 `dsp.rs::is_valid_id` 一致：小写字母、数字、下划线，
+    最长 48。它同时是文件名，宽一点就意味着写到目录外面去。
+    """
+    out: list = []
+    seen: set[str] = set()
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        pid = str(e.get("id") or "").strip()
+        if not pid or len(pid) > 48 or not all(
+            c.islower() and c.isascii() or c.isdigit() or c == "_" for c in pid
+        ):
+            rep.warn(f"DSP 预设 id 不合法，已跳过：{pid!r}")
+            continue
+        if pid in seen:
+            rep.warn(f"DSP 预设 id 重复，已跳过后一条：{pid}")
+            continue
+        params = e.get("params")
+        if not isinstance(params, dict) or not params:
+            rep.warn(f"DSP 预设 {pid} 没有 params，已跳过")
+            continue
+        seen.add(pid)
+        out.append(
+            {
+                "id": pid,
+                "name": str(e.get("name") or pid),
+                "desc": str(e.get("desc") or ""),
+                "author": str(e.get("author") or ""),
+                "params": params,
+            }
+        )
+    return out
+
+
 def _compile_extras(entries: list, rep: Report) -> dict:
     """附加资源 → index.extras。
 
@@ -1275,6 +1315,9 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     _validate_shell_versions(app, rep)
 
     extras = _compile_extras(src.get("extras") or [], rep)
+    # DSP 变声预设：直接内嵌进清单，不走单独下载 —— 一份几百字节，
+    # 为它走一遍「下载 + sha256 + 进度条」是给 55MB 模型设计的流程。
+    dsp_presets = _compile_dsp_presets(src.get("dsp_presets") or [], rep)
 
     engine_core = _compile_blob(
         src.get("engine_core") or {}, paths, rep, who="engine-core", extract_root="."
@@ -1420,6 +1463,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "engine_core": engine_core,
         "vbcable": vbcable_top,
         "extras": extras,
+        "dsp_presets": dsp_presets,
     }
     snippet = {
         "schema": 1,

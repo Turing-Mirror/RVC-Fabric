@@ -1387,7 +1387,13 @@
     "dspFxReverb": "리버브",
     "dspStackTitle": "음색과 DSP 프리셋이 동시에 적용 중입니다",
     "dspStackBody": "소리는 음색 변환을 먼저 거친 뒤 DSP 효과를 지납니다. 한 겹만 남기려면 하단 체인의 프리셋 이름을 클릭해 DSP를 끄세요.",
-    "dspStackOk": "알겠습니다"
+    "dspStackOk": "알겠습니다",
+    "dspPresetNotInCatalog": "광장 목록에 없는 프리셋입니다. 새로 고친 뒤 다시 시도하세요.",
+    "dspPlazaTitle": "DSP 음성 변조 프리셋",
+    "dspPlazaBlurb": "모델도 그래픽카드도 필요 없이 설치하면 바로 씁니다. 하나에 수백 바이트라 클릭 한 번이면 끝납니다.",
+    "dspPlazaInstalled": "설치됨",
+    "dspPlazaInstall": "설치",
+    "dspPlazaEmpty": "아직 공개된 DSP 프리셋이 없습니다."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

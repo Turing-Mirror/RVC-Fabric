@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
 import { ExtrasPanel } from "../components/ExtrasDialog";
+import { DspPlazaSection } from "../components/DspPlazaSection";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
 import {
@@ -171,6 +172,12 @@ function PlazaPageImpl({
 
       <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
         <StoreSection reloadToken={reloadToken} />
+      </Block>
+
+      {/* 排在社区音色之后：同样是往本机装东西，但这个是秒装的，
+          放在需要下几十 MB 的那些前面，用户更容易先试到。 */}
+      <Block title={t("s.dspPlazaTitle")}>
+        <DspPlazaSection reloadToken={reloadToken} />
       </Block>
 
       <Block title={t("s.aff4b0df8a")} note={items.length ? String(items.length) : ""}>

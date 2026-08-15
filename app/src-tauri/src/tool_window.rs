@@ -103,6 +103,19 @@ pub fn focus_main_downloads(app: &AppHandle, reason: &str, filter: &str) -> Resu
     Ok(())
 }
 
+/// 工具窗口点「查看说明」：把主窗口叫到前面并跳到说明页对应段。
+pub fn focus_main_help(app: &AppHandle, section: &str) -> Result<(), String> {
+    let main = app
+        .get_webview_window("main")
+        .ok_or_else(|| crate::i18n::t("s.toolMainWindowGone"))?;
+    let _ = main.unminimize();
+    let _ = main.show();
+    let _ = main.set_focus();
+    main.emit("open-help", json!({ "section": section }))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     let sp = spec_for(kind).ok_or_else(|| crate::i18n::te("s.22a95f37e3", &(kind)))?;
     let label = label_for(kind);

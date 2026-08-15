@@ -171,12 +171,25 @@ function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: s
   return hits;
 }
 
+function buildTrainGuide(): { q: string; hint: string; a: string }[] {
+  return [
+    { q: t("s.trainGuideQ1"), hint: t("s.trainGuideH1"), a: t("s.trainGuideA1") },
+    { q: t("s.trainGuideQ2"), hint: t("s.trainGuideH2"), a: t("s.trainGuideA2") },
+    { q: t("s.trainGuideQ3"), hint: t("s.trainGuideH3"), a: t("s.trainGuideA3") },
+    { q: t("s.trainGuideQ4"), hint: t("s.trainGuideH4"), a: t("s.trainGuideA4") },
+    { q: t("s.trainGuideQ5"), hint: t("s.trainGuideH5"), a: t("s.trainGuideA5") },
+    { q: t("s.trainGuideQ6"), hint: t("s.trainGuideH6"), a: t("s.trainGuideA6") },
+  ];
+}
+
 type HelpProps = {
   /** 引擎报的设备列表。空的时候是引擎还没起来，不代表用户没装声卡。 */
   status?: { input_devices?: unknown; output_devices?: unknown };
+  /** 从训练窗跳过来时滚到这一段（现在只有 train）。 */
+  focus?: string;
 };
 
-function HelpPageImpl({ status }: HelpProps = {}) {
+function HelpPageImpl({ status, focus }: HelpProps = {}) {
   const glossary = useGlossary();
   const glossaryTitle = useGlossarySectionTitle();
   const [open, setOpen] = useState<string>("");
@@ -209,6 +222,14 @@ function HelpPageImpl({ status }: HelpProps = {}) {
   useEffect(() => {
     void refreshVb();
   }, []);
+
+  useEffect(() => {
+    if (focus !== "train") return;
+    const el = document.getElementById("help-train");
+    el?.scrollIntoView({ block: "start" });
+    const first = buildTrainGuide()[0]?.q;
+    if (first) setOpen(first);
+  }, [focus]);
 
   const installVb = async () => {
     if (vbBusy) return;
@@ -269,6 +290,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
   // 的即时证据。刚卸完、重启前两边都可能还在，用 vbRemoved 盖住卸载按钮。
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
   const faq = buildFaq();
+  const trainGuide = buildTrainGuide();
 
   return (
     <PagePad>
@@ -367,6 +389,30 @@ function HelpPageImpl({ status }: HelpProps = {}) {
             desc={t("s.26ad7c406b")}
             right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
           />
+        </Group>
+      </Block>
+      <Block title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
+        <div id="help-train" />
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+          {t("s.trainGuideLead")}
+        </p>
+        <Group>
+          {trainGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
         </Group>
       </Block>
       <Block title={t("s.209d309d58")} note={String(faq.length)}>

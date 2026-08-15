@@ -151,6 +151,7 @@ pub fn status(root: &Path) -> Value {
         "nvidia": nvidia,
         "pretrained": pre,
         "experiments": experiments(root),
+        "suggested_batch": suggested_batch(),
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
 }
@@ -194,6 +195,47 @@ pub struct TrainReq {
     pub save_every: u32,
     pub f0_method: String,
     pub resume: bool,
+    #[serde(default)]
+    pub save_every_weights: bool,
+}
+
+const F0_METHODS: [&str; 4] = ["rmvpe", "harvest", "pm", "dio"];
+
+/// 原版 `default_batch_size = VRAM_GB // 2`。查不到就给 4（6GB 卡的稳妥值）。
+fn suggested_batch() -> u32 {
+    static CACHED: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        let mut cmd = Command::new("nvidia-smi");
+        cmd.args([
+            "--query-gpu=memory.total",
+            "--format=csv,noheader,nounits",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let Ok(out) = cmd.output() else {
+            return 4;
+        };
+        if !out.status.success() {
+            return 4;
+        }
+        let mut min_mb = u32::MAX;
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            if let Ok(n) = line.trim().parse::<u32>() {
+                min_mb = min_mb.min(n);
+            }
+        }
+        if min_mb == u32::MAX {
+            return 4;
+        }
+        let gb = (min_mb / 1024).max(1);
+        (gb / 2).clamp(1, 16)
+    })
 }
 
 /// 名字要当目录名和 .pth 文件名用，非法字符会在训练跑了半小时之后才炸。
@@ -227,6 +269,9 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
     }
     if !SAMPLE_RATES.contains(&req.sample_rate.as_str()) {
         return Err(crate::i18n::te("s.ab1660b1a1", &(req.sample_rate)));
+    }
+    if !F0_METHODS.contains(&req.f0_method.as_str()) {
+        return Err(crate::i18n::te("s.ab1660b1a1", &(req.f0_method)));
     }
     if !pretrained_ready(root, &req.sample_rate) {
         return Err(crate::i18n::te("s.c7a9f88925", &req.sample_rate));
@@ -272,6 +317,7 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
             "save_every": req.save_every,
             "f0_method": req.f0_method,
             "resume": req.resume,
+            "save_every_weights": req.save_every_weights,
         }),
     );
     crate::logging::shell_log!(
@@ -319,6 +365,7 @@ fn run_inner(
         "device": device,
         "is_half": device == "cuda",
         "resume": req.resume,
+        "save_every_weights": req.save_every_weights,
     });
     std::fs::write(
         &reqfile,
@@ -505,6 +552,7 @@ mod tests {
             save_every: 5,
             f0_method: "rmvpe".into(),
             resume: false,
+            save_every_weights: false,
         };
         // 没 Runtime 就该在这里停，而不是起个进程再失败。
         assert!(preflight(&base, &req).is_err());

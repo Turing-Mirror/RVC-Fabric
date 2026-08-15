@@ -145,6 +145,42 @@ def infer_sr(exp_dir):
     return None
 
 
+def publish_voice(root, req, weights, index_path):
+    """把训好的 pth/index 装进 User_Data/models，模型页能直接「使用」。
+
+    savee 只写 assets/weights。那边会被当成旧版单文件音色，没有检索库。
+    复制一份进用户音色库，并写 sidecar。
+    """
+    dest = root / "User_Data" / "models" / req["exp"]
+    dest.mkdir(parents=True, exist_ok=True)
+    pth_dest = dest / ("%s.pth" % req["exp"])
+    try:
+        shutil.copy2(weights, pth_dest)
+        if index_path:
+            ip = Path(index_path)
+            if ip.is_file():
+                shutil.copy2(ip, dest / ip.name)
+        sidecar = dest / "config.json"
+        data = {}
+        if sidecar.is_file():
+            try:
+                data = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+        if not isinstance(data, dict):
+            data = {}
+        data["name"] = req["exp"]
+        data["tag"] = data.get("tag") or "自制"
+        data["source"] = "trained"
+        data["sample_rate"] = req["sample_rate"]
+        sidecar.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return pth_dest
+    except OSError:
+        return None
+
+
 def wipe_stage_dirs(exp_dir):
     for name in STAGE_DIRS:
         d = exp_dir / name
@@ -462,7 +498,7 @@ def stage_train(req, exp_dir, py, root, n_stages):
         "-pd", str(pd),
         "-l", "1",   # 只留最新的 G/D，不然 200 轮能吃掉几十 GB
         "-c", "0",   # 不缓存数据集进显存：家用卡缓存进去就没地方训练了
-        "-sw", "0",
+        "-sw", "1" if req.get("save_every_weights") else "0",
         "-v", VERSION,
     ]
     # train.py 的 n_gpus 是 torch.cuda.device_count() 数出来的，不看 -g；-g 只
@@ -561,6 +597,8 @@ def normalize(raw):
         fail("不支持的采样率：%s" % sr)
     device = str(raw.get("device") or "cuda")
     method = str(raw.get("f0_method") or "rmvpe")
+    if method not in ("rmvpe", "harvest", "pm", "dio"):
+        fail("不支持的音高算法：%s" % method)
     def num(key, default):
         """缺省用 default，写了但不合理就夹到 1。
 
@@ -587,6 +625,7 @@ def normalize(raw):
         "device": device,
         "is_half": bool(raw.get("is_half", device == "cuda")),
         "resume": bool(raw.get("resume", False)),
+        "save_every_weights": bool(raw.get("save_every_weights", False)),
     }
 
 
@@ -660,8 +699,9 @@ def main():
     weights = root / "assets" / "weights" / ("%s.pth" % req["exp"])
     if not weights.is_file():
         fail("训练结束但没找到 %s。查看 logs/%s/train.log。" % (weights, req["exp"]))
+    published = publish_voice(root, req, weights, index_path)
     msg = "训练完成" if index_path else "训练完成（索引没建成，音色仍可用）"
-    emit(phase="done", weights=str(weights),
+    emit(phase="done", weights=str(published or weights),
          index=str(index_path) if index_path else "",
          message=msg)
 

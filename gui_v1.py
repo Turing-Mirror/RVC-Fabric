@@ -2684,6 +2684,42 @@ if __name__ == "__main__":
                     payload.get("index_path"),
                     payload.get("index_rate"),
                 )
+            # 「丢掉当前音色」的反向操作，和 pth_path 热推对称。
+            #
+            # 光把配置里的路径清空是不够的：正在跑的这个 worker 手里还攥着
+            # RVC 实例，function 还是 vc，用户在界面上看到音色没了、耳朵里
+            # 听到的还是那个音色。
+            if payload.get("drop_model"):
+                self._worker_drop_model()
+
+        def _worker_drop_model(self):
+            """变声中丢掉音色，退回纯 DSP（或直通），不重开流。
+
+            和 `_worker_swap_model` 对称：只换该换的那一件东西。缓冲区、设备、
+            SOLA 窗口全都不动 —— 它们只跟采样率有关，跟有没有音色无关。
+
+            排队中的换模型也要一起取消，否则刚清掉音色，后台那个正在读的权重
+            读完了又自己接回来。
+            """
+            with self._pending_model_lock:
+                self._pending_model = None
+                self._swap_ready = None
+            self._swap_busy = False
+            self.rvc = None
+            self.resampler2 = None
+            self.gui_config.pth_path = ""
+            self.gui_config.index_path = ""
+            self.dsp_only = True
+            # 没音色了，vc 无从谈起：开着 DSP 就走 fx，否则只剩直通。
+            if self.function == "vc":
+                self.function = (
+                    "fx" if bool(getattr(self.gui_config, "dsp_enabled", False)) else "im"
+                )
+            try:
+                self.sola_buffer.zero_()
+            except Exception:
+                pass
+            printt("已丢掉音色，function=%s", self.function)
 
         def _ckpt_tgt_sr(self, pth: str):
             """只读出这个权重的目标采样率，不建模型。
@@ -2880,6 +2916,12 @@ if __name__ == "__main__":
 
         def _attach_rvc(self, new, pth, idx, rate):
             self.rvc = new
+            # 纯 DSP 跑着的时候选了个音色：RVC 装上了，但 function 还是 fx，
+            # 音频线程只在 function == "vc" 时才走 self.rvc.infer —— 不翻回来
+            # 的话，用户选了音色却一点变化都听不到，而界面上音色名已经换了。
+            self.dsp_only = False
+            if self.function == "fx":
+                self.function = "vc"
             self.gui_config.pth_path = pth
             self.gui_config.index_path = idx
             self.gui_config.index_rate = rate

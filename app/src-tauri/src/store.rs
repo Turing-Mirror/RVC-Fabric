@@ -39,8 +39,11 @@ fn store_progress_payload(id: &str, phase: &str, done: u64, total: u64, message:
 /// Expand a catalog URL to the download list. HF links become the domestic
 /// mirror chain. Official CNB packs also get a sha256 LFS fallback so a
 /// hanging `/-/releases/download/` endpoint can fail over.
-fn voice_download_urls(url: &str, sha: &str, hf_endpoint: &str) -> Vec<String> {
-    let mut urls = crate::hf::download_urls(url, hf_endpoint);
+///
+/// 镜像顺序由 `mirrors::hf_endpoints` 解出来（用户指定 → 上次成功 → 清单
+/// 下发 → 编译进来的兜底），不再是写死在 `hf.rs` 里的那一串。
+fn voice_download_urls(root: &Path, url: &str, sha: &str) -> Vec<String> {
+    let mut urls = crate::hf::download_urls_with(url, &crate::mirrors::hf_endpoints(root));
     let sha: String = sha
         .chars()
         .filter(|c| c.is_ascii_hexdigit())
@@ -49,14 +52,19 @@ fn voice_download_urls(url: &str, sha: &str, hf_endpoint: &str) -> Vec<String> {
     if sha.len() == 64
         && (url.contains("cnb.cool") || url.contains("/-/releases/download/"))
     {
-        let lfs = format!(
-            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{sha}"
-        );
-        if !urls.iter().any(|u| u == &lfs) {
-            urls.push(lfs);
+        for base in crate::mirrors::lfs_bases(root) {
+            let lfs = format!("{base}/-/lfs/{sha}");
+            if !urls.iter().any(|u| u == &lfs) {
+                urls.push(lfs);
+            }
         }
     }
     urls
+}
+
+/// .index 没有 sha（清单里常常缺），所以只做镜像展开。
+fn index_urls(root: &Path, url: &str) -> Vec<String> {
+    crate::hf::download_urls_with(url, &crate::mirrors::hf_endpoints(root))
 }
 
 /// Per-voice cancel flags. A single global flag meant that cancelling one
@@ -84,11 +92,11 @@ fn drop_cancel_flag(id: &str) {
     }
 }
 
-fn bundled_catalog_path(root: &Path) -> PathBuf {
+pub(crate) fn bundled_catalog_path(root: &Path) -> PathBuf {
     root.join("configs").join("online_catalog.json")
 }
 
-fn cache_catalog_path(root: &Path) -> PathBuf {
+pub(crate) fn cache_catalog_path(root: &Path) -> PathBuf {
     paths::user_data(root).join("catalog_cache.json")
 }
 
@@ -982,13 +990,7 @@ pub fn install_voice_entry(
     // 证明不了那个文件本身干净。让用户自己先看一眼。
     let stage_only = !official;
 
-    // HF 清单写规范域；下载时扩成镜像列表（用户可在设置里改优先根）。
-    let hf_endpoint = crate::config::read(&root)
-        .get("hf_endpoint")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
+    // HF 清单写规范域；下载时扩成镜像列表 —— 见 `voice_download_urls`。
     if !pack_url.is_empty() {
         let vid = safe_model_dir_name(if id.is_empty() { &name } else { &id })?;
         let cache = if stage_only {
@@ -1011,10 +1013,11 @@ pub fn install_voice_entry(
             );
         });
 
-        let urls = voice_download_urls(&pack_url, &sha, &hf_endpoint);
+        let urls = voice_download_urls(&root, &pack_url, &sha);
         let res = download::download_request(
             DownloadRequest {
                 urls,
+                root: Some(root.clone()),
                 dest: zpath.clone(),
                 expected_sha256: sha,
                 size_hint: size,
@@ -1071,7 +1074,8 @@ pub fn install_voice_entry(
     });
     if let Err(e) = download::download_request(
         DownloadRequest {
-            urls: voice_download_urls(&pth_url, &sha, &hf_endpoint),
+            urls: voice_download_urls(&root, &pth_url, &sha),
+            root: Some(root.clone()),
             dest: pth_tmp.clone(),
             expected_sha256: sha,
             // 0 而不是 size：voice_files 的 size_bytes 是 pth + index 的合计
@@ -1103,7 +1107,8 @@ pub fn install_voice_entry(
                     .to_string();
                 let _ = download::download_request(
                     DownloadRequest {
-                        urls: crate::hf::download_urls(iu, &hf_endpoint),
+                        urls: index_urls(&root, iu),
+                        root: Some(root.clone()),
                         dest: cache.join(format!("{vid}.index")),
                         expected_sha256: idx_sha,
                         size_hint: 0,
@@ -1158,7 +1163,8 @@ pub fn install_voice_entry(
                 .to_string();
             let _ = download::download_request(
                 DownloadRequest {
-                    urls: crate::hf::download_urls(iu, &hf_endpoint),
+                    urls: index_urls(&root, iu),
+                    root: Some(root.clone()),
                     dest: idx_tmp.clone(),
                     expected_sha256: idx_sha,
                     size_hint: 0,
@@ -1504,7 +1510,9 @@ mod tests {
     fn official_cnb_pack_gets_lfs_fallback() {
         let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Anon-v1.zip";
-        let list = voice_download_urls(url, sha, "");
+        let root = std::env::temp_dir().join("rvcf-store-lfs");
+        let _ = std::fs::remove_dir_all(&root);
+        let list = voice_download_urls(&root, url, sha);
         assert_eq!(list[0], url);
         assert_eq!(
             list[1],
@@ -1516,7 +1524,9 @@ mod tests {
     fn hf_pack_does_not_get_cnb_lfs() {
         let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let url = "https://huggingface.co/org/repo/resolve/main/a.zip";
-        let list = voice_download_urls(url, sha, "");
+        let root = std::env::temp_dir().join("rvcf-store-hf");
+        let _ = std::fs::remove_dir_all(&root);
+        let list = voice_download_urls(&root, url, sha);
         assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
         assert!(list[0].contains("hf-cdn.sufy.com"));
     }

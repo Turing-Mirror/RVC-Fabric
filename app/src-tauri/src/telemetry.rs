@@ -93,7 +93,13 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
         .and_then(|v| v.as_array())
         .map(|a| a.is_empty())
         .unwrap_or(true);
-    if last_sent == t && queued_empty {
+    // 今天已经报过、也没有积压 —— 重启五次不该变成五个请求五次写盘。
+    // 但攒了下载成败就还得走一趟：那份数据没搭上今天的车，就得等到明天。
+    let dl_pending = download_summary(&cfg)
+        .as_array()
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    if last_sent == t && queued_empty && !dl_pending {
         return json!({"sent": false, "reason": "already-counted-today"});
     }
 
@@ -112,7 +118,13 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
         days.drain(0..cut);
     }
 
-    let body = json!({ "id": id, "days": days, "ver": app_version, "accel": accel });
+    // 下载源成败搭这趟车走，不单开请求。
+    let dl = download_summary(&cfg);
+    let has_dl = dl.as_array().map(|a| !a.is_empty()).unwrap_or(false);
+    let mut body = json!({ "id": id, "days": days, "ver": app_version, "accel": accel });
+    if has_dl {
+        body["dl"] = dl;
+    }
     let ok = post(&body);
 
     let mut patch = Map::new();
@@ -123,10 +135,109 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
     );
     if ok {
         patch.insert("telemetry_last_sent".into(), json!(t));
+        // 报出去了才清。没报成就留着下次一起 —— 跟补报那几天同一个道理。
+        if has_dl {
+            patch.insert("download_stats".into(), json!({}));
+        }
     }
     let _ = config::update(root, patch);
 
     json!({"sent": ok, "days": body["days"].clone()})
+}
+
+// ---------------------------------------------------------------------------
+// 下载源健康度
+// ---------------------------------------------------------------------------
+//
+// 「哪个镜像在哪些地区已经不行了」这件事，现在只写在用户自己机器的日志里 ——
+// 等他来群里骂我们才知道。而 `mirrors::hf_endpoints` 那份下发列表要改成什么，
+// 总得有个依据。
+//
+// 设计跟日活 ping 一样克制：
+//
+// * **不新开请求**。每条下载都发一次遥测，既是多余的流量，也是一个能拿来
+//   对时序做指纹的面。这里只在本地攒计数，跟着那条每天一次的 ping 一起走。
+// * **只有主机名**。没有文件名、没有音色 id、没有耗时 —— 「谁下了什么」不是
+//   我们要的信息，「哪个源连不上」才是。
+// * 同样受 `telemetry_opt_in` 管：没开就一个字节都不攒。
+
+/// 最多记这么多个源。清单被改坏或者用户填了一堆自定义端点时，别让配置文件
+/// 无限长。
+const MAX_HOSTS: usize = 12;
+
+/// 把五花八门的错误串归成几类。原文里有 URL、有路径、有系统语言的句子，
+/// 那些都不该出门。
+fn error_kind(err: &str) -> &'static str {
+    let e = err.to_ascii_lowercase();
+    if e.contains("sha256") {
+        "hash"
+    } else if e.contains("timed out") || e.contains("timeout") || e.contains("10060") {
+        "timeout"
+    } else if e.contains("dns") || e.contains("11001") {
+        "dns"
+    } else if e.contains("tls") || e.contains("handshake") || e.contains("certificate") {
+        "tls"
+    } else if e.contains("status 4") {
+        "http4xx"
+    } else if e.contains("status 5") || e.contains("bad gateway") || e.contains("unavailable") {
+        "http5xx"
+    } else if e.contains("reset") || e.contains("connection") || e.contains("10054") {
+        "reset"
+    } else {
+        "other"
+    }
+}
+
+/// 记一次下载结果。`err` 为 None = 成功。
+pub fn note_download(root: &Path, url: &str, err: Option<&str>) {
+    let cfg = config::read(root);
+    if cfg.get("telemetry_opt_in").and_then(|v| v.as_bool()) != Some(true) {
+        return;
+    }
+    let host = crate::mirrors::host_of(url);
+    if host.is_empty() || host.len() > 64 {
+        return;
+    }
+    let mut stats = cfg
+        .get("download_stats")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    if !stats.contains_key(&host) && stats.len() >= MAX_HOSTS {
+        return;
+    }
+    let entry = stats.entry(host).or_insert_with(|| json!({}));
+    let Some(obj) = entry.as_object_mut() else {
+        return;
+    };
+    let field = if err.is_some() { "fail" } else { "ok" };
+    let n = obj.get(field).and_then(|v| v.as_u64()).unwrap_or(0);
+    obj.insert(field.into(), json!(n.saturating_add(1)));
+    if let Some(e) = err {
+        obj.insert("err".into(), json!(error_kind(e)));
+    }
+
+    let mut patch = Map::new();
+    patch.insert("download_stats".into(), Value::Object(stats));
+    let _ = config::update(root, patch);
+}
+
+/// 攒下来的计数整理成上报格式：`[["host", ok, fail, "err"], ...]`。
+fn download_summary(cfg: &Map<String, Value>) -> Value {
+    let Some(stats) = cfg.get("download_stats").and_then(|v| v.as_object()) else {
+        return json!([]);
+    };
+    let mut rows: Vec<Value> = Vec::new();
+    for (host, v) in stats.iter().take(MAX_HOSTS) {
+        let ok = v.get("ok").and_then(|x| x.as_u64()).unwrap_or(0);
+        let fail = v.get("fail").and_then(|x| x.as_u64()).unwrap_or(0);
+        if ok == 0 && fail == 0 {
+            continue;
+        }
+        let err = v.get("err").and_then(|x| x.as_str()).unwrap_or("");
+        rows.push(json!([host, ok, fail, err]));
+    }
+    json!(rows)
 }
 
 fn post(body: &Value) -> bool {

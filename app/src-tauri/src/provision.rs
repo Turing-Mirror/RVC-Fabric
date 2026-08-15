@@ -573,6 +573,7 @@ pub fn run_provision(
             download::download_request(
                 download::DownloadRequest {
                     urls: part.urls.clone(),
+                    root: Some(root.clone()),
                     dest: dest_file.clone(),
                     expected_sha256: part.sha256.clone(),
                     size_hint: size,

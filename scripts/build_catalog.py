@@ -61,6 +61,9 @@ RAW = f"{CNB_REPO_URL}/-/git/raw/main"
 LFS = f"{CNB_REPO_URL}/-/lfs"
 # 封面所在的 Release tag。见 cnb_cover_url() 里为什么不能用 git raw。
 COVER_TAG = "covers"
+# 一份清单最多认这么多个下载源；跟客户端 `mirrors.rs::MAX_ENDPOINTS` 对齐。
+MAX_MIRRORS = 8
+
 MANIFEST_URLS = [
     f"{RAW}/index.json",
     f"{RAW}/catalog/online_catalog.snippet.json",
@@ -1037,6 +1040,80 @@ def _safe_extra_name(name: str) -> bool:
     return all(part not in ("", ".", "..") for part in n.split("/"))
 
 
+def _compile_download_mirrors(meta: dict, rep: Report) -> dict:
+    """meta.download_mirrors → index.download_mirrors。
+
+    客户端的镜像顺序本来写死在 exe 里（`hf.rs::DEFAULT_MIRRORS`）：某个源哪天
+    挂了，得发一个新版本才能救，而用户装的还是旧版。放进清单，改一行几分钟内
+    全网换源。
+
+    **这份列表决定客户端去哪里下 .pth（一个 pickle）**，所以这里和客户端两边
+    都要校验，规则必须一致 —— 见 `mirrors.rs::is_valid_endpoint / is_valid_base`：
+    只收 https、不收 userinfo / 查询串 / 非 ASCII，lfs 基址的路径里不许有 `..`。
+
+    这里拦一道是为了「发布前就发现写错了」，不是因为可以少写客户端那道。
+    """
+    raw = meta.get("download_mirrors") or {}
+    if not isinstance(raw, dict):
+        rep.warn("meta.download_mirrors 不是字典，已忽略")
+        return {}
+
+    def clean(items, kind: str) -> list:
+        out: list = []
+        for it in items or []:
+            u = str(it or "").strip().rstrip("/")
+            if not u:
+                continue
+            ok = _valid_lfs_base(u) if kind == "lfs" else _valid_hf_endpoint(u)
+            if not ok:
+                rep.warn(f"download_mirrors.{kind} 里这条不合法，已跳过：{u}")
+                continue
+            if u not in out:
+                out.append(u)
+        return out[:MAX_MIRRORS]
+
+    out = {}
+    for kind in ("hf", "lfs"):
+        got = clean(raw.get(kind), kind)
+        if got:
+            out[kind] = got
+    return out
+
+
+def _valid_host_port(host: str) -> bool:
+    name, _, port = host.rpartition(":")
+    if not name:
+        name, port = host, ""
+    if port and (not port.isdigit() or len(port) > 5):
+        return False
+    if not name or name.startswith(".") or name.endswith(".") or "." not in name:
+        return False
+    if ".." in name:
+        return False
+    return all(c.isalnum() and c.isascii() or c in ".-" for c in name)
+
+
+def _valid_hf_endpoint(u: str) -> bool:
+    if not u.isascii() or len(u) > 128 or not u.startswith("https://"):
+        return False
+    host = u[len("https://"):]
+    if not host or any(c in host for c in "/@?#"):
+        return False
+    return _valid_host_port(host)
+
+
+def _valid_lfs_base(u: str) -> bool:
+    if not u.isascii() or len(u) > 128 or not u.startswith("https://"):
+        return False
+    rest = u[len("https://"):]
+    if any(c in rest for c in "@?#"):
+        return False
+    host, _, path = rest.partition("/")
+    if not _valid_host_port(host):
+        return False
+    return ".." not in path.split("/")
+
+
 def _compile_dsp_presets(entries: list, rep: Report) -> list:
     """DSP 变声预设 → index.dsp_presets。
 
@@ -1289,6 +1366,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
     if rep.errors:
         return None
     meta = src.get("meta") or {}
+    download_mirrors = _compile_download_mirrors(meta, rep)
     # Deep-copy app so changelog can override notes without mutating YAML load cache
     app_src = dict(src.get("app") or {})
     if isinstance(app_src.get("gui"), dict):
@@ -1460,6 +1538,7 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "runtime_release_tag": runtime_release_tag,
         "runtimes": runtimes,
         "manifest_urls": list(meta.get("manifest_urls") or MANIFEST_URLS),
+        "download_mirrors": download_mirrors,
         "engine_core": engine_core,
         "vbcable": vbcable_top,
         "extras": extras,
@@ -1497,6 +1576,9 @@ def compile_catalog(src: dict, paths: Paths, rep: Report) -> Optional[dict]:
         # 附加资源（训练底模 / 分离模型）也进内置兜底：离线或 CNB 抽风时
         # extra_list 仍能列出「该下什么」，下载 URL 仍指向 CNB Release。
         "extras": extras,
+        # 镜像列表也进兜底：清单还没拉下来的那一次下载（首次运行下 engine-core）
+        # 正是最需要备份源的时候。
+        "download_mirrors": download_mirrors,
     }
     return {"index": index, "snippet": snippet, "bundled": bundled}
 

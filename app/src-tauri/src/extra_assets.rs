@@ -533,6 +533,9 @@ mod tests {
 
     #[test]
     fn urls_default_to_the_release_attachment() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let blob = json!({
             "label": &crate::i18n::t("s.f6bccbff47"),
             "dest": "assets/pymss",

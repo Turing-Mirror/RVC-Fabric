@@ -1847,6 +1847,9 @@ mod tests {
 
     #[test]
     fn a_shared_pth_filename_cannot_hijack_the_selection() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 社区音色包里 `model.pth` 这种文件名重名是常态。以前三个键或在一起、
         // 第一个撞上的赢，于是排在前面的同名模型把真正选中的那条顶掉了：
         // 界面「使用中」是别人，重开变声也用错模型 —— 而随手切一次别的再切
@@ -1866,6 +1869,9 @@ mod tests {
 
     #[test]
     fn falls_back_through_file_then_name() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let models = vec![
             model(&crate::i18n::t("s.1b85dd8d61"), "a.pth", "/lib/a/a.pth"),
             model(&crate::i18n::t("s.3458316756"), "b.pth", "/lib/b/b.pth"),

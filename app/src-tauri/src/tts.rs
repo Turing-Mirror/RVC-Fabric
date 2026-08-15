@@ -396,6 +396,9 @@ mod tests {
 
     #[test]
     fn an_empty_text_is_refused_before_anything_spawns() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 这条断言的意义在于顺序：空文本必须在起 PowerShell 之前就被挡掉，
         // 否则 SAPI 会生成一个 0 秒的 wav，然后 RVC 对着它跑一遍，最后交给
         // 用户一个听不见任何东西的文件。

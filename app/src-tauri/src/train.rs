@@ -397,6 +397,9 @@ mod tests {
 
     #[test]
     fn rejects_names_that_would_break_a_path() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 这些字符不拦，用户会在训练跑了半小时之后收到一个建目录失败。
         for bad in ["", "  ", "a/b", "a\\b", "c:d", "x?y", "*", ".hidden", "mute"] {
             assert!(validate_name(bad).is_err(), "should reject {bad:?}");

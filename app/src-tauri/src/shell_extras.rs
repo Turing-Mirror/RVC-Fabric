@@ -933,6 +933,9 @@ mod tests {
     /// 又看不出哪里错了。
     #[test]
     fn hotkey_defaults_match_the_config_defaults() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let d = crate::config::defaults();
         for (key, _action, default) in HOTKEYS {
             let got = d
@@ -949,6 +952,9 @@ mod tests {
     /// 生效」，用户在游戏里按 Ctrl+F2 没反应，而界面上什么错都不会报。
     #[test]
     fn every_hotkey_has_a_global_switch_defaulting_to_on() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let d = crate::config::defaults();
         for (key, _action, _default) in HOTKEYS {
             let k = format!("{key}_global");

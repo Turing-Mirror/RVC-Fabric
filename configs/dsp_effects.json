@@ -1,0 +1,193 @@
+{
+  "order": [
+    "pitch",
+    "formant",
+    "whisper",
+    "ring",
+    "vibrato",
+    "chorus",
+    "bitcrush",
+    "drive",
+    "radio",
+    "echo",
+    "reverb"
+  ],
+  "effects": {
+    "pitch": {
+      "params": {
+        "semitones": 0.0
+      },
+      "ranges": {
+        "semitones": [
+          -24.0,
+          24.0
+        ]
+      }
+    },
+    "formant": {
+      "params": {
+        "shift": 0.0
+      },
+      "ranges": {
+        "shift": [
+          -12.0,
+          12.0
+        ]
+      }
+    },
+    "whisper": {
+      "params": {
+        "amount": 0.0
+      },
+      "ranges": {
+        "amount": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "ring": {
+      "params": {
+        "freq": 50.0,
+        "mix": 0.0
+      },
+      "ranges": {
+        "freq": [
+          5.0,
+          2000.0
+        ],
+        "mix": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "vibrato": {
+      "params": {
+        "rate": 5.0,
+        "depth": 0.0
+      },
+      "ranges": {
+        "rate": [
+          0.1,
+          20.0
+        ],
+        "depth": [
+          0.0,
+          30.0
+        ]
+      }
+    },
+    "chorus": {
+      "params": {
+        "depth": 0.0,
+        "rate": 0.7,
+        "voices": 2
+      },
+      "ranges": {
+        "depth": [
+          0.0,
+          1.0
+        ],
+        "rate": [
+          0.05,
+          5.0
+        ],
+        "voices": [
+          2,
+          3
+        ]
+      }
+    },
+    "bitcrush": {
+      "params": {
+        "bits": 16,
+        "downsample": 1
+      },
+      "ranges": {
+        "bits": [
+          2,
+          16
+        ],
+        "downsample": [
+          1,
+          32
+        ]
+      }
+    },
+    "drive": {
+      "params": {
+        "amount": 0.0
+      },
+      "ranges": {
+        "amount": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "radio": {
+      "params": {
+        "low": 300.0,
+        "high": 3400.0,
+        "mix": 0.0,
+        "noise": 0.0
+      },
+      "ranges": {
+        "low": [
+          50.0,
+          2000.0
+        ],
+        "high": [
+          1000.0,
+          12000.0
+        ],
+        "mix": [
+          0.0,
+          1.0
+        ],
+        "noise": [
+          0.0,
+          0.5
+        ]
+      }
+    },
+    "echo": {
+      "params": {
+        "time_ms": 180.0,
+        "feedback": 0.3,
+        "mix": 0.0
+      },
+      "ranges": {
+        "time_ms": [
+          10.0,
+          1000.0
+        ],
+        "feedback": [
+          0.0,
+          0.9
+        ],
+        "mix": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "reverb": {
+      "params": {
+        "size": 0.5,
+        "mix": 0.0
+      },
+      "ranges": {
+        "size": [
+          0.0,
+          1.0
+        ],
+        "mix": [
+          0.0,
+          1.0
+        ]
+      }
+    }
+  }
+}

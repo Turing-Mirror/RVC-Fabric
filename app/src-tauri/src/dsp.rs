@@ -108,6 +108,18 @@ pub fn list(root: &Path) -> Value {
     json!({ "presets": items })
 }
 
+/// 效果器规格（参数名、默认值、取值范围）。
+///
+/// 由 `configs/dsp_effects.json` 提供，那份文件是从引擎侧
+/// `tools/dsp_voice.py` 的 EFFECT_SPECS 生成的。**壳不手抄一份范围** ——
+/// 抄了就一定会跟引擎走散：界面上能拉到的值引擎那边会被静默钳回去，
+/// 用户看到的和听到的对不上，而且从哪一侧都查不出原因。
+pub fn effect_specs(root: &Path) -> Value {
+    read_json(&root.join("configs").join("dsp_effects.json"))
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({ "order": [], "effects": {} }))
+}
+
 /// 广场上架的预设。
 ///
 /// 直接内嵌在 online_catalog.json 里，不走单独下载 —— 一份预设几百字节，

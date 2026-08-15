@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEven
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
+import { DspPresetEditor } from "../components/DspPresetEditor";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
@@ -62,12 +63,17 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   const [kind, setKind] = useState<Kind>("rvc");
   /** 当前生效的 DSP 预设 id；空串 = DSP 没开。 */
   const [dspId, setDspId] = useState("");
+  /** 当前生效的那条预设本体，编辑器要拿它画滑条。 */
+  const [dspActive, setDspActive] = useState<DspPreset | null>(null);
+  /** 加一就让预设列表重拉（存了/删了自定义预设之后）。 */
+  const [dspReload, setDspReload] = useState(0);
 
   // DSP 是热键，开关和换预设都不重开流。用完立刻回读配置，别让界面和引擎
   // 各记各的 —— 那种不一致用户看不出原因，只会觉得「点了没反应」。
   const applyDsp = useCallback(async (p: DspPreset | null) => {
     const next = p ? p.id : "";
     setDspId(next);
+    setDspActive(p);
     try {
       await setHot(
         p
@@ -402,9 +408,24 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
               query={query}
               activeId={dspId}
               busy={busy}
+              reloadToken={dspReload}
+              onActive={setDspActive}
               onUse={(p) => void applyDsp(p)}
               onStop={() => void applyDsp(null)}
             />
+            {dspActive ? (
+              <DspPresetEditor
+                preset={dspActive}
+                onApply={(params) =>
+                  void setHot({
+                    dsp_enabled: true,
+                    dsp_preset: dspActive.id,
+                    dsp_params: params,
+                  }).catch(() => {})
+                }
+                onSaved={() => setDspReload((n) => n + 1)}
+              />
+            ) : null}
           </div>
         ) : (
         <div

@@ -685,6 +685,15 @@ async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
         .map_err(|e| e.to_string())?
 }
 
+/// DSP 效果器规格。前端画滑条要用，范围只有引擎侧一份定义。
+#[tauri::command]
+async fn dsp_effects(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(dsp::effect_specs(&root)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// 广场上架的 DSP 预设（内嵌在清单里，不单独下载）。
 #[tauri::command]
 async fn dsp_catalog(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1557,6 +1566,7 @@ pub fn run() {
             tools_open_downloads,
             dsp_presets,
             dsp_catalog,
+            dsp_effects,
             dsp_preset_install,
             dsp_preset_save,
             dsp_preset_delete,

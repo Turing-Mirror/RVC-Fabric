@@ -10,6 +10,7 @@ import { t } from "../i18n/t";
 type Props = {
   currentId?: string;
   onOpenModels?: () => void;
+  onOpenDsp?: () => void;
   /** Same payload the models page reports, so the dock agrees either way. */
   onVoiceChange?: (info: {
     model: VoiceModel;
@@ -123,7 +124,7 @@ function HeroEmblem() {
  * Recency comes from `recent_keys` (app_config `recent_models`), which
  * `voices_select` maintains — the same ordering the Tk shell used.
  */
-function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
+function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Props) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -219,10 +220,14 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
         </div>
         <PagePad>
           <Block title={t("s.71265fc4cb")}>
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-3 flex-wrap">
               <Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>
+              {onOpenDsp ? (
+                <Btn onClick={onOpenDsp}>{t("s.dspHomeOpen")}</Btn>
+              ) : null}
             </div>
           </Block>
+          <DspHomeEntry onOpen={onOpenDsp} />
           <ToolShortcuts />
         </PagePad>
       </div>
@@ -326,9 +331,35 @@ function HomePageImpl({ currentId, onOpenModels, onVoiceChange }: Props) {
             })}
           </div>
         </Block>
+        <DspHomeEntry onOpen={onOpenDsp} />
         <ToolShortcuts />
       </PagePad>
     </div>
+  );
+}
+
+function DspHomeEntry({ onOpen }: { onOpen?: () => void }) {
+  if (!onOpen) return null;
+  return (
+    <Block title={t("s.dspHomeTitle")}>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={[
+          "w-full text-left border-0 cursor-pointer",
+          "rounded-[var(--r)] px-4 py-3.5",
+          "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+          "transition-[transform,background] duration-200 ease-[var(--ease)]",
+          "hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)]",
+          "active:scale-[0.985]",
+        ].join(" ")}
+      >
+        <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+          {t("s.dspHomeOpen")}
+        </div>
+        <div className="text-[12px] text-[var(--meta)] mt-1">{t("s.dspHomeDesc")}</div>
+      </button>
+    </Block>
   );
 }
 

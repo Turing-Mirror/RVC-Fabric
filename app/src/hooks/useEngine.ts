@@ -15,6 +15,7 @@ import {
   type ProvisionStatus,
 } from "../lib/engine";
 import type { OutputMode } from "../components/Dock";
+import { getConfig } from "../lib/config";
 import { t } from "../i18n/t";
 
 export function useEngine() {
@@ -182,11 +183,21 @@ export function useEngine() {
       );
       return;
     }
-    // 实时推理链路（rtrvc）加载 hubert_base.pt + rmvpe.pt；缺了会在引擎里炸。
-    // 停变声不需要查；只有要「开启」时才引导补全。
+    // RVC 要 hubert / rmvpe；纯 DSP（开了预设、没选音色）不碰那五件套。
+    // 停变声不需要查；只有要「开启」且会走 RVC 时才引导补全。
     const stopping =
       running || status.state === "starting" || startingRef.current;
+    let dspOnly = false;
     if (!stopping) {
+      try {
+        const cfg = await getConfig();
+        dspOnly =
+          Boolean(cfg.dsp_enabled) && !String(cfg.pth_path || "").trim();
+      } catch {
+        dspOnly = false;
+      }
+    }
+    if (!stopping && !dspOnly) {
       try {
         const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
         const ok = await ensureEngineCoreOrPrompt(
@@ -219,7 +230,11 @@ export function useEngine() {
           await setHot({
             pitch: pitchRef.current,
             formant: formantRef.current,
-            function: modeRef.current,
+            function: dspOnly
+              ? "fx"
+              : modeRef.current === "bypass"
+                ? "im"
+                : "vc",
           });
         } catch {
           /* worker may still be coming up; start_vc still syncs from config */

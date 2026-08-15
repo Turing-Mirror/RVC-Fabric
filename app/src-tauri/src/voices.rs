@@ -726,6 +726,14 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
     }))
 }
 
+/// 丢掉当前选中的 RVC 音色，好让 DSP 走纯 fx。
+///
+/// `sync_inuse` 不会把空 pth 写进 inuse，所以必须走 force_clear。
+pub fn clear_voice(root: &Path) -> Result<Value, String> {
+    crate::config::force_clear_model_paths(root)?;
+    Ok(json!({ "ok": true }))
+}
+
 /// Persist the selected model.
 ///
 /// **app_config is the source of truth**, not inuse: the shell rewrites inuse

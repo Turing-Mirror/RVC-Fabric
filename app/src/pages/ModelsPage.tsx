@@ -14,6 +14,7 @@ import { t } from "../i18n/t";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import {
   bindIndex,
+  clearVoice,
   colsForWidth,
   deleteProfile,
   deleteVoice,
@@ -38,9 +39,17 @@ import {
   type VoiceModel,
 } from "../lib/voices";
 
+type SortKey = "default" | "name" | "index";
+/** 列表看的是哪一种东西。RVC 音色和 DSP 预设不混排。 */
+type Kind = "rvc" | "dsp";
+
 export type ModelsPageProps = {
   /** 跳到广场。社区音色现在住在那儿。 */
   onOpenPlaza?: () => void;
+  /** 从首页进来时直接停在 DSP 预设。 */
+  focusKind?: Kind;
+  /** 加一就再切一次 focusKind（连点首页入口也要生效）。 */
+  focusNonce?: number;
   /** Models-page placement, owned by App so the feed is fetched once. */
   banner?: PlazaItem | null;
   onVoiceChange?: (info: {
@@ -51,11 +60,13 @@ export type ModelsPageProps = {
   }) => void;
 };
 
-type SortKey = "default" | "name" | "index";
-/** 列表看的是哪一种东西。RVC 音色和 DSP 预设不混排。 */
-type Kind = "rvc" | "dsp";
-
-function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPageProps) {
+function ModelsPageImpl({
+  banner = null,
+  onVoiceChange,
+  onOpenPlaza,
+  focusKind,
+  focusNonce = 0,
+}: ModelsPageProps) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -74,16 +85,26 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
     const next = p ? p.id : "";
     setDspId(next);
     setDspActive(p);
+    const noVoice = !selectedKey;
     try {
       await setHot(
         p
-          ? { dsp_enabled: true, dsp_preset: p.id, dsp_params: p.params }
+          ? {
+              dsp_enabled: true,
+              dsp_preset: p.id,
+              dsp_params: p.params,
+              ...(noVoice ? { function: "fx" as const } : {}),
+            }
           : { dsp_enabled: false, dsp_preset: "" },
       );
     } catch {
       /* 引擎没开着也没关系：配置已经写下去了，下次开启变声就生效 */
     }
-  }, []);
+  }, [selectedKey]);
+
+  useEffect(() => {
+    if (focusKind === "rvc" || focusKind === "dsp") setKind(focusKind);
+  }, [focusKind, focusNonce]);
 
   // 进页面时把当前预设读回来，不然切走再切回来「使用中」的标记就没了。
   useEffect(() => {
@@ -102,6 +123,19 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
   const [cols, setCols] = useState(5);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+
+  const dropVoice = useCallback(async () => {
+    try {
+      await clearVoice();
+      setSelectedKey("");
+      onVoiceChange?.({
+        model: { name: "", path: "", dir: "", file: "" },
+      });
+      setMsg(t("s.dspCleared"));
+    } catch (e) {
+      setMsg(String(e));
+    }
+  }, [onVoiceChange]);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   // 封面本地化：已装第三方音色的远程封面走本地缓存，不再每次全量重拉。
@@ -403,6 +437,14 @@ function ModelsPageImpl({ banner = null, onVoiceChange, onOpenPlaza }: ModelsPag
 
         {kind === "dsp" ? (
           <div ref={gridRef}>
+            {selectedKey ? (
+              <div className="mb-4 flex items-center gap-3 flex-wrap">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug flex-1 min-w-[220px]">
+                  {t("s.dspClearVoiceHint")}
+                </p>
+                <Btn onClick={() => void dropVoice()}>{t("s.dspClearVoice")}</Btn>
+              </div>
+            ) : null}
             <DspPresetGrid
               cols={cols}
               query={query}

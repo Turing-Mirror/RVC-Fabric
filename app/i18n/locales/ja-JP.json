@@ -46,7 +46,8 @@
     "engineError": "エンジンエラー",
     "engineDown": "エンジン未起動",
     "waitStart": "エンジン起動待ち",
-    "delayLine": "遅延 {delay} ms · 推論 {infer} ms"
+    "delayLine": "遅延 {delay} ms · 推論 {infer} ms",
+    "dspStopHint": "クリックで DSP エフェクトをオフ"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "プリセットを保存できませんでした：{0}",
     "dspPresetNotUser": "内蔵プリセットは削除できません。同名のカスタムプリセットを保存すると上書きできます。",
     "dspPresetDeleteFail": "プリセットを削除できませんでした：{0}",
-    "toolMainWindowGone": "メインウィンドウが閉じています。モデルをダウンロードするには、まずメイン画面に戻ってください。"
+    "toolMainWindowGone": "メインウィンドウが閉じています。モデルをダウンロードするには、まずメイン画面に戻ってください。",
+    "dspKindRvc": "RVC ボイス",
+    "dspKindDsp": "DSP プリセット",
+    "dspPresetTag": "DSP 変声プリセット",
+    "dspPresetMine": "カスタム",
+    "dspPresetStop": "停止",
+    "dspPresetsLoading": "プリセットを読み込み中…",
+    "dspNoPresets": "DSP プリセットがまだありません。",
+    "dspFxPitch": "ピッチ",
+    "dspFxFormant": "フォルマント",
+    "dspFxWhisper": "ささやき",
+    "dspFxRing": "リング変調",
+    "dspFxVibrato": "ビブラート",
+    "dspFxChorus": "コーラス",
+    "dspFxBitcrush": "ビットクラッシュ",
+    "dspFxDrive": "ドライブ",
+    "dspFxRadio": "帯域制限",
+    "dspFxEcho": "エコー",
+    "dspFxReverb": "リバーブ",
+    "dspStackTitle": "ボイスと DSP プリセットが同時に有効です",
+    "dspStackBody": "音声はまずボイス変換を通り、その後 DSP エフェクトを通ります。片方だけにしたい場合は、下部のチェーンにあるプリセット名をクリックすると DSP をオフにできます。",
+    "dspStackOk": "了解"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

@@ -130,6 +130,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("fx_comp_attack_ms".into(), json!(5.0));
     m.insert("fx_comp_release_ms".into(), json!(100.0));
     m.insert("fx_comp_makeup_db".into(), json!(0.0));
+    // 「音色和 DSP 同时开着」那句说明只说一次，说过就记下来。
+    m.insert("dsp_stack_noted".into(), json!(false));
     m.insert("dsp_enabled".into(), json!(false));
     m.insert("dsp_preset".into(), json!(""));
     m.insert("dsp_params".into(), json!({}));

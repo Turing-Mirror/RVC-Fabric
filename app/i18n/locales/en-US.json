@@ -46,7 +46,8 @@
     "engineError": "Engine error",
     "engineDown": "Engine not started",
     "waitStart": "Waiting for the engine to start",
-    "delayLine": "{delay} ms latency · {infer} ms inference"
+    "delayLine": "{delay} ms latency · {infer} ms inference",
+    "dspStopHint": "Click to turn off the DSP effect"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "Could not save the preset: {0}",
     "dspPresetNotUser": "Built-in presets cannot be deleted. Save a custom preset with the same name to override it.",
     "dspPresetDeleteFail": "Could not delete the preset: {0}",
-    "toolMainWindowGone": "The main window is closed. Go back to it to download models."
+    "toolMainWindowGone": "The main window is closed. Go back to it to download models.",
+    "dspKindRvc": "RVC voices",
+    "dspKindDsp": "DSP presets",
+    "dspPresetTag": "DSP voice preset",
+    "dspPresetMine": "Custom",
+    "dspPresetStop": "Turn off",
+    "dspPresetsLoading": "Loading presets…",
+    "dspNoPresets": "No DSP presets yet.",
+    "dspFxPitch": "Pitch",
+    "dspFxFormant": "Formant",
+    "dspFxWhisper": "Whisper",
+    "dspFxRing": "Ring mod",
+    "dspFxVibrato": "Vibrato",
+    "dspFxChorus": "Chorus",
+    "dspFxBitcrush": "Bit crush",
+    "dspFxDrive": "Drive",
+    "dspFxRadio": "Band limit",
+    "dspFxEcho": "Echo",
+    "dspFxReverb": "Reverb",
+    "dspStackTitle": "A voice and a DSP preset are both active",
+    "dspStackBody": "Audio goes through the voice conversion first, then the DSP effects. To keep only one layer, click the preset name in the chain at the bottom to turn DSP off.",
+    "dspStackOk": "Got it"
   },
   "extras": {
     "engineTitle": "Engine resources",

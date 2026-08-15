@@ -46,7 +46,8 @@
     "engineError": "Erreur du moteur",
     "engineDown": "Moteur non démarré",
     "waitStart": "En attente du moteur",
-    "delayLine": "Latence {delay} ms · Inférence {infer} ms"
+    "delayLine": "Latence {delay} ms · Inférence {infer} ms",
+    "dspStopHint": "Cliquer pour désactiver l'effet DSP"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "Impossible d'enregistrer le préréglage : {0}",
     "dspPresetNotUser": "Les préréglages intégrés ne peuvent pas être supprimés. Enregistrez un préréglage personnalisé du même nom pour le remplacer.",
     "dspPresetDeleteFail": "Impossible de supprimer le préréglage : {0}",
-    "toolMainWindowGone": "La fenêtre principale est fermée. Revenez-y pour télécharger des modèles."
+    "toolMainWindowGone": "La fenêtre principale est fermée. Revenez-y pour télécharger des modèles.",
+    "dspKindRvc": "Voix RVC",
+    "dspKindDsp": "Préréglages DSP",
+    "dspPresetTag": "Préréglage de voix DSP",
+    "dspPresetMine": "Personnalisé",
+    "dspPresetStop": "Désactiver",
+    "dspPresetsLoading": "Chargement des préréglages…",
+    "dspNoPresets": "Aucun préréglage DSP pour l'instant.",
+    "dspFxPitch": "Hauteur",
+    "dspFxFormant": "Formant",
+    "dspFxWhisper": "Chuchotement",
+    "dspFxRing": "Modulation en anneau",
+    "dspFxVibrato": "Vibrato",
+    "dspFxChorus": "Chorus",
+    "dspFxBitcrush": "Réduction de bits",
+    "dspFxDrive": "Saturation",
+    "dspFxRadio": "Bande limitée",
+    "dspFxEcho": "Écho",
+    "dspFxReverb": "Réverbération",
+    "dspStackTitle": "Une voix et un préréglage DSP sont actifs en même temps",
+    "dspStackBody": "Le son passe d'abord par la conversion de voix, puis par les effets DSP. Pour ne garder qu'une couche, cliquez sur le nom du préréglage dans la chaîne en bas pour désactiver le DSP.",
+    "dspStackOk": "Compris"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

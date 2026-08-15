@@ -119,10 +119,15 @@ export async function forceKillEngine(): Promise<EngineStatus> {
 export async function setHot(params: {
   pitch?: number;
   formant?: number;
-  function?: "vc" | "bypass" | "im";
+  /** "fx" = 无模型 DSP 变声，整条 RVC 都不走。 */
+  function?: "vc" | "bypass" | "im" | "fx";
   threhold?: number;
   index_rate?: number;
   rms_mix_rate?: number;
+  /** 无模型 DSP 变声。三个都是热键，换预设不重开流。 */
+  dsp_enabled?: boolean;
+  dsp_preset?: string;
+  dsp_params?: Record<string, Record<string, number>>;
 }): Promise<number> {
   if (!isTauri()) return 0;
   return invoke<number>("engine_set_hot", params);

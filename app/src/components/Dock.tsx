@@ -6,6 +6,10 @@ export type OutputMode = "vc" | "bypass";
 
 type Props = {
   voiceName?: string;
+  /** 生效中的 DSP 预设名；空 = 没开。 */
+  dspName?: string;
+  /** 点一下关掉 DSP 那一层。 */
+  onStopDsp?: () => void;
   voiceTag?: string;
   voiceIndex?: string;
   profileSummary?: string;
@@ -36,6 +40,8 @@ type Props = {
 export function Dock({
   // No invented defaults for voice — empty means not selected.
   voiceName,
+  dspName,
+  onStopDsp,
   voiceTag = "",
   voiceIndex = "",
   profileSummary,
@@ -81,6 +87,30 @@ export function Dock({
         <div className="text-[15px] font-semibold">
           {t("dock.current", { name })}
         </div>
+        {/*
+          两层同时开着的时候，这条链一直挂在这儿。
+          用户听到怪声低头一看就知道现在叠了几层、叠的顺序是什么 —— 弹一次
+          就消失的提示做不到这件事，而「怪声」往往是过几分钟才被注意到的。
+          等宽字 + 箭头，和设置页那套元信息一致。
+        */}
+        {dspName ? (
+          <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-[var(--meta)]">
+            {voiceName ? (
+              <>
+                <span className="truncate max-w-[92px]">{voiceName}</span>
+                <span aria-hidden>→</span>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={onStopDsp}
+              title={t("dock.dspStopHint")}
+              className="truncate max-w-[92px] underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+            >
+              {dspName}
+            </button>
+          </div>
+        ) : null}
         {voiceTag || voiceIndex ? (
           <div className="text-xs text-[var(--meta)] mt-0.5">
             {[voiceTag, voiceIndex].filter(Boolean).join(" · ")}

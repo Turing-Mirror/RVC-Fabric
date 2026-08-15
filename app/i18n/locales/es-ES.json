@@ -46,7 +46,8 @@
     "engineError": "Error del motor",
     "engineDown": "Motor no iniciado",
     "waitStart": "Esperando al motor",
-    "delayLine": "Latencia {delay} ms · Inferencia {infer} ms"
+    "delayLine": "Latencia {delay} ms · Inferencia {infer} ms",
+    "dspStopHint": "Haz clic para desactivar el efecto DSP"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "No se pudo guardar el preajuste: {0}",
     "dspPresetNotUser": "Los preajustes integrados no se pueden eliminar. Guarda un preajuste propio con el mismo nombre para sustituirlo.",
     "dspPresetDeleteFail": "No se pudo eliminar el preajuste: {0}",
-    "toolMainWindowGone": "La ventana principal está cerrada. Vuelve a ella para descargar modelos."
+    "toolMainWindowGone": "La ventana principal está cerrada. Vuelve a ella para descargar modelos.",
+    "dspKindRvc": "Voces RVC",
+    "dspKindDsp": "Preajustes DSP",
+    "dspPresetTag": "Preajuste de voz DSP",
+    "dspPresetMine": "Personalizado",
+    "dspPresetStop": "Desactivar",
+    "dspPresetsLoading": "Cargando preajustes…",
+    "dspNoPresets": "Todavía no hay preajustes DSP.",
+    "dspFxPitch": "Tono",
+    "dspFxFormant": "Formante",
+    "dspFxWhisper": "Susurro",
+    "dspFxRing": "Modulación en anillo",
+    "dspFxVibrato": "Vibrato",
+    "dspFxChorus": "Coro",
+    "dspFxBitcrush": "Reducción de bits",
+    "dspFxDrive": "Saturación",
+    "dspFxRadio": "Banda limitada",
+    "dspFxEcho": "Eco",
+    "dspFxReverb": "Reverberación",
+    "dspStackTitle": "Una voz y un preajuste DSP están activos a la vez",
+    "dspStackBody": "El audio pasa primero por la conversión de voz y después por los efectos DSP. Para dejar solo una capa, haz clic en el nombre del preajuste en la cadena inferior para desactivar el DSP.",
+    "dspStackOk": "Entendido"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

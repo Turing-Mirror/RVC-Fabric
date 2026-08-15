@@ -46,7 +46,8 @@
     "engineError": "엔진 오류",
     "engineDown": "엔진 미시작",
     "waitStart": "엔진 시작 대기 중",
-    "delayLine": "지연 {delay} ms · 추론 {infer} ms"
+    "delayLine": "지연 {delay} ms · 추론 {infer} ms",
+    "dspStopHint": "클릭하면 DSP 효과를 끕니다"
   },
   "settings": {
     "tabs": {
@@ -1365,7 +1366,28 @@
     "dspPresetSaveFail": "프리셋을 저장하지 못했습니다: {0}",
     "dspPresetNotUser": "기본 제공 프리셋은 삭제할 수 없습니다. 같은 이름으로 사용자 프리셋을 저장하면 덮어쓸 수 있습니다.",
     "dspPresetDeleteFail": "프리셋을 삭제하지 못했습니다: {0}",
-    "toolMainWindowGone": "메인 창이 닫혀 있습니다. 모델을 내려받으려면 메인 화면으로 돌아가세요."
+    "toolMainWindowGone": "메인 창이 닫혀 있습니다. 모델을 내려받으려면 메인 화면으로 돌아가세요.",
+    "dspKindRvc": "RVC 음색",
+    "dspKindDsp": "DSP 프리셋",
+    "dspPresetTag": "DSP 음성 변조 프리셋",
+    "dspPresetMine": "사용자 지정",
+    "dspPresetStop": "사용 중지",
+    "dspPresetsLoading": "프리셋을 불러오는 중…",
+    "dspNoPresets": "아직 DSP 프리셋이 없습니다.",
+    "dspFxPitch": "피치",
+    "dspFxFormant": "포먼트",
+    "dspFxWhisper": "속삭임",
+    "dspFxRing": "링 모듈레이션",
+    "dspFxVibrato": "비브라토",
+    "dspFxChorus": "코러스",
+    "dspFxBitcrush": "비트 크러시",
+    "dspFxDrive": "드라이브",
+    "dspFxRadio": "대역 제한",
+    "dspFxEcho": "에코",
+    "dspFxReverb": "리버브",
+    "dspStackTitle": "음색과 DSP 프리셋이 동시에 적용 중입니다",
+    "dspStackBody": "소리는 음색 변환을 먼저 거친 뒤 DSP 효과를 지납니다. 한 겹만 남기려면 하단 체인의 프리셋 이름을 클릭해 DSP를 끄세요.",
+    "dspStackOk": "알겠습니다"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

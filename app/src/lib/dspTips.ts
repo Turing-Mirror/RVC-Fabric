@@ -22,5 +22,23 @@ export function dspTips() {
       echo: t("s.dspTipFxEcho"),
       reverb: t("s.dspTipFxReverb"),
     } as Record<string, string>,
+    param: {
+      semitones: t("s.dspTipPSemitones"),
+      shift: t("s.dspTipPShift"),
+      amount: t("s.dspTipPAmount"),
+      freq: t("s.dspTipPFreq"),
+      mix: t("s.dspTipPMix"),
+      rate: t("s.dspTipPRate"),
+      depth: t("s.dspTipPDepth"),
+      voices: t("s.dspTipPVoices"),
+      bits: t("s.dspTipPBits"),
+      downsample: t("s.dspTipPDownsample"),
+      low: t("s.dspTipPLow"),
+      high: t("s.dspTipPHigh"),
+      noise: t("s.dspTipPNoise"),
+      time_ms: t("s.dspTipPTimeMs"),
+      feedback: t("s.dspTipPFeedback"),
+      size: t("s.dspTipPSize"),
+    } as Record<string, string>,
   };
 }

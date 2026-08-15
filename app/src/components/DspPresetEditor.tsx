@@ -222,8 +222,13 @@ export function DspPresetEditor({
               const v = Number(params[effect]?.[key] ?? dflt);
               return (
                 <div key={key} className={ROW}>
-                  <span className="w-[86px] shrink-0 text-[13px]">
-                    {PARAM_LABEL[key] ? t(PARAM_LABEL[key]) : key}
+                  <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-[9px]">
+                    <span className="truncate">
+                      {PARAM_LABEL[key] ? t(PARAM_LABEL[key]) : key}
+                    </span>
+                    {dspTips().param[key] ? (
+                      <HelpMark title={dspTips().param[key]} />
+                    ) : null}
                   </span>
                   <div className="flex-1">
                     <RangeBar

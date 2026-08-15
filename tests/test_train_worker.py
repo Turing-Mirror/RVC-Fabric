@@ -132,6 +132,39 @@ class TrainLogTailTests(unittest.TestCase):
         self.assertEqual(cap.lines(), [])
 
 
+class WatcherJoinTests(unittest.TestCase):
+    """进度线程 stop+join 不能把已经跑完的预处理打成崩溃。
+
+    26.8.15/2：`self._stop = Event()` 盖掉 `Thread._stop()`，子进程其实已经
+    退出，finally 里 join 却 TypeError: 'Event' object is not callable。
+    """
+
+    def test_thread_stop_method_is_still_callable(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = tw.StageProgress("preprocess", 1, 5, Path(td), 1, "x")
+            t = tw.TrainLogTail(Path(td) / "train.log", 10, 4, 5)
+        self.assertTrue(callable(w._stop), "StageProgress shadowed Thread._stop")
+        self.assertTrue(callable(t._stop), "TrainLogTail shadowed Thread._stop")
+
+    def test_stage_progress_stop_then_join(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = tw.StageProgress("preprocess", 1, 5, Path(td), 1, "x")
+            w.start()
+            w.stop()
+            w.join(timeout=3)
+            self.assertFalse(w.is_alive())
+
+    def test_log_tail_stop_then_join(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "train.log"
+            p.write_text("", encoding="utf-8")
+            t = tw.TrainLogTail(p, 10, 4, 5)
+            t.start()
+            t.stop()
+            t.join(timeout=3)
+            self.assertFalse(t.is_alive())
+
+
 class CountFilesTests(unittest.TestCase):
     def test_counts_only_files(self):
         with tempfile.TemporaryDirectory() as td:

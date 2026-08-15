@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Btn } from "./ui";
+import { Btn, HelpMark } from "./ui";
+import { RangeBar } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
+import { openHelpSection } from "../lib/helpNav";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 
@@ -23,8 +25,12 @@ type Progress = {
 };
 
 const ROW = "flex items-center gap-3 py-2.5";
+const LABEL = "w-[64px] shrink-0 text-[13px]";
+const FIELD =
+  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
+const FORMATS = ["wav", "flac", "mp3", "m4a"] as const;
 
 /**
  * 人声分离（PyMSS）。
@@ -37,6 +43,8 @@ export function SeparatePanel() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [model, setModel] = useState("");
+  const [fmt, setFmt] = useState<(typeof FORMATS)[number]>("wav");
+  const [agg, setAgg] = useState(10);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
@@ -72,9 +80,12 @@ export function SeparatePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 开一次窗只挂一次
   }, []);
 
-  const pick = async (dir: boolean) => {
+  const pick = async (dir: boolean, inputFolder = false) => {
     try {
-      const p = await invoke<string | null>("separate_pick", { dir });
+      const p = await invoke<string | null>("separate_pick", {
+        dir,
+        inputFolder,
+      });
       if (!p) return;
       if (dir) setOutput(p);
       else setInput(p);
@@ -94,6 +105,8 @@ export function SeparatePanel() {
         input,
         output,
         model,
+        format: fmt,
+        aggression: agg,
       });
       setMsg(t("s.8efd7ca6b1", { v0: r.files?.length ?? 0 }));
     } catch (e) {
@@ -121,7 +134,10 @@ export function SeparatePanel() {
 
   return (
     <ToolBody>
-        <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.8fd038283b")}</h3>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h3 className="m-0 text-[17px] font-semibold">{t("s.8fd038283b")}</h3>
+          <Btn onClick={() => openHelpSection("separate")}>{t("s.trainOpenHelp")}</Btn>
+        </div>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.497e7d9af6")}</p>
 
         {blocked ? (
@@ -141,17 +157,18 @@ export function SeparatePanel() {
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">{t("s.e8850440f2")}</span>
+            <span className={LABEL}>{t("s.e8850440f2")}</span>
             <span className={PATH}>{input || t("s.53e2db7016")}</span>
             <Btn onClick={() => void pick(false)}>{t("s.70b208202c")}</Btn>
+            <Btn onClick={() => void pick(false, true)}>{t("s.sepFolder")}</Btn>
           </div>
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">{t("s.a0bc984876")}</span>
+            <span className={LABEL}>{t("s.a0bc984876")}</span>
             <span className={PATH}>{output || t("s.53e2db7016")}</span>
             <Btn onClick={() => void pick(true)}>{t("s.70b208202c")}</Btn>
           </div>
           <div className={ROW}>
-            <span className="w-[64px] shrink-0 text-[13px]">{t("s.98fd0cbd9c")}</span>
+            <span className={LABEL}>{t("s.98fd0cbd9c")}</span>
             <select
               className="flex-1 min-w-0 rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]"
               value={model}
@@ -164,6 +181,41 @@ export function SeparatePanel() {
               ))}
               {!st.models?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}
             </select>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.sepFormat")}
+              <HelpMark title={t("s.sepFormatHint")} />
+            </span>
+            <select
+              className={FIELD}
+              value={fmt}
+              onChange={(e) => setFmt(e.target.value as (typeof FORMATS)[number])}
+            >
+              {FORMATS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.sepAgg")}
+              <HelpMark title={t("s.sepAggHint")} />
+            </span>
+            <div className="flex-1">
+              <RangeBar
+                value={agg}
+                min={0}
+                max={20}
+                step={1}
+                defaultValue={10}
+                onChange={setAgg}
+                ariaLabel={t("s.sepAgg")}
+              />
+            </div>
+            <span className="w-[36px] text-right text-[13px] tabular-nums">{agg}</span>
           </div>
         </div>
 
@@ -188,7 +240,14 @@ export function SeparatePanel() {
         <div className="mt-5 flex justify-end gap-2.5">
           {running ? (
             <Btn onClick={() => void invoke("separate_cancel")}>{t("s.4d0b4688c7")}</Btn>
-          ) : null}
+          ) : (
+            <Btn
+              disabled={!output}
+              onClick={() => void invoke("separate_reveal", { path: output })}
+            >
+              {t("s.344a481fa0")}
+            </Btn>
+          )}
           <Btn
             primary
             disabled={running || !!blocked || !input || !output}

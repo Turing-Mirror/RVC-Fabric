@@ -244,8 +244,9 @@ def main(argv: list[str]) -> int:
     index_rate = float(req.get("index_rate") if req.get("index_rate") is not None else 0.75)
     filter_radius = int(req.get("filter_radius") if req.get("filter_radius") is not None else 3)
     resample_sr = int(req.get("resample_sr") or 0)
-    rms_mix_rate = float(req.get("rms_mix_rate") if req.get("rms_mix_rate") is not None else 1.0)
+    rms_mix_rate = float(req.get("rms_mix_rate") if req.get("rms_mix_rate") is not None else 0.25)
     protect = float(req.get("protect") if req.get("protect") is not None else 0.33)
+    fmt = sts_core.normalize_format(str(req.get("format") or "wav"))
 
     if not inp or not out_dir or not model:
         emit(phase="error", message="输入 / 输出 / 音色模型 都不能为空")
@@ -330,6 +331,7 @@ def main(argv: list[str]) -> int:
                 "resample_sr": resample_sr,
                 "rms_mix_rate": rms_mix_rate,
                 "protect": protect,
+                "format": fmt,
             },
             prog,
             emit,

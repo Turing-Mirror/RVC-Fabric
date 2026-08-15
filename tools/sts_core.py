@@ -145,16 +145,44 @@ def file_weights(paths: Iterable[Path]) -> list[float]:
     return out
 
 
-def unique_dest(out_dir: Path, rel: Path, stem: str) -> Path:
+_AUDIO_OUT = ("wav", "flac", "mp3", "m4a")
+
+
+def normalize_format(name: str) -> str:
+    ext = (name or "wav").strip().lstrip(".").lower()
+    return ext if ext in _AUDIO_OUT else "wav"
+
+
+def unique_dest(out_dir: Path, rel: Path, stem: str, ext: str = "wav") -> Path:
     """输出路径，保持输入的目录层级，重名加序号。"""
+    ext = normalize_format(ext)
     sub = out_dir / rel.parent
     sub.mkdir(parents=True, exist_ok=True)
-    dest = sub / f"{stem}_rvc.wav"
+    dest = sub / f"{stem}_rvc.{ext}"
     n = 1
     while dest.exists():
-        dest = sub / f"{stem}_rvc_{n}.wav"
+        dest = sub / f"{stem}_rvc_{n}.{ext}"
         n += 1
     return dest
+
+
+def write_audio(wavfile, dest: Path, sr, audio, fmt: str = "wav") -> None:
+    """wav 直接写；flac/mp3/m4a 走原版 wav2。"""
+    fmt = normalize_format(fmt)
+    if fmt == "wav":
+        wavfile.write(str(dest), sr, audio)
+        return
+    from infer.lib.audio import wav2
+
+    tmp = dest.with_name(dest.stem + ".__tmp.wav")
+    wavfile.write(str(tmp), sr, audio)
+    try:
+        wav2(str(tmp), str(dest), fmt)
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +396,7 @@ def convert_one(
     protect,
     on_stage,
     wavfile,
+    fmt="wav",
 ) -> None:
     """跑一次 vc_single 并写盘。第一次 CUDA OOM 就缩小 rmvpe 分片再试一次。"""
     attempts = 2
@@ -392,7 +421,7 @@ def convert_one(
             if wav_opt is None or wav_opt[0] is None:
                 raise RuntimeError(friendly_error(info or "未知错误"))
             on_stage("write", 0.0)
-            wavfile.write(str(dest), wav_opt[0], wav_opt[1])
+            write_audio(wavfile, dest, wav_opt[0], wav_opt[1], fmt)
             on_stage("write", 1.0)
             return
         except Exception as e:
@@ -495,7 +524,9 @@ def run_batch(
 
                 hit_oom = False
                 try:
-                    dest = unique_dest(out_root, rel, src.stem)
+                    dest = unique_dest(
+                        out_root, rel, src.stem, params.get("format") or "wav"
+                    )
                     convert_one(
                         vc,
                         src,
@@ -510,6 +541,7 @@ def run_batch(
                         protect=params["protect"],
                         on_stage=on_stage,
                         wavfile=wavfile,
+                        fmt=params.get("format") or "wav",
                     )
                     out_files.append(str(dest))
                     prog.file_done(i, src.name, ok=True)

@@ -647,9 +647,9 @@ fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 /// 选音频文件 / 选输出目录。原生对话框要主线程，所以留在同步命令里 ——
 /// 它本来就只阻塞到用户点完为止。
 #[tauri::command]
-fn separate_pick(dir: bool) -> Option<String> {
+fn separate_pick(dir: bool, input_folder: Option<bool>) -> Option<String> {
     let d = rfd::FileDialog::new();
-    if dir {
+    if dir || input_folder.unwrap_or(false) {
         d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
         d.add_filter(&crate::i18n::t("s.461189f186"), &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
@@ -666,11 +666,15 @@ async fn separate_start(
     input: String,
     output: String,
     model: String,
+    format: Option<String>,
+    aggression: Option<u32>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    let format = format.unwrap_or_else(|| "wav".into());
+    let aggression = aggression.unwrap_or(10).min(20);
     // 一次分离是几十秒到几分钟，绝不能占着 IPC 线程 —— 那就是窗口全程卡死。
     tauri::async_runtime::spawn_blocking(move || {
-        separate::run(&app, &root, &input, &output, &model)
+        separate::run(&app, &root, &input, &output, &model, &format, aggression)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -679,6 +683,18 @@ async fn separate_start(
 #[tauri::command]
 fn separate_cancel() {
     separate::cancel();
+}
+
+#[tauri::command]
+fn separate_reveal(path: String) -> Result<(), String> {
+    let p = std::path::PathBuf::from(path.trim());
+    if p.is_file() {
+        return crate::shell_extras::reveal(&p);
+    }
+    if p.is_dir() {
+        return crate::shell_extras::reveal(&p.join("x"));
+    }
+    Ok(())
 }
 
 // --- 离线语音转换 STS（音频 → 目标音色）------------------------------------
@@ -835,10 +851,22 @@ async fn sts_start(
     model_path: Option<String>,
     // Optional .index for that voice. Empty = library binding / config.
     index_path: Option<String>,
+    filter_radius: Option<u32>,
+    resample_sr: Option<u32>,
+    rms_mix_rate: Option<f64>,
+    protect: Option<f64>,
+    format: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let model_path = model_path.unwrap_or_default();
     let index_path = index_path.unwrap_or_default();
+    let opts = sts::ConvertOpts::from_raw(
+        filter_radius,
+        resample_sr,
+        rms_mix_rate,
+        protect,
+        format,
+    );
     tauri::async_runtime::spawn_blocking(move || {
         sts::run(
             &app,
@@ -850,6 +878,7 @@ async fn sts_start(
             index_rate,
             &model_path,
             &index_path,
+            opts,
         )
     })
     .await
@@ -1583,6 +1612,7 @@ pub fn run() {
             separate_pick,
             separate_start,
             separate_cancel,
+            separate_reveal,
             tools_open_downloads,
             dsp_presets,
             dsp_effects,

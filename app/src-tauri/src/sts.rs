@@ -31,6 +31,65 @@ const LAST_INPUT: &str = "last_sts_input";
 const LAST_OUTPUT: &str = "last_sts_output";
 const MAX_RECORD_SEC: u64 = 30 * 60;
 
+/// 原版单次推理那几个旋钮。缺省跟 infer-web 单次推理一致。
+#[derive(Debug, Clone)]
+pub struct ConvertOpts {
+    pub filter_radius: u32,
+    pub resample_sr: u32,
+    pub rms_mix_rate: f64,
+    pub protect: f64,
+    pub format: String,
+}
+
+impl Default for ConvertOpts {
+    fn default() -> Self {
+        Self {
+            filter_radius: 3,
+            resample_sr: 0,
+            rms_mix_rate: 0.25,
+            protect: 0.33,
+            format: "wav".into(),
+        }
+    }
+}
+
+impl ConvertOpts {
+    pub fn from_raw(
+        filter_radius: Option<u32>,
+        resample_sr: Option<u32>,
+        rms_mix_rate: Option<f64>,
+        protect: Option<f64>,
+        format: Option<String>,
+    ) -> Self {
+        let mut o = Self::default();
+        if let Some(n) = filter_radius {
+            o.filter_radius = n.min(7);
+        }
+        if let Some(n) = resample_sr {
+            o.resample_sr = match n {
+                16000 | 32000 | 40000 | 44100 | 48000 => n,
+                _ => 0,
+            };
+        }
+        if let Some(n) = rms_mix_rate {
+            o.rms_mix_rate = n.clamp(0.0, 1.0);
+        }
+        if let Some(n) = protect {
+            o.protect = n.clamp(0.0, 0.5);
+        }
+        if let Some(s) = format {
+            o.format = match s.trim().to_ascii_lowercase().as_str() {
+                "flac" => "flac",
+                "mp3" => "mp3",
+                "m4a" => "m4a",
+                _ => "wav",
+            }
+            .into();
+        }
+        o
+    }
+}
+
 fn cancel_flag() -> Arc<AtomicBool> {
     CANCEL
         .get_or_init(|| Arc::new(AtomicBool::new(false)))
@@ -713,6 +772,7 @@ fn run_hot(
     index_rate: f64,
     pth: &str,
     index: &str,
+    opts: &ConvertOpts,
 ) -> Result<Value, HotError> {
     crate::protocol::clear_sts(root);
     let mut payload = serde_json::Map::new();
@@ -726,10 +786,11 @@ fn run_hot(
         json!(if f0method.trim().is_empty() { "rmvpe" } else { f0method }),
     );
     payload.insert("index_rate".into(), json!(index_rate.clamp(0.0, 1.0)));
-    payload.insert("filter_radius".into(), json!(3));
-    payload.insert("resample_sr".into(), json!(0));
-    payload.insert("rms_mix_rate".into(), json!(1.0));
-    payload.insert("protect".into(), json!(0.33));
+    payload.insert("filter_radius".into(), json!(opts.filter_radius));
+    payload.insert("resample_sr".into(), json!(opts.resample_sr));
+    payload.insert("rms_mix_rate".into(), json!(opts.rms_mix_rate));
+    payload.insert("protect".into(), json!(opts.protect));
+    payload.insert("format".into(), json!(opts.format));
     let seq = crate::worker::send_command(root, "convert", payload)
         .map_err(HotError::Unavailable)?;
 
@@ -894,6 +955,7 @@ pub fn run(
     index_rate: f64,
     model_path: &str,
     index_path: &str,
+    opts: ConvertOpts,
 ) -> Result<Value, String> {
     {
         if *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
@@ -916,6 +978,11 @@ pub fn run(
         "index_rate": index_rate,
         "model_path": model_path,
         "index_path": index_path,
+        "filter_radius": opts.filter_radius,
+        "resample_sr": opts.resample_sr,
+        "rms_mix_rate": opts.rms_mix_rate,
+        "protect": opts.protect,
+        "format": opts.format,
     });
     let log_path = crate::logging::begin_run(root, crate::logging::CH_STS, &header);
     crate::logging::shell_log!(
@@ -935,6 +1002,7 @@ pub fn run(
         index_rate,
         model_path,
         index_path,
+        &opts,
         &log_path,
     );
     match &result {
@@ -981,6 +1049,7 @@ fn run_inner(
     index_rate: f64,
     model_path: &str,
     index_path: &str,
+    opts: &ConvertOpts,
     log_path: &Path,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
@@ -1011,7 +1080,9 @@ fn run_inner(
     // 真正干活一两秒，其余全耗在这上面。现在直接让它兼职把活干了。
     if crate::worker::is_worker_alive(root) {
         crate::logging::note_run(log_path, "hot path: reusing live worker models");
-        match run_hot(app, root, input, &out, pitch, f0method, index_rate, &pth, &index) {
+        match run_hot(
+            app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts,
+        ) {
             Ok(v) => {
                 let stats = crate::paths::clean_temps(root);
                 crate::paths::log_clean_stats(&crate::i18n::t("s.e246e3bafa"), root, &stats);
@@ -1047,10 +1118,11 @@ fn run_inner(
         "pitch": pitch,
         "f0method": if f0method.trim().is_empty() { "rmvpe" } else { f0method },
         "index_rate": index_rate.clamp(0.0, 1.0),
-        "filter_radius": 3,
-        "resample_sr": 0,
-        "rms_mix_rate": 1.0,
-        "protect": 0.33,
+        "filter_radius": opts.filter_radius,
+        "resample_sr": opts.resample_sr,
+        "rms_mix_rate": opts.rms_mix_rate,
+        "protect": opts.protect,
+        "format": opts.format,
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
@@ -1271,6 +1343,31 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rvcf-sts-rec-{n}"));
         fs::create_dir_all(dir.join("User_Data")).unwrap();
         dir
+    }
+
+    #[test]
+    fn convert_opts_clamp_like_the_original_ui() {
+        let o = ConvertOpts::from_raw(
+            Some(99),
+            Some(22050),
+            Some(2.5),
+            Some(-1.0),
+            Some("AAC".into()),
+        );
+        assert_eq!(o.filter_radius, 7);
+        assert_eq!(o.resample_sr, 0);
+        assert_eq!(o.rms_mix_rate, 1.0);
+        assert_eq!(o.protect, 0.0);
+        assert_eq!(o.format, "wav");
+        let o = ConvertOpts::from_raw(
+            Some(3),
+            Some(44100),
+            Some(0.25),
+            Some(0.33),
+            Some("flac".into()),
+        );
+        assert_eq!(o.resample_sr, 44100);
+        assert_eq!(o.format, "flac");
     }
 
     #[test]

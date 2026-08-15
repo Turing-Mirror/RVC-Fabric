@@ -74,7 +74,14 @@ def main(argv: list[str]) -> int:
     inp = str(req.get("input") or "").strip()
     out = str(req.get("output") or "").strip()
     device = str(req.get("device") or "auto").strip()
-    fmt = str(req.get("format") or "wav").strip()
+    fmt = str(req.get("format") or "wav").strip().lower()
+    if fmt not in ("wav", "flac", "mp3", "m4a"):
+        fmt = "wav"
+    try:
+        agg = int(req.get("aggression") if req.get("aggression") is not None else 10)
+    except (TypeError, ValueError):
+        agg = 10
+    agg = max(0, min(agg, 20))
     if not (model and inp and out):
         emit(phase="error", message="模型 / 输入 / 输出 都不能为空")
         return 2
@@ -111,6 +118,7 @@ def main(argv: list[str]) -> int:
             output_format=fmt,
             store_dirs=out,
             progress_callback=on_progress,
+            inference_params={"aggression": agg},
         ) as sep:
             files = sep.process_folder(inp)
         emit(phase="done", files=[str(f) for f in (files or [])])

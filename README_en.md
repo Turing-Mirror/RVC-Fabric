@@ -126,5 +126,5 @@ Thanks to the following excellent open-source projects for providing technical s
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — Core acoustic models and pitch algorithms
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Retrieval and real-time noise reduction
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Optional pitch algorithms
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) (UVR series separation models, run by PyMSS) · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Vocal separation and audio processing
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Vocal separation engine (follows upstream RVC; replaces UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Separation model source · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Audio processing
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Virtual sound card (makes the changed voice heard in games)

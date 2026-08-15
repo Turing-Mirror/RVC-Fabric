@@ -4,8 +4,11 @@ Scopes (product-oriented)::
 
   core      — hubert + rmvpe (+ rmvpe.onnx if available)  [daily realtime VC]
   training  — assets/pretrained + pretrained_v2            [train your own voice]
-  uvr       — UVR / demucs-style separation weights        [WebUI stem split]
-  all       — everything (legacy full download)
+  all       — everything
+
+人声分离用的是 PyMSS（tools/pymss，模型按需从它自己的清单下），不再有 uvr
+这一档 —— 上游 RVC 已经用 PyMSS 取代了 UVR5，本产品的分离功能也一直走 PyMSS，
+留着这一档只会让人下一堆没有任何代码会去读的权重。
 
 Improvements over the original script:
 - Skip only when size exceeds minimum thresholds (not size>0)
@@ -49,17 +52,6 @@ PRETRAIN_NAMES = [
     "f0G32k.pth",
     "f0G40k.pth",
     "f0G48k.pth",
-]
-
-UVR_NAMES = [
-    "HP2-%E4%BA%BA%E5%A3%B0vocals%2B%E9%9D%9E%E4%BA%BA%E5%A3%B0instrumentals.pth",
-    "HP2_all_vocals.pth",
-    "HP3_all_vocals.pth",
-    "HP5-%E4%B8%BB%E6%97%8B%E5%BE%8B%E4%BA%BA%E5%A3%B0vocals%2B%E5%85%B6%E4%BB%96instrumentals.pth",
-    "HP5_only_main_vocal.pth",
-    "VR-DeEchoAggressive.pth",
-    "VR-DeEchoDeReverb.pth",
-    "VR-DeEchoNormal.pth",
 ]
 
 
@@ -168,31 +160,14 @@ def download_training() -> None:
         dl_model(RVC_DOWNLOAD_LINK + "pretrained_v2/", model, rvc_models_dir)
 
 
-def download_uvr() -> None:
-    print("=== scope=uvr (stem separation) ===")
-    try:
-        print("Downloading vocals.onnx...")
-        dl_model(
-            RVC_DOWNLOAD_LINK + "uvr5_weights/onnx_dereverb_By_FoxJoy/",
-            "vocals.onnx",
-            BASE_DIR / "assets/uvr5_weights/onnx_dereverb_By_FoxJoy",
-        )
-    except Exception as e:
-        print(f"  vocals.onnx skip/fail: {e}")
-
-    print("Downloading uvr5_weights:")
-    rvc_models_dir = BASE_DIR / "assets/uvr5_weights"
-    for model in UVR_NAMES:
-        dl_model(RVC_DOWNLOAD_LINK + "uvr5_weights/", model, rvc_models_dir)
-
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Download RVC model weights from Hugging Face")
     ap.add_argument(
         "--scope",
-        choices=("core", "training", "uvr", "all"),
+        choices=("core", "training", "all"),
         default="core",
-        help="core=daily VC; training=bottom models; uvr=separation; all=legacy full set",
+        help="core=daily VC; training=bottom models; all=both",
     )
     args = ap.parse_args(argv)
     scope = args.scope
@@ -202,8 +177,6 @@ def main(argv: list[str] | None = None) -> int:
             download_core()
         if scope in ("training", "all"):
             download_training()
-        if scope in ("uvr", "all"):
-            download_uvr()
         print(f"Done (scope={scope}).")
         return 0
     except Exception as e:

@@ -58,6 +58,8 @@ FORBIDDEN = (
     "assets/rmvpe/rmvpe.onnx",
     "assets/pretrained",
     "assets/pretrained_v2",
+    # 产品早就不用 UVR5 了（分离走 PyMSS），代码也删了。这一条留着是因为从
+    # 老版本升上来的机器盘上还有这个目录，别让它跟着打进包里。
     "assets/uvr5_weights",
     "docs",
     "Runtime",
@@ -149,7 +151,6 @@ def write_env_file() -> None:
         "# 由 scripts/prepare_engine_payload.py 生成，不要手改。",
         "# 路径相对产品根（worker 的 cwd）。",
         "weight_root=assets/weights",
-        "weight_uvr5_root=assets/uvr5_weights",
         "index_root=logs",
         "outside_index_root=assets/indices",
         "rmvpe_root=assets/rmvpe",

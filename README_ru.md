@@ -126,5 +126,5 @@ npm run dev
 - [ContentVec](https://github.com/auspicious3000/contentvec) · [VITS](https://github.com/jaywalnut310/vits) · [HiFi-GAN](https://github.com/jik876/hifi-gan) · [RMVPE](https://github.com/Dream-High/RMVPE) — Основные акустические модели и алгоритмы высоты тона
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Поиск и шумоподавление в реальном времени
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Опциональные алгоритмы высоты тона
-- [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) (Модели разделения серии UVR, запускаемые через PyMSS) · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Разделение вокала и обработка звука
+- [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Движок разделения вокала (следует за upstream RVC, заменил UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Источник моделей разделения · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Обработка звука
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Виртуальная звуковая карта (именно благодаря ей вы слышите измененный голос в игре)

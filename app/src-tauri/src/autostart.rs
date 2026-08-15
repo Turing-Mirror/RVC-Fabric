@@ -144,6 +144,11 @@ mod tests {
 
     /// 真注册表 roundtrip：写开 → 读到开且值是当前 exe → 写关 → 读到关。
     /// 测试结束按进入时的状态恢复，不留残留（值名固定，跑完即还原）。
+    ///
+    /// 只在 Windows 上跑：别的平台上 imp 是个直接返回 Err 的桩，这条必然红。
+    /// 长期红的测试等于没有测试 —— 开发机是 macOS，它一直红着，久而久之
+    /// 「那两条本来就红」就成了默认，真红了也没人看。
+    #[cfg(windows)]
     #[test]
     fn registry_roundtrip() {
         let before = get();
@@ -163,5 +168,16 @@ mod tests {
         // 恢复进入前的状态，即使上面的断言失败也要还原。
         let _ = set(before.enabled);
         result.expect("registry roundtrip failed");
+    }
+
+    /// 非 Windows 上这套是明说「不支持」的桩，它也得照约定行事：
+    /// 读永远是「没开」，写要明确报错而不是假装成功。
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_is_an_honest_stub() {
+        let st = get();
+        assert!(!st.enabled);
+        assert!(st.path.is_empty());
+        assert!(set(true).is_err(), "写不了就要报错，不能假装写成了");
     }
 }

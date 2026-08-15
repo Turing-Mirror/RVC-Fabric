@@ -449,6 +449,9 @@ mod tests {
 
     #[test]
     fn the_three_badge_shapes() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let mk = |kind: &str, sponsor: &str| {
             PlazaItem::from_value(&serde_json::json!({
                 "id": "x", "title": "t", "type": kind, "sponsor": sponsor
@@ -497,6 +500,9 @@ mod tests {
 
     #[test]
     fn plaza_ads_are_not_dismissible_models_banner_is() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let feed = json!({"items": [
             {"id": "p", "title": &crate::i18n::t("s.800d82ff2e"), "type": "ad"},
             {"id": "m", "title": &crate::i18n::t("s.d06eb20450"), "type": "ad",
@@ -511,6 +517,9 @@ mod tests {
 
     #[test]
     fn schedule_window_and_version_gate() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let feed = json!({"items": [
             {"id": "past", "title": &crate::i18n::t("s.7cf7bfff3c"), "end": "260101"},
             {"id": "future", "title": &crate::i18n::t("s.062e5e670f"), "start": "991231"},
@@ -612,6 +621,9 @@ mod tests {
 
     #[test]
     fn auto_derived_release_news_never_shows_in_placements() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // 「RVC Fabric v1.2.4 发布」是清单自动派生给老客户端的，不是投放内容。
         // 广场自己已经有更新日志区块，再挂一条就是同一件事说两遍。
         let feed = json!({"items": [

@@ -1515,6 +1515,9 @@ mod tests {
 
     #[test]
     fn a_hostile_voice_id_cannot_escape_the_downloads_dir() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         // voice_id 来自线上清单，会被拼进路径。safe_model_dir_name 是「洗干净」
         // 而不是「拒绝」，所以这里断言的是结果性质：必须还在 downloads 下面，
         // 且不含任何能往上跳的成分。
@@ -1586,6 +1589,9 @@ mod tests {
 
     #[test]
     fn origin_label_fills_origin_not_the_placeholder() {
+        // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
+        // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
+        let _g = crate::i18n::testing::pin("zh-CN");
         let s = origin_label_for("huggingface", false);
         assert!(!s.contains("{origin}"), "{s}");
         assert!(s.contains("Hugging Face"), "{s}");

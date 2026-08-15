@@ -991,6 +991,9 @@ fn engine_set_hot(
     threhold: Option<f64>,
     index_rate: Option<f64>,
     rms_mix_rate: Option<f64>,
+    dsp_enabled: Option<bool>,
+    dsp_preset: Option<String>,
+    dsp_params: Option<Value>,
 ) -> Result<u64, String> {
     let root = root_clone(&state)?;
     let mut payload = Map::new();
@@ -1001,10 +1004,12 @@ fn engine_set_hot(
         payload.insert("formant".into(), json!(v));
     }
     if let Some(v) = function {
-        let f = if v == "bypass" || v == "im" {
-            "im"
-        } else {
-            "vc"
+        // "fx" = 无模型 DSP 变声，整条 RVC 不走。以前这里只认 im/vc，
+        // 别的一律折成 vc —— fx 传进来会被悄悄改成 vc，等于没生效。
+        let f = match v.as_str() {
+            "bypass" | "im" => "im",
+            "fx" => "fx",
+            _ => "vc",
         };
         payload.insert("function".into(), json!(f));
     }
@@ -1016,6 +1021,20 @@ fn engine_set_hot(
     }
     if let Some(v) = rms_mix_rate {
         payload.insert("rms_mix_rate".into(), json!(v));
+    }
+    // 无模型 DSP 变声。这三个键在 config::HOT_KEYS 里，但**命令签名里没有的
+    // 参数 Tauri 是直接丢掉的** —— 加进 HOT_KEYS 只让它们能落盘，推不推得到
+    // worker 是另一回事。少了这一段，模型页点预设是一点反应都没有的。
+    if let Some(v) = dsp_enabled {
+        payload.insert("dsp_enabled".into(), json!(v));
+    }
+    if let Some(v) = dsp_preset {
+        payload.insert("dsp_preset".into(), json!(v));
+    }
+    if let Some(v) = dsp_params {
+        if v.is_object() {
+            payload.insert("dsp_params".into(), v);
+        }
     }
     if payload.is_empty() {
         return Err(crate::i18n::t("s.40018c2fe1").into());

@@ -137,6 +137,25 @@ class ShellContractTests(unittest.TestCase):
         clash = [k for k in self.KEYS if k in cold]
         self.assertEqual(clash, [], f"这些键同时被列成冷键：{clash}")
 
+    def test_engine_set_hot_actually_accepts_them(self):
+        """光进 HOT_KEYS 不够 —— 命令签名里没有的参数 Tauri 会直接丢掉。
+
+        踩过：三个键都在 HOT_KEYS 里、config.rs 有默认值、引擎侧也读了，
+        但 engine_set_hot 的参数列表里没有，于是模型页点预设一点反应都没有。
+        静态看每一处都「对」，只有把签名也对进来才看得出。
+        """
+        src = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        head = "fn engine_set_hot("
+        body = src[src.index(head) : src.index(") -> Result<u64, String> {", src.index(head))]
+        for key in self.KEYS:
+            self.assertIn(f"{key}:", body, f"engine_set_hot 签名里没有 {key}")
+            self.assertIn(f'"{key}".into()', src, f"engine_set_hot 没把 {key} 放进 payload")
+
+    def test_fx_function_is_not_folded_into_vc(self):
+        """function 传 "fx" 不能被折成 "vc"，那等于 DSP 模式永远起不来。"""
+        src = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(encoding="utf-8")
+        self.assertIn('"fx" => "fx"', src)
+
     def test_rust_defaults_exist(self):
         src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
             encoding="utf-8"

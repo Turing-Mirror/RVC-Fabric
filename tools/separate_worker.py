@@ -32,9 +32,26 @@ import sys
 import traceback
 from pathlib import Path
 
-# 让 `tools.pymss` 能被 import：这个脚本是被绝对路径拉起来的，cwd 是产品根，
-# 但 sys.path[0] 会是 tools/ 自己。
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+def setup_sys_path() -> None:
+    """Make both `tools.pymss` and top-level `pymss_core` importable.
+
+    Runtime python ships a `python39._pth`, which ignores the script
+    directory. The worker used to only push the product root, so
+    `from tools.pymss…` worked and `from pymss_core` (what pymss itself
+    does) did not — even when `tools/pymss_core/__init__.py` was on disk
+    and the Rust preflight had already passed.
+    """
+    tools = Path(__file__).resolve().parent
+    root = tools.parent
+    # root first so `import tools.pymss` resolves; tools second so
+    # `import pymss_core` finds the sibling package. insert(0) is last-wins.
+    for p in (tools, root):
+        s = str(p)
+        if s not in sys.path:
+            sys.path.insert(0, s)
+
+
+setup_sys_path()
 
 
 def emit(**kw) -> None:

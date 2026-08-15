@@ -9,6 +9,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ExtrasFilter } from "../components/ExtrasDialog";
 
 export type AssetsStatus = {
@@ -39,11 +40,23 @@ export function registerDownloadModelsOpener(fn: ModelsOpener | null): void {
  * 前面再跳，而不是就地弹一个塞不下的框。
  */
 export function openDownloadModels(opts?: OpenDownloadModelsOpts): void {
-  if (modelsOpener) {
+  // 工具窗是独立 webview。以前只要模块里挂过 opener（或 hash 丢了误挂
+  // 整棵 App）就会在小窗里 setPage("plaza")，看起来像旧的「下载分离模型」
+  // 弹窗，主窗口广场根本没动。不是主窗就一律绕回主窗口。
+  let isMain = false;
+  try {
+    isMain = getCurrentWindow().label === "main";
+  } catch {
+    isMain = !/^#\/tool\//.test(window.location.hash || "");
+  }
+  if (isMain && modelsOpener) {
     modelsOpener(opts);
     return;
   }
-  void invoke("tools_open_downloads", { reason: opts?.reason || "" }).catch(() => {
+  void invoke("tools_open_downloads", {
+    reason: opts?.reason || "",
+    filter: opts?.filter || "",
+  }).catch(() => {
     /* 浏览器预览里没有 shell */
   });
 }

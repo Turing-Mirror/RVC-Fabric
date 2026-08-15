@@ -97,8 +97,7 @@ function categoryBlurb(cat: Category): string {
  * 这里只有内容，没有弹窗那层壳。两个地方用它：
  *
  * * 广场「下载模型」区块 —— 主窗口里这是唯一的入口，直接铺在页面上；
- * * `ExtrasDialog` —— 工具窗口（人声分离 / 训练音色）里缺资源时弹的那个框。
- *   那是独立的窗口，没有广场可去，只能就地弹。
+ * * 工具窗口不再就地弹这个框：点下载一律把主窗口拉到广场对应分类。
  */
 export function ExtrasPanel({
   onClose,

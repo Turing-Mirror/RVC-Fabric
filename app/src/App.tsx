@@ -77,6 +77,9 @@ export default function App() {
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
   const [extrasReason, setExtrasReason] = useState("");
+  const [extrasFilter, setExtrasFilter] = useState<"all" | "separate" | "train">(
+    "all",
+  );
   const [scrollToDownloads, setScrollToDownloads] = useState(0);
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
@@ -545,17 +548,25 @@ export default function App() {
   // 以前它是「其他」页上弹的一个框。同一件事在两个地方各有一份实现，改一个
   // 忘一个是迟早的；而且用户在弹框里下完东西，关掉之后回到的还是「其他」页，
   // 跟他刚做的事没有任何关系。
-  const openDownloadModels = useCallback((reason?: string) => {
-    plaza.markSeen();
-    setPage("plaza");
-    setExtrasReason(reason || "");
-    // 加一 = 「再滚一次」。广场很长，不滚过去用户看不见自己被带到哪了。
-    setScrollToDownloads((n) => n + 1);
-  }, [plaza]);
+  const openDownloadModels = useCallback(
+    (reason?: string, filter?: "all" | "separate" | "train") => {
+      plaza.markSeen();
+      setPage("plaza");
+      setExtrasReason(reason || "");
+      setExtrasFilter(filter === "train" || filter === "separate" ? filter : "all");
+      // 加一 = 「再滚一次」。广场很长，不滚过去用户看不见自己被带到哪了。
+      setScrollToDownloads((n) => n + 1);
+    },
+    [plaza],
+  );
 
   useEffect(() => {
     registerDownloadModelsOpener((opts) => {
-      openDownloadModels(opts?.reason);
+      const f = opts?.filter;
+      openDownloadModels(
+        opts?.reason,
+        f === "train" || f === "separate" ? f : "all",
+      );
     });
     return () => registerDownloadModelsOpener(null);
   }, [openDownloadModels]);
@@ -564,9 +575,16 @@ export default function App() {
   // webview，没有广场可去，只能把主窗口叫到前面再让它跳。
   useEffect(() => {
     let un: (() => void) | undefined;
-    void listen<{ reason?: string }>("open-download-models", (e) => {
-      openDownloadModels(e.payload?.reason || "");
-    }).then((f) => {
+    void listen<{ reason?: string; filter?: string }>(
+      "open-download-models",
+      (e) => {
+        const f = e.payload?.filter;
+        openDownloadModels(
+          e.payload?.reason || "",
+          f === "train" || f === "separate" ? f : "all",
+        );
+      },
+    ).then((f) => {
       un = f;
     });
     return () => un?.();
@@ -886,6 +904,7 @@ export default function App() {
                   loading={plaza.loading}
                   onReload={reloadPlaza}
                   downloadReason={extrasReason}
+                  extrasFilter={extrasFilter}
                   scrollToDownloads={scrollToDownloads}
                 />
               );

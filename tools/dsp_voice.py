@@ -847,6 +847,8 @@ class BandLimit:
 class Echo:
     """带反馈的延迟线。"""
 
+    MAX_MS = 1000.0
+
     def __init__(self, time_ms: float = 180.0, feedback: float = 0.3, mix: float = 0.0):
         self.time_ms = float(time_ms)
         self.feedback = float(feedback)
@@ -860,8 +862,14 @@ class Echo:
         self._w = 0
 
     def _ensure(self, sr: int) -> None:
+        """缓冲区按**最长**延迟分配一次，跟当前 time_ms 无关。
+
+        以前是按 time_ms 算大小的，于是拖那根滑条 = 每动一下重新分配一个清零
+        的缓冲区，攒着的回声当场消失，听感就是一串咔哒。现在只有采样率变了才
+        重建，延迟长度靠读指针的偏移量表示，随便拖。
+        """
         np = _numpy()
-        size = max(16, int(sr * min(max(self.time_ms, 1.0), 1000.0) * 0.001))
+        size = max(16, int(sr * self.MAX_MS * 0.001) + 4)
         if self._buf is not None and self._buf.shape[0] == size and sr == self._sr:
             return
         self._sr = sr
@@ -881,18 +889,24 @@ class Echo:
         buf = self._buf
         size = buf.shape[0]
         fb = min(max(self.feedback, 0.0), 0.9)
+        # 延迟量：至少 1 个样本，否则读写同一格就成了没有延迟的自反馈。
+        delay = max(
+            1, min(size - 1, int(sr * min(max(self.time_ms, 1.0), self.MAX_MS) * 0.001))
+        )
         wet = np.empty(n, dtype=np.float64)
         w = self._w
-        # 反馈让延迟线自我引用，这一段绕不开逐样本；size 通常几千，块只有一千，
-        # 所以按「不跨越写指针环绕」的段落切开，段内可以整段读写。
+        r = (w - delay) % size
+        # 反馈让延迟线自我引用，绕不开分段；按「读、写指针都不环绕」的段落切开，
+        # 段内可以整段读写。
         i = 0
         while i < n:
-            room = min(n - i, size - w)
+            room = min(n - i, size - w, size - r)
             seg = dry[i : i + room]
-            delayed = buf[w : w + room].copy()
+            delayed = buf[r : r + room].copy()
             wet[i : i + room] = delayed
             buf[w : w + room] = seg + delayed * fb
             w = (w + room) % size
+            r = (r + room) % size
             i += room
         self._w = w
         return (dry * (1.0 - mix) + wet * mix).astype(np.float32)
@@ -1116,12 +1130,23 @@ class VoiceChain:
         return {k: dict(v) for k, v in self._params.items()}
 
     def apply(self, params: Dict[str, Dict[str, Any]]) -> None:
-        """按预设更新参数。只改属性，不重建效果器——重建会清掉延迟线状态。"""
+        """换上这一套参数。只改属性，不重建效果器——重建会清掉延迟线状态。
+
+        **`params` 是一整份预设，不是增量**：没提到的效果器要回到默认值，也就是
+        「不参与」。之前只更新提到的那些，于是从「音高 +7」切到「回声」，回声接
+        在还没退下去的 +7 上，两个预设叠着响 —— 换了半天预设越换越怪。编辑器里
+        删掉一个效果器同理，删了跟没删一样。
+
+        默认值本身就是各效果器的旁路点（mix=0 / depth=0 / semitones=0），所以
+        「回到默认」不会有额外开销，也不需要重建实例。
+        """
         for name in CHAIN_ORDER:
             incoming = params.get(name)
-            if not isinstance(incoming, dict):
-                continue
-            clean = clamp_params(name, incoming)
+            clean = (
+                clamp_params(name, incoming)
+                if isinstance(incoming, dict)
+                else dict(EFFECT_SPECS[name]["params"])
+            )
             self._params[name] = clean
             fx = self._fx[name]
             for key, value in clean.items():

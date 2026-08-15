@@ -526,6 +526,101 @@ class FormantTests(unittest.TestCase):
 
 
 @unittest.skipUnless(_HAS_NP, "需要 numpy")
+class PresetSwitchTests(unittest.TestCase):
+    """换预设是**替换**，不是叠加。
+
+    `dsp_params` 热推的永远是一整份预设。以前 apply() 只更新提到的那些效果器，
+    于是从「音高 +7」换到「回声」，回声接在还没退下去的 +7 上 —— 用户越换越怪，
+    而且没有任何办法换回去（只有关掉 DSP 重开）。编辑器里删掉一个效果器同理，
+    删了跟没删一样。
+    """
+
+    def test_switching_presets_drops_the_previous_effects(self):
+        from tools.dsp_voice import VoiceChain
+
+        c = VoiceChain({"pitch": {"semitones": 7.0}})
+        self.assertEqual(c.active(), ["pitch"])
+        c.apply({"echo": {"time_ms": 200.0, "feedback": 0.3, "mix": 0.5}})
+        self.assertEqual(c.active(), ["echo"], "上一个预设的效果器还挂着")
+        self.assertEqual(c.params["pitch"]["semitones"], 0.0)
+
+    def test_removing_an_effect_actually_removes_it(self):
+        from tools.dsp_voice import VoiceChain
+
+        full = {"pitch": {"semitones": 5.0}, "drive": {"amount": 0.6}}
+        c = VoiceChain(full)
+        self.assertEqual(sorted(c.active()), ["drive", "pitch"])
+        c.apply({"pitch": {"semitones": 5.0}})  # 编辑器里删掉 drive
+        self.assertEqual(c.active(), ["pitch"])
+
+    def test_switching_is_audible_not_just_bookkeeping(self):
+        """`active()` 只是账面。真正要保证的是听感上那一层没了。"""
+        from tools.dsp_voice import VoiceChain
+
+        x = _tone(f0=200.0, secs=0.5)
+        moved = VoiceChain({"pitch": {"semitones": 7.0}})
+        _blocks(moved, x)
+        moved.apply({"drive": {"amount": 0.5}})
+        after = _blocks(moved, x)
+        # 切走之后基频应当回到原位，而不是停在 +7 半音（约 300Hz）
+        self.assertAlmostEqual(_est_f0(after), 200.0, delta=12.0)
+
+
+class EchoSliderTests(unittest.TestCase):
+    """拖 time_ms 不该把攒着的回声清掉。
+
+    缓冲区原来是按当前 time_ms 分配的 —— 动一下滑条就换一个清零的新缓冲区，
+    回声当场消失，一串咔哒。编辑器上那根推子 80ms 推一次，拖一次就是几十下。
+    """
+
+    def test_delay_lands_where_the_parameter_says(self):
+        from tools.dsp_voice import Echo
+
+        for ms in (50.0, 180.0, 400.0):
+            e = Echo(time_ms=ms, feedback=0.0, mix=1.0)
+            x = np.zeros(SR, dtype=np.float32)
+            x[0] = 1.0
+            y = _blocks(e, x, n=480)
+            self.assertEqual(int(np.argmax(np.abs(y))), int(SR * ms * 0.001), ms)
+
+    def test_changing_the_time_keeps_the_tail(self):
+        from tools.dsp_voice import Echo
+
+        e = Echo(time_ms=200.0, feedback=0.5, mix=1.0)
+        x = (0.5 * np.sin(2 * np.pi * 300 * np.arange(SR // 2) / SR)).astype(np.float32)
+        _blocks(e, x, n=480)
+        before = float(np.abs(e._buf).max())
+        e.time_ms = 210.0
+        e.process(np.zeros(480, dtype=np.float32), SR)
+        self.assertGreater(float(np.abs(e._buf).max()), before * 0.5, "回声被清空了")
+
+
+class BlockSizeInvarianceTests(unittest.TestCase):
+    """同一段音频切成 1024 或 480 一块，结果必须一样。
+
+    设备给的块长不是我们能选的（WASAPI 独占能给出 480、333 这种），任何把状态
+    和块长绑在一起的写法在真机上都会露出来，而在 1024 的测试里永远看不见。
+    """
+
+    def test_every_effect_is_block_size_agnostic(self):
+        from tools.dsp_voice import VoiceChain
+
+        x = _tone(f0=180.0, secs=1.0)
+        for name in CHAIN_ORDER:
+            if name == "pitch":
+                # WSOLA 的相关性搜索本来就跟切块位置有关，波形对不齐是正常的；
+                # 它该守的契约是「音高准」，那条在 PitchShiftTests 里。
+                continue
+            outs = []
+            for bs in (1024, 480):
+                c = VoiceChain({name: ACTIVE[name]})
+                c.reset()
+                outs.append(_blocks(c, x, n=bs))
+            self.assertLess(
+                float(np.max(np.abs(outs[0] - outs[1]))), 1e-3, f"{name} 跟块长有关"
+            )
+
+
 class IndividualEffectTests(unittest.TestCase):
     def test_bitcrush_quantizes(self):
         from tools.dsp_voice import VoiceChain

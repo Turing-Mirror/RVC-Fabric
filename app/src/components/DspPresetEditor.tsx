@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { RangeBar } from "./controls";
 import { Btn } from "./ui";
@@ -107,10 +107,21 @@ export function DspPresetEditor({
     return specs.order.filter((k) => k in params);
   }, [specs, params]);
 
+  // 拖一次推子 onChange 会连着触发几十下，每一下 setHot 都要写 app_config、
+  // 同步 inuse、再写一次命令文件（还带等待上一条被认领）。跟底栏音高/共鸣
+  // 那两根推子一样，压到 80ms 一次。
+  const applyTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      if (applyTimer.current) window.clearTimeout(applyTimer.current);
+    };
+  }, []);
+
   const setParam = (effect: string, key: string, v: number) => {
     const next = { ...params, [effect]: { ...params[effect], [key]: v } };
     setParams(next);
-    onApply(next);
+    if (applyTimer.current) window.clearTimeout(applyTimer.current);
+    applyTimer.current = window.setTimeout(() => onApply(next), 80);
   };
 
   const save = async () => {

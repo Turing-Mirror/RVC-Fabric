@@ -3,7 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
-import { RangeBar } from "./controls";
+import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
@@ -198,6 +198,9 @@ function StsSection() {
   const [filterRadius, setFilterRadius] = useState(3);
   const [resample, setResample] = useState(0);
   const [fmt, setFmt] = useState<(typeof STS_FMTS)[number]>("wav");
+  const [adv, setAdv] = useState(false);
+  const [sid, setSid] = useState(0);
+  const [f0File, setF0File] = useState("");
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
@@ -549,6 +552,8 @@ function StsSection() {
         rmsMixRate: rms,
         protect,
         format: fmt,
+        sid,
+        f0File,
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
@@ -952,6 +957,69 @@ function StsSection() {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="mt-3">
+        <Btn onClick={() => setAdv((v) => !v)}>
+          {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
+        </Btn>
+        {adv ? (
+          <div className="mt-3 flex flex-col gap-3.5">
+            <Field
+              label={t("s.stsSid")}
+              tip={t("s.stsSidHint")}
+              control={
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <RangeBar
+                      value={sid}
+                      min={0}
+                      max={16}
+                      step={1}
+                      defaultValue={0}
+                      onChange={setSid}
+                      ariaLabel={t("s.stsSid")}
+                    />
+                  </div>
+                  <input
+                    className={`w-[64px] ${FIELD}`}
+                    type="number"
+                    min={0}
+                    max={2333}
+                    value={sid}
+                    onChange={(e) =>
+                      setSid(Math.max(0, Math.min(2333, Number(e.target.value) || 0)))
+                    }
+                  />
+                </div>
+              }
+            />
+            <Field
+              label={t("s.stsF0File")}
+              tip={t("s.stsF0FileHint")}
+              control={
+                <div className="flex items-center gap-2">
+                  <span className={PATH}>{f0File || t("s.53e2db7016")}</span>
+                  <Btn
+                    disabled={running}
+                    onClick={() => {
+                      void invoke<string | null>("ckpt_pick", { kind: "f0" }).then(
+                        (p) => p && setF0File(p),
+                      );
+                    }}
+                  >
+                    {t("s.70b208202c")}
+                  </Btn>
+                  {f0File ? (
+                    <Btn disabled={running} onClick={() => setF0File("")}>
+                      {t("s.stsF0FileClear")}
+                    </Btn>
+                  ) : null}
+                </div>
+              }
+            />
+          </div>
+        ) : null}
       </div>
 
       {prog || running ? (

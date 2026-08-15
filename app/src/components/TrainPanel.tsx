@@ -5,6 +5,7 @@ import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
+import { CkptAdvanced } from "./CkptAdvanced";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 
@@ -82,6 +83,7 @@ export function TrainPanel() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
+  const [adv, setAdv] = useState(false);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -398,6 +400,13 @@ export function TrainPanel() {
         {running ? (
           <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
         ) : null}
+
+        <div className="mt-4">
+          <Btn onClick={() => setAdv((v) => !v)}>
+            {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
+          </Btn>
+          {adv ? <CkptAdvanced /> : null}
+        </div>
 
     </ToolBody>
   );

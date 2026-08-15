@@ -3415,6 +3415,13 @@ if __name__ == "__main__":
                             "format": sts_core.normalize_format(
                                 str(payload.get("format") or "wav")
                             ),
+                            "sid": int(payload.get("sid") or 0),
+                            "f0_file": (
+                                type("F0File", (), {"name": fp})()
+                                if (fp := str(payload.get("f0_file") or "").strip())
+                                and os.path.isfile(fp)
+                                else None
+                            ),
                         },
                         prog,
                         self._sts_emit,

@@ -51,17 +51,15 @@ DEFAULT_PATHS: list[str] = [
     # 空。历史上这里列过 launcher/ 和 tools/*.py，见上面的注释。
 ]
 
+# 已经没人引用了：Tauri 壳的补丁只换 frontend/，引擎侧的 .py 和 configs/ 换不了
+# （见上面 FRONTEND_DIR 那段）。留着是当历史清单看的，**往这里加文件不会让它
+# 进任何包** —— 引擎侧的东西走安装包，由 pack_spec 的 tools/ + configs/ 前缀覆盖。
 _LEGACY_PATHS = [
     "app/frontend",
     "launcher",
     "configs/online_catalog.json",
     "tools/realtime_worker.py",
     "tools/dsp_fx.py",
-    # 无模型 DSP 变声：效果器、预设读写、内置预设本体。
-    # 少打其中任何一个，DSP 模式在补丁包升级上来的机器上就是半残的。
-    "tools/dsp_voice.py",
-    "tools/dsp_presets.py",
-    "configs/dsp_presets",
     "tools/download_models.py",
     # diagnostics bundle deps: more_page loads collect_diagnostics from disk,
     # perf_bench runs benchmark_realtime in the Runtime, perf_report is

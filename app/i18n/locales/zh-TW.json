@@ -1328,6 +1328,8 @@
     "trainBatchHint": "一次餵多少條。越大越快、越吃顯存。建議值依顯存自動給，爆顯存就改小再繼續。",
     "trainF0": "音高算法",
     "trainF0Hint": "rmvpe 效果最好，一般不用改。harvest 更穩更慢，素材吵的時候可以試試。pm 最快但容易破音。",
+    "trainF0Unsupported": "不支援的音高算法：{a0}",
+    "trainRmvpeMissing": "缺音高模型 rmvpe.pt，先補全引擎資源",
     "trainSaveEvery": "儲存間隔",
     "trainSaveEveryHint": "每隔多少輪存一次進度。大權重只留最新一份，硬碟不會堆滿。",
     "trainSaveWeights": "每隔這些輪另存一個能用的小模型",

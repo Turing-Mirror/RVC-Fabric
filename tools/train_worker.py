@@ -5,8 +5,9 @@
 拖进来 —— 那是几十兆的依赖和一个必须开着的 web 服务。
 
 所以这里把「驱动」和「界面」拆开：本文件只负责按顺序把原版那几个训练脚本
-起成子进程，把进度折算成 JSON 行打到 stdout；壳读这些行画进度条。原版那几个
-脚本一行没改，将来跟进上游就只是替换文件。
+起成子进程，把进度折算成 JSON 行打到 stdout；壳读这些行画进度条。预处理和
+`extract_f0_print` 的 argv 从模块顶层挪进了 `__main__`（Windows spawn 否则
+会把子进程砸死），其余尽量不动，跟进上游时对一下这两处即可。
 
 协议（每行一个 JSON 对象，stdout）::
 
@@ -371,10 +372,20 @@ def stage_preprocess(req, exp_dir, py, n_stages):
         fail("预处理没有产出任何切片。检查数据集里是不是没有可读的音频文件。")
 
 
+def rmvpe_ok(root):
+    p = Path(root) / "assets" / "rmvpe" / "rmvpe.pt"
+    try:
+        return p.is_file() and p.stat().st_size > 1_000_000
+    except OSError:
+        return False
+
+
 def stage_f0(req, exp_dir, py, n_stages):
     total = count_files(exp_dir / "1_16k_wavs")
     log = exp_dir / "extract_f0_feature.log"
     method = req["f0_method"]
+    if method == "rmvpe" and not rmvpe_ok(NOW_DIR):
+        fail("缺少 assets/rmvpe/rmvpe.pt，请先补全引擎资源。")
     emit(phase="stage", stage="f0", index=2, total_stages=n_stages,
          done=0, total=max(total, 1), message="提取音高…")
     w = StageProgress("f0", 2, n_stages, exp_dir / "2a_f0", max(total, 1), "提取音高…")

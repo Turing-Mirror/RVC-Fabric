@@ -1328,6 +1328,8 @@
     "trainBatchHint": "Cuántos fragmentos por paso. Más grande es más rápido y usa más VRAM. El valor sugerido sale de la memoria; bájalo si se llena.",
     "trainF0": "Tono",
     "trainF0Hint": "rmvpe suele ser lo mejor. harvest es más lento y estable con ruido. pm es rápido pero puede romperse.",
+    "trainF0Unsupported": "Algoritmo de tono no soportado: {a0}",
+    "trainRmvpeMissing": "Falta rmvpe.pt. Descarga primero el paquete del motor.",
     "trainSaveEvery": "Guardar cada",
     "trainSaveEveryHint": "Cada cuántas épocas guardar. Solo se queda el último peso grande.",
     "trainSaveWeights": "Guardar también un modelo usable en cada punto",

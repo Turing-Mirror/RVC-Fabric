@@ -152,8 +152,19 @@ pub fn status(root: &Path) -> Value {
         "pretrained": pre,
         "experiments": experiments(root),
         "suggested_batch": suggested_batch(),
+        "rmvpe_present": rmvpe_ready(root),
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
+}
+
+/// rmvpe 是默认音高算法。文件不在或下到一半，预处理跑完才会炸。
+fn rmvpe_ready(root: &Path) -> bool {
+    root.join("assets")
+        .join("rmvpe")
+        .join("rmvpe.pt")
+        .metadata()
+        .map(|m| m.is_file() && m.len() > 1_000_000)
+        .unwrap_or(false)
 }
 
 pub fn cancel() {
@@ -271,7 +282,10 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
         return Err(crate::i18n::te("s.ab1660b1a1", &(req.sample_rate)));
     }
     if !F0_METHODS.contains(&req.f0_method.as_str()) {
-        return Err(crate::i18n::te("s.ab1660b1a1", &(req.f0_method)));
+        return Err(crate::i18n::te("s.trainF0Unsupported", &(req.f0_method)));
+    }
+    if req.f0_method == "rmvpe" && !rmvpe_ready(root) {
+        return Err(crate::i18n::t("s.trainRmvpeMissing").into());
     }
     if !pretrained_ready(root, &req.sample_rate) {
         return Err(crate::i18n::te("s.c7a9f88925", &req.sample_rate));
@@ -536,6 +550,31 @@ mod tests {
         assert_eq!(exps[0]["slices"], json!(1));
         assert_eq!(exps[0]["resumable"], json!(true));
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn rmvpe_ready_rejects_missing_and_tiny_files() {
+        let base = std::env::temp_dir().join("rvcf-train-rmvpe");
+        let _ = std::fs::remove_dir_all(&base);
+        let d = base.join("assets").join("rmvpe");
+        std::fs::create_dir_all(&d).unwrap();
+        assert!(!rmvpe_ready(&base));
+        std::fs::write(d.join("rmvpe.pt"), b"half").unwrap();
+        assert!(!rmvpe_ready(&base));
+        std::fs::write(d.join("rmvpe.pt"), vec![0u8; 1_000_001]).unwrap();
+        assert!(rmvpe_ready(&base));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn bad_f0_method_is_not_called_a_sample_rate() {
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let msg = crate::i18n::te("s.trainF0Unsupported", &"crepe");
+        assert!(msg.contains("crepe"), "{msg}");
+        assert!(
+            !msg.contains("采样率"),
+            "wrong key reused the sample-rate string: {msg}"
+        );
     }
 
     #[test]

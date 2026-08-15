@@ -1328,6 +1328,8 @@
     "trainBatchHint": "How many slices per step. Larger is faster and uses more VRAM. The suggested value comes from your GPU memory; lower it if you run out of VRAM.",
     "trainF0": "Pitch",
     "trainF0Hint": "rmvpe is usually best. harvest is slower and more stable on noisy audio. pm is fastest but can crack.",
+    "trainF0Unsupported": "Unsupported pitch method: {a0}",
+    "trainRmvpeMissing": "Missing rmvpe.pt. Download the engine pack first.",
     "trainSaveEvery": "Save every",
     "trainSaveEveryHint": "Write a checkpoint every N epochs. Only the latest large weights are kept.",
     "trainSaveWeights": "Also save a usable model at each checkpoint",

@@ -187,9 +187,11 @@ type HelpProps = {
   status?: { input_devices?: unknown; output_devices?: unknown };
   /** 从训练窗跳过来时滚到这一段（现在只有 train）。 */
   focus?: string;
+  /** 同一段再点一次也要再滚过去，不能只看 focus 字符串。 */
+  focusNonce?: number;
 };
 
-function HelpPageImpl({ status, focus }: HelpProps = {}) {
+function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
   const glossary = useGlossary();
   const glossaryTitle = useGlossarySectionTitle();
   const [open, setOpen] = useState<string>("");
@@ -229,7 +231,7 @@ function HelpPageImpl({ status, focus }: HelpProps = {}) {
     el?.scrollIntoView({ block: "start" });
     const first = buildTrainGuide()[0]?.q;
     if (first) setOpen(first);
-  }, [focus]);
+  }, [focus, focusNonce]);
 
   const installVb = async () => {
     if (vbBusy) return;
@@ -391,8 +393,7 @@ function HelpPageImpl({ status, focus }: HelpProps = {}) {
           />
         </Group>
       </Block>
-      <Block title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
-        <div id="help-train" />
+      <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
           {t("s.trainGuideLead")}
         </p>

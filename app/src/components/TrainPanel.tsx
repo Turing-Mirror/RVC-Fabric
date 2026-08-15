@@ -27,6 +27,7 @@ type Status = {
   pretrained?: Pretrained[];
   experiments?: Experiment[];
   suggested_batch?: number;
+  rmvpe_present?: boolean;
   busy?: boolean;
 };
 
@@ -120,6 +121,7 @@ export function TrainPanel() {
   const srReady = st.pretrained?.find((p) => p.sample_rate === sr)?.ready ?? false;
 
   // 拦住训练的原因，外加这句话里那个专有名词的解释（渲染成一个小问号）。
+  const needRmvpe = f0 === "rmvpe" && !st.rmvpe_present;
   const needPretrained =
     !!st.runtime_ready &&
     !!st.worker_present &&
@@ -133,17 +135,19 @@ export function TrainPanel() {
       ? { text: t("s.946a92f5a2") }
       : !st.hubert_present
         ? { text: t("s.e700c7ba47"), term: t("s.b269c54674") }
-        : !st.nvidia
-          ? {
-              text: t("s.8f5fdb1c8a"),
-              term: "DirectML",
-            }
-          : !srReady
+        : needRmvpe
+          ? { text: t("s.trainRmvpeMissing") }
+          : !st.nvidia
             ? {
-                text: t("s.b453debe2c", { v0: sr }),
-                term: t("s.4bdd408f42"),
+                text: t("s.8f5fdb1c8a"),
+                term: "DirectML",
               }
-            : { text: "" };
+            : !srReady
+              ? {
+                  text: t("s.b453debe2c", { v0: sr }),
+                  term: t("s.4bdd408f42"),
+                }
+              : { text: "" };
 
   const start = async () => {
     if (runningRef.current) return;
@@ -196,7 +200,7 @@ export function TrainPanel() {
               {blocked.text}
               {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
             </p>
-            {needPretrained || !st.hubert_present ? (
+            {needPretrained || !st.hubert_present || needRmvpe ? (
               <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.0c593a479c")}</Btn>
             ) : null}
           </div>
@@ -259,7 +263,7 @@ export function TrainPanel() {
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
               {t("s.trainBatch")}
-              <HelpMark title={tip(t("s.trainBatchHint"))} />
+              <HelpMark title={t("s.trainBatchHint")} />
             </span>
             <input
               className={`w-[100px] ${FIELD}`}
@@ -281,7 +285,7 @@ export function TrainPanel() {
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
               {t("s.trainF0")}
-              <HelpMark title={tip(t("s.trainF0Hint"))} />
+              <HelpMark title={t("s.trainF0Hint")} />
             </span>
             <select
               className={FIELD}
@@ -298,7 +302,7 @@ export function TrainPanel() {
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
               {t("s.trainSaveEvery")}
-              <HelpMark title={tip(t("s.trainSaveEveryHint"))} />
+              <HelpMark title={t("s.trainSaveEveryHint")} />
             </span>
             <input
               className={`w-[100px] ${FIELD}`}
@@ -318,7 +322,7 @@ export function TrainPanel() {
                 className="accent-[var(--accent)]"
               />
               {t("s.trainSaveWeights")}
-              <HelpMark title={tip(t("s.trainSaveWeightsHint"))} />
+              <HelpMark title={t("s.trainSaveWeightsHint")} />
             </label>
           </div>
         </div>

@@ -1328,6 +1328,8 @@
     "trainBatchHint": "Combien de tranches par pas. Plus grand = plus vite et plus de VRAM. La valeur proposée vient de la mémoire ; baissez-la en cas de saturation.",
     "trainF0": "Hauteur",
     "trainF0Hint": "rmvpe est en général le meilleur. harvest est plus lent et plus stable sur un son bruité. pm est rapide mais casse facilement.",
+    "trainF0Unsupported": "Algorithme de hauteur non pris en charge : {a0}",
+    "trainRmvpeMissing": "rmvpe.pt manquant. Téléchargez d'abord le pack moteur.",
     "trainSaveEvery": "Sauver tous les",
     "trainSaveEveryHint": "Tous les N tours. Seul le dernier gros poids est gardé.",
     "trainSaveWeights": "Sauver aussi un petit modèle utilisable à chaque point",

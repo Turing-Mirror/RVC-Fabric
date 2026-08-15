@@ -245,6 +245,39 @@ class PublishVoiceTests(unittest.TestCase):
             self.assertEqual(side["sample_rate"], "48k")
 
 
+class RmvpeGateTests(unittest.TestCase):
+    def test_rmvpe_ok_rejects_missing_and_tiny(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.assertFalse(tw.rmvpe_ok(root))
+            d = root / "assets" / "rmvpe"
+            d.mkdir(parents=True)
+            (d / "rmvpe.pt").write_bytes(b"half")
+            self.assertFalse(tw.rmvpe_ok(root))
+            (d / "rmvpe.pt").write_bytes(b"x" * 1_000_001)
+            self.assertTrue(tw.rmvpe_ok(root))
+
+
+class ExtractF0PrintImportTests(unittest.TestCase):
+    """harvest/pm 走 extract_f0_print，Windows spawn 会重新 import 这个文件。"""
+
+    def test_argv_is_not_read_at_import(self):
+        src = (
+            ROOT / "infer" / "modules" / "train" / "extract" / "extract_f0_print.py"
+        ).read_text(encoding="utf-8")
+        head, sep, _tail = src.partition('if __name__ == "__main__"')
+        self.assertTrue(sep, "extract_f0_print.py must keep a __main__ guard")
+        # main() 里读 argv 没问题；模块顶层一读，spawn 子进程就会死。
+        for line in head.splitlines():
+            if not line or line[0] in " \t#" or line.startswith(("def ", "class ")):
+                continue
+            self.assertNotIn(
+                "sys.argv[",
+                line,
+                "module-level argv will crash Windows spawn children: %s" % line,
+            )
+
+
 class CountAudioTests(unittest.TestCase):
     def test_counts_nested_audio_only(self):
         with tempfile.TemporaryDirectory() as td:

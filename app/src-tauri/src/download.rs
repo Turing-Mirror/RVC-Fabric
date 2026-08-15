@@ -23,6 +23,12 @@ const MAX_CONNECTIONS: usize = 32;
 /// fetch used to die on the first blip. Wait ~3s and try again.
 const RETRY_WAIT: Duration = Duration::from_secs(3);
 const MAX_TRANSIENT_ATTEMPTS: u32 = 5;
+/// ripget's `fetch_metadata` retries non-404/500 forever and the client has
+/// no request timeout. A hanging mirror / CNB 502 then never returns, so the
+/// store card stays at 0% and we never fail over to the next URL. Cap how
+/// long we wait for the first real byte, then treat it as a transient error.
+const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(20);
+const FIRST_BYTE_TIMEOUT_ERR: &str = "timed out waiting for first byte";
 
 /// What is being downloaded — same pipeline for all product artifacts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +61,16 @@ pub fn retry_phase(attempt: u32) -> String {
 /// Parse `retry:N`. Anything else is not a reconnect phase.
 pub fn parse_retry_attempt(phase: &str) -> Option<u32> {
     phase.strip_prefix("retry:")?.parse().ok()
+}
+
+/// Percent for UI. Keep it a float so a 100 KB / 80 MB voice pack does not
+/// sit on integer `0%` until a full percent has landed.
+pub fn progress_percent(done: u64, total: u64) -> f64 {
+    if total == 0 {
+        0.0
+    } else {
+        (done as f64 / total as f64) * 100.0
+    }
 }
 
 /// Network / origin blips we should reconnect on. Permanent catalog/auth/hash
@@ -364,6 +380,11 @@ pub fn download_request(
             if cancel.load(Ordering::SeqCst) {
                 return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }
+            crate::logging::shell_log!(format!(
+                "download {} try {}",
+                req.kind.as_str(),
+                url
+            ));
             if let Some(ref cb) = progress {
                 cb(
                     0,
@@ -381,6 +402,11 @@ pub fn download_request(
                 progress.clone(),
             )) {
                 Ok(()) => {
+                    crate::logging::shell_log!(format!(
+                        "download {} ok {}",
+                        req.kind.as_str(),
+                        url
+                    ));
                     if !req.expected_sha256.is_empty() {
                         if let Some(ref cb) = progress {
                             let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
@@ -404,6 +430,11 @@ pub fn download_request(
                     return Ok(());
                 }
                 Err(e) => {
+                    crate::logging::shell_log!(format!(
+                        "download {} fail {}: {e}",
+                        req.kind.as_str(),
+                        url
+                    ));
                     let _ = std::fs::remove_file(&part_path);
                     if e == crate::i18n::t("s.a5ffdc95ee")
                         || e.to_ascii_lowercase().contains("cancel")
@@ -449,28 +480,38 @@ async fn download_one_url(
     cancel: Arc<AtomicBool>,
     progress: Option<ProgressFn>,
 ) -> Result<(), String> {
-    let progress_handle: Option<ripget::Progress> = progress.map(|cb| {
-        Arc::new(ProgressBridge {
-            cb,
-            total: AtomicU64::new(size_hint),
-            done: AtomicU64::new(0),
-            threads: AtomicU64::new(threads as u64),
-            kind,
-            cancel: cancel.clone(),
-            size_hint,
-            last_emit_ms: AtomicU64::new(0),
-            started_ms: AtomicU64::new(0),
-        }) as ripget::Progress
+    let got_bytes = Arc::new(AtomicBool::new(false));
+    // Always attach a reporter so first-byte timeout can see real traffic,
+    // even when the caller did not pass a UI callback (index files, etc.).
+    let track: ProgressFn = {
+        let flag = got_bytes.clone();
+        Arc::new(move |done, total, phase| {
+            if done > 0 {
+                flag.store(true, Ordering::SeqCst);
+            }
+            if let Some(ref cb) = progress {
+                cb(done, total, phase);
+            }
+        })
+    };
+    let progress_handle: ripget::Progress = Arc::new(ProgressBridge {
+        cb: track,
+        total: AtomicU64::new(size_hint),
+        done: AtomicU64::new(0),
+        threads: AtomicU64::new(threads as u64),
+        kind,
+        cancel: cancel.clone(),
+        size_hint,
+        last_emit_ms: AtomicU64::new(0),
+        started_ms: AtomicU64::new(0),
     });
 
-    let mut options = DownloadOptions::new()
+    let options = DownloadOptions::new()
         .threads(threads)
-        .user_agent(UA.to_string());
-    if let Some(p) = progress_handle {
-        options = options.progress(p);
-    }
+        .user_agent(UA.to_string())
+        .progress(progress_handle);
 
-    // Cancel: poll and abort by dropping the future via select
+    // Cancel / first-byte timeout: poll and abort by dropping the future.
     let download = ripget::download_url_with_options(url, dest, options);
     tokio::pin!(download);
 
@@ -484,14 +525,42 @@ async fn download_one_url(
     };
     tokio::pin!(cancel_wait);
 
+    let first_byte_wait = wait_first_byte_or_timeout(got_bytes, cancel.clone());
+    tokio::pin!(first_byte_wait);
+
     tokio::select! {
         biased;
         _ = &mut cancel_wait => {
             Err(crate::i18n::t("s.a5ffdc95ee").into())
         }
+        timed_out = &mut first_byte_wait => {
+            timed_out
+        }
         res = &mut download => {
             res.map(|_| ()).map_err(|e| format!("ripget: {e}"))
         }
+    }
+}
+
+/// Completes only when the first byte never arrives in time. After bytes
+/// start flowing this future parks so the download branch can finish.
+async fn wait_first_byte_or_timeout(
+    got_bytes: Arc<AtomicBool>,
+    cancel: Arc<AtomicBool>,
+) -> Result<(), String> {
+    let deadline = tokio::time::Instant::now() + FIRST_BYTE_TIMEOUT;
+    loop {
+        if cancel.load(Ordering::SeqCst) {
+            return Err(crate::i18n::t("s.a5ffdc95ee"));
+        }
+        if got_bytes.load(Ordering::SeqCst) {
+            std::future::pending::<()>().await;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(FIRST_BYTE_TIMEOUT_ERR.to_string());
+        }
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        tokio::time::sleep(left.min(Duration::from_millis(200))).await;
     }
 }
 
@@ -518,6 +587,17 @@ mod tests {
         ));
         assert!(is_transient_download_error("error sending request for url"));
         assert!(is_transient_download_error("os error 10054"));
+        assert!(is_transient_download_error(FIRST_BYTE_TIMEOUT_ERR));
+    }
+
+    #[test]
+    fn progress_percent_keeps_fractions() {
+        // 100 KiB of an 80 MiB pack used to cast to integer 0%.
+        let p = progress_percent(100 * 1024, 80 * 1024 * 1024);
+        assert!(p > 0.1 && p < 0.2, "{p}");
+        assert_eq!(progress_percent(0, 1), 0.0);
+        assert_eq!(progress_percent(50, 0), 0.0);
+        assert!((progress_percent(1, 1) - 100.0).abs() < f64::EPSILON);
     }
 
     #[test]

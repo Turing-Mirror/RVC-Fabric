@@ -45,7 +45,40 @@ import { askConfirm } from "../lib/webDialog";
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
 
-type VoiceProg = { percent: number; message: string; phase: string };
+type VoiceProg = {
+  percent: number;
+  done: number;
+  total: number;
+  message: string;
+  phase: string;
+};
+
+const STALL_AFTER_MS = 12_000;
+
+function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return t("s.0cc05a38ad", { v0: s });
+  const m = Math.floor(s / 60);
+  return t("s.2a94e5c93f", { v0: m, v1: s % 60 });
+}
+
+/** Integer 0% used to mean both "not started" and "first 800 KB of a 80 MB pack". */
+function storePercentLabel(
+  progress: VoiceProg | undefined,
+  now: number,
+  lastMoveAt: number,
+): string {
+  const done = progress?.done ?? 0;
+  const pct = progress?.percent ?? 0;
+  const idleMs = lastMoveAt ? now - lastMoveAt : 0;
+  if (idleMs > STALL_AFTER_MS) {
+    return t("s.2a4fa38f1e", { v0: formatDuration(idleMs) });
+  }
+  if (done <= 0) return t("s.502c5adda6");
+  if (pct < 0.1) return "<0.1%";
+  if (pct < 10) return `${pct.toFixed(1)}%`;
+  return `${Math.round(pct)}%`;
+}
 
 function clearVoiceProg(
   setProg: Dispatch<SetStateAction<Record<string, VoiceProg>>>,
@@ -207,15 +240,28 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       message?: string;
       percent?: number;
       phase?: string;
+      done?: number;
+      total?: number;
     }>("store-progress", (ev) => {
       const p = ev.payload;
       const id = (p.voice_id || "").trim();
       if (!id) return;
-      const pct = p.percent != null ? Math.max(0, Math.min(100, p.percent)) : undefined;
+      const done = Number(p.done);
+      const total = Number(p.total);
+      const fromBytes =
+        Number.isFinite(done) && Number.isFinite(total) && total > 0
+          ? (done / total) * 100
+          : undefined;
+      const pctRaw =
+        p.percent != null && !Number.isNaN(Number(p.percent))
+          ? Number(p.percent)
+          : fromBytes;
       setProg((prev) => ({
         ...prev,
         [id]: {
-          percent: pct ?? prev[id]?.percent ?? 0,
+          percent: pctRaw != null ? Math.max(0, Math.min(100, pctRaw)) : (prev[id]?.percent ?? 0),
+          done: Number.isFinite(done) ? done : (prev[id]?.done ?? 0),
+          total: Number.isFinite(total) && total > 0 ? total : (prev[id]?.total ?? 0),
           message: p.message || prev[id]?.message || "",
           phase: p.phase || prev[id]?.phase || "",
         },
@@ -866,8 +912,15 @@ function SeriesPageGrid({
 }
 
 /** Thin fill on the cover — stays on the card, no banner jumping around. */
-function CardProgressBar({ percent }: { percent: number }) {
+function CardProgressBar({
+  percent,
+  connecting,
+}: {
+  percent: number;
+  connecting?: boolean;
+}) {
   const pct = Math.max(0, Math.min(100, percent));
+  const barWidth = connecting ? 33 : pct > 0 && pct < 0.5 ? Math.max(pct, 0.5) : pct;
   const reduce =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -877,10 +930,10 @@ function CardProgressBar({ percent }: { percent: number }) {
       aria-hidden
     >
       <div
-        className="h-full bg-[var(--accent)]"
+        className={`h-full bg-[var(--accent)]${connecting && !reduce ? " animate-pulse" : ""}`}
         style={{
-          width: `${pct}%`,
-          transition: reduce ? undefined : "width 160ms var(--ease)",
+          width: `${barWidth}%`,
+          transition: reduce || connecting ? undefined : "width 160ms var(--ease)",
         }}
       />
     </div>
@@ -923,6 +976,8 @@ function VoiceCard({
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const [useLocalCover, setUseLocalCover] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const lastMove = useRef({ at: 0, done: -1 });
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
@@ -943,6 +998,19 @@ function VoiceCard({
     setImgFailed(false);
     setUseLocalCover(false);
   }, [coverHttp]);
+  useEffect(() => {
+    if (!busy) return;
+    lastMove.current = { at: Date.now(), done: progress?.done ?? 0 };
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [busy]);
+  useEffect(() => {
+    const d = progress?.done ?? 0;
+    if (d !== lastMove.current.done) {
+      lastMove.current = { at: Date.now(), done: d };
+      setNow(Date.now());
+    }
+  }, [progress?.done]);
   const author = displayVoiceAuthor(v, loc);
   const parentLabel = voiceParentSeries(v, loc);
   const childLabel = voiceChildGroup(v, loc);
@@ -980,7 +1048,12 @@ function VoiceCard({
         <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--ink)] drop-shadow">
           {coverBadge}
         </span>
-        {busy && !staged ? <CardProgressBar percent={progress?.percent ?? 0} /> : null}
+        {busy && !staged ? (
+          <CardProgressBar
+            percent={progress?.percent ?? 0}
+            connecting={(progress?.done ?? 0) <= 0}
+          />
+        ) : null}
       </div>
       <div className="text-[14.5px] font-semibold mt-2.5 truncate" title={title}>
         {title}
@@ -1020,8 +1093,8 @@ function VoiceCard({
               {t("s.65188d08a2")}
             </Btn>
             <Btn onClick={onCancel}>{t("s.4d0b4688c7")}</Btn>
-            <span className="text-[11.5px] text-[var(--meta)] tabular-nums">
-              {Math.round(progress?.percent ?? 0)}%
+            <span className="text-[11.5px] text-[var(--meta)] tabular-nums min-w-0 truncate">
+              {storePercentLabel(progress, now, lastMove.current.at)}
             </span>
           </>
         ) : queued ? (

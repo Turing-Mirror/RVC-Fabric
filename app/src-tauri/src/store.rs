@@ -24,6 +24,41 @@ fn progress_message(phase: &str) -> String {
         .unwrap_or_else(|| phase.to_string())
 }
 
+fn store_progress_payload(id: &str, phase: &str, done: u64, total: u64, message: &str) -> Value {
+    let total = total.max(1);
+    json!({
+        "voice_id": id,
+        "phase": phase,
+        "done": done,
+        "total": total,
+        "percent": download::progress_percent(done, total),
+        "message": message,
+    })
+}
+
+/// Expand a catalog URL to the download list. HF links become the domestic
+/// mirror chain. Official CNB packs also get a sha256 LFS fallback so a
+/// hanging `/-/releases/download/` endpoint can fail over.
+fn voice_download_urls(url: &str, sha: &str, hf_endpoint: &str) -> Vec<String> {
+    let mut urls = crate::hf::download_urls(url, hf_endpoint);
+    let sha: String = sha
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if sha.len() == 64
+        && (url.contains("cnb.cool") || url.contains("/-/releases/download/"))
+    {
+        let lfs = format!(
+            "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{sha}"
+        );
+        if !urls.iter().any(|u| u == &lfs) {
+            urls.push(lfs);
+        }
+    }
+    urls
+}
+
 /// Per-voice cancel flags. A single global flag meant that cancelling one
 /// download killed every other in-flight one, and that starting a second
 /// install reset the first one's cancel state — so concurrent installs were
@@ -924,20 +959,19 @@ pub fn install_voice_entry(
     // A .pth is an untrusted pickle — it must never be installed unverified,
     // whatever the catalog happens to contain.
     if sha.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
+        crate::logging::shell_log!(format!("store install reject id={id}: missing sha256"));
         return Err(crate::i18n::te("s.40dc667415", &(id)));
     }
+
+    crate::logging::shell_log!(format!(
+        "store install start id={id} official={official} form={} size={size}",
+        if !pack_url.is_empty() { "pack" } else { "files" }
+    ));
 
     let emit = |phase: &str, done: u64, total: u64, message: &str| {
         let _ = app.emit(
             "store-progress",
-            json!({
-                "voice_id": id,
-                "phase": phase,
-                "done": done,
-                "total": total,
-                "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                "message": message,
-            }),
+            store_progress_payload(&id, phase, done, total, message),
         );
     };
 
@@ -973,18 +1007,11 @@ pub fn install_voice_entry(
         let progress: download::ProgressFn = Arc::new(move |done, total, msg| {
             let _ = app2.emit(
                 "store-progress",
-                json!({
-                    "voice_id": id2,
-                    "phase": "download",
-                    "done": done,
-                    "total": total,
-                    "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                    "message": progress_message(msg),
-                }),
+                store_progress_payload(&id2, "download", done, total, &progress_message(msg)),
             );
         });
 
-        let urls = crate::hf::download_urls(&pack_url, &hf_endpoint);
+        let urls = voice_download_urls(&pack_url, &sha, &hf_endpoint);
         let res = download::download_request(
             DownloadRequest {
                 urls,
@@ -1033,25 +1060,18 @@ pub fn install_voice_entry(
         fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
     }
 
-    let cancel = Arc::new(AtomicBool::new(false));
+    let cancel = cancel_flag_for(&id);
     let app2 = app.clone();
     let id2 = id.clone();
     let progress: download::ProgressFn = Arc::new(move |done, total, msg| {
         let _ = app2.emit(
             "store-progress",
-            json!({
-                "voice_id": id2,
-                "phase": "pth",
-                "done": done,
-                "total": total,
-                "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                "message": progress_message(msg),
-            }),
+            store_progress_payload(&id2, "pth", done, total, &progress_message(msg)),
         );
     });
-    download::download_request(
+    if let Err(e) = download::download_request(
         DownloadRequest {
-            urls: crate::hf::download_urls(&pth_url, &hf_endpoint),
+            urls: voice_download_urls(&pth_url, &sha, &hf_endpoint),
             dest: pth_tmp.clone(),
             expected_sha256: sha,
             // 0 而不是 size：voice_files 的 size_bytes 是 pth + index 的合计
@@ -1063,8 +1083,12 @@ pub fn install_voice_entry(
         },
         cancel.clone(),
         Some(progress),
-    )?;
+    ) {
+        drop_cancel_flag(&id);
+        return Err(e);
+    }
     if pth_tmp.metadata().map(|m| m.len()).unwrap_or(0) < MIN_PTH_BYTES {
+        drop_cancel_flag(&id);
         return Err(crate::i18n::t("s.281cb87781").into());
     }
 
@@ -1092,6 +1116,7 @@ pub fn install_voice_entry(
             }
         }
         emit("staged", 1, 1, &crate::i18n::t("s.1245a7db42"));
+        drop_cancel_flag(&id);
         return Ok(json!({
             "staged": true,
             "voice_id": id,
@@ -1114,7 +1139,10 @@ pub fn install_voice_entry(
         }
     }
     let dest_pth = dest_dir.join(format!("{vid}.pth"));
-    fs::copy(&pth_tmp, &dest_pth).map_err(|e| e.to_string())?;
+    if let Err(e) = fs::copy(&pth_tmp, &dest_pth) {
+        drop_cancel_flag(&id);
+        return Err(e.to_string());
+    }
 
     let mut index_path = String::new();
     if let Some(iu) = entry.get("index_url").and_then(|v| v.as_str()) {
@@ -1175,6 +1203,7 @@ pub fn install_voice_entry(
         &extra,
     );
     emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
+    drop_cancel_flag(&id);
     Ok(info)
 }
 
@@ -1469,6 +1498,34 @@ mod tests {
             crate::i18n::pick_str_locale(&out, "description", "en-US"),
             "From the official download"
         );
+    }
+
+    #[test]
+    fn official_cnb_pack_gets_lfs_fallback() {
+        let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Anon-v1.zip";
+        let list = voice_download_urls(url, sha, "");
+        assert_eq!(list[0], url);
+        assert_eq!(
+            list[1],
+            format!("https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{sha}")
+        );
+    }
+
+    #[test]
+    fn hf_pack_does_not_get_cnb_lfs() {
+        let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let url = "https://huggingface.co/org/repo/resolve/main/a.zip";
+        let list = voice_download_urls(url, sha, "");
+        assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
+        assert!(list[0].contains("hf-cdn.sufy.com"));
+    }
+
+    #[test]
+    fn store_progress_percent_is_float() {
+        let p = store_progress_payload("tp-alice", "download", 100 * 1024, 80 * 1024 * 1024, "x");
+        let pct = p.get("percent").and_then(|v| v.as_f64()).unwrap();
+        assert!(pct > 0.1 && pct < 0.2, "{pct}");
     }
 
     #[test]

@@ -1363,7 +1363,10 @@
     "cacheClearFail": "清理失败：{v0}",
     "stsHotWorkerGone": "转换中途引擎进程退出了。请重试；反复出现请到「其他 - 收集诊断信息」导出日志。",
     "stsHotStalled": "引擎长时间没有回应，转换已中断。请重试。",
-    "stsHotFailed": "转换失败。详情见 User_Data/logs/sts/ 下本次的日志。"
+    "stsHotFailed": "转换失败。详情见 User_Data/logs/sts/ 下本次的日志。",
+    "dlReconnect": "连接失败，正在重连（第 {v0} 次）…",
+    "dlGaveUp": "已自动重试 {v0} 次仍未成功。",
+    "dlFailedHelp": "可以试一下：\n• 检查网络是否通畅，或换个网络（例如手机热点）\n• 关掉或换一个代理 / VPN 再试\n• 服务器繁忙时多等一会儿即可\n• 仍然不行，请到「其他」页扫码加入 QQ 群（1077458748）反馈"
   },
   "extras": {
     "engineTitle": "引擎资源",

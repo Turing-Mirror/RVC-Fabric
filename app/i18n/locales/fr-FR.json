@@ -1363,7 +1363,10 @@
     "cacheClearFail": "Impossible de vider le cache : {v0}",
     "stsHotWorkerGone": "Le processus du moteur s'est arrêté pendant la conversion. Réessayez ; si cela se reproduit, exportez les journaux depuis Autres - Collecter les diagnostics.",
     "stsHotStalled": "Le moteur ne répond plus, la conversion a été interrompue. Réessayez.",
-    "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/."
+    "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/.",
+    "dlReconnect": "Connexion interrompue, reconnexion (essai {v0})…",
+    "dlGaveUp": "Nouvelle tentative automatique {v0} fois, toujours en échec.",
+    "dlFailedHelp": "Vous pouvez essayer :\n• Vérifier le réseau, ou changer de réseau (par ex. le partage de connexion)\n• Couper ou changer de proxy / VPN\n• Patienter un moment si le serveur est occupé\n• Si ça échoue encore, scanner le QR du groupe QQ dans Plus (1077458748) pour nous le signaler"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

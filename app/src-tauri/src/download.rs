@@ -3,12 +3,14 @@
 //! Core engine: **[ripget](https://github.com/sam0x17/ripget)** — open-source
 //! multi-part HTTP range downloader (aria2c-style), with retries, idle reconnect,
 //! and configurable parallelism. We only add product glue:
-//! adaptive thread count, mirror URL fallback, sha256 verify, cancel, and a
-//! blocking API for Tauri commands.
+//! adaptive thread count, mirror URL fallback, sha256 verify, cancel,
+//! reconnect on HTTP 500 (ripget treats it as fatal), and a blocking API
+//! for Tauri commands.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use ripget::{DownloadOptions, ProgressReporter};
 use sha2::{Digest, Sha256};
@@ -16,6 +18,11 @@ use sha2::{Digest, Sha256};
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RVCFabric/1.3";
 const MIN_MULTIPART_BYTES: u64 = 16 * 1024 * 1024; // 16 MiB — same as launcher/online/multipart.py
 const MAX_CONNECTIONS: usize = 32;
+/// CNB Release CDN returns HTTP 500 under load. ripget treats 500 as fatal
+/// (only 404/500 are non-retryable inside the crate), so a 6 GB Runtime
+/// fetch used to die on the first blip. Wait ~3s and try again.
+const RETRY_WAIT: Duration = Duration::from_secs(3);
+const MAX_TRANSIENT_ATTEMPTS: u32 = 30;
 
 /// What is being downloaded — same pipeline for all product artifacts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +46,90 @@ impl DownloadKind {
 }
 
 pub type ProgressFn = Arc<dyn Fn(u64, u64, &str) + Send + Sync>;
+
+/// Progress phase token: `retry:N` (N = how many times we already failed).
+pub fn retry_phase(attempt: u32) -> String {
+    format!("retry:{attempt}")
+}
+
+/// Parse `retry:N`. Anything else is not a reconnect phase.
+pub fn parse_retry_attempt(phase: &str) -> Option<u32> {
+    phase.strip_prefix("retry:")?.parse().ok()
+}
+
+/// Network / origin blips we should reconnect on. Permanent catalog/auth/hash
+/// errors must not spin.
+pub fn is_transient_download_error(err: &str) -> bool {
+    let e = err.to_ascii_lowercase();
+    if e.contains("已取消") || e.contains("cancel") {
+        return false;
+    }
+    if e.contains("status 404")
+        || e.contains("status 403")
+        || e.contains("status 401")
+        || e.contains("status 410")
+    {
+        return false;
+    }
+    // Hash mismatch is the file we got, not the pipe. Next URL maybe; not a reconnect.
+    if e.contains("sha256") {
+        return false;
+    }
+    if e.contains("status 500")
+        || e.contains("internal server error")
+        || e.contains("status 502")
+        || e.contains("status 503")
+        || e.contains("status 504")
+        || e.contains("status 429")
+        || e.contains("bad gateway")
+        || e.contains("service unavailable")
+        || e.contains("gateway timeout")
+        || e.contains("too many requests")
+    {
+        return true;
+    }
+    e.contains("timed out")
+        || e.contains("timeout")
+        || e.contains("connection")
+        || e.contains("reset")
+        || e.contains("broken pipe")
+        || e.contains("unexpected end of stream")
+        || e.contains("error sending request")
+        || e.contains("dns")
+        || e.contains("tls")
+        || e.contains("handshake")
+        || e.contains("unreachable")
+        || e.contains("os error 10054")
+        || e.contains("os error 10060")
+        || e.contains("os error 10053")
+        || e.contains("os error 10061")
+        || e.contains("os error 11001")
+        || (e.starts_with("ripget:") && !e.contains("status 40"))
+}
+
+fn wait_retry(cancel: &AtomicBool) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + RETRY_WAIT;
+    while std::time::Instant::now() < deadline {
+        if cancel.load(Ordering::SeqCst) {
+            return Err(crate::i18n::t("s.a5ffdc95ee"));
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        std::thread::sleep(left.min(Duration::from_millis(200)));
+    }
+    if cancel.load(Ordering::SeqCst) {
+        return Err(crate::i18n::t("s.a5ffdc95ee"));
+    }
+    Ok(())
+}
+
+fn with_retry_help(err: &str, attempts: u32) -> String {
+    format!(
+        "{}\n\n{}\n\n{}",
+        err,
+        crate::i18n::te("s.dlGaveUp", &attempts),
+        crate::i18n::t("s.dlFailedHelp"),
+    )
+}
 
 /// Adaptive connection count (mirrors `launcher/online/multipart.auto_connections`).
 pub fn auto_connections(size: u64) -> usize {
@@ -265,57 +356,85 @@ pub fn download_request(
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
     let mut last_err = String::new();
-    for url in &req.urls {
-        if cancel.load(Ordering::SeqCst) {
-            return Err(crate::i18n::t("s.a5ffdc95ee").into());
-        }
-        if let Some(ref cb) = progress {
-            cb(
-                0,
-                req.size_hint.max(1),
-                &crate::i18n::te("s.9d7d0dbc49", &(req.kind.as_str())),
-            );
-        }
-        match rt.block_on(download_one_url(
-            url,
-            &part_path,
-            threads,
-            req.kind,
-            req.size_hint,
-            cancel.clone(),
-            progress.clone(),
-        )) {
-            Ok(()) => {
-                if !req.expected_sha256.is_empty() {
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        let mut saw_transient = false;
+        for url in &req.urls {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(crate::i18n::t("s.a5ffdc95ee").into());
+            }
+            if let Some(ref cb) = progress {
+                cb(
+                    0,
+                    req.size_hint.max(1),
+                    &crate::i18n::te("s.9d7d0dbc49", &(req.kind.as_str())),
+                );
+            }
+            match rt.block_on(download_one_url(
+                url,
+                &part_path,
+                threads,
+                req.kind,
+                req.size_hint,
+                cancel.clone(),
+                progress.clone(),
+            )) {
+                Ok(()) => {
+                    if !req.expected_sha256.is_empty() {
+                        if let Some(ref cb) = progress {
+                            let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+                            cb(len, len.max(1), "verify");
+                        }
+                        if let Err(e) = verify_sha256(&part_path, &req.expected_sha256) {
+                            let _ = std::fs::remove_file(&part_path);
+                            last_err = e;
+                            continue;
+                        }
+                    }
+                    if req.dest.is_file() {
+                        let _ = std::fs::remove_file(&req.dest);
+                    }
+                    std::fs::rename(&part_path, &req.dest)
+                        .map_err(|e| crate::i18n::te("s.fe9e98a65c", &(e)))?;
                     if let Some(ref cb) = progress {
-                        let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
-                        cb(len, len.max(1), "verify");
+                        let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
+                        cb(len, len.max(1), "download");
                     }
-                    if let Err(e) = verify_sha256(&part_path, &req.expected_sha256) {
-                        let _ = std::fs::remove_file(&part_path);
-                        last_err = e;
-                        continue;
+                    return Ok(());
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&part_path);
+                    if e == crate::i18n::t("s.a5ffdc95ee")
+                        || e.to_ascii_lowercase().contains("cancel")
+                    {
+                        return Err(e);
                     }
+                    if is_transient_download_error(&e) {
+                        saw_transient = true;
+                    }
+                    last_err = e;
                 }
-                if req.dest.is_file() {
-                    let _ = std::fs::remove_file(&req.dest);
-                }
-                std::fs::rename(&part_path, &req.dest)
-                    .map_err(|e| crate::i18n::te("s.fe9e98a65c", &(e)))?;
-                if let Some(ref cb) = progress {
-                    let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
-                    cb(len, len.max(1), "download");
-                }
-                return Ok(());
-            }
-            Err(e) => {
-                last_err = e;
-                let _ = std::fs::remove_file(&part_path);
             }
         }
+        if last_err.is_empty() {
+            break;
+        }
+        if !saw_transient || attempt >= MAX_TRANSIENT_ATTEMPTS {
+            break;
+        }
+        crate::logging::shell_log!(format!(
+            "download retry {attempt}/{MAX_TRANSIENT_ATTEMPTS} after: {last_err}"
+        ));
+        if let Some(ref cb) = progress {
+            cb(0, req.size_hint.max(1), &retry_phase(attempt));
+        }
+        wait_retry(&cancel)?;
     }
     Err(if last_err.is_empty() {
         crate::i18n::t("s.e0dab22b1a")
+    } else if is_transient_download_error(&last_err) {
+        with_retry_help(&last_err, attempt)
     } else {
         last_err
     })
@@ -386,5 +505,41 @@ mod tests {
         assert_eq!(auto_connections(20 * 1024 * 1024), 8);
         assert!(auto_connections(2 * 1024 * 1024 * 1024) >= 12);
         assert!(auto_connections(8 * 1024 * 1024 * 1024) <= MAX_CONNECTIONS);
+    }
+
+    #[test]
+    fn cnb_500_is_transient() {
+        let e = "ripget: unexpected HTTP status 500 Internal Server Error for \
+                 https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/\
+                 RVC-runtime/runtime-nvidia-2026.07.21.tar";
+        assert!(is_transient_download_error(e));
+        assert!(is_transient_download_error(
+            "ripget: unexpected HTTP status 502 Bad Gateway for https://cnb.cool/x"
+        ));
+        assert!(is_transient_download_error("error sending request for url"));
+        assert!(is_transient_download_error("os error 10054"));
+    }
+
+    #[test]
+    fn permanent_errors_are_not_retried() {
+        assert!(!is_transient_download_error(
+            "ripget: unexpected HTTP status 404 Not Found for https://cnb.cool/x"
+        ));
+        assert!(!is_transient_download_error(
+            "ripget: unexpected HTTP status 403 Forbidden for https://cnb.cool/x"
+        ));
+        assert!(!is_transient_download_error("已取消"));
+        assert!(!is_transient_download_error("cancelled by user"));
+        assert!(!is_transient_download_error(
+            "sha256 mismatch: expected abc got def"
+        ));
+    }
+
+    #[test]
+    fn retry_phase_roundtrip() {
+        assert_eq!(retry_phase(3), "retry:3");
+        assert_eq!(parse_retry_attempt("retry:3"), Some(3));
+        assert_eq!(parse_retry_attempt("retry"), None);
+        assert_eq!(parse_retry_attempt("download"), None);
     }
 }

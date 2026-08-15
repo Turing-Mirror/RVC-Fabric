@@ -525,4 +525,15 @@ mod tests {
         assert!(!missing.contains("{kind}"), "got {missing}");
     }
 
+    #[test]
+    fn download_retry_copy_resolves() {
+        let _g = testing::pin("zh-CN");
+        let s = te("s.dlReconnect", &3);
+        assert!(s.contains('3'), "got {s}");
+        assert!(!s.contains("{v0}"), "got {s}");
+        let help = t("s.dlFailedHelp");
+        assert!(help.contains("1077458748"), "got {help}");
+        assert!(t("s.dlGaveUp").contains("{v0}") || te("s.dlGaveUp", &30).contains("30"));
+    }
+
 }

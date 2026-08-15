@@ -18,6 +18,12 @@ use crate::voices::safe_model_dir_name;
 const CNB_RAW_MAIN: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main";
 const MIN_PTH_BYTES: u64 = 50_000;
 
+fn progress_message(phase: &str) -> String {
+    download::parse_retry_attempt(phase)
+        .map(|n| crate::i18n::te("s.dlReconnect", &n))
+        .unwrap_or_else(|| phase.to_string())
+}
+
 /// Per-voice cancel flags. A single global flag meant that cancelling one
 /// download killed every other in-flight one, and that starting a second
 /// install reset the first one's cancel state — so concurrent installs were
@@ -969,7 +975,7 @@ pub fn install_voice_entry(
                     "done": done,
                     "total": total,
                     "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                    "message": msg,
+                    "message": progress_message(msg),
                 }),
             );
         });
@@ -1035,7 +1041,7 @@ pub fn install_voice_entry(
                 "done": done,
                 "total": total,
                 "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                "message": msg,
+                "message": progress_message(msg),
             }),
         );
     });

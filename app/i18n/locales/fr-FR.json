@@ -1403,8 +1403,6 @@
     "dspSaved": "« {v0} » enregistré",
     "dspDelete": "Supprimer",
     "dspClearVoice": "DSP seulement",
-    "dspOverlayHint": "Avec le moteur, la voix et le DSP se superposent. Sans lui, seul le DSP tourne ; la voix reste sélectionnée.",
-    "dspOnlyHint": "Sans voix : DSP seul. Après le moteur et une voix, les deux couches se superposent.",
     "dspCleared": "Voix retirée. Relancez la conversion pour n'utiliser que le DSP.",
     "dspAddEffect": "Ajouter un effet",
     "dspRemoveEffect": "Retirer",

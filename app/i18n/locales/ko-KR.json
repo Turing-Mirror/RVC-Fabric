@@ -1403,8 +1403,6 @@
     "dspSaved": "“{v0}” 저장됨",
     "dspDelete": "삭제",
     "dspClearVoice": "DSP만",
-    "dspOverlayHint": "엔진 자원이 있으면 음색과 DSP를 겹칩니다. 없으면 DSP만 돌아가고 음색은 그대로 둡니다.",
-    "dspOnlyHint": "음색 없음: DSP만. 자원을 받고 음색을 고르면 두 층이 겹칩니다.",
     "dspCleared": "음색을 해제했습니다. 변성을 다시 켜면 DSP만 동작합니다.",
     "dspAddEffect": "효과 추가",
     "dspRemoveEffect": "제거",

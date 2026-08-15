@@ -459,8 +459,14 @@ export function ExtrasDialog({
       className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
       onClick={busy ? undefined : onClose}
     >
+      {/*
+        内层要 min-h-0 + overflow-y-auto。
+        外面给了 max-h，里面的 flex 子项却默认 min-height:auto —— 不肯缩到
+        内容以下。窗口一矮（工具窗只有 540–780px），列表就把底部那排关闭/取消
+        按钮顶出可视区，而且整块都滚不动：用户想关掉，点到的是下载按钮。
+      */}
       <div
-        className="flex max-h-[min(88vh,720px)] w-full max-w-[min(920px,96vw)] flex-col rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
+        className="flex max-h-[min(88vh,720px)] min-h-0 w-full max-w-[min(920px,96vw)] flex-col overflow-y-auto rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
       >
         <ExtrasPanel

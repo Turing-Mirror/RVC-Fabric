@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "プリセットのパラメータ形式が不正です。",
     "dspPresetSaveFail": "プリセットを保存できませんでした：{0}",
     "dspPresetNotUser": "内蔵プリセットは削除できません。同名のカスタムプリセットを保存すると上書きできます。",
-    "dspPresetDeleteFail": "プリセットを削除できませんでした：{0}"
+    "dspPresetDeleteFail": "プリセットを削除できませんでした：{0}",
+    "toolMainWindowGone": "メインウィンドウが閉じています。モデルをダウンロードするには、まずメイン画面に戻ってください。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

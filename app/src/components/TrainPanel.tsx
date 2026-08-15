@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
-import { ExtrasDialog } from "./ExtrasDialog";
+import { openDownloadModels } from "../lib/downloadModels";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 
@@ -72,7 +72,6 @@ export function TrainPanel() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
-  const [extrasOpen, setExtrasOpen] = useState(false);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -182,12 +181,12 @@ export function TrainPanel() {
               {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
             </p>
             {needPretrained ? (
-              <Btn onClick={() => setExtrasOpen(true)}>{t("s.0c593a479c")}</Btn>
+              <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.0c593a479c")}</Btn>
             ) : null}
           </div>
         ) : (
           <div className="mb-3 flex justify-end">
-            <Btn onClick={() => setExtrasOpen(true)}>{t("s.aac4f88e84")}</Btn>
+            <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.aac4f88e84")}</Btn>
           </div>
         )}
 
@@ -291,15 +290,6 @@ export function TrainPanel() {
           <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
         ) : null}
 
-        <ExtrasDialog
-          open={extrasOpen}
-          onClose={() => {
-            setExtrasOpen(false);
-            void load();
-          }}
-          filter="train"
-          title={t("s.0c593a479c")}
-        />
     </ToolBody>
   );
 }

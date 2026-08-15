@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "Les paramètres du préréglage sont mal formés.",
     "dspPresetSaveFail": "Impossible d'enregistrer le préréglage : {0}",
     "dspPresetNotUser": "Les préréglages intégrés ne peuvent pas être supprimés. Enregistrez un préréglage personnalisé du même nom pour le remplacer.",
-    "dspPresetDeleteFail": "Impossible de supprimer le préréglage : {0}"
+    "dspPresetDeleteFail": "Impossible de supprimer le préréglage : {0}",
+    "toolMainWindowGone": "La fenêtre principale est fermée. Revenez-y pour télécharger des modèles."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

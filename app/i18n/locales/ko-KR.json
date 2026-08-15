@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "프리셋 매개변수 형식이 올바르지 않습니다.",
     "dspPresetSaveFail": "프리셋을 저장하지 못했습니다: {0}",
     "dspPresetNotUser": "기본 제공 프리셋은 삭제할 수 없습니다. 같은 이름으로 사용자 프리셋을 저장하면 덮어쓸 수 있습니다.",
-    "dspPresetDeleteFail": "프리셋을 삭제하지 못했습니다: {0}"
+    "dspPresetDeleteFail": "프리셋을 삭제하지 못했습니다: {0}",
+    "toolMainWindowGone": "메인 창이 닫혀 있습니다. 모델을 내려받으려면 메인 화면으로 돌아가세요."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

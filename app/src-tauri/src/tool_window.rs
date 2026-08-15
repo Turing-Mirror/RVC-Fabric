@@ -10,7 +10,8 @@
 //!
 //! 同一个工具只开一扇窗：再点一次是把已经开着的那扇拉到前面，不是叠第二扇。
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use serde_json::json;
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::logging;
 
@@ -77,6 +78,26 @@ fn url_for(kind: &str) -> String {
             crate::ui_assets::SCHEME
         )
     }
+}
+
+/// 从工具窗口把主窗口叫到前面，并让它跳到「广场 → 下载模型」。
+///
+/// 工具窗口以前是就地弹一个下载框。那个框在 720px 高的工具窗里放不下：外层
+/// 有 max-h 却没有滚动容器，flex 子项默认又不肯缩到内容以下，于是列表把底部
+/// 的关闭按钮顶出可视区，页面还滚不动 —— 用户想关窗口，点到的是下载按钮。
+///
+/// 与其把那个框塞进小窗口，不如根本不塞：下载模型本来就住在主窗口的广场里，
+/// 那儿有完整的高度和滚动，也是主窗口唯一的入口。工具窗口只负责把人带过去。
+pub fn focus_main_downloads(app: &AppHandle, reason: &str) -> Result<(), String> {
+    let main = app
+        .get_webview_window("main")
+        .ok_or_else(|| crate::i18n::t("s.toolMainWindowGone"))?;
+    let _ = main.unminimize();
+    let _ = main.show();
+    let _ = main.set_focus();
+    main.emit("open-download-models", json!({ "reason": reason }))
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {

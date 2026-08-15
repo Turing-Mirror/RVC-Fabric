@@ -492,6 +492,18 @@ export default function App() {
     });
     return () => registerDownloadModelsOpener(null);
   }, [openDownloadModels]);
+
+  // 工具窗口（人声分离 / 训练音色）点「下载模型」时发过来的。那边是独立的
+  // webview，没有广场可去，只能把主窗口叫到前面再让它跳。
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void listen<{ reason?: string }>("open-download-models", (e) => {
+      openDownloadModels(e.payload?.reason || "");
+    }).then((f) => {
+      un = f;
+    });
+    return () => un?.();
+  }, [openDownloadModels]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const openPlaza = useCallback(() => {

@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "The preset parameters are malformed.",
     "dspPresetSaveFail": "Could not save the preset: {0}",
     "dspPresetNotUser": "Built-in presets cannot be deleted. Save a custom preset with the same name to override it.",
-    "dspPresetDeleteFail": "Could not delete the preset: {0}"
+    "dspPresetDeleteFail": "Could not delete the preset: {0}",
+    "toolMainWindowGone": "The main window is closed. Go back to it to download models."
   },
   "extras": {
     "engineTitle": "Engine resources",

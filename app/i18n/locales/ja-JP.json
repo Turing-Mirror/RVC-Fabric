@@ -1328,6 +1328,8 @@
     "trainBatchHint": "1回に送るスライス数。大きいほど速く、VRAM も食います。目安はVRAMから自動で出ます。足りなければ小さくして続きから。",
     "trainF0": "ピッチ",
     "trainF0Hint": "通常は rmvpe。harvest は遅くて安定。pm は速いが裏返りやすい。",
+    "trainF0Unsupported": "未対応のピッチ算法です：{a0}",
+    "trainRmvpeMissing": "rmvpe.pt がありません。先にエンジン資源を入れてください。",
     "trainSaveEvery": "保存間隔",
     "trainSaveEveryHint": "何エポックごとに進捗を保存するか。大きな重みは最新だけ残します。",
     "trainSaveWeights": "保存のたびに使える小モデルも残す",

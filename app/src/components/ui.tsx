@@ -40,6 +40,7 @@ export function Block({
   action,
   children,
   className = "",
+  id,
 }: {
   title?: string;
   /** 标题后面的小问号。专有名词的解释统一从 lib/glossary 取。 */
@@ -48,9 +49,10 @@ export function Block({
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
-    <section className={`mt-[30px] ${className}`}>
+    <section id={id} className={`mt-[30px] ${className}`}>
       {(title || note || action) && (
         // items-center（不是 baseline）：标题旁的小问号是 17px 圆，按基线对齐会
         // 整颗往下掉一截，看起来比「检索特征库」标题低半个字。

@@ -1328,6 +1328,8 @@
     "trainBatchHint": "한 번에 넣는 조각 수. 클수록 빠르고 VRAM을 더 씁니다. 권장값은 메모리로 자동 계산됩니다. 부족하면 줄이고 이어서 하세요.",
     "trainF0": "피치",
     "trainF0Hint": "보통 rmvpe. harvest는 느리고 안정적. pm은 빠르지만 음이 갈라질 수 있습니다.",
+    "trainF0Unsupported": "지원하지 않는 피치 알고리즘: {a0}",
+    "trainRmvpeMissing": "rmvpe.pt가 없습니다. 엔진 자원을 먼저 받으세요.",
     "trainSaveEvery": "저장 간격",
     "trainSaveEveryHint": "몇 에포크마다 진행을 저장할지. 큰 가중치는 최신본만 남깁니다.",
     "trainSaveWeights": "저장할 때마다 쓸 수 있는 작은 모델도 남기기",

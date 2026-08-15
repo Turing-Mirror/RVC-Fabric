@@ -16,18 +16,21 @@ from infer.lib.audio import load_audio
 logging.getLogger("numba").setLevel(logging.WARNING)
 from multiprocessing import Process
 
-exp_dir = sys.argv[1]
-f = open("%s/extract_f0_feature.log" % exp_dir, "a+")
+# argv / 日志句柄只能在 __main__ 里打开。Windows spawn 会重新 import
+# 本模块，子进程的 sys.argv 是 `-c from multiprocessing.spawn…`，
+# 放在模块顶层会把子进程直接砸死，音高文件数为 0。
+_log = None
 
 
 def printt(strr):
     print(strr)
-    f.write("%s\n" % strr)
-    f.flush()
-
-
-n_p = int(sys.argv[2])
-f0method = sys.argv[3]
+    if _log is None:
+        return
+    try:
+        _log.write("%s\n" % strr)
+        _log.flush()
+    except Exception:
+        pass
 
 
 class FeatureInput(object):
@@ -139,37 +142,62 @@ class FeatureInput(object):
                     printt("f0fail-%s-%s-%s" % (idx, inp_path, traceback.format_exc()))
 
 
+def _go_part(paths, f0_method):
+    # 顶层函数才能给 Process 当 target：绑在实例上的方法在 spawn 下
+    # 还要再 pickle FeatureInput，没有好处。
+    FeatureInput().go(paths, f0_method)
+
+
+def main():
+    global _log
+    exp_dir = sys.argv[1]
+    n_p = max(int(sys.argv[2]), 1)
+    f0method = sys.argv[3]
+    # 家用机 harvest/pm 开几十个进程只会把内存打满。
+    n_p = min(n_p, 8)
+
+    _log = open(
+        "%s/extract_f0_feature.log" % exp_dir,
+        "a+",
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        printt(" ".join(sys.argv))
+        paths = []
+        inp_root = "%s/1_16k_wavs" % (exp_dir)
+        opt_root1 = "%s/2a_f0" % (exp_dir)
+        opt_root2 = "%s/2b-f0nsf" % (exp_dir)
+
+        os.makedirs(opt_root1, exist_ok=True)
+        os.makedirs(opt_root2, exist_ok=True)
+        for name in sorted(list(os.listdir(inp_root))):
+            inp_path = "%s/%s" % (inp_root, name)
+            if "spec" in inp_path:
+                continue
+            opt_path1 = "%s/%s" % (opt_root1, name)
+            opt_path2 = "%s/%s" % (opt_root2, name)
+            paths.append([inp_path, opt_path1, opt_path2])
+
+        if n_p <= 1 or len(paths) <= 1:
+            _go_part(paths, f0method)
+        else:
+            n_p = min(n_p, len(paths))
+            ps = []
+            for i in range(n_p):
+                p = Process(target=_go_part, args=(paths[i::n_p], f0method))
+                ps.append(p)
+                p.start()
+            for p in ps:
+                p.join()
+    finally:
+        try:
+            _log.close()
+        except Exception:
+            pass
+        _log = None
+
+
 if __name__ == "__main__":
-    # exp_dir=r"E:\codes\py39\dataset\mi-test"
-    # n_p=16
-    # f = open("%s/log_extract_f0.log"%exp_dir, "w")
-    printt(" ".join(sys.argv))
-    featureInput = FeatureInput()
-    paths = []
-    inp_root = "%s/1_16k_wavs" % (exp_dir)
-    opt_root1 = "%s/2a_f0" % (exp_dir)
-    opt_root2 = "%s/2b-f0nsf" % (exp_dir)
-
-    os.makedirs(opt_root1, exist_ok=True)
-    os.makedirs(opt_root2, exist_ok=True)
-    for name in sorted(list(os.listdir(inp_root))):
-        inp_path = "%s/%s" % (inp_root, name)
-        if "spec" in inp_path:
-            continue
-        opt_path1 = "%s/%s" % (opt_root1, name)
-        opt_path2 = "%s/%s" % (opt_root2, name)
-        paths.append([inp_path, opt_path1, opt_path2])
-
-    ps = []
-    for i in range(n_p):
-        p = Process(
-            target=featureInput.go,
-            args=(
-                paths[i::n_p],
-                f0method,
-            ),
-        )
-        ps.append(p)
-        p.start()
-    for i in range(n_p):
-        ps[i].join()
+    # argv 只能在这里读，原因见模块顶注释。
+    main()

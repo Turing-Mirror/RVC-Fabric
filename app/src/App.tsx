@@ -544,8 +544,10 @@ export default function App() {
     setPage("models");
   }, []);
   const [helpFocus, setHelpFocus] = useState("");
+  const [helpFocusNonce, setHelpFocusNonce] = useState(0);
   const openHelp = useCallback((section?: string) => {
     setHelpFocus(section || "");
+    setHelpFocusNonce((n) => n + 1);
     setPage("help");
   }, []);
   // 「下载模型」现在住在广场，「其他」页和工具入口都是跳过来。
@@ -954,7 +956,13 @@ export default function App() {
             case "help":
               // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
               // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
-              return <HelpPage status={deviceStatus} focus={helpFocus} />;
+              return (
+                <HelpPage
+                  status={deviceStatus}
+                  focus={helpFocus}
+                  focusNonce={helpFocusNonce}
+                />
+              );
             case "more":
               return (
                 <MorePage

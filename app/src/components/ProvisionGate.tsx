@@ -285,11 +285,18 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     done > 0 && pct < 0.5 ? Math.max(pct, 0.5) : Math.min(100, pct);
   const showBar = busy && progress && progress.phase !== "error";
   // Only the download phase reports bytes. Extract / vbcable emit done=0 total=1.
-  const isDownload = String(progress?.phase || "") === "download";
+  const phase = String(progress?.phase || "");
+  const isDownload = phase === "download";
+  const retryN = (() => {
+    const m = /^retry:(\d+)$/.exec(phase);
+    return m ? Number(m[1]) : 0;
+  })();
+  const reconnecting = Boolean(showBar) && (phase === "retry" || retryN > 0);
   const connecting =
     showBar &&
     done <= 0 &&
-    (String(progress?.phase || "").startsWith("connecting") ||
+    (reconnecting ||
+      phase.startsWith("connecting") ||
       String(progress?.message || "").includes(t("s.7328deebb5")));
 
   // 静默多久了。lastMove.at 为 0 表示这一轮还没开始，别把它当成静默了 55 年。
@@ -429,7 +436,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         ) : null}
 
         {error ? (
-          <p className="text-[12.5px] text-[#c43] m-0 mb-3 leading-relaxed">{error}</p>
+          <p className="text-[12.5px] text-[#c43] m-0 mb-3 leading-relaxed whitespace-pre-line">
+            {error}
+          </p>
         ) : null}
 
         {vbcable ? (

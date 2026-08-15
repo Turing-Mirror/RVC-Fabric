@@ -545,6 +545,10 @@ pub fn run_provision(
                 let m = match phase {
                     "verify" => crate::i18n::te("s.af05b41a37", &format_size(done.max(total))),
                     "retry" => crate::i18n::t("s.a24d69a01d"),
+                    other if other.starts_with("retry:") => {
+                        let n = download::parse_retry_attempt(other).unwrap_or(1);
+                        crate::i18n::te("s.dlReconnect", &n)
+                    }
                     other if other.starts_with("connecting:") => {
                         crate::i18n::te("s.d28fcd74d0", &(format_size(total)))
                     }

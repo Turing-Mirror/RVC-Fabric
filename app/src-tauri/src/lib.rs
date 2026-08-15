@@ -190,7 +190,10 @@ fn config_set(
     patch: Map<String, Value>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let out = config::update(&root, patch)?;
+    let out = config::update(&root, patch.clone())?;
+    if let Err(e) = voices::persist_profile_patch(&root, &patch) {
+        logging::shell_log!("persist profile: {e}");
+    }
     if let Some(hot) = out.get("hot").and_then(|v| v.as_object()) {
         if !hot.is_empty() && worker::is_worker_alive(&root) {
             let _ = worker::set_hot(&root, hot.clone());
@@ -614,7 +617,7 @@ async fn engine_stop_vc(
     force: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let f = force.unwrap_or(true);
+    let f = force.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
         worker::stop_vc(&root, f)?;
         Ok(worker::status_for_ui(&root))
@@ -1021,6 +1024,9 @@ fn engine_set_hot(
     // app_config），但 inuse 还是 0，引擎按默认起 —— 显示对、声音不对。
     // 这里顺手落盘并同步 inuse；worker 没起来时只落盘，不算失败。
     if let Ok(out) = config::update(&root, payload.clone()) {
+        if let Err(e) = voices::persist_profile_patch(&root, &payload) {
+            logging::shell_log!("persist profile: {e}");
+        }
         let _ = app.emit("config-changed", &out);
     }
     match worker::set_hot(&root, payload) {

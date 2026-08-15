@@ -15,6 +15,35 @@ const MIN_MODEL_BYTES: u64 = 200 * 1024;
 const PROFILE_EXT: &str = ".tmvp";
 const PROFILES_DIR: &str = "profiles";
 
+/// 档案自己管的键。切模型时整组换成该模型的，不沿用上一个。
+const PROFILE_VOICE_KEYS: &[&str] = &[
+    "pitch",
+    "formant",
+    "index_rate",
+    "rms_mix_rate",
+    "threhold",
+    "f0method",
+];
+const PROFILE_FX_KEYS: &[&str] = &[
+    "fx_enabled",
+    "fx_gate_enabled",
+    "fx_gate_threshold_db",
+    "fx_gate_release_ms",
+    "fx_gate_hold_ms",
+    "fx_gate_range_db",
+    "fx_comp_enabled",
+    "fx_comp_threshold_db",
+    "fx_comp_ratio",
+    "fx_comp_attack_ms",
+    "fx_comp_release_ms",
+    "fx_comp_makeup_db",
+    "fx_eq_enabled",
+    "fx_eq_gains",
+    "fx_eq_preset",
+    "fx_out_gain_db",
+];
+const PROFILE_PERF_KEYS: &[&str] = &["block_time", "crossfade_length", "extra_time"];
+
 /// 从内置清单（bundled，离线可用）按 id 找封面 URL。
 /// 只在 sidecar 与包内都没有封面时查 —— 覆盖旧版本装的第三方音色
 /// （安装时漏写 cover），一次文件读的代价可接受，不加跨 root 的缓存。
@@ -665,19 +694,17 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
     recents.truncate(12);
     cfg.insert("recent_models".into(), json!(recents));
 
-    // Apply profile / voice params into app config for dock
+    // 档案参数按「这个音色」来，不沿用上一个模型留在 app_config 里的值。
     if let Some(md) = m.get("dir").and_then(|v| v.as_str()) {
         if m.get("source").and_then(|v| v.as_str()) == Some("user_data") {
             apply_profile_to_cfg(md, &mut cfg);
+        } else {
+            reset_profile_keys(&mut cfg);
+            overlay_keys_from_value(&m, PROFILE_VOICE_KEYS, &mut cfg);
         }
-    }
-    // Fallback voice params from model entry
-    for k in ["pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method"] {
-        if let Some(v) = m.get(k) {
-            if !v.is_null() && cfg.get(k).is_none() {
-                cfg.insert(k.to_string(), v.clone());
-            }
-        }
+    } else {
+        reset_profile_keys(&mut cfg);
+        overlay_keys_from_value(&m, PROFILE_VOICE_KEYS, &mut cfg);
     }
 
     save_app_config(root, &cfg)?;
@@ -1028,6 +1055,25 @@ fn profile_path(model_dir: &Path, profile_id: &str) -> Result<PathBuf, String> {
     Ok(profiles_dir(model_dir).join(format!("{profile_id}{PROFILE_EXT}")))
 }
 
+fn profile_voice_desc(src: &Map<String, Value>) -> String {
+    let mut cfg = Map::new();
+    reset_profile_keys(&mut cfg);
+    overlay_keys(src, PROFILE_VOICE_KEYS, &mut cfg);
+    let pitch = cfg
+        .get("pitch")
+        .and_then(|v| v.as_i64().or_else(|| v.as_f64().map(|f| f as i64)))
+        .unwrap_or(0);
+    let formant = cfg
+        .get("formant")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    crate::i18n::t2(
+        "s.8ece88dffe",
+        &format!("{:+}", pitch),
+        &format!("{:.2}", formant),
+    )
+}
+
 fn source_label(src: &str) -> String {
     match src {
         "default" => crate::i18n::t("s.a55afe4b5f"),
@@ -1035,6 +1081,49 @@ fn source_label(src: &str) -> String {
         "import" => crate::i18n::t("s.60e2bcad85"),
         "official" => crate::i18n::t("s.291eab062c"),
         other => other.to_string(),
+    }
+}
+
+fn reset_profile_keys(cfg: &mut Map<String, Value>) {
+    let d = crate::config::defaults();
+    for k in PROFILE_VOICE_KEYS
+        .iter()
+        .chain(PROFILE_FX_KEYS)
+        .chain(PROFILE_PERF_KEYS)
+    {
+        if let Some(v) = d.get(*k) {
+            cfg.insert((*k).to_string(), v.clone());
+        }
+    }
+}
+
+fn overlay_keys(src: &Map<String, Value>, keys: &[&str], dest: &mut Map<String, Value>) {
+    for k in keys {
+        match src.get(*k) {
+            Some(v) if !v.is_null() && v != "" => {
+                dest.insert((*k).to_string(), v.clone());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn overlay_keys_from_value(src: &Value, keys: &[&str], dest: &mut Map<String, Value>) {
+    let Some(obj) = src.as_object() else {
+        return;
+    };
+    overlay_keys(obj, keys, dest);
+}
+
+fn overlay_profile_groups(prof: &Value, dest: &mut Map<String, Value>) {
+    for (group, keys) in [
+        ("voice", PROFILE_VOICE_KEYS),
+        ("fx", PROFILE_FX_KEYS),
+        ("perf", PROFILE_PERF_KEYS),
+    ] {
+        if let Some(g) = prof.get(group).and_then(|v| v.as_object()) {
+            overlay_keys(g, keys, dest);
+        }
     }
 }
 
@@ -1047,16 +1136,14 @@ fn apply_profile_to_cfg(model_dir: &str, cfg: &mut Map<String, Value>) {
         .unwrap_or("")
         .to_string();
     cfg.insert("_active_profile_id".into(), json!(pid));
+    // 先摊成产品默认，再盖这个音色自己的 sidecar / 具名档案。
+    // 缺键不能留着上一个模型的音高。
+    reset_profile_keys(cfg);
+    overlay_keys(&side, PROFILE_VOICE_KEYS, cfg);
+    overlay_keys(&side, PROFILE_FX_KEYS, cfg);
+    overlay_keys(&side, PROFILE_PERF_KEYS, cfg);
     if pid.is_empty() {
         cfg.insert("_active_profile_name".into(), json!(""));
-        // model inline params
-        for k in ["pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method"] {
-            if let Some(v) = side.get(k) {
-                if !v.is_null() {
-                    cfg.insert(k.to_string(), v.clone());
-                }
-            }
-        }
         return;
     }
     let Ok(path) = profile_path(&md, &pid) else {
@@ -1074,13 +1161,77 @@ fn apply_profile_to_cfg(model_dir: &str, cfg: &mut Map<String, Value>) {
         .unwrap_or(&crate::i18n::t("s.3ca928cd40"))
         .to_string();
     cfg.insert("_active_profile_name".into(), json!(name));
-    for group in ["voice", "fx", "perf"] {
-        if let Some(g) = prof.get(group).and_then(|v| v.as_object()) {
-            for (k, v) in g {
-                cfg.insert(k.clone(), v.clone());
-            }
+    overlay_profile_groups(&prof, cfg);
+}
+
+fn patch_has_profile_keys(patch: &Map<String, Value>) -> bool {
+    PROFILE_VOICE_KEYS
+        .iter()
+        .chain(PROFILE_FX_KEYS)
+        .chain(PROFILE_PERF_KEYS)
+        .any(|k| patch.contains_key(*k))
+}
+
+fn merge_patch_into_group(dest: &mut Map<String, Value>, patch: &Map<String, Value>, keys: &[&str]) {
+    for k in keys {
+        if let Some(v) = patch.get(*k) {
+            dest.insert((*k).to_string(), v.clone());
         }
     }
+}
+
+/// 设置页 / 底栏改了档案键：写回当前音色的默认 sidecar 或具名 .tmvp。
+pub fn persist_profile_patch(root: &Path, patch: &Map<String, Value>) -> Result<(), String> {
+    if !patch_has_profile_keys(patch) {
+        return Ok(());
+    }
+    let cfg = load_app_config(root);
+    let pth = cfg
+        .get("last_model_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if pth.is_empty() {
+        return Ok(());
+    }
+    let pth_path = PathBuf::from(pth);
+    let Some(md) = pth_path.parent() else {
+        return Ok(());
+    };
+    if guard_model_dir(root, md).is_err() {
+        return Ok(());
+    }
+    let mut side = read_sidecar(md);
+    let pid = side
+        .get("active_profile")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let named = !pid.is_empty() && profile_path(md, &pid).map(|p| p.is_file()).unwrap_or(false);
+    if named {
+        let path = profile_path(md, &pid)?;
+        let mut prof = read_json(&path);
+        let obj = prof.as_object_mut().ok_or_else(|| crate::i18n::t("s.dab1a19c29"))?;
+        for (group, keys) in [
+            ("voice", PROFILE_VOICE_KEYS),
+            ("fx", PROFILE_FX_KEYS),
+            ("perf", PROFILE_PERF_KEYS),
+        ] {
+            let mut g = obj
+                .get(group)
+                .and_then(|v| v.as_object())
+                .cloned()
+                .unwrap_or_default();
+            merge_patch_into_group(&mut g, patch, keys);
+            obj.insert(group.into(), Value::Object(g));
+        }
+        write_json_atomic(&path, &prof)?;
+    } else {
+        merge_patch_into_group(&mut side, patch, PROFILE_VOICE_KEYS);
+        merge_patch_into_group(&mut side, patch, PROFILE_FX_KEYS);
+        merge_patch_into_group(&mut side, patch, PROFILE_PERF_KEYS);
+        write_sidecar(md, &side)?;
+    }
+    Ok(())
 }
 
 pub fn list_profiles(root: &Path, model_dir: &str) -> Result<Value, String> {
@@ -1093,6 +1244,7 @@ pub fn list_profiles(root: &Path, model_dir: &str) -> Result<Value, String> {
         .unwrap_or("")
         .to_string();
 
+    let def_desc = profile_voice_desc(&side);
     let mut items = vec![json!({
         "id": "",
         "name": &crate::i18n::t("s.8923a00d0b"),
@@ -1100,7 +1252,7 @@ pub fn list_profiles(root: &Path, model_dir: &str) -> Result<Value, String> {
         "source_label": &crate::i18n::t("s.a55afe4b5f"),
         "score": null,
         "active": active.is_empty(),
-        "desc": "",
+        "desc": def_desc,
     })];
 
     let dir = profiles_dir(&md);
@@ -1225,46 +1377,11 @@ pub fn save_current_as_profile(
     );
     let id = &id[..id.len().min(12)];
     let mut voice = Map::new();
-    for k in ["pitch", "formant", "index_rate", "rms_mix_rate", "threhold", "f0method"] {
-        if let Some(v) = cfg.get(k) {
-            if !v.is_null() {
-                voice.insert(k.to_string(), v.clone());
-            }
-        }
-    }
+    overlay_keys(&cfg, PROFILE_VOICE_KEYS, &mut voice);
     let mut fx = Map::new();
-    for k in [
-        "fx_enabled",
-        "fx_gate_enabled",
-        "fx_gate_threshold_db",
-        "fx_gate_release_ms",
-        "fx_gate_hold_ms",
-        "fx_gate_range_db",
-        "fx_comp_enabled",
-        "fx_comp_threshold_db",
-        "fx_comp_ratio",
-        "fx_comp_attack_ms",
-        "fx_comp_release_ms",
-        "fx_comp_makeup_db",
-        "fx_eq_enabled",
-        "fx_eq_gains",
-        "fx_eq_preset",
-        "fx_out_gain_db",
-    ] {
-        if let Some(v) = cfg.get(k) {
-            if !v.is_null() {
-                fx.insert(k.to_string(), v.clone());
-            }
-        }
-    }
+    overlay_keys(&cfg, PROFILE_FX_KEYS, &mut fx);
     let mut perf = Map::new();
-    for k in ["block_time", "crossfade_length", "extra_time"] {
-        if let Some(v) = cfg.get(k) {
-            if !v.is_null() {
-                perf.insert(k.to_string(), v.clone());
-            }
-        }
-    }
+    overlay_keys(&cfg, PROFILE_PERF_KEYS, &mut perf);
     let display = if name.trim().is_empty() {
         &crate::i18n::t("s.6cdd7fc584")
     } else {
@@ -1825,5 +1942,104 @@ mod tests {
         // .tmvp files are shared between users; the id inside one is untrusted.
         let hostile = "../../../../evil";
         assert!(profile_path(Path::new("x"), hostile).is_err());
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "rvcf-prof-{}-{}",
+            tag,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&p);
+        p
+    }
+
+    #[test]
+    fn default_profile_does_not_keep_previous_model_pitch() {
+        let md = scratch("def-reset");
+        std::fs::create_dir_all(&md).unwrap();
+        write_sidecar(&md, &Map::new()).unwrap();
+        let mut cfg = Map::new();
+        cfg.insert("pitch".into(), json!(12));
+        cfg.insert("formant".into(), json!(1.5));
+        apply_profile_to_cfg(&md.to_string_lossy(), &mut cfg);
+        assert_eq!(cfg["pitch"], json!(0));
+        assert_eq!(cfg["formant"], json!(0.0));
+        let _ = std::fs::remove_dir_all(&md);
+    }
+
+    #[test]
+    fn default_profile_uses_this_model_sidecar() {
+        let md = scratch("def-side");
+        std::fs::create_dir_all(&md).unwrap();
+        let mut side = Map::new();
+        side.insert("pitch".into(), json!(7));
+        side.insert("formant".into(), json!(0.4));
+        write_sidecar(&md, &side).unwrap();
+        let mut cfg = Map::new();
+        cfg.insert("pitch".into(), json!(12));
+        apply_profile_to_cfg(&md.to_string_lossy(), &mut cfg);
+        assert_eq!(cfg["pitch"], json!(7));
+        assert_eq!(cfg["formant"], json!(0.4));
+        let _ = std::fs::remove_dir_all(&md);
+    }
+
+    #[test]
+    fn persist_default_writes_sidecar_not_app_config_only() {
+        let root = scratch("persist-def");
+        let md = paths::models_dir(&root).join("voice-a");
+        std::fs::create_dir_all(&md).unwrap();
+        let pth = md.join("a.pth");
+        std::fs::write(&pth, vec![0u8; 8]).unwrap();
+        write_sidecar(&md, &Map::new()).unwrap();
+        let mut cfg = Map::new();
+        cfg.insert(
+            "last_model_path".into(),
+            json!(pth.to_string_lossy().to_string()),
+        );
+        save_app_config(&root, &cfg).unwrap();
+        let mut patch = Map::new();
+        patch.insert("pitch".into(), json!(8));
+        persist_profile_patch(&root, &patch).unwrap();
+        let side = read_sidecar(&md);
+        assert_eq!(side["pitch"], json!(8));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn persist_named_updates_tmvp() {
+        let root = scratch("persist-named");
+        let md = paths::models_dir(&root).join("voice-b");
+        std::fs::create_dir_all(md.join(PROFILES_DIR)).unwrap();
+        let pth = md.join("b.pth");
+        std::fs::write(&pth, vec![0u8; 8]).unwrap();
+        let mut side = Map::new();
+        side.insert("active_profile".into(), json!("p1"));
+        write_sidecar(&md, &side).unwrap();
+        let dest = profile_path(&md, "p1").unwrap();
+        write_json_atomic(
+            &dest,
+            &json!({
+                "id": "p1",
+                "name": "test",
+                "voice": { "pitch": 1, "formant": 0.1 },
+                "fx": {},
+                "perf": {}
+            }),
+        )
+        .unwrap();
+        let mut cfg = Map::new();
+        cfg.insert(
+            "last_model_path".into(),
+            json!(pth.to_string_lossy().to_string()),
+        );
+        save_app_config(&root, &cfg).unwrap();
+        let mut patch = Map::new();
+        patch.insert("pitch".into(), json!(9));
+        persist_profile_patch(&root, &patch).unwrap();
+        let prof = read_json(&dest);
+        assert_eq!(prof["voice"]["pitch"], json!(9));
+        assert_eq!(prof["voice"]["formant"], json!(0.1));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -421,7 +421,10 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
         let key2 = key.to_string();
         let label = f.name.clone();
         let base = before;
-        let cb: download::ProgressFn = Arc::new(move |got, _len, _stage| {
+        let cb: download::ProgressFn = Arc::new(move |got, _len, stage| {
+            let message = download::parse_retry_attempt(stage)
+                .map(|n| crate::i18n::te("s.dlReconnect", &n))
+                .unwrap_or_else(|| crate::i18n::te("s.407187444b", &(label)));
             let _ = app2.emit(
                 "extra-progress",
                 json!({
@@ -429,7 +432,7 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
                     "phase": "run",
                     "done": base + got,
                     "total": total.max(1),
-                    "message": crate::i18n::te("s.407187444b", &(label)),
+                    "message": message,
                 }),
             );
         });

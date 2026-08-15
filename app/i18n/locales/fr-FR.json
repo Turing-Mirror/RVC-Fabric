@@ -18,6 +18,10 @@
     "maximize": "Agrandir",
     "close": "Fermer"
   },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Annuler"
+  },
   "store": {
     "allSeries": "Toutes les séries",
     "searchHint": "Rechercher voix / séries / clubs / auteurs…",
@@ -314,7 +318,7 @@
     "002dcbcd28": "Racine du produit détectée automatiquement",
     "004a3a2b67": "Vous ne savez pas ? Allez dans l'Aide",
     "007e8f085e": "Pack de voix {e}",
-    "0096454995": "Enregistrez plusieurs préréglages de paramètres (hauteur/effets/performances) par voix, passez de l'un à l'autre en un clic, et exportez-les ou importez ceux des autres.",
+    "0096454995": "Chaque voix a ses propres paramètres par défaut ; les changements de hauteur/effets/performances s'enregistrent dans le profil actuel. Vous pouvez aussi enregistrer d'autres préréglages et les changer, les exporter ou les importer.",
     "0196cf51cf": "Test de performance effectué : {}",
     "01eba6e7b6": "Fichiers de la voix manquants ou incomplets",
     "02791c87b8": "Enveloppe de volume",
@@ -1361,6 +1365,9 @@
     "stsHotWorkerGone": "Le processus du moteur s'est arrêté pendant la conversion. Réessayez ; si cela se reproduit, exportez les journaux depuis Autres - Collecter les diagnostics.",
     "stsHotStalled": "Le moteur ne répond plus, la conversion a été interrompue. Réessayez.",
     "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/.",
+    "dlReconnect": "Connexion interrompue, reconnexion (essai {v0})…",
+    "dlGaveUp": "Nouvelle tentative automatique {v0} fois, toujours en échec.",
+    "dlFailedHelp": "Vous pouvez essayer :\n• Vérifier le réseau, ou changer de réseau (par ex. le partage de connexion)\n• Couper ou changer de proxy / VPN\n• Patienter un moment si le serveur est occupé\n• Si ça échoue encore, scanner le QR du groupe QQ dans Plus (1077458748) pour nous le signaler",
     "dspPresetBadId": "Le nom d'un préréglage n'accepte que minuscules, chiffres et tirets bas, 48 caractères maximum.",
     "dspPresetBadParams": "Les paramètres du préréglage sont mal formés.",
     "dspPresetSaveFail": "Impossible d'enregistrer le préréglage : {0}",

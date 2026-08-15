@@ -18,6 +18,7 @@ import {
   stagedVoices,
   revealStagedVoice,
   discardStagedVoice,
+  coverSrc,
   type StagedVoice,
   type StoreCatalog,
   type StoreVoice,
@@ -30,6 +31,7 @@ import {
   compareVoiceGroups,
   displayVoiceAuthor,
   displayVoiceName,
+  displayVoiceOrigin,
   displayVoiceTag,
   isCharacterAsGroup,
   isCharacterAsSeries,
@@ -38,6 +40,7 @@ import {
   voiceParentSeries,
   voiceSearchText,
 } from "../lib/voiceDisplay";
+import { askConfirm } from "../lib/webDialog";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
@@ -442,9 +445,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const discard = async (v: StoreVoice) => {
     const s = staged[v.id];
     if (
-      !window.confirm(
+      !(await askConfirm(
         t("s.de94f39aff", { v0: s?.file || v.name }),
-      )
+      ))
     )
       return;
     try {
@@ -458,7 +461,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const install = async (v: StoreVoice) => {
     if (v.installed || running.includes(v.id) || queued.includes(v.id)) return;
     if (v.official !== false && !officialAck) {
-      const ok = window.confirm(
+      const ok = await askConfirm(
         t("s.9a9349a407") +
           t("s.0ea68258a8") +
           t("s.f6453bbaae") +
@@ -469,7 +472,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       setOfficialAck(true);
     }
     if (v.official === false && !thirdAck) {
-      const ok = window.confirm(
+      const ok = await askConfirm(
         t("s.ba1368fee3") +
           t("s.1229f8d52c") +
           t("s.60d30d777c") +
@@ -927,10 +930,12 @@ function VoiceCard({
   // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
   const coverRemote = (v.cover_url || "").trim();
   const coverRel = (v.cover || "").trim();
+  const coverAbs = (v.cover_local || "").trim();
   const coverHttp = resolveCover(coverRemote || coverRel, coverMap ?? {});
   const coverLocal =
-    coverRel && coverRel !== coverRemote ? resolveCover(coverRel, {}) : "";
-  const shownCover = useLocalCover && coverLocal ? coverLocal : coverHttp;
+    (coverAbs ? coverSrc(coverAbs) : "") ||
+    (coverRel && coverRel !== coverRemote ? resolveCover(coverRel, {}) : "");
+  const shownCover = useLocalCover && coverLocal ? coverLocal : coverHttp || coverLocal;
   const showImg = Boolean(shownCover) && !imgFailed;
   // src 变化（如重试成功后换成本地缓存路径）时解除失败占位，
   // img 换 src 会自动重新加载 —— 不被 imgFailed 永久卡死。
@@ -944,9 +949,7 @@ function VoiceCard({
   const meta =
     [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ") ||
     displayVoiceTag(v, loc);
-  const coverBadge = author ||
-    v.origin_label ||
-    (v.official === false ? t("s.4500b5dfc7") : t("s.7c134b6e64"));
+  const coverBadge = author || displayVoiceOrigin(v);
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>

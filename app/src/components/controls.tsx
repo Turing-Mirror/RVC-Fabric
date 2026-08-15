@@ -203,6 +203,19 @@ export function RangeBar({
   // 拖动中光标所在的百分比。null = 没在拖，把手画在量化后的位置上。
   const [dragPct, setDragPct] = useState<number | null>(null);
   const dragging = dragPct !== null;
+  const valueRef = useRef(value);
+
+  // 设置页改了数值时，清掉可能卡住的 dragPct，否则把手停在旧位置。
+  useEffect(() => {
+    if (dragging) {
+      valueRef.current = value;
+      return;
+    }
+    if (valueRef.current !== value) {
+      valueRef.current = value;
+      setDragPct(null);
+    }
+  }, [value, dragging]);
 
   // 光标落在轨道哪儿（0..100）。把手中心的行程比轨道窄一个把手宽，所以要
   // 按「可走的那段」换算，否则推到两头时把手和光标会差半个把手。

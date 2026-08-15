@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
+import { openHelpSection } from "../lib/helpNav";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 
@@ -25,6 +26,7 @@ type Status = {
   nvidia?: boolean;
   pretrained?: Pretrained[];
   experiments?: Experiment[];
+  suggested_batch?: number;
   busy?: boolean;
 };
 
@@ -56,12 +58,14 @@ const PATH =
 const FIELD =
   "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 
+const F0_OPTS = ["rmvpe", "harvest", "pm"] as const;
+
 /**
  * 训练音色。
  *
- * 只暴露四个决定：素材在哪、叫什么名字、多少轮、采样率。原版那一屏还有
- * batch size、缓存进显存、多卡拆分、是否保存中间权重 —— 那些是给训练农场
- * 调的，我们的用户是一台家用机，多给一个开关就多一种训废的方式。
+ * 原版一键训练那条链都在：素材、名字、采样率、轮数、批次、音高算法、
+ * 保存间隔、中途出小模型。多卡拆分和缓存进显存仍不开放——家用机开了
+ * 只会炸显存。
  */
 export function TrainPanel() {
   const [st, setSt] = useState<Status>({});
@@ -69,6 +73,11 @@ export function TrainPanel() {
   const [dataset, setDataset] = useState("");
   const [sr, setSr] = useState("48k");
   const [epochs, setEpochs] = useState(200);
+  const [batch, setBatch] = useState(4);
+  const [batchTouched, setBatchTouched] = useState(false);
+  const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
+  const [saveEvery, setSaveEvery] = useState(5);
+  const [saveWeights, setSaveWeights] = useState(false);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
@@ -76,7 +85,11 @@ export function TrainPanel() {
 
   const load = async () => {
     try {
-      setSt(await invoke<Status>("train_status"));
+      const s = await invoke<Status>("train_status");
+      setSt(s);
+      if (!batchTouched && s.suggested_batch && s.suggested_batch > 0) {
+        setBatch(s.suggested_batch);
+      }
     } catch (e) {
       setMsg(String(e));
     }
@@ -145,11 +158,11 @@ export function TrainPanel() {
           dataset,
           sample_rate: sr,
           total_epoch: epochs,
-          // 家用卡的稳妥值。开放出去只会让人调到爆显存，然后来问为什么崩。
-          batch_size: 8,
-          save_every: 25,
-          f0_method: "rmvpe",
+          batch_size: batch,
+          save_every: saveEvery,
+          f0_method: f0,
           resume,
+          save_every_weights: saveWeights,
         },
       });
       setMsg(t("s.2b30598b60", { v0: r.weights ?? "" }));
@@ -171,7 +184,10 @@ export function TrainPanel() {
 
   return (
     <ToolBody>
-        <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.ba65bd5595")}</h3>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <h3 className="m-0 text-[17px] font-semibold">{t("s.ba65bd5595")}</h3>
+          <Btn onClick={() => openHelpSection("train")}>{t("s.trainOpenHelp")}</Btn>
+        </div>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.42667034ec")}</p>
 
         {blocked.text ? (
@@ -240,7 +256,96 @@ export function TrainPanel() {
             />
             <span className="text-[12px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
           </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.trainBatch")}
+              <HelpMark title={tip(t("s.trainBatchHint"))} />
+            </span>
+            <input
+              className={`w-[100px] ${FIELD}`}
+              type="number"
+              min={1}
+              max={40}
+              value={batch}
+              onChange={(e) => {
+                setBatchTouched(true);
+                setBatch(Math.max(1, Number(e.target.value) || 1));
+              }}
+            />
+            {st.suggested_batch ? (
+              <span className="text-[12px] text-[var(--meta)]">
+                {t("s.trainSuggested", { v0: st.suggested_batch })}
+              </span>
+            ) : null}
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.trainF0")}
+              <HelpMark title={tip(t("s.trainF0Hint"))} />
+            </span>
+            <select
+              className={FIELD}
+              value={f0}
+              onChange={(e) => setF0(e.target.value as (typeof F0_OPTS)[number])}
+            >
+              {F0_OPTS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.trainSaveEvery")}
+              <HelpMark title={tip(t("s.trainSaveEveryHint"))} />
+            </span>
+            <input
+              className={`w-[100px] ${FIELD}`}
+              type="number"
+              min={1}
+              max={50}
+              value={saveEvery}
+              onChange={(e) => setSaveEvery(Math.max(1, Number(e.target.value) || 5))}
+            />
+          </div>
+          <div className={ROW}>
+            <label className="flex items-center gap-2 text-[13px] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={saveWeights}
+                onChange={(e) => setSaveWeights(e.target.checked)}
+                className="accent-[var(--accent)]"
+              />
+              {t("s.trainSaveWeights")}
+              <HelpMark title={tip(t("s.trainSaveWeightsHint"))} />
+            </label>
+          </div>
         </div>
+
+        {st.experiments && st.experiments.length > 0 ? (
+          <div className="mt-3">
+            <div className="text-[12px] text-[var(--meta)] mb-1.5">{t("s.trainExps")}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {st.experiments.map((e) => (
+                <button
+                  key={e.name}
+                  type="button"
+                  className={[
+                    "text-[12px] px-2 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
+                    e.name === name.trim()
+                      ? "bg-[var(--accent-soft)] text-[var(--ink)]"
+                      : "bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] text-[var(--ink-muted)]",
+                  ].join(" ")}
+                  onClick={() => setName(e.name)}
+                >
+                  {e.name}
+                  {e.trained ? " · pth" : e.resumable ? ` · ${e.slices}` : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {resume ? (
           <p className="m-0 mt-3 text-[12.5px] text-[var(--meta)]">

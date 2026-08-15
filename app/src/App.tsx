@@ -30,6 +30,7 @@ import {
   isEngineCoreReady,
   registerDownloadModelsOpener,
 } from "./lib/downloadModels";
+import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
 
@@ -542,7 +543,11 @@ export default function App() {
     setModelsKindNonce((n) => n + 1);
     setPage("models");
   }, []);
-  const openHelp = useCallback(() => setPage("help"), []);
+  const [helpFocus, setHelpFocus] = useState("");
+  const openHelp = useCallback((section?: string) => {
+    setHelpFocus(section || "");
+    setPage("help");
+  }, []);
   // 「下载模型」现在住在广场，「其他」页和工具入口都是跳过来。
   //
   // 以前它是「其他」页上弹的一个框。同一件事在两个地方各有一份实现，改一个
@@ -589,6 +594,21 @@ export default function App() {
     });
     return () => un?.();
   }, [openDownloadModels]);
+
+  useEffect(() => {
+    registerHelpOpener((section) => openHelp(section));
+    return () => registerHelpOpener(null);
+  }, [openHelp]);
+
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void listen<{ section?: string }>("open-help", (e) => {
+      openHelp(e.payload?.section || "");
+    }).then((f) => {
+      un = f;
+    });
+    return () => un?.();
+  }, [openHelp]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const stopDsp = useCallback(() => {
@@ -934,7 +954,7 @@ export default function App() {
             case "help":
               // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
               // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
-              return <HelpPage status={deviceStatus} />;
+              return <HelpPage status={deviceStatus} focus={helpFocus} />;
             case "more":
               return (
                 <MorePage

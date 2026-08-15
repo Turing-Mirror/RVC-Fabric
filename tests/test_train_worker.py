@@ -69,7 +69,13 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(r["sample_rate"], "48k")
         self.assertEqual(r["total_epoch"], 200)
         self.assertEqual(r["f0_method"], "rmvpe")
+        self.assertFalse(r["save_every_weights"])
         self.assertGreaterEqual(r["n_cpu"], 1)
+
+    def test_rejects_unknown_f0_method(self):
+        with self.assertRaises(SystemExit):
+            with _Capture():
+                tw.normalize({"exp": "x", "f0_method": "crepe"})
 
     def test_zero_and_negative_counts_are_clamped(self):
         # 0 轮训练、0 batch 都会让下游脚本以除零或空 loader 崩掉。
@@ -212,6 +218,31 @@ class MetaSrTests(unittest.TestCase):
             self.assertFalse((exp / "1_16k_wavs").exists())
             self.assertFalse((exp / "filelist.txt").exists())
             self.assertFalse((exp / "tm_meta.json").exists())
+
+
+class PublishVoiceTests(unittest.TestCase):
+    def test_copies_pth_and_index_into_user_models(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            weights = root / "assets" / "weights" / "v.pth"
+            weights.parent.mkdir(parents=True)
+            weights.write_bytes(b"pth")
+            idx = root / "logs" / "v" / "added.index"
+            idx.parent.mkdir(parents=True)
+            idx.write_bytes(b"idx")
+            dest = tw.publish_voice(
+                root, {"exp": "v", "sample_rate": "48k"}, weights, idx
+            )
+            self.assertIsNotNone(dest)
+            self.assertTrue((root / "User_Data" / "models" / "v" / "v.pth").is_file())
+            self.assertTrue((root / "User_Data" / "models" / "v" / "added.index").is_file())
+            side = json.loads(
+                (root / "User_Data" / "models" / "v" / "config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(side["source"], "trained")
+            self.assertEqual(side["sample_rate"], "48k")
 
 
 class CountAudioTests(unittest.TestCase):

@@ -697,6 +697,12 @@ fn tools_open_downloads(
     )
 }
 
+/// 工具窗口点「查看说明」：主窗口跳到说明页对应段。
+#[tauri::command]
+fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), String> {
+    tool_window::focus_main_help(&app, section.as_deref().unwrap_or("train"))
+}
+
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
 #[tauri::command]
 async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1497,6 +1503,7 @@ pub fn run() {
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
             tools_open,
+            tools_open_help,
             ui_source,
             shell_version,
             ui_ready,

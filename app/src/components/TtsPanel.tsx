@@ -8,6 +8,7 @@ import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { listVoices, type VoiceModel } from "../lib/voices";
+import { askConfirm } from "../lib/webDialog";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -203,6 +204,7 @@ function StsSection() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef(input);
   inputRef.current = input;
+  const lastHomePath = useRef("");
 
   const pickVoice = (m: VoiceModel | undefined) => {
     if (!m || !m.path) return;
@@ -227,8 +229,10 @@ function StsSection() {
         : undefined;
     const byIdxUsable =
       byIdx && usable.some((m) => samePath(m.path, byIdx.path)) ? byIdx : undefined;
-    const chosen = byPath || byIdxUsable || usable[0];
+    // 首页当前音色优先：上次转换用过的路径不能盖住刚换的最近模型。
+    const chosen = byIdxUsable || byPath || usable[0];
     if (chosen) {
+      if (byIdxUsable) lastHomePath.current = byIdxUsable.path;
       pickVoice(chosen);
     } else if (s.model_path) {
       setModelPath(s.model_path);
@@ -304,10 +308,16 @@ function StsSection() {
     });
     // 首页换音色（含最近三卡）时本窗要跟过去。工具窗是独立 webview，
     // 不听事件就一直停在打开时的那一个。
-    void listen<{ model?: VoiceModel }>("voices-changed", (ev) => {
-      const m = ev.payload?.model;
+    const followHome = (m?: VoiceModel | null) => {
       if (m?.path && !m.missing) {
+        lastHomePath.current = m.path;
         pickVoice(m);
+        return true;
+      }
+      return false;
+    };
+    void listen<{ model?: VoiceModel }>("voices-changed", (ev) => {
+      if (followHome(ev.payload?.model)) {
         void listVoices()
           .then((cat) => {
             setVoices(
@@ -321,6 +331,27 @@ function StsSection() {
       }
       void load(false);
     }).then((fn) => {
+      if (disposed) fn();
+      else unsubs.push(fn);
+    });
+    void listen<{ config?: { last_model_path?: string } }>(
+      "config-changed",
+      (ev) => {
+        const p = ev.payload?.config?.last_model_path || "";
+        if (!p || samePath(p, lastHomePath.current)) return;
+        lastHomePath.current = p;
+        void listVoices()
+          .then((cat) => {
+            const usable = (cat.models || []).filter(
+              (x) => x.path && !x.missing && String(x.path).length > 0,
+            );
+            setVoices(usable);
+            const hit = usable.find((x) => samePath(x.path, p));
+            if (hit) pickVoice(hit);
+          })
+          .catch(() => undefined);
+      },
+    ).then((fn) => {
       if (disposed) fn();
       else unsubs.push(fn);
     });
@@ -464,7 +495,7 @@ function StsSection() {
   };
 
   const removeFile = async (f: InputFile) => {
-    if (!window.confirm(t("s.stsDeleteConfirm", { v0: f.name }))) return;
+    if (!(await askConfirm(t("s.stsDeleteConfirm", { v0: f.name })))) return;
     if (playing === f.path) stopPlay();
     try {
       await invoke("sts_delete_input", { input, path: f.path });
@@ -477,14 +508,7 @@ function StsSection() {
 
   const start = async () => {
     if (runningRef.current || recordingRef.current) return;
-    // 离线转换要独占显存，后端会先杀掉实时变声。那是用户正在用的东西，不能
-    // 不打招呼就停——现问一次状态，别拿进面板时的旧值判断。
-    try {
-      const now = await invoke<StsStatus>("sts_status");
-      if (now.worker_alive && !window.confirm(t("s.stsStopWorkerConfirm"))) return;
-    } catch {
-      // 状态问不到就照原样往下走，后端还会再判一次。
-    }
+    // 实时 worker 还活着就走热路径（复用已加载的模型），不再先杀进程。
     setMsg("");
     setProg({ phase: "start", done: 0, total: 1, pct: 0, message: t("s.090840132b") });
     setSkipped([]);

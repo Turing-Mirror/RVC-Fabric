@@ -18,6 +18,12 @@ use crate::voices::safe_model_dir_name;
 const CNB_RAW_MAIN: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main";
 const MIN_PTH_BYTES: u64 = 50_000;
 
+fn progress_message(phase: &str) -> String {
+    download::parse_retry_attempt(phase)
+        .map(|n| crate::i18n::te("s.dlReconnect", &n))
+        .unwrap_or_else(|| phase.to_string())
+}
+
 /// Per-voice cancel flags. A single global flag meant that cancelling one
 /// download killed every other in-flight one, and that starting a second
 /// install reset the first one's cancel state — so concurrent installs were
@@ -356,6 +362,14 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                     obj.insert("origin_label".into(), json!(origin_label));
                     let size = obj.get("size_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
                     obj.insert("size_label".into(), json!(format_size(size)));
+                    let cover_hint = obj
+                        .get("cover_url")
+                        .and_then(|x| x.as_str())
+                        .or_else(|| obj.get("cover").and_then(|x| x.as_str()))
+                        .unwrap_or("");
+                    if let Some(local) = local_banner_for_hint(root, cover_hint) {
+                        obj.insert("cover_local".into(), json!(local));
+                    }
                 }
             }
         }
@@ -424,6 +438,10 @@ fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Ok(url.to_string()); // 非 http（如 asset://）原样返回
     }
+    // 本机有图就先用：远程 404 / 国内访问 CNB 挂掉时，优香这类条目不再空白。
+    if let Some(local) = local_banner_for_hint(root, url) {
+        return Ok(local);
+    }
     let dir = paths::user_data(root).join("cover_cache");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let key = hex::encode(sha2::Sha256::digest(url.as_bytes()));
@@ -435,41 +453,76 @@ fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
         .timeout(std::time::Duration::from_secs(8)) // 封面几十 KB，8 秒足够；挂了快速失败交给前端重试
         .build()
         .map_err(|e| e.to_string())?;
+    let mut last_err = String::new();
+    for cand in cover_download_candidates(url) {
+        match fetch_cover_bytes(&client, &cand) {
+            Ok(bytes) => {
+                let tmp = dir.join(format!("{}.tmp", &key[..24]));
+                fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+                fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+                return Ok(dest.to_string_lossy().into_owned());
+            }
+            Err(e) => last_err = e,
+        }
+    }
+    local_banner_for_hint(root, url).ok_or(last_err)
+}
+
+fn fetch_cover_bytes(
+    client: &reqwest::blocking::Client,
+    url: &str,
+) -> Result<Vec<u8>, String> {
     let resp = client.get(url).send().map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return local_banner_for_url(root, url).ok_or_else(|| format!("HTTP {}", resp.status()));
+        return Err(format!("HTTP {}", resp.status()));
     }
     let bytes = resp.bytes().map_err(|e| e.to_string())?;
     // 封面是几十 KB 的 jpg；小于 100B 不像图，大于 8MB 不像封面。
     if bytes.len() < 100 || bytes.len() > 8 * 1024 * 1024 {
-        return local_banner_for_url(root, url)
-            .ok_or_else(|| format!("unexpected size {}", bytes.len()));
+        return Err(format!("unexpected size {}", bytes.len()));
     }
-    // 原子写：先写临时名再 rename，崩溃也不会留半个文件。
-    let tmp = dir.join(format!("{}.tmp", &key[..24]));
-    fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
-    Ok(dest.to_string_lossy().into_owned())
+    Ok(bytes.to_vec())
 }
 
-/// 远程封面挂了时，用文件名去本机 ch-banner 里找（开发仓 / 已缓存的封面）。
-fn local_banner_for_url(root: &Path, url: &str) -> Option<String> {
-    let name = url
-        .rsplit('/')
+/// 发布附件 404 时再试 git-raw（ch-banner 进仓、covers 标签可能漏传）。
+fn cover_download_candidates(url: &str) -> Vec<String> {
+    let mut out = vec![url.to_string()];
+    if let Some(name) = banner_file_name(url) {
+        let raw = format!("{CNB_RAW_MAIN}/ch-banner/{name}");
+        if raw != url {
+            out.push(raw);
+        }
+    }
+    out
+}
+
+fn banner_file_name(hint: &str) -> Option<String> {
+    let name = hint
+        .rsplit(['/', '\\'])
         .next()?
         .split('?')
         .next()?
         .trim();
-    if name.is_empty() || name.contains("..") || name.contains('\\') {
+    if name.is_empty() || name.contains("..") {
         return None;
     }
+    Some(name.to_string())
+}
+
+/// 远程封面挂了时，用文件名去本机 ch-banner 里找（开发仓 / 已缓存的封面）。
+fn local_banner_for_url(root: &Path, url: &str) -> Option<String> {
+    local_banner_for_hint(root, url)
+}
+
+fn local_banner_for_hint(root: &Path, hint: &str) -> Option<String> {
+    let name = banner_file_name(hint)?;
     let dirs = [
         paths::ch_banner_dir(root),
         root.join("ch-banner"),
         root.join("CNB-GIT-RELEASE").join("ch-banner"),
     ];
     for base in dirs {
-        let p = base.join(name);
+        let p = base.join(&name);
         if p.is_file() && p.metadata().map(|m| m.len()).unwrap_or(0) > 100 {
             return Some(p.to_string_lossy().into_owned());
         }
@@ -926,7 +979,7 @@ pub fn install_voice_entry(
                     "done": done,
                     "total": total,
                     "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                    "message": msg,
+                    "message": progress_message(msg),
                 }),
             );
         });
@@ -992,7 +1045,7 @@ pub fn install_voice_entry(
                 "done": done,
                 "total": total,
                 "percent": if total > 0 { (done as f64 / total as f64 * 100.0) as u32 } else { 0 },
-                "message": msg,
+                "message": progress_message(msg),
             }),
         );
     });
@@ -1553,6 +1606,20 @@ mod tests {
         let got = local_banner_for_url(&root, url).expect("should find local yuuka");
         assert!(got.ends_with("tp-yuuka.jpg"), "{got}");
         assert!(local_banner_for_url(&root, "https://x/covers/..").is_none());
+        // 相对路径 cover 字段也能对上本机文件。
+        let rel = local_banner_for_hint(&root, "ch-banner/tp-yuuka.jpg");
+        assert!(rel.unwrap().ends_with("tp-yuuka.jpg"));
+        // 本机有图时不再去网上撞 404。
+        let resolved = resolve_cover_url(&root, url).expect("local first");
+        assert!(resolved.ends_with("tp-yuuka.jpg"), "{resolved}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cover_download_adds_git_raw_fallback() {
+        let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-yuuka.jpg";
+        let c = cover_download_candidates(url);
+        assert_eq!(c[0], url);
+        assert!(c.iter().any(|u| u.ends_with("/ch-banner/tp-yuuka.jpg")), "{c:?}");
     }
 }

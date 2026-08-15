@@ -5,6 +5,7 @@ import { SeparatePanel } from "./SeparatePanel";
 import { TrainPanel } from "./TrainPanel";
 import { TtsPanel } from "./TtsPanel";
 import { t } from "../i18n/t";
+import { WebDialogHost } from "./WebDialog";
 
 /** 地址里带的 `#/tool/<kind>` —— 主窗口和工具窗口用的是同一份前端。 */
 export type ToolKind = "separate" | "train" | "tts";
@@ -65,6 +66,7 @@ export function ToolWindow({ kind }: { kind: ToolKind }) {
         {kind === "train" ? <TrainPanel /> : null}
         {kind === "tts" ? <TtsPanel /> : null}
       </div>
+      <WebDialogHost />
     </div>
   );
 }

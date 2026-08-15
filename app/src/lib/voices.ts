@@ -81,6 +81,8 @@ export type StoreVoice = {
   group_i18n?: Record<string, string>;
   origin?: string;
   origin_label?: string;
+  /** 本机 ch-banner 绝对路径；远程封面挂了时走 asset 协议。 */
+  cover_local?: string;
   source_url?: string;
   official?: boolean;
   installed?: boolean;

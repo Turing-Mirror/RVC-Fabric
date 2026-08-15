@@ -18,6 +18,10 @@
     "maximize": "Maximizar",
     "close": "Cerrar"
   },
+  "dialog": {
+    "ok": "Aceptar",
+    "cancel": "Cancelar"
+  },
   "store": {
     "allSeries": "Todas las series",
     "searchHint": "Buscar voces / series / clubes / autores…",
@@ -314,7 +318,7 @@
     "002dcbcd28": "Raíz del producto detectada automáticamente",
     "004a3a2b67": "¿No sabes usarlo? Ve a Ayuda",
     "007e8f085e": "Paquete de voz {e}",
-    "0096454995": "Guarda varios presets de parámetros (tono/efectos/rendimiento) por voz, cambia entre ellos con un clic y expórtalos o importa los de otros.",
+    "0096454995": "Cada voz tiene sus parámetros por defecto; los cambios de tono/efectos/rendimiento se guardan en el perfil actual. También puedes guardar más presets y cambiarlos, exportarlos o importarlos.",
     "0196cf51cf": "Prueba de rendimiento realizada: {}",
     "01eba6e7b6": "Faltan archivos de la voz o están incompletos",
     "02791c87b8": "Envolvente de volumen",
@@ -1361,6 +1365,9 @@
     "stsHotWorkerGone": "El proceso del motor se cerró durante la conversión. Inténtalo de nuevo; si se repite, exporta los registros desde Más - Recopilar diagnósticos.",
     "stsHotStalled": "El motor dejó de responder, así que se interrumpió la conversión. Inténtalo de nuevo.",
     "stsHotFailed": "La conversión falló. Consulta el registro de esta ejecución en User_Data/logs/sts/.",
+    "dlReconnect": "Fallo de conexión, reconectando (intento {v0})…",
+    "dlGaveUp": "Se reintentó automáticamente {v0} veces y sigue fallando.",
+    "dlFailedHelp": "Puedes probar:\n• Comprueba la red o cambia de red (por ejemplo el punto de acceso del móvil)\n• Desactiva o cambia el proxy / VPN\n• Espera un momento si el servidor está ocupado\n• Si sigue fallando, escanea el QR del grupo QQ en Más (1077458748) y avísanos",
     "dspPresetBadId": "El nombre del preajuste solo admite minúsculas, dígitos y guiones bajos, hasta 48 caracteres.",
     "dspPresetBadParams": "Los parámetros del preajuste no son válidos.",
     "dspPresetSaveFail": "No se pudo guardar el preajuste: {0}",

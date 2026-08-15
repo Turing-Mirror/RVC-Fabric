@@ -18,6 +18,10 @@
     "maximize": "Maximize",
     "close": "Close"
   },
+  "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel"
+  },
   "store": {
     "allSeries": "All series",
     "searchHint": "Search voices / series / clubs / authors…",
@@ -314,7 +318,7 @@
     "002dcbcd28": "Product root resolved automatically",
     "004a3a2b67": "Need help? Go to Help",
     "007e8f085e": "Voice pack {e}",
-    "0096454995": "Save multiple parameter presets (pitch / effects / performance) per voice, switch with one click, and export or import presets to share.",
+    "0096454995": "Each voice has its own default parameters; pitch / effects / performance edits save to the current profile. You can also save extra presets and switch, export, or import them.",
     "0196cf51cf": "Performance test done: {}",
     "01eba6e7b6": "Voice files missing or incomplete",
     "02791c87b8": "Loudness envelope",
@@ -1361,6 +1365,9 @@
     "stsHotWorkerGone": "The engine process exited during conversion. Try again; if it keeps happening, export the logs from More - Collect diagnostics.",
     "stsHotStalled": "The engine stopped responding, so the conversion was aborted. Try again.",
     "stsHotFailed": "Conversion failed. See this run's log under User_Data/logs/sts/ for details.",
+    "dlReconnect": "Connection failed, reconnecting (attempt {v0})…",
+    "dlGaveUp": "Automatically retried {v0} times and still failed.",
+    "dlFailedHelp": "You can try:\n• Check your network, or switch networks (for example a phone hotspot)\n• Turn off or switch your proxy / VPN\n• Wait a moment if the server is busy\n• If it still fails, scan the QQ group QR on the More page (1077458748) and tell us",
     "dspPresetBadId": "Preset names may only use lowercase letters, digits and underscores, up to 48 characters.",
     "dspPresetBadParams": "The preset parameters are malformed.",
     "dspPresetSaveFail": "Could not save the preset: {0}",

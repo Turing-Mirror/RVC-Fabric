@@ -503,9 +503,9 @@ fn protected_tool_pids() -> Vec<u32> {
 
 /// Kill Runtime python processes.
 ///
-/// * `orphans_only` — leftovers after 关闭变声. Parent-dead **or** reparented
-///   onto this shell (Windows does that when the worker dies). STS / train /
-///   separate / TTS pids the shell itself spawned are skipped.
+/// * `orphans_only` — leftovers after **强制结束** / 关应用. Parent-dead
+///   **or** reparented onto this shell. 普通「停止变声」走软停，不调这里。
+///   STS / train / separate / TTS pids the shell itself spawned are skipped.
 /// * otherwise — every python whose image lives under Runtime. Used on
 ///   关闭应用 so nothing is left behind.
 pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) {

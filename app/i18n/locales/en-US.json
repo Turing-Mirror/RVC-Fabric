@@ -1403,8 +1403,6 @@
     "dspSaved": "Saved “{v0}”",
     "dspDelete": "Delete",
     "dspClearVoice": "DSP only",
-    "dspOverlayHint": "With engine files present, the voice and DSP stack. Without them, DSP runs alone and the voice stays selected.",
-    "dspOnlyHint": "No voice selected: DSP only. After you download engine files and pick a voice, both layers stack.",
     "dspCleared": "Voice cleared. Start conversion again to run DSP only.",
     "dspAddEffect": "Add effect",
     "dspRemoveEffect": "Remove",

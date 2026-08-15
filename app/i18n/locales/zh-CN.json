@@ -1403,8 +1403,6 @@
     "dspSaved": "已保存「{v0}」",
     "dspDelete": "删除",
     "dspClearVoice": "只用 DSP",
-    "dspOverlayHint": "有引擎资源时，音色和 DSP 叠在一起。资源还没下则先只走 DSP，音色留着。",
-    "dspOnlyHint": "没选音色：只走 DSP。下完引擎资源并选用音色后，两层会叠在一起。",
     "dspCleared": "已去掉当前音色。重新开启变声后只走 DSP。",
     "dspAddEffect": "添加效果器",
     "dspRemoveEffect": "去掉",

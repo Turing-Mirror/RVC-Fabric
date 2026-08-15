@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
 import { ExtrasPanel } from "../components/ExtrasDialog";
-import { DspPlazaSection } from "../components/DspPlazaSection";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
 import {
@@ -15,6 +14,7 @@ import {
 
 /**
  * 广场：社区音色、投放、下载模型、更新日志，从上往下就是这个顺序。
+ * DSP 预设不上广场（内置在模型页）。
  *
  * 社区音色排第一，因为这是用户主动进广场的唯一理由 —— 投放和更新日志是我们
  * 想让他看的，音色是他想看的。把想让人看的东西摆在人想看的东西前面，结果是
@@ -172,12 +172,6 @@ function PlazaPageImpl({
 
       <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
         <StoreSection reloadToken={reloadToken} />
-      </Block>
-
-      {/* 排在社区音色之后：同样是往本机装东西，但这个是秒装的，
-          放在需要下几十 MB 的那些前面，用户更容易先试到。 */}
-      <Block title={t("s.dspPlazaTitle")}>
-        <DspPlazaSection reloadToken={reloadToken} />
       </Block>
 
       <Block title={t("s.aff4b0df8a")} note={items.length ? String(items.length) : ""}>

@@ -182,6 +182,53 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("dsp_only", src)
         self.assertIn('self.function = "fx"', src)
 
+    def test_apply_hot_keeps_fx_when_rvc_is_missing(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn('payload["function"] in ("vc", "im", "fx")', src)
+        self.assertIn('nxt == "vc"', src)
+        self.assertIn('nxt = "fx"', src)
+
+    def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
+        src = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
+            encoding="utf-8"
+        )
+        start = src.index("pub fn start_vc")
+        body = src[start : src.index("pub fn wait_vc_running", start)]
+        self.assertIn("dsp_only", body)
+        self.assertIn('json!("fx")', body)
+
+    def test_toggle_run_skips_engine_core_for_dsp_only(self):
+        src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("dspOnly", src)
+        self.assertIn("!dspOnly", src)
+        self.assertIn('function: dspOnly', src)
+
+    def test_plaza_does_not_host_dsp(self):
+        src = (ROOT / "app" / "src" / "pages" / "PlazaPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("DspPlazaSection", src)
+        self.assertFalse(
+            (ROOT / "app" / "src" / "components" / "DspPlazaSection.tsx").is_file()
+        )
+
+    def test_voices_clear_is_wired(self):
+        lib = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("fn voices_clear", lib)
+        self.assertIn("voices_clear,", lib)
+        voices = (ROOT / "app" / "src-tauri" / "src" / "voices.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pub fn clear_voice", voices)
+        cfg = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pub fn force_clear_model_paths", cfg)
+
 
 def _tone(f0=200.0, secs=1.0, harmonics=25):
     """谐波丰富的周期信号 —— 基频和共振峰都能量出来。"""

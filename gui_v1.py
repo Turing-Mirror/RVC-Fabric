@@ -2574,8 +2574,17 @@ if __name__ == "__main__":
                 self.gui_config.O_noise_reduce = bool(payload["O_noise_reduce"])
             if "use_pv" in payload:
                 self.gui_config.use_pv = bool(payload["use_pv"])
-            if "function" in payload and payload["function"] in ("vc", "im"):
-                self.function = payload["function"]
+            if "function" in payload and payload["function"] in ("vc", "im", "fx"):
+                nxt = str(payload["function"])
+                # 底栏只有 vc/bypass。纯 DSP 起流后壳还会按配置再推一次
+                # function=vc；这时 rvc 是 None，改成 vc 下一帧 infer 会炸。
+                if (
+                    nxt == "vc"
+                    and getattr(self, "rvc", None) is None
+                    and bool(getattr(self.gui_config, "dsp_enabled", False))
+                ):
+                    nxt = "fx"
+                self.function = nxt
             # Self-monitor can toggle while running
             mon_changed = False
             if "monitor_enabled" in payload:

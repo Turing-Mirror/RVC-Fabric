@@ -1198,6 +1198,16 @@ fn voices_select(
 }
 
 #[tauri::command]
+fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let out = voices::clear_voice(&root)?;
+    let _ = app.emit("voices-changed", &out);
+    let cfg = config::read(&root);
+    let _ = app.emit("config-changed", json!({ "config": cfg }));
+    Ok(out)
+}
+
+#[tauri::command]
 async fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -1536,6 +1546,7 @@ pub fn run() {
             provision_cancel,
             voices_list,
             voices_select,
+            voices_clear,
             voices_current,
             voices_index_list,
             voices_index_use,

@@ -68,6 +68,8 @@ export default function App() {
   void locale;
 
   const [page, setPage] = useState<PageId>("home");
+  const [modelsKind, setModelsKind] = useState<"rvc" | "dsp">("rvc");
+  const [modelsKindNonce, setModelsKindNonce] = useState(0);
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
   const [extrasReason, setExtrasReason] = useState("");
@@ -518,7 +520,16 @@ export default function App() {
 
   // One place where "the user picked a different voice" is applied, so the
   // home page and the models page can never drift apart on what the dock shows.
-  const openModels = useCallback(() => setPage("models"), []);
+  const openModels = useCallback(() => {
+    setModelsKind("rvc");
+    setModelsKindNonce((n) => n + 1);
+    setPage("models");
+  }, []);
+  const openDsp = useCallback(() => {
+    setModelsKind("dsp");
+    setModelsKindNonce((n) => n + 1);
+    setPage("models");
+  }, []);
   const openHelp = useCallback(() => setPage("help"), []);
   // 「下载模型」现在住在广场，「其他」页和工具入口都是跳过来。
   //
@@ -576,6 +587,13 @@ export default function App() {
     formant?: number;
     profileSummary?: string;
   }) => {
+    if (!model.path && !model.dir && !model.name) {
+      setVoiceName("");
+      setVoiceId("");
+      setVoiceTag("");
+      setVoicePos("");
+      return;
+    }
     setVoiceName(model.name || t("s.262d11e2d6"));
     setVoiceId(model.path || model.dir || model.name || "");
     if (p != null) setPitch(Number(p));
@@ -848,6 +866,7 @@ export default function App() {
                 <HomePage
                   currentId={voiceId}
                   onOpenModels={openModels}
+                  onOpenDsp={openDsp}
                   onVoiceChange={applyVoiceChange}
                 />
               );
@@ -867,6 +886,8 @@ export default function App() {
                   banner={plaza.feed.banner}
                   onVoiceChange={applyVoiceChange}
                   onOpenPlaza={openPlaza}
+                  focusKind={modelsKind}
+                  focusNonce={modelsKindNonce}
                 />
               );
             case "settings":

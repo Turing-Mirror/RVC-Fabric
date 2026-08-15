@@ -113,6 +113,11 @@ export async function listVoices(): Promise<VoicesCatalog> {
   return invoke<VoicesCatalog>("voices_list");
 }
 
+export async function clearVoice() {
+  if (!isTauri()) return { ok: false };
+  return invoke<{ ok?: boolean }>("voices_clear");
+}
+
 export async function selectVoice(m: Pick<VoiceModel, "path" | "dir" | "name">) {
   if (!isTauri()) return { ok: false };
   return invoke<{

@@ -912,7 +912,21 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     if let Some(v) = cfg.get("formant") {
         hot.insert("formant".into(), v.clone());
     }
-    if let Some(v) = cfg.get("function") {
+    let dsp_only = cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        && cfg
+            .get("pth_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .is_empty();
+    if dsp_only {
+        // 底栏 mode 只有 vc/bypass，配置里的 function 几乎总是 vc。
+        // 纯 DSP 必须推 fx，否则会把 start_vc 刚设的 fx 冲掉。
+        hot.insert("function".into(), json!("fx"));
+    } else if let Some(v) = cfg.get("function") {
         hot.insert("function".into(), v.clone());
     }
     if !hot.is_empty() {

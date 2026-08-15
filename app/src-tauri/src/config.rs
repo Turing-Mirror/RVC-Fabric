@@ -484,6 +484,38 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
     }))
 }
 
+/// 用户明确点「只用 DSP」：把 app_config 和 inuse 里的音色路径一起清掉。
+///
+/// 普通 `sync_inuse` 故意不让空 `pth_path` 覆盖已有值（见
+/// `empty_model_path_never_clobbers_a_real_one`）。这里是用户自己要丢掉音色，
+/// 必须写穿。
+pub fn force_clear_model_paths(root: &Path) -> Result<(), String> {
+    let mut saved = read_json(&paths::app_config_path(root));
+    for k in [
+        "pth_path",
+        "index_path",
+        "last_model",
+        "last_model_name",
+        "last_model_path",
+    ] {
+        saved.insert(k.into(), json!(""));
+    }
+    let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
+    write_atomic(&paths::app_config_path(root), &text)
+        .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+
+    let inuse = paths::inuse_config_path(root);
+    if let Some(parent) = inuse.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut out = read_json(&inuse);
+    out.insert("pth_path".into(), json!(""));
+    out.insert("index_path".into(), json!(""));
+    let text = serde_json::to_string_pretty(&Value::Object(out)).map_err(|e| e.to_string())?;
+    write_atomic(&inuse, &text).map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+    Ok(())
+}
+
 /// Newest plaza date (`YYMMDD`) the user has actually looked at. Drives the
 /// dot on the 广场 tab, which was previously hardcoded on and therefore never
 /// meant anything.
@@ -711,6 +743,36 @@ mod tests {
         sanitize_inuse(root, &mut m);
         assert_eq!(m["pth_path"], json!(""));
         assert_eq!(m["index_path"], json!("User_Data\\a.index"));
+    }
+
+    #[test]
+    fn force_clear_model_paths_writes_empty_into_inuse() {
+        let root = std::env::temp_dir().join("rvcf-force-clear-model");
+        let _ = std::fs::remove_dir_all(&root);
+        let inuse = root.join("configs").join("inuse");
+        let user = crate::paths::user_data(&root);
+        std::fs::create_dir_all(&inuse).unwrap();
+        std::fs::create_dir_all(&user).unwrap();
+        std::fs::write(
+            inuse.join("config.json"),
+            r#"{"pth_path":"User_Data/models/anon/anon.pth","index_path":"a.index"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            crate::paths::app_config_path(&root),
+            r#"{"pth_path":"User_Data/models/anon/anon.pth","last_model":"anon.pth"}"#,
+        )
+        .unwrap();
+
+        force_clear_model_paths(&root).unwrap();
+
+        let after = read_json(&paths::inuse_config_path(&root));
+        assert_eq!(after["pth_path"], json!(""));
+        assert_eq!(after["index_path"], json!(""));
+        let app = read_json(&paths::app_config_path(&root));
+        assert_eq!(app["pth_path"], json!(""));
+        assert_eq!(app["last_model"], json!(""));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

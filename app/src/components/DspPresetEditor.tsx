@@ -101,10 +101,14 @@ export function DspPresetEditor({
       .catch(() => setSpecs({ order: [], effects: {} }));
   }, []);
 
-  /** 只画这个预设用到的效果器 —— 十一个全铺开等于把人劝退。 */
+  /** 只画已经加进来的效果器。十一个全铺开等于把人劝退。 */
   const shown = useMemo(() => {
     if (!specs) return [];
     return specs.order.filter((k) => k in params);
+  }, [specs, params]);
+  const unused = useMemo(() => {
+    if (!specs) return [];
+    return specs.order.filter((k) => !(k in params));
   }, [specs, params]);
 
   // 拖一次推子 onChange 会连着触发几十下，每一下 setHot 都要写 app_config、
@@ -117,11 +121,26 @@ export function DspPresetEditor({
     };
   }, []);
 
-  const setParam = (effect: string, key: string, v: number) => {
-    const next = { ...params, [effect]: { ...params[effect], [key]: v } };
+  const push = (next: DspPreset["params"]) => {
     setParams(next);
     if (applyTimer.current) window.clearTimeout(applyTimer.current);
     applyTimer.current = window.setTimeout(() => onApply(next), 80);
+  };
+
+  const setParam = (effect: string, key: string, v: number) => {
+    push({ ...params, [effect]: { ...params[effect], [key]: v } });
+  };
+
+  const addEffect = (effect: string) => {
+    const spec = specs?.effects[effect];
+    if (!spec) return;
+    push({ ...params, [effect]: { ...spec.params } });
+  };
+
+  const removeEffect = (effect: string) => {
+    const next = { ...params };
+    delete next[effect];
+    push(next);
   };
 
   const save = async () => {
@@ -179,8 +198,17 @@ export function DspPresetEditor({
         if (!spec) return null;
         return (
           <div key={effect} className="mb-3">
-            <div className="text-[12.5px] text-[var(--meta)] mb-0.5">
-              {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="text-[12.5px] text-[var(--meta)]">
+                {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
+              </div>
+              <button
+                type="button"
+                onClick={() => removeEffect(effect)}
+                className="ml-auto border-0 bg-transparent p-0 text-[12px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+              >
+                {t("s.dspRemoveEffect")}
+              </button>
             </div>
             {Object.keys(spec.params).map((key) => {
               const [lo, hi] = spec.ranges[key] || [0, 1];
@@ -212,6 +240,21 @@ export function DspPresetEditor({
           </div>
         );
       })}
+
+      {unused.length ? (
+        <div className="mt-4 mb-2">
+          <div className="text-[12.5px] text-[var(--meta)] mb-1.5">
+            {t("s.dspAddEffect")}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unused.map((effect) => (
+              <Btn key={effect} onClick={() => addEffect(effect)}>
+                {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
+              </Btn>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2 mt-4">
         <input

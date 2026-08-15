@@ -189,13 +189,19 @@ function HelpPageImpl({ status }: HelpProps = {}) {
   const [vbReady, setVbReady] = useState<boolean | "checking" | "unknown">(
     "checking",
   );
+  const [vbInstalled, setVbInstalled] = useState(false);
+  const [vbRemoved, setVbRemoved] = useState(false);
   const [vbMsg, setVbMsg] = useState("");
-  const [vbBusy, setVbBusy] = useState(false);
+  const [vbBusy, setVbBusy] = useState<"install" | "uninstall" | false>(false);
 
   const refreshVb = async () => {
     try {
-      const st = await invoke<{ vbcable_pack_ready?: boolean }>("assets_status");
+      const st = await invoke<{
+        vbcable_pack_ready?: boolean;
+        vbcable_installed?: boolean;
+      }>("assets_status");
       setVbReady(!!st.vbcable_pack_ready);
+      setVbInstalled(!!st.vbcable_installed);
     } catch {
       setVbReady("unknown");
     }
@@ -206,7 +212,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
 
   const installVb = async () => {
     if (vbBusy) return;
-    setVbBusy(true);
+    setVbBusy("install");
     setVbMsg("");
     try {
       if (vbReady !== true) {
@@ -223,7 +229,27 @@ function HelpPageImpl({ status }: HelpProps = {}) {
       setVbMsg(t("s.vbcableInstalling"));
       // 静默安装，装完才返回。这里的等待就是驱动真正在装的那段时间。
       await invoke("assets_install_vbcable");
+      setVbRemoved(false);
       setVbMsg(t("s.vbcableDone"));
+      await refreshVb();
+    } catch (e) {
+      setVbMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setVbBusy(false);
+    }
+  };
+
+  const uninstallVb = async () => {
+    if (vbBusy) return;
+    setVbBusy("uninstall");
+    setVbMsg("");
+    try {
+      setVbMsg(t("s.vbcableUninstalling"));
+      // 静默卸载，装完才返回。优先跑系统里那份官方卸载程序。
+      await invoke("assets_uninstall_vbcable");
+      setVbRemoved(true);
+      setVbMsg(t("s.vbcableUninstalled"));
+      await refreshVb();
     } catch (e) {
       setVbMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -239,6 +265,9 @@ function HelpPageImpl({ status }: HelpProps = {}) {
   const found = detectRoutes(names);
   const hasVirtual = found.some((f) => f.kind === "virtual");
   const hasCable = found.some((f) => f.label === "VB-Cable");
+  // 设备列表要重启后才出现；Program Files 里的官方卸载程序才是「已经装上」
+  // 的即时证据。刚卸完、重启前两边都可能还在，用 vbRemoved 盖住卸载按钮。
+  const canUninstall = !vbRemoved && (hasCable || vbInstalled);
   const faq = buildFaq();
 
   return (
@@ -274,7 +303,7 @@ function HelpPageImpl({ status }: HelpProps = {}) {
             titleTip={tip(t("s.7d7d710ba5"))}
             desc={
               vbMsg ||
-              (hasCable
+              (canUninstall
                 ? t("s.3d2c784f94")
                 : vbReady === "checking"
                 ? t("s.481ee2d4bc")
@@ -285,9 +314,26 @@ function HelpPageImpl({ status }: HelpProps = {}) {
                     : t("s.7be46937d4"))
             }
             right={
-              <Btn disabled={vbBusy} onClick={() => void installVb()}>
-                {vbBusy ? t("s.1cac8ac7f5") : t("s.b386a7fb53")}
-              </Btn>
+              <>
+                {canUninstall ? (
+                  <Btn
+                    disabled={!!vbBusy}
+                    onClick={() => void uninstallVb()}
+                  >
+                    {vbBusy === "uninstall"
+                      ? t("s.1cac8ac7f5")
+                      : t("s.vbcableUninstall")}
+                  </Btn>
+                ) : null}
+                <Btn
+                  disabled={!!vbBusy}
+                  onClick={() => void installVb()}
+                >
+                  {vbBusy === "install"
+                    ? t("s.1cac8ac7f5")
+                    : t("s.b386a7fb53")}
+                </Btn>
+              </>
             }
           />
         </Group>

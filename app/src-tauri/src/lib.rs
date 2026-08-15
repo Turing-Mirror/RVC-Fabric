@@ -155,6 +155,18 @@ async fn assets_install_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Val
     .map_err(|e| e.to_string())?
 }
 
+/// 静默卸载虚拟声卡。优先跑 Program Files 里那份官方卸载程序（和系统
+/// 「应用和功能」同一条），没有再退回软件下的安装包。
+#[tauri::command]
+async fn assets_uninstall_vbcable(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_assets::uninstall_vbcable(&root).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Full effective settings (defaults overlaid with saved values).
 #[tauri::command]
 fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1520,6 +1532,7 @@ pub fn run() {
             assets_ensure_engine_core,
             assets_ensure_vbcable,
             assets_install_vbcable,
+            assets_uninstall_vbcable,
             product_root,
             engine_status,
             engine_ensure,

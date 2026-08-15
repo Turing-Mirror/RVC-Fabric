@@ -16,6 +16,7 @@ export type AssetsStatus = {
   engine_core_ready?: boolean;
   engine_core_missing?: string[];
   vbcable_pack_ready?: boolean;
+  vbcable_installed?: boolean;
 };
 
 export type OpenDownloadModelsOpts = {

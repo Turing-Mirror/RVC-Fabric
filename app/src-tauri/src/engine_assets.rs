@@ -257,25 +257,79 @@ pub fn ensure_vbcable_pack(
     }
 }
 
-/// 静默安装 VB-Cable：不弹官方安装界面，装完才返回。
+/// Official install location after a successful setup. Windows "Apps &
+/// features" points here. Uninstall must run this copy when it exists;
+/// the downloaded pack is only a fallback (user may have installed Cable
+/// themselves, or the pack has not been fetched yet).
+fn system_vbcable_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Ok(pf) = std::env::var(key) {
+            let dir = PathBuf::from(pf).join("VB").join("CABLE");
+            if !out.iter().any(|p| p == &dir) {
+                out.push(dir);
+            }
+        }
+    }
+    out
+}
+
+pub fn vbcable_system_dir() -> Option<PathBuf> {
+    system_vbcable_dirs()
+        .into_iter()
+        .find(|d| find_vbcable_setup(d).is_some())
+}
+
+/// Driver is on the machine (setup lives under Program Files), not just
+/// that we have a downloaded pack. Device names only appear after reboot,
+/// so the Help page cannot rely on the worker list alone.
+pub fn vbcable_installed() -> bool {
+    vbcable_system_dir().is_some()
+}
+
+fn pick_setup_dir(root: &Path, prefer_system: bool) -> Result<(PathBuf, PathBuf), String> {
+    if prefer_system {
+        if let Some(dir) = vbcable_system_dir() {
+            if let Some(setup) = find_vbcable_setup(&dir) {
+                return Ok((dir, setup));
+            }
+        }
+    }
+    let dir = vbcable_dir(root);
+    let setup = find_vbcable_setup(&dir).ok_or(crate::i18n::t("s.vbcableNoSetup"))?;
+    Ok((dir, setup))
+}
+
+/// `-i -h` / `-u -h` 是 VB-Audio 官方静默参数（i=install，u=uninstall，h=不显示界面）。
+/// 提权躲不掉 —— 动的是驱动，系统那道 UAC 必须由用户点确认。
 ///
-/// `-i -h` 是 VB-Audio 官方支持的静默参数（i=install，h=不显示界面）。
-/// 提权躲不掉 —— 装的是驱动，系统那道 UAC 必须由用户点确认。
-///
-/// cwd 必须是 VBCABLE 目录：安装程序要从工作目录里找 INF/SYS，找不到就装不上。
+/// cwd 必须是安装程序所在目录：它要从工作目录里找 INF/SYS，找不到就装不上。
 ///
 /// `-Wait -PassThru` 之后把安装程序的退出码原样带回来。以前是 spawn 完就
 /// 返回，界面只能说「已启动安装程序」，装成没装成谁都不知道。
 #[cfg(target_os = "windows")]
-pub fn install_vbcable(root: &Path) -> Result<(), String> {
+fn run_vbcable_setup(setup: &Path, dir: &Path, uninstall: bool) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
 
-    let dir = vbcable_dir(root);
-    let setup = find_vbcable_setup(&dir).ok_or(crate::i18n::t("s.vbcableNoSetup"))?;
+    let args = if uninstall {
+        "'-u','-h'"
+    } else {
+        "'-i','-h'"
+    };
+    let fail_key = if uninstall {
+        "s.vbcableUninstallFailedCode"
+    } else {
+        "s.vbcableFailedCode"
+    };
+    let cancel_key = if uninstall {
+        "s.vbcableUninstallCancelled"
+    } else {
+        "s.vbcableCancelled"
+    };
     // UAC 被用户点「否」时 Start-Process 抛异常，单靠退出码分不出「拒绝提权」
     // 和「装失败」。这里把它归一成 1223（ERROR_CANCELLED）。
     let ps = format!(
-        "try {{ $p = Start-Process -FilePath '{}' -ArgumentList '-i','-h' \
+        "try {{ $p = Start-Process -FilePath '{}' -ArgumentList {args} \
          -WorkingDirectory '{}' -Verb RunAs -Wait -PassThru }} catch {{ exit 1223 }}; \
          exit $p.ExitCode",
         setup.to_string_lossy().replace('\'', "''"),
@@ -294,12 +348,24 @@ pub fn install_vbcable(root: &Path) -> Result<(), String> {
         .status()
         .map_err(|e| crate::i18n::te("s.23220ab448", &(e)))?;
     match status.code() {
-        // 3010 = 装好了，等重启生效。对用户来说是成功。
+        // 3010 = 做完了，等重启生效。对用户来说是成功。
         Some(0) | Some(3010) => Ok(()),
-        Some(1223) => Err(crate::i18n::t("s.vbcableCancelled")),
-        Some(c) => Err(crate::i18n::te("s.vbcableFailedCode", &c)),
-        None => Err(crate::i18n::te("s.vbcableFailedCode", &"?")),
+        Some(1223) => Err(crate::i18n::t(cancel_key)),
+        Some(c) => Err(crate::i18n::te(fail_key, &c)),
+        None => Err(crate::i18n::te(fail_key, &"?")),
     }
+}
+
+#[cfg(target_os = "windows")]
+pub fn install_vbcable(root: &Path) -> Result<(), String> {
+    let (dir, setup) = pick_setup_dir(root, false)?;
+    run_vbcable_setup(&setup, &dir, false)
+}
+
+#[cfg(target_os = "windows")]
+pub fn uninstall_vbcable(root: &Path) -> Result<(), String> {
+    let (dir, setup) = pick_setup_dir(root, true)?;
+    run_vbcable_setup(&setup, &dir, true)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -307,13 +373,19 @@ pub fn install_vbcable(_root: &Path) -> Result<(), String> {
     Err(crate::i18n::t("s.vbcableWindowsOnly").into())
 }
 
-/// Status for the first-run gate and the 「其他」page.
+#[cfg(not(target_os = "windows"))]
+pub fn uninstall_vbcable(_root: &Path) -> Result<(), String> {
+    Err(crate::i18n::t("s.vbcableWindowsOnly").into())
+}
+
+/// Status for the first-run gate and the Help page.
 pub fn assets_status(root: &Path) -> Value {
     let missing = engine_core_missing(root);
     json!({
         "engine_core_ready": missing.is_empty(),
         "engine_core_missing": missing,
         "vbcable_pack_ready": vbcable_pack_ready(root),
+        "vbcable_installed": vbcable_installed(),
         "vbcable_dir": vbcable_dir(root).to_string_lossy(),
     })
 }
@@ -371,6 +443,18 @@ mod tests {
         assert!(u[0].starts_with(CNB_REPO));
         assert!(u[0].ends_with(ENGINE_CORE_SHA));
         assert!(u[0].contains("/-/lfs/"));
+    }
+
+    #[test]
+    fn system_vbcable_dirs_are_under_program_files() {
+        let dirs = system_vbcable_dirs();
+        for d in &dirs {
+            assert!(
+                d.ends_with(Path::new("VB").join("CABLE")),
+                "unexpected system cable dir: {}",
+                d.display()
+            );
+        }
     }
 
     #[test]

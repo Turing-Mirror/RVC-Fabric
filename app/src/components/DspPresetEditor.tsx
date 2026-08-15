@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { RangeBar } from "./controls";
-import { Btn } from "./ui";
+import { Btn, HelpMark } from "./ui";
+import { dspTips } from "../lib/dspTips";
 import { t } from "../i18n/t";
 import type { DspPreset } from "./DspPresetGrid";
 
@@ -180,8 +181,9 @@ export function DspPresetEditor({
   return (
     <div className="mt-6 pt-5 border-t border-[var(--hairline)]">
       <div className="flex items-center gap-3 mb-2">
-        <h4 className="m-0 text-[14px] font-semibold">
+        <h4 className="m-0 text-[14px] font-semibold flex items-center gap-[9px]">
           {t("s.dspEditTitle", { v0: preset.name })}
+          <HelpMark title={dspTips().edit} />
         </h4>
         {preset.source === "user" ? (
           <Btn className="ml-auto" disabled={busy} onClick={() => void remove()}>
@@ -199,8 +201,11 @@ export function DspPresetEditor({
         return (
           <div key={effect} className="mb-3">
             <div className="flex items-center gap-2 mb-0.5">
-              <div className="text-[12.5px] text-[var(--meta)]">
+              <div className="text-[12.5px] text-[var(--meta)] flex items-center gap-[9px]">
                 {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
+                {dspTips().fx[effect] ? (
+                  <HelpMark title={dspTips().fx[effect]} />
+                ) : null}
               </div>
               <button
                 type="button"
@@ -243,8 +248,9 @@ export function DspPresetEditor({
 
       {unused.length ? (
         <div className="mt-4 mb-2">
-          <div className="text-[12.5px] text-[var(--meta)] mb-1.5">
+          <div className="text-[12.5px] text-[var(--meta)] mb-1.5 flex items-center gap-[9px]">
             {t("s.dspAddEffect")}
+            <HelpMark title={dspTips().add} />
           </div>
           <div className="flex flex-wrap gap-2">
             {unused.map((effect) => (

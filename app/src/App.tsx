@@ -26,7 +26,10 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { registerDownloadModelsOpener } from "./lib/downloadModels";
+import {
+  isEngineCoreReady,
+  registerDownloadModelsOpener,
+} from "./lib/downloadModels";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
 
@@ -70,6 +73,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [modelsKind, setModelsKind] = useState<"rvc" | "dsp">("rvc");
   const [modelsKindNonce, setModelsKindNonce] = useState(0);
+  const [coreReady, setCoreReady] = useState(true);
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
   const [extrasReason, setExtrasReason] = useState("");
@@ -98,6 +102,11 @@ export default function App() {
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    void isEngineCoreReady()
+      .then(setCoreReady)
+      .catch(() => {});
+  }, [page]);
   // 启动时自动查到的新版本。非空 = 弹一条「要不要现在装」。
   const [updateOffer, setUpdateOffer] = useState<UpdateInfo | null>(null);
 
@@ -1040,6 +1049,7 @@ export default function App() {
       <Dock
         voiceName={voiceName}
         dspName={dspName}
+        dspStacked={Boolean(voiceName && coreReady)}
         onStopDsp={stopDsp}
         voiceTag={voiceTag}
         voiceIndex={voicePos}

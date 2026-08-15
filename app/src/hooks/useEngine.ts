@@ -16,6 +16,7 @@ import {
 } from "../lib/engine";
 import type { OutputMode } from "../components/Dock";
 import { getConfig } from "../lib/config";
+import { isEngineCoreReady } from "../lib/downloadModels";
 import { t } from "../i18n/t";
 
 export function useEngine() {
@@ -183,16 +184,18 @@ export function useEngine() {
       );
       return;
     }
-    // RVC 要 hubert / rmvpe；纯 DSP（开了预设、没选音色）不碰那五件套。
-    // 停变声不需要查；只有要「开启」且会走 RVC 时才引导补全。
+    // 没引擎资源：开了 DSP 就纯走预设，音色留着，不拦去下 720MB。
+    // 有资源 + 选了音色 + DSP：两层叠着，这时才要 engine-core。
     const stopping =
       running || status.state === "starting" || startingRef.current;
     let dspOnly = false;
     if (!stopping) {
       try {
         const cfg = await getConfig();
-        dspOnly =
-          Boolean(cfg.dsp_enabled) && !String(cfg.pth_path || "").trim();
+        const dspOn = Boolean(cfg.dsp_enabled);
+        const hasPth = Boolean(String(cfg.pth_path || "").trim());
+        const coreReady = await isEngineCoreReady();
+        dspOnly = dspOn && (!hasPth || !coreReady);
       } catch {
         dspOnly = false;
       }

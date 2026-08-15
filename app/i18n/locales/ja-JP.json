@@ -1410,6 +1410,8 @@
     "dspDelete": "削除",
     "dspClearVoice": "DSP のみ",
     "dspClearVoiceHint": "今は選択中のボイスに重ねています。ここを押すと RVC を外して DSP だけになります。",
+    "dspOverlayHint": "エンジン資源があればボイスと DSP を重ねます。未ダウンロードなら DSP だけ動き、ボイスはそのまま残ります。",
+    "dspOnlyHint": "ボイス未選択：DSP のみ。資源を入れてボイスを選ぶと両方が重なります。",
     "dspCleared": "ボイスを外しました。変声を開き直すと DSP のみになります。",
     "dspAddEffect": "エフェクトを追加",
     "dspRemoveEffect": "外す",

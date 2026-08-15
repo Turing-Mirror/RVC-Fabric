@@ -1,5 +1,7 @@
 import { SegmentControl } from "./SegmentControl";
 import { RangeBar } from "./controls";
+import { HelpMark } from "./ui";
+import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
 
 export type OutputMode = "vc" | "bypass";
@@ -98,6 +100,7 @@ export function Dock({
         */}
         {dspName ? (
           <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-[var(--meta)]">
+            <HelpMark title={dspTips().stack} />
             {voiceName && dspStacked ? (
               <>
                 <span className="truncate max-w-[92px]">{voiceName}</span>

@@ -1,5 +1,6 @@
 import { useEffect, useState, memo } from "react";
-import { Btn, Block, PagePad } from "../components/ui";
+import { Btn, Block, HelpMark, PagePad } from "../components/ui";
+import { dspTips } from "../lib/dspTips";
 import { setHot } from "../lib/engine";
 import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 import { resolveCover, useCoverCache } from "../lib/cover";
@@ -223,7 +224,10 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
             <div className="flex justify-center gap-3 flex-wrap">
               <Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>
               {onOpenDsp ? (
-                <Btn onClick={onOpenDsp}>{t("s.dspHomeOpen")}</Btn>
+                <span className="inline-flex items-center gap-[9px]">
+                  <Btn onClick={onOpenDsp}>{t("s.dspHomeOpen")}</Btn>
+                  <HelpMark title={dspTips().home} />
+                </span>
               ) : null}
             </div>
           </Block>
@@ -341,7 +345,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
 function DspHomeEntry({ onOpen }: { onOpen?: () => void }) {
   if (!onOpen) return null;
   return (
-    <Block title={t("s.dspHomeTitle")}>
+    <Block title={t("s.dspHomeTitle")} titleTip={dspTips().home}>
       <button
         type="button"
         onClick={onOpen}

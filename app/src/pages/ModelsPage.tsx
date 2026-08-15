@@ -6,7 +6,8 @@ import { DspPresetEditor } from "../components/DspPresetEditor";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
-import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
+import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
 import { setHot } from "../lib/engine";
 import { getConfig } from "../lib/config";
@@ -420,6 +421,7 @@ function ModelsPageImpl({
               { id: "dsp", label: t("s.dspKindDsp") },
             ]}
           />
+          <HelpMark title={dspTips().kind} />
           {kind === "rvc" ? (
             <span className="ml-auto">
               <SegmentControl<SortKey>
@@ -438,17 +440,11 @@ function ModelsPageImpl({
         {kind === "dsp" ? (
           <div ref={gridRef}>
             {selectedKey ? (
-              <div className="mb-4 flex items-center gap-3 flex-wrap">
-                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug flex-1 min-w-[220px]">
-                  {t("s.dspOverlayHint")}
-                </p>
+              <div className="mb-4 flex items-center gap-[9px]">
                 <Btn onClick={() => void dropVoice()}>{t("s.dspClearVoice")}</Btn>
+                <HelpMark title={dspTips().clear} />
               </div>
-            ) : (
-              <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)] leading-snug">
-                {t("s.dspOnlyHint")}
-              </p>
-            )}
+            ) : null}
             <DspPresetGrid
               cols={cols}
               query={query}

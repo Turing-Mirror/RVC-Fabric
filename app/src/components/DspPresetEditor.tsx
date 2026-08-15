@@ -207,13 +207,18 @@ export function DspPresetEditor({
                   <HelpMark title={dspTips().fx[effect]} />
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => removeEffect(effect)}
-                className="ml-auto border-0 bg-transparent p-0 text-[12px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
-              >
-                {t("s.dspRemoveEffect")}
-              </button>
+              {/* 最后一个不给删：删空了 DSP 还显示开着，声音却一点没变，
+                  用户只会以为整个功能坏了。要不出声就关掉 DSP，那是另一个
+                  开关，不该从这里绕过去。 */}
+              {shown.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => removeEffect(effect)}
+                  className="ml-auto border-0 bg-transparent p-0 text-[12px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+                >
+                  {t("s.dspRemoveEffect")}
+                </button>
+              ) : null}
             </div>
             {Object.keys(spec.params).map((key) => {
               const [lo, hi] = spec.ranges[key] || [0, 1];

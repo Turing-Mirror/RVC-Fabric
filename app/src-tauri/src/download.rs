@@ -22,7 +22,7 @@ const MAX_CONNECTIONS: usize = 32;
 /// (only 404/500 are non-retryable inside the crate), so a 6 GB Runtime
 /// fetch used to die on the first blip. Wait ~3s and try again.
 const RETRY_WAIT: Duration = Duration::from_secs(3);
-const MAX_TRANSIENT_ATTEMPTS: u32 = 7;
+const MAX_TRANSIENT_ATTEMPTS: u32 = 5;
 
 /// What is being downloaded — same pipeline for all product artifacts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

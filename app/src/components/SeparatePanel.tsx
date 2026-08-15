@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
-import { ExtrasDialog } from "./ExtrasDialog";
+import { openDownloadModels } from "../lib/downloadModels";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 
@@ -39,7 +39,6 @@ export function SeparatePanel() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
-  const [extrasOpen, setExtrasOpen] = useState(false);
   const runningRef = useRef(false);
 
   const load = async () => {
@@ -125,13 +124,13 @@ export function SeparatePanel() {
             <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
             {needModels ? (
               <Btn
-                onClick={() => setExtrasOpen(true)}
+                onClick={() => openDownloadModels({ filter: "separate" })}
               >{t("s.7a218555fd")}</Btn>
             ) : null}
           </div>
         ) : (
           <div className="mb-3 flex justify-end">
-            <Btn onClick={() => setExtrasOpen(true)}>{t("s.1252c81119")}</Btn>
+            <Btn onClick={() => openDownloadModels({ filter: "separate" })}>{t("s.1252c81119")}</Btn>
           </div>
         )}
 
@@ -194,15 +193,6 @@ export function SeparatePanel() {
           </Btn>
         </div>
 
-        <ExtrasDialog
-          open={extrasOpen}
-          onClose={() => {
-            setExtrasOpen(false);
-            void load();
-          }}
-          filter="separate"
-          title={t("s.7a218555fd")}
-        />
     </ToolBody>
   );
 }

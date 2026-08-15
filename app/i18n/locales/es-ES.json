@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "Los parámetros del preajuste no son válidos.",
     "dspPresetSaveFail": "No se pudo guardar el preajuste: {0}",
     "dspPresetNotUser": "Los preajustes integrados no se pueden eliminar. Guarda un preajuste propio con el mismo nombre para sustituirlo.",
-    "dspPresetDeleteFail": "No se pudo eliminar el preajuste: {0}"
+    "dspPresetDeleteFail": "No se pudo eliminar el preajuste: {0}",
+    "toolMainWindowGone": "La ventana principal está cerrada. Vuelve a ella para descargar modelos."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -31,9 +31,21 @@ export function registerDownloadModelsOpener(fn: ModelsOpener | null): void {
   modelsOpener = fn;
 }
 
-/** 打开「广场 → 下载模型」（引擎资源卡 + 分离/训练列表）。 */
+/**
+ * 打开「广场 → 下载模型」。
+ *
+ * 主窗口里有注册好的 opener，直接跳广场。工具窗口（人声分离 / 训练音色 /
+ * 语音转换）是独立的 webview，没有广场也没有 App —— 那边改成把主窗口叫到
+ * 前面再跳，而不是就地弹一个塞不下的框。
+ */
 export function openDownloadModels(opts?: OpenDownloadModelsOpts): void {
-  modelsOpener?.(opts);
+  if (modelsOpener) {
+    modelsOpener(opts);
+    return;
+  }
+  void invoke("tools_open_downloads", { reason: opts?.reason || "" }).catch(() => {
+    /* 浏览器预览里没有 shell */
+  });
 }
 
 export async function getAssetsStatus(): Promise<AssetsStatus> {

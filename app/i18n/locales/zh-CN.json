@@ -1364,7 +1364,8 @@
     "dspPresetBadParams": "预设参数格式不对。",
     "dspPresetSaveFail": "预设保存失败：{0}",
     "dspPresetNotUser": "内置预设删不掉。想改的话，存一个同名的自定义预设就会盖住它。",
-    "dspPresetDeleteFail": "预设删除失败：{0}"
+    "dspPresetDeleteFail": "预设删除失败：{0}",
+    "toolMainWindowGone": "主窗口已关闭，请先回到主界面再下载模型。"
   },
   "extras": {
     "engineTitle": "引擎资源",

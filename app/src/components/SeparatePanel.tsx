@@ -9,6 +9,7 @@ import { t } from "../i18n/t";
 type Status = {
   runtime_ready?: boolean;
   worker_present?: boolean;
+  core_present?: boolean;
   model_dir?: string;
   models?: string[];
   busy?: boolean;
@@ -104,13 +105,17 @@ export function SeparatePanel() {
   };
 
   const needModels = !!st.runtime_ready && !!st.worker_present && !st.models?.length;
+  const needCore =
+    !!st.runtime_ready && !!st.worker_present && st.core_present === false;
   const blocked = !st.runtime_ready
     ? t("s.bc45fc14b1")
     : !st.worker_present
       ? t("s.92ba5de60f")
-      : needModels
-        ? t("s.f8893054c2")
-        : "";
+      : needCore
+        ? t("s.6ff3d83b8f")
+        : needModels
+          ? t("s.f8893054c2")
+          : "";
 
   const pct = prog?.total ? Math.round((prog.done / prog.total) * 100) : 0;
 

@@ -88,15 +88,18 @@ fn url_for(kind: &str) -> String {
 ///
 /// 与其把那个框塞进小窗口，不如根本不塞：下载模型本来就住在主窗口的广场里，
 /// 那儿有完整的高度和滚动，也是主窗口唯一的入口。工具窗口只负责把人带过去。
-pub fn focus_main_downloads(app: &AppHandle, reason: &str) -> Result<(), String> {
+pub fn focus_main_downloads(app: &AppHandle, reason: &str, filter: &str) -> Result<(), String> {
     let main = app
         .get_webview_window("main")
         .ok_or_else(|| crate::i18n::t("s.toolMainWindowGone"))?;
     let _ = main.unminimize();
     let _ = main.show();
     let _ = main.set_focus();
-    main.emit("open-download-models", json!({ "reason": reason }))
-        .map_err(|e| e.to_string())?;
+    main.emit(
+        "open-download-models",
+        json!({ "reason": reason, "filter": filter }),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

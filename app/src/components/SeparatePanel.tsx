@@ -127,7 +127,7 @@ export function SeparatePanel() {
         {blocked ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
-            {needModels ? (
+            {needModels || needCore ? (
               <Btn
                 onClick={() => openDownloadModels({ filter: "separate" })}
               >{t("s.7a218555fd")}</Btn>

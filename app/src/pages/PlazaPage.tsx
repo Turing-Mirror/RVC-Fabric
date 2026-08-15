@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
-import { ExtrasPanel } from "../components/ExtrasDialog";
+import { ExtrasPanel, type ExtrasFilter } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
 import {
@@ -42,6 +42,7 @@ function PlazaPageImpl({
   loading = false,
   onReload,
   downloadReason = "",
+  extrasFilter = "all",
   scrollToDownloads = 0,
 }: {
   feed: PlazaFeed;
@@ -49,6 +50,8 @@ function PlazaPageImpl({
   onReload?: () => void;
   /** 从工具入口跳过来时的说明（缺引擎资源等）。 */
   downloadReason?: string;
+  /** 从分离/训练跳过来时预选对应分类。 */
+  extrasFilter?: ExtrasFilter;
   /** 加一就滚到「下载模型」。用计数而不是布尔：连着跳两次也得再滚一次。 */
   scrollToDownloads?: number;
 }) {
@@ -190,7 +193,7 @@ function PlazaPageImpl({
 
       <Block title={t("s.1252c81119")}>
         <div id="download-models" ref={extrasRef} className="scroll-mt-4">
-          <ExtrasPanel filter="all" reason={downloadReason} />
+          <ExtrasPanel filter={extrasFilter} reason={downloadReason} />
         </div>
       </Block>
 

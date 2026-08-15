@@ -9,6 +9,7 @@ import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm } from "../lib/webDialog";
+import { openDownloadModels } from "../lib/downloadModels";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -574,7 +575,12 @@ function StsSection() {
   return (
     <>
       {blocked ? (
-        <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+          {st.engine_core_ready === false ? (
+            <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
+          ) : null}
+        </div>
       ) : null}
 
       <div>
@@ -983,7 +989,12 @@ function TtsSection() {
       <p className="m-0 mb-3 text-[12.5px] text-[var(--meta)]">{t("s.b052ea8cb8")}</p>
 
       {blocked ? (
-        <p className="m-0 mb-4 text-[13px] text-[#b8534f]">{blocked}</p>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+          {useRvc && !st.infer_present ? (
+            <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
+          ) : null}
+        </div>
       ) : null}
 
       <textarea

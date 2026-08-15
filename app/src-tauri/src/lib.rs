@@ -673,8 +673,16 @@ fn separate_cancel() {
 
 /// 工具窗口点「下载模型」：把主窗口叫到前面并跳到广场的下载区。
 #[tauri::command]
-fn tools_open_downloads(app: AppHandle, reason: Option<String>) -> Result<(), String> {
-    tool_window::focus_main_downloads(&app, reason.as_deref().unwrap_or(""))
+fn tools_open_downloads(
+    app: AppHandle,
+    reason: Option<String>,
+    filter: Option<String>,
+) -> Result<(), String> {
+    tool_window::focus_main_downloads(
+        &app,
+        reason.as_deref().unwrap_or(""),
+        filter.as_deref().unwrap_or(""),
+    )
 }
 
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。

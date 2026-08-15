@@ -252,6 +252,31 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("isEngineCoreReady", src)
         self.assertIn("!hasPth || !coreReady", src)
 
+    def test_tool_downloads_never_open_in_the_tool_window(self):
+        src = (ROOT / "app" / "src" / "lib" / "downloadModels.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('label === "main"', src)
+        self.assertIn("tools_open_downloads", src)
+        self.assertIn("filter:", src)
+        rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        sig = rust[rust.index("fn tools_open_downloads") : rust.index(
+            "tool_window::focus_main_downloads"
+        )]
+        self.assertIn("filter:", sig)
+        sep = (ROOT / "app" / "src" / "components" / "SeparatePanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('filter: "separate"', sep)
+        self.assertNotIn("ExtrasDialog", sep)
+        train = (ROOT / "app" / "src" / "components" / "TrainPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('filter: "train"', train)
+        self.assertNotIn("ExtrasDialog", train)
+
     def test_plaza_does_not_host_dsp(self):
         src = (ROOT / "app" / "src" / "pages" / "PlazaPage.tsx").read_text(
             encoding="utf-8"

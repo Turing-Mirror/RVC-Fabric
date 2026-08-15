@@ -180,7 +180,7 @@ export function TrainPanel() {
               {blocked.text}
               {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
             </p>
-            {needPretrained ? (
+            {needPretrained || !st.hubert_present ? (
               <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.0c593a479c")}</Btn>
             ) : null}
           </div>

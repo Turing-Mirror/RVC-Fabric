@@ -39,6 +39,8 @@ pub struct ConvertOpts {
     pub rms_mix_rate: f64,
     pub protect: f64,
     pub format: String,
+    pub sid: u32,
+    pub f0_file: String,
 }
 
 impl Default for ConvertOpts {
@@ -49,6 +51,8 @@ impl Default for ConvertOpts {
             rms_mix_rate: 0.25,
             protect: 0.33,
             format: "wav".into(),
+            sid: 0,
+            f0_file: String::new(),
         }
     }
 }
@@ -60,6 +64,8 @@ impl ConvertOpts {
         rms_mix_rate: Option<f64>,
         protect: Option<f64>,
         format: Option<String>,
+        sid: Option<u32>,
+        f0_file: Option<String>,
     ) -> Self {
         let mut o = Self::default();
         if let Some(n) = filter_radius {
@@ -85,6 +91,15 @@ impl ConvertOpts {
                 _ => "wav",
             }
             .into();
+        }
+        if let Some(n) = sid {
+            o.sid = n.min(2333);
+        }
+        if let Some(s) = f0_file {
+            let t = s.trim();
+            if t.is_empty() || Path::new(t).is_file() {
+                o.f0_file = t.to_string();
+            }
         }
         o
     }
@@ -791,6 +806,8 @@ fn run_hot(
     payload.insert("rms_mix_rate".into(), json!(opts.rms_mix_rate));
     payload.insert("protect".into(), json!(opts.protect));
     payload.insert("format".into(), json!(opts.format));
+    payload.insert("sid".into(), json!(opts.sid));
+    payload.insert("f0_file".into(), json!(opts.f0_file));
     let seq = crate::worker::send_command(root, "convert", payload)
         .map_err(HotError::Unavailable)?;
 
@@ -983,6 +1000,8 @@ pub fn run(
         "rms_mix_rate": opts.rms_mix_rate,
         "protect": opts.protect,
         "format": opts.format,
+        "sid": opts.sid,
+        "f0_file": opts.f0_file,
     });
     let log_path = crate::logging::begin_run(root, crate::logging::CH_STS, &header);
     crate::logging::shell_log!(
@@ -1123,6 +1142,8 @@ fn run_inner(
         "rms_mix_rate": opts.rms_mix_rate,
         "protect": opts.protect,
         "format": opts.format,
+        "sid": opts.sid,
+        "f0_file": opts.f0_file,
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
@@ -1353,7 +1374,10 @@ mod tests {
             Some(2.5),
             Some(-1.0),
             Some("AAC".into()),
+            Some(9000),
+            Some(String::new()),
         );
+        assert_eq!(o.sid, 2333);
         assert_eq!(o.filter_radius, 7);
         assert_eq!(o.resample_sr, 0);
         assert_eq!(o.rms_mix_rate, 1.0);
@@ -1365,6 +1389,8 @@ mod tests {
             Some(0.25),
             Some(0.33),
             Some("flac".into()),
+            None,
+            None,
         );
         assert_eq!(o.resample_sr, 44100);
         assert_eq!(o.format, "flac");

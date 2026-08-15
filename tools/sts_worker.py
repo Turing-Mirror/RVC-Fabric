@@ -247,6 +247,17 @@ def main(argv: list[str]) -> int:
     rms_mix_rate = float(req.get("rms_mix_rate") if req.get("rms_mix_rate") is not None else 0.25)
     protect = float(req.get("protect") if req.get("protect") is not None else 0.33)
     fmt = sts_core.normalize_format(str(req.get("format") or "wav"))
+    try:
+        sid = max(int(req.get("sid") or 0), 0)
+    except (TypeError, ValueError):
+        sid = 0
+    f0_path = str(req.get("f0_file") or "").strip()
+    f0_file = None
+    if f0_path:
+        if not Path(f0_path).is_file():
+            emit(phase="error", message="找不到 F0 曲线文件：%s" % f0_path)
+            return 2
+        f0_file = type("F0File", (), {"name": f0_path})()
 
     if not inp or not out_dir or not model:
         emit(phase="error", message="输入 / 输出 / 音色模型 都不能为空")
@@ -332,6 +343,8 @@ def main(argv: list[str]) -> int:
                 "rms_mix_rate": rms_mix_rate,
                 "protect": protect,
                 "format": fmt,
+                "sid": sid,
+                "f0_file": f0_file,
             },
             prog,
             emit,

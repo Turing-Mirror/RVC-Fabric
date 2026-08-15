@@ -4,6 +4,7 @@
 
 pub mod catalog;
 mod autostart;
+mod ckpt;
 mod config;
 mod download;
 mod dsp;
@@ -856,6 +857,8 @@ async fn sts_start(
     rms_mix_rate: Option<f64>,
     protect: Option<f64>,
     format: Option<String>,
+    sid: Option<u32>,
+    f0_file: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let model_path = model_path.unwrap_or_default();
@@ -866,6 +869,8 @@ async fn sts_start(
         rms_mix_rate,
         protect,
         format,
+        sid,
+        f0_file,
     );
     tauri::async_runtime::spawn_blocking(move || {
         sts::run(
@@ -1000,6 +1005,28 @@ async fn train_start(
 #[tauri::command]
 fn train_cancel() {
     train::cancel();
+}
+
+#[tauri::command]
+fn ckpt_pick(kind: Option<String>) -> Option<String> {
+    ckpt::pick(kind.as_deref().unwrap_or("pth"))
+}
+
+#[tauri::command]
+async fn ckpt_run(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    req: Value,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || ckpt::run(&app, &root, req))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn ckpt_cancel() {
+    ckpt::cancel();
 }
 
 #[tauri::command]
@@ -1641,6 +1668,9 @@ pub fn run() {
             train_pick_dataset,
             train_start,
             train_cancel,
+            ckpt_pick,
+            ckpt_run,
+            ckpt_cancel,
         ])
         .setup(move |app| {
             // Window URL must use the custom scheme registered above.

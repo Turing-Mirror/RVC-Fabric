@@ -394,14 +394,27 @@ class Pipeline(object):
         audio_pad = np.pad(audio, (self.t_pad, self.t_pad), mode="reflect")
         p_len = audio_pad.shape[0] // self.window
         inp_f0 = None
-        if hasattr(f0_file, "name"):
+        f0_path = None
+        if isinstance(f0_file, str) and f0_file:
+            f0_path = f0_file
+        elif hasattr(f0_file, "name"):
+            f0_path = f0_file.name
+        if f0_path:
             try:
-                with open(f0_file.name, "r") as f:
+                with open(f0_path, "r", encoding="utf-8", errors="replace") as f:
                     lines = f.read().strip("\n").split("\n")
-                inp_f0 = []
+                rows = []
                 for line in lines:
-                    inp_f0.append([float(i) for i in line.split(",")])
-                inp_f0 = np.array(inp_f0, dtype="float32")
+                    parts = [p for p in line.replace(" ", "").split(",") if p]
+                    if not parts:
+                        continue
+                    nums = [float(p) for p in parts]
+                    if len(nums) == 1:
+                        rows.append([float(len(rows)), nums[0]])
+                    else:
+                        rows.append(nums[:2])
+                if rows:
+                    inp_f0 = np.array(rows, dtype="float32")
             except:
                 traceback.print_exc()
         sid = torch.tensor(sid, device=self.device).unsqueeze(0).long()

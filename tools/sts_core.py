@@ -397,6 +397,8 @@ def convert_one(
     on_stage,
     wavfile,
     fmt="wav",
+    sid=0,
+    f0_file=None,
 ) -> None:
     """跑一次 vc_single 并写盘。第一次 CUDA OOM 就缩小 rmvpe 分片再试一次。"""
     attempts = 2
@@ -404,10 +406,10 @@ def convert_one(
     for attempt in range(attempts):
         try:
             info, wav_opt = vc.vc_single(
-                0,
+                int(sid or 0),
                 str(src),
                 pitch,
-                None,
+                f0_file,
                 f0method,
                 index_path,
                 None,
@@ -542,6 +544,8 @@ def run_batch(
                         on_stage=on_stage,
                         wavfile=wavfile,
                         fmt=params.get("format") or "wav",
+                        sid=params.get("sid") or 0,
+                        f0_file=params.get("f0_file"),
                     )
                     out_files.append(str(dest))
                     prog.file_done(i, src.name, ok=True)

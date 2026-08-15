@@ -29,6 +29,12 @@ const MAX_TRANSIENT_ATTEMPTS: u32 = 5;
 /// long we wait for the first real byte, then treat it as a transient error.
 const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(20);
 const FIRST_BYTE_TIMEOUT_ERR: &str = "timed out waiting for first byte";
+/// 选源阶段给每个候选的时间。这里只发一个 `Range: bytes=0-0`，回不回得来
+/// 是秒级的事；等满 8 秒还没动静的源，让它排到后面去。
+const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
+/// 续传流多久没有新字节算卡死。比 FIRST_BYTE_TIMEOUT 短：这时候连接已经建
+/// 起来过了，再哑 15 秒就是真断了。
+const RESUME_STALL: Duration = Duration::from_secs(15);
 
 /// What is being downloaded — same pipeline for all product artifacts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,6 +153,186 @@ fn with_retry_help(err: &str, attempts: u32) -> String {
     )
 }
 
+fn suffixed(base: &Path, suffix: &str) -> PathBuf {
+    let mut p = base.as_os_str().to_os_string();
+    p.push(suffix);
+    PathBuf::from(p)
+}
+
+/// 手上这半截还能不能接着下：返回它属于哪个源，None = 作废重来。
+///
+/// 判据只有标记文件，因为 `.part` 本身分不出「续传攒下的前缀」和「ripget 预
+/// 分配出来的完整长度空壳」—— 后者的大小就是完整大小。
+fn resumable_from(recorded: &str, urls: &[String], part_len: u64) -> Option<String> {
+    let r = recorded.trim();
+    if r.is_empty() || part_len == 0 || !urls.iter().any(|u| u == r) {
+        return None;
+    }
+    Some(r.to_string())
+}
+
+/// 第 n 次重试用多少连接。
+///
+/// 有些镜像不是「挂了」，是被 32 路并发打到限流才回 429/503。同样的并发重试
+/// 五轮，五轮都会被同样地拒掉 —— 退一步反而下得来。
+pub fn connections_for_attempt(base: usize, attempt: u32) -> usize {
+    match attempt {
+        0 | 1 => base,
+        2 => (base / 4).max(4).min(base),
+        _ => 1,
+    }
+}
+
+/// 把候选源按「谁先回应」重排，第一个能用的排最前。
+///
+/// 以前是串行的：第一个源卡住就等满 20 秒，三个源全卡要等一分钟才轮到第一次
+/// 重试。这里同时给每个源发一个 `Range: bytes=0-0`，谁先回 200/206 就用谁 ——
+/// 一个字节的往返，是秒级的事。
+///
+/// 只重排、不淘汰：探测失败的源仍然留在后面。探测用的连接和真正下载的连接
+/// 走的可能不是同一条路（CDN 节点、连接池），凭一次探测就把源判死太武断。
+fn probe_order(urls: &[String], cancel: &Arc<AtomicBool>) -> Vec<String> {
+    if urls.len() < 2 {
+        return urls.to_vec();
+    }
+    let (tx, rx) = std::sync::mpsc::channel::<usize>();
+    for (i, u) in urls.iter().enumerate().take(6) {
+        let url = u.clone();
+        let tx = tx.clone();
+        // detach：探测线程最多活 PROBE_TIMEOUT，不 join，免得一个卡死的源
+        // 把选源阶段拖成它自己的超时。
+        std::thread::spawn(move || {
+            let ok = reqwest::blocking::Client::builder()
+                .timeout(PROBE_TIMEOUT)
+                .user_agent(UA)
+                .build()
+                .ok()
+                .and_then(|c| c.get(&url).header("Range", "bytes=0-0").send().ok())
+                .map(|r| {
+                    let s = r.status();
+                    s.is_success() || s == reqwest::StatusCode::PARTIAL_CONTENT
+                })
+                .unwrap_or(false);
+            if ok {
+                let _ = tx.send(i);
+            }
+        });
+    }
+    drop(tx);
+
+    let deadline = std::time::Instant::now() + PROBE_TIMEOUT;
+    let winner = loop {
+        if cancel.load(Ordering::SeqCst) {
+            return urls.to_vec();
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            break None;
+        }
+        match rx.recv_timeout(left.min(Duration::from_millis(250))) {
+            Ok(i) => break Some(i),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            // 所有探测线程都结束了还没人成功
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break None,
+        }
+    };
+
+    let Some(w) = winner else {
+        return urls.to_vec();
+    };
+    let mut out = Vec::with_capacity(urls.len());
+    out.push(urls[w].clone());
+    for (i, u) in urls.iter().enumerate() {
+        if i != w {
+            out.push(u.clone());
+        }
+    }
+    out
+}
+
+/// 单流续传：把 `part` 已有的字节数当起点，`Range: bytes=N-` 接着下。
+///
+/// **为什么不是全程都用它**：ripget 那条是多连接并行的，健康网络上快得多，
+/// 但它会 `prepare_file` 把目标预分配成完整长度，再往各个 offset 写 —— 一个
+/// 半截的 `.part` 大小就是完整大小，中间哪些块是真的没法知道，续不了。
+///
+/// 所以分工是：第一次走 ripget（快），重试走这条（能攒）。网络烂的时候重试
+/// 才是常态，而那正是续传值钱的地方 —— 一个 500MB 的包不会每次都从零开始。
+async fn resume_one_url(
+    url: &str,
+    part: &Path,
+    kind: DownloadKind,
+    size_hint: u64,
+    cancel: Arc<AtomicBool>,
+    progress: Option<ProgressFn>,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let have = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+    let client = reqwest::Client::builder()
+        .user_agent(UA)
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(RESUME_STALL)
+        .build()
+        .map_err(|e| format!("client: {e}"))?;
+
+    let mut req = client.get(url);
+    if have > 0 {
+        req = req.header("Range", format!("bytes={have}-"));
+    }
+    let resp = req.send().await.map_err(|e| format!("resume: {e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("resume: status {}", status.as_u16()));
+    }
+
+    // 服务器不认 Range（回 200 而不是 206）：它给的是整个文件，之前那截作废。
+    let partial = status == reqwest::StatusCode::PARTIAL_CONTENT;
+    let start = if partial && have > 0 { have } else { 0 };
+    let total = resp
+        .content_length()
+        .map(|n| start + n)
+        .unwrap_or(size_hint)
+        .max(1);
+
+    let mut f = if start > 0 {
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(part)
+            .map_err(|e| e.to_string())?
+    } else {
+        std::fs::File::create(part).map_err(|e| e.to_string())?
+    };
+
+    let mut done = start;
+    let mut last_emit = std::time::Instant::now();
+    if let Some(ref cb) = progress {
+        cb(done, total, kind.as_str());
+    }
+    let mut resp = resp;
+    loop {
+        if cancel.load(Ordering::SeqCst) {
+            let _ = f.flush();
+            return Err(crate::i18n::t("s.a5ffdc95ee"));
+        }
+        let chunk = resp.chunk().await.map_err(|e| format!("resume: {e}"))?;
+        let Some(bytes) = chunk else { break };
+        f.write_all(&bytes).map_err(|e| e.to_string())?;
+        done += bytes.len() as u64;
+        if let Some(ref cb) = progress {
+            if last_emit.elapsed() >= Duration::from_millis(150) {
+                last_emit = std::time::Instant::now();
+                cb(done, total.max(done), kind.as_str());
+            }
+        }
+    }
+    f.flush().map_err(|e| e.to_string())?;
+    if let Some(ref cb) = progress {
+        cb(done, total.max(done), kind.as_str());
+    }
+    Ok(())
+}
+
 /// Adaptive connection count (mirrors `launcher/online/multipart.auto_connections`).
 pub fn auto_connections(size: u64) -> usize {
     if size == 0 {
@@ -196,6 +382,9 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
 #[derive(Clone)]
 pub struct DownloadRequest {
     pub urls: Vec<String>,
+    /// 产品根。有它才能记「上次成功的源」和攒下载成败计数；给 None 就是
+    /// 纯下载，不碰配置（安装器早期、单元测试）。
+    pub root: Option<PathBuf>,
     pub dest: PathBuf,
     pub expected_sha256: String,
     /// Known size from catalog (feeds auto_connections when HEAD is slow).
@@ -298,6 +487,7 @@ pub fn download_file(
     download_request(
         DownloadRequest {
             urls: urls.to_vec(),
+            root: None,
             dest: dest.to_path_buf(),
             expected_sha256: expected_sha256.to_string(),
             size_hint: 0,
@@ -354,14 +544,27 @@ pub fn download_request(
     }
 
     // Download to .part then rename after verify
-    let part_path = {
-        let mut p = req.dest.as_os_str().to_os_string();
-        p.push(".part");
-        PathBuf::from(p)
-    };
-    if part_path.is_file() {
-        // ripget overwrites destination; drop stale partial
+    let part_path = suffixed(&req.dest, ".part");
+    // 「这个 .part 是从哪个源续下来的合法前缀」。
+    //
+    // 光看文件本身分不出来：ripget 会把目标**预分配**成完整长度再往各个
+    // offset 写，一个半截的 .part 大小就是完整大小。只有续传那条路会写这个
+    // 标记，所以它在 = 可以接着下，它不在 = 无条件重来。
+    //
+    // 顺带解决跨调用续传：用户取消一个 700MB 的包，回头再点，接着下。
+    let tag_path = suffixed(&req.dest, ".part.src");
+    let recorded = std::fs::read_to_string(&tag_path).unwrap_or_default();
+    let part_len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+    let mut resume_url = resumable_from(&recorded, &req.urls, part_len).unwrap_or_default();
+    if resume_url.is_empty() {
+        // 没标记、标记指向一个这次不用的源、或者半截是空的 —— 全部作废。
         let _ = std::fs::remove_file(&part_path);
+        let _ = std::fs::remove_file(&tag_path);
+    } else {
+        crate::logging::shell_log!(format!(
+            "download resume {} bytes from {resume_url}",
+            part_len
+        ));
     }
 
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -371,17 +574,22 @@ pub fn download_request(
         .build()
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
+    // 选源：并发探一轮，谁先回应谁排第一。串行等超时的老做法在三个源都卡的
+    // 时候要一分钟才轮到第一次重试。
+    let urls = probe_order(&req.urls, &cancel);
+
     let mut last_err = String::new();
     let mut attempt = 0u32;
     loop {
         attempt += 1;
         let mut saw_transient = false;
-        for url in &req.urls {
+        for url in &urls {
             if cancel.load(Ordering::SeqCst) {
                 return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }
+            let conns = connections_for_attempt(threads, attempt);
             crate::logging::shell_log!(format!(
-                "download {} try {}",
+                "download {} try {} (attempt {attempt}, conns {conns})",
                 req.kind.as_str(),
                 url
             ));
@@ -392,28 +600,64 @@ pub fn download_request(
                     &crate::i18n::te("s.9d7d0dbc49", &(req.kind.as_str())),
                 );
             }
-            match rt.block_on(download_one_url(
-                url,
-                &part_path,
-                threads,
-                req.kind,
-                req.size_hint,
-                cancel.clone(),
-                progress.clone(),
-            )) {
+            // 第一次走 ripget（多连接，健康网络上快得多）；重试走单流续传 ——
+            // 重试才是网络烂的时候的常态，而那正是续传值钱的地方。手上已经
+            // 攒着这个源的半截时，第一次就直接接着下。
+            let use_resume = attempt > 1 || resume_url == *url;
+            if !use_resume {
+                // 交给 ripget：它会预分配，接不上，半截作废。
+                let _ = std::fs::remove_file(&part_path);
+                let _ = std::fs::remove_file(&tag_path);
+            } else if resume_url != *url {
+                // 换源了：别在别人的字节后面接。
+                let _ = std::fs::remove_file(&part_path);
+            }
+            let outcome = if use_resume {
+                resume_url = url.clone();
+                let _ = std::fs::write(&tag_path, url);
+                rt.block_on(resume_one_url(
+                    url,
+                    &part_path,
+                    req.kind,
+                    req.size_hint,
+                    cancel.clone(),
+                    progress.clone(),
+                ))
+            } else {
+                rt.block_on(download_one_url(
+                    url,
+                    &part_path,
+                    conns,
+                    req.kind,
+                    req.size_hint,
+                    cancel.clone(),
+                    progress.clone(),
+                ))
+            };
+            match outcome {
                 Ok(()) => {
                     crate::logging::shell_log!(format!(
                         "download {} ok {}",
                         req.kind.as_str(),
                         url
                     ));
+                    if let Some(ref root) = req.root {
+                        crate::mirrors::note_success(root, url);
+                        crate::telemetry::note_download(root, url, None);
+                    }
                     if !req.expected_sha256.is_empty() {
                         if let Some(ref cb) = progress {
                             let len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
                             cb(len, len.max(1), "verify");
                         }
                         if let Err(e) = verify_sha256(&part_path, &req.expected_sha256) {
+                            // 拿到的东西不对，续传更没意义 —— 整个丢掉换下一个源。
                             let _ = std::fs::remove_file(&part_path);
+                            let _ = std::fs::remove_file(&tag_path);
+                            resume_url.clear();
+                            if let Some(ref root) = req.root {
+                                crate::telemetry::note_download(root, url, Some(&e));
+                            }
                             last_err = e;
                             continue;
                         }
@@ -421,6 +665,7 @@ pub fn download_request(
                     if req.dest.is_file() {
                         let _ = std::fs::remove_file(&req.dest);
                     }
+                    let _ = std::fs::remove_file(&tag_path);
                     std::fs::rename(&part_path, &req.dest)
                         .map_err(|e| crate::i18n::te("s.fe9e98a65c", &(e)))?;
                     if let Some(ref cb) = progress {
@@ -435,11 +680,20 @@ pub fn download_request(
                         req.kind.as_str(),
                         url
                     ));
-                    let _ = std::fs::remove_file(&part_path);
                     if e == crate::i18n::t("s.a5ffdc95ee")
                         || e.to_ascii_lowercase().contains("cancel")
                     {
+                        // 取消：把半截留着，下次点安装能接着下。
                         return Err(e);
+                    }
+                    if let Some(ref root) = req.root {
+                        crate::telemetry::note_download(root, url, Some(&e));
+                    }
+                    // 续传路径下失败**不删** `.part` —— 那正是它存在的意义。
+                    // ripget 那条留下的是预分配的稀疏文件，必须删。
+                    if !use_resume {
+                        let _ = std::fs::remove_file(&part_path);
+                        let _ = std::fs::remove_file(&tag_path);
                     }
                     if is_transient_download_error(&e) {
                         saw_transient = true;
@@ -567,6 +821,65 @@ async fn wait_first_byte_or_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connections_back_off_across_retries() {
+        // 有些镜像不是挂了，是被 32 路并发打到限流。同并发重试五轮全是白费。
+        assert_eq!(connections_for_attempt(32, 1), 32);
+        assert_eq!(connections_for_attempt(32, 2), 8);
+        assert_eq!(connections_for_attempt(32, 3), 1);
+        assert_eq!(connections_for_attempt(32, 5), 1);
+        // 本来就只有一条连接的小文件，不该被「退让」抬上去
+        assert_eq!(connections_for_attempt(1, 2), 1);
+        assert_eq!(connections_for_attempt(4, 2), 4);
+    }
+
+    #[test]
+    fn probe_leaves_a_single_url_alone() {
+        // 只有一个源就没什么可探的 —— 别为它多付一个往返。
+        let urls = vec!["https://example.invalid/a".to_string()];
+        let cancel = Arc::new(AtomicBool::new(false));
+        assert_eq!(probe_order(&urls, &cancel), urls);
+    }
+
+    #[test]
+    fn probe_keeps_every_url_when_none_answers() {
+        // 全都探不通时必须原样返回：探测只重排，不淘汰。真正的下载连接和探测
+        // 连接走的可能不是同一条路，凭一次探测判死太武断。
+        let urls = vec![
+            "https://a.invalid/x".to_string(),
+            "https://b.invalid/x".to_string(),
+        ];
+        let cancel = Arc::new(AtomicBool::new(true)); // 立刻取消，不真发请求
+        assert_eq!(probe_order(&urls, &cancel), urls);
+    }
+
+    #[test]
+    fn a_stale_partial_is_only_kept_with_a_matching_tag() {
+        // `.part` 单看是分不出「续传攒下的前缀」和「ripget 预分配的空壳」的，
+        // 所以只认标记文件。
+        let urls = vec!["https://a.cn/p.zip".to_string(), "https://b.cn/p.zip".to_string()];
+        assert_eq!(
+            resumable_from("https://a.cn/p.zip", &urls, 1024),
+            Some("https://a.cn/p.zip".to_string())
+        );
+        // 标记指向这次不用的源：接在别人的字节后面，最后 sha256 才发现，白下一遍
+        assert_eq!(resumable_from("https://c.cn/p.zip", &urls, 1024), None);
+        // 没标记 = ripget 留下的空壳，或者根本没下过
+        assert_eq!(resumable_from("", &urls, 1024), None);
+        // 空文件没什么可续的，还多一个 Range 往返
+        assert_eq!(resumable_from("https://a.cn/p.zip", &urls, 0), None);
+    }
+
+    #[test]
+    fn part_and_tag_sit_next_to_the_destination() {
+        let dest = std::path::Path::new("/tmp/x/pack.zip");
+        assert_eq!(suffixed(dest, ".part").file_name().unwrap(), "pack.zip.part");
+        assert_eq!(
+            suffixed(dest, ".part.src").file_name().unwrap(),
+            "pack.zip.part.src"
+        );
+    }
 
     #[test]
     fn auto_connections_scales() {

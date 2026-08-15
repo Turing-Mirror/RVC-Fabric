@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 use crate::{download, extract, paths};
 
-const CNB_REPO: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases";
+pub(crate) const CNB_REPO: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases";
 
 // ---------------------------------------------------------------------------
 // engine-core
@@ -124,8 +124,16 @@ fn has_driver_files(dir: &Path) -> bool {
 // Shared download + extract
 // ---------------------------------------------------------------------------
 
-fn lfs_urls(sha: &str) -> Vec<String> {
-    vec![format!("{CNB_REPO}/-/lfs/{sha}")]
+/// engine-core / VB-Cable 的下载地址。
+///
+/// 以前只有官方仓库一条 —— CNB 一挂，谁都装不上，而这是首次运行的必经之路。
+/// 现在基址列表从清单来（`mirrors::lfs_bases`），官方仓库永远排第一，要加备份
+/// 源改一行 JSON 就行，不用发新版本。
+fn lfs_urls(root: &Path, sha: &str) -> Vec<String> {
+    crate::mirrors::lfs_bases(root)
+        .into_iter()
+        .map(|base| format!("{base}/-/lfs/{sha}"))
+        .collect()
 }
 
 fn fetch_and_extract(
@@ -145,8 +153,20 @@ fn fetch_and_extract(
     if !cached_ok {
         // Passing progress through is what keeps the first-run gate honest:
         // without it the bar sits still while the NIC is busy for minutes.
-        download::download_file(&lfs_urls(sha), &archive, sha, cancel, progress)
-            .map_err(|e| crate::i18n::te("s.04c4e3b2b3", &(e)))?;
+        download::download_request(
+            download::DownloadRequest {
+                urls: lfs_urls(root, sha),
+                root: Some(root.to_path_buf()),
+                dest: archive.clone(),
+                expected_sha256: sha.to_string(),
+                size_hint: 0,
+                connections: None,
+                kind: download::DownloadKind::Generic,
+            },
+            cancel,
+            progress,
+        )
+        .map_err(|e| crate::i18n::te("s.04c4e3b2b3", &(e)))?;
     }
 
     extract::extract_zip(&archive, dest_root).map_err(|e| crate::i18n::te("s.0707e8af4e", &(e)))?;
@@ -343,9 +363,31 @@ mod tests {
 
     #[test]
     fn lfs_url_is_sha_addressed() {
-        let u = lfs_urls(ENGINE_CORE_SHA);
+        let root = std::env::temp_dir().join("rvcf-lfs-url");
+        let _ = std::fs::remove_dir_all(&root);
+        let u = lfs_urls(&root, ENGINE_CORE_SHA);
+        // 没有清单时就只有官方仓库那一条
         assert_eq!(u.len(), 1);
+        assert!(u[0].starts_with(CNB_REPO));
         assert!(u[0].ends_with(ENGINE_CORE_SHA));
         assert!(u[0].contains("/-/lfs/"));
+    }
+
+    #[test]
+    fn lfs_urls_pick_up_catalog_mirrors() {
+        // engine-core 是首次运行的必经之路，以前只有一个源，CNB 一挂谁都装不上。
+        let root = std::env::temp_dir().join("rvcf-lfs-mirror");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("configs")).unwrap();
+        std::fs::write(
+            root.join("configs").join("online_catalog.json"),
+            r#"{"download_mirrors":{"lfs":["https://backup.example.cn/Turing-Mirror/Rel"]}}"#,
+        )
+        .unwrap();
+        let u = lfs_urls(&root, ENGINE_CORE_SHA);
+        assert_eq!(u.len(), 2, "{u:?}");
+        assert!(u[0].starts_with(CNB_REPO), "官方仓库必须还是第一个");
+        assert!(u[1].starts_with("https://backup.example.cn/"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

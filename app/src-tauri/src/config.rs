@@ -198,10 +198,15 @@ pub fn defaults() -> Map<String, Value> {
     // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。
     m.insert("vc_run_count".into(), json!(0));
     m.insert("follow_prompt_done".into(), json!(false));
-    // 第三方 Hugging Face 下载镜像根。空 = 产品默认双镜像
-    // （hf-mirror.com → hf-cdn.sufy.com → 规范域）。见 `hf::download_urls`。
-    // 不进 worker / inuse。
+    // 第三方 Hugging Face 下载镜像根。空 = 走 `mirrors::hf_endpoints` 解出来
+    // 的顺序（清单下发 → 编译进来的兜底 → 规范域）。不进 worker / inuse。
     m.insert("hf_endpoint".into(), json!(""));
+    // 上一次真的下成功的那个源。用户没指定时排第一 —— 某些网络就是过不去
+    // 默认那个源，不记住的话他每次、每个文件都要先白等一遍首字节超时。
+    m.insert("hf_endpoint_last_good".into(), json!(""));
+    // 各下载源的成败计数，随日活 ping 一起报（同样是 opt-in）。
+    // 只有主机名和错误类型，没有文件名。见 `telemetry::download_summary`。
+    m.insert("download_stats".into(), json!({}));
     m
 }
 

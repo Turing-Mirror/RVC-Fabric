@@ -14,6 +14,7 @@ mod extract;
 mod i18n;
 mod legacy;
 mod logging;
+mod mirrors;
 pub mod paths;
 pub mod plaza;
 mod protocol;

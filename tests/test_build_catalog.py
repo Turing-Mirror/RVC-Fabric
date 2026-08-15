@@ -410,6 +410,64 @@ class CheckFailureTests(unittest.TestCase):
             self.assertEqual(bc.cmd_check(paths), 0)
 
 
+class DownloadMirrorTests(unittest.TestCase):
+    """meta.download_mirrors → index.download_mirrors。
+
+    客户端的镜像顺序原本写死在 exe 里，某个源挂掉要发新版本才能救。这份列表
+    存在的意义就是「改一行 JSON 全网换源」——**也正因如此它是个能改下载去向的
+    远端字段**，格式校验两边都得有，不能只指望客户端。
+    """
+
+    def _build(self, mirrors) -> dict:
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            meta_p = paths.src / "meta.yaml"
+            meta = yaml.safe_load(meta_p.read_text(encoding="utf-8")) or {}
+            meta["download_mirrors"] = mirrors
+            _y(meta_p, meta)
+            self.assertEqual(bc.cmd_build(paths), 0)
+            return json.loads(paths.index_out.read_text(encoding="utf-8"))
+
+    def test_good_mirrors_land_in_the_index_and_the_bundled_copy(self):
+        index = self._build(
+            {"hf": ["https://a.mirror.cn"], "lfs": ["https://b.cn/Org/Repo"]}
+        )
+        self.assertEqual(index["download_mirrors"]["hf"], ["https://a.mirror.cn"])
+        self.assertEqual(index["download_mirrors"]["lfs"], ["https://b.cn/Org/Repo"])
+
+    def test_dangerous_entries_are_dropped_not_shipped(self):
+        index = self._build(
+            {
+                "hf": [
+                    "http://plain.cn",          # 明文：下载去向交给中间人
+                    "https://evil.cn/go?to=x",  # 带路径查询串，不是裸端点
+                    "https://u:p@evil.cn",      # userinfo
+                    "https://例子.cn",           # 非 ASCII
+                    "https://ok.mirror.cn",
+                ],
+                "lfs": ["https://evil.cn/a/../../b"],
+            }
+        )
+        self.assertEqual(index["download_mirrors"], {"hf": ["https://ok.mirror.cn"]})
+
+    def test_absent_means_absent(self):
+        """没配就不写这个键 —— 客户端那边「没有就用兜底」。"""
+        with tempfile.TemporaryDirectory() as td:
+            paths = make_fixture(Path(td))
+            self.assertEqual(bc.cmd_build(paths), 0)
+            index = json.loads(paths.index_out.read_text(encoding="utf-8"))
+            self.assertEqual(index["download_mirrors"], {})
+
+    def test_validators_match_the_rust_side(self):
+        """规则跟 mirrors.rs 的 is_valid_endpoint / is_valid_base 一致。"""
+        self.assertTrue(bc._valid_hf_endpoint("https://hf-mirror.com"))
+        self.assertTrue(bc._valid_hf_endpoint("https://mirror.example.cn:8443"))
+        self.assertFalse(bc._valid_hf_endpoint("https://localhost"))  # 没有点
+        self.assertFalse(bc._valid_hf_endpoint("https://a.cn/path"))
+        self.assertTrue(bc._valid_lfs_base("https://cnb.cool/Org/Repo"))
+        self.assertFalse(bc._valid_lfs_base("https://cnb.cool/a/../b"))
+
+
 class ExtrasTests(unittest.TestCase):
     """附加资源（分离模型 / 训练底模）。
 

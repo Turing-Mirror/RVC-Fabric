@@ -155,6 +155,21 @@ pub fn rewrite(url: &str, endpoint: &str) -> String {
 ///
 /// Non-HF URLs (CNB, etc.) are returned as a single-element list unchanged.
 pub fn download_urls(url: &str, user_endpoint: &str) -> Vec<String> {
+    let mut eps: Vec<String> = Vec::with_capacity(4);
+    let user = user_endpoint.trim();
+    if !user.is_empty() {
+        eps.push(user.to_string());
+    }
+    eps.extend(DEFAULT_MIRRORS.iter().map(|m| (*m).to_string()));
+    eps.push(CANONICAL.to_string());
+    download_urls_with(url, &eps)
+}
+
+/// 同上，但端点顺序由调用方给 —— `mirrors::hf_endpoints` 解析出来的那份。
+///
+/// 这个模块保持无 IO、可纯测试：从哪儿读镜像列表是 `mirrors` 的事，怎么把一条
+/// 规范链接改写到某个端点上是这里的事。
+pub fn download_urls_with(url: &str, endpoints: &[String]) -> Vec<String> {
     let url = url.trim();
     if url.is_empty() {
         return Vec::new();
@@ -164,28 +179,17 @@ pub fn download_urls(url: &str, user_endpoint: &str) -> Vec<String> {
     }
 
     let url = encode_path(url);
-    let mut out: Vec<String> = Vec::with_capacity(4);
-    let mut push = |u: String| {
-        if u.is_empty() {
-            return;
-        }
-        if !out.iter().any(|x| x == &u) {
+    let mut out: Vec<String> = Vec::with_capacity(endpoints.len() + 1);
+    for ep in endpoints {
+        let u = rewrite(&url, ep);
+        if !u.is_empty() && !out.iter().any(|x| x == &u) {
             out.push(u);
         }
-    };
-
-    let user = user_endpoint.trim();
-    if !user.is_empty() {
-        push(rewrite(&url, user));
     }
-    for m in DEFAULT_MIRRORS {
-        push(rewrite(&url, m));
-    }
-    // Canonical last — overseas / when both mirrors fail.
-    push(rewrite(&url, CANONICAL));
-
-    if out.is_empty() {
-        out.push(url);
+    // 兜底的兜底：调用方一个端点都没给（或全被过滤掉了）时，至少还有规范域。
+    let canon = rewrite(&url, CANONICAL);
+    if !out.iter().any(|x| x == &canon) {
+        out.push(canon);
     }
     out
 }

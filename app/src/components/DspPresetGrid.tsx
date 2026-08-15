@@ -47,6 +47,8 @@ export function DspPresetGrid({
   onUse,
   onStop,
   busy,
+  reloadToken,
+  onActive,
 }: {
   cols: number;
   query: string;
@@ -55,6 +57,10 @@ export function DspPresetGrid({
   onUse: (p: DspPreset) => void;
   onStop: () => void;
   busy?: boolean;
+  /** 加一就重新拉一次清单（存了/删了自定义预设之后）。 */
+  reloadToken?: number;
+  /** 清单到手时把当前生效的那条交出去，编辑器要用。 */
+  onActive?: (p: DspPreset | null) => void;
 }) {
   const [list, setList] = useState<DspPreset[] | null>(null);
   const [msg, setMsg] = useState("");
@@ -63,7 +69,10 @@ export function DspPresetGrid({
     let alive = true;
     void invoke<{ presets: DspPreset[] }>("dsp_presets")
       .then((r) => {
-        if (alive) setList(r.presets || []);
+        if (!alive) return;
+        const items = r.presets || [];
+        setList(items);
+        onActive?.(items.find((p) => p.id === activeId) || null);
       })
       .catch((e) => {
         if (alive) {
@@ -74,7 +83,9 @@ export function DspPresetGrid({
     return () => {
       alive = false;
     };
-  }, []);
+    // activeId 变化时不需要重拉清单，交出去那一下由 onUse 直接给。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken]);
 
   const view = useMemo(() => {
     const q = query.trim().toLowerCase();

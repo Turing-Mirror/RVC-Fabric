@@ -93,6 +93,43 @@ class BuiltinTests(unittest.TestCase):
             self.assertTrue(changed, f"{p['id']} 的参数全是默认值，听起来没变化")
 
 
+class EffectSpecFileTests(unittest.TestCase):
+    """configs/dsp_effects.json 必须跟引擎侧 EFFECT_SPECS 一致。
+
+    壳画滑条要范围，但**不能自己抄一份** —— 抄了就一定会走散：界面上能拉到的
+    值引擎那边会被静默钳回去，用户看到的和听到的对不上，而且从哪一侧都查不出
+    原因。所以生成一份给壳读，并用这条测试盯着它别过期。
+    """
+
+    PATH = ROOT / "configs" / "dsp_effects.json"
+
+    def test_file_exists(self):
+        self.assertTrue(self.PATH.is_file(), f"缺 {self.PATH}")
+
+    def test_matches_engine_specs(self):
+        from tools.dsp_voice import CHAIN_ORDER
+
+        data = json.loads(self.PATH.read_text(encoding="utf-8"))
+        self.assertEqual(data["order"], list(CHAIN_ORDER), "效果器顺序对不上")
+        self.assertEqual(set(data["effects"]), set(EFFECT_SPECS), "效果器清单对不上")
+        for name, spec in EFFECT_SPECS.items():
+            got = data["effects"][name]
+            self.assertEqual(got["params"], spec["params"], f"{name} 默认值对不上")
+            for key, rng in spec["ranges"].items():
+                self.assertEqual(
+                    tuple(got["ranges"][key]), tuple(rng), f"{name}.{key} 范围对不上"
+                )
+
+    def test_every_param_has_a_ui_label(self):
+        """壳给每个参数画一行，没标签的会露出 raw key。"""
+        src = (ROOT / "app" / "src" / "components" / "DspPresetEditor.tsx").read_text(
+            encoding="utf-8"
+        )
+        for name, spec in EFFECT_SPECS.items():
+            for key in spec["params"]:
+                self.assertIn(f"{key}:", src, f"编辑器没有 {name}.{key} 的标签")
+
+
 class IdValidationTests(unittest.TestCase):
     def test_accepts_plain_ids(self):
         for good in ("robot", "male_to_female", "a1_2", "x"):

@@ -234,6 +234,10 @@ fn catalog_from_data(data: &Value, source: &str) -> Value {
         "source": source,
         "voices": voices,
         "thirdparty_voices": thirdparty,
+        // DSP 变声预设原样透传（dsp::catalog 自己会校验）。
+        // 这个函数只保留它认识的键，不透传的话远端清单上架了预设，
+        // 客户端这边永远是空的 —— 而且只有装了才发现，静态看两边都对。
+        "dsp_presets": data.get("dsp_presets").cloned().unwrap_or_else(|| json!([])),
         "fetch_error": "",
     })
 }

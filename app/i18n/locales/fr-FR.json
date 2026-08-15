@@ -1387,7 +1387,13 @@
     "dspFxReverb": "Réverbération",
     "dspStackTitle": "Une voix et un préréglage DSP sont actifs en même temps",
     "dspStackBody": "Le son passe d'abord par la conversion de voix, puis par les effets DSP. Pour ne garder qu'une couche, cliquez sur le nom du préréglage dans la chaîne en bas pour désactiver le DSP.",
-    "dspStackOk": "Compris"
+    "dspStackOk": "Compris",
+    "dspPresetNotInCatalog": "Ce préréglage n'est pas dans le catalogue de la place. Actualisez puis réessayez.",
+    "dspPlazaTitle": "Préréglages de voix DSP",
+    "dspPlazaBlurb": "Sans modèle ni carte graphique : installez et c'est parti. Quelques centaines d'octets chacun, donc l'installation tient en un clic.",
+    "dspPlazaInstalled": "Installé",
+    "dspPlazaInstall": "Installer",
+    "dspPlazaEmpty": "Aucun préréglage DSP publié pour l'instant."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

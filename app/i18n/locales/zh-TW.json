@@ -1387,7 +1387,13 @@
     "dspFxReverb": "混響",
     "dspStackTitle": "音色與 DSP 預設正同時生效",
     "dspStackBody": "訊號先經過音色轉換，再經過 DSP 效果。想只留一層，點底欄那條鏈上的名字就能關閉 DSP。",
-    "dspStackOk": "知道了"
+    "dspStackOk": "知道了",
+    "dspPresetNotInCatalog": "廣場清單裡沒有這個預設，重新整理後再試。",
+    "dspPlazaTitle": "DSP 變聲預設",
+    "dspPlazaBlurb": "不用模型、不用顯示卡，裝上就能用。每個幾百位元組，點一下就裝好。",
+    "dspPlazaInstalled": "已安裝",
+    "dspPlazaInstall": "安裝",
+    "dspPlazaEmpty": "廣場上暫時還沒有上架的 DSP 預設。"
   },
   "extras": {
     "engineTitle": "引擎資源",

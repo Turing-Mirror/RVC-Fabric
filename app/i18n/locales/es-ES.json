@@ -1387,7 +1387,13 @@
     "dspFxReverb": "Reverberación",
     "dspStackTitle": "Una voz y un preajuste DSP están activos a la vez",
     "dspStackBody": "El audio pasa primero por la conversión de voz y después por los efectos DSP. Para dejar solo una capa, haz clic en el nombre del preajuste en la cadena inferior para desactivar el DSP.",
-    "dspStackOk": "Entendido"
+    "dspStackOk": "Entendido",
+    "dspPresetNotInCatalog": "Ese preajuste no está en el catálogo de la plaza. Actualiza e inténtalo de nuevo.",
+    "dspPlazaTitle": "Preajustes de voz DSP",
+    "dspPlazaBlurb": "Sin modelo ni tarjeta gráfica: instala y listo. Cada uno ocupa unos cientos de bytes, así que se instala con un clic.",
+    "dspPlazaInstalled": "Instalado",
+    "dspPlazaInstall": "Instalar",
+    "dspPlazaEmpty": "Todavía no hay preajustes DSP publicados."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -1387,7 +1387,13 @@
     "dspFxReverb": "Reverb",
     "dspStackTitle": "A voice and a DSP preset are both active",
     "dspStackBody": "Audio goes through the voice conversion first, then the DSP effects. To keep only one layer, click the preset name in the chain at the bottom to turn DSP off.",
-    "dspStackOk": "Got it"
+    "dspStackOk": "Got it",
+    "dspPresetNotInCatalog": "That preset is not in the plaza catalog. Refresh and try again.",
+    "dspPlazaTitle": "DSP voice presets",
+    "dspPlazaBlurb": "No model, no GPU — install and go. Each one is a few hundred bytes, so it installs in a click.",
+    "dspPlazaInstalled": "Installed",
+    "dspPlazaInstall": "Install",
+    "dspPlazaEmpty": "No DSP presets published yet."
   },
   "extras": {
     "engineTitle": "Engine resources",

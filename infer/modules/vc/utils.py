@@ -29,7 +29,13 @@ def get_index_path_from_model(sid):
         return ""
 
     # Absolute catalog paths: match on the model stem, not the drive letter path.
-    key = os.path.splitext(os.path.basename(str(sid or "")))[0]
+    #
+    # 分隔符自己切，不用 os.path.basename：非 Windows 上它不认反斜杠，
+    # `F:\models\Anon\Anon-local.pth` 会被整条当成文件名，key 里带着盘符和
+    # 目录，自然什么都匹配不上。产品只发 Windows，但 CI / 开发机是 POSIX，
+    # 这条测试因此长期红着 —— 长期红的测试等于没有测试，大家会开始不看失败。
+    raw = str(sid or "").replace("\\", "/")
+    key = os.path.splitext(raw.rsplit("/", 1)[-1])[0]
     if not key:
         return ""
 

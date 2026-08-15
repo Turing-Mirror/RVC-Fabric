@@ -428,12 +428,6 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                   : t("s.703e6f531a")}
                 <br />{t("s.de5de9e783")}</div>
             ) : null}
-
-            {reconnecting && retryN >= 3 ? (
-              <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line">
-                {t("s.dlFailedHelp")}
-              </div>
-            ) : null}
           </div>
         ) : null}
 

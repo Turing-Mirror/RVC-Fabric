@@ -533,7 +533,7 @@ mod tests {
         assert!(!s.contains("{v0}"), "got {s}");
         let help = t("s.dlFailedHelp");
         assert!(help.contains("1077458748"), "got {help}");
-        assert!(t("s.dlGaveUp").contains("{v0}") || te("s.dlGaveUp", &30).contains("30"));
+        assert!(t("s.dlGaveUp").contains("{v0}") || te("s.dlGaveUp", &7).contains("7"));
     }
 
 }

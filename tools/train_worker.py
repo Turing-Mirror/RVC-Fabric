@@ -88,14 +88,16 @@ class StageProgress(threading.Thread):
         self.total = max(int(total), 1)
         self.message = message
         self.suffix = suffix
-        self._stop = threading.Event()
+        # 不能叫 _stop：Thread.join 收尾会调 self._stop()，盖成 Event
+        # 就是 26.8.15/2 那条 TypeError: 'Event' object is not callable。
+        self._halt = threading.Event()
         self._last = -1
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
     def run(self):
-        while not self._stop.wait(1.5):
+        while not self._halt.wait(1.5):
             done = count_files(self.target_dir, self.suffix)
             if done == self._last:
                 continue
@@ -127,12 +129,13 @@ class TrainLogTail(threading.Thread):
         self.total_epoch = max(int(total_epoch), 1)
         self.index = index
         self.total_stages = total_stages
-        self._stop = threading.Event()
+        # 同 StageProgress：不能叫 _stop，见那边的注释。
+        self._halt = threading.Event()
         self._pos = 0
         self._epoch = 0
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
     def _scan(self):
         try:
@@ -168,7 +171,7 @@ class TrainLogTail(threading.Thread):
             )
 
     def run(self):
-        while not self._stop.wait(2.0):
+        while not self._halt.wait(2.0):
             self._scan()
         self._scan()
 

@@ -1359,7 +1359,12 @@
     "cacheClearFail": "清理失敗：{v0}",
     "stsHotWorkerGone": "轉換中途引擎行程結束了。請重試；反覆出現請到「其他 - 收集診斷資訊」匯出記錄。",
     "stsHotStalled": "引擎長時間沒有回應，轉換已中斷。請重試。",
-    "stsHotFailed": "轉換失敗。詳情請看 User_Data/logs/sts/ 下本次的記錄。"
+    "stsHotFailed": "轉換失敗。詳情請看 User_Data/logs/sts/ 下本次的記錄。",
+    "dspPresetBadId": "預設名只能用小寫字母、數字和底線，最長 48 個字元。",
+    "dspPresetBadParams": "預設參數格式不對。",
+    "dspPresetSaveFail": "預設儲存失敗：{0}",
+    "dspPresetNotUser": "內建預設刪不掉。想改的話，存一個同名的自訂預設就會蓋住它。",
+    "dspPresetDeleteFail": "預設刪除失敗：{0}"
   },
   "extras": {
     "engineTitle": "引擎資源",

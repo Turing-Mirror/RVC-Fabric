@@ -1,0 +1,12 @@
+{
+  "name": "女声转男声",
+  "desc": "降调同时把共振峰压下来，不闷",
+  "params": {
+    "pitch": {
+      "semitones": -5.0
+    },
+    "formant": {
+      "shift": -2.5
+    }
+  }
+}

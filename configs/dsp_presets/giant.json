@@ -1,0 +1,13 @@
+{
+  "name": "巨人",
+  "desc": "音高压低，整个人变大一号",
+  "params": {
+    "pitch": {
+      "semitones": -8.0
+    },
+    "reverb": {
+      "size": 0.6,
+      "mix": 0.18
+    }
+  }
+}

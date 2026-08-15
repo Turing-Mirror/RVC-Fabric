@@ -1,0 +1,17 @@
+{
+  "name": "外星人",
+  "desc": "高频环调加颤音，谁都听得出不是人",
+  "params": {
+    "pitch": {
+      "semitones": 4.0
+    },
+    "ring": {
+      "freq": 420.0,
+      "mix": 0.6
+    },
+    "vibrato": {
+      "rate": 7.0,
+      "depth": 18.0
+    }
+  }
+}

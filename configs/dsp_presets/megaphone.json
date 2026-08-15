@@ -1,0 +1,20 @@
+{
+  "name": "扩音喇叭",
+  "desc": "限带加重过载加短回声",
+  "params": {
+    "radio": {
+      "low": 600.0,
+      "high": 3800.0,
+      "mix": 0.9,
+      "noise": 0.05
+    },
+    "drive": {
+      "amount": 0.75
+    },
+    "echo": {
+      "time_ms": 90.0,
+      "feedback": 0.2,
+      "mix": 0.2
+    }
+  }
+}

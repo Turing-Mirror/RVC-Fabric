@@ -57,6 +57,11 @@ _LEGACY_PATHS = [
     "configs/online_catalog.json",
     "tools/realtime_worker.py",
     "tools/dsp_fx.py",
+    # 无模型 DSP 变声：效果器、预设读写、内置预设本体。
+    # 少打其中任何一个，DSP 模式在补丁包升级上来的机器上就是半残的。
+    "tools/dsp_voice.py",
+    "tools/dsp_presets.py",
+    "configs/dsp_presets",
     "tools/download_models.py",
     # diagnostics bundle deps: more_page loads collect_diagnostics from disk,
     # perf_bench runs benchmark_realtime in the Runtime, perf_report is

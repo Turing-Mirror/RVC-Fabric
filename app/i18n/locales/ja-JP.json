@@ -1359,7 +1359,12 @@
     "cacheClearFail": "削除に失敗しました：{v0}",
     "stsHotWorkerGone": "変換中にエンジンのプロセスが終了しました。もう一度お試しください。繰り返す場合は「その他 - 診断情報の収集」からログを書き出してください。",
     "stsHotStalled": "エンジンが長時間応答しないため、変換を中断しました。もう一度お試しください。",
-    "stsHotFailed": "変換に失敗しました。詳細は User_Data/logs/sts/ の今回のログをご確認ください。"
+    "stsHotFailed": "変換に失敗しました。詳細は User_Data/logs/sts/ の今回のログをご確認ください。",
+    "dspPresetBadId": "プリセット名に使えるのは小文字・数字・アンダースコアのみで、48 文字までです。",
+    "dspPresetBadParams": "プリセットのパラメータ形式が不正です。",
+    "dspPresetSaveFail": "プリセットを保存できませんでした：{0}",
+    "dspPresetNotUser": "内蔵プリセットは削除できません。同名のカスタムプリセットを保存すると上書きできます。",
+    "dspPresetDeleteFail": "プリセットを削除できませんでした：{0}"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

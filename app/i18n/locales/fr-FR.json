@@ -1359,7 +1359,12 @@
     "cacheClearFail": "Impossible de vider le cache : {v0}",
     "stsHotWorkerGone": "Le processus du moteur s'est arrêté pendant la conversion. Réessayez ; si cela se reproduit, exportez les journaux depuis Autres - Collecter les diagnostics.",
     "stsHotStalled": "Le moteur ne répond plus, la conversion a été interrompue. Réessayez.",
-    "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/."
+    "stsHotFailed": "Échec de la conversion. Voir le journal de cette exécution dans User_Data/logs/sts/.",
+    "dspPresetBadId": "Le nom d'un préréglage n'accepte que minuscules, chiffres et tirets bas, 48 caractères maximum.",
+    "dspPresetBadParams": "Les paramètres du préréglage sont mal formés.",
+    "dspPresetSaveFail": "Impossible d'enregistrer le préréglage : {0}",
+    "dspPresetNotUser": "Les préréglages intégrés ne peuvent pas être supprimés. Enregistrez un préréglage personnalisé du même nom pour le remplacer.",
+    "dspPresetDeleteFail": "Impossible de supprimer le préréglage : {0}"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

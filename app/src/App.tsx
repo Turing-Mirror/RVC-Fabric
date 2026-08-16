@@ -14,7 +14,7 @@ import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
 import { onConfigPatch, type Config } from "./lib/config";
-import { forceKillEngine, setHot, swapModel } from "./lib/engine";
+import { deactivateDsp, forceKillEngine, setHot, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
 import { invoke } from "@tauri-apps/api/core";
@@ -592,7 +592,7 @@ export default function App() {
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const stopDsp = useCallback(() => {
     setDspId("");
-    void setHot({ dsp_enabled: false, dsp_preset: "" }).catch(() => {});
+    void deactivateDsp().catch(() => {});
   }, []);
 
   const openPlaza = useCallback(() => {
@@ -913,6 +913,7 @@ export default function App() {
                 <ModelsPage
                   banner={plaza.feed.banner}
                   onVoiceChange={applyVoiceChange}
+                  onDspChange={(id) => setDspId(id)}
                   onOpenPlaza={openPlaza}
                   focusKind={modelsKind}
                   focusNonce={modelsKindNonce}
@@ -1082,7 +1083,7 @@ export default function App() {
         mode={mode}
         onMode={handleMode}
         running={engine.running || engine.starting}
-        onToggleRun={() => void engine.toggleRun()}
+        onToggleRun={() => void engine.toggleRun({ dspId })}
         profileSummary={profileSummary}
         statusTitle={engine.title}
         statusSub={engine.sub}

@@ -720,6 +720,37 @@ fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), String
 
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
 #[tauri::command]
+fn dsp_activate(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let id = id.trim().to_string();
+    let out = dsp::activate(&root, &id)?;
+    let _ = app.emit(
+        "config-changed",
+        json!({
+            "config": out.get("config"),
+            "hot": {
+                "dsp_enabled": true,
+                "dsp_preset": id,
+                "function": "fx"
+            }
+        }),
+    );
+    Ok(out)
+}
+
+#[tauri::command]
+fn dsp_deactivate(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let out = dsp::deactivate(&root)?;
+    let _ = app.emit("config-changed", json!({ "config": out.get("config"), "hot": { "dsp_enabled": false, "dsp_preset": "", "function": "vc" } }));
+    Ok(out)
+}
+
+#[tauri::command]
 async fn dsp_presets(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(dsp::list(&root)))
@@ -1631,6 +1662,8 @@ pub fn run() {
             engine_stop_vc,
             engine_force_kill,
             engine_set_hot,
+            dsp_activate,
+            dsp_deactivate,
             engine_swap_model,
             engine_list_devices,
             provision_status,

@@ -876,10 +876,8 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             .unwrap_or("worker error")
             .to_string());
     }
-    // 等命令环的这段时间用户可能刚点了 DSP。再读一次，别用过期的
-    // dsp_enabled=false 把 inuse 盖回去。
-    let cfg = crate::config::read(root);
-    let _ = crate::config::sync_inuse(root, &cfg);
+    // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
+    let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
     {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);

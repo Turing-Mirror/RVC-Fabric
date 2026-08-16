@@ -429,6 +429,120 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
     write_atomic(&path, &text).map_err(|e| crate::i18n::te("s.4ad9fdccd9", &(e)))
 }
 
+fn write_saved_and_inuse(
+    root: &Path,
+    saved: Map<String, Value>,
+) -> Result<Map<String, Value>, String> {
+    let text = serde_json::to_string_pretty(&Value::Object(saved.clone()))
+        .map_err(|e| e.to_string())?;
+    write_atomic(&paths::app_config_path(root), &text)
+        .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+    let mut cfg = defaults();
+    for (k, v) in saved {
+        cfg.insert(k, v);
+    }
+    let _ = apply_device_alias(&mut cfg);
+    sync_inuse(root, &cfg)?;
+    Ok(cfg)
+}
+
+/// 选用 DSP：开关、预设、参数、function=fx、清音色一次落盘。
+pub fn write_dsp_on(
+    root: &Path,
+    preset: &str,
+    params: &Value,
+) -> Result<Map<String, Value>, String> {
+    let _g = lock_files();
+    let mut saved = read_json(&paths::app_config_path(root));
+    saved.insert("dsp_enabled".into(), json!(true));
+    saved.insert("dsp_preset".into(), json!(preset));
+    saved.insert("dsp_params".into(), params.clone());
+    saved.insert("function".into(), json!("fx"));
+    for k in [
+        "pth_path",
+        "index_path",
+        "last_model",
+        "last_model_name",
+        "last_model_path",
+    ] {
+        saved.insert(k.into(), json!(""));
+    }
+    write_saved_and_inuse(root, saved)
+}
+
+pub fn write_dsp_off(root: &Path) -> Result<Map<String, Value>, String> {
+    let _g = lock_files();
+    let mut saved = read_json(&paths::app_config_path(root));
+    saved.insert("dsp_enabled".into(), json!(false));
+    saved.insert("dsp_preset".into(), json!(""));
+    saved.insert("dsp_params".into(), json!({}));
+    if saved.get("function").and_then(|v| v.as_str()) == Some("fx") {
+        saved.insert("function".into(), json!("vc"));
+    }
+    write_saved_and_inuse(root, saved)
+}
+
+/// 开启变声前在锁里再读一次。预设 id 在、参数丢了就从磁盘补上。
+pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
+    let _g = lock_files();
+    let mut cfg = read(root);
+    let preset = cfg
+        .get("dsp_preset")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let params_empty = cfg
+        .get("dsp_params")
+        .and_then(|v| v.as_object())
+        .map(|m| m.is_empty())
+        .unwrap_or(true);
+    if !preset.is_empty() && params_empty {
+        if let Some(p) = crate::dsp::get(root, &preset) {
+            if let Some(params) = p.get("params").cloned().filter(Value::is_object) {
+                cfg.insert("dsp_params".into(), params);
+            }
+        }
+    }
+    let dsp_on = cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        || !preset.is_empty()
+        || cfg
+            .get("dsp_params")
+            .and_then(|v| v.as_object())
+            .map(|m| !m.is_empty())
+            .unwrap_or(false);
+    if dsp_on {
+        cfg.insert("dsp_enabled".into(), json!(true));
+        cfg.insert("function".into(), json!("fx"));
+        let mut saved = read_json(&paths::app_config_path(root));
+        for k in [
+            "dsp_enabled",
+            "dsp_preset",
+            "dsp_params",
+            "function",
+            "pth_path",
+            "index_path",
+        ] {
+            if let Some(v) = cfg.get(k) {
+                saved.insert(k.into(), v.clone());
+            }
+        }
+        if dsp_on {
+            saved.insert("pth_path".into(), json!(""));
+            saved.insert("index_path".into(), json!(""));
+        }
+        let text = serde_json::to_string_pretty(&Value::Object(saved))
+            .map_err(|e| e.to_string())?;
+        write_atomic(&paths::app_config_path(root), &text)
+            .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+    }
+    sync_inuse(root, &cfg)?;
+    Ok(cfg)
+}
+
 /// Merge `patch` into the saved config; returns the new effective config plus
 /// which keys need a restart of the stream to take effect.
 pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {

@@ -116,6 +116,16 @@ export async function forceKillEngine(): Promise<EngineStatus> {
   return invoke<EngineStatus>("engine_force_kill");
 }
 
+export async function activateDsp(id: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("dsp_activate", { id });
+}
+
+export async function deactivateDsp(): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("dsp_deactivate");
+}
+
 export async function setHot(params: {
   pitch?: number;
   formant?: number;

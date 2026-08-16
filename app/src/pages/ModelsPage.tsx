@@ -9,7 +9,7 @@ import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
-import { setHot } from "../lib/engine";
+import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { getConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { askConfirm, askPrompt } from "../lib/webDialog";
@@ -59,11 +59,14 @@ export type ModelsPageProps = {
     formant?: number;
     profileSummary?: string;
   }) => void;
+  /** 选了 / 停了 DSP 预设。底栏开启变声必须用这个 id，不能再去猜配置。 */
+  onDspChange?: (id: string) => void;
 };
 
 function ModelsPageImpl({
   banner = null,
   onVoiceChange,
+  onDspChange,
   onOpenPlaza,
   focusKind,
   focusNonce = 0,
@@ -86,19 +89,12 @@ function ModelsPageImpl({
     const next = p ? p.id : "";
     setDspId(next);
     setDspActive(p);
+    onDspChange?.(next);
     try {
-      await setHot(
-        p
-          ? {
-              dsp_enabled: true,
-              dsp_preset: p.id,
-              dsp_params: p.params,
-              function: "fx",
-            }
-          : { dsp_enabled: false, dsp_preset: "" },
-      );
+      if (p) await activateDsp(p.id);
+      else await deactivateDsp();
     } catch {
-      /* 引擎没开着也没关系：配置已经写下去了，下次开启变声就生效 */
+      /* 落盘失败时界面仍记着 id，开启变声会再写一次 */
     }
     if (p) {
       setSelectedKey("");
@@ -106,7 +102,7 @@ function ModelsPageImpl({
         model: { name: "", path: "", dir: "", file: "" },
       });
     }
-  }, [onVoiceChange]);
+  }, [onVoiceChange, onDspChange]);
 
   useEffect(() => {
     if (focusKind === "rvc" || focusKind === "dsp") setKind(focusKind);

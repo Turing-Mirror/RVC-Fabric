@@ -914,13 +914,34 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     if let Some(v) = cfg.get("formant") {
         hot.insert("formant".into(), v.clone());
     }
+    let dsp_preset = cfg
+        .get("dsp_preset")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let dsp_params_on = cfg
+        .get("dsp_params")
+        .and_then(|v| v.as_object())
+        .map(|m| !m.is_empty())
+        .unwrap_or(false);
     let dsp_on = cfg
         .get("dsp_enabled")
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
-        || cfg.get("function").and_then(|v| v.as_str()) == Some("fx");
+        || !dsp_preset.is_empty()
+        || dsp_params_on;
     if dsp_on {
         hot.insert("function".into(), json!("fx"));
+        hot.insert("dsp_enabled".into(), json!(true));
+        if !dsp_preset.is_empty() {
+            hot.insert("dsp_preset".into(), json!(dsp_preset));
+        }
+        if let Some(v) = cfg.get("dsp_params").cloned() {
+            if v.as_object().map(|m| !m.is_empty()).unwrap_or(false) {
+                hot.insert("dsp_params".into(), v);
+            }
+        }
     } else if let Some(v) = cfg.get("function") {
         hot.insert("function".into(), v.clone());
     }

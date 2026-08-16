@@ -196,8 +196,10 @@ export function useEngine() {
     if (!stopping) {
       try {
         const cfg = await getConfig();
+        // 只看 function=fx 会把上次残留当成 DSP，开起来是干声直通。
         dspOnly =
-          Boolean(cfg.dsp_enabled) || String(cfg.function || "") === "fx";
+          Boolean(cfg.dsp_enabled) ||
+          Boolean(String(cfg.dsp_preset || "").trim());
       } catch {
         dspOnly = false;
       }
@@ -240,6 +242,7 @@ export function useEngine() {
               : modeRef.current === "bypass"
                 ? "im"
                 : "vc",
+            ...(dspOnly ? { dsp_enabled: true } : {}),
           });
         } catch {
           /* worker may still be coming up; start_vc still syncs from config */

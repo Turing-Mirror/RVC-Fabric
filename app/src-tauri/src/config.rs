@@ -395,6 +395,23 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
         {
             continue;
         }
+        // DSP 开着时，空预设/空参数不能把已经选好的那份盖掉。
+        if dsp_on && k == "dsp_preset" && v.as_str().map(str::is_empty).unwrap_or(false) {
+            if out.get(k).and_then(|x| x.as_str()).map(|s| !s.is_empty()) == Some(true) {
+                continue;
+            }
+        }
+        if dsp_on && k == "dsp_params" {
+            let incoming_empty = v.as_object().map(|m| m.is_empty()).unwrap_or(true);
+            let have = out
+                .get(k)
+                .and_then(|x| x.as_object())
+                .map(|m| !m.is_empty())
+                .unwrap_or(false);
+            if incoming_empty && have {
+                continue;
+            }
+        }
         out.insert(k.to_string(), v.clone());
     }
     // The shell calls it `monitor_self`; the worker reads `monitor_enabled`.

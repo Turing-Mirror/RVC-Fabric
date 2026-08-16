@@ -25,6 +25,10 @@ export type EngineStatus = {
   meter_level?: number;
   threshold_meter?: number;
   threhold?: number;
+  /** "fx" = 纯 DSP，不上 RVC。 */
+  function?: string;
+  dsp_only?: boolean;
+  worker_kind?: string;
   [key: string]: unknown;
 };
 
@@ -251,7 +255,14 @@ export function statusSub(st: EngineStatus): string {
   const delay = Number(st.delay_ms || 0);
   const infer = Number(st.infer_ms || 0);
   if (st.state === "running" && (delay > 0 || infer > 0)) {
-    return tStatic("dock.delayLine", { delay, infer });
+    const dsp =
+      st.dsp_only === true ||
+      st.function === "fx" ||
+      st.worker_kind === "dsp";
+    return tStatic(dsp ? "dock.delayLineDsp" : "dock.delayLine", {
+      delay,
+      infer,
+    });
   }
   // Prefer shell-localized message (worker message_code resolved in Rust).
   // Fallback to raw message / error / idle labels.

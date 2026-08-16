@@ -579,7 +579,12 @@ async fn engine_ensure(state: State<'_, Mutex<AppState>>) -> Result<Value, Strin
     // Called on app start and waits up to 90s for the worker. Inline, that is
     // a 90-second freeze on the first launch after an install.
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(worker::ensure_worker_and_devices(&root, 90_000))
+        let ms = if worker::dsp_requested(&root) {
+            20_000
+        } else {
+            90_000
+        };
+        Ok(worker::ensure_worker_and_devices(&root, ms))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1158,9 +1163,7 @@ fn engine_set_hot(
             payload.insert("drop_model".into(), json!(true));
             payload.insert("pth_path".into(), json!(""));
             payload.insert("index_path".into(), json!(""));
-            payload.insert("last_model".into(), json!(""));
-            payload.insert("last_model_name".into(), json!(""));
-            payload.insert("last_model_path".into(), json!(""));
+            // last_model 留下：关掉 DSP / 下次选音色还认得用户上次用的那个。
         }
     }
     if let Some(v) = dsp_preset {

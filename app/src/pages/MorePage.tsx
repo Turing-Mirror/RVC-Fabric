@@ -186,9 +186,15 @@ export function MorePage({
 
   const delay = Number(status?.delay_ms || 0);
   const infer = Number(status?.infer_ms || 0);
+  const dsp =
+    status?.dsp_only === true ||
+    status?.function === "fx" ||
+    status?.worker_kind === "dsp";
   const latency =
     status?.state === "running"
-      ? t("s.4461ca9594", { v0: delay, v1: infer })
+      ? dsp
+        ? t("dock.delayLineDsp", { delay, infer })
+        : t("s.4461ca9594", { v0: delay, v1: infer })
       : status?.worker_alive
         ? t("s.1a0db8dc43")
         : "—";

@@ -14,7 +14,7 @@ import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
 import { getConfig, onConfigPatch, type Config } from "./lib/config";
-import { deactivateDsp, forceKillEngine, setHot, swapModel } from "./lib/engine";
+import { deactivateDsp, forceKillEngine, setHot, startVc, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
 import { invoke } from "@tauri-apps/api/core";
@@ -682,9 +682,22 @@ export default function App() {
     // 正在变声时热换模型：后台读新权重，旧音色继续出声；装上后只换指针。
     // 采样率会变时引擎自己退回重开流。worker 没在跑时这里会失败，配置已是
     // 新的，下次开启就对，所以吞掉。
-    if (engine.running) engine.noteSwap();
-    void swapModel().catch(() => {});
-  }, [syncParams, engine.running, engine.noteSwap]);
+    // 纯 DSP worker 手里没有 RVC，热换会失败；改走完整 start（会切到 RVC worker）。
+    if (engine.running) {
+      const st = engine.status;
+      const dsp =
+        st?.dsp_only === true ||
+        st?.function === "fx" ||
+        st?.worker_kind === "dsp";
+      if (dsp) {
+        engine.noteSwap();
+        void startVc().catch(() => {});
+      } else {
+        engine.noteSwap();
+        void swapModel().catch(() => {});
+      }
+    }
+  }, [syncParams, engine.running, engine.noteSwap, engine.status]);
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {

@@ -51,6 +51,7 @@
     "engineDown": "Engine not started",
     "waitStart": "Waiting for the engine to start",
     "delayLine": "{delay} ms latency · {infer} ms inference",
+    "delayLineDsp": "{delay} ms latency · {infer} ms process",
     "dspStopHint": "Click to turn off the DSP effect"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "Engine process started, loading runtime…",
       "importing": "Importing inference libraries (this can take a while)…",
+      "dsp_starting": "Starting DSP voice…",
       "missing_gui": "Incomplete install: engine binary missing",
       "crash_load": "Engine crashed while loading, see the logs",
       "ready": "Engine ready",

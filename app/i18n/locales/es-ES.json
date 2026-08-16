@@ -51,6 +51,7 @@
     "engineDown": "Motor no iniciado",
     "waitStart": "Esperando al motor",
     "delayLine": "Latencia {delay} ms · Inferencia {infer} ms",
+    "delayLineDsp": "Latencia {delay} ms · Proceso {infer} ms",
     "dspStopHint": "Haz clic para desactivar el efecto DSP"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "Proceso del motor iniciado, cargando el entorno…",
       "importing": "Importando bibliotecas de inferencia (puede tardar)…",
+      "dsp_starting": "Iniciando voz DSP…",
       "missing_gui": "Instalación incompleta: falta el ejecutable del motor",
       "crash_load": "El motor falló al cargar; consulta los registros",
       "ready": "Motor listo",

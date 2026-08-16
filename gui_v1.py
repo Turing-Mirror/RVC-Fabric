@@ -352,6 +352,7 @@ if __name__ == "__main__":
             self.gui_config = GUIConfig()
             self.config = Config()
             self.function = "vc"
+            self.dsp_only = False
             self._fx_chain = None
             self._voice_chain = None
             # 正在跑的离线转换是哪条命令发的。转换途中靠它认出后来的 sts_cancel。
@@ -1318,18 +1319,59 @@ if __name__ == "__main__":
             ).type_as(infer_wav)
             return torch.cat([head, tail_t], dim=0)
 
-        def start_vc(self):
-            # DML: ensure previous heavy objects are gone before allocating new ones
-            try:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                else:
-                    import gc
+        def _start_dsp_only(self, preset: str, params: dict) -> None:
+            """纯 DSP：不开 RVC、不占 GPU、不报「正在加载音色」。"""
+            if preset and not params:
+                try:
+                    from tools.dsp_presets import get_preset
 
-                    gc.collect()
+                    got = get_preset(preset)
+                    if got and isinstance(got.get("params"), dict):
+                        params = got["params"]
+                except Exception:
+                    traceback.print_exc()
+            self.rvc = None
+            self.resampler = None
+            self.resampler2 = None
+            self.tg = None
+            self.function = "fx"
+            self.dsp_only = True
+            self.gui_config.dsp_enabled = True
+            self.gui_config.dsp_preset = preset
+            self.gui_config.dsp_params = params
+            self.gui_config.pth_path = ""
+            self.gui_config.index_path = ""
+            self.gui_config.samplerate = self.get_device_samplerate()
+            self.gui_config.channels = self.get_device_channels()
+            printt(
+                "dsp start preset=%s effects=%s",
+                preset or "-",
+                ",".join(params.keys()) if params else "-",
+            )
+            try:
+                self._rebuild_fx_chain()
+                if self._fx_chain is not None:
+                    self._fx_chain.reset()
+                self._rebuild_voice_chain()
+                if self._voice_chain is not None:
+                    self._voice_chain.reset()
             except Exception:
-                pass
-            self._report_load(VC_LOADING_MODEL, 18)
+                traceback.print_exc()
+            self.zc = max(1, int(self.gui_config.samplerate) // 100)
+            self.block_frame = (
+                int(
+                    np.round(
+                        self.gui_config.block_time
+                        * self.gui_config.samplerate
+                        / self.zc
+                    )
+                )
+                * self.zc
+            )
+            self._report_load(VC_OPENING_STREAM, 80)
+            self.start_stream()
+
+        def start_vc(self):
             # RVC / DSP 二选一。没音色就绝不能去建 RVC：空路径会留下半截实例，
             # 下一行读 tgt_sr 直接 AttributeError（diag 26.8.16/141710）。
             pth = str(getattr(self.gui_config, "pth_path", "") or "").strip()
@@ -1344,65 +1386,55 @@ if __name__ == "__main__":
                 dsp_on = str(getattr(self, "function", "") or "") == "fx"
             self.dsp_only = dsp_on
             if self.dsp_only:
-                if preset and not params:
-                    try:
-                        from tools.dsp_presets import get_preset
+                self._start_dsp_only(preset, params)
+                return
+            # DML: ensure previous heavy objects are gone before allocating new ones
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                else:
+                    import gc
 
-                        got = get_preset(preset)
-                        if got and isinstance(got.get("params"), dict):
-                            params = got["params"]
-                    except Exception:
-                        traceback.print_exc()
+                    gc.collect()
+            except Exception:
+                pass
+            self._report_load(VC_LOADING_MODEL, 18)
+            if not pth or not os.path.isfile(pth):
                 self.rvc = None
-                self.function = "fx"
-                self.gui_config.dsp_enabled = True
-                self.gui_config.dsp_preset = preset
-                self.gui_config.dsp_params = params
-                self.gui_config.pth_path = ""
-                self.gui_config.index_path = ""
-                self.gui_config.samplerate = self.get_device_samplerate()
-                printt(
-                    "dsp start preset=%s effects=%s",
-                    preset or "-",
-                    ",".join(params.keys()) if params else "-",
+                raise FileNotFoundError(
+                    i18n("请选择音色，或先选用一个 DSP 预设")
                 )
-            else:
-                if not pth or not os.path.isfile(pth):
-                    self.rvc = None
-                    raise FileNotFoundError(
-                        i18n("请选择音色，或先选用一个 DSP 预设")
-                    )
-                if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
-                    try:
-                        ensure_harvest_workers(self.gui_config.n_cpu)
-                    except Exception:
-                        pass
-                last = getattr(self, "rvc", None)
-                if last is not None and not getattr(last, "tgt_sr", 0):
-                    last = None
-                self.rvc = rvc_for_realtime.RVC(
-                    self.gui_config.pitch,
-                    self.gui_config.formant,
-                    self.gui_config.pth_path,
-                    self.gui_config.index_path,
-                    self.gui_config.index_rate,
-                    self.gui_config.n_cpu,
-                    inp_q,
-                    opt_q,
-                    self.config,
-                    last,
-                    on_progress=self._on_rvc_progress,
-                )
-                if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
-                    self.rvc = None
-                    raise RuntimeError(i18n("模型加载失败"))
-                if self.function == "fx":
-                    self.function = "vc"
-                self.gui_config.samplerate = (
-                    self.rvc.tgt_sr
-                    if self.gui_config.sr_type == "sr_model"
-                    else self.get_device_samplerate()
-                )
+            if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
+                try:
+                    ensure_harvest_workers(self.gui_config.n_cpu)
+                except Exception:
+                    pass
+            last = getattr(self, "rvc", None)
+            if last is not None and not getattr(last, "tgt_sr", 0):
+                last = None
+            self.rvc = rvc_for_realtime.RVC(
+                self.gui_config.pitch,
+                self.gui_config.formant,
+                self.gui_config.pth_path,
+                self.gui_config.index_path,
+                self.gui_config.index_rate,
+                self.gui_config.n_cpu,
+                inp_q,
+                opt_q,
+                self.config,
+                last,
+                on_progress=self._on_rvc_progress,
+            )
+            if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
+                self.rvc = None
+                raise RuntimeError(i18n("模型加载失败"))
+            if self.function == "fx":
+                self.function = "vc"
+            self.gui_config.samplerate = (
+                self.rvc.tgt_sr
+                if self.gui_config.sr_type == "sr_model"
+                else self.get_device_samplerate()
+            )
             self.gui_config.channels = self.get_device_channels()
             try:
                 self._rebuild_fx_chain()
@@ -1668,7 +1700,10 @@ if __name__ == "__main__":
                     def audio_loop():
                         while flag_vc:
                             try:
-                                self.audio_infer(self.block_frame << 1)
+                                if getattr(self, "dsp_only", False):
+                                    self.audio_infer_dsp(self.block_frame << 1)
+                                else:
+                                    self.audio_infer(self.block_frame << 1)
                             except Exception:
                                 traceback.print_exc()
                                 break
@@ -2083,6 +2118,101 @@ if __name__ == "__main__":
             except Exception:
                 pass
 
+        def audio_infer_dsp(self, buf_size: int) -> None:
+            """纯 DSP 热路径：numpy only，不走 RVC / SOLA / TorchGate。"""
+            global flag_vc
+            got = self.in_evt.wait(timeout=0.5)
+            if not flag_vc:
+                return
+            if not got:
+                return
+            if self.in_buf is None or self.out_buf is None:
+                return
+            if getattr(self, "in_ptr", None) is None or getattr(self, "out_ptr", None) is None:
+                return
+            rptr = self.in_ptr.value
+            self.in_evt.clear()
+            start_time = time.perf_counter()
+            rend = rptr + self.block_frame
+            chunk = np.copy(self.in_buf[rptr:rend])
+            if chunk.ndim == 2:
+                indata = chunk.mean(axis=1).astype(np.float32)
+            else:
+                indata = np.asarray(chunk, dtype=np.float32).reshape(-1)
+            in_gain_db = float(getattr(self.gui_config, "in_gain_db", 0.0) or 0.0)
+            if abs(in_gain_db) >= 0.05:
+                indata = indata * np.float32(10.0 ** (in_gain_db / 20.0))
+                np.clip(indata, -1.0, 1.0, out=indata)
+            try:
+                _rms = float(np.sqrt(np.mean(np.square(indata))) + 1e-9)
+                self.last_input_db = float(max(-90.0, 20.0 * np.log10(_rms)))
+            except Exception:
+                pass
+            if float(getattr(self.gui_config, "threhold", -60) or -60) > -60:
+                if self.last_input_db < float(self.gui_config.threhold):
+                    hold = float(getattr(self, "_dsp_gate_hold", 0.0) or 0.0)
+                    hold = max(0.0, hold - 0.35)
+                    self._dsp_gate_hold = hold
+                    if hold <= 0.0:
+                        indata = np.zeros_like(indata)
+                    else:
+                        indata = indata * np.float32(hold)
+                else:
+                    self._dsp_gate_hold = 1.0
+            y = indata
+            if self.function == "fx":
+                try:
+                    if self._voice_chain is None:
+                        self._rebuild_voice_chain()
+                    if self._voice_chain is not None:
+                        y = self._voice_chain.process(
+                            y, int(getattr(self.gui_config, "samplerate", 48000) or 48000)
+                        )
+                except Exception:
+                    traceback.print_exc()
+            if bool(getattr(self.gui_config, "fx_enabled", False)):
+                try:
+                    if self._fx_chain is None:
+                        self._rebuild_fx_chain()
+                    if self._fx_chain is not None and self._fx_chain.enabled:
+                        y = self._fx_chain.process(
+                            y, int(getattr(self.gui_config, "samplerate", 48000) or 48000)
+                        )
+                except Exception:
+                    traceback.print_exc()
+            y = np.asarray(y, dtype=np.float32).reshape(-1)
+            n = int(self.block_frame)
+            if y.shape[0] != n:
+                out = np.zeros(n, dtype=np.float32)
+                take = min(n, int(y.shape[0]))
+                if take > 0:
+                    out[:take] = y[:take]
+                y = out
+            y = soft_clip_np(y)
+            ch = int(getattr(self.gui_config, "channels", 2) or 2)
+            if ch <= 1:
+                outdata = y.reshape(-1, 1)
+            else:
+                outdata = np.repeat(y.reshape(-1, 1), ch, axis=1)
+            self._write_monitor(outdata)
+            if self.out_buf is None or not flag_vc:
+                return
+            start = self.out_ptr.value
+            play_pos = self.play_ptr.value
+            delta = (start - play_pos + buf_size) % buf_size
+            write_pos = play_pos if delta < self.block_frame else (start + self.block_frame) % buf_size
+            end = (write_pos + self.block_frame) % buf_size
+            if end > write_pos:
+                self.out_buf[write_pos:end] = outdata
+            else:
+                first = buf_size - write_pos
+                self.out_buf[write_pos:] = outdata[:first]
+                self.out_buf[:end] = outdata[first:]
+            if self.out_ptr is None:
+                return
+            self.out_ptr.value = write_pos
+            self.last_infer_ms = int((time.perf_counter() - start_time) * 1000)
+
         def audio_infer(
             self, buf_size:int # 2 * self.block_frame
         ):
@@ -2473,6 +2603,13 @@ if __name__ == "__main__":
             try:
                 from tools.worker_protocol import write_status
 
+                dsp = bool(getattr(self, "dsp_only", False)) or str(
+                    getattr(self, "function", "") or ""
+                ) == "fx"
+                fields.setdefault("worker_kind", "dsp" if dsp else "rvc")
+                if dsp:
+                    fields.setdefault("dsp_only", True)
+                    fields.setdefault("function", "fx")
                 write_status(**fields)
             except Exception:
                 traceback.print_exc()
@@ -3150,14 +3287,28 @@ if __name__ == "__main__":
                 self.stop_stream()
             except Exception:
                 traceback.print_exc()
+            dsp_hint = False
+            if isinstance(cmd, dict):
+                dsp_hint = bool(cmd.get("dsp_enabled")) or bool(
+                    str(cmd.get("dsp_preset") or "").strip()
+                )
+            if not dsp_hint:
+                dsp_hint = bool(getattr(self.gui_config, "dsp_enabled", False)) or bool(
+                    str(getattr(self.gui_config, "dsp_preset", "") or "").strip()
+                )
             try:
-                from tools.msg_codes import VC_LOADING_MODEL, status_fields as _sf_start
+                if dsp_hint:
+                    from tools.msg_codes import VC_OPENING_STREAM, status_fields as _sf_start
 
-                _load_fields = _sf_start(VC_LOADING_MODEL)
+                    _load_fields = _sf_start(VC_OPENING_STREAM)
+                else:
+                    from tools.msg_codes import VC_LOADING_MODEL, status_fields as _sf_start
+
+                    _load_fields = _sf_start(VC_LOADING_MODEL)
             except Exception:
                 _load_fields = {
-                    "message_code": "vc.loading_model",
-                    "message": "正在加载音色模型…",
+                    "message_code": "vc.opening_stream" if dsp_hint else "vc.loading_model",
+                    "message": "正在打开音频设备…" if dsp_hint else "正在加载音色模型…",
                 }
 
             self._worker_write_status(
@@ -3652,6 +3803,8 @@ if __name__ == "__main__":
             base["state"] = "idle"
             base["pid"] = os.getpid()
             base["progress"] = 100
+            base["worker_kind"] = "rvc"
+            base["dsp_only"] = False
             try:
                 from tools.msg_codes import ENGINE_READY, status_fields as _sf_ready
 

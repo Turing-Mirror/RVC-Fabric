@@ -14,6 +14,7 @@ from __future__ import annotations
 # process lifecycle
 ENGINE_STARTING = "engine.starting"
 ENGINE_IMPORTING = "engine.importing"
+ENGINE_DSP_STARTING = "engine.dsp_starting"
 ENGINE_MISSING_GUI = "engine.missing_gui"
 ENGINE_CRASH_LOAD = "engine.crash_load"
 ENGINE_READY = "engine.ready"
@@ -54,6 +55,7 @@ VC_UNKNOWN_CMD = "vc.unknown_cmd"
 _FALLBACK_ZH: dict[str, str] = {
     ENGINE_STARTING: "引擎进程已启动，正在加载运行库…",
     ENGINE_IMPORTING: "正在导入推理库（可能需要十几秒）…",
+    ENGINE_DSP_STARTING: "正在启动 DSP 变声…",
     ENGINE_MISSING_GUI: "安装不完整：缺少引擎主程序",
     ENGINE_CRASH_LOAD: "引擎加载时崩溃，详见日志",
     ENGINE_READY: "引擎就绪",

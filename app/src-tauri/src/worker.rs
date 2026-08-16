@@ -863,11 +863,6 @@ pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
 
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
 pub fn start_vc(root: &Path) -> Result<u64, String> {
-    // 开启前把 app_config 再刷进 inuse：底栏热更若只改了内存，或安装包覆盖了
-    // 干净 inuse，这里兜一次，避免引擎按 pitch=0 起流而界面仍显示 +11。
-    let cfg = crate::config::read(root);
-    let _ = crate::config::sync_inuse(root, &cfg);
-
     if !is_worker_alive(root) {
         start_worker(root)?;
     }
@@ -881,6 +876,10 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             .unwrap_or("worker error")
             .to_string());
     }
+    // 等命令环的这段时间用户可能刚点了 DSP。再读一次，别用过期的
+    // dsp_enabled=false 把 inuse 盖回去。
+    let cfg = crate::config::read(root);
+    let _ = crate::config::sync_inuse(root, &cfg);
     {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);
@@ -918,7 +917,8 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     let dsp_on = cfg
         .get("dsp_enabled")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || cfg.get("function").and_then(|v| v.as_str()) == Some("fx");
     if dsp_on {
         hot.insert("function".into(), json!("fx"));
     } else if let Some(v) = cfg.get("function") {

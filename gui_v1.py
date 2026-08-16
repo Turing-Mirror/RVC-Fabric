@@ -1030,7 +1030,9 @@ if __name__ == "__main__":
         def set_values(self, values):
             # RVC / DSP 二选一。开了 DSP 就不查音色、不拦引擎资源。
             pth = values["pth_path"].strip()
-            dsp_on = bool(values.get("dsp_enabled"))
+            dsp_on = bool(values.get("dsp_enabled")) or str(
+                values.get("function") or ""
+            ) == "fx"
             core_ok = _engine_core_ready()
             if dsp_on:
                 pth = ""
@@ -2519,6 +2521,7 @@ if __name__ == "__main__":
                 "dsp_enabled": bool(data.get("dsp_enabled")),
                 "dsp_preset": str(data.get("dsp_preset") or ""),
                 "dsp_params": data.get("dsp_params") or {},
+                "function": str(data.get("function") or "vc"),
             }
             # CUDA Graph 加速。设 0/1 到环境变量里，rtrvc 起模型时读它决定探不
             # 探测；只有 N 卡吃得到，A/I 卡和 CPU 那边探测函数自己会返回 False。

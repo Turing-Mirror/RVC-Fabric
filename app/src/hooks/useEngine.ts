@@ -196,7 +196,8 @@ export function useEngine() {
     if (!stopping) {
       try {
         const cfg = await getConfig();
-        dspOnly = Boolean(cfg.dsp_enabled);
+        dspOnly =
+          Boolean(cfg.dsp_enabled) || String(cfg.function || "") === "fx";
       } catch {
         dspOnly = false;
       }

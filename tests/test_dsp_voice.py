@@ -264,6 +264,13 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn('function: "fx"', apply)
         self.assertIn("clearVoice", apply)
         self.assertNotIn("noVoice", apply)
+        self.assertLess(apply.index("setHot"), apply.index("clearVoice"))
+
+    def test_start_accepts_fx_function_as_dsp(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        body = src[src.index("def set_values") : src.index("def _load_fx_from_values")]
+        self.assertIn('== "fx"', body)
+        self.assertIn('"function"', src[src.index("def _values_from_config_file") :])
 
     def test_tool_downloads_never_open_in_the_tool_window(self):
         src = (ROOT / "app" / "src" / "lib" / "downloadModels.ts").read_text(

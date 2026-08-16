@@ -1,15 +1,15 @@
 {
   "name": "山洞",
-  "desc": "大混响加长回声",
+  "desc": "空间拉开，回声不盖住人声",
   "params": {
     "reverb": {
-      "size": 0.95,
-      "mix": 0.5
+      "size": 0.8,
+      "mix": 0.28
     },
     "echo": {
-      "time_ms": 320.0,
-      "feedback": 0.45,
-      "mix": 0.35
+      "time_ms": 250.0,
+      "feedback": 0.24,
+      "mix": 0.16
     }
   }
 }

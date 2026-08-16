@@ -30,165 +30,176 @@ def _p(**kw: Any) -> Dict[str, Dict[str, Any]]:
     return {k: v for k, v in kw.items()}
 
 
-# 内置预设。名字用描述性的通用词（Alien / Robot / Radio 这类谁都能用），
-# 不打包任何别人的音频素材，也不宣称跟谁「兼容」。
+# 内置预设。名字用描述性的通用词，不宣称跟谁兼容。
 #
-# 顺序就是界面上的顺序：先是几个一眼能听出效果的梗声（流量入口），
-# 再是正经能用的男女声互换，最后是场景类。
+# 变调是 WSOLA：升/降调时共振峰会跟着走（Clownfish 同一个变调滑条就是这样）。
+# 所以：
+#   * 花栗鼠 / 巨人 / 小孩 = 只动 pitch，别再叠同向 formant
+#   * 男女互换 = pitch 和 formant **反向**配平，把跟着走的那截嗓子收回来
+#   * 氦气 = 只动 formant，调子不动
+# 环调 mix 超过 ~0.4 人话就听不清，机器人 / 外星人必须留 intelligibility。
+#
+# 顺序就是界面上的顺序：先是一眼能听出效果的梗声，再是能用的人声，最后是场景。
 BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "chipmunk",
         "name": "花栗鼠",
-        "desc": "音高拉高，共振峰跟着走 —— 经典的尖细嗓",
-        "params": _p(pitch={"semitones": 8.0}),
+        "desc": "升调，共振峰跟着走 —— 尖细、能说话",
+        "params": _p(pitch={"semitones": 7.0}),
     },
     {
         "id": "giant",
         "name": "巨人",
-        "desc": "音高压低，整个人变大一号",
-        "params": _p(pitch={"semitones": -8.0}, reverb={"size": 0.6, "mix": 0.18}),
+        "desc": "降调，整个人变大一号，不加混响",
+        "params": _p(pitch={"semitones": -7.0}),
     },
     {
         "id": "robot",
         "name": "机器人",
-        "desc": "环形调制把嗓音打成金属声",
-        "params": _p(ring={"freq": 55.0, "mix": 0.85}, drive={"amount": 0.25}),
+        "desc": "低频环调加一点金属感，还听得清在说什么",
+        "params": _p(
+            ring={"freq": 32.0, "mix": 0.32},
+            radio={"low": 220.0, "high": 4200.0, "mix": 0.28, "noise": 0.0},
+            drive={"amount": 0.14},
+        ),
     },
     {
         "id": "alien",
         "name": "外星人",
-        "desc": "高频环调加颤音，谁都听得出不是人",
+        "desc": "略升调、一层薄环调、轻轻发颤",
         "params": _p(
-            pitch={"semitones": 4.0},
-            ring={"freq": 420.0, "mix": 0.6},
-            vibrato={"rate": 7.0, "depth": 18.0},
+            pitch={"semitones": 3.0},
+            ring={"freq": 96.0, "mix": 0.18},
+            vibrato={"rate": 6.2, "depth": 8.0},
         ),
     },
     {
         "id": "radio",
         "name": "老收音机",
-        "desc": "限带加底噪，像从喇叭里传出来",
+        "desc": "窄带加一点底噪，像从喇叭里传出来",
         "params": _p(
-            radio={"low": 420.0, "high": 2800.0, "mix": 1.0, "noise": 0.12},
-            drive={"amount": 0.3},
+            radio={"low": 380.0, "high": 2700.0, "mix": 1.0, "noise": 0.07},
+            drive={"amount": 0.16},
         ),
     },
     {
         "id": "walkie",
         "name": "对讲机",
-        "desc": "更窄的带宽，更狠的过载",
+        "desc": "更窄的带宽，沙沙声和过载都在，人话还在",
         "params": _p(
-            radio={"low": 500.0, "high": 2400.0, "mix": 1.0, "noise": 0.2},
-            drive={"amount": 0.55},
-            bitcrush={"bits": 10, "downsample": 1},
+            radio={"low": 480.0, "high": 2300.0, "mix": 1.0, "noise": 0.13},
+            drive={"amount": 0.38},
         ),
     },
     {
         "id": "retro8bit",
         "name": "8-bit",
-        "desc": "位深压到底，掉进老游戏机里",
-        "params": _p(bitcrush={"bits": 4, "downsample": 8}, drive={"amount": 0.2}),
+        "desc": "老游戏机那种碎，不是坏掉的喇叭",
+        "params": _p(bitcrush={"bits": 6, "downsample": 5}, drive={"amount": 0.12}),
     },
     {
         "id": "ghost",
         "name": "幽灵",
-        "desc": "耳语加长混响，贴着耳朵说话",
+        "desc": "半气声、略沉，空间拉开但不糊成一团",
         "params": _p(
-            whisper={"amount": 0.75},
-            pitch={"semitones": -3.0},
-            reverb={"size": 0.85, "mix": 0.45},
+            whisper={"amount": 0.42},
+            pitch={"semitones": -2.0},
+            reverb={"size": 0.72, "mix": 0.26},
         ),
     },
     {
         "id": "monster",
         "name": "怪物",
-        "desc": "压得很低再过载，胸腔里出来的声音",
+        "desc": "压低再加一点胸腔过载，还能吼得出字",
         "params": _p(
-            pitch={"semitones": -12.0},
-            formant={"shift": -3.0},
-            drive={"amount": 0.5},
-            reverb={"size": 0.5, "mix": 0.2},
+            pitch={"semitones": -8.0},
+            formant={"shift": -2.0},
+            drive={"amount": 0.32},
+            reverb={"size": 0.32, "mix": 0.12},
         ),
     },
     {
         "id": "helium",
         "name": "氦气",
-        "desc": "只搬共振峰不动音高 —— 吸了气球的那种细，但调子没变",
-        "params": _p(formant={"shift": 7.0}),
+        "desc": "只搬共振峰，调子不动 —— 吸了气球那种细",
+        "params": _p(formant={"shift": 8.0}),
     },
     {
         "id": "male_to_female",
         "name": "男声转女声",
-        "desc": "音高与共振峰配平，升调但不发塑料",
-        "params": _p(pitch={"semitones": 5.0}, formant={"shift": 2.5}),
+        "desc": "升调后把跟着走的共振峰压回来，不发塑料",
+        "params": _p(pitch={"semitones": 4.5}, formant={"shift": -2.2}),
     },
     {
         "id": "female_to_male",
         "name": "女声转男声",
-        "desc": "降调同时把共振峰压下来，不闷",
-        "params": _p(pitch={"semitones": -5.0}, formant={"shift": -2.5}),
+        "desc": "降调后把嗓子亮度补回来，不闷成巨人",
+        "params": _p(pitch={"semitones": -4.5}, formant={"shift": 2.2}),
     },
     {
         "id": "child",
         "name": "小孩",
-        "desc": "音高与共振峰一起上抬，比单纯升调自然",
-        "params": _p(pitch={"semitones": 6.0}, formant={"shift": 4.0}),
+        "desc": "升调，共振峰跟着走，比花栗鼠矮一截",
+        "params": _p(pitch={"semitones": 5.5}),
     },
     {
         "id": "elder",
         "name": "老者",
-        "desc": "略降调 + 慢颤音，喉头有点抖",
+        "desc": "略沉、喉头轻抖，亮度还在",
         "params": _p(
-            pitch={"semitones": -2.0},
-            formant={"shift": -1.5},
-            vibrato={"rate": 4.5, "depth": 9.0},
+            pitch={"semitones": -1.5},
+            formant={"shift": 1.0},
+            vibrato={"rate": 4.0, "depth": 6.5},
         ),
     },
     {
         "id": "whisper",
         "name": "耳语",
-        "desc": "谐波打散、共振峰保留，气声但听得清",
-        "params": _p(whisper={"amount": 0.9}),
+        "desc": "气声，字还能听清",
+        "params": _p(whisper={"amount": 0.56}),
     },
     {
         "id": "chorus_crowd",
         "name": "一群人",
-        "desc": "三路失谐叠在一起，一个人说成一群",
-        "params": _p(chorus={"depth": 0.85, "rate": 0.5, "voices": 3}),
+        "desc": "三路轻轻失谐，一个人说成旁边还有人",
+        "params": _p(chorus={"depth": 0.55, "rate": 0.42, "voices": 3}),
     },
     {
         "id": "cave",
         "name": "山洞",
-        "desc": "大混响加长回声",
+        "desc": "空间拉开，回声不盖住人声",
         "params": _p(
-            reverb={"size": 0.95, "mix": 0.5},
-            echo={"time_ms": 320.0, "feedback": 0.45, "mix": 0.35},
+            reverb={"size": 0.8, "mix": 0.28},
+            echo={"time_ms": 250.0, "feedback": 0.24, "mix": 0.16},
         ),
     },
     {
         "id": "telephone",
         "name": "电话",
-        "desc": "300–3400Hz 的老式话路",
-        "params": _p(radio={"low": 300.0, "high": 3400.0, "mix": 1.0, "noise": 0.03}),
+        "desc": "300–3400Hz 老式话路",
+        "params": _p(
+            radio={"low": 300.0, "high": 3400.0, "mix": 1.0, "noise": 0.025},
+            drive={"amount": 0.08},
+        ),
     },
     {
         "id": "megaphone",
         "name": "扩音喇叭",
-        "desc": "限带加重过载加短回声",
+        "desc": "限带、过载、短反射，像手里那只喇叭",
         "params": _p(
-            radio={"low": 600.0, "high": 3800.0, "mix": 0.9, "noise": 0.05},
-            drive={"amount": 0.75},
-            echo={"time_ms": 90.0, "feedback": 0.2, "mix": 0.2},
+            radio={"low": 550.0, "high": 3500.0, "mix": 0.92, "noise": 0.035},
+            drive={"amount": 0.46},
+            echo={"time_ms": 72.0, "feedback": 0.12, "mix": 0.14},
         ),
     },
     {
         "id": "underwater",
         "name": "水下",
-        "desc": "砍掉高频再加慢颤音",
+        "desc": "高频闷掉，慢慢晃，远处一点空间",
         "params": _p(
-            radio={"low": 80.0, "high": 1100.0, "mix": 0.95, "noise": 0.0},
-            vibrato={"rate": 2.5, "depth": 12.0},
-            reverb={"size": 0.7, "mix": 0.3},
+            radio={"low": 70.0, "high": 1000.0, "mix": 0.88, "noise": 0.0},
+            vibrato={"rate": 1.6, "depth": 7.0},
+            reverb={"size": 0.62, "mix": 0.2},
         ),
     },
 ]

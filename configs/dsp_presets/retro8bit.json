@@ -1,13 +1,13 @@
 {
   "name": "8-bit",
-  "desc": "位深压到底，掉进老游戏机里",
+  "desc": "老游戏机那种碎，不是坏掉的喇叭",
   "params": {
     "bitcrush": {
-      "bits": 4,
-      "downsample": 8
+      "bits": 6,
+      "downsample": 5
     },
     "drive": {
-      "amount": 0.2
+      "amount": 0.12
     }
   }
 }

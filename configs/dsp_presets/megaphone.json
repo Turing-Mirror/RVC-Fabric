@@ -1,20 +1,20 @@
 {
   "name": "扩音喇叭",
-  "desc": "限带加重过载加短回声",
+  "desc": "限带、过载、短反射，像手里那只喇叭",
   "params": {
     "radio": {
-      "low": 600.0,
-      "high": 3800.0,
-      "mix": 0.9,
-      "noise": 0.05
+      "low": 550.0,
+      "high": 3500.0,
+      "mix": 0.92,
+      "noise": 0.035
     },
     "drive": {
-      "amount": 0.75
+      "amount": 0.46
     },
     "echo": {
-      "time_ms": 90.0,
-      "feedback": 0.2,
-      "mix": 0.2
+      "time_ms": 72.0,
+      "feedback": 0.12,
+      "mix": 0.14
     }
   }
 }

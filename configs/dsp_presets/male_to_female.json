@@ -1,12 +1,12 @@
 {
   "name": "男声转女声",
-  "desc": "音高与共振峰配平，升调但不发塑料",
+  "desc": "升调后把跟着走的共振峰压回来，不发塑料",
   "params": {
     "pitch": {
-      "semitones": 5.0
+      "semitones": 4.5
     },
     "formant": {
-      "shift": 2.5
+      "shift": -2.2
     }
   }
 }

@@ -1,20 +1,20 @@
 {
   "name": "水下",
-  "desc": "砍掉高频再加慢颤音",
+  "desc": "高频闷掉，慢慢晃，远处一点空间",
   "params": {
     "radio": {
-      "low": 80.0,
-      "high": 1100.0,
-      "mix": 0.95,
+      "low": 70.0,
+      "high": 1000.0,
+      "mix": 0.88,
       "noise": 0.0
     },
     "vibrato": {
-      "rate": 2.5,
-      "depth": 12.0
+      "rate": 1.6,
+      "depth": 7.0
     },
     "reverb": {
-      "size": 0.7,
-      "mix": 0.3
+      "size": 0.62,
+      "mix": 0.2
     }
   }
 }

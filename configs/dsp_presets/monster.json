@@ -1,19 +1,19 @@
 {
   "name": "怪物",
-  "desc": "压得很低再过载，胸腔里出来的声音",
+  "desc": "压低再加一点胸腔过载，还能吼得出字",
   "params": {
     "pitch": {
-      "semitones": -12.0
+      "semitones": -8.0
     },
     "formant": {
-      "shift": -3.0
+      "shift": -2.0
     },
     "drive": {
-      "amount": 0.5
+      "amount": 0.32
     },
     "reverb": {
-      "size": 0.5,
-      "mix": 0.2
+      "size": 0.32,
+      "mix": 0.12
     }
   }
 }

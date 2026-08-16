@@ -1,12 +1,15 @@
 {
   "name": "电话",
-  "desc": "300–3400Hz 的老式话路",
+  "desc": "300–3400Hz 老式话路",
   "params": {
     "radio": {
       "low": 300.0,
       "high": 3400.0,
       "mix": 1.0,
-      "noise": 0.03
+      "noise": 0.025
+    },
+    "drive": {
+      "amount": 0.08
     }
   }
 }

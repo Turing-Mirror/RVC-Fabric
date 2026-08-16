@@ -116,7 +116,7 @@ npm run dev
 
 - The source code of this project is open-sourced under the [MIT License](./LICENSE).
 - Model weights, voice packages, and third-party resources follow their original licensing agreements.
-- **Disclaimer**: Please do not use this software for identity forgery, fraud, harassment, or any unauthorized illegal purposes. Before using others' voices for training or conversion, explicit authorization must be obtained from the original right holders. Users are solely responsible for any legal consequences arising from illegal use.
+- **Disclaimer**: Do not use this software for identity fraud, impersonation, or any other illegal purpose. Obtain the rights holder's authorization before training on or converting someone else's voice. Users are responsible for complying with local laws and regulations.
 
 ## Acknowledgements
 

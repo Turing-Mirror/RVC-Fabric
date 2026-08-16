@@ -1869,6 +1869,15 @@ if __name__ == "__main__":
 
             idx = self._resolve_output_device_index(name)
             if idx is None:
+                # 配置名过期（扬声器↔耳机改名、设备拔了）时别直接放弃：
+                # 纯 DSP 输出常在 CABLE，听感全靠监听。
+                better = self._pick_better_monitor_device("")
+                if better and better != name:
+                    printt("monitor device fallback: %r -> %r", name, better)
+                    name = better
+                    self.gui_config.monitor_device = better
+                    idx = self._resolve_output_device_index(name)
+            if idx is None:
                 msg = "monitor device not found: %s" % name
                 printt(msg)
                 self._monitor_status = msg
@@ -2085,6 +2094,13 @@ if __name__ == "__main__":
             if not flag_vc:
                 return
             if not got:
+                return
+            # stop_stream 会先清 flag_vc 再把 out_buf 置 None；若本轮已经过了
+            # 上面的 flag 检查，后面写入会 TypeError，audio_loop 直接 break，
+            # 状态还挂着 running，用户以为变声开着其实已经没声了。
+            if self.in_buf is None or self.out_buf is None:
+                return
+            if getattr(self, "in_ptr", None) is None or getattr(self, "out_ptr", None) is None:
                 return
             rptr = self.in_ptr.value
             self.in_evt.clear()
@@ -2321,7 +2337,9 @@ if __name__ == "__main__":
                 # 否则按块对齐
                 write_pos = (start + self.block_frame) % buf_size
 
-            # 写入共享缓冲区
+            # 写入共享缓冲区（再判一次：stop 可能中途把缓冲拆了）
+            if self.out_buf is None or not flag_vc:
+                return
             end = (write_pos + self.block_frame) % buf_size
             if end > write_pos:
                 self.out_buf[write_pos:end] = outdata
@@ -2331,6 +2349,8 @@ if __name__ == "__main__":
                 self.out_buf[:end] = outdata[first:]
 
             # 更新写指针
+            if self.out_ptr is None:
+                return
             self.out_ptr.value = write_pos
 
             if self.in_evt.is_set():

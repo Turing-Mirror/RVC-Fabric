@@ -180,7 +180,8 @@ pub fn t_vars(key: &str, vars: &HashMap<String, String>) -> String {
     key.to_string()
 }
 
-/// Single display arg: replaces `{e}`, `{a0}`, `{kind}`, `{v0}`, and first `{}`.
+/// Single display arg: replaces `{e}`, `{a0}`, `{kind}`, `{v0}`, `{label}`,
+/// `{name}`, and first `{}`.
 pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
     let v = e.to_string();
     t(key)
@@ -188,6 +189,8 @@ pub fn te(key: &str, e: &impl std::fmt::Display) -> String {
         .replace("{a0}", &v)
         .replace("{kind}", &v)
         .replace("{v0}", &v)
+        .replace("{label}", &v)
+        .replace("{name}", &v)
         .replacen("{}", &v, 1)
 }
 
@@ -394,11 +397,11 @@ pub fn localize_status(status: &mut Value) {
         .get("state")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    if code == "engine.starting"
-        && matches!(state, "idle" | "running" | "error" | "stopping")
+    if (code == "engine.starting" || code == "engine.importing") && state != "starting"
     {
         if let Some(obj) = status.as_object_mut() {
             obj.insert("message_code".into(), Value::String(String::new()));
+            obj.insert("message".into(), Value::String(String::new()));
         }
         return;
     }
@@ -523,6 +526,32 @@ mod tests {
         let missing = te("s.22a95f37e3", &"train");
         assert!(missing.contains("train"), "got {missing}");
         assert!(!missing.contains("{kind}"), "got {missing}");
+    }
+
+    #[test]
+    fn te_fills_label_and_name_placeholders() {
+        let _g = testing::pin("zh-CN");
+        let label = te("s.407187444b", &"hubert.pt");
+        assert!(label.contains("hubert.pt"), "got {label}");
+        assert!(!label.contains("{label}"), "got {label}");
+        let name = te("s.1cf582864a", &"model.zip");
+        assert!(name.contains("model.zip"), "got {name}");
+        assert!(!name.contains("{name}"), "got {name}");
+    }
+
+    #[test]
+    fn stale_importing_code_is_cleared_when_idle() {
+        let mut st = serde_json::json!({
+            "state": "idle",
+            "message_code": "engine.importing",
+            "message": "正在导入推理库（可能需要十几秒）…",
+        });
+        localize_status(&mut st);
+        assert_eq!(
+            st.get("message_code").and_then(|v| v.as_str()).unwrap_or("x"),
+            ""
+        );
+        assert_eq!(st.get("message").and_then(|v| v.as_str()).unwrap_or("x"), "");
     }
 
     #[test]

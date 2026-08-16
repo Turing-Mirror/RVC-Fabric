@@ -191,6 +191,8 @@ const LOAD_CODES = new Set([
   "vc.swapping",
 ]);
 
+const BOOT_CODES = new Set(["engine.starting", "engine.importing"]);
+
 export function loadProgress(st: EngineStatus): number | null {
   const p = Number(st.progress);
   if (Number.isFinite(p) && p >= 0 && p < 100) return p;
@@ -199,6 +201,9 @@ export function loadProgress(st: EngineStatus): number | null {
 
 export function isLoadPhase(st: EngineStatus): boolean {
   const code = String(st.message_code || "");
+  // 开机导入推理库的码会粘在 status.json 里。引擎已经 idle 之后
+  // 不能再当成「启动中」，否则底栏一直写着「正在导入推理库」。
+  if (BOOT_CODES.has(code)) return st.state === "starting";
   if (LOAD_CODES.has(code)) return true;
   if (st.state === "starting") return true;
   return loadProgress(st) != null;
@@ -219,8 +224,11 @@ export function statusTitle(st: EngineStatus): string {
 }
 
 export function statusSub(st: EngineStatus): string {
+  const code = String(st.message_code || "");
+  const staleBoot =
+    BOOT_CODES.has(code) && st.state !== "starting";
   // 加载/切换时优先展示分阶段说明，不要被延迟读数盖掉。
-  if (isLoadPhase(st) && st.message) {
+  if (!staleBoot && isLoadPhase(st) && st.message) {
     return String(st.message).slice(0, 80);
   }
   if (String(st.message_code || "") === "vc.swap_failed" && st.message) {
@@ -238,7 +246,7 @@ export function statusSub(st: EngineStatus): string {
   // Prefer shell-localized message (worker message_code resolved in Rust).
   // Fallback to raw message / error / idle labels.
   // Skip duplicate "engine ready" as subtitle — title already says it.
-  if (st.message) {
+  if (st.message && !staleBoot) {
     const msg = String(st.message).slice(0, 80);
     const ready = tStatic("dock.engineReady");
     const readyMsg = tStatic("msg.engine.ready");

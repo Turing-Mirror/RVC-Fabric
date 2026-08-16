@@ -717,6 +717,11 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
         overlay_keys_from_value(&m, PROFILE_VOICE_KEYS, &mut cfg);
     }
 
+    // RVC / DSP 二选一：选了音色就把 DSP 关掉，下次开启不会再走 fx。
+    cfg.insert("dsp_enabled".into(), json!(false));
+    cfg.insert("dsp_preset".into(), json!(""));
+    cfg.insert("function".into(), json!("vc"));
+
     save_app_config(root, &cfg)?;
 
     // Sync engine inuse config if present
@@ -725,6 +730,7 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
         m.get("path").and_then(|v| v.as_str()).unwrap_or(""),
         m.get("index").and_then(|v| v.as_str()).unwrap_or(""),
     );
+    let _ = crate::config::sync_inuse(root, &cfg);
 
     Ok(json!({
         "ok": true,

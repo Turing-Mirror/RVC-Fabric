@@ -187,20 +187,15 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn('payload["function"] in ("vc", "im", "fx")', src)
         self.assertIn('nxt == "vc"', src)
         self.assertIn('nxt = "fx"', src)
-        # 有 RVC 实例时残留的 fx 必须折回 vc，否则叠不上
-        self.assertIn("nxt == \"fx\" and rvc is not None", src)
+        # 二选一：有 RVC 也不能把 fx 折回 vc，否则停完 DSP 又跳回 RVC。
+        self.assertNotIn('nxt == "fx" and rvc is not None', src)
 
     def test_attaching_a_model_leaves_pure_dsp_mode(self):
-        """纯 DSP 跑着的时候选音色：RVC 装上了，function 也要从 fx 翻回 vc。
-
-        音频线程只在 `function == "vc"` 时才调 `self.rvc.infer`。热换模型那条
-        路只换了 RVC 实例，不翻 function 的话，用户选完音色界面上名字变了、
-        耳朵里一点变化都没有 —— 跟当初「换模型不生效」是同一种病。
-        """
+        """选音色就是切到 RVC：关掉 DSP，function 走 vc。"""
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         body = src[src.index("def _attach_rvc") : src.index("def _apply_pending_model")]
         self.assertIn("self.dsp_only = False", body)
-        self.assertIn('self.function == "fx"', body)
+        self.assertIn("dsp_enabled = False", body)
         self.assertIn('self.function = "vc"', body)
 
     def test_dropping_the_voice_reaches_a_running_engine(self):
@@ -226,10 +221,12 @@ class ShellContractTests(unittest.TestCase):
         clear = voices[voices.index("pub fn clear_voice") :][:600]
         self.assertIn("worker::drop_model", clear)
 
-    def test_start_falls_back_to_dsp_without_engine_core(self):
+    def test_start_is_exclusive_dsp_or_rvc(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         self.assertIn("def _engine_core_ready", src)
-        self.assertIn("dsp_on and not _engine_core_ready()", src)
+        start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
+        self.assertIn("self.dsp_only = dsp_on", start)
+        self.assertIn('self.gui_config.pth_path = ""', start)
 
     def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
         src = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
@@ -237,10 +234,10 @@ class ShellContractTests(unittest.TestCase):
         )
         start = src.index("pub fn start_vc")
         body = src[start : src.index("pub fn wait_vc_running", start)]
-        self.assertIn("dsp_only", body)
+        self.assertIn("dsp_on", body)
         self.assertIn('json!("fx")', body)
-        self.assertIn("engine_core_ready", body)
-        self.assertIn('json!("vc")', body)
+        self.assertIn("wait_worker_ready", body)
+        self.assertNotIn("engine_core_ready", body)
 
     def test_toggle_run_skips_engine_core_for_dsp_only(self):
         src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(
@@ -248,9 +245,25 @@ class ShellContractTests(unittest.TestCase):
         )
         self.assertIn("dspOnly", src)
         self.assertIn("!dspOnly", src)
-        self.assertIn('function: dspOnly', src)
-        self.assertIn("isEngineCoreReady", src)
-        self.assertIn("!hasPth || !coreReady", src)
+        self.assertIn("function: dspOnly", src)
+        self.assertNotIn("!hasPth || !coreReady", src)
+        self.assertNotIn("isEngineCoreReady", src)
+
+    def test_worker_honors_start_issued_during_import(self):
+        worker = (ROOT / "tools" / "realtime_worker.py").read_text(encoding="utf-8")
+        self.assertIn("worker_boot_ts", worker)
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn("worker_boot_ts", src)
+        self.assertIn("last_seq - 1", src)
+
+    def test_apply_dsp_always_sends_fx_and_clears_voice(self):
+        src = (ROOT / "app" / "src" / "pages" / "ModelsPage.tsx").read_text(
+            encoding="utf-8"
+        )
+        apply = src[src.index("const applyDsp") : src.index("useEffect", src.index("const applyDsp"))]
+        self.assertIn('function: "fx"', apply)
+        self.assertIn("clearVoice", apply)
+        self.assertNotIn("noVoice", apply)
 
     def test_tool_downloads_never_open_in_the_tool_window(self):
         src = (ROOT / "app" / "src" / "lib" / "downloadModels.ts").read_text(

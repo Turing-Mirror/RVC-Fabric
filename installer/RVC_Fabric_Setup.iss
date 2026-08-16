@@ -19,9 +19,9 @@
 
 #define MyAppName "RVC Fabric"
 #define MyAppNameCN "RVC Fabric · 图灵镜"
-#define MyAppVersion "1.5.1"
+#define MyAppVersion "1.5.2"
 ; Windows 版本资源只接受纯数字 a.b.c.d
-#define MyAppVerNum "1.5.1.0"
+#define MyAppVerNum "1.5.2.0"
 #define MyAppPublisher "Turing-Mirror"
 #define MyAppURL "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases"
 #define MyAppId "{{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}"

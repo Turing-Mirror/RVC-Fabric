@@ -1027,20 +1027,52 @@ if __name__ == "__main__":
             except Exception:
                 pass
 
+        def _resolve_dsp(self, values):
+            """从配置收出一套能真正出声的 DSP。只有 function=fx、没有预设，是上次
+            残留，会走干声直通 —— 用户听起来就是「启动了但没变声」。"""
+            preset = str(values.get("dsp_preset") or "").strip()
+            params = values.get("dsp_params")
+            if not isinstance(params, dict):
+                params = {}
+            if preset and not params:
+                try:
+                    from tools.dsp_presets import get_preset
+
+                    got = get_preset(preset)
+                    if got and isinstance(got.get("params"), dict):
+                        params = got["params"]
+                except Exception:
+                    traceback.print_exc()
+            enabled = bool(values.get("dsp_enabled"))
+            leftover_fx = str(values.get("function") or "") == "fx"
+            dsp_on = enabled or bool(preset) or bool(params)
+            if leftover_fx and not dsp_on:
+                dsp_on = False
+            return dsp_on, preset, params
+
         def set_values(self, values):
             # RVC / DSP 二选一。开了 DSP 就不查音色、不拦引擎资源。
             pth = values["pth_path"].strip()
-            dsp_on = bool(values.get("dsp_enabled")) or str(
-                values.get("function") or ""
-            ) == "fx"
+            dsp_on, dsp_preset, dsp_params = self._resolve_dsp(values)
             core_ok = _engine_core_ready()
             if dsp_on:
                 pth = ""
                 values["pth_path"] = ""
                 values["dsp_enabled"] = True
+                values["dsp_preset"] = dsp_preset
+                values["dsp_params"] = dsp_params
                 values["function"] = "fx"
+                if not dsp_params:
+                    self._notify(
+                        i18n("请先选用一个 DSP 预设"),
+                        VC_NEED_MODEL,
+                    )
+                    return False
             elif not pth:
-                self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
+                self._notify(
+                    i18n("请选择音色，或先选用一个 DSP 预设"),
+                    VC_NEED_MODEL,
+                )
                 return False
             elif not core_ok:
                 self._notify(
@@ -1175,13 +1207,27 @@ if __name__ == "__main__":
         def _rebuild_voice_chain(self) -> None:
             """建 / 更新 DSP 变声链。参数热改，不重建实例——重建会清掉延迟线。"""
             gc = self.gui_config
-            if not bool(getattr(gc, "dsp_enabled", False)):
+            params = gc.dsp_params if isinstance(getattr(gc, "dsp_params", None), dict) else {}
+            preset = str(getattr(gc, "dsp_preset", "") or "").strip()
+            if preset and not params:
+                try:
+                    from tools.dsp_presets import get_preset
+
+                    got = get_preset(preset)
+                    if got and isinstance(got.get("params"), dict):
+                        params = got["params"]
+                        gc.dsp_params = params
+                except Exception:
+                    traceback.print_exc()
+            if not params and not bool(getattr(gc, "dsp_enabled", False)):
                 self._voice_chain = None
                 return
             try:
                 from tools.dsp_voice import VoiceChain
 
-                params = gc.dsp_params if isinstance(gc.dsp_params, dict) else {}
+                if not params:
+                    self._voice_chain = None
+                    return
                 if self._voice_chain is None:
                     self._voice_chain = VoiceChain(params)
                 else:
@@ -1285,17 +1331,39 @@ if __name__ == "__main__":
             # RVC / DSP 二选一。没音色就绝不能去建 RVC：空路径会留下半截实例，
             # 下一行读 tgt_sr 直接 AttributeError（diag 26.8.16/141710）。
             pth = str(getattr(self.gui_config, "pth_path", "") or "").strip()
-            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False)) or str(
-                getattr(self, "function", "") or ""
-            ) == "fx" or not pth
+            preset = str(getattr(self.gui_config, "dsp_preset", "") or "").strip()
+            params = getattr(self.gui_config, "dsp_params", None)
+            if not isinstance(params, dict):
+                params = {}
+            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False)) or bool(
+                preset
+            ) or bool(params)
+            if not pth and not dsp_on:
+                dsp_on = str(getattr(self, "function", "") or "") == "fx"
             self.dsp_only = dsp_on
             if self.dsp_only:
+                if preset and not params:
+                    try:
+                        from tools.dsp_presets import get_preset
+
+                        got = get_preset(preset)
+                        if got and isinstance(got.get("params"), dict):
+                            params = got["params"]
+                    except Exception:
+                        traceback.print_exc()
                 self.rvc = None
                 self.function = "fx"
                 self.gui_config.dsp_enabled = True
+                self.gui_config.dsp_preset = preset
+                self.gui_config.dsp_params = params
                 self.gui_config.pth_path = ""
                 self.gui_config.index_path = ""
                 self.gui_config.samplerate = self.get_device_samplerate()
+                printt(
+                    "dsp start preset=%s effects=%s",
+                    preset or "-",
+                    ",".join(params.keys()) if params else "-",
+                )
             else:
                 if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
                     try:
@@ -2124,10 +2192,9 @@ if __name__ == "__main__":
                 infer_wav = self.tg(
                     infer_wav.unsqueeze(0), self.output_buffer.unsqueeze(0)
                 ).squeeze(0)
-            # DSP 变声（tools.dsp_voice）。和 RVC 二选一，只在 fx 里处理干声。
-            if self.function == "fx" and bool(
-                getattr(self.gui_config, "dsp_enabled", False)
-            ):
+            # DSP 变声。function=fx 时只要链还在就处理，不额外看 dsp_enabled：
+            # 热推可能把开关写丢，链在就该出声。
+            if self.function == "fx":
                 try:
                     infer_wav = self._apply_voice_chain(infer_wav)
                 except Exception:

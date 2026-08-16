@@ -227,7 +227,7 @@ class ShellContractTests(unittest.TestCase):
         start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
         self.assertIn("self.dsp_only = dsp_on", start)
         self.assertIn('self.gui_config.pth_path = ""', start)
-        self.assertIn("or not pth", start)
+        self.assertIn("dsp start preset", start)
         self.assertIn("getattr(self.rvc, \"tgt_sr\"", src)
 
     def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
@@ -238,6 +238,7 @@ class ShellContractTests(unittest.TestCase):
         body = src[start : src.index("pub fn wait_vc_running", start)]
         self.assertIn("dsp_on", body)
         self.assertIn('json!("fx")', body)
+        self.assertIn("dsp_params", body)
         self.assertIn("wait_worker_ready", body)
         self.assertNotIn("engine_core_ready", body)
 
@@ -248,6 +249,7 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("dspOnly", src)
         self.assertIn("!dspOnly", src)
         self.assertIn("function: dspOnly", src)
+        self.assertIn("dsp_preset", src)
         self.assertNotIn("!hasPth || !coreReady", src)
         self.assertNotIn("isEngineCoreReady", src)
 
@@ -275,8 +277,10 @@ class ShellContractTests(unittest.TestCase):
 
     def test_start_accepts_fx_function_as_dsp(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        self.assertIn("def _resolve_dsp", src)
+        self.assertIn("get_preset", src)
         body = src[src.index("def set_values") : src.index("def _load_fx_from_values")]
-        self.assertIn('== "fx"', body)
+        self.assertIn("请先选用一个 DSP 预设", body)
         self.assertIn('"function"', src[src.index("def _values_from_config_file") :])
 
     def test_tool_downloads_never_open_in_the_tool_window(self):

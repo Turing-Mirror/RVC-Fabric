@@ -617,7 +617,12 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
         worker::start_vc(&root)?;
-        Ok(worker::wait_vc_running(&root, 180_000))
+        let st = worker::wait_vc_running(&root, 180_000);
+        if st.get("state").and_then(|v| v.as_str()) == Some("running") {
+            let cfg = crate::config::read(&root);
+            let _ = worker::push_running_hot(&root, &cfg);
+        }
+        Ok(st)
     })
     .await
     .map_err(|e| e.to_string())?

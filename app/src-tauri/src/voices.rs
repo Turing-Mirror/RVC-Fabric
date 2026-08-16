@@ -617,12 +617,22 @@ pub fn list_voices(root: &Path) -> Value {
         .unwrap_or("")
         .to_string();
 
-    let selected_idx = resolve_selected(
-        &primary,
-        &selected_path,
-        &selected_file,
-        &selected_name,
-    );
+    let dsp_on = cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    // DSP 开着时界面不能把 last_model 当成「当前音色」，否则首页中间那张
+    // 卡还亮着，用户以为选了音色、一点开启却走 DSP 或被拒。
+    let selected_idx = if dsp_on {
+        -1
+    } else {
+        resolve_selected(
+            &primary,
+            &selected_path,
+            &selected_file,
+            &selected_name,
+        )
+    };
 
     let recents = cfg
         .get("recent_models")

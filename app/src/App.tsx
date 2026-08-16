@@ -13,7 +13,7 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
-import { onConfigPatch, type Config } from "./lib/config";
+import { getConfig, onConfigPatch, type Config } from "./lib/config";
 import { deactivateDsp, forceKillEngine, setHot, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
@@ -390,6 +390,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void getConfig()
+      .then((c) => {
+        if (c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
+      })
+      .catch(() => {});
     void currentVoice()
       .then((c) => {
         if (c.model) {
@@ -430,8 +435,23 @@ export default function App() {
       if (fn === "im" || fn === "bypass") setMode("bypass");
       else if (fn === "vc" || fn === "fx") setMode("vc");
       // DSP 那一层从哪儿改的都行（模型页、设置页、别的窗口），底栏都得跟上。
-      if (c.dsp_enabled != null || c.dsp_preset != null) {
-        setDspId(c.dsp_enabled ? String(c.dsp_preset || "") : "");
+      if (c.dsp_enabled === false) {
+        setDspId("");
+        void currentVoice()
+          .then((cur) => {
+            if (!cur.model) return;
+            setVoiceName(String(cur.model.name || t("s.262d11e2d6")));
+            setVoiceId(
+              String(cur.model.path || cur.model.dir || cur.model.name || ""),
+            );
+            setVoiceTag(String((cur.model as { tag?: string }).tag || ""));
+            setVoicePos(
+              cur.index && cur.total ? `${cur.index}/${cur.total}` : "",
+            );
+          })
+          .catch(() => {});
+      } else if (c.dsp_enabled === true || c.dsp_preset != null) {
+        setDspId(String(c.dsp_preset || ""));
       }
     },
     [syncParams],
@@ -592,8 +612,29 @@ export default function App() {
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const stopDsp = useCallback(() => {
     setDspId("");
-    void deactivateDsp().catch(() => {});
-  }, []);
+    void deactivateDsp()
+      .then(async () => {
+        try {
+          const c = await currentVoice();
+          if (c.model) {
+            setVoiceName(String(c.model.name || t("s.262d11e2d6")));
+            setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
+            setVoiceTag(String((c.model as { tag?: string }).tag || ""));
+            setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
+            if (c.pitch != null) setPitch(Number(c.pitch));
+            if (c.formant != null) setFormant(Number(c.formant));
+            if (c.profile_summary) setProfileSummary(c.profile_summary);
+            syncParams({
+              pitch: c.pitch != null ? Number(c.pitch) : undefined,
+              formant: c.formant != null ? Number(c.formant) : undefined,
+            });
+          }
+        } catch {
+          /* 没有上次音色就保持未选择 */
+        }
+      })
+      .catch(() => {});
+  }, [syncParams]);
 
   const openPlaza = useCallback(() => {
     plaza.markSeen();

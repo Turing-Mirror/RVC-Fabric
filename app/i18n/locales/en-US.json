@@ -290,7 +290,7 @@
       "missing_python": "Runtime\\python.exe not found"
     },
     "vc": {
-      "need_model": "Pick a voice model first",
+      "need_model": "Select a voice, or apply a DSP preset first",
       "loading_model": "Loading voice model…",
       "loading_index": "Loading retrieval index…",
       "loading_hubert": "Loading feature model (Hubert)…",

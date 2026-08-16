@@ -446,7 +446,33 @@ fn write_saved_and_inuse(
     Ok(cfg)
 }
 
-/// 选用 DSP：开关、预设、参数、function=fx、清音色一次落盘。
+/// 上次选中的音色路径：文件还在才返回。DSP 二选一只清 inuse 的 pth，
+/// `last_model*` 留下来，关掉 DSP 或 DSP 没开成时还能回到这个音色。
+fn last_model_pth(cfg: &Map<String, Value>, root: &Path) -> Option<String> {
+    let raw = cfg
+        .get("last_model_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let p = std::path::Path::new(raw);
+    let abs = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        root.join(p)
+    };
+    if abs.is_file() {
+        Some(raw.to_string())
+    } else {
+        None
+    }
+}
+
+/// 选用 DSP：开关、预设、参数、function=fx。引擎侧 pth 清掉（二选一），
+/// last_model 留下 —— 清掉的话关 DSP 之后用户什么都选不了
+/// （diag 26.8.16：开 DSP / 只用 DSP 之后 last_model 空，开启变声直接拒）。
 pub fn write_dsp_on(
     root: &Path,
     preset: &str,
@@ -458,15 +484,8 @@ pub fn write_dsp_on(
     saved.insert("dsp_preset".into(), json!(preset));
     saved.insert("dsp_params".into(), params.clone());
     saved.insert("function".into(), json!("fx"));
-    for k in [
-        "pth_path",
-        "index_path",
-        "last_model",
-        "last_model_name",
-        "last_model_path",
-    ] {
-        saved.insert(k.into(), json!(""));
-    }
+    saved.insert("pth_path".into(), json!(""));
+    saved.insert("index_path".into(), json!(""));
     write_saved_and_inuse(root, saved)
 }
 
@@ -478,6 +497,17 @@ pub fn write_dsp_off(root: &Path) -> Result<Map<String, Value>, String> {
     saved.insert("dsp_params".into(), json!({}));
     if saved.get("function").and_then(|v| v.as_str()) == Some("fx") {
         saved.insert("function".into(), json!("vc"));
+    }
+    if saved
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .is_empty()
+    {
+        if let Some(pth) = last_model_pth(&saved, root) {
+            saved.insert("pth_path".into(), json!(pth));
+        }
     }
     write_saved_and_inuse(root, saved)
 }
@@ -530,14 +560,29 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
                 saved.insert(k.into(), v.clone());
             }
         }
-        if dsp_on {
-            saved.insert("pth_path".into(), json!(""));
-            saved.insert("index_path".into(), json!(""));
-        }
+        saved.insert("pth_path".into(), json!(""));
+        saved.insert("index_path".into(), json!(""));
         let text = serde_json::to_string_pretty(&Value::Object(saved))
             .map_err(|e| e.to_string())?;
         write_atomic(&paths::app_config_path(root), &text)
             .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+    } else if cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .is_empty()
+    {
+        // DSP 没开、pth 又空：把上次的音色填回去，否则开启变声会直接拒。
+        if let Some(pth) = last_model_pth(&cfg, root) {
+            cfg.insert("pth_path".into(), json!(pth));
+            let mut saved = read_json(&paths::app_config_path(root));
+            saved.insert("pth_path".into(), json!(pth));
+            let text = serde_json::to_string_pretty(&Value::Object(saved))
+                .map_err(|e| e.to_string())?;
+            write_atomic(&paths::app_config_path(root), &text)
+                .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
+        }
     }
     sync_inuse(root, &cfg)?;
     Ok(cfg)
@@ -952,6 +997,45 @@ mod tests {
             "empty default must not clear the selected model"
         );
         assert_eq!(after["pitch"], json!(5), "other keys still sync");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn write_dsp_on_keeps_last_model() {
+        let root = std::env::temp_dir().join("rvcf-dsp-keep-last");
+        let _ = std::fs::remove_dir_all(&root);
+        let inuse = root.join("configs").join("inuse");
+        let user = crate::paths::user_data(&root);
+        std::fs::create_dir_all(&inuse).unwrap();
+        std::fs::create_dir_all(&user).unwrap();
+        let model = user.join("kasumi.pth");
+        std::fs::write(&model, b"x").unwrap();
+        let model_s = model.to_string_lossy().to_string();
+        std::fs::write(
+            crate::paths::app_config_path(&root),
+            serde_json::to_string(&json!({
+                "pth_path": model_s,
+                "last_model": "kasumi.pth",
+                "last_model_name": "Kasumi",
+                "last_model_path": model_s,
+                "dsp_enabled": false
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(inuse.join("config.json"), "{}").unwrap();
+
+        write_dsp_on(&root, "chipmunk", &json!({"pitch":{"semitones":7}})).unwrap();
+        let app = read_json(&paths::app_config_path(&root));
+        assert_eq!(app["dsp_enabled"], json!(true));
+        assert_eq!(app["pth_path"], json!(""));
+        assert_eq!(app["last_model"], json!("kasumi.pth"));
+        assert_eq!(app["last_model_path"], json!(model_s));
+
+        write_dsp_off(&root).unwrap();
+        let app = read_json(&paths::app_config_path(&root));
+        assert_eq!(app["dsp_enabled"], json!(false));
+        assert_eq!(app["pth_path"], json!(model_s), "关掉 DSP 应回到上次音色");
         let _ = std::fs::remove_dir_all(&root);
     }
 

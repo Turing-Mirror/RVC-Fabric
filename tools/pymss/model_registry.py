@@ -287,6 +287,21 @@ def auxiliary_paths_for(entry, model_dir=None):
     return [root / relpath for relpath in entry.auxiliary_relpaths]
 
 
+def _find_named(root, name):
+    """First file under *root* whose basename matches *name* (case-insensitive)."""
+    root = Path(root)
+    if not root.is_dir() or not name:
+        return None
+    want = name.lower()
+    try:
+        for p in root.rglob("*"):
+            if p.is_file() and p.name.lower() == want:
+                return p
+    except OSError:
+        return None
+    return None
+
+
 def resolve_model(model_name, model_dir=None, require_supported=True, require_exists=True):
     """Resolve a catalog model to local file paths.
 
@@ -333,6 +348,15 @@ def resolve_model(model_name, model_dir=None, require_supported=True, require_ex
 
     model_path = model_path_for(entry, model_dir)
     config_path = config_path_for(entry, model_dir)
+    # 清单 relpath 对不上时，按文件名在 model_dir 里找：老用户平铺放过
+    # 权重、或者发版机/安装目录和开发机布局不一致时，不能只认那一条相对路径。
+    if require_exists and not model_path.is_file():
+        found = _find_named(model_root(model_dir), Path(entry.relpath).name)
+        if found is not None:
+            model_path = found
+            sibling = found.with_suffix(".yaml")
+            if config_path is not None and not config_path.is_file() and sibling.is_file():
+                config_path = sibling
     missing = []
     if require_exists and not model_path.is_file():
         missing.append(str(model_path))

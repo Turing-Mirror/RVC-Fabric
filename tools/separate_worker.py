@@ -33,19 +33,21 @@ import traceback
 from pathlib import Path
 
 def setup_sys_path() -> None:
-    """Make both `tools.pymss` and top-level `pymss_core` importable.
+    """Make top-level ``pymss`` and ``pymss_core`` importable.
 
-    Runtime python ships a `python39._pth`, which ignores the script
-    directory. The worker used to only push the product root, so
-    `from tools.pymss…` worked and `from pymss_core` (what pymss itself
-    does) did not — even when `tools/pymss_core/__init__.py` was on disk
-    and the Rust preflight had already passed.
+    Runtime python ships a ``python39._pth``, which ignores the script
+    directory. We used to import ``tools.pymss`` from the product root.
+    That loads the same files under a different package name, and then
+    ``uvr_lib_v5`` calls ``alias_submodules(__name__, …)`` which only
+    accepts names starting with ``pymss.modules.`` — VR models (HP3/HP4)
+    die after the catalog loads. Import as ``pymss`` so the name matches
+    what the vendored package expects.
     """
     tools = Path(__file__).resolve().parent
     root = tools.parent
-    # root first so `import tools.pymss` resolves; tools second so
-    # `import pymss_core` finds the sibling package. insert(0) is last-wins.
-    for p in (tools, root):
+    # tools first so `import pymss` / `import pymss_core` win.
+    # root second for anything that still does `import tools.xxx`.
+    for p in (root, tools):
         s = str(p)
         if s not in sys.path:
             sys.path.insert(0, s)
@@ -93,7 +95,7 @@ def main(argv: list[str]) -> int:
 
     emit(phase="start")
     try:
-        from tools.pymss.model_registry import create_separator
+        from pymss.model_registry import create_separator
 
         last = [-1]
 

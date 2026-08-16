@@ -37,15 +37,14 @@ def _drop_product_paths(paths: list[str]) -> list[str]:
 class SetupPathTests(unittest.TestCase):
     def test_setup_puts_root_and_tools_on_path(self):
         # Isolated Runtime leaves sys.path as [python39.zip, Runtime, site-packages].
-        # The worker must put both the product root (`tools.pymss`) and tools/
-        # (`pymss_core`) on sys.path itself.
+        # tools 必须在最前：`import pymss` 才能对上 VR 的 alias_submodules。
         mod = _load_worker()
         saved = list(sys.path)
         try:
             sys.path[:] = [str(ROOT / "Runtime" / "python39.zip")] + _drop_product_paths(saved)
             mod.setup_sys_path()
-            self.assertEqual(Path(sys.path[0]).resolve(), ROOT.resolve())
-            self.assertEqual(Path(sys.path[1]).resolve(), TOOLS.resolve())
+            self.assertEqual(Path(sys.path[0]).resolve(), TOOLS.resolve())
+            self.assertEqual(Path(sys.path[1]).resolve(), ROOT.resolve())
         finally:
             sys.path[:] = saved
 
@@ -113,6 +112,47 @@ class CatalogLoadTests(unittest.TestCase):
             TOOLS / "pymss" / "modules" / "vocal_remover" / "vr_separator.py"
         ).read_text(encoding="utf-8")
         self.assertNotIn("from importlib.resources", src)
+
+    def test_alias_submodules_accepts_the_tools_prefix(self):
+        # 不 import pymss 包本身（会拉 torch）。只测名字改写。
+        path = TOOLS / "pymss" / "modules" / "_core_shims.py"
+        spec = importlib.util.spec_from_file_location("tm_pymss_shims", path)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        self.assertEqual(
+            mod._as_pymss_module("tools.pymss.modules.vocal_remover.uvr_lib_v5"),
+            "pymss.modules.vocal_remover.uvr_lib_v5",
+        )
+        self.assertEqual(
+            mod._as_pymss_module("pymss.modules.vocal_remover.uvr_lib_v5"),
+            "pymss.modules.vocal_remover.uvr_lib_v5",
+        )
+
+    def test_worker_imports_pymss_as_the_top_level_package(self):
+        src = WORKER.read_text(encoding="utf-8")
+        self.assertIn("from pymss.model_registry import create_separator", src)
+        self.assertNotIn("from tools.pymss", src)
+
+    def test_resolve_model_finds_a_flat_file_by_basename(self):
+        # 权重如果没按 catalog relpath 摆（平铺在 model_dir），也不能判失踪。
+        import tempfile
+
+        reg = _load_registry()
+        reg.load_model_catalog.cache_clear()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "4_HP-Vocal-UVR.pth").write_bytes(b"x")
+            (root / "4_HP-Vocal-UVR.yaml").write_text("x", encoding="utf-8")
+            resolved = reg.resolve_model(
+                "4_HP-Vocal-UVR.pth",
+                model_dir=root,
+                require_supported=False,
+                require_exists=True,
+            )
+            self.assertTrue(Path(resolved["model_path"]).is_file())
+            self.assertEqual(Path(resolved["model_path"]).name, "4_HP-Vocal-UVR.pth")
 
 
 if __name__ == "__main__":

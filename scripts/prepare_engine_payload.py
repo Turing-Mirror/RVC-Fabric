@@ -98,15 +98,51 @@ def check_forbidden() -> list[str]:
     return [rel for rel in FORBIDDEN if (PAYLOAD / rel).exists()]
 
 
+# 发版机盘符不一定是 C:。只查 C:\ / Users 会把 L:\My project、F:\RVC Fabric-new
+# 这种开发机路径放进安装包，用户机器上那些路径不存在。
+_ABS_MARKERS = (
+    "C:\\",
+    "C:/",
+    "D:\\",
+    "D:/",
+    "E:\\",
+    "E:/",
+    "F:\\",
+    "F:/",
+    "L:\\",
+    "L:/",
+    "/Users/",
+    "/home/",
+    "\\\\Users\\\\21627",
+    "/21627/",
+)
+
+
+def leaked_dev_path(text: str) -> str | None:
+    """Return the first developer-machine path marker in *text*, if any."""
+    for marker in _ABS_MARKERS:
+        if marker in text:
+            return marker
+    return None
+
+
 def check_absolute_paths() -> list[str]:
     """跑过程序的机器会把绝对路径写进 configs/inuse/config.json。"""
     bad = []
-    cfg = PAYLOAD / "configs" / "inuse" / "config.json"
-    if cfg.is_file():
-        text = cfg.read_text(encoding="utf-8", errors="replace")
-        for marker in ("C:\\", "C:/", "/Users/", "/home/"):
-            if marker in text:
-                bad.append(f"configs/inuse/config.json 含绝对路径 {marker!r}")
+    # 文本清单最容易夹带开发机路径。权重/二进制不扫。
+    for rel in (
+        "configs/inuse/config.json",
+        "configs/online_catalog.json",
+        "setup_package.json",
+        ".env",
+    ):
+        p = PAYLOAD / rel
+        if not p.is_file():
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        hit = leaked_dev_path(text)
+        if hit:
+            bad.append(f"{rel} 含绝对路径 {hit!r}")
     return bad
 
 

@@ -870,15 +870,18 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
 
     if !is_worker_alive(root) {
         start_worker(root)?;
-        let st = wait_worker_ready(root, 100_000);
-        if st.get("state").and_then(|v| v.as_str()) == Some("error") {
-            return Err(st
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("worker error")
-                .to_string());
-        }
-    } else {
+    }
+    // 导入推理库时 worker 已经活着，但命令环还没起来。这时候写下的 start
+    // 会被 gui_v1 当成上一轮残留丢掉。先等到 idle/running 再发命令。
+    let st = wait_worker_ready(root, 100_000);
+    if st.get("state").and_then(|v| v.as_str()) == Some("error") {
+        return Err(st
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("worker error")
+            .to_string());
+    }
+    {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);
         if st.get("state").and_then(|v| v.as_str()) == Some("running") {
@@ -916,19 +919,8 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
         .get("dsp_enabled")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let pth_empty = cfg
-        .get("pth_path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .is_empty();
-    let core_ready = crate::engine_assets::engine_core_ready(root);
-    let dsp_only = dsp_on && (pth_empty || !core_ready);
-    if dsp_only {
+    if dsp_on {
         hot.insert("function".into(), json!("fx"));
-    } else if dsp_on && !pth_empty {
-        // 有音色 + 有资源 + DSP：叠在 RVC 后面。别把上次纯 DSP 留下的 fx 推回去。
-        hot.insert("function".into(), json!("vc"));
     } else if let Some(v) = cfg.get("function") {
         hot.insert("function".into(), v.clone());
     }

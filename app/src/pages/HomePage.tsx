@@ -157,8 +157,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
     void load();
   }, [currentId]);
 
-  const current =
-    (selectedIdx >= 0 ? models[selectedIdx] : undefined) ?? models[0];
+  const selected =
+    selectedIdx >= 0 ? models[selectedIdx] : undefined;
+  // 没选中音色时不要把库里第一条当成「当前」—— DSP 模式下那就是跳回 RVC。
+  const current = selected ?? models[0];
+  const hasSelection = Boolean(selected);
 
   // Most-recent first, current excluded — it always takes the centre slot.
   const rest = [...models]
@@ -184,15 +187,20 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       // pitch / formant were never pushed to a running stream and the dock kept
       // showing the previous voice's name and numbers. Same handling as the
       // models page now.
-      if (res.pitch != null || res.formant != null) {
-        try {
-          await setHot({
-            pitch: Number(res.pitch ?? 0),
-            formant: Number(res.formant ?? 0),
-          });
-        } catch {
-          /* worker may be idle */
-        }
+      try {
+        await setHot({
+          dsp_enabled: false,
+          dsp_preset: "",
+          function: "vc",
+          ...(res.pitch != null || res.formant != null
+            ? {
+                pitch: Number(res.pitch ?? 0),
+                formant: Number(res.formant ?? 0),
+              }
+            : {}),
+        });
+      } catch {
+        /* worker may be idle */
       }
       onVoiceChange?.({
         model: (res.model as VoiceModel) || m,
@@ -243,14 +251,19 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
         <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0 mb-1.5">
-          {current.name}
+          {hasSelection ? current.name : t("s.262d11e2d6")}
         </p>
         <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {[current.tag, current.author ? t("s.7feea73fa3", { v0: current.author }) : ""]
-            .filter(Boolean)
-            .join(" · ")}
-          {current.tag || current.author ? " · " : ""}
-          {t("s.856b4d0ba9")}
+          {hasSelection
+            ? [
+                current.tag,
+                current.author ? t("s.7feea73fa3", { v0: current.author }) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ") +
+              (current.tag || current.author ? " · " : "") +
+              t("s.856b4d0ba9")
+            : t("s.856b4d0ba9")}
         </p>
         <HeroEmblem />
       </div>
@@ -309,7 +322,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                     ) : (
                       <span>{(v.name || "?").slice(0, 4)}</span>
                     )}
-                    {cur ? (
+                    {cur && hasSelection ? (
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (

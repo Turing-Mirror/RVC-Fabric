@@ -44,6 +44,7 @@ CLEAN_INUSE: dict[str, Any] = {
     "function": "vc",
     "fx_enabled": False,
     # 无模型 DSP 变声。dsp_enabled 打开时不选音色也能开声（function 走 "fx"）。
+    # 和 RVC 二选一，不会叠在音色后面。
     "dsp_enabled": False,
     "dsp_preset": "",
     "dsp_params": {},

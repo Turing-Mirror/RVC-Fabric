@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import runpy
 import sys
+import time
 import traceback
 import warnings
 from datetime import datetime
@@ -140,11 +141,13 @@ def main() -> None:
         def status_fields(code, **extra):  # type: ignore[misc]
             return {"message_code": code, "message": "引擎进程已启动，正在加载…", **extra}
 
+    boot_ts = time.time()
     _write_status_early(
         root,
         state="starting",
         error="",
         progress=8,
+        worker_boot_ts=boot_ts,
         **status_fields(ENGINE_STARTING),
     )
 
@@ -176,6 +179,7 @@ def main() -> None:
                 state="starting",
                 error="",
                 progress=14,
+                worker_boot_ts=boot_ts,
                 **_sf_imp(ENGINE_IMPORTING),
             )
         except Exception:
@@ -184,6 +188,7 @@ def main() -> None:
                 state="starting",
                 error="",
                 progress=14,
+                worker_boot_ts=boot_ts,
                 message_code="engine.importing",
                 message="正在导入推理库（可能需要十几秒）…",
             )

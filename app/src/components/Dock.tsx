@@ -10,9 +10,7 @@ type Props = {
   voiceName?: string;
   /** 生效中的 DSP 预设名；空 = 没开。 */
   dspName?: string;
-  /** 音色层真的在跑（有引擎资源）。否则底栏只画 DSP，免得以为 RVC 也开了。 */
-  dspStacked?: boolean;
-  /** 点一下关掉 DSP 那一层。 */
+  /** 点一下关掉 DSP。 */
   onStopDsp?: () => void;
   voiceTag?: string;
   voiceIndex?: string;
@@ -45,7 +43,6 @@ export function Dock({
   // No invented defaults for voice — empty means not selected.
   voiceName,
   dspName,
-  dspStacked = false,
   onStopDsp,
   voiceTag = "",
   voiceIndex = "",
@@ -66,7 +63,11 @@ export function Dock({
   thresholdDb = -60,
 }: Props) {
   const { t } = useI18n();
-  const name = voiceName ?? t("dock.noVoice");
+  const name = voiceName?.trim()
+    ? voiceName
+    : dspName?.trim()
+      ? dspName
+      : t("dock.noVoice");
   const profile = profileSummary ?? t("dock.none");
   const title = statusTitle ?? t("dock.engineReady");
   const sub = statusSub ?? t("dock.engineIdle");
@@ -92,21 +93,9 @@ export function Dock({
         <div className="text-[15px] font-semibold">
           {t("dock.current", { name })}
         </div>
-        {/*
-          两层同时开着的时候，这条链一直挂在这儿。
-          用户听到怪声低头一看就知道现在叠了几层、叠的顺序是什么 —— 弹一次
-          就消失的提示做不到这件事，而「怪声」往往是过几分钟才被注意到的。
-          等宽字 + 箭头，和设置页那套元信息一致。
-        */}
         {dspName ? (
           <div className="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-[var(--meta)]">
             <HelpMark title={dspTips().stack} />
-            {voiceName && dspStacked ? (
-              <>
-                <span className="truncate max-w-[92px]">{voiceName}</span>
-                <span aria-hidden>→</span>
-              </>
-            ) : null}
             <button
               type="button"
               onClick={onStopDsp}

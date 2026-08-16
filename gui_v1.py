@@ -341,8 +341,8 @@ if __name__ == "__main__":
             self.fx_eq_gains: list = [0.0, 0.0, 0.0, 0.0, 0.0]
             self.fx_eq_preset: str = "flat"
             self.fx_out_gain_db: float = 0.0
-            # 无模型 DSP 变声（tools.dsp_voice）。dsp_enabled 打开时可以完全
-            # 不选音色就开声，function 走 "fx" 分支；跟 RVC 同时开就是叠加。
+            # 无模型 DSP 变声（tools.dsp_voice）。和 RVC 二选一：dsp_enabled
+            # 打开时 function 走 "fx"，不加载、不叠加音色。
             self.dsp_enabled: bool = False
             self.dsp_preset: str = ""
             self.dsp_params: dict = {}
@@ -1028,16 +1028,17 @@ if __name__ == "__main__":
                 pass
 
         def set_values(self, values):
-            # 没引擎资源 → 只要开了 DSP 就走纯 fx，音色路径留着，下完资源再叠。
-            # 有资源 + 选了音色 + 开了 DSP → RVC 和 DSP 同时走。
+            # RVC / DSP 二选一。开了 DSP 就不查音色、不拦引擎资源。
             pth = values["pth_path"].strip()
             dsp_on = bool(values.get("dsp_enabled"))
             core_ok = _engine_core_ready()
-            dsp_only = dsp_on and (not pth or not core_ok)
-            if not pth and not dsp_on:
+            if dsp_on:
+                pth = ""
+                values["pth_path"] = ""
+            elif not pth:
                 self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
                 return False
-            if pth and not core_ok and not dsp_on:
+            elif not core_ok:
                 self._notify(
                     i18n(
                         "实时变声需要引擎资源。请到广场下载模型，或先选用一个 DSP 预设。"
@@ -1083,7 +1084,7 @@ if __name__ == "__main__":
                         self.window["index_path"].update("")
                     except Exception:
                         pass
-            if pth and not os.path.isfile(pth) and not dsp_only:
+            if pth and not os.path.isfile(pth) and not dsp_on:
                 self._notify(i18n("pth文件不存在") + f"\n{pth}", VC_PTH_MISSING, path=pth)
                 return False
             # Devices must exist for current hostapi list
@@ -1277,14 +1278,14 @@ if __name__ == "__main__":
             except Exception:
                 pass
             self._report_load(VC_LOADING_MODEL, 18)
-            # 纯 DSP：没选音色，或开了 DSP 但 engine-core 还没齐。
-            # 后一种不把音色忘掉，只是这次不加载 RVC。
-            pth = str(self.gui_config.pth_path or "").strip()
+            # RVC / DSP 二选一。开了 DSP 就不加载 RVC，也不把旧音色路径写回去。
             dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False))
-            self.dsp_only = (not pth) or (dsp_on and not _engine_core_ready())
+            self.dsp_only = dsp_on
             if self.dsp_only:
                 self.rvc = None
                 self.function = "fx"
+                self.gui_config.pth_path = ""
+                self.gui_config.index_path = ""
                 self.gui_config.samplerate = self.get_device_samplerate()
             else:
                 if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
@@ -2113,10 +2114,8 @@ if __name__ == "__main__":
                 infer_wav = self.tg(
                     infer_wav.unsqueeze(0), self.output_buffer.unsqueeze(0)
                 ).squeeze(0)
-            # DSP 变声（tools.dsp_voice）。跟 RVC 是叠加关系，不是二选一：
-            # 有音色时它接在 RVC 之后（音色给音色、DSP 给性格），没音色时
-            # function 是 "fx"，上面直接走的干声，这里就是唯一的处理。
-            if self.function in ("vc", "fx") and bool(
+            # DSP 变声（tools.dsp_voice）。和 RVC 二选一，只在 fx 里处理干声。
+            if self.function == "fx" and bool(
                 getattr(self.gui_config, "dsp_enabled", False)
             ):
                 try:
@@ -2612,12 +2611,9 @@ if __name__ == "__main__":
                 nxt = str(payload["function"])
                 rvc = getattr(self, "rvc", None)
                 dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False))
-                # 底栏只有 vc/bypass。纯 DSP 时壳可能推来 vc，rvc 是 None 不能跟。
+                # 底栏只有 vc/bypass。DSP 模式下壳可能推来 vc，不能跟。
                 if nxt == "vc" and rvc is None and dsp_on:
                     nxt = "fx"
-                # 音色已经在跑：配置里残留的 fx 不能把 RVC 关掉，两层要叠着。
-                if nxt == "fx" and rvc is not None:
-                    nxt = "vc"
                 self.function = nxt
             # Self-monitor can toggle while running
             mon_changed = False
@@ -2668,6 +2664,7 @@ if __name__ == "__main__":
             # 和重叠缓冲，拖滑条就会一路咔哒。
             if any(k in payload for k in ("dsp_enabled", "dsp_preset", "dsp_params")):
                 gc = self.gui_config
+                prev_on = bool(getattr(gc, "dsp_enabled", False))
                 if payload.get("dsp_enabled") is not None:
                     gc.dsp_enabled = bool(payload["dsp_enabled"])
                 if payload.get("dsp_preset") is not None:
@@ -2675,6 +2672,21 @@ if __name__ == "__main__":
                 if isinstance(payload.get("dsp_params"), dict):
                     gc.dsp_params = payload["dsp_params"]
                 self._rebuild_voice_chain()
+                now_on = bool(getattr(gc, "dsp_enabled", False))
+                if now_on:
+                    # 二选一：DSP 开着就不走 RVC。
+                    if self.function != "im":
+                        self.function = "fx"
+                    if getattr(self, "rvc", None) is not None:
+                        self.rvc = None
+                        self.resampler2 = None
+                        self.dsp_only = True
+                        self.gui_config.pth_path = ""
+                        self.gui_config.index_path = ""
+                elif prev_on and self.function == "fx":
+                    self.function = (
+                        "vc" if getattr(self, "rvc", None) is not None else "im"
+                    )
             # 换音色放在最后：上面那些（音高、共鸣、检索强度）已经落到
             # gui_config 上了，新的 RVC 实例正好用这些值建起来，不会先用旧参数
             # 建好再补一遍。
@@ -2916,12 +2928,11 @@ if __name__ == "__main__":
 
         def _attach_rvc(self, new, pth, idx, rate):
             self.rvc = new
-            # 纯 DSP 跑着的时候选了个音色：RVC 装上了，但 function 还是 fx，
-            # 音频线程只在 function == "vc" 时才走 self.rvc.infer —— 不翻回来
-            # 的话，用户选了音色却一点变化都听不到，而界面上音色名已经换了。
+            # 选了音色就是 RVC：关掉 DSP，function 走 vc。
             self.dsp_only = False
-            if self.function == "fx":
-                self.function = "vc"
+            self.gui_config.dsp_enabled = False
+            self.function = "vc"
+            self._rebuild_voice_chain()
             self.gui_config.pth_path = pth
             self.gui_config.index_path = idx
             self.gui_config.index_rate = rate
@@ -3475,6 +3486,7 @@ if __name__ == "__main__":
             from tools.worker_protocol import (
                 default_status,
                 read_command,
+                read_status,
                 write_status,
                 write_worker_pid_file,
                 clear_worker_pid_file,
@@ -3518,10 +3530,15 @@ if __name__ == "__main__":
                 base["message_code"] = "engine.ready"
             write_status(**base)
 
-            # Ignore stale commands left from previous sessions
+            # 上一轮崩溃留在磁盘上的命令要丢掉。导入推理库期间点的
+            # 「开启变声」是这一轮的，必须接着跑，否则用户会觉得启动没反应。
             try:
+                boot_ts = float((read_status() or {}).get("worker_boot_ts") or 0.0)
                 prev = read_command()
                 last_seq = int(prev.get("seq") or 0)
+                cmd_ts = float(prev.get("ts") or 0.0)
+                if last_seq > 0 and boot_ts > 0 and cmd_ts >= boot_ts - 1.0:
+                    last_seq = last_seq - 1
             except Exception:
                 last_seq = 0
             running = True

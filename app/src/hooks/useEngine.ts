@@ -16,7 +16,6 @@ import {
 } from "../lib/engine";
 import type { OutputMode } from "../components/Dock";
 import { getConfig } from "../lib/config";
-import { isEngineCoreReady } from "../lib/downloadModels";
 import { t } from "../i18n/t";
 
 export function useEngine() {
@@ -174,8 +173,14 @@ export function useEngine() {
   }, [refresh]);
 
   const running = status.state === "running";
+  const bootCode =
+    String(status.message_code || "") === "engine.starting" ||
+    String(status.message_code || "") === "engine.importing";
+  // 导入推理库不是「变声启动中」：底栏按钮仍应是「开启变声」。
   const starting =
-    startingRef.current || status.state === "starting" || busy;
+    startingRef.current ||
+    (status.state === "starting" && !bootCode) ||
+    busy;
 
   const toggleRun = useCallback(async () => {
     if (provision.need_provision || provision.runtime_ready === false) {
@@ -184,18 +189,14 @@ export function useEngine() {
       );
       return;
     }
-    // 没引擎资源：开了 DSP 就纯走预设，音色留着，不拦去下 720MB。
-    // 有资源 + 选了音色 + DSP：两层叠着，这时才要 engine-core。
-    const stopping =
-      running || status.state === "starting" || startingRef.current;
+    // 开机导入推理库时 status 也会是 starting。那一下点按钮必须是「开启」，
+    // 不能被当成「停止」把还没发出去的 start 吃掉。
+    const stopping = running || startingRef.current;
     let dspOnly = false;
     if (!stopping) {
       try {
         const cfg = await getConfig();
-        const dspOn = Boolean(cfg.dsp_enabled);
-        const hasPth = Boolean(String(cfg.pth_path || "").trim());
-        const coreReady = await isEngineCoreReady();
-        dspOnly = dspOn && (!hasPth || !coreReady);
+        dspOnly = Boolean(cfg.dsp_enabled);
       } catch {
         dspOnly = false;
       }
@@ -217,7 +218,7 @@ export function useEngine() {
     setBusy(true);
     setLastError("");
     try {
-      if (running || status.state === "starting" || startingRef.current) {
+      if (stopping) {
         startingRef.current = false;
         // 软停：只停音频流，worker 进程留下。force 会杀掉整棵 Python，
         // 下次开启还要再冷启动 torch/CUDA。

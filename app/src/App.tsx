@@ -26,10 +26,7 @@ import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import {
-  isEngineCoreReady,
-  registerDownloadModelsOpener,
-} from "./lib/downloadModels";
+import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
@@ -74,7 +71,6 @@ export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const [modelsKind, setModelsKind] = useState<"rvc" | "dsp">("rvc");
   const [modelsKindNonce, setModelsKindNonce] = useState(0);
-  const [coreReady, setCoreReady] = useState(true);
   const [compactNav, setCompactNav] = useState(false);
   // 「下载模型」：用户主动打开，或音频工具缺引擎资源时跳转。
   const [extrasReason, setExtrasReason] = useState("");
@@ -106,11 +102,6 @@ export default function App() {
       alive = false;
     };
   }, []);
-  useEffect(() => {
-    void isEngineCoreReady()
-      .then(setCoreReady)
-      .catch(() => {});
-  }, [page]);
   // 启动时自动查到的新版本。非空 = 弹一条「要不要现在装」。
   const [updateOffer, setUpdateOffer] = useState<UpdateInfo | null>(null);
 
@@ -241,28 +232,6 @@ export default function App() {
   /** id → 显示名。底栏要写「收音机」，不是写 radio。 */
   const [dspNames, setDspNames] = useState<Record<string, string>>({});
   const dspName = dspId ? dspNames[dspId] || dspId : "";
-
-  /**
-   * 两层第一次同时开着的时候说明一句顺序，说完就不再出现。
-   *
-   * 底栏那条链是常驻的，负责回答「现在叠了几层」；这条只回答一次
-   * 「为什么叠在一起是这个味道」。两件事分开，不必每次都念一遍。
-   */
-  const [askDspStack, setAskDspStack] = useState(false);
-  const dspStackNoted = useRef(false);
-  useEffect(() => {
-    if (!dspId || !voiceId || dspStackNoted.current) return;
-    dspStackNoted.current = true;
-    void invoke<Record<string, unknown>>("config_get")
-      .then((c) => {
-        if (c?.dsp_stack_noted !== true) setAskDspStack(true);
-      })
-      .catch(() => {});
-  }, [dspId, voiceId]);
-  const closeDspStack = useCallback(() => {
-    setAskDspStack(false);
-    void invoke("config_set", { patch: { dsp_stack_noted: true } }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -651,6 +620,7 @@ export default function App() {
       setVoicePos("");
       return;
     }
+    setDspId("");
     setVoiceName(model.name || t("s.262d11e2d6"));
     setVoiceId(model.path || model.dir || model.name || "");
     if (p != null) setPitch(Number(p));
@@ -1091,11 +1061,6 @@ export default function App() {
             </>
           }
         >{t("s.7f3ebfb67b")}</Nudge>
-      ) : askDspStack ? (
-        <Nudge
-          title={t("s.dspStackTitle")}
-          actions={<Btn primary onClick={closeDspStack}>{t("s.dspStackOk")}</Btn>}
-        >{t("s.dspStackBody")}</Nudge>
       ) : null}
 
       {qr ? (
@@ -1107,7 +1072,6 @@ export default function App() {
       <Dock
         voiceName={voiceName}
         dspName={dspName}
-        dspStacked={Boolean(voiceName && coreReady)}
         onStopDsp={stopDsp}
         voiceTag={voiceTag}
         voiceIndex={voicePos}

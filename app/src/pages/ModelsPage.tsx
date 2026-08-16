@@ -86,7 +86,18 @@ function ModelsPageImpl({
     const next = p ? p.id : "";
     setDspId(next);
     setDspActive(p);
-    const noVoice = !selectedKey;
+    if (p) {
+      // RVC / DSP 二选一：选用预设就把当前音色清掉，避免停完又跳回 RVC。
+      try {
+        await clearVoice();
+      } catch {
+        /* 没选过音色也没关系 */
+      }
+      setSelectedKey("");
+      onVoiceChange?.({
+        model: { name: "", path: "", dir: "", file: "" },
+      });
+    }
     try {
       await setHot(
         p
@@ -94,14 +105,14 @@ function ModelsPageImpl({
               dsp_enabled: true,
               dsp_preset: p.id,
               dsp_params: p.params,
-              ...(noVoice ? { function: "fx" as const } : {}),
+              function: "fx",
             }
           : { dsp_enabled: false, dsp_preset: "" },
       );
     } catch {
       /* 引擎没开着也没关系：配置已经写下去了，下次开启变声就生效 */
     }
-  }, [selectedKey]);
+  }, [onVoiceChange]);
 
   useEffect(() => {
     if (focusKind === "rvc" || focusKind === "dsp") setKind(focusKind);
@@ -184,8 +195,6 @@ function ModelsPageImpl({
       const idx = cat.selected_idx ?? -1;
       if (idx >= 0 && cat.models?.[idx]) {
         setSelectedKey(modelKey(cat.models[idx]));
-      } else if (cat.models?.[0]) {
-        setSelectedKey(modelKey(cat.models[0]));
       } else {
         setSelectedKey("");
       }
@@ -307,15 +316,22 @@ function ModelsPageImpl({
     try {
       const res = await selectVoice(m);
       setSelectedKey(modelKey(m));
-      if (res.pitch != null || res.formant != null) {
-        try {
-          await setHot({
-            pitch: Number(res.pitch ?? 0),
-            formant: Number(res.formant ?? 0),
-          });
-        } catch {
-          /* worker may be idle */
-        }
+      setDspId("");
+      setDspActive(null);
+      try {
+        await setHot({
+          dsp_enabled: false,
+          dsp_preset: "",
+          function: "vc",
+          ...(res.pitch != null || res.formant != null
+            ? {
+                pitch: Number(res.pitch ?? 0),
+                formant: Number(res.formant ?? 0),
+              }
+            : {}),
+        });
+      } catch {
+        /* worker may be idle */
       }
       onVoiceChange?.({
         model: (res.model as VoiceModel) || m,

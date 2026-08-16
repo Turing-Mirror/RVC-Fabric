@@ -105,7 +105,7 @@
     "设备类型": "设备类型",
     "请指定说话人id": "Please specify the speaker/singer ID:",
     "请选择index文件": "Please choose the .index file",
-    "请选择pth文件": "Please choose the .pth file",
+    "请选择pth文件": "Select a voice, or apply a DSP preset first",
     "请选择说话人id": "Select Speaker/Singer ID:",
     "转换": "Convert",
     "输入实验名": "Enter the experiment name:",

@@ -547,6 +547,10 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
     if dsp_on {
         cfg.insert("dsp_enabled".into(), json!(true));
         cfg.insert("function".into(), json!("fx"));
+        // 必须改 cfg 本身再 sync_inuse：只改 app_config 文件、cfg 里还留着
+        // 旧 pth 的话，inuse 会被写回音色路径，worker 又去要 .pth。
+        cfg.insert("pth_path".into(), json!(""));
+        cfg.insert("index_path".into(), json!(""));
         let mut saved = read_json(&paths::app_config_path(root));
         for k in [
             "dsp_enabled",
@@ -560,8 +564,6 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
                 saved.insert(k.into(), v.clone());
             }
         }
-        saved.insert("pth_path".into(), json!(""));
-        saved.insert("index_path".into(), json!(""));
         let text = serde_json::to_string_pretty(&Value::Object(saved))
             .map_err(|e| e.to_string())?;
         write_atomic(&paths::app_config_path(root), &text)

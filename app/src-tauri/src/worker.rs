@@ -877,7 +877,7 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             .to_string());
     }
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
-    let _cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
+    let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
     {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);
@@ -894,7 +894,40 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             thread::sleep(Duration::from_millis(250));
         }
     }
-    let seq = send_command(root, "start", Map::new())?;
+    // 纯 DSP 必须把开关/预设/参数塞进 start 本体。
+    // 以前 start 载荷是空的，worker 只读 inuse；inuse 若没同步到 dsp_enabled，
+    // set_values 会当成没选音色，直接报「请选择pth文件」——纯 DSP 永远开不了。
+    let mut payload = Map::new();
+    let dsp_preset = cfg
+        .get("dsp_preset")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let dsp_params_on = cfg
+        .get("dsp_params")
+        .and_then(|v| v.as_object())
+        .map(|m| !m.is_empty())
+        .unwrap_or(false);
+    let dsp_on = cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        || !dsp_preset.is_empty()
+        || dsp_params_on;
+    if dsp_on {
+        payload.insert("dsp_enabled".into(), json!(true));
+        payload.insert("function".into(), json!("fx"));
+        if !dsp_preset.is_empty() {
+            payload.insert("dsp_preset".into(), json!(dsp_preset));
+        }
+        if let Some(v) = cfg.get("dsp_params").cloned() {
+            if v.as_object().map(|m| !m.is_empty()).unwrap_or(false) {
+                payload.insert("dsp_params".into(), v);
+            }
+        }
+    }
+    let seq = send_command(root, "start", payload)?;
     // Claim start before any follow-up set. Worker acks last_cmd_seq as soon as
     // it dequeues start (before model load), so this is usually <100 ms.
     if !protocol::wait_cmd_acked(root, seq, 5_000) {

@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.5.0",
+    "version": "1.5.1",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "4e8968522bbd4a5f110b556e5dc7db8ae2e5704267eb5c60a728e0d040c687d6",
-      "size_bytes": 10160581,
+      "sha256": "7509f8afdd07ffc82c864fb2ab015fa6a3dc9da0da88c6f45e966834e97611c1",
+      "size_bytes": 10465519,
       "min_app_version": "1.3.0",
-      "notes": "1.5.0 收口一批实机体验。每个音色的「默认」档案只属于该音色：切模型 不再继承上一个的音高/共鸣/音效，设置与底栏改动会写回当前档案（默认写 进该音色目录，具名档案写回 .tmvp）。关闭变声只停音频流、留下引擎进程， 再开不必重新冷启动；「其他」页强制结束仍会杀掉进程。社区音色卡片不再 显示「第三方 · {origin}」，远程封面失败回退本机 ch-banner；语音转换 目标音色跟随首页当前选择。启动与换模型有分阶段进度，Web 弹窗居中， 广场按分类时系列定位选单始终显示。自动选麦不再把 NVIDIA Broadcast 当成真实麦克风；商店下载进度画在对应音色卡上。"
+      "notes": "1.5.1 把 1.5.0 之后已入仓的训练、分离、下载和 DSP 收成一版，并修掉 点「开启变声」却一直停在引擎就绪的实机问题：启动失败不会再被后续参数 推送盖掉，选用 DSP 会留下上次音色以便关掉后恢复。人声分离不再在 Runtime 3.9 上读清单就崩，广场全部 UVR 模型可解析。训练预处理不再 TypeError，训完退出码认成功，可续跑并对齐原版常用项与 ckpt 进阶。 二十个内置 DSP 预设可单独用；设置页可测麦克风；说明页可卸载 VB-Cable； 工具窗点下载模型会把主窗口叫到广场。"
     }
   },
   "community": {
@@ -7655,5 +7655,5 @@
       "release_tag": "pymss"
     }
   },
-  "dsp_presets": []
+  "download_mirrors": {}
 }

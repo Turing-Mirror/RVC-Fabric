@@ -616,9 +616,6 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
         // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
-        if let Err(e) = config::sync_inuse(&root, &config::read(&root)) {
-            logging::shell_log!(crate::i18n::t("s.5a7c8b5a25"));
-        }
         worker::start_vc(&root)?;
         Ok(worker::wait_vc_running(&root, 180_000))
     })
@@ -1117,6 +1114,18 @@ fn engine_set_hot(
     // worker 是另一回事。少了这一段，模型页点预设是一点反应都没有的。
     if let Some(v) = dsp_enabled {
         payload.insert("dsp_enabled".into(), json!(v));
+        if v {
+            // 开 DSP 必须和清音色写在同一次落盘、同一条 worker 命令里。
+            // 先 setHot 再 clearVoice：mailbox 是单槽，drop 会盖掉 dsp 那条
+            // set，引擎内存里 dsp_enabled 仍是 false，start 就会拿空路径去建 RVC。
+            payload.insert("function".into(), json!("fx"));
+            payload.insert("drop_model".into(), json!(true));
+            payload.insert("pth_path".into(), json!(""));
+            payload.insert("index_path".into(), json!(""));
+            payload.insert("last_model".into(), json!(""));
+            payload.insert("last_model_name".into(), json!(""));
+            payload.insert("last_model_path".into(), json!(""));
+        }
     }
     if let Some(v) = dsp_preset {
         payload.insert("dsp_preset".into(), json!(v));

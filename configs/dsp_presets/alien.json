@@ -1,17 +1,21 @@
 {
   "name": "外星人",
-  "desc": "略升调、一层薄环调、轻轻发颤",
+  "desc": "略升调，音量和音高一起发颤",
   "params": {
     "pitch": {
       "semitones": 3.0
     },
+    "tremolo": {
+      "rate": 7.0,
+      "depth": 0.32
+    },
     "ring": {
-      "freq": 96.0,
-      "mix": 0.18
+      "freq": 90.0,
+      "mix": 0.12
     },
     "vibrato": {
-      "rate": 6.2,
-      "depth": 8.0
+      "rate": 6.0,
+      "depth": 6.0
     }
   }
 }

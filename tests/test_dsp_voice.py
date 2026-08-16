@@ -40,7 +40,9 @@ ACTIVE = {
     "pitch": {"semitones": 7.0},
     "formant": {"shift": -4.0},
     "whisper": {"amount": 0.7},
+    "robot": {"amount": 0.5, "freq": 80.0},
     "ring": {"freq": 80.0, "mix": 0.8},
+    "tremolo": {"rate": 6.0, "depth": 0.6},
     "vibrato": {"rate": 6.0, "depth": 25.0},
     "chorus": {"depth": 0.7},
     "bitcrush": {"bits": 5, "downsample": 6},
@@ -523,6 +525,36 @@ class EveryEffectTests(unittest.TestCase):
             y = _blocks(self._chain(name), x)
             self.assertEqual(y.shape, x.shape, name)
             self.assertTrue(np.isfinite(y).all(), f"{name} 出了 NaN/Inf")
+
+    def test_tremolo_wobbles_amplitude(self):
+        from tools.dsp_voice import VoiceChain
+
+        n = SR // 2
+        x = (0.4 * np.sin(2 * np.pi * 220 * np.arange(n) / SR)).astype(np.float32)
+        y = _blocks(VoiceChain({"tremolo": {"rate": 8.0, "depth": 1.0}}), x)
+        env = np.abs(y[SR // 8 :]).reshape(-1, 200).mean(axis=1)
+        self.assertGreater(env.max() / max(env.min(), 1e-6), 2.0, "振幅没晃起来")
+
+    def test_robotizer_imprints_the_carrier(self):
+        from tools.dsp_voice import VoiceChain
+
+        n = SR // 2
+        x = (0.25 * np.sin(2 * np.pi * 180 * np.arange(n) / SR)).astype(np.float32)
+        y = _blocks(VoiceChain({"robot": {"amount": 1.0, "freq": 80.0}}), x)
+        spec = np.abs(np.fft.rfft(y[SR // 8 : SR // 8 + 8192].astype(np.float64)))
+        freqs = np.fft.rfftfreq(8192, 1.0 / SR)
+        k80 = int(np.argmin(np.abs(freqs - 80.0)))
+        self.assertGreater(spec[k80], spec.mean() * 4, "载波 80Hz 没印上去")
+
+    def test_pitch_leaves_fricative_noise_closer_to_dry(self):
+        """升调不该把齿音也拉成金属丝。"""
+        from tools.dsp_voice import VoiceChain
+
+        rng = np.random.default_rng(3)
+        noise = rng.standard_normal(SR // 2).astype(np.float32) * 0.15
+        wet = _blocks(VoiceChain({"pitch": {"semitones": 8.0}}), noise)
+        err = float(np.mean(np.abs(wet - noise)))
+        self.assertLess(err, 0.12)
 
     def test_never_clips(self):
         """任何一档拉满都不该爆音。"""

@@ -6,8 +6,14 @@
       "bits": 6,
       "downsample": 5
     },
+    "radio": {
+      "low": 280.0,
+      "high": 3600.0,
+      "mix": 0.32,
+      "noise": 0.0
+    },
     "drive": {
-      "amount": 0.12
+      "amount": 0.1
     }
   }
 }

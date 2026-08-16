@@ -36,7 +36,7 @@ def _p(**kw: Any) -> Dict[str, Dict[str, Any]]:
 # 所以：
 #   * 花栗鼠 / 巨人 / 小孩 = 只动 pitch，别再叠同向 formant
 #   * 男女互换 = pitch 和 formant **反向**配平，把跟着走的那截嗓子收回来
-#   * 氦气 = 只动 formant，调子不动
+#   * 氦气 / 花栗鼠 / 小孩 = Clownfish 那档「越升越尖」，只动 pitch，程度不同
 # 环调 mix 超过 ~0.4 人话就听不清，机器人 / 外星人必须留 intelligibility。
 #
 # 顺序就是界面上的顺序：先是一眼能听出效果的梗声，再是能用的人声，最后是场景。
@@ -56,30 +56,32 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "robot",
         "name": "机器人",
-        "desc": "低频环调加一点金属感，还听得清在说什么",
+        "desc": "包络去推脉冲载波，金属、还能说话",
         "params": _p(
-            ring={"freq": 32.0, "mix": 0.32},
-            radio={"low": 220.0, "high": 4200.0, "mix": 0.28, "noise": 0.0},
-            drive={"amount": 0.14},
+            robot={"amount": 0.46, "freq": 88.0},
+            ring={"freq": 30.0, "mix": 0.1},
+            radio={"low": 220.0, "high": 4000.0, "mix": 0.22, "noise": 0.0},
         ),
     },
     {
         "id": "alien",
         "name": "外星人",
-        "desc": "略升调、一层薄环调、轻轻发颤",
+        "desc": "略升调，音量和音高一起发颤",
         "params": _p(
             pitch={"semitones": 3.0},
-            ring={"freq": 96.0, "mix": 0.18},
-            vibrato={"rate": 6.2, "depth": 8.0},
+            tremolo={"rate": 7.0, "depth": 0.32},
+            ring={"freq": 90.0, "mix": 0.12},
+            vibrato={"rate": 6.0, "depth": 6.0},
         ),
     },
     {
         "id": "radio",
         "name": "老收音机",
-        "desc": "窄带加一点底噪，像从喇叭里传出来",
+        "desc": "窄带、底噪、一点点音量晃，像喇叭里传出来",
         "params": _p(
-            radio={"low": 380.0, "high": 2700.0, "mix": 1.0, "noise": 0.07},
-            drive={"amount": 0.16},
+            radio={"low": 400.0, "high": 2600.0, "mix": 1.0, "noise": 0.06},
+            tremolo={"rate": 7.5, "depth": 0.08},
+            drive={"amount": 0.14},
         ),
     },
     {
@@ -95,7 +97,11 @@ BUILTIN: List[Dict[str, Any]] = [
         "id": "retro8bit",
         "name": "8-bit",
         "desc": "老游戏机那种碎，不是坏掉的喇叭",
-        "params": _p(bitcrush={"bits": 6, "downsample": 5}, drive={"amount": 0.12}),
+        "params": _p(
+            bitcrush={"bits": 6, "downsample": 5},
+            radio={"low": 280.0, "high": 3600.0, "mix": 0.32, "noise": 0.0},
+            drive={"amount": 0.1},
+        ),
     },
     {
         "id": "ghost",
@@ -121,8 +127,8 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "helium",
         "name": "氦气",
-        "desc": "只搬共振峰，调子不动 —— 吸了气球那种细",
-        "params": _p(formant={"shift": 8.0}),
+        "desc": "升得比花栗鼠更高，尖、还能喊得出字",
+        "params": _p(pitch={"semitones": 10.0}),
     },
     {
         "id": "male_to_female",
@@ -139,8 +145,8 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "child",
         "name": "小孩",
-        "desc": "升调，共振峰跟着走，比花栗鼠矮一截",
-        "params": _p(pitch={"semitones": 5.5}),
+        "desc": "升调比花栗鼠矮一截，软一点",
+        "params": _p(pitch={"semitones": 6.0}),
     },
     {
         "id": "elder",
@@ -161,8 +167,8 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "chorus_crowd",
         "name": "一群人",
-        "desc": "三路轻轻失谐，一个人说成旁边还有人",
-        "params": _p(chorus={"depth": 0.55, "rate": 0.42, "voices": 3}),
+        "desc": "自己叠一路，像旁边还有个人在说",
+        "params": _p(chorus={"depth": 0.48, "rate": 0.28, "voices": 2}),
     },
     {
         "id": "cave",

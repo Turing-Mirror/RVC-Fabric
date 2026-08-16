@@ -1,9 +1,9 @@
 {
   "name": "小孩",
-  "desc": "升调，共振峰跟着走，比花栗鼠矮一截",
+  "desc": "升调比花栗鼠矮一截，软一点",
   "params": {
     "pitch": {
-      "semitones": 5.5
+      "semitones": 6.0
     }
   }
 }

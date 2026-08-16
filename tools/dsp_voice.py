@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
 """无模型 DSP 变声：不用 RVC、不用显卡、不用 torch。
 
-Clownfish 那一票梗声（高音、机器人、无线电、外星人…）本质就是几个便宜的
-时域/频域效果器串起来。这里把它们做全，并且补上 Clownfish 做不到的那件事：
-**变调和共振峰可以分开调**。
+Clownfish 那一票梗声（官方 14 档：Alien / Atari / Clone / Mutation /
+Male·Female·Helium·Baby pitch / Radio / Robot / Custom ±15）本质是低延迟
+变调（共振峰跟着走）再叠一层便宜效果。这里按同一套逻辑做，并补上它做不到
+的那件事：**变调和共振峰可以分开调**。
+
+对照公开资料后的实现要点：
+* 变调走 WSOLA + 重采样，和它一样升调变尖、降调变大
+* 清辅音少变调，不然 s/sh 会变成金属齿音
+* 机器人是包络 × 脉冲载波，不是把环调拉满
+* 外星人是振幅颤音（tremolo），不是只晃音高
 
 Clownfish 只有一个「变调」，升调时共振峰跟着一起搬，所以必然「花栗鼠」，
 降调必然「巨人」。分开之后：
@@ -49,15 +56,25 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
         "params": {"amount": 0.0},
         "ranges": {"amount": (0.0, 1.0)},
     },
+    "robot": {
+        "label": "机器人",
+        "params": {"amount": 0.0, "freq": 80.0},
+        "ranges": {"amount": (0.0, 1.0), "freq": (40.0, 250.0)},
+    },
     "ring": {
         "label": "环形调制",
         "params": {"freq": 50.0, "mix": 0.0},
         "ranges": {"freq": (5.0, 2000.0), "mix": (0.0, 1.0)},
     },
+    "tremolo": {
+        "label": "振幅颤音",
+        "params": {"rate": 6.0, "depth": 0.0},
+        "ranges": {"rate": (0.5, 20.0), "depth": (0.0, 1.0)},
+    },
     "vibrato": {
         "label": "颤音",
         "params": {"rate": 5.0, "depth": 0.0},
-        "ranges": {"rate": (0.1, 20.0), "depth": (0.0, 30.0)},
+        "ranges": {"rate": (0.1, 20.0), "depth": (0.0, 50.0)},
     },
     "chorus": {
         "label": "合唱",
@@ -101,7 +118,9 @@ CHAIN_ORDER: tuple[str, ...] = (
     "pitch",
     "formant",
     "whisper",
+    "robot",
     "ring",
+    "tremolo",
     "vibrato",
     "chorus",
     "bitcrush",
@@ -163,6 +182,28 @@ def _sosfilt():
 
 def semitones_to_ratio(st: float) -> float:
     return float(2.0 ** (float(st) / 12.0))
+
+
+def _voiced_amount(x: "np.ndarray", sr: int) -> float:
+    """这一块有多像浊音。1 = 全变调，0 = 放干声。
+
+    清辅音（s / sh / f）零交叉远高于基频。跟浊音一起拉伸再重采样，
+    会出一嘴金属齿音 —— 升调预设听着像笑话，多半是这个。
+    """
+    np = _numpy()
+    n = int(x.size)
+    if n < 24:
+        return 1.0
+    rms = float(np.sqrt(np.mean(x * x)) + 1e-12)
+    if rms < 4e-4:
+        return 0.0
+    z = float(np.count_nonzero(np.diff(np.signbit(x))))
+    zcr = z * float(sr) / float(n)
+    if zcr >= 2800.0:
+        return 0.12
+    if zcr >= 1800.0:
+        return 0.45
+    return 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +269,7 @@ class PitchShifter:
         self._read_pos = 0.0         # 重采样读指针（浮点）
         self._prev_tail: Any = None  # 上一帧尾巴，用来做相关对齐
         self._primed = False         # 储备够了没
+        self._voiced = 1.0           # 浊音权重，辅音少变调（Clownfish 那类听感）
 
     def reset(self) -> None:
         self._in_buf = None
@@ -237,6 +279,7 @@ class PitchShifter:
         self._read_pos = 0.0
         self._prev_tail = None
         self._primed = False
+        self._voiced = 1.0
 
     def _ensure(self, sr: int) -> None:
         np = _numpy()
@@ -393,6 +436,12 @@ class PitchShifter:
         y = self._out_buf[i0] * (1.0 - frac) + self._out_buf[i0 + 1] * frac
         self._read_pos = float(pos[-1]) + ratio
         self._compact()
+        # 清辅音 / 气音零交叉很多。整段一起变调会变成金属齿音，
+        # Clownfish 那种能聊天的升调就是浊音多变、辅音少动。
+        voiced = _voiced_amount(xs, sr)
+        self._voiced = 0.82 * self._voiced + 0.18 * voiced
+        if self._voiced < 0.995:
+            y = y * self._voiced + xs * (1.0 - self._voiced)
         return y.astype(np.float32)
 
     def _compact(self) -> None:
@@ -579,6 +628,75 @@ class Whisper(_StftEffect):
         return spec * (1.0 - amt) + noisy * amt
 
 
+class Robotizer:
+    """包络 × 脉冲载波。Clownfish 机器人是这种廉价声码器，不是把环调拉满。"""
+
+    def __init__(self, amount: float = 0.0, freq: float = 80.0) -> None:
+        self.amount = float(amount)
+        self.freq = float(freq)
+        self._env = 0.0
+        self._phase = 0.0
+
+    def reset(self) -> None:
+        self._env = 0.0
+        self._phase = 0.0
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        mix = min(max(self.amount, 0.0), 1.0)
+        if mix <= 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        n = int(np.size(x))
+        if n == 0:
+            return np.asarray(x, dtype=np.float32)
+        dry = np.asarray(x, dtype=np.float64)
+        # ~8ms 包络，跟得上口型、不跟每个齿音
+        coef = math.exp(-1.0 / max(1.0, float(sr) * 0.008))
+        inst = np.abs(dry)
+        env = np.empty(n, dtype=np.float64)
+        prev = self._env
+        one = 1.0 - coef
+        for i in range(n):
+            prev = coef * prev + one * inst[i]
+            env[i] = prev
+        self._env = float(prev)
+        w = 2.0 * math.pi * float(min(max(self.freq, 40.0), 250.0)) / float(sr)
+        ph = self._phase + w * np.arange(n, dtype=np.float64)
+        self._phase = float((self._phase + w * n) % (2.0 * math.pi))
+        sine = np.sin(ph)
+        square = np.sign(sine)
+        square[square == 0.0] = 1.0
+        carrier = 0.62 * square + 0.38 * sine
+        wet = env * carrier * 1.55
+        return (dry * (1.0 - mix) + wet * mix).astype(np.float32)
+
+
+class Tremolo:
+    """振幅 LFO。Clownfish 外星人是这种发颤，不是只晃音高。"""
+
+    def __init__(self, rate: float = 6.0, depth: float = 0.0) -> None:
+        self.rate = float(rate)
+        self.depth = float(depth)
+        self._phase = 0.0
+
+    def reset(self) -> None:
+        self._phase = 0.0
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        depth = min(max(self.depth, 0.0), 1.0)
+        if depth <= 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        n = int(np.size(x))
+        if n == 0:
+            return np.asarray(x, dtype=np.float32)
+        w = 2.0 * math.pi * float(self.rate) / float(sr)
+        ph = self._phase + w * np.arange(n, dtype=np.float64)
+        self._phase = float((self._phase + w * n) % (2.0 * math.pi))
+        gain = 1.0 - depth * 0.5 * (1.0 - np.cos(ph))
+        return (np.asarray(x, dtype=np.float64) * gain).astype(np.float32)
+
+
 class RingMod:
     """环形调制。相位跨块连续，不然每块开头都有一下咔哒。"""
 
@@ -695,9 +813,12 @@ class Chorus:
         voices = max(2, min(3, self.voices))
         acc = np.asarray(x, dtype=np.float64) * (1.0 - depth * 0.5)
         span = hist * 0.35
+        # 每路一个固定延迟差，才像「叠了一个人」，不是同一路在晃。
+        # Clownfish Clone 是带一点音高差的加倍，不是纯合唱扫频。
+        bases = (0.38, 0.55, 0.47)[:voices]
         for v in range(voices):
             off = 2.0 * np.pi * v / voices
-            d = hist * 0.5 + span * depth * np.sin(self_ph + w * t + off)
+            d = hist * bases[v] + span * depth * np.sin(self_ph + w * t + off)
             np.clip(d, 1.0, hist - 2.0, out=d)
             pos = base - d
             i0 = pos.astype(np.int64)
@@ -1091,7 +1212,9 @@ _FACTORIES = {
     "pitch": lambda p: PitchShifter(p.get("semitones", 0.0)),
     "formant": lambda p: FormantShifter(p.get("shift", 0.0)),
     "whisper": lambda p: Whisper(p.get("amount", 0.0)),
+    "robot": lambda p: Robotizer(p.get("amount", 0.0), p.get("freq", 80.0)),
     "ring": lambda p: RingMod(p.get("freq", 50.0), p.get("mix", 0.0)),
+    "tremolo": lambda p: Tremolo(p.get("rate", 6.0), p.get("depth", 0.0)),
     "vibrato": lambda p: Vibrato(p.get("rate", 5.0), p.get("depth", 0.0)),
     "chorus": lambda p: Chorus(
         p.get("depth", 0.0), p.get("rate", 0.7), int(p.get("voices", 2))

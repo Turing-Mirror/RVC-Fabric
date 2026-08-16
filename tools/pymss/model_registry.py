@@ -4,7 +4,6 @@ import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from importlib import resources
 from pathlib import Path
 
 
@@ -108,6 +107,17 @@ class ModelEntry:
         )
 
 
+def _resource_file(*parts):
+    """Vendored tree next to this file. Do not use importlib.resources.
+
+    Runtime is Python 3.9. ``resources.files("pymss.resources")`` needs a
+    regular package with an origin; our ``resources/`` has no ``__init__.py``
+    and the worker imports us as ``tools.pymss``, so 3.9 raises
+    ``TypeError: expected str, bytes or os.PathLike object, not NoneType``.
+    """
+    return Path(__file__).resolve().parent.joinpath("resources", *parts)
+
+
 @lru_cache(maxsize=1)
 def load_model_catalog():
     """Load model catalog.
@@ -117,7 +127,10 @@ def load_model_catalog():
 
     Returns:
         Any: Computed result."""
-    with resources.files("pymss.resources").joinpath("model_catalog.json").open(encoding="utf-8") as f:
+    catalog = _resource_file("model_catalog.json")
+    if not catalog.is_file():
+        raise FileNotFoundError("分离模型清单不存在：%s" % catalog)
+    with catalog.open(encoding="utf-8") as f:
         data = json.load(f)
     models = [ModelEntry.from_dict(item) for item in data["models"]]
     return {**data, "models": models}

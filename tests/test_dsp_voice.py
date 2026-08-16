@@ -248,7 +248,7 @@ class ShellContractTests(unittest.TestCase):
         )
         self.assertIn("dspOnly", src)
         self.assertIn("!dspOnly", src)
-        self.assertIn("function: dspOnly", src)
+        self.assertIn("activateDsp", src)
         self.assertIn("dsp_preset", src)
         self.assertNotIn("!hasPth || !coreReady", src)
         self.assertNotIn("isEngineCoreReady", src)
@@ -265,15 +265,18 @@ class ShellContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         apply = src[src.index("const applyDsp") : src.index("useEffect", src.index("const applyDsp"))]
-        self.assertIn('function: "fx"', apply)
-        self.assertNotIn("clearVoice", apply)
-        self.assertNotIn("noVoice", apply)
+        self.assertIn("activateDsp", apply)
+        self.assertIn("deactivateDsp", apply)
         rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
             encoding="utf-8"
         )
-        hot = rust[rust.index("fn engine_set_hot") : rust.index("fn engine_swap_model")]
-        self.assertIn('payload.insert("drop_model"', hot)
-        self.assertIn('json!("fx")', hot)
+        self.assertIn("fn dsp_activate", rust)
+        self.assertIn("fn dsp_deactivate", rust)
+        dsp = (ROOT / "app" / "src-tauri" / "src" / "dsp.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pub fn activate", dsp)
+        self.assertIn("write_dsp_on", dsp)
 
     def test_start_accepts_fx_function_as_dsp(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")

@@ -120,6 +120,54 @@ pub fn effect_specs(root: &Path) -> Value {
         .unwrap_or_else(|| json!({ "order": [], "effects": {} }))
 }
 
+/// 按 id 取一条预设（用户覆盖内置）。没有或坏文件返回 None。
+pub fn get(root: &Path, id: &str) -> Option<Value> {
+    if !is_valid_id(id) {
+        return None;
+    }
+    let listed = list(root);
+    listed
+        .get("presets")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|p| p.get("id").and_then(|x| x.as_str()) == Some(id))
+                .cloned()
+        })
+}
+
+/// 选用一条预设：配置和 inuse 一次写完，再推一条 worker 命令。
+///
+/// 点「使用」和点「开启变声」都走这里。以前分两次 setHot，mailbox 单槽
+/// 会把预设那条盖掉，配置里永远是空的，启动就报「请先选用预设」。
+pub fn activate(root: &Path, id: &str) -> Result<Value, String> {
+    let preset = get(root, id).ok_or_else(|| crate::i18n::te("s.dspPresetBadId", &id))?;
+    let params = preset.get("params").cloned().unwrap_or_else(|| json!({}));
+    if !params.is_object() || params.as_object().map(|m| m.is_empty()).unwrap_or(true) {
+        return Err(crate::i18n::t("s.dspPresetBadParams"));
+    }
+    let cfg = crate::config::write_dsp_on(root, id, &params)?;
+    let mut payload = Map::new();
+    payload.insert("dsp_enabled".into(), json!(true));
+    payload.insert("dsp_preset".into(), json!(id));
+    payload.insert("dsp_params".into(), params);
+    payload.insert("function".into(), json!("fx"));
+    payload.insert("drop_model".into(), json!(true));
+    // worker 没起来只算配置写好了，开启变声会再推一次。
+    let _ = crate::worker::set_hot(root, payload);
+    Ok(json!({ "ok": true, "id": id, "config": cfg }))
+}
+
+pub fn deactivate(root: &Path) -> Result<Value, String> {
+    let cfg = crate::config::write_dsp_off(root)?;
+    let mut payload = Map::new();
+    payload.insert("dsp_enabled".into(), json!(false));
+    payload.insert("dsp_preset".into(), json!(""));
+    payload.insert("dsp_params".into(), json!({}));
+    let _ = crate::worker::set_hot(root, payload);
+    Ok(json!({ "ok": true, "config": cfg }))
+}
+
 pub fn save(root: &Path, id: &str, name: &str, params: &Value) -> Result<Value, String> {
     if !is_valid_id(id) {
         return Err(crate::i18n::t("s.dspPresetBadId"));
@@ -164,6 +212,16 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn get_returns_params_for_a_real_preset() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let got = get(&root, "chipmunk").expect("chipmunk.json 必须在仓库里");
+        let params = got.get("params").and_then(|v| v.as_object()).unwrap();
+        assert!(params.contains_key("pitch"), "got {got}");
     }
 
     #[test]

@@ -182,7 +182,7 @@ export function useEngine() {
     (status.state === "starting" && !bootCode) ||
     busy;
 
-  const toggleRun = useCallback(async () => {
+  const toggleRun = useCallback(async (opts?: { dspId?: string }) => {
     if (provision.need_provision || provision.runtime_ready === false) {
       setLastError(
         String(provision.message || t("s.6aa0d5bedd")),
@@ -192,14 +192,13 @@ export function useEngine() {
     // 开机导入推理库时 status 也会是 starting。那一下点按钮必须是「开启」，
     // 不能被当成「停止」把还没发出去的 start 吃掉。
     const stopping = running || startingRef.current;
-    let dspOnly = false;
-    if (!stopping) {
+    let dspOnly = Boolean(opts?.dspId?.trim());
+    let dspId = String(opts?.dspId || "").trim();
+    if (!stopping && !dspOnly) {
       try {
         const cfg = await getConfig();
-        // 只看 function=fx 会把上次残留当成 DSP，开起来是干声直通。
-        dspOnly =
-          Boolean(cfg.dsp_enabled) ||
-          Boolean(String(cfg.dsp_preset || "").trim());
+        dspId = String(cfg.dsp_preset || "").trim();
+        dspOnly = Boolean(cfg.dsp_enabled) || Boolean(dspId);
       } catch {
         dspOnly = false;
       }
@@ -229,23 +228,19 @@ export function useEngine() {
         setStatus(st);
       } else {
         startingRef.current = true;
-        // Push slider values into config/worker first. Safe now: shell waits
-        // for each command to be acked before overwriting command.json
-        // (previously set→start→set could erase `start` and freeze the dock
-        // on「引擎就绪 / 参数已应用」).
-        try {
-          await setHot({
-            pitch: pitchRef.current,
-            formant: formantRef.current,
-            function: dspOnly
-              ? "fx"
-              : modeRef.current === "bypass"
-                ? "im"
-                : "vc",
-            ...(dspOnly ? { dsp_enabled: true } : {}),
-          });
-        } catch {
-          /* worker may still be coming up; start_vc still syncs from config */
+        if (dspOnly && dspId) {
+          const { activateDsp } = await import("../lib/engine");
+          await activateDsp(dspId);
+        } else {
+          try {
+            await setHot({
+              pitch: pitchRef.current,
+              formant: formantRef.current,
+              function: modeRef.current === "bypass" ? "im" : "vc",
+            });
+          } catch {
+            /* worker may still be coming up; start_vc still syncs from config */
+          }
         }
         const st = await startVc();
         setStatus(st);

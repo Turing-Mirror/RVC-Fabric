@@ -3,7 +3,9 @@
     "pitch",
     "formant",
     "whisper",
+    "robot",
     "ring",
+    "tremolo",
     "vibrato",
     "chorus",
     "bitcrush",
@@ -46,6 +48,22 @@
         ]
       }
     },
+    "robot": {
+      "params": {
+        "amount": 0.0,
+        "freq": 80.0
+      },
+      "ranges": {
+        "amount": [
+          0.0,
+          1.0
+        ],
+        "freq": [
+          40.0,
+          250.0
+        ]
+      }
+    },
     "ring": {
       "params": {
         "freq": 50.0,
@@ -57,6 +75,22 @@
           2000.0
         ],
         "mix": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "tremolo": {
+      "params": {
+        "rate": 6.0,
+        "depth": 0.0
+      },
+      "ranges": {
+        "rate": [
+          0.5,
+          20.0
+        ],
+        "depth": [
           0.0,
           1.0
         ]
@@ -74,7 +108,7 @@
         ],
         "depth": [
           0.0,
-          30.0
+          50.0
         ]
       }
     },

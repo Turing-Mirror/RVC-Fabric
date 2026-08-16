@@ -354,5 +354,79 @@ class FilelistTests(unittest.TestCase):
                     tw.write_filelist(req, exp, root)
 
 
+class ArtifactSnapshotTests(unittest.TestCase):
+    """取消/失败时必须能从快照判断：有没有可用音色、卡在哪一步。"""
+
+    def _exp(self, td: Path, *, slices=0, f0=0, feat=0, epoch=None, final=False, ckpt=None):
+        root = td
+        exp = root / "logs" / "voice"
+        exp.mkdir(parents=True)
+        for name, n in (("1_16k_wavs", slices), ("2a_f0", f0), ("3_feature768", feat)):
+            d = exp / name
+            d.mkdir(parents=True, exist_ok=True)
+            for i in range(n):
+                (d / ("%s.bin" % i)).write_text("x")
+        if epoch is not None:
+            (exp / "train.log").write_text(
+                "====> Epoch: %d [t] | (0:00:01)\n" % epoch, encoding="utf-8"
+            )
+        if final:
+            w = root / "assets" / "weights"
+            w.mkdir(parents=True)
+            (w / "voice.pth").write_bytes(b"pth")
+        if ckpt:
+            (exp / ckpt).write_bytes(b"g")
+        return root, exp
+
+    def test_nothing_on_disk_is_unusable(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._exp(Path(td))
+            snap = tw.artifact_snapshot(exp, root, {"exp": "voice"})
+            self.assertEqual(snap["usable"], "none")
+            self.assertEqual(snap["counts"]["1_16k_wavs"], 0)
+            self.assertIsNone(snap["latest_epoch"])
+
+    def test_slices_without_weights_are_not_a_voice(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._exp(Path(td), slices=12)
+            snap = tw.artifact_snapshot(exp, root, {"exp": "voice"})
+            self.assertEqual(snap["usable"], "slices_only")
+            self.assertEqual(snap["counts"]["1_16k_wavs"], 12)
+
+    def test_an_intermediate_ckpt_counts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._exp(Path(td), slices=12, epoch=2, ckpt="G_2.pth")
+            snap = tw.artifact_snapshot(exp, root, {"exp": "voice"})
+            self.assertEqual(snap["usable"], "intermediate")
+            self.assertEqual(snap["latest_epoch"], 2)
+            self.assertEqual([x["name"] for x in snap["exp_pths"]], ["G_2.pth"])
+
+    def test_final_weights_win(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._exp(Path(td), slices=12, epoch=3, final=True, ckpt="G_3.pth")
+            snap = tw.artifact_snapshot(exp, root, {"exp": "voice"})
+            self.assertEqual(snap["usable"], "final")
+            self.assertGreater(snap["final_weights_bytes"], 0)
+
+    def test_latest_epoch_skips_garbage(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "train.log"
+            p.write_text(
+                "====> Epoch: not\n====> Epoch: 4 [t]\nnoise\n====> Epoch: 7 [t]\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(tw.latest_epoch_in_log(p), 7)
+
+    def test_dump_log_tail_mentions_a_missing_file(self):
+        buf = io.StringIO()
+        real = sys.stderr
+        sys.stderr = buf
+        try:
+            tw.dump_log_tail(Path("/definitely/not/here.log"), n=10)
+        finally:
+            sys.stderr = real
+        self.assertIn("missing", buf.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

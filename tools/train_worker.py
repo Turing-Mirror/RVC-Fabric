@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import wave
 from pathlib import Path
 
@@ -102,6 +103,159 @@ def count_audio(d):
         for x in p.rglob("*")
         if x.is_file() and x.suffix.lower() in AUDIO_EXT
     )
+
+
+def file_bytes(p):
+    try:
+        return p.stat().st_size if p.is_file() else 0
+    except OSError:
+        return 0
+
+
+def latest_epoch_in_log(log_path):
+    """train.log 里最后一次 ``====> Epoch: N``。文件不在或读失败就当没训过。"""
+    p = Path(log_path)
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    epoch = None
+    marker = "====> Epoch: "
+    for line in text.splitlines():
+        at = line.find(marker)
+        if at < 0:
+            continue
+        tail = line[at + len(marker):].strip().split()
+        if not tail:
+            continue
+        try:
+            epoch = int(tail[0])
+        except ValueError:
+            continue
+    return epoch
+
+
+def list_pths(d):
+    p = Path(d)
+    if not p.is_dir():
+        return []
+    out = []
+    try:
+        names = sorted(p.iterdir(), key=lambda x: x.name)
+    except OSError:
+        return []
+    for x in names:
+        if x.is_file() and x.suffix.lower() == ".pth":
+            out.append({"name": x.name, "bytes": file_bytes(x)})
+    return out
+
+
+def artifact_snapshot(exp_dir, root, req):
+    """一次训练结束时盘上到底有什么。
+
+    取消、崩、成功都要能从这份快照判断：有没有可用音色、卡在哪一步。
+    26.8.16 两份用户日志只有一句「已取消」或预处理 traceback，看不出
+    切片有没有切完、权重写没写出来。
+    """
+    exp = str(req.get("exp") or Path(exp_dir).name)
+    exp_dir = Path(exp_dir)
+    root = Path(root)
+    counts = {
+        "0_gt_wavs": count_files(exp_dir / "0_gt_wavs"),
+        "1_16k_wavs": count_files(exp_dir / "1_16k_wavs"),
+        "2a_f0": count_files(exp_dir / "2a_f0"),
+        "2b-f0nsf": count_files(exp_dir / "2b-f0nsf"),
+        "3_feature768": count_files(exp_dir / "3_feature768"),
+    }
+    filelist_lines = 0
+    fl = exp_dir / "filelist.txt"
+    if fl.is_file():
+        try:
+            filelist_lines = sum(
+                1 for line in fl.read_text(encoding="utf-8", errors="replace").splitlines()
+                if line.strip()
+            )
+        except OSError:
+            filelist_lines = 0
+    weights = root / "assets" / "weights" / ("%s.pth" % exp)
+    published = root / "User_Data" / "models" / exp / ("%s.pth" % exp)
+    weight_pths = [
+        x for x in list_pths(root / "assets" / "weights")
+        if x["name"] == ("%s.pth" % exp) or x["name"].startswith("%s_e" % exp)
+    ]
+    exp_pths = list_pths(exp_dir)
+    if file_bytes(weights) > 0 or file_bytes(published) > 0:
+        usable = "final"
+    elif weight_pths or exp_pths:
+        usable = "intermediate"
+    elif counts["1_16k_wavs"] > 0:
+        usable = "slices_only"
+    else:
+        usable = "none"
+    return {
+        "exp": exp,
+        "counts": counts,
+        "filelist_lines": filelist_lines,
+        "latest_epoch": latest_epoch_in_log(exp_dir / "train.log"),
+        "final_weights_bytes": file_bytes(weights),
+        "published_bytes": file_bytes(published),
+        "weight_pths": weight_pths,
+        "exp_pths": exp_pths,
+        "usable": usable,
+    }
+
+
+def emit_checkpoint(stage, exp_dir, root, req):
+    snap = artifact_snapshot(exp_dir, root, req)
+    emit(phase="checkpoint", stage=stage, **snap)
+    # stderr 也会进壳的训练日志（stdout 只走进度管道）。进程被 taskkill
+    # 时这条可能写不完，所以壳侧结束时还会自己再扫一遍盘。
+    sys.stderr.write(
+        "checkpoint stage=%s usable=%s epoch=%s slices=%s f0=%s feat=%s "
+        "filelist=%s weights=%s published=%s exp_pths=%s\n"
+        % (
+            stage,
+            snap["usable"],
+            snap["latest_epoch"],
+            snap["counts"]["1_16k_wavs"],
+            snap["counts"]["2a_f0"],
+            snap["counts"]["3_feature768"],
+            snap["filelist_lines"],
+            snap["final_weights_bytes"],
+            snap["published_bytes"],
+            ",".join(x["name"] for x in snap["exp_pths"]) or "-",
+        )
+    )
+    sys.stderr.flush()
+    return snap
+
+
+def dump_log_tail(path, n=50, max_bytes=65536):
+    """失败时把阶段日志尾巴打到 stderr，诊断包里就能看见真正的报错。"""
+    p = Path(path)
+    try:
+        size = p.stat().st_size
+    except OSError:
+        sys.stderr.write("=== tail %s (missing) ===\n" % p)
+        sys.stderr.flush()
+        return
+    try:
+        with open(p, "rb") as f:
+            if size > max_bytes:
+                f.seek(-max_bytes, os.SEEK_END)
+            data = f.read()
+        text = data.decode("utf-8", errors="replace")
+        lines = text.splitlines()
+        shown = lines[-n:]
+        sys.stderr.write(
+            "=== tail %s (%d bytes, last %d lines) ===\n"
+            % (p, size, len(shown))
+        )
+        sys.stderr.write("\n".join(shown) + "\n")
+        sys.stderr.flush()
+    except OSError as e:
+        sys.stderr.write("=== tail %s (unreadable: %s) ===\n" % (p, e))
+        sys.stderr.flush()
 
 
 def write_meta(exp_dir, req):
@@ -317,6 +471,15 @@ def spawn(args, log_file, env=None):
     if os.name == "nt":
         creation = 0x08000000  # CREATE_NO_WINDOW
     with open(log_file, "a+", encoding="utf-8", errors="replace") as f:
+        f.write(
+            "\n===== %s %s =====\nargv: %s\n"
+            % (
+                Path(args[1]).name if len(args) > 1 else "stage",
+                time.strftime("%Y-%m-%d %H:%M:%S"),
+                " ".join(str(a) for a in args),
+            )
+        )
+        f.flush()
         return subprocess.Popen(
             args,
             cwd=NOW_DIR,
@@ -340,6 +503,7 @@ def run_stage(args, log_file, watcher=None, env=None, what="", ok_codes=(0,)):
             watcher.stop()
             watcher.join(timeout=3)
     if code not in ok_codes:
+        dump_log_tail(log_file)
         fail("%s失败（退出码 %s），详情见 %s" % (what or "该步骤", code, log_file))
     return code
 
@@ -368,7 +532,9 @@ def stage_preprocess(req, exp_dir, py, n_stages):
          str(req["n_cpu"]), str(exp_dir), "False", "3.7"],
         log, watcher=w, what="数据预处理",
     )
+    emit_checkpoint("preprocess", exp_dir, ROOT, req)
     if count_files(exp_dir / "1_16k_wavs") == 0:
+        dump_log_tail(log)
         fail("预处理没有产出任何切片。检查数据集里是不是没有可读的音频文件。")
 
 
@@ -400,7 +566,9 @@ def stage_f0(req, exp_dir, py, n_stages):
         args = [py, "infer/modules/train/extract/extract_f0_print.py",
                 str(exp_dir), str(req["n_cpu"]), method]
     run_stage(args, log, watcher=w, what="音高提取")
+    emit_checkpoint("f0", exp_dir, ROOT, req)
     if count_files(exp_dir / "2a_f0") == 0 or count_files(exp_dir / "2b-f0nsf") == 0:
+        dump_log_tail(log)
         fail("音高提取没有产出。换一种音高算法再试。")
 
 
@@ -419,7 +587,9 @@ def stage_feature(req, exp_dir, py, n_stages):
          "1", "0", "0", str(exp_dir), VERSION, str(req["is_half"])],
         log, watcher=w, what="特征提取",
     )
+    emit_checkpoint("feature", exp_dir, ROOT, req)
     if count_files(exp_dir / ("3_feature%d" % FEATURE_DIM)) == 0:
+        dump_log_tail(log)
         fail("特征提取没有产出。多半是 assets/hubert/hubert_base.pt 缺失或损坏。")
 
 
@@ -517,6 +687,7 @@ def stage_train(req, exp_dir, py, root, n_stages):
     args += ["-g", "0" if req["device"] == "cuda" else ""]
     (root / "assets" / "weights").mkdir(parents=True, exist_ok=True)
     run_stage(args, log, watcher=tail, what="训练", ok_codes=(0, TRAIN_PY_DONE))
+    emit_checkpoint("train", exp_dir, root, req)
 
 
 def stage_index(req, exp_dir, py, n_stages):
@@ -658,6 +829,16 @@ def main():
     n_stages = len(STAGES)
     emit(phase="start", exp=req["exp"], total_stages=n_stages,
          message="开始训练 %s" % req["exp"])
+    emit(
+        phase="env",
+        python=sys.version.split()[0],
+        executable=sys.executable,
+        cwd=os.getcwd(),
+        device=req["device"],
+        is_half=req["is_half"],
+        n_cpu=req["n_cpu"],
+        dataset_audio=count_audio(req["dataset"]) if req["dataset"] else 0,
+    )
 
     # 续跑：已经有产物的前几步直接跳过。判据是产物目录非空 —— 比记状态文件
     # 可靠，用户手动删过目录也能自愈。
@@ -665,6 +846,7 @@ def main():
     have_f0 = count_files(exp_dir / "2a_f0") > 0
     have_feat = count_files(exp_dir / ("3_feature%d" % FEATURE_DIM)) > 0
     resume = bool(req["resume"] and have_slices)
+    emit_checkpoint("start", exp_dir, root, req)
 
     if resume:
         stored = infer_sr(exp_dir)
@@ -686,6 +868,7 @@ def main():
     try:
         if resume and have_slices:
             emit(phase="skip", stage="preprocess", message="已有切片，跳过预处理")
+            emit_checkpoint("preprocess", exp_dir, root, req)
         else:
             if not Path(req["dataset"]).is_dir():
                 fail("数据集目录不存在：%s" % req["dataset"])
@@ -693,27 +876,35 @@ def main():
 
         if resume and have_f0:
             emit(phase="skip", stage="f0", message="已有音高，跳过")
+            emit_checkpoint("f0", exp_dir, root, req)
         else:
             stage_f0(req, exp_dir, py, n_stages)
 
         if resume and have_feat:
             emit(phase="skip", stage="feature", message="已有特征，跳过")
+            emit_checkpoint("feature", exp_dir, root, req)
         else:
             stage_feature(req, exp_dir, py, n_stages)
 
         stage_train(req, exp_dir, py, root, n_stages)
         index_path = stage_index(req, exp_dir, py, n_stages)
+        emit_checkpoint("index", exp_dir, root, req)
     except KeyboardInterrupt:
+        emit_checkpoint("interrupted", exp_dir, root, req)
         emit(phase="error", message="已取消")
         sys.exit(2)
 
     weights = root / "assets" / "weights" / ("%s.pth" % req["exp"])
     if not weights.is_file():
+        emit_checkpoint("missing_weights", exp_dir, root, req)
+        dump_log_tail(exp_dir / "train.log")
         fail("训练结束但没找到 %s。查看 logs/%s/train.log。" % (weights, req["exp"]))
     published = publish_voice(root, req, weights, index_path)
+    snap = emit_checkpoint("done", exp_dir, root, req)
     msg = "训练完成" if index_path else "训练完成（索引没建成，音色仍可用）"
     emit(phase="done", weights=str(published or weights),
          index=str(index_path) if index_path else "",
+         usable=snap["usable"],
          message=msg)
 
 

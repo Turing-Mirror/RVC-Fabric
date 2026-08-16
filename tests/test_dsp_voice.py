@@ -221,6 +221,31 @@ class ShellContractTests(unittest.TestCase):
         clear = voices[voices.index("pub fn clear_voice") :][:600]
         self.assertIn("worker::drop_model", clear)
 
+    def test_selecting_a_voice_clears_dsp_params(self):
+        voices = (ROOT / "app" / "src-tauri" / "src" / "voices.rs").read_text(
+            encoding="utf-8"
+        )
+        body = voices[voices.index("pub fn select_voice") : voices.index(
+            "pub fn clear_voice"
+        )]
+        self.assertIn('"dsp_params"', body)
+        self.assertIn("dsp_enabled", body)
+        self.assertIn('json!("vc")', body)
+
+    def test_leftover_dsp_params_do_not_force_dsp_start(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        resolve = src[src.index("def _resolve_dsp") : src.index("def set_values")]
+        self.assertIn("if enabled:", resolve)
+        self.assertIn("elif pth", resolve)
+        start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
+        self.assertIn("elif pth:", start)
+        rust = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        fn = rust[rust.index("pub fn wants_dsp") : rust.index("pub fn prepare_vc_start")]
+        self.assertIn('Some("vc")', fn)
+        self.assertIn("pth", fn)
+
     def test_start_is_exclusive_dsp_or_rvc(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         self.assertIn("def _engine_core_ready", src)

@@ -376,26 +376,8 @@ impl WorkerKind {
     }
 }
 
-pub fn cfg_wants_dsp(cfg: &Map<String, Value>) -> bool {
-    let preset = cfg
-        .get("dsp_preset")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim();
-    let params_on = cfg
-        .get("dsp_params")
-        .and_then(|v| v.as_object())
-        .map(|m| !m.is_empty())
-        .unwrap_or(false);
-    cfg.get("dsp_enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        || !preset.is_empty()
-        || params_on
-}
-
 pub fn dsp_requested(root: &Path) -> bool {
-    cfg_wants_dsp(&crate::config::read(root))
+    crate::config::wants_dsp(&crate::config::read(root))
 }
 
 pub fn worker_kind_of(root: &Path) -> Option<WorkerKind> {
@@ -975,7 +957,7 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
     // 必须在选 worker 之前：dsp_enabled 决定走哪条进程。
     let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
-    let dsp_on = cfg_wants_dsp(&cfg);
+    let dsp_on = crate::config::wants_dsp(&cfg);
     let want = if dsp_on {
         WorkerKind::Dsp
     } else {

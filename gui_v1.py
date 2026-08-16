@@ -1046,8 +1046,16 @@ if __name__ == "__main__":
                     traceback.print_exc()
             enabled = bool(values.get("dsp_enabled"))
             leftover_fx = str(values.get("function") or "") == "fx"
-            dsp_on = enabled or bool(preset) or bool(params)
-            if leftover_fx and not dsp_on:
+            pth = str(values.get("pth_path") or "").strip()
+            # 开关优先。选了音色之后 dsp_params 常还留着上一份预设，
+            # 不能再靠「有参数就是 DSP」，否则换回 RVC 仍走 fx。
+            if enabled:
+                dsp_on = True
+            elif pth or str(values.get("function") or "") == "vc":
+                dsp_on = False
+            else:
+                dsp_on = bool(preset) or bool(params)
+            if leftover_fx and not enabled and pth:
                 dsp_on = False
             return dsp_on, preset, params
 
@@ -1379,11 +1387,15 @@ if __name__ == "__main__":
             params = getattr(self.gui_config, "dsp_params", None)
             if not isinstance(params, dict):
                 params = {}
-            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False)) or bool(
-                preset
-            ) or bool(params)
-            if not pth and not dsp_on:
-                dsp_on = str(getattr(self, "function", "") or "") == "fx"
+            enabled = bool(getattr(self.gui_config, "dsp_enabled", False))
+            if enabled:
+                dsp_on = True
+            elif pth:
+                dsp_on = False
+            else:
+                dsp_on = bool(preset) or bool(params) or (
+                    str(getattr(self, "function", "") or "") == "fx"
+                )
             self.dsp_only = dsp_on
             if self.dsp_only:
                 self._start_dsp_only(preset, params)

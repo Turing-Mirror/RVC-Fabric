@@ -322,6 +322,7 @@ function ModelsPageImpl({
         await setHot({
           dsp_enabled: false,
           dsp_preset: "",
+          dsp_params: {},
           function: "vc",
           ...(res.pitch != null || res.formant != null
             ? {

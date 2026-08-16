@@ -512,6 +512,42 @@ pub fn write_dsp_off(root: &Path) -> Result<Map<String, Value>, String> {
     write_saved_and_inuse(root, saved)
 }
 
+/// 这次开启该走 DSP 还是 RVC。
+///
+/// `dsp_enabled` 是开关。选了音色之后 `dsp_params` 常还留着上一份预设，
+/// 不能再靠「有参数就是 DSP」——否则换回 RVC 仍走 fx。
+pub fn wants_dsp(cfg: &Map<String, Value>) -> bool {
+    if cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    let pth = cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if !pth.is_empty() {
+        return false;
+    }
+    if cfg.get("function").and_then(|v| v.as_str()) == Some("vc") {
+        return false;
+    }
+    let preset = cfg
+        .get("dsp_preset")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let params_on = cfg
+        .get("dsp_params")
+        .and_then(|v| v.as_object())
+        .map(|m| !m.is_empty())
+        .unwrap_or(false);
+    !preset.is_empty() || params_on
+}
+
 /// 开启变声前在锁里再读一次。预设 id 在、参数丢了就从磁盘补上。
 pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
     let _g = lock_files();
@@ -534,16 +570,7 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
             }
         }
     }
-    let dsp_on = cfg
-        .get("dsp_enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        || !preset.is_empty()
-        || cfg
-            .get("dsp_params")
-            .and_then(|v| v.as_object())
-            .map(|m| !m.is_empty())
-            .unwrap_or(false);
+    let dsp_on = wants_dsp(&cfg);
     if dsp_on {
         cfg.insert("dsp_enabled".into(), json!(true));
         cfg.insert("function".into(), json!("fx"));
@@ -1000,6 +1027,31 @@ mod tests {
         );
         assert_eq!(after["pitch"], json!(5), "other keys still sync");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn leftover_dsp_params_do_not_win_over_a_selected_voice() {
+        let mut cfg = defaults();
+        cfg.insert("dsp_enabled".into(), json!(false));
+        cfg.insert("dsp_preset".into(), json!(""));
+        cfg.insert(
+            "dsp_params".into(),
+            json!({"pitch":{"semitones":7.0}}),
+        );
+        cfg.insert("function".into(), json!("vc"));
+        cfg.insert("pth_path".into(), json!("User_Data/models/anon/anon.pth"));
+        assert!(
+            !wants_dsp(&cfg),
+            "选了音色就不能再因为残留 DSP 参数走 fx"
+        );
+
+        cfg.insert("pth_path".into(), json!(""));
+        cfg.insert("function".into(), json!("vc"));
+        assert!(!wants_dsp(&cfg), "function=vc 也必须是 RVC 侧");
+
+        cfg.insert("function".into(), json!("fx"));
+        cfg.insert("dsp_enabled".into(), json!(true));
+        assert!(wants_dsp(&cfg));
     }
 
     #[test]

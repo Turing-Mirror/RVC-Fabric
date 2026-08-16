@@ -875,9 +875,30 @@ pub fn install_voice_pack_zip(
         }
 
         let mut extra = Map::new();
-        for k in ["author", "author_url", "date", "series", "group", "cover"] {
+        for k in [
+            "author",
+            "author_url",
+            "source_url",
+            "date",
+            "series",
+            "group",
+            "cover",
+        ] {
             if let Some(v) = pack_cfg.get(k) {
                 extra.insert(k.to_string(), v.clone());
+            }
+        }
+        // 作者主页 / 来源仓库多半只写在清单里 —— 第三方的 zip 是别人打的包，
+        // 里面那份 config.json 通常只有名字和标签。不从 entry 兜底，装完的
+        // 音色就再也查不到它是从哪来的、是谁做的。
+        if let Some(e) = entry {
+            for k in ["author_url", "source_url"] {
+                if extra.contains_key(k) {
+                    continue;
+                }
+                if let Some(v) = e.get(k).filter(|v| !v.as_str().unwrap_or("").is_empty()) {
+                    extra.insert(k.to_string(), v.clone());
+                }
             }
         }
         // 第三方 zip 里没有 cover，封面 URL 只在清单 —— 不补上，安装后的
@@ -1179,7 +1200,7 @@ pub fn install_voice_entry(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "date", "series", "group"] {
+    for k in ["author", "author_url", "source_url", "date", "series", "group"] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1376,7 +1397,7 @@ fn install_staged_files(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "date", "series", "group"] {
+    for k in ["author", "author_url", "source_url", "date", "series", "group"] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1437,6 +1458,35 @@ mod tests {
         assert!(!extra.contains_key("author_url"));
         // 白名单外的字段一个都不许混进来。
         assert!(!extra.contains_key("sha256"));
+    }
+
+    /// 作者主页和来源仓库都要从清单原样传下来。
+    ///
+    /// 第三方音色是别人的东西：装完之后「这是谁做的、从哪来的」必须还查得到，
+    /// 否则用户想去提个 issue、想看看作者别的作品，一条路都没有。清单解析那张
+    /// json! 表是白名单，少列一个字段这两条链接就永远到不了界面上。
+    #[test]
+    fn a_thirdparty_entry_keeps_both_of_its_links() {
+        let v = parse_voice_entry(
+            &json!({
+                "id": "tp-x",
+                "name": "某某",
+                "pth_url": "https://example.invalid/a.pth",
+                "author_url": "https://example.invalid/u/someone",
+                "repo_url": "https://example.invalid/someone/voices",
+            }),
+            Some(false),
+        )
+        .expect("entry should parse");
+        assert_eq!(
+            v.get("author_url").and_then(|x| x.as_str()),
+            Some("https://example.invalid/u/someone"),
+        );
+        // `repo_url` 是第三方手写 YAML 里的常见叫法，得认成 source_url。
+        assert_eq!(
+            v.get("source_url").and_then(|x| x.as_str()),
+            Some("https://example.invalid/someone/voices"),
+        );
     }
 
     /// 第三方条目的封面 URL 必须落进 sidecar 的 `cover` —— 漏掉这条，

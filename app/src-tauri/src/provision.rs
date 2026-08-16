@@ -378,6 +378,23 @@ fn format_speed(bps: u64) -> String {
     }
 }
 
+/// 解压这一步失败时说清楚「不是网的问题」。
+///
+/// 走到解压说明 tar 的 sha256 已经对上了 —— 包本身是好的。用户看到一句
+/// 「解压失败 Lib/site-packages/…: 拒绝访问」只会以为又得重下，实际上重下
+/// 一遍还是同样的错，真正要动的是杀软白名单或者磁盘空间。
+fn extract_error_text(raw: &str) -> String {
+    let why = crate::download::explain_error(raw)
+        .map(crate::i18n::t)
+        .unwrap_or_else(|| crate::i18n::t("s.rtExtractFailed"));
+    format!(
+        "{}\n\n{}\n\n{}",
+        why,
+        crate::i18n::t("s.rtExtractHelp"),
+        crate::i18n::te("s.dlDetail", &raw),
+    )
+}
+
 fn emit_progress(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
     emit_progress_speed(app, phase, done, total, 0, message);
 }
@@ -602,14 +619,21 @@ pub fn run_provision(
                     total.max(1),
                     &crate::i18n::t2("s.6aa1e213af", &format_size(done), &format_size(total)),
                 );
-            })?;
+            })
+            .map_err(|e| extract_error_text(&e))?;
         }
         emit_progress(&app, "extract", 1, 1, &crate::i18n::t("s.58a0882f6f"));
 
         write_package_meta(&root, &var, &spec.label, &spec.version)?;
 
         if !paths::runtime_ready(&root) {
-            return Err(crate::i18n::t("s.74aef4af02"));
+            // 校验过的包解出来却少东西，几乎只有一个原因：杀软在解压过程中
+            // 把 torch 那几个 dll 挑走了。不写出来，用户只会一遍遍重下。
+            return Err(format!(
+                "{}\n\n{}",
+                crate::i18n::t("s.74aef4af02"),
+                crate::i18n::t("s.rtExtractHelp"),
+            ));
         }
 
         // 起 worker 并把设备列表读出来。以前这一步只在应用启动时做过一次，

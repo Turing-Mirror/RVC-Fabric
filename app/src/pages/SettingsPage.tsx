@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
+import { MicTest } from "../components/MicTest";
 import { useConfig } from "../hooks/useConfig";
 import { tips } from "../lib/config";
 import { HOTKEYS } from "../lib/hotkeys";
@@ -36,6 +37,8 @@ type Props = {
   /** 跳到说明页。设备这一套（虚拟声卡怎么连）的解释全在那边，
    *  这里只放一个入口，不把同一段话再抄一遍。 */
   onOpenHelp?: () => void;
+  /** 跳到「其他」页的仓库与社媒。说明页解决不了的，只能找人。 */
+  onOpenCommunity?: () => void;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -100,6 +103,7 @@ function SettingsPageImpl({
   updateLine,
   updateBusy = false,
   onOpenHelp,
+  onOpenCommunity,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
@@ -200,13 +204,22 @@ function SettingsPageImpl({
 
   return (
     <div>
-      <div className="px-[30px] pt-4 max-[1020px]:px-[22px] max-[720px]:px-4 overflow-x-auto">
-        <SegmentControl
-          options={TAB_KEYS.map((k) => ({ id: k, label: tabLabels[k] }))}
-          value={tab}
-          onChange={setTab}
-          className="!inline-flex !ml-0 max-w-full"
-        />
+      {/* 「联系社区」跟标签栏同一行，八个子设置都在 —— 卡住的人不会先想到
+          去翻「其他」页，得让求助的路在他正卡着的那一页上就看得见。 */}
+      <div className="px-[30px] pt-4 max-[1020px]:px-[22px] max-[720px]:px-4 flex items-center gap-3 flex-wrap">
+        <div className="min-w-0 overflow-x-auto">
+          <SegmentControl
+            options={TAB_KEYS.map((k) => ({ id: k, label: tabLabels[k] }))}
+            value={tab}
+            onChange={setTab}
+            className="!inline-flex !ml-0 max-w-full"
+          />
+        </div>
+        {onOpenCommunity ? (
+          <Btn className="ml-auto shrink-0" onClick={onOpenCommunity}>
+            {t("s.contactCommunity")}
+          </Btn>
+        ) : null}
       </div>
 
       <PagePad>
@@ -334,6 +347,7 @@ function SettingsPageImpl({
               {deviceHint ? (
                 <div className="text-[12.5px] text-[var(--help)]">{deviceHint}</div>
               ) : null}
+              <MicTest deviceReady={devicesReady} />
             </div>
           </Block>
         ) : null}

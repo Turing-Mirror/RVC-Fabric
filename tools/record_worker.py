@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
-"""STS 输入目录实时录音。
+"""STS 输入目录实时录音，兼设置页的麦克风测试。
 
 用 Runtime 里的 sounddevice 打开设置页同一个输入设备，把人声写成 wav，
 存到语音转换的输入文件夹。不是变声，也不占 GPU。
+
+`probe` 模式只开设备读电平，**不写任何文件** —— 那是「测一下麦有没有声」，
+用户没打算留下一个录音，往他的输入目录里扔个 wav 是多做事。
 
 用法::
 
@@ -15,19 +18,23 @@
       "device": "设置里的输入设备名（可截断）",
       "hostapi": "MME",
       "stop_file": "出现此文件则停",
-      "max_sec": 1800
+      "max_sec": 1800,
+      "probe": false
     }
 
 stdout 每行一条 JSON::
 
     {"phase":"start","device":"...","sr":44100,"message":"..."}
-    {"phase":"level","db":-18.2,"sec":1.25}
+    {"phase":"level","db":-18.2,"peak":-9.4,"sec":1.25}
     {"phase":"done","file":"...","sec":12.0}
-    {"phase":"error","message":"..."}
+    {"phase":"error","message":"...","code":"busy"}
+
+`code` 是给壳做多语言用的稳定标识，`message` 是中文兜底（旧壳和日志读）。
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import sys
@@ -156,9 +163,33 @@ def rms_db(samples) -> float:
     return 20.0 * math.log10(rms)
 
 
-def _friendly_open_error(exc: BaseException) -> str:
-    text = str(exc) or type(exc).__name__
-    low = text.lower()
+def peak_db(samples) -> float:
+    """峰值电平（dBFS）。
+
+    RMS 是平均能量，说话的瞬间峰值比它高 10 dB 以上是常事。判断「这只麦到底
+    有没有在收声」看峰值更准 —— 只看 RMS 的话，用户正常音量说一句话也可能
+    停在 -40 dB 上，读起来像没声音。
+    """
+    try:
+        import numpy as np
+
+        arr = np.asarray(samples, dtype=np.float64).reshape(-1)
+        if arr.size == 0:
+            return -90.0
+        peak = float(np.max(np.abs(arr)))
+    except Exception:
+        vals = [abs(float(x)) for x in samples]
+        if not vals:
+            return -90.0
+        peak = max(vals)
+    if peak < 1e-9:
+        return -90.0
+    return 20.0 * math.log10(peak)
+
+
+def _open_error_code(exc: BaseException) -> str:
+    """打不开设备 → 稳定标识。壳按标识出多语言文案。"""
+    low = (str(exc) or type(exc).__name__).lower()
     if (
         "unanticipated host error" in low
         or "device unavailable" in low
@@ -166,11 +197,17 @@ def _friendly_open_error(exc: BaseException) -> str:
         or "error opening" in low
         or "portaudio" in low
     ):
+        return "busy"
+    return "open"
+
+
+def _friendly_open_error(exc: BaseException) -> str:
+    if _open_error_code(exc) == "busy":
         return (
             "打不开麦克风。常见原因：实时变声正在用这块设备（尤其开了 WASAPI 独占），"
             "或别的软件占着输入。请先在主界面停止变声后再试。"
         )
-    return text
+    return str(exc) or type(exc).__name__
 
 
 def record(req: dict) -> int:
@@ -178,34 +215,36 @@ def record(req: dict) -> int:
     stop_file = Path(str(req.get("stop_file") or "").strip())
     device_name = str(req.get("device") or "").strip()
     hostapi = str(req.get("hostapi") or "").strip()
+    probe = bool(req.get("probe"))
     try:
         max_sec = float(req.get("max_sec") or DEFAULT_MAX_SEC)
     except (TypeError, ValueError):
         max_sec = float(DEFAULT_MAX_SEC)
     max_sec = max(1.0, min(max_sec, float(DEFAULT_MAX_SEC)))
 
-    if not out:
-        emit(phase="error", message="缺少输出路径")
-        return 2
-
-    dest = Path(out)
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest = None
+    if not probe:
+        if not out:
+            emit(phase="error", message="缺少输出路径", code="nopath")
+            return 2
+        dest = Path(out)
+        dest.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         import numpy as np
         import sounddevice as sd
     except Exception as e:
-        emit(phase="error", message=f"录音组件不可用：{e}")
+        emit(phase="error", message=f"录音组件不可用：{e}", code="nolib")
         return 1
 
     try:
         idx, resolved = pick_device(device_name, hostapi)
     except Exception as e:
-        emit(phase="error", message=f"枚举输入设备失败：{e}")
+        emit(phase="error", message=f"枚举输入设备失败：{e}", code="enum")
         return 1
 
     if device_name and not resolved:
-        emit(phase="error", message=f"找不到输入设备：{device_name}")
+        emit(phase="error", message=f"找不到输入设备：{device_name}", code="notfound")
         return 1
 
     kwargs: dict = {"channels": 1, "dtype": "float32", "blocksize": BLOCK}
@@ -225,17 +264,24 @@ def record(req: dict) -> int:
         phase="start",
         device=label,
         sr=int(kwargs["samplerate"]),
-        message=f"正在录音（{label}）",
+        message=f"正在测试（{label}）" if probe else f"正在录音（{label}）",
     )
 
     frames = 0
+    top = -90.0
     t0 = time.monotonic()
     last_emit = 0.0
     try:
-        with sd.InputStream(**kwargs) as stream, wave.open(str(dest), "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(int(kwargs["samplerate"]))
+        # `probe` 不落盘：contextlib.nullcontext 让下面那段循环两种模式共用一份，
+        # 不用为了少写一个 wav 头再抄一遍读流的逻辑。
+        writer = (
+            contextlib.nullcontext() if probe else wave.open(str(dest), "wb")
+        )
+        with sd.InputStream(**kwargs) as stream, writer as wf:
+            if wf is not None:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(int(kwargs["samplerate"]))
             while True:
                 if stop_file.exists():
                     break
@@ -246,29 +292,44 @@ def record(req: dict) -> int:
                 mono = np.asarray(block, dtype=np.float32)
                 if mono.ndim > 1:
                     mono = mono.mean(axis=1)
-                pcm = np.clip(mono * 32767.0, -32768, 32767).astype(np.int16)
-                wf.writeframes(pcm.tobytes())
+                if wf is not None:
+                    pcm = np.clip(mono * 32767.0, -32768, 32767).astype(np.int16)
+                    wf.writeframes(pcm.tobytes())
                 frames += int(mono.shape[0])
+                pk = peak_db(mono)
+                if pk > top:
+                    top = pk
                 now = time.monotonic()
                 if now - last_emit >= 0.08:
                     last_emit = now
                     emit(
                         phase="level",
                         db=round(rms_db(mono), 1),
+                        peak=round(pk, 1),
                         sec=round(now - t0, 2),
                     )
     except Exception as e:
         traceback.print_exc()
-        emit(phase="error", message=_friendly_open_error(e))
+        emit(phase="error", message=_friendly_open_error(e), code=_open_error_code(e))
         return 1
 
     sec = frames / float(kwargs["samplerate"] or 1)
+    if probe:
+        # 测试没有「失败」这一说：一个字节都没读到才算打不开，读到了但全是
+        # 静音是**结果**，得让壳照实说「没听到声音」，而不是报错。
+        if frames <= 0:
+            emit(phase="error", message="没有读到任何输入", code="silent")
+            return 1
+        emit(phase="done", peak=round(top, 1), sec=round(sec, 2), device=label)
+        return 0
+
     if frames <= 0:
         try:
-            dest.unlink(missing_ok=True)
+            if dest is not None:
+                dest.unlink(missing_ok=True)
         except OSError:
             pass
-        emit(phase="error", message="没有录到声音")
+        emit(phase="error", message="没有录到声音", code="silent")
         return 1
 
     emit(phase="done", file=str(dest), sec=round(sec, 2), device=label)

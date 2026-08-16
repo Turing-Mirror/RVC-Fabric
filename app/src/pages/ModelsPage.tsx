@@ -793,6 +793,21 @@ function ModelsPageImpl({
 }
 
 /**
+ * 这个模型身上能打开的外链：作者主页、来源仓库。
+ *
+ * 只认 http(s)：地址来自清单，是第三方写的。别的协议交给 `open_external`
+ * 也会被挡掉，但那时菜单项已经画出来了 —— 点了没反应比没这一项更糟。
+ */
+function voiceLinks(m: VoiceModel): [string, string][] {
+  return (
+    [
+      [(m.author_url || "").trim(), t("s.468c96d425")],
+      [(m.source_url || "").trim(), t("s.voiceOpenSource")],
+    ] as [string, string][]
+  ).filter(([url]) => /^https?:\/\//i.test(url));
+}
+
+/**
  * 这个模型有没有「⋯」里能做的事。
  *
  * 条件要和 `MoreMenu` 里往 items 塞东西的判断逐条对上：这边多判一个，用户
@@ -800,7 +815,7 @@ function ModelsPageImpl({
  */
 function hasMoreActions(m: VoiceModel): boolean {
   if (m.source === "user_data" && m.dir) return true;
-  if (m.author_url) return true;
+  if (voiceLinks(m).length) return true;
   if (m.source === "legacy_weights" && m.path) return true;
   return false;
 }
@@ -860,14 +875,15 @@ function MoreMenu({
       },
     });
   }
-  if (model.author_url) {
-    const authorUrl = model.author_url;
+  // 作者主页和来源仓库是两个地址：清单里常常只写其中一个，第三方音色尤其
+  // 是「只有仓库、没有主页」。两条都挂，有哪条给哪条。
+  for (const [url, label] of voiceLinks(model)) {
     items.push({
-      label: t("s.468c96d425"),
+      label,
       action: () => {
         // Through the shell so it lands in the user's own browser, and so the
         // http/https check applies — a catalog-supplied URL is untrusted.
-        void openExternal(authorUrl);
+        void openExternal(url);
         onClose();
       },
     });

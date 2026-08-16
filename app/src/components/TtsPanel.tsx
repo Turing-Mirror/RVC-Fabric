@@ -218,6 +218,8 @@ function StsSection() {
   const inputRef = useRef(input);
   inputRef.current = input;
   const lastHomePath = useRef("");
+  /** 上一次真正写出文件的目录。打开输出目录用它，不看默认 sts。 */
+  const lastDestRef = useRef("");
 
   const pickVoice = (m: VoiceModel | undefined) => {
     if (!m || !m.path) return;
@@ -273,8 +275,8 @@ function StsSection() {
         }
         if (s.index_rate != null) setIndexRate(Number(s.index_rate));
         if (!input && s.last_input) setInput(String(s.last_input));
+        // 只回填用户选过的目录。默认 User_Data/sts 不当成已选。
         if (!output && s.last_output) setOutput(String(s.last_output));
-        else if (!output && s.out_dir) setOutput(String(s.out_dir));
         if (s.recording) {
           recordingRef.current = true;
           setRecording(true);
@@ -557,6 +559,7 @@ function StsSection() {
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
+      if (r.output) lastDestRef.current = String(r.output);
       // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
       // 有跳过的就必须在总结里说出来，不然「完成 8 个文件」会被当成全转完了。
@@ -1082,7 +1085,15 @@ function StsSection() {
         {running ? (
           <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>
         ) : (
-          <Btn onClick={() => void invoke("sts_reveal")}>{t("s.344a481fa0")}</Btn>
+          <Btn
+            onClick={() =>
+              void invoke("sts_reveal", {
+                path: lastDestRef.current || output,
+              })
+            }
+          >
+            {t("s.344a481fa0")}
+          </Btn>
         )}
         <Btn
           primary

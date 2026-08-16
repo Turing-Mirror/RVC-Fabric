@@ -952,10 +952,12 @@ fn sts_cancel() {
 }
 
 #[tauri::command]
-fn sts_reveal(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let dir = sts::out_dir(&root_clone(&state)?);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    shell_extras::reveal(&dir.join("x"))
+fn sts_reveal(
+    state: State<'_, Mutex<AppState>>,
+    path: Option<String>,
+) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    sts::reveal_output(&root, path.as_deref().unwrap_or(""))
 }
 
 // --- 文字合成 TTS（文字 → SAPI → 可选 RVC）--------------------------------

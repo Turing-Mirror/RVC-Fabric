@@ -116,7 +116,7 @@ npm run dev
 
 - Le code source de ce projet est sous licence open source [MIT License](./LICENSE).
 - Les poids des modèles, les packs vocaux et les ressources tierces sont soumis à leurs accords de licence d'origine.
-- **Clause de non-responsabilité** : N'utilisez pas ce logiciel pour usurper une identité, frauder, harceler ou pour tout usage illégal non autorisé. Avant d'utiliser la voix de quelqu'un d'autre pour l'entraînement ou la conversion, vous devez obtenir l'autorisation explicite du titulaire des droits. L'utilisateur est seul responsable de toutes les conséquences juridiques découlant d'une utilisation non conforme.
+- **Clause de non-responsabilité** : N'utilisez pas ce logiciel pour usurper une identité, commettre une fraude ou toute autre activité illégale. Obtenez l'autorisation du titulaire des droits avant d'entraîner ou de convertir la voix d'autrui. Les utilisateurs sont responsables du respect des lois et réglementations locales.
 
 ## Remerciements
 

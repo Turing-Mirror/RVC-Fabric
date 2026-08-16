@@ -116,7 +116,7 @@ npm run dev
 
 - El código fuente de este proyecto es de código abierto bajo la [Licencia MIT](./LICENSE).
 - Los pesos del modelo, los paquetes de voz y los recursos de terceros siguen sus acuerdos de licencia originales.
-- **Descargo de responsabilidad**: No utilice este software para falsificación de identidad, fraude, acoso o cualquier propósito ilegal no autorizado. Antes de usar la voz de otros para entrenamiento o conversión, debe obtener la autorización explícita del titular del derecho original. Todas las consecuencias legales derivadas de un uso inadecuado correrán a cargo del usuario.
+- **Descargo de responsabilidad**: No utilice este software para suplantación de identidad, fraude u otros fines ilegales. Obtenga la autorización del titular de los derechos antes de entrenar o convertir la voz de otra persona. Los usuarios son responsables de cumplir con las leyes y regulaciones locales.
 
 ## Agradecimientos
 

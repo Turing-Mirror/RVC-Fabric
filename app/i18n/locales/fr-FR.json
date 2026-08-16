@@ -51,6 +51,7 @@
     "engineDown": "Moteur non démarré",
     "waitStart": "En attente du moteur",
     "delayLine": "Latence {delay} ms · Inférence {infer} ms",
+    "delayLineDsp": "Latence {delay} ms · Traitement {infer} ms",
     "dspStopHint": "Cliquer pour désactiver l'effet DSP"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "Processus du moteur démarré, chargement de l'environnement…",
       "importing": "Import des bibliothèques d'inférence (peut prendre un moment)…",
+      "dsp_starting": "Démarrage de la voix DSP…",
       "missing_gui": "Installation incomplète : fichier du moteur manquant",
       "crash_load": "Le moteur a planté au chargement ; voir les journaux",
       "ready": "Moteur prêt",

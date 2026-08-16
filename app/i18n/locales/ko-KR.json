@@ -51,6 +51,7 @@
     "engineDown": "엔진 미시작",
     "waitStart": "엔진 시작 대기 중",
     "delayLine": "지연 {delay} ms · 추론 {infer} ms",
+    "delayLineDsp": "지연 {delay} ms · 처리 {infer} ms",
     "dspStopHint": "클릭하면 DSP 효과를 끕니다"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "엔진 프로세스 시작됨. 런타임을 불러오는 중…",
       "importing": "추론 라이브러리를 불러오는 중(수십 초 걸릴 수 있음)…",
+      "dsp_starting": "DSP 보이스를 시작하는 중…",
       "missing_gui": "설치 불완전: 엔진 본체 없음",
       "crash_load": "엔진 로딩 중 충돌. 로그를 확인하세요",
       "ready": "엔진 준비됨",

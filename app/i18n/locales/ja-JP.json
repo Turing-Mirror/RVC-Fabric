@@ -51,6 +51,7 @@
     "engineDown": "エンジン未起動",
     "waitStart": "エンジン起動待ち",
     "delayLine": "遅延 {delay} ms · 推論 {infer} ms",
+    "delayLineDsp": "遅延 {delay} ms · 処理 {infer} ms",
     "dspStopHint": "クリックで DSP エフェクトをオフ"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "エンジンプロセスが起動しました。ランタイムを読み込み中…",
       "importing": "推論ライブラリを読み込み中（数十秒かかることがあります）…",
+      "dsp_starting": "DSPボイスを起動しています…",
       "missing_gui": "インストール不完全：エンジン本体がありません",
       "crash_load": "エンジン読み込み中にクラッシュしました。ログを確認してください",
       "ready": "エンジン準備完了",

@@ -132,6 +132,11 @@ pub fn worker_script(root: &Path) -> PathBuf {
     root.join("tools").join("realtime_worker.py")
 }
 
+/// 纯 DSP 变声：不 import torch，启动只要几秒。
+pub fn dsp_worker_script(root: &Path) -> PathBuf {
+    root.join("tools").join("dsp_worker.py")
+}
+
 pub fn package_meta_path(root: &Path) -> PathBuf {
     root.join("package_meta.json")
 }

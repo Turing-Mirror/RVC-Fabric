@@ -219,6 +219,7 @@ class MsgCodeTests(unittest.TestCase):
 
         for code in (
             mc.ENGINE_IMPORTING,
+            mc.ENGINE_DSP_STARTING,
             mc.VC_LOADING_INDEX,
             mc.VC_LOADING_HUBERT,
             mc.VC_LOADING_NET,
@@ -236,6 +237,8 @@ class MsgCodeTests(unittest.TestCase):
         keys = (
             ("dock", "switching"),
             ("msg", "engine", "importing"),
+            ("msg", "engine", "dsp_starting"),
+            ("dock", "delayLineDsp"),
             ("msg", "vc", "swapping"),
             ("msg", "vc", "warmup"),
             ("msg", "vc", "opening_stream"),

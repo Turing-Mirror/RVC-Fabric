@@ -224,10 +224,16 @@ class ShellContractTests(unittest.TestCase):
     def test_start_is_exclusive_dsp_or_rvc(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         self.assertIn("def _engine_core_ready", src)
+        self.assertIn("def _start_dsp_only", src)
+        self.assertIn("def audio_infer_dsp", src)
         start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
         self.assertIn("self.dsp_only = dsp_on", start)
-        self.assertIn('self.gui_config.pth_path = ""', start)
-        self.assertIn("dsp start preset", start)
+        self.assertIn("_start_dsp_only", start)
+        dsp = src[src.index("def _start_dsp_only") : src.index("def start_vc")]
+        self.assertIn('self.gui_config.pth_path = ""', dsp)
+        self.assertIn("dsp start preset", dsp)
+        self.assertIn("VC_OPENING_STREAM", dsp)
+        self.assertNotIn("VC_LOADING_MODEL", dsp)
         self.assertIn("getattr(self.rvc, \"tgt_sr\"", src)
 
     def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
@@ -242,6 +248,9 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn('json!("fx")', body)
         self.assertIn("dsp_enabled", body)
         self.assertIn("send_command(root, \"start\"", body)
+        # 纯 DSP 不能按 torch 的 100 秒去等
+        self.assertIn("20_000", body)
+        self.assertIn("WorkerKind::Dsp", body)
         # 热推必须在起流成功之后，否则失败的 start 会被 set 盖成「参数已应用」
         self.assertIn("pub fn push_running_hot", src)
         hot = src[src.index("pub fn push_running_hot") : src.index(
@@ -291,6 +300,43 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("last_model_path", src)
         self.assertIn("msg.vc.need_model", src)
         self.assertNotIn("function: modeRef.current === \"bypass\" ? \"im\" : \"vc\"", src)
+
+    def test_dsp_worker_exists_and_skips_torch(self):
+        """纯 DSP 必须有一条不 import torch 的进程，否则还是得等 RVC 引擎。"""
+        path = ROOT / "tools" / "dsp_worker.py"
+        self.assertTrue(path.is_file(), path)
+        src = path.read_text(encoding="utf-8")
+        self.assertNotIn("import torch", src)
+        self.assertNotIn("from torch", src)
+        self.assertNotIn("rvc_for_realtime", src)
+        self.assertIn('worker_kind": "dsp"', src)
+        self.assertIn("VoiceChain", src)
+        rust = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("dsp_worker_script", rust)
+        self.assertIn("pub fn start_worker_kind", rust)
+        paths = (ROOT / "app" / "src-tauri" / "src" / "paths.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("dsp_worker.py", paths)
+
+    def test_ui_does_not_say_infer_on_dsp(self):
+        src = (ROOT / "app" / "src" / "lib" / "engine.ts").read_text(encoding="utf-8")
+        self.assertIn("delayLineDsp", src)
+        zh = (ROOT / "app" / "i18n" / "locales" / "zh-CN.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"delayLineDsp"', zh)
+        self.assertIn("处理 {infer}", zh)
+
+    def test_set_hot_does_not_wipe_last_model(self):
+        rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        body = rust[rust.index("fn engine_set_hot") : rust.index("fn engine_swap_model")]
+        self.assertNotIn('"last_model"', body)
+        self.assertNotIn("last_model_path", body)
 
     def test_toggle_run_skips_engine_core_for_dsp_only(self):
         src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(

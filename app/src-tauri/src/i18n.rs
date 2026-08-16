@@ -397,7 +397,7 @@ pub fn localize_status(status: &mut Value) {
         .get("state")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    if (code == "engine.starting" || code == "engine.importing") && state != "starting"
+    if (code == "engine.starting" || code == "engine.importing" || code == "engine.dsp_starting") && state != "starting"
     {
         if let Some(obj) = status.as_object_mut() {
             obj.insert("message_code".into(), Value::String(String::new()));

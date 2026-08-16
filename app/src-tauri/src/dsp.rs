@@ -153,9 +153,24 @@ pub fn activate(root: &Path, id: &str) -> Result<Value, String> {
     payload.insert("dsp_params".into(), params);
     payload.insert("function".into(), json!("fx"));
     payload.insert("drop_model".into(), json!(true));
+    // RVC 还在 import torch：立刻换成 DSP worker，选预设不该卡住。
+    // 已经就绪的 RVC worker 留下，热推 fx 即可。
+    let kind = crate::worker::worker_kind_of(root);
+    let rvc_importing = kind == Some(crate::worker::WorkerKind::Rvc) && protocol_starting_import(root);
+    if kind.is_none() || rvc_importing {
+        let _ = crate::worker::start_worker_kind(root, crate::worker::WorkerKind::Dsp);
+    }
     // worker 没起来只算配置写好了，开启变声会再推一次。
     let _ = crate::worker::set_hot(root, payload);
     Ok(json!({ "ok": true, "id": id, "config": cfg }))
+}
+
+fn protocol_starting_import(root: &Path) -> bool {
+    let st = crate::protocol::read_status(root);
+    let state = st.get("state").and_then(|v| v.as_str()).unwrap_or("");
+    let code = st.get("message_code").and_then(|v| v.as_str()).unwrap_or("");
+    state == "starting"
+        && (code == "engine.starting" || code == "engine.importing" || code.is_empty())
 }
 
 pub fn deactivate(root: &Path) -> Result<Value, String> {

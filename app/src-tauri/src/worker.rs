@@ -360,6 +360,70 @@ fn status_looks_ready(st: &Value) -> bool {
     state == "idle" || state == "running"
 }
 
+/// 当前该起哪一种 worker。纯 DSP 绝不能去拉 torch。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkerKind {
+    Rvc,
+    Dsp,
+}
+
+impl WorkerKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            WorkerKind::Rvc => "rvc",
+            WorkerKind::Dsp => "dsp",
+        }
+    }
+}
+
+pub fn cfg_wants_dsp(cfg: &Map<String, Value>) -> bool {
+    let preset = cfg
+        .get("dsp_preset")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let params_on = cfg
+        .get("dsp_params")
+        .and_then(|v| v.as_object())
+        .map(|m| !m.is_empty())
+        .unwrap_or(false);
+    cfg.get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        || !preset.is_empty()
+        || params_on
+}
+
+pub fn dsp_requested(root: &Path) -> bool {
+    cfg_wants_dsp(&crate::config::read(root))
+}
+
+pub fn worker_kind_of(root: &Path) -> Option<WorkerKind> {
+    if !is_worker_alive(root) {
+        return None;
+    }
+    let st = protocol::read_status(root);
+    match st.get("worker_kind").and_then(|v| v.as_str()) {
+        Some("dsp") => Some(WorkerKind::Dsp),
+        Some("rvc") => Some(WorkerKind::Rvc),
+        _ => Some(WorkerKind::Rvc),
+    }
+}
+
+fn worker_ready_for_commands(root: &Path) -> bool {
+    if !is_worker_alive(root) {
+        return false;
+    }
+    status_looks_ready(&protocol::read_status(root))
+}
+
+fn worker_script_for(root: &Path, kind: WorkerKind) -> std::path::PathBuf {
+    match kind {
+        WorkerKind::Dsp => paths::dsp_worker_script(root),
+        WorkerKind::Rvc => paths::worker_script(root),
+    }
+}
+
 pub fn get_live_pid(root: &Path) -> u32 {
     // 台账里的 pid 必须参与判定。只看 worker.pid / status.pid 时：
     // adopt 之后若文件被清掉、或 python 还没回写，is_worker_alive 会变 false，
@@ -610,6 +674,17 @@ pub fn reap_orphan_workers(root: &Path) {
 }
 
 pub fn start_worker(root: &Path) -> Result<(), String> {
+    let kind = if dsp_requested(root) {
+        WorkerKind::Dsp
+    } else {
+        WorkerKind::Rvc
+    };
+    start_worker_kind(root, kind)
+}
+
+/// 起指定种类的 worker。种类不对就先杀掉再开 —— 纯 DSP 不能卡在
+/// 「正在导入推理库」上等 torch。
+pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
     // Recover from poisoning instead of failing forever: one panic while
     // starting would otherwise make the engine unstartable for the rest of the
     // session, with a restart as the only way out. The lock guards a re-check
@@ -617,17 +692,32 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
     let _guard = START_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     if is_worker_alive(root) {
-        return Ok(());
+        if worker_kind_of(root) == Some(kind) {
+            return Ok(());
+        }
+        crate::logging::shell_log!(
+            "worker kind {:?} → {:?}, replacing",
+            worker_kind_of(root),
+            kind
+        );
+        let _ = send_command(root, "stop", Map::new());
+        thread::sleep(Duration::from_millis(200));
+        kill_known_workers(root);
+        thread::sleep(Duration::from_millis(200));
     }
 
     // Clear dead bookkeeping; only kill confirmed ours
     kill_known_workers(root);
     thread::sleep(Duration::from_millis(200));
-    if is_worker_alive(root) {
+    if is_worker_alive(root) && worker_kind_of(root) == Some(kind) {
         return Ok(());
     }
+    if is_worker_alive(root) {
+        kill_known_workers(root);
+        thread::sleep(Duration::from_millis(200));
+    }
 
-    let script = paths::worker_script(root);
+    let script = worker_script_for(root, kind);
     if !script.is_file() {
         return Err(crate::i18n::te("s.fd40e2e936", &script.display()));
     }
@@ -641,20 +731,29 @@ pub fn start_worker(root: &Path) -> Result<(), String> {
     fields.insert("message".into(), json!("launching worker…"));
     fields.insert("error".into(), json!(""));
     fields.insert("pid".into(), json!(0));
+    fields.insert("worker_kind".into(), json!(kind.as_str()));
+    if kind == WorkerKind::Dsp {
+        fields.insert("dsp_only".into(), json!(true));
+        fields.insert("function".into(), json!("fx"));
+        fields.insert("message_code".into(), json!("engine.dsp_starting"));
+        fields.insert("message".into(), json!("正在启动 DSP 变声…"));
+    }
     let _ = protocol::write_status_merge(root, fields);
 
     append_log(
         root,
         &format!(
-            "\n===== launch ts={} (tauri shell) =====\nROOT={}\nvia: {} {}",
+            "\n===== launch ts={} kind={} (tauri shell) =====\nROOT={}\nvia: {} {}",
             stamp(),
+            kind.as_str(),
             root.display(),
             pyw.display(),
             script.display()
         ),
     );
 
-    let env = env_for_runtime(root);
+    let mut env = env_for_runtime(root);
+    env.insert("TM_WORKER_KIND".into(), kind.as_str().into());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -818,12 +917,22 @@ pub fn send_command(root: &Path, cmd: &str, payload: Map<String, Value>) -> Resu
 
 /// Ensure worker is up; refresh device list if empty. Does not hold UI locks.
 pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
-    if !is_worker_alive(root) {
-        if let Err(e) = start_worker(root) {
+    let kind = if dsp_requested(root) {
+        WorkerKind::Dsp
+    } else {
+        WorkerKind::Rvc
+    };
+    if worker_kind_of(root) != Some(kind) || !is_worker_alive(root) {
+        if let Err(e) = start_worker_kind(root, kind) {
             return json!({"state": "error", "error": e, "pid": 0});
         }
     }
-    let st = wait_worker_ready(root, timeout_ms);
+    let wait_ms = if kind == WorkerKind::Dsp {
+        timeout_ms.min(20_000)
+    } else {
+        timeout_ms
+    };
+    let st = wait_worker_ready(root, wait_ms);
     if st.get("state").and_then(|v| v.as_str()) == Some("error") {
         return st;
     }
@@ -863,12 +972,37 @@ pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
 
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
 pub fn start_vc(root: &Path) -> Result<u64, String> {
-    if !is_worker_alive(root) {
-        start_worker(root)?;
+    // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
+    // 必须在选 worker 之前：dsp_enabled 决定走哪条进程。
+    let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
+    let dsp_on = cfg_wants_dsp(&cfg);
+    let want = if dsp_on {
+        WorkerKind::Dsp
+    } else {
+        WorkerKind::Rvc
+    };
+    // 纯 DSP：RVC worker 还在 import torch 时立刻换掉，不要让用户等。
+    // RVC worker 已经 idle/running 则复用（里面也有 numpy DSP 路径）。
+    let keep_rvc_for_dsp = dsp_on
+        && worker_kind_of(root) == Some(WorkerKind::Rvc)
+        && worker_ready_for_commands(root);
+    let kind = if keep_rvc_for_dsp {
+        WorkerKind::Rvc
+    } else {
+        want
+    };
+    if worker_kind_of(root) != Some(kind) || !is_worker_alive(root) {
+        start_worker_kind(root, kind)?;
     }
     // 导入推理库时 worker 已经活着，但命令环还没起来。这时候写下的 start
     // 会被 gui_v1 当成上一轮残留丢掉。先等到 idle/running 再发命令。
-    let st = wait_worker_ready(root, 100_000);
+    // 纯 DSP worker 几秒就就绪，不必按 torch 的 100 秒等。
+    let ready_ms = if kind == WorkerKind::Dsp {
+        20_000
+    } else {
+        100_000
+    };
+    let st = wait_worker_ready(root, ready_ms);
     if st.get("state").and_then(|v| v.as_str()) == Some("error") {
         return Err(st
             .get("error")
@@ -876,8 +1010,6 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             .unwrap_or("worker error")
             .to_string());
     }
-    // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
-    let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
     {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);

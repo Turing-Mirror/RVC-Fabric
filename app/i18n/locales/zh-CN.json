@@ -51,6 +51,7 @@
     "engineDown": "引擎未启动",
     "waitStart": "等待引擎启动",
     "delayLine": "延迟 {delay} ms · 推理 {infer} ms",
+    "delayLineDsp": "延迟 {delay} ms · 处理 {infer} ms",
     "dspStopHint": "点一下关掉 DSP 效果"
   },
   "settings": {
@@ -277,6 +278,7 @@
     "engine": {
       "starting": "引擎进程已启动，正在加载运行库…",
       "importing": "正在导入推理库（可能需要十几秒）…",
+      "dsp_starting": "正在启动 DSP 变声…",
       "missing_gui": "安装不完整：缺少引擎主程序",
       "crash_load": "引擎加载时崩溃，详见日志",
       "ready": "引擎就绪",

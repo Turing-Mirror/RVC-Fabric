@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.5.1",
+    "version": "1.5.2",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "7509f8afdd07ffc82c864fb2ab015fa6a3dc9da0da88c6f45e966834e97611c1",
-      "size_bytes": 10465519,
+      "sha256": "6d9f0ac10de562f8f556bd449c3a91a8768ea0c1a1ac37b2ea5cea66ba5538ae",
+      "size_bytes": 10466692,
       "min_app_version": "1.3.0",
-      "notes": "1.5.1 把 1.5.0 之后已入仓的训练、分离、下载和 DSP 收成一版，并修掉 点「开启变声」却一直停在引擎就绪的实机问题：启动失败不会再被后续参数 推送盖掉，选用 DSP 会留下上次音色以便关掉后恢复。人声分离不再在 Runtime 3.9 上读清单就崩，广场全部 UVR 模型可解析。训练预处理不再 TypeError，训完退出码认成功，可续跑并对齐原版常用项与 ckpt 进阶。 二十个内置 DSP 预设可单独用；设置页可测麦克风；说明页可卸载 VB-Cable； 工具窗点下载模型会把主窗口叫到广场。"
+      "notes": "1.5.2 专修纯 DSP 变声起流。选用预设后点开启，不再因 inuse 漏写 dsp_enabled 而弹出 Please choose the .pth file。start 命令自带 DSP 开关与参数；监听设备在扬声器/耳机改名后仍能匹配。并带上 1.5.1 之后已入仓的开启失败状态不被盖掉等修复。"
     }
   },
   "community": {

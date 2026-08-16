@@ -1164,6 +1164,10 @@ fn engine_set_hot(
             payload.insert("pth_path".into(), json!(""));
             payload.insert("index_path".into(), json!(""));
             // last_model 留下：关掉 DSP / 下次选音色还认得用户上次用的那个。
+        } else {
+            payload.insert("function".into(), json!("vc"));
+            payload.insert("dsp_preset".into(), json!(""));
+            payload.insert("dsp_params".into(), json!({}));
         }
     }
     if let Some(v) = dsp_preset {

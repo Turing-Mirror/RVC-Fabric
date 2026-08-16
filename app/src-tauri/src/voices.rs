@@ -726,9 +726,11 @@ pub fn select_voice(root: &Path, path: &str, dir: &str, name: &str) -> Result<Va
         overlay_keys_from_value(&m, PROFILE_VOICE_KEYS, &mut cfg);
     }
 
-    // RVC / DSP 二选一：选了音色就把 DSP 关掉，下次开启不会再走 fx。
+    // RVC / DSP 二选一：选了音色就把 DSP 关掉。预设参数也要清，
+    // 不然 start 看见残留 dsp_params 还会当成纯 DSP。
     cfg.insert("dsp_enabled".into(), json!(false));
     cfg.insert("dsp_preset".into(), json!(""));
+    cfg.insert("dsp_params".into(), json!({}));
     cfg.insert("function".into(), json!("vc"));
 
     save_app_config(root, &cfg)?;

@@ -11,7 +11,7 @@
 //! 不复用 `worker.rs`：那套 pid 文件 + status.json 是给常驻变声进程设计的，
 //! 训练是一次性任务，套进去只会多出一堆要清理的残留。
 
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -309,6 +309,230 @@ fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
     Ok(())
 }
 
+/// 这一趟训练目前走到哪。取消或崩的时候，光看「已取消」不够。
+#[derive(Default, Clone)]
+struct Progress {
+    stage: String,
+    done: u64,
+    total: u64,
+    message: String,
+}
+
+/// 训练结束不管成败，都把盘上的产物和阶段日志尾巴写进 run log。
+///
+/// 26.8.16 两份用户日志只有请求 JSON + 一句 ERROR：一份是预处理
+/// `_stop` 崩了，另一份是「已取消」。切片切完没有、权重写没写、训到第
+/// 几轮，全看不出来。stdout 进度以前只进界面，不进日志。
+fn write_outcome(root: &Path, exp: &str, log: &Path, progress: &Progress, outcome: &str) {
+    let exp_dir = exp_root(root).join(exp);
+    let counts = [
+        ("0_gt_wavs", count_dir(&exp_dir.join("0_gt_wavs"))),
+        ("1_16k_wavs", count_dir(&exp_dir.join("1_16k_wavs"))),
+        ("2a_f0", count_dir(&exp_dir.join("2a_f0"))),
+        ("2b-f0nsf", count_dir(&exp_dir.join("2b-f0nsf"))),
+        ("3_feature768", count_dir(&exp_dir.join("3_feature768"))),
+    ];
+    let filelist = count_text_lines(&exp_dir.join("filelist.txt"));
+    let epoch = latest_epoch(&exp_dir.join("train.log"));
+    let final_w = root
+        .join("assets")
+        .join("weights")
+        .join(format!("{exp}.pth"));
+    let published = root
+        .join("User_Data")
+        .join("models")
+        .join(exp)
+        .join(format!("{exp}.pth"));
+    let exp_pths = list_pth_names(&exp_dir);
+    let weight_pths = list_pth_names(&root.join("assets").join("weights"))
+        .into_iter()
+        .filter(|n| n == &format!("{exp}.pth") || n.starts_with(&format!("{exp}_e")))
+        .collect::<Vec<_>>();
+    let usable = if file_len(&final_w) > 0 || file_len(&published) > 0 {
+        "final"
+    } else if !weight_pths.is_empty() || !exp_pths.is_empty() {
+        "intermediate"
+    } else if counts[1].1 > 0 {
+        "slices_only"
+    } else {
+        "none"
+    };
+    let last = if progress.stage.is_empty() {
+        "-".into()
+    } else {
+        format!(
+            "{} {}/{} {}",
+            progress.stage, progress.done, progress.total, progress.message
+        )
+    };
+    crate::logging::note_run(
+        log,
+        &format!(
+            "=== outcome ({outcome}) ===\n\
+             last: {last}\n\
+             usable: {usable}\n\
+             latest_epoch: {}\n\
+             counts: {}\n\
+             filelist_lines: {filelist}\n\
+             final_weights: {} ({} bytes)\n\
+             published: {} ({} bytes)\n\
+             exp_pths: {}\n\
+             weight_pths: {}",
+            epoch.map(|n| n.to_string()).unwrap_or_else(|| "-".into()),
+            counts
+                .iter()
+                .map(|(k, n)| format!("{k}={n}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+            final_w.display(),
+            file_len(&final_w),
+            published.display(),
+            file_len(&published),
+            if exp_pths.is_empty() {
+                "-".into()
+            } else {
+                exp_pths.join(",")
+            },
+            if weight_pths.is_empty() {
+                "-".into()
+            } else {
+                weight_pths.join(",")
+            },
+        ),
+    );
+    for name in ["preprocess.log", "extract_f0_feature.log", "train.log"] {
+        crate::logging::append_file(log, &tail_lines(&exp_dir.join(name), 50, 64 * 1024));
+    }
+}
+
+fn file_len(p: &Path) -> u64 {
+    std::fs::metadata(p)
+        .ok()
+        .filter(|m| m.is_file())
+        .map(|m| m.len())
+        .unwrap_or(0)
+}
+
+fn count_text_lines(p: &Path) -> u64 {
+    std::fs::read_to_string(p)
+        .map(|s| s.lines().filter(|l| !l.trim().is_empty()).count() as u64)
+        .unwrap_or(0)
+}
+
+fn list_pth_names(dir: &Path) -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = rd
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("pth") {
+                p.file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+fn latest_epoch(train_log: &Path) -> Option<u32> {
+    let text = std::fs::read_to_string(train_log).ok()?;
+    let marker = "====> Epoch: ";
+    let mut last = None;
+    for line in text.lines() {
+        let Some(at) = line.find(marker) else {
+            continue;
+        };
+        let tail = line[at + marker.len()..].split_whitespace().next()?;
+        if let Ok(n) = tail.parse::<u32>() {
+            last = Some(n);
+        }
+    }
+    last
+}
+
+fn tail_lines(path: &Path, max_lines: usize, max_bytes: u64) -> String {
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("log");
+    let Ok(meta) = std::fs::metadata(path) else {
+        return format!("--- {name} (missing) ---");
+    };
+    let size = meta.len();
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return format!("--- {name} (unreadable) ---");
+    };
+    if size > max_bytes {
+        if f.seek(SeekFrom::Start(size - max_bytes)).is_err() {
+            return format!("--- {name} (seek failed, {size} bytes) ---");
+        }
+    }
+    let mut buf = String::new();
+    if f.read_to_string(&mut buf).is_err() {
+        return format!("--- {name} (read failed, {size} bytes) ---");
+    }
+    let lines: Vec<&str> = buf.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    format!(
+        "--- {name} ({size} bytes, last {} lines) ---\n{}",
+        lines.len() - start,
+        lines[start..].join("\n")
+    )
+}
+
+fn note_progress(log: &Path, v: &Value, progress: &mut Progress) {
+    let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
+    let stage = v.get("stage").and_then(|x| x.as_str()).unwrap_or("");
+    let message = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+    let done = v
+        .get("done")
+        .and_then(|x| x.as_u64().or_else(|| x.as_i64().map(|n| n as u64)));
+    let total = v
+        .get("total")
+        .and_then(|x| x.as_u64().or_else(|| x.as_i64().map(|n| n as u64)));
+    if !stage.is_empty() {
+        progress.stage = stage.to_string();
+    } else if matches!(phase, "start" | "done" | "error" | "env") {
+        progress.stage = phase.to_string();
+    }
+    if let Some(n) = done {
+        progress.done = n;
+    }
+    if let Some(n) = total {
+        progress.total = n;
+    }
+    if !message.is_empty() {
+        progress.message = message.to_string();
+    }
+    // checkpoint 行已经是一份完整快照，原样落下；普通进度压成一行。
+    if phase == "checkpoint" || phase == "env" {
+        crate::logging::note_run(
+            log,
+            &format!(
+                "{phase} {}",
+                serde_json::to_string(v).unwrap_or_else(|_| "{}".into())
+            ),
+        );
+        return;
+    }
+    crate::logging::note_run(
+        log,
+        &format!(
+            "progress {phase} stage={} {}/{} {}",
+            if stage.is_empty() { "-" } else { stage },
+            done.map(|n| n.to_string()).unwrap_or_else(|| "-".into()),
+            total.map(|n| n.to_string()).unwrap_or_else(|| "-".into()),
+            message,
+        ),
+    );
+}
+
 /// 阻塞跑一次训练，调用方负责挪到后台线程。
 pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String> {
     {
@@ -319,6 +543,7 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
+    let device = if is_nvidia(root) { "cuda" } else { "cpu" };
     let log = crate::logging::begin_run(
         root,
         crate::logging::CH_TRAIN,
@@ -332,18 +557,26 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
             "f0_method": req.f0_method,
             "resume": req.resume,
             "save_every_weights": req.save_every_weights,
+            "device": device,
         }),
     );
     crate::logging::shell_log!(
         "train run log {}",
         log.file_name().and_then(|s| s.to_str()).unwrap_or("train")
     );
-    let result = run_inner(app, root, &req, &log);
+    let mut progress = Progress::default();
+    let result = run_inner(app, root, &req, &log, &mut progress);
+    let outcome = match &result {
+        Ok(_) => "ok",
+        Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
+        Err(_) => "error",
+    };
+    write_outcome(root, req.exp.trim(), &log, &progress, outcome);
     match &result {
         Ok(_) => crate::logging::finish_run(&log, true, "ok"),
         Err(e) => {
             crate::logging::note_run(&log, &format!("ERROR {e}"));
-            crate::logging::finish_run(&log, true, "error");
+            crate::logging::finish_run(&log, true, outcome);
         }
     }
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
@@ -359,6 +592,7 @@ fn run_inner(
     root: &Path,
     req: &TrainReq,
     log: &Path,
+    progress: &mut Progress,
 ) -> Result<Value, String> {
     preflight(root, req)?;
 
@@ -427,6 +661,7 @@ fn run_inner(
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue; // 不是协议行（tqdm 之类），忽略
         };
+        note_progress(log, &v, progress);
         match v.get("phase").and_then(|x| x.as_str()).unwrap_or("") {
             "error" => {
                 fail = Some(
@@ -575,6 +810,70 @@ mod tests {
             !msg.contains("采样率"),
             "wrong key reused the sample-rate string: {msg}"
         );
+    }
+
+    #[test]
+    fn latest_epoch_reads_the_last_marker() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-train-epoch-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&td);
+        std::fs::create_dir_all(&td).unwrap();
+        let p = td.join("train.log");
+        std::fs::write(
+            &p,
+            "noise\n====> Epoch: 1 [t]\n====> Epoch: 2 [t]\n====> Epoch: 2 [t]\n",
+        )
+        .unwrap();
+        assert_eq!(latest_epoch(&p), Some(2));
+        assert_eq!(latest_epoch(&td.join("missing.log")), None);
+        let _ = std::fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn tail_lines_says_missing_instead_of_panicking() {
+        let text = tail_lines(Path::new("/definitely/not/here.log"), 10, 1024);
+        assert!(text.contains("missing"), "{text}");
+    }
+
+    #[test]
+    fn outcome_report_can_tell_slices_from_a_finished_model() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-train-outcome-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&td);
+        let exp = td.join("logs").join("voice");
+        std::fs::create_dir_all(exp.join("1_16k_wavs")).unwrap();
+        std::fs::write(exp.join("1_16k_wavs").join("a.wav"), b"x").unwrap();
+        std::fs::write(exp.join("preprocess.log"), "sliced 1 file\n").unwrap();
+        let log = td.join("run.log");
+        std::fs::write(&log, b"").unwrap();
+        let progress = Progress {
+            stage: "preprocess".into(),
+            done: 1,
+            total: 1,
+            message: "切片与重采样…".into(),
+        };
+        write_outcome(&td, "voice", &log, &progress, "cancelled");
+        let body = std::fs::read_to_string(&log).unwrap();
+        assert!(body.contains("usable: slices_only"), "{body}");
+        assert!(body.contains("1_16k_wavs=1"), "{body}");
+        assert!(body.contains("last: preprocess 1/1"), "{body}");
+        assert!(body.contains("preprocess.log"), "{body}");
+        assert!(body.contains("sliced 1 file"), "{body}");
+
+        std::fs::create_dir_all(td.join("assets").join("weights")).unwrap();
+        std::fs::write(
+            td.join("assets").join("weights").join("voice.pth"),
+            b"pth",
+        )
+        .unwrap();
+        write_outcome(&td, "voice", &log, &progress, "ok");
+        let body = std::fs::read_to_string(&log).unwrap();
+        assert!(body.contains("usable: final"), "{body}");
+        let _ = std::fs::remove_dir_all(&td);
     }
 
     #[test]

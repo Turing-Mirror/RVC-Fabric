@@ -63,6 +63,26 @@ class EngineShipsWithTheInstaller(unittest.TestCase):
         )
 
 
+class PayloadDoesNotShipDevMachinePaths(unittest.TestCase):
+    def test_prepare_script_rejects_any_drive_letter(self):
+        """发版机经常是 L: / F:，不能只查 C:\\。"""
+        src = PREP.read_text(encoding="utf-8")
+        self.assertIn("L:\\\\", src)
+        self.assertIn("F:\\\\", src)
+        sys_path = str(REPO / "scripts")
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location("tm_prepare_payload", PREP)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        self.assertEqual(mod.leaked_dev_path('pth: "L:\\\\My project\\\\x.pth"'), "L:\\")
+        self.assertEqual(mod.leaked_dev_path('pth: "F:/RVC Fabric-new/a.pth"'), "F:/")
+        self.assertIsNone(mod.leaked_dev_path('pth_path: ""'))
+
+
 class InstallerHooks(unittest.TestCase):
     def test_hooks_file_has_a_bom(self):
         """钩子里有中文文件名（启动器.exe 等），NSIS 要 UTF-8 BOM 才认。"""

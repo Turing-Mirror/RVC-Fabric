@@ -14,10 +14,19 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Mutex;
 
 use serde_json::{json, Map, Value};
 
 use crate::paths;
+
+/// app_config 读改写必须排队。选 DSP 的 setHot 和开启变声的 setHot
+/// 同时读改写会把刚写上的 dsp_enabled 盖回 false，启动就报「请选择pth文件」。
+static FILE_LOCK: Mutex<()> = Mutex::new(());
+
+fn lock_files() -> std::sync::MutexGuard<'static, ()> {
+    FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Applies live while converting (mirrors `realtime_protocol.HOT_KEYS`).
 pub const HOT_KEYS: &[&str] = &[
@@ -370,12 +379,18 @@ fn sanitize_inuse(root: &Path, m: &mut Map<String, Value>) {
 pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
     let path = paths::inuse_config_path(root);
     let mut out = read_json(&path);
+    let dsp_on = cfg
+        .get("dsp_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     for k in engine_keys() {
         let Some(v) = cfg.get(k) else { continue };
         // Never let an empty model path overwrite one that is already set:
         // losing pth_path means the worker starts with no model at all.
+        // DSP 模式除外：二选一就是要把音色路径清掉。
         if matches!(k, "pth_path" | "index_path")
             && v.as_str().map(str::is_empty).unwrap_or(false)
+            && !dsp_on
             && out.get(k).and_then(|x| x.as_str()).map(|s| !s.is_empty()) == Some(true)
         {
             continue;
@@ -400,6 +415,7 @@ pub fn sync_inuse(root: &Path, cfg: &Map<String, Value>) -> Result<(), String> {
 /// Merge `patch` into the saved config; returns the new effective config plus
 /// which keys need a restart of the stream to take effect.
 pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
+    let _g = lock_files();
     let mut saved = read_json(&paths::app_config_path(root));
     let mut hot = Map::new();
     let mut needs_restart: Vec<String> = Vec::new();
@@ -495,6 +511,7 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
 /// `empty_model_path_never_clobbers_a_real_one`）。这里是用户自己要丢掉音色，
 /// 必须写穿。
 pub fn force_clear_model_paths(root: &Path) -> Result<(), String> {
+    let _g = lock_files();
     let mut saved = read_json(&paths::app_config_path(root));
     for k in [
         "pth_path",
@@ -804,6 +821,26 @@ mod tests {
             "empty default must not clear the selected model"
         );
         assert_eq!(after["pitch"], json!(5), "other keys still sync");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn dsp_mode_may_clear_the_model_path() {
+        let root = std::env::temp_dir().join("rvcf-inuse-dsp-clear");
+        let inuse = root.join("configs").join("inuse");
+        std::fs::create_dir_all(&inuse).unwrap();
+        std::fs::write(
+            inuse.join("config.json"),
+            r#"{"pth_path":"User_Data/models/anon/anon.pth","dsp_enabled":false}"#,
+        )
+        .unwrap();
+        let mut cfg = defaults();
+        cfg.insert("dsp_enabled".into(), json!(true));
+        cfg.insert("pth_path".into(), json!(""));
+        sync_inuse(&root, &cfg).unwrap();
+        let after = read_json(&paths::inuse_config_path(&root));
+        assert_eq!(after["pth_path"], json!(""));
+        assert_eq!(after["dsp_enabled"], json!(true));
         let _ = std::fs::remove_dir_all(&root);
     }
 

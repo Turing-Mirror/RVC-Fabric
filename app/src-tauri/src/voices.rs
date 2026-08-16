@@ -558,9 +558,8 @@ fn resolve_selected(models: &[Value], path: &str, file: &str, name: &str) -> i64
     find("path", path)
         .or_else(|| find("file", file))
         .or_else(|| find("name", name))
-        // 三个键都没对上（配置是新的、或者选中的音色被删了）：退回第一条，
-        // 总比「一条都没选中」强 —— 那会让底栏显示「未选择模型」。
-        .or(if models.is_empty() { None } else { Some(0) })
+        // 三个键都没对上就是没选中。以前退回第一条，选用 DSP 清掉音色之后
+        // 列表又把第一条当成「使用中」，检索库跟着露出来。
         .map(|i| i as i64)
         .unwrap_or(-1)
 }
@@ -1915,10 +1914,10 @@ mod tests {
             ),
             1
         );
-        // 三个都对不上：退回第一条，而不是「未选择模型」
+        // 三个都对不上：就是没选中。退回第一条会让 DSP 清音色后检索库又露出来。
         assert_eq!(
             resolve_selected(&models, "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
-            0
+            -1
         );
         // 一条音色都没有
         assert_eq!(

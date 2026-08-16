@@ -89,12 +89,39 @@ pub fn run(app: &AppHandle, root: &Path, mut req: Value) -> Result<Value, String
         .unwrap_or("")
         .to_string();
     let log = crate::logging::begin_run(root, crate::logging::CH_TRAIN, &req);
-    let result = run_inner(app, root, &action, &mut req, &log);
+    let mut trace = crate::logging::RunTrace::new(log.clone());
+    let started = std::time::Instant::now();
+    let result = run_inner(app, root, &action, &mut req, &mut trace);
+    let outcome = match &result {
+        Ok(_) => "ok",
+        Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
+        Err(_) => "error",
+    };
+    let out = result
+        .as_ref()
+        .ok()
+        .and_then(|v| {
+            v.get("file")
+                .or_else(|| v.get("path"))
+                .or_else(|| v.get("out"))
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default();
+    trace.outcome(
+        outcome,
+        &format!(
+            "elapsed_ms: {}\naction: {action}\nout: {} ({} bytes)",
+            started.elapsed().as_millis(),
+            out,
+            crate::logging::file_len(Path::new(&out)),
+        ),
+    );
     match &result {
         Ok(_) => crate::logging::finish_run(&log, true, "ok"),
         Err(e) => {
-            crate::logging::note_run(&log, &format!("ERROR {e}"));
-            crate::logging::finish_run(&log, true, "error");
+            trace.note(&format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, outcome);
         }
     }
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
@@ -109,7 +136,7 @@ fn run_inner(
     root: &Path,
     action: &str,
     req: &mut Value,
-    log: &Path,
+    trace: &mut crate::logging::RunTrace,
 ) -> Result<Value, String> {
     preflight(root, action, req)?;
     let reqfile = paths::update_cache(root).join("ckpt_request.json");
@@ -126,7 +153,7 @@ fn run_inner(
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log)
+        .open(&trace.path)
         .ok();
     let mut cmd = Command::new(&py);
     cmd.arg(worker_script(root).as_os_str())
@@ -156,12 +183,23 @@ fn run_inner(
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
             let _ = child.wait();
+            trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
-        match v.get("phase").and_then(|x| x.as_str()).unwrap_or("") {
+        let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
+        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        match phase {
+            "start" | "done" | "error" => {
+                trace.note(&format!("progress {phase} {msg}"));
+            }
+            _ => {
+                trace.progress(phase, &format!("progress {phase} {msg}"));
+            }
+        }
+        match phase {
             "error" => {
                 fail = Some(
                     v.get("message")

@@ -17,10 +17,10 @@
 //! packs with no record that STS/TTS/separate/train had been used.
 
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
@@ -130,6 +130,110 @@ pub fn note_run(path: &Path, line: &str) {
 /// `keep` is accepted so existing callers compile — it no longer deletes.
 pub fn finish_run(path: &Path, _keep: bool, summary: &str) {
     note_run(path, &format!("=== done ({summary}) ==="));
+}
+
+/// 同一步骤里进度条会连打很多次。每次都 `open+write+close` 会拖慢热路径，
+/// 日志也会被百分比淹没。键变了（换文件 / 换步骤）立刻写；同一键至少隔
+/// 两秒才再写一行。
+const PROGRESS_GAP: Duration = Duration::from_secs(2);
+
+/// 一份任务日志的写入口。训练 / 转换 / 分离 / TTS / ckpt 共用。
+pub struct RunTrace {
+    pub path: PathBuf,
+    last_key: String,
+    last_at: Instant,
+}
+
+impl RunTrace {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            last_key: String::new(),
+            last_at: Instant::now(),
+        }
+    }
+
+    pub fn note(&self, line: &str) {
+        note_run(&self.path, line);
+    }
+
+    pub fn progress(&mut self, key: &str, line: &str) {
+        let now = Instant::now();
+        if !self.last_key.is_empty()
+            && key == self.last_key
+            && now.duration_since(self.last_at) < PROGRESS_GAP
+        {
+            return;
+        }
+        self.last_key.clear();
+        self.last_key.push_str(key);
+        self.last_at = now;
+        note_run(&self.path, line);
+    }
+
+    pub fn outcome(&self, outcome: &str, body: &str) {
+        note_run(&self.path, &format!("=== outcome ({outcome}) ===\n{body}"));
+    }
+}
+
+pub fn file_len(p: &Path) -> u64 {
+    fs::metadata(p)
+        .ok()
+        .filter(|m| m.is_file())
+        .map(|m| m.len())
+        .unwrap_or(0)
+}
+
+/// 给结论用：列出最多 `cap` 个文件的名字和体积，多出来的写 +N。
+pub fn describe_files(paths: &[impl AsRef<Path>], cap: usize) -> String {
+    if paths.is_empty() {
+        return "-".into();
+    }
+    let mut out = String::new();
+    for (i, p) in paths.iter().take(cap).enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let p = p.as_ref();
+        let name = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_else(|| p.to_str().unwrap_or("?"));
+        out.push_str(&format!("  {name} {} bytes", file_len(p)));
+    }
+    if paths.len() > cap {
+        out.push_str(&format!("\n  +{} more", paths.len() - cap));
+    }
+    out
+}
+
+/// 只读文件尾巴。train.log 可以到几十 MB，不能整份 `read_to_string`。
+pub fn tail_lines(path: &Path, max_lines: usize, max_bytes: u64) -> String {
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("log");
+    let Ok(meta) = fs::metadata(path) else {
+        return format!("--- {name} (missing) ---");
+    };
+    let size = meta.len();
+    let Ok(mut f) = fs::File::open(path) else {
+        return format!("--- {name} (unreadable) ---");
+    };
+    if size > max_bytes && f.seek(SeekFrom::Start(size - max_bytes)).is_err() {
+        return format!("--- {name} (seek failed, {size} bytes) ---");
+    }
+    let mut buf = String::new();
+    if f.read_to_string(&mut buf).is_err() {
+        return format!("--- {name} (read failed, {size} bytes) ---");
+    }
+    let lines: Vec<&str> = buf.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    format!(
+        "--- {name} ({size} bytes, last {} lines) ---\n{}",
+        lines.len() - start,
+        lines[start..].join("\n")
+    )
 }
 
 fn is_log_name(name: &str) -> bool {
@@ -324,6 +428,54 @@ mod tests {
         assert_eq!(inv["channels"]["tts"]["count"], 0);
         assert_eq!(inv["channels"]["tts"]["dir_exists"], false);
         let _ = fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn progress_throttles_the_same_key() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-log-trace-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(&td).unwrap();
+        let p = td.join("job.log");
+        fs::write(&p, b"").unwrap();
+        let mut t = RunTrace::new(p.clone());
+        t.progress("run:1", "a");
+        t.progress("run:1", "b"); // same key, too soon
+        t.progress("run:2", "c"); // key changed
+        t.note("always");
+        let body = fs::read_to_string(&p).unwrap();
+        assert!(body.contains("a"), "{body}");
+        assert!(!body.contains("b"), "throttled line leaked: {body}");
+        assert!(body.contains("c"), "{body}");
+        assert!(body.contains("always"), "{body}");
+        let _ = fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn describe_files_caps_and_sizes() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-log-files-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(&td).unwrap();
+        let a = td.join("a.wav");
+        let b = td.join("b.wav");
+        fs::write(&a, b"12345").unwrap();
+        fs::write(&b, b"x").unwrap();
+        let text = describe_files(&[a.as_path(), b.as_path()], 1);
+        assert!(text.contains("a.wav 5 bytes"), "{text}");
+        assert!(text.contains("+1 more"), "{text}");
+        assert_eq!(describe_files(&[] as &[&Path], 8), "-");
+        let _ = fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn tail_lines_says_missing_instead_of_panicking() {
+        let text = tail_lines(Path::new("/definitely/not/here.log"), 10, 1024);
+        assert!(text.contains("missing"), "{text}");
     }
 
     #[test]

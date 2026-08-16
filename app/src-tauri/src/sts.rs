@@ -111,6 +111,84 @@ fn cancel_flag() -> Arc<AtomicBool> {
         .clone()
 }
 
+/// 转换日志状态。进度条每 120ms 可能跳一次，不能每条都落盘。
+struct StsLog {
+    trace: crate::logging::RunTrace,
+    started: std::time::Instant,
+    last: String,
+    route: &'static str,
+    files: Vec<String>,
+    skipped: usize,
+}
+
+impl StsLog {
+    fn new(path: std::path::PathBuf) -> Self {
+        Self {
+            trace: crate::logging::RunTrace::new(path),
+            started: std::time::Instant::now(),
+            last: String::new(),
+            route: "cold",
+            files: Vec::new(),
+            skipped: 0,
+        }
+    }
+
+    fn event(&mut self, v: &Value) {
+        let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
+        let file = v.get("file").and_then(|x| x.as_str()).unwrap_or("");
+        let step = v.get("step").and_then(|x| x.as_str()).unwrap_or("");
+        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
+        let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(0);
+        let pct = v
+            .get("pct")
+            .and_then(|x| x.as_u64().or_else(|| x.as_f64().map(|f| f as u64)))
+            .unwrap_or(0);
+        let current = v.get("current").and_then(|x| x.as_u64()).unwrap_or(0);
+        self.last = format!("{phase} {current}/{total} {step} {file} {pct}% {msg}");
+        if phase == "done" {
+            if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
+                self.files = arr
+                    .iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect();
+            }
+            if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
+                self.skipped = arr.len();
+            }
+        } else if phase == "skip" {
+            self.skipped += 1;
+        }
+        let line = format!(
+            "progress {phase} file={file} step={step} {done}/{total} {pct}% {msg}"
+        );
+        match phase {
+            "start" | "skip" | "done" | "error" | "cancelled" => self.trace.note(&line),
+            _ => {
+                // 同一文件同一 step 的百分比节流；换文件 / 换步骤立刻写。
+                self.trace.progress(&format!("{phase}:{current}:{step}"), &line);
+            }
+        }
+    }
+
+    fn finish(&self, outcome: &str) {
+        let body = format!(
+            "elapsed_ms: {}\nroute: {}\nlast: {}\nok: {}\nskipped: {}\noutputs:\n{}",
+            self.started.elapsed().as_millis(),
+            self.route,
+            if self.last.is_empty() {
+                "-"
+            } else {
+                self.last.as_str()
+            },
+            self.files.len(),
+            self.skipped,
+            crate::logging::describe_files(&self.files, 8),
+        );
+        self.trace.outcome(outcome, &body);
+    }
+}
+
 fn rec_cancel_flag() -> Arc<AtomicBool> {
     REC_CANCEL
         .get_or_init(|| Arc::new(AtomicBool::new(false)))
@@ -487,7 +565,45 @@ pub fn record(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String
         *g = true;
     }
     rec_cancel_flag().store(false, Ordering::SeqCst);
+    let log = crate::logging::begin_run(
+        root,
+        crate::logging::CH_STS,
+        &json!({ "kind": "record", "input": input }),
+    );
     let result = record_inner(app, root, input);
+    match &result {
+        Ok(v) => {
+            let file = v.get("file").and_then(|x| x.as_str()).unwrap_or("");
+            crate::logging::note_run(
+                &log,
+                &format!(
+                    "=== outcome ({}) ===\nfile: {} ({} bytes)\nsec: {}\ncancelled: {}",
+                    if v.get("cancelled").and_then(|x| x.as_bool()).unwrap_or(false) {
+                        "cancelled"
+                    } else {
+                        "ok"
+                    },
+                    file,
+                    crate::logging::file_len(Path::new(file)),
+                    v.get("sec").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                    v.get("cancelled").and_then(|x| x.as_bool()).unwrap_or(false),
+                ),
+            );
+            crate::logging::finish_run(
+                &log,
+                true,
+                if v.get("cancelled").and_then(|x| x.as_bool()).unwrap_or(false) {
+                    "cancelled"
+                } else {
+                    "ok"
+                },
+            );
+        }
+        Err(e) => {
+            crate::logging::note_run(&log, &format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, "error");
+        }
+    }
     *REC_STOP.lock().unwrap_or_else(|e| e.into_inner()) = None;
     *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
     if let Err(ref e) = result {
@@ -788,6 +904,7 @@ fn run_hot(
     pth: &str,
     index: &str,
     opts: &ConvertOpts,
+    job: &mut StsLog,
 ) -> Result<Value, HotError> {
     crate::protocol::clear_sts(root);
     let mut payload = serde_json::Map::new();
@@ -828,7 +945,7 @@ fn run_hot(
             last_ts = ts;
             last_change = std::time::Instant::now();
             saw_any = true;
-            if let Some(done) = forward_sts_event(app, &v, out) {
+            if let Some(done) = forward_sts_event(app, &v, out, job) {
                 return done;
             }
         } else {
@@ -868,7 +985,9 @@ fn forward_sts_event(
     app: &AppHandle,
     v: &Value,
     out: &Path,
+    job: &mut StsLog,
 ) -> Option<Result<Value, HotError>> {
+    job.event(v);
     let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
     let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
     let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
@@ -1011,6 +1130,7 @@ pub fn run(
             .and_then(|s| s.to_str())
             .unwrap_or("sts")
     );
+    let mut job = StsLog::new(log_path.clone());
     let result = run_inner(
         app,
         root,
@@ -1022,33 +1142,38 @@ pub fn run(
         model_path,
         index_path,
         &opts,
-        &log_path,
+        &mut job,
     );
     match &result {
         Ok(v) => {
-            let files = v
-                .get("files")
-                .and_then(|x| x.as_array())
-                .map(|a| a.len())
-                .unwrap_or(0);
-            let skipped = v
-                .get("skipped")
-                .and_then(|x| x.as_array())
-                .map(|a| a.len())
-                .unwrap_or(0);
-            crate::logging::finish_run(
-                &log_path,
-                true,
-                if skipped > 0 || files == 0 {
-                    "skipped or empty"
-                } else {
-                    "ok"
-                },
-            );
+            if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
+                job.files = arr
+                    .iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect();
+            }
+            if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
+                job.skipped = arr.len();
+            }
+            let files = job.files.len();
+            let skipped = job.skipped;
+            let summary = if skipped > 0 || files == 0 {
+                "skipped or empty"
+            } else {
+                "ok"
+            };
+            job.finish(summary);
+            crate::logging::finish_run(&log_path, true, summary);
         }
         Err(e) => {
-            crate::logging::note_run(&log_path, &format!("ERROR {e}"));
-            crate::logging::finish_run(&log_path, true, "error");
+            let outcome = if e == &crate::i18n::t("s.a5ffdc95ee") {
+                "cancelled"
+            } else {
+                "error"
+            };
+            job.trace.note(&format!("ERROR {e}"));
+            job.finish(outcome);
+            crate::logging::finish_run(&log_path, true, outcome);
         }
     }
     *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
@@ -1069,7 +1194,7 @@ fn run_inner(
     model_path: &str,
     index_path: &str,
     opts: &ConvertOpts,
-    log_path: &Path,
+    job: &mut StsLog,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
@@ -1098,9 +1223,10 @@ fn run_inner(
     // 老做法是把它杀掉再起一个新 python 把这四样从盘上重读一遍——一条 5 秒语音
     // 真正干活一两秒，其余全耗在这上面。现在直接让它兼职把活干了。
     if crate::worker::is_worker_alive(root) {
-        crate::logging::note_run(log_path, "hot path: reusing live worker models");
+        job.route = "hot";
+        job.trace.note("hot path: reusing live worker models");
         match run_hot(
-            app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts,
+            app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts, job,
         ) {
             Ok(v) => {
                 let stats = crate::paths::clean_temps(root);
@@ -1111,7 +1237,8 @@ fn run_inner(
             Err(HotError::Unavailable(why)) => {
                 // 热路径没接上（worker 半死、模型还没加载好…）。退回冷路径，
                 // 慢是慢，但不能因为提速的那条路没走通就干脆转不了。
-                crate::logging::note_run(log_path, &format!("hot path unavailable: {why}"));
+                job.route = "cold";
+                job.trace.note(&format!("hot path unavailable: {why}"));
                 let free_msg = crate::i18n::t("s.stsFreeVram");
                 emit_full(
                     app, "run", 0, 1, &free_msg, Some(0), Some("free_vram"),
@@ -1149,7 +1276,11 @@ fn run_inner(
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let errfile = OpenOptions::new().create(true).append(true).open(log_path).ok();
+    let errfile = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&job.trace.path)
+        .ok();
 
     let mut cmd = Command::new(&py);
     cmd.arg(script.as_os_str())
@@ -1171,7 +1302,7 @@ fn run_inner(
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            crate::logging::note_run(log_path, &format!("spawn failed: {e}"));
+            job.trace.note(&format!("spawn failed: {e}"));
             return Err(crate::i18n::te("s.4f592d4fc2", &(e)));
         }
     };
@@ -1192,12 +1323,13 @@ fn run_inner(
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
             let _ = child.wait();
-            crate::logging::note_run(log_path, "cancelled by user");
+            job.trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        job.event(&v);
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
         let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
         // 细粒度 0–100；worker 旧版可能不带，界面回退到 done/total。
@@ -1301,30 +1433,24 @@ fn run_inner(
     let st = match child.wait() {
         Ok(s) => s,
         Err(e) => {
-            crate::logging::note_run(log_path, &format!("wait failed: {e}"));
+            job.trace.note(&format!("wait failed: {e}"));
             return Err(crate::i18n::te("s.cdad0c927d", &(e)));
         }
     };
     if let Some(e) = fail {
-        crate::logging::note_run(log_path, &format!("worker error: {e}"));
+        job.trace.note(&format!("worker error: {e}"));
         return Err(e);
     }
     if !st.success() {
-        crate::logging::note_run(
-            log_path,
-            &format!("process exit code {}", st.code().unwrap_or(-1)),
-        );
+        job.trace.note(&format!("process exit code {}", st.code().unwrap_or(-1)));
         return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
     }
     if !sts_run_clean_success(&files, &skipped) {
-        crate::logging::note_run(
-            log_path,
-            &format!(
-                "finished with {} ok, {} skipped",
-                files.len(),
-                skipped.len()
-            ),
-        );
+        job.trace.note(&format!(
+            "finished with {} ok, {} skipped",
+            files.len(),
+            skipped.len()
+        ));
     }
 
     emit_full(
@@ -1364,6 +1490,29 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rvcf-sts-rec-{n}"));
         fs::create_dir_all(dir.join("User_Data")).unwrap();
         dir
+    }
+
+    #[test]
+    fn sts_log_throttles_intra_file_pct() {
+        let td = std::env::temp_dir().join(format!(
+            "rvcf-sts-log-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&td);
+        fs::create_dir_all(&td).unwrap();
+        let p = td.join("sts.log");
+        fs::write(&p, b"").unwrap();
+        let mut job = StsLog::new(p.clone());
+        job.event(&json!({"phase":"start","total":1,"message":"go"}));
+        job.event(&json!({"phase":"run","current":1,"step":"infer","pct":10,"file":"a.wav"}));
+        job.event(&json!({"phase":"run","current":1,"step":"infer","pct":20,"file":"a.wav"}));
+        job.event(&json!({"phase":"skip","file":"b.wav","reason":"bad"}));
+        let body = fs::read_to_string(&p).unwrap();
+        assert!(body.contains("progress start"), "{body}");
+        assert!(body.contains("a.wav"), "{body}");
+        assert!(!body.contains("20%"), "pct tick should be throttled: {body}");
+        assert!(body.contains("progress skip"), "{body}");
+        let _ = fs::remove_dir_all(&td);
     }
 
     #[test]

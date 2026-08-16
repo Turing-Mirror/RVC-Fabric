@@ -148,12 +148,51 @@ pub fn run(
             .and_then(|s| s.to_str())
             .unwrap_or("separate")
     );
-    let result = run_inner(app, root, input, output, model, format, aggression, &log);
+    let mut trace = crate::logging::RunTrace::new(log.clone());
+    let started = std::time::Instant::now();
+    let result = run_inner(
+        app,
+        root,
+        input,
+        output,
+        model,
+        format,
+        aggression,
+        &mut trace,
+    );
+    let outcome = match &result {
+        Ok(_) => "ok",
+        Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
+        Err(_) => "error",
+    };
+    let files: Vec<String> = result
+        .as_ref()
+        .ok()
+        .and_then(|v| v.get("files").and_then(|x| x.as_array()))
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let in_path = Path::new(input);
+    trace.outcome(
+        outcome,
+        &format!(
+            "elapsed_ms: {}\ninput: {} ({} bytes)\noutput: {}\nfiles_ok: {}\noutputs:\n{}",
+            started.elapsed().as_millis(),
+            input,
+            crate::logging::file_len(in_path),
+            output,
+            files.len(),
+            crate::logging::describe_files(&files, 8),
+        ),
+    );
     match &result {
         Ok(_) => crate::logging::finish_run(&log, true, "ok"),
         Err(e) => {
-            crate::logging::note_run(&log, &format!("ERROR {e}"));
-            crate::logging::finish_run(&log, true, "error");
+            trace.note(&format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, outcome);
         }
     }
     {
@@ -174,7 +213,7 @@ fn run_inner(
     model: &str,
     format: &str,
     aggression: u32,
-    log: &Path,
+    trace: &mut crate::logging::RunTrace,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
@@ -226,7 +265,7 @@ fn run_inner(
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log)
+        .open(&trace.path)
         .ok();
 
     let mut cmd = Command::new(&py);
@@ -255,6 +294,7 @@ fn run_inner(
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
+            trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
@@ -262,18 +302,27 @@ fn run_inner(
         };
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
         let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let detail = v.get("detail").and_then(|x| x.as_str()).unwrap_or("");
+        let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
+        let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1);
         match phase {
             "start" => {
                 let m = crate::i18n::t("s.07bbf0331b");
+                trace.note("progress start");
                 emit(app, "start", 0, 1, &m);
             }
             "run" => {
                 let fallback = crate::i18n::t("s.2282c91c77");
+                // worker 已按百分比去重，这里再按 2 秒节流，避免长音频刷盘。
+                trace.progress(
+                    "run",
+                    &format!("progress run {done}/{total} {msg}"),
+                );
                 emit(
                     app,
                     "run",
-                    v.get("done").and_then(|x| x.as_u64()).unwrap_or(0),
-                    v.get("total").and_then(|x| x.as_u64()).unwrap_or(1),
+                    done,
+                    total,
                     if msg.is_empty() {
                         &fallback
                     } else {
@@ -288,8 +337,17 @@ fn run_inner(
                         .filter_map(|x| x.as_str().map(str::to_string))
                         .collect();
                 }
+                trace.note(&format!("progress done files={}", files.len()));
             }
-            "error" => fail = Some(msg.to_string()),
+            "error" => {
+                if !detail.is_empty() {
+                    trace.note(&format!("error {msg} detail={detail}"));
+                    fail = Some(format!("{msg}（{detail}）"));
+                } else {
+                    trace.note(&format!("error {msg}"));
+                    fail = Some(msg.to_string());
+                }
+            }
             _ => {}
         }
     }

@@ -1,6 +1,5 @@
 import math
 import os
-from importlib.resources import files
 from pathlib import Path
 
 import numpy as np
@@ -16,30 +15,22 @@ from .common_separator import CommonSeparator
 from .uvr_lib_v5 import spec_utils
 
 
-class _ResourceDir:
-    def __init__(self, package):
-        self._root = files(package)
+def _vr_params_dir():
+    """Disk path, not importlib.resources.
 
-    def __truediv__(self, name):
-        return self._root / name
-
-    def exists(self):
-        return self._root.is_dir()
-
-    def is_dir(self):
-        return self._root.is_dir()
-
-    def iterdir(self):
-        return self._root.iterdir()
-
-    def __str__(self):
-        return str(self._root)
-
-    def __repr__(self):
-        return repr(self._root)
+    ``4_HP-Vocal-UVR`` etc. load a json from here. ``files("pymss_core.resources…")``
+    on Runtime 3.9 blows up the same way as the model catalog (namespace package,
+    ``spec.origin is None``).
+    """
+    here = Path(__file__).resolve()
+    # tools/pymss/modules/vocal_remover/this.py → tools/pymss_core/resources/…
+    core = here.parents[3] / "pymss_core" / "resources" / "vr_modelparams"
+    if core.is_dir():
+        return core
+    return here.parents[2] / "resources" / "vr_modelparams"
 
 
-VR_PARAMS_DIR = _ResourceDir("pymss_core.resources.vr_modelparams")
+VR_PARAMS_DIR = _vr_params_dir()
 
 
 def _fuse_sequential_conv_bn(module):

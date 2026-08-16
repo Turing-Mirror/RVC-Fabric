@@ -67,5 +67,53 @@ class SetupPathTests(unittest.TestCase):
             sys.path[:] = saved
 
 
+def _load_registry():
+    # 不要 ``import tools.pymss``：包的 __init__ 会拉 torch。
+    path = TOOLS / "pymss" / "model_registry.py"
+    spec = importlib.util.spec_from_file_location("tm_pymss_model_registry", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class CatalogLoadTests(unittest.TestCase):
+    """26.8.16：Runtime 3.9 上 resources.files('pymss.resources') 读清单炸了。"""
+
+    def test_catalog_loads_from_the_vendored_file(self):
+        reg = _load_registry()
+        reg.load_model_catalog.cache_clear()
+        catalog = reg._resource_file("model_catalog.json")
+        self.assertTrue(catalog.is_file(), catalog)
+        data = reg.load_model_catalog()
+        names = {m.name for m in data["models"]}
+        self.assertIn("4_HP-Vocal-UVR.pth", names)
+        entry = reg.get_model_entry("4_HP-Vocal-UVR.pth")
+        self.assertTrue(entry.relpath.endswith("4_HP-Vocal-UVR.pth"))
+
+    def test_catalog_loader_does_not_import_importlib_resources(self):
+        src = (TOOLS / "pymss" / "model_registry.py").read_text(encoding="utf-8")
+        self.assertNotIn("from importlib", src)
+        self.assertNotIn("import importlib", src)
+
+    def test_vr_params_live_on_disk(self):
+        # 人声提取那几个 UVR 模型下一步会读这份 json。路径必须是真目录。
+        core = TOOLS / "pymss_core" / "resources" / "vr_modelparams"
+        local = TOOLS / "pymss" / "resources" / "vr_modelparams"
+        self.assertTrue(core.is_dir() or local.is_dir())
+        found = core if core.is_dir() else local
+        self.assertTrue(
+            any(found.glob("*.json")),
+            "vr_modelparams has no json files",
+        )
+
+    def test_vr_separator_does_not_use_importlib_resources(self):
+        src = (
+            TOOLS / "pymss" / "modules" / "vocal_remover" / "vr_separator.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("from importlib.resources", src)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,12 +1,12 @@
 {
   "name": "女声转男声",
-  "desc": "降调同时把共振峰压下来，不闷",
+  "desc": "降调后把嗓子亮度补回来，不闷成巨人",
   "params": {
     "pitch": {
-      "semitones": -5.0
+      "semitones": -4.5
     },
     "formant": {
-      "shift": -2.5
+      "shift": 2.2
     }
   }
 }

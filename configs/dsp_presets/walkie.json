@@ -1,19 +1,15 @@
 {
   "name": "对讲机",
-  "desc": "更窄的带宽，更狠的过载",
+  "desc": "更窄的带宽，沙沙声和过载都在，人话还在",
   "params": {
     "radio": {
-      "low": 500.0,
-      "high": 2400.0,
+      "low": 480.0,
+      "high": 2300.0,
       "mix": 1.0,
-      "noise": 0.2
+      "noise": 0.13
     },
     "drive": {
-      "amount": 0.55
-    },
-    "bitcrush": {
-      "bits": 10,
-      "downsample": 1
+      "amount": 0.38
     }
   }
 }

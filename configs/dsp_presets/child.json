@@ -1,12 +1,9 @@
 {
   "name": "小孩",
-  "desc": "音高与共振峰一起上抬，比单纯升调自然",
+  "desc": "升调，共振峰跟着走，比花栗鼠矮一截",
   "params": {
     "pitch": {
-      "semitones": 6.0
-    },
-    "formant": {
-      "shift": 4.0
+      "semitones": 5.5
     }
   }
 }

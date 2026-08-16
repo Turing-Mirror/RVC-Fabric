@@ -83,6 +83,26 @@ class BuiltinTests(unittest.TestCase):
             self.assertEqual(body["name"], p["name"], p["id"])
             self.assertEqual(body["params"], p["params"], p["id"])
 
+    def test_gender_presets_compensate_formants(self):
+        """变调会带走共振峰。男女互换必须反向配平，否则就是花栗鼠/巨人。"""
+        m2f = next(p for p in BUILTIN if p["id"] == "male_to_female")
+        self.assertGreater(m2f["params"]["pitch"]["semitones"], 0)
+        self.assertLess(m2f["params"]["formant"]["shift"], 0)
+        f2m = next(p for p in BUILTIN if p["id"] == "female_to_male")
+        self.assertLess(f2m["params"]["pitch"]["semitones"], 0)
+        self.assertGreater(f2m["params"]["formant"]["shift"], 0)
+
+    def test_robot_and_alien_stay_intelligible(self):
+        robot = next(p for p in BUILTIN if p["id"] == "robot")
+        self.assertLessEqual(robot["params"]["ring"]["mix"], 0.4)
+        alien = next(p for p in BUILTIN if p["id"] == "alien")
+        self.assertLessEqual(alien["params"]["ring"]["mix"], 0.3)
+
+    def test_chipmunk_and_child_do_not_stack_formant(self):
+        for pid in ("chipmunk", "child", "giant"):
+            p = next(x for x in BUILTIN if x["id"] == pid)
+            self.assertNotIn("formant", p["params"], pid)
+
     def test_no_preset_is_a_no_op(self):
         for p in BUILTIN:
             changed = {

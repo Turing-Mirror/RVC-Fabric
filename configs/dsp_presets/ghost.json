@@ -1,16 +1,16 @@
 {
   "name": "幽灵",
-  "desc": "耳语加长混响，贴着耳朵说话",
+  "desc": "半气声、略沉，空间拉开但不糊成一团",
   "params": {
     "whisper": {
-      "amount": 0.75
+      "amount": 0.42
     },
     "pitch": {
-      "semitones": -3.0
+      "semitones": -2.0
     },
     "reverb": {
-      "size": 0.85,
-      "mix": 0.45
+      "size": 0.72,
+      "mix": 0.26
     }
   }
 }

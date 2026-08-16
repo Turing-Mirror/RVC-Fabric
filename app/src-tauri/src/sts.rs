@@ -207,6 +207,61 @@ pub fn out_dir(root: &Path) -> PathBuf {
     paths::user_data(root).join("sts")
 }
 
+fn norm_dir(p: &Path) -> String {
+    p.to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches(['\\', '/'])
+        .to_ascii_lowercase()
+}
+
+/// 默认 `User_Data/sts`：界面不能预选它，但没选输出时文件仍会落到这儿。
+pub fn is_default_out(root: &Path, path: &str) -> bool {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return false;
+    }
+    let a = PathBuf::from(raw);
+    let b = out_dir(root);
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => norm_dir(&a) == norm_dir(&b),
+    }
+}
+
+fn last_output_for_ui(root: &Path, raw: &str) -> String {
+    let p = existing_path(raw);
+    if p.is_empty() || is_default_out(root, &p) {
+        String::new()
+    } else {
+        p
+    }
+}
+
+/// 打开转换结果所在目录。界面传这次用的路径；空则用上次记下的，再没有才是默认。
+pub fn reveal_output(root: &Path, path: &str) -> Result<(), String> {
+    let raw = path.trim();
+    let dir = if !raw.is_empty() {
+        PathBuf::from(raw)
+    } else {
+        let last = existing_path(
+            crate::config::read(root)
+                .get(LAST_OUTPUT)
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+        );
+        if !last.is_empty() {
+            PathBuf::from(last)
+        } else {
+            out_dir(root)
+        }
+    };
+    if dir.is_file() {
+        return crate::shell_extras::reveal(&dir);
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    crate::shell_extras::reveal(&dir.join("x"))
+}
+
 pub fn cancel() {
     cancel_flag().store(true, Ordering::SeqCst);
 }
@@ -318,7 +373,10 @@ pub fn status(root: &Path) -> Value {
         "out_dir": out_dir(root).to_string_lossy(),
         "default_input_dir": default_input_dir(root).to_string_lossy(),
         "last_input": existing_path(cfg.get(LAST_INPUT).and_then(|v| v.as_str()).unwrap_or("")),
-        "last_output": existing_path(cfg.get(LAST_OUTPUT).and_then(|v| v.as_str()).unwrap_or("")),
+        "last_output": last_output_for_ui(
+            root,
+            cfg.get(LAST_OUTPUT).and_then(|v| v.as_str()).unwrap_or(""),
+        ),
         "input_device": cfg.get("sg_input_device").and_then(|v| v.as_str()).unwrap_or(""),
         "recorder_present": record_script(root).is_file(),
         "recording": *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()),
@@ -1216,6 +1274,7 @@ fn run_inner(
         PathBuf::from(output.trim())
     };
     std::fs::create_dir_all(&out).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
+    remember_output(root, &out.to_string_lossy());
 
     let (pth, index) = resolve_model(root, model_path, index_path)?;
 
@@ -1622,6 +1681,27 @@ mod tests {
         assert_eq!(
             p.file_name().unwrap().to_string_lossy(),
             "rec_20260813_120000_2.wav"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn default_sts_dir_is_not_shown_as_a_user_choice() {
+        let root = tmp_root();
+        let def = out_dir(&root);
+        fs::create_dir_all(&def).unwrap();
+        assert!(is_default_out(&root, &def.to_string_lossy()));
+        assert!(is_default_out(
+            &root,
+            &def.to_string_lossy().replace('\\', "/")
+        ));
+        let custom = root.join("elsewhere");
+        fs::create_dir_all(&custom).unwrap();
+        assert!(!is_default_out(&root, &custom.to_string_lossy()));
+        assert_eq!(last_output_for_ui(&root, &def.to_string_lossy()), "");
+        assert_eq!(
+            last_output_for_ui(&root, &custom.to_string_lossy()),
+            custom.to_string_lossy()
         );
         let _ = fs::remove_dir_all(&root);
     }

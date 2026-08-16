@@ -407,6 +407,20 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn("请先选用一个 DSP 预设", body)
         self.assertIn('"function"', src[src.index("def _values_from_config_file") :])
 
+    def test_sts_reveal_uses_the_chosen_folder(self):
+        src = (ROOT / "app" / "src" / "components" / "TtsPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('invoke("sts_reveal"', src)
+        self.assertIn("lastDestRef", src)
+        self.assertNotIn("s.out_dir", src)
+        rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        sig = rust[rust.index("fn sts_reveal") : rust.index("fn tts_status")]
+        self.assertIn("path:", sig)
+        self.assertIn("reveal_output", sig)
+
     def test_tool_downloads_never_open_in_the_tool_window(self):
         src = (ROOT / "app" / "src" / "lib" / "downloadModels.ts").read_text(
             encoding="utf-8"

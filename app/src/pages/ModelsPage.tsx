@@ -86,9 +86,6 @@ function ModelsPageImpl({
     const next = p ? p.id : "";
     setDspId(next);
     setDspActive(p);
-    // 必须先把 dsp_enabled / function=fx 落盘，再清音色。
-    // 先清 pth 再写 DSP：开启变声若插在中间，会读到「没音色也没 DSP」，
-    // 连着报「请选择pth文件」（diag 26.8.16/135841）。
     try {
       await setHot(
         p
@@ -104,11 +101,6 @@ function ModelsPageImpl({
       /* 引擎没开着也没关系：配置已经写下去了，下次开启变声就生效 */
     }
     if (p) {
-      try {
-        await clearVoice();
-      } catch {
-        /* 没选过音色也没关系 */
-      }
       setSelectedKey("");
       onVoiceChange?.({
         model: { name: "", path: "", dir: "", file: "" },

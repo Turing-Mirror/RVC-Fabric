@@ -1037,6 +1037,8 @@ if __name__ == "__main__":
             if dsp_on:
                 pth = ""
                 values["pth_path"] = ""
+                values["dsp_enabled"] = True
+                values["function"] = "fx"
             elif not pth:
                 self._notify(i18n("请选择pth文件"), VC_NEED_MODEL)
                 return False
@@ -1280,12 +1282,17 @@ if __name__ == "__main__":
             except Exception:
                 pass
             self._report_load(VC_LOADING_MODEL, 18)
-            # RVC / DSP 二选一。开了 DSP 就不加载 RVC，也不把旧音色路径写回去。
-            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False))
+            # RVC / DSP 二选一。没音色就绝不能去建 RVC：空路径会留下半截实例，
+            # 下一行读 tgt_sr 直接 AttributeError（diag 26.8.16/141710）。
+            pth = str(getattr(self.gui_config, "pth_path", "") or "").strip()
+            dsp_on = bool(getattr(self.gui_config, "dsp_enabled", False)) or str(
+                getattr(self, "function", "") or ""
+            ) == "fx" or not pth
             self.dsp_only = dsp_on
             if self.dsp_only:
                 self.rvc = None
                 self.function = "fx"
+                self.gui_config.dsp_enabled = True
                 self.gui_config.pth_path = ""
                 self.gui_config.index_path = ""
                 self.gui_config.samplerate = self.get_device_samplerate()
@@ -1404,7 +1411,8 @@ if __name__ == "__main__":
                 dtype=torch.float32,
             ).to(self.config.device)
             # DSP 模式没有模型，也就没有 tgt_sr，输入输出同一个采样率。
-            if self.rvc is not None and self.rvc.tgt_sr != self.gui_config.samplerate:
+            rvc_sr = getattr(self.rvc, "tgt_sr", None) if self.rvc is not None else None
+            if rvc_sr and rvc_sr != self.gui_config.samplerate:
                 self.resampler2 = tat.Resample(
                     orig_freq=self.rvc.tgt_sr,
                     new_freq=self.gui_config.samplerate,
@@ -3084,6 +3092,8 @@ if __name__ == "__main__":
                         self.function = fn
                 except Exception:
                     self.function = "vc"
+                if bool(getattr(self.gui_config, "dsp_enabled", False)):
+                    self.function = "fx"
                 printt("worker start_vc")
                 printt("cuda_is_available: %s", torch.cuda.is_available())
                 printt(

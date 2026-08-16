@@ -227,6 +227,8 @@ class ShellContractTests(unittest.TestCase):
         start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
         self.assertIn("self.dsp_only = dsp_on", start)
         self.assertIn('self.gui_config.pth_path = ""', start)
+        self.assertIn("or not pth", start)
+        self.assertIn("getattr(self.rvc, \"tgt_sr\"", src)
 
     def test_start_vc_hot_push_uses_fx_when_dsp_only(self):
         src = (ROOT / "app" / "src-tauri" / "src" / "worker.rs").read_text(
@@ -262,9 +264,14 @@ class ShellContractTests(unittest.TestCase):
         )
         apply = src[src.index("const applyDsp") : src.index("useEffect", src.index("const applyDsp"))]
         self.assertIn('function: "fx"', apply)
-        self.assertIn("clearVoice", apply)
+        self.assertNotIn("clearVoice", apply)
         self.assertNotIn("noVoice", apply)
-        self.assertLess(apply.index("setHot"), apply.index("clearVoice"))
+        rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        hot = rust[rust.index("fn engine_set_hot") : rust.index("fn engine_swap_model")]
+        self.assertIn('payload.insert("drop_model"', hot)
+        self.assertIn('json!("fx")', hot)
 
     def test_start_accepts_fx_function_as_dsp(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")

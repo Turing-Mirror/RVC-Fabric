@@ -107,10 +107,26 @@ VR_MODEL_METADATA = {
 
 
 def get_vr_model_metadata(model_path):
-    model_name = os.path.basename(model_path)
-    if model_name not in VR_MODEL_METADATA:
-        raise ValueError(f"Unsupported VR model: {model_name}. Only the supported UVR/VR series weights are available.")
-    data = dict(VR_MODEL_METADATA[model_name])
+    """Look up UVR/VR weights by file name.
+
+    The UI only hands over the basename. Catalog relpath, different drive
+    letters, and Windows case folding must not matter — every extras model
+    (vocal / karaoke / HP2 / DeEcho / DeReverb / …) uses this table.
+    """
+    model_name = os.path.basename(str(model_path or "").replace("\\", "/"))
+    data = VR_MODEL_METADATA.get(model_name)
+    if data is None and model_name:
+        want = model_name.lower()
+        for key, value in VR_MODEL_METADATA.items():
+            if key.lower() == want:
+                model_name = key
+                data = value
+                break
+    if data is None:
+        raise ValueError(
+            f"Unsupported VR model: {model_name}. Only the supported UVR/VR series weights are available."
+        )
+    data = dict(data)
     data["model_name"] = model_name
     data["model_class"] = "VR_Models"
     return data

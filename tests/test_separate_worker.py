@@ -155,5 +155,52 @@ class CatalogLoadTests(unittest.TestCase):
             self.assertEqual(Path(resolved["model_path"]).name, "4_HP-Vocal-UVR.pth")
 
 
+class AllExtrasModelsTests(unittest.TestCase):
+    """广场上架的每一份分离模型都要能解析，不能只认 HP3/HP4。"""
+
+    def _extras_basenames(self):
+        extras = ROOT / "CNB-GIT-RELEASE" / "catalog-src" / "extras"
+        names = []
+        if not extras.is_dir():
+            self.skipTest("no catalog-src/extras on this clone")
+        for p in extras.glob("pymss-*.yaml"):
+            for line in p.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("- name:") or line.startswith("name:"):
+                    rel = line.split(":", 1)[1].strip()
+                    if rel.endswith(".pth"):
+                        names.append(Path(rel.replace("\\", "/")).name)
+        return names
+
+    def test_every_extra_has_vr_metadata_and_param_json(self):
+        names = self._extras_basenames()
+        self.assertGreaterEqual(len(names), 20)
+        path = TOOLS / "pymss" / "modules" / "vocal_remover" / "vr_models.py"
+        spec = importlib.util.spec_from_file_location("tm_vr_models", path)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        pdir = TOOLS / "pymss_core" / "resources" / "vr_modelparams"
+        for name in names:
+            data = mod.get_vr_model_metadata(name)
+            self.assertEqual(data["model_name"], name)
+            param = data["vr_model_param"]
+            self.assertTrue(
+                (pdir / ("%s.json" % param)).is_file(),
+                "%s -> %s.json missing" % (name, param),
+            )
+            # 换盘符 / 大小写也不能炸
+            data2 = mod.get_vr_model_metadata("D:/models/" + name.upper())
+            self.assertEqual(data2["vr_model_param"], param)
+
+    def test_every_extra_is_in_the_pymss_catalog(self):
+        reg = _load_registry()
+        reg.load_model_catalog.cache_clear()
+        for name in self._extras_basenames():
+            entry = reg.get_model_entry(name)
+            self.assertTrue(entry.relpath.replace("\\", "/").endswith(name))
+
+
 if __name__ == "__main__":
     unittest.main()

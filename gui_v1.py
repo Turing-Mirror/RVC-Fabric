@@ -1365,11 +1365,19 @@ if __name__ == "__main__":
                     ",".join(params.keys()) if params else "-",
                 )
             else:
+                if not pth or not os.path.isfile(pth):
+                    self.rvc = None
+                    raise FileNotFoundError(
+                        i18n("请选择音色，或先选用一个 DSP 预设")
+                    )
                 if str(getattr(self.gui_config, "f0method", "") or "") == "harvest":
                     try:
                         ensure_harvest_workers(self.gui_config.n_cpu)
                     except Exception:
                         pass
+                last = getattr(self, "rvc", None)
+                if last is not None and not getattr(last, "tgt_sr", 0):
+                    last = None
                 self.rvc = rvc_for_realtime.RVC(
                     self.gui_config.pitch,
                     self.gui_config.formant,
@@ -1380,9 +1388,12 @@ if __name__ == "__main__":
                     inp_q,
                     opt_q,
                     self.config,
-                    self.rvc if getattr(self, "rvc", None) is not None else None,
+                    last,
                     on_progress=self._on_rvc_progress,
                 )
+                if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
+                    self.rvc = None
+                    raise RuntimeError(i18n("模型加载失败"))
                 if self.function == "fx":
                     self.function = "vc"
                 self.gui_config.samplerate = (
@@ -3683,9 +3694,9 @@ if __name__ == "__main__":
                                         pid=os.getpid(),
                                         **self._worker_device_payload(),
                                     )
-                                else:
+                                elif flag_vc:
                                     self._worker_write_status(
-                                        state="running" if flag_vc else "idle",
+                                        state="running",
                                         **_msg(VC_PARAMS_APPLIED),
                                         progress=100,
                                         delay_ms=int(np.round(self.delay_time * 1000)),
@@ -3693,6 +3704,10 @@ if __name__ == "__main__":
                                         pid=os.getpid(),
                                         **self._worker_device_payload(),
                                     )
+                                # 没在跑：只认领 last_cmd_seq（派发时已经写了）。
+                                # 再写「参数已应用」会把刚刚的启动失败盖掉，
+                                # 底栏变回「引擎就绪」，用户以为没反应
+                                # （diag 26.8.16：请选择音色之后紧跟 set）。
                             else:
                                 self._worker_write_status(
                                     **_msg(VC_UNKNOWN_CMD, action=action),

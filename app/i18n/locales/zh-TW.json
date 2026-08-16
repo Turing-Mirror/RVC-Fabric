@@ -290,7 +290,7 @@
       "missing_python": "找不到 Runtime\\python.exe"
     },
     "vc": {
-      "need_model": "請先選擇音色模型",
+      "need_model": "請選擇音色，或先選用一個 DSP 預設",
       "loading_model": "正在載入音色模型…",
       "loading_index": "正在載入檢索庫…",
       "loading_hubert": "正在載入特徵模型（Hubert）…",

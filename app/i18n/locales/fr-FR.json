@@ -290,7 +290,7 @@
       "missing_python": "Runtime\\python.exe introuvable"
     },
     "vc": {
-      "need_model": "Choisissez d'abord un modèle de voix",
+      "need_model": "Choisissez une voix, ou appliquez d'abord un préréglage DSP",
       "loading_model": "Chargement du modèle vocal…",
       "loading_index": "Chargement de l'index de recherche…",
       "loading_hubert": "Chargement du modèle de traits (Hubert)…",

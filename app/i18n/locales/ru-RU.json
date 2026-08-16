@@ -290,7 +290,7 @@
       "missing_python": "Не найден Runtime\\python.exe"
     },
     "vc": {
-      "need_model": "Сначала выберите модель голоса",
+      "need_model": "Выберите голос или сначала примените пресет DSP",
       "loading_model": "Загрузка голосовой модели…",
       "loading_index": "Загрузка индекса поиска…",
       "loading_hubert": "Загрузка модели признаков (Hubert)…",

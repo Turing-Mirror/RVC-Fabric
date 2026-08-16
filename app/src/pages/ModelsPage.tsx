@@ -10,7 +10,7 @@ import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../com
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
-import { getConfig } from "../lib/config";
+import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import {
@@ -87,14 +87,20 @@ function ModelsPageImpl({
   // 各记各的 —— 那种不一致用户看不出原因，只会觉得「点了没反应」。
   const applyDsp = useCallback(async (p: DspPreset | null) => {
     const next = p ? p.id : "";
+    const prevId = dspId;
+    const prevActive = dspActive;
     setDspId(next);
     setDspActive(p);
     onDspChange?.(next);
     try {
       if (p) await activateDsp(p.id);
       else await deactivateDsp();
-    } catch {
-      /* 落盘失败时界面仍记着 id，开启变声会再写一次 */
+    } catch (e) {
+      setDspId(prevId);
+      setDspActive(prevActive);
+      onDspChange?.(prevId);
+      setMsg(String(e));
+      return;
     }
     if (p) {
       setSelectedKey("");
@@ -102,7 +108,7 @@ function ModelsPageImpl({
         model: { name: "", path: "", dir: "", file: "" },
       });
     }
-  }, [onVoiceChange, onDspChange]);
+  }, [dspId, dspActive, onVoiceChange, onDspChange]);
 
   useEffect(() => {
     if (focusKind === "rvc" || focusKind === "dsp") setKind(focusKind);
@@ -127,6 +133,10 @@ function ModelsPageImpl({
   const [msg, setMsg] = useState("");
 
   const dropVoice = useCallback(async () => {
+    if (!dspId) {
+      setMsg(t("msg.vc.need_model"));
+      return;
+    }
     try {
       await clearVoice();
       setSelectedKey("");
@@ -137,7 +147,7 @@ function ModelsPageImpl({
     } catch (e) {
       setMsg(String(e));
     }
-  }, [onVoiceChange]);
+  }, [dspId, onVoiceChange]);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   // 封面本地化：已装第三方音色的远程封面走本地缓存，不再每次全量重拉。
@@ -464,13 +474,18 @@ function ModelsPageImpl({
             {dspActive ? (
               <DspPresetEditor
                 preset={dspActive}
-                onApply={(params) =>
+                onApply={(params) => {
+                  void setConfig({
+                    dsp_enabled: true,
+                    dsp_preset: dspActive.id,
+                    dsp_params: params,
+                  }).catch(() => {});
                   void setHot({
                     dsp_enabled: true,
                     dsp_preset: dspActive.id,
                     dsp_params: params,
-                  }).catch(() => {})
-                }
+                  }).catch(() => {});
+                }}
                 onSaved={() => setDspReload((n) => n + 1)}
               />
             ) : null}

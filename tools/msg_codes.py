@@ -66,7 +66,7 @@ _FALLBACK_ZH: dict[str, str] = {
     DEV_REFRESHED: "设备列表已刷新",
     DEV_LIST_FAILED: "读取设备失败",
     DEV_INVALID: "设备无效：{detail}",
-    VC_NEED_MODEL: "请先选择音色模型",
+    VC_NEED_MODEL: "请选择音色，或先选用一个 DSP 预设",
     VC_LOADING_MODEL: "正在加载音色模型…",
     VC_LOADING_INDEX: "正在加载检索库…",
     VC_LOADING_HUBERT: "正在加载特征模型（Hubert）…",

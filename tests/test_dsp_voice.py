@@ -236,11 +236,51 @@ class ShellContractTests(unittest.TestCase):
         )
         start = src.index("pub fn start_vc")
         body = src[start : src.index("pub fn wait_vc_running", start)]
-        self.assertIn("dsp_on", body)
-        self.assertIn('json!("fx")', body)
-        self.assertIn("dsp_params", body)
         self.assertIn("wait_worker_ready", body)
         self.assertNotIn("engine_core_ready", body)
+        # 热推必须在起流成功之后，否则失败的 start 会被 set 盖成「参数已应用」
+        self.assertIn("pub fn push_running_hot", src)
+        hot = src[src.index("pub fn push_running_hot") : src.index(
+            "pub fn wait_vc_running"
+        )]
+        self.assertIn("dsp_on", hot)
+        self.assertIn('json!("fx")', hot)
+        self.assertIn("dsp_params", hot)
+        lib = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("push_running_hot", lib)
+        self.assertIn('Some("running")', lib)
+
+    def test_idle_set_does_not_overwrite_start_error(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        loop = src[src.index("action == \"set\"") :]
+        self.assertIn("elif flag_vc:", loop)
+        self.assertIn("没在跑", loop)
+
+    def test_homepage_does_not_fake_a_selected_voice(self):
+        src = (ROOT / "app" / "src" / "pages" / "HomePage.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("const current = selected ??", src)
+        self.assertIn("const current = selected;", src)
+
+    def test_dsp_activate_keeps_last_model(self):
+        src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
+            encoding="utf-8"
+        )
+        fn = src[src.index("pub fn write_dsp_on") : src.index("pub fn write_dsp_off")]
+        self.assertNotIn('"last_model"', fn)
+        self.assertIn('"pth_path"', fn)
+        self.assertIn("last_model_pth", src[src.index("pub fn write_dsp_off") :])
+
+    def test_toggle_run_refuses_without_voice_or_dsp(self):
+        src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("last_model_path", src)
+        self.assertIn("msg.vc.need_model", src)
+        self.assertNotIn("function: modeRef.current === \"bypass\" ? \"im\" : \"vc\"", src)
 
     def test_toggle_run_skips_engine_core_for_dsp_only(self):
         src = (ROOT / "app" / "src" / "hooks" / "useEngine.ts").read_text(

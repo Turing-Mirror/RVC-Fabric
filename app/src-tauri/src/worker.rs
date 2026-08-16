@@ -877,7 +877,7 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
             .to_string());
     }
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
-    let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
+    let _cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
     {
         // Soft stop any leftover stream so start is clean
         let st = protocol::read_status(root);
@@ -896,15 +896,21 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     }
     let seq = send_command(root, "start", Map::new())?;
     // Claim start before any follow-up set. Worker acks last_cmd_seq as soon as
-    // it dequeues start (before model load), so this is usually <100 ms. Without
-    // it, the hot set below races the 80 ms poll and erases start.
+    // it dequeues start (before model load), so this is usually <100 ms.
     if !protocol::wait_cmd_acked(root, seq, 5_000) {
         append_log(
             root,
-            &format!("start_vc: start seq={seq} not acked within 5s — hot set may race"),
+            &format!("start_vc: start seq={seq} not acked within 5s"),
         );
     }
-    // 再热推一次音高/共鸣：worker 读 inuse 起流后，若进程内仍是旧默认值，补上。
+    // 音高/DSP 热推挪到 wait_vc_running 之后：start 失败（没音色、没预设）
+    // 时再推一条 set，会把 error 盖成「参数已应用」，底栏看起来像没点过
+    // （diag 26.8.16）。
+    Ok(seq)
+}
+
+/// 起流成功后再补一次音高/共鸣/DSP。失败的 start 不要走这里。
+pub fn push_running_hot(root: &Path, cfg: &Map<String, Value>) -> Result<u64, String> {
     let mut hot = Map::new();
     if let Some(v) = cfg.get("pitch") {
         hot.insert("pitch".into(), v.clone());
@@ -943,10 +949,10 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     } else if let Some(v) = cfg.get("function") {
         hot.insert("function".into(), v.clone());
     }
-    if !hot.is_empty() {
-        let _ = set_hot(root, hot);
+    if hot.is_empty() {
+        return Ok(0);
     }
-    Ok(seq)
+    set_hot(root, hot)
 }
 
 pub fn wait_vc_running(root: &Path, timeout_ms: u64) -> Value {

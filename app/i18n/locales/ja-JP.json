@@ -290,7 +290,7 @@
       "missing_python": "Runtime\\python.exe が見つかりません"
     },
     "vc": {
-      "need_model": "先に音声モデルを選択してください",
+      "need_model": "音声を選ぶか、先に DSP プリセットを選んでください",
       "loading_model": "ボイスモデルを読み込み中…",
       "loading_index": "検索インデックスを読み込み中…",
       "loading_hubert": "特徴モデル（Hubert）を読み込み中…",

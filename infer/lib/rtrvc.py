@@ -105,6 +105,11 @@ class RVC:
                 traceback.print_exc()
             self.f0_up_key = key
             self.formant_shift = formant
+            # 加载失败时 except 会吞掉异常。先给上这两个，调用方用
+            # getattr(rvc, "tgt_sr", 0) 就能认出半截实例，不会 AttributeError
+            # （diag 26.8.16：空 pth 留下没 tgt_sr 的 RVC，开启变声全军覆没）。
+            self.tgt_sr = 0
+            self.net_g = None
             self.f0_min = 50
             self.f0_max = 1100
             self.f0_mel_min = 1127 * np.log(1 + self.f0_min / 700)
@@ -228,14 +233,19 @@ class RVC:
                 _progress("vc.loading_net", 58)
                 set_synthesizer()
             else:
-                self.tgt_sr = last_rvc.tgt_sr
-                self.if_f0 = last_rvc.if_f0
-                self.version = last_rvc.version
-                self.is_half = last_rvc.is_half
-                if last_rvc.use_jit != self.use_jit:
+                prev_sr = int(getattr(last_rvc, "tgt_sr", 0) or 0)
+                if not prev_sr:
+                    _progress("vc.loading_net", 58)
                     set_synthesizer()
                 else:
-                    self.net_g = last_rvc.net_g
+                    self.tgt_sr = prev_sr
+                    self.if_f0 = getattr(last_rvc, "if_f0", 1)
+                    self.version = getattr(last_rvc, "version", "v1")
+                    self.is_half = last_rvc.is_half
+                    if last_rvc.use_jit != self.use_jit:
+                        set_synthesizer()
+                    else:
+                        self.net_g = last_rvc.net_g
 
             if last_rvc is not None and hasattr(last_rvc, "model_rmvpe"):
                 self.model_rmvpe = last_rvc.model_rmvpe

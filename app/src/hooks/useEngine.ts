@@ -102,13 +102,11 @@ export function useEngine() {
       setStatus(st);
       if (st.state === "error" && st.error) {
         setLastError(String(st.error));
-      } else if (st.state === "running" || st.state === "idle") {
-        // Clear sticky errors once engine is healthy again
-        setLastError((prev) => (prev && st.state === "running" ? "" : prev));
-        if (st.state === "idle" && st.worker_alive) {
-          setLastError("");
-        }
+      } else if (st.state === "running") {
+        setLastError("");
       }
+      // idle 不要清 lastError：start 失败后 worker 可能马上被一条 set
+      // 写回 idle，这里一清底栏就变回「引擎就绪」，像没点过。
     } catch (e) {
       setLastError(String(e));
     }
@@ -194,13 +192,23 @@ export function useEngine() {
     const stopping = running || startingRef.current;
     let dspOnly = Boolean(opts?.dspId?.trim());
     let dspId = String(opts?.dspId || "").trim();
-    if (!stopping && !dspOnly) {
+    if (!stopping) {
       try {
         const cfg = await getConfig();
-        dspId = String(cfg.dsp_preset || "").trim();
-        dspOnly = Boolean(cfg.dsp_enabled) || Boolean(dspId);
+        if (!dspOnly) {
+          dspId = String(cfg.dsp_preset || "").trim();
+          dspOnly = Boolean(cfg.dsp_enabled) || Boolean(dspId);
+        }
+        if (!dspOnly) {
+          const pth = String(cfg.pth_path || cfg.last_model_path || "").trim();
+          const last = String(cfg.last_model || "").trim();
+          if (!pth && !last) {
+            setLastError(t("msg.vc.need_model"));
+            return;
+          }
+        }
       } catch {
-        dspOnly = false;
+        /* 预览模式：没有配置就让后面的 start 自己报 */
       }
     }
     if (!stopping && !dspOnly) {
@@ -229,23 +237,29 @@ export function useEngine() {
       } else {
         startingRef.current = true;
         if (dspOnly && dspId) {
-          const { activateDsp } = await import("../lib/engine");
-          await activateDsp(dspId);
-        } else {
           try {
-            await setHot({
-              pitch: pitchRef.current,
-              formant: formantRef.current,
-              function: modeRef.current === "bypass" ? "im" : "vc",
-            });
+            const cfg = await getConfig();
+            const same =
+              Boolean(cfg.dsp_enabled) && String(cfg.dsp_preset || "") === dspId;
+            const params = cfg.dsp_params as Record<string, unknown> | undefined;
+            const hasParams = Boolean(params && Object.keys(params).length);
+            if (!same || !hasParams) {
+              const { activateDsp } = await import("../lib/engine");
+              await activateDsp(dspId);
+            }
           } catch {
-            /* worker may still be coming up; start_vc still syncs from config */
+            const { activateDsp } = await import("../lib/engine");
+            await activateDsp(dspId);
           }
         }
+        // 不再在 start 前推 function=vc：那条 set 会跟 start 抢槽，失败时
+        // 还会把 error 盖成「参数已应用」。音高由 start 读 inuse、成功后再热补。
         const st = await startVc();
         setStatus(st);
         if (st.state === "error" && st.error) {
           setLastError(String(st.error));
+        } else if (st.state !== "running") {
+          setLastError(String(st.error || st.message || t("msg.vc.need_model")));
         } else {
           setLastError("");
         }

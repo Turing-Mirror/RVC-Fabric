@@ -159,8 +159,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
 
   const selected =
     selectedIdx >= 0 ? models[selectedIdx] : undefined;
-  // 没选中音色时不要把库里第一条当成「当前」—— DSP 模式下那就是跳回 RVC。
-  const current = selected ?? models[0];
+  // 没选中就不要把库里第一条画成当前。以前回退到 models[0] 让中间
+  // 那张卡永远亮着，用户以为选了音色，一点开启却被拒（diag 26.8.16）。
+  const current = selected;
   const hasSelection = Boolean(selected);
 
   // Most-recent first, current excluded — it always takes the centre slot.
@@ -173,7 +174,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
     });
   const ordered = current
     ? ([rest[0], current, rest[1]].filter(Boolean) as VoiceModel[])
-    : [];
+    : rest.slice(0, 3);
 
   const pick = async (m: VoiceModel) => {
     if (m.missing) {
@@ -215,7 +216,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
     }
   };
 
-  if (!current) {
+  if (!models.length) {
     return (
       <div>
         <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
@@ -251,17 +252,17 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
         <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0 mb-1.5">
-          {hasSelection ? current.name : t("s.262d11e2d6")}
+          {selected ? selected.name : t("s.262d11e2d6")}
         </p>
         <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {hasSelection
+          {selected
             ? [
-                current.tag,
-                current.author ? t("s.7feea73fa3", { v0: current.author }) : "",
+                selected.tag,
+                selected.author ? t("s.7feea73fa3", { v0: selected.author }) : "",
               ]
                 .filter(Boolean)
                 .join(" · ") +
-              (current.tag || current.author ? " · " : "") +
+              (selected.tag || selected.author ? " · " : "") +
               t("s.856b4d0ba9")
             : t("s.856b4d0ba9")}
         </p>

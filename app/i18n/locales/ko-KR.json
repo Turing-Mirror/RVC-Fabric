@@ -290,7 +290,7 @@
       "missing_python": "Runtime\\python.exe를 찾을 수 없습니다"
     },
     "vc": {
-      "need_model": "먼저 음색 모델을 선택하세요",
+      "need_model": "음색을 선택하거나 먼저 DSP 프리셋을 적용하세요",
       "loading_model": "음성 모델 로드 중…",
       "loading_index": "검색 인덱스를 불러오는 중…",
       "loading_hubert": "특징 모델(Hubert)을 불러오는 중…",

@@ -72,6 +72,18 @@ class ResolveTests(unittest.TestCase):
             "麦克风 (NVIDIA Broadcast)",
         )
 
+    def test_speaker_to_headphone_same_hardware_token(self):
+        """插拔耳机后扬声器/耳机改名，监听配置不能整段失效。"""
+        outs = [
+            "CABLE Input (VB-Audio Virtual C",
+            "耳机 (3- KM-HIFI-384KHZ)",
+            "扬声器 (Realtek(R) Audio)",
+        ]
+        self.assertEqual(
+            resolve_device_name("扬声器 (3- KM-HIFI-384KHZ)", outs),
+            "耳机 (3- KM-HIFI-384KHZ)",
+        )
+
 
 class FillMissingTests(unittest.TestCase):
     def test_keeps_saved_realtek_when_output_name_is_truncated(self):

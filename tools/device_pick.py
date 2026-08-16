@@ -16,6 +16,7 @@ Rules:
 
 from __future__ import annotations
 
+import re
 from typing import Iterable, Optional
 
 _VIRTUAL_CAPTURE = (
@@ -72,7 +73,13 @@ def is_virtual_playback_name(name: str) -> bool:
 
 
 def resolve_device_name(name: str, names: Iterable[str]) -> Optional[str]:
-    """Exact match, then truncated-MME prefix. Never '麦克风' → first 麦克风."""
+    """Exact match, then truncated-MME prefix. Never '麦克风' → first 麦克风.
+
+    再按括号里的硬件串匹配：插拔耳机时 Windows 会把同一块声卡在
+    「扬声器 (3- KM-HIFI-384KHZ)」和「耳机 (3- KM-HIFI-384KHZ)」之间改名，
+    配置里还写着扬声器、列表里只剩耳机时，前缀对不上，监听自己就开不了 ——
+    纯 DSP 变声时输出在 CABLE，用户全靠监听，看起来就像「DSP 开不起来」。
+    """
     names = [n for n in names if n]
     if not name or not names:
         return None
@@ -82,7 +89,24 @@ def resolve_device_name(name: str, names: Iterable[str]) -> Optional[str]:
     for n in names:
         if n.startswith(name) or name.startswith(n):
             return n
-    return None
+    m = re.search(r"\(([^)]+)\)\s*$", name)
+    if not m:
+        return None
+    token = m.group(1).strip().lower()
+    if not token or len(token) < 3:
+        return None
+    hits = [n for n in names if token in n.lower()]
+    if not hits:
+        return None
+    if len(hits) == 1:
+        return hits[0]
+    # 多个命中时尽量保住角色词（耳机/扬声器/麦克风）
+    for role in ("耳机", "headphone", "headset", "扬声器", "speaker", "麦克风", "microphone", "mic"):
+        if role in name.lower() or role in name:
+            for n in hits:
+                if role in n.lower() or role in n:
+                    return n
+    return hits[0]
 
 
 def pick_default_input(names: Iterable[str]) -> str:

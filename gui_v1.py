@@ -1052,7 +1052,7 @@ if __name__ == "__main__":
 
         def set_values(self, values):
             # RVC / DSP 二选一。开了 DSP 就不查音色、不拦引擎资源。
-            pth = values["pth_path"].strip()
+            pth = str(values.get("pth_path") or "").strip()
             dsp_on, dsp_preset, dsp_params = self._resolve_dsp(values)
             core_ok = _engine_core_ready()
             if dsp_on:
@@ -1069,6 +1069,8 @@ if __name__ == "__main__":
                     )
                     return False
             elif not pth:
+                # 纯 DSP 未识别时绝不能再报「请选择pth文件」——那是老上游文案，
+                # 英文界面会变成 Please choose the .pth file，用户以为必须下音色。
                 self._notify(
                     i18n("请选择音色，或先选用一个 DSP 预设"),
                     VC_NEED_MODEL,
@@ -3133,7 +3135,7 @@ if __name__ == "__main__":
                 **_msg(VC_RUNNING),
             )
 
-        def _worker_start(self):
+        def _worker_start(self, cmd=None):
             global flag_vc
             # 排在半路的换模型请求作废：重开流会照配置文件重新建 RVC，那份配置
             # 里已经是新模型了。留着它只会在新流刚起来时再白换一次。
@@ -3170,6 +3172,24 @@ if __name__ == "__main__":
             )
             try:
                 values = self._values_from_config_file()
+                # start 命令本体可携带 DSP 字段。inuse 若漏同步 dsp_enabled，
+                # 纯 DSP 会被误判成「没选音色」并弹出「请选择pth文件」。
+                if isinstance(cmd, dict):
+                    for k in ("dsp_enabled", "dsp_preset", "dsp_params", "function"):
+                        if k in cmd and cmd.get(k) is not None:
+                            values[k] = cmd[k]
+                printt(
+                    "start values pth=%r dsp_enabled=%s preset=%r params=%s function=%r",
+                    str(values.get("pth_path") or "")[:80],
+                    values.get("dsp_enabled"),
+                    str(values.get("dsp_preset") or ""),
+                    (
+                        list(values["dsp_params"].keys())
+                        if isinstance(values.get("dsp_params"), dict)
+                        else type(values.get("dsp_params")).__name__
+                    ),
+                    values.get("function"),
+                )
                 self._last_invalid_reason = ""
                 ok = self.set_values(values)
                 if ok is not True:
@@ -3678,7 +3698,7 @@ if __name__ == "__main__":
                                 host = cmd.get("sg_hostapi") or cmd.get("hostapi")
                                 self._worker_list_devices(host)
                             elif action == "start":
-                                self._worker_start()
+                                self._worker_start(cmd)
                             elif action == "stop":
                                 self._worker_stop()
                             elif action == "convert":

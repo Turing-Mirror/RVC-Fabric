@@ -237,20 +237,10 @@ export function useEngine() {
       } else {
         startingRef.current = true;
         if (dspOnly && dspId) {
-          try {
-            const cfg = await getConfig();
-            const same =
-              Boolean(cfg.dsp_enabled) && String(cfg.dsp_preset || "") === dspId;
-            const params = cfg.dsp_params as Record<string, unknown> | undefined;
-            const hasParams = Boolean(params && Object.keys(params).length);
-            if (!same || !hasParams) {
-              const { activateDsp } = await import("../lib/engine");
-              await activateDsp(dspId);
-            }
-          } catch {
-            const { activateDsp } = await import("../lib/engine");
-            await activateDsp(dspId);
-          }
+          // 每次纯 DSP 开启都重新落盘一次：inuse 若漏了 dsp_enabled，
+          // worker 会当成没选音色，报 Please choose the .pth file。
+          const { activateDsp } = await import("../lib/engine");
+          await activateDsp(dspId);
         }
         // 不再在 start 前推 function=vc：那条 set 会跟 start 抢槽，失败时
         // 还会把 error 盖成「参数已应用」。音高由 start 读 inuse、成功后再热补。

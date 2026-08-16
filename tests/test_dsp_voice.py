@@ -238,19 +238,29 @@ class ShellContractTests(unittest.TestCase):
         body = src[start : src.index("pub fn wait_vc_running", start)]
         self.assertIn("wait_worker_ready", body)
         self.assertNotIn("engine_core_ready", body)
+        # 纯 DSP 必须把开关塞进 start 本体，不能只靠 inuse 文件
+        self.assertIn('json!("fx")', body)
+        self.assertIn("dsp_enabled", body)
+        self.assertIn("send_command(root, \"start\"", body)
         # 热推必须在起流成功之后，否则失败的 start 会被 set 盖成「参数已应用」
         self.assertIn("pub fn push_running_hot", src)
         hot = src[src.index("pub fn push_running_hot") : src.index(
             "pub fn wait_vc_running"
         )]
         self.assertIn("dsp_on", hot)
-        self.assertIn('json!("fx")', hot)
         self.assertIn("dsp_params", hot)
         lib = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
             encoding="utf-8"
         )
         self.assertIn("push_running_hot", lib)
         self.assertIn('Some("running")', lib)
+
+    def test_worker_start_merges_dsp_from_start_command(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        body = src[src.index("def _worker_start") : src.index("def _worker_stop")]
+        self.assertIn('for k in ("dsp_enabled", "dsp_preset", "dsp_params", "function")', body)
+        self.assertIn("start values pth=", body)
+        self.assertNotIn('i18n("请选择pth文件")', src)
 
     def test_idle_set_does_not_overwrite_start_error(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")

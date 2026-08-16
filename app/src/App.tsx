@@ -543,6 +543,14 @@ export default function App() {
     setModelsKindNonce((n) => n + 1);
     setPage("models");
   }, []);
+  // 「用不了？联系社区」的落点。仓库与社媒那张表只在「其他」页有一份，
+  // 不在设置页和说明页各抄一遍 —— 抄了就得改三处，迟早对不上。
+  // 加一 = 「再滚一次」：同一页反复点也要每次都滚过去。
+  const [communityNonce, setCommunityNonce] = useState(0);
+  const openCommunity = useCallback(() => {
+    setCommunityNonce((n) => n + 1);
+    setPage("more");
+  }, []);
   const [helpFocus, setHelpFocus] = useState("");
   const [helpFocusNonce, setHelpFocusNonce] = useState(0);
   const openHelp = useCallback((section?: string) => {
@@ -951,6 +959,7 @@ export default function App() {
                   updateLine={updateLine}
                   updateBusy={updateBusy}
                   onOpenHelp={openHelp}
+                  onOpenCommunity={openCommunity}
                 />
               );
             case "help":
@@ -961,6 +970,7 @@ export default function App() {
                   status={deviceStatus}
                   focus={helpFocus}
                   focusNonce={helpFocusNonce}
+                  onOpenCommunity={openCommunity}
                 />
               );
             case "more":
@@ -977,6 +987,7 @@ export default function App() {
                     setShowProvision(true);
                   }}
                   onOpenDownloadModels={openDownloadModels}
+                  focusCommunityNonce={communityNonce}
                 />
               );
           }

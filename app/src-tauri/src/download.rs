@@ -144,13 +144,86 @@ fn wait_retry(cancel: &AtomicBool) -> Result<(), String> {
     Ok(())
 }
 
-fn with_retry_help(err: &str, attempts: u32) -> String {
-    format!(
-        "{}\n\n{}\n\n{}",
-        err,
-        crate::i18n::te("s.dlGaveUp", &attempts),
-        crate::i18n::t("s.dlFailedHelp"),
-    )
+/// 底层那句话 → 用户看得懂的一句话。
+///
+/// `ripget: status 403`、`resume: error sending request for url (...)`、
+/// `os error 10060` 这些是给日志看的，不是给人看的。用户看到的应该是
+/// 「服务器拒绝了这次下载」而不是一串英文加数字 —— 前者他知道该换个源
+/// 或者挂代理，后者他只能截图来问。
+///
+/// 返回 None = 归不了类，原样往外报。宁可露出原文，也不要编一句听起来
+/// 很确定却指错方向的话。
+pub fn explain_error(raw: &str) -> Option<&'static str> {
+    let e = raw.to_ascii_lowercase();
+    if e.contains("sha256") {
+        // 校验不过：下完了但内容不对。跟网断了是两码事，不能都说「网络问题」。
+        return Some("s.dlWhyHash");
+    }
+    if e.contains("os error 112") || e.contains("no space left") || e.contains("not enough space") {
+        return Some("s.dlWhyDisk");
+    }
+    if e.contains("os error 5")
+        || e.contains("access is denied")
+        || e.contains("permission denied")
+    {
+        return Some("s.dlWhyPerm");
+    }
+    if e.contains("11001") || e.contains("dns") || e.contains("failed to lookup") {
+        return Some("s.dlWhyDns");
+    }
+    if e.contains("tls") || e.contains("handshake") || e.contains("certificate") {
+        return Some("s.dlWhyTls");
+    }
+    if e.contains("status 429") || e.contains("too many requests") {
+        return Some("s.dlWhyBusy");
+    }
+    if e.contains("status 40") || e.contains("status 41") || e.contains("forbidden") {
+        return Some("s.dlWhyRefused");
+    }
+    if e.contains("status 5") || e.contains("bad gateway") || e.contains("service unavailable") {
+        return Some("s.dlWhyServer");
+    }
+    if e.contains("timed out") || e.contains("timeout") || e.contains("10060") {
+        return Some("s.dlWhyTimeout");
+    }
+    if e.contains("reset") || e.contains("10054") || e.contains("broken pipe") {
+        return Some("s.dlWhyReset");
+    }
+    if e.contains("10061") || e.contains("unreachable") || e.contains("error sending request") {
+        return Some("s.dlWhyUnreachable");
+    }
+    None
+}
+
+/// 报错的完整形状：一句人话 → 试过哪些源 → 能自己做点什么 → 技术细节。
+///
+/// 技术细节留在最后一行而不是删掉：用户来群里问的时候贴的就是这一整段，
+/// 没有它我们只知道「下载失败」，一样查不出是哪一步。
+fn download_error_text(raw: &str, attempts: u32, hosts: &[String]) -> String {
+    let mut out = String::new();
+    match explain_error(raw) {
+        Some(key) => out.push_str(&crate::i18n::t(key)),
+        None => out.push_str(raw),
+    }
+    if !hosts.is_empty() {
+        out.push_str("\n\n");
+        out.push_str(&crate::i18n::t2(
+            "s.dlTriedHosts",
+            &hosts.len(),
+            &hosts.join("、"),
+        ));
+    }
+    if attempts > 1 {
+        out.push_str(if hosts.is_empty() { "\n\n" } else { "\n" });
+        out.push_str(&crate::i18n::te("s.dlGaveUp", &attempts));
+    }
+    out.push_str("\n\n");
+    out.push_str(&crate::i18n::t("s.dlFailedHelp"));
+    if explain_error(raw).is_some() {
+        out.push_str("\n\n");
+        out.push_str(&crate::i18n::te("s.dlDetail", &raw));
+    }
+    out
 }
 
 fn suffixed(base: &Path, suffix: &str) -> PathBuf {
@@ -716,13 +789,19 @@ pub fn download_request(
         }
         wait_retry(&cancel)?;
     }
-    Err(if last_err.is_empty() {
-        crate::i18n::t("s.e0dab22b1a")
-    } else if is_transient_download_error(&last_err) {
-        with_retry_help(&last_err, attempt)
-    } else {
-        last_err
-    })
+    if last_err.is_empty() {
+        return Err(crate::i18n::t("s.e0dab22b1a"));
+    }
+    // 试过哪些站。用户手上只有一个「下载失败」的时候，最想知道的第一件事
+    // 就是「它到底试没试过别的源」—— 不写出来，看起来就像我们只有一个源。
+    let mut hosts: Vec<String> = Vec::new();
+    for u in &urls {
+        let h = crate::mirrors::host_of(u);
+        if !h.is_empty() && !hosts.iter().any(|x| *x == h) {
+            hosts.push(h);
+        }
+    }
+    Err(download_error_text(&last_err, attempt, &hosts))
 }
 
 async fn download_one_url(
@@ -934,5 +1013,57 @@ mod tests {
         assert_eq!(parse_retry_attempt("retry:3"), Some(3));
         assert_eq!(parse_retry_attempt("retry"), None);
         assert_eq!(parse_retry_attempt("download"), None);
+    }
+
+    /// 下面这些是真实报错原文（日志里抄来的）。归类错一条，用户就会被指去
+    /// 修一件跟他的问题无关的事 —— 磁盘满了却让他换代理，比不解释更糟。
+    #[test]
+    fn real_world_errors_land_in_the_right_bucket() {
+        assert_eq!(explain_error("sha256 不匹配"), Some("s.dlWhyHash"));
+        assert_eq!(explain_error("ripget: status 403"), Some("s.dlWhyRefused"));
+        assert_eq!(explain_error("resume: status 404"), Some("s.dlWhyRefused"));
+        assert_eq!(explain_error("ripget: status 503"), Some("s.dlWhyServer"));
+        assert_eq!(explain_error("resume: status 429"), Some("s.dlWhyBusy"));
+        assert_eq!(explain_error("os error 10060"), Some("s.dlWhyTimeout"));
+        assert_eq!(explain_error("os error 11001"), Some("s.dlWhyDns"));
+        assert_eq!(explain_error("os error 10054"), Some("s.dlWhyReset"));
+        assert_eq!(explain_error("os error 112"), Some("s.dlWhyDisk"));
+        assert_eq!(
+            explain_error("解压失败 Lib/foo.dll: Access is denied. (os error 5)"),
+            Some("s.dlWhyPerm"),
+        );
+        assert_eq!(
+            explain_error("client: invalid TLS handshake"),
+            Some("s.dlWhyTls"),
+        );
+        // 归不了类就别硬归 —— 编一句听着很确定的错话，比露出原文更难查。
+        assert_eq!(explain_error("tokio runtime: whatever"), None);
+    }
+
+    /// 429 必须在 4xx 之前判掉：限流是「等一会儿」，403/404 是「换个源」，
+    /// 两句话给的建议正好相反。
+    #[test]
+    fn rate_limiting_is_not_reported_as_a_dead_link() {
+        assert_ne!(explain_error("status 429"), explain_error("status 403"));
+    }
+
+    /// 归不了类的时候，原文必须原样留在正文里 —— 否则用户手上只剩「下载失败」
+    /// 四个字，我们也查不出他卡在哪。
+    #[test]
+    fn an_unclassified_error_keeps_its_original_text() {
+        let text = download_error_text("tokio runtime: boom", 1, &[]);
+        assert!(text.contains("tokio runtime: boom"));
+    }
+
+    /// 试过哪些源要写出来。只报一句「下载失败」的话，看起来就像我们压根
+    /// 只有一个源、一次没成就放弃了。
+    #[test]
+    fn the_message_names_the_hosts_it_tried() {
+        let hosts = vec!["cnb.cool".to_string(), "hf-mirror.com".to_string()];
+        let text = download_error_text("os error 10060", 3, &hosts);
+        assert!(text.contains("cnb.cool"));
+        assert!(text.contains("hf-mirror.com"));
+        // 技术细节留在末尾：用户反馈时贴的就是这一整段。
+        assert!(text.contains("os error 10060"));
     }
 }

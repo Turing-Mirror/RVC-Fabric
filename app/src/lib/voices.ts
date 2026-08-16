@@ -16,6 +16,8 @@ export type VoiceModel = {
   tag?: string;
   author?: string;
   author_url?: string;
+  /** 来源仓库 / 发布页。第三方音色装完之后靠它查得到出处。 */
+  source_url?: string;
   source?: string;
   missing?: boolean;
   pitch?: number;

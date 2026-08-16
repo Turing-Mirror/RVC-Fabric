@@ -390,6 +390,13 @@ fn list_user_data(root: &Path) -> Vec<Value> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        // 来源仓库。第三方音色的清单里两个地址常常只有一个，模型页那个
+        // 「⋯」菜单两条都挂，有哪条给哪条。
+        let source_url = side
+            .get("source_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let mut cover = side
             .get("cover")
             .and_then(|v| v.as_str())
@@ -425,6 +432,7 @@ fn list_user_data(root: &Path) -> Vec<Value> {
                 "tag": tag,
                 "author": author,
                 "author_url": author_url,
+                "source_url": source_url,
                 "source": "user_data",
                 "missing": true,
             }));
@@ -444,6 +452,7 @@ fn list_user_data(root: &Path) -> Vec<Value> {
             "tag": tag,
             "author": author,
             "author_url": author_url,
+            "source_url": source_url,
             "source": "user_data",
             "missing": broken,
         });
@@ -514,6 +523,7 @@ fn list_legacy(root: &Path) -> Vec<Value> {
             "tag": guess_tag(&name),
             "author": "",
             "author_url": "",
+            "source_url": "",
             "source": "legacy_weights",
             "missing": model_is_broken(Some(&p)),
         }));

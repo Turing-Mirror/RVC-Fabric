@@ -41,6 +41,7 @@ import {
   voiceSearchText,
 } from "../lib/voiceDisplay";
 import { askConfirm } from "../lib/webDialog";
+import { openExternal } from "../lib/plaza";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
@@ -650,7 +651,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       ) : null}
 
       {err ? (
-        <div className="mb-3 text-[12px] text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
+        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
           {err}
         </div>
       ) : null}
@@ -1018,6 +1019,15 @@ function VoiceCard({
     [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ") ||
     displayVoiceTag(v, loc);
   const coverBadge = author || displayVoiceOrigin(v);
+  // 第三方音色下下来是别人的东西：作者是谁、从哪个仓库发的，得在**下载之前**
+  // 就能点开看，不能等装完了才在模型页的「⋯」里找得到。清单里两个地址常常
+  // 只有一个，有哪条给哪条。
+  const links = (
+    [
+      [(v.author_url || "").trim(), t("s.voiceLinkAuthor")],
+      [(v.source_url || "").trim(), t("s.voiceLinkSource")],
+    ] as const
+  ).filter(([url]) => /^https?:\/\//i.test(url));
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
@@ -1067,6 +1077,23 @@ function VoiceCard({
       {meta ? (
         <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
           {meta}
+        </div>
+      ) : null}
+      {links.length ? (
+        <div className="mt-1 flex items-center gap-3 flex-wrap">
+          {links.map(([url, label]) => (
+            <button
+              key={label}
+              type="button"
+              // 走壳打开，落到用户自己的浏览器；顺带过一遍 http/https 白名单
+              // —— 清单里的地址是第三方写的，不能当可信输入。
+              onClick={() => void openExternal(url)}
+              title={url}
+              className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       ) : null}
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">

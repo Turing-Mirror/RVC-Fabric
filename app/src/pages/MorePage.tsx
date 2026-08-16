@@ -22,6 +22,13 @@ type Props = {
   onOpenProvision?: () => void;
   /** 「下载模型」住在广场，这里只有一个跳过去的入口。 */
   onOpenDownloadModels?: (reason?: string) => void;
+  /**
+   * 别处点「用不了？联系社区」跳过来时滚到「仓库与社媒」。
+   *
+   * 用计数而不是布尔：这一页很长，用户在同一页上再点一次也得再滚一次，
+   * 只看布尔的话第二次点就什么都不会发生。
+   */
+  focusCommunityNonce?: number;
 };
 
 export function MorePage({
@@ -30,6 +37,7 @@ export function MorePage({
   onForceKill,
   onOpenProvision,
   onOpenDownloadModels,
+  focusCommunityNonce = 0,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
@@ -127,6 +135,28 @@ export function MorePage({
       setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
     }
   };
+  useEffect(() => {
+    if (!focusCommunityNonce) return;
+    // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了个 translate 动画，
+    // 而 scrollIntoView 是按元素**变换后**的屏幕位置算的 —— 动画跑到哪就滚到
+    // 哪，落点每次都不一样。offsetTop 不受 transform 影响，直接算给滚动容器。
+    //
+    // 还得等一拍：PageHost 换页时有个 useLayoutEffect 把 scrollTop 归零，
+    // 同一帧里滚过去会被它抹掉。
+    const id = window.setTimeout(() => {
+      const el = document.getElementById("more-community");
+      const pane = el?.closest(".overflow-y-auto");
+      if (el && pane instanceof HTMLElement) {
+        // 直接赋值，不用 smooth：换页动画期间平滑滚动会被打断，停在几像素上
+        // ——「点了没反应」比生硬地跳过去糟得多。说明页那几段跳转也是硬跳。
+        pane.scrollTop = Math.max(0, el.offsetTop - 12);
+      } else {
+        el?.scrollIntoView({ block: "start" });
+      }
+    }, 60);
+    return () => window.clearTimeout(id);
+  }, [focusCommunityNonce]);
+
   useEffect(() => {
     let alive = true;
     invoke<string>("ui_source")
@@ -400,7 +430,7 @@ export function MorePage({
           />
         </Group>
       </Block>
-      <Block title={t("s.2bd28fc9c2")}>
+      <Block id="more-community" title={t("s.2bd28fc9c2")}>
         <Group>
           {allLinks().map((l) => (
             <ListItem

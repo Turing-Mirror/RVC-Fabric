@@ -15,6 +15,7 @@ mod extract;
 mod i18n;
 mod legacy;
 mod logging;
+mod mic;
 mod mirrors;
 pub mod paths;
 pub mod plaza;
@@ -839,6 +840,23 @@ fn sts_record_stop() {
     sts::cancel_record();
 }
 
+/// 设置页「测试麦克风」：只开设备读电平，不起引擎、不写文件。
+#[tauri::command]
+async fn mic_test_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || mic::test(&app, &root))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn mic_test_stop() {
+    mic::stop();
+}
+
 #[tauri::command]
 async fn sts_start(
     app: AppHandle,
@@ -1654,6 +1672,8 @@ pub fn run() {
             sts_default_input,
             sts_record_start,
             sts_record_stop,
+            mic_test_start,
+            mic_test_stop,
             sts_start,
             sts_cancel,
             sts_reveal,

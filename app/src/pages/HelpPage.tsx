@@ -207,9 +207,16 @@ type HelpProps = {
   focus?: string;
   /** 同一段再点一次也要再滚过去，不能只看 focus 字符串。 */
   focusNonce?: number;
+  /** 跳到「其他」页的仓库与社媒。说明页答不上来的，只能找人问。 */
+  onOpenCommunity?: () => void;
 };
 
-function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
+function HelpPageImpl({
+  status,
+  focus,
+  focusNonce = 0,
+  onOpenCommunity,
+}: HelpProps = {}) {
   const glossary = useGlossary();
   const glossaryTitle = useGlossarySectionTitle();
   const [open, setOpen] = useState<string>("");
@@ -321,7 +328,15 @@ function HelpPageImpl({ status, focus, focusNonce = 0 }: HelpProps = {}) {
 
   return (
     <PagePad>
-      <PageHead title={t("s.26670dda42")} sub={t("s.e137006ffd")} />
+      <PageHead
+        title={t("s.26670dda42")}
+        sub={t("s.e137006ffd")}
+        actions={
+          onOpenCommunity ? (
+            <Btn onClick={onOpenCommunity}>{t("s.contactCommunity")}</Btn>
+          ) : undefined
+        }
+      />
 
       <Block title={t("s.b386a7fb53")}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">{t("s.5695956a42")}</p>

@@ -11,7 +11,7 @@
 //! 不复用 `worker.rs`：那套 pid 文件 + status.json 是给常驻变声进程设计的，
 //! 训练是一次性任务，套进去只会多出一堆要清理的残留。
 
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -348,7 +348,9 @@ fn write_outcome(root: &Path, exp: &str, log: &Path, progress: &Progress, outcom
         .into_iter()
         .filter(|n| n == &format!("{exp}.pth") || n.starts_with(&format!("{exp}_e")))
         .collect::<Vec<_>>();
-    let usable = if file_len(&final_w) > 0 || file_len(&published) > 0 {
+    let usable = if crate::logging::file_len(&final_w) > 0
+        || crate::logging::file_len(&published) > 0
+    {
         "final"
     } else if !weight_pths.is_empty() || !exp_pths.is_empty() {
         "intermediate"
@@ -385,9 +387,9 @@ fn write_outcome(root: &Path, exp: &str, log: &Path, progress: &Progress, outcom
                 .collect::<Vec<_>>()
                 .join(" "),
             final_w.display(),
-            file_len(&final_w),
+            crate::logging::file_len(&final_w),
             published.display(),
-            file_len(&published),
+            crate::logging::file_len(&published),
             if exp_pths.is_empty() {
                 "-".into()
             } else {
@@ -401,16 +403,11 @@ fn write_outcome(root: &Path, exp: &str, log: &Path, progress: &Progress, outcom
         ),
     );
     for name in ["preprocess.log", "extract_f0_feature.log", "train.log"] {
-        crate::logging::append_file(log, &tail_lines(&exp_dir.join(name), 50, 64 * 1024));
+        crate::logging::append_file(
+            log,
+            &crate::logging::tail_lines(&exp_dir.join(name), 50, 64 * 1024),
+        );
     }
-}
-
-fn file_len(p: &Path) -> u64 {
-    std::fs::metadata(p)
-        .ok()
-        .filter(|m| m.is_file())
-        .map(|m| m.len())
-        .unwrap_or(0)
 }
 
 fn count_text_lines(p: &Path) -> u64 {
@@ -454,36 +451,6 @@ fn latest_epoch(train_log: &Path) -> Option<u32> {
         }
     }
     last
-}
-
-fn tail_lines(path: &Path, max_lines: usize, max_bytes: u64) -> String {
-    let name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("log");
-    let Ok(meta) = std::fs::metadata(path) else {
-        return format!("--- {name} (missing) ---");
-    };
-    let size = meta.len();
-    let Ok(mut f) = std::fs::File::open(path) else {
-        return format!("--- {name} (unreadable) ---");
-    };
-    if size > max_bytes {
-        if f.seek(SeekFrom::Start(size - max_bytes)).is_err() {
-            return format!("--- {name} (seek failed, {size} bytes) ---");
-        }
-    }
-    let mut buf = String::new();
-    if f.read_to_string(&mut buf).is_err() {
-        return format!("--- {name} (read failed, {size} bytes) ---");
-    }
-    let lines: Vec<&str> = buf.lines().collect();
-    let start = lines.len().saturating_sub(max_lines);
-    format!(
-        "--- {name} ({size} bytes, last {} lines) ---\n{}",
-        lines.len() - start,
-        lines[start..].join("\n")
-    )
 }
 
 fn note_progress(log: &Path, v: &Value, progress: &mut Progress) {
@@ -829,12 +796,6 @@ mod tests {
         assert_eq!(latest_epoch(&p), Some(2));
         assert_eq!(latest_epoch(&td.join("missing.log")), None);
         let _ = std::fs::remove_dir_all(&td);
-    }
-
-    #[test]
-    fn tail_lines_says_missing_instead_of_panicking() {
-        let text = tail_lines(Path::new("/definitely/not/here.log"), 10, 1024);
-        assert!(text.contains("missing"), "{text}");
     }
 
     #[test]

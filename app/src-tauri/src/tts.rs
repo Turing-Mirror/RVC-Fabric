@@ -226,12 +226,39 @@ pub fn run(
         "tts run log {}",
         log.file_name().and_then(|s| s.to_str()).unwrap_or("tts")
     );
-    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc, &log);
+    let mut trace = crate::logging::RunTrace::new(log.clone());
+    let started = std::time::Instant::now();
+    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc, &mut trace);
+    let outcome = match &result {
+        Ok(_) => "ok",
+        Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
+        Err(_) => "error",
+    };
+    let file = result
+        .as_ref()
+        .ok()
+        .and_then(|v| v.get("file").and_then(|x| x.as_str()))
+        .unwrap_or("");
+    let converted = result
+        .as_ref()
+        .ok()
+        .and_then(|v| v.get("converted").and_then(|x| x.as_bool()))
+        .unwrap_or(false);
+    trace.outcome(
+        outcome,
+        &format!(
+            "elapsed_ms: {}\nconverted: {}\nfile: {} ({} bytes)",
+            started.elapsed().as_millis(),
+            converted,
+            file,
+            crate::logging::file_len(Path::new(file)),
+        ),
+    );
     match &result {
         Ok(_) => crate::logging::finish_run(&log, true, "ok"),
         Err(e) => {
-            crate::logging::note_run(&log, &format!("ERROR {e}"));
-            crate::logging::finish_run(&log, true, "error");
+            trace.note(&format!("ERROR {e}"));
+            crate::logging::finish_run(&log, true, outcome);
         }
     }
     {
@@ -252,7 +279,7 @@ fn run_inner(
     rate: i32,
     pitch: i32,
     use_rvc: bool,
-    log: &Path,
+    trace: &mut crate::logging::RunTrace,
 ) -> Result<Value, String> {
     let text = text.trim();
     if text.is_empty() {
@@ -263,8 +290,15 @@ fn run_inner(
     }
 
     emit(app, "sapi", 0, 2, &crate::i18n::t("s.b99cbcbcd3"));
+    trace.note(&format!("sapi start voice={voice} rate={rate} chars={}", text.chars().count()));
     let raw = synthesize(root, text, voice, rate)?;
+    trace.note(&format!(
+        "sapi done {} ({} bytes)",
+        raw.display(),
+        crate::logging::file_len(&raw)
+    ));
     if cancel_flag().load(Ordering::SeqCst) {
+        trace.note("cancelled after sapi");
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
 
@@ -279,6 +313,7 @@ fn run_inner(
     if !use_rvc {
         std::fs::copy(&raw, &out).map_err(|e| crate::i18n::te("s.9f8084f7cb", &(e)))?;
         emit(app, "done", 2, 2, &crate::i18n::t("s.2e33db9056"));
+        trace.note("rvc skipped (sapi only)");
         return Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": false }));
     }
 
@@ -302,11 +337,11 @@ fn run_inner(
 
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
     let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    crate::logging::note_run(log, &format!("rvc model {pth}"));
+    trace.note(&format!("rvc model {pth}"));
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log)
+        .open(&trace.path)
         .ok();
 
     let index = cfg
@@ -354,6 +389,7 @@ fn run_inner(
     loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
+            trace.note("cancelled during rvc");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
         match child.try_wait().map_err(|e| crate::i18n::te("s.50b4ac5f07", &(e)))? {
@@ -369,6 +405,11 @@ fn run_inner(
     if !out.is_file() {
         return Err(crate::i18n::t("s.f7271a7905").into());
     }
+    trace.note(&format!(
+        "rvc done {} ({} bytes)",
+        out.display(),
+        crate::logging::file_len(&out)
+    ));
     let _ = std::fs::remove_file(&raw);
     emit(app, "done", 2, 2, &crate::i18n::t("s.2e33db9056"));
     Ok(json!({ "ok": true, "file": out.to_string_lossy(), "converted": true }))

@@ -506,6 +506,77 @@ fn clip_log(path: &Path, head: usize, tail: usize) -> String {
     out
 }
 
+// ---------------------------------------------------------------------------
+// 诊断包脱敏
+// ---------------------------------------------------------------------------
+
+/// 用户主目录里那一段个人信息：`C:\Users\张三` 的「张三」。
+///
+/// 诊断包会被贴进群里、转给旁人。里面几乎每条日志、每个配置项都带绝对路径，
+/// 而 Windows 的用户名往往就是真名或常用 ID —— 那是用户没打算公开的东西，
+/// 跟排障也没有半点关系。
+///
+/// 返回 (要替换掉的字符串, 替换成什么)。查不到主目录就返回 None。
+fn home_redaction() -> Option<(String, String)> {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok()?;
+    let home = home.trim_end_matches(['/', '\\']).to_string();
+    if home.len() < 4 {
+        return None; // "/" 之类的，替换掉只会把整份文本搅烂
+    }
+    Some((home, "<用户目录>".to_string()))
+}
+
+/// 把文本里的用户名抹掉。
+///
+/// 只认主目录整段（连同盘符和 `Users\`），不去猜「哪个词像人名」—— 猜错的
+/// 代价是把日志里真正要看的字段也改了，排障的人拿到一份被改坏的证据。
+///
+/// 反斜杠、正斜杠、以及 JSON 里转义过的 `\\` 三种写法都要认：同一个路径在
+/// info.json、config.json 和日志里长得不一样。
+fn redact_user(text: &str, redaction: Option<&(String, String)>) -> String {
+    let Some((home, mask)) = redaction else {
+        return text.to_string();
+    };
+    let mut out = text.to_string();
+    let slash = home.replace('\\', "/");
+    let escaped = home.replace('\\', "\\\\");
+    // 长的先替换：`C:\\Users\x` 是 `C:\Users\x` 的转义写法，反过来先换短的
+    // 会把它切成两半，剩下半截反斜杠留在原地。
+    let mut forms = vec![escaped, home.clone(), slash];
+    forms.sort_by_key(|f| std::cmp::Reverse(f.len()));
+    forms.dedup();
+    for f in forms {
+        if f.is_empty() {
+            continue;
+        }
+        // 大小写不敏感：Windows 的路径大小写在不同 API 之间并不一致。
+        out = replace_ignore_case(&out, &f, mask);
+    }
+    out
+}
+
+/// `str::replace` 的大小写不敏感版。按字节走，只在 ASCII 上折叠大小写 ——
+/// 用户名里的中日韩字符本来就没有大小写之分。
+fn replace_ignore_case(haystack: &str, needle: &str, to: &str) -> String {
+    if needle.is_empty() {
+        return haystack.to_string();
+    }
+    let hay_lower = haystack.to_ascii_lowercase();
+    let needle_lower = needle.to_ascii_lowercase();
+    let mut out = String::with_capacity(haystack.len());
+    let mut at = 0usize;
+    while let Some(rel) = hay_lower[at..].find(&needle_lower) {
+        let start = at + rel;
+        out.push_str(&haystack[at..start]);
+        out.push_str(to);
+        at = start + needle.len();
+    }
+    out.push_str(&haystack[at..]);
+    out
+}
+
 fn zip_text(
     zip: &mut zip::ZipWriter<std::fs::File>,
     opts: zip::write::FileOptions<'_, ()>,
@@ -521,12 +592,13 @@ fn zip_existing(
     opts: zip::write::FileOptions<'_, ()>,
     arc: &str,
     path: &Path,
+    redaction: Option<&(String, String)>,
 ) -> Result<(), String> {
     if !path.is_file() {
         return Ok(());
     }
     match std::fs::read_to_string(path) {
-        Ok(text) => zip_text(zip, opts, arc, &text),
+        Ok(text) => zip_text(zip, opts, arc, &redact_user(&text, redaction)),
         Err(_) => Ok(()),
     }
 }
@@ -562,11 +634,60 @@ fn delay_estimate(cfg: &serde_json::Map<String, Value>) -> Value {
     })
 }
 
+/// 用户在生成诊断包前自己填的那几行。
+///
+/// 群昵称和 QQ 号是**用户主动交出来**的联系方式 —— 没有它，支援拿到一个
+/// `diag_20260817_143012.zip` 也不知道该回复谁。这跟「顺手把系统里的用户名
+/// 一起打包出去」是两回事，后者用户既没同意也不知情，`redact_user` 负责抹掉。
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct UserReport {
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default)]
+    pub qq: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+impl UserReport {
+    /// 三个字段都是自由文本，直接进 zip。裁长度是防手滑粘贴一整本小说进来
+    /// 把包撑大，不是防人。
+    fn sanitized(&self) -> Value {
+        fn clip(s: &str, max: usize) -> String {
+            let t = s.trim();
+            if t.chars().count() <= max {
+                return t.to_string();
+            }
+            t.chars().take(max).collect::<String>() + "…"
+        }
+        json!({
+            "nickname": clip(&self.nickname, 64),
+            "qq": clip(&self.qq, 32),
+            "description": clip(&self.description, 4000),
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.nickname.trim().is_empty()
+            && self.qq.trim().is_empty()
+            && self.description.trim().is_empty()
+    }
+}
+
 /// Zip logs + machine info + effective settings into `User_Data/diagnostics/`.
 ///
 /// `with_perf`：用户确认后才跑 bench。Log tails 有上限，避免几百 MB 的废包。
+/// `report`：用户自己填的昵称 / QQ / 问题描述，落成 `report.json`。
+///
+/// 出包前所有文本都过一遍 `redact_user`：日志和配置里到处是绝对路径，而
+/// Windows 用户名常常就是真名。用户是拿这个包去群里求助的，不该顺带把这个
+/// 也交出去。
 /// 返回 (zip 路径, 性能测试说明)。
-pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, String), String> {
+pub fn build_diagnostics(
+    root: &Path,
+    with_perf: bool,
+    report: &UserReport,
+) -> Result<(PathBuf, String), String> {
     let perf_note = if with_perf {
         match run_perf_bench(root) {
             Ok(p) => crate::i18n::te("s.37f36c5824", &p.file_name().unwrap_or_default().to_string_lossy()),
@@ -588,6 +709,20 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
     let mut zip = zip::ZipWriter::new(file);
     let opts: zip::write::FileOptions<'_, ()> =
         zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    let redaction = home_redaction();
+    let redaction = redaction.as_ref();
+
+    // 用户自己填的那几行排在最前面：支援打开包第一眼就该看到「谁、什么问题」，
+    // 而不是先去翻三十个日志文件猜。
+    if !report.is_empty() {
+        zip_text(
+            &mut zip,
+            opts,
+            "report.json",
+            &serde_json::to_string_pretty(&report.sanitized()).unwrap_or_default(),
+        )?;
+    }
 
     let cfg = config::read(root);
     // machine + app info
@@ -622,7 +757,10 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
         &mut zip,
         opts,
         "info.json",
-        &serde_json::to_string_pretty(&info).unwrap_or_default(),
+        &redact_user(
+            &serde_json::to_string_pretty(&info).unwrap_or_default(),
+            redaction,
+        ),
     )?;
 
     zip_existing(
@@ -630,12 +768,14 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
         opts,
         "configs/inuse/config.json",
         &paths::inuse_config_path(root),
+        redaction,
     )?;
     zip_existing(
         &mut zip,
         opts,
         "runtime_control/status.json",
         &crate::protocol::status_path(root),
+        redaction,
     )?;
 
     // Per-channel newest files; head+tail so a warning flood cannot drop start_vc.
@@ -652,7 +792,7 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
                     .to_string_lossy()
                     .into_owned()
             });
-        let text = clip_log(&p, LOG_HEAD, LOG_TAIL);
+        let text = redact_user(&clip_log(&p, LOG_HEAD, LOG_TAIL), redaction);
         zip_text(&mut zip, opts, &format!("logs/{rel}"), &text)?;
     }
 
@@ -667,9 +807,8 @@ pub fn build_diagnostics(root: &Path, with_perf: bool) -> Result<(PathBuf, Strin
         if let Some(p) = files.last() {
             if let Ok(text) = std::fs::read_to_string(p) {
                 let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-                zip.start_file(format!("perf/{name}"), opts)
-                    .map_err(|e| e.to_string())?;
-                zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                let text = redact_user(&text, redaction);
+                zip_text(&mut zip, opts, &format!("perf/{name}"), &text)?;
             }
         }
     }
@@ -867,6 +1006,66 @@ mod tests {
     ///
     /// 后面新加的不在这条约束里（所以这里比的是前四个，不是整张表），但
     /// 新加的也不许挤到前面去，否则等于把老用户的键改了。
+    #[test]
+    fn the_windows_username_is_stripped_from_every_path_form() {
+        // 同一个路径在 info.json、config.json 和日志里长得不一样：
+        // 反斜杠、正斜杠、以及 JSON 转义过的双反斜杠。三种都要认。
+        let r = Some(("C:\\Users\\张三".to_string(), "<用户目录>".to_string()));
+        let r = r.as_ref();
+        assert_eq!(
+            redact_user("root=C:\\Users\\张三\\RVC", r),
+            "root=<用户目录>\\RVC"
+        );
+        assert_eq!(
+            redact_user("\"root\": \"C:/Users/张三/RVC\"", r),
+            "\"root\": \"<用户目录>/RVC\""
+        );
+        assert_eq!(
+            redact_user("\"p\": \"C:\\\\Users\\\\张三\\\\a.pth\"", r),
+            "\"p\": \"<用户目录>\\\\a.pth\""
+        );
+    }
+
+    #[test]
+    fn redaction_is_case_insensitive_like_windows_paths() {
+        // 同一次运行里 c:\users\… 和 C:\Users\… 都会出现，取决于哪个 API 写的。
+        let r = Some(("C:\\Users\\Bob".to_string(), "<用户目录>".to_string()));
+        assert_eq!(
+            redact_user("open c:\\users\\bob\\x.log failed", r.as_ref()),
+            "open <用户目录>\\x.log failed"
+        );
+    }
+
+    #[test]
+    fn without_a_home_path_the_text_is_left_alone() {
+        // 抹不掉就原样交出去，不去猜「哪个词像人名」—— 猜错等于把日志改坏，
+        // 排障的人拿到的是一份被污染的证据。
+        let text = "root=D:\\RVC-Fabric";
+        assert_eq!(redact_user(text, None), text);
+    }
+
+    #[test]
+    fn the_user_report_is_trimmed_and_capped() {
+        let r = UserReport {
+            nickname: "  老王  ".into(),
+            qq: " 12345678 ".into(),
+            description: "啊".repeat(5000),
+        };
+        let v = r.sanitized();
+        assert_eq!(v["nickname"], json!("老王"));
+        assert_eq!(v["qq"], json!("12345678"));
+        // 4000 字 + 一个省略号，防手滑粘贴一整本小说把包撑大。
+        assert_eq!(v["description"].as_str().unwrap().chars().count(), 4001);
+    }
+
+    #[test]
+    fn an_untouched_form_counts_as_empty() {
+        // 三个都没填就不写 report.json，别在包里塞一个全空的文件。
+        assert!(UserReport::default().is_empty());
+        assert!(UserReport { qq: "   ".into(), ..Default::default() }.is_empty());
+        assert!(!UserReport { qq: "42".into(), ..Default::default() }.is_empty());
+    }
+
     #[test]
     fn the_original_four_hotkeys_keep_their_combos() {
         let combos: Vec<&str> = HOTKEYS.iter().take(4).map(|(_, _, d)| *d).collect();

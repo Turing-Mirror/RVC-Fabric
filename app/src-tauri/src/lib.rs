@@ -296,14 +296,18 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
 /// Zip logs + machine info + settings for support.
 ///
 /// `with_perf`：前端先问用户是否跑约一分钟的性能测试。
+/// `report`：用户填的群昵称 / QQ / 问题描述，可以整个不给（老前端、或用户
+/// 什么都没填），那就不写 `report.json`。
 #[tauri::command]
 async fn diagnostics_build(
     state: State<'_, Mutex<AppState>>,
     with_perf: bool,
+    report: Option<shell_extras::UserReport>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    let report = report.unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
-        shell_extras::build_diagnostics(&root, with_perf).map(|(p, perf_note)| {
+        shell_extras::build_diagnostics(&root, with_perf, &report).map(|(p, perf_note)| {
             let _ = shell_extras::reveal(&p);
             json!({
                 "ok": true,
@@ -403,11 +407,6 @@ async fn update_app(app: AppHandle) -> Result<Value, String> {
 #[tauri::command]
 async fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
     tool_window::open(&app, &kind)
-}
-
-#[tauri::command]
-fn ui_source() -> String {
-    ui_assets::source_label()
 }
 
 /// Shipping version. The 「其他」page had this typed in as a literal, so it
@@ -1066,6 +1065,21 @@ fn train_pick_dataset() -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// 选训好的音色放哪。原生对话框要主线程。
+#[tauri::command]
+fn train_pick_output_dir() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title(&crate::i18n::t("s.trainOutPick"))
+        .pick_folder()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// 上次选的存放目录。空 = 默认的 `User_Data/models`。
+#[tauri::command]
+fn train_output_dir(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    Ok(config::train_output_dir(&root_clone(&state)?))
+}
+
 #[tauri::command]
 async fn train_start(
     app: AppHandle,
@@ -1651,7 +1665,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tools_open,
             tools_open_help,
-            ui_source,
             shell_version,
             ui_ready,
             ui_log,
@@ -1763,6 +1776,8 @@ pub fn run() {
             train_status,
             train_pick_dataset,
             train_start,
+            train_pick_output_dir,
+            train_output_dir,
             train_cancel,
             ckpt_pick,
             ckpt_run,

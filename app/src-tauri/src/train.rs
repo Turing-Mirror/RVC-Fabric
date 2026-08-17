@@ -214,6 +214,13 @@ pub struct TrainReq {
     pub resume: bool,
     #[serde(default)]
     pub save_every_weights: bool,
+    /// 训好的音色放哪。空 = `User_Data/models`（老行为）。
+    ///
+    /// 一个音色连模型带索引三四百 MB，训十个就是几个 G。允许挪到别的盘，
+    /// 但必须是绝对路径且建得出来 —— 相对路径会跟着 cwd 跑，训了几小时
+    /// 最后落在谁也找不到的地方。
+    #[serde(default)]
+    pub output_dir: String,
 }
 
 const F0_METHODS: [&str; 4] = ["rmvpe", "harvest", "pm", "dio"];
@@ -507,8 +514,27 @@ fn note_progress(log: &Path, v: &Value, progress: &mut Progress) {
     );
 }
 
+
+/// 校验用户选的音色存放目录，返回归一化后的路径（空 = 用默认的 `User_Data/models`）。
+///
+/// 必须是绝对路径：相对路径会跟着进程的 cwd 走，训了几小时最后落在谁也找不到
+/// 的地方。也必须现在就建得出来 —— 拔掉的移动硬盘、写保护的目录，等训完再发现
+/// 就是几小时白烧。
+pub fn normalize_output_dir(raw: &str) -> Result<String, String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Ok(String::new());
+    }
+    let p = Path::new(t);
+    if !p.is_absolute() {
+        return Err(crate::i18n::te("s.trainOutRelative", &t));
+    }
+    std::fs::create_dir_all(p).map_err(|e| crate::i18n::t2("s.trainOutUnwritable", &t, &e))?;
+    Ok(p.to_string_lossy().into_owned())
+}
+
 /// 阻塞跑一次训练，调用方负责挪到后台线程。
-pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String> {
+pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, String> {
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
@@ -517,6 +543,17 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
+    // 先把输出目录判掉：训了几小时最后落不下去，那几小时就白烧了。
+    let out_dir = match normalize_output_dir(&req.output_dir) {
+        Ok(d) => d,
+        Err(e) => {
+            *BUSY.lock().unwrap_or_else(|err| err.into_inner()) = false;
+            return Err(e);
+        }
+    };
+    // 记住选择：音色库要一直扫这个目录，不然重启之后训好的音色就「消失」了。
+    let _ = crate::config::set_train_output_dir(root, &out_dir);
+    req.output_dir = out_dir;
     let device = if is_nvidia(root) { "cuda" } else { "cpu" };
     let log = crate::logging::begin_run(
         root,
@@ -531,6 +568,7 @@ pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String>
             "f0_method": req.f0_method,
             "resume": req.resume,
             "save_every_weights": req.save_every_weights,
+            "output_dir": req.output_dir,
             "device": device,
         }),
     );
@@ -588,6 +626,7 @@ fn run_inner(
         "is_half": device == "cuda",
         "resume": req.resume,
         "save_every_weights": req.save_every_weights,
+        "output_dir": req.output_dir,
     });
     std::fs::write(
         &reqfile,
@@ -677,6 +716,34 @@ fn run_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_output_dir_means_the_default_library() {
+        assert_eq!(normalize_output_dir("").unwrap(), "");
+        assert_eq!(normalize_output_dir("   ").unwrap(), "");
+    }
+
+    #[test]
+    fn a_relative_output_dir_is_rejected() {
+        // 相对路径跟着进程的 cwd 走。训了几小时，音色落在谁也找不到的地方，
+        // 而用户看到的只是「训练完成」。
+        let _g = crate::i18n::testing::pin("zh-CN");
+        for bad in ["models", "./out", "..\\elsewhere"] {
+            assert!(normalize_output_dir(bad).is_err(), "should reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn an_absolute_output_dir_is_created_up_front() {
+        // 建不出来就得当场报错 —— 拔掉的移动硬盘、写保护的目录，等训完再
+        // 发现就是几小时白烧。
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let base = std::env::temp_dir().join("rvcf-train-out").join("nested");
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("rvcf-train-out"));
+        let got = normalize_output_dir(&base.to_string_lossy()).expect("should accept");
+        assert!(Path::new(&got).is_dir(), "目录应当已经建好：{got}");
+        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("rvcf-train-out"));
+    }
 
     #[test]
     fn rejects_names_that_would_break_a_path() {
@@ -861,6 +928,7 @@ mod tests {
             f0_method: "rmvpe".into(),
             resume: false,
             save_every_weights: false,
+            output_dir: String::new(),
         };
         // 没 Runtime 就该在这里停，而不是起个进程再失败。
         assert!(preflight(&base, &req).is_err());

@@ -768,6 +768,41 @@ pub fn set_plaza_seen(root: &Path, newest: &str) -> Result<(), String> {
     write_atomic(&paths::app_config_path(root), &text).map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
 }
 
+/// Key holding the folder trained voices are written to. Not a settings key:
+/// it never reaches the engine config — it only widens the voice library scan.
+const TRAIN_OUT_DIR: &str = "train_output_dir";
+
+/// 用户给训练音色选的存放目录。空 = 默认的 `User_Data/models`。
+pub fn train_output_dir(root: &Path) -> String {
+    read_json(&paths::app_config_path(root))
+        .get(TRAIN_OUT_DIR)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+/// 记住这个选择。音色库要一直扫这个目录，否则重启之后训好的音色就「消失」了。
+///
+/// 空字符串是有意义的输入，不是「没传」：用户从自定义改回默认时必须把旧的那条
+/// 清掉，不然音色库会一直扫一个他已经不用的地方。
+pub fn set_train_output_dir(root: &Path, dir: &str) -> Result<(), String> {
+    let dir = dir.trim();
+    let mut saved = read_json(&paths::app_config_path(root));
+    let cur = saved.get(TRAIN_OUT_DIR).and_then(|v| v.as_str()).unwrap_or("");
+    if cur == dir {
+        return Ok(());
+    }
+    if dir.is_empty() {
+        saved.remove(TRAIN_OUT_DIR);
+    } else {
+        saved.insert(TRAIN_OUT_DIR.into(), json!(dir));
+    }
+    let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
+    write_atomic(&paths::app_config_path(root), &text)
+        .map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
+}
+
 /// Key holding dismissed models-page banner ids. Not a settings key: it never
 /// appears in the settings UI and must not reach the engine's config.
 const DISMISSED_ADS: &str = "dismissed_ads";

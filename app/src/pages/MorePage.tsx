@@ -11,6 +11,7 @@ import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
 import { askConfirm } from "../lib/webDialog";
+import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
 const SHOW_CONSULT = false;
@@ -41,7 +42,6 @@ export function MorePage({
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
-  const [uiSource, setUiSource] = useState("—");
   // 有二维码的社媒条目（QQ 群）点开的是图片，不是外链。
   const [qr, setQr] = useState<{ src: string; label: string } | null>(null);
   // Where the app thinks it is installed. The row below used to only describe
@@ -52,6 +52,7 @@ export function MorePage({
   const [cacheMb, setCacheMb] = useState("");
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
+  const [diagOpen, setDiagOpen] = useState(false);
   // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
   // 而这一整块讲的就是「这台机器拿什么在跑」。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
@@ -108,29 +109,29 @@ export function MorePage({
     }
   };
 
-  /** 生成诊断包：先问要不要跑约一分钟的性能测试。 */
-  const runDiagnostics = async () => {
-    // 确定 = 先 bench；取消 = 只打日志与设置。
-    const withPerf = await askConfirm(
-      t("s.dd3c9cc8db") +
-        t("s.50b717c880") +
-        t("s.a9094fb530") +
-        t("s.8ba72769d6"),
-    );
-    setBusyMsg(
-      withPerf
-        ? t("s.d7ae8f757e")
-        : t("s.56ce781723"),
-    );
+  /**
+   * 生成诊断包。先弹表单收「你是谁 / 什么问题」，再出包。
+   *
+   * 昵称、QQ、问题描述都可以留空 —— 那就退化成以前的行为，只是多了一个
+   * 勾选框来决定跑不跑性能测试。
+   */
+  const runDiagnostics = async (r: DiagReport) => {
+    setDiagOpen(false);
+    setBusyMsg(r.withPerf ? t("s.d7ae8f757e") : t("s.56ce781723"));
     try {
-      const r = await invoke<{ path?: string; perf_note?: string }>(
+      const out = await invoke<{ path?: string; perf_note?: string }>(
         "diagnostics_build",
-        { withPerf },
+        {
+          withPerf: r.withPerf,
+          report: {
+            nickname: r.nickname,
+            qq: r.qq,
+            description: r.description,
+          },
+        },
       );
-      const note = r?.perf_note ? ` · ${r.perf_note}` : "";
-      setBusyMsg(
-        t("s.ae82b8cc23", { v0: r?.path ?? "", v1: note }),
-      );
+      const note = out?.perf_note ? ` · ${out.perf_note}` : "";
+      setBusyMsg(t("s.ae82b8cc23", { v0: out?.path ?? "", v1: note }));
     } catch (e) {
       setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
     }
@@ -159,9 +160,6 @@ export function MorePage({
 
   useEffect(() => {
     let alive = true;
-    invoke<string>("ui_source")
-      .then((v) => alive && setUiSource(v || "—"))
-      .catch(() => alive && setUiSource("—"));
     invoke<string>("product_root")
       .then((v) => alive && setRoot(v || "—"))
       .catch(() => alive && setRoot("—"));
@@ -227,17 +225,6 @@ export function MorePage({
                 title={root}
               >
                 {root}
-              </span>
-            }
-          />
-          <ListItem
-            title={t("s.fe0eb943d7")}
-            right={
-              <span
-                className="text-[13.5px] text-[var(--ink-muted)] max-w-[280px] text-right truncate"
-                title={uiSource}
-              >
-                {uiSource}
               </span>
             }
           />
@@ -353,7 +340,7 @@ export function MorePage({
                 : t("s.df51787548")
             }
             right={
-              <Btn onClick={() => void runDiagnostics()}>{t("s.4aa2306395")}</Btn>
+              <Btn onClick={() => setDiagOpen(true)}>{t("s.4aa2306395")}</Btn>
             }
           />
           <ListItem
@@ -459,6 +446,11 @@ export function MorePage({
       {qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
       ) : null}
+      <DiagnosticsDialog
+        open={diagOpen}
+        onCancel={() => setDiagOpen(false)}
+        onSubmit={(r) => void runDiagnostics(r)}
+      />
     </PagePad>
   );
 }

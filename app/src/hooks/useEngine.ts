@@ -214,11 +214,9 @@ export function useEngine() {
     if (!stopping && !dspOnly) {
       try {
         const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
-        const ok = await ensureEngineCoreOrPrompt(
-          "实时变声需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。请先下载补全，完成后再点「开启变声」。",
-        );
+        const ok = await ensureEngineCoreOrPrompt(t("s.vcNeedEngineCore"));
         if (!ok) {
-          setLastError("请先补全引擎资源，再开启变声");
+          setLastError(t("s.vcNeedEngineCoreShort"));
           return;
         }
       } catch {

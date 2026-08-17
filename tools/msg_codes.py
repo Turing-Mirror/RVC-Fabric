@@ -12,6 +12,9 @@ Keep codes short, dotted, and stable — never renumber for wording tweaks.
 from __future__ import annotations
 
 # process lifecycle
+# engine.launching 由 shell 侧写（spawn 之前那一下），worker 自己不发；
+# 登记在这里是为了这张表就是所有状态码的清单，不用两处对照着看。
+ENGINE_LAUNCHING = "engine.launching"
 ENGINE_STARTING = "engine.starting"
 ENGINE_IMPORTING = "engine.importing"
 ENGINE_DSP_STARTING = "engine.dsp_starting"
@@ -53,6 +56,7 @@ VC_UNKNOWN_CMD = "vc.unknown_cmd"
 
 # Chinese fallbacks (zh-CN). Must match app/i18n/locales/zh-CN.json msg.*
 _FALLBACK_ZH: dict[str, str] = {
+    ENGINE_LAUNCHING: "正在启动引擎进程…",
     ENGINE_STARTING: "引擎进程已启动，正在加载运行库…",
     ENGINE_IMPORTING: "正在导入推理库（可能需要十几秒）…",
     ENGINE_DSP_STARTING: "正在启动 DSP 变声…",

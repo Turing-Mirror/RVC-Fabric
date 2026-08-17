@@ -285,7 +285,8 @@
       "idle": "待機中",
       "stopped": "停止しました",
       "quit": "終了しました",
-      "loop_error": "エンジン内部エラー。ログを確認してください"
+      "loop_error": "エンジン内部エラー。ログを確認してください",
+      "launching": "エンジンプロセスを起動中…"
     },
     "runtime": {
       "not_ready": "Runtime の準備ができていません。先に補完を完了してください",
@@ -1311,7 +1312,7 @@
     "0b38f69017": "{v0} より提供",
     "7611f15dff": "worker を起動できません: {a0}",
     "c8542337dc": "{v0} 個 · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "6ff3d83b8f": "ボーカル分離コンポーネント（pymss_core）が見つかりません。再インストールまたは更新してください。",
     "vbcableDonate": "VB-Cable は VB-Audio チームのドネーションウェア（Donationware）です（{site}）。可能であれば開発への寄付をご検討ください。",
     "vbcableInstalling": "インストール中です。システムのダイアログで「はい」を選んでください…",
     "vbcableDone": "仮想サウンドカードをインストールしました。PC を再起動すると有効になります。",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "追加リソースをダウンロード中です。完了するか中止してから削除してください。",
     "extraRemoveSepBusy": "ボーカル分離の実行中です。停止してから分離モデルを削除してください。",
     "extraRemoveTrainBusy": "学習の実行中です。停止してからベースモデルを削除してください。",
-    "extraRemoveFailed": "{a0} を削除できません：{a1}。使用中の可能性があります。分離／学習を止めてから再試行してください。"
+    "extraRemoveFailed": "{a0} を削除できません：{a1}。使用中の可能性があります。分離／学習を止めてから再試行してください。",
+    "vcNeedEngineCore": "リアルタイム変換にはエンジンリソース（hubert / rmvpe / ffmpeg、約 720 MB）が要ります。先にダウンロードしてから「変声を開始」を押してください。",
+    "vcNeedEngineCoreShort": "先にエンジンリソースを揃えてから変声を開始してください",
+    "wkDiedDuringLoad": "読み込み中にエンジンプロセスが終了しました。User_Data/logs/realtime_worker.log を確認してください",
+    "wkPidNotAlive": "エンジンプロセスがすでに動いていません",
+    "wkReadyTimeout": "エンジンの準備待ちがタイムアウトしました。もう一度試すか、User_Data/logs/realtime_worker.log を確認してください",
+    "wkStartTimeout": "起動タイムアウト",
+    "wkDiedListDevices": "デバイス一覧の取得中にエンジンプロセスが終了しました。もう一度お試しください"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

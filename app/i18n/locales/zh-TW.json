@@ -285,7 +285,8 @@
       "idle": "待命",
       "stopped": "已停止",
       "quit": "已結束",
-      "loop_error": "引擎內部錯誤，詳見日誌"
+      "loop_error": "引擎內部錯誤，詳見日誌",
+      "launching": "正在啟動引擎行程…"
     },
     "runtime": {
       "not_ready": "Runtime 未就緒，請先完成補齊",
@@ -1311,7 +1312,7 @@
     "0b38f69017": "由 {v0} 投放",
     "7611f15dff": "無法啟動 worker: {a0}",
     "c8542337dc": "{v0} 個 · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "6ff3d83b8f": "人聲分離元件缺失（pymss_core），請重新安裝或更新軟體",
     "vbcableDonate": "VB-Cable 虛擬音效卡是VB-Audio團隊的 {site} Donationware（捐助軟體），若你有能力，請捐助其開發",
     "vbcableInstalling": "正在安裝，請在系統彈窗中點「是」…",
     "vbcableDone": "虛擬音效卡已安裝，重新開機後生效",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "正在下載附加資源，等它下完或取消後再卸載。",
     "extraRemoveSepBusy": "人聲分離正在跑，先停下再卸載分離模型。",
     "extraRemoveTrainBusy": "訓練正在跑，先停下再卸載訓練底模。",
-    "extraRemoveFailed": "{a0} 刪不掉：{a1}。檔案可能正被占用，先停下分離／訓練再試。"
+    "extraRemoveFailed": "{a0} 刪不掉：{a1}。檔案可能正被占用，先停下分離／訓練再試。",
+    "vcNeedEngineCore": "即時變聲需要引擎資源（hubert / rmvpe / ffmpeg，約 720 MB）。先下載補齊，完成後再點「開啟變聲」。",
+    "vcNeedEngineCoreShort": "請先補齊引擎資源，再開啟變聲",
+    "wkDiedDuringLoad": "引擎行程在載入過程中結束，詳見 User_Data/logs/realtime_worker.log",
+    "wkPidNotAlive": "引擎行程已不在執行",
+    "wkReadyTimeout": "等待引擎就緒逾時，請再試一次，或查看 User_Data/logs/realtime_worker.log",
+    "wkStartTimeout": "啟動逾時",
+    "wkDiedListDevices": "讀取裝置清單時引擎行程結束，請再試一次"
   },
   "extras": {
     "engineTitle": "引擎資源",

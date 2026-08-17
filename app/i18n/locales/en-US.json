@@ -285,7 +285,8 @@
       "idle": "Standby",
       "stopped": "Stopped",
       "quit": "Exited",
-      "loop_error": "Engine internal error — see the log"
+      "loop_error": "Engine internal error — see the log",
+      "launching": "Launching the engine process…"
     },
     "runtime": {
       "not_ready": "Runtime not ready — finish setup first",
@@ -1311,7 +1312,7 @@
     "0b38f69017": "Submitted by {v0}",
     "7611f15dff": "Failed to start worker: {a0}",
     "c8542337dc": "{v0} items · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "6ff3d83b8f": "The vocal separation component (pymss_core) is missing. Reinstall or update the app.",
     "vbcableDonate": "VB-Cable is donationware from the VB-Audio team ({site}). If you can, please donate to support its development.",
     "vbcableInstalling": "Installing — click Yes in the system prompt…",
     "vbcableDone": "Virtual sound card installed. Restart your PC for it to take effect.",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "A download is running. Wait for it to finish or cancel it, then uninstall.",
     "extraRemoveSepBusy": "Separation is running. Stop it before uninstalling a separation model.",
     "extraRemoveTrainBusy": "Training is running. Stop it before uninstalling a pretrained model.",
-    "extraRemoveFailed": "Cannot delete {a0}: {a1}. The file may be in use — stop separation/training and retry."
+    "extraRemoveFailed": "Cannot delete {a0}: {a1}. The file may be in use — stop separation/training and retry.",
+    "vcNeedEngineCore": "Realtime conversion needs the engine resources (hubert / rmvpe / ffmpeg, about 720 MB). Download them first, then hit Start.",
+    "vcNeedEngineCoreShort": "Download the engine resources before starting conversion",
+    "wkDiedDuringLoad": "The engine process exited while loading — see User_Data/logs/realtime_worker.log",
+    "wkPidNotAlive": "The engine process is no longer running",
+    "wkReadyTimeout": "Timed out waiting for the engine to be ready. Try again, or check User_Data/logs/realtime_worker.log",
+    "wkStartTimeout": "Startup timed out",
+    "wkDiedListDevices": "The engine process exited while listing devices — try again"
   },
   "extras": {
     "engineTitle": "Engine resources",

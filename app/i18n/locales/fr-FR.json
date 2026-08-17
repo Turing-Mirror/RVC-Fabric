@@ -285,7 +285,8 @@
       "idle": "En attente",
       "stopped": "Arrêté",
       "quit": "Quitté",
-      "loop_error": "Erreur interne du moteur — voir le journal"
+      "loop_error": "Erreur interne du moteur — voir le journal",
+      "launching": "Démarrage du processus moteur…"
     },
     "runtime": {
       "not_ready": "Runtime pas prêt : terminez d'abord l'installation",
@@ -1311,7 +1312,7 @@
     "0b38f69017": "Fourni par {v0}",
     "7611f15dff": "Impossible de démarrer le worker : {a0}",
     "c8542337dc": "{v0} éléments · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "6ff3d83b8f": "Le composant de séparation vocale (pymss_core) est absent. Réinstallez ou mettez à jour l'application.",
     "vbcableDonate": "VB-Cable est un donationware de l'équipe VB-Audio ({site}). Si vous le pouvez, faites un don pour soutenir son développement.",
     "vbcableInstalling": "Installation en cours — cliquez sur Oui dans la fenêtre système…",
     "vbcableDone": "Carte son virtuelle installée. Redémarrez le PC pour l'activer.",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "Un téléchargement est en cours. Attendez la fin ou annulez-le avant de désinstaller.",
     "extraRemoveSepBusy": "La séparation est en cours. Arrêtez-la avant de désinstaller un modèle de séparation.",
     "extraRemoveTrainBusy": "L'entraînement est en cours. Arrêtez-le avant de désinstaller un modèle de base.",
-    "extraRemoveFailed": "Impossible de supprimer {a0} : {a1}. Le fichier est peut-être utilisé — arrêtez la séparation/l'entraînement et réessayez."
+    "extraRemoveFailed": "Impossible de supprimer {a0} : {a1}. Le fichier est peut-être utilisé — arrêtez la séparation/l'entraînement et réessayez.",
+    "vcNeedEngineCore": "La conversion en temps réel exige les ressources moteur (hubert / rmvpe / ffmpeg, environ 720 Mo). Téléchargez-les d'abord, puis appuyez sur Démarrer.",
+    "vcNeedEngineCoreShort": "Téléchargez les ressources moteur avant de démarrer la conversion",
+    "wkDiedDuringLoad": "Le processus moteur s'est arrêté pendant le chargement — voir User_Data/logs/realtime_worker.log",
+    "wkPidNotAlive": "Le processus moteur ne tourne plus",
+    "wkReadyTimeout": "Délai dépassé en attendant que le moteur soit prêt. Réessayez ou consultez User_Data/logs/realtime_worker.log",
+    "wkStartTimeout": "Délai de démarrage dépassé",
+    "wkDiedListDevices": "Le processus moteur s'est arrêté pendant la liste des périphériques — réessayez"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

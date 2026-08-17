@@ -620,6 +620,8 @@ pub fn kill_known_workers(root: &Path) {
     let mut fields = Map::new();
     fields.insert("state".into(), json!("idle"));
     fields.insert("pid".into(), json!(0));
+    // 同上：底栏读的就是这一条，写死英文等于八种语言都显示 "workers cleared"。
+    fields.insert("message_code".into(), json!("engine.stopped"));
     fields.insert("message".into(), json!("workers cleared"));
     fields.insert("error".into(), json!(""));
     fields.insert("delay_ms".into(), json!(0));
@@ -710,6 +712,10 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
     protocol::ensure_control_dir(root).map_err(|e| e.to_string())?;
     let mut fields = Map::new();
     fields.insert("state".into(), json!("starting"));
+    // 带上 code，别只写一句英文：这条会直接显示在底栏状态行上，而 status.json
+    // 里的 message 只有在下一次写入时才会变 —— 用 code 的话，用户中途换语言，
+    // `localize_status` 每次读都会重新解析成当前语言。
+    fields.insert("message_code".into(), json!("engine.launching"));
     fields.insert("message".into(), json!("launching worker…"));
     fields.insert("error".into(), json!(""));
     fields.insert("pid".into(), json!(0));
@@ -845,22 +851,26 @@ pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
         } else if pid > 0 && !pid_alive(pid) && (saw_live || state == "starting") {
             protocol::clear_worker_pid(root);
             forget_identity_cache();
+            // 这几条是现算现返给界面的，不落 status.json，所以直接按当前语言
+            // 取文案就行 —— 不像上面那些写盘的，需要留 code 等下次解析。
+            let died = crate::i18n::t("s.wkDiedDuringLoad");
             return json!({
                 "state": "error",
-                "error": last.get("error").and_then(|v| v.as_str()).unwrap_or("worker died during load"),
-                "message": "worker pid not alive",
+                "error": last.get("error").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).unwrap_or(&died),
+                "message": &crate::i18n::t("s.wkPidNotAlive"),
                 "pid": 0
             });
         }
         thread::sleep(Duration::from_millis(250));
     }
+    let timeout = crate::i18n::t("s.wkReadyTimeout");
     if last.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-        json!({"state": "error", "error": "worker ready timeout", "pid": 0})
+        json!({"state": "error", "error": &timeout, "pid": 0})
     } else if !is_worker_alive(root) {
         json!({
             "state": "error",
-            "error": last.get("error").and_then(|v| v.as_str()).unwrap_or("worker ready timeout"),
-            "message": "timeout",
+            "error": last.get("error").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).unwrap_or(&timeout),
+            "message": &crate::i18n::t("s.wkStartTimeout"),
             "pid": 0
         })
     } else {
@@ -945,7 +955,7 @@ pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
             return st;
         }
         if !is_worker_alive(root) {
-            return json!({"state": "error", "error": "worker died during list_devices", "pid": 0});
+            return json!({"state": "error", "error": &crate::i18n::t("s.wkDiedListDevices"), "pid": 0});
         }
         thread::sleep(Duration::from_millis(200));
     }

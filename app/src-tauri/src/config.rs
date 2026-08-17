@@ -353,7 +353,16 @@ fn strip_verbatim(p: &str) -> &str {
         .unwrap_or_else(|| p.strip_prefix(r"\\?\").unwrap_or(p))
 }
 
-/// Strip anything that would pin the worker to this machine's layout.
+/// 安装目录里的路径存成相对的，让 inuse 不跟这台机器的盘符绑死。
+///
+/// **装在安装目录外面的路径原样保留。** 这里以前是直接抹成空字符串，理由大概是
+/// 「不让 inuse 记住本机布局」，但代价是：音色只要不在安装目录里，写进 inuse 的
+/// `pth_path` 就是空的，worker 拿到空路径 → 报「请选择音色」→ RVC 根本用不了。
+/// 而「音色在别处」是正常情况：用户从别的地方导入的音色，以及训练时选了自定义
+/// 存放目录（`train_output_dir`，可以指到另一个盘）落下来的音色。
+///
+/// 抹掉也解决不了「跟机器绑死」——绝对路径换台机器一样不成立，而空路径连本机
+/// 都用不了。所以保留：本机能用，换机器时用户重选一次音色即可。
 fn sanitize_inuse(root: &Path, m: &mut Map<String, Value>) {
     let root_s = root.to_string_lossy().to_string();
     let root_s = strip_verbatim(&root_s).to_string();
@@ -365,12 +374,15 @@ fn sanitize_inuse(root: &Path, m: &mut Map<String, Value>) {
         if !looks_absolute(&p) {
             continue;
         }
-        // Keep it only if it is inside this install, and store it relative.
         if let Some(rel) = p.strip_prefix(&root_s) {
-            let rel = rel.trim_start_matches(['\\', '/']).to_string();
-            m.insert(key.into(), json!(rel));
+            m.insert(
+                key.into(),
+                json!(rel.trim_start_matches(['\\', '/']).to_string()),
+            );
         } else {
-            m.insert(key.into(), json!(""));
+            // verbatim 前缀（`\\?\E:\…`）要去掉：那是 canonicalize 的产物，
+            // 对用户不可见，留着只会让日志和诊断包里的路径看起来像另一个东西。
+            m.insert(key.into(), json!(p));
         }
     }
 }
@@ -904,6 +916,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_voice_outside_the_install_keeps_its_path() {
+        // 抹成空字符串等于「RVC 用不了」：worker 拿到空 pth 就报「请选择音色」。
+        // 而音色在安装目录外面是正常情况 —— 从别处导入的，或者训练时选了自定义
+        // 存放目录（可以在另一个盘）落下来的。
+        let root = Path::new("C:\\App");
+        let mut m = Map::new();
+        m.insert("pth_path".into(), json!("D:\\Voices\\anon\\anon.pth"));
+        m.insert("index_path".into(), json!("D:\\Voices\\anon\\anon.index"));
+        sanitize_inuse(root, &mut m);
+        assert_eq!(m["pth_path"], json!("D:\\Voices\\anon\\anon.pth"));
+        assert_eq!(m["index_path"], json!("D:\\Voices\\anon\\anon.index"));
+    }
+
+    #[test]
+    fn a_voice_inside_the_install_is_stored_relative() {
+        // 装在安装目录里的仍然存相对路径：换个盘符装同一份安装还能用。
+        let root = Path::new("C:\\App");
+        let mut m = Map::new();
+        m.insert(
+            "pth_path".into(),
+            json!("C:\\App\\User_Data\\models\\anon\\anon.pth"),
+        );
+        sanitize_inuse(root, &mut m);
+        assert_eq!(
+            m["pth_path"],
+            json!("User_Data\\models\\anon\\anon.pth")
+        );
+    }
+
+    #[test]
+    fn a_verbatim_prefix_is_stripped_either_way() {
+        // canonicalize 会吐 `\\?\…`，对用户不可见，别让它进 inuse 和诊断包。
+        let root = Path::new("C:\\App");
+        let mut m = Map::new();
+        m.insert("pth_path".into(), json!(r"\\?\D:\Voices\a.pth"));
+        m.insert(
+            "index_path".into(),
+            json!(r"\\?\C:\App\User_Data\models\a\a.index"),
+        );
+        sanitize_inuse(root, &mut m);
+        assert_eq!(m["pth_path"], json!("D:\\Voices\\a.pth"));
+        assert_eq!(
+            m["index_path"],
+            json!("User_Data\\models\\a\\a.index")
+        );
+    }
+
+    #[test]
     fn leftover_input_device_fills_empty_sg_key() {
         let mut m = Map::new();
         m.insert("input_device".into(), json!("麦克风 (Realtek(R) Audio)"));
@@ -986,13 +1046,16 @@ mod tests {
     }
 
     #[test]
-    fn verbatim_paths_outside_the_install_are_still_dropped() {
-        // 去前缀只是为了能正确比较，不是放行：别的盘上的路径照样得清掉。
+    fn verbatim_paths_outside_the_install_keep_working() {
+        // 这条原来叫 `..._are_still_dropped`，断言别的盘上的路径被清成空。
+        // 本次刻意反转了那个决定：清空的代价是「RVC 直接用不了」，而绝对路径
+        // 换台机器本来也不成立 —— 清空只是额外把本机也弄坏。verbatim 前缀仍要
+        // 去掉，它是 canonicalize 的产物，对用户不可见。
         let root = Path::new(r"E:\Dev\RVC-Fabric");
         let mut m = Map::new();
         m.insert("pth_path".into(), json!(r"\\?\L:\somebody-else\x.pth"));
         sanitize_inuse(root, &mut m);
-        assert_eq!(m["pth_path"], json!(""));
+        assert_eq!(m["pth_path"], json!(r"L:\somebody-else\x.pth"));
     }
 
     #[test]
@@ -1005,13 +1068,15 @@ mod tests {
     }
 
     #[test]
-    fn inuse_strips_foreign_absolute_paths() {
+    fn inuse_relativises_local_paths_and_keeps_foreign_ones() {
+        // 原名 `inuse_strips_foreign_absolute_paths`，断言外部路径被清空 ——
+        // 同上，那个决定本次反转了。安装目录里的仍然转相对（保住可搬迁）。
         let root = Path::new("C:\\App");
         let mut m = Map::new();
         m.insert("pth_path".into(), json!("Z:\\somewhere\\anon.pth"));
         m.insert("index_path".into(), json!("C:\\App\\User_Data\\a.index"));
         sanitize_inuse(root, &mut m);
-        assert_eq!(m["pth_path"], json!(""));
+        assert_eq!(m["pth_path"], json!("Z:\\somewhere\\anon.pth"));
         assert_eq!(m["index_path"], json!("User_Data\\a.index"));
     }
 

@@ -1370,13 +1370,13 @@
     "sepGuideA1": "Pour l'entraînement : Extraction vocale (HP3/HP4). Karaoké = HP5. Désécho = DeEcho, déréverb = DeReverb.",
     "sepGuideQ2": "Un dossier entier ?",
     "sepGuideH2": "Oui — Dossier",
-    "sepGuideA2": "Comme l'UVR d'origine : un fichier ou un dossier. Une tâche à la fois.",
+    "sepGuideA2": "Prend en charge le traitement par dossier : un fichier seul ou un dossier entier. Une seule tâche à la fois, pour que deux traitements ne se disputent pas la VRAM.",
     "sepGuideQ3": "L'intensité ?",
     "sepGuideH3": "Défaut 10",
     "sepGuideA3": "0–20. Plus haut = plus net. En cas de doute, 10.",
     "sepGuideQ4": "Et le MDX-Net d'origine ?",
     "sepGuideH4": "Le pack Déréverb",
-    "sepGuideA4": "La séparation tourne sur PyMSS ; les scripts UVR5 ont été retirés. La déréverb stéréo est le pack Déréverb de la Place.",
+    "sepGuideA4": "Le moteur de séparation est PyMSS. Pour la déréverb stéréo, téléchargez « Déréverb » sur la Place ; pour l'écho, « Désécho ». Flux conseillé : extraction vocale d'abord, puis désécho/déréverb selon les besoins.",
     "ckptAdvanced": "Réglages avancés",
     "ckptAdvancedHide": "Masquer les réglages avancés",
     "ckptMerge": "Fusion",
@@ -1639,27 +1639,27 @@
     "items": {
       "pymss-vocal": {
         "label": "Extraction vocale",
-        "notes": "Premier choix pour nettoyer le matériel d’entraînement : extraire la voix sèche. Équivaut à RVC/UVR HP3/HP4 Vocal."
+        "notes": "Premier choix pour nettoyer le matériel d’entraînement : extraire la voix sèche d’une chanson."
       },
       "pymss-denoise": {
         "label": "Débruitage",
-        "notes": "Supprime le bruit de fond et le ronflement. Si le dry est sale. UVR DeNoise."
+        "notes": "Supprime le bruit de fond et le ronflement. Si le dry est sale."
       },
       "pymss-deecho": {
         "label": "Anti-écho",
-        "notes": "Supprime l’écho de pièce et les queues. Utile en pièce vide. UVR De-Echo."
+        "notes": "Supprime l’écho de pièce et les queues de delay. Utile en pièce vide."
       },
       "pymss-dereverb": {
         "label": "Déréverbération",
-        "notes": "Réduit la réverb pour une voix plus sèche. UVR DeReverb."
+        "notes": "Réduit la réverb pour une voix plus sèche."
       },
       "pymss-inst": {
         "label": "Extraction instrumentale",
-        "notes": "Extrait la piste instrumentale (inverse de la voix). UVR HP1/HP2."
+        "notes": "Extrait la piste instrumentale (inverse de la voix)."
       },
       "pymss-karaoke": {
         "label": "Karaoké (retirer voix)",
-        "notes": "Retire la voix principale, garde l’accompagnement. UVR HP5/HP6 Karaoke."
+        "notes": "Retire la voix principale, garde l’accompagnement."
       },
       "pymss-bve": {
         "label": "Chœurs de fond (avancé)",
@@ -1679,7 +1679,7 @@
       },
       "pymss-sp": {
         "label": "Série spectre SP (avancé)",
-        "notes": "Série spectre UVR 10–16_SP. Volumineuse ; cas particuliers seulement."
+        "notes": "Série spectre SP. Volumineuse ; cas particuliers seulement."
       },
       "pymss-wind": {
         "label": "Orchestre/vents (avancé)",

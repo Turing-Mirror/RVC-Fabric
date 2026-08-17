@@ -1370,13 +1370,13 @@
     "sepGuideA1": "Para entrenar: Extracción vocal (HP3/HP4). Karaoke = HP5. Eco = DeEcho, reverb = DeReverb.",
     "sepGuideQ2": "¿Una carpeta entera?",
     "sepGuideH2": "Sí — Carpeta",
-    "sepGuideA2": "Como el UVR original: un archivo o una carpeta. Solo un trabajo a la vez.",
+    "sepGuideA2": "Admite lotes por carpeta: un archivo suelto o una carpeta entera. Solo un trabajo a la vez, para que dos procesos no se peleen por la VRAM.",
     "sepGuideQ3": "¿La intensidad?",
     "sepGuideH3": "Por defecto 10",
     "sepGuideA3": "0–20. Más alto = más limpio. Si dudas, 10.",
     "sepGuideQ4": "¿Y el MDX-Net original?",
     "sepGuideH4": "El paquete De-reverb",
-    "sepGuideA4": "La separación corre en PyMSS; los scripts UVR5 ya no están. La reverb estéreo es el paquete De-reverb de la Plaza.",
+    "sepGuideA4": "El motor de separación es PyMSS. Para la reverb estéreo descarga «De-reverb» en la Plaza; para el eco, «De-echo». Flujo recomendado: primero extracción vocal y luego deseco/dereverb según haga falta.",
     "ckptAdvanced": "Ajustes avanzados",
     "ckptAdvancedHide": "Ocultar avanzados",
     "ckptMerge": "Fusionar",
@@ -1639,27 +1639,27 @@
     "items": {
       "pymss-vocal": {
         "label": "Extracción de voz",
-        "notes": "Primera opción para limpiar material de entrenamiento: extraer voz seca. Equivale a RVC/UVR HP3/HP4 Vocal."
+        "notes": "Primera opción para limpiar material de entrenamiento: extraer voz seca de una canción."
       },
       "pymss-denoise": {
         "label": "Reducción de ruido",
-        "notes": "Quita ruido de fondo y zumbidos. Baja si el dry está sucio. UVR DeNoise."
+        "notes": "Quita ruido de fondo y zumbidos. Baja si el dry está sucio."
       },
       "pymss-deecho": {
         "label": "Quitar eco",
-        "notes": "Quita eco de sala y colas. Útil en habitaciones vacías. UVR De-Echo."
+        "notes": "Quita eco de sala y colas de delay. Útil en habitaciones vacías."
       },
       "pymss-dereverb": {
         "label": "Quitar reverb",
-        "notes": "Reduce reverb para una voz más seca. UVR DeReverb."
+        "notes": "Reduce reverb para una voz más seca."
       },
       "pymss-inst": {
         "label": "Extraer instrumental",
-        "notes": "Extrae la pista instrumental (opuesto a la voz). UVR HP1/HP2."
+        "notes": "Extrae la pista instrumental (opuesto a la voz)."
       },
       "pymss-karaoke": {
         "label": "Karaoke (quitar voz)",
-        "notes": "Quita la voz principal y deja el acompañamiento. UVR HP5/HP6 Karaoke."
+        "notes": "Quita la voz principal y deja el acompañamiento."
       },
       "pymss-bve": {
         "label": "Coros de fondo (avanzado)",
@@ -1679,7 +1679,7 @@
       },
       "pymss-sp": {
         "label": "Serie espectro SP (avanzado)",
-        "notes": "Serie de espectro UVR 10–16_SP. Grande; solo casos especiales."
+        "notes": "Serie de espectro SP. Grande; solo casos especiales."
       },
       "pymss-wind": {
         "label": "Orquesta/viento (avanzado)",

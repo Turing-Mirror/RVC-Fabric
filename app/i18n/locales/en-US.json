@@ -1629,7 +1629,15 @@
     "micErrBusy": "Cannot open the microphone: the device is in use. Stop conversion on the main screen (especially with WASAPI exclusive on), or close whatever else is holding the mic.",
     "micErrNotFound": "The input device chosen in settings is gone. It may have been unplugged — hit Rescan and pick again.",
     "micErrNoLib": "The runtime's audio component is unavailable. Run the runtime setup first.",
-    "micErrOpen": "Cannot open the microphone. Check that it is plugged in and that Windows microphone privacy settings allow this app."
+    "micErrOpen": "Cannot open the microphone. Check that it is plugged in and that Windows microphone privacy settings allow this app.",
+    "extraRemove": "Uninstall",
+    "extraRemoving": "Removing…",
+    "extraRemoveConfirm": "Uninstall \"{v0}\"? This deletes {v1} from disk; you can download it again later.",
+    "extraRemoveDone": "Uninstalled — {v0} freed.",
+    "extraRemoveBusy": "A download is running. Wait for it to finish or cancel it, then uninstall.",
+    "extraRemoveSepBusy": "Separation is running. Stop it before uninstalling a separation model.",
+    "extraRemoveTrainBusy": "Training is running. Stop it before uninstalling a pretrained model.",
+    "extraRemoveFailed": "Cannot delete {a0}: {a1}. The file may be in use — stop separation/training and retry."
   },
   "extras": {
     "engineTitle": "Engine resources",

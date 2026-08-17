@@ -137,6 +137,12 @@ fn is_nvidia(root: &Path) -> bool {
     }
 }
 
+/// 训练是否在跑。卸载底模前要问一句 —— 训练正读着底模，删掉只会让它在
+/// 某个 epoch 中间炸掉。
+pub fn busy() -> bool {
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn status(root: &Path) -> Value {
     let nvidia = is_nvidia(root);
     let pre: Vec<Value> = SAMPLE_RATES

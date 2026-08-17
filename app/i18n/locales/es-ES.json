@@ -1629,7 +1629,15 @@
     "micErrBusy": "No se puede abrir el micrófono: el dispositivo está en uso. Detén la conversión en la pantalla principal (sobre todo con WASAPI exclusivo) o cierra el otro programa que lo ocupa.",
     "micErrNotFound": "No se encuentra el dispositivo de entrada elegido en ajustes. Puede que se haya desconectado: pulsa Reexplorar y elígelo otra vez.",
     "micErrNoLib": "El componente de audio del runtime no está disponible. Completa antes la instalación del runtime.",
-    "micErrOpen": "No se puede abrir el micrófono. Comprueba que esté conectado y que la privacidad de micrófono de Windows permita esta app."
+    "micErrOpen": "No se puede abrir el micrófono. Comprueba que esté conectado y que la privacidad de micrófono de Windows permita esta app.",
+    "extraRemove": "Desinstalar",
+    "extraRemoving": "Desinstalando…",
+    "extraRemoveConfirm": "¿Desinstalar «{v0}»? Se borrarán {v1} del disco; puedes volver a descargarlo cuando quieras.",
+    "extraRemoveDone": "Desinstalado: {v0} liberados.",
+    "extraRemoveBusy": "Hay una descarga en curso. Espera a que termine o cancélala antes de desinstalar.",
+    "extraRemoveSepBusy": "La separación está en marcha. Deténla antes de desinstalar un modelo de separación.",
+    "extraRemoveTrainBusy": "El entrenamiento está en marcha. Detenlo antes de desinstalar un modelo base.",
+    "extraRemoveFailed": "No se puede borrar {a0}: {a1}. Puede estar en uso: detén la separación/entrenamiento y reinténtalo."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

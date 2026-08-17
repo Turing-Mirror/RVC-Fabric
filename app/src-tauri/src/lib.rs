@@ -1031,6 +1031,25 @@ fn extra_cancel() {
     extra_assets::cancel();
 }
 
+/// 卸载一条已下载的附加资源，把磁盘还给用户。
+///
+/// 先看有没有人正在用：分离在跑就别删分离模型，训练在跑就别删底模。
+/// Windows 上占用中的文件根本删不掉（报一句看不懂的 os error 32），
+/// Linux 上删得掉、但任务会在某个中途步骤炸 —— 两种都不如当场拦下来。
+#[tauri::command]
+async fn extra_remove(
+    state: State<'_, Mutex<AppState>>,
+    key: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    // 哪一类归哪个任务管，由清单里的 group 说了算，所以判断放在 extra_assets
+    // 里做 —— 这里只负责把「谁正在跑」这两件事实递进去。
+    let (sep, train) = (separate::busy(), train::busy());
+    tauri::async_runtime::spawn_blocking(move || extra_assets::remove(&root, &key, sep, train))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 // --- 训练 -------------------------------------------------------------------
 
 #[tauri::command]
@@ -1740,6 +1759,7 @@ pub fn run() {
             extra_list,
             extra_download,
             extra_cancel,
+            extra_remove,
             train_status,
             train_pick_dataset,
             train_start,

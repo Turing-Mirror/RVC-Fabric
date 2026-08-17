@@ -285,7 +285,8 @@
       "idle": "En espera",
       "stopped": "Detenido",
       "quit": "Cerrado",
-      "loop_error": "Error interno del motor: consulta el registro"
+      "loop_error": "Error interno del motor: consulta el registro",
+      "launching": "Iniciando el proceso del motor…"
     },
     "runtime": {
       "not_ready": "El Runtime no está listo: completa la instalación primero",
@@ -1311,7 +1312,7 @@
     "0b38f69017": "Distribuido por {v0}",
     "7611f15dff": "No se pudo iniciar el worker: {a0}",
     "c8542337dc": "{v0} · {v1}",
-    "6ff3d83b8f": "人声分离组件缺失（pymss_core），请重新安装或更新软件",
+    "6ff3d83b8f": "Falta el componente de separación vocal (pymss_core). Reinstala o actualiza la aplicación.",
     "vbcableDonate": "VB-Cable es donationware del equipo VB-Audio ({site}). Si puedes, dona para apoyar su desarrollo.",
     "vbcableInstalling": "Instalando: pulsa Sí en la ventana del sistema…",
     "vbcableDone": "Tarjeta de sonido virtual instalada. Reinicia el PC para que surta efecto.",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "Hay una descarga en curso. Espera a que termine o cancélala antes de desinstalar.",
     "extraRemoveSepBusy": "La separación está en marcha. Deténla antes de desinstalar un modelo de separación.",
     "extraRemoveTrainBusy": "El entrenamiento está en marcha. Detenlo antes de desinstalar un modelo base.",
-    "extraRemoveFailed": "No se puede borrar {a0}: {a1}. Puede estar en uso: detén la separación/entrenamiento y reinténtalo."
+    "extraRemoveFailed": "No se puede borrar {a0}: {a1}. Puede estar en uso: detén la separación/entrenamiento y reinténtalo.",
+    "vcNeedEngineCore": "La conversión en tiempo real necesita los recursos del motor (hubert / rmvpe / ffmpeg, unos 720 MB). Descárgalos primero y luego pulsa Iniciar.",
+    "vcNeedEngineCoreShort": "Descarga los recursos del motor antes de iniciar la conversión",
+    "wkDiedDuringLoad": "El proceso del motor terminó durante la carga: consulta User_Data/logs/realtime_worker.log",
+    "wkPidNotAlive": "El proceso del motor ya no se está ejecutando",
+    "wkReadyTimeout": "Se agotó el tiempo esperando a que el motor estuviera listo. Inténtalo de nuevo o revisa User_Data/logs/realtime_worker.log",
+    "wkStartTimeout": "Tiempo de inicio agotado",
+    "wkDiedListDevices": "El proceso del motor terminó al listar los dispositivos: inténtalo de nuevo"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

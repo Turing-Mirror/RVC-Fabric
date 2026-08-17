@@ -285,7 +285,8 @@
       "idle": "待命",
       "stopped": "已停止",
       "quit": "已退出",
-      "loop_error": "引擎内部错误，详见日志"
+      "loop_error": "引擎内部错误，详见日志",
+      "launching": "正在启动引擎进程…"
     },
     "runtime": {
       "not_ready": "运行时未就绪，请先完成补全",
@@ -1637,7 +1638,14 @@
     "extraRemoveBusy": "正在下载附加资源，等它下完或取消后再卸载。",
     "extraRemoveSepBusy": "人声分离正在跑，先停下再卸载分离模型。",
     "extraRemoveTrainBusy": "训练正在跑，先停下再卸载训练底模。",
-    "extraRemoveFailed": "{a0} 删不掉：{a1}。文件可能正被占用，先停下分离/训练再试。"
+    "extraRemoveFailed": "{a0} 删不掉：{a1}。文件可能正被占用，先停下分离/训练再试。",
+    "vcNeedEngineCore": "实时变声需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。先下载补全，完成后再点「开启变声」。",
+    "vcNeedEngineCoreShort": "请先补全引擎资源，再开启变声",
+    "wkDiedDuringLoad": "引擎进程在加载过程中退出，详见 User_Data/logs/realtime_worker.log",
+    "wkPidNotAlive": "引擎进程已不在运行",
+    "wkReadyTimeout": "等待引擎就绪超时，请再试一次，或查看 User_Data/logs/realtime_worker.log",
+    "wkStartTimeout": "启动超时",
+    "wkDiedListDevices": "读取设备列表时引擎进程退出，请再试一次"
   },
   "extras": {
     "engineTitle": "引擎资源",

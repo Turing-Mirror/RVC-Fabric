@@ -205,7 +205,11 @@ const LOAD_CODES = new Set([
   "vc.swapping",
 ]);
 
-const BOOT_CODES = new Set(["engine.starting", "engine.importing"]);
+const BOOT_CODES = new Set([
+  "engine.launching",
+  "engine.starting",
+  "engine.importing",
+]);
 
 export function loadProgress(st: EngineStatus): number | null {
   const p = Number(st.progress);

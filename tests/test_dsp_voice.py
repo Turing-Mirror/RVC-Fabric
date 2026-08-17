@@ -235,12 +235,29 @@ class ShellContractTests(unittest.TestCase):
         self.assertIn('json!("vc")', body)
 
     def test_leftover_dsp_params_do_not_force_dsp_start(self):
+        """残留的预设/参数不能把「换回 RVC」按成 DSP。
+
+        以前这条还断言 `start_vc` 里有 `elif pth:` —— 那是在锁一份**重复的
+        判定**。判定在链路上被算了六遍、四套规则，就是「DSP 之后换不回 RVC」
+        的根子。现在判定只有 `_resolve_dsp` 一家，`start_vc` 读它定下来的
+        `_dsp_resolved`，所以这里改成断言那个唯一性。
+        """
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         resolve = src[src.index("def _resolve_dsp") : src.index("def set_values")]
         self.assertIn("if enabled:", resolve)
         self.assertIn("elif pth", resolve)
+        # set_values 必须把结论记下来，供其余地方读。
+        self.assertIn("self._dsp_resolved = bool(dsp_on)", src)
         start = src[src.index("def start_vc") : src.index("def ", src.index("def start_vc") + 1)]
-        self.assertIn("elif pth:", start)
+        self.assertIn("_dsp_resolved", start)
+        # 别再从常驻内存状态自己推判定：gui_config.dsp_enabled 和 self.function
+        # 跑过一次纯 DSP 之后就一直是 True / "fx"。
+        #
+        # 只禁「拿它们当判据」这一件事。函数后半段那句
+        # `if self.function == "fx": self.function = "vc"` 是 RVC 路径把残留的
+        # fx 归一回来，是对的，不能一并禁掉。
+        self.assertNotIn('enabled = bool(getattr(self.gui_config, "dsp_enabled"', start)
+        self.assertNotIn('str(getattr(self, "function", "") or "") == "fx"', start)
         rust = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(
             encoding="utf-8"
         )
@@ -271,9 +288,13 @@ class ShellContractTests(unittest.TestCase):
         body = src[start : src.index("pub fn wait_vc_running", start)]
         self.assertIn("wait_worker_ready", body)
         self.assertNotIn("engine_core_ready", body)
-        # 纯 DSP 必须把开关塞进 start 本体，不能只靠 inuse 文件
-        self.assertIn('json!("fx")', body)
-        self.assertIn("dsp_enabled", body)
+        # 纯 DSP 必须把开关塞进 start 本体，不能只靠 inuse 文件。
+        #
+        # 这几个键以前是在 start_vc 和 push_running_hot 里各拼一遍，判定条件
+        # 还和 config::wants_dsp 不一样（更松）—— 壳按 wants_dsp 选了 RVC
+        # worker，却在载荷里说 function=fx，RVC 就永远起不来。现在两边共用
+        # dsp_command_fields，所以这里断言的是「都走那一个生成器」。
+        self.assertIn("dsp_command_fields", body)
         self.assertIn("send_command(root, \"start\"", body)
         # 纯 DSP 不能按 torch 的 100 秒去等
         self.assertIn("20_000", body)
@@ -283,8 +304,19 @@ class ShellContractTests(unittest.TestCase):
         hot = src[src.index("pub fn push_running_hot") : src.index(
             "pub fn wait_vc_running"
         )]
-        self.assertIn("dsp_on", hot)
-        self.assertIn("dsp_params", hot)
+        self.assertIn("dsp_command_fields", hot)
+        # 生成器本体：判定必须来自 wants_dsp，且非 DSP 时把开关明确写成 false
+        # （不能只是不提 —— worker 的 gui_config 是常驻的）。
+        gen = src[src.index("pub fn dsp_command_fields") : src.index(
+            "pub fn start_vc"
+        )]
+        self.assertIn("crate::config::wants_dsp", gen)
+        self.assertIn('json!("fx")', gen)
+        self.assertIn("dsp_params", gen)
+        self.assertIn('out.insert("dsp_enabled".into(), json!(false))', gen)
+        # 松规则不许回来：判定只能问 wants_dsp，不能自己看有没有预设/参数。
+        self.assertNotIn("|| !dsp_preset.is_empty()", src)
+        self.assertNotIn("|| dsp_params_on", src)
         lib = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(
             encoding="utf-8"
         )

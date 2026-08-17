@@ -35,7 +35,7 @@ fn emit(app: &AppHandle, payload: Value) {
 }
 
 pub fn pick(kind: &str) -> Option<String> {
-    let d = rfd::FileDialog::new();
+    let d = crate::shell_extras::dialog();
     match kind {
         "folder" => d
             .set_title(&crate::i18n::t("s.ckptPickFolder"))

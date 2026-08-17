@@ -248,7 +248,7 @@ function SettingsPageImpl({
               ) : undefined
             }
           >
-            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[76ch]">{t("s.d4b9d6c80f")}<br />{t("s.6c4698ee82")}</p>
+            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.d4b9d6c80f")}<br />{t("s.6c4698ee82")}</p>
             <div className={CARD}>
               <Field
                 label={t("s.47a991d18c")}
@@ -354,7 +354,7 @@ function SettingsPageImpl({
 
         {c.loaded && tab === "voice" ? (
           <Block title={t("s.ae7cbbecbc")} note={t("s.d48a0bf3c8")} className="!mt-6">
-            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[80ch]">{t("s.a9e4eb7a51")}</p>
+            <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.a9e4eb7a51")}</p>
             <div className={CARD}>
               <Field
                 label={t("s.75e7326c34")}

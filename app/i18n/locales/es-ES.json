@@ -351,7 +351,8 @@
       "no_audio": "No se encontró audio convertible (se admiten wav/mp3/flac/ogg/m4a y similares)",
       "load_failed": "Error al cargar el modelo: {error}",
       "all_failed": "Los {total} archivos fallaron al convertir. Primer motivo: {first}",
-      "done": "{done} completados, {skipped} omitidos"
+      "done": "{done} completados, {skipped} omitidos",
+      "hot_unavailable": "No hay ninguna voz cargada en el motor en tiempo real: se convertirá en un proceso aparte (algo más lento)."
     },
     "train": {
       "step_failed": "Este paso falló (código de salida {code}); detalles en {log}",
@@ -1739,7 +1740,13 @@
     "trainOutHint": "Una voz ocupa 300–400 MB con su índice. Apunta a otra unidad si quieres: la página de modelos la seguirá encontrando.",
     "trainOutPick": "Elige dónde guardar las voces",
     "trainOutRelative": "La carpeta de guardado debe ser una ruta completa (por ejemplo D:\\Voices); se recibió «{a0}».",
-    "trainOutUnwritable": "No se puede crear la carpeta {a0}: {a1}. Elige una ubicación con permiso de escritura antes de empezar, no tras horas de entrenamiento."
+    "trainOutUnwritable": "No se puede crear la carpeta {a0}: {a1}. Elige una ubicación con permiso de escritura antes de empezar, no tras horas de entrenamiento.",
+    "provCoreAsk": "hubert / rmvpe / ffmpeg, unos 720 MB. Necesarios para la conversión en tiempo real, la conversión de voz y el entrenamiento; el cambio DSP y la separación vocal no los usan. Descárgalos ahora o luego desde la Plaza.",
+    "provCoreGet": "Descargar recursos del motor",
+    "provCoreSkip": "Más tarde: entrar ya",
+    "provCoreDownloading": "Descargando recursos del motor…",
+    "provCoreDone": "Los recursos del motor están listos: ya funcionan la conversión en tiempo real, la conversión de voz y el entrenamiento.",
+    "provCoreFailed": "No se pudieron descargar los recursos del motor: {v0}. Puedes entrar y reintentarlo luego desde la Plaza."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -1080,7 +1080,7 @@ pub fn unbind_index(root: &Path, model_dir: &str, index_path: &str) -> Result<Va
 }
 
 pub fn pick_index_file() -> Option<String> {
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .add_filter(&crate::i18n::t("s.dc66c55a2e"), &["index"])
         .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
         .set_title(&crate::i18n::t("s.6832505652"))
@@ -1528,7 +1528,7 @@ pub fn delete_profile(root: &Path, model_dir: &str, profile_id: &str) -> Result<
 }
 
 pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
-    let path = rfd::FileDialog::new()
+    let path = crate::shell_extras::dialog()
         .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp", "json"])
         .set_title(&crate::i18n::t("s.a49f8d4a05"))
         .pick_file()
@@ -1610,7 +1610,7 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
         })
         .take(80)
         .collect();
-    let dest = rfd::FileDialog::new()
+    let dest = crate::shell_extras::dialog()
         .set_file_name(format!("{safe}.tmvp"))
         .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp"])
         .set_title(&crate::i18n::t("s.217b12a5cb"))
@@ -1625,7 +1625,7 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
 // ---------------------------------------------------------------------------
 
 pub fn pick_import_files() -> Vec<String> {
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .add_filter(&crate::i18n::t("s.c4301894a2"), &["pth", "index", "zip"])
         .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
         .set_title(&crate::i18n::t("s.54b3625b92"))

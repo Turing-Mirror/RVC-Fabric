@@ -351,7 +351,8 @@
       "no_audio": "Aucun audio convertible trouvé (wav/mp3/flac/ogg/m4a et similaires pris en charge)",
       "load_failed": "Échec du chargement du modèle : {error}",
       "all_failed": "Les {total} fichiers ont échoué à la conversion. Première raison : {first}",
-      "done": "{done} terminés, {skipped} ignorés"
+      "done": "{done} terminés, {skipped} ignorés",
+      "hot_unavailable": "Aucune voix chargée dans le moteur temps réel — conversion dans un processus séparé (un peu plus lent)."
     },
     "train": {
       "step_failed": "Cette étape a échoué (code de sortie {code}) — détails dans {log}",
@@ -1739,7 +1740,13 @@
     "trainOutHint": "Une voix pèse 300 à 400 Mo avec son index. Pointez vers un autre disque si vous voulez — la page des modèles la retrouvera.",
     "trainOutPick": "Choisir où enregistrer les voix",
     "trainOutRelative": "Le dossier d'enregistrement doit être un chemin complet (par exemple D:\\Voices) ; reçu « {a0} ».",
-    "trainOutUnwritable": "Impossible de créer le dossier {a0} : {a1}. Choisissez un emplacement inscriptible avant de lancer, pas après des heures d'entraînement."
+    "trainOutUnwritable": "Impossible de créer le dossier {a0} : {a1}. Choisissez un emplacement inscriptible avant de lancer, pas après des heures d'entraînement.",
+    "provCoreAsk": "hubert / rmvpe / ffmpeg, environ 720 Mo. Nécessaires à la conversion en temps réel, à la conversion vocale et à l'entraînement ; le changement DSP et la séparation vocale n'en ont pas besoin. À télécharger maintenant ou plus tard depuis la Place.",
+    "provCoreGet": "Télécharger les ressources moteur",
+    "provCoreSkip": "Plus tard — entrer dans l'app",
+    "provCoreDownloading": "Téléchargement des ressources moteur…",
+    "provCoreDone": "Les ressources moteur sont prêtes — conversion temps réel, conversion vocale et entraînement sont disponibles.",
+    "provCoreFailed": "Échec du téléchargement des ressources moteur : {v0}. Vous pouvez entrer et réessayer plus tard depuis la Place."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

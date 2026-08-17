@@ -209,7 +209,12 @@ export function ListItem({
           悬停灰底的底边上 —— 鼠标停在标题上时，灰块下沿和文字挨成一条，
           看着像文字被切了一刀。 */}
       {expanded ? (
-        <div className="pt-2 pb-4 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line max-w-[74ch]">
+        // 别再往这儿加 `max-w-[NNch]`：`ch` 是「0」字形的宽度（12.5px 字号下
+        // 实测 6.95px），只有一个汉字（12.5px）的一半。按拉丁文校准的 74ch
+        // 折成中文就只剩 41 字、约容器宽度的 47% —— 用户看到的就是「一行话
+        // 没走到一半就断了」。DonateNote 早前是同一个毛病，改成 w-full
+        // min-w-0 治好的，这里跟它对齐。
+        <div className="pt-2 pb-4 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line w-full min-w-0">
           {children}
         </div>
       ) : null}

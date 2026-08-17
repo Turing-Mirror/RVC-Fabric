@@ -339,11 +339,11 @@ function HelpPageImpl({
       />
 
       <Block title={t("s.b386a7fb53")}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">{t("s.5695956a42")}</p>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
         {/* 先照着用户机器上真实的设备列表说一句话。
             已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
             多一层能接错的地方 —— 那不是帮忙。 */}
-        <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed max-w-[74ch]">
+        <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed w-full min-w-0">
           {!known ? (
             <span className="text-[var(--help)]">{t("s.60f0f911ec")}</span>
           ) : found.length === 0 ? (
@@ -434,7 +434,7 @@ function HelpPageImpl({
         </Group>
       </Block>
       <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.sepGuideLead")}
         </p>
         <Group>
@@ -457,7 +457,7 @@ function HelpPageImpl({
         </Group>
       </Block>
       <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
         </p>
         <Group>
@@ -480,7 +480,7 @@ function HelpPageImpl({
         </Group>
       </Block>
       <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 max-w-[74ch]">
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.trainGuideLead")}
         </p>
         <Group>

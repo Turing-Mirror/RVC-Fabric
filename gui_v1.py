@@ -353,6 +353,9 @@ if __name__ == "__main__":
             self.config = Config()
             self.function = "vc"
             self.dsp_only = False
+            # set_values 定下来的「这一次是 DSP 还是 RVC」。None = 还没判过。
+            # 判定只有 _resolve_dsp 一家，其余地方读这个字段。
+            self._dsp_resolved = None
             self._fx_chain = None
             self._voice_chain = None
             # 正在跑的离线转换是哪条命令发的。转换途中靠它认出后来的 sts_cancel。
@@ -1063,7 +1066,15 @@ if __name__ == "__main__":
             # RVC / DSP 二选一。开了 DSP 就不查音色、不拦引擎资源。
             pth = str(values.get("pth_path") or "").strip()
             dsp_on, dsp_preset, dsp_params = self._resolve_dsp(values)
+            # 判定只做一次，记在实例上。start_vc 和 _worker_start 以前各自
+            # 从 gui_config.dsp_enabled 再推一遍，而 gui_config 是常驻的 ——
+            # 跑过一次纯 DSP 之后它一直是 True，于是换回 RVC 时这两处又把
+            # 结论翻回 DSP。现在它们读这一个字段。
+            self._dsp_resolved = bool(dsp_on)
             core_ok = _engine_core_ready()
+            if not dsp_on:
+                # 明确关掉，别把上一次纯 DSP 留在内存里的开关继续用下去。
+                values["dsp_enabled"] = False
             if dsp_on:
                 pth = ""
                 values["pth_path"] = ""
@@ -1387,15 +1398,17 @@ if __name__ == "__main__":
             params = getattr(self.gui_config, "dsp_params", None)
             if not isinstance(params, dict):
                 params = {}
-            enabled = bool(getattr(self.gui_config, "dsp_enabled", False))
-            if enabled:
-                dsp_on = True
-            elif pth:
-                dsp_on = False
-            else:
-                dsp_on = bool(preset) or bool(params) or (
-                    str(getattr(self, "function", "") or "") == "fx"
-                )
+            # 用 set_values 定下来的那一个结论，不在这里另推一套。
+            #
+            # 这里以前是「dsp_enabled 或 没 pth 且(有预设/有参数/function==fx)」。
+            # `self.function` 在跑过一次纯 DSP 之后就一直是 "fx"，`dsp_enabled`
+            # 也一直是 True —— 换回 RVC 时 set_values 明明判成 RVC，这一行又
+            # 翻回 DSP，于是 _start_dsp_only 再跑一遍，RVC 永远加载不上。
+            resolved = getattr(self, "_dsp_resolved", None)
+            if resolved is None:
+                # 没走过 set_values（不该发生）时的兜底：有音色就按 RVC。
+                resolved = not pth and (bool(preset) or bool(params))
+            dsp_on = bool(resolved)
             self.dsp_only = dsp_on
             if self.dsp_only:
                 self._start_dsp_only(preset, params)
@@ -2947,6 +2960,8 @@ if __name__ == "__main__":
                     self.function = (
                         "vc" if getattr(self, "rvc", None) is not None else "im"
                     )
+                # 热改也要同步结论，别让它和 gui_config.dsp_enabled 各说一套。
+                self._dsp_resolved = now_on
             # 换音色放在最后：上面那些（音高、共鸣、检索强度）已经落到
             # gui_config 上了，新的 RVC 实例正好用这些值建起来，不会先用旧参数
             # 建好再补一遍。
@@ -3373,8 +3388,13 @@ if __name__ == "__main__":
                         self.function = fn
                 except Exception:
                     self.function = "vc"
-                if bool(getattr(self.gui_config, "dsp_enabled", False)):
+                # 按 set_values 的结论定 function，不看 gui_config.dsp_enabled ——
+                # 那个字段跑过纯 DSP 之后会一直是 True，据它强改 function 就是
+                # 把「换回 RVC」按回 fx。
+                if getattr(self, "_dsp_resolved", False):
                     self.function = "fx"
+                elif self.function == "fx":
+                    self.function = "vc"
                 printt("worker start_vc")
                 printt("cuda_is_available: %s", torch.cuda.is_available())
                 printt(

@@ -624,6 +624,11 @@ pub fn kill_known_workers(root: &Path) {
     fields.insert("message_code".into(), json!("engine.stopped"));
     fields.insert("message".into(), json!("workers cleared"));
     fields.insert("error".into(), json!(""));
+    // 种类也要清。status.json 是合并写的，杀掉 DSP worker 之后这里还留着
+    // worker_kind="dsp"，`worker_kind_of` 就会对着一个已经不存在的进程回答
+    // 「现在跑的是 DSP」—— 换回 RVC 的判断从第一步就错了。
+    fields.insert("worker_kind".into(), json!(""));
+    fields.insert("dsp_only".into(), json!(false));
     fields.insert("delay_ms".into(), json!(0));
     fields.insert("infer_ms".into(), json!(0));
     let _ = protocol::write_status_merge(root, fields);
@@ -962,6 +967,50 @@ pub fn ensure_worker_and_devices(root: &Path, timeout_ms: u64) -> Value {
     protocol::read_status(root)
 }
 
+/// `start` / `set` 命令里那几个 DSP 字段，按**唯一**的判定 `config::wants_dsp` 生成。
+///
+/// 抽出来是为了能测：这几个键以前在 `start_vc` 和 `push_running_hot` 里各写了
+/// 一遍，判定条件还和 `wants_dsp` 不一样（不看 pth_path、不看 function，比它
+/// 松）。后果是壳按 wants_dsp 选了 RVC worker，转头又在命令里告诉它
+/// 「dsp_enabled=true, function=fx」——「DSP 之后换不回 RVC」就是这么来的。
+///
+/// 非 DSP 时**明确写 false**，不是省略：worker 的 gui_config 是常驻的，
+/// 跑过一次纯 DSP 之后那几个字段还在内存里，不覆盖等于沿用上一次。
+pub fn dsp_command_fields(cfg: &Map<String, Value>) -> Map<String, Value> {
+    let mut out = Map::new();
+    if crate::config::wants_dsp(cfg) {
+        out.insert("dsp_enabled".into(), json!(true));
+        out.insert("function".into(), json!("fx"));
+        let preset = cfg
+            .get("dsp_preset")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if !preset.is_empty() {
+            out.insert("dsp_preset".into(), json!(preset));
+        }
+        if let Some(v) = cfg.get("dsp_params").cloned() {
+            if v.as_object().map(|m| !m.is_empty()).unwrap_or(false) {
+                out.insert("dsp_params".into(), v);
+            }
+        }
+    } else {
+        out.insert("dsp_enabled".into(), json!(false));
+        out.insert("dsp_preset".into(), json!(""));
+        out.insert("dsp_params".into(), json!({}));
+        out.insert(
+            "function".into(),
+            match cfg.get("function").and_then(|v| v.as_str()) {
+                // 残留的 fx 不能带回去：那是上一次纯 DSP 留下的。
+                Some(f) if f != "fx" => json!(f),
+                _ => json!("vc"),
+            },
+        );
+    }
+    out
+}
+
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
 pub fn start_vc(root: &Path) -> Result<u64, String> {
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
@@ -1021,36 +1070,14 @@ pub fn start_vc(root: &Path) -> Result<u64, String> {
     // 纯 DSP 必须把开关/预设/参数塞进 start 本体。
     // 以前 start 载荷是空的，worker 只读 inuse；inuse 若没同步到 dsp_enabled，
     // set_values 会当成没选音色，直接报「请选择pth文件」——纯 DSP 永远开不了。
-    let mut payload = Map::new();
-    let dsp_preset = cfg
-        .get("dsp_preset")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    let dsp_params_on = cfg
-        .get("dsp_params")
-        .and_then(|v| v.as_object())
-        .map(|m| !m.is_empty())
-        .unwrap_or(false);
-    let dsp_on = cfg
-        .get("dsp_enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        || !dsp_preset.is_empty()
-        || dsp_params_on;
-    if dsp_on {
-        payload.insert("dsp_enabled".into(), json!(true));
-        payload.insert("function".into(), json!("fx"));
-        if !dsp_preset.is_empty() {
-            payload.insert("dsp_preset".into(), json!(dsp_preset));
-        }
-        if let Some(v) = cfg.get("dsp_params").cloned() {
-            if v.as_object().map(|m| !m.is_empty()).unwrap_or(false) {
-                payload.insert("dsp_params".into(), v);
-            }
-        }
-    }
+    //
+    // 用的必须是上面那个 `dsp_on`（`config::wants_dsp`），不能在这里另算一套。
+    // 这里以前是「dsp_enabled 或 有预设 或 有参数」，不看 pth_path、不看
+    // function —— 比 wants_dsp 松。于是换回 RVC 时会出现：壳按 wants_dsp 选了
+    // RVC worker，转头又在 start 载荷里告诉它「dsp_enabled=true, function=fx」。
+    // worker 听载荷的，于是走纯 DSP，RVC 永远加载不上 —— 这就是「DSP 之后换不
+    // 回 RVC，要反复切模型甚至重启」。
+    let payload = dsp_command_fields(&cfg);
     let seq = send_command(root, "start", payload)?;
     // Claim start before any follow-up set. Worker acks last_cmd_seq as soon as
     // it dequeues start (before model load), so this is usually <100 ms.
@@ -1075,36 +1102,11 @@ pub fn push_running_hot(root: &Path, cfg: &Map<String, Value>) -> Result<u64, St
     if let Some(v) = cfg.get("formant") {
         hot.insert("formant".into(), v.clone());
     }
-    let dsp_preset = cfg
-        .get("dsp_preset")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    let dsp_params_on = cfg
-        .get("dsp_params")
-        .and_then(|v| v.as_object())
-        .map(|m| !m.is_empty())
-        .unwrap_or(false);
-    let dsp_on = cfg
-        .get("dsp_enabled")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        || !dsp_preset.is_empty()
-        || dsp_params_on;
-    if dsp_on {
-        hot.insert("function".into(), json!("fx"));
-        hot.insert("dsp_enabled".into(), json!(true));
-        if !dsp_preset.is_empty() {
-            hot.insert("dsp_preset".into(), json!(dsp_preset));
-        }
-        if let Some(v) = cfg.get("dsp_params").cloned() {
-            if v.as_object().map(|m| !m.is_empty()).unwrap_or(false) {
-                hot.insert("dsp_params".into(), v);
-            }
-        }
-    } else if let Some(v) = cfg.get("function") {
-        hot.insert("function".into(), v.clone());
+    // 和 start 载荷共用同一个生成器 —— 也就是同一个判定。以前这里是另一套松
+    // 规则，后果比 start 更重：start 已经按 RVC 起好了流，这一条热推又把
+    // function 改回 fx、dsp_enabled 改回 true，等于当场把刚起来的 RVC 掐掉。
+    for (k, v) in dsp_command_fields(cfg) {
+        hot.insert(k, v);
     }
     if hot.is_empty() {
         return Ok(0);
@@ -1320,6 +1322,112 @@ pub fn status_for_ui(root: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cfg_of(pairs: &[(&str, Value)]) -> Map<String, Value> {
+        let mut m = crate::config::defaults();
+        for (k, v) in pairs {
+            m.insert((*k).to_string(), v.clone());
+        }
+        m
+    }
+
+    /// 这条是「DSP 之后换不回 RVC」的回归测试。
+    ///
+    /// 命令载荷的判定必须**等于** `config::wants_dsp`。以前它是另一套更松的
+    /// 规则（只看 dsp_enabled / 有没有预设 / 有没有参数），于是「选了音色但
+    /// 配置里还留着旧预设」这种状态下，壳按 wants_dsp 选了 RVC worker，却在
+    /// start 载荷里告诉它 function=fx —— worker 听载荷的，RVC 永远起不来。
+    #[test]
+    fn the_command_payload_never_disagrees_with_wants_dsp() {
+        let cases = vec![
+            // 选了音色，但上一次纯 DSP 的预设和参数还留在配置里 ← 就是那个 bug
+            cfg_of(&[
+                ("pth_path", json!("C:\\voices\\a.pth")),
+                ("function", json!("vc")),
+                ("dsp_enabled", json!(false)),
+                ("dsp_preset", json!("robot")),
+                ("dsp_params", json!({"pitch": 3})),
+            ]),
+            // 纯 DSP
+            cfg_of(&[
+                ("pth_path", json!("")),
+                ("function", json!("fx")),
+                ("dsp_enabled", json!(true)),
+                ("dsp_preset", json!("robot")),
+            ]),
+            // 什么都没选
+            cfg_of(&[("pth_path", json!("")), ("function", json!("vc"))]),
+            // 残留 fx + 有音色：算 RVC
+            cfg_of(&[
+                ("pth_path", json!("C:\\voices\\a.pth")),
+                ("function", json!("fx")),
+                ("dsp_enabled", json!(false)),
+            ]),
+        ];
+        for cfg in cases {
+            let want = crate::config::wants_dsp(&cfg);
+            let fields = dsp_command_fields(&cfg);
+            let sent = fields
+                .get("dsp_enabled")
+                .and_then(|v| v.as_bool())
+                .expect("dsp_enabled 必须明确给出");
+            assert_eq!(
+                sent, want,
+                "载荷和 wants_dsp 不一致，cfg={cfg:?} fields={fields:?}"
+            );
+            let fname = fields.get("function").and_then(|v| v.as_str()).unwrap();
+            assert_eq!(fname == "fx", want, "function 和判定不一致：{fields:?}");
+        }
+    }
+
+    /// 非 DSP 时必须**明确**把三个键写成关闭态，不能只是不提。
+    ///
+    /// worker 的 gui_config 是常驻的：跑过一次纯 DSP 之后 dsp_enabled / preset /
+    /// params 都还在内存里。载荷不覆盖就等于沿用上一次，用户看到的还是换不回。
+    #[test]
+    fn switching_back_to_rvc_states_the_negative_explicitly() {
+        let cfg = cfg_of(&[
+            ("pth_path", json!("C:\\voices\\a.pth")),
+            ("function", json!("vc")),
+            ("dsp_enabled", json!(false)),
+            ("dsp_preset", json!("robot")),
+            ("dsp_params", json!({"pitch": 3})),
+        ]);
+        let f = dsp_command_fields(&cfg);
+        assert_eq!(f.get("dsp_enabled"), Some(&json!(false)));
+        assert_eq!(f.get("dsp_preset"), Some(&json!("")));
+        assert_eq!(f.get("dsp_params"), Some(&json!({})));
+        assert_eq!(f.get("function"), Some(&json!("vc")));
+    }
+
+    /// 残留的 `function="fx"` 不能被原样带回给 worker。
+    #[test]
+    fn a_leftover_fx_function_is_not_echoed_back() {
+        let cfg = cfg_of(&[
+            ("pth_path", json!("C:\\voices\\a.pth")),
+            ("function", json!("fx")),
+            ("dsp_enabled", json!(false)),
+        ]);
+        assert!(!crate::config::wants_dsp(&cfg));
+        let f = dsp_command_fields(&cfg);
+        assert_eq!(f.get("function"), Some(&json!("vc")));
+    }
+
+    /// 纯 DSP 该带上预设和参数，否则 worker 只能干声直通。
+    #[test]
+    fn a_dsp_start_carries_the_preset_and_params() {
+        let cfg = cfg_of(&[
+            ("pth_path", json!("")),
+            ("dsp_enabled", json!(true)),
+            ("dsp_preset", json!("robot")),
+            ("dsp_params", json!({"pitch": 5})),
+        ]);
+        let f = dsp_command_fields(&cfg);
+        assert_eq!(f.get("dsp_enabled"), Some(&json!(true)));
+        assert_eq!(f.get("function"), Some(&json!("fx")));
+        assert_eq!(f.get("dsp_preset"), Some(&json!("robot")));
+        assert_eq!(f.get("dsp_params"), Some(&json!({"pitch": 5})));
+    }
 
     #[test]
     fn identity_memo_is_keyed_to_one_pid() {

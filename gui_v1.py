@@ -2348,6 +2348,13 @@ if __name__ == "__main__":
                     infer_wav = torch.zeros(
                         need, device=self.config.device, dtype=torch.float32
                     )
+                    # 跳过推理省显卡，但音高历史必须照常往前走。少了这一句，
+                    # 静音期间那段历史会冻在用户上一次说话的结尾上，下次开口
+                    # 时模型拿着几秒前的音高轨迹去解码，前几个字就发糊。
+                    try:
+                        self.rvc.skip_block(self.block_frame_16k)
+                    except Exception:
+                        traceback.print_exc()
                     # Decay SOLA tail so stop-speaking does not leave a short "aftertaste"
                     try:
                         self.sola_buffer.mul_(0.88)

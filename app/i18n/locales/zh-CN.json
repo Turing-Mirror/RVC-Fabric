@@ -1748,7 +1748,22 @@
     "provCoreDone": "引擎资源已就绪，实时变声、语音转换、训练都能直接用了。",
     "provCoreFailed": "引擎资源没下成：{v0}。可以先进软件，之后在广场「下载模型」里重试。",
     "pickBusyFolder": "正在选择文件夹。选完或取消之后，界面才会重新响应 —— 这期间点关闭、切页都不会有反应。",
-    "pickBusyFile": "正在选择文件。选完或取消之后，界面才会重新响应 —— 这期间点关闭、切页都不会有反应。"
+    "pickBusyFile": "正在选择文件。选完或取消之后，界面才会重新响应 —— 这期间点关闭、切页都不会有反应。",
+    "vcrDone": "运行库已安装",
+    "vcrAlready": "系统里已有更新版本，无需安装",
+    "vcrDoneReboot": "运行库已安装，重启电脑后生效",
+    "vcrCancelled": "安装已取消，可稍后在设置页重试（代码 {e}）",
+    "vcrBusy": "系统正在安装其他程序，请稍后重试（代码 {e}）",
+    "vcrFailed": "运行库安装失败（代码 {e}）",
+    "vcrNoSetup": "安装包里找不到安装程序",
+    "vcrPackBroken": "运行库安装包不完整，请重试",
+    "vcrPackMissing": "当前版本未附带运行库安装包",
+    "vcrWindowsOnly": "该操作仅支持 Windows",
+    "vcrTitle": "VC++ 运行库",
+    "vcrNeeded": "未检测到 VC++ 运行库，缺少它变声无法启动",
+    "vcrInstall": "安装运行库",
+    "vcrInstalling": "正在安装运行库，系统会弹出授权窗口",
+    "vcrPreparing": "正在准备运行库安装包"
   },
   "extras": {
     "engineTitle": "引擎资源",

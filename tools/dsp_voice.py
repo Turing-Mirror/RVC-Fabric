@@ -269,7 +269,9 @@ class PitchShifter:
         self._read_pos = 0.0         # 重采样读指针（浮点）
         self._prev_tail: Any = None  # 上一帧尾巴，用来做相关对齐
         self._primed = False         # 储备够了没
-        self._voiced = 1.0           # 浊音权重，辅音少变调（Clownfish 那类听感）
+        self._voiced = 1.0           # 平滑后的浊音程度，决定清辅音那条支路
+        # 固定种子：同样的输入每次跑出同样的结果，测试才钉得住。
+        self._rng = _numpy().random.default_rng(0x5F3D)
 
     def reset(self) -> None:
         self._in_buf = None
@@ -333,6 +335,30 @@ class PitchShifter:
         while self._ana + frame + search <= n_in:
             start = self._ana
             tail = self._prev_tail
+            # 这一帧像不像浊音，决定要不要做相关对齐。
+            #
+            # 金属齿音的病根在这儿：清辅音（s / sh / f）是噪声，没有周期，可是
+            # 互相关照样能在噪声里找到一个「最像」的位置。每帧都吸到这种伪峰上，
+            # 等于给本来没有周期的声音**造出**一个周期 —— 出来就是那种嗞嗞的
+            # 金属味。浊音才有真周期，对齐才有意义。
+            #
+            # 清辅音改走名义位置直接叠加：照样变调（噪声整体搬频率还是噪声，
+            # 听感正常），只是不再被伪周期污染。
+            seg_v = self._in_buf[self._ana : self._ana + frame]
+            self._voiced = 0.82 * self._voiced + 0.18 * _voiced_amount(seg_v, self._sr)
+            if self._voiced < 0.5:
+                # 清辅音不做相关对齐，改成在名义位置附近随机抖一下。
+                #
+                # 光是「不对齐」还不够：重叠相加本身就有结构 —— 相邻两帧共享
+                # 半个窗，每 hop 一次的自相似会在噪声上凑出一个周期峰（实测
+                # 0.46，干声只有 0.03），听感就是那股金属味。抖动让每帧取到
+                # 的噪声段互不相干，结构性周期就散了。
+                #
+                # 内容本来就是噪声，抖几百个采样听不出来；浊音那边一个采样都
+                # 不抖，音高精度不受影响。
+                tail = None
+                if search > 1:
+                    start = self._ana + int(self._rng.integers(-search, search + 1))
             if tail is not None and tail.size:
                 lo = max(0, self._ana - search)
                 hi = min(n_in - frame, self._ana + search)
@@ -436,12 +462,17 @@ class PitchShifter:
         y = self._out_buf[i0] * (1.0 - frac) + self._out_buf[i0 + 1] * frac
         self._read_pos = float(pos[-1]) + ratio
         self._compact()
-        # 清辅音 / 气音零交叉很多。整段一起变调会变成金属齿音，
-        # Clownfish 那种能聊天的升调就是浊音多变、辅音少动。
-        voiced = _voiced_amount(xs, sr)
-        self._voiced = 0.82 * self._voiced + 0.18 * voiced
-        if self._voiced < 0.995:
-            y = y * self._voiced + xs * (1.0 - self._voiced)
+        # 这里**绝不能**把 xs（未处理的原始输入）混回来。
+        #
+        # 以前这儿按浊音程度做过一次干声交叉淡化，本意是压清辅音的金属齿音。
+        # 三个问题叠在一起，结果是原声一直在漏：清辅音的权重低到 0.12，一个 /s/
+        # 就掺进近九成干声；0.82/0.18 的平滑把它抹开约 60ms，后面那个元音跟着
+        # 漏；而 0.995 这个门槛正常说话根本够不到（连续浊音要约 280ms 才爬得
+        # 上去），所以这条路几乎永远开着。用户听到的就是自己的原声一直垫在
+        # 下面，变调再大也被兑淡了。
+        #
+        # 齿音现在在 _stretch_more 里按帧解决：清辅音不做相关对齐，不给它造
+        # 假周期。变调照常施加在全部内容上，输出里不出现任何未处理的原始信号。
         return y.astype(np.float32)
 
     def _compact(self) -> None:

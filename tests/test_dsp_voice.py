@@ -578,15 +578,51 @@ class EveryEffectTests(unittest.TestCase):
         k80 = int(np.argmin(np.abs(freqs - 80.0)))
         self.assertGreater(spec[k80], spec.mean() * 4, "载波 80Hz 没印上去")
 
-    def test_pitch_leaves_fricative_noise_closer_to_dry(self):
-        """升调不该把齿音也拉成金属丝。"""
+    def test_pitch_does_not_leak_the_original_voice(self):
+        """输出里不许出现未处理的原始信号。
+
+        这一条以前是反着写的（断言输出「接近干声」），把一个 bug 锁成了预期
+        行为：变调器按浊音程度把干声交叉淡化回输出，正常说话时那条路几乎永远
+        开着，用户听到自己的原声一直垫在下面，变调再大也被兑淡。
+
+        直接验最硬的性质：喂一个纯音，升调之后**原来那个频率必须消失**。
+        只要还漏干声，原频率就还在。
+        """
+        from tools.dsp_voice import VoiceChain
+
+        f0 = 200.0
+        n = SR
+        x = (0.3 * np.sin(2 * np.pi * f0 * np.arange(n) / SR)).astype(np.float32)
+        y = _blocks(VoiceChain({"pitch": {"semitones": 8.0}}), x)
+        # 掐掉开头：算法有固有延迟，预热那几十毫秒本来就放干声。
+        seg = y[SR // 2 : SR // 2 + 8192].astype(np.float64)
+        spec = np.abs(np.fft.rfft(seg * np.hanning(seg.size)))
+        freqs = np.fft.rfftfreq(seg.size, 1.0 / SR)
+        k_src = int(np.argmin(np.abs(freqs - f0)))
+        k_dst = int(np.argmin(np.abs(freqs - f0 * 2.0 ** (8.0 / 12.0))))
+        self.assertGreater(spec[k_dst], spec[k_src] * 8.0, "变调后的频率不够突出")
+
+    def test_pitch_does_not_make_fricatives_periodic(self):
+        """齿音变调之后仍然该是噪声，不能被拼出一个假周期。
+
+        金属齿音的病根是 WSOLA 的相关对齐在噪声里也能找到「最像」的位置，
+        每帧吸过去就等于**造出**一个本来不存在的周期。修法是清辅音不做对齐，
+        所以这里验的是「输出的自相关没有强周期峰」，而不是「输出像干声」。
+        """
         from tools.dsp_voice import VoiceChain
 
         rng = np.random.default_rng(3)
         noise = rng.standard_normal(SR // 2).astype(np.float32) * 0.15
-        wet = _blocks(VoiceChain({"pitch": {"semitones": 8.0}}), noise)
-        err = float(np.mean(np.abs(wet - noise)))
-        self.assertLess(err, 0.12)
+        y = _blocks(VoiceChain({"pitch": {"semitones": 8.0}}), noise)
+        seg = y[SR // 4 :].astype(np.float64)
+        seg = seg - seg.mean()
+        if float(np.dot(seg, seg)) <= 0.0:
+            self.fail("变调把齿音整段吃掉了")
+        ac = np.correlate(seg, seg, mode="full")[seg.size - 1 :]
+        ac /= ac[0]
+        # 跳过零延迟附近的主瓣，看基音周期可能落的范围（约 60Hz–800Hz）
+        lo, hi = SR // 800, SR // 60
+        self.assertLess(float(np.max(np.abs(ac[lo:hi]))), 0.35, "齿音被拼出了周期")
 
     def test_never_clips(self):
         """任何一档拉满都不该爆音。"""

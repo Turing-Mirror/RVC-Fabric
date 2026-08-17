@@ -136,6 +136,21 @@ fn lfs_urls(root: &Path, sha: &str) -> Vec<String> {
         .collect()
 }
 
+/// 给别的资源包复用同一条路：下载 → 校验 → 解压。
+///
+/// VC++ 运行库走的是跟 VB-Cable 一模一样的流程，没必要各写一份 —— 两份就会
+/// 有一份先长出自己的重试逻辑和缓存规则，然后行为对不上。
+pub fn fetch_pack(
+    cache_name: &str,
+    sha: &str,
+    dest_root: &Path,
+    root: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
+) -> Result<(), String> {
+    fetch_and_extract(cache_name, sha, dest_root, root, cancel, progress)
+}
+
 fn fetch_and_extract(
     cache_name: &str,
     sha: &str,

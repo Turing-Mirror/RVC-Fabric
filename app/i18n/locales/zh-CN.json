@@ -1629,7 +1629,15 @@
     "micErrBusy": "打不开麦克风：这块设备正被占用。先在主界面停止变声（尤其开了 WASAPI 独占时），或者关掉其他正在用麦的软件。",
     "micErrNotFound": "找不到设置里选的那个输入设备。可能已经拔掉了 —— 点「重新扫描」再选一次。",
     "micErrNoLib": "运行时里的音频组件不可用，请先完成一次「补全运行时」。",
-    "micErrOpen": "打不开麦克风。检查一下设备是否插好，以及系统的「麦克风隐私设置」有没有放行本软件。"
+    "micErrOpen": "打不开麦克风。检查一下设备是否插好，以及系统的「麦克风隐私设置」有没有放行本软件。",
+    "extraRemove": "卸载",
+    "extraRemoving": "卸载中…",
+    "extraRemoveConfirm": "确定卸载「{v0}」？会删掉本地的 {v1}，之后需要时可以重新下载。",
+    "extraRemoveDone": "已卸载，腾出 {v0}。",
+    "extraRemoveBusy": "正在下载附加资源，等它下完或取消后再卸载。",
+    "extraRemoveSepBusy": "人声分离正在跑，先停下再卸载分离模型。",
+    "extraRemoveTrainBusy": "训练正在跑，先停下再卸载训练底模。",
+    "extraRemoveFailed": "{a0} 删不掉：{a1}。文件可能正被占用，先停下分离/训练再试。"
   },
   "extras": {
     "engineTitle": "引擎资源",

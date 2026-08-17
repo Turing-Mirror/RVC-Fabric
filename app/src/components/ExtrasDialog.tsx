@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import {
   getAssetsStatus,
@@ -122,6 +123,7 @@ export function ExtrasPanel({
   const [coreProg, setCoreProg] = useState<ProvProgress | null>(null);
   const [msg, setMsg] = useState("");
   const [busyKey, setBusyKey] = useState("");
+  const [removeKey, setRemoveKey] = useState("");
   const [coreBusy, setCoreBusy] = useState(false);
   const [category, setCategory] = useState<Category>(
     filter === "train" ? "train" : "separate",
@@ -230,13 +232,48 @@ export function ExtrasPanel({
     setProg(null);
     try {
       await invoke("extra_download", { key });
+      // 同上：`load` 开头清 msg，先刷新再报「下载完成」，否则这句永远看不见。
+      await load();
       setMsg(t("s.4bbcf94739"));
-      void load();
     } catch (e) {
       setMsg(String(e));
     } finally {
       busyRef.current = false;
       setBusyKey("");
+    }
+  };
+
+  /**
+   * 卸载一条已装好的资源。
+   *
+   * 删之前必须问一句：这是几百 MB 到 1.5 GB 的东西，重下一次是几分钟起步，
+   * 点错一下的代价太大。确认框里把体积写出来，别让用户去猜删的是什么。
+   */
+  const remove = async (it: Item) => {
+    if (busyRef.current || coreBusy || removeKey) return;
+    const ok = await askConfirm(
+      t("s.extraRemoveConfirm", {
+        v0: extraLabel(it, category),
+        v1: mb(it.size_bytes) || t("s.2b9d013177"),
+      }),
+    );
+    if (!ok) return;
+    busyRef.current = true;
+    setRemoveKey(it.key);
+    setMsg("");
+    setProg(null);
+    try {
+      const r = await invoke<{ freed_bytes?: number }>("extra_remove", {
+        key: it.key,
+      });
+      // 先刷新列表再报结果：`load` 开头会把 msg 清空，反过来写这句就白写了。
+      await load();
+      setMsg(t("s.extraRemoveDone", { v0: mb(r?.freed_bytes || 0) || "0 MB" }));
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      busyRef.current = false;
+      setRemoveKey("");
     }
   };
 
@@ -256,7 +293,7 @@ export function ExtrasPanel({
         : t("s.7e9782377b");
 
   const locked = engineReady === false;
-  const anyBusy = !!busyKey || coreBusy;
+  const anyBusy = !!busyKey || !!removeKey || coreBusy;
   useEffect(() => {
     onBusyChange?.(anyBusy);
   }, [anyBusy, onBusyChange]);
@@ -371,8 +408,10 @@ export function ExtrasPanel({
                   it={it}
                   category={category}
                   busyKey={busyKey}
+                  removeKey={removeKey}
                   disabled={coreBusy}
                   onStart={start}
+                  onRemove={remove}
                 />
               ))}
             </div>
@@ -426,7 +465,7 @@ export function ExtrasPanel({
             {busyKey ? (
               <Btn onClick={() => void invoke("extra_cancel")}>{t("s.7115f2e29d")}</Btn>
             ) : onClose ? (
-              <Btn onClick={onClose} disabled={coreBusy}>{t("s.6c14bd7f6f")}</Btn>
+              <Btn onClick={onClose} disabled={coreBusy || !!removeKey}>{t("s.6c14bd7f6f")}</Btn>
             ) : null}
           </div>
         ) : null}
@@ -486,15 +525,20 @@ function ItemRow({
   it,
   category,
   busyKey,
+  removeKey,
   disabled,
   onStart,
+  onRemove,
 }: {
   it: Item;
   category: Category;
   busyKey: string;
+  removeKey: string;
   disabled?: boolean;
   onStart: (key: string) => void;
+  onRemove: (it: Item) => void;
 }) {
+  const removing = removeKey === it.key;
   return (
     <div className="flex items-center gap-4 border-b border-[var(--hairline)] py-3.5">
       <span className="min-w-0 flex-1">
@@ -516,11 +560,22 @@ function ItemRow({
         </span>
       </span>
       {it.installed ? (
-        <span className="shrink-0 text-[13px] text-[var(--ink-muted)] px-2">{t("s.eb88ff57c9")}</span>
+        // 已装好的给一个卸载口子：模型动辄几百 MB，试过不合用就该能删掉，
+        // 不然只能让用户自己去 assets 里翻文件。
+        <span className="shrink-0 flex items-center gap-2">
+          <span className="text-[13px] text-[var(--ink-muted)] px-1">{t("s.eb88ff57c9")}</span>
+          <Btn
+            className="min-w-[72px]"
+            disabled={!!busyKey || !!removeKey || !!disabled}
+            onClick={() => void onRemove(it)}
+          >
+            {removing ? t("s.extraRemoving") : t("s.extraRemove")}
+          </Btn>
+        </span>
       ) : (
         <Btn
           className="shrink-0 min-w-[72px]"
-          disabled={!!busyKey || !!disabled}
+          disabled={!!busyKey || !!removeKey || !!disabled}
           onClick={() => void onStart(it.key)}
         >
           {busyKey === it.key ? t("s.65188d08a2") : t("s.2b9d013177")}

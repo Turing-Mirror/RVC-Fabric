@@ -20,6 +20,7 @@
 //! `dest` 是相对安装根目录的路径，**只允许相对路径**：清单是从网上拉的，
 //! 让它决定一个绝对路径等于把任意写文件的权限交出去。
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -372,6 +373,128 @@ fn file_ok(p: &Path, f: &ExtraFile) -> bool {
     }
 }
 
+/// 删完文件顺手收掉空下来的子目录，止步于 `dest` 本身。
+///
+/// `dest` 留着不删：它是十几条资源共用的（分离模型全在 `assets/pymss`），
+/// 而且分离启动时要按这个目录扫模型，没了会报另一种错。
+fn prune_empty_dirs(from: Option<&Path>, stop: &Path) {
+    let Some(p) = from else { return };
+    let mut cur = p.to_path_buf();
+    while cur.starts_with(stop) && cur.as_path() != stop {
+        // 非空就删不掉，那再往上也一样非空，直接收工。
+        if std::fs::remove_dir(&cur).is_err() {
+            return;
+        }
+        match cur.parent() {
+            Some(parent) => cur = parent.to_path_buf(),
+            None => return,
+        }
+    }
+}
+
+/// 卸载一条已下载的附加资源。
+///
+/// 只删这条规格登记过的文件名（外加它半途留下的 `.part`），**不按目录整删**：
+/// `dest` 是共用的 —— 十二条分离模型全落在 `assets/pymss`，按目录删等于把
+/// 用户其它模型一起端了。
+///
+/// 别的规格也登记了同一个文件时跳过。今天的清单没有这种交叉，但清单在线上，
+/// 改一版就可能有；共用权重被删掉，表现是「卸了 A，B 也用不了了」。
+///
+/// 文件本来就不在不算错：用户要的是「删干净」，那它已经是干净的。
+///
+/// `sep_busy` / `train_busy` 是「谁正在跑」。正用着的权重删掉，Windows 上是
+/// 当场删不掉（os error 32），Linux 上是删得掉、任务跑到中途才炸 —— 两种都
+/// 不如在这里拦下来。哪条资源归哪个任务管，按清单里的 `group` 判，不按 key
+/// 猜：key 的命名规则将来会变，group 是清单明写的。
+pub fn remove(
+    root: &Path,
+    key: &str,
+    sep_busy: bool,
+    train_busy: bool,
+) -> Result<Value, String> {
+    // 占住和下载同一把锁，不是只瞄一眼：只判断的话，判完到删完之间正好起一个
+    // 下载，两边就会对着同一批文件一个写一个删。
+    {
+        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        if *g {
+            return Err(crate::i18n::t("s.extraRemoveBusy"));
+        }
+        *g = true;
+    }
+    let (data, _) = catalog_for_extras(root, true);
+    let specs = extras_from(&data);
+    let r = remove_with(root, key, &specs, sep_busy, train_busy);
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    r
+}
+
+/// 卸载的实际动作。清单从外面递进来，测试才能不碰网络也不碰全局 BUSY。
+fn remove_with(
+    root: &Path,
+    key: &str,
+    specs: &[ExtraSpec],
+    sep_busy: bool,
+    train_busy: bool,
+) -> Result<Value, String> {
+    let spec = specs
+        .iter()
+        .find(|s| s.key == key)
+        .ok_or_else(|| crate::i18n::te("s.ae3f0d2168", &key))?;
+    match spec.group.as_str() {
+        "train" if train_busy => return Err(crate::i18n::t("s.extraRemoveTrainBusy")),
+        "separate" if sep_busy => return Err(crate::i18n::t("s.extraRemoveSepBusy")),
+        _ => {}
+    }
+    let dir = safe_dest(root, &spec.dest)
+        .ok_or_else(|| crate::i18n::te("s.341bc35cbf", &spec.dest))?;
+
+    // 整条落地路径一致才算共用；同名文件落在不同目录是两份东西。
+    let mut shared: HashSet<PathBuf> = HashSet::new();
+    for other in specs.iter().filter(|s| s.key != spec.key) {
+        let Some(d) = safe_dest(root, &other.dest) else {
+            continue;
+        };
+        for f in &other.files {
+            shared.insert(d.join(&f.name));
+        }
+    }
+
+    let mut removed = 0usize;
+    let mut kept = 0usize;
+    let mut freed = 0u64;
+    for f in &spec.files {
+        let path = dir.join(&f.name);
+        // 半截下载谁也不想留，跟正主一起收走。
+        let part = dir.join(format!("{}.part", f.name));
+        if part.is_file() {
+            let _ = std::fs::remove_file(&part);
+        }
+        if shared.contains(&path) {
+            kept += 1;
+            continue;
+        }
+        if let Ok(m) = std::fs::metadata(&path) {
+            if m.is_file() {
+                let len = m.len();
+                std::fs::remove_file(&path)
+                    .map_err(|e| crate::i18n::t2("s.extraRemoveFailed", &f.name, &e))?;
+                removed += 1;
+                freed += len;
+            }
+        }
+        prune_empty_dirs(path.parent(), &dir);
+    }
+
+    Ok(json!({
+        "ok": true,
+        "key": spec.key,
+        "removed": removed,
+        "kept_shared": kept,
+        "freed_bytes": freed,
+    }))
+}
+
 /// 下载一条附加资源。阻塞，调用方负责挪到后台线程。
 pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String> {
     {
@@ -603,6 +726,135 @@ mod tests {
     fn a_catalog_without_extras_yields_nothing() {
         assert!(extras_from(&json!({})).is_empty());
         assert!(extras_from(&json!({"extras": []})).is_empty());
+    }
+
+    /// 造一个装着两条资源的假安装目录：`a` 有嵌套子目录，`b` 平铺。
+    fn fixture(tag: &str) -> (PathBuf, Value) {
+        let root = std::env::temp_dir().join(format!("rvcf-extra-rm-{tag}"));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("assets").join("pymss");
+        std::fs::create_dir_all(dir.join("vocal").join("v1")).unwrap();
+        std::fs::write(dir.join("vocal/v1/a.ckpt"), b"aaaa").unwrap();
+        std::fs::write(dir.join("b.ckpt"), b"bbbbbb").unwrap();
+        let catalog = json!({"extras": {
+            "pymss-a": {
+                "dest": "assets/pymss", "release_tag": "pymss", "group": "separate",
+                "files": [{"name": "vocal/v1/a.ckpt", "sha256": sha('a'), "size_bytes": 4}]
+            },
+            "pymss-b": {
+                "dest": "assets/pymss", "release_tag": "pymss", "group": "separate",
+                "files": [{"name": "b.ckpt", "sha256": sha('b'), "size_bytes": 6}]
+            }
+        }});
+        (root, catalog)
+    }
+
+    #[test]
+    fn removing_one_resource_leaves_the_others_alone() {
+        // dest 是十几条资源共用的。按目录整删等于把用户其它模型一起端了。
+        let (root, cat) = fixture("neighbors");
+        let specs = extras_from(&cat);
+        let a = specs.iter().find(|s| s.key == "pymss-a").unwrap();
+        let dir = safe_dest(&root, &a.dest).unwrap();
+
+        let out = remove_with(&root, "pymss-a", &specs, false, false).expect("remove");
+        assert_eq!(out["removed"], json!(1));
+        assert_eq!(out["freed_bytes"], json!(4));
+        assert!(!dir.join("vocal/v1/a.ckpt").exists());
+        // 邻居和它的落地目录都要原样留着。
+        assert!(dir.join("b.ckpt").is_file());
+        assert!(dir.is_dir());
+        // 空下来的子目录顺手收掉，但止步于 dest。
+        assert!(!dir.join("vocal").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_file_another_resource_also_claims_is_kept() {
+        // 共用权重删掉，表现是「卸了 A，B 也用不了了」—— 最难查的那种。
+        let (root, _) = fixture("shared");
+        let cat = json!({"extras": {
+            "pymss-a": {
+                "dest": "assets/pymss", "release_tag": "pymss", "group": "separate",
+                "files": [{"name": "b.ckpt", "sha256": sha('b'), "size_bytes": 6}]
+            },
+            "pymss-b": {
+                "dest": "assets/pymss", "release_tag": "pymss", "group": "separate",
+                "files": [{"name": "b.ckpt", "sha256": sha('b'), "size_bytes": 6}]
+            }
+        }});
+        let specs = extras_from(&cat);
+        let dir = root.join("assets").join("pymss");
+
+        let out = remove_with(&root, "pymss-a", &specs, false, false).expect("remove");
+        assert_eq!(out["removed"], json!(0));
+        assert_eq!(out["kept_shared"], json!(1));
+        assert!(dir.join("b.ckpt").is_file());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_half_downloaded_part_file_goes_too() {
+        let (root, cat) = fixture("partfile");
+        let specs = extras_from(&cat);
+        let dir = root.join("assets").join("pymss");
+        std::fs::write(dir.join("b.ckpt.part"), b"half").unwrap();
+
+        remove_with(&root, "pymss-b", &specs, false, false).expect("remove");
+        assert!(!dir.join("b.ckpt").exists());
+        assert!(!dir.join("b.ckpt.part").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn removing_something_already_gone_is_not_an_error() {
+        // 用户要的是「删干净」。文件本来就不在，那它已经是干净的。
+        let (root, cat) = fixture("idempotent");
+        let specs = extras_from(&cat);
+        remove_with(&root, "pymss-b", &specs, false, false).expect("first");
+        let out = remove_with(&root, "pymss-b", &specs, false, false).expect("second");
+        assert_eq!(out["removed"], json!(0));
+        assert_eq!(out["freed_bytes"], json!(0));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_running_job_blocks_only_its_own_kind() {
+        // 分离在跑不该拦住卸载训练底模，反过来也一样。
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let (root, _) = fixture("busy");
+        let cat = json!({"extras": {
+            "pymss-b": {
+                "dest": "assets/pymss", "release_tag": "pymss", "group": "separate",
+                "files": [{"name": "b.ckpt", "sha256": sha('b'), "size_bytes": 6}]
+            },
+            "pretrained-40k": {
+                "dest": "assets/pretrained_v2", "release_tag": "pretrained", "group": "train",
+                "files": [{"name": "G40k.pth", "sha256": sha('c'), "size_bytes": 3}]
+            }
+        }});
+        let specs = extras_from(&cat);
+
+        assert!(remove_with(&root, "pymss-b", &specs, true, false).is_err());
+        assert!(remove_with(&root, "pretrained-40k", &specs, false, true).is_err());
+        // 交叉方向要放行。
+        assert!(remove_with(&root, "pymss-b", &specs, false, true).is_ok());
+        assert!(remove_with(&root, "pretrained-40k", &specs, true, false).is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unknown_key_is_rejected() {
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let (root, cat) = fixture("unknown");
+        let specs = extras_from(&cat);
+        assert!(remove_with(&root, "pymss-nope", &specs, false, false).is_err());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

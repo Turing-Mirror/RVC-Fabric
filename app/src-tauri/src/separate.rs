@@ -29,6 +29,12 @@ fn cancel_flag() -> Arc<AtomicBool> {
         .clone()
 }
 
+/// 分离任务是否在跑。卸载分离模型前要问一句：跑着的时候删权重，Windows 上
+/// 是删不掉（文件被占），Linux 上是删得掉但任务跑到一半才炸。
+pub fn busy() -> bool {
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// 权重放安装目录，不放用户主目录 —— PyMSS 默认写 ~/.cache/pymss，
 /// 卸载软件不会带走，用户也找不到。
 pub fn model_dir(root: &Path) -> PathBuf {

@@ -73,6 +73,8 @@ export function TrainPanel() {
   const [st, setSt] = useState<Status>({});
   const [name, setName] = useState("");
   const [dataset, setDataset] = useState("");
+  /** 训好的音色放哪。空 = User_Data/models。上次的选择记在配置里。 */
+  const [outDir, setOutDir] = useState("");
   const [sr, setSr] = useState("48k");
   const [epochs, setEpochs] = useState(200);
   const [batch, setBatch] = useState(4);
@@ -100,6 +102,11 @@ export function TrainPanel() {
 
   useEffect(() => {
     void load();
+    // 上次选的存放目录记在配置里 —— 重开面板要回到用户上次的选择，
+    // 而不是每次都退回默认，害他每训一个音色重选一遍。
+    void invoke<string>("train_output_dir")
+      .then((d) => setOutDir(d || ""))
+      .catch(() => {});
     // listen() 是异步的，弹窗在它 resolve 之前关掉就会把注销句柄丢掉，
     // 每开一次泄漏一个监听。和 SeparateDialog 一样的处理。
     let disposed = false;
@@ -169,6 +176,7 @@ export function TrainPanel() {
           f0_method: f0,
           resume,
           save_every_weights: saveWeights,
+          output_dir: outDir,
         },
       });
       setMsg(t("s.2b30598b60", { v0: r.weights ?? "" }));
@@ -224,6 +232,25 @@ export function TrainPanel() {
               }}
             >{t("s.70b208202c")}</Btn>
           </div>
+          <div className={ROW}>
+            <span className={LABEL}>{t("s.trainOutDir")}</span>
+            <span className={PATH} title={outDir || t("s.trainOutDefault")}>
+              {outDir || t("s.trainOutDefault")}
+            </span>
+            {outDir ? (
+              <Btn onClick={() => setOutDir("")}>{t("s.trainOutReset")}</Btn>
+            ) : null}
+            <Btn
+              onClick={() => {
+                void invoke<string | null>("train_pick_output_dir").then(
+                  (p) => p && setOutDir(p),
+                );
+              }}
+            >{t("s.70b208202c")}</Btn>
+          </div>
+          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+            {t("s.trainOutHint")}
+          </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.4eea655d6f")}</span>
             <input

@@ -350,9 +350,14 @@ fn resolve_active_index(model_dir: &Path, side: &Map<String, Value>) -> String {
 }
 
 fn list_user_data(root: &Path) -> Vec<Value> {
-    let models_root = paths::models_dir(root);
+    scan_models_dir(root, &paths::models_dir(root))
+}
+
+/// 扫一个音色目录。以前这里写死 `User_Data/models`；训练可以把音色放到别的盘
+/// 之后，同一段逻辑要能对着任意目录跑。
+fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
     let mut out = Vec::new();
-    let Ok(rd) = fs::read_dir(&models_root) else {
+    let Ok(rd) = fs::read_dir(models_root) else {
         return out;
     };
     let mut folders: Vec<PathBuf> = rd
@@ -567,6 +572,24 @@ fn resolve_selected(models: &[Value], path: &str, file: &str, name: &str) -> i64
 pub fn list_voices(root: &Path) -> Value {
     let _ = paths::ensure_user_dirs(root);
     let mut primary = list_user_data(root);
+    // 训练可以把音色放到别的盘（`train_output_dir`）。不扫这里的话，用户训完
+    // 几小时，模型页上什么都没有 —— 文件明明在，只是没人去看那个目录。
+    let extra = crate::config::train_output_dir(root);
+    if !extra.trim().is_empty() {
+        let extra = PathBuf::from(extra.trim());
+        let default_root = paths::models_dir(root);
+        // 指回默认目录时别扫第二遍。canonicalize 是为了认出 `..`、短名、
+        // 大小写不同的同一个目录；取不到（目录还没建）就退回原样比较。
+        let same = extra
+            .canonicalize()
+            .ok()
+            .zip(default_root.canonicalize().ok())
+            .map(|(a, b)| a == b)
+            .unwrap_or(extra == default_root);
+        if !same {
+            primary.extend(scan_models_dir(root, &extra));
+        }
+    }
     let mut seen_paths: std::collections::HashSet<String> = primary
         .iter()
         .filter_map(|m| m.get("path").and_then(|v| v.as_str()))

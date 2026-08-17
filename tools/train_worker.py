@@ -311,12 +311,17 @@ def infer_sr(exp_dir):
 
 
 def publish_voice(root, req, weights, index_path):
-    """把训好的 pth/index 装进 User_Data/models，模型页能直接「使用」。
+    """把训好的 pth/index 装进音色库，模型页能直接「使用」。
 
     savee 只写 assets/weights。那边会被当成旧版单文件音色，没有检索库。
     复制一份进用户音色库，并写 sidecar。
+
+    `output_dir` 非空时改放到用户指定的目录 —— 一个音色连模型带索引三四百 MB，
+    训十个就是几个 G，不该全部压在系统盘上。壳那边会把这个目录一并加进音色库
+    的扫描范围，所以放到别处也照样在模型页里看得见、用得上。
     """
-    dest = root / "User_Data" / "models" / req["exp"]
+    base = Path(req["output_dir"]) if req.get("output_dir") else root / "User_Data" / "models"
+    dest = base / req["exp"]
     dest.mkdir(parents=True, exist_ok=True)
     pth_dest = dest / ("%s.pth" % req["exp"])
     try:
@@ -828,6 +833,9 @@ def normalize(raw):
         "is_half": bool(raw.get("is_half", device == "cuda")),
         "resume": bool(raw.get("resume", False)),
         "save_every_weights": bool(raw.get("save_every_weights", False)),
+        # 空 = 老行为（放 User_Data/models）。合法性由壳那边判过了，这里不再
+        # 二次校验：worker 是被壳启动的，不是用户直接调的。
+        "output_dir": str(raw.get("output_dir") or "").strip(),
     }
 
 

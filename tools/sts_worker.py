@@ -56,6 +56,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from tools import sts_core  # noqa: E402 — 上面要先把产品根塞进 sys.path
+from tools import msg_codes as mc  # noqa: E402
 from tools.sts_core import (  # noqa: E402
     AUDIO_EXT,
     StsProgress,
@@ -226,12 +227,12 @@ def _save_timing(timer, **extra) -> None:
 def main(argv: list[str]) -> int:
     _ensure_stdio_utf8()
     if len(argv) < 2:
-        emit(phase="error", message="缺请求文件参数")
+        emit(phase="error", **mc.msg_fields(mc.STS_NO_REQUEST))
         return 2
     try:
         req = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
     except Exception as e:
-        emit(phase="error", message=f"请求文件读不了：{e}")
+        emit(phase="error", **mc.msg_fields(mc.STS_BAD_REQUEST, {"error": e}))
         return 2
 
     inp = str(req.get("input") or "").strip()
@@ -255,20 +256,20 @@ def main(argv: list[str]) -> int:
     f0_file = None
     if f0_path:
         if not Path(f0_path).is_file():
-            emit(phase="error", message="找不到 F0 曲线文件：%s" % f0_path)
+            emit(phase="error", **mc.msg_fields(mc.STS_F0_CURVE_MISSING, {"path": f0_path}))
             return 2
         f0_file = type("F0File", (), {"name": f0_path})()
 
     if not inp or not out_dir or not model:
-        emit(phase="error", message="输入 / 输出 / 音色模型 都不能为空")
+        emit(phase="error", **mc.msg_fields(mc.STS_EMPTY_FIELDS))
         return 2
     if not Path(model).is_file():
-        emit(phase="error", message=f"找不到音色模型：{model}")
+        emit(phase="error", **mc.msg_fields(mc.STS_MODEL_MISSING, {"model": model}))
         return 2
 
     files = collect_inputs(inp)
     if not files:
-        emit(phase="error", message="没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）")
+        emit(phase="error", **mc.msg_fields(mc.STS_NO_AUDIO))
         return 2
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -325,7 +326,7 @@ def main(argv: list[str]) -> int:
         cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
-        emit(phase="error", message=f"加载模型失败：{friendly_error(e)}")
+        emit(phase="error", **mc.msg_fields(mc.STS_LOAD_FAILED, {"error": friendly_error(e)}))
         return 1
 
     with _stage(timer, "convert"):
@@ -356,7 +357,10 @@ def main(argv: list[str]) -> int:
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。
         first = skipped[0]["reason"] if skipped else "未知错误"
-        emit(phase="error", message=f"{total} 个文件全部转换失败。第一个原因：{first}")
+        emit(
+            phase="error",
+            **mc.msg_fields(mc.STS_ALL_FAILED, {"total": total, "first": first}),
+        )
         return 1
 
     emit(
@@ -368,7 +372,9 @@ def main(argv: list[str]) -> int:
         current=total,
         ok=len(out_files),
         skip=len(skipped),
-        message=f"完成 {len(out_files)} 个，跳过 {len(skipped)} 个",
+        **mc.msg_fields(
+            mc.STS_DONE, {"done": len(out_files), "skipped": len(skipped)}
+        ),
     )
     return 0
 

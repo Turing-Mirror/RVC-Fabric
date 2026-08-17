@@ -307,7 +307,9 @@ fn run_inner(
             continue; // 不是我们的协议行，忽略
         };
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        // worker 的中文原样转发 = 非中文用户看中文。有 code 走语言包。
+        let msg_owned = crate::i18n::t_worker_msg(&v);
+        let msg = msg_owned.as_str();
         let detail = v.get("detail").and_then(|x| x.as_str()).unwrap_or("");
         let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
         let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1);

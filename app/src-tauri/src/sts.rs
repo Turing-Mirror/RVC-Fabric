@@ -137,7 +137,8 @@ impl StsLog {
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
         let file = v.get("file").and_then(|x| x.as_str()).unwrap_or("");
         let step = v.get("step").and_then(|x| x.as_str()).unwrap_or("");
-        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let msg_owned = crate::i18n::t_worker_msg(v);
+        let msg = msg_owned.as_str();
         let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
         let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(0);
         let pct = v
@@ -785,7 +786,8 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
             continue;
         };
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let msg_owned = crate::i18n::t_worker_msg(&v);
+        let msg = msg_owned.as_str();
         let db = v.get("db").and_then(|x| x.as_f64());
         let sec = v.get("sec").and_then(|x| x.as_f64());
         match phase {
@@ -1047,7 +1049,8 @@ fn forward_sts_event(
 ) -> Option<Result<Value, HotError>> {
     job.event(v);
     let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-    let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+    let msg_owned = crate::i18n::t_worker_msg(v);
+    let msg = msg_owned.as_str();
     let total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
     let done = v.get("done").and_then(|x| x.as_u64()).unwrap_or(0);
     let pct = v
@@ -1390,7 +1393,8 @@ fn run_inner(
         };
         job.event(&v);
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let msg_owned = crate::i18n::t_worker_msg(&v);
+        let msg = msg_owned.as_str();
         // 细粒度 0–100；worker 旧版可能不带，界面回退到 done/total。
         let pct = v
             .get("pct")

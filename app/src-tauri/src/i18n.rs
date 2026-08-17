@@ -380,6 +380,55 @@ pub fn t_msg(code: &str) -> String {
     t(&key)
 }
 
+/// worker 送上来的一行进度/报错，按当前语言取文案。
+///
+/// 分离 / 训练 / STS / ckpt 四个 worker 是 Python 侧的独立进程，界面上那句
+/// 「提取音高…」「融合完成」原来是它们直接写死的中文，壳这边原样转发 ——
+/// 于是非中文用户在面板里看到的是中文原文。
+///
+/// 认 `message_code` + `message_params`；没有 code、或这条码还没登记进语言包
+/// 时，回退到 worker 自带的 `message`。回退很重要：老的 worker 二进制、以及
+/// 将来新加还没来得及翻译的消息，都该照旧显示中文，而不是变成一片空白或者
+/// 一串 `msg.train.xxx`。
+pub fn t_worker_msg(line: &Value) -> String {
+    let raw = line
+        .get("message")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let code = line
+        .get("message_code")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if code.is_empty() {
+        return raw;
+    }
+    let mut vars = HashMap::new();
+    if let Some(obj) = line.get("message_params").and_then(|v| v.as_object()) {
+        for (k, v) in obj {
+            let s = match v {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                _ => continue,
+            };
+            vars.insert(k.clone(), s);
+        }
+    }
+    let key = if code.starts_with("msg.") {
+        code
+    } else {
+        format!("msg.{code}")
+    };
+    let text = t_vars(&key, &vars);
+    if text == key {
+        return raw; // 没登记进语言包，用 worker 自带的那句
+    }
+    text
+}
+
 /// If status has message_code, replace message with localized string.
 pub fn localize_status(status: &mut Value) {
     let code = status
@@ -470,7 +519,52 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
+
+    #[test]
+    fn a_worker_line_is_localized_by_its_code() {
+        let _g = testing::pin("en-US");
+        // 分离 worker 打上来的一行：自带中文兜底 + 稳定的码。
+        let line = json!({
+            "phase": "error",
+            "message": "模型 / 输入 / 输出 都不能为空",
+            "message_code": "sep.empty_fields",
+        });
+        assert_eq!(t_worker_msg(&line), "Model, input and output are all required");
+    }
+
+    #[test]
+    fn worker_message_params_are_filled_into_the_translation() {
+        let _g = testing::pin("en-US");
+        let line = json!({
+            "phase": "stage",
+            "message": "第 3 / 20 轮",
+            "message_code": "train.epoch",
+            "message_params": {"epoch": 3, "total": 20},
+        });
+        assert_eq!(t_worker_msg(&line), "Epoch 3 / 20");
+    }
+
+    #[test]
+    fn a_worker_line_without_a_code_keeps_its_own_text() {
+        // 老 worker 二进制、以及还没编码的消息，照旧显示自带那句，
+        // 不能变成空白 —— 界面上宁可是中文，也不能什么都不写。
+        let _g = testing::pin("en-US");
+        let line = json!({"phase": "run", "message": "还没编码的一句"});
+        assert_eq!(t_worker_msg(&line), "还没编码的一句");
+    }
+
+    #[test]
+    fn an_unregistered_code_falls_back_instead_of_showing_the_key() {
+        let _g = testing::pin("en-US");
+        let line = json!({
+            "message": "自带兜底",
+            "message_code": "train.not_a_real_code_yet",
+        });
+        assert_eq!(t_worker_msg(&line), "自带兜底");
+    }
 
     #[test]
     fn tray_and_msg_locales() {

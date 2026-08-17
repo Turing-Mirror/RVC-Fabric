@@ -55,6 +55,9 @@ def setup_sys_path() -> None:
 
 setup_sys_path()
 
+# 必须在 setup_sys_path 之后：Runtime 的 python39._pth 不认脚本目录。
+from tools import msg_codes as mc  # noqa: E402
+
 
 def emit(**kw) -> None:
     sys.stdout.write(json.dumps(kw, ensure_ascii=False) + "\n")
@@ -63,12 +66,12 @@ def emit(**kw) -> None:
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
-        emit(phase="error", message="缺请求文件参数")
+        emit(phase="error", **mc.msg_fields(mc.SEP_NO_REQUEST))
         return 2
     try:
         req = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
     except Exception as e:
-        emit(phase="error", message=f"请求文件读不了：{e}")
+        emit(phase="error", **mc.msg_fields(mc.SEP_BAD_REQUEST, {"error": e}))
         return 2
 
     model = str(req.get("model") or "").strip()
@@ -85,7 +88,7 @@ def main(argv: list[str]) -> int:
         agg = 10
     agg = max(0, min(agg, 20))
     if not (model and inp and out):
-        emit(phase="error", message="模型 / 输入 / 输出 都不能为空")
+        emit(phase="error", **mc.msg_fields(mc.SEP_EMPTY_FIELDS))
         return 2
 
     # PyMSS 默认把权重放 ~/.cache/pymss；我们要它只认安装目录里的那份，
@@ -128,7 +131,11 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         # 原始异常进 stderr（壳会收进日志），界面上只给中文。
         traceback.print_exc(file=sys.stderr)
-        emit(phase="error", message="分离失败，详见日志", detail=f"{type(e).__name__}: {e}")
+        emit(
+            phase="error",
+            detail=f"{type(e).__name__}: {e}",
+            **mc.msg_fields(mc.SEP_FAILED),
+        )
         return 1
 
 

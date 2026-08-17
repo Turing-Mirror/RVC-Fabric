@@ -5,6 +5,7 @@ import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
 import { WebDialogHost } from "./components/WebDialog";
+import { NativeDialogHint } from "./components/NativeDialogHint";
 import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
@@ -1123,6 +1124,7 @@ export default function App() {
       ) : null}
 
       <WebDialogHost />
+      <NativeDialogHint />
 
       <Dock
         voiceName={voiceName}

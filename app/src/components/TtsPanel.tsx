@@ -7,6 +7,7 @@ import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { pickPath } from "../lib/nativeDialog";
 import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm } from "../lib/webDialog";
@@ -649,7 +650,7 @@ function StsSection() {
           <Btn
             disabled={running || recording}
             onClick={() => {
-              void invoke<string | null>("sts_pick_input", { folder: false }).then(
+              void pickPath<string | null>("sts_pick_input", { folder: false }, t("s.pickBusyFolder")).then(
                 (p) => p && setInput(p),
               );
             }}
@@ -657,7 +658,7 @@ function StsSection() {
           <Btn
             disabled={running || recording}
             onClick={() => {
-              void invoke<string | null>("sts_pick_input", { folder: true }).then(
+              void pickPath<string | null>("sts_pick_input", { folder: true }, t("s.pickBusyFolder")).then(
                 (p) => p && setInput(p),
               );
             }}
@@ -668,7 +669,7 @@ function StsSection() {
           <span className={PATH}>{output || t("s.53e2db7016")}</span>
           <Btn
             onClick={() => {
-              void invoke<string | null>("sts_pick_output").then(
+              void pickPath<string | null>("sts_pick_output", undefined, t("s.pickBusyFolder")).then(
                 (p) => p && setOutput(p),
               );
             }}
@@ -1006,7 +1007,7 @@ function StsSection() {
                   <Btn
                     disabled={running}
                     onClick={() => {
-                      void invoke<string | null>("ckpt_pick", { kind: "f0" }).then(
+                      void pickPath<string | null>("ckpt_pick", { kind: "f0" }, t("s.pickBusyFile")).then(
                         (p) => p && setF0File(p),
                       );
                     }}

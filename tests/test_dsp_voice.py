@@ -983,3 +983,58 @@ class ChainBudgetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NativeDialogHintTests(unittest.TestCase):
+    """原生对话框提示条的两条安全属性。
+
+    这条提示是为了解释「对话框开着时界面点不动」。加一个解释卡住的东西，绝不能
+    自己变成新的卡住来源 —— 那比原来的问题更糟。所以两件事必须成立：
+
+    1. 横幅在 `finally` 里熄灭（invoke 抛错、用户取消，都要熄）。
+    2. 横幅 `pointer-events-none`，万一没熄也挡不住点击。
+
+    这里是静态断言。行为层面用 Chromium 对真实模块跑过四种情形（正常 / 抛错 /
+    取消 / 横幅亮着时点击穿透），但仓库里没有前端测试运行器，为一个模块引入
+    playwright 依赖不值得，所以把「代码形状」这一层钉在这儿防回归。
+    """
+
+    def _read(self, rel):
+        return (ROOT / rel).read_text(encoding="utf-8")
+
+    def test_hint_is_cleared_in_a_finally(self):
+        src = self._read("app/src/lib/nativeDialog.ts")
+        body = src[src.index("export async function pickPath"):]
+        self.assertIn("finally", body, "横幅必须在 finally 里熄灭")
+        after = body[body.index("finally"):]
+        self.assertIn('publish("")', after, "finally 里要把横幅清空")
+
+    def test_hint_cannot_swallow_clicks(self):
+        src = self._read("app/src/components/NativeDialogHint.tsx")
+        self.assertIn("pointer-events-none", src,
+                      "横幅必须 pointer-events-none，卡住也不能挡点击")
+        # 别在内层再开回 pointer-events：那等于把保证撤了。
+        self.assertNotIn("pointer-events-auto", src)
+
+    def test_every_native_picker_goes_through_the_helper(self):
+        """漏掉一个调用点，那个入口就还是「点了没反应且没解释」。"""
+        import re
+
+        for rel in (
+            "app/src/components/SeparatePanel.tsx",
+            "app/src/components/CkptAdvanced.tsx",
+            "app/src/components/TtsPanel.tsx",
+            "app/src/components/TrainPanel.tsx",
+        ):
+            src = self._read(rel)
+            leaked = re.findall(
+                r'invoke\s*(?:<[^>]*>)?\(\s*"(\w*_?pick\w*)"', src
+            )
+            self.assertEqual(
+                leaked, [], f"{rel} 还有绕过 pickPath 的原生选择器：{leaked}"
+            )
+
+    def test_the_hint_host_is_mounted_in_both_windows(self):
+        """工具窗是独立 webview，只在主窗挂等于工具窗里没有提示。"""
+        for rel in ("app/src/App.tsx", "app/src/components/ToolWindow.tsx"):
+            self.assertIn("<NativeDialogHint />", self._read(rel), rel)

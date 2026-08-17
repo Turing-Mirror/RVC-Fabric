@@ -1746,7 +1746,9 @@
     "provCoreSkip": "Plus tard — entrer dans l'app",
     "provCoreDownloading": "Téléchargement des ressources moteur…",
     "provCoreDone": "Les ressources moteur sont prêtes — conversion temps réel, conversion vocale et entraînement sont disponibles.",
-    "provCoreFailed": "Échec du téléchargement des ressources moteur : {v0}. Vous pouvez entrer et réessayer plus tard depuis la Place."
+    "provCoreFailed": "Échec du téléchargement des ressources moteur : {v0}. Vous pouvez entrer et réessayer plus tard depuis la Place.",
+    "pickBusyFolder": "Sélection d'un dossier. L'interface répondra à nouveau après votre choix ou une annulation — d'ici là, fermer ou changer de page n'a aucun effet.",
+    "pickBusyFile": "Sélection d'un fichier. L'interface répondra à nouveau après votre choix ou une annulation — d'ici là, fermer ou changer de page n'a aucun effet."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

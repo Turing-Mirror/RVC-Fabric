@@ -8,6 +8,7 @@ import { openHelpSection } from "../lib/helpNav";
 import { CkptAdvanced } from "./CkptAdvanced";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { pickPath } from "../lib/nativeDialog";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -226,7 +227,7 @@ export function TrainPanel() {
             <span className={PATH}>{dataset || t("s.53e2db7016")}</span>
             <Btn
               onClick={() => {
-                void invoke<string | null>("train_pick_dataset").then(
+                void pickPath<string | null>("train_pick_dataset", undefined, t("s.pickBusyFolder")).then(
                   (p) => p && setDataset(p),
                 );
               }}
@@ -242,7 +243,7 @@ export function TrainPanel() {
             ) : null}
             <Btn
               onClick={() => {
-                void invoke<string | null>("train_pick_output_dir").then(
+                void pickPath<string | null>("train_pick_output_dir", undefined, t("s.pickBusyFolder")).then(
                   (p) => p && setOutDir(p),
                 );
               }}

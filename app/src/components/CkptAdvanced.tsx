@@ -4,6 +4,7 @@ import { Btn } from "./ui";
 import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
+import { pickPath } from "../lib/nativeDialog";
 
 type Tab = "merge" | "change" | "extract" | "onnx";
 
@@ -13,7 +14,7 @@ const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 
 function pickPth(set: (p: string) => void) {
-  void invoke<string | null>("ckpt_pick", { kind: "pth" }).then((p) => p && set(p));
+  void pickPath<string | null>("ckpt_pick", { kind: "pth" }, t("s.pickBusyFile")).then((p) => p && set(p));
 }
 
 /**
@@ -376,7 +377,7 @@ export function CkptAdvanced() {
                   <span className={PATH}>{dest || t("s.ckptOnnxOutAuto")}</span>
                   <Btn
                     onClick={() => {
-                      void invoke<string | null>("ckpt_pick", { kind: "onnx" }).then(
+                      void pickPath<string | null>("ckpt_pick", { kind: "onnx" }, t("s.pickBusyFile")).then(
                         (p) => p && setDest(p),
                       );
                     }}

@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use serde_json::{json, Value};
+use std::sync::OnceLock;
+
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
@@ -671,6 +673,51 @@ impl UserReport {
         self.nickname.trim().is_empty()
             && self.qq.trim().is_empty()
             && self.description.trim().is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 原生对话框
+// ---------------------------------------------------------------------------
+
+/// 主窗口所在的 AppHandle。`setup` 里存一次，给原生对话框认父窗口用。
+///
+/// 存全局而不是把 `AppHandle` 一路传下去：需要挂父窗口的对话框散在四个模块、
+/// 十几个调用点，其中多数是普通函数不是 tauri 命令，逐个改签名会波及一大片。
+/// 而「父窗口是哪个」本来就是进程级唯一的事实 —— 只有一个 main 窗口。
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+pub fn remember_app(app: &AppHandle) {
+    let _ = APP.set(app.clone());
+}
+
+fn parent_window() -> Option<tauri::WebviewWindow> {
+    APP.get().and_then(|a| a.get_webview_window("main"))
+}
+
+/// 建一个**挂在主窗口上**的文件对话框。
+///
+/// 不设父窗口的话，它是一个跟我们没有归属关系的顶层窗口。而选目录用的是同步
+/// 命令（原生对话框要主线程），对话框一开，整个事件循环就停了 —— 用户点主
+/// 窗口的关闭按钮没有任何反应，也不可能弹提示告诉他「先关掉对话框」：那句提示
+/// 要渲染，而渲染线程正被堵着。
+///
+/// 设了父窗口，Windows 自己会把这件事说清楚：父窗口标题栏变灰，点父窗口时对话框
+/// 闪一下并被拉到前台。这是所有 Windows 程序的既有约定，不需要一个字的文案。
+pub fn dialog() -> rfd::FileDialog {
+    let d = rfd::FileDialog::new();
+    match parent_window() {
+        Some(w) => d.set_parent(&w),
+        None => d,
+    }
+}
+
+/// 同上，给消息框用。
+pub fn message_dialog() -> rfd::MessageDialog {
+    let d = rfd::MessageDialog::new();
+    match parent_window() {
+        Some(w) => d.set_parent(&w),
+        None => d,
     }
 }
 

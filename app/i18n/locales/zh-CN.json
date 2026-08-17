@@ -351,7 +351,8 @@
       "no_audio": "没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）",
       "load_failed": "加载模型失败：{error}",
       "all_failed": "{total} 个文件全部转换失败。第一个原因：{first}",
-      "done": "完成 {done} 个，跳过 {skipped} 个"
+      "done": "完成 {done} 个，跳过 {skipped} 个",
+      "hot_unavailable": "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。"
     },
     "train": {
       "step_failed": "该步骤失败（退出码 {code}），详情见 {log}",
@@ -1739,7 +1740,13 @@
     "trainOutHint": "一个音色连模型带索引三四百 MB。想放到别的盘就改这里，模型页照样能用。",
     "trainOutPick": "选音色存放目录",
     "trainOutRelative": "存放目录必须是完整路径（比如 D:\\RVC音色），当前填的是「{a0}」。",
-    "trainOutUnwritable": "建不了存放目录 {a0}：{a1}。换一个能写的位置再开始，别等训完几小时才发现落不下去。"
+    "trainOutUnwritable": "建不了存放目录 {a0}：{a1}。换一个能写的位置再开始，别等训完几小时才发现落不下去。",
+    "provCoreAsk": "hubert / rmvpe / ffmpeg，约 720 MB。实时变声、语音转换、训练音色需要它；DSP 变声和人声分离用不到。现在下，或者以后在广场里再下都行。",
+    "provCoreGet": "下载引擎资源",
+    "provCoreSkip": "以后再说，先进软件",
+    "provCoreDownloading": "正在下载引擎资源…",
+    "provCoreDone": "引擎资源已就绪，实时变声、语音转换、训练都能直接用了。",
+    "provCoreFailed": "引擎资源没下成：{v0}。可以先进软件，之后在广场「下载模型」里重试。"
   },
   "extras": {
     "engineTitle": "引擎资源",

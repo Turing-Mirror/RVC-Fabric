@@ -259,7 +259,7 @@ async fn cover_resolve_many(
 /// image merely loads slowly, it cannot break anything.
 #[tauri::command]
 fn pick_wallpaper() -> Option<String> {
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .add_filter(&crate::i18n::t("s.be8da62ea1"), &["jpg", "jpeg", "png", "webp", "bmp"])
         .set_title(&crate::i18n::t("s.501fdcd3ef"))
         .pick_file()
@@ -662,9 +662,14 @@ fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 
 /// 选音频文件 / 选输出目录。原生对话框要主线程，所以留在同步命令里 ——
 /// 它本来就只阻塞到用户点完为止。
+///
+/// 挂在主窗口上（`shell_extras::dialog`）：不挂的话它是个无归属的顶层窗口，
+/// 而事件循环这会儿被堵着，用户点主窗口关闭没反应、也弹不出任何提示解释原因
+/// （提示要渲染，渲染线程正被这个对话框占着）。挂上之后 Windows 自己会用
+/// 「标题栏变灰 + 点父窗口时对话框闪动」把这件事讲明白。
 #[tauri::command]
 fn separate_pick(dir: bool, input_folder: Option<bool>) -> Option<String> {
-    let d = rfd::FileDialog::new();
+    let d = shell_extras::dialog();
     if dir || input_folder.unwrap_or(false) {
         d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
@@ -1067,7 +1072,7 @@ fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 /// 选数据集目录。原生对话框要主线程。
 #[tauri::command]
 fn train_pick_dataset() -> Option<String> {
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .set_title(&crate::i18n::t("s.612dddefc4"))
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1076,7 +1081,7 @@ fn train_pick_dataset() -> Option<String> {
 /// 选训好的音色放哪。原生对话框要主线程。
 #[tauri::command]
 fn train_pick_output_dir() -> Option<String> {
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .set_title(&crate::i18n::t("s.trainOutPick"))
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1792,6 +1797,8 @@ pub fn run() {
             ckpt_cancel,
         ])
         .setup(move |app| {
+            // 原生对话框要认父窗口，先把句柄存下来（见 shell_extras::dialog）。
+            shell_extras::remember_app(app.handle());
             // Window URL must use the custom scheme registered above.
             // WebView2 cannot register non-standard schemes at all, so wry
             // rewrites `fabric://localhost/x` to `http://fabric.localhost/x`

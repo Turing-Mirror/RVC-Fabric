@@ -351,7 +351,8 @@
       "no_audio": "No convertible audio found (wav/mp3/flac/ogg/m4a and similar are supported)",
       "load_failed": "Failed to load the model: {error}",
       "all_failed": "All {total} files failed to convert. First reason: {first}",
-      "done": "{done} done, {skipped} skipped"
+      "done": "{done} done, {skipped} skipped",
+      "hot_unavailable": "No voice is loaded in the realtime engine — converting in a separate process instead (a bit slower)."
     },
     "train": {
       "step_failed": "This step failed (exit code {code}) — details in {log}",
@@ -1739,7 +1740,13 @@
     "trainOutHint": "A voice runs 300–400 MB with its index. Point this at another drive if you like — the models page still finds it.",
     "trainOutPick": "Choose where to save voices",
     "trainOutRelative": "The save folder must be a full path (for example D:\\Voices); got “{a0}”.",
-    "trainOutUnwritable": "Cannot create the save folder {a0}: {a1}. Pick a writable location before starting — not after hours of training."
+    "trainOutUnwritable": "Cannot create the save folder {a0}: {a1}. Pick a writable location before starting — not after hours of training.",
+    "provCoreAsk": "hubert / rmvpe / ffmpeg, about 720 MB. Needed for realtime conversion, voice conversion and training; DSP voice changing and vocal separation do not use it. Get it now, or later from the Plaza.",
+    "provCoreGet": "Download engine resources",
+    "provCoreSkip": "Later — take me in",
+    "provCoreDownloading": "Downloading engine resources…",
+    "provCoreDone": "Engine resources are ready — realtime conversion, voice conversion and training all work now.",
+    "provCoreFailed": "Engine resources failed: {v0}. You can go in anyway and retry later from the Plaza's download panel."
   },
   "extras": {
     "engineTitle": "Engine resources",

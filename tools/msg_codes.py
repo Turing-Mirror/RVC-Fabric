@@ -103,6 +103,9 @@ STS_NO_AUDIO = "sts.no_audio"
 STS_LOAD_FAILED = "sts.load_failed"
 STS_ALL_FAILED = "sts.all_failed"
 STS_DONE = "sts.done"
+# 「热路径接不上，请走冷路径」的信号，不是终端错误。壳靠这个码把它归成
+# HotError::Unavailable 并自动回退；归错了用户就会看到一句面向开发的状态。
+STS_HOT_UNAVAILABLE = "sts.hot_unavailable"
 
 # 训练
 TRAIN_STEP_FAILED = "train.step_failed"
@@ -179,6 +182,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_LOAD_FAILED: "加载模型失败：{error}",
     STS_ALL_FAILED: "{total} 个文件全部转换失败。第一个原因：{first}",
     STS_DONE: "完成 {done} 个，跳过 {skipped} 个",
+    STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",
     TRAIN_F0_FAILED: "音高提取失败（退出码 {code}），详情见 {log}",

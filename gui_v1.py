@@ -3587,7 +3587,13 @@ if __name__ == "__main__":
 
             rvc = getattr(self, "rvc", None)
             if rvc is None or getattr(rvc, "net_g", None) is None:
-                return None, "实时引擎里还没有加载好的音色模型"
+                # 这不是错误，是「这条快车道今天不通」。壳那边有冷路径兜着。
+                #
+                # 常驻模型为空是**常态**，不是异常：用户开软件、直接进语音转换、
+                # 选模型、点开始 —— 全程没碰过实时变声，rvc 自然是 None。用过
+                # DSP 或丢过音色也一样。以前这里返回一句面向开发的状态，壳把它
+                # 当终端错误抛给用户，转换直接失败（作者本人都看不懂那句话）。
+                return None, "__hot_unavailable__"
 
             want = (model_path or "").strip()
             cur = str(getattr(rvc, "pth_path", "") or "").strip()
@@ -3695,6 +3701,20 @@ if __name__ == "__main__":
                 fail(f"复用实时模型失败：{sts_core.friendly_error(e)}")
                 return
             if vc is None:
+                if why == "__hot_unavailable__":
+                    # 带码上报，壳按「热路径不可用」处理并自动退到冷路径。
+                    from tools.msg_codes import (
+                        STS_HOT_UNAVAILABLE,
+                        msg_fields as _mf,
+                    )
+
+                    self._sts_emit(
+                        phase="error",
+                        pct=0,
+                        hot_unavailable=True,
+                        **_mf(STS_HOT_UNAVAILABLE),
+                    )
+                    return
                 fail(why or "实时引擎里没有可用的模型")
                 return
 

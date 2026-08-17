@@ -9,6 +9,7 @@ import {
   type ProvisionProgress,
 } from "../lib/engine";
 import { Btn, HelpMark } from "./ui";
+import { isEngineCoreReady } from "../lib/downloadModels";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "./MainGpuPicker";
 import { t } from "../i18n/t";
 
@@ -82,6 +83,19 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     null | "ready" | "installing" | "installed" | "failed"
   >(null);
   const [vbcableMsg, setVbcableMsg] = useState("");
+  /**
+   * 引擎资源（hubert / rmvpe / ffmpeg，约 720MB）这一步。
+   *
+   * `null` = 不用问（已经有了）；`ask` = 摆在补全后面让用户自己决定；
+   * 之后是下载中 / 好了 / 失败。
+   *
+   * 刻意不并进首次补全：DSP 变声和人声分离都用不到这三个文件，无条件下载
+   * 等于让这两类用户白等 720MB。摆成「下一步」，跳过也能直接去变声。
+   */
+  const [core, setCore] = useState<
+    null | "ask" | "downloading" | "done" | "failed"
+  >(null);
+  const [coreMsg, setCoreMsg] = useState("");
   // 主显卡。-1 = 自动。只有多块 N 卡时才有得选，所以下面按需渲染。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
 
@@ -220,6 +234,8 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     setError("");
     setVbcable(null);
     setVbcableMsg("");
+    setCore(null);
+    setCoreMsg("");
     startedAt.current = Date.now();
     lastMove.current = { at: Date.now(), done: -1, phase: "" };
     setNow(Date.now());
@@ -227,7 +243,14 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     try {
       const r = await startProvision(variant, false);
       if (r.ok) {
-        // 引擎资源（hubert/rmvpe/ffmpeg）不在首次补全里，改到「下载模型」按需下。
+        // 引擎资源不并进补全本体，但补全完要主动问一句 —— 以前完全不提，用户
+        // 点开实时变声才发现还要再下 720MB，那一下的挫败是可以避免的。
+        try {
+          const ready = await isEngineCoreReady();
+          setCore(ready ? null : "ask");
+        } catch {
+          /* 预览模式：拿不到状态就不问 */
+        }
         // VB-Cable 仍随首次补全准备，否则游戏里听不到变声。
         await prepareVbcable();
       } else if (isCancelError(r.message)) {
@@ -456,8 +479,43 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           </div>
         ) : null}
 
+        {core ? (
+          <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
+            <div className="text-[13.5px] mb-1">{t("extras.engineTitle")}</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              {core === "failed"
+                ? t("s.provCoreFailed", { v0: coreMsg })
+                : core === "downloading"
+                  ? t("s.provCoreDownloading")
+                  : core === "done"
+                    ? t("s.provCoreDone")
+                    : t("s.provCoreAsk")}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2 justify-end">
-          {vbcable ? (
+          {core === "ask" || core === "failed" ? (
+            <>
+              {/* 跳过也能直接去变声：DSP 变声不需要这三个文件。 */}
+              <Btn onClick={onDone}>{t("s.provCoreSkip")}</Btn>
+              <Btn
+                primary
+                onClick={() => {
+                  setCore("downloading");
+                  setCoreMsg("");
+                  void invoke("assets_ensure_engine_core")
+                    .then(() => setCore("done"))
+                    .catch((e) => {
+                      setCoreMsg(String(e));
+                      setCore("failed");
+                    });
+                }}
+              >{t("s.provCoreGet")}</Btn>
+            </>
+          ) : core === "downloading" ? (
+            <Btn disabled>{t("s.provCoreDownloading")}</Btn>
+          ) : vbcable ? (
             <>
               <Btn onClick={onDone}>{vbcable === "ready" ? t("s.31a98593f1") : t("s.33246f6a5e")}</Btn>
               {vbcable === "ready" ? (

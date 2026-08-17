@@ -351,7 +351,8 @@
       "no_audio": "沒有找到可轉換的音訊（支援 wav/mp3/flac/ogg/m4a 等）",
       "load_failed": "載入模型失敗：{error}",
       "all_failed": "{total} 個檔案全部轉換失敗。第一個原因：{first}",
-      "done": "完成 {done} 個，跳過 {skipped} 個"
+      "done": "完成 {done} 個，跳過 {skipped} 個",
+      "hot_unavailable": "即時引擎裡沒有已載入的音色，改用獨立行程轉換（會慢一些）。"
     },
     "train": {
       "step_failed": "該步驟失敗（退出碼 {code}），詳情見 {log}",
@@ -1739,7 +1740,13 @@
     "trainOutHint": "一個音色連模型帶索引三四百 MB。想放到別的碟就改這裡，模型頁照樣能用。",
     "trainOutPick": "選音色存放目錄",
     "trainOutRelative": "存放目錄必須是完整路徑（比如 D:\\RVC音色），目前填的是「{a0}」。",
-    "trainOutUnwritable": "建不了存放目錄 {a0}：{a1}。換一個能寫的位置再開始，別等訓完幾小時才發現落不下去。"
+    "trainOutUnwritable": "建不了存放目錄 {a0}：{a1}。換一個能寫的位置再開始，別等訓完幾小時才發現落不下去。",
+    "provCoreAsk": "hubert / rmvpe / ffmpeg，約 720 MB。即時變聲、語音轉換、訓練音色需要它；DSP 變聲和人聲分離用不到。現在下，或者以後在廣場裡再下都行。",
+    "provCoreGet": "下載引擎資源",
+    "provCoreSkip": "以後再說，先進軟體",
+    "provCoreDownloading": "正在下載引擎資源…",
+    "provCoreDone": "引擎資源已就緒，即時變聲、語音轉換、訓練都能直接用了。",
+    "provCoreFailed": "引擎資源沒下成：{v0}。可以先進軟體，之後在廣場「下載模型」裡重試。"
   },
   "extras": {
     "engineTitle": "引擎資源",

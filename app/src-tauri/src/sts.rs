@@ -466,7 +466,7 @@ pub fn pick_input(folder: bool) -> Option<String> {
     } else {
         crate::i18n::t("s.79b552d700")
     };
-    let dlg = rfd::FileDialog::new().set_title(&title);
+    let dlg = crate::shell_extras::dialog().set_title(&title);
     if folder {
         dlg.pick_folder().map(|p| p.to_string_lossy().into_owned())
     } else {
@@ -482,7 +482,7 @@ pub fn pick_input(folder: bool) -> Option<String> {
 
 pub fn pick_output() -> Option<String> {
     let title = crate::i18n::t("s.cb12ce77e7");
-    rfd::FileDialog::new()
+    crate::shell_extras::dialog()
         .set_title(&title)
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1064,11 +1064,31 @@ fn forward_sts_event(
 
     match phase {
         "error" => {
+            // 「热路径接不上」和「转换失败」是两件事，以前都归成 Failed。
+            //
+            // 回退分支（`HotError::Unavailable`）本来就写好了，但只有传输层问题
+            // （worker 退出、命令没被领走）会走到它。worker 自己报的「实时引擎里
+            // 没有已加载的音色」——恰恰是最该回退的那一种——以 phase=error 上来，
+            // 被当成终端错误直接抛给用户，转换就失败了。而常驻模型为空是常态：
+            // 用户开软件直接进语音转换，全程没碰实时变声，rvc 本来就是 None。
+            let hot_unavailable = v
+                .get("hot_unavailable")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false)
+                || v.get("message_code").and_then(|x| x.as_str())
+                    == Some("sts.hot_unavailable");
+            if hot_unavailable {
+                return Some(Err(HotError::Unavailable(if msg.is_empty() {
+                    "no resident model".to_string()
+                } else {
+                    msg.to_string()
+                })));
+            }
             return Some(Err(HotError::Failed(if msg.is_empty() {
                 crate::i18n::t("s.stsHotFailed").into()
             } else {
                 msg.to_string()
-            })))
+            })));
         }
         "cancelled" => {
             return Some(Err(HotError::Failed(

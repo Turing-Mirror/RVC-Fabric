@@ -40,6 +40,9 @@ if os.getcwd() != NOW_DIR:
 if NOW_DIR not in sys.path:
     sys.path.insert(0, NOW_DIR)
 
+# 必须在 sys.path 补好之后：Runtime 的 python39._pth 不认脚本目录。
+from tools import msg_codes as mc  # noqa: E402
+
 # 采样率字符串 → 整数。原版 infer-web.py 的 sr_dict。
 SR_MAP = {"32k": 32000, "40k": 40000, "48k": 48000}
 SR_FROM_HZ = {32000: "32k", 40000: "40k", 48000: "48k"}
@@ -76,7 +79,14 @@ def emit(**kw):
 
 
 def fail(message):
+    """没有码的报错：上游 RVC 返回的原文，我们编不了码。"""
     emit(phase="error", message=str(message))
+    sys.exit(1)
+
+
+def fail_code(code, params=None):
+    """我们自己写的报错。带码，壳按界面语言取译文。"""
+    emit(phase="error", **mc.msg_fields(code, params))
     sys.exit(1)
 
 
@@ -359,14 +369,18 @@ class StageProgress(threading.Thread):
 
     daemon = True
 
-    def __init__(self, stage, index, total_stages, target_dir, total, message, suffix=None):
+    def __init__(self, stage, index, total_stages, target_dir, total,
+                 message_code, suffix=None, message_params=None):
         super().__init__()
         self.stage = stage
         self.index = index
         self.total_stages = total_stages
         self.target_dir = target_dir
         self.total = max(int(total), 1)
-        self.message = message
+        # 收的是消息码不是成品中文：这行每 1.5 秒往界面刷一次，
+        # 写死中文的话非中文用户整个训练过程都在看中文。
+        self.message_code = message_code
+        self.message_params = message_params
         self.suffix = suffix
         # 不能叫 _stop：Thread.join 收尾会调 self._stop()，盖成 Event
         # 就是 26.8.15/2 那条 TypeError: 'Event' object is not callable。
@@ -389,7 +403,7 @@ class StageProgress(threading.Thread):
                 total_stages=self.total_stages,
                 done=min(done, self.total),
                 total=self.total,
-                message=self.message,
+                **mc.msg_fields(self.message_code, self.message_params),
             )
 
 
@@ -447,7 +461,9 @@ class TrainLogTail(threading.Thread):
                 total_stages=self.total_stages,
                 done=min(ep, self.total_epoch),
                 total=self.total_epoch,
-                message="第 %d / %d 轮" % (ep, self.total_epoch),
+                **mc.msg_fields(
+                    mc.TRAIN_EPOCH, {"epoch": ep, "total": self.total_epoch}
+                ),
             )
 
     def run(self):
@@ -491,7 +507,8 @@ def spawn(args, log_file, env=None):
         )
 
 
-def run_stage(args, log_file, watcher=None, env=None, what="", ok_codes=(0,)):
+def run_stage(args, log_file, watcher=None, env=None,
+              stage_code=mc.TRAIN_STEP_FAILED, ok_codes=(0,)):
     p = spawn(args, log_file, env=env)
     try:
         code = p.wait()
@@ -504,7 +521,7 @@ def run_stage(args, log_file, watcher=None, env=None, what="", ok_codes=(0,)):
             watcher.join(timeout=3)
     if code not in ok_codes:
         dump_log_tail(log_file)
-        fail("%s失败（退出码 %s），详情见 %s" % (what or "该步骤", code, log_file))
+        fail_code(stage_code, {"code": code, "log": log_file})
     return code
 
 
@@ -520,22 +537,22 @@ def stage_preprocess(req, exp_dir, py, n_stages):
     log.write_text("", encoding="utf-8")
     emit(
         phase="stage", stage="preprocess", index=1, total_stages=n_stages,
-        done=0, total=max(n_files, 1), message="切片与重采样…",
+        done=0, total=max(n_files, 1), **mc.msg_fields(mc.TRAIN_PREPROCESS),
     )
     # 切片会把一条长音频切成多段，产出数量必然多于输入数量。用输入数量当分母
     # 只是个下界，所以上面 emit 的 done 一律 min() 住，不会出现 120%。
     w = StageProgress("preprocess", 1, n_stages, exp_dir / "0_gt_wavs",
-                      max(n_files, 1), "切片与重采样…")
+                      max(n_files, 1), mc.TRAIN_PREPROCESS)
     w.start()
     run_stage(
         [py, "infer/modules/train/preprocess.py", dataset, str(SR_MAP[req["sample_rate"]]),
          str(req["n_cpu"]), str(exp_dir), "False", "3.7"],
-        log, watcher=w, what="数据预处理",
+        log, watcher=w, stage_code=mc.TRAIN_PREPROCESS_FAILED,
     )
     emit_checkpoint("preprocess", exp_dir, ROOT, req)
     if count_files(exp_dir / "1_16k_wavs") == 0:
         dump_log_tail(log)
-        fail("预处理没有产出任何切片。检查数据集里是不是没有可读的音频文件。")
+        fail_code(mc.TRAIN_NO_SLICES)
 
 
 def rmvpe_ok(root):
@@ -551,10 +568,11 @@ def stage_f0(req, exp_dir, py, n_stages):
     log = exp_dir / "extract_f0_feature.log"
     method = req["f0_method"]
     if method == "rmvpe" and not rmvpe_ok(NOW_DIR):
-        fail("缺少 assets/rmvpe/rmvpe.pt，请先补全引擎资源。")
+        fail_code(mc.TRAIN_RMVPE_MISSING)
     emit(phase="stage", stage="f0", index=2, total_stages=n_stages,
-         done=0, total=max(total, 1), message="提取音高…")
-    w = StageProgress("f0", 2, n_stages, exp_dir / "2a_f0", max(total, 1), "提取音高…")
+         done=0, total=max(total, 1), **mc.msg_fields(mc.TRAIN_EXTRACT_F0))
+    w = StageProgress("f0", 2, n_stages, exp_dir / "2a_f0", max(total, 1),
+                      mc.TRAIN_EXTRACT_F0)
     w.start()
     if method == "rmvpe" and req["device"] == "cuda":
         args = [py, "infer/modules/train/extract/extract_f0_rmvpe.py",
@@ -565,32 +583,32 @@ def stage_f0(req, exp_dir, py, n_stages):
     else:
         args = [py, "infer/modules/train/extract/extract_f0_print.py",
                 str(exp_dir), str(req["n_cpu"]), method]
-    run_stage(args, log, watcher=w, what="音高提取")
+    run_stage(args, log, watcher=w, stage_code=mc.TRAIN_F0_FAILED)
     emit_checkpoint("f0", exp_dir, ROOT, req)
     if count_files(exp_dir / "2a_f0") == 0 or count_files(exp_dir / "2b-f0nsf") == 0:
         dump_log_tail(log)
-        fail("音高提取没有产出。换一种音高算法再试。")
+        fail_code(mc.TRAIN_NO_F0)
 
 
 def stage_feature(req, exp_dir, py, n_stages):
     total = count_files(exp_dir / "1_16k_wavs")
     log = exp_dir / "extract_f0_feature.log"
     emit(phase="stage", stage="feature", index=3, total_stages=n_stages,
-         done=0, total=max(total, 1), message="提取音色特征…")
+         done=0, total=max(total, 1), **mc.msg_fields(mc.TRAIN_EXTRACT_FEATURE))
     w = StageProgress("feature", 3, n_stages, exp_dir / ("3_feature%d" % FEATURE_DIM),
-                      max(total, 1), "提取音色特征…")
+                      max(total, 1), mc.TRAIN_EXTRACT_FEATURE)
     w.start()
     # 单卡单进程：n_part=1, i_part=0, i_gpu=0。多卡拆分是原版为训练农场做的，
     # 我们的用户是一台家用机，多开只会互相抢显存。
     run_stage(
         [py, "infer/modules/train/extract_feature_print.py", req["device"],
          "1", "0", "0", str(exp_dir), VERSION, str(req["is_half"])],
-        log, watcher=w, what="特征提取",
+        log, watcher=w, stage_code=mc.TRAIN_FEATURE_FAILED,
     )
     emit_checkpoint("feature", exp_dir, ROOT, req)
     if count_files(exp_dir / ("3_feature%d" % FEATURE_DIM)) == 0:
         dump_log_tail(log)
-        fail("特征提取没有产出。多半是 assets/hubert/hubert_base.pt 缺失或损坏。")
+        fail_code(mc.TRAIN_NO_FEATURE)
 
 
 def write_filelist(req, exp_dir, root):
@@ -610,7 +628,7 @@ def write_filelist(req, exp_dir, root):
         & {x.name.split(".")[0] for x in f0nsf.iterdir() if x.is_file()}
     )
     if not names:
-        fail("四类产物对不上号，没有一条可用的训练样本。建议清掉实验重来。")
+        fail_code(mc.TRAIN_NO_SAMPLES)
 
     def esc(p):
         return str(p).replace("\\", "\\\\")
@@ -623,7 +641,7 @@ def write_filelist(req, exp_dir, root):
     ]
     mute = root / "logs" / "mute"
     if not (mute / "0_gt_wavs" / ("mute%s.wav" % req["sample_rate"])).is_file():
-        fail("缺少 logs/mute 静音样本，安装不完整。")
+        fail_code(mc.TRAIN_MUTE_MISSING)
     for _ in range(2):
         opt.append(
             "%s/0_gt_wavs/mute%s.wav|%s/3_feature%d/mute.npy|"
@@ -644,7 +662,7 @@ def write_config(req, exp_dir, root):
     rel = "v1/40k.json" if sr == "40k" else "v2/%s.json" % sr
     src = root / "configs" / rel
     if not src.is_file():
-        fail("缺少 configs/%s" % rel)
+        fail_code(mc.TRAIN_CONFIG_MISSING, {"name": rel})
     dst = exp_dir / "config.json"
     if not dst.exists():
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -655,14 +673,13 @@ def stage_train(req, exp_dir, py, root, n_stages):
     n = write_filelist(req, exp_dir, root)
     emit(phase="stage", stage="train", index=4, total_stages=n_stages,
          done=0, total=req["total_epoch"],
-         message="准备训练（%d 条样本）…" % n)
+         **mc.msg_fields(mc.TRAIN_PREPARING, {"count": n}))
 
     sr = req["sample_rate"]
     pg = root / "assets" / "pretrained_v2" / ("f0G%s.pth" % sr)
     pd = root / "assets" / "pretrained_v2" / ("f0D%s.pth" % sr)
     if not pg.is_file() or not pd.is_file():
-        fail("缺少 %s 的底模（assets/pretrained_v2/f0G%s.pth）。不用底模从零训练"
-             "需要几十小时和上百小时素材，不是这个界面的用法。" % (sr, sr))
+        fail_code(mc.TRAIN_PRETRAINED_MISSING, {"sample_rate": sr})
 
     log = exp_dir / "train.log"
     tail = TrainLogTail(log, req["total_epoch"], 4, n_stages)
@@ -686,7 +703,8 @@ def stage_train(req, exp_dir, py, root, n_stages):
     # 用来设 CUDA_VISIBLE_DEVICES。所以非 N 卡传空串，让它数到 0 卡、走 CPU 分支。
     args += ["-g", "0" if req["device"] == "cuda" else ""]
     (root / "assets" / "weights").mkdir(parents=True, exist_ok=True)
-    run_stage(args, log, watcher=tail, what="训练", ok_codes=(0, TRAIN_PY_DONE))
+    run_stage(args, log, watcher=tail, stage_code=mc.TRAIN_TRAIN_FAILED,
+              ok_codes=(0, TRAIN_PY_DONE))
     emit_checkpoint("train", exp_dir, root, req)
 
 
@@ -702,16 +720,16 @@ def stage_index(req, exp_dir, py, n_stages):
         import numpy as np
 
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-             done=0, total=3, message="收集特征…")
+             done=0, total=3, **mc.msg_fields(mc.TRAIN_COLLECT_FEATURE))
         feat_dir = exp_dir / ("3_feature%d" % FEATURE_DIM)
         if not feat_dir.is_dir():
             emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-                 done=3, total=3, message="没有特征目录，跳过索引")
+                 done=3, total=3, **mc.msg_fields(mc.TRAIN_NO_FEATURE_DIR))
             return None
         names = sorted(x for x in feat_dir.iterdir() if x.is_file() and x.suffix == ".npy")
         if not names:
             emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-                 done=3, total=3, message="没有特征文件，跳过索引")
+                 done=3, total=3, **mc.msg_fields(mc.TRAIN_NO_FEATURE_FILE))
             return None
         big = np.concatenate([np.load(str(x)) for x in names], 0)
         idx = np.arange(big.shape[0])
@@ -720,7 +738,7 @@ def stage_index(req, exp_dir, py, n_stages):
 
         if big.shape[0] > 2e5:
             emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-                 done=1, total=3, message="特征过多，先聚类到 1 万个中心…")
+                 done=1, total=3, **mc.msg_fields(mc.TRAIN_KMEANS))
             try:
                 from sklearn.cluster import MiniBatchKMeans
 
@@ -737,7 +755,8 @@ def stage_index(req, exp_dir, py, n_stages):
                 )
             except Exception as e:  # 聚类失败不该让整次训练白跑
                 emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-                     done=1, total=3, message="聚类失败，改用全量特征：%s" % e)
+                     done=1, total=3,
+                     **mc.msg_fields(mc.TRAIN_KMEANS_FAILED, {"error": e}))
 
         import faiss
 
@@ -745,7 +764,8 @@ def stage_index(req, exp_dir, py, n_stages):
         n_ivf = min(int(16 * np.sqrt(big.shape[0])), big.shape[0] // 39)
         n_ivf = max(n_ivf, 1)
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-             done=2, total=3, message="训练索引（%d 条特征）…" % big.shape[0])
+             done=2, total=3,
+             **mc.msg_fields(mc.TRAIN_BUILD_INDEX, {"count": big.shape[0]}))
         index = faiss.index_factory(FEATURE_DIM, "IVF%s,Flat" % n_ivf)
         ivf = faiss.extract_index_ivf(index)
         ivf.nprobe = 1
@@ -756,12 +776,12 @@ def stage_index(req, exp_dir, py, n_stages):
                          % (n_ivf, ivf.nprobe, req["exp"], VERSION))
         faiss.write_index(index, str(out))
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
-             done=3, total=3, message="索引完成")
+             done=3, total=3, **mc.msg_fields(mc.TRAIN_INDEX_DONE))
         return out
     except Exception as e:
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
              done=3, total=3,
-             message="索引没建成（%s）。音色已经训好，仍可使用。" % e)
+             **mc.msg_fields(mc.TRAIN_INDEX_FAILED, {"error": e}))
         return None
 
 
@@ -773,14 +793,14 @@ def stage_index(req, exp_dir, py, n_stages):
 def normalize(raw):
     exp = str(raw.get("exp") or "").strip()
     if not exp or any(c in exp for c in '\\/:*?"<>|'):
-        fail("音色名不能为空，也不能含 \\ / : * ? \" < > | 这些字符")
+        fail_code(mc.TRAIN_NAME_INVALID)
     sr = str(raw.get("sample_rate") or "48k")
     if sr not in SR_MAP:
-        fail("不支持的采样率：%s" % sr)
+        fail_code(mc.TRAIN_BAD_SAMPLE_RATE, {"sample_rate": sr})
     device = str(raw.get("device") or "cuda")
     method = str(raw.get("f0_method") or "rmvpe")
     if method not in ("rmvpe", "harvest", "pm", "dio"):
-        fail("不支持的音高算法：%s" % method)
+        fail_code(mc.TRAIN_BAD_F0_METHOD, {"method": method})
     def num(key, default):
         """缺省用 default，写了但不合理就夹到 1。
 
@@ -813,11 +833,11 @@ def normalize(raw):
 
 def main():
     if len(sys.argv) < 2:
-        fail("用法：train_worker.py <request.json>")
+        fail_code(mc.TRAIN_USAGE)
     try:
         raw = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     except Exception as e:
-        fail("读不了请求文件：%s" % e)
+        fail_code(mc.TRAIN_BAD_REQUEST, {"error": e})
     req = normalize(raw)
 
     root = Path(NOW_DIR)
@@ -828,7 +848,7 @@ def main():
 
     n_stages = len(STAGES)
     emit(phase="start", exp=req["exp"], total_stages=n_stages,
-         message="开始训练 %s" % req["exp"])
+         **mc.msg_fields(mc.TRAIN_STARTED, {"exp": req["exp"]}))
     emit(
         phase="env",
         python=sys.version.split()[0],
@@ -854,7 +874,10 @@ def main():
             emit(
                 phase="skip",
                 stage="preprocess",
-                message="沿用已有切片的采样率 %s（这次选的是 %s）" % (stored, req["sample_rate"]),
+                **mc.msg_fields(
+                    mc.TRAIN_REUSE_SR,
+                    {"actual": stored, "picked": req["sample_rate"]},
+                ),
             )
         if stored:
             req["sample_rate"] = stored
@@ -867,21 +890,22 @@ def main():
 
     try:
         if resume and have_slices:
-            emit(phase="skip", stage="preprocess", message="已有切片，跳过预处理")
+            emit(phase="skip", stage="preprocess",
+                 **mc.msg_fields(mc.TRAIN_SKIP_PREPROCESS))
             emit_checkpoint("preprocess", exp_dir, root, req)
         else:
             if not Path(req["dataset"]).is_dir():
-                fail("数据集目录不存在：%s" % req["dataset"])
+                fail_code(mc.TRAIN_DATASET_MISSING, {"path": req["dataset"]})
             stage_preprocess(req, exp_dir, py, n_stages)
 
         if resume and have_f0:
-            emit(phase="skip", stage="f0", message="已有音高，跳过")
+            emit(phase="skip", stage="f0", **mc.msg_fields(mc.TRAIN_SKIP_F0))
             emit_checkpoint("f0", exp_dir, root, req)
         else:
             stage_f0(req, exp_dir, py, n_stages)
 
         if resume and have_feat:
-            emit(phase="skip", stage="feature", message="已有特征，跳过")
+            emit(phase="skip", stage="feature", **mc.msg_fields(mc.TRAIN_SKIP_FEATURE))
             emit_checkpoint("feature", exp_dir, root, req)
         else:
             stage_feature(req, exp_dir, py, n_stages)
@@ -891,14 +915,14 @@ def main():
         emit_checkpoint("index", exp_dir, root, req)
     except KeyboardInterrupt:
         emit_checkpoint("interrupted", exp_dir, root, req)
-        emit(phase="error", message="已取消")
+        emit(phase="error", **mc.msg_fields(mc.TRAIN_CANCELLED))
         sys.exit(2)
 
     weights = root / "assets" / "weights" / ("%s.pth" % req["exp"])
     if not weights.is_file():
         emit_checkpoint("missing_weights", exp_dir, root, req)
         dump_log_tail(exp_dir / "train.log")
-        fail("训练结束但没找到 %s。查看 logs/%s/train.log。" % (weights, req["exp"]))
+        fail_code(mc.TRAIN_NO_WEIGHT, {"name": weights, "exp": req["exp"]})
     published = publish_voice(root, req, weights, index_path)
     snap = emit_checkpoint("done", exp_dir, root, req)
     msg = "训练完成" if index_path else "训练完成（索引没建成，音色仍可用）"

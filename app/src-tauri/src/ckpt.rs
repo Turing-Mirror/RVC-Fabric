@@ -190,7 +190,8 @@ fn run_inner(
             continue;
         };
         let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-        let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+        let msg_owned = crate::i18n::t_worker_msg(&v);
+        let msg = msg_owned.as_str();
         match phase {
             "start" | "done" | "error" => {
                 trace.note(&format!("progress {phase} {msg}"));
@@ -201,12 +202,14 @@ fn run_inner(
         }
         match phase {
             "error" => {
-                fail = Some(
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or(&crate::i18n::t("s.60a21a8105"))
-                        .to_string(),
-                );
+                fail = Some({
+                    let m = crate::i18n::t_worker_msg(&v);
+                    if m.is_empty() {
+                        crate::i18n::t("s.60a21a8105")
+                    } else {
+                        m
+                    }
+                });
             }
             "done" => done = Some(v.clone()),
             _ => {}

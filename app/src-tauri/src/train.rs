@@ -462,7 +462,8 @@ fn latest_epoch(train_log: &Path) -> Option<u32> {
 fn note_progress(log: &Path, v: &Value, progress: &mut Progress) {
     let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
     let stage = v.get("stage").and_then(|x| x.as_str()).unwrap_or("");
-    let message = v.get("message").and_then(|x| x.as_str()).unwrap_or("");
+    let message_owned = crate::i18n::t_worker_msg(v);
+    let message = message_owned.as_str();
     let done = v
         .get("done")
         .and_then(|x| x.as_u64().or_else(|| x.as_i64().map(|n| n as u64)));
@@ -637,12 +638,14 @@ fn run_inner(
         note_progress(log, &v, progress);
         match v.get("phase").and_then(|x| x.as_str()).unwrap_or("") {
             "error" => {
-                fail = Some(
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or(&crate::i18n::t("s.60a21a8105"))
-                        .to_string(),
-                )
+                fail = Some({
+                    let m = crate::i18n::t_worker_msg(&v);
+                    if m.is_empty() {
+                        crate::i18n::t("s.60a21a8105")
+                    } else {
+                        m
+                    }
+                })
             }
             "done" => done = Some(v.clone()),
             _ => {}

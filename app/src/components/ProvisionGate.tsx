@@ -79,6 +79,11 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const [extra, setExtra] = useState("");
   // Runtime 下完后准备 VB-Cable：ready=可点安装，installed=装完了，
   // failed=下载或安装失败，仍可跳过。
+  // 运行库这一步排在虚拟声卡前面：没有它变声根本起不来，比"游戏里听不到"更基础。
+  const [vcr, setVcr] = useState<
+    null | "ready" | "installing" | "installed" | "failed"
+  >(null);
+  const [vcrMsg, setVcrMsg] = useState("");
   const [vbcable, setVbcable] = useState<
     null | "ready" | "installing" | "installed" | "failed"
   >(null);
@@ -208,6 +213,34 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     onDismiss?.();
   };
 
+  /** Runtime 之后先看运行库：装过就整条跳过，一个字都不提。 */
+  async function prepareVcredist() {
+    try {
+      // 已装的机器占绝大多数，不该为异常用户多一次点击、多一次下载。
+      if (await invoke<boolean>("vcredist_installed")) return;
+    } catch {
+      // 拿不到结论就当装过：宁可漏提示，也不要给正常用户凭空多一步。
+      return;
+    }
+    setExtra(t("s.vcrPreparing"));
+    setProgress({
+      phase: "vcredist",
+      done: 0,
+      total: 1,
+      percent: 0,
+      message: t("s.vcrPreparing"),
+    });
+    try {
+      await invoke("assets_ensure_vcredist");
+      setExtra("");
+      setVcr("ready");
+    } catch (e) {
+      setExtra("");
+      setVcrMsg(String(e));
+      setVcr("failed");
+    }
+  }
+
   /** Runtime 之后：下 VB-Cable 安装包（软失败可跳过），再让用户点安装。 */
   async function prepareVbcable() {
     setExtra(t("s.094beaeab9"));
@@ -232,6 +265,8 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const start = async () => {
     setBusy(true);
     setError("");
+    setVcr(null);
+    setVcrMsg("");
     setVbcable(null);
     setVbcableMsg("");
     setCore(null);
@@ -251,6 +286,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
         } catch {
           /* 预览模式：拿不到状态就不问 */
         }
+        await prepareVcredist();
         // VB-Cable 仍随首次补全准备，否则游戏里听不到变声。
         await prepareVbcable();
       } else if (isCancelError(r.message)) {
@@ -464,6 +500,21 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           </p>
         ) : null}
 
+        {vcr ? (
+          <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
+            <div className="text-[13.5px] mb-1">{t("s.vcrTitle")}</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              {vcr === "failed"
+                ? vcrMsg
+                : vcr === "installing"
+                  ? t("s.vcrInstalling")
+                  : vcr === "installed"
+                    ? t("s.vcrDone")
+                    : t("s.vcrNeeded")}
+            </div>
+          </div>
+        ) : null}
+
         {vbcable ? (
           <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4">
             <div className="text-[13.5px] mb-1">{t("s.3d4e683008")}</div>
@@ -515,6 +566,28 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             </>
           ) : core === "downloading" ? (
             <Btn disabled>{t("s.provCoreDownloading")}</Btn>
+          ) : vcr === "ready" || vcr === "failed" ? (
+            <>
+              {/* 跳过也走得下去：跳过的人还能在设置页补装。 */}
+              <Btn onClick={() => setVcr(null)}>{t("s.33246f6a5e")}</Btn>
+              {vcr === "ready" ? (
+                <Btn
+                  primary
+                  onClick={() => {
+                    setVcr("installing");
+                    setVcrMsg("");
+                    void invoke("vcredist_install")
+                      .then(() => setVcr("installed"))
+                      .catch((e) => {
+                        setVcrMsg(String(e));
+                        setVcr("failed");
+                      });
+                  }}
+                >{t("s.vcrInstall")}</Btn>
+              ) : null}
+            </>
+          ) : vcr === "installing" ? (
+            <Btn disabled>{t("s.vcrInstalling")}</Btn>
           ) : vbcable ? (
             <>
               <Btn onClick={onDone}>{vbcable === "ready" ? t("s.31a98593f1") : t("s.33246f6a5e")}</Btn>

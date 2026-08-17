@@ -22,6 +22,7 @@ pub mod plaza;
 mod protocol;
 mod provision;
 mod separate;
+mod vcredist;
 mod shell_extras;
 mod sts;
 mod store;
@@ -104,6 +105,59 @@ async fn assets_ensure_engine_core(
             );
         });
         engine_assets::ensure_engine_core(&root, cancel, Some(cb)).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 机器上装没装 VC++ 运行库。补全页据此决定要不要显示那一步。
+#[tauri::command]
+fn vcredist_installed() -> bool {
+    vcredist::installed()
+}
+
+/// 补全 VC++ 运行库安装包。进度走 `provision-progress`（phase=vcredist）。
+#[tauri::command]
+async fn assets_ensure_vcredist(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    tauri::async_runtime::spawn_blocking(move || {
+        let cb: download::ProgressFn = Arc::new(move |done, total, phase| {
+            let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
+            let m = match phase {
+                "verify" => crate::i18n::t("s.3b227dfa30"),
+                other if other.starts_with("connecting:") => {
+                    crate::i18n::te("s.c86b0f4fc1", &(fmt_size(total)))
+                }
+                _ if done == 0 => crate::i18n::t("s.3a05d4d51e"),
+                _ => crate::i18n::tn("s.350261fb86", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
+            };
+            let _ = app.emit(
+                "provision-progress",
+                json!({
+                    "phase": "vcredist",
+                    "done": done,
+                    "total": total.max(1),
+                    "percent": pct,
+                    "message": m,
+                }),
+            );
+        });
+        vcredist::ensure_pack(&root, cancel, Some(cb)).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 静默安装 VC++ 运行库。要 UAC，用户点了才走到这里。
+#[tauri::command]
+async fn vcredist_install(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        vcredist::install(&root).map(|m| json!({"ok": true, "message": m}))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1711,6 +1765,9 @@ pub fn run() {
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,
+            vcredist_installed,
+            assets_ensure_vcredist,
+            vcredist_install,
             assets_install_vbcable,
             assets_uninstall_vbcable,
             product_root,

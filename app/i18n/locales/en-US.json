@@ -1748,7 +1748,22 @@
     "provCoreDone": "Engine resources are ready — realtime conversion, voice conversion and training all work now.",
     "provCoreFailed": "Engine resources failed: {v0}. You can go in anyway and retry later from the Plaza's download panel.",
     "pickBusyFolder": "Choosing a folder. The app responds again once you pick one or cancel — until then, closing or switching pages does nothing.",
-    "pickBusyFile": "Choosing a file. The app responds again once you pick one or cancel — until then, closing or switching pages does nothing."
+    "pickBusyFile": "Choosing a file. The app responds again once you pick one or cancel — until then, closing or switching pages does nothing.",
+    "vcrDone": "Runtime installed",
+    "vcrAlready": "A newer version is already installed",
+    "vcrDoneReboot": "Runtime installed. Restart your PC to apply",
+    "vcrCancelled": "Installation cancelled. Retry later in Settings (code {e})",
+    "vcrBusy": "Another installation is in progress. Try again later (code {e})",
+    "vcrFailed": "Runtime installation failed (code {e})",
+    "vcrNoSetup": "No installer found in the package",
+    "vcrPackBroken": "The runtime package is incomplete. Please retry",
+    "vcrPackMissing": "This build does not ship the runtime package",
+    "vcrWindowsOnly": "This action is Windows only",
+    "vcrTitle": "VC++ Runtime",
+    "vcrNeeded": "VC++ Runtime not found. Voice changing cannot start without it",
+    "vcrInstall": "Install runtime",
+    "vcrInstalling": "Installing the runtime. Windows will ask for permission",
+    "vcrPreparing": "Preparing the runtime package"
   },
   "extras": {
     "engineTitle": "Engine resources",

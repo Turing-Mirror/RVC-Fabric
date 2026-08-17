@@ -1,0 +1,18 @@
+# 外壳静态链接 CRT。
+#
+# 默认动态链接时 rvc-fabric.exe 依赖 vcruntime140.dll，而这个 DLL 不是 Windows
+# 自带的（UCRT 是，它不是），只随 VC++ 运行库安装。缺运行库的机器双击软件时
+# Windows 直接弹系统错误框，进程根本没起来 —— 我们在软件里写的「检测到缺少
+# 运行库，点这里安装」他一辈子看不到。
+#
+# 静态之后外壳自己永远能启动，检测和引导才有意义。
+#
+# 注意：这**不能**替代安装运行库。pythonw.exe 那边（torch / numpy 那些扩展
+# 模块）照样要，所以补全流程里那一步该做还得做。这里只解决「让提示能显示出来」。
+#
+# 只对 Windows 目标生效；Linux/macOS 上开 crt-static 会连不上系统库。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

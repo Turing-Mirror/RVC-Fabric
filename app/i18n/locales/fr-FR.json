@@ -1748,7 +1748,22 @@
     "provCoreDone": "Les ressources moteur sont prêtes — conversion temps réel, conversion vocale et entraînement sont disponibles.",
     "provCoreFailed": "Échec du téléchargement des ressources moteur : {v0}. Vous pouvez entrer et réessayer plus tard depuis la Place.",
     "pickBusyFolder": "Sélection d'un dossier. L'interface répondra à nouveau après votre choix ou une annulation — d'ici là, fermer ou changer de page n'a aucun effet.",
-    "pickBusyFile": "Sélection d'un fichier. L'interface répondra à nouveau après votre choix ou une annulation — d'ici là, fermer ou changer de page n'a aucun effet."
+    "pickBusyFile": "Sélection d'un fichier. L'interface répondra à nouveau après votre choix ou une annulation — d'ici là, fermer ou changer de page n'a aucun effet.",
+    "vcrDone": "Runtime installé",
+    "vcrAlready": "Une version plus récente est déjà installée",
+    "vcrDoneReboot": "Installé. Redémarrez le PC pour appliquer",
+    "vcrCancelled": "Installation annulée. Réessayez dans Paramètres (code {e})",
+    "vcrBusy": "Une autre installation est en cours. Réessayez plus tard (code {e})",
+    "vcrFailed": "Échec de l'installation du runtime (code {e})",
+    "vcrNoSetup": "Aucun programme d'installation dans le paquet",
+    "vcrPackBroken": "Le paquet du runtime est incomplet. Réessayez",
+    "vcrPackMissing": "Cette version n'inclut pas le paquet du runtime",
+    "vcrWindowsOnly": "Cette action est réservée à Windows",
+    "vcrTitle": "Runtime VC++",
+    "vcrNeeded": "Runtime VC++ introuvable. Sans lui, la modification vocale ne peut pas démarrer",
+    "vcrInstall": "Installer le runtime",
+    "vcrInstalling": "Installation du runtime. Windows demandera l'autorisation",
+    "vcrPreparing": "Préparation du paquet du runtime"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

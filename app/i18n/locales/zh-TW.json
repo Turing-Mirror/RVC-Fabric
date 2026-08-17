@@ -1748,7 +1748,22 @@
     "provCoreDone": "引擎資源已就緒，即時變聲、語音轉換、訓練都能直接用了。",
     "provCoreFailed": "引擎資源沒下成：{v0}。可以先進軟體，之後在廣場「下載模型」裡重試。",
     "pickBusyFolder": "正在選擇資料夾。選完或取消之後，介面才會重新回應 —— 這期間點關閉、切頁都不會有反應。",
-    "pickBusyFile": "正在選擇檔案。選完或取消之後，介面才會重新回應 —— 這期間點關閉、切頁都不會有反應。"
+    "pickBusyFile": "正在選擇檔案。選完或取消之後，介面才會重新回應 —— 這期間點關閉、切頁都不會有反應。",
+    "vcrDone": "執行庫已安裝",
+    "vcrAlready": "系統中已有更新版本，無需安裝",
+    "vcrDoneReboot": "執行庫已安裝，重新啟動電腦後生效",
+    "vcrCancelled": "安裝已取消，可稍後在設定頁重試（代碼 {e}）",
+    "vcrBusy": "系統正在安裝其他程式，請稍後重試（代碼 {e}）",
+    "vcrFailed": "執行庫安裝失敗（代碼 {e}）",
+    "vcrNoSetup": "安裝包中找不到安裝程式",
+    "vcrPackBroken": "執行庫安裝包不完整，請重試",
+    "vcrPackMissing": "目前版本未附帶執行庫安裝包",
+    "vcrWindowsOnly": "此操作僅支援 Windows",
+    "vcrTitle": "VC++ 執行庫",
+    "vcrNeeded": "未偵測到 VC++ 執行庫，缺少它變聲無法啟動",
+    "vcrInstall": "安裝執行庫",
+    "vcrInstalling": "正在安裝執行庫，系統會彈出授權視窗",
+    "vcrPreparing": "正在準備執行庫安裝包"
   },
   "extras": {
     "engineTitle": "引擎資源",

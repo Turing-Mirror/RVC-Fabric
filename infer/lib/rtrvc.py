@@ -511,6 +511,34 @@ class RVC:
         f0 *= pow(2, f0_up_key / 12)
         return self.get_f0_post(f0)
 
+    def skip_block(self, block_frame_16k) -> None:
+        """整块静音、外面没调 `infer` 时，替它把音高历史往前推一格。
+
+        `cache_pitch` / `cache_pitchf` 是滚动的历史，**只在 `infer` 里面挪**
+        （见下面那两行 `cache_pitch[:-shift] = cache_pitch[shift:]`）。壳为了
+        省显卡会跳过静音块不调 `infer` —— 那样这段历史就既不挪也不填，停在
+        用户上一次说话的结尾上。
+
+        于是他停顿两秒再开口，模型拿到的音高轨迹还是两秒前那句话的收尾，位置
+        上却被当成「紧挨着现在」。起音处音高对不上，听感就是每句话前几个字发糊。
+
+        新腾出来的位置填 0：0 在 RVC 里就是清音，静音本来就该是清音，跟推理
+        正常跑过静音段时填进去的值一致，不会引入新的怪声。
+        """
+        if self.if_f0 != 1:
+            return
+        shift = int(block_frame_16k) // 160
+        if shift <= 0:
+            return
+        if shift >= self.cache_pitch.shape[0]:
+            self.cache_pitch.zero_()
+            self.cache_pitchf.zero_()
+            return
+        self.cache_pitch[:-shift] = self.cache_pitch[shift:].clone()
+        self.cache_pitchf[:-shift] = self.cache_pitchf[shift:].clone()
+        self.cache_pitch[-shift:] = 0
+        self.cache_pitchf[-shift:] = 0
+
     def infer(
         self,
         input_wav: torch.Tensor,

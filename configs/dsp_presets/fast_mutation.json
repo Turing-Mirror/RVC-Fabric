@@ -1,0 +1,19 @@
+{
+  "name": "快速变异",
+  "desc": "升调加共振峰上移，音高快速抖动 —— 换个人，不是换个怪物",
+  "params": {
+    "pitch": {
+      "semitones": 5.0
+    },
+    "formant": {
+      "shift": 2.5
+    },
+    "vibrato": {
+      "rate": 9.5,
+      "depth": 14.0
+    },
+    "drive": {
+      "amount": 0.1
+    }
+  }
+}

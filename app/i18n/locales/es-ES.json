@@ -1748,7 +1748,22 @@
     "provCoreDone": "Los recursos del motor están listos: ya funcionan la conversión en tiempo real, la conversión de voz y el entrenamiento.",
     "provCoreFailed": "No se pudieron descargar los recursos del motor: {v0}. Puedes entrar y reintentarlo luego desde la Plaza.",
     "pickBusyFolder": "Eligiendo una carpeta. La interfaz volverá a responder cuando elijas o canceles; hasta entonces, cerrar o cambiar de página no hará nada.",
-    "pickBusyFile": "Eligiendo un archivo. La interfaz volverá a responder cuando elijas o canceles; hasta entonces, cerrar o cambiar de página no hará nada."
+    "pickBusyFile": "Eligiendo un archivo. La interfaz volverá a responder cuando elijas o canceles; hasta entonces, cerrar o cambiar de página no hará nada.",
+    "vcrDone": "Runtime instalado",
+    "vcrAlready": "Ya hay una versión más reciente instalada",
+    "vcrDoneReboot": "Instalado. Reinicia el equipo para aplicar",
+    "vcrCancelled": "Instalación cancelada. Reinténtalo en Ajustes (código {e})",
+    "vcrBusy": "Hay otra instalación en curso. Inténtalo más tarde (código {e})",
+    "vcrFailed": "Error al instalar el runtime (código {e})",
+    "vcrNoSetup": "No se encontró el instalador en el paquete",
+    "vcrPackBroken": "El paquete del runtime está incompleto. Reinténtalo",
+    "vcrPackMissing": "Esta versión no incluye el paquete del runtime",
+    "vcrWindowsOnly": "Esta acción solo está disponible en Windows",
+    "vcrTitle": "Runtime de VC++",
+    "vcrNeeded": "No se encontró el runtime de VC++. Sin él no se puede iniciar el cambio de voz",
+    "vcrInstall": "Instalar runtime",
+    "vcrInstalling": "Instalando el runtime. Windows pedirá permiso",
+    "vcrPreparing": "Preparando el paquete del runtime"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

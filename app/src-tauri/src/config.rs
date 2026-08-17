@@ -563,14 +563,22 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
         .and_then(|v| v.as_object())
         .map(|m| m.is_empty())
         .unwrap_or(true);
-    if !preset.is_empty() && params_empty {
+    // 只有真要走 DSP 才把参数补回来。
+    //
+    // 以前这里是无条件补：`dsp_preset` 只要非空就从磁盘把 params 灌进 cfg。
+    // 而下游有几处判定是「有预设或有参数就算 DSP」，于是「选了音色、但配置里
+    // 还留着一个旧预设名」这种状态，会被这一步亲手补成「有参数」，接着被判成
+    // 纯 DSP —— 换回 RVC 换不动的根子之一。
+    //
+    // 判定用补参数之前的 cfg：wants_dsp 本身会看 params，补完再问就是自证。
+    let dsp_on = wants_dsp(&cfg);
+    if dsp_on && !preset.is_empty() && params_empty {
         if let Some(p) = crate::dsp::get(root, &preset) {
             if let Some(params) = p.get("params").cloned().filter(Value::is_object) {
                 cfg.insert("dsp_params".into(), params);
             }
         }
     }
-    let dsp_on = wants_dsp(&cfg);
     if dsp_on {
         cfg.insert("dsp_enabled".into(), json!(true));
         cfg.insert("function".into(), json!("fx"));

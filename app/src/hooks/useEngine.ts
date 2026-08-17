@@ -196,8 +196,14 @@ export function useEngine() {
       try {
         const cfg = await getConfig();
         if (!dspOnly) {
-          dspId = String(cfg.dsp_preset || "").trim();
-          dspOnly = Boolean(cfg.dsp_enabled) || Boolean(dspId);
+          // `dsp_active` 是后端 `config::wants_dsp` 的结论，前端不再自己推。
+          //
+          // 这里以前是「dsp_enabled 或 dsp_preset 非空」—— 比后端那套松：
+          // 配置里剩一个旧预设名就算纯 DSP，于是下面 `activateDsp` 会在开启
+          // 前把 pth_path 清掉、让引擎丢掉模型。用户明明选好了音色，一点
+          // 「开启变声」就被抹掉，只能反复切模型碰运气。
+          dspOnly = Boolean(cfg.dsp_active);
+          dspId = dspOnly ? String(cfg.dsp_preset || "").trim() : "";
         }
         if (!dspOnly) {
           const pth = String(cfg.pth_path || cfg.last_model_path || "").trim();

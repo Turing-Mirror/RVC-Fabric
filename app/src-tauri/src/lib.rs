@@ -172,7 +172,15 @@ async fn assets_uninstall_vbcable(state: State<'_, Mutex<AppState>>) -> Result<V
 /// Full effective settings (defaults overlaid with saved values).
 #[tauri::command]
 fn config_get(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
-    Ok(Value::Object(config::read(&root_clone(&state)?)))
+    let mut cfg = config::read(&root_clone(&state)?);
+    // 「这一次该走 DSP 还是 RVC」由 `config::wants_dsp` 一家说了算，前端不要
+    // 自己再推一遍。以前 useEngine 里是「dsp_enabled 或 有预设」，比 wants_dsp
+    // 松：配置里剩一个旧预设名，前端就当成纯 DSP，开启前先调一次
+    // `activateDsp` —— 那一下会把 pth_path 清掉并让引擎丢掉模型。用户选好的
+    // 音色就是这么在「开启变声」的瞬间被抹掉的。
+    let dsp = config::wants_dsp(&cfg);
+    cfg.insert("dsp_active".into(), json!(dsp));
+    Ok(Value::Object(cfg))
 }
 
 /// Switch shell locale (tray / status message_code). Frontend keeps its own pack.

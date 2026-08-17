@@ -1746,7 +1746,9 @@
     "provCoreSkip": "Más tarde: entrar ya",
     "provCoreDownloading": "Descargando recursos del motor…",
     "provCoreDone": "Los recursos del motor están listos: ya funcionan la conversión en tiempo real, la conversión de voz y el entrenamiento.",
-    "provCoreFailed": "No se pudieron descargar los recursos del motor: {v0}. Puedes entrar y reintentarlo luego desde la Plaza."
+    "provCoreFailed": "No se pudieron descargar los recursos del motor: {v0}. Puedes entrar y reintentarlo luego desde la Plaza.",
+    "pickBusyFolder": "Eligiendo una carpeta. La interfaz volverá a responder cuando elijas o canceles; hasta entonces, cerrar o cambiar de página no hará nada.",
+    "pickBusyFile": "Eligiendo un archivo. La interfaz volverá a responder cuando elijas o canceles; hasta entonces, cerrar o cambiar de página no hará nada."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

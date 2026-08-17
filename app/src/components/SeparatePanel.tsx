@@ -7,6 +7,7 @@ import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { pickPath } from "../lib/nativeDialog";
 
 type Status = {
   runtime_ready?: boolean;
@@ -82,10 +83,10 @@ export function SeparatePanel() {
 
   const pick = async (dir: boolean, inputFolder = false) => {
     try {
-      const p = await invoke<string | null>("separate_pick", {
+      const p = await pickPath<string | null>("separate_pick", {
         dir,
         inputFolder,
-      });
+      }, t("s.pickBusyFolder"));
       if (!p) return;
       if (dir) setOutput(p);
       else setInput(p);

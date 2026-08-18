@@ -89,7 +89,11 @@
     "hfEndpoint": "Hugging Face 미러",
     "hfEndpointTip": "Hugging Face에서 받는 서드파티 음색에만 적용됩니다. 비우면 hf-cdn.sufy.com → hf-mirror.com → 공식 순으로 시도합니다.",
     "hfEndpointPlaceholder": "비움 = 기본 미러",
-    "hfEndpointDefault": "기본 이중 미러"
+    "hfEndpointDefault": "기본 이중 미러",
+    "compatRender": "호환 렌더링",
+    "compatRenderTip": "화면이 검게 나오거나 깨지거나 찢어질 때 켜세요. 재시작 후 적용됩니다. 화면을 CPU가 그리므로 페이지 전환과 반투명 효과의 프레임이 약간 떨어집니다.",
+    "compatRenderOn": "켜짐",
+    "compatRenderOff": "꺼짐"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "음성 끊김이 감지되었습니다. 지연을 늘릴까요? 음성 변조가 다시 시작됩니다",
     "tearApply": "지연 늘리기",
     "tearKeep": "현재 상태 유지",
-    "tearTitle": "음성 품질"
+    "tearTitle": "음성 품질",
+    "trainInterrupted": "지난 학습({v0})이 {v2}회 중 {v1}회에서 중단됐습니다. 슬라이스와 특징은 그대로 남아 있어 다시 시작하면 이어서 진행됩니다. 소재를 다시 처리할 필요는 없습니다.",
+    "trainEtaSoon": "거의 완료",
+    "trainEtaMin": "약 {v0}분 남음",
+    "trainEtaHour": "약 {v0}시간 남음",
+    "trainEtaHourMin": "약 {v0}시간 {v1}분 남음"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

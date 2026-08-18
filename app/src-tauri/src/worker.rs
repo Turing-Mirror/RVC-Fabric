@@ -554,10 +554,13 @@ fn protected_tool_pids() -> Vec<u32> {
 ///   STS / train / separate / TTS pids the shell itself spawned are skipped.
 /// * otherwise — every python whose image lives under Runtime. Used on
 ///   关闭应用 so nothing is left behind.
-pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) {
+///
+/// Returns how many were killed — 启动时的那次调用要拿它写日志。
+pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) -> usize {
     let rt = paths::runtime_dir(root);
     let shell = std::process::id();
     let tools = protected_tool_pids();
+    let mut killed = 0usize;
     for (pid, parent, img) in iter_python_procs() {
         if !path_is_under(&rt, &img) {
             continue;
@@ -579,6 +582,26 @@ pub fn kill_runtime_pythons(root: &Path, orphans_only: bool) {
             ),
         );
         kill_tree(pid);
+        killed += 1;
+    }
+    killed
+}
+
+/// 上一次是被强杀 / 崩掉的：训练、分离、STS、TTS 的 python 都是我们 spawn
+/// 出来的独立进程，壳一死它们不死，还攥着显存继续跑。
+///
+/// 26.8.18 的用户就栽在这里：窗口黑了他去任务管理器结束进程，训练进程活
+/// 得好好的继续跑了五分钟；重开之后界面显示「空闲」，他再点一次开始训练，
+/// 两个进程抢同一张 8G 卡 —— 那时候才是真卡死。
+///
+/// `reap_orphan_workers` 只认实时 worker 的 pid 台账，工具进程不在里面，
+/// 所以这里单独扫一遍。判据和 `orphans_only` 一致：父进程已死，或者已被
+/// Windows 过继到本壳。别人那份还活着的 App 不受影响（它的 python 父进程
+/// 活着且不是本壳）。
+pub fn reap_orphan_tool_pythons(root: &Path) {
+    let n = kill_runtime_pythons(root, true);
+    if n > 0 {
+        crate::logging::shell_log!("收掉 {n} 个上次留下的 Runtime python（训练/分离/合成的残留）");
     }
 }
 

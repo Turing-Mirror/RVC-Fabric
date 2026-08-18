@@ -174,6 +174,10 @@ pub fn defaults() -> Map<String, Value> {
     // 只会多一个没人看的键。needs_restart 在 update() 里单独补。
     m.insert("main_gpu".into(), json!(-1));
     m.insert("close_action".into(), json!("ask"));
+    // 界面兼容渲染。默认关。开了就在下次启动时给 WebView2 加
+    // --disable-gpu-compositing —— 画面交回 CPU 合成，动效会掉一点，
+    // 但显卡驱动一抽风整窗变黑/花屏的机器能救回来。见 lib.rs::run。
+    m.insert("ui_compat_render".into(), json!(false));
     m.insert("theme_mode".into(), json!("system"));
     // UI language (React + Rust tray/errors). Engine logs may stay Chinese.
     // ui_locale_picked 不进 defaults：老配置缺该键时不能被默认 false 盖成「未选过」，
@@ -902,7 +906,7 @@ pub fn describe() -> Value {
     );
     groups.insert(
         "general",
-        vec!["close_action", "ui_locale", "telemetry_opt_in"],
+        vec!["close_action", "ui_locale", "telemetry_opt_in", "ui_compat_render"],
     );
     json!({
         "groups": groups,

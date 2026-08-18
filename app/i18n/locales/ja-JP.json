@@ -89,7 +89,11 @@
     "hfEndpoint": "Hugging Face ミラー",
     "hfEndpointTip": "Hugging Face から取得するサードパーティ音声のみに影響します。空欄の場合は hf-cdn.sufy.com → hf-mirror.com → 公式の順で試します。",
     "hfEndpointPlaceholder": "空 = デフォルトミラー",
-    "hfEndpointDefault": "デフォルト二重ミラー"
+    "hfEndpointDefault": "デフォルト二重ミラー",
+    "compatRender": "互換描画",
+    "compatRenderTip": "画面が真っ黒になる・乱れる・ちらつく場合にオンにしてください。再起動後に有効になります。描画を CPU が担当するため、ページ切り替えとすりガラスのフレームが少し落ちます。",
+    "compatRenderOn": "オン",
+    "compatRenderOff": "オフ"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "音の途切れを検出しました。遅延を広げますか？変声が再起動します",
     "tearApply": "遅延を広げる",
     "tearKeep": "このままにする",
-    "tearTitle": "変声の品質"
+    "tearTitle": "変声の品質",
+    "trainInterrupted": "前回の学習（{v0}）は {v2} 回中 {v1} 回目で中断されました。スライスと特徴はディスクに残っているので、そのまま開始すれば続きから走ります。素材の再処理は不要です。",
+    "trainEtaSoon": "まもなく完了",
+    "trainEtaMin": "残り約 {v0} 分",
+    "trainEtaHour": "残り約 {v0} 時間",
+    "trainEtaHourMin": "残り約 {v0} 時間 {v1} 分"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

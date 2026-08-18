@@ -31,6 +31,8 @@ type Status = {
   suggested_batch?: number;
   rmvpe_present?: boolean;
   busy?: boolean;
+  /** 上一次训练没跑完就断了（壳被强杀/崩了）。busy 时后端一定给 null。 */
+  interrupted?: { exp: string; epoch: number; total: number } | null;
 };
 
 type Progress = {
@@ -52,6 +54,55 @@ function stageName(id: string): string {
     index: t("s.79f9110607"),
   };
   return map[id] || id;
+}
+
+/** 最多留这么多轮的到达时刻。太少会被偶发的一轮抖动带偏，太多则在
+ *  显卡降频之后半天跟不上真实速度。 */
+const ETA_WINDOW = 8;
+
+/**
+ * 估算剩余时间。
+ *
+ * 训练轮数默认 200，每轮八到十秒，进度条每九秒才动 0.5% —— 肉眼就是不动。
+ * 26.8.18 的用户等了十分钟以为死机，去任务管理器把程序结束了。给个「约剩
+ * 25 分钟」，这一整类误判就没了。
+ *
+ * 取中位数而不是平均：预处理刚结束那几轮、以及显卡被别的程序抢走的那几轮
+ * 会明显偏长，平均值会被它们拽着不放。
+ */
+export function trackEta(marks: { at: number; done: number }[], p: Progress): string {
+  if (p.stage !== "train" || !p.total || !p.done) {
+    // 不是训练阶段（预处理/提取音高/特征）就不猜 —— 那几步各自的耗时
+    // 规律完全不同，硬套只会给出一个错得离谱的数。
+    return "";
+  }
+  const last = marks[marks.length - 1];
+  if (last && p.done <= last.done) return "";
+  marks.push({ at: Date.now(), done: p.done });
+  if (marks.length > ETA_WINDOW) marks.splice(0, marks.length - ETA_WINDOW);
+  if (marks.length < 3) return "";
+  const per: number[] = [];
+  for (let i = 1; i < marks.length; i++) {
+    const dt = marks[i].at - marks[i - 1].at;
+    const dn = marks[i].done - marks[i - 1].done;
+    if (dt > 0 && dn > 0) per.push(dt / dn);
+  }
+  if (!per.length) return "";
+  per.sort((a, b) => a - b);
+  const mid = per[Math.floor(per.length / 2)];
+  const left = Math.max(0, p.total - p.done);
+  return humanLeft(Math.round((mid * left) / 1000));
+}
+
+/** 秒数说成人话。不到一分钟就别报数字了，写「快好了」。 */
+export function humanLeft(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return "";
+  if (sec < 60) return t("s.trainEtaSoon");
+  const mins = Math.round(sec / 60);
+  if (mins < 60) return t("s.trainEtaMin", { v0: mins });
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? t("s.trainEtaHourMin", { v0: h, v1: m }) : t("s.trainEtaHour", { v0: h });
 }
 
 const ROW = "flex items-center gap-3 py-2.5";
@@ -88,6 +139,9 @@ export function TrainPanel() {
   const [running, setRunning] = useState(false);
   const [adv, setAdv] = useState(false);
   const runningRef = useRef(false);
+  /** 每轮到达的时刻，用来估剩余时间。只留最近若干个。 */
+  const epochMarks = useRef<{ at: number; done: number }[]>([]);
+  const [eta, setEta] = useState("");
 
   const load = async () => {
     try {
@@ -114,6 +168,7 @@ export function TrainPanel() {
     let un: (() => void) | undefined;
     void listen<Progress>("train-progress", (ev) => {
       setProg(ev.payload);
+      setEta(trackEta(epochMarks.current, ev.payload));
       if (ev.payload.phase === "error") setMsg(ev.payload.message || t("s.60a21a8105"));
     }).then((fn) => {
       if (disposed) fn();
@@ -163,6 +218,8 @@ export function TrainPanel() {
     if (runningRef.current) return;
     setMsg("");
     setProg(null);
+    setEta("");
+    epochMarks.current = [];
     runningRef.current = true;
     setRunning(true);
     try {
@@ -181,12 +238,14 @@ export function TrainPanel() {
         },
       });
       setMsg(t("s.2b30598b60", { v0: r.weights ?? "" }));
-      void load();
     } catch (e) {
       setMsg(String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
+      // 成败都回读一次：训好的音色要出现在列表里，失败/取消的那次也要
+      // 让「上次中断了」这条提示跟着盘上的实际情况走。
+      void load();
     }
   };
 
@@ -390,6 +449,16 @@ export function TrainPanel() {
           </p>
         ) : null}
 
+        {!prog && st.interrupted ? (
+          <p className="m-0 mt-3 text-[12.5px] text-[var(--meta)]">
+            {t("s.trainInterrupted", {
+              v0: st.interrupted.exp,
+              v1: st.interrupted.epoch,
+              v2: st.interrupted.total,
+            })}
+          </p>
+        ) : null}
+
         {prog ? (
           <div className="mt-4">
             <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
@@ -402,6 +471,7 @@ export function TrainPanel() {
               {stepLine ? `${stepLine} · ` : ""}
               {prog.message}
               {prog.phase === "stage" ? ` ${pct}%` : ""}
+              {eta ? ` · ${eta}` : ""}
             </p>
           </div>
         ) : null}

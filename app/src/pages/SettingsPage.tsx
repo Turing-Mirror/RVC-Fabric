@@ -848,6 +848,21 @@ function SettingsPageImpl({
                 }
               />
               <Field
+                label={t("settings.compatRender")}
+                tip={t("settings.compatRenderTip")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.ui_compat_render === true
+                        ? t("settings.compatRenderOn")
+                        : t("settings.compatRenderOff")
+                    }
+                    checked={c.cfg.ui_compat_render === true}
+                    onChange={(v) => c.set("ui_compat_render", v, true)}
+                  />
+                }
+              />
+              <Field
                 label={t("s.3ff3e5ff9b")}
                 tip={TIPS.telemetry_opt_in}
                 desc={t("s.dc3f6fc6fd")}

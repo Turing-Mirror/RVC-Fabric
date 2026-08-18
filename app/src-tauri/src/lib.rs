@@ -11,6 +11,7 @@ mod dsp;
 mod engine_assets;
 mod hf;
 mod extra_assets;
+mod gpu_pref;
 mod extract;
 mod i18n;
 mod legacy;
@@ -1744,6 +1745,33 @@ async fn store_install_staged(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// WebView2 的启动参数只能在进程起来、窗口建出来之前给一次，之后改不了。
+///
+/// 26.8.18：混合显卡笔记本上训练把显存吃满，WebView2 的合成表面申请不到
+/// 显存，两个窗口一起变纯黑。图形首选项（gpu_pref）是对症的那一手；这里
+/// 是兜底 —— 驱动层面的问题不止显存一种，把合成交回 CPU 就一定能画出来。
+///
+/// 默认不开：软件合成会让换页和磨砂掉帧，不该让所有人替少数机器买单。
+fn apply_webview_compat_flag(root: &std::path::Path) {
+    let on = config::read(root)
+        .get("ui_compat_render")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !on {
+        return;
+    }
+    const VAR: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
+    const FLAG: &str = "--disable-gpu-compositing";
+    // 用户自己在环境里设过就顺着他的，不覆盖。
+    let merged = match std::env::var(VAR) {
+        Ok(cur) if cur.contains(FLAG) => cur,
+        Ok(cur) if !cur.trim().is_empty() => format!("{cur} {FLAG}"),
+        _ => FLAG.to_string(),
+    };
+    std::env::set_var(VAR, &merged);
+    logging::shell_log!("界面兼容渲染：已开启（{merged}）");
+}
+
 pub fn run() {
     let root = paths::product_root();
     // Before anything else: a release build has no console, so without this the
@@ -1765,6 +1793,9 @@ pub fn run() {
             .unwrap_or_else(|e| format!("<unknown: {e}>"))
     );
     logging::shell_log!("UI source: {}", ui_assets::source_label());
+
+    // 必须在建窗之前：WebView2 只在第一个 webview 创建时读这个环境变量。
+    apply_webview_compat_flag(&root);
 
     // 尽早清 TEMP：放在 setup 之前，避免建窗/预热 worker 占着文件删不掉。
     // 官方 WebUI 也是一启动就 rmtree(TEMP)。
@@ -2021,6 +2052,11 @@ pub fn run() {
                 }
             }
 
+            // 混合显卡笔记本：把界面钉在集显上，独显整张留给推理和训练。
+            // 不这么做的话训练一吃满显存，WebView2 拿不到合成表面，整个
+            // 窗口会变纯黑 —— 用户看到的就是「打开就卡死」。
+            gpu_pref::apply_once();
+
             // setup 末尾再清一次：中间步骤若又写下临时文件，这里兜底。
             {
                 let stats = paths::clean_temps(&root);
@@ -2046,6 +2082,10 @@ pub fn run() {
                     // 预热之前先收孤儿：上次留下的多余 worker 还占着输出设备，
                     // 不收掉的话这次认领的那个发不出声。
                     worker::reap_orphan_workers(&root_bg);
+                    // 训练 / 分离 / 合成的 python 不在 worker 台账里。上次是
+                    // 被强杀的话它们还活着，还攥着显存 —— 界面这边却是「空
+                    // 闲」，用户再点一次就是两个进程抢同一张卡。
+                    worker::reap_orphan_tool_pythons(&root_bg);
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
                 } else {
                     logging::shell_log!("skip worker prewarm: Runtime not ready");

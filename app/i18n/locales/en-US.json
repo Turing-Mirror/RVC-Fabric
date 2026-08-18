@@ -1775,7 +1775,11 @@
     "guideFirstTitle": "This is your first time using RVC Fabric!",
     "guideFirstBody": "RVC Fabric is starting the voice changer. While you wait, take a look at the basics~",
     "guideFirstGo": "Open the guide",
-    "guideFirstSkip": "No thanks"
+    "guideFirstSkip": "No thanks",
+    "killStsAskTitle": "Voice conversion is still running",
+    "killStsAskBody": "Forcing the engine to stop will also abort the conversion. Finished files are kept; the file being converted will not be saved.",
+    "killStsAskKeep": "Cancel",
+    "killStsAskGo": "Stop both"
   },
   "extras": {
     "engineTitle": "Engine resources",

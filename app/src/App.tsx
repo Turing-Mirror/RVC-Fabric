@@ -378,6 +378,31 @@ export default function App() {
     await invoke("close_finish", { toTray }).catch(() => {});
   };
 
+  // 「强制结束变声引擎」。
+  //
+  // 它现在会把正在跑的语音转换一起收掉（见 lib.rs 的 engine_force_kill）——
+  // 用户报的就是「结束了引擎，转换还在跑」。但转换可能是一批几小时的活，
+  // 不能闷声吃掉，所以按之前先查一下在不在跑，在跑就问一句。不在跑就直接执行，
+  // 不给已经卡死的人再加一道弹窗。
+  const [killAsk, setKillAsk] = useState(false);
+  const doForceKill = async () => {
+    setKillAsk(false);
+    await forceKillEngine();
+    await engine.refresh();
+  };
+  const requestForceKill = async () => {
+    try {
+      const st = await invoke<{ busy?: boolean }>("sts_status");
+      if (st?.busy) {
+        setKillAsk(true);
+        return;
+      }
+    } catch {
+      /* 问不到就当没在跑：这个按钮是用来解卡死的，不该被一次查询失败挡住 */
+    }
+    await doForceKill();
+  };
+
 
 
   useEffect(() => {
@@ -1035,10 +1060,7 @@ export default function App() {
                 <MorePage
                   status={engine.status}
                   provision={engine.provision}
-                  onForceKill={async () => {
-                    await forceKillEngine();
-                    await engine.refresh();
-                  }}
+                  onForceKill={requestForceKill}
                   onOpenProvision={() => {
                     setProvisionDismissed(false);
                     setShowProvision(true);
@@ -1050,6 +1072,27 @@ export default function App() {
           }
         }}
       </PageHost>
+
+      {killAsk ? (
+        <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
+          <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
+            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
+            <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">{t("s.killStsAskBody")}</p>
+            <div className="flex gap-2.5 justify-end">
+              <button
+                type="button"
+                onClick={() => setKillAsk(false)}
+                className="text-[13px] px-3.5 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] border-0 cursor-pointer shadow-[inset_0_0_0_1px_var(--line)]"
+              >{t("s.killStsAskKeep")}</button>
+              <button
+                type="button"
+                onClick={() => void doForceKill()}
+                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+              >{t("s.killStsAskGo")}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {closeAsk ? (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">

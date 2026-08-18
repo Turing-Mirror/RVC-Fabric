@@ -1775,7 +1775,11 @@
     "guideFirstTitle": "這是你第一次使用RVC Fabric哦！",
     "guideFirstBody": "RVC Fabric正在啟動變聲，在這之前，先來看看基礎教學吧～",
     "guideFirstGo": "轉到說明頁",
-    "guideFirstSkip": "不了"
+    "guideFirstSkip": "不了",
+    "killStsAskTitle": "語音轉換仍在進行",
+    "killStsAskBody": "強制結束會一併中止語音轉換。已完成的檔案保留，正在轉換的檔案不會儲存。",
+    "killStsAskKeep": "取消",
+    "killStsAskGo": "一併結束"
   },
   "extras": {
     "engineTitle": "引擎資源",

@@ -37,6 +37,8 @@ type StsStatus = {
   out_dir?: string;
   worker_alive?: boolean;
   busy?: boolean;
+  /** busy 时后端给的最后一条进度快照，用来给新开的窗口补上进度。 */
+  progress?: Progress | null;
   last_input?: string;
   last_output?: string;
   default_input_dir?: string;
@@ -282,6 +284,19 @@ function StsSection() {
           recordingRef.current = true;
           setRecording(true);
         }
+      }
+      // 后台还在转就把界面接回去。
+      //
+      // 进度是靠 `sts-progress` 事件推的，事件只发给当时开着的窗口。用户把这扇
+      // 窗口关掉再打开，一条都没赶上，界面就显示成「还没开始」，而任务其实还在
+      // 跑 —— 用户报的就是这个：以为要从头再来。
+      //
+      // 后端现在会连着 busy 一起给最后一条进度（sts.rs 的 LAST_PROGRESS），
+      // 这里接上就行：进度条接着走，取消按钮也就有东西可取消了。
+      if (s.busy && !runningRef.current) {
+        runningRef.current = true;
+        setRunning(true);
+        if (s.progress) setProg(s.progress);
       }
       applyCurrent(s, cat);
     } catch (e) {

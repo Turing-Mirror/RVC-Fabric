@@ -1775,7 +1775,11 @@
     "guideFirstTitle": "¡Es tu primera vez con RVC Fabric!",
     "guideFirstBody": "RVC Fabric está iniciando el cambiador de voz. Mientras tanto, echa un vistazo a lo básico~",
     "guideFirstGo": "Ir a la guía",
-    "guideFirstSkip": "No, gracias"
+    "guideFirstSkip": "No, gracias",
+    "killStsAskTitle": "La conversión de voz sigue en curso",
+    "killStsAskBody": "Forzar la detención del motor también interrumpirá la conversión. Los archivos terminados se conservan; el archivo en curso no se guardará.",
+    "killStsAskKeep": "Cancelar",
+    "killStsAskGo": "Detener ambos"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

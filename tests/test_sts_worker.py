@@ -246,6 +246,45 @@ class TorchRuntimeTests(unittest.TestCase):
         with inference_context():
             pass
 
+    def test_inference_context_lets_errors_out(self):
+        """块里抛的异常必须原样出来。
+
+        以前 try 把 yield 一起包了，异常被 `except Exception: pass` 吞掉，生成器
+        接着第二次 yield，contextlib 换抛一句 "generator didn't stop after
+        throw()"。用户看到的报错跟真实原因毫无关系。
+        """
+        from infer.lib.torch_runtime import inference_context
+
+        with self.assertRaises(ValueError):
+            with inference_context():
+                raise ValueError("boom")
+
+    def test_no_inference_mode_anywhere(self):
+        """`torch.inference_mode()` 在本仓库里一处都不许有。
+
+        它建出来的张量带 inference 标记，出了块再用就抛
+        "Cannot set version_counter for inference tensor"。而离线转换会在块里
+        懒加载 RMVPE（`mel_basis` 是 register_buffer），26.8.18 有用户因此
+        整批转换失败。省下的那点记账开销不值这个。
+        """
+        import re
+
+        root = Path(__file__).resolve().parent.parent
+        # 只扫源码目录：app/src-tauri 下面有构建时拷进去的副本，虚拟环境里还有
+        # torch 自己，扫到它们只会得到一堆噪音。
+        pat = re.compile(r"(with|return|=)\s+torch\.inference_mode\s*\(")
+        hits = []
+        for sub in ("infer", "tools", "configs"):
+            base = root / sub
+            if not base.is_dir():
+                continue
+            for path in base.rglob("*.py"):
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                for i, line in enumerate(text.splitlines(), 1):
+                    if pat.search(line):
+                        hits.append(f"{path.relative_to(root)}:{i}")
+        self.assertEqual(hits, [], "改回 no_grad：" + ", ".join(hits))
+
     def test_tune_thread_knobs_applied_once(self):
         """第二次 tune 不得再调 set_num_interop_threads。
 

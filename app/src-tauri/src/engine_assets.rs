@@ -151,6 +151,57 @@ pub fn fetch_pack(
     fetch_and_extract(cache_name, sha, dest_root, root, cancel, progress)
 }
 
+/// 按 Release 标签直连的下载地址，作为 `/-/lfs/<sha>` 的备用源。
+///
+/// 按 sha 寻址那条路要等 CNB 侧建索引，刚传上去的制品会 404 一段时间（实测
+/// 新传的包直连 206、按 sha 404）。只挂一条源等于把「能不能装」押在一个我们
+/// 控制不了的后台任务上。
+///
+/// 两条路指向同一个文件，而下载完照样按 sha 校验，多一条源不会放松任何检查。
+pub fn release_urls(root: &Path, tag: &str, file: &str) -> Vec<String> {
+    crate::mirrors::lfs_bases(root)
+        .into_iter()
+        .map(|base| format!("{base}/-/releases/download/{tag}/{file}"))
+        .collect()
+}
+
+/// 同 `fetch_pack`，但在按 sha 寻址之后再挂几条备用地址。
+pub fn fetch_pack_with_fallback(
+    cache_name: &str,
+    sha: &str,
+    extra: Vec<String>,
+    dest_root: &Path,
+    root: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
+) -> Result<(), String> {
+    let cache = paths::update_cache(root);
+    std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
+    let archive = cache.join(cache_name);
+    let cached_ok = archive.is_file() && download::verify_sha256(&archive, sha).is_ok();
+    if !cached_ok {
+        let mut urls = lfs_urls(root, sha);
+        urls.extend(extra);
+        download::download_request(
+            download::DownloadRequest {
+                urls,
+                root: Some(root.to_path_buf()),
+                dest: archive.clone(),
+                expected_sha256: sha.to_string(),
+                size_hint: 0,
+                connections: None,
+                kind: download::DownloadKind::Generic,
+            },
+            cancel,
+            progress,
+        )
+        .map_err(|e| crate::i18n::te("s.04c4e3b2b3", &(e)))?;
+    }
+    extract::extract_zip(&archive, dest_root).map_err(|e| crate::i18n::te("s.0707e8af4e", &(e)))?;
+    let _ = std::fs::remove_file(&archive);
+    Ok(())
+}
+
 fn fetch_and_extract(
     cache_name: &str,
     sha: &str,
@@ -470,6 +521,25 @@ mod tests {
                 d.display()
             );
         }
+    }
+
+    #[test]
+    fn a_release_tag_url_is_built_for_every_mirror() {
+        // 按 sha 寻址要等 CNB 建索引，新传的包会 404 一阵子。备用源必须跟着
+        // 镜像一起铺开，只有官方仓一条的话 CNB 一挂就全断。
+        let root = std::env::temp_dir().join("rvcf-rel-url");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("configs")).unwrap();
+        std::fs::write(
+            root.join("configs").join("online_catalog.json"),
+            r#"{"download_mirrors":{"lfs":["https://backup.example.cn/Turing-Mirror/Rel"]}}"#,
+        )
+        .unwrap();
+        let u = release_urls(&root, "vcredist", "vcredist-x64.zip");
+        assert_eq!(u.len(), 2, "{u:?}");
+        assert!(u[0].starts_with(CNB_REPO), "官方仓库必须还是第一个");
+        assert!(u[0].ends_with("/-/releases/download/vcredist/vcredist-x64.zip"), "{}", u[0]);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

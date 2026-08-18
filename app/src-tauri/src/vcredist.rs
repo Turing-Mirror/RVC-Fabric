@@ -24,6 +24,8 @@ use crate::download;
 pub const PACK_SHA: &str =
     "8070a3607eef0f8e24de95eef079426456ea7d30bfd25d722c23f77b1c3c6d60";
 pub const PACK_NAME: &str = "vcredist-x64.zip";
+/// 发布仓的 Release 标签，直连备用地址用它拼。
+pub const RELEASE_TAG: &str = "vcredist";
 
 pub fn pack_dir(root: &Path) -> PathBuf {
     root.join("VCREDIST")
@@ -122,7 +124,17 @@ pub fn ensure_pack(
     if PACK_SHA.is_empty() {
         return Err(crate::i18n::t("s.vcrPackMissing"));
     }
-    crate::engine_assets::fetch_pack(PACK_NAME, PACK_SHA, &pack_dir(root), root, cancel, progress)?;
+    // 备用源：按 sha 寻址要等 CNB 建索引，刚传上去的包会 404 一阵子。
+    let extra = crate::engine_assets::release_urls(root, RELEASE_TAG, PACK_NAME);
+    crate::engine_assets::fetch_pack_with_fallback(
+        PACK_NAME,
+        PACK_SHA,
+        extra,
+        &pack_dir(root),
+        root,
+        cancel,
+        progress,
+    )?;
     if pack_ready(root) {
         Ok(())
     } else {

@@ -1096,8 +1096,8 @@ pub fn unbind_index(root: &Path, model_dir: &str, index_path: &str) -> Result<Va
     list_index_bindings(root, model_dir)
 }
 
-pub fn pick_index_file() -> Option<String> {
-    crate::shell_extras::dialog()
+pub fn pick_index_file(win: Option<&tauri::WebviewWindow>) -> Option<String> {
+    crate::shell_extras::dialog_on(win)
         .add_filter(&crate::i18n::t("s.dc66c55a2e"), &["index"])
         .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
         .set_title(&crate::i18n::t("s.6832505652"))
@@ -1544,8 +1544,12 @@ pub fn delete_profile(root: &Path, model_dir: &str, profile_id: &str) -> Result<
     list_profiles(root, model_dir)
 }
 
-pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
-    let path = crate::shell_extras::dialog()
+pub fn import_profile(
+    win: Option<&tauri::WebviewWindow>,
+    root: &Path,
+    model_dir: &str,
+) -> Result<Value, String> {
+    let path = crate::shell_extras::dialog_on(win)
         .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp", "json"])
         .set_title(&crate::i18n::t("s.a49f8d4a05"))
         .pick_file()
@@ -1595,7 +1599,11 @@ pub fn import_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
     set_active_profile(root, model_dir, &id)
 }
 
-pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, String> {
+pub fn export_active_profile(
+    win: Option<&tauri::WebviewWindow>,
+    root: &Path,
+    model_dir: &str,
+) -> Result<Value, String> {
     let md = PathBuf::from(model_dir);
     guard_model_dir(root, &md)?;
     let side = read_sidecar(&md);
@@ -1627,7 +1635,7 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
         })
         .take(80)
         .collect();
-    let dest = crate::shell_extras::dialog()
+    let dest = crate::shell_extras::dialog_on(win)
         .set_file_name(format!("{safe}.tmvp"))
         .add_filter(&crate::i18n::t("s.5ec6f626c3"), &["tmvp"])
         .set_title(&crate::i18n::t("s.217b12a5cb"))
@@ -1641,8 +1649,8 @@ pub fn export_active_profile(root: &Path, model_dir: &str) -> Result<Value, Stri
 // import / delete / open / promote
 // ---------------------------------------------------------------------------
 
-pub fn pick_import_files() -> Vec<String> {
-    crate::shell_extras::dialog()
+pub fn pick_import_files(win: Option<&tauri::WebviewWindow>) -> Vec<String> {
+    crate::shell_extras::dialog_on(win)
         .add_filter(&crate::i18n::t("s.c4301894a2"), &["pth", "index", "zip"])
         .add_filter(&crate::i18n::t("s.778fc8f994"), &["*"])
         .set_title(&crate::i18n::t("s.54b3625b92"))

@@ -367,8 +367,8 @@ async fn cover_resolve_many(
 /// referenced by path and decoded by the webview on its own time — a huge
 /// image merely loads slowly, it cannot break anything.
 #[tauri::command]
-fn pick_wallpaper() -> Option<String> {
-    crate::shell_extras::dialog()
+fn pick_wallpaper(window: tauri::WebviewWindow) -> Option<String> {
+    crate::shell_extras::dialog_on(Some(&window))
         .add_filter(&crate::i18n::t("s.be8da62ea1"), &["jpg", "jpeg", "png", "webp", "bmp"])
         .set_title(&crate::i18n::t("s.501fdcd3ef"))
         .pick_file()
@@ -777,8 +777,12 @@ fn separate_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 /// （提示要渲染，渲染线程正被这个对话框占着）。挂上之后 Windows 自己会用
 /// 「标题栏变灰 + 点父窗口时对话框闪动」把这件事讲明白。
 #[tauri::command]
-fn separate_pick(dir: bool, input_folder: Option<bool>) -> Option<String> {
-    let d = shell_extras::dialog();
+fn separate_pick(
+    window: tauri::WebviewWindow,
+    dir: bool,
+    input_folder: Option<bool>,
+) -> Option<String> {
+    let d = shell_extras::dialog_on(Some(&window));
     if dir || input_folder.unwrap_or(false) {
         d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
@@ -931,8 +935,12 @@ async fn sts_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> 
 }
 
 #[tauri::command]
-fn sts_pick_input(state: State<'_, Mutex<AppState>>, folder: bool) -> Option<String> {
-    let p = sts::pick_input(folder)?;
+fn sts_pick_input(
+    window: tauri::WebviewWindow,
+    state: State<'_, Mutex<AppState>>,
+    folder: bool,
+) -> Option<String> {
+    let p = sts::pick_input(Some(&window), folder)?;
     if let Ok(root) = root_clone(&state) {
         sts::remember_input(&root, &p);
     }
@@ -940,8 +948,11 @@ fn sts_pick_input(state: State<'_, Mutex<AppState>>, folder: bool) -> Option<Str
 }
 
 #[tauri::command]
-fn sts_pick_output(state: State<'_, Mutex<AppState>>) -> Option<String> {
-    let p = sts::pick_output()?;
+fn sts_pick_output(
+    window: tauri::WebviewWindow,
+    state: State<'_, Mutex<AppState>>,
+) -> Option<String> {
+    let p = sts::pick_output(Some(&window))?;
     if let Ok(root) = root_clone(&state) {
         sts::remember_output(&root, &p);
     }
@@ -1180,8 +1191,8 @@ fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 
 /// 选数据集目录。原生对话框要主线程。
 #[tauri::command]
-fn train_pick_dataset() -> Option<String> {
-    crate::shell_extras::dialog()
+fn train_pick_dataset(window: tauri::WebviewWindow) -> Option<String> {
+    crate::shell_extras::dialog_on(Some(&window))
         .set_title(&crate::i18n::t("s.612dddefc4"))
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1189,8 +1200,8 @@ fn train_pick_dataset() -> Option<String> {
 
 /// 选训好的音色放哪。原生对话框要主线程。
 #[tauri::command]
-fn train_pick_output_dir() -> Option<String> {
-    crate::shell_extras::dialog()
+fn train_pick_output_dir(window: tauri::WebviewWindow) -> Option<String> {
+    crate::shell_extras::dialog_on(Some(&window))
         .set_title(&crate::i18n::t("s.trainOutPick"))
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())
@@ -1221,8 +1232,8 @@ fn train_cancel() {
 }
 
 #[tauri::command]
-fn ckpt_pick(kind: Option<String>) -> Option<String> {
-    ckpt::pick(kind.as_deref().unwrap_or("pth"))
+fn ckpt_pick(window: tauri::WebviewWindow, kind: Option<String>) -> Option<String> {
+    ckpt::pick(Some(&window), kind.as_deref().unwrap_or("pth"))
 }
 
 #[tauri::command]
@@ -1528,6 +1539,7 @@ fn voices_index_use(
 
 #[tauri::command]
 fn voices_index_bind(
+    window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     index_src: Option<String>,
@@ -1535,7 +1547,7 @@ fn voices_index_bind(
     let root = root_clone(&state)?;
     let src = match index_src.filter(|s| !s.is_empty()) {
         Some(s) => s,
-        None => voices::pick_index_file().ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?,
+        None => voices::pick_index_file(Some(&window)).ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?,
     };
     voices::bind_index_file(&root, &model_dir, &src)
 }
@@ -1591,24 +1603,27 @@ fn voices_profile_delete(
 
 #[tauri::command]
 fn voices_profile_import(
+    window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::import_profile(&root, &model_dir)
+    voices::import_profile(Some(&window), &root, &model_dir)
 }
 
 #[tauri::command]
 fn voices_profile_export(
+    window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::export_active_profile(&root, &model_dir)
+    voices::export_active_profile(Some(&window), &root, &model_dir)
 }
 
 #[tauri::command]
 async fn voices_import(
+    window: tauri::WebviewWindow,
     state: State<'_, Mutex<AppState>>,
     paths: Option<Vec<String>>,
     current_model_dir: Option<String>,
@@ -1619,7 +1634,7 @@ async fn voices_import(
     let files = match paths.filter(|p| !p.is_empty()) {
         Some(p) => p,
         None => {
-            let picked = voices::pick_import_files();
+            let picked = voices::pick_import_files(Some(&window));
             if picked.is_empty() {
                 return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }

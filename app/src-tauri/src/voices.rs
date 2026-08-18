@@ -959,14 +959,31 @@ fn guard_model_dir(root: &Path, md: &Path) -> Result<(), String> {
     let Ok(root_c) = models.canonicalize() else {
         return Err(crate::i18n::t("s.3ba595eced").into());
     };
-    if !md_c.starts_with(&root_c) {
+    // 1.5.3 起音色可以合法地待在音色库外：训练自定义存放目录
+    // （`train_output_dir`，可以指到另一个盘）落下来的音色会被列进模型页，
+    // 那它们就该能改名 / 删除 / 绑检索库 —— 否则就是「能列出来、不能管理」，
+    // 用户点删除只会得到一句看不见的「路径不在音色库内」（diag 26.8.18）。
+    // 目录还没建（canonicalize 失败）时只认音色库，不额外放行。
+    let extra_raw = crate::config::train_output_dir(root);
+    let extra_c = if extra_raw.trim().is_empty() {
+        None
+    } else {
+        PathBuf::from(extra_raw.trim()).canonicalize().ok()
+    };
+    let in_models = md_c.starts_with(&root_c);
+    let in_extra = extra_c
+        .as_ref()
+        .map(|e| md_c.starts_with(e))
+        .unwrap_or(false);
+    if !in_models && !in_extra {
         return Err(crate::i18n::t("s.899c21edd3").into());
     }
     // starts_with is also true when the paths are equal, so without this a
     // delete_voice(models_dir) would recursively wipe the whole library. The UI
     // never passes it today, but this is the most destructive operation in the
-    // app and it should not be one bad argument away.
-    if md_c == root_c {
+    // app and it should not be one bad argument away. 训练输出根目录同样不能
+    // 整根删（那里还有切片/特征/日志，删了等于把训练现场也端了）。
+    if md_c == root_c || extra_c.as_ref().map(|e| md_c == *e).unwrap_or(false) {
         return Err(crate::i18n::t("s.b43921940c").into());
     }
     Ok(())
@@ -1781,6 +1798,104 @@ fn import_pth(root: &Path, src: &Path) -> Result<Value, String> {
     }))
 }
 
+/// 路径规范化：去 verbatim 前缀（`\\?\`）、统一分隔符与大小写，用于删除后的
+/// 字符串比较。文件此时已删，canonicalize 拿不到，不能依赖它。
+fn norm_path(p: &str) -> String {
+    let s = p.trim().replace("\\\\?\\", "").replace('\\', "/");
+    #[cfg(windows)]
+    {
+        s.to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
+/// 删除音色后清掉 app_config / inuse 里指向该目录的引用（当前选中、最近使用）。
+/// 不清的话：模型页/首页还会把已经删掉的音色当成「当前音色」或「最近使用」，
+/// worker 的 inuse 里也留着旧路径，下次起流报「请选择音色」。
+fn drop_voice_refs(root: &Path, md: &Path) {
+    let dir_s = norm_path(&md.to_string_lossy());
+    // inuse 里存的是相对安装目录的路径（`User_Data\models\...`），比较前先
+    // 拼成绝对路径；app_config 里是绝对路径。
+    let hit = |s: &str| -> bool {
+        let s = s.trim();
+        if s.is_empty() {
+            return false;
+        }
+        let p = if Path::new(s).is_absolute() {
+            s.to_string()
+        } else {
+            root.join(s).to_string_lossy().into_owned()
+        };
+        let n = norm_path(&p);
+        n == dir_s || n.starts_with(&format!("{dir_s}/"))
+    };
+    let mut cfg = load_app_config(root);
+    let mut changed = false;
+    let mut clear_inuse = false;
+    if cfg
+        .get("pth_path")
+        .and_then(|v| v.as_str())
+        .map(hit)
+        .unwrap_or(false)
+    {
+        cfg.insert("pth_path".into(), json!(""));
+        clear_inuse = true;
+        changed = true;
+    }
+    if cfg
+        .get("index_path")
+        .and_then(|v| v.as_str())
+        .map(hit)
+        .unwrap_or(false)
+    {
+        cfg.insert("index_path".into(), json!(""));
+        clear_inuse = true;
+        changed = true;
+    }
+    if cfg
+        .get("last_model_path")
+        .and_then(|v| v.as_str())
+        .map(hit)
+        .unwrap_or(false)
+    {
+        cfg.remove("last_model_path");
+        cfg.remove("last_model");
+        cfg.remove("last_model_name");
+        changed = true;
+    }
+    // recent_models 的 key 是 pth 绝对路径，或 `dir|name`
+    if let Some(arr) = cfg.get("recent_models").and_then(|v| v.as_array()) {
+        let keep: Vec<Value> = arr
+            .iter()
+            .filter(|x| {
+                let s = x.as_str().unwrap_or("");
+                !(hit(s) || s.starts_with(&format!("{dir_s}|")))
+            })
+            .cloned()
+            .collect();
+        if keep.len() != arr.len() {
+            cfg.insert("recent_models".into(), json!(keep));
+            changed = true;
+        }
+    }
+    if changed {
+        let _ = save_app_config(root, &cfg);
+    }
+    if clear_inuse {
+        // inuse 平时由外壳在设置变化时同步；删除没有后续同步，直接清掉
+        // 指向已删目录的引擎键，免得 worker 拿旧路径起流。
+        let iu = paths::inuse_config_path(root);
+        if let Some(mut v) = read_json(&iu).as_object().cloned() {
+            v.insert("pth_path".into(), json!(""));
+            v.insert("index_path".into(), json!(""));
+            let _ = write_json_atomic(&iu, &Value::Object(v));
+        }
+    }
+}
+
 pub fn delete_voice(root: &Path, model_dir: &str) -> Result<Value, String> {
     let md = PathBuf::from(model_dir);
     guard_model_dir(root, &md)?;
@@ -1806,6 +1921,7 @@ pub fn delete_voice(root: &Path, model_dir: &str) -> Result<Value, String> {
         Ok(())
     }
     rm(&md)?;
+    drop_voice_refs(root, &md);
     Ok(json!({"ok": true}))
 }
 
@@ -1978,6 +2094,88 @@ mod tests {
         assert!(err.contains(&crate::i18n::t("s.18755acbbb")), "got {err}");
         // Anything outside stays rejected.
         assert!(guard_model_dir(&root, &root).is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn guard_allows_train_output_dir_voices() {
+        // 1.5.3 训练可以自定义存放目录（train_output_dir，可以指到另一个盘），
+        // list_voices 会把那里的音色列进模型页（source=user_data），删除/改名
+        // 走同一个 guard_model_dir —— 不放行的话用户点删除只会得到
+        // 「路径不在音色库内」（diag 26.8.18 模型删不掉）。
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let root = std::env::temp_dir().join("rvcf-guard-train-test");
+        std::fs::create_dir_all(paths::models_dir(&root)).unwrap();
+        let out = std::env::temp_dir().join("rvcf-guard-train-out");
+        let voice = out.join("myvoice");
+        std::fs::create_dir_all(&voice).unwrap();
+        crate::config::set_train_output_dir(&root, &out.to_string_lossy()).unwrap();
+
+        // 训练输出目录下的音色目录可以管理（删除/改名/绑检索库）。
+        assert!(guard_model_dir(&root, &voice).is_ok());
+        // 训练输出根目录本身仍被拒 —— 那里还有切片/特征/日志，整根删等于
+        // 把训练现场也端了。
+        assert!(guard_model_dir(&root, &out).is_err());
+        // 没设 train_output_dir 时行为不变（只认音色库）。
+        crate::config::set_train_output_dir(&root, "").unwrap();
+        assert!(guard_model_dir(&root, &voice).is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn delete_voice_clears_config_refs() {
+        // 删除音色后，app_config 的当前选中/最近使用和 inuse 里指向它的
+        // 引用必须一起清掉，否则首页/底栏还把已删音色当「当前音色」。
+        let _g = crate::i18n::testing::pin("zh-CN");
+        let root = std::env::temp_dir().join("rvcf-delete-refs-test");
+        let models = paths::models_dir(&root);
+        let voice = models.join("myvoice");
+        std::fs::create_dir_all(&voice).unwrap();
+        let pth = voice.join("myvoice.pth");
+        std::fs::write(&pth, b"fake pth").unwrap();
+
+        let mut cfg = load_app_config(&root);
+        cfg.insert("pth_path".into(), json!(pth.to_string_lossy()));
+        cfg.insert("index_path".into(), json!(voice.join("x.index").to_string_lossy()));
+        cfg.insert("last_model".into(), json!("myvoice.pth"));
+        cfg.insert("last_model_name".into(), json!("myvoice"));
+        cfg.insert("last_model_path".into(), json!(pth.to_string_lossy()));
+        cfg.insert(
+            "recent_models".into(),
+            json!([pth.to_string_lossy(), "D:\\other\\voice.pth"]),
+        );
+        save_app_config(&root, &cfg).unwrap();
+        // 造一份 inuse，模拟外壳同步过
+        let iu = paths::inuse_config_path(&root);
+        write_json_atomic(
+            &iu,
+            &json!({"pth_path": pth.to_string_lossy(), "index_path": "x", "block_time": 0.25}),
+        )
+        .unwrap();
+
+        assert!(delete_voice(&root, &voice.to_string_lossy()).is_ok());
+        assert!(!voice.exists());
+
+        let after = load_app_config(&root);
+        assert_eq!(after.get("pth_path").and_then(|v| v.as_str()), Some(""));
+        assert_eq!(after.get("index_path").and_then(|v| v.as_str()), Some(""));
+        assert!(after.get("last_model_path").is_none());
+        assert!(after.get("last_model").is_none());
+        let recents = after
+            .get("recent_models")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        assert_eq!(recents.len(), 1);
+        assert_eq!(recents[0].as_str(), Some("D:\\other\\voice.pth"));
+
+        let inuse = read_json(&iu);
+        assert_eq!(inuse.get("pth_path").and_then(|v| v.as_str()), Some(""));
+        assert_eq!(inuse.get("index_path").and_then(|v| v.as_str()), Some(""));
+        assert_eq!(inuse.get("block_time").and_then(|v| v.as_f64()), Some(0.25));
 
         let _ = std::fs::remove_dir_all(&root);
     }

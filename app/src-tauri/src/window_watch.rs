@@ -541,9 +541,6 @@ pub fn round_corners(win: &WebviewWindow) {
     // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
     // 调用方在 Resized 时会再调一次。
     logging::shell_log!(crate::i18n::t("s.2d0c1739e0"));
-    // Win10 上「拖动窗口后左缘留一条永不消失的竖带」也在这条分支里一并治掉。
-    // 注意：必须延后到后台线程做，绝不能在建窗现场同步改框架（见函数注释）。
-    kill_undecorated_shadow_inset_deferred(win);
     apply_corner_region(win);
     sync_maximized_frame(win);
 }

@@ -132,6 +132,14 @@ function ModelsPageImpl({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // 页面消息（删除/改名/导入的结果）自动消失：不消失的话会一直挂着，
+  // 而下一条消息会盖掉上一条，用户更容易漏看。4 秒足够读完一行。
+  useEffect(() => {
+    if (!msg) return;
+    const id = window.setTimeout(() => setMsg(""), 4000);
+    return () => window.clearTimeout(id);
+  }, [msg]);
+
   const dropVoice = useCallback(async () => {
     if (!dspId) {
       setMsg(t("msg.vc.need_model"));
@@ -412,7 +420,12 @@ function ModelsPageImpl({
       />
 
       {msg ? (
-        <div className="text-[12.5px] text-[var(--meta)] mt-2">{msg}</div>
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[95] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
+        >
+          {msg}
+        </div>
       ) : null}
 
       <AdBanner banner={banner} />

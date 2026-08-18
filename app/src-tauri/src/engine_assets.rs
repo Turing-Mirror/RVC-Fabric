@@ -129,6 +129,14 @@ fn has_driver_files(dir: &Path) -> bool {
 /// 以前只有官方仓库一条 —— CNB 一挂，谁都装不上，而这是首次运行的必经之路。
 /// 现在基址列表从清单来（`mirrors::lfs_bases`），官方仓库永远排第一，要加备份
 /// 源改一行 JSON 就行，不用发新版本。
+///
+/// **这条路只对老制品有效。** 实测 engine-core 和 vbcable 按 sha 能取到
+/// （206），而 setup 和新传的 vcredist 都是 404 —— 前两个是仓库当年还在用
+/// git-lfs 时留下的对象，后来 LFS 清掉了，但对象永远留在历史里。之后用
+/// Release 附件传上去的东西，**不会**进这个命名空间。
+///
+/// 所以每个包都必须另外挂一条按标签直连的地址（`release_urls`）。只写这一条
+/// 的话，新加的包会在用户机器上报「下载失败」，而我们本地什么都测不出来。
 fn lfs_urls(root: &Path, sha: &str) -> Vec<String> {
     crate::mirrors::lfs_bases(root)
         .into_iter()
@@ -202,6 +210,16 @@ pub fn fetch_pack_with_fallback(
     Ok(())
 }
 
+/// 制品的 Release 标签。按 sha 寻址那条路只对**老制品**有效（见 `lfs_urls`
+/// 上面那段），所以每个包都要能按标签直连兜底。
+fn release_ref(cache_name: &str) -> Option<(&'static str, &'static str)> {
+    match cache_name {
+        ENGINE_CORE_NAME => Some(("engine-core", ENGINE_CORE_NAME)),
+        VBCABLE_NAME => Some(("vbcable", VBCABLE_NAME)),
+        _ => None,
+    }
+}
+
 fn fetch_and_extract(
     cache_name: &str,
     sha: &str,
@@ -219,9 +237,13 @@ fn fetch_and_extract(
     if !cached_ok {
         // Passing progress through is what keeps the first-run gate honest:
         // without it the bar sits still while the NIC is busy for minutes.
+        let mut urls = lfs_urls(root, sha);
+        if let Some((tag, file)) = release_ref(cache_name) {
+            urls.extend(release_urls(root, tag, file));
+        }
         download::download_request(
             download::DownloadRequest {
-                urls: lfs_urls(root, sha),
+                urls,
                 root: Some(root.to_path_buf()),
                 dest: archive.clone(),
                 expected_sha256: sha.to_string(),

@@ -15,7 +15,7 @@
     },
     "vibrato": {
       "rate": 6.0,
-      "depth": 6.0
+      "depth": 50.0
     }
   }
 }

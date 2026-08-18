@@ -71,7 +71,9 @@ BUILTIN: List[Dict[str, Any]] = [
             pitch={"semitones": 3.0},
             tremolo={"rate": 7.0, "depth": 0.32},
             ring={"freq": 90.0, "mix": 0.12},
-            vibrato={"rate": 6.0, "depth": 6.0},
+            # 50 音分 = 半个半音。原来写 6，那是 5 音分不到的摆动，人耳听不见，
+            # 于是这个预设听着只剩上面那 3 个半音的死升调 —— 用户报的就是这个。
+            vibrato={"rate": 6.0, "depth": 50.0},
         ),
     },
     {
@@ -155,7 +157,8 @@ BUILTIN: List[Dict[str, Any]] = [
         "params": _p(
             pitch={"semitones": -1.5},
             formant={"shift": 1.0},
-            vibrato={"rate": 4.0, "depth": 6.5},
+            # 「喉头轻抖」要听得出才算数。原来的 6.5 只有 3 音分，等于没写。
+            vibrato={"rate": 4.0, "depth": 20.0},
         ),
     },
     {
@@ -204,7 +207,9 @@ BUILTIN: List[Dict[str, Any]] = [
         "desc": "高频闷掉，慢慢晃，远处一点空间",
         "params": _p(
             radio={"low": 70.0, "high": 1000.0, "mix": 0.88, "noise": 0.0},
-            vibrato={"rate": 1.6, "depth": 7.0},
+            # 慢而深地晃。转速只有 1.6Hz，深度不给够就完全察觉不到（原来的 7
+            # 折合 1.5 音分）。
+            vibrato={"rate": 1.6, "depth": 35.0},
             reverb={"size": 0.62, "mix": 0.2},
         ),
     },
@@ -219,9 +224,13 @@ BUILTIN: List[Dict[str, Any]] = [
             # 共振峰再往上推一点。只动音高不动共振峰，听感是同一个人捏着嗓子；
             # 共振峰跟上去，声道才像真的变短了，人才换掉。
             formant={"shift": 2.5},
-            # 快而浅的音高抖动，是这个预设名字的来处。深度给 14 音分：
+            # 快而浅的音高抖动，是这个预设名字的来处。深度给 17 音分：
             # 再深就成了唱歌的颤音，浅到听不出又白加。
-            vibrato={"rate": 9.5, "depth": 14.0},
+            #
+            # 换算式修好之前这里写的是 14，按当时那个漏了 rate 的系数算出来正好
+            # 也是 17 音分。改成 17 是为了让这个预设**听感不变** —— 它是唯一一个
+            # 之前就抖得出来的，用户拿它当参照。
+            vibrato={"rate": 9.5, "depth": 17.0},
             # 一点点过载补回变调损失的密度，不到能听出失真的程度。
             drive={"amount": 0.1},
         ),

@@ -74,7 +74,9 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
     "vibrato": {
         "label": "颤音",
         "params": {"rate": 5.0, "depth": 0.0},
-        "ranges": {"rate": (0.1, 20.0), "depth": (0.0, 50.0)},
+        # depth 上限从 50 放到 200：50 音分是半个半音，做「明显在抖」刚够，
+        # 想要夸张效果的还得往上。真拉满时会被延迟线长度截住，见 Vibrato。
+        "ranges": {"rate": (0.1, 20.0), "depth": (0.0, 200.0)},
     },
     "chorus": {
         "label": "合唱",
@@ -798,9 +800,27 @@ class Vibrato:
         w = 2.0 * np.pi * float(self.rate) / float(sr)
         ph = self._phase + w * np.arange(n, dtype=np.float64)
         self._phase = float((self._phase + w * n) % (2.0 * np.pi))
-        # depth 是音分；换算成延迟摆幅（经验系数，够用就行）
-        sweep = (depth / 100.0) * (sr * 0.0012)
+        # depth 是音分，换算成延迟线的摆幅（样点）。
+        #
+        # 延迟线做音高的原理是：读取点在动，动得多快，音高就偏多少。所以偏移量
+        # 正比于 **rate × sweep**，跟 rate 有关。以前这里写的是
+        # `sweep = (depth / 100.0) * (sr * 0.0012)`，式子里根本没有 rate ——
+        # 于是「音分」这个单位只在某一个转速下对得上，换个 rate 同样的 depth
+        # 出来的抖动就不是一回事。而且按那个系数，拉到上限 50 也只有 39 音分。
+        #
+        # 现在按定义反解：正弦摆动 d(t) = sweep·sin(2π·rate·t)，读取点速度峰值
+        # 是 2π·rate·sweep/sr，音高比值 = 1 + 这个速度，所以
+        #
+        #     2π·rate·sweep/sr = 2^(depth/1200) − 1
+        #
+        # 解出 sweep 即可。depth 写 50 就真是 50 音分，与 rate 无关。
+        rate = max(1e-3, abs(float(self.rate)))
+        sweep = sr * (2.0 ** (depth / 1200.0) - 1.0) / (2.0 * np.pi * rate)
         center = hist * 0.5
+        # 慢速 + 大深度会要一条比缓冲区还长的延迟线（rate 0.1、depth 200 要 9000
+        # 多个样点，缓冲只有 12ms）。这里按缓冲上限截断：抖动到顶就不再更深，
+        # 总比让读取点撞墙削成方波强。
+        sweep = min(sweep, center - 2.0)
         d = center + sweep * np.sin(ph)
         np.clip(d, 1.0, hist - 2.0, out=d)
         pos = np.arange(n, dtype=np.float64) + hist - d

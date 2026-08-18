@@ -10,7 +10,7 @@
     },
     "tremolo": {
       "rate": 7.5,
-      "depth": 0.08
+      "depth": 0.12
     },
     "drive": {
       "amount": 0.14

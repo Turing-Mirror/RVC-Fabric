@@ -2025,7 +2025,19 @@ pub fn run() {
                         let _ = h.emit("app://ui-stalled", ());
                     }
                     if let Some(w) = h.get_webview_window("main") {
-                        window_watch::report_and_rescue(&w, &crate::i18n::t("s.6c0434f6f2"));
+                        // 只记录，不动窗口 —— 除非界面根本没挂起来。
+                        //
+                        // 这条 12 秒后的体检本来是给白屏用的：窗口在、但用户
+                        // 看不见，救回来。可它以前无条件执行，而救援里含
+                        // `show()` —— 用户在这 12 秒里点 X 选了「最小化到托盘」，
+                        // 12 秒一到窗口自己又蹦出来。用户报的「已经最小化的主界面
+                        // 跳出」就是这个。
+                        //
+                        // 界面报到了就说明它活着、看得见，用户把它收哪儿是他的事。
+                        window_watch::report(&w, &crate::i18n::t("s.6c0434f6f2"));
+                        if !ui_assets::ui_reported_ready() {
+                            window_watch::rescue(&w);
+                        }
                     }
                 });
             }

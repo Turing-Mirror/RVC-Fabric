@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "음성 변환이 진행 중입니다",
     "killStsAskBody": "강제 종료하면 음성 변환도 중단됩니다. 완료된 파일은 유지되며, 변환 중인 파일은 저장되지 않습니다.",
     "killStsAskKeep": "취소",
-    "killStsAskGo": "함께 종료"
+    "killStsAskGo": "함께 종료",
+    "outGainLabel": "변환 음량 (dB)",
+    "outGainTip": "변환된 음성이 나가는 음량을 조절합니다. 상대방에게 작게 들리면 올리세요. 너무 올리면 클리핑되어 왜곡됩니다. 출력 레벨이 끝까지 차지 않는 선에서 조절하세요."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

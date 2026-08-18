@@ -16,12 +16,16 @@ const PROFILE_EXT: &str = ".tmvp";
 const PROFILES_DIR: &str = "profiles";
 
 /// 档案自己管的键。切模型时整组换成该模型的，不沿用上一个。
+///
+/// `threhold`（响应阈值）**不在这里**。它描述的是这只麦克风和这个房间有多吵，
+/// 跟选了哪个音色没关系；跟着音色走的结果是用户调好了、换个音色又变回去，
+/// 于是感觉「这个东西根本调不了」。旧 .tmvp 里存着的那个键读到了也不用，
+/// 不需要迁移。
 const PROFILE_VOICE_KEYS: &[&str] = &[
     "pitch",
     "formant",
     "index_rate",
     "rms_mix_rate",
-    "threhold",
     "f0method",
 ];
 const PROFILE_FX_KEYS: &[&str] = &[
@@ -468,7 +472,6 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
                 "formant",
                 "index_rate",
                 "rms_mix_rate",
-                "threhold",
                 "f0method",
             ] {
                 if let Some(v) = side.get(k) {

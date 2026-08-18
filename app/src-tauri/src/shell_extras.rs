@@ -90,6 +90,22 @@ pub fn install_tray(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 上一次弹出「关闭询问」但**还没被回答**的时刻。
+///
+/// 用来兜住「界面卡死了，用户连窗口都关不掉」：10 秒内第二次点 X 就直接退出。
+///
+/// 关键是**答完必须清掉**（`clear_close_ask`）。以前它是个闭包里的局部变量，
+/// 谁也够不着，于是用户点 X → 选「最小化到托盘」→ 一会儿又点 X，第二次就撞上
+/// 这条兜底：软件不问一声直接没了。用户报的「再次点 X 软件会崩溃」就是这个 ——
+/// 它没崩，是被自己的救命开关退掉了。答过一次就证明界面是活的，计时该归零。
+static LAST_ASK: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// 用户答过关闭询问了：界面是活的，把「卡死」计时清掉。
+pub fn clear_close_ask() {
+    *LAST_ASK.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 fn focus_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -990,9 +1006,6 @@ pub fn install_close_handler(app: &AppHandle) {
     };
     let handle = app.clone();
     let w = win.clone();
-    // Tracks the previous unanswered close prompt (see the "ask" branch).
-    let last_ask: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
     win.on_window_event(move |event| {
         // 尺寸变了：Win10 重裁圆角区域；最大化状态只跟区域，尺寸由子类化落地前钳好。
         if matches!(
@@ -1016,6 +1029,11 @@ pub fn install_close_handler(app: &AppHandle) {
 
         match action.as_str() {
             "exit" => {
+                // 同 finish_close：stop_vc 要等几秒，先把窗口收掉再等，
+                // 别让用户对着一个不响应的窗口数秒。
+                for win in handle.webview_windows().into_values() {
+                    let _ = win.hide();
+                }
                 if let Some(root) = root_of(&handle) {
                     let _ = worker::stop_vc(&root, true);
                 }
@@ -1030,7 +1048,7 @@ pub fn install_close_handler(app: &AppHandle) {
                 // 10s falls back to a plain exit.
                 api.prevent_close();
                 let now = std::time::Instant::now();
-                let mut last = last_ask.lock().unwrap_or_else(|e| e.into_inner());
+                let mut last = LAST_ASK.lock().unwrap_or_else(|e| e.into_inner());
                 let stuck = last
                     .map(|t: std::time::Instant| now.duration_since(t).as_secs() < 10)
                     .unwrap_or(false);
@@ -1051,11 +1069,22 @@ pub fn install_close_handler(app: &AppHandle) {
 
 /// Called by the UI once the user answered the close prompt.
 pub fn finish_close(app: &AppHandle, to_tray: bool) {
+    // 答过了就说明界面是活的，「点两次 X 强退」那条兜底该重新计时。
+    clear_close_ask();
     if to_tray {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.hide();
         }
         return;
+    }
+    // 先把所有窗口收掉，再做收尾。
+    //
+    // 收尾要停 worker（最多等 3 秒）再清 TEMP，全在主线程上跑。以前是先收尾
+    // 后退出，那几秒里窗口还杵在屏幕上、还不响应 —— 用户报的「关软件会卡顿
+    // 一下再关闭」就是这段。hide 走的是 ShowWindow，不用等消息循环，喊完立刻
+    // 就没了；后面的活照做，只是用户不用盯着一个死窗口等。
+    for w in app.webview_windows().into_values() {
+        let _ = w.hide();
     }
     if let Some(root) = root_of(app) {
         let _ = worker::stop_vc(&root, true);

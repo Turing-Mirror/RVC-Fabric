@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "Voice conversion is still running",
     "killStsAskBody": "Forcing the engine to stop will also abort the conversion. Finished files are kept; the file being converted will not be saved.",
     "killStsAskKeep": "Cancel",
-    "killStsAskGo": "Stop both"
+    "killStsAskGo": "Stop both",
+    "outGainLabel": "Output volume (dB)",
+    "outGainTip": "Sets how loud the converted voice is sent out. Raise it if others hear you too quietly. Too much clips and distorts — keep the output meter off the top."
   },
   "extras": {
     "engineTitle": "Engine resources",

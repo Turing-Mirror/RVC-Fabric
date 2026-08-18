@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "语音转换仍在进行",
     "killStsAskBody": "强制结束会一并中止语音转换。已完成的文件保留，正在转换的文件不会保存。",
     "killStsAskKeep": "取消",
-    "killStsAskGo": "一并结束"
+    "killStsAskGo": "一并结束",
+    "outGainLabel": "变声音量 dB",
+    "outGainTip": "调节变声后送出去的音量：对方听着太小就调高。调过头会削波破音，加多少以底栏输出电平不顶到头为准。"
   },
   "extras": {
     "engineTitle": "引擎资源",

@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "音声変換が実行中です",
     "killStsAskBody": "強制終了すると音声変換も中止されます。完了済みのファイルは保持され、変換中のファイルは保存されません。",
     "killStsAskKeep": "キャンセル",
-    "killStsAskGo": "まとめて終了"
+    "killStsAskGo": "まとめて終了",
+    "outGainLabel": "変換後の音量 (dB)",
+    "outGainTip": "変換後に送出される音量を調節します。相手に小さく聞こえる場合は上げてください。上げすぎるとクリップして歪みます。出力メーターが振り切らない範囲で。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

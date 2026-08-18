@@ -50,6 +50,8 @@ CLEAN_INUSE: dict[str, Any] = {
     "dsp_params": {},
     # Mic pre-gain (dB); plain float — must survive sanitize (review #8)
     "in_gain_db": 0.0,
+    # 变声后的总音量（dB）。同上，得是纯 float。
+    "out_gain_db": 0.0,
 }
 
 _ABS_WIN = re.compile(r"^[A-Za-z]:[\\/]")

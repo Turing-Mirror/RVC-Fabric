@@ -326,15 +326,17 @@ export default function App() {
 
   // 第一次点「开启变声」时问一句要不要先看说明。
   //
-  // 挂在 engine.starting 上而不是 engine.running：引擎起来要好几秒，那几秒
-  // 用户本来就在等，正好是唯一不打扰人的空档；等 running 了他已经在说话了。
+  // 挂在 engine.userStarts 上，不是 engine.starting。starting 在开机预热引擎、
+  // 导入推理库的时候也会为真，界面上根本没人按过东西 —— 挂在它上面的结果是
+  // 软件一启动就弹说明，用户报的就是这个。userStarts 只在 toggleRun 真的走
+  // 开启分支时才加，是「有人按了那个按钮」的唯一凭据。
   //
-  // guideAsked 这个 ref 是防抖：starting 在一次启动里会来回翻好几次，没有它
-  // 每翻一次都要读一遍配置。
+  // 挑开启的那一刻而不是 running：引擎起来要好几秒，那几秒用户本来就在等，
+  // 是唯一不打扰人的空档；等 running 了他已经在说话了。
   const [askGuide, setAskGuide] = useState(false);
   const guideAsked = useRef(false);
   useEffect(() => {
-    if (!engine.starting || guideAsked.current) return;
+    if (engine.userStarts === 0 || guideAsked.current) return;
     guideAsked.current = true;
     void (async () => {
       try {
@@ -344,7 +346,7 @@ export default function App() {
         /* 配置读不到就算了，这不是要紧事 */
       }
     })();
-  }, [engine.starting]);
+  }, [engine.userStarts]);
 
   // 「转到说明页」和「不了」都算表过态，都不再问第二次。
   const closeGuide = (toHelp: boolean) => {

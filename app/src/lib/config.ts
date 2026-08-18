@@ -43,6 +43,7 @@ export function tips(): Record<string, string> {
     sg_input_device: t("s.7a24f480cf"),
     in_gain_db: t("s.25d87929cc"),
     sg_output_device: t("s.ef8cc2df41"),
+    out_gain_db: t("s.outGainTip"),
     monitor_self: t("s.c2b9d351f6"),
     monitor_device: t("s.594eba5310"),
     sg_wasapi_exclusive: t("s.c1614d68d8"),

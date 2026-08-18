@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "La conversión de voz sigue en curso",
     "killStsAskBody": "Forzar la detención del motor también interrumpirá la conversión. Los archivos terminados se conservan; el archivo en curso no se guardará.",
     "killStsAskKeep": "Cancelar",
-    "killStsAskGo": "Detener ambos"
+    "killStsAskGo": "Detener ambos",
+    "outGainLabel": "Volumen de salida (dB)",
+    "outGainTip": "Ajusta el volumen de la voz convertida que se envía. Súbelo si los demás te oyen demasiado bajo. Un exceso recorta y distorsiona: mantén el medidor de salida por debajo del tope."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

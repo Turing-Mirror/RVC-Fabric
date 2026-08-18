@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "La conversion vocale est toujours en cours",
     "killStsAskBody": "Forcer l'arrêt du moteur interrompra également la conversion. Les fichiers terminés sont conservés ; le fichier en cours ne sera pas enregistré.",
     "killStsAskKeep": "Annuler",
-    "killStsAskGo": "Tout arrêter"
+    "killStsAskGo": "Tout arrêter",
+    "outGainLabel": "Volume de sortie (dB)",
+    "outGainTip": "Règle le volume de la voix convertie envoyée. Augmentez-le si les autres vous entendent trop faiblement. Trop fort, le signal écrête et se déforme : gardez le vumètre de sortie sous le maximum."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

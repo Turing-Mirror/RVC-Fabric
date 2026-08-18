@@ -289,6 +289,23 @@ function SettingsPageImpl({
                   />
                 }
               />
+              {/* 响应阈值从「变声参数」搬到这里。
+                  它是拿麦克风电平去比的一条线，而那条电平表就在这一段的下面；
+                  隔着一个标签页调它，等于让用户闭着眼睛拧。而且它以前跟着音色
+                  存，换个音色就变回去 —— 现在是全局的，见 voices.rs。 */}
+              <Field
+                label={t("s.75e7326c34")}
+                tip={TIPS.threhold}
+                control={
+                  <Slider
+                    value={c.num("threhold", -60)}
+                    min={-60}
+                    max={0}
+                    step={1}
+                    onChange={(v) => c.set("threhold", v)}
+                  />
+                }
+              />
               <Field
                 label={t("s.3aa83c304c")}
                 tip={TIPS.sg_output_device}
@@ -298,6 +315,23 @@ function SettingsPageImpl({
                     value={c.str("sg_output_device")}
                     options={outputs}
                     onChange={(v) => c.set("sg_output_device", v, true)}
+                  />
+                }
+              />
+              {/* 变声后的总音量。以前只有 fx_out_gain_db，它住在音效链里，
+                  音效开关关着的时候整条链直接跳过 —— 于是「变声太小声」这件事
+                  得先打开噪声门和压缩器才有得调。这个不挂在任何链上。 */}
+              <Field
+                label={t("s.outGainLabel")}
+                tip={TIPS.out_gain_db}
+                control={
+                  <Slider
+                    value={c.num("out_gain_db")}
+                    min={-12}
+                    max={24}
+                    step={0.5}
+                    onChange={(v) => c.set("out_gain_db", v)}
+                    format={(v) => v.toFixed(2)}
                   />
                 }
               />
@@ -356,19 +390,6 @@ function SettingsPageImpl({
           <Block title={t("s.ae7cbbecbc")} note={t("s.d48a0bf3c8")} className="!mt-6">
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.a9e4eb7a51")}</p>
             <div className={CARD}>
-              <Field
-                label={t("s.75e7326c34")}
-                tip={TIPS.threhold}
-                control={
-                  <Slider
-                    value={c.num("threhold", -60)}
-                    min={-60}
-                    max={0}
-                    step={1}
-                    onChange={(v) => c.set("threhold", v)}
-                  />
-                }
-              />
               <Field
                 label={t("s.bda11a3c2d")}
                 tip={TIPS.pitch}

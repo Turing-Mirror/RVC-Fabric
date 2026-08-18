@@ -1771,7 +1771,11 @@
     "trainEtaSoon": "casi listo",
     "trainEtaMin": "quedan unos {v0} min",
     "trainEtaHour": "quedan unas {v0} h",
-    "trainEtaHourMin": "quedan unas {v0} h {v1} min"
+    "trainEtaHourMin": "quedan unas {v0} h {v1} min",
+    "guideFirstTitle": "¡Es tu primera vez con RVC Fabric!",
+    "guideFirstBody": "RVC Fabric está iniciando el cambiador de voz. Mientras tanto, echa un vistazo a lo básico~",
+    "guideFirstGo": "Ir a la guía",
+    "guideFirstSkip": "No, gracias"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

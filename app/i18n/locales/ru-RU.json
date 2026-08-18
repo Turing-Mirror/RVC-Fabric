@@ -1771,7 +1771,11 @@
     "trainEtaSoon": "почти готово",
     "trainEtaMin": "осталось около {v0} мин",
     "trainEtaHour": "осталось около {v0} ч",
-    "trainEtaHourMin": "осталось около {v0} ч {v1} мин"
+    "trainEtaHourMin": "осталось около {v0} ч {v1} мин",
+    "guideFirstTitle": "Вы впервые пользуетесь RVC Fabric!",
+    "guideFirstBody": "RVC Fabric запускает преобразование голоса. А пока загляните в основы~",
+    "guideFirstGo": "Открыть справку",
+    "guideFirstSkip": "Нет, спасибо"
   },
   "extras": {
     "engineTitle": "Ресурсы движка",

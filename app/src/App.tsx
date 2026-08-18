@@ -324,6 +324,37 @@ export default function App() {
     })();
   }, [engine.running]);
 
+  // 第一次点「开启变声」时问一句要不要先看说明。
+  //
+  // 挂在 engine.starting 上而不是 engine.running：引擎起来要好几秒，那几秒
+  // 用户本来就在等，正好是唯一不打扰人的空档；等 running 了他已经在说话了。
+  //
+  // guideAsked 这个 ref 是防抖：starting 在一次启动里会来回翻好几次，没有它
+  // 每翻一次都要读一遍配置。
+  const [askGuide, setAskGuide] = useState(false);
+  const guideAsked = useRef(false);
+  useEffect(() => {
+    if (!engine.starting || guideAsked.current) return;
+    guideAsked.current = true;
+    void (async () => {
+      try {
+        const cfg = await invoke<Record<string, unknown>>("config_get");
+        if (cfg.guide_prompt_done !== true) setAskGuide(true);
+      } catch {
+        /* 配置读不到就算了，这不是要紧事 */
+      }
+    })();
+  }, [engine.starting]);
+
+  // 「转到说明页」和「不了」都算表过态，都不再问第二次。
+  const closeGuide = (toHelp: boolean) => {
+    setAskGuide(false);
+    if (toHelp) setPage("help");
+    void invoke("config_set", { patch: { guide_prompt_done: true } }).catch(
+      () => {},
+    );
+  };
+
   // 不管点的是哪个社媒还是「以后再说」，都不再问第二次。反复问一件用户
   // 已经表过态的事，比不问更让人反感。
   const closeFollow = () => {
@@ -1076,7 +1107,22 @@ export default function App() {
       {/* 同时最多出现一条。更新排最前 —— 它是开机 4 秒就出来的，那会儿另外
           两条的触发条件（用满 60 秒 / 变声十次）都还远没到。
           统计邀请次之，两条撞在一起会把底栏顶掉半个屏。 */}
-      {updateOffer ? (
+      {/* 首次引导排在最前：更新提示是开机 4 秒就出来的，统计和关注更靠后，
+          而这条只在用户第一次点「开启变声」的那几秒里有意义，错过就没了。
+          它关掉之后被它压住的那条会自己顶上来。 */}
+      {askGuide ? (
+        <Nudge
+          title={t("s.guideFirstTitle")}
+          actions={
+            <>
+              <Btn onClick={() => closeGuide(false)}>{t("s.guideFirstSkip")}</Btn>
+              <Btn primary onClick={() => closeGuide(true)}>
+                {t("s.guideFirstGo")}
+              </Btn>
+            </>
+          }
+        >{t("s.guideFirstBody")}</Nudge>
+      ) : updateOffer ? (
         <Nudge
           title={
             updateWorking

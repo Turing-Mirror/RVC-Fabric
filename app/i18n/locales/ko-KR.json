@@ -1771,7 +1771,11 @@
     "trainEtaSoon": "거의 완료",
     "trainEtaMin": "약 {v0}분 남음",
     "trainEtaHour": "약 {v0}시간 남음",
-    "trainEtaHourMin": "약 {v0}시간 {v1}분 남음"
+    "trainEtaHourMin": "약 {v0}시간 {v1}분 남음",
+    "guideFirstTitle": "RVC Fabric을 처음 사용하시는군요!",
+    "guideFirstBody": "RVC Fabric이 음성 변환을 시작하고 있어요. 그 전에 기본 사용법을 살펴볼까요~",
+    "guideFirstGo": "설명 페이지로",
+    "guideFirstSkip": "괜찮아요"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

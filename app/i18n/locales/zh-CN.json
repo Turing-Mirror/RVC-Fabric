@@ -1771,7 +1771,11 @@
     "trainEtaSoon": "快好了",
     "trainEtaMin": "约剩 {v0} 分钟",
     "trainEtaHour": "约剩 {v0} 小时",
-    "trainEtaHourMin": "约剩 {v0} 小时 {v1} 分钟"
+    "trainEtaHourMin": "约剩 {v0} 小时 {v1} 分钟",
+    "guideFirstTitle": "这是你第一次使用RVC Fabric哦！",
+    "guideFirstBody": "RVC Fabric正在启动变声，在这之前，先来看看基础教程吧～",
+    "guideFirstGo": "转到说明页",
+    "guideFirstSkip": "不了"
   },
   "extras": {
     "engineTitle": "引擎资源",

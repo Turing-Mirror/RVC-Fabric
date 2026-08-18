@@ -89,7 +89,11 @@
     "hfEndpoint": "Espejo de Hugging Face",
     "hfEndpointTip": "Solo afecta a voces de terceros descargadas de Hugging Face. Vacío: hf-cdn.sufy.com, luego hf-mirror.com, luego el host oficial.",
     "hfEndpointPlaceholder": "Vacío = espejos por defecto",
-    "hfEndpointDefault": "Espejos duales por defecto"
+    "hfEndpointDefault": "Espejos duales por defecto",
+    "compatRender": "Renderizado de compatibilidad",
+    "compatRenderTip": "Actívalo si la ventana se ve negra, con artefactos o cortada; surte efecto tras reiniciar. La imagen la dibuja la CPU, así que los cambios de página y el desenfoque pierden algunos fotogramas.",
+    "compatRenderOn": "Activado",
+    "compatRenderOff": "Desactivado"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "Se detectaron cortes de audio. ¿Aumentar la latencia? Se reiniciará el cambio de voz",
     "tearApply": "Aumentar latencia",
     "tearKeep": "Mantener así",
-    "tearTitle": "Calidad de voz"
+    "tearTitle": "Calidad de voz",
+    "trainInterrupted": "El entrenamiento anterior ({v0}) se detuvo en la época {v1} de {v2}. Los cortes y las características siguen en el disco: al empezar de nuevo continuará desde ahí, sin reprocesar.",
+    "trainEtaSoon": "casi listo",
+    "trainEtaMin": "quedan unos {v0} min",
+    "trainEtaHour": "quedan unas {v0} h",
+    "trainEtaHourMin": "quedan unas {v0} h {v1} min"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -145,6 +145,7 @@ pub fn busy() -> bool {
 
 pub fn status(root: &Path) -> Value {
     let nvidia = is_nvidia(root);
+    let busy = *BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let pre: Vec<Value> = SAMPLE_RATES
         .iter()
         .map(|sr| json!({ "sample_rate": sr, "ready": pretrained_ready(root, sr) }))
@@ -159,8 +160,71 @@ pub fn status(root: &Path) -> Value {
         "experiments": experiments(root),
         "suggested_batch": suggested_batch(),
         "rmvpe_present": rmvpe_ready(root),
-        "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
+        "busy": busy,
+        // 正在跑的时候不提「上次断了」—— 那说的就是这一次。
+        "interrupted": if busy { Value::Null } else { last_interrupted(root).unwrap_or(Value::Null) },
     })
+}
+
+/// 上一次训练是不是没跑完就断了，断在第几轮。
+///
+/// 训练进度以前只活在内存（`BUSY` 那个 bool）和界面组件的 state 里，程序
+/// 一死就全没了。26.8.18 的用户被强杀之后重开，界面显示「空闲」，他完全
+/// 不知道刚才那一次跑到了第 99 轮、切片和特征都还在盘上 —— 只能从头再来。
+///
+/// 判据是日志尾巴：`finish_run` 不管成败都会写一行 `=== done (…) ===`，
+/// 没有这行就是壳没活到写它的那一刻。
+fn last_interrupted(root: &Path) -> Option<Value> {
+    let dir = crate::logging::channel_dir(root, crate::logging::CH_TRAIN);
+    let mut newest: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
+    for e in std::fs::read_dir(&dir).ok()?.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("log") {
+            continue;
+        }
+        let Ok(m) = e.metadata().and_then(|m| m.modified()) else {
+            continue;
+        };
+        if newest.as_ref().map_or(true, |(t, _)| m > *t) {
+            newest = Some((m, p));
+        }
+    }
+    let (_, path) = newest?;
+    let text = std::fs::read_to_string(&path).ok()?;
+    if text.contains("=== done (") {
+        return None;
+    }
+    parse_interrupted(&text).map(|(exp, done, total)| {
+        json!({ "exp": exp, "epoch": done, "total": total })
+    })
+}
+
+/// 从一份没写完的训练日志里挖出实验名和最后一轮。日志格式见 `begin_run`
+/// （头部是请求 JSON）和 `note_progress`（`progress stage stage=train 99/200 …`）。
+fn parse_interrupted(text: &str) -> Option<(String, u32, u32)> {
+    let exp = text
+        .lines()
+        .find_map(|l| {
+            let l = l.trim();
+            let rest = l.strip_prefix("\"exp\":")?;
+            let v = rest.trim().trim_end_matches(',').trim();
+            let v = v.strip_prefix('"')?.strip_suffix('"')?;
+            (!v.is_empty()).then(|| v.to_string())
+        })?;
+    let mut last = None;
+    for line in text.lines() {
+        let Some(at) = line.find("stage=train ") else {
+            continue;
+        };
+        let tail = line[at + "stage=train ".len()..].split_whitespace().next()?;
+        let (a, b) = tail.split_once('/')?;
+        if let (Ok(a), Ok(b)) = (a.parse::<u32>(), b.parse::<u32>()) {
+            last = Some((a, b));
+        }
+    }
+    let (done, total) = last?;
+    // 0/200 是「准备训练」那一下，还没真开始，不值得提示用户续跑。
+    (done > 0).then_some((exp, done, total))
 }
 
 /// rmvpe 是默认音高算法。文件不在或下到一半，预处理跑完才会炸。
@@ -853,6 +917,27 @@ mod tests {
             !msg.contains("采样率"),
             "wrong key reused the sample-rate string: {msg}"
         );
+    }
+
+    #[test]
+    fn an_unfinished_train_log_reports_where_it_stopped() {
+        // 壳被强杀 → 日志里没有 `=== done (…) ===`，界面据此告诉用户
+        // 「上次断在第几轮、切片还在、可以续跑」。
+        let text = "=== train run 2026-08-18 11:42:56 ===\n                    {\n  \"exp\": \"tomori\",\n  \"total_epoch\": 200\n}\n                    2026-08-18 11:43:22 progress stage stage=train 0/200 准备训练…\n                    2026-08-18 11:58:45 progress stage stage=train 99/200 第 99 / 200 轮\n";
+        assert_eq!(parse_interrupted(text), Some(("tomori".into(), 99, 200)));
+    }
+
+    #[test]
+    fn a_run_that_never_reached_epoch_one_is_not_worth_a_prompt() {
+        // 只跑到「准备训练」就断了，没有中间产物可续，提示反而添乱。
+        let text = "{\n  \"exp\": \"tomori\"\n}\n                    progress stage stage=train 0/200 准备训练…\n";
+        assert_eq!(parse_interrupted(text), None);
+    }
+
+    #[test]
+    fn a_log_without_an_exp_name_is_ignored() {
+        let text = "progress stage stage=train 9/200 第 9 / 200 轮\n";
+        assert_eq!(parse_interrupted(text), None);
     }
 
     #[test]

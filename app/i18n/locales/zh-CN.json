@@ -89,7 +89,11 @@
     "hfEndpoint": "Hugging Face 镜像",
     "hfEndpointTip": "仅影响从 Hugging Face 下载的第三方音色。留空则依次尝试 hf-cdn.sufy.com 与 hf-mirror.com，最后回退官方域。",
     "hfEndpointPlaceholder": "留空 = 默认双镜像",
-    "hfEndpointDefault": "默认双镜像"
+    "hfEndpointDefault": "默认双镜像",
+    "compatRender": "界面兼容渲染",
+    "compatRenderTip": "界面出现整片黑屏、花屏或撕裂时打开，重启软件后生效。画面改由 CPU 绘制，换页和磨砂会略微掉帧。",
+    "compatRenderOn": "已开启",
+    "compatRenderOff": "未开启"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "检测到声音撕裂，要放宽延迟吗？会重启变声",
     "tearApply": "放宽延迟",
     "tearKeep": "保持现状",
-    "tearTitle": "变声质量"
+    "tearTitle": "变声质量",
+    "trainInterrupted": "上次训练（{v0}）在第 {v1} / {v2} 轮中断了。切片和特征都还在，直接开始训练会自动接着跑，不用重新处理素材。",
+    "trainEtaSoon": "快好了",
+    "trainEtaMin": "约剩 {v0} 分钟",
+    "trainEtaHour": "约剩 {v0} 小时",
+    "trainEtaHourMin": "约剩 {v0} 小时 {v1} 分钟"
   },
   "extras": {
     "engineTitle": "引擎资源",

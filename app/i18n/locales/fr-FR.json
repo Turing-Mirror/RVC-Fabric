@@ -89,7 +89,11 @@
     "hfEndpoint": "Miroir Hugging Face",
     "hfEndpointTip": "Affecte uniquement les voix tierces téléchargées depuis Hugging Face. Vide : hf-cdn.sufy.com, puis hf-mirror.com, puis l’hôte officiel.",
     "hfEndpointPlaceholder": "Vide = miroirs par défaut",
-    "hfEndpointDefault": "Miroirs doubles par défaut"
+    "hfEndpointDefault": "Miroirs doubles par défaut",
+    "compatRender": "Rendu de compatibilité",
+    "compatRenderTip": "À activer si la fenêtre devient noire, brouillée ou déchirée ; effectif après redémarrage. L'image est dessinée par le processeur, les changements de page et le flou perdent quelques images.",
+    "compatRenderOn": "Activé",
+    "compatRenderOff": "Désactivé"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "Coupures audio détectées. Augmenter la latence ? La modification vocale redémarrera",
     "tearApply": "Augmenter la latence",
     "tearKeep": "Garder tel quel",
-    "tearTitle": "Qualité vocale"
+    "tearTitle": "Qualité vocale",
+    "trainInterrupted": "Le dernier entraînement ({v0}) s'est arrêté à l'époque {v1} sur {v2}. Les segments et les caractéristiques sont toujours là : relancer reprend où ça s'était arrêté, sans retraiter.",
+    "trainEtaSoon": "presque fini",
+    "trainEtaMin": "environ {v0} min restantes",
+    "trainEtaHour": "environ {v0} h restantes",
+    "trainEtaHourMin": "environ {v0} h {v1} min restantes"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

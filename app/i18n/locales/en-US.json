@@ -89,7 +89,11 @@
     "hfEndpoint": "Hugging Face mirror",
     "hfEndpointTip": "Only affects third-party voices downloaded from Hugging Face. Leave empty to try hf-cdn.sufy.com, then hf-mirror.com, then the official host.",
     "hfEndpointPlaceholder": "Empty = default mirrors",
-    "hfEndpointDefault": "Default dual mirrors"
+    "hfEndpointDefault": "Default dual mirrors",
+    "compatRender": "Compatibility rendering",
+    "compatRenderTip": "Turn this on if the window goes black, garbled or torn; takes effect after a restart. The picture is drawn by the CPU, so page changes and frosted glass lose a few frames.",
+    "compatRenderOn": "On",
+    "compatRenderOff": "Off"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -1768,7 +1772,12 @@
     "tearAskBlock": "Audio tearing detected. Increase latency? Voice changing will restart",
     "tearApply": "Increase latency",
     "tearKeep": "Keep as is",
-    "tearTitle": "Voice quality"
+    "tearTitle": "Voice quality",
+    "trainInterrupted": "The last run ({v0}) stopped at epoch {v1} of {v2}. Slices and features are still on disk — starting again picks up where it left off, no need to reprocess.",
+    "trainEtaSoon": "almost done",
+    "trainEtaMin": "about {v0} min left",
+    "trainEtaHour": "about {v0} h left",
+    "trainEtaHourMin": "about {v0} h {v1} min left"
   },
   "extras": {
     "engineTitle": "Engine resources",

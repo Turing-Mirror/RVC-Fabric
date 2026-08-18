@@ -1763,7 +1763,12 @@
     "vcrNeeded": "VC++ 런타임이 없습니다. 없으면 음성 변조를 시작할 수 없습니다",
     "vcrInstall": "런타임 설치",
     "vcrInstalling": "런타임을 설치하는 중입니다. 권한 요청 창이 표시됩니다",
-    "vcrPreparing": "런타임 패키지를 준비하는 중"
+    "vcrPreparing": "런타임 패키지를 준비하는 중",
+    "tearLowered": "GPU 성능/자원이 부족하여 정밀도를 자동으로 낮췄습니다",
+    "tearAskBlock": "음성 끊김이 감지되었습니다. 지연을 늘릴까요? 음성 변조가 다시 시작됩니다",
+    "tearApply": "지연 늘리기",
+    "tearKeep": "현재 상태 유지",
+    "tearTitle": "음성 품질"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

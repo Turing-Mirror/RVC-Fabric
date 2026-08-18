@@ -695,8 +695,16 @@ class Robotizer:
         ph = self._phase + w * np.arange(n, dtype=np.float64)
         self._phase = float((self._phase + w * n) % (2.0 * math.pi))
         sine = np.sin(ph)
-        square = np.sign(sine)
-        square[square == 0.0] = 1.0
+        # 方波用软限幅逼近，不用 np.sign。
+        #
+        # sign 在过零点是个跳变，会把相位累加的 1e-16 浮点误差放大成 ±2 的
+        # 整幅翻转 —— 同一段音频按 1024 和 480 分块，输出会在十几个过零点上
+        # 符号相反。设备给的块长不是我们能选的（WASAPI 独占会给 480、333），
+        # 所以这不只是测试好不好看的问题。
+        #
+        # tanh 在零点附近连续，同样的浮点误差只造成 1e-15 的输出差；听感上
+        # 也更干净，硬边方波的高次谐波本来就会混叠。
+        square = np.tanh(sine * 8.0)
         carrier = 0.62 * square + 0.38 * sine
         wet = env * carrier * 1.55
         return (dry * (1.0 - mix) + wet * mix).astype(np.float32)

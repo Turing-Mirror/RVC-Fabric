@@ -1048,6 +1048,31 @@ export default function App() {
         </div>
       ) : null}
 
+      {/* 撕裂这两条排在所有 Nudge 前面：用户正卡着，别让「要不要更新」
+          「要不要开统计」挡在他前面。 */}
+      {engine.tearAsk ? (
+        <Nudge
+          title={t("s.tearTitle")}
+          actions={
+            <>
+              <Btn onClick={engine.dismissTearAsk}>{t("s.tearKeep")}</Btn>
+              <Btn primary onClick={() => void engine.applyTearAsk()}>
+                {t("s.tearApply")}
+              </Btn>
+            </>
+          }
+        >
+          {engine.tearAsk.message}
+        </Nudge>
+      ) : engine.notice ? (
+        <Nudge
+          title={t("s.tearTitle")}
+          actions={<Btn onClick={engine.dismissNotice}>{t("s.cb63c62e50")}</Btn>}
+        >
+          {engine.notice}
+        </Nudge>
+      ) : null}
+
       {/* 同时最多出现一条。更新排最前 —— 它是开机 4 秒就出来的，那会儿另外
           两条的触发条件（用满 60 秒 / 变声十次）都还远没到。
           统计邀请次之，两条撞在一起会把底栏顶掉半个屏。 */}

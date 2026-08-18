@@ -1763,7 +1763,12 @@
     "vcrNeeded": "No se encontró el runtime de VC++. Sin él no se puede iniciar el cambio de voz",
     "vcrInstall": "Instalar runtime",
     "vcrInstalling": "Instalando el runtime. Windows pedirá permiso",
-    "vcrPreparing": "Preparando el paquete del runtime"
+    "vcrPreparing": "Preparando el paquete del runtime",
+    "tearLowered": "Rendimiento o recursos de GPU insuficientes. Se redujo la precisión automáticamente",
+    "tearAskBlock": "Se detectaron cortes de audio. ¿Aumentar la latencia? Se reiniciará el cambio de voz",
+    "tearApply": "Aumentar latencia",
+    "tearKeep": "Mantener así",
+    "tearTitle": "Calidad de voz"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -1763,7 +1763,12 @@
     "vcrNeeded": "VC++ Runtime not found. Voice changing cannot start without it",
     "vcrInstall": "Install runtime",
     "vcrInstalling": "Installing the runtime. Windows will ask for permission",
-    "vcrPreparing": "Preparing the runtime package"
+    "vcrPreparing": "Preparing the runtime package",
+    "tearLowered": "Low GPU performance or resources. Precision reduced automatically",
+    "tearAskBlock": "Audio tearing detected. Increase latency? Voice changing will restart",
+    "tearApply": "Increase latency",
+    "tearKeep": "Keep as is",
+    "tearTitle": "Voice quality"
   },
   "extras": {
     "engineTitle": "Engine resources",

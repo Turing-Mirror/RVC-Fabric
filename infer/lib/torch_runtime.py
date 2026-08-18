@@ -174,18 +174,36 @@ def rmvpe_max_mel_frames(is_half: bool, device) -> int:
 
 @contextmanager
 def inference_context():
-    """Prefer ``torch.inference_mode``; fall back to ``no_grad`` / null."""
+    """推理期间关掉 autograd。**故意用 no_grad，不用 inference_mode。**
+
+    `torch.inference_mode()` 里新建的张量会被打上 inference 标记。这个标记跟着
+    张量走，出了这个块也不会掉。而离线转换这条路上会**顺手建长命对象**：
+    `Pipeline.get_f0` 第一次跑 rmvpe 时才现场 new 一个 `RMVPE`，它的
+    `mel_basis` 是 `register_buffer` 存下来的;`MelSpectrogram.hann_window`
+    和 `RMVPE.resample_kernel` 也是普通 dict 缓存。这些东西一旦生在
+    inference_mode 里，之后在别处再用就是：
+
+        RuntimeError: Cannot set version_counter for inference tensor
+        （新版 torch 措辞变成 "Inference tensors cannot be saved for backward"）
+
+    26.8.18 有用户就这么炸的，栈底停在 `rmvpe.py` 的
+    `torch.matmul(self.mel_basis, magnitude)`。
+
+    `no_grad` 省的显存和时间跟 `inference_mode` 基本一样（差在版本计数器那点
+    记账，这个负载上不到 1%），但它建出来的是普通张量，怎么传都不会炸。这点
+    速度不值得拿一整类崩溃去换。
+
+    另外：try 只包 import，不包 yield。以前是整段包在 `except Exception: pass`
+    里，块里抛任何异常都会被吞掉、然后生成器第二次 yield，contextlib 抛一句
+    "generator didn't stop after throw()"，真正的错误就此消失。
+    """
     try:
         import torch
-
-        if hasattr(torch, "inference_mode"):
-            with torch.inference_mode():
-                yield
-            return
-        with torch.no_grad():
-            yield
-            return
     except Exception:
-        pass
-    with nullcontext():
+        # 没有 torch 就没有推理，空转即可（单测环境走这条）。
+        with nullcontext():
+            yield
+        return
+
+    with torch.no_grad():
         yield

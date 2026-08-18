@@ -242,9 +242,11 @@ def _autocast(device, enabled):
 
 
 def _inference_context(device):
-    if torch.device(device).type == "privateuseone":
-        return torch.no_grad()
-    return torch.inference_mode()
+    # 一律 no_grad，不用 inference_mode：inference_mode 里新建的张量带 inference
+    # 标记，出了块再用就抛 "Cannot set version_counter for inference tensor"。
+    # 分离 worker 一个进程连着跑多个文件，模型里任何懒加载的缓存都会踩这个坑。
+    # 见 infer/lib/torch_runtime.inference_context 的长注释。
+    return torch.no_grad()
 
 
 def _source_names(config):

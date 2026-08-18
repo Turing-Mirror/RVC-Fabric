@@ -314,7 +314,10 @@ class VRSeparator(CommonSeparator):
                         self.progress_callback(i + batch_count, patches, "Processing VR batches")
                 return mx.concatenate(mask_batches, axis=2)[:, :, :write_pos]
 
-            with torch.inference_mode():
+            # no_grad 而不是 inference_mode：后者建出来的张量带 inference 标记，
+            # 出了块再用就抛 "Cannot set version_counter for inference tensor"。
+            # 见 infer/lib/torch_runtime.inference_context。
+            with torch.no_grad():
                 for i in process_batches:
                     batch_count = min(self.batch_size, patches - i)
                     x_batch_cpu = torch.from_numpy(x_dataset[i : i + batch_count])

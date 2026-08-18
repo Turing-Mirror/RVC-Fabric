@@ -81,7 +81,9 @@ class WiringTests(unittest.TestCase):
         # 跳过分支的标志是那句 peak 判据；skip_block 必须紧跟在它后面出现。
         i = src.find("if peak < 2e-5:")
         self.assertGreater(i, 0, "静音跳过分支不见了，判据是不是改了？")
-        window = src[i : i + 1200]
+        # 窗口开得宽一点：这条分支里还有起音诊断那几行，卡太紧的话加一段
+        # 无关的日志就会把测试弄红，而它要守的其实只是「有没有调 skip_block」。
+        window = src[i : i + 2600]
         self.assertIn(
             "skip_block",
             window,

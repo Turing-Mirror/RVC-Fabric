@@ -1763,7 +1763,12 @@
     "vcrNeeded": "Runtime VC++ introuvable. Sans lui, la modification vocale ne peut pas démarrer",
     "vcrInstall": "Installer le runtime",
     "vcrInstalling": "Installation du runtime. Windows demandera l'autorisation",
-    "vcrPreparing": "Préparation du paquet du runtime"
+    "vcrPreparing": "Préparation du paquet du runtime",
+    "tearLowered": "Performances ou ressources GPU insuffisantes. Précision réduite automatiquement",
+    "tearAskBlock": "Coupures audio détectées. Augmenter la latence ? La modification vocale redémarrera",
+    "tearApply": "Augmenter la latence",
+    "tearKeep": "Garder tel quel",
+    "tearTitle": "Qualité vocale"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   ensureEngine,
   getEngineStatus,
@@ -171,6 +172,58 @@ export function useEngine() {
   }, [refresh]);
 
   const running = status.state === "running";
+
+  // 「已自动降低精度」那句话，用完即弃。
+  const [notice, setNotice] = useState("");
+  // 「要放宽延迟吗」那个询问。null = 没在问。
+  const [tearAsk, setTearAsk] = useState<
+    null | { message: string; blockTime: number }
+  >(null);
+
+  // 撕裂判定：把心跳里的累计欠载数喂给壳，壳按增速判断。
+  //
+  // 判定状态（窗口、冷却）全在 Rust 那边，这里只负责传数和显示结果 ——
+  // 放前端的话换页、重渲染都会把状态弄丢。
+  const tearAsked = useRef(false);
+  useEffect(() => {
+    if (!running) {
+      tearAsked.current = false;
+      try {
+        void invoke("tearing_reset").catch(() => undefined);
+      } catch {
+        /* not in Tauri */
+      }
+      return;
+    }
+    const n = Number(status.underrun || 0);
+    try {
+      void invoke<{ action?: string; message?: string; block_time?: number }>(
+        "tearing_step",
+        { underrun: n },
+      )
+        .then((r) => {
+          if (!r || r.action === "none") return;
+          if (r.action === "lowered") {
+            // 已经做完了，只是告诉他一声。不打断，声音没断过。
+            setNotice(String(r.message || ""));
+            return;
+          }
+          if (r.action === "ask_block") {
+            // 这一步要停流重开，问过再动。一次会话只问一次 —— 他说了不要，
+            // 就别每隔十几秒再弹一遍。
+            if (tearAsked.current) return;
+            tearAsked.current = true;
+            setTearAsk({
+              message: String(r.message || ""),
+              blockTime: Number(r.block_time || 0),
+            });
+          }
+        })
+        .catch(() => undefined);
+    } catch {
+      /* not in Tauri */
+    }
+  }, [running, status.underrun]);
   const bootCode =
     String(status.message_code || "") === "engine.starting" ||
     String(status.message_code || "") === "engine.importing";
@@ -376,6 +429,22 @@ export function useEngine() {
     syncParams,
     refresh,
     refreshProvision,
+    notice,
+    dismissNotice: () => setNotice(""),
+    tearAsk,
+    // 用户点了「保持现状」：关掉就好，这一轮会话不会再问第二次。
+    dismissTearAsk: () => setTearAsk(null),
+    // 用户点了「放宽延迟」。block_time 是冷参数，改完要停流重开。
+    applyTearAsk: async () => {
+      const bt = tearAsk?.blockTime || 0;
+      setTearAsk(null);
+      if (bt <= 0) return;
+      try {
+        await invoke("config_set", { patch: { block_time: bt } });
+      } catch {
+        /* 改不动就维持现状，别把用户卡在一个弹不掉的框里 */
+      }
+    },
     reloadDevices,
     devicesBusy,
     title: statusTitle(hinted),

@@ -1763,7 +1763,12 @@
     "vcrNeeded": "未偵測到 VC++ 執行庫，缺少它變聲無法啟動",
     "vcrInstall": "安裝執行庫",
     "vcrInstalling": "正在安裝執行庫，系統會彈出授權視窗",
-    "vcrPreparing": "正在準備執行庫安裝包"
+    "vcrPreparing": "正在準備執行庫安裝包",
+    "tearLowered": "顯示卡效能/資源不足，已自動降低精度",
+    "tearAskBlock": "偵測到聲音撕裂，要放寬延遲嗎？會重新啟動變聲",
+    "tearApply": "放寬延遲",
+    "tearKeep": "保持現狀",
+    "tearTitle": "變聲品質"
   },
   "extras": {
     "engineTitle": "引擎資源",

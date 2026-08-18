@@ -1763,7 +1763,12 @@
     "vcrNeeded": "未检测到 VC++ 运行库，缺少它变声无法启动",
     "vcrInstall": "安装运行库",
     "vcrInstalling": "正在安装运行库，系统会弹出授权窗口",
-    "vcrPreparing": "正在准备运行库安装包"
+    "vcrPreparing": "正在准备运行库安装包",
+    "tearLowered": "显卡性能/资源不足，已自动降低精度",
+    "tearAskBlock": "检测到声音撕裂，要放宽延迟吗？会重启变声",
+    "tearApply": "放宽延迟",
+    "tearKeep": "保持现状",
+    "tearTitle": "变声质量"
   },
   "extras": {
     "engineTitle": "引擎资源",

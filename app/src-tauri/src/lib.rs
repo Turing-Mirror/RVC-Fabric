@@ -22,6 +22,7 @@ pub mod plaza;
 mod protocol;
 mod provision;
 mod separate;
+mod tearing;
 mod vcredist;
 mod shell_extras;
 mod sts;
@@ -108,6 +109,59 @@ async fn assets_ensure_engine_core(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// 喂一次心跳给撕裂判定。第一级（降 f0 精度）直接做掉并回报做了什么；
+/// 第二级（放宽块长）只返回建议 —— 那一步要停流重开，得用户点头。
+#[tauri::command]
+fn tearing_step(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    underrun: u32,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cfg = config::read(&root);
+    let f0 = cfg
+        .get("f0method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("rmvpe")
+        .to_string();
+    let bt = cfg.get("block_time").and_then(|v| v.as_f64()).unwrap_or(0.25);
+
+    match tearing::step(underrun, &f0, bt) {
+        tearing::Action::None => Ok(json!({"action": "none"})),
+        tearing::Action::LowerF0 => {
+            let Some(next) = tearing::next_f0(&f0) else {
+                return Ok(json!({"action": "none"}));
+            };
+            // f0method 是热参数，改它不用停流 —— 声音不会断。
+            let mut patch = Map::new();
+            patch.insert("f0method".into(), json!(next));
+            config::update(&root, patch.clone())?;
+            let _ = app.emit("config-changed", json!({"patch": patch}));
+            Ok(json!({
+                "action": "lowered",
+                "f0": next,
+                "message": crate::i18n::t("s.tearLowered"),
+            }))
+        }
+        tearing::Action::AskBlock => {
+            let Some(next) = tearing::next_block(bt) else {
+                return Ok(json!({"action": "none"}));
+            };
+            Ok(json!({
+                "action": "ask_block",
+                "block_time": next,
+                "message": crate::i18n::t("s.tearAskBlock"),
+            }))
+        }
+    }
+}
+
+/// 起播时清掉判定窗口。
+#[tauri::command]
+fn tearing_reset() {
+    tearing::reset();
 }
 
 /// 机器上装没装 VC++ 运行库。补全页据此决定要不要显示那一步。
@@ -1765,6 +1819,8 @@ pub fn run() {
             assets_status,
             assets_ensure_engine_core,
             assets_ensure_vbcable,
+            tearing_step,
+            tearing_reset,
             vcredist_installed,
             assets_ensure_vcredist,
             vcredist_install,

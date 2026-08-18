@@ -1763,7 +1763,12 @@
     "vcrNeeded": "VC++ ランタイムが見つかりません。これがないと変声を開始できません",
     "vcrInstall": "ランタイムをインストール",
     "vcrInstalling": "ランタイムをインストール中です。許可を求める画面が表示されます",
-    "vcrPreparing": "ランタイムパッケージを準備中"
+    "vcrPreparing": "ランタイムパッケージを準備中",
+    "tearLowered": "GPU の性能／リソースが不足しているため、精度を自動的に下げました",
+    "tearAskBlock": "音の途切れを検出しました。遅延を広げますか？変声が再起動します",
+    "tearApply": "遅延を広げる",
+    "tearKeep": "このままにする",
+    "tearTitle": "変声の品質"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

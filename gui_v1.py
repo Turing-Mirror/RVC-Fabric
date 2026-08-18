@@ -2338,6 +2338,29 @@ if __name__ == "__main__":
             if self.function == "vc":
                 # Skip full RVC when this block is gated silent — less GPU load / no "ghost" noise
                 peak = float(np.max(np.abs(indata))) if indata.size else 0.0
+                # 起音诊断：静音之后的头两块单独记一行。
+                #
+                # 「说话前几个字变不上 / 糊」有好几种可能的成因，光看代码分不清
+                # 是哪一种：冷启动第一块特别慢、门限把弱起音切了、还是音高历史
+                # 对不上。这三种在日志里长得完全不一样，录一句话就能定位。
+                #
+                # 只记起音那两块，不是每块都记 —— 每块一行的话一分钟就几千行，
+                # 真正要看的那两行反而找不到。
+                try:
+                    if peak < 2e-5:
+                        self._onset_left = 2
+                    elif int(getattr(self, "_onset_left", 0) or 0) > 0:
+                        self._onset_left = int(self._onset_left) - 1
+                        printt(
+                            "onset peak=%.4f in_db=%.1f gate=%s infer_ms=%s q=%.0f",
+                            peak,
+                            float(getattr(self, "last_input_db", -90.0)),
+                            float(getattr(self.gui_config, "threhold", -60) or -60),
+                            int(getattr(self, "last_infer_ms", 0) or 0),
+                            float(getattr(self, "_queue_frames", 0.0) or 0.0),
+                        )
+                except Exception:
+                    pass
                 if peak < 2e-5:
                     need = (
                         int(self.block_frame)
@@ -2487,6 +2510,16 @@ if __name__ == "__main__":
 
             # 计算播放进度差（写指针距离播放指针的帧数）
             delta = (start - play_pos + buf_size) % buf_size
+
+            # 这个差就是「已经算好、还没放出去」的音频量 —— 真实的排队延迟。
+            # 底栏那个延迟读数一直是拿公式算的（设备延迟 + 块长 + 交叉淡化），
+            # 假设推理总能在一个块内跑完；跑不完时真实延迟会涨，而那个数字纹丝
+            # 不动。这里量的是实际值，涨了就看得见。
+            #
+            # 平滑一下：逐块读出来的数会跳，界面上乱蹦的数字比一个稳定的错数
+            # 还难用。0.85/0.15 大约半秒收敛，跟得上变化又不晃。
+            q = float(getattr(self, "_queue_frames", float(delta)) or 0.0)
+            self._queue_frames = 0.85 * q + 0.15 * float(delta)
 
             if delta < self.block_frame:
                 # 装填赶不上播放，导致播放进度追上来了，
@@ -2658,6 +2691,24 @@ if __name__ == "__main__":
             if lat < 0 or lat > 5.0:
                 return 0.0
             return lat
+
+        def _real_delay_sec(self) -> float:
+            """实测端到端延迟：设备 + 采集攒满一块 + 已排队待播的量。
+
+            前两项躲不掉（声卡自己的缓冲、以及必须收满一块才能算），第三项是
+            实际测出来的排队量 —— 推理跟得上时它稳定在一块左右，跟不上时会涨。
+
+            量不到就退回公式估算，不返回 0：界面上突然掉成 0 比偏乐观更糟。
+            """
+            try:
+                sr = float(getattr(self.gui_config, "samplerate", 0) or 0)
+                q = float(getattr(self, "_queue_frames", 0.0) or 0.0)
+                if sr <= 0.0 or q <= 0.0:
+                    return float(getattr(self, "delay_time", 0.0) or 0.0)
+                block = float(self.block_frame) / sr
+                return self._device_latency_sec() + block + q / sr
+            except Exception:
+                return float(getattr(self, "delay_time", 0.0) or 0.0)
 
         def _refresh_delay_time(self) -> float:
             """Algorithm delay estimate: device + block + crossfade (+ denoise)."""
@@ -3973,6 +4024,14 @@ if __name__ == "__main__":
                                 "state": "running",
                                 "delay_ms": int(np.round(self.delay_time * 1000)),
                                 "infer_ms": self.last_infer_ms,
+                                # 实测端到端延迟。跟 delay_ms（公式估算）并存：
+                                # 公式那个是「理论上应该多少」，这个是「实际
+                                # 多少」，两者拉开就说明推理没跟上块的节奏。
+                                "real_delay_ms": int(round(self._real_delay_sec() * 1000)),
+                                # 累计欠载次数。壳按它的增速判撕裂 —— 单看
+                                # infer_ms 会被偶发的尖峰骗到（显卡被别的程序
+                                # 抢一下很正常），持续欠载才是真跟不上。
+                                "underrun": int(getattr(self, "_underrun_n", 0) or 0),
                                 "input_db": round(
                                     float(getattr(self, "last_input_db", -90.0)), 1
                                 ),

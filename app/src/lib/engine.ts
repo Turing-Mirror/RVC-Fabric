@@ -10,7 +10,11 @@ export type EngineStatus = {
   /** 0–100. <100 means a load/swap is in flight; 100 or missing means idle. */
   progress?: number | null;
   delay_ms?: number;
+  /** 实测端到端延迟。delay_ms 是公式估算，这个是实际量出来的。 */
+  real_delay_ms?: number;
   infer_ms?: number;
+  /** 累计输出欠载次数。撕裂判据看它的增速，不看绝对值。 */
+  underrun?: number;
   samplerate?: number;
   pid?: number;
   worker_alive?: boolean;
@@ -256,7 +260,9 @@ export function statusSub(st: EngineStatus): string {
   // 再把 message 重复一遍就是浪费。status.json 是合并写的，message 会一直
   // 停在最后一次设置的值上，所以这条必须排在 message 前面，否则延迟永远
   // 显示不出来。
-  const delay = Number(st.delay_ms || 0);
+  // 有实测值就用实测的：公式那个假设推理总能在一个块内跑完，跟不上时
+  // 真实延迟涨了它却纹丝不动 —— 用户看到「延迟 180ms」却觉得慢半拍。
+  const delay = Number(st.real_delay_ms || st.delay_ms || 0);
   const infer = Number(st.infer_ms || 0);
   if (st.state === "running" && (delay > 0 || infer > 0)) {
     const dsp =

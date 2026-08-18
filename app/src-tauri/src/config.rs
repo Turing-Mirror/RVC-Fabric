@@ -211,6 +211,9 @@ pub fn defaults() -> Map<String, Value> {
     // 问过之后 follow_prompt_done 置 true，这辈子不再问第二次。
     m.insert("vc_run_count".into(), json!(0));
     m.insert("follow_prompt_done".into(), json!(false));
+    // 第一次点「开启变声」时问一句要不要先看说明页。点「转到说明页」或
+    // 「不了」都置 true，只出这一次 —— 已经上手的人再被拦一道就是骚扰。
+    m.insert("guide_prompt_done".into(), json!(false));
     // 第三方 Hugging Face 下载镜像根。空 = 走 `mirrors::hf_endpoints` 解出来
     // 的顺序（清单下发 → 编译进来的兜底 → 规范域）。不进 worker / inuse。
     m.insert("hf_endpoint".into(), json!(""));

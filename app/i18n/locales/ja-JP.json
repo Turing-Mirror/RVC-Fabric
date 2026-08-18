@@ -1771,7 +1771,11 @@
     "trainEtaSoon": "まもなく完了",
     "trainEtaMin": "残り約 {v0} 分",
     "trainEtaHour": "残り約 {v0} 時間",
-    "trainEtaHourMin": "残り約 {v0} 時間 {v1} 分"
+    "trainEtaHourMin": "残り約 {v0} 時間 {v1} 分",
+    "guideFirstTitle": "RVC Fabric のご利用は初めてですね！",
+    "guideFirstBody": "RVC Fabric が変声を起動しています。その前に、基本の使い方を見てみましょう～",
+    "guideFirstGo": "説明ページへ",
+    "guideFirstSkip": "いいえ"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

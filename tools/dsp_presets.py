@@ -82,7 +82,10 @@ BUILTIN: List[Dict[str, Any]] = [
         "desc": "窄带、底噪、一点点音量晃，像喇叭里传出来",
         "params": _p(
             radio={"low": 400.0, "high": 2600.0, "mix": 1.0, "noise": 0.06},
-            tremolo={"rate": 7.5, "depth": 0.08},
+            # 0.08 只摆 0.72dB，在响度可闻阈（约 1dB）下面 —— 何况前面还压着
+            # 限带和过载，那点晃动全被盖掉了。0.12 是 1.11dB：还是「一点点」，
+            # 但真的在那儿。
+            tremolo={"rate": 7.5, "depth": 0.12},
             drive={"amount": 0.14},
         ),
     },

@@ -34,8 +34,8 @@ fn emit(app: &AppHandle, payload: Value) {
     let _ = app.emit("ckpt-progress", payload);
 }
 
-pub fn pick(kind: &str) -> Option<String> {
-    let d = crate::shell_extras::dialog();
+pub fn pick(win: Option<&tauri::WebviewWindow>, kind: &str) -> Option<String> {
+    let d = crate::shell_extras::dialog_on(win);
     match kind {
         "folder" => d
             .set_title(&crate::i18n::t("s.ckptPickFolder"))

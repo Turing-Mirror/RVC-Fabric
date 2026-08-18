@@ -460,13 +460,13 @@ fn path_under(child: &Path, parent: &Path) -> bool {
 }
 
 /// 选输入：`folder=false` 选单个音频，`true` 选文件夹（批量）。
-pub fn pick_input(folder: bool) -> Option<String> {
+pub fn pick_input(win: Option<&tauri::WebviewWindow>, folder: bool) -> Option<String> {
     let title = if folder {
         crate::i18n::t("s.46ffa5479e")
     } else {
         crate::i18n::t("s.79b552d700")
     };
-    let dlg = crate::shell_extras::dialog().set_title(&title);
+    let dlg = crate::shell_extras::dialog_on(win).set_title(&title);
     if folder {
         dlg.pick_folder().map(|p| p.to_string_lossy().into_owned())
     } else {
@@ -480,9 +480,9 @@ pub fn pick_input(folder: bool) -> Option<String> {
     }
 }
 
-pub fn pick_output() -> Option<String> {
+pub fn pick_output(win: Option<&tauri::WebviewWindow>) -> Option<String> {
     let title = crate::i18n::t("s.cb12ce77e7");
-    crate::shell_extras::dialog()
+    crate::shell_extras::dialog_on(win)
         .set_title(&title)
         .pick_folder()
         .map(|p| p.to_string_lossy().into_owned())

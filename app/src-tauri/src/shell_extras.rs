@@ -691,25 +691,32 @@ pub fn remember_app(app: &AppHandle) {
     let _ = APP.set(app.clone());
 }
 
-/// 对话框该挂在哪个窗口上：**当前有焦点的那个**，没有就退回主窗口。
+/// 对话框该挂在哪个窗口上：**发起这次调用的那个**。
 ///
-/// 以前写死 `"main"`。人声分离 / 训练音色 / 语音合成都是独立的工具窗口
+/// 以前写死 `"main"`。人声分离 / 训练音色 / 语音转换都是独立的工具窗口
 /// （`tool_window.rs`），从它们里面点「选择文件夹」，对话框却认主窗口当爹
 /// —— Windows 把主窗口连同对话框一起拉到前台，工具窗口跟它俩没有归属关系，
-/// 于是被挤到后面。用户视角就是「选完文件夹，那个窗口没了」，得去任务栏
-/// 里翻，或者回首页重新打开。
+/// 于是被挤到后面。用户视角就是「选完文件夹，那个窗口没了」。
 ///
-/// 挂对了以后是系统自己的既有行为：对话框始终压在发起它的那个窗口上面，
-/// 关掉之后焦点原样还回去，一行额外代码都不用写。
-fn parent_window() -> Option<tauri::WebviewWindow> {
-    let app = APP.get()?;
-    app.webview_windows()
-        .into_values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .or_else(|| app.get_webview_window("main"))
+/// 后来改成「找当前有焦点的那个窗口」，还是不对。窗口内容跑在 WebView2 里，
+/// 真正持有键盘焦点的是 WebView2 那个子 HWND，不是顶层窗口；`is_focused()`
+/// 读的又是 tao 缓存下来的标志而不是现问系统，于是可能所有窗口都报 false，
+/// 一路退回 `"main"`，等于没改。
+///
+/// 现在不猜了：Tauri v2 的命令可以声明一个 `window: WebviewWindow` 参数，
+/// 框架会把**发起这次 invoke 的窗口**注入进来。这是唯一的事实来源，任何缓存
+/// 和启发式都比不过它。
+///
+/// `None` 是留给非命令上下文的（比如托盘菜单），那里确实没有发起窗口，退回
+/// 主窗口是对的。
+fn resolve_parent(win: Option<&tauri::WebviewWindow>) -> Option<tauri::WebviewWindow> {
+    if let Some(w) = win {
+        return Some(w.clone());
+    }
+    APP.get()?.get_webview_window("main")
 }
 
-/// 建一个**挂在主窗口上**的文件对话框。
+/// 建一个挂在 `win` 上的文件对话框。
 ///
 /// 不设父窗口的话，它是一个跟我们没有归属关系的顶层窗口。而选目录用的是同步
 /// 命令（原生对话框要主线程），对话框一开，整个事件循环就停了 —— 用户点主
@@ -718,9 +725,9 @@ fn parent_window() -> Option<tauri::WebviewWindow> {
 ///
 /// 设了父窗口，Windows 自己会把这件事说清楚：父窗口标题栏变灰，点父窗口时对话框
 /// 闪一下并被拉到前台。这是所有 Windows 程序的既有约定，不需要一个字的文案。
-pub fn dialog() -> rfd::FileDialog {
+pub fn dialog_on(win: Option<&tauri::WebviewWindow>) -> rfd::FileDialog {
     let d = rfd::FileDialog::new();
-    match parent_window() {
+    match resolve_parent(win) {
         Some(w) => d.set_parent(&w),
         None => d,
     }
@@ -729,7 +736,7 @@ pub fn dialog() -> rfd::FileDialog {
 /// 同上，给消息框用。
 pub fn message_dialog() -> rfd::MessageDialog {
     let d = rfd::MessageDialog::new();
-    match parent_window() {
+    match resolve_parent(None) {
         Some(w) => d.set_parent(&w),
         None => d,
     }

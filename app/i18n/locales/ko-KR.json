@@ -1775,7 +1775,11 @@
     "guideFirstTitle": "RVC Fabric을 처음 사용하시는군요!",
     "guideFirstBody": "RVC Fabric이 음성 변환을 시작하고 있어요. 그 전에 기본 사용법을 살펴볼까요~",
     "guideFirstGo": "설명 페이지로",
-    "guideFirstSkip": "괜찮아요"
+    "guideFirstSkip": "괜찮아요",
+    "killStsAskTitle": "음성 변환이 진행 중입니다",
+    "killStsAskBody": "강제 종료하면 음성 변환도 중단됩니다. 완료된 파일은 유지되며, 변환 중인 파일은 저장되지 않습니다.",
+    "killStsAskKeep": "취소",
+    "killStsAskGo": "함께 종료"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

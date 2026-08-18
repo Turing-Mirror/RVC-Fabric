@@ -19,6 +19,12 @@ use crate::paths;
 static BUSY: Mutex<bool> = Mutex::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static REC_BUSY: Mutex<bool> = Mutex::new(false);
+/// 最后一条推出去的进度。
+///
+/// 进度是靠 `sts-progress` 事件推的，事件只发给**当时开着的**窗口。用户把语音
+/// 转换窗口关掉再打开，新窗口一条都没赶上，于是显示成「还没开始」，而后台其实
+/// 还在跑 —— 用户报的就是这个。存一份最后状态，新窗口进来先补一次。
+static LAST_PROGRESS: Mutex<Option<Value>> = Mutex::new(None);
 static REC_CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static REC_STOP: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -267,6 +273,27 @@ pub fn cancel() {
     cancel_flag().store(true, Ordering::SeqCst);
 }
 
+/// 有没有正在跑的转换任务。强杀引擎前拿它决定要不要先问一句。
+pub fn is_busy() -> bool {
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 取消并等它真的停下来，最多等 `secs` 秒。返回停没停下来。
+///
+/// 强杀引擎会顺手清 Runtime 下的 python 进程，如果这时候转换还在跑，就是
+/// 一边杀一边写文件。先让它按正常路径收尾，收不掉再交给强杀。
+pub fn cancel_and_wait(secs: u64) -> bool {
+    cancel();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
+    while std::time::Instant::now() < deadline {
+        if !is_busy() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    !is_busy()
+}
+
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
     emit_full(app, phase, done, total, message, None, None, None, None, None, None);
 }
@@ -338,11 +365,13 @@ fn emit_full_ex(
             body["reason"] = json!(r);
         }
     }
+    *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(body.clone());
     let _ = app.emit("sts-progress", body);
 }
 
 /// 当前能不能转、用哪个音色。
 pub fn status(root: &Path) -> Value {
+    let busy = *BUSY.lock().unwrap_or_else(|e| e.into_inner());
     let cfg = crate::config::read(root);
     let pth = cfg
         .get("pth_path")
@@ -383,7 +412,17 @@ pub fn status(root: &Path) -> Value {
         "recording": *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()),
         // 实时变声是否还占着显存。面板拿它决定要不要先问一句再开转。
         "worker_alive": crate::worker::is_worker_alive(root),
-        "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
+        "busy": busy,
+        // 只在还在跑的时候给，跑完了给一份陈旧进度反而误导。
+        "progress": if busy {
+            LAST_PROGRESS
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .unwrap_or(Value::Null)
+        } else {
+            Value::Null
+        },
     })
 }
 
@@ -1184,6 +1223,8 @@ pub fn run(
         }
         *g = true;
     }
+    // 上一单的终态别留给这一单看。
+    *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     cancel_flag().store(false, Ordering::SeqCst);
     // Open the run log *before* preflight so a 22:00 "engine missing" still
     // leaves a file with that timestamp. The old single sts.log never saw those.
@@ -1401,13 +1442,37 @@ fn run_inner(
     let mut fail: Option<String> = None;
     let mut total: u64 = 1;
 
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+    // stdout 的读取放到单独线程，主循环每 200ms 醒一次。
+    //
+    // 以前是直接 `for line in stdout.lines()`，取消标志只在**新的一行进度出来
+    // 时**才看得到。而一个文件转到一半，worker 十几秒不吭声是常事 —— 这十几秒
+    // 里点取消，界面上什么都不会发生，用户只会以为按钮坏了。用户报的就是这个。
+    //
+    // 换成 channel 之后取消是秒级的：不管 worker 在不在说话，200ms 内一定醒来
+    // 查一次。读取线程那边 recv 端一断就自然结束，不用额外的收尾。
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
             let _ = child.wait();
             job.trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
+        let line = match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(l) => l,
+            // 超时只是这一轮没有新进度，回去再查一遍取消标志。
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            // 发送端没了 = 子进程 stdout 关了 = 跑完了。
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        };
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
         };

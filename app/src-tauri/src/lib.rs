@@ -1257,6 +1257,18 @@ fn ckpt_cancel() {
 async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
+        // 先把语音转换收掉。
+        //
+        // 用户报的是「其他页结束变声引擎，语音转换还在跑」。以前不动它是有意
+        // 的 —— `kill_runtime_pythons(root, true)` 只收孤儿进程，怕误伤几小时
+        // 的长任务。但这个按钮写的是「强制结束变声引擎 / 解决卡死」，用户按下去
+        // 的预期就是全停；不停反而要他再去别处找开关。
+        //
+        // 走正常的取消路径而不是直接杀：转换那边收到取消会 kill 掉自己的子进程
+        // 并把 BUSY 放掉，文件不会写到一半。收不掉才让后面的强杀兜底。
+        //
+        // 界面在按之前会问一句（App.tsx 的 killAsk），不闷声吃掉长任务。
+        sts::cancel_and_wait(3);
         worker::kill_known_workers(&root);
         worker::kill_runtime_pythons(&root, true);
         // 杀完把「当前音色」重新写回引擎配置。

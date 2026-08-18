@@ -1775,7 +1775,11 @@
     "guideFirstTitle": "RVC Fabric のご利用は初めてですね！",
     "guideFirstBody": "RVC Fabric が変声を起動しています。その前に、基本の使い方を見てみましょう～",
     "guideFirstGo": "説明ページへ",
-    "guideFirstSkip": "いいえ"
+    "guideFirstSkip": "いいえ",
+    "killStsAskTitle": "音声変換が実行中です",
+    "killStsAskBody": "強制終了すると音声変換も中止されます。完了済みのファイルは保持され、変換中のファイルは保存されません。",
+    "killStsAskKeep": "キャンセル",
+    "killStsAskGo": "まとめて終了"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

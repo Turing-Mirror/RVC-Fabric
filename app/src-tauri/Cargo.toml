@@ -61,8 +61,7 @@ windows-sys = { version = "0.59", features = [
   # Win10 上 DWM 那条属性不存在，兜底靠 SetWindowRgn 自己裁圆角。
   # SetWindowRgn 虽然是 user32 的函数，windows-sys 把它归在 Gdi 这个 feature 下。
   "Win32_Graphics_Gdi",
-  # 竖带修复要等 WebView2 渲染器子窗口出现才能动框架，靠 EnumChildWindows /
-  # GetClassName 探测。
+  # 无边框窗口的样式与最大化矩形：GetWindowLong / SetWindowPos / MINMAXINFO。
   "Win32_UI_WindowsAndMessaging",
   # 无边框最大化：子类化 WM_GETMINMAXINFO / WM_WINDOWPOSCHANGING，
   # 落地前把矩形钳到工作区（不含任务栏），避免事后 SetWindowPos 毁掉还原尺寸。

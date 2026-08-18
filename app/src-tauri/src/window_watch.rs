@@ -217,16 +217,44 @@ fn hide_dwm_border_color(hwnd: windows_sys::Win32::Foundation::HWND) {
 /// 最大化状态开关**。
 #[cfg(windows)]
 fn ensure_thickframe(hwnd: windows_sys::Win32::Foundation::HWND) {
+    ensure_frame_styles(hwnd, false)
+}
+
+/// 窗口投影的来源是 `WS_CAPTION`，不是 tao 的 `set_shadow(true)`。
+///
+/// 这是之前搞反的一处。tao 的 `set_shadow(true)` 对无边框窗口做的是
+/// `DwmExtendFrameIntoClientArea` 留 1px 边距 —— 那 1px 由 DWM 自己画，
+/// 看上去就是那条「Aero 白边」。当时的结论「无边框就不能有投影」是从这个
+/// 实现推出来的，对 tao 成立，对 Windows 不成立。
+///
+/// 系统给窗口画投影看的是样式里有没有 `WS_CAPTION`。加上它，DWM 就照常画
+/// 投影、照常做最小化/还原动画；标题栏本身不会露出来，因为
+/// `work_area_subclass_proc` 里的 `WM_NCCALCSIZE` 一律把客户区撑满整个窗口。
+/// VS Code、Windows Terminal 走的都是这条路。
+///
+/// `set_shadow(false)` 那几处一个都不用动 —— 投影不再靠它，它继续负责挡住
+/// tao 那 1px。
+#[cfg(windows)]
+fn ensure_caption_for_shadow(hwnd: windows_sys::Win32::Foundation::HWND) {
+    ensure_frame_styles(hwnd, true)
+}
+
+#[cfg(windows)]
+fn ensure_frame_styles(hwnd: windows_sys::Win32::Foundation::HWND, caption: bool) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
         SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
     };
     const WS_THICKFRAME: u32 = 0x0004_0000;
     const WS_BORDER: u32 = 0x0080_0000;
+    const WS_CAPTION: u32 = 0x00C0_0000;
     // SAFETY: hwnd 是我们自己的窗口。
     unsafe {
         let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
-        let new_style = (style | WS_THICKFRAME) & !WS_BORDER;
+        let mut new_style = (style | WS_THICKFRAME) & !WS_BORDER;
+        if caption {
+            new_style |= WS_CAPTION;
+        }
         if new_style == style {
             return;
         }
@@ -364,8 +392,7 @@ unsafe extern "system" fn work_area_subclass_proc(
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::Shell::DefSubclassProc;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongW, GetWindowRect, MINMAXINFO, WINDOWPOS, GWL_STYLE, SWP_NOMOVE,
-        SWP_NOSIZE, WS_MAXIMIZE,
+        GetWindowRect, MINMAXINFO, WINDOWPOS, SWP_NOMOVE, SWP_NOSIZE,
     };
 
     const WM_GETMINMAXINFO: u32 = 0x0024;
@@ -437,13 +464,18 @@ unsafe extern "system" fn work_area_subclass_proc(
         return ret;
     }
 
-    if msg == WM_NCCALCSIZE {
-        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
-        if style & WS_MAXIMIZE != 0 {
-            // 最大化时客户区 = 窗口矩形，厚框不会露成一圈 Aero 描边。
-            // 不调用 DefSubclassProc，避免 tao 再按「有边框」去内缩。
-            return 0;
-        }
+    if msg == WM_NCCALCSIZE && wparam != 0 {
+        // 客户区 = 整个窗口矩形，一律如此，不分最大化。
+        //
+        // 这一行是整套无边框窗口的地基，之前只在最大化时生效，剩下的情况
+        // 交给 DefSubclassProc → tao，而 tao 会按「有边框」把客户区四周内缩
+        // 一圈（Win10 上左右下各 8px）。那圈非客户区 WebView 不铺、没人画，
+        // 窗口一移动系统重画框架就把旧像素钉在左缘 —— 「拖动后出现、再也不
+        // 消失的竖带」。以前是另起一个线程、等 WebView2 渲染器就绪、再翻
+        // set_shadow 标志去反推同一个结果；直接在这里拦下就没那回事了。
+        //
+        // 不调 DefSubclassProc 是有意的：只要它跑了，tao 就会内缩。
+        return 0;
     }
 
     DefSubclassProc(hwnd, msg, wparam, lparam)
@@ -491,6 +523,9 @@ pub fn round_corners(win: &WebviewWindow) {
     // set_shadow(true) 把 1px 白边加回来。
     let _ = win.set_shadow(false);
     if hr == 0 {
+        // DWM 认这条属性 = Win11。系统会画圆角，也会画投影 —— 只要样式里
+        // 有 WS_CAPTION。窗口层次感就是从这儿来的，见 ensure_caption_for_shadow。
+        ensure_caption_for_shadow(hwnd);
         logging::shell_log!(crate::i18n::t("s.3db536a84d"));
         // 建窗时若已是最大化（少见），立刻铺满，别等第一次 Resized。
         sync_maximized_frame(win);
@@ -498,6 +533,9 @@ pub fn round_corners(win: &WebviewWindow) {
     }
     // 记下走的是兜底那条，之后 Resized 才知道该不该重新裁。DWM 生效的机器上
     // 再去裁一刀，等于拿硬边盖掉系统画好的抗锯齿圆角。
+    //
+    // 这条分支上 SetWindowRgn 会打断 DWM 合成，投影本来就没有，所以不加
+    // WS_CAPTION —— 加了也画不出来，只多一次样式变更。
     NEEDS_REGION.store(true, Ordering::Relaxed);
     // Win10 没有这个属性，DWM 这条路走不通。系统不给画就自己画：给窗口套一个
     // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
@@ -510,114 +548,16 @@ pub fn round_corners(win: &WebviewWindow) {
     sync_maximized_frame(win);
 }
 
-/// Win10 左缘竖带的根治：把「为系统投影预留的隐形边框」关掉。
-///
-/// 病灶在 tao：无边框窗口默认带着「无装饰投影」标志（对应 `.shadow(true)`，
-/// 也是默认值），`WM_NCCALCSIZE` 时把客户区四周内缩一圈边框厚度（这台机器上
-/// 左右下各 8px），好让 `WS_THICKFRAME` 的隐形边框画出系统投影。Win11 上那圈
-/// 边框真的只画投影，看不见；Win10 上它是实打实的非客户区——WebView 只铺客户区，
-/// 这 8px 归窗口框架画。平时没人画它看不出问题，窗口一移动系统重画框架区，画出的
-/// 旧像素从此钉在左缘，切页也盖不掉——就是那条「拖动后出现、再也不消失」的竖带。
-///
-/// `set_shadow(false)` 把那个标志清掉，`WM_NCCALCSIZE` 不再内缩，客户区涨满整个
-/// 窗口，WebView 铺满，8px 从此有主人画。代价是没了系统投影——但走到这个分支的
-/// Win10 机器上 `SetWindowRgn` 本来就把 DWM 合成打断了，投影早就没有，不损失任何
-/// 看得见的东西；Win11（DWM 分支）绝不调用，投影照旧。拉着边改大小不受影响，
-/// 命中测试由 tao 的 `WM_NCHITTEST` 自己算。
-///
-/// 为什么是「延后」而不是当场改：tao 收到标志变化后会同步
-/// `SetWindowLong + SetWindowPos(SWP_FRAMECHANGED)` 重算框架，这一串会波及窗口里
-/// 的子窗口（WebView2 的渲染窗口在另一个进程）。建窗现场 WebView2 还在初始化，
-/// 此刻跟它做跨进程的同步等待，渲染器就此卡死——工具窗口永久白屏。所以不光要
-/// 挪到后台线程，还要**等渲染器真的就绪**（`webview_renderer_ready`）再动框架：
-/// 只靠固定延时赌不出初始化时长，赌输了就是同款白屏。
-#[cfg(windows)]
-fn kill_undecorated_shadow_inset_deferred(win: &WebviewWindow) {
-    let win = win.clone();
-    std::thread::spawn(move || {
-        // 等 WebView2 把渲染器子窗口建出来再动框架。最多等 15 秒；等不到就放弃
-        // 修复（竖带回来总比把窗口搞白屏强）。
-        let mut ready = false;
-        for _ in 0..300 {
-            if webview_renderer_ready(&win) {
-                ready = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        if !ready {
-            logging::shell_log!(crate::i18n::t("s.6ec08cc8d9"));
-            return;
-        }
-        // 渲染器出现后再宽限半秒，让它把首帧提交完。
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        if let Err(e) = win.set_shadow(false) {
-            logging::shell_log!(crate::i18n::t("s.e4476ca669"));
-            return;
-        }
-        // set_shadow 把活派给 tao 的另一个线程，等它改完：标志生效后客户区会和
-        // 窗口等大。最多等半秒，等不到也照常往下走。
-        for _ in 0..25 {
-            if let (Ok(i), Ok(o)) = (win.inner_size(), win.outer_size()) {
-                if i.width >= o.width && i.height >= o.height {
-                    break;
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-        // 客户区涨满之后区域要按新尺寸重裁一次。set_shadow 引发的 WM_SIZE 可能
-        // 比 Resized 回调挂上得还早（工具窗口），不能只指望回调，这里自己补一刀。
-        // SetWindowRgn 得在窗口自己的线程上调，run_on_main_thread 会把它送过去。
-        // 闭包要把 win 整个搬进去，方法调用还得借用它，先克隆一份给闭包用。
-        let for_region = win.clone();
-        let _ = win.run_on_main_thread(move || {
-            apply_corner_region(&for_region);
-        });
-        logging::shell_log!(crate::i18n::t("s.b5e27d4505"));
-    });
-}
-
-/// WebView2 是不是已经把渲染器子窗口（`Chrome_RenderWidgetHostHWND`）建出来了。
-///
-/// 这个子窗口属于另一个进程（msedgewebview2.exe 的渲染进程），它一出现就说明
-/// 控制器创建完成、页面开始渲染——此刻再对宿主窗口动框架才不会跨进程卡住它。
-/// 拿不到 HWND（窗口已关）时返回 false，调用方会一直等到超时放弃。
-#[cfg(windows)]
-fn webview_renderer_ready(win: &WebviewWindow) -> bool {
-    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, GetClassNameW,
-    };
-
-    let Ok(hwnd) = win.hwnd() else {
-        return false;
-    };
-    extern "system" fn find_renderer(child: HWND, found: LPARAM) -> BOOL {
-        let mut name = [0u16; 64];
-        // SAFETY：child 由枚举器给出，缓冲区长度如实传入。
-        let len = unsafe { GetClassNameW(child, name.as_mut_ptr(), name.len() as i32) };
-        const TARGET: &str = "Chrome_RenderWidgetHostHWND";
-        let wide: Vec<u16> = TARGET.encode_utf16().collect();
-        let mut buf = [0u16; TARGET.len()];
-        buf[..wide.len()].copy_from_slice(&wide);
-        if len as usize == wide.len() && name[..len as usize] == buf[..] {
-            // 找到了：把标志置位并终止枚举（返回 false）。
-            unsafe { *(found as *mut bool) = true };
-            return 0;
-        }
-        1
-    }
-    let mut found = false;
-    // SAFETY：回调只读写自己栈上的标志位；EnumChildWindows 同步走完才返回。
-    unsafe {
-        EnumChildWindows(
-            hwnd.0 as HWND,
-            Some(find_renderer),
-            &mut found as *mut bool as LPARAM,
-        );
-    }
-    found
-}
+// 这里曾经有两个函数：`kill_undecorated_shadow_inset_deferred` 和它依赖的
+// `webview_renderer_ready`。前者另起一个线程、轮询等 WebView2 的渲染器子窗口
+// 出现、再翻 tao 的 shadow 标志、再等客户区涨满、再回主线程重裁一次圆角区域，
+// 只为了达成一件事：客户区铺满整个窗口，别留一圈没人画的非客户区（Win10 上
+// 那圈会变成「拖动后出现、再也不消失的左缘竖带」）。
+//
+// 现在 `work_area_subclass_proc` 的 `WM_NCCALCSIZE` 一律返回 0，客户区从建窗
+// 第一帧起就是整个窗口矩形，上面那一串全是多余的。别再写回来 —— 它引入过
+// 「工具窗口永久白屏」（建窗现场跟 WebView2 跨进程同步等待），代价比它治的
+// 病还大。
 
 /// Win10 的兜底：SetWindowRgn 把四角裁圆。
 ///

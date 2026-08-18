@@ -691,8 +691,22 @@ pub fn remember_app(app: &AppHandle) {
     let _ = APP.set(app.clone());
 }
 
+/// 对话框该挂在哪个窗口上：**当前有焦点的那个**，没有就退回主窗口。
+///
+/// 以前写死 `"main"`。人声分离 / 训练音色 / 语音合成都是独立的工具窗口
+/// （`tool_window.rs`），从它们里面点「选择文件夹」，对话框却认主窗口当爹
+/// —— Windows 把主窗口连同对话框一起拉到前台，工具窗口跟它俩没有归属关系，
+/// 于是被挤到后面。用户视角就是「选完文件夹，那个窗口没了」，得去任务栏
+/// 里翻，或者回首页重新打开。
+///
+/// 挂对了以后是系统自己的既有行为：对话框始终压在发起它的那个窗口上面，
+/// 关掉之后焦点原样还回去，一行额外代码都不用写。
 fn parent_window() -> Option<tauri::WebviewWindow> {
-    APP.get().and_then(|a| a.get_webview_window("main"))
+    let app = APP.get()?;
+    app.webview_windows()
+        .into_values()
+        .find(|w| w.is_focused().unwrap_or(false))
+        .or_else(|| app.get_webview_window("main"))
 }
 
 /// 建一个**挂在主窗口上**的文件对话框。

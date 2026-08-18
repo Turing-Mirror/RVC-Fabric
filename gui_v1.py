@@ -309,6 +309,13 @@ if __name__ == "__main__":
             self.block_time: float = 0.22  # s — slightly snappier than 0.25
             self.threhold: int = -48  # >-60 enables gate; cuts room noise when quiet
             self.in_gain_db: float = 0.0  # mic pre-gain before gate/meter, hot
+            # 变声后的总音量，出声之前最后一道，热更新。
+            #
+            # 和 fx_out_gain_db 不是一回事：那个住在音效链里，`fx_enabled`
+            # 关着的时候整条链直接 return，它一点作用都没有。而「变声声音太小」
+            # 跟要不要开噪声门/压缩/EQ 毫无关系，不该被绑在一起 —— 用户报的
+            # 「变声的音量不可调」就是被这层耦合挡住的。
+            self.out_gain_db: float = 0.0
             self.crossfade_time: float = 0.05
             self.extra_time: float = 2.5
             self.I_noise_reduce: bool = False
@@ -1171,6 +1178,7 @@ if __name__ == "__main__":
             ]
             self.gui_config.threhold = values["threhold"]
             self.gui_config.in_gain_db = float(values.get("in_gain_db") or 0.0)
+            self.gui_config.out_gain_db = float(values.get("out_gain_db") or 0.0)
             self.gui_config.pitch = values["pitch"]
             self.gui_config.formant = values["formant"]
             self.gui_config.block_time = values["block_time"]
@@ -1300,6 +1308,17 @@ if __name__ == "__main__":
                 "fx_eq_preset": str(gc.fx_eq_preset or "flat"),
                 "fx_out_gain_db": float(gc.fx_out_gain_db or 0),
             }
+
+        def _apply_out_gain(self, y):
+            """出声前的总音量。RVC 和 DSP 两条路都走这里，软限幅之前。
+
+            放在软限幅之前而不是之后：限幅是为了不削爆，加完增益再限才有意义；
+            反过来先限后加，加多了照样爆出去。
+            """
+            g = float(getattr(self.gui_config, "out_gain_db", 0.0) or 0.0)
+            if abs(g) < 0.05:
+                return y
+            return (y * np.float32(10.0 ** (g / 20.0))).astype(np.float32)
 
         def _rebuild_fx_chain(self) -> None:
             try:
@@ -2213,6 +2232,7 @@ if __name__ == "__main__":
                 if take > 0:
                     out[:take] = y[:take]
                 y = out
+            y = self._apply_out_gain(y)
             y = soft_clip_np(y)
             ch = int(getattr(self.gui_config, "channels", 2) or 2)
             if ch <= 1:
@@ -2499,6 +2519,7 @@ if __name__ == "__main__":
                 .cpu()
                 .numpy()
             )
+            outdata = self._apply_out_gain(outdata)
             outdata = soft_clip_np(outdata)
 
             # Self-monitor: same converted audio to headphones (main out stays CABLE)
@@ -2812,6 +2833,7 @@ if __name__ == "__main__":
                 "sr_device": sr == "sr_device",
                 "threhold": data.get("threhold", -60),
                 "in_gain_db": float(data.get("in_gain_db") or 0.0),
+                "out_gain_db": float(data.get("out_gain_db") or 0.0),
                 "pitch": data.get("pitch", 0),
                 "formant": data.get("formant", 0.0),
                 "index_rate": data.get("index_rate", 0),
@@ -2924,6 +2946,8 @@ if __name__ == "__main__":
                 self.gui_config.threhold = payload["threhold"]
             if "in_gain_db" in payload and payload["in_gain_db"] is not None:
                 self.gui_config.in_gain_db = float(payload["in_gain_db"])
+            if "out_gain_db" in payload and payload["out_gain_db"] is not None:
+                self.gui_config.out_gain_db = float(payload["out_gain_db"])
             if "f0method" in payload and payload["f0method"]:
                 method = str(payload["f0method"] or "fcpe")
                 self.gui_config.f0method = method
@@ -3496,6 +3520,9 @@ if __name__ == "__main__":
                         "threhold": self.gui_config.threhold,
                         "in_gain_db": float(
                             getattr(self.gui_config, "in_gain_db", 0.0) or 0.0
+                        ),
+                        "out_gain_db": float(
+                            getattr(self.gui_config, "out_gain_db", 0.0) or 0.0
                         ),
                         "pitch": self.gui_config.pitch,
                         "formant": self.gui_config.formant,

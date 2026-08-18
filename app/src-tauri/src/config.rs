@@ -36,6 +36,8 @@ pub const HOT_KEYS: &[&str] = &[
     "rms_mix_rate",
     "threhold",
     "in_gain_db",
+    // 变声后的总音量。和 fx_out_gain_db 分开：那个在音效链里，音效关着就不生效。
+    "out_gain_db",
     "f0method",
     "I_noise_reduce",
     "O_noise_reduce",
@@ -120,6 +122,7 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("rms_mix_rate".into(), json!(0.25));
     m.insert("threhold".into(), json!(-60));
     m.insert("in_gain_db".into(), json!(0.0));
+    m.insert("out_gain_db".into(), json!(0.0));
     m.insert("f0method".into(), json!("rmvpe"));
     m.insert("I_noise_reduce".into(), json!(true));
     m.insert("O_noise_reduce".into(), json!(false));
@@ -880,7 +883,9 @@ pub fn describe() -> Value {
             "sg_hostapi",
             "sg_input_device",
             "in_gain_db",
+            "threhold",
             "sg_output_device",
+            "out_gain_db",
             "monitor_self",
             "monitor_device",
             "sg_wasapi_exclusive",
@@ -890,7 +895,6 @@ pub fn describe() -> Value {
     groups.insert(
         "voice",
         vec![
-            "threhold",
             "pitch",
             "formant",
             "index_rate",

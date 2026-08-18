@@ -100,7 +100,14 @@ fn win_rect(win: &WebviewWindow) -> Option<Rect> {
 ///
 /// `phase` 只是日志标签——一次启动会调用两次（建完窗口、12 秒后），两条对比
 /// 才能看出窗口是一开始就不对，还是后来被挪走的。
+/// 记录窗口状态，然后把看不见的窗口救回来。开机建窗后调一次。
 pub fn report_and_rescue(win: &WebviewWindow, phase: &str) {
+    report(win, phase);
+    rescue(win);
+}
+
+/// 把窗口和显示器的状态写进日志。**不动窗口。**
+pub fn report(win: &WebviewWindow, phase: &str) {
     let visible = win.is_visible();
     let minimized = win.is_minimized();
     let rect = win_rect(win);
@@ -155,10 +162,18 @@ pub fn report_and_rescue(win: &WebviewWindow, phase: &str) {
         logging::shell_log!("光标位置：{:.0},{:.0}", c.x, c.y);
     }
 
-    if minimized.unwrap_or(false) {
+}
+
+/// 把最小化/隐藏/跑到屏幕外的窗口弄回用户眼前。
+///
+/// **这是补救，不是例行维护**：它会 show 一扇用户可能是故意藏起来的窗口。
+/// 只在有理由相信「窗口不见了不是用户的意思」时调用（开机建窗后、界面迟迟
+/// 没挂起来），别放进定时体检里。
+pub fn rescue(win: &WebviewWindow) {
+    if win.is_minimized().unwrap_or(false) {
         let _ = win.unminimize();
     }
-    if !visible.unwrap_or(true) {
+    if !win.is_visible().unwrap_or(true) {
         logging::shell_log!(crate::i18n::t("s.4401758653"));
         let _ = win.show();
     }

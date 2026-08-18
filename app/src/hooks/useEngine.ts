@@ -37,6 +37,13 @@ export function useEngine() {
   const modeRef = useRef<OutputMode>("vc");
   const hotTimer = useRef<number | null>(null);
   const startingRef = useRef(false);
+  // 用户**亲手**按下「开启变声」的次数。
+  //
+  // `starting` 不能当这个用：开机预热引擎、导入推理库的时候后端一样会报
+  // starting，界面上没人按过任何东西。首次引导挂在 starting 上，结果软件一
+  // 启动就弹出来了 —— 用户报的就是这个。这个计数只在 toggleRun 真的走开启
+  // 分支时才加，托盘和快捷键也走同一条路，所以它们也算数。
+  const [userStarts, setUserStarts] = useState(0);
   const [swapHint, setSwapHint] = useState(false);
   const progressRef = useRef<number | null>(null);
 
@@ -293,6 +300,7 @@ export function useEngine() {
         setStatus(st);
       } else {
         startingRef.current = true;
+        setUserStarts((n) => n + 1);
         if (dspOnly && dspId) {
           // 每次纯 DSP 开启都重新落盘一次：inuse 若漏了 dsp_enabled，
           // worker 会当成没选音色，报 Please choose the .pth file。
@@ -418,6 +426,8 @@ export function useEngine() {
     provision,
     running,
     starting: starting || swapHint,
+    /** 用户亲手按下「开启变声」的次数。预热和自动重启不计。 */
+    userStarts,
     busy,
     progress: loadProgress(hinted),
     noteSwap,

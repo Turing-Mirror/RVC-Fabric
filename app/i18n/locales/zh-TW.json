@@ -1779,7 +1779,9 @@
     "killStsAskTitle": "語音轉換仍在進行",
     "killStsAskBody": "強制結束會一併中止語音轉換。已完成的檔案保留，正在轉換的檔案不會儲存。",
     "killStsAskKeep": "取消",
-    "killStsAskGo": "一併結束"
+    "killStsAskGo": "一併結束",
+    "outGainLabel": "變聲音量 dB",
+    "outGainTip": "調節變聲後送出去的音量：對方聽著太小就調高。調過頭會削波破音，加多少以底欄輸出電平不頂到頭為準。"
   },
   "extras": {
     "engineTitle": "引擎資源",

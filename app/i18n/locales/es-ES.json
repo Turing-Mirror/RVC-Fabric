@@ -1845,7 +1845,18 @@
     "faqBypassA": "«Convertida / Original», en la barra inferior, vuelve a tu propia voz sin detener el motor.\nEn Ajustes → Atajos puedes asignarle una tecla; marca «Global» y funcionará también dentro de un juego.\nCambiar de voz tampoco requiere parar: con el motor en marcha, elige otra voz en la pantalla principal y el cambio es continuo.",
     "faqOfflineQ": "No quiero hablar en un juego, solo convertir una grabación",
     "faqOfflineH": "Usa «Conversión de voz»: no hace falta tarjeta virtual",
-    "faqOfflineA": "En Herramientas de audio → Conversión de voz, bajo la pantalla principal: elige un archivo de audio o una carpeta entera, conviértelo a la voz actual y expórtalo.\nEsta vía no necesita tarjeta de sonido virtual ni activar el cambio de voz en tiempo real.\nSi antes quieres extraer la voz de una canción, usa «Separación de voz», al lado."
+    "faqOfflineA": "En Herramientas de audio → Conversión de voz, bajo la pantalla principal: elige un archivo de audio o una carpeta entera, conviértelo a la voz actual y expórtalo.\nEsta vía no necesita tarjeta de sonido virtual ni activar el cambio de voz en tiempo real.\nSi antes quieres extraer la voz de una canción, usa «Separación de voz», al lado.",
+    "routeDiagramAlt": "Enrutado: tu micrófono entra en el programa y la voz convertida llega al juego o chat de voz a través de CABLE. La escucha es una rama aparte que solo oyes tú.",
+    "routeMic": "Micrófono",
+    "routeMicSub": "tu micro real",
+    "routeApp": "RVC Fabric",
+    "routeAppSub": "salida: CABLE Input",
+    "routeCableSub": "tarjeta virtual",
+    "routeGame": "Juego / chat",
+    "routeGameSub": "micro: CABLE Output",
+    "routeMonitor": "Auriculares",
+    "routeMonitorSub": "disp. de escucha",
+    "routeMonitorNote": "opcional, solo lo oyes tú"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

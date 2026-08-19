@@ -1845,7 +1845,18 @@
     "faqBypassA": "底栏的「变声 / 原声」一键切回自己的声音，不用停引擎。\n「设置 → 快捷键」里可以给它设全局快捷键，勾上「全局」之后在游戏里也能按。\n换音色同样不用停：运行中直接在主界面点另一个音色，无缝切换。",
     "faqOfflineQ": "不进游戏，只想把一段录音换成这个音色",
     "faqOfflineH": "用「语音转换」，不需要虚拟声卡",
-    "faqOfflineA": "主界面下方「音频工具 → 语音转换」，选一个音频文件或整个文件夹，换成当前音色后导出。\n这条路不需要虚拟声卡，也不用开启实时变声。\n想从歌里先把人声抠出来，用旁边的「人声分离」。"
+    "faqOfflineA": "主界面下方「音频工具 → 语音转换」，选一个音频文件或整个文件夹，换成当前音色后导出。\n这条路不需要虚拟声卡，也不用开启实时变声。\n想从歌里先把人声抠出来，用旁边的「人声分离」。",
+    "routeDiagramAlt": "接线示意：麦克风进入本软件，变声后经 CABLE 送给游戏或语音软件；监听是另一条支路，只有你自己听得到。",
+    "routeMic": "麦克风",
+    "routeMicSub": "你真实的麦克风",
+    "routeApp": "RVC Fabric",
+    "routeAppSub": "输出选 CABLE Input",
+    "routeCableSub": "虚拟声卡",
+    "routeGame": "游戏 / 语音",
+    "routeGameSub": "麦克风选 CABLE Output",
+    "routeMonitor": "耳机",
+    "routeMonitorSub": "监听设备",
+    "routeMonitorNote": "可选，只有你听得到"
   },
   "extras": {
     "engineTitle": "引擎资源",

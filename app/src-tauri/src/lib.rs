@@ -1832,6 +1832,26 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        // 必须是第一个：插件在第二个进程里做的事就是把命令行递给已经在跑的那个，
+        // 然后自己 exit，越早越好，别让它先把窗口和 worker 建起来。
+        //
+        // 多开的代价不是「多占一份内存」：两个进程会抢同一块显卡、同一个输入
+        // 设备，还会同时往 runtime_control/status.json 和 configs/inuse/config.json
+        // 里写 —— 后者是共享状态，谁最后写谁赢，另一边的设置就这么没了。
+        //
+        // 第二个进程在插件里直接退出，它自己的日志只会留下一行启动横幅然后没有
+        // 下文，看起来很像白屏。真正的说明在这里由第一个进程写出来。
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            logging::shell_log!("检测到重复启动（argv={argv:?} cwd={cwd}），聚焦现有窗口");
+            let Some(win) = app.get_webview_window("main") else {
+                return;
+            };
+            // rescue 的注释写着「只在有理由相信窗口不见了不是用户的意思时调用」。
+            // 用户刚刚又点了一次图标，那就是他要看到这扇窗 —— 关到托盘里、最小化
+            // 了、被拖到屏幕外，这里都该拉回来。
+            window_watch::rescue(&win);
+            let _ = win.set_focus();
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())

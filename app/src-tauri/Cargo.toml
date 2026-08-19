@@ -43,6 +43,7 @@ rfd = "0.15"
 regex = "1"
 # Local-time stamps for diagnostics / consult filenames (support reads these)
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tauri-plugin-single-instance = "2"
 
 # Process liveness without spawning a helper process. The status poll runs
 # every 400 ms while converting; shelling out to tasklist / powershell there

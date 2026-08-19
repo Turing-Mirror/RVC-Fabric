@@ -1,9 +1,9 @@
 {
   "name": "小孩",
-  "desc": "升调比花栗鼠矮一截，软一点",
+  "desc": "升一个八度，尖、还能喊得出字",
   "params": {
     "pitch": {
-      "semitones": 6.0
+      "semitones": 12.0
     }
   }
 }

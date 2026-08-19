@@ -83,14 +83,14 @@ class BuiltinTests(unittest.TestCase):
             self.assertEqual(body["name"], p["name"], p["id"])
             self.assertEqual(body["params"], p["params"], p["id"])
 
-    def test_gender_presets_compensate_formants(self):
-        """变调会带走共振峰。男女互换必须反向配平，否则就是花栗鼠/巨人。"""
+    def test_gender_presets_are_pitch_only(self):
+        """男女档跟 Clownfish 一样只动 pitch，共振峰跟着走。"""
         m2f = next(p for p in BUILTIN if p["id"] == "male_to_female")
-        self.assertGreater(m2f["params"]["pitch"]["semitones"], 0)
-        self.assertLess(m2f["params"]["formant"]["shift"], 0)
+        self.assertAlmostEqual(m2f["params"]["pitch"]["semitones"], 4.5)
+        self.assertNotIn("formant", m2f["params"])
         f2m = next(p for p in BUILTIN if p["id"] == "female_to_male")
-        self.assertLess(f2m["params"]["pitch"]["semitones"], 0)
-        self.assertGreater(f2m["params"]["formant"]["shift"], 0)
+        self.assertAlmostEqual(f2m["params"]["pitch"]["semitones"], -4.5)
+        self.assertNotIn("formant", f2m["params"])
 
     def test_robot_and_alien_stay_intelligible(self):
         robot = next(p for p in BUILTIN if p["id"] == "robot")

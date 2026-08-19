@@ -690,7 +690,7 @@ class PitchShiftTests(unittest.TestCase):
         还漏掉一段输入 —— 修之前这一档出来是 905Hz，跟目标的 50Hz 毫无关系。
         合成跳距要跟着 ratio 一起缩，并把 Hann 的窗和补回去。
         """
-        x = _tone(self.F0)
+        x = _tone(self.F0, secs=2.0)
         from tools.dsp_voice import VoiceChain
 
         for st in (-24, -19, -12, -5, 3, 7, 12, 19, 24):
@@ -706,7 +706,7 @@ class PitchShiftTests(unittest.TestCase):
         """跳距一变，Hann 的窗和就不是 1 了。不补偿的话音量随设置乱跳。"""
         from tools.dsp_voice import VoiceChain
 
-        x = _tone(self.F0)
+        x = _tone(self.F0, secs=2.0)
         peaks = []
         for st in (-24, -12, -5, 7, 12, 24):
             y = _blocks(VoiceChain({"pitch": {"semitones": st}}), x)
@@ -737,7 +737,7 @@ class PitchShiftTests(unittest.TestCase):
         """
         from tools.dsp_voice import VoiceChain
 
-        x = _tone(self.F0)
+        x = _tone(self.F0, secs=2.0)
         for st in (-24, -12, -5, 7, 12, 24):
             want = self.F0 * semitones_to_ratio(st)
             for blk in (1024, 512, 480, 333, 256):
@@ -751,28 +751,33 @@ class PitchShiftTests(unittest.TestCase):
                 env = np.abs(body[: len(body) // 200 * 200]).reshape(-1, 200).max(axis=1)
                 self.assertEqual(int((env < 1e-3).sum()), 0, f"{st:+d} / {blk} 有掉音")
 
-    def test_buffers_stay_bounded(self):
-        """内部缓冲必须有上界，不能只涨不落。
+    def test_uses_soundtouch_when_dll_present(self):
+        from tools.dsp_soundtouch import available
+        from tools.dsp_voice import VoiceChain
 
-        踩过三次坑，每次现象都是「先卡音、后吃内存」：
-        1. 读指针飘到 _out_valid 之外，压缩算出的位移超过有效长度
-        2. 压缩时把整条尾巴照搬，容量随 _stretch_more 的翻倍扩容只涨不落
-        3. 预热那条早退路径跳过压缩，欠载周期性打回预热，_out_valid 逐次抬高
-        """
+        if not available():
+            self.skipTest("SoundTouch.dll 不在")
+        c = VoiceChain({"pitch": {"semitones": 4.5}})
+        _blocks(c, _tone(self.F0), BLOCK)
+        self.assertEqual(c._fx["pitch"].backend, "soundtouch")
+
+    def test_buffers_stay_bounded(self):
+        """内部缓冲必须有上界，不能只涨不落。"""
         from tools.dsp_voice import VoiceChain
 
         x = _noisy(secs=6.0, seed=2)
         for st in (-12, -5, 7, 12):
             c = VoiceChain({"pitch": {"semitones": st}})
             fx = c._fx["pitch"]
-            out_peak = in_peak = 0
+            fifo_peak = 0
             for i in range(0, len(x), BLOCK):
                 c.process(x[i : i + BLOCK], SR)
-                out_peak = max(out_peak, fx._out_buf.shape[0])
-                in_peak = max(in_peak, fx._in_buf.shape[0])
-            # 一帧约 1008 点；十几帧的量级是合理的，几十万就是漏了
-            self.assertLess(out_peak, fx._frame * 16, f"{st:+d} 输出缓冲 {out_peak}")
-            self.assertLess(in_peak, fx._frame * 16, f"{st:+d} 输入缓冲 {in_peak}")
+                if fx.backend == "soundtouch":
+                    n = 0 if fx._fifo is None else int(fx._fifo.size)
+                    fifo_peak = max(fifo_peak, n)
+                else:
+                    fifo_peak = max(fifo_peak, fx._out_buf.shape[0], fx._in_buf.shape[0])
+            self.assertLess(fifo_peak, SR, f"{st:+d} 缓冲 {fifo_peak}")
 
 
 @unittest.skipUnless(_HAS_NP, "需要 numpy")

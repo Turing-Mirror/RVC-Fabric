@@ -32,11 +32,10 @@ def _p(**kw: Any) -> Dict[str, Dict[str, Any]]:
 
 # 内置预设。名字用描述性的通用词，不宣称跟谁兼容。
 #
-# 变调是 WSOLA：升/降调时共振峰会跟着走（Clownfish 同一个变调滑条就是这样）。
+# 变调核是 SoundTouch speech 档（共振峰跟着走，和 Clownfish 同一根滑条）。
 # 所以：
-#   * 花栗鼠 / 巨人 / 小孩 = 只动 pitch，别再叠同向 formant
-#   * 男女互换 = pitch 和 formant **反向**配平，把跟着走的那截嗓子收回来
-#   * 氦气 / 花栗鼠 / 小孩 = Clownfish 那档「越升越尖」，只动 pitch，程度不同
+#   * 花栗鼠 / 巨人 / 小孩 / 氦气 / 男女 = 只动 pitch
+#   * 独立 formant 仍留给编辑器，内置档不对着 Clownfish 再叠一层
 # 环调 mix 超过 ~0.4 人话就听不清，机器人 / 外星人必须留 intelligibility。
 #
 # 顺序就是界面上的顺序：先是一眼能听出效果的梗声，再是能用的人声，最后是场景。
@@ -133,25 +132,25 @@ BUILTIN: List[Dict[str, Any]] = [
         "id": "helium",
         "name": "氦气",
         "desc": "升得比花栗鼠更高，尖、还能喊得出字",
-        "params": _p(pitch={"semitones": 10.0}),
+        "params": _p(pitch={"semitones": 8.0}),
     },
     {
         "id": "male_to_female",
         "name": "男声转女声",
-        "desc": "升调后把跟着走的共振峰压回来，不发塑料",
-        "params": _p(pitch={"semitones": 4.5}, formant={"shift": -2.2}),
+        "desc": "升 4.5 半音，共振峰跟着走",
+        "params": _p(pitch={"semitones": 4.5}),
     },
     {
         "id": "female_to_male",
         "name": "女声转男声",
-        "desc": "降调后把嗓子亮度补回来，不闷成巨人",
-        "params": _p(pitch={"semitones": -4.5}, formant={"shift": 2.2}),
+        "desc": "降 4.5 半音，共振峰跟着走",
+        "params": _p(pitch={"semitones": -4.5}),
     },
     {
         "id": "child",
         "name": "小孩",
-        "desc": "升调比花栗鼠矮一截，软一点",
-        "params": _p(pitch={"semitones": 6.0}),
+        "desc": "升一个八度，尖、还能喊得出字",
+        "params": _p(pitch={"semitones": 12.0}),
     },
     {
         "id": "elder",

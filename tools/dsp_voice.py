@@ -3,12 +3,13 @@
 
 Clownfish 那一票梗声（官方 14 档：Alien / Atari / Clone / Mutation /
 Male·Female·Helium·Baby pitch / Radio / Robot / Custom ±15）本质是低延迟
-变调（共振峰跟着走）再叠一层便宜效果。这里按同一套逻辑做，并补上它做不到
-的那件事：**变调和共振峰可以分开调**。
+变调（共振峰跟着走）再叠一层便宜效果。变调核走官方 SoundTouch speech 档
+（40/15/8，抗混叠开、快速搜索关），和它 APO 里那套是同一个库。
+
+另外补上它做不到的：**变调和共振峰可以分开调**（编辑器里的共振峰）。
 
 对照公开资料后的实现要点：
-* 变调走 WSOLA + 重采样，和它一样升调变尖、降调变大
-* 清辅音少变调，不然 s/sh 会变成金属齿音
+* 变调默认 SoundTouch；DLL 没有才退回 WSOLA
 * 机器人是包络 × 脉冲载波，不是把环调拉满
 * 外星人是振幅颤音（tremolo），不是只晃音高
 
@@ -240,18 +241,10 @@ class _Tail:
         return joined
 
 
-class PitchShifter:
-    """WSOLA 时间伸缩 + 重采样。
+class _WsolaPitchShifter:
+    """WSOLA 时间伸缩 + 重采样。SoundTouch DLL 加载失败时的退路。
 
     先按 r 倍把时间拉长（音高不变），再按 r 倍加速播放（音高 ×r、时长还原）。
-
-    最初写的是「两个读指针相差半个窗、sin/cos 交叉淡化」那套廉价延迟线变调器
-    —— Clownfish 那一类用的就是它。实测在持续音上会**整段归零**：两个抽头差
-    半个窗，遇上窗长恰好是半周期奇数倍的音就是反相抵消，梳状零点，听感是持续
-    元音一顿一顿的。两个抽头各自都要覆盖大半个周期，这个抵消绕不开。
-
-    WSOLA 多做一件事就解决了：拼接前先在一个搜索范围里找互相关最大的位置，
-    保证重叠的两段波形同相。代价是每帧一次相关，块预算里够。
     """
 
     FRAME_MS = 21.0      # 帧长，约 1024 点 @48k
@@ -1265,6 +1258,119 @@ def _peak_sos(sr: int, freq: float, gain_db: float, q: float = 1.0) -> List[floa
 # ---------------------------------------------------------------------------
 # 整条链
 # ---------------------------------------------------------------------------
+
+
+class PitchShifter:
+    """变调。默认走官方 SoundTouch speech 档（和 Clownfish APO 同一套核）。
+
+    DLL 不在或加载失败时退回 WSOLA，保证测试机和残缺安装还能出声。
+    """
+
+    def __init__(self, semitones: float = 0.0) -> None:
+        self.semitones = float(semitones)
+        self._sr = 0
+        self._st: Any = None
+        self._wsola: Optional[_WsolaPitchShifter] = None
+        self._backend = "none"
+        self._fifo: Any = None
+        self._primed = False
+
+    @property
+    def backend(self) -> str:
+        return self._backend
+
+    def reset(self) -> None:
+        if self._st is not None:
+            try:
+                self._st.clear()
+            except Exception:
+                pass
+        if self._wsola is not None:
+            self._wsola.reset()
+        self._fifo = None
+        self._primed = False
+
+    def _ensure(self, sr: int) -> None:
+        if sr == self._sr and self._backend != "none":
+            return
+        self._close_st()
+        self._wsola = None
+        self._fifo = None
+        self._primed = False
+        self._sr = int(sr)
+        try:
+            from tools.dsp_soundtouch import SoundTouch
+
+            self._st = SoundTouch(self._sr)
+            self._st.set_pitch_semitones(self.semitones)
+            self._backend = "soundtouch"
+        except Exception:
+            self._st = None
+            self._wsola = _WsolaPitchShifter(self.semitones)
+            self._backend = "wsola"
+
+    def _close_st(self) -> None:
+        if self._st is not None:
+            try:
+                self._st.close()
+            except Exception:
+                pass
+            self._st = None
+
+    def __del__(self) -> None:
+        self._close_st()
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        n = int(np.size(x))
+        if n == 0:
+            return np.asarray(x, dtype=np.float32)
+        if abs(float(self.semitones)) < 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        self._ensure(sr)
+        if self._backend == "wsola":
+            self._wsola.semitones = self.semitones
+            return self._wsola.process(x, sr)
+        try:
+            return self._process_st(x, sr)
+        except Exception:
+            self._close_st()
+            self._wsola = _WsolaPitchShifter(self.semitones)
+            self._backend = "wsola"
+            return self._wsola.process(x, sr)
+
+    def _process_st(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        self._st.set_pitch_semitones(self.semitones)
+        xs = np.ascontiguousarray(x, dtype=np.float32).reshape(-1)
+        n = int(xs.size)
+        self._st.put(xs)
+        avail = self._st.num_samples()
+        if avail > 0:
+            chunk = self._st.receive(avail)
+            if self._fifo is None or self._fifo.size == 0:
+                self._fifo = chunk
+            else:
+                self._fifo = np.concatenate([self._fifo, chunk])
+        # 延迟上限：变声器攒超过约 250ms 的「以前的声音」没有意义。
+        cap = max(n * 4, int(sr * 0.25))
+        if self._fifo is not None and self._fifo.size > cap:
+            self._fifo = self._fifo[-cap:].copy()
+        if self._fifo is None or self._fifo.size == 0:
+            return np.zeros(n, dtype=np.float32)
+        if not self._primed:
+            # 等攒够一块再出声，避免开头把零和干声拧在一起。
+            if self._fifo.size < n:
+                return np.zeros(n, dtype=np.float32)
+            self._primed = True
+        if self._fifo.size >= n:
+            y = self._fifo[:n]
+            self._fifo = self._fifo[n:].copy()
+            return np.asarray(y, dtype=np.float32)
+        y = np.zeros(n, dtype=np.float32)
+        y[: self._fifo.size] = self._fifo
+        self._fifo = self._fifo[:0]
+        return y
 
 
 _FACTORIES = {

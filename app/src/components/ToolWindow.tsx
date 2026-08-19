@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { SeparatePanel } from "./SeparatePanel";
 import { TrainPanel } from "./TrainPanel";
 import { TtsPanel } from "./TtsPanel";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { WebDialogHost } from "./WebDialog";
 import { NativeDialogHint } from "./NativeDialogHint";
 
@@ -59,18 +61,62 @@ export function openTool(kind: ToolKind): void {
  * 自绘的，这里要是用系统标题栏，同一个软件里会同时出现两种窗口长相。
  */
 export function ToolWindow({ kind }: { kind: ToolKind }) {
+  // 订阅语言。I18nProvider 刻意不用 key={locale} 重挂子树（那会把引擎状态一起
+  // 拆掉），代价是每个根组件必须自己订阅才会在语言就绪后重渲染 —— provider 的
+  // 注释里写着这一条。ToolWindow 就是这样一个根，而它一直没订阅：标题栏没有任何
+  // state，于是永远停在 DEFAULT_LOCALE。面板里的文字因为自己有 state 会跟着刷新，
+  // 结果同一扇窗上半截中文、下半截日文。
+  useI18n();
+  // 常驻操作栏挂载的那个格子。用 state 而不是 ref：ref 变了不会触发重渲染，
+  // 面板第一次渲染时拿到的会永远是 null，按钮就再也进不了这条栏。
+  const [footer, setFooter] = useState<HTMLElement | null>(null);
   return (
-    <div className="h-full flex flex-col text-[var(--ink)] overflow-hidden">
+    // 无边框窗口 + shadow(false)，浅色桌面上整扇窗和背景糊在一起，看不出边界
+    // 在哪 —— 用户报的就是这个。补一条 1px 外框；用 --line 不用 --hairline，
+    // 后者是 0.1 透明度的界面内分隔线，当窗口边界几乎看不见。
+    <div className="h-full flex flex-col text-[var(--ink)] overflow-hidden border border-[var(--line)]">
       <ToolTitleBar title={toolTitle(kind)} />
-      <div className="flex-1 overflow-y-auto">
-        {kind === "separate" ? <SeparatePanel /> : null}
-        {kind === "train" ? <TrainPanel /> : null}
-        {kind === "tts" ? <TtsPanel /> : null}
-      </div>
+      <ToolFooterSlot.Provider value={footer}>
+        <div className="flex-1 overflow-y-auto">
+          {kind === "separate" ? <SeparatePanel /> : null}
+          {kind === "train" ? <TrainPanel /> : null}
+          {kind === "tts" ? <TtsPanel /> : null}
+        </div>
+      </ToolFooterSlot.Provider>
+      <div ref={setFooter} className="flex-none" />
       <WebDialogHost />
       <NativeDialogHint />
     </div>
   );
+}
+
+/** 操作栏要挂到哪个 DOM 结点上。`null` = 还没挂好，先就地渲染。 */
+const ToolFooterSlot = createContext<HTMLElement | null>(null);
+
+/**
+ * 工具窗口底部那条常驻操作栏 —— 和主窗口底栏同一个位置、同一条发丝线。
+ *
+ * 用 portal 传送到滚动区**外面**，而不是在滚动区里面写 `sticky bottom-0`：
+ * sticky 只在元素本来会被挤出可视区时才生效，窗口拉高、内容又短的时候，那条
+ * 栏会停在内容正下方的半空中，而不是贴着窗口底边。主按钮的位置不能取决于表单
+ * 有多长。
+ *
+ * 传送目标还没准备好时就地渲染 —— 首帧 ref 回调还没跑完，这一帧退回原来的
+ * 位置，比闪一下空白强。
+ */
+export function ToolActions({ children }: { children: ReactNode }) {
+  const slot = useContext(ToolFooterSlot);
+  const bar = (
+    <div className="relative px-6 py-3.5 flex items-center gap-2.5">
+      {/* 和主窗口底栏一样：两端内缩的发丝线，不是整条 border-top。 */}
+      <div
+        aria-hidden
+        className="absolute top-0 left-6 right-6 h-px bg-[var(--hairline)]"
+      />
+      {children}
+    </div>
+  );
+  return slot ? createPortal(bar, slot) : bar;
 }
 
 function ToolTitleBar({ title }: { title: string }) {

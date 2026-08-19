@@ -5,7 +5,7 @@ import { Btn, HelpMark } from "./ui";
 import { RangeBar } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
-import { ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 
@@ -26,7 +26,16 @@ type Progress = {
 };
 
 const ROW = "flex items-center gap-3 py-2.5";
-const LABEL = "w-[64px] shrink-0 text-[13px]";
+/**
+ * 表单左边那一列。
+ *
+ * 宽度原来是照着中文标签配的，四个汉字五十来像素刚好塞得下。八种语言里
+ * 这就不成立了：法语的「Enregistrer les modèles dans」有两百多像素，会在
+ * 词中间断成三行；连中文的「导出格式」加上后面那个问号图标也已经超了。
+ * 放宽到能装下绝大多数语言，剩下几个特别长的折成两行，配 leading-tight
+ * 看起来是有意为之，而不是挤坏了。
+ */
+const LABEL = "w-[96px] shrink-0 text-[13px] leading-tight";
 const FIELD =
   "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 const PATH =
@@ -238,25 +247,27 @@ export function SeparatePanel() {
           <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)]">{msg}</p>
         ) : null}
 
-        <div className="mt-5 flex justify-end gap-2.5">
-          {running ? (
-            <Btn onClick={() => void invoke("separate_cancel")}>{t("s.4d0b4688c7")}</Btn>
-          ) : (
+        <ToolActions>
+          <div className="ml-auto flex items-center gap-2.5">
+            {running ? (
+              <Btn onClick={() => void invoke("separate_cancel")}>{t("s.4d0b4688c7")}</Btn>
+            ) : (
+              <Btn
+                disabled={!output}
+                onClick={() => void invoke("separate_reveal", { path: output })}
+              >
+                {t("s.344a481fa0")}
+              </Btn>
+            )}
             <Btn
-              disabled={!output}
-              onClick={() => void invoke("separate_reveal", { path: output })}
+              primary
+              disabled={running || !!blocked || !input || !output}
+              onClick={() => void start()}
             >
-              {t("s.344a481fa0")}
+              {running ? t("s.2282c91c77") : t("s.8c57156c9d")}
             </Btn>
-          )}
-          <Btn
-            primary
-            disabled={running || !!blocked || !input || !output}
-            onClick={() => void start()}
-          >
-            {running ? t("s.2282c91c77") : t("s.8c57156c9d")}
-          </Btn>
-        </div>
+          </div>
+        </ToolActions>
 
     </ToolBody>
   );

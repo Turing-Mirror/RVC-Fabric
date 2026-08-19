@@ -123,7 +123,7 @@ export function MicTest({ deviceReady }: { deviceReady: boolean }) {
 
   return (
     <div className="flex items-start gap-3 flex-wrap">
-      <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-[9px] pt-1">
+      <span className="w-[108px] shrink-0 text-[13px] leading-tight flex items-center gap-[9px] pt-1">
         <span>{t("s.micTest")}</span>
         <HelpMark title={t("s.micTestDesc")} />
       </span>

@@ -68,7 +68,10 @@ export function Dock({
     : dspName?.trim()
       ? dspName
       : t("dock.noVoice");
-  const profile = profileSummary ?? t("dock.none");
+  // 空串也要落到占位文案。App 那边已经不在 useState 的初值里塞 t(…) 了 ——
+  // 初值只在首帧求值一次，那时语言包还没加载完，那句占位会永远停在
+  // DEFAULT_LOCALE。现在它初始就是空串，占位由这里在渲染时取，语言换了就跟着换。
+  const profile = profileSummary?.trim() ? profileSummary : t("dock.none");
   const title = statusTitle ?? t("dock.engineReady");
   const sub = statusSub ?? t("dock.engineIdle");
 

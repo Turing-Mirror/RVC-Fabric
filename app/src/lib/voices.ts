@@ -141,7 +141,9 @@ export async function currentVoice() {
       model: null,
       pitch: 0,
       formant: 0,
-      profile_summary: t("s.72077749f7"),
+      // 空串，占位交给 Dock 在渲染时取。这里是模块早期就会跑到的路径，
+      // 那时语言包还没加载完，t() 会把 DEFAULT_LOCALE 的字面量固化下来。
+      profile_summary: "",
       index: 0,
       total: 0,
     };

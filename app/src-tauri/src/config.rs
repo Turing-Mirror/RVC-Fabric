@@ -177,6 +177,11 @@ pub fn defaults() -> Map<String, Value> {
     // 只会多一个没人看的键。needs_restart 在 update() 里单独补。
     m.insert("main_gpu".into(), json!(-1));
     m.insert("close_action".into(), json!("ask"));
+    // 文字合成的两个输出目录。空串 = 用默认（User_Data/tts/read 与
+    // User_Data/tts/voice）。朗读和变声分开：一个是系统嗓子的原声，一个是它再
+    // 过一遍 RVC 的结果，混在一个目录里攒几十个就分不出来了。
+    m.insert("tts_out_dir_read".into(), json!(""));
+    m.insert("tts_out_dir_voice".into(), json!(""));
     // 界面兼容渲染。默认关。开了就在下次启动时给 WebView2 加
     // --disable-gpu-compositing —— 画面交回 CPU 合成，动效会掉一点，
     // 但显卡驱动一抽风整窗变黑/花屏的机器能救回来。见 lib.rs::run。

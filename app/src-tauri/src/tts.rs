@@ -43,8 +43,71 @@ fn cancel_flag() -> Arc<AtomicBool> {
 /// 任何进度可报，用户只会以为卡死了。两千字大约三五分钟，是「等得起」的上限。
 pub const MAX_CHARS: usize = 2000;
 
-pub fn out_dir(root: &Path) -> PathBuf {
-    paths::user_data(root).join("tts")
+/// 朗读合成和变声合成分两个输出目录，各自可改、各自记住上次的位置。
+///
+/// 分开是因为这两种产物根本不是一类东西：朗读是系统嗓子念出来的原声，变声是
+/// 它再过一遍 RVC 的结果。以前两者同一个目录、同一套 `tts_<时间戳>.wav` 文件名，
+/// 攒上十几个之后就再也分不出哪个是哪个了 —— 而且时间戳是秒级的，同一秒里先出
+/// 朗读再出变声，名字还会撞。
+const OUT_READ: &str = "tts_out_dir_read";
+const OUT_VOICE: &str = "tts_out_dir_voice";
+
+pub fn default_out_read(root: &Path) -> PathBuf {
+    paths::user_data(root).join("tts").join("read")
+}
+
+pub fn default_out_voice(root: &Path) -> PathBuf {
+    paths::user_data(root).join("tts").join("voice")
+}
+
+/// 用户选过就用他选的，没选过用默认。`use_rvc` 决定问哪一个。
+pub fn out_dir_for(root: &Path, use_rvc: bool) -> PathBuf {
+    let key = if use_rvc { OUT_VOICE } else { OUT_READ };
+    let picked = crate::config::read(root)
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if picked.is_empty() {
+        if use_rvc {
+            default_out_voice(root)
+        } else {
+            default_out_read(root)
+        }
+    } else {
+        PathBuf::from(picked)
+    }
+}
+
+/// 让用户挑一个输出目录，挑完记进配置。返回 `None` 表示他取消了。
+pub fn pick_output(
+    root: &Path,
+    win: Option<&tauri::WebviewWindow>,
+    use_rvc: bool,
+) -> Option<String> {
+    let title = crate::i18n::t("s.cb12ce77e7");
+    let picked = crate::shell_extras::dialog_on(win)
+        .set_title(&title)
+        .pick_folder()
+        .map(|p| p.to_string_lossy().into_owned())?;
+    let mut patch = serde_json::Map::new();
+    patch.insert(
+        (if use_rvc { OUT_VOICE } else { OUT_READ }).to_string(),
+        json!(picked.trim()),
+    );
+    let _ = crate::config::update(root, patch);
+    Some(picked)
+}
+
+/// 把某一路的输出目录恢复成默认。
+pub fn reset_output(root: &Path, use_rvc: bool) {
+    let mut patch = serde_json::Map::new();
+    patch.insert(
+        (if use_rvc { OUT_VOICE } else { OUT_READ }).to_string(),
+        json!(""),
+    );
+    let _ = crate::config::update(root, patch);
 }
 
 fn infer_script(root: &Path) -> PathBuf {
@@ -187,7 +250,10 @@ pub fn status(root: &Path) -> Value {
         "voices": list_sapi_voices(),
         "model_path": pth,
         "model_name": cfg.get("last_model_name").and_then(|v| v.as_str()).unwrap_or(""),
-        "out_dir": out_dir(root).to_string_lossy(),
+        "out_dir_read": out_dir_for(root, false).to_string_lossy(),
+        "out_dir_voice": out_dir_for(root, true).to_string_lossy(),
+        "out_dir_read_default": default_out_read(root).to_string_lossy(),
+        "out_dir_voice_default": default_out_voice(root).to_string_lossy(),
         "max_chars": MAX_CHARS,
         "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
     })
@@ -302,13 +368,19 @@ fn run_inner(
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
 
-    let dir = out_dir(root);
+    let dir = out_dir_for(root, use_rvc);
     std::fs::create_dir_all(&dir).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let out = dir.join(format!("tts_{stamp}.wav"));
+    // 文件名也带上模式。两条路即使被用户指到同一个目录，也不会撞名、也看得出
+    // 哪个是哪个 —— 时间戳只到秒，同一秒里先出朗读再出变声是能撞上的。
+    let out = dir.join(if use_rvc {
+        format!("tts_voice_{stamp}.wav")
+    } else {
+        format!("tts_read_{stamp}.wav")
+    });
 
     if !use_rvc {
         std::fs::copy(&raw, &out).map_err(|e| crate::i18n::te("s.9f8084f7cb", &(e)))?;
@@ -423,9 +495,22 @@ mod tests {
     fn output_lands_under_user_data_not_the_install_root() {
         // 用户的产出物一律进 User_Data：那是卸载时会问「要不要留着」的那个目录，
         // 扔在安装目录里会被卸载器一起删掉。
-        let d = out_dir(Path::new("C:\\App"));
-        assert!(d.ends_with("tts"));
-        assert!(d.to_string_lossy().contains("User_Data"));
+        for d in [
+            default_out_read(Path::new("C:\\App")),
+            default_out_voice(Path::new("C:\\App")),
+        ] {
+            assert!(d.to_string_lossy().contains("User_Data"), "{}", d.display());
+        }
+    }
+
+    /// 两条路的默认目录必须是两个地方。同一个目录 + 秒级时间戳，同一秒里先出
+    /// 朗读再出变声就会撞名，后写的把前一个盖掉。
+    #[test]
+    fn read_and_voice_default_to_different_folders() {
+        let root = Path::new("C:\\App");
+        assert_ne!(default_out_read(root), default_out_voice(root));
+        assert!(default_out_read(root).ends_with("read"));
+        assert!(default_out_voice(root).ends_with("voice"));
     }
 
     #[test]

@@ -1127,12 +1127,31 @@ fn tts_cancel() {
     tts::cancel();
 }
 
-/// 在文件管理器里打开合成结果所在的目录。
+/// 在文件管理器里打开合成结果所在的目录。`use_rvc` 决定开哪一路。
 #[tauri::command]
-fn tts_reveal(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let dir = tts::out_dir(&root_clone(&state)?);
+fn tts_reveal(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), String> {
+    let dir = tts::out_dir_for(&root_clone(&state)?, use_rvc);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     shell_extras::reveal(&dir.join("x"))
+}
+
+/// 选朗读 / 变声的输出目录。`window` 是为了让选择框挂在调用它的那扇窗上 ——
+/// 不传的话对话框会认错父窗口，把工具窗挤到后台去。
+#[tauri::command]
+fn tts_pick_output(
+    window: tauri::WebviewWindow,
+    state: State<'_, Mutex<AppState>>,
+    use_rvc: bool,
+) -> Result<Option<String>, String> {
+    let root = root_clone(&state)?;
+    Ok(tts::pick_output(&root, Some(&window), use_rvc))
+}
+
+/// 把某一路的输出目录恢复成默认。
+#[tauri::command]
+fn tts_reset_output(state: State<'_, Mutex<AppState>>, use_rvc: bool) -> Result<(), String> {
+    tts::reset_output(&root_clone(&state)?, use_rvc);
+    Ok(())
 }
 
 // --- 附加资源（分离模型 / 训练底模）-----------------------------------------
@@ -1958,6 +1977,8 @@ pub fn run() {
             sts_status,
             sts_pick_input,
             sts_pick_output,
+            tts_pick_output,
+            tts_reset_output,
             sts_list_input,
             sts_delete_input,
             sts_reveal_input,

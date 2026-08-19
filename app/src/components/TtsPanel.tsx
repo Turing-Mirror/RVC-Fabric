@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -75,7 +75,17 @@ type TtsStatus = {
   voices?: string[];
   model_path?: string;
   model_name?: string;
-  out_dir?: string;
+  /**
+   * 朗读和变声的输出目录是两个，各自可改。
+   *
+   * 分开是因为这两种产物不是一类东西：朗读是系统嗓子的原声，变声是它再过一遍
+   * RVC 的结果。以前共用一个目录、共用一套 tts_<时间戳>.wav 的名字，攒上十几个
+   * 就再也分不出哪个是哪个。
+   */
+  out_dir_read?: string;
+  out_dir_voice?: string;
+  out_dir_read_default?: string;
+  out_dir_voice_default?: string;
   max_chars?: number;
   busy?: boolean;
 };
@@ -1139,6 +1149,15 @@ function TtsSection() {
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
 
+  /** 改完输出目录要把状态拉一遍，路径是后端算出来的，前端不自己拼。 */
+  const refreshStatus = useCallback(async () => {
+    try {
+      setSt(await invoke<TtsStatus>("tts_status"));
+    } catch (e) {
+      setMsg(String(e));
+    }
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -1163,6 +1182,11 @@ function TtsSection() {
       un?.();
     };
   }, []);
+
+  // 当前模式那一路的输出目录，以及它是不是用户自己选过的（选过才给「恢复默认」）。
+  const outDir = (useRvc ? st.out_dir_voice : st.out_dir_read) || "";
+  const outDefault = (useRvc ? st.out_dir_voice_default : st.out_dir_read_default) || "";
+  const outCustom = !!outDir && !!outDefault && !samePath(outDir, outDefault);
 
   const max = st.max_chars ?? 2000;
   const over = text.length > max;
@@ -1293,6 +1317,40 @@ function TtsSection() {
           </label>
           <span className="text-[12px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
         </div>
+        {/* 只显示当前模式那一路。两行并排摆出来的话，用户改了不用的那一行却
+            以为改的是这一次要用的，比不给还糟。 */}
+        <div className={ROW}>
+          <span className={LABEL}>{t("s.ttsOutDir")}</span>
+          <span className={PATH} title={outDir}>
+            {outDir || t("s.53e2db7016")}
+          </span>
+          {outCustom ? (
+            <Btn
+              onClick={() => {
+                void invoke("tts_reset_output", { useRvc })
+                  .then(refreshStatus)
+                  .catch((e) => setMsg(String(e)));
+              }}
+            >
+              {t("s.ttsOutReset")}
+            </Btn>
+          ) : null}
+          <Btn
+            onClick={() => {
+              void pickPath<string | null>(
+                "tts_pick_output",
+                { useRvc },
+                t("s.pickBusyFolder"),
+              )
+                .then((p) => {
+                  if (p) void refreshStatus();
+                })
+                .catch((e) => setMsg(String(e)));
+            }}
+          >
+            {t("s.70b208202c")}
+          </Btn>
+        </div>
       </div>
 
       {prog ? (
@@ -1317,7 +1375,9 @@ function TtsSection() {
         {running ? (
           <Btn onClick={() => void invoke("tts_cancel")}>{t("s.4d0b4688c7")}</Btn>
         ) : (
-          <Btn onClick={() => void invoke("tts_reveal")}>{t("s.344a481fa0")}</Btn>
+          <Btn onClick={() => void invoke("tts_reveal", { useRvc })}>
+            {t("s.344a481fa0")}
+          </Btn>
         )}
         <Btn
           primary

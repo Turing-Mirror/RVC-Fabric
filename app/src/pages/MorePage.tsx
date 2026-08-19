@@ -59,6 +59,35 @@ export function MorePage({
   const [gpuMsg, setGpuMsg] = useState("");
   const nvGpus = provision?.nvidia_gpus || [];
 
+  /**
+   * 引擎实际落在哪个后端上。
+   *
+   * 后端是自动降级的：CUDA 不可用就退 DirectML，再不行退 CPU。以前这条链路只写
+   * 在 worker 日志里，界面上什么都看不到 —— 用户装的是 N 卡包、机器上插着 N 卡，
+   * 实际跑在虚拟显示适配器上，最后报出来的是「显存不足」，跟显卡设置对不上号。
+   */
+  const backend = String(status?.compute_backend || "");
+  const backendLabel = backend
+    ? ({
+        cuda: "CUDA",
+        directml: "DirectML",
+        mps: "Metal",
+        xpu: "XPU",
+        cpu: "CPU",
+      }[backend] ?? backend)
+    : "";
+  const backendDevice = String(status?.compute_device || "");
+  const backendLine = backendLabel
+    ? backendDevice && backendDevice !== backendLabel
+      ? `${backendLabel} · ${backendDevice}`
+      : backendLabel
+    : t("s.computeBackendIdle");
+  // 装了 N 卡运行时却没用上 CUDA —— 这个矛盾我们判得出来，就别让用户自己猜。
+  const backendMismatch =
+    backend !== "" &&
+    backend !== "cuda" &&
+    String(provision?.installed_variant || "").startsWith("nvidia");
+
   const pickMainGpu = (v: number) => {
     setMainGpu(v);
     setGpuMsg("");
@@ -265,6 +294,19 @@ export function MorePage({
               }
             />
           ) : null}
+          <ListItem
+            title={t("s.computeBackend")}
+            titleTip={t("s.computeBackendTip")}
+            desc={backendMismatch ? t("s.computeBackendWarn") : undefined}
+            right={
+              <span
+                className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate"
+                title={backendLine}
+              >
+                {backendLine}
+              </span>
+            }
+          />
           <ListItem
             title={t("s.07a1fa9790")}
             desc={

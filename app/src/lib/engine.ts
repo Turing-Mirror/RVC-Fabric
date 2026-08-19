@@ -29,6 +29,15 @@ export type EngineStatus = {
   meter_level?: number;
   threshold_meter?: number;
   threhold?: number;
+  /**
+   * 引擎实际在算的后端：cuda | directml | mps | xpu | cpu。
+   *
+   * 后端是自动降级的，装了 N 卡包也可能落到 DirectML 或 CPU。不摆出来的话，
+   * 用户只会看到「显存不足」之类的现象，没法把它和显卡设置联系起来。
+   */
+  compute_backend?: string;
+  /** 后端选中的那块设备的名字。 */
+  compute_device?: string;
   /** "fx" = 纯 DSP，不上 RVC。 */
   function?: string;
   dsp_only?: boolean;
@@ -43,7 +52,12 @@ export type ProvisionStatus = {
   worker_script_ok?: boolean;
   product_root?: string;
   gpus?: string[];
-  /** 只含 N 卡，保持系统枚举顺序。下标就是 CUDA 序号，「主显卡」下拉用它。 */
+  /**
+   * 只含 N 卡，「主显卡」下拉用它，下标就是 CUDA 序号。
+   *
+   * 来源是 `nvidia-smi`，不是系统的显示适配器枚举 —— 后者会把已禁用的卡、残留的
+   * 驱动键和虚拟显示器一起数进去，下标跟 CUDA 对不上。
+   */
   nvidia_gpus?: string[];
   recommended_variant?: string;
   recommend_reason?: string;

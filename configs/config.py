@@ -5,6 +5,8 @@ import json
 import shutil
 from multiprocessing import cpu_count
 
+from configs.accel import first_real_adapter
+
 import torch
 
 try:
@@ -213,6 +215,47 @@ class Config:
         except Exception:
             return (True, "")
 
+    @classmethod
+    def pick_directml_device(cls) -> int:
+        """挑一块真显卡，别用 DirectML 的默认设备。
+
+        `torch_directml.default_device()` 永远返回 0。装了串流或 VR 软件的机器上
+        0 号往往是一块虚拟显示适配器 —— 它没有独立显存，模型一压上去就是显存不足，
+        或者干脆访问违例把进程带走（Windows 退出码 -1073741819 / 0xC0000005）。
+        用户那边看到的只有「显存不足，没法打开变声器」，跟显卡设置看不出关系。
+
+        按名字把虚拟适配器排掉，取第一块剩下的。全都像虚拟的就退回 0：至少和以前
+        一样，不会因为筛得太狠反而没得选。
+        """
+        try:
+            import torch_directml  # type: ignore
+
+            n = int(torch_directml.device_count())
+        except Exception:
+            return 0
+        if n <= 1:
+            return 0
+        names = []
+        for i in range(n):
+            try:
+                names.append(str(torch_directml.device_name(i)))
+            except Exception:
+                names.append("")
+        i = first_real_adapter(names)
+        if i is None:
+            logger.warning(
+                "DirectML: every adapter looks virtual (%s), falling back to 0", names
+            )
+            return 0
+        if i != 0:
+            logger.info(
+                "DirectML: skipping virtual adapter(s) %s, using %d:%s",
+                names[:i],
+                i,
+                names[i],
+            )
+        return i
+
     def use_fp32_config(self):
         for config_file in version_config_list:
             self.json_config[config_file]["train"]["fp16_run"] = False
@@ -302,11 +345,10 @@ class Config:
             try:
                 import torch_directml  # type: ignore
 
-                self.device = torch_directml.device(torch_directml.default_device())
+                idx = self.pick_directml_device()
+                self.device = torch_directml.device(idx)
                 try:
-                    self.gpu_name = str(
-                        torch_directml.device_name(torch_directml.default_device())
-                    )
+                    self.gpu_name = str(torch_directml.device_name(idx))
                 except Exception:
                     self.gpu_name = "DirectML"
                 self.is_half = False

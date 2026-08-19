@@ -342,6 +342,20 @@ fn apply_main_gpu(root: &Path, env: &mut HashMap<String, String>) {
         // 环境，不是我们该覆盖的东西。
         return;
     }
+    // 越界的序号比不设还糟：`CUDA_VISIBLE_DEVICES` 指向不存在的设备时，CUDA 报的
+    // 是 0 个设备，`is_available()` 直接变 false，引擎会静默退到 DirectML 甚至 CPU。
+    // 用户看到的是「显存不足」，跟他动过的那个下拉框看不出任何关系。
+    //
+    // 这种脏序号是真会存在的：早先的列表来自注册表的显示适配器枚举，里面混着已
+    // 禁用的卡和残留的驱动键，存下来的下标换到 CUDA 那边可能根本没有对应设备；
+    // 用户换掉一块卡之后，旧配置里的下标同样会悬空。宁可当「自动」。
+    let avail = crate::provision::list_nvidia_gpus().len() as i64;
+    if avail == 0 || idx >= avail {
+        crate::logging::shell_log!(
+            "main_gpu={idx} 超出可用 N 卡数量（{avail}），按自动处理，不设 CUDA_VISIBLE_DEVICES"
+        );
+        return;
+    }
     env.insert("CUDA_VISIBLE_DEVICES".into(), idx.to_string());
     env.insert("CUDA_DEVICE_ORDER".into(), "PCI_BUS_ID".into());
     crate::logging::shell_log!("main_gpu={idx} → CUDA_VISIBLE_DEVICES");

@@ -198,6 +198,9 @@ def default_status() -> dict[str, Any]:
         "message": "",
         # Explicit empty so a full default write does not keep a stale code.
         "message_code": "",
+        # cuda | directml | mps | xpu | cpu。空串 = 引擎还没起来，问不到。
+        "compute_backend": "",
+        "compute_device": "",
     }
 
 

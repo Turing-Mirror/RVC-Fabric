@@ -817,6 +817,9 @@ pub fn build_diagnostics(
         "product_root": root.to_string_lossy(),
         "runtime_ready": paths::runtime_ready(root),
         "gpus": crate::provision::list_gpus(),
+        // 「主显卡」那个下标是按这份列表数的。少了它，配置里的 main_gpu 是个孤零零
+        // 的数字，没法判断用户选中的到底是哪块卡、还是根本越界了。
+        "nvidia_gpus": crate::provision::list_nvidia_gpus(),
         "installed_variant": crate::provision::read_package_meta_variant(root),
         "engine_core_missing": crate::engine_assets::engine_core_missing(root),
         "ui_source": crate::ui_assets::source_label(),

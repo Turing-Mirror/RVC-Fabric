@@ -6,14 +6,7 @@ export const MAIN_GPU_AUTO = -1;
 
 /** Call at use time — module-level t() freezes default locale. */
 export function mainGpuTip(): string {
-  return (
-    t("s.c4c4673f74") +
-    t("s.c21f67d167") +
-    t("s.750e6a370f") +
-    t("s.7cb4f28eb2") +
-    t("s.12579f2917") +
-    t("s.310f4d242c")
-  );
+  return t("s.mainGpuTip");
 }
 
 /**

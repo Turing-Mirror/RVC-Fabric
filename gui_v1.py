@@ -2754,6 +2754,36 @@ if __name__ == "__main__":
                 "sg_hostapi": self.gui_config.sg_hostapi,
                 "sg_input_device": self.gui_config.sg_input_device,
                 "sg_output_device": self.gui_config.sg_output_device,
+                **self._compute_backend_payload(),
+            }
+
+        def _compute_backend_payload(self):
+            """真正在算的是什么设备。
+
+            后端是自动选的：没有可用的 CUDA 就退 DirectML，DirectML 也没有就退
+            CPU。退下来这件事以前只写在 worker 日志里，界面上一个字都没有 —— 用户
+            装的是 N 卡包、机器上插着 N 卡，实际却跑在虚拟显示适配器上，报出来的
+            现象是「显存不足」，跟显卡毫无关联。这两个字段就是为了把这条链路摆到
+            界面上。
+            """
+            try:
+                dev = str(getattr(self.config, "device", "") or "")
+            except Exception:
+                return {}
+            low = dev.lower()
+            if low.startswith("cuda"):
+                kind = "cuda"
+            elif low.startswith("privateuseone") or low.startswith("dml"):
+                kind = "directml"
+            elif low.startswith("mps"):
+                kind = "mps"
+            elif low.startswith("xpu"):
+                kind = "xpu"
+            else:
+                kind = "cpu"
+            return {
+                "compute_backend": kind,
+                "compute_device": str(getattr(self.config, "gpu_name", "") or "") or dev,
             }
 
         def _cuda_graph_payload(self):

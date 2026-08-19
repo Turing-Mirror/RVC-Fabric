@@ -40,6 +40,12 @@ audio-slicer
 https://github.com/openvpi/audio-slicer/blob/main/LICENSE
 MIT License
 
+SoundTouch
+https://www.surina.net/soundtouch
+https://codeberg.org/soundtouch/soundtouch
+GNU Lesser General Public License v2.1
+tools/soundtouch/COPYING.TXT
+
 PySimpleGUI
 https://github.com/PySimpleGUI/PySimpleGUI/blob/master/license.txt
 LPGLv3 License

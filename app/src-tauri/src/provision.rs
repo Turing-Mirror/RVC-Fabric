@@ -85,16 +85,96 @@ pub(crate) fn looks_like_nvidia(name: &str) -> bool {
         .any(|k| n.contains(k))
 }
 
-/// 系统里枚举到的 N 卡，保持枚举顺序。
+/// 能选作「主显卡」的 N 卡，顺序即 `CUDA_VISIBLE_DEVICES` 的序号。
 ///
-/// 下标就是给 `CUDA_VISIBLE_DEVICES` 用的序号。注册表枚举顺序和 CUDA 的排序
-/// 不保证一一对应 —— 所以界面上写明了「选完不对就换一个」，而不是假装这里
-/// 算出来的一定准。
+/// 序号必须和 CUDA 自己数出来的一致，所以优先问 `nvidia-smi`：它按 PCI bus 排，
+/// 而 `worker::apply_main_gpu` 会一并设 `CUDA_DEVICE_ORDER=PCI_BUS_ID`，两边天然
+/// 对齐。
+///
+/// 注册表那份列表只在 `nvidia-smi` 不在时兜底，因为它数的是显示适配器而不是
+/// 计算设备：已禁用的卡、拔掉之后残留的驱动键都还在里面，虚拟显示器（串流、
+/// VR、远程桌面）也照样占位。于是「第 N 个名字带 NVIDIA 的注册表项」和「第 N
+/// 块 CUDA 设备」可以完全对不上号 —— 用户选了列表里的第二块卡，环境变量却指向
+/// 一个不存在的设备，CUDA 直接报 0 设备、`is_available()` 变 false，整个引擎静默
+/// 掉进 DirectML。这不是「选错卡慢一点」，是显卡整块消失。
 pub fn list_nvidia_gpus() -> Vec<String> {
-    list_gpus()
-        .into_iter()
-        .filter(|g| looks_like_nvidia(g))
-        .collect()
+    static NV: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    NV.get_or_init(|| {
+        if let Some(v) = nvidia_smi_gpus() {
+            crate::logging::shell_log!("nvidia gpus (nvidia-smi): {:?}", v);
+            return v;
+        }
+        let v: Vec<String> = list_gpus()
+            .into_iter()
+            .filter(|g| looks_like_nvidia(g))
+            .collect();
+        crate::logging::shell_log!("nvidia gpus (registry fallback): {:?}", v);
+        v
+    })
+    .clone()
+}
+
+/// `nvidia-smi --query-gpu=index,name`，读到什么就是 CUDA 数得到什么。
+///
+/// 超时是必须的：`Command::output()` 没有超时，而这个进程在驱动出问题的机器上
+/// 是会挂住的 —— 结果被 `OnceLock` 记住，一次卡死就把后面每一个调用者一起拖住，
+/// 表现是应用打开之后再也画不完。所以放线程里跑，到点就当没有。
+///
+/// 返回 `None` 表示「问不到」，不是「没有 N 卡」：两者要分开，前者该退回注册表，
+/// 后者不该。
+fn nvidia_smi_gpus() -> Option<Vec<String>> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let (tx, rx) = mpsc::channel::<Option<String>>();
+    std::thread::spawn(move || {
+        let mut cmd = std::process::Command::new("nvidia-smi");
+        cmd.args(["--query-gpu=index,name", "--format=csv,noheader"]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let out = cmd
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+        let _ = tx.send(out);
+    });
+
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Some(t)) => parse_nvidia_smi(&t),
+        // 超时的线程仍在跑，但它只持有自己的 sender，发不出去就结束，不泄漏。
+        Ok(None) | Err(_) => None,
+    }
+}
+
+/// 每行 `0, NVIDIA GeForce RTX 3060`。按 index 排一遍再取名字，不依赖输出顺序。
+fn parse_nvidia_smi(text: &str) -> Option<Vec<String>> {
+    let mut rows: Vec<(u32, String)> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((idx, name)) = line.split_once(',') else {
+            continue;
+        };
+        let Ok(idx) = idx.trim().parse::<u32>() else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        rows.push((idx, name.to_string()));
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    rows.sort_by_key(|(i, _)| *i);
+    Some(rows.into_iter().map(|(_, n)| n).collect())
 }
 
 /// Enumerated once per run. The video controller set does not change while the
@@ -700,5 +780,38 @@ mod tests {
         ] {
             assert!(!looks_like_nvidia(bad));
         }
+    }
+
+    /// 序号得按 `index` 列排，不能按行序。CUDA 的下标就是这个 index，两边错开
+    /// 一位就等于把用户选的卡换成另一块。
+    #[test]
+    fn nvidia_smi_rows_are_ordered_by_index_not_by_line() {
+        let out = "1, NVIDIA GeForce RTX 3060\n0, NVIDIA GeForce GTX 1050 Ti\n";
+        assert_eq!(
+            parse_nvidia_smi(out),
+            Some(vec![
+                "NVIDIA GeForce GTX 1050 Ti".to_string(),
+                "NVIDIA GeForce RTX 3060".to_string(),
+            ])
+        );
+    }
+
+    /// 「问不到」和「一块 N 卡都没有」必须分开：前者要退回注册表那份列表，后者
+    /// 不能退 —— 退了就又把注册表里的虚拟适配器和残留驱动键当成可选项。
+    #[test]
+    fn unusable_nvidia_smi_output_is_none_not_empty() {
+        for junk in ["", "   \n\n", "NVIDIA-SMI has failed because...", "x, y"] {
+            assert_eq!(parse_nvidia_smi(junk), None, "{junk:?}");
+        }
+    }
+
+    /// 显卡名里本来就有逗号的话（`NVIDIA RTX A4000, Laptop GPU` 这类），只在第一个
+    /// 逗号处切，剩下的都算名字。
+    #[test]
+    fn only_the_first_comma_separates_index_from_name() {
+        assert_eq!(
+            parse_nvidia_smi("0, NVIDIA RTX A4000, Laptop GPU\n"),
+            Some(vec!["NVIDIA RTX A4000, Laptop GPU".to_string()])
+        );
     }
 }

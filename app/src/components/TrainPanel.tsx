@@ -6,7 +6,7 @@ import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { CkptAdvanced } from "./CkptAdvanced";
-import { ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 
@@ -106,7 +106,16 @@ export function humanLeft(sec: number): string {
 }
 
 const ROW = "flex items-center gap-3 py-2.5";
-const LABEL = "w-[76px] shrink-0 text-[13px]";
+/**
+ * 表单左边那一列。
+ *
+ * 宽度原来是照着中文标签配的，四个汉字五十来像素刚好塞得下。八种语言里
+ * 这就不成立了：法语的「Enregistrer les modèles dans」有两百多像素，会在
+ * 词中间断成三行；连中文的「导出格式」加上后面那个问号图标也已经超了。
+ * 放宽到能装下绝大多数语言，剩下几个特别长的折成两行，配 leading-tight
+ * 看起来是有意为之，而不是挤坏了。
+ */
+const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FIELD =
@@ -138,6 +147,12 @@ export function TrainPanel() {
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
   const [adv, setAdv] = useState(false);
+  // 进阶设置的开关在底栏、内容在正文末尾。展开时把内容滚进视野，不然用户点完
+  // 按钮，画面上什么都不会变 —— 新长出来的那块在滚动区外面。
+  const advRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (adv) advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [adv]);
   const runningRef = useRef(false);
   /** 每轮到达的时刻，用来估剩余时间。只留最近若干个。 */
   const epochMarks = useRef<{ at: number; done: number }[]>([]);
@@ -482,7 +497,24 @@ export function TrainPanel() {
           </p>
         ) : null}
 
-        <div className="mt-5 flex justify-end gap-2.5">
+        {running ? (
+          <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
+        ) : null}
+
+        {/* 进阶设置的按钮进了底栏，展开的内容留在这里 —— 那是一整块表单，塞进
+            操作栏没地方放。展开时把它滚进视野，否则按钮在窗口底部、内容在正文
+            末尾，用户点完会以为什么都没发生。 */}
+        {adv ? (
+          <div ref={advRef} className="mt-4">
+            <CkptAdvanced />
+          </div>
+        ) : null}
+
+      <ToolActions>
+        <Btn onClick={() => setAdv((v) => !v)}>
+          {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
+        </Btn>
+        <div className="ml-auto flex items-center gap-2.5">
           {running ? (
             <Btn onClick={() => void invoke("train_cancel")}>{t("s.44e681a374")}</Btn>
           ) : null}
@@ -494,18 +526,7 @@ export function TrainPanel() {
             {running ? t("s.3e6b1657c7") : resume ? t("s.3166554c46") : t("s.be24590d21")}
           </Btn>
         </div>
-
-        {running ? (
-          <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
-        ) : null}
-
-        <div className="mt-4">
-          <Btn onClick={() => setAdv((v) => !v)}>
-            {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
-          </Btn>
-          {adv ? <CkptAdvanced /> : null}
-        </div>
-
+      </ToolActions>
     </ToolBody>
   );
 }

@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
 import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
-import { ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { openHelpSection } from "../lib/helpNav";
@@ -116,7 +116,16 @@ type Skipped = {
 };
 
 const ROW = "flex items-center gap-3 py-2.5";
-const LABEL = "w-[86px] shrink-0 text-[13px]";
+/**
+ * 表单左边那一列。
+ *
+ * 宽度原来是照着中文标签配的，四个汉字五十来像素刚好塞得下。八种语言里
+ * 这就不成立了：法语的「Enregistrer les modèles dans」有两百多像素，会在
+ * 词中间断成三行；连中文的「导出格式」加上后面那个问号图标也已经超了。
+ * 放宽到能装下绝大多数语言，剩下几个特别长的折成两行，配 leading-tight
+ * 看起来是有意为之，而不是挤坏了。
+ */
+const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const LIST_CAP_UI = 300;
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
@@ -1107,28 +1116,30 @@ function StsSection() {
         </div>
       ) : null}
 
-      <div className="mt-5 flex justify-end gap-2.5">
-        {running ? (
-          <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>
-        ) : (
+      <ToolActions>
+        <div className="ml-auto flex items-center gap-2.5">
+          {running ? (
+            <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>
+          ) : (
+            <Btn
+              onClick={() =>
+                void invoke("sts_reveal", {
+                  path: lastDestRef.current || output,
+                })
+              }
+            >
+              {t("s.344a481fa0")}
+            </Btn>
+          )}
           <Btn
-            onClick={() =>
-              void invoke("sts_reveal", {
-                path: lastDestRef.current || output,
-              })
-            }
+            primary
+            disabled={running || recording || !!blocked || !input}
+            onClick={() => void start()}
           >
-            {t("s.344a481fa0")}
+            {running ? t("s.090840132b") : t("s.31e9cad169")}
           </Btn>
-        )}
-        <Btn
-          primary
-          disabled={running || recording || !!blocked || !input}
-          onClick={() => void start()}
-        >
-          {running ? t("s.090840132b") : t("s.31e9cad169")}
-        </Btn>
-      </div>
+        </div>
+      </ToolActions>
     </>
   );
 }
@@ -1371,22 +1382,24 @@ function TtsSection() {
         </p>
       ) : null}
 
-      <div className="mt-5 flex justify-end gap-2.5">
-        {running ? (
-          <Btn onClick={() => void invoke("tts_cancel")}>{t("s.4d0b4688c7")}</Btn>
-        ) : (
-          <Btn onClick={() => void invoke("tts_reveal", { useRvc })}>
-            {t("s.344a481fa0")}
+      <ToolActions>
+        <div className="ml-auto flex items-center gap-2.5">
+          {running ? (
+            <Btn onClick={() => void invoke("tts_cancel")}>{t("s.4d0b4688c7")}</Btn>
+          ) : (
+            <Btn onClick={() => void invoke("tts_reveal", { useRvc })}>
+              {t("s.344a481fa0")}
+            </Btn>
+          )}
+          <Btn
+            primary
+            disabled={running || !!blocked || !text.trim() || over}
+            onClick={() => void start()}
+          >
+            {running ? t("s.ec35cdf525") : t("s.74a000b7ac")}
           </Btn>
-        )}
-        <Btn
-          primary
-          disabled={running || !!blocked || !text.trim() || over}
-          onClick={() => void start()}
-        >
-          {running ? t("s.ec35cdf525") : t("s.74a000b7ac")}
-        </Btn>
-      </div>
+        </div>
+      </ToolActions>
     </>
   );
 }

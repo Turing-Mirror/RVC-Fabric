@@ -223,9 +223,17 @@ export default function App() {
   const [pitch, setPitch] = useState(0);
   const [formant, setFormant] = useState(0);
   const [mode, setMode] = useState<OutputMode>("vc");
-  const [voiceName, setVoiceName] = useState(t("s.262d11e2d6"));
+  /**
+   * 空串 = 还没选音色，渲染时才去取那句占位文案。
+   *
+   * 以前写的是 `useState(t("s.262d11e2d6"))`。`useState` 的初值只在首帧求值一次，
+   * 而那一帧语言包还没加载完，t() 拿到的是 DEFAULT_LOCALE —— 于是底栏那句
+   * 「未选择模型」会永远停在简体中文，用户把界面切成日文也不会变，除非他真的
+   * 去选一个音色把这个 state 覆盖掉。占位文案不该进 state，它是渲染出来的。
+   */
+  const [voiceName, setVoiceName] = useState("");
   const [voiceId, setVoiceId] = useState("");
-  const [profileSummary, setProfileSummary] = useState(t("s.72077749f7"));
+  const [profileSummary, setProfileSummary] = useState("");
   const [voiceTag, setVoiceTag] = useState("");
   const [voicePos, setVoicePos] = useState("");
   /** 生效中的 DSP 预设 id；空 = 没开。底栏靠它画那条「音色 → 预设」的链。 */
@@ -457,7 +465,7 @@ export default function App() {
     void currentVoice()
       .then((c) => {
         if (c.model) {
-          setVoiceName(String(c.model.name || t("s.262d11e2d6")));
+          setVoiceName(String(c.model.name || ""));
           setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
           setVoiceTag(String(c.model.tag || ""));
         }
@@ -499,7 +507,7 @@ export default function App() {
         void currentVoice()
           .then((cur) => {
             if (!cur.model) return;
-            setVoiceName(String(cur.model.name || t("s.262d11e2d6")));
+            setVoiceName(String(cur.model.name || ""));
             setVoiceId(
               String(cur.model.path || cur.model.dir || cur.model.name || ""),
             );
@@ -676,7 +684,7 @@ export default function App() {
         try {
           const c = await currentVoice();
           if (c.model) {
-            setVoiceName(String(c.model.name || t("s.262d11e2d6")));
+            setVoiceName(String(c.model.name || ""));
             setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
             setVoiceTag(String((c.model as { tag?: string }).tag || ""));
             setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
@@ -721,7 +729,7 @@ export default function App() {
       return;
     }
     setDspId("");
-    setVoiceName(model.name || t("s.262d11e2d6"));
+    setVoiceName(model.name || "");
     setVoiceId(model.path || model.dir || model.name || "");
     if (p != null) setPitch(Number(p));
     if (f != null) setFormant(Number(f));

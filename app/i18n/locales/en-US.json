@@ -1845,7 +1845,18 @@
     "faqBypassA": "Converted / Original in the bottom bar switches straight back to your own voice without stopping the engine.\nSettings → Hotkeys can bind a key to it; tick “Global” and it works from inside a game too.\nSwitching voices needs no restart either: while it is running, just pick another voice on the main screen and it changes seamlessly.",
     "faqOfflineQ": "I just want to convert a recording, not talk in a game",
     "faqOfflineH": "Use Voice conversion — no virtual audio device needed",
-    "faqOfflineA": "Audio tools → Voice conversion, below the main screen: pick an audio file or a whole folder, convert it to the current voice and export.\nThis route needs no virtual audio device and no real-time conversion.\nTo pull the vocals out of a song first, use Vocal separation next to it."
+    "faqOfflineA": "Audio tools → Voice conversion, below the main screen: pick an audio file or a whole folder, convert it to the current voice and export.\nThis route needs no virtual audio device and no real-time conversion.\nTo pull the vocals out of a song first, use Vocal separation next to it.",
+    "routeDiagramAlt": "Routing: your microphone goes into the app, and the converted voice reaches the game or voice app through CABLE. Monitoring is a separate branch only you hear.",
+    "routeMic": "Microphone",
+    "routeMicSub": "your real mic",
+    "routeApp": "RVC Fabric",
+    "routeAppSub": "output: CABLE Input",
+    "routeCableSub": "virtual device",
+    "routeGame": "Game / voice",
+    "routeGameSub": "mic: CABLE Output",
+    "routeMonitor": "Headphones",
+    "routeMonitorSub": "monitor device",
+    "routeMonitorNote": "optional, only you hear it"
   },
   "extras": {
     "engineTitle": "Engine resources",

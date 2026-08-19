@@ -1845,7 +1845,18 @@
     "faqBypassA": "底欄的「變聲 / 原聲」一鍵切回自己的聲音，不用停引擎。\n「設定 → 快速鍵」裡可以給它設全域快捷鍵，勾上「全域」之後在遊戲裡也能按。\n換音色同樣不用停：執行中直接在主畫面點另一個音色，無縫切換。",
     "faqOfflineQ": "不進遊戲，只想把一段錄音換成這個音色",
     "faqOfflineH": "用「語音轉換」，不需要虛擬音效卡",
-    "faqOfflineA": "主畫面下方「音訊工具 → 語音轉換」，選一個音訊檔或整個資料夾，換成目前音色後匯出。\n這條路不需要虛擬音效卡，也不用開啟即時變聲。\n想從歌裡先把人聲摳出來，用旁邊的「人聲分離」。"
+    "faqOfflineA": "主畫面下方「音訊工具 → 語音轉換」，選一個音訊檔或整個資料夾，換成目前音色後匯出。\n這條路不需要虛擬音效卡，也不用開啟即時變聲。\n想從歌裡先把人聲摳出來，用旁邊的「人聲分離」。",
+    "routeDiagramAlt": "接線示意：麥克風進入本軟體，變聲後經 CABLE 送給遊戲或語音軟體；監聽是另一條支路，只有你自己聽得到。",
+    "routeMic": "麥克風",
+    "routeMicSub": "你真實的麥克風",
+    "routeApp": "RVC Fabric",
+    "routeAppSub": "輸出選 CABLE Input",
+    "routeCableSub": "虛擬音效卡",
+    "routeGame": "遊戲 / 語音",
+    "routeGameSub": "麥克風選 CABLE Output",
+    "routeMonitor": "耳機",
+    "routeMonitorSub": "監聽設備",
+    "routeMonitorNote": "可選，只有你聽得到"
   },
   "extras": {
     "engineTitle": "引擎資源",

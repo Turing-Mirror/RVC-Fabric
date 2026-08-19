@@ -1,6 +1,7 @@
 import { useEffect, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import { RouteDiagram } from "../components/RouteDiagram";
 import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { openExternal } from "../lib/plaza";
 import { t } from "../i18n/t";
@@ -527,6 +528,9 @@ function HelpPageImpl({
       </Block>
 
       <Block title={t("s.149ab7bf0a")}>
+        {/* 图在表前面：表说的是「每一格该填什么」，图说的是「声音往哪走」。
+            接错线的人缺的是后者 —— 五行并列的表看不出监听是另一条支路。 */}
+        <RouteDiagram />
         <Group>
           <ListItem
             title={t("s.69f4bc1200")}

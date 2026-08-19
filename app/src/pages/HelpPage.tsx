@@ -39,11 +39,34 @@ function DonateNote() {
 }
 
 /**
+ * 从装好软件到对方听得见的那条线性路径。
+ *
+ * 这一段和下面的常见情况是两种东西：常见情况是查阅式的，服务「已经知道自己
+ * 要干什么、卡在某一步」的人；而说明页是在用户第一次点「开启变声」时弹出来
+ * 的，那一刻他手里没有问题，只有一个还没做成的任务。查阅式的页面对这种人是
+ * 失效的 —— 他不知道该查哪一条。所以排在全页最前面。
+ */
+function buildFirstRun(): { q: string; hint: string; a: string }[] {
+  return [
+    { q: t("s.firstRunQ1"), hint: t("s.firstRunH1"), a: t("s.firstRunA1") },
+    { q: t("s.firstRunQ2"), hint: t("s.firstRunH2"), a: t("s.firstRunA2") },
+    { q: t("s.firstRunQ3"), hint: t("s.firstRunH3"), a: t("s.firstRunA3") },
+    { q: t("s.firstRunQ4"), hint: t("s.firstRunH4"), a: t("s.firstRunA4") },
+    { q: t("s.firstRunQ5"), hint: t("s.firstRunH5"), a: t("s.firstRunA5") },
+    { q: t("s.firstRunQ6"), hint: t("s.firstRunH6"), a: t("s.firstRunA6") },
+    { q: t("s.firstRunQ7"), hint: t("s.firstRunH7"), a: t("s.firstRunA7") },
+  ];
+}
+
+/**
  * FAQ / route tables must call t() at use time — module-level t() freezes
  * zh-CN because locale packs load after first import (DEFAULT_LOCALE).
  */
 function buildFaq(): { q: string; hint: string; a: string }[] {
+  // 顺序按新手实际撞上的先后排，不按写进来的先后。第一次接线时会卡的排在最前，
+  // 装机和收尾类的排在后面。
   return [
+    // —— 接线：声音出不去 / 进不来 ——
     {
       q: t("s.73996ce817"),
       hint: t("s.8152d450a3"),
@@ -55,6 +78,37 @@ function buildFaq(): { q: string; hint: string; a: string }[] {
       a: [t("s.d02e026f75"), t("s.52c469558c")].join("\n"),
     },
     {
+      q: t("s.faqSelfSilentQ"),
+      hint: t("s.faqSelfSilentH"),
+      a: t("s.faqSelfSilentA"),
+    },
+    {
+      q: t("s.faqNoCableQ"),
+      hint: t("s.faqNoCableH"),
+      a: t("s.faqNoCableA"),
+    },
+    // —— 效果：出得来，但不对劲 ——
+    {
+      q: t("s.faqVoiceUnlikeQ"),
+      hint: t("s.faqVoiceUnlikeH"),
+      a: t("s.faqVoiceUnlikeA"),
+    },
+    {
+      q: t("s.faqThresholdQ"),
+      hint: t("s.faqThresholdH"),
+      a: t("s.faqThresholdA"),
+    },
+    {
+      q: t("s.faqLoudnessQ"),
+      hint: t("s.faqLoudnessH"),
+      a: t("s.faqLoudnessA"),
+    },
+    {
+      q: t("s.faqEchoQ"),
+      hint: t("s.faqEchoH"),
+      a: t("s.faqEchoA"),
+    },
+    {
       q: t("s.ca98fe8db7"),
       hint: t("s.68458a0d6c"),
       a: [
@@ -64,6 +118,63 @@ function buildFaq(): { q: string; hint: string; a: string }[] {
         t("s.e6408f03f4"),
         t("s.561d709070"),
       ].join("\n"),
+    },
+    {
+      q: t("s.faqLatencyQ"),
+      hint: t("s.faqLatencyH"),
+      a: t("s.faqLatencyA"),
+    },
+    // —— 装机：根本开不起来 ——
+    {
+      q: t("s.faqVramQ"),
+      hint: t("s.faqVramH"),
+      a: t("s.faqVramA"),
+    },
+    {
+      q: t("s.faqGpuNeedQ"),
+      hint: t("s.faqGpuNeedH"),
+      a: t("s.faqGpuNeedA"),
+    },
+    {
+      q: t("s.faqAlreadyRunningQ"),
+      hint: t("s.faqAlreadyRunningH"),
+      a: t("s.faqAlreadyRunningA"),
+    },
+    {
+      q: t("s.faqAntivirusQ"),
+      hint: t("s.faqAntivirusH"),
+      a: t("s.faqAntivirusA"),
+    },
+    {
+      q: t("s.faqDownloadSlowQ"),
+      hint: t("s.faqDownloadSlowH"),
+      a: t("s.faqDownloadSlowA"),
+    },
+    {
+      q: t("s.29a29efed7"),
+      hint: t("s.7cdb0a7622"),
+      a: t("s.23cb78c4b5"),
+    },
+    {
+      q: t("s.0ec38407bc"),
+      hint: t("s.cd8301f295"),
+      a: t("s.83d8ae170a"),
+    },
+    {
+      q: t("s.8e6b1ba01b"),
+      hint: t("s.55e39bd8d0"),
+      a: t("s.d69e96920e"),
+    },
+    // —— 用法：知道怎么开了，问还能怎么用 ——
+    {
+      q: t("s.faqBypassQ"),
+      hint: t("s.faqBypassH"),
+      a: t("s.faqBypassA"),
+    },
+    {
+      q: t("s.faqOfflineQ"),
+      hint: t("s.faqOfflineH"),
+      a: t("s.faqOfflineA"),
     },
     {
       q: t("s.c96a64f150"),
@@ -82,21 +193,6 @@ function buildFaq(): { q: string; hint: string; a: string }[] {
         t("s.983328d89b"),
         t("s.3800ff2864"),
       ].join("\n"),
-    },
-    {
-      q: t("s.0ec38407bc"),
-      hint: t("s.cd8301f295"),
-      a: t("s.83d8ae170a"),
-    },
-    {
-      q: t("s.29a29efed7"),
-      hint: t("s.7cdb0a7622"),
-      a: t("s.23cb78c4b5"),
-    },
-    {
-      q: t("s.8e6b1ba01b"),
-      hint: t("s.55e39bd8d0"),
-      a: t("s.d69e96920e"),
     },
   ];
 }
@@ -321,6 +417,7 @@ function HelpPageImpl({
   // 设备列表要重启后才出现；Program Files 里的官方卸载程序才是「已经装上」
   // 的即时证据。刚卸完、重启前两边都可能还在，用 vbRemoved 盖住卸载按钮。
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
+  const firstRun = buildFirstRun();
   const faq = buildFaq();
   const trainGuide = buildTrainGuide();
   const inferGuide = buildInferGuide();
@@ -338,6 +435,31 @@ function HelpPageImpl({
         }
       />
 
+      {/* 全页第一块。说明页是在用户第一次点「开启变声」时弹出来的，那一刻
+          他手里没有问题、只有一个没做成的任务 —— 先给整条路径，再给查阅材料。 */}
+      <Block title={t("s.firstRunTitle")} note={String(firstRun.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
+          {t("s.firstRunLead")}
+        </p>
+        <Group>
+          {firstRun.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
       <Block title={t("s.b386a7fb53")}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
         {/* 先照着用户机器上真实的设备列表说一句话。
@@ -433,75 +555,6 @@ function HelpPageImpl({
           />
         </Group>
       </Block>
-      <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
-          {t("s.sepGuideLead")}
-        </p>
-        <Group>
-          {separateGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
-      </Block>
-      <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
-          {t("s.inferGuideLead")}
-        </p>
-        <Group>
-          {inferGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
-      </Block>
-      <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
-          {t("s.trainGuideLead")}
-        </p>
-        <Group>
-          {trainGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
-      </Block>
       <Block title={t("s.209d309d58")} note={String(faq.length)}>
         <Group>
           {faq.map((f) => (
@@ -540,6 +593,75 @@ function HelpPageImpl({
               }
             >
               {term.detail}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
+      <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
+          {t("s.inferGuideLead")}
+        </p>
+        <Group>
+          {inferGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
+      <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
+          {t("s.sepGuideLead")}
+        </p>
+        <Group>
+          {separateGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
+            </ListItem>
+          ))}
+        </Group>
+      </Block>
+      <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
+          {t("s.trainGuideLead")}
+        </p>
+        <Group>
+          {trainGuide.map((f) => (
+            <ListItem
+              key={f.q}
+              title={f.q}
+              desc={f.hint}
+              expanded={open === f.q}
+              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
+              right={
+                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
+                </span>
+              }
+            >
+              {f.a}
             </ListItem>
           ))}
         </Group>

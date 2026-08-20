@@ -428,5 +428,119 @@ class ArtifactSnapshotTests(unittest.TestCase):
         self.assertIn("missing", buf.getvalue())
 
 
+class ResumeCompletenessTests(unittest.TestCase):
+    """半份产物不能算做完。
+
+    26.8.20 用户诊断包：上一次在音高阶段被取消，2a_f0 里留下 616 份，切片有
+    3884 份。续跑时旧判据是「目录非空就跳过」，于是音高整步跳过，filelist 取
+    四类产物的交集只剩 618 行 —— 用户以为在拿 3884 条数据训练，实际只用了 16%，
+    界面上没有任何提示。
+    """
+
+    def test_a_half_finished_stage_is_not_done(self):
+        self.assertFalse(tw.stage_complete(616, 3884))
+
+    def test_a_finished_stage_is_done(self):
+        self.assertTrue(tw.stage_complete(3884, 3884))
+
+    def test_more_outputs_than_slices_still_counts(self):
+        # mute 之类的额外产物不该把「做完了」判成「没做完」。
+        self.assertTrue(tw.stage_complete(3886, 3884))
+
+    def test_nothing_at_all_is_not_done(self):
+        self.assertFalse(tw.stage_complete(0, 3884))
+        self.assertFalse(tw.stage_complete(0, 0))
+
+
+class PreprocessSuccessCountTests(unittest.TestCase):
+    """2038 个音频只切出 3 条，界面上却一个字都没有——那次是 ffmpeg 读不了文件。"""
+
+    def _log(self, td, text):
+        p = Path(td) / "preprocess.log"
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def test_counts_only_success_lines(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = self._log(td, "\n".join([
+                "start preprocess",
+                "D:\\a\\1.wav\t-> Success",
+                "D:\\a\\2.wav\t-> Traceback (most recent call last):",
+                "  File \"audio.py\", line 44, in load_audio",
+                "ffmpeg._run.Error: ffmpeg error",
+                "D:\\a\\3.wav\t-> Success",
+                "end preprocess",
+            ]))
+            self.assertEqual(tw.count_preprocess_ok(log), 2)
+
+    def test_missing_log_is_zero(self):
+        self.assertEqual(tw.count_preprocess_ok(Path("/definitely/not/here.log")), 0)
+
+
+class TrainOomDetectionTests(unittest.TestCase):
+    """「训练结束但没找到 xxx.pth」对用户毫无指向，显存不足要直说。"""
+
+    # 用户日志里的原文。
+    OOM = (
+        "torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB "
+        "(GPU 0; 8.00 GiB total capacity; 2.00 GiB already allocated; 4.84 GiB free; "
+        "2.04 GiB reserved in total by PyTorch)"
+    )
+
+    def _log(self, td, text):
+        p = Path(td) / "train.log"
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def test_recognizes_the_real_message(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.assertTrue(tw.log_has_oom(self._log(td, "INFO:voice:start\n" + self.OOM)))
+
+    def test_a_healthy_log_is_not_oom(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.assertFalse(
+                tw.log_has_oom(self._log(td, "====> Epoch: 12 [t] | (0:00:01)\n"))
+            )
+
+    def test_only_the_tail_counts(self):
+        # 上一轮的显存不足不该栽给这一轮：只看最后 8000 字。
+        with tempfile.TemporaryDirectory() as td:
+            text = self.OOM + "\n" + ("====> Epoch: 1 [t]\n" * 900)
+            self.assertFalse(tw.log_has_oom(self._log(td, text)))
+
+    def test_missing_log_is_not_oom(self):
+        self.assertFalse(tw.log_has_oom(Path("/definitely/not/here.log")))
+
+
+class SnapshotPublishedPathTests(unittest.TestCase):
+    """用户设了输出目录时，音色不在 User_Data 下，诊断包不能永远报 0 字节。"""
+
+    def _tree(self, td):
+        root = Path(td) / "root"
+        (root / "logs" / "voice").mkdir(parents=True)
+        return root, root / "logs" / "voice"
+
+    def test_custom_output_dir_is_where_we_look(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._tree(td)
+            out = Path(td) / "E" / "voices"
+            (out / "voice").mkdir(parents=True)
+            (out / "voice" / "voice.pth").write_bytes(b"published")
+            snap = tw.artifact_snapshot(
+                exp, root, {"exp": "voice", "output_dir": str(out)}
+            )
+            self.assertEqual(snap["published_bytes"], len(b"published"))
+            self.assertEqual(snap["usable"], "final")
+
+    def test_default_location_still_works(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, exp = self._tree(td)
+            d = root / "User_Data" / "models" / "voice"
+            d.mkdir(parents=True)
+            (d / "voice.pth").write_bytes(b"published")
+            snap = tw.artifact_snapshot(exp, root, {"exp": "voice", "output_dir": ""})
+            self.assertEqual(snap["published_bytes"], len(b"published"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -399,7 +399,11 @@
       "skip_f0": "Hauteur déjà extraite — ignorée",
       "skip_feature": "Caractéristiques déjà extraites — ignorées",
       "cancelled": "Annulé",
-      "no_weight": "L'entraînement est terminé mais {name} est introuvable. Consultez logs/{exp}/train.log."
+      "no_weight": "L'entraînement est terminé mais {name} est introuvable. Consultez logs/{exp}/train.log.",
+      "oom": "Mémoire vidéo insuffisante : l'entraînement s'est arrêté. Réduisez la taille de lot (actuellement {batch}) et fermez les autres programmes utilisant le GPU. Détails dans {log}",
+      "preprocess_partial": "{failed} fichiers audio sur {total} n'ont pas pu être lus ; on continue avec les {ok} valides. Détails dans {log}",
+      "resume_f0_partial": "La dernière fois, l'extraction de hauteur s'est arrêtée à {done}/{total} ; le reste est complété maintenant.",
+      "resume_feature_partial": "La dernière fois, l'extraction de caractéristiques s'est arrêtée à {done}/{total} ; le reste est complété maintenant."
     }
   },
   "s": {

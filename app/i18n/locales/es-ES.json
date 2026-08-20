@@ -399,7 +399,11 @@
       "skip_f0": "El tono ya existe: se omite",
       "skip_feature": "Las características ya existen: se omite",
       "cancelled": "Cancelado",
-      "no_weight": "El entrenamiento terminó pero no se encontró {name}. Revisa logs/{exp}/train.log."
+      "no_weight": "El entrenamiento terminó pero no se encontró {name}. Revisa logs/{exp}/train.log.",
+      "oom": "Sin memoria de vídeo: el entrenamiento se detuvo. Reduce el tamaño de lote (ahora {batch}) y cierra otros programas que usen la GPU. Detalles en {log}",
+      "preprocess_partial": "No se pudieron leer {failed} de {total} archivos de audio; se continúa con los {ok} correctos. Detalles en {log}",
+      "resume_f0_partial": "La vez anterior la extracción de tono solo llegó a {done}/{total}; ahora se completa el resto.",
+      "resume_feature_partial": "La vez anterior la extracción de características solo llegó a {done}/{total}; ahora se completa el resto."
     }
   },
   "s": {

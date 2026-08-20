@@ -357,7 +357,8 @@
       "load_failed": "加载模型失败：{error}",
       "all_failed": "{total} 个文件全部转换失败。第一个原因：{first}",
       "done": "完成 {done} 个，跳过 {skipped} 个",
-      "hot_unavailable": "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。"
+      "hot_unavailable": "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
+      "hot_dml_fallback": "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。"
     },
     "train": {
       "step_failed": "该步骤失败（退出码 {code}），详情见 {log}",

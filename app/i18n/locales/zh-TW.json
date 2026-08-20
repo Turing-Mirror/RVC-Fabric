@@ -357,7 +357,8 @@
       "load_failed": "載入模型失敗：{error}",
       "all_failed": "{total} 個檔案全部轉換失敗。第一個原因：{first}",
       "done": "完成 {done} 個，跳過 {skipped} 個",
-      "hot_unavailable": "即時引擎裡沒有已載入的音色，改用獨立行程轉換（會慢一些）。"
+      "hot_unavailable": "即時引擎裡沒有已載入的音色，改用獨立行程轉換（會慢一些）。",
+      "hot_dml_fallback": "顯示卡後端（DirectML）不支援這一步，改用獨立行程轉換（會慢一些）。"
     },
     "train": {
       "step_failed": "該步驟失敗（退出碼 {code}），詳情見 {log}",

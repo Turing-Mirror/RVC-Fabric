@@ -357,7 +357,8 @@
       "load_failed": "Failed to load the model: {error}",
       "all_failed": "All {total} files failed to convert. First reason: {first}",
       "done": "{done} done, {skipped} skipped",
-      "hot_unavailable": "No voice is loaded in the realtime engine — converting in a separate process instead (a bit slower)."
+      "hot_unavailable": "No voice is loaded in the realtime engine — converting in a separate process instead (a bit slower).",
+      "hot_dml_fallback": "The graphics backend (DirectML) does not support this step — converting in a separate process instead (a bit slower)."
     },
     "train": {
       "step_failed": "This step failed (exit code {code}) — details in {log}",

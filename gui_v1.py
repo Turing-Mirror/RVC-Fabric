@@ -3783,15 +3783,6 @@ if __name__ == "__main__":
                 fail("没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）")
                 return
 
-            # 离线转换要独占显存，实时流先停。停完不自动重开——用户自己点，
-            # 跟「关闭变声」的心智保持一致。
-            was_running = bool(flag_vc)
-            if was_running:
-                try:
-                    self.stop_stream()
-                except Exception:
-                    traceback.print_exc()
-
             total = len(files)
             srcs = [p for p, _ in files]
             # 热路径没有加载阶段，进度从 0 就是第一个文件。
@@ -3847,6 +3838,23 @@ if __name__ == "__main__":
                 fail(why or "实时引擎里没有可用的模型")
                 return
 
+            # 实时流到这里才停。停完不自动重开——用户自己点，跟「关闭变声」的
+            # 心智保持一致。
+            #
+            # 顺序要紧：stop_stream 在非 N 卡上会顺手把 self.rvc / resampler 等
+            # 一并置空（DML 没有 empty_cache，只能靠 del + gc 还显存，见
+            # stop_stream 里那段）。以前这一步在取常驻模型之前，于是 A / I 卡上
+            # 热路径**永远**接不上：模型刚被清掉，_sts_resident_vc 就看见 rvc
+            # 是 None，只能报「实时引擎里没有已加载的音色」退回冷路径。用户
+            # 「先开实时变声再转换」的规避办法因此在 A 卡上不成立（26.8.20
+            # 反馈）。先把引用拿到手（vc 已经握着 net_g / hubert），再停。
+            was_running = bool(flag_vc)
+            if was_running:
+                try:
+                    self.stop_stream()
+                except Exception:
+                    traceback.print_exc()
+
             index_path = str(payload.get("index") or "").strip()
             if not index_path or not os.path.isfile(index_path):
                 index_path = str(getattr(self.gui_config, "index_path", "") or "").strip()
@@ -3900,6 +3908,11 @@ if __name__ == "__main__":
                         prog,
                         self._sts_emit,
                         should_cancel=self._sts_cancelled,
+                        # 这里的 net_g / hubert 就是实时引擎那几个对象本人，
+                        # 挪到 CPU 会把实时变声一起废掉。撞上 DirectML 缺口时
+                        # 改报「热路径不可用」，让壳退到冷路径，那边的 worker
+                        # 自己拥有模型，可以安全地退 CPU 重试。
+                        allow_cpu_fallback=False,
                     )
             except Exception as e:
                 traceback.print_exc()
@@ -3929,6 +3942,21 @@ if __name__ == "__main__":
                 return
             if not out_files:
                 first = skipped[0]["reason"] if skipped else "未知错误"
+                if sts_core.is_dml_backend_error(first):
+                    # 一个文件都没转出来，也就没有写坏任何东西，整批交给冷路径
+                    # 重来一次是安全的：那边能把模型挪到 CPU 顶上去。
+                    from tools.msg_codes import (
+                        STS_HOT_DML_FALLBACK,
+                        msg_fields as _mf,
+                    )
+
+                    self._sts_emit(
+                        phase="error",
+                        pct=0,
+                        hot_unavailable=True,
+                        **_mf(STS_HOT_DML_FALLBACK),
+                    )
+                    return
                 fail(f"{total} 个文件全部转换失败。第一个原因：{first}")
                 return
             self._sts_emit(

@@ -399,7 +399,11 @@
       "skip_f0": "음높이가 이미 있어 건너뜁니다",
       "skip_feature": "특징이 이미 있어 건너뜁니다",
       "cancelled": "취소했습니다",
-      "no_weight": "학습은 끝났지만 {name}을(를) 찾을 수 없습니다. logs/{exp}/train.log를 확인하세요."
+      "no_weight": "학습은 끝났지만 {name}을(를) 찾을 수 없습니다. logs/{exp}/train.log를 확인하세요.",
+      "oom": "VRAM이 부족해 학습이 중단되었습니다. 배치 크기(현재 {batch})를 줄이고 GPU를 쓰는 다른 프로그램을 닫은 뒤 다시 시도하세요. 자세한 내용은 {log}",
+      "preprocess_partial": "{total}개 중 {failed}개 오디오를 읽지 못했습니다. 성공한 {ok}개로 계속합니다. 자세한 내용은 {log}",
+      "resume_f0_partial": "지난번에 음높이 추출이 {done}/{total}까지만 끝났습니다. 나머지를 채웁니다.",
+      "resume_feature_partial": "지난번에 특징 추출이 {done}/{total}까지만 끝났습니다. 나머지를 채웁니다."
     }
   },
   "s": {

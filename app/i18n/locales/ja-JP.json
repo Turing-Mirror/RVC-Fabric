@@ -399,7 +399,11 @@
       "skip_f0": "ピッチが既にあるためスキップします",
       "skip_feature": "特徴が既にあるためスキップします",
       "cancelled": "中止しました",
-      "no_weight": "学習は終わりましたが {name} が見つかりません。logs/{exp}/train.log を確認してください。"
+      "no_weight": "学習は終わりましたが {name} が見つかりません。logs/{exp}/train.log を確認してください。",
+      "oom": "VRAM が足りず学習が中断しました。バッチサイズ（現在 {batch}）を小さくし、GPU を使う他のソフトを閉じてから再試行してください。詳細は {log}",
+      "preprocess_partial": "{total} 個中 {failed} 個の音声を読み込めませんでした。成功した {ok} 個で続行します。詳細は {log}",
+      "resume_f0_partial": "前回はピッチ抽出が {done}/{total} までしか終わっていません。残りを補います。",
+      "resume_feature_partial": "前回は特徴抽出が {done}/{total} までしか終わっていません。残りを補います。"
     }
   },
   "s": {

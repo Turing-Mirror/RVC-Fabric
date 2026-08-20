@@ -152,6 +152,10 @@ TRAIN_SKIP_F0 = "train.skip_f0"
 TRAIN_SKIP_FEATURE = "train.skip_feature"
 TRAIN_CANCELLED = "train.cancelled"
 TRAIN_NO_WEIGHT = "train.no_weight"
+TRAIN_OOM = "train.oom"
+TRAIN_PREPROCESS_PARTIAL = "train.preprocess_partial"
+TRAIN_RESUME_F0_PARTIAL = "train.resume_f0_partial"
+TRAIN_RESUME_FEATURE_PARTIAL = "train.resume_feature_partial"
 
 
 # Chinese fallbacks (zh-CN). Must match app/i18n/locales/zh-CN.json msg.*
@@ -228,6 +232,10 @@ _FALLBACK_ZH: dict[str, str] = {
     TRAIN_SKIP_FEATURE: "已有特征，跳过",
     TRAIN_CANCELLED: "已取消",
     TRAIN_NO_WEIGHT: "训练结束但没找到 {name}。查看 logs/{exp}/train.log。",
+    TRAIN_OOM: "显存不足，训练中断。可以把批大小（当前 {batch}）调小、关掉其他占显存的程序后重试。详情见 {log}",
+    TRAIN_PREPROCESS_PARTIAL: "{failed} 个音频没能读取（共 {total} 个），只用成功的 {ok} 个继续。详情见 {log}",
+    TRAIN_RESUME_F0_PARTIAL: "上次音高只提取了 {done}/{total}，这次把剩下的补齐。",
+    TRAIN_RESUME_FEATURE_PARTIAL: "上次特征只提取了 {done}/{total}，这次把剩下的补齐。",
     ENGINE_LAUNCHING: "正在启动引擎进程…",
     ENGINE_STARTING: "引擎进程已启动，正在加载运行库…",
     ENGINE_IMPORTING: "正在导入推理库（可能需要十几秒）…",

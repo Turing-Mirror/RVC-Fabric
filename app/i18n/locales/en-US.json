@@ -399,7 +399,11 @@
       "skip_f0": "Pitch already extracted — skipping",
       "skip_feature": "Features already extracted — skipping",
       "cancelled": "Cancelled",
-      "no_weight": "Training finished but {name} was not found. Check logs/{exp}/train.log."
+      "no_weight": "Training finished but {name} was not found. Check logs/{exp}/train.log.",
+      "oom": "Out of GPU memory — training stopped. Try a smaller batch size (currently {batch}) and close other programs using the GPU. Details in {log}",
+      "preprocess_partial": "{failed} of {total} audio files could not be read; continuing with the {ok} that worked. Details in {log}",
+      "resume_f0_partial": "Pitch extraction only finished {done}/{total} last time; filling in the rest now.",
+      "resume_feature_partial": "Feature extraction only finished {done}/{total} last time; filling in the rest now."
     }
   },
   "s": {

@@ -188,7 +188,11 @@ def artifact_snapshot(exp_dir, root, req):
         except OSError:
             filelist_lines = 0
     weights = root / "assets" / "weights" / ("%s.pth" % exp)
-    published = root / "User_Data" / "models" / exp / ("%s.pth" % exp)
+    # 发布位置要跟 publish_voice 一致：用户设了输出目录时音色不在 User_Data 下，
+    # 写死这一条会让诊断包里永远显示「published 0 字节」，看的人以为发布失败。
+    out_dir = str(req.get("output_dir") or "").strip()
+    published_base = Path(out_dir) if out_dir else root / "User_Data" / "models"
+    published = published_base / exp / ("%s.pth" % exp)
     weight_pths = [
         x for x in list_pths(root / "assets" / "weights")
         if x["name"] == ("%s.pth" % exp) or x["name"].startswith("%s_e" % exp)
@@ -558,6 +562,50 @@ def stage_preprocess(req, exp_dir, py, n_stages):
     if count_files(exp_dir / "1_16k_wavs") == 0:
         dump_log_tail(log)
         fail_code(mc.TRAIN_NO_SLICES)
+    # 读不了的文件 preprocess 只写进它自己的日志，界面上一个字都看不到。用户
+    # 因此可能拿着 2038 个音频、实际只切出 3 条就开训（26.8.20 诊断包），训完
+    # 才发现音色不像。数目对不上就明说。
+    ok_files = count_preprocess_ok(log)
+    if 0 < ok_files < n_files:
+        emit(
+            phase="skip", stage="preprocess",
+            **mc.msg_fields(
+                mc.TRAIN_PREPROCESS_PARTIAL,
+                {"failed": n_files - ok_files, "total": n_files, "ok": ok_files,
+                 "log": log},
+            ),
+        )
+
+
+def stage_complete(done, total) -> bool:
+    """这一步的产物数目对得上切片数才算做完，半份不算。"""
+    return int(total) > 0 and int(done) >= int(total)
+
+
+def count_preprocess_ok(log):
+    """preprocess.log 里成功了几个文件。
+
+    preprocess.py 每处理完一个文件写一行 ``<路径>\t-> Success``，失败的写
+    ``<路径>\t-> Traceback...``。数成功的那种最省事，也不用改上游脚本。
+    """
+    try:
+        text = Path(log).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    return sum(1 for line in text.splitlines() if line.rstrip().endswith("-> Success"))
+
+
+_OOM_MARKERS = ("outofmemoryerror", "out of memory", "显存")
+
+
+def log_has_oom(log):
+    """训练日志尾部是不是显存不足。只看最后 8000 字，前面的属于上一轮。"""
+    try:
+        text = Path(log).read_text(encoding="utf-8", errors="replace")[-8000:]
+    except OSError:
+        return False
+    low = text.lower()
+    return any(m in low for m in _OOM_MARKERS)
 
 
 def rmvpe_ok(root):
@@ -868,11 +916,21 @@ def main():
         dataset_audio=count_audio(req["dataset"]) if req["dataset"] else 0,
     )
 
-    # 续跑：已经有产物的前几步直接跳过。判据是产物目录非空 —— 比记状态文件
-    # 可靠，用户手动删过目录也能自愈。
-    have_slices = count_files(exp_dir / "1_16k_wavs") > 0
-    have_f0 = count_files(exp_dir / "2a_f0") > 0
-    have_feat = count_files(exp_dir / ("3_feature%d" % FEATURE_DIM)) > 0
+    # 续跑：已经有产物的前几步直接跳过。判据是产物**数目对得上切片数** —— 比记
+    # 状态文件可靠（用户手动删过目录也能自愈），也比「目录非空」老实。
+    #
+    # 只看非空会漏掉半份产物：上一次在音高或特征中途被取消，目录里留着一部分，
+    # 续跑就整步跳过。filelist 取的是四类产物的交集，于是训练悄悄只用了那一部分
+    # 数据，界面上没有任何提示。26.8.20 的诊断包里就是这样：3884 条切片只有 616
+    # 条音高，最后按 618 条样本训完，用户以为整份数据集都在训。
+    #
+    # 补齐很便宜：两个提取脚本都会跳过已经存在的输出文件，重跑只做缺的那些。
+    n_slices = count_files(exp_dir / "1_16k_wavs")
+    n_f0 = count_files(exp_dir / "2a_f0")
+    n_feat = count_files(exp_dir / ("3_feature%d" % FEATURE_DIM))
+    have_slices = n_slices > 0
+    have_f0 = stage_complete(n_f0, n_slices)
+    have_feat = stage_complete(n_feat, n_slices)
     resume = bool(req["resume"] and have_slices)
     emit_checkpoint("start", exp_dir, root, req)
 
@@ -910,12 +968,27 @@ def main():
             emit(phase="skip", stage="f0", **mc.msg_fields(mc.TRAIN_SKIP_F0))
             emit_checkpoint("f0", exp_dir, root, req)
         else:
+            if resume and 0 < n_f0 < n_slices:
+                emit(
+                    phase="skip", stage="f0",
+                    **mc.msg_fields(
+                        mc.TRAIN_RESUME_F0_PARTIAL, {"done": n_f0, "total": n_slices}
+                    ),
+                )
             stage_f0(req, exp_dir, py, n_stages)
 
         if resume and have_feat:
             emit(phase="skip", stage="feature", **mc.msg_fields(mc.TRAIN_SKIP_FEATURE))
             emit_checkpoint("feature", exp_dir, root, req)
         else:
+            if resume and 0 < n_feat < n_slices:
+                emit(
+                    phase="skip", stage="feature",
+                    **mc.msg_fields(
+                        mc.TRAIN_RESUME_FEATURE_PARTIAL,
+                        {"done": n_feat, "total": n_slices},
+                    ),
+                )
             stage_feature(req, exp_dir, py, n_stages)
 
         stage_train(req, exp_dir, py, root, n_stages)
@@ -929,7 +1002,15 @@ def main():
     weights = root / "assets" / "weights" / ("%s.pth" % req["exp"])
     if not weights.is_file():
         emit_checkpoint("missing_weights", exp_dir, root, req)
-        dump_log_tail(exp_dir / "train.log")
+        train_log = exp_dir / "train.log"
+        dump_log_tail(train_log)
+        # 「训练结束但没找到 xxx.pth」对用户没有任何指向。显存不够是这里最常见
+        # 的死法（26.8.20 诊断包连着三次），日志里认得出来就直说。
+        if log_has_oom(train_log):
+            fail_code(
+                mc.TRAIN_OOM,
+                {"batch": req.get("batch_size"), "log": train_log},
+            )
         fail_code(mc.TRAIN_NO_WEIGHT, {"name": weights, "exp": req["exp"]})
     published = publish_voice(root, req, weights, index_path)
     snap = emit_checkpoint("done", exp_dir, root, req)

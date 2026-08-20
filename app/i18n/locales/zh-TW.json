@@ -399,7 +399,11 @@
       "skip_f0": "已有音高，跳過",
       "skip_feature": "已有特徵，跳過",
       "cancelled": "已取消",
-      "no_weight": "訓練結束但沒找到 {name}。查看 logs/{exp}/train.log。"
+      "no_weight": "訓練結束但沒找到 {name}。查看 logs/{exp}/train.log。",
+      "oom": "顯示記憶體不足，訓練中斷。可以把批次大小（目前 {batch}）調小、關掉其他佔用顯示記憶體的程式後重試。詳情見 {log}",
+      "preprocess_partial": "{failed} 個音訊沒能讀取（共 {total} 個），只用成功的 {ok} 個繼續。詳情見 {log}",
+      "resume_f0_partial": "上次音高只擷取了 {done}/{total}，這次把剩下的補齊。",
+      "resume_feature_partial": "上次特徵只擷取了 {done}/{total}，這次把剩下的補齊。"
     }
   },
   "s": {

@@ -399,7 +399,11 @@
       "skip_f0": "已有音高，跳过",
       "skip_feature": "已有特征，跳过",
       "cancelled": "已取消",
-      "no_weight": "训练结束但没找到 {name}。查看 logs/{exp}/train.log。"
+      "no_weight": "训练结束但没找到 {name}。查看 logs/{exp}/train.log。",
+      "oom": "显存不足，训练中断。可以把批大小（当前 {batch}）调小、关掉其他占显存的程序后重试。详情见 {log}",
+      "preprocess_partial": "{failed} 个音频没能读取（共 {total} 个），只用成功的 {ok} 个继续。详情见 {log}",
+      "resume_f0_partial": "上次音高只提取了 {done}/{total}，这次把剩下的补齐。",
+      "resume_feature_partial": "上次特征只提取了 {done}/{total}，这次把剩下的补齐。"
     }
   },
   "s": {

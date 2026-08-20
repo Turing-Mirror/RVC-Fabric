@@ -10,10 +10,48 @@
 //!
 //! 同一个工具只开一扇窗：再点一次是把已经开着的那扇拉到前面，不是叠第二扇。
 
+use std::collections::HashSet;
+use std::sync::Mutex;
+
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::logging;
+
+/// 正在建的工具窗口 label。
+///
+/// 「已经开着就拉到前面」那道闸只挡得住**建完之后**的第二次点击。建一扇窗要
+/// 一秒上下，而 `tools_open` 是 async command，每次点击各跑各的 tokio 线程：
+/// 连点几下时，几个调用会先后穿过 `get_webview_window` 的检查（那时窗口都还
+/// 没建出来），然后拿同一个 label 各建一扇。26.8.20 的用户日志里就是四行
+/// 「工具窗口（train）已建好」压在同一毫秒上，紧接着一条
+/// `Cannot read properties of undefined (reading 'handlerId')` —— 被顶掉的那
+/// 几个 webview 在拆自己的事件监听时炸在 Tauri 的事件插件里，用户看到的是
+/// 一句「界面出错」。
+///
+/// 用一张「正在建」的表把并发的那几下收成一次。
+static OPENING: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+
+/// 尝试认领这个 label 的建窗权。返回 false 表示已经有人在建了，这次什么都不用做。
+fn claim_open(label: &str) -> bool {
+    let mut guard = match OPENING.lock() {
+        Ok(g) => g,
+        // 上一次 panic 毒化了锁也不能因此开不出窗口：放行，最坏是回到旧行为。
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.get_or_insert_with(HashSet::new).insert(label.to_string())
+}
+
+/// 建完（成功或失败都要还）。
+fn release_open(label: &str) {
+    let mut guard = match OPENING.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(set) = guard.as_mut() {
+        set.remove(label);
+    }
+}
 
 /// 一个工具窗口的全部参数：标题、初始大小、最小大小。
 struct Spec {
@@ -129,6 +167,12 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
         return Ok(());
     }
 
+    // 这扇窗正在建（用户连点了几下）：交给第一次调用，这次直接返回。窗口建好
+    // 之后本来就会自己跑到前台，不需要在这儿等它。
+    if !claim_open(&label) {
+        return Ok(());
+    }
+
     let url = url_for(kind);
     let win = WebviewWindowBuilder::new(
         app,
@@ -146,7 +190,11 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     .shadow(false)
     .center()
     .build()
-    .map_err(|e| crate::i18n::te("s.79a71841b6", &(e)))?;
+    .map_err(|e| {
+        release_open(&label);
+        crate::i18n::te("s.79a71841b6", &(e))
+    })?;
+    release_open(&label);
     logging::shell_log!(crate::i18n::te("s.e1e2bc3a99", &kind));
 
     // `.center()` 居的是**主显示器**的中。用户把主窗口拖到副屏上用的时候，
@@ -198,6 +246,29 @@ mod tests {
         uniq.sort();
         uniq.dedup();
         assert_eq!(uniq.len(), labels.len());
+    }
+
+    #[test]
+    fn a_second_click_while_the_window_is_being_built_is_dropped() {
+        // 连点：第一下认领，后面几下什么都不做。以前它们会拿同一个 label 各建
+        // 一扇窗，被顶掉的 webview 在拆事件监听时把「界面出错」弹到用户脸上。
+        let label = "tool-test-claim";
+        assert!(claim_open(label));
+        assert!(!claim_open(label));
+        assert!(!claim_open(label));
+        release_open(label);
+        // 关掉之后再开是正常操作，得能重新认领。
+        assert!(claim_open(label));
+        release_open(label);
+    }
+
+    #[test]
+    fn each_tool_is_claimed_on_its_own() {
+        // 开着训练窗的时候点分离窗，不能被训练窗那一下挡住。
+        assert!(claim_open("tool-test-a"));
+        assert!(claim_open("tool-test-b"));
+        release_open("tool-test-a");
+        release_open("tool-test-b");
     }
 
     #[test]

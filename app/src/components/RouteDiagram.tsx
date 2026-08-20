@@ -7,7 +7,7 @@ import { t } from "../i18n/t";
  * 一张图多带一份 PNG。文字用 `<text>` 而不是描边路径，所以它跟着 i18n 走，
  * 八个语言共用同一张图。
  *
- * viewBox 固定、宽度 100%：容器窄下来时整张图等比缩，不重排、不裁切。
+ * 坐标写在 viewBox 里，宽高交给容器：窗口拉大缩小都等比缩放。
  */
 export function RouteDiagram() {
   // 两条链路的锚点。改这里就能挪整块，不用逐个数坐标。
@@ -21,9 +21,11 @@ export function RouteDiagram() {
     <svg
       viewBox="0 0 620 168"
       width="100%"
+      height="auto"
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={t("s.routeDiagramAlt")}
-      className="block max-w-[620px] mb-4"
+      className="block w-full h-auto mb-4"
     >
       <defs>
         <marker

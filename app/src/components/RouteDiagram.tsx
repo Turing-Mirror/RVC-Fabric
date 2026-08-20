@@ -20,12 +20,10 @@ export function RouteDiagram() {
   return (
     <svg
       viewBox="0 0 620 168"
-      width="100%"
-      height="auto"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={t("s.routeDiagramAlt")}
-      className="block w-full h-auto mb-4"
+      className="block w-full min-w-0 mb-4 aspect-[620/168] h-auto"
     >
       <defs>
         <marker

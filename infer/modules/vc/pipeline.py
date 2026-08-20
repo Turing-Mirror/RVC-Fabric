@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 from functools import lru_cache
 from time import time as ttime
 
+from infer.lib.dml_compat import crepe_device
 from infer.lib.faiss_io import NonAsciiPathError, read_index
 import librosa
 import numpy as np
@@ -135,6 +136,13 @@ class Pipeline(object):
             batch_size = 512
             # Compute pitch using first gpu
             audio = torch.tensor(np.copy(x))[None].float()
+            # A / I 卡退回 CPU：torchcrepe 装权重用的是
+            # torch.load(map_location=device)，privateuseone 这个标签 torch 的
+            # 反序列化不认，模型根本装不起来（26.8.20 诊断包里有一条）。离线转换
+            # 慢一点可以接受，报错不行。
+            crepe_dev = crepe_device(self.device)
+            if crepe_dev != self.device:
+                logger.info("crepe: DirectML 不支持，改用 CPU 提取音高")
             f0, pd = torchcrepe.predict(
                 audio,
                 self.sr,
@@ -143,7 +151,7 @@ class Pipeline(object):
                 f0_max,
                 model,
                 batch_size=batch_size,
-                device=self.device,
+                device=crepe_dev,
                 return_periodicity=True,
             )
             pd = torchcrepe.filter.median(pd, 3)

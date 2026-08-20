@@ -2,6 +2,10 @@ import os
 import sys
 import traceback
 
+# 跟 preprocess.py / train.py 一样：这几个脚本是按文件路径起的，sys.path[0] 是脚本所在目录而不是产品根，
+# 不补这一句就 import 不到 infer.。PYTHONPATH 被壳子擦掉了，指望不上。
+sys.path.append(os.getcwd())
+
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 
@@ -35,12 +39,10 @@ else:
 
     device = torch_directml.device(torch_directml.default_device())
 
-    def forward_dml(ctx, x, scale):
-        ctx.scale = scale
-        res = x.clone().detach()
-        return res
+    # GradMultiply 在 DirectML 上抛 PrivateUse1，补丁见 infer/lib/dml_compat。
+    from infer.lib.dml_compat import patch_fairseq_grad_multiply
 
-    fairseq.modules.grad_multiply.GradMultiply.forward = forward_dml
+    patch_fairseq_grad_multiply(fairseq)
 
 f = open("%s/extract_f0_feature.log" % exp_dir, "a+")
 

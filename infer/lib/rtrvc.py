@@ -6,6 +6,7 @@ from infer.lib import jit
 from infer.lib.jit.get_synthesizer import get_synthesizer
 from time import time as ttime
 import fairseq
+from infer.lib import dml_compat
 from infer.lib.faiss_io import NonAsciiPathError, read_index, require_ascii_path
 import numpy as np
 import parselmouth
@@ -81,14 +82,9 @@ class RVC:
                 pass
 
         try:
-            if config.dml == True:
-
-                def forward_dml(ctx, x, scale):
-                    ctx.scale = scale
-                    res = x.clone().detach()
-                    return res
-
-                fairseq.modules.grad_multiply.GradMultiply.forward = forward_dml
+            # DirectML 上 fairseq 的 GradMultiply 会抛 PrivateUse1，补丁收在
+            # infer/lib/dml_compat 里，实时 / 离线 / 训练三条路共用一份。
+            dml_compat.apply_for(config)
             # global config
             self.config = config
             self.inp_q = inp_q

@@ -1,6 +1,6 @@
 import torch
 
-from infer.lib.safe_load import safe_torch_load
+from infer.lib.safe_load import check_voice_ckpt, safe_torch_load
 
 
 def get_synthesizer(pth_path, device=torch.device("cpu")):
@@ -12,6 +12,7 @@ def get_synthesizer(pth_path, device=torch.device("cpu")):
     )
 
     cpt = safe_torch_load(pth_path, map_location=torch.device("cpu"))
+    check_voice_ckpt(cpt, pth_path)
     # tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
     if_f0 = cpt.get("f0", 1)

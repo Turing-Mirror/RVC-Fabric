@@ -15,7 +15,7 @@ from infer.lib.infer_pack.models import (
     SynthesizerTrnMs768NSFsid,
     SynthesizerTrnMs768NSFsid_nono,
 )
-from infer.lib.safe_load import safe_model_path, safe_torch_load
+from infer.lib.safe_load import check_voice_ckpt, safe_model_path, safe_torch_load
 from infer.modules.vc.pipeline import Pipeline
 from infer.modules.vc.utils import get_index_path_from_model, load_hubert
 
@@ -96,6 +96,9 @@ class VC:
         logger.info("Loading: %s", person)
 
         self.cpt = safe_torch_load(person, map_location="cpu")
+        # 选到训练存档（G_*.pth）时在这里就说清楚，别让 KeyError: 'config'
+        # 冒到界面上。
+        check_voice_ckpt(self.cpt, person)
         self.tgt_sr = self.cpt["config"][-1]
         self.cpt["config"][-3] = self.cpt["weight"]["emb_g.weight"].shape[0]  # n_spk
         self.if_f0 = self.cpt.get("f0", 1)

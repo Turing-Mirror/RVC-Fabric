@@ -104,3 +104,37 @@ def safe_torch_load(
             return torch.load(path, map_location=map_location, weights_only=False)
         except TypeError:
             return torch.load(path, map_location=map_location)
+
+
+# 训练检查点（train.py 存进 logs/<实验>/ 的 G_*.pth / D_*.pth）里有这些键，
+# 可用的音色模型里没有。用来把两者分开。
+_TRAIN_CKPT_KEYS = ("model", "optimizer", "iteration", "learning_rate")
+
+
+def check_voice_ckpt(cpt: Any, path: PathLike = "") -> None:
+    """确认这份 .pth 是能直接用的音色模型，不是训练中间检查点。
+
+    音色模型是 ``{"weight": ..., "config": [...], ...}``；训练检查点是
+    ``{"model": ..., "optimizer": ..., "iteration": ...}``，两者都叫 .pth，
+    体积还差着七八倍，用户分不出来很正常。
+
+    以前不检查，直接 ``cpt["config"][-1]``，用户选错文件时收到的是::
+
+        加载模型失败：'config'
+
+    这句话既没说错在哪，也没说该怎么办（26.8.20 用户诊断包：连着四次都栽在
+    同一个 G_35200.pth 上）。这里把话说清楚，并指向真正能解决的那个功能。
+    """
+    name = os.path.basename(str(path or "")) or "所选文件"
+    if not isinstance(cpt, dict):
+        raise RuntimeError(f"{name} 不是音色模型：文件里不是权重字典。")
+    if "weight" in cpt and "config" in cpt:
+        return
+    if any(k in cpt for k in _TRAIN_CKPT_KEYS):
+        raise RuntimeError(
+            f"{name} 是训练过程中的存档（G_ / D_ 开头那种），不能直接当音色用。\n"
+            "请在训练窗「进阶设置 → 模型提取」里把它转成音色模型，"
+            "或者改选训练完成后生成的那个音色 .pth。"
+        )
+    missing = "、".join(k for k in ("weight", "config") if k not in cpt)
+    raise RuntimeError(f"{name} 不是 RVC 音色模型：缺少 {missing}。")

@@ -12,7 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from infer.lib.safe_load import resolve_under_root, safe_model_path, safe_torch_load
+from infer.lib.safe_load import (
+    check_voice_ckpt,
+    resolve_under_root,
+    safe_model_path,
+    safe_torch_load,
+)
 from infer.modules.vc.utils import get_index_path_from_model
 
 
@@ -173,6 +178,42 @@ class GetIndexPathFromModelTests(unittest.TestCase):
                 self.assertEqual(Path(found).resolve(), idx.resolve())
             finally:
                 os.environ.pop("index_root", None)
+
+
+class VoiceCkptShapeTests(unittest.TestCase):
+    """选错 .pth 时说人话。
+
+    音色模型是 {"weight": ..., "config": [...]}，训练存档是 {"model": ...,
+    "optimizer": ..., "iteration": ...}。两者都叫 .pth，用户分不出来很正常。
+    以前直接 cpt["config"][-1]，选错就收到「加载模型失败：'config'」——既没说
+    错在哪也没说怎么办（26.8.20 用户诊断包里连着四次栽在同一个 G_35200.pth）。
+    """
+
+    def test_a_real_voice_model_passes(self):
+        check_voice_ckpt({"weight": {}, "config": [1, 2, 3], "f0": 1}, "voice.pth")
+
+    def test_a_training_checkpoint_says_so_and_points_somewhere(self):
+        cpt = {"model": {}, "optimizer": {}, "iteration": 35200, "learning_rate": 1e-4}
+        with self.assertRaises(RuntimeError) as caught:
+            check_voice_ckpt(cpt, r"D:\models\G_35200\G_35200.pth")
+        msg = str(caught.exception)
+        self.assertIn("G_35200.pth", msg)
+        self.assertIn("训练", msg)
+        self.assertIn("模型提取", msg)  # 得告诉用户上哪儿去转
+
+    def test_some_other_pth_says_what_is_missing(self):
+        with self.assertRaises(RuntimeError) as caught:
+            check_voice_ckpt({"state_dict": {}}, "hubert_base.pt")
+        self.assertIn("weight", str(caught.exception))
+
+    def test_not_even_a_dict(self):
+        with self.assertRaises(RuntimeError):
+            check_voice_ckpt([1, 2, 3], "weird.pth")
+
+    def test_no_path_still_reads_ok(self):
+        with self.assertRaises(RuntimeError) as caught:
+            check_voice_ckpt({"model": {}})
+        self.assertIn("所选文件", str(caught.exception))
 
 
 if __name__ == "__main__":

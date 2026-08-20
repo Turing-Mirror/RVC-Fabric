@@ -120,6 +120,13 @@ class InstallerHooks(unittest.TestCase):
             "递归删整个安装目录会把用户的运行时和音色一起删掉",
         )
 
+    def test_warns_when_install_dir_is_not_ascii(self):
+        text = HOOKS.read_text(encoding="utf-8-sig")
+        self.assertIn("$INSTDIR", text)
+        self.assertIn("WideCharToMultiByte", text)
+        self.assertIn("D:\\RVCFabric", text)
+        self.assertIn("IfSilent", text)
+
     def test_hooks_are_wired_into_the_config(self):
         nsis = conf()["bundle"]["windows"]["nsis"]
         self.assertEqual(nsis.get("installerHooks"), "installer-hooks.nsh")

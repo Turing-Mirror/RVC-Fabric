@@ -71,6 +71,7 @@ try:
         VC_NEED_MODEL,
         VC_OPENING_STREAM,
         VC_PARAMS_APPLIED,
+        VC_NON_ASCII_PATH,
         VC_PTH_MISSING,
         VC_RUNNING,
         VC_START_FAILED,
@@ -96,6 +97,7 @@ except Exception:
     VC_NEED_MODEL = "vc.need_model"
     VC_OPENING_STREAM = "vc.opening_stream"
     VC_PARAMS_APPLIED = "vc.params_applied"
+    VC_NON_ASCII_PATH = "vc.non_ascii_path"
     VC_PTH_MISSING = "vc.pth_missing"
     VC_RUNNING = "vc.running"
     VC_START_FAILED = "vc.start_failed"
@@ -3608,6 +3610,17 @@ if __name__ == "__main__":
                     self.stop_stream()
                 except Exception:
                     pass
+                try:
+                    from infer.lib.faiss_io import NonAsciiPathError
+                except Exception:
+                    NonAsciiPathError = ()  # type: ignore
+                if NonAsciiPathError and isinstance(e, NonAsciiPathError):
+                    self._worker_write_status(
+                        state="error",
+                        error=str(e),
+                        **_msg(VC_NON_ASCII_PATH),
+                    )
+                    return
                 self._worker_write_status(
                     state="error",
                     error=f"{type(e).__name__}: {e}",

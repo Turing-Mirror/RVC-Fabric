@@ -307,6 +307,7 @@
       "swapping": "Changement de voix, veuillez patienter…",
       "swap_failed": "Échec du changement — la voix précédente est conservée",
       "pth_missing": "Fichier .pth introuvable : {path}",
+      "non_ascii_path": "Ce chemin contient des caractères chinois ou non anglais : l'index vocal ne peut pas être lu. Déplacez l'application ou la voix vers un dossier uniquement en anglais (ex. D:\\RVCFabric) puis réessayez.",
       "running": "Conversion en cours",
       "bad_settings": "Réglages non valides, démarrage impossible",
       "start_failed": "Échec du démarrage",

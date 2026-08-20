@@ -304,6 +304,39 @@ begin
     mbInformation, MB_OK);
 end;
 
+function DirHasNonAscii(const S: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to Length(S) do
+  begin
+    if Ord(S[I]) > 127 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = wpSelectDir then
+  begin
+    if DirHasNonAscii(WizardDirValue) then
+    begin
+      if MsgBox(
+        '安装路径里有中文或其他非英文字符。' + #13#10 + #13#10 +
+        '音色检索等功能在这种路径下无法使用。' + #13#10 +
+        '请改到纯英文路径，例如 D:\RVCFabric。' + #13#10 + #13#10 +
+        '仍要安装到这里吗？',
+        mbError, MB_YESNO) = IDNO then
+        Result := False;
+    end;
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then

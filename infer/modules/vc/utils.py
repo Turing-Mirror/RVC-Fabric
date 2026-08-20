@@ -57,6 +57,13 @@ def get_index_path_from_model(sid):
 def load_hubert(config):
     from fairseq import checkpoint_utils
 
+    from infer.lib.dml_compat import apply_for
+
+    # A / I 卡（DirectML）上 hubert 的 GradMultiply 会当场抛 PrivateUse1，必须在
+    # 推理前把补丁打上。实时和训练那两条路各自打过，唯独离线转换这条漏了，A 卡
+    # 用户点「语音转换」于是必失败（26.8.20 诊断包）。细节见 infer/lib/dml_compat。
+    apply_for(config)
+
     # Relative "assets/hubert/..." fails when cwd is not the product root, and
     # fairseq only says "Model file not found". Resolve under TM_VOICE_ROOT.
     path = resolve_under_product("assets", "hubert", "hubert_base.pt")

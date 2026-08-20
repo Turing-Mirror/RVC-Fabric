@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from infer.lib.safe_load import resolve_under_root, safe_model_path
+from infer.lib.safe_load import resolve_under_root, safe_model_path, safe_torch_load
 from infer.modules.vc.utils import get_index_path_from_model
 
 
@@ -77,6 +77,63 @@ class Str2BoolTests(unittest.TestCase):
     def test_invalid(self):
         with self.assertRaises(ValueError):
             str2bool("maybe")
+
+
+class SafeTorchLoadFallbackTests(unittest.TestCase):
+    """nvidia50 Runtime is PyTorch 2.6: weights_only=True rejects legacy tar."""
+
+    def test_legacy_tar_error_falls_back(self):
+        import sys
+        import types
+
+        calls = []
+
+        def fake_load(path, map_location="cpu", weights_only=None):
+            calls.append(weights_only)
+            if weights_only is True:
+                raise RuntimeError(
+                    "Cannot use ``weights_only=True`` with files saved in "
+                    "the legacy .tar format. In PyTorch 2.6, we changed the "
+                    "default value of the `weights_only` argument."
+                )
+            return {"ok": True}
+
+        fake_mod = types.ModuleType("torch")
+        fake_mod.load = fake_load
+        prev = sys.modules.get("torch")
+        sys.modules["torch"] = fake_mod
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                path = Path(td) / "rmvpe.pt"
+                path.write_bytes(b"not-a-real-checkpoint")
+                got = safe_torch_load(path, map_location="cpu")
+        finally:
+            if prev is None:
+                sys.modules.pop("torch", None)
+            else:
+                sys.modules["torch"] = prev
+        self.assertEqual(got, {"ok": True})
+        self.assertEqual(calls, [True, False])
+
+
+class RmvpeLoadWiringTests(unittest.TestCase):
+    def test_rmvpe_uses_safe_torch_load(self):
+        src = (ROOT / "infer" / "lib" / "rmvpe.py").read_text(encoding="utf-8")
+        self.assertIn("safe_torch_load", src)
+        self.assertNotIn("torch.load(model_path", src)
+        jit_src = (ROOT / "infer" / "lib" / "jit" / "get_rmvpe.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("safe_torch_load", jit_src)
+        self.assertNotIn("torch.load(model_path", jit_src)
+
+    def test_start_vc_does_not_swallow_warmup(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        start = src[src.index("def start_vc") : src.index("def _on_rvc_progress")]
+        warm = start.index("self._warmup_engine()")
+        stream = start.index("self.start_stream()")
+        between = start[warm:stream]
+        self.assertNotIn("except Exception", between)
 
 
 class GetIndexPathFromModelTests(unittest.TestCase):

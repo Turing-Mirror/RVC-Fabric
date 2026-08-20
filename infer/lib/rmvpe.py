@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from infer.lib import jit
+from infer.lib.safe_load import safe_torch_load
 
 try:
     # Fix "Torch not compiled with CUDA enabled"
@@ -541,7 +542,12 @@ class RMVPE:
 
             def get_default_model():
                 model = E2E(4, 1, (2, 2))
-                ckpt = torch.load(model_path, map_location="cpu")
+                # rmvpe.pt is a legacy .tar checkpoint. PyTorch 2.6
+                # (nvidia50 Runtime) defaults torch.load to weights_only=True
+                # and refuses that format — realtime then opens a silent stream
+                # (diag 26.8.20/6). safe_torch_load falls back the same way
+                # voice .pth already does.
+                ckpt = safe_torch_load(model_path, map_location="cpu")
                 model.load_state_dict(ckpt)
                 model.eval()
                 if is_half:

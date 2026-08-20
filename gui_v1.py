@@ -1585,10 +1585,11 @@ if __name__ == "__main__":
             # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
             # here instead of inside the first audible blocks
             self._report_load(VC_WARMUP, 78)
-            try:
-                self._warmup_engine()
-            except Exception:
-                traceback.print_exc()
+            # Warmup loads rmvpe (and friends). Swallowing the error used to
+            # open a live stream that then died on the first infer block —
+            # UI said running, output was silence (diag 26.8.20/6). Let it
+            # raise; _worker_start already maps that to vc.start_failed.
+            self._warmup_engine()
             self._report_load(VC_OPENING_STREAM, 92)
             self.start_stream()
 

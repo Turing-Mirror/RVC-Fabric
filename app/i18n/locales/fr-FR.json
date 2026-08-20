@@ -357,7 +357,8 @@
       "load_failed": "Échec du chargement du modèle : {error}",
       "all_failed": "Les {total} fichiers ont échoué à la conversion. Première raison : {first}",
       "done": "{done} terminés, {skipped} ignorés",
-      "hot_unavailable": "Aucune voix chargée dans le moteur temps réel — conversion dans un processus séparé (un peu plus lent)."
+      "hot_unavailable": "Aucune voix chargée dans le moteur temps réel — conversion dans un processus séparé (un peu plus lent).",
+      "hot_dml_fallback": "Le backend graphique (DirectML) ne prend pas en charge cette étape — conversion dans un processus séparé (un peu plus lent)."
     },
     "train": {
       "step_failed": "Cette étape a échoué (code de sortie {code}) — détails dans {log}",

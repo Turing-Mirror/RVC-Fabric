@@ -107,6 +107,10 @@ STS_DONE = "sts.done"
 # 「热路径接不上，请走冷路径」的信号，不是终端错误。壳靠这个码把它归成
 # HotError::Unavailable 并自动回退；归错了用户就会看到一句面向开发的状态。
 STS_HOT_UNAVAILABLE = "sts.hot_unavailable"
+# 同样是「请走冷路径」，但原因不是没加载音色，而是显卡后端缺算子。分成两个
+# 码是为了让用户看到的那句话是真的：热路径的模型是实时引擎的，不能挪到 CPU，
+# 冷路径的 worker 自己拥有模型，退 CPU 重试是安全的。
+STS_HOT_DML_FALLBACK = "sts.hot_dml_fallback"
 
 # 训练
 TRAIN_STEP_FAILED = "train.step_failed"
@@ -184,6 +188,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_ALL_FAILED: "{total} 个文件全部转换失败。第一个原因：{first}",
     STS_DONE: "完成 {done} 个，跳过 {skipped} 个",
     STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
+    STS_HOT_DML_FALLBACK: "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。",
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",
     TRAIN_F0_FAILED: "音高提取失败（退出码 {code}），详情见 {log}",

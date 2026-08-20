@@ -74,12 +74,97 @@ def friendly_error(exc: BaseException | str) -> str:
         )
     if "显存不够" in text or "缺少 hubert" in text:
         return text
+    if is_dml_backend_error(text):
+        # 整段 traceback 对用户没有意义，收成一句话 + 最后那行真正的报错。
+        return (
+            "显卡后端（DirectML）不支持这一步用到的算子，没法在显卡上完成转换。\n"
+            "可以在系统环境变量里设 TM_USE_DML=0 改用 CPU 后端后重启软件（会慢一些）。\n"
+            f"原始报错：{last_error_line(text)}"
+        )
     return text
 
 
 def is_oom(text: str) -> bool:
     low = (text or "").lower()
     return "显存不够" in (text or "") or "out of memory" in low
+
+
+# DirectML（privateuseone）后端缺算子时抛出来的那几种。字样取自实测报错：
+#
+#   RuntimeError: new(): expected key in DispatchKeySet(...) but got: PrivateUse1
+#   RuntimeError: don't know how to restore data location of
+#                 torch.storage.UntypedStorage (tagged with privateuseone:0)
+#
+# 前一句是 fairseq 的 GradMultiply，后一句是 torchcrepe 装权重。两处都已单独修
+# （infer/lib/dml_compat），这里是兜底：DirectML 的算子缺口以后还会有新的，撞上
+# 了宁可慢慢用 CPU 转出来，也不能整批失败。
+DML_ERROR_MARKERS = ("privateuse1", "privateuseone", "directml", "dml backend")
+
+
+def is_dml_backend_error(text) -> bool:
+    low = str(text or "").lower()
+    return any(m in low for m in DML_ERROR_MARKERS)
+
+
+def last_error_line(text) -> str:
+    """从一整段 traceback 里取最后那句真正的报错。
+
+    vc_single 把整段 traceback 塞进 info 字符串，界面原样贴出来就是几十行路径，
+    用户根本看不出发生了什么（26.8.20 的反馈截图里就是这样一堵字）。
+    """
+    lines = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    for ln in reversed(lines):
+        if ln.startswith("File ") or ln.startswith("Traceback"):
+            continue
+        return ln
+    return lines[-1]
+
+
+def move_models_to_cpu(vc) -> bool:
+    """把这份 VC 的模型整体挪到 CPU，返回是否挪成功。
+
+    只有自己拥有模型的调用方能用（冷路径 worker）。热路径复用的是实时引擎的常驻
+    张量，`vc.net_g` 就是 `rvc.net_g` 本人，挪走等于把实时变声一起废了——那边传
+    ``allow_cpu_fallback=False``，改走「热路径不可用」让壳退到冷路径。
+    """
+    moved = False
+    for name in ("net_g", "hubert_model"):
+        model = getattr(vc, name, None)
+        if model is None:
+            continue
+        try:
+            setattr(vc, name, model.float().to("cpu"))
+            moved = True
+        except Exception:
+            traceback.print_exc()
+            return False
+
+    pipe = getattr(vc, "pipeline", None)
+    if pipe is not None:
+        try:
+            pipe.device = "cpu"
+            pipe.is_half = False
+            # rmvpe 是按设备建的（privateuseone 走 onnxruntime 的 DML EP，
+            # 见 infer/lib/rmvpe.py:506），扔掉让它在 CPU 上重新加载。
+            if hasattr(pipe, "model_rmvpe"):
+                del pipe.model_rmvpe
+            moved = True
+        except Exception:
+            traceback.print_exc()
+            return False
+
+    config = getattr(vc, "config", None)
+    if config is not None:
+        try:
+            config.device = "cpu"
+            config.is_half = False
+        except Exception:
+            pass
+
+    cuda_empty_cache()
+    return moved
 
 
 def normalize_f0method(name: str) -> tuple[str, str | None]:
@@ -486,11 +571,16 @@ def run_batch(
     prog: StsProgress,
     emit: Callable[..., None],
     should_cancel: Callable[[], bool] | None = None,
+    allow_cpu_fallback: bool = True,
 ) -> tuple[list[str], list[dict], bool]:
     """转一批文件。返回 (成功清单, 跳过清单, 是否被取消)。
 
     单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。批量转 50 个，第 3 个
     是段损坏的 mp3，剩下 47 个照样得转出来。
+
+    ``allow_cpu_fallback``：撞上 DirectML 算子缺口时，把模型挪到 CPU 重试一次，
+    这一批剩下的文件也留在 CPU 上。慢，但能转出来。热路径必须传 False，那边的
+    模型是实时引擎的（见 move_models_to_cpu）。
     """
     from scipy.io import wavfile
 
@@ -501,6 +591,7 @@ def run_batch(
     out_files: list[str] = []
     skipped: list[dict] = []
     cancelled = False
+    cpu_fallback_done = False
     index_path = params.get("index_path") or None
     # 批量：尽量不 empty_cache；OOM 或显存吃紧时才清。末尾清一次即可。
     cache_every = 8
@@ -529,10 +620,7 @@ def run_batch(
                     dest = unique_dest(
                         out_root, rel, src.stem, params.get("format") or "wav"
                     )
-                    convert_one(
-                        vc,
-                        src,
-                        dest,
+                    kwargs = dict(
                         pitch=params["pitch"],
                         f0method=params["f0method"],
                         index_path=index_path,
@@ -547,6 +635,35 @@ def run_batch(
                         sid=params.get("sid") or 0,
                         f0_file=params.get("f0_file"),
                     )
+                    # ConversionCancelled 继承 BaseException，不会被这里接住。
+                    try:
+                        convert_one(vc, src, dest, **kwargs)
+                    except Exception as first:
+                        if (
+                            allow_cpu_fallback
+                            and not cpu_fallback_done
+                            and is_dml_backend_error(first)
+                            and move_models_to_cpu(vc)
+                        ):
+                            # 显卡这条路走不通了，别让整批陪葬。挪到 CPU 重来一次，
+                            # 后面的文件也留在 CPU 上（模型已经不在显卡上了）。
+                            cpu_fallback_done = True
+                            traceback.print_exc()
+                            emit(
+                                phase="run",
+                                done=i - 1,
+                                total=total,
+                                pct=prog.last_pct,
+                                current=i,
+                                ok=prog.ok_count,
+                                skip=prog.skip_count,
+                                file=src.name,
+                                message="显卡后端（DirectML）不支持这一步，已改用 CPU 重试（会慢一些）",
+                            )
+                            on_stage("read", 0.0)
+                            convert_one(vc, src, dest, **kwargs)
+                        else:
+                            raise
                     out_files.append(str(dest))
                     prog.file_done(i, src.name, ok=True)
                 except Exception as e:

@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -182,6 +183,58 @@ class OfflineLoadHubertPatches(unittest.TestCase):
             self.fake.modules.grad_multiply.GradMultiply.forward(
                 SimpleNamespace(), FakeTensor(), 0.1
             )
+
+
+class HotPathSurvivesStopStream(unittest.TestCase):
+    """非 N 卡上热路径必须真的接得上——它以前是死的。
+
+    `gui_v1.stop_stream` 在 `torch.cuda.is_available()` 为假时会把 self.rvc /
+    resampler / tg 一并置空：DML 没有 empty_cache，只能靠 del + gc 把显存还回去。
+    而 `_worker_convert` 以前是先停流、再去取常驻模型，于是 A / I 卡上顺序注定
+    是「先清空、后来取」，`_sts_resident_vc` 永远看见 rvc is None，永远报「实时
+    引擎里没有已加载的音色」退回冷路径。
+
+    后果有两层：热路径省下的那二十几秒在这些机器上从来没生效过；而且「先开实时
+    变声再做文件转换」这个绕过 DirectML 缺陷的办法在 A 卡上根本不成立——用户
+    照做了还是失败（26.8.20 反馈）。
+
+    这条测试只钉顺序：取常驻模型必须发生在停流之前。跑 gui_v1 需要 torch /
+    sounddevice，装不上，所以按 AST 读源码（tests/test_dsp_voice.py 也是这么干的）。
+    """
+
+    def _worker_convert_body(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.FunctionDef) and node.name == "_worker_convert":
+                return node
+        self.fail("gui_v1 里找不到 _worker_convert")
+
+    def _first_line(self, node, predicate):
+        hits = [n.lineno for n in ast.walk(node) if predicate(n)]
+        return min(hits) if hits else None
+
+    def test_resident_model_is_taken_before_the_stream_stops(self):
+        fn = self._worker_convert_body()
+
+        def is_call_to(name):
+            def check(n):
+                return (
+                    isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)
+                    and n.func.attr == name
+                )
+
+            return check
+
+        resident = self._first_line(fn, is_call_to("_sts_resident_vc"))
+        stop = self._first_line(fn, is_call_to("stop_stream"))
+        self.assertIsNotNone(resident, "_worker_convert 没取常驻模型")
+        self.assertIsNotNone(stop, "_worker_convert 没停实时流")
+        self.assertLess(
+            resident,
+            stop,
+            "stop_stream 在非 N 卡上会清掉 self.rvc，必须等常驻模型取到手之后再停",
+        )
 
 
 class CrepeDevice(unittest.TestCase):

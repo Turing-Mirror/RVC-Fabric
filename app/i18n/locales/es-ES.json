@@ -357,7 +357,8 @@
       "load_failed": "Error al cargar el modelo: {error}",
       "all_failed": "Los {total} archivos fallaron al convertir. Primer motivo: {first}",
       "done": "{done} completados, {skipped} omitidos",
-      "hot_unavailable": "No hay ninguna voz cargada en el motor en tiempo real: se convertirá en un proceso aparte (algo más lento)."
+      "hot_unavailable": "No hay ninguna voz cargada en el motor en tiempo real: se convertirá en un proceso aparte (algo más lento).",
+      "hot_dml_fallback": "El backend gráfico (DirectML) no admite este paso: se convertirá en un proceso aparte (algo más lento)."
     },
     "train": {
       "step_failed": "Este paso falló (código de salida {code}); detalles en {log}",

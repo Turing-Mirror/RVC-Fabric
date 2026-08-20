@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -15,7 +16,11 @@ if str(ROOT) not in sys.path:
 from tools.sts_core import (  # noqa: E402
     ConversionCancelled,
     StsProgress,
+    friendly_error,
+    is_dml_backend_error,
+    move_models_to_cpu,
     normalize_format,
+    run_batch,
     unique_dest,
 )
 
@@ -154,6 +159,200 @@ class CudnnBenchmarkGateTests(unittest.TestCase):
         from infer.lib.torch_runtime import want_cudnn_benchmark
 
         self.assertFalse(want_cudnn_benchmark())
+
+
+# ---------------------------------------------------------------------------
+# DirectML 兜底
+# ---------------------------------------------------------------------------
+
+# 用户诊断包（26.8.20，AMD 核显）里的两条原文，一字未改。
+DML_GRAD_MULTIPLY_TB = """Traceback (most recent call last):
+  File "D:\\RVC Fabric\\infer\\modules\\vc\\modules.py", line 206, in vc_single
+    audio_opt = self.pipeline.pipeline(
+  File "D:\\RVC Fabric\\Runtime\\lib\\site-packages\\fairseq\\modules\\grad_multiply.py", line 13, in forward
+    res = x.new(x)
+RuntimeError: new(): expected key in DispatchKeySet(CPU, CUDA, HIP, XLA, MPS, IPU, XPU, HPU, Lazy, Meta) but got: PrivateUse1"""
+
+DML_TORCHCREPE_TB = """Traceback (most recent call last):
+  File "D:\\RVC Fabric\\Runtime\\lib\\site-packages\\torchcrepe\\load.py", line 30, in model
+    torch.load(file, map_location=device))
+RuntimeError: don't know how to restore data location of torch.storage.UntypedStorage (tagged with privateuseone:0)"""
+
+
+class DmlErrorTextTests(unittest.TestCase):
+    def test_recognizes_both_real_errors(self):
+        self.assertTrue(is_dml_backend_error(DML_GRAD_MULTIPLY_TB))
+        self.assertTrue(is_dml_backend_error(DML_TORCHCREPE_TB))
+
+    def test_oom_is_not_a_dml_error(self):
+        self.assertFalse(is_dml_backend_error("CUDA out of memory. Tried to allocate 2.00 GiB"))
+        self.assertFalse(is_dml_backend_error(""))
+
+    def test_friendly_error_collapses_the_wall_of_traceback(self):
+        # 截图里用户看到的是几十行 D:\RVC Fabric\... 的路径，什么也说明不了。
+        msg = friendly_error(DML_GRAD_MULTIPLY_TB)
+        self.assertNotIn("site-packages", msg)
+        self.assertIn("DirectML", msg)
+        self.assertIn("TM_USE_DML=0", msg)
+        self.assertIn("PrivateUse1", msg)  # 原始报错那一行还留着
+
+    def test_friendly_error_stays_detectable(self):
+        # run_batch 判断要不要退 CPU 时看的是 friendly_error 之后的文本，
+        # 这条链断了兜底就永远不触发。
+        self.assertTrue(is_dml_backend_error(friendly_error(DML_GRAD_MULTIPLY_TB)))
+
+
+class FakeModel:
+    def __init__(self, device="privateuseone:0"):
+        self.device = device
+        self.half = True
+
+    def float(self):
+        self.half = False
+        return self
+
+    def to(self, device):
+        self.device = str(device)
+        return self
+
+
+class FakePipeline:
+    def __init__(self):
+        self.device = "privateuseone:0"
+        self.is_half = True
+        self.model_rmvpe = object()
+
+
+class FakeVC:
+    def __init__(self):
+        self.net_g = FakeModel()
+        self.hubert_model = FakeModel()
+        self.pipeline = FakePipeline()
+        self.config = SimpleNamespace(device="privateuseone:0", is_half=True)
+
+
+class MoveToCpuTests(unittest.TestCase):
+    def test_moves_everything_and_drops_rmvpe(self):
+        vc = FakeVC()
+        self.assertTrue(move_models_to_cpu(vc))
+        self.assertEqual(vc.net_g.device, "cpu")
+        self.assertEqual(vc.hubert_model.device, "cpu")
+        self.assertFalse(vc.net_g.half)
+        self.assertEqual(vc.pipeline.device, "cpu")
+        self.assertFalse(vc.pipeline.is_half)
+        # rmvpe 在 privateuseone 上是 onnxruntime 的 DML EP，必须扔掉重建
+        self.assertFalse(hasattr(vc.pipeline, "model_rmvpe"))
+        self.assertEqual(vc.config.device, "cpu")
+
+
+class FakeWavfile:
+    """scipy.io.wavfile 的替身，只要能落个文件。"""
+
+    @staticmethod
+    def write(path, sr, audio):
+        Path(path).write_bytes(b"RIFF-fake")
+
+
+class DmlFailingVC(FakeVC):
+    """在显卡上必炸、挪到 CPU 就好——就是用户那台机器的行为。"""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def vc_single(self, *a, progress_cb=None, **kw):
+        self.calls += 1
+        if str(self.pipeline.device) != "cpu":
+            raise RuntimeError(DML_GRAD_MULTIPLY_TB)
+        if progress_cb:
+            progress_cb("infer", 1.0)
+        return "ok", (16000, b"\x00\x00")
+
+
+class CpuFallbackTests(unittest.TestCase):
+    """DirectML 撞上算子缺口时，冷路径要能自己退到 CPU 把文件转出来。"""
+
+    def setUp(self):
+        # run_batch 里 `from scipy.io import wavfile`，开发机上没有 scipy。
+        self._saved = {k: sys.modules.get(k) for k in ("scipy", "scipy.io")}
+        scipy = ModuleType("scipy")
+        scipy_io = ModuleType("scipy.io")
+        scipy_io.wavfile = FakeWavfile
+        scipy.io = scipy_io
+        sys.modules["scipy"] = scipy
+        sys.modules["scipy.io"] = scipy_io
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+    def _run(self, vc, allow_cpu_fallback=True):
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "in.wav"
+            src.write_bytes(b"RIFF-fake")
+            out = Path(td) / "out"
+            events: list[dict] = []
+            emit = lambda **e: events.append(e)  # noqa: E731
+            prog = StsProgress(1, "rmvpe", emit=emit, load_end=0.0)
+            params = {
+                "pitch": 0,
+                "f0method": "rmvpe",
+                "index_path": None,
+                "index_rate": 0.75,
+                "filter_radius": 3,
+                "resample_sr": 0,
+                "rms_mix_rate": 0.25,
+                "protect": 0.33,
+                "format": "wav",
+                "sid": 0,
+                "f0_file": None,
+            }
+            return run_batch(
+                vc, [(src, Path("in.wav"))], out, params, prog, emit,
+                allow_cpu_fallback=allow_cpu_fallback,
+            ), events
+
+    def test_retries_on_cpu_and_the_file_comes_out(self):
+        vc = DmlFailingVC()
+        (out_files, skipped, cancelled), events = self._run(vc)
+        self.assertEqual(len(out_files), 1, skipped)
+        self.assertEqual(skipped, [])
+        self.assertFalse(cancelled)
+        self.assertEqual(vc.calls, 2)  # 显卡一次，CPU 一次
+        self.assertTrue(
+            any("CPU" in str(e.get("message") or "") for e in events),
+            "退 CPU 这件事得让用户看见",
+        )
+
+    def test_hot_path_never_touches_the_resident_models(self):
+        # 热路径的 net_g / hubert 就是实时引擎那几个对象，挪走实时变声就废了。
+        vc = DmlFailingVC()
+        (out_files, skipped, _), _ = self._run(vc, allow_cpu_fallback=False)
+        self.assertEqual(out_files, [])
+        self.assertEqual(len(skipped), 1)
+        self.assertEqual(vc.calls, 1)
+        self.assertEqual(vc.pipeline.device, "privateuseone:0")
+        self.assertEqual(vc.net_g.device, "privateuseone:0")
+        self.assertTrue(is_dml_backend_error(skipped[0]["reason"]))
+
+    def test_a_normal_failure_is_not_retried(self):
+        class Broken(FakeVC):
+            def __init__(self):
+                super().__init__()
+                self.calls = 0
+
+            def vc_single(self, *a, progress_cb=None, **kw):
+                self.calls += 1
+                raise RuntimeError("找不到音频文件")
+
+        vc = Broken()
+        (out_files, skipped, _), _ = self._run(vc)
+        self.assertEqual(out_files, [])
+        self.assertEqual(vc.calls, 1)
+        self.assertEqual(vc.pipeline.device, "privateuseone:0")
 
 
 if __name__ == "__main__":

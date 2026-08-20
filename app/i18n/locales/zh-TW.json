@@ -307,6 +307,7 @@
       "swapping": "正在切換音色，請稍候…",
       "swap_failed": "切換失敗，仍在使用上一音色",
       "pth_missing": "pth 檔案不存在：{path}",
+      "non_ascii_path": "路徑含有中文或其他非英文字元，檢索庫無法讀取。請把軟體或音色移到純英文資料夾（例如 D:\\RVCFabric）後再試。",
       "running": "變聲中",
       "bad_settings": "設定無效，無法開始變聲",
       "start_failed": "啟動失敗",

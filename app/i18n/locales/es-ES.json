@@ -307,6 +307,7 @@
       "swapping": "Cambiando de voz, espera un momento…",
       "swap_failed": "El cambio falló: se sigue usando la voz anterior",
       "pth_missing": "No existe el archivo .pth: {path}",
+      "non_ascii_path": "Esta ruta contiene caracteres chinos u otros no ingleses, así que no se puede leer el índice de voz. Mueve la app o la voz a una carpeta solo en inglés (p. ej. D:\\RVCFabric) e inténtalo de nuevo.",
       "running": "Convirtiendo",
       "bad_settings": "Ajustes no válidos; no se puede iniciar",
       "start_failed": "No se pudo iniciar",

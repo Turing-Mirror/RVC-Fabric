@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 from functools import lru_cache
 from time import time as ttime
 
-import faiss
+from infer.lib.faiss_io import NonAsciiPathError, read_index
 import librosa
 import numpy as np
 import parselmouth
@@ -363,9 +363,11 @@ class Pipeline(object):
             and index_rate != 0
         ):
             try:
-                index = faiss.read_index(file_index)
+                index = read_index(file_index)
                 # big_npy = np.load(file_big_npy)
                 big_npy = index.reconstruct_n(0, index.ntotal)
+            except NonAsciiPathError:
+                raise
             except:
                 traceback.print_exc()
                 index = big_npy = None

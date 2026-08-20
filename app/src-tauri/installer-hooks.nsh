@@ -14,6 +14,22 @@
 ; 后者是用户自己的音色。删了没法找回来。
 
 !macro NSIS_HOOK_PREINSTALL
+  ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
+  ; 的人卸了重来更糟），正常安装弹一句，让他改到 D:\RVCFabric 这种纯英文路径。
+  IfSilent skip_nonascii_warn
+    Push $R0
+    Push $R1
+    StrCpy $R1 0
+    ; CP_USASCII=20127，WC_NO_BEST_FIT_CHARS=0x400。替换过字符则路径含非 ASCII。
+    System::Call 'kernel32::WideCharToMultiByte(i 20127, i 1024, w "$INSTDIR", i -1, i 0, i 0, i 0, *i .R1) i .R0'
+    IntCmp $R1 0 skip_nonascii_pop
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "安装路径里有中文或其他非英文字符。$\r$\n$\r$\n音色检索等功能在这种路径下无法使用。$\r$\n请改到纯英文路径，例如 D:\RVCFabric。$\r$\n$\r$\n仍要安装到这里吗？" IDYES skip_nonascii_pop
+    Abort
+    skip_nonascii_pop:
+    Pop $R1
+    Pop $R0
+  skip_nonascii_warn:
+
   ; ── 一、清掉更早的「Python 双程序版」残骸 ────────────────────────────
   ; 那一版装的是 启动器.exe + 变声器.exe 两个程序。装新版只覆盖不删除的话，
   ; 旧的启动器还留在目录里，旧快捷方式还能把它拉起来 —— 两个程序共用

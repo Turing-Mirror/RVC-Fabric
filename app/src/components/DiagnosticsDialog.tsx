@@ -3,6 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 
+/** 出包之前的文件清单。bytes 为 null 表示这份是出包时现生成的。 */
+type DiagPreview = {
+  items: { name: string; bytes: number | null }[];
+  total_bytes: number;
+};
+
 /** 后端 selfcheck.rs 跑出来的一条结论。 */
 type Finding = {
   code: string;
@@ -41,6 +47,7 @@ export function DiagnosticsDialog({
   const [description, setDescription] = useState("");
   const [withPerf, setWithPerf] = useState(false);
   const [findings, setFindings] = useState<Finding[] | null>(null);
+  const [preview, setPreview] = useState<DiagPreview | null>(null);
   const firstRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -68,6 +75,23 @@ export function DiagnosticsDialog({
         // 自检失败不该挡住出包 —— 包本身才是用户要的东西。
         if (alive) setFindings([]);
       });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  // 包里到底有什么，出包之前先摆出来。跟出包走的是同一份清单。
+  useEffect(() => {
+    if (!open) {
+      setPreview(null);
+      return;
+    }
+    let alive = true;
+    invoke<DiagPreview>("diagnostics_preview")
+      .then((v) => {
+        if (alive && v && Array.isArray(v.items)) setPreview(v);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -209,10 +233,38 @@ export function DiagnosticsDialog({
           )}
         </div>
 
-        {/* 用户要把这个包发到群里，所以得先说清楚里面有什么、没有什么。 */}
-        <p className="m-0 mb-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3 py-2 text-[12px] text-[var(--meta)] leading-relaxed">
-          {t("s.diagPrivacy")}
-        </p>
+        {/* 用户要把这个包发到群里，所以得先说清楚里面有什么、没有什么。
+            光说不够 —— 底下那份清单是这句话的凭据，他自己能看一眼。 */}
+        <div className="mb-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3 py-2">
+          <p className="m-0 text-[12px] text-[var(--meta)] leading-relaxed">
+            {t("s.diagPrivacy")}
+          </p>
+          {preview ? (
+            <details className="mt-1.5">
+              <summary className="cursor-pointer text-[12px] text-[var(--meta)] select-none">
+                {t("s.diagFilesSummary", {
+                  a0: String(preview.items.length),
+                  a1: humanBytes(preview.total_bytes),
+                })}
+              </summary>
+              <ul className="mt-1.5 m-0 list-none p-0 max-h-[168px] overflow-y-auto">
+                {preview.items.map((f) => (
+                  <li
+                    key={f.name}
+                    className="flex justify-between gap-3 font-mono text-[11px] text-[var(--meta)] leading-relaxed"
+                  >
+                    <span className="truncate">{f.name}</span>
+                    <span className="shrink-0 tabular-nums">
+                      {f.bytes == null
+                        ? t("s.diagFilesGenerated")
+                        : humanBytes(f.bytes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
 
         <div className="flex justify-end gap-2.5">
           <Btn onClick={onCancel}>{t("dialog.cancel")}</Btn>
@@ -234,4 +286,11 @@ function levelLabel(level: Finding["level"]): string {
   if (level === "error") return t("s.chkLevelError");
   if (level === "warn") return t("s.chkLevelWarn");
   return t("s.chkLevelInfo");
+}
+
+/** 清单里的体积。用户看的是量级，不是精确字节数。 */
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }

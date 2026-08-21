@@ -605,22 +605,6 @@ fn zip_text(
     zip.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
-fn zip_existing(
-    zip: &mut zip::ZipWriter<std::fs::File>,
-    opts: zip::write::FileOptions<'_, ()>,
-    arc: &str,
-    path: &Path,
-    redaction: Option<&(String, String)>,
-) -> Result<(), String> {
-    if !path.is_file() {
-        return Ok(());
-    }
-    match std::fs::read_to_string(path) {
-        Ok(text) => zip_text(zip, opts, arc, &redact_user(&text, redaction)),
-        Err(_) => Ok(()),
-    }
-}
-
 fn delay_estimate(cfg: &serde_json::Map<String, Value>) -> Value {
     let block = cfg
         .get("block_time")
@@ -758,6 +742,95 @@ pub fn message_dialog() -> rfd::MessageDialog {
     }
 }
 
+/// 诊断包里一份来自磁盘的文件。生成的那两份（info.json / report.json）不在这里。
+#[derive(Debug, Clone)]
+pub struct DiagEntry {
+    /// 包里的路径。
+    pub arc: String,
+    /// 磁盘上的来源。
+    pub path: PathBuf,
+    /// 整份收，还是只收头尾。
+    pub clipped: bool,
+}
+
+/// 诊断包会收哪些文件 —— 出包和「出包前给用户看清单」用的是同一个函数。
+///
+/// 两边各写一遍，迟早会分叉：预览说收 12 个，实际收 14 个，而用户是拿这个包去
+/// 群里求助的，多出来的那两个他不知道。
+pub fn diagnostics_manifest(root: &Path) -> Vec<DiagEntry> {
+    let mut out = Vec::new();
+    for (arc, path) in [
+        ("configs/inuse/config.json", paths::inuse_config_path(root)),
+        ("runtime_control/status.json", crate::protocol::status_path(root)),
+    ] {
+        if path.is_file() {
+            out.push(DiagEntry { arc: arc.to_string(), path, clipped: false });
+        }
+    }
+    let logs = paths::logs_dir(root);
+    for p in logs_for_zip(&logs) {
+        let rel = p
+            .strip_prefix(&logs)
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|_| {
+                p.file_name().unwrap_or_default().to_string_lossy().into_owned()
+            });
+        out.push(DiagEntry { arc: format!("logs/{rel}"), path: p, clipped: true });
+    }
+    if let Some(p) = newest_perf_report(root) {
+        let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+        out.push(DiagEntry { arc: format!("perf/{name}"), path: p, clipped: false });
+    }
+    out
+}
+
+fn newest_perf_report(root: &Path) -> Option<PathBuf> {
+    let dir = paths::user_data(root).join("perf_reports");
+    let rd = std::fs::read_dir(dir).ok()?;
+    let mut files: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("json"))
+        .collect();
+    files.sort();
+    files.pop()
+}
+
+/// 日志头尾各留多少。收全份的话，一次警告刷屏就能把 start_vc 挤掉。
+const LOG_HEAD: usize = 128 * 1024;
+const LOG_TAIL: usize = 384 * 1024;
+
+/// 一份条目最终进包的文本。预览按它算字节数，出包按它写内容。
+fn diag_entry_text(e: &DiagEntry, redaction: Option<&(String, String)>) -> Option<String> {
+    if !e.path.is_file() {
+        return None;
+    }
+    let raw = if e.clipped {
+        clip_log(&e.path, LOG_HEAD, LOG_TAIL)
+    } else {
+        std::fs::read_to_string(&e.path).ok()?
+    };
+    Some(redact_user(&raw, redaction))
+}
+
+/// 出包之前给用户看的清单：包里会有哪些文件、各自多大。
+///
+/// 用户要把这个包发到群里。「里面只有日志和配置」是一句承诺，清单是这句承诺的
+/// 凭据 —— 说得再好听，不如让他自己看一眼。
+pub fn diagnostics_preview(root: &Path) -> Value {
+    let redaction = home_redaction();
+    let redaction = redaction.as_ref();
+    let mut items: Vec<Value> = vec![json!({"name": "info.json", "bytes": Value::Null})];
+    let mut total: u64 = 0;
+    for e in diagnostics_manifest(root) {
+        let bytes = diag_entry_text(&e, redaction)
+            .map(|t| t.len() as u64)
+            .unwrap_or(0);
+        total += bytes;
+        items.push(json!({"name": e.arc, "bytes": bytes}));
+    }
+    json!({"items": items, "total_bytes": total})
+}
+
 /// Zip logs + machine info + effective settings into `User_Data/diagnostics/`.
 ///
 /// `with_perf`：用户确认后才跑 bench。Log tails 有上限，避免几百 MB 的废包。
@@ -853,53 +926,11 @@ pub fn build_diagnostics(
         ),
     )?;
 
-    zip_existing(
-        &mut zip,
-        opts,
-        "configs/inuse/config.json",
-        &paths::inuse_config_path(root),
-        redaction,
-    )?;
-    zip_existing(
-        &mut zip,
-        opts,
-        "runtime_control/status.json",
-        &crate::protocol::status_path(root),
-        redaction,
-    )?;
-
-    // Per-channel newest files; head+tail so a warning flood cannot drop start_vc.
-    let logs = paths::logs_dir(root);
-    const LOG_HEAD: usize = 128 * 1024;
-    const LOG_TAIL: usize = 384 * 1024;
-    for p in logs_for_zip(&logs) {
-        let rel = p
-            .strip_prefix(&logs)
-            .map(|r| r.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_else(|_| {
-                p.file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned()
-            });
-        let text = redact_user(&clip_log(&p, LOG_HEAD, LOG_TAIL), redaction);
-        zip_text(&mut zip, opts, &format!("logs/{rel}"), &text)?;
-    }
-
-    // newest perf report, if any
-    let perf = paths::user_data(root).join("perf_reports");
-    if let Ok(rd) = std::fs::read_dir(&perf) {
-        let mut files: Vec<PathBuf> = rd
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.extension().and_then(|x| x.to_str()) == Some("json"))
-            .collect();
-        files.sort();
-        if let Some(p) = files.last() {
-            if let Ok(text) = std::fs::read_to_string(p) {
-                let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-                let text = redact_user(&text, redaction);
-                zip_text(&mut zip, opts, &format!("perf/{name}"), &text)?;
-            }
+    // 配置、状态、日志、性能报告都走同一份清单 —— 出包前给用户看的预览用的
+    // 也是它，两边各写一遍迟早会分叉。日志只收头尾，一次警告刷屏挤不掉 start_vc。
+    for e in diagnostics_manifest(root) {
+        if let Some(text) = diag_entry_text(&e, redaction) {
+            zip_text(&mut zip, opts, &e.arc, &text)?;
         }
     }
 
@@ -1104,6 +1135,48 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 预览和出包必须走同一份清单。
+    ///
+    /// 两边各写一遍迟早分叉：预览说收 12 个、实际收 14 个，而用户是拿这个包去
+    /// 群里求助的，多出来的那两个他不知道。这条测试盯的就是那份清单本身。
+    #[test]
+    fn the_preview_lists_exactly_what_the_bundle_will_contain() {
+        let root = std::env::temp_dir().join("rvcf-diag-manifest");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("configs").join("inuse")).unwrap();
+        std::fs::write(
+            root.join("configs").join("inuse").join("config.json"),
+            "{\"pitch\": 0}",
+        )
+        .unwrap();
+        let logs = root.join("User_Data").join("logs").join("shell");
+        std::fs::create_dir_all(&logs).unwrap();
+        std::fs::write(logs.join("2026-08-21.log"), "启动\n").unwrap();
+
+        let manifest = diagnostics_manifest(&root);
+        let arcs: Vec<&str> = manifest.iter().map(|e| e.arc.as_str()).collect();
+        assert!(arcs.contains(&"configs/inuse/config.json"), "{arcs:?}");
+        assert!(arcs.contains(&"logs/shell/2026-08-21.log"), "{arcs:?}");
+        // 不存在的文件不进清单 —— 预览里列一个包里没有的名字是在骗人。
+        assert!(!arcs.iter().any(|a| a.starts_with("perf/")), "{arcs:?}");
+        assert!(
+            !arcs.contains(&"runtime_control/status.json"),
+            "这个 root 下根本没有 status.json：{arcs:?}"
+        );
+
+        let preview = diagnostics_preview(&root);
+        let items = preview.get("items").and_then(|v| v.as_array()).unwrap();
+        // 预览多一条 info.json —— 那份是出包时现生成的，不在磁盘清单里。
+        assert_eq!(items.len(), manifest.len() + 1);
+        assert_eq!(items[0].get("name").unwrap(), "info.json");
+        assert!(items[0].get("bytes").unwrap().is_null());
+        // 日志是收头尾的，报出来的必须是进包之后的字节数，不是磁盘上的。
+        let total = preview.get("total_bytes").and_then(|v| v.as_u64()).unwrap();
+        assert!(total > 0);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// 旧 Python 壳那四个的默认组合和顺序不许动 —— 用户有肌肉记忆。
     ///

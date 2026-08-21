@@ -326,7 +326,12 @@ def main(argv: list[str]) -> int:
         cuda_empty_cache()
     except Exception as e:
         traceback.print_exc()
-        emit(phase="error", **mc.msg_fields(mc.STS_LOAD_FAILED, {"error": friendly_error(e)}))
+        # 训练存档单独立码：壳侧给这个码配了「打开训练窗」按钮，用户手里的
+        # G_/D_ 存档要先在模型提取里转成音色才有得转。
+        if "训练过程中的存档" in str(e):
+            emit(phase="error", **mc.msg_fields(mc.STS_MODEL_IS_ARCHIVE))
+        else:
+            emit(phase="error", **mc.msg_fields(mc.STS_LOAD_FAILED, {"error": friendly_error(e)}))
         return 1
 
     with _stage(timer, "convert"):

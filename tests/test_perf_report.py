@@ -90,3 +90,37 @@ def test_prune_keeps_newest(tmp_path):
     # oldest were removed, newest kept
     assert reports[0] == "perf_20260101_000005.json"
     assert (tmp_path / "other.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# unittest 桥。这个文件是 pytest 风格（模块级 test_ 函数 + tmp_path 夹具），但
+# 产品的跑法是 `python -m unittest discover`（scripts/run_tests.bat），后者两样
+# 都不认 —— 守卫一直没在跑。挂到 TestCase 上，声明了 tmp_path 的发一个临时
+# 目录，两种跑法都能执行。
+# ---------------------------------------------------------------------------
+import inspect
+import pathlib
+import tempfile
+import unittest
+
+
+def _bridge(fn):
+    if "tmp_path" in inspect.signature(fn).parameters:
+        def run(self):
+            with tempfile.TemporaryDirectory() as td:
+                fn(tmp_path=pathlib.Path(td))
+    else:
+        def run(self):
+            fn()
+    return run
+
+
+class _UnittestBridge(unittest.TestCase):
+    pass
+
+
+for _name in [n for n in list(globals()) if n.startswith("test_")]:
+    setattr(_UnittestBridge, _name, _bridge(globals()[_name]))
+
+if __name__ == "__main__":
+    unittest.main()

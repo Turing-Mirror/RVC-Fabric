@@ -111,6 +111,9 @@ STS_HOT_UNAVAILABLE = "sts.hot_unavailable"
 # 码是为了让用户看到的那句话是真的：热路径的模型是实时引擎的，不能挪到 CPU，
 # 冷路径的 worker 自己拥有模型，退 CPU 重试是安全的。
 STS_HOT_DML_FALLBACK = "sts.hot_dml_fallback"
+# 选到的是训练存档（G_/D_ 开头）而不是音色模型。单独立码是因为壳侧能给它配
+# 一个「打开训练窗」的按钮 —— 那份存档得先在「模型提取」里转成音色才能用。
+STS_MODEL_IS_ARCHIVE = "sts.model_is_archive"
 
 # 训练
 TRAIN_STEP_FAILED = "train.step_failed"
@@ -193,6 +196,10 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_DONE: "完成 {done} 个，跳过 {skipped} 个",
     STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
     STS_HOT_DML_FALLBACK: "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。",
+    STS_MODEL_IS_ARCHIVE: (
+        "选到的是训练存档（G_ / D_ 开头那种），不能直接当音色用。\n"
+        "请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"
+    ),
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",
     TRAIN_F0_FAILED: "音高提取失败（退出码 {code}），详情见 {log}",
@@ -203,11 +210,11 @@ _FALLBACK_ZH: dict[str, str] = {
     TRAIN_EXTRACT_F0: "提取音高…",
     TRAIN_NO_F0: "音高提取没有产出。换一种音高算法再试。",
     TRAIN_EXTRACT_FEATURE: "提取音色特征…",
-    TRAIN_NO_FEATURE: "特征提取没有产出。多半是 assets/hubert/hubert_base.pt 缺失或损坏。",
-    TRAIN_NO_SAMPLES: "四类产物对不上号，没有一条可用的训练样本。建议清掉实验重来。",
+    TRAIN_NO_FEATURE: "特征提取没有产出。通常为 assets/hubert/hubert_base.pt 缺失或损坏。",
+    TRAIN_NO_SAMPLES: "四类训练产物的条目无法对应，没有可用的训练样本。建议清空该实验后重新开始。",
     TRAIN_MUTE_MISSING: "缺少 logs/mute 静音样本，安装不完整。",
     TRAIN_CONFIG_MISSING: "缺少 configs/{name}",
-    TRAIN_PRETRAINED_MISSING: "缺少 {sample_rate} 的底模（assets/pretrained_v2/f0G{sample_rate}.pth）。不用底模从零训练需要几十小时和上百小时素材，不是这个界面的用法。",
+    TRAIN_PRETRAINED_MISSING: "缺少 {sample_rate} 的底模（assets/pretrained_v2/f0G{sample_rate}.pth）。从零训练需要数十小时与上百小时的素材，本软件不支持该方式，请先下载对应底模。",
     TRAIN_COLLECT_FEATURE: "收集特征…",
     TRAIN_NO_FEATURE_DIR: "没有特征目录，跳过索引",
     TRAIN_NO_FEATURE_FILE: "没有特征文件，跳过索引",
@@ -215,7 +222,7 @@ _FALLBACK_ZH: dict[str, str] = {
     TRAIN_KMEANS_FAILED: "聚类失败，改用全量特征：{error}",
     TRAIN_BUILD_INDEX: "训练索引（{count} 条特征）…",
     TRAIN_INDEX_DONE: "索引完成",
-    TRAIN_INDEX_FAILED: "索引没建成（{error}）。音色已经训好，仍可使用。",
+    TRAIN_INDEX_FAILED: "索引构建失败（{error}）。音色模型已训练完成，仍可正常使用。",
     TRAIN_NAME_INVALID: "音色名不能为空，也不能含 \\ / : * ? \" < > |",
     TRAIN_BAD_SAMPLE_RATE: "不支持的采样率：{sample_rate}",
     TRAIN_BAD_F0_METHOD: "不支持的音高算法：{method}",

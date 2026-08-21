@@ -107,6 +107,8 @@ type Progress = {
   file?: string;
   /** skip 事件的干净原因（不含「跳过 name：」前缀） */
   reason?: string;
+  /** error 事件带的 worker 错误码 —— 配得上动作按钮的码（如「选到训练存档」）靠它 */
+  message_code?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -236,13 +238,22 @@ function StsSection() {
   // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
   // 所以两条路分开走，别让 ErrorNote 去猜。
   const [msgErr, setMsgErr] = useState(false);
-  const showErr = (v: string) => {
+  // 错误码（worker 的 message_code）。同一条报错通常来两次：进度事件一次（带
+  // 码）、invoke 拒绝一次（只剩文本）。后到的没带码时不能把先到的抹掉，否则
+  // 错误码上配的动作按钮会闪一下就消失。
+  const errRef = useRef({ text: "", code: "" });
+  const [msgCode, setMsgCode] = useState("");
+  const showErr = (v: string, code?: string | null) => {
+    const c = code ?? (v === errRef.current.text ? errRef.current.code : "");
+    errRef.current = { text: v, code: c };
     setMsgErr(true);
     setMsg(v);
+    setMsgCode(c);
   };
   const showInfo = (v: string) => {
     setMsgErr(false);
     setMsg(v);
+    setMsgCode("");
   };
 
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
@@ -350,7 +361,7 @@ function StsSection() {
     void listen<Progress>("sts-progress", (ev) => {
       const p = ev.payload;
       setProg(p);
-      if (p.phase === "error") showErr(p.message);
+      if (p.phase === "error") showErr(p.message, p.message_code);
       // 批量：跳过事件当场入列，方便边跑边看哪个坏了。
       if (p.phase === "skip" && p.file) {
         setSkipped((prev) => {
@@ -1107,7 +1118,7 @@ function StsSection() {
         </div>
       ) : null}
 
-      {msg ? <ErrorNote text={msg} error={msgErr} /> : null}
+      {msg ? <ErrorNote text={msg} error={msgErr} code={msgCode} /> : null}
 
       {skipped.length ? (
         <div className="mt-3 pt-2">

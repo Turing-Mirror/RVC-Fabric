@@ -98,6 +98,13 @@ fn experiments(root: &Path) -> Vec<Value> {
         // 预处理读进来几个、失败几个。界面上要能说清「上次到底做完没有」，
         // 光一个「可续跑」的布尔值说不出这件事。
         let (ok_files, fail_files) = preprocess_tally(&p.join("preprocess.log"));
+        // 失败清单只在做失败过时才去解析 —— 日志要整个读一遍，没失败的实验
+        // 不用付这个钱。
+        let failed_files = if fail_files > 0 {
+            preprocess_failure_list(&p.join("preprocess.log"))
+        } else {
+            Vec::new()
+        };
         let trained = root
             .join("assets")
             .join("weights")
@@ -116,6 +123,7 @@ fn experiments(root: &Path) -> Vec<Value> {
                 "complete": slices > 0 && f0 == slices && feats == slices,
                 "preprocess_ok": ok_files,
                 "preprocess_failed": fail_files,
+                "preprocess_failed_files": failed_files,
                 // 有切片就能续跑：预处理是最慢的一步，能跳过就是省下几十分钟。
                 "resumable": slices > 0,
                 "trained": trained,
@@ -207,12 +215,15 @@ pub fn inspect_dataset(root: &Path, dir: &Path) -> Value {
     let mut durations: Vec<f64> = Vec::new();
     let mut rates: std::collections::BTreeMap<u32, u64> = Default::default();
     let mut channels: std::collections::BTreeMap<u32, u64> = Default::default();
+    // 响度/静音要解码，只在这几个（前 5 个抽中的）上做。
+    let mut loud_files: Vec<(PathBuf, f64)> = Vec::new();
     for p in &picked {
         let Some((dur, sr, ch)) = probe_one(&probe, p) else {
             continue;
         };
         if dur > 0.0 {
             durations.push(dur);
+            loud_files.push(((*p).clone(), dur));
         }
         if sr > 0 {
             *rates.entry(sr).or_insert(0) += 1;
@@ -227,7 +238,7 @@ pub fn inspect_dataset(root: &Path, dir: &Path) -> Value {
     durations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let median = durations[durations.len() / 2];
     let mean: f64 = durations.iter().sum::<f64>() / durations.len() as f64;
-    json!({
+    let mut out = json!({
         "available": true,
         "files": total,
         "sampled": durations.len(),
@@ -236,7 +247,14 @@ pub fn inspect_dataset(root: &Path, dir: &Path) -> Value {
         "estimated_total_seconds": mean * total as f64,
         "sample_rates": rates.iter().map(|(k, v)| json!({"rate": k, "files": v})).collect::<Vec<_>>(),
         "channels": channels.iter().map(|(k, v)| json!({"channels": k, "files": v})).collect::<Vec<_>>(),
-    })
+    });
+    // 响度和静音占比量不出来（没有 ffmpeg / 文件都读不出）就不给字段，
+    // 界面把缺省当成「没这项检查」，不当成 0。
+    if let Some((mean_db, silence_ratio)) = probe_loudness(root, &loud_files) {
+        out["mean_volume_db"] = json!((mean_db * 10.0).round() / 10.0);
+        out["silence_ratio"] = json!((silence_ratio * 100.0).round() / 100.0);
+    }
+    out
 }
 
 fn collect_audio(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
@@ -321,6 +339,111 @@ fn run_with_timeout(mut cmd: std::process::Command, wait: std::time::Duration) -
             None
         }
     }
+}
+
+/// `run_with_timeout` 的 stderr 版：ffmpeg 的 volumedetect / silencedetect
+/// 报告写在 stderr，stdout 是空的无所谓。
+fn run_with_timeout_stderr(
+    mut cmd: std::process::Command,
+    wait: std::time::Duration,
+) -> Option<String> {
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().ok()?;
+    let mut stderr = child.stderr.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        let _ = stderr.read_to_end(&mut buf);
+        let _ = tx.send(buf);
+    });
+    match rx.recv_timeout(wait) {
+        Ok(buf) => {
+            let _ = child.wait();
+            Some(String::from_utf8_lossy(&buf).into_owned())
+        }
+        Err(_) => {
+            let _ = child.kill();
+            None
+        }
+    }
+}
+
+/// ffmpeg 报告里解析 (平均响度 dB, 累计静音秒)。行样例：
+/// `[Parsed_volumedetect_1 @ …] mean_volume: -23.6 dB`
+/// `silence_duration: 4.51`
+fn parse_volume_report(text: &str) -> (Option<f64>, f64) {
+    let mut mean = None;
+    let mut silence = 0.0;
+    for line in text.lines() {
+        if let Some(v) = line.split("mean_volume:").nth(1) {
+            if let Ok(n) = v.trim().trim_end_matches("dB").trim().parse::<f64>() {
+                mean = Some(n);
+            }
+        } else if let Some(v) = line.split("silence_duration:").nth(1) {
+            if let Ok(n) = v.trim().parse::<f64>() {
+                silence += n;
+            }
+        }
+    }
+    (mean, silence)
+}
+
+/// 解码抽中的前几个文件，量平均响度和静音占比。
+///
+/// ffprobe 只读元数据，量不出这两样 —— 而「录得太轻」「整轨大段静音」恰恰是
+/// 跑完几百轮才暴露的素材问题。解码贵，所以只抽前 5 个、每个最多听前 120 秒。
+/// 返回 (平均响度 dB, 静音占比 0..1)；ffmpeg 不在或全军覆没就 None，界面
+/// 不显示这一块。
+fn probe_loudness(root: &Path, files: &[(PathBuf, f64)]) -> Option<(f64, f64)> {
+    let ffmpeg = root.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+    if !ffmpeg.is_file() {
+        return None;
+    }
+    const CAP: f64 = 120.0;
+    let mut vols: Vec<f64> = Vec::new();
+    let mut silence_sum = 0.0;
+    let mut analyzed = 0.0;
+    for (p, dur) in files.iter().take(5) {
+        let mut cmd = std::process::Command::new(&ffmpeg);
+        cmd.args(["-hide_banner", "-nostats", "-v", "info", "-i"])
+            .arg(p)
+            .args([
+                "-t",
+                "120",
+                "-map",
+                "a:0",
+                "-af",
+                "silencedetect=noise=-35dB:d=1,volumedetect",
+                "-f",
+                "null",
+                "-",
+            ]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        // 坏文件能让 ffmpeg 卡住；这里要连着跑五次，超时必须比 probe_one 紧。
+        let Some(text) = run_with_timeout_stderr(cmd, std::time::Duration::from_secs(20))
+        else {
+            continue;
+        };
+        let (mean, silence) = parse_volume_report(&text);
+        if let Some(m) = mean {
+            vols.push(m);
+            silence_sum += silence;
+            analyzed += dur.min(CAP).max(0.0);
+        }
+    }
+    if vols.is_empty() || analyzed <= 0.0 {
+        return None;
+    }
+    let mean = vols.iter().sum::<f64>() / vols.len() as f64;
+    let ratio = (silence_sum / analyzed).clamp(0.0, 1.0);
+    Some((mean, ratio))
 }
 
 /// 可清理的三类。分开列、分开勾 —— 三样的后果完全不同，混成一个「一键清理」
@@ -547,6 +670,61 @@ pub fn preprocess_tally(log: &Path) -> (u64, u64) {
         }
     }
     (ok, fail)
+}
+
+/// preprocess.log 里失败的文件清单（最多 20 条，含原因）。
+///
+/// 失败行是 `<路径>\t-> Traceback (most recent call last):`，后面跟整段
+/// traceback。原因取其中最后一个非空行 —— 那才是真正的异常那一行（如
+/// `UnicodeDecodeError: …`）。只报条数的话，用户知道「有 12 个坏了」却不知道
+/// 是哪 12 个、为什么坏，清完坏文件还得再跑一遍才知道。
+fn preprocess_failure_list(log: &Path) -> Vec<Value> {
+    let Ok(text) = std::fs::read_to_string(log) else {
+        return Vec::new();
+    };
+    const MAX: usize = 20;
+    let mut out: Vec<Value> = Vec::new();
+    let mut cur: Option<String> = None;
+    let mut reason = String::new();
+    fn flush(out: &mut Vec<Value>, cur: &mut Option<String>, reason: &str) {
+        if let Some(name) = cur.take() {
+            let r: String = reason.chars().take(200).collect();
+            out.push(json!({ "name": name, "reason": r }));
+        }
+    }
+    for line in text.lines() {
+        if let Some((path, rest)) = line.split_once('\t') {
+            if let Some(tail) = rest.strip_prefix("-> ") {
+                if !tail.starts_with("Success") && out.len() < MAX {
+                    flush(&mut out, &mut cur, &reason);
+                    let name = Path::new(path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(path)
+                        .to_string();
+                    cur = Some(name);
+                    reason.clear();
+                } else {
+                    flush(&mut out, &mut cur, &reason);
+                }
+                continue;
+            }
+        }
+        if cur.is_some() {
+            let t = line.trim();
+            // 上游脚本的起止标记不是 traceback 的一部分，别让它们把原因顶掉。
+            if t.is_empty()
+                || t == "start preprocess"
+                || t == "end preprocess"
+                || t.starts_with("Fail.")
+            {
+                continue;
+            }
+            reason = t.to_string();
+        }
+    }
+    flush(&mut out, &mut cur, &reason);
+    out
 }
 
 /// 数据集里算数的音频后缀。
@@ -1314,6 +1492,54 @@ mod tests {
         assert!(!is_train_checkpoint("G.pth"));
         assert!(!is_train_checkpoint("Gundam_1.pth"));
         assert!(!is_train_checkpoint("added_miku.index"));
+    }
+
+    /// 失败清单要能从上游 preprocess.py 的日志格式里抠出「哪个文件、为什么」，
+    /// 且只挑失败的，成功行和起止标记都不算。
+    #[test]
+    fn preprocess_failure_list_names_the_file_and_the_last_exception_line() {
+        let dir = std::env::temp_dir().join("rvcf-preprocess-failures");
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("preprocess.log");
+        std::fs::write(
+            &log,
+            "start preprocess\n\
+             D:\\ds\\ok1.wav\t-> Success\n\
+             D:\\ds\\bad 1.flac\t-> Traceback (most recent call last):\n\
+             \x20 File \"preprocess.py\", line 100, in preprocess_dataset\n\
+             UnicodeDecodeError: 'utf-8' codec can't decode\n\
+             D:\\ds\\ok2.wav\t-> Success\n\
+             D:\\ds\\bad2.mp3\t-> Traceback (most recent call last):\n\
+             \x20 File \"preprocess.py\", line 90\n\
+             CouldntDecodeError: mangled header\n\
+             end preprocess\n",
+        )
+        .unwrap();
+        let v = preprocess_failure_list(&log);
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0]["name"], "bad 1.flac");
+        assert_eq!(v[0]["reason"], "UnicodeDecodeError: 'utf-8' codec can't decode");
+        assert_eq!(v[1]["name"], "bad2.mp3");
+        // 原因是最后一个非空行（真正的异常行），不是 traceback 中间的 File 行，
+        // 也不是收尾的 end preprocess。
+        assert_eq!(v[1]["reason"], "CouldntDecodeError: mangled header");
+    }
+
+    /// ffmpeg 的报告解析：mean_volume 取到，静音时长累加，解析不出就 None/0。
+    #[test]
+    fn volume_report_parsing_takes_mean_and_sums_silence() {
+        let text = "[Parsed_silencedetect_0 @ 0x1] silence_start: 1.0\n\
+                    [Parsed_silencedetect_0 @ 0x1] silence_end: 3.5 | silence_duration: 2.5\n\
+                    [Parsed_silencedetect_0 @ 0x1] silence_start: 10.0\n\
+                    [Parsed_silencedetect_0 @ 0x1] silence_end: 11.0 | silence_duration: 1.0\n\
+                    [Parsed_volumedetect_1 @ 0x2] mean_volume: -23.6 dB\n\
+                    [Parsed_volumedetect_1 @ 0x2] max_volume: -3.1 dB\n";
+        let (mean, silence) = parse_volume_report(text);
+        assert_eq!(mean, Some(-23.6));
+        assert!((silence - 3.5).abs() < 1e-9);
+        let (mean, silence) = parse_volume_report("no report at all");
+        assert_eq!(mean, None);
+        assert_eq!(silence, 0.0);
     }
 
     /// 扫描给出的数字必须就是删除会释放的数字，而且不该删的不能出现在清单里。

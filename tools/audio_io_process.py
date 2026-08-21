@@ -5,6 +5,32 @@ import sounddevice as sd
 import signal
 
 
+def copy_and_consume_ring(ring, play_ptr, frames, outdata):
+    """Copy ``frames`` from a circular ring into ``outdata``, then zero them.
+
+    The audio callback used to keep playing whatever was last written. When
+    inference misses a deadline the play pointer wraps and the last syllable
+    loops — that is the stutter in diag 26.8.21/1 (underrun 28, Infer time
+    spikes to 17s). Consuming to zero makes a miss into a gap, not a loop.
+    Returns the new play pointer.
+    """
+    buf_size = int(ring.shape[0])
+    play_ptr = int(play_ptr)
+    frames = int(frames)
+    end_ptr = play_ptr + frames
+    if end_ptr <= buf_size:
+        outdata[:] = ring[play_ptr:end_ptr]
+        ring[play_ptr:end_ptr] = 0
+    else:
+        first = buf_size - play_ptr
+        second = end_ptr - buf_size
+        outdata[:first] = ring[play_ptr:]
+        outdata[first:] = ring[:second]
+        ring[play_ptr:] = 0
+        ring[:second] = 0
+    return end_ptr % buf_size
+
+
 class AudioIoProcess(Process):
     def __init__(self,
                  input_device,
@@ -113,18 +139,9 @@ class AudioIoProcess(Process):
 
         def output_callback(outdata, frames, time_info, status):
             boost_current_thread_audio()
-            play_ptr = self.play_ptr.value
-            end_ptr = play_ptr + frames
-
-            if end_ptr <= self.buf_size:
-                outdata[:] = self.out_buf[play_ptr:end_ptr]
-            else:
-                first = self.buf_size - play_ptr
-                second = end_ptr - self.buf_size
-                outdata[:first] = self.out_buf[play_ptr:]
-                outdata[first:] = self.out_buf[:second]
-
-            self.play_ptr.value = end_ptr % self.buf_size
+            self.play_ptr.value = copy_and_consume_ring(
+                self.out_buf, self.play_ptr.value, frames, outdata
+            )
 
         def input_callback(indata, frames, time_info, status):
             boost_current_thread_audio()

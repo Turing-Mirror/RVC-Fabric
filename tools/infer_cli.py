@@ -10,6 +10,9 @@ from scipy.io import wavfile
 from configs.config import Config
 from infer.modules.vc.modules import VC
 
+# 产品里这条 CLI 只给文字合成第二步用（SAPI wav → 当前音色）。DirectML 上
+# hubert 会炸 PrivateUse1，必须走 dml_compat + CPU 兜底，不能再直接 vc_single。
+
 ####
 # USAGE
 #
@@ -67,6 +70,11 @@ def arg_parse():
 
 
 def main():
+    from pathlib import Path
+
+    from infer.lib.dml_compat import apply_for
+    from tools.sts_core import convert_one_with_cpu_fallback, friendly_error
+
     load_dotenv()
     args = arg_parse()
     config = Config()
@@ -74,26 +82,47 @@ def main():
         config.device = args.device
     if args.is_half is not None:
         config.is_half = args.is_half
+    # DirectML 上 hubert 的 GradMultiply 会抛 PrivateUse1。load_hubert 里也会
+    # 打这份补丁，这里提前打：TTS 走的是这条 CLI，不是 sts_worker，26.8.21
+    # 的用户日志就是 SAPI 念完之后整次换音色挂在 PrivateUse1 上。
+    apply_for(config)
     vc = VC(config)
     vc.get_vc(args.model_name)
-    info, wav_opt = vc.vc_single(
-        0,
-        args.input_path,
-        args.f0up_key,
-        None,
-        args.f0method,
-        args.index_path,
-        None,
-        args.index_rate,
-        args.filter_radius,
-        args.resample_sr,
-        args.rms_mix_rate,
-        args.protect,
-    )
-    if wav_opt is None or wav_opt[0] is None:
-        raise SystemExit(f"inference failed:\n{info}")
-    wavfile.write(args.opt_path, wav_opt[0], wav_opt[1])
-    print(info)
+
+    src = Path(args.input_path)
+    dest = Path(args.opt_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    def on_stage(*_a, **_k):
+        return None
+
+    def on_fallback(_err):
+        print(
+            "DirectML: operator missing, retrying on CPU",
+            file=sys.stderr,
+        )
+
+    try:
+        convert_one_with_cpu_fallback(
+            vc,
+            src,
+            dest,
+            pitch=args.f0up_key,
+            f0method=args.f0method,
+            index_path=args.index_path or None,
+            index_rate=args.index_rate,
+            filter_radius=args.filter_radius,
+            resample_sr=args.resample_sr,
+            rms_mix_rate=args.rms_mix_rate,
+            protect=args.protect,
+            on_stage=on_stage,
+            wavfile=wavfile,
+            fmt="wav",
+            on_fallback=on_fallback,
+        )
+    except Exception as e:
+        raise SystemExit(friendly_error(e)) from e
+    print("ok")
 
 
 if __name__ == "__main__":

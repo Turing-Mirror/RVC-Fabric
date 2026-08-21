@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""DirectML（``privateuseone``）后端上要提前打的补丁，三条推理路径共用。
+"""DirectML（``privateuseone``）后端上要提前打的补丁，各条推理路径共用。
 
 AMD / Intel 版走的是 torch-directml，设备字符串是 ``privateuseone:0``。这个
 后端只实现了常用算子的一部分，落在缺口上的调用会当场抛 RuntimeError，而不是
@@ -22,12 +22,11 @@ AMD / Intel 版走的是 torch-directml，设备字符串是 ``privateuseone:0``
       RuntimeError: don't know how to restore data location of
                     torch.storage.UntypedStorage (tagged with privateuseone:0)
 
-补丁本身早就有，问题出在只打了两处：实时（``infer/lib/rtrvc.py``）和训练特征
-提取（``infer/modules/train/extract_feature_print.py``）。离线文件转换那条路
-（``infer/modules/vc/utils.load_hubert``）从来没打过，A 卡用户点「语音转换」
-必失败 —— 除非实时引擎正开着、转换走的是复用常驻进程的热路径，那条路沾了实时
-的光才是好的。26.8.20 的用户诊断包就是这么来的：8 次转换全部走冷路径，全挂在
-GradMultiply 上。
+补丁本身早就有，问题出在入口漏打：实时（``rtrvc``）和训练特征提取
+（``extract_feature_print``）各自写过一份，离线文件转换的 ``load_hubert``
+一直没打（26.8.20，A 卡 8 次「语音转换」全挂）。文字合成第二步走的是另一条
+冷路径 ``tools/infer_cli.py``，不经过 sts_worker，连 CPU 兜底都没有 ——
+26.8.21 的 TTS 日志就是 SAPI 念完之后整次换音色挂在 GradMultiply 上。
 
 所以这里收成一份，谁要用谁调，别再各写各的。本模块**不导入 torch，也不导入
 fairseq**，只在真的要打补丁时才现拿 —— 开发机和 CI 上这两个包都没有。

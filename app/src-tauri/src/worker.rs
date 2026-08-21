@@ -1507,11 +1507,16 @@ mod tests {
 
     /// 另一半：收不到退出码就说明多半是上次会话遗留的陈旧 status，那还是按
     /// 空闲处理 —— 不能凭「进程不在」就报崩溃。
+    ///
+    /// PID 不能复用 DEAD_PID：crash 注册表是全局的，两个测试并行时那边
+    /// `record_exit` 与这边 `forget_exit` 的先后不定，赶巧了就把这条挤成
+    /// error。各用各的 PID，互不踩脚。
     #[test]
     fn a_stale_starting_status_without_an_exit_code_still_falls_back_to_idle() {
+        const STALE_PID: u32 = 4_000_001;
         let root = tmp_root("stale-starting");
-        write_starting(&root, DEAD_PID);
-        crate::crash::forget_exit(DEAD_PID);
+        write_starting(&root, STALE_PID);
+        crate::crash::forget_exit(STALE_PID);
 
         let st = status_for_ui(&root);
         assert_eq!(st.get("state").unwrap(), "idle");

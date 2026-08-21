@@ -57,10 +57,12 @@ const CODE_ACTIONS: Record<string, Action> = {
     labelKey: "s.errActRuntime",
     run: toDownloads("engine.missing_gui", "all"),
   },
-  // 中文路径：这条只能靠用户搬目录，说明页那段写着该搬到哪。
+  // 中文路径：这条只能靠用户搬目录，说明页里对应的答案在「常见情况」。
+  // 深链 faq#key 会直接展开那一条 —— HELP_ANCHORS 里没有 "install"，
+  // 传它等于点了个不动的按钮。
   "vc.non_ascii_path": {
     labelKey: "s.errActHelp",
-    run: toHelp("install"),
+    run: toHelp("faq#s.8e6b1ba01b"),
   },
 };
 

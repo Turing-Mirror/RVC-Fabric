@@ -584,7 +584,10 @@ async fn consult_build(
 }
 
 /// More page: how much regenerable cache is sitting on disk.
-#[tauri::command]
+///
+/// `(async)`: footprint 递归走 TEMP 与诊断目录，文件多时上百毫秒。同步命令
+/// 跑在主线程上，「其他」页每次进存储区都会顿一下；挪到线程池只是加个词。
+#[tauri::command(async)]
 fn cache_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let bytes = paths::cache_footprint(&root);
@@ -595,7 +598,9 @@ fn cache_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 }
 
 /// More page: wipe logs + TEMP + leftover downloads. Confirm in the UI first.
-#[tauri::command]
+///
+/// `(async)` 同上：删除是成片的文件操作，不该占着主线程。
+#[tauri::command(async)]
 fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let stats = paths::clear_user_cache(&root);

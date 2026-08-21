@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "While reading the audio device list, the program loads every registered ASIO driver in turn. Older Realtek drivers make the program exit at that point. Updating or uninstalling that driver restores normal operation; nothing else is affected while the engine is off.",
     "kiDismiss": "Got it",
     "diagFilesSummary": "{a0} files in the bundle, {a1} in total",
-    "diagFilesGenerated": "generated"
+    "diagFilesGenerated": "generated",
+    "errDetails": "Details",
+    "errDetailsHide": "Hide details",
+    "errCopy": "Copy full error",
+    "errCopied": "Copied",
+    "errOpenLog": "Open logs",
+    "errActDownload": "Download it",
+    "errActRuntime": "Complete the runtime",
+    "errActHelp": "Open help",
+    "errActExtract": "Open model extraction",
+    "errActBatch": "Adjust training settings"
   },
   "extras": {
     "engineTitle": "Engine resources",

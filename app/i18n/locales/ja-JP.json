@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "オーディオデバイス一覧を読み取る際、登録済みの ASIO ドライバーを順に読み込みます。古い Realtek ドライバーはこの時点でプログラムを終了させます。該当ドライバーを更新またはアンインストールすれば復旧します。エンジンを起動していない間は影響ありません。",
     "kiDismiss": "了解",
     "diagFilesSummary": "パックに含まれるファイルは {a0} 個、合計 {a1}",
-    "diagFilesGenerated": "生成"
+    "diagFilesGenerated": "生成",
+    "errDetails": "詳細",
+    "errDetailsHide": "詳細を隠す",
+    "errCopy": "エラー全文をコピー",
+    "errCopied": "コピーしました",
+    "errOpenLog": "ログを開く",
+    "errActDownload": "ダウンロードへ",
+    "errActRuntime": "ランタイムを補完",
+    "errActHelp": "説明を見る",
+    "errActExtract": "モデル抽出へ",
+    "errActBatch": "学習設定を調整"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
+import { ErrorNote } from "./ErrorNote";
 import { RangeBar } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
@@ -57,6 +58,18 @@ export function SeparatePanel() {
   const [agg, setAgg] = useState(10);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
+  // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
+  // 所以两条路分开走，别让 ErrorNote 去猜。
+  const [msgErr, setMsgErr] = useState(false);
+  const showErr = (v: string) => {
+    setMsgErr(true);
+    setMsg(v);
+  };
+  const showInfo = (v: string) => {
+    setMsgErr(false);
+    setMsg(v);
+  };
+
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
 
@@ -66,7 +79,7 @@ export function SeparatePanel() {
       setSt(s);
       if (!model && s.models?.length) setModel(s.models[0]);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
@@ -78,7 +91,7 @@ export function SeparatePanel() {
     let un: (() => void) | undefined;
     void listen<Progress>("separate-progress", (ev) => {
       setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message);
+      if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;
@@ -100,13 +113,13 @@ export function SeparatePanel() {
       if (dir) setOutput(p);
       else setInput(p);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
   const start = async () => {
     if (runningRef.current) return;
-    setMsg("");
+    showInfo("");
     setProg(null);
     runningRef.current = true;
     setRunning(true);
@@ -118,9 +131,9 @@ export function SeparatePanel() {
         format: fmt,
         aggression: agg,
       });
-      setMsg(t("s.8efd7ca6b1", { v0: r.files?.length ?? 0 }));
+      showInfo(t("s.8efd7ca6b1", { v0: r.files?.length ?? 0 }));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -244,7 +257,7 @@ export function SeparatePanel() {
         ) : null}
 
         {msg ? (
-          <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)]">{msg}</p>
+          <ErrorNote text={msg} error={msgErr} />
         ) : null}
 
         <ToolActions>

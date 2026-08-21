@@ -40,7 +40,6 @@ import { t } from "./i18n/t";
  */
 const FOLLOW_AFTER_RUNS = 10;
 
-/** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
 /** known_issues.rs 匹配出来的一条。文案已经在 Rust 那边按当前语言取好。 */
 type KnownIssue = {
   id: string;
@@ -49,6 +48,7 @@ type KnownIssue = {
   body: string;
 };
 
+/** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
 type UpdateInfo = {
   local: string;
   remote: string;

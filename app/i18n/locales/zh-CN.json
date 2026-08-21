@@ -1988,7 +1988,16 @@
     "cleanupDone": "已清除，释放 {}。",
     "cleanupNothing": "没有可清理的内容。",
     "trainLeftover": "本次训练产生了约 {} 的中间文件，可在「其他 → 存储」中清理。",
-    "storageTrash": "回收站（保留 7 天）"
+    "storageTrash": "回收站（保留 7 天）",
+    "trainInspect": "体检数据集",
+    "trainInspecting": "体检中…",
+    "trainInspectResult": "抽样 {a0} 个：总时长约 {a1}，单条中位数 {a2}。",
+    "trainInspectShort": "素材总时长偏短，音色可能不够像。一般建议 10 分钟以上的干声。",
+    "trainInspectLong": "单条素材偏长（中位数 {}）。若为整首歌曲，建议先用「人声分离」取出干声。",
+    "trainInspectMixedRate": "素材采样率不统一（{}）。预处理会统一重采样，通常无需处理。",
+    "unitSeconds": "{} 秒",
+    "unitMinutes": "{} 分钟",
+    "unitHours": "{} 小时"
   },
   "extras": {
     "engineTitle": "引擎资源",

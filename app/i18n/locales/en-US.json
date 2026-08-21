@@ -1988,7 +1988,16 @@
     "cleanupDone": "Cleared, freeing {}.",
     "cleanupNothing": "There is nothing to clean up.",
     "trainLeftover": "This training run produced about {} of intermediate files. They can be cleared under “More → Storage”.",
-    "storageTrash": "Trash (kept 7 days)"
+    "storageTrash": "Trash (kept 7 days)",
+    "trainInspect": "Inspect dataset",
+    "trainInspecting": "Inspecting…",
+    "trainInspectResult": "Sampled {a0} files: about {a1} in total, median clip {a2}.",
+    "trainInspectShort": "The total material is on the short side and the voice may not sound close. Ten minutes or more of dry vocals is the usual recommendation.",
+    "trainInspectLong": "Individual clips are long (median {}). If these are full songs, extract the dry vocals with “Vocal separation” first.",
+    "trainInspectMixedRate": "The material has mixed sample rates ({}). Preprocessing resamples everything, so this usually needs no action.",
+    "unitSeconds": "{} s",
+    "unitMinutes": "{} min",
+    "unitHours": "{} h"
   },
   "extras": {
     "engineTitle": "Engine resources",

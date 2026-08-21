@@ -1988,7 +1988,16 @@
     "cleanupDone": "已清除，釋放 {}。",
     "cleanupNothing": "沒有可清理的內容。",
     "trainLeftover": "本次訓練產生了約 {} 的中間檔案，可在「其他 → 儲存」中清理。",
-    "storageTrash": "回收桶（保留 7 天）"
+    "storageTrash": "回收桶（保留 7 天）",
+    "trainInspect": "體檢資料集",
+    "trainInspecting": "體檢中…",
+    "trainInspectResult": "抽樣 {a0} 個：總時長約 {a1}，單條中位數 {a2}。",
+    "trainInspectShort": "素材總時長偏短，音色可能不夠像。一般建議 10 分鐘以上的乾聲。",
+    "trainInspectLong": "單條素材偏長（中位數 {}）。若為整首歌曲，建議先用「人聲分離」取出乾聲。",
+    "trainInspectMixedRate": "素材取樣率不統一（{}）。前處理會統一重新取樣，通常無需處理。",
+    "unitSeconds": "{} 秒",
+    "unitMinutes": "{} 分鐘",
+    "unitHours": "{} 小時"
   },
   "extras": {
     "engineTitle": "引擎資源",

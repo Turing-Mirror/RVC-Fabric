@@ -52,6 +52,15 @@ type DatasetScan = {
   supported: string[];
 };
 
+type Inspect = {
+  available: boolean;
+  files?: number;
+  sampled?: number;
+  median_seconds?: number;
+  estimated_total_seconds?: number;
+  sample_rates?: { rate: number; files: number }[];
+};
+
 type Progress = {
   phase: "start" | "stage" | "skip" | "done" | "error";
   stage?: string;
@@ -159,11 +168,29 @@ export function TrainPanel() {
   // 这里到底有几个音频。
   const [scan, setScan] = useState<DatasetScan | null>(null);
   const [scanning, setScanning] = useState(false);
+  // 体检要解码元数据，比数文件慢，所以是手动触发、可跳过的一步：素材本身不
+  // 合适（整首歌、时长太短）跑完 500 轮才发现，同样是几十分钟白费。
+  const [inspect, setInspect] = useState<Inspect | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const runInspect = async () => {
+    if (!dataset || inspecting) return;
+    setInspecting(true);
+    try {
+      setInspect(await invoke<Inspect>("train_inspect_dataset", { path: dataset }));
+    } catch {
+      setInspect(null);
+    } finally {
+      setInspecting(false);
+    }
+  };
   useEffect(() => {
     if (!dataset) {
       setScan(null);
+      setInspect(null);
       return;
     }
+    // 换了目录，上一份体检结果就不作数了。
+    setInspect(null);
     let alive = true;
     setScanning(true);
     invoke<DatasetScan>("train_scan_dataset", { path: dataset })
@@ -508,6 +535,47 @@ export function TrainPanel() {
               }}
             >{t("s.70b208202c")}</Btn>
           </div>
+          {dataset && scan && scan.files > 0 ? (
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Btn onClick={() => void runInspect()} busy={inspecting} disabled={inspecting}>
+                {inspecting ? t("s.trainInspecting") : t("s.trainInspect")}
+              </Btn>
+              {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
+                <span className="text-[12px] text-[var(--meta)]">
+                  {t("s.trainInspectResult", {
+                    a0: String(inspect.sampled),
+                    a1: humanSeconds(inspect.estimated_total_seconds ?? 0),
+                    a2: humanSeconds(inspect.median_seconds ?? 0),
+                  })}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
+            <div className="mb-2 flex flex-col gap-1">
+              {(inspect.estimated_total_seconds ?? 0) < 600 ? (
+                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                  {t("s.trainInspectShort")}
+                </p>
+              ) : null}
+              {(inspect.median_seconds ?? 0) > 60 ? (
+                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                  {t("s.trainInspectLong", {
+                    v0: humanSeconds(inspect.median_seconds ?? 0),
+                  })}
+                </p>
+              ) : null}
+              {(inspect.sample_rates?.length ?? 0) > 1 ? (
+                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                  {t("s.trainInspectMixedRate", {
+                    v0: (inspect.sample_rates ?? [])
+                      .map((r) => `${Math.round(r.rate / 1000)}k×${r.files}`)
+                      .join(" / "),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {dataset ? (
             <p
               className={
@@ -814,4 +882,11 @@ function humanBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+/** 秒数写成人话。用户看的是量级，不是精确到秒。单位跟着语言走。 */
+function humanSeconds(n: number): string {
+  if (n < 60) return t("s.unitSeconds", { v0: Math.round(n) });
+  if (n < 3600) return t("s.unitMinutes", { v0: Math.round(n / 60) });
+  return t("s.unitHours", { v0: (n / 3600).toFixed(1) });
 }

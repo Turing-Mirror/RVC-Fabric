@@ -1,0 +1,13 @@
+[
+  {
+    "id": "realtek-asio-enum-crash",
+    "title_key": "s.kiAsioCrashTitle",
+    "body_key": "s.kiAsioCrashBody",
+    "level": "error",
+    "affects": {
+      "os": "windows",
+      "asio_driver": "realtek"
+    },
+    "fixed_in": ""
+  }
+]

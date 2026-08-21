@@ -55,6 +55,7 @@ pub fn run(root: &Path) -> Vec<Finding> {
     let status = crate::protocol::read_status(root);
     let mut out: Vec<Finding> = Vec::new();
 
+    out.extend(known_issue_hits(root));
     out.extend(engine_killed());
     out.extend(chosen_model(&cfg));
     out.extend(train_experiments(root));
@@ -64,6 +65,27 @@ pub fn run(root: &Path) -> Vec<Finding> {
 
     out.sort_by_key(|f| rank(f.level));
     out
+}
+
+// ------------------------------------------------------------ 已知问题
+
+/// 1.1 和 1.2 共用同一套判断：命中的已知问题也算一条结论，跟着诊断包一起走。
+/// 支援打开 info.json 就能看到「这台机器命中了 realtek-asio-enum-crash」，
+/// 不用再从显卡声卡列表里自己认。
+fn known_issue_hits(root: &Path) -> Vec<Finding> {
+    crate::known_issues::hits(root)
+        .into_iter()
+        .map(|h| Finding {
+            code: "known_issue",
+            level: match h.level.as_str() {
+                "error" => ERROR,
+                "info" => INFO,
+                _ => WARN,
+            },
+            title: h.title,
+            evidence: vec![Evidence::new("known_issues.json", h.id)],
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------- 引擎被杀

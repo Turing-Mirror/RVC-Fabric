@@ -16,6 +16,7 @@ mod extra_assets;
 mod gpu_pref;
 mod extract;
 mod i18n;
+mod known_issues;
 mod legacy;
 mod logging;
 mod mic;
@@ -422,6 +423,15 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
 async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || json!(selfcheck::run(&root)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 这台机器踩到哪些我们已经知道的坑。开机后台校验一次，命中就在底栏上方提示。
+#[tauri::command]
+async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || json!(known_issues::hits(&root)))
         .await
         .map_err(|e| e.to_string())
 }
@@ -1924,6 +1934,7 @@ pub fn run() {
             hotkeys_apply,
             diagnostics_build,
             diagnostics_self_check,
+            known_issues_check,
             cache_status,
             cache_clear,
             consult_build,

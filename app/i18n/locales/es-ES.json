@@ -1890,7 +1890,10 @@
     "diagFindingsChecking": "Comprobando…",
     "chkLevelError": "Crítico",
     "chkLevelWarn": "Aviso",
-    "chkLevelInfo": "Nota"
+    "chkLevelInfo": "Nota",
+    "kiAsioCrashTitle": "El controlador Realtek ASIO de este equipo puede impedir que el motor arranque",
+    "kiAsioCrashBody": "Al leer la lista de dispositivos de audio, el programa carga uno por uno todos los controladores ASIO registrados. Los controladores Realtek antiguos hacen que el programa se cierre en ese punto. Actualizar o desinstalar ese controlador restablece el funcionamiento; mientras el motor está apagado no afecta a nada.",
+    "kiDismiss": "Entendido"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

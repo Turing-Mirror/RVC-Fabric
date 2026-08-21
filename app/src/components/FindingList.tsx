@@ -1,5 +1,6 @@
 import { Btn } from "./ui";
 import { openDownloadModels } from "../lib/downloadModels";
+import { openHelpSection } from "../lib/helpNav";
 import { t } from "../i18n/t";
 
 /** 后端 selfcheck.rs 跑出来的一条结论。 */
@@ -23,12 +24,34 @@ function levelLabel(level: Finding["level"]): string {
  * 动作。剩下那些（选错了模型、上次训练被显存不足带走）没有一个按钮能代劳，
  * 给一个点了没用的按钮比不给更伤。
  */
+
+/**
+ * 结论码 → 说明页里真正回答它的那一段（甚至那一条）。
+ *
+ * 只在说明页确实写了这件事时才登记。指到「常见情况」那一整块没什么用 ——
+ * 二十一条里找自己那条，跟没指一样；所以带上问题的 key，跳过去直接展开。
+ */
+const HELP_TARGET: Record<string, string> = {
+  "engine.killed_by_system": "faq#s.faqAlreadyRunningQ",
+  "train.out_of_memory": "faq#s.faqVramQ",
+  "audio.underrun": "faq#s.ca98fe8db7",
+  "audio.mme_high_delay": "faq#s.faqLatencyQ",
+  // 训练这几条的答案在「训练音色」那一段里，不在常见情况。
+  "model.training_snapshot": "train",
+  "train.stage_mismatch": "train",
+  "train.preprocess_failures": "train",
+};
+
 function actionFor(f: Finding): { label: string; run: () => void } | null {
   if (f.code === "assets.pretrained_partial") {
     return {
       label: t("s.errActDownload"),
       run: () => openDownloadModels({ filter: "train" }),
     };
+  }
+  const target = HELP_TARGET[f.code];
+  if (target) {
+    return { label: t("s.errActHelp"), run: () => openHelpSection(target) };
   }
   return null;
 }

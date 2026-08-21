@@ -6,6 +6,24 @@ import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { openExternal } from "../lib/plaza";
 import { t } from "../i18n/t";
 
+/**
+ * 说明页里可以被直接跳转到的段。
+ *
+ * 以前只有 train / infer / separate 三个。自检结论想指到「常见情况」或者
+ * 「虚拟声卡怎么连」时无处可去，只能笼统跳一个页面 —— 用户落在页顶，还得
+ * 自己找，等于没指。
+ */
+export const HELP_ANCHORS = new Set([
+  "firstrun",
+  "vbcable",
+  "wiring",
+  "faq",
+  "train",
+  "infer",
+  "separate",
+]);
+
+
 /** VB-Cable 的官网。捐助提示里唯一该出现的地址。 */
 const VBCABLE_SITE = "www.vb-cable.com";
 const VBCABLE_URL = "https://www.vb-cable.com";
@@ -348,15 +366,30 @@ function HelpPageImpl({
   }, []);
 
   useEffect(() => {
-    if (focus !== "train" && focus !== "infer" && focus !== "separate") return;
-    const el = document.getElementById(`help-${focus}`);
+    // `focus` 允许写成「段#问题 key」，例如 faq#s.faqVramQ。指到「常见情况」
+    // 那一整块没什么用 —— 二十一条里找自己那条，跟没指一样。带上 key 就能直接
+    // 把那一条展开。用 key 不用序号：条目会增删，序号会错位，key 不会。
+    const [sec, qKey] = (focus || "").split("#");
+    if (!sec || !HELP_ANCHORS.has(sec)) return;
+    const el = document.getElementById(`help-${sec}`);
     el?.scrollIntoView({ block: "start" });
+    if (qKey) {
+      const q = t(qKey);
+      // 查不到就别展开一个叫「s.xxxx」的手风琴。
+      if (q && q !== qKey) {
+        setOpen(q);
+        return;
+      }
+    }
+    // 带手风琴的那三段顺手展开第一条，否则跳过去只看到一排标题。
     const first =
-      focus === "train"
+      sec === "train"
         ? buildTrainGuide()[0]?.q
-        : focus === "infer"
+        : sec === "infer"
           ? buildInferGuide()[0]?.q
-          : buildSeparateGuide()[0]?.q;
+          : sec === "separate"
+            ? buildSeparateGuide()[0]?.q
+            : undefined;
     if (first) setOpen(first);
   }, [focus, focusNonce]);
 
@@ -438,7 +471,7 @@ function HelpPageImpl({
 
       {/* 全页第一块。说明页是在用户第一次点「开启变声」时弹出来的，那一刻
           他手里没有问题、只有一个没做成的任务 —— 先给整条路径，再给查阅材料。 */}
-      <Block title={t("s.firstRunTitle")} note={String(firstRun.length)}>
+      <Block id="help-firstrun" title={t("s.firstRunTitle")} note={String(firstRun.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.firstRunLead")}
         </p>
@@ -461,7 +494,7 @@ function HelpPageImpl({
           ))}
         </Group>
       </Block>
-      <Block title={t("s.b386a7fb53")}>
+      <Block id="help-vbcable" title={t("s.b386a7fb53")}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
         {/* 先照着用户机器上真实的设备列表说一句话。
             已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
@@ -527,7 +560,7 @@ function HelpPageImpl({
         <DonateNote />
       </Block>
 
-      <Block title={t("s.149ab7bf0a")}>
+      <Block id="help-wiring" title={t("s.149ab7bf0a")}>
         {/* 图在表前面：表说的是「每一格该填什么」，图说的是「声音往哪走」。
             接错线的人缺的是后者 —— 五行并列的表看不出监听是另一条支路。 */}
         <RouteDiagram />
@@ -559,7 +592,7 @@ function HelpPageImpl({
           />
         </Group>
       </Block>
-      <Block title={t("s.209d309d58")} note={String(faq.length)}>
+      <Block id="help-faq" title={t("s.209d309d58")} note={String(faq.length)}>
         <Group>
           {faq.map((f) => (
             <ListItem

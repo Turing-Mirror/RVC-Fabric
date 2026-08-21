@@ -1893,7 +1893,9 @@
     "chkLevelInfo": "提示",
     "kiAsioCrashTitle": "这台电脑的 Realtek ASIO 驱动可能导致变声无法开启",
     "kiAsioCrashBody": "程序在读取音频设备列表时会逐个加载已注册的 ASIO 驱动，Realtek 的旧版驱动在这一步会让程序直接退出。将该驱动更新到新版或卸载后即可恢复；未开启变声时不受影响。",
-    "kiDismiss": "知道了"
+    "kiDismiss": "知道了",
+    "diagFilesSummary": "包里会有 {a0} 个文件，共 {a1}",
+    "diagFilesGenerated": "现生成"
   },
   "extras": {
     "engineTitle": "引擎资源",

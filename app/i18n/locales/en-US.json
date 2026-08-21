@@ -1893,7 +1893,9 @@
     "chkLevelInfo": "Note",
     "kiAsioCrashTitle": "The Realtek ASIO driver on this computer can prevent the engine from starting",
     "kiAsioCrashBody": "While reading the audio device list, the program loads every registered ASIO driver in turn. Older Realtek drivers make the program exit at that point. Updating or uninstalling that driver restores normal operation; nothing else is affected while the engine is off.",
-    "kiDismiss": "Got it"
+    "kiDismiss": "Got it",
+    "diagFilesSummary": "{a0} files in the bundle, {a1} in total",
+    "diagFilesGenerated": "generated"
   },
   "extras": {
     "engineTitle": "Engine resources",

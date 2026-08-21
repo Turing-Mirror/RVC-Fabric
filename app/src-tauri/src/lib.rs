@@ -436,6 +436,18 @@ async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, 
         .map_err(|e| e.to_string())
 }
 
+/// 出包之前，把包里会有哪些文件、各自多大摆出来。
+///
+/// 用户是拿这个包去群里求助的。「里面只有日志和配置」是一句承诺，这份清单是
+/// 这句承诺的凭据。
+#[tauri::command]
+async fn diagnostics_preview(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || shell_extras::diagnostics_preview(&root))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Zip logs + machine info + settings for support.
 ///
 /// `with_perf`：前端先问用户是否跑约一分钟的性能测试。
@@ -1935,6 +1947,7 @@ pub fn run() {
             diagnostics_build,
             diagnostics_self_check,
             known_issues_check,
+            diagnostics_preview,
             cache_status,
             cache_clear,
             consult_build,

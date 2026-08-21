@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "引擎进程被系统终止，退出码 {}。这类退出通常由第三方驱动在程序内部出错引起。",
     "wkExitedWithCode": "引擎进程已退出，退出码 {}。",
     "audioProbeCrash": "读取音频设备列表时进程被系统终止，退出码 {}。",
-    "audioProbeAsio": "本机已注册的 ASIO 驱动：{}。请更新或卸载相关驱动后重试。"
+    "audioProbeAsio": "本机已注册的 ASIO 驱动：{}。请更新或卸载相关驱动后重试。",
+    "chkWorkerKilled": "本次运行中，引擎进程被系统终止过",
+    "chkSnapshotModel": "当前选中的「{name}」看起来是训练存档，不是音色模型",
+    "chkStageMismatch": "实验「{a0}」的产物不完整：切片 {a1}、音高 {a2}、特征 {a3}",
+    "chkPreprocessFail": "实验「{a0}」预处理有 {a1} 个文件读取失败",
+    "chkOom": "实验「{}」的训练日志末尾是显存不足",
+    "chkPretrainedPartial": "底模缺 {}，可选采样率受限",
+    "chkDiskLow": "产品所在磁盘只剩 {} GB",
+    "chkMmeDelay": "音频接口是 MME，实测延迟 {} 毫秒",
+    "chkUnderrun": "累计欠载 {} 次，声音会有卡顿",
+    "diagFindingsTitle": "这个包里已经能看出的",
+    "diagFindingsNone": "暂时没看出明显问题",
+    "diagFindingsChecking": "正在检查…",
+    "chkLevelError": "严重",
+    "chkLevelWarn": "注意",
+    "chkLevelInfo": "提示"
   },
   "extras": {
     "engineTitle": "引擎资源",

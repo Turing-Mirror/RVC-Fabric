@@ -24,6 +24,7 @@ pub mod paths;
 pub mod plaza;
 mod protocol;
 mod provision;
+mod selfcheck;
 mod separate;
 mod tearing;
 mod vcredist;
@@ -411,6 +412,18 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
     // 设置页每改一次快捷键都会调到这里，正好是通知的时机。
     let _ = app.emit("hotkeys://changed", ());
     out
+}
+
+/// 出包之前，把这个包里已经能看出来的问题先摆给用户看。
+///
+/// 支援收到的包里，相当一部分结论用户自己就能得出（选错模型、数据集没读进去、
+/// 上次训练是被显存不足带走的）。这条命令只读盘，不改任何东西。
+#[tauri::command]
+async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || json!(selfcheck::run(&root)))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Zip logs + machine info + settings for support.
@@ -1910,6 +1923,7 @@ pub fn run() {
             update_app,
             hotkeys_apply,
             diagnostics_build,
+            diagnostics_self_check,
             cache_status,
             cache_clear,
             consult_build,

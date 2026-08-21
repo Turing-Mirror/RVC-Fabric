@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "The engine process was terminated by the system (exit code {}). This kind of exit is usually caused by a third-party driver failing inside the program.",
     "wkExitedWithCode": "The engine process exited with code {}.",
     "audioProbeCrash": "The process was terminated by the system while reading the audio device list (exit code {}).",
-    "audioProbeAsio": "ASIO drivers registered on this computer: {}. Please update or uninstall them and try again."
+    "audioProbeAsio": "ASIO drivers registered on this computer: {}. Please update or uninstall them and try again.",
+    "chkWorkerKilled": "The engine process was terminated by the system during this session",
+    "chkSnapshotModel": "The selected file \"{name}\" looks like a training checkpoint, not a voice model",
+    "chkStageMismatch": "Experiment \"{a0}\" has incomplete artifacts: {a1} slices, {a2} pitch, {a3} features",
+    "chkPreprocessFail": "Preprocessing for experiment \"{a0}\" failed to read {a1} file(s)",
+    "chkOom": "The training log for experiment \"{}\" ends with an out-of-memory error",
+    "chkPretrainedPartial": "Base models missing: {}. Sample-rate choices are limited.",
+    "chkDiskLow": "Only {} GB free on the drive holding the app",
+    "chkMmeDelay": "Audio interface is MME; measured latency is {} ms",
+    "chkUnderrun": "{} buffer underruns so far; the audio will stutter",
+    "diagFindingsTitle": "What this bundle already shows",
+    "diagFindingsNone": "Nothing obvious found",
+    "diagFindingsChecking": "Checking…",
+    "chkLevelError": "Critical",
+    "chkLevelWarn": "Warning",
+    "chkLevelInfo": "Note"
   },
   "extras": {
     "engineTitle": "Engine resources",

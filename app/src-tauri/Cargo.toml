@@ -69,4 +69,6 @@ windows-sys = { version = "0.59", features = [
   "Win32_UI_Shell",
   # 退出/关变声时枚举 Runtime 下残留的 python*.exe（含 AudioIoProcess 孤儿）。
   "Win32_System_Diagnostics_ToolHelp",
+  # 诊断自检要看产品所在盘还剩多少（GetDiskFreeSpaceExW）。
+  "Win32_Storage_FileSystem",
 ] }

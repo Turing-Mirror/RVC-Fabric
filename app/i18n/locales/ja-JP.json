@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "エンジンプロセスがシステムによって終了されました（終了コード {}）。この種の終了は、通常サードパーティ製ドライバーがプログラム内部で失敗したことが原因です。",
     "wkExitedWithCode": "エンジンプロセスが終了しました（終了コード {}）。",
     "audioProbeCrash": "オーディオデバイス一覧の読み取り中に、プロセスがシステムによって終了されました（終了コード {}）。",
-    "audioProbeAsio": "このコンピューターに登録されている ASIO ドライバー：{}。更新またはアンインストールしてからもう一度お試しください。"
+    "audioProbeAsio": "このコンピューターに登録されている ASIO ドライバー：{}。更新またはアンインストールしてからもう一度お試しください。",
+    "chkWorkerKilled": "今回の実行中に、エンジンプロセスがシステムによって終了されました",
+    "chkSnapshotModel": "選択中の「{name}」は音声モデルではなく、学習のチェックポイントのようです",
+    "chkStageMismatch": "実験「{a0}」の中間ファイルが不揃いです：スライス {a1}、ピッチ {a2}、特徴 {a3}",
+    "chkPreprocessFail": "実験「{a0}」の前処理で {a1} 個のファイルを読み込めませんでした",
+    "chkOom": "実験「{}」の学習ログの末尾が VRAM 不足で終わっています",
+    "chkPretrainedPartial": "ベースモデルが不足しています：{}。選べるサンプリングレートが限られます。",
+    "chkDiskLow": "本体があるドライブの空き容量は {} GB しかありません",
+    "chkMmeDelay": "オーディオインターフェースが MME で、実測遅延は {} ミリ秒です",
+    "chkUnderrun": "バッファアンダーランが累計 {} 回発生しており、音が途切れます",
+    "diagFindingsTitle": "このパックから既に分かること",
+    "diagFindingsNone": "目立った問題は見つかりませんでした",
+    "diagFindingsChecking": "確認中…",
+    "chkLevelError": "重大",
+    "chkLevelWarn": "注意",
+    "chkLevelInfo": "参考"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

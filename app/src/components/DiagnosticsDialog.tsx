@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
+
+/** 后端 selfcheck.rs 跑出来的一条结论。 */
+type Finding = {
+  code: string;
+  level: "error" | "warn" | "info";
+  title: string;
+  evidence: { file: string; line?: number; text: string }[];
+};
 
 export type DiagReport = {
   nickname: string;
@@ -31,6 +40,7 @@ export function DiagnosticsDialog({
   const [qq, setQq] = useState("");
   const [description, setDescription] = useState("");
   const [withPerf, setWithPerf] = useState(false);
+  const [findings, setFindings] = useState<Finding[] | null>(null);
   const firstRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -41,6 +51,26 @@ export function DiagnosticsDialog({
     setWithPerf(false);
     const id = window.setTimeout(() => firstRef.current?.focus(), 30);
     return () => window.clearTimeout(id);
+  }, [open]);
+
+  // 只读盘，不改任何东西；出包之前先把已经能看出来的摆出来。
+  useEffect(() => {
+    if (!open) {
+      setFindings(null);
+      return;
+    }
+    let alive = true;
+    invoke<Finding[]>("diagnostics_self_check")
+      .then((v) => {
+        if (alive) setFindings(Array.isArray(v) ? v : []);
+      })
+      .catch(() => {
+        // 自检失败不该挡住出包 —— 包本身才是用户要的东西。
+        if (alive) setFindings([]);
+      });
+    return () => {
+      alive = false;
+    };
   }, [open]);
 
   useEffect(() => {
@@ -129,6 +159,56 @@ export function DiagnosticsDialog({
           </span>
         </label>
 
+        {/* 包里已经能看出来的问题。用户当场就能改掉一部分（选错模型、盘满），
+            剩下的支援也省一轮问答。没有结论时只留一行，不占地方。 */}
+        <div className="mb-4">
+          <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
+            {t("s.diagFindingsTitle")}
+          </span>
+          {findings === null ? (
+            <p className="m-0 text-[12px] text-[var(--meta)]">
+              {t("s.diagFindingsChecking")}
+            </p>
+          ) : findings.length === 0 ? (
+            <p className="m-0 text-[12px] text-[var(--meta)]">
+              {t("s.diagFindingsNone")}
+            </p>
+          ) : (
+            <ul className="m-0 list-none p-0">
+              {findings.map((f, i) => (
+                <li
+                  key={f.code + i}
+                  className="relative py-2 first:pt-0"
+                >
+                  {i > 0 ? (
+                    <div
+                      aria-hidden
+                      className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
+                    />
+                  ) : null}
+                  <div className="flex gap-2 items-baseline">
+                    <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
+                      {levelLabel(f.level)}
+                    </span>
+                    <span className="text-[12.5px] leading-relaxed">
+                      {f.title}
+                    </span>
+                  </div>
+                  {f.evidence.map((e, j) => (
+                    <div
+                      key={j}
+                      className="mt-0.5 font-mono text-[11px] text-[var(--meta)] break-all"
+                    >
+                      {e.file}
+                      {e.line != null ? `:${e.line}` : ""} — {e.text}
+                    </div>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {/* 用户要把这个包发到群里，所以得先说清楚里面有什么、没有什么。 */}
         <p className="m-0 mb-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3 py-2 text-[12px] text-[var(--meta)] leading-relaxed">
           {t("s.diagPrivacy")}
@@ -148,4 +228,10 @@ export function DiagnosticsDialog({
       </div>
     </div>
   );
+}
+
+function levelLabel(level: Finding["level"]): string {
+  if (level === "error") return t("s.chkLevelError");
+  if (level === "warn") return t("s.chkLevelWarn");
+  return t("s.chkLevelInfo");
 }

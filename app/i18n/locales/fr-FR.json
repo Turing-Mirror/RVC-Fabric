@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "Le processus du moteur a été arrêté par le système (code de sortie {}). Ce type d'arrêt est généralement causé par un pilote tiers qui échoue à l'intérieur du programme.",
     "wkExitedWithCode": "Le processus du moteur s'est terminé avec le code {}.",
     "audioProbeCrash": "Le processus a été arrêté par le système lors de la lecture de la liste des périphériques audio (code de sortie {}).",
-    "audioProbeAsio": "Pilotes ASIO enregistrés sur cet ordinateur : {}. Mettez-les à jour ou désinstallez-les, puis réessayez."
+    "audioProbeAsio": "Pilotes ASIO enregistrés sur cet ordinateur : {}. Mettez-les à jour ou désinstallez-les, puis réessayez.",
+    "chkWorkerKilled": "Le processus du moteur a été arrêté par le système au cours de cette session",
+    "chkSnapshotModel": "Le fichier sélectionné « {name} » ressemble à un point de contrôle d'entraînement, pas à un modèle de voix",
+    "chkStageMismatch": "L'expérience « {a0} » a des fichiers intermédiaires incomplets : {a1} segments, {a2} hauteurs, {a3} caractéristiques",
+    "chkPreprocessFail": "Le prétraitement de l'expérience « {a0} » n'a pas pu lire {a1} fichier(s)",
+    "chkOom": "Le journal d'entraînement de l'expérience « {} » se termine par un manque de mémoire vidéo",
+    "chkPretrainedPartial": "Modèles de base manquants : {}. Le choix de fréquence d'échantillonnage est limité.",
+    "chkDiskLow": "Il ne reste que {} Go sur le disque contenant l'application",
+    "chkMmeDelay": "L'interface audio est MME ; la latence mesurée est de {} ms",
+    "chkUnderrun": "{} sous-alimentations de tampon au total ; le son va saccader",
+    "diagFindingsTitle": "Ce que ce paquet montre déjà",
+    "diagFindingsNone": "Rien d'évident n'a été trouvé",
+    "diagFindingsChecking": "Vérification…",
+    "chkLevelError": "Critique",
+    "chkLevelWarn": "Attention",
+    "chkLevelInfo": "Info"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

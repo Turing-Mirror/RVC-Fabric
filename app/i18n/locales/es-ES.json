@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "El sistema finalizó el proceso del motor (código de salida {}). Este tipo de finalización suele deberse a un controlador de terceros que falla dentro del programa.",
     "wkExitedWithCode": "El proceso del motor finalizó con el código {}.",
     "audioProbeCrash": "El sistema finalizó el proceso al leer la lista de dispositivos de audio (código de salida {}).",
-    "audioProbeAsio": "Controladores ASIO registrados en este equipo: {}. Actualícelos o desinstálelos e inténtelo de nuevo."
+    "audioProbeAsio": "Controladores ASIO registrados en este equipo: {}. Actualícelos o desinstálelos e inténtelo de nuevo.",
+    "chkWorkerKilled": "El sistema finalizó el proceso del motor durante esta sesión",
+    "chkSnapshotModel": "El archivo seleccionado «{name}» parece un punto de control de entrenamiento, no un modelo de voz",
+    "chkStageMismatch": "El experimento «{a0}» tiene archivos intermedios incompletos: {a1} fragmentos, {a2} de tono, {a3} de características",
+    "chkPreprocessFail": "El preprocesamiento del experimento «{a0}» no pudo leer {a1} archivo(s)",
+    "chkOom": "El registro de entrenamiento del experimento «{}» termina por falta de memoria de vídeo",
+    "chkPretrainedPartial": "Faltan modelos base: {}. Las opciones de frecuencia de muestreo están limitadas.",
+    "chkDiskLow": "Solo quedan {} GB en la unidad donde está la aplicación",
+    "chkMmeDelay": "La interfaz de audio es MME; la latencia medida es de {} ms",
+    "chkUnderrun": "{} subdesbordamientos de búfer en total; el sonido se entrecortará",
+    "diagFindingsTitle": "Lo que este paquete ya muestra",
+    "diagFindingsNone": "No se encontró nada evidente",
+    "diagFindingsChecking": "Comprobando…",
+    "chkLevelError": "Crítico",
+    "chkLevelWarn": "Aviso",
+    "chkLevelInfo": "Nota"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

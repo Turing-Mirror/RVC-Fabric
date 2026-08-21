@@ -122,6 +122,13 @@ def pick_default_input(names: Iterable[str]) -> str:
 
 
 def pick_default_output(names: Iterable[str]) -> str:
+    """主输出必须是 CABLE 类虚拟设备；找不到就返回空，让调用方报错。
+
+    以前找不到 CABLE 会退回「第一个真实放音设备」。变声主输出一旦落在
+    耳机/扬声器上，用户从头到尾听到的都是自己变声后的声音（diag
+    26.8.19/3：CABLE 瞬时不在列表里，自动补选挑了 HyperX 耳机）。宁可
+    这一次启动失败并说清「输出设备不可用」，也不能把声音悄悄送进耳机。
+    """
     names = list(names or [])
     for n in names:
         low = _low(n)
@@ -132,10 +139,7 @@ def pick_default_output(names: Iterable[str]) -> str:
             "cable" in _low(n) and "output" not in _low(n)
         ):
             return n
-    real = [n for n in names if not is_virtual_playback_name(n)]
-    if real:
-        return real[0]
-    return names[0] if names else ""
+    return ""
 
 
 def fill_missing_devices(

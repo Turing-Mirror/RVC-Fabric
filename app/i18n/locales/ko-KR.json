@@ -1999,6 +1999,7 @@
     "unitMinutes": "{}분",
     "unitHours": "{}시간",
     "auditionText": "안녕하세요. 현재 음색의 미리 듣기입니다. 가나다라마바사.",
+    "voiceDeleteFailed": "삭제 실패: {e}. 다른 프로세스가 파일을 사용 중일 수 있어요. 변환을 중지하거나 끝날 때까지 기다린 뒤 다시 시도해 주세요.",
     "auditionBtn": "미리 듣기",
     "auditionBusy": "합성 중…",
     "auditionFailed": "미리 듣기에 실패했습니다: {}"

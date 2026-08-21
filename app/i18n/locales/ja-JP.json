@@ -1999,6 +1999,7 @@
     "unitMinutes": "{} 分",
     "unitHours": "{} 時間",
     "auditionText": "こんにちは。これは現在の音声モデルの試聴です。あいうえお、かきくけこ。",
+    "voiceDeleteFailed": "削除に失敗しました：{e}。ファイルが別のプロセスに使われている可能性があります。変換を停止するか終わるまで待ってから、もう一度お試しください。",
     "auditionBtn": "試聴",
     "auditionBusy": "合成中…",
     "auditionFailed": "試聴に失敗しました：{}"

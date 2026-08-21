@@ -1999,6 +1999,7 @@
     "unitMinutes": "{} min",
     "unitHours": "{} h",
     "auditionText": "Hola. Esta es una muestra de la voz actual. El veloz murciélago hindú comía feliz cardillo.",
+    "voiceDeleteFailed": "No se pudo eliminar: {e}. Otro proceso puede estar usando el archivo: detén la conversión o espera a que termine e inténtalo de nuevo.",
     "auditionBtn": "Escuchar",
     "auditionBusy": "Sintetizando…",
     "auditionFailed": "Error en la escucha: {}"

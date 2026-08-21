@@ -104,6 +104,16 @@ def safe_torch_load(
             return torch.load(path, map_location=map_location, weights_only=False)
         except TypeError:
             return torch.load(path, map_location=map_location)
+        except Exception as e:
+            # 两条路都读不出来，说明文件本身坏了 —— 最常见的是下载只下了一半
+            # （diag 26.8.19/3：unpickling stack underflow 反复出现，用户看到
+            # 的只是「模型加载失败」四个字）。把「文件坏了、该怎么办」说出来。
+            raise RuntimeError(
+                f"{os.path.basename(str(path))} 读取失败，文件可能不完整或已损坏"
+                f"（{type(e).__name__}: {e}）。\n"
+                "下载来的音色：删除后重新下载；自己训练的：检查当时的磁盘空间，"
+                "再用「进阶设置 → 模型提取」从训练存档恢复。"
+            ) from e
 
 
 # 训练检查点（train.py 存进 logs/<实验>/ 的 G_*.pth / D_*.pth）里有这些键，

@@ -43,7 +43,22 @@ def savee(ckpt, sr, if_f0, name, epoch, version, hps):
         opt["sr"] = sr
         opt["f0"] = if_f0
         opt["version"] = version
-        torch.save(opt, "assets/weights/%s.pth" % name)
+        # torch 的 PyTorchFileWriter 在部分 Windows 机器上打不开含非 ASCII 的
+        # 文件名（diag 26.8.20/4：实验名「诗歌剧」，200 轮训完最终权重没落地，
+        # 界面只说「没找到 pth」，用户以为白训）。先落到 ASCII 临时名，再用
+        # Python 的 os.replace 挪到目标名 —— 它走 Unicode API，什么名字都认。
+        # 临时名带 pid：训练收尾和「模型提取」可能同时在跑，别互相覆盖。
+        os.makedirs("assets/weights", exist_ok=True)
+        tmp = "assets/weights/_save_tmp_%d.pth" % os.getpid()
+        try:
+            torch.save(opt, tmp)
+            os.replace(tmp, "assets/weights/%s.pth" % name)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
         return "Success."
     except Exception:
         return traceback.format_exc()

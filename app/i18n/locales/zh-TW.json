@@ -1999,6 +1999,7 @@
     "unitMinutes": "{} 分鐘",
     "unitHours": "{} 小時",
     "auditionText": "你好，這是目前音色的試聽效果。一二三四五，上山打老虎。",
+    "voiceDeleteFailed": "刪除失敗：{e}。檔案可能正被其他程式佔用——先停止變聲、等轉換跑完，再試一次。",
     "auditionBtn": "試聽",
     "auditionBusy": "合成中…",
     "auditionFailed": "試聽失敗：{}"

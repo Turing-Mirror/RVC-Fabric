@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Keep realtime audio running when a fullscreen game is in front.
+"""Keep the realtime worker schedulable while a game is in front.
 
-pythonw.exe has no window, so Windows 11 Game Mode / EcoQoS treats the
-worker as a background process and throttles it. Inference then misses
-the audio deadline and the ring buffer loops the last syllable
-(diag 26.8.21/1, also 26.8.19/4).
+pythonw.exe has no window, so Windows 11 Game Mode / EcoQoS can treat the
+worker as a background process and throttle CPU. That is one factor, but
+diag 26.8.21/1 still stuttered with a windowed game, a High/Realtime
+priority class, and a GPU that was not full — the audio ring was looping
+stale samples on underrun, and DirectML was flushing the GPU on every
+block. This module only covers scheduling: disable EcoQoS, raise CPU and
+GPU scheduling class, MMCSS on the PortAudio thread.
 """
 
 from __future__ import annotations
@@ -53,11 +56,18 @@ def boost_current_process(*, high: bool = False) -> None:
         k32.SetProcessInformation.restype = wintypes.BOOL
         k32.SetProcessInformation(handle, 4, ctypes.byref(state), ctypes.sizeof(state))
 
-        # Same GPU as the game: ask the scheduler not to park our compute.
+        # Same GPU as the game: HIGH so DML is not queued behind 3D.
+        # ABOVE_NORMAL (3) is still below a focused game; HIGH (4) is not
+        # REALTIME (5), which can freeze the desktop.
         try:
             gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
-            # D3DKMT_SCHEDULINGPRIORITYCLASS_ABOVE_NORMAL = 3
-            gdi32.D3DKMTSetProcessSchedulingPriorityClass(handle, 3)
+            gdi32.D3DKMTSetProcessSchedulingPriorityClass.argtypes = [
+                wintypes.HANDLE,
+                ctypes.c_int,
+            ]
+            gdi32.D3DKMTSetProcessSchedulingPriorityClass.restype = ctypes.c_long
+            # D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH = 4
+            gdi32.D3DKMTSetProcessSchedulingPriorityClass(handle, 4)
         except Exception:
             pass
         _boosted_proc = True

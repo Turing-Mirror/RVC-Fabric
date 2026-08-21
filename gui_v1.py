@@ -1476,6 +1476,22 @@ if __name__ == "__main__":
                 raise RuntimeError(i18n("模型加载失败"))
             if self.function == "fx":
                 self.function = "vc"
+            # DirectML shares the GPU with the game via WDDM. Every .cpu() /
+            # TorchGate / SOLA on that device waits for 3D. Keep I/O tensors
+            # on CPU so a quiet block (and post-RVC mix) never touches the GPU
+            # (diag 26.8.21/1: 17s Infer time with no Spent time — stall was
+            # outside rvc.infer).
+            try:
+                from infer.lib.dml_compat import is_dml_device
+
+                self._dml = bool(is_dml_device(self.config.device))
+            except Exception:
+                self._dml = "privateuseone" in str(
+                    getattr(self.config, "device", "")
+                ).lower()
+            self._io_device = (
+                torch.device("cpu") if self._dml else self.config.device
+            )
             self.gui_config.samplerate = (
                 self.rvc.tgt_sr
                 if self.gui_config.sr_type == "sr_model"
@@ -1525,23 +1541,24 @@ if __name__ == "__main__":
                 )
                 * self.zc
             )
+            io_dev = self._io_device
             self.input_wav: torch.Tensor = torch.zeros(
                 self.extra_frame
                 + self.crossfade_frame
                 + self.sola_search_frame
                 + self.block_frame,
-                device=self.config.device,
+                device=io_dev,
                 dtype=torch.float32,
             )
             self.input_wav_denoise: torch.Tensor = self.input_wav.clone()
             self.input_wav_res: torch.Tensor = torch.zeros(
                 160 * self.input_wav.shape[0] // self.zc,
-                device=self.config.device,
+                device=io_dev,
                 dtype=torch.float32,
             )
             self.rms_buffer: np.ndarray = np.zeros(4 * self.zc, dtype="float32")
             self.sola_buffer: torch.Tensor = torch.zeros(
-                self.sola_buffer_frame, device=self.config.device, dtype=torch.float32
+                self.sola_buffer_frame, device=io_dev, dtype=torch.float32
             )
             self.nr_buffer: torch.Tensor = self.sola_buffer.clone()
             self.output_buffer: torch.Tensor = self.input_wav.clone()
@@ -1557,7 +1574,7 @@ if __name__ == "__main__":
                         0.0,
                         1.0,
                         steps=self.sola_buffer_frame,
-                        device=self.config.device,
+                        device=io_dev,
                         dtype=torch.float32,
                     )
                 )
@@ -1568,7 +1585,7 @@ if __name__ == "__main__":
                 orig_freq=self.gui_config.samplerate,
                 new_freq=16000,
                 dtype=torch.float32,
-            ).to(self.config.device)
+            ).to(io_dev)
             # DSP 模式没有模型，也就没有 tgt_sr，输入输出同一个采样率。
             rvc_sr = getattr(self.rvc, "tgt_sr", None) if self.rvc is not None else None
             if rvc_sr and rvc_sr != self.gui_config.samplerate:
@@ -1581,7 +1598,7 @@ if __name__ == "__main__":
                 self.resampler2 = None
             self.tg = TorchGate(
                 sr=self.gui_config.samplerate, n_fft=4 * self.zc, prop_decrease=0.9
-            ).to(self.config.device)
+            ).to(io_dev)
             # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
             # here instead of inside the first audible blocks
             self._report_load(VC_WARMUP, 78)
@@ -1626,6 +1643,8 @@ if __name__ == "__main__":
             n = min(int(dummy.shape[0]), 4000)
             t = torch.arange(n, device=dummy.device, dtype=torch.float32)
             dummy[-n:] = 0.1 * torch.sin(2 * np.pi * 150.0 * t / 16000.0)
+            if getattr(self, "_dml", False):
+                dummy = dummy.to(self.config.device)
             for _ in range(2):
                 infer_wav = self.rvc.infer(
                     dummy,
@@ -1745,6 +1764,12 @@ if __name__ == "__main__":
                         traceback.print_exc()
 
                     def audio_loop():
+                        try:
+                            from tools.win_realtime import boost_current_thread_audio
+
+                            boost_current_thread_audio()
+                        except Exception:
+                            pass
                         while flag_vc:
                             try:
                                 if getattr(self, "dsp_only", False):
@@ -2165,6 +2190,73 @@ if __name__ == "__main__":
             except Exception:
                 pass
 
+        def _commit_output(self, outdata: np.ndarray, buf_size: int) -> None:
+            """Write one block into the shared ring. Underrun writes at play_ptr."""
+            global flag_vc
+            if self.out_buf is None or not flag_vc:
+                return
+            if getattr(self, "out_ptr", None) is None or getattr(self, "play_ptr", None) is None:
+                return
+            start = self.out_ptr.value
+            play_pos = self.play_ptr.value
+            delta = (start - play_pos + buf_size) % buf_size
+            q = float(getattr(self, "_queue_frames", float(delta)) or 0.0)
+            self._queue_frames = 0.85 * q + 0.15 * float(delta)
+            if delta < self.block_frame:
+                n_u = int(getattr(self, "_underrun_n", 0) or 0) + 1
+                self._underrun_n = n_u
+                if n_u <= 2 or n_u % 40 == 0:
+                    print("[W] Output underrun")
+                write_pos = play_pos
+            else:
+                write_pos = (start + self.block_frame) % buf_size
+            if self.out_buf is None or not flag_vc:
+                return
+            end = (write_pos + self.block_frame) % buf_size
+            if end > write_pos:
+                self.out_buf[write_pos:end] = outdata
+            else:
+                first = buf_size - write_pos
+                self.out_buf[write_pos:] = outdata[:first]
+                self.out_buf[:end] = outdata[first:]
+            if self.out_ptr is None:
+                return
+            self.out_ptr.value = write_pos
+            if self.in_evt is not None and self.in_evt.is_set():
+                n_o = int(getattr(self, "_overrun_n", 0) or 0) + 1
+                self._overrun_n = n_o
+                if n_o <= 2 or n_o % 40 == 0:
+                    print("[W] Input overrun")
+                self.in_evt.clear()
+
+        def _finish_block_timing(self, start_time: float) -> None:
+            total_time = time.perf_counter() - start_time
+            self.last_infer_ms = int(total_time * 1000)
+            perf = getattr(self, "_perf", None)
+            if perf is not None:
+                perf.add(total_time)
+            if flag_vc and self.window is not None:
+                try:
+                    self.window["infer_time"].update(self.last_infer_ms)
+                except Exception:
+                    pass
+            # Every block was 0.10s+ so the old `> 0.05` log wrote the disk
+            # on the infer thread ~4 times a second (diag 26.8.21/1). Only
+            # log deadline misses, plus a heartbeat every 2s.
+            budget = float(getattr(self.gui_config, "block_time", 0.25) or 0.25)
+            _lt = getattr(self, "_last_infer_log_t", 0.0)
+            now = time.perf_counter()
+            if total_time > budget * 0.9 or (now - _lt) > 2.0:
+                self._last_infer_log_t = now
+                printt("Infer time: %.2f", total_time)
+
+        def _emit_silence(self, buf_size: int, start_time: float) -> None:
+            ch = int(getattr(self.gui_config, "channels", 2) or 2)
+            outdata = np.zeros((int(self.block_frame), max(1, ch)), dtype=np.float32)
+            self._write_monitor(outdata)
+            self._commit_output(outdata, buf_size)
+            self._finish_block_timing(start_time)
+
         def audio_infer_dsp(self, buf_size: int) -> None:
             """纯 DSP 热路径：numpy only，不走 RVC / SOLA / TorchGate。"""
             global flag_vc
@@ -2322,17 +2414,57 @@ if __name__ == "__main__":
                     if db_threhold[i]:
                         indata[i * self.zc : (i + 1) * self.zc] = 0
                 indata = indata[self.zc // 2 :]
+            io_dev = self.input_wav.device
             self.input_wav[: -self.block_frame] = self.input_wav[
                 self.block_frame :
             ].clone()
-            self.input_wav[-indata.shape[0] :] = torch.from_numpy(indata).to(
-                self.config.device
-            )
+            self.input_wav[-indata.shape[0] :] = torch.from_numpy(indata).to(io_dev)
+
+            peak = float(np.max(np.abs(indata))) if indata.size else 0.0
+            # 起音诊断：静音之后的头两块单独记一行。
+            try:
+                if peak < 2e-5:
+                    self._onset_left = 2
+                elif int(getattr(self, "_onset_left", 0) or 0) > 0:
+                    self._onset_left = int(self._onset_left) - 1
+                    printt(
+                        "onset peak=%.4f in_db=%.1f gate=%s infer_ms=%s q=%.0f",
+                        peak,
+                        float(getattr(self, "last_input_db", -90.0)),
+                        float(getattr(self.gui_config, "threhold", -60) or -60),
+                        int(getattr(self, "last_infer_ms", 0) or 0),
+                        float(getattr(self, "_queue_frames", 0.0) or 0.0),
+                    )
+            except Exception:
+                pass
+
+            if self.function == "vc" and peak < 2e-5:
+                # Quiet block: do not touch the GPU. TorchGate + skip_block +
+                # SOLA on DirectML wait for the game's 3D queue — that is the
+                # 17s Infer time with no Spent time in diag 26.8.21/1.
+                self.input_wav_res[: -self.block_frame_16k] = self.input_wav_res[
+                    self.block_frame_16k :
+                ].clone()
+                self.input_wav_res[-self.block_frame_16k :] = 0
+                self._pitch_skip_blocks = int(
+                    getattr(self, "_pitch_skip_blocks", 0) or 0
+                ) + 1
+                try:
+                    self.sola_buffer.mul_(0.88)
+                except Exception:
+                    pass
+                self._emit_silence(buf_size, start_time)
+                return
+
             self.input_wav_res[: -self.block_frame_16k] = self.input_wav_res[
                 self.block_frame_16k :
             ].clone()
-            # input noise reduction and resampling
-            if self.gui_config.I_noise_reduce:
+            # Skip denoise when already late — catching the deadline matters
+            # more than one block of spectral gating.
+            budget_ms = float(getattr(self.gui_config, "block_time", 0.25) or 0.25) * 850.0
+            behind = int(getattr(self, "last_infer_ms", 0) or 0) > budget_ms
+            denoise = bool(self.gui_config.I_noise_reduce) and not behind
+            if denoise:
                 self.input_wav_denoise[: -self.block_frame] = self.input_wav_denoise[
                     self.block_frame :
                 ].clone()
@@ -2359,63 +2491,29 @@ if __name__ == "__main__":
                 )
             # infer
             if self.function == "vc":
-                # Skip full RVC when this block is gated silent — less GPU load / no "ghost" noise
-                peak = float(np.max(np.abs(indata))) if indata.size else 0.0
-                # 起音诊断：静音之后的头两块单独记一行。
-                #
-                # 「说话前几个字变不上 / 糊」有好几种可能的成因，光看代码分不清
-                # 是哪一种：冷启动第一块特别慢、门限把弱起音切了、还是音高历史
-                # 对不上。这三种在日志里长得完全不一样，录一句话就能定位。
-                #
-                # 只记起音那两块，不是每块都记 —— 每块一行的话一分钟就几千行，
-                # 真正要看的那两行反而找不到。
-                try:
-                    if peak < 2e-5:
-                        self._onset_left = 2
-                    elif int(getattr(self, "_onset_left", 0) or 0) > 0:
-                        self._onset_left = int(self._onset_left) - 1
-                        printt(
-                            "onset peak=%.4f in_db=%.1f gate=%s infer_ms=%s q=%.0f",
-                            peak,
-                            float(getattr(self, "last_input_db", -90.0)),
-                            float(getattr(self.gui_config, "threhold", -60) or -60),
-                            int(getattr(self, "last_infer_ms", 0) or 0),
-                            float(getattr(self, "_queue_frames", 0.0) or 0.0),
-                        )
-                except Exception:
-                    pass
-                if peak < 2e-5:
-                    need = (
-                        int(self.block_frame)
-                        + int(self.sola_buffer_frame)
-                        + int(self.sola_search_frame)
-                        + 32
-                    )
-                    infer_wav = torch.zeros(
-                        need, device=self.config.device, dtype=torch.float32
-                    )
-                    # 跳过推理省显卡，但音高历史必须照常往前走。少了这一句，
-                    # 静音期间那段历史会冻在用户上一次说话的结尾上，下次开口
-                    # 时模型拿着几秒前的音高轨迹去解码，前几个字就发糊。
+                nskip = int(getattr(self, "_pitch_skip_blocks", 0) or 0)
+                if nskip:
+                    # 静音时没动 GPU 上的音高历史。开口这一块一次性补上，
+                    # 否则模型拿着几秒前的音高轨迹解码，前几个字发糊。
                     try:
-                        self.rvc.skip_block(self.block_frame_16k)
+                        self.rvc.skip_block(self.block_frame_16k * nskip)
                     except Exception:
                         traceback.print_exc()
-                    # Decay SOLA tail so stop-speaking does not leave a short "aftertaste"
-                    try:
-                        self.sola_buffer.mul_(0.88)
-                    except Exception:
-                        pass
-                else:
-                    infer_wav = self.rvc.infer(
-                        self.input_wav_res,
-                        self.block_frame_16k,
-                        self.skip_head,
-                        self.return_length,
-                        self.gui_config.f0method,
-                    )
-                    if self.resampler2 is not None:
-                        infer_wav = self.resampler2(infer_wav)
+                    self._pitch_skip_blocks = 0
+                feat16 = self.input_wav_res
+                if getattr(self, "_dml", False):
+                    feat16 = feat16.to(self.config.device)
+                infer_wav = self.rvc.infer(
+                    feat16,
+                    self.block_frame_16k,
+                    self.skip_head,
+                    self.return_length,
+                    self.gui_config.f0method,
+                )
+                if self.resampler2 is not None:
+                    infer_wav = self.resampler2(infer_wav)
+                if getattr(self, "_dml", False):
+                    infer_wav = infer_wav.to(io_dev)
             elif self.gui_config.I_noise_reduce:
                 infer_wav = self.input_wav_denoise[self.extra_frame :].clone()
             else:
@@ -2447,16 +2545,17 @@ if __name__ == "__main__":
                     traceback.print_exc()
             # volume envelop mixing
             if self.gui_config.rms_mix_rate < 1 and self.function == "vc":
-                if self.gui_config.I_noise_reduce:
+                if denoise:
                     input_wav = self.input_wav_denoise[self.extra_frame :]
                 else:
                     input_wav = self.input_wav[self.extra_frame :]
+                mix_dev = infer_wav.device
                 rms1 = librosa.feature.rms(
-                    y=input_wav[: infer_wav.shape[0]].cpu().numpy(),
+                    y=input_wav[: infer_wav.shape[0]].detach().cpu().numpy(),
                     frame_length=4 * self.zc,
                     hop_length=self.zc,
                 )
-                rms1 = torch.from_numpy(rms1).to(self.config.device)
+                rms1 = torch.from_numpy(rms1).to(mix_dev)
                 rms1 = F.interpolate(
                     rms1.unsqueeze(0),
                     size=infer_wav.shape[0] + 1,
@@ -2464,11 +2563,11 @@ if __name__ == "__main__":
                     align_corners=True,
                 )[0, 0, :-1]
                 rms2 = librosa.feature.rms(
-                    y=infer_wav[:].cpu().numpy(),
+                    y=infer_wav[:].detach().cpu().numpy(),
                     frame_length=4 * self.zc,
                     hop_length=self.zc,
                 )
-                rms2 = torch.from_numpy(rms2).to(self.config.device)
+                rms2 = torch.from_numpy(rms2).to(mix_dev)
                 rms2 = F.interpolate(
                     rms2.unsqueeze(0),
                     size=infer_wav.shape[0] + 1,
@@ -2489,7 +2588,9 @@ if __name__ == "__main__":
             cor_den = torch.sqrt(
                 F.conv1d(
                     conv_input**2,
-                    torch.ones(1, 1, self.sola_buffer_frame, device=self.config.device),
+                    torch.ones(
+                        1, 1, self.sola_buffer_frame, device=self.sola_buffer.device
+                    ),
                 )
                 + 1e-8
             )
@@ -2527,77 +2628,8 @@ if __name__ == "__main__":
 
             # Self-monitor: same converted audio to headphones (main out stays CABLE)
             self._write_monitor(outdata)
-
-            # 装填输出缓冲
-            start = self.out_ptr.value
-            play_pos = self.play_ptr.value
-
-            # 计算播放进度差（写指针距离播放指针的帧数）
-            delta = (start - play_pos + buf_size) % buf_size
-
-            # 这个差就是「已经算好、还没放出去」的音频量 —— 真实的排队延迟。
-            # 底栏那个延迟读数一直是拿公式算的（设备延迟 + 块长 + 交叉淡化），
-            # 假设推理总能在一个块内跑完；跑不完时真实延迟会涨，而那个数字纹丝
-            # 不动。这里量的是实际值，涨了就看得见。
-            #
-            # 平滑一下：逐块读出来的数会跳，界面上乱蹦的数字比一个稳定的错数
-            # 还难用。0.85/0.15 大约半秒收敛，跟得上变化又不晃。
-            q = float(getattr(self, "_queue_frames", float(delta)) or 0.0)
-            self._queue_frames = 0.85 * q + 0.15 * float(delta)
-
-            if delta < self.block_frame:
-                # 装填赶不上播放，导致播放进度追上来了，
-                # 此时已产生无法挽回的破音，
-                # 只好直接卡着播放指针写入，保证接下来的尽快放出来
-                n_u = int(getattr(self, "_underrun_n", 0) or 0) + 1
-                self._underrun_n = n_u
-                if n_u <= 2 or n_u % 40 == 0:
-                    print("[W] Output underrun")
-                write_pos = play_pos
-            else:
-                # 否则按块对齐
-                write_pos = (start + self.block_frame) % buf_size
-
-            # 写入共享缓冲区（再判一次：stop 可能中途把缓冲拆了）
-            if self.out_buf is None or not flag_vc:
-                return
-            end = (write_pos + self.block_frame) % buf_size
-            if end > write_pos:
-                self.out_buf[write_pos:end] = outdata
-            else:
-                first = buf_size - write_pos
-                self.out_buf[write_pos:] = outdata[:first]
-                self.out_buf[:end] = outdata[first:]
-
-            # 更新写指针
-            if self.out_ptr is None:
-                return
-            self.out_ptr.value = write_pos
-
-            if self.in_evt.is_set():
-                n_o = int(getattr(self, "_overrun_n", 0) or 0) + 1
-                self._overrun_n = n_o
-                if n_o <= 2 or n_o % 40 == 0:
-                    print("[W] Input overrun")
-                self.in_evt.clear()
-
-            total_time = time.perf_counter() - start_time
-            self.last_infer_ms = int(total_time * 1000)
-            perf = getattr(self, "_perf", None)
-            if perf is not None:
-                perf.add(total_time)
-            if flag_vc and self.window is not None:
-                try:
-                    self.window["infer_time"].update(self.last_infer_ms)
-                except Exception:
-                    pass
-            # Soft-clip main output buffer write (below) via outdata path
-            # Rate-limit timing log
-            _lt = getattr(self, "_last_infer_log_t", 0.0)
-            if total_time > 0.05 or (time.perf_counter() - _lt) > 2.0:
-                self._last_infer_log_t = time.perf_counter()
-                if total_time > 0.05:
-                    printt("Infer time: %.2f", total_time)
+            self._commit_output(outdata, buf_size)
+            self._finish_block_timing(start_time)
 
         def update_devices(self, hostapi_name=None):
             """获取设备列表 — must fully stop stream before re-init sounddevice."""

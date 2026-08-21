@@ -125,7 +125,7 @@ def main() -> None:
     try:
         from tools.win_realtime import boost_current_process
 
-        boost_current_process()
+        boost_current_process(high=True)
     except Exception:
         pass
 

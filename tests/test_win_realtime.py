@@ -30,7 +30,7 @@ class WinRealtimeTests(unittest.TestCase):
     def test_worker_calls_boost_before_torch(self):
         src = (ROOT / "tools" / "realtime_worker.py").read_text(encoding="utf-8")
         main = src[src.index("def main") :]
-        self.assertIn("boost_current_process", main)
+        self.assertIn("boost_current_process(high=True)", main)
         self.assertLess(
             main.index("boost_current_process"),
             main.index("runpy"),
@@ -60,6 +60,10 @@ class WinRealtimeTests(unittest.TestCase):
         self.assertTrue(
             (ROOT / "app" / "src-tauri" / "src" / "win_realtime.rs").is_file()
         )
+
+    def test_gpu_scheduling_is_high(self):
+        src = (ROOT / "tools" / "win_realtime.py").read_text(encoding="utf-8")
+        self.assertIn("D3DKMTSetProcessSchedulingPriorityClass(handle, 4)", src)
 
 
 if __name__ == "__main__":

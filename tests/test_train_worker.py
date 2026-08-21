@@ -542,5 +542,16 @@ class SnapshotPublishedPathTests(unittest.TestCase):
             self.assertEqual(snap["published_bytes"], len(b"published"))
 
 
+class TrainPartialWarningUiTests(unittest.TestCase):
+    """半份产物的 skip 下一拍就是 stage，必须写到 msg 上才看得到。"""
+
+    def test_panel_keeps_skip_text_on_msg(self):
+        src = (ROOT / "app" / "src" / "components" / "TrainPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('phase === "skip"', src)
+        self.assertIn("setMsg", src)
+
+
 if __name__ == "__main__":
     unittest.main()

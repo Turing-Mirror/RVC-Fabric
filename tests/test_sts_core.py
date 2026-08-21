@@ -244,6 +244,19 @@ class MoveToCpuTests(unittest.TestCase):
         self.assertFalse(hasattr(vc.pipeline, "model_rmvpe"))
         self.assertEqual(vc.config.device, "cpu")
 
+    def test_hubert_fail_leaves_net_g_on_original_device(self):
+        vc = FakeVC()
+
+        class Boom(FakeModel):
+            def to(self, device):
+                raise RuntimeError("oom moving hubert")
+
+        vc.hubert_model = Boom()
+        self.assertFalse(move_models_to_cpu(vc))
+        self.assertEqual(vc.net_g.device, "privateuseone:0")
+        self.assertEqual(vc.pipeline.device, "privateuseone:0")
+        self.assertTrue(hasattr(vc.pipeline, "model_rmvpe"))
+
 
 class FakeWavfile:
     """scipy.io.wavfile 的替身，只要能落个文件。"""

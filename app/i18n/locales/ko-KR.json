@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "엔진 프로세스가 시스템에 의해 종료되었습니다(종료 코드 {}). 이런 종료는 보통 타사 드라이버가 프로그램 내부에서 실패해 발생합니다.",
     "wkExitedWithCode": "엔진 프로세스가 종료되었습니다(종료 코드 {}).",
     "audioProbeCrash": "오디오 장치 목록을 읽는 중 프로세스가 시스템에 의해 종료되었습니다(종료 코드 {}).",
-    "audioProbeAsio": "이 컴퓨터에 등록된 ASIO 드라이버: {}. 해당 드라이버를 업데이트하거나 제거한 뒤 다시 시도하세요."
+    "audioProbeAsio": "이 컴퓨터에 등록된 ASIO 드라이버: {}. 해당 드라이버를 업데이트하거나 제거한 뒤 다시 시도하세요.",
+    "chkWorkerKilled": "이번 실행 중 엔진 프로세스가 시스템에 의해 종료되었습니다",
+    "chkSnapshotModel": "선택된 \"{name}\"은(는) 음색 모델이 아니라 학습 체크포인트로 보입니다",
+    "chkStageMismatch": "실험 \"{a0}\"의 중간 산출물이 불완전합니다: 슬라이스 {a1}, 피치 {a2}, 특징 {a3}",
+    "chkPreprocessFail": "실험 \"{a0}\" 전처리에서 파일 {a1}개를 읽지 못했습니다",
+    "chkOom": "실험 \"{}\"의 학습 로그가 VRAM 부족으로 끝났습니다",
+    "chkPretrainedPartial": "기본 모델 누락: {}. 선택 가능한 샘플링 레이트가 제한됩니다.",
+    "chkDiskLow": "앱이 설치된 드라이브의 여유 공간이 {} GB뿐입니다",
+    "chkMmeDelay": "오디오 인터페이스가 MME이며 실측 지연은 {} 밀리초입니다",
+    "chkUnderrun": "버퍼 언더런이 누적 {}회 발생했으며 소리가 끊깁니다",
+    "diagFindingsTitle": "이 묶음에서 이미 보이는 것",
+    "diagFindingsNone": "뚜렷한 문제를 찾지 못했습니다",
+    "diagFindingsChecking": "확인 중…",
+    "chkLevelError": "심각",
+    "chkLevelWarn": "주의",
+    "chkLevelInfo": "참고"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

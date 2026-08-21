@@ -838,6 +838,9 @@ pub fn build_diagnostics(
             "train": crate::train::status(root),
         },
         "perf_note": perf_note,
+        // 包里已经能看出来的问题，跟着包一起走。支援打开 info.json 第一眼就
+        // 看到结论，不用先翻三十个日志文件。
+        "findings": crate::selfcheck::run(root),
         "generated_at": stamp,
     });
     zip_text(

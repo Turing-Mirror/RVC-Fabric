@@ -1875,7 +1875,22 @@
     "wkKilledBySystem": "引擎程序被系統終止，結束代碼 {}。這類結束通常由第三方驅動程式在程式內部出錯引起。",
     "wkExitedWithCode": "引擎程序已結束，結束代碼 {}。",
     "audioProbeCrash": "讀取音訊裝置清單時程序被系統終止，結束代碼 {}。",
-    "audioProbeAsio": "本機已註冊的 ASIO 驅動程式：{}。請更新或解除安裝後再試一次。"
+    "audioProbeAsio": "本機已註冊的 ASIO 驅動程式：{}。請更新或解除安裝後再試一次。",
+    "chkWorkerKilled": "本次執行中，引擎程序曾被系統終止",
+    "chkSnapshotModel": "目前選取的「{name}」看起來是訓練存檔，不是音色模型",
+    "chkStageMismatch": "實驗「{a0}」的產物不完整：切片 {a1}、音高 {a2}、特徵 {a3}",
+    "chkPreprocessFail": "實驗「{a0}」前處理有 {a1} 個檔案讀取失敗",
+    "chkOom": "實驗「{}」的訓練紀錄結尾是顯示記憶體不足",
+    "chkPretrainedPartial": "底模缺 {}，可選取樣率受限",
+    "chkDiskLow": "產品所在磁碟只剩 {} GB",
+    "chkMmeDelay": "音訊介面是 MME，實測延遲 {} 毫秒",
+    "chkUnderrun": "累計欠載 {} 次，聲音會有卡頓",
+    "diagFindingsTitle": "這個包裡已經能看出的",
+    "diagFindingsNone": "暫時沒看出明顯問題",
+    "diagFindingsChecking": "正在檢查…",
+    "chkLevelError": "嚴重",
+    "chkLevelWarn": "注意",
+    "chkLevelInfo": "提示"
   },
   "extras": {
     "engineTitle": "引擎資源",

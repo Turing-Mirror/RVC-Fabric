@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "{a0} 刪不掉：{a1}。檔案可能正被占用，先停下分離／訓練再試。",
     "vcNeedEngineCore": "即時變聲需要引擎資源（hubert / rmvpe / ffmpeg，約 720 MB）。先下載補齊，完成後再點「開啟變聲」。",
     "vcNeedEngineCoreShort": "請先補齊引擎資源，再開啟變聲",
-    "wkDiedDuringLoad": "引擎行程在載入過程中結束，詳見 User_Data/logs/realtime_worker.log",
+    "wkDiedDuringLoad": "引擎程序在載入過程中結束，詳見 User_Data/logs/worker/ 下當天的紀錄。",
     "wkPidNotAlive": "引擎行程已不在執行",
     "wkReadyTimeout": "等待引擎就緒逾時，請再試一次，或查看 User_Data/logs/realtime_worker.log",
     "wkStartTimeout": "啟動逾時",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "麥克風選 CABLE Output",
     "routeMonitor": "耳機",
     "routeMonitorSub": "監聽設備",
-    "routeMonitorNote": "可選，只有你聽得到"
+    "routeMonitorNote": "可選，只有你聽得到",
+    "exitAccessViolation": "存取衝突",
+    "exitDivideByZero": "整數除以零",
+    "exitIllegalInstruction": "非法指令",
+    "exitStackBufferOverrun": "堆疊緩衝區滿溢",
+    "exitStackOverflow": "堆疊溢位",
+    "exitMissingDll": "缺少相依程式庫",
+    "exitInterrupted": "程序被中斷",
+    "wkKilledBySystem": "引擎程序被系統終止，結束代碼 {}。這類結束通常由第三方驅動程式在程式內部出錯引起。",
+    "wkExitedWithCode": "引擎程序已結束，結束代碼 {}。",
+    "audioProbeCrash": "讀取音訊裝置清單時程序被系統終止，結束代碼 {}。",
+    "audioProbeAsio": "本機已註冊的 ASIO 驅動程式：{}。請更新或解除安裝後再試一次。"
   },
   "extras": {
     "engineTitle": "引擎資源",

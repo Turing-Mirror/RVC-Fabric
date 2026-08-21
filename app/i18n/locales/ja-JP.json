@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "{a0} を削除できません：{a1}。使用中の可能性があります。分離／学習を止めてから再試行してください。",
     "vcNeedEngineCore": "リアルタイム変換にはエンジンリソース（hubert / rmvpe / ffmpeg、約 720 MB）が要ります。先にダウンロードしてから「変声を開始」を押してください。",
     "vcNeedEngineCoreShort": "先にエンジンリソースを揃えてから変声を開始してください",
-    "wkDiedDuringLoad": "読み込み中にエンジンプロセスが終了しました。User_Data/logs/realtime_worker.log を確認してください",
+    "wkDiedDuringLoad": "読み込み中にエンジンプロセスが終了しました。User_Data/logs/worker/ 内の当日のログをご確認ください。",
     "wkPidNotAlive": "エンジンプロセスがすでに動いていません",
     "wkReadyTimeout": "エンジンの準備待ちがタイムアウトしました。もう一度試すか、User_Data/logs/realtime_worker.log を確認してください",
     "wkStartTimeout": "起動タイムアウト",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "マイクは CABLE Output",
     "routeMonitor": "ヘッドホン",
     "routeMonitorSub": "モニタリング",
-    "routeMonitorNote": "任意・自分だけに聞こえます"
+    "routeMonitorNote": "任意・自分だけに聞こえます",
+    "exitAccessViolation": "アクセス違反",
+    "exitDivideByZero": "ゼロ除算",
+    "exitIllegalInstruction": "不正な命令",
+    "exitStackBufferOverrun": "スタックバッファのオーバーラン",
+    "exitStackOverflow": "スタックオーバーフロー",
+    "exitMissingDll": "依存ライブラリが見つかりません",
+    "exitInterrupted": "プロセスが中断されました",
+    "wkKilledBySystem": "エンジンプロセスがシステムによって終了されました（終了コード {}）。この種の終了は、通常サードパーティ製ドライバーがプログラム内部で失敗したことが原因です。",
+    "wkExitedWithCode": "エンジンプロセスが終了しました（終了コード {}）。",
+    "audioProbeCrash": "オーディオデバイス一覧の読み取り中に、プロセスがシステムによって終了されました（終了コード {}）。",
+    "audioProbeAsio": "このコンピューターに登録されている ASIO ドライバー：{}。更新またはアンインストールしてからもう一度お試しください。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

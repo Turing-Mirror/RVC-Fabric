@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "{a0}을(를) 삭제할 수 없습니다: {a1}. 사용 중일 수 있습니다. 분리/학습을 멈춘 뒤 다시 시도하세요.",
     "vcNeedEngineCore": "실시간 변조에는 엔진 리소스(hubert / rmvpe / ffmpeg, 약 720 MB)가 필요합니다. 먼저 내려받은 뒤 「변조 시작」을 누르세요.",
     "vcNeedEngineCoreShort": "엔진 리소스를 먼저 받은 뒤 변조를 시작하세요",
-    "wkDiedDuringLoad": "로딩 중 엔진 프로세스가 종료됐습니다. User_Data/logs/realtime_worker.log를 확인하세요",
+    "wkDiedDuringLoad": "로딩 중 엔진 프로세스가 종료되었습니다. User_Data/logs/worker/ 아래의 당일 로그를 확인하세요.",
     "wkPidNotAlive": "엔진 프로세스가 더 이상 실행 중이 아닙니다",
     "wkReadyTimeout": "엔진 준비를 기다리다 시간이 초과됐습니다. 다시 시도하거나 User_Data/logs/realtime_worker.log를 확인하세요",
     "wkStartTimeout": "시작 시간 초과",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "마이크는 CABLE Output",
     "routeMonitor": "헤드폰",
     "routeMonitorSub": "모니터링 장치",
-    "routeMonitorNote": "선택, 본인만 들립니다"
+    "routeMonitorNote": "선택, 본인만 들립니다",
+    "exitAccessViolation": "액세스 위반",
+    "exitDivideByZero": "0으로 나누기",
+    "exitIllegalInstruction": "잘못된 명령",
+    "exitStackBufferOverrun": "스택 버퍼 오버런",
+    "exitStackOverflow": "스택 오버플로",
+    "exitMissingDll": "종속 라이브러리 없음",
+    "exitInterrupted": "프로세스가 중단됨",
+    "wkKilledBySystem": "엔진 프로세스가 시스템에 의해 종료되었습니다(종료 코드 {}). 이런 종료는 보통 타사 드라이버가 프로그램 내부에서 실패해 발생합니다.",
+    "wkExitedWithCode": "엔진 프로세스가 종료되었습니다(종료 코드 {}).",
+    "audioProbeCrash": "오디오 장치 목록을 읽는 중 프로세스가 시스템에 의해 종료되었습니다(종료 코드 {}).",
+    "audioProbeAsio": "이 컴퓨터에 등록된 ASIO 드라이버: {}. 해당 드라이버를 업데이트하거나 제거한 뒤 다시 시도하세요."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

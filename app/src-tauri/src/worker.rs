@@ -752,6 +752,28 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
     })?;
 
     protocol::ensure_control_dir(root).map_err(|e| e.to_string())?;
+
+    // 音频设备枚举会不会把进程带走？值得一探，但不值得每次都探。
+    //
+    // 探一次要起一个 Python 进程，一两秒起步；正常机器上这钱白花。所以只在
+    // 本次会话已经有 worker 被系统终止过的时候才去踩：第一次崩照崩（拦不住，
+    // 那时还没有任何迹象），第二次点开启之前就能把祸首指出来，而不是让用户
+    // 像 26.8.21 那位一样点满九次。
+    if crate::crash::saw_fatal_exit() {
+        if let Some(reason) = crate::audio_probe::blocking_reason(root) {
+            let mut fields = Map::new();
+            fields.insert("state".into(), json!("error"));
+            fields.insert("error".into(), json!(reason.clone()));
+            fields.insert("message".into(), json!(""));
+            fields.insert("message_code".into(), json!(""));
+            fields.insert("pid".into(), json!(0));
+            fields.insert("progress".into(), json!(0));
+            let _ = protocol::write_status_merge(root, fields);
+            append_log(root, &format!("拒绝启动 worker：{reason}"));
+            return Err(reason);
+        }
+    }
+
     let mut fields = Map::new();
     fields.insert("state".into(), json!("starting"));
     // 带上 code，别只写一句英文：这条会直接显示在底栏状态行上，而 status.json
@@ -820,8 +842,7 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
         crate::win_realtime::boost_child(&child);
         append_log(root, &format!("spawned shell-side pid={}", child.id()));
         adopt_spawned(root, child.id());
-        // Do not wait; worker re-parents as Runtime process and writes its own pid
-        std::mem::forget(child);
+        watch_exit(root, child);
     }
     #[cfg(not(windows))]
     {
@@ -835,7 +856,7 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
             .spawn()
             .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
         adopt_spawned(root, child.id());
-        std::mem::forget(child);
+        watch_exit(root, child);
     }
 
     Ok(())
@@ -858,6 +879,8 @@ fn adopt_spawned(root: &Path, pid: u32) {
     if pid == 0 {
         return;
     }
+    // pid 会被系统复用：上一个用这个号的进程怎么死的，跟眼前这个没关系。
+    crate::crash::forget_exit(pid);
     let _ = protocol::write_worker_pid(root, pid);
     let _ = protocol::remember_spawned_pid(root, pid);
     // 直接记成「是我们的」，别让它去走镜像路径比对。
@@ -872,6 +895,57 @@ fn adopt_spawned(root: &Path, pid: u32) {
     let mut fields = Map::new();
     fields.insert("pid".into(), json!(pid));
     let _ = protocol::write_status_merge(root, fields);
+}
+
+/// 收 worker 的退出码。
+///
+/// 以前这里是 `std::mem::forget(child)`，理由写的是「worker 会 re-parent，自己
+/// 写 pid」。前半句对 pythonw 这条路不成立：`spawned shell-side pid=` 和 worker
+/// 日志里的 pid 是同一个，句柄就是它本人。代价是进程被系统终止时退出码没人收，
+/// 日志里连一行都没有 —— 26.8.21 那位连点九次开启变声，九次都是 PortAudio 探
+/// ASIO 驱动时被 0xC0000094 带走，诊断包里翻不出任何痕迹。
+///
+/// 等在后台线程里，不挡任何人。`wait()` 也顺手把句柄还给系统。
+fn watch_exit(root: &Path, mut child: std::process::Child) {
+    let pid = child.id();
+    let root = root.to_path_buf();
+    let _ = thread::Builder::new()
+        .name(format!("worker-exit-{pid}"))
+        .spawn(move || {
+            let code = match child.wait() {
+                Ok(st) => st.code(),
+                Err(_) => return,
+            };
+            let Some(code) = code else { return };
+            crate::crash::record_exit(pid, code);
+            if crate::crash::is_fatal_status(code) {
+                let desc = crate::crash::describe(code);
+                append_log(&root, &format!("worker pid={pid} 被系统终止，退出码 {desc}"));
+                crate::logging::shell_log!("worker pid={} 被系统终止，退出码 {}", pid, desc);
+            } else if code != 0 {
+                append_log(&root, &format!("worker pid={pid} 退出，退出码 {code}"));
+            }
+        });
+}
+
+/// 「引擎进程为什么没了」——能说出退出码就说，说不出就退回旧那句。
+///
+/// 退出码由 `watch_exit` 的线程回填，进程刚没的那一瞬间可能还没到，所以这里给
+/// 它半秒。等不到也不硬等：没有退出码一样要把话说完整。
+fn death_reason(pid: u32) -> String {
+    let deadline = Instant::now() + Duration::from_millis(500);
+    loop {
+        if let Some(code) = crate::crash::exit_code_of(pid) {
+            if crate::crash::is_fatal_status(code) {
+                return crate::i18n::te("s.wkKilledBySystem", &crate::crash::describe(code));
+            }
+            return crate::i18n::te("s.wkExitedWithCode", &code);
+        }
+        if Instant::now() >= deadline {
+            return crate::i18n::t("s.wkDiedDuringLoad");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
 }
 
 pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
@@ -896,7 +970,7 @@ pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
             forget_identity_cache();
             // 这几条是现算现返给界面的，不落 status.json，所以直接按当前语言
             // 取文案就行 —— 不像上面那些写盘的，需要留 code 等下次解析。
-            let died = crate::i18n::t("s.wkDiedDuringLoad");
+            let died = death_reason(pid);
             return json!({
                 "state": "error",
                 "error": last.get("error").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).unwrap_or(&died),
@@ -1330,12 +1404,39 @@ pub fn status_for_ui(root: &Path) -> Value {
             .unwrap_or("")
             .to_string();
         // 假启动：status 仍写 starting，但已经没有活着的 worker。
-        // 底栏会一直「启动中…」，用户点开启也像没反应。直接摊成 idle。
+        // 底栏会一直「启动中…」，用户点开启也像没反应。
+        //
+        // 但不能一律摊成 idle。26.8.21 那位九次点开启，九次 worker 被系统终止，
+        // 每次都在这里被抹成「空闲、无消息」，只剩一根停在 22% 的进度条 ——
+        // 界面上没有任何东西告诉他刚才崩了。收得到退出码就照实说；收不到（多半
+        // 是上一次会话遗留的陈旧 status）才按空闲处理。
         if state == "starting" && !alive {
-            obj.insert("state".into(), json!("idle"));
-            obj.insert("message".into(), json!(""));
-            obj.insert("message_code".into(), json!(""));
+            let dead_pid = obj.get("pid").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            let fatal = crate::crash::exit_code_of(dead_pid)
+                .filter(|c| crate::crash::is_fatal_status(*c));
             obj.insert("pid".into(), json!(0));
+            obj.insert("progress".into(), json!(0));
+            match fatal {
+                Some(code) => {
+                    obj.insert("state".into(), json!("error"));
+                    // message 留空：statusSub 会优先显示 message，短提示反而会
+                    // 把真正那句「被系统终止，退出码 …」顶掉。
+                    obj.insert("message_code".into(), json!(""));
+                    obj.insert("message".into(), json!(""));
+                    obj.insert(
+                        "error".into(),
+                        json!(crate::i18n::te(
+                            "s.wkKilledBySystem",
+                            &crate::crash::describe(code)
+                        )),
+                    );
+                }
+                None => {
+                    obj.insert("state".into(), json!("idle"));
+                    obj.insert("message".into(), json!(""));
+                    obj.insert("message_code".into(), json!(""));
+                }
+            }
         } else if !alive {
             // If status claims a pid that is not ours / dead, surface it
             if let Some(p) = obj.get("pid").and_then(|v| v.as_u64()) {
@@ -1360,6 +1461,64 @@ pub fn status_for_ui(root: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 仓库里没有 tempfile 依赖，其他模块的测试都是这么开临时目录的。
+    fn tmp_root(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("rvcf-worker-{name}"));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        protocol::ensure_control_dir(&d).unwrap();
+        d
+    }
+
+    /// 系统上不会存在的 pid，`pid_alive` 必须判它死。
+    const DEAD_PID: u32 = 4_000_000;
+
+    fn write_starting(root: &Path, pid: u32) {
+        let mut f = Map::new();
+        f.insert("state".into(), json!("starting"));
+        f.insert("pid".into(), json!(pid));
+        f.insert("progress".into(), json!(22));
+        f.insert("message_code".into(), json!("engine.importing"));
+        f.insert("message".into(), json!("正在导入推理库（可能需要十几秒）…"));
+        protocol::write_status_merge(root, f).unwrap();
+    }
+
+    /// 26.8.21 的用户：worker 被系统终止（ASIO 驱动 0xC0000094），status 还停在
+    /// starting/22。以前这里一律摊成 idle 且清空 message，界面上只剩一根停住的
+    /// 进度条，什么都不说 —— 他因此点了九次。
+    #[test]
+    fn a_worker_killed_by_the_system_is_reported_not_blanked() {
+        let root = tmp_root("crash-reported");
+        write_starting(&root, DEAD_PID);
+        crate::crash::record_exit(DEAD_PID, 0xC000_0094u32 as i32);
+
+        let st = status_for_ui(&root);
+        assert_eq!(st.get("state").unwrap(), "error");
+        let err = st.get("error").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(err.contains("0xC0000094"), "退出码要写在报错里：{err}");
+        // 进度条必须归零，否则界面上留着一根 22% 的条子。
+        assert_eq!(st.get("progress").and_then(|v| v.as_u64()), Some(0));
+        assert_eq!(st.get("pid").and_then(|v| v.as_u64()), Some(0));
+
+        crate::crash::forget_exit(DEAD_PID);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 另一半：收不到退出码就说明多半是上次会话遗留的陈旧 status，那还是按
+    /// 空闲处理 —— 不能凭「进程不在」就报崩溃。
+    #[test]
+    fn a_stale_starting_status_without_an_exit_code_still_falls_back_to_idle() {
+        let root = tmp_root("stale-starting");
+        write_starting(&root, DEAD_PID);
+        crate::crash::forget_exit(DEAD_PID);
+
+        let st = status_for_ui(&root);
+        assert_eq!(st.get("state").unwrap(), "idle");
+        assert_eq!(st.get("message").and_then(|v| v.as_str()), Some(""));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     fn cfg_of(pairs: &[(&str, Value)]) -> Map<String, Value> {
         let mut m = crate::config::defaults();

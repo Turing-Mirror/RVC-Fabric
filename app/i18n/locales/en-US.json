@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "Cannot delete {a0}: {a1}. The file may be in use — stop separation/training and retry.",
     "vcNeedEngineCore": "Realtime conversion needs the engine resources (hubert / rmvpe / ffmpeg, about 720 MB). Download them first, then hit Start.",
     "vcNeedEngineCoreShort": "Download the engine resources before starting conversion",
-    "wkDiedDuringLoad": "The engine process exited while loading — see User_Data/logs/realtime_worker.log",
+    "wkDiedDuringLoad": "The engine process exited while loading. See today's log under User_Data/logs/worker/.",
     "wkPidNotAlive": "The engine process is no longer running",
     "wkReadyTimeout": "Timed out waiting for the engine to be ready. Try again, or check User_Data/logs/realtime_worker.log",
     "wkStartTimeout": "Startup timed out",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "mic: CABLE Output",
     "routeMonitor": "Headphones",
     "routeMonitorSub": "monitor device",
-    "routeMonitorNote": "optional, only you hear it"
+    "routeMonitorNote": "optional, only you hear it",
+    "exitAccessViolation": "Access violation",
+    "exitDivideByZero": "Integer divide by zero",
+    "exitIllegalInstruction": "Illegal instruction",
+    "exitStackBufferOverrun": "Stack buffer overrun",
+    "exitStackOverflow": "Stack overflow",
+    "exitMissingDll": "Missing dependent library",
+    "exitInterrupted": "Process interrupted",
+    "wkKilledBySystem": "The engine process was terminated by the system (exit code {}). This kind of exit is usually caused by a third-party driver failing inside the program.",
+    "wkExitedWithCode": "The engine process exited with code {}.",
+    "audioProbeCrash": "The process was terminated by the system while reading the audio device list (exit code {}).",
+    "audioProbeAsio": "ASIO drivers registered on this computer: {}. Please update or uninstall them and try again."
   },
   "extras": {
     "engineTitle": "Engine resources",

@@ -1997,7 +1997,11 @@
     "trainInspectMixedRate": "The material has mixed sample rates ({}). Preprocessing resamples everything, so this usually needs no action.",
     "unitSeconds": "{} s",
     "unitMinutes": "{} min",
-    "unitHours": "{} h"
+    "unitHours": "{} h",
+    "auditionText": "Hello. This is a preview of the current voice. The quick brown fox jumps over the lazy dog.",
+    "auditionBtn": "Preview",
+    "auditionBusy": "Synthesizing…",
+    "auditionFailed": "Preview failed: {}"
   },
   "extras": {
     "engineTitle": "Engine resources",

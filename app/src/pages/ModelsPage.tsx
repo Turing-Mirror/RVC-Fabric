@@ -7,6 +7,7 @@ import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
+import { auditionVoice } from "../lib/audition";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
@@ -314,6 +315,18 @@ function ModelsPageImpl({
     });
   };
 
+  const [auditing, setAuditing] = useState("");
+  const runAudition = async (m: VoiceModel) => {
+    if (auditing) return;
+    setAuditing(m.dir);
+    try {
+      const err = await auditionVoice(m.path || "");
+      if (err) setMsg(t("s.auditionFailed", { v0: err }));
+    } finally {
+      setAuditing("");
+    }
+  };
+
   const onUse = async (m: VoiceModel) => {
     if (m.missing) {
       setMsg(t("s.314a72cba4"));
@@ -562,6 +575,17 @@ function ModelsPageImpl({
                     ) : (
                       <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
                     )}
+                    {/* 试听不改用户当前选中的音色 —— 为了听一下就把他的选择改掉，
+                        是拿副作用换功能。后端直接按这个路径换声。 */}
+                    {v.path && !v.missing ? (
+                      <Btn
+                        busy={auditing === v.dir}
+                        disabled={busy || auditing !== ""}
+                        onClick={() => void runAudition(v)}
+                      >
+                        {auditing === v.dir ? t("s.auditionBusy") : t("s.auditionBtn")}
+                      </Btn>
+                    ) : null}
                     {/* 改名 / 删除 / 看作者主页原来藏在右键里，没人找得到。
                         一条都没有的模型不画这个按钮 —— 点开只写着「无可用
                         操作」的菜单，比没有按钮更让人恼火。 */}

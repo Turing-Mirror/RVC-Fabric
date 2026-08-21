@@ -1997,7 +1997,11 @@
     "trainInspectMixedRate": "자료의 샘플링 레이트가 섞여 있습니다({}). 전처리에서 일괄 리샘플링하므로 보통 조치가 필요 없습니다.",
     "unitSeconds": "{}초",
     "unitMinutes": "{}분",
-    "unitHours": "{}시간"
+    "unitHours": "{}시간",
+    "auditionText": "안녕하세요. 현재 음색의 미리 듣기입니다. 가나다라마바사.",
+    "auditionBtn": "미리 듣기",
+    "auditionBusy": "합성 중…",
+    "auditionFailed": "미리 듣기에 실패했습니다: {}"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

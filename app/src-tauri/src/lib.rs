@@ -1251,6 +1251,35 @@ async fn tts_speak(
     .map_err(|e| e.to_string())?
 }
 
+/// 用指定音色念一句固定的话，用来当场听一下这个音色像不像。
+///
+/// 不额外附带样音：产品自带的 SAPI 朗读加上离线换声，本来就能凑出一段人声，
+/// 省掉一份要考虑体积和授权的内置音频。念的那句话跟着界面语言走。
+#[tauri::command]
+async fn voice_audition(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    model_path: String,
+    voice: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let text = crate::i18n::t("s.auditionText");
+        tts::run_with_model(
+            &app,
+            &root,
+            &text,
+            voice.as_deref().unwrap_or(""),
+            0,
+            0,
+            true,
+            &model_path,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 fn tts_cancel() {
     tts::cancel();
@@ -2131,6 +2160,7 @@ pub fn run() {
             sts_reveal,
             tts_status,
             tts_speak,
+            voice_audition,
             tts_cancel,
             tts_reveal,
             extra_list,

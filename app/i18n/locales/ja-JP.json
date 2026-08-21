@@ -1997,7 +1997,11 @@
     "trainInspectMixedRate": "素材のサンプリングレートが混在しています（{}）。前処理で統一的にリサンプルされるため、通常は対応不要です。",
     "unitSeconds": "{} 秒",
     "unitMinutes": "{} 分",
-    "unitHours": "{} 時間"
+    "unitHours": "{} 時間",
+    "auditionText": "こんにちは。これは現在の音声モデルの試聴です。あいうえお、かきくけこ。",
+    "auditionBtn": "試聴",
+    "auditionBusy": "合成中…",
+    "auditionFailed": "試聴に失敗しました：{}"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

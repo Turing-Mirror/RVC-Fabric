@@ -427,6 +427,27 @@ async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Val
         .map_err(|e| e.to_string())
 }
 
+/// 清空一个实验的中间产物（切片 / 音高 / 特征），返回释放的字节数。
+///
+/// 只删可再生的那几样，训练存档、索引和日志一律不碰。训练进行中拒绝执行。
+#[tauri::command]
+async fn train_reset_stages(
+    state: State<'_, Mutex<AppState>>,
+    exp: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        train::reset_stages(&root, &exp).map(|freed| {
+            json!({
+                "freed_bytes": freed,
+                "freed_mb": format!("{:.1}", freed as f64 / (1024.0 * 1024.0)),
+            })
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// 选完数据集立刻数一遍：这个目录里到底有几个音频。
 #[tauri::command]
 async fn train_scan_dataset(path: String) -> Result<Value, String> {
@@ -1965,6 +1986,7 @@ pub fn run() {
             diagnostics_self_check,
             known_issues_check,
             train_scan_dataset,
+            train_reset_stages,
             diagnostics_preview,
             diagnostics_summary_text,
             cache_status,

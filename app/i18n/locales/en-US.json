@@ -1951,7 +1951,19 @@
     "sumCopyDesc": "Copies the version, GPU, compute backend and self-check results, so they can be provided together when asking for help.",
     "sumCopyBtn": "Copy",
     "sumCopied": "Copied to the clipboard.",
-    "sumCopyFailed": "Copying failed. Please try again."
+    "sumCopyFailed": "Copying failed. Please try again.",
+    "trainStages": "Last run: {a0} slices · {a1} pitch · {a2} features",
+    "trainStagesIncomplete": "The three counts do not match, which means the previous run stopped partway. Training will complete the missing parts first, which takes extra time.",
+    "trainPreprocessFailed": "The previous preprocessing failed to read {a0} file(s); {a1} succeeded.",
+    "trainResumeFill": "Complete and continue",
+    "trainResumeReset": "Clear and start over",
+    "trainResetConfirm": "This will delete all intermediate files for experiment “{}” (slices, pitch, features). The next training run will start again from preprocessing. Voices already trained are unaffected. Continue?",
+    "trainResetDone": "Intermediate files for experiment “{a0}” were removed, freeing {a1}.",
+    "trainNameInvalid": "Invalid experiment name: {}",
+    "trainBusyNoReset": "Training is in progress; intermediate files cannot be removed.",
+    "trainExpMissing": "Experiment “{}” was not found.",
+    "stsRouteHot": "This run reuses the models already held by the running engine; no reloading is needed.",
+    "stsRouteCold": "This run has to load the models again; the first load takes about 20 seconds."
   },
   "extras": {
     "engineTitle": "Engine resources",

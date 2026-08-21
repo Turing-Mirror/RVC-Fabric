@@ -1951,7 +1951,19 @@
     "sumCopyDesc": "Copie la version, le GPU, le moteur de calcul et les résultats de l'auto-diagnostic, à joindre à votre question.",
     "sumCopyBtn": "Copier",
     "sumCopied": "Copié dans le presse-papiers.",
-    "sumCopyFailed": "La copie a échoué. Veuillez réessayer."
+    "sumCopyFailed": "La copie a échoué. Veuillez réessayer.",
+    "trainStages": "Dernière exécution : {a0} segments · {a1} hauteurs · {a2} caractéristiques",
+    "trainStagesIncomplete": "Les trois nombres ne concordent pas : l'exécution précédente s'est interrompue. L'entraînement complétera d'abord les parties manquantes, ce qui prendra du temps supplémentaire.",
+    "trainPreprocessFailed": "Le prétraitement précédent n'a pas pu lire {a0} fichier(s) ; {a1} ont réussi.",
+    "trainResumeFill": "Compléter et continuer",
+    "trainResumeReset": "Effacer et recommencer",
+    "trainResetConfirm": "Tous les fichiers intermédiaires de l'expérience « {} » (segments, hauteurs, caractéristiques) seront supprimés. Le prochain entraînement repartira du prétraitement. Les voix déjà entraînées ne sont pas affectées. Continuer ?",
+    "trainResetDone": "Les fichiers intermédiaires de l'expérience « {a0} » ont été supprimés, libérant {a1}.",
+    "trainNameInvalid": "Nom d'expérience non valide : {}",
+    "trainBusyNoReset": "Un entraînement est en cours ; les fichiers intermédiaires ne peuvent pas être supprimés.",
+    "trainExpMissing": "L'expérience « {} » est introuvable.",
+    "stsRouteHot": "Cette exécution réutilise les modèles déjà chargés par le moteur en cours ; aucun rechargement n'est nécessaire.",
+    "stsRouteCold": "Cette exécution doit recharger les modèles ; le premier chargement prend environ 20 secondes."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

@@ -1951,7 +1951,19 @@
     "sumCopyDesc": "複製版本、顯示卡、運算後端與自檢結論，便於在群組內提問時一併提供。",
     "sumCopyBtn": "複製",
     "sumCopied": "已複製到剪貼簿。",
-    "sumCopyFailed": "複製失敗，請重試。"
+    "sumCopyFailed": "複製失敗，請重試。",
+    "trainStages": "上次進度：切片 {a0} · 音高 {a1} · 特徵 {a2}",
+    "trainStagesIncomplete": "三項數目不一致，表示上次是中途停的。繼續訓練會先把缺的補齊，這一步需要額外時間。",
+    "trainPreprocessFailed": "上次前處理有 {a0} 個檔案未能讀取，成功 {a1} 個。",
+    "trainResumeFill": "補齊並繼續",
+    "trainResumeReset": "清空重來",
+    "trainResetConfirm": "將刪除實驗「{}」的全部中間產物（切片、音高、特徵），下次訓練需要從前處理重新開始。已訓練出的音色不受影響。是否繼續？",
+    "trainResetDone": "已清空實驗「{a0}」的中間產物，釋放 {a1}。",
+    "trainNameInvalid": "實驗名稱不合法：{}",
+    "trainBusyNoReset": "訓練正在進行中，無法清空中間產物。",
+    "trainExpMissing": "找不到實驗「{}」。",
+    "stsRouteHot": "本次重複使用常駐引擎中的模型，無需重新載入。",
+    "stsRouteCold": "本次需要重新載入模型，首次載入約需 20 秒。"
   },
   "extras": {
     "engineTitle": "引擎資源",

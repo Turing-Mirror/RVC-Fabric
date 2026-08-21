@@ -549,7 +549,7 @@
     "291eab062c": "Optimisation Turing Mirror",
     "298dd55e6d": "force_kill : échec de la réécriture de la configuration de voix : {e}",
     "29a29efed7": "Le premier lancement est particulièrement lent",
-    "29abc60b6f": "Les fichiers du modèle et les préréglages liés seront supprimés définitivement.\n\nSupprimer ?",
+    "29abc60b6f": "Les fichiers de modèle de cette voix et les préréglages associés seront déplacés vers la corbeille. Ils y restent 7 jours puis sont supprimés automatiquement ; l'espace disque ne sera pas libéré entre-temps.\n\nSupprimer cette voix ?",
     "2a26295b90": "Pas encore de voix locales : importez-en une dans Modèles ou allez faire un tour sur la Place !",
     "2a330f81d4": "« mute » est un nom réservé. Veuillez en choisir un autre~",
     "2a4080ad9f": "État d'exécution",
@@ -1987,7 +1987,8 @@
     "cleanupConfirm": "Les éléments suivants seront supprimés de l'expérience « {a0} » : {a1}. Continuer ?",
     "cleanupDone": "Nettoyé, {} libérés.",
     "cleanupNothing": "Il n'y a rien à nettoyer.",
-    "trainLeftover": "Cet entraînement a produit environ {} de fichiers intermédiaires. Vous pouvez les supprimer dans « Autres → Stockage »."
+    "trainLeftover": "Cet entraînement a produit environ {} de fichiers intermédiaires. Vous pouvez les supprimer dans « Autres → Stockage ».",
+    "storageTrash": "Corbeille (conservée 7 jours)"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

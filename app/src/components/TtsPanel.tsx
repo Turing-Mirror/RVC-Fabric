@@ -1142,6 +1142,7 @@ function StsSection() {
           )}
           <Btn
             primary
+            busy={running}
             disabled={running || recording || !!blocked || !input}
             onClick={() => void start()}
           >
@@ -1410,6 +1411,7 @@ function TtsSection() {
           )}
           <Btn
             primary
+            busy={running}
             disabled={running || !!blocked || !text.trim() || over}
             onClick={() => void start()}
           >

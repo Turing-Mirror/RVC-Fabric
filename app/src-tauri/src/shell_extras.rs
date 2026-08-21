@@ -884,6 +884,9 @@ pub fn storage_usage(root: &Path) -> Value {
         ("update_cache", paths::update_cache(root)),
         ("diagnostics", ud.join("diagnostics")),
         ("perf_reports", ud.join("perf_reports")),
+        // 回收站要单列。删完音色磁盘占用短期不会下降，界面上不写出来的话，
+        // 用户会觉得「我清理完反而更满了」。
+        ("trash", crate::voices::trash_dir(root)),
         ("app_logs", paths::logs_dir(root)),
     ];
     let list: Vec<Value> = items

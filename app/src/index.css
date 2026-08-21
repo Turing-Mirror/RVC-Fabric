@@ -211,6 +211,40 @@ option {
   animation: dock-indeterminate 1.1s ease-in-out infinite;
 }
 
+/* 按钮上的「正在做」回执。
+ *
+ * 只把按钮变灰是不够的：用户点了一下，按钮灰了，界面别的地方没有任何变化 ——
+ * 他分不出「正在做」和「点了没反应」，于是再点一次，或者来群里问。灰是状态，
+ * 动的这三个点才是回执。
+ *
+ * 不用转圈也不用强调色：它出现在按钮文字前面，只需要「在动」这一件事。 */
+.btn-dots {
+  width: 1.1em;
+  height: 1em;
+  background-image: radial-gradient(currentColor 42%, transparent 45%);
+  background-size: 0.36em 0.36em;
+  background-repeat: repeat-x;
+  background-position: 0 center;
+  animation: btn-dots 0.9s linear infinite;
+  opacity: 0.7;
+}
+
+@keyframes btn-dots {
+  from {
+    background-position: 0 center;
+  }
+  to {
+    /* 走满一个点距，循环处接得上，看着就是一串点在往前挪。 */
+    background-position: 0.36em center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-dots {
+    animation: none;
+  }
+}
+
 @keyframes pulse {
   0%,
   100% {

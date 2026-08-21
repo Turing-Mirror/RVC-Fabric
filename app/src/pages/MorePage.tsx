@@ -427,6 +427,7 @@ export function MorePage({
             right={
               <Btn
                 onClick={() => void runSelfCheck()}
+                busy={checkState === "running"}
                 disabled={checkState === "running"}
               >
                 {checkState === "running"

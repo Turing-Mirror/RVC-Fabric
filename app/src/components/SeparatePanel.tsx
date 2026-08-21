@@ -274,6 +274,7 @@ export function SeparatePanel() {
             )}
             <Btn
               primary
+              busy={running}
               disabled={running || !!blocked || !input || !output}
               onClick={() => void start()}
             >

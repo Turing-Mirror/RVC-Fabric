@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
+import { FindingList, type Finding } from "./FindingList";
+import {
+  MAX_SHOTS,
+  imageFilesFrom,
+  prepareShot,
+  type Shot,
+} from "../lib/shots";
 
 /** 出包之前的文件清单。bytes 为 null 表示这份是出包时现生成的。 */
 type DiagPreview = {
@@ -9,19 +16,13 @@ type DiagPreview = {
   total_bytes: number;
 };
 
-/** 后端 selfcheck.rs 跑出来的一条结论。 */
-type Finding = {
-  code: string;
-  level: "error" | "warn" | "info";
-  title: string;
-  evidence: { file: string; line?: number; text: string }[];
-};
-
 export type DiagReport = {
   nickname: string;
   qq: string;
   description: string;
   withPerf: boolean;
+  /** 用户粘进来或选中的截图，出包时写进 shots/。 */
+  shots: { ext: string; data: string }[];
 };
 
 /**
@@ -48,6 +49,10 @@ export function DiagnosticsDialog({
   const [withPerf, setWithPerf] = useState(false);
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [preview, setPreview] = useState<DiagPreview | null>(null);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [shotMsg, setShotMsg] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const firstRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -56,6 +61,9 @@ export function DiagnosticsDialog({
     setQq("");
     setDescription("");
     setWithPerf(false);
+    setShots([]);
+    setShotMsg("");
+    setDragging(false);
     const id = window.setTimeout(() => firstRef.current?.focus(), 30);
     return () => window.clearTimeout(id);
   }, [open]);
@@ -97,6 +105,40 @@ export function DiagnosticsDialog({
     };
   }, [open]);
 
+  const addFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    setShotMsg("");
+    const accepted: Shot[] = [];
+    let full = false;
+    let failed = "";
+    for (const f of files) {
+      if (shots.length + accepted.length >= MAX_SHOTS) {
+        full = true;
+        break;
+      }
+      const shot = await prepareShot(f, f.name || "clipboard");
+      if (shot) accepted.push(shot);
+      else if (!failed) failed = f.name || "clipboard";
+    }
+    if (accepted.length) setShots((prev) => [...prev, ...accepted].slice(0, MAX_SHOTS));
+    if (failed) setShotMsg(t("s.diagShotUnreadable", { v0: failed }));
+    else if (full) setShotMsg(t("s.diagShotsFull"));
+  }, [shots.length]);
+
+  // 粘贴：截图工具按完 Ctrl+V 就进来，不必先存成文件再选。
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const files = imageFilesFrom(e.clipboardData);
+      if (files.length === 0) return;
+      // 只有真的取到图才拦下这次粘贴，否则会把往输入框里粘文字也一起吃掉。
+      e.preventDefault();
+      void addFiles(files);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [open, addFiles]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -121,9 +163,34 @@ export function DiagnosticsDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-[460px] max-h-[88vh] overflow-y-auto rounded-[var(--r)] bg-[var(--surface)] p-6 shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)]"
+        className={
+          "relative w-full max-w-[460px] max-h-[88vh] overflow-y-auto rounded-[var(--r)] " +
+          "bg-[var(--surface)] p-6 shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] " +
+          (dragging ? "outline outline-1 outline-[var(--accent)]" : "")
+        }
         onClick={(e) => e.stopPropagation()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          // 只有真的离开对话框才收起提示；掠过子元素会连发 dragleave。
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void addFiles(imageFilesFrom(e.dataTransfer));
+        }}
       >
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[var(--r)] bg-[color-mix(in_srgb,var(--surface)_86%,transparent)]">
+            <span className="text-[13px] text-[var(--ink-muted)]">
+              {t("s.diagShotsDrop")}
+            </span>
+          </div>
+        ) : null}
         <h3 className="m-0 mb-1 text-[15px] font-semibold">{t("s.diagTitle")}</h3>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--meta)] leading-relaxed">
           {t("s.diagLead")}
@@ -171,6 +238,60 @@ export function DiagnosticsDialog({
           />
         </label>
 
+        <div className="mb-3">
+          <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
+            {t("s.diagShots")}
+          </span>
+          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-relaxed">
+            {t("s.diagShotsHint")}
+          </p>
+          {shots.length ? (
+            <ul className="m-0 mb-2 list-none p-0 flex flex-wrap gap-2">
+              {shots.map((sh) => (
+                <li key={sh.id} className="relative">
+                  <img
+                    src={sh.url}
+                    alt=""
+                    className="block h-[64px] w-[64px] rounded-[var(--rs)] object-cover shadow-[inset_0_0_0_1px_var(--line)]"
+                  />
+                  <button
+                    type="button"
+                    title={t("s.diagShotRemove")}
+                    aria-label={t("s.diagShotRemove")}
+                    onClick={() =>
+                      setShots((prev) => prev.filter((x) => x.id !== sh.id))
+                    }
+                    className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full border-0 cursor-pointer bg-[var(--surface)] text-[12px] leading-none text-[var(--meta)] shadow-[0_0_0_1px_var(--line)] hover:text-[var(--ink)]"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              e.target.value = "";
+              void addFiles(files);
+            }}
+          />
+          <Btn
+            onClick={() => fileRef.current?.click()}
+            disabled={shots.length >= MAX_SHOTS}
+          >
+            {t("s.diagShotsAdd")}
+          </Btn>
+          {shotMsg ? (
+            <p className="m-0 mt-1.5 text-[12px] text-[var(--ink-muted)]">{shotMsg}</p>
+          ) : null}
+        </div>
+
         <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
           <input
             type="checkbox"
@@ -198,38 +319,7 @@ export function DiagnosticsDialog({
               {t("s.diagFindingsNone")}
             </p>
           ) : (
-            <ul className="m-0 list-none p-0">
-              {findings.map((f, i) => (
-                <li
-                  key={f.code + i}
-                  className="relative py-2 first:pt-0"
-                >
-                  {i > 0 ? (
-                    <div
-                      aria-hidden
-                      className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
-                    />
-                  ) : null}
-                  <div className="flex gap-2 items-baseline">
-                    <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
-                      {levelLabel(f.level)}
-                    </span>
-                    <span className="text-[12.5px] leading-relaxed">
-                      {f.title}
-                    </span>
-                  </div>
-                  {f.evidence.map((e, j) => (
-                    <div
-                      key={j}
-                      className="mt-0.5 font-mono text-[11px] text-[var(--meta)] break-all"
-                    >
-                      {e.file}
-                      {e.line != null ? `:${e.line}` : ""} — {e.text}
-                    </div>
-                  ))}
-                </li>
-              ))}
-            </ul>
+            <FindingList findings={findings} />
           )}
         </div>
 
@@ -243,12 +333,21 @@ export function DiagnosticsDialog({
             <details className="mt-1.5">
               <summary className="cursor-pointer text-[12px] text-[var(--meta)] select-none">
                 {t("s.diagFilesSummary", {
-                  a0: String(preview.items.length),
-                  a1: humanBytes(preview.total_bytes),
+                  a0: String(preview.items.length + shots.length),
+                  a1: humanBytes(
+                    preview.total_bytes +
+                      shots.reduce((n, sh) => n + sh.bytes, 0),
+                  ),
                 })}
               </summary>
               <ul className="mt-1.5 m-0 list-none p-0 max-h-[168px] overflow-y-auto">
-                {preview.items.map((f) => (
+                {[
+                  ...preview.items,
+                  ...shots.map((sh, i) => ({
+                    name: `shots/${String(i + 1).padStart(2, "0")}.${sh.ext}`,
+                    bytes: sh.bytes,
+                  })),
+                ].map((f) => (
                   <li
                     key={f.name}
                     className="flex justify-between gap-3 font-mono text-[11px] text-[var(--meta)] leading-relaxed"
@@ -271,7 +370,13 @@ export function DiagnosticsDialog({
           <Btn
             primary
             onClick={() =>
-              onSubmit({ nickname, qq, description, withPerf })
+              onSubmit({
+                nickname,
+                qq,
+                description,
+                withPerf,
+                shots: shots.map((sh) => ({ ext: sh.ext, data: sh.data })),
+              })
             }
           >
             {t("s.4aa2306395")}
@@ -282,11 +387,6 @@ export function DiagnosticsDialog({
   );
 }
 
-function levelLabel(level: Finding["level"]): string {
-  if (level === "error") return t("s.chkLevelError");
-  if (level === "warn") return t("s.chkLevelWarn");
-  return t("s.chkLevelInfo");
-}
 
 /** 清单里的体积。用户看的是量级，不是精确字节数。 */
 function humanBytes(n: number): string {

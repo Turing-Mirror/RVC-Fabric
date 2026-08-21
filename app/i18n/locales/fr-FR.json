@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "Une expérience nommée « {} » existe déjà ; continuer écrira dans le même dossier",
     "trainCheckFewFiles": "Seulement {} fichiers audio ; avec si peu de matière, la voix risque de ne pas ressembler",
     "trainCheckRepick": "Choisir à nouveau",
-    "trainCheckRename": "Renommer"
+    "trainCheckRename": "Renommer",
+    "diagShots": "Captures d'écran",
+    "diagShotsHint": "Collez ici une capture d'écran depuis le presse-papiers, ou faites glisser des fichiers image dans cette fenêtre. 6 au maximum.",
+    "diagShotsAdd": "Choisir des images",
+    "diagShotsFull": "La limite de 6 images est atteinte ; aucune autre n'a été ajoutée.",
+    "diagShotTooBig": "« {} » dépasse encore 8 Mo après traitement et n'a pas été ajouté.",
+    "diagShotUnreadable": "« {} » n'a pas pu être lu comme une image et n'a pas été ajouté.",
+    "diagShotRemove": "Retirer",
+    "diagShotsDrop": "Relâchez pour ajouter les images",
+    "selfCheckTitle": "Auto-diagnostic",
+    "selfCheckDesc": "Vérifie les réglages actuels et les enregistrements d'exécution récents, puis répertorie les problèmes déjà identifiables.",
+    "selfCheckRun": "Lancer la vérification",
+    "selfCheckAgain": "Vérifier à nouveau",
+    "selfCheckFailed": "La vérification n'a pas pu aboutir. Veuillez réessayer plus tard."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

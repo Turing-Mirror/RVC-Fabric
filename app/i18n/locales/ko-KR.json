@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "\"{}\" 실험이 이미 있습니다. 계속하면 같은 폴더에 기록됩니다",
     "trainCheckFewFiles": "오디오가 {}개뿐입니다. 자료가 적으면 음색이 비슷해지기 어렵습니다",
     "trainCheckRepick": "다시 선택",
-    "trainCheckRename": "이름 변경"
+    "trainCheckRename": "이름 변경",
+    "diagShots": "문제 화면",
+    "diagShotsHint": "클립보드의 스크린샷을 여기에 붙여넣거나 이미지 파일을 이 창으로 끌어다 놓으십시오. 최대 6장입니다.",
+    "diagShotsAdd": "이미지 선택",
+    "diagShotsFull": "6장 제한에 도달하여 더 추가하지 않았습니다.",
+    "diagShotTooBig": "“{}”은(는) 처리 후에도 8 MB를 초과하여 추가되지 않았습니다.",
+    "diagShotUnreadable": "“{}”을(를) 이미지로 읽을 수 없어 추가되지 않았습니다.",
+    "diagShotRemove": "제거",
+    "diagShotsDrop": "놓으면 이미지가 추가됩니다",
+    "selfCheckTitle": "자가 점검",
+    "selfCheckDesc": "현재 설정과 최근 실행 기록을 확인하여 이미 판정 가능한 문제를 나열합니다.",
+    "selfCheckRun": "검사 실행",
+    "selfCheckAgain": "다시 검사",
+    "selfCheckFailed": "검사를 완료하지 못했습니다. 잠시 후 다시 시도하십시오."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

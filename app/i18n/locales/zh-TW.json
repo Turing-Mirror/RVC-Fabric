@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "已經有一個叫「{}」的實驗，繼續會寫進同一個目錄",
     "trainCheckFewFiles": "只有 {} 個音訊，素材偏少時音色不容易像",
     "trainCheckRepick": "重新選擇",
-    "trainCheckRename": "換個名字"
+    "trainCheckRename": "換個名字",
+    "diagShots": "問題截圖",
+    "diagShotsHint": "可在此處直接貼上剪貼簿中的截圖，或將圖片檔案拖入本視窗。最多 6 張。",
+    "diagShotsAdd": "選擇圖片",
+    "diagShotsFull": "已達到 6 張上限，未新增更多圖片。",
+    "diagShotTooBig": "「{}」處理後仍超出 8 MB，未新增。",
+    "diagShotUnreadable": "「{}」無法讀取為圖片，未新增。",
+    "diagShotRemove": "移除",
+    "diagShotsDrop": "放開即可新增圖片",
+    "selfCheckTitle": "自助排查",
+    "selfCheckDesc": "檢查目前設定與最近的執行紀錄，列出已經可以判定的問題。",
+    "selfCheckRun": "開始檢查",
+    "selfCheckAgain": "重新檢查",
+    "selfCheckFailed": "檢查未能完成，請稍後重試。"
   },
   "extras": {
     "engineTitle": "引擎資源",

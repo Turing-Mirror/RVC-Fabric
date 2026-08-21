@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "Ya existe un experimento llamado «{}»; continuar escribirá en la misma carpeta",
     "trainCheckFewFiles": "Solo {} archivos de audio; con tan poco material la voz puede no parecerse",
     "trainCheckRepick": "Elegir de nuevo",
-    "trainCheckRename": "Cambiar el nombre"
+    "trainCheckRename": "Cambiar el nombre",
+    "diagShots": "Capturas de pantalla",
+    "diagShotsHint": "Pegue aquí una captura desde el portapapeles o arrastre archivos de imagen a esta ventana. Máximo 6.",
+    "diagShotsAdd": "Elegir imágenes",
+    "diagShotsFull": "Se alcanzó el límite de 6 imágenes; no se añadieron más.",
+    "diagShotTooBig": "«{}» sigue superando los 8 MB tras el procesamiento y no se añadió.",
+    "diagShotUnreadable": "No se pudo leer «{}» como imagen y no se añadió.",
+    "diagShotRemove": "Quitar",
+    "diagShotsDrop": "Suelte para añadir las imágenes",
+    "selfCheckTitle": "Autodiagnóstico",
+    "selfCheckDesc": "Comprueba la configuración actual y los registros de ejecución recientes, y enumera los problemas que ya pueden determinarse.",
+    "selfCheckRun": "Ejecutar comprobación",
+    "selfCheckAgain": "Comprobar de nuevo",
+    "selfCheckFailed": "No se pudo completar la comprobación. Inténtelo de nuevo más tarde."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

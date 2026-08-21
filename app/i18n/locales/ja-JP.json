@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "「{}」という実験が既にあります。続けると同じフォルダーに書き込まれます",
     "trainCheckFewFiles": "音声が {} 個しかありません。素材が少ないと似た声になりにくいです",
     "trainCheckRepick": "選び直す",
-    "trainCheckRename": "名前を変更"
+    "trainCheckRename": "名前を変更",
+    "diagShots": "スクリーンショット",
+    "diagShotsHint": "クリップボードのスクリーンショットをここに貼り付けるか、画像ファイルをこのウィンドウにドラッグしてください。最大 6 枚です。",
+    "diagShotsAdd": "画像を選択",
+    "diagShotsFull": "上限の 6 枚に達したため、これ以上は追加されませんでした。",
+    "diagShotTooBig": "「{}」は処理後も 8 MB を超えるため追加されませんでした。",
+    "diagShotUnreadable": "「{}」を画像として読み取れなかったため追加されませんでした。",
+    "diagShotRemove": "削除",
+    "diagShotsDrop": "離すと画像が追加されます",
+    "selfCheckTitle": "セルフチェック",
+    "selfCheckDesc": "現在の設定と直近の実行記録を確認し、すでに判定できる問題を一覧にします。",
+    "selfCheckRun": "チェックを実行",
+    "selfCheckAgain": "再チェック",
+    "selfCheckFailed": "チェックを完了できませんでした。しばらくしてからもう一度お試しください。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

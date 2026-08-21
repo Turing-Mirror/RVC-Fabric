@@ -649,6 +649,61 @@ pub struct UserReport {
     pub qq: String,
     #[serde(default)]
     pub description: String,
+    /// 用户随手粘进来的截图。一张图省下的来回，往往比整份日志还多 ——
+    /// 「界面出错」这四个字加一张截图就知道是哪扇窗、哪个按钮。
+    #[serde(default)]
+    pub shots: Vec<Shot>,
+}
+
+/// 一张截图。前端已经缩过尺寸、编成 base64；这里只负责解码写盘。
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct Shot {
+    /// 扩展名（png / jpg）。只认这两种，其余一律当 png 存。
+    #[serde(default)]
+    pub ext: String,
+    /// 不带 `data:` 前缀的 base64。
+    #[serde(default)]
+    pub data: String,
+}
+
+/// 最多收几张、单张最大多少。挡的是手滑，不是人。
+const MAX_SHOTS: usize = 6;
+const MAX_SHOT_BYTES: usize = 8 * 1024 * 1024;
+
+/// base64 解码。
+///
+/// 为一个「把粘贴板里的图写进 zip」加一个依赖不划算，何况这段是纯函数、好测。
+/// 忽略空白（前端拼出来的串可能带换行），认标准表，`=` 之后就停。
+pub fn base64_decode(src: &str) -> Option<Vec<u8>> {
+    fn val(c: u8) -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let mut out = Vec::with_capacity(src.len() / 4 * 3);
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
+    for &c in src.as_bytes() {
+        if c.is_ascii_whitespace() {
+            continue;
+        }
+        if c == b'=' {
+            break;
+        }
+        let v = val(c)? as u32;
+        buf = (buf << 6) | v;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+        }
+    }
+    Some(out)
 }
 
 impl UserReport {
@@ -666,6 +721,9 @@ impl UserReport {
             "nickname": clip(&self.nickname, 64),
             "qq": clip(&self.qq, 32),
             "description": clip(&self.description, 4000),
+            // 图不进 report.json —— 它是给人读的，塞几兆 base64 进去就没法读了。
+            // 只记一句「有几张」，图本身在 shots/ 下。
+            "shots": self.shots.len(),
         })
     }
 
@@ -673,6 +731,7 @@ impl UserReport {
         self.nickname.trim().is_empty()
             && self.qq.trim().is_empty()
             && self.description.trim().is_empty()
+            && self.shots.is_empty()
     }
 }
 
@@ -926,6 +985,30 @@ pub fn build_diagnostics(
         ),
     )?;
 
+    // 用户粘进来的截图。放在 report.json 旁边 —— 支援打开包先看这两样。
+    for (i, shot) in report.shots.iter().take(MAX_SHOTS).enumerate() {
+        let Some(bytes) = base64_decode(&shot.data) else {
+            crate::logging::shell_log!("诊断包：第 {} 张截图解码失败，已跳过", i + 1);
+            continue;
+        };
+        if bytes.is_empty() || bytes.len() > MAX_SHOT_BYTES {
+            crate::logging::shell_log!(
+                "诊断包：第 {} 张截图 {} 字节，超出上限，已跳过",
+                i + 1,
+                bytes.len()
+            );
+            continue;
+        }
+        let ext = if shot.ext.eq_ignore_ascii_case("jpg") || shot.ext.eq_ignore_ascii_case("jpeg") {
+            "jpg"
+        } else {
+            "png"
+        };
+        zip.start_file(format!("shots/{:02}.{ext}", i + 1), opts)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+
     // 配置、状态、日志、性能报告都走同一份清单 —— 出包前给用户看的预览用的
     // 也是它，两边各写一遍迟早会分叉。日志只收头尾，一次警告刷屏挤不掉 start_vc。
     for e in diagnostics_manifest(root) {
@@ -1136,6 +1219,52 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn base64_round_trips_the_bytes_a_png_would_carry() {
+        // 标准表 + 两种补位长度。
+        assert_eq!(base64_decode("").unwrap(), b"");
+        assert_eq!(base64_decode("QQ==").unwrap(), b"A");
+        assert_eq!(base64_decode("QUI=").unwrap(), b"AB");
+        assert_eq!(base64_decode("QUJD").unwrap(), b"ABC");
+        // PNG 的头八个字节，粘贴板里来的图就长这样。
+        let png = base64_decode("iVBORw0KGgo=").unwrap();
+        assert_eq!(png, [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        // 前端拼出来的串可能带换行，不能因此整张图丢掉。
+        assert_eq!(base64_decode("QUJD\n").unwrap(), b"ABC");
+        assert_eq!(base64_decode("QU\r\nJD").unwrap(), b"ABC");
+        // 认不出来的字符宁可整张跳过，也不要写半张坏图进包。
+        assert!(base64_decode("QU*D").is_none());
+    }
+
+    /// 图不进 report.json —— 那份是给人读的，塞几兆 base64 进去就没法读了。
+    #[test]
+    fn the_report_json_records_how_many_shots_but_not_the_images() {
+        let r = UserReport {
+            nickname: "柠檬酸".into(),
+            qq: "12345".into(),
+            description: "无法使用".into(),
+            shots: vec![
+                Shot { ext: "png".into(), data: "QUJD".into() },
+                Shot { ext: "jpg".into(), data: "QUJD".into() },
+            ],
+        };
+        let v = r.sanitized();
+        assert_eq!(v["shots"].as_u64(), Some(2));
+        let text = serde_json::to_string(&v).unwrap();
+        assert!(!text.contains("QUJD"), "base64 不该出现在 report.json 里：{text}");
+    }
+
+    /// 只填了图、三个字段都空着，也得出包 —— 那张图本身就是全部信息。
+    #[test]
+    fn a_report_with_only_a_screenshot_is_not_empty() {
+        let r = UserReport {
+            shots: vec![Shot { ext: "png".into(), data: "QUJD".into() }],
+            ..Default::default()
+        };
+        assert!(!r.is_empty());
+        assert!(UserReport::default().is_empty());
+    }
+
     /// 预览和出包必须走同一份清单。
     ///
     /// 两边各写一遍迟早分叉：预览说收 12 个、实际收 14 个，而用户是拿这个包去
@@ -1226,6 +1355,7 @@ mod tests {
             nickname: "  老王  ".into(),
             qq: " 12345678 ".into(),
             description: "啊".repeat(5000),
+            ..Default::default()
         };
         let v = r.sanitized();
         assert_eq!(v["nickname"], json!("老王"));

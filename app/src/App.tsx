@@ -41,6 +41,14 @@ import { t } from "./i18n/t";
 const FOLLOW_AFTER_RUNS = 10;
 
 /** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
+/** known_issues.rs 匹配出来的一条。文案已经在 Rust 那边按当前语言取好。 */
+type KnownIssue = {
+  id: string;
+  level: "error" | "warn" | "info";
+  title: string;
+  body: string;
+};
+
 type UpdateInfo = {
   local: string;
   remote: string;
@@ -269,6 +277,23 @@ export default function App() {
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
   const [askTelemetry, setAskTelemetry] = useState(false);
+
+  // 这台机器有没有踩到我们已经知道的坑。判据和条目都在 Rust 那边
+  // （known_issues.json + known_issues.rs），这里只负责显示第一条。
+  const [knownIssue, setKnownIssue] = useState<KnownIssue | null>(null);
+  useEffect(() => {
+    let alive = true;
+    invoke<KnownIssue[]>("known_issues_check")
+      .then((v) => {
+        if (alive && Array.isArray(v) && v.length > 0) setKnownIssue(v[0]);
+      })
+      .catch(() => {
+        /* 查不到就不提示，这条本来就是锦上添花 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // The daily ping belongs to app start, not to every start/stop of the
   // stream. The Rust side dedupes by day, but firing it on each toggle still
@@ -1154,6 +1179,20 @@ export default function App() {
           actions={<Btn onClick={engine.dismissNotice}>{t("s.cb63c62e50")}</Btn>}
         >
           {engine.notice}
+        </Nudge>
+      ) : null}
+
+      {/* 已知问题排在这里：比「要不要更新」重要（它解释的是用户此刻为什么用不了），
+          但比撕裂靠后（那条是正在发生的卡顿）。一个会话里关掉就不再出现 ——
+          不落配置，因为坑没填之前下次启动本来就该再说一次。 */}
+      {knownIssue ? (
+        <Nudge
+          title={knownIssue.title}
+          actions={
+            <Btn onClick={() => setKnownIssue(null)}>{t("s.kiDismiss")}</Btn>
+          }
+        >
+          {knownIssue.body}
         </Nudge>
       ) : null}
 

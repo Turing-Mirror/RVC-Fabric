@@ -1890,7 +1890,10 @@
     "diagFindingsChecking": "正在檢查…",
     "chkLevelError": "嚴重",
     "chkLevelWarn": "注意",
-    "chkLevelInfo": "提示"
+    "chkLevelInfo": "提示",
+    "kiAsioCrashTitle": "這台電腦的 Realtek ASIO 驅動程式可能導致變聲無法開啟",
+    "kiAsioCrashBody": "程式在讀取音訊裝置清單時會逐一載入已註冊的 ASIO 驅動程式，Realtek 的舊版驅動在這一步會讓程式直接結束。將該驅動更新到新版或解除安裝後即可恢復；未開啟變聲時不受影響。",
+    "kiDismiss": "知道了"
   },
   "extras": {
     "engineTitle": "引擎資源",

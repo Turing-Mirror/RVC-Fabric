@@ -1890,7 +1890,10 @@
     "diagFindingsChecking": "確認中…",
     "chkLevelError": "重大",
     "chkLevelWarn": "注意",
-    "chkLevelInfo": "参考"
+    "chkLevelInfo": "参考",
+    "kiAsioCrashTitle": "このパソコンの Realtek ASIO ドライバーが原因でエンジンが起動しないことがあります",
+    "kiAsioCrashBody": "オーディオデバイス一覧を読み取る際、登録済みの ASIO ドライバーを順に読み込みます。古い Realtek ドライバーはこの時点でプログラムを終了させます。該当ドライバーを更新またはアンインストールすれば復旧します。エンジンを起動していない間は影響ありません。",
+    "kiDismiss": "了解"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

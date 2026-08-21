@@ -1890,7 +1890,10 @@
     "diagFindingsChecking": "Vérification…",
     "chkLevelError": "Critique",
     "chkLevelWarn": "Attention",
-    "chkLevelInfo": "Info"
+    "chkLevelInfo": "Info",
+    "kiAsioCrashTitle": "Le pilote Realtek ASIO de cet ordinateur peut empêcher le moteur de démarrer",
+    "kiAsioCrashBody": "Lors de la lecture de la liste des périphériques audio, le programme charge tour à tour chaque pilote ASIO enregistré. Les anciens pilotes Realtek font quitter le programme à cette étape. Mettre à jour ou désinstaller ce pilote rétablit le fonctionnement ; rien n'est affecté tant que le moteur est arrêté.",
+    "kiDismiss": "J'ai compris"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

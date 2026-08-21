@@ -7,6 +7,8 @@
   全读一遍。没有实时 worker 在跑的时候用它。
 * 热路径 ``gui_v1`` 的 ``convert`` 命令 —— 实时 worker 进程里，直接拿常驻的
   那几个模型对象干活，一个字节都不读盘。
+* 文字合成第二步 ``tools/infer_cli.py`` —— SAPI 念完之后的单文件 RVC，同样
+  是冷路径，走 ``convert_one_with_cpu_fallback``。
 
 两条路唯一的差别是「模型从哪来」和「进度往哪发」，转换循环本身必须是同一份，
 不然批量跳过、OOM 重试、进度加权这些行为会在两条路上慢慢长歪。
@@ -558,6 +560,40 @@ def convert_one(
             raise RuntimeError(reason) from e
     if last_err is not None:
         raise RuntimeError(friendly_error(last_err)) from last_err
+
+
+def convert_one_with_cpu_fallback(
+    vc,
+    src: Path,
+    dest: Path,
+    *,
+    allow_cpu_fallback: bool = True,
+    on_fallback: Callable[[Exception], None] | None = None,
+    **kwargs,
+) -> bool:
+    """跑 ``convert_one``；DirectML 撞算子缺口时把模型挪到 CPU 再试一次。
+
+    返回是否用了 CPU 兜底。STS 批量走 ``run_batch``（自带同一份逻辑）；TTS
+    的 ``infer_cli`` 是单文件冷路径，以前漏了 —— 26.8.21 用户日志就是
+    GradMultiply ``PrivateUse1``，SAPI 念完之后整次换音色失败。
+    """
+    try:
+        convert_one(vc, src, dest, **kwargs)
+        return False
+    except Exception as first:
+        if (
+            allow_cpu_fallback
+            and is_dml_backend_error(first)
+            and move_models_to_cpu(vc)
+        ):
+            if on_fallback is not None:
+                try:
+                    on_fallback(first)
+                except Exception:
+                    traceback.print_exc()
+            convert_one(vc, src, dest, **kwargs)
+            return True
+        raise
 
 
 def preload_side_models(vc, config, f0method: str, prog: StsProgress) -> None:

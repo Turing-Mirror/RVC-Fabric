@@ -246,5 +246,50 @@ class CrepeDevice(unittest.TestCase):
         self.assertEqual(dml_compat.crepe_device("cpu"), "cpu")
 
 
+class TtsInferCliPatches(unittest.TestCase):
+    """文字合成第二步走 infer_cli，必须自己打补丁、自己接 CPU 兜底。
+
+    26.8.21 用户日志：SAPI 成功写出 tts_raw.wav，随后 infer_cli 在 hubert
+    GradMultiply 上抛 PrivateUse1，整次换音色失败。这条 CLI 不经过
+    sts_worker，load_hubert 的补丁不够——还得在 Config 之后显式 apply_for，
+    并且撞上别的 DirectML 缺口时能退 CPU（跟 STS 批量同一份函数）。
+    """
+
+    def _main_body(self):
+        src = (ROOT / "tools" / "infer_cli.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "main":
+                return node, src
+        self.fail("tools/infer_cli.py 里找不到 main")
+
+    def test_applies_dml_compat_before_loading_models(self):
+        fn, src = self._main_body()
+        self.assertIn("apply_for", src)
+        # apply_for 必须出现在 VC(config) / get_vc 之前。
+        apply_line = None
+        vc_line = None
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = ""
+                if isinstance(func, ast.Name):
+                    name = func.id
+                elif isinstance(func, ast.Attribute):
+                    name = func.attr
+                if name == "apply_for" and apply_line is None:
+                    apply_line = node.lineno
+                if name == "VC" and vc_line is None:
+                    vc_line = node.lineno
+        self.assertIsNotNone(apply_line, "infer_cli.main 没调 apply_for")
+        self.assertIsNotNone(vc_line, "infer_cli.main 没建 VC")
+        self.assertLess(apply_line, vc_line, "apply_for 必须在加载模型之前")
+
+    def test_uses_shared_cpu_fallback(self):
+        _fn, src = self._main_body()
+        self.assertIn("convert_one_with_cpu_fallback", src)
+        self.assertIn("friendly_error", src)
+
+
 if __name__ == "__main__":
     unittest.main()

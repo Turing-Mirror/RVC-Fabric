@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from tools.sts_core import (  # noqa: E402
     ConversionCancelled,
     StsProgress,
+    convert_one_with_cpu_fallback,
     friendly_error,
     is_dml_backend_error,
     move_models_to_cpu,
@@ -364,6 +365,52 @@ class CpuFallbackTests(unittest.TestCase):
         vc = Broken()
         (out_files, skipped, _), _ = self._run(vc)
         self.assertEqual(out_files, [])
+        self.assertEqual(vc.calls, 1)
+        self.assertEqual(vc.pipeline.device, "privateuseone:0")
+
+    def _single(self, vc, allow_cpu_fallback=True):
+        """TTS / infer_cli 那条单文件入口。"""
+        notes: list[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "in.wav"
+            src.write_bytes(b"RIFF-fake")
+            dest = Path(td) / "out.wav"
+            used = convert_one_with_cpu_fallback(
+                vc,
+                src,
+                dest,
+                pitch=0,
+                f0method="rmvpe",
+                index_path=None,
+                index_rate=0.75,
+                filter_radius=3,
+                resample_sr=0,
+                rms_mix_rate=1.0,
+                protect=0.33,
+                on_stage=lambda *_a, **_k: None,
+                wavfile=FakeWavfile,
+                fmt="wav",
+                allow_cpu_fallback=allow_cpu_fallback,
+                on_fallback=lambda _e: notes.append("cpu"),
+            )
+            return used, dest.exists(), notes
+
+    def test_single_file_entry_retries_on_cpu(self):
+        # 26.8.21 TTS 日志：SAPI 成功、infer_cli 在 GradMultiply 上炸。
+        # 这条入口以前没有 CPU 兜底，现在必须跟 STS 批量同一份行为。
+        vc = DmlFailingVC()
+        used, exists, notes = self._single(vc)
+        self.assertTrue(used)
+        self.assertTrue(exists)
+        self.assertEqual(notes, ["cpu"])
+        self.assertEqual(vc.calls, 2)
+        self.assertEqual(vc.pipeline.device, "cpu")
+
+    def test_single_file_entry_does_not_move_models_when_disabled(self):
+        vc = DmlFailingVC()
+        with self.assertRaises(RuntimeError) as caught:
+            self._single(vc, allow_cpu_fallback=False)
+        self.assertTrue(is_dml_backend_error(caught.exception))
         self.assertEqual(vc.calls, 1)
         self.assertEqual(vc.pipeline.device, "privateuseone:0")
 

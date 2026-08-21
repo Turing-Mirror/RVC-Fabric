@@ -764,6 +764,62 @@
       "group": "游戏开发部",
       "channel": "release",
       "release_tag": "voices"
+    },
+    {
+      "id": "Hoshino-JP",
+      "name": "小鸟游星野（日配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260821",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Hoshino-JP.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Hoshino-JP.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hoshino-JP-v1.zip",
+      "sha256": "61755cffe1e959c1884dfeee9b6e31e5bdcdcc594b0b141891425e1e9edfa496",
+      "size_bytes": 208437696,
+      "description": "小鸟游星野（日配） · 蔚蓝档案 · 图灵镜 260821 版",
+      "name_i18n": {
+        "en-US": "Takanashi Hoshino (JP)",
+        "ja-JP": "小鳥遊ホシノ（日本語）",
+        "zh-TW": "小鳥遊星野（日配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260821",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
+      "channel": "release",
+      "release_tag": "voices"
+    },
+    {
+      "id": "Hoshino-ZH",
+      "name": "小鸟游星野（中配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260821",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Hoshino-ZH.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Hoshino-ZH.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Hoshino-ZH-v1.zip",
+      "sha256": "d0f8cf0666761ca6cc4d73e2f6a8e934cadfef762378ad9b94b269d293a0c8fc",
+      "size_bytes": 178234530,
+      "description": "小鸟游星野（中配） · 蔚蓝档案 · 图灵镜 260821 版",
+      "name_i18n": {
+        "en-US": "Takanashi Hoshino (CN)",
+        "ja-JP": "小鳥遊ホシノ（中国語）",
+        "zh-TW": "小鳥遊星野（中配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260821",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
+      "channel": "release",
+      "release_tag": "voices"
     }
   ],
   "thirdparty_voices": [

@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "오디오 장치 목록을 읽을 때 등록된 ASIO 드라이버를 차례로 불러옵니다. 구버전 Realtek 드라이버는 이 시점에서 프로그램을 종료시킵니다. 해당 드라이버를 업데이트하거나 제거하면 정상으로 돌아옵니다. 엔진을 켜지 않은 동안에는 영향이 없습니다.",
     "kiDismiss": "확인",
     "diagFilesSummary": "묶음에 파일 {a0}개, 총 {a1}",
-    "diagFilesGenerated": "생성됨"
+    "diagFilesGenerated": "생성됨",
+    "errDetails": "자세히",
+    "errDetailsHide": "자세히 숨기기",
+    "errCopy": "전체 오류 복사",
+    "errCopied": "복사됨",
+    "errOpenLog": "로그 열기",
+    "errActDownload": "다운로드로 이동",
+    "errActRuntime": "런타임 보완하기",
+    "errActHelp": "설명 보기",
+    "errActExtract": "모델 추출로 이동",
+    "errActBatch": "학습 설정 조정"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

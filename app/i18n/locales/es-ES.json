@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "Al leer la lista de dispositivos de audio, el programa carga uno por uno todos los controladores ASIO registrados. Los controladores Realtek antiguos hacen que el programa se cierre en ese punto. Actualizar o desinstalar ese controlador restablece el funcionamiento; mientras el motor está apagado no afecta a nada.",
     "kiDismiss": "Entendido",
     "diagFilesSummary": "{a0} archivos en el paquete, {a1} en total",
-    "diagFilesGenerated": "generado"
+    "diagFilesGenerated": "generado",
+    "errDetails": "Detalles",
+    "errDetailsHide": "Ocultar detalles",
+    "errCopy": "Copiar el error completo",
+    "errCopied": "Copiado",
+    "errOpenLog": "Abrir registros",
+    "errActDownload": "Ir a la descarga",
+    "errActRuntime": "Completar el entorno",
+    "errActHelp": "Ver la ayuda",
+    "errActExtract": "Ir a la extracción de modelos",
+    "errActBatch": "Ajustar los parámetros de entrenamiento"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

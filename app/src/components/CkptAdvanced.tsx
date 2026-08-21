@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
+import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
@@ -25,6 +26,18 @@ export function CkptAdvanced() {
   const [tab, setTab] = useState<Tab>("merge");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
+  // 所以两条路分开走，别让 ErrorNote 去猜。
+  const [msgErr, setMsgErr] = useState(false);
+  const showErr = (v: string) => {
+    setMsgErr(true);
+    setMsg(v);
+  };
+  const showInfo = (v: string) => {
+    setMsgErr(false);
+    setMsg(v);
+  };
+
   const [pathA, setPathA] = useState("");
   const [pathB, setPathB] = useState("");
   const [path, setPath] = useState("");
@@ -39,15 +52,15 @@ export function CkptAdvanced() {
   const run = async (req: Record<string, unknown>) => {
     if (busy) return;
     setBusy(true);
-    setMsg("");
+    showInfo("");
     try {
       const r = await invoke<{ message?: string; weights?: string; info?: string; onnx?: string }>(
         "ckpt_run",
         { req },
       );
-      setMsg(r.info || r.message || r.weights || r.onnx || t("s.ckptDone"));
+      showInfo(r.info || r.message || r.weights || r.onnx || t("s.ckptDone"));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       setBusy(false);
     }
@@ -400,9 +413,7 @@ export function CkptAdvanced() {
         ) : null}
 
         {msg ? (
-          <p className="m-0 text-[12.5px] text-[var(--ink-muted)] break-all whitespace-pre-wrap">
-            {msg}
-          </p>
+          <ErrorNote text={msg} error={msgErr} />
         ) : null}
       </div>
     </div>

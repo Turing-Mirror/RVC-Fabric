@@ -3,6 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
+import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody } from "./ToolWindow";
@@ -225,6 +226,18 @@ function StsSection() {
   const [f0File, setF0File] = useState("");
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
+  // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
+  // 所以两条路分开走，别让 ErrorNote 去猜。
+  const [msgErr, setMsgErr] = useState(false);
+  const showErr = (v: string) => {
+    setMsgErr(true);
+    setMsg(v);
+  };
+  const showInfo = (v: string) => {
+    setMsgErr(false);
+    setMsg(v);
+  };
+
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
   // 到底是哪几个没转出来。过程中 skip 事件也会往这里塞，不用等整批结束。
   const [skipped, setSkipped] = useState<Skipped[]>([]);
@@ -319,7 +332,7 @@ function StsSection() {
       }
       applyCurrent(s, cat);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
@@ -330,7 +343,7 @@ function StsSection() {
     void listen<Progress>("sts-progress", (ev) => {
       const p = ev.payload;
       setProg(p);
-      if (p.phase === "error") setMsg(p.message);
+      if (p.phase === "error") showErr(p.message);
       // 批量：跳过事件当场入列，方便边跑边看哪个坏了。
       if (p.phase === "skip" && p.file) {
         setSkipped((prev) => {
@@ -449,7 +462,7 @@ function StsSection() {
       const r = await invoke<InputList>("sts_list_input", { input: path });
       setLib(r);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
@@ -506,18 +519,18 @@ function StsSection() {
       el.onended = () => setPlaying("");
       el.onerror = () => {
         setPlaying("");
-        setMsg(t("s.stsPlayFail"));
+        showErr(t("s.stsPlayFail"));
       };
       void el.play().then(() => setPlaying(path));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
   const startRec = async () => {
     if (recordingRef.current || runningRef.current) return;
     stopPlay();
-    setMsg("");
+    showInfo("");
     setRec({ phase: "start", sec: 0, message: t("s.stsRecordOpening") });
     recordingRef.current = true;
     setRecording(true);
@@ -539,11 +552,11 @@ function StsSection() {
         else if (!prior) setInput(r.dir);
       }
       if (r.file && !r.cancelled) {
-        setMsg(t("s.stsRecordSaved", { v0: r.file }));
+        showInfo(t("s.stsRecordSaved", { v0: r.file }));
       }
       await refreshList(r.dir || folder);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       recordingRef.current = false;
       setRecording(false);
@@ -559,14 +572,14 @@ function StsSection() {
       if (input === f.path) setInput(lib?.dir || "");
       await refreshList(input === f.path ? lib?.dir || "" : input);
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
   const start = async () => {
     if (runningRef.current || recordingRef.current) return;
     // 实时 worker 还活着就走热路径（复用已加载的模型），不再先杀进程。
-    setMsg("");
+    showInfo("");
     setProg({ phase: "start", done: 0, total: 1, pct: 0, message: t("s.090840132b") });
     setSkipped([]);
     runningRef.current = true;
@@ -598,7 +611,7 @@ function StsSection() {
       // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
       // 有跳过的就必须在总结里说出来，不然「完成 8 个文件」会被当成全转完了。
-      setMsg(
+      showInfo(
         bad.length
           ? t("s.stsDoneSkipped", {
               v0: ok,
@@ -610,7 +623,7 @@ function StsSection() {
             : t("s.4d8ef8514f", { v0: ok }),
       );
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -1091,11 +1104,7 @@ function StsSection() {
         </div>
       ) : null}
 
-      {msg ? (
-        <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all">
-          {msg}
-        </p>
-      ) : null}
+      {msg ? <ErrorNote text={msg} error={msgErr} /> : null}
 
       {skipped.length ? (
         <div className="mt-3 pt-2">
@@ -1157,6 +1166,18 @@ function TtsSection() {
   const [useRvc, setUseRvc] = useState(true);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
+  // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
+  // 所以两条路分开走，别让 ErrorNote 去猜。
+  const [msgErr, setMsgErr] = useState(false);
+  const showErr = (v: string) => {
+    setMsgErr(true);
+    setMsg(v);
+  };
+  const showInfo = (v: string) => {
+    setMsgErr(false);
+    setMsg(v);
+  };
+
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
 
@@ -1165,7 +1186,7 @@ function TtsSection() {
     try {
       setSt(await invoke<TtsStatus>("tts_status"));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   }, []);
 
@@ -1176,14 +1197,14 @@ function TtsSection() {
         setSt(s);
         if (s.voices?.length) setVoice((v) => v || s.voices![0]);
       } catch (e) {
-        setMsg(String(e));
+        showErr(String(e));
       }
     })();
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<Progress>("tts-progress", (ev) => {
       setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message);
+      if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;
@@ -1214,7 +1235,7 @@ function TtsSection() {
 
   const start = async () => {
     if (runningRef.current) return;
-    setMsg("");
+    showInfo("");
     setProg(null);
     runningRef.current = true;
     setRunning(true);
@@ -1226,9 +1247,9 @@ function TtsSection() {
         pitch,
         useRvc,
       });
-      setMsg(t("s.c7cbedc8f6", { v0: r.file ?? "" }));
+      showInfo(t("s.c7cbedc8f6", { v0: r.file ?? "" }));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -1340,7 +1361,7 @@ function TtsSection() {
               onClick={() => {
                 void invoke("tts_reset_output", { useRvc })
                   .then(refreshStatus)
-                  .catch((e) => setMsg(String(e)));
+                  .catch((e) => showErr(String(e)));
               }}
             >
               {t("s.ttsOutReset")}
@@ -1356,7 +1377,7 @@ function TtsSection() {
                 .then((p) => {
                   if (p) void refreshStatus();
                 })
-                .catch((e) => setMsg(String(e)));
+                .catch((e) => showErr(String(e)));
             }}
           >
             {t("s.70b208202c")}
@@ -1376,11 +1397,7 @@ function TtsSection() {
         </div>
       ) : null}
 
-      {msg ? (
-        <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all">
-          {msg}
-        </p>
-      ) : null}
+      {msg ? <ErrorNote text={msg} error={msgErr} /> : null}
 
       <ToolActions>
         <div className="ml-auto flex items-center gap-2.5">

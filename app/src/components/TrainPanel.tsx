@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, HelpMark } from "./ui";
@@ -6,6 +6,7 @@ import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { CkptAdvanced } from "./CkptAdvanced";
+import { ErrorNote } from "./ErrorNote";
 import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
@@ -43,6 +44,9 @@ type Progress = {
   done?: number;
   total?: number;
   message?: string;
+  /** worker 写的稳定错误码。壳子是把 worker 那行 JSON 原样 emit 出来的，
+      这个字段一直都在，只是以前没人声明、也就没人用。 */
+  message_code?: string;
 };
 
 function stageName(id: string): string {
@@ -139,12 +143,36 @@ export function TrainPanel() {
   const [sr, setSr] = useState("48k");
   const [epochs, setEpochs] = useState(200);
   const [batch, setBatch] = useState(4);
+  const batchRef = useRef<HTMLInputElement | null>(null);
+  // 显存不足时那个按钮要落到实处：滚进视野 + 选中输入框里的数字，用户下一键
+  // 就能改。只滚不选的话，他还得自己找、自己划掉旧值。
+  const focusBatch = useCallback(() => {
+    const el = batchRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus();
+    el.select();
+  }, []);
   const [batchTouched, setBatchTouched] = useState(false);
   const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
   const [saveEvery, setSaveEvery] = useState(5);
   const [saveWeights, setSaveWeights] = useState(false);
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
+  // 配一个能按的按钮要靠错误码，光有文案认不出来是哪一类错。
+  const [msgCode, setMsgCode] = useState("");
+  // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
+  // 所以两条路分开走，别让 ErrorNote 去猜。
+  const [msgErr, setMsgErr] = useState(false);
+  const showErr = (v: string) => {
+    setMsgErr(true);
+    setMsg(v);
+  };
+  const showInfo = (v: string) => {
+    setMsgErr(false);
+    setMsg(v);
+  };
+
   const [running, setRunning] = useState(false);
   const [adv, setAdv] = useState(false);
   // 进阶设置的开关在底栏、内容在正文末尾。展开时把内容滚进视野，不然用户点完
@@ -166,7 +194,7 @@ export function TrainPanel() {
         setBatch(s.suggested_batch);
       }
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     }
   };
 
@@ -186,7 +214,8 @@ export function TrainPanel() {
       setEta(trackEta(epochMarks.current, ev.payload));
       const line = ev.payload.message || "";
       if (ev.payload.phase === "error") {
-        setMsg(line || t("s.60a21a8105"));
+        showErr(line || t("s.60a21a8105"));
+        setMsgCode(ev.payload.message_code || "");
       } else if (ev.payload.phase === "skip" && line) {
         // skip 下一拍就是 stage，prog.message 会被盖掉。半份产物那种警告
         // 必须写到 msg 上，否则界面上看着像正常续跑。
@@ -238,7 +267,8 @@ export function TrainPanel() {
 
   const start = async () => {
     if (runningRef.current) return;
-    setMsg("");
+    showInfo("");
+    setMsgCode("");
     setProg(null);
     setEta("");
     epochMarks.current = [];
@@ -259,9 +289,9 @@ export function TrainPanel() {
           output_dir: outDir,
         },
       });
-      setMsg(t("s.2b30598b60", { v0: r.weights ?? "" }));
+      showInfo(t("s.2b30598b60", { v0: r.weights ?? "" }));
     } catch (e) {
-      setMsg(String(e));
+      showErr(String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
@@ -377,6 +407,7 @@ export function TrainPanel() {
               <HelpMark title={t("s.trainBatchHint")} />
             </span>
             <input
+              ref={batchRef}
               className={`w-[100px] ${FIELD}`}
               type="number"
               min={1}
@@ -499,9 +530,18 @@ export function TrainPanel() {
         ) : null}
 
         {msg ? (
-          <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] break-all">
-            {msg}
-          </p>
+          <ErrorNote
+            text={msg}
+            error={msgErr}
+            code={msgCode}
+            extraAction={
+              // 显存不足只有一条路能走：把批大小调小。那个输入框就在这一页上，
+              // 所以这条不进 CODE_ACTIONS 表 —— 表里只放跨窗口也成立的动作。
+              msgCode === "train.oom"
+                ? { label: t("s.errActBatch"), run: focusBatch }
+                : null
+            }
+          />
         ) : null}
 
         {running ? (

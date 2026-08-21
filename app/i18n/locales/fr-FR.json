@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "Lors de la lecture de la liste des périphériques audio, le programme charge tour à tour chaque pilote ASIO enregistré. Les anciens pilotes Realtek font quitter le programme à cette étape. Mettre à jour ou désinstaller ce pilote rétablit le fonctionnement ; rien n'est affecté tant que le moteur est arrêté.",
     "kiDismiss": "J'ai compris",
     "diagFilesSummary": "{a0} fichiers dans le paquet, {a1} au total",
-    "diagFilesGenerated": "généré"
+    "diagFilesGenerated": "généré",
+    "errDetails": "Détails",
+    "errDetailsHide": "Masquer les détails",
+    "errCopy": "Copier l'erreur complète",
+    "errCopied": "Copié",
+    "errOpenLog": "Ouvrir les journaux",
+    "errActDownload": "Télécharger",
+    "errActRuntime": "Compléter l'environnement",
+    "errActHelp": "Voir l'aide",
+    "errActExtract": "Ouvrir l'extraction de modèle",
+    "errActBatch": "Ajuster les réglages d'entraînement"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

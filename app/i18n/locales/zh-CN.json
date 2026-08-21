@@ -1895,7 +1895,17 @@
     "kiAsioCrashBody": "程序在读取音频设备列表时会逐个加载已注册的 ASIO 驱动，Realtek 的旧版驱动在这一步会让程序直接退出。将该驱动更新到新版或卸载后即可恢复；未开启变声时不受影响。",
     "kiDismiss": "知道了",
     "diagFilesSummary": "包里会有 {a0} 个文件，共 {a1}",
-    "diagFilesGenerated": "现生成"
+    "diagFilesGenerated": "现生成",
+    "errDetails": "详情",
+    "errDetailsHide": "收起详情",
+    "errCopy": "复制完整错误",
+    "errCopied": "已复制",
+    "errOpenLog": "打开日志",
+    "errActDownload": "去下载",
+    "errActRuntime": "去补全运行时",
+    "errActHelp": "查看说明",
+    "errActExtract": "去模型提取",
+    "errActBatch": "去调训练参数"
   },
   "extras": {
     "engineTitle": "引擎资源",

@@ -1988,7 +1988,16 @@
     "cleanupDone": "Limpiado; se liberaron {}.",
     "cleanupNothing": "No hay nada que limpiar.",
     "trainLeftover": "Este entrenamiento generó unos {} de archivos intermedios. Puede eliminarlos en «Otros → Almacenamiento».",
-    "storageTrash": "Papelera (7 días)"
+    "storageTrash": "Papelera (7 días)",
+    "trainInspect": "Analizar el conjunto de datos",
+    "trainInspecting": "Analizando…",
+    "trainInspectResult": "Muestra de {a0} archivos: unos {a1} en total, mediana por clip {a2}.",
+    "trainInspectShort": "La duración total es más bien corta y la voz podría no parecerse. Se suelen recomendar al menos diez minutos de voz seca.",
+    "trainInspectLong": "Los clips son largos (mediana {}). Si son canciones completas, extraiga primero la voz seca con «Separación vocal».",
+    "trainInspectMixedRate": "El material tiene frecuencias de muestreo mixtas ({}). El preprocesamiento lo reemplaza todo, así que normalmente no hay que hacer nada.",
+    "unitSeconds": "{} s",
+    "unitMinutes": "{} min",
+    "unitHours": "{} h"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

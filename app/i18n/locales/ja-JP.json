@@ -1988,7 +1988,16 @@
     "cleanupDone": "削除しました。{} を解放しました。",
     "cleanupNothing": "整理できる項目はありません。",
     "trainLeftover": "今回の学習で約 {} の中間ファイルが生成されました。「その他 → ストレージ」で整理できます。",
-    "storageTrash": "ごみ箱（7 日間保持）"
+    "storageTrash": "ごみ箱（7 日間保持）",
+    "trainInspect": "データセットを診断",
+    "trainInspecting": "診断中…",
+    "trainInspectResult": "{a0} 件を抽出：合計約 {a1}、1 件あたりの中央値 {a2}。",
+    "trainInspectShort": "素材の合計時間が短めで、似た声になりにくい可能性があります。一般には 10 分以上のドライボーカルが推奨されます。",
+    "trainInspectLong": "1 件あたりが長めです（中央値 {}）。楽曲そのものであれば、先に「ボーカル分離」でドライボーカルを取り出すことを推奨します。",
+    "trainInspectMixedRate": "素材のサンプリングレートが混在しています（{}）。前処理で統一的にリサンプルされるため、通常は対応不要です。",
+    "unitSeconds": "{} 秒",
+    "unitMinutes": "{} 分",
+    "unitHours": "{} 時間"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

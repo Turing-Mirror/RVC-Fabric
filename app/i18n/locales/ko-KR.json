@@ -1988,7 +1988,16 @@
     "cleanupDone": "삭제 완료. {}을(를) 확보했습니다.",
     "cleanupNothing": "정리할 항목이 없습니다.",
     "trainLeftover": "이번 학습에서 약 {}의 중간 파일이 생성되었습니다. “기타 → 저장 공간”에서 정리할 수 있습니다.",
-    "storageTrash": "휴지통(7일 보관)"
+    "storageTrash": "휴지통(7일 보관)",
+    "trainInspect": "데이터셋 점검",
+    "trainInspecting": "점검 중…",
+    "trainInspectResult": "{a0}개 표본: 총 약 {a1}, 개별 중앙값 {a2}.",
+    "trainInspectShort": "전체 자료가 짧은 편이라 음색이 충분히 비슷하지 않을 수 있습니다. 보통 10분 이상의 건조한 보컬을 권장합니다.",
+    "trainInspectLong": "개별 클립이 깁니다(중앙값 {}). 전체 곡이라면 먼저 “보컬 분리”로 건조한 보컬을 추출하십시오.",
+    "trainInspectMixedRate": "자료의 샘플링 레이트가 섞여 있습니다({}). 전처리에서 일괄 리샘플링하므로 보통 조치가 필요 없습니다.",
+    "unitSeconds": "{}초",
+    "unitMinutes": "{}분",
+    "unitHours": "{}시간"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

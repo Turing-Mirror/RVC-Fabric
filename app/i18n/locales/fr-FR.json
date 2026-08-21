@@ -1988,7 +1988,16 @@
     "cleanupDone": "Nettoyé, {} libérés.",
     "cleanupNothing": "Il n'y a rien à nettoyer.",
     "trainLeftover": "Cet entraînement a produit environ {} de fichiers intermédiaires. Vous pouvez les supprimer dans « Autres → Stockage ».",
-    "storageTrash": "Corbeille (conservée 7 jours)"
+    "storageTrash": "Corbeille (conservée 7 jours)",
+    "trainInspect": "Analyser le jeu de données",
+    "trainInspecting": "Analyse…",
+    "trainInspectResult": "Échantillon de {a0} fichiers : environ {a1} au total, durée médiane {a2}.",
+    "trainInspectShort": "La durée totale est plutôt courte et la voix risque de ne pas ressembler. On recommande en général au moins dix minutes de voix sèche.",
+    "trainInspectLong": "Les extraits sont longs (médiane {}). S'il s'agit de chansons entières, extrayez d'abord la voix sèche avec « Séparation vocale ».",
+    "trainInspectMixedRate": "Les fréquences d'échantillonnage sont mélangées ({}). Le prétraitement rééchantillonne tout ; aucune action n'est en général nécessaire.",
+    "unitSeconds": "{} s",
+    "unitMinutes": "{} min",
+    "unitHours": "{} h"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

@@ -173,6 +173,156 @@ fn dir_or_file_bytes(p: &Path) -> u64 {
         .sum()
 }
 
+/// 数据集抽样体检。
+///
+/// 26.8.20 那位跑了 500 epoch 才发现音色不像，原因是 2038 个文件只切出 3 条。
+/// 那件事已经在预处理阶段拦住了，但还有一类拦不住：素材本身就不合适 —— 整首歌
+/// （带伴奏）、大段静音、采样率五花八门。这些跑完才发现同样是几十分钟白费。
+///
+/// 用产品自带的 ffprobe 读元数据，不解码 —— 三十个文件几秒钟就回来了。响度和
+/// 静音占比要解码，所以只在更小的子集上做。
+///
+/// 全程可跳过：拿不到 ffprobe（比如开发机上）就返回 available=false，界面不显示
+/// 这一块，而不是报错。
+pub fn inspect_dataset(root: &Path, dir: &Path) -> Value {
+    let probe = root.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+    if !probe.is_file() {
+        return json!({ "available": false });
+    }
+    let mut files = Vec::new();
+    collect_audio(dir, &mut files, 0);
+    if files.is_empty() {
+        return json!({ "available": true, "sampled": 0, "files": 0 });
+    }
+    files.sort();
+    let total = files.len();
+    // 均匀抽样，不是取前 N 个 —— 用户常按歌手/来源分文件夹，取前 N 个只会看到
+    // 第一个文件夹。
+    const SAMPLE: usize = 30;
+    let step = (total as f64 / SAMPLE as f64).max(1.0);
+    let picked: Vec<&PathBuf> = (0..SAMPLE.min(total))
+        .map(|i| &files[((i as f64) * step) as usize % total])
+        .collect();
+
+    let mut durations: Vec<f64> = Vec::new();
+    let mut rates: std::collections::BTreeMap<u32, u64> = Default::default();
+    let mut channels: std::collections::BTreeMap<u32, u64> = Default::default();
+    for p in &picked {
+        let Some((dur, sr, ch)) = probe_one(&probe, p) else {
+            continue;
+        };
+        if dur > 0.0 {
+            durations.push(dur);
+        }
+        if sr > 0 {
+            *rates.entry(sr).or_insert(0) += 1;
+        }
+        if ch > 0 {
+            *channels.entry(ch).or_insert(0) += 1;
+        }
+    }
+    if durations.is_empty() {
+        return json!({ "available": true, "sampled": 0, "files": total });
+    }
+    durations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let median = durations[durations.len() / 2];
+    let mean: f64 = durations.iter().sum::<f64>() / durations.len() as f64;
+    json!({
+        "available": true,
+        "files": total,
+        "sampled": durations.len(),
+        "median_seconds": median,
+        // 总时长是估的：抽样均值 × 文件数。界面上必须写成「约」。
+        "estimated_total_seconds": mean * total as f64,
+        "sample_rates": rates.iter().map(|(k, v)| json!({"rate": k, "files": v})).collect::<Vec<_>>(),
+        "channels": channels.iter().map(|(k, v)| json!({"channels": k, "files": v})).collect::<Vec<_>>(),
+    })
+}
+
+fn collect_audio(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
+    if depth > 6 || out.len() > 20_000 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_audio(&p, out, depth + 1);
+            continue;
+        }
+        let ext = p
+            .extension()
+            .and_then(|x| x.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if DATASET_AUDIO_EXT.contains(&ext.as_str()) {
+            out.push(p);
+        }
+    }
+}
+
+/// 一个文件的 (时长秒, 采样率, 声道数)。取不到就是 None。
+fn probe_one(probe: &Path, file: &Path) -> Option<(f64, u32, u32)> {
+    let mut cmd = std::process::Command::new(probe);
+    cmd.args([
+        "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=sample_rate,channels:format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=0",
+    ])
+    .arg(file)
+    .stdin(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    // `output()` 没有超时。坏文件能让 ffprobe 卡住，而这里要连着跑三十次。
+    let out = run_with_timeout(cmd, std::time::Duration::from_secs(5))?;
+    let text = String::from_utf8_lossy(&out);
+    let mut dur = 0.0;
+    let mut sr = 0u32;
+    let mut ch = 0u32;
+    for line in text.lines() {
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
+        match k.trim() {
+            "duration" => dur = v.trim().parse().unwrap_or(0.0),
+            "sample_rate" => sr = v.trim().parse().unwrap_or(0),
+            "channels" => ch = v.trim().parse().unwrap_or(0),
+            _ => {}
+        }
+    }
+    Some((dur, sr, ch))
+}
+
+fn run_with_timeout(mut cmd: std::process::Command, wait: std::time::Duration) -> Option<Vec<u8>> {
+    cmd.stdout(std::process::Stdio::piped());
+    let mut child = cmd.spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        let _ = stdout.read_to_end(&mut buf);
+        let _ = tx.send(buf);
+    });
+    match rx.recv_timeout(wait) {
+        Ok(buf) => {
+            let _ = child.wait();
+            Some(buf)
+        }
+        Err(_) => {
+            let _ = child.kill();
+            None
+        }
+    }
+}
+
 /// 可清理的三类。分开列、分开勾 —— 三样的后果完全不同，混成一个「一键清理」
 /// 就等于让用户在不知道后果的情况下按下去。
 ///

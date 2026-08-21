@@ -427,6 +427,21 @@ async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Val
         .map_err(|e| e.to_string())
 }
 
+/// 数据集抽样体检：总时长估计、采样率与声道分布。拿不到 ffprobe 就返回
+/// available=false，界面不显示这一块。
+#[tauri::command]
+async fn train_inspect_dataset(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        train::inspect_dataset(&root, std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// 每个实验、每一类可清理的产物各占多少。只扫不删。
 #[tauri::command]
 async fn train_cleanup_scan(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -2025,6 +2040,7 @@ pub fn run() {
             known_issues_check,
             train_scan_dataset,
             train_reset_stages,
+            train_inspect_dataset,
             train_cleanup_scan,
             train_cleanup_apply,
             storage_usage,

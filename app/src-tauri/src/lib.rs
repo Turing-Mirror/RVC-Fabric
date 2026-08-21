@@ -36,6 +36,7 @@ mod ui_assets;
 pub mod update;
 mod voices;
 mod window_watch;
+mod win_realtime;
 mod worker;
 
 use std::path::PathBuf;
@@ -2136,6 +2137,8 @@ pub fn run() {
             // 不这么做的话训练一吃满显存，WebView2 拿不到合成表面，整个
             // 窗口会变纯黑 —— 用户看到的就是「打开就卡死」。
             gpu_pref::apply_once();
+            // pythonw 没窗口，全屏游戏一开，Game Mode 会把我们当后台限速。
+            win_realtime::boost_current();
 
             // setup 末尾再清一次：中间步骤若又写下临时文件，这里兜底。
             {

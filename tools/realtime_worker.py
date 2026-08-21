@@ -122,6 +122,12 @@ def main() -> None:
         sys.path.insert(0, str(root))
     os.environ["TM_REALTIME_WORKER"] = "1"
     os.environ.setdefault("TM_VOICE_ROOT", str(root))
+    try:
+        from tools.win_realtime import boost_current_process
+
+        boost_current_process()
+    except Exception:
+        pass
 
     _tee_stdio(root)
     _append_log(

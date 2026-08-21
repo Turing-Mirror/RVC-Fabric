@@ -163,6 +163,20 @@ export function MorePage({
     }
   };
 
+  // 群里每一轮问答都从「你什么版本 / 什么显卡 / 什么后端」开始。这三样散在
+  // 四个页面上，用户答不上来不是他的错。凑成一段纯文本，按一下复制。
+  const [sumMsg, setSumMsg] = useState("");
+  const copySummary = async () => {
+    setSumMsg("");
+    try {
+      const text = await invoke<string>("diagnostics_summary_text");
+      await navigator.clipboard.writeText(text);
+      setSumMsg(t("s.sumCopied"));
+    } catch {
+      setSumMsg(t("s.sumCopyFailed"));
+    }
+  };
+
   const runDiagnostics = async (r: DiagReport) => {
     setDiagOpen(false);
     setBusyMsg(r.withPerf ? t("s.d7ae8f757e") : t("s.56ce781723"));
@@ -394,6 +408,11 @@ export function MorePage({
 
       <Block title={t("s.72527e2f0e")}>
         <Group>
+          <ListItem
+            title={t("s.sumCopyTitle")}
+            desc={sumMsg || t("s.sumCopyDesc")}
+            right={<Btn onClick={() => void copySummary()}>{t("s.sumCopyBtn")}</Btn>}
+          />
           <ListItem
             title={t("s.selfCheckTitle")}
             desc={

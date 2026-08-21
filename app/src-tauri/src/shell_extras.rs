@@ -871,6 +871,88 @@ fn diag_entry_text(e: &DiagEntry, redaction: Option<&(String, String)>) -> Optio
     Some(redact_user(&raw, redaction))
 }
 
+/// 一段可以直接粘进群里的环境信息。
+///
+/// 每一轮群聊问答都从同样三句开始：「你什么版本」「什么显卡」「什么后端」。
+/// 用户答不上来不是他的错 —— 这些散在四个页面上。这里把它们凑成一段纯文本，
+/// 按一下复制，问答就从第四句开始。
+///
+/// 出包一样能带这些信息，但发包对很多人来说太重了：他只是想在群里问一句。
+///
+/// 路径里的 Windows 用户名照样抹掉 —— 这段文字比诊断包更容易被贴到公开场合。
+pub fn summary_text(root: &Path) -> String {
+    let cfg = config::read(root);
+    let st = worker::status_for_ui(root);
+    let sv = |k: &str| st.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let cv = |k: &str| cfg.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let dash = crate::i18n::t("s.sumUnknown");
+    let or_dash = |s: String| if s.trim().is_empty() { dash.clone() } else { s };
+
+    let gpus = crate::provision::list_gpus();
+    let backend = {
+        let b = sv("compute_backend");
+        let d = sv("compute_device");
+        match (b.is_empty(), d.is_empty()) {
+            (true, true) => dash.clone(),
+            (false, false) => format!("{b} / {d}"),
+            _ => format!("{b}{d}"),
+        }
+    };
+    let main_gpu = match cfg.get("main_gpu").and_then(|v| v.as_i64()) {
+        Some(i) if i >= 0 => i.to_string(),
+        _ => crate::i18n::t("s.sumAuto"),
+    };
+    let audio = format!(
+        "{} / {} → {}",
+        or_dash(sv("sg_hostapi")),
+        or_dash(sv("sg_input_device")),
+        or_dash(sv("sg_output_device"))
+    );
+    let findings = crate::selfcheck::run(root);
+    let findings_line = if findings.is_empty() {
+        crate::i18n::t("s.diagFindingsNone")
+    } else {
+        findings
+            .iter()
+            .map(|f| format!("[{}] {}", f.level, f.title))
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    };
+
+    let mut lines = vec![
+        format!("RVC Fabric {}", crate::update::APP_VERSION),
+        format!("{}: {} {}", crate::i18n::t("s.sumSystem"), std::env::consts::OS, std::env::consts::ARCH),
+        format!(
+            "{}: {}",
+            crate::i18n::t("s.sumVariant"),
+            or_dash(crate::provision::read_package_meta_variant(root).unwrap_or_default())
+        ),
+        format!(
+            "{}: {}",
+            crate::i18n::t("s.sumGpu"),
+            if gpus.is_empty() { dash.clone() } else { gpus.join(" / ") }
+        ),
+        format!("{}: {}", crate::i18n::t("s.sumBackend"), backend),
+        format!("{}: {}", crate::i18n::t("s.sumMainGpu"), main_gpu),
+        format!("{}: {}", crate::i18n::t("s.sumAudio"), audio),
+        format!(
+            "{}: {}",
+            crate::i18n::t("s.sumRuntime"),
+            crate::i18n::t(if paths::runtime_ready(root) { "s.sumYes" } else { "s.sumNo" })
+        ),
+        format!("{}: {}", crate::i18n::t("s.sumVoice"), or_dash(cv("last_model_name"))),
+    ];
+    let err = sv("error");
+    if !err.trim().is_empty() {
+        lines.push(format!("{}: {}", crate::i18n::t("s.sumLastError"), err.trim()));
+    }
+    lines.push(format!("{}:\n  {}", crate::i18n::t("s.sumFindings"), findings_line));
+
+    let text = lines.join("\n");
+    let redaction = home_redaction();
+    redact_user(&text, redaction.as_ref())
+}
+
 /// 出包之前给用户看的清单：包里会有哪些文件、各自多大。
 ///
 /// 用户要把这个包发到群里。「里面只有日志和配置」是一句承诺，清单是这句承诺的
@@ -1218,6 +1300,36 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 这段文字是给用户贴到群里的，所以两件事必须成立：该有的字段一个不少，
+    /// 以及路径里的 Windows 用户名不能跟着出去 —— 它比诊断包更容易被贴到公开
+    /// 场合，而发的时候没人会先读一遍。
+    #[test]
+    fn the_summary_carries_the_fields_support_always_has_to_ask_for() {
+        let root = std::env::temp_dir().join("rvcf-summary-text");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        let text = summary_text(&root);
+        assert!(text.contains(crate::update::APP_VERSION), "少了版本号：{text}");
+        for key in ["s.sumSystem", "s.sumGpu", "s.sumBackend", "s.sumMainGpu", "s.sumAudio"] {
+            let label = crate::i18n::t(key);
+            assert!(text.contains(&label), "少了「{label}」：{text}");
+        }
+        // 没配过的字段要写「未知」，不能留一个空冒号让人以为是我们漏了。
+        assert!(text.contains(&crate::i18n::t("s.sumUnknown")));
+        // main_gpu 没设时是「自动」，不是 -1 —— 用户看不懂 -1。
+        assert!(text.contains(&crate::i18n::t("s.sumAuto")));
+
+        if let Some(home) = std::env::var("HOME").ok().or_else(|| std::env::var("USERPROFILE").ok()) {
+            let home = home.trim_end_matches(['/', '\\']);
+            if home.len() >= 4 {
+                assert!(!text.contains(home), "用户目录漏出去了：{text}");
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn base64_round_trips_the_bytes_a_png_would_carry() {

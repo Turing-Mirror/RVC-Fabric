@@ -1919,7 +1919,20 @@
     "trainCheckNameTaken": "An experiment named \"{}\" already exists; continuing writes into the same folder",
     "trainCheckFewFiles": "Only {} audio files; with this little material the voice may not sound close",
     "trainCheckRepick": "Choose again",
-    "trainCheckRename": "Rename"
+    "trainCheckRename": "Rename",
+    "diagShots": "Screenshots",
+    "diagShotsHint": "Paste a screenshot from the clipboard here, or drag image files into this window. Up to 6.",
+    "diagShotsAdd": "Choose images",
+    "diagShotsFull": "The limit of 6 images has been reached; no more were added.",
+    "diagShotTooBig": "“{}” still exceeds 8 MB after processing and was not added.",
+    "diagShotUnreadable": "“{}” could not be read as an image and was not added.",
+    "diagShotRemove": "Remove",
+    "diagShotsDrop": "Release to add the images",
+    "selfCheckTitle": "Self-diagnosis",
+    "selfCheckDesc": "Checks the current settings and recent run records, and lists the problems that can already be determined.",
+    "selfCheckRun": "Run check",
+    "selfCheckAgain": "Check again",
+    "selfCheckFailed": "The check could not be completed. Please try again later."
   },
   "extras": {
     "engineTitle": "Engine resources",

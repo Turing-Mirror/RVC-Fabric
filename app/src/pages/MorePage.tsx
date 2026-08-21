@@ -12,6 +12,7 @@ import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
 import { askConfirm } from "../lib/webDialog";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
+import { FindingList, type Finding } from "../components/FindingList";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
 const SHOW_CONSULT = false;
@@ -144,6 +145,24 @@ export function MorePage({
    * 昵称、QQ、问题描述都可以留空 —— 那就退化成以前的行为，只是多了一个
    * 勾选框来决定跑不跑性能测试。
    */
+  // 自助排查：跟诊断包里那份是同一套规则、同一份渲染。用户在这两处看到的
+  // 应当是同一句话，否则「我这边写的是另一句」会变成新的一轮问答。
+  const [checkState, setCheckState] = useState<
+    "idle" | "running" | "done" | "failed"
+  >("idle");
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const runSelfCheck = async () => {
+    setCheckState("running");
+    try {
+      const v = await invoke<Finding[]>("diagnostics_self_check");
+      setFindings(Array.isArray(v) ? v : []);
+      setCheckState("done");
+    } catch {
+      setFindings([]);
+      setCheckState("failed");
+    }
+  };
+
   const runDiagnostics = async (r: DiagReport) => {
     setDiagOpen(false);
     setBusyMsg(r.withPerf ? t("s.d7ae8f757e") : t("s.56ce781723"));
@@ -156,6 +175,7 @@ export function MorePage({
             nickname: r.nickname,
             qq: r.qq,
             description: r.description,
+            shots: r.shots,
           },
         },
       );
@@ -374,6 +394,33 @@ export function MorePage({
 
       <Block title={t("s.72527e2f0e")}>
         <Group>
+          <ListItem
+            title={t("s.selfCheckTitle")}
+            desc={
+              checkState === "failed"
+                ? t("s.selfCheckFailed")
+                : checkState === "done" && findings.length === 0
+                  ? t("s.diagFindingsNone")
+                  : t("s.selfCheckDesc")
+            }
+            right={
+              <Btn
+                onClick={() => void runSelfCheck()}
+                disabled={checkState === "running"}
+              >
+                {checkState === "running"
+                  ? t("s.diagFindingsChecking")
+                  : checkState === "idle"
+                    ? t("s.selfCheckRun")
+                    : t("s.selfCheckAgain")}
+              </Btn>
+            }
+          />
+          {checkState === "done" && findings.length ? (
+            <div className="px-4 py-3">
+              <FindingList findings={findings} />
+            </div>
+          ) : null}
           <ListItem
             title={t("s.8b720e5330")}
             desc={

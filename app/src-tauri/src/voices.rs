@@ -1951,7 +1951,11 @@ pub fn delete_voice(root: &Path, model_dir: &str) -> Result<Value, String> {
             crate::logging::shell_log!("删除音色：移入回收站失败（{e}），改为直接删除");
         }
     }
-    rm(&md)?;
+    // 回收站没成、直接删也没成：多半是文件正被别的进程攥着（变声开着、转换
+    // 还没跑完）。裸的「拒绝访问 (os error 5)」没法行动 —— 说清该怎么走。
+    if let Err(e) = rm(&md) {
+        return Err(crate::i18n::te("s.voiceDeleteFailed", &e));
+    }
     drop_voice_refs(root, &md);
     prune_trash(root);
     Ok(json!({"ok": true}))

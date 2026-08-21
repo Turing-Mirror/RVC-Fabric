@@ -1999,6 +1999,7 @@
     "unitMinutes": "{} min",
     "unitHours": "{} h",
     "auditionText": "Bonjour. Voici un aperçu de la voix actuelle. Portez ce vieux whisky au juge blond qui fume.",
+    "voiceDeleteFailed": "Échec de la suppression : {e}. Le fichier est peut-être utilisé par un autre processus — arrêtez la conversion ou attendez sa fin, puis réessayez.",
     "auditionBtn": "Écouter",
     "auditionBusy": "Synthèse…",
     "auditionFailed": "Échec de l'aperçu : {}"

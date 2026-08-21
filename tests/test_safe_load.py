@@ -216,5 +216,38 @@ class VoiceCkptShapeTests(unittest.TestCase):
         self.assertIn("所选文件", str(caught.exception))
 
 
+
+class CorruptFileMessageTests(unittest.TestCase):
+    def test_unreadable_checkpoint_says_what_to_do(self):
+        """两条加载路都读不出来时要说出「文件坏了、该怎么办」。
+
+        26.8.19/3：下载了一半的 pth 反复报 unpickling stack underflow，
+        用户看到的只有「模型加载失败」四个字。
+        """
+
+        class _FakeTorch:
+            @staticmethod
+            def load(path, map_location=None, weights_only=None):
+                raise RuntimeError("unpickling stack underflow")
+
+        saved = sys.modules.get("torch")
+        sys.modules["torch"] = _FakeTorch()
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                p = Path(td) / "broken.pth"
+                p.write_bytes(b"\x00\x01")
+                with self.assertRaises(RuntimeError) as cm:
+                    safe_torch_load(p, map_location="cpu")
+                msg = str(cm.exception)
+                self.assertIn("不完整或已损坏", msg)
+                self.assertIn("unpickling stack underflow", msg)
+                self.assertIn("重新下载", msg)
+        finally:
+            if saved is not None:
+                sys.modules["torch"] = saved
+            else:
+                sys.modules.pop("torch", None)
+
+
 if __name__ == "__main__":
     unittest.main()

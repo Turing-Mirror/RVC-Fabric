@@ -104,11 +104,27 @@ class Config:
     def load_config_json() -> dict:
         d = {}
         for config_file in version_config_list:
+            src = f"configs/{config_file}"
             p = f"configs/inuse/{config_file}"
             if not os.path.exists(p):
-                shutil.copy(f"configs/{config_file}", p)
-            with open(f"configs/inuse/{config_file}", "r") as f:
-                d[config_file] = json.load(f)
+                shutil.copy(src, p)
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    d[config_file] = json.load(f)
+            except (ValueError, OSError):
+                # inuse 那份坏了（空文件 / 写了一半）就回源头重拷一份再读。
+                # 以前这里直接把异常抛出去，Config() 当场崩 —— 性能测试、实时
+                # worker、离线转换全都起不来，而修复只要重拷一个 2 KB 的文件
+                # （diag 26.8.19/1：清缓存之后 bench 报 JSONDecodeError）。
+                logger.warning(
+                    "config %s unreadable; restoring from %s", p, src
+                )
+                try:
+                    shutil.copy(src, p)
+                    with open(p, "r", encoding="utf-8") as f:
+                        d[config_file] = json.load(f)
+                except (ValueError, OSError):
+                    logger.warning("config %s still unreadable; skipping", src)
         return d
 
     @staticmethod

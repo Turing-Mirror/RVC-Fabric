@@ -1999,6 +1999,7 @@
     "unitMinutes": "{} min",
     "unitHours": "{} h",
     "auditionText": "Hello. This is a preview of the current voice. The quick brown fox jumps over the lazy dog.",
+    "voiceDeleteFailed": "Delete failed: {e}. The file may be held by another process — stop voice conversion / let it finish, then try again.",
     "auditionBtn": "Preview",
     "auditionBusy": "Synthesizing…",
     "auditionFailed": "Preview failed: {}"

@@ -2518,6 +2518,20 @@ if __name__ == "__main__":
                 infer_wav = self.input_wav_denoise[self.extra_frame :].clone()
             else:
                 infer_wav = self.input_wav[self.extra_frame :].clone()
+            # 后面的 SOLA 和输出装填都按「至少一个块 + 交叉淡化 + 搜索窗」的
+            # 长度在切。个别后端（26.8.16 那台 Intel 核显的 DirectML）会偶发
+            # 返回短一截的输出，短了就是一句
+            # 「The expanded size of the tensor (1764) must match the existing
+            # size (954)」把整条变声流带走。不足的部分补静音：这一块听着空
+            # 一点，比整条流断掉强。
+            _need = self.block_frame + self.sola_buffer_frame + self.sola_search_frame
+            if infer_wav.shape[0] < _need:
+                _pad = torch.zeros(
+                    _need - infer_wav.shape[0],
+                    device=infer_wav.device,
+                    dtype=infer_wav.dtype,
+                )
+                infer_wav = torch.cat([infer_wav, _pad], dim=0)
             # output noise reduction
             if self.gui_config.O_noise_reduce and self.function == "vc":
                 self.output_buffer[: -self.block_frame] = self.output_buffer[

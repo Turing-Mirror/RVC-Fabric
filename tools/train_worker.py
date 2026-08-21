@@ -434,7 +434,11 @@ class TrainLogTail(threading.Thread):
         self.total_stages = total_stages
         # 同 StageProgress：不能叫 _stop，见那边的注释。
         self._halt = threading.Event()
-        self._pos = 0
+        # 从现成日志的末尾开始追。续跑时 train.log 里还躺着上一轮的 epoch 行，
+        # 从头扫会把它们全部当成本轮进度重播 —— 界面瞬间冲到 200/200，真实
+        # 跑着的第一轮反而看不见，用户看到的就是「进度条卡住」（diag 26.8.20/4
+        # 第二、三次训练：205 行进度 3 秒内打完，之后 13 分钟一动不动）。
+        self._pos = self.log_path.stat().st_size if self.log_path.is_file() else 0
         self._epoch = 0
 
     def stop(self):

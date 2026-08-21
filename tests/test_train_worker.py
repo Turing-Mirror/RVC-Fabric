@@ -553,5 +553,39 @@ class TrainPartialWarningUiTests(unittest.TestCase):
         self.assertIn("setMsg", src)
 
 
+
+class TrainLogTailTests(unittest.TestCase):
+    def test_resume_does_not_replay_old_epochs(self):
+        """续跑时旧 train.log 里的 epoch 行不是本轮的进度，一行都不能重播。
+
+        26.8.20/4：205 行进度 3 秒内打完（上一轮的 200 epoch 全被重播），
+        界面停在 200/200，真实跑着的训练反而看不见，用户只能取消。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "train.log"
+            log.write_text(
+                "====> Epoch: 1 [old]\n====> Epoch: 2 [old]\n====> Epoch: 200 [old]\n",
+                encoding="utf-8",
+            )
+            tail = tw.TrainLogTail(log, 200, 4, 5)
+            with _Capture() as cap:
+                tail._scan()
+            self.assertEqual(cap.lines(), [], "旧日志的 epoch 不该被当成进度播出去")
+
+            with open(log, "a", encoding="utf-8") as f:
+                f.write("====> Epoch: 3 [new run]\n")
+            with _Capture() as cap:
+                tail._scan()
+            lines = cap.lines()
+            self.assertEqual(len(lines), 1)
+            self.assertEqual(lines[0]["done"], 3)
+            self.assertEqual(lines[0]["total"], 200)
+
+    def test_missing_log_starts_at_zero(self):
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "train.log"
+            tail = tw.TrainLogTail(log, 200, 4, 5)
+            self.assertEqual(tail._pos, 0)
+
 if __name__ == "__main__":
     unittest.main()

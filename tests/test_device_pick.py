@@ -113,5 +113,28 @@ class FillMissingTests(unittest.TestCase):
         self.assertEqual(inn, "麦克风 (Realtek(R) Audio)")
 
 
+class PickDefaultNoCableTests(unittest.TestCase):
+    """主输出找不到 CABLE 时必须返回空，不能拿耳机/扬声器顶上。
+
+    26.8.19/3：CABLE 瞬时不在设备列表里，旧逻辑把变声主输出补成了
+    HyperX 耳机 —— 变声结果直接进耳机，用户从此一直听到自己的声音。
+    """
+
+    def test_no_cable_means_no_output_not_headphones(self):
+        outs = ["耳机 (HyperX Cloud III)", "扬声器 (Realtek(R) Audio)"]
+        self.assertEqual(pick_default_output(outs), "")
+
+    def test_fill_missing_returns_empty_output_when_no_cable(self):
+        inn, out, notes = fill_missing_devices(
+            "麦克风 (Realtek(R) Audio)",
+            "CABLE Input (VB-Audio Virtual C",
+            INPUTS,
+            ["耳机 (HyperX Cloud III)"],
+        )
+        self.assertEqual(inn, "麦克风 (Realtek(R) Audio)")
+        self.assertEqual(out, "")
+        self.assertTrue(any("output" in n for n in notes))
+
+
 if __name__ == "__main__":
     unittest.main()

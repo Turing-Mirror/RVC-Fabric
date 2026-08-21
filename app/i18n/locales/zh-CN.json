@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "{a0} 删不掉：{a1}。文件可能正被占用，先停下分离/训练再试。",
     "vcNeedEngineCore": "实时变声需要引擎资源（hubert / rmvpe / ffmpeg，约 720 MB）。先下载补全，完成后再点「开启变声」。",
     "vcNeedEngineCoreShort": "请先补全引擎资源，再开启变声",
-    "wkDiedDuringLoad": "引擎进程在加载过程中退出，详见 User_Data/logs/realtime_worker.log",
+    "wkDiedDuringLoad": "引擎进程在加载过程中退出，详见 User_Data/logs/worker/ 下当天的日志。",
     "wkPidNotAlive": "引擎进程已不在运行",
     "wkReadyTimeout": "等待引擎就绪超时，请再试一次，或查看 User_Data/logs/realtime_worker.log",
     "wkStartTimeout": "启动超时",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "麦克风选 CABLE Output",
     "routeMonitor": "耳机",
     "routeMonitorSub": "监听设备",
-    "routeMonitorNote": "可选，只有你听得到"
+    "routeMonitorNote": "可选，只有你听得到",
+    "exitAccessViolation": "访问冲突",
+    "exitDivideByZero": "整数除零",
+    "exitIllegalInstruction": "非法指令",
+    "exitStackBufferOverrun": "栈缓冲区溢出",
+    "exitStackOverflow": "栈溢出",
+    "exitMissingDll": "缺少依赖库",
+    "exitInterrupted": "进程被中断",
+    "wkKilledBySystem": "引擎进程被系统终止，退出码 {}。这类退出通常由第三方驱动在程序内部出错引起。",
+    "wkExitedWithCode": "引擎进程已退出，退出码 {}。",
+    "audioProbeCrash": "读取音频设备列表时进程被系统终止，退出码 {}。",
+    "audioProbeAsio": "本机已注册的 ASIO 驱动：{}。请更新或卸载相关驱动后重试。"
   },
   "extras": {
     "engineTitle": "引擎资源",

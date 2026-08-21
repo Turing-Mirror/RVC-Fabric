@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "Impossible de supprimer {a0} : {a1}. Le fichier est peut-être utilisé — arrêtez la séparation/l'entraînement et réessayez.",
     "vcNeedEngineCore": "La conversion en temps réel exige les ressources moteur (hubert / rmvpe / ffmpeg, environ 720 Mo). Téléchargez-les d'abord, puis appuyez sur Démarrer.",
     "vcNeedEngineCoreShort": "Téléchargez les ressources moteur avant de démarrer la conversion",
-    "wkDiedDuringLoad": "Le processus moteur s'est arrêté pendant le chargement — voir User_Data/logs/realtime_worker.log",
+    "wkDiedDuringLoad": "Le processus du moteur s'est arrêté pendant le chargement. Consultez le journal du jour dans User_Data/logs/worker/.",
     "wkPidNotAlive": "Le processus moteur ne tourne plus",
     "wkReadyTimeout": "Délai dépassé en attendant que le moteur soit prêt. Réessayez ou consultez User_Data/logs/realtime_worker.log",
     "wkStartTimeout": "Délai de démarrage dépassé",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "micro : CABLE Output",
     "routeMonitor": "Casque",
     "routeMonitorSub": "périph. d'écoute",
-    "routeMonitorNote": "optionnel, vous seul l'entendez"
+    "routeMonitorNote": "optionnel, vous seul l'entendez",
+    "exitAccessViolation": "Violation d'accès",
+    "exitDivideByZero": "Division entière par zéro",
+    "exitIllegalInstruction": "Instruction illégale",
+    "exitStackBufferOverrun": "Dépassement de tampon de pile",
+    "exitStackOverflow": "Débordement de pile",
+    "exitMissingDll": "Bibliothèque dépendante manquante",
+    "exitInterrupted": "Processus interrompu",
+    "wkKilledBySystem": "Le processus du moteur a été arrêté par le système (code de sortie {}). Ce type d'arrêt est généralement causé par un pilote tiers qui échoue à l'intérieur du programme.",
+    "wkExitedWithCode": "Le processus du moteur s'est terminé avec le code {}.",
+    "audioProbeCrash": "Le processus a été arrêté par le système lors de la lecture de la liste des périphériques audio (code de sortie {}).",
+    "audioProbeAsio": "Pilotes ASIO enregistrés sur cet ordinateur : {}. Mettez-les à jour ou désinstallez-les, puis réessayez."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

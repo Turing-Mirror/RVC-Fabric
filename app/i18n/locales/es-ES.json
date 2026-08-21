@@ -1717,7 +1717,7 @@
     "extraRemoveFailed": "No se puede borrar {a0}: {a1}. Puede estar en uso: detén la separación/entrenamiento y reinténtalo.",
     "vcNeedEngineCore": "La conversión en tiempo real necesita los recursos del motor (hubert / rmvpe / ffmpeg, unos 720 MB). Descárgalos primero y luego pulsa Iniciar.",
     "vcNeedEngineCoreShort": "Descarga los recursos del motor antes de iniciar la conversión",
-    "wkDiedDuringLoad": "El proceso del motor terminó durante la carga: consulta User_Data/logs/realtime_worker.log",
+    "wkDiedDuringLoad": "El proceso del motor finalizó durante la carga. Consulte el registro de hoy en User_Data/logs/worker/.",
     "wkPidNotAlive": "El proceso del motor ya no se está ejecutando",
     "wkReadyTimeout": "Se agotó el tiempo esperando a que el motor estuviera listo. Inténtalo de nuevo o revisa User_Data/logs/realtime_worker.log",
     "wkStartTimeout": "Tiempo de inicio agotado",
@@ -1864,7 +1864,18 @@
     "routeGameSub": "micro: CABLE Output",
     "routeMonitor": "Auriculares",
     "routeMonitorSub": "disp. de escucha",
-    "routeMonitorNote": "opcional, solo lo oyes tú"
+    "routeMonitorNote": "opcional, solo lo oyes tú",
+    "exitAccessViolation": "Violación de acceso",
+    "exitDivideByZero": "División entera por cero",
+    "exitIllegalInstruction": "Instrucción no válida",
+    "exitStackBufferOverrun": "Desbordamiento del búfer de pila",
+    "exitStackOverflow": "Desbordamiento de pila",
+    "exitMissingDll": "Falta una biblioteca dependiente",
+    "exitInterrupted": "Proceso interrumpido",
+    "wkKilledBySystem": "El sistema finalizó el proceso del motor (código de salida {}). Este tipo de finalización suele deberse a un controlador de terceros que falla dentro del programa.",
+    "wkExitedWithCode": "El proceso del motor finalizó con el código {}.",
+    "audioProbeCrash": "El sistema finalizó el proceso al leer la lista de dispositivos de audio (código de salida {}).",
+    "audioProbeAsio": "Controladores ASIO registrados en este equipo: {}. Actualícelos o desinstálelos e inténtelo de nuevo."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

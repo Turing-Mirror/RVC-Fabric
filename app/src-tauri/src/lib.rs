@@ -3,9 +3,11 @@
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 pub mod catalog;
+mod audio_probe;
 mod autostart;
 mod ckpt;
 mod config;
+mod crash;
 mod download;
 mod dsp;
 mod engine_assets;

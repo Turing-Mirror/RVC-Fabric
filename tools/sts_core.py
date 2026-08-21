@@ -122,49 +122,84 @@ def last_error_line(text) -> str:
     return lines[-1]
 
 
+def _module_device(model):
+    """nn.Module.to() 是原地搬的，失败时要靠这个把已经搬走的搬回去。"""
+    if model is None:
+        return None
+    dev = getattr(model, "device", None)
+    if dev is not None:
+        return dev
+    try:
+        return next(model.parameters()).device
+    except Exception:
+        return None
+
+
 def move_models_to_cpu(vc) -> bool:
     """把这份 VC 的模型整体挪到 CPU，返回是否挪成功。
 
     只有自己拥有模型的调用方能用（冷路径 worker）。热路径复用的是实时引擎的常驻
     张量，`vc.net_g` 就是 `rvc.net_g` 本人，挪走等于把实时变声一起废了——那边传
     ``allow_cpu_fallback=False``，改走「热路径不可用」让壳退到冷路径。
-    """
-    moved = False
-    for name in ("net_g", "hubert_model"):
-        model = getattr(vc, name, None)
-        if model is None:
-            continue
-        try:
-            setattr(vc, name, model.float().to("cpu"))
-            moved = True
-        except Exception:
-            traceback.print_exc()
-            return False
 
+    ``Module.to()`` 原地改设备。net_g 搬走之后 hubert 再失败，不能把一半 CPU、
+    一半 DirectML 的组合留给后面的文件——那种错不再像算子缺口，CPU 重试也
+    不会再走。
+    """
+    net_g = getattr(vc, "net_g", None)
+    hubert = getattr(vc, "hubert_model", None)
     pipe = getattr(vc, "pipeline", None)
-    if pipe is not None:
-        try:
+    if net_g is None and hubert is None and pipe is None:
+        return False
+
+    net_dev = _module_device(net_g)
+    hub_dev = _module_device(hubert)
+    pipe_dev = getattr(pipe, "device", None) if pipe is not None else None
+    pipe_half = bool(getattr(pipe, "is_half", False)) if pipe is not None else False
+    rmvpe = getattr(pipe, "model_rmvpe", None) if pipe is not None else None
+    had_rmvpe = pipe is not None and hasattr(pipe, "model_rmvpe")
+    moved_net = moved_hub = moved_pipe = False
+
+    def _restore():
+        if moved_net and net_g is not None and net_dev is not None:
+            vc.net_g = net_g.to(net_dev)
+        if moved_hub and hubert is not None and hub_dev is not None:
+            vc.hubert_model = hubert.to(hub_dev)
+        if moved_pipe and pipe is not None:
+            if pipe_dev is not None:
+                pipe.device = pipe_dev
+            pipe.is_half = pipe_half
+            if had_rmvpe and rmvpe is not None:
+                pipe.model_rmvpe = rmvpe
+
+    try:
+        if net_g is not None:
+            vc.net_g = net_g.float().to("cpu")
+            moved_net = True
+        if hubert is not None:
+            vc.hubert_model = hubert.float().to("cpu")
+            moved_hub = True
+        if pipe is not None:
             pipe.device = "cpu"
             pipe.is_half = False
-            # rmvpe 是按设备建的（privateuseone 走 onnxruntime 的 DML EP，
-            # 见 infer/lib/rmvpe.py:506），扔掉让它在 CPU 上重新加载。
-            if hasattr(pipe, "model_rmvpe"):
+            # rmvpe 在 privateuseone 上是 onnxruntime 的 DML EP，扔掉让 CPU 重建。
+            if had_rmvpe:
                 del pipe.model_rmvpe
-            moved = True
-        except Exception:
-            traceback.print_exc()
-            return False
-
-    config = getattr(vc, "config", None)
-    if config is not None:
-        try:
+            moved_pipe = True
+        config = getattr(vc, "config", None)
+        if config is not None:
             config.device = "cpu"
             config.is_half = False
+    except Exception:
+        traceback.print_exc()
+        try:
+            _restore()
         except Exception:
-            pass
+            traceback.print_exc()
+        return False
 
     cuda_empty_cache()
-    return moved
+    return True
 
 
 def normalize_f0method(name: str) -> tuple[str, str | None]:

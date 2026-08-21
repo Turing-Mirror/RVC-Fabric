@@ -184,7 +184,14 @@ export function TrainPanel() {
     void listen<Progress>("train-progress", (ev) => {
       setProg(ev.payload);
       setEta(trackEta(epochMarks.current, ev.payload));
-      if (ev.payload.phase === "error") setMsg(ev.payload.message || t("s.60a21a8105"));
+      const line = ev.payload.message || "";
+      if (ev.payload.phase === "error") {
+        setMsg(line || t("s.60a21a8105"));
+      } else if (ev.payload.phase === "skip" && line) {
+        // skip 下一拍就是 stage，prog.message 会被盖掉。半份产物那种警告
+        // 必须写到 msg 上，否则界面上看着像正常续跑。
+        setMsg((prev) => (prev && prev !== line ? `${prev}\n${line}` : line));
+      }
     }).then((fn) => {
       if (disposed) fn();
       else un = fn;

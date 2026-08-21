@@ -444,6 +444,15 @@ async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, 
         .map_err(|e| e.to_string())
 }
 
+/// 一段可以直接粘进群里的环境信息。
+#[tauri::command]
+async fn diagnostics_summary_text(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || shell_extras::summary_text(&root))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 出包之前，把包里会有哪些文件、各自多大摆出来。
 ///
 /// 用户是拿这个包去群里求助的。「里面只有日志和配置」是一句承诺，这份清单是
@@ -1957,6 +1966,7 @@ pub fn run() {
             known_issues_check,
             train_scan_dataset,
             diagnostics_preview,
+            diagnostics_summary_text,
             cache_status,
             cache_clear,
             consult_build,

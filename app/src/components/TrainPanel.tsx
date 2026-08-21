@@ -11,6 +11,7 @@ import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { askConfirm } from "../lib/webDialog";
+import { auditionVoice } from "../lib/audition";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -217,6 +218,21 @@ export function TrainPanel() {
   // Btn 不转发 ref（它到处都在用，不为这一处改签名），所以套一层 span。
   const startRef = useRef<HTMLSpanElement | null>(null);
   const [resetting, setResetting] = useState(false);
+  // 训完之后立刻能听一下像不像。「训完才发现白训」是这个产品里最贵的一种失望，
+  // 而「像不像」只有用户自己判断得了 —— 我们能做的是把这一步从「导出、找文件、
+  // 拖进播放器」缩成一个按钮。
+  const [trained, setTrained] = useState("");
+  const [auditing, setAuditing] = useState(false);
+  const audition = async () => {
+    if (!trained || auditing) return;
+    setAuditing(true);
+    try {
+      const err = await auditionVoice(trained);
+      if (err) showErr(t("s.auditionFailed", { v0: err }));
+    } finally {
+      setAuditing(false);
+    }
+  };
   // 「补齐并继续」不另起一条代码路径：它就是开始按钮，两条路会分叉。这里只是
   // 把它滚进视野，省得用户在长表单里自己找。
   const focusStart = () => {
@@ -433,6 +449,7 @@ export function TrainPanel() {
     if (runningRef.current) return;
     showInfo("");
     setMsgCode("");
+    setTrained("");
     setProg(null);
     setEta("");
     epochMarks.current = [];
@@ -453,6 +470,7 @@ export function TrainPanel() {
           output_dir: outDir,
         },
       });
+      setTrained(String(r?.weights ?? ""));
       const leftover = r?.leftover_bytes ?? 0;
       showInfo(
         t("s.2b30598b60", { v0: r.weights ?? "" }) +
@@ -821,6 +839,14 @@ export function TrainPanel() {
               {prog.phase === "stage" ? ` ${pct}%` : ""}
               {eta ? ` · ${eta}` : ""}
             </p>
+          </div>
+        ) : null}
+
+        {trained && !running ? (
+          <div className="mt-3">
+            <Btn onClick={() => void audition()} busy={auditing} disabled={auditing}>
+              {auditing ? t("s.auditionBusy") : t("s.auditionBtn")}
+            </Btn>
           </div>
         ) : null}
 

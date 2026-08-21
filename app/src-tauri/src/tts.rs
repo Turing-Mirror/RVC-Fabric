@@ -269,6 +269,25 @@ pub fn run(
     pitch: i32,
     use_rvc: bool,
 ) -> Result<Value, String> {
+    run_with_model(app, root, text, voice, rate, pitch, use_rvc, "")
+}
+
+/// 同上，但可以指定用哪个音色换声。
+///
+/// `model_path` 为空就用配置里当前选中的那个（文字合成面板走的就是这条）。
+/// 试听要转的是用户点的那个音色，而不是「当前选中的」—— 为了听一下就把他的
+/// 选择改掉，是拿副作用换功能。
+#[allow(clippy::too_many_arguments)]
+pub fn run_with_model(
+    app: &AppHandle,
+    root: &Path,
+    text: &str,
+    voice: &str,
+    rate: i32,
+    pitch: i32,
+    use_rvc: bool,
+    model_path: &str,
+) -> Result<Value, String> {
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
@@ -294,7 +313,9 @@ pub fn run(
     );
     let mut trace = crate::logging::RunTrace::new(log.clone());
     let started = std::time::Instant::now();
-    let result = run_inner(app, root, text, voice, rate, pitch, use_rvc, &mut trace);
+    let result = run_inner(
+        app, root, text, voice, rate, pitch, use_rvc, model_path, &mut trace,
+    );
     let outcome = match &result {
         Ok(_) => "ok",
         Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
@@ -345,6 +366,7 @@ fn run_inner(
     rate: i32,
     pitch: i32,
     use_rvc: bool,
+    model_path: &str,
     trace: &mut crate::logging::RunTrace,
 ) -> Result<Value, String> {
     let text = text.trim();
@@ -390,12 +412,15 @@ fn run_inner(
     }
 
     let cfg = crate::config::read(root);
-    let pth = cfg
-        .get("pth_path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
+    let pth = if model_path.trim().is_empty() {
+        cfg.get("pth_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    } else {
+        model_path.trim().to_string()
+    };
     if pth.is_empty() || !Path::new(&pth).is_file() {
         return Err(crate::i18n::t("s.ab63502dd7").into());
     }

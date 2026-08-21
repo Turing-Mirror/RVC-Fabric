@@ -1997,7 +1997,11 @@
     "trainInspectMixedRate": "素材采样率不统一（{}）。预处理会统一重采样，通常无需处理。",
     "unitSeconds": "{} 秒",
     "unitMinutes": "{} 分钟",
-    "unitHours": "{} 小时"
+    "unitHours": "{} 小时",
+    "auditionText": "你好，这是当前音色的试听效果。一二三四五，上山打老虎。",
+    "auditionBtn": "试听",
+    "auditionBusy": "合成中…",
+    "auditionFailed": "试听失败：{}"
   },
   "extras": {
     "engineTitle": "引擎资源",

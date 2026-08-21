@@ -1997,7 +1997,11 @@
     "trainInspectMixedRate": "El material tiene frecuencias de muestreo mixtas ({}). El preprocesamiento lo reemplaza todo, así que normalmente no hay que hacer nada.",
     "unitSeconds": "{} s",
     "unitMinutes": "{} min",
-    "unitHours": "{} h"
+    "unitHours": "{} h",
+    "auditionText": "Hola. Esta es una muestra de la voz actual. El veloz murciélago hindú comía feliz cardillo.",
+    "auditionBtn": "Escuchar",
+    "auditionBusy": "Sintetizando…",
+    "auditionFailed": "Error en la escucha: {}"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

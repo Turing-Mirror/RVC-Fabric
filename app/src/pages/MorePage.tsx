@@ -13,6 +13,7 @@ import { t } from "../i18n/t";
 import { askConfirm } from "../lib/webDialog";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 import { FindingList, type Finding } from "../components/FindingList";
+import { StorageSection } from "../components/StorageSection";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
 const SHOW_CONSULT = false;
@@ -406,6 +407,7 @@ export function MorePage({
         </Group>
       </Block>
 
+      <StorageSection />
       <Block title={t("s.72527e2f0e")}>
         <Group>
           <ListItem

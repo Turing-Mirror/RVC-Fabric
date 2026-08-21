@@ -871,6 +871,49 @@ fn diag_entry_text(e: &DiagEntry, redaction: Option<&(String, String)>) -> Optio
     Some(redact_user(&raw, redaction))
 }
 
+/// 各个目录各占多少。
+///
+/// 一个训练实验的中间产物动辄三四个 GB，而用户完全看不见 —— 他只知道 C 盘满了，
+/// 不知道是谁占的。异步跑：logs 下可能有好几万个文件。
+pub fn storage_usage(root: &Path) -> Value {
+    let ud = paths::user_data(root);
+    let items = [
+        ("logs", root.join("logs")),
+        ("weights", root.join("assets").join("weights")),
+        ("models", ud.join("models")),
+        ("update_cache", paths::update_cache(root)),
+        ("diagnostics", ud.join("diagnostics")),
+        ("perf_reports", ud.join("perf_reports")),
+        ("app_logs", paths::logs_dir(root)),
+    ];
+    let list: Vec<Value> = items
+        .iter()
+        .map(|(name, p)| json!({ "name": name, "bytes": dir_bytes(p) }))
+        .collect();
+    let total: u64 = list
+        .iter()
+        .filter_map(|v| v.get("bytes").and_then(|b| b.as_u64()))
+        .sum();
+    json!({
+        "items": list,
+        "total_bytes": total,
+        "free_bytes": paths::free_space_bytes(root).map(Value::from).unwrap_or(Value::Null),
+    })
+}
+
+fn dir_bytes(p: &Path) -> u64 {
+    let Ok(meta) = std::fs::metadata(p) else {
+        return 0;
+    };
+    if meta.is_file() {
+        return meta.len();
+    }
+    let Ok(rd) = std::fs::read_dir(p) else {
+        return 0;
+    };
+    rd.flatten().map(|e| dir_bytes(&e.path())).sum()
+}
+
 /// 一段可以直接粘进群里的环境信息。
 ///
 /// 每一轮群聊问答都从同样三句开始：「你什么版本」「什么显卡」「什么后端」。

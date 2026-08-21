@@ -71,6 +71,9 @@ pub struct Hit {
     pub level: String,
     pub title: String,
     pub body: String,
+    /// 哪一版修好的，空 = 还没修。界面拿它给「更新到 x.y.z」按钮写版本号。
+    /// 能出现在 Hit 里的条目必然满足 当前版本 < fixed_in，所以有值就值得给按钮。
+    pub fixed_in: String,
 }
 
 fn table() -> Vec<Entry> {
@@ -142,6 +145,7 @@ pub fn hits(root: &Path) -> Vec<Hit> {
             level: e.level,
             title: crate::i18n::t(&e.title_key),
             body: crate::i18n::t(&e.body_key),
+            fixed_in: e.fixed_in.clone(),
         })
         .collect()
 }
@@ -218,5 +222,19 @@ mod tests {
     fn an_entry_with_no_conditions_matches_everything() {
         let e = entry(r#"{"id":"x","title_key":"a","body_key":"b"}"#);
         assert!(matches(&e, &Machine { version: "1.5.4".into(), ..Default::default() }));
+    }
+
+    /// Hit 要把 fixed_in 带出去 —— 界面上的「更新到 x.y.z」按钮靠它写版本号。
+    #[test]
+    fn a_hit_carries_the_fix_version_for_the_update_button() {
+        let h = Hit {
+            id: "x".into(),
+            level: "warn".into(),
+            title: "t".into(),
+            body: "b".into(),
+            fixed_in: "1.5.5".into(),
+        };
+        let v = serde_json::to_value(&h).unwrap();
+        assert_eq!(v["fixed_in"], "1.5.5");
     }
 }

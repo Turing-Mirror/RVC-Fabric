@@ -48,6 +48,8 @@ type KnownIssue = {
   level: "error" | "warn" | "info";
   title: string;
   body: string;
+  /** 哪一版修好。空 = 还没修 —— 有值才给「更新到 x.y.z」按钮。 */
+  fixed_in?: string;
 };
 
 /** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
@@ -296,6 +298,31 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  // 「更新到 x.y.z」的回执。修复还没发布、没有新版本可装时进度条不会动，
+  // 这条得留在横幅里说清楚为什么按钮没起作用。
+  const [kiNote, setKiNote] = useState("");
+  const kiUpdate = async () => {
+    if (updateBusy) return;
+    // 开机 4 秒那次检查的结果还热着就复用，别再发一次请求。
+    const r = updateOffer ?? (await probeUpdate().catch(() => null));
+    if (!r) {
+      setKiNote(t("s.kiNoUpdateYet"));
+      return;
+    }
+    // 下载进度走下面那条更新横幅（两块 Nudge 各占一行，可以并存）——
+    // 用户按了按钮就得看得见它在动。
+    setUpdateOffer(r);
+    setUpdateWorking(true);
+    setUpdateBusy(true);
+    try {
+      await installUpdate(r);
+    } catch (e) {
+      setUpdateLine(t("s.bac68ea7db", { v0: String(e) }));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   // The daily ping belongs to app start, not to every start/stop of the
   // stream. The Rust side dedupes by day, but firing it on each toggle still
@@ -1227,10 +1254,24 @@ export default function App() {
         <Nudge
           title={knownIssue.title}
           actions={
-            <Btn onClick={() => setKnownIssue(null)}>{t("s.kiDismiss")}</Btn>
+            <>
+              <Btn onClick={() => setKnownIssue(null)}>{t("s.kiDismiss")}</Btn>
+              {/* 有修复版本才给这个按钮：它说的「更新到 x.y.z」必须是真的。 */}
+              {knownIssue.fixed_in ? (
+                <Btn
+                  primary
+                  busy={updateBusy}
+                  disabled={updateBusy}
+                  onClick={() => void kiUpdate()}
+                >
+                  {t("s.kiUpdate", { v0: knownIssue.fixed_in })}
+                </Btn>
+              ) : null}
+            </>
           }
         >
           {knownIssue.body}
+          {kiNote ? <span className="block mt-1">{kiNote}</span> : null}
         </Nudge>
       ) : null}
 

@@ -365,7 +365,8 @@
       "all_failed": "Los {total} archivos fallaron al convertir. Primer motivo: {first}",
       "done": "{done} completados, {skipped} omitidos",
       "hot_unavailable": "No hay ninguna voz cargada en el motor en tiempo real: se convertirá en un proceso aparte (algo más lento).",
-      "hot_dml_fallback": "El backend gráfico (DirectML) no admite este paso: se convertirá en un proceso aparte (algo más lento)."
+      "hot_dml_fallback": "El backend gráfico (DirectML) no admite este paso: se convertirá en un proceso aparte (algo más lento).",
+      "model_is_archive": "Lo seleccionado es un archivo de entrenamiento (G_ / D_) y no puede usarse directamente como voz.\nConviértalo primero en un modelo de voz en «Ajustes avanzados → Extracción de modelos» de la ventana de entrenamiento."
     },
     "train": {
       "step_failed": "Este paso falló (código de salida {code}); detalles en {log}",
@@ -2081,7 +2082,14 @@
     "twReset": "Restaurar parámetros predeterminados",
     "twResetDone": "Se han restaurado los parámetros predeterminados de esta voz",
     "twDone": "Ajuste completado.",
-    "twDoneHint": "Todos los cambios se aplican en tiempo real y se guardan automáticamente con la voz actual."
+    "twDoneHint": "Todos los cambios se aplican en tiempo real y se guardan automáticamente con la voz actual.",
+    "kiUpdate": "Actualizar a {v0}",
+    "kiNoUpdateYet": "Ya tiene la última versión: la corrección de este problema aún no se ha publicado; llegará con la próxima versión.",
+    "trainInspectQuiet": "Las grabaciones suenan flojas (media de la muestra en torno a {} dB). Suba el volumen de grabación antes de entrenar.",
+    "trainInspectSilent": "Aproximadamente el {}% del material es silencio. Recorte los tramos largos en silencio antes de entrenar.",
+    "trainInspectMixedCh": "Los canales están mezclados ({}). El preprocesamiento lo reduce todo a mono automáticamente; normalmente no hay que hacer nada.",
+    "trainFailedList": "Ver los {v0} archivo(s) fallidos",
+    "trainFailedHide": "Ocultar la lista de fallos"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

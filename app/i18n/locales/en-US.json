@@ -365,7 +365,8 @@
       "all_failed": "All {total} files failed to convert. First reason: {first}",
       "done": "{done} done, {skipped} skipped",
       "hot_unavailable": "No voice is loaded in the realtime engine — converting in a separate process instead (a bit slower).",
-      "hot_dml_fallback": "The graphics backend (DirectML) does not support this step — converting in a separate process instead (a bit slower)."
+      "hot_dml_fallback": "The graphics backend (DirectML) does not support this step — converting in a separate process instead (a bit slower).",
+      "model_is_archive": "What you picked is a training archive (a G_ / D_ checkpoint), not a voice model.\nTurn it into a voice model first via “Advanced → Model extraction” in the training window, then convert."
     },
     "train": {
       "step_failed": "This step failed (exit code {code}) — details in {log}",
@@ -2081,7 +2082,14 @@
     "twReset": "Restore default parameters",
     "twResetDone": "Default parameters for this voice have been restored",
     "twDone": "Tuning complete.",
-    "twDoneHint": "All adjustments take effect immediately and are saved automatically with the current voice."
+    "twDoneHint": "All adjustments take effect immediately and are saved automatically with the current voice.",
+    "kiUpdate": "Update to {v0}",
+    "kiNoUpdateYet": "You are on the latest version — the fix for this issue hasn't shipped yet; it arrives with the next release.",
+    "trainInspectQuiet": "The recordings are on the quiet side (sample average around {} dB). Consider raising the recording volume before training.",
+    "trainInspectSilent": "About {}% of the material is silence. Consider trimming the long silent stretches before training.",
+    "trainInspectMixedCh": "Channel layouts are mixed ({}). Preprocessing downmixes everything to mono automatically; this usually needs no action.",
+    "trainFailedList": "View the {v0} failed file(s)",
+    "trainFailedHide": "Hide the failure list"
   },
   "extras": {
     "engineTitle": "Engine resources",

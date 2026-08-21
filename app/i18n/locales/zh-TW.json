@@ -365,7 +365,8 @@
       "all_failed": "{total} 個檔案全部轉換失敗。第一個原因：{first}",
       "done": "完成 {done} 個，跳過 {skipped} 個",
       "hot_unavailable": "即時引擎裡沒有已載入的音色，改用獨立行程轉換（會慢一些）。",
-      "hot_dml_fallback": "顯示卡後端（DirectML）不支援這一步，改用獨立行程轉換（會慢一些）。"
+      "hot_dml_fallback": "顯示卡後端（DirectML）不支援這一步，改用獨立行程轉換（會慢一些）。",
+      "model_is_archive": "選到的是訓練存檔（G_ / D_ 開頭那種），不能直接當音色用。\n請先在訓練視窗「進階設定 → 模型提取」裡轉成音色模型，再來轉換。"
     },
     "train": {
       "step_failed": "該步驟失敗（退出碼 {code}），詳情見 {log}",
@@ -2081,7 +2082,14 @@
     "twReset": "恢復預設參數",
     "twResetDone": "已恢復該音色的預設參數",
     "twDone": "調整完成。",
-    "twDoneHint": "所有調整已即時生效，並會隨當前音色自動儲存。"
+    "twDoneHint": "所有調整已即時生效，並會隨當前音色自動儲存。",
+    "kiUpdate": "更新到 {v0}",
+    "kiNoUpdateYet": "目前已是最新版本——這個問題的修復還沒發布，請等下一版。",
+    "trainInspectQuiet": "素材錄音偏輕（抽樣平均約 {} dB），建議提高錄音音量後再訓練。",
+    "trainInspectSilent": "素材約 {}% 是靜音，建議剪掉長靜音段後再訓練。",
+    "trainInspectMixedCh": "聲道不統一（{}），前處理會自動混為單聲道，通常無需處理。",
+    "trainFailedList": "查看 {v0} 個失敗檔案",
+    "trainFailedHide": "收起失敗清單"
   },
   "extras": {
     "engineTitle": "引擎資源",

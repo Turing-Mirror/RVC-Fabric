@@ -1595,7 +1595,22 @@ fn run_inner(
                 // 先亮一次「完成」再翻成红字，用户只会觉得程序在骗人。
                 // 收尾那条 done 在 child.wait() 和错误判定之后发。
             }
-            "error" => fail = Some(msg.to_string()),
+            "error" => {
+                fail = Some(msg.to_string());
+                // 错误也要走事件推一遍，且带上 message_code —— 有些码在前端配了
+                // 动作按钮（「选到训练存档」配「打开训练窗」）。invoke 的 Err 只
+                // 剩纯文本，码丢了按钮就没了。
+                let mut body = json!({
+                    "phase": "error",
+                    "message": msg,
+                    "done": v.get("done").and_then(|x| x.as_u64()).unwrap_or(0),
+                    "total": total,
+                });
+                if let Some(c) = v.get("message_code").and_then(|x| x.as_str()) {
+                    body["message_code"] = json!(c);
+                }
+                let _ = app.emit("sts-progress", body);
+            }
             _ => {}
         }
     }

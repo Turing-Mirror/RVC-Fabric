@@ -365,7 +365,8 @@
       "all_failed": "Les {total} fichiers ont échoué à la conversion. Première raison : {first}",
       "done": "{done} terminés, {skipped} ignorés",
       "hot_unavailable": "Aucune voix chargée dans le moteur temps réel — conversion dans un processus séparé (un peu plus lent).",
-      "hot_dml_fallback": "Le backend graphique (DirectML) ne prend pas en charge cette étape — conversion dans un processus séparé (un peu plus lent)."
+      "hot_dml_fallback": "Le backend graphique (DirectML) ne prend pas en charge cette étape — conversion dans un processus séparé (un peu plus lent).",
+      "model_is_archive": "Le fichier choisi est une archive d'entraînement (G_ / D_) : elle ne sert pas directement de voix.\nConvertissez-la d'abord en modèle de voix via « Réglages avancés → Extraction de modèle » dans la fenêtre d'entraînement."
     },
     "train": {
       "step_failed": "Cette étape a échoué (code de sortie {code}) — détails dans {log}",
@@ -2081,7 +2082,14 @@
     "twReset": "Restaurer les paramètres par défaut",
     "twResetDone": "Les paramètres par défaut de cette voix ont été restaurés",
     "twDone": "Réglage terminé.",
-    "twDoneHint": "Tous les ajustements s'appliquent en temps réel et sont enregistrés automatiquement avec la voix actuelle."
+    "twDoneHint": "Tous les ajustements s'appliquent en temps réel et sont enregistrés automatiquement avec la voix actuelle.",
+    "kiUpdate": "Mettre à jour vers {v0}",
+    "kiNoUpdateYet": "Vous avez déjà la dernière version — le correctif de ce problème n'est pas encore publié ; il arrivera avec la prochaine version.",
+    "trainInspectQuiet": "Les enregistrements sont faibles (moyenne d'échantillons autour de {} dB). Augmentez le niveau d'enregistrement avant l'entraînement.",
+    "trainInspectSilent": "Environ {}% du matériel est du silence. Coupez les longues plages de silence avant l'entraînement.",
+    "trainInspectMixedCh": "Les canaux sont mélangés ({}). Le prétraitement réduit tout en mono automatiquement ; aucune action n'est en général nécessaire.",
+    "trainFailedList": "Voir les {v0} fichier(s) en échec",
+    "trainFailedHide": "Replier la liste des échecs"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

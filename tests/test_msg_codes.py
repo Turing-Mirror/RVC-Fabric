@@ -70,3 +70,23 @@ def test_params_survive_json_even_when_they_are_not_json_types():
 
 def test_fallback_message_fills_placeholders():
     assert mc.fallback_message(mc.TRAIN_EPOCH, {"epoch": 3, "total": 20}) == "第 3 / 20 轮"
+
+
+# ---------------------------------------------------------------------------
+# unittest 桥。这两个文件是 pytest 风格（模块级 test_ 函数），但产品的跑法是
+# `python -m unittest discover`（scripts/run_tests.bat），后者不收集裸函数 ——
+# 结果守卫挂了没人知道：msg_codes 的中文兜底和语言包漂移了四条，半年后才被
+# 发现。把同一份函数挂到 TestCase 上，两种跑法都能执行。
+# ---------------------------------------------------------------------------
+import unittest
+
+
+class _UnittestBridge(unittest.TestCase):
+    pass
+
+
+for _name in [n for n in list(globals()) if n.startswith("test_")]:
+    setattr(_UnittestBridge, _name, lambda self, _fn=globals()[_name]: _fn())
+
+if __name__ == "__main__":
+    unittest.main()

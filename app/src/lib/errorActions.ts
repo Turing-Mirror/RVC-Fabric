@@ -82,6 +82,16 @@ const CODE_ACTIONS: Record<string, Action> = {
     labelKey: "s.errActHelp",
     run: toHelp("faq#s.8e6b1ba01b"),
   },
+  // 选到的是训练存档：得先在训练窗「进阶设置 → 模型提取」里转成音色。把训练
+  // 窗开到用户眼前，比让他自己去猜「训练窗」在主界面哪个入口强。不走
+  // ToolWindow 的 openTool —— 那个会先查引擎资源并可能弹下载框，而能碰上这个
+  // 错的人显然已经有整套训练环境；也避免组件间的循环引用。
+  "sts.model_is_archive": {
+    labelKey: "s.errActExtract",
+    run: () => {
+      void invoke("tools_open", { kind: "train" }).catch(() => {});
+    },
+  },
 };
 
 /** 这个错误码有没有配一个能按的按钮。 */

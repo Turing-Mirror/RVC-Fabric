@@ -26,6 +26,8 @@ type Experiment = {
   complete?: boolean;
   preprocess_ok?: number;
   preprocess_failed?: number;
+  /** 上次预处理里读不了的文件（最多 20 条），文件名 + 最后一行异常。 */
+  preprocess_failed_files?: { name: string; reason: string }[];
 };
 
 type Status = {
@@ -60,6 +62,11 @@ type Inspect = {
   median_seconds?: number;
   estimated_total_seconds?: number;
   sample_rates?: { rate: number; files: number }[];
+  channels?: { channels: number; files: number }[];
+  /** 平均响度（dB）。要解码才量得出，ffmpeg 不在就没这一项 —— 缺省≠0。 */
+  mean_volume_db?: number;
+  /** 静音占比 0..1。同上，缺省不算 0%。 */
+  silence_ratio?: number;
 };
 
 type Progress = {
@@ -173,6 +180,9 @@ export function TrainPanel() {
   // 合适（整首歌、时长太短）跑完 500 轮才发现，同样是几十分钟白费。
   const [inspect, setInspect] = useState<Inspect | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  // 预处理失败清单的展开状态。换了实验名不自动收起 —— 名字列表跟着 existing
+  // 走，看另一个实验的失败清单同样是「展开」语义。
+  const [showFailed, setShowFailed] = useState(false);
   const runInspect = async () => {
     if (!dataset || inspecting) return;
     setInspecting(true);
@@ -592,6 +602,31 @@ export function TrainPanel() {
                   })}
                 </p>
               ) : null}
+              {/* 阈值只给相对判断用的「值得看一眼」线，不是承诺：偏轻到什么程度
+                  该重录，取决于用户能接受什么质量。 */}
+              {inspect.mean_volume_db != null && inspect.mean_volume_db < -35 ? (
+                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                  {t("s.trainInspectQuiet", {
+                    v0: inspect.mean_volume_db.toFixed(1),
+                  })}
+                </p>
+              ) : null}
+              {(inspect.silence_ratio ?? 0) > 0.6 ? (
+                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                  {t("s.trainInspectSilent", {
+                    v0: Math.round((inspect.silence_ratio ?? 0) * 100),
+                  })}
+                </p>
+              ) : null}
+              {(inspect.channels?.length ?? 0) > 1 ? (
+                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                  {t("s.trainInspectMixedCh", {
+                    v0: (inspect.channels ?? [])
+                      .map((c) => `${c.channels}ch×${c.files}`)
+                      .join(" / "),
+                  })}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {dataset ? (
@@ -799,6 +834,36 @@ export function TrainPanel() {
                   a1: String(existing.preprocess_ok ?? 0),
                 })}
               </p>
+            ) : null}
+            {/* 哪些文件坏了、为什么坏 —— 只报条数的话，用户清完坏文件还得再跑
+                一遍预处理才知道清没清干净。清单来自 preprocess.log，上限 20 条。 */}
+            {existing && (existing.preprocess_failed_files?.length ?? 0) > 0 ? (
+              <div className="mt-1">
+                <Btn
+                  onClick={() => setShowFailed((v) => !v)}
+                  className="!py-1 !px-2 text-[12px]"
+                >
+                  {showFailed
+                    ? t("s.trainFailedHide")
+                    : t("s.trainFailedList", {
+                        v0: String(existing.preprocess_failed_files?.length ?? 0),
+                      })}
+                </Btn>
+                {showFailed ? (
+                  <ul className="m-0 mt-1.5 max-h-[120px] list-none overflow-auto p-0">
+                    {(existing.preprocess_failed_files ?? []).map((f) => (
+                      <li
+                        key={f.name}
+                        className="py-0.5 text-[11.5px] text-[var(--meta)] break-all leading-snug"
+                      >
+                        <span className="font-medium text-[var(--ink-muted)]">{f.name}</span>
+                        {" — "}
+                        {f.reason}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
             <div className="mt-2 flex flex-wrap gap-2">
               {/* 「补齐并继续」就是现在的开始按钮，这里只是把话说清楚，不另开一条

@@ -817,6 +817,7 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
         let child = cmd
             .spawn()
             .map_err(|e| crate::i18n::te("s.7611f15dff", &e))?;
+        crate::win_realtime::boost_child(&child);
         append_log(root, &format!("spawned shell-side pid={}", child.id()));
         adopt_spawned(root, child.id());
         // Do not wait; worker re-parents as Runtime process and writes its own pid

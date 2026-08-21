@@ -82,6 +82,20 @@ class AudioIoProcess(Process):
 
     def run(self):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            from tools.win_realtime import (
+                begin_timer_period,
+                boost_current_process,
+                boost_current_thread_audio,
+                end_timer_period,
+            )
+
+            boost_current_process(high=True)
+            _timer = begin_timer_period()
+        except Exception:
+            boost_current_thread_audio = lambda: None  # type: ignore[assignment]
+            end_timer_period = lambda _t: None  # type: ignore[assignment]
+            _timer = None
 
         in_mem = SharedMemory(name=self.in_mem_name)
         self.in_buf = np.ndarray(
@@ -98,6 +112,7 @@ class AudioIoProcess(Process):
         sd.default.device = (self.in_dev, self.out_dev)
 
         def output_callback(outdata, frames, time_info, status):
+            boost_current_thread_audio()
             play_ptr = self.play_ptr.value
             end_ptr = play_ptr + frames
 
@@ -112,6 +127,7 @@ class AudioIoProcess(Process):
             self.play_ptr.value = end_ptr % self.buf_size
 
         def input_callback(indata, frames, time_info, status):
+            boost_current_thread_audio()
             # 收录输入数据
             end_ptr = self.__rec_ptr + frames
             if end_ptr <= self.buf_size:  # 整块拷贝
@@ -136,39 +152,42 @@ class AudioIoProcess(Process):
             output_callback(outdata, frames, time_info, status)  # 优先出声
             input_callback(indata, frames, time_info, status)
 
-        if self.is_device_combined:
-            with sd.Stream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=self.buf_dtype,
-                latency='low',
-                extra_settings=exclusive_settings if
-                        self.is_input_wasapi_exclusive and
-                        self.is_output_wasapi_exclusive else None,
-                callback=combined_callback
-            ) as s:
-                self.latency.value = s.latency[-1]
-                self.stop_evt.wait()
-                self.out_buf.fill(0.0)
-        else:
-            with sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=self.buf_dtype,
-                latency='low',
-                extra_settings=exclusive_settings if self.is_input_wasapi_exclusive else None,
-                callback=input_callback
-            ) as si, sd.OutputStream(
-                samplerate=self.sample_rate,
-                channels=self.channels,
-                dtype=self.buf_dtype,
-                latency='low',
-                extra_settings=exclusive_settings if self.is_output_wasapi_exclusive else None,
-                callback=output_callback
-            ) as so:
-                self.latency.value = si.latency[-1] + so.latency[-1]
-                self.stop_evt.wait()
-                self.out_buf.fill(0.0)
+        try:
+            if self.is_device_combined:
+                with sd.Stream(
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype=self.buf_dtype,
+                    latency='low',
+                    extra_settings=exclusive_settings if
+                            self.is_input_wasapi_exclusive and
+                            self.is_output_wasapi_exclusive else None,
+                    callback=combined_callback
+                ) as s:
+                    self.latency.value = s.latency[-1]
+                    self.stop_evt.wait()
+                    self.out_buf.fill(0.0)
+            else:
+                with sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype=self.buf_dtype,
+                    latency='low',
+                    extra_settings=exclusive_settings if self.is_input_wasapi_exclusive else None,
+                    callback=input_callback
+                ) as si, sd.OutputStream(
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype=self.buf_dtype,
+                    latency='low',
+                    extra_settings=exclusive_settings if self.is_output_wasapi_exclusive else None,
+                    callback=output_callback
+                ) as so:
+                    self.latency.value = si.latency[-1] + so.latency[-1]
+                    self.stop_evt.wait()
+                    self.out_buf.fill(0.0)
+        finally:
+            end_timer_period(_timer)
 
         # 清理共享内存
         in_mem.close()

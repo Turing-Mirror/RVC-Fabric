@@ -40,6 +40,12 @@ def _log(msg: str, *args) -> None:
 
 def main() -> None:
     try:
+        from tools.win_realtime import boost_current_process
+
+        boost_current_process()
+    except Exception:
+        pass
+    try:
         from tools.worker_protocol import force_windowed_multiprocessing
 
         force_windowed_multiprocessing()

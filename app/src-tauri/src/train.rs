@@ -173,6 +173,178 @@ fn dir_or_file_bytes(p: &Path) -> u64 {
         .sum()
 }
 
+/// 可清理的三类。分开列、分开勾 —— 三样的后果完全不同，混成一个「一键清理」
+/// 就等于让用户在不知道后果的情况下按下去。
+///
+/// | 类别 | 匹配 | 删掉之后 |
+/// |---|---|---|
+/// | snapshots  | `assets/weights/<exp>_e\d+_s\d+.pth` | 无影响 |
+/// | checkpoints| `logs/<exp>/[GD]_\d+.pth`             | 不能续训 |
+/// | dataset    | `STAGE_ARTIFACTS`                     | 不能续训，要从预处理重来 |
+///
+/// 永不触碰：`assets/weights/<exp>.pth`（正式权重）、`User_Data/models/**`
+/// （已发布的音色）、`logs/<exp>/*.index`（检索索引）、各类 `.log`。
+pub const CLEANUP_KINDS: [&str; 3] = ["snapshots", "checkpoints", "dataset"];
+
+/// 「训练途中另存的小模型」：`<exp>_e12_s3456.pth`。
+///
+/// 判据必须把正式权重 `<exp>.pth` 排除在外 —— 那是训练的最终产物，删了就没了。
+pub fn is_epoch_snapshot(exp: &str, name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".pth") else {
+        return false;
+    };
+    let Some(rest) = stem.strip_prefix(exp) else {
+        return false;
+    };
+    // `<exp>.pth` 本身：rest 是空串，不算。
+    let Some(rest) = rest.strip_prefix("_e") else {
+        return false;
+    };
+    let Some((epoch, step)) = rest.split_once("_s") else {
+        return false;
+    };
+    !epoch.is_empty()
+        && epoch.chars().all(|c| c.is_ascii_digit())
+        && !step.is_empty()
+        && step.chars().all(|c| c.is_ascii_digit())
+}
+
+/// 「训练存档」：`G_35200.pth` / `D_35200.pth`。
+pub fn is_train_checkpoint(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".pth") else {
+        return false;
+    };
+    let Some(rest) = stem.strip_prefix('G').or_else(|| stem.strip_prefix('D')) else {
+        return false;
+    };
+    let Some(digits) = rest.strip_prefix('_') else {
+        return false;
+    };
+    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+}
+
+/// 某一类在盘上的文件清单。扫描和删除都调它 —— 只有一处判据。
+fn cleanup_targets(root: &Path, exp: &str, kind: &str) -> Vec<PathBuf> {
+    let exp_dir = exp_root(root).join(exp);
+    match kind {
+        "snapshots" => {
+            let dir = root.join("assets").join("weights");
+            list_files(&dir)
+                .into_iter()
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|n| is_epoch_snapshot(exp, n))
+                        .unwrap_or(false)
+                })
+                .collect()
+        }
+        "checkpoints" => list_files(&exp_dir)
+            .into_iter()
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|s| s.to_str())
+                    .map(is_train_checkpoint)
+                    .unwrap_or(false)
+            })
+            .collect(),
+        "dataset" => STAGE_ARTIFACTS
+            .iter()
+            .map(|n| exp_dir.join(n))
+            .filter(|p| p.exists())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn list_files(dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(dir)
+        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.is_file()).collect())
+        .unwrap_or_default()
+}
+
+/// 每个实验、每一类各占多少、各有几个文件。
+pub fn cleanup_scan(root: &Path) -> Value {
+    let mut out: Vec<Value> = Vec::new();
+    let Ok(rd) = std::fs::read_dir(exp_root(root)) else {
+        return json!([]);
+    };
+    let mut names: Vec<String> = rd
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().to_str().map(String::from))
+        .filter(|n| n != "mute" && !n.starts_with('.'))
+        .collect();
+    names.sort();
+    for exp in names {
+        let mut kinds = serde_json::Map::new();
+        let mut total = 0u64;
+        for kind in CLEANUP_KINDS {
+            let files = cleanup_targets(root, &exp, kind);
+            let bytes: u64 = files.iter().map(|p| dir_or_file_bytes(p)).sum();
+            total += bytes;
+            kinds.insert(kind.into(), json!({ "files": files.len(), "bytes": bytes }));
+        }
+        out.push(json!({ "exp": exp, "total_bytes": total, "kinds": Value::Object(kinds) }));
+    }
+    json!(out)
+}
+
+/// 删掉指定实验的指定几类，返回释放的字节数。
+///
+/// 和 `reset_stages` 同一套闸：训练中拒绝、实验名不许逃逸、删前重扫、写日志。
+pub fn cleanup_apply(root: &Path, exp: &str, kinds: &[String]) -> Result<u64, String> {
+    let exp_dir = guard_exp_dir(root, exp)?;
+    let _ = &exp_dir;
+    let mut freed = 0u64;
+    for kind in kinds {
+        if !CLEANUP_KINDS.contains(&kind.as_str()) {
+            continue;
+        }
+        // 删之前重新扫一次，不复用界面上那份可能已经过时的清单。
+        for p in cleanup_targets(root, exp.trim(), kind) {
+            let bytes = dir_or_file_bytes(&p);
+            let r = if p.is_dir() {
+                std::fs::remove_dir_all(&p)
+            } else {
+                std::fs::remove_file(&p)
+            };
+            match r {
+                Ok(()) => freed += bytes,
+                Err(e) => {
+                    crate::logging::shell_log!("清理：{} 删除失败 {}", p.display(), e)
+                }
+            }
+        }
+    }
+    crate::logging::shell_log!(
+        "清理：实验 {} 类别 {:?} 释放约 {:.1} MB",
+        exp.trim(),
+        kinds,
+        freed as f64 / (1024.0 * 1024.0)
+    );
+    Ok(freed)
+}
+
+/// 删除类操作共用的那几道闸。
+fn guard_exp_dir(root: &Path, exp: &str) -> Result<PathBuf, String> {
+    let exp = exp.trim();
+    if exp.is_empty() || exp.contains(['/', '\\', ':']) || exp == "." || exp == ".." {
+        return Err(crate::i18n::te("s.trainNameInvalid", &exp));
+    }
+    if *BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
+        return Err(crate::i18n::t("s.trainBusyNoReset"));
+    }
+    let exp_dir = exp_root(root).join(exp);
+    let (Ok(canon), Ok(canon_root)) = (exp_dir.canonicalize(), root.canonicalize()) else {
+        return Err(crate::i18n::te("s.trainExpMissing", &exp));
+    };
+    if !canon.starts_with(&canon_root) {
+        return Err(crate::i18n::te("s.trainExpMissing", &exp));
+    }
+    Ok(exp_dir)
+}
+
 /// 删掉一个实验的中间产物，返回释放的字节数。
 ///
 /// 五条硬要求，一条都不能少：
@@ -182,22 +354,8 @@ fn dir_or_file_bytes(p: &Path) -> u64 {
 /// 4. 路径必须落在产品根之下，否则拒绝。
 /// 5. 每次操作往日志写一行：删了哪个实验、释放多少。
 pub fn reset_stages(root: &Path, exp: &str) -> Result<u64, String> {
+    let exp_dir = guard_exp_dir(root, exp)?;
     let exp = exp.trim();
-    if exp.is_empty() || exp.contains(['/', '\\', ':']) || exp == "." || exp == ".." {
-        return Err(crate::i18n::te("s.trainNameInvalid", &exp));
-    }
-    if *BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
-        return Err(crate::i18n::t("s.trainBusyNoReset"));
-    }
-    let exp_dir = exp_root(root).join(exp);
-    // 路径必须在产品根下。`exp` 已经过滤过分隔符，这条是第二道闸 —— 删东西的
-    // 代码不该只有一道。
-    let (Ok(canon), Ok(canon_root)) = (exp_dir.canonicalize(), root.canonicalize()) else {
-        return Err(crate::i18n::te("s.trainExpMissing", &exp));
-    };
-    if !canon.starts_with(&canon_root) {
-        return Err(crate::i18n::te("s.trainExpMissing", &exp));
-    }
 
     // 删之前重新算一次。
     let freed = stage_artifact_bytes(&exp_dir);
@@ -966,6 +1124,9 @@ fn run_inner(
         "ok": true,
         "weights": d.get("weights").cloned().unwrap_or(Value::Null),
         "index": d.get("index").cloned().unwrap_or(Value::Null),
+        // 一次训练留下的切片 / 音高 / 特征动辄几个 GB，而用户完全看不见。
+        // 训练刚跑完是唯一一个他会读这句话的时刻。只报数，不自动删。
+        "leftover_bytes": stage_artifact_bytes(&exp_root(root).join(req.exp.trim())),
     }))
 }
 
@@ -977,6 +1138,80 @@ mod tests {
     ///
     /// 界面报「找到 120 个音频」而预处理只认 80 个，用户会拿这个假数字判断数据
     /// 集够不够。两边各写一份就一定会漂，所以这里直接读 Python 源码来比。
+    /// 「另存的小模型」和正式权重只差一个后缀段。认错了就是把用户训练的最终
+    /// 成果删了 —— 这条判据必须窄。
+    #[test]
+    fn epoch_snapshots_are_told_apart_from_the_final_weight() {
+        assert!(is_epoch_snapshot("miku", "miku_e12_s3456.pth"));
+        assert!(is_epoch_snapshot("miku", "miku_e1_s1.pth"));
+        // 正式权重：删了不可再生。
+        assert!(!is_epoch_snapshot("miku", "miku.pth"));
+        // 别的实验的东西不归这次清理管。
+        assert!(!is_epoch_snapshot("miku", "rin_e12_s3456.pth"));
+        // 形似但不是：缺 step、缺数字、后缀不对。
+        assert!(!is_epoch_snapshot("miku", "miku_e12.pth"));
+        assert!(!is_epoch_snapshot("miku", "miku_e_s1.pth"));
+        assert!(!is_epoch_snapshot("miku", "miku_e12_s34.index"));
+        // 名字里正好带 _e.._s.. 的音色不能被误伤。
+        assert!(!is_epoch_snapshot("miku", "miku_extra.pth"));
+    }
+
+    #[test]
+    fn training_checkpoints_are_matched_by_their_own_shape() {
+        assert!(is_train_checkpoint("G_35200.pth"));
+        assert!(is_train_checkpoint("D_0.pth"));
+        assert!(!is_train_checkpoint("miku.pth"));
+        assert!(!is_train_checkpoint("G.pth"));
+        assert!(!is_train_checkpoint("Gundam_1.pth"));
+        assert!(!is_train_checkpoint("added_miku.index"));
+    }
+
+    /// 扫描给出的数字必须就是删除会释放的数字，而且不该删的不能出现在清单里。
+    #[test]
+    fn the_cleanup_scan_and_apply_agree_and_spare_everything_irreplaceable() {
+        let root = std::env::temp_dir().join("rvcf-cleanup");
+        let _ = std::fs::remove_dir_all(&root);
+        let exp = root.join("logs").join("miku");
+        let weights = root.join("assets").join("weights");
+        std::fs::create_dir_all(exp.join("1_16k_wavs")).unwrap();
+        std::fs::create_dir_all(&weights).unwrap();
+        std::fs::write(exp.join("1_16k_wavs").join("a.wav"), vec![0u8; 300]).unwrap();
+        std::fs::write(exp.join("G_100.pth"), vec![0u8; 200]).unwrap();
+        std::fs::write(exp.join("D_100.pth"), vec![0u8; 200]).unwrap();
+        std::fs::write(exp.join("added_miku.index"), vec![0u8; 7]).unwrap();
+        std::fs::write(exp.join("train.log"), vec![0u8; 5]).unwrap();
+        std::fs::write(weights.join("miku_e5_s50.pth"), vec![0u8; 100]).unwrap();
+        std::fs::write(weights.join("miku.pth"), vec![0u8; 999]).unwrap();
+
+        let scan = cleanup_scan(&root);
+        let row = &scan.as_array().unwrap()[0];
+        assert_eq!(row["exp"], "miku");
+        assert_eq!(row["kinds"]["snapshots"]["bytes"].as_u64(), Some(100));
+        assert_eq!(row["kinds"]["checkpoints"]["bytes"].as_u64(), Some(400));
+        assert_eq!(row["kinds"]["dataset"]["bytes"].as_u64(), Some(300));
+        assert_eq!(row["total_bytes"].as_u64(), Some(800));
+
+        // 只勾两类，第三类必须原样留着。
+        let freed = cleanup_apply(
+            &root,
+            "miku",
+            &["snapshots".to_string(), "checkpoints".to_string()],
+        )
+        .unwrap();
+        assert_eq!(freed, 500);
+        assert!(!weights.join("miku_e5_s50.pth").exists());
+        assert!(!exp.join("G_100.pth").exists());
+        assert!(exp.join("1_16k_wavs").join("a.wav").is_file(), "没勾的类别不能动");
+        assert!(weights.join("miku.pth").is_file(), "正式权重永远不动");
+        assert!(exp.join("added_miku.index").is_file(), "索引永远不动");
+        assert!(exp.join("train.log").is_file(), "日志永远不动");
+
+        // 认不出来的类别名直接忽略，不做任何事。
+        assert_eq!(cleanup_apply(&root, "miku", &["everything".to_string()]).unwrap(), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// 删中间产物这件事，删错一次就是用户几十分钟白跑。所以钉死两件：
     /// 该删的一个不剩，不该删的一个不碰。
     #[test]

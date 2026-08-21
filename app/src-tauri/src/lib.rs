@@ -427,6 +427,44 @@ async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Val
         .map_err(|e| e.to_string())
 }
 
+/// 每个实验、每一类可清理的产物各占多少。只扫不删。
+#[tauri::command]
+async fn train_cleanup_scan(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || train::cleanup_scan(&root))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 删掉指定实验的指定几类。类别必须明确勾选，没有「一键清理全部」。
+#[tauri::command]
+async fn train_cleanup_apply(
+    state: State<'_, Mutex<AppState>>,
+    exp: String,
+    kinds: Vec<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        train::cleanup_apply(&root, &exp, &kinds).map(|freed| {
+            json!({
+                "freed_bytes": freed,
+                "freed_mb": format!("{:.1}", freed as f64 / (1024.0 * 1024.0)),
+            })
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 各个目录各占多少磁盘。
+#[tauri::command]
+async fn storage_usage(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || shell_extras::storage_usage(&root))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 清空一个实验的中间产物（切片 / 音高 / 特征），返回释放的字节数。
 ///
 /// 只删可再生的那几样，训练存档、索引和日志一律不碰。训练进行中拒绝执行。
@@ -1987,6 +2025,9 @@ pub fn run() {
             known_issues_check,
             train_scan_dataset,
             train_reset_stages,
+            train_cleanup_scan,
+            train_cleanup_apply,
+            storage_usage,
             diagnostics_preview,
             diagnostics_summary_text,
             cache_status,

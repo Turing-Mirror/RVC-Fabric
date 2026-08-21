@@ -412,7 +412,7 @@ export function TrainPanel() {
     runningRef.current = true;
     setRunning(true);
     try {
-      const r = await invoke<{ weights?: string }>("train_start", {
+      const r = await invoke<{ weights?: string; leftover_bytes?: number }>("train_start", {
         req: {
           exp: name.trim(),
           dataset,
@@ -426,7 +426,13 @@ export function TrainPanel() {
           output_dir: outDir,
         },
       });
-      showInfo(t("s.2b30598b60", { v0: r.weights ?? "" }));
+      const leftover = r?.leftover_bytes ?? 0;
+      showInfo(
+        t("s.2b30598b60", { v0: r.weights ?? "" }) +
+          // 训练刚跑完是用户唯一会读这句话的时刻。只报数，不自动删 —— 中间产物
+          // 还留着才能续训。
+          (leftover > 0 ? `\n${t("s.trainLeftover", { v0: humanBytes(leftover) })}` : ""),
+      );
     } catch (e) {
       showErr(String(e));
     } finally {

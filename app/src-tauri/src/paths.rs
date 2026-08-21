@@ -512,3 +512,32 @@ mod cache_clear_tests {
         let _ = std::fs::remove_dir_all(&td);
     }
 }
+
+/// 这个路径所在盘还剩多少字节。取不到就是 None（别把「问不出来」当成「盘满了」）。
+#[cfg(windows)]
+pub fn free_space_bytes(path: &Path) -> Option<u64> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let mut wide: Vec<u16> = OsStr::new(path).encode_wide().collect();
+    wide.push(0);
+    let mut free: u64 = 0;
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut free,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    Some(free)
+}
+
+#[cfg(not(windows))]
+pub fn free_space_bytes(_path: &Path) -> Option<u64> {
+    None
+}

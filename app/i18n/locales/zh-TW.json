@@ -1905,7 +1905,21 @@
     "errActRuntime": "去補齊執行環境",
     "errActHelp": "查看說明",
     "errActExtract": "去模型擷取",
-    "errActBatch": "去調訓練參數"
+    "errActBatch": "去調訓練參數",
+    "trainDatasetFound": "找到 {a0} 個音訊，共 {a1}",
+    "trainDatasetEmpty": "這個資料夾裡沒有找到音訊。支援的格式：{}",
+    "trainDatasetScanning": "正在統計…",
+    "trainSrCost": "取樣率越高越吃顯示記憶體：48k > 40k > 32k。顯示記憶體吃緊時選低的。",
+    "trainSrOnly48": "目前只有 48k 底模就緒。顯示記憶體不夠時可以去下載 40k 或 32k 底模。",
+    "trainCheckMust": "必須解決",
+    "trainCheckShould": "建議解決",
+    "trainCheckNoAudio": "選取的資料集裡沒有音訊檔案",
+    "trainCheckDisk": "磁碟剩餘 {a0}，訓練中間檔案預計需要 {a1} 以上",
+    "trainCheckBatch": "批次大小 {a0} 高於本機建議值 {a1}，顯示記憶體不足時訓練會中途失敗",
+    "trainCheckNameTaken": "已經有一個叫「{}」的實驗，繼續會寫進同一個目錄",
+    "trainCheckFewFiles": "只有 {} 個音訊，素材偏少時音色不容易像",
+    "trainCheckRepick": "重新選擇",
+    "trainCheckRename": "換個名字"
   },
   "extras": {
     "engineTitle": "引擎資源",

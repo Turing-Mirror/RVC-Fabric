@@ -1905,7 +1905,21 @@
     "errActRuntime": "런타임 보완하기",
     "errActHelp": "설명 보기",
     "errActExtract": "모델 추출로 이동",
-    "errActBatch": "학습 설정 조정"
+    "errActBatch": "학습 설정 조정",
+    "trainDatasetFound": "오디오 파일 {a0}개, 총 {a1}",
+    "trainDatasetEmpty": "이 폴더에서 오디오를 찾지 못했습니다. 지원 형식: {}",
+    "trainDatasetScanning": "세는 중…",
+    "trainSrCost": "샘플링 레이트가 높을수록 VRAM을 더 씁니다: 48k > 40k > 32k. VRAM이 빠듯하면 낮은 쪽을 고르세요.",
+    "trainSrOnly48": "현재 48k 기본 모델만 준비되어 있습니다. VRAM이 부족하면 40k 또는 32k 기본 모델을 내려받으세요.",
+    "trainCheckMust": "필수 해결",
+    "trainCheckShould": "확인 권장",
+    "trainCheckNoAudio": "선택한 데이터셋에 오디오 파일이 없습니다",
+    "trainCheckDisk": "디스크 여유 {a0}. 학습 중간 파일에는 {a1} 이상이 필요합니다",
+    "trainCheckBatch": "배치 크기 {a0}은(는) 이 컴퓨터 권장값 {a1}보다 큽니다. VRAM 부족으로 학습이 중단될 수 있습니다",
+    "trainCheckNameTaken": "\"{}\" 실험이 이미 있습니다. 계속하면 같은 폴더에 기록됩니다",
+    "trainCheckFewFiles": "오디오가 {}개뿐입니다. 자료가 적으면 음색이 비슷해지기 어렵습니다",
+    "trainCheckRepick": "다시 선택",
+    "trainCheckRename": "이름 변경"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

@@ -116,6 +116,70 @@ fn experiments(root: &Path) -> Vec<Value> {
     out
 }
 
+/// 数据集里算数的音频后缀。
+///
+/// 必须和 `tools/train_worker.AUDIO_EXT` / `infer/modules/train/preprocess.py`
+/// 那两份完全一致 —— 界面上报「找到 120 个音频」而预处理只认出 80 个，比不报
+/// 还糟：用户会拿这个数字去判断自己的数据集够不够，而它是假的。有一条测试直接
+/// 读 train_worker.py 的那一行来比对，改一边忘了另一边就红。
+pub const DATASET_AUDIO_EXT: [&str; 8] =
+    ["wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus"];
+
+/// 选完数据集立刻数一遍。
+///
+/// 26.8.20 那位的另一个实验：2038 个文件只切出 3 条，训练照跑，500 epoch 跑完
+/// 才发现音色不像。那是预处理阶段的事，但更早一步就能拦 —— 选目录的当下就该
+/// 知道这里到底有几个音频。
+///
+/// 递归扫子目录，跟 preprocess.py 的 os.walk 一致：用户按歌手分文件夹是常态。
+pub fn scan_dataset(dir: &Path) -> Value {
+    let mut files: u64 = 0;
+    let mut other: u64 = 0;
+    let mut bytes: u64 = 0;
+    let mut by_ext: std::collections::BTreeMap<String, u64> = Default::default();
+    let mut stack = vec![dir.to_path_buf()];
+    // 扫到这么多就停：真有人把整块盘选进来，界面不该卡在那儿数。
+    const MAX_ENTRIES: u64 = 200_000;
+    let mut seen: u64 = 0;
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            seen += 1;
+            if seen > MAX_ENTRIES {
+                stack.clear();
+                break;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+                continue;
+            }
+            let ext = p
+                .extension()
+                .and_then(|x| x.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if DATASET_AUDIO_EXT.contains(&ext.as_str()) {
+                files += 1;
+                bytes += e.metadata().map(|m| m.len()).unwrap_or(0);
+                *by_ext.entry(ext).or_insert(0) += 1;
+            } else {
+                other += 1;
+            }
+        }
+    }
+    json!({
+        "files": files,
+        "other_files": other,
+        "total_bytes": bytes,
+        "by_ext": by_ext,
+        "truncated": seen > MAX_ENTRIES,
+        "supported": DATASET_AUDIO_EXT,
+    })
+}
+
 fn count_dir(p: &Path) -> u64 {
     std::fs::read_dir(p)
         .map(|rd| rd.flatten().filter(|e| e.path().is_file()).count() as u64)
@@ -160,6 +224,9 @@ pub fn status(root: &Path) -> Value {
         "experiments": experiments(root),
         "suggested_batch": suggested_batch(),
         "rmvpe_present": rmvpe_ready(root),
+        // 产品所在盘还剩多少。训练要在 logs/<实验>/ 下写切片、音高、特征，
+        // 写到一半盘满了是「跑了四十分钟然后失败」，值得在开始之前就拦。
+        "disk_free_bytes": paths::free_space_bytes(root).map(Value::from).unwrap_or(Value::Null),
         "busy": busy,
         // 正在跑的时候不提「上次断了」—— 那说的就是这一次。
         "interrupted": if busy { Value::Null } else { last_interrupted(root).unwrap_or(Value::Null) },
@@ -780,6 +847,56 @@ fn run_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 后缀表和 Python 那份必须逐字一致。
+    ///
+    /// 界面报「找到 120 个音频」而预处理只认 80 个，用户会拿这个假数字判断数据
+    /// 集够不够。两边各写一份就一定会漂，所以这里直接读 Python 源码来比。
+    #[test]
+    fn the_audio_extensions_match_the_python_side() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let src = std::fs::read_to_string(root.join("tools").join("train_worker.py"))
+            .expect("train_worker.py 不在预期位置");
+        let line = src
+            .lines()
+            .find(|l| l.starts_with("AUDIO_EXT"))
+            .expect("train_worker.py 里没有 AUDIO_EXT");
+        for ext in DATASET_AUDIO_EXT {
+            assert!(line.contains(&format!("\".{ext}\"")), "Python 那边没有 {ext}：{line}");
+        }
+        // 反向：Python 多出来的也要在这边补上。
+        let py_count = line.matches('"').count() / 2;
+        assert_eq!(py_count, DATASET_AUDIO_EXT.len(), "两边数量对不上：{line}");
+    }
+
+    #[test]
+    fn a_dataset_scan_counts_audio_recursively_and_ignores_the_rest() {
+        let base = std::env::temp_dir().join("rvcf-scan-dataset");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("歌手A")).unwrap();
+        std::fs::write(base.join("a.wav"), b"1234").unwrap();
+        std::fs::write(base.join("歌手A").join("b.MP3"), b"12").unwrap();
+        std::fs::write(base.join("cover.jpg"), b"x").unwrap();
+        std::fs::write(base.join("readme.txt"), b"x").unwrap();
+
+        let v = scan_dataset(&base);
+        // 子目录里的也算 —— 用户按歌手分文件夹是常态，preprocess 也是 os.walk。
+        assert_eq!(v["files"].as_u64(), Some(2));
+        // 大小写不敏感：.MP3 也是音频。
+        assert_eq!(v["by_ext"]["mp3"].as_u64(), Some(1));
+        assert_eq!(v["by_ext"]["wav"].as_u64(), Some(1));
+        assert_eq!(v["other_files"].as_u64(), Some(2));
+        assert_eq!(v["total_bytes"].as_u64(), Some(6));
+
+        // 空目录报 0，不是报错 —— 界面靠这个 0 把提示标红。
+        let empty = base.join("空的");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert_eq!(scan_dataset(&empty)["files"].as_u64(), Some(0));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn an_empty_output_dir_means_the_default_library() {

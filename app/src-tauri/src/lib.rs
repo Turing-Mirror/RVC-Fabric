@@ -427,6 +427,14 @@ async fn diagnostics_self_check(state: State<'_, Mutex<AppState>>) -> Result<Val
         .map_err(|e| e.to_string())
 }
 
+/// 选完数据集立刻数一遍：这个目录里到底有几个音频。
+#[tauri::command]
+async fn train_scan_dataset(path: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || train::scan_dataset(std::path::Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 这台机器踩到哪些我们已经知道的坑。开机后台校验一次，命中就在底栏上方提示。
 #[tauri::command]
 async fn known_issues_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
@@ -1947,6 +1955,7 @@ pub fn run() {
             diagnostics_build,
             diagnostics_self_check,
             known_issues_check,
+            train_scan_dataset,
             diagnostics_preview,
             cache_status,
             cache_clear,

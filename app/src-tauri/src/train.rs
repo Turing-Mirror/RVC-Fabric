@@ -93,7 +93,11 @@ fn experiments(root: &Path) -> Vec<Value> {
             continue;
         }
         let slices = count_dir(&p.join("1_16k_wavs"));
+        let f0 = count_dir(&p.join("2a_f0"));
         let feats = count_dir(&p.join("3_feature768"));
+        // 预处理读进来几个、失败几个。界面上要能说清「上次到底做完没有」，
+        // 光一个「可续跑」的布尔值说不出这件事。
+        let (ok_files, fail_files) = preprocess_tally(&p.join("preprocess.log"));
         let trained = root
             .join("assets")
             .join("weights")
@@ -104,7 +108,14 @@ fn experiments(root: &Path) -> Vec<Value> {
             json!({
                 "name": name,
                 "slices": slices,
+                "f0": f0,
                 "features": feats,
+                // 三个数目对不上就说明上一次是中途停的。判据已经修过（数目对得上
+                // 才算做完），但界面上也得说出来 —— 否则「补齐并继续」会比用户
+                // 预期的慢几分钟，他会以为是更新之后变慢了。
+                "complete": slices > 0 && f0 == slices && feats == slices,
+                "preprocess_ok": ok_files,
+                "preprocess_failed": fail_files,
                 // 有切片就能续跑：预处理是最慢的一步，能跳过就是省下几十分钟。
                 "resumable": slices > 0,
                 "trained": trained,
@@ -114,6 +125,120 @@ fn experiments(root: &Path) -> Vec<Value> {
     items.sort_by(|a, b| a.0.cmp(&b.0));
     out.extend(items.into_iter().map(|(_, v)| v));
     out
+}
+
+/// preprocess.log 里成功了几个、失败了几个。
+///
+/// 26.8.20 那位的一个实验 2038 个文件只切出 3 条，训练照跑，500 epoch 之后才
+/// 发现音色不像。后端已经会报这件事了，但报完就被下一阶段的进度盖掉；界面上
+/// 得能随时翻出来。
+///
+/// 一个实验的「中间产物」——可以删、删了只是要重跑预处理的东西。
+///
+/// 这张表是唯一的判据：扫多少和删多少必须来自同一处，两边各写一份迟早会分叉，
+/// 而分叉的后果是删掉了不该删的。
+///
+/// 明确不在表里：`*.pth`（训练存档和权重）、`*.index`（检索索引）、
+/// `*.log`（日志）、`config.json`。前两样删了不可再生。
+pub const STAGE_ARTIFACTS: [&str; 7] = [
+    "0_gt_wavs",
+    "1_16k_wavs",
+    "2a_f0",
+    "2b-f0nsf",
+    "3_feature768",
+    "total_fea.npy",
+    "filelist.txt",
+];
+
+/// 中间产物一共占多少字节。
+pub fn stage_artifact_bytes(exp_dir: &Path) -> u64 {
+    STAGE_ARTIFACTS
+        .iter()
+        .map(|name| dir_or_file_bytes(&exp_dir.join(name)))
+        .sum()
+}
+
+fn dir_or_file_bytes(p: &Path) -> u64 {
+    let Ok(meta) = std::fs::metadata(p) else {
+        return 0;
+    };
+    if meta.is_file() {
+        return meta.len();
+    }
+    let Ok(rd) = std::fs::read_dir(p) else {
+        return 0;
+    };
+    rd.flatten()
+        .map(|e| dir_or_file_bytes(&e.path()))
+        .sum()
+}
+
+/// 删掉一个实验的中间产物，返回释放的字节数。
+///
+/// 五条硬要求，一条都不能少：
+/// 1. 扫和删用同一张表（`STAGE_ARTIFACTS`）。
+/// 2. 删之前重新算一次体积 —— 对话框开着的时候训练可能刚跑完，盘上的东西变了。
+/// 3. 训练进行中一律拒绝。
+/// 4. 路径必须落在产品根之下，否则拒绝。
+/// 5. 每次操作往日志写一行：删了哪个实验、释放多少。
+pub fn reset_stages(root: &Path, exp: &str) -> Result<u64, String> {
+    let exp = exp.trim();
+    if exp.is_empty() || exp.contains(['/', '\\', ':']) || exp == "." || exp == ".." {
+        return Err(crate::i18n::te("s.trainNameInvalid", &exp));
+    }
+    if *BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
+        return Err(crate::i18n::t("s.trainBusyNoReset"));
+    }
+    let exp_dir = exp_root(root).join(exp);
+    // 路径必须在产品根下。`exp` 已经过滤过分隔符，这条是第二道闸 —— 删东西的
+    // 代码不该只有一道。
+    let (Ok(canon), Ok(canon_root)) = (exp_dir.canonicalize(), root.canonicalize()) else {
+        return Err(crate::i18n::te("s.trainExpMissing", &exp));
+    };
+    if !canon.starts_with(&canon_root) {
+        return Err(crate::i18n::te("s.trainExpMissing", &exp));
+    }
+
+    // 删之前重新算一次。
+    let freed = stage_artifact_bytes(&exp_dir);
+    for name in STAGE_ARTIFACTS {
+        let p = exp_dir.join(name);
+        let Ok(meta) = std::fs::metadata(&p) else {
+            continue;
+        };
+        let r = if meta.is_dir() {
+            std::fs::remove_dir_all(&p)
+        } else {
+            std::fs::remove_file(&p)
+        };
+        if let Err(e) = r {
+            crate::logging::shell_log!("清空中间产物：{} 删除失败 {}", p.display(), e);
+        }
+    }
+    crate::logging::shell_log!(
+        "清空中间产物：实验 {} 释放约 {:.1} MB",
+        exp,
+        freed as f64 / (1024.0 * 1024.0)
+    );
+    Ok(freed)
+}
+
+/// preprocess.py 每个文件写一行：成功是 `路径\t-> Success`，失败是
+/// `路径\t-> Traceback (most recent call last): …`。数这两种前缀就够。
+pub fn preprocess_tally(log: &Path) -> (u64, u64) {
+    let Ok(text) = std::fs::read_to_string(log) else {
+        return (0, 0);
+    };
+    let mut ok = 0u64;
+    let mut fail = 0u64;
+    for line in text.lines() {
+        if line.contains("-> Success") {
+            ok += 1;
+        } else if line.contains("-> Traceback") {
+            fail += 1;
+        }
+    }
+    (ok, fail)
 }
 
 /// 数据集里算数的音频后缀。
@@ -852,6 +977,73 @@ mod tests {
     ///
     /// 界面报「找到 120 个音频」而预处理只认 80 个，用户会拿这个假数字判断数据
     /// 集够不够。两边各写一份就一定会漂，所以这里直接读 Python 源码来比。
+    /// 删中间产物这件事，删错一次就是用户几十分钟白跑。所以钉死两件：
+    /// 该删的一个不剩，不该删的一个不碰。
+    #[test]
+    fn resetting_stages_removes_only_the_regenerable_artifacts() {
+        let root = std::env::temp_dir().join("rvcf-reset-stages");
+        let _ = std::fs::remove_dir_all(&root);
+        let exp = root.join("logs").join("miku");
+        std::fs::create_dir_all(exp.join("1_16k_wavs")).unwrap();
+        std::fs::create_dir_all(exp.join("2a_f0")).unwrap();
+        std::fs::create_dir_all(exp.join("3_feature768")).unwrap();
+        std::fs::write(exp.join("1_16k_wavs").join("a.wav"), vec![0u8; 100]).unwrap();
+        std::fs::write(exp.join("2a_f0").join("a.npy"), vec![0u8; 50]).unwrap();
+        std::fs::write(exp.join("filelist.txt"), b"x").unwrap();
+        // 这三样不可再生，绝不能碰。
+        std::fs::write(exp.join("G_2333.pth"), b"snapshot").unwrap();
+        std::fs::write(exp.join("added_miku.index"), b"index").unwrap();
+        std::fs::write(exp.join("train.log"), b"log").unwrap();
+
+        assert_eq!(stage_artifact_bytes(&exp), 151);
+        let freed = reset_stages(&root, "miku").unwrap();
+        assert_eq!(freed, 151);
+        assert!(!exp.join("1_16k_wavs").exists());
+        assert!(!exp.join("2a_f0").exists());
+        assert!(!exp.join("filelist.txt").exists());
+        assert!(exp.join("G_2333.pth").is_file(), "训练存档不能删");
+        assert!(exp.join("added_miku.index").is_file(), "索引不能删");
+        assert!(exp.join("train.log").is_file(), "日志不能删");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 实验名里带路径分隔符时必须拒绝 —— 这是删除操作，`../..` 不能有第二种解读。
+    #[test]
+    fn resetting_refuses_anything_that_could_escape_the_experiment_folder() {
+        let root = std::env::temp_dir().join("rvcf-reset-escape");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("logs")).unwrap();
+        for bad in ["", "   ", "..", ".", "../mute", "a/b", "a\\b", "C:x"] {
+            assert!(reset_stages(&root, bad).is_err(), "{bad:?} 应该被拒绝");
+        }
+        // 不存在的实验也拒绝，而不是「删了 0 字节」假装成功。
+        assert!(reset_stages(&root, "nope").is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 判据必须跟 preprocess.py 写日志的格式对上。
+    ///
+    /// 26.8.20 那位的实验里，2038 个文件的日志就长这样 —— 每个文件一行，
+    /// 成功写 Success，读不进来写整条 traceback。
+    #[test]
+    fn the_preprocess_tally_matches_what_preprocess_py_writes() {
+        let dir = std::env::temp_dir().join("rvcf-preprocess-tally");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("preprocess.log");
+        std::fs::write(
+            &log,
+            "start preprocess\n             D:/ds/a.wav\t-> Success\n             D:/ds/b.m4a\t-> Traceback (most recent call last):\n             \x20 File \"x.py\", line 1\n             D:/ds/c.wav\t-> Success\n             end preprocess\n",
+        )
+        .unwrap();
+        // traceback 后面那几行缩进的栈帧不能被重复计数。
+        assert_eq!(preprocess_tally(&log), (2, 1));
+        // 日志不在（还没跑过预处理）不是错误，是 0/0。
+        assert_eq!(preprocess_tally(&dir.join("nope.log")), (0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn the_audio_extensions_match_the_python_side() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

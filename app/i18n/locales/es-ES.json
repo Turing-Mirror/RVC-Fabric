@@ -1951,7 +1951,19 @@
     "sumCopyDesc": "Copia la versión, la GPU, el backend de cómputo y los resultados del autodiagnóstico para adjuntarlos a su consulta.",
     "sumCopyBtn": "Copiar",
     "sumCopied": "Copiado al portapapeles.",
-    "sumCopyFailed": "No se pudo copiar. Inténtelo de nuevo."
+    "sumCopyFailed": "No se pudo copiar. Inténtelo de nuevo.",
+    "trainStages": "Última ejecución: {a0} fragmentos · {a1} de tono · {a2} de características",
+    "trainStagesIncomplete": "Los tres recuentos no coinciden: la ejecución anterior se interrumpió. El entrenamiento completará primero las partes que faltan, lo que requiere tiempo adicional.",
+    "trainPreprocessFailed": "El preprocesamiento anterior no pudo leer {a0} archivo(s); {a1} se procesaron correctamente.",
+    "trainResumeFill": "Completar y continuar",
+    "trainResumeReset": "Borrar y empezar de nuevo",
+    "trainResetConfirm": "Se eliminarán todos los archivos intermedios del experimento «{}» (fragmentos, tono, características). El próximo entrenamiento comenzará de nuevo desde el preprocesamiento. Las voces ya entrenadas no se ven afectadas. ¿Continuar?",
+    "trainResetDone": "Se eliminaron los archivos intermedios del experimento «{a0}», liberando {a1}.",
+    "trainNameInvalid": "Nombre de experimento no válido: {}",
+    "trainBusyNoReset": "El entrenamiento está en curso; no se pueden eliminar los archivos intermedios.",
+    "trainExpMissing": "No se encontró el experimento «{}».",
+    "stsRouteHot": "Esta ejecución reutiliza los modelos ya cargados por el motor en marcha; no es necesario volver a cargarlos.",
+    "stsRouteCold": "Esta ejecución debe volver a cargar los modelos; la primera carga tarda unos 20 segundos."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

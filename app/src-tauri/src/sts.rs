@@ -1348,6 +1348,12 @@ fn run_inner(
     if crate::worker::is_worker_alive(root) {
         job.route = "hot";
         job.trace.note("hot path: reusing live worker models");
+        // 界面上也要说走了哪条路。用户对同一段音频两次转换耗时差二十秒毫无头绪，
+        // 只会得出「这软件时快时慢」——而这条信息本来就在，只是以前只进日志。
+        emit_full(
+            app, "run", 0, 1, &crate::i18n::t("s.stsRouteHot"),
+            Some(0), Some("route"), Some(0), Some(0), Some(0), None,
+        );
         match run_hot(
             app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts, job,
         ) {
@@ -1374,6 +1380,13 @@ fn run_inner(
             }
         }
     }
+
+    // 走到这里就是冷路径：要另起一个 python 把 hubert / net_g / rmvpe / faiss
+    // 从盘上重读一遍。先说一声要等多久，否则用户以为卡住了。
+    emit_full(
+        app, "run", 0, 1, &crate::i18n::t("s.stsRouteCold"),
+        Some(0), Some("route"), Some(0), Some(0), Some(0), None,
+    );
 
     let req = paths::update_cache(root).join("sts_request.json");
     if let Some(p) = req.parent() {

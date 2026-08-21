@@ -10,6 +10,7 @@ import { ErrorNote } from "./ErrorNote";
 import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
+import { askConfirm } from "../lib/webDialog";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -19,6 +20,11 @@ type Experiment = {
   features: number;
   resumable: boolean;
   trained: boolean;
+  /** 三个阶段各自的产物数。数目对不上就说明上次是中途停的。 */
+  f0?: number;
+  complete?: boolean;
+  preprocess_ok?: number;
+  preprocess_failed?: number;
 };
 
 type Status = {
@@ -181,6 +187,30 @@ export function TrainPanel() {
   const [batch, setBatch] = useState(4);
   const batchRef = useRef<HTMLInputElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
+  // Btn 不转发 ref（它到处都在用，不为这一处改签名），所以套一层 span。
+  const startRef = useRef<HTMLSpanElement | null>(null);
+  const [resetting, setResetting] = useState(false);
+  // 「补齐并继续」不另起一条代码路径：它就是开始按钮，两条路会分叉。这里只是
+  // 把它滚进视野，省得用户在长表单里自己找。
+  const focusStart = () => {
+    startRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    startRef.current?.querySelector("button")?.focus();
+  };
+  const resetStages = async () => {
+    const exp = name.trim();
+    if (!exp || resetting) return;
+    if (!(await askConfirm(t("s.trainResetConfirm", { v0: exp })))) return;
+    setResetting(true);
+    try {
+      const r = await invoke<{ freed_mb?: string }>("train_reset_stages", { exp });
+      showInfo(t("s.trainResetDone", { a0: exp, a1: `${r?.freed_mb ?? "0"} MB` }));
+      await load();
+    } catch (e) {
+      showErr(String(e));
+    } finally {
+      setResetting(false);
+    }
+  };
   // 显存不足时那个按钮要落到实处：滚进视野 + 选中输入框里的数字，用户下一键
   // 就能改。只滚不选的话，他还得自己找、自己划掉旧值。
   const focusBatch = useCallback(() => {
@@ -648,12 +678,45 @@ export function TrainPanel() {
         ) : null}
 
         {resume ? (
-          <p className="m-0 mt-3 text-[12.5px] text-[var(--meta)]">
-            {t("s.0340e37d88", {
-              v0: name.trim(),
-              v1: existing?.slices ?? 0,
-            })}
-          </p>
+          <div className="mt-3">
+            <p className="m-0 text-[12.5px] text-[var(--meta)]">
+              {t("s.0340e37d88", {
+                v0: name.trim(),
+                v1: existing?.slices ?? 0,
+              })}
+            </p>
+            {/* 三个阶段的数目摊开写。以前只有一个「可续跑」的布尔值，用户看不出
+                上次到底做完没有 —— 而没做完时「继续」会比他预期的慢几分钟，
+                他会以为是更新之后变慢了。 */}
+            <p className="m-0 mt-1 font-mono text-[11.5px] text-[var(--meta)]">
+              {t("s.trainStages", {
+                a0: String(existing?.slices ?? 0),
+                a1: String(existing?.f0 ?? 0),
+                a2: String(existing?.features ?? 0),
+              })}
+            </p>
+            {existing && existing.complete === false ? (
+              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+                {t("s.trainStagesIncomplete")}
+              </p>
+            ) : null}
+            {existing && (existing.preprocess_failed ?? 0) > 0 ? (
+              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+                {t("s.trainPreprocessFailed", {
+                  a0: String(existing.preprocess_failed),
+                  a1: String(existing.preprocess_ok ?? 0),
+                })}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {/* 「补齐并继续」就是现在的开始按钮，这里只是把话说清楚，不另开一条
+                  代码路径 —— 两条路会分叉。 */}
+              <Btn onClick={focusStart}>{t("s.trainResumeFill")}</Btn>
+              <Btn onClick={() => void resetStages()} disabled={running || resetting}>
+                {t("s.trainResumeReset")}
+              </Btn>
+            </div>
+          </div>
         ) : null}
 
         {!prog && st.interrupted ? (
@@ -719,6 +782,7 @@ export function TrainPanel() {
           {running ? (
             <Btn onClick={() => void invoke("train_cancel")}>{t("s.44e681a374")}</Btn>
           ) : null}
+          <span ref={startRef}>
           <Btn
             primary
             disabled={running || mustFix || !name.trim() || (!dataset && !resume)}
@@ -726,6 +790,7 @@ export function TrainPanel() {
           >
             {running ? t("s.3e6b1657c7") : resume ? t("s.3166554c46") : t("s.be24590d21")}
           </Btn>
+          </span>
         </div>
       </ToolActions>
     </ToolBody>

@@ -31,6 +31,7 @@ const USAGE_LABEL: Record<string, string> = {
   diagnostics: "s.storageDiagnostics",
   perf_reports: "s.storagePerf",
   app_logs: "s.storageAppLogs",
+  trash: "s.storageTrash",
 };
 
 function human(n: number): string {
@@ -123,7 +124,7 @@ export function StorageSection() {
               : t("s.cleanupDesc"))
           }
           right={
-            <Btn onClick={() => void scan()} disabled={busy}>
+            <Btn onClick={() => void scan()} disabled={busy} busy={busy}>
               {busy ? t("s.storageScanning") : t("s.storageScan")}
             </Btn>
           }
@@ -207,6 +208,7 @@ export function StorageSection() {
                   <div className="mt-2">
                     <Btn
                       onClick={() => void apply(row)}
+                      busy={busy}
                       disabled={busy || (picked[row.exp]?.size ?? 0) === 0}
                     >
                       {t("s.cleanupApply")}

@@ -549,7 +549,7 @@
     "291eab062c": "Turing Mirror optimization",
     "298dd55e6d": "force_kill: failed to rewrite voice config: {e}",
     "29a29efed7": "Very slow on the first start",
-    "29abc60b6f": "The model files and bound presets will be deleted for good.\n\nDelete?",
+    "29abc60b6f": "The model files and bound presets for this voice will be moved to the trash. They are kept for 7 days and then removed automatically; disk usage will not drop during that period.\n\nDelete this voice?",
     "2a26295b90": "No local voices yet — import one on Models or browse the Plaza!",
     "2a330f81d4": "'mute' is a reserved name — pick another one~",
     "2a4080ad9f": "Run status",
@@ -1987,7 +1987,8 @@
     "cleanupConfirm": "The following will be removed from experiment “{a0}”: {a1}. Continue?",
     "cleanupDone": "Cleared, freeing {}.",
     "cleanupNothing": "There is nothing to clean up.",
-    "trainLeftover": "This training run produced about {} of intermediate files. They can be cleared under “More → Storage”."
+    "trainLeftover": "This training run produced about {} of intermediate files. They can be cleared under “More → Storage”.",
+    "storageTrash": "Trash (kept 7 days)"
   },
   "extras": {
     "engineTitle": "Engine resources",

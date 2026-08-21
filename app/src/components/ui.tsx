@@ -86,6 +86,7 @@ export function Btn({
   on = false,
   uw = false,
   disabled = false,
+  busy = false,
   onClick,
   className = "",
   ariaLabel,
@@ -96,6 +97,14 @@ export function Btn({
   /** Equal width for 使用 / 使用中 */
   uw?: boolean;
   disabled?: boolean;
+  /**
+   * 请求在途。会禁用按钮，并在文字前面点三个点。
+   *
+   * 只变灰是不够的：用户点了一下，按钮灰了，界面别的地方没有任何变化 ——
+   * 他分不出「正在做」和「点了没反应」，于是再点，或者来群里问。灰是状态，
+   * 动的那三个点才是回执。
+   */
+  busy?: boolean;
   /** 事件是可选的：只写 `() => …` 的调用方照旧能用。 */
   onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
@@ -105,7 +114,8 @@ export function Btn({
   return (
     <button
       type="button"
-      disabled={disabled}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       aria-label={ariaLabel}
       onClick={onClick}
       className={[
@@ -118,10 +128,13 @@ export function Btn({
           : on
             ? "bg-transparent text-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_42%,transparent)]"
             : "bg-transparent text-[var(--ink-muted)] shadow-[inset_0_0_0_1px_var(--line)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
-        disabled ? "cursor-default active:scale-100" : "",
+        disabled || busy ? "cursor-default active:scale-100" : "",
         className,
       ].join(" ")}
     >
+      {busy ? (
+        <span aria-hidden className="btn-dots mr-1.5 inline-block align-middle" />
+      ) : null}
       {children}
     </button>
   );

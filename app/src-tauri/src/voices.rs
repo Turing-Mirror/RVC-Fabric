@@ -1931,9 +1931,95 @@ pub fn delete_voice(root: &Path, model_dir: &str) -> Result<Value, String> {
         }
         Ok(())
     }
+    // 先试着移进回收站。音色是不可再生资产 —— 用户手滑删掉一个训练了四十分钟
+    // 的音色，我们没有任何办法帮他找回来。中间产物那类可再生的东西直接删就行，
+    // 这类不行。
+    match trash_voice(root, &md) {
+        Ok(dest) => {
+            crate::logging::shell_log!(
+                "删除音色：{} → 回收站 {}",
+                md.display(),
+                dest.display()
+            );
+            drop_voice_refs(root, &md);
+            prune_trash(root);
+            return Ok(json!({"ok": true, "trashed": dest.to_string_lossy()}));
+        }
+        Err(e) => {
+            // 跨盘、权限、目标已存在……移不动就照旧真删，别因为回收站没做成
+            // 就让「删除」这个功能失灵。
+            crate::logging::shell_log!("删除音色：移入回收站失败（{e}），改为直接删除");
+        }
+    }
     rm(&md)?;
     drop_voice_refs(root, &md);
+    prune_trash(root);
     Ok(json!({"ok": true}))
+}
+
+/// 回收站保留多久。到期由下一次删除操作顺手清掉 —— 不为这件事起一个后台任务。
+const TRASH_KEEP_DAYS: u64 = 7;
+
+pub fn trash_dir(root: &Path) -> PathBuf {
+    crate::paths::user_data(root).join("trash")
+}
+
+/// 把一个音色目录整个挪进回收站，返回它在回收站里的位置。
+///
+/// 目录名带时间戳，同名音色删两次不会互相覆盖。
+fn trash_voice(root: &Path, md: &Path) -> Result<PathBuf, String> {
+    let name = md
+        .file_name()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "bad model dir".to_string())?;
+    let dir = trash_dir(root);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let dest = dir.join(format!("{stamp}_{name}"));
+    if dest.exists() {
+        return Err("destination exists".into());
+    }
+    fs::rename(md, &dest).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// 清掉回收站里过期的条目。
+///
+/// 判据是目录名前面那个时间戳 —— 不看 mtime：移动进来时 mtime 可能是音色本身
+/// 的创建时间，那会让刚删的东西立刻过期。
+pub fn prune_trash(root: &Path) {
+    let dir = trash_dir(root);
+    let Ok(rd) = fs::read_dir(&dir) else {
+        return;
+    };
+    let cutoff = chrono::Local::now() - chrono::Duration::days(TRASH_KEEP_DAYS as i64);
+    for e in rd.flatten() {
+        let p = e.path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(when) = trash_stamp(name) else {
+            continue;
+        };
+        if when < cutoff.naive_local() {
+            let _ = fs::remove_dir_all(&p);
+            crate::logging::shell_log!("回收站：清理过期条目 {}", name);
+        }
+    }
+}
+
+/// 从 `20260821_173623_tp-miku` 里读出那个时间戳。认不出来就不动它。
+pub fn trash_stamp(name: &str) -> Option<chrono::NaiveDateTime> {
+    let (date, rest) = name.split_once('_')?;
+    let time = rest.get(..6)?;
+    if date.len() != 8 || !date.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if !time.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    chrono::NaiveDateTime::parse_from_str(&format!("{date}{time}"), "%Y%m%d%H%M%S").ok()
 }
 
 pub fn rename_voice(root: &Path, model_dir: &str, new_name: &str) -> Result<Value, String> {
@@ -2136,6 +2222,64 @@ mod tests {
         let _ = std::fs::remove_dir_all(&out);
     }
 
+    /// 音色是不可再生资产：用户手滑删掉一个训练了四十分钟的东西，我们没有
+    /// 任何办法帮他找回来。所以删除走的是「移进回收站」，不是真删。
+    #[test]
+    fn deleting_a_voice_moves_it_aside_instead_of_destroying_it() {
+        let root = std::env::temp_dir().join("rvcf-trash-voice");
+        let _ = fs::remove_dir_all(&root);
+        let md = crate::paths::user_data(&root).join("models").join("miku");
+        fs::create_dir_all(&md).unwrap();
+        fs::write(md.join("miku.pth"), b"weights").unwrap();
+
+        let out = delete_voice(&root, &md.to_string_lossy()).unwrap();
+        assert_eq!(out["ok"], true);
+        assert!(!md.exists(), "原位置要腾空");
+        let trashed = out["trashed"].as_str().expect("应该报告落在回收站的哪里");
+        let trashed = Path::new(trashed);
+        assert!(trashed.join("miku.pth").is_file(), "文件必须完整保留");
+        assert!(trashed.starts_with(trash_dir(&root)));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 过期判据看的是目录名里那个时间戳，不是 mtime —— 移动进来时 mtime 可能
+    /// 还是音色本身的创建时间，那会让刚删掉的东西立刻被清掉。
+    #[test]
+    fn the_trash_stamp_is_read_from_the_folder_name() {
+        let ts = trash_stamp("20260821_173623_tp-miku").unwrap();
+        assert_eq!(ts.format("%Y-%m-%d %H:%M:%S").to_string(), "2026-08-21 17:36:23");
+        // 认不出来的名字返回 None —— 不认识就别删。
+        assert!(trash_stamp("tp-miku").is_none());
+        assert!(trash_stamp("abcdefgh_123456_x").is_none());
+        assert!(trash_stamp("20260821_ab3623_x").is_none());
+        assert!(trash_stamp("2026_173623_x").is_none());
+    }
+
+    /// 过期的清掉，没过期的一个不动。
+    #[test]
+    fn pruning_only_removes_entries_older_than_the_window() {
+        let root = std::env::temp_dir().join("rvcf-trash-prune");
+        let _ = fs::remove_dir_all(&root);
+        let dir = trash_dir(&root);
+        fs::create_dir_all(&dir).unwrap();
+        let old = chrono::Local::now() - chrono::Duration::days(TRASH_KEEP_DAYS as i64 + 1);
+        let fresh = chrono::Local::now();
+        let old_name = format!("{}_old", old.format("%Y%m%d_%H%M%S"));
+        let new_name = format!("{}_new", fresh.format("%Y%m%d_%H%M%S"));
+        fs::create_dir_all(dir.join(&old_name)).unwrap();
+        fs::create_dir_all(dir.join(&new_name)).unwrap();
+        // 名字认不出来的第三方目录不该被顺手删掉。
+        fs::create_dir_all(dir.join("someone-elses-folder")).unwrap();
+
+        prune_trash(&root);
+        assert!(!dir.join(&old_name).exists(), "过期的要清掉");
+        assert!(dir.join(&new_name).exists(), "没过期的不能动");
+        assert!(dir.join("someone-elses-folder").exists(), "认不出来的不能动");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn delete_voice_clears_config_refs() {
         // 删除音色后，app_config 的当前选中/最近使用和 inuse 里指向它的
@@ -2319,3 +2463,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+

@@ -718,7 +718,11 @@ export function TrainPanel() {
               {/* 「补齐并继续」就是现在的开始按钮，这里只是把话说清楚，不另开一条
                   代码路径 —— 两条路会分叉。 */}
               <Btn onClick={focusStart}>{t("s.trainResumeFill")}</Btn>
-              <Btn onClick={() => void resetStages()} disabled={running || resetting}>
+              <Btn
+                onClick={() => void resetStages()}
+                busy={resetting}
+                disabled={running || resetting}
+              >
                 {t("s.trainResumeReset")}
               </Btn>
             </div>
@@ -791,6 +795,7 @@ export function TrainPanel() {
           <span ref={startRef}>
           <Btn
             primary
+            busy={running}
             disabled={running || mustFix || !name.trim() || (!dataset && !resume)}
             onClick={() => void start()}
           >

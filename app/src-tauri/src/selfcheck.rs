@@ -313,32 +313,8 @@ fn disk(root: &Path) -> Vec<Finding> {
     }]
 }
 
-#[cfg(windows)]
 fn free_space_gb(root: &Path) -> Option<f64> {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
-
-    let mut wide: Vec<u16> = OsStr::new(root).encode_wide().collect();
-    wide.push(0);
-    let mut free: u64 = 0;
-    let ok = unsafe {
-        GetDiskFreeSpaceExW(
-            wide.as_ptr(),
-            &mut free,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
-    if ok == 0 {
-        return None;
-    }
-    Some(free as f64 / 1024.0 / 1024.0 / 1024.0)
-}
-
-#[cfg(not(windows))]
-fn free_space_gb(_root: &Path) -> Option<f64> {
-    None
+    crate::paths::free_space_bytes(root).map(|b| b as f64 / 1024.0 / 1024.0 / 1024.0)
 }
 
 // ---------------------------------------------------------------- 音频

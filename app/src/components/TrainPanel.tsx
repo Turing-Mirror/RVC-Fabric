@@ -30,10 +30,20 @@ type Status = {
   pretrained?: Pretrained[];
   experiments?: Experiment[];
   suggested_batch?: number;
+  disk_free_bytes?: number | null;
   rmvpe_present?: boolean;
   busy?: boolean;
   /** 上一次训练没跑完就断了（壳被强杀/崩了）。busy 时后端一定给 null。 */
   interrupted?: { exp: string; epoch: number; total: number } | null;
+};
+
+type DatasetScan = {
+  files: number;
+  other_files: number;
+  total_bytes: number;
+  by_ext: Record<string, number>;
+  truncated: boolean;
+  supported: string[];
 };
 
 type Progress = {
@@ -138,12 +148,39 @@ export function TrainPanel() {
   const [st, setSt] = useState<Status>({});
   const [name, setName] = useState("");
   const [dataset, setDataset] = useState("");
+  // 选完就数一遍。26.8.20 那位的另一个实验 2038 个文件只切出 3 条，训练照跑，
+  // 500 epoch 跑完才发现音色不像 —— 那是预处理的事，但选目录的当下就该知道
+  // 这里到底有几个音频。
+  const [scan, setScan] = useState<DatasetScan | null>(null);
+  const [scanning, setScanning] = useState(false);
+  useEffect(() => {
+    if (!dataset) {
+      setScan(null);
+      return;
+    }
+    let alive = true;
+    setScanning(true);
+    invoke<DatasetScan>("train_scan_dataset", { path: dataset })
+      .then((v) => {
+        if (alive) setScan(v);
+      })
+      .catch(() => {
+        if (alive) setScan(null);
+      })
+      .finally(() => {
+        if (alive) setScanning(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [dataset]);
   /** 训好的音色放哪。空 = User_Data/models。上次的选择记在配置里。 */
   const [outDir, setOutDir] = useState("");
   const [sr, setSr] = useState("48k");
   const [epochs, setEpochs] = useState(200);
   const [batch, setBatch] = useState(4);
   const batchRef = useRef<HTMLInputElement | null>(null);
+  const nameRef = useRef<HTMLInputElement | null>(null);
   // 显存不足时那个按钮要落到实处：滚进视野 + 选中输入框里的数字，用户下一键
   // 就能改。只滚不选的话，他还得自己找、自己划掉旧值。
   const focusBatch = useCallback(() => {
@@ -235,35 +272,105 @@ export function TrainPanel() {
   // 有切片就能续跑，预处理是最慢的一步（几十分钟），能跳过就跳过。
   const resume = !!existing?.resumable;
   const srReady = st.pretrained?.find((p) => p.sample_rate === sr)?.ready ?? false;
+  // 只有最吃显存的那档就绪：显存不够的用户没有退路，得先告诉他退路在哪。
+  const readySrs = (st.pretrained || []).filter((p) => p.ready).map((p) => p.sample_rate);
+  const onlyHighSrReady = readySrs.length === 1 && readySrs[0] === "48k";
 
   // 拦住训练的原因，外加这句话里那个专有名词的解释（渲染成一个小问号）。
   const needRmvpe = f0 === "rmvpe" && !st.rmvpe_present;
-  const needPretrained =
-    !!st.runtime_ready &&
-    !!st.worker_present &&
-    !!st.mute_present &&
-    !!st.hubert_present &&
-    !!st.nvidia &&
-    !srReady;
-  const blocked: { text: string; term?: string } = !st.runtime_ready
-    ? { text: t("s.bc45fc14b1"), term: t("s.cef8154370") }
-    : !st.worker_present || !st.mute_present
-      ? { text: t("s.946a92f5a2") }
-      : !st.hubert_present
-        ? { text: t("s.e700c7ba47"), term: t("s.b269c54674") }
-        : needRmvpe
-          ? { text: t("s.trainRmvpeMissing") }
-          : !st.nvidia
-            ? {
-                text: t("s.8f5fdb1c8a"),
-                term: "DirectML",
-              }
-            : !srReady
-              ? {
-                  text: t("s.b453debe2c", { v0: sr }),
-                  term: t("s.4bdd408f42"),
-                }
-              : { text: "" };
+  /**
+   * 开始之前的检查清单。
+   *
+   * 以前这里是一条 if-else 链，只报第一个拦路的：用户改掉它，点一下，又冒出
+   * 第二个。而且全都一个级别 —— 「没装运行时」和「素材可能偏少」长得一样，
+   * 用户不知道哪个必须先解决。
+   *
+   * 现在分两级：must 会禁用开始按钮，should 不会。每条尽量自带一个能按的东西
+   * —— 只把失败从「训练跑到一半」提前到「点按钮之前」是不够的，那只是换了个
+   * 地方失败。
+   */
+  const goDownloads = () => openDownloadModels({ filter: "train" });
+  const repick = () => {
+    void pickPath<string | null>(
+      "train_pick_dataset",
+      undefined,
+      t("s.pickBusyFolder"),
+    ).then((p) => p && setDataset(p));
+  };
+  const focusName = () => {
+    nameRef.current?.focus();
+    nameRef.current?.select();
+  };
+
+  type Check = {
+    level: "must" | "should";
+    text: string;
+    term?: string;
+    action?: { label: string; run: () => void };
+  };
+  const checks: Check[] = [];
+  const dl = { label: t("s.0c593a479c"), run: goDownloads };
+  if (!st.runtime_ready) {
+    checks.push({ level: "must", text: t("s.bc45fc14b1"), term: t("s.cef8154370"), action: dl });
+  } else if (!st.worker_present || !st.mute_present) {
+    checks.push({ level: "must", text: t("s.946a92f5a2"), action: dl });
+  } else {
+    if (!st.hubert_present) {
+      checks.push({ level: "must", text: t("s.e700c7ba47"), term: t("s.b269c54674"), action: dl });
+    }
+    if (needRmvpe) {
+      checks.push({ level: "must", text: t("s.trainRmvpeMissing"), action: dl });
+    }
+    if (!st.nvidia) {
+      // 这条没有动作按钮：换显卡不是软件能代劳的事，给一个点了没用的按钮更伤。
+      checks.push({ level: "must", text: t("s.8f5fdb1c8a"), term: "DirectML" });
+    }
+    if (!srReady) {
+      checks.push({
+        level: "must",
+        text: t("s.b453debe2c", { v0: sr }),
+        term: t("s.4bdd408f42"),
+        action: dl,
+      });
+    }
+  }
+  // 数据集这两条只在真选了目录之后才谈得上；续跑不需要数据集。
+  if (dataset && scan && !scanning) {
+    if (scan.files === 0 && !resume) {
+      checks.push({
+        level: "must",
+        text: t("s.trainCheckNoAudio"),
+        action: { label: t("s.trainCheckRepick"), run: repick },
+      });
+    } else if (scan.files > 0 && scan.files < 10) {
+      checks.push({ level: "should", text: t("s.trainCheckFewFiles", { v0: scan.files }) });
+    }
+    // 中间产物（切片 + 音高 + 特征）大致是源素材的三倍上下。给的是量级，
+    // 不是承诺 —— 所以文案写「预计需要 … 以上」，不写具体数字对账。
+    const need = scan.total_bytes * 3;
+    const free = st.disk_free_bytes;
+    if (typeof free === "number" && free > 0 && need > 0 && free < need) {
+      checks.push({
+        level: "must",
+        text: t("s.trainCheckDisk", { a0: humanBytes(free), a1: humanBytes(need) }),
+      });
+    }
+  }
+  if (st.suggested_batch && batch > st.suggested_batch) {
+    checks.push({
+      level: "should",
+      text: t("s.trainCheckBatch", { a0: String(batch), a1: String(st.suggested_batch) }),
+      action: { label: t("s.errActBatch"), run: focusBatch },
+    });
+  }
+  if (existing && !resume) {
+    checks.push({
+      level: "should",
+      text: t("s.trainCheckNameTaken", { v0: name.trim() }),
+      action: { label: t("s.trainCheckRename"), run: focusName },
+    });
+  }
+  const mustFix = checks.some((c) => c.level === "must");
 
   const start = async () => {
     if (runningRef.current) return;
@@ -316,19 +423,40 @@ export function TrainPanel() {
         </div>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.42667034ec")}</p>
 
-        {blocked.text ? (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <p className="m-0 text-[13px] text-[#b8534f] flex items-center gap-1.5">
-              {blocked.text}
-              {blocked.term ? <HelpMark title={tip(blocked.term)} /> : null}
-            </p>
-            {needPretrained || !st.hubert_present || needRmvpe ? (
-              <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.0c593a479c")}</Btn>
-            ) : null}
-          </div>
+        {checks.length ? (
+          <ul className="m-0 mb-4 list-none p-0">
+            {checks.map((c, i) => (
+              <li key={i} className="relative py-2 first:pt-0">
+                {i > 0 ? (
+                  <div
+                    aria-hidden
+                    className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
+                  />
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先做哪个。 */}
+                  <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
+                    {c.level === "must" ? t("s.trainCheckMust") : t("s.trainCheckShould")}
+                  </span>
+                  <p
+                    className={
+                      "m-0 flex items-center gap-1.5 text-[13px] " +
+                      (c.level === "must" ? "text-[#b8534f]" : "text-[var(--ink-muted)]")
+                    }
+                  >
+                    {c.text}
+                    {c.term ? <HelpMark title={tip(c.term)} /> : null}
+                  </p>
+                  {c.action ? (
+                    <Btn onClick={c.action.run}>{c.action.label}</Btn>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : (
           <div className="mb-3 flex justify-end">
-            <Btn onClick={() => openDownloadModels({ filter: "train" })}>{t("s.aac4f88e84")}</Btn>
+            <Btn onClick={goDownloads}>{t("s.aac4f88e84")}</Btn>
           </div>
         )}
 
@@ -344,6 +472,25 @@ export function TrainPanel() {
               }}
             >{t("s.70b208202c")}</Btn>
           </div>
+          {dataset ? (
+            <p
+              className={
+                "m-0 mb-2 text-[12px] leading-snug " +
+                (scan && scan.files === 0
+                  ? "text-[var(--ink-muted)] font-semibold"
+                  : "text-[var(--meta)]")
+              }
+            >
+              {scanning || !scan
+                ? t("s.trainDatasetScanning")
+                : scan.files === 0
+                  ? t("s.trainDatasetEmpty", { v0: scan.supported.join(" / ") })
+                  : t("s.trainDatasetFound", {
+                      a0: String(scan.files),
+                      a1: humanBytes(scan.total_bytes),
+                    })}
+            </p>
+          ) : null}
           <div className={ROW}>
             <span className={LABEL}>{t("s.trainOutDir")}</span>
             <span className={PATH} title={outDir || t("s.trainOutDefault")}>
@@ -366,6 +513,7 @@ export function TrainPanel() {
           <div className={ROW}>
             <span className={LABEL}>{t("s.4eea655d6f")}</span>
             <input
+              ref={nameRef}
               className={`flex-1 min-w-0 ${FIELD}`}
               value={name}
               placeholder={t("s.b27dd877b1")}
@@ -389,6 +537,12 @@ export function TrainPanel() {
             </select>
             <span className="text-[12px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
           </div>
+          {/* 只给相对判断，不给「48k 需要 8 GB」这种绝对承诺 —— 那取决于批大小、
+              数据集长度和显卡，说死了就会有人拿着它来对账。 */}
+          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+            {t("s.trainSrCost")}
+            {onlyHighSrReady ? ` ${t("s.trainSrOnly48")}` : ""}
+          </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.61fdf63b84")}</span>
             <input
@@ -567,7 +721,7 @@ export function TrainPanel() {
           ) : null}
           <Btn
             primary
-            disabled={running || !!blocked.text || !name.trim() || (!dataset && !resume)}
+            disabled={running || mustFix || !name.trim() || (!dataset && !resume)}
             onClick={() => void start()}
           >
             {running ? t("s.3e6b1657c7") : resume ? t("s.3166554c46") : t("s.be24590d21")}
@@ -576,4 +730,12 @@ export function TrainPanel() {
       </ToolActions>
     </ToolBody>
   );
+}
+
+/** 数据集体积。用户看的是量级，不是精确字节数。 */
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }

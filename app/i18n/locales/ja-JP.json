@@ -1905,7 +1905,21 @@
     "errActRuntime": "ランタイムを補完",
     "errActHelp": "説明を見る",
     "errActExtract": "モデル抽出へ",
-    "errActBatch": "学習設定を調整"
+    "errActBatch": "学習設定を調整",
+    "trainDatasetFound": "音声ファイル {a0} 個、合計 {a1}",
+    "trainDatasetEmpty": "このフォルダーに音声が見つかりません。対応形式：{}",
+    "trainDatasetScanning": "集計中…",
+    "trainSrCost": "サンプリングレートが高いほど VRAM を使います：48k > 40k > 32k。VRAM が足りないときは低い方を選んでください。",
+    "trainSrOnly48": "現在は 48k のベースモデルのみ利用できます。VRAM が足りない場合は 40k か 32k を追加ダウンロードしてください。",
+    "trainCheckMust": "要対応",
+    "trainCheckShould": "確認推奨",
+    "trainCheckNoAudio": "選択したデータセットに音声ファイルがありません",
+    "trainCheckDisk": "ディスクの空きは {a0}。学習の中間ファイルには {a1} 以上必要です",
+    "trainCheckBatch": "バッチサイズ {a0} はこの環境の推奨値 {a1} を超えています。VRAM 不足で学習が途中で失敗することがあります",
+    "trainCheckNameTaken": "「{}」という実験が既にあります。続けると同じフォルダーに書き込まれます",
+    "trainCheckFewFiles": "音声が {} 個しかありません。素材が少ないと似た声になりにくいです",
+    "trainCheckRepick": "選び直す",
+    "trainCheckRename": "名前を変更"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

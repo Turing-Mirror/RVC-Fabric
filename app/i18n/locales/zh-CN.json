@@ -1905,7 +1905,21 @@
     "errActRuntime": "去补全运行时",
     "errActHelp": "查看说明",
     "errActExtract": "去模型提取",
-    "errActBatch": "去调训练参数"
+    "errActBatch": "去调训练参数",
+    "trainDatasetFound": "找到 {a0} 个音频，共 {a1}",
+    "trainDatasetEmpty": "这个文件夹里没有找到音频。支持的格式：{}",
+    "trainDatasetScanning": "正在统计…",
+    "trainSrCost": "采样率越高越吃显存：48k > 40k > 32k。显存紧张时选低的。",
+    "trainSrOnly48": "目前只有 48k 底模就绪。显存不够时可以去下载 40k 或 32k 底模。",
+    "trainCheckMust": "必须解决",
+    "trainCheckShould": "建议解决",
+    "trainCheckNoAudio": "选中的数据集里没有音频文件",
+    "trainCheckDisk": "磁盘剩余 {a0}，训练中间文件预计需要 {a1} 以上",
+    "trainCheckBatch": "批大小 {a0} 高于本机建议值 {a1}，显存不足时训练会中途失败",
+    "trainCheckNameTaken": "已经有一个叫「{}」的实验，继续会写进同一个目录",
+    "trainCheckFewFiles": "只有 {} 个音频，素材偏少时音色不容易像",
+    "trainCheckRepick": "重新选择",
+    "trainCheckRename": "换个名字"
   },
   "extras": {
     "engineTitle": "引擎资源",

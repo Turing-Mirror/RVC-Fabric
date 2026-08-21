@@ -1905,7 +1905,21 @@
     "errActRuntime": "Complete the runtime",
     "errActHelp": "Open help",
     "errActExtract": "Open model extraction",
-    "errActBatch": "Adjust training settings"
+    "errActBatch": "Adjust training settings",
+    "trainDatasetFound": "Found {a0} audio files, {a1} in total",
+    "trainDatasetEmpty": "No audio found in this folder. Supported formats: {}",
+    "trainDatasetScanning": "Counting…",
+    "trainSrCost": "Higher sample rates use more VRAM: 48k > 40k > 32k. Pick a lower one if VRAM is tight.",
+    "trainSrOnly48": "Only the 48k base model is ready. If VRAM is short, download the 40k or 32k base model.",
+    "trainCheckMust": "Must fix",
+    "trainCheckShould": "Worth checking",
+    "trainCheckNoAudio": "The selected dataset contains no audio files",
+    "trainCheckDisk": "{a0} free on disk; intermediate training files need at least {a1}",
+    "trainCheckBatch": "Batch size {a0} is above the suggested {a1} for this machine; training may fail on VRAM",
+    "trainCheckNameTaken": "An experiment named \"{}\" already exists; continuing writes into the same folder",
+    "trainCheckFewFiles": "Only {} audio files; with this little material the voice may not sound close",
+    "trainCheckRepick": "Choose again",
+    "trainCheckRename": "Rename"
   },
   "extras": {
     "engineTitle": "Engine resources",

@@ -1905,7 +1905,21 @@
     "errActRuntime": "Compléter l'environnement",
     "errActHelp": "Voir l'aide",
     "errActExtract": "Ouvrir l'extraction de modèle",
-    "errActBatch": "Ajuster les réglages d'entraînement"
+    "errActBatch": "Ajuster les réglages d'entraînement",
+    "trainDatasetFound": "{a0} fichiers audio trouvés, {a1} au total",
+    "trainDatasetEmpty": "Aucun audio dans ce dossier. Formats pris en charge : {}",
+    "trainDatasetScanning": "Comptage…",
+    "trainSrCost": "Plus la fréquence d'échantillonnage est élevée, plus elle consomme de VRAM : 48k > 40k > 32k. Choisissez plus bas si la VRAM est limitée.",
+    "trainSrOnly48": "Seul le modèle de base 48k est prêt. Si la VRAM manque, téléchargez le modèle 40k ou 32k.",
+    "trainCheckMust": "À corriger",
+    "trainCheckShould": "À vérifier",
+    "trainCheckNoAudio": "Le jeu de données sélectionné ne contient aucun fichier audio",
+    "trainCheckDisk": "{a0} libres sur le disque ; les fichiers intermédiaires nécessitent au moins {a1}",
+    "trainCheckBatch": "La taille de lot {a0} dépasse la valeur suggérée {a1} pour cette machine ; l'entraînement peut échouer faute de VRAM",
+    "trainCheckNameTaken": "Une expérience nommée « {} » existe déjà ; continuer écrira dans le même dossier",
+    "trainCheckFewFiles": "Seulement {} fichiers audio ; avec si peu de matière, la voix risque de ne pas ressembler",
+    "trainCheckRepick": "Choisir à nouveau",
+    "trainCheckRename": "Renommer"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

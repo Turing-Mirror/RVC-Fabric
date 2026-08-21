@@ -1905,7 +1905,21 @@
     "errActRuntime": "Completar el entorno",
     "errActHelp": "Ver la ayuda",
     "errActExtract": "Ir a la extracción de modelos",
-    "errActBatch": "Ajustar los parámetros de entrenamiento"
+    "errActBatch": "Ajustar los parámetros de entrenamiento",
+    "trainDatasetFound": "{a0} archivos de audio encontrados, {a1} en total",
+    "trainDatasetEmpty": "No se encontró audio en esta carpeta. Formatos admitidos: {}",
+    "trainDatasetScanning": "Contando…",
+    "trainSrCost": "Cuanto mayor es la frecuencia de muestreo, más VRAM usa: 48k > 40k > 32k. Elige una menor si la VRAM es escasa.",
+    "trainSrOnly48": "Solo está listo el modelo base de 48k. Si falta VRAM, descarga el modelo de 40k o 32k.",
+    "trainCheckMust": "Debe resolverse",
+    "trainCheckShould": "Conviene revisar",
+    "trainCheckNoAudio": "El conjunto de datos seleccionado no contiene archivos de audio",
+    "trainCheckDisk": "{a0} libres en disco; los archivos intermedios necesitan al menos {a1}",
+    "trainCheckBatch": "El tamaño de lote {a0} supera el sugerido {a1} para este equipo; el entrenamiento puede fallar por VRAM",
+    "trainCheckNameTaken": "Ya existe un experimento llamado «{}»; continuar escribirá en la misma carpeta",
+    "trainCheckFewFiles": "Solo {} archivos de audio; con tan poco material la voz puede no parecerse",
+    "trainCheckRepick": "Elegir de nuevo",
+    "trainCheckRename": "Cambiar el nombre"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -115,6 +115,36 @@ def _write_status_early(root: Path, **fields) -> None:
         _append_log(root, f"early status write failed: {e}")
 
 
+def _scan_null_byte_sources(root: Path, max_hits: int = 5) -> list[str]:
+    """引擎源码里读得到 NUL 字节的文件（相对路径）。只在 null-bytes 崩溃后调用。
+
+    杀软挑走内容、断电后 NTFS 零填充，都会留下这种文件。报出具体路径，
+    支援才能分清是杀毒软件还是磁盘的问题。
+    """
+    hits: list[str] = []
+    skip = {
+        "Runtime", "User_Data", "TEMP", "logs", "frontend",
+        "update_cache", "__pycache__", ".git", "node_modules",
+    }
+    try:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in skip]
+            for name in filenames:
+                if not name.endswith(".py"):
+                    continue
+                p = Path(dirpath) / name
+                try:
+                    if b"\x00" in p.read_bytes():
+                        hits.append(str(p.relative_to(root)))
+                        if len(hits) >= max_hits:
+                            return hits
+                except OSError:
+                    continue
+    except Exception:
+        return hits
+    return hits
+
+
 def main() -> None:
     root = _root()
     os.chdir(root)
@@ -204,15 +234,32 @@ def main() -> None:
     except BaseException as e:
         tb = traceback.format_exc()
         _append_log(root, "WORKER FATAL:\n" + tb)
+        err_text = f"{type(e).__name__}: {e}"
+        # 「source code string cannot contain null bytes」＝ 引擎 .py 在用户盘上
+        # 被改坏了。重启救不了，得覆盖重装 —— 单独的状态码让界面直接说人话，
+        # 坏文件路径进 error 供支援分辨是杀软还是磁盘。
+        bad_files: list[str] = []
+        if isinstance(e, ValueError) and "null bytes" in str(e):
+            bad_files = _scan_null_byte_sources(root)
+            if bad_files:
+                err_text += " | 损坏文件: " + "; ".join(bad_files)
         try:
             from tools.worker_protocol import write_status
-            from tools.msg_codes import ENGINE_CRASH_LOAD, status_fields as _sf2
+            from tools.msg_codes import (
+                ENGINE_CRASH_LOAD,
+                ENGINE_FILES_CORRUPT,
+                status_fields as _sf2,
+            )
 
+            if bad_files:
+                fields = _sf2(ENGINE_FILES_CORRUPT, {"files": "; ".join(bad_files[:3])})
+            else:
+                fields = _sf2(ENGINE_CRASH_LOAD)
             write_status(
                 state="error",
-                error=f"{type(e).__name__}: {e}"[:200],
+                error=err_text[:200],
                 pid=0,
-                **_sf2(ENGINE_CRASH_LOAD),
+                **fields,
             )
         except Exception:
             try:
@@ -220,9 +267,15 @@ def main() -> None:
 
                 write_status(
                     state="error",
-                    error=f"{type(e).__name__}: {e}"[:200],
-                    message="引擎加载时崩溃，详见日志",
-                    message_code="engine.crash_load",
+                    error=err_text[:200],
+                    message=(
+                        "引擎程序文件损坏（"
+                        + "; ".join(bad_files[:3])
+                        + "）。重新运行安装包覆盖安装即可修复，音色与运行时会保留"
+                        if bad_files
+                        else "引擎加载时崩溃，详见日志"
+                    ),
+                    message_code="engine.files_corrupt" if bad_files else "engine.crash_load",
                     pid=0,
                 )
             except Exception:

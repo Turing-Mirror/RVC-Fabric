@@ -729,7 +729,9 @@ pub fn run_provision(
                     .and_then(|v| v.as_array())
                     .map(|a| a.len())
                     .unwrap_or(0);
-                crate::logging::shell_log!(crate::i18n::t("s.5c5f9ed8e4"));
+                let mut vars = std::collections::HashMap::new();
+                vars.insert("n".to_string(), n.to_string());
+                crate::logging::shell_log!("{}", crate::i18n::t_vars("s.5c5f9ed8e4", &vars));
             });
         }
 

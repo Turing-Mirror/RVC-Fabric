@@ -297,7 +297,8 @@
       "stopped": "Arrêté",
       "quit": "Quitté",
       "loop_error": "Erreur interne du moteur — voir le journal",
-      "launching": "Démarrage du processus moteur…"
+      "launching": "Démarrage du processus moteur…",
+      "files_corrupt": "Fichier du moteur endommagé ({files}). Relancez le programme d'installation pour réparer sur place — les voix et le runtime téléchargé sont conservés."
     },
     "runtime": {
       "not_ready": "Runtime pas prêt : terminez d'abord l'installation",

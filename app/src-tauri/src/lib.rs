@@ -2254,6 +2254,25 @@ pub fn run() {
             {
                 asset_scope::grant_file(app.handle(), wp);
             }
+            // 上次会话自选的输入/输出目录也要续放行。选择命令里的放行只在
+            // 当次会话活着 —— 不补这笔的话，重启后语音转换列表里上次录的
+            // 音频一按播放就静默 404，用户只会看到「播放失败」。
+            {
+                let cfg = config::read(&root);
+                for key in [
+                    sts::LAST_INPUT,
+                    sts::LAST_OUTPUT,
+                    tts::OUT_READ,
+                    tts::OUT_VOICE,
+                ] {
+                    if let Some(dir) = cfg.get(key).and_then(|v| v.as_str()) {
+                        let dir = dir.trim();
+                        if !dir.is_empty() {
+                            asset_scope::grant_dir(app.handle(), std::path::Path::new(dir));
+                        }
+                    }
+                }
+            }
             // Window URL must use the custom scheme registered above.
             // WebView2 cannot register non-standard schemes at all, so wry
             // rewrites `fabric://localhost/x` to `http://fabric.localhost/x`

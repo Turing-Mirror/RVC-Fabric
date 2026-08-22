@@ -33,8 +33,8 @@ const AUDIO_EXT: &[&str] = &[
 ];
 const LIST_CAP: usize = 300;
 const WALK_CAP: usize = 2000;
-const LAST_INPUT: &str = "last_sts_input";
-const LAST_OUTPUT: &str = "last_sts_output";
+pub(crate) const LAST_INPUT: &str = "last_sts_input";
+pub(crate) const LAST_OUTPUT: &str = "last_sts_output";
 const MAX_RECORD_SEC: u64 = 30 * 60;
 
 /// 原版单次推理那几个旋钮。缺省跟 infer-web 单次推理一致。

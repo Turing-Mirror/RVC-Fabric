@@ -53,6 +53,13 @@ pub fn gather(root: &Path) -> Value {
     // 最新诊断包：求助信息里带上路径，管理员少问一轮「包呢」。
     let diag_latest = latest_diag(root);
 
+    // 求助信息会把 engine_error / diag_latest 原样拼进剪贴板贴到群里。这两样
+    // 都可能带绝对路径（报错文本、安装在用户目录下时的诊断包路径）—— 和
+    // diagnostics_summary_text 同一条规矩：这段文字比诊断包更容易被贴到公开
+    // 场合，用户名得抹掉；完整原文本来就在日志与诊断包里。
+    let redaction = crate::shell_extras::home_redaction();
+    let redact = |s: String| crate::shell_extras::redact_user(&s, redaction.as_ref());
+
     json!({
         "version": crate::update::APP_VERSION,
         "gpu": crate::provision::list_gpus().first().cloned().unwrap_or_default(),
@@ -63,11 +70,11 @@ pub fn gather(root: &Path) -> Value {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        "engine_error": status.as_ref()
+        "engine_error": redact(status.as_ref()
             .and_then(|s| s.get("error"))
             .and_then(|v| v.as_str())
             .unwrap_or("")
-            .to_string(),
+            .to_string()),
         "vbcable_installed": assets.get("vbcable_installed")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
@@ -76,7 +83,7 @@ pub fn gather(root: &Path) -> Value {
         "default_output": str_of(status.as_ref().and_then(|s| s.get("default_output_device"))),
         "input_devices": inputs,
         "output_devices": outputs,
-        "diag_latest": diag_latest,
+        "diag_latest": redact(diag_latest),
     })
 }
 

@@ -202,10 +202,33 @@ impl CleanStats {
     }
 }
 
+/// 一小时内有写入的半截下载不算垃圾。
+///
+/// 活跃下载的 `.part` 每秒都在落盘，mtime 一直是新的；被放弃的半截则永远
+/// 停在最后一次写入。diag 26.8.22/1：用户重启了一次应用，启动清理把下到
+/// 322 MB 的 Runtime 半截当垃圾删了 —— 那一晚进度条反复归零，六 GB 的包下了
+/// 十四个小时。阈值取一小时：真在下的文件不可能一小时没有新字节。
+const ACTIVE_DOWNLOAD_WINDOW_SECS: u64 = 60 * 60;
+
+fn recently_modified(p: &Path) -> bool {
+    let Ok(m) = std::fs::metadata(p) else {
+        return false;
+    };
+    let Ok(modified) = m.modified() else {
+        return false;
+    };
+    match modified.elapsed() {
+        Ok(age) => age.as_secs() < ACTIVE_DOWNLOAD_WINDOW_SECS,
+        // 时钟回拨等算不出年龄的情况：宁可当成活跃的，不删。
+        Err(_) => true,
+    }
+}
+
 /// 清临时垃圾。启动、退出、分离/训练结束都应调。
 ///
 /// - `TEMP/`：引擎/UVR 中间产物。先整目录删，失败再逐文件删（锁占用时常见）。
 /// - `User_Data/update_cache`：半截下载、OTA 暂存、一次性请求 json。
+///   正在下的大文件不在此列 —— 删了它就是让用户从头再下一遍。
 /// - 绝不碰 Runtime / models / app_config / 已装音色。
 pub fn clean_temps(root: &Path) -> CleanStats {
     let mut stats = CleanStats::default();
@@ -214,17 +237,24 @@ pub fn clean_temps(root: &Path) -> CleanStats {
     stats.merge(wipe_dir_contents(&temp, /*recreate*/ true));
 
     let cache = update_cache(root);
-    // 半截下载 / 临时名
-    stats.merge(remove_matching_files(&cache, |name| {
+    // 半截下载 / 临时名（活跃下载除外，见 recently_modified）
+    stats.merge(remove_matching_files(&cache, |name, path| {
         let lower = name.to_ascii_lowercase();
-        lower.ends_with(".part")
+        (lower.ends_with(".part")
             || lower.ends_with(".tmp")
             || lower.ends_with(".download")
             || lower.ends_with(".reformatted.wav")
-            || lower.ends_with(".crdownload")
+            || lower.ends_with(".crdownload"))
+            && !recently_modified(path)
     }));
-    // OTA 暂存目录整清（装完就没用了）
+    // OTA 暂存目录整清（装完就没用了）。`runtime` 只在引擎已解压后才算
+    // 没用：Runtime 还没就绪时，里面躺着的可能是刚下完、还没来得及解压的
+    // tar —— 这时候清掉，几 GB 就得原样重下。
+    let runtime_installed = runtime_ready(root);
     for sub in ["gui_stage", "frontend_stage", "runtime"] {
+        if sub == "runtime" && !runtime_installed {
+            continue;
+        }
         let p = cache.join(sub);
         if p.is_dir() {
             stats.merge(wipe_dir_contents(&p, /*recreate*/ false));
@@ -335,7 +365,7 @@ fn remove_tree_best_effort(dir: &Path) -> CleanStats {
     stats
 }
 
-fn remove_matching_files(dir: &Path, pred: impl Fn(&str) -> bool + Copy) -> CleanStats {
+fn remove_matching_files(dir: &Path, pred: impl Fn(&str, &Path) -> bool + Copy) -> CleanStats {
     let mut stats = CleanStats::default();
     let Ok(rd) = std::fs::read_dir(dir) else {
         return stats;
@@ -349,7 +379,7 @@ fn remove_matching_files(dir: &Path, pred: impl Fn(&str) -> bool + Copy) -> Clea
         let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
-        if pred(name) {
+        if pred(name, &p) {
             let sz = p.metadata().map(|m| m.len()).unwrap_or(0);
             match std::fs::remove_file(&p) {
                 Ok(()) => {
@@ -411,7 +441,7 @@ pub fn clear_user_cache(root: &Path) -> CleanStats {
     let mut stats = clean_temps(root);
     stats.merge(clear_log_files(&logs_dir(root)));
     let diag = user_data(root).join("diagnostics");
-    stats.merge(remove_matching_files(&diag, |name| {
+    stats.merge(remove_matching_files(&diag, |name, _| {
         let lower = name.to_ascii_lowercase();
         lower.ends_with(".zip") || lower.ends_with(".tmp")
     }));
@@ -468,7 +498,7 @@ fn dir_size_logs_only(dir: &Path) -> u64 {
 }
 
 fn clear_log_files(dir: &Path) -> CleanStats {
-    remove_matching_files(dir, |name| {
+    remove_matching_files(dir, |name, _| {
         let lower = name.to_ascii_lowercase();
         lower.ends_with(".log") || lower.ends_with(".log.1")
     })
@@ -509,6 +539,54 @@ mod cache_clear_tests {
         assert!(!logs.join("sts_fail.log").exists());
         assert!(models.join("a.pth").exists());
         assert!(td.join("User_Data").join("app_config.json").exists());
+        let _ = std::fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn clean_temps_spares_a_download_in_progress() {
+        // diag 26.8.22/1：启动清理把下到 322MB 的 Runtime 半截当垃圾删了，
+        // 六 GB 的包只好从零再来。刚写过的 .part 必须活过清理。
+        let td = std::env::temp_dir().join(format!("tm-fresh-part-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&td);
+        let cache = td.join("User_Data").join("update_cache");
+        std::fs::create_dir_all(&cache).unwrap();
+        let part = cache.join("engine-core-260722.zip.part");
+        std::fs::write(&part, vec![0u8; 4096]).unwrap();
+
+        clean_temps(&td);
+        assert!(part.exists(), "freshly written .part must survive cleanup");
+
+        // Runtime 还没就绪时，update_cache/runtime 里下完待解压的 tar 也得留。
+        let rt_cache = cache.join("runtime");
+        std::fs::create_dir_all(&rt_cache).unwrap();
+        let tar = rt_cache.join("runtime-nvidia.tar");
+        std::fs::write(&tar, vec![0u8; 4096]).unwrap();
+        clean_temps(&td);
+        assert!(tar.exists(), "unextracted runtime tar must survive cleanup");
+
+        // 引擎装好之后同一个 tar 才算「装完没用了」，可以清。
+        std::fs::create_dir_all(
+            td.join("Runtime")
+                .join("Lib")
+                .join("site-packages")
+                .join("torch"),
+        )
+        .unwrap();
+        std::fs::write(td.join("Runtime").join("python.exe"), b"py").unwrap();
+        std::fs::write(
+            td.join("Runtime")
+                .join("Lib")
+                .join("site-packages")
+                .join("torch")
+                .join("__init__.py"),
+            b"torch",
+        )
+        .unwrap();
+        assert!(runtime_ready(&td), "fixture must look installed");
+        clean_temps(&td);
+        assert!(!tar.exists(), "tar is regenerable once runtime extracted");
+        // 活跃半截的保护与引擎是否装好无关。
+        assert!(part.exists());
         let _ = std::fs::remove_dir_all(&td);
     }
 }

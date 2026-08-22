@@ -21,6 +21,7 @@ export const APPEARANCE_KEYS = [
   "wallpaper_path",
   "wallpaper_blur",
   "wallpaper_opacity",
+  "home_banner_opacity",
 ] as const;
 
 /** 磨砂滑杆是 0–100，换算成实际的高斯半径。24px 上限是试出来的：
@@ -41,6 +42,12 @@ export function applyAppearance(cfg: Config): void {
   el.style.setProperty(
     "--wp-opacity",
     String(Number(cfg.wallpaper_opacity ?? 70) / 100),
+  );
+  // 首页横幅背景的不透明度。只影响那一格底色（HomePage 里用 color-mix 消费），
+  // 文字与 LOGO 不跟着变淡。
+  el.style.setProperty(
+    "--banner-opacity",
+    String(Math.min(100, Math.max(20, Number(cfg.home_banner_opacity ?? 100))) / 100),
   );
 
   const path = String(cfg.wallpaper_path ?? "");

@@ -93,7 +93,13 @@
     "compatRender": "介面相容繪製",
     "compatRenderTip": "介面出現整片黑屏、花屏或撕裂時開啟，重啟軟體後生效。畫面改由 CPU 繪製，換頁和霧面會略微掉幀。",
     "compatRenderOn": "已開啟",
-    "compatRenderOff": "未開啟"
+    "compatRenderOff": "未開啟",
+    "bannerText": "首頁橫幅文案",
+    "bannerTextTip": "自定義首頁頂部橫幅的標題文字，留空時顯示預設標題。",
+    "bannerTextPlaceholder": "留空使用預設標題",
+    "bannerTextReset": "恢復預設",
+    "bannerOpacity": "橫幅不透明度",
+    "bannerOpacityTip": "調節首頁頂部橫幅背景的不透明度，文字與 LOGO 不受影響，最低 20%。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "刪除失敗：{e}。檔案可能正被其他程式佔用——先停止變聲、等轉換跑完，再試一次。",
     "auditionBtn": "試聽",
     "auditionBusy": "合成中…",
-    "auditionFailed": "試聽失敗：{}"
+    "auditionFailed": "試聽失敗：{}",
+    "helpFaqFilter": "輸入關鍵詞過濾，如：聽不到 / 視訊記憶體 / 中文路徑",
+    "helpFaqNoHit": "沒有匹配的條目，請更換關鍵詞。"
   },
   "extras": {
     "engineTitle": "引擎資源",

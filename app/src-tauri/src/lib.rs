@@ -3,6 +3,7 @@
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 pub mod catalog;
+mod asset_scope;
 mod audio_probe;
 mod autostart;
 mod ckpt;
@@ -328,6 +329,10 @@ fn config_set(
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let out = config::update(&root, patch.clone())?;
+    // 壁纸路径也可能由导入配置档案写进来（不是走选择框），同样要放行。
+    if let Some(Value::String(p)) = patch.get("wallpaper_path") {
+        asset_scope::grant_file(&app, p);
+    }
     if let Err(e) = voices::persist_profile_patch(&root, &patch) {
         logging::shell_log!("persist profile: {e}");
     }
@@ -373,11 +378,16 @@ async fn cover_resolve_many(
 /// image merely loads slowly, it cannot break anything.
 #[tauri::command]
 fn pick_wallpaper(window: tauri::WebviewWindow) -> Option<String> {
-    crate::shell_extras::dialog_on(Some(&window))
+    let picked = crate::shell_extras::dialog_on(Some(&window))
         .add_filter(&crate::i18n::t("s.be8da62ea1"), &["jpg", "jpeg", "png", "webp", "bmp"])
         .set_title(&crate::i18n::t("s.501fdcd3ef"))
         .pick_file()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.to_string_lossy().into_owned());
+    // 壁纸可以是盘上任何一张图，asset 协议只放行选中的这一个文件。
+    if let Some(ref p) = picked {
+        asset_scope::grant_file(window.app_handle(), p);
+    }
+    picked
 }
 
 /// Ask the catalog whether a newer build exists.
@@ -917,14 +927,19 @@ fn separate_pick(
     input_folder: Option<bool>,
 ) -> Option<String> {
     let d = shell_extras::dialog_on(Some(&window));
-    if dir || input_folder.unwrap_or(false) {
+    let folder = dir || input_folder.unwrap_or(false);
+    let picked = if folder {
         d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
         d.add_filter(&crate::i18n::t("s.461189f186"), &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
             .set_title(&crate::i18n::t("s.7ba52d2bf3"))
             .pick_file()
     }
-    .map(|p| p.to_string_lossy().into_owned())
+    .map(|p| p.to_string_lossy().into_owned());
+    if let Some(ref p) = picked {
+        asset_scope::grant_picked(window.app_handle(), p, folder);
+    }
+    picked
 }
 
 #[tauri::command]
@@ -1307,7 +1322,12 @@ fn tts_pick_output(
     use_rvc: bool,
 ) -> Result<Option<String>, String> {
     let root = root_clone(&state)?;
-    Ok(tts::pick_output(&root, Some(&window), use_rvc))
+    let picked = tts::pick_output(&root, Some(&window), use_rvc);
+    // 输出目录可以在任何盘上；试听播放的正是写进这里的文件。
+    if let Some(ref p) = picked {
+        asset_scope::grant_dir(window.app_handle(), std::path::Path::new(p));
+    }
+    Ok(picked)
 }
 
 /// 把某一路的输出目录恢复成默认。
@@ -1374,19 +1394,28 @@ fn train_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 /// 选数据集目录。原生对话框要主线程。
 #[tauri::command]
 fn train_pick_dataset(window: tauri::WebviewWindow) -> Option<String> {
-    crate::shell_extras::dialog_on(Some(&window))
+    let picked = crate::shell_extras::dialog_on(Some(&window))
         .set_title(&crate::i18n::t("s.612dddefc4"))
         .pick_folder()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.to_string_lossy().into_owned());
+    if let Some(ref p) = picked {
+        asset_scope::grant_dir(window.app_handle(), std::path::Path::new(p));
+    }
+    picked
 }
 
 /// 选训好的音色放哪。原生对话框要主线程。
 #[tauri::command]
 fn train_pick_output_dir(window: tauri::WebviewWindow) -> Option<String> {
-    crate::shell_extras::dialog_on(Some(&window))
+    let picked = crate::shell_extras::dialog_on(Some(&window))
         .set_title(&crate::i18n::t("s.trainOutPick"))
         .pick_folder()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.to_string_lossy().into_owned());
+    // 训练输出目录在模型页之外：音色的封面要从那里读，得放行。
+    if let Some(ref p) = picked {
+        asset_scope::grant_dir(window.app_handle(), std::path::Path::new(p));
+    }
+    picked
 }
 
 /// 上次选的存放目录。空 = 默认的 `User_Data/models`。
@@ -2185,6 +2214,18 @@ pub fn run() {
         .setup(move |app| {
             // 原生对话框要认父窗口，先把句柄存下来（见 shell_extras::dialog）。
             shell_extras::remember_app(app.handle());
+            // asset 协议白名单：tauri.conf.json 的静态 scope 为空，全部放行
+            // 在这里按运行时解析出的路径来（见 asset_scope.rs）。封面缓存、
+            // 音色库、转换输出都住在这两棵树下；壁纸等用户自选路径在选择
+            // 命令里单放。
+            asset_scope::grant_dir(app.handle(), &root);
+            asset_scope::grant_dir(app.handle(), &paths::user_data(&root));
+            if let Some(wp) = config::read(&root)
+                .get("wallpaper_path")
+                .and_then(|v| v.as_str())
+            {
+                asset_scope::grant_file(app.handle(), wp);
+            }
             // Window URL must use the custom scheme registered above.
             // WebView2 cannot register non-standard schemes at all, so wry
             // rewrites `fabric://localhost/x` to `http://fabric.localhost/x`

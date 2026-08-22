@@ -93,7 +93,13 @@
     "compatRender": "Rendu de compatibilité",
     "compatRenderTip": "À activer si la fenêtre devient noire, brouillée ou déchirée ; effectif après redémarrage. L'image est dessinée par le processeur, les changements de page et le flou perdent quelques images.",
     "compatRenderOn": "Activé",
-    "compatRenderOff": "Désactivé"
+    "compatRenderOff": "Désactivé",
+    "bannerText": "Texte de la bannière d'accueil",
+    "bannerTextTip": "Personnalise le titre de la bannière en haut de la page d'accueil. Laissez vide pour utiliser le titre par défaut.",
+    "bannerTextPlaceholder": "Vide = titre par défaut",
+    "bannerTextReset": "Rétablir par défaut",
+    "bannerOpacity": "Opacité de la bannière",
+    "bannerOpacityTip": "Règle l'opacité du fond de la bannière d'accueil. Le texte et le logo ne sont pas affectés. Minimum 20 %."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "Échec de la suppression : {e}. Le fichier est peut-être utilisé par un autre processus — arrêtez la conversion ou attendez sa fin, puis réessayez.",
     "auditionBtn": "Écouter",
     "auditionBusy": "Synthèse…",
-    "auditionFailed": "Échec de l'aperçu : {}"
+    "auditionFailed": "Échec de l'aperçu : {}",
+    "helpFaqFilter": "Filtrer par mot-clé, ex. pas de son / VRAM / chemin chinois",
+    "helpFaqNoHit": "Aucune entrée correspondante ; essayez un autre mot-clé."
   },
   "extras": {
     "engineTitle": "Ressources moteur",

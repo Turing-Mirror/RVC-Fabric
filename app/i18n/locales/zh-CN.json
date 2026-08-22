@@ -93,7 +93,13 @@
     "compatRender": "界面兼容渲染",
     "compatRenderTip": "界面出现整片黑屏、花屏或撕裂时打开，重启软件后生效。画面改由 CPU 绘制，换页和磨砂会略微掉帧。",
     "compatRenderOn": "已开启",
-    "compatRenderOff": "未开启"
+    "compatRenderOff": "未开启",
+    "bannerText": "首页横幅文案",
+    "bannerTextTip": "自定义首页顶部横幅的标题文字，留空时显示默认标题。",
+    "bannerTextPlaceholder": "留空使用默认标题",
+    "bannerTextReset": "恢复默认",
+    "bannerOpacity": "横幅不透明度",
+    "bannerOpacityTip": "调节首页顶部横幅背景的不透明度，文字与 LOGO 不受影响，最低 20%。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "删除失败：{e}。文件可能正被其他程序占用——先停止变声、等转换跑完，再试一次。",
     "auditionBtn": "试听",
     "auditionBusy": "合成中…",
-    "auditionFailed": "试听失败：{}"
+    "auditionFailed": "试听失败：{}",
+    "helpFaqFilter": "输入关键词过滤，如：听不到 / 显存 / 中文路径",
+    "helpFaqNoHit": "没有匹配的条目，请更换关键词。"
   },
   "extras": {
     "engineTitle": "引擎资源",

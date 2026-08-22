@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "lint": "eslint .",
-    "build": "eslint . && tsc && vite build",
+    "test": "vitest run",
+    "check:i18n": "node scripts/check_i18n.mjs",
+    "build": "eslint . && tsc && node scripts/check_i18n.mjs && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -30,6 +32,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.65.0",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.11"
   }
 }

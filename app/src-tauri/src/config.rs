@@ -194,6 +194,9 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("wallpaper_path".into(), json!(""));
     m.insert("wallpaper_blur".into(), json!(40));
     m.insert("wallpaper_opacity".into(), json!(70));
+    // 首页横幅自定义：文案留空 = 默认标题；不透明度最低由前端滑杆限在 20。
+    m.insert("home_banner_text".into(), json!(""));
+    m.insert("home_banner_opacity".into(), json!(100));
     m.insert("hotkeys_enabled".into(), json!(false));
     // 快捷键组合。默认沿用旧 Python 壳的那四个，用户有肌肉记忆；
     // 键名要和 shell_extras::HOTKEYS 对上。
@@ -914,7 +917,14 @@ pub fn describe() -> Value {
     groups.insert("fx", vec!["I_noise_reduce", "O_noise_reduce", "use_pv"]);
     groups.insert(
         "appearance",
-        vec!["theme_mode", "wallpaper_path", "wallpaper_blur", "wallpaper_opacity"],
+        vec![
+            "theme_mode",
+            "wallpaper_path",
+            "wallpaper_blur",
+            "wallpaper_opacity",
+            "home_banner_text",
+            "home_banner_opacity",
+        ],
     );
     groups.insert(
         "general",

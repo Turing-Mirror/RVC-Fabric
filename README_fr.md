@@ -108,6 +108,7 @@ npm run dev
 ### Build et tests
 
 - **Tests unitaires** : Exécutez `scripts\run_tests.bat`
+- **Tests unitaires du frontend** : `cd app && npm test`
 - **Packager le programme d'installation (NSIS)** : `cd app && npm run tauri:build`
 - **Packager la version hors ligne complète** : `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Construire le catalogue en ligne** : `python scripts\build_catalog.py build --diff`

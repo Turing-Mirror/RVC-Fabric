@@ -108,6 +108,7 @@ npm run dev
 ### Build and Test
 
 - **Unit Tests**: Run `scripts\run_tests.bat`
+- **Frontend unit tests**: `cd app && npm test`
 - **Package Installer (NSIS)**: `cd app && npm run tauri:build`
 - **Package Full Offline Release**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Build Online Catalog**: `python scripts\build_catalog.py build --diff`
@@ -127,4 +128,4 @@ Thanks to the following excellent open-source projects for providing technical s
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Retrieval and real-time noise reduction
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Optional pitch algorithms
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Vocal separation engine (follows upstream RVC; replaces UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Separation model source · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Audio processing
-- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Virtual sound card (makes the changed voice heard in games)
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Virtual sound card (routes the converted voice into games and voice apps)

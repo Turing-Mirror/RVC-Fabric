@@ -93,7 +93,13 @@
     "compatRender": "호환 렌더링",
     "compatRenderTip": "화면이 검게 나오거나 깨지거나 찢어질 때 켜세요. 재시작 후 적용됩니다. 화면을 CPU가 그리므로 페이지 전환과 반투명 효과의 프레임이 약간 떨어집니다.",
     "compatRenderOn": "켜짐",
-    "compatRenderOff": "꺼짐"
+    "compatRenderOff": "꺼짐",
+    "bannerText": "홈 배너 문구",
+    "bannerTextTip": "홈 화면 상단 배너의 제목 문구를 사용자 지정합니다. 비워 두면 기본 제목을 표시합니다.",
+    "bannerTextPlaceholder": "비우면 기본 제목 사용",
+    "bannerTextReset": "기본값으로 되돌리기",
+    "bannerOpacity": "배너 불투명도",
+    "bannerOpacityTip": "홈 화면 상단 배너 배경의 불투명도를 조절합니다. 문구와 LOGO 는 영향을 받지 않으며 최소 20% 입니다."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "삭제 실패: {e}. 다른 프로세스가 파일을 사용 중일 수 있어요. 변환을 중지하거나 끝날 때까지 기다린 뒤 다시 시도해 주세요.",
     "auditionBtn": "미리 듣기",
     "auditionBusy": "합성 중…",
-    "auditionFailed": "미리 듣기에 실패했습니다: {}"
+    "auditionFailed": "미리 듣기에 실패했습니다: {}",
+    "helpFaqFilter": "키워드로 필터(예: 안 들림 / VRAM / 중국어 경로)",
+    "helpFaqNoHit": "일치하는 항목이 없습니다. 다른 키워드로 시도하세요."
   },
   "extras": {
     "engineTitle": "엔진 리소스",

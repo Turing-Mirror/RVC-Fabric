@@ -83,6 +83,13 @@ def friendly_error(exc: BaseException | str) -> str:
             "可以在系统环境变量里设 TM_USE_DML=0 改用 CPU 后端后重启软件（会慢一些）。\n"
             f"原始报错：{last_error_line(text)}"
         )
+    # 规格书 1.3 兜底：正文 = 最后一行真实报错，完整 traceback 留给「详情」。
+    # 认不出的错误以前原样整段丢给界面，第一行永远是 Traceback (most recent
+    # call last):，26.8.22/4 截图里用户看到的就是这个。
+    if looks_like_traceback(text):
+        last = last_error_line(text)
+        if last and last != text:
+            return f"{last}\n{text}"
     return text
 
 
@@ -106,6 +113,11 @@ DML_ERROR_MARKERS = ("privateuse1", "privateuseone", "directml", "dml backend")
 def is_dml_backend_error(text) -> bool:
     low = str(text or "").lower()
     return any(m in low for m in DML_ERROR_MARKERS)
+
+
+def looks_like_traceback(text) -> bool:
+    s = str(text or "").lstrip()
+    return s.startswith("Traceback") or "\n  File " in s or "\nFile " in s
 
 
 def last_error_line(text) -> str:

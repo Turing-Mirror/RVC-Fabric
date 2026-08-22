@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { actionFor } from "../lib/errorActions";
+import { splitErrorText } from "../lib/errorText";
 
 /**
  * 面板里那行报错。
@@ -11,9 +12,9 @@ import { actionFor } from "../lib/errorActions";
  * 群里，我们再从几十行 `D:\RVC Fabric\Runtime\lib\site-packages\...` 里找那句
  * 真正有用的。
  *
- * 现在正文只留第一行，剩下的收进「详情」。但收起来有个代价 —— 我们在群里问
- * 「报什么错」时，用户的截图会只剩一行。所以「复制完整错误」必须一按就有，
- * 而且完整内容一个字都不能少地进日志和诊断包（那条本来就在，不归这里管）。
+ * 现在正文只留真正有用的那一行（traceback 取最后一行异常，普通多行取第一行），
+ * 剩下的收进「详情」。收起来有个代价 —— 群里问「报什么错」时截图会只剩一行。
+ * 所以「复制完整错误」必须一按就有，完整内容一个字都不能少地进日志和诊断包。
  */
 export function ErrorNote({
   text,
@@ -46,9 +47,7 @@ export function ErrorNote({
     );
   }
 
-  const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  const head = lines[0] || text;
-  const hasMore = lines.length > 1;
+  const { head, detail, hasMore } = splitErrorText(text);
   const action = extraAction ?? actionFor(code);
 
   const done = () => {
@@ -88,7 +87,7 @@ export function ErrorNote({
       </p>
       {open && hasMore ? (
         <pre className="mt-1.5 mb-0 max-h-[168px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-[var(--meta)] leading-relaxed">
-          {lines.slice(1).join("\n")}
+          {detail}
         </pre>
       ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">

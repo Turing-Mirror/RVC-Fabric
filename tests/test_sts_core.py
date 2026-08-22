@@ -203,6 +203,19 @@ class DmlErrorTextTests(unittest.TestCase):
         # 这条链断了兜底就永远不触发。
         self.assertTrue(is_dml_backend_error(friendly_error(DML_GRAD_MULTIPLY_TB)))
 
+    def test_unknown_traceback_headline_is_the_last_line(self):
+        # 规格书 1.3 兜底：认不出的错误也必须把正文收成最后一行，不能让界面
+        # 第一行停在 Traceback (most recent call last):。
+        tb = (
+            "Traceback (most recent call last):\n"
+            '  File "foo.py", line 1, in <module>\n'
+            "ValueError: bad wav header"
+        )
+        msg = friendly_error(tb)
+        self.assertTrue(msg.startswith("ValueError: bad wav header"))
+        self.assertIn("Traceback", msg)
+        self.assertIn("foo.py", msg)
+
 
 class FakeModel:
     def __init__(self, device="privateuseone:0"):

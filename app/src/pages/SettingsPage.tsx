@@ -808,6 +808,45 @@ function SettingsPageImpl({
                   />
                 }
               />
+              <Field
+                label={t("settings.bannerText")}
+                tip={TIPS.home_banner_text}
+                control={
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <input
+                      type="text"
+                      maxLength={40}
+                      className={[
+                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
+                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
+                        "focus:outline-none focus:border-[var(--accent)]",
+                      ].join(" ")}
+                      placeholder={t("settings.bannerTextPlaceholder")}
+                      value={c.str("home_banner_text")}
+                      onChange={(e) => c.set("home_banner_text", e.target.value)}
+                    />
+                    {c.str("home_banner_text") ? (
+                      <Btn onClick={() => c.set("home_banner_text", "", true)}>
+                        {t("settings.bannerTextReset")}
+                      </Btn>
+                    ) : null}
+                  </div>
+                }
+              />
+              <Field
+                label={t("settings.bannerOpacity")}
+                tip={TIPS.home_banner_opacity}
+                control={
+                  <Slider
+                    value={c.num("home_banner_opacity", 100)}
+                    min={20}
+                    max={100}
+                    step={1}
+                    onChange={(v) => c.set("home_banner_opacity", v)}
+                    format={(v) => `${v}%`}
+                  />
+                }
+              />
             </div>
           </Block>
         ) : null}

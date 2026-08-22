@@ -44,6 +44,24 @@ const CODE_ACTIONS: Record<string, Action> = {
     labelKey: "s.errActDownload",
     run: toDownloads("train.mute_missing", "train"),
   },
+  // hubert 缺失/损坏走引擎资源入口（和 Runtime 同一页，不带筛选词）。
+  "train.no_feature": {
+    labelKey: "s.errActDownload",
+    run: toDownloads("train.no_feature", "all"),
+  },
+  // 数据集体检不通过的三条：答案在说明页「训练音色」段，跳过去直接展开。
+  "train.no_slices": {
+    labelKey: "s.errActHelp",
+    run: toHelp("train"),
+  },
+  "train.no_f0": {
+    labelKey: "s.errActHelp",
+    run: toHelp("train"),
+  },
+  "train.no_samples": {
+    labelKey: "s.errActHelp",
+    run: toHelp("train"),
+  },
   // 运行时没装齐：同一个入口，不带筛选词。
   "runtime.not_ready": {
     labelKey: "s.errActRuntime",

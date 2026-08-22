@@ -337,6 +337,9 @@ function HelpPageImpl({
   const [open, setOpen] = useState<string>("");
   // 名词表和常见情况各自独立展开，互不影响。
   const [openTerm, setOpenTerm] = useState<string>("");
+  // 常见情况的本地过滤。二十一条靠「新手撞上的先后」排，第一条不一定是
+  // 用户的那条 —— 给个关键词框，比让他逐条展开快。
+  const [faqFilter, setFaqFilter] = useState("");
   // Installing the driver needs UAC, so it can only ever be user-initiated.
   // Without this entry the pack is downloaded but never actually installed.
   // "checking" and "we could not check" used to be the same state (null), so a
@@ -453,6 +456,12 @@ function HelpPageImpl({
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
   const firstRun = buildFirstRun();
   const faq = buildFaq();
+  const faqNeedle = faqFilter.trim().toLowerCase();
+  const faqShown = faqNeedle
+    ? faq.filter((f) =>
+        `${f.q}\n${f.hint}\n${f.a}`.toLowerCase().includes(faqNeedle),
+      )
+    : faq;
   const trainGuide = buildTrainGuide();
   const inferGuide = buildInferGuide();
   const separateGuide = buildSeparateGuide();
@@ -592,9 +601,29 @@ function HelpPageImpl({
           />
         </Group>
       </Block>
-      <Block id="help-faq" title={t("s.209d309d58")} note={String(faq.length)}>
+      <Block
+        id="help-faq"
+        title={t("s.209d309d58")}
+        note={faqNeedle ? `${faqShown.length} / ${faq.length}` : String(faq.length)}
+      >
+        <input
+          type="text"
+          value={faqFilter}
+          onChange={(e) => setFaqFilter(e.target.value)}
+          placeholder={t("s.helpFaqFilter")}
+          className={[
+            "w-full max-w-[380px] rounded-[var(--rs)] border px-3 py-2 text-[13px] mb-4",
+            "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
+            "focus:outline-none focus:border-[var(--accent)]",
+          ].join(" ")}
+        />
+        {faqShown.length === 0 ? (
+          <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-4">
+            {t("s.helpFaqNoHit")}
+          </p>
+        ) : null}
         <Group>
-          {faq.map((f) => (
+          {faqShown.map((f) => (
             <ListItem
               key={f.q}
               title={f.q}

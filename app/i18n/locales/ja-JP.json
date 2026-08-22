@@ -93,7 +93,13 @@
     "compatRender": "互換描画",
     "compatRenderTip": "画面が真っ黒になる・乱れる・ちらつく場合にオンにしてください。再起動後に有効になります。描画を CPU が担当するため、ページ切り替えとすりガラスのフレームが少し落ちます。",
     "compatRenderOn": "オン",
-    "compatRenderOff": "オフ"
+    "compatRenderOff": "オフ",
+    "bannerText": "ホームバナーの文言",
+    "bannerTextTip": "ホーム画面上部バナーのタイトル文言をカスタマイズします。空欄の場合は既定のタイトルを表示します。",
+    "bannerTextPlaceholder": "空欄で既定のタイトル",
+    "bannerTextReset": "既定に戻す",
+    "bannerOpacity": "バナーの不透明度",
+    "bannerOpacityTip": "ホーム画面上部バナーの背景の不透明度を調整します。文言と LOGO は変わりません。最低 20% です。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "削除に失敗しました：{e}。ファイルが別のプロセスに使われている可能性があります。変換を停止するか終わるまで待ってから、もう一度お試しください。",
     "auditionBtn": "試聴",
     "auditionBusy": "合成中…",
-    "auditionFailed": "試聴に失敗しました：{}"
+    "auditionFailed": "試聴に失敗しました：{}",
+    "helpFaqFilter": "キーワードで絞り込み（例：聞こえない / VRAM / 中文パス）",
+    "helpFaqNoHit": "一致する項目がありません。別のキーワードをお試しください。"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

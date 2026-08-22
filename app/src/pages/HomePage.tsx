@@ -2,6 +2,7 @@ import { useEffect, useState, memo } from "react";
 import { Btn, Block, HelpMark, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { setHot } from "../lib/engine";
+import { getConfig, onConfigPatch } from "../lib/config";
 import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { openTool } from "../components/ToolWindow";
@@ -125,6 +126,44 @@ function HeroEmblem() {
  * Recency comes from `recent_keys` (app_config `recent_models`), which
  * `voices_select` maintains — the same ordering the Tk shell used.
  */
+/**
+ * 首页顶部横幅的自定义标题（设置 → 外观）。留空 = 默认标题。
+ *
+ * 只在这一个组件里读：memo 化的 HomePage 不接收任何新 prop，配置变化走
+ * onConfigPatch 触发内部 state 更新，别的页面完全感知不到。
+ */
+function useBannerText(): string {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    let alive = true;
+    void getConfig()
+      .then((c) => {
+        if (alive && typeof c.home_banner_text === "string") {
+          setText(c.home_banner_text);
+        }
+      })
+      .catch(() => {
+        /* 浏览器预览里没有 Tauri 后端，用默认标题 */
+      });
+    const off = onConfigPatch((p) => {
+      if (typeof p.home_banner_text === "string") setText(p.home_banner_text);
+    });
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  return text.trim();
+}
+
+/**
+ * 横幅底色。--banner-opacity 由 applyAppearance 写到 <html> 上（默认 1），
+ * 只混这一格的背景色 —— 整块 div 上挂 opacity 会把文字和 LOGO 一起洗淡，
+ * 那不是「横幅透明度」该有的行为。
+ */
+const STAGE_BG =
+  "color-mix(in srgb, var(--stage) calc(var(--banner-opacity, 1) * 100%), transparent)";
+
 function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Props) {
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
@@ -134,6 +173,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   // something they may already have.
   const [loadError, setLoadError] = useState("");
   const [msg, setMsg] = useState("");
+  const bannerText = useBannerText();
   const cardPx = useRecentCardMetrics();
   // 封面本地化：已装第三方音色的远程封面走本地缓存（见 lib/cover.ts）。
   const coverCache = useCoverCache(
@@ -220,8 +260,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   if (!models.length) {
     return (
       <div>
-        <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4">
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
+        <div
+          className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
+          style={{ background: STAGE_BG }}
+        >
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerText || t("s.9d835868b4")}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? t("s.c4a98bd0e6", { v0: loadError })
@@ -250,8 +293,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
 
   return (
     <div>
-      <div className="relative overflow-hidden bg-[var(--stage)] px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5">
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{t("s.9d835868b4")}</h2>
+      <div
+        className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5"
+        style={{ background: STAGE_BG }}
+      >
+        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerText || t("s.9d835868b4")}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0 mb-1.5">
           {selected ? selected.name : t("s.262d11e2d6")}
         </p>

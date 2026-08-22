@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::{json, Map, Value};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::paths;
 
@@ -506,7 +506,7 @@ pub fn pick_input(win: Option<&tauri::WebviewWindow>, folder: bool) -> Option<St
         crate::i18n::t("s.79b552d700")
     };
     let dlg = crate::shell_extras::dialog_on(win).set_title(&title);
-    if folder {
+    let picked = if folder {
         dlg.pick_folder().map(|p| p.to_string_lossy().into_owned())
     } else {
         let filter = crate::i18n::t("s.461189f186");
@@ -516,15 +516,24 @@ pub fn pick_input(win: Option<&tauri::WebviewWindow>, folder: bool) -> Option<St
         )
         .pick_file()
         .map(|p| p.to_string_lossy().into_owned())
+    };
+    // 输入音频要在界面里试听，选进来的路径必须进 asset 白名单。
+    if let (Some(win), Some(p)) = (win, picked.as_ref()) {
+        crate::asset_scope::grant_picked(win.app_handle(), p, folder);
     }
+    picked
 }
 
 pub fn pick_output(win: Option<&tauri::WebviewWindow>) -> Option<String> {
     let title = crate::i18n::t("s.cb12ce77e7");
-    crate::shell_extras::dialog_on(win)
+    let picked = crate::shell_extras::dialog_on(win)
         .set_title(&title)
         .pick_folder()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.to_string_lossy().into_owned());
+    if let (Some(win), Some(p)) = (win, picked.as_ref()) {
+        crate::asset_scope::grant_dir(win.app_handle(), std::path::Path::new(p));
+    }
+    picked
 }
 
 /// 列出输入文件夹里的音频（含子目录），按修改时间新→旧，最多 LIST_CAP。

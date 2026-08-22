@@ -63,7 +63,7 @@ RVC Fabric 是面向 Windows 的即時 AI 變聲桌面軟體，開箱即用：�
 
 ### 2. 音訊路由（虛擬音效卡接法）
 
-想讓遊戲、QQ、Discord 或直播軟體裡的人聽到變聲，需要 VB-Cable 虛擬音效卡在中間轉一手：
+想讓遊戲、QQ、Discord 或直播軟體裡的人聽到變聲，需要 VB-Cable 虛擬音效卡在中間轉發音訊：
 
 | 配置項 | 推薦選擇 | 說明 |
 | :--- | :--- | :--- |
@@ -108,6 +108,7 @@ npm run dev
 ### 建置與測試
 
 - **單元測試**：執行 `scripts\run_tests.bat`
+- **前端單元測試**：`cd app && npm test`
 - **打包安裝程式（NSIS）**：`cd app && npm run tauri:build`
 - **打包全量離線包**：`python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **建置線上清單**：`python scripts\build_catalog.py build --diff`
@@ -127,4 +128,4 @@ npm run dev
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — 檢索與即時降噪
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — 可選音高演算法
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 人聲分離引擎（跟隨上游 RVC，已取代 UVR5）· [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 分離模型來源 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 音訊處理
-- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虛擬音效卡（遊戲裡聽到變聲靠它）
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虛擬音效卡（把變聲結果送入遊戲/語音軟體）

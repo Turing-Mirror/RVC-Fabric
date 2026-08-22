@@ -65,6 +65,7 @@ export function useConfig() {
     cfg.wallpaper_path,
     cfg.wallpaper_blur,
     cfg.wallpaper_opacity,
+    cfg.home_banner_opacity,
   ]);
 
   const flush = useCallback(async () => {

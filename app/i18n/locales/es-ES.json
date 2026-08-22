@@ -93,7 +93,13 @@
     "compatRender": "Renderizado de compatibilidad",
     "compatRenderTip": "Actívalo si la ventana se ve negra, con artefactos o cortada; surte efecto tras reiniciar. La imagen la dibuja la CPU, así que los cambios de página y el desenfoque pierden algunos fotogramas.",
     "compatRenderOn": "Activado",
-    "compatRenderOff": "Desactivado"
+    "compatRenderOff": "Desactivado",
+    "bannerText": "Texto del banner de inicio",
+    "bannerTextTip": "Personaliza el texto del título del banner superior de la página de inicio. Déjelo vacío para usar el predeterminado.",
+    "bannerTextPlaceholder": "Vacío = título predeterminado",
+    "bannerTextReset": "Restablecer",
+    "bannerOpacity": "Opacidad del banner",
+    "bannerOpacityTip": "Ajusta la opacidad del fondo del banner de inicio. El texto y el logotipo no se ven afectados. Mínimo 20 %."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "No se pudo eliminar: {e}. Otro proceso puede estar usando el archivo: detén la conversión o espera a que termine e inténtalo de nuevo.",
     "auditionBtn": "Escuchar",
     "auditionBusy": "Sintetizando…",
-    "auditionFailed": "Error en la escucha: {}"
+    "auditionFailed": "Error en la escucha: {}",
+    "helpFaqFilter": "Filtrar por palabra clave, p. ej. sin sonido / VRAM / ruta china",
+    "helpFaqNoHit": "Ninguna entrada coincide; pruebe otra palabra clave."
   },
   "extras": {
     "engineTitle": "Recursos del motor",

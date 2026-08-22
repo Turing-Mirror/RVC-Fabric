@@ -9,13 +9,36 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use ripget::{DownloadOptions, ProgressReporter};
 use sha2::{Digest, Sha256};
 
-const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RVCFabric/1.3";
+/// UA 里的版本号跟包版本走。写死过的 1.3 在 1.5.4 上原样发了一年，服务端
+/// 按版本统计的数据全是错的；env! 在编译期取 Cargo.toml 的值，零运行时开销。
+const UA: &str = concat!(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RVCFabric/",
+    env!("CARGO_PKG_VERSION")
+);
+
+/// 全下载共用的多线程 runtime。
+///
+/// 以前每个 `download_request` 都 build 一个再丢掉：音色广场连下几个包，
+/// 就是几次「起线程池 → 用几秒 → 拆线程池」。并发下载共用一个池才是正
+/// 常形态。约束不变：调用方仍然不许在 tokio 的异步上下文里进
+/// `block_on`（那会 panic），这条限制对旧写法同样成立，没有变严。
+fn shared_runtime() -> &'static tokio::runtime::Runtime {
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(8)
+            .thread_name("rvc-dl")
+            .enable_all()
+            .build()
+            .expect("download runtime")
+    })
+}
 const MIN_MULTIPART_BYTES: u64 = 16 * 1024 * 1024; // 16 MiB — same as launcher/online/multipart.py
 const MAX_CONNECTIONS: usize = 32;
 /// CNB Release CDN returns HTTP 500 under load. ripget treats 500 as fatal
@@ -640,12 +663,7 @@ pub fn download_request(
         ));
     }
 
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(2.max(threads.min(8)))
-        .thread_name("rvc-dl")
-        .build()
-        .map_err(|e| format!("tokio runtime: {e}"))?;
+    let rt = shared_runtime();
 
     // 选源：并发探一轮，谁先回应谁排第一。串行等超时的老做法在三个源都卡的
     // 时候要一分钟才轮到第一次重试。

@@ -108,6 +108,7 @@ npm run dev
 ### 빌드 및 테스트
 
 - **단위 테스트**: `scripts\run_tests.bat` 실행
+- **프런트엔드 단위 테스트**: `cd app && npm test`
 - **설치 프로그램 패키징 (NSIS)**: `cd app && npm run tauri:build`
 - **전체 오프라인 패키지 패키징**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **온라인 매니페스트 빌드**: `python scripts\build_catalog.py build --diff`

@@ -108,6 +108,7 @@ npm run dev
 ### ビルドとテスト
 
 - **単体テスト**：`scripts\run_tests.bat` を実行
+- **フロントエンド単体テスト**：`cd app && npm test`
 - **インストーラのパッケージ化（NSIS）**：`cd app && npm run tauri:build`
 - **完全なオフラインパッケージの作成**：`python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **オンラインカタログの構築**：`python scripts\build_catalog.py build --diff`

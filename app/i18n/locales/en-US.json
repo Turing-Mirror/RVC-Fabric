@@ -93,7 +93,13 @@
     "compatRender": "Compatibility rendering",
     "compatRenderTip": "Turn this on if the window goes black, garbled or torn; takes effect after a restart. The picture is drawn by the CPU, so page changes and frosted glass lose a few frames.",
     "compatRenderOn": "On",
-    "compatRenderOff": "Off"
+    "compatRenderOff": "Off",
+    "bannerText": "Home banner text",
+    "bannerTextTip": "Custom title text for the banner at the top of the home page. Leave empty to use the default.",
+    "bannerTextPlaceholder": "Empty = default title",
+    "bannerTextReset": "Reset to default",
+    "bannerOpacity": "Banner opacity",
+    "bannerOpacityTip": "Adjusts the opacity of the home banner background. Text and the logo are not affected. Minimum 20%."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -2002,7 +2008,9 @@
     "voiceDeleteFailed": "Delete failed: {e}. The file may be held by another process — stop voice conversion / let it finish, then try again.",
     "auditionBtn": "Preview",
     "auditionBusy": "Synthesizing…",
-    "auditionFailed": "Preview failed: {}"
+    "auditionFailed": "Preview failed: {}",
+    "helpFaqFilter": "Filter by keyword, e.g. no sound / VRAM / Chinese path",
+    "helpFaqNoHit": "No matching entries; try another keyword."
   },
   "extras": {
     "engineTitle": "Engine resources",

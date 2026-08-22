@@ -108,6 +108,7 @@ npm run dev
 ### Сборка и тестирование
 
 - **Модульные тесты**: Запустите `scripts\run_tests.bat`
+- **Тесты фронтенда**: `cd app && npm test`
 - **Сборка программы установки (NSIS)**: `cd app && npm run tauri:build`
 - **Сборка полного оффлайн-пакета**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Сборка онлайн-каталога**: `python scripts\build_catalog.py build --diff`

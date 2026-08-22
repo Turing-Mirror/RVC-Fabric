@@ -13,13 +13,56 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 
 use crate::{download, extract, paths};
 
 pub(crate) const CNB_REPO: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases";
+
+/// 同一时刻只允许一个引擎资源包在下载。
+///
+/// 触发入口有好几个：首跑补全、点「开启变声」、工具窗、更多页。以前每个
+/// 入口各起一条下载线程，全往同一个 `.part` 里写：一个在续传追加，另一个
+/// 走 ripget 把文件预分配成完整长度盖上去，最后 sha256 对不上，整包作废
+/// 从零再来 —— 用户看到的就是「下完一遍又重新下一遍」（diag 26.8.22/1：
+/// 两条重试循环交错了一上午，754MB 一次都没落地）。串行化之后后来的等先来
+/// 的做完，轮到它时一看就绪了，直接返回。
+static PACK_LOCK: Mutex<()> = Mutex::new(());
+
+fn pack_lock() -> std::sync::MutexGuard<'static, ()> {
+    PACK_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 内置清单里登记的包大小（字节）。拿不到就 0 —— 下载器按无提示处理，
+/// 行为和从前一样。
+///
+/// 这个数喂给 `auto_connections` 和进度条分母：以前恒传 0，754MB 的
+/// engine-core 只开一条连接慢慢爬（Runtime 有 6GB 大小可查所以有 16 条），
+/// 慢网络下雪上加霜。
+fn catalog_size_for(root: &Path, cache_name: &str) -> u64 {
+    let data: Value = std::fs::read_to_string(root.join("configs").join("online_catalog.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| json!({}));
+    for section in ["engine_core", "vbcable", "extras"] {
+        let Some(v) = data.get(section) else { continue };
+        // 段本身就是条目（engine_core / vbcable 在清单里是单对象）。
+        if v.get("name").and_then(|x| x.as_str()) == Some(cache_name) {
+            return v.get("size_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
+        }
+        // 或者是「名字 → 条目」的映射（extras 预留这种形状）。
+        if let Value::Object(m) = v {
+            for e in m.values() {
+                if e.get("name").and_then(|x| x.as_str()) == Some(cache_name) {
+                    return e.get("size_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
+                }
+            }
+        }
+    }
+    0
+}
 
 // ---------------------------------------------------------------------------
 // engine-core
@@ -196,7 +239,7 @@ pub fn fetch_pack_with_fallback(
                 root: Some(root.to_path_buf()),
                 dest: archive.clone(),
                 expected_sha256: sha.to_string(),
-                size_hint: 0,
+                size_hint: catalog_size_for(root, cache_name),
                 connections: None,
                 kind: download::DownloadKind::Generic,
             },
@@ -247,7 +290,7 @@ fn fetch_and_extract(
                 root: Some(root.to_path_buf()),
                 dest: archive.clone(),
                 expected_sha256: sha.to_string(),
-                size_hint: 0,
+                size_hint: catalog_size_for(root, cache_name),
                 connections: None,
                 kind: download::DownloadKind::Generic,
             },
@@ -303,6 +346,9 @@ pub fn ensure_engine_core(
     cancel: Arc<AtomicBool>,
     progress: Option<download::ProgressFn>,
 ) -> Result<(), String> {
+    // 先拿锁再看就绪：并发触发的第二个调用等第一个下完，回头一看文件都在
+    // 了，直接返回 —— 而不是再起一条下载线程去打同一个 .part。
+    let _flight = pack_lock();
     if engine_core_ready(root) {
         return Ok(());
     }
@@ -329,6 +375,9 @@ pub fn ensure_vbcable_pack(
     cancel: Arc<AtomicBool>,
     progress: Option<download::ProgressFn>,
 ) -> Result<(), String> {
+    // 与 engine-core 共用一把锁：两个包都走 update_cache 里的同一条下载管线，
+    // 弱网下同时抢带宽只会两个都下不动，串行反而各自更快落地。
+    let _flight = pack_lock();
     if vbcable_pack_ready(root) {
         return Ok(());
     }
@@ -481,6 +530,23 @@ pub fn assets_status(root: &Path) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_size_feeds_the_engine_core_download() {
+        // 754MB 的包以前 size_hint 恒为 0，auto_connections 只给一条连接慢慢
+        // 爬，进度条连分母都没有。大小得从内置清单里查出来。
+        let root = std::env::temp_dir().join("rvcf-catalog-size");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("configs")).unwrap();
+        std::fs::write(
+            root.join("configs").join("online_catalog.json"),
+            r#"{"engine_core":{"name":"engine-core-260722.zip","size_bytes":753796337}}"#,
+        )
+        .unwrap();
+        assert_eq!(catalog_size_for(&root, "engine-core-260722.zip"), 753_796_337);
+        assert_eq!(catalog_size_for(&root, "not-in-catalog.zip"), 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn missing_when_root_is_empty() {

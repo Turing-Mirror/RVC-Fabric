@@ -1677,7 +1677,7 @@ async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, St
         // draw without it, so a slow answer looks exactly like a hang. Say so.
         let ms = t.elapsed().as_millis();
         if ms > 1500 {
-            logging::shell_log!(crate::i18n::t("s.7fdbc694cb"));
+            logging::shell_log!(crate::i18n::te("s.7fdbc694cb", &(ms.to_string())));
         }
         Ok(v)
     })

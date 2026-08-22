@@ -50,7 +50,11 @@ const MAX_TRANSIENT_ATTEMPTS: u32 = 5;
 /// no request timeout. A hanging mirror / CNB 502 then never returns, so the
 /// store card stays at 0% and we never fail over to the next URL. Cap how
 /// long we wait for the first real byte, then treat it as a transient error.
-const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(20);
+///
+/// 40s 而不是 20s：拥塞线路上 TLS 握手加排队首字节超过 20 秒很常见
+/// （diag 26.8.22/1 一晚上几十次恰好卡在 20s 整），每次掐断都把慢启动攒的
+/// 窗口打回原点。选源阶段有 8 秒的探测兜底，这里放宽不影响死链切换。
+const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(40);
 const FIRST_BYTE_TIMEOUT_ERR: &str = "timed out waiting for first byte";
 /// 选源阶段给每个候选的时间。这里只发一个 `Range: bytes=0-0`，回不回得来
 /// 是秒级的事；等满 8 秒还没动静的源，让它排到后面去。
@@ -265,6 +269,25 @@ fn resumable_from(recorded: &str, urls: &[String], part_len: u64) -> Option<Stri
         return None;
     }
     Some(r.to_string())
+}
+
+/// 把已经攒了半截的源钉到候选列表最前。
+///
+/// 「轮流换源」对两个都不稳的网络是灾难：不同源的字节接不到一起，换一次源
+/// 就得把旧半截整个丢掉，两边互相归零，谁也攒不齐（diag 26.8.22/1：754MB
+/// 的引擎资源在 lfs 和 release 两条地址间来回横跳，一晚上续传点在 10MB 和
+/// 69MB 之间打转，一次都没落地）。所以只要手上有合法半截，就一路续它到底；
+/// `stalls` 记连续几轮没长进 —— 连着两轮颗粒无收说明这个源真不行，放开钉，
+/// 让备用源顶上（那一次丢字节是值得的）。
+fn pin_resume_first(mut urls: Vec<String>, resume_url: &str, stalls: u32) -> Vec<String> {
+    if resume_url.is_empty() || stalls >= 2 {
+        return urls;
+    }
+    if let Some(pos) = urls.iter().position(|u| u == resume_url) {
+        let picked = urls.remove(pos);
+        urls.insert(0, picked);
+    }
+    urls
 }
 
 /// 第 n 次重试用多少连接。
@@ -671,10 +694,17 @@ pub fn download_request(
 
     let mut last_err = String::new();
     let mut attempt = 0u32;
+    // 有合法半截时把那个源钉在最前；连着两轮没长进就放开（见 pin_resume_first）。
+    let mut pinned_stalls: u32 = 0;
     loop {
         attempt += 1;
         let mut saw_transient = false;
-        for url in &urls {
+        // 本轮开跑时的半截长度：判断钉住的源这轮有没有长进用。
+        let len_at_round_start = std::fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0);
+        // 钉住的源得在这里快照下来 —— resume_url 会随尝试被改写，循环里比不了。
+        let pinned_this_round = resume_url.clone();
+        let round_urls = pin_resume_first(urls.clone(), &pinned_this_round, pinned_stalls);
+        for url in &round_urls {
             if cancel.load(Ordering::SeqCst) {
                 return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }
@@ -786,10 +816,29 @@ pub fn download_request(
                         let _ = std::fs::remove_file(&part_path);
                         let _ = std::fs::remove_file(&tag_path);
                     }
-                    if is_transient_download_error(&e) {
+                    let transient = is_transient_download_error(&e);
+                    if transient {
                         saw_transient = true;
                     }
+                    // 钉住的源这轮是瞬时断流：本轮到此为止，别再往下轮询 ——
+                    // 再往下就得换源，换源就要丢掉已攒的半截。下一轮还是它
+                    // 先来接着续；这轮有没有长进决定钉还放不放开。
+                    let pinned_broke =
+                        use_resume && pinned_this_round == *url && transient;
+                    if pinned_broke {
+                        let now_len =
+                            std::fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0);
+                        if now_len > len_at_round_start {
+                            pinned_stalls = 0;
+                        } else {
+                            pinned_stalls += 1;
+                        }
+                    }
+                    // last_err 必须先记下：外层靠它决定还要不要再续一轮。
                     last_err = e;
+                    if pinned_broke {
+                        break;
+                    }
                 }
             }
         }
@@ -918,6 +967,25 @@ async fn wait_first_byte_or_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_resumable_source_is_pinned_to_the_front() {
+        let urls = vec![
+            "https://a.cn/p.zip".to_string(),
+            "https://b.cn/p.zip".to_string(),
+        ];
+        // 有半截的源排最前，探测选出来的顺序让位。
+        assert_eq!(
+            pin_resume_first(urls.clone(), "https://b.cn/p.zip", 0),
+            vec!["https://b.cn/p.zip".to_string(), "https://a.cn/p.zip".to_string()]
+        );
+        // 没有半截就维持原序。
+        assert_eq!(pin_resume_first(urls.clone(), "", 0), urls);
+        // 半截指向不在候选里的源：不动。
+        assert_eq!(pin_resume_first(urls.clone(), "https://c.cn/p.zip", 0), urls);
+        // 连续两轮颗粒无收：放开钉，让备用源有机会顶上。
+        assert_eq!(pin_resume_first(urls.clone(), "https://b.cn/p.zip", 2), urls);
+    }
 
     #[test]
     fn connections_back_off_across_retries() {

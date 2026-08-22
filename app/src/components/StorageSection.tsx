@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem } from "./ui";
 import { askConfirm } from "../lib/webDialog";
@@ -57,6 +57,24 @@ export function StorageSection() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [picked, setPicked] = useState<Record<string, Set<string>>>({});
+  // 实验一多（每个三四个 GB 的主儿），一整列铺下去「其他」页就成了账本。
+  // 每页五个，按占用从大到小排 —— 最该处理的永远在第一页。
+  const PAGE_SIZE = 5;
+  const [page, setPage] = useState(1);
+
+  const sorted = useMemo(
+    () =>
+      (rows ?? [])
+        .slice()
+        .sort((a, b) => b.total_bytes - a.total_bytes),
+    [rows],
+  );
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const pageClamped = Math.min(page, totalPages);
+  const pageRows = sorted.slice(
+    (pageClamped - 1) * PAGE_SIZE,
+    pageClamped * PAGE_SIZE,
+  );
 
   const scan = async () => {
     setBusy(true);
@@ -69,6 +87,7 @@ export function StorageSection() {
       setUsage(u);
       setRows(Array.isArray(r) ? r : []);
       setPicked({});
+      setPage(1);
     } catch (e) {
       setMsg(String(e));
     } finally {
@@ -153,14 +172,19 @@ export function StorageSection() {
         ) : null}
         {rows && rows.length ? (
           <div className="px-4 py-3">
-            <p className="m-0 mb-2 text-[12.5px] text-[var(--ink-muted)]">
-              {t("s.cleanupTitle")}
-            </p>
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <p className="m-0 text-[12.5px] text-[var(--ink-muted)]">
+                {t("s.cleanupTitle")}
+              </p>
+              <span className="font-mono text-[11.5px] text-[var(--meta)] tabular-nums">
+                {t("s.pageOf", { cur: pageClamped, total: totalPages })}
+              </span>
+            </div>
             <p className="m-0 mb-3 text-[12px] text-[var(--meta)] leading-relaxed">
               {t("s.cleanupDesc")}
             </p>
             <ul className="m-0 list-none p-0">
-              {rows.map((row, i) => (
+              {pageRows.map((row, i) => (
                 <li key={row.exp} className="relative py-3 first:pt-0">
                   {i > 0 ? (
                     <div
@@ -217,6 +241,29 @@ export function StorageSection() {
                 </li>
               ))}
             </ul>
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-center gap-3 pt-4 text-[12.5px] text-[var(--meta)]">
+                <Btn
+                  disabled={pageClamped <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  {t("s.b41561d807")}
+                </Btn>
+                <span className="tabular-nums">
+                  {t("s.40a021ed44", {
+                    v0: pageClamped,
+                    v1: totalPages,
+                    v2: sorted.length,
+                  })}
+                </span>
+                <Btn
+                  disabled={pageClamped >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  {t("s.67a246a344")}
+                </Btn>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </Group>

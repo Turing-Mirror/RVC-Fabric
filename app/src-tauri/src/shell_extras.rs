@@ -1352,6 +1352,9 @@ mod tests {
     /// 场合，而发的时候没人会先读一遍。
     #[test]
     fn the_summary_carries_the_fields_support_always_has_to_ask_for() {
+        // 断言的是 zh-CN 的字段标签。别的测试（如 i18n 的语言遍历）会在并行
+        // 时把全局语言切来切去，必须先把自己的语言钉住，否则标签对不上。
+        let _locale = crate::i18n::testing::pin("zh-CN");
         let root = std::env::temp_dir().join("rvcf-summary-text");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
@@ -1429,6 +1432,8 @@ mod tests {
     /// 群里求助的，多出来的那两个他不知道。这条测试盯的就是那份清单本身。
     #[test]
     fn the_preview_lists_exactly_what_the_bundle_will_contain() {
+        // 同 summary：info.json 的生成文案走 i18n，先钉住语言。
+        let _locale = crate::i18n::testing::pin("zh-CN");
         let root = std::env::temp_dir().join("rvcf-diag-manifest");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("configs").join("inuse")).unwrap();

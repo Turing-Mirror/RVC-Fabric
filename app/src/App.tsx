@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
+import { LinkCheckDialog } from "./components/LinkCheckDialog";
+import { OnboardingBar } from "./components/OnboardingBar";
 import { Nudge } from "./components/Nudge";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
@@ -791,6 +793,42 @@ export default function App() {
     }
   }, [syncParams, engine.running, engine.noteSwap, engine.status]);
 
+  // —— 新手进度：两个历史事件的落盘点 ——
+  // 首次成功变声（running 一旦为真就记，之后不再写）。
+  const onboardConvertDone = useRef(false);
+  useEffect(() => {
+    if (!engine.running || onboardConvertDone.current) return;
+    onboardConvertDone.current = true;
+    void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => {});
+    setOnboardTick((n) => n + 1);
+  }, [engine.running]);
+
+  // 开启过监听（勾选 monitor_self 即视为完成；取消勾选不回退——「做过」是事实）。
+  const onboardMonitorDone = useRef(false);
+  useEffect(() => {
+    const cfg = cfgRef.current;
+    if (cfg?.monitor_self === true) onboardMonitorDone.current = true;
+  }, [/* cfgRef 由下方 effect 维护 */]);
+  // cfgRef：让上面的检查能读到最新配置而不进依赖。
+  const cfgRef = useRef<Config | undefined>(undefined);
+  useEffect(() => {
+    const off = onConfigPatch((p) => {
+      cfgRef.current = { ...(cfgRef.current || {}), ...p };
+      if (p.monitor_self === true && !onboardMonitorDone.current) {
+        onboardMonitorDone.current = true;
+        void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => {});
+        setOnboardTick((n) => n + 1);
+      }
+      if (p.onboard_dismiss !== undefined) setOnboardTick((n) => n + 1);
+    });
+    return off;
+  }, []);
+
+  // —— 链路自检对话框：dock 错误态的「自检」入口 ——
+  const [selfCheckOpen, setSelfCheckOpen] = useState(false);
+  // 新手进度条的刷新信号：两个历史事件落盘时 +1。
+  const [onboardTick, setOnboardTick] = useState(0);
+
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {
     try {
@@ -1310,7 +1348,17 @@ export default function App() {
         loading={engine.starting && engine.progress == null}
         micDb={engine.micDb}
         thresholdDb={engine.thresholdDb}
+        showSelfCheck={engine.status?.state === "error"}
+        onSelfCheck={() => setSelfCheckOpen(true)}
       />
+      {selfCheckOpen ? <LinkCheckDialog onClose={() => setSelfCheckOpen(false)} /> : null}
+      {page === "home" ? (
+        <OnboardingBar
+          tick={onboardTick}
+          onDismissed={() => setOnboardTick((n) => n + 1)}
+          onNavigate={setPage}
+        />
+      ) : null}
     </div>
   );
 }

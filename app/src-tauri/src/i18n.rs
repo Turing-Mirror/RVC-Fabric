@@ -598,6 +598,11 @@ mod tests {
             assert!(!s.is_empty() && s != "tray.show", "{code}: {s}");
             assert!(supported(code), "{code} should be supported");
         }
+        // pin guard 的 Drop 会恢复语言，但那只在 guard 真的活着到函数尾时成立
+        // —— 这里中途 set_locale 了六次，最后一次停在 ru-RU。测试并行跑时，
+        // 后启动的测试（如 summary_text）会在错误的语言下断言中文字段。
+        // 显式回到 zh-CN，别把语言泄漏给邻居。
+        set_locale("zh-CN");
     }
     #[test]
     fn pick_str_prefers_locale_map() {

@@ -222,6 +222,13 @@ function StsSection() {
   const [resample, setResample] = useState(0);
   const [fmt, setFmt] = useState<(typeof STS_FMTS)[number]>("wav");
   const [adv, setAdv] = useState(false);
+  // 与训练面板同一模式：开关在底栏、内容在正文末尾。展开时把内容滚进
+  // 视野 —— 两个工具窗曾经各摆各的（这里原来把按钮放在正文中间），
+  // 用户在一个面板学会的位置到另一个面板就找不着了。
+  const advRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (adv) advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [adv]);
   const [sid, setSid] = useState(0);
   const [f0File, setF0File] = useState("");
   const [prog, setProg] = useState<Progress | null>(null);
@@ -1010,12 +1017,9 @@ function StsSection() {
         </div>
       </div>
 
-      <div className="mt-3">
-        <Btn onClick={() => setAdv((v) => !v)}>
-          {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
-        </Btn>
-        {adv ? (
-          <div className="mt-3 flex flex-col gap-3.5">
+      {/* 进阶设置的开关挪进了底栏（与训练面板同位），展开的内容留在这里。 */}
+      {adv ? (
+        <div ref={advRef} className="mt-3 flex flex-col gap-3.5">
             <Field
               label={t("s.stsSid")}
               tip={t("s.stsSidHint")}
@@ -1070,8 +1074,7 @@ function StsSection() {
               }
             />
           </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {prog || running ? (
         <div className="mt-4">
@@ -1126,6 +1129,10 @@ function StsSection() {
       ) : null}
 
       <ToolActions>
+        {/* 进阶设置开关与训练面板同位：底栏左侧，主操作永远在最右。 */}
+        <Btn onClick={() => setAdv((v) => !v)}>
+          {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
+        </Btn>
         <div className="ml-auto flex items-center gap-2.5">
           {running ? (
             <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>

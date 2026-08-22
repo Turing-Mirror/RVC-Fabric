@@ -82,6 +82,25 @@ class Pipeline(object):
         self.t_max = self.sr * self.x_max  # 免查询时长阈值
         self.device = config.device
 
+    def shrink_windows(self):
+        """Halve the synthesizer window after CUDA OOM.
+
+        3GB fp32 (diag 26.8.22/3) hangs/OOM on a 30s ``net_g.infer``. The retry
+        must actually cut smaller or it is a no-op. Floor at 3s so we still
+        overlap at the quiet-point search.
+        """
+        self.x_center = max(3, int(self.x_center) // 2)
+        self.x_max = max(self.x_center + 2, int(self.x_max) // 2)
+        self.x_query = max(2, min(int(self.x_query), self.x_center // 2))
+        self.t_center = self.sr * self.x_center
+        self.t_max = self.sr * self.x_max
+        self.t_query = self.sr * self.x_query
+        logger.info(
+            "pipeline windows shrunk after OOM: center=%ss max=%ss",
+            self.x_center,
+            self.x_max,
+        )
+
     def get_f0(
         self,
         input_audio_path,
@@ -313,11 +332,18 @@ class Pipeline(object):
             feats = feats * pitchff + feats0 * (1 - pitchff)
             feats = feats.to(feats0.dtype)
         p_len = torch.tensor([p_len], device=self.device).long()
+        logger.info(
+            "vc infer start samples=%s frames=%s device=%s",
+            int(audio0.shape[0]),
+            int(p_len.item()),
+            self.device,
+        )
         with torch.no_grad():
             hasp = pitch is not None and pitchf is not None
             arg = (feats, p_len, pitch, pitchf, sid) if hasp else (feats, p_len, sid)
             audio1 = (net_g.infer(*arg)[0][0, 0]).data.cpu().float().numpy()
             del hasp, arg
+        logger.info("vc infer done samples=%s", int(getattr(audio1, "shape", [0])[0]))
         del feats, p_len, padding_mask
         # empty_cache every segment was the biggest offline slowdown (device sync).
         # Only free the allocator when free VRAM is actually tight.
@@ -456,6 +482,12 @@ class Pipeline(object):
         times[1] += t2 - t1
         # +1 for the final tail segment after the opt_ts loop.
         n_parts = len(opt_ts) + 1
+        logger.info(
+            "pipeline: audio=%.1fs t_max=%ss parts=%s",
+            audio.shape[0] / float(self.sr),
+            self.x_max,
+            n_parts,
+        )
         part_i = 0
 
         def _infer_prog(part_idx, sub_frac=0.0):

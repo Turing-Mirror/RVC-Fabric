@@ -6,6 +6,7 @@ import shutil
 from multiprocessing import cpu_count
 
 from configs.accel import first_real_adapter
+from configs.infer_windows import infer_window_profile
 
 import torch
 
@@ -337,24 +338,17 @@ class Config:
         if self.n_cpu == 0:
             self.n_cpu = cpu_count()
 
-        if self.is_half:
-            # 6G显存配置
-            x_pad = 3
-            x_query = 10
-            x_center = 60
-            x_max = 65
-        else:
-            # 5G显存配置
-            x_pad = 1
-            x_query = 6
-            x_center = 38
-            x_max = 41
-
-        if self.gpu_mem is not None and self.gpu_mem <= 4:
-            x_pad = 1
-            x_query = 5
-            x_center = 30
-            x_max = 32
+        x_pad, x_query, x_center, x_max = infer_window_profile(
+            self.gpu_mem, self.is_half
+        )
+        if self.gpu_mem is not None and self.gpu_mem <= 3:
+            logger.info(
+                "offline infer windows tightened for %sGB (fp32=%s): center=%ss max=%ss",
+                self.gpu_mem,
+                not self.is_half,
+                x_center,
+                x_max,
+            )
         if self.dml:
             logger.info("Use DirectML instead (AMD/Intel path, official RVC --dml)")
             self._swap_onnxruntime_provider(want_dml=True)

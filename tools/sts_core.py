@@ -554,6 +554,14 @@ def convert_one(
             if attempt + 1 < attempts and is_oom(reason):
                 # 分片改小 + 归还显存，再试一次。
                 os.environ["TM_RMVPE_MAX_FRAMES"] = "512"
+                os.environ["TM_VC_X_MAX"] = "4"
+                pipe = getattr(vc, "pipeline", None)
+                shrink = getattr(pipe, "shrink_windows", None) if pipe is not None else None
+                if callable(shrink):
+                    try:
+                        shrink()
+                    except Exception:
+                        traceback.print_exc()
                 cuda_empty_cache()
                 on_stage("f0", 0.0)
                 continue

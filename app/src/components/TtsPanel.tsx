@@ -360,8 +360,14 @@ function StsSection() {
     const unsubs: Array<() => void> = [];
     void listen<Progress>("sts-progress", (ev) => {
       const p = ev.payload;
-      setProg(p);
-      if (p.phase === "error") showErr(p.message, p.message_code);
+      if (p.phase === "error") {
+        showErr(p.message, p.message_code);
+        // 错误正文只走 ErrorNote。进度行再贴一遍就是 26.8.22/4 截图里
+        // 同一段 traceback 上下各一堵。
+        setProg(null);
+      } else {
+        setProg(p);
+      }
       // 批量：跳过事件当场入列，方便边跑边看哪个坏了。
       if (p.phase === "skip" && p.file) {
         setSkipped((prev) => {
@@ -642,6 +648,7 @@ function StsSection() {
       );
     } catch (e) {
       showErr(String(e));
+      setProg(null);
     } finally {
       runningRef.current = false;
       setRunning(false);

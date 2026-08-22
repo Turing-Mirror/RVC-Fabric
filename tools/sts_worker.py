@@ -310,6 +310,13 @@ def main(argv: list[str]) -> int:
         prog.load("config", 0.0)
         with _stage(timer, "config"):
             config = Config()
+            # DirectML 上 hubert 的 GradMultiply 会抛 PrivateUse1。load_hubert
+            # 里也会打这份补丁，这里提前打：冷路径入口必须自己接 dml_compat，
+            # 不能只靠下游某层「顺手打一下」。26.8.22/4（Intel Iris Xe，1.5.4）
+            # 四次语音转换全挂在同一句 x.new(x)，热路径当时根本没接上。
+            from infer.lib.dml_compat import apply_for
+
+            apply_for(config)
         prog.load("config", 1.0)
         # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
         _tune_torch(total_seconds=est_seconds, total_files=total)

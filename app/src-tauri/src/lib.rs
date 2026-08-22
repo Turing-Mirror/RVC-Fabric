@@ -6,6 +6,7 @@ pub mod catalog;
 mod asset_scope;
 mod audio_probe;
 mod autostart;
+mod link_check;
 mod ckpt;
 mod config;
 mod crash;
@@ -534,6 +535,30 @@ async fn diagnostics_summary_text(state: State<'_, Mutex<AppState>>) -> Result<S
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || shell_extras::summary_text(&root))
         .await
+        .map_err(|e| e.to_string())
+}
+
+/// 链路自检：读事实不出结论，毫秒级（见 link_check.rs）。
+#[tauri::command(async)]
+fn link_check(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(link_check::gather(&root_clone(&state)?))
+}
+
+/// 新手进度的五步状态（见 link_check.rs 的 onboarding）。
+#[tauri::command(async)]
+fn onboarding_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(link_check::onboarding(&root_clone(&state)?))
+}
+
+/// 打开 Windows 声音设置页。方案串是写死的系统值，不收任何外部输入。
+#[tauri::command]
+fn open_sound_settings() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("explorer.exe")
+        .arg("ms-settings:sound")
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .spawn()
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -2100,6 +2125,9 @@ pub fn run() {
             hotkeys_apply,
             diagnostics_build,
             diagnostics_self_check,
+            link_check,
+            onboarding_status,
+            open_sound_settings,
             known_issues_check,
             train_scan_dataset,
             train_reset_stages,

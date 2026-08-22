@@ -4,6 +4,7 @@ import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
+import { TuningWizard } from "../components/TuningWizard";
 import { useConfig } from "../hooks/useConfig";
 import { tips } from "../lib/config";
 import { HOTKEYS } from "../lib/hotkeys";
@@ -106,6 +107,8 @@ function SettingsPageImpl({
   onOpenCommunity,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
+  // 效果调校向导（变声参数页入口）。
+  const [wizard, setWizard] = useState(false);
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
   const TIPS = useMemo(() => tips(), [locale]);
   const tabLabels = useMemo(
@@ -354,6 +357,12 @@ function SettingsPageImpl({
 
         {c.loaded && tab === "voice" ? (
           <Block title={t("s.ae7cbbecbc")} note={t("s.d48a0bf3c8")} className="!mt-6">
+            <div className="mb-4">
+              <Btn onClick={() => setWizard(true)}>{t("s.twOpen")}</Btn>
+              <span className="text-[12.5px] text-[var(--help)] ml-2.5">
+                {t("s.twOpenHint")}
+              </span>
+            </div>
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.a9e4eb7a51")}</p>
             <div className={CARD}>
               <Field
@@ -1034,6 +1043,7 @@ function SettingsPageImpl({
           </Block>
         ) : null}
       </PagePad>
+      {wizard ? <TuningWizard onClose={() => setWizard(false)} /> : null}
     </div>
   );
 }

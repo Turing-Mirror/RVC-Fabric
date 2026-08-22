@@ -33,6 +33,9 @@ type Props = {
   micDb?: number | null;
   /** Response gate in dBFS. Bar stays muted until the level reaches it. */
   thresholdDb?: number;
+  /** 引擎处于错误态时显示「自检」入口 —— 平时不占一个像素。 */
+  showSelfCheck?: boolean;
+  onSelfCheck?: () => void;
 };
 
 /**
@@ -61,6 +64,8 @@ export function Dock({
   loading = false,
   micDb = null,
   thresholdDb = -60,
+  showSelfCheck = false,
+  onSelfCheck,
 }: Props) {
   const { t } = useI18n();
   const name = voiceName?.trim()
@@ -200,6 +205,17 @@ export function Dock({
           >
             {sub}
           </div>
+          {/* 出错的那一刻是用户最愿意看点子的时刻。「自检」入口只在这里长
+              出来 —— 平时不占底栏任何宽度（见 LinkCheckDialog）。 */}
+          {showSelfCheck && onSelfCheck ? (
+            <button
+              type="button"
+              onClick={onSelfCheck}
+              className="ml-auto mt-0.5 border-0 bg-transparent p-0 text-[11.5px] text-[var(--accent)] underline underline-offset-2 cursor-pointer"
+            >
+              {t("dock.selfCheck")}
+            </button>
+          ) : null}
           {progress != null ? (
             <div
               className="ml-auto mt-1.5 h-1 w-[132px] overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]"

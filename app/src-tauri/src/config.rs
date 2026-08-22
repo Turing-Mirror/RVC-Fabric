@@ -197,6 +197,12 @@ pub fn defaults() -> Map<String, Value> {
     // 首页横幅自定义：文案留空 = 默认标题；不透明度最低由前端滑杆限在 20。
     m.insert("home_banner_text".into(), json!(""));
     m.insert("home_banner_opacity".into(), json!(100));
+    // 新手进度的两个历史事件（首次成功变声 / 开启过监听）与永久关闭标记。
+    // 前三步（运行时/音色/声卡）每次实时推导，不需要存。不进任何设置分组：
+    // 这不是用户该在设置页里看到的东西。
+    m.insert("onboard_convert".into(), json!(false));
+    m.insert("onboard_monitor".into(), json!(false));
+    m.insert("onboard_dismiss".into(), json!(false));
     m.insert("hotkeys_enabled".into(), json!(false));
     // 快捷键组合。默认沿用旧 Python 壳的那四个，用户有肌肉记忆；
     // 键名要和 shell_extras::HOTKEYS 对上。

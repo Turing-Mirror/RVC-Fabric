@@ -3857,6 +3857,7 @@ if __name__ == "__main__":
                 phase="start", total=total, done=0, pct=0, current=0, ok=0, skip=0,
                 message=head,
             )
+            printt("sts convert start files=%s out=%s f0=%s", total, out_dir, f0method)
 
             try:
                 os.makedirs(out_dir, exist_ok=True)
@@ -3911,6 +3912,19 @@ if __name__ == "__main__":
                     self.stop_stream()
                 except Exception:
                     traceback.print_exc()
+
+            # 实时 CUDA Graph 的静态张量还占着显存。离线 convert 走 eager
+            # net_g.infer，形状完全不同，图复用不上，3GB 卡上留着只会挤爆
+            # 第一段合成（diag 26.8.22/3）。
+            try:
+                from tools.cuda_graph import clear_cuda_graph_cache
+
+                rvc = getattr(self, "rvc", None)
+                if rvc is not None:
+                    clear_cuda_graph_cache(getattr(rvc, "net_g", None))
+                    clear_cuda_graph_cache(getattr(rvc, "model", None))
+            except Exception:
+                traceback.print_exc()
 
             index_path = str(payload.get("index") or "").strip()
             if not index_path or not os.path.isfile(index_path):

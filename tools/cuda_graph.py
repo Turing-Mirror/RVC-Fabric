@@ -196,6 +196,8 @@ def run_cuda_graph(owner, namespace, function, *inputs):
 
 
 def clear_cuda_graph_cache(owner):
+    if owner is None:
+        return
     cache = getattr(owner, "_rvc_cuda_graph_cache", None)
     if cache is not None:
         cache.entries.clear()

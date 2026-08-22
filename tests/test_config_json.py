@@ -84,5 +84,54 @@ class LoadConfigJsonTests(unittest.TestCase):
             self.assertEqual(d["v1/32k.json"], {"file": "v1/32k.json"})
 
 
+class InferWindowProfileTests(unittest.TestCase):
+    """3GB fp32 不能再用官方 30s 合成窗（diag 26.8.22/3）。
+
+    函数在 ``configs/infer_windows.py``，不 import torch，开发机也能跑。
+    """
+
+    def setUp(self):
+        self._old = os.environ.pop("TM_VC_X_MAX", None)
+        from configs.infer_windows import infer_window_profile
+
+        self.fn = infer_window_profile
+
+    def tearDown(self):
+        os.environ.pop("TM_VC_X_MAX", None)
+        if self._old is not None:
+            os.environ["TM_VC_X_MAX"] = self._old
+
+    def test_3gb_fp32_stays_under_ten_seconds(self):
+        _pad, _query, center, mx = self.fn(3, False)
+        self.assertEqual((center, mx), (6, 8))
+        self.assertLessEqual(mx, 10)
+
+    def test_3gb_even_in_fp16_is_tight(self):
+        _pad, _query, center, mx = self.fn(3, True)
+        self.assertEqual((center, mx), (6, 8))
+
+    def test_4gb_fp16_keeps_official_windows(self):
+        _pad, _query, center, mx = self.fn(4, True)
+        self.assertEqual((center, mx), (30, 32))
+
+    def test_4gb_fp32_is_tighter_than_official(self):
+        _pad, _query, center, mx = self.fn(4, False)
+        self.assertEqual((center, mx), (10, 12))
+
+    def test_6gb_fp16_is_the_wide_profile(self):
+        _pad, _query, center, mx = self.fn(6, True)
+        self.assertEqual((center, mx), (60, 65))
+
+    def test_none_mem_uses_half_or_fp32_defaults(self):
+        self.assertEqual(self.fn(None, True)[2:], (60, 65))
+        self.assertEqual(self.fn(None, False)[2:], (38, 41))
+
+    def test_env_override_wins(self):
+        os.environ["TM_VC_X_MAX"] = "4"
+        _pad, _query, center, mx = self.fn(8, True)
+        self.assertEqual(mx, 4)
+        self.assertEqual(center, 3)
+
+
 if __name__ == "__main__":
     unittest.main()

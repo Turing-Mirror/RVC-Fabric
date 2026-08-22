@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from tools.sts_core import (  # noqa: E402
     ConversionCancelled,
     StsProgress,
+    convert_one,
     convert_one_with_cpu_fallback,
     friendly_error,
     is_dml_backend_error,
@@ -413,6 +414,79 @@ class CpuFallbackTests(unittest.TestCase):
         self.assertTrue(is_dml_backend_error(caught.exception))
         self.assertEqual(vc.calls, 1)
         self.assertEqual(vc.pipeline.device, "privateuseone:0")
+
+
+class OomRetryShrinksWindowsTests(unittest.TestCase):
+    """CUDA OOM 重试必须真的把合成窗改小，否则第二轮还是同一段 30s infer。"""
+
+    def setUp(self):
+        import os
+
+        self._old_frames = os.environ.pop("TM_RMVPE_MAX_FRAMES", None)
+        self._old_xmax = os.environ.pop("TM_VC_X_MAX", None)
+
+    def tearDown(self):
+        import os
+
+        os.environ.pop("TM_RMVPE_MAX_FRAMES", None)
+        os.environ.pop("TM_VC_X_MAX", None)
+        if self._old_frames is not None:
+            os.environ["TM_RMVPE_MAX_FRAMES"] = self._old_frames
+        if self._old_xmax is not None:
+            os.environ["TM_VC_X_MAX"] = self._old_xmax
+
+    def test_first_oom_calls_pipeline_shrink_then_succeeds(self):
+        import os
+
+        class FakeWavfile:
+            @staticmethod
+            def write(path, sr, audio):
+                Path(path).write_bytes(b"RIFF")
+
+        class Pipe:
+            def __init__(self):
+                self.shrunk = 0
+
+            def shrink_windows(self):
+                self.shrunk += 1
+
+        class Vc:
+            def __init__(self):
+                self.pipeline = Pipe()
+                self.calls = 0
+
+            def vc_single(self, *a, **k):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+                return "ok", (16000, [0, 0, 0])
+
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "in.wav"
+            dest = Path(td) / "out.wav"
+            src.write_bytes(b"x")
+            vc = Vc()
+            convert_one(
+                vc,
+                src,
+                dest,
+                pitch=0,
+                f0method="rmvpe",
+                index_path=None,
+                index_rate=0.75,
+                filter_radius=3,
+                resample_sr=0,
+                rms_mix_rate=1.0,
+                protect=0.33,
+                on_stage=lambda *_a, **_k: None,
+                wavfile=FakeWavfile,
+                fmt="wav",
+            )
+            self.assertEqual(vc.calls, 2)
+            self.assertEqual(vc.pipeline.shrunk, 1)
+            self.assertEqual(os.environ.get("TM_VC_X_MAX"), "4")
+            self.assertEqual(os.environ.get("TM_RMVPE_MAX_FRAMES"), "512")
+            self.assertTrue(dest.is_file())
 
 
 if __name__ == "__main__":

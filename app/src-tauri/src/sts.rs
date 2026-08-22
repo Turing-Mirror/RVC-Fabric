@@ -993,9 +993,14 @@ enum HotError {
     Failed(String),
 }
 
-/// worker 多久没更新 sts.json 就认为它没接住这条命令。
-/// 转换途中每个文件都会推好几条进度，卡这么久基本等于死了。
-const HOT_STALL_MS: u128 = 20_000;
+/// worker 多久没更新 sts.json 就认为这条热路径走不通。
+///
+/// 进度只在片段边界跳（hubert / index / infer 完）。3GB fp32 上一窗
+/// synthesizer 可能要十几秒（diag 26.8.22/3 卡在 infer 10%），20 秒会把
+/// 还活着的转换误判成死了。卡死时必须走 Unavailable（杀进程 + 冷路径），
+/// 走 Failed 的话 worker 命令循环还堵在 convert 里，用户重试就是
+/// `command not claimed`。
+const HOT_STALL_MS: u128 = 90_000;
 /// 发出命令后等第一条进度的宽限。换目标音色时这里要读一个 55MB 的 pth。
 const HOT_FIRST_MS: u128 = 45_000;
 
@@ -1068,13 +1073,11 @@ fn run_hot(
             let idle = last_change.elapsed().as_millis();
             let budget = if saw_any { HOT_STALL_MS } else { HOT_FIRST_MS };
             if idle > budget {
-                return Err(if saw_any {
-                    HotError::Failed(crate::i18n::t("s.stsHotStalled").into())
+                return Err(HotError::Unavailable(if saw_any {
+                    crate::i18n::t("s.stsHotStalled").into()
                 } else {
-                    HotError::Unavailable(format!(
-                        "no progress within {budget}ms (seq={seq})"
-                    ))
-                });
+                    format!("no progress within {budget}ms (seq={seq})")
+                }));
             }
             // 命令还没被认领，说明 worker 忙着别的（比如正在起流）。
             if !saw_any
@@ -1728,6 +1731,13 @@ mod tests {
         );
         assert_eq!(o.resample_sr, 44100);
         assert_eq!(o.format, "flac");
+    }
+
+    #[test]
+    fn hot_stall_budget_covers_a_low_vram_synthesizer_window() {
+        // 26.8.22/3: 3GB fp32 上一窗 synthesizer 可能 >20s；20_000 会误杀还活着的转换。
+        assert!(HOT_STALL_MS >= 60_000);
+        assert!(HOT_STALL_MS <= HOT_FIRST_MS * 3);
     }
 
     #[test]

@@ -297,7 +297,8 @@
       "stopped": "已停止",
       "quit": "已結束",
       "loop_error": "引擎內部錯誤，詳見日誌",
-      "launching": "正在啟動引擎行程…"
+      "launching": "正在啟動引擎行程…",
+      "files_corrupt": "引擎程式檔案損壞（{files}）。重新執行安裝套件覆蓋安裝即可修復，音色與執行環境會保留"
     },
     "runtime": {
       "not_ready": "Runtime 未就緒，請先完成補齊",

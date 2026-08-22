@@ -297,7 +297,8 @@
       "stopped": "Detenido",
       "quit": "Cerrado",
       "loop_error": "Error interno del motor: consulta el registro",
-      "launching": "Iniciando el proceso del motor…"
+      "launching": "Iniciando el proceso del motor…",
+      "files_corrupt": "Archivo del motor dañado ({files}). Vuelva a ejecutar el instalador para repararlo; las voces y el runtime descargado se conservan."
     },
     "runtime": {
       "not_ready": "El Runtime no está listo: completa la instalación primero",

@@ -22,6 +22,9 @@ ENGINE_IMPORTING = "engine.importing"
 ENGINE_DSP_STARTING = "engine.dsp_starting"
 ENGINE_MISSING_GUI = "engine.missing_gui"
 ENGINE_CRASH_LOAD = "engine.crash_load"
+# 引擎 .py 在用户盘上被改坏（杀软挑走内容 / 断电后零填充），重启救不了，
+# 界面要直接说「重跑安装包覆盖修复」。
+ENGINE_FILES_CORRUPT = "engine.files_corrupt"
 ENGINE_READY = "engine.ready"
 ENGINE_IDLE = "engine.idle"
 
@@ -249,6 +252,7 @@ _FALLBACK_ZH: dict[str, str] = {
     ENGINE_DSP_STARTING: "正在启动 DSP 变声…",
     ENGINE_MISSING_GUI: "安装不完整：缺少引擎主程序",
     ENGINE_CRASH_LOAD: "引擎加载时崩溃，详见日志",
+    ENGINE_FILES_CORRUPT: "引擎程序文件损坏（{files}）。重新运行安装包覆盖安装即可修复，音色与运行时会保留",
     ENGINE_READY: "引擎就绪",
     ENGINE_IDLE: "待命",
     ENGINE_STOPPED: "已停止",

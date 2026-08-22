@@ -297,7 +297,8 @@
       "stopped": "Stopped",
       "quit": "Exited",
       "loop_error": "Engine internal error — see the log",
-      "launching": "Launching the engine process…"
+      "launching": "Launching the engine process…",
+      "files_corrupt": "Engine program file damaged ({files}). Run the installer again to repair in place — voices and the downloaded runtime are kept."
     },
     "runtime": {
       "not_ready": "Runtime not ready — finish setup first",

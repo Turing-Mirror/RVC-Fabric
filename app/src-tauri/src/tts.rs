@@ -49,8 +49,8 @@ pub const MAX_CHARS: usize = 2000;
 /// 它再过一遍 RVC 的结果。以前两者同一个目录、同一套 `tts_<时间戳>.wav` 文件名，
 /// 攒上十几个之后就再也分不出哪个是哪个了 —— 而且时间戳是秒级的，同一秒里先出
 /// 朗读再出变声，名字还会撞。
-const OUT_READ: &str = "tts_out_dir_read";
-const OUT_VOICE: &str = "tts_out_dir_voice";
+pub(crate) const OUT_READ: &str = "tts_out_dir_read";
+pub(crate) const OUT_VOICE: &str = "tts_out_dir_voice";
 
 pub fn default_out_read(root: &Path) -> PathBuf {
     paths::user_data(root).join("tts").join("read")

@@ -535,7 +535,7 @@ fn clip_log(path: &Path, head: usize, tail: usize) -> String {
 /// 跟排障也没有半点关系。
 ///
 /// 返回 (要替换掉的字符串, 替换成什么)。查不到主目录就返回 None。
-fn home_redaction() -> Option<(String, String)> {
+pub(crate) fn home_redaction() -> Option<(String, String)> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()?;
@@ -553,7 +553,7 @@ fn home_redaction() -> Option<(String, String)> {
 ///
 /// 反斜杠、正斜杠、以及 JSON 里转义过的 `\\` 三种写法都要认：同一个路径在
 /// info.json、config.json 和日志里长得不一样。
-fn redact_user(text: &str, redaction: Option<&(String, String)>) -> String {
+pub(crate) fn redact_user(text: &str, redaction: Option<&(String, String)>) -> String {
     let Some((home, mask)) = redaction else {
         return text.to_string();
     };

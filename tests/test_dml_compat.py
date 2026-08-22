@@ -246,6 +246,55 @@ class CrepeDevice(unittest.TestCase):
         self.assertEqual(dml_compat.crepe_device("cpu"), "cpu")
 
 
+class StsWorkerPatches(unittest.TestCase):
+    """语音转换冷路径走 sts_worker，必须自己打补丁、自己留 CPU 兜底。
+
+    26.8.22/4：Intel Iris Xe、DirectML、1.5.4。用户没开实时变声（热路径
+    rvc is None 是常态），四次「开始转换」全进冷路径，全挂 GradMultiply
+    PrivateUse1。load_hubert 里那份补丁是对的，但冷路径入口漏打 —— 跟
+    26.8.21 TTS 走 infer_cli 是同一类漏。规则：新的冷路径入口必须显式接
+    dml_compat，不能只靠下游某层顺手打一下。
+    """
+
+    def _main_body(self):
+        src = (ROOT / "tools" / "sts_worker.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "main":
+                return node, src
+        self.fail("tools/sts_worker.py 里找不到 main")
+
+    def test_applies_dml_compat_before_loading_models(self):
+        fn, src = self._main_body()
+        self.assertIn("apply_for", src)
+        apply_line = None
+        vc_line = None
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call):
+                func = node.func
+                name = ""
+                if isinstance(func, ast.Name):
+                    name = func.id
+                elif isinstance(func, ast.Attribute):
+                    name = func.attr
+                if name == "apply_for" and apply_line is None:
+                    apply_line = node.lineno
+                if name == "VC" and vc_line is None:
+                    vc_line = node.lineno
+        self.assertIsNotNone(apply_line, "sts_worker.main 没调 apply_for")
+        self.assertIsNotNone(vc_line, "sts_worker.main 没建 VC")
+        self.assertLess(apply_line, vc_line, "apply_for 必须在加载模型之前")
+
+    def test_keeps_cpu_fallback_on(self):
+        # 冷路径走 run_batch，默认 allow_cpu_fallback=True。热路径才需要关掉。
+        # 这里钉的是「别把开关带 False 传进去」——带了就等于 A/I 卡再撞算子
+        # 缺口时整批陪葬，26.8.22/4 就会原样重演。
+        _fn, src = self._main_body()
+        self.assertIn("run_batch", src)
+        self.assertNotIn("allow_cpu_fallback=False", src)
+        self.assertNotIn("allow_cpu_fallback = False", src)
+
+
 class TtsInferCliPatches(unittest.TestCase):
     """文字合成第二步走 infer_cli，必须自己打补丁、自己接 CPU 兜底。
 

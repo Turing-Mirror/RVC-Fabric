@@ -1972,6 +1972,7 @@
     "trainBusyNoReset": "Training is in progress; intermediate files cannot be removed.",
     "trainExpMissing": "Experiment “{}” was not found.",
     "stsRouteHot": "This run reuses the models already held by the running engine; no reloading is needed.",
+    "stsRouteWarm": "This run reuses the models left loaded by the previous conversion; no reloading is needed.",
     "stsRouteCold": "This run has to load the models again; the first load takes about 20 seconds.",
     "storageTitle": "Storage usage",
     "storageScan": "Measure",

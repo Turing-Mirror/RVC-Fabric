@@ -984,6 +984,138 @@ fn sts_run_clean_success(files: &[String], skipped: &[Value]) -> bool {
     skipped.is_empty() && !files.is_empty()
 }
 
+// ─── 冷路径的常驻进程 ────────────────────────────────────────────────────────
+//
+// 冷启动那几十秒里，真正的转换只占很小一块，其余全在 import torch / 探设备 /
+// 读 hubert / 读 rmvpe。这四样跟转哪段音频、转成谁都没关系，以前却是每转一次
+// 重付一次 —— 只用离线转换、从来不开实时变声的用户（比如录视频时）就一直在付。
+//
+// 现在跑完一批不再让 python 退出：进程留着，模型留在显存里，下一条请求从 stdin
+// 递进去。第二次起就没有加载阶段了。热路径（实时 worker 兼职）优先级不变，
+// 这里只管「实时 worker 不在」的那条路。
+
+/// 空闲多久就把常驻进程放掉。
+///
+/// 显存不是白占的：训练、游戏、实时变声都要抢。十分钟是按「录一段、说两句、
+/// 再录一段」的节奏定的 —— 短了等于没复用，长了会在小显存卡上挡别人的路。
+/// 另外开实时变声 / 开训练时会立刻放掉，不等这个钟。
+const RESIDENT_IDLE_MS: u128 = 10 * 60 * 1000;
+/// 关掉 stdin 之后等它自己退出的上限；torch 收尾偶尔慢，但不能无限等。
+const RESIDENT_QUIT_MS: u64 = 1_000;
+
+/// 一个还活着的冷路径 python。
+struct Resident {
+    child: std::process::Child,
+    /// 写一行请求文件路径进去就是派一次活。`None` 表示已经在关了。
+    stdin: Option<std::process::ChildStdin>,
+    /// 读取线程那边送过来的 stdout 行。
+    rx: std::sync::mpsc::Receiver<String>,
+    root: PathBuf,
+    /// 上一批结束的时间，空闲回收按它算。
+    last: std::time::Instant,
+    /// 活着期间一直占着，免得「关变声」把它当残留杀了。
+    _guard: crate::worker::ToolPidGuard,
+}
+
+static RESIDENT: Mutex<Option<Resident>> = Mutex::new(None);
+static REAPER: OnceLock<()> = OnceLock::new();
+
+/// 让常驻进程退出：先关 stdin 让它自己走，赖着不走再杀。
+fn stop_resident(mut r: Resident) {
+    let pid = r.child.id();
+    drop(r.stdin.take());
+    let since = std::time::Instant::now();
+    while since.elapsed().as_millis() < RESIDENT_QUIT_MS as u128 {
+        if matches!(r.child.try_wait(), Ok(Some(_))) {
+            crate::logging::shell_log!("语音转换常驻进程已退出 pid={pid}");
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let _ = r.child.kill();
+    let _ = r.child.wait();
+    crate::logging::shell_log!("语音转换常驻进程超时未退，已结束 pid={pid}");
+}
+
+/// 立刻放掉常驻进程，把显存还回去。
+///
+/// 开实时变声、开训练之前必须调 —— 那两样都要显存，而这个进程正攥着
+/// hubert + rmvpe + net_g 不放。没有常驻进程时是空操作。
+pub fn release_resident() {
+    let taken = RESIDENT.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(r) = taken {
+        stop_resident(r);
+    }
+}
+
+/// 空闲回收线程，第一次起常驻进程时拉起来，之后一直在。
+///
+/// 正在转换的那个进程是从 RESIDENT 里**取出来**的（局部持有），所以这里
+/// 永远看不到它 —— 不会把跑着的活腰斩。
+fn ensure_reaper() {
+    REAPER.get_or_init(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            let expired = {
+                let mut g = RESIDENT.lock().unwrap_or_else(|e| e.into_inner());
+                let done = match g.as_mut() {
+                    // 超时没人用，或者进程自己没了（崩溃 / 被外面杀掉）。
+                    Some(r) => {
+                        r.last.elapsed().as_millis() > RESIDENT_IDLE_MS
+                            || matches!(r.child.try_wait(), Ok(Some(_)))
+                    }
+                    None => false,
+                };
+                if done {
+                    g.take()
+                } else {
+                    None
+                }
+            };
+            if let Some(r) = expired {
+                stop_resident(r);
+            }
+        });
+    });
+}
+
+/// 取出可用的常驻进程。产品根对不上、进程已死的一律丢掉重来。
+fn take_resident(root: &Path) -> Option<Resident> {
+    let mut g = RESIDENT.lock().unwrap_or_else(|e| e.into_inner());
+    let mut r = g.take()?;
+    if r.root.as_path() != root {
+        drop(g);
+        stop_resident(r);
+        return None;
+    }
+    match r.child.try_wait() {
+        Ok(None) => Some(r),
+        // 已经退了 / 问不出状态：当它没了。
+        _ => {
+            let _ = r.child.wait();
+            None
+        }
+    }
+}
+
+/// 一批跑完、进程还活着，放回去等下一次。
+fn keep_resident(mut r: Resident) {
+    // 这中间用户把实时变声开起来了：下一次转换会走热路径，这个进程再留着就
+    // 纯粹是白占显存，还跟实时 worker 抢同一张卡。直接放掉。
+    if crate::worker::is_worker_alive(&r.root) {
+        stop_resident(r);
+        return;
+    }
+    r.last = std::time::Instant::now();
+    let mut g = RESIDENT.lock().unwrap_or_else(|e| e.into_inner());
+    // 理论上此刻 RESIDENT 必然是 None（同一时刻只有一批在跑，BUSY 拦着）。
+    // 真撞上了就让旧的那个走，别攒出两个占显存的进程。
+    if let Some(old) = g.replace(r) {
+        drop(g);
+        stop_resident(old);
+    }
+}
+
 /// 热路径没跑成的两种情况。
 enum HotError {
     /// worker 没接住（没应答、模型还没加载好…）。可以退回冷路径重试。
@@ -1393,13 +1525,8 @@ fn run_inner(
         }
     }
 
-    // 走到这里就是冷路径：要另起一个 python 把 hubert / net_g / rmvpe / faiss
-    // 从盘上重读一遍。先说一声要等多久，否则用户以为卡住了。
-    emit_full(
-        app, "run", 0, 1, &crate::i18n::t("s.stsRouteCold"),
-        Some(0), Some("route"), Some(0), Some(0), Some(0), None,
-    );
-
+    // 走到这里就是冷路径。上一次转换留下的那个 python 还在的话，hubert /
+    // net_g / rmvpe 都还在它显存里 —— 那就不是冷启动，也别拿「约 20 秒」吓人。
     let req = paths::update_cache(root).join("sts_request.json");
     if let Some(p) = req.parent() {
         let _ = std::fs::create_dir_all(p);
@@ -1423,79 +1550,135 @@ fn run_inner(
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
-    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
-    let errfile = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&job.trace.path)
-        .ok();
-
-    let mut cmd = Command::new(&py);
-    cmd.arg(script.as_os_str())
-        .arg(req.as_os_str())
-        .current_dir(root)
-        .envs(crate::worker::env_for_runtime(root))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(match errfile {
-            Some(f) => Stdio::from(f),
-            None => Stdio::null(),
-        });
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
+    // 先把请求递给还活着的那个进程；递不进去（管道断了 = 它其实已经不行了）
+    // 就当没有，老老实实起一个新的。路线文案要等这一步有结果了才发。
+    let mut sess = take_resident(root);
+    if let Some(r) = sess.as_mut() {
+        use std::io::Write;
+        let line = format!("{}\n", req.display());
+        let ok = r
+            .stdin
+            .as_mut()
+            .map(|w| w.write_all(line.as_bytes()).and_then(|()| w.flush()).is_ok())
+            .unwrap_or(false);
+        if !ok {
+            job.trace.note("resident stdin closed; starting a new python");
+            if let Some(dead) = sess.take() {
+                stop_resident(dead);
+            }
+        }
     }
+    let reused = sess.is_some();
+    job.trace.note(if reused {
+        "cold path: reusing resident python"
+    } else {
+        "cold path: new python"
+    });
+    emit_full(
+        app,
+        "run",
+        0,
+        1,
+        &crate::i18n::t(if reused { "s.stsRouteWarm" } else { "s.stsRouteCold" }),
+        Some(0), Some("route"), Some(0), Some(0), Some(0), None,
+    );
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => {
-            job.trace.note(&format!("spawn failed: {e}"));
-            return Err(crate::i18n::te("s.4f592d4fc2", &(e)));
-        }
-    };
-    let _keep = crate::worker::ToolPidGuard::new(child.id());
-    let stdout = match child.stdout.take() {
-        Some(s) => s,
+    let mut sess = match sess {
+        Some(r) => r,
         None => {
-            let _ = child.kill();
-            return Err(crate::i18n::t("s.68759edc4b").into());
+            let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+            let errfile = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&job.trace.path)
+                .ok();
+
+            let mut cmd = Command::new(&py);
+            cmd.arg(script.as_os_str())
+                .arg(req.as_os_str())
+                // 跑完不退出，模型留在显存里等下一条请求（见上面 Resident 的说明）。
+                .arg("--resident")
+                .current_dir(root)
+                .envs(crate::worker::env_for_runtime(root))
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(match errfile {
+                    Some(f) => Stdio::from(f),
+                    None => Stdio::null(),
+                });
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+
+            let mut child = match cmd.spawn() {
+                Ok(c) => c,
+                Err(e) => {
+                    job.trace.note(&format!("spawn failed: {e}"));
+                    return Err(crate::i18n::te("s.4f592d4fc2", &(e)));
+                }
+            };
+            let guard = crate::worker::ToolPidGuard::new(child.id());
+            let stdin = child.stdin.take();
+            let stdout = match child.stdout.take() {
+                Some(s) => s,
+                None => {
+                    let _ = child.kill();
+                    return Err(crate::i18n::t("s.68759edc4b").into());
+                }
+            };
+
+            // stdout 的读取放到单独线程，主循环每 200ms 醒一次。
+            //
+            // 以前是直接 `for line in stdout.lines()`，取消标志只在**新的一行进度
+            // 出来时**才看得到。而一个文件转到一半，worker 十几秒不吭声是常事 ——
+            // 这十几秒里点取消，界面上什么都不会发生，用户只会以为按钮坏了。
+            // 用户报的就是这个。
+            //
+            // 换成 channel 之后取消是秒级的：不管 worker 在不在说话，200ms 内一定
+            // 醒来查一次。读取线程那边 recv 端一断就自然结束，不用额外的收尾。
+            let (tx, rx) = std::sync::mpsc::channel::<String>();
+            std::thread::spawn(move || {
+                for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                    if tx.send(line).is_err() {
+                        break;
+                    }
+                }
+            });
+            ensure_reaper();
+            Resident {
+                child,
+                stdin,
+                rx,
+                root: root.to_path_buf(),
+                last: std::time::Instant::now(),
+                _guard: guard,
+            }
         }
     };
+
     let mut files: Vec<String> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
     let mut fail: Option<String> = None;
     let mut total: u64 = 1;
-
-    // stdout 的读取放到单独线程，主循环每 200ms 醒一次。
-    //
-    // 以前是直接 `for line in stdout.lines()`，取消标志只在**新的一行进度出来
-    // 时**才看得到。而一个文件转到一半，worker 十几秒不吭声是常事 —— 这十几秒
-    // 里点取消，界面上什么都不会发生，用户只会以为按钮坏了。用户报的就是这个。
-    //
-    // 换成 channel 之后取消是秒级的：不管 worker 在不在说话，200ms 内一定醒来
-    // 查一次。读取线程那边 recv 端一断就自然结束，不用额外的收尾。
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if tx.send(line).is_err() {
-                break;
-            }
-        }
-    });
+    // 进程跑完这批之后还活着 —— 只有收到 idle 才算数。
+    let mut alive = false;
 
     loop {
         if cancel_flag().load(Ordering::SeqCst) {
-            let _ = child.kill();
-            let _ = child.wait();
+            // 取消就是杀。杀掉的这个不放回池子：它可能正卡在一半的推理里。
+            let _ = sess.child.kill();
+            let _ = sess.child.wait();
             job.trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
-        let line = match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+        let line = match sess.rx.recv_timeout(std::time::Duration::from_millis(200)) {
             Ok(l) => l,
             // 超时只是这一轮没有新进度，回去再查一遍取消标志。
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-            // 发送端没了 = 子进程 stdout 关了 = 跑完了。
+            // 发送端没了 = 子进程 stdout 关了 = 它死了。常驻模式下正常收尾走
+            // 的是 idle，走到这里就是崩了，下面按退出码报错。
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
         };
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
@@ -1614,24 +1797,41 @@ fn run_inner(
                 }
                 let _ = app.emit("sts-progress", body);
             }
+            // 常驻进程说「这批收尾了、我还活着」。done / error 都在它前面，
+            // 所以走到这里该收的都收齐了。
+            "idle" => {
+                alive = true;
+                break;
+            }
             _ => {}
         }
     }
 
-    let st = match child.wait() {
-        Ok(s) => s,
-        Err(e) => {
-            job.trace.note(&format!("wait failed: {e}"));
-            return Err(crate::i18n::te("s.cdad0c927d", &(e)));
+    // 还活着就放回池子给下一次用；死了才有退出码可判。
+    let exit = if alive {
+        keep_resident(sess);
+        None
+    } else {
+        match sess.child.wait() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                job.trace.note(&format!("wait failed: {e}"));
+                return Err(crate::i18n::te("s.cdad0c927d", &(e)));
+            }
         }
     };
     if let Some(e) = fail {
         job.trace.note(&format!("worker error: {e}"));
         return Err(e);
     }
-    if !st.success() {
-        job.trace.note(&format!("process exit code {}", st.code().unwrap_or(-1)));
-        return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
+    if let Some(st) = exit {
+        if !st.success() {
+            job.trace.note(&format!("process exit code {}", st.code().unwrap_or(-1)));
+            return Err(crate::i18n::te("s.0d8ec50de8", &st.code().unwrap_or(-1)));
+        }
+        // 退出码 0 却没有 idle：装的是不认 --resident 的旧 worker（壳升级了、
+        // 引擎负载还没升）。它已经把这批正常跑完了，照旧当成功。
+        job.trace.note("python exited without an idle line (older worker?)");
     }
     if !sts_run_clean_success(&files, &skipped) {
         job.trace.note(&format!(

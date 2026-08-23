@@ -9,9 +9,18 @@
 命令，直接用常驻模型），根本不起这个进程。两条路的转换循环都在
 `tools/sts_core.py`，这里只负责「把模型从盘上装起来」和「把进度写 stdout」。
 
+加了 `--resident` 就**不在跑完一批之后退出**：模型留在显存里，从 stdin 一行
+一行接下一个请求文件的路径。冷启动的几十秒从此只在开软件后的第一次转换付一
+次——只用离线转换、从来不开实时变声的用户，以前是每转一次付一次。协议：
+
+* 壳 → worker：一行一个请求 json 的路径；空行忽略；`exit` 或 stdin 关闭即退出。
+* worker → 壳：原有的 start / run / skip / done / error 进度行，外加每批收尾
+  后的一行 ``{"phase": "idle"}``——壳看见它才知道「这批完了、进程还活着、可以
+  再派活」。不带 `--resident` 时没有这一行，行为与从前完全一致。
+
 用法::
 
-    Runtime\\python.exe tools/sts_worker.py <请求.json>
+    Runtime\\python.exe tools/sts_worker.py <请求.json> [--resident]
 
 请求::
 
@@ -89,6 +98,13 @@ def _ensure_stdio_utf8() -> None:
                 stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
+    # 常驻模式下请求路径是从 stdin 读的，用户名是中文时管道上就是 UTF-8 字节；
+    # 这里不 replace —— 路径错一个字符就是找不到文件，宁可当场炸也别静默转换。
+    try:
+        if hasattr(sys.stdin, "reconfigure"):
+            sys.stdin.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _ensure_rvc_env() -> None:
@@ -224,17 +240,95 @@ def _save_timing(timer, **extra) -> None:
         pass
 
 
-def main(argv: list[str]) -> int:
-    _ensure_stdio_utf8()
-    if len(argv) < 2:
-        emit(phase="error", **mc.msg_fields(mc.STS_NO_REQUEST))
-        return 2
-    try:
-        req = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
-    except Exception as e:
-        emit(phase="error", **mc.msg_fields(mc.STS_BAD_REQUEST, {"error": e}))
-        return 2
+class _Engine:
+    """常驻进程里活着的那份引擎。
 
+    冷启动那几十秒的构成是固定的：import torch / fairseq、`Config()` 探设备、
+    读 net_g、读 hubert、读 rmvpe。这五样里只有 net_g 跟着音色走，其余四样换谁
+    来转都一样 —— 所以它们该活到进程结束，而不是活到这一批结束。
+    """
+
+    def __init__(self) -> None:
+        self.config = None
+        self.vc = None
+        # 已经装进显存的那个 pth 的路径。空字符串 = 还没装或上次装失败。
+        self.model = ""
+
+    def reset(self) -> None:
+        """装模型这一步炸了就整个丢掉重来，别留半个 vc 给下一条请求。"""
+        self.config = None
+        self.vc = None
+        self.model = ""
+        cuda_empty_cache()
+
+
+def _prepare(engine: "_Engine", model: str, f0method: str, prog, timer,
+             est_seconds: float, total: int) -> None:
+    """把这条请求需要的模型准备好。已经在显存里的一概不重读。"""
+    if engine.vc is None:
+        with _stage(timer, "import"):
+            from configs.config import Config
+            from infer.modules.vc.modules import VC
+
+        # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
+        sys.argv = [sys.argv[0]]
+        prog.load("config", 0.0)
+        with _stage(timer, "config"):
+            config = Config()
+            # DirectML 上 hubert 的 GradMultiply 会抛 PrivateUse1。load_hubert
+            # 里也会打这份补丁，这里提前打：冷路径入口必须自己接 dml_compat，
+            # 不能只靠下游某层「顺手打一下」。26.8.22/4（Intel Iris Xe，1.5.4）
+            # 四次语音转换全挂在同一句 x.new(x)，热路径当时根本没接上。
+            from infer.lib.dml_compat import apply_for
+
+            apply_for(config)
+        prog.load("config", 1.0)
+        # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
+        _tune_torch(total_seconds=est_seconds, total_files=total)
+        engine.config = config
+        engine.vc = VC(config)
+    else:
+        # 复用：import、设备探测这两段一分钱都不用再付。进度条别卡在 0。
+        prog.load("config", 1.0)
+        _tune_torch(total_seconds=est_seconds, total_files=total)
+
+    if engine.model != model:
+        prog.load("model", 0.0)
+        with _stage(timer, "model"):
+            # get_vc 会重建 pipeline，180MB 的 rmvpe 跟着 pipeline 一起没了。
+            # 换音色只该付 net_g 的钱，rmvpe 原样接回去 —— 但只在半精度与设备
+            # 都没变时接，两者任一不同就让 preload_side_models 重新装。
+            pipe = getattr(engine.vc, "pipeline", None)
+            old_rmvpe = getattr(pipe, "model_rmvpe", None)
+            old_half = getattr(pipe, "is_half", None)
+            old_dev = str(getattr(pipe, "device", ""))
+            # get_vc 中途炸掉时 vc 里留着半个模型，下一条请求不能当它装好了。
+            engine.model = ""
+            engine.vc.get_vc(model)
+            engine.model = model
+            pipe = getattr(engine.vc, "pipeline", None)
+            if (
+                old_rmvpe is not None
+                and pipe is not None
+                and not hasattr(pipe, "model_rmvpe")
+                and getattr(pipe, "is_half", None) == old_half
+                and str(getattr(pipe, "device", "")) == old_dev
+            ):
+                pipe.model_rmvpe = old_rmvpe
+        prog.load("model", 1.0)
+    else:
+        prog.load("model", 1.0)
+
+    # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
+    # 已经装好的话这里只是把进度打满，不重读。
+    with _stage(timer, "hubert"):
+        preload_side_models(engine.vc, engine.config, f0method, prog)
+    # 只在显存紧时清；加载后强清一次把碎片归还给池，后面尽量不碰。
+    cuda_empty_cache()
+
+
+def run_request(engine: "_Engine", req: dict) -> int:
+    """跑一条转换请求。返回值即进程退出码的语义（0 成功）。"""
     inp = str(req.get("input") or "").strip()
     out_dir = str(req.get("output") or "").strip()
     model = str(req.get("model") or "").strip()
@@ -298,41 +392,15 @@ def main(argv: list[str]) -> int:
 
     # 分段计时。「一条 5 秒语音要一两分钟」之前只能靠读代码估，估错了力气就
     # 花在错的地方。落一份本地 JSON，用户发过来我们才有别人机器上的真数字。
+    # reused 记的是「这次省掉了几段加载」，复用到底值多少钱要拿它对。
+    reused = engine.vc is not None
     timer = _new_timer(hot=False)
 
     try:
-        with _stage(timer, "import"):
-            from configs.config import Config
-            from infer.modules.vc.modules import VC
-
-        # Config 也会读 sys.argv；清掉以免和本脚本参数打架。
-        sys.argv = [sys.argv[0]]
-        prog.load("config", 0.0)
-        with _stage(timer, "config"):
-            config = Config()
-            # DirectML 上 hubert 的 GradMultiply 会抛 PrivateUse1。load_hubert
-            # 里也会打这份补丁，这里提前打：冷路径入口必须自己接 dml_compat，
-            # 不能只靠下游某层「顺手打一下」。26.8.22/4（Intel Iris Xe，1.5.4）
-            # 四次语音转换全挂在同一句 x.new(x)，热路径当时根本没接上。
-            from infer.lib.dml_compat import apply_for
-
-            apply_for(config)
-        prog.load("config", 1.0)
-        # Config 可能刚跑过探测；再调一次 cudnn.benchmark 等。
-        _tune_torch(total_seconds=est_seconds, total_files=total)
-        vc = VC(config)
-        # get_vc 认绝对路径（User_Data/models/...）
-        prog.load("model", 0.0)
-        with _stage(timer, "model"):
-            vc.get_vc(model)
-        prog.load("model", 1.0)
-        # 批量：hubert / rmvpe 先拉起来，后面每个文件只付推理成本。
-        with _stage(timer, "hubert"):
-            preload_side_models(vc, config, f0method, prog)
-        # 只在显存紧时清；加载后强清一次把碎片归还给池，后面尽量不碰。
-        cuda_empty_cache()
+        _prepare(engine, model, f0method, prog, timer, est_seconds, total)
     except Exception as e:
         traceback.print_exc()
+        engine.reset()
         # 训练存档单独立码：壳侧给这个码配了「打开训练窗」按钮，用户手里的
         # G_/D_ 存档要先在模型提取里转成音色才有得转。
         if "训练过程中的存档" in str(e):
@@ -343,7 +411,7 @@ def main(argv: list[str]) -> int:
 
     with _stage(timer, "convert"):
         out_files, skipped, _cancelled = run_batch(
-            vc,
+            engine.vc,
             files,
             out_dir,
             {
@@ -364,7 +432,7 @@ def main(argv: list[str]) -> int:
             # 冷路径的取消是壳直接杀进程，不需要软取消。
             should_cancel=None,
         )
-    _save_timing(timer, total=total, ok=len(out_files), seconds=est_seconds)
+    _save_timing(timer, total=total, ok=len(out_files), seconds=est_seconds, reused=reused)
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。
@@ -388,6 +456,50 @@ def main(argv: list[str]) -> int:
             mc.STS_DONE, {"done": len(out_files), "skipped": len(skipped)}
         ),
     )
+    return 0
+
+
+def _run_request_file(engine: "_Engine", path: str) -> int:
+    try:
+        req = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as e:
+        emit(phase="error", **mc.msg_fields(mc.STS_BAD_REQUEST, {"error": e}))
+        return 2
+    return run_request(engine, req)
+
+
+def main(argv: list[str]) -> int:
+    _ensure_stdio_utf8()
+    rest = list(argv[1:])
+    resident = "--resident" in rest
+    reqs = [a for a in rest if not a.startswith("--")]
+    if not reqs:
+        emit(phase="error", **mc.msg_fields(mc.STS_NO_REQUEST))
+        return 2
+
+    engine = _Engine()
+    rc = _run_request_file(engine, reqs[0])
+    if not resident:
+        return rc
+
+    # 壳靠这一行判断「这批收尾了、进程还活着」。不带 --resident 时没有这一行，
+    # 壳那边照旧用 stdout 关闭当收尾信号，老行为一个字都没变。
+    emit(phase="idle")
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except Exception:
+            break
+        # 空串 = 壳把 stdin 关了 = 让我退出（空闲超时、开实时变声要腾显存…）。
+        if not line:
+            break
+        path = line.strip()
+        if not path:
+            continue
+        if path == "exit":
+            break
+        _run_request_file(engine, path)
+        emit(phase="idle")
     return 0
 
 

@@ -551,15 +551,25 @@ fn onboarding_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
 }
 
 /// 打开 Windows 声音设置页。方案串是写死的系统值，不收任何外部输入。
+///
+/// 产品只出 Windows，但仓库要能在 macOS / Linux 上编过 —— 测试和 CI 都在
+/// 那边跑。没有 cfg 门的话 `std::os::windows` 直接让整个 crate 编不过。
 #[tauri::command]
 fn open_sound_settings() -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    std::process::Command::new("explorer.exe")
-        .arg("ms-settings:sound")
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer.exe")
+            .arg("ms-settings:sound")
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("only on Windows".into())
+    }
 }
 
 /// 出包之前，把包里会有哪些文件、各自多大摆出来。
@@ -1505,6 +1515,8 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
         //
         // 界面在按之前会问一句（App.tsx 的 killAsk），不闷声吃掉长任务。
         sts::cancel_and_wait(3);
+        // 语音转换的常驻 python 是我们自己记着的，先按正常路子放掉再强杀。
+        sts::release_resident();
         worker::kill_known_workers(&root);
         worker::kill_runtime_pythons(&root, true);
         // 杀完把「当前音色」重新写回引擎配置。
@@ -2443,6 +2455,7 @@ pub fn run() {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
+                    sts::release_resident();
                     worker::kill_known_workers(&g.root);
                     worker::kill_runtime_pythons(&g.root, false);
                     let stats = paths::clean_temps(&g.root);

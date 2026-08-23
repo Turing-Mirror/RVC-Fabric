@@ -717,6 +717,10 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
     // that is idempotent, so a poisoned state is safe to continue from.
     let _guard = START_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
+    // 离线语音转换的常驻 python 攥着 hubert + rmvpe + net_g 不放。实时变声要
+    // 的是同一张卡的同一块显存，小显存机器上两边一起在就是开不起来。先放掉。
+    crate::sts::release_resident();
+
     if is_worker_alive(root) {
         if worker_kind_of(root) == Some(kind) {
             return Ok(());

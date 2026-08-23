@@ -335,6 +335,77 @@ class TorchRuntimeTests(unittest.TestCase):
                 sys.modules["torch"] = old
 
 
+class ResidentLoopTests(unittest.TestCase):
+    """常驻模式的协议：一行一个请求，每批收尾补一行 idle。
+
+    这里不碰 torch —— 请求全都在装模型之前就被判掉（模型文件不存在），
+    走的是同一套「解析请求 → 报错 → 收尾」路径，协议部分完全一致。
+    """
+
+    def _run(self, argv, stdin_text):
+        import io
+        import json as _json
+
+        import tools.sts_worker as w
+
+        old_in, old_out = sys.stdin, sys.stdout
+        sys.stdin, sys.stdout = io.StringIO(stdin_text), io.StringIO()
+        try:
+            rc = w.main(argv)
+            raw = sys.stdout.getvalue()
+        finally:
+            sys.stdin, sys.stdout = old_in, old_out
+        lines = [_json.loads(x) for x in raw.splitlines() if x.strip().startswith("{")]
+        return rc, lines
+
+    def _req(self, tmp, name):
+        import json as _json
+
+        path = Path(tmp) / name
+        path.write_text(
+            _json.dumps({"input": "a.wav", "output": tmp, "model": str(Path(tmp) / "nope.pth")}),
+            encoding="utf-8",
+        )
+        return str(path)
+
+    def test_one_shot_has_no_idle_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, lines = self._run(["sts_worker.py", self._req(tmp, "r1.json")], "")
+            self.assertEqual(rc, 2)
+            self.assertEqual([x["phase"] for x in lines], ["error"])
+
+    def test_resident_serves_three_requests_then_stops_at_eof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self._req(tmp, "r1.json")
+            more = f"{self._req(tmp, 'r2.json')}\n\n{self._req(tmp, 'r3.json')}\n"
+            rc, lines = self._run(["sts_worker.py", first, "--resident"], more)
+            self.assertEqual(rc, 0)
+            phases = [x["phase"] for x in lines]
+            # 三条请求，每条一个 error 一个 idle；中间那行空行被忽略。
+            self.assertEqual(phases, ["error", "idle", "error", "idle", "error", "idle"])
+
+    def test_resident_stops_on_exit_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self._req(tmp, "r1.json")
+            rest = f"exit\n{self._req(tmp, 'r2.json')}\n"
+            rc, lines = self._run(["sts_worker.py", first, "--resident"], rest)
+            self.assertEqual(rc, 0)
+            # exit 之后那条请求不该再跑。
+            self.assertEqual([x["phase"] for x in lines], ["error", "idle"])
+
+    def test_unreadable_request_does_not_kill_the_resident(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.json"
+            bad.write_text("{ this is not json", encoding="utf-8")
+            rest = f"{bad}\n{self._req(tmp, 'r2.json')}\n"
+            rc, lines = self._run(["sts_worker.py", self._req(tmp, "r1.json"), "--resident"], rest)
+            self.assertEqual(rc, 0)
+            self.assertEqual(
+                [x["phase"] for x in lines],
+                ["error", "idle", "error", "idle", "error", "idle"],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
 

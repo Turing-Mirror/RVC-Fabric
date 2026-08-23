@@ -1972,6 +1972,7 @@
     "trainBusyNoReset": "训练正在进行中，无法清空中间产物。",
     "trainExpMissing": "找不到实验「{}」。",
     "stsRouteHot": "本次复用常驻引擎中的模型，无需重新加载。",
+    "stsRouteWarm": "本次复用上次转换留下的模型，无需重新加载。",
     "stsRouteCold": "本次需要重新加载模型，首次加载约需 20 秒。",
     "storageTitle": "存储占用",
     "storageScan": "统计",

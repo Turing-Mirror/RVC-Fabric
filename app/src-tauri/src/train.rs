@@ -697,9 +697,14 @@ fn preprocess_failure_list(log: &Path) -> Vec<Value> {
             if let Some(tail) = rest.strip_prefix("-> ") {
                 if !tail.starts_with("Success") && out.len() < MAX {
                     flush(&mut out, &mut cur, &reason);
-                    let name = Path::new(path)
-                        .file_name()
-                        .and_then(|s| s.to_str())
+                    // 日志是 Windows 上的 python 写的，路径一律是反斜杠。
+                    // `Path::file_name` 在非 Windows 上不认反斜杠，整条路径会
+                    // 原样留下 —— 产品只出 Windows 不受影响，但测试在 macOS
+                    // 上就成了摆设。两种分隔符都自己切，判据与平台无关。
+                    let name = path
+                        .rsplit(['\\', '/'])
+                        .next()
+                        .filter(|s| !s.is_empty())
                         .unwrap_or(path)
                         .to_string();
                     cur = Some(name);
@@ -1285,6 +1290,9 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
         *g = true;
     }
     cancel_flag().store(false, Ordering::SeqCst);
+    // 训练是这里最吃显存的一件事。离线语音转换留下的常驻 python 还攥着
+    // hubert + rmvpe + net_g，先放掉再开，别让训练从第一步就 OOM。
+    crate::sts::release_resident();
     // 先把输出目录判掉：训了几小时最后落不下去，那几小时就白烧了。
     let out_dir = match normalize_output_dir(&req.output_dir) {
         Ok(d) => d,

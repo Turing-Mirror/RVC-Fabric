@@ -257,12 +257,25 @@ class StsWorkerPatches(unittest.TestCase):
     """
 
     def _main_body(self):
+        """找到「装模型」的那个函数 —— 按行为找，不按名字找。
+
+        这条守卫钉的是「建 VC 之前必须先 apply_for」。以前它写死了函数名
+        main，装模型的代码一挪到别的函数里，守卫就悄悄变成永远通过。改成
+        认「谁调了 VC(...)」，重构挪窝也拦得住。
+        """
         src = (ROOT / "tools" / "sts_worker.py").read_text(encoding="utf-8")
         tree = ast.parse(src)
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "main":
-                return node, src
-        self.fail("tools/sts_worker.py 里找不到 main")
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for inner in ast.walk(node):
+                if (
+                    isinstance(inner, ast.Call)
+                    and isinstance(inner.func, ast.Name)
+                    and inner.func.id == "VC"
+                ):
+                    return node, src
+        self.fail("tools/sts_worker.py 里找不到建 VC 的函数")
 
     def test_applies_dml_compat_before_loading_models(self):
         fn, src = self._main_body()
@@ -281,8 +294,8 @@ class StsWorkerPatches(unittest.TestCase):
                     apply_line = node.lineno
                 if name == "VC" and vc_line is None:
                     vc_line = node.lineno
-        self.assertIsNotNone(apply_line, "sts_worker.main 没调 apply_for")
-        self.assertIsNotNone(vc_line, "sts_worker.main 没建 VC")
+        self.assertIsNotNone(apply_line, "装模型的函数里没调 apply_for")
+        self.assertIsNotNone(vc_line, "装模型的函数里没建 VC")
         self.assertLess(apply_line, vc_line, "apply_for 必须在加载模型之前")
 
     def test_keeps_cpu_fallback_on(self):

@@ -1972,6 +1972,7 @@
     "trainBusyNoReset": "El entrenamiento está en curso; no se pueden eliminar los archivos intermedios.",
     "trainExpMissing": "No se encontró el experimento «{}».",
     "stsRouteHot": "Esta ejecución reutiliza los modelos ya cargados por el motor en marcha; no es necesario volver a cargarlos.",
+    "stsRouteWarm": "Esta ejecución reutiliza los modelos que quedaron cargados de la conversión anterior; no es necesario volver a cargarlos.",
     "stsRouteCold": "Esta ejecución debe volver a cargar los modelos; la primera carga tarda unos 20 segundos.",
     "storageTitle": "Uso de almacenamiento",
     "storageScan": "Calcular",

@@ -1972,6 +1972,7 @@
     "trainBusyNoReset": "Un entraînement est en cours ; les fichiers intermédiaires ne peuvent pas être supprimés.",
     "trainExpMissing": "L'expérience « {} » est introuvable.",
     "stsRouteHot": "Cette exécution réutilise les modèles déjà chargés par le moteur en cours ; aucun rechargement n'est nécessaire.",
+    "stsRouteWarm": "Cette exécution réutilise les modèles restés chargés depuis la conversion précédente ; aucun rechargement n'est nécessaire.",
     "stsRouteCold": "Cette exécution doit recharger les modèles ; le premier chargement prend environ 20 secondes.",
     "storageTitle": "Espace disque utilisé",
     "storageScan": "Mesurer",

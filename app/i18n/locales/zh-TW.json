@@ -1972,6 +1972,7 @@
     "trainBusyNoReset": "訓練正在進行中，無法清空中間產物。",
     "trainExpMissing": "找不到實驗「{}」。",
     "stsRouteHot": "本次重複使用常駐引擎中的模型，無需重新載入。",
+    "stsRouteWarm": "本次重複使用上次轉換留下的模型，無需重新載入。",
     "stsRouteCold": "本次需要重新載入模型，首次載入約需 20 秒。",
     "storageTitle": "儲存空間佔用",
     "storageScan": "統計",

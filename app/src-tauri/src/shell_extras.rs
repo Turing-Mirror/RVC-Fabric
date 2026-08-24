@@ -631,7 +631,7 @@ fn delay_estimate(cfg: &serde_json::Map<String, Value>) -> Value {
         "crossfade_ms": (xf * 1000.0).round() as i64,
         "extra_time_s": extra,
         "algo_ms_without_device": (algo * 1000.0).round() as i64,
-        "formula": "device_latency + block_time + crossfade + 10ms [+ denoise]",
+        "formula": "device + block + wait_to_start + infer (live; crossfade/extra_time lookback only)",
         "extra_time_note": "lookback only; not in delay_ms",
     })
 }

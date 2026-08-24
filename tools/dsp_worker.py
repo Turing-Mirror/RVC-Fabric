@@ -56,6 +56,9 @@ def main() -> None:
     import sounddevice as sd
 
     from tools.audio_io_process import AudioIoProcess
+    from tools.delay_metric import ema as _delay_ema
+    from tools.delay_metric import frames_until_block_start
+    from tools.delay_metric import live_delay_sec
     from tools.device_pick import fill_missing_devices, resolve_device_name
     from tools.dsp_fx import RealtimeFxChain
     from tools.dsp_presets import get_preset
@@ -119,6 +122,8 @@ def main() -> None:
     last_infer_ms = 0
     last_input_db = -90.0
     delay_time = 0.0
+    queue_frames = 0.0
+    infer_ema = 0.0
     monitor_stream = None
     monitor_q = None
     monitor_channels = 2
@@ -409,6 +414,7 @@ def main() -> None:
     def stop_stream() -> None:
         nonlocal audio_proc, in_mem, out_mem, in_buf, out_buf
         nonlocal in_ptr, out_ptr, play_ptr, in_evt, stop_evt
+        nonlocal queue_frames, infer_ema
         flag["vc"] = False
         _close_monitor()
         proc = audio_proc
@@ -439,9 +445,38 @@ def main() -> None:
             in_buf = out_buf = None
             in_ptr = out_ptr = play_ptr = None
             in_evt = stop_evt = None
+            queue_frames = 0.0
+            infer_ema = 0.0
+
+    def _live_ms() -> int:
+        lat = 0.0
+        if audio_proc is not None:
+            try:
+                v = float(audio_proc.get_latency())
+                if 0.0 <= v < 5.0:
+                    lat = v
+            except Exception:
+                pass
+        sr = float(samplerate or 0) or 1.0
+        blk = (
+            float(block_frame) / sr
+            if block_frame
+            else float(block_time or 0.0)
+        )
+        return int(
+            round(
+                1000.0
+                * live_delay_sec(
+                    device=lat,
+                    block=blk,
+                    queued=queue_frames / sr,
+                    infer=infer_ema,
+                )
+            )
+        )
 
     def audio_loop():
-        nonlocal last_infer_ms, last_input_db, rms_hold
+        nonlocal last_infer_ms, last_input_db, rms_hold, queue_frames, infer_ema
         buf_size = int(block_frame) << 1
         while flag["vc"]:
             try:
@@ -510,6 +545,12 @@ def main() -> None:
                     out_buf[:end] = outdata[first:]
                 out_ptr.value = write_pos
                 last_infer_ms = int((time.perf_counter() - t0) * 1000)
+                wait = frames_until_block_start(
+                    write_pos, play_pos, int(block_frame), int(buf_size)
+                )
+                queue_frames = _delay_ema(queue_frames, float(wait))
+                if last_infer_ms > 8:
+                    infer_ema = _delay_ema(infer_ema, last_infer_ms / 1000.0)
             except Exception:
                 traceback.print_exc()
                 break
@@ -654,11 +695,13 @@ def main() -> None:
             ",".join(voice_chain.active()) if voice_chain else "-",
         )
         start_stream()
+        live = _live_ms()
         _write(
             state="running",
             error="",
             progress=100,
-            delay_ms=int(round(delay_time * 1000)),
+            delay_ms=live,
+            real_delay_ms=live,
             infer_ms=0,
             samplerate=int(samplerate),
             **_payload(),
@@ -806,6 +849,7 @@ def main() -> None:
                                 state="idle",
                                 error="",
                                 delay_ms=0,
+                                real_delay_ms=0,
                                 infer_ms=0,
                                 progress=100,
                                 **_payload(),
@@ -826,10 +870,12 @@ def main() -> None:
                         )
                         apply_hot(params)
                         if flag["vc"]:
+                            live = _live_ms()
                             _write(
                                 state="running",
                                 progress=100,
-                                delay_ms=int(round(delay_time * 1000)),
+                                delay_ms=live,
+                                real_delay_ms=live,
                                 infer_ms=last_infer_ms,
                                 **_payload(),
                                 **_sf(VC_PARAMS_APPLIED),
@@ -846,9 +892,11 @@ def main() -> None:
                         lat = float(audio_proc.get_latency())
                         if 0 <= lat < 5.0:
                             delay_time = lat + float(block_time) + 0.01
+                    live = _live_ms()
                     _write(
                         state="running",
-                        delay_ms=int(round(delay_time * 1000)),
+                        delay_ms=live,
+                        real_delay_ms=live,
                         infer_ms=last_infer_ms,
                         input_db=round(float(last_input_db), 1),
                         samplerate=int(samplerate or 0),

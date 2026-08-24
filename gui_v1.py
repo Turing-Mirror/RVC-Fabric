@@ -197,6 +197,9 @@ if __name__ == "__main__":
     import traceback
     from multiprocessing import Queue, cpu_count
     from tools.audio_io_process import AudioIoProcess
+    from tools.delay_metric import ema as _delay_ema
+    from tools.delay_metric import frames_until_block_start
+    from tools.delay_metric import live_delay_sec
     from multiprocessing.shared_memory import SharedMemory
     from queue import Empty
 
@@ -2164,6 +2167,8 @@ if __name__ == "__main__":
                     self.out_buf = None
                     self.stop_evt = None
                     self.in_evt = None
+                    self._queue_frames = 0.0
+                    self._infer_ema_sec = 0.0
             # Free VRAM so second start after denoise/settings is less likely to OOM
             try:
                 if torch.cuda.is_available():
@@ -2200,8 +2205,6 @@ if __name__ == "__main__":
             start = self.out_ptr.value
             play_pos = self.play_ptr.value
             delta = (start - play_pos + buf_size) % buf_size
-            q = float(getattr(self, "_queue_frames", float(delta)) or 0.0)
-            self._queue_frames = 0.85 * q + 0.15 * float(delta)
             if delta < self.block_frame:
                 n_u = int(getattr(self, "_underrun_n", 0) or 0) + 1
                 self._underrun_n = n_u
@@ -2222,6 +2225,14 @@ if __name__ == "__main__":
             if self.out_ptr is None:
                 return
             self.out_ptr.value = write_pos
+            # Wait until this block *starts* playing — 0 if play is already
+            # inside it. The old (out_ptr - play) % buf wrapped the empty
+            # half in (diag 26.8.24 q=11k–20k → fake +250–475ms).
+            wait = frames_until_block_start(
+                write_pos, play_pos, int(self.block_frame), int(buf_size)
+            )
+            prev_q = float(getattr(self, "_queue_frames", 0.0) or 0.0)
+            self._queue_frames = _delay_ema(prev_q, float(wait))
             if self.in_evt is not None and self.in_evt.is_set():
                 n_o = int(getattr(self, "_overrun_n", 0) or 0) + 1
                 self._overrun_n = n_o
@@ -2232,6 +2243,10 @@ if __name__ == "__main__":
         def _finish_block_timing(self, start_time: float) -> None:
             total_time = time.perf_counter() - start_time
             self.last_infer_ms = int(total_time * 1000)
+            # Silence/skip blocks are 0–2ms and must not drag the delay reading down.
+            if total_time > 0.008:
+                prev_i = float(getattr(self, "_infer_ema_sec", 0.0) or 0.0)
+                self._infer_ema_sec = _delay_ema(prev_i, total_time)
             perf = getattr(self, "_perf", None)
             if perf is not None:
                 perf.add(total_time)
@@ -2763,20 +2778,27 @@ if __name__ == "__main__":
             return lat
 
         def _real_delay_sec(self) -> float:
-            """实测端到端延迟：设备 + 采集攒满一块 + 已排队待播的量。
+            """Live delay: device + capture block + wait-to-start + infer.
 
-            前两项躲不掉（声卡自己的缓冲、以及必须收满一块才能算），第三项是
-            实际测出来的排队量 —— 推理跟得上时它稳定在一块左右，跟不上时会涨。
-
-            量不到就退回公式估算，不返回 0：界面上突然掉成 0 比偏乐观更糟。
+            Wait-to-start is 0 when play is already inside the last written
+            block (the wrap that used to add ~300ms). Infer is an EMA of real
+            work, ignoring silent skips. Crossfade/extra_time stay lookback.
             """
             try:
                 sr = float(getattr(self.gui_config, "samplerate", 0) or 0)
-                q = float(getattr(self, "_queue_frames", 0.0) or 0.0)
-                if sr <= 0.0 or q <= 0.0:
+                if sr <= 0.0:
                     return float(getattr(self, "delay_time", 0.0) or 0.0)
-                block = float(self.block_frame) / sr
-                return self._device_latency_sec() + block + q / sr
+                block = float(self.block_frame) / sr if self.block_frame else float(
+                    getattr(self.gui_config, "block_time", 0.25) or 0.25
+                )
+                queued = float(getattr(self, "_queue_frames", 0.0) or 0.0) / sr
+                infer = float(getattr(self, "_infer_ema_sec", 0.0) or 0.0)
+                return live_delay_sec(
+                    device=self._device_latency_sec(),
+                    block=block,
+                    queued=queued,
+                    infer=infer,
+                )
             except Exception:
                 return float(getattr(self, "delay_time", 0.0) or 0.0)
 
@@ -3588,13 +3610,13 @@ if __name__ == "__main__":
                         time.sleep(0.05)
                     self._refresh_delay_time()
                 printt(
-                    "delay_ms=%s infer_ms=%s device_lat=%.3f block=%.3f xf=%.3f extra=%.3f hostapi=%s",
-                    int(round(float(getattr(self, "delay_time", 0.0) or 0.0) * 1000)),
+                    "delay_ms=%s infer_ms=%s device_lat=%.3f block=%.3f queued=%.3f hostapi=%s",
+                    int(round(self._real_delay_sec() * 1000)),
                     int(getattr(self, "last_infer_ms", 0) or 0),
                     self._device_latency_sec(),
                     float(getattr(self.gui_config, "block_time", 0.25) or 0.25),
-                    float(getattr(self.gui_config, "crossfade_time", 0.05) or 0.05),
-                    float(getattr(self.gui_config, "extra_time", 2.5) or 2.5),
+                    float(getattr(self, "_queue_frames", 0.0) or 0.0)
+                    / max(float(getattr(self.gui_config, "samplerate", 0) or 0), 1.0),
                     getattr(self.gui_config, "sg_hostapi", ""),
                 )
                 # persist
@@ -3650,12 +3672,14 @@ if __name__ == "__main__":
                     os.replace(tmp_path, cfg_path)
                 except Exception:
                     traceback.print_exc()
+                live_ms = int(round(self._real_delay_sec() * 1000))
                 self._worker_write_status(
                     state="running",
                     error="",
                     **_msg(VC_RUNNING),
                     progress=100,
-                    delay_ms=int(np.round(self.delay_time * 1000)),
+                    delay_ms=live_ms,
+                    real_delay_ms=live_ms,
                     infer_ms=0,
                     samplerate=int(getattr(self.gui_config, "samplerate", 0) or 0),
                     **self._worker_device_payload(),
@@ -3711,6 +3735,7 @@ if __name__ == "__main__":
                 state="idle",
                 error="",
                 delay_ms=0,
+                real_delay_ms=0,
                 infer_ms=0,
                 progress=100,
                 pid=os.getpid(),
@@ -4156,23 +4181,27 @@ if __name__ == "__main__":
                                 )
                                 self._worker_apply_hot(params)
                                 if flag_vc and self._swap_in_flight():
+                                    live_ms = int(round(self._real_delay_sec() * 1000))
                                     self._worker_write_status(
                                         state="running",
                                         **_msg(VC_SWAPPING),
                                         progress=int(
                                             getattr(self, "_swap_progress", 20) or 20
                                         ),
-                                        delay_ms=int(np.round(self.delay_time * 1000)),
+                                        delay_ms=live_ms,
+                                        real_delay_ms=live_ms,
                                         infer_ms=self.last_infer_ms,
                                         pid=os.getpid(),
                                         **self._worker_device_payload(),
                                     )
                                 elif flag_vc:
+                                    live_ms = int(round(self._real_delay_sec() * 1000))
                                     self._worker_write_status(
                                         state="running",
                                         **_msg(VC_PARAMS_APPLIED),
                                         progress=100,
-                                        delay_ms=int(np.round(self.delay_time * 1000)),
+                                        delay_ms=live_ms,
+                                        real_delay_ms=live_ms,
                                         infer_ms=self.last_infer_ms,
                                         pid=os.getpid(),
                                         **self._worker_device_payload(),
@@ -4190,14 +4219,14 @@ if __name__ == "__main__":
                         # heartbeat metrics — refresh delay (device latency may arrive late)
                         if flag_vc:
                             self._refresh_delay_time()
+                            live_ms = int(round(self._real_delay_sec() * 1000))
                             hb = {
                                 "state": "running",
-                                "delay_ms": int(np.round(self.delay_time * 1000)),
+                                # delay_ms and real_delay_ms are the same live
+                                # reading (device + block + wait-to-start + infer).
+                                "delay_ms": live_ms,
                                 "infer_ms": self.last_infer_ms,
-                                # 实测端到端延迟。跟 delay_ms（公式估算）并存：
-                                # 公式那个是「理论上应该多少」，这个是「实际
-                                # 多少」，两者拉开就说明推理没跟上块的节奏。
-                                "real_delay_ms": int(round(self._real_delay_sec() * 1000)),
+                                "real_delay_ms": live_ms,
                                 # 累计欠载次数。壳按它的增速判撕裂 —— 单看
                                 # infer_ms 会被偶发的尖峰骗到（显卡被别的程序
                                 # 抢一下很正常），持续欠载才是真跟不上。

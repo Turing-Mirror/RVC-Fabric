@@ -246,7 +246,7 @@ export function MorePage({
     };
   }, []);
 
-  const delay = Number(status?.delay_ms || 0);
+  const delay = Number(status?.real_delay_ms || status?.delay_ms || 0);
   const infer = Number(status?.infer_ms || 0);
   const dsp =
     status?.dsp_only === true ||

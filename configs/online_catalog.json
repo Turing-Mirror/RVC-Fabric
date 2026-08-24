@@ -820,6 +820,62 @@
       "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
+    },
+    {
+      "id": "Serika-JP",
+      "name": "黑见芹香（日配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260824",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Serika-JP.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Serika-JP.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Serika-JP-v1.zip",
+      "sha256": "0e390650de62782bb805b776393a623885fac92fbc1d5598e497d693664dcc97",
+      "size_bytes": 217069969,
+      "description": "黑见芹香（日配） · 蔚蓝档案 · 图灵镜 260824 版",
+      "name_i18n": {
+        "en-US": "Kuromi Serika (JP)",
+        "ja-JP": "黒見セリカ（日本語）",
+        "zh-TW": "黑見芹香（日配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260824",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
+      "channel": "release",
+      "release_tag": "voices"
+    },
+    {
+      "id": "Serika-ZH",
+      "name": "黑见芹香（中配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260824",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Serika-ZH.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Serika-ZH.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Serika-ZH-v1.zip",
+      "sha256": "63105cb80ec763fb9d0cab4ab2b10dd05263d48e16fe96f5d5c7d594b85265df",
+      "size_bytes": 155249786,
+      "description": "黑见芹香（中配） · 蔚蓝档案 · 图灵镜 260824 版",
+      "name_i18n": {
+        "en-US": "Kuromi Serika (CN)",
+        "ja-JP": "黒見セリカ（中国語）",
+        "zh-TW": "黑見芹香（中配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260824",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
+      "channel": "release",
+      "release_tag": "voices"
     }
   ],
   "thirdparty_voices": [

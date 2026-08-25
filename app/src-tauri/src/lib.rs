@@ -1930,6 +1930,33 @@ fn voices_rename(
     voices::rename_voice(&root, &model_dir, &new_name)
 }
 
+/// 选一张图给「更换封面」用。返回绝对路径或 null（取消）。
+#[tauri::command]
+fn voices_pick_cover(window: tauri::WebviewWindow) -> Option<String> {
+    voices::pick_cover_image(Some(&window))
+}
+
+/// 写入界面裁好的封面（data URL，JPEG/PNG）。
+#[tauri::command]
+fn voices_set_cover(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+    image: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::set_cover(&root, &model_dir, &image)
+}
+
+/// 撤销自定义封面，回落到包内 / 清单封面。
+#[tauri::command]
+fn voices_reset_cover(
+    state: State<'_, Mutex<AppState>>,
+    model_dir: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    voices::reset_cover(&root, &model_dir)
+}
+
 #[tauri::command]
 async fn voices_promote(
     state: State<'_, Mutex<AppState>>,
@@ -2198,6 +2225,9 @@ pub fn run() {
             voices_import,
             voices_delete,
             voices_rename,
+            voices_pick_cover,
+            voices_set_cover,
+            voices_reset_cover,
             voices_promote,
             voices_open_dir,
             store_catalog,

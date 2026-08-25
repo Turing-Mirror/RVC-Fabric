@@ -5,6 +5,8 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+export type VoiceAuthor = { name: string; url?: string };
+
 export type VoiceModel = {
   name: string;
   path: string;
@@ -16,6 +18,10 @@ export type VoiceModel = {
   tag?: string;
   author?: string;
   author_url?: string;
+  /** 多作者写法（sidecar 的 authors 数组）。单作者音色这里也有一项。 */
+  authors?: VoiceAuthor[];
+  /** 收录 / 发布日期（YYMMDD），模型卡上当版本号展示。 */
+  date?: string;
   /** 来源仓库 / 发布页。第三方音色装完之后靠它查得到出处。 */
   source_url?: string;
   source?: string;
@@ -73,6 +79,8 @@ export type StoreVoice = {
   description?: string;
   author?: string;
   author_url?: string;
+  /** 多作者写法（清单的 authors 数组）。 */
+  authors?: VoiceAuthor[];
   date?: string;
   series?: string;
   series_ja?: string;
@@ -250,6 +258,24 @@ export async function deleteVoice(modelDir: string) {
 export async function renameVoice(modelDir: string, newName: string) {
   if (!isTauri()) return;
   return invoke("voices_rename", { modelDir, newName });
+}
+
+/** 选一张本机图片给「更换封面」用（返回绝对路径，取消返回 null）。 */
+export async function pickCoverImage(): Promise<string | null> {
+  if (!isTauri()) return null;
+  return invoke<string | null>("voices_pick_cover");
+}
+
+/** 把界面裁好的封面（data URL）写进模型目录。 */
+export async function setVoiceCover(modelDir: string, image: string) {
+  if (!isTauri()) return { ok: false };
+  return invoke("voices_set_cover", { modelDir, image });
+}
+
+/** 撤销自定义封面，回落到包内 / 清单封面。 */
+export async function resetVoiceCover(modelDir: string) {
+  if (!isTauri()) return { ok: false };
+  return invoke("voices_reset_cover", { modelDir });
 }
 
 export async function promoteLegacy(pthPath: string) {

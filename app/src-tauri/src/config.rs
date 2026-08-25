@@ -194,8 +194,11 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("wallpaper_path".into(), json!(""));
     m.insert("wallpaper_blur".into(), json!(40));
     m.insert("wallpaper_opacity".into(), json!(70));
-    // 首页横幅自定义：文案留空 = 默认标题；不透明度最低由前端滑杆限在 20。
+    // 首页横幅自定义：标题留空 = 默认标题；副标题留空 = 不显示（那行以前
+    // 固定写着「切换立即生效 · 运行中可无缝换音色」，现在是用户自己的位置）；
+    // 不透明度最低由前端滑杆限在 20。
     m.insert("home_banner_text".into(), json!(""));
+    m.insert("home_banner_sub".into(), json!(""));
     m.insert("home_banner_opacity".into(), json!(100));
     // 新手进度的两个历史事件（首次成功变声 / 开启过监听）与永久关闭标记。
     // 前三步（运行时/音色/声卡）每次实时推导，不需要存。不进任何设置分组：
@@ -929,6 +932,7 @@ pub fn describe() -> Value {
             "wallpaper_blur",
             "wallpaper_opacity",
             "home_banner_text",
+            "home_banner_sub",
             "home_banner_opacity",
         ],
     );

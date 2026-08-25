@@ -238,6 +238,13 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "source_url": d.get("source_url").or_else(|| d.get("repo_url")).and_then(|v| v.as_str()).unwrap_or(""),
         "official": official,
     });
+    // 多作者写法（`authors: [{name, url}]`）：数组原样透传，前端在「作者主页」
+    // 一处展开让用户挑。没有这个字段就不加键，保持老清单的输出形状不变。
+    if let Some(obj) = out.as_object_mut() {
+        if let Some(a) = d.get("authors").filter(|v| v.is_array()) {
+            obj.insert("authors".into(), a.clone());
+        }
+    }
     // 上面那张表是**白名单**：没列的字段一律丢掉。清单里的 `name_i18n` /
     // `tag_i18n` / `description_i18n` 就是这么被吃掉的 —— 广场页拿不到译名，
     // 装到本地的 config.json 里更没有，于是英文界面下载 Chihaya Anon，
@@ -904,6 +911,7 @@ pub fn install_voice_pack_zip(
         for k in [
             "author",
             "author_url",
+            "authors",
             "source_url",
             "date",
             "series",
@@ -914,11 +922,12 @@ pub fn install_voice_pack_zip(
                 extra.insert(k.to_string(), v.clone());
             }
         }
-        // 作者主页 / 来源仓库多半只写在清单里 —— 第三方的 zip 是别人打的包，
+        // 作者 / 主页 / 来源 / 日期多半只写在清单里 —— 第三方的 zip 是别人打的包，
         // 里面那份 config.json 通常只有名字和标签。不从 entry 兜底，装完的
-        // 音色就再也查不到它是从哪来的、是谁做的。
+        // 音色就再也查不到它是从哪来的、是谁做的。（author 以前不在这张表里，
+        // 清单写了 author 但没写 author_i18n 时，装完的作者一栏就是空的。）
         if let Some(e) = entry {
-            for k in ["author_url", "source_url"] {
+            for k in ["author", "author_url", "authors", "source_url", "date", "series", "group"] {
                 if extra.contains_key(k) {
                     continue;
                 }
@@ -1226,7 +1235,15 @@ pub fn install_voice_entry(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "source_url", "date", "series", "group"] {
+    for k in [
+        "author",
+        "author_url",
+        "authors",
+        "source_url",
+        "date",
+        "series",
+        "group",
+    ] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1423,7 +1440,15 @@ fn install_staged_files(
     }
 
     let mut extra = Map::new();
-    for k in ["author", "author_url", "source_url", "date", "series", "group"] {
+    for k in [
+        "author",
+        "author_url",
+        "authors",
+        "source_url",
+        "date",
+        "series",
+        "group",
+    ] {
         if let Some(v) = entry.get(k) {
             extra.insert(k.to_string(), v.clone());
         }
@@ -1513,6 +1538,62 @@ mod tests {
             v.get("source_url").and_then(|x| x.as_str()),
             Some("https://example.invalid/someone/voices"),
         );
+    }
+
+    /// 清单里只写了 `author`（没有 author_i18n 变体）时，装进 sidecar 的
+    /// 也必须有作者 —— 以前 entry 兜底那张白名单只有 URL 两个字段，第三方
+    /// zip 的包内 config.json 又几乎从不带 author，装完的「作者」一栏就是
+    /// 空的。这条锁住兜底循环必须覆盖 author 本名。
+    #[test]
+    fn plain_author_from_entry_reaches_the_extra_map() {
+        let entry = json!({
+            "id": "tp-furina",
+            "author": "ArkanDash",
+            "date": "260731",
+        });
+        let mut extra = Map::new();
+        // 包内 config.json 没有 author —— 模拟第三方 zip。
+        for k in ["author", "author_url", "authors", "source_url", "date", "series", "group"] {
+            if let Some(v) = entry.get(k) {
+                extra.entry(k.to_string()).or_insert(v.clone());
+            }
+        }
+        assert_eq!(
+            extra.get("author").and_then(|v| v.as_str()),
+            Some("ArkanDash"),
+        );
+        assert_eq!(extra.get("date").and_then(|v| v.as_str()), Some("260731"));
+    }
+
+    /// 多作者的 `authors` 数组要原样透传到商店条目上 —— 前端在「作者主页」
+    /// 一处展开让用户挑。数组缺失时不加键，保持老清单输出形状不变。
+    #[test]
+    fn authors_array_passes_through_when_present() {
+        let with = parse_voice_entry(
+            &json!({
+                "id": "tp-duo",
+                "pth_url": "https://example.invalid/a.pth",
+                "authors": [
+                    {"name": "A", "url": "https://example.invalid/a"},
+                    {"name": "B"},
+                ],
+            }),
+            None,
+        )
+        .expect("entry should parse");
+        let arr = with.get("authors").and_then(|v| v.as_array()).expect("authors kept");
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].get("url").and_then(|x| x.as_str()), Some("https://example.invalid/a"));
+
+        let without = parse_voice_entry(
+            &json!({
+                "id": "tp-solo",
+                "pth_url": "https://example.invalid/b.pth",
+            }),
+            None,
+        )
+        .expect("entry should parse");
+        assert!(!without.as_object().unwrap().contains_key("authors"));
     }
 
     /// 第三方条目的封面 URL 必须落进 sidecar 的 `cover` —— 漏掉这条，

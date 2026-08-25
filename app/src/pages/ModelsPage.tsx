@@ -6,8 +6,10 @@ import { DspPresetEditor } from "../components/DspPresetEditor";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
+import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
-import { auditionVoice } from "../lib/audition";
+import { CropCoverDialog } from "../components/CropCoverDialog";
+import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
@@ -31,6 +33,7 @@ import {
   openModelsDir,
   promoteLegacy,
   renameVoice,
+  resetVoiceCover,
   saveProfile,
   selectVoice,
   unbindIndex,
@@ -38,6 +41,7 @@ import {
   applyProfile,
   type IndexItem,
   type ProfileItem,
+  type VoiceAuthor,
   type VoiceModel,
 } from "../lib/voices";
 
@@ -168,6 +172,10 @@ function ModelsPageImpl({
     y: number;
     model: VoiceModel;
   } | null>(null);
+  // 多位作者都有主页：先问用户要打开哪一个。
+  const [authorPick, setAuthorPick] = useState<VoiceAuthor[] | null>(null);
+  // 正在换封面的模型（裁剪对话框）。
+  const [coverEdit, setCoverEdit] = useState<VoiceModel | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const selected = useMemo(
@@ -313,18 +321,6 @@ function ModelsPageImpl({
       y: r.bottom + 6,
       model,
     });
-  };
-
-  const [auditing, setAuditing] = useState("");
-  const runAudition = async (m: VoiceModel) => {
-    if (auditing) return;
-    setAuditing(m.dir);
-    try {
-      const err = await auditionVoice(m.path || "");
-      if (err) setMsg(t("s.auditionFailed", { v0: err }));
-    } finally {
-      setAuditing("");
-    }
   };
 
   const onUse = async (m: VoiceModel) => {
@@ -535,6 +531,8 @@ function ModelsPageImpl({
             pageView.map((v) => {
               const cur = modelKey(v) === selectedKey;
               const src = resolveCover(v.cover, coverCache);
+              const authors = voiceAuthorList(v);
+              const ver = voiceVersionLabel(v.date);
               return (
                 <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
@@ -550,14 +548,25 @@ function ModelsPageImpl({
                     ) : (
                       <span>{(v.name || "?").slice(0, 4)}</span>
                     )}
+                    {/* 左上角：发布日期当版本号（v26.07.31），方便认同一角色的
+                        不同版本；下面才是「文件丢失」。都没有就不占位。 */}
+                    {(ver || v.missing) ? (
+                      <span className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1">
+                        {ver ? (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                            {ver}
+                          </span>
+                        ) : null}
+                        {v.missing ? (
+                          <span className="text-[11px] text-[#c44]">{t("s.2fe9b75856")}</span>
+                        ) : null}
+                      </span>
+                    ) : null}
                     {cur ? (
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
-                    ) : null}
-                    {v.missing ? (
-                      <span className="absolute left-2.5 top-2.5 text-[11px] text-[#c44]">{t("s.2fe9b75856")}</span>
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
@@ -566,8 +575,15 @@ function ModelsPageImpl({
                   <div className="text-[14.5px] font-semibold mt-0.5 truncate">
                     {v.name}
                   </div>
-                  <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
-                    {v.author ? t("s.7feea73fa3", { v0: v.author }) : t("s.2af26573b0")}
+                  <div
+                    className="text-xs text-[var(--meta)] mt-0.5 truncate"
+                    title={authors.map((a) => a.name).join("、") || undefined}
+                  >
+                    {authors.length
+                      ? t("s.7feea73fa3", {
+                          v0: authors.map((a) => a.name).join("、"),
+                        })
+                      : t("s.2af26573b0")}
                   </div>
                   <div className="mt-2.5 flex items-center gap-1.5">
                     {cur ? (
@@ -575,17 +591,6 @@ function ModelsPageImpl({
                     ) : (
                       <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
                     )}
-                    {/* 试听不改用户当前选中的音色 —— 为了听一下就把他的选择改掉，
-                        是拿副作用换功能。后端直接按这个路径换声。 */}
-                    {v.path && !v.missing ? (
-                      <Btn
-                        busy={auditing === v.dir}
-                        disabled={busy || auditing !== ""}
-                        onClick={() => void runAudition(v)}
-                      >
-                        {auditing === v.dir ? t("s.auditionBusy") : t("s.auditionBtn")}
-                      </Btn>
-                    ) : null}
                     {/* 改名 / 删除 / 看作者主页原来藏在右键里，没人找得到。
                         一条都没有的模型不画这个按钮 —— 点开只写着「无可用
                         操作」的菜单，比没有按钮更让人恼火。 */}
@@ -848,6 +853,30 @@ function ModelsPageImpl({
             await reload();
           }}
           onMessage={setMsg}
+          onPickAuthors={(a) => {
+            setMenu(null);
+            setAuthorPick(a);
+          }}
+          onEditCover={(m) => {
+            setMenu(null);
+            setCoverEdit(m);
+          }}
+        />
+      ) : null}
+
+      {authorPick ? (
+        <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
+      ) : null}
+
+      {coverEdit ? (
+        <CropCoverDialog
+          model={coverEdit}
+          onClose={() => setCoverEdit(null)}
+          onSaved={async (message) => {
+            setCoverEdit(null);
+            await reload();
+            if (message) setMsg(message);
+          }}
         />
       ) : null}
 
@@ -856,18 +885,19 @@ function ModelsPageImpl({
 }
 
 /**
- * 这个模型身上能打开的外链：作者主页、来源仓库。
+ * 这个模型身上能打开的外链：作者主页（可多位）、来源仓库。
  *
  * 只认 http(s)：地址来自清单，是第三方写的。别的协议交给 `open_external`
  * 也会被挡掉，但那时菜单项已经画出来了 —— 点了没反应比没这一项更糟。
  */
-function voiceLinks(m: VoiceModel): [string, string][] {
-  return (
-    [
-      [(m.author_url || "").trim(), t("s.468c96d425")],
-      [(m.source_url || "").trim(), t("s.voiceOpenSource")],
-    ] as [string, string][]
-  ).filter(([url]) => /^https?:\/\//i.test(url));
+function voiceSourceLink(m: VoiceModel): string {
+  const url = (m.source_url || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
+/** 带有效主页的作者。多作者音色在这里展开，点「作者主页」时让用户挑一个。 */
+function voiceAuthorLinks(m: VoiceModel): VoiceAuthor[] {
+  return voiceAuthorList(m).filter((a) => /^https?:\/\//i.test(a.url || ""));
 }
 
 /**
@@ -878,13 +908,15 @@ function voiceLinks(m: VoiceModel): [string, string][] {
  */
 function hasMoreActions(m: VoiceModel): boolean {
   if (m.source === "user_data" && m.dir) return true;
-  if (voiceLinks(m).length) return true;
+  if (voiceSourceLink(m)) return true;
+  if (voiceAuthorLinks(m).length) return true;
   if (m.source === "legacy_weights" && m.path) return true;
   return false;
 }
 
 /**
- * 模型卡片上「⋯」按钮弹的菜单：改名、删除、看作者主页、把老权重收进音色库。
+ * 模型卡片上「⋯」按钮弹的菜单：改名、换封面、删除、看作者主页、把老权重收
+ * 进音色库。
  *
  * 这些以前是右键菜单。右键在桌面软件里是个没人会去试的入口——用户不知道有，
  * 就等于没做。现在它挂在「使用」旁边一个看得见的按钮上。
@@ -896,6 +928,8 @@ function MoreMenu({
   onClose,
   onDone,
   onMessage,
+  onPickAuthors,
+  onEditCover,
 }: {
   x: number;
   y: number;
@@ -903,6 +937,10 @@ function MoreMenu({
   onClose: () => void;
   onDone: () => void;
   onMessage: (s: string) => void;
+  /** 多位作者都有主页：交给页面上的选择框，让用户挑要打开哪一位。 */
+  onPickAuthors: (authors: VoiceAuthor[]) => void;
+  /** 打开封面裁剪对话框（仅本地音色有这一项）。 */
+  onEditCover: (m: VoiceModel) => void;
 }) {
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
   if (model.source === "user_data" && model.dir) {
@@ -913,6 +951,24 @@ function MoreMenu({
         if (!n) return;
         try {
           await renameVoice(model.dir, n);
+          onDone();
+        } catch (e) {
+          onMessage(String(e));
+        }
+      },
+    });
+    items.push({
+      label: t("models.changeCover"),
+      action: () => {
+        onEditCover(model);
+        onClose();
+      },
+    });
+    items.push({
+      label: t("models.resetCover"),
+      action: async () => {
+        try {
+          await resetVoiceCover(model.dir);
           onDone();
         } catch (e) {
           onMessage(String(e));
@@ -939,14 +995,35 @@ function MoreMenu({
     });
   }
   // 作者主页和来源仓库是两个地址：清单里常常只写其中一个，第三方音色尤其
-  // 是「只有仓库、没有主页」。两条都挂，有哪条给哪条。
-  for (const [url, label] of voiceLinks(model)) {
+  // 是「只有仓库、没有主页」。两条都挂，有哪条给哪条。作者可以有多位 ——
+  // 只有一位就直接打开；多位先问一声开哪个。
+  const authorLinks = voiceAuthorLinks(model);
+  if (authorLinks.length === 1) {
+    const a = authorLinks[0];
     items.push({
-      label,
+      label: t("s.voiceLinkAuthor"),
+      action: () => {
+        void openExternal(a.url || "");
+        onClose();
+      },
+    });
+  } else if (authorLinks.length > 1) {
+    items.push({
+      label: t("s.voiceLinkAuthor"),
+      action: () => {
+        onPickAuthors(authorLinks);
+        onClose();
+      },
+    });
+  }
+  const srcUrl = voiceSourceLink(model);
+  if (srcUrl) {
+    items.push({
+      label: t("s.voiceOpenSource"),
       action: () => {
         // Through the shell so it lands in the user's own browser, and so the
         // http/https check applies — a catalog-supplied URL is untrusted.
-        void openExternal(url);
+        void openExternal(srcUrl);
         onClose();
       },
     });

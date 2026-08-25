@@ -776,7 +776,9 @@ fn record_inner(app: &AppHandle, root: &Path, input: &str) -> Result<Value, Stri
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &e))?;
 
-    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+    // pythonw：piped stdout 仍然能读，不会闪控制台。python.exe 即便加了
+    // CREATE_NO_WINDOW，它再拉起来的 ffmpeg 仍会弹黑框。
+    let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     emit_record(app, "start", None, Some(0.0), &crate::i18n::t("s.stsRecordOpening"));
 
     // stderr 必须落文件，不能 piped 后不读：管道满了子进程就卡在 write 上，
@@ -1586,7 +1588,7 @@ fn run_inner(
     let mut sess = match sess {
         Some(r) => r,
         None => {
-            let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+            let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
             let errfile = OpenOptions::new()
                 .create(true)
                 .append(true)

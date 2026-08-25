@@ -119,17 +119,17 @@ export function ExtrasPanel({
 }) {
   const [list, setList] = useState<List | null>(null);
   const [assets, setAssets] = useState<AssetsStatus | null>(null);
-  const [prog, setProg] = useState<Progress | null>(null);
+  const [progByKey, setProgByKey] = useState<Record<string, Progress>>({});
   const [coreProg, setCoreProg] = useState<ProvProgress | null>(null);
   const [msg, setMsg] = useState("");
-  const [busyKey, setBusyKey] = useState("");
+  const [busyKeys, setBusyKeys] = useState<Record<string, true>>({});
   const [removeKey, setRemoveKey] = useState("");
   const [coreBusy, setCoreBusy] = useState(false);
   const [category, setCategory] = useState<Category>(
     filter === "train" ? "train" : "separate",
   );
   const [page, setPage] = useState(0);
-  const busyRef = useRef(false);
+  const startingRef = useRef<Record<string, true>>({});
 
   /** null = 还在查；false = 缺引擎资源；true = 已就绪 */
   const engineReady: boolean | null =
@@ -160,8 +160,10 @@ export function ExtrasPanel({
     let disposed = false;
     const unsubs: Array<() => void> = [];
     void listen<Progress>("extra-progress", (ev) => {
-      setProg(ev.payload);
-      if (ev.payload.phase === "error") setMsg(ev.payload.message || t("s.e0dab22b1a"));
+      const p = ev.payload;
+      if (!p?.key) return;
+      setProgByKey((m) => ({ ...m, [p.key]: p }));
+      if (p.phase === "error") setMsg(p.message || t("s.e0dab22b1a"));
     }).then((fn) => {
       if (disposed) fn();
       else unsubs.push(fn);
@@ -196,8 +198,7 @@ export function ExtrasPanel({
   );
 
   const downloadEngineCore = async () => {
-    if (busyRef.current || coreBusy) return;
-    busyRef.current = true;
+    if (coreBusy || Object.keys(busyKeys).length > 0) return;
     setCoreBusy(true);
     setMsg("");
     setCoreProg({
@@ -215,21 +216,19 @@ export function ExtrasPanel({
     } catch (e) {
       setMsg(String(e));
     } finally {
-      busyRef.current = false;
       setCoreBusy(false);
     }
   };
 
   const start = async (key: string) => {
-    if (busyRef.current || coreBusy) return;
+    if (coreBusy || busyKeys[key] || startingRef.current[key]) return;
     if (engineReady === false) {
       setMsg(t("s.e8a77f003d"));
       return;
     }
-    busyRef.current = true;
-    setBusyKey(key);
+    startingRef.current[key] = true;
+    setBusyKeys((m) => ({ ...m, [key]: true }));
     setMsg("");
-    setProg(null);
     try {
       await invoke("extra_download", { key });
       // 同上：`load` 开头清 msg，先刷新再报「下载完成」，否则这句永远看不见。
@@ -238,8 +237,12 @@ export function ExtrasPanel({
     } catch (e) {
       setMsg(String(e));
     } finally {
-      busyRef.current = false;
-      setBusyKey("");
+      delete startingRef.current[key];
+      setBusyKeys((m) => {
+        const n = { ...m };
+        delete n[key];
+        return n;
+      });
     }
   };
 
@@ -250,7 +253,7 @@ export function ExtrasPanel({
    * 点错一下的代价太大。确认框里把体积写出来，别让用户去猜删的是什么。
    */
   const remove = async (it: Item) => {
-    if (busyRef.current || coreBusy || removeKey) return;
+    if (coreBusy || removeKey || busyKeys[it.key]) return;
     const ok = await askConfirm(
       t("s.extraRemoveConfirm", {
         v0: extraLabel(it, category),
@@ -258,10 +261,8 @@ export function ExtrasPanel({
       }),
     );
     if (!ok) return;
-    busyRef.current = true;
     setRemoveKey(it.key);
     setMsg("");
-    setProg(null);
     try {
       const r = await invoke<{ freed_bytes?: number }>("extra_remove", {
         key: it.key,
@@ -272,12 +273,11 @@ export function ExtrasPanel({
     } catch (e) {
       setMsg(String(e));
     } finally {
-      busyRef.current = false;
       setRemoveKey("");
     }
   };
 
-  const pct = prog?.total ? Math.round(((prog.done ?? 0) / prog.total) * 100) : 0;
+  const downloading = Object.keys(busyKeys);
   const corePct =
     coreProg?.percent != null
       ? Math.min(100, Math.max(0, Number(coreProg.percent)))
@@ -293,7 +293,7 @@ export function ExtrasPanel({
         : t("s.7e9782377b");
 
   const locked = engineReady === false;
-  const anyBusy = !!busyKey || !!removeKey || coreBusy;
+  const anyBusy = downloading.length > 0 || !!removeKey || coreBusy;
   useEffect(() => {
     onBusyChange?.(anyBusy);
   }, [anyBusy, onBusyChange]);
@@ -376,7 +376,7 @@ export function ExtrasPanel({
               <Btn
                 primary
                 className="shrink-0"
-                disabled={coreBusy || !!busyKey}
+                disabled={coreBusy || downloading.length > 0}
                 onClick={() => void downloadEngineCore()}
               >
                 {coreBusy ? t("s.65188d08a2") : t("s.cbf7f4dada")}
@@ -407,7 +407,8 @@ export function ExtrasPanel({
                   key={it.key}
                   it={it}
                   category={category}
-                  busyKey={busyKey}
+                  busy={!!busyKeys[it.key]}
+                  progress={progByKey[it.key]}
                   removeKey={removeKey}
                   disabled={coreBusy}
                   onStart={start}
@@ -419,14 +420,14 @@ export function ExtrasPanel({
             {totalPages > 1 ? (
               <div className="flex items-center justify-center gap-3 pt-4 pb-1">
                 <Btn
-                  disabled={pageClamped <= 0 || anyBusy}
+                  disabled={pageClamped <= 0 || !!removeKey || coreBusy}
                   onClick={() => setPage(pageClamped - 1)}
                 >{t("s.b41561d807")}</Btn>
                 <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
                   {pageClamped + 1} / {totalPages}
                 </span>
                 <Btn
-                  disabled={pageClamped >= totalPages - 1 || anyBusy}
+                  disabled={pageClamped >= totalPages - 1 || !!removeKey || coreBusy}
                   onClick={() => setPage(pageClamped + 1)}
                 >{t("s.67a246a344")}</Btn>
               </div>
@@ -438,20 +439,6 @@ export function ExtrasPanel({
           </div>
         )}
 
-        {busyKey && prog ? (
-          <div className="mt-4">
-            <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
-              <div
-                className="h-full bg-[var(--accent)] transition-[width] duration-200"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
-              {prog.message} {pct}%
-            </p>
-          </div>
-        ) : null}
-
         {msg ? (
           // 下载失败现在是多行的（一句人话 + 试过的源 + 怎么办 + 技术细节），
           // 不换行的话整段挤成一坨，等于白写。
@@ -460,9 +447,9 @@ export function ExtrasPanel({
           </p>
         ) : null}
 
-        {busyKey || onClose ? (
+        {downloading.length > 0 || onClose ? (
           <div className="mt-5 flex justify-end gap-2.5">
-            {busyKey ? (
+            {downloading.length > 0 ? (
               <Btn onClick={() => void invoke("extra_cancel")}>{t("s.7115f2e29d")}</Btn>
             ) : onClose ? (
               <Btn onClick={onClose} disabled={coreBusy || !!removeKey}>{t("s.6c14bd7f6f")}</Btn>
@@ -524,7 +511,8 @@ export function ExtrasDialog({
 function ItemRow({
   it,
   category,
-  busyKey,
+  busy,
+  progress,
   removeKey,
   disabled,
   onStart,
@@ -532,55 +520,74 @@ function ItemRow({
 }: {
   it: Item;
   category: Category;
-  busyKey: string;
+  busy: boolean;
+  progress?: Progress;
   removeKey: string;
   disabled?: boolean;
   onStart: (key: string) => void;
   onRemove: (it: Item) => void;
 }) {
   const removing = removeKey === it.key;
+  const pct = progress?.total
+    ? Math.round(((progress.done ?? 0) / Math.max(progress.total, 1)) * 100)
+    : 0;
   return (
-    <div className="flex items-center gap-4 border-b border-[var(--hairline)] py-3.5">
-      <span className="min-w-0 flex-1">
-        <span className="block text-[14px] leading-snug">
-          {extraLabel(it, category)}
-          {it.recommended ? (
-            <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
-          ) : null}
-        </span>
-        {extraNotes(it) ? (
-          <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
-            {extraNotes(it)}
+    <div className="border-b border-[var(--hairline)] py-3.5">
+      <div className="flex items-center gap-4">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] leading-snug">
+            {extraLabel(it, category)}
+            {it.recommended ? (
+              <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
+            ) : null}
           </span>
-        ) : null}
-        <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
-          {mb(it.size_bytes)}
-          {it.files?.length ? t("s.8e7dddc185", { v0: it.files.length }) : ""}
-          {it.installed ? t("s.f7b11922f6") : ""}
+          {extraNotes(it) ? (
+            <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
+              {extraNotes(it)}
+            </span>
+          ) : null}
+          <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
+            {mb(it.size_bytes)}
+            {it.files?.length ? t("s.8e7dddc185", { v0: it.files.length }) : ""}
+            {it.installed ? t("s.f7b11922f6") : ""}
+          </span>
         </span>
-      </span>
-      {it.installed ? (
-        // 已装好的给一个卸载口子：模型动辄几百 MB，试过不合用就该能删掉，
-        // 不然只能让用户自己去 assets 里翻文件。
-        <span className="shrink-0 flex items-center gap-2">
-          <span className="text-[13px] text-[var(--ink-muted)] px-1">{t("s.eb88ff57c9")}</span>
+        {it.installed ? (
+          // 已装好的给一个卸载口子：模型动辄几百 MB，试过不合用就该能删掉，
+          // 不然只能让用户自己去 assets 里翻文件。
+          <span className="shrink-0 flex items-center gap-2">
+            <span className="text-[13px] text-[var(--ink-muted)] px-1">{t("s.eb88ff57c9")}</span>
+            <Btn
+              className="min-w-[72px]"
+              disabled={busy || !!removeKey || !!disabled}
+              onClick={() => void onRemove(it)}
+            >
+              {removing ? t("s.extraRemoving") : t("s.extraRemove")}
+            </Btn>
+          </span>
+        ) : (
           <Btn
-            className="min-w-[72px]"
-            disabled={!!busyKey || !!removeKey || !!disabled}
-            onClick={() => void onRemove(it)}
+            className="shrink-0 min-w-[72px]"
+            disabled={busy || !!removeKey || !!disabled}
+            onClick={() => void onStart(it.key)}
           >
-            {removing ? t("s.extraRemoving") : t("s.extraRemove")}
+            {busy ? t("s.65188d08a2") : t("s.2b9d013177")}
           </Btn>
-        </span>
-      ) : (
-        <Btn
-          className="shrink-0 min-w-[72px]"
-          disabled={!!busyKey || !!removeKey || !!disabled}
-          onClick={() => void onStart(it.key)}
-        >
-          {busyKey === it.key ? t("s.65188d08a2") : t("s.2b9d013177")}
-        </Btn>
-      )}
+        )}
+      </div>
+      {busy && progress ? (
+        <div className="mt-2">
+          <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
+            <div
+              className="h-full bg-[var(--accent)] transition-[width] duration-200"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
+            {progress.message} {pct > 0 ? ` ${pct}%` : ""}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

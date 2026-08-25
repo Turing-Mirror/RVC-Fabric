@@ -469,6 +469,12 @@ def _run_request_file(engine: "_Engine", path: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    try:
+        from tools.worker_protocol import prepare_headless_windows
+
+        prepare_headless_windows()
+    except Exception:
+        pass
     _ensure_stdio_utf8()
     rest = list(argv[1:])
     resident = "--resident" in rest

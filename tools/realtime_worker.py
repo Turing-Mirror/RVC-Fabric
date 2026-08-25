@@ -153,6 +153,12 @@ def main() -> None:
     os.environ["TM_REALTIME_WORKER"] = "1"
     os.environ.setdefault("TM_VOICE_ROOT", str(root))
     try:
+        from tools.worker_protocol import prepare_headless_windows
+
+        prepare_headless_windows()
+    except Exception:
+        pass
+    try:
         from tools.win_realtime import boost_current_process
 
         boost_current_process(high=True)

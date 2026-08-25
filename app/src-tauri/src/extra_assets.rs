@@ -20,10 +20,10 @@
 //! `dest` 是相对安装根目录的路径，**只允许相对路径**：清单是从网上拉的，
 //! 让它决定一个绝对路径等于把任意写文件的权限交出去。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
@@ -32,17 +32,66 @@ use crate::{catalog, download};
 
 const CNB_REPO: &str = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases";
 
-static BUSY: Mutex<bool> = Mutex::new(false);
-static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+/// 正在下/正在卸的 key。按条占位，不同模型可以同时进行；同一条不能重叠。
+static BUSY: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+/// 每条下载自己的取消旗标。全局一个的话，取消 A 会把 B 也掐掉。
+static CANCELS: Mutex<Option<HashMap<String, Arc<AtomicBool>>>> = Mutex::new(None);
 
-fn cancel_flag() -> Arc<AtomicBool> {
-    CANCEL
-        .get_or_init(|| Arc::new(AtomicBool::new(false)))
+fn occupy(key: &str) -> Result<(), String> {
+    let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    let set = g.get_or_insert_with(HashSet::new);
+    if set.contains(key) {
+        return Err(crate::i18n::t("s.42b898eb36"));
+    }
+    set.insert(key.to_string());
+    Ok(())
+}
+
+fn release(key: &str) {
+    let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(set) = g.as_mut() {
+        set.remove(key);
+    }
+}
+
+fn occupied_keys() -> Vec<String> {
+    let g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    g.as_ref()
+        .map(|s| s.iter().cloned().collect())
+        .unwrap_or_default()
+}
+
+struct OccupyGuard(String);
+
+impl Drop for OccupyGuard {
+    fn drop(&mut self) {
+        release(&self.0);
+        drop_cancel_flag(&self.0);
+    }
+}
+
+fn cancel_flag_for(key: &str) -> Arc<AtomicBool> {
+    let mut g = CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    let map = g.get_or_insert_with(HashMap::new);
+    map.entry(key.to_string())
+        .or_insert_with(|| Arc::new(AtomicBool::new(false)))
         .clone()
 }
 
+fn drop_cancel_flag(key: &str) {
+    let mut g = CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = g.as_mut() {
+        map.remove(key);
+    }
+}
+
 pub fn cancel() {
-    cancel_flag().store(true, Ordering::SeqCst);
+    let g = CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(map) = g.as_ref() {
+        for f in map.values() {
+            f.store(true, Ordering::SeqCst);
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -351,10 +400,12 @@ pub fn list(root: &Path) -> Value {
             })
         })
         .collect();
+    let keys = occupied_keys();
     json!({
         "available": reachable,
         "items": items,
-        "busy": *BUSY.lock().unwrap_or_else(|e| e.into_inner()),
+        "busy": !keys.is_empty(),
+        "busy_keys": keys,
     })
 }
 
@@ -413,20 +464,14 @@ pub fn remove(
     sep_busy: bool,
     train_busy: bool,
 ) -> Result<Value, String> {
-    // 占住和下载同一把锁，不是只瞄一眼：只判断的话，判完到删完之间正好起一个
-    // 下载，两边就会对着同一批文件一个写一个删。
-    {
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
-            return Err(crate::i18n::t("s.extraRemoveBusy"));
-        }
-        *g = true;
-    }
+    // 占住这条资源，不是全局一把锁：别的模型可以同时在下，只拦「同一条一边
+    // 下一边删」。判完到删完之间如果允许再点下载，两边就会对着同一批文件一个
+    // 写一个删。
+    occupy(key).map_err(|_| crate::i18n::t("s.extraRemoveBusy"))?;
+    let _guard = OccupyGuard(key.to_string());
     let (data, _) = catalog_for_extras(root, true);
     let specs = extras_from(&data);
-    let r = remove_with(root, key, &specs, sep_busy, train_busy);
-    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
-    r
+    remove_with(root, key, &specs, sep_busy, train_busy)
 }
 
 /// 卸载的实际动作。清单从外面递进来，测试才能不碰网络也不碰全局 BUSY。
@@ -496,17 +541,14 @@ fn remove_with(
 }
 
 /// 下载一条附加资源。阻塞，调用方负责挪到后台线程。
+///
+/// 不同 key 可以同时下（广场「下载模型」一次点好几条）。同一 key 仍互斥。
 pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String> {
-    {
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
-            return Err(crate::i18n::t("s.42b898eb36").into());
-        }
-        *g = true;
-    }
-    cancel_flag().store(false, Ordering::SeqCst);
-    let r = download_inner(app, root, key);
-    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    occupy(key)?;
+    let _guard = OccupyGuard(key.to_string());
+    let cancel = cancel_flag_for(key);
+    cancel.store(false, Ordering::SeqCst);
+    let r = download_inner(app, root, key, cancel);
     if let Err(ref e) = r {
         let _ = app.emit(
             "extra-progress",
@@ -516,7 +558,12 @@ pub fn download(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String
     r
 }
 
-fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, String> {
+fn download_inner(
+    app: &AppHandle,
+    root: &Path,
+    key: &str,
+    cancel: Arc<AtomicBool>,
+) -> Result<Value, String> {
     // 下载也允许内置清单：规格里已经带了 sha256 和 CNB URL，不依赖 index 在线。
     let (data, _) = catalog_for_extras(root, true);
     // 用户主动点下载时再硬拉一次线上，避免内置过旧；失败就用刚才那份。
@@ -562,7 +609,7 @@ fn download_inner(app: &AppHandle, root: &Path, key: &str) -> Result<Value, Stri
         // 先落到临时名，校验通过再改名：中断留下的半截文件如果就叫最终名，
         // 下次开界面会被 file_ok 当成已装好（大小刚好撞上就更糟）。
         let tmp = dir.join(format!("{}.part", f.name));
-        download::download_file(&f.urls, &tmp, &f.sha256, cancel_flag(), Some(cb))
+        download::download_file(&f.urls, &tmp, &f.sha256, cancel.clone(), Some(cb))
             .map_err(|e| crate::i18n::t2("s.0df1f31a67", &f.name, &e))?;
         if dest.exists() {
             let _ = std::fs::remove_file(&dest);
@@ -875,5 +922,23 @@ mod tests {
         let f2 = ExtraFile { size_bytes: 4, ..f };
         assert!(file_ok(&p, &f2));
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn different_keys_can_be_occupied_at_once() {
+        // 广场一次点好几条分离模型，全局一把锁只会让第二条报「已有下载」。
+        let a = format!("occupy-a-{}", std::process::id());
+        let b = format!("occupy-b-{}", std::process::id());
+        assert!(occupy(&a).is_ok());
+        assert!(occupy(&b).is_ok());
+        let keys = occupied_keys();
+        assert!(keys.contains(&a) && keys.contains(&b));
+        assert!(occupy(&a).is_err(), "同一条不能叠两次");
+        release(&a);
+        release(&b);
+        let keys = occupied_keys();
+        assert!(!keys.contains(&a) && !keys.contains(&b));
+        assert!(occupy(&a).is_ok());
+        release(&a);
     }
 }

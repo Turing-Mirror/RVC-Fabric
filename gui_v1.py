@@ -205,9 +205,9 @@ if __name__ == "__main__":
 
     # Multiprocessing children must use pythonw (no Runtime\\python.exe flash)
     try:
-        from tools.worker_protocol import force_windowed_multiprocessing
+        from tools.worker_protocol import prepare_headless_windows
 
-        force_windowed_multiprocessing()
+        prepare_headless_windows()
     except Exception:
         try:
             from pathlib import Path as _Path
@@ -281,9 +281,9 @@ if __name__ == "__main__":
         if _harvest_workers:
             return
         try:
-            from tools.worker_protocol import force_windowed_multiprocessing
+            from tools.worker_protocol import prepare_headless_windows
 
-            force_windowed_multiprocessing()
+            prepare_headless_windows()
         except Exception:
             pass
         count = max(1, int(n or n_cpu))

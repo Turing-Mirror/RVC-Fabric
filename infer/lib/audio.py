@@ -1,4 +1,5 @@
 import platform, os
+import subprocess
 import ffmpeg
 import numpy as np
 import av
@@ -40,10 +41,20 @@ def load_audio(file, sr):
             raise RuntimeError(
                 "You input a wrong audio path that does not exists, please fix it!"
             )
+        run_kw = {}
+        if platform.system() == "Windows":
+            run_kw["creationflags"] = getattr(
+                subprocess, "CREATE_NO_WINDOW", 0x08000000
+            )
         out, _ = (
             ffmpeg.input(file, threads=0)
             .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
-            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
+            .run(
+                cmd=["ffmpeg", "-nostdin"],
+                capture_stdout=True,
+                capture_stderr=True,
+                **run_kw,
+            )
         )
     except Exception as e:
         traceback.print_exc()

@@ -143,6 +143,7 @@ fn tearing_step(
                 return Ok(json!({"action": "none"}));
             };
             // f0method 是热参数，改它不用停流 —— 声音不会断。
+            crate::logging::shell_log!("tearing: f0 {} → {} (underrun auto-drop)", f0, next);
             let mut patch = Map::new();
             patch.insert("f0method".into(), json!(next));
             config::update(&root, patch.clone())?;

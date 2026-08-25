@@ -265,9 +265,9 @@ fn run_inner(
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
-    // python.exe 而不是 pythonw：我们要读它的 stdout。窗口用 CREATE_NO_WINDOW
-    // 压掉，不然每次分离都会闪一个黑框。
-    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+    // pythonw：piped stdout 仍然能读。python.exe 自己的窗口能用 CREATE_NO_WINDOW
+    // 压掉，但它再拉起来的 ffmpeg 还是会闪黑框。
+    let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     let errfile = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

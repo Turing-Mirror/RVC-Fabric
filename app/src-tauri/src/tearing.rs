@@ -20,12 +20,30 @@
 //! 第二级干脆只描述现象（「检测到声音撕裂」）再问一句。
 
 /// 判定窗口。太短会被一次偶发卡顿触发，太长则用户已经难受了半天。
-pub const WINDOW_SEC: f64 = 5.0;
+///
+/// 26.8.24 诊断：起播加载 rmvpe 的几秒里连续两次 Output underrun 是常态
+/// （infer_ms 还是 0），5 秒 / 10% 会把这两次当成「持续跟不上」并把 rmvpe
+/// 写成 fcpe。窗口拉到 10 秒，要的是「听得见的一段卡顿」而不是开机毛刺。
+pub const WINDOW_SEC: f64 = 10.0;
+
+/// 起播后这么多秒内的欠载一律不算。CUDA graph 捕获、rmvpe 首次推理、声卡
+/// 开流，都会在开头甩出一两次欠载，跟「资源不足」无关。
+pub const WARMUP_SEC: f64 = 20.0;
 
 /// 窗口内欠载超过这个比例才算「持续跟不上」。
 ///
-/// 块长 0.25s 时 5 秒窗口约 20 块，10% 即 2 次。一次是偶发，两次开始有听感。
-pub const RATE: f64 = 0.10;
+/// 块长 0.25s 时 10 秒窗口约 40 块，25% 即 10 次。26.8.24 那台 RTX 3050
+/// 全程 28 分钟 91 次欠载（约 1.3%），rmvpe 推理 1–76ms，完全跟得上；旧的
+/// 10% / 2 次门槛会在每一次起播时误判。
+pub const RATE: f64 = 0.25;
+
+/// 比例够了但绝对次数太少也不算。块长被用户调大时 10 秒里块数很少，
+/// 两三次毛刺就能过比例。
+pub const MIN_UNDERRUNS: u32 = 5;
+
+/// 连续几个过线窗口才动手。一个窗口过线可能是切窗口、杀毒扫盘；连续两段
+/// 才是真跟不上。
+pub const HOT_STREAK: u32 = 2;
 
 /// 降过一档之后的冷却期。没有它会在一个窗口里连降到底 —— 第一级刚生效，
 /// 效果还没反映到欠载计数上，就被判了第二次。
@@ -61,22 +79,39 @@ pub struct Sample {
     pub f0: String,
     /// 当前块长。
     pub block_time: f64,
+    /// 还在起播热身期内。热身期内的欠载是加载模型，不是跟不上。
+    pub warmup: bool,
+    /// 连续过线的窗口数（含本窗口）。要满 HOT_STREAK 才动手。
+    pub hot_streak: u32,
+    /// 这一轮会话已经降过一次 f0。不再沿梯子走到 pm。
+    pub already_lowered_f0: bool,
+}
+
+/// 这一窗算不算「持续跟不上」。比例和绝对次数都要过。
+pub fn window_is_hot(underruns: u32, blocks: u32) -> bool {
+    if blocks == 0 || underruns < MIN_UNDERRUNS {
+        return false;
+    }
+    f64::from(underruns) / f64::from(blocks) >= RATE
 }
 
 /// 下一步该做什么。
 pub fn decide(s: &Sample) -> Action {
-    if s.blocks == 0 {
+    if s.warmup || s.blocks == 0 {
         return Action::None;
     }
     if s.since_last_action_sec < COOLDOWN_SEC {
         return Action::None;
     }
-    let rate = f64::from(s.underruns) / f64::from(s.blocks);
-    if rate < RATE {
+    if !window_is_hot(s.underruns, s.blocks) {
         return Action::None;
     }
-    // 先走不打断的那一级。f0 已经到底了才谈动块长。
-    if next_f0(&s.f0).is_some() {
+    if s.hot_streak < HOT_STREAK {
+        return Action::None;
+    }
+    // 先走不打断的那一级。同一会话只降一次 f0：26.8.21 误判把 rmvpe 一路
+    // 降到 pm，音质没了，欠载也未必好。再撕裂就问要不要放宽块长。
+    if !s.already_lowered_f0 && next_f0(&s.f0).is_some() {
         Action::LowerF0
     } else if next_block(s.block_time).is_some() {
         Action::AskBlock
@@ -112,6 +147,12 @@ struct Watch {
     window_underrun: u32,
     /// 上次真正动手的时间。
     last_action: Option<Instant>,
+    /// 这一轮起播的时间。热身期从这儿算。
+    session_start: Instant,
+    /// 连续过线窗口。过线中断就清零。
+    hot_streak: u32,
+    /// 这一轮已经降过 f0。
+    lowered_f0: bool,
 }
 
 static WATCH: Mutex<Option<Watch>> = Mutex::new(None);
@@ -139,6 +180,9 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
         window_start: now,
         window_underrun: 0,
         last_action: None,
+        session_start: now,
+        hot_streak: 0,
+        lowered_f0: false,
     });
 
     // 计数器只会往上走。变小说明 worker 重启了，重新开始数。
@@ -146,8 +190,18 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
         w.last_underrun = underrun_total;
         w.window_start = now;
         w.window_underrun = 0;
+        w.hot_streak = 0;
         return Action::None;
     }
+
+    // 热身期内只跟着计数器走，不把起播那两次欠载带进第一个窗口。
+    if now.duration_since(w.session_start).as_secs_f64() < WARMUP_SEC {
+        w.last_underrun = underrun_total;
+        w.window_start = now;
+        w.window_underrun = 0;
+        return Action::None;
+    }
+
     w.window_underrun += underrun_total - w.last_underrun;
     w.last_underrun = underrun_total;
 
@@ -163,12 +217,18 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
         .map(|t| now.duration_since(t).as_secs_f64())
         .unwrap_or(f64::MAX);
 
+    let hot = window_is_hot(w.window_underrun, blocks);
+    w.hot_streak = if hot { w.hot_streak.saturating_add(1) } else { 0 };
+
     let act = decide(&Sample {
         underruns: w.window_underrun,
         blocks,
         since_last_action_sec: since,
         f0: f0.to_string(),
         block_time: bt,
+        warmup: false,
+        hot_streak: w.hot_streak,
+        already_lowered_f0: w.lowered_f0,
     });
 
     // 窗口滚动。无论判没判出来都要滚 —— 不滚的话旧的欠载会一直累加，
@@ -177,6 +237,10 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
     w.window_underrun = 0;
     if act != Action::None {
         w.last_action = Some(now);
+        w.hot_streak = 0;
+        if act == Action::LowerF0 {
+            w.lowered_f0 = true;
+        }
     }
     act
 }
@@ -192,6 +256,9 @@ mod tests {
             since_last_action_sec: since,
             f0: f0.to_string(),
             block_time: bt,
+            warmup: false,
+            hot_streak: HOT_STREAK,
+            already_lowered_f0: false,
         }
     }
 
@@ -202,26 +269,60 @@ mod tests {
         assert_eq!(decide(&s(1, 20, 999.0, "rmvpe", 0.25)), Action::None);
     }
 
+    /// 26.8.24 起播那两次 Output underrun：旧门槛 2/20=10% 会立刻把 rmvpe
+    /// 改成 fcpe。新门槛要 5 次且 25%。
+    #[test]
+    fn two_startup_underruns_are_not_tearing() {
+        assert_eq!(decide(&s(2, 20, 999.0, "rmvpe", 0.25)), Action::None);
+        assert_eq!(decide(&s(3, 20, 999.0, "rmvpe", 0.25)), Action::None);
+        assert!(!window_is_hot(2, 20));
+        assert!(!window_is_hot(4, 20));
+        assert!(window_is_hot(10, 40));
+    }
+
+    #[test]
+    fn warmup_and_a_single_hot_window_do_nothing() {
+        let mut x = s(10, 40, 999.0, "rmvpe", 0.25);
+        x.warmup = true;
+        assert_eq!(decide(&x), Action::None);
+        x.warmup = false;
+        x.hot_streak = 1;
+        assert_eq!(decide(&x), Action::None);
+        x.hot_streak = HOT_STREAK;
+        assert_eq!(decide(&x), Action::LowerF0);
+    }
+
     #[test]
     fn sustained_underruns_lower_the_f0_method_first() {
         // 不打断的那一级必须排在前面：能不断音就不断音。
-        assert_eq!(decide(&s(3, 20, 999.0, "rmvpe", 0.25)), Action::LowerF0);
+        assert_eq!(decide(&s(10, 40, 999.0, "rmvpe", 0.25)), Action::LowerF0);
+    }
+
+    /// 同一会话只降一次 f0，不再 rmvpe → fcpe → pm。
+    #[test]
+    fn a_session_lowers_f0_only_once() {
+        let mut x = s(10, 40, 999.0, "fcpe", 0.25);
+        x.already_lowered_f0 = true;
+        assert_eq!(decide(&x), Action::AskBlock);
     }
 
     /// f0 到底了才谈动块长 —— 那一步要停流重开，代价高得多。
     #[test]
     fn only_after_f0_bottoms_out_do_we_ask_about_the_block() {
-        assert_eq!(decide(&s(3, 20, 999.0, "pm", 0.25)), Action::AskBlock);
+        assert_eq!(decide(&s(10, 40, 999.0, "pm", 0.25)), Action::AskBlock);
         // 块长也到顶：再降只是把声音弄差，不解决问题。
-        assert_eq!(decide(&s(9, 20, 999.0, "pm", 0.40)), Action::None);
+        assert_eq!(decide(&s(20, 40, 999.0, "pm", 0.40)), Action::None);
     }
 
     /// 冷却期内一律不动。没有它会在一个窗口里连降到底：第一级刚生效，效果
     /// 还没反映到欠载计数上就被判了第二次，用户眼里是「音质突然掉了两档」。
     #[test]
     fn nothing_happens_during_the_cooldown() {
-        assert_eq!(decide(&s(9, 20, 1.0, "rmvpe", 0.25)), Action::None);
-        assert_eq!(decide(&s(9, 20, COOLDOWN_SEC + 0.1, "rmvpe", 0.25)), Action::LowerF0);
+        assert_eq!(decide(&s(20, 40, 1.0, "rmvpe", 0.25)), Action::None);
+        assert_eq!(
+            decide(&s(20, 40, COOLDOWN_SEC + 0.1, "rmvpe", 0.25)),
+            Action::LowerF0
+        );
     }
 
     /// 没有块就没有判据。刚起播、或者心跳之间一块都没过时不能瞎判。
@@ -229,6 +330,15 @@ mod tests {
     fn no_blocks_means_no_verdict() {
         assert_eq!(decide(&s(0, 0, 999.0, "rmvpe", 0.25)), Action::None);
         assert_eq!(decide(&s(5, 0, 999.0, "rmvpe", 0.25)), Action::None);
+    }
+
+    #[test]
+    fn warmup_swallows_the_start_underruns() {
+        reset();
+        // 26.8.24：Loading rmvpe 之后立刻两次 Output underrun。热身期内不算。
+        assert_eq!(step(0, "rmvpe", 0.25), Action::None);
+        assert_eq!(step(2, "rmvpe", 0.25), Action::None);
+        reset();
     }
 
     #[test]

@@ -35,13 +35,17 @@ import {
   displayVoiceTag,
   isCharacterAsGroup,
   isCharacterAsSeries,
+  voiceAuthorList,
   voiceChildGroup,
   voiceGroupRaw,
   voiceParentSeries,
   voiceSearchText,
+  voiceVersionLabel,
 } from "../lib/voiceDisplay";
 import { askConfirm } from "../lib/webDialog";
 import { openExternal } from "../lib/plaza";
+import { AuthorsDialog } from "./AuthorsDialog";
+import type { VoiceAuthor } from "../lib/voices";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
@@ -1019,15 +1023,17 @@ function VoiceCard({
     [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ") ||
     displayVoiceTag(v, loc);
   const coverBadge = author || displayVoiceOrigin(v);
+  // 发布日期当版本号（v26.07.31）：同一角色常有多个版本在架，下载前先看清
+  // 自己装的是哪一版。没有日期就不画，不留一个空角标。
+  const ver = voiceVersionLabel(v.date);
   // 第三方音色下下来是别人的东西：作者是谁、从哪个仓库发的，得在**下载之前**
   // 就能点开看，不能等装完了才在模型页的「⋯」里找得到。清单里两个地址常常
-  // 只有一个，有哪条给哪条。
-  const links = (
-    [
-      [(v.author_url || "").trim(), t("s.voiceLinkAuthor")],
-      [(v.source_url || "").trim(), t("s.voiceLinkSource")],
-    ] as const
-  ).filter(([url]) => /^https?:\/\//i.test(url));
+  // 只有一个，有哪条给哪条。作者可以有多位 —— 多位时点了先问一声开哪个。
+  const [authorPick, setAuthorPick] = useState<VoiceAuthor[] | null>(null);
+  const authors = voiceAuthorList(v).filter((a) =>
+    /^https?:\/\//i.test(a.url || ""),
+  );
+  const sourceUrl = (v.source_url || "").trim();
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
@@ -1055,6 +1061,11 @@ function VoiceCard({
         {v.installed ? (
           <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.eb88ff57c9")}</span>
         ) : null}
+        {ver ? (
+          <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+            {ver}
+          </span>
+        ) : null}
         <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--ink)] drop-shadow">
           {coverBadge}
         </span>
@@ -1079,22 +1090,37 @@ function VoiceCard({
           {meta}
         </div>
       ) : null}
-      {links.length ? (
+      {(authors.length || /^https?:\/\//i.test(sourceUrl)) ? (
         <div className="mt-1 flex items-center gap-3 flex-wrap">
-          {links.map(([url, label]) => (
+          {authors.length ? (
             <button
-              key={label}
               type="button"
               // 走壳打开，落到用户自己的浏览器；顺带过一遍 http/https 白名单
               // —— 清单里的地址是第三方写的，不能当可信输入。
-              onClick={() => void openExternal(url)}
-              title={url}
+              onClick={() => {
+                if (authors.length === 1) void openExternal(authors[0].url || "");
+                else setAuthorPick(authors);
+              }}
+              title={authors.length === 1 ? authors[0].url : undefined}
               className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
             >
-              {label}
+              {t("s.voiceLinkAuthor")}
             </button>
-          ))}
+          ) : null}
+          {/^https?:\/\//i.test(sourceUrl) ? (
+            <button
+              type="button"
+              onClick={() => void openExternal(sourceUrl)}
+              title={sourceUrl}
+              className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+            >
+              {t("s.voiceLinkSource")}
+            </button>
+          ) : null}
         </div>
+      ) : null}
+      {authorPick ? (
+        <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
       ) : null}
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
         {v.installed ? (

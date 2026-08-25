@@ -246,6 +246,86 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+/**
+ * 发布日期 → 版本号样式的角标（260731 → v26.07.31）。
+ *
+ * 认三种写法：YYMMDD（清单现行格式）、YYYYMMDD、ISO 前缀。认不出返回空串，
+ * 卡片上就不画这个角标 —— 没有日期不该显示成「v」加一串问号。
+ */
+export function voiceVersionLabel(date?: unknown): string {
+  const d = str(date).replace(/[/.]/g, "-");
+  let y = "";
+  let m = "";
+  let day = "";
+  if (/^\d{6}$/.test(d)) {
+    y = d.slice(0, 2);
+    m = d.slice(2, 4);
+    day = d.slice(4, 6);
+  } else if (/^\d{8}$/.test(d)) {
+    y = d.slice(0, 4);
+    m = d.slice(4, 6);
+    day = d.slice(6, 8);
+  } else {
+    const mt = d.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (mt) {
+      y = mt[1];
+      m = mt[2].padStart(2, "0");
+      day = mt[3].padStart(2, "0");
+    }
+  }
+  if (!y || !m || !day) return "";
+  const yy = y.length === 4 ? y.slice(2) : y;
+  if (Number(m) < 1 || Number(m) > 12 || Number(day) < 1 || Number(day) > 31) {
+    return "";
+  }
+  return `v${yy}.${m}.${day}`;
+}
+
+export type VoiceAuthor = { name: string; url?: string };
+
+type AuthorSource = {
+  author?: unknown;
+  author_url?: unknown;
+  authors?: unknown;
+};
+
+/**
+ * 一个音色的作者列表。新写法 `authors` 数组优先（元素是
+ * `{name, url}` 或纯字符串），兼容单个 `author` + `author_url` 字段；
+ * 名字去重，顺序保持原样。
+ */
+export function voiceAuthorList(v: AuthorSource): VoiceAuthor[] {
+  const out: VoiceAuthor[] = [];
+  const push = (name: string, url?: string) => {
+    const n = name.trim();
+    if (!n) return;
+    const hit = out.find((a) => a.name === n);
+    if (hit) {
+      if (!hit.url && url) hit.url = url;
+      return;
+    }
+    out.push({ name: n, url: url || undefined });
+  };
+  if (Array.isArray(v.authors)) {
+    for (const a of v.authors) {
+      if (typeof a === "string") push(a);
+      else if (a && typeof a === "object") {
+        const m = a as Record<string, unknown>;
+        push(str(m.name), str(m.url) || undefined);
+      }
+    }
+  }
+  const single = str(v.author);
+  const singleUrl = str(v.author_url);
+  if (out.length === 0 && single) push(single, singleUrl);
+  else if (single) {
+    // authors 里没带主页而单字段带了的话，补给同名那位。
+    const hit = out.find((a) => a.name === single);
+    if (hit && !hit.url && singleUrl) hit.url = singleUrl;
+  }
+  return out;
+}
+
 function resolveParts(v: NamedVoice) {
   const id = str(v.id);
   const fb = id ? BY_ID[id] : undefined;

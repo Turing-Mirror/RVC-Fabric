@@ -76,6 +76,7 @@ export function tips(): Record<string, string> {
     wallpaper_blur: t("s.f069ff33fd"),
     wallpaper_opacity: t("s.6e2aba9d02"),
     home_banner_text: t("settings.bannerTextTip"),
+    home_banner_sub: t("settings.bannerSubTip"),
     home_banner_opacity: t("settings.bannerOpacityTip"),
     close_action: t("s.a22a5eeab1"),
     hotkeys_enabled: t("s.6e382d3bef"),

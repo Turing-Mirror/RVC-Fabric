@@ -4,9 +4,9 @@ import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
-import { TuningWizard } from "../components/TuningWizard";
 import { useConfig } from "../hooks/useConfig";
-import { tips } from "../lib/config";
+import { setConfig, tips } from "../lib/config";
+import { pickAutoDevices } from "../lib/deviceSetup";
 import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
@@ -107,8 +107,6 @@ function SettingsPageImpl({
   onOpenCommunity,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
-  // 效果调校向导（变声参数页入口）。
-  const [wizard, setWizard] = useState(false);
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
   const TIPS = useMemo(() => tips(), [locale]);
   const tabLabels = useMemo(
@@ -204,6 +202,31 @@ function SettingsPageImpl({
       : workerAlive
         ? t("s.1831f7eb53")
         : t("s.95af7bd399");
+
+  /**
+   * 自动配置输入 / 输出：MME 接口、真麦克风进、CABLE Input 出。
+   *
+   * 只补缺失或已失效的项，用户选好的不动。写完 sg_* 是冷参数，页面顶部的
+   * 「重启后生效」提示条会自己亮起来。
+   */
+  const [autoDevMsg, setAutoDevMsg] = useState("");
+  const runAutoSetup = async () => {
+    try {
+      const pick = pickAutoDevices(c.cfg, raw ?? {});
+      if (!pick) {
+        setAutoDevMsg(t("s.devAutoNone"));
+        return;
+      }
+      await setConfig(pick);
+      const parts: string[] = [];
+      if (pick.hostapi) parts.push(t("s.devAutoApi"));
+      if (pick.input_device) parts.push(t("s.devAutoIn"));
+      if (pick.output_device) parts.push(t("s.devAutoOut"));
+      setAutoDevMsg(t("s.devAutoDone", { v0: parts.join("、") }));
+    } catch (e) {
+      setAutoDevMsg(String(e));
+    }
+  };
 
   return (
     <div>
@@ -342,6 +365,12 @@ function SettingsPageImpl({
                     ]}
                     onChange={(v) => c.set("sr_type", v, true)}
                   />
+                  <Btn
+                    disabled={!devicesReady || devicesBusy}
+                    onClick={() => void runAutoSetup()}
+                  >
+                    {t("s.devAutoBtn")}
+                  </Btn>
                   <Btn onClick={onReloadDevices} disabled={devicesBusy}>
                     {devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}
                   </Btn>
@@ -350,6 +379,9 @@ function SettingsPageImpl({
               {deviceHint ? (
                 <div className="text-[12.5px] text-[var(--help)]">{deviceHint}</div>
               ) : null}
+              {autoDevMsg ? (
+                <div className="text-[12.5px] text-[var(--help)]">{autoDevMsg}</div>
+              ) : null}
               <MicTest deviceReady={devicesReady} />
             </div>
           </Block>
@@ -357,12 +389,6 @@ function SettingsPageImpl({
 
         {c.loaded && tab === "voice" ? (
           <Block title={t("s.ae7cbbecbc")} note={t("s.d48a0bf3c8")} className="!mt-6">
-            <div className="mb-4">
-              <Btn onClick={() => setWizard(true)}>{t("s.twOpen")}</Btn>
-              <span className="text-[12.5px] text-[var(--help)] ml-2.5">
-                {t("s.twOpenHint")}
-              </span>
-            </div>
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.a9e4eb7a51")}</p>
             <div className={CARD}>
               <Field
@@ -843,6 +869,31 @@ function SettingsPageImpl({
                 }
               />
               <Field
+                label={t("settings.bannerSub")}
+                tip={TIPS.home_banner_sub}
+                control={
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <input
+                      type="text"
+                      maxLength={60}
+                      className={[
+                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
+                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
+                        "focus:outline-none focus:border-[var(--accent)]",
+                      ].join(" ")}
+                      placeholder={t("settings.bannerSubPlaceholder")}
+                      value={c.str("home_banner_sub")}
+                      onChange={(e) => c.set("home_banner_sub", e.target.value)}
+                    />
+                    {c.str("home_banner_sub") ? (
+                      <Btn onClick={() => c.set("home_banner_sub", "", true)}>
+                        {t("settings.bannerTextReset")}
+                      </Btn>
+                    ) : null}
+                  </div>
+                }
+              />
+              <Field
                 label={t("settings.bannerOpacity")}
                 tip={TIPS.home_banner_opacity}
                 control={
@@ -1043,7 +1094,6 @@ function SettingsPageImpl({
           </Block>
         ) : null}
       </PagePad>
-      {wizard ? <TuningWizard onClose={() => setWizard(false)} /> : null}
     </div>
   );
 }

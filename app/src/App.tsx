@@ -16,10 +16,11 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
-import { getConfig, onConfigPatch, type Config } from "./lib/config";
+import { getConfig, onConfigPatch, setConfig, type Config } from "./lib/config";
 import { deactivateDsp, forceKillEngine, setHot, startVc, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
 import { currentVoice } from "./lib/voices";
+import { pickAutoDevices } from "./lib/deviceSetup";
 import { invoke } from "@tauri-apps/api/core";
 import { applyAppearance } from "./lib/appearance";
 import { listen } from "@tauri-apps/api/event";
@@ -617,6 +618,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content, not identity
     [deviceKey],
   );
+
+  // 设备列表第一次就绪时自动检查并补齐输入 / 输出 / hostapi。
+  //
+  // 只补「缺失或已失效」的项 —— 用户自己选过的有效配置永远不动。一个会话只
+  // 跑一次：跑完之后设备再怎么变（插拔耳机、装 VB-Cable）都交给设置页的手动
+  // 按钮，不然用户改完设置会被我们悄悄改回去，那比不配更糟。
+  const autoDevRan = useRef(false);
+  useEffect(() => {
+    if (autoDevRan.current) return;
+    const lists = deviceStatus as Record<string, unknown>;
+    const ready =
+      (Array.isArray(lists.input_devices) && lists.input_devices.length > 0) ||
+      (Array.isArray(lists.output_devices) && lists.output_devices.length > 0);
+    if (!ready) return;
+    autoDevRan.current = true;
+    void (async () => {
+      try {
+        const cfg = await getConfig();
+        const pick = pickAutoDevices(cfg, lists);
+        if (pick) await setConfig(pick);
+      } catch {
+        /* 浏览器预览或读配置失败：安静放弃，设置页还有手动按钮 */
+      }
+    })();
+  }, [deviceStatus]);
 
   const { onPitch, onFormant, onMode } = engine;
   const handlePitch = useCallback(

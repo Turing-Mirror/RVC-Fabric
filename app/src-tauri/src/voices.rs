@@ -71,6 +71,96 @@ fn catalog_cover(root: &Path, id: &str) -> String {
     String::new()
 }
 
+/// 从内置 / 缓存清单按 id 找作者相关字段与发布日期，整表带回（含
+/// `author_i18n` / `author_en` 等语言变体）。
+///
+/// 旧版本装的第三方音色，sidecar 里常常只有名字 —— 那时候安装路径还没有
+/// 「从清单兜底 author」这一步。按 online_id 回查清单把缺的字段补齐，
+/// 用户不用重装也能看到作者是谁、这是哪一版。
+fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
+    let cat = crate::store::fetch_store_catalog(root, false);
+    for key in ["voices", "thirdparty_voices"] {
+        let Some(arr) = cat.get(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        if let Some(item) = arr
+            .iter()
+            .find(|x| x.get("id").and_then(|i| i.as_str()) == Some(id))
+        {
+            let mut out = Map::new();
+            if let Some(obj) = item.as_object() {
+                for (k, v) in obj {
+                    let relevant = k == "author"
+                        || k == "date"
+                        || k == "author_url"
+                        || k.starts_with("author_");
+                    let nonempty = v
+                        .as_str()
+                        .map(|s| !s.trim().is_empty())
+                        .unwrap_or(false);
+                    if relevant && nonempty {
+                        out.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            return Some(out);
+        }
+    }
+    None
+}
+
+/// sidecar 里收出作者列表：新写法的 `authors` 数组优先，兼容单个 `author`
+/// 字段（带上它的主页）。名字去重，顺序保持清单里的写法。
+fn collect_authors(side: &Map<String, Value>, author: &str, author_url: &str) -> Value {
+    fn push(out: &mut Vec<Value>, name: &str, url: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        if out
+            .iter()
+            .any(|v| v.get("name").and_then(|n| n.as_str()) == Some(name))
+        {
+            return;
+        }
+        out.push(json!({"name": name, "url": url}));
+    }
+    let mut out: Vec<Value> = Vec::new();
+    if let Some(arr) = side.get("authors").and_then(|v| v.as_array()) {
+        for a in arr {
+            match a {
+                Value::String(s) => push(&mut out, s, ""),
+                Value::Object(m) => {
+                    let n = m.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let u = m.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                    push(&mut out, n, u);
+                }
+                _ => {}
+            }
+        }
+    }
+    // 单作者字段兜底（多作者清单通常只写 authors；老数据只有这一个）。
+    if out.is_empty() && !author.trim().is_empty() {
+        push(&mut out, author, author_url);
+    } else if !author.trim().is_empty() {
+        // authors 里没带主页而单字段带了的话，把它补给同名那位。
+        if let Some(hit) = out
+            .iter_mut()
+            .find(|v| v.get("name").and_then(|n| n.as_str()) == Some(author.trim()))
+        {
+            if hit
+                .get("url")
+                .and_then(|u| u.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
+                hit["url"] = json!(author_url);
+            }
+        }
+    }
+    Value::Array(out)
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
@@ -378,7 +468,7 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
     folders.sort();
     for folder in folders {
         let pth = find_pth(&folder);
-        let side = read_sidecar(&folder);
+        let mut side = read_sidecar(&folder);
         let vid = folder
             .file_name()
             .and_then(|s| s.to_str())
@@ -393,9 +483,14 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
         let tag = Some(crate::i18n::pick_str_obj(&side, "tag"))
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| guess_tag(&name).to_string());
-        let author = crate::i18n::pick_str_obj(&side, "author");
-        let author_url = side
+        let mut author = crate::i18n::pick_str_obj(&side, "author");
+        let mut author_url = side
             .get("author_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let mut date = side
+            .get("date")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
@@ -406,6 +501,56 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        // 旧版本装的第三方音色，sidecar 里没有作者 / 日期（那时安装路径还
+        // 没有「从清单兜底」这一步）。按 online_id 从内置清单补齐，并把结果
+        // 写回 sidecar —— 修一次就永久好，不用每次列表都查一遍。
+        let oid = side
+            .get("online_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&vid)
+            .to_string();
+        if (author.trim().is_empty() || date.is_empty()) && !oid.is_empty() {
+            if let Some(meta) = catalog_entry_meta(root, &oid) {
+                let mut healed = Map::new();
+                if author.trim().is_empty() {
+                    if let Some(v) = meta.get("author") {
+                        healed.insert("author".into(), v.clone());
+                    }
+                }
+                if author_url.is_empty() {
+                    if let Some(v) = meta.get("author_url") {
+                        healed.insert("author_url".into(), v.clone());
+                    }
+                }
+                if date.is_empty() {
+                    if let Some(v) = meta.get("date") {
+                        healed.insert("date".into(), v.clone());
+                    }
+                }
+                // 语言变体一并带走：sidecar 里没有的才补，换语言后显示仍正确。
+                for (k, v) in &meta {
+                    if k.starts_with("author_") && !side.contains_key(k) {
+                        healed.entry(k.clone()).or_insert(v.clone());
+                    }
+                }
+                if !healed.is_empty() {
+                    let mut side2 = side.clone();
+                    for (k, v) in &healed {
+                        side2.insert(k.clone(), v.clone());
+                        if k == "author" {
+                            author = v.as_str().unwrap_or("").to_string();
+                        } else if k == "author_url" {
+                            author_url = v.as_str().unwrap_or("").to_string();
+                        } else if k == "date" {
+                            date = v.as_str().unwrap_or("").to_string();
+                        }
+                    }
+                    let _ = write_sidecar(&folder, &side2);
+                    side = side2;
+                }
+            }
+        }
+        let authors = collect_authors(&side, &author, &author_url);
         let mut cover = side
             .get("cover")
             .and_then(|v| v.as_str())
@@ -418,11 +563,6 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
         if cover.is_empty() {
             // 旧版本装的第三方音色，sidecar 里没有 cover（安装时漏写）。
             // 按 online_id 从内置清单回补封面 URL —— 用户不用重下也有封面。
-            let oid = side
-                .get("online_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&vid)
-                .to_string();
             cover = catalog_cover(root, &oid);
         }
 
@@ -441,6 +581,8 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
                 "tag": tag,
                 "author": author,
                 "author_url": author_url,
+                "authors": authors,
+                "date": date,
                 "source_url": source_url,
                 "source": "user_data",
                 "missing": true,
@@ -461,6 +603,8 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             "tag": tag,
             "author": author,
             "author_url": author_url,
+            "authors": authors,
+            "date": date,
             "source_url": source_url,
             "source": "user_data",
             "missing": broken,
@@ -2039,6 +2183,146 @@ pub fn rename_voice(root: &Path, model_dir: &str, new_name: &str) -> Result<Valu
     Ok(json!({"ok": true, "name": name}))
 }
 
+// ---------------------------------------------------------------------------
+// 自定义封面：选图 → 界面里裁剪 → 写回模型目录
+// ---------------------------------------------------------------------------
+//
+// 裁剪本身在界面（canvas）里做，这里只负责收成品：解码、验魔数、落盘、把
+// sidecar 的 cover 指过去。文件名故意用 `cover-custom.*` 而不是 `cover.jpg`
+// —— 后者可能和包里自带的封面同名，「恢复默认」时才不会误删别人的文件。
+
+/// 解码后图片的字节上限。短边 512 的 jpg 撑死几百 KB，8 MB 已经宽得离谱；
+/// 卡这道线是为了不让一个恶意/手滑的请求往 User_Data 里灌垃圾。
+const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
+
+/// 自定义封面的固定文件名（不含扩展名）。恢复默认时只删这两个名字。
+const CUSTOM_COVER_STEM: &str = "cover-custom";
+
+/// 标准字母表 base64。输入来自我们自己的 canvas.toDataURL，不需要宽容解析。
+fn decode_base64(s: &str) -> Option<Vec<u8>> {
+    fn val(c: u8) -> Option<u32> {
+        match c {
+            b'A'..=b'Z' => Some((c - b'A') as u32),
+            b'a'..=b'z' => Some((c - b'a' + 26) as u32),
+            b'0'..=b'9' => Some((c - b'0' + 52) as u32),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+    let bytes: Vec<u8> = s
+        .bytes()
+        .filter(|c| !c.is_ascii_whitespace() && *c != b'=')
+        .collect();
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3 + 3);
+    for chunk in bytes.chunks(4) {
+        if chunk.len() < 2 {
+            return None;
+        }
+        let mut n: u32 = 0;
+        for (i, c) in chunk.iter().enumerate() {
+            n |= val(*c)? << (18 - 6 * i);
+        }
+        out.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            out.push(n as u8);
+        }
+    }
+    Some(out)
+}
+
+/// 选一张图给封面用。选择成功当场放行 asset 协议 —— webview 要把它画进
+/// canvas 里。
+pub fn pick_cover_image(win: Option<&tauri::WebviewWindow>) -> Option<String> {
+    let picked = crate::shell_extras::dialog_on(win)
+        .add_filter(
+            &crate::i18n::t("s.be8da62ea1"),
+            &["jpg", "jpeg", "png", "webp", "bmp"],
+        )
+        .set_title(&crate::i18n::t("models.pickCover"))
+        .pick_file()
+        .map(|p| p.to_string_lossy().into_owned());
+    if let (Some(w), Some(ref p)) = (win, picked.as_ref()) {
+        use tauri::Manager;
+        crate::asset_scope::grant_file(&w.app_handle(), p);
+    }
+    picked
+}
+
+/// 把界面裁好的封面写进模型目录，并让 sidecar 的 cover 指向它。
+///
+/// 只认 data URL（`data:image/jpeg;base64,…`），魔数只放行 JPEG / PNG ——
+/// 这条命令的输入是第三方音色页面上的一块画布，不该被当成任意文件写入用。
+pub fn set_cover(root: &Path, model_dir: &str, image_data_url: &str) -> Result<Value, String> {
+    let md = PathBuf::from(model_dir);
+    guard_model_dir(root, &md)?;
+    let b64 = image_data_url
+        .split_once("base64,")
+        .map(|(_, rest)| rest)
+        .ok_or_else(|| crate::i18n::t("models.coverBadImage"))?;
+    let data = decode_base64(b64).ok_or_else(|| crate::i18n::t("models.coverBadImage"))?;
+    if data.is_empty() || data.len() > MAX_COVER_BYTES {
+        return Err(crate::i18n::t("models.coverBadImage").into());
+    }
+    let is_jpeg = data.len() > 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+    let is_png = data.len() > 8 && data[0..4] == [0x89, 0x50, 0x4E, 0x47];
+    if !is_jpeg && !is_png {
+        return Err(crate::i18n::t("models.coverBadImage").into());
+    }
+    let ext = if is_png { "png" } else { "jpg" };
+    // 先清掉另一种扩展名的旧自定义封面，别让目录里同时躺两张。
+    for stale in ["cover-custom.png", "cover-custom.jpg"] {
+        if stale != format!("{CUSTOM_COVER_STEM}.{ext}") {
+            let _ = fs::remove_file(md.join(stale));
+        }
+    }
+    let dest = md.join(format!("{CUSTOM_COVER_STEM}.{ext}"));
+    fs::write(&dest, &data).map_err(|e| e.to_string())?;
+    let fname = dest
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let mut side = read_sidecar(&md);
+    side.insert("cover".into(), json!(fname));
+    write_sidecar(&md, &side)?;
+    Ok(json!({
+        "ok": true,
+        "cover": dest.to_string_lossy(),
+    }))
+}
+
+/// 撤销自定义封面：删掉 `cover-custom.*` 并摘掉指向它的 sidecar 键，
+/// 显示回落到包内封面 / 清单封面。没设置过就当成功，不报错。
+pub fn reset_cover(root: &Path, model_dir: &str) -> Result<Value, String> {
+    let md = PathBuf::from(model_dir);
+    guard_model_dir(root, &md)?;
+    let mut removed = false;
+    for ext in ["png", "jpg", "jpeg", "webp"] {
+        let p = md.join(format!("{CUSTOM_COVER_STEM}.{ext}"));
+        if p.is_file() {
+            let _ = fs::remove_file(&p);
+            removed = true;
+        }
+    }
+    let mut side = read_sidecar(&md);
+    let cur = side
+        .get("cover")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if cur.starts_with(CUSTOM_COVER_STEM) {
+        side.remove("cover");
+        write_sidecar(&md, &side)?;
+        removed = true;
+    }
+    Ok(json!({"ok": true, "removed": removed}))
+}
+
 pub fn promote_legacy(root: &Path, pth_path: &str) -> Result<Value, String> {
     let src = PathBuf::from(pth_path);
     if !src.is_file() {
@@ -2121,6 +2405,33 @@ mod tests {
 
     fn model(name: &str, file: &str, path: &str) -> Value {
         json!({"name": name, "file": file, "path": path})
+    }
+
+    #[test]
+    fn authors_list_prefers_the_array_and_falls_back_to_single() {
+        // authors 数组优先，同名作者从单字段补主页。
+        let side = serde_json::from_str::<Map<String, Value>>(
+            r#"{"authors":[{"name":"A"},{"name":"B","url":"https://x/b"}],"author":"A","author_url":"https://x/a"}"#,
+        )
+        .unwrap();
+        let out = collect_authors(&side, "A", "https://x/a");
+        let arr = out.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].get("url").and_then(|u| u.as_str()), Some("https://x/a"));
+        assert_eq!(arr[1].get("url").and_then(|u| u.as_str()), Some("https://x/b"));
+
+        // 老数据只有单字段：照样能收出一条带主页的作者。
+        let mut solo = Map::new();
+        solo.insert("author".into(), json!("某人"));
+        let out = collect_authors(&solo, "某人", "https://x/solo");
+        let arr = out.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0].get("name").and_then(|n| n.as_str()), Some("某人"));
+        assert_eq!(arr[0].get("url").and_then(|u| u.as_str()), Some("https://x/solo"));
+
+        // 什么都没有：空数组，不是 null —— 前端好判断。
+        let empty = collect_authors(&Map::new(), "", "");
+        assert_eq!(empty, json!([]));
     }
 
     #[test]

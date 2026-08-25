@@ -127,33 +127,40 @@ function HeroEmblem() {
  * `voices_select` maintains — the same ordering the Tk shell used.
  */
 /**
- * 首页顶部横幅的自定义标题（设置 → 外观）。留空 = 默认标题。
+ * 首页顶部横幅的自定义文案（设置 → 外观）。标题留空 = 默认标题；副标题
+ * 留空 = 不显示。以前这里固定写着「切换立即生效 · 运行中可无缝换音色」，
+ * 对每天用的人来说是废话，现在这行只属于用户自己。
  *
  * 只在这一个组件里读：memo 化的 HomePage 不接收任何新 prop，配置变化走
  * onConfigPatch 触发内部 state 更新，别的页面完全感知不到。
  */
-function useBannerText(): string {
-  const [text, setText] = useState("");
+function useBannerTexts(): { title: string; sub: string } {
+  const [texts, setTexts] = useState({ title: "", sub: "" });
   useEffect(() => {
     let alive = true;
     void getConfig()
       .then((c) => {
-        if (alive && typeof c.home_banner_text === "string") {
-          setText(c.home_banner_text);
-        }
+        if (!alive) return;
+        setTexts({
+          title: typeof c.home_banner_text === "string" ? c.home_banner_text : "",
+          sub: typeof c.home_banner_sub === "string" ? c.home_banner_sub : "",
+        });
       })
       .catch(() => {
         /* 浏览器预览里没有 Tauri 后端，用默认标题 */
       });
     const off = onConfigPatch((p) => {
-      if (typeof p.home_banner_text === "string") setText(p.home_banner_text);
+      setTexts((prev) => ({
+        title: typeof p.home_banner_text === "string" ? p.home_banner_text : prev.title,
+        sub: typeof p.home_banner_sub === "string" ? p.home_banner_sub : prev.sub,
+      }));
     });
     return () => {
       alive = false;
       off();
     };
   }, []);
-  return text.trim();
+  return { title: texts.title.trim(), sub: texts.sub.trim() };
 }
 
 /**
@@ -173,7 +180,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   // something they may already have.
   const [loadError, setLoadError] = useState("");
   const [msg, setMsg] = useState("");
-  const bannerText = useBannerText();
+  const bannerTexts = useBannerTexts();
   const cardPx = useRecentCardMetrics();
   // 封面本地化：已装第三方音色的远程封面走本地缓存（见 lib/cover.ts）。
   const coverCache = useCoverCache(
@@ -264,7 +271,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerText || t("s.9d835868b4")}</h2>
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? t("s.c4a98bd0e6", { v0: loadError })
@@ -297,22 +304,17 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
         className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5"
         style={{ background: STAGE_BG }}
       >
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerText || t("s.9d835868b4")}</h2>
-        <p className="text-[19px] font-semibold text-[var(--accent)] m-0 mb-1.5">
+        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+        <p className="text-[19px] font-semibold text-[var(--accent)] m-0">
           {selected ? selected.name : t("s.262d11e2d6")}
         </p>
-        <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
-          {selected
-            ? [
-                selected.tag,
-                selected.author ? t("s.7feea73fa3", { v0: selected.author }) : "",
-              ]
-                .filter(Boolean)
-                .join(" · ") +
-              (selected.tag || selected.author ? " · " : "") +
-              t("s.856b4d0ba9")
-            : t("s.856b4d0ba9")}
-        </p>
+        {/* 副标题不再有固定文案 —— 那句「切换立即生效 · 运行中可无缝换音色」
+            对老用户是废话。这行只显示用户自己写的（设置 → 外观），没写就不占位。 */}
+        {bannerTexts.sub ? (
+          <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mt-1.5">
+            {bannerTexts.sub}
+          </p>
+        ) : null}
         <HeroEmblem />
       </div>
 

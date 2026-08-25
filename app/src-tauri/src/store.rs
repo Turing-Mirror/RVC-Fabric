@@ -37,25 +37,29 @@ fn store_progress_payload(id: &str, phase: &str, done: u64, total: u64, message:
 }
 
 /// Expand a catalog URL to the download list. HF links become the domestic
-/// mirror chain. Official CNB packs also get a sha256 LFS fallback so a
-/// hanging `/-/releases/download/` endpoint can fail over.
+/// mirror chain. Official CNB packs get the same attachment path on every
+/// known repo base (official first, catalog mirrors after), so a hanging
+/// cnb.cool endpoint can fail over without waiting for an app release.
 ///
-/// 镜像顺序由 `mirrors::hf_endpoints` 解出来（用户指定 → 上次成功 → 清单
-/// 下发 → 编译进来的兜底），不再是写死在 `hf.rs` 里的那一串。
-fn voice_download_urls(root: &Path, url: &str, sha: &str) -> Vec<String> {
+/// **不给音色包挂 `/-/lfs/<sha>` 兜底。** 那条按 sha 寻址的路只对 git-lfs
+/// 时代的老制品有效（engine-core / vbcable，见 `engine_assets::lfs_urls` 的
+/// 实测记录）；音色包全是 Release 附件，永远不进那个命名空间。挂上去的
+/// 结果是每次失败都多一轮必 404 的尝试，而且它的「404 拒绝」会盖掉主源的
+/// 真实错误 —— 26.8.26/1 的 Kei 明明是首字节超时，用户看到的却是
+/// 「服务器拒绝提供该文件，清单中的地址可能已过期」。
+fn voice_download_urls(root: &Path, url: &str) -> Vec<String> {
     let mut urls = crate::hf::download_urls_with(url, &crate::mirrors::hf_endpoints(root));
-    let sha: String = sha
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .collect::<String>()
-        .to_ascii_lowercase();
-    if sha.len() == 64
-        && (url.contains("cnb.cool") || url.contains("/-/releases/download/"))
-    {
+    if url.starts_with(crate::engine_assets::CNB_REPO) {
+        // 同一个附件路径搬到每个镜像基址上。官方仓库自己不用重排 —— 它
+        // 已经是 urls[0]；只追加清单里配置的备份基址。
+        let suffix = &url[crate::engine_assets::CNB_REPO.len()..];
         for base in crate::mirrors::lfs_bases(root) {
-            let lfs = format!("{base}/-/lfs/{sha}");
-            if !urls.iter().any(|u| u == &lfs) {
-                urls.push(lfs);
+            if base == crate::engine_assets::CNB_REPO {
+                continue;
+            }
+            let mirrored = format!("{base}{suffix}");
+            if !urls.iter().any(|u| u == &mirrored) {
+                urls.push(mirrored);
             }
         }
     }
@@ -1065,7 +1069,7 @@ pub fn install_voice_entry(
             );
         });
 
-        let urls = voice_download_urls(&root, &pack_url, &sha);
+        let urls = voice_download_urls(&root, &pack_url);
         let res = download::download_request(
             DownloadRequest {
                 urls,
@@ -1126,7 +1130,7 @@ pub fn install_voice_entry(
     });
     if let Err(e) = download::download_request(
         DownloadRequest {
-            urls: voice_download_urls(&root, &pth_url, &sha),
+            urls: voice_download_urls(&root, &pth_url),
             root: Some(root.clone()),
             dest: pth_tmp.clone(),
             expected_sha256: sha,
@@ -1674,18 +1678,50 @@ mod tests {
         );
     }
 
+    /// CNB 音色包不再挂 `/-/lfs/<sha>` 兜底 —— 那条路对 Release 附件必 404
+    /// （只有 git-lfs 时代的老制品有效），挂上去只会用「404 拒绝」盖掉主源
+    /// 的真实超时错误。没配镜像时，候选列表就是原 URL 一条。
     #[test]
-    fn official_cnb_pack_gets_lfs_fallback() {
+    fn cnb_pack_has_no_dead_lfs_fallback() {
         let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Anon-v1.zip";
         let root = std::env::temp_dir().join("rvcf-store-lfs");
         let _ = std::fs::remove_dir_all(&root);
-        let list = voice_download_urls(&root, url, sha);
+        let _ = std::fs::create_dir_all(crate::paths::user_data(&root));
+        let list = voice_download_urls(&root, url);
+        assert_eq!(list, vec![url.to_string()], "{list:?}");
+        assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
+        // sha 参数已不再参与 URL 扩展 —— 留这个断言提醒别把它加回来。
+        assert!(!list.iter().any(|u| u.contains(&sha[..8])), "{list:?}");
+    }
+
+    /// 清单里配了仓库镜像时，CNB 音色包的同一个附件路径要搬到每个镜像基址
+    /// 上 —— cnb.cool 首字节经常超时（26.8.26/1），没有备用源用户只能手动
+    /// 点十几次重试。
+    #[test]
+    fn cnb_pack_is_mirrored_across_catalog_bases() {
+        let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Kei-v1.zip";
+        let root = std::env::temp_dir().join("rvcf-store-mirror");
+        let _ = std::fs::remove_dir_all(&root);
+        let ud = crate::paths::user_data(&root);
+        let _ = std::fs::create_dir_all(&ud);
+        let mirror = "https://mirror.example.com/Turing-Mirror/RVC-Fabric-Releases";
+        let cat = json!({
+            "download_mirrors": { "lfs": [mirror] },
+            "voices": [],
+        });
+        std::fs::write(
+            crate::store::cache_catalog_path(&root),
+            serde_json::to_string(&cat).unwrap(),
+        )
+        .unwrap();
+        let list = voice_download_urls(&root, url);
         assert_eq!(list[0], url);
-        assert_eq!(
-            list[1],
-            format!("https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/{sha}")
+        assert!(
+            list.iter().any(|u| u == &format!("{mirror}/-/releases/download/voices/Kei-v1.zip")),
+            "{list:?}"
         );
+        assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
     }
 
     #[test]
@@ -1694,7 +1730,7 @@ mod tests {
         let url = "https://huggingface.co/org/repo/resolve/main/a.zip";
         let root = std::env::temp_dir().join("rvcf-store-hf");
         let _ = std::fs::remove_dir_all(&root);
-        let list = voice_download_urls(&root, url, sha);
+        let list = voice_download_urls(&root, url);
         assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
         assert!(list[0].contains("hf-cdn.sufy.com"));
     }

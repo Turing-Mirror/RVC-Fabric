@@ -49,6 +49,11 @@ pub struct Entry {
     /// 哪一版修好的。当前版本 >= 它就不再显示。空 = 还没修。
     #[serde(default)]
     pub fixed_in: String,
+    /// 只在本会话里 worker 被系统干掉过才报。Realtek ASIO 几乎每台 Windows
+    /// 电脑都装着，26.8.24 那台 RTX 3050 引擎跑得好好的仍被这条 error 横幅
+    /// 吓到；真正会崩的是少数旧版 rthdasio64.dll，崩过一次再提示才有用。
+    #[serde(default)]
+    pub requires_fatal: bool,
 }
 
 fn default_level() -> String {
@@ -63,6 +68,8 @@ pub struct Machine {
     pub backend: String,
     pub gpus: Vec<String>,
     pub asio: Vec<String>,
+    /// 本会话 worker 是否被系统终止过。配合 `requires_fatal`。
+    pub saw_fatal: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,6 +124,9 @@ pub fn matches(e: &Entry, m: &Machine) -> bool {
     if !a.asio_driver.is_empty() && !contains_ci(&m.asio, &a.asio_driver) {
         return false;
     }
+    if e.requires_fatal && !m.saw_fatal {
+        return false;
+    }
     true
 }
 
@@ -132,6 +142,7 @@ pub fn machine(root: &Path) -> Machine {
             .to_string(),
         gpus: crate::provision::list_gpus(),
         asio: crate::crash::asio_drivers(),
+        saw_fatal: crate::crash::saw_fatal_exit(),
     }
 }
 
@@ -216,6 +227,37 @@ mod tests {
         assert!(!matches(&e, &m("windows", &[])));
         // 系统对不上也不报。
         assert!(!matches(&e, &m("macos", &["Realtek ASIO"])));
+    }
+
+    #[test]
+    fn a_fatal_only_asio_entry_stays_quiet_until_a_crash() {
+        let e = entry(
+            r#"{"id":"x","title_key":"a","body_key":"b",
+                "affects":{"os":"windows","asio_driver":"realtek"},
+                "requires_fatal":true}"#,
+        );
+        let mut m = Machine {
+            version: "1.5.5".into(),
+            os: "windows".into(),
+            asio: vec!["Realtek ASIO".into()],
+            ..Default::default()
+        };
+        assert!(!matches(&e, &m), "光装着驱动不能报");
+        m.saw_fatal = true;
+        assert!(matches(&e, &m), "崩过才报");
+    }
+
+    #[test]
+    fn the_shipped_realtek_entry_does_not_fire_just_because_the_driver_is_installed() {
+        let t = table();
+        let e = t
+            .iter()
+            .find(|e| e.id == "realtek-asio-enum-crash")
+            .expect("shipped table");
+        assert!(
+            e.requires_fatal,
+            "几乎每台 Windows 都有 Realtek ASIO，开机横幅必须要求先崩过"
+        );
     }
 
     #[test]

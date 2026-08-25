@@ -8,6 +8,7 @@
       "os": "windows",
       "asio_driver": "realtek"
     },
+    "requires_fatal": true,
     "fixed_in": ""
   }
 ]

@@ -256,5 +256,26 @@ class MsgCodeTests(unittest.TestCase):
                 self.assertTrue(cur.strip(), f"{path.name} empty {'.'.join(parts)}")
 
 
+class HeadlessWindowsTests(unittest.TestCase):
+    def test_hide_console_subprocesses_is_idempotent(self):
+        if sys.platform != "win32":
+            rp.hide_console_subprocesses()
+            return
+        import subprocess
+
+        orig = subprocess.Popen
+        try:
+            rp.hide_console_subprocesses()
+            first = subprocess.Popen
+            rp.hide_console_subprocesses()
+            self.assertIs(subprocess.Popen, first)
+            self.assertTrue(getattr(subprocess.Popen, "_tm_hidden", False))
+        finally:
+            subprocess.Popen = orig
+
+    def test_prepare_headless_windows_does_not_raise(self):
+        rp.prepare_headless_windows()
+
+
 if __name__ == "__main__":
     unittest.main()

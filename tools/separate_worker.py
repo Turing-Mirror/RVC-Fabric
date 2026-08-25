@@ -65,6 +65,12 @@ def emit(**kw) -> None:
 
 
 def main(argv: list[str]) -> int:
+    try:
+        from tools.worker_protocol import prepare_headless_windows
+
+        prepare_headless_windows()
+    except Exception:
+        pass
     if len(argv) < 2:
         emit(phase="error", **mc.msg_fields(mc.SEP_NO_REQUEST))
         return 2

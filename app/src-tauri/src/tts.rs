@@ -433,7 +433,7 @@ fn run_inner(
     }
 
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
-    let py = paths::runtime_python(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
+    let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     trace.note(&format!("rvc model {pth}"));
     let errfile = std::fs::OpenOptions::new()
         .create(true)

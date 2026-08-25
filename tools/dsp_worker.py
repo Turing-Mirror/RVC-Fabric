@@ -46,9 +46,9 @@ def main() -> None:
     except Exception:
         pass
     try:
-        from tools.worker_protocol import force_windowed_multiprocessing
+        from tools.worker_protocol import prepare_headless_windows
 
-        force_windowed_multiprocessing()
+        prepare_headless_windows()
     except Exception:
         pass
 

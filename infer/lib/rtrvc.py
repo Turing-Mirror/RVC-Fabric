@@ -37,9 +37,9 @@ def _shared_mm():
     global _mm
     if _mm is None:
         try:
-            from tools.worker_protocol import force_windowed_multiprocessing
+            from tools.worker_protocol import prepare_headless_windows
 
-            force_windowed_multiprocessing()
+            prepare_headless_windows()
         except Exception:
             pass
         _mm = M()

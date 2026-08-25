@@ -235,3 +235,47 @@ def force_windowed_multiprocessing() -> str | None:
             except Exception:
                 continue
     return None
+
+
+CREATE_NO_WINDOW = 0x08000000
+
+
+def hide_console_subprocesses() -> None:
+    """Stop ffmpeg / harvest children flashing a console on Windows.
+
+    ``CREATE_NO_WINDOW`` is per-process. The parent may be pythonw (or python
+    with the flag), but ffmpeg-python and multiprocessing still spawn
+    ``ffmpeg.exe`` / ``python.exe`` without it — that's the black window every
+    time 语音转换 loads a file.
+    """
+    import subprocess
+    import sys
+
+    if sys.platform != "win32":
+        return
+    if getattr(subprocess.Popen, "_tm_hidden", False):
+        return
+
+    _orig = subprocess.Popen
+
+    class _HiddenPopen(_orig):  # type: ignore[valid-type,misc]
+        _tm_hidden = True
+
+        def __init__(self, *args, **kwargs):
+            flags = kwargs.get("creationflags", 0) or 0
+            kwargs["creationflags"] = int(flags) | CREATE_NO_WINDOW
+            si = kwargs.get("startupinfo")
+            if si is None:
+                si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = si
+            super().__init__(*args, **kwargs)
+
+    subprocess.Popen = _HiddenPopen  # type: ignore[misc]
+
+
+def prepare_headless_windows() -> None:
+    """No console windows from this process or its children on Windows."""
+    force_windowed_multiprocessing()
+    hide_console_subprocesses()

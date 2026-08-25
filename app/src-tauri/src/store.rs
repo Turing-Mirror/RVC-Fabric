@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
@@ -742,6 +742,32 @@ fn write_voice_config(
     })
 }
 
+/// 每次安装一份独立的解压目录，并发装两个音色才不会互相踩。
+fn unique_voice_extract_dir(root: &Path, voice_id: &str) -> PathBuf {
+    static SEQ: AtomicU64 = AtomicU64::new(1);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let safe: String = voice_id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(48)
+        .collect();
+    let safe = if safe.is_empty() {
+        "voice".to_string()
+    } else {
+        safe
+    };
+    paths::update_cache(root).join(format!(
+        "voice_extract_{safe}_{}_{seq}",
+        std::process::id()
+    ))
+}
+
 /// Install a local voice_pack zip into User_Data/models/<id>/.
 /// `entry` 是清单里那条（广场下载时有，本地导入 zip 时没有）。它带着
 /// `name_i18n` 之类的多语言字段，装进本地 `config.json` 才能让模型页按当前
@@ -759,10 +785,10 @@ pub fn install_voice_pack_zip(
     if !zip_path.is_file() {
         return Err(crate::i18n::te("s.760364197e", &(zip_path.display())));
     }
-    let tmp = paths::update_cache(root).join(format!(
-        "voice_extract_{}",
-        std::process::id()
-    ));
+    // 以前按壳进程 pid 共用一个解压目录。广场允许同时下多个音色（26.8.24
+    // 一秒内点了 Serika-JP 和 Serika-ZH），两个 zip 解到同一处、一个装完
+    // remove_dir_all 另一个还在写，Windows 就报目录被占用。
+    let tmp = unique_voice_extract_dir(root, voice_id);
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let result = (|| {
@@ -1514,6 +1540,21 @@ mod tests {
             none.insert("cover".into(), v);
         }
         assert!(!none.contains_key("cover"), "空封面不该写进 sidecar");
+    }
+
+    /// 26.8.24 同时点 Serika-JP / Serika-ZH：解压目录必须按音色分开，不能
+    /// 大家都写 `voice_extract_<pid>`。
+    #[test]
+    fn concurrent_installs_get_distinct_extract_dirs() {
+        let root = Path::new(r"C:\App");
+        let a = unique_voice_extract_dir(root, "Serika-JP");
+        let b = unique_voice_extract_dir(root, "Serika-ZH");
+        let c = unique_voice_extract_dir(root, "Serika-JP");
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+        let name = a.file_name().unwrap().to_string_lossy();
+        assert!(name.contains("Serika-JP"), "{name}");
+        assert!(name.starts_with("voice_extract_"));
     }
 
     /// 清单解析那张 json! 表是白名单，多语言字段以前全被它吃掉。

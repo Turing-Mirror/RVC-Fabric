@@ -54,7 +54,12 @@ const MAX_TRANSIENT_ATTEMPTS: u32 = 5;
 /// 40s 而不是 20s：拥塞线路上 TLS 握手加排队首字节超过 20 秒很常见
 /// （diag 26.8.22/1 一晚上几十次恰好卡在 20s 整），每次掐断都把慢启动攒的
 /// 窗口打回原点。选源阶段有 8 秒的探测兜底，这里放宽不影响死链切换。
-const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(40);
+///
+/// 75s 而不是 40s（diag 26.8.26/1）：cnb.cool 的 Release 端点冷启动时
+/// 首字节稳定地卡在 40 秒出头 —— 日志里一连串「恰好 40s 整」的超时，而
+/// 同一条 URL 只要熬到第一字节，剩下的 100MB 一口气下完。掐得太早等于
+/// 永远在重付握手成本。
+const FIRST_BYTE_TIMEOUT: Duration = Duration::from_secs(75);
 const FIRST_BYTE_TIMEOUT_ERR: &str = "timed out waiting for first byte";
 /// 选源阶段给每个候选的时间。这里只发一个 `Range: bytes=0-0`，回不回得来
 /// 是秒级的事；等满 8 秒还没动静的源，让它排到后面去。

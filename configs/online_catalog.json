@@ -7156,6 +7156,68 @@
       "hf_likes": 0,
       "snapshot_date": "260826",
       "real_person": false
+    },
+    {
+      "id": "tp-sasuke",
+      "name": "宇智波佐助",
+      "tag": "男声",
+      "origin": "huggingface",
+      "source_url": "https://huggingface.co/RareHG/Rare_Models",
+      "author": "RareHG",
+      "author_url": "https://huggingface.co/RareHG",
+      "package_type": "voice_pack",
+      "sha256": "a9b79d0fa8e95b15cbb697929d609e0deb92eed6eb42015504709e837b155be0",
+      "size_bytes": 100837069,
+      "released": "260826",
+      "date": "260826",
+      "description": "收录自 Hugging Face 公开仓库；非 RVC Fabric 官方音色，授权/音质/版权由来源站点与上传者负责，与官方无关。",
+      "official": false,
+      "publisher": "community",
+      "fabric_official": false,
+      "pack_url": "https://huggingface.co/RareHG/Rare_Models/resolve/main/sasuke.zip",
+      "cover": "ch-banner/tp-sasuke.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-sasuke.jpg",
+      "series": "火影忍者",
+      "tag_i18n": {
+        "en-US": "Male Voice",
+        "ja-JP": "男性ボイス",
+        "ko-KR": "남성 음성",
+        "zh-TW": "男聲",
+        "es-ES": "Hombre",
+        "fr-FR": "Voix d'homme",
+        "ru-RU": "Мужской голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from Hugging Face public repository; not an official RVC Fabric voice. Authorization/audio quality/copyright are the responsibility of the source site and uploader, and are not affiliated with official.",
+        "ja-JP": "Hugging Face パブリックリポジトリから収録。RVC Fabric 公式音声ではありません。ライセンス/音質/著作権は提供元およびアップロード者に帰属し、公式とは無関係です。",
+        "ko-KR": "Hugging Face 공개 저장소에서 수록됨; RVC Fabric 공식 음색이 아니며, 라이선스/음질/저작권은 출처 사이트 및 업로더에게 책임이 있고 공식 측과는 무관함.",
+        "zh-TW": "收錄自 Hugging Face 公開倉庫；非 RVC Fabric 官方音色，授權/音質/版權由來源站點與上傳者負責，與官方無關。",
+        "es-ES": "Obtenido de un repositorio público en Hugging Face; no es una voz oficial de RVC Fabric. La autorización, calidad y derechos de autor son responsabilidad de la fuente y del usuario que la cargó; el proyecto oficial no se responsabiliza.",
+        "fr-FR": "Inclus à partir du dépôt public Hugging Face ; ceci n'est pas une voix officielle de RVC Fabric, l'autorisation/la qualité sonore/les droits d'auteur relèvent de la responsabilité du site source et de la personne ayant mis en ligne le fichier, sans aucun lien avec l'équipe officielle.",
+        "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
+      },
+      "name_i18n": {
+        "en-US": "Sasuke Uchiha",
+        "ja-JP": "うちはサスケ",
+        "ko-KR": "우치하 사스케",
+        "zh-TW": "宇智波佐助",
+        "es-ES": "Sasuke Uchiha",
+        "fr-FR": "Sasuke Uchiha",
+        "ru-RU": "Саске Учиха"
+      },
+      "series_i18n": {
+        "en-US": "Naruto",
+        "ja-JP": "NARUTO",
+        "ko-KR": "나루토",
+        "zh-TW": "火影忍者",
+        "es-ES": "Naruto",
+        "fr-FR": "Naruto",
+        "ru-RU": "Наруто"
+      },
+      "hf_downloads": 0,
+      "hf_likes": 0,
+      "snapshot_date": "260826",
+      "real_person": false
     }
   ],
   "extras": {

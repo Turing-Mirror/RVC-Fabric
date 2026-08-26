@@ -7035,7 +7035,7 @@
     },
     {
       "id": "tp-guy",
-      "name": "迈特凯",
+      "name": "迈特凯（英配）",
       "tag": "男声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/RareHG/Rare_Models",
@@ -7073,13 +7073,13 @@
         "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
       },
       "name_i18n": {
-        "en-US": "Might Guy",
-        "ja-JP": "マイト・ガイ",
-        "ko-KR": "마이트 가이",
-        "zh-TW": "邁特凱",
-        "es-ES": "Might Guy",
-        "fr-FR": "Might Guy",
-        "ru-RU": "Майт Гай"
+        "en-US": "Might Guy (EN)",
+        "ja-JP": "マイト・ガイ（英語）",
+        "ko-KR": "마이트 가이 (영어)",
+        "zh-TW": "邁特凱（英配）",
+        "es-ES": "Might Guy (EN)",
+        "fr-FR": "Might Guy (EN)",
+        "ru-RU": "Майт Гай (EN)"
       },
       "series_i18n": {
         "en-US": "Naruto",
@@ -7159,7 +7159,7 @@
     },
     {
       "id": "tp-itachi",
-      "name": "宇智波鼬",
+      "name": "宇智波鼬（英配）",
       "tag": "男声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/DQueen/Itachi-HaruNova",
@@ -7197,13 +7197,13 @@
         "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
       },
       "name_i18n": {
-        "en-US": "Itachi Uchiha",
-        "ja-JP": "うちはイタチ",
-        "ko-KR": "우치하 이타치",
-        "zh-TW": "宇智波鼬",
-        "es-ES": "Itachi Uchiha",
-        "fr-FR": "Itachi Uchiha",
-        "ru-RU": "Итачи Учиха"
+        "en-US": "Itachi Uchiha (EN)",
+        "ja-JP": "うちはイタチ（英語）",
+        "ko-KR": "우치하 이타치 (영어)",
+        "zh-TW": "宇智波鼬（英配）",
+        "es-ES": "Itachi Uchiha (EN)",
+        "fr-FR": "Itachi Uchiha (EN)",
+        "ru-RU": "Итачи Учиха (EN)"
       },
       "series_i18n": {
         "en-US": "Naruto",
@@ -7470,7 +7470,7 @@
     },
     {
       "id": "tp-naruto",
-      "name": "漩涡鸣人",
+      "name": "漩涡鸣人（英配）",
       "tag": "男声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/Narufan/Naruto_Uzumaki_315_Epochs",
@@ -7508,13 +7508,13 @@
         "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
       },
       "name_i18n": {
-        "en-US": "Naruto Uzumaki",
-        "ja-JP": "うずまきナルト",
-        "ko-KR": "우즈마키 나루토",
-        "zh-TW": "漩渦鳴人",
-        "es-ES": "Naruto Uzumaki",
-        "fr-FR": "Naruto Uzumaki",
-        "ru-RU": "Наруто Узумаки"
+        "en-US": "Naruto Uzumaki (EN)",
+        "ja-JP": "うずまきナルト（英語）",
+        "ko-KR": "우즈마키 나루토 (영어)",
+        "zh-TW": "漩渦鳴人（英配）",
+        "es-ES": "Naruto Uzumaki (EN)",
+        "fr-FR": "Naruto Uzumaki (EN)",
+        "ru-RU": "Наруто Узумаки (EN)"
       },
       "series_i18n": {
         "en-US": "Naruto",
@@ -7656,7 +7656,7 @@
     },
     {
       "id": "tp-sasuke",
-      "name": "宇智波佐助",
+      "name": "宇智波佐助（英配）",
       "tag": "男声",
       "origin": "huggingface",
       "source_url": "https://huggingface.co/RareHG/Rare_Models",
@@ -7694,13 +7694,13 @@
         "ru-RU": "Взято из открытого репозитория Hugging Face; это не официальный голос RVC Fabric, ответственность за лицензирование/качество/авторские права несет источник и загрузивший, официальные разработчики не имеют к этому отношения."
       },
       "name_i18n": {
-        "en-US": "Sasuke Uchiha",
-        "ja-JP": "うちはサスケ",
-        "ko-KR": "우치하 사스케",
-        "zh-TW": "宇智波佐助",
-        "es-ES": "Sasuke Uchiha",
-        "fr-FR": "Sasuke Uchiha",
-        "ru-RU": "Саске Учиха"
+        "en-US": "Sasuke Uchiha (EN)",
+        "ja-JP": "うちはサスケ（英語）",
+        "ko-KR": "우치하 사스케 (영어)",
+        "zh-TW": "宇智波佐助（英配）",
+        "es-ES": "Sasuke Uchiha (EN)",
+        "fr-FR": "Sasuke Uchiha (EN)",
+        "ru-RU": "Саске Учиха (EN)"
       },
       "series_i18n": {
         "en-US": "Naruto",

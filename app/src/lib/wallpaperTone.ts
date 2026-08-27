@@ -100,36 +100,70 @@ export function toneFromPixels(
 /**
  * 把一张图缩到 `GRID × GRID` 读像素。
  *
- * 读不到就返回中庸值，绝不抛：取不到色调只是界面少协调一点，不该让整个外观
- * 设置连带失效。读不到的情况是有的 —— asset 协议没带 CORS 头时 canvas 会被
- * 标记为污染，`getImageData` 直接抛 SecurityError。
+ * **画进 canvas 会被同源策略挡下来。** 界面跑在 `http(s)://<scheme>.localhost`，
+ * `convertFileSrc` 出来的 asset 地址属于另一个源，画上去那张 canvas 就成了
+ * tainted，`getImageData` 直接抛 SecurityError。`crossOrigin="anonymous"` 只在
+ * 宿主真的回了 CORS 头时才管用，不能指望。
+ *
+ * 所以给一条退路：`readDataUrl` 由调用方提供，从后端把字节读成 data URL —— 那
+ * 是同源的，canvas 不会脏。只在直接采样失败时才调，多数机器上一次都不会走到。
+ *
+ * 两条路都不行就返回中庸值，绝不抛：取不到色调只是界面少协调一点，不该让整个
+ * 外观设置连带失效。
  */
-export function sampleWallpaper(url: string): Promise<WallpaperTone> {
+export async function sampleWallpaper(
+  url: string,
+  readDataUrl?: () => Promise<string>,
+): Promise<WallpaperTone> {
+  if (!url) return NEUTRAL_TONE;
+  const direct = await toneOf(url);
+  if (direct) return direct;
+  if (!readDataUrl) return NEUTRAL_TONE;
+  try {
+    const data = await readDataUrl();
+    return (data ? await toneOf(data) : null) ?? NEUTRAL_TONE;
+  } catch {
+    return NEUTRAL_TONE;
+  }
+}
+
+/** 采一张图。失败返回 null（而不是中庸值），好让调用方知道该不该走退路。 */
+function toneOf(src: string): Promise<WallpaperTone | null> {
   return new Promise((resolve) => {
-    if (!url) {
-      resolve(NEUTRAL_TONE);
-      return;
+    // 整段包起来：没有 DOM 的环境（单测、SSR）里 `new Image()` 本身就会抛，
+    // 而这个函数对外的承诺是「失败返回 null」，不是「有时候抛」。
+    try {
+      drawAndRead(src, resolve);
+    } catch {
+      resolve(null);
     }
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas");
-        c.width = GRID;
-        c.height = GRID;
-        const ctx = c.getContext("2d", { willReadFrequently: true });
-        if (!ctx) {
-          resolve(NEUTRAL_TONE);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, GRID, GRID);
-        const d = ctx.getImageData(0, 0, GRID, GRID).data;
-        resolve(toneFromPixels(d, GRID, GRID));
-      } catch {
-        resolve(NEUTRAL_TONE);
-      }
-    };
-    img.onerror = () => resolve(NEUTRAL_TONE);
-    img.src = url;
   });
+}
+
+/** 把 `src` 缩到 GRID×GRID 画进 canvas 读像素。同源策略挡下来就是 null。 */
+function drawAndRead(
+  src: string,
+  resolve: (v: WallpaperTone | null) => void,
+): void {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = GRID;
+      c.height = GRID;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, GRID, GRID);
+      const d = ctx.getImageData(0, 0, GRID, GRID).data;
+      resolve(toneFromPixels(d, GRID, GRID));
+    } catch {
+      resolve(null);
+    }
+  };
+  img.onerror = () => resolve(null);
+  img.src = src;
 }

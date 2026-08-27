@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NEUTRAL_TONE, toneFromPixels } from "./wallpaperTone";
+import { NEUTRAL_TONE, sampleWallpaper, toneFromPixels } from "./wallpaperTone";
 
 /** 铺一张 w×h 的图，`at(x, y)` 返回该点的 [r,g,b]。 */
 function px(w: number, h: number, at: (x: number, y: number) => number[]) {
@@ -68,5 +68,20 @@ describe("toneFromPixels", () => {
   it("尺寸和数据对不上时退回中庸值", () => {
     expect(toneFromPixels(new Uint8ClampedArray(4), 8, 8)).toEqual(NEUTRAL_TONE);
     expect(toneFromPixels(new Uint8ClampedArray(0), 0, 0)).toEqual(NEUTRAL_TONE);
+  });
+});
+
+describe("sampleWallpaper", () => {
+  it("没有 DOM 的环境里也只是返回中庸值，不抛", async () => {
+    // 这条锁的是对外承诺：取不到色调只该让界面少协调一点，不该把调用它的
+    // 那次「应用外观」整个带崩。单测环境里连 Image 都没有，正好是最差的那种。
+    await expect(sampleWallpaper("whatever.png")).resolves.toEqual(NEUTRAL_TONE);
+    await expect(sampleWallpaper("")).resolves.toEqual(NEUTRAL_TONE);
+  });
+
+  it("退路自己抛了也照样收敛到中庸值", async () => {
+    await expect(
+      sampleWallpaper("x.png", () => Promise.reject(new Error("no shell"))),
+    ).resolves.toEqual(NEUTRAL_TONE);
   });
 });

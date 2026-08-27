@@ -1,4 +1,4 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Config } from "./config";
 import { NEUTRAL_TONE, sampleWallpaper } from "./wallpaperTone";
 
@@ -90,7 +90,11 @@ async function applyTone(
 ): Promise<void> {
   if (path === sampledPath) return;
   sampledPath = path;
-  const tone = await sampleWallpaper(src).catch(() => NEUTRAL_TONE);
+  // 直接采样多半会被 canvas 的同源策略挡下来（asset 地址是另一个源），
+  // 挡下来就让 shell 把字节读成 data URL 再采一次。见 wallpaperTone 的说明。
+  const tone = await sampleWallpaper(src, () =>
+    invoke<string>("wallpaper_data_url", { path }),
+  ).catch(() => NEUTRAL_TONE);
   // 采样是异步的，这中间用户可能已经换了图甚至清空了。以最后一次为准。
   if (sampledPath !== path) return;
   el.style.setProperty("--wp-tint", `rgb(${tone.tint})`);

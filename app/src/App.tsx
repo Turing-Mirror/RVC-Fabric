@@ -286,11 +286,13 @@ export default function App() {
   // 这台机器有没有踩到我们已经知道的坑。判据和条目都在 Rust 那边
   // （known_issues.json + known_issues.rs），这里只负责显示第一条。
   const [knownIssue, setKnownIssue] = useState<KnownIssue | null>(null);
+  const knownDismissed = useRef(false);
   useEffect(() => {
     let alive = true;
     invoke<KnownIssue[]>("known_issues_check")
       .then((v) => {
-        if (alive && Array.isArray(v) && v.length > 0) setKnownIssue(v[0]);
+        if (!alive || knownDismissed.current) return;
+        if (Array.isArray(v) && v.length > 0) setKnownIssue(v[0]);
       })
       .catch(() => {
         /* 查不到就不提示，这条本来就是锦上添花 */
@@ -298,7 +300,9 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, []);
+    // 开机查一次不够：Realtek 条目要求先崩过，而崩发生在点「开启变声」之后。
+    // 引擎掉进 error 再查一次，真崩的人才能看到说明；没崩过的人开机仍然安静。
+  }, [engine.status?.state]);
 
   // 「更新到 x.y.z」的回执。修复还没发布、没有新版本可装时进度条不会动，
   // 这条得留在横幅里说清楚为什么按钮没起作用。
@@ -1281,7 +1285,12 @@ export default function App() {
           title={knownIssue.title}
           actions={
             <>
-              <Btn onClick={() => setKnownIssue(null)}>{t("s.kiDismiss")}</Btn>
+              <Btn
+                onClick={() => {
+                  knownDismissed.current = true;
+                  setKnownIssue(null);
+                }}
+              >{t("s.kiDismiss")}</Btn>
               {/* 有修复版本才给这个按钮：它说的「更新到 x.y.z」必须是真的。 */}
               {knownIssue.fixed_in ? (
                 <Btn

@@ -232,7 +232,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "description": d.get("description").or_else(|| d.get("desc")).and_then(|v| v.as_str()).unwrap_or(""),
         "author": author,
         "author_url": d.get("author_url").or_else(|| d.get("author_link")).and_then(|v| v.as_str()).unwrap_or(""),
-        "date": d.get("date").or_else(|| d.get("released")).and_then(|v| v.as_str()).unwrap_or(""),
+        "date": json_text(d.get("date").or_else(|| d.get("released"))),
         "series": series,
         "series_ja": series_ja,
         "series_en": series_en,
@@ -708,6 +708,15 @@ fn value_is_filled(v: &Value) -> bool {
         Value::Array(a) => !a.is_empty(),
         Value::Object(o) => !o.is_empty(),
         _ => true,
+    }
+}
+
+/// 清单 `date` 经常是未加引号的 YYMMDD，serde_yaml 会收成数字。
+fn json_text(v: Option<&Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s.trim().to_string(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
     }
 }
 
@@ -1597,6 +1606,23 @@ mod tests {
         assert_eq!(extra.get("date").and_then(|v| v.as_str()), Some("260731"));
         let arr = extra.get("authors").and_then(|v| v.as_array()).expect("authors");
         assert_eq!(arr.len(), 1);
+    }
+
+    #[test]
+    fn unquoted_yaml_date_numbers_become_text() {
+        assert_eq!(json_text(Some(&json!(260731))), "260731");
+        assert_eq!(json_text(Some(&json!("260731"))), "260731");
+        assert_eq!(json_text(None), "");
+        let v = parse_voice_entry(
+            &json!({
+                "id": "tp-x",
+                "pth_url": "https://example.invalid/a.pth",
+                "date": 260731,
+            }),
+            Some(false),
+        )
+        .expect("entry");
+        assert_eq!(v.get("date").and_then(|x| x.as_str()), Some("260731"));
     }
 
     /// `authors` 数组不是字符串，as_str 过滤会把它丢掉。

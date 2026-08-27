@@ -1033,7 +1033,7 @@ mod tests {
         // The settings page writes `monitor_self`; the worker only ever looks
         // at `monitor_enabled`. If this mapping goes missing again,
         // 「变声时监听自己」 silently does nothing.
-        let root = std::env::temp_dir().join("rvcf-monitor-sync-test");
+        let root = crate::testutil::scratch("monitor-sync-test");
         let _ = std::fs::remove_dir_all(&root);
         let mut cfg = defaults();
         cfg.insert("monitor_self".into(), json!(true));
@@ -1118,7 +1118,7 @@ mod tests {
 
     #[test]
     fn force_clear_model_paths_writes_empty_into_inuse() {
-        let root = std::env::temp_dir().join("rvcf-force-clear-model");
+        let root = crate::testutil::scratch("force-clear-model");
         let _ = std::fs::remove_dir_all(&root);
         let inuse = root.join("configs").join("inuse");
         let user = crate::paths::user_data(&root);
@@ -1151,7 +1151,7 @@ mod tests {
         // The shell rewrites inuse from app_config at startup. If app_config
         // has not caught up yet, an empty pth_path must not wipe the model the
         // worker is actually using.
-        let root = std::env::temp_dir().join("rvcf-inuse-guard");
+        let root = crate::testutil::scratch("inuse-guard");
         let inuse = root.join("configs").join("inuse");
         std::fs::create_dir_all(&inuse).unwrap();
         std::fs::write(
@@ -1200,7 +1200,7 @@ mod tests {
 
     #[test]
     fn write_dsp_on_keeps_last_model() {
-        let root = std::env::temp_dir().join("rvcf-dsp-keep-last");
+        let root = crate::testutil::scratch("dsp-keep-last");
         let _ = std::fs::remove_dir_all(&root);
         let inuse = root.join("configs").join("inuse");
         let user = crate::paths::user_data(&root);
@@ -1239,7 +1239,7 @@ mod tests {
 
     #[test]
     fn dsp_mode_may_clear_the_model_path() {
-        let root = std::env::temp_dir().join("rvcf-inuse-dsp-clear");
+        let root = crate::testutil::scratch("inuse-dsp-clear");
         let inuse = root.join("configs").join("inuse");
         std::fs::create_dir_all(&inuse).unwrap();
         std::fs::write(
@@ -1268,7 +1268,7 @@ mod tests {
         assert!(!is_cold("main_gpu"));
         assert!(!engine_keys().contains(&"main_gpu"));
 
-        let root = std::env::temp_dir().join("rvcf-main-gpu-test");
+        let root = crate::testutil::scratch("main-gpu-test");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 

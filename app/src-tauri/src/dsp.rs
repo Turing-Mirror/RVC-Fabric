@@ -223,7 +223,7 @@ mod tests {
 
     /// 仓库里没有 tempfile 依赖，其他模块的测试都是这么开临时目录的。
     fn scratch(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("rvcf-dsp-{name}"));
+        let d = crate::testutil::scratch(name);
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d

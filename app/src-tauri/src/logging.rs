@@ -392,10 +392,7 @@ mod tests {
 
     #[test]
     fn finish_run_always_keeps_the_file() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-log-keep-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("log-keep");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(&td).unwrap();
         let p = td.join("sts_ok.log");
@@ -409,10 +406,7 @@ mod tests {
 
     #[test]
     fn inventory_lists_empty_channels() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-log-inv-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("log-inv");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(td.join("User_Data").join("logs").join("sts")).unwrap();
         // inventory() joins user_data(root)/logs — fake a product root.
@@ -432,10 +426,7 @@ mod tests {
 
     #[test]
     fn progress_throttles_the_same_key() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-log-trace-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("log-trace");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(&td).unwrap();
         let p = td.join("job.log");
@@ -455,10 +446,7 @@ mod tests {
 
     #[test]
     fn describe_files_caps_and_sizes() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-log-files-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("log-files");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(&td).unwrap();
         let a = td.join("a.wav");
@@ -480,10 +468,7 @@ mod tests {
 
     #[test]
     fn sweep_keeps_fresh_logs_and_json() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-log-sweep-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("log-sweep");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(td.join("sts")).unwrap();
         let fresh = td.join("sts").join("sts_new.log");

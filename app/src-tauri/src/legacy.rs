@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn missing_scripts_report_the_path() {
-        let empty = std::env::temp_dir().join("rvcf-legacy-empty");
+        let empty = crate::testutil::scratch("legacy-empty");
         let _ = std::fs::create_dir_all(&empty);
         let e = open_realtime_panel(&empty).unwrap_err();
         assert!(e.contains("gui_v1.py"), "got {e}");

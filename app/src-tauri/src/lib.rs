@@ -35,6 +35,8 @@ mod shell_extras;
 mod sts;
 mod store;
 mod telemetry;
+#[cfg(test)]
+mod testutil;
 mod tool_window;
 mod train;
 mod tts;

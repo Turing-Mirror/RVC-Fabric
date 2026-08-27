@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn missing_runtime_is_unknown_not_crashed() {
         // 开发机上没有 Runtime/pythonw，探不出结论就该放行。
-        let dir = std::env::temp_dir().join("tm-audio-probe-none");
+        let dir = crate::testutil::scratch("audio-probe-none");
         let _ = std::fs::create_dir_all(&dir);
         assert_eq!(run_probe(&dir), Verdict::Unknown);
     }

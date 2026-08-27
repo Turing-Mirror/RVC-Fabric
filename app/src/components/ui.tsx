@@ -239,7 +239,8 @@ export function ListItem({
  * 小问号。真身在 `Tooltip.tsx` —— 这里只是把名字接着导出，免得十几个
  * 引用处全部改 import。
  *
- * 它以前是个带原生 `title` 的 `<span>{t("s.b5fe935ca7")}<label>` 里会把点击转给它管的开关（点一下说明，功能被
+ * 它以前是个带原生 `title` 的 `<span>`：要悬停一秒多才出提示、样式由操作
+ * 系统画、而且在 `<label>` 里会把点击转给它管的开关（点一下说明，功能被
  * 切了）。三件事都在 Tooltip 里治好了。
  */
 export { HelpMark };

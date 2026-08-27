@@ -777,7 +777,7 @@ mod tests {
 
     /// 造一个装着两条资源的假安装目录：`a` 有嵌套子目录，`b` 平铺。
     fn fixture(tag: &str) -> (PathBuf, Value) {
-        let root = std::env::temp_dir().join(format!("rvcf-extra-rm-{tag}"));
+        let root = crate::testutil::scratch(tag);
         let _ = std::fs::remove_dir_all(&root);
         let dir = root.join("assets").join("pymss");
         std::fs::create_dir_all(dir.join("vocal").join("v1")).unwrap();
@@ -907,7 +907,7 @@ mod tests {
     #[test]
     fn size_mismatch_means_not_installed() {
         // 半截下载的文件存在但没用；只判存在会让分离在加载模型时才炸。
-        let base = std::env::temp_dir().join("rvcf-extra-fileok");
+        let base = crate::testutil::scratch("extra-fileok");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         let p = base.join("a.ckpt");

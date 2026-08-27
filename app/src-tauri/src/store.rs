@@ -1756,7 +1756,7 @@ mod tests {
     fn cnb_pack_has_no_dead_lfs_fallback() {
         let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Anon-v1.zip";
-        let root = std::env::temp_dir().join("rvcf-store-lfs");
+        let root = crate::testutil::scratch("store-lfs");
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::create_dir_all(crate::paths::user_data(&root));
         let list = voice_download_urls(&root, url);
@@ -1772,7 +1772,7 @@ mod tests {
     #[test]
     fn cnb_pack_is_mirrored_across_catalog_bases() {
         let url = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Kei-v1.zip";
-        let root = std::env::temp_dir().join("rvcf-store-mirror");
+        let root = crate::testutil::scratch("store-mirror");
         let _ = std::fs::remove_dir_all(&root);
         let ud = crate::paths::user_data(&root);
         let _ = std::fs::create_dir_all(&ud);
@@ -1798,7 +1798,7 @@ mod tests {
     #[test]
     fn hf_pack_does_not_get_cnb_lfs() {
         let url = "https://huggingface.co/org/repo/resolve/main/a.zip";
-        let root = std::env::temp_dir().join("rvcf-store-hf");
+        let root = crate::testutil::scratch("store-hf");
         let _ = std::fs::remove_dir_all(&root);
         let list = voice_download_urls(&root, url);
         assert!(list.iter().all(|u| !u.contains("/-/lfs/")), "{list:?}");
@@ -1878,7 +1878,7 @@ mod tests {
 
     #[test]
     fn staged_payload_prefers_the_zip_and_ignores_junk() {
-        let base = std::env::temp_dir().join("rvcf-staged-payload");
+        let base = crate::testutil::scratch("staged-payload");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         assert!(staged_payload(&base).is_none());
@@ -1898,7 +1898,7 @@ mod tests {
 
     #[test]
     fn staged_status_only_lists_dirs_that_have_something_installable() {
-        let base = std::env::temp_dir().join("rvcf-staged-status");
+        let base = crate::testutil::scratch("staged-status");
         let _ = std::fs::remove_dir_all(&base);
         let dl = base.join("User_Data").join("downloads");
         std::fs::create_dir_all(dl.join("ready")).unwrap();
@@ -1917,7 +1917,7 @@ mod tests {
     #[test]
     fn discarding_staged_files_is_idempotent() {
         // 用户连点两下「删除」不该报错。
-        let base = std::env::temp_dir().join("rvcf-staged-discard");
+        let base = crate::testutil::scratch("staged-discard");
         let _ = std::fs::remove_dir_all(&base);
         let d = staged_dir(&base, "v1").unwrap();
         std::fs::create_dir_all(&d).unwrap();
@@ -1944,7 +1944,7 @@ mod tests {
 
     #[test]
     fn cover_url_falls_back_to_local_banner_file() {
-        let root = std::env::temp_dir().join(format!("rvcf-cover-fb-{}", std::process::id()));
+        let root = crate::testutil::scratch("cover-fb");
         let _ = std::fs::remove_dir_all(&root);
         let dir = root.join("CNB-GIT-RELEASE").join("ch-banner");
         std::fs::create_dir_all(&dir).unwrap();

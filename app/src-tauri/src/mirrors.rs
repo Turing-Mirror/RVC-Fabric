@@ -213,7 +213,7 @@ mod tests {
     use serde_json::json;
 
     fn scratch(name: &str) -> std::path::PathBuf {
-        let p = std::env::temp_dir().join(format!("rvcf-mirrors-{name}"));
+        let p = crate::testutil::scratch(name);
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(p.join("configs")).unwrap();
         std::fs::create_dir_all(crate::paths::user_data(&p)).unwrap();

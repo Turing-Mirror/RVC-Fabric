@@ -1355,7 +1355,7 @@ mod tests {
         // 断言的是 zh-CN 的字段标签。别的测试（如 i18n 的语言遍历）会在并行
         // 时把全局语言切来切去，必须先把自己的语言钉住，否则标签对不上。
         let _locale = crate::i18n::testing::pin("zh-CN");
-        let root = std::env::temp_dir().join("rvcf-summary-text");
+        let root = crate::testutil::scratch("summary-text");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
 
@@ -1434,7 +1434,7 @@ mod tests {
     fn the_preview_lists_exactly_what_the_bundle_will_contain() {
         // 同 summary：info.json 的生成文案走 i18n，先钉住语言。
         let _locale = crate::i18n::testing::pin("zh-CN");
-        let root = std::env::temp_dir().join("rvcf-diag-manifest");
+        let root = crate::testutil::scratch("diag-manifest");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("configs").join("inuse")).unwrap();
         std::fs::write(
@@ -1571,7 +1571,7 @@ mod tests {
 
     #[test]
     fn log_tail_is_capped() {
-        let p = std::env::temp_dir().join("rvcf-tail-test.log");
+        let p = crate::testutil::scratch("tail-test-log");
         std::fs::write(&p, "x".repeat(50_000)).unwrap();
         assert_eq!(tail_bytes(&p, 1000).len(), 1000);
         let _ = std::fs::remove_file(&p);
@@ -1579,7 +1579,7 @@ mod tests {
 
     #[test]
     fn clip_log_keeps_head_and_tail() {
-        let p = std::env::temp_dir().join("rvcf-clip-test.log");
+        let p = crate::testutil::scratch("clip-test-log");
         let mut body = String::from("HEAD-LINE\n");
         body.push_str(&"m".repeat(20_000));
         body.push_str("\nTAIL-LINE\n");

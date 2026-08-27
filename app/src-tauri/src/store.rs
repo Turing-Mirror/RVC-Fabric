@@ -689,6 +689,43 @@ fn entry_cover(entry: &Value) -> Option<Value> {
     Some(v.clone())
 }
 
+/// sidecar 里跟「这是谁做的、哪一版、从哪来」有关的键。装包时从清单抄到
+/// 本地 config.json；空串 / 空数组 / 空对象都算「没写」，不能挡住清单兜底。
+const VOICE_META_KEYS: [&str; 7] = [
+    "author",
+    "author_url",
+    "authors",
+    "source_url",
+    "date",
+    "series",
+    "group",
+];
+
+fn value_is_filled(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::String(s) => !s.trim().is_empty(),
+        Value::Array(a) => !a.is_empty(),
+        Value::Object(o) => !o.is_empty(),
+        _ => true,
+    }
+}
+
+/// 把 `src` 里有内容的元数据补进 `extra`。已有非空值不覆盖。
+fn merge_voice_meta(extra: &mut Map<String, Value>, src: &Value) {
+    let Some(obj) = src.as_object() else {
+        return;
+    };
+    for k in VOICE_META_KEYS {
+        if extra.get(k).map(value_is_filled).unwrap_or(false) {
+            continue;
+        }
+        if let Some(v) = obj.get(k).filter(|v| value_is_filled(v)) {
+            extra.insert(k.to_string(), v.clone());
+        }
+    }
+}
+
 fn copy_i18n_fields(entry: &Value, extra: &mut Map<String, Value>) {
     let Some(obj) = entry.as_object() else { return };
     const FIELDS: [&str; 6] = ["name", "tag", "series", "author", "description", "group"];
@@ -912,33 +949,16 @@ pub fn install_voice_pack_zip(
         }
 
         let mut extra = Map::new();
-        for k in [
-            "author",
-            "author_url",
-            "authors",
-            "source_url",
-            "date",
-            "series",
-            "group",
-            "cover",
-        ] {
-            if let Some(v) = pack_cfg.get(k) {
-                extra.insert(k.to_string(), v.clone());
-            }
+        // 包内 config.json 先抄：官方包自己带作者。空串不能当「已有」——
+        // 第三方 zip 经常写 `"author": ""`，以前 contains_key 为真就把清单
+        // 里的真作者挡掉，模型页变成「作者 : —」。
+        merge_voice_meta(&mut extra, &Value::Object(pack_cfg.clone()));
+        if let Some(c) = pack_cfg.get("cover").filter(|v| value_is_filled(v)) {
+            extra.insert("cover".into(), c.clone());
         }
-        // 作者 / 主页 / 来源 / 日期多半只写在清单里 —— 第三方的 zip 是别人打的包，
-        // 里面那份 config.json 通常只有名字和标签。不从 entry 兜底，装完的
-        // 音色就再也查不到它是从哪来的、是谁做的。（author 以前不在这张表里，
-        // 清单写了 author 但没写 author_i18n 时，装完的作者一栏就是空的。）
+        // 作者 / 主页 / 来源 / 日期 / 多作者数组多半只写在清单里。
         if let Some(e) = entry {
-            for k in ["author", "author_url", "authors", "source_url", "date", "series", "group"] {
-                if extra.contains_key(k) {
-                    continue;
-                }
-                if let Some(v) = e.get(k).filter(|v| !v.as_str().unwrap_or("").is_empty()) {
-                    extra.insert(k.to_string(), v.clone());
-                }
-            }
+            merge_voice_meta(&mut extra, e);
         }
         // 第三方 zip 里没有 cover，封面 URL 只在清单 —— 不补上，安装后的
         // 模型页/首页就永远没有封面（官方包自带 cover 已优先，不受影响）。
@@ -1239,19 +1259,8 @@ pub fn install_voice_entry(
     }
 
     let mut extra = Map::new();
-    for k in [
-        "author",
-        "author_url",
-        "authors",
-        "source_url",
-        "date",
-        "series",
-        "group",
-    ] {
-        if let Some(v) = entry.get(k) {
-            extra.insert(k.to_string(), v.clone());
-        }
-    }
+    merge_voice_meta(&mut extra, &entry);
+    copy_i18n_fields(&entry, &mut extra);
     // 清单封面（voice_files 形态的第三方也没有包内 cover，全靠这一行）。
     if let Some(v) = entry_cover(&entry) {
         extra.insert("cover".into(), v);
@@ -1556,17 +1565,53 @@ mod tests {
             "date": "260731",
         });
         let mut extra = Map::new();
-        // 包内 config.json 没有 author —— 模拟第三方 zip。
-        for k in ["author", "author_url", "authors", "source_url", "date", "series", "group"] {
-            if let Some(v) = entry.get(k) {
-                extra.entry(k.to_string()).or_insert(v.clone());
-            }
-        }
+        merge_voice_meta(&mut extra, &entry);
         assert_eq!(
             extra.get("author").and_then(|v| v.as_str()),
             Some("ArkanDash"),
         );
         assert_eq!(extra.get("date").and_then(|v| v.as_str()), Some("260731"));
+    }
+
+    /// 第三方 zip 的包内 config.json 经常带 `"author": ""`。空串不能挡住清单。
+    #[test]
+    fn empty_pack_author_does_not_block_catalog_author() {
+        let pack = json!({"author": "", "authors": [], "date": "   "});
+        let catalog = json!({
+            "author": "ArkanDash",
+            "author_url": "https://huggingface.co/ArkanDash",
+            "authors": [{"name": "A", "url": "https://example.invalid/a"}],
+            "date": "260731",
+        });
+        let mut extra = Map::new();
+        merge_voice_meta(&mut extra, &pack);
+        merge_voice_meta(&mut extra, &catalog);
+        assert_eq!(
+            extra.get("author").and_then(|v| v.as_str()),
+            Some("ArkanDash"),
+        );
+        assert_eq!(
+            extra.get("author_url").and_then(|v| v.as_str()),
+            Some("https://huggingface.co/ArkanDash"),
+        );
+        assert_eq!(extra.get("date").and_then(|v| v.as_str()), Some("260731"));
+        let arr = extra.get("authors").and_then(|v| v.as_array()).expect("authors");
+        assert_eq!(arr.len(), 1);
+    }
+
+    /// `authors` 数组不是字符串，as_str 过滤会把它丢掉。
+    #[test]
+    fn authors_array_survives_meta_merge() {
+        let catalog = json!({
+            "authors": [
+                {"name": "A", "url": "https://example.invalid/a"},
+                {"name": "B"},
+            ],
+        });
+        let mut extra = Map::new();
+        merge_voice_meta(&mut extra, &catalog);
+        let arr = extra.get("authors").and_then(|v| v.as_array()).expect("authors");
+        assert_eq!(arr.len(), 2);
     }
 
     /// 多作者的 `authors` 数组要原样透传到商店条目上 —— 前端在「作者主页」

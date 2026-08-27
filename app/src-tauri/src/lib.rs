@@ -119,11 +119,11 @@ async fn assets_ensure_engine_core(
     .map_err(|e| e.to_string())?
 }
 
-/// 喂一次心跳给撕裂判定。第一级（降 f0 精度）直接做掉并回报做了什么；
-/// 第二级（放宽块长）只返回建议 —— 那一步要停流重开，得用户点头。
+/// 喂一次心跳给撕裂判定。只可能建议放宽块长（要停流重开，得用户点头）。
+/// 音高算法（rmvpe 等）这里绝不改 —— 欠载误判把用户的 rmvpe 改成 fcpe
+/// 比漏降一档更糟。
 #[tauri::command]
 fn tearing_step(
-    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     underrun: u32,
 ) -> Result<Value, String> {
@@ -138,22 +138,6 @@ fn tearing_step(
 
     match tearing::step(underrun, &f0, bt) {
         tearing::Action::None => Ok(json!({"action": "none"})),
-        tearing::Action::LowerF0 => {
-            let Some(next) = tearing::next_f0(&f0) else {
-                return Ok(json!({"action": "none"}));
-            };
-            // f0method 是热参数，改它不用停流 —— 声音不会断。
-            crate::logging::shell_log!("tearing: f0 {} → {} (underrun auto-drop)", f0, next);
-            let mut patch = Map::new();
-            patch.insert("f0method".into(), json!(next));
-            config::update(&root, patch.clone())?;
-            let _ = app.emit("config-changed", json!({"patch": patch}));
-            Ok(json!({
-                "action": "lowered",
-                "f0": next,
-                "message": crate::i18n::t("s.tearLowered"),
-            }))
-        }
         tearing::Action::AskBlock => {
             let Some(next) = tearing::next_block(bt) else {
                 return Ok(json!({"action": "none"}));

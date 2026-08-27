@@ -1,4 +1,4 @@
-//! 撕裂检测与自动降级。
+//! 撕裂检测。
 //!
 //! 撕裂（滋滋啦啦、断断续续）的直接原因是**输出欠载**：推理没在一个块的时间
 //! 内交出结果，播放指针追上了写指针，那一段音频无论如何都补不回来。
@@ -7,17 +7,17 @@
 //! 显卡被别的程序抢一下、驱动打个嗝，都会让某一块特别慢，但听感上没事。
 //! 持续欠载才是真跟不上。
 //!
-//! 处置分两级，第二级要问过用户（改块长要停流重开，音频会断一两秒）：
+//! 处置只有一档，而且要问过用户（改块长要停流重开，音频会断一两秒）：
 //!
 //! | 档 | 动作 | 打断 |
 //! |---|---|---|
-//! | 1 | f0 方法 rmvpe → fcpe（热参数，不重启） | 无 |
-//! | 2 | block_time 抬一档 | 停流重开 |
+//! | 1 | 建议把 block_time 抬一档 | 停流重开 |
 //!
-//! 有一件事这里**做不到**，写清楚免得下次有人拿它当权威：欠载只说明「没跟上」，
-//! 不说明「为什么没跟上」。WASAPI 独占被抢、USB 麦掉包、笔记本降频，看起来
-//! 都一样。所以第一级的文案说的是「显卡性能/资源不足」而不是「你的显卡不行」，
-//! 第二级干脆只描述现象（「检测到声音撕裂」）再问一句。
+//! **不再自动改 f0 方法。** 旧逻辑会在欠载时把 rmvpe 写成 fcpe，文案还说
+//! 「显卡性能/资源不足」。欠载只说明「没跟上」，不说明「为什么没跟上」——
+//! WASAPI 独占被抢、USB 麦掉包、笔记本降频、起播加载模型，看起来都一样。
+//! 26.8.24 那台只开了变声器的 RTX 3050 全程跟得上，仍被误判改掉 rmvpe。
+//! 音高算法是用户特意选的，误判的代价比漏降一档大得多，所以这里动也不动。
 
 /// 判定窗口。太短会被一次偶发卡顿触发，太长则用户已经难受了半天。
 ///
@@ -45,8 +45,7 @@ pub const MIN_UNDERRUNS: u32 = 5;
 /// 才是真跟不上。
 pub const HOT_STREAK: u32 = 2;
 
-/// 降过一档之后的冷却期。没有它会在一个窗口里连降到底 —— 第一级刚生效，
-/// 效果还没反映到欠载计数上，就被判了第二次。
+/// 问过一次之后的冷却期。没有它会在每个窗口里再弹一次「要放宽延迟吗」。
 pub const COOLDOWN_SEC: f64 = 15.0;
 
 /// f0 方法的开销排序（贵 → 便宜）。降级就是沿着这条链往下走一格。
@@ -60,8 +59,6 @@ pub const BLOCK_LADDER: &[f64] = &[0.25, 0.30, 0.40];
 pub enum Action {
     /// 什么都不做。
     None,
-    /// 降 f0 精度。热更新，不打断。
-    LowerF0,
     /// 建议放宽块长。**只是建议** —— 要停流重开，得用户点头。
     AskBlock,
 }
@@ -83,8 +80,6 @@ pub struct Sample {
     pub warmup: bool,
     /// 连续过线的窗口数（含本窗口）。要满 HOT_STREAK 才动手。
     pub hot_streak: u32,
-    /// 这一轮会话已经降过一次 f0。不再沿梯子走到 pm。
-    pub already_lowered_f0: bool,
 }
 
 /// 这一窗算不算「持续跟不上」。比例和绝对次数都要过。
@@ -109,14 +104,11 @@ pub fn decide(s: &Sample) -> Action {
     if s.hot_streak < HOT_STREAK {
         return Action::None;
     }
-    // 先走不打断的那一级。同一会话只降一次 f0：26.8.21 误判把 rmvpe 一路
-    // 降到 pm，音质没了，欠载也未必好。再撕裂就问要不要放宽块长。
-    if !s.already_lowered_f0 && next_f0(&s.f0).is_some() {
-        Action::LowerF0
-    } else if next_block(s.block_time).is_some() {
+    // 只建议放宽块长，而且要用户点头。f0 方法（rmvpe / fcpe / …）是用户
+    // 特意选的音质档，这里动它就是「资源不足」误判把设置改掉。
+    if next_block(s.block_time).is_some() {
         Action::AskBlock
     } else {
-        // 两级都到底还在撕裂，再降就只是把声音弄得更差而不解决问题。
         Action::None
     }
 }
@@ -151,8 +143,6 @@ struct Watch {
     session_start: Instant,
     /// 连续过线窗口。过线中断就清零。
     hot_streak: u32,
-    /// 这一轮已经降过 f0。
-    lowered_f0: bool,
 }
 
 static WATCH: Mutex<Option<Watch>> = Mutex::new(None);
@@ -182,7 +172,6 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
         last_action: None,
         session_start: now,
         hot_streak: 0,
-        lowered_f0: false,
     });
 
     // 计数器只会往上走。变小说明 worker 重启了，重新开始数。
@@ -228,7 +217,6 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
         block_time: bt,
         warmup: false,
         hot_streak: w.hot_streak,
-        already_lowered_f0: w.lowered_f0,
     });
 
     // 窗口滚动。无论判没判出来都要滚 —— 不滚的话旧的欠载会一直累加，
@@ -238,9 +226,6 @@ pub fn step(underrun_total: u32, f0: &str, block_time: f64) -> Action {
     if act != Action::None {
         w.last_action = Some(now);
         w.hot_streak = 0;
-        if act == Action::LowerF0 {
-            w.lowered_f0 = true;
-        }
     }
     act
 }
@@ -258,7 +243,6 @@ mod tests {
             block_time: bt,
             warmup: false,
             hot_streak: HOT_STREAK,
-            already_lowered_f0: false,
         }
     }
 
@@ -289,29 +273,20 @@ mod tests {
         x.hot_streak = 1;
         assert_eq!(decide(&x), Action::None);
         x.hot_streak = HOT_STREAK;
-        assert_eq!(decide(&x), Action::LowerF0);
-    }
-
-    #[test]
-    fn sustained_underruns_lower_the_f0_method_first() {
-        // 不打断的那一级必须排在前面：能不断音就不断音。
-        assert_eq!(decide(&s(10, 40, 999.0, "rmvpe", 0.25)), Action::LowerF0);
-    }
-
-    /// 同一会话只降一次 f0，不再 rmvpe → fcpe → pm。
-    #[test]
-    fn a_session_lowers_f0_only_once() {
-        let mut x = s(10, 40, 999.0, "fcpe", 0.25);
-        x.already_lowered_f0 = true;
         assert_eq!(decide(&x), Action::AskBlock);
     }
 
-    /// f0 到底了才谈动块长 —— 那一步要停流重开，代价高得多。
+    /// 持续欠载只问要不要放宽块长，绝不改 f0 方法。
+    ///
+    /// 旧逻辑会在这里把 rmvpe 写成 fcpe。用户只开了变声器也会被「资源不足」
+    /// 误判改掉音高算法 —— 那是设置被悄悄覆盖，比漏降一档更糟。
     #[test]
-    fn only_after_f0_bottoms_out_do_we_ask_about_the_block() {
+    fn sustained_underruns_never_touch_the_f0_method() {
+        assert_eq!(decide(&s(10, 40, 999.0, "rmvpe", 0.25)), Action::AskBlock);
+        assert_eq!(decide(&s(10, 40, 999.0, "fcpe", 0.25)), Action::AskBlock);
         assert_eq!(decide(&s(10, 40, 999.0, "pm", 0.25)), Action::AskBlock);
         // 块长也到顶：再降只是把声音弄差，不解决问题。
-        assert_eq!(decide(&s(20, 40, 999.0, "pm", 0.40)), Action::None);
+        assert_eq!(decide(&s(20, 40, 999.0, "rmvpe", 0.40)), Action::None);
     }
 
     /// 冷却期内一律不动。没有它会在一个窗口里连降到底：第一级刚生效，效果
@@ -321,7 +296,7 @@ mod tests {
         assert_eq!(decide(&s(20, 40, 1.0, "rmvpe", 0.25)), Action::None);
         assert_eq!(
             decide(&s(20, 40, COOLDOWN_SEC + 0.1, "rmvpe", 0.25)),
-            Action::LowerF0
+            Action::AskBlock
         );
     }
 

@@ -275,7 +275,50 @@ def hide_console_subprocesses() -> None:
     subprocess.Popen = _HiddenPopen  # type: ignore[misc]
 
 
+def hide_multiprocessing_windows() -> None:
+    """Hide consoles of ``multiprocessing.Process`` children on Windows.
+
+    ``AudioIoProcess`` / Harvest 走的是 ``multiprocessing.popen_spawn_win32``，
+    内部直接 ``_winapi.CreateProcess(..., flags=0)``，**不经过** ``subprocess.Popen``。
+    上面那层 Popen 补丁挡不住 —— 开启变声时闪一下黑框就是它。
+    """
+    import sys
+
+    if sys.platform != "win32":
+        return
+    try:
+        import threading
+        import _winapi
+        from multiprocessing import popen_spawn_win32 as psp
+    except Exception:
+        return
+    if getattr(psp.Popen, "_tm_hidden", False):
+        return
+
+    _orig_init = psp.Popen.__init__
+    _lock = threading.Lock()
+    _orig_cp = _winapi.CreateProcess
+
+    def _hidden_init(self, process_obj):
+        def _cp(app_name, cmd_line, proc_attr, thread_attr, inherit, flags, *rest):
+            flags = int(flags or 0) | CREATE_NO_WINDOW
+            return _orig_cp(
+                app_name, cmd_line, proc_attr, thread_attr, inherit, flags, *rest
+            )
+
+        with _lock:
+            _winapi.CreateProcess = _cp
+            try:
+                _orig_init(self, process_obj)
+            finally:
+                _winapi.CreateProcess = _orig_cp
+
+    psp.Popen.__init__ = _hidden_init  # type: ignore[misc]
+    psp.Popen._tm_hidden = True  # type: ignore[attr-defined]
+
+
 def prepare_headless_windows() -> None:
     """No console windows from this process or its children on Windows."""
     force_windowed_multiprocessing()
     hide_console_subprocesses()
+    hide_multiprocessing_windows()

@@ -93,11 +93,17 @@ fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
                     let relevant = k == "author"
                         || k == "date"
                         || k == "author_url"
+                        || k == "authors"
+                        || k == "source_url"
                         || k.starts_with("author_");
-                    let nonempty = v
-                        .as_str()
-                        .map(|s| !s.trim().is_empty())
-                        .unwrap_or(false);
+                    // 字符串、authors 数组、author_i18n 对象都要能进来。
+                    // 以前只认 as_str，数组和译名表全被丢掉。
+                    let nonempty = match v {
+                        Value::String(s) => !s.trim().is_empty(),
+                        Value::Array(a) => !a.is_empty(),
+                        Value::Object(o) => !o.is_empty(),
+                        _ => false,
+                    };
                     if relevant && nonempty {
                         out.insert(k.clone(), v.clone());
                     }
@@ -109,12 +115,30 @@ fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
     None
 }
 
+/// 旧安装把作者写成空串 / 「未知」/ 「—」。这些都该当成没写，好从清单补。
+fn author_looks_blank(s: &str) -> bool {
+    let t = s.trim();
+    t.is_empty()
+        || matches!(
+            t,
+            "未知"
+                | "unknown"
+                | "Unknown"
+                | "—"
+                | "-"
+                | "N/A"
+                | "n/a"
+                | "作者未知"
+                | "未填写"
+        )
+}
+
 /// sidecar 里收出作者列表：新写法的 `authors` 数组优先，兼容单个 `author`
 /// 字段（带上它的主页）。名字去重，顺序保持清单里的写法。
 fn collect_authors(side: &Map<String, Value>, author: &str, author_url: &str) -> Value {
     fn push(out: &mut Vec<Value>, name: &str, url: &str) {
         let name = name.trim();
-        if name.is_empty() {
+        if author_looks_blank(name) {
             return;
         }
         if out
@@ -509,10 +533,18 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             .and_then(|v| v.as_str())
             .unwrap_or(&vid)
             .to_string();
-        if (author.trim().is_empty() || date.is_empty()) && !oid.is_empty() {
+        let authors_missing = side
+            .get("authors")
+            .and_then(|v| v.as_array())
+            .map(|a| a.is_empty())
+            .unwrap_or(true);
+        let author_placeholder = author_looks_blank(&author);
+        if (author_placeholder || date.is_empty() || authors_missing || author_url.is_empty())
+            && !oid.is_empty()
+        {
             if let Some(meta) = catalog_entry_meta(root, &oid) {
                 let mut healed = Map::new();
-                if author.trim().is_empty() {
+                if author_placeholder {
                     if let Some(v) = meta.get("author") {
                         healed.insert("author".into(), v.clone());
                     }
@@ -525,6 +557,11 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
                 if date.is_empty() {
                     if let Some(v) = meta.get("date") {
                         healed.insert("date".into(), v.clone());
+                    }
+                }
+                if authors_missing {
+                    if let Some(v) = meta.get("authors") {
+                        healed.insert("authors".into(), v.clone());
                     }
                 }
                 // 语言变体一并带走：sidecar 里没有的才补，换语言后显示仍正确。
@@ -2487,6 +2524,20 @@ mod tests {
             resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
             -1
         );
+    }
+
+    #[test]
+    fn placeholder_author_names_are_treated_as_blank() {
+        assert!(author_looks_blank(""));
+        assert!(author_looks_blank("  未知  "));
+        assert!(author_looks_blank("—"));
+        assert!(author_looks_blank("unknown"));
+        assert!(!author_looks_blank("ArkanDash"));
+        let mut side = Map::new();
+        side.insert("authors".into(), json!([{"name": "未知"}, {"name": "binant"}]));
+        let arr = collect_authors(&side, "未知", "").as_array().cloned().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["name"], "binant");
     }
 
     #[test]

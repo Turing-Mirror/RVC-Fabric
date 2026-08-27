@@ -244,6 +244,28 @@ export function CropCoverDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [busy, onClose]);
 
+  // 打开时带上当前封面，用户可以直接裁，不必先重选一张。远程 https
+  // 封面跨域会污染 canvas，toDataURL 会抛，那种情况仍走「选本地图」。
+  useEffect(() => {
+    const raw = (model.cover || "").trim();
+    if (!raw || /^https?:\/\//i.test(raw)) return;
+    const src = coverSrc(raw);
+    if (!src) return;
+    let cancelled = false;
+    void loadImageEl(src)
+      .then((el) => {
+        if (cancelled) return;
+        setSrcLabel(raw.split(/[\\/]/).pop() || raw);
+        startEditor(el);
+      })
+      .catch(() => {
+        /* 读不到就停在选图，不挡操作 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [model.cover, startEditor]);
+
   // 画布跟随窗口宽度重排。
   useEffect(() => {
     if (!img) return;
@@ -378,7 +400,14 @@ export function CropCoverDialog({
     setBusy(true);
     setErr("");
     try {
-      await setVoiceCover(model.dir, out.canvas.toDataURL("image/jpeg", 0.85));
+      let dataUrl: string;
+      try {
+        dataUrl = out.canvas.toDataURL("image/jpeg", 0.85);
+      } catch {
+        setErr(t("models.coverBadImage"));
+        return;
+      }
+      await setVoiceCover(model.dir, dataUrl);
       await onSaved(t("models.coverSaved"));
     } catch (e) {
       setErr(String(e));

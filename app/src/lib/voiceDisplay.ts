@@ -298,7 +298,7 @@ export function voiceAuthorList(v: AuthorSource): VoiceAuthor[] {
   const out: VoiceAuthor[] = [];
   const push = (name: string, url?: string) => {
     const n = name.trim();
-    if (!n) return;
+    if (!n || /^(未知|unknown|—|-|n\/a|作者未知|未填写)$/i.test(n)) return;
     const hit = out.find((a) => a.name === n);
     if (hit) {
       if (!hit.url && url) hit.url = url;

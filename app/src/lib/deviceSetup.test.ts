@@ -21,10 +21,10 @@ describe("pickAutoDevices", () => {
       STATUS,
     );
     expect(pick).not.toBeNull();
-    expect(pick!.hostapi).toBe("MME");
+    expect(pick!.sg_hostapi).toBe("MME");
     // 真麦克风优先，虚拟声卡的输出端（CABLE Output）不算麦克风。
-    expect(pick!.input_device).toBe("麦克风 (Realtek(R) Audio)");
-    expect(pick!.output_device).toBe("CABLE Input (VB-Audio Virtual Cable) (MME)");
+    expect(pick!.sg_input_device).toBe("麦克风 (Realtek(R) Audio)");
+    expect(pick!.sg_output_device).toBe("CABLE Input (VB-Audio Virtual Cable) (MME)");
   });
 
   it("keeps valid user choices untouched", () => {
@@ -48,7 +48,7 @@ describe("pickAutoDevices", () => {
       },
       STATUS,
     );
-    expect(pick).toEqual({ input_device: "麦克风 (Realtek(R) Audio)" });
+    expect(pick).toEqual({ sg_input_device: "麦克风 (Realtek(R) Audio)" });
   });
 
   it("does nothing without device lists", () => {

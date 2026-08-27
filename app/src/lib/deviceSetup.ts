@@ -56,9 +56,9 @@ function looksLikeCableInput(name: string): boolean {
 }
 
 export type DeviceAutoPick = {
-  hostapi?: string;
-  input_device?: string;
-  output_device?: string;
+  sg_hostapi?: string;
+  sg_input_device?: string;
+  sg_output_device?: string;
 };
 
 /**
@@ -123,8 +123,11 @@ export function pickAutoDevices(
   }
 
   const out: DeviceAutoPick = {};
-  if (apiChanged) out.hostapi = api;
-  if (input) out.input_device = input;
-  if (output) out.output_device = output;
+  // 引擎和设置页读的都是 sg_*。写成 hostapi / input_device 只会进磁盘
+  // 里的旧别名：输入输出靠 apply_device_alias 碰巧能回填，sg_hostapi
+  // 没有别名，MME 永远配不上。
+  if (apiChanged) out.sg_hostapi = api;
+  if (input) out.sg_input_device = input;
+  if (output) out.sg_output_device = output;
   return Object.keys(out).length ? out : null;
 }

@@ -819,16 +819,11 @@ pub fn start_worker_kind(root: &Path, kind: WorkerKind) -> Result<(), String> {
             .append(true)
             .open(&log_path)
             .ok();
-        // Prefer pythonw (no console). CREATE_NO_WINDOW if fallback to python.exe.
-        let is_pythonw = pyw
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.eq_ignore_ascii_case("pythonw.exe"))
-            .unwrap_or(false);
+        // CREATE_NO_WINDOW 对 pythonw 无害，对 python.exe 回退是必须的。
+        // 子进程（AudioIoProcess）走 multiprocessing CreateProcess，不吃这个
+        // 标志 —— 那边在 worker_protocol.hide_multiprocessing_windows 补。
         let mut flags = 0x00000200u32; // CREATE_NEW_PROCESS_GROUP
-        if !is_pythonw {
-            flags |= 0x08000000; // CREATE_NO_WINDOW
-        }
+        flags |= 0x08000000; // CREATE_NO_WINDOW
         let mut cmd = Command::new(&pyw);
         cmd.arg(script.as_os_str())
             .current_dir(root)

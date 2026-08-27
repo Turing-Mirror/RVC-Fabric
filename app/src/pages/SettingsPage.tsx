@@ -219,9 +219,9 @@ function SettingsPageImpl({
       }
       await setConfig(pick);
       const parts: string[] = [];
-      if (pick.hostapi) parts.push(t("s.devAutoApi"));
-      if (pick.input_device) parts.push(t("s.devAutoIn"));
-      if (pick.output_device) parts.push(t("s.devAutoOut"));
+      if (pick.sg_hostapi) parts.push(t("s.devAutoApi"));
+      if (pick.sg_input_device) parts.push(t("s.devAutoIn"));
+      if (pick.sg_output_device) parts.push(t("s.devAutoOut"));
       setAutoDevMsg(t("s.devAutoDone", { v0: parts.join("、") }));
     } catch (e) {
       setAutoDevMsg(String(e));

@@ -211,7 +211,8 @@ export function useEngine() {
         .then((r) => {
           if (!r || r.action === "none") return;
           if (r.action === "lowered") {
-            // 已经做完了，只是告诉他一声。不打断，声音没断过。
+            // 旧壳会自动改 f0 并回这条。现在撕裂判定不再动音高算法，
+            // 收到也只当提示，绝不把 rmvpe 改回去。
             setNotice(String(r.message || ""));
             return;
           }

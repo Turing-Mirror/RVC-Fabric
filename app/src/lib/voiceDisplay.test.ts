@@ -45,4 +45,10 @@ describe("voiceAuthorList", () => {
     const out = voiceAuthorList({ authors: [{ url: "https://x/x" }, { name: "" }] });
     expect(out).toEqual([]);
   });
+
+  it("drops placeholder author names so the card does not say 未知", () => {
+    expect(voiceAuthorList({ author: "未知" })).toEqual([]);
+    expect(voiceAuthorList({ author: "—" })).toEqual([]);
+    expect(voiceAuthorList({ authors: [{ name: "unknown" }] })).toEqual([]);
+  });
 });

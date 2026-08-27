@@ -276,6 +276,20 @@ class HeadlessWindowsTests(unittest.TestCase):
     def test_prepare_headless_windows_does_not_raise(self):
         rp.prepare_headless_windows()
 
+    def test_hide_multiprocessing_windows_is_idempotent(self):
+        if sys.platform != "win32":
+            rp.hide_multiprocessing_windows()
+            return
+        try:
+            from multiprocessing import popen_spawn_win32 as psp
+        except ImportError:
+            return
+        rp.hide_multiprocessing_windows()
+        first = psp.Popen.__init__
+        rp.hide_multiprocessing_windows()
+        self.assertIs(psp.Popen.__init__, first)
+        self.assertTrue(getattr(psp.Popen, "_tm_hidden", False))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -876,6 +876,62 @@
       "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
+    },
+    {
+      "id": "Alice-JP",
+      "name": "天童爱丽丝（日配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260827",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Alice-JP.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Alice-JP.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Alice-JP-v1.zip",
+      "sha256": "913e8b10abf6ed480dcc1b78307529b9fa24cfc49071be46be34d971d4461d82",
+      "size_bytes": 184688320,
+      "description": "天童爱丽丝（日配） · 蔚蓝档案 · 图灵镜 260827 版",
+      "name_i18n": {
+        "en-US": "Tendou Alice (JP)",
+        "ja-JP": "天童アリス（日本語）",
+        "zh-TW": "天童愛麗絲（日配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260827",
+      "series": "蔚蓝档案",
+      "group": "游戏开发部",
+      "channel": "release",
+      "release_tag": "voices"
+    },
+    {
+      "id": "Alice-ZH",
+      "name": "天童爱丽丝（中配）",
+      "author": "图灵镜",
+      "author_url": "https://space.bilibili.com/3546871148579062",
+      "released": "260827",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/Alice-ZH.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/Alice-ZH.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Alice-ZH-v1.zip",
+      "sha256": "078ec44ff6b498644f1af0628c71632360dfcaeec59f97876319f2bd5773d958",
+      "size_bytes": 120882380,
+      "description": "天童爱丽丝（中配） · 蔚蓝档案 · 图灵镜 260827 版",
+      "name_i18n": {
+        "en-US": "Tendou Alice (CN)",
+        "ja-JP": "天童アリス（中国語）",
+        "zh-TW": "天童愛麗絲（中配）"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260827",
+      "series": "蔚蓝档案",
+      "group": "游戏开发部",
+      "channel": "release",
+      "release_tag": "voices"
     }
   ],
   "thirdparty_voices": [

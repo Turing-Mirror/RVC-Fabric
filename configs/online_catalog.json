@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.5.5",
+    "version": "1.5.6",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.5.5",
+      "version": "1.5.6",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "a20b228641a2407883977182939368aea777b3ea5cc3dee6069c0759829038ee",
-      "size_bytes": 11249086,
+      "sha256": "206011c5d3eba4457112e5c0cd3eba286bc02951bb87de622e6f8ea5fab0cf0c",
+      "size_bytes": 11416125,
       "min_app_version": "1.3.0",
-      "notes": "1.5.5 把 1.5.4 之后「坏在哪儿要当场说出来」的一批收成正式版。Intel / AMD 卡上的离线语音转换补上 DirectML 补丁，撞上算子缺口会改走 CPU，不再整批 挂在 PrivateUse1；3GB 显卡的合成窗收短，转换不再看起来卡死在 10%。 报错正文只留最后一行真实异常，完整 traceback 进详情、复制和日志。 出诊断包前先跑自检；命中已知问题时底栏上方提示。训练选完数据集立刻数 音频，开始前有两级检查清单，可抽样体检；续跑按三阶段数目对齐，半份产物 会说明并补齐；「其他 → 存储」可清训练残留；删除音色改走回收站；训完能 当场试听。另含链路自检、新手进度、效果调校向导、首页横幅自定义、文案 正式化。"
+      "notes": "1.5.6 把 1.5.5 之后的体验改进收成正式版。广场新增天童爱丽丝日配/中配（图灵镜源）， 以及此前已上的黑见芹香。模型页可以改音色名、换封面并裁剪，裁剪预览和保存 已修好。设置页能自动检查并配置输入输出：真麦克风进、CABLE Input 或 VoiceMeeter Input 出，不会把扬声器或 CABLE Output 当成正确路由。游戏或 会议时可以开一扇小悬浮窗看麦有没有进声、当前是哪个音色。离线语音转换的 推理进程跑完不退出，第二次转换不再重付冷启动。音频撕裂时只建议放宽块长， 不再自动把音高算法从 rmvpe 换成别的。另含：背景图会跟界面色调协调、延迟 改成四段实测相加、音色下载去掉必 404 的 LFS 兜底、广场可同时装多个音色、 Realtek ASIO 只在真崩过才提示、变声子进程不再弹黑框、火影忍者第三方音色 扩列。"
     }
   },
   "community": {

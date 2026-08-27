@@ -2,9 +2,17 @@
 
 /* Design tokens — match docs handoff preview (Schale light-blue, no AI gradients) */
 :root {
-  --bg: #f4f6f8;
+  --bg-base: #f4f6f8;
+  --bg: var(--bg-base);
   --surface: #ffffff;
-  --group: rgba(255, 255, 255, 0.6);
+  --group-base: rgba(255, 255, 255, 0.6);
+  --group: var(--group-base);
+  /* 设了背景图时的两个量。见文件末尾 [data-wallpaper] 那一段。
+     scrim = 整块内容区那层磨砂的浓度区间，卡片实度不再逐个调。 */
+  --wp-scrim-min: 0.52;
+  --wp-scrim-max: 0.86;
+  --wp-group-a: 0.72;
+  --group-ink: #ffffff;
   --ink: #1e242b;
   --ink-muted: #5d6874;
   --help: #8a949e;
@@ -55,11 +63,19 @@
    「浅色」/「深色」 were inert and the app always followed the OS. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #171b22;
+    --bg-base: #171b22;
+    --bg: var(--bg-base);
     --surface: #1f242d;
     /* 卡片/分组底色。0.045 在深色底上几乎和背景一样，一屏设置看下来分不出
        哪些项是一组的。抬到 0.075 刚好能看出边界，又不至于变成一块块灰砖。 */
-    --group: rgba(232, 240, 248, 0.075);
+    --group-base: rgba(232, 240, 248, 0.075);
+    --group: var(--group-base);
+    /* 深色下的磨砂要更浓一点：浅色字压在一张亮照片上，比深色字压在暗照片上
+       更早读不出来。7.5% 的卡片色也抬一档 —— 底本身透了之后它更看不出来。 */
+    --wp-scrim-min: 0.58;
+    --wp-scrim-max: 0.90;
+    --wp-group-a: 0.14;
+    --group-ink: #e8f0f8;
     --stage: #1e2837;
     --ink: #e4e9ef;
     --ink-muted: #a9b3be;
@@ -87,9 +103,15 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #171b22;
+  --bg-base: #171b22;
+  --bg: var(--bg-base);
   --surface: #1f242d;
-  --group: rgba(232, 240, 248, 0.075);
+  --group-base: rgba(232, 240, 248, 0.075);
+  --group: var(--group-base);
+  --wp-scrim-min: 0.58;
+  --wp-scrim-max: 0.90;
+  --wp-group-a: 0.14;
+  --group-ink: #e8f0f8;
   --stage: #1e2837;
   --ink: #e4e9ef;
   --ink-muted: #a9b3be;
@@ -403,6 +425,72 @@ option {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* 悬浮窗：窗口本身是透明的，页面这一层一个像素的底都不能画。
+ *
+ * html 平时带着不透明的 --bg —— 背景图那一层要有地方待（见上面那段注释）。
+ * 在悬浮窗里那块底色会把系统给的透明直接作废，用户看到的是一个纯色小方块
+ * 盖在游戏画面上。药丸自己的底色画在组件里，不走主题变量：跟着主题走的话，
+ * 浅色模式下药丸会变白，压到亮画面上就没了。 */
+:root[data-window="overlay"],
+:root[data-window="overlay"] body {
+  background: transparent;
+}
+
+/* 设了背景图时的协调层。
+ *
+ * `data-wallpaper` 和下面两个变量由 lib/appearance 写：`--wp-tint` 是那张图的
+ * 平均色，`--wp-detail` 是它的细节量（0–1，相邻像素平均差换算来的）。没设图的
+ * 时候这一段整块不生效，界面和以前一个像素都不差。
+ *
+ * 两件事，全部按图自适应，一个新开关都不加：
+ *
+ * 1. **整块内容区盖一层磨砂，浓度跟着细节量走。** 一张灰调的雾景，磨砂可以很薄，
+ *    图透出来才好看；一张满是花纹的图，磨砂必须够厚，不然字压上去读不出来。
+ *
+ *    盖的是 `#root` 整块，不是逐个卡片。界面里那五十多处「4% 的墨色」小色块
+ *    （首页的工具格、分段控件、列表行）压在照片上等于不存在，一个个去调既改不
+ *    干净又会把弹窗一起改坏。整块盖一层之后，它们各自和底的对比关系原封不动，
+ *    透出来的是同一层被磨过的图 —— macOS 的做法也是一整块毛玻璃，不是一片片。
+ *
+ * 2. **底色、卡片色、描边各往图的平均色偏一点，卡片实度抬一档。** 整屏于是像
+ *    一个房间里的东西，而不是照片上摆了几张纸。偏得很轻 —— 再多浅色就发浑。
+ *
+ * 磨砂和不透明度那两根滑杆这里一个都不碰。那是用户明确表达过的意思，拿一个
+ * 推断去覆盖它就是「撕裂自动降 f0」犯过的错。他把磨砂拖到 0，这里的应对是把
+ * 这层磨砂加厚到字能看清，不是偷偷把他的滑杆拧回去。 */
+:root[data-wallpaper] {
+  --bg: color-mix(in srgb, var(--bg-base) 90%, var(--wp-tint, transparent));
+  --group: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--group-ink) 92%, var(--wp-tint, transparent))
+      calc(var(--wp-group-a) * 100%),
+    transparent
+  );
+  --hairline: color-mix(in srgb, var(--ink) 20%, transparent);
+  --line: color-mix(in srgb, var(--ink) 26%, transparent);
+  /* 次要文字各抬一档。这就是那条待办问的「要不要让组件更浓重」的正确版本：
+     浓的是**压在半透明底上的次要文字**，不是字号字重，也不是把每个控件描粗。
+     用 --ink 的透明度写，不写死颜色 —— 深浅两套主题的 --ink 本来就是反的，
+     写死会让其中一套彻底失效。今天的实际值约 72 / 55 / 44，这里各抬几个点。 */
+  --ink-muted: color-mix(in srgb, var(--ink) 78%, transparent);
+  --help: color-mix(in srgb, var(--ink) 62%, transparent);
+  --meta: color-mix(in srgb, var(--ink) 52%, transparent);
+}
+
+:root[data-wallpaper] #root {
+  background: color-mix(
+    in srgb,
+    var(--bg)
+      calc(
+        (
+            var(--wp-scrim-min) +
+              (var(--wp-scrim-max) - var(--wp-scrim-min)) * var(--wp-detail, 0.5)
+          ) * 100%
+      ),
+    transparent
+  );
 }
 
 /* Wallpaper layer. Set by App from app_config; absent means no background. */

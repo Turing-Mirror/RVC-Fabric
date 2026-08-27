@@ -380,7 +380,7 @@ pub fn provision_status(root: &Path) -> Value {
     let variant_defs = [
         ("nvidia", crate::i18n::t("s.4c65a5e25e")),
         ("nvidia50", crate::i18n::t("s.e7a64d4aaf")),
-        ("amd", "AMD / Intel（DirectML）".to_string()),
+        ("amd", crate::i18n::t("s.variantAmd")),
     ];
     let mut variants = Vec::with_capacity(3);
     let mut size_hint = 0u64;

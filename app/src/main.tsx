@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToolWindow, toolFromHash } from "./components/ToolWindow";
+import { Overlay } from "./components/Overlay";
 import { I18nProvider } from "./i18n";
 import { applyAppearance } from "./lib/appearance";
 import "./index.css";
@@ -32,9 +33,19 @@ window.addEventListener("contextmenu", (e) => {
 // 靠地址后面的 `#/tool/<kind>` 分流。分不出来就是主窗口。
 const tool = toolFromHash(window.location.hash);
 
-// 工具窗口是另一个 webview，主窗口在 App 里做的那套外观设置它一点都不知道。
-// 不在这儿补一次，用户设了深色 / 背景图之后，弹出来的工具窗还是浅色的。
-if (tool) {
+// 悬浮窗也走同一份前端，但它不是工具窗：透明底、置顶、只显示状态。
+const overlay = window.location.hash === "#/tool/overlay";
+
+if (overlay) {
+  // 这一条决定窗口是不是真的透明。html 平时带着不透明的 --bg（背景图那一层要
+  // 有地方待，见 index.css 的注释），悬浮窗里那块底色会把「透明窗口」这件事
+  // 直接作废 —— 用户看到的是一个纯色小方块盖在游戏上。
+  document.documentElement.setAttribute("data-window", "overlay");
+} else if (tool) {
+  // 工具窗口是另一个 webview，主窗口在 App 里做的那套外观设置它一点都不知道。
+  // 不在这儿补一次，用户设了深色 / 背景图之后，弹出来的工具窗还是浅色的。
+  // 悬浮窗不参与：它是一块自带配色的深色药丸，跟着主题走反而会在浅色下变白，
+  // 压到亮画面上就看不见了。
   void invoke<Record<string, unknown>>("config_get")
     .then(applyAppearance)
     .catch(() => {
@@ -46,7 +57,7 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <I18nProvider>
       <ErrorBoundary>
-        {tool ? <ToolWindow kind={tool} /> : <App />}
+        {overlay ? <Overlay /> : tool ? <ToolWindow kind={tool} /> : <App />}
       </ErrorBoundary>
     </I18nProvider>
   </React.StrictMode>,

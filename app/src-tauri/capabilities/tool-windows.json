@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "tool-windows",
-  "description": "Capability for the standalone tool windows (vocal separation / training / TTS). They load the same frontend as the main window, so they need the same window-control and event permissions; without this file the custom title bar buttons and event listeners silently fail on tool-* windows.",
+  "description": "Capability for the standalone tool windows (vocal separation / training / TTS) and the status overlay, all labelled tool-*. They load the same frontend as the main window, so they need the same window-control and event permissions; without this file the custom title bar buttons and event listeners silently fail. The overlay needs allow-close (its only button) and allow-start-dragging (the whole pill is the drag region) — it has no title bar to fall back on.",
   "windows": [
     "tool-*"
   ],

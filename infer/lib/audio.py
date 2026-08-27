@@ -1,5 +1,4 @@
 import platform, os
-import subprocess
 import ffmpeg
 import numpy as np
 import av
@@ -41,20 +40,12 @@ def load_audio(file, sr):
             raise RuntimeError(
                 "You input a wrong audio path that does not exists, please fix it!"
             )
-        run_kw = {}
-        if platform.system() == "Windows":
-            run_kw["creationflags"] = getattr(
-                subprocess, "CREATE_NO_WINDOW", 0x08000000
-            )
+        # ffmpeg-python 的 run() 不认 creationflags（那是 Popen 的参数）。
+        # Windows 藏黑框走 worker_protocol.hide_console_subprocesses 打的 Popen 补丁。
         out, _ = (
             ffmpeg.input(file, threads=0)
             .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sr)
-            .run(
-                cmd=["ffmpeg", "-nostdin"],
-                capture_stdout=True,
-                capture_stderr=True,
-                **run_kw,
-            )
+            .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True)
         )
     except Exception as e:
         traceback.print_exc()

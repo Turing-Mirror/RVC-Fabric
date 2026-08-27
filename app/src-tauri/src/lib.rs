@@ -37,6 +37,7 @@ mod store;
 mod telemetry;
 #[cfg(test)]
 mod testutil;
+mod wallpaper;
 mod tool_window;
 mod train;
 mod tts;
@@ -2070,6 +2071,17 @@ fn apply_webview_compat_flag(root: &std::path::Path) {
     logging::shell_log!("界面兼容渲染：已开启（{merged}）");
 }
 
+/// 背景图的字节 → data URL，给界面把它画进 canvas 读像素用。
+///
+/// 界面只有在直接采样被 canvas 的同源策略挡下来时才会调这条，多数机器上
+/// 一次都不会走到。详见 `wallpaper` 模块的说明。
+#[tauri::command]
+async fn wallpaper_data_url(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || wallpaper::data_url(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 pub fn run() {
     let root = paths::product_root();
     // Before anything else: a release build has no console, so without this the
@@ -2133,6 +2145,7 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
+            wallpaper_data_url,
             tools_open,
             tools_open_help,
             shell_version,

@@ -290,6 +290,10 @@ type AuthorSource = {
   author?: unknown;
   author_url?: unknown;
   authors?: unknown;
+  // 索引签名不是摆设：NamedVoice 自己带一条，没有它 TS 会把这三个全可选的
+  // 类型当「弱类型」，判定两者「没有共同属性」而拒收 —— voiceDisplay.ts:565
+  // 那次 tsc 失败就是这样，而 build 脚本里 tsc 排在 vite build 前面。
+  [key: string]: unknown;
 };
 
 /**

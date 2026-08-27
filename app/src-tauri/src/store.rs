@@ -1797,7 +1797,6 @@ mod tests {
 
     #[test]
     fn hf_pack_does_not_get_cnb_lfs() {
-        let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let url = "https://huggingface.co/org/repo/resolve/main/a.zip";
         let root = std::env::temp_dir().join("rvcf-store-hf");
         let _ = std::fs::remove_dir_all(&root);

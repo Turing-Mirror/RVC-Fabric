@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import {
-  coverSrc,
+  coverDataUrl,
   pickCoverImage,
   setVoiceCover,
   type VoiceModel,
@@ -163,8 +163,15 @@ export function CropCoverDialog({
   const updatePreview = useCallback(() => {
     const out = renderCrop();
     if (!out) return;
+    let after = "";
+    try {
+      after = out.canvas.toDataURL("image/jpeg", 0.85);
+    } catch {
+      // 脏画布：源图没走 data URL。预览留空，保存时同样会失败并报错。
+      return;
+    }
     setPreview({
-      after: out.canvas.toDataURL("image/jpeg", 0.85),
+      after,
       before: imgRef.current?.src || "",
       note: t("crop.previewNote", { v0: `${out.w}×${out.h}` }),
     });
@@ -215,12 +222,8 @@ export function CropCoverDialog({
       // 脸通常偏上：初始选区贴向中上。
       clampCrop();
       setImg(im);
-      requestAnimationFrame(() => {
-        fitCanvas();
-        updatePreview();
-      });
     },
-    [clampCrop, fitCanvas, updatePreview],
+    [clampCrop],
   );
 
   const openPicker = useCallback(async () => {
@@ -228,7 +231,7 @@ export function CropCoverDialog({
     try {
       const p = await pickCoverImage();
       if (!p) return;
-      const el = await loadImageEl(coverSrc(p));
+      const el = await loadImageEl(await coverDataUrl(p));
       setSrcLabel(p.split(/[\\/]/).pop() || p);
       startEditor(el);
     } catch (e) {
@@ -244,27 +247,37 @@ export function CropCoverDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [busy, onClose]);
 
-  // 打开时带上当前封面，用户可以直接裁，不必先重选一张。远程 https
-  // 封面跨域会污染 canvas，toDataURL 会抛，那种情况仍走「选本地图」。
+  // 打开时带上当前封面。字节从壳读成 data URL 再画 —— 直接用远程图或
+  // convertFileSrc 会把 canvas 弄脏，预览/保存一起挂（diag 26.8.27）。
   useEffect(() => {
     const raw = (model.cover || "").trim();
-    if (!raw || /^https?:\/\//i.test(raw)) return;
-    const src = coverSrc(raw);
-    if (!src) return;
+    if (!raw) return;
     let cancelled = false;
-    void loadImageEl(src)
+    void coverDataUrl(raw)
+      .then((data) => loadImageEl(data))
       .then((el) => {
         if (cancelled) return;
         setSrcLabel(raw.split(/[\\/]/).pop() || raw);
         startEditor(el);
       })
-      .catch(() => {
-        /* 读不到就停在选图，不挡操作 */
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
       });
     return () => {
       cancelled = true;
     };
   }, [model.cover, startEditor]);
+
+  // 编辑器 DOM 挂上之后再量宽度。以前 startEditor 里立刻 rAF，那时
+  // wrap 还没渲染，画布 0 宽，预览区也是空的。
+  useEffect(() => {
+    if (!img) return;
+    const id = requestAnimationFrame(() => {
+      fitCanvas();
+      updatePreview();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [img, fitCanvas, updatePreview]);
 
   // 画布跟随窗口宽度重排。
   useEffect(() => {

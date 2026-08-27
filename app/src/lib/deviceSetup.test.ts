@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDevices, pickAutoDevices } from "./deviceSetup";
+import { assessDevices, parseDevices, pickAutoDevices } from "./deviceSetup";
 
 const STATUS = {
   hostapis: ["MME", "Windows WASAPI", "Windows DirectSound"],
@@ -61,5 +61,89 @@ describe("pickAutoDevices", () => {
       { name: "a", hostapi: undefined },
       { name: "b", hostapi: "MME" },
     ]);
+  });
+});
+
+const VM = {
+  hostapis: ["MME", "Windows WASAPI"],
+  input_devices: [
+    { name: "麦克风 (Realtek(R) Audio)", hostapi: "MME" },
+    { name: "VoiceMeeter Output (VB-Audio VoiceMeeter VAIO)", hostapi: "MME" },
+  ],
+  output_devices: [
+    { name: "扬声器 (Realtek(R) Audio)", hostapi: "MME" },
+    { name: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)", hostapi: "MME" },
+    { name: "耳机 (Realtek(R) Audio)", hostapi: "MME" },
+  ],
+};
+
+describe("assessDevices", () => {
+  it("does not treat speakers as a fine output when a virtual cable exists", () => {
+    const advice = assessDevices(
+      {
+        sg_hostapi: "MME",
+        sg_input_device: "麦克风 (Realtek(R) Audio)",
+        sg_output_device: "扬声器 (Realtek(R) Audio)",
+      },
+      STATUS,
+    );
+    expect(advice.patch?.sg_output_device).toBe(
+      "CABLE Input (VB-Audio Virtual Cable) (MME)",
+    );
+    expect(advice.reasons).toContain("s.devAutoOutWasSpeaker");
+  });
+
+  it("moves input off CABLE Output onto a real mic", () => {
+    const advice = assessDevices(
+      {
+        sg_hostapi: "MME",
+        sg_input_device: "CABLE Output (VB-Audio Virtual Cable) (MME)",
+        sg_output_device: "CABLE Input (VB-Audio Virtual Cable) (MME)",
+      },
+      STATUS,
+    );
+    expect(advice.patch?.sg_input_device).toBe("麦克风 (Realtek(R) Audio)");
+    expect(advice.reasons).toContain("s.devAutoInWasCable");
+  });
+
+  it("accepts VoiceMeeter Input as a valid output", () => {
+    const advice = assessDevices(
+      {
+        sg_hostapi: "MME",
+        sg_input_device: "麦克风 (Realtek(R) Audio)",
+        sg_output_device: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+      },
+      VM,
+    );
+    expect(advice.patch).toBeNull();
+    expect(advice.reasons).toEqual(["s.devAutoOkVm"]);
+  });
+
+  it("accepts CABLE Input + real mic", () => {
+    const advice = assessDevices(
+      {
+        sg_hostapi: "MME",
+        sg_input_device: "麦克风 (Realtek(R) Audio)",
+        sg_output_device: "CABLE Input (VB-Audio Virtual Cable) (MME)",
+      },
+      STATUS,
+    );
+    expect(advice.patch).toBeNull();
+    expect(advice.reasons).toEqual(["s.devAutoOkCable"]);
+  });
+
+  it("moves monitor off the virtual cable onto headphones", () => {
+    const advice = assessDevices(
+      {
+        sg_hostapi: "MME",
+        sg_input_device: "麦克风 (Realtek(R) Audio)",
+        sg_output_device: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+        monitor_self: true,
+        monitor_device: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+      },
+      VM,
+    );
+    expect(advice.patch?.monitor_device).toBe("耳机 (Realtek(R) Audio)");
+    expect(advice.reasons).toContain("s.devAutoMonWasCable");
   });
 });

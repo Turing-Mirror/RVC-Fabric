@@ -1922,6 +1922,15 @@ fn voices_pick_cover(window: tauri::WebviewWindow) -> Option<String> {
     voices::pick_cover_image(Some(&window))
 }
 
+/// 本机路径或 http(s) 封面 → data URL。裁剪对话框必须走这条，不能把
+/// convertFileSrc 画进 canvas（会 tainted，保存/预览全挂）。
+#[tauri::command]
+async fn voices_cover_data_url(src: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || voices::cover_to_data_url(&src))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// 写入界面裁好的封面（data URL，JPEG/PNG）。
 #[tauri::command]
 fn voices_set_cover(
@@ -2212,6 +2221,7 @@ pub fn run() {
             voices_delete,
             voices_rename,
             voices_pick_cover,
+            voices_cover_data_url,
             voices_set_cover,
             voices_reset_cover,
             voices_promote,

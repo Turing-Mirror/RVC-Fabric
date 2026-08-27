@@ -266,6 +266,19 @@ export async function pickCoverImage(): Promise<string | null> {
   return invoke<string | null>("voices_pick_cover");
 }
 
+/**
+ * 本机路径或 http(s) 封面 → data URL。
+ *
+ * 裁剪对话框必须走这条：界面源是 `http://fabric.localhost`，把
+ * convertFileSrc / 远程图直接画进 canvas 会 tainted，预览空白、保存失败。
+ */
+export async function coverDataUrl(src: string): Promise<string> {
+  if (!src) return "";
+  if (src.startsWith("data:image/")) return src;
+  if (!isTauri()) return src;
+  return invoke<string>("voices_cover_data_url", { src });
+}
+
 /** 把界面裁好的封面（data URL）写进模型目录。 */
 export async function setVoiceCover(modelDir: string, image: string) {
   if (!isTauri()) return { ok: false };

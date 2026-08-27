@@ -55,6 +55,19 @@ export function openTool(kind: ToolKind): void {
 }
 
 /**
+ * 开出悬浮状态窗（已经开着就拉到前面）。
+ *
+ * 不走 `openTool`：那条路会先确认 engine-core 在不在（分离/训练/语音转换都要
+ * hubert 和 rmvpe）。悬浮窗只读状态文件，一个模型都不加载，让它去等一次下载
+ * 提示纯属添堵。
+ */
+export function openOverlay(): void {
+  void invoke("tools_open", { kind: "overlay" }).catch(() => {
+    /* 浏览器预览里没有 shell */
+  });
+}
+
+/**
  * 工具窗口的外壳：一条自绘标题栏 + 一块能滚的内容区。
  *
  * 标题栏是自己画的，因为窗口建的时候 `decorations(false)` —— 主窗口也是无边框

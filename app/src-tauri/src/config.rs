@@ -197,6 +197,10 @@ pub fn defaults() -> Map<String, Value> {
     // 首页横幅自定义：标题留空 = 默认标题；副标题留空 = 不显示（那行以前
     // 固定写着「切换立即生效 · 运行中可无缝换音色」，现在是用户自己的位置）；
     // 不透明度最低由前端滑杆限在 20。
+    // 悬浮窗上次被拖到哪儿。没有这两个键就开在屏幕正中。
+    // 不记「上次是开着的」—— 一个会自己冒出来盖在别人画面上的置顶窗是个惊吓。
+    m.insert("overlay_x".into(), json!(null));
+    m.insert("overlay_y".into(), json!(null));
     m.insert("home_banner_text".into(), json!(""));
     m.insert("home_banner_sub".into(), json!(""));
     m.insert("home_banner_opacity".into(), json!(100));

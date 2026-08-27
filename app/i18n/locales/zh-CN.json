@@ -2081,7 +2081,8 @@
     "devAutoIn": "输入设备",
     "devAutoOut": "输出设备",
     "authorsPickTitle": "打开哪位作者的主页？",
-    "authorsPickHint": "这个音色标注了多位作者，请选择要打开的一位。"
+    "authorsPickHint": "这个音色标注了多位作者，请选择要打开的一位。",
+    "variantAmd": "AMD / Intel（DirectML）"
   },
   "extras": {
     "engineTitle": "引擎资源",
@@ -2191,5 +2192,12 @@
     "save": "保存封面",
     "saving": "保存中…",
     "localNote": "仅写入本机该音色目录，不上传。"
+  },
+  "overlay": {
+    "title": "悬浮状态窗",
+    "noVoice": "尚未选择音色",
+    "close": "关闭悬浮窗",
+    "open": "悬浮状态窗",
+    "openHint": "在其他窗口之上显示麦克风电平与当前音色。游戏以全屏独占方式运行时无法显示。"
   }
 }

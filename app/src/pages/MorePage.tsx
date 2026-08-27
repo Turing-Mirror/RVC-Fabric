@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
-import { openTool } from "../components/ToolWindow";
+import { openOverlay, openTool } from "../components/ToolWindow";
 import { QrDialog } from "../components/QrDialog";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuPicker";
 import { openExternal } from "../lib/plaza";
@@ -395,6 +395,11 @@ export function MorePage({
             title={t("s.6f311c47fe")}
             desc={t("s.ba7bd6e071")}
             right={<Btn onClick={() => openTool("tts")}>{t("s.65fc81e161")}</Btn>}
+          />
+          <ListItem
+            title={t("overlay.open")}
+            desc={t("overlay.openHint")}
+            right={<Btn onClick={openOverlay}>{t("s.65fc81e161")}</Btn>}
           />
           {/* 入口留着（老用户是从这儿找它的），功能已经搬去广场了。 */}
           <ListItem

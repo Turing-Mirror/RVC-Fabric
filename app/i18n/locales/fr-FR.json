@@ -2081,7 +2081,8 @@
     "devAutoIn": "périphérique d'entrée",
     "devAutoOut": "périphérique de sortie",
     "authorsPickTitle": "Quelle page d'auteur ouvrir ?",
-    "authorsPickHint": "Cette voix liste plusieurs auteurs — choisissez la page à ouvrir."
+    "authorsPickHint": "Cette voix liste plusieurs auteurs — choisissez la page à ouvrir.",
+    "variantAmd": "AMD / Intel (DirectML)"
   },
   "extras": {
     "engineTitle": "Ressources moteur",
@@ -2191,5 +2192,12 @@
     "save": "Enregistrer la couverture",
     "saving": "Enregistrement…",
     "localNote": "Enregistré uniquement dans le dossier local de cette voix — rien n'est envoyé."
+  },
+  "overlay": {
+    "title": "Indicateur flottant",
+    "noVoice": "Aucune voix sélectionnée",
+    "close": "Fermer l'indicateur",
+    "open": "Indicateur flottant",
+    "openHint": "Affiche le niveau du microphone et la voix actuelle au-dessus des autres fenêtres. Indisponible tant qu'un jeu s'exécute en plein écran exclusif."
   }
 }

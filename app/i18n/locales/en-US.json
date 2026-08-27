@@ -2081,7 +2081,8 @@
     "devAutoIn": "input device",
     "devAutoOut": "output device",
     "authorsPickTitle": "Which author's page?",
-    "authorsPickHint": "This voice lists multiple authors — choose whose page to open."
+    "authorsPickHint": "This voice lists multiple authors — choose whose page to open.",
+    "variantAmd": "AMD / Intel (DirectML)"
   },
   "extras": {
     "engineTitle": "Engine resources",
@@ -2191,5 +2192,12 @@
     "save": "Save cover",
     "saving": "Saving…",
     "localNote": "Saved only into this voice's local folder — nothing is uploaded."
+  },
+  "overlay": {
+    "title": "Status Overlay",
+    "noVoice": "No voice selected",
+    "close": "Close overlay",
+    "open": "Status overlay",
+    "openHint": "Shows the microphone level and the current voice above other windows. Not visible while a game runs in exclusive fullscreen."
   }
 }

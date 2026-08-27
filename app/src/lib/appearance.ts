@@ -81,6 +81,7 @@ function clearTone(el: HTMLElement): void {
   el.removeAttribute("data-wallpaper");
   el.style.removeProperty("--wp-tint");
   el.style.removeProperty("--wp-detail");
+  el.style.removeProperty("--wp-luma");
 }
 
 async function applyTone(
@@ -99,4 +100,7 @@ async function applyTone(
   if (sampledPath !== path) return;
   el.style.setProperty("--wp-tint", `rgb(${tone.tint})`);
   el.style.setProperty("--wp-detail", String(Math.round(tone.detail * 100) / 100));
+  // 亮度交给 CSS 去和当前主题的底色比。放在这里而不是在 JS 里算好，是因为
+  // 「当前主题」在跟随系统时会自己变，而这个函数只在配置变化时跑一次。
+  el.style.setProperty("--wp-luma", String(Math.round(tone.luma * 100) / 100));
 }

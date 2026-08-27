@@ -393,6 +393,25 @@ fn remove_matching_files(dir: &Path, pred: impl Fn(&str, &Path) -> bool + Copy) 
     stats
 }
 
+/// 这个名字是不是**本产品自己**留下的残留。
+///
+/// 判据抽出来是为了能测，而且这是个删文件的判据 —— 它必须能被断言，不能靠读。
+///
+/// 收窄过一次（26.8.27）。这几个仓的壳是同源的，这张表也就跟着抄来抄去：
+/// 三个产品的清理器扫的都是 `rvcf-` 前缀。结果是各自都删不到自己的东西，
+/// 而只要用户同时装了 RVC Fabric，谁先启动谁就去清它的残留。
+///
+/// 现在只认自己的名字。`.tmp` / `.part` 那条也要求带产品特征串，不再用
+/// 三个字母的短词去 contains —— 系统 TEMP 是所有软件共用的，短词会误伤。
+fn is_our_leftover(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("rvcf-")
+        || lower.starts_with("rvc-fabric")
+        || lower.ends_with(".reformatted.wav")
+        || ((lower.contains("rvc-fabric") || lower.contains("rvcf"))
+            && (lower.ends_with(".tmp") || lower.ends_with(".part")))
+}
+
 /// 系统 TEMP 里带我们特征的残留（改 TEMP 环境之前写进去的）。
 fn clean_system_temp_leftovers() -> CleanStats {
     let mut stats = CleanStats::default();
@@ -405,12 +424,7 @@ fn clean_system_temp_leftovers() -> CleanStats {
         let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
-        let lower = name.to_ascii_lowercase();
-        let ours = lower.starts_with("rvcf-")
-            || lower.starts_with("rvc-fabric")
-            || lower.ends_with(".reformatted.wav")
-            || (lower.contains("rvc") && (lower.ends_with(".tmp") || lower.ends_with(".part")));
-        if !ours {
+        if !is_our_leftover(name) {
             continue;
         }
         if p.is_dir() {
@@ -514,6 +528,32 @@ fn fs_create_all(p: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod cache_clear_tests {
     use super::*;
+
+    /// 清理器只许删本产品自己留下的东西。
+    ///
+    /// 这几个仓的壳同源，这张表一度是抄来的 —— 三个产品扫的都是 `rvcf-`，
+    /// 各自都删不到自己的，反倒会去清同机器上 RVC Fabric 的残留。这条测试
+    /// 就是为了别再抄回去。
+    #[test]
+    fn the_temp_sweeper_never_touches_another_products_leftovers() {
+        for name in [
+            "svcf-abc",
+            "gpt-sovits-x",
+            "trm-fps-y",
+            "python-3.11.tmp",
+            "Microsoft-Update.part",
+            "some-users-own-file.tmp",
+        ] {
+            assert!(!is_our_leftover(name), "不该删：{name}");
+        }
+        for name in [
+            "rvcf-cache",
+            "rvc-fabric-dl.part",
+            "whatever.reformatted.wav",
+        ] {
+            assert!(is_our_leftover(name), "该删：{name}");
+        }
+    }
 
     #[test]
     fn clear_user_cache_drops_logs_keeps_models_and_config() {

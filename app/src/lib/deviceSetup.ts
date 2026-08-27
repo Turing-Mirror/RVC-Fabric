@@ -44,7 +44,9 @@ const MIC_KEYWORDS = [
 
 function looksLikeMic(name: string): boolean {
   const n = name.toLowerCase();
-  if (n.includes("cable")) return false;
+  if (n.includes("cable") || n.includes("voicemeeter") || n.includes("vb-audio")) {
+    return false;
+  }
   return MIC_KEYWORDS.some((k) => n.includes(k));
 }
 
@@ -55,10 +57,51 @@ function looksLikeCableInput(name: string): boolean {
   return n.includes("cable input") || n.includes("vb-audio virtual cable");
 }
 
+/** 虚拟线的注入端（放音）：软件输出该选这个。 */
+export function looksLikeVirtualInject(name: string): boolean {
+  const n = name.toLowerCase();
+  if (looksLikeVirtualCapture(n)) return false;
+  if (n.includes("cable input")) return true;
+  if (n.includes("hi-fi cable input") || n.includes("hifi cable input")) return true;
+  if (n.includes("voicemeeter") && n.includes("input")) return true;
+  if (n.includes("vaio") && n.includes("input")) return true;
+  if (n.includes("vb-audio virtual cable") && !n.includes("output")) return true;
+  return false;
+}
+
+/** 虚拟线的录音端：游戏/Discord 的麦克风。不能当本软件的输入或输出。 */
+export function looksLikeVirtualCapture(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes("cable output")) return true;
+  if (n.includes("voicemeeter") && n.includes("output")) return true;
+  if (n.includes("vaio") && n.includes("output")) return true;
+  return false;
+}
+
+function looksLikePhysicalPlay(name: string): boolean {
+  const n = name.toLowerCase();
+  if (looksLikeVirtualInject(n) || looksLikeVirtualCapture(n)) return false;
+  return [
+    "耳机",
+    "headphone",
+    "headset",
+    "扬声器",
+    "speaker",
+    "realtek",
+    "hdmi",
+  ].some((k) => n.includes(k));
+}
+
+function looksLikeVoiceMeeterInject(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("voicemeeter") && n.includes("input") && !n.includes("output");
+}
+
 export type DeviceAutoPick = {
   sg_hostapi?: string;
   sg_input_device?: string;
   sg_output_device?: string;
+  monitor_device?: string;
 };
 
 /**
@@ -116,9 +159,13 @@ export function pickAutoDevices(
 
   let output: string | undefined;
   if (!outValid && outputs.length) {
-    const cable = outputs.filter((d) => looksLikeCableInput(d.name));
+    const injects = outputs.filter((d) => looksLikeVirtualInject(d.name));
     output =
-      cable.find(inSameApi)?.name ?? cable[0]?.name ?? outputs[0]?.name;
+      injects.find((d) => looksLikeCableInput(d.name) && inSameApi(d))?.name ??
+      injects.find(inSameApi)?.name ??
+      injects.find((d) => looksLikeCableInput(d.name))?.name ??
+      injects[0]?.name ??
+      undefined;
     if (output === curOut) output = undefined;
   }
 
@@ -130,4 +177,128 @@ export function pickAutoDevices(
   if (input) out.sg_input_device = input;
   if (output) out.sg_output_device = output;
   return Object.keys(out).length ? out : null;
+}
+
+export type DeviceAdvice = {
+  patch: DeviceAutoPick | null;
+  /** 给按钮下面那行看的文案 key，按顺序拼成一句。 */
+  reasons: string[];
+};
+
+function preferSameApi(
+  list: DeviceInfo[],
+  api: string,
+  pred: (n: string) => boolean,
+): string | undefined {
+  const apiSuffix = api ? `(${api})` : "";
+  const hit = list.filter((d) => pred(d.name));
+  if (!hit.length) return undefined;
+  return (
+    hit.find(
+      (d) =>
+        !!api &&
+        (d.name.includes(apiSuffix) || d.hostapi?.toLowerCase() === api.toLowerCase()),
+    )?.name ?? hit[0]?.name
+  );
+}
+
+/**
+ * 设置页「自动配置」用的防呆检查。
+ *
+ * 不只看「设备名还在列表里」—— 把输出设成扬声器、输入设成 CABLE Output
+ * 都是合法设备名，但变声送不到游戏/Discord。这里只拦几类常见接错：
+ *
+ * - 输入选了虚拟线的录音端（会录到变声自己，或没原声）
+ * - 输出没走虚拟线注入端（有 VB-Cable / VoiceMeeter 时）
+ * - 输出误选了录音端
+ * - 监听选了虚拟线（听不到，还可能回环）
+ *
+ * VoiceMeeter 的 Input / Aux Input / VAIO3 Input 都算注入端，不强迫改成 Cable。
+ * 没有虚拟声卡时不瞎改输出，只提示去装。
+ */
+export function assessDevices(
+  cfg: Record<string, unknown>,
+  status: Record<string, unknown> | undefined | null,
+): DeviceAdvice {
+  const inputs = parseDevices(status?.input_devices);
+  const outputs = parseDevices(status?.output_devices);
+  const hostapis = parseDevices(status?.hostapis).map((d) => d.name);
+  if (!inputs.length && !outputs.length) {
+    return { patch: null, reasons: ["s.devAutoNoList"] };
+  }
+
+  const curApi = str(cfg.sg_hostapi);
+  const curIn = str(cfg.sg_input_device);
+  const curOut = str(cfg.sg_output_device);
+  const curMon = str(cfg.monitor_device);
+  const monitorOn = cfg.monitor_self === true || cfg.monitor_self === "true";
+
+  let api = curApi;
+  const patch: DeviceAutoPick = {};
+  const parts: string[] = [];
+
+  const apiValid =
+    !!curApi &&
+    (!hostapis.length ||
+      hostapis.some((h) => h.toLowerCase() === curApi.toLowerCase()));
+  if (!apiValid && hostapis.length) {
+    const mme = hostapis.find((h) => h.toLowerCase().includes("mme"));
+    if (mme) {
+      api = mme;
+      patch.sg_hostapi = mme;
+      parts.push("s.devAutoApi");
+    }
+  }
+
+  const cableOut = preferSameApi(outputs, api, looksLikeCableInput);
+  const vmOut = preferSameApi(outputs, api, looksLikeVoiceMeeterInject);
+  const anyInject = preferSameApi(outputs, api, looksLikeVirtualInject);
+  const inject = cableOut || vmOut || anyInject;
+  const realMic = preferSameApi(inputs, api, looksLikeMic);
+  const phones =
+    preferSameApi(outputs, api, (n) => {
+      const x = n.toLowerCase();
+      return (
+        !looksLikeVirtualInject(n) &&
+        !looksLikeVirtualCapture(n) &&
+        ["耳机", "headphone", "headset"].some((k) => x.includes(k))
+      );
+    }) ?? preferSameApi(outputs, api, looksLikePhysicalPlay);
+
+  const inIsCapture = !!curIn && looksLikeVirtualCapture(curIn);
+  const inMissing = !curIn || !inputs.some((d) => d.name === curIn);
+  if ((inMissing || inIsCapture) && realMic && realMic !== curIn) {
+    patch.sg_input_device = realMic;
+    parts.push(inIsCapture ? "s.devAutoInWasCable" : "s.devAutoIn");
+  }
+
+  const outMissing = !curOut || !outputs.some((d) => d.name === curOut);
+  const outIsCapture = !!curOut && looksLikeVirtualCapture(curOut);
+  const outIsInject = !!curOut && looksLikeVirtualInject(curOut);
+  if (inject) {
+    if ((outMissing || outIsCapture || !outIsInject) && inject !== curOut) {
+      patch.sg_output_device = inject;
+      parts.push(outIsCapture ? "s.devAutoOutWasCapture" : "s.devAutoOutWasSpeaker");
+    }
+  } else if (outMissing && outputs[0] && outputs[0].name !== curOut) {
+    // 没有虚拟线：不把输出改去扬声器装样子，只告诉人去装。
+    parts.push("s.devAutoNoVirtual");
+  }
+
+  if (monitorOn && curMon && (looksLikeVirtualInject(curMon) || looksLikeVirtualCapture(curMon))) {
+    if (phones && phones !== curMon) {
+      patch.monitor_device = phones;
+      parts.push("s.devAutoMonWasCable");
+    }
+  }
+
+  const keys = Object.keys(patch);
+  if (!keys.length) {
+    if (!inject) {
+      return { patch: null, reasons: ["s.devAutoNoVirtual"] };
+    }
+    const kind = looksLikeVoiceMeeterInject(curOut) ? "s.devAutoOkVm" : "s.devAutoOkCable";
+    return { patch: null, reasons: [kind] };
+  }
+  return { patch, reasons: parts };
 }

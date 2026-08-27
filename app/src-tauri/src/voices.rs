@@ -2286,6 +2286,100 @@ fn decode_base64(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+fn encode_base64(data: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let a = chunk[0] as u32;
+        let b = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let c = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let n = (a << 16) | (b << 8) | c;
+        out.push(T[(n >> 18) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(T[((n >> 6) & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if chunk.len() > 2 {
+            out.push(T[(n & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+    }
+    out
+}
+
+fn sniff_image_mime(data: &[u8]) -> Option<&'static str> {
+    if data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 {
+        return Some("image/jpeg");
+    }
+    if data.len() >= 8 && data[0..4] == [0x89, 0x50, 0x4E, 0x47] {
+        return Some("image/png");
+    }
+    if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    if data.len() >= 2 && data[0] == b'B' && data[1] == b'M' {
+        return Some("image/bmp");
+    }
+    if data.len() >= 6 && (data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a")) {
+        return Some("image/gif");
+    }
+    None
+}
+
+fn fetch_image_bytes(url: &str) -> Result<Vec<u8>, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get(url)
+        .header("User-Agent", "RVC-Fabric")
+        .send()
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().map_err(|e| e.to_string())?;
+    if bytes.len() < 32 || bytes.len() > MAX_COVER_BYTES {
+        return Err(crate::i18n::t("models.coverBadImage"));
+    }
+    Ok(bytes.to_vec())
+}
+
+/// 把本机路径或 http(s) 封面读成 data URL，给裁剪对话框画进 canvas。
+///
+/// 界面跑在 `http://fabric.localhost`，用 convertFileSrc / 远程 `<img>` 画到
+/// canvas 上会被标成 tainted，`toDataURL` 直接抛 SecurityError —— 预览空白、
+/// 保存报「图片数据无效」。字节从这边读、编成 data URL，同源，不会脏。
+pub fn cover_to_data_url(src: &str) -> Result<String, String> {
+    let src = src.trim();
+    if src.is_empty() {
+        return Err(crate::i18n::t("models.coverBadImage"));
+    }
+    let data = if src.to_ascii_lowercase().starts_with("http://")
+        || src.to_ascii_lowercase().starts_with("https://")
+    {
+        fetch_image_bytes(src)?
+    } else if src.starts_with("data:image/") {
+        return Ok(src.to_string());
+    } else {
+        let p = PathBuf::from(src);
+        if !p.is_file() {
+            return Err(crate::i18n::t("models.coverBadImage"));
+        }
+        let len = p.metadata().map(|m| m.len()).unwrap_or(0);
+        if len < 32 || len > MAX_COVER_BYTES as u64 {
+            return Err(crate::i18n::t("models.coverBadImage"));
+        }
+        fs::read(&p).map_err(|e| e.to_string())?
+    };
+    let mime = sniff_image_mime(&data).ok_or_else(|| crate::i18n::t("models.coverBadImage"))?;
+    Ok(format!("data:{mime};base64,{}", encode_base64(&data)))
+}
+
 /// 选一张图给封面用。选择成功当场放行 asset 协议 —— webview 要把它画进
 /// canvas 里。
 pub fn pick_cover_image(win: Option<&tauri::WebviewWindow>) -> Option<String> {
@@ -2325,7 +2419,7 @@ pub fn set_cover(root: &Path, model_dir: &str, image_data_url: &str) -> Result<V
     if data.is_empty() || data.len() > MAX_COVER_BYTES {
         return Err(crate::i18n::t("models.coverBadImage").into());
     }
-    let is_jpeg = data.len() > 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+    let is_jpeg = data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8;
     let is_png = data.len() > 8 && data[0..4] == [0x89, 0x50, 0x4E, 0x47];
     if !is_jpeg && !is_png {
         return Err(crate::i18n::t("models.coverBadImage").into());
@@ -2545,6 +2639,22 @@ mod tests {
             resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
             -1
         );
+    }
+
+    #[test]
+    fn cover_bytes_round_trip_as_a_data_url() {
+        // JPEG SOI + a few padding bytes is enough for sniff + encode.
+        let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4];
+        let url = cover_to_data_url(&format!(
+            "data:image/jpeg;base64,{}",
+            encode_base64(&jpeg)
+        ))
+        .unwrap();
+        assert!(url.starts_with("data:image/jpeg;base64,"));
+        assert_eq!(sniff_image_mime(&jpeg), Some("image/jpeg"));
+        assert_eq!(sniff_image_mime(&[0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0]), Some("image/png"));
+        let decoded = decode_base64(url.split_once("base64,").unwrap().1).unwrap();
+        assert_eq!(decoded, jpeg);
     }
 
     #[test]

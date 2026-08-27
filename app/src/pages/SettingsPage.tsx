@@ -6,7 +6,7 @@ import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
 import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
-import { pickAutoDevices } from "../lib/deviceSetup";
+import { assessDevices } from "../lib/deviceSetup";
 import { HOTKEYS } from "../lib/hotkeys";
 import type { EngineStatus } from "../lib/engine";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
@@ -212,17 +212,9 @@ function SettingsPageImpl({
   const [autoDevMsg, setAutoDevMsg] = useState("");
   const runAutoSetup = async () => {
     try {
-      const pick = pickAutoDevices(c.cfg, raw ?? {});
-      if (!pick) {
-        setAutoDevMsg(t("s.devAutoNone"));
-        return;
-      }
-      await setConfig(pick);
-      const parts: string[] = [];
-      if (pick.sg_hostapi) parts.push(t("s.devAutoApi"));
-      if (pick.sg_input_device) parts.push(t("s.devAutoIn"));
-      if (pick.sg_output_device) parts.push(t("s.devAutoOut"));
-      setAutoDevMsg(t("s.devAutoDone", { v0: parts.join("、") }));
+      const advice = assessDevices(c.cfg, raw ?? {});
+      if (advice.patch) await setConfig(advice.patch);
+      setAutoDevMsg(advice.reasons.map((k) => t(k)).join(" "));
     } catch (e) {
       setAutoDevMsg(String(e));
     }

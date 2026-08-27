@@ -580,9 +580,26 @@ function ModelsPageImpl({
                     title={authors.map((a) => a.name).join("、") || undefined}
                   >
                     {authors.length
-                      ? t("s.7feea73fa3", {
-                          v0: authors.map((a) => a.name).join("、"),
-                        })
+                      ? (() => {
+                          const links = voiceAuthorLinks(v);
+                          const line = t("s.7feea73fa3", {
+                            v0: authors.map((a) => a.name).join("、"),
+                          });
+                          if (!links.length) return line;
+                          return (
+                            <button
+                              type="button"
+                              className="border-0 bg-transparent p-0 text-inherit cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (links.length === 1) void openExternal(links[0].url || "");
+                                else setAuthorPick(links);
+                              }}
+                            >
+                              {line}
+                            </button>
+                          );
+                        })()
                       : t("s.2af26573b0")}
                   </div>
                   <div className="mt-2.5 flex items-center gap-1.5">

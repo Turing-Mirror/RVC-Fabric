@@ -5,6 +5,7 @@ import { setHot } from "../lib/engine";
 import { getConfig, onConfigPatch } from "../lib/config";
 import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 import { resolveCover, useCoverCache } from "../lib/cover";
+import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
 import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
 import { t } from "../i18n/t";
@@ -331,6 +332,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
               const cur = v === current;
               const edge = cur ? cardPx.cur : cardPx.side;
               const fontPx = cur ? cardPx.fontCur : cardPx.fontSide;
+              const ver = voiceVersionLabel(v.date);
+              const authors = voiceAuthorList(v);
               return (
                 <button
                   key={keyOf(v)}
@@ -372,6 +375,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                     ) : (
                       <span>{(v.name || "?").slice(0, 4)}</span>
                     )}
+                    {ver ? (
+                      <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                        {ver}
+                      </span>
+                    ) : null}
                     {cur && hasSelection ? (
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
@@ -390,8 +398,10 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                   >
                     {v.name}
                   </div>
-                  <div className="text-xs text-[var(--meta)] mt-0.5">
-                    {v.author ? t("s.7feea73fa3", { v0: v.author }) : "\u00a0"}
+                  <div className="text-xs text-[var(--meta)] mt-0.5 truncate" title={authors.map((a) => a.name).join("、") || undefined}>
+                    {authors.length
+                      ? t("s.7feea73fa3", { v0: authors.map((a) => a.name).join("、") })
+                      : "\u00a0"}
                   </div>
                 </button>
               );

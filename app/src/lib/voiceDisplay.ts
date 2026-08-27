@@ -243,7 +243,10 @@ const GROUP_FALLBACK: Record<
 };
 
 function str(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
+  if (typeof v === "string") return v.trim();
+  // 清单 YAML 里未加引号的 YYMMDD 会进 JSON 数字，版本角标不能因此消失。
+  if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v));
+  return "";
 }
 
 /**
@@ -553,9 +556,16 @@ export function displayVoiceAuthor(
   const a = v.author;
   if (a && typeof a === "object" && !Array.isArray(a)) {
     const m = a as Record<string, unknown>;
-    return str(m[loc]) || str(m["zh-CN"]) || str(m.zh) || "";
+    const hit = str(m[loc]) || str(m["zh-CN"]) || str(m.zh) || "";
+    if (hit) return hit;
   }
-  return str(a);
+  const single = str(a);
+  if (single) return single;
+  // 只有 authors 数组、没有单个 author 字段时，广场/首页也会走到这里。
+  return voiceAuthorList(v)
+    .map((x) => x.name)
+    .filter(Boolean)
+    .join("、");
 }
 
 /** Club / department label inside a series (研讨会, Veritas, …). */

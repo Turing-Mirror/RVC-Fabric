@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { voiceAuthorList, voiceVersionLabel } from "./voiceDisplay";
+import { displayVoiceAuthor, voiceAuthorList, voiceVersionLabel } from "./voiceDisplay";
 
 describe("voiceVersionLabel", () => {
   it("formats catalog YYMMDD as vYY.MM.DD", () => {
@@ -10,6 +10,10 @@ describe("voiceVersionLabel", () => {
     expect(voiceVersionLabel("20260731")).toBe("v26.07.31");
     expect(voiceVersionLabel("2026-07-31T12:00:00Z")).toBe("v26.07.31");
     expect(voiceVersionLabel("2026/7/3")).toBe("v26.07.03");
+  });
+
+  it("accepts a numeric YYMMDD from unquoted YAML", () => {
+    expect(voiceVersionLabel(260731)).toBe("v26.07.31");
   });
 
   it("returns empty for garbage instead of a broken badge", () => {
@@ -50,5 +54,15 @@ describe("voiceAuthorList", () => {
     expect(voiceAuthorList({ author: "未知" })).toEqual([]);
     expect(voiceAuthorList({ author: "—" })).toEqual([]);
     expect(voiceAuthorList({ authors: [{ name: "unknown" }] })).toEqual([]);
+  });
+});
+
+describe("displayVoiceAuthor", () => {
+  it("falls back to the authors array when the single field is empty", () => {
+    expect(
+      displayVoiceAuthor({
+        authors: [{ name: "A" }, { name: "B", url: "https://x/b" }],
+      }),
+    ).toBe("A、B");
   });
 });

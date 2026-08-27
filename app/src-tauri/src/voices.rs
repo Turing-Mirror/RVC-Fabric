@@ -100,12 +100,17 @@ fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
                     // 以前只认 as_str，数组和译名表全被丢掉。
                     let nonempty = match v {
                         Value::String(s) => !s.trim().is_empty(),
+                        Value::Number(_) => k == "date",
                         Value::Array(a) => !a.is_empty(),
                         Value::Object(o) => !o.is_empty(),
                         _ => false,
                     };
                     if relevant && nonempty {
-                        out.insert(k.clone(), v.clone());
+                        if k == "date" {
+                            out.insert(k.clone(), json!(json_text(Some(v))));
+                        } else {
+                            out.insert(k.clone(), v.clone());
+                        }
                     }
                 }
             }
@@ -113,6 +118,14 @@ fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
         }
     }
     None
+}
+
+fn json_text(v: Option<&Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s.trim().to_string(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    }
 }
 
 /// 旧安装把作者写成空串 / 「未知」/ 「—」。这些都该当成没写，好从清单补。
@@ -513,11 +526,7 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let mut date = side
-            .get("date")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let mut date = json_text(side.get("date"));
         // 来源仓库。第三方音色的清单里两个地址常常只有一个，模型页那个
         // 「⋯」菜单两条都挂，有哪条给哪条。
         let source_url = side

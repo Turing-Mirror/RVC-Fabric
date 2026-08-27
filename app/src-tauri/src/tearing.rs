@@ -48,7 +48,8 @@ pub const HOT_STREAK: u32 = 2;
 /// 问过一次之后的冷却期。没有它会在每个窗口里再弹一次「要放宽延迟吗」。
 pub const COOLDOWN_SEC: f64 = 15.0;
 
-/// f0 方法的开销排序（贵 → 便宜）。降级就是沿着这条链往下走一格。
+/// f0 方法的开销排序（贵 → 便宜）。不再自动沿这条链降级，测试仍钉住方向。
+#[allow(dead_code)]
 pub const F0_LADDER: &[&str] = &["harvest", "rmvpe", "fcpe", "pm"];
 
 /// block_time 的阶梯，单位秒。不无限往上加：超过 0.4 秒的延迟已经没法对话了，
@@ -72,7 +73,8 @@ pub struct Sample {
     pub blocks: u32,
     /// 距离上次降级过了多久。从没降过传一个大数。
     pub since_last_action_sec: f64,
-    /// 当前 f0 方法。
+    /// 当前 f0 方法。判定不再读它，字段留下给测试构造。
+    #[allow(dead_code)]
     pub f0: String,
     /// 当前块长。
     pub block_time: f64,
@@ -114,6 +116,7 @@ pub fn decide(s: &Sample) -> Action {
 }
 
 /// 链上的下一个 f0 方法。已经是最便宜的（或者不认识）就返回 None。
+#[allow(dead_code)]
 pub fn next_f0(cur: &str) -> Option<&'static str> {
     let i = F0_LADDER.iter().position(|m| *m == cur)?;
     F0_LADDER.get(i + 1).copied()

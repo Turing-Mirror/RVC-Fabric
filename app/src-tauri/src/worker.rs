@@ -4,6 +4,7 @@
 //! one worker, cleaned env, pythonw preferred, soft stop then force.
 
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::process::{Command, Stdio};

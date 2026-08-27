@@ -77,8 +77,7 @@ fn catalog_cover(root: &Path, id: &str) -> String {
 /// 旧版本装的第三方音色，sidecar 里常常只有名字 —— 那时候安装路径还没有
 /// 「从清单兜底 author」这一步。按 online_id 回查清单把缺的字段补齐，
 /// 用户不用重装也能看到作者是谁、这是哪一版。
-fn catalog_entry_meta(root: &Path, id: &str) -> Option<Map<String, Value>> {
-    let cat = crate::store::fetch_store_catalog(root, false);
+fn catalog_entry_meta(cat: &Value, id: &str) -> Option<Map<String, Value>> {
     for key in ["voices", "thirdparty_voices"] {
         let Some(arr) = cat.get(key).and_then(|v| v.as_array()) else {
             continue;
@@ -488,6 +487,11 @@ fn list_user_data(root: &Path) -> Vec<Value> {
 /// 之后，同一段逻辑要能对着任意目录跑。
 fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
     let mut out = Vec::new();
+    // 清单只在真有音色缺元数据时读，而且整轮扫描只读一次。
+    // `fetch_store_catalog` 每次都要把内置那份和缓存那份（各 ~380 KB）从盘上
+    // 读出来重新解析一遍 —— 按目录调用就是 N 次全量解析，装了几十个音色的
+    // 用户每刷新一次列表要白烧几十兆的 JSON。
+    let mut catalog: Option<Value> = None;
     let Ok(rd) = fs::read_dir(models_root) else {
         return out;
     };
@@ -551,7 +555,9 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
         if (author_placeholder || date.is_empty() || authors_missing || author_url.is_empty())
             && !oid.is_empty()
         {
-            if let Some(meta) = catalog_entry_meta(root, &oid) {
+            let cat = catalog
+                .get_or_insert_with(|| crate::store::fetch_store_catalog(root, false));
+            if let Some(meta) = catalog_entry_meta(cat, &oid) {
                 let mut healed = Map::new();
                 if author_placeholder {
                     if let Some(v) = meta.get("author") {
@@ -2309,6 +2315,12 @@ pub fn set_cover(root: &Path, model_dir: &str, image_data_url: &str) -> Result<V
         .split_once("base64,")
         .map(|(_, rest)| rest)
         .ok_or_else(|| crate::i18n::t("models.coverBadImage"))?;
+    // 先按 base64 长度卡一刀再解码。解码器按输入长度预分配，先解后判等于
+    // 让一条超大 data URL 在被拒之前就把内存吃掉。4/3 是 base64 的膨胀率，
+    // 多给 64 字节留 padding 和头部的余量。
+    if b64.len() > MAX_COVER_BYTES / 3 * 4 + 64 {
+        return Err(crate::i18n::t("models.coverBadImage"));
+    }
     let data = decode_base64(b64).ok_or_else(|| crate::i18n::t("models.coverBadImage"))?;
     if data.is_empty() || data.len() > MAX_COVER_BYTES {
         return Err(crate::i18n::t("models.coverBadImage").into());

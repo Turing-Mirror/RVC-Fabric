@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn core_present_detects_missing_pymss_core() {
         // 部署树缺 tools/pymss_core 时分离会崩在 import 上，预检要认得出来。
-        let base = std::env::temp_dir().join("rvcf-separate-core");
+        let base = crate::testutil::scratch("separate-core");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("tools").join("pymss")).unwrap();
         assert!(!core_present(&base));
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn models_in_nested_catalog_dirs_are_found() {
         // PyMSS 按 relpath 摆子目录（legacy_vr/vr_hp2/…），平铺扫描会扫不到。
-        let base = std::env::temp_dir().join("rvcf-separate-nested");
+        let base = crate::testutil::scratch("separate-nested");
         let _ = std::fs::remove_dir_all(&base);
         let nested = base.join("legacy_vr").join("vr_hp2");
         std::fs::create_dir_all(&nested).unwrap();

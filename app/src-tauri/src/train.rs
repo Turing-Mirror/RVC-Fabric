@@ -1506,7 +1506,7 @@ mod tests {
     /// 且只挑失败的，成功行和起止标记都不算。
     #[test]
     fn preprocess_failure_list_names_the_file_and_the_last_exception_line() {
-        let dir = std::env::temp_dir().join("rvcf-preprocess-failures");
+        let dir = crate::testutil::scratch("preprocess-failures");
         std::fs::create_dir_all(&dir).unwrap();
         let log = dir.join("preprocess.log");
         std::fs::write(
@@ -1553,7 +1553,7 @@ mod tests {
     /// 扫描给出的数字必须就是删除会释放的数字，而且不该删的不能出现在清单里。
     #[test]
     fn the_cleanup_scan_and_apply_agree_and_spare_everything_irreplaceable() {
-        let root = std::env::temp_dir().join("rvcf-cleanup");
+        let root = crate::testutil::scratch("cleanup");
         let _ = std::fs::remove_dir_all(&root);
         let exp = root.join("logs").join("miku");
         let weights = root.join("assets").join("weights");
@@ -1600,7 +1600,7 @@ mod tests {
     /// 该删的一个不剩，不该删的一个不碰。
     #[test]
     fn resetting_stages_removes_only_the_regenerable_artifacts() {
-        let root = std::env::temp_dir().join("rvcf-reset-stages");
+        let root = crate::testutil::scratch("reset-stages");
         let _ = std::fs::remove_dir_all(&root);
         let exp = root.join("logs").join("miku");
         std::fs::create_dir_all(exp.join("1_16k_wavs")).unwrap();
@@ -1630,7 +1630,7 @@ mod tests {
     /// 实验名里带路径分隔符时必须拒绝 —— 这是删除操作，`../..` 不能有第二种解读。
     #[test]
     fn resetting_refuses_anything_that_could_escape_the_experiment_folder() {
-        let root = std::env::temp_dir().join("rvcf-reset-escape");
+        let root = crate::testutil::scratch("reset-escape");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("logs")).unwrap();
         for bad in ["", "   ", "..", ".", "../mute", "a/b", "a\\b", "C:x"] {
@@ -1647,7 +1647,7 @@ mod tests {
     /// 成功写 Success，读不进来写整条 traceback。
     #[test]
     fn the_preprocess_tally_matches_what_preprocess_py_writes() {
-        let dir = std::env::temp_dir().join("rvcf-preprocess-tally");
+        let dir = crate::testutil::scratch("preprocess-tally");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let log = dir.join("preprocess.log");
@@ -1684,7 +1684,7 @@ mod tests {
 
     #[test]
     fn a_dataset_scan_counts_audio_recursively_and_ignores_the_rest() {
-        let base = std::env::temp_dir().join("rvcf-scan-dataset");
+        let base = crate::testutil::scratch("scan-dataset");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("歌手A")).unwrap();
         std::fs::write(base.join("a.wav"), b"1234").unwrap();
@@ -1730,11 +1730,11 @@ mod tests {
         // 建不出来就得当场报错 —— 拔掉的移动硬盘、写保护的目录，等训完再
         // 发现就是几小时白烧。
         let _g = crate::i18n::testing::pin("zh-CN");
-        let base = std::env::temp_dir().join("rvcf-train-out").join("nested");
-        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("rvcf-train-out"));
+        let base = crate::testutil::scratch("train-out").join("nested");
+        let _ = std::fs::remove_dir_all(crate::testutil::scratch("train-out"));
         let got = normalize_output_dir(&base.to_string_lossy()).expect("should accept");
         assert!(Path::new(&got).is_dir(), "目录应当已经建好：{got}");
-        let _ = std::fs::remove_dir_all(std::env::temp_dir().join("rvcf-train-out"));
+        let _ = std::fs::remove_dir_all(crate::testutil::scratch("train-out"));
     }
 
     #[test]
@@ -1753,7 +1753,7 @@ mod tests {
 
     #[test]
     fn mute_ready_needs_the_wav_not_just_the_folder() {
-        let base = std::env::temp_dir().join("rvcf-train-mute");
+        let base = crate::testutil::scratch("train-mute");
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("logs").join("mute").join("0_gt_wavs");
         std::fs::create_dir_all(&d).unwrap();
@@ -1770,7 +1770,7 @@ mod tests {
 
     #[test]
     fn pretrained_needs_both_g_and_d() {
-        let base = std::env::temp_dir().join("rvcf-train-pretrained");
+        let base = crate::testutil::scratch("train-pretrained");
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("assets").join("pretrained_v2");
         std::fs::create_dir_all(&d).unwrap();
@@ -1789,7 +1789,7 @@ mod tests {
     #[test]
     fn a_truncated_pretrained_download_is_not_ready() {
         // 下到一半的 .pth 存在但没用；只判存在会让训练在加载底模时才炸。
-        let base = std::env::temp_dir().join("rvcf-train-trunc");
+        let base = crate::testutil::scratch("train-trunc");
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("assets").join("pretrained_v2");
         std::fs::create_dir_all(&d).unwrap();
@@ -1804,7 +1804,7 @@ mod tests {
         // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
         let _g = crate::i18n::testing::pin("zh-CN");
         // logs/mute 是随包发的静音样本。列出来用户会以为那是自己的音色。
-        let base = std::env::temp_dir().join("rvcf-train-exps");
+        let base = crate::testutil::scratch("train-exps");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("logs").join("mute")).unwrap();
         std::fs::create_dir_all(base.join("logs").join(&crate::i18n::t("s.6ca6738e54")).join("1_16k_wavs")).unwrap();
@@ -1824,7 +1824,7 @@ mod tests {
 
     #[test]
     fn rmvpe_ready_rejects_missing_and_tiny_files() {
-        let base = std::env::temp_dir().join("rvcf-train-rmvpe");
+        let base = crate::testutil::scratch("train-rmvpe");
         let _ = std::fs::remove_dir_all(&base);
         let d = base.join("assets").join("rmvpe");
         std::fs::create_dir_all(&d).unwrap();
@@ -1870,10 +1870,7 @@ mod tests {
 
     #[test]
     fn latest_epoch_reads_the_last_marker() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-train-epoch-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("train-epoch");
         let _ = std::fs::remove_dir_all(&td);
         std::fs::create_dir_all(&td).unwrap();
         let p = td.join("train.log");
@@ -1889,10 +1886,7 @@ mod tests {
 
     #[test]
     fn outcome_report_can_tell_slices_from_a_finished_model() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-train-outcome-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("train-outcome");
         let _ = std::fs::remove_dir_all(&td);
         let exp = td.join("logs").join("voice");
         std::fs::create_dir_all(exp.join("1_16k_wavs")).unwrap();
@@ -1928,7 +1922,7 @@ mod tests {
 
     #[test]
     fn preflight_refuses_before_it_can_waste_hours() {
-        let base = std::env::temp_dir().join("rvcf-train-preflight");
+        let base = crate::testutil::scratch("train-preflight");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         let req = TrainReq {

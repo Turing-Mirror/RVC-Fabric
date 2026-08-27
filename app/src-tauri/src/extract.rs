@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn a_normal_zip_round_trips() {
-        let dir = std::env::temp_dir().join("rvcf-extract-zip-test");
+        let dir = crate::testutil::scratch("extract-zip-test");
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let zip_path = dir.join("ui.zip");

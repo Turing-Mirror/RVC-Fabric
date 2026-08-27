@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn a_second_start_on_the_same_day_does_not_ping_again() {
-        let root = std::env::temp_dir().join("rvcf-telemetry-test");
+        let root = crate::testutil::scratch("telemetry-test");
         let _ = std::fs::remove_dir_all(&root);
         let mut patch = serde_json::Map::new();
         patch.insert("telemetry_opt_in".into(), json!(true));
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn opting_out_never_pings() {
-        let root = std::env::temp_dir().join("rvcf-telemetry-optout");
+        let root = crate::testutil::scratch("telemetry-optout");
         let _ = std::fs::remove_dir_all(&root);
         let out = tick(&root, "1.3.0", "nvidia");
         assert_eq!(out["reason"], json!("opt-out"));

@@ -519,10 +519,7 @@ mod cache_clear_tests {
     fn clear_user_cache_drops_logs_keeps_models_and_config() {
         // Must not start with `rvcf-`: clean_temps also sweeps system TEMP
         // entries with that prefix, and would delete this fixture first.
-        let td = std::env::temp_dir().join(format!(
-            "tm-cache-clear-test-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("cache-clear-test");
         let _ = std::fs::remove_dir_all(&td);
         let logs = td.join("User_Data").join("logs").join("sts");
         let models = td.join("User_Data").join("models").join("Anon");
@@ -546,7 +543,7 @@ mod cache_clear_tests {
     fn clean_temps_spares_a_download_in_progress() {
         // diag 26.8.22/1：启动清理把下到 322MB 的 Runtime 半截当垃圾删了，
         // 六 GB 的包只好从零再来。刚写过的 .part 必须活过清理。
-        let td = std::env::temp_dir().join(format!("tm-fresh-part-{}", std::process::id()));
+        let td = crate::testutil::scratch("fresh-part");
         let _ = std::fs::remove_dir_all(&td);
         let cache = td.join("User_Data").join("update_cache");
         std::fs::create_dir_all(&cache).unwrap();

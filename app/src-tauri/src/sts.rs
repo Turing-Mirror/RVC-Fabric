@@ -1870,24 +1870,16 @@ fn run_inner(
 mod tests {
     use super::*;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn tmp_root() -> PathBuf {
-        let n = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!("rvcf-sts-rec-{n}"));
+        let dir = crate::testutil::scratch("sts-rec");
         fs::create_dir_all(dir.join("User_Data")).unwrap();
         dir
     }
 
     #[test]
     fn sts_log_throttles_intra_file_pct() {
-        let td = std::env::temp_dir().join(format!(
-            "rvcf-sts-log-{}",
-            std::process::id()
-        ));
+        let td = crate::testutil::scratch("sts-log");
         let _ = fs::remove_dir_all(&td);
         fs::create_dir_all(&td).unwrap();
         let p = td.join("sts.log");

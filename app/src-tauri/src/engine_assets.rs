@@ -535,7 +535,7 @@ mod tests {
     fn catalog_size_feeds_the_engine_core_download() {
         // 754MB 的包以前 size_hint 恒为 0，auto_connections 只给一条连接慢慢
         // 爬，进度条连分母都没有。大小得从内置清单里查出来。
-        let root = std::env::temp_dir().join("rvcf-catalog-size");
+        let root = crate::testutil::scratch("catalog-size");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("configs")).unwrap();
         std::fs::write(
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn missing_when_root_is_empty() {
-        let tmp = std::env::temp_dir().join("rvcf-engine-core-test");
+        let tmp = crate::testutil::scratch("engine-core-test");
         let _ = std::fs::create_dir_all(&tmp);
         assert_eq!(engine_core_missing(&tmp).len(), 5);
         assert!(!engine_core_ready(&tmp));
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn truncated_file_does_not_count_as_ready() {
-        let tmp = std::env::temp_dir().join("rvcf-engine-core-trunc");
+        let tmp = crate::testutil::scratch("engine-core-trunc");
         let f = tmp.join("assets/hubert");
         let _ = std::fs::create_dir_all(&f);
         let _ = std::fs::write(f.join("hubert_base.pt"), b"too small");
@@ -572,7 +572,7 @@ mod tests {
         // The VB-Cable pack sometimes ships with a top-level VBCABLE/ folder.
         // Without the hoist the installer ends up one level too deep and the
         // user simply cannot install the virtual cable.
-        let base = std::env::temp_dir().join("rvcf-hoist-test");
+        let base = crate::testutil::scratch("hoist-test");
         let _ = std::fs::remove_dir_all(&base);
         let nested = base.join("VBCABLE");
         std::fs::create_dir_all(&nested).unwrap();
@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn lfs_url_is_sha_addressed() {
-        let root = std::env::temp_dir().join("rvcf-lfs-url");
+        let root = crate::testutil::scratch("lfs-url");
         let _ = std::fs::remove_dir_all(&root);
         let u = lfs_urls(&root, ENGINE_CORE_SHA);
         // 没有清单时就只有官方仓库那一条
@@ -615,7 +615,7 @@ mod tests {
     fn a_release_tag_url_is_built_for_every_mirror() {
         // 按 sha 寻址要等 CNB 建索引，新传的包会 404 一阵子。备用源必须跟着
         // 镜像一起铺开，只有官方仓一条的话 CNB 一挂就全断。
-        let root = std::env::temp_dir().join("rvcf-rel-url");
+        let root = crate::testutil::scratch("rel-url");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("configs")).unwrap();
         std::fs::write(
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn lfs_urls_pick_up_catalog_mirrors() {
         // engine-core 是首次运行的必经之路，以前只有一个源，CNB 一挂谁都装不上。
-        let root = std::env::temp_dir().join("rvcf-lfs-mirror");
+        let root = crate::testutil::scratch("lfs-mirror");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("configs")).unwrap();
         std::fs::write(

@@ -2565,7 +2565,7 @@ mod tests {
     fn guard_rejects_the_library_root_itself() {
         // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
         let _g = crate::i18n::testing::pin("zh-CN");
-        let root = std::env::temp_dir().join("rvcf-guard-test");
+        let root = crate::testutil::scratch("guard-test");
         let models = paths::models_dir(&root);
         let one = models.join("anon");
         std::fs::create_dir_all(&one).unwrap();
@@ -2589,9 +2589,9 @@ mod tests {
         // 走同一个 guard_model_dir —— 不放行的话用户点删除只会得到
         // 「路径不在音色库内」（diag 26.8.18 模型删不掉）。
         let _g = crate::i18n::testing::pin("zh-CN");
-        let root = std::env::temp_dir().join("rvcf-guard-train-test");
+        let root = crate::testutil::scratch("guard-train-test");
         std::fs::create_dir_all(paths::models_dir(&root)).unwrap();
-        let out = std::env::temp_dir().join("rvcf-guard-train-out");
+        let out = crate::testutil::scratch("guard-train-out");
         let voice = out.join("myvoice");
         std::fs::create_dir_all(&voice).unwrap();
         crate::config::set_train_output_dir(&root, &out.to_string_lossy()).unwrap();
@@ -2613,7 +2613,7 @@ mod tests {
     /// 任何办法帮他找回来。所以删除走的是「移进回收站」，不是真删。
     #[test]
     fn deleting_a_voice_moves_it_aside_instead_of_destroying_it() {
-        let root = std::env::temp_dir().join("rvcf-trash-voice");
+        let root = crate::testutil::scratch("trash-voice");
         let _ = fs::remove_dir_all(&root);
         let md = crate::paths::user_data(&root).join("models").join("miku");
         fs::create_dir_all(&md).unwrap();
@@ -2646,7 +2646,7 @@ mod tests {
     /// 过期的清掉，没过期的一个不动。
     #[test]
     fn pruning_only_removes_entries_older_than_the_window() {
-        let root = std::env::temp_dir().join("rvcf-trash-prune");
+        let root = crate::testutil::scratch("trash-prune");
         let _ = fs::remove_dir_all(&root);
         let dir = trash_dir(&root);
         fs::create_dir_all(&dir).unwrap();
@@ -2672,7 +2672,7 @@ mod tests {
         // 删除音色后，app_config 的当前选中/最近使用和 inuse 里指向它的
         // 引用必须一起清掉，否则首页/底栏还把已删音色当「当前音色」。
         let _g = crate::i18n::testing::pin("zh-CN");
-        let root = std::env::temp_dir().join("rvcf-delete-refs-test");
+        let root = crate::testutil::scratch("delete-refs-test");
         let models = paths::models_dir(&root);
         let voice = models.join("myvoice");
         std::fs::create_dir_all(&voice).unwrap();
@@ -2752,13 +2752,7 @@ mod tests {
     }
 
     fn scratch(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!(
-            "rvcf-prof-{}-{}",
-            tag,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&p);
-        p
+        crate::testutil::scratch(tag)
     }
 
     #[test]

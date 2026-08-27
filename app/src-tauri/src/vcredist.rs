@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn setup_is_found_by_name_not_by_position() {
-        let dir = std::env::temp_dir().join("rvcf-vcr-find");
+        let dir = crate::testutil::scratch("vcr-find");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         // 包里除了安装程序还可能有说明文件，不能随便挑一个 exe。

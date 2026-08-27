@@ -1464,7 +1464,7 @@ mod tests {
 
     /// 仓库里没有 tempfile 依赖，其他模块的测试都是这么开临时目录的。
     fn tmp_root(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("rvcf-worker-{name}"));
+        let d = crate::testutil::scratch(name);
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         protocol::ensure_control_dir(&d).unwrap();
@@ -1679,7 +1679,7 @@ mod tests {
     /// 退出时杀不掉，它会一直占着声卡活到用户重启电脑。台账就是补这条记忆。
     #[test]
     fn every_spawned_pid_stays_on_the_ledger() {
-        let dir = std::env::temp_dir().join(format!("rvcf_pids_{}", std::process::id()));
+        let dir = crate::testutil::scratch("pids");
         let _ = std::fs::remove_dir_all(&dir);
         let root = dir.as_path();
 
@@ -1703,7 +1703,7 @@ mod tests {
     /// pid 0 是「没有 worker」的意思，不能进台账、不能进待杀名单。
     #[test]
     fn pid_zero_never_enters_the_ledger() {
-        let dir = std::env::temp_dir().join(format!("rvcf_pid0_{}", std::process::id()));
+        let dir = crate::testutil::scratch("pid0");
         let _ = std::fs::remove_dir_all(&dir);
         let root = dir.as_path();
         protocol::remember_spawned_pid(root, 0).unwrap();
@@ -1715,7 +1715,7 @@ mod tests {
     /// 台账里的 pid 必须进入 known 列表（get_live_pid 靠它防双开）。
     #[test]
     fn ledger_pids_are_known_even_without_pid_file() {
-        let dir = std::env::temp_dir().join(format!("rvcf_live_{}", std::process::id()));
+        let dir = crate::testutil::scratch("live");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(paths::control_dir(dir.as_path())).unwrap();
         let root = dir.as_path();

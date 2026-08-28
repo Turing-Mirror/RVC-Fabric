@@ -156,10 +156,26 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\RVC Fabric.exe"; WorkingDir
 Filename: "{app}\RVC Fabric.exe"; Description: "打开 RVC Fabric（首次运行会自动补全环境）"; Flags: nowait postinstall skipifsilent; WorkingDir: "{app}"
 
 [UninstallDelete]
-; 用户下载的 Runtime / 音色体积大，默认不在卸载时删除 User_Data 与 Runtime
-; 若需干净卸载可改为删除（谨慎）
-; Type: filesandordirs; Name: "{app}\Runtime"
-; Type: filesandordirs; Name: "{app}\User_Data"
+; 随包文件由 Inno 按安装清单删除。以下是首次运行后从 CNB 下载 / 运行中生成的残留，
+; 不在清单里，不写这一段卸载后安装目录会留下几 GB。覆盖升级不走卸载，不会误删。
+Type: filesandordirs; Name: "{app}\Runtime"
+Type: filesandordirs; Name: "{app}\runtime"
+Type: filesandordirs; Name: "{app}\User_Data"
+Type: filesandordirs; Name: "{app}\UserData"
+Type: filesandordirs; Name: "{app}\TEMP"
+Type: files; Name: "{app}\ffmpeg.exe"
+Type: files; Name: "{app}\ffprobe.exe"
+Type: files; Name: "{app}\package_meta.json"
+Type: files; Name: "{app}\assets\hubert\hubert_base.pt"
+Type: files; Name: "{app}\assets\rmvpe\rmvpe.pt"
+Type: files; Name: "{app}\assets\rmvpe\rmvpe.onnx"
+Type: filesandordirs; Name: "{app}\assets\pretrained_v2"
+Type: filesandordirs; Name: "{app}\assets\pretrained"
+Type: filesandordirs; Name: "{app}\assets\uvr5_weights"
+Type: filesandordirs; Name: "{app}\assets\pymss"
+Type: filesandordirs; Name: "{app}\assets\weights"
+Type: filesandordirs; Name: "{app}\VBCABLE"
+Type: filesandordirs; Name: "{app}\frontend"
 
 [Code]
 // 通用安装包：安装时不再让用户选显卡分版。
@@ -337,6 +353,24 @@ begin
   end;
 end;
 
+procedure KillInstallDirProcesses;
+var
+  AppDir, Args: String;
+  Code: Integer;
+begin
+  { 只杀 ExecutablePath 落在 {app} 下的进程。不能 taskkill pythonw —— 会误伤别的程序。 }
+  AppDir := ExpandConstant('{app}');
+  StringChangeEx(AppDir, '''', '', True);
+  Args :=
+    '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "' +
+    '$p = [IO.Path]::GetFullPath(''' + AppDir + '''); ' +
+    'Get-CimInstance Win32_Process | ForEach-Object { ' +
+    '$e = [string]$_.ExecutablePath; ' +
+    'if ($e -and $e.StartsWith($p, [StringComparison]::OrdinalIgnoreCase)) { ' +
+    'Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } }"';
+  Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
@@ -345,6 +379,12 @@ begin
     WritePackageMeta;
     WriteSetupPending;
   end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    KillInstallDirProcesses;
 end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,

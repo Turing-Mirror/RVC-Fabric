@@ -61,6 +61,9 @@
         "languages": [
           "SimpChinese"
         ],
+        "customLanguageFiles": {
+          "SimpChinese": "nsis-languages/SimpChinese.nsh"
+        },
         "displayLanguageSelector": false,
         "installMode": "currentUser",
         "installerIcon": "../../assets/brand/app.ico",

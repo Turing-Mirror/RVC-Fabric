@@ -13,8 +13,13 @@
 ; 安装钩子（PREINSTALL / POSTINSTALL）绝对不要碰 Runtime\ 和 User_Data\：
 ; 覆盖升级要靠它们留下来。卸载钩子（PREUNINSTALL / POSTUNINSTALL）相反：
 ; 薄包首次运行后会从 CNB 再下 Runtime、engine-core、音色、分离/训练底模，
-; 这些不在安装清单里，模板清不掉。真正卸载时必须清，否则安装目录留下几 GB。
+; 这些不在安装清单里，模板清不掉。真正卸载时必须清 Runtime 等运行环境，
+; User_Data 由用户勾选「同时删除用户数据」或弹窗选择，默认保留。
 ; OTA（/UPDATE）和被动安装（/P）会走卸载器时仍跳过，避免升级把运行时卸掉。
+; VB-Cable 是系统驱动，卸载程序只删安装目录里的安装包，驱动要用户自己卸。
+
+; 卸载时记住「要不要留 User_Data」。默认 1 = 保留。
+Var KeepUserData
 
 !macro NSIS_HOOK_PREINSTALL
   ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
@@ -87,9 +92,23 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
-  ; OTA / 被动升级会把 /UPDATE、/P 传给卸载器，这时不能杀进程、更不能删 Runtime。
+  ; 默认保留用户数据。OTA / 被动升级把 /UPDATE、/P 传给卸载器时整段跳过。
+  StrCpy $KeepUserData 1
   StrCmp $UpdateMode 1 skip_uninst_kill
   StrCmp $PassiveMode 1 skip_uninst_kill
+
+  ; 确认页勾了「同时删除用户数据」就不再问；没勾则弹窗让用户选。
+  ; 两种路径都要提到 VB-Cable：它是系统驱动，这里卸不掉。
+  StrCmp $DeleteAppDataCheckboxState 1 uninst_force_delete_data
+  IfSilent skip_uninst_prompt
+    MessageBox MB_YESNO|MB_ICONQUESTION "是否保留用户数据（音色、设置、日志）？$\r$\n$\r$\n选「是」将保留 User_Data，下次安装后可继续使用。$\r$\n选「否」将连同用户数据一起删除。$\r$\n$\r$\nRuntime 等下载的运行环境会一并清除。$\r$\n$\r$\n注意：VB-Cable 虚拟声卡是系统驱动，需要到 Windows「应用和功能」中单独卸载 VB-Audio Virtual Cable。本程序不会卸载它。" IDYES skip_uninst_prompt
+    StrCpy $KeepUserData 0
+    Goto skip_uninst_prompt
+  uninst_force_delete_data:
+    StrCpy $KeepUserData 0
+    IfSilent skip_uninst_prompt
+    MessageBox MB_OK|MB_ICONINFORMATION "注意：VB-Cable 虚拟声卡是系统驱动，需要到 Windows「应用和功能」中单独卸载 VB-Audio Virtual Cable。本程序不会卸载它。"
+  skip_uninst_prompt:
 
   ; 停掉安装目录里的进程，否则 Runtime\pythonw.exe 还攥着 DLL，后面 RMDir 会剩半截。
   ; 只按 ExecutablePath 前缀匹配 $INSTDIR，绝不 taskkill pythonw（会误伤别的程序）。
@@ -99,15 +118,17 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
-  ; 模板已经按清单删完随包文件。这里只清事后下载/生成的残留，好让 $INSTDIR 能被 RMDir 掉。
+  ; 模板已经按清单删完随包文件。这里只清事后下载/生成的残留。
   ; 不 RMDir /r "$INSTDIR"：用户万一装到 D:\ 这种宽目录，递归删会把同盘别的东西一起带走。
   StrCmp $UpdateMode 1 skip_uninst_clean
   StrCmp $PassiveMode 1 skip_uninst_clean
 
   RMDir /r "$INSTDIR\Runtime"
   RMDir /r "$INSTDIR\runtime"
-  RMDir /r "$INSTDIR\User_Data"
-  RMDir /r "$INSTDIR\UserData"
+  StrCmp $KeepUserData 1 skip_uninst_userdata
+    RMDir /r "$INSTDIR\User_Data"
+    RMDir /r "$INSTDIR\UserData"
+  skip_uninst_userdata:
   RMDir /r "$INSTDIR\TEMP"
   RMDir /r "$INSTDIR\VBCABLE"
   ; OTA gui_patch 换过 frontend 后哈希文件名对不上清单，模板删不干净

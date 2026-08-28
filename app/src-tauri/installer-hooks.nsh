@@ -10,8 +10,11 @@
 ;   - 默认装到 %LOCALAPPDATA%\RVC Fabric，不要管理员权限
 ;   - 卸载时只删自己装的文件，RMDir 不带 /r —— Runtime\ 和 User_Data\ 不会被删
 ;
-; 绝对不要在这里碰 Runtime\ 和 User_Data\：前者是用户下了几个 GB 的运行时，
-; 后者是用户自己的音色。删了没法找回来。
+; 安装钩子（PREINSTALL / POSTINSTALL）绝对不要碰 Runtime\ 和 User_Data\：
+; 覆盖升级要靠它们留下来。卸载钩子（PREUNINSTALL / POSTUNINSTALL）相反：
+; 薄包首次运行后会从 CNB 再下 Runtime、engine-core、音色、分离/训练底模，
+; 这些不在安装清单里，模板清不掉。真正卸载时必须清，否则安装目录留下几 GB。
+; OTA（/UPDATE）和被动安装（/P）会走卸载器时仍跳过，避免升级把运行时卸掉。
 
 !macro NSIS_HOOK_PREINSTALL
   ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
@@ -84,7 +87,45 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  ; OTA / 被动升级会把 /UPDATE、/P 传给卸载器，这时不能杀进程、更不能删 Runtime。
+  StrCmp $UpdateMode 1 skip_uninst_kill
+  StrCmp $PassiveMode 1 skip_uninst_kill
+
+  ; 停掉安装目录里的进程，否则 Runtime\pythonw.exe 还攥着 DLL，后面 RMDir 会剩半截。
+  ; 只按 ExecutablePath 前缀匹配 $INSTDIR，绝不 taskkill pythonw（会误伤别的程序）。
+  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath(''$INSTDIR''); Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  Sleep 800
+  skip_uninst_kill:
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
+  ; 模板已经按清单删完随包文件。这里只清事后下载/生成的残留，好让 $INSTDIR 能被 RMDir 掉。
+  ; 不 RMDir /r "$INSTDIR"：用户万一装到 D:\ 这种宽目录，递归删会把同盘别的东西一起带走。
+  StrCmp $UpdateMode 1 skip_uninst_clean
+  StrCmp $PassiveMode 1 skip_uninst_clean
+
+  RMDir /r "$INSTDIR\Runtime"
+  RMDir /r "$INSTDIR\runtime"
+  RMDir /r "$INSTDIR\User_Data"
+  RMDir /r "$INSTDIR\UserData"
+  RMDir /r "$INSTDIR\TEMP"
+  RMDir /r "$INSTDIR\VBCABLE"
+  ; OTA gui_patch 换过 frontend 后哈希文件名对不上清单，模板删不干净
+  RMDir /r "$INSTDIR\frontend"
+  Delete "$INSTDIR\ffmpeg.exe"
+  Delete "$INSTDIR\ffprobe.exe"
+  Delete "$INSTDIR\package_meta.json"
+  Delete "$INSTDIR\assets\hubert\hubert_base.pt"
+  Delete "$INSTDIR\assets\rmvpe\rmvpe.pt"
+  Delete "$INSTDIR\assets\rmvpe\rmvpe.onnx"
+  RMDir /r "$INSTDIR\assets\pretrained_v2"
+  RMDir /r "$INSTDIR\assets\pretrained"
+  RMDir /r "$INSTDIR\assets\uvr5_weights"
+  RMDir /r "$INSTDIR\assets\pymss"
+  RMDir /r "$INSTDIR\assets\hubert"
+  RMDir /r "$INSTDIR\assets\rmvpe"
+  RMDir /r "$INSTDIR\assets\weights"
+  RMDir "$INSTDIR\assets"
+  RMDir "$INSTDIR"
+  skip_uninst_clean:
 !macroend

@@ -15,7 +15,37 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 TAURI_CONF = REPO / "app" / "src-tauri" / "tauri.conf.json"
 HOOKS = REPO / "app" / "src-tauri" / "installer-hooks.nsh"
+ISS = REPO / "installer" / "RVC_Fabric_Setup.iss"
 PREP = REPO / "scripts" / "prepare_engine_payload.py"
+
+
+def macro_bodies(text: str) -> dict[str, str]:
+    """Split installer-hooks.nsh into {macro name: body}."""
+    bodies: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("!macro "):
+            current = stripped.split()[1]
+            buf = []
+        elif stripped == "!macroend" and current:
+            bodies[current] = "\n".join(buf)
+            current = None
+        elif current is not None:
+            buf.append(line)
+    return bodies
+
+
+def live_lines(body: str) -> list[str]:
+    """Non-empty, non-comment lines of a macro body."""
+    out: list[str] = []
+    for line in body.splitlines():
+        code = line.strip()
+        if not code or code.startswith(";"):
+            continue
+        out.append(code)
+    return out
 
 
 def conf() -> dict:
@@ -104,21 +134,66 @@ class InstallerHooks(unittest.TestCase):
         closes = sum(1 for line in lines if line.strip() == "!macroend")
         self.assertEqual(opens, closes, "!macro 和 !macroend 不配对")
 
-    def test_never_touches_user_data_or_runtime(self):
-        """用户下了几个 GB 的运行时和自己的音色，删了找不回来。"""
-        for line in HOOKS.read_text(encoding="utf-8-sig").splitlines():
-            code = line.strip()
-            if not code or code.startswith(";"):
-                continue
-            for danger in ("Runtime", "User_Data", "engine-core"):
-                self.assertNotIn(danger, code, f"钩子碰了 {danger}：{code}")
+    def test_install_hooks_never_touch_user_data_or_runtime(self):
+        """覆盖升级靠 Runtime / User_Data 留下来。安装钩子不许碰它们。"""
+        bodies = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))
+        for name in ("NSIS_HOOK_PREINSTALL", "NSIS_HOOK_POSTINSTALL"):
+            for code in live_lines(bodies[name]):
+                for danger in ("Runtime", "User_Data", "engine-core"):
+                    self.assertNotIn(
+                        danger, code, f"{name} 碰了 {danger}：{code}"
+                    )
 
     def test_never_recursively_deletes_the_install_dir(self):
+        """不许 RMDir /r $INSTDIR。用户万一装到 D:\\ 这种宽目录，会把同盘别的东西一起带走。"""
         text = HOOKS.read_text(encoding="utf-8-sig")
         self.assertIsNone(
             re.search(r'RMDir\s+/r\s+"\$INSTDIR"\s*$', text, re.MULTILINE),
-            "递归删整个安装目录会把用户的运行时和音色一起删掉",
+            "递归删整个安装目录会把安装目录之外的东西一起删掉",
         )
+
+    def test_uninstall_cleans_downloaded_dependencies(self):
+        """薄包首次运行后下的 Runtime / User_Data / engine-core 不在安装清单里，卸载必须清。"""
+        bodies = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))
+        post = bodies["NSIS_HOOK_POSTUNINSTALL"]
+        self.assertIn('RMDir /r "$INSTDIR\\Runtime"', post)
+        self.assertIn('RMDir /r "$INSTDIR\\User_Data"', post)
+        self.assertIn("$INSTDIR\\ffmpeg.exe", post)
+        self.assertIn("$INSTDIR\\ffprobe.exe", post)
+        self.assertIn("hubert_base.pt", post)
+        self.assertIn("pretrained_v2", post)
+        pre = bodies["NSIS_HOOK_PREUNINSTALL"]
+        self.assertIn("$INSTDIR", pre)
+        self.assertIn("Stop-Process", pre)
+
+    def test_uninstall_cleanup_skips_ota_and_passive(self):
+        """OTA (/UPDATE) 和被动安装 (/P) 走卸载器时必须跳过，否则覆盖升级会卸掉运行时。"""
+        bodies = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))
+        for name in ("NSIS_HOOK_PREUNINSTALL", "NSIS_HOOK_POSTUNINSTALL"):
+            body = bodies[name]
+            self.assertIn("$UpdateMode", body, f"{name} 没挡 /UPDATE")
+            self.assertIn("$PassiveMode", body, f"{name} 没挡 /P")
+
+    def test_inno_uninstall_deletes_downloaded_dependencies(self):
+        """Inno 退路同样要清事后下载的残留。覆盖升级不走卸载，不会误删。"""
+        text = ISS.read_text(encoding="utf-8")
+        # 只看 [UninstallDelete] 到下一个段，避免被注释或别的段干扰。
+        start = text.find("[UninstallDelete]")
+        self.assertGreater(start, 0, "缺少 [UninstallDelete]")
+        rest = text[start + len("[UninstallDelete]") :]
+        nxt = rest.find("\n[")
+        section = rest if nxt < 0 else rest[:nxt]
+        live = [
+            ln.strip()
+            for ln in section.splitlines()
+            if ln.strip() and not ln.strip().startswith(";")
+        ]
+        joined = "\n".join(live)
+        self.assertIn("{app}\\Runtime", joined)
+        self.assertIn("{app}\\User_Data", joined)
+        self.assertIn("{app}\\ffmpeg.exe", joined)
+        self.assertIn("CurUninstallStepChanged", text)
+        self.assertIn("KillInstallDirProcesses", text)
 
     def test_warns_when_install_dir_is_not_ascii(self):
         text = HOOKS.read_text(encoding="utf-8-sig")

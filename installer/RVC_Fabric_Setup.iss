@@ -158,10 +158,9 @@ Filename: "{app}\RVC Fabric.exe"; Description: "打开 RVC Fabric（首次运行
 [UninstallDelete]
 ; 随包文件由 Inno 按安装清单删除。以下是首次运行后从 CNB 下载 / 运行中生成的残留，
 ; 不在清单里，不写这一段卸载后安装目录会留下几 GB。覆盖升级不走卸载，不会误删。
+; User_Data 不写在这里：卸载时弹窗询问是否保留，选否才在 usPostUninstall 里 DelTree。
 Type: filesandordirs; Name: "{app}\Runtime"
 Type: filesandordirs; Name: "{app}\runtime"
-Type: filesandordirs; Name: "{app}\User_Data"
-Type: filesandordirs; Name: "{app}\UserData"
 Type: filesandordirs; Name: "{app}\TEMP"
 Type: files; Name: "{app}\ffmpeg.exe"
 Type: files; Name: "{app}\ffprobe.exe"
@@ -178,6 +177,9 @@ Type: filesandordirs; Name: "{app}\VBCABLE"
 Type: filesandordirs; Name: "{app}\frontend"
 
 [Code]
+var
+  KeepUserData: Boolean;
+
 // 通用安装包：安装时不再让用户选显卡分版。
 // 运行时类型由程序首次启动时鉴别主显卡后推荐（可自行改选），
 // 所以这里写空串，package_meta 不预先钉死任何变体。
@@ -381,10 +383,31 @@ begin
   end;
 end;
 
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  KeepUserData := True;
+  if UninstallSilent then
+    Exit;
+  if MsgBox(
+    '是否保留用户数据（音色、设置、日志）？' + #13#10 + #13#10 +
+    '选「是」将保留 User_Data，下次安装后可继续使用。' + #13#10 +
+    '选「否」将连同用户数据一起删除。' + #13#10 + #13#10 +
+    'Runtime 等下载的运行环境会一并清除。' + #13#10 + #13#10 +
+    '注意：VB-Cable 虚拟声卡是系统驱动，需要到 Windows「应用和功能」中单独卸载 VB-Audio Virtual Cable。本程序不会卸载它。',
+    mbConfirmation, MB_YESNO) = IDNO then
+    KeepUserData := False;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
     KillInstallDirProcesses;
+  if (CurUninstallStep = usPostUninstall) and (not KeepUserData) then
+  begin
+    DelTree(ExpandConstant('{app}\User_Data'), True, True, True);
+    DelTree(ExpandConstant('{app}\UserData'), True, True, True);
+  end;
 end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,

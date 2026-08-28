@@ -153,11 +153,12 @@ class InstallerHooks(unittest.TestCase):
         )
 
     def test_uninstall_cleans_downloaded_dependencies(self):
-        """薄包首次运行后下的 Runtime / User_Data / engine-core 不在安装清单里，卸载必须清。"""
+        """薄包首次运行后下的 Runtime / engine-core 不在安装清单里，卸载必须清。"""
         bodies = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))
         post = bodies["NSIS_HOOK_POSTUNINSTALL"]
         self.assertIn('RMDir /r "$INSTDIR\\Runtime"', post)
         self.assertIn('RMDir /r "$INSTDIR\\User_Data"', post)
+        self.assertIn("$KeepUserData", post)
         self.assertIn("$INSTDIR\\ffmpeg.exe", post)
         self.assertIn("$INSTDIR\\ffprobe.exe", post)
         self.assertIn("hubert_base.pt", post)
@@ -165,6 +166,33 @@ class InstallerHooks(unittest.TestCase):
         pre = bodies["NSIS_HOOK_PREUNINSTALL"]
         self.assertIn("$INSTDIR", pre)
         self.assertIn("Stop-Process", pre)
+
+    def test_uninstall_asks_to_keep_user_data_and_mentions_vbcable(self):
+        """用户数据默认保留；弹窗可选删除，并告知 VB-Cable 要单独卸载。"""
+        text = HOOKS.read_text(encoding="utf-8-sig")
+        self.assertIn("Var KeepUserData", text)
+        pre = macro_bodies(text)["NSIS_HOOK_PREUNINSTALL"]
+        self.assertIn("是否保留用户数据", pre)
+        self.assertIn("VB-Cable", pre)
+        self.assertIn("VB-Audio Virtual Cable", pre)
+        self.assertIn("应用和功能", pre)
+        self.assertIn("$DeleteAppDataCheckboxState", pre)
+        self.assertIn("IfSilent", pre)
+        post = macro_bodies(text)["NSIS_HOOK_POSTUNINSTALL"]
+        self.assertIn("skip_uninst_userdata", post)
+
+    def test_nsis_checkbox_label_mentions_user_data(self):
+        """确认页复选框文案必须写明删的是音色/设置，不能只写「应用程序数据」。"""
+        nsis = conf()["bundle"]["windows"]["nsis"]
+        files = nsis.get("customLanguageFiles") or {}
+        self.assertIn("SimpChinese", files)
+        lang = REPO / "app" / "src-tauri" / files["SimpChinese"]
+        self.assertTrue(lang.is_file(), f"自定义语言文件不存在：{lang}")
+        self.assertEqual(lang.read_bytes()[:3], b"\xef\xbb\xbf")
+        body = lang.read_text(encoding="utf-8-sig")
+        self.assertIn('LangString deleteAppData ${LANG_SIMPCHINESE}', body)
+        self.assertIn("用户数据", body)
+        self.assertIn("音色", body)
 
     def test_uninstall_cleanup_skips_ota_and_passive(self):
         """OTA (/UPDATE) 和被动安装 (/P) 走卸载器时必须跳过，否则覆盖升级会卸掉运行时。"""
@@ -190,8 +218,14 @@ class InstallerHooks(unittest.TestCase):
         ]
         joined = "\n".join(live)
         self.assertIn("{app}\\Runtime", joined)
-        self.assertIn("{app}\\User_Data", joined)
         self.assertIn("{app}\\ffmpeg.exe", joined)
+        self.assertNotIn("{app}\\User_Data", joined)
+        self.assertNotIn("{app}\\UserData", joined)
+        self.assertIn("InitializeUninstall", text)
+        self.assertIn("KeepUserData", text)
+        self.assertIn("是否保留用户数据", text)
+        self.assertIn("VB-Audio Virtual Cable", text)
+        self.assertIn("DelTree", text)
         self.assertIn("CurUninstallStepChanged", text)
         self.assertIn("KillInstallDirProcesses", text)
 

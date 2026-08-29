@@ -9,7 +9,7 @@ from functools import lru_cache
 from time import time as ttime
 
 from infer.lib.dml_compat import crepe_device
-from infer.lib.faiss_io import NonAsciiPathError, read_index
+from infer.lib.faiss_io import read_index
 import librosa
 import numpy as np
 import parselmouth
@@ -400,8 +400,6 @@ class Pipeline(object):
                 index = read_index(file_index)
                 # big_npy = np.load(file_big_npy)
                 big_npy = index.reconstruct_n(0, index.ntotal)
-            except NonAsciiPathError:
-                raise
             except:
                 traceback.print_exc()
                 index = big_npy = None

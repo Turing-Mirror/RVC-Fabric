@@ -52,7 +52,6 @@ VC_OPENING_STREAM = "vc.opening_stream"
 VC_SWAPPING = "vc.swapping"
 VC_SWAP_FAILED = "vc.swap_failed"
 VC_PTH_MISSING = "vc.pth_missing"
-VC_NON_ASCII_PATH = "vc.non_ascii_path"
 VC_RUNNING = "vc.running"
 VC_BAD_SETTINGS = "vc.bad_settings"
 VC_START_FAILED = "vc.start_failed"
@@ -273,7 +272,6 @@ _FALLBACK_ZH: dict[str, str] = {
     VC_SWAPPING: "正在切换音色，请稍候…",
     VC_SWAP_FAILED: "切换失败，仍在使用上一音色",
     VC_PTH_MISSING: "pth 文件不存在：{path}",
-    VC_NON_ASCII_PATH: "路径含有中文或其他非英文字符，检索库无法读取。请把软件或音色移到纯英文文件夹（例如 D:\\RVCFabric）后再试。",
     VC_RUNNING: "变声中",
     VC_BAD_SETTINGS: "设置无效，无法开始变声",
     VC_START_FAILED: "启动失败",

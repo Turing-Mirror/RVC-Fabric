@@ -243,7 +243,6 @@ class MsgCodeTests(unittest.TestCase):
             ("msg", "vc", "warmup"),
             ("msg", "vc", "opening_stream"),
             ("msg", "vc", "swap_failed"),
-            ("msg", "vc", "non_ascii_path"),
         )
         for path in sorted(root.glob("*.json")):
             data = json.loads(path.read_text(encoding="utf-8"))

@@ -4025,9 +4025,12 @@ if __name__ == "__main__":
                 return
             if not out_files:
                 first = skipped[0]["reason"] if skipped else "未知错误"
-                if sts_core.is_dml_backend_error(first):
+                if sts_core.is_dml_runtime_failure(first, vc):
                     # 一个文件都没转出来，也就没有写坏任何东西，整批交给冷路径
                     # 重来一次是安全的：那边能把模型挪到 CPU 顶上去。
+                    # （reason 是 friendly_error 之后的文本；DirectML 的空
+                    # RuntimeError 收完只剩一行光秃秃的 "RuntimeError"，
+                    # 也得认出来 —— 26.8.29/113756。）
                     from tools.msg_codes import (
                         STS_HOT_DML_FALLBACK,
                         msg_fields as _mf,

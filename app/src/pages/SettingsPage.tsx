@@ -246,7 +246,7 @@ function SettingsPageImpl({
           />
         </div>
         {onOpenCommunity ? (
-          <Btn className="ml-auto shrink-0" onClick={onOpenCommunity}>
+          <Btn className="ml-auto shrink-0" onClick={() => onOpenCommunity()}>
             {t("s.contactCommunity")}
           </Btn>
         ) : null}

@@ -398,7 +398,8 @@ function HelpPageImpl({
     // `focus` 允许写成「段#问题 key」，例如 faq#s.faqVramQ。指到「常见情况」
     // 那一整块没什么用 —— 二十一条里找自己那条，跟没指一样。带上 key 就能直接
     // 把那一条展开。用 key 不用序号：条目会增删，序号会错位，key 不会。
-    const [sec, qKey] = (focus || "").split("#");
+    const raw = typeof focus === "string" ? focus : "";
+    const [sec, qKey] = raw.split("#");
     if (!sec || !HELP_ANCHORS.has(sec)) return;
     if (qKey) {
       const q = t(qKey);
@@ -526,7 +527,7 @@ function HelpPageImpl({
         sub={t("s.e137006ffd")}
         actions={
           onOpenCommunity ? (
-            <Btn onClick={onOpenCommunity}>{t("s.contactCommunity")}</Btn>
+            <Btn onClick={() => onOpenCommunity()}>{t("s.contactCommunity")}</Btn>
           ) : undefined
         }
       />

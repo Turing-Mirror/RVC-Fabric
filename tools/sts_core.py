@@ -115,6 +115,38 @@ def is_dml_backend_error(text) -> bool:
     return any(m in low for m in DML_ERROR_MARKERS)
 
 
+def _vc_is_dml(vc) -> bool:
+    pipe = getattr(vc, "pipeline", None)
+    return "privateuseone" in str(getattr(pipe, "device", "") or "")
+
+
+def is_dml_runtime_failure(exc, vc) -> bool:
+    """DirectML 上这次失败算不算「该退 CPU」。``exc`` 可以是异常对象，
+    也可以是 ``friendly_error`` 之后的文本。
+
+    带字样的报错（GradMultiply / torchcrepe 那类）`is_dml_backend_error`
+    直接认；但没有字样的裸 ``RuntimeError`` 也得认 —— torch-directml 撞
+    显存/后端失败时抛的就是一个空消息的 RuntimeError
+    （26.8.29/113756：Arc 130T 上 41 秒段死在 ResBlock conv1d，
+    ``RuntimeError`` 后面一个字都没有），关键词匹配永远接不住。
+
+    注意 ``convert_one`` 会把底层异常统一包成 ``RuntimeError(友好文本)``
+    再抛出来，异常类型到调用方这层没有信息量，判定只能看文本：空消息
+    过完 ``friendly_error`` 只剩一行光秃秃的 ``RuntimeError``，带消息的
+    是消息本身。所以「带消息但没关键词」的失败不重试 —— 那多半是坏文件，
+    退 CPU 也一样炸，别拖着整批陪跑。非 DML 设备整个规则不适用。
+    """
+    if is_dml_backend_error(exc):
+        return True
+    if not _vc_is_dml(vc):
+        return False
+    if isinstance(exc, BaseException):
+        text = str(exc) or type(exc).__name__
+    else:
+        text = str(exc or "")
+    return last_error_line(text) == "RuntimeError"
+
+
 def looks_like_traceback(text) -> bool:
     s = str(text or "").lstrip()
     return s.startswith("Traceback") or "\n  File " in s or "\nFile " in s
@@ -603,7 +635,7 @@ def convert_one_with_cpu_fallback(
     except Exception as first:
         if (
             allow_cpu_fallback
-            and is_dml_backend_error(first)
+            and is_dml_runtime_failure(first, vc)
             and move_models_to_cpu(vc)
         ):
             if on_fallback is not None:
@@ -733,7 +765,7 @@ def run_batch(
                         if (
                             allow_cpu_fallback
                             and not cpu_fallback_done
-                            and is_dml_backend_error(first)
+                            and is_dml_runtime_failure(first, vc)
                             and move_models_to_cpu(vc)
                         ):
                             # 显卡这条路走不通了，别让整批陪葬。挪到 CPU 重来一次，

@@ -10,6 +10,7 @@ from time import time as ttime
 
 from infer.lib.dml_compat import crepe_device
 from infer.lib.faiss_io import read_index
+from configs.infer_windows import clamp_windows_for_dml
 import librosa
 import numpy as np
 import parselmouth
@@ -72,6 +73,28 @@ class Pipeline(object):
             config.x_max,
             config.is_half,
         )
+        self.device = config.device
+        # DirectML 长段必炸（空报错），先把窗口收到安全档；用户显式指定的
+        # TM_VC_X_MAX 不覆盖。实时路径不走这里（块级几何在 rtrvc 手里）。
+        try:
+            forced = int((os.environ.get("TM_VC_X_MAX") or "").strip() or "0")
+        except ValueError:
+            forced = 0
+        windows, dml_clamped = clamp_windows_for_dml(
+            self.x_pad,
+            self.x_query,
+            self.x_center,
+            self.x_max,
+            "privateuseone" in str(self.device),
+            forced_x_max=forced,
+        )
+        if dml_clamped:
+            self.x_pad, self.x_query, self.x_center, self.x_max = windows
+            logger.info(
+                "DirectML: offline windows clamped to center=%ss max=%ss",
+                self.x_center,
+                self.x_max,
+            )
         self.sr = 16000  # hubert输入采样率
         self.window = 160  # 每帧点数
         self.t_pad = self.sr * self.x_pad  # 每条前后pad时间
@@ -80,7 +103,6 @@ class Pipeline(object):
         self.t_query = self.sr * self.x_query  # 查询切点前后查询时间
         self.t_center = self.sr * self.x_center  # 查询切点位置
         self.t_max = self.sr * self.x_max  # 免查询时长阈值
-        self.device = config.device
 
     def shrink_windows(self):
         """Halve the synthesizer window after CUDA OOM.

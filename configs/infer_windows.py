@@ -52,3 +52,22 @@ def infer_window_profile(gpu_mem, is_half):
         x_pad = 1
 
     return x_pad, x_query, x_center, x_max
+
+
+# DirectML 的离线窗口上限，对齐 4GB fp32 档。A/I 卡的 torch-directml 在长段
+# 上会炸：x_max=41s 的段进解码器后中间张量约 1x512x200 万 ≈ 4.3GB fp32，
+# iGPU 直接分配失败，抛的还是一个空消息的 RuntimeError
+# （diag 26.8.29/113756，Arc 130T 死在 ResBlock conv1d）。
+DML_WINDOWS = (1, 4, 10, 12)
+
+
+def clamp_windows_for_dml(x_pad, x_query, x_center, x_max, is_dml, forced_x_max=0):
+    """DirectML 上把离线窗口收到安全档，返回 (四元组, 是否收紧过)。
+
+    用户显式设了 ``TM_VC_X_MAX`` 就不覆盖 —— 那是明确的意思表示，改小了
+    反而违背本人意愿；真炸了还有 CPU 兜底接着。
+    """
+    if not is_dml or forced_x_max > 0:
+        return x_pad, x_query, x_center, x_max, False
+    return *DML_WINDOWS, True
+

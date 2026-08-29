@@ -20,6 +20,7 @@ from tools.sts_core import (  # noqa: E402
     convert_one_with_cpu_fallback,
     friendly_error,
     is_dml_backend_error,
+    is_dml_runtime_failure,
     move_models_to_cpu,
     normalize_format,
     run_batch,
@@ -217,6 +218,53 @@ class DmlErrorTextTests(unittest.TestCase):
         self.assertIn("foo.py", msg)
 
 
+class DmlRuntimeFailureTests(unittest.TestCase):
+    """26.8.29/113756：空消息的 RuntimeError 也得算 DirectML 后端失败。
+
+    torch-directml 撞显存/后端失败时抛一个字都没有的 RuntimeError，关键词
+    匹配（privateuse1/directml…）永远接不住，用户只能看到一墙 traceback。
+    """
+
+    def _vc(self, device):
+        return SimpleNamespace(pipeline=SimpleNamespace(device=device))
+
+    def test_bare_runtime_error_on_dml_device(self):
+        vc = self._vc("privateuseone:0")
+        self.assertTrue(is_dml_runtime_failure(RuntimeError(), vc))
+
+    def test_wrapped_bare_error_from_convert_one(self):
+        # convert_one 会把底层异常包成 RuntimeError(friendly 文本) 再抛；
+        # 空 RuntimeError 包完 str 就是 "RuntimeError"。
+        vc = self._vc("privateuseone:0")
+        self.assertTrue(is_dml_runtime_failure(RuntimeError("RuntimeError"), vc))
+
+    def test_message_runtime_error_on_dml_is_not(self):
+        # 带消息但没关键词的失败多半是坏文件，退 CPU 也一样炸，不陪跑。
+        vc = self._vc("privateuseone:0")
+        self.assertFalse(is_dml_runtime_failure(RuntimeError("boom"), vc))
+
+    def test_bare_runtime_error_on_cuda_is_not(self):
+        # CUDA / CPU 上的 RuntimeError 是真 bug，拖去 CPU 重试只会更糊涂。
+        vc = self._vc("cuda:0")
+        self.assertFalse(is_dml_runtime_failure(RuntimeError(), vc))
+
+    def test_other_exception_on_dml_is_not(self):
+        vc = self._vc("privateuseone:0")
+        self.assertFalse(is_dml_runtime_failure(ValueError("bad wav"), vc))
+
+    def test_marker_text_wins_regardless_of_device(self):
+        vc = self._vc("cuda:0")
+        self.assertTrue(is_dml_runtime_failure(DML_GRAD_MULTIPLY_TB, vc))
+
+    def test_friendly_text_of_bare_error_on_dml(self):
+        # 热路径闸门拿到的是 friendly_error 之后的文本：空 RuntimeError
+        # 过完只剩一行光秃秃的 "RuntimeError"。
+        text = friendly_error(RuntimeError())
+        self.assertEqual(text, "RuntimeError")
+        self.assertTrue(is_dml_runtime_failure(text, self._vc("privateuseone:0")))
+        self.assertFalse(is_dml_runtime_failure(text, self._vc("cuda:0")))
+
+
 class FakeModel:
     def __init__(self, device="privateuseone:0"):
         self.device = device
@@ -232,8 +280,8 @@ class FakeModel:
 
 
 class FakePipeline:
-    def __init__(self):
-        self.device = "privateuseone:0"
+    def __init__(self, device="privateuseone:0"):
+        self.device = device
         self.is_half = True
         self.model_rmvpe = object()
 
@@ -366,7 +414,9 @@ class CpuFallbackTests(unittest.TestCase):
         self.assertEqual(vc.net_g.device, "privateuseone:0")
         self.assertTrue(is_dml_backend_error(skipped[0]["reason"]))
 
-    def test_a_normal_failure_is_not_retried(self):
+    def test_a_non_runtime_failure_is_not_retried(self):
+        # DML 设备上只有 RuntimeError（含空报错）才给 CPU 机会；别的类型
+        # 是真 bug / 真坏文件，退 CPU 也一样炸，别拖着整批慢慢陪跑。
         class Broken(FakeVC):
             def __init__(self):
                 super().__init__()
@@ -374,13 +424,32 @@ class CpuFallbackTests(unittest.TestCase):
 
             def vc_single(self, *a, progress_cb=None, **kw):
                 self.calls += 1
-                raise RuntimeError("找不到音频文件")
+                raise ValueError("找不到音频文件")
 
         vc = Broken()
         (out_files, skipped, _), _ = self._run(vc)
         self.assertEqual(out_files, [])
         self.assertEqual(vc.calls, 1)
         self.assertEqual(vc.pipeline.device, "privateuseone:0")
+
+    def test_bare_runtime_error_retries_on_cpu(self):
+        # 26.8.29/113756：torch-directml 撞显存/后端失败抛的是空消息的
+        # RuntimeError，关键词匹配接不住，用户只能看到一墙 traceback。
+        # 现在得跟带字样的报错一样退 CPU 把文件转出来。
+
+        class BareDmlFailure(DmlFailingVC):
+            def vc_single(self, *a, progress_cb=None, **kw):
+                self.calls += 1
+                if str(self.pipeline.device) != "cpu":
+                    raise RuntimeError()  # 一个字都没有
+                if progress_cb:
+                    progress_cb("infer", 1.0)
+                return "ok", (16000, b"\x00\x00")
+
+        vc = BareDmlFailure()
+        (out_files, skipped, _), _ = self._run(vc)
+        self.assertEqual(len(out_files), 1, skipped)
+        self.assertEqual(vc.calls, 2)
 
     def _single(self, vc, allow_cpu_fallback=True):
         """TTS / infer_cli 那条单文件入口。"""

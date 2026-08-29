@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { getConfig, notifyConfigPatch, setConfig, type Config } from "../lib/config";
 import { applyAppearance } from "../lib/appearance";
 
@@ -36,12 +37,12 @@ export function useConfig() {
         setCfg({ ...next, ...pending.current });
       }
     }).then((fn) => {
-      if (!alive) fn();
+      if (!alive) dropListen(fn);
       else unCfg = fn;
     });
     return () => {
       alive = false;
-      unCfg?.();
+      dropListen(unCfg);
     };
   }, []);
 

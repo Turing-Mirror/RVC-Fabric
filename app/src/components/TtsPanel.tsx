@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
@@ -391,7 +392,7 @@ function StsSection() {
         });
       }
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     void listen<RecProgress>("sts-record", (ev) => {
@@ -405,7 +406,7 @@ function StsSection() {
           .catch(() => undefined);
       }
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     // 首页换音色（含最近三卡）时本窗要跟过去。工具窗是独立 webview，
@@ -433,7 +434,7 @@ function StsSection() {
       }
       void load(false);
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     void listen<{ config?: { last_model_path?: string } }>(
@@ -454,7 +455,7 @@ function StsSection() {
           .catch(() => undefined);
       },
     ).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     let unFocus: (() => void) | undefined;
@@ -475,7 +476,7 @@ function StsSection() {
             .catch(() => undefined);
         })
         .then((fn) => {
-          if (disposed) fn();
+          if (disposed) dropListen(fn);
           else unFocus = fn;
         });
     } catch {
@@ -483,8 +484,8 @@ function StsSection() {
     }
     return () => {
       disposed = true;
-      unsubs.forEach((f) => f());
-      unFocus?.();
+      unsubs.forEach((f) => dropListen(f));
+      dropListen(unFocus);
       audioRef.current?.pause();
     };
   }, [load, pickVoice, showErr]);
@@ -1310,12 +1311,12 @@ function TtsSection() {
       setProg(ev.payload);
       if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else un = fn;
     });
     return () => {
       disposed = true;
-      un?.();
+      dropListen(un);
     };
   }, []);
 

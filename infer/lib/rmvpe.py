@@ -504,6 +504,8 @@ class RMVPE:
         self.mel_extractor = MelSpectrogram(
             is_half, 128, 16000, 1024, 160, None, 30, 8000
         ).to(device)
+        self._onnx_dml = False
+        self._pt_path = model_path
         if "privateuseone" in str(device):
             import onnxruntime as ort
 
@@ -511,11 +513,22 @@ class RMVPE:
             # 跑脚本、新入口）没有这个变量，1.3.4 时代在这里 KeyError 过
             # （26.8.29/182800）。cwd 恒为产品根，相对路径直接能落。
             rmvpe_root = os.environ.get("rmvpe_root") or "assets/rmvpe"
-            ort_session = ort.InferenceSession(
-                "%s/rmvpe.onnx" % rmvpe_root,
-                providers=["DmlExecutionProvider"],
-            )
-            self.model = ort_session
+            try:
+                ort_session = ort.InferenceSession(
+                    "%s/rmvpe.onnx" % rmvpe_root,
+                    providers=["DmlExecutionProvider"],
+                )
+                self.model = ort_session
+                self._onnx_dml = True
+            except Exception as e:
+                # Intel HD 615 等核显建 session / 第一次 run 会 TDR
+                # （diag 26.8.29/210251，HRESULT 887A0005）。改走 CPU 上的
+                # rmvpe.pt，开启变声还能用，只是音高提取变慢。
+                logger.warning(
+                    "rmvpe onnx DirectML failed (%s); falling back to CPU rmvpe.pt",
+                    e,
+                )
+                self._load_cpu_pt(model_path)
         else:
             if str(self.device) == "cuda":
                 self.device = torch.device("cuda:0")
@@ -576,16 +589,40 @@ class RMVPE:
         cents_mapping = 20 * np.arange(360) + 1997.3794084376191
         self.cents_mapping = np.pad(cents_mapping, (4, 4))  # 368
 
+    def _load_cpu_pt(self, model_path):
+        """DirectML onnx 走不通时改用 CPU 上的 rmvpe.pt。"""
+        self.device = torch.device("cpu")
+        self.is_half = False
+        self._onnx_dml = False
+        self.mel_extractor = MelSpectrogram(
+            False, 128, 16000, 1024, 160, None, 30, 8000
+        ).to(self.device)
+        model = E2E(4, 1, (2, 2))
+        ckpt = safe_torch_load(model_path, map_location="cpu")
+        model.load_state_dict(ckpt)
+        model.eval()
+        self.model = model.float().to(self.device)
+
     def _mel2hidden_chunk(self, mel):
         """Run the UNet on one mel chunk (time dim already a multiple of 32)."""
-        if "privateuseone" in str(self.device):
-            onnx_input_name = self.model.get_inputs()[0].name
-            onnx_outputs_names = self.model.get_outputs()[0].name
-            return self.model.run(
-                [onnx_outputs_names],
-                input_feed={onnx_input_name: mel.cpu().numpy()},
-            )[0]
-        mel = mel.half() if self.is_half else mel.float()
+        if self._onnx_dml:
+            try:
+                onnx_input_name = self.model.get_inputs()[0].name
+                onnx_outputs_names = self.model.get_outputs()[0].name
+                return self.model.run(
+                    [onnx_outputs_names],
+                    input_feed={onnx_input_name: mel.cpu().numpy()},
+                )[0]
+            except Exception as e:
+                logger.warning(
+                    "rmvpe onnx run failed (%s); switching to CPU rmvpe.pt",
+                    e,
+                )
+                self._load_cpu_pt(self._pt_path)
+        if hasattr(mel, "float"):
+            mel = mel.half() if self.is_half else mel.float()
+            if str(getattr(mel, "device", "cpu")) != str(self.device):
+                mel = mel.to(self.device)
         return self.model(mel)
 
     def mel2hidden(self, mel, progress_cb=None):

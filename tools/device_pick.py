@@ -135,9 +135,7 @@ def pick_default_output(names: Iterable[str]) -> str:
         if any(k in low for k in _CABLE_IN_HINTS):
             return n
     for n in names:
-        if "cable input" in _low(n) or (
-            "cable" in _low(n) and "output" not in _low(n)
-        ):
+        if "cable input" in _low(n):
             return n
     return ""
 

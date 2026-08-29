@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { askConfirm } from "../lib/webDialog";
@@ -165,7 +166,7 @@ export function ExtrasPanel({
       setProgByKey((m) => ({ ...m, [p.key]: p }));
       if (p.phase === "error") setMsg(p.message || t("s.e0dab22b1a"));
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     // 引擎资源下载复用 provision-progress（phase=engine-core）
@@ -174,12 +175,12 @@ export function ExtrasPanel({
         setCoreProg(ev.payload);
       }
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else unsubs.push(fn);
     });
     return () => {
       disposed = true;
-      unsubs.forEach((f) => f());
+      unsubs.forEach((f) => dropListen(f));
     };
     // `load` 每次渲染都是新函数，列进依赖会变成「渲染一次拉一次清单」。
     // 这个 effect 要的是「挂载时拉一次，filter 变了再拉一次」。

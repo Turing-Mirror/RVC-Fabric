@@ -24,17 +24,27 @@ class ClampWindowsForDmlTests(unittest.TestCase):
     def test_non_dml_untouched(self):
         for dev in ("cuda:0", "cpu", "privateuseone:1 之外的东西"):
             got = clamp_windows_for_dml(3, 10, 60, 65, False)
-            self.assertEqual(got, (3, 10, 60, 65, False), dev)
+            self.assertEqual(got, ((3, 10, 60, 65), False), dev)
 
     def test_dml_clamps_to_safe_profile(self):
         got = clamp_windows_for_dml(1, 6, 38, 41, True)
-        self.assertEqual(got, (*DML_WINDOWS, True))
+        self.assertEqual(got, (DML_WINDOWS, True))
         self.assertLessEqual(DML_WINDOWS[3], 12)
 
     def test_user_forced_x_max_wins(self):
         # TM_VC_X_MAX 是明确的意思表示，不覆盖；真炸了还有 CPU 兜底。
         got = clamp_windows_for_dml(1, 6, 38, 41, True, forced_x_max=30)
-        self.assertEqual(got, (1, 6, 38, 41, False))
+        self.assertEqual(got, ((1, 6, 38, 41), False))
+
+    def test_return_shape_matches_pipeline_unpack(self):
+        """pipeline.py 是 `windows, flagged = clamp...`。五元组会
+        ValueError，DirectML 上语音转换还没开始就死（20077cf 笔误）。"""
+        windows, flagged = clamp_windows_for_dml(1, 6, 38, 41, True)
+        self.assertEqual(len(windows), 4)
+        self.assertTrue(flagged)
+        windows, flagged = clamp_windows_for_dml(3, 10, 60, 65, False)
+        self.assertEqual(windows, (3, 10, 60, 65))
+        self.assertFalse(flagged)
 
 
 class InferWindowProfileTests(unittest.TestCase):

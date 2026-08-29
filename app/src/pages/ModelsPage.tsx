@@ -12,6 +12,7 @@ import { CropCoverDialog } from "../components/CropCoverDialog";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
@@ -257,12 +258,12 @@ function ModelsPageImpl({
       if (hot.pitch == null && hot.formant == null) return;
       void reloadPanels(selected);
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else un = fn;
     });
     return () => {
       disposed = true;
-      un?.();
+      dropListen(un);
     };
   }, [selected, reloadPanels]);
 

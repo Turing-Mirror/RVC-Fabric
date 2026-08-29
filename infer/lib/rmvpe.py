@@ -507,8 +507,12 @@ class RMVPE:
         if "privateuseone" in str(device):
             import onnxruntime as ort
 
+            # 壳层会注入 rmvpe_root=assets/rmvpe；不走壳层的启动方式（直接
+            # 跑脚本、新入口）没有这个变量，1.3.4 时代在这里 KeyError 过
+            # （26.8.29/182800）。cwd 恒为产品根，相对路径直接能落。
+            rmvpe_root = os.environ.get("rmvpe_root") or "assets/rmvpe"
             ort_session = ort.InferenceSession(
-                "%s/rmvpe.onnx" % os.environ["rmvpe_root"],
+                "%s/rmvpe.onnx" % rmvpe_root,
                 providers=["DmlExecutionProvider"],
             )
             self.model = ort_session

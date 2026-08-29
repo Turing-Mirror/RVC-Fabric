@@ -75,13 +75,6 @@ const CODE_ACTIONS: Record<string, Action> = {
     labelKey: "s.errActRuntime",
     run: toDownloads("engine.missing_gui", "all"),
   },
-  // 中文路径：这条只能靠用户搬目录，说明页里对应的答案在「常见情况」。
-  // 深链 faq#key 会直接展开那一条 —— HELP_ANCHORS 里没有 "install"，
-  // 传它等于点了个不动的按钮。
-  "vc.non_ascii_path": {
-    labelKey: "s.errActHelp",
-    run: toHelp("faq#s.8e6b1ba01b"),
-  },
   // 选到的是训练存档：得先在训练窗「进阶设置 → 模型提取」里转成音色。把训练
   // 窗开到用户眼前，比让他自己去猜「训练窗」在主界面哪个入口强。不走
   // ToolWindow 的 openTool —— 那个会先查引擎资源并可能弹下载框，而能碰上这个

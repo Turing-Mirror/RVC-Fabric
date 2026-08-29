@@ -7,7 +7,7 @@ from infer.lib.jit.get_synthesizer import get_synthesizer
 from time import time as ttime
 import fairseq
 from infer.lib import dml_compat
-from infer.lib.faiss_io import NonAsciiPathError, read_index, require_ascii_path
+from infer.lib.faiss_io import read_index
 import numpy as np
 import parselmouth
 import pyworld
@@ -124,9 +124,6 @@ class RVC:
                 except Exception:
                     pass
 
-            # 中文路径 faiss 读不了，必须让用户换目录，不能静默丢掉检索库。
-            require_ascii_path(pth_path)
-            require_ascii_path(index_path)
             # Missing / wrong index must not kill the process (common for catalog models)
             if index_rate != 0 and index_path and os.path.isfile(index_path):
                 _progress("vc.loading_index", 32)
@@ -135,8 +132,6 @@ class RVC:
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
                     self._init_index_bank()
-                except NonAsciiPathError:
-                    raise
                 except Exception as e:
                     printt("Index load failed, continue without index: %s", e)
                     index_rate = 0
@@ -253,8 +248,6 @@ class RVC:
             if last_rvc is not None and hasattr(last_rvc, "model_fcpe"):
                 self.device_fcpe = last_rvc.device_fcpe
                 self.model_fcpe = last_rvc.model_fcpe
-        except NonAsciiPathError:
-            raise
         except:
             printt(traceback.format_exc())
 
@@ -272,8 +265,6 @@ class RVC:
                     self.big_npy = self.index.reconstruct_n(0, self.index.ntotal)
                     printt("Index search enabled")
                     self._init_index_bank()
-                except NonAsciiPathError:
-                    raise
                 except Exception as e:
                     printt("Index load failed: %s", e)
                     new_index_rate = 0

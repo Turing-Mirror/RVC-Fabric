@@ -285,7 +285,6 @@
       "swapping": "Switching voice, please wait…",
       "swap_failed": "Switch failed — still using the previous voice",
       "pth_missing": "No such .pth file: {path}",
-      "non_ascii_path": "This path contains Chinese or other non-English characters, so the voice index cannot be read. Move the app or the voice to an English-only folder (e.g. D:\\RVCFabric) and try again.",
       "running": "Converting",
       "bad_settings": "Invalid settings — cannot start",
       "start_failed": "Failed to start",

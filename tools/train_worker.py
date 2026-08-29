@@ -831,7 +831,10 @@ def stage_index(req, exp_dir, py, n_stages):
             index.add(big[i: i + 8192])
         out = exp_dir / ("added_IVF%s_Flat_nprobe_%s_%s_%s.index"
                          % (n_ivf, ivf.nprobe, req["exp"], VERSION))
-        faiss.write_index(index, str(out))
+        # 音色实验名常是中文，faiss 原生 write_index 打不开非 ASCII 路径。
+        from infer.lib.faiss_io import write_index as _write_index
+
+        _write_index(index, str(out))
         emit(phase="stage", stage="index", index=5, total_stages=n_stages,
              done=3, total=3, **mc.msg_fields(mc.TRAIN_INDEX_DONE))
         return out

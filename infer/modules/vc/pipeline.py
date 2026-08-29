@@ -203,12 +203,14 @@ class Pipeline(object):
             if not hasattr(self, "model_rmvpe"):
                 from infer.lib.rmvpe import RMVPE
 
+                # 壳层注入 rmvpe_root；没有就用默认相对路径，别 KeyError。
+                rmvpe_root = os.environ.get("rmvpe_root") or "assets/rmvpe"
                 logger.info(
-                    "Loading rmvpe model,%s" % "%s/rmvpe.pt" % os.environ["rmvpe_root"]
+                    "Loading rmvpe model,%s" % "%s/rmvpe.pt" % rmvpe_root
                 )
                 _p(0.02)
                 self.model_rmvpe = RMVPE(
-                    "%s/rmvpe.pt" % os.environ["rmvpe_root"],
+                    "%s/rmvpe.pt" % rmvpe_root,
                     is_half=self.is_half,
                     device=self.device,
                 )

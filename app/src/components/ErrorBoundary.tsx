@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n/t";
 
@@ -15,6 +15,16 @@ type State = { error: Error | null; stack: string };
  *
  * Both paths write to shell.log, so a user report carries the cause either way.
  */
+const ebBtn: CSSProperties = {
+  fontSize: 13,
+  padding: "6px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--line, #cfd6dd)",
+  background: "transparent",
+  color: "var(--ink, #1e242b)",
+  cursor: "pointer",
+};
+
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null, stack: "" };
 
@@ -52,6 +62,27 @@ export class ErrorBoundary extends Component<Props, State> {
       >
         <div style={{ fontSize: 17, color: "var(--ink, #1e242b)" }}>{t("s.61f43bf584")}</div>
         <div>{t("s.d851b62cf4")}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              void invoke("diagnostics_build", { withPerf: false }).catch(() => {});
+            }}
+            style={ebBtn}
+          >
+            {t("s.8b720e5330")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // close_action=ask 要靠已经卸掉的 App 弹窗，这里必须直接退。
+              void invoke("close_finish", { toTray: false }).catch(() => {});
+            }}
+            style={ebBtn}
+          >
+            {t("window.close")}
+          </button>
+        </div>
         <pre
           style={{
             margin: 0,

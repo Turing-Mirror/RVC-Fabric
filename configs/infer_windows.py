@@ -68,6 +68,6 @@ def clamp_windows_for_dml(x_pad, x_query, x_center, x_max, is_dml, forced_x_max=
     反而违背本人意愿；真炸了还有 CPU 兜底接着。
     """
     if not is_dml or forced_x_max > 0:
-        return x_pad, x_query, x_center, x_max, False
-    return *DML_WINDOWS, True
+        return (x_pad, x_query, x_center, x_max), False
+    return DML_WINDOWS, True
 

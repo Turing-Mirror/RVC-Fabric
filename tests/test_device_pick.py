@@ -48,6 +48,24 @@ class PickDefaultTests(unittest.TestCase):
             pick_default_output(OUTPUTS), "CABLE Input (VB-Audio Virtual C"
         )
 
+    def test_prefers_cable_input_over_16ch(self):
+        both = [
+            "扬声器 (Realtek(R) Audio)",
+            "CABLE In 16ch (VB-Audio Virtual",
+            "CABLE Input (VB-Audio Virtual C",
+        ]
+        self.assertEqual(
+            pick_default_output(both), "CABLE Input (VB-Audio Virtual C"
+        )
+
+    def test_16ch_is_not_a_stand_in_for_cable_input(self):
+        """diag 26.8.29/210251：列表只剩 16ch 时不要顶上普通 CABLE。"""
+        only_16 = [
+            "扬声器 (Realtek(R) Audio)",
+            "CABLE In 16ch (VB-Audio Virtual",
+        ]
+        self.assertEqual(pick_default_output(only_16), "")
+
 
 class ResolveTests(unittest.TestCase):
     def test_exact(self):
@@ -124,12 +142,30 @@ class PickDefaultNoCableTests(unittest.TestCase):
         outs = ["耳机 (HyperX Cloud III)", "扬声器 (Realtek(R) Audio)"]
         self.assertEqual(pick_default_output(outs), "")
 
+    def test_saved_cable_input_does_not_resolve_to_16ch(self):
+        """截断的 CABLE Input 不能 startswith 对上 CABLE In 16ch。"""
+        only_16 = ["CABLE In 16ch (VB-Audio Virtual", "扬声器 (Realtek(R) Audio)"]
+        self.assertIsNone(
+            resolve_device_name("CABLE Input (VB-Audio Virtual C", only_16)
+        )
+
     def test_fill_missing_returns_empty_output_when_no_cable(self):
         inn, out, notes = fill_missing_devices(
             "麦克风 (Realtek(R) Audio)",
             "CABLE Input (VB-Audio Virtual C",
             INPUTS,
             ["耳机 (HyperX Cloud III)"],
+        )
+        self.assertEqual(inn, "麦克风 (Realtek(R) Audio)")
+        self.assertEqual(out, "")
+        self.assertTrue(any("output" in n for n in notes))
+
+    def test_fill_missing_does_not_swap_input_for_16ch(self):
+        inn, out, notes = fill_missing_devices(
+            "麦克风 (Realtek(R) Audio)",
+            "CABLE Input (VB-Audio Virtual C",
+            INPUTS,
+            ["CABLE In 16ch (VB-Audio Virtual", "扬声器 (Realtek(R) Audio)"],
         )
         self.assertEqual(inn, "麦克风 (Realtek(R) Audio)")
         self.assertEqual(out, "")

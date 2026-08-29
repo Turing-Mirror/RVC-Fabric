@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
@@ -342,12 +343,12 @@ export function TrainPanel() {
         setMsg((prev) => (prev && prev !== line ? `${prev}\n${line}` : line));
       }
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else un = fn;
     });
     return () => {
       disposed = true;
-      un?.();
+      dropListen(un);
     };
   }, []);
 

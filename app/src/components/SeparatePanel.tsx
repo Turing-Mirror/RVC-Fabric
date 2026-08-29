@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
 import { RangeBar } from "./controls";
@@ -93,12 +94,12 @@ export function SeparatePanel() {
       setProg(ev.payload);
       if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {
-      if (disposed) fn();
+      if (disposed) dropListen(fn);
       else un = fn;
     });
     return () => {
       disposed = true;
-      un?.();
+      dropListen(un);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 开一次窗只挂一次
   }, []);

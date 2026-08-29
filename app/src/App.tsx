@@ -24,6 +24,7 @@ import { pickAutoDevices } from "./lib/deviceSetup";
 import { invoke } from "@tauri-apps/api/core";
 import { applyAppearance } from "./lib/appearance";
 import { listen } from "@tauri-apps/api/event";
+import { dropListen } from "./lib/tauriListen";
 import { HelpPage } from "./pages/HelpPage";
 import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -694,7 +695,10 @@ export default function App() {
   const [helpFocus, setHelpFocus] = useState("");
   const [helpFocusNonce, setHelpFocusNonce] = useState(0);
   const openHelp = useCallback((section?: string) => {
-    setHelpFocus(section || "");
+    // Btn 会把 MouseEvent 传进来。当字符串用就会把说明页 split 炸掉
+    // （diag 26.8.29/210251：设置页「转至说明页」）。
+    const focus = typeof section === "string" ? section : "";
+    setHelpFocus(focus);
     setHelpFocusNonce((n) => n + 1);
     setPage("help");
   }, []);
@@ -742,7 +746,7 @@ export default function App() {
     ).then((f) => {
       un = f;
     });
-    return () => un?.();
+    return () => dropListen(un);
   }, [openDownloadModels]);
 
   useEffect(() => {
@@ -757,7 +761,7 @@ export default function App() {
     }).then((f) => {
       un = f;
     });
-    return () => un?.();
+    return () => dropListen(un);
   }, [openHelp]);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
@@ -989,7 +993,7 @@ export default function App() {
     const add = async (event: string, fn: () => void) => {
       const un = await listen(event, fn);
       // Cleanup may have already run while this was in flight.
-      if (disposed) un();
+      if (disposed) dropListen(un);
       else offs.push(un);
     };
     void add("tray://toggle-vc", () => actionsRef.current.toggleRun());
@@ -1010,7 +1014,7 @@ export default function App() {
     void add("app://close-requested", () => setCloseAsk(true));
     return () => {
       disposed = true;
-      offs.forEach((f) => f());
+      offs.forEach((f) => dropListen(f));
     };
   }, []);
 

@@ -14,8 +14,10 @@ import { askConfirm } from "../lib/webDialog";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
+import { ConsultDialog } from "../components/ConsultDialog";
 
-/** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
+/** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
+ *  打包）都已经在，开放时把它改成 true 即可，不要删代码。 */
 const SHOW_CONSULT = false;
 
 type Props = {
@@ -55,6 +57,8 @@ export function MorePage({
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
   const [diagOpen, setDiagOpen] = useState(false);
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [consultDone, setConsultDone] = useState("");
   // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
   // 而这一整块讲的就是「这台机器拿什么在跑」。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
@@ -120,23 +124,6 @@ export function MorePage({
         ...m,
         [which]: t("s.ea582ad463", { v0: String(e) }),
       }));
-    }
-  };
-
-  const run = async (label: string, cmd: string, args?: Record<string, unknown>) => {
-    setBusyMsg(`${label}…`);
-    try {
-      const r = await invoke<{ path?: string; perf_note?: string }>(cmd, args);
-      const note = r?.perf_note ? ` · ${r.perf_note}` : "";
-      setBusyMsg(
-        t("s.05d0e1e672", {
-          v0: label,
-          v1: r?.path ?? "",
-          v2: note,
-        }),
-      );
-    } catch (e) {
-      setBusyMsg(t("s.179ee96e83", { v0: label, v1: String(e) }));
     }
   };
 
@@ -515,14 +502,13 @@ export function MorePage({
             desc={legacyMsg.webui || t("s.bc94a9c280")}
             right={<Btn onClick={() => void openLegacy("webui")}>{t("s.65fc81e161")}</Btn>}
           />
-          {/* 「申请专业优化」暂时隐藏（服务还没开）。后端 consult_build 保留，
-              开放时把 SHOW_CONSULT 改成 true 就行，不要删代码。 */}
+          {/* 「申请专业优化」暂时隐藏（服务还没开）。 */}
           {SHOW_CONSULT ? (
             <ListItem
               title={t("s.dd41f552d6")}
-              desc={busyMsg.startsWith(t("s.1a2edaedf8")) ? busyMsg : t("s.db1fdebf6f")}
+              desc={consultDone || t("s.db1fdebf6f")}
               right={
-                <Btn onClick={() => void run(t("s.1a2edaedf8"), "consult_build", { note: "" })}>{t("s.1a2edaedf8")}</Btn>
+                <Btn onClick={() => setConsultOpen(true)}>{t("s.1a2edaedf8")}</Btn>
               }
             />
           ) : null}
@@ -562,6 +548,14 @@ export function MorePage({
       {qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
       ) : null}
+      <ConsultDialog
+        open={consultOpen}
+        onCancel={() => setConsultOpen(false)}
+        onDone={(path) => {
+          setConsultOpen(false);
+          setConsultDone(path);
+        }}
+      />
       <DiagnosticsDialog
         open={diagOpen}
         onCancel={() => setDiagOpen(false)}

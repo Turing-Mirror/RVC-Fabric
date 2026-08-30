@@ -427,8 +427,8 @@ mod tests {
         for lang in LANGS {
             let lines = s[lang]["lines"].as_array().unwrap();
             let fourth = lines[3].as_str().unwrap().chars().count();
-            for i in 0..3 {
-                let other = lines[i].as_str().unwrap().chars().count();
+            for (i, line) in lines.iter().take(3).enumerate() {
+                let other = line.as_str().unwrap().chars().count();
                 assert!(fourth > other, "{lang}：第 4 段应当比第 {} 段长", i + 1);
             }
         }

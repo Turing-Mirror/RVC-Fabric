@@ -533,8 +533,13 @@ def convert_one(
     fmt="wav",
     sid=0,
     f0_file=None,
+    on_degrade=None,
 ) -> None:
-    """跑一次 vc_single 并写盘。第一次 CUDA OOM 就缩小 rmvpe 分片再试一次。"""
+    """跑一次 vc_single 并写盘。第一次 CUDA OOM 就缩小 rmvpe 分片再试一次。
+
+    `on_degrade(why, rung)` 在每次降质时调一次。给 None 就是不报 ——
+    但产品路径上都该传，见 FALLBACK_LADDER 那段说明。
+    """
     attempts = 2
     last_err: Exception | None = None
     for attempt in range(attempts):
@@ -564,7 +569,14 @@ def convert_one(
             last_err = e
             reason = friendly_error(e)
             if attempt + 1 < attempts and is_oom(reason):
-                # 分片改小 + 归还显存，再试一次。
+                # 分片改小 + 归还显存，再试一次。这是阶梯的第 1 档
+                # 「显卡（省显存）」，退了要说出来 —— 用户只看到变慢了，
+                # 不说他会以为软件坏了。
+                if on_degrade is not None:
+                    try:
+                        on_degrade("显存不足", ladder_rung(1))
+                    except Exception:
+                        traceback.print_exc()
                 os.environ["TM_RMVPE_MAX_FRAMES"] = "512"
                 os.environ["TM_VC_X_MAX"] = "4"
                 pipe = getattr(vc, "pipeline", None)
@@ -580,6 +592,79 @@ def convert_one(
             raise RuntimeError(reason) from e
     if last_err is not None:
         raise RuntimeError(friendly_error(last_err)) from last_err
+
+
+# ---------------------------------------------------------------------------
+# 降质回退阶梯
+# ---------------------------------------------------------------------------
+#
+# 只处理「根本出不来结果」，**不处理「慢」**。
+#
+# 慢就让它慢：用户等得起，而「多慢算慢」没有客观门限，误判的代价是把他特意选
+# 的高质量选项改掉。真正要自动处理的是显存不足、后端缺算子这类 —— 那些不退
+# 就是一个红字错误，用户拿它没有任何办法。
+#
+# 每退一档都要说出来（STS_DEGRADED）：降质是自动的，但不能是无声的。
+# 用户看到的是「怎么这么慢」，真正发生的是退到了 CPU；不说他会以为软件坏了，
+# 说了他知道该去关掉别的占显卡的程序。
+
+#: 阶梯，从好到差。名字会原样显示给用户，所以是人话不是代号。
+FALLBACK_LADDER = (
+    "显卡",
+    "显卡（省显存）",
+    # 用 "CPU" 而不是「处理器」：产品里既有的说法就是 CPU
+    # （「显卡后端不支持这一步，已改用 CPU 重试」），换个词等于同一件事
+    # 在两处有两种叫法，用户会以为是两回事。
+    "CPU",
+)
+
+
+def _degraded_fields(why: str, rung: str) -> dict:
+    """降质消息的字段。
+
+    走 `msg_codes.status_fields`，所以同时带上 `message_code`（新壳按界面语言
+    翻译）和 `message`（老壳直接显示中文）—— 两边都不会看到一个空消息。
+
+    **导入失败也绝不抛。** 这是一条报告用的消息，而它报告的那件事
+    （已经退档、正在继续转换）比消息本身重要得多；为了一句话让整次转换失败
+    是本末倒置。第一版就是直接 `from msg_codes import`，在 tools/ 不在
+    sys.path 的场景下把转换带崩了，测试当场抓住。
+    """
+    try:
+        from msg_codes import STS_DEGRADED, status_fields
+
+        return status_fields(STS_DEGRADED, {"why": why, "rung": rung})
+    except Exception:
+        return {
+            "message_code": "sts.degraded",
+            "message": f"这台机器跑不动原来那档（{why}），已自动降到「{rung}」继续，会慢一些。",
+            "message_params": {"why": why, "rung": rung},
+        }
+
+
+def ladder_rung(index: int) -> str:
+    """第几档的人话名字。越界就取最后一档 —— 宁可名字不准，不要在退档时崩。"""
+    if index < 0:
+        index = 0
+    return FALLBACK_LADDER[min(index, len(FALLBACK_LADDER) - 1)]
+
+
+def next_rung(current: int, reason: str) -> int | None:
+    """撞上 `reason` 之后该退到第几档；不该退就返回 None。
+
+    判据只有两条，都对应「出不来结果」：
+
+    * 显存不足 → 退一档（先省显存，再不行退处理器）；
+    * 后端缺算子（DirectML 的 PrivateUse1）→ 直接退到处理器，
+      中间那档还是同一个后端，退了也是白退。
+    """
+    if is_dml_backend_error(reason):
+        last = len(FALLBACK_LADDER) - 1
+        return last if current < last else None
+    if is_oom(reason):
+        nxt = current + 1
+        return nxt if nxt < len(FALLBACK_LADDER) else None
+    return None
 
 
 def convert_one_with_cpu_fallback(
@@ -609,6 +694,13 @@ def convert_one_with_cpu_fallback(
             if on_fallback is not None:
                 try:
                     on_fallback(first)
+                except Exception:
+                    traceback.print_exc()
+            on_degrade = kwargs.get("on_degrade")
+            if on_degrade is not None:
+                try:
+                    # 后端缺算子直接退到最后一档：中间那档还是同一个后端。
+                    on_degrade("显卡后端不支持这一步", ladder_rung(len(FALLBACK_LADDER) - 1))
                 except Exception:
                     traceback.print_exc()
             convert_one(vc, src, dest, **kwargs)
@@ -725,6 +817,19 @@ def run_batch(
                         fmt=params.get("format") or "wav",
                         sid=params.get("sid") or 0,
                         f0_file=params.get("f0_file"),
+                        # 降质是自动的，但不能是无声的：用户看到的是「怎么这么慢」，
+                        # 真正发生的是退了一档。不说他会以为软件坏了。
+                        on_degrade=lambda why, rung, _i=i, _n=src.name: emit(
+                            phase="run",
+                            done=_i - 1,
+                            total=total,
+                            pct=prog.last_pct,
+                            current=_i,
+                            ok=prog.ok_count,
+                            skip=prog.skip_count,
+                            file=_n,
+                            **_degraded_fields(why, rung),
+                        ),
                     )
                     # ConversionCancelled 继承 BaseException，不会被这里接住。
                     try:
@@ -749,7 +854,10 @@ def run_batch(
                                 ok=prog.ok_count,
                                 skip=prog.skip_count,
                                 file=src.name,
-                                message="显卡后端（DirectML）不支持这一步，已改用 CPU 重试（会慢一些）",
+                                **_degraded_fields(
+                                    "显卡后端不支持这一步",
+                                    ladder_rung(len(FALLBACK_LADDER) - 1),
+                                ),
                             )
                             on_stage("read", 0.0)
                             convert_one(vc, src, dest, **kwargs)

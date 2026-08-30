@@ -337,7 +337,8 @@
       "done": "{done} done, {skipped} skipped",
       "hot_unavailable": "No voice is loaded in the realtime engine — converting in a separate process instead (a bit slower).",
       "hot_dml_fallback": "The graphics backend (DirectML) does not support this step — converting in a separate process instead (a bit slower).",
-      "model_is_archive": "What you picked is a training archive (a G_ / D_ checkpoint), not a voice model.\nTurn it into a voice model first via “Advanced → Model extraction” in the training window, then convert."
+      "model_is_archive": "What you picked is a training archive (a G_ / D_ checkpoint), not a voice model.\nTurn it into a voice model first via “Advanced → Model extraction” in the training window, then convert.",
+      "degraded": "This machine could not run the previous setting ({why}); switched to “{rung}” automatically. It will be slower."
     },
     "train": {
       "step_failed": "This step failed (exit code {code}) — details in {log}",

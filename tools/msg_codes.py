@@ -117,6 +117,15 @@ STS_HOT_DML_FALLBACK = "sts.hot_dml_fallback"
 # 选到的是训练存档（G_/D_ 开头）而不是音色模型。单独立码是因为壳侧能给它配
 # 一个「打开训练窗」的按钮 —— 那份存档得先在「模型提取」里转成音色才能用。
 STS_MODEL_IS_ARCHIVE = "sts.model_is_archive"
+# 降质回退：这一次转换退到了阶梯的哪一档、为什么。
+#
+# **降质是自动的，但不能是无声的。** 用户看到的是「怎么这么慢」，
+# 而真正发生的是显存不够、退到了 CPU —— 不说出来他会以为软件坏了，
+# 说出来他知道该关掉别的占显卡的程序，或者换个更小的档。
+#
+# 只在「根本出不来结果」时才退（显存不足、后端缺算子），**不因为慢而退**：
+# 慢没有客观门限，误判的代价是把用户特意选的高质量选项改掉。
+STS_DEGRADED = "sts.degraded"
 
 # 训练
 TRAIN_STEP_FAILED = "train.step_failed"
@@ -199,6 +208,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_DONE: "完成 {done} 个，跳过 {skipped} 个",
     STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
     STS_HOT_DML_FALLBACK: "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。",
+    STS_DEGRADED: "这台机器跑不动原来那档（{why}），已自动降到「{rung}」继续，会慢一些。",
     STS_MODEL_IS_ARCHIVE: (
         "选到的是训练存档（G_ / D_ 开头那种），不能直接当音色用。\n"
         "请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"

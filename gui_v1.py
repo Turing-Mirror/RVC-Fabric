@@ -1400,17 +1400,18 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = max(1, int(self.gui_config.samplerate) // 100)
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 无模型 DSP 这条路也要切块，用的必须是同一份几何 ——
+            # 两条路块长不一样的话，从 RVC 切到 DSP 会听见一次长度突变。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                max(100, int(self.gui_config.samplerate)),
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
             self._report_load(VC_OPENING_STREAM, 80)
             self.start_stream()
 
@@ -1510,40 +1511,27 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = self.gui_config.samplerate // 100
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 分块几何统一从 tools/block_geometry.py 取。
+            #
+            # 这段算术原来在这里（两处）、benchmark_realtime.py，以及将来离线
+            # 渲染器里各写一份。几份必须完全一致，而**不一致时没有任何征兆**：
+            # 渲染出来的声音听着像那么回事，只是和用户实际听到的差了半个块，
+            # 照着它调出来的参数到用户机器上就不对。所以只留一份。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                self.gui_config.samplerate,
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
-            self.block_frame_16k = 160 * self.block_frame // self.zc
-            self.crossfade_frame = (
-                int(
-                    np.round(
-                        self.gui_config.crossfade_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
-            self.sola_buffer_frame = min(self.crossfade_frame, 4 * self.zc)
-            self.sola_search_frame = self.zc
-            self.extra_frame = (
-                int(
-                    np.round(
-                        self.gui_config.extra_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
+            self.block_frame_16k = _geo["block_frame_16k"]
+            self.crossfade_frame = _geo["crossfade_frame"]
+            self.sola_buffer_frame = _geo["sola_buffer_frame"]
+            self.sola_search_frame = _geo["sola_search_frame"]
+            self.extra_frame = _geo["extra_frame"]
             io_dev = self._io_device
             self.input_wav: torch.Tensor = torch.zeros(
                 self.extra_frame

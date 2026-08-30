@@ -96,10 +96,10 @@ class FallbackLadderTests(unittest.TestCase):
         spec.loader.exec_module(codes)
         self.assertEqual(codes.STS_DEGRADED, "sts.degraded")
         text = codes.fallback_message(
-            codes.STS_DEGRADED, {"why": "显存不足", "rung": "CPU"}
+            codes.STS_DEGRADED, {"why": "显卡内存不足", "rung": "CPU"}
         )
         # 用户要能从这句话里读出两件事：为什么退、退到了哪。
-        self.assertIn("显存不足", text)
+        self.assertIn("显卡内存不足", text)
         self.assertIn("CPU", text)
 
 

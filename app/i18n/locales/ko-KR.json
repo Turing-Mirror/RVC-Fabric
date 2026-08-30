@@ -91,7 +91,17 @@
     "bannerOpacityTip": "홈 화면 상단 배너 배경의 불투명도를 조절합니다. 문구와 LOGO 는 영향을 받지 않으며 최소 20% 입니다.",
     "bannerSub": "홈 배너 부제목",
     "bannerSubTip": "홈 배너 제목 아래에 표시되는 한 줄. 비워 두면 표시되지 않습니다.",
-    "bannerSubPlaceholder": "비워 두면 부제목이 표시되지 않습니다"
+    "bannerSubPlaceholder": "비워 두면 부제목이 표시되지 않습니다",
+    "prewarm": "음색 미리 불러오기",
+    "prewarmOn": "켜짐",
+    "prewarmOff": "꺼짐",
+    "prewarmTip": "켜면 소프트웨어를 시작할 때 현재 음색을 그래픽 카드에 불러옵니다. 시작을 누를 때 기다리지 않아도 됩니다.",
+    "prewarmDesc": "그래픽 메모리를 미리 사용합니다. 실행 직후 바로 말하는 경우가 많다면 켜는 것을 권합니다.",
+    "f0Repair": "음정 보정",
+    "f0RepairOn": "켜짐",
+    "f0RepairOff": "꺼짐",
+    "f0RepairTip": "켜면 음정을 인식할 때 이따금 발생하는 뚜렷한 오류(갑자기 높아졌다가 곧바로 돌아오는 등)를 보정합니다. 변환 중에도 켜고 끌 수 있어 효과를 비교할 수 있습니다.",
+    "f0RepairDesc": "뚜렷한 인식 오류만 처리하며 비브라토나 숨소리 같은 표현은 약화시키지 않습니다."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "실시간 엔진에 불러온 음색이 없어 별도 프로세스로 변환합니다(조금 느립니다).",
       "hot_dml_fallback": "그래픽 백엔드(DirectML)가 이 단계를 지원하지 않아 별도 프로세스로 변환합니다(조금 느립니다).",
       "model_is_archive": "선택한 것은 학습 스냅샷(G_ / D_ 시작)이라 음색 모델로 바로 쓸 수 없습니다.\n학습 창의 “고급 설정 → 모델 추출”에서 음색 모델로 변환한 뒤 사용해 주세요.",
-      "degraded": "이 컴퓨터에서는 기존 설정으로 처리할 수 없어({why}) 자동으로 「{rung}」(으)로 전환했습니다. 조금 느려집니다."
+      "degraded": "현재 설정으로는 이번 변환을 완료할 수 없어({why}) 「{rung}」(으)로 전환하여 계속합니다. 속도는 느려집니다."
     },
     "train": {
       "step_failed": "이 단계가 실패했습니다(종료 코드 {code}). 자세한 내용은 {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "어느 작성자의 페이지를 열까요?",
     "authorsPickHint": "이 보이스에는 여러 작성자가 표시되어 있습니다. 열 페이지의 작성자를 선택하세요.",
     "variantAmd": "AMD / Intel(DirectML)",
-    "consultIntro": "아래 대본을 읽어 주세요. 원본 음성, 현재 설정으로 변환한 결과, 이 컴퓨터의 성능 기록을 함께 묶어 보냅니다. 한 언어만 읽어도 되지만 세 언어 모두 읽으면 더 좋습니다.",
+    "consultIntro": "아래 문장을 읽어 주세요. 소프트웨어가 녹음, 현재 설정으로 변환한 결과, 이 컴퓨터의 동작 기록을 함께 저장합니다. 세 언어 중 하나만 읽어도 되지만, 세 언어를 모두 읽으면 결과가 더 좋아집니다.",
     "consultRecord": "녹음 시작",
     "consultReRecord": "다시 녹음",
-    "consultStop": "정지",
-    "consultClear": "녹음 지우기",
-    "consultNote": "전하고 싶은 내용(선택)",
-    "consultBuild": "패키지 생성",
-    "consultBuilding": "변환 후 패키징 중…",
-    "consultProgress": "{v0}/{v1}개 언어 녹음됨",
-    "consultNeedRecording": "최소 한 언어는 녹음해야 합니다"
+    "consultStop": "녹음 중지",
+    "consultClear": "녹음 모두 삭제",
+    "consultNote": "추가로 알리고 싶은 내용(선택)",
+    "consultBuild": "상담 파일 만들기",
+    "consultBuilding": "변환하여 저장하고 있습니다. 잠시 기다려 주세요.",
+    "consultProgress": "{v1}개 언어 중 {v0}개 완료",
+    "consultNeedRecording": "최소 한 언어는 녹음해 주세요.",
+    "consultRecording": "「{v0}」 녹음 중"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

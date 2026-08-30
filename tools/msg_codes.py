@@ -208,7 +208,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_DONE: "完成 {done} 个，跳过 {skipped} 个",
     STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
     STS_HOT_DML_FALLBACK: "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。",
-    STS_DEGRADED: "这台机器跑不动原来那档（{why}），已自动降到「{rung}」继续，会慢一些。",
+    STS_DEGRADED: "当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。",
     STS_MODEL_IS_ARCHIVE: (
         "选到的是训练存档（G_ / D_ 开头那种），不能直接当音色用。\n"
         "请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"

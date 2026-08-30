@@ -91,7 +91,17 @@
     "bannerOpacityTip": "Règle l'opacité du fond de la bannière d'accueil. Le texte et le logo ne sont pas affectés. Minimum 20 %.",
     "bannerSub": "Sous-titre de la bannière d'accueil",
     "bannerSubTip": "Une petite ligne sous le titre de la bannière d'accueil. Laissez vide pour la masquer.",
-    "bannerSubPlaceholder": "Vide = pas de sous-titre"
+    "bannerSubPlaceholder": "Vide = pas de sous-titre",
+    "prewarm": "Charger la voix à l’avance",
+    "prewarmOn": "Activé",
+    "prewarmOff": "Désactivé",
+    "prewarmTip": "Une fois activé, la voix actuelle est chargée sur la carte graphique dès le démarrage du logiciel : il n’y a plus d’attente au moment de cliquer sur Démarrer.",
+    "prewarmDesc": "Une partie de la mémoire graphique est réservée à l’avance. Activez cette option si vous parlez souvent juste après avoir ouvert le logiciel.",
+    "f0Repair": "Correction de hauteur",
+    "f0RepairOn": "Activé",
+    "f0RepairOff": "Désactivé",
+    "f0RepairTip": "Une fois activé, le logiciel corrige les erreurs manifestes qui apparaissent parfois lors de la détection de la hauteur, par exemple une voix qui monte brusquement puis redescend aussitôt. Vous pouvez l’activer et le désactiver pendant la conversion pour comparer.",
+    "f0RepairDesc": "Il ne traite que les erreurs manifestes de détection et n’atténue ni le vibrato ni le souffle."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "Aucune voix chargée dans le moteur temps réel — conversion dans un processus séparé (un peu plus lent).",
       "hot_dml_fallback": "Le backend graphique (DirectML) ne prend pas en charge cette étape — conversion dans un processus séparé (un peu plus lent).",
       "model_is_archive": "Le fichier choisi est une archive d'entraînement (G_ / D_) : elle ne sert pas directement de voix.\nConvertissez-la d'abord en modèle de voix via « Réglages avancés → Extraction de modèle » dans la fenêtre d'entraînement.",
-      "degraded": "Cette machine n’a pas pu exécuter le réglage précédent ({why}) ; passage automatique à « {rung} ». Ce sera plus lent."
+      "degraded": "Les réglages actuels n’ont pas pu terminer cette conversion ({why}). Le traitement continue avec « {rung} », mais il sera plus lent."
     },
     "train": {
       "step_failed": "Cette étape a échoué (code de sortie {code}) — détails dans {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "Quelle page d'auteur ouvrir ?",
     "authorsPickHint": "Cette voix liste plusieurs auteurs — choisissez la page à ouvrir.",
     "variantAmd": "AMD / Intel (DirectML)",
-    "consultIntro": "Lisez le texte ci-dessous à voix haute. Nous empaquetons votre enregistrement, son rendu avec vos réglages actuels et le relevé de performance de cette machine. Une seule langue suffit ; les trois, c’est mieux.",
-    "consultRecord": "Enregistrer",
-    "consultReRecord": "Réenregistrer",
-    "consultStop": "Arrêter",
-    "consultClear": "Effacer les enregistrements",
-    "consultNote": "Ce que vous voulez nous dire (facultatif)",
-    "consultBuild": "Créer le paquet",
-    "consultBuilding": "Conversion et empaquetage…",
-    "consultProgress": "{v0}/{v1} langues enregistrées",
-    "consultNeedRecording": "Enregistrez au moins une langue"
+    "consultIntro": "Veuillez lire le texte ci-dessous à voix haute. Le logiciel enregistre votre lecture, le résultat obtenu avec vos réglages actuels et le relevé de fonctionnement de cet ordinateur. Lire une seule des trois langues suffit ; les lire toutes donne un meilleur résultat.",
+    "consultRecord": "Commencer l’enregistrement",
+    "consultReRecord": "Enregistrer de nouveau",
+    "consultStop": "Arrêter l’enregistrement",
+    "consultClear": "Effacer tous les enregistrements",
+    "consultNote": "Ce que vous souhaitez ajouter (facultatif)",
+    "consultBuild": "Créer le fichier",
+    "consultBuilding": "Conversion et enregistrement en cours. Veuillez patienter.",
+    "consultProgress": "{v0} langue(s) sur {v1} terminée(s)",
+    "consultNeedRecording": "Veuillez enregistrer au moins une langue.",
+    "consultRecording": "Enregistrement de « {v0} »"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

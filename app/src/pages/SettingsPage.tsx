@@ -8,7 +8,7 @@ import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
 import { HOTKEYS } from "../lib/hotkeys";
-import type { EngineStatus } from "../lib/engine";
+import { setHot, type EngineStatus } from "../lib/engine";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
 
 const TAB_KEYS = [
@@ -964,6 +964,43 @@ function SettingsPageImpl({
                     }
                     checked={c.cfg.ui_compat_render === true}
                     onChange={(v) => c.set("ui_compat_render", v, true)}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.prewarm")}
+                tip={t("settings.prewarmTip")}
+                desc={t("settings.prewarmDesc")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.prewarm_on_start === true
+                        ? t("settings.prewarmOn")
+                        : t("settings.prewarmOff")
+                    }
+                    checked={c.cfg.prewarm_on_start === true}
+                    onChange={(v) => c.set("prewarm_on_start", v, true)}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.f0Repair")}
+                tip={t("settings.f0RepairTip")}
+                desc={t("settings.f0RepairDesc")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.f0_repair === true
+                        ? t("settings.f0RepairOn")
+                        : t("settings.f0RepairOff")
+                    }
+                    checked={c.cfg.f0_repair === true}
+                    onChange={(v) => {
+                      // 落盘之后立刻推给引擎：这是热键，变声进行中也要当场生效，
+                      // 否则用户没法对比开与关的差别。
+                      c.set("f0_repair", v, true);
+                      void setHot({ f0_repair: v }).catch(() => {});
+                    }}
                   />
                 }
               />

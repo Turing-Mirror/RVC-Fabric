@@ -129,6 +129,11 @@ pub fn defaults() -> Map<String, Value> {
     // 默认关：它改变声音。改变声音的东西必须是用户自己点开的，
     // 而且要能一项一项关掉，不是一个总开关。
     m.insert("f0_repair".into(), json!(false));
+    // 开始变声之前先把模型读进显存。
+    //
+    // 默认关：预热会提前占住显存，而多数人开着变声器的时间远长于真正说话的
+    // 时间。愿意用一点显存换开口即用的人可以打开它。
+    m.insert("prewarm_on_start".into(), json!(false));
     m.insert("threhold".into(), json!(-60));
     m.insert("in_gain_db".into(), json!(0.0));
     m.insert("out_gain_db".into(), json!(0.0));

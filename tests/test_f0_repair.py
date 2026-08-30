@@ -192,6 +192,26 @@ class WiringTests(unittest.TestCase):
         self.assertIn('"f0_repair"', hot)
         self.assertIn('elif event == "f0_repair":', self._read("gui_v1.py"))
 
+    def test_the_switch_reaches_the_engine_from_the_ui(self):
+        """光加进 HOT_KEYS 是不够的。
+
+        engine_set_hot 是一张**固定参数表**，不在表上的键界面根本递不过去 ——
+        config.rs 里 monitor_self 那条注释警告的就是这个。这一条钉住三处：
+        Rust 命令签名、前端类型、设置页真的调了它。
+        """
+        lib = self._read(os.path.join("app", "src-tauri", "src", "lib.rs"))
+        hot = lib[lib.index("fn engine_set_hot"):]
+        hot = hot[: hot.index("-> Result<u64, String>")]
+        self.assertIn("f0_repair: Option<bool>", hot)
+        self.assertIn(
+            'payload.insert("f0_repair".into(), json!(v));',
+            self._read(os.path.join("app", "src-tauri", "src", "lib.rs")),
+        )
+        self.assertIn("f0_repair?: boolean;", self._read(os.path.join("app", "src", "lib", "engine.ts")))
+        settings = self._read(os.path.join("app", "src", "pages", "SettingsPage.tsx"))
+        self.assertIn("setHot({ f0_repair: v })", settings)
+        self.assertIn('t("settings.f0Repair")', settings)
+
     def test_the_switch_is_applied_when_the_stream_opens(self):
         """不带的话用户要先动一次开关才生效，而他上次的选择本该被记住。"""
         gui = self._read("gui_v1.py")

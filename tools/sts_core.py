@@ -574,7 +574,7 @@ def convert_one(
                 # 不说他会以为软件坏了。
                 if on_degrade is not None:
                     try:
-                        on_degrade("显存不足", ladder_rung(1))
+                        on_degrade("显卡内存不足", ladder_rung(1))
                     except Exception:
                         traceback.print_exc()
                 os.environ["TM_RMVPE_MAX_FRAMES"] = "512"
@@ -611,10 +611,9 @@ def convert_one(
 #: 阶梯，从好到差。名字会原样显示给用户，所以是人话不是代号。
 FALLBACK_LADDER = (
     "显卡",
-    "显卡（省显存）",
-    # 用 "CPU" 而不是「处理器」：产品里既有的说法就是 CPU
-    # （「显卡后端不支持这一步，已改用 CPU 重试」），换个词等于同一件事
-    # 在两处有两种叫法，用户会以为是两回事。
+    "显卡（降低占用）",
+    # 用 "CPU" 而不是「处理器」：产品里既有的说法就是 CPU，
+    # 同一件事在两处有两种叫法，用户会以为是两回事。
     "CPU",
 )
 
@@ -637,7 +636,7 @@ def _degraded_fields(why: str, rung: str) -> dict:
     except Exception:
         return {
             "message_code": "sts.degraded",
-            "message": f"这台机器跑不动原来那档（{why}），已自动降到「{rung}」继续，会慢一些。",
+            "message": f"当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。",
             "message_params": {"why": why, "rung": rung},
         }
 
@@ -700,7 +699,7 @@ def convert_one_with_cpu_fallback(
             if on_degrade is not None:
                 try:
                     # 后端缺算子直接退到最后一档：中间那档还是同一个后端。
-                    on_degrade("显卡后端不支持这一步", ladder_rung(len(FALLBACK_LADDER) - 1))
+                    on_degrade("显卡不支持这一项处理", ladder_rung(len(FALLBACK_LADDER) - 1))
                 except Exception:
                     traceback.print_exc()
             convert_one(vc, src, dest, **kwargs)

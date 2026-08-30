@@ -1572,6 +1572,7 @@ fn engine_set_hot(
     threhold: Option<f64>,
     index_rate: Option<f64>,
     rms_mix_rate: Option<f64>,
+    f0_repair: Option<bool>,
     dsp_enabled: Option<bool>,
     dsp_preset: Option<String>,
     dsp_params: Option<Value>,
@@ -1583,6 +1584,9 @@ fn engine_set_hot(
     }
     if let Some(v) = formant {
         payload.insert("formant".into(), json!(v));
+    }
+    if let Some(v) = f0_repair {
+        payload.insert("f0_repair".into(), json!(v));
     }
     if let Some(v) = function {
         // "fx" = 无模型 DSP 变声，整条 RVC 不走。以前这里只认 im/vc，
@@ -2524,6 +2528,22 @@ pub fn run() {
                     // 闲」，用户再点一次就是两个进程抢同一张卡。
                     worker::reap_orphan_tool_pythons(&root_bg);
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
+                    // 设置里开了「提前载入音色」就顺手把权重读进显存。
+                    //
+                    // 放在设备枚举**之后**：枚举是界面第一屏就要用的，
+                    // 而预热只影响「点开始之后要等多久」。让预热排在前面，
+                    // 用户会先看到一个一直转圈的设备列表。
+                    if config::read(&root_bg)
+                        .get("prewarm_on_start")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        match worker::send_command(&root_bg, "prewarm", Map::new()) {
+                            Ok(_) => logging::shell_log!("已请求提前载入音色"),
+                            // 预热是额外的便利，失败不该影响任何别的事。
+                            Err(e) => logging::shell_log!("提前载入音色未能开始：{e}"),
+                        }
+                    }
                 } else {
                     logging::shell_log!("skip worker prewarm: Runtime not ready");
                 }

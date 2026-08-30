@@ -91,7 +91,17 @@
     "bannerOpacityTip": "Ajusta la opacidad del fondo del banner de inicio. El texto y el logotipo no se ven afectados. Mínimo 20 %.",
     "bannerSub": "Subtítulo del banner de inicio",
     "bannerSubTip": "Una línea pequeña bajo el título del banner de inicio. Déjelo vacío para ocultarla.",
-    "bannerSubPlaceholder": "Vacío = sin subtítulo"
+    "bannerSubPlaceholder": "Vacío = sin subtítulo",
+    "prewarm": "Cargar la voz por adelantado",
+    "prewarmOn": "Activado",
+    "prewarmOff": "Desactivado",
+    "prewarmTip": "Si se activa, la voz actual se carga en la tarjeta gráfica al iniciar el programa, de modo que no hay que esperar al pulsar Iniciar.",
+    "prewarmDesc": "Reserva parte de la memoria gráfica por adelantado. Actívalo si sueles hablar justo después de abrir el programa.",
+    "f0Repair": "Corrección de tono",
+    "f0RepairOn": "Activado",
+    "f0RepairOff": "Desactivado",
+    "f0RepairTip": "Si se activa, el programa corrige los errores evidentes que a veces aparecen al detectar el tono, como que la voz suba de golpe y vuelva enseguida. Puedes activarlo y desactivarlo mientras conviertes para comparar.",
+    "f0RepairDesc": "Solo trata errores evidentes de detección y no debilita el vibrato ni el aire de la voz."
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "No hay ninguna voz cargada en el motor en tiempo real: se convertirá en un proceso aparte (algo más lento).",
       "hot_dml_fallback": "El backend gráfico (DirectML) no admite este paso: se convertirá en un proceso aparte (algo más lento).",
       "model_is_archive": "Lo seleccionado es un archivo de entrenamiento (G_ / D_) y no puede usarse directamente como voz.\nConviértalo primero en un modelo de voz en «Ajustes avanzados → Extracción de modelos» de la ventana de entrenamiento.",
-      "degraded": "Este equipo no pudo con la opción anterior ({why}); se cambió automáticamente a «{rung}». Irá más lento."
+      "degraded": "Los ajustes actuales no han podido completar esta conversión ({why}). Se ha cambiado a «{rung}» y continúa, pero será más lento."
     },
     "train": {
       "step_failed": "Este paso falló (código de salida {code}); detalles en {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "¿Qué página de autor abrir?",
     "authorsPickHint": "Esta voz lista varios autores: elige qué página abrir.",
     "variantAmd": "AMD / Intel (DirectML)",
-    "consultIntro": "Lee el texto de abajo en voz alta. Empaquetamos tu grabación, cómo suena con tus ajustes actuales y el registro de rendimiento de este equipo. Con un idioma basta; los tres es mejor.",
-    "consultRecord": "Grabar",
+    "consultIntro": "Lee el texto siguiente en voz alta. El programa guardará tu grabación, el resultado obtenido con los ajustes actuales y el registro de funcionamiento de este equipo. Basta con leer uno de los tres idiomas; leerlos todos da un mejor resultado.",
+    "consultRecord": "Empezar a grabar",
     "consultReRecord": "Grabar de nuevo",
-    "consultStop": "Detener",
-    "consultClear": "Borrar grabaciones",
-    "consultNote": "Algo que quieras contarnos (opcional)",
-    "consultBuild": "Crear paquete",
-    "consultBuilding": "Convirtiendo y empaquetando…",
-    "consultProgress": "{v0}/{v1} idiomas grabados",
-    "consultNeedRecording": "Graba al menos un idioma"
+    "consultStop": "Detener la grabación",
+    "consultClear": "Borrar todas las grabaciones",
+    "consultNote": "Lo que quieras añadir (opcional)",
+    "consultBuild": "Crear el paquete",
+    "consultBuilding": "Convirtiendo y guardando. Espera un momento.",
+    "consultProgress": "{v0} de {v1} idiomas completados",
+    "consultNeedRecording": "Graba al menos un idioma.",
+    "consultRecording": "Grabando «{v0}»"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

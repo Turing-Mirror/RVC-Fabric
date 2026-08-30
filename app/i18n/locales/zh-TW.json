@@ -91,7 +91,17 @@
     "bannerOpacityTip": "調節首頁頂部橫幅背景的不透明度，文字與 LOGO 不受影響，最低 20%。",
     "bannerSub": "首頁橫幅副標題",
     "bannerSubTip": "顯示在首頁橫幅標題下方的一行小字。留空則不顯示。",
-    "bannerSubPlaceholder": "留空則不顯示副標題"
+    "bannerSubPlaceholder": "留空則不顯示副標題",
+    "prewarm": "提前載入音色",
+    "prewarmOn": "已開啟",
+    "prewarmOff": "未開啟",
+    "prewarmTip": "開啟後，軟體啟動時就把目前音色載入顯示卡。點擊開始變聲時不必再等待載入。",
+    "prewarmDesc": "會提前佔用一部分顯示卡記憶體。如果你經常需要打開軟體後馬上說話，建議開啟。",
+    "f0Repair": "音高校正",
+    "f0RepairOn": "已開啟",
+    "f0RepairOff": "未開啟",
+    "f0RepairTip": "開啟後，軟體會修正辨識音高時偶爾出現的明顯錯誤，例如聲音突然拔高又立刻落回。變聲進行中也可以隨時開關，便於比較效果。",
+    "f0RepairDesc": "只處理明顯的辨識錯誤，不會削弱顫音、氣聲等表達。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "即時引擎裡沒有已載入的音色，改用獨立處理程序轉換（會慢一些）。",
       "hot_dml_fallback": "顯示卡後端（DirectML）不支援這一步，改用獨立處理程序轉換（會慢一些）。",
       "model_is_archive": "選到的是訓練存檔（G_ / D_ 開頭那種），不能直接當音色用。\n請先在訓練視窗「進階設定 → 模型提取」裡轉成音色模型，再來轉換。",
-      "degraded": "這台機器跑不動原來那檔（{why}），已自動降到「{rung}」繼續，會慢一些。"
+      "degraded": "目前設定無法完成這次轉換（{why}），已自動改用「{rung}」繼續，速度會慢一些。"
     },
     "train": {
       "step_failed": "該步驟失敗（退出碼 {code}），詳情見 {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "開啟哪位作者的主頁？",
     "authorsPickHint": "這個音色標註了多位作者，請選擇要開啟的一位。",
     "variantAmd": "AMD / Intel（DirectML）",
-    "consultIntro": "照著下面的稿子念一遍，軟體會把你的原聲、用目前參數轉出來的效果，連同這台機器的效能紀錄一起打包。三種語言選一種就能寄，全念更好。",
+    "consultIntro": "請朗讀下面的文字。軟體會把你的朗讀錄音、使用目前設定轉換後的效果，以及本機的執行紀錄一起打包。三種語言中任選一種即可，三種都讀效果更好。",
     "consultRecord": "開始錄音",
-    "consultReRecord": "重錄",
+    "consultReRecord": "重新錄音",
     "consultStop": "停止錄音",
-    "consultClear": "清空錄音",
-    "consultNote": "想說明的情況（可不填）",
+    "consultClear": "清除全部錄音",
+    "consultNote": "想要補充說明的內容（可以不填）",
     "consultBuild": "產生諮詢包",
-    "consultBuilding": "正在轉換並打包…",
-    "consultProgress": "已錄 {v0}/{v1} 種語言",
-    "consultNeedRecording": "至少要錄一種語言才能產生"
+    "consultBuilding": "正在轉換並打包，請稍候。",
+    "consultProgress": "已完成 {v0} / {v1} 種語言",
+    "consultNeedRecording": "請至少完成一種語言的錄音。",
+    "consultRecording": "正在錄製「{v0}」"
   },
   "extras": {
     "engineTitle": "引擎資源",

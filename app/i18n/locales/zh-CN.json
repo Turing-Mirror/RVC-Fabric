@@ -91,7 +91,17 @@
     "bannerOpacityTip": "调节首页顶部横幅背景的不透明度，文字与 LOGO 不受影响，最低 20%。",
     "bannerSub": "首页横幅副标题",
     "bannerSubTip": "显示在首页横幅标题下方的一行小字。留空则不显示。",
-    "bannerSubPlaceholder": "留空不显示副标题"
+    "bannerSubPlaceholder": "留空不显示副标题",
+    "prewarm": "提前载入音色",
+    "prewarmOn": "已开启",
+    "prewarmOff": "未开启",
+    "prewarmTip": "开启后，软件启动时就把当前音色载入显卡。点击开始变声时不必再等待载入。",
+    "prewarmDesc": "会提前占用一部分显卡内存。如果你经常需要打开软件后马上说话，建议开启。",
+    "f0Repair": "音高纠错",
+    "f0RepairOn": "已开启",
+    "f0RepairOff": "未开启",
+    "f0RepairTip": "开启后，软件会修正识别音高时偶尔出现的明显错误，例如声音突然拔高又立刻落回。变声进行中也可以随时开关，便于对比效果。",
+    "f0RepairDesc": "只处理明显的识别错误，不会削弱颤音、气声等表达。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
       "hot_dml_fallback": "显卡后端（DirectML）不支持这一步，改用独立进程转换（会慢一些）。",
       "model_is_archive": "选到的是训练存档（G_ / D_ 开头那种），不能直接当音色用。\n请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。",
-      "degraded": "这台机器跑不动原来那档（{why}），已自动降到「{rung}」继续，会慢一些。"
+      "degraded": "当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。"
     },
     "train": {
       "step_failed": "该步骤失败（退出码 {code}），详情见 {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "打开哪位作者的主页？",
     "authorsPickHint": "这个音色标注了多位作者，请选择要打开的一位。",
     "variantAmd": "AMD / Intel（DirectML）",
-    "consultIntro": "照着下面的稿子念一遍，软件会把你的原声、用当前参数转出来的效果，连同这台机器的性能记录一起打包。三种语言选一种就能寄，全念更好。",
+    "consultIntro": "请朗读下面的文本。软件会把你的朗读录音、使用当前设置转换后的效果，以及本机的运行记录一起打包。三种语言中任选一种即可，三种都读效果更好。",
     "consultRecord": "开始录音",
-    "consultReRecord": "重录",
+    "consultReRecord": "重新录音",
     "consultStop": "停止录音",
-    "consultClear": "清空录音",
-    "consultNote": "想说明的情况（可不填）",
+    "consultClear": "清除全部录音",
+    "consultNote": "想要补充说明的内容（可以不填）",
     "consultBuild": "生成咨询包",
-    "consultBuilding": "正在转换并打包…",
-    "consultProgress": "已录 {v0}/{v1} 种语言",
-    "consultNeedRecording": "至少要录一种语言才能生成"
+    "consultBuilding": "正在转换并打包，请稍候。",
+    "consultProgress": "已完成 {v0} / {v1} 种语言",
+    "consultNeedRecording": "请至少完成一种语言的录音。",
+    "consultRecording": "正在录制「{v0}」"
   },
   "extras": {
     "engineTitle": "引擎资源",

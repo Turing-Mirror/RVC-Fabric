@@ -91,7 +91,17 @@
     "bannerOpacityTip": "ホーム画面上部バナーの背景の不透明度を調整します。文言と LOGO は変わりません。最低 20% です。",
     "bannerSub": "ホームバナーのサブタイトル",
     "bannerSubTip": "ホームバナーのタイトル下に表示される小さな一行。空欄なら非表示。",
-    "bannerSubPlaceholder": "空欄ならサブタイトル非表示"
+    "bannerSubPlaceholder": "空欄ならサブタイトル非表示",
+    "prewarm": "音声モデルを事前に読み込む",
+    "prewarmOn": "オン",
+    "prewarmOff": "オフ",
+    "prewarmTip": "オンにすると、ソフトウェアの起動時に現在の音声モデルをグラフィックカードへ読み込みます。開始を押したときに待つ必要がなくなります。",
+    "prewarmDesc": "グラフィックメモリを事前に使用します。起動後すぐに話すことが多い場合はオンにしてください。",
+    "f0Repair": "音程の補正",
+    "f0RepairOn": "オン",
+    "f0RepairOff": "オフ",
+    "f0RepairTip": "オンにすると、音程の検出で時折起きる明らかな誤り（急に高くなってすぐ戻るなど）を補正します。変換中でも切り替えられるため、効果を比較できます。",
+    "f0RepairDesc": "明らかな検出の誤りだけを扱い、ビブラートや息づかいなどの表現は弱めません。"
   },
   "locale": {
     "zh-CN": "简体中文",
@@ -338,7 +348,7 @@
       "hot_unavailable": "リアルタイムエンジンにモデルが読み込まれていないため、別プロセスで変換します（少し遅くなります）。",
       "hot_dml_fallback": "グラフィックスバックエンド（DirectML）がこの処理に対応していないため、別プロセスで変換します（少し遅くなります）。",
       "model_is_archive": "選択されたのは学習用スナップショット（G_ / D_ 始まり）で、音色モデルとしてそのままは使えません。\n学習ウィンドウの「詳細設定 → モデル抽出」で音色モデルに変換してからご利用ください。",
-      "degraded": "この環境では元の設定で処理できませんでした（{why}）。自動的に「{rung}」に切り替えて続行します。処理は遅くなります。"
+      "degraded": "現在の設定ではこの変換を完了できませんでした（{why}）。「{rung}」に切り替えて続行しています。処理は遅くなります。"
     },
     "train": {
       "step_failed": "このステップが失敗しました（終了コード {code}）。詳細は {log}",
@@ -1923,16 +1933,17 @@
     "authorsPickTitle": "どの作者のページを開く？",
     "authorsPickHint": "この音声には複数の作者が登録されています。開く人を選んでください。",
     "variantAmd": "AMD / Intel（DirectML）",
-    "consultIntro": "下の原稿を読み上げてください。あなたの声、現在の設定で変換した音、そしてこのPCの性能記録をまとめて送ります。1言語だけでも構いませんが、3つとも読むとより良い結果になります。",
-    "consultRecord": "録音開始",
-    "consultReRecord": "録り直す",
-    "consultStop": "停止",
-    "consultClear": "録音を消す",
-    "consultNote": "伝えたいこと（任意）",
-    "consultBuild": "パックを作成",
-    "consultBuilding": "変換して梱包しています…",
-    "consultProgress": "{v0}/{v1} 言語を録音済み",
-    "consultNeedRecording": "少なくとも1言語は録音してください"
+    "consultIntro": "下の文章を読み上げてください。ソフトウェアは、あなたの録音、現在の設定で変換した結果、このパソコンの動作記録をまとめて保存します。3つの言語のうち1つでも構いませんが、3つとも読むとより良い結果になります。",
+    "consultRecord": "録音を開始",
+    "consultReRecord": "録音し直す",
+    "consultStop": "録音を停止",
+    "consultClear": "録音をすべて削除",
+    "consultNote": "補足したい内容（任意）",
+    "consultBuild": "相談用ファイルを作成",
+    "consultBuilding": "変換して保存しています。しばらくお待ちください。",
+    "consultProgress": "{v1} 言語中 {v0} 言語が完了",
+    "consultNeedRecording": "少なくとも1つの言語を録音してください。",
+    "consultRecording": "「{v0}」を録音しています"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

@@ -187,17 +187,25 @@ export function ConsultDialog({
         </ol>
 
         <div className="flex items-center gap-3 flex-wrap mb-4">
-          {recording === lang ? (
+          {/* 录音时**不管当前看的是哪一页**都显示停止按钮。
+              按语言页判断的话，用户录着中文顺手翻到英文那一页看稿子，
+              停止按钮就没了，而录音还在继续。 */}
+          {recording ? (
             <>
               <Btn primary onClick={stopRec}>
                 {t("s.consultStop")}
               </Btn>
+              <span className="text-[12.5px] text-[var(--meta)]">
+                {t("s.consultRecording", {
+                  v0: blockOf(st?.script, recording)?.label ?? recording,
+                })}
+              </span>
               <span className="text-[12.5px] text-[var(--meta)] tabular-nums">
                 {seconds.toFixed(1)}s · {level.toFixed(0)} dB
               </span>
             </>
           ) : (
-            <Btn primary disabled={Boolean(recording) || Boolean(busy)} onClick={() => void startRec(lang)}>
+            <Btn primary disabled={Boolean(busy)} onClick={() => void startRec(lang)}>
               {st?.recorded?.[lang] ? t("s.consultReRecord") : t("s.consultRecord")}
             </Btn>
           )}

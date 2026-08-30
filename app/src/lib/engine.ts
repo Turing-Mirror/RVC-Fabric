@@ -157,6 +157,8 @@ export async function setHot(params: {
   threhold?: number;
   index_rate?: number;
   rms_mix_rate?: number;
+  /** 音高纠错。变声进行中也能开关，用户可以当场对比。 */
+  f0_repair?: boolean;
   /** 无模型 DSP 变声。三个都是热键，换预设不重开流。 */
   dsp_enabled?: boolean;
   dsp_preset?: string;

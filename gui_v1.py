@@ -328,6 +328,10 @@ if __name__ == "__main__":
             self.use_pv: bool = False
             self.rms_mix_rate: float = 0.25  # follow speech loudness a bit
             self.index_rate: float = 0.0
+            # 音高纠错。默认关：它改变声音，而改变声音的东西必须是用户点开的。
+            # 只删算法算错的三类（八度错误、无声段冒音高、孤立野值），
+            # 不做平滑 —— 平滑会把颤音和爆发力一起抹掉。见 tools/f0_repair.py。
+            self.f0_repair: bool = False
             self.n_cpu: int = min(n_cpu, 4)
             self.f0method: str = "fcpe"
             self.sg_hostapi: str = ""
@@ -992,6 +996,12 @@ if __name__ == "__main__":
                     self.gui_config.index_rate = values["index_rate"]
                     if hasattr(self, "rvc"):
                         self.rvc.change_index_rate(values["index_rate"])
+                elif event == "f0_repair":
+                    # 音高纠错。热键：转着的时候能开关，用户要能当场 A/B。
+                    on = bool(values["f0_repair"])
+                    self.gui_config.f0_repair = on
+                    if hasattr(self, "rvc"):
+                        self.rvc.f0_repair = on
                 elif event == "rms_mix_rate":
                     self.gui_config.rms_mix_rate = values["rms_mix_rate"]
                 elif event in ["pm", "harvest", "crepe", "rmvpe", "fcpe"]:
@@ -1400,17 +1410,18 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = max(1, int(self.gui_config.samplerate) // 100)
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 无模型 DSP 这条路也要切块，用的必须是同一份几何 ——
+            # 两条路块长不一样的话，从 RVC 切到 DSP 会听见一次长度突变。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                max(100, int(self.gui_config.samplerate)),
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
             self._report_load(VC_OPENING_STREAM, 80)
             self.start_stream()
 
@@ -1461,6 +1472,13 @@ if __name__ == "__main__":
             last = getattr(self, "rvc", None)
             if last is not None and not getattr(last, "tgt_sr", 0):
                 last = None
+            # 预热过就用预热的那份。RVC 的构造函数会尽量从 last 里复用
+            # 已经读进显存的权重，所以这一步能把「点开始之后等几秒」变成即时。
+            if last is None:
+                warm = getattr(self, "_prewarmed", None)
+                if warm is not None and getattr(warm, "tgt_sr", 0):
+                    last = warm
+                self._prewarmed = None
             self.rvc = rvc_for_realtime.RVC(
                 self.gui_config.pitch,
                 self.gui_config.formant,
@@ -1477,6 +1495,9 @@ if __name__ == "__main__":
             if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
                 self.rvc = None
                 raise RuntimeError(i18n("模型加载失败"))
+            # 开流时就把当前值带上。不带的话用户要先动一次开关才生效 ——
+            # 而他上次关掉的状态本该被记住。
+            self.rvc.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             if self.function == "fx":
                 self.function = "vc"
             # DirectML shares the GPU with the game via WDDM. Every .cpu() /
@@ -1510,40 +1531,27 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = self.gui_config.samplerate // 100
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 分块几何统一从 tools/block_geometry.py 取。
+            #
+            # 这段算术原来在这里（两处）、benchmark_realtime.py，以及将来离线
+            # 渲染器里各写一份。几份必须完全一致，而**不一致时没有任何征兆**：
+            # 渲染出来的声音听着像那么回事，只是和用户实际听到的差了半个块，
+            # 照着它调出来的参数到用户机器上就不对。所以只留一份。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                self.gui_config.samplerate,
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
-            self.block_frame_16k = 160 * self.block_frame // self.zc
-            self.crossfade_frame = (
-                int(
-                    np.round(
-                        self.gui_config.crossfade_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
-            self.sola_buffer_frame = min(self.crossfade_frame, 4 * self.zc)
-            self.sola_search_frame = self.zc
-            self.extra_frame = (
-                int(
-                    np.round(
-                        self.gui_config.extra_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
+            self.block_frame_16k = _geo["block_frame_16k"]
+            self.crossfade_frame = _geo["crossfade_frame"]
+            self.sola_buffer_frame = _geo["sola_buffer_frame"]
+            self.sola_search_frame = _geo["sola_search_frame"]
+            self.extra_frame = _geo["extra_frame"]
             io_dev = self._io_device
             self.input_wav: torch.Tensor = torch.zeros(
                 self.extra_frame
@@ -3302,6 +3310,48 @@ if __name__ == "__main__":
             self._swap_loader = t
             t.start()
 
+        def _cmd_prewarm(self):
+            """把当前音色提前读进显存，但不开流。
+
+            用户点「开始变声」时最慢的一步是读权重。软件启动之后空着的那段时间
+            正好可以用来做这件事，于是点下去就能说话，不用等。
+
+            三种情况直接跳过，都不算失败：正在变声（模型已经在显存里了）、
+            没有选音色、上一次预热的还在。预热是一项额外的便利，
+            它出任何问题都不该影响用户接下来的操作。
+            """
+            try:
+                if getattr(self, "flag_vc", False):
+                    return
+                pth = str(getattr(self.gui_config, "pth_path", "") or "").strip()
+                if not pth or not os.path.isfile(pth):
+                    return
+                warm = getattr(self, "_prewarmed", None)
+                if warm is not None and getattr(warm, "pth_path_str", "") == pth:
+                    return
+                printt("预热：开始读取 %s", pth)
+                new = rvc_for_realtime.RVC(
+                    self.gui_config.pitch,
+                    self.gui_config.formant,
+                    pth,
+                    self.gui_config.index_path,
+                    self.gui_config.index_rate,
+                    self.gui_config.n_cpu,
+                    inp_q,
+                    opt_q,
+                    self.config,
+                    None,
+                )
+                if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
+                    new.pth_path_str = pth
+                    self._prewarmed = new
+                    printt("预热：完成")
+                else:
+                    printt("预热：模型读取失败，忽略")
+            except Exception:
+                # 预热失败就当没预热过。用户点开始时会照常读一次权重。
+                traceback.print_exc()
+
         def _preload_pending_model(self, job):
             """在命令线程之外读新权重，音频线程只做指针替换。"""
             pth, idx, rate = job
@@ -4173,6 +4223,8 @@ if __name__ == "__main__":
                                 # 转换途中由 _sts_cancelled 直接读命令文件认领；
                                 # 走到这儿说明转换早结束了，什么都不用做。
                                 pass
+                            elif action == "prewarm":
+                                self._cmd_prewarm()
                             elif action == "set":
                                 params = (
                                     cmd.get("params")

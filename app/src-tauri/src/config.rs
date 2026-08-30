@@ -39,6 +39,8 @@ pub const HOT_KEYS: &[&str] = &[
     // 变声后的总音量。和 fx_out_gain_db 分开：那个在音效链里，音效关着就不生效。
     "out_gain_db",
     "f0method",
+    // 音高纠错。热键：转着的时候能开关，用户要能当场 A/B 一下。
+    "f0_repair",
     "I_noise_reduce",
     "O_noise_reduce",
     "use_pv",
@@ -120,6 +122,18 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("formant".into(), json!(0.0));
     m.insert("index_rate".into(), json!(0.75));
     m.insert("rms_mix_rate".into(), json!(0.25));
+    // 音高纠错：只删算法算错的三类（八度错误、无声段冒音高、孤立野值），
+    // **不做平滑** —— 平滑会把颤音、气声、爆发力和错误一起抹掉，
+    // 用户表达得越好被削得越狠。
+    //
+    // 默认关：它改变声音。改变声音的东西必须是用户自己点开的，
+    // 而且要能一项一项关掉，不是一个总开关。
+    m.insert("f0_repair".into(), json!(false));
+    // 开始变声之前先把模型读进显存。
+    //
+    // 默认关：预热会提前占住显存，而多数人开着变声器的时间远长于真正说话的
+    // 时间。愿意用一点显存换开口即用的人可以打开它。
+    m.insert("prewarm_on_start".into(), json!(false));
     m.insert("threhold".into(), json!(-60));
     m.insert("in_gain_db".into(), json!(0.0));
     m.insert("out_gain_db".into(), json!(0.0));

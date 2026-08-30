@@ -9,6 +9,7 @@ mod autostart;
 mod link_check;
 mod ckpt;
 mod config;
+mod consult;
 mod crash;
 mod download;
 mod dsp;
@@ -599,15 +600,51 @@ async fn diagnostics_build(
     .map_err(|e| e.to_string())?
 }
 
-/// Bundle the current voice's config + profiles for paid tuning.
+/// 朗读稿 + 现在录到什么程度了。界面照着它画。
+#[tauri::command]
+fn consult_state(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(consult::state(&root_clone(&state)?))
+}
+
+/// 开始录一种语言的原声。语言只认 zh / en / ja。
+#[tauri::command]
+async fn consult_record_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    lang: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || consult::record_start(&app, &root, &lang))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// 停止录音。和语音转换那边共用同一个录音器，所以直接借它的停。
+#[tauri::command]
+fn consult_record_stop() {
+    sts::cancel_record();
+}
+
+/// 把录好的全删掉，重来一次。
+#[tauri::command]
+fn consult_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    consult::clear(&root);
+    Ok(consult::state(&root))
+}
+
+/// 出包：把每种语言的原声用当前参数转一遍，连同性能记录一起打成 zip。
+///
+/// 转换要几十秒（第一次还要付冷启动），所以丢给阻塞线程池。
 #[tauri::command]
 async fn consult_build(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     note: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        shell_extras::build_consult_pack(&root, &note).map(|p| {
+        consult::build(&app, &root, &note).map(|p| {
             let _ = shell_extras::reveal(&p);
             json!({"ok": true, "path": p.to_string_lossy()})
         })
@@ -1535,6 +1572,7 @@ fn engine_set_hot(
     threhold: Option<f64>,
     index_rate: Option<f64>,
     rms_mix_rate: Option<f64>,
+    f0_repair: Option<bool>,
     dsp_enabled: Option<bool>,
     dsp_preset: Option<String>,
     dsp_params: Option<Value>,
@@ -1546,6 +1584,9 @@ fn engine_set_hot(
     }
     if let Some(v) = formant {
         payload.insert("formant".into(), json!(v));
+    }
+    if let Some(v) = f0_repair {
+        payload.insert("f0_repair".into(), json!(v));
     }
     if let Some(v) = function {
         // "fx" = 无模型 DSP 变声，整条 RVC 不走。以前这里只认 im/vc，
@@ -2188,6 +2229,10 @@ pub fn run() {
             cache_status,
             cache_clear,
             consult_build,
+            consult_state,
+            consult_record_start,
+            consult_record_stop,
+            consult_clear,
             reveal_user_dir,
             telemetry_tick,
             close_finish,
@@ -2483,6 +2528,22 @@ pub fn run() {
                     // 闲」，用户再点一次就是两个进程抢同一张卡。
                     worker::reap_orphan_tool_pythons(&root_bg);
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
+                    // 设置里开了「提前载入音色」就顺手把权重读进显存。
+                    //
+                    // 放在设备枚举**之后**：枚举是界面第一屏就要用的，
+                    // 而预热只影响「点开始之后要等多久」。让预热排在前面，
+                    // 用户会先看到一个一直转圈的设备列表。
+                    if config::read(&root_bg)
+                        .get("prewarm_on_start")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        match worker::send_command(&root_bg, "prewarm", Map::new()) {
+                            Ok(_) => logging::shell_log!("已请求提前载入音色"),
+                            // 预热是额外的便利，失败不该影响任何别的事。
+                            Err(e) => logging::shell_log!("提前载入音色未能开始：{e}"),
+                        }
+                    }
                 } else {
                     logging::shell_log!("skip worker prewarm: Runtime not ready");
                 }

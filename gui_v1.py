@@ -328,6 +328,10 @@ if __name__ == "__main__":
             self.use_pv: bool = False
             self.rms_mix_rate: float = 0.25  # follow speech loudness a bit
             self.index_rate: float = 0.0
+            # 音高纠错。默认关：它改变声音，而改变声音的东西必须是用户点开的。
+            # 只删算法算错的三类（八度错误、无声段冒音高、孤立野值），
+            # 不做平滑 —— 平滑会把颤音和爆发力一起抹掉。见 tools/f0_repair.py。
+            self.f0_repair: bool = False
             self.n_cpu: int = min(n_cpu, 4)
             self.f0method: str = "fcpe"
             self.sg_hostapi: str = ""
@@ -992,6 +996,12 @@ if __name__ == "__main__":
                     self.gui_config.index_rate = values["index_rate"]
                     if hasattr(self, "rvc"):
                         self.rvc.change_index_rate(values["index_rate"])
+                elif event == "f0_repair":
+                    # 音高纠错。热键：转着的时候能开关，用户要能当场 A/B。
+                    on = bool(values["f0_repair"])
+                    self.gui_config.f0_repair = on
+                    if hasattr(self, "rvc"):
+                        self.rvc.f0_repair = on
                 elif event == "rms_mix_rate":
                     self.gui_config.rms_mix_rate = values["rms_mix_rate"]
                 elif event in ["pm", "harvest", "crepe", "rmvpe", "fcpe"]:
@@ -1478,6 +1488,9 @@ if __name__ == "__main__":
             if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
                 self.rvc = None
                 raise RuntimeError(i18n("模型加载失败"))
+            # 开流时就把当前值带上。不带的话用户要先动一次开关才生效 ——
+            # 而他上次关掉的状态本该被记住。
+            self.rvc.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             if self.function == "fx":
                 self.function = "vc"
             # DirectML shares the GPU with the game via WDDM. Every .cpu() /

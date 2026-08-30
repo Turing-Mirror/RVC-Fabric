@@ -368,6 +368,16 @@ class RVC:
         return (neigh * weight.unsqueeze(2)).sum(dim=1)
 
     def get_f0_post(self, f0):
+        # 音高纠错。**只删算法算错的，不碰人的表达** —— 见 tools/f0_repair.py。
+        #
+        # 挂在 get_f0_post 而不是各个提取器里：所有提取器（rmvpe / fcpe /
+        # harvest / crepe / pm）都从这里出去，挂一处等于全都覆盖到，
+        # 也不会出现「换个音高算法纠错就没了」这种事。
+        #
+        # 默认关。它改变声音，而改变声音的东西必须是用户点开的
+        # —— 而且要能一项一项关掉，不是一个总开关。
+        if getattr(self, "f0_repair", False):
+            f0 = self._repair_f0(f0)
         if not torch.is_tensor(f0):
             f0 = torch.from_numpy(f0)
         f0 = f0.float().to(self.device).squeeze()
@@ -380,6 +390,25 @@ class RVC:
         f0_mel = torch.where(f0_mel > 0, scaled, f0_mel).clamp_(min=1, max=255)
         f0_coarse = torch.round(f0_mel).long()
         return f0_coarse, f0
+
+    def _repair_f0(self, f0):
+        """把 f0 交给纠错器。**出任何问题都原样返回。**
+
+        这是热路径上的一个可选增强：它坏掉的正确表现是「没有增强」，
+        不是「变声停了」。用户宁可听见一次八度错误，也不要整条流断掉。
+        """
+        try:
+            from tools.f0_repair import repair
+
+            arr = f0.detach().float().cpu().numpy() if torch.is_tensor(f0) else f0
+            fixed, stats = repair(arr)
+            if stats["octave"] or stats["island"]:
+                self._f0_repair_hits = getattr(self, "_f0_repair_hits", 0) + (
+                    stats["octave"] + stats["island"]
+                )
+            return fixed
+        except Exception:
+            return f0
 
     def _bench_sync(self):
         # opt-in (benchmark --sync-stages): truthful per-stage timings on async devices

@@ -5,8 +5,17 @@
 //! 1. **系统 TTS 念出来** —— Windows 自带的 SAPI，走 PowerShell 调
 //!    `System.Speech.Synthesis`。念出来的是微软那几把标准嗓子，不好听，但这一
 //!    步只负责「把字读成有停顿有轻重的人声」。
-//! 2. **RVC 换成用户选的音色** —— 就是离线推理，`tools/infer_cli.py`，和实时
-//!    变声用的是同一批权重。音色完全来自这一步。
+//! 2. **RVC 换成用户选的音色** —— 就是离线推理，音色完全来自这一步。
+//!
+//!    这一步**走 `sts::run`**，也就是语音转换那条链路，而不是自己起
+//!    `tools/infer_cli.py`。原来是后者，代价是**每合成一句都要付一次完整冷启动**：
+//!    import torch / fairseq、探设备、读 net_g、读 hubert、读 rmvpe 全套重来，
+//!    一条五秒的语音要等一两分钟。而 `sts::run` 那边早就解决了同一个问题 ——
+//!    实时 worker 在跑就借它的常驻模型（热路径），不在就用自己的常驻进程
+//!    （十分钟空闲回收）。同一个仓库里两套实现，好的那套一直没被这里用上。
+//!
+//!    接过去之后顺带白拿三样：OOM 自动重试、DirectML 算子缺口时退 CPU、
+//!    取消能真的中断。这三样 `infer_cli.py` 那条路一样都没有。
 //!
 //! 为什么不引一个神经 TTS：那要往 Runtime 里塞一个新的 python 依赖和一份新的
 //! 模型权重。Runtime 是个 1.8 GB 的整包，加一个依赖就得重发一次全量包，而所有
@@ -110,6 +119,10 @@ pub fn reset_output(root: &Path, use_rvc: bool) {
     let _ = crate::config::update(root, patch);
 }
 
+/// 旧的单文件推理脚本。
+///
+/// 第二步已经改走 `sts::run`，这里只剩一个用途：`status()` 报告它在不在，
+/// 让诊断包能看出这台机器的 payload 完整不完整。
 fn infer_script(root: &Path) -> PathBuf {
     root.join("tools").join("infer_cli.py")
 }
@@ -427,19 +440,18 @@ fn run_inner(
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.75b84a31d6").into());
     }
-    let script = infer_script(root);
-    if !script.is_file() {
-        return Err(crate::i18n::te("s.77c5c75ab1", &(script.display())));
-    }
-
     emit(app, "rvc", 1, 2, &crate::i18n::t("s.25865a0d91"));
-    let py = paths::runtime_pythonw(root).ok_or(crate::i18n::t("s.47e57cab60"))?;
     trace.note(&format!("rvc model {pth}"));
-    let errfile = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&trace.path)
-        .ok();
+
+    // 走语音转换那条链路：热路径（实时 worker 常驻的模型）优先，
+    // 没有实时 worker 时用它自己的常驻进程。两条都不必重付冷启动。
+    //
+    // sts::run 只认「输入路径 → 输出目录」，产物文件名由它决定，所以先转到一个
+    // 临时目录再挪到我们要的名字上。多这一步是为了不去改 sts 那边的签名 ——
+    // 那条链路同时服务批量转换，动它的输出命名风险更大。
+    let stage = crate::paths::update_cache(root).join("tts_rvc");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).map_err(|e| crate::i18n::te("s.e9ddef6eab", &(e)))?;
 
     let index = cfg
         .get("index_path")
@@ -451,57 +463,54 @@ fn run_inner(
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    let mut cmd = Command::new(&py);
-    cmd.arg(script.as_os_str())
-        .arg("--input_path")
-        .arg(raw.as_os_str())
-        .arg("--opt_path")
-        .arg(out.as_os_str())
-        .arg("--model_name")
-        .arg(&pth)
-        .arg("--index_path")
-        .arg(&index)
-        .arg("--index_rate")
-        .arg(index_rate.to_string())
-        .arg("--f0up_key")
-        .arg(pitch.to_string())
-        .arg("--f0method")
-        .arg("rmvpe")
-        .current_dir(root)
-        .envs(crate::worker::env_for_runtime(root))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(match errfile {
-            Some(f) => Stdio::from(f),
-            None => Stdio::null(),
-        });
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let opts = crate::sts::ConvertOpts {
+        // 文字合成有自己的进度条，别让「语音转换」页显示一个它没启动过的任务。
+        quiet: true,
+        ..Default::default()
+    };
+    let res = crate::sts::run(
+        app,
+        root,
+        &raw.to_string_lossy(),
+        &stage.to_string_lossy(),
+        pitch,
+        "rmvpe",
+        index_rate,
+        &pth,
+        &index,
+        opts,
+    );
+    if cancel_flag().load(Ordering::SeqCst) {
+        let _ = std::fs::remove_dir_all(&stage);
+        trace.note("cancelled during rvc");
+        return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
-
-    let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.dd5660b4da", &(e)))?;
-    let _keep = crate::worker::ToolPidGuard::new(child.id());
-    loop {
-        if cancel_flag().load(Ordering::SeqCst) {
-            let _ = child.kill();
-            trace.note("cancelled during rvc");
-            return Err(crate::i18n::t("s.a5ffdc95ee").into());
+    let value = match res {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&stage);
+            trace.note(&format!("rvc failed: {e}"));
+            return Err(e);
         }
-        match child.try_wait().map_err(|e| crate::i18n::te("s.50b4ac5f07", &(e)))? {
-            Some(st) => {
-                if !st.success() {
-                    return Err(crate::i18n::te("s.b640c89ee3", &st.code().unwrap_or(-1)));
-                }
-                break;
-            }
-            None => std::thread::sleep(std::time::Duration::from_millis(200)),
-        }
-    }
-    if !out.is_file() {
+    };
+    // 一条输入只会有一个产物。拿不到就是没转出来，别让后面的 copy 报一个
+    // 更难懂的「文件不存在」。
+    let produced = value
+        .get("files")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.first())
+        .and_then(|x| x.as_str())
+        .map(PathBuf::from)
+        .filter(|p| p.is_file());
+    let Some(produced) = produced else {
+        let _ = std::fs::remove_dir_all(&stage);
         return Err(crate::i18n::t("s.f7271a7905").into());
-    }
+    };
+    std::fs::rename(&produced, &out)
+        .or_else(|_| std::fs::copy(&produced, &out).map(|_| ()))
+        .map_err(|e| crate::i18n::te("s.9f8084f7cb", &(e)))?;
+    let _ = std::fs::remove_dir_all(&stage);
+
     trace.note(&format!(
         "rvc done {} ({} bytes)",
         out.display(),
@@ -543,6 +552,29 @@ mod tests {
         let st = status(Path::new("C:\\definitely-not-here"));
         assert_eq!(st["runtime_ready"], json!(false));
         assert_eq!(st["infer_present"], json!(false));
+    }
+
+    /// 第二步必须走 sts::run（常驻），不能再自己起 infer_cli.py。
+    ///
+    /// 这条钉的是一次真实的浪费：原来每合成一句都要付一次完整冷启动
+    /// （import torch/fairseq、探设备、读 net_g/hubert/rmvpe），一条五秒的
+    /// 语音要一两分钟；而同一个仓库里 sts 那条链路早就把它解决了。
+    #[test]
+    fn the_rvc_step_goes_through_the_resident_path() {
+        let src = include_str!("tts.rs");
+        assert!(src.contains("crate::sts::run("), "第二步应当调用 sts::run");
+        // run_inner 里不许再出现起进程的痕迹。infer_script 只剩 status() 在用。
+        let body = &src[src.find("fn run_inner").expect("run_inner")..];
+        let body = &body[..body.find("#[cfg(test)]").unwrap_or(body.len())];
+        assert!(!body.contains("cmd.spawn()"), "run_inner 不该再自己起进程");
+    }
+
+    /// 借用 sts 那条链路时必须静音，否则用户开着「语音转换」页跑文字合成，
+    /// 那一页会显示一个它自己没启动过的任务在跑。
+    #[test]
+    fn borrowing_the_sts_path_is_silent() {
+        let src = include_str!("tts.rs");
+        assert!(src.contains("quiet: true"), "借用时要静音");
     }
 
     #[test]

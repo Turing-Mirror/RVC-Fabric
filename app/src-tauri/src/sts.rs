@@ -17,6 +17,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::paths;
 
 static BUSY: Mutex<bool> = Mutex::new(false);
+/// 这一单要不要静音（见 `ConvertOpts::quiet`）。只在 `run()` 里改，
+/// 而 `run()` 被 BUSY 串行化，所以不会有两单互相改这个标志。
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static REC_BUSY: Mutex<bool> = Mutex::new(false);
 /// 最后一条推出去的进度。
@@ -40,6 +43,12 @@ const MAX_RECORD_SEC: u64 = 30 * 60;
 /// 原版单次推理那几个旋钮。缺省跟 infer-web 单次推理一致。
 #[derive(Debug, Clone)]
 pub struct ConvertOpts {
+    /// 不往界面发 `sts-progress`。
+    ///
+    /// 文字合成借这条链路做它的第二步，但它有自己的进度条（`tts-progress`）。
+    /// 不静音的话，用户开着「语音转换」页跑文字合成，那一页会显示一个它自己
+    /// 没启动过的任务在跑 —— 看着像串台。
+    pub quiet: bool,
     pub filter_radius: u32,
     pub resample_sr: u32,
     pub rms_mix_rate: f64,
@@ -52,6 +61,7 @@ pub struct ConvertOpts {
 impl Default for ConvertOpts {
     fn default() -> Self {
         Self {
+            quiet: false,
             filter_radius: 3,
             resample_sr: 0,
             rms_mix_rate: 0.25,
@@ -366,6 +376,9 @@ fn emit_full_ex(
         }
     }
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(body.clone());
+    if QUIET.load(Ordering::SeqCst) {
+        return;
+    }
     let _ = app.emit("sts-progress", body);
 }
 
@@ -1369,6 +1382,7 @@ pub fn run(
         }
         *g = true;
     }
+    QUIET.store(opts.quiet, Ordering::SeqCst);
     // 上一单的终态别留给这一单看。
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     cancel_flag().store(false, Ordering::SeqCst);
@@ -1448,6 +1462,8 @@ pub fn run(
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
     }
+    // 复位必须在 emit 之后：上面那条错误也该跟着静音。
+    QUIET.store(false, Ordering::SeqCst);
     result
 }
 
@@ -1868,6 +1884,17 @@ fn run_inner(
 
 #[cfg(test)]
 mod tests {
+
+    /// quiet 打开时不发 sts-progress。
+    #[test]
+    fn quiet_suppresses_progress_events() {
+        QUIET.store(true, Ordering::SeqCst);
+        assert!(QUIET.load(Ordering::SeqCst));
+        QUIET.store(false, Ordering::SeqCst);
+        assert!(!QUIET.load(Ordering::SeqCst));
+        // 默认必须是不静音的：批量转换那条路要靠这些事件画进度。
+        assert!(!ConvertOpts::default().quiet);
+    }
     use super::*;
     use std::fs;
 

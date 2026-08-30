@@ -167,7 +167,54 @@ export function ListItem({
   // completely inert, which is what the four 「展开」 rows on the help page were.
   const act = onClick;
   const isBtn = Boolean(act);
-  const body = (
+  const rowClass = [
+    "flex items-center gap-3.5 py-3.5 rounded-[var(--rs)]",
+    clickable || isBtn
+      ? "cursor-pointer -mx-3.5 px-3.5 hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-colors"
+      : "",
+    isBtn
+      ? "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-2px]"
+      : "",
+  ].join(" ");
+  // Use spans inside the native button: a button cannot contain divs, and the
+  // previous role=button wrapper also made keyboard support needlessly manual.
+  const content = (
+    <>
+      <span className="min-w-0">
+        {meta ? (
+          <span className="block text-[11.5px] text-[var(--meta)] mb-0.5">{meta}</span>
+        ) : null}
+        {title ? (
+          <span className="inline-flex items-center gap-1.5 text-sm leading-snug">
+            <span>{title}</span>
+            {titleTip ? <HelpMark title={titleTip} /> : null}
+          </span>
+        ) : null}
+        {desc ? (
+          <span className="block text-[12.5px] text-[var(--help)] mt-0.5 leading-relaxed">
+            {desc}
+          </span>
+        ) : null}
+      </span>
+      {right ? (
+        <span className="ml-auto flex-none flex items-center gap-2">{right}</span>
+      ) : null}
+    </>
+  );
+  // The current expandable rows have text-only right content. Keep the
+  // fallback for a future clickable row with a tooltip, where nesting the
+  // HelpMark button inside another button would be invalid HTML.
+  const nativeButton = isBtn && !titleTip;
+  const body = nativeButton ? (
+    <button
+      type="button"
+      aria-expanded={expanded !== undefined ? expanded : undefined}
+      onClick={act}
+      className={[rowClass, "w-full appearance-none border-0 bg-transparent text-left font-[inherit] text-[inherit]"].join(" ")}
+    >
+      {content}
+    </button>
+  ) : (
     <div
       role={isBtn ? "button" : undefined}
       tabIndex={isBtn ? 0 : undefined}
@@ -183,35 +230,9 @@ export function ListItem({
             }
           : undefined
       }
-      className={[
-        "flex items-center gap-3.5 py-3.5 rounded-[var(--rs)]",
-        clickable || isBtn
-          ? "cursor-pointer -mx-3.5 px-3.5 hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-colors"
-          : "",
-        isBtn
-          ? "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-2px]"
-          : "",
-      ].join(" ")}
+      className={rowClass}
     >
-      <div className="min-w-0">
-        {meta ? (
-          <span className="block text-[11.5px] text-[var(--meta)] mb-0.5">{meta}</span>
-        ) : null}
-        {title ? (
-          <span className="inline-flex items-center gap-1.5 text-sm leading-snug">
-            <span>{title}</span>
-            {titleTip ? <HelpMark title={titleTip} /> : null}
-          </span>
-        ) : null}
-        {desc ? (
-          <span className="block text-[12.5px] text-[var(--help)] mt-0.5 leading-relaxed">
-            {desc}
-          </span>
-        ) : null}
-      </div>
-      {right ? (
-        <div className="ml-auto flex-none flex items-center gap-2">{right}</div>
-      ) : null}
+      {content}
     </div>
   );
   if (!children) return body;
@@ -232,6 +253,52 @@ export function ListItem({
         </div>
       ) : null}
     </div>
+  );
+}
+
+export type AccordionItem = {
+  id: string;
+  title: string;
+  desc?: string;
+  content: ReactNode;
+};
+
+/** Shared grouped accordion rows used by the help sections. */
+export function AccordionGroup({
+  items,
+  openId,
+  onToggle,
+  openLabel,
+  closedLabel,
+}: {
+  items: readonly AccordionItem[];
+  openId: string;
+  onToggle: (id: string) => void;
+  openLabel: ReactNode;
+  closedLabel: ReactNode;
+}) {
+  return (
+    <Group>
+      {items.map((item) => {
+        const expanded = openId === item.id;
+        return (
+          <ListItem
+            key={item.id}
+            title={item.title}
+            desc={item.desc}
+            expanded={expanded}
+            onClick={() => onToggle(item.id)}
+            right={
+              <span className="text-[13.5px] text-[var(--ink-muted)]">
+                {expanded ? openLabel : closedLabel}
+              </span>
+            }
+          >
+            {item.content}
+          </ListItem>
+        );
+      })}
+    </Group>
   );
 }
 

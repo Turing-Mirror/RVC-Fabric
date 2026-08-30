@@ -24,6 +24,8 @@ type Step = {
   id: keyof Omit<Status, "dismissed">;
   label: string;
   page: PageId;
+  /** Help-page anchor for steps that need a precise landing point. */
+  focus?: string;
 };
 
 export function OnboardingBar({
@@ -34,8 +36,8 @@ export function OnboardingBar({
   /** App 在历史事件落盘/关闭时 +1，触发重读。 */
   tick: number;
   onDismissed?: () => void;
-  /** 点某一段时跳到对应页面（App 的 setPage，与站内其它入口同一导航）。 */
-  onNavigate: (page: PageId) => void;
+  /** 点某一段时跳到对应页面；说明页可以同时接收区块锚点。 */
+  onNavigate: (page: PageId, focus?: string) => void;
 }) {
   const [st, setSt] = useState<Status | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -72,15 +74,16 @@ export function OnboardingBar({
   const steps: Step[] = [
     { id: "runtime", label: t("s.obRuntime"), page: "more" },
     { id: "voice", label: t("s.obVoice"), page: "models" },
-    { id: "cable", label: t("s.obCable"), page: "help" },
+    { id: "cable", label: t("s.obCable"), page: "help", focus: "vbcable" },
     { id: "convert", label: t("s.obConvert"), page: "home" },
     { id: "monitor", label: t("s.obMonitor"), page: "settings" },
   ];
   const doneCount = steps.filter((s) => st[s.id]).length;
   const allDone = doneCount === steps.length;
 
-  // 跳转走 App 的 setPage 回调，与站内其它入口同一导航。
-  const go = (page: PageId) => onNavigate(page);
+  // 跳转走 App 的统一导航回调。虚拟声卡这一步直达安装区块，避免用户
+  // 进入说明页后还要在长页面里寻找安装按钮。
+  const go = (step: Step) => onNavigate(step.page, step.focus);
 
   return (
     <div className="mx-[30px] mt-4 mb-1 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-4 py-3 max-[1020px]:mx-[22px] max-[720px]:mx-4">
@@ -98,7 +101,7 @@ export function OnboardingBar({
               ) : null}
               <button
                 type="button"
-                onClick={() => go(s.page)}
+                onClick={() => go(s)}
                 className={[
                   "border-0 cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] leading-none",
                   st[s.id]

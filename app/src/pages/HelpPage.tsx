@@ -1,16 +1,26 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
+import {
+  AccordionGroup,
+  Block,
+  Btn,
+  Group,
+  ListItem,
+  PageHead,
+  PagePad,
+  type AccordionItem,
+} from "../components/ui";
 import { RouteDiagram } from "../components/RouteDiagram";
 import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { openExternal } from "../lib/plaza";
+import { useI18n } from "../i18n";
 import { t } from "../i18n/t";
 
 /**
  * 说明页里可以被直接跳转到的段。
  *
  * 以前只有 train / infer / separate 三个。自检结论想指到「常见情况」或者
- * 「虚拟声卡怎么连」时无处可去，只能笼统跳一个页面 —— 用户落在页顶，还得
+ * 「虚拟声卡连接方式」时无处可去，只能笼统跳一个页面 —— 用户落在页顶，还得
  * 自己找，等于没指。
  */
 export const HELP_ANCHORS = new Set([
@@ -23,6 +33,16 @@ export const HELP_ANCHORS = new Set([
   "separate",
 ]);
 
+type TextGuideEntry = { q: string; hint: string; a: string };
+
+function accordionItems(entries: readonly TextGuideEntry[]): AccordionItem[] {
+  return entries.map((entry) => ({
+    id: entry.q,
+    title: entry.q,
+    desc: entry.hint,
+    content: entry.a,
+  }));
+}
 
 /** VB-Cable 的官网。捐助提示里唯一该出现的地址。 */
 const VBCABLE_SITE = "www.vb-cable.com";
@@ -63,7 +83,8 @@ function DonateNote() {
  * 这一段和下面的常见情况是两种东西：常见情况是查阅式的，服务「已经知道自己
  * 要干什么、卡在某一步」的人；而说明页是在用户第一次点「开启变声」时弹出来
  * 的，那一刻他手里没有问题，只有一个还没做成的任务。查阅式的页面对这种人是
- * 失效的 —— 他不知道该查哪一条。所以排在全页最前面。
+ * 失效的 —— 他不知道该查哪一条。所以紧跟虚拟声卡安装区块，作为安装后的完整
+ * 操作路径。
  */
 function buildFirstRun(): { q: string; hint: string; a: string }[] {
   return [
@@ -269,10 +290,13 @@ function deviceNames(list: unknown): string[] {
     .filter(Boolean);
 }
 
-function detectRoutes(names: string[]): { kind: "virtual" | "physical"; label: string }[] {
+function detectRoutes(
+  names: string[],
+  routes: ReturnType<typeof buildRoutes>,
+): { kind: "virtual" | "physical"; label: string }[] {
   const lower = names.map((n) => n.toLowerCase());
   const hits: { kind: "virtual" | "physical"; label: string }[] = [];
-  for (const r of buildRoutes()) {
+  for (const r of routes) {
     // 「其他虚拟声卡」是兜底桶，已经认出具体是哪一款就别再报一遍：
     // VB-Cable 的设备名是「VB-Audio Virtual Cable」，两条都能命中，
     // 报成「VB-Cable、其他虚拟声卡」会让人以为自己装了两套。
@@ -318,7 +342,7 @@ function buildTrainGuide(): { q: string; hint: string; a: string }[] {
 type HelpProps = {
   /** 引擎报的设备列表。空的时候是引擎还没起来，不代表用户没装声卡。 */
   status?: { input_devices?: unknown; output_devices?: unknown };
-  /** 从工具窗跳过来时滚到这一段（train / infer / separate）。 */
+  /** 从其他入口跳过来时滚到这一段（vbcable / train / infer / separate）。 */
   focus?: string;
   /** 同一段再点一次也要再滚过去，不能只看 focus 字符串。 */
   focusNonce?: number;
@@ -332,6 +356,7 @@ function HelpPageImpl({
   focusNonce = 0,
   onOpenCommunity,
 }: HelpProps = {}) {
+  const { locale } = useI18n();
   const glossary = useGlossary();
   const glossaryTitle = useGlossarySectionTitle();
   const [open, setOpen] = useState<string>("");
@@ -443,28 +468,56 @@ function HelpPageImpl({
     }
   };
 
-  const names = [
-    ...deviceNames(status?.input_devices),
-    ...deviceNames(status?.output_devices),
-  ];
+  const names = useMemo(
+    () => [
+      ...deviceNames(status?.input_devices),
+      ...deviceNames(status?.output_devices),
+    ],
+    [status?.input_devices, status?.output_devices],
+  );
   const known = names.length > 0;
-  const found = detectRoutes(names);
+  const routes = useMemo(buildRoutes, [locale]);
+  const found = useMemo(() => detectRoutes(names, routes), [names, routes]);
   const hasVirtual = found.some((f) => f.kind === "virtual");
   const hasCable = found.some((f) => f.label === "VB-Cable");
   // 设备列表要重启后才出现；Program Files 里的官方卸载程序才是「已经装上」
   // 的即时证据。刚卸完、重启前两边都可能还在，用 vbRemoved 盖住卸载按钮。
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
-  const firstRun = buildFirstRun();
-  const faq = buildFaq();
+  // These guides contain translated text, so cache them until the locale
+  // changes. Expanding one row should not rebuild every help paragraph.
+  const firstRun = useMemo(buildFirstRun, [locale]);
+  const faq = useMemo(buildFaq, [locale]);
   const faqNeedle = faqFilter.trim().toLowerCase();
-  const faqShown = faqNeedle
-    ? faq.filter((f) =>
-        `${f.q}\n${f.hint}\n${f.a}`.toLowerCase().includes(faqNeedle),
-      )
-    : faq;
-  const trainGuide = buildTrainGuide();
-  const inferGuide = buildInferGuide();
-  const separateGuide = buildSeparateGuide();
+  const faqShown = useMemo(
+    () =>
+      faqNeedle
+        ? faq.filter((f) =>
+            `${f.q}\n${f.hint}\n${f.a}`.toLowerCase().includes(faqNeedle),
+          )
+        : faq,
+    [faq, faqNeedle],
+  );
+  const trainGuide = useMemo(buildTrainGuide, [locale]);
+  const inferGuide = useMemo(buildInferGuide, [locale]);
+  const separateGuide = useMemo(buildSeparateGuide, [locale]);
+  const firstRunItems = useMemo(() => accordionItems(firstRun), [firstRun]);
+  const faqItems = useMemo(() => accordionItems(faqShown), [faqShown]);
+  const glossaryItems = useMemo(
+    () =>
+      glossary.map((term) => ({
+        id: term.term,
+        title: term.term,
+        desc: term.brief,
+        content: term.detail,
+      })),
+    [glossary],
+  );
+  const inferItems = useMemo(() => accordionItems(inferGuide), [inferGuide]);
+  const separateItems = useMemo(
+    () => accordionItems(separateGuide),
+    [separateGuide],
+  );
+  const trainItems = useMemo(() => accordionItems(trainGuide), [trainGuide]);
 
   return (
     <PagePad>
@@ -478,31 +531,8 @@ function HelpPageImpl({
         }
       />
 
-      {/* 全页第一块。说明页是在用户第一次点「开启变声」时弹出来的，那一刻
-          他手里没有问题、只有一个没做成的任务 —— 先给整条路径，再给查阅材料。 */}
-      <Block id="help-firstrun" title={t("s.firstRunTitle")} note={String(firstRun.length)}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
-          {t("s.firstRunLead")}
-        </p>
-        <Group>
-          {firstRun.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
-      </Block>
+      {/* 先放用户必须完成的安装动作。安装按钮位于说明页顶部，和首次运行说明中
+          的落点一致；完整的七步路径紧跟其后，用户不需要在长页面里寻找入口。 */}
       <Block id="help-vbcable" title={t("s.b386a7fb53")}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
         {/* 先照着用户机器上真实的设备列表说一句话。
@@ -569,6 +599,21 @@ function HelpPageImpl({
         <DonateNote />
       </Block>
 
+      {/* 说明页是在用户第一次点「开启变声」时弹出来的，那一刻他手里没有问题、
+          只有一个没做成的任务 —— 安装完成后先给整条路径，再给查阅材料。 */}
+      <Block id="help-firstrun" title={t("s.firstRunTitle")} note={String(firstRun.length)}>
+        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
+          {t("s.firstRunLead")}
+        </p>
+        <AccordionGroup
+          items={firstRunItems}
+          openId={open}
+          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
+      </Block>
+
       <Block id="help-wiring" title={t("s.149ab7bf0a")}>
         {/* 图在表前面：表说的是「每一格该填什么」，图说的是「声音往哪走」。
             接错线的人缺的是后者 —— 五行并列的表看不出监听是另一条支路。 */}
@@ -622,115 +667,58 @@ function HelpPageImpl({
             {t("s.helpFaqNoHit")}
           </p>
         ) : null}
-        <Group>
-          {faqShown.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
+        <AccordionGroup
+          items={faqItems}
+          openId={open}
+          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
       </Block>
       <Block title={glossaryTitle} note={String(glossary.length)}>
-        <Group>
-          {glossary.map((term) => (
-            <ListItem
-              key={term.id || term.term}
-              title={term.term}
-              desc={term.brief}
-              expanded={openTerm === term.term}
-              onClick={() =>
-                setOpenTerm((cur) => (cur === term.term ? "" : term.term))
-              }
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {openTerm === term.term ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {term.detail}
-            </ListItem>
-          ))}
-        </Group>
+        <AccordionGroup
+          items={glossaryItems}
+          openId={openTerm}
+          onToggle={(id) => setOpenTerm((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
       </Block>
       <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
         </p>
-        <Group>
-          {inferGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
+        <AccordionGroup
+          items={inferItems}
+          openId={open}
+          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
       </Block>
       <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.sepGuideLead")}
         </p>
-        <Group>
-          {separateGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
+        <AccordionGroup
+          items={separateItems}
+          openId={open}
+          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
       </Block>
       <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.trainGuideLead")}
         </p>
-        <Group>
-          {trainGuide.map((f) => (
-            <ListItem
-              key={f.q}
-              title={f.q}
-              desc={f.hint}
-              expanded={open === f.q}
-              onClick={() => setOpen((cur) => (cur === f.q ? "" : f.q))}
-              right={
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {open === f.q ? t("s.5d5815647c") : t("s.b0e24833f7")}
-                </span>
-              }
-            >
-              {f.a}
-            </ListItem>
-          ))}
-        </Group>
+        <AccordionGroup
+          items={trainItems}
+          openId={open}
+          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
       </Block>
     </PagePad>
   );

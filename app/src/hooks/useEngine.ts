@@ -327,7 +327,7 @@ export function useEngine() {
       startingRef.current = false;
       setBusy(false);
     }
-  }, [running, refresh, provision, status.state]);
+  }, [running, refresh, provision]);
 
   /**
    * Ask the worker to re-enumerate audio devices.

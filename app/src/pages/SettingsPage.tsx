@@ -35,7 +35,7 @@ type Props = {
   onCheckUpdate?: () => void;
   updateLine?: string;
   updateBusy?: boolean;
-  /** 跳到说明页。设备这一套（虚拟声卡怎么连）的解释全在那边，
+  /** 跳到说明页。设备这一套（虚拟声卡连接方式）的解释全在那边，
    *  这里只放一个入口，不把同一段话再抄一遍。 */
   onOpenHelp?: () => void;
   /** 跳到「其他」页的仓库与社媒。说明页解决不了的，只能找人。 */
@@ -108,7 +108,7 @@ function SettingsPageImpl({
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
-  const TIPS = useMemo(() => tips(), [locale]);
+  const TIPS = useMemo(() => tips(t), [t]);
   const tabLabels = useMemo(
     () =>
       Object.fromEntries(

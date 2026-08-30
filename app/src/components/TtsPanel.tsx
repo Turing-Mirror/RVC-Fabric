@@ -243,18 +243,18 @@ function StsSection() {
   // 错误码上配的动作按钮会闪一下就消失。
   const errRef = useRef({ text: "", code: "" });
   const [msgCode, setMsgCode] = useState("");
-  const showErr = (v: string, code?: string | null) => {
+  const showErr = useCallback((v: string, code?: string | null) => {
     const c = code ?? (v === errRef.current.text ? errRef.current.code : "");
     errRef.current = { text: v, code: c };
     setMsgErr(true);
     setMsg(v);
     setMsgCode(c);
-  };
-  const showInfo = (v: string) => {
+  }, []);
+  const showInfo = useCallback((v: string) => {
     setMsgErr(false);
     setMsg(v);
     setMsgCode("");
-  };
+  }, []);
 
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
   // 到底是哪几个没转出来。过程中 skip 事件也会往这里塞，不用等整批结束。
@@ -274,14 +274,14 @@ function StsSection() {
   /** 上一次真正写出文件的目录。打开输出目录用它，不看默认 sts。 */
   const lastDestRef = useRef("");
 
-  const pickVoice = (m: VoiceModel | undefined) => {
+  const pickVoice = useCallback((m: VoiceModel | undefined) => {
     if (!m || !m.path) return;
     setModelPath(m.path);
     setIndexPath(typeof m.index === "string" ? m.index : "");
     setModelName(m.name || m.file || "");
-  };
+  }, []);
 
-  const applyCurrent = (
+  const applyCurrent = useCallback((
     s: StsStatus,
     cat: { models?: VoiceModel[]; selected_idx?: number },
   ) => {
@@ -307,9 +307,12 @@ function StsSection() {
       setIndexPath(s.index_path || "");
       setModelName(s.model_name || "");
     }
-  };
+  }, [pickVoice]);
 
-  const load = async (full = true) => {
+  const outputRef = useRef(output);
+  outputRef.current = output;
+
+  const load = useCallback(async (full = true) => {
     try {
       const [s, cat] = await Promise.all([
         invoke<StsStatus>("sts_status"),
@@ -327,9 +330,9 @@ function StsSection() {
           );
         }
         if (s.index_rate != null) setIndexRate(Number(s.index_rate));
-        if (!input && s.last_input) setInput(String(s.last_input));
+        if (!inputRef.current && s.last_input) setInput(String(s.last_input));
         // 只回填用户选过的目录。默认 User_Data/sts 不当成已选。
-        if (!output && s.last_output) setOutput(String(s.last_output));
+        if (!outputRef.current && s.last_output) setOutput(String(s.last_output));
         if (s.recording) {
           recordingRef.current = true;
           setRecording(true);
@@ -352,7 +355,7 @@ function StsSection() {
     } catch (e) {
       showErr(String(e));
     }
-  };
+  }, [applyCurrent, showErr]);
 
   useEffect(() => {
     void load(true);
@@ -479,21 +482,21 @@ function StsSection() {
       unFocus?.();
       audioRef.current?.pause();
     };
-  }, []);
+  }, [load, pickVoice, showErr]);
 
-  const refreshList = async (path: string) => {
+  const refreshList = useCallback(async (path: string) => {
     try {
       const r = await invoke<InputList>("sts_list_input", { input: path });
       setLib(r);
     } catch (e) {
       showErr(String(e));
     }
-  };
+  }, [showErr]);
 
   useEffect(() => {
     // 只跟输入路径走
     void refreshList(input);
-  }, [input]);
+  }, [input, refreshList]);
 
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
   useEffect(() => {

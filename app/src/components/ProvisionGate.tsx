@@ -64,9 +64,9 @@ function isCancelError(e: unknown): boolean {
  * Only shown when need_provision; does not change everyday VC flow once ready.
  */
 export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
-  // 订阅语言。这个组件用的是静态 t()，本身不会因为换语言重渲染；下面那个
-  // useMemo 还把 locale 当依赖，拿不到它就永远算不出第二遍。
-  const { locale } = useI18n();
+  // 订阅语言。大多数文案仍使用静态 t()，运行时兜底选项改用 hook 返回的
+  // translate，确保语言切换后不会留下旧语言的选项标签。
+  const { t: translate } = useI18n();
   const [info, setInfo] = useState<ProvisionStatus>(initial || {});
   const [variant, setVariant] = useState(
     initial?.recommended_variant && initial.recommended_variant !== "unknown"
@@ -189,14 +189,14 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     const list = (info.variants || []) as VariantRow[];
     if (list.length > 0) return list;
     return [
-      { id: "nvidia", label: t("s.4c65a5e25e") },
-      { id: "nvidia50", label: t("s.e7a64d4aaf") },
-      { id: "amd", label: t("s.variantAmd") },
+      { id: "nvidia", label: translate("s.4c65a5e25e") },
+      { id: "nvidia50", label: translate("s.e7a64d4aaf") },
+      { id: "amd", label: translate("s.variantAmd") },
     ];
     // locale 必须进依赖：这三条是 useMemo 算出来的，locale 就绪之前算过一次
     // 之后就再也不重算 —— 弹窗标题这些直接写在 JSX 里的会跟着刷新，这三行
     // 不会，于是同一个弹窗上半截是当前语言、三个选项停在默认语言。
-  }, [info.variants, locale]);
+  }, [info.variants, translate]);
 
   const selectedSizeLabel = useMemo(() => {
     const row = variants.find((v) => v.id === variant);

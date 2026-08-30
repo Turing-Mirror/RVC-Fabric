@@ -276,8 +276,13 @@ export default function App() {
   const [langGateChecked, setLangGateChecked] = useState(false);
 
   const engine = useEngine();
+  // App re-renders on the engine status heartbeat. Keep the latest status
+  // available to voice selection without making the selection callback change
+  // on every heartbeat and forcing the memoised pages to rebuild.
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
   const plaza = usePlaza();
-  const { syncParams, refreshProvision } = engine;
+  const { syncParams, refreshProvision, noteSwap } = engine;
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -834,21 +839,22 @@ export default function App() {
     // 采样率会变时引擎自己退回重开流。worker 没在跑时这里会失败，配置已是
     // 新的，下次开启就对，所以吞掉。
     // 纯 DSP worker 手里没有 RVC，热换会失败；改走完整 start（会切到 RVC worker）。
-    if (engine.running) {
-      const st = engine.status;
+    const currentEngine = engineRef.current;
+    if (currentEngine.running) {
+      const st = currentEngine.status;
       const dsp =
         st?.dsp_only === true ||
         st?.function === "fx" ||
         st?.worker_kind === "dsp";
       if (dsp) {
-        engine.noteSwap();
+        noteSwap();
         void startVc().catch(() => {});
       } else {
-        engine.noteSwap();
+        noteSwap();
         void swapModel().catch(() => {});
       }
     }
-  }, [syncParams, engine.running, engine.noteSwap, engine.status]);
+  }, [noteSwap, syncParams]);
 
   // —— 新手进度：两个历史事件的落盘点 ——
   // 首次成功变声（running 一旦为真就记，之后不再写）。
@@ -1432,7 +1438,10 @@ export default function App() {
         <OnboardingBar
           tick={onboardTick}
           onDismissed={() => setOnboardTick((n) => n + 1)}
-          onNavigate={setPage}
+          onNavigate={(id, focus) => {
+            if (id === "help") openHelp(focus);
+            else setPage(id);
+          }}
         />
       ) : null}
     </div>

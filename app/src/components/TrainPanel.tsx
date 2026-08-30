@@ -223,6 +223,9 @@ export function TrainPanel() {
   const [sr, setSr] = useState("48k");
   const [epochs, setEpochs] = useState(200);
   const [batch, setBatch] = useState(4);
+  // A ref keeps the initial batch suggestion from being re-applied after the
+  // user edits the field, without making the mount-only listener effect churn.
+  const batchTouchedRef = useRef(false);
   const batchRef = useRef<HTMLInputElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   // Btn 不转发 ref（它到处都在用，不为这一处改签名），所以套一层 span。
@@ -273,7 +276,6 @@ export function TrainPanel() {
     el.focus();
     el.select();
   }, []);
-  const [batchTouched, setBatchTouched] = useState(false);
   const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
   const [saveEvery, setSaveEvery] = useState(5);
   const [saveWeights, setSaveWeights] = useState(false);
@@ -284,14 +286,14 @@ export function TrainPanel() {
   // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
   // 所以两条路分开走，别让 ErrorNote 去猜。
   const [msgErr, setMsgErr] = useState(false);
-  const showErr = (v: string) => {
+  const showErr = useCallback((v: string) => {
     setMsgErr(true);
     setMsg(v);
-  };
-  const showInfo = (v: string) => {
+  }, []);
+  const showInfo = useCallback((v: string) => {
     setMsgErr(false);
     setMsg(v);
-  };
+  }, []);
 
   const [running, setRunning] = useState(false);
   const [adv, setAdv] = useState(false);
@@ -306,17 +308,17 @@ export function TrainPanel() {
   const epochMarks = useRef<{ at: number; done: number }[]>([]);
   const [eta, setEta] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const s = await invoke<Status>("train_status");
       setSt(s);
-      if (!batchTouched && s.suggested_batch && s.suggested_batch > 0) {
+      if (!batchTouchedRef.current && s.suggested_batch && s.suggested_batch > 0) {
         setBatch(s.suggested_batch);
       }
     } catch (e) {
       showErr(String(e));
     }
-  };
+  }, [showErr]);
 
   useEffect(() => {
     void load();
@@ -349,7 +351,7 @@ export function TrainPanel() {
       disposed = true;
       un?.();
     };
-  }, []);
+  }, [load, showErr]);
 
   const existing = st.experiments?.find((e) => e.name === name.trim());
   // 有切片就能续跑，预处理是最慢的一步（几十分钟），能跳过就跳过。
@@ -725,7 +727,7 @@ export function TrainPanel() {
               max={40}
               value={batch}
               onChange={(e) => {
-                setBatchTouched(true);
+                batchTouchedRef.current = true;
                 setBatch(Math.max(1, Number(e.target.value) || 1));
               }}
             />

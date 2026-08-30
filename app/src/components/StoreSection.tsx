@@ -983,6 +983,8 @@ function VoiceCard({
   const [useLocalCover, setUseLocalCover] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const lastMove = useRef({ at: 0, done: -1 });
+  const progressDoneRef = useRef(progress?.done ?? 0);
+  progressDoneRef.current = progress?.done ?? 0;
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
@@ -1005,7 +1007,7 @@ function VoiceCard({
   }, [coverHttp]);
   useEffect(() => {
     if (!busy) return;
-    lastMove.current = { at: Date.now(), done: progress?.done ?? 0 };
+    lastMove.current = { at: Date.now(), done: progressDoneRef.current };
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(tick);
   }, [busy]);

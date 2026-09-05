@@ -121,6 +121,88 @@ def pick_default_input(names: Iterable[str]) -> str:
     return names[0] if names else ""
 
 
+def system_default_device_name(kind: str, hostapis, devices) -> str:
+    """Windows 默认播放/录音设备名，取自 PortAudio 各 host API 自己的默认索引。
+
+    不要用 ``sd.query_devices(kind=…)``：那会跟 ``sd.default.device``，而
+    ``set_devices`` 已经把进程默认改成了 CABLE。链路自检再读这个字段，就会
+    把软件输出误报成「Windows 默认播放」（diag 26.9.6 阿白：系统面板是扬声器，
+    自检仍写 CABLE Input）。
+
+    host API 的 ``default_output_device`` 不随进程流走。WASAPI 跟设置页 /
+    mmsys.cpl 最接近，没有再退 MME / DirectSound / WDM-KS。
+    """
+    kind = (kind or "").strip().lower()
+    if kind not in ("input", "output"):
+        return ""
+    field = "default_input_device" if kind == "input" else "default_output_device"
+    ch_field = "max_input_channels" if kind == "input" else "max_output_channels"
+    by_index = {}
+    for d in devices or []:
+        if not isinstance(d, dict):
+            continue
+        raw = d.get("index")
+        if raw is None:
+            continue
+        try:
+            by_index[int(raw)] = d
+        except (TypeError, ValueError):
+            continue
+
+    def _name_of(api) -> str:
+        if not isinstance(api, dict):
+            return ""
+        try:
+            idx = int(api.get(field, -1))
+        except (TypeError, ValueError):
+            return ""
+        if idx < 0:
+            return ""
+        d = by_index.get(idx)
+        if not d:
+            return ""
+        try:
+            if int(d.get(ch_field, 0) or 0) <= 0:
+                return ""
+        except (TypeError, ValueError):
+            return ""
+        return str(d.get("name") or "")
+
+    prefer = ("WASAPI", "MME", "DirectSound", "WDM-KS")
+    ranked = []
+    rest = []
+    for api in hostapis or []:
+        name = str((api or {}).get("name") or "")
+        slot = next((i for i, p in enumerate(prefer) if p.lower() in name.lower()), None)
+        if slot is None:
+            rest.append(api)
+        else:
+            ranked.append((slot, api))
+    ranked.sort(key=lambda x: x[0])
+    for _, api in ranked:
+        got = _name_of(api)
+        if got:
+            return got
+    for api in rest:
+        got = _name_of(api)
+        if got:
+            return got
+    return ""
+
+
+def query_system_default_names(sd_mod) -> tuple[str, str]:
+    """现场查一遍。失败返回空串。不读 ``sd.default.device``。"""
+    try:
+        hostapis = sd_mod.query_hostapis()
+        devices = sd_mod.query_devices()
+    except Exception:
+        return "", ""
+    return (
+        system_default_device_name("input", hostapis, devices),
+        system_default_device_name("output", hostapis, devices),
+    )
+
+
 def pick_default_output(names: Iterable[str]) -> str:
     """主输出必须是 CABLE 类虚拟设备；找不到就返回空，让调用方报错。
 

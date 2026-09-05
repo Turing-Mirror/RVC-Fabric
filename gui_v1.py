@@ -2816,21 +2816,18 @@ if __name__ == "__main__":
             return self.delay_time
 
         def _worker_device_payload(self):
-            # default_*：PortAudio 的默认设备即 Windows 默认设备。链路自检
-            # 靠它发现「默认播放被设成了 CABLE」这种接法事故；查询失败就报
-            # 空串，让壳子按「无法检查」处理，别让整份状态都发不出去。
-            def _default_name(kind):
-                try:
-                    return str(sd.query_devices(kind=kind).get("name") or "")
-                except Exception:
-                    return ""
+            # default_* 必须走 host API 自己的默认索引，不能 query_devices(kind=)。
+            # 后者跟 sd.default.device，set_devices 已经把它改成 CABLE，自检会把
+            # 软件输出误报成 Windows 默认播放（diag 26.9.6 阿白）。
+            from tools.device_pick import query_system_default_names
 
+            default_in, default_out = query_system_default_names(sd)
             return {
                 "hostapis": list(self.hostapis or []),
                 "input_devices": list(self.input_devices or []),
                 "output_devices": list(self.output_devices or []),
-                "default_input_device": _default_name("input"),
-                "default_output_device": _default_name("output"),
+                "default_input_device": default_in,
+                "default_output_device": default_out,
                 "sg_hostapi": self.gui_config.sg_hostapi,
                 "sg_input_device": self.gui_config.sg_input_device,
                 "sg_output_device": self.gui_config.sg_output_device,

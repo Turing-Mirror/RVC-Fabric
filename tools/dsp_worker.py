@@ -59,7 +59,11 @@ def main() -> None:
     from tools.delay_metric import ema as _delay_ema
     from tools.delay_metric import frames_until_block_start
     from tools.delay_metric import live_delay_sec
-    from tools.device_pick import fill_missing_devices, resolve_device_name
+    from tools.device_pick import (
+        fill_missing_devices,
+        query_system_default_names,
+        resolve_device_name,
+    )
     from tools.dsp_fx import RealtimeFxChain
     from tools.dsp_presets import get_preset
     from tools.dsp_voice import VoiceChain
@@ -135,6 +139,7 @@ def main() -> None:
         return status_fields(code, params or None)
 
     def _payload():
+        default_in, default_out = query_system_default_names(sd)
         return {
             "worker_kind": "dsp",
             "dsp_only": True,
@@ -142,6 +147,8 @@ def main() -> None:
             "hostapis": list(hostapis),
             "input_devices": list(input_devices),
             "output_devices": list(output_devices),
+            "default_input_device": default_in,
+            "default_output_device": default_out,
             "sg_hostapi": sg_hostapi,
             "sg_input_device": sg_input,
             "sg_output_device": sg_output,

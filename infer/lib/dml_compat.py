@@ -44,6 +44,18 @@ def is_dml_device(device) -> bool:
     return "privateuseone" in str(device or "").lower()
 
 
+def index_dtype(device):
+    """音高 / 长度这类索引张量用的整数类型。
+
+    DirectML 对 int64（``torch.long``）支持很差：``torch.zeros(..., dtype=long)``
+    在 ``privateuseone`` 上会抛**空消息**的 ``RuntimeError``（diag 26.9.6）。
+    改用 int32，Embedding 索引和 ``net_g.infer`` 都认。
+    """
+    import torch
+
+    return torch.int32 if is_dml_device(device) else torch.long
+
+
 def wants_dml(config) -> bool:
     """这份配置跑不跑 DirectML。
 

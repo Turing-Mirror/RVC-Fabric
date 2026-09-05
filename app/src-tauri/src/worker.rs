@@ -315,6 +315,12 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     if !env.contains_key("TM_ACCEL") {
         env.insert("TM_ACCEL".into(), "auto".into());
     }
+    // 注册表 / nvidia-smi 看到的 N 卡名。worker 里 torch.cuda 起不来时，靠这个
+    // 判断「卡在、驱动不在」，不要自动改走核显 DirectML。
+    let nv = crate::provision::list_nvidia_gpus();
+    if !nv.is_empty() {
+        env.insert("TM_NVIDIA_GPUS".into(), nv.join("|"));
+    }
     apply_main_gpu(root, &mut env);
     env
 }

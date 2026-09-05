@@ -26,6 +26,46 @@ VIRTUAL_ADAPTER_HINTS = (
 )
 
 
+NVIDIA_HINTS = ("nvidia", "geforce", "rtx", "gtx", "quadro", "tesla")
+
+
+def looks_like_nvidia(name: str) -> bool:
+    n = str(name or "").lower()
+    return any(k in n for k in NVIDIA_HINTS)
+
+
+def nvidia_names_from_env(environ=None) -> list:
+    """壳层写入的 ``TM_NVIDIA_GPUS``（``|`` 分隔）。没有或空则 []。"""
+    import os
+
+    raw = (environ if environ is not None else os.environ).get("TM_NVIDIA_GPUS", "")
+    raw = str(raw or "").strip()
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split("|") if p.strip()]
+
+
+def nvidia_present_without_cuda(cuda_available: bool, names) -> bool:
+    """注册表/nvidia-smi 看到 N 卡，但 torch.cuda 起不来。
+
+    diag 26.9.6 落了灰的歌单：P106-100 在，CUDA 不可用，自动后端却去了
+    HD 4600 DirectML，实时变声在 ``torch.zeros(..., dtype=long)`` 上空报错。
+    """
+    if cuda_available:
+        return False
+    return any(looks_like_nvidia(n) for n in (names or []))
+
+
+def auto_use_dml(cuda_available: bool, dml_count: int, nvidia_names=None) -> bool:
+    """自动后端：CUDA 可用就不用 DirectML；N 卡在而 CUDA 挂了也不自动改走
+    DirectML（退 CPU，让界面把「装驱动」说出来）；否则 DirectML 设备数 ≥ 1。"""
+    if cuda_available:
+        return False
+    if nvidia_present_without_cuda(False, nvidia_names):
+        return False
+    return int(dml_count or 0) >= 1
+
+
 def first_real_adapter(names) -> "int | None":
     """名字看着不像虚拟适配器的第一块。全都像、或者一个名字都读不出来就返回 None。
 

@@ -268,7 +268,8 @@
       "quit": "Exited",
       "loop_error": "Engine internal error — see the log",
       "launching": "Launching the engine process…",
-      "files_corrupt": "Engine program file damaged ({files}). Run the installer again to repair in place — voices and the downloaded runtime are kept."
+      "files_corrupt": "Engine program file damaged ({files}). Run the installer again to repair in place — voices and the downloaded runtime are kept.",
+      "nvidia_cuda_missing": "An NVIDIA GPU was found ({gpu}), but CUDA is not available. Install the official GPU driver and restart this app."
     },
     "runtime": {
       "not_ready": "Runtime not ready — finish setup first",
@@ -288,6 +289,7 @@
       "running": "Converting",
       "bad_settings": "Invalid settings — cannot start",
       "start_failed": "Failed to start",
+      "dml_alloc": "This GPU ({gpu}) cannot allocate the model cache on DirectML. If you have an NVIDIA card, install the official driver first.",
       "start_timeout": "Start timed out: engine never entered voice conversion. Try again, or check User_Data/logs/realtime_worker.log",
       "stop_failed": "Failed to stop",
       "params_applied": "Settings applied",

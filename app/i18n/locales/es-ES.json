@@ -268,7 +268,8 @@
       "quit": "Cerrado",
       "loop_error": "Error interno del motor: consulta el registro",
       "launching": "Iniciando el proceso del motor…",
-      "files_corrupt": "Archivo del motor dañado ({files}). Vuelva a ejecutar el instalador para repararlo; las voces y el runtime descargado se conservan."
+      "files_corrupt": "Archivo del motor dañado ({files}). Vuelva a ejecutar el instalador para repararlo; las voces y el runtime descargado se conservan.",
+      "nvidia_cuda_missing": "Se detectó una GPU NVIDIA ({gpu}), pero CUDA no está disponible. Instale el controlador oficial y reinicie esta aplicación."
     },
     "runtime": {
       "not_ready": "El Runtime no está listo: completa la instalación primero",
@@ -288,6 +289,7 @@
       "running": "Convirtiendo",
       "bad_settings": "Ajustes no válidos; no se puede iniciar",
       "start_failed": "No se pudo iniciar",
+      "dml_alloc": "Esta GPU ({gpu}) no puede reservar la caché del modelo en DirectML. Si tiene una tarjeta NVIDIA, instale primero el controlador oficial.",
       "start_timeout": "Tiempo de inicio agotado: el motor no entró en conversión. Inténtalo de nuevo o revisa User_Data/logs/realtime_worker.log",
       "stop_failed": "No se pudo detener",
       "params_applied": "Ajustes aplicados",

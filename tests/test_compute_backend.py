@@ -14,7 +14,13 @@ VR、远程桌面的机器上，0 号常常是一块虚拟显示适配器 ——
 
 import unittest
 
-from configs.accel import first_real_adapter
+from configs.accel import (
+    auto_use_dml,
+    first_real_adapter,
+    looks_like_nvidia,
+    nvidia_names_from_env,
+    nvidia_present_without_cuda,
+)
 
 
 class DirectMLAdapterPick(unittest.TestCase):
@@ -53,6 +59,34 @@ class DirectMLAdapterPick(unittest.TestCase):
         # 名字读不出来时补的是空串，不能因为「空串里不含关键词」就把它当真卡。
         self.assertEqual(first_real_adapter(["", "NVIDIA GeForce RTX 3060"]), 1)
         self.assertIsNone(first_real_adapter(["", ""]))
+
+
+class NvidiaWithoutCuda(unittest.TestCase):
+    """diag 26.9.6 落了灰的歌单：P106 在、CUDA 不起，不能自动改走核显 DirectML。"""
+
+    def test_p106_counts_as_nvidia(self):
+        self.assertTrue(looks_like_nvidia("NVIDIA P106-100 (RainCandy Technology)"))
+        self.assertFalse(looks_like_nvidia("Intel(R) HD Graphics 4600"))
+
+    def test_env_split(self):
+        self.assertEqual(
+            nvidia_names_from_env({"TM_NVIDIA_GPUS": "NVIDIA P106-100 (RainCandy Technology)"}),
+            ["NVIDIA P106-100 (RainCandy Technology)"],
+        )
+        self.assertEqual(nvidia_names_from_env({"TM_NVIDIA_GPUS": ""}), [])
+
+    def test_present_without_cuda(self):
+        names = ["NVIDIA P106-100 (RainCandy Technology)"]
+        self.assertTrue(nvidia_present_without_cuda(False, names))
+        self.assertFalse(nvidia_present_without_cuda(True, names))
+        self.assertFalse(nvidia_present_without_cuda(False, ["Intel(R) HD Graphics 4600"]))
+
+    def test_auto_dml_skips_when_nvidia_listed_but_cuda_down(self):
+        nv = ["NVIDIA P106-100 (RainCandy Technology)"]
+        self.assertFalse(auto_use_dml(False, 2, nv))
+        self.assertTrue(auto_use_dml(False, 2, []))
+        self.assertFalse(auto_use_dml(True, 2, nv))
+        self.assertFalse(auto_use_dml(False, 0, []))
 
 
 if __name__ == "__main__":

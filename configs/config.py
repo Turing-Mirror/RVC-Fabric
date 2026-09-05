@@ -63,6 +63,11 @@ class Config:
         ) = self.arg_parse()
         # Product / worker env (official AMD path uses --dml; we also honor TM_*)
         self.dml = self._resolve_dml_flag(self.dml)
+        from configs.accel import nvidia_names_from_env, nvidia_present_without_cuda
+
+        self.nvidia_cuda_missing = nvidia_present_without_cuda(
+            torch.cuda.is_available(), nvidia_names_from_env()
+        )
         self.instead = ""
         self.preprocess_per = 3.7
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
@@ -89,16 +94,25 @@ class Config:
         if cli_dml:
             return True
         # auto
-        if torch.cuda.is_available():
-            return False
+        from configs.accel import auto_use_dml, nvidia_names_from_env
+
+        cuda_on = bool(torch.cuda.is_available())
+        nv = nvidia_names_from_env()
+        dml_n = 0
         try:
             import torch_directml  # type: ignore
 
-            if int(torch_directml.device_count()) >= 1:
-                logger.info("Auto backend: DirectML (no CUDA; torch_directml available)")
-                return True
+            dml_n = int(torch_directml.device_count())
         except Exception:
-            pass
+            dml_n = 0
+        if nv and not cuda_on:
+            logger.warning(
+                "NVIDIA GPU listed (%s) but CUDA unavailable; not auto-selecting DirectML",
+                ", ".join(nv),
+            )
+        if auto_use_dml(cuda_on, dml_n, nv):
+            logger.info("Auto backend: DirectML (no CUDA; torch_directml available)")
+            return True
         return False
 
     @staticmethod

@@ -62,7 +62,9 @@ try:
         DEV_LIST_FAILED,
         DEV_REFRESHED,
         ENGINE_LOOP_ERROR,
+        ENGINE_NVIDIA_CUDA_MISSING,
         ENGINE_QUIT,
+        VC_DML_ALLOC,
         VC_BAD_SETTINGS,
         VC_LOADING_HUBERT,
         VC_LOADING_INDEX,
@@ -87,8 +89,10 @@ except Exception:
     DEV_LIST_FAILED = "dev.list_failed"
     DEV_REFRESHED = "dev.refreshed"
     ENGINE_LOOP_ERROR = "engine.loop_error"
+    ENGINE_NVIDIA_CUDA_MISSING = "engine.nvidia_cuda_missing"
     ENGINE_QUIT = "engine.quit"
     VC_BAD_SETTINGS = "vc.bad_settings"
+    VC_DML_ALLOC = "vc.dml_alloc"
     VC_LOADING_HUBERT = "vc.loading_hubert"
     VC_LOADING_INDEX = "vc.loading_index"
     VC_LOADING_MODEL = "vc.loading_model"
@@ -1473,8 +1477,9 @@ if __name__ == "__main__":
                 on_progress=self._on_rvc_progress,
             )
             if not getattr(self.rvc, "tgt_sr", 0) or getattr(self.rvc, "net_g", None) is None:
+                detail = getattr(self.rvc, "_load_error", "") if self.rvc else ""
                 self.rvc = None
-                raise RuntimeError(i18n("模型加载失败"))
+                raise RuntimeError(detail or i18n("模型加载失败"))
             if self.function == "fx":
                 self.function = "vc"
             # DirectML shares the GPU with the game via WDDM. Every .cpu() /
@@ -2858,10 +2863,13 @@ if __name__ == "__main__":
                 kind = "xpu"
             else:
                 kind = "cpu"
-            return {
+            out = {
                 "compute_backend": kind,
                 "compute_device": str(getattr(self.config, "gpu_name", "") or "") or dev,
             }
+            if getattr(self.config, "nvidia_cuda_missing", False):
+                out["nvidia_cuda_missing"] = True
+            return out
 
         def _cuda_graph_payload(self):
             """录了几张图、重放了多少次、退回 eager 多少次。
@@ -3687,10 +3695,25 @@ if __name__ == "__main__":
                     self.stop_stream()
                 except Exception:
                     pass
+                text = (str(e) or "").strip()
+                gpu_nv = os.environ.get("TM_NVIDIA_GPUS", "").replace("|", "、")
+                gpu_now = str(
+                    getattr(getattr(self, "config", None), "gpu_name", "") or ""
+                )
+                if getattr(getattr(self, "config", None), "nvidia_cuda_missing", False):
+                    fields = _msg(
+                        ENGINE_NVIDIA_CUDA_MISSING, gpu=gpu_nv or gpu_now or "NVIDIA"
+                    )
+                elif "DirectML" in text and "分配" in text:
+                    fields = _msg(
+                        VC_DML_ALLOC, gpu=gpu_now or str(getattr(self.config, "device", ""))
+                    )
+                else:
+                    fields = _msg(VC_START_FAILED)
                 self._worker_write_status(
                     state="error",
-                    error=f"{type(e).__name__}: {e}",
-                    **_msg(VC_START_FAILED),
+                    error=f"{type(e).__name__}: {e}" if text else type(e).__name__,
+                    **fields,
                 )
 
         def _worker_stop(self):
@@ -4098,9 +4121,17 @@ if __name__ == "__main__":
             base["worker_kind"] = "rvc"
             base["dsp_only"] = False
             try:
-                from tools.msg_codes import ENGINE_READY, status_fields as _sf_ready
+                from tools.msg_codes import (
+                    ENGINE_NVIDIA_CUDA_MISSING,
+                    ENGINE_READY,
+                    status_fields as _sf_ready,
+                )
 
-                base.update(_sf_ready(ENGINE_READY))
+                if getattr(getattr(self, "config", None), "nvidia_cuda_missing", False):
+                    gpu = os.environ.get("TM_NVIDIA_GPUS", "").replace("|", "、") or "NVIDIA"
+                    base.update(_sf_ready(ENGINE_NVIDIA_CUDA_MISSING, {"gpu": gpu}))
+                else:
+                    base.update(_sf_ready(ENGINE_READY))
             except Exception:
                 base["message"] = "引擎就绪"
                 base["message_code"] = "engine.ready"

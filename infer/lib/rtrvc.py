@@ -141,12 +141,20 @@ class RVC:
             self.pth_path: str = pth_path
             self.index_path = index_path
             self.index_rate = index_rate
-            self.cache_pitch: torch.Tensor = torch.zeros(
-                1024, device=self.device, dtype=torch.long
-            )
-            self.cache_pitchf = torch.zeros(
-                1024, device=self.device, dtype=torch.float32
-            )
+            self._index_dtype = dml_compat.index_dtype(self.device)
+            try:
+                self.cache_pitch: torch.Tensor = torch.zeros(
+                    1024, device=self.device, dtype=self._index_dtype
+                )
+                self.cache_pitchf = torch.zeros(
+                    1024, device=self.device, dtype=torch.float32
+                )
+            except Exception as e:
+                gpu = str(getattr(config, "gpu_name", "") or self.device)
+                detail = (str(e) or "").strip() or type(e).__name__
+                raise RuntimeError(
+                    "DirectML 无法在当前显卡（%s）上分配模型缓存（%s）" % (gpu, detail)
+                ) from e
 
             self.resample_kernel = {}
 
@@ -248,8 +256,13 @@ class RVC:
             if last_rvc is not None and hasattr(last_rvc, "model_fcpe"):
                 self.device_fcpe = last_rvc.device_fcpe
                 self.model_fcpe = last_rvc.model_fcpe
-        except:
+        except Exception as e:
             printt(traceback.format_exc())
+            text = (str(e) or "").strip()
+            if not text:
+                gpu = str(getattr(config, "gpu_name", "") or getattr(self, "device", ""))
+                text = "DirectML 无法在当前显卡（%s）上分配模型缓存" % gpu
+            self._load_error = text
 
     def change_key(self, new_key):
         self.f0_up_key = new_key
@@ -289,7 +302,10 @@ class RVC:
             cache = self._long_dev_cache = {}
         t = cache.get(value)
         if t is None:
-            t = cache[value] = torch.LongTensor([value]).to(self.device)
+            dt = getattr(self, "_index_dtype", None)
+            if dt is None:
+                dt = torch.long
+            t = cache[value] = torch.tensor([value], dtype=dt, device=self.device)
         return t
 
     def _long_cpu(self, value):
@@ -369,7 +385,8 @@ class RVC:
             self.f0_mel_max - self.f0_mel_min
         ) + 1
         f0_mel = torch.where(f0_mel > 0, scaled, f0_mel).clamp_(min=1, max=255)
-        f0_coarse = torch.round(f0_mel).long()
+        dt = getattr(self, "_index_dtype", None)
+        f0_coarse = torch.round(f0_mel).to(dtype=dt if dt is not None else torch.long)
         return f0_coarse, f0
 
     def _bench_sync(self):

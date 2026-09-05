@@ -35,6 +35,9 @@ RUNTIME_MISSING_PYTHON = "runtime.missing_python"
 ENGINE_STOPPED = "engine.stopped"
 ENGINE_QUIT = "engine.quit"
 ENGINE_LOOP_ERROR = "engine.loop_error"
+# 壳层枚举到 N 卡，但 Runtime 里 torch.cuda.is_available() 为假（驱动没装 /
+# nvidia-smi 没有 / 矿卡没显示输出）。自动后端不再改走核显 DirectML。
+ENGINE_NVIDIA_CUDA_MISSING = "engine.nvidia_cuda_missing"
 
 # devices
 DEV_REFRESHED = "dev.refreshed"
@@ -55,6 +58,7 @@ VC_PTH_MISSING = "vc.pth_missing"
 VC_RUNNING = "vc.running"
 VC_BAD_SETTINGS = "vc.bad_settings"
 VC_START_FAILED = "vc.start_failed"
+VC_DML_ALLOC = "vc.dml_alloc"
 VC_STOP_FAILED = "vc.stop_failed"
 VC_PARAMS_APPLIED = "vc.params_applied"
 VC_UNKNOWN_CMD = "vc.unknown_cmd"
@@ -257,6 +261,7 @@ _FALLBACK_ZH: dict[str, str] = {
     ENGINE_STOPPED: "已停止",
     ENGINE_QUIT: "已退出",
     ENGINE_LOOP_ERROR: "引擎内部错误，详见日志",
+    ENGINE_NVIDIA_CUDA_MISSING: "检测到 NVIDIA 显卡（{gpu}），但 CUDA 不可用。请安装官方显卡驱动并重启本软件。",
     RUNTIME_NOT_READY: "运行时未就绪，请先完成补全",
     RUNTIME_MISSING_PYTHON: "找不到 Runtime\\python.exe",
     DEV_REFRESHED: "设备列表已刷新",
@@ -275,6 +280,7 @@ _FALLBACK_ZH: dict[str, str] = {
     VC_RUNNING: "变声中",
     VC_BAD_SETTINGS: "设置无效，无法开始变声",
     VC_START_FAILED: "启动失败",
+    VC_DML_ALLOC: "当前显卡（{gpu}）无法在 DirectML 上分配模型缓存。若有 NVIDIA 显卡，请先安装官方驱动。",
     VC_STOP_FAILED: "停止失败",
     VC_PARAMS_APPLIED: "参数已应用",
     VC_UNKNOWN_CMD: "无法识别的指令：{action}",

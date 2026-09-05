@@ -93,6 +93,12 @@ class DeviceDetection(unittest.TestCase):
         self.assertFalse(dml_compat.wants_dml(SimpleNamespace(dml=False, device="cuda:0")))
         self.assertFalse(dml_compat.wants_dml(None))
 
+    def test_rtrvc_uses_dml_index_dtype_and_keeps_load_error(self):
+        src = (ROOT / "infer" / "lib" / "rtrvc.py").read_text(encoding="utf-8")
+        self.assertIn("dml_compat.index_dtype", src)
+        self.assertIn("self._load_error", src)
+        self.assertNotIn("dtype=torch.long", src.split("cache_pitch")[1][:400])
+
 
 class GradMultiplyPatch(unittest.TestCase):
     def test_unpatched_forward_blows_up(self):

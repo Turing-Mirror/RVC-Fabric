@@ -268,7 +268,8 @@
       "quit": "已退出",
       "loop_error": "引擎内部错误，详见日志",
       "launching": "正在启动引擎进程…",
-      "files_corrupt": "引擎程序文件损坏（{files}）。重新运行安装包覆盖安装即可修复，音色与运行时会保留"
+      "files_corrupt": "引擎程序文件损坏（{files}）。重新运行安装包覆盖安装即可修复，音色与运行时会保留",
+      "nvidia_cuda_missing": "检测到 NVIDIA 显卡（{gpu}），但 CUDA 不可用。请安装官方显卡驱动并重启本软件。"
     },
     "runtime": {
       "not_ready": "运行时未就绪，请先完成补全",
@@ -288,6 +289,7 @@
       "running": "变声中",
       "bad_settings": "设置无效，无法开始变声",
       "start_failed": "启动失败",
+      "dml_alloc": "当前显卡（{gpu}）无法在 DirectML 上分配模型缓存。若有 NVIDIA 显卡，请先安装官方驱动。",
       "start_timeout": "启动超时：引擎未进入变声。请再试一次，或查看 User_Data/logs/realtime_worker.log",
       "stop_failed": "停止失败",
       "params_applied": "参数已应用",

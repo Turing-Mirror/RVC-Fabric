@@ -268,7 +268,8 @@
       "quit": "Quitté",
       "loop_error": "Erreur interne du moteur — voir le journal",
       "launching": "Démarrage du processus moteur…",
-      "files_corrupt": "Fichier du moteur endommagé ({files}). Relancez le programme d'installation pour réparer sur place — les voix et le runtime téléchargé sont conservés."
+      "files_corrupt": "Fichier du moteur endommagé ({files}). Relancez le programme d'installation pour réparer sur place — les voix et le runtime téléchargé sont conservés.",
+      "nvidia_cuda_missing": "Une GPU NVIDIA a été détectée ({gpu}), mais CUDA n'est pas disponible. Installez le pilote officiel puis redémarrez cette application."
     },
     "runtime": {
       "not_ready": "Runtime pas prêt : terminez d'abord l'installation",
@@ -288,6 +289,7 @@
       "running": "Conversion en cours",
       "bad_settings": "Réglages non valides, démarrage impossible",
       "start_failed": "Échec du démarrage",
+      "dml_alloc": "Ce GPU ({gpu}) ne peut pas allouer le cache du modèle sur DirectML. Si vous avez une carte NVIDIA, installez d'abord le pilote officiel.",
       "start_timeout": "Démarrage expiré : le moteur n'est pas passé en conversion. Réessayez ou consultez User_Data/logs/realtime_worker.log",
       "stop_failed": "Échec de l'arrêt",
       "params_applied": "Réglages appliqués",

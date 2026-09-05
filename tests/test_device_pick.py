@@ -14,7 +14,9 @@ from tools.device_pick import (
     is_virtual_capture_name,
     pick_default_input,
     pick_default_output,
+    query_system_default_names,
     resolve_device_name,
+    system_default_device_name,
 )
 
 
@@ -170,6 +172,105 @@ class PickDefaultNoCableTests(unittest.TestCase):
         self.assertEqual(inn, "麦克风 (Realtek(R) Audio)")
         self.assertEqual(out, "")
         self.assertTrue(any("output" in n for n in notes))
+
+
+# diag 26.9.6 阿白：MME 进程默认已是 CABLE，系统面板默认仍是扬声器。
+_ABAI_HOSTAPIS = [
+    {
+        "name": "MME",
+        "devices": [0, 1, 2],
+        "default_input_device": 0,
+        "default_output_device": 1,
+    },
+    {
+        "name": "Windows WASAPI",
+        "devices": [3, 4],
+        "default_input_device": 3,
+        "default_output_device": 4,
+    },
+]
+_ABAI_DEVICES = [
+    {"index": 0, "name": "麦克风 (UGREEN Camera 1080P Audio)", "max_input_channels": 1, "max_output_channels": 0},
+    {"index": 1, "name": "CABLE Input (VB-Audio Virtual C", "max_input_channels": 0, "max_output_channels": 2},
+    {"index": 2, "name": "扬声器 (COLORFIRE CF100)", "max_input_channels": 0, "max_output_channels": 2},
+    {"index": 3, "name": "麦克风 (UGREEN Camera 1080P Audio)", "max_input_channels": 1, "max_output_channels": 0},
+    {"index": 4, "name": "扬声器 (COLORFIRE CF100)", "max_input_channels": 0, "max_output_channels": 2},
+]
+
+
+class SystemDefaultDeviceTests(unittest.TestCase):
+    def test_wasapi_speakers_win_over_mme_cable(self):
+        self.assertEqual(
+            system_default_device_name("output", _ABAI_HOSTAPIS, _ABAI_DEVICES),
+            "扬声器 (COLORFIRE CF100)",
+        )
+
+    def test_true_cable_default_still_reported(self):
+        apis = [
+            {
+                "name": "Windows WASAPI",
+                "default_input_device": 0,
+                "default_output_device": 1,
+            }
+        ]
+        devices = [
+            {"index": 0, "name": "麦克风 (AB13X USB Audio)", "max_input_channels": 1, "max_output_channels": 0},
+            {"index": 1, "name": "CABLE Input (VB-Audio Virtual C", "max_input_channels": 0, "max_output_channels": 2},
+        ]
+        self.assertEqual(
+            system_default_device_name("output", apis, devices),
+            "CABLE Input (VB-Audio Virtual C",
+        )
+
+    def test_wasapi_minus_one_falls_to_mme(self):
+        apis = [
+            {
+                "name": "Windows WASAPI",
+                "default_output_device": -1,
+                "default_input_device": -1,
+            },
+            {
+                "name": "MME",
+                "default_output_device": 2,
+                "default_input_device": 0,
+            },
+        ]
+        self.assertEqual(
+            system_default_device_name("output", apis, _ABAI_DEVICES),
+            "扬声器 (COLORFIRE CF100)",
+        )
+
+    def test_empty_or_bad_kind(self):
+        self.assertEqual(system_default_device_name("output", [], []), "")
+        self.assertEqual(system_default_device_name("both", _ABAI_HOSTAPIS, _ABAI_DEVICES), "")
+
+    def test_query_helper_does_not_read_process_default(self):
+        class _Sd:
+            default_device = [0, 1]
+
+            @staticmethod
+            def query_hostapis():
+                return _ABAI_HOSTAPIS
+
+            @staticmethod
+            def query_devices(kind=None):
+                if kind is not None:
+                    raise AssertionError("must not use query_devices(kind=)")
+                return _ABAI_DEVICES
+
+        inn, out = query_system_default_names(_Sd)
+        self.assertEqual(out, "扬声器 (COLORFIRE CF100)")
+        self.assertEqual(inn, "麦克风 (UGREEN Camera 1080P Audio)")
+
+    def test_workers_report_hostapi_default_not_process_default(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "gui_v1.py"), encoding="utf-8") as f:
+            gui = f.read()
+        with open(os.path.join(root, "tools", "dsp_worker.py"), encoding="utf-8") as f:
+            dsp = f.read()
+        self.assertIn("query_system_default_names", gui)
+        self.assertIn("query_system_default_names", dsp)
+        self.assertNotIn("def _default_name", gui)
 
 
 if __name__ == "__main__":

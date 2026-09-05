@@ -232,6 +232,11 @@ class MsgCodeTests(unittest.TestCase):
             self.assertTrue(text and text != code, code)
             self.assertNotIn("{", text)
 
+        for code in (mc.ENGINE_NVIDIA_CUDA_MISSING, mc.VC_DML_ALLOC):
+            text = mc.fallback_message(code, {"gpu": "NVIDIA P106-100"})
+            self.assertIn("NVIDIA P106-100", text)
+            self.assertNotIn("{gpu}", text)
+
     def test_locale_packs_have_load_keys(self):
         root = ROOT / "app" / "i18n" / "locales"
         keys = (
@@ -243,6 +248,8 @@ class MsgCodeTests(unittest.TestCase):
             ("msg", "vc", "warmup"),
             ("msg", "vc", "opening_stream"),
             ("msg", "vc", "swap_failed"),
+            ("msg", "engine", "nvidia_cuda_missing"),
+            ("msg", "vc", "dml_alloc"),
         )
         for path in sorted(root.glob("*.json")):
             data = json.loads(path.read_text(encoding="utf-8"))

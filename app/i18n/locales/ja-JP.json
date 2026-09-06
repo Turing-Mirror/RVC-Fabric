@@ -306,6 +306,12 @@
         "term": "RVC",
         "brief": "本ソフトウェアが採用するボイスチェンジ技術",
         "detail": "RVC（Retrieval-based Voice Conversion、検索ベースの音声変換）。各音声は独立したモデルで動作し、音声の切り替えはモデルファイルの切り替えです。"
+      },
+      {
+        "id": "rvc_fabric",
+        "term": "RVC Fabric",
+        "brief": "RVC のボイスチェンジと関連ツールをまとめたデスクトップアプリ",
+        "detail": "RVC Fabric は RVC のボイスチェンジを中心にしたデスクトップアプリです。リアルタイム変換、音声モデル管理、学習、音声変換、人声分離などをまとめて利用できます。"
       }
     ]
   },
@@ -1759,17 +1765,6 @@
     "faqOfflineA": "メイン画面下の「オーディオツール → 音声変換」で、音声ファイルまたはフォルダ全体を選択し、現在の音色に変換して書き出します。\nこの機能に仮想サウンドカードやリアルタイム変声は不要です。\n楽曲から先にボーカルを抽出したい場合は、隣の「ボーカル分離」をご利用ください。",
     "ttsOutDir": "出力フォルダ",
     "ttsOutReset": "既定に戻す",
-    "routeDiagramAlt": "配線図：マイクの音が本ソフトに入り、変換後 CABLE を通ってゲームや通話アプリへ届きます。モニタリングは自分だけに聞こえる別系統です。",
-    "routeMic": "マイク",
-    "routeMicSub": "実際のマイク",
-    "routeApp": "RVC Fabric",
-    "routeAppSub": "出力は CABLE Input",
-    "routeCableSub": "仮想サウンドカード",
-    "routeGame": "ゲーム / 通話",
-    "routeGameSub": "マイクは CABLE Output",
-    "routeMonitor": "ヘッドホン",
-    "routeMonitorSub": "モニタリング",
-    "routeMonitorNote": "任意・自分だけに聞こえます",
     "exitAccessViolation": "アクセス違反",
     "exitDivideByZero": "ゼロ除算",
     "exitIllegalInstruction": "不正な命令",

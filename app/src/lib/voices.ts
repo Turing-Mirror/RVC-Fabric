@@ -116,21 +116,55 @@ export function coverSrc(path?: string): string {
   }
 }
 
-export async function listVoices(): Promise<VoicesCatalog> {
+const VOICE_CACHE_TTL_MS = 1200;
+let voiceCache: { value: VoicesCatalog; expiresAt: number } | null = null;
+let voiceRequest: Promise<VoicesCatalog> | null = null;
+
+/** 外部文件变化或音色写操作完成后，让下一次读取重新走后端。 */
+export function invalidateVoicesCache(): void {
+  voiceCache = null;
+}
+
+export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesCatalog> {
   if (!isTauri()) {
     return { models: [], selected_idx: -1 };
   }
-  return invoke<VoicesCatalog>("voices_list");
+  const fresh = options?.fresh === true;
+  if (!fresh && voiceCache && voiceCache.expiresAt > Date.now()) {
+    return voiceCache.value;
+  }
+  // Home、模型页和语音转换窗可能同时启动。只允许一次 IPC 扫描，后续调用
+  // 共享同一个请求，避免三个页面各自把整个音色目录扫一遍。
+  if (voiceRequest) return voiceRequest;
+  voiceRequest = invoke<VoicesCatalog>("voices_list")
+    .then((value) => {
+      voiceCache = { value, expiresAt: Date.now() + VOICE_CACHE_TTL_MS };
+      return value;
+    })
+    .finally(() => {
+      voiceRequest = null;
+    });
+  return voiceRequest;
+}
+
+async function invokeVoiceMutation<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  invalidateVoicesCache();
+  try {
+    return await invoke<T>(command, args);
+  } finally {
+    // 不能让写操作前已经在途的旧 list 请求重新把过期目录写回缓存。
+    invalidateVoicesCache();
+  }
 }
 
 export async function clearVoice() {
   if (!isTauri()) return { ok: false };
-  return invoke<{ ok?: boolean }>("voices_clear");
+  return invokeVoiceMutation<{ ok?: boolean }>("voices_clear");
 }
 
 export async function selectVoice(m: Pick<VoiceModel, "path" | "dir" | "name">) {
   if (!isTauri()) return { ok: false };
-  return invoke<{
+  return invokeVoiceMutation<{
     ok?: boolean;
     model?: VoiceModel;
     pitch?: number;
@@ -178,7 +212,7 @@ export async function listIndex(modelDir: string) {
 
 export async function applyIndex(modelDir: string, indexPath: string) {
   if (!isTauri()) return { items: [] as IndexItem[] };
-  return invoke<{ items: IndexItem[] }>("voices_index_use", {
+  return invokeVoiceMutation<{ items: IndexItem[] }>("voices_index_use", {
     modelDir,
     indexPath,
   });
@@ -186,7 +220,7 @@ export async function applyIndex(modelDir: string, indexPath: string) {
 
 export async function bindIndex(modelDir: string) {
   if (!isTauri()) return { items: [] as IndexItem[] };
-  return invoke<{ items: IndexItem[] }>("voices_index_bind", {
+  return invokeVoiceMutation<{ items: IndexItem[] }>("voices_index_bind", {
     modelDir,
     indexSrc: null,
   });
@@ -194,7 +228,7 @@ export async function bindIndex(modelDir: string) {
 
 export async function unbindIndex(modelDir: string, indexPath: string) {
   if (!isTauri()) return { items: [] as IndexItem[] };
-  return invoke<{ items: IndexItem[] }>("voices_index_unbind", {
+  return invokeVoiceMutation<{ items: IndexItem[] }>("voices_index_unbind", {
     modelDir,
     indexPath,
   });
@@ -241,7 +275,7 @@ export async function exportProfile(modelDir: string) {
 
 export async function importVoices(currentModelDir?: string) {
   if (!isTauri()) return { models: [], errors: [] };
-  return invoke<{
+  return invokeVoiceMutation<{
     models?: unknown[];
     indices?: unknown[];
     errors?: { path: string; error: string }[];
@@ -253,12 +287,12 @@ export async function importVoices(currentModelDir?: string) {
 
 export async function deleteVoice(modelDir: string) {
   if (!isTauri()) return;
-  return invoke("voices_delete", { modelDir });
+  return invokeVoiceMutation("voices_delete", { modelDir });
 }
 
 export async function renameVoice(modelDir: string, newName: string) {
   if (!isTauri()) return;
-  return invoke("voices_rename", { modelDir, newName });
+  return invokeVoiceMutation("voices_rename", { modelDir, newName });
 }
 
 /** 选一张本机图片给「更换封面」用（返回绝对路径，取消返回 null）。 */
@@ -294,7 +328,7 @@ export async function resetVoiceCover(modelDir: string) {
 
 export async function promoteLegacy(pthPath: string) {
   if (!isTauri()) return;
-  return invoke("voices_promote", { pthPath });
+  return invokeVoiceMutation("voices_promote", { pthPath });
 }
 
 export async function openModelsDir() {

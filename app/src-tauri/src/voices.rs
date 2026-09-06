@@ -48,11 +48,9 @@ const PROFILE_FX_KEYS: &[&str] = &[
 ];
 const PROFILE_PERF_KEYS: &[&str] = &["block_time", "crossfade_length", "extra_time"];
 
-/// 从内置清单（bundled，离线可用）按 id 找封面 URL。
-/// 只在 sidecar 与包内都没有封面时查 —— 覆盖旧版本装的第三方音色
-/// （安装时漏写 cover），一次文件读的代价可接受，不加跨 root 的缓存。
-fn catalog_cover(root: &Path, id: &str) -> String {
-    let cat = crate::store::fetch_store_catalog(root, false);
+/// 从已经载入的清单按 id 找封面 URL。
+/// 只在 sidecar 与包内都没有封面时查 —— 覆盖旧版本装的第三方音色。
+fn catalog_cover(cat: &Value, id: &str) -> String {
     for key in ["voices", "thirdparty_voices"] {
         let Some(arr) = cat.get(key).and_then(|v| v.as_array()) else {
             continue;
@@ -615,7 +613,9 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
         if cover.is_empty() {
             // 旧版本装的第三方音色，sidecar 里没有 cover（安装时漏写）。
             // 按 online_id 从内置清单回补封面 URL —— 用户不用重下也有封面。
-            cover = catalog_cover(root, &oid);
+            let cat = catalog
+                .get_or_insert_with(|| crate::store::fetch_store_catalog(root, false));
+            cover = catalog_cover(cat, &oid);
         }
 
         if pth.is_none() {

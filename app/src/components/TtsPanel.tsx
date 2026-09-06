@@ -712,15 +712,15 @@ function StsSection() {
 
   return (
     <>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
         <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+        {st.engine_core_ready === false ? (
+          <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
+        ) : null}
       </div>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
-          {st.engine_core_ready === false ? (
-            <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
-          ) : null}
         </div>
       ) : null}
 
@@ -771,25 +771,7 @@ function StsSection() {
               );
             }}
           >{t("s.46ecac2910")}</Btn>
-          {canTrimAudio(input) ? (
-            <AudioTrimButton
-              disabled={running || recording || trimBusy}
-              open={trimOpen}
-              onClick={() => setTrimOpen((v) => !v)}
-            />
-          ) : null}
         </div>
-        {trimOpen && canTrimAudio(input) ? (
-          <AudioTrimEditor
-            key={input}
-            input={input}
-            disabled={running || recording}
-            onBusyChange={setTrimBusy}
-            onApply={(path) => {
-              if (inputRef.current === input && !runningRef.current) setInput(path);
-            }}
-          />
-        ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
           <span className={PATH}>{output || t("s.53e2db7016")}</span>
@@ -881,6 +863,13 @@ function StsSection() {
               {t("s.stsUseFolder")}
             </Btn>
           ) : null}
+          {canTrimAudio(input) ? (
+            <AudioTrimButton
+              disabled={running || recording || trimBusy}
+              open={trimOpen}
+              onClick={() => setTrimOpen((v) => !v)}
+            />
+          ) : null}
           <Btn
             disabled={!lib?.dir}
             onClick={() => {
@@ -890,6 +879,17 @@ function StsSection() {
             {t("s.stsOpenInput")}
           </Btn>
         </div>
+        {trimOpen && canTrimAudio(input) ? (
+          <AudioTrimEditor
+            key={input}
+            input={input}
+            disabled={running || recording}
+            onBusyChange={setTrimBusy}
+            onApply={(path) => {
+              if (inputRef.current === input && !runningRef.current) setInput(path);
+            }}
+          />
+        ) : null}
         {(lib?.files?.length ?? 0) === 0 ? (
           <p className="m-0 text-[12.5px] text-[var(--meta)]">
             {t("s.stsInputEmpty")}

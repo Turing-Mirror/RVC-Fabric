@@ -210,7 +210,7 @@ export function ListItem({
       type="button"
       aria-expanded={expanded !== undefined ? expanded : undefined}
       onClick={act}
-      className={[rowClass, "w-full appearance-none border-0 bg-transparent text-left font-[inherit] text-[inherit]"].join(" ")}
+      className={[rowClass, "w-[calc(100%+1.75rem)] appearance-none border-0 bg-transparent text-left font-[inherit] text-[inherit]"].join(" ")}
     >
       {content}
     </button>

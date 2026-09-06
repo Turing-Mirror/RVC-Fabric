@@ -11,9 +11,9 @@ import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
-import { askConfirm } from "../lib/webDialog";
+import { askConfirm, askPrompt } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
-import { AudioTrim } from "./AudioTrim";
+import { AudioTrimButton, AudioTrimEditor, canTrimAudio } from "./AudioTrim";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -264,6 +264,9 @@ function StsSection() {
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
   const [lib, setLib] = useState<InputList | null>(null);
+  const [inputPage, setInputPage] = useState(0);
+  const [trimOpen, setTrimOpen] = useState(false);
+  const [trimBusy, setTrimBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [rec, setRec] = useState<RecProgress | null>(null);
   const [playing, setPlaying] = useState("");
@@ -499,6 +502,12 @@ function StsSection() {
     void refreshList(input);
   }, [input, refreshList]);
 
+  useEffect(() => {
+    setInputPage(0);
+    setTrimOpen(false);
+    setTrimBusy(false);
+  }, [input]);
+
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
   useEffect(() => {
     if (!running) {
@@ -604,6 +613,25 @@ function StsSection() {
     }
   };
 
+  const renameFile = async (f: InputFile) => {
+    const name = await askPrompt(t("s.b8659855b0"), f.name);
+    const nextName = name?.trim();
+    if (!nextName || nextName === f.name) return;
+    const selected = samePath(input, f.path);
+    if (playing === f.path) stopPlay();
+    try {
+      const renamed = await invoke<string>("sts_rename_input", {
+        input,
+        path: f.path,
+        newName: nextName,
+      });
+      if (selected) setInput(renamed);
+      else await refreshList(input);
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
   const start = async () => {
     if (runningRef.current || recordingRef.current) return;
     // 实时 worker 还活着就走热路径（复用已加载的模型），不再先杀进程。
@@ -677,6 +705,10 @@ function StsSection() {
   const okN = prog?.ok ?? 0;
   const skipN = prog?.skip ?? skipped.length;
   const eta = running ? formatEta(elapsed, pct) : "";
+  const inputFiles = lib?.files ?? [];
+  const inputPageCount = Math.max(1, Math.ceil(inputFiles.length / 20));
+  const currentInputPage = Math.min(inputPage, inputPageCount - 1);
+  const visibleInputFiles = inputFiles.slice(currentInputPage * 20, (currentInputPage + 1) * 20);
 
   return (
     <>
@@ -739,10 +771,25 @@ function StsSection() {
               );
             }}
           >{t("s.46ecac2910")}</Btn>
+          {canTrimAudio(input) ? (
+            <AudioTrimButton
+              disabled={running || recording || trimBusy}
+              open={trimOpen}
+              onClick={() => setTrimOpen((v) => !v)}
+            />
+          ) : null}
         </div>
-        <AudioTrim key={input} input={input} disabled={running || recording} onApply={(path) => {
-          if (inputRef.current === input && !runningRef.current) setInput(path);
-        }} />
+        {trimOpen && canTrimAudio(input) ? (
+          <AudioTrimEditor
+            key={input}
+            input={input}
+            disabled={running || recording}
+            onBusyChange={setTrimBusy}
+            onApply={(path) => {
+              if (inputRef.current === input && !runningRef.current) setInput(path);
+            }}
+          />
+        ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
           <span className={PATH}>{output || t("s.53e2db7016")}</span>
@@ -848,49 +895,72 @@ function StsSection() {
             {t("s.stsInputEmpty")}
           </p>
         ) : (
-          <ul className="m-0 max-h-[220px] list-none overflow-y-auto p-0">
-            {(lib?.files ?? []).map((f) => {
-              const on = input === f.path;
-              return (
-                <li
-                  key={f.path}
-                  className={[
-                    "flex items-center gap-2 rounded-[var(--rs)] px-2 py-1.5",
-                    on
-                      ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
-                      : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
-                  ].join(" ")}
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer"
-                    disabled={running || recording}
-                    onClick={() => setInput(f.path)}
-                    title={f.path}
+          <>
+            <ul className="m-0 max-h-[220px] list-none overflow-y-auto p-0">
+              {visibleInputFiles.map((f) => {
+                const on = input === f.path;
+                return (
+                  <li
+                    key={f.path}
+                    className={[
+                      "flex items-center gap-2 rounded-[var(--rs)] px-2 py-1.5",
+                      on
+                        ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+                        : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+                    ].join(" ")}
                   >
-                    <span className="block truncate text-[12.5px] font-mono">
-                      {f.rel || f.name}
-                    </span>
-                    <span className="block text-[11px] text-[var(--meta)] tabular-nums">
-                      {`${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
-                    </span>
-                  </button>
-                  <Btn
-                    disabled={recording}
-                    onClick={() => playFile(f.path)}
-                  >
-                    {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
-                  </Btn>
-                  <Btn
-                    disabled={running || recording}
-                    onClick={() => void removeFile(f)}
-                  >
-                    {t("s.stsDelete")}
-                  </Btn>
-                </li>
-              );
-            })}
-          </ul>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer"
+                      disabled={running || recording}
+                      onClick={() => setInput(f.path)}
+                      title={f.path}
+                    >
+                      <span className="block truncate text-[12.5px] font-mono">
+                        {f.rel || f.name}
+                      </span>
+                      <span className="block text-[11px] text-[var(--meta)] tabular-nums">
+                        {`${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
+                      </span>
+                    </button>
+                    <Btn
+                      disabled={recording}
+                      onClick={() => playFile(f.path)}
+                    >
+                      {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
+                    </Btn>
+                    <Btn
+                      disabled={running || recording}
+                      onClick={() => void renameFile(f)}
+                    >
+                      {t("s.1cd80fd7a8")}
+                    </Btn>
+                    <Btn
+                      disabled={running || recording}
+                      onClick={() => void removeFile(f)}
+                    >
+                      {t("s.stsDelete")}
+                    </Btn>
+                  </li>
+                );
+              })}
+            </ul>
+            {inputPageCount > 1 ? (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <Btn
+                  disabled={running || recording || currentInputPage === 0}
+                  onClick={() => setInputPage(Math.max(0, currentInputPage - 1))}
+                >{t("s.prevPage")}</Btn>
+                <span className="text-[11.5px] text-[var(--meta)] tabular-nums">
+                  {t("s.pageOf", { cur: currentInputPage + 1, total: inputPageCount })}
+                </span>
+                <Btn
+                  disabled={running || recording || currentInputPage >= inputPageCount - 1}
+                  onClick={() => setInputPage(Math.min(inputPageCount - 1, currentInputPage + 1))}
+                >{t("s.67a246a344")}</Btn>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 

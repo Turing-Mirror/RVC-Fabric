@@ -34,6 +34,8 @@ type Props = {
    * 只看布尔的话第二次点就什么都不会发生。
    */
   focusCommunityNonce?: number;
+  /** 顶部导航直接进入「其他」时，把滚动位置重置到页首。 */
+  resetScrollNonce?: number;
 };
 
 export function MorePage({
@@ -43,6 +45,7 @@ export function MorePage({
   onOpenProvision,
   onOpenDownloadModels,
   focusCommunityNonce = 0,
+  resetScrollNonce = 0,
 }: Props = {}) {
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
@@ -208,6 +211,16 @@ export function MorePage({
     }, 60);
     return () => window.clearTimeout(id);
   }, [focusCommunityNonce]);
+
+  useEffect(() => {
+    if (!resetScrollNonce) return;
+    const id = window.setTimeout(() => {
+      const el = document.getElementById("more-community");
+      const pane = el?.closest(".overflow-y-auto");
+      if (pane instanceof HTMLElement) pane.scrollTop = 0;
+    }, 60);
+    return () => window.clearTimeout(id);
+  }, [resetScrollNonce]);
 
   useEffect(() => {
     let alive = true;

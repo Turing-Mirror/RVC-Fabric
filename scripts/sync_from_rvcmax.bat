@@ -9,8 +9,7 @@ set ERR=%errorlevel%
 if %ERR%==0 (
   echo.
   echo Done. Test without system Python:
-  echo   start.bat
-  echo   scripts\dev\go-web.bat
+  echo   scripts\dev\tauri-dev.bat
 ) else (
   echo Sync failed code=%ERR%
 )

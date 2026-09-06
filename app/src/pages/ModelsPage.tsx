@@ -208,9 +208,9 @@ function ModelsPageImpl({
     return t("s.425fb93e79", { v0: models.length, v1: cur });
   }, [models, query, view.length, selected]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (fresh = false) => {
     try {
-      const cat = await listVoices();
+      const cat = await listVoices(fresh ? { fresh: true } : undefined);
       setModels(cat.models || []);
       const idx = cat.selected_idx ?? -1;
       if (idx >= 0 && cat.models?.[idx]) {
@@ -418,7 +418,7 @@ function ModelsPageImpl({
             >{t("s.54b3625b92")}</Btn>
             <Btn
               onClick={async () => {
-                await reload();
+                await reload(true);
                 setMsg(t("s.58b4af2771"));
               }}
             >{t("s.38108eaa1d")}</Btn>

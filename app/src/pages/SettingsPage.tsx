@@ -263,7 +263,7 @@ function SettingsPageImpl({
             className="!mt-6"
             action={
               onOpenHelp ? (
-                <Btn onClick={onOpenHelp}>{t("s.004a3a2b67")}</Btn>
+                <Btn onClick={() => onOpenHelp()}>{t("s.004a3a2b67")}</Btn>
               ) : undefined
             }
           >

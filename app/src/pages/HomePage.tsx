@@ -183,11 +183,6 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   const [msg, setMsg] = useState("");
   const bannerTexts = useBannerTexts();
   const cardPx = useRecentCardMetrics();
-  // 封面本地化：已装第三方音色的远程封面走本地缓存（见 lib/cover.ts）。
-  const coverCache = useCoverCache(
-    models.map((m) => m.cover || "").filter(Boolean),
-  );
-
   const load = async () => {
     try {
       const cat = await listVoices();
@@ -223,6 +218,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   const ordered = current
     ? ([rest[0], current, rest[1]].filter(Boolean) as VoiceModel[])
     : rest.slice(0, 3);
+  // 首页只显示三张卡，只为这三张解析本地封面；原来把整个音色库都交给
+  // cover_resolve_many，100+ 个音色会在页面刚打开时一起触发磁盘/网络工作。
+  const coverCache = useCoverCache(
+    ordered.map((m) => m.cover || "").filter(Boolean),
+  );
 
   const pick = async (m: VoiceModel) => {
     if (m.missing) {
@@ -367,6 +367,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                         src={resolveCover(v.cover, coverCache)}
                         alt=""
                         draggable={false}
+                        loading="lazy"
+                        decoding="async"
                         // contain 而不是 cover：官方封面全是 1:1，在方形框里
                         // 两者结果一样、都不裁；第三方是竖图（最极端 0.395），
                         // cover 会切掉七成。宁可两边留出底色，也别把人裁没。

@@ -512,7 +512,10 @@ export function TrainPanel() {
     <ToolBody>
         <div className="mb-1 flex items-center justify-between gap-2">
           <h3 className="m-0 text-[17px] font-semibold">{t("s.ba65bd5595")}</h3>
-          <Btn onClick={() => openHelpSection("train")}>{t("s.trainOpenHelp")}</Btn>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!checks.length ? <Btn onClick={goDownloads}>{t("s.aac4f88e84")}</Btn> : null}
+            <Btn onClick={() => openHelpSection("train")}>{t("s.trainOpenHelp")}</Btn>
+          </div>
         </div>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.42667034ec")}</p>
 
@@ -547,11 +550,7 @@ export function TrainPanel() {
               </li>
             ))}
           </ul>
-        ) : (
-          <div className="mb-3 flex justify-end">
-            <Btn onClick={goDownloads}>{t("s.aac4f88e84")}</Btn>
-          </div>
-        )}
+        ) : null}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>

@@ -306,6 +306,12 @@
         "term": "RVC",
         "brief": "本软件采用的变声技术路线",
         "detail": "RVC（Retrieval-based Voice Conversion，基于检索的声线转换）：每个音色由独立模型驱动，切换音色就是切换模型文件。"
+      },
+      {
+        "id": "rvc_fabric",
+        "term": "RVC Fabric",
+        "brief": "把 RVC 变声和相关工具整合在一起的桌面应用",
+        "detail": "RVC Fabric 是一个围绕 RVC 变声制作的桌面应用，整合了实时变声、音色管理以及训练、语音转换和人声分离等工具。"
       }
     ]
   },
@@ -1759,17 +1765,6 @@
     "faqOfflineA": "主界面下方「音频工具 → 语音转换」，选择一个音频文件或整个文件夹，转换为目标音色后导出。\n该功能不需要虚拟声卡，也无需开启实时变声。\n如需先从歌曲中提取人声，请使用旁边的「人声分离」。",
     "ttsOutDir": "输出目录",
     "ttsOutReset": "恢复默认",
-    "routeDiagramAlt": "接线示意：麦克风进入本软件，变声后经 CABLE 送给游戏或语音软件；监听是另一条支路，只有你自己听得到。",
-    "routeMic": "麦克风",
-    "routeMicSub": "你真实的麦克风",
-    "routeApp": "RVC Fabric",
-    "routeAppSub": "输出选 CABLE Input",
-    "routeCableSub": "虚拟声卡",
-    "routeGame": "游戏 / 语音",
-    "routeGameSub": "麦克风选 CABLE Output",
-    "routeMonitor": "耳机",
-    "routeMonitorSub": "监听设备",
-    "routeMonitorNote": "可选，只有你听得到",
     "exitAccessViolation": "访问冲突",
     "exitDivideByZero": "整数除零",
     "exitIllegalInstruction": "非法指令",

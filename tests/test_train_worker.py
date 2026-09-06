@@ -149,8 +149,10 @@ class WatcherJoinTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             w = tw.StageProgress("preprocess", 1, 5, Path(td), 1, "x")
             t = tw.TrainLogTail(Path(td) / "train.log", 10, 4, 5)
-        self.assertTrue(callable(w._stop), "StageProgress shadowed Thread._stop")
-        self.assertTrue(callable(t._stop), "TrainLogTail shadowed Thread._stop")
+        self.assertNotIn("_stop", w.__dict__, "StageProgress shadowed Thread._stop")
+        self.assertNotIn("_stop", t.__dict__, "TrainLogTail shadowed Thread._stop")
+        self.assertTrue(callable(w.stop), "StageProgress.stop is not callable")
+        self.assertTrue(callable(t.stop), "TrainLogTail.stop is not callable")
 
     def test_stage_progress_stop_then_join(self):
         with tempfile.TemporaryDirectory() as td:

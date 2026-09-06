@@ -306,6 +306,12 @@
         "term": "RVC",
         "brief": "본 소프트웨어가 채택한 변조 기술",
         "detail": "RVC(Retrieval-based Voice Conversion, 검색 기반 음성 변환). 각 음색은 독립적인 모델로 구동되며, 음색을 바꾸는 것은 모델 파일을 바꾸는 것입니다."
+      },
+      {
+        "id": "rvc_fabric",
+        "term": "RVC Fabric",
+        "brief": "RVC 음성 변환과 관련 도구를 한곳에 모은 데스크톱 앱",
+        "detail": "RVC Fabric은 RVC 음성 변환을 중심으로 만든 데스크톱 앱입니다. 실시간 변조, 음색 관리, 학습, 음성 변환, 보컬 분리 도구를 함께 제공합니다."
       }
     ]
   },
@@ -1759,17 +1765,6 @@
     "faqOfflineA": "메인 화면 아래 '오디오 도구 → 음성 변환'에서 오디오 파일이나 폴더 전체를 골라 현재 음색으로 변환해 내보냅니다.\n이 기능에는 가상 사운드카드와 실시간 변성이 필요 없습니다.\n노래에서 먼저 보컬을 뽑아내려면 옆의 '보컬 분리'를 사용하세요.",
     "ttsOutDir": "출력 폴더",
     "ttsOutReset": "기본값으로",
-    "routeDiagramAlt": "연결도: 마이크 소리가 이 프로그램으로 들어가고, 변조된 뒤 CABLE을 거쳐 게임이나 음성 채팅으로 전달됩니다. 모니터링은 본인만 듣는 별도 경로입니다.",
-    "routeMic": "마이크",
-    "routeMicSub": "실제 마이크",
-    "routeApp": "RVC Fabric",
-    "routeAppSub": "출력은 CABLE Input",
-    "routeCableSub": "가상 사운드 카드",
-    "routeGame": "게임 / 음성",
-    "routeGameSub": "마이크는 CABLE Output",
-    "routeMonitor": "헤드폰",
-    "routeMonitorSub": "모니터링 장치",
-    "routeMonitorNote": "선택, 본인만 들립니다",
     "exitAccessViolation": "액세스 위반",
     "exitDivideByZero": "0으로 나누기",
     "exitIllegalInstruction": "잘못된 명령",

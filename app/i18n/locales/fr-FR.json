@@ -306,6 +306,12 @@
         "term": "RVC",
         "brief": "La technologie de conversion de voix sur laquelle repose le logiciel",
         "detail": "RVC (Retrieval-based Voice Conversion — conversion de voix par récupération) : chaque voix est un modèle indépendant, et changer de voix revient à changer de fichier de modèle."
+      },
+      {
+        "id": "rvc_fabric",
+        "term": "RVC Fabric",
+        "brief": "Une application de bureau qui réunit la conversion vocale RVC et les outils associés",
+        "detail": "RVC Fabric est une application de bureau conçue autour de la conversion vocale RVC. Elle réunit le changement de voix en temps réel, la gestion des voix, l'entraînement, la conversion vocale et la séparation de la voix."
       }
     ]
   },
@@ -1759,17 +1765,6 @@
     "faqOfflineA": "Dans « Outils audio → Conversion vocale » de l'écran principal, choisissez un fichier ou un dossier entier et exportez-le converti vers la voix actuelle.\nCette voie n'exige ni carte son virtuelle ni conversion temps réel.\nPour extraire d'abord la voix d'une chanson, utilisez la « Séparation vocale » voisine.",
     "ttsOutDir": "Dossier de sortie",
     "ttsOutReset": "Réinitialiser",
-    "routeDiagramAlt": "Routage : votre micro entre dans le logiciel et la voix transformée atteint le jeu ou le chat vocal via CABLE. L'écoute est une branche distincte que vous seul entendez.",
-    "routeMic": "Micro",
-    "routeMicSub": "votre vrai micro",
-    "routeApp": "RVC Fabric",
-    "routeAppSub": "sortie : CABLE Input",
-    "routeCableSub": "carte virtuelle",
-    "routeGame": "Jeu / chat",
-    "routeGameSub": "micro : CABLE Output",
-    "routeMonitor": "Casque",
-    "routeMonitorSub": "périph. d'écoute",
-    "routeMonitorNote": "optionnel, vous seul l'entendez",
     "exitAccessViolation": "Violation d'accès",
     "exitDivideByZero": "Division entière par zéro",
     "exitIllegalInstruction": "Instruction illégale",

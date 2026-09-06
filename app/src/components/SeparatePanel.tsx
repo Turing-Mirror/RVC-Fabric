@@ -159,24 +159,22 @@ export function SeparatePanel() {
     <ToolBody>
         <div className="mb-1 flex items-center justify-between gap-2">
           <h3 className="m-0 text-[17px] font-semibold">{t("s.8fd038283b")}</h3>
-          <Btn onClick={() => openHelpSection("separate")}>{t("s.trainOpenHelp")}</Btn>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!blocked || needModels || needCore ? (
+              <Btn
+                onClick={() => openDownloadModels({ filter: "separate" })}
+              >{blocked ? t("s.7a218555fd") : t("s.1252c81119")}</Btn>
+            ) : null}
+            <Btn onClick={() => openHelpSection("separate")}>{t("s.trainOpenHelp")}</Btn>
+          </div>
         </div>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.497e7d9af6")}</p>
 
         {blocked ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
-            {needModels || needCore ? (
-              <Btn
-                onClick={() => openDownloadModels({ filter: "separate" })}
-              >{t("s.7a218555fd")}</Btn>
-            ) : null}
           </div>
-        ) : (
-          <div className="mb-3 flex justify-end">
-            <Btn onClick={() => openDownloadModels({ filter: "separate" })}>{t("s.1252c81119")}</Btn>
-          </div>
-        )}
+        ) : null}
 
         <div className="border-t border-[var(--hairline)]">
           <div className={ROW}>

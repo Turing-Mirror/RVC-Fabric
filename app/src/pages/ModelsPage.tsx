@@ -165,10 +165,6 @@ function ModelsPageImpl({
   }, [dspId, onVoiceChange]);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
-  // 封面本地化：已装第三方音色的远程封面走本地缓存，不再每次全量重拉。
-  const coverCache = useCoverCache(
-    useMemo(() => models.map((m) => m.cover || "").filter(Boolean), [models]),
-  );
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -193,9 +189,14 @@ function ModelsPageImpl({
   const pageSize = cols * 3;
   const totalPages = Math.max(1, Math.ceil(view.length / pageSize) || 1);
   const pageClamped = Math.min(page, totalPages - 1);
-  const pageView = view.slice(
-    pageClamped * pageSize,
-    pageClamped * pageSize + pageSize,
+  const pageView = useMemo(
+    () => view.slice(pageClamped * pageSize, pageClamped * pageSize + pageSize),
+    [view, pageClamped, pageSize],
+  );
+  // 只解析当前页封面。模型页的其余音色并没有进入 DOM，没必要在首屏为它们
+  // 启动本地缓存下载。
+  const coverCache = useCoverCache(
+    useMemo(() => pageView.map((m) => m.cover || "").filter(Boolean), [pageView]),
   );
 
   const statusSub = useMemo(() => {
@@ -546,6 +547,8 @@ function ModelsPageImpl({
                         // 只剩胸口或腿。与首页 HomePage 一致。
                         className="absolute inset-0 w-full h-full object-contain"
                         draggable={false}
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <span>{(v.name || "?").slice(0, 4)}</span>

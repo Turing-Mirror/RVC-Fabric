@@ -306,6 +306,12 @@
         "term": "RVC",
         "brief": "The voice-conversion tech this app is built on",
         "detail": "RVC (Retrieval-based Voice Conversion): each voice is a standalone model, and switching voices means switching model files."
+      },
+      {
+        "id": "rvc_fabric",
+        "term": "RVC Fabric",
+        "brief": "A desktop app that brings RVC voice conversion and related tools together",
+        "detail": "RVC Fabric is a desktop app built around RVC voice conversion. It brings together real-time voice changing, voice management, training, speech conversion, and vocal separation tools."
       }
     ]
   },
@@ -1759,17 +1765,6 @@
     "faqOfflineA": "Under “Audio tools → Voice conversion” on the main screen, pick an audio file or a whole folder and export it converted to the current voice.\nThis path needs no virtual sound card and no realtime conversion.\nTo pull vocals out of a song first, use “Vocal separation” next to it.",
     "ttsOutDir": "Output folder",
     "ttsOutReset": "Reset",
-    "routeDiagramAlt": "Routing: your microphone goes into the app, and the converted voice reaches the game or voice app through CABLE. Monitoring is a separate branch only you hear.",
-    "routeMic": "Microphone",
-    "routeMicSub": "your real mic",
-    "routeApp": "RVC Fabric",
-    "routeAppSub": "output: CABLE Input",
-    "routeCableSub": "virtual device",
-    "routeGame": "Game / voice",
-    "routeGameSub": "mic: CABLE Output",
-    "routeMonitor": "Headphones",
-    "routeMonitorSub": "monitor device",
-    "routeMonitorNote": "optional, only you hear it",
     "exitAccessViolation": "Access violation",
     "exitDivideByZero": "Integer divide by zero",
     "exitIllegalInstruction": "Illegal instruction",

@@ -502,6 +502,27 @@ function SettingsPageImpl({
                   />
                 }
               />
+              <Field
+                label={t("settings.f0Repair")}
+                tip={t("settings.f0RepairTip")}
+                desc={t("settings.f0RepairDesc")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.f0_repair === true
+                        ? t("settings.f0RepairOn")
+                        : t("settings.f0RepairOff")
+                    }
+                    checked={c.cfg.f0_repair === true}
+                    onChange={(v) => {
+                      // 落盘之后立刻推给引擎：这是热键，变声进行中也要当场生效，
+                      // 否则用户没法对比开与关的差别。
+                      c.set("f0_repair", v, true);
+                      void setHot({ f0_repair: v }).catch(() => {});
+                    }}
+                  />
+                }
+              />
             </div>
           </Block>
         ) : null}
@@ -993,27 +1014,6 @@ function SettingsPageImpl({
                     }
                     checked={c.cfg.prewarm_on_start === true}
                     onChange={(v) => c.set("prewarm_on_start", v, true)}
-                  />
-                }
-              />
-              <Field
-                label={t("settings.f0Repair")}
-                tip={t("settings.f0RepairTip")}
-                desc={t("settings.f0RepairDesc")}
-                control={
-                  <Toggle
-                    label={
-                      c.cfg.f0_repair === true
-                        ? t("settings.f0RepairOn")
-                        : t("settings.f0RepairOff")
-                    }
-                    checked={c.cfg.f0_repair === true}
-                    onChange={(v) => {
-                      // 落盘之后立刻推给引擎：这是热键，变声进行中也要当场生效，
-                      // 否则用户没法对比开与关的差别。
-                      c.set("f0_repair", v, true);
-                      void setHot({ f0_repair: v }).catch(() => {});
-                    }}
                   />
                 }
               />

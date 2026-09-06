@@ -10,7 +10,6 @@ import {
   PagePad,
   type AccordionItem,
 } from "../components/ui";
-import { RouteDiagram } from "../components/RouteDiagram";
 import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { openExternal } from "../lib/plaza";
 import { useI18n } from "../i18n";
@@ -615,9 +614,6 @@ function HelpPageImpl({
       </Block>
 
       <Block id="help-wiring" title={t("s.149ab7bf0a")}>
-        {/* 图在表前面：表说的是「每一格该填什么」，图说的是「声音往哪走」。
-            接错线的人缺的是后者 —— 五行并列的表看不出监听是另一条支路。 */}
-        <RouteDiagram />
         <Group>
           <ListItem
             title={t("s.69f4bc1200")}
@@ -675,15 +671,6 @@ function HelpPageImpl({
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
-      <Block title={glossaryTitle} note={String(glossary.length)}>
-        <AccordionGroup
-          items={glossaryItems}
-          openId={openTerm}
-          onToggle={(id) => setOpenTerm((cur) => (cur === id ? "" : id))}
-          openLabel={t("s.5d5815647c")}
-          closedLabel={t("s.b0e24833f7")}
-        />
-      </Block>
       <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
@@ -716,6 +703,15 @@ function HelpPageImpl({
           items={trainItems}
           openId={open}
           onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+          openLabel={t("s.5d5815647c")}
+          closedLabel={t("s.b0e24833f7")}
+        />
+      </Block>
+      <Block title={glossaryTitle} note={String(glossary.length)}>
+        <AccordionGroup
+          items={glossaryItems}
+          openId={openTerm}
+          onToggle={(id) => setOpenTerm((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />

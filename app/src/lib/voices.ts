@@ -116,13 +116,20 @@ export function coverSrc(path?: string): string {
   }
 }
 
-const VOICE_CACHE_TTL_MS = 1200;
+// The library changes through the mutation helpers below, so keep the scan
+// across page switches instead of paying for it again after every navigation.
+// An explicit fresh read still invalidates this cache for external changes.
+const VOICE_CACHE_TTL_MS = 30_000;
 let voiceCache: { value: VoicesCatalog; expiresAt: number } | null = null;
-let voiceRequest: Promise<VoicesCatalog> | null = null;
+let voiceCacheEpoch = 0;
+let voiceRequest: { epoch: number; promise: Promise<VoicesCatalog> } | null = null;
 
 /** 外部文件变化或音色写操作完成后，让下一次读取重新走后端。 */
 export function invalidateVoicesCache(): void {
   voiceCache = null;
+  // An older IPC request may finish after a mutation. Its result must not
+  // repopulate the cache with a pre-mutation directory listing.
+  voiceCacheEpoch += 1;
 }
 
 export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesCatalog> {
@@ -130,21 +137,26 @@ export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesC
     return { models: [], selected_idx: -1 };
   }
   const fresh = options?.fresh === true;
+  if (fresh) invalidateVoicesCache();
   if (!fresh && voiceCache && voiceCache.expiresAt > Date.now()) {
     return voiceCache.value;
   }
   // Home、模型页和语音转换窗可能同时启动。只允许一次 IPC 扫描，后续调用
   // 共享同一个请求，避免三个页面各自把整个音色目录扫一遍。
-  if (voiceRequest) return voiceRequest;
-  voiceRequest = invoke<VoicesCatalog>("voices_list")
+  const epoch = voiceCacheEpoch;
+  if (voiceRequest?.epoch === epoch) return voiceRequest.promise;
+  const promise = invoke<VoicesCatalog>("voices_list")
     .then((value) => {
-      voiceCache = { value, expiresAt: Date.now() + VOICE_CACHE_TTL_MS };
+      if (epoch === voiceCacheEpoch) {
+        voiceCache = { value, expiresAt: Date.now() + VOICE_CACHE_TTL_MS };
+      }
       return value;
     })
     .finally(() => {
-      voiceRequest = null;
+      if (voiceRequest?.epoch === epoch) voiceRequest = null;
     });
-  return voiceRequest;
+  voiceRequest = { epoch, promise };
+  return promise;
 }
 
 async function invokeVoiceMutation<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -244,7 +256,7 @@ export async function listProfiles(modelDir: string) {
 
 export async function applyProfile(modelDir: string, profileId: string) {
   if (!isTauri()) return {};
-  return invoke<{
+  return invokeVoiceMutation<{
     pitch?: number;
     formant?: number;
     profile_summary?: string;
@@ -255,17 +267,17 @@ export async function applyProfile(modelDir: string, profileId: string) {
 
 export async function saveProfile(modelDir: string, name: string) {
   if (!isTauri()) return {};
-  return invoke("voices_profile_save", { modelDir, name });
+  return invokeVoiceMutation("voices_profile_save", { modelDir, name });
 }
 
 export async function deleteProfile(modelDir: string, profileId: string) {
   if (!isTauri()) return {};
-  return invoke("voices_profile_delete", { modelDir, profileId });
+  return invokeVoiceMutation("voices_profile_delete", { modelDir, profileId });
 }
 
 export async function importProfile(modelDir: string) {
   if (!isTauri()) return {};
-  return invoke("voices_profile_import", { modelDir });
+  return invokeVoiceMutation("voices_profile_import", { modelDir });
 }
 
 export async function exportProfile(modelDir: string) {
@@ -317,13 +329,13 @@ export async function coverDataUrl(src: string): Promise<string> {
 /** 把界面裁好的封面（data URL）写进模型目录。 */
 export async function setVoiceCover(modelDir: string, image: string) {
   if (!isTauri()) return { ok: false };
-  return invoke("voices_set_cover", { modelDir, image });
+  return invokeVoiceMutation("voices_set_cover", { modelDir, image });
 }
 
 /** 撤销自定义封面，回落到包内 / 清单封面。 */
 export async function resetVoiceCover(modelDir: string) {
   if (!isTauri()) return { ok: false };
-  return invoke("voices_reset_cover", { modelDir });
+  return invokeVoiceMutation("voices_reset_cover", { modelDir });
 }
 
 export async function promoteLegacy(pthPath: string) {
@@ -350,7 +362,7 @@ export async function fetchStoreCatalog(preferRemote = true) {
 
 export async function installStoreVoice(entry: StoreVoice) {
   if (!isTauri()) return { ok: false };
-  return invoke("store_install", { entry });
+  return invokeVoiceMutation("store_install", { entry });
 }
 
 /** 已下载但还没安装的第三方音色：{ voiceId: { dir, file, size_bytes } }。 */
@@ -375,7 +387,7 @@ export async function discardStagedVoice(voiceId: string) {
 /** 把已下载的第三方音色真正装进音色库。 */
 export async function installStagedVoice(entry: StoreVoice) {
   if (!isTauri()) return { ok: false };
-  return invoke("store_install_staged", { entry });
+  return invokeVoiceMutation("store_install_staged", { entry });
 }
 
 /** Cancel one voice's download, or all of them when `voiceId` is omitted. */

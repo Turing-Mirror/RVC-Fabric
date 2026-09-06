@@ -7,8 +7,6 @@
 | **`build_setup.bat`** | 打 `dist\RVC_Fabric_Setup.exe`（`--clean`） |
 | **`run_smoke_tests.bat`** | 环境检查 + Python/Rust 单测 |
 | **`TEST_CHECKLIST.md`** | 开发版 + Setup 人工验收清单 |
-| `go-web.bat` | 上游 Gradio WebUI |
-| `go-realtime-gui.bat` | 上游实时 GUI（需 Runtime） |
 
 ## 你现在要测什么
 

@@ -1192,6 +1192,16 @@ fn sts_delete_input(
 }
 
 #[tauri::command]
+fn sts_rename_input(
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+    path: String,
+    new_name: String,
+) -> Result<String, String> {
+    sts::rename_input_file(&root_clone(&state)?, &input, &path, &new_name)
+}
+
+#[tauri::command]
 fn sts_reveal_input(path: String) -> Result<(), String> {
     sts::reveal_path(&path)
 }
@@ -2193,6 +2203,7 @@ pub fn run() {
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
             audio_edit::audio_trim,
+            audio_edit::audio_cut,
             audio_recovery::audio_recover,
             voices::voices_export_model,
             wallpaper_data_url,
@@ -2317,6 +2328,7 @@ pub fn run() {
             tts_reset_output,
             sts_list_input,
             sts_delete_input,
+            sts_rename_input,
             sts_reveal_input,
             sts_default_input,
             sts_record_start,

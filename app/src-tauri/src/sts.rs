@@ -646,6 +646,60 @@ pub fn delete_input_file(root: &Path, input: &str, path: &str) -> Result<(), Str
     Ok(())
 }
 
+pub fn rename_input_file(
+    root: &Path,
+    input: &str,
+    path: &str,
+    new_name: &str,
+) -> Result<String, String> {
+    let dir = resolve_input_dir(root, input);
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Err(crate::i18n::t("s.stsInputDirMissing"));
+    }
+    if !is_audio_path(file) || !path_under(file, &dir) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+
+    let requested = new_name.trim();
+    if requested.is_empty()
+        || requested == "."
+        || requested == ".."
+        || requested.ends_with('.')
+        || requested.contains('/')
+        || requested.contains('\\')
+    {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+    let mut filename = requested.to_string();
+    if Path::new(&filename).extension().is_none() {
+        if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
+            filename.push('.');
+            filename.push_str(ext);
+        }
+    }
+    if !is_audio_path(Path::new(&filename)) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+
+    let Some(parent) = file.parent() else {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    };
+    if !path_under(parent, &dir) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+    let target = parent.join(filename);
+    if target == file {
+        return Ok(file.to_string_lossy().into_owned());
+    }
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(crate::i18n::t("s.stsRenameExists"));
+    }
+    std::fs::rename(file, &target)
+        .map_err(|e| crate::i18n::te("s.stsRenameFail", &e))?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
 pub fn reveal_path(path: &str) -> Result<(), String> {
     let p = Path::new(path);
     if p.is_dir() {
@@ -2025,6 +2079,25 @@ mod tests {
         assert!(delete_input_file(&root, &dir.to_string_lossy(), &wav.to_string_lossy()).is_ok());
         assert!(!wav.exists());
         assert!(outside.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rename_stays_inside_input_and_keeps_audio_extension() {
+        let root = tmp_root();
+        let dir = root.join("in");
+        fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("old.wav");
+        fs::write(&wav, b"1").unwrap();
+        let outside = root.join("outside.wav");
+        fs::write(&outside, b"2").unwrap();
+        let renamed = rename_input_file(&root, &dir.to_string_lossy(), &wav.to_string_lossy(), "new").unwrap();
+        assert_eq!(Path::new(&renamed).file_name().unwrap().to_string_lossy(), "new.wav");
+        assert!(!wav.exists());
+        assert!(Path::new(&renamed).exists());
+        assert!(rename_input_file(&root, &dir.to_string_lossy(), &outside.to_string_lossy(), "x").is_err());
+        fs::write(dir.join("taken.wav"), b"3").unwrap();
+        assert!(rename_input_file(&root, &dir.to_string_lossy(), &renamed, "taken.wav").is_err());
         let _ = fs::remove_dir_all(&root);
     }
 

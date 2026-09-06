@@ -30,7 +30,7 @@ import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
-import { SettingsPage } from "./pages/SettingsPage";
+import { SettingsPage, type SettingsTab } from "./pages/SettingsPage";
 import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
@@ -84,6 +84,7 @@ export default function App() {
   void locale;
 
   const [page, setPage] = useState<PageId>("home");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("device");
   const [modelsKind, setModelsKind] = useState<"rvc" | "dsp">("rvc");
   const [modelsKindNonce, setModelsKindNonce] = useState(0);
   const [compactNav, setCompactNav] = useState(false);
@@ -693,8 +694,11 @@ export default function App() {
   // 不在设置页和说明页各抄一遍 —— 抄了就得改三处，迟早对不上。
   // 加一 = 「再滚一次」：同一页反复点也要每次都滚过去。
   const [communityNonce, setCommunityNonce] = useState(0);
+  const [moreTopNonce, setMoreTopNonce] = useState(0);
   const openCommunity = useCallback(() => {
     setCommunityNonce((n) => n + 1);
+    // 清掉上一次的社区落点，避免之后进入「其他」时把旧请求当成新请求。
+    setMoreTopNonce(0);
     setPage("more");
   }, []);
   const [helpFocus, setHelpFocus] = useState("");
@@ -1098,6 +1102,12 @@ export default function App() {
           // Opening the plaza is what clears its dot — it used to be hardcoded
           // on, so it meant nothing.
           if (id === "plaza") plaza.markSeen();
+          if (id === "more") {
+            // 顶部导航进入「其他」是普通页面导航，应回到页首；社区入口才滚到
+            // 社媒区。清除社区请求也避免旧落点在返回时再次触发。
+            setCommunityNonce(0);
+            setMoreTopNonce((n) => n + 1);
+          }
           setPage(id);
         }}
         plazaUnread={plaza.unread}
@@ -1179,6 +1189,8 @@ export default function App() {
                   updateBusy={updateBusy}
                   onOpenHelp={openHelp}
                   onOpenCommunity={openCommunity}
+                  selectedTab={settingsTab}
+                  onTabChange={setSettingsTab}
                 />
               );
             case "help":
@@ -1204,6 +1216,7 @@ export default function App() {
                   }}
                   onOpenDownloadModels={openDownloadModels}
                   focusCommunityNonce={communityNonce}
+                  resetScrollNonce={moreTopNonce}
                 />
               );
           }

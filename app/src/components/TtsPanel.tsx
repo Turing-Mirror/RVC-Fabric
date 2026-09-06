@@ -13,6 +13,7 @@ import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
+import { AudioTrim } from "./AudioTrim";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -739,6 +740,9 @@ function StsSection() {
             }}
           >{t("s.46ecac2910")}</Btn>
         </div>
+        <AudioTrim key={input} input={input} disabled={running || recording} onApply={(path) => {
+          if (inputRef.current === input && !runningRef.current) setInput(path);
+        }} />
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
           <span className={PATH}>{output || t("s.53e2db7016")}</span>

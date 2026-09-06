@@ -4,6 +4,7 @@ import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
+import { AudioRecoverySettings } from "../components/AudioRecovery";
 import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
@@ -267,6 +268,7 @@ function SettingsPageImpl({
             }
           >
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.d4b9d6c80f")}<br />{t("s.6c4698ee82")}</p>
+            <AudioRecoverySettings config={c.cfg} />
             <div className={CARD}>
               <Field
                 label={t("s.47a991d18c")}

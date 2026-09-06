@@ -122,9 +122,10 @@ export function ConsultDialog({
     setErr("");
     setBusy(t("s.consultBuilding"));
     try {
-      const r = await invoke<{ ok: boolean; path: string }>("consult_build", { note });
+      const r = await invoke<{ ok: boolean; path: string; missing: number }>("consult_build", { note });
       setBusy("");
-      onDone(r.path);
+      if (r.missing) setErr(t("neptune.consultPartial", { count: r.missing }));
+      else onDone(r.path);
     } catch (e) {
       setBusy("");
       setErr(String(e));

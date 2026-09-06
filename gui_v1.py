@@ -222,7 +222,8 @@ if __name__ == "__main__":
     from tools.torchgate import TorchGate
     import numpy as np
     import FreeSimpleGUI as sg
-    import sounddevice as sd
+    from tools.audio_backend import load_sounddevice, filter_devices
+    sd = load_sounddevice()
     if os.environ.get("TM_REALTIME_WORKER", "").strip() in ("1", "true", "yes"):
         try:
             from tools.worker_protocol import write_status as _boot_status
@@ -1203,6 +1204,7 @@ if __name__ == "__main__":
             self.gui_config.O_noise_reduce = values["O_noise_reduce"]
             self.gui_config.use_pv = values["use_pv"]
             self.gui_config.rms_mix_rate = values["rms_mix_rate"]
+            self.gui_config.f0_repair = bool(values.get("f0_repair", False))
             self.gui_config.index_rate = (
                 0 if not index_path else values["index_rate"]
             )
@@ -2679,6 +2681,7 @@ if __name__ == "__main__":
             sd._initialize()
             devices = sd.query_devices()
             hostapis = sd.query_hostapis()
+            devices = filter_devices(devices, hostapis)
             for hostapi in hostapis:
                 for device_idx in hostapi["devices"]:
                     devices[device_idx]["hostapi_name"] = hostapi["name"]
@@ -2958,6 +2961,7 @@ if __name__ == "__main__":
                 "formant": data.get("formant", 0.0),
                 "index_rate": data.get("index_rate", 0),
                 "rms_mix_rate": data.get("rms_mix_rate", 0),
+                "f0_repair": bool(data.get("f0_repair", False)),
                 "block_time": data.get("block_time", 0.25),
                 "crossfade_length": data.get("crossfade_length", 0.05),
                 "extra_time": data.get("extra_time", 2.5),
@@ -3042,6 +3046,10 @@ if __name__ == "__main__":
 
         def _worker_apply_hot(self, payload: dict):
             """Apply hot-updatable parameters while stream may be running."""
+            if "f0_repair" in payload:
+                self.gui_config.f0_repair = bool(payload["f0_repair"])
+                if getattr(self, "rvc", None) is not None:
+                    self.rvc.f0_repair = self.gui_config.f0_repair
             if "pitch" in payload and payload["pitch"] is not None:
                 self.gui_config.pitch = payload["pitch"]
                 if getattr(self, "rvc", None) is not None:
@@ -3321,9 +3329,15 @@ if __name__ == "__main__":
             它出任何问题都不该影响用户接下来的操作。
             """
             try:
-                if getattr(self, "flag_vc", False):
+                if flag_vc:
                     return
-                pth = str(getattr(self.gui_config, "pth_path", "") or "").strip()
+                # The worker has enumerated devices, but has not started a stream.
+                # GUIConfig therefore does not yet contain the saved voice.
+                with open("configs/inuse/config.json", encoding="utf-8") as f:
+                    saved = json.load(f)
+                if saved.get("dsp_enabled"):
+                    return
+                pth = str(saved.get("pth_path") or "").strip()
                 if not pth or not os.path.isfile(pth):
                     return
                 warm = getattr(self, "_prewarmed", None)
@@ -3331,12 +3345,12 @@ if __name__ == "__main__":
                     return
                 printt("预热：开始读取 %s", pth)
                 new = rvc_for_realtime.RVC(
-                    self.gui_config.pitch,
-                    self.gui_config.formant,
+                    float(saved.get("pitch") or 0),
+                    float(saved.get("formant") or 0),
                     pth,
-                    self.gui_config.index_path,
-                    self.gui_config.index_rate,
-                    self.gui_config.n_cpu,
+                    str(saved.get("index_path") or ""),
+                    float(saved.get("index_rate") or 0),
+                    int(saved.get("n_cpu") or self.gui_config.n_cpu),
                     inp_q,
                     opt_q,
                     self.config,
@@ -3447,6 +3461,7 @@ if __name__ == "__main__":
 
         def _attach_rvc(self, new, pth, idx, rate):
             self.rvc = new
+            new.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             # 选了音色就是 RVC：关掉 DSP，function 走 vc。
             self.dsp_only = False
             self.gui_config.dsp_enabled = False
@@ -4088,7 +4103,7 @@ if __name__ == "__main__":
                 return
             if not out_files:
                 first = skipped[0]["reason"] if skipped else "未知错误"
-                if sts_core.is_dml_backend_error(first):
+                if sts_core.is_dml_backend_error(first) or sts_core.is_oom(first):
                     # 一个文件都没转出来，也就没有写坏任何东西，整批交给冷路径
                     # 重来一次是安全的：那边能把模型挪到 CPU 顶上去。
                     from tools.msg_codes import (

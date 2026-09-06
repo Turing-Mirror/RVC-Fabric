@@ -5,6 +5,9 @@
 pub mod catalog;
 mod asset_scope;
 mod audio_probe;
+mod audio_edit;
+mod audio_recovery;
+mod browser_keys;
 mod autostart;
 mod link_check;
 mod ckpt;
@@ -644,9 +647,9 @@ async fn consult_build(
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        consult::build(&app, &root, &note).map(|p| {
+        consult::build(&app, &root, &note).map(|(p, missing)| {
             let _ = shell_extras::reveal(&p);
-            json!({"ok": true, "path": p.to_string_lossy()})
+            json!({"ok": true, "path": p.to_string_lossy(), "missing": missing})
         })
     })
     .await
@@ -1950,12 +1953,15 @@ async fn voices_delete(
 
 #[tauri::command]
 fn voices_rename(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     new_name: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::rename_voice(&root, &model_dir, &new_name)
+    let out = voices::rename_voice(&root, &model_dir, &new_name)?;
+    let _ = app.emit("voices-changed", &out);
+    Ok(out)
 }
 
 /// 选一张图给「更换封面」用。返回绝对路径或 null（取消）。
@@ -2186,6 +2192,9 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
+            audio_edit::audio_trim,
+            audio_recovery::audio_recover,
+            voices::voices_export_model,
             wallpaper_data_url,
             tools_open,
             tools_open_help,
@@ -2395,6 +2404,7 @@ pub fn run() {
             .shadow(false)
             .center()
             .build()?;
+            browser_keys::configure(&main_window);
             // `.center()` 只认主显示器。多显示器的人主屏未必是他正在看的那
             // 块，窗口连同任务栏按钮一起去了另一块屏，这头看起来就跟没启动
             // 一样。摆到光标所在的屏上。

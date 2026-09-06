@@ -13,7 +13,7 @@
 
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -23,6 +23,13 @@ use crate::paths;
 /// 探测最多等这么久。正常机器上一两秒就回来了，卡住的多半是驱动在里面转，
 /// 等下去也没有意义 —— 超时按「不确定」处理，不拦引擎。
 const PROBE_TIMEOUT: Duration = Duration::from_secs(25);
+static CONFIRMED_CRASH: AtomicBool = AtomicBool::new(false);
+
+pub fn confirmed_failure() -> bool { CONFIRMED_CRASH.load(Ordering::Relaxed) }
+pub fn reset() {
+    *cache().lock().unwrap_or_else(|e| e.into_inner()) = None;
+    CONFIRMED_CRASH.store(false, Ordering::Relaxed);
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
@@ -109,27 +116,13 @@ fn run_probe(root: &Path) -> Verdict {
         }
     };
 
-    // `Child::wait` 没有超时。丢给一根线程去等，主线程只认这个超时。
-    let (tx, rx) = mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        let st = child.wait();
-        let _ = tx.send(st.ok().and_then(|s| s.code()));
-    });
-    let code = match rx.recv_timeout(PROBE_TIMEOUT) {
-        Ok(c) => {
-            let _ = handle.join();
-            c
-        }
-        Err(_) => {
-            crate::logging::shell_log!("audio probe 超时（{} 秒），按不确定处理", PROBE_TIMEOUT.as_secs());
-            return Verdict::Unknown;
-        }
-    };
+    let code = wait_probe(&mut child);
 
     let Some(code) = code else {
         return Verdict::Unknown;
     };
     if code == 0 {
+        CONFIRMED_CRASH.store(false, Ordering::Relaxed);
         crate::logging::shell_log!("audio probe: 设备枚举正常");
         return Verdict::Ok;
     }
@@ -139,12 +132,24 @@ fn run_probe(root: &Path) -> Verdict {
         return Verdict::Unknown;
     }
     let asio = crate::crash::asio_drivers();
+    CONFIRMED_CRASH.store(true, Ordering::Relaxed);
     crate::logging::shell_log!(
         "audio probe 被系统终止，退出码 {}；已注册的 ASIO 驱动：{:?}",
         crate::crash::describe(code),
         asio
     );
     Verdict::Crashed { code, asio }
+}
+
+pub fn wait_probe(child: &mut std::process::Child) -> Option<i32> {
+    let deadline = std::time::Instant::now() + PROBE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.code(),
+            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
+            _ => { let _ = child.kill(); let _ = child.wait(); return None; }
+        }
+    }
 }
 
 #[cfg(test)]

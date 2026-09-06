@@ -172,6 +172,9 @@ pub fn defaults() -> Map<String, Value> {
     // devices / performance (cold)
     m.insert("sg_hostapi".into(), json!(""));
     m.insert("sg_wasapi_exclusive".into(), json!(false));
+    m.insert("audio_compatibility".into(), json!(false));
+    m.insert("audio_ignore_enabled".into(), json!(false));
+    m.insert("ignored_audio_devices".into(), json!([]));
     m.insert("sg_input_device".into(), json!(""));
     m.insert("sg_output_device".into(), json!(""));
     m.insert("sr_type".into(), json!("sr_device"));

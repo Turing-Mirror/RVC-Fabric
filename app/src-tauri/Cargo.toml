@@ -49,6 +49,8 @@ tauri-plugin-single-instance = "2"
 # every 400 ms while converting; shelling out to tasklist / powershell there
 # was costing more CPU than the conversion itself.
 [target.'cfg(windows)'.dependencies]
+webview2-com = "0.38.2"
+windows-core = "0.61"
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_System_Threading",

@@ -2235,6 +2235,99 @@ pub fn rename_voice(root: &Path, model_dir: &str, new_name: &str) -> Result<Valu
     Ok(json!({"ok": true, "name": name}))
 }
 
+/// Export only portable model assets; never copy a training directory wholesale.
+pub fn export_model(root: &Path, model_dir: &str, dest: &Path) -> Result<(), String> {
+    let md = Path::new(model_dir);
+    guard_model_dir(root, md)?;
+    let pth = find_pth(md).filter(|p| p.is_file())
+        .ok_or_else(|| crate::i18n::t("neptune.exportMissing"))?;
+    let side = read_sidecar(md);
+    let mut meta = Map::new();
+    for key in ["name", "tag", "author", "author_url", "authors", "source_url", "description", "license", "language", "gender"]
+        .iter().copied().chain(PROFILE_VOICE_KEYS.iter().copied()).chain(PROFILE_FX_KEYS.iter().copied()).chain(PROFILE_PERF_KEYS.iter().copied()) {
+        if let Some(v) = side.get(key) { meta.insert(key.into(), v.clone()); }
+    }
+    meta.insert("voice_id".into(), json!(md.file_name().unwrap_or_default().to_string_lossy()));
+    let mut files = vec![(pth, "model.pth".to_string())];
+    let index = PathBuf::from(resolve_active_index(md, &side));
+    if index.is_file() {
+        meta.insert("index".into(), json!("model.index"));
+        files.push((index, "model.index".into()));
+    }
+    let raw_cover = side.get("cover").and_then(|v| v.as_str()).map(str::to_string)
+        .or_else(|| find_cover(md)).unwrap_or_default();
+    let cover = PathBuf::from(resolve_cover(&raw_cover, Some(md), "", root));
+    if cover.is_file() {
+        let ext = cover.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+            let name = format!("cover.{ext}");
+            meta.insert("cover".into(), json!(name));
+            files.push((cover, name));
+        }
+    }
+    let mut profiles = Vec::new();
+    for entry in fs::read_dir(profiles_dir(md)).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|v| v.to_str()) != Some("tmvp") { continue; }
+        let value: Value = serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut portable = Map::new();
+        for key in ["schema", "id", "name", "description", "created_at", "source"] {
+            if let Some(v) = value.get(key) { portable.insert(key.into(), v.clone()); }
+        }
+        for (group, keys) in [("voice", PROFILE_VOICE_KEYS), ("fx", PROFILE_FX_KEYS), ("perf", PROFILE_PERF_KEYS)] {
+            let mut settings = Map::new();
+            overlay_keys_from_value(&value[group], keys, &mut settings);
+            portable.insert(group.into(), json!(settings));
+        }
+        let filename = path.file_name().unwrap().to_string_lossy();
+        profiles.push((format!("{PROFILES_DIR}/{filename}"), portable));
+    }
+    if let Ok(destination) = dest.canonicalize() {
+        if files.iter().any(|(source, _)| source.canonicalize().ok().as_ref() == Some(&destination)) {
+            return Err(crate::i18n::t("neptune.exportMissing"));
+        }
+    }
+    let stage = dest.with_extension(format!("{}.partial", chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
+    let result = (|| -> Result<(), String> {
+        let file = fs::OpenOptions::new().write(true).create_new(true).open(&stage).map_err(|e| e.to_string())?;
+        let mut zip = zip::ZipWriter::new(file);
+        let opts: zip::write::SimpleFileOptions = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored).large_file(true);
+        zip.start_file("config.json", opts).map_err(|e| e.to_string())?;
+        zip.write_all(&serde_json::to_vec_pretty(&meta).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        for (name, profile) in profiles {
+            zip.start_file(name, opts).map_err(|e| e.to_string())?;
+            zip.write_all(&serde_json::to_vec_pretty(&profile).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        }
+        for (path, name) in files {
+            zip.start_file(name, opts).map_err(|e| e.to_string())?;
+            let mut source = fs::File::open(path).map_err(|e| e.to_string())?;
+            std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
+        }
+        zip.finish().map_err(|e| e.to_string())?;
+        fs::rename(&stage, dest).map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+    let _ = fs::remove_file(stage);
+    result
+}
+
+#[tauri::command]
+pub async fn voices_export_model(window: tauri::WebviewWindow, state: tauri::State<'_, std::sync::Mutex<crate::AppState>>, model_dir: String) -> Result<Option<String>, String> {
+    let root = crate::root_clone(&state)?;
+    guard_model_dir(&root, Path::new(&model_dir))?;
+    let name = read_sidecar(Path::new(&model_dir)).get("name").and_then(|v| v.as_str()).unwrap_or("voice").to_string();
+    let name = safe_model_dir_name(&name).unwrap_or_else(|_| "voice".into());
+    let Some(dest) = crate::shell_extras::dialog_on(Some(&window))
+        .set_title(crate::i18n::t("neptune.exportModel"))
+        .set_file_name(format!("{name}.zip")).add_filter("ZIP", &["zip"]).save_file() else { return Ok(None) };
+    tauri::async_runtime::spawn_blocking(move || {
+        export_model(&root, &model_dir, &dest)?;
+        let _ = crate::shell_extras::reveal(&dest);
+        Ok(Some(dest.to_string_lossy().into_owned()))
+    }).await.map_err(|e| e.to_string())?
+}
+
 // ---------------------------------------------------------------------------
 // 自定义封面：选图 → 界面里裁剪 → 写回模型目录
 // ---------------------------------------------------------------------------
@@ -2539,8 +2632,14 @@ pub fn current_selection_summary(root: &Path) -> Value {
     // Position in the library, for the dock's "少女音 · 2/7" line. The UI had
     // no source for this and shipped a hardcoded "1/3" to every user.
     let total = models.map(|a| a.len()).unwrap_or(0);
+    let dsp_name = if crate::config::wants_dsp(&cfg) {
+        cfg.get("dsp_preset").and_then(|v| v.as_str())
+            .and_then(|id| crate::dsp::get(root, id))
+            .and_then(|v| v["name"].as_str().map(str::to_owned))
+    } else { None };
     json!({
         "model": model,
+        "dsp_name": dsp_name,
         "pitch": cfg.get("pitch").cloned().unwrap_or(json!(0)),
         "formant": cfg.get("formant").cloned().unwrap_or(json!(0.0)),
         "profile_summary": profile_summary_from_cfg(&cfg2),
@@ -2866,6 +2965,31 @@ mod tests {
     }
 
     #[test]
+    fn exported_model_can_be_imported_without_private_files_or_paths() {
+        let root = scratch("export-source");
+        let md = crate::paths::models_dir(&root).join("alice");
+        fs::create_dir_all(profiles_dir(&md)).unwrap();
+        fs::write(md.join("alice.pth"), vec![1u8; 60_000]).unwrap();
+        fs::write(md.join("alice.index"), vec![2u8; 2000]).unwrap();
+        fs::write(md.join("private.log"), "not for sharing").unwrap();
+        fs::write(md.join("cover.png"), [0x89u8, 0x50, 0x4e, 0x47, 13, 10, 26, 10]).unwrap();
+        write_sidecar(&md, &json!({"name":"Alice", "pitch":2, "index":"alice.index", "cover":"cover.png", "pth_path":"/private/source.pth"}).as_object().unwrap().clone()).unwrap();
+        fs::write(profiles_dir(&md).join("abc.tmvp"), r#"{"id":"abc","name":"Soft","voice":{"pitch":3,"pth_path":"/private/hidden.pth"}}"#).unwrap();
+        let zip_path = root.join("alice.zip");
+        export_model(&root, &md.to_string_lossy(), &zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap();
+        assert!(archive.by_name("private.log").is_err());
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut archive.by_name("config.json").unwrap(), &mut text).unwrap();
+        assert!(!text.contains("/private/"));
+        assert!(archive.by_name("profiles/abc.tmvp").is_ok());
+        let target = scratch("export-import");
+        let result = import_files(&target, &[zip_path.to_string_lossy().into_owned()], None).unwrap();
+        assert_eq!(result["errors"], json!([]), "{result}");
+        assert_eq!(result["models"].as_array().unwrap().len(), 1, "{result}");
+    }
+
+    #[test]
     fn default_profile_does_not_keep_previous_model_pitch() {
         let md = scratch("def-reset");
         std::fs::create_dir_all(&md).unwrap();
@@ -2954,4 +3078,3 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
-

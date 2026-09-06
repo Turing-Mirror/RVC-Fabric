@@ -188,10 +188,10 @@ def move_models_to_cpu(vc) -> bool:
 
     try:
         if net_g is not None:
-            vc.net_g = net_g.float().to("cpu")
+            vc.net_g = net_g.to("cpu").float()
             moved_net = True
         if hubert is not None:
-            vc.hubert_model = hubert.float().to("cpu")
+            vc.hubert_model = hubert.to("cpu").float()
             moved_hub = True
         if pipe is not None:
             pipe.device = "cpu"
@@ -687,7 +687,7 @@ def convert_one_with_cpu_fallback(
     except Exception as first:
         if (
             allow_cpu_fallback
-            and is_dml_backend_error(first)
+            and (is_dml_backend_error(first) or is_oom(str(first)))
             and move_models_to_cpu(vc)
         ):
             if on_fallback is not None:
@@ -699,7 +699,8 @@ def convert_one_with_cpu_fallback(
             if on_degrade is not None:
                 try:
                     # 后端缺算子直接退到最后一档：中间那档还是同一个后端。
-                    on_degrade("显卡不支持这一项处理", ladder_rung(len(FALLBACK_LADDER) - 1))
+                    why = "显卡内存不足" if is_oom(str(first)) else "显卡不支持这一项处理"
+                    on_degrade(why, ladder_rung(len(FALLBACK_LADDER) - 1))
                 except Exception:
                     traceback.print_exc()
             convert_one(vc, src, dest, **kwargs)
@@ -837,7 +838,7 @@ def run_batch(
                         if (
                             allow_cpu_fallback
                             and not cpu_fallback_done
-                            and is_dml_backend_error(first)
+                            and (is_dml_backend_error(first) or is_oom(str(first)))
                             and move_models_to_cpu(vc)
                         ):
                             # 显卡这条路走不通了，别让整批陪葬。挪到 CPU 重来一次，
@@ -854,7 +855,7 @@ def run_batch(
                                 skip=prog.skip_count,
                                 file=src.name,
                                 **_degraded_fields(
-                                    "显卡后端不支持这一步",
+                                    "显卡内存不足" if is_oom(str(first)) else "显卡后端不支持这一步",
                                     ladder_rung(len(FALLBACK_LADDER) - 1),
                                 ),
                             )

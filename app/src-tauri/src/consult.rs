@@ -10,7 +10,7 @@
 //! 所以现在包里有三样新东西：
 //!
 //! * `raw/<语言>.wav` —— 用户照着稿子念的原声；
-//! * `converted/<语言>.wav` —— 用他**当前这套参数**转过的同一段；
+//! * `converted/<语言>.wav` —— 使用当前离线参数生成的同一段，不含实时音效；
 //! * `perf/*.json` —— 这台机器的实时性能记录。
 //!
 //! 第三样不是凑数：调出来的参数必须在**他那台机器**上跑得动。
@@ -213,12 +213,11 @@ pub fn has_any_recording(root: &Path) -> bool {
 ///
 /// 转换走 `sts::run`（静音模式）：实时 worker 在跑就借它常驻的模型，
 /// 不在就用冷路径的常驻进程。三种语言只付一次冷启动。
-fn convert_all(app: &AppHandle, root: &Path) -> Vec<(String, PathBuf)> {
-    let cfg = crate::config::read(root);
+fn convert_all(app: &AppHandle, root: &Path, cfg: &serde_json::Map<String, Value>) -> (Vec<(String, PathBuf)>, Vec<Value>) {
     let pth = cfg.get("pth_path").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
     if pth.is_empty() || !Path::new(&pth).is_file() {
         crate::logging::shell_log!("咨询包：没有选音色，跳过变声样本");
-        return Vec::new();
+        return (Vec::new(), LANGS.iter().filter(|l| only_wav(&raw_dir(root, l)).is_some()).map(|l| json!({"language": l, "error": "model_not_selected"})).collect());
     }
     let index = cfg.get("index_path").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let index_rate = cfg.get("index_rate").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -234,18 +233,22 @@ fn convert_all(app: &AppHandle, root: &Path) -> Vec<(String, PathBuf)> {
     let _ = std::fs::remove_dir_all(&stage);
 
     let mut out = Vec::new();
+    let mut failures = Vec::new();
     for lang in LANGS {
         let Some(raw) = only_wav(&raw_dir(root, lang)) else {
             continue;
         };
         let dst_dir = stage.join(lang);
-        if std::fs::create_dir_all(&dst_dir).is_err() {
+        if let Err(e) = std::fs::create_dir_all(&dst_dir) {
+            failures.push(json!({"language": lang, "error": e.to_string()}));
             continue;
         }
         let opts = crate::sts::ConvertOpts {
             // 用户点的是「申请专业优化」，不是「语音转换」。
             // 不静音的话那一页会显示一个他没启动过的任务。
             quiet: true,
+            rms_mix_rate: cfg.get("rms_mix_rate").and_then(|v| v.as_f64()).unwrap_or(0.25).clamp(0.0, 1.0),
+            protect: cfg.get("protect").and_then(|v| v.as_f64()).unwrap_or(0.33).clamp(0.0, 0.5),
             ..Default::default()
         };
         let res = crate::sts::run(
@@ -271,34 +274,39 @@ fn convert_all(app: &AppHandle, root: &Path) -> Vec<(String, PathBuf)> {
                     .filter(|p| p.is_file())
                 {
                     out.push((lang.to_string(), p));
+                } else {
+                    failures.push(json!({"language": lang, "error": "conversion_produced_no_audio", "result": v}));
                 }
             }
             // 一种语言转失败不该让整个包出不来 —— 原声照样有价值。
-            Err(e) => crate::logging::shell_log!("咨询包：{lang} 变声样本失败：{e}"),
+            Err(e) => {
+                crate::logging::shell_log!("咨询包：{lang} 变声样本失败：{e}");
+                failures.push(json!({"language": lang, "error": e}));
+            },
         }
     }
-    out
+    (out, failures)
 }
 
 /// 打包。
 ///
 /// 顺序是有讲究的：**先转换再打包**。反过来的话，转换那几十秒里用户看着
 /// 一个已经生成的 zip，会以为已经好了。
-pub fn build(app: &AppHandle, root: &Path, note: &str) -> Result<PathBuf, String> {
+pub fn build(app: &AppHandle, root: &Path, note: &str) -> Result<(PathBuf, usize), String> {
     use std::io::Write;
 
     if !has_any_recording(root) {
         return Err(crate::i18n::t("s.consultNeedRecording"));
     }
 
-    let converted = convert_all(app, root);
+    let cfg = crate::config::read(root);
+    let (converted, failures) = convert_all(app, root, &cfg);
 
     let out_dir = crate::paths::user_data(root).join("consult_packs");
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let stamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
     let out = out_dir.join(format!("consult_{stamp}.zip"));
 
-    let cfg = crate::config::read(root);
     let pth = cfg.get("pth_path").and_then(|v| v.as_str()).unwrap_or("");
     let model_dir = if pth.is_empty() {
         None
@@ -327,6 +335,12 @@ pub fn build(app: &AppHandle, root: &Path, note: &str) -> Result<PathBuf, String
         "generated_at": stamp,
         "languages": recorded,
         "converted": converted.iter().map(|(l, _)| l.clone()).collect::<Vec<_>>(),
+        "conversion_failures": failures,
+        "conversion_scope": {
+            "mode": "offline_baseline",
+            "applied": ["pth_path", "index_path", "index_rate", "pitch", "f0method", "rms_mix_rate", "protect"],
+            "not_applied": ["formant", "f0_repair", "realtime_fx", "realtime_noise_reduction", "in_gain_db", "out_gain_db"]
+        },
         "script": script(),
     });
     zip.start_file("consult.json", opts).map_err(|e| e.to_string())?;
@@ -336,16 +350,16 @@ pub fn build(app: &AppHandle, root: &Path, note: &str) -> Result<PathBuf, String
     // 原声。
     for lang in LANGS {
         if let Some(p) = only_wav(&raw_dir(root, lang)) {
-            let bytes = std::fs::read(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+            let mut source = std::fs::File::open(&p).map_err(|e| format!("{}: {e}", p.display()))?;
             zip.start_file(format!("raw/{lang}.wav"), opts).map_err(|e| e.to_string())?;
-            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+            std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
         }
     }
     // 用当前参数转过的同一段。
     for (lang, p) in &converted {
-        let bytes = std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let mut source = std::fs::File::open(p).map_err(|e| format!("{}: {e}", p.display()))?;
         zip.start_file(format!("converted/{lang}.wav"), opts).map_err(|e| e.to_string())?;
-        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
     }
     // 这台机器跑得动什么。
     for p in perf_reports(root) {
@@ -378,7 +392,7 @@ pub fn build(app: &AppHandle, root: &Path, note: &str) -> Result<PathBuf, String
         recorded.len(),
         converted.len()
     );
-    Ok(out)
+    Ok((out, failures.len()))
 }
 
 #[cfg(test)]

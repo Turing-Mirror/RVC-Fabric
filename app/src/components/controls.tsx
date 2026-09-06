@@ -181,6 +181,7 @@ export function RangeBar({
   /** 初始/中性值位置（如音高 0）。画成竖线；与之重合的刻度小点会跳过不画。 */
   defaultValue,
   ariaLabel,
+  disabled = false,
 }: {
   value: number;
   min: number;
@@ -191,6 +192,7 @@ export function RangeBar({
   ticks?: number;
   defaultValue?: number;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   const span = max - min || 1;
   const pct = Math.min(100, Math.max(0, ((value - min) / span) * 100));
@@ -341,6 +343,7 @@ export function RangeBar({
         step={step}
         value={value}
         aria-label={ariaLabel}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         onPointerDown={(e) => setDragPct(pctFromClientX(e.clientX))}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -394,21 +397,22 @@ export function Toggle({
   onChange,
   label,
   tip,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
   tip?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex items-center gap-[11px] cursor-pointer select-none">
       {tip ? <HelpMark title={tip} /> : null}
       <span
-        role="checkbox"
-        aria-checked={checked}
+        aria-hidden="true"
         onClick={(e) => {
           e.preventDefault();
-          onChange(!checked);
+          if (!disabled) onChange(!checked);
         }}
         className={[
           "w-[15px] h-[15px] rounded grid place-items-center flex-none transition-colors",
@@ -425,6 +429,7 @@ export function Toggle({
         type="checkbox"
         className="sr-only"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="text-sm">{label}</span>

@@ -42,6 +42,7 @@ import time
 import traceback
 import wave
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 AUDIO_EXT = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".opus"}
 DEFAULT_MAX_SEC = 30 * 60
@@ -91,11 +92,13 @@ def list_input_devices(hostapi_name: str = "") -> list[tuple[object, str]]:
 
     Index 的取法跟 gui_v1.update_devices 一致：优先 d["index"]，没有就用名字。
     """
-    import sounddevice as sd
+    from tools.audio_backend import load_sounddevice, filter_devices
+    sd = load_sounddevice()
 
     sd._initialize()
     devices = sd.query_devices()
     hostapis = sd.query_hostapis()
+    devices = filter_devices(devices, hostapis)
     for hostapi in hostapis:
         hname = str(hostapi.get("name") or "")
         for device_idx in hostapi.get("devices") or []:
@@ -232,7 +235,8 @@ def record(req: dict) -> int:
 
     try:
         import numpy as np
-        import sounddevice as sd
+        from tools.audio_backend import load_sounddevice
+        sd = load_sounddevice()
     except Exception as e:
         emit(phase="error", message=f"录音组件不可用：{e}", code="nolib")
         return 1

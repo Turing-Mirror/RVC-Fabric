@@ -3,6 +3,7 @@ import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { OnboardingBar } from "./components/OnboardingBar";
 import { Nudge } from "./components/Nudge";
+import { AudioRecoveryBanner } from "./components/AudioRecovery";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
@@ -1260,6 +1261,7 @@ export default function App() {
 
       {/* 撕裂这两条排在所有 Nudge 前面：用户正卡着，别让「要不要更新」
           「要不要开统计」挡在他前面。 */}
+      <AudioRecoveryBanner status={engine.status} />
       {engine.tearAsk ? (
         <Nudge
           title={t("s.tearTitle")}

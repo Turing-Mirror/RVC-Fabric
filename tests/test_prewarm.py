@@ -44,7 +44,7 @@ class PrewarmTests(unittest.TestCase):
         body = body[: body.index("def _preload_pending_model")]
         self.assertIn("except Exception:", body)
         # 正在变声、没选音色、已经预热过，三种情况都直接跳过，不算失败。
-        self.assertIn('if getattr(self, "flag_vc", False):', body)
+        self.assertIn('if flag_vc:', body)
         self.assertIn("os.path.isfile(pth)", body)
 
     def test_the_shell_only_asks_when_the_setting_is_on(self):

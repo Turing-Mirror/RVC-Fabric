@@ -53,7 +53,8 @@ def main() -> None:
         pass
 
     import numpy as np
-    import sounddevice as sd
+    from tools.audio_backend import load_sounddevice, filter_devices
+    sd = load_sounddevice()
 
     from tools.audio_io_process import AudioIoProcess
     from tools.delay_metric import ema as _delay_ema
@@ -162,6 +163,7 @@ def main() -> None:
         sd._initialize()
         devices = sd.query_devices()
         apis = sd.query_hostapis()
+        devices = filter_devices(devices, apis)
         for api in apis:
             for idx in api["devices"]:
                 devices[idx]["hostapi_name"] = api["name"]

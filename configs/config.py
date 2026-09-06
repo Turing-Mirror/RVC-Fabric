@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import shutil
+from functools import wraps
 from multiprocessing import cpu_count
 
 from configs.accel import first_real_adapter
@@ -34,6 +35,7 @@ version_config_list = [
 
 
 def singleton_variable(func):
+    @wraps(func, updated=())
     def wrapper(*args, **kwargs):
         if not wrapper.instance:
             wrapper.instance = func(*args, **kwargs)
@@ -107,6 +109,7 @@ class Config:
         for config_file in version_config_list:
             src = f"configs/{config_file}"
             p = f"configs/inuse/{config_file}"
+            os.makedirs(os.path.dirname(p), exist_ok=True)
             if not os.path.exists(p):
                 shutil.copy(src, p)
             try:

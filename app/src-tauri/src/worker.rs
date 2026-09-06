@@ -316,6 +316,15 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
         env.insert("TM_ACCEL".into(), "auto".into());
     }
     apply_main_gpu(root, &mut env);
+    let cfg = crate::config::read(root);
+    env.remove("TM_PORTAUDIO_DLL");
+    if cfg.get("audio_compatibility").and_then(|v| v.as_bool()) == Some(true) {
+        env.insert("TM_PORTAUDIO_DLL".into(), crate::audio_recovery::dll_path(root).to_string_lossy().into_owned());
+    }
+    let ignored = if cfg.get("audio_ignore_enabled").and_then(|v| v.as_bool()) == Some(true) {
+        cfg.get("ignored_audio_devices").cloned().unwrap_or_else(|| serde_json::json!([]))
+    } else { serde_json::json!([]) };
+    env.insert("TM_AUDIO_IGNORED".into(), ignored.to_string());
     env
 }
 

@@ -158,6 +158,7 @@ export async function currentVoice() {
   }
   return invoke<{
     model?: VoiceModel | null;
+    dsp_name?: string | null;
     pitch?: number;
     formant?: number;
     profile_summary?: string;

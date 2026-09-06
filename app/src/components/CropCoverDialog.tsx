@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
+import { coverSize } from "../lib/imageSize";
 import {
   coverDataUrl,
   pickCoverImage,
@@ -12,7 +13,7 @@ import {
  * 封面裁剪对话框（模型页「⋯」→「更换封面」）。
  *
  * 交互移植自发布仓里的 cover-tool 网页：滚轮缩放 / 拖动平移，选区可拖动、
- * 八个手柄缩放，4:3 · 1:1 · 自由比例；输出统一短边 512 的 jpg（质量 0.85）。
+ * 八个手柄缩放，4:3 · 1:1 · 自由比例；输出短边优先 512、长边不超过 2048 的 jpg（质量 0.85）。
  * 原工具的 git 推送、CNB 附件上传在软件内一律不存在 —— 这里只把裁好的图
  * 写进该音色自己的目录，纯本地操作。
  *
@@ -146,10 +147,8 @@ export function CropCoverDialog({
     y = Math.round(y);
     w = Math.max(1, Math.round(w));
     h = Math.max(1, Math.round(h));
-    // 裁出选区，短边统一到 512（不足放大、超出缩小），保持比例不拉伸。
-    const k = 512 / Math.min(w, h);
-    const outW = Math.max(1, Math.round(w * k));
-    const outH = Math.max(1, Math.round(h * k));
+    // 优先短边 512，同时限制长边 2048，保持比例不拉伸。
+    const [outW, outH] = coverSize(w, h);
     const cv = document.createElement("canvas");
     cv.width = outW;
     cv.height = outH;

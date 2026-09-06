@@ -9,6 +9,8 @@ import { resolveCover, useCoverCache } from "../lib/cover";
 import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
+import { copyText } from "../lib/clipboard";
+import { invoke } from "@tauri-apps/api/core";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
@@ -961,6 +963,26 @@ function MoreMenu({
 }) {
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
   if (model.source === "user_data" && model.dir) {
+    items.push({
+      label: t("neptune.exportModel"),
+      action: async () => {
+        onClose();
+        onMessage(t("neptune.exportBusy"));
+        try {
+          const path = await invoke<string | null>("voices_export_model", { modelDir: model.dir });
+          onMessage(path ? t("neptune.exportDone") : "");
+        } catch (e) { onMessage(String(e)); }
+      },
+    });
+    items.push({
+      label: t("neptune.exportSummary"),
+      action: async () => {
+        const authors = voiceAuthorList(model).map((a) => [a.name, a.url].filter(Boolean).join(" · "));
+        const text = [model.name, model.tag, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
+        onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"));
+        onClose();
+      },
+    });
     items.push({
       label: t("s.1cd80fd7a8"),
       action: async () => {

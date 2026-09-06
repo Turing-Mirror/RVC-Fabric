@@ -21,10 +21,14 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from tools.audio_backend import load_sounddevice, check_selected
 
 
 def probe() -> dict:
-    import sounddevice as sd
+    sd = load_sounddevice()
 
     # 和 gui_v1.update_devices 走同一套：先 terminate 再 initialize，
     # 否则探到的是 import 时那一次的缓存，复现不了真正的失败点。
@@ -48,8 +52,13 @@ def probe() -> dict:
         if d.get("max_output_channels", 0) > 0:
             outputs.append({"name": name, "hostapi": api})
 
+    failed = []
+    if "--check" in sys.argv:
+        cfg = json.loads((Path.cwd() / "configs/inuse/config.json").read_text(encoding="utf-8"))
+        failed = check_selected(sd, cfg)
     return {
         "ok": True,
+        "failed": failed,
         "hostapis": [a["name"] for a in hostapis],
         "inputs": inputs,
         "outputs": outputs,

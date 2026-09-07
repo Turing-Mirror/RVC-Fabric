@@ -1,8 +1,8 @@
-# RVC Fabric 1.3.0 · 开发版 + Setup 测试清单
+# RVC Fabric 1.6.0 · 开发版 + Setup 测试清单
 
 > 代码侧 Tauri 迁移：**主体已完成**（壳/补全/商店/设置/更新/删旧 Tk）。  
 > 本清单用于你亲自验收「开发版」与「干净机 Setup 全流程」。  
-> 日期基线：2026-07-31 · 版本 **1.3.0**
+> 日期基线：2026-09-07 · 版本 **1.6.0**
 
 ---
 
@@ -18,7 +18,7 @@
 | 整包签名更新（策略 B） | 代码有，**公钥/密钥未正式投产**，本轮可不测自动换 exe |
 | **干净机实机矩阵** | **未完成 → 就是你要测的** |
 
-结论：**可以按 1.3.0 做开发版与 Setup 验收**；测完前不要当「已正式发版」。
+结论：**可以按 1.6.0 做开发版与 Setup 验收**；测完前不要当「已正式发版」。
 
 ---
 
@@ -37,18 +37,14 @@ scripts\dev\run_smoke_tests.bat
 | 2 | 开发环境缺东西（Node/Rust/MSVC…） |
 | 3 | 开发可用，但 Inno/ISCC 未就绪 |
 
-本机已确认过的路径示例：
-
-- `F:\VS2022\BuildTools\...vcvars64.bat`
-- `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`
-- 仓库根已有 `Runtime\pythonw.exe`（开发版测变声用）
+本机工具链路径以 `check_test_env.ps1` 的实际输出为准；脚本不再写死某台开发机的绝对路径。
 
 准备阶段已修/已验：
 
 - `build_setup.py` 不再错误要求旧 `启动器.exe` / `变声器.exe`（否则 Setup 永远打不出）
 - `provision.rs` 补上 `use std::process::Command`（否则 `tauri:dev` / `cargo test` 编不过）
 - 环境检查脚本：`RESULT: DEV + SETUP env ready`
-- Rust 单测：**35 passed**（`app/src-tauri`）
+- Rust 单测：以 `cargo test` 的实际结果为准（`app/src-tauri`）
 
 ---
 
@@ -60,7 +56,7 @@ scripts\dev\run_smoke_tests.bat
 scripts\dev\tauri-dev.bat
 ```
 
-不要直接 `npm run tauri:dev`（除非当前窗口已 call 过 vcvars，否则常缺 `link.exe`）。
+开发版统一使用 `scripts\dev\tauri-dev.bat`，它会设置产品根和隔离的 Cargo 构建目录。
 
 期望：
 

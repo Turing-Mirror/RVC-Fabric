@@ -2,41 +2,26 @@
 chcp 65001 >nul
 setlocal EnableExtensions
 cd /d "%~dp0..\.."
-title RVC Fabric · tauri dev
+title RVC Fabric - tauri dev
 
-echo === RVC Fabric 开发版 ===
-echo 仓库: %CD%
-echo.
-
-REM --- MSVC 环境（link.exe）---
-if defined TM_VCVARS if exist "%TM_VCVARS%" goto :vc_ok
-if exist "F:\VS2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" set "TM_VCVARS=F:\VS2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-if not defined TM_VCVARS if exist "%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" set "TM_VCVARS=%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-if not defined TM_VCVARS if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" set "TM_VCVARS=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-if not defined TM_VCVARS if exist "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" set "TM_VCVARS=%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
-
-:vc_ok
-if not defined TM_VCVARS (
-  echo [错误] 找不到 vcvars64.bat。请安装 VS2022 C++ 生成工具，或 set TM_VCVARS=路径\vcvars64.bat
+if not exist "app\package.json" (
+  echo [错误] 当前目录不是 RVC Fabric 仓库：%CD%
   exit /b 1
 )
-echo [env] call "%TM_VCVARS%"
-call "%TM_VCVARS%" >nul
+where npm.cmd >nul 2>&1
 if errorlevel 1 (
-  echo [错误] vcvars 失败
+  echo [错误] 找不到 npm.cmd，请先安装 Node.js 或修正 PATH。
   exit /b 1
 )
 
-REM 可选：把 cargo target 放到短路径盘，减轻 L: 路径过长问题
-REM 默认用 app\src-tauri\target，避免错误的 CARGO_TARGET_DIR 带空格导致编译失败
-set "CARGO_TARGET_DIR="
-if exist "F:\VS2022\cargo-target\" (
-  set "CARGO_TARGET_DIR=F:\VS2022\cargo-target"
-  echo [env] CARGO_TARGET_DIR=%CARGO_TARGET_DIR%
-)
+REM 默认使用隔离的 Cargo 缓存，避免复用其他检出目录的绝对路径。
+if not defined CARGO_TARGET_DIR set "CARGO_TARGET_DIR=%TEMP%\RVC-Fabric\cargo-target"
 
 REM 产品根 = 仓库根（paths.rs 也会自己爬；显式更稳）
 set "TM_VOICE_ROOT=%CD%"
+echo === RVC Fabric 开发版 ===
+echo 仓库: %TM_VOICE_ROOT%
+echo Cargo target: %CARGO_TARGET_DIR%
 echo [env] TM_VOICE_ROOT=%TM_VOICE_ROOT%
 
 if not exist "Runtime\pythonw.exe" (
@@ -48,16 +33,17 @@ if not exist "Runtime\pythonw.exe" (
 if not exist "app\node_modules\" (
   echo [app] npm install ...
   pushd app
-  call npm install --no-audit --no-fund
-  if errorlevel 1 ( popd & exit /b 1 )
+  call npm.cmd install --no-audit --no-fund
+  set "ERR=%ERRORLEVEL%"
   popd
+  if not "%ERR%"=="0" exit /b %ERR%
 )
 
 echo.
 echo 启动 tauri dev（关窗口或 Ctrl+C 结束）...
 echo.
 pushd app
-call npm run tauri:dev
+call npm.cmd run tauri:dev
 set ERR=%errorlevel%
 popd
 exit /b %ERR%

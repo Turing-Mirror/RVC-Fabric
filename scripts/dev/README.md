@@ -3,7 +3,7 @@
 | 文件 | 作用 |
 |------|------|
 | **`check_test_env.ps1`** | 检查 Node/Rust/MSVC/ISCC/Runtime 是否就绪 |
-| **`tauri-dev.bat`** | **开发版主入口**（先 vcvars 再 `npm run tauri:dev`） |
+| **`tauri-dev.bat`** | **开发版主入口**（设置产品根和隔离 Cargo 缓存后运行 `npm.cmd run tauri:dev`） |
 | **`build_setup.bat`** | 打 `dist\RVC_Fabric_Setup.exe`（`--clean`） |
 | **`run_smoke_tests.bat`** | 环境检查 + Python/Rust 单测 |
 | **`TEST_CHECKLIST.md`** | 开发版 + Setup 人工验收清单 |
@@ -21,5 +21,5 @@
 ## 注意
 
 - 发行物是 **Tauri** 单一 `RVC Fabric.exe`，不再有启动器.exe / 变声器.exe。  
-- 直接 `npm run tauri:dev` 容易因缺 MSVC `link.exe` 失败；请用 `tauri-dev.bat`。  
+- `tauri-dev.bat` 不写死某台机器的 VS 路径；请在已配置 C++ 工具链的终端中运行。
 - 产品根：开发时 = 仓库根；安装后 = exe 所在目录。

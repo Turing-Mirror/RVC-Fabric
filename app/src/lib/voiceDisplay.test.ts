@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setTLocale } from "../i18n/t";
 import {
   displayVoiceAuthor,
+  displayVoiceFieldForGroup,
   displayVoiceTag,
   voiceAuthorList,
   voiceVersionLabel,
@@ -82,5 +83,39 @@ describe("displayVoiceTag", () => {
     expect(displayVoiceTag({ tag: "自制", source: "trained" }, "en-US")).toBe(
       "Custom",
     );
+  });
+});
+
+describe("displayVoiceFieldForGroup", () => {
+  it("uses a localized value from any row in a mixed-source bucket", () => {
+    expect(
+      displayVoiceFieldForGroup(
+        [
+          { series: "蔚蓝档案" },
+          {
+            series: "蔚蓝档案",
+            series_i18n: { "en-US": "Blue Archive" },
+          },
+        ],
+        "series",
+        "en-US",
+      ),
+    ).toBe("Blue Archive");
+  });
+
+  it("uses a localized child-group value from any row in the bucket", () => {
+    expect(
+      displayVoiceFieldForGroup(
+        [
+          { group: "游戏开发部" },
+          {
+            group: "游戏开发部",
+            group_i18n: { "en-US": "Game Development Department" },
+          },
+        ],
+        "group",
+        "en-US",
+      ),
+    ).toBe("Game Development Department");
   });
 });

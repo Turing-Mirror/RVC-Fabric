@@ -470,6 +470,32 @@ export function displayVoiceGroup(
   return primary;
 }
 
+/**
+ * Choose a localized series/group label from an aggregated bucket.
+ *
+ * Catalog sources can mix official and third-party rows. One row may only
+ * contain the primary Chinese value while another row for the same bucket has
+ * the locale map, so using the first row would make the result depend on
+ * source order.
+ */
+export function displayVoiceFieldForGroup(
+  voices: NamedVoice[],
+  field: "series" | "group",
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const raw = voices.map((v) => str(v[field])).find(Boolean) || "";
+  const labels = voices
+    .map((v) =>
+      field === "series"
+        ? displayVoiceSeries(v, loc)
+        : displayVoiceGroup(v, loc),
+    )
+    .map((label) => str(label))
+    .filter(Boolean);
+  return labels.find((label) => label !== raw) || labels[0] || raw;
+}
+
 /** 清单 `origin` 是站点代号；卡片上要写成「第三方 · Hugging Face」。 */
 function originDisplayName(origin: string): string {
   const trimmed = origin.trim();

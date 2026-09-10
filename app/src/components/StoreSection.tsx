@@ -30,6 +30,7 @@ import { t, getTLocale } from "../i18n/t";
 import {
   compareVoiceGroups,
   displayVoiceAuthor,
+  displayVoiceFieldForGroup,
   displayVoiceName,
   displayVoiceOrigin,
   displayVoiceTag,
@@ -329,36 +330,36 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const loc = locale;
     const map = new Map<
       string,
-      { label: string; groups: Map<string, StoreVoice[]> }
+      { voices: StoreVoice[]; groups: Map<string, StoreVoice[]> }
     >();
     for (const v of list) {
       const rawSeries = (v.series || "").trim();
-      const parentLabel =
-        voiceParentSeries(v, loc).trim() || rawSeries || other;
-      const parentKey =
-        rawSeries || (parentLabel === other ? OTHER_SERIES_KEY : parentLabel);
+      const parentKey = rawSeries || OTHER_SERIES_KEY;
       let bucket = map.get(parentKey);
       if (!bucket) {
-        bucket = { label: parentLabel, groups: new Map() };
+        bucket = { voices: [], groups: new Map() };
         map.set(parentKey, bucket);
       }
+      bucket.voices.push(v);
       const rawGroup = voiceGroupRaw(v);
       if (!bucket.groups.has(rawGroup)) bucket.groups.set(rawGroup, []);
       bucket.groups.get(rawGroup)!.push(v);
     }
     const nodes: SeriesNode[] = [...map.entries()]
-      .sort((a, b) => {
-        if (a[0] === OTHER_SERIES_KEY) return 1;
-        if (b[0] === OTHER_SERIES_KEY) return -1;
-        return a[1].label.localeCompare(b[1].label, loc);
-      })
       .map(([key, bucket]) => {
+        const rawSeries =
+          bucket.voices.map((v) => (v.series || "").trim()).find(Boolean) || "";
+        const parentLabel =
+          displayVoiceFieldForGroup(bucket.voices, "series", loc).trim() ||
+          rawSeries ||
+          other;
         const gm = bucket.groups;
         const named = [...gm.keys()].some((r) => r);
         const groups = [...gm.entries()]
           .map(([raw, voices]) => {
             let label = named
-              ? voiceChildGroup(voices[0], loc) || (raw ? raw : other)
+              ? displayVoiceFieldForGroup(voices, "group", loc).trim() ||
+                (raw ? raw : other)
               : "";
             // 子类名就是角色名时，不要再套一层「分类」。
             if (label && label !== other && isCharacterAsGroup(label, voices, loc)) {
@@ -369,10 +370,15 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           .sort((a, b) => compareVoiceGroups(a.label, b.label, other, loc));
         return {
           key,
-          label: bucket.label,
+          label: parentLabel,
           voices: groups.flatMap((g) => g.voices),
           groups,
         };
+      })
+      .sort((a, b) => {
+        if (a.key === OTHER_SERIES_KEY) return 1;
+        if (b.key === OTHER_SERIES_KEY) return -1;
+        return a.label.localeCompare(b.label, loc);
       });
 
     // 系列名等于唯一角色名（如 ATRI / ATRI）时并进「其他」，

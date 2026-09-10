@@ -761,7 +761,25 @@
       "fabric_official": true,
       "date": "260816",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "游戏开发部",
+      "group_i18n": {
+        "en-US": "Game Development Department",
+        "ja-JP": "ゲーム開発部",
+        "ko-KR": "게임개발부",
+        "zh-TW": "遊戲開發部",
+        "es-ES": "Game Development Department",
+        "fr-FR": "Game Development Department",
+        "ru-RU": "Game Development Department"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -789,7 +807,25 @@
       "fabric_official": true,
       "date": "260821",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "对策委员会",
+      "group_i18n": {
+        "en-US": "Countermeasures Committee",
+        "ja-JP": "対策委員会",
+        "ko-KR": "대책위원회",
+        "zh-TW": "對策委員會",
+        "es-ES": "Countermeasures Committee",
+        "fr-FR": "Countermeasures Committee",
+        "ru-RU": "Countermeasures Committee"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -817,7 +853,25 @@
       "fabric_official": true,
       "date": "260821",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "对策委员会",
+      "group_i18n": {
+        "en-US": "Countermeasures Committee",
+        "ja-JP": "対策委員会",
+        "ko-KR": "대책위원회",
+        "zh-TW": "對策委員會",
+        "es-ES": "Countermeasures Committee",
+        "fr-FR": "Countermeasures Committee",
+        "ru-RU": "Countermeasures Committee"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -845,7 +899,25 @@
       "fabric_official": true,
       "date": "260824",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "对策委员会",
+      "group_i18n": {
+        "en-US": "Countermeasures Committee",
+        "ja-JP": "対策委員会",
+        "ko-KR": "대책위원회",
+        "zh-TW": "對策委員會",
+        "es-ES": "Countermeasures Committee",
+        "fr-FR": "Countermeasures Committee",
+        "ru-RU": "Countermeasures Committee"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -873,7 +945,25 @@
       "fabric_official": true,
       "date": "260824",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "对策委员会",
+      "group_i18n": {
+        "en-US": "Countermeasures Committee",
+        "ja-JP": "対策委員会",
+        "ko-KR": "대책위원회",
+        "zh-TW": "對策委員會",
+        "es-ES": "Countermeasures Committee",
+        "fr-FR": "Countermeasures Committee",
+        "ru-RU": "Countermeasures Committee"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -901,7 +991,25 @@
       "fabric_official": true,
       "date": "260827",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "游戏开发部",
+      "group_i18n": {
+        "en-US": "Game Development Department",
+        "ja-JP": "ゲーム開発部",
+        "ko-KR": "게임개발부",
+        "zh-TW": "遊戲開發部",
+        "es-ES": "Game Development Department",
+        "fr-FR": "Game Development Department",
+        "ru-RU": "Game Development Department"
+      },
       "channel": "release",
       "release_tag": "voices"
     },
@@ -929,7 +1037,25 @@
       "fabric_official": true,
       "date": "260827",
       "series": "蔚蓝档案",
+      "series_i18n": {
+        "en-US": "Blue Archive",
+        "ja-JP": "ブルーアーカイブ",
+        "ko-KR": "블루 아카이브",
+        "zh-TW": "蔚藍檔案",
+        "es-ES": "Blue Archive",
+        "fr-FR": "Blue Archive",
+        "ru-RU": "Blue Archive"
+      },
       "group": "游戏开发部",
+      "group_i18n": {
+        "en-US": "Game Development Department",
+        "ja-JP": "ゲーム開発部",
+        "ko-KR": "게임개발부",
+        "zh-TW": "遊戲開發部",
+        "es-ES": "Game Development Department",
+        "fr-FR": "Game Development Department",
+        "ru-RU": "Game Development Department"
+      },
       "channel": "release",
       "release_tag": "voices"
     }

@@ -757,10 +757,6 @@
         "ja-JP": "ケイ",
         "zh-TW": "凱伊"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260816",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -770,7 +766,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "游戏开发部",
       "group_i18n": {
         "en-US": "Game Development Department",
         "ja-JP": "ゲーム開発部",
@@ -780,6 +775,11 @@
         "fr-FR": "Game Development Department",
         "ru-RU": "Game Development Department"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260816",
+      "series": "蔚蓝档案",
+      "group": "游戏开发部",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -803,10 +803,6 @@
         "ja-JP": "小鳥遊ホシノ（日本語）",
         "zh-TW": "小鳥遊星野（日配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260821",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -816,7 +812,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "对策委员会",
       "group_i18n": {
         "en-US": "Countermeasures Committee",
         "ja-JP": "対策委員会",
@@ -826,6 +821,11 @@
         "fr-FR": "Countermeasures Committee",
         "ru-RU": "Countermeasures Committee"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260821",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -849,10 +849,6 @@
         "ja-JP": "小鳥遊ホシノ（中国語）",
         "zh-TW": "小鳥遊星野（中配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260821",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -862,7 +858,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "对策委员会",
       "group_i18n": {
         "en-US": "Countermeasures Committee",
         "ja-JP": "対策委員会",
@@ -872,6 +867,11 @@
         "fr-FR": "Countermeasures Committee",
         "ru-RU": "Countermeasures Committee"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260821",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -895,10 +895,6 @@
         "ja-JP": "黒見セリカ（日本語）",
         "zh-TW": "黑見芹香（日配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260824",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -908,7 +904,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "对策委员会",
       "group_i18n": {
         "en-US": "Countermeasures Committee",
         "ja-JP": "対策委員会",
@@ -918,6 +913,11 @@
         "fr-FR": "Countermeasures Committee",
         "ru-RU": "Countermeasures Committee"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260824",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -941,10 +941,6 @@
         "ja-JP": "黒見セリカ（中国語）",
         "zh-TW": "黑見芹香（中配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260824",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -954,7 +950,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "对策委员会",
       "group_i18n": {
         "en-US": "Countermeasures Committee",
         "ja-JP": "対策委員会",
@@ -964,6 +959,11 @@
         "fr-FR": "Countermeasures Committee",
         "ru-RU": "Countermeasures Committee"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260824",
+      "series": "蔚蓝档案",
+      "group": "对策委员会",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -987,10 +987,6 @@
         "ja-JP": "天童アリス（日本語）",
         "zh-TW": "天童愛麗絲（日配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260827",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -1000,7 +996,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "游戏开发部",
       "group_i18n": {
         "en-US": "Game Development Department",
         "ja-JP": "ゲーム開発部",
@@ -1010,6 +1005,11 @@
         "fr-FR": "Game Development Department",
         "ru-RU": "Game Development Department"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260827",
+      "series": "蔚蓝档案",
+      "group": "游戏开发部",
       "channel": "release",
       "release_tag": "voices"
     },
@@ -1033,10 +1033,6 @@
         "ja-JP": "天童アリス（中国語）",
         "zh-TW": "天童愛麗絲（中配）"
       },
-      "publisher": "rvc_fabric",
-      "fabric_official": true,
-      "date": "260827",
-      "series": "蔚蓝档案",
       "series_i18n": {
         "en-US": "Blue Archive",
         "ja-JP": "ブルーアーカイブ",
@@ -1046,7 +1042,6 @@
         "fr-FR": "Blue Archive",
         "ru-RU": "Blue Archive"
       },
-      "group": "游戏开发部",
       "group_i18n": {
         "en-US": "Game Development Department",
         "ja-JP": "ゲーム開発部",
@@ -1056,6 +1051,11 @@
         "fr-FR": "Game Development Department",
         "ru-RU": "Game Development Department"
       },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260827",
+      "series": "蔚蓝档案",
+      "group": "游戏开发部",
       "channel": "release",
       "release_tag": "voices"
     }
@@ -16405,6 +16405,62 @@
         "ru-RU": "Danganronpa"
       },
       "snapshot_date": "260909",
+      "real_person": false
+    },
+    {
+      "id": "tp-danganronpa-nanami-ja",
+      "name": "七海千秋（Nanamin，日语标注）",
+      "tag": "女声",
+      "origin": "huggingface",
+      "source_url": "https://huggingface.co/sxndypz/rvc-v2-models",
+      "author": "sxndypz",
+      "author_url": "https://huggingface.co/sxndypz",
+      "package_type": "voice_pack",
+      "sha256": "f9e400f1bf581bec49d8f1cebac3a970bf1eb3d9e3d8541ff1ec1167df758e8c",
+      "size_bytes": 117790244,
+      "released": "260910",
+      "date": "260910",
+      "description": "收录自 Hugging Face 公开仓库；来源目录将该条目标注为日语 RVC v2。压缩包已验证为 RVC v2（40k，含 .pth 与 .index）；原始训练语料未公开，因此不能据此宣传为已确认的纯日文语料模型。非 RVC Fabric 官方音色，授权、音质与版权由来源站点及上传者负责，与官方无关。",
+      "official": false,
+      "publisher": "community",
+      "fabric_official": false,
+      "pack_url": "https://huggingface.co/sxndypz/rvc-v2-models/resolve/ffb5fa7e346aa31cf9cd3da393904958242069c0/nanamin.zip",
+      "cover": "ch-banner/tp-danganronpa-nanami.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-danganronpa-nanami.jpg",
+      "series": "弹丸论破",
+      "tag_i18n": {
+        "en-US": "Female voice",
+        "ja-JP": "女性ボイス",
+        "ko-KR": "여성 음성",
+        "zh-TW": "女聲",
+        "es-ES": "Female voice",
+        "fr-FR": "Female voice",
+        "ru-RU": "Женский голос"
+      },
+      "description_i18n": {
+        "en-US": "Collected from a public Hugging Face repository; the source directory labels this entry as a Japanese RVC v2 model. The archive was verified as RVC v2 (40k) with a .pth and an .index file; the original training corpus is not disclosed, so it must not be advertised as a confirmed pure-Japanese corpus model. This is not an official RVC Fabric voice; licensing, audio quality, and copyright remain the responsibility of the source and uploader, and it is not affiliated with the official project.",
+        "ja-JP": "公開されたHugging Faceリポジトリから収録した音声です。配布元の一覧では日本語のRVC v2モデルとして記載されています。アーカイブは.pthと.indexを含むRVC v2（40k）として検証済みですが、元の学習コーパスは公開されていないため、純粋な日本語コーパスのモデルだとは断定できません。RVC Fabric公式音声ではなく、ライセンス、音質、著作権は配布元とアップロード者の責任であり、公式プロジェクトとは無関係です。",
+        "ko-KR": "공개된 Hugging Face 저장소에서 수록한 음색이며, 출처 목록에는 일본어 RVC v2 모델로 표시되어 있습니다. 압축 파일은 .pth와 .index를 포함한 RVC v2(40k)로 검증되었지만 원본 학습 말뭉치는 공개되지 않았으므로 순수 일본어 말뭉치 모델이라고 단정할 수 없습니다. RVC Fabric 공식 음색이 아니며 라이선스, 음질, 저작권은 출처와 업로더의 책임이고 공식 프로젝트와 무관합니다.",
+        "zh-TW": "收錄自公開的 Hugging Face 儲存庫；來源清單將此條目標註為日語 RVC v2 模型。壓縮包已驗證為含有 .pth 與 .index 的 RVC v2（40k），但原始訓練語料未公開，因此不能宣稱這是已確認的純日語語料模型。非 RVC Fabric 官方音色，授權、音質與版權由來源與上傳者負責，與官方專案無關。",
+        "es-ES": "Recopilado de un repositorio público de Hugging Face; el directorio de origen etiqueta esta entrada como un modelo RVC v2 en japonés. El archivo se verificó como RVC v2 (40k) con archivos .pth y .index, pero el corpus de entrenamiento original no está publicado, así que no debe anunciarse como un modelo confirmado de corpus exclusivamente japonés. No es una voz oficial de RVC Fabric; la licencia, la calidad de audio y los derechos de autor son responsabilidad de la fuente y de quien lo subió, y no está afiliado al proyecto oficial.",
+        "fr-FR": "Collecté depuis un dépôt Hugging Face public ; le répertoire source indique cette entrée comme un modèle RVC v2 japonais. L’archive a été vérifiée comme un modèle RVC v2 (40k) contenant un fichier .pth et un fichier .index, mais le corpus d’entraînement original n’est pas publié ; il ne faut donc pas le présenter comme un modèle dont le corpus serait confirmé comme exclusivement japonais. Ce n’est pas une voix officielle de RVC Fabric ; la licence, la qualité audio et les droits d’auteur relèvent de la source et de la personne qui a mis le fichier en ligne, sans lien avec le projet officiel.",
+        "ru-RU": "Добавлено из открытого репозитория Hugging Face; в каталоге источника эта запись помечена как японская модель RVC v2. Архив проверен как RVC v2 (40k) с файлами .pth и .index, однако исходный обучающий корпус не опубликован, поэтому модель нельзя называть подтверждённой моделью на чисто японском корпусе. Это не официальный голос RVC Fabric; лицензия, качество звука и авторские права относятся к источнику и загрузившему файл, а с официальным проектом связи нет."
+      },
+      "name_i18n": {
+        "en-US": "Chiaki Nanami (Nanamin, Japanese-labeled)",
+        "ja-JP": "七海千秋（Nanamin、日本語表記）",
+        "zh-TW": "七海千秋（Nanamin，日語標註）"
+      },
+      "series_i18n": {
+        "en-US": "Danganronpa",
+        "ja-JP": "ダンガンロンパ",
+        "ko-KR": "단간론파",
+        "zh-TW": "彈丸論破",
+        "es-ES": "Danganronpa",
+        "fr-FR": "Danganronpa",
+        "ru-RU": "Danganronpa"
+      },
+      "snapshot_date": "260910",
       "real_person": false
     }
   ],

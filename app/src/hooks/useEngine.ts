@@ -18,8 +18,10 @@ import {
 import type { OutputMode } from "../components/Dock";
 import { getConfig } from "../lib/config";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 
 export function useEngine() {
+  const { ready: i18nReady } = useI18n();
   const [status, setStatus] = useState<EngineStatus>({});
   const [provision, setProvision] = useState<ProvisionStatus>({});
   const [busy, setBusy] = useState(false);
@@ -121,6 +123,7 @@ export function useEngine() {
   }, [refreshProvision]);
 
   useEffect(() => {
+    if (!i18nReady) return;
     let cancelled = false;
     (async () => {
       try {
@@ -176,7 +179,7 @@ export function useEngine() {
       if (id) window.clearInterval(id);
       if (hotTimer.current) window.clearTimeout(hotTimer.current);
     };
-  }, [refresh]);
+  }, [refresh, i18nReady]);
 
   const running = status.state === "running";
 

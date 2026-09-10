@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { displayVoiceAuthor, voiceAuthorList, voiceVersionLabel } from "./voiceDisplay";
+import { afterEach, describe, expect, it } from "vitest";
+import { setTLocale } from "../i18n/t";
+import {
+  displayVoiceAuthor,
+  displayVoiceTag,
+  voiceAuthorList,
+  voiceVersionLabel,
+} from "./voiceDisplay";
+
+afterEach(() => setTLocale("zh-CN"));
 
 describe("voiceVersionLabel", () => {
   it("formats catalog YYMMDD as vYY.MM.DD", () => {
@@ -64,5 +72,15 @@ describe("displayVoiceAuthor", () => {
         authors: [{ name: "A" }, { name: "B", url: "https://x/b" }],
       }),
     ).toBe("A和B");
+  });
+});
+
+describe("displayVoiceTag", () => {
+  it("localizes a generic tag from an older sidecar", () => {
+    setTLocale("en-US");
+    expect(displayVoiceTag({ tag: "音色" }, "en-US")).toBe("Voice");
+    expect(displayVoiceTag({ tag: "自制", source: "trained" }, "en-US")).toBe(
+      "Custom",
+    );
   });
 });

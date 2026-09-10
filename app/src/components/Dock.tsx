@@ -3,6 +3,7 @@ import { RangeBar } from "./controls";
 import { HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
+import { displayVoiceTag } from "../lib/voiceDisplay";
 
 export type OutputMode = "vc" | "bypass";
 
@@ -79,6 +80,7 @@ export function Dock({
   const profile = profileSummary?.trim() ? profileSummary : t("dock.none");
   const title = statusTitle ?? t("dock.engineReady");
   const sub = statusSub ?? t("dock.engineIdle");
+  const tag = voiceTag ? displayVoiceTag({ tag: voiceTag }) : "";
 
   // Same mapping as the Tk shell's _draw_mic_meter: -60..0 dBFS over the bar.
   const frac = (db: number) =>
@@ -114,9 +116,9 @@ export function Dock({
             </button>
           </div>
         ) : null}
-        {voiceTag || voiceIndex ? (
+        {tag || voiceIndex ? (
           <div className="text-xs text-[var(--meta)] mt-0.5">
-            {[voiceTag, voiceIndex].filter(Boolean).join(" · ")}
+            {[tag, voiceIndex].filter(Boolean).join(" · ")}
           </div>
         ) : null}
         <div

@@ -80,8 +80,7 @@ function clockNow(): string {
 export default function App() {
   // Subscribe so locale change re-renders App (static t() labels) without
   // remounting the tree / re-running useEngine.
-  const { locale } = useI18n();
-  void locale;
+  const { locale, ready } = useI18n();
 
   const [page, setPage] = useState<PageId>("home");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("device");
@@ -523,13 +522,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!ready) return;
+    let alive = true;
     void getConfig()
       .then((c) => {
-        if (c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
+        if (alive && c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
       })
       .catch(() => {});
-    void currentVoice()
-      .then((c) => {
+    void (async () => {
+      // Keep shell-generated profile text in step with the React locale.
+      try {
+        await invoke("i18n_set_locale", { locale });
+      } catch {
+        /* browser preview */
+      }
+      const c = await currentVoice();
+      if (!alive) return;
+      {
         if (c.model) {
           setVoiceName(String(c.model.name || ""));
           setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
@@ -543,12 +552,17 @@ export default function App() {
           pitch: c.pitch != null ? Number(c.pitch) : undefined,
           formant: c.formant != null ? Number(c.formant) : undefined,
         });
-      })
-      .catch(() => {
+      }
+    })().catch(() => {
+      if (alive) {
         /* browser preview */
-      });
-    // Runs once on mount; syncParams is stable (useCallback with no deps).
-  }, [syncParams]);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // Locale changes must refresh the shell-provided profile summary too.
+  }, [locale, ready, syncParams]);
 
   // 设置页 / 底栏 / 快捷键 / 切音色都会改配置。底栏自己的 state 以前只在
   // 挂载和切音色时读一次，设置里拖音高底栏数字不动。

@@ -91,12 +91,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     (async () => {
+      let code: LocaleCode;
       try {
         const cfg = await invoke<Record<string, unknown>>("config_get");
         const picked = cfg.ui_locale_picked;
         // 未确认过语言（新装）：按系统语言预选，引导里可再改。
         // 已确认或老配置（无 ui_locale_picked 键）：用配置里的 ui_locale。
-        let code: LocaleCode;
         if (picked === false) {
           code = detectSystemLocale();
         } else if (isLocaleCode(cfg.ui_locale)) {
@@ -104,23 +104,26 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         } else {
           code = detectSystemLocale();
         }
-        if (alive) {
-          setLocaleState(code);
-          setStaticLocale(code);
-          setGlossaryLocale(code);
-          setTLocale(code);
-        }
       } catch {
         /* browser preview — follow system */
-        if (alive) {
-          const code = detectSystemLocale();
-          setLocaleState(code);
-          setStaticLocale(code);
-          setGlossaryLocale(code);
-          setTLocale(code);
-        }
-      } finally {
-        if (alive) setReady(true);
+        code = detectSystemLocale();
+      }
+
+      // The Rust shell also formats engine/runtime responses. Synchronize it
+      // before releasing ready, otherwise the first voices_current or
+      // provision_status response can remain in the default language forever.
+      try {
+        await invoke("i18n_set_locale", { locale: code });
+      } catch {
+        /* browser preview — the React pack is still usable */
+      }
+
+      if (alive) {
+        setLocaleState(code);
+        setStaticLocale(code);
+        setGlossaryLocale(code);
+        setTLocale(code);
+        setReady(true);
       }
     })();
     return () => {
@@ -134,12 +137,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setGlossaryLocale(code);
     setTLocale(code);
     document.documentElement.lang = code;
-    try {
-      void invoke("config_set", { patch: { ui_locale: code } });
-      void invoke("i18n_set_locale", { locale: code });
-    } catch {
-      /* no shell */
-    }
+    void invoke("config_set", { patch: { ui_locale: code } }).catch(() => {});
+    void invoke("i18n_set_locale", { locale: code }).catch(() => {});
   }, []);
 
   useEffect(() => {

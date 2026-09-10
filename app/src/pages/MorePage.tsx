@@ -7,7 +7,11 @@ import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuP
 import { openExternal } from "../lib/plaza";
 import { allLinks } from "../lib/links";
 import { tip } from "../lib/glossary";
-import { statusTitle } from "../lib/engine";
+import {
+  runtimeRecommendation,
+  runtimeVariantLabel,
+  statusTitle,
+} from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
@@ -268,9 +272,16 @@ export function MorePage({
     : t("s.90b74980e4");
   const runtimeLine = provision?.runtime_ready
     ? provision.installed_variant
-      ? t("s.7dd9064298", { v0: provision.installed_variant })
+      ? t("s.7dd9064298", {
+          v0:
+            runtimeVariantLabel(provision.installed_variant) ||
+            provision.installed_variant,
+        })
       : t("s.f2afde8960")
     : t("s.5abed96e7d");
+  const runtimeRecommendationLine = provision
+    ? runtimeRecommendation(provision)
+    : "";
 
   return (
     <PagePad>
@@ -298,7 +309,7 @@ export function MorePage({
             title={t("s.cef8154370")}
             titleTip={tip(t("s.cef8154370"))}
             desc={
-              provision?.recommend_reason ||
+              runtimeRecommendationLine ||
               (status?.product_root ? String(status.product_root) : t("s.002dcbcd28"))
             }
             right={
@@ -356,7 +367,9 @@ export function MorePage({
             right={
               <span className="flex items-center gap-2">
                 <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {provision?.recommended_variant || "—"}
+                  {runtimeVariantLabel(provision?.recommended_variant) ||
+                    provision?.recommended_variant ||
+                    "—"}
                 </span>
                 {onOpenProvision ? (
                   <Btn onClick={onOpenProvision}>

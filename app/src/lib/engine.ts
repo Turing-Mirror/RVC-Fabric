@@ -78,6 +78,38 @@ export type ProvisionStatus = {
   message?: string;
 };
 
+/** Translate the stable runtime id at the UI boundary. */
+export function runtimeVariantLabel(id?: string): string {
+  switch (id) {
+    case "nvidia":
+      return t("s.4c65a5e25e");
+    case "nvidia50":
+      return t("s.e7a64d4aaf");
+    case "amd":
+      return t("s.variantAmd");
+    default:
+      return "";
+  }
+}
+
+/** Build the recommendation from stable status data, never from stale shell text. */
+export function runtimeRecommendation(status?: Pick<
+  ProvisionStatus,
+  "recommended_variant" | "gpus"
+>): string {
+  const gpu = status?.gpus?.filter(Boolean).join(" · ") || t("s.90b74980e4");
+  switch (status?.recommended_variant) {
+    case "nvidia50":
+      return t("s.8289d5d0bc", { v0: gpu });
+    case "nvidia":
+      return t("s.3967a4b124", { v0: gpu });
+    case "amd":
+      return t("s.c0b4d5c2f4", { v0: gpu });
+    default:
+      return t("s.1e1016e5c8");
+  }
+}
+
 export type ProvisionProgress = {
   phase?: string;
   done?: number;

@@ -10,6 +10,7 @@
  * e.g. 若葉睦 Wakaba Mutsumi — user request.
  */
 import type { LocaleCode } from "../i18n/types";
+import { fallbackPack, lookup } from "../i18n/dict";
 import { getTLocale, t } from "../i18n/t";
 
 export type LocalizedText = Record<string, string>;
@@ -303,13 +304,42 @@ function pickFieldI18n(
   return localizedFieldValue(v, field, locale) || str(v[field]);
 }
 
+// Older local sidecars only have the Chinese value of a generic tag. Resolve
+// those legacy values through the source locale pack instead of baking
+// another language map into the UI.
+const LEGACY_TAG_KEYS = [
+  "s.c4301894a2",
+  "s.c493338e8c",
+  "s.bacc87084d",
+  "s.3c689400b4",
+  "s.1bf4a01d78",
+] as const;
+
+function localizeLegacyTag(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const sourcePack = fallbackPack();
+  for (const key of LEGACY_TAG_KEYS) {
+    const source = lookup(sourcePack, key);
+    if (typeof source === "string" && source.trim() === raw) {
+      return t(key);
+    }
+  }
+  return "";
+}
+
 /** Store card tag line (少女音 / Girl voice / …). */
 export function displayVoiceTag(
   v: NamedVoice,
   locale?: LocaleCode | string,
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  return pickFieldI18n(v, "tag", loc);
+  const source = str(v.source).toLowerCase();
+  if (source === "trained" || source === "self") {
+    return t("s.c493338e8c");
+  }
+  const value = pickFieldI18n(v, "tag", loc);
+  return localizeLegacyTag(str(v.tag)) || value;
 }
 
 /** Longer description under the card / detail. */

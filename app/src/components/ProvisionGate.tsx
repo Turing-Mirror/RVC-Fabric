@@ -5,6 +5,8 @@ import {
   getProvisionStatus,
   startProvision,
   cancelProvision,
+  runtimeRecommendation,
+  runtimeVariantLabel,
   type ProvisionStatus,
   type ProvisionProgress,
 } from "../lib/engine";
@@ -187,7 +189,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
   const variants: VariantRow[] = useMemo(() => {
     const list = (info.variants || []) as VariantRow[];
-    if (list.length > 0) return list;
+    if (list.length > 0) {
+      return list.map((row) => ({
+        ...row,
+        label: runtimeVariantLabel(row.id) || row.label,
+      }));
+    }
     return [
       { id: "nvidia", label: translate("s.4c65a5e25e") },
       { id: "nvidia50", label: translate("s.e7a64d4aaf") },
@@ -375,8 +382,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
       <div className="w-full max-w-[520px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">{t("s.405125fb37")}</h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
-          {info.recommend_reason ||
-            t("s.1e1016e5c8")}
+          {runtimeRecommendation(info)}
           <br />{t("s.7d4cfa5986")}</p>
 
         <div className="text-[12.5px] text-[var(--meta)] mb-2">{t("s.6a6564705b")}</div>

@@ -1603,6 +1603,7 @@
     "dlWhyDisk": "No queda espacio en disco. Libera espacio e inténtalo de nuevo; el runtime ocupa más de diez GB descomprimido.",
     "dlWhyPerm": "Se denegó la escritura del archivo. Puede bloquearlo el antivirus o la carpeta de instalación no permite escritura.",
     "dlTriedHosts": "Se probaron {a0} fuente(s): {a1}",
+    "listSeparator": ", ",
     "dlDetail": "Detalle técnico (inclúyelo al reportar): {e}",
     "rtExtractFailed": "El paquete se descargó y verificó correctamente; el fallo está en la extracción, así que volver a descargarlo no lo resolverá.",
     "rtExtractHelp": "Puedes probar:\n• Añadir la carpeta de instalación a la lista blanca del antivirus y reintentar\n• Comprobar que la unidad tenga al menos 20 GB libres\n• Instalar fuera del disco del sistema, sin espacios ni caracteres no ASCII en la ruta\n• Si sigue fallando, escanea el QR del grupo QQ en la página Más",

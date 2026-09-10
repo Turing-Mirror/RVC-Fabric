@@ -11,6 +11,8 @@ import {
   type PlazaFeed,
   type PlazaItem,
 } from "../lib/plaza";
+import { formatLocalizedList } from "../lib/voiceDisplay";
+import { useI18n } from "../i18n";
 
 /**
  * 广场：社区音色、投放、下载模型、更新日志，从上往下就是这个顺序。
@@ -55,6 +57,7 @@ function PlazaPageImpl({
   /** 加一就滚到「下载模型」。用计数而不是布尔：连着跳两次也得再滚一次。 */
   scrollToDownloads?: number;
 }) {
+  useI18n();
   // 「查看全部」进的是独立一页，不是在原地展开一条长列表 —— 版本多了以后
   // 原地展开会把「投放」挤到看不见的地方，而且没有尽头。
   const [showAll, setShowAll] = useState(false);
@@ -160,7 +163,7 @@ function PlazaPageImpl({
 
       {feed?.errors?.length ? (
         <p className="text-[12.5px] text-[var(--notify)] m-0 mb-4">
-          {feed.errors.join("；")}
+          {formatLocalizedList(feed.errors)}
         </p>
       ) : null}
 

@@ -1538,7 +1538,7 @@ fn run_inner(
         return Err(crate::i18n::t("s.75b84a31d6").into());
     }
     if !crate::engine_assets::engine_core_ready(root) {
-        let miss = crate::engine_assets::engine_core_missing(root).join("、");
+        let miss = crate::i18n::join_list(&crate::engine_assets::engine_core_missing(root));
         return Err(crate::i18n::te("s.5eb32f1350", &miss));
     }
     let script = worker_script(root);

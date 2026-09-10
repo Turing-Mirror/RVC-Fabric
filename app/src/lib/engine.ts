@@ -297,15 +297,11 @@ export function statusSub(st: EngineStatus): string {
   // Skip duplicate "engine ready" as subtitle — title already says it.
   if (st.message && !staleBoot) {
     const msg = String(st.message).slice(0, 80);
-    const ready = tStatic("dock.engineReady");
-    const readyMsg = tStatic("msg.engine.ready");
     if (
       st.state !== "running" &&
       st.state !== "error" &&
-      (msg === ready ||
-        msg === readyMsg ||
-        msg === "引擎就绪" ||
-        msg === "Engine ready")
+      st.worker_alive &&
+      !st.message_code
     ) {
       return tStatic("dock.engineIdle");
     }

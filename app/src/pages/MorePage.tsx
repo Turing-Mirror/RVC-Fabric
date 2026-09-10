@@ -10,6 +10,7 @@ import { tip } from "../lib/glossary";
 import { statusTitle } from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { askConfirm } from "../lib/webDialog";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 import { FindingList, type Finding } from "../components/FindingList";
@@ -47,6 +48,7 @@ export function MorePage({
   focusCommunityNonce = 0,
   resetScrollNonce = 0,
 }: Props = {}) {
+  useI18n();
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   // 有二维码的社媒条目（QQ 群）点开的是图片，不是外链。

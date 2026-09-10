@@ -5,10 +5,17 @@ import { setHot } from "../lib/engine";
 import { getConfig, onConfigPatch } from "../lib/config";
 import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
 import { resolveCover, useCoverCache } from "../lib/cover";
-import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
+import {
+  displayVoiceName,
+  displayVoiceTag,
+  displayVoiceAuthor,
+  voiceAuthorList,
+  voiceVersionLabel,
+} from "../lib/voiceDisplay";
 import { openTool } from "../components/ToolWindow";
 import emblem from "../assets/logo_ui.png";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 
 type Props = {
   currentId?: string;
@@ -173,6 +180,7 @@ const STAGE_BG =
   "color-mix(in srgb, var(--stage) calc(var(--banner-opacity, 1) * 100%), transparent)";
 
 function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Props) {
+  useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -334,6 +342,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
               const fontPx = cur ? cardPx.fontCur : cardPx.fontSide;
               const ver = voiceVersionLabel(v.date);
               const authors = voiceAuthorList(v);
+              const title = displayVoiceName(v);
+              const tag = displayVoiceTag(v) || t("s.c4301894a2");
+              const author = displayVoiceAuthor(v);
               return (
                 <button
                   key={keyOf(v)}
@@ -375,7 +386,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                         className="absolute inset-0 w-full h-full object-contain"
                       />
                     ) : (
-                      <span>{(v.name || "?").slice(0, 4)}</span>
+                      <span>{(title || "?").slice(0, 4)}</span>
                     )}
                     {ver ? (
                       <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
@@ -390,7 +401,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-3">
-                    {v.tag || t("s.c4301894a2")}
+                    {tag}
                   </div>
                   <div
                     className={[
@@ -398,11 +409,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                       cur ? "text-[14.5px]" : "text-[13.5px]",
                     ].join(" ")}
                   >
-                    {v.name}
+                    {title}
                   </div>
-                  <div className="text-xs text-[var(--meta)] mt-0.5 truncate" title={authors.map((a) => a.name).join("、") || undefined}>
+                  <div className="text-xs text-[var(--meta)] mt-0.5 truncate" title={author || undefined}>
                     {authors.length
-                      ? t("s.7feea73fa3", { v0: authors.map((a) => a.name).join("、") })
+                      ? t("s.7feea73fa3", { v0: author })
                       : "\u00a0"}
                   </div>
                 </button>

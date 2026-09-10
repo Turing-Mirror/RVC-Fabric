@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem } from "./ui";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
+import { formatLocalizedList } from "../lib/voiceDisplay";
 
 type Usage = {
   items: { name: string; bytes: number }[];
@@ -109,10 +110,11 @@ export function StorageSection() {
   const apply = async (row: Row) => {
     const kinds = [...(picked[row.exp] ?? [])];
     if (kinds.length === 0 || busy) return;
-    const names = kinds
-      .map((k) => t(KINDS.find((x) => x.id === k)?.labelKey ?? k))
-      .join("、");
-    if (!(await askConfirm(t("s.cleanupConfirm", { a0: row.exp, a1: names })))) return;
+    const names = kinds.map((k) =>
+      t(KINDS.find((x) => x.id === k)?.labelKey ?? k),
+    );
+    const namesLabel = formatLocalizedList(names);
+    if (!(await askConfirm(t("s.cleanupConfirm", { a0: row.exp, a1: namesLabel })))) return;
     setBusy(true);
     try {
       const r = await invoke<{ freed_bytes?: number }>("train_cleanup_apply", {

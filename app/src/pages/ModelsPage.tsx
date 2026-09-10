@@ -6,7 +6,14 @@ import { DspPresetEditor } from "../components/DspPresetEditor";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
-import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
+import {
+  displayVoiceName,
+  displayVoiceTag,
+  displayVoiceAuthor,
+  formatLocalizedList,
+  voiceAuthorList,
+  voiceVersionLabel,
+} from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
 import { copyText } from "../lib/clipboard";
@@ -17,6 +24,7 @@ import { listen } from "@tauri-apps/api/event";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import {
   bindIndex,
@@ -78,6 +86,7 @@ function ModelsPageImpl({
   focusKind,
   focusNonce = 0,
 }: ModelsPageProps) {
+  const { t: translate } = useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -200,13 +209,13 @@ function ModelsPageImpl({
   );
 
   const statusSub = useMemo(() => {
-    if (!models.length) return t("s.b4ac696046");
+    if (!models.length) return translate("s.b4ac696046");
     if (query.trim() && view.length !== models.length) {
-      return t("s.e5323dcb69", { v0: models.length, v1: view.length });
+      return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
     }
     const cur = selected?.name || models[0]?.name || "—";
-    return t("s.425fb93e79", { v0: models.length, v1: cur });
-  }, [models, query, view.length, selected]);
+    return translate("s.425fb93e79", { v0: models.length, v1: cur });
+  }, [models, query, view.length, selected, translate]);
 
   const reload = useCallback(async (fresh = false) => {
     try {
@@ -406,7 +415,7 @@ function ModelsPageImpl({
                 try {
                   const r = await importVoices(selected?.dir);
                   if (r.errors?.length) {
-                    setMsg(r.errors.map((e) => e.error).join("；"));
+                    setMsg(formatLocalizedList(r.errors.map((e) => e.error)));
                   }
                   await reload();
                 } catch (e) {
@@ -536,6 +545,9 @@ function ModelsPageImpl({
               const src = resolveCover(v.cover, coverCache);
               const authors = voiceAuthorList(v);
               const ver = voiceVersionLabel(v.date);
+              const title = displayVoiceName(v);
+              const tag = displayVoiceTag(v) || t("s.c4301894a2");
+              const author = displayVoiceAuthor(v);
               return (
                 <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
@@ -551,7 +563,7 @@ function ModelsPageImpl({
                         decoding="async"
                       />
                     ) : (
-                      <span>{(v.name || "?").slice(0, 4)}</span>
+                      <span>{(title || "?").slice(0, 4)}</span>
                     )}
                     {/* 左上角：发布日期当版本号（v26.07.31），方便认同一角色的
                         不同版本；下面才是「文件丢失」。都没有就不占位。 */}
@@ -575,20 +587,20 @@ function ModelsPageImpl({
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
-                    {v.tag || t("s.c4301894a2")}
+                    {tag}
                   </div>
                   <div className="text-[14.5px] font-semibold mt-0.5 truncate">
-                    {v.name}
+                    {title}
                   </div>
                   <div
                     className="text-xs text-[var(--meta)] mt-0.5 truncate"
-                    title={authors.map((a) => a.name).join("、") || undefined}
+                    title={author || undefined}
                   >
                     {authors.length
                       ? (() => {
                           const links = voiceAuthorLinks(v);
                           const line = t("s.7feea73fa3", {
-                            v0: authors.map((a) => a.name).join("、"),
+                            v0: author,
                           });
                           if (!links.length) return line;
                           return (

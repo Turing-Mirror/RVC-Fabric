@@ -1603,6 +1603,7 @@
     "dlWhyDisk": "The disk is out of space. Please free up space and try again; the runtime needs over 10 GB once unpacked.",
     "dlWhyPerm": "Writing the file was denied. Antivirus may be blocking it, or the install folder is not writable.",
     "dlTriedHosts": "Tried {a0} source(s): {a1}",
+    "listSeparator": ", ",
     "dlDetail": "Technical detail (include this when reporting): {e}",
     "rtExtractFailed": "The package downloaded and verified correctly; the failure is in the extraction step, so re-downloading will not fix it.",
     "rtExtractHelp": "Things to try:\n• Add the install folder to your antivirus allowlist, then run setup again\n• Make sure the drive has at least 20 GB free\n• Install outside the system drive, with no spaces or non-ASCII in the path\n• Still stuck? Scan the QQ group QR on the More page",

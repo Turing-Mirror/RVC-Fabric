@@ -6,9 +6,14 @@ import { SegmentControl } from "./SegmentControl";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import {
+  formatLocalizedList,
+  localizedTextValue,
+} from "../lib/voiceDisplay";
+import {
   getAssetsStatus,
   type AssetsStatus,
 } from "../lib/downloadModels";
+import { useI18n } from "../i18n";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -20,6 +25,8 @@ type Item = {
   recommended?: boolean;
   order?: number;
   notes?: string;
+  label_i18n?: Record<string, string>;
+  notes_i18n?: Record<string, string>;
   size_bytes: number;
   files: string[];
   installed: boolean;
@@ -69,20 +76,17 @@ function inferGroup(key: string): string {
   return "other";
 }
 
-/** Prefer locale pack extras.items.<key>; fall back to catalog Chinese with prefix strip. */
-function extraLabel(it: Item, cat: Category): string {
+/** Prefer the locale pack, then the catalog's locale map, then its primary value. */
+function extraLabel(it: Item): string {
   const localized = t(`extras.items.${it.key}.label`);
   if (localized && !localized.startsWith("extras.items.")) return localized;
-  let l = it.label || it.key;
-  if (cat === "separate") l = l.replace(/^人声分离\s*[·•]\s*/, "");
-  if (cat === "train") l = l.replace(/^训练音色\s*[·•]\s*/, "");
-  return l;
+  return localizedTextValue(it.label_i18n) || it.label || it.key;
 }
 
 function extraNotes(it: Item): string {
   const localized = t(`extras.items.${it.key}.notes`);
   if (localized && !localized.startsWith("extras.items.")) return localized;
-  return (it.notes || "").trim();
+  return localizedTextValue(it.notes_i18n) || (it.notes || "").trim();
 }
 
 function categoryBlurb(cat: Category): string {
@@ -117,6 +121,7 @@ export function ExtrasPanel({
   /** 正在下载时告诉外面的弹窗别让点空白关掉。 */
   onBusyChange?: (busy: boolean) => void;
 }) {
+  useI18n();
   const [list, setList] = useState<List | null>(null);
   const [assets, setAssets] = useState<AssetsStatus | null>(null);
   const [progByKey, setProgByKey] = useState<Record<string, Progress>>({});
@@ -256,7 +261,7 @@ export function ExtrasPanel({
     if (coreBusy || removeKey || busyKeys[it.key]) return;
     const ok = await askConfirm(
       t("s.extraRemoveConfirm", {
-        v0: extraLabel(it, category),
+        v0: extraLabel(it),
         v1: mb(it.size_bytes) || t("s.2b9d013177"),
       }),
     );
@@ -352,7 +357,7 @@ export function ExtrasPanel({
                 {t("extras.engineDesc")}
                 {assets?.engine_core_missing?.length
                   ? t("extras.missingList", {
-                      list: assets.engine_core_missing.join("、"),
+                      list: formatLocalizedList(assets.engine_core_missing),
                     })
                   : ""}
               </p>
@@ -406,7 +411,6 @@ export function ExtrasPanel({
                 <ItemRow
                   key={it.key}
                   it={it}
-                  category={category}
                   busy={!!busyKeys[it.key]}
                   progress={progByKey[it.key]}
                   removeKey={removeKey}
@@ -510,7 +514,6 @@ export function ExtrasDialog({
 
 function ItemRow({
   it,
-  category,
   busy,
   progress,
   removeKey,
@@ -519,7 +522,6 @@ function ItemRow({
   onRemove,
 }: {
   it: Item;
-  category: Category;
   busy: boolean;
   progress?: Progress;
   removeKey: string;
@@ -536,7 +538,7 @@ function ItemRow({
       <div className="flex items-center gap-4">
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] leading-snug">
-            {extraLabel(it, category)}
+            {extraLabel(it)}
             {it.recommended ? (
               <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
             ) : null}

@@ -14,6 +14,7 @@ import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
 import { AudioTrimButton, AudioTrimEditor, canTrimAudio } from "./AudioTrim";
+import { formatLocalizedList } from "../lib/voiceDisplay";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -530,7 +531,7 @@ function StsSection() {
     ? t("s.bc45fc14b1")
     : st.engine_core_ready === false
       ? t("s.156ff9271b", {
-          v0: (st.engine_core_missing || []).join("、") || "hubert/rmvpe",
+          v0: formatLocalizedList(st.engine_core_missing || []) || "hubert/rmvpe",
         })
       : !st.worker_present
         ? t("s.84b7d7b6b0")

@@ -74,7 +74,7 @@ pub fn blocking_reason(root: &Path) -> Option<String> {
             let mut msg = crate::i18n::te("s.audioProbeCrash", &crate::crash::describe(code));
             if !asio.is_empty() {
                 msg.push(' ');
-                msg.push_str(&crate::i18n::te("s.audioProbeAsio", &asio.join("、")));
+                msg.push_str(&crate::i18n::te("s.audioProbeAsio", &crate::i18n::join_list(&asio)));
             }
             Some(msg)
         }

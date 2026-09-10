@@ -216,6 +216,18 @@ pub fn tn(key: &str, args: &[&str]) -> String {
     s
 }
 
+/// Join a user-visible list using the separator from the active language pack.
+pub fn join_list(items: &[String]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let separator = t("s.listSeparator");
+    if separator == "s.listSeparator" || separator.is_empty() {
+        return items.join(", ");
+    }
+    items.join(&separator)
+}
+
 // ---------------------------------------------------------------------------
 // Catalog / remote JSON localization
 // ---------------------------------------------------------------------------
@@ -688,6 +700,15 @@ mod tests {
         let help = t("s.dlFailedHelp");
         assert!(help.contains("1077458748"), "got {help}");
         assert!(t("s.dlGaveUp").contains("{v0}") || te("s.dlGaveUp", &5).contains("5"));
+    }
+
+    #[test]
+    fn list_separator_follows_locale() {
+        let _g = testing::pin("zh-CN");
+        let items = vec!["hubert".to_string(), "rmvpe".to_string()];
+        assert_eq!(join_list(&items), "hubert、rmvpe");
+        set_locale("en-US");
+        assert_eq!(join_list(&items), "hubert, rmvpe");
     }
 
 }

@@ -16,6 +16,12 @@ export type VoiceModel = {
   index?: string;
   has_index?: boolean;
   tag?: string;
+  name_i18n?: Record<string, string>;
+  tag_i18n?: Record<string, string>;
+  description_i18n?: Record<string, string>;
+  author_i18n?: Record<string, string>;
+  series_i18n?: Record<string, string>;
+  group_i18n?: Record<string, string>;
   author?: string;
   author_url?: string;
   /** 多作者写法（sidecar 的 authors 数组）。单作者音色这里也有一项。 */
@@ -59,6 +65,7 @@ export type ProfileItem = {
 export type StoreVoice = {
   id: string;
   name: string;
+  name_i18n?: Record<string, string>;
   /** Japanese display name when different from name */
   name_ja?: string;
   /** English / romanization */
@@ -66,6 +73,7 @@ export type StoreVoice = {
   /** Traditional Chinese */
   name_zh_Hant?: string;
   tag?: string;
+  tag_i18n?: Record<string, string>;
   version?: string;
   pack_url?: string;
   pth_url?: string;
@@ -77,12 +85,15 @@ export type StoreVoice = {
   size_label?: string;
   sha256?: string;
   description?: string;
+  description_i18n?: Record<string, string>;
   author?: string;
+  author_i18n?: Record<string, string>;
   author_url?: string;
   /** 多作者写法（清单的 authors 数组）。 */
   authors?: VoiceAuthor[];
   date?: string;
   series?: string;
+  series_i18n?: Record<string, string>;
   series_ja?: string;
   series_en?: string;
   series_zh_Hant?: string;

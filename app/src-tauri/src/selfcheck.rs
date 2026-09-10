@@ -99,7 +99,7 @@ fn engine_killed() -> Vec<Finding> {
     if !asio.is_empty() {
         ev.push(Evidence::new(
             r"HKLM\SOFTWARE\ASIO",
-            asio.join("、"),
+            crate::i18n::join_list(&asio),
         ));
     }
     vec![Finding {
@@ -291,8 +291,11 @@ fn pretrained(root: &Path) -> Vec<Finding> {
     vec![Finding {
         code: "assets.pretrained_partial",
         level: INFO,
-        title: crate::i18n::te("s.chkPretrainedPartial", &missing.join("、")),
-        evidence: vec![Evidence::new("assets/pretrained_v2/", missing.join("、"))],
+        title: crate::i18n::te("s.chkPretrainedPartial", &crate::i18n::join_list(&missing)),
+        evidence: vec![Evidence::new(
+            "assets/pretrained_v2/",
+            crate::i18n::join_list(&missing),
+        )],
     }]
 }
 

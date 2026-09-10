@@ -63,6 +63,6 @@ describe("displayVoiceAuthor", () => {
       displayVoiceAuthor({
         authors: [{ name: "A" }, { name: "B", url: "https://x/b" }],
       }),
-    ).toBe("A、B");
+    ).toBe("A和B");
   });
 });

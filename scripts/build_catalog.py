@@ -1209,6 +1209,7 @@ def _compile_extras(entries: list, rep: Report) -> dict:
             "size_bytes": sum(f["size_bytes"] for f in files),
             "files": files,
         }
+        _attach_i18n_fields(e, out[key], ["label", "notes"])
         if default_tag:
             out[key]["release_tag"] = default_tag
     return out

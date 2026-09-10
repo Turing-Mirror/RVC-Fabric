@@ -1603,6 +1603,7 @@
     "dlWhyDisk": "Le disque est plein. Libérez de l'espace et réessayez ; le runtime dépasse dix Go une fois décompressé.",
     "dlWhyPerm": "L'écriture du fichier a été refusée. L'antivirus la bloque peut-être, ou le dossier d'installation est en lecture seule.",
     "dlTriedHosts": "{a0} source(s) essayée(s) : {a1}",
+    "listSeparator": ", ",
     "dlDetail": "Détail technique (à joindre à votre signalement) : {e}",
     "rtExtractFailed": "Le paquet a été téléchargé et vérifié correctement ; l'échec se situe à l'extraction, le retélécharger n'y changera rien.",
     "rtExtractHelp": "À essayer :\n• Ajoutez le dossier d'installation aux exclusions de l'antivirus, puis relancez\n• Vérifiez qu'il reste au moins 20 Go sur le disque\n• Installez hors du disque système, sans espace ni caractère non-ASCII dans le chemin\n• Toujours bloqué ? Scannez le QR du groupe QQ sur la page Plus",

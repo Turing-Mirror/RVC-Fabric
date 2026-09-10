@@ -14,6 +14,7 @@ import { tip, useGlossary, useGlossarySectionTitle } from "../lib/glossary";
 import { openExternal } from "../lib/plaza";
 import { useI18n } from "../i18n";
 import { t } from "../i18n/t";
+import { formatLocalizedList } from "../lib/voiceDisplay";
 
 /**
  * 说明页里可以被直接跳转到的段。
@@ -545,7 +546,7 @@ function HelpPageImpl({
               {t("s.helpNoRoute", { n: names.length })}
             </span>
           ) : (
-            <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{found.map((f) => f.label).join("、")}</b>。
+            <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{formatLocalizedList(found.map((f) => f.label))}</b>
               <br />
               {hasVirtual
                 ? hasCable

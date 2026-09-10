@@ -46,9 +46,11 @@ import { askConfirm } from "../lib/webDialog";
 import { openExternal } from "../lib/plaza";
 import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
+import { useI18n } from "../i18n";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
+const OTHER_SERIES_KEY = "__other__";
 
 type VoiceProg = {
   percent: number;
@@ -99,6 +101,7 @@ function clearVoiceProg(
 
 type SeriesNode = {
   key: string;
+  label: string;
   voices: StoreVoice[];
   groups: { raw: string; label: string; voices: StoreVoice[] }[];
 };
@@ -149,6 +152,7 @@ type Props = {
 };
 
 export function StoreSection({ reloadToken, onInstalled }: Props) {
+  const { locale } = useI18n();
   const [cat, setCat] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<Source>("all");
@@ -319,32 +323,39 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
   const seriesGroups = useMemo((): SeriesNode[] | null => {
     if (grouping !== "series") return null;
-    // 父系列 → 子类。只有 BanG Dream 按乐队拆；蔚蓝档案和其他系列整类平铺。
-    // 没填 series 的落进「其他」；旧清单把乐队写成顶层 series，仍收到 BanG Dream 下。
+    // 父系列 → 子类。清单有 group 就按 group 展开，没有就整类平铺。
+    // 没填 series 的落进「其他」。
     const other = t("s.1a26edf94a");
-    const loc = getTLocale();
-    const map = new Map<string, Map<string, StoreVoice[]>>();
+    const loc = locale;
+    const map = new Map<
+      string,
+      { label: string; groups: Map<string, StoreVoice[]> }
+    >();
     for (const v of list) {
-      const parent =
-        voiceParentSeries(v, loc).trim() ||
-        (v.series || "").trim() ||
-        other;
-      const raw = voiceGroupRaw(v);
-      if (!map.has(parent)) map.set(parent, new Map());
-      const gm = map.get(parent)!;
-      if (!gm.has(raw)) gm.set(raw, []);
-      gm.get(raw)!.push(v);
+      const rawSeries = (v.series || "").trim();
+      const parentLabel =
+        voiceParentSeries(v, loc).trim() || rawSeries || other;
+      const parentKey =
+        rawSeries || (parentLabel === other ? OTHER_SERIES_KEY : parentLabel);
+      let bucket = map.get(parentKey);
+      if (!bucket) {
+        bucket = { label: parentLabel, groups: new Map() };
+        map.set(parentKey, bucket);
+      }
+      const rawGroup = voiceGroupRaw(v);
+      if (!bucket.groups.has(rawGroup)) bucket.groups.set(rawGroup, []);
+      bucket.groups.get(rawGroup)!.push(v);
     }
     const nodes: SeriesNode[] = [...map.entries()]
       .sort((a, b) => {
-        if (a[0] === other) return 1;
-        if (b[0] === other) return -1;
-        return a[0].localeCompare(b[0], "zh");
+        if (a[0] === OTHER_SERIES_KEY) return 1;
+        if (b[0] === OTHER_SERIES_KEY) return -1;
+        return a[1].label.localeCompare(b[1].label, loc);
       })
-      .map(([key, gm]) => {
+      .map(([key, bucket]) => {
+        const gm = bucket.groups;
         const named = [...gm.keys()].some((r) => r);
         const groups = [...gm.entries()]
-          .sort((a, b) => compareVoiceGroups(a[0], b[0], other))
           .map(([raw, voices]) => {
             let label = named
               ? voiceChildGroup(voices[0], loc) || (raw ? raw : other)
@@ -354,9 +365,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               label = "";
             }
             return { raw, label, voices };
-          });
+          })
+          .sort((a, b) => compareVoiceGroups(a.label, b.label, other, loc));
         return {
           key,
+          label: bucket.label,
           voices: groups.flatMap((g) => g.voices),
           groups,
         };
@@ -367,16 +380,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const folded: StoreVoice[] = [];
     const kept: SeriesNode[] = [];
     for (const n of nodes) {
-      if (n.key !== other && isCharacterAsSeries(n.key, n.voices, loc)) {
+      if (n.key !== OTHER_SERIES_KEY && isCharacterAsSeries(n.key, n.voices, loc)) {
         folded.push(...n.voices);
       } else {
         kept.push(n);
       }
     }
     if (folded.length) {
-      let extra = kept.find((n) => n.key === other);
+      let extra = kept.find((n) => n.key === OTHER_SERIES_KEY);
       if (!extra) {
-        extra = { key: other, voices: [], groups: [] };
+        extra = { key: OTHER_SERIES_KEY, label: other, voices: [], groups: [] };
         kept.push(extra);
       }
       extra.voices = extra.voices.concat(folded);
@@ -386,7 +399,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       else extra.groups.push({ raw: rawKey, label: "", voices: folded });
     }
     return kept;
-  }, [grouping, list]);
+  }, [grouping, list, locale]);
 
   const perPage = cols * PAGE_ROWS;
   const totalPages = Math.max(1, Math.ceil(list.length / perPage));
@@ -410,7 +423,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       setSeriesFocus("");
       return;
     }
-    if (group && !node.groups.some((g) => g.label === group)) {
+    if (group && !node.groups.some((g) => g.raw === group)) {
       setSeriesFocus("");
     }
   }, [seriesFocus, seriesGroups]);
@@ -424,7 +437,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         seriesGroups.flatMap((s) =>
           s.groups
             .filter((g) => g.label)
-            .map((g) => groupFocusKey(s.key, g.label)),
+            .map((g) => groupFocusKey(s.key, g.raw)),
         ),
       ),
     );
@@ -609,7 +622,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                 if (group) n.add(groupFocusKey(parent, group));
                 else {
                   for (const g of node.groups) {
-                    if (g.label) n.add(groupFocusKey(parent, g.label));
+                    if (g.label) n.add(groupFocusKey(parent, g.raw));
                   }
                 }
                 return n;
@@ -623,12 +636,12 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               return (
                 <Fragment key={node.key}>
                   <option value={node.key}>
-                    {node.key} ({node.voices.length})
+                    {node.label} ({node.voices.length})
                   </option>
                   {nested.map((g) => (
                     <option
-                      key={groupFocusKey(node.key, g.label)}
-                      value={groupFocusKey(node.key, g.label)}
+                      key={groupFocusKey(node.key, g.raw)}
+                      value={groupFocusKey(node.key, g.raw)}
                     >
                       {`\u00A0\u00A0${g.label} (${g.voices.length})`}
                     </option>
@@ -677,7 +690,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               // 下拉选中父类：整类平铺，不再先点一个同名子类。
               const parentAll = !!seriesFocus && !focusGroup;
               const groups = focusGroup
-                ? node.groups.filter((g) => g.label === focusGroup)
+                ? node.groups.filter((g) => g.raw === focusGroup)
                 : node.groups;
               return (
                 <div key={node.key} className="mb-3">
@@ -694,7 +707,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                         })
                       }
                     >
-                      <span className="font-semibold text-[14px]">{node.key}</span>
+                        <span className="font-semibold text-[14px]">{node.label}</span>
                       <span className="text-[12px] text-[var(--meta)]">
                         {t("s.c8542337dc", {
                           v0: node.voices.length,
@@ -706,7 +719,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                   {openS ? (
                     nested && !parentAll ? (
                       groups.map((g) => {
-                        const gk = groupFocusKey(node.key, g.label);
+                        const gk = groupFocusKey(node.key, g.raw);
                         const openG = !!focusGroup || expandedGroups.has(gk);
                         return (
                           <div key={gk} className="pl-3 mt-1.5">

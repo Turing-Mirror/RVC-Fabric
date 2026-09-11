@@ -270,7 +270,12 @@ export function MorePage({
   const gpus = provision?.gpus?.length
     ? provision.gpus.join(" · ")
     : t("s.90b74980e4");
-  const runtimeLine = provision?.runtime_ready
+  const currentRuntimeRow = provision?.variants?.find(
+    (row) => row.id === provision.installed_variant,
+  );
+  const runtimeLine = provision?.runtime_migration_required
+    ? t("runtimeMigration.pending")
+    : provision?.runtime_ready
     ? provision.installed_variant
       ? t("s.7dd9064298", {
           v0:
@@ -279,6 +284,13 @@ export function MorePage({
         })
       : t("s.f2afde8960")
     : t("s.5abed96e7d");
+  const runtimeButtonLabel = provision?.runtime_migration_required
+    ? t("runtimeActions.migrating")
+    : currentRuntimeRow?.update_available
+      ? t("runtimeActions.update")
+      : provision?.need_provision
+        ? t("runtimeActions.download")
+        : t("runtimeActions.redownload");
   const runtimeRecommendationLine = provision
     ? runtimeRecommendation(provision)
     : "";
@@ -373,7 +385,7 @@ export function MorePage({
                 </span>
                 {onOpenProvision ? (
                   <Btn onClick={onOpenProvision}>
-                    {provision?.need_provision ? t("s.d5c27cb2ba") : t("s.69f5974b47")}
+                    {runtimeButtonLabel}
                   </Btn>
                 ) : null}
               </span>

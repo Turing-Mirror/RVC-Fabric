@@ -49,6 +49,7 @@ export type EngineStatus = {
 export type ProvisionStatus = {
   runtime_ready?: boolean;
   need_provision?: boolean;
+  runtime_migration_required?: boolean;
   runtime_python?: string | null;
   worker_script_ok?: boolean;
   product_root?: string;
@@ -66,6 +67,9 @@ export type ProvisionStatus = {
   recommended_size_bytes?: number;
   recommended_size_label?: string;
   installed_variant?: string | null;
+  installed_version?: string | null;
+  latest_runtime_version?: string | null;
+  worker_alive?: boolean;
   download_supported?: boolean;
   busy?: boolean;
   /** Per-variant size so the start button tracks the user's selection. */
@@ -74,6 +78,11 @@ export type ProvisionStatus = {
     label: string;
     size_bytes?: number;
     size_label?: string;
+    installed?: boolean;
+    active?: boolean;
+    installed_version?: string | null;
+    latest_version?: string | null;
+    update_available?: boolean;
   }[];
   message?: string;
 };

@@ -1,6 +1,9 @@
 //! Resolve product root (dev repo or install dir next to the exe).
 
+use std::fs;
 use std::path::{Path, PathBuf};
+
+const MANAGED_RUNTIME_VARIANTS: [&str; 3] = ["nvidia", "nvidia50", "amd"];
 
 /// Walk from `start` upward looking for a product root marker.
 fn looks_like_root(p: &Path) -> bool {
@@ -85,12 +88,113 @@ pub fn logs_dir(root: &Path) -> PathBuf {
     user_data(root).join("logs")
 }
 
-pub fn runtime_dir(root: &Path) -> PathBuf {
-    if root.join("Runtime").is_dir() {
-        root.join("Runtime")
-    } else {
-        root.join("runtime")
+/// Normalize the stable runtime ids shared by the release catalog and the UI.
+pub fn normalize_runtime_variant(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "nvidia" => Some("nvidia"),
+        "nvidia50" => Some("nvidia50"),
+        "amd" => Some("amd"),
+        _ => None,
     }
+}
+
+/// Installed runtime trees live beside each other under User_Data. The short
+/// variant name is intentional: it is also the value stored in app_config.
+pub fn runtimes_dir(root: &Path) -> PathBuf {
+    user_data(root).join("runtimes")
+}
+
+pub fn runtime_variant_dir(root: &Path, variant: &str) -> PathBuf {
+    let id = normalize_runtime_variant(variant).unwrap_or("nvidia");
+    runtimes_dir(root).join(id)
+}
+
+pub fn runtime_meta_path(root: &Path, variant: &str) -> PathBuf {
+    runtime_variant_dir(root, variant).join("runtime.json")
+}
+
+/// The active variant is kept in the existing app_config instead of a second
+/// state file. Read the raw file here so paths.rs does not depend on config.rs.
+pub fn active_runtime_variant(root: &Path) -> Option<String> {
+    let text = fs::read_to_string(app_config_path(root)).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+    value
+        .get("runtime_variant")
+        .and_then(|v| v.as_str())
+        .and_then(normalize_runtime_variant)
+        .map(str::to_string)
+}
+
+/// The pre-1.6 layout. This function is deliberately retained as the upgrade
+/// source for future versions; it is never used as a second installed runtime.
+pub fn legacy_runtime_dir(root: &Path) -> Option<PathBuf> {
+    ["Runtime", "runtime"]
+        .iter()
+        .map(|name| root.join(name))
+        .find(|path| path.is_dir())
+}
+
+pub fn runtime_tree_ready(runtime: &Path) -> bool {
+    let Some(py) = ["python.exe", "pythonw.exe"]
+        .iter()
+        .map(|name| runtime.join(name))
+        .find(|path| path.is_file())
+    else {
+        return false;
+    };
+    py.parent()
+        .map(|p| {
+            p.join("Lib")
+                .join("site-packages")
+                .join("torch")
+                .join("__init__.py")
+        })
+        .map(|p| p.is_file())
+        .unwrap_or(false)
+}
+
+pub fn runtime_variant_ready(root: &Path, variant: &str) -> bool {
+    runtime_tree_ready(&runtime_variant_dir(root, variant))
+}
+
+/// Managed trees that are complete but have not yet been selected. This also
+/// lets a later build recover if the process stopped after moving a tree and
+/// before it could write the active setting.
+pub fn managed_runtime_variants(root: &Path) -> Vec<String> {
+    MANAGED_RUNTIME_VARIANTS
+        .iter()
+        .filter(|id| runtime_variant_ready(root, id))
+        .map(|id| (*id).to_string())
+        .collect()
+}
+
+/// True when an installed pre-1.6 tree needs the one-time move into User_Data.
+/// Development checkouts and bare test fixtures must continue using Runtime.
+pub fn runtime_migration_required(root: &Path) -> bool {
+    if root.join(".git").exists() {
+        return false;
+    }
+    if !package_meta_path(root).is_file() && !app_config_path(root).is_file() {
+        return false;
+    }
+
+    if legacy_runtime_dir(root).is_some() {
+        return active_runtime_variant(root)
+            .map(|id| !runtime_variant_ready(root, &id))
+            .unwrap_or(true);
+    }
+
+    active_runtime_variant(root).is_none() && !managed_runtime_variants(root).is_empty()
+}
+
+pub fn runtime_dir(root: &Path) -> PathBuf {
+    if let Some(active) = active_runtime_variant(root) {
+        let managed = runtime_variant_dir(root, &active);
+        if managed.is_dir() {
+            return managed;
+        }
+    }
+    legacy_runtime_dir(root).unwrap_or_else(|| root.join("Runtime"))
 }
 
 /// Prefer pythonw (no console). Fall back to python.exe only if needed.
@@ -119,13 +223,10 @@ pub fn runtime_python(root: &Path) -> Option<PathBuf> {
 /// True when Runtime looks usable (python + torch present), same spirit as
 /// launcher.runtime_provision.runtime_ready.
 pub fn runtime_ready(root: &Path) -> bool {
-    let Some(py) = runtime_python(root) else {
+    if runtime_migration_required(root) {
         return false;
-    };
-    let site = py
-        .parent()
-        .map(|p| p.join("Lib").join("site-packages").join("torch").join("__init__.py"));
-    site.map(|p| p.is_file()).unwrap_or(false)
+    }
+    runtime_tree_ready(&runtime_dir(root))
 }
 
 pub fn worker_script(root: &Path) -> PathBuf {
@@ -251,7 +352,13 @@ pub fn clean_temps(root: &Path) -> CleanStats {
     // 没用：Runtime 还没就绪时，里面躺着的可能是刚下完、还没来得及解压的
     // tar —— 这时候清掉，几 GB 就得原样重下。
     let runtime_installed = runtime_ready(root);
-    for sub in ["gui_stage", "frontend_stage", "runtime"] {
+    for sub in [
+        "gui_stage",
+        "frontend_stage",
+        "runtime",
+        "runtime_install",
+        "runtime_extract",
+    ] {
         if sub == "runtime" && !runtime_installed {
             continue;
         }
@@ -298,7 +405,8 @@ pub fn clean_temps(root: &Path) -> CleanStats {
 
 /// 记录一次清理结果（启动/退出日志里能看见有没有真清）。
 pub fn log_clean_stats(phase: &str, root: &Path, stats: &CleanStats) {
-    crate::logging::shell_log!("临时清理（{phase}）root={}：删文件 {} 个、目录 {} 个，失败 {}，约 {:.1} MB",
+    crate::logging::shell_log!(
+        "临时清理（{phase}）root={}：删文件 {} 个、目录 {} 个，失败 {}，约 {:.1} MB",
         root.display(),
         stats.removed_files,
         stats.removed_dirs,

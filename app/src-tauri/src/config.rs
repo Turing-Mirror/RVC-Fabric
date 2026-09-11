@@ -208,6 +208,10 @@ pub fn defaults() -> Map<String, Value> {
     // ui_locale_picked 不进 defaults：老配置缺该键时不能被默认 false 盖成「未选过」，
     // 否则老用户升级后会再弹一次语言引导。新装在 read() 里文件不存在时再写 false。
     m.insert("ui_locale".into(), json!("zh-CN"));
+    // The active managed Runtime variant is separate from engine settings.
+    // It lives in the existing app_config so upgrades do not need another
+    // state file beside User_Data.
+    m.insert("runtime_variant".into(), json!(""));
     m.insert("wallpaper_path".into(), json!(""));
     m.insert("wallpaper_blur".into(), json!(40));
     m.insert("wallpaper_opacity".into(), json!(70));
@@ -380,6 +384,18 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     }
 }
 
+/// Select one already-installed managed Runtime tree.
+pub fn set_runtime_variant(root: &Path, variant: &str) -> Result<(), String> {
+    let id = paths::normalize_runtime_variant(variant)
+        .ok_or_else(|| format!("unsupported runtime variant: {variant}"))?;
+    let _g = lock_files();
+    let path = paths::app_config_path(root);
+    let mut saved = read_json(&path);
+    saved.insert("runtime_variant".into(), json!(id));
+    let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
+    write_atomic(&path, &text).map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))
+}
+
 /// True when a string looks like an absolute path (drive letter or UNC).
 fn looks_absolute(s: &str) -> bool {
     let b = s.as_bytes();
@@ -493,8 +509,8 @@ fn write_saved_and_inuse(
     root: &Path,
     saved: Map<String, Value>,
 ) -> Result<Map<String, Value>, String> {
-    let text = serde_json::to_string_pretty(&Value::Object(saved.clone()))
-        .map_err(|e| e.to_string())?;
+    let text =
+        serde_json::to_string_pretty(&Value::Object(saved.clone())).map_err(|e| e.to_string())?;
     write_atomic(&paths::app_config_path(root), &text)
         .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
     let mut cfg = defaults();
@@ -659,8 +675,8 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
                 saved.insert(k.into(), v.clone());
             }
         }
-        let text = serde_json::to_string_pretty(&Value::Object(saved))
-            .map_err(|e| e.to_string())?;
+        let text =
+            serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
         write_atomic(&paths::app_config_path(root), &text)
             .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
     } else if cfg
@@ -675,8 +691,8 @@ pub fn prepare_vc_start(root: &Path) -> Result<Map<String, Value>, String> {
             cfg.insert("pth_path".into(), json!(pth));
             let mut saved = read_json(&paths::app_config_path(root));
             saved.insert("pth_path".into(), json!(pth));
-            let text = serde_json::to_string_pretty(&Value::Object(saved))
-                .map_err(|e| e.to_string())?;
+            let text =
+                serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
             write_atomic(&paths::app_config_path(root), &text)
                 .map_err(|e| crate::i18n::te("s.47a27ebb17", &(e)))?;
         }
@@ -833,7 +849,8 @@ pub fn set_plaza_seen(root: &Path, newest: &str) -> Result<(), String> {
     let mut saved = read_json(&paths::app_config_path(root));
     saved.insert(PLAZA_SEEN.into(), json!(newest));
     let text = serde_json::to_string_pretty(&Value::Object(saved)).map_err(|e| e.to_string())?;
-    write_atomic(&paths::app_config_path(root), &text).map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
+    write_atomic(&paths::app_config_path(root), &text)
+        .map_err(|e| crate::i18n::te("s.1455f353e7", &(e)))
 }
 
 /// Key holding the folder trained voices are written to. Not a settings key:
@@ -857,7 +874,10 @@ pub fn train_output_dir(root: &Path) -> String {
 pub fn set_train_output_dir(root: &Path, dir: &str) -> Result<(), String> {
     let dir = dir.trim();
     let mut saved = read_json(&paths::app_config_path(root));
-    let cur = saved.get(TRAIN_OUT_DIR).and_then(|v| v.as_str()).unwrap_or("");
+    let cur = saved
+        .get(TRAIN_OUT_DIR)
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     if cur == dir {
         return Ok(());
     }
@@ -932,13 +952,7 @@ pub fn describe() -> Value {
     );
     groups.insert(
         "voice",
-        vec![
-            "pitch",
-            "formant",
-            "index_rate",
-            "rms_mix_rate",
-            "f0method",
-        ],
+        vec!["pitch", "formant", "index_rate", "rms_mix_rate", "f0method"],
     );
     groups.insert(
         "perf",
@@ -959,7 +973,12 @@ pub fn describe() -> Value {
     );
     groups.insert(
         "general",
-        vec!["close_action", "ui_locale", "telemetry_opt_in", "ui_compat_render"],
+        vec![
+            "close_action",
+            "ui_locale",
+            "telemetry_opt_in",
+            "ui_compat_render",
+        ],
     );
     json!({
         "groups": groups,
@@ -996,10 +1015,7 @@ mod tests {
             json!("C:\\App\\User_Data\\models\\anon\\anon.pth"),
         );
         sanitize_inuse(root, &mut m);
-        assert_eq!(
-            m["pth_path"],
-            json!("User_Data\\models\\anon\\anon.pth")
-        );
+        assert_eq!(m["pth_path"], json!("User_Data\\models\\anon\\anon.pth"));
     }
 
     #[test]
@@ -1014,10 +1030,7 @@ mod tests {
         );
         sanitize_inuse(root, &mut m);
         assert_eq!(m["pth_path"], json!("D:\\Voices\\a.pth"));
-        assert_eq!(
-            m["index_path"],
-            json!("User_Data\\models\\a\\a.index")
-        );
+        assert_eq!(m["index_path"], json!("User_Data\\models\\a\\a.index"));
     }
 
     #[test]
@@ -1058,12 +1071,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let mut cfg = defaults();
         cfg.insert("monitor_self".into(), json!(true));
-        cfg.insert("monitor_device".into(), json!(crate::i18n::t("s.a593781b23")));
+        cfg.insert(
+            "monitor_device".into(),
+            json!(crate::i18n::t("s.a593781b23")),
+        );
         sync_inuse(&root, &cfg).unwrap();
 
         let out = read_json(&paths::inuse_config_path(&root));
         assert_eq!(out.get("monitor_enabled"), Some(&json!(true)));
-        assert_eq!(out.get("monitor_device"), Some(&json!(crate::i18n::t("s.a593781b23"))));
+        assert_eq!(
+            out.get("monitor_device"),
+            Some(&json!(crate::i18n::t("s.a593781b23")))
+        );
 
         cfg.insert("monitor_self".into(), json!(false));
         sync_inuse(&root, &cfg).unwrap();
@@ -1096,9 +1115,7 @@ mod tests {
             json!(r"\\?\E:\Dev\RVC-Fabric\User_Data\models\anon\a.index"),
         );
         sanitize_inuse(root, &mut m);
-        assert_eq!(
-            m["pth_path"],
-            json!(r"User_Data\models\anon\anon.pth"));
+        assert_eq!(m["pth_path"], json!(r"User_Data\models\anon\anon.pth"));
         assert_eq!(m["index_path"], json!(r"User_Data\models\anon\a.index"));
     }
 
@@ -1187,7 +1204,8 @@ mod tests {
 
         let after = read_json(&paths::inuse_config_path(&root));
         assert_eq!(
-            after["pth_path"], json!("User_Data/models/anon/anon.pth"),
+            after["pth_path"],
+            json!("User_Data/models/anon/anon.pth"),
             "empty default must not clear the selected model"
         );
         assert_eq!(after["pitch"], json!(5), "other keys still sync");
@@ -1199,16 +1217,10 @@ mod tests {
         let mut cfg = defaults();
         cfg.insert("dsp_enabled".into(), json!(false));
         cfg.insert("dsp_preset".into(), json!(""));
-        cfg.insert(
-            "dsp_params".into(),
-            json!({"pitch":{"semitones":7.0}}),
-        );
+        cfg.insert("dsp_params".into(), json!({"pitch":{"semitones":7.0}}));
         cfg.insert("function".into(), json!("vc"));
         cfg.insert("pth_path".into(), json!("User_Data/models/anon/anon.pth"));
-        assert!(
-            !wants_dsp(&cfg),
-            "选了音色就不能再因为残留 DSP 参数走 fx"
-        );
+        assert!(!wants_dsp(&cfg), "选了音色就不能再因为残留 DSP 参数走 fx");
 
         cfg.insert("pth_path".into(), json!(""));
         cfg.insert("function".into(), json!("vc"));
@@ -1298,13 +1310,11 @@ mod tests {
         let out = update(&root, patch).unwrap();
 
         let restart = out["needs_restart"].as_array().unwrap();
-        assert!(
-            restart.iter().any(|v| v == "main_gpu"));
+        assert!(restart.iter().any(|v| v == "main_gpu"));
         assert_eq!(out["config"]["main_gpu"], json!(1));
 
         // 不是引擎键，就不该顺手去改引擎的配置文件 —— worker 可能正在读它。
-        assert!(
-            !paths::inuse_config_path(&root).is_file());
+        assert!(!paths::inuse_config_path(&root).is_file());
         let _ = std::fs::remove_dir_all(&root);
     }
 

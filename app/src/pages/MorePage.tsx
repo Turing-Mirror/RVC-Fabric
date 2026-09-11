@@ -285,7 +285,7 @@ export function MorePage({
       : t("s.f2afde8960")
     : t("s.5abed96e7d");
   const runtimeButtonLabel = provision?.runtime_migration_required
-    ? t("runtimeActions.migrating")
+    ? t("runtimeMigration.migrate")
     : currentRuntimeRow?.update_available
       ? t("runtimeActions.update")
       : provision?.need_provision

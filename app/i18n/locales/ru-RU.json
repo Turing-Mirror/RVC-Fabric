@@ -2104,15 +2104,17 @@
     "switch": "Переключить",
     "update": "Обновить runtime",
     "redownload": "Загрузить заново",
-    "switchDone": "Runtime переключён.",
-    "migrating": "Перенос runtime…"
+    "switchDone": "Runtime переключён."
   },
     "runtimeMigration": {
     "title": "Перенос runtime",
+    "migrate": "Перенести runtime",
     "nvidia": "NVIDIA (рекомендуется для большинства карт NVIDIA)",
     "nvidia50": "Серия NVIDIA 50 (RTX 50xx)",
     "amd": "AMD / Intel (DirectML)",
-    "description": "Установленный runtime переносится в новое расположение. Повторная загрузка не требуется. Не закрывайте приложение.",
+    "description": "Перенос перемещает установленный runtime в новое расположение. Повторная загрузка не выполняется.",
+    "waitingDescription": "Старый runtime найден, но его тип не удалось определить. Выберите вариант, чтобы начать перенос.",
+    "runningDescription": "Установленный runtime перемещается в новое расположение. Не закрывайте приложение.",
     "pending": "Требуется перенос",
     "preparing": "Подготовка переноса…",
     "prepare": "Подготовка к переносу runtime…",

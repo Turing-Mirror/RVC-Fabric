@@ -2104,15 +2104,17 @@
     "switch": "전환",
     "update": "런타임 업데이트",
     "redownload": "다시 다운로드",
-    "switchDone": "런타임을 전환했습니다.",
-    "migrating": "런타임을 마이그레이션하는 중…"
+    "switchDone": "런타임을 전환했습니다."
   },
     "runtimeMigration": {
     "title": "런타임 마이그레이션",
+    "migrate": "런타임 마이그레이션",
     "nvidia": "NVIDIA(대부분의 NVIDIA 카드에 권장)",
     "nvidia50": "NVIDIA 50 시리즈(RTX 50xx)",
     "amd": "AMD / Intel(DirectML)",
-    "description": "설치된 런타임을 새 위치로 이동합니다. 다시 다운로드하지 않습니다. 앱을 열어 두세요.",
+    "description": "마이그레이션은 설치된 런타임을 새 위치로 이동합니다. 다시 다운로드하지 않습니다.",
+    "waitingDescription": "이전 런타임을 찾았지만 종류를 확인할 수 없습니다. 선택하면 마이그레이션을 시작합니다.",
+    "runningDescription": "설치된 런타임을 새 위치로 이동하는 중입니다. 앱을 열어 두세요.",
     "pending": "마이그레이션 필요",
     "preparing": "마이그레이션 준비 중…",
     "prepare": "런타임 마이그레이션 준비 중…",

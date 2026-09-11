@@ -2104,15 +2104,17 @@
     "switch": "切換",
     "update": "更新執行環境",
     "redownload": "重新下載",
-    "switchDone": "執行環境已切換。",
-    "migrating": "正在遷移執行環境…"
+    "switchDone": "執行環境已切換。"
   },
     "runtimeMigration": {
     "title": "遷移執行環境",
+    "migrate": "遷移執行環境",
     "nvidia": "NVIDIA（推薦大多數 N 卡）",
     "nvidia50": "NVIDIA 50 系（RTX 50xx）",
     "amd": "AMD / Intel（DirectML）",
-    "description": "正在將已安裝的執行環境移到新版位置，不會重新下載。請保持軟體開啟。",
+    "description": "遷移會將已安裝的執行環境移到新版位置，不會重新下載。",
+    "waitingDescription": "已找到舊版執行環境，但無法確認類型。請選擇後才會開始遷移。",
+    "runningDescription": "正在將已安裝的執行環境移到新版位置，請保持軟體開啟。",
     "pending": "等待遷移",
     "preparing": "正在準備遷移…",
     "prepare": "正在準備遷移…",

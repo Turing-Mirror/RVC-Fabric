@@ -242,6 +242,30 @@ pub fn package_meta_path(root: &Path) -> PathBuf {
     root.join("package_meta.json")
 }
 
+/// During `tauri dev`, the staged product tree lives under
+/// `app/src-tauri/target/{debug,release}`. Keep its package metadata lookup
+/// connected to the source checkout when the staged tree has no copy yet.
+/// Installed products always use the metadata beside the executable.
+pub fn development_package_meta_path(root: &Path) -> Option<PathBuf> {
+    let target = root.parent()?;
+    if target.file_name()?.to_str()? != "target" {
+        return None;
+    }
+    let src_tauri = target.parent()?;
+    if src_tauri.file_name()?.to_str()? != "src-tauri"
+        || !src_tauri.join("Cargo.toml").is_file()
+    {
+        return None;
+    }
+    let app = src_tauri.parent()?;
+    let repo = app.parent()?;
+    if !repo.join(".git").exists() {
+        return None;
+    }
+    let path = repo.join("package_meta.json");
+    path.is_file().then_some(path)
+}
+
 pub fn models_dir(root: &Path) -> PathBuf {
     user_data(root).join("models")
 }

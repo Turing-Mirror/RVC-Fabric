@@ -14,9 +14,17 @@ use tauri::{AppHandle, Emitter};
 use crate::{config, paths, provision, worker};
 
 fn package_meta(root: &Path) -> Value {
-    fs::read_to_string(paths::package_meta_path(root))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
+    let mut candidates = vec![paths::package_meta_path(root)];
+    if let Some(path) = paths::development_package_meta_path(root) {
+        candidates.push(path);
+    }
+    candidates
+        .into_iter()
+        .find_map(|path| {
+            fs::read_to_string(path)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+        })
         .unwrap_or_else(|| json!({}))
 }
 
@@ -217,5 +225,20 @@ mod tests {
         fs::write(paths::package_meta_path(&root), r#"{"label":"amd"}"#).unwrap();
         assert_eq!(metadata_variant(&root).as_deref(), Some("amd"));
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn reads_source_metadata_for_a_tauri_dev_staging_root() {
+        let base = crate::testutil::scratch("runtime-migration-dev-meta");
+        let _ = fs::remove_dir_all(&base);
+        let repo = base.join("repo");
+        let root = repo.join("app").join("src-tauri").join("target").join("debug");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        fs::write(repo.join("app").join("src-tauri").join("Cargo.toml"), b"[package]").unwrap();
+        fs::write(repo.join("package_meta.json"), r#"{"variant":"nvidia50"}"#).unwrap();
+
+        assert_eq!(metadata_variant(&root).as_deref(), Some("nvidia50"));
+        let _ = fs::remove_dir_all(&base);
     }
 }

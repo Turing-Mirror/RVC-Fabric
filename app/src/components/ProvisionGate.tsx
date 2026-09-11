@@ -21,6 +21,11 @@ type VariantRow = {
   label: string;
   size_bytes?: number;
   size_label?: string;
+  installed?: boolean;
+  active?: boolean;
+  installed_version?: string | null;
+  latest_version?: string | null;
+  update_available?: boolean;
 };
 
 type Props = {
@@ -71,9 +76,10 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
   const { t: translate } = useI18n();
   const [info, setInfo] = useState<ProvisionStatus>(initial || {});
   const [variant, setVariant] = useState(
-    initial?.recommended_variant && initial.recommended_variant !== "unknown"
-      ? initial.recommended_variant
-      : "nvidia",
+    initial?.installed_variant ||
+      (initial?.recommended_variant && initial.recommended_variant !== "unknown"
+        ? initial.recommended_variant
+        : "nvidia")
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -155,8 +161,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     if (!open) return;
     void getProvisionStatus().then((p) => {
       setInfo(p);
-      if (p.recommended_variant && p.recommended_variant !== "unknown") {
-        setVariant(p.recommended_variant);
+      const preferred = p.installed_variant || p.recommended_variant;
+      if (preferred && preferred !== "unknown") {
+        setVariant(preferred);
       }
     });
   }, [open]);
@@ -215,6 +222,15 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     }
     return "";
   }, [variants, variant, info.recommended_variant, info.recommended_size_label]);
+
+  const selectedRow = variants.find((v) => v.id === variant);
+  const selectedAction = selectedRow?.installed
+    ? selectedRow.active
+      ? selectedRow.update_available
+        ? { label: t("runtimeActions.update"), force: true }
+        : { label: t("runtimeActions.redownload"), force: true }
+      : { label: t("runtimeActions.switch"), force: false }
+    : { label: t("runtimeActions.download"), force: false };
 
   if (!open) return null;
 
@@ -290,7 +306,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     setNow(Date.now());
     setProgress({ phase: "prepare", done: 0, total: 1, percent: 0, message: t("s.2105061e3e") });
     try {
-      const r = await startProvision(variant, false);
+      const r = await startProvision(variant, selectedAction.force);
       if (r.ok) {
         // 引擎资源不并进补全本体，但补全完要主动问一句 —— 以前完全不提，用户
         // 点开实时变声才发现还要再下 720MB，那一下的挫败是可以避免的。
@@ -417,6 +433,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                   {sizeText ? (
                     <span className="text-[11.5px] text-[var(--meta)]">
                       {t("s.244d1be15c", { v0: sizeText })}
+                    </span>
+                  ) : null}
+                  {v.installed ? (
+                    <span className="text-[11.5px] text-[var(--meta)]">
+                      {v.active ? t("runtimeMigration.active") : t("runtimeMigration.installed")}
+                      {v.installed_version ? ` · ${v.installed_version}` : ""}
                     </span>
                   ) : null}
                 </span>
@@ -627,8 +649,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             <>
               {onDismiss ? <Btn onClick={onDismiss}>{t("s.479fcc1cc0")}</Btn> : null}
               <Btn primary onClick={() => void start()}>
-                {t("s.92f35590d5")}
-                {selectedSizeLabel ? t("s.e592773b6a", { v0: selectedSizeLabel }) : ""}
+                {selectedAction.label}
+                {selectedAction.force && selectedSizeLabel
+                  ? t("s.e592773b6a", { v0: selectedSizeLabel })
+                  : !selectedRow?.installed && selectedSizeLabel
+                    ? t("s.e592773b6a", { v0: selectedSizeLabel })
+                    : ""}
               </Btn>
             </>
           )}

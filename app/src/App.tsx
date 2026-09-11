@@ -13,6 +13,7 @@ import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
+import { RuntimeMigrationDialog } from "./components/RuntimeMigrationDialog";
 import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
@@ -503,6 +504,10 @@ export default function App() {
   useEffect(() => {
     // 语言引导优先于 Runtime 补全，避免补全窗还是默认中文。
     if (!langGateChecked || showLangGate) return;
+    if (engine.provision.runtime_migration_required) {
+      setShowProvision(false);
+      return;
+    }
     if (engine.provision.need_provision && !provisionDismissed) {
       setShowProvision(true);
     }
@@ -511,6 +516,7 @@ export default function App() {
     provisionDismissed,
     langGateChecked,
     showLangGate,
+    engine.provision.runtime_migration_required,
   ]);
 
   useEffect(() => {
@@ -1133,8 +1139,24 @@ export default function App() {
         onDone={() => setShowLangGate(false)}
       />
 
+      <RuntimeMigrationDialog
+        open={!showLangGate && engine.provision.runtime_migration_required === true}
+        onDone={async () => {
+          try {
+            await refreshProvision();
+          } catch {
+            /* status polling will retry */
+          }
+          await engine.refresh();
+        }}
+      />
+
       <ProvisionGate
-        open={showProvision && !showLangGate}
+        open={
+          showProvision &&
+          !showLangGate &&
+          engine.provision.runtime_migration_required !== true
+        }
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);

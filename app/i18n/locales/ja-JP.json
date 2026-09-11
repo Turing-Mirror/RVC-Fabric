@@ -2104,15 +2104,17 @@
     "switch": "切り替え",
     "update": "ランタイムを更新",
     "redownload": "再ダウンロード",
-    "switchDone": "ランタイムを切り替えました。",
-    "migrating": "ランタイムを移行中…"
+    "switchDone": "ランタイムを切り替えました。"
   },
     "runtimeMigration": {
     "title": "ランタイムを移行",
+    "migrate": "ランタイムを移行",
     "nvidia": "NVIDIA（ほとんどの NVIDIA カードに推奨）",
     "nvidia50": "NVIDIA 50 シリーズ（RTX 50xx）",
     "amd": "AMD / Intel（DirectML）",
-    "description": "インストール済みのランタイムを新しい場所へ移動しています。再ダウンロードはしません。アプリを開いたままにしてください。",
+    "description": "移行では、インストール済みのランタイムを新しい場所へ移動します。再ダウンロードは行いません。",
+    "waitingDescription": "旧ランタイムは見つかりましたが、種類を判別できません。選択すると移行を開始します。",
+    "runningDescription": "インストール済みのランタイムを新しい場所へ移動しています。アプリを開いたままにしてください。",
     "pending": "移行が必要です",
     "preparing": "移行を準備中…",
     "prepare": "ランタイムの移行を準備中…",

@@ -24,6 +24,7 @@ fn metadata_variant(root: &Path) -> Option<String> {
     let meta = package_meta(root);
     meta.get("variant")
         .or_else(|| meta.get("runtime_variant"))
+        .or_else(|| meta.get("label"))
         .and_then(|value| value.as_str())
         .and_then(paths::normalize_runtime_variant)
         .map(str::to_string)
@@ -188,4 +189,33 @@ pub fn run(
         "variant": selected,
         "version": version,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_the_runtime_variant_from_package_metadata() {
+        let root = crate::testutil::scratch("runtime-migration-meta");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            paths::package_meta_path(&root),
+            r#"{"variant":"nvidia"}"#,
+        )
+        .unwrap();
+        assert_eq!(metadata_variant(&root).as_deref(), Some("nvidia"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn falls_back_to_a_plain_variant_label() {
+        let root = crate::testutil::scratch("runtime-migration-label");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(paths::package_meta_path(&root), r#"{"label":"amd"}"#).unwrap();
+        assert_eq!(metadata_variant(&root).as_deref(), Some("amd"));
+        let _ = fs::remove_dir_all(&root);
+    }
 }

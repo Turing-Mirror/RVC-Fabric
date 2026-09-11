@@ -103,6 +103,15 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
   const options = status?.options?.length ? status.options : FALLBACK_OPTIONS;
   const percent = Math.min(100, Math.max(0, Number(progress?.percent || 0)));
   const selectedLabel = runtimeVariantLabel(choice) || choice;
+  const waitingForChoice = status?.needs_variant === true && !busy;
+  const migrationInProgress =
+    !error &&
+    (busy || ["prepare", "move", "verify"].includes(progress?.phase || ""));
+  const description = waitingForChoice
+    ? t("runtimeMigration.waitingDescription")
+    : migrationInProgress
+      ? t("runtimeMigration.runningDescription")
+      : t("runtimeMigration.description");
 
   return (
     <div className="absolute inset-0 z-[60] flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
@@ -111,10 +120,10 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
           {t("runtimeMigration.title")}
         </h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
-          {t("runtimeMigration.description")}
+          {description}
         </p>
 
-        {status?.needs_variant ? (
+        {waitingForChoice ? (
           <>
             <div className="text-[12.5px] text-[var(--meta)] mb-2">
               {t("runtimeMigration.selectVariant")}
@@ -170,7 +179,7 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
         ) : null}
 
         <div className="flex items-center gap-2 justify-end">
-          {status?.needs_variant ? (
+          {waitingForChoice ? (
             <Btn
               primary
               disabled={!choice || busy}

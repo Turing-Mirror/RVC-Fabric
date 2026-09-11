@@ -2104,15 +2104,17 @@
     "switch": "Switch",
     "update": "Update runtime",
     "redownload": "Download again",
-    "switchDone": "Runtime switched.",
-    "migrating": "Migrating runtime…"
+    "switchDone": "Runtime switched."
   },
     "runtimeMigration": {
     "title": "Migrate runtime",
+    "migrate": "Migrate runtime",
     "nvidia": "NVIDIA (recommended for most NVIDIA cards)",
     "nvidia50": "NVIDIA 50-series (RTX 50xx)",
     "amd": "AMD / Intel (DirectML)",
-    "description": "The installed runtime is being moved to the new location. Nothing is downloaded again. Keep the app open.",
+    "description": "Migration moves the installed runtime to the new location. Nothing is downloaded again.",
+    "waitingDescription": "The old runtime was found, but its type could not be identified. Choose one to start the migration.",
+    "runningDescription": "Moving the installed runtime to the new location. Keep the app open.",
     "pending": "Migration required",
     "preparing": "Preparing migration…",
     "prepare": "Preparing runtime migration…",

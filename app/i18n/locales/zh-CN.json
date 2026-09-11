@@ -2104,15 +2104,17 @@
     "switch": "切换",
     "update": "更新运行时",
     "redownload": "重新下载",
-    "switchDone": "运行时已切换。",
-    "migrating": "正在迁移运行时…"
+    "switchDone": "运行时已切换。"
   },
     "runtimeMigration": {
     "title": "迁移运行时",
+    "migrate": "迁移运行时",
     "nvidia": "NVIDIA（推荐大多数 N 卡）",
     "nvidia50": "NVIDIA 50 系（RTX 50xx）",
     "amd": "AMD / Intel（DirectML）",
-    "description": "正在把已安装的运行时移到新版位置，不会重新下载。请保持软件打开。",
+    "description": "迁移会把已安装的运行时移到新版位置，不会重新下载。",
+    "waitingDescription": "已找到旧版运行时，但无法确认类型。请选择后才会开始迁移。",
+    "runningDescription": "正在把已安装的运行时移到新版位置，请保持软件打开。",
     "pending": "等待迁移",
     "preparing": "正在准备迁移…",
     "prepare": "正在准备迁移…",

@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
@@ -128,7 +129,13 @@ pub fn run(
         .ok_or_else(|| crate::i18n::t("runtimeMigration.selectVariant"))?;
 
     if worker::is_worker_alive(root) {
-        return Err(crate::i18n::t("runtimeMigration.stopEngine"));
+        // 迁移窗盖住整页，用户没法先去停引擎。这里自己停，再等句柄放开，
+        // 否则 rename Runtime 会「文件正在使用」，窗口就卡在报错上。
+        let _ = worker::stop_vc(root, true);
+        std::thread::sleep(Duration::from_millis(400));
+        if worker::is_worker_alive(root) {
+            return Err(crate::i18n::t("runtimeMigration.stopEngine"));
+        }
     }
 
     let target = paths::runtime_variant_dir(root, &selected);

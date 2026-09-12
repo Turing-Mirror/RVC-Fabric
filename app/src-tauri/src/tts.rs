@@ -40,6 +40,13 @@ use crate::paths;
 static BUSY: Mutex<bool> = Mutex::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 
+struct BusyOff;
+impl Drop for BusyOff {
+    fn drop(&mut self) {
+        *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    }
+}
+
 fn cancel_flag() -> Arc<AtomicBool> {
     CANCEL
         .get_or_init(|| Arc::new(AtomicBool::new(false)))
@@ -308,6 +315,7 @@ pub fn run_with_model(
         }
         *g = true;
     }
+    let _busy = BusyOff;
     cancel_flag().store(false, Ordering::SeqCst);
     let log = crate::logging::begin_run(
         root,
@@ -360,10 +368,6 @@ pub fn run_with_model(
             trace.note(&format!("ERROR {e}"));
             crate::logging::finish_run(&log, true, outcome);
         }
-    }
-    {
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        *g = false;
     }
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);

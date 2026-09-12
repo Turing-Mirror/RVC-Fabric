@@ -211,13 +211,20 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
               disabled={busy}
               onClick={() => {
                 started.current = true;
-                void invoke<{ ok?: boolean }>("runtime_migration_start", {
-                  variant: null,
-                })
-                  .then((result) => {
+                void (async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const result = await invoke<{ ok?: boolean }>("runtime_migration_start", {
+                      variant: choice || null,
+                    });
                     if (result?.ok) doneRef.current();
-                  })
-                  .catch((e) => setError(String(e)));
+                  } catch (e) {
+                    setError(String(e));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
               }}
             >
               {t("runtimeMigration.retry")}

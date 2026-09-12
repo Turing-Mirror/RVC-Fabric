@@ -94,6 +94,14 @@ export default function App() {
     "all",
   );
   const [scrollToDownloads, setScrollToDownloads] = useState(0);
+  // 下载区落点只是一次性导航请求。离开广场后清掉，避免重新进入广场时
+  // 把上一次已经完成的请求当成新请求，再次滚到下载区。
+  useEffect(() => {
+    if (page === "plaza") return;
+    setScrollToDownloads(0);
+    setExtrasReason("");
+    setExtrasFilter("all");
+  }, [page]);
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");

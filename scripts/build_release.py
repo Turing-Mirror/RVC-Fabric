@@ -103,10 +103,17 @@ def copy_tree(src: Path, dst: Path, *, ignore=None) -> None:
     if dst.exists():
         shutil.rmtree(dst)
     log(f"  copy dir: {src} -> {dst}")
+
+    def _copy_ignore(directory: str, names: list[str]) -> set[str]:
+        excluded = set(ignore(directory, names) or ()) if ignore else set()
+        if ".gitignore" in names:
+            excluded.add(".gitignore")
+        return excluded
+
     shutil.copytree(
         src,
         dst,
-        ignore=ignore,
+        ignore=_copy_ignore,
         dirs_exist_ok=False,
     )
 
@@ -128,6 +135,8 @@ def robocopy(src: Path, dst: Path) -> None:
             "/nc",
             "/ns",
             "/np",
+            "/XF",
+            ".gitignore",
             "/R:2",
             "/W:2",
         ]
@@ -681,7 +690,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
                     target = dst / child.name
                     if target.exists():
                         shutil.rmtree(target)
-                    shutil.copytree(child, target)
+                    shutil.copytree(child, target, ignore=shutil.ignore_patterns(".gitignore"))
                 elif child.suffix.lower() == ".pth":
                     name = child.stem
                     folder = dst / name
@@ -696,7 +705,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
             # copy tree as-is
             for child in models_src.iterdir():
                 if child.is_dir():
-                    shutil.copytree(child, dst / child.name, dirs_exist_ok=True)
+                    shutil.copytree(child, dst / child.name, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".gitignore"))
     else:
         log("[models] no source — empty catalog (import in UI later)")
     # also pull any existing User_Data/models from repo
@@ -706,7 +715,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
             if child.is_dir() and any(child.glob("*.pth")):
                 t = dst / child.name
                 if not t.exists():
-                    shutil.copytree(child, t)
+                    shutil.copytree(child, t, ignore=shutil.ignore_patterns(".gitignore"))
                     log(f"  + repo model {child.name}")
 
 

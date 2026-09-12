@@ -122,6 +122,23 @@ class FindPackFakeTreeTests(unittest.TestCase):
         self.assertIn("50", br.VARIANTS["nvidia"]["exclude_keys"])
 
 
+class CopyTreeTests(unittest.TestCase):
+    def test_copy_tree_excludes_gitignore_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            dst = root / "dst"
+            (src / "nested").mkdir(parents=True)
+            (src / ".gitignore").write_text("*\n", encoding="utf-8")
+            (src / "nested" / ".gitignore").write_text("*\n", encoding="utf-8")
+            (src / "keep.txt").write_text("keep\n", encoding="utf-8")
+
+            br.copy_tree(src, dst)
+
+            self.assertTrue((dst / "keep.txt").is_file())
+            self.assertFalse((dst / ".gitignore").exists())
+            self.assertFalse((dst / "nested" / ".gitignore").exists())
+
 class FindPackRealRvcmaxTests(unittest.TestCase):
     """If local RVCMAX packs exist, assert correct resolution."""
 

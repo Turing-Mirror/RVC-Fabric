@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { useI18n } from "../i18n";
 import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
+import {
+  fitPxPerSec,
+  scrollAfterZoom,
+  timeAtX,
+  waveformWidth as waveW,
+  xAtTime,
+  zoomPxPerSec,
+} from "../lib/waveformView";
 
 type AudioTrimProps = {
   input: string;
@@ -42,6 +50,9 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
   const canvas = useRef<HTMLCanvasElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const dragStart = useRef<number | null>(null);
+  const pendingScroll = useRef<number | null>(null);
+  const pxRef = useRef(0);
+  const previewing = useRef(false);
   const [duration, setDuration] = useState(0);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
@@ -51,6 +62,10 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
   const [mode, setMode] = useState<EditMode>("keep");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [viewW, setViewW] = useState(0);
+  const [pxPerSec, setPxPerSec] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -61,6 +76,9 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     setPeaks([]);
     setWaveformError("");
     setWaveformLoading(true);
+    setPxPerSec(0);
+    setCurrentTime(0);
+    setMode("keep");
 
     const load = async () => {
       try {
@@ -102,7 +120,48 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     };
   }, [input]);
 
-  const waveformWidth = Math.max(720, Math.min(14_000, Math.ceil(Math.max(duration, 1) * 24)));
+  useEffect(() => {
+    const el = scroll.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setViewW(el.clientWidth));
+    ro.observe(el);
+    setViewW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const minFit = fitPxPerSec(duration, viewW || 720);
+  const scale = pxPerSec || minFit;
+  pxRef.current = scale;
+  const waveformWidth = waveW(duration, scale);
+
+  useEffect(() => {
+    const el = scroll.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!duration) return;
+      if (e.shiftKey) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY || e.deltaX;
+        return;
+      }
+      e.preventDefault();
+      const oldScale = pxRef.current || minFit;
+      const oldWidth = waveW(duration, oldScale);
+      const next = zoomPxPerSec(oldScale, e.deltaY, minFit);
+      const rect = el.getBoundingClientRect();
+      const cursor = e.clientX - rect.left;
+      pendingScroll.current = scrollAfterZoom(el.scrollLeft, cursor, oldWidth, waveW(duration, next));
+      setPxPerSec(next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [duration, minFit]);
+
+  useLayoutEffect(() => {
+    if (pendingScroll.current == null || !scroll.current) return;
+    scroll.current.scrollLeft = pendingScroll.current;
+    pendingScroll.current = null;
+  }, [waveformWidth]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -128,8 +187,8 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     ctx.stroke();
     if (!peaks.length || !duration) return;
 
-    const left = Math.max(0, Math.min(waveformWidth, (start / duration) * waveformWidth));
-    const right = Math.max(left, Math.min(waveformWidth, (end / duration) * waveformWidth));
+    const left = xAtTime(start, duration, waveformWidth);
+    const right = Math.max(left, xAtTime(end, duration, waveformWidth));
     ctx.fillStyle = "rgba(20, 26, 33, 0.12)";
     ctx.fillRect(0, 0, left, WAVE_HEIGHT);
     ctx.fillRect(right, 0, waveformWidth - right, WAVE_HEIGHT);
@@ -151,12 +210,24 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     ctx.fillRect(Math.min(waveformWidth - 2, right - 1), 0, 2, WAVE_HEIGHT);
   }, [duration, end, peaks, start, waveformWidth]);
 
+  useEffect(() => {
+    const el = scroll.current;
+    if (!el || !playing || !duration) return;
+    const x = xAtTime(currentTime, duration, waveformWidth);
+    const left = el.scrollLeft;
+    const right = left + el.clientWidth;
+    const margin = 32;
+    if (x < left + margin || x > right - margin) {
+      el.scrollLeft = Math.max(0, x - el.clientWidth / 3);
+    }
+  }, [currentTime, duration, playing, waveformWidth]);
+
   const timeAt = (clientX: number) => {
     const el = canvas.current;
     if (!el || !duration) return 0;
     const rect = el.getBoundingClientRect();
-    const x = Math.max(0, Math.min(waveformWidth, (clientX - rect.left) * (waveformWidth / rect.width)));
-    return (x / waveformWidth) * duration;
+    const x = (clientX - rect.left) * (waveformWidth / Math.max(rect.width, 1));
+    return timeAtX(x, duration, waveformWidth);
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -187,6 +258,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     end <= duration;
   const removingEverything = valid && start <= 0.01 && end >= duration - 0.01;
   const canApply = valid && (mode === "keep" || !removingEverything);
+  const playhead = xAtTime(currentTime, duration, waveformWidth);
 
   const apply = async () => {
     if (!canApply || busy) return;
@@ -207,9 +279,16 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     }
   };
 
+  const seek = (time: number) => {
+    previewing.current = false;
+    const t0 = Math.max(0, Math.min(duration, time));
+    setCurrentTime(t0);
+    if (audio.current) audio.current.currentTime = t0;
+  };
+
   if (!canTrimAudio(input)) return null;
   return <div className="mt-3 flex flex-col gap-3">
-    <audio ref={audio} src={(() => { try { return convertFileSrc(input); } catch { return ""; } })()} preload="metadata" className="w-full" controls
+    <audio ref={audio} src={(() => { try { return convertFileSrc(input); } catch { return ""; } })()} preload="metadata" className="hidden"
       onLoadedMetadata={(e) => {
         const d = e.currentTarget.duration;
         if (Number.isFinite(d) && d > 0) {
@@ -218,7 +297,16 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
         }
       }}
       onError={() => setError(t("neptune.previewFailed"))}
-      onTimeUpdate={(e) => { if (end > 0 && e.currentTarget.currentTime >= end) e.currentTarget.pause(); }} />
+      onPlay={() => setPlaying(true)}
+      onPause={() => setPlaying(false)}
+      onTimeUpdate={(e) => {
+        const now = e.currentTarget.currentTime;
+        setCurrentTime(now);
+        if (previewing.current && end > 0 && now >= end) {
+          e.currentTarget.pause();
+          previewing.current = false;
+        }
+      }} />
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-[12.5px]">{t("neptune.editMode")}</span>
       <SegmentControl<EditMode>
@@ -233,26 +321,32 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     <div
       ref={scroll}
       className="max-w-full overflow-x-auto rounded-[var(--rs)] border border-[var(--hairline)] bg-[var(--surface)]"
-      onWheel={(e) => {
-        if (!e.shiftKey || !scroll.current) return;
-        e.preventDefault();
-        scroll.current.scrollLeft += e.deltaY || e.deltaX;
-      }}
     >
-      <canvas
-        ref={canvas}
-        role="img"
-        aria-label={t("neptune.waveform")}
-        className="block max-w-none cursor-crosshair touch-none"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      />
+      <div className="relative" style={{ width: waveformWidth, height: WAVE_HEIGHT }}>
+        <canvas
+          ref={canvas}
+          role="img"
+          aria-label={t("neptune.waveform")}
+          className="block max-w-none cursor-crosshair touch-none"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        />
+        {duration > 0 ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-0 w-px bg-[var(--ink)]"
+            style={{ left: playhead, height: WAVE_HEIGHT, opacity: 0.55 }}
+          />
+        ) : null}
+      </div>
     </div>
     {waveformLoading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
     {waveformError ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
     <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
+    <RangeBar ariaLabel={t("neptune.position")} min={0} max={duration || 1} step={0.01} value={currentTime}
+      disabled={busy || disabled || !duration} onChange={seek} />
     <div className="flex flex-wrap items-center gap-3">
       <label>{t("neptune.trimStart")} <input type="number" min={0} max={end} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(start) ? start.toFixed(2) : ""} onChange={(e) => setStart(Number(e.target.value))} /></label>
@@ -266,13 +360,15 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     <div className="flex gap-2">
       <Btn disabled={!valid || busy || disabled} onClick={() => {
         if (audio.current) {
+          previewing.current = true;
           audio.current.currentTime = start;
+          setCurrentTime(start);
           void audio.current.play().catch(() => setError(t("neptune.previewFailed")));
         }
       }}>{t("neptune.previewSelection")}</Btn>
-      <Btn disabled={!canApply || busy || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : mode === "keep" ? "neptune.applyTrim" : "neptune.applyRemove")}</Btn>
+      <Btn disabled={!canApply || busy || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
     </div>
-    <p className="m-0 text-[12px] text-[var(--help)]">{error || (removingEverything ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : t("neptune.trimHint"))}</p>
+    <p className="m-0 text-[12px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : t("neptune.trimHint"))}</p>
   </div>;
 }
 

@@ -15,6 +15,7 @@ import { openExternal } from "../lib/plaza";
 import { useI18n } from "../i18n";
 import { t } from "../i18n/t";
 import { formatLocalizedList } from "../lib/voiceDisplay";
+import { scheduleScrollToId } from "../lib/scrollPane";
 
 /**
  * 说明页里可以被直接跳转到的段。
@@ -399,26 +400,25 @@ function HelpPageImpl({
     // 把那一条展开。用 key 不用序号：条目会增删，序号会错位，key 不会。
     const [sec, qKey] = (focus || "").split("#");
     if (!sec || !HELP_ANCHORS.has(sec)) return;
-    const el = document.getElementById(`help-${sec}`);
-    el?.scrollIntoView({ block: "start" });
     if (qKey) {
       const q = t(qKey);
       // 查不到就别展开一个叫「s.xxxx」的手风琴。
-      if (q && q !== qKey) {
-        setOpen(q);
-        return;
-      }
+      if (q && q !== qKey) setOpen(q);
+    } else {
+      // 带手风琴的那三段顺手展开第一条，否则跳过去只看到一排标题。
+      const first =
+        sec === "train"
+          ? buildTrainGuide()[0]?.q
+          : sec === "infer"
+            ? buildInferGuide()[0]?.q
+            : sec === "separate"
+              ? buildSeparateGuide()[0]?.q
+              : undefined;
+      if (first) setOpen(first);
     }
-    // 带手风琴的那三段顺手展开第一条，否则跳过去只看到一排标题。
-    const first =
-      sec === "train"
-        ? buildTrainGuide()[0]?.q
-        : sec === "infer"
-          ? buildInferGuide()[0]?.q
-          : sec === "separate"
-            ? buildSeparateGuide()[0]?.q
-            : undefined;
-    if (first) setOpen(first);
+    // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了 transform，
+    // scrollIntoView 跟着动画走，落点停在页顶。offsetTop 不受 transform 影响。
+    return scheduleScrollToId(`help-${sec}`);
   }, [focus, focusNonce]);
 
   const installVb = async () => {

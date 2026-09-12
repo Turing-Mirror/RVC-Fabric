@@ -20,6 +20,7 @@ import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDia
 import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
+import { scheduleScrollToId } from "../lib/scrollPane";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
  *  打包）都已经在，开放时把它改成 true 即可，不要删代码。 */
@@ -204,18 +205,7 @@ export function MorePage({
     //
     // 还得等一拍：PageHost 换页时有个 useLayoutEffect 把 scrollTop 归零，
     // 同一帧里滚过去会被它抹掉。
-    const id = window.setTimeout(() => {
-      const el = document.getElementById("more-community");
-      const pane = el?.closest(".overflow-y-auto");
-      if (el && pane instanceof HTMLElement) {
-        // 直接赋值，不用 smooth：换页动画期间平滑滚动会被打断，停在几像素上
-        // ——「点了没反应」比生硬地跳过去糟得多。说明页那几段跳转也是硬跳。
-        pane.scrollTop = Math.max(0, el.offsetTop - 12);
-      } else {
-        el?.scrollIntoView({ block: "start" });
-      }
-    }, 60);
-    return () => window.clearTimeout(id);
+    return scheduleScrollToId("more-community");
   }, [focusCommunityNonce]);
 
   useEffect(() => {

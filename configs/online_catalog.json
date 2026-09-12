@@ -1602,6 +1602,64 @@
       "group": "研讨会",
       "channel": "release",
       "release_tag": "voices"
+    },
+    {
+      "id": "Nanami-JP",
+      "name": "七海千秋（日语）",
+      "author": "蔚汀Wittin",
+      "author_url": "https://space.bilibili.com/3546926668580983",
+      "released": "260912",
+      "tag": "少女音",
+      "version": "1",
+      "package_type": "voice_pack",
+      "cover": "ch-banner/tp-danganronpa-nanami.jpg",
+      "cover_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/covers/tp-danganronpa-nanami.jpg",
+      "pack_url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/voices/Nanami-JP-v1.zip",
+      "sha256": "78bf957939774dcc304260efa527bc3811a046cf45b8276966c27ce395590733",
+      "size_bytes": 332274747,
+      "description": "七海千秋（日语） · 弹丸论破 · 蔚汀Wittin · 图灵镜整理发布 260912 版",
+      "tag_i18n": {
+        "en-US": "Female voice",
+        "ja-JP": "女性ボイス",
+        "ko-KR": "여성 음성",
+        "zh-TW": "女聲",
+        "es-ES": "Voz femenina",
+        "fr-FR": "Voix féminine",
+        "ru-RU": "Женский голос"
+      },
+      "description_i18n": {
+        "en-US": "Japanese RVC Fabric voice pack published by Turing Mirror from a model provided by Wittin.",
+        "ja-JP": "蔚汀Wittinが提供したモデルを、Turing MirrorがRVC Fabric用音声パックとして整理・公開しました。",
+        "ko-KR": "蔚汀Wittin이 제공한 모델을 Turing Mirror가 RVC Fabric용 음색 팩으로 정리해 공개했습니다.",
+        "zh-TW": "由蔚汀Wittin提供模型，圖靈鏡整理並發布為 RVC Fabric 日語音色包。",
+        "es-ES": "Paquete de voz japonés de RVC Fabric publicado por Turing Mirror a partir de un modelo proporcionado por Wittin.",
+        "fr-FR": "Pack de voix japonais RVC Fabric publié par Turing Mirror à partir d’un modèle fourni par Wittin.",
+        "ru-RU": "Японский голосовой пакет RVC Fabric, опубликованный Turing Mirror на основе модели, предоставленной Wittin."
+      },
+      "name_i18n": {
+        "en-US": "Chiaki Nanami (Japanese)",
+        "ja-JP": "七海千秋（日本語）",
+        "ko-KR": "나나미 치아키 (일본어)",
+        "zh-TW": "七海千秋（日語）",
+        "es-ES": "Chiaki Nanami (japonés)",
+        "fr-FR": "Chiaki Nanami (japonais)",
+        "ru-RU": "Чиаки Нанами (японская версия)"
+      },
+      "series_i18n": {
+        "en-US": "Danganronpa",
+        "ja-JP": "ダンガンロンパ",
+        "ko-KR": "단간론파",
+        "zh-TW": "彈丸論破",
+        "es-ES": "Danganronpa",
+        "fr-FR": "Danganronpa",
+        "ru-RU": "Danganronpa"
+      },
+      "publisher": "rvc_fabric",
+      "fabric_official": true,
+      "date": "260912",
+      "series": "弹丸论破",
+      "channel": "release",
+      "release_tag": "voices"
     }
   ],
   "thirdparty_voices": [

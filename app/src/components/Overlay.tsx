@@ -122,6 +122,8 @@ export function Overlay() {
 
   const over = live && level >= gate;
   const label = name.trim() || t("overlay.noVoice");
+  const iconButtonClass =
+    "inline-flex h-4 w-4 flex-none items-center justify-center p-0 text-[15px] leading-none";
 
   return (
     <div
@@ -181,11 +183,11 @@ export function Overlay() {
         {(hover || busy) && <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
           <button disabled={busy} title={t(live ? "dock.stop" : "dock.start")}
             aria-label={t(live ? "dock.stop" : "dock.start")}
-            className="cursor-pointer border-0 bg-transparent text-white disabled:opacity-40"
+            className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
             onClick={() => void act(() => live ? stopVc() : startVc())}>{live ? "■" : "▷"}</button>
           <button disabled={busy || !live} title={t(bypass ? "dock.modeVc" : "dock.modeBypass")}
             aria-label={t(bypass ? "dock.modeVc" : "dock.modeBypass")}
-            className="cursor-pointer border-0 bg-transparent text-white disabled:opacity-40"
+            className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
             onClick={() => void act(() => setHot({ function: bypass ? "vc" : "im" }))}>↔</button>
         </div>}
         {hover ? (
@@ -194,8 +196,8 @@ export function Overlay() {
             aria-label={t("overlay.close")}
             title={t("overlay.close")}
             onClick={() => void getCurrentWindow().close()}
-            className="flex-none cursor-pointer rounded-full border-0 bg-transparent p-0 text-[15px] leading-none"
-            style={{ color: "#9aa4b0", width: 16, height: 16 }}
+            className={`${iconButtonClass} cursor-pointer rounded-full border-0 bg-transparent`}
+            style={{ color: "#9aa4b0" }}
           >
             ×
           </button>

@@ -98,6 +98,13 @@ def check_forbidden() -> list[str]:
     return [rel for rel in FORBIDDEN if (PAYLOAD / rel).exists()]
 
 
+def check_gitignore_files() -> list[str]:
+    return [
+        f"{path.relative_to(PAYLOAD)} 不应进入安装负载"
+        for path in PAYLOAD.rglob(".gitignore")
+    ]
+
+
 # 发版机盘符不一定是 C:。只查 C:\ / Users 会把 L:\My project、F:\RVC Fabric-new
 # 这种开发机路径放进安装包，用户机器上那些路径不存在。
 _ABS_MARKERS = (
@@ -201,6 +208,7 @@ def main() -> int:
 
     problems = check_forbidden()
     problems = [f"负载里混进了不该有的 {x}" for x in problems]
+    problems += check_gitignore_files()
     problems += check_absolute_paths()
     problems += check_conf_coverage()
 

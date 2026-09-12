@@ -49,6 +49,7 @@ export type EngineStatus = {
 export type ProvisionStatus = {
   runtime_ready?: boolean;
   need_provision?: boolean;
+  runtime_migration_required?: boolean;
   runtime_python?: string | null;
   worker_script_ok?: boolean;
   product_root?: string;
@@ -66,6 +67,9 @@ export type ProvisionStatus = {
   recommended_size_bytes?: number;
   recommended_size_label?: string;
   installed_variant?: string | null;
+  installed_version?: string | null;
+  latest_runtime_version?: string | null;
+  worker_alive?: boolean;
   download_supported?: boolean;
   busy?: boolean;
   /** Per-variant size so the start button tracks the user's selection. */
@@ -74,9 +78,46 @@ export type ProvisionStatus = {
     label: string;
     size_bytes?: number;
     size_label?: string;
+    installed?: boolean;
+    active?: boolean;
+    installed_version?: string | null;
+    latest_version?: string | null;
+    update_available?: boolean;
   }[];
   message?: string;
 };
+
+/** Translate the stable runtime id at the UI boundary. */
+export function runtimeVariantLabel(id?: string): string {
+  switch (id) {
+    case "nvidia":
+      return t("s.4c65a5e25e");
+    case "nvidia50":
+      return t("s.e7a64d4aaf");
+    case "amd":
+      return t("s.variantAmd");
+    default:
+      return "";
+  }
+}
+
+/** Build the recommendation from stable status data, never from stale shell text. */
+export function runtimeRecommendation(status?: Pick<
+  ProvisionStatus,
+  "recommended_variant" | "gpus"
+>): string {
+  const gpu = status?.gpus?.filter(Boolean).join(" · ") || t("s.90b74980e4");
+  switch (status?.recommended_variant) {
+    case "nvidia50":
+      return t("s.8289d5d0bc", { v0: gpu });
+    case "nvidia":
+      return t("s.3967a4b124", { v0: gpu });
+    case "amd":
+      return t("s.c0b4d5c2f4", { v0: gpu });
+    default:
+      return t("s.1e1016e5c8");
+  }
+}
 
 export type ProvisionProgress = {
   phase?: string;
@@ -157,6 +198,8 @@ export async function setHot(params: {
   threhold?: number;
   index_rate?: number;
   rms_mix_rate?: number;
+  /** 音高纠错。变声进行中也能开关，用户可以当场对比。 */
+  f0_repair?: boolean;
   /** 无模型 DSP 变声。三个都是热键，换预设不重开流。 */
   dsp_enabled?: boolean;
   dsp_preset?: string;
@@ -295,15 +338,11 @@ export function statusSub(st: EngineStatus): string {
   // Skip duplicate "engine ready" as subtitle — title already says it.
   if (st.message && !staleBoot) {
     const msg = String(st.message).slice(0, 80);
-    const ready = tStatic("dock.engineReady");
-    const readyMsg = tStatic("msg.engine.ready");
     if (
       st.state !== "running" &&
       st.state !== "error" &&
-      (msg === ready ||
-        msg === readyMsg ||
-        msg === "引擎就绪" ||
-        msg === "Engine ready")
+      st.worker_alive &&
+      !st.message_code
     ) {
       return tStatic("dock.engineIdle");
     }

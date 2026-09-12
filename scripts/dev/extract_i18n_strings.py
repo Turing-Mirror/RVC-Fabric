@@ -548,7 +548,7 @@ def write_legacy_frontend_table() -> tuple[str, int]:
         "- 带 `${...}` 的是拼接出来的句子，`${}` 里的东西是运行时才知道的值"
         "（版本号、文件名、数量），改的时候把它原样留着。",
         "- 同一句话在多处出现只列一次，改一处就是全改。",
-        "- 由 `scripts/dev/extract_i18n_strings.py` 生成（亦兼容旧 `extract_ui_copy.py`）。",
+        "- 由 `scripts/dev/extract_i18n_strings.py` 生成。",
         "",
         "---",
         "",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getEngineStatus } from "../lib/engine";
+import { getEngineStatus, startVc, stopVc, setHot } from "../lib/engine";
+import { listen } from "@tauri-apps/api/event";
 import { currentVoice } from "../lib/voices";
 import { displayVoiceName } from "../lib/voiceDisplay";
 import { useI18n } from "../i18n";
@@ -15,9 +16,7 @@ import { useI18n } from "../i18n";
  * 参照的是 KOOK / TeamSpeak 的说话指示器，但只借行为不借布局 —— 那两个是频道
  * 成员列表，主语是「别人」；这里主语只有用户自己一个，摆成列表是照抄。
  *
- * **一个功能按钮都不放。** 在游戏里误点一下换音色要停流重开，声音当场断一两秒。
- * 唯一的按钮是关闭，而且悬停才出现：这扇窗没有任务栏图标也没有标题栏，不给关闭
- * 就真的关不掉了。
+ * 悬停时显示启停和原声切换；控件区域不参与窗口拖动。
  *
  * 底不是透明的，是一块深色药丸。窗口本身透明，药丸负责让白字在任何画面上都读得
  * 出来 —— 直接把字放在全透明的窗上，压到浅色画面就没了。
@@ -36,6 +35,9 @@ export function Overlay() {
   const [gate, setGate] = useState(0.25);
   const [live, setLive] = useState(false);
   const [hover, setHover] = useState(false);
+  const [bypass, setBypass] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   // 安静一段时间就整体变淡。一个一直保持全亮的置顶方块压在游戏画面上很烦，
   // 而说话的那一刻它必须立刻亮回来 —— 淡的是不透明度，不是内容。
   const [quiet, setQuiet] = useState(true);
@@ -56,6 +58,7 @@ export function Overlay() {
         const level = Number.isFinite(lv) ? Math.min(1, Math.max(0, lv)) : 0;
         const gate = Number.isFinite(g) ? g : 0.25;
         setLive(running);
+        setBypass(s.function === "im");
         setLevel(level);
         setGate(gate);
         const now = Date.now();
@@ -79,15 +82,48 @@ export function Overlay() {
   }, []);
 
   useEffect(() => {
-    void currentVoice()
-      .then((c) => {
-        if (c.model) setName(displayVoiceName(c.model as Record<string, unknown>));
-      })
-      .catch(() => {});
+    let stopped = false;
+    let reading = false;
+    let pending = false;
+    let selectionKey = "";
+    const refresh = async () => {
+      if (stopped) return;
+      if (reading) { pending = true; return; }
+      reading = true;
+      try {
+        const c = await currentVoice();
+        if (!stopped) setName(c.dsp_name || (c.model ? displayVoiceName(c.model as Record<string, unknown>) : ""));
+      } catch { /* The engine may be restarting. */ }
+      finally {
+        reading = false;
+        if (pending) { pending = false; void refresh(); }
+      }
+    };
+    void refresh();
+    const unlisten = [listen("voices-changed", () => void refresh()),
+      listen<{ config?: Record<string, unknown> }>("config-changed", (ev) => {
+        const cfg = ev.payload.config;
+        if (!cfg) return;
+        const key = JSON.stringify([cfg.pth_path, cfg.dsp_enabled, cfg.dsp_preset]);
+        if (selectionKey !== key) { selectionKey = key; void refresh(); }
+      })];
+    return () => {
+      stopped = true;
+      for (const off of unlisten) void off.then((fn) => fn()).catch(() => {});
+    };
   }, []);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError("");
+    try { await fn(); } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  };
 
   const over = live && level >= gate;
   const label = name.trim() || t("overlay.noVoice");
+  const iconButtonClass =
+    "inline-flex h-4 w-4 flex-none items-center justify-center p-0 text-[15px] leading-none";
 
   return (
     <div
@@ -107,6 +143,7 @@ export function Overlay() {
       >
         <span
           aria-hidden
+          data-tauri-drag-region
           className="flex-none rounded-full"
           style={{
             width: 9,
@@ -118,19 +155,22 @@ export function Overlay() {
         />
         <div data-tauri-drag-region className="min-w-0 flex-1">
           <div
+            data-tauri-drag-region
             className="truncate text-[12.5px] font-semibold leading-tight"
             style={{ color: "#eef2f7" }}
-            title={label}
+            title={error || label}
           >
-            {label}
+            {error || label}
           </div>
           {/* 电平条。宽度用 transform 画，不用 width —— 每秒十次改 width 会
               一直触发布局，改 transform 只在合成器里走。 */}
           <div
+            data-tauri-drag-region
             className="mt-1 h-[3px] overflow-hidden rounded-full"
             style={{ background: "rgba(238, 242, 247, 0.16)" }}
           >
             <div
+              data-tauri-drag-region
               className="h-full origin-left rounded-full"
               style={{
                 transform: `scaleX(${live ? level : 0})`,
@@ -140,14 +180,24 @@ export function Overlay() {
             />
           </div>
         </div>
+        {(hover || busy) && <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+          <button disabled={busy} title={t(live ? "dock.stop" : "dock.start")}
+            aria-label={t(live ? "dock.stop" : "dock.start")}
+            className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
+            onClick={() => void act(() => live ? stopVc() : startVc())}>{live ? "■" : "▷"}</button>
+          <button disabled={busy || !live} title={t(bypass ? "dock.modeVc" : "dock.modeBypass")}
+            aria-label={t(bypass ? "dock.modeVc" : "dock.modeBypass")}
+            className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
+            onClick={() => void act(() => setHot({ function: bypass ? "vc" : "im" }))}>↔</button>
+        </div>}
         {hover ? (
           <button
             type="button"
             aria-label={t("overlay.close")}
             title={t("overlay.close")}
             onClick={() => void getCurrentWindow().close()}
-            className="flex-none cursor-pointer rounded-full border-0 bg-transparent p-0 text-[15px] leading-none"
-            style={{ color: "#9aa4b0", width: 16, height: 16 }}
+            className={`${iconButtonClass} cursor-pointer rounded-full border-0 bg-transparent`}
+            style={{ color: "#9aa4b0" }}
           >
             ×
           </button>

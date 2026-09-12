@@ -188,8 +188,10 @@ class InstallerHooks(unittest.TestCase):
         self.assertIn("SimpChinese", files)
         lang = REPO / "app" / "src-tauri" / files["SimpChinese"]
         self.assertTrue(lang.is_file(), f"自定义语言文件不存在：{lang}")
-        self.assertEqual(lang.read_bytes()[:3], b"\xef\xbb\xbf")
+        # Tauri copies this file and writes its own UTF-8 BOM. A BOM in the
+        # source becomes a double BOM, and makensis then dies on LangString.
         body = lang.read_text(encoding="utf-8-sig")
+        self.assertTrue(body.lstrip().startswith("LangString"))
         self.assertIn('LangString deleteAppData ${LANG_SIMPCHINESE}', body)
         self.assertIn("用户数据", body)
         self.assertIn("音色", body)

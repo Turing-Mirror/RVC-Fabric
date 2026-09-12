@@ -2,24 +2,28 @@
 //!
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
-pub mod catalog;
 mod asset_scope;
+mod audio_edit;
 mod audio_probe;
+mod audio_recovery;
 mod autostart;
-mod link_check;
+mod browser_keys;
+pub mod catalog;
 mod ckpt;
 mod config;
+mod consult;
 mod crash;
 mod download;
 mod dsp;
 mod engine_assets;
-mod hf;
 mod extra_assets;
-mod gpu_pref;
 mod extract;
+mod gpu_pref;
+mod hf;
 mod i18n;
 mod known_issues;
 mod legacy;
+mod link_check;
 mod logging;
 mod mic;
 mod mirrors;
@@ -27,25 +31,26 @@ pub mod paths;
 pub mod plaza;
 mod protocol;
 mod provision;
+mod runtime_migration;
 mod selfcheck;
 mod separate;
-mod tearing;
-mod vcredist;
 mod shell_extras;
-mod sts;
 mod store;
+mod sts;
+mod tearing;
 mod telemetry;
 #[cfg(test)]
 mod testutil;
-mod wallpaper;
 mod tool_window;
 mod train;
 mod tts;
 mod ui_assets;
 pub mod update;
+mod vcredist;
 mod voices;
-mod window_watch;
+mod wallpaper;
 mod win_realtime;
+mod window_watch;
 mod worker;
 
 use std::path::PathBuf;
@@ -103,7 +108,10 @@ async fn assets_ensure_engine_core(
                     crate::i18n::te("s.727e8c1993", &(fmt_size(total)))
                 }
                 _ if done == 0 => crate::i18n::t("s.6bde20da46"),
-                _ => crate::i18n::tn("s.1342ffb704", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
+                _ => crate::i18n::tn(
+                    "s.1342ffb704",
+                    &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)],
+                ),
             };
             let _ = app.emit(
                 "provision-progress",
@@ -126,10 +134,7 @@ async fn assets_ensure_engine_core(
 /// 音高算法（rmvpe 等）这里绝不改 —— 欠载误判把用户的 rmvpe 改成 fcpe
 /// 比漏降一档更糟。
 #[tauri::command]
-fn tearing_step(
-    state: State<'_, Mutex<AppState>>,
-    underrun: u32,
-) -> Result<Value, String> {
+fn tearing_step(state: State<'_, Mutex<AppState>>, underrun: u32) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let cfg = config::read(&root);
     let f0 = cfg
@@ -137,7 +142,10 @@ fn tearing_step(
         .and_then(|v| v.as_str())
         .unwrap_or("rmvpe")
         .to_string();
-    let bt = cfg.get("block_time").and_then(|v| v.as_f64()).unwrap_or(0.25);
+    let bt = cfg
+        .get("block_time")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.25);
 
     match tearing::step(underrun, &f0, bt) {
         tearing::Action::None => Ok(json!({"action": "none"})),
@@ -183,7 +191,10 @@ async fn assets_ensure_vcredist(
                     crate::i18n::te("s.c86b0f4fc1", &(fmt_size(total)))
                 }
                 _ if done == 0 => crate::i18n::t("s.3a05d4d51e"),
-                _ => crate::i18n::tn("s.350261fb86", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
+                _ => crate::i18n::tn(
+                    "s.350261fb86",
+                    &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)],
+                ),
             };
             let _ = app.emit(
                 "provision-progress",
@@ -230,7 +241,10 @@ async fn assets_ensure_vbcable(
                     crate::i18n::te("s.c86b0f4fc1", &(fmt_size(total)))
                 }
                 _ if done == 0 => crate::i18n::t("s.3a05d4d51e"),
-                _ => crate::i18n::tn("s.350261fb86", &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)]),
+                _ => crate::i18n::tn(
+                    "s.350261fb86",
+                    &[&fmt_size(done), &fmt_size(total), &format!("{:.1}", pct)],
+                ),
             };
             let _ = app.emit(
                 "provision-progress",
@@ -368,7 +382,10 @@ async fn cover_resolve_many(
 #[tauri::command]
 fn pick_wallpaper(window: tauri::WebviewWindow) -> Option<String> {
     let picked = crate::shell_extras::dialog_on(Some(&window))
-        .add_filter(&crate::i18n::t("s.be8da62ea1"), &["jpg", "jpeg", "png", "webp", "bmp"])
+        .add_filter(
+            &crate::i18n::t("s.be8da62ea1"),
+            &["jpg", "jpeg", "png", "webp", "bmp"],
+        )
         .set_title(&crate::i18n::t("s.501fdcd3ef"))
         .pick_file()
         .map(|p| p.to_string_lossy().into_owned());
@@ -599,17 +616,53 @@ async fn diagnostics_build(
     .map_err(|e| e.to_string())?
 }
 
-/// Bundle the current voice's config + profiles for paid tuning.
+/// 朗读稿 + 现在录到什么程度了。界面照着它画。
+#[tauri::command]
+fn consult_state(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    Ok(consult::state(&root_clone(&state)?))
+}
+
+/// 开始录一种语言的原声。语言只认 zh / en / ja。
+#[tauri::command]
+async fn consult_record_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    lang: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || consult::record_start(&app, &root, &lang))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// 停止录音。和语音转换那边共用同一个录音器，所以直接借它的停。
+#[tauri::command]
+fn consult_record_stop() {
+    sts::cancel_record();
+}
+
+/// 把录好的全删掉，重来一次。
+#[tauri::command]
+fn consult_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    consult::clear(&root);
+    Ok(consult::state(&root))
+}
+
+/// 出包：把每种语言的原声用当前参数转一遍，连同性能记录一起打成 zip。
+///
+/// 转换要几十秒（第一次还要付冷启动），所以丢给阻塞线程池。
 #[tauri::command]
 async fn consult_build(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     note: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        shell_extras::build_consult_pack(&root, &note).map(|p| {
+        consult::build(&app, &root, &note).map(|(p, missing)| {
             let _ = shell_extras::reveal(&p);
-            json!({"ok": true, "path": p.to_string_lossy()})
+            json!({"ok": true, "path": p.to_string_lossy(), "missing": missing})
         })
     })
     .await
@@ -954,9 +1007,12 @@ fn separate_pick(
     let picked = if folder {
         d.set_title(&crate::i18n::t("s.cb12ce77e7")).pick_folder()
     } else {
-        d.add_filter(&crate::i18n::t("s.461189f186"), &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"])
-            .set_title(&crate::i18n::t("s.7ba52d2bf3"))
-            .pick_file()
+        d.add_filter(
+            &crate::i18n::t("s.461189f186"),
+            &["wav", "mp3", "flac", "m4a", "ogg", "wma", "aac"],
+        )
+        .set_title(&crate::i18n::t("s.7ba52d2bf3"))
+        .pick_file()
     }
     .map(|p| p.to_string_lossy().into_owned());
     if let Some(ref p) = picked {
@@ -1088,10 +1144,7 @@ async fn dsp_preset_save(
 }
 
 #[tauri::command]
-async fn dsp_preset_delete(
-    state: State<'_, Mutex<AppState>>,
-    id: String,
-) -> Result<Value, String> {
+async fn dsp_preset_delete(state: State<'_, Mutex<AppState>>, id: String) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || dsp::delete(&root, &id))
         .await
@@ -1132,10 +1185,7 @@ fn sts_pick_output(
 }
 
 #[tauri::command]
-async fn sts_list_input(
-    state: State<'_, Mutex<AppState>>,
-    input: String,
-) -> Result<Value, String> {
+async fn sts_list_input(state: State<'_, Mutex<AppState>>, input: String) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || Ok(sts::list_input(&root, &input)))
         .await
@@ -1149,6 +1199,16 @@ fn sts_delete_input(
     path: String,
 ) -> Result<(), String> {
     sts::delete_input_file(&root_clone(&state)?, &input, &path)
+}
+
+#[tauri::command]
+fn sts_rename_input(
+    state: State<'_, Mutex<AppState>>,
+    input: String,
+    path: String,
+    new_name: String,
+) -> Result<String, String> {
+    sts::rename_input_file(&root_clone(&state)?, &input, &path, &new_name)
 }
 
 #[tauri::command]
@@ -1256,10 +1316,7 @@ fn sts_cancel() {
 }
 
 #[tauri::command]
-fn sts_reveal(
-    state: State<'_, Mutex<AppState>>,
-    path: Option<String>,
-) -> Result<(), String> {
+fn sts_reveal(state: State<'_, Mutex<AppState>>, path: Option<String>) -> Result<(), String> {
     let root = root_clone(&state)?;
     sts::reveal_output(&root, path.as_deref().unwrap_or(""))
 }
@@ -1394,10 +1451,7 @@ fn extra_cancel() {
 /// Windows 上占用中的文件根本删不掉（报一句看不懂的 os error 32），
 /// Linux 上删得掉、但任务会在某个中途步骤炸 —— 两种都不如当场拦下来。
 #[tauri::command]
-async fn extra_remove(
-    state: State<'_, Mutex<AppState>>,
-    key: String,
-) -> Result<Value, String> {
+async fn extra_remove(state: State<'_, Mutex<AppState>>, key: String) -> Result<Value, String> {
     let root = root_clone(&state)?;
     // 哪一类归哪个任务管，由清单里的 group 说了算，所以判断放在 extra_assets
     // 里做 —— 这里只负责把「谁正在跑」这两件事实递进去。
@@ -1535,6 +1589,7 @@ fn engine_set_hot(
     threhold: Option<f64>,
     index_rate: Option<f64>,
     rms_mix_rate: Option<f64>,
+    f0_repair: Option<bool>,
     dsp_enabled: Option<bool>,
     dsp_preset: Option<String>,
     dsp_params: Option<Value>,
@@ -1546,6 +1601,9 @@ fn engine_set_hot(
     }
     if let Some(v) = formant {
         payload.insert("formant".into(), json!(v));
+    }
+    if let Some(v) = f0_repair {
+        payload.insert("f0_repair".into(), json!(v));
     }
     if let Some(v) = function {
         // "fx" = 无模型 DSP 变声，整条 RVC 不走。以前这里只认 im/vc，
@@ -1686,6 +1744,26 @@ async fn provision_status(state: State<'_, Mutex<AppState>>) -> Result<Value, St
 }
 
 #[tauri::command]
+async fn runtime_migration_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || Ok(runtime_migration::status(&root)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn runtime_migration_start(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    variant: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || runtime_migration::run(app, &root, variant))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn provision_start(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
@@ -1698,11 +1776,9 @@ async fn provision_start(
     // path for the whole transfer, which meant the 取消 button's own invoke
     // could not be delivered — the user could watch the progress bar but not
     // stop it.
-    tauri::async_runtime::spawn_blocking(move || {
-        provision::run_provision(app, root, variant, f)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || provision::run_provision(app, root, variant, f))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1759,11 +1835,9 @@ fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Val
 #[tauri::command]
 async fn voices_current(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(voices::current_selection_summary(&root))
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || Ok(voices::current_selection_summary(&root)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1795,7 +1869,9 @@ fn voices_index_bind(
     let root = root_clone(&state)?;
     let src = match index_src.filter(|s| !s.is_empty()) {
         Some(s) => s,
-        None => voices::pick_index_file(Some(&window)).ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?,
+        None => {
+            voices::pick_index_file(Some(&window)).ok_or_else(|| crate::i18n::t("s.a5ffdc95ee"))?
+        }
     };
     voices::bind_index_file(&root, &model_dir, &src)
 }
@@ -1909,12 +1985,15 @@ async fn voices_delete(
 
 #[tauri::command]
 fn voices_rename(
+    app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     model_dir: String,
     new_name: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    voices::rename_voice(&root, &model_dir, &new_name)
+    let out = voices::rename_voice(&root, &model_dir, &new_name)?;
+    let _ = app.emit("voices-changed", &out);
+    Ok(out)
 }
 
 /// 选一张图给「更换封面」用。返回绝对路径或 null（取消）。
@@ -1979,11 +2058,9 @@ async fn store_catalog(
     let root = root_clone(&state)?;
     let remote = prefer_remote.unwrap_or(true);
     // Network fetch — never on the IPC thread.
-    tauri::async_runtime::spawn_blocking(move || {
-        Ok(store::fetch_store_catalog(&root, remote))
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || Ok(store::fetch_store_catalog(&root, remote)))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2015,18 +2092,12 @@ fn store_staged(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 
 /// 在资源管理器里打开暂存目录，用户自己看文件、自己删。
 #[tauri::command]
-fn store_reveal_staged(
-    state: State<'_, Mutex<AppState>>,
-    voice_id: String,
-) -> Result<(), String> {
+fn store_reveal_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), String> {
     store::reveal_staged(&root_clone(&state)?, &voice_id)
 }
 
 #[tauri::command]
-fn store_discard_staged(
-    state: State<'_, Mutex<AppState>>,
-    voice_id: String,
-) -> Result<(), String> {
+fn store_discard_staged(state: State<'_, Mutex<AppState>>, voice_id: String) -> Result<(), String> {
     store::discard_staged(&root_clone(&state)?, &voice_id)
 }
 
@@ -2090,7 +2161,8 @@ pub fn run() {
     i18n::init_from_config(&root);
     // pid 在横幅里，是因为 shell.log 是跨启动追加的：报告「进程还在但看不见
     // 窗口」时，得先能确认手上这段日志和任务管理器里那个进程是同一次运行。
-    logging::shell_log!("=== RVC Fabric {} 启动（pid {}）===",
+    logging::shell_log!(
+        "=== RVC Fabric {} 启动（pid {}）===",
         update::APP_VERSION,
         std::process::id()
     );
@@ -2145,6 +2217,10 @@ pub fn run() {
         })
         .manage(Mutex::new(AppState { root: root.clone() }))
         .invoke_handler(tauri::generate_handler![
+            audio_edit::audio_trim,
+            audio_edit::audio_cut,
+            audio_recovery::audio_recover,
+            voices::voices_export_model,
             wallpaper_data_url,
             tools_open,
             tools_open_help,
@@ -2188,6 +2264,10 @@ pub fn run() {
             cache_status,
             cache_clear,
             consult_build,
+            consult_state,
+            consult_record_start,
+            consult_record_stop,
+            consult_clear,
             reveal_user_dir,
             telemetry_tick,
             close_finish,
@@ -2214,6 +2294,8 @@ pub fn run() {
             engine_swap_model,
             engine_list_devices,
             provision_status,
+            runtime_migration_status,
+            runtime_migration_start,
             provision_start,
             provision_cancel,
             voices_list,
@@ -2263,6 +2345,7 @@ pub fn run() {
             tts_reset_output,
             sts_list_input,
             sts_delete_input,
+            sts_rename_input,
             sts_reveal_input,
             sts_default_input,
             sts_record_start,
@@ -2350,6 +2433,7 @@ pub fn run() {
             .shadow(false)
             .center()
             .build()?;
+            browser_keys::configure(&main_window);
             // `.center()` 只认主显示器。多显示器的人主屏未必是他正在看的那
             // 块，窗口连同任务栏按钮一起去了另一块屏，这头看起来就跟没启动
             // 一样。摆到光标所在的屏上。
@@ -2474,7 +2558,9 @@ pub fn run() {
 
             let root_bg = root.clone();
             std::thread::spawn(move || {
-                if paths::runtime_ready(&root_bg) {
+                if paths::runtime_migration_required(&root_bg) {
+                    logging::shell_log!("skip worker prewarm: Runtime migration required");
+                } else if paths::runtime_ready(&root_bg) {
                     // 预热之前先收孤儿：上次留下的多余 worker 还占着输出设备，
                     // 不收掉的话这次认领的那个发不出声。
                     worker::reap_orphan_workers(&root_bg);
@@ -2483,6 +2569,22 @@ pub fn run() {
                     // 闲」，用户再点一次就是两个进程抢同一张卡。
                     worker::reap_orphan_tool_pythons(&root_bg);
                     let _ = worker::ensure_worker_and_devices(&root_bg, 90_000);
+                    // 设置里开了「提前载入音色」就顺手把权重读进显存。
+                    //
+                    // 放在设备枚举**之后**：枚举是界面第一屏就要用的，
+                    // 而预热只影响「点开始之后要等多久」。让预热排在前面，
+                    // 用户会先看到一个一直转圈的设备列表。
+                    if config::read(&root_bg)
+                        .get("prewarm_on_start")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        match worker::send_command(&root_bg, "prewarm", Map::new()) {
+                            Ok(_) => logging::shell_log!("已请求提前载入音色"),
+                            // 预热是额外的便利，失败不该影响任何别的事。
+                            Err(e) => logging::shell_log!("提前载入音色未能开始：{e}"),
+                        }
+                    }
                 } else {
                     logging::shell_log!("skip worker prewarm: Runtime not ready");
                 }

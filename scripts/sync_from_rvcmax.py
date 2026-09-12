@@ -323,10 +323,8 @@ def main() -> int:
         return 1
     for m in missing:
         log(f"[verify] soft: {m}")
-    log("[verify] OK — bat can use Runtime\\python.exe without system install")
-    log(f"  variant={variant}  try: start.bat  or  scripts\\dev\\go-web.bat")
-    if variant == "amd":
-        log("  AMD: use scripts\\dev\\go-web-dml.bat / go-realtime-gui-dml.bat")
+    log("[verify] OK — the Tauri dev entry can use Runtime\\python.exe without a system install")
+    log(f"  variant={variant}  start: scripts\\dev\\tauri-dev.bat")
     return 0
 
 

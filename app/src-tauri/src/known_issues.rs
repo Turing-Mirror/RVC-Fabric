@@ -142,7 +142,7 @@ pub fn machine(root: &Path) -> Machine {
             .to_string(),
         gpus: crate::provision::list_gpus(),
         asio: crate::crash::asio_drivers(),
-        saw_fatal: crate::crash::saw_fatal_exit(),
+        saw_fatal: crate::audio_probe::confirmed_failure(),
     }
 }
 

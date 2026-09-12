@@ -5,6 +5,8 @@ import {
   getProvisionStatus,
   startProvision,
   cancelProvision,
+  runtimeRecommendation,
+  runtimeVariantLabel,
   type ProvisionStatus,
   type ProvisionProgress,
 } from "../lib/engine";
@@ -19,6 +21,11 @@ type VariantRow = {
   label: string;
   size_bytes?: number;
   size_label?: string;
+  installed?: boolean;
+  active?: boolean;
+  installed_version?: string | null;
+  latest_version?: string | null;
+  update_available?: boolean;
 };
 
 type Props = {
@@ -64,14 +71,15 @@ function isCancelError(e: unknown): boolean {
  * Only shown when need_provision; does not change everyday VC flow once ready.
  */
 export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
-  // 订阅语言。这个组件用的是静态 t()，本身不会因为换语言重渲染；下面那个
-  // useMemo 还把 locale 当依赖，拿不到它就永远算不出第二遍。
-  const { locale } = useI18n();
+  // 订阅语言。大多数文案仍使用静态 t()，运行时兜底选项改用 hook 返回的
+  // translate，确保语言切换后不会留下旧语言的选项标签。
+  const { t: translate } = useI18n();
   const [info, setInfo] = useState<ProvisionStatus>(initial || {});
   const [variant, setVariant] = useState(
-    initial?.recommended_variant && initial.recommended_variant !== "unknown"
-      ? initial.recommended_variant
-      : "nvidia",
+    initial?.installed_variant ||
+      (initial?.recommended_variant && initial.recommended_variant !== "unknown"
+        ? initial.recommended_variant
+        : "nvidia")
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -153,8 +161,9 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     if (!open) return;
     void getProvisionStatus().then((p) => {
       setInfo(p);
-      if (p.recommended_variant && p.recommended_variant !== "unknown") {
-        setVariant(p.recommended_variant);
+      const preferred = p.installed_variant || p.recommended_variant;
+      if (preferred && preferred !== "unknown") {
+        setVariant(preferred);
       }
     });
   }, [open]);
@@ -187,16 +196,21 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
 
   const variants: VariantRow[] = useMemo(() => {
     const list = (info.variants || []) as VariantRow[];
-    if (list.length > 0) return list;
+    if (list.length > 0) {
+      return list.map((row) => ({
+        ...row,
+        label: runtimeVariantLabel(row.id) || row.label,
+      }));
+    }
     return [
-      { id: "nvidia", label: t("s.4c65a5e25e") },
-      { id: "nvidia50", label: t("s.e7a64d4aaf") },
-      { id: "amd", label: t("s.variantAmd") },
+      { id: "nvidia", label: translate("s.4c65a5e25e") },
+      { id: "nvidia50", label: translate("s.e7a64d4aaf") },
+      { id: "amd", label: translate("s.variantAmd") },
     ];
     // locale 必须进依赖：这三条是 useMemo 算出来的，locale 就绪之前算过一次
     // 之后就再也不重算 —— 弹窗标题这些直接写在 JSX 里的会跟着刷新，这三行
     // 不会，于是同一个弹窗上半截是当前语言、三个选项停在默认语言。
-  }, [info.variants, locale]);
+  }, [info.variants, translate]);
 
   const selectedSizeLabel = useMemo(() => {
     const row = variants.find((v) => v.id === variant);
@@ -208,6 +222,15 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     }
     return "";
   }, [variants, variant, info.recommended_variant, info.recommended_size_label]);
+
+  const selectedRow = variants.find((v) => v.id === variant);
+  const selectedAction = selectedRow?.installed
+    ? selectedRow.active
+      ? selectedRow.update_available
+        ? { label: t("runtimeActions.update"), force: true }
+        : { label: t("runtimeActions.redownload"), force: true }
+      : { label: t("runtimeActions.switch"), force: false }
+    : { label: t("runtimeActions.download"), force: false };
 
   if (!open) return null;
 
@@ -283,7 +306,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
     setNow(Date.now());
     setProgress({ phase: "prepare", done: 0, total: 1, percent: 0, message: t("s.2105061e3e") });
     try {
-      const r = await startProvision(variant, false);
+      const r = await startProvision(variant, selectedAction.force);
       if (r.ok) {
         // 引擎资源不并进补全本体，但补全完要主动问一句 —— 以前完全不提，用户
         // 点开实时变声才发现还要再下 720MB，那一下的挫败是可以避免的。
@@ -375,8 +398,7 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
       <div className="w-full max-w-[520px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">{t("s.405125fb37")}</h2>
         <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
-          {info.recommend_reason ||
-            t("s.1e1016e5c8")}
+          {runtimeRecommendation(info)}
           <br />{t("s.7d4cfa5986")}</p>
 
         <div className="text-[12.5px] text-[var(--meta)] mb-2">{t("s.6a6564705b")}</div>
@@ -411,6 +433,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                   {sizeText ? (
                     <span className="text-[11.5px] text-[var(--meta)]">
                       {t("s.244d1be15c", { v0: sizeText })}
+                    </span>
+                  ) : null}
+                  {v.installed ? (
+                    <span className="text-[11.5px] text-[var(--meta)]">
+                      {v.active ? t("runtimeMigration.active") : t("runtimeMigration.installed")}
+                      {v.installed_version ? ` · ${v.installed_version}` : ""}
                     </span>
                   ) : null}
                 </span>
@@ -621,8 +649,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             <>
               {onDismiss ? <Btn onClick={onDismiss}>{t("s.479fcc1cc0")}</Btn> : null}
               <Btn primary onClick={() => void start()}>
-                {t("s.92f35590d5")}
-                {selectedSizeLabel ? t("s.e592773b6a", { v0: selectedSizeLabel }) : ""}
+                {selectedAction.label}
+                {selectedAction.force && selectedSizeLabel
+                  ? t("s.e592773b6a", { v0: selectedSizeLabel })
+                  : !selectedRow?.installed && selectedSizeLabel
+                    ? t("s.e592773b6a", { v0: selectedSizeLabel })
+                    : ""}
               </Btn>
             </>
           )}

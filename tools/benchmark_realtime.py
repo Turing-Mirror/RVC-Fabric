@@ -30,6 +30,7 @@ import numpy as np
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
+sys.path.append(os.path.join(now_dir, "tools"))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -90,27 +91,16 @@ def stage_stats(stage_rows) -> dict:
 def block_geometry(
     sr: int, block_time: float, crossfade_time: float, extra_time: float
 ) -> dict:
-    """Frame layout for one stream — mirrors gui_v1.start_vc exactly."""
-    zc = sr // 100
-    block_frame = int(np.round(block_time * sr / zc)) * zc
-    crossfade_frame = int(np.round(crossfade_time * sr / zc)) * zc
-    sola_buffer_frame = min(crossfade_frame, 4 * zc)
-    sola_search_frame = zc
-    extra_frame = int(np.round(extra_time * sr / zc)) * zc
-    input_frames = extra_frame + crossfade_frame + sola_search_frame + block_frame
-    return {
-        "zc": zc,
-        "block_frame": block_frame,
-        "block_frame_16k": 160 * block_frame // zc,
-        "crossfade_frame": crossfade_frame,
-        "sola_buffer_frame": sola_buffer_frame,
-        "sola_search_frame": sola_search_frame,
-        "extra_frame": extra_frame,
-        "input_frames": input_frames,
-        "input_res_len": 160 * input_frames // zc,
-        "skip_head": extra_frame // zc,
-        "return_length": (block_frame + sola_buffer_frame + sola_search_frame) // zc,
-    }
+    """Frame layout for one stream.
+
+    Delegates to ``tools/block_geometry.py`` so this benchmark, ``gui_v1`` and
+    the offline renderer can never drift apart. They must agree exactly: half a
+    block of difference is inaudible on its own, but it makes every parameter
+    tuned here wrong on the user's machine.
+    """
+    from block_geometry import geometry
+
+    return geometry(sr, block_time, crossfade_time, extra_time)
 
 
 def synth_input(n_samples: int) -> np.ndarray:

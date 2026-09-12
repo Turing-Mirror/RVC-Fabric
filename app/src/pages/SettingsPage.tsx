@@ -4,11 +4,12 @@ import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
+import { AudioRecoverySettings } from "../components/AudioRecovery";
 import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
 import { HOTKEYS } from "../lib/hotkeys";
-import type { EngineStatus } from "../lib/engine";
+import { setHot, type EngineStatus } from "../lib/engine";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
 
 const TAB_KEYS = [
@@ -22,7 +23,8 @@ const TAB_KEYS = [
   "update",
 ] as const;
 
-type TabKey = (typeof TAB_KEYS)[number];
+export type SettingsTab = (typeof TAB_KEYS)[number];
+type TabKey = SettingsTab;
 
 type Props = {
   status?: EngineStatus;
@@ -35,11 +37,14 @@ type Props = {
   onCheckUpdate?: () => void;
   updateLine?: string;
   updateBusy?: boolean;
-  /** 跳到说明页。设备这一套（虚拟声卡怎么连）的解释全在那边，
+  /** 跳到说明页。设备这一套（虚拟声卡连接方式）的解释全在那边，
    *  这里只放一个入口，不把同一段话再抄一遍。 */
-  onOpenHelp?: () => void;
+  onOpenHelp?: (section?: string) => void;
   /** 跳到「其他」页的仓库与社媒。说明页解决不了的，只能找人。 */
   onOpenCommunity?: () => void;
+  /** 跨主页面导航保留当前设置子页；不传则保持组件自身的默认状态。 */
+  selectedTab?: SettingsTab;
+  onTabChange?: (tab: SettingsTab) => void;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -105,10 +110,12 @@ function SettingsPageImpl({
   updateBusy = false,
   onOpenHelp,
   onOpenCommunity,
+  selectedTab,
+  onTabChange,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
-  const TIPS = useMemo(() => tips(), [locale]);
+  const TIPS = useMemo(() => tips(t), [t]);
   const tabLabels = useMemo(
     () =>
       Object.fromEntries(
@@ -116,7 +123,12 @@ function SettingsPageImpl({
       ) as Record<TabKey, string>,
     [t],
   );
-  const [tab, setTab] = useState<TabKey>("device");
+  const [localTab, setLocalTab] = useState<TabKey>("device");
+  const tab = selectedTab ?? localTab;
+  const setTab = (next: TabKey) => {
+    setLocalTab(next);
+    onTabChange?.(next);
+  };
   const c = useConfig();
   // 开机自启：状态以注册表为准（autostart_get），不进 app_config。
   const [autoStart, setAutoStart] = useState(false);
@@ -262,11 +274,12 @@ function SettingsPageImpl({
             className="!mt-6"
             action={
               onOpenHelp ? (
-                <Btn onClick={() => onOpenHelp()}>{t("s.004a3a2b67")}</Btn>
+                <Btn onClick={() => onOpenHelp("wiring")}>{t("s.004a3a2b67")}</Btn>
               ) : undefined
             }
           >
             <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.d4b9d6c80f")}<br />{t("s.6c4698ee82")}</p>
+            <AudioRecoverySettings config={c.cfg} />
             <div className={CARD}>
               <Field
                 label={t("s.47a991d18c")}
@@ -486,6 +499,27 @@ function SettingsPageImpl({
                       { id: "crepe", label: "crepe" },
                     ]}
                     onChange={(v) => c.set("f0method", v, true)}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.f0Repair")}
+                tip={t("settings.f0RepairTip")}
+                desc={t("settings.f0RepairDesc")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.f0_repair === true
+                        ? t("settings.f0RepairOn")
+                        : t("settings.f0RepairOff")
+                    }
+                    checked={c.cfg.f0_repair === true}
+                    onChange={(v) => {
+                      // 落盘之后立刻推给引擎：这是热键，变声进行中也要当场生效，
+                      // 否则用户没法对比开与关的差别。
+                      c.set("f0_repair", v, true);
+                      void setHot({ f0_repair: v }).catch(() => {});
+                    }}
                   />
                 }
               />
@@ -964,6 +998,22 @@ function SettingsPageImpl({
                     }
                     checked={c.cfg.ui_compat_render === true}
                     onChange={(v) => c.set("ui_compat_render", v, true)}
+                  />
+                }
+              />
+              <Field
+                label={t("settings.prewarm")}
+                tip={t("settings.prewarmTip")}
+                desc={t("settings.prewarmDesc")}
+                control={
+                  <Toggle
+                    label={
+                      c.cfg.prewarm_on_start === true
+                        ? t("settings.prewarmOn")
+                        : t("settings.prewarmOff")
+                    }
+                    checked={c.cfg.prewarm_on_start === true}
+                    onChange={(v) => c.set("prewarm_on_start", v, true)}
                   />
                 }
               />

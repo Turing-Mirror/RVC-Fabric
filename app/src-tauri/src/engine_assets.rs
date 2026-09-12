@@ -364,7 +364,7 @@ pub fn ensure_engine_core(
     if missing.is_empty() {
         Ok(())
     } else {
-        Err(crate::i18n::te("s.f36aff2870", &(missing.join("、"))))
+        Err(crate::i18n::te("s.f36aff2870", &crate::i18n::join_list(&missing)))
     }
 }
 

@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-One-click release packer for RVC Fabric.
+Offline release packer for RVC Fabric.
 
-Builds a RVCMAX-style tree::
+Builds a RVCMAX-style offline pack::
 
-    dist/TuringMirror_Voice/   # pack folder name (legacy script id)
-      启动器.exe          first-run helper (exe)
-      变声器.exe          daily app (UI title: RVC Fabric)
-      Runtime/            embedded Python (required)
-      User_Data/models/   bundled voice models
-      VBCABLE/            VB-Cable installers
-      assets/ … infer/    engine (from this repo)
+    dist/TuringMirror_Voice_Nvidia/
+      RVC Fabric.exe      Tauri application
+      frontend/            swappable frontend assets
+      Runtime/             embedded Python (required)
+      User_Data/models/    bundled voice models
+      VBCABLE/             VB-Cable installers
+      assets/ … infer/     engine (from this repo)
       使用说明.txt
 
 Usage (from repo root)::
 
     python scripts/build_release.py
     python scripts/build_release.py --runtime "D:\\path\\Runtime" --models "D:\\models"
-    python scripts/build_release.py --skip-exe          # layout only
+    python scripts/build_release.py --skip-exe          # layout only; skip Tauri build
     python scripts/build_release.py --skip-runtime      # dev dry-run without copy
 
 Default Runtime/models/VBCABLE sources try the local RVCMAX reference pack if present.
@@ -103,10 +103,17 @@ def copy_tree(src: Path, dst: Path, *, ignore=None) -> None:
     if dst.exists():
         shutil.rmtree(dst)
     log(f"  copy dir: {src} -> {dst}")
+
+    def _copy_ignore(directory: str, names: list[str]) -> set[str]:
+        excluded = set(ignore(directory, names) or ()) if ignore else set()
+        if ".gitignore" in names:
+            excluded.add(".gitignore")
+        return excluded
+
     shutil.copytree(
         src,
         dst,
-        ignore=ignore,
+        ignore=_copy_ignore,
         dirs_exist_ok=False,
     )
 
@@ -128,6 +135,8 @@ def robocopy(src: Path, dst: Path) -> None:
             "/nc",
             "/ns",
             "/np",
+            "/XF",
+            ".gitignore",
             "/R:2",
             "/W:2",
         ]
@@ -681,7 +690,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
                     target = dst / child.name
                     if target.exists():
                         shutil.rmtree(target)
-                    shutil.copytree(child, target)
+                    shutil.copytree(child, target, ignore=shutil.ignore_patterns(".gitignore"))
                 elif child.suffix.lower() == ".pth":
                     name = child.stem
                     folder = dst / name
@@ -696,7 +705,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
             # copy tree as-is
             for child in models_src.iterdir():
                 if child.is_dir():
-                    shutil.copytree(child, dst / child.name, dirs_exist_ok=True)
+                    shutil.copytree(child, dst / child.name, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".gitignore"))
     else:
         log("[models] no source — empty catalog (import in UI later)")
     # also pull any existing User_Data/models from repo
@@ -706,7 +715,7 @@ def copy_models(out: Path, models_src: Path | None) -> None:
             if child.is_dir() and any(child.glob("*.pth")):
                 t = dst / child.name
                 if not t.exists():
-                    shutil.copytree(child, t)
+                    shutil.copytree(child, t, ignore=shutil.ignore_patterns(".gitignore"))
                     log(f"  + repo model {child.name}")
 
 
@@ -726,9 +735,9 @@ def write_readme(
 
 【用户只需要】
 1. 解压到英文路径（推荐 D:\\RVC_Fabric\\）
-2. 双击「启动器.exe」（或 TM_Setup.exe）
-3. 点「发送快捷方式」「安装虚拟声卡」
-4. 之后双击桌面图标或主界面「变声器.exe」（界面标题为 RVC Fabric）
+2. 双击「RVC Fabric.exe」
+3. 按首次运行引导检查或补全 Runtime、引擎和虚拟声卡
+4. 从主界面选择音色并开启变声
 
 【显卡说明 — 与官方 RVC 一致】
 {accel_line}
@@ -745,7 +754,7 @@ def write_readme(
 - 引擎与界面（含 rmvpe.pt / rmvpe.onnx）
 
 【不要用】
-- tools\\dev\\ 下的 .bat 仅供开发调试
+- scripts\\dev\\ 下的 .bat 仅供开发调试
 - 不要把 N 卡包 Runtime 拷进 A 卡包混用
 
 打包时间: {time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -871,7 +880,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--runtime", type=Path, default=None, help="Runtime source dir")
     p.add_argument("--models", type=Path, default=None, help="models source dir")
     p.add_argument("--vbcable", type=Path, default=None, help="VBCABLE source dir")
-    p.add_argument("--skip-exe", action="store_true", help="do not run PyInstaller")
+    p.add_argument("--skip-exe", action="store_true", help="do not build the Tauri exe")
     p.add_argument("--skip-runtime", action="store_true", help="do not copy Runtime")
     p.add_argument("--clean", action="store_true", help="wipe out dir first")
     return p.parse_args()
@@ -974,7 +983,7 @@ def main() -> int:
             build_exes(out)
         except Exception as e:
             log(f"[exe] FAILED: {e}")
-            log("  You can re-run without --skip-exe after fixing PyInstaller.")
+            log("  You can re-run without --skip-exe after fixing the Tauri build.")
             return 1
     else:
         log("[exe] skipped")
@@ -985,10 +994,8 @@ def main() -> int:
     log("=== done ===")
     log(f"Output: {out}")
     for name in (
-        "TM_Setup.exe",
-        "TM_Voice.exe",
-        "启动器.exe",
-        "变声器.exe",
+        TAURI_EXE_NAME,
+        "frontend",
         "Runtime",
         "User_Data",
         "VBCABLE",
@@ -999,7 +1006,7 @@ def main() -> int:
         log(f"  [{mark}] {name}")
     if not (out / "Runtime" / "python.exe").is_file():
         log("[WARN] Runtime incomplete — do not ship this folder to users yet.")
-    log("User path: unzip -> double-click 启动器.exe or TM_Setup.exe (no bat).")
+    log(f"User path: unzip -> double-click {TAURI_EXE_NAME} (no bat).")
     return 0
 
 

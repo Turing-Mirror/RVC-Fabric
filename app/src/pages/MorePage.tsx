@@ -7,15 +7,23 @@ import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "../components/MainGpuP
 import { openExternal } from "../lib/plaza";
 import { allLinks } from "../lib/links";
 import { tip } from "../lib/glossary";
-import { statusTitle } from "../lib/engine";
+import {
+  runtimeRecommendation,
+  runtimeVariantLabel,
+  statusTitle,
+} from "../lib/engine";
 import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { askConfirm } from "../lib/webDialog";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
+import { ConsultDialog } from "../components/ConsultDialog";
+import { scheduleScrollToId } from "../lib/scrollPane";
 
-/** 「申请专业优化」的开关。服务还没开放，先藏起来；后端命令仍然在。 */
+/** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
+ *  打包）都已经在，开放时把它改成 true 即可，不要删代码。 */
 const SHOW_CONSULT = false;
 
 type Props = {
@@ -32,6 +40,8 @@ type Props = {
    * 只看布尔的话第二次点就什么都不会发生。
    */
   focusCommunityNonce?: number;
+  /** 顶部导航直接进入「其他」时，把滚动位置重置到页首。 */
+  resetScrollNonce?: number;
 };
 
 export function MorePage({
@@ -41,7 +51,9 @@ export function MorePage({
   onOpenProvision,
   onOpenDownloadModels,
   focusCommunityNonce = 0,
+  resetScrollNonce = 0,
 }: Props = {}) {
+  useI18n();
   // Where the UI itself is served from. Surfaced so a UI patch that did not
   // take effect is diagnosable instead of invisible (OTA strategy A).
   // 有二维码的社媒条目（QQ 群）点开的是图片，不是外链。
@@ -55,6 +67,8 @@ export function MorePage({
   const [version, setVersion] = useState("—");
   const [busyMsg, setBusyMsg] = useState("");
   const [diagOpen, setDiagOpen] = useState(false);
+  const [consultOpen, setConsultOpen] = useState(false);
+  const [consultDone, setConsultDone] = useState("");
   // 主显卡。放在「补全运行时」旁边：装完运行时之后才谈得上用哪块卡算，
   // 而这一整块讲的就是「这台机器拿什么在跑」。
   const [mainGpu, setMainGpu] = useState<number>(MAIN_GPU_AUTO);
@@ -120,23 +134,6 @@ export function MorePage({
         ...m,
         [which]: t("s.ea582ad463", { v0: String(e) }),
       }));
-    }
-  };
-
-  const run = async (label: string, cmd: string, args?: Record<string, unknown>) => {
-    setBusyMsg(`${label}…`);
-    try {
-      const r = await invoke<{ path?: string; perf_note?: string }>(cmd, args);
-      const note = r?.perf_note ? ` · ${r.perf_note}` : "";
-      setBusyMsg(
-        t("s.05d0e1e672", {
-          v0: label,
-          v1: r?.path ?? "",
-          v2: note,
-        }),
-      );
-    } catch (e) {
-      setBusyMsg(t("s.179ee96e83", { v0: label, v1: String(e) }));
     }
   };
 
@@ -208,19 +205,18 @@ export function MorePage({
     //
     // 还得等一拍：PageHost 换页时有个 useLayoutEffect 把 scrollTop 归零，
     // 同一帧里滚过去会被它抹掉。
+    return scheduleScrollToId("more-community");
+  }, [focusCommunityNonce]);
+
+  useEffect(() => {
+    if (!resetScrollNonce) return;
     const id = window.setTimeout(() => {
       const el = document.getElementById("more-community");
       const pane = el?.closest(".overflow-y-auto");
-      if (el && pane instanceof HTMLElement) {
-        // 直接赋值，不用 smooth：换页动画期间平滑滚动会被打断，停在几像素上
-        // ——「点了没反应」比生硬地跳过去糟得多。说明页那几段跳转也是硬跳。
-        pane.scrollTop = Math.max(0, el.offsetTop - 12);
-      } else {
-        el?.scrollIntoView({ block: "start" });
-      }
+      if (pane instanceof HTMLElement) pane.scrollTop = 0;
     }, 60);
     return () => window.clearTimeout(id);
-  }, [focusCommunityNonce]);
+  }, [resetScrollNonce]);
 
   useEffect(() => {
     let alive = true;
@@ -264,11 +260,30 @@ export function MorePage({
   const gpus = provision?.gpus?.length
     ? provision.gpus.join(" · ")
     : t("s.90b74980e4");
-  const runtimeLine = provision?.runtime_ready
+  const currentRuntimeRow = provision?.variants?.find(
+    (row) => row.id === provision.installed_variant,
+  );
+  const runtimeLine = provision?.runtime_migration_required
+    ? t("runtimeMigration.pending")
+    : provision?.runtime_ready
     ? provision.installed_variant
-      ? t("s.7dd9064298", { v0: provision.installed_variant })
+      ? t("s.7dd9064298", {
+          v0:
+            runtimeVariantLabel(provision.installed_variant) ||
+            provision.installed_variant,
+        })
       : t("s.f2afde8960")
     : t("s.5abed96e7d");
+  const runtimeButtonLabel = provision?.runtime_migration_required
+    ? t("runtimeMigration.migrate")
+    : currentRuntimeRow?.update_available
+      ? t("runtimeActions.update")
+      : provision?.need_provision
+        ? t("runtimeActions.download")
+        : t("runtimeActions.redownload");
+  const runtimeRecommendationLine = provision
+    ? runtimeRecommendation(provision)
+    : "";
 
   return (
     <PagePad>
@@ -296,7 +311,7 @@ export function MorePage({
             title={t("s.cef8154370")}
             titleTip={tip(t("s.cef8154370"))}
             desc={
-              provision?.recommend_reason ||
+              runtimeRecommendationLine ||
               (status?.product_root ? String(status.product_root) : t("s.002dcbcd28"))
             }
             right={
@@ -354,11 +369,13 @@ export function MorePage({
             right={
               <span className="flex items-center gap-2">
                 <span className="text-[13.5px] text-[var(--ink-muted)]">
-                  {provision?.recommended_variant || "—"}
+                  {runtimeVariantLabel(provision?.recommended_variant) ||
+                    provision?.recommended_variant ||
+                    "—"}
                 </span>
                 {onOpenProvision ? (
                   <Btn onClick={onOpenProvision}>
-                    {provision?.need_provision ? t("s.d5c27cb2ba") : t("s.69f5974b47")}
+                    {runtimeButtonLabel}
                   </Btn>
                 ) : null}
               </span>
@@ -515,14 +532,13 @@ export function MorePage({
             desc={legacyMsg.webui || t("s.bc94a9c280")}
             right={<Btn onClick={() => void openLegacy("webui")}>{t("s.65fc81e161")}</Btn>}
           />
-          {/* 「申请专业优化」暂时隐藏（服务还没开）。后端 consult_build 保留，
-              开放时把 SHOW_CONSULT 改成 true 就行，不要删代码。 */}
+          {/* 「申请专业优化」暂时隐藏（服务还没开）。 */}
           {SHOW_CONSULT ? (
             <ListItem
               title={t("s.dd41f552d6")}
-              desc={busyMsg.startsWith(t("s.1a2edaedf8")) ? busyMsg : t("s.db1fdebf6f")}
+              desc={consultDone || t("s.db1fdebf6f")}
               right={
-                <Btn onClick={() => void run(t("s.1a2edaedf8"), "consult_build", { note: "" })}>{t("s.1a2edaedf8")}</Btn>
+                <Btn onClick={() => setConsultOpen(true)}>{t("s.1a2edaedf8")}</Btn>
               }
             />
           ) : null}
@@ -562,6 +578,14 @@ export function MorePage({
       {qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
       ) : null}
+      <ConsultDialog
+        open={consultOpen}
+        onCancel={() => setConsultOpen(false)}
+        onDone={(path) => {
+          setConsultOpen(false);
+          setConsultDone(path);
+        }}
+      />
       <DiagnosticsDialog
         open={diagOpen}
         onCancel={() => setDiagOpen(false)}

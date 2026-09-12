@@ -776,7 +776,8 @@ class PitchShiftTests(unittest.TestCase):
                     n = 0 if fx._fifo is None else int(fx._fifo.size)
                     fifo_peak = max(fifo_peak, n)
                 else:
-                    fifo_peak = max(fifo_peak, fx._out_buf.shape[0], fx._in_buf.shape[0])
+                    self.assertEqual(fx.backend, "wsola")
+                    fifo_peak = max(fifo_peak, fx._wsola._out_buf.shape[0], fx._wsola._in_buf.shape[0])
             self.assertLess(fifo_peak, SR, f"{st:+d} 缓冲 {fifo_peak}")
 
 

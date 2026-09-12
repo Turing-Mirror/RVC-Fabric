@@ -224,7 +224,8 @@ if __name__ == "__main__":
     from tools.torchgate import TorchGate
     import numpy as np
     import FreeSimpleGUI as sg
-    import sounddevice as sd
+    from tools.audio_backend import load_sounddevice, filter_devices
+    sd = load_sounddevice()
     if os.environ.get("TM_REALTIME_WORKER", "").strip() in ("1", "true", "yes"):
         try:
             from tools.worker_protocol import write_status as _boot_status
@@ -330,6 +331,10 @@ if __name__ == "__main__":
             self.use_pv: bool = False
             self.rms_mix_rate: float = 0.25  # follow speech loudness a bit
             self.index_rate: float = 0.0
+            # 音高纠错。默认关：它改变声音，而改变声音的东西必须是用户点开的。
+            # 只删算法算错的三类（八度错误、无声段冒音高、孤立野值），
+            # 不做平滑 —— 平滑会把颤音和爆发力一起抹掉。见 tools/f0_repair.py。
+            self.f0_repair: bool = False
             self.n_cpu: int = min(n_cpu, 4)
             self.f0method: str = "fcpe"
             self.sg_hostapi: str = ""
@@ -994,6 +999,12 @@ if __name__ == "__main__":
                     self.gui_config.index_rate = values["index_rate"]
                     if hasattr(self, "rvc"):
                         self.rvc.change_index_rate(values["index_rate"])
+                elif event == "f0_repair":
+                    # 音高纠错。热键：转着的时候能开关，用户要能当场 A/B。
+                    on = bool(values["f0_repair"])
+                    self.gui_config.f0_repair = on
+                    if hasattr(self, "rvc"):
+                        self.rvc.f0_repair = on
                 elif event == "rms_mix_rate":
                     self.gui_config.rms_mix_rate = values["rms_mix_rate"]
                 elif event in ["pm", "harvest", "crepe", "rmvpe", "fcpe"]:
@@ -1195,6 +1206,7 @@ if __name__ == "__main__":
             self.gui_config.O_noise_reduce = values["O_noise_reduce"]
             self.gui_config.use_pv = values["use_pv"]
             self.gui_config.rms_mix_rate = values["rms_mix_rate"]
+            self.gui_config.f0_repair = bool(values.get("f0_repair", False))
             self.gui_config.index_rate = (
                 0 if not index_path else values["index_rate"]
             )
@@ -1402,17 +1414,18 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = max(1, int(self.gui_config.samplerate) // 100)
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 无模型 DSP 这条路也要切块，用的必须是同一份几何 ——
+            # 两条路块长不一样的话，从 RVC 切到 DSP 会听见一次长度突变。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                max(100, int(self.gui_config.samplerate)),
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
             self._report_load(VC_OPENING_STREAM, 80)
             self.start_stream()
 
@@ -1463,6 +1476,19 @@ if __name__ == "__main__":
             last = getattr(self, "rvc", None)
             if last is not None and not getattr(last, "tgt_sr", 0):
                 last = None
+            # 预热过就用预热的那份。RVC 的构造函数会尽量从 last 里复用
+            # 已经读进显存的权重，所以这一步能把「点开始之后等几秒」变成即时。
+            if last is None:
+                # 预热线程还在读时不要再构造一份：两份权重同时进显存会把卡打满，
+                # 开始变声就会看起来像卡死。
+                import time as _time
+                deadline = _time.time() + 90
+                while getattr(self, "_prewarm_busy", False) and _time.time() < deadline:
+                    _time.sleep(0.05)
+                warm = getattr(self, "_prewarmed", None)
+                if warm is not None and getattr(warm, "tgt_sr", 0):
+                    last = warm
+                self._prewarmed = None
             self.rvc = rvc_for_realtime.RVC(
                 self.gui_config.pitch,
                 self.gui_config.formant,
@@ -1480,6 +1506,9 @@ if __name__ == "__main__":
                 detail = getattr(self.rvc, "_load_error", "") if self.rvc else ""
                 self.rvc = None
                 raise RuntimeError(detail or i18n("模型加载失败"))
+            # 开流时就把当前值带上。不带的话用户要先动一次开关才生效 ——
+            # 而他上次关掉的状态本该被记住。
+            self.rvc.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             if self.function == "fx":
                 self.function = "vc"
             # DirectML shares the GPU with the game via WDDM. Every .cpu() /
@@ -1513,40 +1542,27 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            self.zc = self.gui_config.samplerate // 100
-            self.block_frame = (
-                int(
-                    np.round(
-                        self.gui_config.block_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
+            # 分块几何统一从 tools/block_geometry.py 取。
+            #
+            # 这段算术原来在这里（两处）、benchmark_realtime.py，以及将来离线
+            # 渲染器里各写一份。几份必须完全一致，而**不一致时没有任何征兆**：
+            # 渲染出来的声音听着像那么回事，只是和用户实际听到的差了半个块，
+            # 照着它调出来的参数到用户机器上就不对。所以只留一份。
+            from tools.block_geometry import geometry
+
+            _geo = geometry(
+                self.gui_config.samplerate,
+                self.gui_config.block_time,
+                self.gui_config.crossfade_time,
+                self.gui_config.extra_time,
             )
-            self.block_frame_16k = 160 * self.block_frame // self.zc
-            self.crossfade_frame = (
-                int(
-                    np.round(
-                        self.gui_config.crossfade_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
-            self.sola_buffer_frame = min(self.crossfade_frame, 4 * self.zc)
-            self.sola_search_frame = self.zc
-            self.extra_frame = (
-                int(
-                    np.round(
-                        self.gui_config.extra_time
-                        * self.gui_config.samplerate
-                        / self.zc
-                    )
-                )
-                * self.zc
-            )
+            self.zc = _geo["zc"]
+            self.block_frame = _geo["block_frame"]
+            self.block_frame_16k = _geo["block_frame_16k"]
+            self.crossfade_frame = _geo["crossfade_frame"]
+            self.sola_buffer_frame = _geo["sola_buffer_frame"]
+            self.sola_search_frame = _geo["sola_search_frame"]
+            self.extra_frame = _geo["extra_frame"]
             io_dev = self._io_device
             self.input_wav: torch.Tensor = torch.zeros(
                 self.extra_frame
@@ -2674,6 +2690,7 @@ if __name__ == "__main__":
             sd._initialize()
             devices = sd.query_devices()
             hostapis = sd.query_hostapis()
+            devices = filter_devices(devices, hostapis)
             for hostapi in hostapis:
                 for device_idx in hostapi["devices"]:
                     devices[device_idx]["hostapi_name"] = hostapi["name"]
@@ -2953,6 +2970,7 @@ if __name__ == "__main__":
                 "formant": data.get("formant", 0.0),
                 "index_rate": data.get("index_rate", 0),
                 "rms_mix_rate": data.get("rms_mix_rate", 0),
+                "f0_repair": bool(data.get("f0_repair", False)),
                 "block_time": data.get("block_time", 0.25),
                 "crossfade_length": data.get("crossfade_length", 0.05),
                 "extra_time": data.get("extra_time", 2.5),
@@ -3037,6 +3055,10 @@ if __name__ == "__main__":
 
         def _worker_apply_hot(self, payload: dict):
             """Apply hot-updatable parameters while stream may be running."""
+            if "f0_repair" in payload:
+                self.gui_config.f0_repair = bool(payload["f0_repair"])
+                if getattr(self, "rvc", None) is not None:
+                    self.rvc.f0_repair = self.gui_config.f0_repair
             if "pitch" in payload and payload["pitch"] is not None:
                 self.gui_config.pitch = payload["pitch"]
                 if getattr(self, "rvc", None) is not None:
@@ -3305,6 +3327,72 @@ if __name__ == "__main__":
             self._swap_loader = t
             t.start()
 
+        def _cmd_prewarm(self):
+            """把当前音色提前读进显存，但不开流。
+
+            用户点「开始变声」时最慢的一步是读权重。软件启动之后空着的那段时间
+            正好可以用来做这件事，于是点下去就能说话，不用等。
+
+            读权重必须在命令循环之外做。命令循环是单槽的：预热若占着它，
+            用户再点「开启变声」会被后到的 set 盖掉，底栏就会停在「引擎就绪」
+            再也不开流。
+            """
+            try:
+                if flag_vc:
+                    return
+                if getattr(self, "_prewarm_busy", False):
+                    return
+                # The worker has enumerated devices, but has not started a stream.
+                # GUIConfig therefore does not yet contain the saved voice.
+                with open("configs/inuse/config.json", encoding="utf-8") as f:
+                    saved = json.load(f)
+                if saved.get("dsp_enabled"):
+                    return
+                pth = str(saved.get("pth_path") or "").strip()
+                if not pth or not os.path.isfile(pth):
+                    return
+                warm = getattr(self, "_prewarmed", None)
+                if warm is not None and getattr(warm, "pth_path_str", "") == pth:
+                    return
+                self._prewarm_busy = True
+                def _prewarm_job():
+                    try:
+                        if flag_vc:
+                            return
+                        printt("预热：开始读取 %s", pth)
+                        new = rvc_for_realtime.RVC(
+                            float(saved.get("pitch") or 0),
+                            float(saved.get("formant") or 0),
+                            pth,
+                            str(saved.get("index_path") or ""),
+                            float(saved.get("index_rate") or 0),
+                            int(saved.get("n_cpu") or self.gui_config.n_cpu),
+                            inp_q,
+                            opt_q,
+                            self.config,
+                            None,
+                        )
+                        if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
+                            new.pth_path_str = pth
+                            self._prewarmed = new
+                            printt("预热：完成")
+                        else:
+                            printt("预热：模型读取失败，忽略")
+                    except Exception:
+                        traceback.print_exc()
+                    finally:
+                        self._prewarm_busy = False
+                t = threading.Thread(
+                    target=_prewarm_job,
+                    name="prewarm",
+                    daemon=True,
+                )
+                t.start()
+            except Exception:
+                # 预热失败就当没预热过。用户点开始时会照常读一次权重。
+                self._prewarm_busy = False
+                traceback.print_exc()
+
         def _preload_pending_model(self, job):
             """在命令线程之外读新权重，音频线程只做指针替换。"""
             pth, idx, rate = job
@@ -3400,6 +3488,7 @@ if __name__ == "__main__":
 
         def _attach_rvc(self, new, pth, idx, rate):
             self.rvc = new
+            new.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             # 选了音色就是 RVC：关掉 DSP，function 走 vc。
             self.dsp_only = False
             self.gui_config.dsp_enabled = False
@@ -4045,7 +4134,7 @@ if __name__ == "__main__":
                 return
             if not out_files:
                 first = skipped[0]["reason"] if skipped else "未知错误"
-                if sts_core.is_dml_runtime_failure(first, vc):
+                if sts_core.is_dml_runtime_failure(first, vc) or sts_core.is_oom(first):
                     # 一个文件都没转出来，也就没有写坏任何东西，整批交给冷路径
                     # 重来一次是安全的：那边能把模型挪到 CPU 顶上去。
                     # （reason 是 friendly_error 之后的文本；DirectML 的空
@@ -4191,6 +4280,8 @@ if __name__ == "__main__":
                                 # 转换途中由 _sts_cancelled 直接读命令文件认领；
                                 # 走到这儿说明转换早结束了，什么都不用做。
                                 pass
+                            elif action == "prewarm":
+                                self._cmd_prewarm()
                             elif action == "set":
                                 params = (
                                     cmd.get("params")

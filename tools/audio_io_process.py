@@ -1,7 +1,8 @@
 import numpy as np
 from multiprocessing import Process, Value, Event
 from multiprocessing.shared_memory import SharedMemory
-import sounddevice as sd
+from tools.audio_backend import load_sounddevice
+sd = load_sounddevice()
 import signal
 
 

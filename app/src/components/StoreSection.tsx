@@ -1,4 +1,3 @@
-import { listen } from "@tauri-apps/api/event";
 import {
   Fragment,
   useCallback,
@@ -10,11 +9,8 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  cancelStoreDownload,
   colsForWidth,
   fetchStoreCatalog,
-  installStoreVoice,
-  installStagedVoice,
   stagedVoices,
   revealStagedVoice,
   discardStagedVoice,
@@ -23,6 +19,12 @@ import {
   type StoreCatalog,
   type StoreVoice,
 } from "../lib/voices";
+import {
+  cancelStoreJob,
+  enqueueStoreDownload,
+  useStoreJobs,
+  type VoiceProg,
+} from "../lib/storeJobs";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
@@ -30,6 +32,7 @@ import { t, getTLocale } from "../i18n/t";
 import {
   compareVoiceGroups,
   displayVoiceAuthor,
+  displayVoiceFieldForGroup,
   displayVoiceName,
   displayVoiceOrigin,
   displayVoiceTag,
@@ -46,17 +49,11 @@ import { askConfirm } from "../lib/webDialog";
 import { openExternal } from "../lib/plaza";
 import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
+import { useI18n } from "../i18n";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
-
-type VoiceProg = {
-  percent: number;
-  done: number;
-  total: number;
-  message: string;
-  phase: string;
-};
+const OTHER_SERIES_KEY = "__other__";
 
 const STALL_AFTER_MS = 12_000;
 
@@ -85,20 +82,9 @@ function storePercentLabel(
   return `${Math.round(pct)}%`;
 }
 
-function clearVoiceProg(
-  setProg: Dispatch<SetStateAction<Record<string, VoiceProg>>>,
-  id: string,
-) {
-  setProg((prev) => {
-    if (!(id in prev)) return prev;
-    const next = { ...prev };
-    delete next[id];
-    return next;
-  });
-}
-
 type SeriesNode = {
   key: string;
+  label: string;
   voices: StoreVoice[];
   groups: { raw: string; label: string; voices: StoreVoice[] }[];
 };
@@ -149,6 +135,7 @@ type Props = {
 };
 
 export function StoreSection({ reloadToken, onInstalled }: Props) {
+  const { locale } = useI18n();
   const [cat, setCat] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<Source>("all");
@@ -166,14 +153,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [cols, setCols] = useState(5);
-  // Two concurrent installs plus a queue — same as the Tk shell. Each download
-  // now has its own cancel flag in Rust, so one cancel no longer kills the rest.
-  const MAX_CONCURRENT = 2;
-  const [running, setRunning] = useState<string[]>([]);
-  const [queued, setQueued] = useState<string[]>([]);
-  /** Per-voice download progress. The old single string at the top of the
-   *  section was overwritten when two downloads ran at once. */
-  const [prog, setProg] = useState<Record<string, VoiceProg>>({});
+  // Jobs live in storeJobs so leaving the plaza does not drop an in-flight pack.
+  const jobs = useStoreJobs();
+  const running = jobs.running;
+  const queued = jobs.queued;
+  const prog = jobs.prog;
   const [err, setErr] = useState("");
   const [thirdAck, setThirdAck] = useState(false);
   /** 第三方下完后滚到「确认安装」那张卡。 */
@@ -226,6 +210,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     void loadStaged();
   }, [reloadToken, refresh, loadStaged]);
 
+  // A job that finished while this page was unmounted still has to refresh the
+  // catalog and the staged list, otherwise the card stays on 「下载」.
+  useEffect(() => {
+    if (jobs.generation === 0) return;
+    void loadStaged();
+    void refresh(false);
+    onInstalled?.();
+    if (jobs.lastCompletedThird && jobs.lastCompleted) setScrollToId(jobs.lastCompleted);
+  }, [jobs.generation, jobs.lastCompleted, jobs.lastCompletedThird, loadStaged, refresh, onInstalled]);
+
   useEffect(() => {
     if (!scrollToId || !staged[scrollToId]) return;
     const el = document.getElementById(`store-voice-${scrollToId}`);
@@ -235,51 +229,6 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     btn?.focus();
     setScrollToId("");
   }, [scrollToId, staged]);
-
-  useEffect(() => {
-    // 组件卸载早于 listen 兑现时，直接丢掉 unlisten 句柄会把注册泄漏到进程结束。
-    let disposed = false;
-    let un: (() => void) | undefined;
-    void listen<{
-      voice_id?: string;
-      message?: string;
-      percent?: number;
-      phase?: string;
-      done?: number;
-      total?: number;
-    }>("store-progress", (ev) => {
-      const p = ev.payload;
-      const id = (p.voice_id || "").trim();
-      if (!id) return;
-      const done = Number(p.done);
-      const total = Number(p.total);
-      const fromBytes =
-        Number.isFinite(done) && Number.isFinite(total) && total > 0
-          ? (done / total) * 100
-          : undefined;
-      const pctRaw =
-        p.percent != null && !Number.isNaN(Number(p.percent))
-          ? Number(p.percent)
-          : fromBytes;
-      setProg((prev) => ({
-        ...prev,
-        [id]: {
-          percent: pctRaw != null ? Math.max(0, Math.min(100, pctRaw)) : (prev[id]?.percent ?? 0),
-          done: Number.isFinite(done) ? done : (prev[id]?.done ?? 0),
-          total: Number.isFinite(total) && total > 0 ? total : (prev[id]?.total ?? 0),
-          message: p.message || prev[id]?.message || "",
-          phase: p.phase || prev[id]?.phase || "",
-        },
-      }));
-    }).then((fn) => {
-      if (disposed) fn();
-      else un = fn;
-    });
-    return () => {
-      disposed = true;
-      un?.();
-    };
-  }, []);
 
   // 列数跟着容器宽度走，和模型页同一个函数。
   useEffect(() => {
@@ -319,47 +268,61 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
   const seriesGroups = useMemo((): SeriesNode[] | null => {
     if (grouping !== "series") return null;
-    // 父系列 → 子类。只有 BanG Dream 按乐队拆；蔚蓝档案和其他系列整类平铺。
-    // 没填 series 的落进「其他」；旧清单把乐队写成顶层 series，仍收到 BanG Dream 下。
+    // 父系列 → 子类。清单有 group 就按 group 展开，没有就整类平铺。
+    // 没填 series 的落进「其他」。
     const other = t("s.1a26edf94a");
-    const loc = getTLocale();
-    const map = new Map<string, Map<string, StoreVoice[]>>();
+    const loc = locale;
+    const map = new Map<
+      string,
+      { voices: StoreVoice[]; groups: Map<string, StoreVoice[]> }
+    >();
     for (const v of list) {
-      const parent =
-        voiceParentSeries(v, loc).trim() ||
-        (v.series || "").trim() ||
-        other;
-      const raw = voiceGroupRaw(v);
-      if (!map.has(parent)) map.set(parent, new Map());
-      const gm = map.get(parent)!;
-      if (!gm.has(raw)) gm.set(raw, []);
-      gm.get(raw)!.push(v);
+      const rawSeries = (v.series || "").trim();
+      const parentKey = rawSeries || OTHER_SERIES_KEY;
+      let bucket = map.get(parentKey);
+      if (!bucket) {
+        bucket = { voices: [], groups: new Map() };
+        map.set(parentKey, bucket);
+      }
+      bucket.voices.push(v);
+      const rawGroup = voiceGroupRaw(v);
+      if (!bucket.groups.has(rawGroup)) bucket.groups.set(rawGroup, []);
+      bucket.groups.get(rawGroup)!.push(v);
     }
     const nodes: SeriesNode[] = [...map.entries()]
-      .sort((a, b) => {
-        if (a[0] === other) return 1;
-        if (b[0] === other) return -1;
-        return a[0].localeCompare(b[0], "zh");
-      })
-      .map(([key, gm]) => {
+      .map(([key, bucket]) => {
+        const rawSeries =
+          bucket.voices.map((v) => (v.series || "").trim()).find(Boolean) || "";
+        const parentLabel =
+          displayVoiceFieldForGroup(bucket.voices, "series", loc).trim() ||
+          rawSeries ||
+          other;
+        const gm = bucket.groups;
         const named = [...gm.keys()].some((r) => r);
         const groups = [...gm.entries()]
-          .sort((a, b) => compareVoiceGroups(a[0], b[0], other))
           .map(([raw, voices]) => {
             let label = named
-              ? voiceChildGroup(voices[0], loc) || (raw ? raw : other)
+              ? displayVoiceFieldForGroup(voices, "group", loc).trim() ||
+                (raw ? raw : other)
               : "";
             // 子类名就是角色名时，不要再套一层「分类」。
             if (label && label !== other && isCharacterAsGroup(label, voices, loc)) {
               label = "";
             }
             return { raw, label, voices };
-          });
+          })
+          .sort((a, b) => compareVoiceGroups(a.label, b.label, other, loc));
         return {
           key,
+          label: parentLabel,
           voices: groups.flatMap((g) => g.voices),
           groups,
         };
+      })
+      .sort((a, b) => {
+        if (a.key === OTHER_SERIES_KEY) return 1;
+        if (b.key === OTHER_SERIES_KEY) return -1;
+        return a.label.localeCompare(b.label, loc);
       });
 
     // 系列名等于唯一角色名（如 ATRI / ATRI）时并进「其他」，
@@ -367,16 +330,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     const folded: StoreVoice[] = [];
     const kept: SeriesNode[] = [];
     for (const n of nodes) {
-      if (n.key !== other && isCharacterAsSeries(n.key, n.voices, loc)) {
+      if (n.key !== OTHER_SERIES_KEY && isCharacterAsSeries(n.key, n.voices, loc)) {
         folded.push(...n.voices);
       } else {
         kept.push(n);
       }
     }
     if (folded.length) {
-      let extra = kept.find((n) => n.key === other);
+      let extra = kept.find((n) => n.key === OTHER_SERIES_KEY);
       if (!extra) {
-        extra = { key: other, voices: [], groups: [] };
+        extra = { key: OTHER_SERIES_KEY, label: other, voices: [], groups: [] };
         kept.push(extra);
       }
       extra.voices = extra.voices.concat(folded);
@@ -386,7 +349,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       else extra.groups.push({ raw: rawKey, label: "", voices: folded });
     }
     return kept;
-  }, [grouping, list]);
+  }, [grouping, list, locale]);
 
   const perPage = cols * PAGE_ROWS;
   const totalPages = Math.max(1, Math.ceil(list.length / perPage));
@@ -410,7 +373,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       setSeriesFocus("");
       return;
     }
-    if (group && !node.groups.some((g) => g.label === group)) {
+    if (group && !node.groups.some((g) => g.raw === group)) {
       setSeriesFocus("");
     }
   }, [seriesFocus, seriesGroups]);
@@ -424,65 +387,19 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         seriesGroups.flatMap((s) =>
           s.groups
             .filter((g) => g.label)
-            .map((g) => groupFocusKey(s.key, g.label)),
+            .map((g) => groupFocusKey(s.key, g.raw)),
         ),
       ),
     );
   }, [q, seriesGroups]);
 
-  const startOne = async (v: StoreVoice) => {
-    setRunning((r) => [...r, v.id]);
+  const installStaged = (v: StoreVoice) => {
     setErr("");
-    const label = displayVoiceName(v);
-    try {
-      // 装进本地库的显示名跟当前界面语言一致（仍保留清单里的多语字段作缓存）
-      await installStoreVoice({ ...v, name: label });
-      // 第三方到这里只是「下完了」，还没装。刷新暂存表让按钮换成
-      // 「查看 / 确认安装」；官方源才是真的装好了。
-      await loadStaged();
-      onInstalled?.();
-      await refresh(false);
-      if (v.official === false) setScrollToId(v.id);
-    } catch (e) {
-      setErr(`${label || v.id}：${String(e)}`);
-    } finally {
-      setRunning((r) => r.filter((x) => x !== v.id));
-      clearVoiceProg(setProg, v.id);
-      // Promote the next queued item, if any.
-      setQueued((qq) => {
-        const [next, ...rest] = qq;
-        if (next) {
-          const nv = list.find((x) => x.id === next);
-          if (nv) void startOne(nv);
-        }
-        return rest;
-      });
-    }
-  };
-
-  const installStaged = async (v: StoreVoice) => {
-    setRunning((r) => [...r, v.id]);
-    setErr("");
-    const label = displayVoiceName(v);
-    try {
-      await installStagedVoice({ ...v, name: label });
-      await loadStaged();
-      onInstalled?.();
-      await refresh(false);
-    } catch (e) {
-      setErr(`${label || v.id}：${String(e)}`);
-    } finally {
-      setRunning((r) => r.filter((x) => x !== v.id));
-      clearVoiceProg(setProg, v.id);
-    }
+    enqueueStoreDownload(v, "staged");
   };
 
   const cancelOne = (id: string) => {
-    if (queued.includes(id)) {
-      setQueued((qq) => qq.filter((x) => x !== id));
-      return;
-    }
-    void cancelStoreDownload(id);
+    cancelStoreJob(id);
   };
 
   const viewStaged = async (v: StoreVoice) => {
@@ -532,11 +449,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       if (!ok) return;
       setThirdAck(true);
     }
-    if (running.length >= MAX_CONCURRENT) {
-      setQueued((qq) => [...qq, v.id]);
-      return;
-    }
-    void startOne(v);
+    enqueueStoreDownload(v);
   };
 
   const cardProps = (v: StoreVoice) => ({
@@ -609,7 +522,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                 if (group) n.add(groupFocusKey(parent, group));
                 else {
                   for (const g of node.groups) {
-                    if (g.label) n.add(groupFocusKey(parent, g.label));
+                    if (g.label) n.add(groupFocusKey(parent, g.raw));
                   }
                 }
                 return n;
@@ -623,12 +536,12 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               return (
                 <Fragment key={node.key}>
                   <option value={node.key}>
-                    {node.key} ({node.voices.length})
+                    {node.label} ({node.voices.length})
                   </option>
                   {nested.map((g) => (
                     <option
-                      key={groupFocusKey(node.key, g.label)}
-                      value={groupFocusKey(node.key, g.label)}
+                      key={groupFocusKey(node.key, g.raw)}
+                      value={groupFocusKey(node.key, g.raw)}
                     >
                       {`\u00A0\u00A0${g.label} (${g.voices.length})`}
                     </option>
@@ -654,9 +567,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">{t("s.7fe9bcf336")}</div>
       ) : null}
 
-      {err ? (
+      {err || jobs.error ? (
         <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
-          {err}
+          {err || jobs.error}
         </div>
       ) : null}
 
@@ -677,7 +590,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               // 下拉选中父类：整类平铺，不再先点一个同名子类。
               const parentAll = !!seriesFocus && !focusGroup;
               const groups = focusGroup
-                ? node.groups.filter((g) => g.label === focusGroup)
+                ? node.groups.filter((g) => g.raw === focusGroup)
                 : node.groups;
               return (
                 <div key={node.key} className="mb-3">
@@ -694,7 +607,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                         })
                       }
                     >
-                      <span className="font-semibold text-[14px]">{node.key}</span>
+                        <span className="font-semibold text-[14px]">{node.label}</span>
                       <span className="text-[12px] text-[var(--meta)]">
                         {t("s.c8542337dc", {
                           v0: node.voices.length,
@@ -706,7 +619,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                   {openS ? (
                     nested && !parentAll ? (
                       groups.map((g) => {
-                        const gk = groupFocusKey(node.key, g.label);
+                        const gk = groupFocusKey(node.key, g.raw);
                         const openG = !!focusGroup || expandedGroups.has(gk);
                         return (
                           <div key={gk} className="pl-3 mt-1.5">
@@ -983,6 +896,8 @@ function VoiceCard({
   const [useLocalCover, setUseLocalCover] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const lastMove = useRef({ at: 0, done: -1 });
+  const progressDoneRef = useRef(progress?.done ?? 0);
+  progressDoneRef.current = progress?.done ?? 0;
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
   // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
@@ -1005,7 +920,7 @@ function VoiceCard({
   }, [coverHttp]);
   useEffect(() => {
     if (!busy) return;
-    lastMove.current = { at: Date.now(), done: progress?.done ?? 0 };
+    lastMove.current = { at: Date.now(), done: progressDoneRef.current };
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(tick);
   }, [busy]);

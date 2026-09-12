@@ -17,6 +17,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::paths;
 
 static BUSY: Mutex<bool> = Mutex::new(false);
+/// 这一单要不要静音（见 `ConvertOpts::quiet`）。只在 `run()` 里改，
+/// 而 `run()` 被 BUSY 串行化，所以不会有两单互相改这个标志。
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static REC_BUSY: Mutex<bool> = Mutex::new(false);
 /// 最后一条推出去的进度。
@@ -40,6 +43,12 @@ const MAX_RECORD_SEC: u64 = 30 * 60;
 /// 原版单次推理那几个旋钮。缺省跟 infer-web 单次推理一致。
 #[derive(Debug, Clone)]
 pub struct ConvertOpts {
+    /// 不往界面发 `sts-progress`。
+    ///
+    /// 文字合成借这条链路做它的第二步，但它有自己的进度条（`tts-progress`）。
+    /// 不静音的话，用户开着「语音转换」页跑文字合成，那一页会显示一个它自己
+    /// 没启动过的任务在跑 —— 看着像串台。
+    pub quiet: bool,
     pub filter_radius: u32,
     pub resample_sr: u32,
     pub rms_mix_rate: f64,
@@ -52,6 +61,7 @@ pub struct ConvertOpts {
 impl Default for ConvertOpts {
     fn default() -> Self {
         Self {
+            quiet: false,
             filter_radius: 3,
             resample_sr: 0,
             rms_mix_rate: 0.25,
@@ -366,6 +376,9 @@ fn emit_full_ex(
         }
     }
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(body.clone());
+    if QUIET.load(Ordering::SeqCst) {
+        return;
+    }
     let _ = app.emit("sts-progress", body);
 }
 
@@ -631,6 +644,60 @@ pub fn delete_input_file(root: &Path, input: &str, path: &str) -> Result<(), Str
     }
     std::fs::remove_file(file).map_err(|e| crate::i18n::te("s.stsDeleteFail", &e))?;
     Ok(())
+}
+
+pub fn rename_input_file(
+    root: &Path,
+    input: &str,
+    path: &str,
+    new_name: &str,
+) -> Result<String, String> {
+    let dir = resolve_input_dir(root, input);
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Err(crate::i18n::t("s.stsInputDirMissing"));
+    }
+    if !is_audio_path(file) || !path_under(file, &dir) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+
+    let requested = new_name.trim();
+    if requested.is_empty()
+        || requested == "."
+        || requested == ".."
+        || requested.ends_with('.')
+        || requested.contains('/')
+        || requested.contains('\\')
+    {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+    let mut filename = requested.to_string();
+    if Path::new(&filename).extension().is_none() {
+        if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
+            filename.push('.');
+            filename.push_str(ext);
+        }
+    }
+    if !is_audio_path(Path::new(&filename)) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+
+    let Some(parent) = file.parent() else {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    };
+    if !path_under(parent, &dir) {
+        return Err(crate::i18n::t("s.stsRenameUnsafe"));
+    }
+    let target = parent.join(filename);
+    if target == file {
+        return Ok(file.to_string_lossy().into_owned());
+    }
+    if std::fs::symlink_metadata(&target).is_ok() {
+        return Err(crate::i18n::t("s.stsRenameExists"));
+    }
+    std::fs::rename(file, &target)
+        .map_err(|e| crate::i18n::te("s.stsRenameFail", &e))?;
+    Ok(target.to_string_lossy().into_owned())
 }
 
 pub fn reveal_path(path: &str) -> Result<(), String> {
@@ -1369,6 +1436,7 @@ pub fn run(
         }
         *g = true;
     }
+    QUIET.store(opts.quiet, Ordering::SeqCst);
     // 上一单的终态别留给这一单看。
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     cancel_flag().store(false, Ordering::SeqCst);
@@ -1448,6 +1516,8 @@ pub fn run(
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
     }
+    // 复位必须在 emit 之后：上面那条错误也该跟着静音。
+    QUIET.store(false, Ordering::SeqCst);
     result
 }
 
@@ -1468,7 +1538,7 @@ fn run_inner(
         return Err(crate::i18n::t("s.75b84a31d6").into());
     }
     if !crate::engine_assets::engine_core_ready(root) {
-        let miss = crate::engine_assets::engine_core_missing(root).join("、");
+        let miss = crate::i18n::join_list(&crate::engine_assets::engine_core_missing(root));
         return Err(crate::i18n::te("s.5eb32f1350", &miss));
     }
     let script = worker_script(root);
@@ -1868,6 +1938,17 @@ fn run_inner(
 
 #[cfg(test)]
 mod tests {
+
+    /// quiet 打开时不发 sts-progress。
+    #[test]
+    fn quiet_suppresses_progress_events() {
+        QUIET.store(true, Ordering::SeqCst);
+        assert!(QUIET.load(Ordering::SeqCst));
+        QUIET.store(false, Ordering::SeqCst);
+        assert!(!QUIET.load(Ordering::SeqCst));
+        // 默认必须是不静音的：批量转换那条路要靠这些事件画进度。
+        assert!(!ConvertOpts::default().quiet);
+    }
     use super::*;
     use std::fs;
 
@@ -1998,6 +2079,25 @@ mod tests {
         assert!(delete_input_file(&root, &dir.to_string_lossy(), &wav.to_string_lossy()).is_ok());
         assert!(!wav.exists());
         assert!(outside.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rename_stays_inside_input_and_keeps_audio_extension() {
+        let root = tmp_root();
+        let dir = root.join("in");
+        fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("old.wav");
+        fs::write(&wav, b"1").unwrap();
+        let outside = root.join("outside.wav");
+        fs::write(&outside, b"2").unwrap();
+        let renamed = rename_input_file(&root, &dir.to_string_lossy(), &wav.to_string_lossy(), "new").unwrap();
+        assert_eq!(Path::new(&renamed).file_name().unwrap().to_string_lossy(), "new.wav");
+        assert!(!wav.exists());
+        assert!(Path::new(&renamed).exists());
+        assert!(rename_input_file(&root, &dir.to_string_lossy(), &outside.to_string_lossy(), "x").is_err());
+        fs::write(dir.join("taken.wav"), b"3").unwrap();
+        assert!(rename_input_file(&root, &dir.to_string_lossy(), &renamed, "taken.wav").is_err());
         let _ = fs::remove_dir_all(&root);
     }
 

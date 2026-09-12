@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
@@ -6,9 +6,18 @@ import { DspPresetEditor } from "../components/DspPresetEditor";
 import { openExternal, type PlazaItem } from "../lib/plaza";
 import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
-import { voiceAuthorList, voiceVersionLabel } from "../lib/voiceDisplay";
+import {
+  displayVoiceName,
+  displayVoiceTag,
+  displayVoiceAuthor,
+  formatLocalizedList,
+  voiceAuthorList,
+  voiceVersionLabel,
+} from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
+import { copyText } from "../lib/clipboard";
+import { invoke } from "@tauri-apps/api/core";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
@@ -16,7 +25,9 @@ import { dropListen } from "../lib/tauriListen";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
+import { placePopup, type PopupAnchor, type PopupBox } from "../lib/popupPos";
 import {
   bindIndex,
   clearVoice,
@@ -77,6 +88,7 @@ function ModelsPageImpl({
   focusKind,
   focusNonce = 0,
 }: ModelsPageProps) {
+  const { t: translate } = useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -164,13 +176,8 @@ function ModelsPageImpl({
   }, [dspId, onVoiceChange]);
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
-  // 封面本地化：已装第三方音色的远程封面走本地缓存，不再每次全量重拉。
-  const coverCache = useCoverCache(
-    useMemo(() => models.map((m) => m.cover || "").filter(Boolean), [models]),
-  );
   const [menu, setMenu] = useState<{
-    x: number;
-    y: number;
+    anchor: PopupAnchor;
     model: VoiceModel;
   } | null>(null);
   // 多位作者都有主页：先问用户要打开哪一个。
@@ -192,23 +199,28 @@ function ModelsPageImpl({
   const pageSize = cols * 3;
   const totalPages = Math.max(1, Math.ceil(view.length / pageSize) || 1);
   const pageClamped = Math.min(page, totalPages - 1);
-  const pageView = view.slice(
-    pageClamped * pageSize,
-    pageClamped * pageSize + pageSize,
+  const pageView = useMemo(
+    () => view.slice(pageClamped * pageSize, pageClamped * pageSize + pageSize),
+    [view, pageClamped, pageSize],
+  );
+  // 只解析当前页封面。模型页的其余音色并没有进入 DOM，没必要在首屏为它们
+  // 启动本地缓存下载。
+  const coverCache = useCoverCache(
+    useMemo(() => pageView.map((m) => m.cover || "").filter(Boolean), [pageView]),
   );
 
   const statusSub = useMemo(() => {
-    if (!models.length) return t("s.b4ac696046");
+    if (!models.length) return translate("s.b4ac696046");
     if (query.trim() && view.length !== models.length) {
-      return t("s.e5323dcb69", { v0: models.length, v1: view.length });
+      return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
     }
     const cur = selected?.name || models[0]?.name || "—";
-    return t("s.425fb93e79", { v0: models.length, v1: cur });
-  }, [models, query, view.length, selected]);
+    return translate("s.425fb93e79", { v0: models.length, v1: cur });
+  }, [models, query, view.length, selected, translate]);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (fresh = false) => {
     try {
-      const cat = await listVoices();
+      const cat = await listVoices(fresh ? { fresh: true } : undefined);
       setModels(cat.models || []);
       const idx = cat.selected_idx ?? -1;
       if (idx >= 0 && cat.models?.[idx]) {
@@ -305,8 +317,8 @@ function ModelsPageImpl({
   /**
    * 「⋯」按钮打开菜单。位置从按钮量，不是从鼠标量。
    *
-   * 菜单右边缘对齐按钮右边缘：卡片在最后一列时，从按钮左边缘往右展开会顶出
-   * 窗口。宽度和 MoreMenu 里的 min-w 对上。
+   * 菜单右边缘对齐按钮右边缘。真正的 left/top/高度在 MoreMenu 量完自身后再
+   * 夹进窗口，这里只把按钮的盒子传过去。
    */
   const openMenu = (e: MouseEvent<HTMLButtonElement>, model: VoiceModel) => {
     // 不让这一下冒泡到上面那个「点别处就关」，否则刚开就被关掉。
@@ -316,10 +328,8 @@ function ModelsPageImpl({
       return;
     }
     const r = e.currentTarget.getBoundingClientRect();
-    const w = 168;
     setMenu({
-      x: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
-      y: r.bottom + 6,
+      anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
       model,
     });
   };
@@ -404,7 +414,7 @@ function ModelsPageImpl({
                 try {
                   const r = await importVoices(selected?.dir);
                   if (r.errors?.length) {
-                    setMsg(r.errors.map((e) => e.error).join("；"));
+                    setMsg(formatLocalizedList(r.errors.map((e) => e.error)));
                   }
                   await reload();
                 } catch (e) {
@@ -416,7 +426,7 @@ function ModelsPageImpl({
             >{t("s.54b3625b92")}</Btn>
             <Btn
               onClick={async () => {
-                await reload();
+                await reload(true);
                 setMsg(t("s.58b4af2771"));
               }}
             >{t("s.38108eaa1d")}</Btn>
@@ -534,6 +544,9 @@ function ModelsPageImpl({
               const src = resolveCover(v.cover, coverCache);
               const authors = voiceAuthorList(v);
               const ver = voiceVersionLabel(v.date);
+              const title = displayVoiceName(v);
+              const tag = displayVoiceTag(v) || t("s.c4301894a2");
+              const author = displayVoiceAuthor(v);
               return (
                 <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
@@ -545,9 +558,11 @@ function ModelsPageImpl({
                         // 只剩胸口或腿。与首页 HomePage 一致。
                         className="absolute inset-0 w-full h-full object-contain"
                         draggable={false}
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
-                      <span>{(v.name || "?").slice(0, 4)}</span>
+                      <span>{(title || "?").slice(0, 4)}</span>
                     )}
                     {/* 左上角：发布日期当版本号（v26.07.31），方便认同一角色的
                         不同版本；下面才是「文件丢失」。都没有就不占位。 */}
@@ -571,20 +586,20 @@ function ModelsPageImpl({
                     ) : null}
                   </div>
                   <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
-                    {v.tag || t("s.c4301894a2")}
+                    {tag}
                   </div>
                   <div className="text-[14.5px] font-semibold mt-0.5 truncate">
-                    {v.name}
+                    {title}
                   </div>
                   <div
                     className="text-xs text-[var(--meta)] mt-0.5 truncate"
-                    title={authors.map((a) => a.name).join("、") || undefined}
+                    title={author || undefined}
                   >
                     {authors.length
                       ? (() => {
                           const links = voiceAuthorLinks(v);
                           const line = t("s.7feea73fa3", {
-                            v0: authors.map((a) => a.name).join("、"),
+                            v0: author,
                           });
                           if (!links.length) return line;
                           return (
@@ -862,8 +877,7 @@ function ModelsPageImpl({
 
       {menu ? (
         <MoreMenu
-          x={menu.x}
-          y={menu.y}
+          anchor={menu.anchor}
           model={menu.model}
           onClose={() => setMenu(null)}
           onDone={async () => {
@@ -940,8 +954,7 @@ function hasMoreActions(m: VoiceModel): boolean {
  * 就等于没做。现在它挂在「使用」旁边一个看得见的按钮上。
  */
 function MoreMenu({
-  x,
-  y,
+  anchor,
   model,
   onClose,
   onDone,
@@ -949,8 +962,7 @@ function MoreMenu({
   onPickAuthors,
   onEditCover,
 }: {
-  x: number;
-  y: number;
+  anchor: PopupAnchor;
   model: VoiceModel;
   onClose: () => void;
   onDone: () => void;
@@ -962,6 +974,26 @@ function MoreMenu({
 }) {
   const items: { label: string; action: () => void; danger?: boolean }[] = [];
   if (model.source === "user_data" && model.dir) {
+    items.push({
+      label: t("neptune.exportModel"),
+      action: async () => {
+        onClose();
+        onMessage(t("neptune.exportBusy"));
+        try {
+          const path = await invoke<string | null>("voices_export_model", { modelDir: model.dir });
+          onMessage(path ? t("neptune.exportDone") : "");
+        } catch (e) { onMessage(String(e)); }
+      },
+    });
+    items.push({
+      label: t("neptune.exportSummary"),
+      action: async () => {
+        const authors = voiceAuthorList(model).map((a) => [a.name, a.url].filter(Boolean).join(" · "));
+        const text = [model.name, model.tag, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
+        onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"));
+        onClose();
+      },
+    });
     items.push({
       label: t("s.1cd80fd7a8"),
       action: async () => {
@@ -1060,9 +1092,48 @@ function MoreMenu({
     });
   }
   return (
+    <MoreMenuPopup anchor={anchor} items={items} />
+  );
+}
+
+function MoreMenuPopup({
+  anchor,
+  items,
+}: {
+  anchor: PopupAnchor;
+  items: { label: string; action: () => void; danger?: boolean }[];
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<PopupBox | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = ref.current;
+      if (!el) return;
+      setBox(
+        placePopup(
+          anchor,
+          { width: Math.max(el.offsetWidth, el.scrollWidth), height: el.scrollHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [anchor, items.length]);
+
+  return (
     <div
-      className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)]"
-      style={{ left: x, top: y }}
+      ref={ref}
+      className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden"
+      style={{
+        left: box?.left ?? anchor.right,
+        top: box?.top ?? anchor.bottom + 6,
+        maxHeight: box?.maxHeight,
+        maxWidth: "calc(100vw - 16px)",
+        visibility: box ? "visible" : "hidden",
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {items.map((it) => (
@@ -1070,7 +1141,7 @@ function MoreMenu({
           key={it.label}
           type="button"
           className={[
-            "block w-full text-left border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
+            "block w-full text-left whitespace-nowrap border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
             it.danger
               ? "text-[#c44] hover:bg-[color-mix(in_srgb,#c44_10%,transparent)]"
               : "text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]",

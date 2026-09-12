@@ -108,9 +108,9 @@ fn spec_for(kind: &str) -> Option<Spec> {
         // 再宽就成了一块横幅，压在游戏画面上碍事；再窄音色名要截断。
         "overlay" => Spec {
             title: crate::i18n::t("overlay.title"),
-            w: 208.0,
+            w: 260.0,
             h: 52.0,
-            min_w: 208.0,
+            min_w: 260.0,
             min_h: 52.0,
             overlay: true,
         },
@@ -237,6 +237,7 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
         crate::i18n::te("s.79a71841b6", &(e))
     })?;
     release_open(&label);
+    crate::browser_keys::configure(&win);
     logging::shell_log!(crate::i18n::te("s.e1e2bc3a99", &kind));
 
     // `.center()` 居的是**主显示器**的中。用户把主窗口拖到副屏上用的时候，

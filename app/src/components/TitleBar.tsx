@@ -46,9 +46,13 @@ export function TitleBar({
     ),
   }));
 
+  // Keep the navigation hit area unchanged and give the title bar a little
+  // more vertical breathing room. The old 54px bar left roughly 8px above
+  // the 37px segment control, which made the menu feel pressed against the
+  // top edge on the light background.
   return (
     <header
-      className="flex-none h-[54px] flex items-center pl-[22px] pr-2"
+      className="flex-none h-[60px] flex items-center pl-[22px] pr-2"
       data-tauri-drag-region
     >
       <img

@@ -1,15 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { dropListen } from "../lib/tauriListen";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import {
+  formatLocalizedList,
+  localizedTextValue,
+} from "../lib/voiceDisplay";
+import {
   getAssetsStatus,
   type AssetsStatus,
 } from "../lib/downloadModels";
+import {
+  startEngineCoreDownload,
+  startExtraDownload,
+  useExtraJobs,
+  type ExtraProgress,
+} from "../lib/extraJobs";
+import { useI18n } from "../i18n";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -21,6 +30,8 @@ type Item = {
   recommended?: boolean;
   order?: number;
   notes?: string;
+  label_i18n?: Record<string, string>;
+  notes_i18n?: Record<string, string>;
   size_bytes: number;
   files: string[];
   installed: boolean;
@@ -30,23 +41,6 @@ type List = {
   available?: boolean;
   items?: Item[];
   busy?: boolean;
-};
-
-type Progress = {
-  key: string;
-  phase: "run" | "done" | "error";
-  done?: number;
-  total?: number;
-  message?: string;
-};
-
-type ProvProgress = {
-  phase?: string;
-  done?: number;
-  total?: number;
-  percent?: number;
-  message?: string;
-  speed_label?: string;
 };
 
 /** 打开下载弹窗时预选哪一类；弹窗内仍可切换。 */
@@ -70,20 +64,17 @@ function inferGroup(key: string): string {
   return "other";
 }
 
-/** Prefer locale pack extras.items.<key>; fall back to catalog Chinese with prefix strip. */
-function extraLabel(it: Item, cat: Category): string {
+/** Prefer the locale pack, then the catalog's locale map, then its primary value. */
+function extraLabel(it: Item): string {
   const localized = t(`extras.items.${it.key}.label`);
   if (localized && !localized.startsWith("extras.items.")) return localized;
-  let l = it.label || it.key;
-  if (cat === "separate") l = l.replace(/^人声分离\s*[·•]\s*/, "");
-  if (cat === "train") l = l.replace(/^训练音色\s*[·•]\s*/, "");
-  return l;
+  return localizedTextValue(it.label_i18n) || it.label || it.key;
 }
 
 function extraNotes(it: Item): string {
   const localized = t(`extras.items.${it.key}.notes`);
   if (localized && !localized.startsWith("extras.items.")) return localized;
-  return (it.notes || "").trim();
+  return localizedTextValue(it.notes_i18n) || (it.notes || "").trim();
 }
 
 function categoryBlurb(cat: Category): string {
@@ -118,19 +109,17 @@ export function ExtrasPanel({
   /** 正在下载时告诉外面的弹窗别让点空白关掉。 */
   onBusyChange?: (busy: boolean) => void;
 }) {
+  useI18n();
+  const jobs = useExtraJobs();
+  const { busyKeys, coreBusy, progByKey, coreProg } = jobs;
   const [list, setList] = useState<List | null>(null);
   const [assets, setAssets] = useState<AssetsStatus | null>(null);
-  const [progByKey, setProgByKey] = useState<Record<string, Progress>>({});
-  const [coreProg, setCoreProg] = useState<ProvProgress | null>(null);
   const [msg, setMsg] = useState("");
-  const [busyKeys, setBusyKeys] = useState<Record<string, true>>({});
   const [removeKey, setRemoveKey] = useState("");
-  const [coreBusy, setCoreBusy] = useState(false);
   const [category, setCategory] = useState<Category>(
     filter === "train" ? "train" : "separate",
   );
   const [page, setPage] = useState(0);
-  const startingRef = useRef<Record<string, true>>({});
 
   /** null = 还在查；false = 缺引擎资源；true = 已就绪 */
   const engineReady: boolean | null =
@@ -156,35 +145,15 @@ export function ExtrasPanel({
     setAssets(null);
     setPage(0);
     setCategory(filter === "train" ? "train" : "separate");
-    setCoreProg(null);
     void load();
-    let disposed = false;
-    const unsubs: Array<() => void> = [];
-    void listen<Progress>("extra-progress", (ev) => {
-      const p = ev.payload;
-      if (!p?.key) return;
-      setProgByKey((m) => ({ ...m, [p.key]: p }));
-      if (p.phase === "error") setMsg(p.message || t("s.e0dab22b1a"));
-    }).then((fn) => {
-      if (disposed) dropListen(fn);
-      else unsubs.push(fn);
-    });
-    // 引擎资源下载复用 provision-progress（phase=engine-core）
-    void listen<ProvProgress>("provision-progress", (ev) => {
-      if (ev.payload?.phase === "engine-core" || String(ev.payload?.phase || "").includes("engine")) {
-        setCoreProg(ev.payload);
-      }
-    }).then((fn) => {
-      if (disposed) dropListen(fn);
-      else unsubs.push(fn);
-    });
-    return () => {
-      disposed = true;
-      unsubs.forEach((f) => dropListen(f));
-    };
     // `load` 每次渲染都是新函数，列进依赖会变成「渲染一次拉一次清单」。
     // 这个 effect 要的是「挂载时拉一次，filter 变了再拉一次」。
   }, [filter]);
+
+  useEffect(() => {
+    if (jobs.generation === 0) return;
+    void load();
+  }, [jobs.generation]);
 
   const filtered = useMemo(() => {
     const all = list?.items || [];
@@ -198,53 +167,12 @@ export function ExtrasPanel({
     pageClamped * PER_PAGE + PER_PAGE,
   );
 
-  const downloadEngineCore = async () => {
-    if (coreBusy || Object.keys(busyKeys).length > 0) return;
-    setCoreBusy(true);
-    setMsg("");
-    setCoreProg({
-      phase: "engine-core",
-      done: 0,
-      total: 1,
-      percent: 0,
-      message: t("s.c7ea0cf156"),
-    });
-    try {
-      await invoke("assets_ensure_engine_core");
-      setMsg(t("s.33dadd8dd6"));
-      setAssets(await getAssetsStatus());
-      setCoreProg(null);
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setCoreBusy(false);
-    }
+  const downloadEngineCore = () => {
+    startEngineCoreDownload();
   };
 
-  const start = async (key: string) => {
-    if (coreBusy || busyKeys[key] || startingRef.current[key]) return;
-    if (engineReady === false) {
-      setMsg(t("s.e8a77f003d"));
-      return;
-    }
-    startingRef.current[key] = true;
-    setBusyKeys((m) => ({ ...m, [key]: true }));
-    setMsg("");
-    try {
-      await invoke("extra_download", { key });
-      // 同上：`load` 开头清 msg，先刷新再报「下载完成」，否则这句永远看不见。
-      await load();
-      setMsg(t("s.4bbcf94739"));
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      delete startingRef.current[key];
-      setBusyKeys((m) => {
-        const n = { ...m };
-        delete n[key];
-        return n;
-      });
-    }
+  const start = (key: string) => {
+    startExtraDownload(key, engineReady);
   };
 
   /**
@@ -257,7 +185,7 @@ export function ExtrasPanel({
     if (coreBusy || removeKey || busyKeys[it.key]) return;
     const ok = await askConfirm(
       t("s.extraRemoveConfirm", {
-        v0: extraLabel(it, category),
+        v0: extraLabel(it),
         v1: mb(it.size_bytes) || t("s.2b9d013177"),
       }),
     );
@@ -353,7 +281,7 @@ export function ExtrasPanel({
                 {t("extras.engineDesc")}
                 {assets?.engine_core_missing?.length
                   ? t("extras.missingList", {
-                      list: assets.engine_core_missing.join("、"),
+                      list: formatLocalizedList(assets.engine_core_missing),
                     })
                   : ""}
               </p>
@@ -407,7 +335,6 @@ export function ExtrasPanel({
                 <ItemRow
                   key={it.key}
                   it={it}
-                  category={category}
                   busy={!!busyKeys[it.key]}
                   progress={progByKey[it.key]}
                   removeKey={removeKey}
@@ -444,7 +371,7 @@ export function ExtrasPanel({
           // 下载失败现在是多行的（一句人话 + 试过的源 + 怎么办 + 技术细节），
           // 不换行的话整段挤成一坨，等于白写。
           <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line break-words">
-            {msg}
+            {msg || jobs.msg}
           </p>
         ) : null}
 
@@ -511,7 +438,6 @@ export function ExtrasDialog({
 
 function ItemRow({
   it,
-  category,
   busy,
   progress,
   removeKey,
@@ -520,9 +446,8 @@ function ItemRow({
   onRemove,
 }: {
   it: Item;
-  category: Category;
   busy: boolean;
-  progress?: Progress;
+  progress?: ExtraProgress;
   removeKey: string;
   disabled?: boolean;
   onStart: (key: string) => void;
@@ -537,7 +462,7 @@ function ItemRow({
       <div className="flex items-center gap-4">
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] leading-snug">
-            {extraLabel(it, category)}
+            {extraLabel(it)}
             {it.recommended ? (
               <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
             ) : null}

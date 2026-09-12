@@ -10,9 +10,11 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
 use crate::catalog;
+use crate::config;
 use crate::download::{self, ProgressFn};
 use crate::extract;
 use crate::paths;
+use crate::worker;
 
 static PROVISION_BUSY: Mutex<bool> = Mutex::new(false);
 /// Shared with download layer (async-fetcher shutdown).
@@ -28,10 +30,7 @@ fn cancel_flag() -> Arc<AtomicBool> {
 pub fn recommend_variant(gpu_names: &[String]) -> (String, String) {
     let joined = gpu_names.join(" | ").to_ascii_lowercase();
     if joined.is_empty() {
-        return (
-            "unknown".into(),
-            crate::i18n::t("s.47c37d6efa"),
-        );
+        return ("unknown".into(), crate::i18n::t("s.47c37d6efa"));
     }
     if joined.contains("rtx 50")
         || joined.contains("rtx50")
@@ -213,7 +212,10 @@ fn enumerate_gpus() -> Vec<String> {
     };
 
     fn wide(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     // GUID_DEVCLASS_DISPLAY.
@@ -260,8 +262,7 @@ fn enumerate_gpus() -> Vec<String> {
                 continue;
             }
             let mut dev: HKEY = std::ptr::null_mut();
-            if RegOpenKeyExW(class_key, wide(&sub).as_ptr(), 0, KEY_READ, &mut dev)
-                != ERROR_SUCCESS
+            if RegOpenKeyExW(class_key, wide(&sub).as_ptr(), 0, KEY_READ, &mut dev) != ERROR_SUCCESS
             {
                 continue;
             }
@@ -310,14 +311,22 @@ pub fn read_package_meta_variant(root: &Path) -> Option<String> {
     v.get("variant")
         .or_else(|| v.get("runtime_variant"))
         .and_then(|x| x.as_str())
-        .map(|s| s.trim().to_string())
+        .and_then(paths::normalize_runtime_variant)
+        .map(str::to_string)
         // The universal Setup writes an empty variant on purpose: the app picks
         // it after detecting the GPU. Empty must read as "not chosen", not as a
         // variant named "".
         .filter(|s| !s.is_empty())
 }
 
-fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) -> Result<(), String> {
+pub fn read_runtime_meta(root: &Path, variant: &str) -> Option<Value> {
+    let path = paths::runtime_meta_path(root, variant);
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+}
+
+fn runtime_meta_value(variant: &str, label: &str, version: &str) -> Value {
     let (accel, use_dml, summary) = match variant {
         "amd" => ("dml", true, crate::i18n::t("s.ab31cc9ebb")),
         "nvidia50" => ("cuda", false, crate::i18n::t("s.083e3aad12")),
@@ -327,7 +336,7 @@ fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) ->
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let data = json!({
+    json!({
         "variant": variant,
         "label": label,
         "accel_default": accel,
@@ -337,20 +346,78 @@ fn write_package_meta(root: &Path, variant: &str, label: &str, version: &str) ->
         "runtime_source": "cnb_release",
         "provisioned_at_unix": now,
         "tagged": true,
-    });
+    })
+}
+
+pub fn write_runtime_meta_at(
+    runtime_dir: &Path,
+    variant: &str,
+    label: &str,
+    version: &str,
+) -> Result<(), String> {
+    let data = runtime_meta_value(variant, label, version);
+    let path = runtime_dir.join("runtime.json");
+    fs::write(
+        &path,
+        serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
+}
+
+pub fn write_package_meta(
+    root: &Path,
+    variant: &str,
+    label: &str,
+    version: &str,
+) -> Result<(), String> {
+    let data = runtime_meta_value(variant, label, version);
     let path = paths::package_meta_path(root);
     fs::write(
         &path,
         serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    let managed = paths::runtime_variant_dir(root, variant);
+    if managed.is_dir() {
+        write_runtime_meta_at(&managed, variant, label, version)?;
+    }
     Ok(())
 }
 
+fn runtime_meta_field(root: &Path, variant: &str, key: &str) -> String {
+    read_runtime_meta(root, variant)
+        .and_then(|meta| meta.get(key).and_then(|v| v.as_str()).map(str::to_string))
+        .or_else(|| {
+            let root_meta = fs::read_to_string(paths::package_meta_path(root))
+                .ok()
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok())?;
+            root_meta
+                .get(key)
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_default()
+}
+
+pub fn activate_runtime(root: &Path, variant: &str) -> Result<(), String> {
+    let id = paths::normalize_runtime_variant(variant)
+        .ok_or_else(|| format!("unsupported runtime variant: {variant}"))?;
+    if !paths::runtime_variant_ready(root, id) {
+        return Err(crate::i18n::t("runtimeMigration.runtimeNotReady"));
+    }
+    let label = runtime_meta_field(root, id, "label");
+    let label = if label.is_empty() {
+        id.to_string()
+    } else {
+        label
+    };
+    let version = runtime_meta_field(root, id, "runtime_version");
+    config::set_runtime_variant(root, id)?;
+    write_package_meta(root, id, &label, &version)
+}
+
 fn cache_dir(root: &Path) -> PathBuf {
-    let d = paths::user_data(root)
-        .join("update_cache")
-        .join("runtime");
+    let d = paths::user_data(root).join("update_cache").join("runtime");
     let _ = fs::create_dir_all(&d);
     d
 }
@@ -366,11 +433,17 @@ fn format_size(n: u64) -> String {
 }
 
 pub fn provision_status(root: &Path) -> Value {
+    let migration_required = paths::runtime_migration_required(root);
     let ready = paths::runtime_ready(root);
     let pyw = paths::runtime_pythonw(root);
     let gpus = list_gpus();
     let (recommended, reason) = recommend_variant(&gpus);
-    let installed = read_package_meta_variant(root);
+    let active = paths::active_runtime_variant(root);
+    let legacy_variant = read_package_meta_variant(root);
+    let legacy_ready = paths::legacy_runtime_dir(root)
+        .map(|dir| paths::runtime_tree_ready(&dir))
+        .unwrap_or(false);
+    let installed = active.clone().or(legacy_variant.clone());
     let worker_script = paths::worker_script(root).is_file();
     let need_provision = !ready;
     let busy = *PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
@@ -391,7 +464,8 @@ pub fn provision_status(root: &Path) -> Value {
         recommended.as_str()
     };
     for (id, fallback_label) in &variant_defs {
-        let (sz, lab) = match catalog::resolve_runtime_spec(id, true) {
+        let id = *id;
+        let (sz, lab, latest_version) = match catalog::resolve_runtime_spec(id, true) {
             Ok(spec) => {
                 let s = spec.size_bytes.max(spec.part.size_bytes);
                 let l = if spec.label.is_empty() {
@@ -399,25 +473,61 @@ pub fn provision_status(root: &Path) -> Value {
                 } else {
                     spec.label
                 };
-                (s, l)
+                (s, l, spec.version)
             }
-            Err(_) => (0u64, fallback_label.clone()),
+            Err(_) => (0u64, fallback_label.clone(), String::new()),
         };
-        if *id == rec_key {
+        if id == rec_key {
             size_hint = sz;
             label = lab.clone();
         }
+        let is_managed = paths::runtime_variant_ready(root, id);
+        let is_legacy = legacy_ready && legacy_variant.as_deref() == Some(id);
+        let installed_for_variant = is_managed || is_legacy;
+        let active_for_variant =
+            active.as_deref() == Some(id) || (active.is_none() && is_legacy && !migration_required);
+        let installed_version = if installed_for_variant {
+            runtime_meta_field(root, id, "runtime_version")
+        } else {
+            String::new()
+        };
+        let update_available = !installed_version.is_empty()
+            && !latest_version.is_empty()
+            && crate::update::compare_versions(&installed_version, &latest_version) < 0;
         variants.push(json!({
             "id": id,
             "label": fallback_label,
             "size_bytes": sz,
             "size_label": format_size(sz),
+            "installed": installed_for_variant,
+            "active": active_for_variant,
+            "installed_version": if installed_version.is_empty() { Value::Null } else { json!(installed_version) },
+            "latest_version": if latest_version.is_empty() { Value::Null } else { json!(latest_version) },
+            "update_available": update_available,
         }));
     }
+
+    let active_latest_version = active
+        .as_deref()
+        .or_else(|| {
+            if migration_required {
+                legacy_variant.as_deref()
+            } else {
+                None
+            }
+        })
+        .and_then(|id| catalog::resolve_runtime_spec(id, true).ok())
+        .map(|spec| spec.version)
+        .filter(|version| !version.is_empty());
+    let installed_version = installed
+        .as_deref()
+        .map(|id| runtime_meta_field(root, id, "runtime_version"))
+        .filter(|version| !version.is_empty());
 
     json!({
         "runtime_ready": ready,
         "need_provision": need_provision,
+        "runtime_migration_required": migration_required,
         "runtime_python": pyw.map(|p| p.to_string_lossy().to_string()),
         "worker_script_ok": worker_script,
         "product_root": root.to_string_lossy(),
@@ -430,10 +540,15 @@ pub fn provision_status(root: &Path) -> Value {
         "recommended_size_bytes": size_hint,
         "recommended_size_label": format_size(size_hint),
         "installed_variant": installed,
+        "installed_version": installed_version,
+        "latest_runtime_version": active_latest_version,
+        "worker_alive": crate::worker::is_worker_alive(root),
         "download_supported": true,
         "busy": busy,
         "variants": variants,
-        "message": if need_provision {
+        "message": if migration_required {
+            crate::i18n::t("runtimeMigration.description")
+        } else if need_provision {
             crate::i18n::t("s.2ae4c43ac6")
         } else if !worker_script {
             crate::i18n::t("s.ee7e83d91d")
@@ -509,6 +624,60 @@ pub fn cancel_provision() {
     cancel_flag().store(true, Ordering::SeqCst);
 }
 
+fn replace_managed_runtime(root: &Path, variant: &str, staged: &Path) -> Result<(), String> {
+    let target = paths::runtime_variant_dir(root, variant);
+    let backup = paths::update_cache(root)
+        .join("runtime_backup")
+        .join(variant);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    if let Some(parent) = backup.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    // A previous process may have stopped between the two renames. Restore
+    // that old tree before starting a new replacement attempt.
+    if !target.exists() && backup.exists() {
+        let _ = fs::rename(&backup, &target);
+    }
+    if target.exists() {
+        if !target.is_dir() {
+            return Err(crate::i18n::te(
+                "runtimeMigration.targetExists",
+                &(target.display()),
+            ));
+        }
+        if backup.exists() {
+            fs::remove_dir_all(&backup).map_err(|e| e.to_string())?;
+        }
+        fs::rename(&target, &backup).map_err(|e| crate::i18n::te("s.90e6bba99d", &(e)))?;
+    }
+
+    if let Err(error) = fs::rename(staged, &target) {
+        if backup.exists() && !target.exists() {
+            let _ = fs::rename(&backup, &target);
+        }
+        return Err(crate::i18n::te("s.90e6bba99d", &(error)));
+    }
+    let _ = fs::remove_dir_all(&backup);
+    Ok(())
+}
+
+fn ensure_worker_background(root: PathBuf) {
+    std::thread::spawn(move || {
+        let r = crate::worker::ensure_worker_and_devices(&root, 90_000);
+        let n = r
+            .get("input_devices")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("n".to_string(), n.to_string());
+        crate::logging::shell_log!("{}", crate::i18n::t_vars("s.5c5f9ed8e4", &vars));
+    });
+}
+
 /// Download + extract Runtime for *variant*. Emits `provision-progress` events.
 pub fn run_provision(
     app: AppHandle,
@@ -528,27 +697,36 @@ pub fn run_provision(
     cancel_flag().store(false, Ordering::SeqCst);
 
     let result: Result<Value, String> = (|| {
-        let mut var = variant.trim().to_ascii_lowercase();
-        if var != "nvidia" && var != "amd" && var != "nvidia50" {
-            var = "nvidia".to_string();
+        let var = paths::normalize_runtime_variant(&variant)
+            .unwrap_or("nvidia")
+            .to_string();
+        if paths::runtime_migration_required(&root) {
+            return Err(crate::i18n::t("runtimeMigration.required"));
         }
 
-        if paths::runtime_ready(&root) && !force {
-            write_package_meta(&root, &var, &var, "").ok();
-            emit_progress(&app, "done", 1, 1, &crate::i18n::t("s.e1b39abf92"));
+        let active = paths::active_runtime_variant(&root);
+        if paths::runtime_variant_ready(&root, &var) && !force {
+            if worker::is_worker_alive(&root) && active.as_deref() != Some(var.as_str()) {
+                return Err(crate::i18n::t("runtimeMigration.stopEngine"));
+            }
+            activate_runtime(&root, &var)?;
+            if !worker::is_worker_alive(&root) {
+                ensure_worker_background(root.clone());
+            }
+            emit_progress(&app, "done", 1, 1, &crate::i18n::t("runtimeMigration.done"));
             return Ok(json!({
                 "ok": true,
-                "message": crate::i18n::t("s.227d108a35"),
+                "message": crate::i18n::t("runtimeActions.switchDone"),
                 "variant": var,
+                "action": "switch",
+                "version": runtime_meta_field(&root, &var, "runtime_version"),
             }));
         }
 
-        if force {
-            let rt = root.join("Runtime");
-            if rt.exists() {
-                emit_progress(&app, "prepare", 0, 1, &crate::i18n::t("s.7a048346cb"));
-                let _ = fs::remove_dir_all(&rt);
-            }
+        // Replacing or activating a Runtime while its Python worker is using
+        // the files is unsafe. The old tree is kept until the user stops it.
+        if worker::is_worker_alive(&root) {
+            return Err(crate::i18n::t("runtimeMigration.stopEngine"));
         }
 
         emit_progress(&app, "catalog", 0, 1, &crate::i18n::t("s.bd45f9d523"));
@@ -561,7 +739,13 @@ pub fn run_provision(
         // it unverified is arbitrary code execution. download_request skips
         // verification on an empty hash, and the cache-reuse branch below would
         // also accept whatever is already on disk, so refuse up front.
-        if part.sha256.chars().filter(|c| c.is_ascii_hexdigit()).count() != 64 {
+        if part
+            .sha256
+            .chars()
+            .filter(|c| c.is_ascii_hexdigit())
+            .count()
+            != 64
+        {
             return Err(crate::i18n::t("s.09dfaea8c0"));
         }
 
@@ -576,7 +760,11 @@ pub fn run_provision(
                 "s.c5f9b6cc72",
                 &[
                     &spec.label,
-                    if spec.version.is_empty() { "?" } else { &spec.version },
+                    if spec.version.is_empty() {
+                        "?"
+                    } else {
+                        &spec.version
+                    },
                     &format_size(size),
                     &conns_preview.to_string(),
                 ],
@@ -589,6 +777,12 @@ pub fn run_provision(
         } else {
             part.name.clone()
         });
+
+        // A deliberate update / re-download must not silently reuse the old
+        // archive. A failed download still leaves the installed tree intact.
+        if force && dest_file.is_file() {
+            let _ = fs::remove_file(&dest_file);
+        }
 
         // Reuse the cache only after verifying it. A stale or truncated file
         // must be dropped, never trusted because it happens to exist.
@@ -651,7 +845,11 @@ pub fn run_provision(
                     }
                     other if other.starts_with("download:") => crate::i18n::tn(
                         "s.3de4870b5b",
-                        &[&format_size(done), &format_size(total), &format_speed(speed)],
+                        &[
+                            &format_size(done),
+                            &format_size(total),
+                            &format_speed(speed),
+                        ],
                     ),
                     _ if done == 0 => crate::i18n::te("s.11a39009ac", &(format_size(total))),
                     _ => crate::i18n::tn(
@@ -689,9 +887,18 @@ pub fn run_provision(
         // Several GB of tar takes minutes. A single static line with a bar that
         // never moves is indistinguishable from a hang, so report bytes read.
         emit_progress(&app, "extract", 0, 1, &crate::i18n::t("s.e5d3918de2"));
+        let staged = paths::update_cache(&root)
+            .join("runtime_install")
+            .join(&var);
+        let staging = paths::update_cache(&root)
+            .join("runtime_extract")
+            .join(&var);
+        if staged.exists() {
+            let _ = fs::remove_dir_all(&staged);
+        }
         {
             let app_x = app.clone();
-            extract::extract_runtime_tar_with_progress(&dest_file, &root, &|done, total| {
+            extract::extract_runtime_tar_into(&dest_file, &staged, &staging, &|done, total| {
                 emit_progress(
                     &app_x,
                     "extract",
@@ -704,11 +911,21 @@ pub fn run_provision(
         }
         emit_progress(&app, "extract", 1, 1, &crate::i18n::t("s.58a0882f6f"));
 
-        write_package_meta(&root, &var, &spec.label, &spec.version)?;
-
-        if !paths::runtime_ready(&root) {
+        if !paths::runtime_tree_ready(&staged) {
             // 校验过的包解出来却少东西，几乎只有一个原因：杀软在解压过程中
             // 把 torch 那几个 dll 挑走了。不写出来，用户只会一遍遍重下。
+            let _ = fs::remove_dir_all(&staged);
+            return Err(format!(
+                "{}\n\n{}",
+                crate::i18n::t("s.74aef4af02"),
+                crate::i18n::t("s.rtExtractHelp"),
+            ));
+        }
+        write_runtime_meta_at(&staged, &var, &spec.label, &spec.version)?;
+        replace_managed_runtime(&root, &var, &staged)?;
+        activate_runtime(&root, &var)?;
+
+        if !paths::runtime_ready(&root) {
             return Err(format!(
                 "{}\n\n{}",
                 crate::i18n::t("s.74aef4af02"),
@@ -720,20 +937,7 @@ pub fn run_provision(
         // 而首装的用户那时候 Runtime 还没有，于是补全完什么也不会发生：设备
         // 下拉是空的、变声起不来，必须重启软件。补全刚结束正是该做这件事的
         // 时候。放后台线程，别把补全流程的收尾卡在 90 秒的等待上。
-        {
-            let root_bg = root.clone();
-            std::thread::spawn(move || {
-                let r = crate::worker::ensure_worker_and_devices(&root_bg, 90_000);
-                let n = r
-                    .get("input_devices")
-                    .and_then(|v| v.as_array())
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-                let mut vars = std::collections::HashMap::new();
-                vars.insert("n".to_string(), n.to_string());
-                crate::logging::shell_log!("{}", crate::i18n::t_vars("s.5c5f9ed8e4", &vars));
-            });
-        }
+        ensure_worker_background(root.clone());
 
         emit_progress(&app, "done", 1, 1, &crate::i18n::t("s.a64a986f63"));
         Ok(json!({
@@ -741,6 +945,7 @@ pub fn run_provision(
             "message": crate::i18n::te("s.3c5bbe47d1", &(spec.label)),
             "variant": var,
             "version": spec.version,
+            "action": if force { "replace" } else { "install" },
         }))
     })();
 

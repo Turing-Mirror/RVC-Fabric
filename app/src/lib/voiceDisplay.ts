@@ -2,244 +2,41 @@
  * Localized display for community / official voice packs.
  *
  * Catalog fields (any may be missing):
- *   name           zh-Hans primary (legacy; always present)
- *   name_ja        Japanese
- *   name_en        English / romanization
- *   name_zh_Hant   Traditional Chinese
- *   series         primary series label (often zh)
- *   series_ja / series_en / series_zh_Hant
+ *   name / name_i18n       primary name and locale map
+ *   series / series_i18n   parent series and locale map
+ *   group / group_i18n     optional child group and locale map
  *
  * English (and other non-CJK UI locales): show "原名 English" when both exist
  * e.g. 若葉睦 Wakaba Mutsumi — user request.
  */
 import type { LocaleCode } from "../i18n/types";
+import { fallbackPack, lookup } from "../i18n/dict";
 import { getTLocale, t } from "../i18n/t";
+
+export type LocalizedText = Record<string, string>;
 
 export type NamedVoice = {
   id?: string;
   name?: string;
+  name_i18n?: LocalizedText;
   name_ja?: string;
   name_en?: string;
   name_zh_Hant?: string;
+  tag_i18n?: LocalizedText;
+  description_i18n?: LocalizedText;
+  author_i18n?: LocalizedText;
   series?: string;
+  series_i18n?: LocalizedText;
   series_ja?: string;
   series_en?: string;
   series_zh_Hant?: string;
   /** Club / department inside a series, e.g. 研讨会. */
   group?: string;
+  group_i18n?: LocalizedText;
   official?: boolean;
   origin?: string;
   origin_label?: string;
   [key: string]: unknown;
-};
-
-/** Built-in fallbacks when catalog cache is old / missing i18n fields. */
-const BY_ID: Record<
-  string,
-  {
-    zh: string;
-    ja?: string;
-    en?: string;
-    hant?: string;
-    series?: string;
-    series_ja?: string;
-    series_en?: string;
-    series_hant?: string;
-  }
-> = {
-  Anon: {
-    zh: "千早爱音",
-    ja: "千早愛音",
-    en: "Chihaya Anon",
-    hant: "千早愛音",
-    series: "BanG Dream",
-  },
-  Tomori: {
-    zh: "高松灯",
-    ja: "高松燈",
-    en: "Takamatsu Tomori",
-    hant: "高松燈",
-    series: "BanG Dream",
-  },
-  Rana: {
-    zh: "要乐奈",
-    ja: "要楽奈",
-    en: "Kaname Raana",
-    hant: "要樂奈",
-    series: "BanG Dream",
-  },
-  Soyo: {
-    zh: "长崎爽世",
-    ja: "長崎そよ",
-    en: "Nagasaki Soyo",
-    hant: "長崎爽世",
-    series: "BanG Dream",
-  },
-  Taki: {
-    zh: "椎名立希",
-    ja: "椎名立希",
-    en: "Shiina Taki",
-    hant: "椎名立希",
-    series: "BanG Dream",
-  },
-  "tp-nahida": {
-    zh: "纳西妲",
-    ja: "ナヒーダ",
-    en: "Nahida",
-    hant: "納西妲",
-    series: "原神",
-    series_en: "Genshin Impact",
-    series_ja: "原神",
-    series_hant: "原神",
-  },
-  "tp-furina": {
-    zh: "芙宁娜",
-    ja: "フリーナ",
-    en: "Furina",
-    hant: "芙寧娜",
-    series: "原神",
-    series_en: "Genshin Impact",
-    series_ja: "原神",
-    series_hant: "原神",
-  },
-  "tp-raiden": {
-    zh: "雷电将军",
-    ja: "雷電将軍",
-    en: "Raiden Shogun",
-    hant: "雷電將軍",
-    series: "原神",
-    series_en: "Genshin Impact",
-    series_ja: "原神",
-    series_hant: "原神",
-  },
-  "tp-zhongli": {
-    zh: "钟离",
-    ja: "鍾離",
-    en: "Zhongli",
-    hant: "鍾離",
-    series: "原神",
-    series_en: "Genshin Impact",
-    series_ja: "原神",
-    series_hant: "原神",
-  },
-  "tp-miku": {
-    zh: "初音未来",
-    ja: "初音ミク",
-    en: "Hatsune Miku",
-    hant: "初音未來",
-    series: "VOCALOID",
-  },
-  "tp-miku-power": {
-    zh: "初音未来（Power）",
-    ja: "初音ミク（Power）",
-    en: "Hatsune Miku (Power)",
-    hant: "初音未來（Power）",
-    series: "VOCALOID",
-  },
-  "tp-trump": {
-    zh: "唐纳德·特朗普",
-    ja: "ドナルド・トランプ",
-    en: "Donald Trump",
-    hant: "唐納·川普",
-  },
-  guanguan: { zh: "guanguanV1", en: "guanguanV1", series: "RVC原版", series_en: "RVC Original", series_ja: "RVCオリジナル", series_hant: "RVC原版" },
-  keruan: { zh: "keruanV1", en: "keruanV1", series: "RVC原版", series_en: "RVC Original", series_ja: "RVCオリジナル", series_hant: "RVC原版" },
-  kiki: { zh: "kikiV1", en: "kikiV1", series: "RVC原版", series_en: "RVC Original", series_ja: "RVCオリジナル", series_hant: "RVC原版" },
-  "youzhanv2-xi": {
-    zh: "youzhanv2-xi",
-    en: "youzhanv2-xi",
-    series: "RVC原版",
-    series_en: "RVC Original",
-    series_ja: "RVCオリジナル",
-    series_hant: "RVC原版",
-  },
-};
-
-const SERIES_FALLBACK: Record<
-  string,
-  { en?: string; ja?: string; hant?: string; ko?: string }
-> = {
-  "原神": { en: "Genshin Impact", ja: "原神", hant: "原神", ko: "원신" },
-  "RVC原版": { en: "RVC Original", ja: "RVCオリジナル", hant: "RVC原版", ko: "RVC 오리지널" },
-  "MyGO!!!!!": { en: "MyGO!!!!!", ja: "MyGO!!!!!", hant: "MyGO!!!!!" },
-  "BanG Dream": { en: "BanG Dream", ja: "BanG Dream", hant: "BanG Dream", ko: "뱅드림" },
-  VOCALOID: { en: "VOCALOID", ja: "VOCALOID", hant: "VOCALOID" },
-  "蔚蓝档案": { en: "Blue Archive", ja: "ブルーアーカイブ", hant: "蔚藍檔案", ko: "블루 아카이브" },
-};
-
-/**
- * Band / club leftover that used to be a top-level `series`.
- * Old catalogs still ship those values; new ones write them as `group`
- * under the franchise. Both shapes must nest the same way in the store.
- */
-const SERIES_PARENT: Record<string, string> = {
-  Afterglow: "BanG Dream",
-  "Hello, Happy World!": "BanG Dream",
-  Morfonica: "BanG Dream",
-  "Pastel＊Palettes": "BanG Dream",
-  "Poppin'Party": "BanG Dream",
-  "RAISE A SUILEN": "BanG Dream",
-  Roselia: "BanG Dream",
-  "MyGO!!!!!": "BanG Dream",
-  "Ave Mujica": "BanG Dream",
-};
-
-/** Franchise-typical child order. Unknown labels sort after these, 「其他」 last. */
-const GROUP_ORDER: string[] = [
-  "研讨会",
-  "真理部",
-  "工程部",
-  "游戏开发部",
-  "特异现象搜查部",
-  "阴阳部",
-  "图书委员会",
-  "Poppin'Party",
-  "Afterglow",
-  "Pastel＊Palettes",
-  "Hello, Happy World!",
-  "Roselia",
-  "RAISE A SUILEN",
-  "Morfonica",
-  "MyGO!!!!!",
-  "Ave Mujica",
-];
-
-const GROUP_FALLBACK: Record<
-  string,
-  { en?: string; ja?: string; hant?: string }
-> = {
-  "真理部": { en: "Veritas", ja: "ヴェリタス", hant: "真理部" },
-  "工程部": { en: "Engineering", ja: "エンジニア部", hant: "工程部" },
-  "研讨会": { en: "Seminar", ja: "セミナー", hant: "研討會" },
-  "游戏开发部": { en: "Game Development", ja: "ゲーム開発部", hant: "遊戲開發部" },
-  "特异现象搜查部": {
-    en: "Super Phenomenon Task Force",
-    ja: "特異現象特捜部",
-    hant: "特異現象搜查部",
-  },
-  "阴阳部": { en: "Yin-Yang Club", ja: "陰陽部", hant: "陰陽部" },
-  "图书委员会": { en: "Library Committee", ja: "図書委員会", hant: "圖書委員會" },
-  Afterglow: { en: "Afterglow", ja: "Afterglow", hant: "Afterglow" },
-  "Hello, Happy World!": {
-    en: "Hello, Happy World!",
-    ja: "ハロー、ハッピーワールド！",
-    hant: "Hello, Happy World!",
-  },
-  Morfonica: { en: "Morfonica", ja: "Morfonica", hant: "Morfonica" },
-  "Pastel＊Palettes": {
-    en: "Pastel＊Palettes",
-    ja: "Pastel＊Palettes",
-    hant: "Pastel＊Palettes",
-  },
-  "Poppin'Party": { en: "Poppin'Party", ja: "Poppin'Party", hant: "Poppin'Party" },
-  "RAISE A SUILEN": {
-    en: "RAISE A SUILEN",
-    ja: "RAISE A SUILEN",
-    hant: "RAISE A SUILEN",
-  },
-  Roselia: { en: "Roselia", ja: "Roselia", hant: "Roselia" },
-  "MyGO!!!!!": { en: "MyGO!!!!!", ja: "MyGO!!!!!", hant: "MyGO!!!!!" },
-  "Ave Mujica": { en: "Ave Mujica", ja: "Ave Mujica", hant: "Ave Mujica" },
 };
 
 function str(v: unknown): string {
@@ -333,13 +130,133 @@ export function voiceAuthorList(v: AuthorSource): VoiceAuthor[] {
   return out;
 }
 
+function localeCandidates(locale: string): string[] {
+  const normalized = locale.replace(/_/g, "-");
+  const short = normalized.split("-")[0] || "";
+  const out = [locale, normalized, short];
+  if (normalized.startsWith("en")) out.push("en-US", "en");
+  if (normalized.startsWith("ja")) out.push("ja-JP", "ja");
+  if (normalized.startsWith("ko")) out.push("ko-KR", "ko");
+  if (normalized.startsWith("es")) out.push("es-ES", "es");
+  if (normalized.startsWith("fr")) out.push("fr-FR", "fr");
+  if (normalized.startsWith("ru")) out.push("ru-RU", "ru");
+  if (normalized === "zh-TW" || normalized === "zh-Hant") {
+    out.push("zh-TW", "zh_Hant", "zh-Hant");
+  } else if (normalized.startsWith("zh")) {
+    out.push("zh-CN", "zh-Hans", "zh-Hans-CN");
+  }
+  return [...new Set(out.filter(Boolean))];
+}
+
+/** Read a locale map without coupling callers to a particular catalog shape. */
+export function localizedTextValue(
+  value: unknown,
+  locale?: LocaleCode | string,
+): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const map = value as Record<string, unknown>;
+  const loc = String(locale || getTLocale() || "zh-CN");
+  for (const candidate of localeCandidates(loc)) {
+    const hit = str(map[candidate]);
+    if (hit) return hit;
+  }
+  return "";
+}
+
+function localizedFieldValue(
+  v: NamedVoice,
+  field: string,
+  locale: string,
+): string {
+  const map = v[`${field}_i18n`];
+  const localized = localizedTextValue(map, locale);
+  if (localized) return localized;
+  const normalized = locale.replace(/_/g, "-");
+  const short = normalized.split("-")[0] || "";
+  for (const key of [
+    `${field}_${locale}`,
+    `${field}_${normalized}`,
+    `${field}_${short}`,
+    `${field}_${locale.replace(/-/g, "_")}`,
+    normalized === "zh-TW" ? `${field}_zh_Hant` : "",
+  ]) {
+    if (!key) continue;
+    const hit = str(v[key]);
+    if (hit) return hit;
+  }
+  return "";
+}
+
+function localizedFieldValues(v: NamedVoice, field: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === "object" && value && !Array.isArray(value)) {
+      for (const nested of Object.values(value)) add(nested);
+      return;
+    }
+    const item = str(value);
+    if (item && !seen.has(item)) {
+      seen.add(item);
+      out.push(item);
+    }
+  };
+  add(v[field]);
+  const map = v[`${field}_i18n`];
+  if (map && typeof map === "object" && !Array.isArray(map)) {
+    for (const value of Object.values(map)) add(value);
+  }
+  for (const key of [
+    `${field}_en`,
+    `${field}_ja`,
+    `${field}_zh_Hant`,
+    `${field}_ko`,
+    `${field}_es`,
+    `${field}_fr`,
+    `${field}_ru`,
+  ]) {
+    add(v[key]);
+  }
+  return out;
+}
+
+/** Locale-aware separator for visible lists. */
+type ListFormatConstructor = new (
+  locales?: string | string[],
+  options?: {
+    type?: "conjunction" | "disjunction" | "unit";
+    style?: "long" | "short" | "narrow";
+  },
+) => { format(values: string[]): string };
+
+export function formatLocalizedList(
+  values: readonly string[],
+  locale?: LocaleCode | string,
+): string {
+  const items = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  if (items.length < 2) return items[0] || "";
+  const loc = locale || getTLocale() || "zh-CN";
+  try {
+    const ListFormat = (Intl as typeof Intl & {
+      ListFormat?: ListFormatConstructor;
+    }).ListFormat;
+    if (!ListFormat) return items.join(", ");
+    return new ListFormat(loc, {
+      type: "conjunction",
+      style: "short",
+    }).format(items);
+  } catch {
+    return items.join(", ");
+  }
+}
+
 function resolveParts(v: NamedVoice) {
   const id = str(v.id);
-  const fb = id ? BY_ID[id] : undefined;
-  const zh = str(v.name) || fb?.zh || id || "?";
-  const ja = str(v.name_ja) || fb?.ja || "";
-  const en = str(v.name_en) || fb?.en || "";
-  const hant = str(v.name_zh_Hant) || fb?.hant || zh;
+  const zh = localizedFieldValue(v, "name", "zh-CN") || str(v.name) || id || "?";
+  const ja = localizedFieldValue(v, "name", "ja-JP") || str(v.name_ja);
+  const en = localizedFieldValue(v, "name", "en-US") || str(v.name_en);
+  const hant =
+    localizedFieldValue(v, "name", "zh-TW") || str(v.name_zh_Hant) || zh;
   return { zh, ja, en, hant, id };
 }
 
@@ -354,13 +271,17 @@ export function displayVoiceName(
   const { zh, ja, en, hant } = resolveParts(v);
 
   if (loc === "ja-JP") {
-    return ja || zh;
+    return ja || en || zh;
   }
   if (loc === "zh-CN") {
     return zh;
   }
   if (loc === "zh-TW") {
     return hant || zh;
+  }
+  const localized = localizedFieldValue(v, "name", loc);
+  if (localized && !loc.startsWith("en")) {
+    return localized;
   }
   // en-US / es-ES / fr-FR / ko-KR / ru-RU / …
   // Prefer "原名(日) English" so Latin UI still shows the original script.
@@ -380,32 +301,31 @@ function pickFieldI18n(
   field: string,
   locale: string,
 ): string {
-  const map = v[`${field}_i18n`];
-  if (map && typeof map === "object" && !Array.isArray(map)) {
-    const m = map as Record<string, unknown>;
-    const cands = [locale, locale.split("-")[0] || ""];
-    if (locale.startsWith("en")) cands.push("en-US", "en");
-    if (locale.startsWith("ja")) cands.push("ja-JP", "ja");
-    if (locale.startsWith("ko")) cands.push("ko-KR", "ko");
-    if (locale === "zh-TW") cands.push("zh_Hant", "zh-Hant");
-    for (const c of cands) {
-      if (!c) continue;
-      const hit = str(m[c]);
-      if (hit) return hit;
+  return localizedFieldValue(v, field, locale) || str(v[field]);
+}
+
+// Older local sidecars only have the Chinese value of a generic tag. Resolve
+// those legacy values through the source locale pack instead of baking
+// another language map into the UI.
+const LEGACY_TAG_KEYS = [
+  "s.c4301894a2",
+  "s.c493338e8c",
+  "s.bacc87084d",
+  "s.3c689400b4",
+  "s.1bf4a01d78",
+] as const;
+
+function localizeLegacyTag(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const sourcePack = fallbackPack();
+  for (const key of LEGACY_TAG_KEYS) {
+    const source = lookup(sourcePack, key);
+    if (typeof source === "string" && source.trim() === raw) {
+      return t(key);
     }
   }
-  const short = locale.split("-")[0] || "";
-  for (const k of [
-    `${field}_${locale}`,
-    `${field}_${short}`,
-    `${field}_${locale.replace(/-/g, "_")}`,
-    locale === "zh-TW" ? `${field}_zh_Hant` : "",
-  ]) {
-    if (!k) continue;
-    const hit = str(v[k]);
-    if (hit) return hit;
-  }
-  return str(v[field]);
+  return "";
 }
 
 /** Store card tag line (少女音 / Girl voice / …). */
@@ -414,7 +334,12 @@ export function displayVoiceTag(
   locale?: LocaleCode | string,
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  return pickFieldI18n(v, "tag", loc);
+  const source = str(v.source).toLowerCase();
+  if (source === "trained" || source === "self") {
+    return t("s.c493338e8c");
+  }
+  const value = pickFieldI18n(v, "tag", loc);
+  return localizeLegacyTag(str(v.tag)) || value;
 }
 
 /** Longer description under the card / detail. */
@@ -426,28 +351,8 @@ export function displayVoiceDescription(
   return pickFieldI18n(v, "description", loc);
 }
 
-function seriesLabelOf(primary: string, locale: string, v?: NamedVoice): string {
-  if (!primary) return "";
-  const id = v ? str(v.id) : "";
-  const fb = id ? BY_ID[id] : undefined;
-  const seriesEn = str(v?.series_en) || fb?.series_en || SERIES_FALLBACK[primary]?.en || "";
-  const seriesJa = str(v?.series_ja) || fb?.series_ja || SERIES_FALLBACK[primary]?.ja || "";
-  const seriesHant =
-    str(v?.series_zh_Hant) || fb?.series_hant || SERIES_FALLBACK[primary]?.hant || primary;
-
-  if (locale === "ja-JP") return seriesJa || primary;
-  if (locale === "zh-CN") return primary;
-  if (locale === "zh-TW") return seriesHant;
-  if (locale === "ko-KR") {
-    return SERIES_FALLBACK[primary]?.ko || seriesEn || primary;
-  }
-  return seriesEn || primary;
-}
-
 function catalogSeriesRaw(v: NamedVoice): string {
-  const id = str(v.id);
-  const fb = id ? BY_ID[id] : undefined;
-  return str(v.series) || fb?.series || "";
+  return str(v.series);
 }
 
 export function displayVoiceSeries(
@@ -455,7 +360,7 @@ export function displayVoiceSeries(
   locale?: LocaleCode | string,
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  return seriesLabelOf(catalogSeriesRaw(v), loc, v);
+  return pickFieldI18n(v, "series", loc) || catalogSeriesRaw(v);
 }
 
 function namesEqual(a: string, b: string): boolean {
@@ -503,50 +408,33 @@ export function voiceParentSeries(
   locale?: LocaleCode | string,
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  const raw = catalogSeriesRaw(v);
-  const parent = SERIES_PARENT[raw] || raw;
-  return seriesLabelOf(parent, loc, SERIES_PARENT[raw] ? undefined : v);
+  return displayVoiceSeries(v, loc);
 }
 
-/** Only BanG Dream keeps band folders; 蔚蓝档案 and everyone else stay one list. */
-function isBangDreamSeries(v: NamedVoice): boolean {
-  const raw = catalogSeriesRaw(v);
-  return (SERIES_PARENT[raw] || raw) === "BanG Dream";
-}
-
-/** Club / band raw key used for sorting and stable focus ids. */
+/** Raw child-group key used for sorting and stable focus ids. */
 export function voiceGroupRaw(v: NamedVoice): string {
-  if (!isBangDreamSeries(v)) return "";
-  const g = str(v.group);
-  if (g) return g;
-  const raw = catalogSeriesRaw(v);
-  if (SERIES_PARENT[raw]) return raw;
-  return "";
+  return str(v.group);
 }
 
-/** Club / band label under the parent series. Empty when the series is flat. */
+/** Localized child-group label. Empty when the catalog row has no group. */
 export function voiceChildGroup(
   v: NamedVoice,
   locale?: LocaleCode | string,
 ): string {
-  if (!isBangDreamSeries(v)) return "";
   const loc = (locale || getTLocale() || "zh-CN") as string;
-  const g = displayVoiceGroup(v, loc);
-  if (g) return g;
-  const raw = catalogSeriesRaw(v);
-  if (SERIES_PARENT[raw]) return seriesLabelOf(raw, loc);
-  return "";
+  return displayVoiceGroup(v, loc);
 }
 
-export function compareVoiceGroups(aRaw: string, bRaw: string, other = ""): number {
-  const rank = (raw: string) => {
-    if (!raw || raw === other) return 1000;
-    const i = GROUP_ORDER.indexOf(raw);
-    return i < 0 ? 500 + raw.charCodeAt(0) : i;
-  };
-  const d = rank(aRaw) - rank(bRaw);
-  if (d !== 0) return d;
-  return aRaw.localeCompare(bRaw, "zh");
+export function compareVoiceGroups(
+  aRaw: string,
+  bRaw: string,
+  other = "",
+  locale?: LocaleCode | string,
+): number {
+  const aEmpty = !aRaw || aRaw === other;
+  const bEmpty = !bRaw || bRaw === other;
+  if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+  return aRaw.localeCompare(bRaw, locale || getTLocale() || "zh-CN");
 }
 
 /** Author line for store / library cards. Picks locale from author_i18n when present. */
@@ -566,10 +454,10 @@ export function displayVoiceAuthor(
   const single = str(a);
   if (single) return single;
   // 只有 authors 数组、没有单个 author 字段时，广场/首页也会走到这里。
-  return voiceAuthorList(v)
-    .map((x) => x.name)
-    .filter(Boolean)
-    .join("、");
+  return formatLocalizedList(
+    voiceAuthorList(v).map((x) => x.name),
+    loc,
+  );
 }
 
 /** Club / department label inside a series (研讨会, Veritas, …). */
@@ -579,12 +467,33 @@ export function displayVoiceGroup(
 ): string {
   const loc = (locale || getTLocale() || "zh-CN") as string;
   const primary = pickFieldI18n(v, "group", loc) || str(v.group);
-  if (!primary) return "";
-  const fb = GROUP_FALLBACK[str(v.group)] || GROUP_FALLBACK[primary];
-  if (loc === "ja-JP") return fb?.ja || primary;
-  if (loc === "zh-CN") return primary;
-  if (loc === "zh-TW") return fb?.hant || primary;
-  return fb?.en || primary;
+  return primary;
+}
+
+/**
+ * Choose a localized series/group label from an aggregated bucket.
+ *
+ * Catalog sources can mix official and third-party rows. One row may only
+ * contain the primary Chinese value while another row for the same bucket has
+ * the locale map, so using the first row would make the result depend on
+ * source order.
+ */
+export function displayVoiceFieldForGroup(
+  voices: NamedVoice[],
+  field: "series" | "group",
+  locale?: LocaleCode | string,
+): string {
+  const loc = (locale || getTLocale() || "zh-CN") as string;
+  const raw = voices.map((v) => str(v[field])).find(Boolean) || "";
+  const labels = voices
+    .map((v) =>
+      field === "series"
+        ? displayVoiceSeries(v, loc)
+        : displayVoiceGroup(v, loc),
+    )
+    .map((label) => str(label))
+    .filter(Boolean);
+  return labels.find((label) => label !== raw) || labels[0] || raw;
 }
 
 /** 清单 `origin` 是站点代号；卡片上要写成「第三方 · Hugging Face」。 */
@@ -623,30 +532,15 @@ export function displayVoiceOrigin(v: NamedVoice): string {
 
 /** Search haystack: all name variants so filtering works in any language. */
 export function voiceSearchText(v: NamedVoice): string {
-  const { zh, ja, en, hant, id } = resolveParts(v);
-  const group = str(v.group);
-  const gf = GROUP_FALLBACK[group];
-  const rawSeries = catalogSeriesRaw(v);
-  const parent = SERIES_PARENT[rawSeries] || "";
-  const pf = parent ? SERIES_FALLBACK[parent] : undefined;
   return [
-    zh,
-    ja,
-    en,
-    hant,
-    id,
-    rawSeries,
-    parent,
-    pf?.en,
-    pf?.ja,
-    pf?.hant,
-    pf?.ko,
-    str(v.author),
-    str(v.tag),
-    group,
-    gf?.en,
-    gf?.ja,
-    gf?.hant,
+    ...localizedFieldValues(v, "name"),
+    ...localizedFieldValues(v, "series"),
+    ...localizedFieldValues(v, "group"),
+    ...localizedFieldValues(v, "author"),
+    ...localizedFieldValues(v, "tag"),
+    ...localizedFieldValues(v, "description"),
+    str(v.id),
+    ...voiceAuthorList(v).map((author) => author.name),
   ]
     .filter(Boolean)
     .join(" ");

@@ -216,6 +216,18 @@ pub fn tn(key: &str, args: &[&str]) -> String {
     s
 }
 
+/// Join a user-visible list using the separator from the active language pack.
+pub fn join_list(items: &[String]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let separator = t("s.listSeparator");
+    if separator == "s.listSeparator" || separator.is_empty() {
+        return items.join(", ");
+    }
+    items.join(&separator)
+}
+
 // ---------------------------------------------------------------------------
 // Catalog / remote JSON localization
 // ---------------------------------------------------------------------------
@@ -390,6 +402,17 @@ pub fn t_msg(code: &str) -> String {
 /// 时，回退到 worker 自带的 `message`。回退很重要：老的 worker 二进制、以及
 /// 将来新加还没来得及翻译的消息，都该照旧显示中文，而不是变成一片空白或者
 /// 一串 `msg.train.xxx`。
+fn worker_parameter(code: &str, key: &str, value: String) -> String {
+    if code.trim_start_matches("msg.") != "sts.degraded" || !matches!(key, "why" | "rung") { return value; }
+    match value.as_str() {
+        "显卡内存不足" => t("neptune.fallbackOom"),
+        "显卡不支持这一项处理" | "显卡后端不支持这一步" => t("neptune.fallbackBackend"),
+        "显卡（降低占用）" => t("neptune.fallbackLow"),
+        "显卡" => t("neptune.fallbackGpu"),
+        _ => value,
+    }
+}
+
 pub fn t_worker_msg(line: &Value) -> String {
     let raw = line
         .get("message")
@@ -414,7 +437,7 @@ pub fn t_worker_msg(line: &Value) -> String {
                 Value::Bool(b) => b.to_string(),
                 _ => continue,
             };
-            vars.insert(k.clone(), s);
+            vars.insert(k.clone(), worker_parameter(&code, k, s));
         }
     }
     let key = if code.starts_with("msg.") {
@@ -466,7 +489,7 @@ pub fn localize_status(status: &mut Value) {
                 Value::Bool(b) => b.to_string(),
                 _ => continue,
             };
-            vars.insert(k.clone(), s);
+            vars.insert(k.clone(), worker_parameter(&code, k, s));
         }
     }
     let key = if code.starts_with("msg.") {
@@ -522,6 +545,18 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn degradation_parameters_follow_the_selected_locale() {
+        let _g = testing::pin("en-US");
+        let mut line = json!({"message_code":"sts.degraded", "message_params":{"why":"显卡内存不足", "rung":"显卡（降低占用）"}, "state":"running"});
+        let message = t_worker_msg(&line);
+        assert!(message.contains(&t("neptune.fallbackOom")));
+        assert!(message.contains(&t("neptune.fallbackLow")));
+        assert!(!message.contains("显卡"));
+        localize_status(&mut line);
+        assert_eq!(line["message"], message);
+    }
 
     #[test]
     fn a_worker_line_is_localized_by_its_code() {
@@ -665,6 +700,15 @@ mod tests {
         let help = t("s.dlFailedHelp");
         assert!(help.contains("1077458748"), "got {help}");
         assert!(t("s.dlGaveUp").contains("{v0}") || te("s.dlGaveUp", &5).contains("5"));
+    }
+
+    #[test]
+    fn list_separator_follows_locale() {
+        let _g = testing::pin("zh-CN");
+        let items = vec!["hubert".to_string(), "rmvpe".to_string()];
+        assert_eq!(join_list(&items), "hubert、rmvpe");
+        set_locale("en-US");
+        assert_eq!(join_list(&items), "hubert, rmvpe");
     }
 
 }

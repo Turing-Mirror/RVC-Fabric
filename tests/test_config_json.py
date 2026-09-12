@@ -56,7 +56,7 @@ class LoadConfigJsonTests(unittest.TestCase):
             old = os.getcwd()
             os.chdir(root)
             try:
-                d = mod.Config.load_config_json()
+                d = mod.Config.__wrapped__.load_config_json()
             finally:
                 os.chdir(old)
 
@@ -77,7 +77,7 @@ class LoadConfigJsonTests(unittest.TestCase):
             old = os.getcwd()
             os.chdir(root)
             try:
-                d = mod.Config.load_config_json()
+                d = mod.Config.__wrapped__.load_config_json()
             finally:
                 os.chdir(old)
 

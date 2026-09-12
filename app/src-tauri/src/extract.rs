@@ -124,37 +124,49 @@ fn find_python_exe(dir: &Path) -> Option<PathBuf> {
 /// Extract so that *dest_root*/Runtime/python.exe exists, calling
 /// `on_progress(done_bytes, total_bytes)` as it goes.
 ///
-/// Throttled to ~5 Hz: a multi-GB tar reads in 8 KB chunks, and an unthrottled
-/// callback would emit hundreds of thousands of IPC events.
+/// This compatibility wrapper keeps the old layout for development checkouts.
+/// Installed builds use `extract_runtime_tar_into` so an existing active
+/// runtime is left untouched until the replacement has been fully staged and
+/// verified.
 pub fn extract_runtime_tar_with_progress(
     archive: &Path,
     dest_root: &Path,
     on_progress: &dyn Fn(u64, u64),
 ) -> Result<(), String> {
-    let total = fs::metadata(archive).map(|m| m.len()).unwrap_or(0);
-    let counter = Arc::new(AtomicU64::new(0));
-    let mut last_emit = std::time::Instant::now();
-    dest_root
-        .canonicalize()
-        .or_else(|_| {
-            fs::create_dir_all(dest_root).ok();
-            dest_root.canonicalize()
-        })
-        .map_err(|e| e.to_string())?;
-
-    let rt = dest_root.join("Runtime");
-    if rt.exists() {
-        let _ = fs::remove_dir_all(&rt);
+    let final_rt = dest_root.join("Runtime");
+    if final_rt.exists() {
+        let _ = fs::remove_dir_all(&final_rt);
     }
-
     let staging = dest_root
         .join("User_Data")
         .join("update_cache")
         .join("runtime_extract");
-    if staging.exists() {
-        let _ = fs::remove_dir_all(&staging);
+    extract_runtime_tar_into(archive, &final_rt, &staging, on_progress)
+}
+
+/// Extract a runtime into a new target directory without replacing anything
+/// that is already there. The caller can validate this target, then atomically
+/// swap it into the managed runtime location.
+pub fn extract_runtime_tar_into(
+    archive: &Path,
+    target: &Path,
+    staging: &Path,
+    on_progress: &dyn Fn(u64, u64),
+) -> Result<(), String> {
+    let total = fs::metadata(archive).map(|m| m.len()).unwrap_or(0);
+    let counter = Arc::new(AtomicU64::new(0));
+    let mut last_emit = std::time::Instant::now();
+
+    if target.exists() {
+        return Err(crate::i18n::te(
+            "runtimeMigration.targetExists",
+            &(target.display()),
+        ));
     }
-    fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+    if staging.exists() {
+        let _ = fs::remove_dir_all(staging);
+    }
+    fs::create_dir_all(staging).map_err(|e| e.to_string())?;
 
     let mut archive = open_archive(archive, counter.clone())?;
     let entries = archive
@@ -173,7 +185,7 @@ pub fn extract_runtime_tar_with_progress(
             continue;
         }
         entry
-            .unpack_in(&staging)
+            .unpack_in(staging)
             .map_err(|e| crate::i18n::t2("s.646bbce5a0", &path, &e))?;
         if last_emit.elapsed() >= std::time::Duration::from_millis(200) {
             last_emit = std::time::Instant::now();
@@ -184,7 +196,7 @@ pub fn extract_runtime_tar_with_progress(
 
     let mut candidate = staging.join("Runtime");
     if !(candidate.join("python.exe")).is_file() {
-        if let Some(py) = find_python_exe(&staging) {
+        if let Some(py) = find_python_exe(staging) {
             if let Some(parent) = py.parent().map(|p| p.to_path_buf()) {
                 if parent
                     .file_name()
@@ -199,21 +211,21 @@ pub fn extract_runtime_tar_with_progress(
         }
     }
     if !(candidate.join("python.exe")).is_file() {
-        let _ = fs::remove_dir_all(&staging);
+        let _ = fs::remove_dir_all(staging);
         return Err(crate::i18n::t("s.b4817b7fdf").into());
     }
 
-    let final_rt = dest_root.join("Runtime");
-    if final_rt.exists() {
-        let _ = fs::remove_dir_all(&final_rt);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::rename(&candidate, &final_rt).map_err(|e| {
-        let _ = fs::remove_dir_all(&staging);
+    fs::rename(&candidate, target).map_err(|e| {
+        let _ = fs::remove_dir_all(staging);
         crate::i18n::te("s.90e6bba99d", &(e))
     })?;
-    let _ = fs::remove_dir_all(&staging);
+    let _ = fs::remove_dir_all(staging);
 
-    if !(final_rt.join("python.exe")).is_file() {
+    if !target.join("python.exe").is_file() {
+        let _ = fs::remove_dir_all(target);
         return Err(crate::i18n::t("s.101fd24d34").into());
     }
     Ok(())

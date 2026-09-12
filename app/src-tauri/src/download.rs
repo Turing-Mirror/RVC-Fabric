@@ -242,7 +242,7 @@ fn download_error_text(raw: &str, attempts: u32, hosts: &[String]) -> String {
         out.push_str(&crate::i18n::t2(
             "s.dlTriedHosts",
             &hosts.len(),
-            &hosts.join("、"),
+            &crate::i18n::join_list(hosts),
         ));
     }
     if attempts > 1 {

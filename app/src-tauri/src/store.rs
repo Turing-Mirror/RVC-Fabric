@@ -277,6 +277,100 @@ fn parse_voice_list(raw: &Value, force_official: Option<bool>) -> Vec<Value> {
         .collect()
 }
 
+fn catalog_section<'a>(value: &'a Value, primary: &str, alternate: &str) -> &'a [Value] {
+    value
+        .get(primary)
+        .and_then(Value::as_array)
+        .or_else(|| value.get(alternate).and_then(Value::as_array))
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn catalog_entry_id(value: &Value) -> Option<String> {
+    value
+        .get("id")
+        .or_else(|| value.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+/// Fill missing translations in an online or cached entry from the catalog
+/// shipped with the current app. Remote metadata remains authoritative when
+/// it already contains a non-empty locale value.
+fn merge_i18n_map(
+    destination: &mut Map<String, Value>,
+    fallback: &Map<String, Value>,
+    field: &str,
+) {
+    let key = format!("{field}_i18n");
+    let Some(source) = fallback.get(&key).and_then(Value::as_object) else {
+        return;
+    };
+    if source.is_empty() {
+        return;
+    }
+    if let Some(Value::Object(target)) = destination.get_mut(&key) {
+        for (locale, value) in source {
+            if target
+                .get(locale)
+                .map(|current| !value_is_filled(current))
+                .unwrap_or(true)
+            {
+                target.insert(locale.clone(), value.clone());
+            }
+        }
+        return;
+    }
+    destination.insert(key, Value::Object(source.clone()));
+}
+
+fn merge_catalog_i18n(data: &mut Value, bundled: &Value) {
+    const FIELDS: [&str; 6] = ["name", "tag", "series", "author", "description", "group"];
+    for (section, alternate) in [
+        ("voices", "models"),
+        ("thirdparty_voices", "third_party_voices"),
+    ] {
+        let fallback_by_id: HashMap<String, &Map<String, Value>> = catalog_section(
+            bundled,
+            section,
+            alternate,
+        )
+        .iter()
+        .filter_map(|entry| {
+            Some((catalog_entry_id(entry)?, entry.as_object()?))
+        })
+        .collect();
+        if fallback_by_id.is_empty() {
+            continue;
+        }
+
+        let data_key = if data.get(section).and_then(Value::as_array).is_some() {
+            section
+        } else {
+            alternate
+        };
+        let Some(entries) = data.get_mut(data_key).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for entry in entries {
+            let Some(id) = catalog_entry_id(entry) else {
+                continue;
+            };
+            let Some(fallback) = fallback_by_id.get(&id) else {
+                continue;
+            };
+            let Some(destination) = entry.as_object_mut() else {
+                continue;
+            };
+            for field in FIELDS {
+                merge_i18n_map(destination, fallback, field);
+            }
+        }
+    }
+}
+
 fn catalog_from_data(data: &Value, source: &str) -> Value {
     let voices = parse_voice_list(
         data.get("voices")
@@ -377,6 +471,15 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                     source = "error";
                 }
             }
+        }
+    }
+
+    // A previously fetched remote snapshot may predate the current catalog.
+    // Keep its package metadata, but never let it hide translations shipped
+    // with this build.
+    if let Ok(s) = fs::read_to_string(&bundled) {
+        if let Ok(v) = serde_json::from_str::<Value>(&s) {
+            merge_catalog_i18n(&mut data, &v);
         }
     }
 
@@ -1505,6 +1608,47 @@ pub fn cancel_store_download(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_catalog_inherits_bundled_translations_without_overwriting_remote() {
+        let mut stale = json!({
+            "thirdparty_voices": [
+                {
+                    "id": "tp-yuuka",
+                    "name": "早濑优香",
+                    "series": "蔚蓝档案",
+                    "group": "研讨会",
+                    "name_i18n": { "en-US": "Remote Yuuka" }
+                }
+            ]
+        });
+        let bundled = json!({
+            "thirdparty_voices": [
+                {
+                    "id": "tp-yuuka",
+                    "name_i18n": {
+                        "en-US": "Hayase Yuuka",
+                        "ja-JP": "早瀬ユウカ"
+                    },
+                    "series_i18n": {
+                        "en-US": "Blue Archive",
+                        "ja-JP": "ブルーアーカイブ"
+                    },
+                    "group_i18n": {
+                        "en-US": "Seminar",
+                        "ja-JP": "セミナー"
+                    }
+                }
+            ]
+        });
+
+        merge_catalog_i18n(&mut stale, &bundled);
+        let entry = &stale["thirdparty_voices"][0];
+        assert_eq!(entry["name_i18n"]["en-US"], "Remote Yuuka");
+        assert_eq!(entry["name_i18n"]["ja-JP"], "早瀬ユウカ");
+        assert_eq!(entry["series_i18n"]["en-US"], "Blue Archive");
+        assert_eq!(entry["group_i18n"]["ja-JP"], "セミナー");
+    }
 
     /// 清单条目里的多语言字段必须一路走到本地 `config.json`。
     ///

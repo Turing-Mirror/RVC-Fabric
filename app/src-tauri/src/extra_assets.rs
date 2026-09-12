@@ -114,6 +114,7 @@ impl ExtraFile {
 pub struct ExtraSpec {
     pub key: String,
     pub label: String,
+    pub label_i18n: HashMap<String, String>,
     pub dest: String,
     /// 客户端分组：`train` 训练音色 / `separate` 人声分离 / `other`。
     pub group: String,
@@ -123,6 +124,7 @@ pub struct ExtraSpec {
     pub order: i32,
     /// 给用户看的用途说明，不是路径。
     pub notes: String,
+    pub notes_i18n: HashMap<String, String>,
     pub files: Vec<ExtraFile>,
 }
 
@@ -205,6 +207,23 @@ fn normalize_sha(s: &str) -> String {
         .to_ascii_lowercase()
 }
 
+fn localized_map(blob: &Value, key: &str) -> HashMap<String, String> {
+    blob.get(key)
+        .and_then(Value::as_object)
+        .map(|map| {
+            map.iter()
+                .filter_map(|(locale, value)| {
+                    value
+                        .as_str()
+                        .map(str::trim)
+                        .filter(|text| !text.is_empty())
+                        .map(|text| (locale.clone(), text.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn release_url(tag: &str, name: &str) -> String {
     format!("{CNB_REPO}/-/releases/download/{tag}/{name}")
 }
@@ -230,6 +249,8 @@ pub fn parse_spec(key: &str, blob: &Value) -> Option<ExtraSpec> {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let label_i18n = localized_map(blob, "label_i18n");
+    let notes_i18n = localized_map(blob, "notes_i18n");
     let group = infer_group(
         key,
         blob.get("group").and_then(|v| v.as_str()).unwrap_or(""),
@@ -303,11 +324,13 @@ pub fn parse_spec(key: &str, blob: &Value) -> Option<ExtraSpec> {
     Some(ExtraSpec {
         key: key.to_string(),
         label,
+        label_i18n,
         dest,
         group,
         recommended,
         order,
         notes,
+        notes_i18n,
         files,
     })
 }
@@ -389,11 +412,13 @@ pub fn list(root: &Path) -> Value {
             json!({
                 "key": s.key,
                 "label": s.label,
+                "label_i18n": s.label_i18n,
                 "dest": s.dest,
                 "group": s.group,
                 "recommended": s.recommended,
                 "order": s.order,
                 "notes": s.notes,
+                "notes_i18n": s.notes_i18n,
                 "size_bytes": s.total_bytes(),
                 "files": s.files.iter().map(|f| f.base_name().to_string()).collect::<Vec<_>>(),
                 "installed": installed,

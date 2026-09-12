@@ -1149,64 +1149,6 @@ pub fn build_diagnostics(
     Ok((out, perf_note))
 }
 
-// ---------------------------------------------------------------------------
-// Consult pack (申请专业优化)
-// ---------------------------------------------------------------------------
-
-/// Bundle the current voice's config + profiles + environment so tuning can be
-/// done off-machine. The model weights are large and are **not** included
-/// unless the user explicitly asks — that is a separate, deliberate step.
-pub fn build_consult_pack(root: &Path, note: &str) -> Result<PathBuf, String> {
-    let out_dir = paths::user_data(root).join("consult_packs");
-    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
-    let stamp = now_stamp();
-    let out = out_dir.join(format!("consult_{stamp}.zip"));
-
-    let cfg = config::read(root);
-    let pth = cfg.get("pth_path").and_then(|v| v.as_str()).unwrap_or("");
-    let model_dir = if pth.is_empty() {
-        None
-    } else {
-        Path::new(pth).parent().map(|p| p.to_path_buf())
-    };
-
-    let file = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts: zip::write::FileOptions<'_, ()> =
-        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-    let meta = json!({
-        "app_version": crate::update::APP_VERSION,
-        "note": note,
-        "gpus": crate::provision::list_gpus(),
-        "installed_variant": crate::provision::read_package_meta_variant(root),
-        "config": Value::Object(cfg.clone()),
-        "generated_at": stamp,
-    });
-    zip.start_file("consult.json", opts).map_err(|e| e.to_string())?;
-    zip.write_all(serde_json::to_string_pretty(&meta).unwrap_or_default().as_bytes())
-        .map_err(|e| e.to_string())?;
-
-    // The voice's own config.json and any .tmvp profiles — small text files.
-    if let Some(dir) = model_dir {
-        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-            let p = entry.path();
-            let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("");
-            if ext == "json" || ext == "tmvp" {
-                if let Ok(text) = std::fs::read_to_string(&p) {
-                    let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    zip.start_file(format!("voice/{name}"), opts)
-                        .map_err(|e| e.to_string())?;
-                    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-                }
-            }
-        }
-    }
-
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(out)
-}
-
 /// `YYYYMMDD_HHMMSS` in local time — same shape as the Python shell's
 /// `diag_20260727_151048`. Support staff read these filenames; a unix epoch
 /// integer tells them nothing.

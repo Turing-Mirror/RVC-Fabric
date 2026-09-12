@@ -3,6 +3,7 @@ import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { OnboardingBar } from "./components/OnboardingBar";
 import { Nudge } from "./components/Nudge";
+import { AudioRecoveryBanner } from "./components/AudioRecovery";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
@@ -12,6 +13,7 @@ import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
+import { RuntimeMigrationDialog } from "./components/RuntimeMigrationDialog";
 import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
@@ -30,7 +32,7 @@ import { HomePage } from "./pages/HomePage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { MorePage } from "./pages/MorePage";
 import { PlazaPage } from "./pages/PlazaPage";
-import { SettingsPage } from "./pages/SettingsPage";
+import { SettingsPage, type SettingsTab } from "./pages/SettingsPage";
 import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
@@ -80,10 +82,10 @@ function clockNow(): string {
 export default function App() {
   // Subscribe so locale change re-renders App (static t() labels) without
   // remounting the tree / re-running useEngine.
-  const { locale } = useI18n();
-  void locale;
+  const { locale, ready } = useI18n();
 
   const [page, setPage] = useState<PageId>("home");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("device");
   const [modelsKind, setModelsKind] = useState<"rvc" | "dsp">("rvc");
   const [modelsKindNonce, setModelsKindNonce] = useState(0);
   const [compactNav, setCompactNav] = useState(false);
@@ -93,6 +95,14 @@ export default function App() {
     "all",
   );
   const [scrollToDownloads, setScrollToDownloads] = useState(0);
+  // 下载区落点只是一次性导航请求。离开广场后清掉，避免重新进入广场时
+  // 把上一次已经完成的请求当成新请求，再次滚到下载区。
+  useEffect(() => {
+    if (page === "plaza") return;
+    setScrollToDownloads(0);
+    setExtrasReason("");
+    setExtrasFilter("all");
+  }, [page]);
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart.
   const [updateLine, setUpdateLine] = useState("");
@@ -277,8 +287,13 @@ export default function App() {
   const [langGateChecked, setLangGateChecked] = useState(false);
 
   const engine = useEngine();
+  // App re-renders on the engine status heartbeat. Keep the latest status
+  // available to voice selection without making the selection callback change
+  // on every heartbeat and forcing the memoised pages to rebuild.
+  const engineRef = useRef(engine);
+  engineRef.current = engine;
   const plaza = usePlaza();
-  const { syncParams, refreshProvision } = engine;
+  const { syncParams, refreshProvision, noteSwap } = engine;
 
   // Telemetry consent: ask only after the user has actually got value out of
   // the product — 60 s of clean conversion — not at first launch.
@@ -498,6 +513,10 @@ export default function App() {
   useEffect(() => {
     // 语言引导优先于 Runtime 补全，避免补全窗还是默认中文。
     if (!langGateChecked || showLangGate) return;
+    if (engine.provision.runtime_migration_required) {
+      setShowProvision(false);
+      return;
+    }
     if (engine.provision.need_provision && !provisionDismissed) {
       setShowProvision(true);
     }
@@ -506,6 +525,7 @@ export default function App() {
     provisionDismissed,
     langGateChecked,
     showLangGate,
+    engine.provision.runtime_migration_required,
   ]);
 
   useEffect(() => {
@@ -517,13 +537,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!ready) return;
+    let alive = true;
     void getConfig()
       .then((c) => {
-        if (c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
+        if (alive && c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
       })
       .catch(() => {});
-    void currentVoice()
-      .then((c) => {
+    void (async () => {
+      // Keep shell-generated profile text in step with the React locale.
+      try {
+        await invoke("i18n_set_locale", { locale });
+      } catch {
+        /* browser preview */
+      }
+      const c = await currentVoice();
+      if (!alive) return;
+      {
         if (c.model) {
           setVoiceName(String(c.model.name || ""));
           setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
@@ -537,12 +567,17 @@ export default function App() {
           pitch: c.pitch != null ? Number(c.pitch) : undefined,
           formant: c.formant != null ? Number(c.formant) : undefined,
         });
-      })
-      .catch(() => {
+      }
+    })().catch(() => {
+      if (alive) {
         /* browser preview */
-      });
-    // Runs once on mount; syncParams is stable (useCallback with no deps).
-  }, [syncParams]);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // Locale changes must refresh the shell-provided profile summary too.
+  }, [locale, ready, syncParams]);
 
   // 设置页 / 底栏 / 快捷键 / 切音色都会改配置。底栏自己的 state 以前只在
   // 挂载和切音色时读一次，设置里拖音高底栏数字不动。
@@ -688,8 +723,11 @@ export default function App() {
   // 不在设置页和说明页各抄一遍 —— 抄了就得改三处，迟早对不上。
   // 加一 = 「再滚一次」：同一页反复点也要每次都滚过去。
   const [communityNonce, setCommunityNonce] = useState(0);
+  const [moreTopNonce, setMoreTopNonce] = useState(0);
   const openCommunity = useCallback(() => {
     setCommunityNonce((n) => n + 1);
+    // 清掉上一次的社区落点，避免之后进入「其他」时把旧请求当成新请求。
+    setMoreTopNonce(0);
     setPage("more");
   }, []);
   const [helpFocus, setHelpFocus] = useState("");
@@ -838,21 +876,22 @@ export default function App() {
     // 采样率会变时引擎自己退回重开流。worker 没在跑时这里会失败，配置已是
     // 新的，下次开启就对，所以吞掉。
     // 纯 DSP worker 手里没有 RVC，热换会失败；改走完整 start（会切到 RVC worker）。
-    if (engine.running) {
-      const st = engine.status;
+    const currentEngine = engineRef.current;
+    if (currentEngine.running) {
+      const st = currentEngine.status;
       const dsp =
         st?.dsp_only === true ||
         st?.function === "fx" ||
         st?.worker_kind === "dsp";
       if (dsp) {
-        engine.noteSwap();
+        noteSwap();
         void startVc().catch(() => {});
       } else {
-        engine.noteSwap();
+        noteSwap();
         void swapModel().catch(() => {});
       }
     }
-  }, [syncParams, engine.running, engine.noteSwap, engine.status]);
+  }, [noteSwap, syncParams]);
 
   // —— 新手进度：两个历史事件的落盘点 ——
   // 首次成功变声（running 一旦为真就记，之后不再写）。
@@ -1095,6 +1134,12 @@ export default function App() {
           // Opening the plaza is what clears its dot — it used to be hardcoded
           // on, so it meant nothing.
           if (id === "plaza") plaza.markSeen();
+          if (id === "more") {
+            // 顶部导航进入「其他」是普通页面导航，应回到页首；社区入口才滚到
+            // 社媒区。清除社区请求也避免旧落点在返回时再次触发。
+            setCommunityNonce(0);
+            setMoreTopNonce((n) => n + 1);
+          }
           setPage(id);
         }}
         plazaUnread={plaza.unread}
@@ -1106,8 +1151,24 @@ export default function App() {
         onDone={() => setShowLangGate(false)}
       />
 
+      <RuntimeMigrationDialog
+        open={!showLangGate && engine.provision.runtime_migration_required === true}
+        onDone={async () => {
+          try {
+            await refreshProvision();
+          } catch {
+            /* status polling will retry */
+          }
+          await engine.refresh();
+        }}
+      />
+
       <ProvisionGate
-        open={showProvision && !showLangGate}
+        open={
+          showProvision &&
+          !showLangGate &&
+          engine.provision.runtime_migration_required !== true
+        }
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);
@@ -1176,6 +1237,8 @@ export default function App() {
                   updateBusy={updateBusy}
                   onOpenHelp={openHelp}
                   onOpenCommunity={openCommunity}
+                  selectedTab={settingsTab}
+                  onTabChange={setSettingsTab}
                 />
               );
             case "help":
@@ -1201,6 +1264,7 @@ export default function App() {
                   }}
                   onOpenDownloadModels={openDownloadModels}
                   focusCommunityNonce={communityNonce}
+                  resetScrollNonce={moreTopNonce}
                 />
               );
           }
@@ -1258,6 +1322,7 @@ export default function App() {
 
       {/* 撕裂这两条排在所有 Nudge 前面：用户正卡着，别让「要不要更新」
           「要不要开统计」挡在他前面。 */}
+      <AudioRecoveryBanner status={engine.status} />
       {engine.tearAsk ? (
         <Nudge
           title={t("s.tearTitle")}
@@ -1436,7 +1501,10 @@ export default function App() {
         <OnboardingBar
           tick={onboardTick}
           onDismissed={() => setOnboardTick((n) => n + 1)}
-          onNavigate={setPage}
+          onNavigate={(id, focus) => {
+            if (id === "help") openHelp(focus);
+            else setPage(id);
+          }}
         />
       ) : null}
     </div>

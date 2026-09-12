@@ -141,6 +141,7 @@ export function Overlay() {
       >
         <span
           aria-hidden
+          data-tauri-drag-region
           className="flex-none rounded-full"
           style={{
             width: 9,
@@ -152,6 +153,7 @@ export function Overlay() {
         />
         <div data-tauri-drag-region className="min-w-0 flex-1">
           <div
+            data-tauri-drag-region
             className="truncate text-[12.5px] font-semibold leading-tight"
             style={{ color: "#eef2f7" }}
             title={error || label}
@@ -161,10 +163,12 @@ export function Overlay() {
           {/* 电平条。宽度用 transform 画，不用 width —— 每秒十次改 width 会
               一直触发布局，改 transform 只在合成器里走。 */}
           <div
+            data-tauri-drag-region
             className="mt-1 h-[3px] overflow-hidden rounded-full"
             style={{ background: "rgba(238, 242, 247, 0.16)" }}
           >
             <div
+              data-tauri-drag-region
               className="h-full origin-left rounded-full"
               style={{
                 transform: `scaleX(${live ? level : 0})`,

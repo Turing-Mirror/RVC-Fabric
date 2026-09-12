@@ -1,4 +1,3 @@
-import { listen } from "@tauri-apps/api/event";
 import {
   Fragment,
   useCallback,
@@ -10,11 +9,8 @@ import {
   type SetStateAction,
 } from "react";
 import {
-  cancelStoreDownload,
   colsForWidth,
   fetchStoreCatalog,
-  installStoreVoice,
-  installStagedVoice,
   stagedVoices,
   revealStagedVoice,
   discardStagedVoice,
@@ -23,6 +19,12 @@ import {
   type StoreCatalog,
   type StoreVoice,
 } from "../lib/voices";
+import {
+  cancelStoreJob,
+  enqueueStoreDownload,
+  useStoreJobs,
+  type VoiceProg,
+} from "../lib/storeJobs";
 import { Btn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
@@ -53,14 +55,6 @@ import { useI18n } from "../i18n";
 const FOCUS_SEP = "\t";
 const OTHER_SERIES_KEY = "__other__";
 
-type VoiceProg = {
-  percent: number;
-  done: number;
-  total: number;
-  message: string;
-  phase: string;
-};
-
 const STALL_AFTER_MS = 12_000;
 
 function formatDuration(ms: number): string {
@@ -86,18 +80,6 @@ function storePercentLabel(
   if (pct < 0.1) return "<0.1%";
   if (pct < 10) return `${pct.toFixed(1)}%`;
   return `${Math.round(pct)}%`;
-}
-
-function clearVoiceProg(
-  setProg: Dispatch<SetStateAction<Record<string, VoiceProg>>>,
-  id: string,
-) {
-  setProg((prev) => {
-    if (!(id in prev)) return prev;
-    const next = { ...prev };
-    delete next[id];
-    return next;
-  });
 }
 
 type SeriesNode = {
@@ -171,14 +153,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [cols, setCols] = useState(5);
-  // Two concurrent installs plus a queue — same as the Tk shell. Each download
-  // now has its own cancel flag in Rust, so one cancel no longer kills the rest.
-  const MAX_CONCURRENT = 2;
-  const [running, setRunning] = useState<string[]>([]);
-  const [queued, setQueued] = useState<string[]>([]);
-  /** Per-voice download progress. The old single string at the top of the
-   *  section was overwritten when two downloads ran at once. */
-  const [prog, setProg] = useState<Record<string, VoiceProg>>({});
+  // Jobs live in storeJobs so leaving the plaza does not drop an in-flight pack.
+  const jobs = useStoreJobs();
+  const running = jobs.running;
+  const queued = jobs.queued;
+  const prog = jobs.prog;
   const [err, setErr] = useState("");
   const [thirdAck, setThirdAck] = useState(false);
   /** 第三方下完后滚到「确认安装」那张卡。 */
@@ -231,6 +210,16 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     void loadStaged();
   }, [reloadToken, refresh, loadStaged]);
 
+  // A job that finished while this page was unmounted still has to refresh the
+  // catalog and the staged list, otherwise the card stays on 「下载」.
+  useEffect(() => {
+    if (jobs.generation === 0) return;
+    void loadStaged();
+    void refresh(false);
+    onInstalled?.();
+    if (jobs.lastCompletedThird && jobs.lastCompleted) setScrollToId(jobs.lastCompleted);
+  }, [jobs.generation, jobs.lastCompleted, jobs.lastCompletedThird, loadStaged, refresh, onInstalled]);
+
   useEffect(() => {
     if (!scrollToId || !staged[scrollToId]) return;
     const el = document.getElementById(`store-voice-${scrollToId}`);
@@ -240,51 +229,6 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     btn?.focus();
     setScrollToId("");
   }, [scrollToId, staged]);
-
-  useEffect(() => {
-    // 组件卸载早于 listen 兑现时，直接丢掉 unlisten 句柄会把注册泄漏到进程结束。
-    let disposed = false;
-    let un: (() => void) | undefined;
-    void listen<{
-      voice_id?: string;
-      message?: string;
-      percent?: number;
-      phase?: string;
-      done?: number;
-      total?: number;
-    }>("store-progress", (ev) => {
-      const p = ev.payload;
-      const id = (p.voice_id || "").trim();
-      if (!id) return;
-      const done = Number(p.done);
-      const total = Number(p.total);
-      const fromBytes =
-        Number.isFinite(done) && Number.isFinite(total) && total > 0
-          ? (done / total) * 100
-          : undefined;
-      const pctRaw =
-        p.percent != null && !Number.isNaN(Number(p.percent))
-          ? Number(p.percent)
-          : fromBytes;
-      setProg((prev) => ({
-        ...prev,
-        [id]: {
-          percent: pctRaw != null ? Math.max(0, Math.min(100, pctRaw)) : (prev[id]?.percent ?? 0),
-          done: Number.isFinite(done) ? done : (prev[id]?.done ?? 0),
-          total: Number.isFinite(total) && total > 0 ? total : (prev[id]?.total ?? 0),
-          message: p.message || prev[id]?.message || "",
-          phase: p.phase || prev[id]?.phase || "",
-        },
-      }));
-    }).then((fn) => {
-      if (disposed) fn();
-      else un = fn;
-    });
-    return () => {
-      disposed = true;
-      un?.();
-    };
-  }, []);
 
   // 列数跟着容器宽度走，和模型页同一个函数。
   useEffect(() => {
@@ -449,59 +393,13 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     );
   }, [q, seriesGroups]);
 
-  const startOne = async (v: StoreVoice) => {
-    setRunning((r) => [...r, v.id]);
+  const installStaged = (v: StoreVoice) => {
     setErr("");
-    const label = displayVoiceName(v);
-    try {
-      // 装进本地库的显示名跟当前界面语言一致（仍保留清单里的多语字段作缓存）
-      await installStoreVoice({ ...v, name: label });
-      // 第三方到这里只是「下完了」，还没装。刷新暂存表让按钮换成
-      // 「查看 / 确认安装」；官方源才是真的装好了。
-      await loadStaged();
-      onInstalled?.();
-      await refresh(false);
-      if (v.official === false) setScrollToId(v.id);
-    } catch (e) {
-      setErr(`${label || v.id}：${String(e)}`);
-    } finally {
-      setRunning((r) => r.filter((x) => x !== v.id));
-      clearVoiceProg(setProg, v.id);
-      // Promote the next queued item, if any.
-      setQueued((qq) => {
-        const [next, ...rest] = qq;
-        if (next) {
-          const nv = list.find((x) => x.id === next);
-          if (nv) void startOne(nv);
-        }
-        return rest;
-      });
-    }
-  };
-
-  const installStaged = async (v: StoreVoice) => {
-    setRunning((r) => [...r, v.id]);
-    setErr("");
-    const label = displayVoiceName(v);
-    try {
-      await installStagedVoice({ ...v, name: label });
-      await loadStaged();
-      onInstalled?.();
-      await refresh(false);
-    } catch (e) {
-      setErr(`${label || v.id}：${String(e)}`);
-    } finally {
-      setRunning((r) => r.filter((x) => x !== v.id));
-      clearVoiceProg(setProg, v.id);
-    }
+    enqueueStoreDownload(v, "staged");
   };
 
   const cancelOne = (id: string) => {
-    if (queued.includes(id)) {
-      setQueued((qq) => qq.filter((x) => x !== id));
-      return;
-    }
-    void cancelStoreDownload(id);
+    cancelStoreJob(id);
   };
 
   const viewStaged = async (v: StoreVoice) => {
@@ -551,11 +449,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       if (!ok) return;
       setThirdAck(true);
     }
-    if (running.length >= MAX_CONCURRENT) {
-      setQueued((qq) => [...qq, v.id]);
-      return;
-    }
-    void startOne(v);
+    enqueueStoreDownload(v);
   };
 
   const cardProps = (v: StoreVoice) => ({
@@ -673,9 +567,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">{t("s.7fe9bcf336")}</div>
       ) : null}
 
-      {err ? (
+      {err || jobs.error ? (
         <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
-          {err}
+          {err || jobs.error}
         </div>
       ) : null}
 

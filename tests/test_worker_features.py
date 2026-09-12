@@ -2,6 +2,9 @@
 import ast
 import json
 import os
+import threading
+import time
+import traceback
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -32,11 +35,20 @@ class WorkerFeatureTests(unittest.TestCase):
         model = SimpleNamespace(tgt_sr=40000, net_g=object())
         loader = Mock(return_value=model)
         engine = SimpleNamespace(gui_config=SimpleNamespace(pth_path="", n_cpu=2), config=object())
-        run = handler("_cmd_prewarm", rvc_for_realtime=SimpleNamespace(RVC=loader),
-                      inp_q=None, opt_q=None)
+        run = handler(
+            "_cmd_prewarm",
+            rvc_for_realtime=SimpleNamespace(RVC=loader),
+            inp_q=None,
+            opt_q=None,
+            threading=threading,
+            traceback=traceback,
+        )
         saved = dict(pth_path="voice.pth", index_path="voice.index", pitch=12, formant=1.0, index_rate=0.6)
         with patch("builtins.open", mock_open(read_data=json.dumps(saved))), patch("os.path.isfile", return_value=True):
             run(engine)
+            deadline = time.time() + 2
+            while getattr(engine, "_prewarm_busy", False) and time.time() < deadline:
+                time.sleep(0.01)
         self.assertEqual(loader.call_args.args[:6], (12, 1.0, "voice.pth", "voice.index", 0.6, 2))
         self.assertIs(engine._prewarmed, model)
 

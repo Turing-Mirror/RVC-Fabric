@@ -46,6 +46,9 @@ class PrewarmTests(unittest.TestCase):
         # 正在变声、没选音色、已经预热过，三种情况都直接跳过，不算失败。
         self.assertIn('if flag_vc:', body)
         self.assertIn("os.path.isfile(pth)", body)
+        # 读权重必须在命令循环之外，否则会把后面的 start 盖掉。
+        self.assertIn('name="prewarm"', body)
+        self.assertIn("daemon=True", body)
 
     def test_the_shell_only_asks_when_the_setting_is_on(self):
         lib = self._read(os.path.join("app", "src-tauri", "src", "lib.rs"))

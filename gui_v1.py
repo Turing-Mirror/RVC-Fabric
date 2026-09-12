@@ -1477,6 +1477,12 @@ if __name__ == "__main__":
             # 预热过就用预热的那份。RVC 的构造函数会尽量从 last 里复用
             # 已经读进显存的权重，所以这一步能把「点开始之后等几秒」变成即时。
             if last is None:
+                # 预热线程还在读时不要再构造一份：两份权重同时进显存会把卡打满，
+                # 开始变声就会看起来像卡死。
+                import time as _time
+                deadline = _time.time() + 90
+                while getattr(self, "_prewarm_busy", False) and _time.time() < deadline:
+                    _time.sleep(0.05)
                 warm = getattr(self, "_prewarmed", None)
                 if warm is not None and getattr(warm, "tgt_sr", 0):
                     last = warm
@@ -3324,12 +3330,14 @@ if __name__ == "__main__":
             用户点「开始变声」时最慢的一步是读权重。软件启动之后空着的那段时间
             正好可以用来做这件事，于是点下去就能说话，不用等。
 
-            三种情况直接跳过，都不算失败：正在变声（模型已经在显存里了）、
-            没有选音色、上一次预热的还在。预热是一项额外的便利，
-            它出任何问题都不该影响用户接下来的操作。
+            读权重必须在命令循环之外做。命令循环是单槽的：预热若占着它，
+            用户再点「开启变声」会被后到的 set 盖掉，底栏就会停在「引擎就绪」
+            再也不开流。
             """
             try:
                 if flag_vc:
+                    return
+                if getattr(self, "_prewarm_busy", False):
                     return
                 # The worker has enumerated devices, but has not started a stream.
                 # GUIConfig therefore does not yet contain the saved voice.
@@ -3343,27 +3351,43 @@ if __name__ == "__main__":
                 warm = getattr(self, "_prewarmed", None)
                 if warm is not None and getattr(warm, "pth_path_str", "") == pth:
                     return
-                printt("预热：开始读取 %s", pth)
-                new = rvc_for_realtime.RVC(
-                    float(saved.get("pitch") or 0),
-                    float(saved.get("formant") or 0),
-                    pth,
-                    str(saved.get("index_path") or ""),
-                    float(saved.get("index_rate") or 0),
-                    int(saved.get("n_cpu") or self.gui_config.n_cpu),
-                    inp_q,
-                    opt_q,
-                    self.config,
-                    None,
+                self._prewarm_busy = True
+                def _prewarm_job():
+                    try:
+                        if flag_vc:
+                            return
+                        printt("预热：开始读取 %s", pth)
+                        new = rvc_for_realtime.RVC(
+                            float(saved.get("pitch") or 0),
+                            float(saved.get("formant") or 0),
+                            pth,
+                            str(saved.get("index_path") or ""),
+                            float(saved.get("index_rate") or 0),
+                            int(saved.get("n_cpu") or self.gui_config.n_cpu),
+                            inp_q,
+                            opt_q,
+                            self.config,
+                            None,
+                        )
+                        if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
+                            new.pth_path_str = pth
+                            self._prewarmed = new
+                            printt("预热：完成")
+                        else:
+                            printt("预热：模型读取失败，忽略")
+                    except Exception:
+                        traceback.print_exc()
+                    finally:
+                        self._prewarm_busy = False
+                t = threading.Thread(
+                    target=_prewarm_job,
+                    name="prewarm",
+                    daemon=True,
                 )
-                if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
-                    new.pth_path_str = pth
-                    self._prewarmed = new
-                    printt("预热：完成")
-                else:
-                    printt("预热：模型读取失败，忽略")
+                t.start()
             except Exception:
                 # 预热失败就当没预热过。用户点开始时会照常读一次权重。
+                self._prewarm_busy = False
                 traceback.print_exc()
 
         def _preload_pending_model(self, job):

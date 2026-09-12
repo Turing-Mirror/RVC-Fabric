@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
@@ -26,6 +26,7 @@ import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
+import { placePopup, type PopupAnchor, type PopupBox } from "../lib/popupPos";
 import {
   bindIndex,
   clearVoice,
@@ -175,8 +176,7 @@ function ModelsPageImpl({
   const [indexItems, setIndexItems] = useState<IndexItem[]>([]);
   const [profiles, setProfiles] = useState<ProfileItem[]>([]);
   const [menu, setMenu] = useState<{
-    x: number;
-    y: number;
+    anchor: PopupAnchor;
     model: VoiceModel;
   } | null>(null);
   // 多位作者都有主页：先问用户要打开哪一个。
@@ -316,8 +316,8 @@ function ModelsPageImpl({
   /**
    * 「⋯」按钮打开菜单。位置从按钮量，不是从鼠标量。
    *
-   * 菜单右边缘对齐按钮右边缘：卡片在最后一列时，从按钮左边缘往右展开会顶出
-   * 窗口。宽度和 MoreMenu 里的 min-w 对上。
+   * 菜单右边缘对齐按钮右边缘。真正的 left/top/高度在 MoreMenu 量完自身后再
+   * 夹进窗口，这里只把按钮的盒子传过去。
    */
   const openMenu = (e: MouseEvent<HTMLButtonElement>, model: VoiceModel) => {
     // 不让这一下冒泡到上面那个「点别处就关」，否则刚开就被关掉。
@@ -327,10 +327,8 @@ function ModelsPageImpl({
       return;
     }
     const r = e.currentTarget.getBoundingClientRect();
-    const w = 168;
     setMenu({
-      x: Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)),
-      y: r.bottom + 6,
+      anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
       model,
     });
   };
@@ -878,8 +876,7 @@ function ModelsPageImpl({
 
       {menu ? (
         <MoreMenu
-          x={menu.x}
-          y={menu.y}
+          anchor={menu.anchor}
           model={menu.model}
           onClose={() => setMenu(null)}
           onDone={async () => {
@@ -956,8 +953,7 @@ function hasMoreActions(m: VoiceModel): boolean {
  * 就等于没做。现在它挂在「使用」旁边一个看得见的按钮上。
  */
 function MoreMenu({
-  x,
-  y,
+  anchor,
   model,
   onClose,
   onDone,
@@ -965,8 +961,7 @@ function MoreMenu({
   onPickAuthors,
   onEditCover,
 }: {
-  x: number;
-  y: number;
+  anchor: PopupAnchor;
   model: VoiceModel;
   onClose: () => void;
   onDone: () => void;
@@ -1096,9 +1091,48 @@ function MoreMenu({
     });
   }
   return (
+    <MoreMenuPopup anchor={anchor} items={items} />
+  );
+}
+
+function MoreMenuPopup({
+  anchor,
+  items,
+}: {
+  anchor: PopupAnchor;
+  items: { label: string; action: () => void; danger?: boolean }[];
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<PopupBox | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = ref.current;
+      if (!el) return;
+      setBox(
+        placePopup(
+          anchor,
+          { width: Math.max(el.offsetWidth, el.scrollWidth), height: el.scrollHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [anchor, items.length]);
+
+  return (
     <div
-      className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)]"
-      style={{ left: x, top: y }}
+      ref={ref}
+      className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden"
+      style={{
+        left: box?.left ?? anchor.right,
+        top: box?.top ?? anchor.bottom + 6,
+        maxHeight: box?.maxHeight,
+        maxWidth: "calc(100vw - 16px)",
+        visibility: box ? "visible" : "hidden",
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       {items.map((it) => (
@@ -1106,7 +1140,7 @@ function MoreMenu({
           key={it.label}
           type="button"
           className={[
-            "block w-full text-left border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
+            "block w-full text-left whitespace-nowrap border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
             it.danger
               ? "text-[#c44] hover:bg-[color-mix(in_srgb,#c44_10%,transparent)]"
               : "text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]",

@@ -39,7 +39,7 @@ type Props = {
   updateBusy?: boolean;
   /** 跳到说明页。设备这一套（虚拟声卡连接方式）的解释全在那边，
    *  这里只放一个入口，不把同一段话再抄一遍。 */
-  onOpenHelp?: () => void;
+  onOpenHelp?: (section?: string) => void;
   /** 跳到「其他」页的仓库与社媒。说明页解决不了的，只能找人。 */
   onOpenCommunity?: () => void;
   /** 跨主页面导航保留当前设置子页；不传则保持组件自身的默认状态。 */
@@ -274,7 +274,7 @@ function SettingsPageImpl({
             className="!mt-6"
             action={
               onOpenHelp ? (
-                <Btn onClick={() => onOpenHelp()}>{t("s.004a3a2b67")}</Btn>
+                <Btn onClick={() => onOpenHelp("wiring")}>{t("s.004a3a2b67")}</Btn>
               ) : undefined
             }
           >

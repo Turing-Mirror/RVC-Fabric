@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.5.7",
+    "version": "1.6.0",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.5.7",
+      "version": "1.6.0",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "bb8f06dfc0a4a2ad6862d2090635659b8281909440981276dc2a45dba5e018f2",
-      "size_bytes": 11424821,
+      "sha256": "a91dd1a2cc6e578f33713a0f66360b5454dd5c791cce179aa6430420248518a6",
+      "size_bytes": 11625002,
       "min_app_version": "1.3.0",
-      "notes": "1.5.7 修 1.5.6 上语音转换读文件必失败的问题。藏 ffmpeg 黑框时把 creationflags 传给了 ffmpeg-python 的 run()，这个库不认这个参数，Windows 上每转一个文件都在读音频这一步炸掉。已改回只把藏黑框交给已有的 Popen 补丁。另含：背景图采样被 canvas 同源策略挡住时改走后端读字节；协调按 冲突度而不只按细节量，避免有的图完全调废；系统 TEMP 清理器只删自己写 的文件，不再去清同门产品的残留。"
+      "notes": "1.6.0 是大更新。设置里可开音高纠错（只修突然拔高又掉回去）和提前载入音色 （启动时把当前音色读进显卡，点开始更快）。离线转换显卡撑不住时会明确告诉你 退到了哪一档。声卡打不开时可以忽略故障设备，或开不加载 ASIO 的兼容模式。 语音转换支持看波形、选一段、试听，点「使用」才另存。模型页可以把音色打成 zip 带走。离开广场后下载继续在后台跑。另修：小窗口里模型菜单被裁掉、 说明页从设置/自检进不去对应段落、提前载入音色把「开启变声」吃掉、 Runtime 搬家对话框挡住整页、NVIDIA 卡 CUDA 没起来时误切核显、中文路径 音色打不开、自检把 CABLE 当成系统默认播放设备。"
     }
   },
   "community": {

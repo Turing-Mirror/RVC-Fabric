@@ -71,6 +71,24 @@ class PrewarmTests(unittest.TestCase):
         self.assertIn('t("settings.prewarm")', settings)
         self.assertIn('c.set("prewarm_on_start", v, true)', settings)
 
+    def test_prewarmed_model_must_match_current_voice(self):
+        """预热读的是旧文件时不能领：用户中途换过音色，拿到旧模型听起来
+        就像切音色没生效（E-01 过期缓存不得进推理）。"""
+        gui = self._read("gui_v1.py")
+        start = gui[gui.index("def start_vc"):]
+        start = start[: start.index("rvc_for_realtime.RVC(")]
+        self.assertIn("pth_path_str", start)
+        self.assertIn("index_path_str", start)
+        self.assertIn("same_voice", start)
+
+    def test_prewarm_discards_stale_result_instead_of_keeping_it(self):
+        """预热完成时音色已换：旧结果要作废重读，不能留着等误领。"""
+        gui = self._read("gui_v1.py")
+        body = gui[gui.index("def _cmd_prewarm"):]
+        body = body[: body.index("def _preload_pending_model")]
+        self.assertIn("self._prewarmed = None", body)
+        self.assertIn("index_path_str", body)
+
 
 if __name__ == "__main__":
     unittest.main()

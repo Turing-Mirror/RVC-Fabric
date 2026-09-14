@@ -736,8 +736,9 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         }
         // 主显卡不是引擎配置键，它改的是 worker 进程的环境变量，所以既不该
         // 进 inuse（touched_engine），也不能靠 is_cold 拿到重启提示 ——
-        // 但它确实要重开变声才换得过去，提示得补上。
-        if k == "main_gpu" {
+        // 但它确实要重开变声才换得过去，提示得补上。accel_backend 同理：
+        // 它改写 worker 的 TM_ACCEL，要重启引擎才生效。
+        if k == "main_gpu" || k == "accel_backend" {
             needs_restart.push(k.clone());
         }
         if k == "ui_locale" {

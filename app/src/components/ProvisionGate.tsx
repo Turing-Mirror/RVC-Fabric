@@ -6,6 +6,7 @@ import {
   startProvision,
   cancelProvision,
   runtimeRecommendation,
+  capabilityLines,
   runtimeVariantLabel,
   type ProvisionStatus,
   type ProvisionProgress,
@@ -447,11 +448,15 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
           })}
         </div>
 
-        {info.gpus && info.gpus.length > 0 ? (
-          <p className="text-[12px] text-[var(--meta)] m-0 mb-4">
-            {t("s.af8a2d5711", { v0: info.gpus.join(" · ") })}
-          </p>
-        ) : null}
+        {/* C-05 安装前能力说明：检测到的 CPU/内存/GPU、所选包的已知限制、
+            实时性能待实测。GPUs 原单行并入第一条检测行，不重复列。 */}
+        <div className="text-[12px] text-[var(--meta)] m-0 mb-4 leading-relaxed">
+          {capabilityLines(info, variant).map((line) => (
+            <p key={line} className="m-0 mb-1 last:mb-0">
+              {line}
+            </p>
+          ))}
+        </div>
 
         {/* 多块 N 卡才问。只有一块的时候「主显卡」是个没有意义的问题，
             摆在首次安装的流程里只会让人卡住。 */}

@@ -54,6 +54,9 @@ export type ProvisionStatus = {
   worker_script_ok?: boolean;
   product_root?: string;
   gpus?: string[];
+  /** C-05 安装前能力说明：检测到的 CPU 型号与内存（GB，0 = 未知）。 */
+  cpu_name?: string;
+  memory_gb?: number;
   /**
    * 只含 N 卡，「主显卡」下拉用它，下标就是 CUDA 序号。
    *
@@ -117,6 +120,37 @@ export function runtimeRecommendation(status?: Pick<
     default:
       return t("s.1e1016e5c8");
   }
+}
+
+/**
+ * C-05 安装前能力说明：检测到的硬件 + 所选包的已知限制。
+ * 只写有依据的结论：检测不到的东西标「未知」，实时性能一律标「待实测」，
+ * 不按型号承诺流畅度。
+ */
+export function capabilityLines(
+  info: Pick<ProvisionStatus, "cpu_name" | "memory_gb" | "gpus" | "nvidia_gpus">,
+  variant: string,
+): string[] {
+  const parts = [
+    info.cpu_name?.trim() || t("s.capUnknownCpu"),
+    info.memory_gb && info.memory_gb > 0
+      ? t("s.capMemGb", { v0: String(info.memory_gb) })
+      : t("s.capUnknownMem"),
+    info.gpus?.filter(Boolean).join(" · ") || t("s.capNoGpu"),
+  ];
+  const lines = [t("s.capDetected", { v0: parts.join(" · ") })];
+  const wantsNvidia = variant.startsWith("nvidia");
+  const wantsDml = variant === "amd";
+  const noGpu = !(info.gpus?.filter(Boolean).length);
+  if (wantsNvidia && !(info.nvidia_gpus?.length)) {
+    lines.push(t("s.capNeedNvidia"));
+  } else if (wantsDml && noGpu) {
+    lines.push(t("s.capNeedGpu"));
+  } else if (noGpu) {
+    lines.push(t("s.capCpuFallback"));
+  }
+  lines.push(t("s.capRealtimeNote"));
+  return lines;
 }
 
 export type ProvisionProgress = {

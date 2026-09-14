@@ -324,6 +324,84 @@ fn enumerate_gpus() -> Vec<String> {
     vec![]
 }
 
+/// CPU 名称：注册表 `CentralProcessor\0` 的 ProcessorNameString。
+/// 与 enumerate_gpus 同一套读法——不起 PowerShell、不会挂起（C-05）。
+#[cfg(windows)]
+pub fn cpu_name() -> String {
+    use std::ffi::{OsStr, OsString};
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ,
+    };
+
+    fn wide(s: &str) -> Vec<u16> {
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+    unsafe {
+        let mut key: HKEY = std::ptr::null_mut();
+        if RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            wide(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0").as_ptr(),
+            0,
+            KEY_READ,
+            &mut key,
+        ) != ERROR_SUCCESS
+        {
+            return String::new();
+        }
+        let mut buf = [0u16; 512];
+        let mut cb: u32 = std::mem::size_of_val(&buf) as u32;
+        let rc = RegQueryValueExW(
+            key,
+            wide("ProcessorNameString").as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            buf.as_mut_ptr() as *mut u8,
+            &mut cb,
+        );
+        RegCloseKey(key);
+        if rc != ERROR_SUCCESS {
+            return String::new();
+        }
+        let chars = (cb as usize / 2).min(buf.len());
+        OsString::from_wide(&buf[..chars])
+            .to_string_lossy()
+            .trim_end_matches('\0')
+            .trim()
+            .to_string()
+    }
+}
+
+#[cfg(not(windows))]
+pub fn cpu_name() -> String {
+    String::new()
+}
+
+/// 物理内存总量（GB，一位小数）。读不出来就给 0，界面把它当「未知」。
+#[cfg(windows)]
+pub fn memory_gb() -> f64 {
+    use windows_sys::Win32::System::SystemInformation::{
+        GlobalMemoryStatusEx, MEMORYSTATUSEX,
+    };
+    unsafe {
+        let mut st: MEMORYSTATUSEX = std::mem::zeroed();
+        st.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        if GlobalMemoryStatusEx(&mut st) == 0 {
+            return 0.0;
+        }
+        (st.ullTotalPhys as f64 / 1024.0 / 1024.0 / 1024.0 * 10.0).round() / 10.0
+    }
+}
+
+#[cfg(not(windows))]
+pub fn memory_gb() -> f64 {
+    0.0
+}
+
 pub fn read_package_meta_variant(root: &Path) -> Option<String> {
     let p = paths::package_meta_path(root);
     if !p.is_file() {
@@ -555,6 +633,10 @@ pub fn provision_status(root: &Path) -> Value {
         "worker_script_ok": worker_script,
         "product_root": root.to_string_lossy(),
         "gpus": gpus,
+        // C-05 安装前能力说明的原料：CPU 型号与内存总量（读不到留空/0，
+        // 界面按「未知」处理，不编数字）。
+        "cpu_name": cpu_name(),
+        "memory_gb": memory_gb(),
         // 「主显卡」下拉的候选项。下标即 CUDA 序号。
         "nvidia_gpus": list_nvidia_gpus(),
         "recommended_variant": recommended,

@@ -2107,7 +2107,7 @@
     "redownload": "Загрузить заново",
     "switchDone": "Runtime переключён."
   },
-    "runtimeMigration": {
+  "runtimeMigration": {
     "title": "Перенос runtime",
     "migrate": "Перенести runtime",
     "nvidia": "NVIDIA (рекомендуется для большинства карт NVIDIA)",
@@ -2135,5 +2135,17 @@
     "verifyFailed": "Перенесённый runtime не прошёл проверку.",
     "notFound": "Старый runtime не найден.",
     "runtimeNotReady": "Этот runtime ещё не готов."
+  },
+  "sepVariant": {
+    "normal": "стандарт",
+    "aggressive": "агрессивный",
+    "lite": "лёгкий",
+    "main": "основной",
+    "highend": "верхние",
+    "lowendA": "низкие A",
+    "lowendB": "низкие B"
+  },
+  "sepModels": {
+    "deechoDereverb": "Удаление эха и реверберации"
   }
 }

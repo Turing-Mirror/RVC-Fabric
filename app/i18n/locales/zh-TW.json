@@ -2107,7 +2107,7 @@
     "redownload": "重新下載",
     "switchDone": "執行環境已切換。"
   },
-    "runtimeMigration": {
+  "runtimeMigration": {
     "title": "遷移執行環境",
     "migrate": "遷移執行環境",
     "nvidia": "NVIDIA（推薦大多數 N 卡）",
@@ -2135,5 +2135,17 @@
     "verifyFailed": "遷移後的執行環境未通過檢查。",
     "notFound": "找不到舊版執行環境。",
     "runtimeNotReady": "這套執行環境尚未就緒。"
+  },
+  "sepVariant": {
+    "normal": "標準",
+    "aggressive": "強力",
+    "lite": "輕量",
+    "main": "主",
+    "highend": "高頻",
+    "lowendA": "低頻 A",
+    "lowendB": "低頻 B"
+  },
+  "sepModels": {
+    "deechoDereverb": "去回聲與混響"
   }
 }

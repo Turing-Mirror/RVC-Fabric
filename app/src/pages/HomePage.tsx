@@ -5,6 +5,7 @@ import { getConfig, onConfigPatch } from "../lib/config";
 import { listVoices, modelKey, type VoiceModel } from "../lib/voices";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { resolveCover, useCoverCache } from "../lib/cover";
+import { useFlipRow } from "../lib/flip";
 import {
   displayVoiceName,
   displayVoiceTag,
@@ -194,6 +195,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   const pendingKey = useVoiceSwitchPending();
   const bannerTexts = useBannerTexts();
   const cardPx = useRecentCardMetrics();
+  // 卡片换序的位置过渡（C-04）：数组重排后卡片滑过去，不瞬移。
+  const flipRowRef = useFlipRow<HTMLDivElement>();
   const load = async () => {
     try {
       const cat = await listVoices();
@@ -319,7 +322,10 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
           {msg ? (
             <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
           ) : null}
-          <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
+          <div
+            ref={flipRowRef}
+            className="relative flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3"
+          >
             {ordered.map((v) => {
               const cur = v === current;
               const pend = pendingKey !== "" && pendingKey === modelKey(v);
@@ -334,6 +340,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                 <button
                   key={keyOf(v)}
                   type="button"
+                  data-flip={keyOf(v)}
                   onClick={() => void pick(v)}
                   className="border-0 bg-transparent p-0 text-left cursor-pointer"
                 >

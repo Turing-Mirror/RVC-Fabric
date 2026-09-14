@@ -37,6 +37,7 @@ mod separate;
 mod shell_extras;
 mod store;
 mod sts;
+mod sts_sources;
 mod tearing;
 mod telemetry;
 #[cfg(test)]
@@ -1294,6 +1295,8 @@ async fn sts_start(
     format: Option<String>,
     sid: Option<u32>,
     f0_file: Option<String>,
+    // C-10 显式清单：冻结快照 [{src, rel}]。有它 worker 不再扫 input。
+    manifest: Option<Vec<Value>>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let model_path = model_path.unwrap_or_default();
@@ -1319,6 +1322,7 @@ async fn sts_start(
             &model_path,
             &index_path,
             opts,
+            manifest,
         )
     })
     .await
@@ -1334,6 +1338,80 @@ fn sts_cancel() {
 fn sts_reveal(state: State<'_, Mutex<AppState>>, path: Option<String>) -> Result<(), String> {
     let root = root_clone(&state)?;
     sts::reveal_output(&root, path.as_deref().unwrap_or(""))
+}
+
+#[tauri::command]
+async fn sts_sources_scan(
+    state: State<'_, Mutex<AppState>>,
+    output: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(sts_sources::scan(&root, output.as_deref().unwrap_or("")))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn sts_sources_add(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
+    sts_sources::add(&root_clone(&state)?, &path)
+}
+
+#[tauri::command]
+fn sts_sources_remove(state: State<'_, Mutex<AppState>>, id: String) -> Result<Value, String> {
+    sts_sources::remove(&root_clone(&state)?, &id)
+}
+
+#[tauri::command]
+fn sts_sources_set_recursive(
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+    recursive: bool,
+) -> Result<(), String> {
+    sts_sources::set_recursive(&root_clone(&state)?, &id, recursive)
+}
+
+#[tauri::command]
+fn sts_sources_exclude(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
+    sts_sources::exclude(&root_clone(&state)?, &path)
+}
+
+#[tauri::command]
+fn sts_sources_restore(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
+    sts_sources::restore(&root_clone(&state)?, &path)
+}
+
+#[tauri::command]
+fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    sts_sources::clear(&root_clone(&state)?)
+}
+
+#[tauri::command]
+fn sts_sources_delete(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
+    sts_sources::delete_file(&root_clone(&state)?, &path)
+}
+
+#[tauri::command]
+fn sts_sources_rename(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+    new_name: String,
+) -> Result<String, String> {
+    sts_sources::rename_file(&root_clone(&state)?, &path, &new_name)
+}
+
+#[tauri::command]
+async fn sts_snapshot(
+    state: State<'_, Mutex<AppState>>,
+    output: Option<String>,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(sts_sources::snapshot(&root, output.as_deref().unwrap_or("")))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // --- 文字合成 TTS（文字 → SAPI → 可选 RVC）--------------------------------
@@ -2398,6 +2476,16 @@ pub fn run() {
             sts_list_input,
             sts_delete_input,
             sts_rename_input,
+            sts_sources_scan,
+            sts_sources_add,
+            sts_sources_remove,
+            sts_sources_set_recursive,
+            sts_sources_exclude,
+            sts_sources_restore,
+            sts_sources_clear,
+            sts_sources_delete,
+            sts_sources_rename,
+            sts_snapshot,
             sts_reveal_input,
             sts_default_input,
             sts_record_start,

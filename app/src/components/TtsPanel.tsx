@@ -14,7 +14,7 @@ import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
-import { AudioTrimButton, AudioTrimEditor, canTrimAudio } from "./AudioTrim";
+import { AudioTrimEditor, canTrimAudio } from "./AudioTrim";
 import { MoreMenuPopup, type PopupAnchor } from "./MoreMenu";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 
@@ -65,14 +65,33 @@ type InputFile = {
   path: string;
   size: number;
   mtime: number;
+  /** C-08/09：来源归属与排除状态，由 sts_sources_scan 给出。 */
+  source_id?: string;
+  source_name?: string;
+  source_path?: string;
+  excluded?: boolean;
+  excluded_by_dir?: boolean;
 };
 
-type InputList = {
-  dir: string;
-  exists?: boolean;
-  truncated?: boolean;
-  files?: InputFile[];
+type SrcDef = {
+  id: string;
+  kind: "file" | "dir";
+  path: string;
+  recursive: boolean;
+  short: string;
 };
+
+type SrcScan = {
+  sources?: SrcDef[];
+  items?: InputFile[];
+  missing?: { id: string; path: string }[];
+  total?: number;
+  pending?: number;
+  excluded?: number;
+  output_in_source?: boolean;
+};
+
+type ManifestEntry = { src: string; rel: string };
 
 type TtsStatus = {
   runtime_ready?: boolean;
@@ -133,7 +152,6 @@ const ROW = "flex items-center gap-3 py-2.5";
  * 看起来是有意为之，而不是挤坏了。
  */
 const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
-const LIST_CAP_UI = 300;
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FIELD =
@@ -216,7 +234,6 @@ function StsSection() {
   const [modelPath, setModelPath] = useState("");
   const [indexPath, setIndexPath] = useState("");
   const [modelName, setModelName] = useState("");
-  const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [pitch, setPitch] = useState(0);
   const [f0method, setF0method] = useState<(typeof STS_F0)[number]>("rmvpe");
@@ -262,21 +279,30 @@ function StsSection() {
   // 批量里转失败被跳过的文件。整批不再因为一个坏文件中止，所以得有地方交代
   // 到底是哪几个没转出来。过程中 skip 事件也会往这里塞，不用等整批结束。
   const [skipped, setSkipped] = useState<Skipped[]>([]);
+  // 上次执行的冻结清单 + 可重试的失败者。重试只跑失败条目，不重复处理
+  // 已成功的（C-10）。
+  const lastManifestRef = useRef<ManifestEntry[]>([]);
+  const [retryable, setRetryable] = useState<ManifestEntry[]>([]);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
-  const [lib, setLib] = useState<InputList | null>(null);
+  // C-09：多来源清单。scan 是后端清单服务给的完整视图（含排除项）；
+  // checked 只是批量操作的临时勾选，不参与/排除状态在服务端。
+  const [scan, setScan] = useState<SrcScan | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [listFilter, setListFilter] = useState<"active" | "excluded" | "all">("active");
+  const [listQuery, setListQuery] = useState("");
   const [inputPage, setInputPage] = useState(0);
+  const lastCheckedRef = useRef("");
+  const [trimPath, setTrimPath] = useState("");
   const [trimOpen, setTrimOpen] = useState(false);
-  const [trimBusy, setTrimBusy] = useState(false);
+  const [, setTrimBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [rec, setRec] = useState<RecProgress | null>(null);
   const [playing, setPlaying] = useState("");
   const [fileMenu, setFileMenu] = useState<{ anchor: PopupAnchor; file: InputFile } | null>(null);
   const recordingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const inputRef = useRef(input);
-  inputRef.current = input;
   const lastHomePath = useRef("");
   /** 上一次真正写出文件的目录。打开输出目录用它，不看默认 sts。 */
   const lastDestRef = useRef("");
@@ -337,7 +363,6 @@ function StsSection() {
           );
         }
         if (s.index_rate != null) setIndexRate(Number(s.index_rate));
-        if (!inputRef.current && s.last_input) setInput(String(s.last_input));
         // 只回填用户选过的目录。默认 User_Data/sts 不当成已选。
         if (!outputRef.current && s.last_output) setOutput(String(s.last_output));
         if (s.recording) {
@@ -401,10 +426,7 @@ function StsSection() {
       if (ev.payload.phase === "done" || ev.payload.phase === "error") {
         recordingRef.current = false;
         setRecording(false);
-        void invoke<InputList>("sts_list_input", {
-          input: inputRef.current,
-        }).then(setLib)
-          .catch(() => undefined);
+        void refreshScanRef.current?.();
       }
     }).then((fn) => {
       if (disposed) dropListen(fn);
@@ -491,25 +513,22 @@ function StsSection() {
     };
   }, [load, pickVoice, showErr]);
 
-  const refreshList = useCallback(async (path: string) => {
+  const refreshScan = useCallback(async () => {
     try {
-      const r = await invoke<InputList>("sts_list_input", { input: path });
-      setLib(r);
+      const r = await invoke<SrcScan>("sts_sources_scan", { output });
+      setScan(r);
+      // 重扫后旧勾选可能已失效（文件消失/被排除规则接管），清掉再选。
+      setChecked(new Set());
     } catch (e) {
       showErr(String(e));
     }
-  }, [showErr]);
+  }, [output, showErr]);
+  const refreshScanRef = useRef<() => Promise<void> | undefined>(() => undefined);
+  refreshScanRef.current = refreshScan;
 
   useEffect(() => {
-    // 只跟输入路径走
-    void refreshList(input);
-  }, [input, refreshList]);
-
-  useEffect(() => {
-    setInputPage(0);
-    setTrimOpen(false);
-    setTrimBusy(false);
-  }, [input]);
+    void refreshScan();
+  }, [refreshScan]);
 
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
   useEffect(() => {
@@ -574,27 +593,22 @@ function StsSection() {
     setRec({ phase: "start", sec: 0, message: t("s.stsRecordOpening") });
     recordingRef.current = true;
     setRecording(true);
-    const prior = input;
     try {
-      let folder = prior;
-      if (!folder) {
-        folder = await invoke<string>("sts_default_input");
-        setInput(folder);
-      }
+      // 录音始终落原默认录音目录，不随手塞进某个来源；录完把这个目录
+      // 登记为来源（已是来源则 add 内部去重），新文件随下次扫描出现。
+      const folder = await invoke<string>("sts_default_input");
       const r = await invoke<{
         file?: string;
         dir?: string;
         cancelled?: boolean;
       }>("sts_record_start", { input: folder });
-      if (r.dir) {
-        const wasSingle = !!(prior && lib?.dir && prior !== lib.dir);
-        if (wasSingle && r.file && !r.cancelled) setInput(r.file);
-        else if (!prior) setInput(r.dir);
+      if (r.dir && !r.cancelled) {
+        await invoke("sts_sources_add", { path: r.dir }).catch(() => undefined);
       }
       if (r.file && !r.cancelled) {
         showInfo(t("s.stsRecordSaved", { v0: r.file }));
       }
-      await refreshList(r.dir || folder);
+      await refreshScan();
     } catch (e) {
       showErr(String(e));
     } finally {
@@ -608,9 +622,8 @@ function StsSection() {
     if (!(await askConfirm(t("s.stsDeleteConfirm", { v0: f.name })))) return;
     if (playing === f.path) stopPlay();
     try {
-      await invoke("sts_delete_input", { input, path: f.path });
-      if (input === f.path) setInput(lib?.dir || "");
-      await refreshList(input === f.path ? lib?.dir || "" : input);
+      await invoke("sts_sources_delete", { path: f.path });
+      await refreshScan();
     } catch (e) {
       showErr(String(e));
     }
@@ -620,16 +633,103 @@ function StsSection() {
     const name = await askPrompt(t("s.b8659855b0"), f.name);
     const nextName = name?.trim();
     if (!nextName || nextName === f.name) return;
-    const selected = samePath(input, f.path);
     if (playing === f.path) stopPlay();
     try {
-      const renamed = await invoke<string>("sts_rename_input", {
-        input,
+      await invoke<string>("sts_sources_rename", {
         path: f.path,
         newName: nextName,
       });
-      if (selected) setInput(renamed);
-      else await refreshList(input);
+      await refreshScan();
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
+  // 批量勾选只作「排除/恢复」的操作对象；参与/排除状态在服务端，
+  // 不拿 checkbox 当真实输入（计划 C8：不拿 DOM 状态决定真正输入）。
+  const visibleItems = (scan?.items ?? []).filter((it) => {
+    if (listFilter === "active" && it.excluded) return false;
+    if (listFilter === "excluded" && !it.excluded) return false;
+    const q = listQuery.trim().toLowerCase();
+    if (q && !(it.name.toLowerCase().includes(q) || it.rel.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const inputPageCount = Math.max(1, Math.ceil(visibleItems.length / 20));
+  const currentInputPage = Math.min(inputPage, inputPageCount - 1);
+  const pagedItems = visibleItems.slice(currentInputPage * 20, (currentInputPage + 1) * 20);
+
+  const toggleItem = (f: InputFile, shift: boolean) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (shift && lastCheckedRef.current) {
+        const ids = visibleItems.map((x) => x.path);
+        const a = ids.indexOf(lastCheckedRef.current);
+        const b = ids.indexOf(f.path);
+        if (a >= 0 && b >= 0) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          const on = !prev.has(f.path);
+          for (const id of ids.slice(lo, hi + 1)) {
+            if (on) next.add(id); else next.delete(id);
+          }
+          lastCheckedRef.current = f.path;
+          return next;
+        }
+      }
+      if (next.has(f.path)) next.delete(f.path); else next.add(f.path);
+      lastCheckedRef.current = f.path;
+      return next;
+    });
+  };
+
+  const excludeSelected = async () => {
+    if (!checked.size) return;
+    try {
+      for (const p of checked) {
+        await invoke("sts_sources_exclude", { path: p });
+      }
+      await refreshScan();
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
+  const restoreSelected = async () => {
+    if (!checked.size) return;
+    try {
+      for (const p of checked) {
+        const r = await invoke<{ blocked_by?: string }>("sts_sources_restore", { path: p });
+        if (r?.blocked_by) showInfo(t("s.stsStillExcluded", { v0: r.blocked_by }));
+      }
+      await refreshScan();
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
+  const addSource = async (folder: boolean) => {
+    const p = await pickPath<string | null>("sts_pick_input", { folder }, t("s.pickBusyFolder"));
+    if (!p) return;
+    try {
+      await invoke("sts_sources_add", { path: p });
+      await refreshScan();
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
+  const removeSource = async (id: string) => {
+    try {
+      await invoke("sts_sources_remove", { id });
+      await refreshScan();
+    } catch (e) {
+      showErr(String(e));
+    }
+  };
+
+  const toggleRecursive = async (id: string, v: boolean) => {
+    try {
+      await invoke("sts_sources_set_recursive", { id, recursive: v });
+      await refreshScan();
     } catch (e) {
       showErr(String(e));
     }
@@ -663,22 +763,42 @@ function StsSection() {
     });
   };
 
-  const start = async () => {
+  const start = async (override?: ManifestEntry[]) => {
     if (runningRef.current || recordingRef.current) return;
     // 实时 worker 还活着就走热路径（复用已加载的模型），不再先杀进程。
     showInfo("");
     setProg({ phase: "start", done: 0, total: 1, pct: 0, message: t("s.090840132b") });
     setSkipped([]);
+    setRetryable([]);
     runningRef.current = true;
     setRunning(true);
     try {
+      // C-10 显式清单：先冻结快照，把同一份清单交给 worker 执行。
+      // 预览计数、进度、worker 三者看到的是同一批文件；重试失败条目时
+      // 直接带上回传入的清单，不再重新扫来源。
+      const manifest =
+        override ??
+        ((
+          await invoke<{ manifest?: ManifestEntry[]; total?: number }>(
+            "sts_snapshot",
+            { output },
+          )
+        )?.manifest ?? []);
+      if (!manifest.length) {
+        showInfo(t("s.stsNoItems"));
+        runningRef.current = false;
+        setRunning(false);
+        setProg(null);
+        return;
+      }
       const r = await invoke<{
         files?: string[];
         skipped?: Skipped[];
         output?: string;
       }>("sts_start", {
-        input,
+        input: "",
         output,
+        manifest,
         pitch,
         f0method,
         indexRate,
@@ -694,6 +814,12 @@ function StsSection() {
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
+      lastManifestRef.current = manifest;
+      setRetryable(
+        bad.length
+          ? manifest.filter((e) => bad.some((b) => samePath(b.file, e.src)))
+          : [],
+      );
       if (r.output) lastDestRef.current = String(r.output);
       // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
@@ -736,10 +862,6 @@ function StsSection() {
   const okN = prog?.ok ?? 0;
   const skipN = prog?.skip ?? skipped.length;
   const eta = running ? formatEta(elapsed, pct) : "";
-  const inputFiles = lib?.files ?? [];
-  const inputPageCount = Math.max(1, Math.ceil(inputFiles.length / 20));
-  const currentInputPage = Math.min(inputPage, inputPageCount - 1);
-  const visibleInputFiles = inputFiles.slice(currentInputPage * 20, (currentInputPage + 1) * 20);
 
   return (
     <>
@@ -784,25 +906,66 @@ function StsSection() {
           </p>
         ) : null}
         <div className={ROW}>
-          <span className={LABEL}>{t("s.e8850440f2")}</span>
-          <span className={PATH}>{input || t("s.245826185c")}</span>
+          <span className={LABEL}>{t("s.stsSources")}</span>
+          <span className={PATH}>
+            {t("s.stsPendingCount", {
+              v0: scan?.pending ?? 0,
+              v1: scan?.excluded ?? 0,
+            })}
+          </span>
           <Btn
             disabled={running || recording}
-            onClick={() => {
-              void pickPath<string | null>("sts_pick_input", { folder: false }, t("s.pickBusyFolder")).then(
-                (p) => p && setInput(p),
-              );
-            }}
-          >{t("s.49deaf7da2")}</Btn>
+            onClick={() => void addSource(false)}
+          >{t("s.stsAddFile")}</Btn>
           <Btn
             disabled={running || recording}
-            onClick={() => {
-              void pickPath<string | null>("sts_pick_input", { folder: true }, t("s.pickBusyFolder")).then(
-                (p) => p && setInput(p),
-              );
-            }}
-          >{t("s.46ecac2910")}</Btn>
+            onClick={() => void addSource(true)}
+          >{t("s.stsAddDir")}</Btn>
         </div>
+        {(scan?.sources?.length ?? 0) > 0 ? (
+          <ul className="m-0 list-none p-0 pb-1">
+            {scan!.sources!.map((s) => {
+              const gone = scan?.missing?.some((m) => m.id === s.id);
+              return (
+                <li
+                  key={s.id}
+                  className="flex items-center gap-2 rounded-[var(--rs)] px-2 py-1 text-[12.5px]"
+                >
+                  <span
+                    className={`min-w-0 flex-1 truncate font-mono ${gone ? "text-[#b8534f]" : "text-[var(--ink-muted)]"}`}
+                    title={s.path}
+                  >
+                    {gone ? `⚠ ${s.path}` : s.path}
+                  </span>
+                  {s.kind === "dir" ? (
+                    <label className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--meta)] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={s.recursive}
+                        disabled={running || recording}
+                        onChange={(e) => void toggleRecursive(s.id, e.target.checked)}
+                      />
+                      {t("s.stsRecursive")}
+                    </label>
+                  ) : null}
+                  <Btn
+                    className="px-2"
+                    disabled={running || recording}
+                    ariaLabel={t("s.stsRemoveSource")}
+                    onClick={() => void removeSource(s.id)}
+                  >
+                    ✕
+                  </Btn>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {scan?.output_in_source ? (
+          <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">
+            {t("s.stsOutputInside")}
+          </p>
+        ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
           <span className={PATH}>{output || t("s.53e2db7016")}</span>
@@ -868,129 +1031,202 @@ function StsSection() {
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <span className="text-[13px] font-medium">{t("s.stsInputLibrary")}</span>
           <span className="text-[11.5px] text-[var(--meta)]">
-            {lib?.truncated
-              ? t("s.stsInputTruncated", { v0: LIST_CAP_UI })
-              : t("s.stsInputCount", { v0: lib?.files?.length ?? 0 })}
+            {t("s.stsInputCount", { v0: visibleItems.length })}
           </span>
         </div>
-        <div className="mb-2 flex flex-wrap justify-end gap-2">
-          {!input ? (
-            <Btn
-              disabled={running || recording}
-              onClick={() => {
-                void invoke<string>("sts_default_input").then((p) => {
-                  if (p) setInput(p);
-                });
-              }}
-            >
-              {t("s.stsDefaultFolder")}
-            </Btn>
-          ) : null}
-          {input && lib?.dir && input !== lib.dir ? (
-            <Btn
-              disabled={running || recording}
-              onClick={() => setInput(lib.dir)}
-            >
-              {t("s.stsUseFolder")}
-            </Btn>
-          ) : null}
-          {canTrimAudio(input) ? (
-            <AudioTrimButton
-              disabled={running || recording || trimBusy}
-              open={trimOpen}
-              onClick={() => setTrimOpen((v) => !v)}
-            />
-          ) : null}
-          <Btn
-            disabled={!lib?.dir}
-            onClick={() => {
-              if (lib?.dir) void invoke("sts_reveal_input", { path: lib.dir });
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <input
+            className={`${FIELD} min-w-0 flex-1`}
+            placeholder={t("s.stsSearchPh")}
+            value={listQuery}
+            onChange={(e) => {
+              setListQuery(e.target.value);
+              setInputPage(0);
+              // 搜索只筛显示，不改参与集合；隐藏的勾选先清掉。
+              setChecked(new Set());
+            }}
+          />
+          <select
+            className={FIELD}
+            value={listFilter}
+            disabled={running || recording}
+            onChange={(e) => {
+              setListFilter(e.target.value as typeof listFilter);
+              setInputPage(0);
+              // 切换过滤后隐藏的已选条目不能被批量操作——直接清勾选。
+              setChecked(new Set());
             }}
           >
-            {t("s.stsOpenInput")}
+            <option value="active">{t("s.stsFilterActive")}</option>
+            <option value="excluded">{t("s.stsFilterExcluded")}</option>
+            <option value="all">{t("s.stsFilterAll")}</option>
+          </select>
+          <Btn
+            disabled={running || recording || !visibleItems.length}
+            onClick={() => setChecked(new Set(visibleItems.map((x) => x.path)))}
+          >
+            {t("s.stsSelectFiltered")}
+          </Btn>
+          <Btn
+            disabled={running || recording || !checked.size}
+            onClick={() => void excludeSelected()}
+          >
+            {t("s.stsExcludeSel")}
+          </Btn>
+          <Btn
+            disabled={running || recording || !checked.size}
+            onClick={() => void restoreSelected()}
+          >
+            {t("s.stsRestoreSel")}
+          </Btn>
+          <Btn
+            disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
+            onClick={() => {
+              void invoke("sts_sources_clear").then(() => refreshScan());
+            }}
+          >
+            {t("s.stsClearList")}
           </Btn>
         </div>
-        {trimOpen && canTrimAudio(input) ? (
+        {checked.size ? (
+          <p className="m-0 mb-1 text-[11.5px] text-[var(--meta)]">
+            {t("s.stsSelected", { v0: checked.size })}
+          </p>
+        ) : null}
+        {trimOpen && canTrimAudio(trimPath) ? (
           <AudioTrimEditor
-            key={input}
-            input={input}
+            key={trimPath}
+            input={trimPath}
             disabled={running || recording}
             onBusyChange={setTrimBusy}
-            onApply={(path) => {
-              if (inputRef.current === input && !runningRef.current) setInput(path);
+            onApply={() => {
+              if (!runningRef.current) void refreshScan();
             }}
           />
         ) : null}
-        {(lib?.files?.length ?? 0) === 0 ? (
+        {!visibleItems.length ? (
           <p className="m-0 text-[12.5px] text-[var(--meta)]">
-            {t("s.stsInputEmpty")}
+            {scan?.items?.length ? t("s.stsInputEmpty") : t("s.stsNoItems")}
           </p>
         ) : (
           <>
             <ul className="m-0 max-h-[220px] list-none overflow-y-auto p-0">
-              {visibleInputFiles.map((f) => {
-                const on = input === f.path;
-                return (
-                  <li
-                    key={f.path}
-                    className={[
-                      "flex items-center gap-2 rounded-[var(--rs)] px-2 py-1.5",
-                      on
-                        ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
-                        : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
-                    ].join(" ")}
+              {pagedItems.map((f) => (
+                <li
+                  key={f.path}
+                  className={[
+                    "flex items-center gap-2 rounded-[var(--rs)] px-2 py-1.5",
+                    checked.has(f.path)
+                      ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+                      : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
+                  ].join(" ")}
+                >
+                  <input
+                    type="checkbox"
+                    className="shrink-0"
+                    checked={checked.has(f.path)}
+                    disabled={running || recording}
+                    // Shift 连选取点击时的 shiftKey；click 里拦下默认切换，
+                    // 由 toggleItem 统一处理普通与连选两条路。
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleItem(f, e.shiftKey);
+                    }}
+                    onChange={() => undefined}
+                    aria-label={f.name}
+                  />
+                  <button
+                    type="button"
+                    className={`min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer ${f.excluded ? "opacity-55" : ""}`}
+                    disabled={running || recording}
+                    onClick={() => toggleItem(f, false)}
+                    title={f.path}
                   >
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer"
-                      disabled={running || recording}
-                      onClick={() => setInput(f.path)}
-                      title={f.path}
-                    >
-                      <span className="block truncate text-[12.5px] font-mono">
-                        {f.rel || f.name}
-                      </span>
-                      <span className="block text-[11px] text-[var(--meta)] tabular-nums">
-                        {`${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
-                      </span>
-                    </button>
-                    <Btn
-                      disabled={recording}
-                      onClick={() => playFile(f.path)}
-                    >
-                      {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
-                    </Btn>
-                    <Btn
-                      className="px-2.5"
-                      disabled={running || recording}
-                      ariaLabel={t("models.more")}
-                      onClick={(e) => openFileMenu(e, f)}
-                    >
-                      ⋯
-                    </Btn>
-                  </li>
-                );
-              })}
+                    <span className="block truncate text-[12.5px] font-mono">
+                      {f.rel || f.name}
+                      {f.source_name && (scan?.sources?.length ?? 0) > 1
+                        ? `  · ${f.source_name}`
+                        : ""}
+                    </span>
+                    <span className="block text-[11px] text-[var(--meta)] tabular-nums">
+                      {f.excluded
+                        ? f.excluded_by_dir
+                          ? t("s.stsExcludedByDir")
+                          : t("s.stsFilterExcluded")
+                        : `${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
+                    </span>
+                  </button>
+                  <Btn
+                    disabled={recording}
+                    onClick={() => playFile(f.path)}
+                  >
+                    {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
+                  </Btn>
+                  <Btn
+                    className="px-2.5"
+                    disabled={running || recording}
+                    ariaLabel={t("models.more")}
+                    onClick={(e) => openFileMenu(e, f)}
+                  >
+                    ⋯
+                  </Btn>
+                </li>
+              ))}
             </ul>
             {fileMenu ? (
               <MoreMenuPopup
                 anchor={fileMenu.anchor}
                 items={[
-                  {
-                    label: t("s.1cd80fd7a8"),
-                    action: () => {
-                      setFileMenu(null);
-                      void renameFile(fileMenu.file);
-                    },
-                  },
-                  {
-                    label: t("s.stsDelete"),
-                    danger: true,
-                    action: () => {
-                      setFileMenu(null);
-                      void removeFile(fileMenu.file);
-                    },
-                  },
+                  ...(canTrimAudio(fileMenu.file.path)
+                    ? [
+                        {
+                          label: t("s.stsTrim"),
+                          action: () => {
+                            setFileMenu(null);
+                            setTrimPath(fileMenu.file.path);
+                            setTrimOpen(true);
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(fileMenu.file.excluded
+                    ? [
+                        {
+                          label: t("s.stsRestoreSel"),
+                          action: () => {
+                            setFileMenu(null);
+                            void invoke("sts_sources_restore", {
+                              path: fileMenu.file.path,
+                            }).then(() => refreshScan());
+                          },
+                        },
+                      ]
+                    : [
+                        {
+                          label: t("s.stsExcludeSel"),
+                          action: () => {
+                            setFileMenu(null);
+                            void invoke("sts_sources_exclude", {
+                              path: fileMenu.file.path,
+                            }).then(() => refreshScan());
+                          },
+                        },
+                        {
+                          label: t("s.1cd80fd7a8"),
+                          action: () => {
+                            setFileMenu(null);
+                            void renameFile(fileMenu.file);
+                          },
+                        },
+                        {
+                          label: t("s.stsDelete"),
+                          danger: true,
+                          action: () => {
+                            setFileMenu(null);
+                            void removeFile(fileMenu.file);
+                          },
+                        },
+                      ]),
                 ]}
               />
             ) : null}
@@ -1258,6 +1494,14 @@ function StsSection() {
           <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
             {t("s.stsSkippedTitle", { v0: skipped.length })}
           </p>
+          {retryable.length && !running ? (
+            <Btn
+              className="mb-1"
+              onClick={() => void start(retryable)}
+            >
+              {t("s.stsRetryFailed", { v0: retryable.length })}
+            </Btn>
+          ) : null}
           <ul className="m-0 list-none p-0">
             {skipped.map((s) => (
               <li
@@ -1294,10 +1538,14 @@ function StsSection() {
           <Btn
             primary
             busy={running}
-            disabled={running || recording || !!blocked || !input}
+            disabled={
+              running || recording || !!blocked || !(scan?.pending ?? 0)
+            }
             onClick={() => void start()}
           >
-            {running ? t("s.090840132b") : t("s.31e9cad169")}
+            {running
+              ? t("s.090840132b")
+              : t("s.stsWillProcess", { v0: scan?.pending ?? 0 })}
           </Btn>
         </div>
       </ToolActions>

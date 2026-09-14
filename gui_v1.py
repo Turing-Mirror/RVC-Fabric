@@ -3975,10 +3975,19 @@ if __name__ == "__main__":
             def fail(msg):
                 self._sts_emit(phase="error", message=msg, pct=0)
 
-            if not inp or not out_dir:
+            manifest = payload.get("manifest")
+            if not inp and not manifest:
                 fail("输入 / 输出目录不能为空")
                 return
-            files = sts_core.collect_inputs(inp)
+            if not out_dir:
+                fail("输入 / 输出目录不能为空")
+                return
+            # 壳冻结的清单优先：快照语义在壳侧定案，worker 照单执行不重扫。
+            files = (
+                sts_core.collect_manifest(manifest)
+                if manifest
+                else sts_core.collect_inputs(inp)
+            )
             if not files:
                 fail("没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）")
                 return

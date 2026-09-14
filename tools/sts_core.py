@@ -300,6 +300,26 @@ def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     return files
 
 
+def collect_manifest(entries) -> list[tuple[Path, Path]]:
+    """显式清单：壳在任务开始时冻结的快照 [{src, rel}]。
+
+    rel 已含来源短名前缀（多来源时），直接当输出相对路径用。worker 拿到
+    manifest 后不再扫目录——排除项、任务期间新增的源文件都不会回流。
+    """
+    files: list[tuple[Path, Path]] = []
+    for e in entries or []:
+        src = Path(str(e.get("src") or "").strip())
+        rel_raw = str(e.get("rel") or "").strip() or src.name
+        if not src.is_file():
+            continue
+        # 防清单里混入绝对路径/上跳：rel 必须是相对路径。
+        rel = Path(rel_raw)
+        if rel.is_absolute() or ".." in rel.parts:
+            rel = Path(src.name)
+        files.append((src, rel))
+    return files
+
+
 def file_weights(paths: Iterable[Path]) -> list[float]:
     """多文件进度按体积加权。读时长要解码，批量扫目录太贵；体积够用。"""
     out: list[float] = []

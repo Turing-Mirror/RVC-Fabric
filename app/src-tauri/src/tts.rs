@@ -483,6 +483,7 @@ fn run_inner(
         &pth,
         &index,
         opts,
+        None,
     );
     if cancel_flag().load(Ordering::SeqCst) {
         let _ = std::fs::remove_dir_all(&stage);

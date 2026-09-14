@@ -760,6 +760,10 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
         sync_inuse(root, &cfg)?;
     }
 
+    // set_hot 派发要等上一条命令被 worker 认领（上限几秒）。文件锁不能带进
+    // 这段等待：config::update 的调用方里有 UI 线程上的回调（overlay 拖动存
+    // 位置），那边会被这把锁一起拖住（R01）。文件操作到这里已全部完成。
+    drop(_g);
     // 监听是唯一「冷键但其实能热切」的东西。worker 的 _worker_apply_hot 早就
     // 认 monitor_enabled / monitor_device，转着的时候会自己开关监听流；只是
     // shell 从来没把它推过去，于是用户点完监听要重启变声才生效。

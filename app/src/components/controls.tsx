@@ -406,33 +406,37 @@ export function Toggle({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-[11px] cursor-pointer select-none">
+    // 问号不能待在 <label> 里：button 也是 labelable 元素，排在复选框前面
+    // 时它就成了这个 label 的 labeled control —— 悬停/按压整行都会把
+    // :hover/:active 转发到问号上（误触发动效），点文字被转发给问号吞掉
+    // （设置不切）。问号挪出去，label 的关联才只属于复选框。
+    <div className="flex items-center gap-[11px]">
       {tip ? <HelpMark title={tip} /> : null}
-      <span
-        aria-hidden="true"
-        onClick={(e) => {
-          e.preventDefault();
-          if (!disabled) onChange(!checked);
-        }}
-        className={[
-          "w-[15px] h-[15px] rounded grid place-items-center flex-none transition-colors",
-          checked
-            ? "bg-[var(--accent)]"
-            : "shadow-[inset_0_0_0_1px_var(--line)]",
-        ].join(" ")}
-      >
-        {checked ? (
-          <span className="text-[10px] leading-none text-[var(--accent-ink)]">✓</span>
-        ) : null}
-      </span>
-      <input
-        type="checkbox"
-        className="sr-only"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="text-sm">{label}</span>
-    </label>
+      <label className="flex items-center gap-[11px] cursor-pointer select-none">
+        {/* 纯视觉的框：点击由 label 转发给真正的 input，不再自己切一次 —
+            否则 label 激活会再点一下 input，一次点击切两回。 */}
+        <span
+          aria-hidden="true"
+          className={[
+            "w-[15px] h-[15px] rounded grid place-items-center flex-none transition-colors",
+            checked
+              ? "bg-[var(--accent)]"
+              : "shadow-[inset_0_0_0_1px_var(--line)]",
+          ].join(" ")}
+        >
+          {checked ? (
+            <span className="text-[10px] leading-none text-[var(--accent-ink)]">✓</span>
+          ) : null}
+        </span>
+        <input
+          type="checkbox"
+          className="sr-only"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="text-sm">{label}</span>
+      </label>
+    </div>
   );
 }

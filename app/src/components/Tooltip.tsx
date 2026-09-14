@@ -34,7 +34,12 @@ export function Tooltip({
 }) {
   const anchor = useRef<HTMLSpanElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
+  // 悬停和聚焦是两条独立的「想看」通道：悬停走了但焦点还在，说明就还在 ——
+  // 以前一份 open 状态，鼠标一离开就关，点了问号拿到的焦点根本留不住说明。
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const open = hovered || focused;
+  const leaveTimer = useRef<number | null>(null);
   const [pos, setPos] = useState<Pos | null>(null);
 
   const place = useCallback(() => {
@@ -61,29 +66,57 @@ export function Tooltip({
 
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
+    const close = () => {
+      setHovered(false);
+      setFocused(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      close();
+      // 焦点还在问号上的话一并放开，下一次点击/聚焦才能重新打开。
+      const a = document.activeElement;
+      if (a instanceof HTMLElement && anchor.current?.contains(a)) a.blur();
+    };
+    window.addEventListener("keydown", onKey);
     // 滚动和改窗口大小时直接收起，不追着锚点跑：追着跑要么卡，要么在
     // 内容滚出视野之后留下一个飘在半空的框。
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     window.addEventListener("blur", close);
     return () => {
+      window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("blur", close);
     };
   }, [open]);
 
+  useEffect(
+    () => () => {
+      if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
+
   return (
     <>
       <span
         ref={anchor}
         className="inline-flex items-center shrink-0 align-middle"
-        onPointerEnter={() => setOpen(true)}
-        onPointerLeave={() => setOpen(false)}
+        onPointerEnter={() => {
+          if (leaveTimer.current) {
+            window.clearTimeout(leaveTimer.current);
+            leaveTimer.current = null;
+          }
+          setHovered(true);
+        }}
+        onPointerLeave={() => {
+          // 收起留一小段缓冲：鼠标朝说明挪的那一下不至于瞬间消失。
+          leaveTimer.current = window.setTimeout(() => setHovered(false), 100);
+        }}
         // 键盘走到这里也要看得到说明，不是只有鼠标用户配看。
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
       >
         {children}
       </span>
@@ -134,6 +167,9 @@ export function HelpMark({ title }: { title: string }) {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          // 主动点击 = 想读说明：拿住焦点，由聚焦态把说明钉住，
+          // 点到别处 / Escape / 滚动才收。
+          e.currentTarget.focus();
         }}
         className={[
           // shrink-0 + align-middle：跟同行中文标题垂直居中，不被基线往下拽

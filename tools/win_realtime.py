@@ -16,16 +16,25 @@ import sys
 import threading
 from typing import Any
 
-_boosted_proc = False
+# 0=未提升, 1=ABOVE_NORMAL, 2=HIGH。允许升级不允许降级：启动/导入/预热
+# 阶段 1 就够，开流之后再升 2 —— HIGH 整个阶段都挂着的话，几十秒的权重
+# 读取和 torch 初始化会拿实时优先级去挤 TeamSpeak / 播放器这类软件的
+# 音频线程（N01）。
+_boost_level = 0
 _boosted_thread = threading.local()
 
 
 def boost_current_process(*, high: bool = False) -> None:
-    """Disable EcoQoS and raise this process's scheduling class. No-op off Windows."""
-    global _boosted_proc
+    """Disable EcoQoS and raise this process's scheduling class. No-op off Windows.
+
+    Re-entrant upward only: a later call with ``high=True`` still escalates a
+    process that was previously boosted at the lower level.
+    """
+    global _boost_level
     if sys.platform != "win32":
         return
-    if _boosted_proc:
+    want = 2 if high else 1
+    if _boost_level >= want:
         return
     try:
         import ctypes
@@ -70,7 +79,7 @@ def boost_current_process(*, high: bool = False) -> None:
             gdi32.D3DKMTSetProcessSchedulingPriorityClass(handle, 4)
         except Exception:
             pass
-        _boosted_proc = True
+        _boost_level = want
     except Exception:
         pass
 

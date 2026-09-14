@@ -30,10 +30,22 @@ class WinRealtimeTests(unittest.TestCase):
     def test_worker_calls_boost_before_torch(self):
         src = (ROOT / "tools" / "realtime_worker.py").read_text(encoding="utf-8")
         main = src[src.index("def main") :]
-        self.assertIn("boost_current_process(high=True)", main)
+        # 启动/导入期只要 ABOVE_NORMAL：压住 EcoQoS 节流但不拿 HIGH 去挤
+        # 其他软件的音频线程。HIGH 在 gui_v1.start_stream 开流成功后升。
+        self.assertIn("boost_current_process()", main)
+        self.assertNotIn("boost_current_process(high=True)", main)
         self.assertLess(
             main.index("boost_current_process"),
             main.index("runpy"),
+        )
+
+    def test_high_boost_waits_for_stream_start(self):
+        src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
+        start = src[src.index("def start_stream") :]
+        self.assertIn("boost_current_process(high=True)", start)
+        self.assertLess(
+            start.index("audio_proc.start()"),
+            start.index("boost_current_process(high=True)"),
         )
 
     def test_dsp_worker_calls_boost(self):

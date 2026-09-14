@@ -165,9 +165,15 @@ def main() -> None:
     def update_devices(hostapi_name=None):
         nonlocal hostapis, input_devices, output_devices
         nonlocal input_indices, output_indices, sg_hostapi
-        stop_stream()
-        sd._terminate()
-        sd._initialize()
+        # 与 gui_v1.update_devices 同一条规矩：读设备列表不停流。实时流在
+        # AudioIoProcess 子进程里，本进程 sd 只做查询；空闲时才重建
+        # PortAudio（热插拔可见），转着/监听开着就按现有快照刷新。
+        if not flag["vc"] and audio_proc is None and monitor_stream is None:
+            try:
+                sd._terminate()
+                sd._initialize()
+            except Exception:
+                traceback.print_exc()
         devices = sd.query_devices()
         apis = sd.query_hostapis()
         devices = filter_devices(devices, apis)
@@ -597,6 +603,14 @@ def main() -> None:
         )
         in_ptr, out_ptr, play_ptr, in_evt, stop_evt = audio_proc.get_ptrs_and_events()
         audio_proc.start()
+        # 与 gui_v1 一致：实时约束从开流成立，此刻才升 HIGH（启动期只是
+        # ABOVE_NORMAL，避免加载/枚举期挤占其他软件的音频线程）。
+        try:
+            from tools.win_realtime import boost_current_process
+
+            boost_current_process(high=True)
+        except Exception:
+            pass
         try:
             _open_monitor()
         except Exception:

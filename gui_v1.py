@@ -1779,6 +1779,14 @@ if __name__ == "__main__":
                     ) = self.audio_proc.get_ptrs_and_events()
 
                     self.audio_proc.start()
+                    # 实时约束从这一刻才成立：升级到 HIGH（worker 启动时只是
+                    # ABOVE_NORMAL，避免导入/预热期挤占其他软件的音频线程）。
+                    try:
+                        from tools.win_realtime import boost_current_process
+
+                        boost_current_process(high=True)
+                    except Exception:
+                        pass
                     # Optional self-monitor (headphones) while main out stays on CABLE
                     try:
                         self._open_monitor_stream()
@@ -2680,14 +2688,28 @@ if __name__ == "__main__":
             self._finish_block_timing(start_time)
 
         def update_devices(self, hostapi_name=None):
-            """获取设备列表 — must fully stop stream before re-init sounddevice."""
-            # Properly release AudioIoProcess (do NOT only clear flag_vc)
-            try:
-                self.stop_stream()
-            except Exception:
-                traceback.print_exc()
-            sd._terminate()
-            sd._initialize()
+            """获取设备列表。枚举不再动音频流。
+
+            实时流活在 AudioIoProcess 子进程里，本进程的 sd 只做查询 —— 读
+            设备列表没有任何理由停流。以前先 stop_stream 再 _terminate：
+            开着变声时刷新一次设备列表就把流停了，状态却还写着 running。
+
+            PortAudio 的设备表是初始化时建的，热插拔的设备要重建才看得见；
+            所以空闲时照旧 _terminate/_initialize，转着（含本进程监听开着）
+            就按现有快照刷新 —— 重建会把本进程的监听流弄坏，也没理由为此
+            去停子进程的流。
+            """
+            busy = (
+                flag_vc
+                or getattr(self, "audio_proc", None) is not None
+                or getattr(self, "monitor_stream", None) is not None
+            )
+            if not busy:
+                try:
+                    sd._terminate()
+                    sd._initialize()
+                except Exception:
+                    traceback.print_exc()
             devices = sd.query_devices()
             hostapis = sd.query_hostapis()
             devices = filter_devices(devices, hostapis)

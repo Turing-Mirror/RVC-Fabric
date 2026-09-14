@@ -161,7 +161,10 @@ def main() -> None:
     try:
         from tools.win_realtime import boost_current_process
 
-        boost_current_process(high=True)
+        # 这里还只是启动/导入阶段，没有实时约束：ABOVE_NORMAL 足够压住
+        # EcoQoS 节流，又不至于让整个加载期都拿 HIGH 去挤别的软件的音频。
+        # 开流成功后 start_stream 会再升到 HIGH。
+        boost_current_process()
     except Exception:
         pass
 

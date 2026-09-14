@@ -184,6 +184,8 @@ const DYNAMIC_PREFIXES = [
   "extras.items.",
   "settings.tabs.",
   "s.annot.issue.",
+  "sepVariant.",
+  "sepModels.",
 ];
 
 // 「引用」在这一道里放得比第三道宽：`labelKey: "nav.home"` 这类把 key 存进

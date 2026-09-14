@@ -354,14 +354,16 @@ def run_request(engine: "_Engine", req: dict) -> int:
             return 2
         f0_file = type("F0File", (), {"name": f0_path})()
 
-    if not inp or not out_dir or not model:
+    manifest = req.get("manifest")
+    if (not inp and not manifest) or not out_dir or not model:
         emit(phase="error", **mc.msg_fields(mc.STS_EMPTY_FIELDS))
         return 2
     if not Path(model).is_file():
         emit(phase="error", **mc.msg_fields(mc.STS_MODEL_MISSING, {"model": model}))
         return 2
 
-    files = collect_inputs(inp)
+    # 壳冻结的清单优先：排除/快照语义在壳侧定案，worker 照单执行不重扫。
+    files = sts_core.collect_manifest(manifest) if manifest else collect_inputs(inp)
     if not files:
         emit(phase="error", **mc.msg_fields(mc.STS_NO_AUDIO))
         return 2

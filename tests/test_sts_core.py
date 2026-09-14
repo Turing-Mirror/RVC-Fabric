@@ -573,3 +573,51 @@ class OomRetryShrinksWindowsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestTests(unittest.TestCase):
+    """C-10 显式清单：worker 只执行壳冻结的快照，不重新扫目录。"""
+
+    def test_manifest_used_verbatim(self):
+        from tools.sts_core import collect_manifest
+
+        with tempfile.TemporaryDirectory() as td:
+            a = Path(td) / "srcA" / "x.wav"
+            b = Path(td) / "srcB" / "x.wav"
+            a.parent.mkdir(parents=True)
+            b.parent.mkdir(parents=True)
+            a.write_bytes(b"1")
+            b.write_bytes(b"2")
+            files = collect_manifest(
+                [
+                    {"src": str(a), "rel": "srcA/x.wav"},
+                    {"src": str(b), "rel": "srcB/x.wav"},
+                ]
+            )
+            self.assertEqual(len(files), 2)
+            rels = {str(rel).replace("\\", "/") for _, rel in files}
+            self.assertEqual(rels, {"srcA/x.wav", "srcB/x.wav"})
+
+    def test_manifest_skips_missing_and_bad_rel(self):
+        from tools.sts_core import collect_manifest
+
+        with tempfile.TemporaryDirectory() as td:
+            good = Path(td) / "g.wav"
+            good.write_bytes(b"1")
+            ghost = Path(td) / "gone.wav"
+            files = collect_manifest(
+                [
+                    {"src": str(good), "rel": "../escape.wav"},
+                    {"src": str(ghost), "rel": "gone.wav"},
+                    {"src": str(good), "rel": str(Path(td).resolve() / "abs.wav")},
+                ]
+            )
+            # 消失的源跳过；../ 与绝对 rel 退回文件名，写不出输出目录。
+            self.assertEqual(len(files), 2)
+            for _, rel in files:
+                self.assertFalse(rel.is_absolute())
+                self.assertNotIn("..", rel.parts)
+
+
+if __name__ == "__main__":
+    unittest.main()

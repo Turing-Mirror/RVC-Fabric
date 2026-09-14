@@ -1219,6 +1219,7 @@ fn run_hot(
     pth: &str,
     index: &str,
     opts: &ConvertOpts,
+    manifest: &Option<Vec<Value>>,
     job: &mut StsLog,
 ) -> Result<Value, HotError> {
     crate::protocol::clear_sts(root);
@@ -1240,6 +1241,9 @@ fn run_hot(
     payload.insert("format".into(), json!(opts.format));
     payload.insert("sid".into(), json!(opts.sid));
     payload.insert("f0_file".into(), json!(opts.f0_file));
+    if let Some(m) = manifest {
+        payload.insert("manifest".into(), json!(m));
+    }
     let seq = crate::worker::send_command(root, "convert", payload)
         .map_err(HotError::Unavailable)?;
 
@@ -1426,6 +1430,7 @@ pub fn run(
     model_path: &str,
     index_path: &str,
     opts: ConvertOpts,
+    manifest: Option<Vec<Value>>,
 ) -> Result<Value, String> {
     {
         if *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
@@ -1479,6 +1484,7 @@ pub fn run(
         model_path,
         index_path,
         &opts,
+        &manifest,
         &mut job,
     );
     match &result {
@@ -1533,6 +1539,7 @@ fn run_inner(
     model_path: &str,
     index_path: &str,
     opts: &ConvertOpts,
+    manifest: &Option<Vec<Value>>,
     job: &mut StsLog,
 ) -> Result<Value, String> {
     if !paths::runtime_ready(root) {
@@ -1546,7 +1553,11 @@ fn run_inner(
     if !script.is_file() {
         return Err(crate::i18n::te("s.bc197d22e5", &(script.display())));
     }
-    if input.trim().is_empty() {
+    let has_manifest = manifest
+        .as_ref()
+        .map(|m| !m.is_empty())
+        .unwrap_or(false);
+    if input.trim().is_empty() && !has_manifest {
         return Err(crate::i18n::t("s.e9c01e81cb").into());
     }
     let out = if output.trim().is_empty() {
@@ -1572,7 +1583,8 @@ fn run_inner(
             Some(0), Some("route"), Some(0), Some(0), Some(0), None,
         );
         match run_hot(
-            app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts, job,
+            app, root, input, &out, pitch, f0method, index_rate, &pth, &index, opts,
+            manifest, job,
         ) {
             Ok(v) => {
                 let stats = crate::paths::clean_temps(root);
@@ -1619,6 +1631,7 @@ fn run_inner(
         "format": opts.format,
         "sid": opts.sid,
         "f0_file": opts.f0_file,
+        "manifest": manifest,
     });
     std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
         .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;

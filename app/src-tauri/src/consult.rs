@@ -262,6 +262,7 @@ fn convert_all(app: &AppHandle, root: &Path, cfg: &serde_json::Map<String, Value
             &pth,
             &index,
             opts,
+            None,
         );
         match res {
             Ok(v) => {

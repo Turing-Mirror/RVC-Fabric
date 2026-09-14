@@ -10,6 +10,7 @@ import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
 import { HOTKEYS } from "../lib/hotkeys";
 import { setHot, type EngineStatus } from "../lib/engine";
+import { backendLabel, normalizeAccel } from "../lib/backend";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
 
 const TAB_KEYS = [
@@ -116,6 +117,14 @@ function SettingsPageImpl({
   const { t, locale, setLocale } = useI18n();
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
   const TIPS = useMemo(() => tips(t), [t]);
+  // E-03 实际后端与所选后端的对照：选了没生效（引擎没重启）时要看得见。
+  const backendLine = (() => {
+    const b = String(status?.compute_backend || "");
+    if (!b) return "";
+    const dev = String(status?.compute_device || "");
+    const label = backendLabel(b);
+    return dev && dev !== label ? `${label} · ${dev}` : label;
+  })();
   const tabLabels = useMemo(
     () =>
       Object.fromEntries(
@@ -530,6 +539,32 @@ function SettingsPageImpl({
         {c.loaded && tab === "perf" ? (
           <Block title={t("s.eb1f3e5ef6")} note={t("s.9ad8c4b79c")} className="!mt-6">
             <div className={CARD}>
+              <Field
+                label={t("s.accelBackend")}
+                tip={t("s.accelBackendTip")}
+                control={
+                  <Select
+                    value={normalizeAccel(c.str("accel_backend"))}
+                    options={[
+                      { id: "auto", label: t("s.accelAuto") },
+                      { id: "cuda", label: t("s.accelCuda") },
+                      { id: "dml", label: t("s.accelDml") },
+                      { id: "cpu", label: t("s.accelCpu") },
+                    ]}
+                    onChange={(v) => c.set("accel_backend", v)}
+                  />
+                }
+              />
+              {/* 界面选的和引擎实际跑的要能对上（E-03）：选了 CPU 而底下
+                  还显示核显，就是后端没遵守选择。 */}
+              {backendLine ? (
+                <div className="text-[12.5px] text-[var(--help)] -mt-2">
+                  {t("s.accelBackendNow", { v0: backendLine })}
+                  {c.restartKeys.includes("accel_backend")
+                    ? ` · ${t("s.accelRestart")}`
+                    : ""}
+                </div>
+              ) : null}
               <Field
                 label={t("s.2f2caa6a62")}
                 tip={TIPS.block_time}

@@ -76,4 +76,6 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_Diagnostics_ToolHelp",
   # 诊断自检要看产品所在盘还剩多少（GetDiskFreeSpaceExW）。
   "Win32_Storage_FileSystem",
+  # 安装前能力说明要报内存总量（GlobalMemoryStatusEx）。
+  "Win32_System_SystemInformation",
 ] }

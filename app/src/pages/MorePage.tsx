@@ -16,6 +16,7 @@ import type { EngineStatus, ProvisionStatus } from "../lib/engine";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { askConfirm } from "../lib/webDialog";
+import { backendLabel as backendLabelOf } from "../lib/backend";
 import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDialog";
 import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
@@ -83,15 +84,7 @@ export function MorePage({
    * 实际跑在虚拟显示适配器上，最后报出来的是「显存不足」，跟显卡设置对不上号。
    */
   const backend = String(status?.compute_backend || "");
-  const backendLabel = backend
-    ? ({
-        cuda: "CUDA",
-        directml: "DirectML",
-        mps: "Metal",
-        xpu: "XPU",
-        cpu: "CPU",
-      }[backend] ?? backend)
-    : "";
+  const backendLabel = backend ? backendLabelOf(backend) : "";
   const backendDevice = String(status?.compute_device || "");
   const backendLine = backendLabel
     ? backendDevice && backendDevice !== backendLabel

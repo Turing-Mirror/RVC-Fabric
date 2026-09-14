@@ -63,8 +63,13 @@ class Config:
             self.noautoopen,
             self.dml,
         ) = self.arg_parse()
-        # Product / worker env (official AMD path uses --dml; we also honor TM_*)
-        self.dml = self._resolve_dml_flag(self.dml)
+        # 唯一后端选择结果（E-03）：用户显式选择 > TM_ACCEL > TM_USE_DML/--dml > 自动。
+        # accel 是策略（auto|cuda|dml|cpu），device_config 全程只看它和硬件事实，
+        # 不允许「界面选了 cpu，CUDA 可用就还是走 cuda」。
+        self.accel = self._resolve_accel(self.dml)
+        self.dml = self.accel == "dml" or (
+            self.accel == "auto" and self._resolve_dml_flag(self.dml)
+        )
         from configs.accel import nvidia_names_from_env, nvidia_present_without_cuda
 
         self.nvidia_cuda_missing = nvidia_present_without_cuda(
@@ -73,6 +78,26 @@ class Config:
         self.instead = ""
         self.preprocess_per = 3.7
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
+
+    @staticmethod
+    def _resolve_accel(cli_dml: bool) -> str:
+        """归一化后端策略：auto|cuda|dml|cpu。
+
+        优先级：TM_ACCEL 显式值 > TM_USE_DML / --dml（旧兼容口）> auto。
+        TM_ACCEL 是壳层把用户选择传进来的通道；用户在系统环境变量里手设
+        TM_ACCEL 时同样生效——两边语义一致，都是「指定了这个后端」。
+        """
+        accel = os.environ.get("TM_ACCEL", "").strip().lower()
+        if accel in ("directml", "amd", "intel"):
+            accel = "dml"
+        if accel == "nvidia":
+            accel = "cuda"
+        if accel in ("cuda", "dml", "cpu"):
+            return accel
+        force = os.environ.get("TM_USE_DML", "").strip().lower()
+        if force in ("1", "true", "yes") or cli_dml:
+            return "dml"
+        return "auto"
 
     @staticmethod
     def _resolve_dml_flag(cli_dml: bool) -> bool:
@@ -302,7 +327,14 @@ class Config:
         logger.info("overwrite preprocess_per to %d" % (self.preprocess_per))
 
     def device_config(self) -> tuple:
-        if torch.cuda.is_available():
+        if self.accel == "cpu":
+            # 显式 CPU：RVC / HuBERT / 音高提取 / 检索 / ONNX 全部走 CPU，
+            # 不再探测 CUDA / MPS / DirectML，也不让「有可用核显」把它顶回去。
+            logger.info("Compute backend forced to CPU by user selection")
+            self.device = self.instead = "cpu"
+            self.is_half = False
+            self.use_fp32_config()
+        elif torch.cuda.is_available():
             # Check compute capability compatibility BEFORE using CUDA.
             # RTX 50-series (sm_120) + torch cu118 (max sm_90) reports
             # is_available()=True but crashes natively on kernel execution.
@@ -341,12 +373,17 @@ class Config:
                 )
                 if self.gpu_mem <= 4:
                     self.preprocess_per = 3.0
-        elif self.has_mps():
+        elif self.accel != "cuda" and self.has_mps():
             logger.info("No supported Nvidia GPU found")
             self.device = self.instead = "mps"
             self.is_half = False
             self.use_fp32_config()
         else:
+            # 显式 cuda 但没有可用 CUDA：如实退回 CPU 并留警告，不偷换 DirectML。
+            if self.accel == "cuda":
+                logger.warning(
+                    "CUDA was explicitly selected but is unavailable; using CPU"
+                )
             logger.info("No supported Nvidia GPU found")
             self.device = self.instead = "cpu"
             self.is_half = False
@@ -389,6 +426,24 @@ class Config:
             if self.instead:
                 logger.info(f"Use {self.instead} instead")
             self._swap_onnxruntime_provider(want_dml=False)
+        # 实际生效后端（与界面选择核对用）：从最终 device 推，不重复探测。
+        low = str(self.device).lower()
+        if low.startswith("privateuseone") or "dml" in low:
+            self.accel_resolved = "dml"
+        elif low.startswith("cuda"):
+            self.accel_resolved = "cuda"
+        elif low.startswith("mps"):
+            self.accel_resolved = "mps"
+        elif low.startswith("xpu"):
+            self.accel_resolved = "xpu"
+        else:
+            self.accel_resolved = "cpu"
+        if self.accel not in ("auto", self.accel_resolved):
+            # 指定后端没生效（设备不在/初始化失败）——日志里写明，界面靠
+            # compute_backend 字段也能看出不一致。
+            logger.warning(
+                "Selected backend %s resolved to %s", self.accel, self.accel_resolved
+            )
         logger.info(
             "Half-precision floating-point: %s, device: %s"
             % (self.is_half, self.device)

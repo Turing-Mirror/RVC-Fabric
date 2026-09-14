@@ -307,10 +307,21 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
     env.insert("TEMP".into(), temp_s.clone());
     env.insert("TMP".into(), temp_s.clone());
     env.insert("TMPDIR".into(), temp_s);
+    let cfg = crate::config::read(root);
     for k in ["TM_ACCEL", "TM_ACCEL_RESOLVED", "TM_USE_DML"] {
         if let Ok(v) = std::env::var(k) {
             env.insert(k.into(), v);
         }
+    }
+    // E-03 唯一后端选择：用户保存的选择 > 旧环境变量 > auto。
+    // 显式选择时清掉 TM_USE_DML——不然用户在界面选 CPU，OS 环境里
+    // 遗留的 TM_USE_DML=1 会把它顶回 DirectML。
+    match cfg.get("accel_backend").and_then(|v| v.as_str()) {
+        Some(v @ ("auto" | "cuda" | "dml" | "cpu")) => {
+            env.insert("TM_ACCEL".into(), v.into());
+            env.remove("TM_USE_DML");
+        }
+        _ => {}
     }
     if !env.contains_key("TM_ACCEL") {
         env.insert("TM_ACCEL".into(), "auto".into());
@@ -322,7 +333,6 @@ pub(crate) fn env_for_runtime(root: &Path) -> HashMap<String, String> {
         env.insert("TM_NVIDIA_GPUS".into(), nv.join("|"));
     }
     apply_main_gpu(root, &mut env);
-    let cfg = crate::config::read(root);
     env.remove("TM_PORTAUDIO_DLL");
     if cfg.get("audio_compatibility").and_then(|v| v.as_bool()) == Some(true) {
         env.insert("TM_PORTAUDIO_DLL".into(), crate::audio_recovery::dll_path(root).to_string_lossy().into_owned());
@@ -1813,5 +1823,34 @@ mod tests {
             "台账 pid 必须被 known_worker_pids 看见"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// E-03：保存的后端选择胜过进程环境里的 TM_ACCEL / TM_USE_DML。
+    ///
+    /// 旧环境变量是 OS 级的，测试里没法安全地伪造（set_var 是进程全局、
+    /// 测试并行会互踩）；这里钉「显式 cpu → TM_ACCEL=cpu 且 TM_USE_DML 被清」，
+    /// 对机器上恰好设了 TM_USE_DML 的情况同样成立——显式选择必须抹掉它。
+    #[test]
+    fn saved_accel_beats_legacy_env() {
+        let root = tmp_root("accel-env");
+        let cfgp = paths::app_config_path(&root);
+        std::fs::create_dir_all(cfgp.parent().unwrap()).unwrap();
+        std::fs::write(&cfgp, r#"{"accel_backend":"cpu"}"#).unwrap();
+        let env = env_for_runtime(&root);
+        assert_eq!(env.get("TM_ACCEL").map(|s| s.as_str()), Some("cpu"));
+        assert!(
+            !env.contains_key("TM_USE_DML"),
+            "显式 CPU 选择必须清掉遗留的 TM_USE_DML：{env:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 没保存选择时维持旧行为：TM_ACCEL 缺席补 auto，旧变量照常继承。
+    #[test]
+    fn unset_accel_defaults_to_auto() {
+        let root = tmp_root("accel-none");
+        let env = env_for_runtime(&root);
+        assert_eq!(env.get("TM_ACCEL").map(|s| s.as_str()), Some("auto"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

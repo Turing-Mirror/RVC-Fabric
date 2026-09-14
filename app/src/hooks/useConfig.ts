@@ -83,7 +83,11 @@ export function useConfig() {
       }
       setError("");
     } catch (e) {
+      // 没写上的字段放回待写：失败不清空用户意图，下一次 flush 还会带上；
+      // 期间用户又改的同名字段以新值为准。
+      pending.current = { ...patch, ...pending.current };
       setError(String(e));
+      throw e;
     }
   }, []);
 
@@ -106,7 +110,8 @@ export function useConfig() {
         timer.current = null;
         return flush();
       }
-      timer.current = window.setTimeout(() => void flush(), 220);
+      // 防抖路径没有调用方能接 Promise：失败结论走 error 状态，吞掉即可。
+      timer.current = window.setTimeout(() => void flush().catch(() => {}), 220);
       return Promise.resolve();
     },
     [flush],

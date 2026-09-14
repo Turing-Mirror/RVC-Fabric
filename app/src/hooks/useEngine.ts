@@ -38,6 +38,9 @@ export function useEngine() {
   const formantRef = useRef(0);
   const modeRef = useRef<OutputMode>("vc");
   const hotTimer = useRef<number | null>(null);
+  // 防抖窗口内各字段的最后值。以前每次 schedule 只带当次调用的 patch，
+  // 先拖音高再拖共鸣就把音高丢了 —— 待发的是字段合并后的一份。
+  const hotPending = useRef<Parameters<typeof setHot>[0]>({});
   const startingRef = useRef(false);
   // 用户**亲手**按下「开启变声」的次数。
   //
@@ -356,9 +359,12 @@ export function useEngine() {
   }, []);
 
   const scheduleHot = useCallback((patch: Parameters<typeof setHot>[0]) => {
+    hotPending.current = { ...hotPending.current, ...patch };
     if (hotTimer.current) window.clearTimeout(hotTimer.current);
     hotTimer.current = window.setTimeout(() => {
-      void setHot(patch).catch(() => {
+      const merged = hotPending.current;
+      hotPending.current = {};
+      void setHot(merged).catch(() => {
         /* ignore when idle without worker */
       });
     }, 80);

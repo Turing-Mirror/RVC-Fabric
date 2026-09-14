@@ -193,7 +193,20 @@ scripts\dev\build_setup.bat --copy-cnb
 | 开发版 | `scripts\dev\tauri-dev.bat` |
 | 仅 UI（无原生） | `cd app && npm run dev` |
 | 打 Setup | `scripts\dev\build_setup.bat` |
-| Python 测 | `scripts\run_tests.bat` 或 `python -m unittest discover -s tests -p "test_*.py" -v` |
+| Python 测 | `scripts\run_tests.bat`（自带 PYTHONPATH） |
 | Rust 测 | `cd app\src-tauri && cargo test`（先 vcvars） |
+| 前端测 | `cd app && npm test`（Vitest + happy-dom） |
+| 前端检查 | `cd app && npx tsc --noEmit` / `npm run build` |
+
+## E. 根目录归属速查
+
+| 目录/文件 | 归属 |
+|-----------|------|
+| `app/` `tools/` `infer/` `configs/` `i18n/` `scripts/` `tests/` `installer/` `assets/` `docs/` `requirements/` `launcher/` | 源码（进 Git） |
+| `User_Data/` | 用户数据（模型/配置/缓存/输出；个别 `.gitkeep`、README 除外，一律不进 Git） |
+| `Runtime/` `VBCABLE/` `TEMP/` `logs/` `__pycache__/` `_local/` | 运行时/临时产物（不进 Git） |
+| `auditions/` | 本机试听样本（用户内容，不进 Git，勿删） |
+| `package_meta.json` | 打包产物标记（构建时生成，只在成品目录里有意义） |
+| `.codex-tauri-target-gnu/` | 备用工具链的构建目录（产物，不进 Git） |
 
 测完请把失败项记下来（现象 + 日志片段 + 是否开发版/Setup），便于修。

@@ -66,6 +66,9 @@ ffprobe.*
 /User_Data/update_cache/
 /User_Data/indices/
 /User_Data/shared_profiles/
+/User_Data/catalog_cache.json
+/User_Data/cover_cache/
+/User_Data/sts/
 # Dev/package-root local banner dump (user data lives under User_Data/ch-banner)
 /ch-banner/
 
@@ -101,6 +104,13 @@ ffprobe.*
 /User_Data/consult_samples/
 /User_Data/dev_variant.txt
 /User_Data/wallpaper/
+
+# 本机试听样本与打包产物标记 —— 用户内容留在本地，不进 Git
+/auditions/
+/package_meta.json
+
+# 本机备用 Rust 工具链的 cargo target（build/test 的副产物目录）
+/.codex-tauri-target-gnu/
 
 # Dev-only noise
 /scripts/dev/_env_trace.bat

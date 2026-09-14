@@ -170,16 +170,6 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   // 所以下完停在这里，让用户先自己看一眼再决定装不装。
   const [staged, setStaged] = useState<Record<string, StagedVoice>>({});
   const gridRef = useRef<HTMLDivElement>(null);
-  // 封面本地化：全部远程封面一次性交给 Rust 下载缓存，卡片走本地，
-  // 不再每次打开商店全量重拉（国内访问 CNB 间歇失败曾导致随机缺图）。
-  const coverCache = useCoverCache(
-    useMemo(() => {
-      if (!cat) return [];
-      return [...(cat.voices ?? []), ...(cat.thirdparty_voices ?? [])]
-        .map((v) => (v.cover_url || v.cover || "").trim())
-        .filter(Boolean);
-    }, [cat]),
-  );
 
   const loadStaged = useCallback(async () => {
     try {
@@ -358,6 +348,25 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     grouping === "series"
       ? []
       : list.slice((pageClamped - 1) * perPage, pageClamped * perPage);
+
+  // 封面本地化：按可视区解析——分页模式只取当前页 + 下一页预取，系列模式
+  // 取前若干个，滚动/翻页新增的卡片随列表变化自然进入解析范围。不再每次
+  // 打开商店就把全部远程封面一次性交给 Rust（国内访问 CNB 间歇失败曾导致
+  // 随机缺图；现在配合磁盘缓存 + 逐批回传，先显示的先用）。
+  const coverCache = useCoverCache(
+    useMemo(() => {
+      if (!cat) return [];
+      const pick = (v: StoreVoice) => (v.cover_url || v.cover || "").trim();
+      if (grouping !== "series") {
+        const start = (pageClamped - 1) * perPage;
+        return list
+          .slice(start, start + perPage * 2)
+          .map(pick)
+          .filter(Boolean);
+      }
+      return list.slice(0, 60).map(pick).filter(Boolean);
+    }, [cat, grouping, list, pageClamped, perPage]),
+  );
 
   // 窗口变窄导致每页装得下的变少时，当前页可能已经越界。
   useEffect(() => {

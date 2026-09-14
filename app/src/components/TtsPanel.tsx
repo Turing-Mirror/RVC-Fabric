@@ -7,7 +7,7 @@ import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
-import { ToolActions, ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { openHelpSection } from "../lib/helpNav";
@@ -153,7 +153,6 @@ export function TtsPanel() {
 
   return (
     <ToolBody>
-      <h3 className="m-0 mb-1 text-[17px] font-semibold">{t("s.6f311c47fe")}</h3>
       <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
       <div className="mb-4">
         <SegmentControl<Mode>
@@ -714,12 +713,12 @@ function StsSection() {
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-        <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+      <ToolTitleActions>
         {st.engine_core_ready === false ? (
           <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
         ) : null}
-      </div>
+        <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+      </ToolTitleActions>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>

@@ -8,7 +8,7 @@ import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { CkptAdvanced } from "./CkptAdvanced";
 import { ErrorNote } from "./ErrorNote";
-import { ToolActions, ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { askConfirm } from "../lib/webDialog";
@@ -511,13 +511,10 @@ export function TrainPanel() {
 
   return (
     <ToolBody>
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <h3 className="m-0 text-[17px] font-semibold">{t("s.ba65bd5595")}</h3>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {!checks.length ? <Btn onClick={goDownloads}>{t("s.aac4f88e84")}</Btn> : null}
-            <Btn onClick={() => openHelpSection("train")}>{t("s.trainOpenHelp")}</Btn>
-          </div>
-        </div>
+        <ToolTitleActions>
+          {!checks.length ? <Btn onClick={goDownloads}>{t("s.aac4f88e84")}</Btn> : null}
+          <Btn onClick={() => openHelpSection("train")}>{t("s.trainOpenHelp")}</Btn>
+        </ToolTitleActions>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.42667034ec")}</p>
 
         {checks.length ? (
@@ -553,7 +550,7 @@ export function TrainPanel() {
           </ul>
         ) : null}
 
-        <div className="border-t border-[var(--hairline)]">
+        <div>
           <div className={ROW}>
             <span className={LABEL}>{t("s.10c5cf2954")}</span>
             <span className={PATH}>{dataset || t("s.53e2db7016")}</span>

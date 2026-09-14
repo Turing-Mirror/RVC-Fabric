@@ -7,7 +7,7 @@ import { ErrorNote } from "./ErrorNote";
 import { RangeBar } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
-import { ToolActions, ToolBody } from "./ToolWindow";
+import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { extraModelLabel } from "../lib/extraModels";
 import { pickPath } from "../lib/nativeDialog";
@@ -159,17 +159,14 @@ export function SeparatePanel() {
 
   return (
     <ToolBody>
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <h3 className="m-0 text-[17px] font-semibold">{t("s.8fd038283b")}</h3>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {!blocked || needModels || needCore ? (
-              <Btn
-                onClick={() => openDownloadModels({ filter: "separate" })}
-              >{blocked ? t("s.7a218555fd") : t("s.1252c81119")}</Btn>
-            ) : null}
-            <Btn onClick={() => openHelpSection("separate")}>{t("s.trainOpenHelp")}</Btn>
-          </div>
-        </div>
+        <ToolTitleActions>
+          {!blocked || needModels || needCore ? (
+            <Btn
+              onClick={() => openDownloadModels({ filter: "separate" })}
+            >{blocked ? t("s.7a218555fd") : t("s.1252c81119")}</Btn>
+          ) : null}
+          <Btn onClick={() => openHelpSection("separate")}>{t("s.trainOpenHelp")}</Btn>
+        </ToolTitleActions>
         <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.497e7d9af6")}</p>
 
         {blocked ? (
@@ -178,7 +175,7 @@ export function SeparatePanel() {
           </div>
         ) : null}
 
-        <div className="border-t border-[var(--hairline)]">
+        <div>
           <div className={ROW}>
             <span className={LABEL}>{t("s.e8850440f2")}</span>
             <span className={PATH}>{input || t("s.53e2db7016")}</span>

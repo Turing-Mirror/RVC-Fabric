@@ -2107,7 +2107,7 @@
     "redownload": "Retélécharger",
     "switchDone": "Runtime changé."
   },
-    "runtimeMigration": {
+  "runtimeMigration": {
     "title": "Migrer le runtime",
     "migrate": "Migrer le runtime",
     "nvidia": "NVIDIA (recommandé pour la plupart des cartes NVIDIA)",
@@ -2135,5 +2135,17 @@
     "verifyFailed": "Le runtime migré n'a pas passé la vérification.",
     "notFound": "Ancien runtime introuvable.",
     "runtimeNotReady": "Ce runtime n'est pas prêt."
+  },
+  "sepVariant": {
+    "normal": "standard",
+    "aggressive": "agressif",
+    "lite": "léger",
+    "main": "principal",
+    "highend": "aigus",
+    "lowendA": "graves A",
+    "lowendB": "graves B"
+  },
+  "sepModels": {
+    "deechoDereverb": "Anti-écho et réverbération"
   }
 }

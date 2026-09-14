@@ -9,6 +9,7 @@ import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { ToolActions, ToolBody } from "./ToolWindow";
 import { t } from "../i18n/t";
+import { extraModelLabel } from "../lib/extraModels";
 import { pickPath } from "../lib/nativeDialog";
 
 type Status = {
@@ -197,8 +198,8 @@ export function SeparatePanel() {
               onChange={(e) => setModel(e.target.value)}
             >
               {(st.models || []).map((m) => (
-                <option key={m} value={m}>
-                  {m}
+                <option key={m} value={m} title={m}>
+                  {extraModelLabel(m)}
                 </option>
               ))}
               {!st.models?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}

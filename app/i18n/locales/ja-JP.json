@@ -2107,7 +2107,7 @@
     "redownload": "再ダウンロード",
     "switchDone": "ランタイムを切り替えました。"
   },
-    "runtimeMigration": {
+  "runtimeMigration": {
     "title": "ランタイムを移行",
     "migrate": "ランタイムを移行",
     "nvidia": "NVIDIA（ほとんどの NVIDIA カードに推奨）",
@@ -2135,5 +2135,17 @@
     "verifyFailed": "移行したランタイムの検証に失敗しました。",
     "notFound": "旧ランタイムが見つかりません。",
     "runtimeNotReady": "このランタイムはまだ使用できません。"
+  },
+  "sepVariant": {
+    "normal": "標準",
+    "aggressive": "強力",
+    "lite": "ライト",
+    "main": "メイン",
+    "highend": "高域",
+    "lowendA": "低域 A",
+    "lowendB": "低域 B"
+  },
+  "sepModels": {
+    "deechoDereverb": "デエコー＆デリバーブ"
   }
 }

@@ -2107,7 +2107,7 @@
     "redownload": "다시 다운로드",
     "switchDone": "런타임을 전환했습니다."
   },
-    "runtimeMigration": {
+  "runtimeMigration": {
     "title": "런타임 마이그레이션",
     "migrate": "런타임 마이그레이션",
     "nvidia": "NVIDIA(대부분의 NVIDIA 카드에 권장)",
@@ -2135,5 +2135,17 @@
     "verifyFailed": "마이그레이션한 런타임 검증에 실패했습니다.",
     "notFound": "이전 런타임을 찾을 수 없습니다.",
     "runtimeNotReady": "이 런타임은 아직 준비되지 않았습니다."
+  },
+  "sepVariant": {
+    "normal": "표준",
+    "aggressive": "강력",
+    "lite": "라이트",
+    "main": "메인",
+    "highend": "고역",
+    "lowendA": "저역 A",
+    "lowendB": "저역 B"
+  },
+  "sepModels": {
+    "deechoDereverb": "에코·리버브 제거"
   }
 }

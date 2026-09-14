@@ -53,7 +53,7 @@ mod win_realtime;
 mod window_watch;
 mod worker;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Map, Value};
@@ -325,27 +325,33 @@ fn config_describe() -> Value {
 /// Merge a patch, persist, mirror into inuse, and push hot keys to a running
 /// stream. Returns `needs_restart` for the cold keys the UI must warn about.
 #[tauri::command]
-fn config_set(
+async fn config_set(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     patch: Map<String, Value>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let out = config::update(&root, patch.clone())?;
-    // 壁纸路径也可能由导入配置档案写进来（不是走选择框），同样要放行。
-    if let Some(Value::String(p)) = patch.get("wallpaper_path") {
-        asset_scope::grant_file(&app, p);
-    }
-    if let Err(e) = voices::persist_profile_patch(&root, &patch) {
-        logging::shell_log!("persist profile: {e}");
-    }
-    if let Some(hot) = out.get("hot").and_then(|v| v.as_object()) {
-        if !hot.is_empty() && worker::is_worker_alive(&root) {
-            let _ = worker::set_hot(&root, hot.clone());
+    // set_hot 派发要等上一条命令被认领（上限 CMD_ACK_TIMEOUT_MS），同步命令
+    // 会让这段等待落在 IPC 线程上 —— 拖一次滑条窗口就冻结几秒（R01）。
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = config::update(&root, patch.clone())?;
+        // 壁纸路径也可能由导入配置档案写进来（不是走选择框），同样要放行。
+        if let Some(Value::String(p)) = patch.get("wallpaper_path") {
+            asset_scope::grant_file(&app, p);
         }
-    }
-    let _ = app.emit("config-changed", &out);
-    Ok(out)
+        if let Err(e) = voices::persist_profile_patch(&root, &patch) {
+            logging::shell_log!("persist profile: {e}");
+        }
+        if let Some(hot) = out.get("hot").and_then(|v| v.as_object()) {
+            if !hot.is_empty() && worker::is_worker_alive(&root) {
+                let _ = worker::set_hot(&root, hot.clone());
+            }
+        }
+        let _ = app.emit("config-changed", &out);
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 开机自启状态（读 HKCU Run 键）。状态以注册表为准，不走 app_config：
@@ -1083,34 +1089,43 @@ fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), String
 
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
 #[tauri::command]
-fn dsp_activate(
+async fn dsp_activate(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     id: String,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let id = id.trim().to_string();
-    let out = dsp::activate(&root, &id)?;
-    let _ = app.emit(
-        "config-changed",
-        json!({
-            "config": out.get("config"),
-            "hot": {
-                "dsp_enabled": true,
-                "dsp_preset": id,
-                "function": "fx"
-            }
-        }),
-    );
-    Ok(out)
+    // activate 里可能换 worker、派发 set 命令（带认领等待）—— 移出 IPC 线程。
+    tauri::async_runtime::spawn_blocking(move || {
+        let id = id.trim().to_string();
+        let out = dsp::activate(&root, &id)?;
+        let _ = app.emit(
+            "config-changed",
+            json!({
+                "config": out.get("config"),
+                "hot": {
+                    "dsp_enabled": true,
+                    "dsp_preset": id,
+                    "function": "fx"
+                }
+            }),
+        );
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn dsp_deactivate(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn dsp_deactivate(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let out = dsp::deactivate(&root)?;
-    let _ = app.emit("config-changed", json!({ "config": out.get("config"), "hot": { "dsp_enabled": false, "dsp_preset": "", "function": "vc" } }));
-    Ok(out)
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = dsp::deactivate(&root)?;
+        let _ = app.emit("config-changed", json!({ "config": out.get("config"), "hot": { "dsp_enabled": false, "dsp_preset": "", "function": "vc" } }));
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1580,7 +1595,7 @@ async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, S
 }
 
 #[tauri::command]
-fn engine_set_hot(
+async fn engine_set_hot(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     pitch: Option<i32>,
@@ -1595,6 +1610,29 @@ fn engine_set_hot(
     dsp_params: Option<Value>,
 ) -> Result<u64, String> {
     let root = root_clone(&state)?;
+    // 落盘 + set_hot 派发等待都要离开 IPC 线程（R01）。
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_set_hot_inner(&app, &root, pitch, formant, function, threhold, index_rate, rms_mix_rate, f0_repair, dsp_enabled, dsp_preset, dsp_params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[allow(clippy::too_many_arguments)]
+fn engine_set_hot_inner(
+    app: &AppHandle,
+    root: &Path,
+    pitch: Option<i32>,
+    formant: Option<f64>,
+    function: Option<String>,
+    threhold: Option<f64>,
+    index_rate: Option<f64>,
+    rms_mix_rate: Option<f64>,
+    f0_repair: Option<bool>,
+    dsp_enabled: Option<bool>,
+    dsp_preset: Option<String>,
+    dsp_params: Option<Value>,
+) -> Result<u64, String> {
     let mut payload = Map::new();
     if let Some(v) = pitch {
         payload.insert("pitch".into(), json!(v));
@@ -1658,13 +1696,14 @@ fn engine_set_hot(
     // 底栏拖音高/共鸣以前只 set_hot、不写盘：界面重启后仍显示旧数（来自
     // app_config），但 inuse 还是 0，引擎按默认起 —— 显示对、声音不对。
     // 这里顺手落盘并同步 inuse；worker 没起来时只落盘，不算失败。
-    if let Ok(out) = config::update(&root, payload.clone()) {
-        if let Err(e) = voices::persist_profile_patch(&root, &payload) {
-            logging::shell_log!("persist profile: {e}");
-        }
-        let _ = app.emit("config-changed", &out);
+    // 落盘失败要如实报错（R04）：以前 if-let-Ok 吞掉失败还照推 worker，
+    // 界面显示成功、重启后参数却回到旧值。
+    let out = config::update(root, payload.clone())?;
+    if let Err(e) = voices::persist_profile_patch(root, &payload) {
+        logging::shell_log!("persist profile: {e}");
     }
-    match worker::set_hot(&root, payload) {
+    let _ = app.emit("config-changed", &out);
+    match worker::set_hot(root, payload) {
         Ok(seq) => Ok(seq),
         Err(e) if e.contains(&crate::i18n::t("s.b2ba9634d9")) => Ok(0),
         Err(e) => Err(e),
@@ -1673,9 +1712,12 @@ fn engine_set_hot(
 
 /// 变声中换音色。不重开流，只把新模型推给引擎。
 #[tauri::command]
-fn engine_swap_model(state: State<'_, Mutex<AppState>>) -> Result<u64, String> {
+async fn engine_swap_model(state: State<'_, Mutex<AppState>>) -> Result<u64, String> {
     let root = root_clone(&state)?;
-    worker::swap_model(&root)
+    // swap_model 走 set_hot，派发等待同样要离开 IPC 线程。
+    tauri::async_runtime::spawn_blocking(move || worker::swap_model(&root))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1800,7 +1842,7 @@ async fn voices_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String>
 }
 
 #[tauri::command]
-fn voices_select(
+async fn voices_select(
     app: AppHandle,
     state: State<'_, Mutex<AppState>>,
     path: Option<String>,
@@ -1808,28 +1850,38 @@ fn voices_select(
     name: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let out = voices::select_voice(
-        &root,
-        path.as_deref().unwrap_or(""),
-        dir.as_deref().unwrap_or(""),
-        name.as_deref().unwrap_or(""),
-    )?;
-    // 工具窗是独立 webview，不广播的话语音转换的目标音色会停在打开时的那个。
-    let _ = app.emit("voices-changed", &out);
-    // 音色档案里的音高/共鸣已经写进 app_config，设置页和底栏要一起跟上。
-    let cfg = config::read(&root);
-    let _ = app.emit("config-changed", json!({ "config": cfg }));
-    Ok(out)
+    // 目录扫描 + 配置落盘，移出 IPC 线程。
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = voices::select_voice(
+            &root,
+            path.as_deref().unwrap_or(""),
+            dir.as_deref().unwrap_or(""),
+            name.as_deref().unwrap_or(""),
+        )?;
+        // 工具窗是独立 webview，不广播的话语音转换的目标音色会停在打开时的那个。
+        let _ = app.emit("voices-changed", &out);
+        // 音色档案里的音高/共鸣已经写进 app_config，设置页和底栏要一起跟上。
+        let cfg = config::read(&root);
+        let _ = app.emit("config-changed", json!({ "config": cfg }));
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn voices_clear(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    let out = voices::clear_voice(&root)?;
-    let _ = app.emit("voices-changed", &out);
-    let cfg = config::read(&root);
-    let _ = app.emit("config-changed", json!({ "config": cfg }));
-    Ok(out)
+    // clear_voice 会给在跑的 worker 发 drop_model（派发等待），移出 IPC 线程。
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = voices::clear_voice(&root)?;
+        let _ = app.emit("voices-changed", &out);
+        let cfg = config::read(&root);
+        let _ = app.emit("config-changed", json!({ "config": cfg }));
+        Ok(out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

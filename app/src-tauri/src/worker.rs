@@ -1010,13 +1010,35 @@ pub fn wait_worker_ready(root: &Path, timeout_ms: u64) -> Value {
     }
 }
 
+/// command.seq 是读改写计数器、command.json 是单槽邮箱，两者都只能在这一把
+/// 锁里动：要发命令的线程先拿派发权，再等上一条被认领、再领号、再落邮箱。
+/// 不串行的话，两个线程会领到同一个 seq —— 后落邮箱的把先落的顶掉，被顶的
+/// 那条命令永远没人执行（R05）。
+static COMMAND_DISPATCH: Mutex<()> = Mutex::new(());
+
+/// Worker 命令循环约 80ms 一轮；3s 盖住繁忙 GC / 磁盘抖动。超过仍写：
+/// 不覆盖的话陈旧的未认领命令会留在邮箱里，worker 下次重启时被当成新指令。
+const CMD_ACK_TIMEOUT_MS: u64 = 3_000;
+
 pub fn send_command(root: &Path, cmd: &str, payload: Map<String, Value>) -> Result<u64, String> {
+    send_command_wait(root, cmd, payload, CMD_ACK_TIMEOUT_MS)
+}
+
+fn send_command_wait(
+    root: &Path,
+    cmd: &str,
+    payload: Map<String, Value>,
+    ack_timeout_ms: u64,
+) -> Result<u64, String> {
     // command.json is a single-slot mailbox. The worker polls ~every 80 ms and
     // only keeps the latest file contents. If the shell writes set → start → set
     // faster than that poll, `start` is overwritten and never runs — the dock
     // freezes on「引擎就绪 / 参数已应用」(diag 26.8.6/bug/1: many set/stop,
     // zero start after relaunch). Wait for the previous command to be claimed
     // (status.last_cmd_seq) before replacing the mailbox.
+    let _dispatch = COMMAND_DISPATCH
+        .lock()
+        .map_err(|_| "command dispatch lock poisoned".to_string())?;
     let pending = protocol::read_command(root);
     let pending_seq = pending
         .get("seq")
@@ -1024,9 +1046,7 @@ pub fn send_command(root: &Path, cmd: &str, payload: Map<String, Value>) -> Resu
         .unwrap_or(0);
     let last_ack = protocol::last_cmd_seq(root);
     if pending_seq > last_ack {
-        // Worker loop is 80 ms; 3 s covers a busy GC / disk hiccup. Past that
-        // we still write so the UI cannot deadlock on a dead worker.
-        let acked = protocol::wait_cmd_acked(root, pending_seq, 3_000);
+        let acked = protocol::wait_cmd_acked(root, pending_seq, ack_timeout_ms);
         if !acked {
             append_log(
                 root,
@@ -1664,6 +1684,58 @@ mod tests {
     #[test]
     fn pid_zero_is_never_alive() {
         assert!(!pid_alive(0));
+    }
+
+    /// R05：command.seq 是读改写计数器，command.json 是单槽邮箱。并发派发必须
+    /// 由 COMMAND_DISPATCH 串行 —— 否则两个线程领到同一个 seq，后写邮箱的把
+    /// 先写的顶掉，被顶的命令永远没人执行。
+    ///
+    /// 没有 worker 认领，所以每条派发都会跑满认领等待；测试用小超时保持快速。
+    /// 修复后的不变量：seq 全部唯一、连续，邮箱里留下的是最后一次派发。
+    #[test]
+    fn concurrent_dispatches_get_unique_seqs_and_last_write_wins() {
+        let root = tmp_root("dispatch-serial");
+        const N: u64 = 8;
+        let mut handles = Vec::new();
+        for i in 0..N {
+            let r = root.clone();
+            handles.push(thread::spawn(move || {
+                let mut p = Map::new();
+                p.insert("tag".into(), json!(i));
+                send_command_wait(&r, "set", p, 10).unwrap()
+            }));
+        }
+        let mut seqs: Vec<u64> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        seqs.sort_unstable();
+        seqs.dedup();
+        assert_eq!(seqs.len(), N as usize, "每个派发都要领到唯一 seq：{seqs:?}");
+        // seq 在锁内即领即写，所以邮箱里必然是最大 seq 对应的那条。
+        let last = protocol::read_command(&root);
+        assert_eq!(
+            last.get("seq").and_then(|v| v.as_u64()),
+            Some(*seqs.last().unwrap())
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 上一条命令迟迟没人认领（慢 worker / 已死 worker）：派发等满超时后仍然
+    /// 落邮箱并回报新 seq —— 不能让 UI 死等，也不能把陈旧命令留给下次启动。
+    #[test]
+    fn an_unacked_pending_command_is_replaced_after_the_ack_timeout() {
+        let root = tmp_root("dispatch-timeout");
+        let first = send_command_wait(&root, "set", Map::new(), 10).unwrap();
+        // 无人认领 first；第二条必须等超时再覆盖，而不是立刻覆盖或死等。
+        let t0 = Instant::now();
+        let second = send_command_wait(&root, "start", Map::new(), 10).unwrap();
+        assert!(second > first);
+        let cmd = protocol::read_command(&root);
+        assert_eq!(cmd.get("cmd").and_then(|v| v.as_str()), Some("start"));
+        assert_eq!(cmd.get("seq").and_then(|v| v.as_u64()), Some(second));
+        assert!(
+            t0.elapsed() >= Duration::from_millis(10),
+            "超时应至少等到 ack_timeout"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

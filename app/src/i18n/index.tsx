@@ -20,6 +20,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  ensurePack,
   fallbackPack,
   interpolate,
   lookup,
@@ -118,6 +119,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         /* browser preview — the React pack is still usable */
       }
 
+      // 先备好当前语言与回退再放行：语言包按需加载（D-02），不 await 的话
+      // 非中文用户会先看一屏回退中文再跳变成本地语言。
+      try {
+        await ensurePack(code);
+      } catch {
+        /* 包加载失败就回退中文，不阻塞启动 */
+      }
+
       if (alive) {
         setLocaleState(code);
         setStaticLocale(code);
@@ -132,13 +141,19 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setLocale = useCallback((code: LocaleCode) => {
-    setLocaleState(code);
-    setStaticLocale(code);
-    setGlossaryLocale(code);
-    setTLocale(code);
-    document.documentElement.lang = code;
-    void invoke("config_set", { patch: { ui_locale: code } }).catch(() => {});
-    void invoke("i18n_set_locale", { locale: code }).catch(() => {});
+    // 按需加载的目标包到了再切 locale：用户不会看到「先是中文、半秒后
+    // 变目标语言」的跳变。包已在缓存里时这条路是同步完成的。
+    void ensurePack(code)
+      .catch(() => undefined)
+      .then(() => {
+        setLocaleState(code);
+        setStaticLocale(code);
+        setGlossaryLocale(code);
+        setTLocale(code);
+        document.documentElement.lang = code;
+        void invoke("config_set", { patch: { ui_locale: code } }).catch(() => {});
+        void invoke("i18n_set_locale", { locale: code }).catch(() => {});
+      });
   }, []);
 
   useEffect(() => {

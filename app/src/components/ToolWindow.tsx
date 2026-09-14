@@ -1,10 +1,25 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { SeparatePanel } from "./SeparatePanel";
-import { TrainPanel } from "./TrainPanel";
-import { TtsPanel } from "./TtsPanel";
+
+// D-02 工具面板按需加载：主窗口不需要这三块，各自独立 chunk。
+const SeparatePanel = lazy(() =>
+  import("./SeparatePanel").then((m) => ({ default: m.SeparatePanel })),
+);
+const TrainPanel = lazy(() =>
+  import("./TrainPanel").then((m) => ({ default: m.TrainPanel })),
+);
+const TtsPanel = lazy(() =>
+  import("./TtsPanel").then((m) => ({ default: m.TtsPanel })),
+);
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { WebDialogHost } from "./WebDialog";
@@ -93,9 +108,11 @@ export function ToolWindow({ kind }: { kind: ToolKind }) {
       <ToolTitleSlot.Provider value={titleActions}>
         <ToolFooterSlot.Provider value={footer}>
           <div className="flex-1 overflow-y-auto">
-            {kind === "separate" ? <SeparatePanel /> : null}
-            {kind === "train" ? <TrainPanel /> : null}
-            {kind === "tts" ? <TtsPanel /> : null}
+            <Suspense fallback={null}>
+              {kind === "separate" ? <SeparatePanel /> : null}
+              {kind === "train" ? <TrainPanel /> : null}
+              {kind === "tts" ? <TtsPanel /> : null}
+            </Suspense>
           </div>
         </ToolFooterSlot.Provider>
       </ToolTitleSlot.Provider>

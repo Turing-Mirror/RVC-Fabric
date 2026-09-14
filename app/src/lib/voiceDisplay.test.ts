@@ -77,7 +77,10 @@ describe("displayVoiceAuthor", () => {
 });
 
 describe("displayVoiceTag", () => {
-  it("localizes a generic tag from an older sidecar", () => {
+  it("localizes a generic tag from an older sidecar", async () => {
+    // 语言包按需加载：先 ensurePack 再切语言，否则拿到的是中文回退包。
+    const { ensurePack } = await import("../i18n/dict");
+    await ensurePack("en-US");
     setTLocale("en-US");
     expect(displayVoiceTag({ tag: "音色" }, "en-US")).toBe("Voice");
     expect(displayVoiceTag({ tag: "自制", source: "trained" }, "en-US")).toBe(

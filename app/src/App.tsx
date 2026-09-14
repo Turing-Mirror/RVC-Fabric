@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { OnboardingBar } from "./components/OnboardingBar";
@@ -29,12 +37,37 @@ import { invoke } from "@tauri-apps/api/core";
 import { applyAppearance } from "./lib/appearance";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "./lib/tauriListen";
-import { HelpPage } from "./pages/HelpPage";
-import { HomePage } from "./pages/HomePage";
-import { ModelsPage } from "./pages/ModelsPage";
-import { MorePage } from "./pages/MorePage";
-import { PlazaPage } from "./pages/PlazaPage";
-import { SettingsPage, type SettingsTab } from "./pages/SettingsPage";
+import type { SettingsTab } from "./pages/SettingsPage";
+
+// D-02 页面按需加载：六个页面各拆独立 chunk，主包只留首页骨架。
+// 命名导出没有 default，包一层 then 适配 React.lazy。
+const HelpPage = lazy(() =>
+  import("./pages/HelpPage").then((m) => ({ default: m.HelpPage })),
+);
+const HomePage = lazy(() =>
+  import("./pages/HomePage").then((m) => ({ default: m.HomePage })),
+);
+const ModelsPage = lazy(() =>
+  import("./pages/ModelsPage").then((m) => ({ default: m.ModelsPage })),
+);
+const MorePage = lazy(() =>
+  import("./pages/MorePage").then((m) => ({ default: m.MorePage })),
+);
+const PlazaPage = lazy(() =>
+  import("./pages/PlazaPage").then((m) => ({ default: m.PlazaPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+
+/** 空闲时把其余页面包预取回来：首屏先快，翻页不再等加载（本地 chunk 极快）。 */
+function prefetchPages() {
+  void import("./pages/ModelsPage");
+  void import("./pages/PlazaPage");
+  void import("./pages/SettingsPage");
+  void import("./pages/HelpPage");
+  void import("./pages/MorePage");
+}
 import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
@@ -84,6 +117,12 @@ export default function App() {
     setExtrasReason("");
     setExtrasFilter("all");
   }, [page]);
+
+  // D-02：首屏渲染完之后空闲预取其余页面 chunk，翻页不用再等分包下载。
+  useEffect(() => {
+    const id = window.setTimeout(prefetchPages, 2500);
+    return () => window.clearTimeout(id);
+  }, []);
   // Self-update: check reports the catalog's latest; applying swaps the
   // external frontend/ dir and takes effect on restart. 检查与安装在
   // useUpdateFlow 里分开：probe/check 只查，accept 才装。
@@ -1067,7 +1106,9 @@ export default function App() {
       />
 
       <PageHost page={page}>
-        {(id) => {
+        {(id) => (
+          <Suspense fallback={null}>
+          {(() => {
           switch (id) {
             case "home":
               return (
@@ -1143,7 +1184,9 @@ export default function App() {
                 />
               );
           }
-        }}
+          })()}
+          </Suspense>
+        )}
       </PageHost>
 
       {killAsk ? (

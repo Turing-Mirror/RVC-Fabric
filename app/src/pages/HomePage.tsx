@@ -1,9 +1,9 @@
 import { useEffect, useState, memo } from "react";
 import { Btn, Block, HelpMark, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
-import { setHot } from "../lib/engine";
 import { getConfig, onConfigPatch } from "../lib/config";
-import { listVoices, selectVoice, type VoiceModel } from "../lib/voices";
+import { listVoices, modelKey, type VoiceModel } from "../lib/voices";
+import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import {
   displayVoiceName,
@@ -189,6 +189,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   // something they may already have.
   const [loadError, setLoadError] = useState("");
   const [msg, setMsg] = useState("");
+  // 与模型页同一个派发器：按下即置 pending，重复点同一目标去重，
+  // 快速点不同目标只留最新意图。
+  const pendingKey = useVoiceSwitchPending();
   const bannerTexts = useBannerTexts();
   const cardPx = useRecentCardMetrics();
   const load = async () => {
@@ -237,39 +240,20 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       setMsg(t("s.314a72cba4"));
       return;
     }
-    try {
-      setMsg("");
-      const res = await selectVoice({ path: m.path, dir: m.dir, name: m.name });
+    // 已生效的音色不重复切换；正在切换/排队的由派发器去重。
+    if (m === current && !pendingKey) return;
+    setMsg("");
+    const out = await requestVoiceSwitch(m, (info) => {
       // Picking here used to only record the selection: the voice's saved
       // pitch / formant were never pushed to a running stream and the dock kept
       // showing the previous voice's name and numbers. Same handling as the
       // models page now.
-      try {
-        await setHot({
-          dsp_enabled: false,
-          dsp_preset: "",
-          dsp_params: {},
-          function: "vc",
-          ...(res.pitch != null || res.formant != null
-            ? {
-                pitch: Number(res.pitch ?? 0),
-                formant: Number(res.formant ?? 0),
-              }
-            : {}),
-        });
-      } catch {
-        /* worker may be idle */
-      }
-      onVoiceChange?.({
-        model: (res.model as VoiceModel) || m,
-        pitch: res.pitch as number | undefined,
-        formant: res.formant as number | undefined,
-        profileSummary: res.profile_summary,
-      });
-      await load();
-    } catch (e) {
+      onVoiceChange?.(info);
+      void load();
+    });
+    if (out.kind === "error") {
       // Clicking a card and having nothing happen is the worst outcome.
-      setMsg(t("home.switchFail", { error: String(e) }));
+      setMsg(t("home.switchFail", { error: out.error }));
     }
   };
 
@@ -338,6 +322,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
           <div className="flex gap-5 items-center justify-center flex-wrap max-[520px]:flex-col max-[720px]:gap-3">
             {ordered.map((v) => {
               const cur = v === current;
+              const pend = pendingKey !== "" && pendingKey === modelKey(v);
               const edge = cur ? cardPx.cur : cardPx.side;
               const fontPx = cur ? cardPx.fontCur : cardPx.fontSide;
               const ver = voiceVersionLabel(v.date);
@@ -368,7 +353,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                       // 表达就够了。
                       "transition-[width,font-size,transform,box-shadow] duration-300 ease-[var(--spring)]",
                       "active:scale-[0.985]",
-                      cur
+                      cur || pend
                         ? "shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)]"
                         : "",
                     ].join(" ")}
@@ -393,7 +378,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
                         {ver}
                       </span>
                     ) : null}
-                    {cur && hasSelection ? (
+                    {pend ? (
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("dock.switching")}</span>
+                    ) : cur && hasSelection ? (
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (

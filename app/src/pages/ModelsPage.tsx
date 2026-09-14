@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
 import { AdBanner } from "../components/AdBanner";
 import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
@@ -28,7 +28,7 @@ import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
-import { placePopup, type PopupAnchor, type PopupBox } from "../lib/popupPos";
+import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import {
   bindIndex,
   clearVoice,
@@ -1077,65 +1077,6 @@ function MoreMenu({
   }
   return (
     <MoreMenuPopup anchor={anchor} items={items} />
-  );
-}
-
-function MoreMenuPopup({
-  anchor,
-  items,
-}: {
-  anchor: PopupAnchor;
-  items: { label: string; action: () => void; danger?: boolean }[];
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<PopupBox | null>(null);
-
-  useLayoutEffect(() => {
-    const place = () => {
-      const el = ref.current;
-      if (!el) return;
-      setBox(
-        placePopup(
-          anchor,
-          { width: Math.max(el.offsetWidth, el.scrollWidth), height: el.scrollHeight },
-          { width: window.innerWidth, height: window.innerHeight },
-        ),
-      );
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [anchor, items.length]);
-
-  return (
-    <div
-      ref={ref}
-      className="fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden"
-      style={{
-        left: box?.left ?? anchor.right,
-        top: box?.top ?? anchor.bottom + 6,
-        maxHeight: box?.maxHeight,
-        maxWidth: "calc(100vw - 16px)",
-        visibility: box ? "visible" : "hidden",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((it) => (
-        <button
-          key={it.label}
-          type="button"
-          className={[
-            "block w-full text-left whitespace-nowrap border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
-            it.danger
-              ? "text-[#c44] hover:bg-[color-mix(in_srgb,#c44_10%,transparent)]"
-              : "text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]",
-          ].join(" ")}
-          onClick={() => void it.action()}
-        >
-          {it.label}
-        </button>
-      ))}
-    </div>
   );
 }
 

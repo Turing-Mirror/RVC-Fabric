@@ -642,7 +642,8 @@ pub fn delete_input_file(root: &Path, input: &str, path: &str) -> Result<(), Str
     if !is_audio_path(file) || !path_under(file, &dir) {
         return Err(crate::i18n::t("s.stsDeleteUnsafe"));
     }
-    std::fs::remove_file(file).map_err(|e| crate::i18n::te("s.stsDeleteFail", &e))?;
+    // 走系统回收站而不是 remove_file：用户能找回，删除前的确认文案也这么承诺。
+    trash::delete(file).map_err(|e| crate::i18n::te("s.stsDeleteFail", &e))?;
     Ok(())
 }
 

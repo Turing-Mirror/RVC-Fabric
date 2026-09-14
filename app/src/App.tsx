@@ -19,9 +19,10 @@ import { TitleBar } from "./components/TitleBar";
 import { useEngine } from "./hooks/useEngine";
 import { usePlaza } from "./hooks/usePlaza";
 import { getConfig, onConfigPatch, setConfig, type Config } from "./lib/config";
-import { deactivateDsp, forceKillEngine, setHot, startVc, swapModel } from "./lib/engine";
+import { deactivateDsp, forceKillEngine, startVc, swapModel } from "./lib/engine";
 import type { PageId } from "./lib/nav";
-import { currentVoice } from "./lib/voices";
+import { currentVoice, type VoiceModel } from "./lib/voices";
+import { requestVoiceSwitch } from "./lib/voiceSwitch";
 import { pickAutoDevices } from "./lib/deviceSetup";
 import { invoke } from "@tauri-apps/api/core";
 import { applyAppearance } from "./lib/appearance";
@@ -941,36 +942,17 @@ export default function App() {
       const cur = Number(cat.selected_idx ?? -1);
       const next = ((cur < 0 ? 0 : cur) + delta + list.length) % list.length;
       const m = list[next];
-      const res = await invoke<{
-        model?: Record<string, unknown>;
-        pitch?: number;
-        formant?: number;
-        profile_summary?: string;
-      }>("voices_select", {
-        path: String(m.path ?? ""),
-        dir: String(m.dir ?? ""),
-        name: String(m.name ?? ""),
+      // Same dispatcher as the voice cards: rapid hotkey presses resolve to
+      // the latest intent, and a repeated step to an already-pending target
+      // doesn't submit twice.
+      await requestVoiceSwitch(m as VoiceModel, (info) => {
+        applyVoiceChange({
+          model: info.model,
+          pitch: info.pitch,
+          formant: info.formant,
+          profileSummary: info.profileSummary,
+        });
       });
-      // Through the shared handler: the hotkeys used to set only the name, so
-      // stepping voices with Ctrl+F5/F6 left the dock's tag, position, pitch
-      // and profile showing the previous voice — and never pushed the new
-      // voice's parameters to a running stream.
-      applyVoiceChange({
-        model: (res.model as { name?: string; path?: string; dir?: string }) || m,
-        pitch: res.pitch,
-        formant: res.formant,
-        profileSummary: res.profile_summary,
-      });
-      if (res.pitch != null || res.formant != null) {
-        try {
-          await setHot({
-            pitch: Number(res.pitch ?? 0),
-            formant: Number(res.formant ?? 0),
-          });
-        } catch {
-          /* worker may be idle */
-        }
-      }
     } catch {
       /* catalog unavailable */
     }

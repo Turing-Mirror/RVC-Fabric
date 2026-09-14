@@ -23,6 +23,7 @@ import { dspTips } from "../lib/dspTips";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
+import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
@@ -47,7 +48,6 @@ import {
   renameVoice,
   resetVoiceCover,
   saveProfile,
-  selectVoice,
   unbindIndex,
   applyIndex,
   applyProfile,
@@ -149,6 +149,8 @@ function ModelsPageImpl({
   const [cols, setCols] = useState(5);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  // 与首页同一个派发器：pendingKey 是切换中/排队中的目标，按卡片即时反馈。
+  const pendingKey = useVoiceSwitchPending();
 
   // 页面消息（删除/改名/导入的结果）自动消失：不消失的话会一直挂着，
   // 而下一条消息会盖掉上一条，用户更容易漏看。4 秒足够读完一行。
@@ -339,40 +341,18 @@ function ModelsPageImpl({
       setMsg(t("s.314a72cba4"));
       return;
     }
-    setBusy(true);
+    // 与首页同一个派发器（B-05）：点下即 pending，同一目标去重，
+    // 快速点不同目标只留最新意图；不再用全局 busy 把整个页面锁住。
     setMsg("");
-    try {
-      const res = await selectVoice(m);
+    const out = await requestVoiceSwitch(m, (info) => {
       setSelectedKey(modelKey(m));
       setDspId("");
       setDspActive(null);
-      try {
-        await setHot({
-          dsp_enabled: false,
-          dsp_preset: "",
-          dsp_params: {},
-          function: "vc",
-          ...(res.pitch != null || res.formant != null
-            ? {
-                pitch: Number(res.pitch ?? 0),
-                formant: Number(res.formant ?? 0),
-              }
-            : {}),
-        });
-      } catch {
-        /* worker may be idle */
-      }
-      onVoiceChange?.({
-        model: (res.model as VoiceModel) || m,
-        pitch: res.pitch as number | undefined,
-        formant: res.formant as number | undefined,
-        profileSummary: res.profile_summary,
-      });
-      await reload();
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setBusy(false);
+      onVoiceChange?.(info);
+      void reload();
+    });
+    if (out.kind === "error") {
+      setMsg(out.error);
     }
   };
 
@@ -621,8 +601,12 @@ function ModelsPageImpl({
                   <div className="mt-2.5 flex items-center gap-1.5">
                     {cur ? (
                       <Btn on uw disabled>{t("s.e6aa2cbd7b")}</Btn>
+                    ) : pendingKey !== "" && pendingKey === modelKey(v) ? (
+                      // 切换中/排队中的目标：点下即标记，不等后端回话。
+                      <Btn uw disabled>{t("dock.switching")}</Btn>
                     ) : (
-                      <Btn uw disabled={busy || !!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
+                      // 其余卡不再被全局 busy 锁住：点了就排进最新意图。
+                      <Btn uw disabled={!!v.missing} onClick={() => void onUse(v)}>{t("s.0e2d3a3c09")}</Btn>
                     )}
                     {/* 改名 / 删除 / 看作者主页原来藏在右键里，没人找得到。
                         一条都没有的模型不画这个按钮 —— 点开只写着「无可用

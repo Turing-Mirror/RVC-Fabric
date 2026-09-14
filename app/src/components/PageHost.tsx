@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { navDirection, type PageId } from "../lib/nav";
+import { noteMount, noteUnmount } from "../lib/lifecycle";
 
 type Props = {
   page: PageId;
@@ -81,26 +82,59 @@ export function PageHost({ page, children }: Props) {
   const leaveCls =
     phase.dir === 1 ? "page-leave-l" : phase.dir === -1 ? "page-leave-r" : "";
 
+  // 同一页在「当前」和「离场」之间只换类名不换 key，子树保持挂载：
+  // 离场动画放完才卸载，期间不会把页面的取数/订阅副作用再跑一遍。
+  // 快速来回切时，仍在离场动画里的页直接回到当前位，装卸各只发生一次。
+  const shown =
+    phase.leaving && phase.leaving !== phase.page
+      ? [phase.leaving, phase.page]
+      : [phase.page];
+
   return (
     <div className="relative flex-1 overflow-hidden">
-      {phase.leaving ? (
-        <div
-          key={`leave-${phase.leaving}`}
-          // 离场层不需要能滚：它是新挂上去的节点，scrollTop 本来就是 0，
-          // 300ms 后就卸载了。留着 overflow-y-auto 只是多一个滚动容器，
-          // 切页那一瞬间会跟着画出第二根滚动条。
-          className={`absolute inset-0 overflow-hidden pointer-events-none z-[1] ${leaveCls}`}
-        >
-          {children(phase.leaving)}
-        </div>
-      ) : null}
-      <div
-        key={`cur-${phase.page}`}
-        ref={paneRef}
-        className={`absolute inset-0 overflow-y-auto z-[2] ${enterCls}`}
-      >
-        {children(phase.page)}
-      </div>
+      {shown.map((id) => {
+        const leaving = id === phase.leaving;
+        return (
+          <PagePane
+            key={id}
+            id={id}
+            paneRef={leaving ? undefined : paneRef}
+            className={
+              leaving
+                ? `absolute inset-0 overflow-hidden pointer-events-none z-[1] ${leaveCls}`
+                : `absolute inset-0 overflow-y-auto z-[2] ${enterCls}`
+            }
+          >
+            {children(id)}
+          </PagePane>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * 一层页面容器。key 就是页面 id，装卸次数记进生命周期台账，
+ * 供 C-01 的「切页 100 次不留净增长」验收。
+ */
+function PagePane({
+  id,
+  paneRef,
+  className,
+  children,
+}: {
+  id: PageId;
+  paneRef?: React.RefObject<HTMLDivElement | null>;
+  className: string;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    noteMount(`page:${id}`);
+    return () => noteUnmount(`page:${id}`);
+  }, [id]);
+  return (
+    <div ref={paneRef} className={className}>
+      {children}
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { deactivateDsp, forceKillEngine, startVc, swapModel } from "./lib/engine
 import type { PageId } from "./lib/nav";
 import { currentVoice, type VoiceModel } from "./lib/voices";
 import { requestVoiceSwitch } from "./lib/voiceSwitch";
+import { useUpdateFlow } from "./lib/updateFlow";
 import { pickAutoDevices } from "./lib/deviceSetup";
 import { invoke } from "@tauri-apps/api/core";
 import { applyAppearance } from "./lib/appearance";
@@ -57,28 +58,7 @@ type KnownIssue = {
   fixed_in?: string;
 };
 
-/** `update_check` 的返回。字段名和 `update::decide` 里那个 json! 一一对应。 */
-type UpdateInfo = {
-  local: string;
-  remote: string;
-  available: boolean;
-  blocked_by_min_version: boolean;
-  min_app_version: string;
-  package_type: string;
-  /** `external` = 换 exe，走签名更新器；否则是界面补丁。 */
-  action: string;
-  url: string;
-  sha256: string;
-  notes: string;
-};
 
-/** `14:07`。状态行里带个时间，才看得出这句话是刚查的还是上次留下的。 */
-function clockNow(): string {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes(),
-  ).padStart(2, "0")}`;
-}
 
 export default function App() {
   // Subscribe so locale change re-renders App (static t() labels) without
@@ -105,11 +85,21 @@ export default function App() {
     setExtrasFilter("all");
   }, [page]);
   // Self-update: check reports the catalog's latest; applying swaps the
-  // external frontend/ dir and takes effect on restart.
-  const [updateLine, setUpdateLine] = useState("");
-  // 检查更新唯一的反馈原来只有一行灰色小字，用户点完看不出点没点上，
-  // 会以为按钮坏了。按钮自己也要进入「检查中…」并禁用。
-  const [updateBusy, setUpdateBusy] = useState(false);
+  // external frontend/ dir and takes effect on restart. 检查与安装在
+  // useUpdateFlow 里分开：probe/check 只查，accept 才装。
+  const {
+    line: updateLine,
+    busy: updateBusy,
+    offer: updateOffer,
+    working: updateWorking,
+    error: updateError,
+    probe: probeUpdate,
+    check: checkUpdate,
+    accept: acceptUpdate,
+    installOffer: installOfferUpdate,
+    present: presentUpdate,
+    dismiss: dismissUpdate,
+  } = useUpdateFlow();
 
   // 开机时把外观（配色 / 背景图 / 磨砂 / 不透明度）套上。之后用户在设置页
   // 每改一下都由 useConfig 就地再套一次，所以这里只跑一次就够 —— 以前依赖数组
@@ -128,78 +118,6 @@ export default function App() {
       alive = false;
     };
   }, []);
-  // 启动时自动查到的新版本。非空 = 弹一条「要不要现在装」。
-  const [updateOffer, setUpdateOffer] = useState<UpdateInfo | null>(null);
-
-  /** 只查，不装。返回后端那份原样的结果，顺手把状态行写好。 */
-  const probeUpdate = async (): Promise<UpdateInfo | null> => {
-    const r = (await invoke<Record<string, unknown>>(
-      "update_check",
-    )) as UpdateInfo;
-    if (r.blocked_by_min_version) {
-      setUpdateLine(
-        t("s.214fe7bcad", {
-          v0: String(r.local),
-          v1: String(r.min_app_version),
-        }),
-      );
-      return null;
-    }
-    if (!r.available) {
-      // 「已是最新」必须带上版本号和时间。只说一句「已是最新」，用户分不清
-      // 是真查过了还是根本没查动。
-      setUpdateLine(
-        t("s.7ccca92d5e", { v0: String(r.local), v1: clockNow() }),
-      );
-      return null;
-    }
-    setUpdateLine(
-      t("s.622a22349e", {
-        v0: String(r.remote),
-        v1: String(r.local),
-      }),
-    );
-    return r;
-  };
-
-  /** 真正下载并安装。整包走签名更新器，界面补丁走 update_apply。 */
-  const installUpdate = async (r: UpdateInfo) => {
-    if (r.action === "external") {
-      // Rust side changed → replace the exe through the signed updater.
-      setUpdateLine(t("s.b22f6e52ac", { v0: String(r.remote) }));
-      const b = await invoke<Record<string, unknown>>("update_app");
-      setUpdateLine(
-        b.installed
-          ? t("s.995e0f4c81", {
-              v0: String(b.version ?? r.remote),
-            })
-          : t("s.3d1fde4601"),
-      );
-      return;
-    }
-    setUpdateLine(t("s.5b3dc1999a", { v0: String(r.remote) }));
-    await invoke("update_apply", {
-      url: String(r.url),
-      sha256: String(r.sha256 || ""),
-    });
-    setUpdateLine(t("s.995e0f4c81", { v0: String(r.remote) }));
-  };
-
-  /** 设置页那个「立即检查」：查到了就直接装，这是用户主动点的。 */
-  const checkUpdate = async () => {
-    if (updateBusy) return;
-    setUpdateBusy(true);
-    setUpdateLine(t("s.481ee2d4bc"));
-    try {
-      const r = await probeUpdate();
-      if (r) await installUpdate(r);
-    } catch (e) {
-      setUpdateLine(t("s.ac3a85a9c1", { v0: String(e) }));
-    } finally {
-      setUpdateBusy(false);
-    }
-  };
-
   // 开机自动查一次。
   //
   // 查到了**不直接装** —— 用户刚点开软件多半是要马上用，后台自作主张占着网
@@ -216,7 +134,7 @@ export default function App() {
       void (async () => {
         try {
           const r = await probeUpdate();
-          if (!cancelled && r) setUpdateOffer(r);
+          if (!cancelled && r) presentUpdate(r);
         } catch {
           // 开机没网是常态，不要为此弹窗打扰。状态行留空，用户进设置页
           // 手点「立即检查」时才会看到具体的失败原因。
@@ -229,22 +147,6 @@ export default function App() {
     };
   }, []);
 
-  // 答应更新之后，那条提示**留在原地**变成进度，不跳页也不换地方看。
-  // 把人扔到设置页去找进度条，等于让他自己去确认「我刚才点的那下算数了吗」。
-  const [updateWorking, setUpdateWorking] = useState(false);
-  const acceptUpdate = async () => {
-    const r = updateOffer;
-    if (!r) return;
-    setUpdateWorking(true);
-    setUpdateBusy(true);
-    try {
-      await installUpdate(r);
-    } catch (e) {
-      setUpdateLine(t("s.bac68ea7db", { v0: String(e) }));
-    } finally {
-      setUpdateBusy(false);
-    }
-  };
   const [pitch, setPitch] = useState(0);
   const [formant, setFormant] = useState(0);
   const [mode, setMode] = useState<OutputMode>("vc");
@@ -334,16 +236,7 @@ export default function App() {
     }
     // 下载进度走下面那条更新横幅（两块 Nudge 各占一行，可以并存）——
     // 用户按了按钮就得看得见它在动。
-    setUpdateOffer(r);
-    setUpdateWorking(true);
-    setUpdateBusy(true);
-    try {
-      await installUpdate(r);
-    } catch (e) {
-      setUpdateLine(t("s.bac68ea7db", { v0: String(e) }));
-    } finally {
-      setUpdateBusy(false);
-    }
+    await installOfferUpdate(r);
   };
 
   // The daily ping belongs to app start, not to every start/stop of the
@@ -1388,12 +1281,14 @@ export default function App() {
           }
           actions={
             updateWorking ? (
-              <Btn onClick={() => setUpdateOffer(null)} disabled={updateBusy}>
+              <Btn onClick={dismissUpdate} disabled={updateBusy}>
                 {updateBusy ? t("s.65188d08a2") : t("s.cb63c62e50")}
               </Btn>
             ) : (
               <>
-                <Btn onClick={() => setUpdateOffer(null)}>{t("s.479fcc1cc0")}</Btn>
+                <Btn onClick={dismissUpdate}>
+                  {updateError ? t("s.cb63c62e50") : t("s.479fcc1cc0")}
+                </Btn>
                 <Btn primary onClick={() => void acceptUpdate()}>{t("s.f4df9977ea")}</Btn>
               </>
             )
@@ -1401,7 +1296,8 @@ export default function App() {
         >
           {updateWorking
             ? updateLine
-            : t("s.3956a2d8bb", {
+            : updateError ||
+              t("s.3956a2d8bb", {
                 v0: updateOffer.local,
                 v1:
                   updateOffer.notes ||

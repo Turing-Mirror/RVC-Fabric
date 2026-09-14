@@ -17,6 +17,29 @@ use crate::paths;
 use crate::worker;
 
 static PROVISION_BUSY: Mutex<bool> = Mutex::new(false);
+
+/// RAII guard for the one-runtime-operation-at-a-time rule. Downloads and the
+/// one-time migration both move trees under `Runtimes/`; overlapping them
+/// means two movers on the same directory.
+pub struct ProvisionGuard {
+    _private: (),
+}
+
+impl Drop for ProvisionGuard {
+    fn drop(&mut self) {
+        let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        *g = false;
+    }
+}
+
+pub fn try_begin() -> Result<ProvisionGuard, String> {
+    let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    if *g {
+        return Err(crate::i18n::t("s.eca157a71e"));
+    }
+    *g = true;
+    Ok(ProvisionGuard { _private: () })
+}
 /// Shared with download layer (async-fetcher shutdown).
 static CANCEL: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
 
@@ -685,15 +708,9 @@ pub fn run_provision(
     variant: String,
     force: bool,
 ) -> Result<Value, String> {
-    {
-        // Poison recovery: a panic here would otherwise leave the flag stuck
-        // and every later provision would report 「已有补全任务在进行」.
-        let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
-            return Err(crate::i18n::t("s.eca157a71e").into());
-        }
-        *g = true;
-    }
+    // Held until the end of the function; Drop releases the flag even on
+    // panic, so a wedged run can't report 「已有补全任务在进行」 forever.
+    let _op_guard = try_begin()?;
     cancel_flag().store(false, Ordering::SeqCst);
 
     let result: Result<Value, String> = (|| {
@@ -949,10 +966,6 @@ pub fn run_provision(
         }))
     })();
 
-    {
-        let mut g = PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        *g = false;
-    }
     cancel_flag().store(false, Ordering::SeqCst);
 
     if let Err(ref e) = result {

@@ -116,6 +116,10 @@ pub fn run(
         return Ok(json!({ "ok": true, "migrated": false }));
     }
 
+    // 迁移和运行时下载都会搬动 Runtimes/ 下的目录树，同一时刻只能有一个
+    // 在动 —— 共用 provision 的忙位，重叠时后者直接报错而不是互相覆盖。
+    let _op_guard = provision::try_begin()?;
+
     let legacy = paths::legacy_runtime_dir(root);
     let known_variant = metadata_variant(root);
     let managed = paths::managed_runtime_variants(root);

@@ -66,6 +66,8 @@ def _make_rmvpe(model):
     obj.device = "cpu"
     obj.is_half = False
     obj.model = model
+    obj._onnx_dml = False
+    obj._pt_path = ""
     return obj
 
 

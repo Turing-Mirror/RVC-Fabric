@@ -1,7 +1,7 @@
 //! Community voice store: catalog fetch + zip/files install.
 //! Mirrors launcher/online/catalog.py + voice_install.py (subset for stage 4).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -416,6 +416,46 @@ fn is_voice_installed(root: &Path, voice_id: &str) -> bool {
     false
 }
 
+/// 后台清单再验证：缓存新鲜（<1 天）不动；过期/缺失才拉远端重写缓存。
+/// 并发去重——同一时刻最多一个在跑，重复调用直接返回。
+static CATALOG_REFRESHING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+const CATALOG_FRESH_SECS: u64 = 24 * 3600;
+
+fn schedule_catalog_refresh(cache_p: PathBuf) {
+    use std::sync::atomic::Ordering;
+    if CATALOG_REFRESHING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                CATALOG_REFRESHING.store(false, Ordering::SeqCst);
+            }
+        }
+        let _reset = Reset;
+        let fresh = cache_p
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .map(|d| d.as_secs() < CATALOG_FRESH_SECS)
+            .unwrap_or(false);
+        if fresh {
+            return;
+        }
+        if let Ok(remote) = crate::catalog::fetch_remote_catalog(25) {
+            if let Ok(text) = serde_json::to_string_pretty(&remote) {
+                let tmp = cache_p.with_extension("tmp");
+                if std::fs::write(&tmp, &text).is_ok() {
+                    let _ = std::fs::rename(&tmp, &cache_p);
+                }
+            }
+        }
+    });
+}
+
 /// Fetch / merge online catalog; annotate installed flags.
 pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
     let _ = paths::ensure_user_dirs(root);
@@ -472,6 +512,10 @@ pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
                 }
             }
         }
+    } else {
+        // 先把本地清单（缓存 > 内置）还给界面，再后台核对远端：缓存超过
+        // 一天就当过期——「仅凭 URL 永久有效」不是策略。失败不动旧缓存。
+        schedule_catalog_refresh(cache_p);
     }
 
     // A previously fetched remote snapshot may predate the current catalog.
@@ -567,8 +611,23 @@ fn origin_label_for(origin: &str, official: bool) -> String {
 pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    // 同一 URL 跨条目重复很常见（系列共用封面）：先合并再下发，不重复下载。
+    let mut seen = HashSet::new();
+    let urls: Vec<String> = urls
+        .iter()
+        .filter(|u| !u.is_empty() && seen.insert((*u).clone()))
+        .cloned()
+        .collect();
     let out: Mutex<Map<String, Value>> = Mutex::new(Map::new());
     let next = AtomicUsize::new(0);
+    // 连接复用：每个 URL 各建一个 Client 等于每张封面都重握手一次。
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+    {
+        Ok(c) => Some(c),
+        Err(_) => None,
+    };
     let lanes = urls.len().clamp(1, 8); // 封面是小图，8 路并行加快批次返回，少拖后腿
     std::thread::scope(|s| {
         for _ in 0..lanes {
@@ -577,7 +636,7 @@ pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
                 if i >= urls.len() {
                     break;
                 }
-                let r = resolve_cover_url(root, &urls[i]);
+                let r = resolve_cover_url(root, &urls[i], client.as_ref());
                 out.lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(urls[i].clone(), json!(r.unwrap_or_default()));
@@ -587,7 +646,15 @@ pub fn resolve_covers(root: &Path, urls: &[String]) -> Map<String, Value> {
     out.into_inner().unwrap_or_default()
 }
 
-fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
+/// 封面缓存的再验证窗口：一周内的直接用；更老的先回本地图（不阻塞
+/// 界面），同时重拉远端——「仅凭 URL 永久有效」不是有效策略。
+const COVER_FRESH_SECS: u64 = 7 * 24 * 3600;
+
+fn resolve_cover_url(
+    root: &Path,
+    url: &str,
+    client: Option<&reqwest::blocking::Client>,
+) -> Result<String, String> {
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Ok(url.to_string()); // 非 http（如 asset://）原样返回
     }
@@ -600,25 +667,85 @@ fn resolve_cover_url(root: &Path, url: &str) -> Result<String, String> {
     let key = hex::encode(sha2::Sha256::digest(url.as_bytes()));
     let dest = dir.join(format!("{}.jpg", &key[..24]));
     if dest.is_file() && dest.metadata().map(|m| m.len()).unwrap_or(0) > 100 {
+        let fresh = dest
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .map(|d| d.as_secs() < COVER_FRESH_SECS)
+            .unwrap_or(true);
+        if fresh {
+            return Ok(dest.to_string_lossy().into_owned());
+        }
+        // 过期缓存：照常先返回旧图，后台线程负责重拉验证；拉取成功覆盖，
+        // 失败保留旧图——不拿「可能更新了」的猜测挡住现在的显示。
+        let (root_c, url_c, dest_c) = (root.to_path_buf(), url.to_string(), dest.clone());
+        let cl = client.cloned();
+        std::thread::spawn(move || {
+            let owned;
+            let c = match (&cl, cl.is_none()) {
+                (Some(c), _) => c,
+                (None, true) => {
+                    owned = reqwest::blocking::Client::builder()
+                        .timeout(std::time::Duration::from_secs(8))
+                        .build()
+                        .ok();
+                    match &owned {
+                        Some(c) => c,
+                        None => return,
+                    }
+                }
+                (None, false) => unreachable!(),
+            };
+            let _ = download_cover(&root_c, &url_c, &dest_c, c);
+        });
         return Ok(dest.to_string_lossy().into_owned());
     }
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(8)) // 封面几十 KB，8 秒足够；挂了快速失败交给前端重试
-        .build()
-        .map_err(|e| e.to_string())?;
+    let Some(client) = client else {
+        return local_banner_for_hint(root, url)
+            .ok_or_else(|| "cover client unavailable".to_string());
+    };
     let mut last_err = String::new();
     for cand in cover_download_candidates(url) {
-        match fetch_cover_bytes(&client, &cand) {
+        match fetch_cover_bytes(client, &cand) {
             Ok(bytes) => {
-                let tmp = dir.join(format!("{}.tmp", &key[..24]));
-                fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
-                fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
+                write_cover_atomic(&dir, &dest, &bytes)?;
                 return Ok(dest.to_string_lossy().into_owned());
             }
             Err(e) => last_err = e,
         }
     }
     local_banner_for_hint(root, url).ok_or(last_err)
+}
+
+/// 临时文件名带线程身份：同一目录下并发下载互不踩踏，崩溃留下的
+/// 半成品 tmp 也不会被当成成品。
+fn write_cover_atomic(dir: &Path, dest: &Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = dir.join(format!(
+        "{}.{}.tmp",
+        dest.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("cover"),
+        std::process::id()
+    ));
+    fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, dest).map_err(|e| e.to_string())
+}
+
+fn download_cover(
+    root: &Path,
+    url: &str,
+    dest: &Path,
+    client: &reqwest::blocking::Client,
+) -> Result<(), String> {
+    for cand in cover_download_candidates(url) {
+        if let Ok(bytes) = fetch_cover_bytes(client, &cand) {
+            return write_cover_atomic(dest.parent().unwrap_or(dest), dest, &bytes)
+                .map(|_| ());
+        }
+    }
+    let _ = root;
+    Err("revalidate failed".into())
 }
 
 fn fetch_cover_bytes(
@@ -663,6 +790,7 @@ fn banner_file_name(hint: &str) -> Option<String> {
 }
 
 /// 远程封面挂了时，用文件名去本机 ch-banner 里找（开发仓 / 已缓存的封面）。
+#[cfg(test)]
 fn local_banner_for_url(root: &Path, url: &str) -> Option<String> {
     local_banner_for_hint(root, url)
 }
@@ -2101,7 +2229,7 @@ mod tests {
         let rel = local_banner_for_hint(&root, "ch-banner/tp-yuuka.jpg");
         assert!(rel.unwrap().ends_with("tp-yuuka.jpg"));
         // 本机有图时不再去网上撞 404。
-        let resolved = resolve_cover_url(&root, url).expect("local first");
+        let resolved = resolve_cover_url(&root, url, None).expect("local first");
         assert!(resolved.ends_with("tp-yuuka.jpg"), "{resolved}");
         let _ = std::fs::remove_dir_all(&root);
     }

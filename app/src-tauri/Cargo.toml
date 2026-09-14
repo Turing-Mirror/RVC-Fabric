@@ -44,6 +44,9 @@ regex = "1"
 # Local-time stamps for diagnostics / consult filenames (support reads these)
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 tauri-plugin-single-instance = "2"
+# Recycle Bin deletion for user audio files (sts input list "更多→删除源文件").
+# Pinned patch version: 5.2.8 was published days ago; stay on the settled one.
+trash = "=5.2.6"
 
 # Process liveness without spawning a helper process. The status poll runs
 # every 400 ms while converting; shelling out to tasklist / powershell there

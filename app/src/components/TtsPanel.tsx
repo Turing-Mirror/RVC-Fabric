@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
@@ -15,6 +15,7 @@ import { listVoices, type VoiceModel } from "../lib/voices";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { openDownloadModels } from "../lib/downloadModels";
 import { AudioTrimButton, AudioTrimEditor, canTrimAudio } from "./AudioTrim";
+import { MoreMenuPopup, type PopupAnchor } from "./MoreMenu";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
@@ -271,6 +272,7 @@ function StsSection() {
   const [recording, setRecording] = useState(false);
   const [rec, setRec] = useState<RecProgress | null>(null);
   const [playing, setPlaying] = useState("");
+  const [fileMenu, setFileMenu] = useState<{ anchor: PopupAnchor; file: InputFile } | null>(null);
   const recordingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef(input);
@@ -633,6 +635,34 @@ function StsSection() {
     }
   };
 
+  // 点别处或 Escape 关闭行内「⋯」菜单；打开处 stopPropagation 防即开即关。
+  useEffect(() => {
+    if (!fileMenu) return;
+    const close = () => setFileMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFileMenu(null);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [fileMenu]);
+
+  const openFileMenu = (e: MouseEvent<HTMLButtonElement>, f: InputFile) => {
+    e.stopPropagation();
+    if (fileMenu && fileMenu.file.path === f.path) {
+      setFileMenu(null);
+      return;
+    }
+    const r = e.currentTarget.getBoundingClientRect();
+    setFileMenu({
+      anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
+      file: f,
+    });
+  };
+
   const start = async () => {
     if (runningRef.current || recordingRef.current) return;
     // 实时 worker 还活着就走热路径（复用已加载的模型），不再先杀进程。
@@ -931,21 +961,39 @@ function StsSection() {
                       {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
                     </Btn>
                     <Btn
+                      className="px-2.5"
                       disabled={running || recording}
-                      onClick={() => void renameFile(f)}
+                      ariaLabel={t("models.more")}
+                      onClick={(e) => openFileMenu(e, f)}
                     >
-                      {t("s.1cd80fd7a8")}
-                    </Btn>
-                    <Btn
-                      disabled={running || recording}
-                      onClick={() => void removeFile(f)}
-                    >
-                      {t("s.stsDelete")}
+                      ⋯
                     </Btn>
                   </li>
                 );
               })}
             </ul>
+            {fileMenu ? (
+              <MoreMenuPopup
+                anchor={fileMenu.anchor}
+                items={[
+                  {
+                    label: t("s.1cd80fd7a8"),
+                    action: () => {
+                      setFileMenu(null);
+                      void renameFile(fileMenu.file);
+                    },
+                  },
+                  {
+                    label: t("s.stsDelete"),
+                    danger: true,
+                    action: () => {
+                      setFileMenu(null);
+                      void removeFile(fileMenu.file);
+                    },
+                  },
+                ]}
+              />
+            ) : null}
             {inputPageCount > 1 ? (
               <div className="mt-2 flex items-center justify-between gap-2">
                 <Btn

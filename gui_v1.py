@@ -1486,8 +1486,19 @@ if __name__ == "__main__":
                 while getattr(self, "_prewarm_busy", False) and _time.time() < deadline:
                     _time.sleep(0.05)
                 warm = getattr(self, "_prewarmed", None)
+                # 预热结果只在「还是当前这套音色」时领取：预热读的是旧文件，
+                # 用户中途换过音色就必须作废，否则听起来像切音色没生效。
                 if warm is not None and getattr(warm, "tgt_sr", 0):
-                    last = warm
+                    same_voice = (
+                        getattr(warm, "pth_path_str", "")
+                        == str(self.gui_config.pth_path or "")
+                        and getattr(warm, "index_path_str", "")
+                        == str(self.gui_config.index_path or "")
+                    )
+                    if same_voice:
+                        last = warm
+                    else:
+                        del warm
                 self._prewarmed = None
             self.rvc = rvc_for_realtime.RVC(
                 self.gui_config.pitch,
@@ -3374,8 +3385,12 @@ if __name__ == "__main__":
                 if not pth or not os.path.isfile(pth):
                     return
                 warm = getattr(self, "_prewarmed", None)
-                if warm is not None and getattr(warm, "pth_path_str", "") == pth:
-                    return
+                if warm is not None:
+                    if getattr(warm, "pth_path_str", "") == pth:
+                        return
+                    # 预热过的是旧音色：作废重读，不然这份缓存永远不会命中。
+                    self._prewarmed = None
+                    del warm
                 self._prewarm_busy = True
                 def _prewarm_job():
                     try:
@@ -3396,6 +3411,7 @@ if __name__ == "__main__":
                         )
                         if getattr(new, "tgt_sr", 0) and getattr(new, "net_g", None) is not None:
                             new.pth_path_str = pth
+                            new.index_path_str = str(saved.get("index_path") or "")
                             self._prewarmed = new
                             printt("预热：完成")
                         else:

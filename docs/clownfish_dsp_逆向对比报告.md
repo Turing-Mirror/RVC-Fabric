@@ -1,6 +1,6 @@
 # Clownfish Voice Changer 逆向与 RVC Fabric DSP 对比报告
 
-研究性质：只研究、不落代码。分析对象为 `ClownfishVoiceChanger\ClownfshAPO64.dll`（约 380KB，Clownfish 2.05），方法为 PE 静态分析 + Capstone 反汇编（`.text` 与可执行的 `RT_CODE` 段）+ 注册表/安装目录检查。命名管道抓包因权限受阻，包格式由解析函数 `0x2D70` 静态还原。
+研究性质：只研究、不落代码。分析对象为 `ClownfshAPO64.dll`（约 380KB，Clownfish 2.05）与 `ClownfishVoiceChanger.exe`（约 1MB），方法为 PE 静态分析 + Capstone 反汇编（APO 的 `RT_CODE` 段 + EXE 的管道写线程与 UI→id 查找表）+ 注册表/安装目录检查。命名管道抓包因权限受阻，包格式由 APO 解析函数 `0x2D70` 与 EXE 组包线程（0x19E40–0x1A110，包长 0x16=22 字节）双侧静态还原并互相印证。
 
 ## 一、Clownfish 的真实架构
 
@@ -43,7 +43,7 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
 ### 3. 配置包格式（20 字节，parser `0x2D70`）
 
 | 偏移 | 还原 | 含义 |
-|---|---|---|
+| --- | --- | --- |
 | 0 | uint8 | 变声效果 id（内部编号，见下） |
 | 1–4 | int32 | 仅 id=0x0E/0x14；0x0E 时是 **float 位型**的自定义半音数 |
 | 5 | /100 | 音乐注入增益 0..1（默认 0.5） |
@@ -59,38 +59,47 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
 | 18 | bool | 把处理结果回传 EXE（电平表/监听） |
 | 19 | %→1.0+0.05x | 输出增益 1.0~6.0 |
 
-### 4. 变声效果 id → 内部实现（内部编号，非 UI 编号）
+### 4. 变声效果 id → 内部实现（**映射表已从 EXE 静态确认**）
 
-4 路 SoundTouch 对象基址 `state+0x14B58+i*0x60`（循环确认）。
+`ClownfishVoiceChanger.exe` `.rdata 0xD2258` 处有两张 **UI 索引 → wire id** 查找表（4 字节步长的 int32 表）：
 
-| id | 实现 | 推断对应 UI |
-|---|---|---|
-| 0 / 1 / 2 / 3 | 空操作（配合其他字节字段使用，如 Robot 走 byte14 声码器） | — |
-| 4 | Hann 窗调制：`out = in × window[pos]`，窗长 `+0x7c`，四路各自相位 | Clone/加倍类 |
-| 5 | SoundTouch `setPitchSemiTones(-3)` | **Male = -3 半音** |
-| 6 | `setPitchSemiTones(+4)` | **Female = +4 半音** |
-| 7 | `setPitchSemiTones(+8)` | **Helium = +8** |
-| 8 | `setPitchSemiTones(+12)` | **Baby = +12** |
-| 9 | 乒乓双缓冲反向播放：录满一条 5s 延迟线→倒序回放，同时录另一条，边缘做淡入淡出 | Clone/反向类（四路错峰相位） |
-| 0x0A | 三角 LFO 扫音高：**-4 ↔ +13 半音**，步进 **0.1 半音/块** | Mutation |
-| 0x0B | 同上，步进 **0.01** | Slow Mutation |
-| 0x0C | 同上，步进 **0.3** | Fast Mutation |
-| 0x0D | LFO 累加器到 -3/+4 边界时把音高在 **+6 ↔ -3 半音**间翻转（方波调制） | Alien |
-| 0x0E | `setPitchSemiTones(float)`，参数=字节1–4 的 float 位型 | **Custom pitch（±15，菜单默认 4.50）** |
-| 0x0F | 125ms 单抽头回声：`out = 0.5·in + 0.5·in[t-125ms]` | —（可能映射到某 UI 档） |
-| 0x10 | **半波整流** `max(0, x)` | **Atari** |
-| 0x11 | `memset(out,0)` | Silence |
-| 0x14 | Chainer：四槽 id 各跑一次，串接 | Custom effects |
+- **表1（链槽用，`[Off] + 字符串表顺序 14 项`）**：`0,9,13,12,10,11,8,6,7,5,14,16,4,15,17`
+- **表2（主效果选择器 15 项）**：`9,13,15,10,12,11,5,6,7,8,16,4,14,17,20`（Alien, Atari, Clone, Mutation, FastMut, SlowMut, Male, Female, Helium, Baby, OldRadio, Robot, Custom, Silence, Chainer）
 
-Robot（UI 14）不在效果循环里：由 byte14 打开声码器支路。**Old Radio**（UI 12）在分派里也没有独立分支，最可能由 EXE 端用 byte16/17 高低音同时砍 + 空间效果组合实现（待动态确认）。
+两张表给出的 wire id ↔ 效果归属完全一致（Robot→4、Clone→15、OldRadio→16、Silence→17、Chainer→20），可信度等同于直接证据。
+
+| UI 效果 | wire id | 内部实现（APO 反汇编确认） |
+| --- | --- | --- |
+| Off | 0 | 空操作 |
+| **Male pitch** | 5 | SoundTouch `setPitchSemiTones(-3)` |
+| **Female pitch** | 6 | `setPitchSemiTones(+4)` |
+| **Helium pitch** | 7 | `setPitchSemiTones(+8)` |
+| **Baby pitch** | 8 | `setPitchSemiTones(+12)` |
+| **Alien** | 9 | **乒乓双缓冲分块倒放**：录进 bufA（边缘线性淡化），从 bufB **反向**读回放；读完交换两缓冲。块长 = 声道数×每块帧数×20 ≈ 几百毫秒级 |
+| **Mutation** | 0x0A | 三角 LFO 扫音高 **-4 ↔ +13 半音**，步进 **0.1 半音/块** |
+| **Slow Mutation** | 0x0B | 同上，步进 **0.01** |
+| **Fast Mutation** | 0x0C | 同上，步进 **0.3** |
+| **Atari** | 0x0D | **音高方波跳变**：LFO 累加器到 -3/+4 边界时音高在 **+6 ↔ -3 半音**间翻转（≈70ms 一切换） |
+| **Custom pitch** | 0x0E | `setPitchSemiTones(float)`，参数=字节1–4 float 位型（±15） |
+| **Clone** | 0x0F | **125ms 单抽头 slapback 回声**：`out = 0.5·in + 0.5·in[t-125ms]` |
+| **Old Radio** | 0x10 | **半波整流** `max(0, x)` |
+| **Silence** | 0x11 | `memset(out,0)` |
+| **Robot** | 4 | **周期 Hann 窗门控**（AM 斩波）：窗长 = `rate/25` = 40ms → **25Hz** 断续调制 |
+| **Chainer** | 0x14 | 四槽各取 byte9–12 的 id 串联执行 |
+| 1 / 2 / 3 | — | 空槽（保留，未映射 UI） |
+
+注意两处**此前推断被推翻**：Alien 不是音高跳变而是**分块倒放**；Atari 不是半波整流而是**音高方波**（半波整流实际是 Old Radio）；Clone 不是倒放而是 125ms slapback。另：**Robot ≠ 声码器**——Robot 是 25Hz Hann 门控 AM，声码器是 byte14 打开的独立支路（载波频谱由 EXE 流式推入，见下）。
 
 ### 5. 关键算法细节
 
 - **SoundTouch 内嵌**（非外挂 DLL），4 个实例；参数 `QUICKSEEK=0, AA_FILTER=1, SEQUENCE=40ms, SEEKWINDOW=15ms, OVERLAP=8ms`——speech 档，保质量。`setPitchSemiTones = 2^(st/12)`（常数 ln2/12 = 0.057762265 已验证）。
-- **声码器（fn `0x79D0`）**：真·FFT 通道声码器。约 256 点 FFT，**.rdata 里的 21 频带边界表**（bin 划分 0-1,2-3,4-5,6-7,8-10,12-14,16-20,24-28,34-40,48-60,78-100…，近对数分布）；每频带做峰值保持包络（衰减系数 **0.6**/块），频带增益线性插值成逐样本增益后乘到载波上。处理时帧数减半 → 半速率声码器。
+- **声码器（fn `0x79D0`，byte14 支路，独立于 Robot）**：通道式声码器。**载波频谱由 EXE 端预先分析后经管道流式推入**：APO 从 `[+0x14DF8]` 环形缓冲读 20 频带×双声道的幅度帧（帧步长 0x50 字节），写进 `[+0xF4]`/`[+0x874]` 后调 `0x79D0` 把载波频带包络乘到输入频谱上。包络衰减系数 **0.6**/块。EXE 侧负责解码 `vocoders/*.mp3` → 频带分析 → 推流。
 - **EffectBassTreble（fn `0x1100`）**：双精度、两段二阶 IIR 架式滤波（低架+高架），系数在采样率/增益变化时经 `0x1830` 重算。±63.5dB 量程。
-- **Clone 类（id 9）**：两条 5 秒延迟线乒乓，倒序回放 + 块边缘线性淡化防咔哒；四路用不同读相位。
-- **Atari（id 0x10）**：不是位深压缩——是 `max(0,x)` 半波整流，丢掉所有负半周，出来是八度感十足的 fuzz。
+- **Alien（id 9）**：两条延迟线乒乓，一条录音另一条**倒序回放**，块边缘线性淡化防咔哒——分块时间反转是 Alien 声的真正来源。
+- **Old Radio（id 0x10）**：不是滤波器——是 `max(0,x)` 半波整流，丢掉所有负半周，出来是老收音机式的破音 fuzz。
+- **Robot（id 4）**：重复 Hann 窗对输入做 25Hz 门控 AM（窗长 rate/25=40ms），是"斩波"而非声码器。
+- **Clone（id 0x0F）**：125ms 单抽头 slapback，`out=0.5·in+0.5·in[t-125ms]`——人声加倍，不是合唱。
+- **Atari（id 0x0D）**：音高在 +6/-3 半音间方波跳变（边界触发），8-bit 游戏式音高颤动。
 - **噪声门**：只按声道 0 逐帧取峰值；低于阈值连续 10 个 APO 块（≈100ms）就整块清零；高于阈值立刻放行并清计数。没有平滑释放——硬切。
 - **延迟/缓冲**：延迟线尺寸 = `rate×channels`（空间效果缓冲为 rate×ch/4），Clone 乒乓缓冲各 5s。
 
@@ -104,13 +113,14 @@ Robot（UI 14）不在效果循环里：由 byte14 打开声码器支路。**Old
 ## 三、逐项差距（为什么复刻不像）
 
 | Clownfish | RVC Fabric | 差距 |
-|---|---|---|
+| --- | --- | --- |
 | Male **-3** / Female **+4** / Helium +8 / Baby +12 半音（整数档，走 setPitchSemiTones） | ∓**4.5**、+8、+12 | 男女声差 **0.5~1.5 半音**；且自定义档 Clownfish 是 float 精确到分，RVC 预设写死 4.5 |
 | Mutation = 音高**三角扫 -4~+13 半音**（步进 0.1/0.01/0.3 每块 ≈ 每 10ms） | fast_mutation = +5 固定 + vibrato 9.5Hz/**17 音分** + formant +2.5 + drive | **机制完全不同**：Clownfish 是 ±17 半音的大范围扫频，RVC 只抖 0.17 半音；且 Clownfish 不碰共振峰，RVC 反而搬了 formant |
-| Alien = 音高在 **+6/-3 半音间方波跳变** | alien = +3 固定 + tremolo + ring + vibrato | 完全不同的调制源（音高跳变 vs 振幅颤音） |
-| Robot = **21 频带 FFT 声码器**（包络衰减 0.6），半速率 | robot = 包络×脉冲载波 + ring + 限带 | 一个是真声码器（载波+带包络），一个是单包络调制；Clownfish 另有 vocoders/*.mp3 载波生态 |
-| Atari = `max(0,x)` **半波整流** | retro8bit = 6bit 量化 + 5×采样保持 + 限带 | 机制完全不同：整流 fuzz ≠ 位深压缩 |
-| Clone = 5s 乒乓延迟线**倒序回放** + 边缘淡化（或 Hann 窗粒子 id4） | chorus_crowd = 2 路失谐延迟 | Clownfish 的 Clone 实际是"倒放/窗口粒子"结构，不是合唱 |
+| Alien = **乒乓缓冲分块倒放**（~200ms 级反转块，边缘淡化） | alien = +3 固定 + tremolo + ring + vibrato | 完全不同的机制：时间反转 babble vs 振幅/环形调制 |
+| Robot = **25Hz Hann 窗门控 AM**（40ms 周期斩波） | robot = 包络×脉冲载波 + ring + 限带 | 都是"调制"但载波结构完全不同；且 Clownfish 另有独立的真声码器（byte14，20 频带，载波频谱经管道流式推入，对应 vocoders/*.mp3） |
+| Atari = 音高在 **+6/-3 半音间方波跳变**（~70ms 周期） | retro8bit = 6bit 量化 + 5×采样保持 + 限带 | 一个是音高方波调制，一个是位深/采样率降级 |
+| Old Radio = `max(0,x)` **半波整流** | radio = 400–2600Hz 限带 + 噪声 + tremolo + drive | Clownfish 用整流失真模拟破喇叭，RVC 用限带+噪声模拟电台——两种"老"的音色路径 |
+| Clone = **125ms slapback** `out=0.5·in+0.5·d` | chorus_crowd = 2 路失谐延迟 | Clone 是固定单回声加倍，不是合唱 |
 | Chorus（空间档3）= **8.3ms 梳状**，(in+d)×0.5 | chorus = 40ms 内 LFO 摆动的 2-3 路延迟 | 延迟量级差 5 倍，听感一个是金属梳状一个是真合唱 |
 | Cave/TownHall/Ghost = 62.5ms/250ms 回声 + **反向读延迟线** | cave=混响+回声，ghost=气声+降调+混响 | Ghost 是"反向回声"这个特殊结构，RVC 用混响凑，不对 |
 | 高低音 = 专用**架式双二阶**（±63.5dB） | 5 段峰式 EQ | 架式 vs 峰式，截止特性不同；Old Radio 疑似靠它砍两头实现 |
@@ -123,7 +133,7 @@ Robot（UI 14）不在效果循环里：由 byte14 打开声码器支路。**Old
 ## 四、无法完美复刻的根因清单
 
 1. **预设数值不对**：Male/Female 差了 0.5~1.5 半音（Clownfish 是 -3/+4，不是 ±4.5）。
-2. **机制级缺失**：Mutation（±17 半音扫频）、Alien（音高方波跳变）、Atari（半波整流）、Ghost（反向回声）、21 带声码器——RVC 的效果器库里没有这些原语，拿 vibrato/混响/位深压缩去凑，形似神不似。
+2. **机制级缺失**：Mutation（±17 半音扫频）、Atari（音高 +6/-3 方波跳变）、Alien（分块倒放）、Old Radio（半波整流）、Robot（25Hz Hann 门控）、Clone（125ms slapback）、Ghost（反向回声）、20 带管道载波声码器——RVC 的效果器库里没有这些原语，拿 vibrato/混响/位深压缩去凑，形似神不似。
 3. **空间效果延迟常数不同**：Clownfish 的 Chorus 是 8.3ms 梳状、Cave/TownHall 是固定 62.5/250ms 回声；RVC 是可调 LFO 合唱 + Schroeder 混响。
 4. **处理顺序差异**：Clownfish 是「门限 → 单效果（或 4 槽串联）→ 空间 → EQ → 干湿 → 增益」；RVC 是 13 级全串联固定顺序。Clownfish 的效果是**单选**（id 互斥），RVC 预设是多效果叠加——同一个预设名背后的信号路径不一样。
 5. **声码器是 FFT 频带式**而非包络×载波；且自带载波库（vocoders/*.mp3）。
@@ -131,10 +141,10 @@ Robot（UI 14）不在效果循环里：由 byte14 打开声码器支路。**Old
 
 ## 五、置信度说明
 
-- **高置信（反汇编直接确认）**：信号链顺序、包格式全部字段、SoundTouch 参数、各 id 内部实现、声码器带数与衰减、EQ 结构、延迟常数。
-- **中置信**：wire id ↔ UI 名的映射（由语义推断：-3/+4/+8/+12 对应 Male/Female/Helium/Baby 单调递增可信；id9 倒放↔Clone、0x0D 跳变↔Alien 为推断）。Old Radio 未见独立分支，疑为 EQ+空间组合——需动态验证。
-- **未解决**：命名管道实时抓包失败（权限），无法拿到各 UI 预设实际下发的整包字节来最终钉死映射表；byte14 声码器的载波来源（内置生成 vs EXE 推流）；id 1/2/3 空槽与 0x0F 的 UI 归属。
+- **已钉死（EXE 查找表 + APO 分派双重证据）**：wire id ↔ UI 效果映射（`ClownfishVoiceChanger.exe` `.rdata 0xD2258` 两张表互证）；音高四档 -3/+4/+8/+12；Alien=分块倒放、Atari=音高方波、OldRadio=半波整流、Clone=125ms slapback、Robot=25Hz Hann 门控、Silence=memset、Chainer=0x14 串联。
+- **高置信（反汇编直接确认）**：信号链顺序、包格式字段、SoundTouch 参数、声码器载波为 EXE 流式推入的 20 频带幅度帧、EQ 结构、延迟常数。EXE 端包长 0x16（22 字节，比 APO 解析的 20 字节多 2 字节头/尾）。
+- **残余未解决**：Alien 倒放块的精确时长（公式 = 声道数×每块帧数×20，依块长而定）；噪声门/音乐等字段的出厂默认值（ini 未在本机生成时无法读）；id 1/2/3 空槽疑似保留位。动态抓包仍受权限限制，但静态表已使映射不再依赖抓包验证。
 
 ## 六、若将来要落地（不在本次范围）
 
-优先级排序：① 修预设数值（-3/+4）；② 加三个原语：半波整流（Atari）、音高 LFO 扫频（Mutation 三档，挂 SoundTouch setPitchSemiTones 每块更新）、音高方波（Alien）；③ 反向回声（Ghost）与 8.3ms 梳状（Chorus）；④ 真声码器；⑤ Chainer 串联语义（Clownfish 是单选+可选4槽串，RVC 全串行可模拟但需注意互斥）。
+优先级排序：① 修预设数值（-3/+4）；② 加原语：音高三角扫频（Mutation 三档，每块调 setPitchSemiTones）、音高方波 +6/-3（Atari）、分块倒放（Alien，乒乓缓冲）、25Hz Hann 门控（Robot）、半波整流（Old Radio）、125ms slapback（Clone）；③ 反向回声（Ghost）与 8.3ms 梳状（Chorus）；④ 真声码器（20 频带，载波分析在宿主侧）；⑤ Chainer 串联语义（Clownfish 是单选+可选4槽串，RVC 全串行可模拟但需注意互斥）。

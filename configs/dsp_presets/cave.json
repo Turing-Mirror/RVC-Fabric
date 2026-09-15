@@ -1,15 +1,11 @@
 {
   "name": "山洞",
-  "desc": "空间拉开，回声不盖住人声",
+  "desc": "62.5ms 反馈回声，空间拉开",
   "params": {
-    "reverb": {
-      "size": 0.8,
-      "mix": 0.28
-    },
     "echo": {
-      "time_ms": 250.0,
-      "feedback": 0.24,
-      "mix": 0.16
+      "time_ms": 62.5,
+      "feedback": 0.5,
+      "mix": 0.5
     }
   }
 }

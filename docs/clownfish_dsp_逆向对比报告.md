@@ -1,5 +1,7 @@
 # Clownfish Voice Changer 逆向与 RVC Fabric DSP 对比报告
 
+> **260915 更新：本报告的结论已全部落地到 `tools/dsp_voice.py`** —— 新增 `sweep`/`pgate`/`rectify`/`reverse`/`revecho` 五个效果器（slapback/空间回声/梳状 Chorus 复用 `Echo`），23 个内置预设中与 Clownfish 对应的十个已换成真实机制与精确参数（−3/+4/+8/+12 半音、变异三档步进 0.1/0.3/0.01、25Hz AM、125ms slapback 等）。Chainer 四槽串联等价于本链的多效果预设。唯一未实现的是声码器（需要外部载波源，不在 14 档菜单内）。
+
 研究性质：只研究、不落代码。分析对象为 `ClownfshAPO64.dll`（约 380KB，Clownfish 2.05）与 `ClownfishVoiceChanger.exe`（约 1MB），方法为 PE 静态分析 + Capstone 反汇编（APO 的 `RT_CODE` 段 + EXE 的管道写线程与 UI→id 查找表）+ 注册表/安装目录检查。命名管道抓包因权限受阻，包格式由 APO 解析函数 `0x2D70` 与 EXE 组包线程（0x19E40–0x1A110，包长 0x16=22 字节）双侧静态还原并互相印证。
 
 ## 一、Clownfish 的真实架构

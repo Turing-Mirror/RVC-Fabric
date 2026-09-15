@@ -38,17 +38,22 @@ BLOCK = 1024
 # 每个效果器一组「确实在干活」的参数，给通用测试轮着用。
 ACTIVE = {
     "pitch": {"semitones": 7.0},
+    "sweep": {"lo": -4.0, "hi": 13.0, "step": 0.3},
+    "pgate": {"up": 6.0, "down": -3.0, "step": 1.0},
     "formant": {"shift": -4.0},
     "whisper": {"amount": 0.7},
     "robot": {"amount": 0.5, "freq": 80.0},
+    "rectify": {"mix": 1.0},
     "ring": {"freq": 80.0, "mix": 0.8},
     "tremolo": {"rate": 6.0, "depth": 0.6},
     "vibrato": {"rate": 6.0, "depth": 25.0},
+    "reverse": {"chunk_ms": 200.0, "mix": 1.0},
     "chorus": {"depth": 0.7},
     "bitcrush": {"bits": 5, "downsample": 6},
     "drive": {"amount": 0.6},
     "radio": {"mix": 0.9, "noise": 0.1},
     "echo": {"mix": 0.5},
+    "revecho": {"size_ms": 250.0, "mix": 1.0},
     "reverb": {"mix": 0.5, "size": 0.7},
 }
 
@@ -639,11 +644,12 @@ class EveryEffectTests(unittest.TestCase):
 
         pitch 除外：WSOLA 每帧的起点是按互相关搜出来的，搜索窗里有多少前瞻
         取决于输入是怎么分块喂进来的，所以逐样本不可能一致。它的块长无关性
-        由 PitchShiftTests 按「音高一致、无掉音」来验。
+        由 PitchShiftTests 按「音高一致、无掉音」来验。sweep/pgate 里包着一个
+        PitchShifter，同理豁免。
         """
         x = _noisy(secs=0.4, seed=9)
         for name in CHAIN_ORDER:
-            if name == "pitch":
+            if name in ("pitch", "sweep", "pgate"):
                 continue
             a = _blocks(self._chain(name), x, 1024)
             for blk in (512, 480):
@@ -907,9 +913,10 @@ class BlockSizeInvarianceTests(unittest.TestCase):
 
         x = _tone(f0=180.0, secs=1.0)
         for name in CHAIN_ORDER:
-            if name == "pitch":
+            if name in ("pitch", "sweep", "pgate"):
                 # WSOLA 的相关性搜索本来就跟切块位置有关，波形对不齐是正常的；
                 # 它该守的契约是「音高准」，那条在 PitchShiftTests 里。
+                # sweep/pgate 里包着一个 PitchShifter，同理。
                 continue
             outs = []
             for bs in (1024, 480):

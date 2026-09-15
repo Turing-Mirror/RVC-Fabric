@@ -17,22 +17,32 @@ type Specs = {
 /** 效果器 / 参数 → 界面上叫什么。跟 tools/dsp_voice.py 的 EFFECT_SPECS 对齐。 */
 const EFFECT_LABEL: Record<string, string> = {
   pitch: "s.dspFxPitch",
+  sweep: "s.dspFxSweep",
+  pgate: "s.dspFxPgate",
   formant: "s.dspFxFormant",
   whisper: "s.dspFxWhisper",
   robot: "s.dspFxRobot",
+  rectify: "s.dspFxRectify",
   ring: "s.dspFxRing",
   tremolo: "s.dspFxTremolo",
   vibrato: "s.dspFxVibrato",
+  reverse: "s.dspFxReverse",
   chorus: "s.dspFxChorus",
   bitcrush: "s.dspFxBitcrush",
   drive: "s.dspFxDrive",
   radio: "s.dspFxRadio",
   echo: "s.dspFxEcho",
+  revecho: "s.dspFxRevecho",
   reverb: "s.dspFxReverb",
 };
 
 const PARAM_LABEL: Record<string, string> = {
   semitones: "s.dspPSemitones",
+  lo: "s.dspPLo",
+  hi: "s.dspPHi",
+  step: "s.dspPStep",
+  up: "s.dspPUp",
+  down: "s.dspPDown",
   shift: "s.dspPShift",
   amount: "s.dspPAmount",
   freq: "s.dspPFreq",
@@ -42,11 +52,13 @@ const PARAM_LABEL: Record<string, string> = {
   voices: "s.dspPVoices",
   bits: "s.dspPBits",
   downsample: "s.dspPDownsample",
+  chunk_ms: "s.dspPChunkMs",
   low: "s.dspPLow",
   high: "s.dspPHigh",
   noise: "s.dspPNoise",
   time_ms: "s.dspPTimeMs",
   feedback: "s.dspPFeedback",
+  size_ms: "s.dspPSizeMs",
   size: "s.dspPSize",
 };
 

@@ -1,11 +1,11 @@
 {
   "name": "一群人",
-  "desc": "自己叠一路，像旁边还有个人在说",
+  "desc": "125ms 加倍回声，像旁边还有个人在说",
   "params": {
-    "chorus": {
-      "depth": 0.48,
-      "rate": 0.28,
-      "voices": 2
+    "echo": {
+      "time_ms": 125.0,
+      "feedback": 0.0,
+      "mix": 0.5
     }
   }
 }

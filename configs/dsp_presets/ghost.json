@@ -1,16 +1,10 @@
 {
   "name": "幽灵",
-  "desc": "半气声、略沉，空间拉开但不糊成一团",
+  "desc": "刚说过的话倒着渗回来，阴湿",
   "params": {
-    "whisper": {
-      "amount": 0.42
-    },
-    "pitch": {
-      "semitones": -2.0
-    },
-    "reverb": {
-      "size": 0.72,
-      "mix": 0.26
+    "revecho": {
+      "size_ms": 250.0,
+      "mix": 1.0
     }
   }
 }

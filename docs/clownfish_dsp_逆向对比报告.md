@@ -40,24 +40,28 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
   → 输出增益（byte19 → 1.0+0.05×百分比 = 1.0~6.0 倍，±1 硬限幅）
 ```
 
-### 3. 配置包格式（20 字节，parser `0x2D70`）
+### 3. 配置包格式（wire = 2 字节头 + 20 字节体，EXE 组包线程 0x19E40 确认）
 
-| 偏移 | 还原 | 含义 |
-| --- | --- | --- |
-| 0 | uint8 | 变声效果 id（内部编号，见下） |
-| 1–4 | int32 | 仅 id=0x0E/0x14；0x0E 时是 **float 位型**的自定义半音数 |
-| 5 | /100 | 音乐注入增益 0..1（默认 0.5） |
-| 6 | int | 空间效果 id（0 关 / 1 Cave / 2 TownHall / 3 Chorus / 4 Ghost） |
-| 7 | /1000 | 噪声门阈值 0..0.255 |
-| 8 | bool | 音乐走效果链（1=前置注入，0=后置叠加） |
-| 9–12 | 4×uint8 | Chainer 四槽的效果 id |
-| 13 | bool | 干声叠加回原声×0.5 |
-| 14 | bool | 声码器模式（切变时清内部计数器） |
-| 15 | bool | 总开关（0=直通） |
-| 16 | int8×0.5 | 低音 dB（-63.5..+63.5） |
-| 17 | int8×0.5 | 高音 dB |
-| 18 | bool | 把处理结果回传 EXE（电平表/监听） |
-| 19 | %→1.0+0.05x | 输出增益 1.0~6.0 |
+wire 实际 22 字节：`[u16 消息类型 = 0x14][20 字节配置体]`。EXE 侧有个**持续运行的配置泵线程**每轮重建整包发送（APO 收到的总是最新状态）。`cfg[0]` 在 EXE 侧被"变声总开关"flag 门控：flag=0 时强制发 0。
+
+| cfg 偏移 | wire 偏移 | 还原 | 含义 |
+| --- | --- | --- | --- |
+| 0 | 2 | uint8 | 变声效果 id（flag=0 时强制 0） |
+| 1–4 | 3–6 | float | 自定义半音数（id=0x0E 用） |
+| 5 | 7 | /100 | 音乐注入增益 |
+| 6 | 8 | int | 空间效果 id（0 关 / 1 Cave / 2 TownHall / 3 Chorus / 4 Ghost） |
+| 7 | 9 | /1000 | 噪声门阈值 |
+| 8 | 10 | bool | 音乐走效果链 |
+| 9–12 | 11–14 | 4×uint8 | Chainer 四槽（EXE 把链槽 UI 索引经表1换算成 wire id 后下发） |
+| 13 | 15 | bool | 干声叠加回原声×0.5 |
+| 14 | 16 | bool | 声码器模式 |
+| 15 | 17 | bool | 变声总开关（=EXE 侧同一 flag） |
+| 16 | 18 | int8×0.5 | 低音 dB |
+| 17 | 19 | int8×0.5 | 高音 dB |
+| 18 | 20 | bool | 电平回传（= 总开关 && (监听/电平表任一使能)） |
+| 19 | 21 | %→1.0+0.05x | 输出增益 1.0~6.0 |
+
+**出厂默认值**（EXE 内嵌 `{键名, 默认值}` 表，`.rdata 0xCE530` 区，字符串形式）：`VOICE_EFFECT=0, SOUND_EFFECT=0, HEAR_VOICE=0, HEAR_MUSIC=0, MANUAL_PITCH=0, MICROPHONE_SENSIVITY=0, MICROPHONE_BASS=0, MICROPHONE_TREBLE=50, MUSIC_VOLUME=0, OUTPUT_AUDIO_BOOST=50, LOCAL_VOLUME=1, APPLY_MUSIC_EFFECTS=0, OVERLAP_ORIGINAL_VOICE=0, ENABLE_NOISE_REMOVAL=0, CHAIN_EFFECT_1..4=0`。TREBLE/BOOST 的 "50" 疑为 0–100 滑块中点（中性）。BASS/TREBLE 是设置页独立滑块、与效果选择正交——即 Old Radio 是纯半波整流，不附带 EQ。
 
 ### 4. 变声效果 id → 内部实现（**映射表已从 EXE 静态确认**）
 
@@ -66,7 +70,7 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
 - **表1（链槽用，`[Off] + 字符串表顺序 14 项`）**：`0,9,13,12,10,11,8,6,7,5,14,16,4,15,17`
 - **表2（主效果选择器 15 项）**：`9,13,15,10,12,11,5,6,7,8,16,4,14,17,20`（Alien, Atari, Clone, Mutation, FastMut, SlowMut, Male, Female, Helium, Baby, OldRadio, Robot, Custom, Silence, Chainer）
 
-两张表给出的 wire id ↔ 效果归属完全一致（Robot→4、Clone→15、OldRadio→16、Silence→17、Chainer→20），可信度等同于直接证据。
+两张表给出的 wire id ↔ 效果归属完全一致（Robot→4、Clone→15、OldRadio→16、Silence→17、Chainer→20）。另在 `.rsrc` 菜单资源中拿到第三重证据：主菜单项的 Windows 命令 ID 依次为 Alien=1007, Atari=1009, Clone=1010, Mutation=1012, FastMut=1011, SlowMut=1014, Male=1002, Female=1004, Helium=1006, Baby=1003, Radio=1017, Robot=1018, Custom=1015, Silence=1019, Chainer=1026（Off=1000），其后紧跟的 menuId 数组 `[1000,1007,1009,1010,1012,1011,1014,1002,1004,1006,1003,1017,1018,1015,1019,1026]` 与表2按下标一一配对——三重证据钉死。
 
 | UI 效果 | wire id | 内部实现（APO 反汇编确认） |
 | --- | --- | --- |
@@ -84,7 +88,7 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
 | **Clone** | 0x0F | **125ms 单抽头 slapback 回声**：`out = 0.5·in + 0.5·in[t-125ms]` |
 | **Old Radio** | 0x10 | **半波整流** `max(0, x)` |
 | **Silence** | 0x11 | `memset(out,0)` |
-| **Robot** | 4 | **周期 Hann 窗门控**（AM 斩波）：窗长 = `rate/25` = 40ms → **25Hz** 断续调制 |
+| **Robot** | 4 | **周期 Hann 窗门控**（AM 斩波）：窗表长 = `rate/25` = 40ms → **25Hz** 断续调制（回绕计数字段 `[+0x7c]` 由构造参数 qword 传入，精确周期以表长为准） |
 | **Chainer** | 0x14 | 四槽各取 byte9–12 的 id 串联执行 |
 | 1 / 2 / 3 | — | 空槽（保留，未映射 UI） |
 
@@ -141,9 +145,9 @@ Windows **APO（Audio Processing Object）**：`ClownfshAPO64.dll` 注册为系�
 
 ## 五、置信度说明
 
-- **已钉死（EXE 查找表 + APO 分派双重证据）**：wire id ↔ UI 效果映射（`ClownfishVoiceChanger.exe` `.rdata 0xD2258` 两张表互证）；音高四档 -3/+4/+8/+12；Alien=分块倒放、Atari=音高方波、OldRadio=半波整流、Clone=125ms slapback、Robot=25Hz Hann 门控、Silence=memset、Chainer=0x14 串联。
-- **高置信（反汇编直接确认）**：信号链顺序、包格式字段、SoundTouch 参数、声码器载波为 EXE 流式推入的 20 频带幅度帧、EQ 结构、延迟常数。EXE 端包长 0x16（22 字节，比 APO 解析的 20 字节多 2 字节头/尾）。
-- **残余未解决**：Alien 倒放块的精确时长（公式 = 声道数×每块帧数×20，依块长而定）；噪声门/音乐等字段的出厂默认值（ini 未在本机生成时无法读）；id 1/2/3 空槽疑似保留位。动态抓包仍受权限限制，但静态表已使映射不再依赖抓包验证。
+- **已钉死（三重独立证据）**：wire id ↔ UI 效果映射——①EXE `.rdata 0xD2258` 两张 int32 查找表互证；②`.rsrc` 菜单资源项顺序（Alien, Atari, Clone, Mutation, FastMut, SlowMut, Male, Female, Helium, Baby, Radio, Robot, Custom, Silence, Chainer）与表2逐项吻合；③菜单命令 ID 数组 `[1000,1007,...,1026]` 与表2按下标配对。音高四档 -3/+4/+8/+12；Alien=分块倒放、Atari=音高方波、OldRadio=半波整流、Clone=125ms slapback、Robot=25Hz Hann 门控、Silence=memset、Chainer=0x14 串联。
+- **高置信（反汇编直接确认）**：信号链顺序、wire 包格式（u16 类型字 0x14 + 20 字节体）、配置泵线程持续下发、各 id 内部实现、声码器载波为 EXE 流式推入的 20 频带幅度帧、EQ 结构、延迟常数、出厂默认值表。
+- **残余未解决**：①Robot Hann 窗回绕字段 `[+0x7c]` 由构造 qword 参数传入，静态值不可见（表长 rate/25=40ms 是上限基准）；②Alien 倒放块精确时长 = 声道数×每块帧数×20，依音频引擎块长浮动；③EXE 菜单事件处理器走 LCL 动态分派，`g_effect` 的写入点静态不可见（不影响映射结论）；④id 1/2/3 空槽为保留位；⑤全程静态分析，未做波形级动态验证。
 
 ## 六、若将来要落地（不在本次范围）
 

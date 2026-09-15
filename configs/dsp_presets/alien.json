@@ -1,21 +1,10 @@
 {
   "name": "外星人",
-  "desc": "略升调，音量和音高一起发颤",
+  "desc": "每 200ms 录一段倒着放回去，语序全反",
   "params": {
-    "pitch": {
-      "semitones": 3.0
-    },
-    "tremolo": {
-      "rate": 7.0,
-      "depth": 0.32
-    },
-    "ring": {
-      "freq": 90.0,
-      "mix": 0.12
-    },
-    "vibrato": {
-      "rate": 6.0,
-      "depth": 50.0
+    "reverse": {
+      "chunk_ms": 200.0,
+      "mix": 1.0
     }
   }
 }

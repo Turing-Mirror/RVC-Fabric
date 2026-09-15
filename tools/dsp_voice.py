@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
 """无模型 DSP 变声：不用 RVC、不用显卡、不用 torch。
 
-参考实现 那一票梗声（官方 14 档：Alien / Atari / Clone / Mutation /
-Male·Female·Helium·Baby pitch / Radio / Robot / Custom ±15）本质是低延迟
-变调（共振峰跟着走）再叠一层便宜效果。变调核走官方 SoundTouch speech 档
-（40/15/8，抗混叠开、快速搜索关），和它 APO 里那套是同一个库。
+对照 参考实现 APO 反汇编（`docs/reference_dsp_逆向对比报告.md`）实现
+的 14 档梗声：
+
+* 音高四档 = SoundTouch `setPitchSemiTones(-3/+4/+8/+12)`，speech 档
+  （40/15/8，抗混叠开、快速搜索关）和它 APO 里那套是同一个库
+* Mutation 三档 = 每块按步进推 `setPitchSemiTones`，三角扫 -4~+13 半音
+* Atari = 音高在 +6/-3 半音间方波跳变（累加器扫到 -3/+4 边界翻转）
+* Alien = 乒乓双缓冲分块倒放，块边缘淡化
+* Robot = 25Hz 正弦波 AM（APO 里是 rate/25 长的整周期 sin 窗乘输入）
+* Old Radio = 半波整流 `max(0, x)`
+* Clone = 125ms 单抽头 slapback，`0.5·in + 0.5·d`
+* 空间档 Cave/TownHall/Chorus/Ghost = 62.5ms fb0.5 / 250ms fb0.25 /
+  8.3ms 梳状 / 反向读延迟线
+* Chainer = 最多四个效果串联 —— 本链本来就是串行，预设里叠效果即是
 
 另外补上它做不到的：**变调和共振峰可以分开调**（编辑器里的共振峰）。
-
-对照公开资料后的实现要点：
-* 变调默认 SoundTouch；DLL 没有才退回 WSOLA
-* 机器人是包络 × 脉冲载波，不是把环调拉满
-* 外星人是振幅颤音（tremolo），不是只晃音高
 
 参考实现 只有一个「变调」，升调时共振峰跟着一起搬，所以必然「花栗鼠」，
 降调必然「巨人」。分开之后：
@@ -47,6 +52,18 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
         "params": {"semitones": 0.0},
         "ranges": {"semitones": (-24.0, 24.0)},
     },
+    "sweep": {
+        "label": "音高扫描",
+        # 参考实现 Mutation：每块（≈10ms）把半音数推 step 步，到边界反弹。
+        "params": {"lo": -4.0, "hi": 13.0, "step": 0.0},
+        "ranges": {"lo": (-24.0, 24.0), "hi": (-24.0, 24.0), "step": (0.0, 2.0)},
+    },
+    "pgate": {
+        "label": "音高跳变",
+        # 参考实现 Atari：累加器扫到边界把变调量在 up/down 间翻转。
+        "params": {"up": 6.0, "down": -3.0, "step": 0.0},
+        "ranges": {"up": (-24.0, 24.0), "down": (-24.0, 24.0), "step": (0.0, 4.0)},
+    },
     "formant": {
         "label": "共振峰",
         "params": {"shift": 0.0},
@@ -61,6 +78,12 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
         "label": "机器人",
         "params": {"amount": 0.0, "freq": 80.0},
         "ranges": {"amount": (0.0, 1.0), "freq": (40.0, 250.0)},
+    },
+    "rectify": {
+        "label": "半波整流",
+        # 参考实现 Old Radio：max(0, x)，丢掉所有负半周。
+        "params": {"mix": 0.0},
+        "ranges": {"mix": (0.0, 1.0)},
     },
     "ring": {
         "label": "环形调制",
@@ -78,6 +101,12 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
         # depth 上限从 50 放到 200：50 音分是半个半音，做「明显在抖」刚够，
         # 想要夸张效果的还得往上。真拉满时会被延迟线长度截住，见 Vibrato。
         "ranges": {"rate": (0.1, 20.0), "depth": (0.0, 200.0)},
+    },
+    "reverse": {
+        "label": "分块倒放",
+        # 参考实现 Alien：乒乓双缓冲，一条录音另一条倒序回放。
+        "params": {"chunk_ms": 200.0, "mix": 0.0},
+        "ranges": {"chunk_ms": (50.0, 1000.0), "mix": (0.0, 1.0)},
     },
     "chorus": {
         "label": "合唱",
@@ -109,6 +138,12 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
         "params": {"time_ms": 180.0, "feedback": 0.3, "mix": 0.0},
         "ranges": {"time_ms": (10.0, 1000.0), "feedback": (0.0, 0.9), "mix": (0.0, 1.0)},
     },
+    "revecho": {
+        "label": "反向回声",
+        # 参考实现 空间档 Ghost：环形缓冲正写反读。
+        "params": {"size_ms": 250.0, "mix": 0.0},
+        "ranges": {"size_ms": (50.0, 1000.0), "mix": (0.0, 1.0)},
+    },
     "reverb": {
         "label": "混响",
         "params": {"size": 0.5, "mix": 0.0},
@@ -116,20 +151,25 @@ EFFECT_SPECS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# 信号链顺序。变调/共振峰在最前（它们决定音色），空间效果在最后。
+# 信号链顺序。变调类在最前（它们决定音色），空间/延迟类在最后。
 CHAIN_ORDER: tuple[str, ...] = (
     "pitch",
+    "sweep",
+    "pgate",
     "formant",
     "whisper",
     "robot",
+    "rectify",
     "ring",
     "tremolo",
     "vibrato",
+    "reverse",
     "chorus",
     "bitcrush",
     "drive",
     "radio",
     "echo",
+    "revecho",
     "reverb",
 )
 
@@ -1373,14 +1413,253 @@ class PitchShifter:
         return y
 
 
+class PitchSweep:
+    """音高三角扫描 —— 参考实现 Mutation 三档（10/11/12）。
+
+    APO 里每处理一块（≈10ms）执行 `acc += step`，扫到 lo/hi 边界翻转方向，
+    再把 acc 交给 `setPitchSemiTones` —— 音高被三角 LFO 推着在 -4~+13 半音
+    间往返。三档只是步进不同：Mutation 0.1 / Slow 0.01 / Fast 0.3 半音每块。
+    step=0 时直通。
+    """
+
+    def __init__(self, lo: float = -4.0, hi: float = 13.0, step: float = 0.0) -> None:
+        self.lo, self.hi, self.step = float(lo), float(hi), float(step)
+        self._sh = PitchShifter(0.0)
+        self._acc = float(lo)
+        self._dir = 1.0
+
+    def reset(self) -> None:
+        self._sh.reset()
+        self._acc, self._dir = self.lo, 1.0
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        x = np.asarray(x, dtype=np.float32)
+        n = int(x.size)
+        step = abs(float(self.step))
+        if n == 0 or step <= 1e-9 or self.hi <= self.lo:
+            return x
+        # 参考实现 的步进按 APO 块（≈10ms）计；按实际块时长折算，保证任何
+        # 块长下扫速一致。
+        self._acc += self._dir * step * (n / float(sr)) / 0.01
+        if self._acc >= self.hi:
+            self._acc, self._dir = self.hi, -1.0
+        elif self._acc <= self.lo:
+            self._acc, self._dir = self.lo, 1.0
+        self._sh.semitones = self._acc
+        return self._sh.process(x, sr)
+
+
+class PitchGate:
+    """音高方波 —— 参考实现 Atari（13）。
+
+    累加器在 [-3, +4] 间以 step/块往返，扫到下边界变调量翻成 up（+6），
+    到上边界翻成 down（-3）：音高在两档间方波跳变，默认约每 70ms 翻一次。
+    step=0 时直通。
+    """
+
+    _LO, _HI = -3.0, 4.0
+
+    def __init__(self, up: float = 6.0, down: float = -3.0, step: float = 0.0) -> None:
+        self.up, self.down, self.step = float(up), float(down), float(step)
+        self._sh = PitchShifter(0.0)
+        self._acc = 0.0
+        self._dir = 1.0
+        self._cur = self.up
+
+    def reset(self) -> None:
+        self._sh.reset()
+        self._acc, self._dir, self._cur = 0.0, 1.0, self.up
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        x = np.asarray(x, dtype=np.float32)
+        n = int(x.size)
+        step = abs(float(self.step))
+        if n == 0 or step <= 1e-9:
+            return x
+        self._acc += self._dir * step * (n / float(sr)) / 0.01
+        if self._acc < self._LO:
+            self._dir, self._cur = 1.0, self.up
+        elif self._acc > self._HI:
+            self._dir, self._cur = -1.0, self.down
+        self._sh.semitones = self._cur
+        return self._sh.process(x, sr)
+
+
+class ChunkReverse:
+    """分块倒放 —— 参考实现 Alien（9）。
+
+    乒乓双缓冲：写指针正向录进当前缓冲，读指针从另一条缓冲倒序回放；
+    读完交换。APO 里缓冲长 = 声道数 × 每块帧数 × 20（≈200ms 立体声，
+    这里按 chunk_ms 直接给），录音样本在块首尾按一个块长做线性淡入淡出，
+    免得倒放块接缝处咔哒。
+    """
+
+    MAX_MS = 1000.0
+
+    def __init__(self, chunk_ms: float = 200.0, mix: float = 0.0) -> None:
+        self.chunk_ms = float(chunk_ms)
+        self.mix = float(mix)
+        self._sr = 0
+        self._rec: Any = None
+        self._play: Any = None
+        self._w = 0
+        self._r = 0
+        self._n = 0
+
+    def reset(self) -> None:
+        self._rec = self._play = None
+        self._w = self._r = self._n = 0
+
+    def _ensure(self, sr: int) -> None:
+        np = _numpy()
+        n = max(16, int(sr * min(max(self.chunk_ms, 1.0), self.MAX_MS) * 0.001))
+        if self._rec is not None and self._n == n and sr == self._sr:
+            return
+        self._sr, self._n = sr, n
+        self._rec = np.zeros(n, dtype=np.float64)
+        self._play = np.zeros(n, dtype=np.float64)
+        self._w, self._r = 0, n - 1
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        mix = min(max(self.mix, 0.0), 1.0)
+        if mix <= 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        self._ensure(sr)
+        dry = np.asarray(x, dtype=np.float64)
+        n = int(dry.shape[0])
+        if n == 0:
+            return np.asarray(x, dtype=np.float32)
+        N = self._n
+        # APO 的淡入淡出按一个块长（≈10ms）。这里写死 10ms 而不是用当前块长，
+        # 不然换块长输出就不一致。
+        fade = max(1.0, min(float(sr) * 0.01, N * 0.5))
+        wet = np.empty(n, dtype=np.float64)
+        w, r = self._w, self._r
+        rec, play = self._rec, self._play
+        i = 0
+        while i < n:
+            room = min(n - i, N - w, r + 1)
+            wpos = np.arange(w, w + room, dtype=np.float64)
+            # 录音样本乘边缘淡化窗：开头淡入、结尾淡出
+            g = np.minimum(wpos, N - wpos) / fade
+            np.clip(g, 0.0, 1.0, out=g)
+            rec[w : w + room] = dry[i : i + room] * g
+            wet[i : i + room] = play[r - room + 1 : r + 1][::-1]
+            w += room
+            r -= room
+            i += room
+            if r < 0:
+                # 一条放完：刚录完的变成回放缓冲，旧回放缓冲腾出来接着录
+                rec, play = play, rec
+                w, r = 0, N - 1
+        self._rec, self._play = rec, play
+        self._w, self._r = w % N, r if r >= 0 else N - 1
+        return (dry * (1.0 - mix) + wet * mix).astype(np.float32)
+
+
+class Rectify:
+    """半波整流 —— 参考实现 Old Radio（16）：max(0, x)，负半周全丢。"""
+
+    def __init__(self, mix: float = 0.0) -> None:
+        self.mix = float(mix)
+
+    def reset(self) -> None:
+        pass
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        mix = min(max(self.mix, 0.0), 1.0)
+        if mix <= 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        dry = np.asarray(x, dtype=np.float64)
+        wet = np.clip(dry, 0.0, None)
+        return (dry * (1.0 - mix) + wet * mix).astype(np.float32)
+
+
+class ReverseEcho:
+    """反向读延迟线 —— 参考实现 空间档 Ghost。
+
+    环形缓冲（APO 里是 rate×声道/4 ≈ 250ms）：写指针正向推进、读指针反向
+    推进，读出来的是刚写进去内容的倒序 —— 持续的「反向回声」底噪。
+    """
+
+    MAX_MS = 1000.0
+
+    def __init__(self, size_ms: float = 250.0, mix: float = 0.0) -> None:
+        self.size_ms = float(size_ms)
+        self.mix = float(mix)
+        self._sr = 0
+        self._buf: Any = None
+        self._w = 0
+        self._r = 0
+        self._n = 0
+
+    def reset(self) -> None:
+        self._buf = None
+        self._w = self._r = self._n = 0
+
+    def _ensure(self, sr: int) -> None:
+        np = _numpy()
+        n = max(16, int(sr * min(max(self.size_ms, 1.0), self.MAX_MS) * 0.001))
+        if self._buf is not None and self._n == n and sr == self._sr:
+            return
+        self._sr, self._n = sr, n
+        self._buf = np.zeros(n, dtype=np.float64)
+        self._w, self._r = 0, n - 1
+
+    def process(self, x: "np.ndarray", sr: int) -> "np.ndarray":
+        np = _numpy()
+        mix = min(max(self.mix, 0.0), 1.0)
+        if mix <= 1e-6:
+            return np.asarray(x, dtype=np.float32)
+        self._ensure(sr)
+        dry = np.asarray(x, dtype=np.float64)
+        n = int(dry.shape[0])
+        if n == 0:
+            return np.asarray(x, dtype=np.float32)
+        N = self._n
+        wet = np.empty(n, dtype=np.float64)
+        w, r = self._w, self._r
+        buf = self._buf
+        i = 0
+        while i < n:
+            room = min(n - i, N - w, r + 1)
+            if w <= r:
+                # 写区正向、读区反向，二者会在段中间相遇：逐样本语义里靠后的读
+                # 拿到的是本段刚写的值。把段长限在两区不重叠处，分块位置不同
+                # 结果也一致。边界那格是同一样本先读后写，仍一致。
+                room = min(room, max(1, (r - w + 2) // 2))
+            # 先拷出读区再写：同一样本的读拿的是旧值（先读后写）。
+            wet[i : i + room] = buf[r - room + 1 : r + 1][::-1]
+            buf[w : w + room] = dry[i : i + room]
+            w = (w + room) % N
+            r -= room
+            if r < 0:
+                r += N
+            i += room
+        self._w, self._r = w, r
+        return (dry * (1.0 - mix) + wet * mix).astype(np.float32)
+
+
 _FACTORIES = {
     "pitch": lambda p: PitchShifter(p.get("semitones", 0.0)),
+    "sweep": lambda p: PitchSweep(
+        p.get("lo", -4.0), p.get("hi", 13.0), p.get("step", 0.0)
+    ),
+    "pgate": lambda p: PitchGate(
+        p.get("up", 6.0), p.get("down", -3.0), p.get("step", 0.0)
+    ),
     "formant": lambda p: FormantShifter(p.get("shift", 0.0)),
     "whisper": lambda p: Whisper(p.get("amount", 0.0)),
     "robot": lambda p: Robotizer(p.get("amount", 0.0), p.get("freq", 80.0)),
+    "rectify": lambda p: Rectify(p.get("mix", 0.0)),
     "ring": lambda p: RingMod(p.get("freq", 50.0), p.get("mix", 0.0)),
     "tremolo": lambda p: Tremolo(p.get("rate", 6.0), p.get("depth", 0.0)),
     "vibrato": lambda p: Vibrato(p.get("rate", 5.0), p.get("depth", 0.0)),
+    "reverse": lambda p: ChunkReverse(p.get("chunk_ms", 200.0), p.get("mix", 0.0)),
     "chorus": lambda p: Chorus(
         p.get("depth", 0.0), p.get("rate", 0.7), int(p.get("voices", 2))
     ),
@@ -1392,6 +1671,7 @@ _FACTORIES = {
     "echo": lambda p: Echo(
         p.get("time_ms", 180.0), p.get("feedback", 0.3), p.get("mix", 0.0)
     ),
+    "revecho": lambda p: ReverseEcho(p.get("size_ms", 250.0), p.get("mix", 0.0)),
     "reverb": lambda p: Reverb(p.get("size", 0.5), p.get("mix", 0.0)),
 }
 

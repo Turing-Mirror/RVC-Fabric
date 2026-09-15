@@ -1,19 +1,11 @@
 {
   "name": "8-bit",
-  "desc": "老游戏机那种碎，不是坏掉的喇叭",
+  "desc": "音高在两档间方波跳变，老游戏机那种颤",
   "params": {
-    "bitcrush": {
-      "bits": 6,
-      "downsample": 5
-    },
-    "radio": {
-      "low": 280.0,
-      "high": 3600.0,
-      "mix": 0.32,
-      "noise": 0.0
-    },
-    "drive": {
-      "amount": 0.1
+    "pgate": {
+      "up": 6.0,
+      "down": -3.0,
+      "step": 1.0
     }
   }
 }

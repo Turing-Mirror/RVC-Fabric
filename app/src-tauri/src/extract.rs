@@ -121,29 +121,6 @@ fn find_python_exe(dir: &Path) -> Option<PathBuf> {
     walk(dir, 0)
 }
 
-/// Extract so that *dest_root*/Runtime/python.exe exists, calling
-/// `on_progress(done_bytes, total_bytes)` as it goes.
-///
-/// This compatibility wrapper keeps the old layout for development checkouts.
-/// Installed builds use `extract_runtime_tar_into` so an existing active
-/// runtime is left untouched until the replacement has been fully staged and
-/// verified.
-pub fn extract_runtime_tar_with_progress(
-    archive: &Path,
-    dest_root: &Path,
-    on_progress: &dyn Fn(u64, u64),
-) -> Result<(), String> {
-    let final_rt = dest_root.join("Runtime");
-    if final_rt.exists() {
-        let _ = fs::remove_dir_all(&final_rt);
-    }
-    let staging = dest_root
-        .join("User_Data")
-        .join("update_cache")
-        .join("runtime_extract");
-    extract_runtime_tar_into(archive, &final_rt, &staging, on_progress)
-}
-
 /// Extract a runtime into a new target directory without replacing anything
 /// that is already there. The caller can validate this target, then atomically
 /// swap it into the managed runtime location.

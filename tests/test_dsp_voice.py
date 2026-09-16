@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+import os
 import sys
 import time
 import unittest
@@ -1011,6 +1012,9 @@ class ChainBudgetTests(unittest.TestCase):
     def test_all_effects_on_under_15_percent(self):
         from tools.dsp_voice import VoiceChain
 
+        # 15% 是产品给自己留的余量，不是物理定律 —— 在更慢的机器上可用
+        # RVC_DSP_BUDGET_PCT 放宽（如 CI=0.25），默认值不变。
+        budget_pct = float(os.environ.get("RVC_DSP_BUDGET_PCT", "0.15"))
         budget_ms = BLOCK / SR * 1000.0
         c = VoiceChain(ACTIVE)
         x = _noisy(secs=1.0, seed=12)
@@ -1024,9 +1028,9 @@ class ChainBudgetTests(unittest.TestCase):
         median = sorted(times)[len(times) // 2]
         self.assertLess(
             median,
-            budget_ms * 0.15,
+            budget_ms * budget_pct,
             f"全开占了块预算的 {median / budget_ms * 100:.1f}%"
-            f"（{median:.2f}ms / {budget_ms:.2f}ms），上限 15%",
+            f"（{median:.2f}ms / {budget_ms:.2f}ms），上限 {budget_pct * 100:.0f}%",
         )
 
 

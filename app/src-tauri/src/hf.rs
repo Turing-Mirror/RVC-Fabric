@@ -151,21 +151,7 @@ pub fn rewrite(url: &str, endpoint: &str) -> String {
     }
 }
 
-/// Ordered download URL list for one catalog link.
-///
-/// Non-HF URLs (CNB, etc.) are returned as a single-element list unchanged.
-pub fn download_urls(url: &str, user_endpoint: &str) -> Vec<String> {
-    let mut eps: Vec<String> = Vec::with_capacity(4);
-    let user = user_endpoint.trim();
-    if !user.is_empty() {
-        eps.push(user.to_string());
-    }
-    eps.extend(DEFAULT_MIRRORS.iter().map(|m| (*m).to_string()));
-    eps.push(CANONICAL.to_string());
-    download_urls_with(url, &eps)
-}
-
-/// 同上，但端点顺序由调用方给 —— `mirrors::hf_endpoints` 解析出来的那份。
+/// 端点顺序由调用方给 —— `mirrors::hf_endpoints` 解析出来的那份。
 ///
 /// 这个模块保持无 IO、可纯测试：从哪儿读镜像列表是 `mirrors` 的事，怎么把一条
 /// 规范链接改写到某个端点上是这里的事。
@@ -198,17 +184,31 @@ pub fn download_urls_with(url: &str, endpoints: &[String]) -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// 生产侧端点列表 = 用户端点 + DEFAULT_MIRRORS + CANONICAL（mirrors::hf_endpoints）。
+    fn prod_endpoints(user_endpoint: &str) -> Vec<String> {
+        let mut eps: Vec<String> = Vec::new();
+        if !user_endpoint.trim().is_empty() {
+            eps.push(user_endpoint.trim().to_string());
+        }
+        eps.extend(DEFAULT_MIRRORS.iter().map(|m| (*m).to_string()));
+        eps.push(CANONICAL.to_string());
+        eps
+    }
+
     #[test]
     fn non_hf_passthrough() {
         let u = "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/lfs/abc";
-        assert_eq!(download_urls(u, ""), vec![u.to_string()]);
-        assert_eq!(download_urls(u, "https://hf-mirror.com"), vec![u.to_string()]);
+        assert_eq!(download_urls_with(u, &prod_endpoints("")), vec![u.to_string()]);
+        assert_eq!(
+            download_urls_with(u, &prod_endpoints("https://hf-mirror.com")),
+            vec![u.to_string()]
+        );
     }
 
     #[test]
     fn default_order() {
         let u = "https://huggingface.co/org/repo/resolve/main/a.zip";
-        let list = download_urls(u, "");
+        let list = download_urls_with(u, &prod_endpoints(""));
         assert_eq!(
             list,
             vec![
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn user_endpoint_first() {
         let u = "https://huggingface.co/org/repo/resolve/main/a.pth";
-        let list = download_urls(u, "https://example.mirror");
+        let list = download_urls_with(u, &prod_endpoints("https://example.mirror"));
         assert_eq!(list[0], "https://example.mirror/org/repo/resolve/main/a.pth");
         assert!(list.contains(&"https://hf-mirror.com/org/repo/resolve/main/a.pth".to_string()));
         assert!(list.contains(&"https://hf-cdn.sufy.com/org/repo/resolve/main/a.pth".to_string()));
@@ -240,10 +240,10 @@ mod tests {
 
     #[test]
     fn empty_and_dedupe() {
-        assert!(download_urls("", "").is_empty());
+        assert!(download_urls_with("", &prod_endpoints("")).is_empty());
         let u = "https://huggingface.co/a/b/resolve/main/f.zip";
         // user endpoint equals first default → no duplicate
-        let list = download_urls(u, "https://hf-mirror.com");
+        let list = download_urls_with(u, &prod_endpoints("https://hf-mirror.com"));
         assert_eq!(list.len(), 3);
         assert_eq!(list[0], "https://hf-mirror.com/a/b/resolve/main/f.zip");
     }
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn encodes_spaces_in_path() {
         let u = "https://huggingface.co/org/repo/resolve/main/prezipped/v2/ayaka-jp 101 epochs.zip";
-        let list = download_urls(u, "");
+        let list = download_urls_with(u, &prod_endpoints(""));
         assert!(list[0].contains("ayaka-jp%20101%20epochs.zip"));
         assert!(!list[0].contains("ayaka-jp 101"));
     }

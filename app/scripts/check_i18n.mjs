@@ -184,6 +184,7 @@ const DYNAMIC_PREFIXES = [
   "extras.items.",
   "settings.tabs.",
   "s.annot.issue.",
+  "sepVariant.",
 ];
 
 // 「引用」在这一道里放得比第三道宽：`labelKey: "nav.home"` 这类把 key 存进
@@ -208,5 +209,5 @@ if (problems.length) {
 const nKeys = Object.keys(base).length;
 console.log(
   `i18n 校验通过：${OTHERS.length + 1} 个语言包 × ${nKeys} 条，结构与占位符一致；` +
-    `引用的 ${refs.size} 个 key 全部有着落，包里也没有无人引用的死文案`,
+  `引用的 ${refs.size} 个 key 全部有着落，包里也没有无人引用的死文案`,
 );

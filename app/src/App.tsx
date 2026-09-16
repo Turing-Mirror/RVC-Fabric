@@ -184,6 +184,9 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
+    // probeUpdate/presentUpdate 是 useUpdateFlow 每次渲染重建的闭包，进依赖数组
+    // 会让这个「开机后 4 秒查一次」的计时器被反复重置 —— 这里就是要只在挂载时跑一次。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [pitch, setPitch] = useState(0);
@@ -217,7 +220,7 @@ export default function App() {
         for (const p of r.presets || []) m[p.id] = p.name;
         setDspNames(m);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       alive = false;
     };
@@ -285,7 +288,7 @@ export default function App() {
     void (async () => {
       const cfg = await invoke<Record<string, unknown>>("config_get").catch(() => null);
       if (cfg?.telemetry_opt_in === true) {
-        void invoke("telemetry_tick").catch(() => {});
+        void invoke("telemetry_tick").catch(() => { });
       }
     })();
   }, []);
@@ -311,8 +314,8 @@ export default function App() {
 
   const answerTelemetry = async (yes: boolean) => {
     setAskTelemetry(false);
-    await invoke("config_set", { patch: { telemetry_opt_in: yes } }).catch(() => {});
-    if (yes) void invoke("telemetry_tick").catch(() => {});
+    await invoke("config_set", { patch: { telemetry_opt_in: yes } }).catch(() => { });
+    if (yes) void invoke("telemetry_tick").catch(() => { });
   };
 
   // 「喜欢的话关注一下」——攒够 FOLLOW_AFTER_RUNS 次变声之后问一次。
@@ -369,7 +372,7 @@ export default function App() {
     setAskGuide(false);
     if (toHelp) setPage("help");
     void invoke("config_set", { patch: { guide_prompt_done: true } }).catch(
-      () => {},
+      () => { },
     );
   };
 
@@ -378,7 +381,7 @@ export default function App() {
   const closeFollow = () => {
     setAskFollow(false);
     void invoke("config_set", { patch: { follow_prompt_done: true } }).catch(
-      () => {},
+      () => { },
     );
   };
 
@@ -391,9 +394,9 @@ export default function App() {
     if (closeRemember) {
       await invoke("config_set", {
         patch: { close_action: toTray ? "tray" : "exit" },
-      }).catch(() => {});
+      }).catch(() => { });
     }
-    await invoke("close_finish", { toTray }).catch(() => {});
+    await invoke("close_finish", { toTray }).catch(() => { });
   };
 
   // 「强制结束变声引擎」。
@@ -476,7 +479,7 @@ export default function App() {
       .then((c) => {
         if (alive && c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
       })
-      .catch(() => {});
+      .catch(() => { });
     void (async () => {
       // Keep shell-generated profile text in step with the React locale.
       try {
@@ -544,7 +547,7 @@ export default function App() {
               cur.index && cur.total ? `${cur.index}/${cur.total}` : "",
             );
           })
-          .catch(() => {});
+          .catch(() => { });
       } else if (c.dsp_enabled === true || c.dsp_preset != null) {
         setDspId(String(c.dsp_preset || ""));
       }
@@ -759,7 +762,7 @@ export default function App() {
           /* 没有上次音色就保持未选择 */
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [syncParams]);
 
   const openPlaza = useCallback(() => {
@@ -818,10 +821,10 @@ export default function App() {
         st?.worker_kind === "dsp";
       if (dsp) {
         noteSwap();
-        void startVc().catch(() => {});
+        void startVc().catch(() => { });
       } else {
         noteSwap();
-        void swapModel().catch(() => {});
+        void swapModel().catch(() => { });
       }
     }
   }, [noteSwap, syncParams]);
@@ -832,7 +835,7 @@ export default function App() {
   useEffect(() => {
     if (!engine.running || onboardConvertDone.current) return;
     onboardConvertDone.current = true;
-    void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => {});
+    void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => { });
     setOnboardTick((n) => n + 1);
   }, [engine.running]);
 
@@ -849,7 +852,7 @@ export default function App() {
       cfgRef.current = { ...(cfgRef.current || {}), ...p };
       if (p.monitor_self === true && !onboardMonitorDone.current) {
         onboardMonitorDone.current = true;
-        void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => {});
+        void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => { });
         setOnboardTick((n) => n + 1);
       }
       if (p.onboard_dismiss !== undefined) setOnboardTick((n) => n + 1);
@@ -901,11 +904,11 @@ export default function App() {
   // each one a live IPC registration on the Rust side, for as long as the app
   // stayed open. Register once and reach the current closures through a ref.
   const actionsRef = useRef({
-    toggleRun: () => {},
-    shiftVoice: (_d: number) => {},
-    toggleMode: () => {},
-    shiftPitch: (_d: number) => {},
-    toggleCfgFlag: (_key: string) => {},
+    toggleRun: () => { },
+    shiftVoice: (_d: number) => { },
+    toggleMode: () => { },
+    shiftPitch: (_d: number) => { },
+    toggleCfgFlag: (_key: string) => { },
   });
   useEffect(() => {
     actionsRef.current = {
@@ -1108,83 +1111,83 @@ export default function App() {
       <PageHost page={page}>
         {(id) => (
           <Suspense fallback={null}>
-          {(() => {
-          switch (id) {
-            case "home":
-              return (
-                <HomePage
-                  currentId={voiceId}
-                  onOpenModels={openModels}
-                  onOpenDsp={openDsp}
-                  onVoiceChange={applyVoiceChange}
-                />
-              );
-            case "plaza":
-              return (
-                <PlazaPage
-                  feed={plaza.feed}
-                  loading={plaza.loading}
-                  onReload={reloadPlaza}
-                  downloadReason={extrasReason}
-                  extrasFilter={extrasFilter}
-                  scrollToDownloads={scrollToDownloads}
-                />
-              );
-            case "models":
-              return (
-                <ModelsPage
-                  banner={plaza.feed.banner}
-                  onVoiceChange={applyVoiceChange}
-                  onDspChange={(id) => setDspId(id)}
-                  onOpenPlaza={openPlaza}
-                  focusKind={modelsKind}
-                  focusNonce={modelsKindNonce}
-                />
-              );
-            case "settings":
-              return (
-                <SettingsPage
-                  status={deviceStatus as never}
-                  onReloadDevices={() => void engine.reloadDevices()}
-                  devicesBusy={engine.devicesBusy}
-                  workerAlive={Boolean(engine.status.worker_alive)}
-                  onCheckUpdate={() => void checkUpdate()}
-                  updateLine={updateLine}
-                  updateBusy={updateBusy}
-                  onOpenHelp={openHelp}
-                  onOpenCommunity={openCommunity}
-                  selectedTab={settingsTab}
-                  onTabChange={setSettingsTab}
-                />
-              );
-            case "help":
-              // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
-              // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
-              return (
-                <HelpPage
-                  status={deviceStatus}
-                  focus={helpFocus}
-                  focusNonce={helpFocusNonce}
-                  onOpenCommunity={openCommunity}
-                />
-              );
-            case "more":
-              return (
-                <MorePage
-                  status={engine.status}
-                  provision={engine.provision}
-                  onForceKill={requestForceKill}
-                  onOpenProvision={() => {
-                    setProvisionDismissed(false);
-                    setShowProvision(true);
-                  }}
-                  onOpenDownloadModels={openDownloadModels}
-                  focusCommunityNonce={communityNonce}
-                  resetScrollNonce={moreTopNonce}
-                />
-              );
-          }
-          })()}
+            {(() => {
+              switch (id) {
+                case "home":
+                  return (
+                    <HomePage
+                      currentId={voiceId}
+                      onOpenModels={openModels}
+                      onOpenDsp={openDsp}
+                      onVoiceChange={applyVoiceChange}
+                    />
+                  );
+                case "plaza":
+                  return (
+                    <PlazaPage
+                      feed={plaza.feed}
+                      loading={plaza.loading}
+                      onReload={reloadPlaza}
+                      downloadReason={extrasReason}
+                      extrasFilter={extrasFilter}
+                      scrollToDownloads={scrollToDownloads}
+                    />
+                  );
+                case "models":
+                  return (
+                    <ModelsPage
+                      banner={plaza.feed.banner}
+                      onVoiceChange={applyVoiceChange}
+                      onDspChange={(id) => setDspId(id)}
+                      onOpenPlaza={openPlaza}
+                      focusKind={modelsKind}
+                      focusNonce={modelsKindNonce}
+                    />
+                  );
+                case "settings":
+                  return (
+                    <SettingsPage
+                      status={deviceStatus as never}
+                      onReloadDevices={() => void engine.reloadDevices()}
+                      devicesBusy={engine.devicesBusy}
+                      workerAlive={Boolean(engine.status.worker_alive)}
+                      onCheckUpdate={() => void checkUpdate()}
+                      updateLine={updateLine}
+                      updateBusy={updateBusy}
+                      onOpenHelp={openHelp}
+                      onOpenCommunity={openCommunity}
+                      selectedTab={settingsTab}
+                      onTabChange={setSettingsTab}
+                    />
+                  );
+                case "help":
+                  // 说明页要按用户真实的设备列表判断他装没装声卡，所以吃的是同一份
+                  // 收窄过的 deviceStatus（原始 status 每秒变两次半，会把页面刷爆）。
+                  return (
+                    <HelpPage
+                      status={deviceStatus}
+                      focus={helpFocus}
+                      focusNonce={helpFocusNonce}
+                      onOpenCommunity={openCommunity}
+                    />
+                  );
+                case "more":
+                  return (
+                    <MorePage
+                      status={engine.status}
+                      provision={engine.provision}
+                      onForceKill={requestForceKill}
+                      onOpenProvision={() => {
+                        setProvisionDismissed(false);
+                        setShowProvision(true);
+                      }}
+                      onOpenDownloadModels={openDownloadModels}
+                      focusCommunityNonce={communityNonce}
+                      resetScrollNonce={moreTopNonce}
+                    />
+                  );
+              }
+            })()}
           </Suspense>
         )}
       </PageHost>
@@ -1340,12 +1343,12 @@ export default function App() {
           {updateWorking
             ? updateLine
             : updateError ||
-              t("s.3956a2d8bb", {
-                v0: updateOffer.local,
-                v1:
-                  updateOffer.notes ||
-                  t("s.58941d30b7"),
-              })}
+            t("s.3956a2d8bb", {
+              v0: updateOffer.local,
+              v1:
+                updateOffer.notes ||
+                t("s.58941d30b7"),
+            })}
         </Nudge>
       ) : askTelemetry ? (
         <Nudge

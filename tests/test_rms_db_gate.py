@@ -21,10 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import numpy as np
-import librosa
+try:
+    import numpy as np
+    import librosa
 
-from gui_v1 import _rms_db_frames
+    from gui_v1 import _rms_db_frames
+
+    _HAS_DEPS = True
+except Exception:
+    _HAS_DEPS = False
 
 
 def _reference(y, frame_length, hop_length):
@@ -32,6 +37,7 @@ def _reference(y, frame_length, hop_length):
     return librosa.amplitude_to_db(rms, ref=1.0)[0]
 
 
+@unittest.skipUnless(_HAS_DEPS, "需要 Runtime（numpy/librosa）")
 class TestRmsDbFrames(unittest.TestCase):
     def test_random_signal_matches_librosa(self):
         rng = np.random.RandomState(0)

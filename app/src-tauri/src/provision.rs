@@ -827,6 +827,15 @@ pub fn run_provision(
         if worker::is_worker_alive(&root) {
             return Err(crate::i18n::t("runtimeMigration.stopEngine"));
         }
+        // WebUI / 实时面板 / 常驻转换都不在 worker 台账里，但它们的 pythonw
+        // 就住在要被换掉的目录下 —— 不先拦住，6GB 下完 rename 才「拒绝访问」。
+        let busy = worker::pythons_under(&paths::runtime_variant_dir(&root, &var));
+        if !busy.is_empty() {
+            return Err(crate::i18n::te(
+                "runtimeMigration.runtimeBusy",
+                &(busy.len()),
+            ));
+        }
 
         emit_progress(&app, "catalog", 0, 1, &crate::i18n::t("s.bd45f9d523"));
         let spec = catalog::resolve_runtime_spec(&var, true)?;
@@ -1021,6 +1030,14 @@ pub fn run_provision(
             ));
         }
         write_runtime_meta_at(&staged, &var, &spec.label, &spec.version)?;
+        // 下载要十几分钟，期间用户可能又开了 WebUI / 面板 —— 换目录前再扫一遍。
+        let busy = worker::pythons_under(&paths::runtime_variant_dir(&root, &var));
+        if !busy.is_empty() {
+            return Err(crate::i18n::te(
+                "runtimeMigration.runtimeBusy",
+                &(busy.len()),
+            ));
+        }
         replace_managed_runtime(&root, &var, &staged)?;
         activate_runtime(&root, &var)?;
 

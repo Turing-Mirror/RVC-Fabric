@@ -605,6 +605,20 @@ fn protected_tool_pids() -> Vec<u32> {
         .clone()
 }
 
+/// Live python.exe / pythonw.exe whose image path sits under `dir`.
+///
+/// 补全/切换运行时用：is_worker_alive 只认实时 worker 台账，原版 WebUI
+/// 和实时面板是 spawn_detached 出去的、不在台账里；它们还开着的时候
+/// rename 运行时目录就是「拒绝访问 (os error 5)」。先扫出来让用户关，
+/// 别下到一半才撞在锁上。
+pub fn pythons_under(dir: &Path) -> Vec<u32> {
+    iter_python_procs()
+        .into_iter()
+        .filter(|(_, _, img)| path_is_under(dir, img))
+        .map(|(pid, _, _)| pid)
+        .collect()
+}
+
 /// Kill Runtime python processes.
 ///
 /// * `orphans_only` — leftovers after **强制结束** / 关应用. Parent-dead
@@ -2309,6 +2323,15 @@ mod tests {
         assert!(!path_is_under(rt, r"C:\App\RuntimeX\python.exe"));
         assert!(!path_is_under(rt, r"C:\Python39\python.exe"));
         assert!(!path_is_under(Path::new(""), r"C:\App\Runtime\python.exe"));
+    }
+
+    /// 不存在的目录下不可能有镜像路径 —— 扫描必须安静返回空，而不是报错。
+    /// 补全运行时用这份结果决定要不要拦用户，空目录绝不能误报「有进程占用」。
+    #[test]
+    fn pythons_under_a_missing_dir_is_empty() {
+        let dir = crate::testutil::scratch("pythons-under-missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(pythons_under(&dir).is_empty());
     }
 
     /// 一次启动开出两个 worker 的时候，多出来那个必须留下痕迹。

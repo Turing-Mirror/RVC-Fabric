@@ -145,6 +145,8 @@ htmlcov/
 .cursor/
 .codex/
 .grok/
+.agents/
+skills-lock.json
 *.swp
 Thumbs.db
 Desktop.ini

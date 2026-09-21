@@ -195,10 +195,15 @@ class RVC:
                 if str(self.device) == "cuda":
                     self.device = torch.device("cuda:0")
                 if os.path.exists(jit_pth_path):
-                    cpt = jit.load(jit_pth_path)
-                    model_device = cpt["device"]
-                    if model_device != str(self.device):
+                    try:
+                        cpt = jit.load(jit_pth_path)
+                        model_device = cpt["device"]
+                    except Exception:
+                        # 旁车损坏或不是预期内容：从 .pth 重新导出。
                         reload = True
+                    else:
+                        if model_device != str(self.device):
+                            reload = True
                 else:
                     reload = True
 

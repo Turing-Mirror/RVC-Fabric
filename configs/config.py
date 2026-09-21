@@ -484,5 +484,16 @@ class Config:
                                 os.rename(ort, ort_dml)
                         if os.path.isdir(ort_cuda) and not os.path.isdir(ort):
                             os.rename(ort_cuda, ort)
-            except Exception:
-                pass
+            except Exception as e:
+                # 改名中途失败会留下残缺的 onnxruntime 安装 —— 必须留痕，
+                # 不然事后排查「ORT 突然 import 不了」没有任何线索。
+                logger.warning(
+                    "onnxruntime provider swap failed under %s: %s", sp, e
+                )
+            want_dll = dml_dll if want_dml else cuda_dll
+            if os.path.isdir(ort) and not os.path.isfile(want_dll):
+                logger.warning(
+                    "onnxruntime provider swap incomplete under %s: %s missing",
+                    sp,
+                    want_dll,
+                )

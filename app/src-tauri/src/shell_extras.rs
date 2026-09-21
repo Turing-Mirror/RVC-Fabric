@@ -490,13 +490,6 @@ fn read_range(path: &Path, start: u64, len: usize) -> Vec<u8> {
     buf
 }
 
-fn tail_bytes(path: &Path, max: usize) -> String {
-    let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let start = len.saturating_sub(max as u64);
-    let data = read_range(path, start, max);
-    String::from_utf8_lossy(&data).into_owned()
-}
-
 /// Head + tail so a TypedStorage flood cannot erase the start_vc / delay lines.
 fn clip_log(path: &Path, head: usize, tail: usize) -> String {
     let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0) as usize;
@@ -787,15 +780,6 @@ fn resolve_parent(win: Option<&tauri::WebviewWindow>) -> Option<tauri::WebviewWi
 pub fn dialog_on(win: Option<&tauri::WebviewWindow>) -> rfd::FileDialog {
     let d = rfd::FileDialog::new();
     match resolve_parent(win) {
-        Some(w) => d.set_parent(&w),
-        None => d,
-    }
-}
-
-/// 同上，给消息框用。
-pub fn message_dialog() -> rfd::MessageDialog {
-    let d = rfd::MessageDialog::new();
-    match resolve_parent(None) {
         Some(w) => d.set_parent(&w),
         None => d,
     }
@@ -1515,7 +1499,7 @@ mod tests {
     fn log_tail_is_capped() {
         let p = crate::testutil::scratch("tail-test-log");
         std::fs::write(&p, "x".repeat(50_000)).unwrap();
-        assert_eq!(tail_bytes(&p, 1000).len(), 1000);
+        assert_eq!(read_range(&p, 49_000, 1000).len(), 1000);
         let _ = std::fs::remove_file(&p);
     }
 
@@ -1581,7 +1565,7 @@ mod tests {
     /// 而 fallback 就是它自己，于是永远注册不上，也没人报错。
     #[test]
     fn every_default_combo_is_well_formed() {
-        for (key, _action, default) in HOTKEYS {
+        for (_key, _action, default) in HOTKEYS {
             assert!(combo_ok(default));
         }
     }

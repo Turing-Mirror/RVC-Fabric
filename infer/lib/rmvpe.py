@@ -538,10 +538,14 @@ class RMVPE:
                 jit_model_path += ".half.jit" if is_half else ".jit"
                 reload = False
                 if os.path.exists(jit_model_path):
-                    ckpt = jit.load(jit_model_path)
-                    model_device = ckpt["device"]
-                    if model_device != str(self.device):
+                    try:
+                        ckpt = jit.load(jit_model_path)
+                        model_device = ckpt["device"]
+                    except Exception:
                         reload = True
+                    else:
+                        if model_device != str(self.device):
+                            reload = True
                 else:
                     reload = True
 

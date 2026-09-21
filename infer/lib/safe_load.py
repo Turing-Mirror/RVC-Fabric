@@ -95,8 +95,10 @@ def safe_torch_load(
         # Older torch without weights_only kwarg
         return torch.load(path, map_location=map_location)
     except Exception as e:
-        logger.debug(
-            "weights_only=True failed for %s (%s); falling back for RVC metadata.",
+        # 回退到 pickle 反序列化：只有可信来源的 .pth 才该走到这里。
+        logger.warning(
+            "Loading %s with weights_only=False (pickle) after safe load failed (%s). "
+            "Only use trusted files.",
             path,
             e,
         )

@@ -92,7 +92,7 @@ pub fn open_realtime_panel(root: &Path) -> Result<serde_json::Value, String> {
     // shell's save_settings_silent() + _sync_model_to_realtime_gui().
     let cfg = config::read(root);
     if let Err(e) = config::sync_inuse(root, &cfg) {
-        logging::shell_log!(crate::i18n::t("s.324ed94533"));
+        logging::shell_log!("{} {}", crate::i18n::t("s.324ed94533"), e);
     }
     let py = runtime_python(root, true)?;
     let pid = spawn_detached(

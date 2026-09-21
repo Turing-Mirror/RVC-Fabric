@@ -5,9 +5,11 @@ import torch
 from tqdm import tqdm
 from collections import OrderedDict
 
+from infer.lib.safe_load import safe_torch_load
+
 
 def load_inputs(path, device, is_half=False):
-    parm = torch.load(path, map_location=torch.device("cpu"))
+    parm = safe_torch_load(path, map_location=torch.device("cpu"))
     for key in parm.keys():
         parm[key] = parm[key].to(device)
         if is_half and parm[key].dtype == torch.float32:
@@ -99,9 +101,37 @@ def export(
     return cpt
 
 
+class _JitUnpickler(pickle.Unpickler):
+    """.jit 旁车文件里只需要容器、标量和 torch.device。
+
+    裸 pickle.load 等于给文件任意代码执行权：.jit 跟 .pth 放在同一目录，
+    用户换音色模型时一起被带进来。只允许这几个全局量，其它一律拒读；
+    拒读后调用方会重新从 .pth 导一份，等于自愈。
+    """
+
+    _ALLOWED = {
+        ("collections", "OrderedDict"),
+        ("torch", "device"),
+        ("torch._C", "device"),
+        ("torch", "dtype"),
+        ("torch", "float16"),
+        ("torch", "float32"),
+        ("torch", "float64"),
+        ("torch", "int64"),
+        ("torch", "int32"),
+    }
+
+    def find_class(self, module, name):
+        if (module, name) in self._ALLOWED:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(
+            f"refusing to unpickle {module}.{name} from .jit file"
+        )
+
+
 def load(path: str):
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return _JitUnpickler(f).load()
 
 
 def save(ckpt: dict, save_path: str):

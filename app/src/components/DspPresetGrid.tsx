@@ -15,17 +15,22 @@ export type DspPreset = {
 /** 效果器 id → 界面上叫什么。跟 tools/dsp_voice.py 的 EFFECT_SPECS 对齐。 */
 const EFFECT_LABEL: Record<string, string> = {
   pitch: "s.dspFxPitch",
+  sweep: "s.dspFxSweep",
+  pgate: "s.dspFxPgate",
   formant: "s.dspFxFormant",
   whisper: "s.dspFxWhisper",
   robot: "s.dspFxRobot",
+  rectify: "s.dspFxRectify",
   ring: "s.dspFxRing",
   tremolo: "s.dspFxTremolo",
   vibrato: "s.dspFxVibrato",
+  reverse: "s.dspFxReverse",
   chorus: "s.dspFxChorus",
   bitcrush: "s.dspFxBitcrush",
   drive: "s.dspFxDrive",
   radio: "s.dspFxRadio",
   echo: "s.dspFxEcho",
+  revecho: "s.dspFxRevecho",
   reverb: "s.dspFxReverb",
 };
 

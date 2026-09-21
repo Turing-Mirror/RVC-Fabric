@@ -189,6 +189,9 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
+    // probeUpdate/presentUpdate 是 useUpdateFlow 每次渲染重建的闭包，进依赖数组
+    // 会让这个「开机后 4 秒查一次」的计时器被反复重置 —— 这里就是要只在挂载时跑一次。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [pitch, setPitch] = useState(0);
@@ -222,7 +225,7 @@ export default function App() {
         for (const p of r.presets || []) m[p.id] = p.name;
         setDspNames(m);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       alive = false;
     };
@@ -290,7 +293,7 @@ export default function App() {
     void (async () => {
       const cfg = await invoke<Record<string, unknown>>("config_get").catch(() => null);
       if (cfg?.telemetry_opt_in === true) {
-        void invoke("telemetry_tick").catch(() => {});
+        void invoke("telemetry_tick").catch(() => { });
       }
     })();
   }, []);
@@ -316,8 +319,8 @@ export default function App() {
 
   const answerTelemetry = async (yes: boolean) => {
     setAskTelemetry(false);
-    await invoke("config_set", { patch: { telemetry_opt_in: yes } }).catch(() => {});
-    if (yes) void invoke("telemetry_tick").catch(() => {});
+    await invoke("config_set", { patch: { telemetry_opt_in: yes } }).catch(() => { });
+    if (yes) void invoke("telemetry_tick").catch(() => { });
   };
 
   // 「喜欢的话关注一下」——攒够 FOLLOW_AFTER_RUNS 次变声之后问一次。
@@ -374,7 +377,7 @@ export default function App() {
     setAskGuide(false);
     if (toHelp) setPage("help");
     void invoke("config_set", { patch: { guide_prompt_done: true } }).catch(
-      () => {},
+      () => { },
     );
   };
 
@@ -383,7 +386,7 @@ export default function App() {
   const closeFollow = () => {
     setAskFollow(false);
     void invoke("config_set", { patch: { follow_prompt_done: true } }).catch(
-      () => {},
+      () => { },
     );
   };
 
@@ -396,9 +399,9 @@ export default function App() {
     if (closeRemember) {
       await invoke("config_set", {
         patch: { close_action: toTray ? "tray" : "exit" },
-      }).catch(() => {});
+      }).catch(() => { });
     }
-    await invoke("close_finish", { toTray }).catch(() => {});
+    await invoke("close_finish", { toTray }).catch(() => { });
   };
 
   // 「强制结束变声引擎」。
@@ -493,7 +496,7 @@ export default function App() {
       .then((c) => {
         if (alive && c.dsp_enabled) setDspId(String(c.dsp_preset || ""));
       })
-      .catch(() => {});
+      .catch(() => { });
     void (async () => {
       // Keep shell-generated profile text in step with the React locale.
       try {
@@ -559,7 +562,7 @@ export default function App() {
               cur.index && cur.total ? `${cur.index}/${cur.total}` : "",
             );
           })
-          .catch(() => {});
+          .catch(() => { });
       } else if (c.dsp_enabled === true || c.dsp_preset != null) {
         setDspId(String(c.dsp_preset || ""));
       }
@@ -774,7 +777,7 @@ export default function App() {
           /* 没有上次音色就保持未选择 */
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [syncParams]);
 
   const openPlaza = useCallback(() => {
@@ -884,7 +887,7 @@ export default function App() {
   useEffect(() => {
     if (!engine.running || onboardConvertDone.current) return;
     onboardConvertDone.current = true;
-    void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => {});
+    void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => { });
     setOnboardTick((n) => n + 1);
   }, [engine.running]);
 
@@ -901,7 +904,7 @@ export default function App() {
       cfgRef.current = { ...(cfgRef.current || {}), ...p };
       if (p.monitor_self === true && !onboardMonitorDone.current) {
         onboardMonitorDone.current = true;
-        void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => {});
+        void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => { });
         setOnboardTick((n) => n + 1);
       }
       if (p.onboard_dismiss !== undefined) setOnboardTick((n) => n + 1);
@@ -961,11 +964,11 @@ export default function App() {
   // each one a live IPC registration on the Rust side, for as long as the app
   // stayed open. Register once and reach the current closures through a ref.
   const actionsRef = useRef({
-    toggleRun: () => {},
-    shiftVoice: (_d: number) => {},
-    toggleMode: () => {},
-    shiftPitch: (_d: number) => {},
-    toggleCfgFlag: (_key: string) => {},
+    toggleRun: () => { },
+    shiftVoice: (_d: number) => { },
+    toggleMode: () => { },
+    shiftPitch: (_d: number) => { },
+    toggleCfgFlag: (_key: string) => { },
   });
   useEffect(() => {
     actionsRef.current = {

@@ -1,17 +1,22 @@
 {
   "order": [
     "pitch",
+    "sweep",
+    "pgate",
     "formant",
     "whisper",
     "robot",
+    "rectify",
     "ring",
     "tremolo",
     "vibrato",
+    "reverse",
     "chorus",
     "bitcrush",
     "drive",
     "radio",
     "echo",
+    "revecho",
     "reverb"
   ],
   "effects": {
@@ -23,6 +28,48 @@
         "semitones": [
           -24.0,
           24.0
+        ]
+      }
+    },
+    "sweep": {
+      "params": {
+        "lo": -4.0,
+        "hi": 13.0,
+        "step": 0.0
+      },
+      "ranges": {
+        "lo": [
+          -24.0,
+          24.0
+        ],
+        "hi": [
+          -24.0,
+          24.0
+        ],
+        "step": [
+          0.0,
+          2.0
+        ]
+      }
+    },
+    "pgate": {
+      "params": {
+        "up": 6.0,
+        "down": -3.0,
+        "step": 0.0
+      },
+      "ranges": {
+        "up": [
+          -24.0,
+          24.0
+        ],
+        "down": [
+          -24.0,
+          24.0
+        ],
+        "step": [
+          0.0,
+          4.0
         ]
       }
     },
@@ -61,6 +108,17 @@
         "freq": [
           40.0,
           250.0
+        ]
+      }
+    },
+    "rectify": {
+      "params": {
+        "mix": 0.0
+      },
+      "ranges": {
+        "mix": [
+          0.0,
+          1.0
         ]
       }
     },
@@ -109,6 +167,22 @@
         "depth": [
           0.0,
           200.0
+        ]
+      }
+    },
+    "reverse": {
+      "params": {
+        "chunk_ms": 200.0,
+        "mix": 0.0
+      },
+      "ranges": {
+        "chunk_ms": [
+          50.0,
+          1000.0
+        ],
+        "mix": [
+          0.0,
+          1.0
         ]
       }
     },
@@ -200,6 +274,22 @@
         "feedback": [
           0.0,
           0.9
+        ],
+        "mix": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "revecho": {
+      "params": {
+        "size_ms": 250.0,
+        "mix": 0.0
+      },
+      "ranges": {
+        "size_ms": [
+          50.0,
+          1000.0
         ],
         "mix": [
           0.0,

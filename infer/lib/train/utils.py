@@ -11,6 +11,8 @@ import numpy as np
 import torch
 from scipy.io.wavfile import read
 
+from infer.lib.safe_load import safe_torch_load
+
 MATPLOTLIB_FLAG = False
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -19,7 +21,7 @@ logger = logging
 
 def load_checkpoint_d(checkpoint_path, combd, sbd, optimizer=None, load_opt=1):
     assert os.path.isfile(checkpoint_path)
-    checkpoint_dict = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint_dict = safe_torch_load(checkpoint_path, map_location="cpu")
 
     ##################
     def go(model, bkey):
@@ -99,7 +101,7 @@ def load_checkpoint_d(checkpoint_path, combd, sbd, optimizer=None, load_opt=1):
 #   return model, optimizer, learning_rate, iteration
 def load_checkpoint(checkpoint_path, model, optimizer=None, load_opt=1):
     assert os.path.isfile(checkpoint_path)
-    checkpoint_dict = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint_dict = safe_torch_load(checkpoint_path, map_location="cpu")
 
     saved_state_dict = checkpoint_dict["model"]
     if hasattr(model, "module"):
@@ -284,7 +286,6 @@ def load_filepaths_and_text(filename, split="|"):
     except UnicodeDecodeError:
         with open(filename) as f:
             filepaths_and_text = [line.strip().split(split) for line in f]
-    
     return filepaths_and_text
 
 

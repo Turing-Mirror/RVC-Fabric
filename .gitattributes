@@ -1,10 +1,55 @@
-# Batch entry points in this repo misparse under LF endings — observed on
-# scripts/run_tests.bat (cmd.exe exit 9009). Pin the extensions so checkouts
-# stay CRLF. Not a claim that every .bat everywhere requires CRLF.
-*.bat text eol=crlf
-*.cmd text eol=crlf
+* text=auto
 
-# These two files are stored CRLF. Without cr-at-eol, `git diff --check`
-# flags every added line's CR as "trailing whitespace".
-infer/modules/train/extract/extract_f0_rmvpe_dml.py whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-infer/modules/train/extract_feature_print.py whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+*.py    text eol=lf
+*.rs    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.txt   text eol=lf
+*.sha256 text eol=lf
+
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico   binary
+*.icns  binary
+*.wav   binary
+*.mp3   binary
+*.flac  binary
+*.ogg   binary
+*.m4a   binary
+*.aac   binary
+*.wma   binary
+*.opus  binary
+*.pth   binary
+*.pt    binary
+*.jit   binary
+*.onnx  binary
+*.index binary
+*.npy   binary
+*.npz   binary
+*.dll   binary
+*.exe   binary
+*.so    binary
+*.dylib binary
+*.7z    binary
+*.zip   binary
+*.tar   binary
+*.gz    binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary

@@ -187,21 +187,6 @@ fn lfs_urls(root: &Path, sha: &str) -> Vec<String> {
         .collect()
 }
 
-/// 给别的资源包复用同一条路：下载 → 校验 → 解压。
-///
-/// VC++ 运行库走的是跟 VB-Cable 一模一样的流程，没必要各写一份 —— 两份就会
-/// 有一份先长出自己的重试逻辑和缓存规则，然后行为对不上。
-pub fn fetch_pack(
-    cache_name: &str,
-    sha: &str,
-    dest_root: &Path,
-    root: &Path,
-    cancel: Arc<AtomicBool>,
-    progress: Option<download::ProgressFn>,
-) -> Result<(), String> {
-    fetch_and_extract(cache_name, sha, dest_root, root, cancel, progress)
-}
-
 /// 按 Release 标签直连的下载地址，作为 `/-/lfs/<sha>` 的备用源。
 ///
 /// 按 sha 寻址那条路要等 CNB 侧建索引，刚传上去的制品会 404 一段时间（实测

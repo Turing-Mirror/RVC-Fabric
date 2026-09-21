@@ -989,7 +989,6 @@
     "b0e24833f7": "展开",
     "b269c54674": "Hubert 模型",
     "b27dd877b1": "训练完成的音色将使用此名称",
-    "b2ba9634d9": "未运行",
     "b2be174f0f": "社区音色",
     "b2c6913616": "安装中…",
     "b3009f6985": "关闭后仅输出系统原声",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "训完会进「模型」页，也可以在安装目录的 assets/weights 找到 .pth。中途关掉软件，下次填同一个名字会跳过已经切好的步骤。保存间隔只留最新一份大权重；勾上「另存可用小模型」才会每隔这些轮多写一份能直接听的模型。没有检索库也能变声，有的话更像原声。",
     "stsDoneSkipped": "完成 {v0} 个文件，跳过 {v1} 个 → {v2}",
     "stsSkippedTitle": "以下 {v0} 个文件没转出来：",
-    "stsFreeVram": "正在停止实时变声以释放显存…",
     "stsTargetVoice": "目标音色",
     "stsModelMissing": "找不到音色模型：{a0}",
     "stsRecord": "录音",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "搜索文件名",
     "stsTrim": "裁剪",
     "stsStillExcluded": "仍受目录排除影响：{v0}",
-    "stsRetryFailed": "只重试失败条目（{v0}）"
+    "stsRetryFailed": "只重试失败条目（{v0}）",
+    "stsStateUnreadable": "无法读取来源清单：{a0}",
+    "stsStateCorrupt": "来源清单文件已损坏，为保护数据已阻止修改",
+    "engineCmdBusy": "引擎正忙，上一条指令还没被接收。请稍候再试。",
+    "modelApplyUnconfirmed": "引擎尚未确认音色已应用。若仍无声，请重试或重启引擎。",
+    "stsClearConfirm": "确定清空全部来源与排除？此操作不可撤销。",
+    "stsForeignBusy": "另一个窗口正在进行转换，此处只读",
+    "stsMissingTag": "源不存在",
+    "stsUnreadableTag": "目录不可读",
+    "stsSourceInsideOut": "来源位于输出目录内，已自动跳过",
+    "stsRefresh": "刷新",
+    "stsScanCancel": "停止扫描"
   },
   "extras": {
     "engineTitle": "引擎资源",
@@ -2164,7 +2173,8 @@
     "targetExists": "运行时目标已存在：{v0}",
     "verifyFailed": "迁移后的运行时未通过检查。",
     "notFound": "找不到旧版运行时。",
-    "runtimeNotReady": "这套运行时尚未就绪。"
+    "runtimeNotReady": "这套运行时尚未就绪。",
+    "runtimeBusy": "仍有 {v0} 个进程在使用这套运行时（原版 WebUI、实时面板或转换任务）。请先关闭它们再重试。"
   },
   "sepVariant": {
     "normal": "标准",

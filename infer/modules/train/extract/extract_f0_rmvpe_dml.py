@@ -16,9 +16,22 @@ from infer.lib.audio import load_audio
 logging.getLogger("numba").setLevel(logging.WARNING)
 
 exp_dir = sys.argv[1]
-import torch_directml
+# 显式 cpu：不 import torch_directml —— CPU 运行时根本没这个包。
+# 其它（dml/空）照旧优先 DirectML，包不在才退回 CPU。
+_dev_req = sys.argv[2].strip().lower() if len(sys.argv) > 2 else ""
+if _dev_req == "cpu":
+    import torch
 
-device = torch_directml.device(torch_directml.default_device())
+    device = torch.device("cpu")
+else:
+    try:
+        import torch_directml
+
+        device = torch_directml.device(torch_directml.default_device())
+    except ImportError:
+        import torch
+
+        device = torch.device("cpu")
 f = open("%s/extract_f0_feature.log" % exp_dir, "a+")
 
 

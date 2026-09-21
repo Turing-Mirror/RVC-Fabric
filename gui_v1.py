@@ -416,6 +416,18 @@ if __name__ == "__main__":
             self._swap_loader = None
             # 换模型失败时留一句话给状态栏，成功就清空。
             self._model_swap_error = ""
+            # 模型应用契约：model_selected 是界面选中的目标，model_active 是
+            # 推理链上真正在跑的那一个，model_apply 是最近一次应用请求的结果
+            # 记录。phase=committed 只在音频线程把指针换上去之后出现——后台
+            # 把权重读好（_swap_ready）不算应用。音频线程只往 _model_events
+            # 塞事件，主命令循环统一落盘，音频回调里不新增阻塞文件 IO。
+            self._model_events = []
+            self._model_apply = None
+            self._model_active = None
+            self._model_selected = {"pth_path": "", "index_path": ""}
+            # 音频线程想发的普通状态（进度/提示语）也走队列：write_status 现在
+            # 进程内串行，音频回调在这等磁盘就是炸点，由主循环代写。
+            self._status_hints = []
             self.worker_mode = os.environ.get("TM_REALTIME_WORKER", "").strip().lower() in (
                 "1",
                 "true",
@@ -2836,6 +2848,92 @@ if __name__ == "__main__":
             except Exception:
                 traceback.print_exc()
 
+        def _emit_model_apply(self, *, seq=0, pth_path="", index_path="", phase, error=""):
+            """记录一次模型应用事件。
+
+            任何线程都只是把事件塞进队列，主命令循环每条循环统一写盘——音频
+            回调里的「指针已提交」信号借此递回控制线程，不在音频路径上加新的
+            阻塞文件 IO。phase: selected | loading | committed | failed。
+            """
+            ev = {
+                "seq": int(seq or 0),
+                "pth_path": str(pth_path or ""),
+                "index_path": str(index_path or ""),
+                "phase": str(phase or ""),
+                "error": str(error or ""),
+            }
+            try:
+                with self._pending_model_lock:
+                    self._model_events.append(ev)
+            except Exception:
+                pass
+
+        def _queue_status_hint(self, **fields):
+            """音频线程的状态写一律排队，由主循环在锁保护下落盘。"""
+            try:
+                with self._pending_model_lock:
+                    self._status_hints.append(dict(fields))
+            except Exception:
+                pass
+
+        def _drain_model_events(self):
+            """把排队中的模型应用事件落成 status.json 里的 model_* 字段。"""
+            try:
+                with self._pending_model_lock:
+                    if not self._model_events and not self._status_hints:
+                        return
+                    evs = self._model_events
+                    self._model_events = []
+                    hints = self._status_hints
+                    self._status_hints = []
+                fields = {}
+                for ev in evs:
+                    phase = ev.get("phase")
+                    if phase == "selected":
+                        self._model_selected = {
+                            "pth_path": ev.get("pth_path") or "",
+                            "index_path": ev.get("index_path") or "",
+                        }
+                        fields["model_selected"] = self._model_selected
+                        continue
+                    rec = {
+                        "seq": ev.get("seq") or 0,
+                        "pth_path": ev.get("pth_path") or "",
+                        "index_path": ev.get("index_path") or "",
+                        "phase": phase or "",
+                        "error": ev.get("error") or "",
+                    }
+                    self._model_apply = rec
+                    fields["model_apply"] = rec
+                    if phase == "committed":
+                        self._model_active = (
+                            {
+                                "pth_path": rec["pth_path"],
+                                "index_path": rec["index_path"],
+                            }
+                            if rec["pth_path"]
+                            else None
+                        )
+                        fields["model_active"] = self._model_active
+                if fields:
+                    try:
+                        from tools.worker_protocol import write_status
+
+                        write_status(**fields)
+                    except Exception:
+                        pass
+                # 音频线程排来的普通状态写在 model_* 之后落盘：一次换模型的
+                # committed 记录先于「运行中」提示出现，壳侧不会读到
+                # 提示已恢复、确认却没到的中间态。同键后写者赢（hint 是
+                # 最新状态）。
+                for hint in hints:
+                    try:
+                        self._worker_write_status(**hint)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
         def _device_latency_sec(self) -> float:
             """Sounddevice stream latency in seconds; 0 if not ready / absurd."""
             if self.audio_proc is None:
@@ -3082,7 +3180,7 @@ if __name__ == "__main__":
                         values["monitor_device"] = better
             return values
 
-        def _worker_list_devices(self, hostapi=None):
+        def _worker_list_devices(self, hostapi=None, seq=0):
             try:
                 name = hostapi or self.gui_config.sg_hostapi or None
                 self.update_devices(hostapi_name=name)
@@ -3091,9 +3189,12 @@ if __name__ == "__main__":
                 elif self.hostapis:
                     self.gui_config.sg_hostapi = self.hostapis[0]
                 payload = self._worker_device_payload()
+                # devices_seq 是「这次枚举已收尾」的证据；壳只认对号的列表，
+                # 非空的旧数据不算数。
                 self._worker_write_status(
                     state="idle" if not flag_vc else "running",
                     error="",
+                    devices_seq=seq,
                     **_msg(DEV_REFRESHED),
                     **payload,
                 )
@@ -3102,6 +3203,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"list_devices: {type(e).__name__}: {e}",
+                    devices_seq=seq,
                     **_msg(DEV_LIST_FAILED),
                 )
 
@@ -3227,6 +3329,10 @@ if __name__ == "__main__":
                         self.dsp_only = True
                         self.gui_config.pth_path = ""
                         self.gui_config.index_path = ""
+                        # 推理链上的音色被 DSP 顶掉：active 归 null，如实记录。
+                        self._emit_model_apply(
+                            seq=payload.get("seq"), phase="committed"
+                        )
                 elif prev_on and self.function == "fx":
                     self.function = (
                         "vc" if getattr(self, "rvc", None) is not None else "im"
@@ -3241,6 +3347,7 @@ if __name__ == "__main__":
                     payload["pth_path"],
                     payload.get("index_path"),
                     payload.get("index_rate"),
+                    seq=payload.get("seq"),
                 )
             # 「丢掉当前音色」的反向操作，和 pth_path 热推对称。
             #
@@ -3248,9 +3355,9 @@ if __name__ == "__main__":
             # RVC 实例，function 还是 vc，用户在界面上看到音色没了、耳朵里
             # 听到的还是那个音色。
             if payload.get("drop_model"):
-                self._worker_drop_model()
+                self._worker_drop_model(seq=payload.get("seq"))
 
-        def _worker_drop_model(self):
+        def _worker_drop_model(self, seq=0):
             """变声中丢掉音色，退回纯 DSP（或直通），不重开流。
 
             和 `_worker_swap_model` 对称：只换该换的那一件东西。缓冲区、设备、
@@ -3278,6 +3385,8 @@ if __name__ == "__main__":
             except Exception:
                 pass
             printt("已丢掉音色，function=%s", self.function)
+            # 丢音色也是一次「应用」：空目标提交成功，model_active 归 null。
+            self._emit_model_apply(seq=seq, phase="committed")
 
         def _ckpt_tgt_sr(self, pth: str):
             """只读出这个权重的目标采样率，不建模型。
@@ -3295,7 +3404,7 @@ if __name__ == "__main__":
                 printt("读不出 %s 的采样率：%s", pth, traceback.format_exc())
                 return None
 
-        def _worker_swap_model(self, pth: str, index_path=None, index_rate=None):
+        def _worker_swap_model(self, pth: str, index_path=None, index_rate=None, seq=0):
             """变声中换音色。
 
             引擎原来根本不认 pth_path 这个热更新键：换模型只写了配置文件，正在跑
@@ -3310,10 +3419,18 @@ if __name__ == "__main__":
             这时候整条流水线的几何尺寸都变了，老老实实重开。
             """
             global flag_vc
+            seq = int(seq or 0)
             pth = str(pth or "").strip()
             if not pth or not os.path.isfile(pth):
                 self._model_swap_error = "音色文件不在了，仍在用上一个音色"
                 printt("换模型：文件不存在 %s", pth)
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=str(index_path or ""),
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
                 return
             idx = (
                 str(index_path or "").strip()
@@ -3330,16 +3447,39 @@ if __name__ == "__main__":
             if not idx:
                 rate = 0.0
 
+            # 选中目标先落记录：model_selected 跟 model_active 可以短暂不一致，
+            # 界面拿它区分「用户点了什么」和「引擎现在在跑什么」。
+            self._emit_model_apply(
+                seq=seq, pth_path=pth, index_path=idx, phase="selected"
+            )
+
             # 没在跑：配置文件里已经是新模型了，下次开启自然就对，这里只把
-            # 内存里的那份对齐，免得随后的热更新拿旧路径去比。
+            # 内存里的那份对齐，免得随后的热更新拿旧路径去比。没有可提交的
+            # 指针，不产生 model_apply 记录。
             if not flag_vc:
                 self.gui_config.pth_path = pth
                 self.gui_config.index_path = idx
                 self.gui_config.index_rate = rate
                 return
 
-            if pth == str(getattr(self.gui_config, "pth_path", "") or ""):
-                return  # 同一个模型，没什么可换的
+            if (
+                pth == str(getattr(self.gui_config, "pth_path", "") or "")
+                and idx == str(getattr(self.gui_config, "index_path", "") or "")
+                and getattr(self, "rvc", None) is not None
+            ):
+                # 合法 no-op：pth+index 两个身份都和推理链上实际绑着的完全
+                # 一致（只比配置路径不算数 —— index 不同说明链上跑的还是旧
+                # 索引，rvc 为空说明根本没绑上）。先热推 index_rate，再为
+                # 这条 seq 新发 committed —— 每条请求都要自己的完结记录。
+                self.gui_config.index_rate = rate
+                try:
+                    self.rvc.change_index_rate(rate)
+                except Exception:
+                    traceback.print_exc()
+                self._emit_model_apply(
+                    seq=seq, pth_path=pth, index_path=idx, phase="committed"
+                )
+                return
 
             if str(getattr(self.gui_config, "sr_type", "") or "") == "sr_model":
                 sr = self._ckpt_tgt_sr(pth)
@@ -3348,13 +3488,17 @@ if __name__ == "__main__":
                     self.gui_config.pth_path = pth
                     self.gui_config.index_path = idx
                     self.gui_config.index_rate = rate
-                    self._worker_start()
+                    # 重开流的 committed/failed 由 _worker_start 自己记。
+                    self._worker_start(seq=seq)
                     return
 
-            job = (pth, idx, rate)
+            job = (pth, idx, rate, seq)
             with self._pending_model_lock:
                 self._pending_model = job
                 self._swap_ready = None
+            self._emit_model_apply(
+                seq=seq, pth_path=pth, index_path=idx, phase="loading"
+            )
             self._swap_busy = True
             self._swap_progress = 20
             self._model_swap_error = ""
@@ -3452,7 +3596,7 @@ if __name__ == "__main__":
 
         def _preload_pending_model(self, job):
             """在命令线程之外读新权重，音频线程只做指针替换。"""
-            pth, idx, rate = job
+            pth, idx, rate, seq = job
             try:
                 self._swap_progress = 45
                 self._worker_write_status(
@@ -3480,8 +3624,10 @@ if __name__ == "__main__":
                     raise RuntimeError("incomplete rvc")
                 with self._pending_model_lock:
                     if self._pending_model != job:
+                        # 被更新的请求顶掉了：这份加载作废，不交接也不记事件，
+                        # 新请求自己的 loading/committed 记录会覆盖它。
                         return
-                    self._swap_ready = (new, pth, idx, rate)
+                    self._swap_ready = (new, pth, idx, rate, seq)
                 self._swap_progress = 88
                 self._worker_write_status(
                     state="running",
@@ -3499,6 +3645,14 @@ if __name__ == "__main__":
                 self._swap_busy = False
                 self._swap_progress = 100
                 self._model_swap_error = "换模型失败，仍在用上一个音色"
+                # 加载失败=这条应用请求失败；旧音色仍在推理链上，active 不动。
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=idx,
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
                 self._worker_write_status(
                     state="running",
                     error="",
@@ -3526,16 +3680,54 @@ if __name__ == "__main__":
             """把预加载好的模型接到流上。**只在音频线程里调用。**"""
             with self._pending_model_lock:
                 pack = self._swap_ready
+                # 装上的前提是它仍是「最新请求」：_pending_model 里排的 job 若
+                # 已经不是产出这份 pack 的那一个，就算读好了也作废，不能把
+                # 新目标顶回旧的。正常情况下两者相等——job 到装上才清。
+                if pack is not None and self._pending_model != (
+                    pack[1],
+                    pack[2],
+                    pack[3],
+                    pack[4],
+                ):
+                    pack = None
                 self._swap_ready = None
-                self._pending_model = None
+                if pack is not None:
+                    self._pending_model = None
             if not pack:
                 return
-            new, pth, idx, rate = pack
-            self._attach_rvc(new, pth, idx, rate)
+            new, pth, idx, rate, seq = pack
+            try:
+                self._attach_rvc(new, pth, idx, rate)
+            except Exception:
+                # attach 是「先做完会失败的准备、再一次提交」：走到这说明
+                # 提交没发生，旧指针还在，如实记 failed，不许假装旧模型还在。
+                printt("换模型失败(attach)：%s", traceback.format_exc())
+                self._swap_busy = False
+                self._swap_progress = 100
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=idx,
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
+                self._queue_status_hint(
+                    state="running",
+                    error="",
+                    progress=100,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAP_FAILED),
+                )
+                return
+            # 指针已经换到推理链上——这才算应用完成。事件进队列，主循环落盘。
+            self._emit_model_apply(
+                seq=seq, pth_path=pth, index_path=idx, phase="committed"
+            )
             self._swap_busy = False
             self._swap_progress = 100
             self._model_swap_error = ""
-            self._worker_write_status(
+            self._queue_status_hint(
                 state="running",
                 error="",
                 progress=100,
@@ -3544,24 +3736,29 @@ if __name__ == "__main__":
             )
 
         def _attach_rvc(self, new, pth, idx, rate):
+            # 会失败的准备先做：重采样器在指针提交前建好。这行之后不允许再
+            # 抛——self.rvc 一换，「旧模型还在跑」就不再成立。
+            resampler2 = (
+                tat.Resample(
+                    orig_freq=new.tgt_sr,
+                    new_freq=self.gui_config.samplerate,
+                    dtype=torch.float32,
+                ).to(self.config.device)
+                if new.tgt_sr != self.gui_config.samplerate
+                else None
+            )
             self.rvc = new
+            self.resampler2 = resampler2
             new.f0_repair = bool(getattr(self.gui_config, "f0_repair", False))
             # 选了音色就是 RVC：关掉 DSP，function 走 vc。
             self.dsp_only = False
             self.gui_config.dsp_enabled = False
             self.function = "vc"
+            # _rebuild_voice_chain 内部自吞异常，不会把半截状态抛回来。
             self._rebuild_voice_chain()
             self.gui_config.pth_path = pth
             self.gui_config.index_path = idx
             self.gui_config.index_rate = rate
-            if new.tgt_sr != self.gui_config.samplerate:
-                self.resampler2 = tat.Resample(
-                    orig_freq=new.tgt_sr,
-                    new_freq=self.gui_config.samplerate,
-                    dtype=torch.float32,
-                ).to(self.config.device)
-            else:
-                self.resampler2 = None
             try:
                 self.sola_buffer.zero_()
             except Exception:
@@ -3575,10 +3772,10 @@ if __name__ == "__main__":
                 self._pending_model = None
             if not job:
                 return
-            pth, idx, rate = job
+            pth, idx, rate, seq = job
             old = getattr(self, "rvc", None)
             self._swap_progress = 40
-            self._worker_write_status(
+            self._queue_status_hint(
                 state="running",
                 error="",
                 progress=40,
@@ -3606,7 +3803,14 @@ if __name__ == "__main__":
                 self._swap_busy = False
                 self._swap_progress = 100
                 self._model_swap_error = "换模型失败，仍在用上一个音色"
-                self._worker_write_status(
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=idx,
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
+                self._queue_status_hint(
                     state="running",
                     error="",
                     progress=100,
@@ -3621,7 +3825,14 @@ if __name__ == "__main__":
                 self._swap_busy = False
                 self._swap_progress = 100
                 self._model_swap_error = "换模型失败，仍在用上一个音色"
-                self._worker_write_status(
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=idx,
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
+                self._queue_status_hint(
                     state="running",
                     error="",
                     progress=100,
@@ -3630,11 +3841,36 @@ if __name__ == "__main__":
                 )
                 return
 
-            self._attach_rvc(new, pth, idx, rate)
+            try:
+                self._attach_rvc(new, pth, idx, rate)
+            except Exception:
+                printt("换模型失败(attach)：%s", traceback.format_exc())
+                self._swap_busy = False
+                self._swap_progress = 100
+                self._model_swap_error = "换模型失败，仍在用上一个音色"
+                self._emit_model_apply(
+                    seq=seq,
+                    pth_path=pth,
+                    index_path=idx,
+                    phase="failed",
+                    error=self._model_swap_error,
+                )
+                self._queue_status_hint(
+                    state="running",
+                    error="",
+                    progress=100,
+                    pid=os.getpid(),
+                    **_msg(VC_SWAP_FAILED),
+                )
+                return
+            # 指针提交发生在本线程（DML 现读现换）——committed 只在这里记。
+            self._emit_model_apply(
+                seq=seq, pth_path=pth, index_path=idx, phase="committed"
+            )
             self._swap_busy = False
             self._swap_progress = 100
             self._model_swap_error = ""
-            self._worker_write_status(
+            self._queue_status_hint(
                 state="running",
                 error="",
                 progress=100,
@@ -3642,8 +3878,13 @@ if __name__ == "__main__":
                 **_msg(VC_RUNNING),
             )
 
-        def _worker_start(self, cmd=None):
+        def _worker_start(self, cmd=None, seq=0):
             global flag_vc
+            # 应用记录要跟发令的 seq 对上：start 命令自带 seq；由换模型触发的
+            # 重开流（采样率变了）拿的是那条 set 的 seq。
+            start_seq = (
+                int(cmd.get("seq") or 0) if isinstance(cmd, dict) else int(seq or 0)
+            )
             # 排在半路的换模型请求作废：重开流会照配置文件重新建 RVC，那份配置
             # 里已经是新模型了。留着它只会在新流刚起来时再白换一次。
             with self._pending_model_lock:
@@ -3695,8 +3936,19 @@ if __name__ == "__main__":
                 values = self._values_from_config_file()
                 # start 命令本体可携带 DSP 字段。inuse 若漏同步 dsp_enabled，
                 # 纯 DSP 会被误判成「没选音色」并弹出「请选择pth文件」。
+                # pth_path/index_path/index_rate 同理：壳派发时冻结的身份
+                # 以命令为准，不认领那一刻的 inuse —— 启动中途的另一次
+                # 音色选择不改这条命令的结论。
                 if isinstance(cmd, dict):
-                    for k in ("dsp_enabled", "dsp_preset", "dsp_params", "function"):
+                    for k in (
+                        "dsp_enabled",
+                        "dsp_preset",
+                        "dsp_params",
+                        "function",
+                        "pth_path",
+                        "index_path",
+                        "index_rate",
+                    ):
                         if k in cmd and cmd.get(k) is not None:
                             values[k] = cmd[k]
                 printt(
@@ -3714,6 +3966,16 @@ if __name__ == "__main__":
                 self._last_invalid_reason = ""
                 ok = self.set_values(values)
                 if ok is not True:
+                    self._emit_model_apply(
+                        seq=start_seq,
+                        pth_path=str(values.get("pth_path") or ""),
+                        index_path=str(values.get("index_path") or ""),
+                        phase="failed",
+                        error=(
+                            getattr(self, "_last_invalid_reason", "")
+                            or "设置无效（模型路径 / 设备）"
+                        ),
+                    )
                     self._worker_write_status(
                         state="error",
                         error=(
@@ -3822,6 +4084,28 @@ if __name__ == "__main__":
                 except Exception:
                     traceback.print_exc()
                 live_ms = int(round(self._real_delay_sec() * 1000))
+                # 流起来了，推理链上绑的就是 set_values 定下来的那份模型。
+                # DSP 启动没有音色指针：committed 空目标 + active null，
+                # 壳按它确认「这次起来的是纯 DSP，不是音色」。
+                _bound_rvc = getattr(self, "rvc", None)
+                if _bound_rvc is not None:
+                    self._emit_model_apply(
+                        seq=start_seq,
+                        pth_path=str(getattr(self.gui_config, "pth_path", "") or ""),
+                        index_path=str(
+                            getattr(self.gui_config, "index_path", "") or ""
+                        ),
+                        phase="committed",
+                    )
+                    self._emit_model_apply(
+                        pth_path=str(getattr(self.gui_config, "pth_path", "") or ""),
+                        index_path=str(
+                            getattr(self.gui_config, "index_path", "") or ""
+                        ),
+                        phase="selected",
+                    )
+                else:
+                    self._emit_model_apply(seq=start_seq, phase="committed")
                 self._worker_write_status(
                     state="running",
                     error="",
@@ -3841,6 +4125,13 @@ if __name__ == "__main__":
                     self.stop_stream()
                 except Exception:
                     pass
+                self._emit_model_apply(
+                    seq=start_seq,
+                    pth_path=str(getattr(self.gui_config, "pth_path", "") or ""),
+                    index_path=str(getattr(self.gui_config, "index_path", "") or ""),
+                    phase="failed",
+                    error=f"{type(e).__name__}: {e}",
+                )
                 text = (str(e) or "").strip()
                 gpu_nv = os.environ.get("TM_NVIDIA_GPUS", "").replace("|", "、")
                 gpu_now = str(
@@ -3862,7 +4153,7 @@ if __name__ == "__main__":
                     **fields,
                 )
 
-        def _worker_stop(self):
+        def _worker_stop(self, seq=0):
             try:
                 self.stop_stream()
             except Exception as e:
@@ -3870,6 +4161,7 @@ if __name__ == "__main__":
                 self._worker_write_status(
                     state="error",
                     error=f"stop: {type(e).__name__}: {e}",
+                    stop_seq=seq,
                     **_msg(VC_STOP_FAILED),
                     pid=os.getpid(),
                 )
@@ -3892,6 +4184,7 @@ if __name__ == "__main__":
                 infer_ms=0,
                 progress=100,
                 pid=os.getpid(),
+                stop_seq=seq,
                 **self._worker_device_payload(),
                 **_idle_fields,
             )
@@ -4307,6 +4600,8 @@ if __name__ == "__main__":
             try:
                 while running:
                     try:
+                        # 模型应用事件（含音频线程的指针提交信号）统一在这落盘。
+                        self._drain_model_events()
                         cmd = read_command()
                         seq = int(cmd.get("seq") or 0)
                         if seq > last_seq and cmd.get("cmd"):
@@ -4315,7 +4610,7 @@ if __name__ == "__main__":
                             printt("worker cmd seq=%s action=%s", seq, action)
                             write_status(last_cmd_seq=seq, pid=os.getpid())
                             if action == "quit":
-                                self._worker_stop()
+                                self._worker_stop(seq)
                                 write_status(
                                     state="idle",
                                     **_msg(ENGINE_QUIT),
@@ -4327,11 +4622,11 @@ if __name__ == "__main__":
                             elif action == "list_devices":
                                 # Reloading hostapi stops stream — report idle after
                                 host = cmd.get("sg_hostapi") or cmd.get("hostapi")
-                                self._worker_list_devices(host)
+                                self._worker_list_devices(host, seq=seq)
                             elif action == "start":
                                 self._worker_start(cmd)
                             elif action == "stop":
-                                self._worker_stop()
+                                self._worker_stop(seq)
                             elif action == "convert":
                                 # 离线语音转换热路径：模型已经在手里，不重新加载。
                                 # 这一句会阻塞到整批转完，期间命令循环不派发新

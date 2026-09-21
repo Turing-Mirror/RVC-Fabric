@@ -2,6 +2,7 @@
 import ast
 import json
 import os
+import sys
 import threading
 import time
 import traceback
@@ -11,6 +12,9 @@ import unittest
 from unittest.mock import Mock, mock_open, patch
 
 ROOT = Path(__file__).resolve().parents[1]
+# 单跑本文件时也要找得到 tools/ —— 不靠别的测试先把仓库根塞进 sys.path。
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def handler(name, **globals_):

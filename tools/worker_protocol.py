@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -118,6 +119,13 @@ def read_status() -> dict[str, Any]:
     return _read_json(STATUS_PATH)
 
 
+# status.json 的读-改-写在进程内串行化：命令循环、模型加载线程、预热线程
+# 都会写这个文件，不串行的话，后写的那份拿旧快照一盖，就把一次性确认记录
+# （model_apply committed 之类）永久弄丢。锁只覆盖本进程；音频线程不写状态
+# （事件走 _model_events 队列回主循环），不会在这把锁上等磁盘。
+_STATUS_WRITE_LOCK = threading.Lock()
+
+
 def write_status(**fields: Any) -> None:
     """Merge fields into status.json.
 
@@ -130,16 +138,17 @@ def write_status(**fields: Any) -> None:
     ``message_code`` clears the old code (empty string). Callers that want a
     code must pass ``message_code`` explicitly (see ``msg_codes.status_fields``).
     """
-    cur = _read_json(STATUS_PATH)
-    if (
-        ("message" in fields or "state" in fields)
-        and "message_code" not in fields
-        and cur.get("message_code")
-    ):
-        fields = {**fields, "message_code": ""}
-    cur.update(fields)
-    cur["ts"] = time.time()
-    _write_json(STATUS_PATH, cur)
+    with _STATUS_WRITE_LOCK:
+        cur = _read_json(STATUS_PATH)
+        if (
+            ("message" in fields or "state" in fields)
+            and "message_code" not in fields
+            and cur.get("message_code")
+        ):
+            fields = {**fields, "message_code": ""}
+        cur.update(fields)
+        cur["ts"] = time.time()
+        _write_json(STATUS_PATH, cur)
 
 
 def read_sts() -> dict[str, Any]:
@@ -201,6 +210,11 @@ def default_status() -> dict[str, Any]:
         # cuda | directml | mps | xpu | cpu。空串 = 引擎还没起来，问不到。
         "compute_backend": "",
         "compute_device": "",
+        # 模型应用契约。新 worker 启动时写 null，清掉崩溃旧 worker 留下的
+        # 过期记录 —— 壳只认 seq+路径都对上的 committed。
+        "model_selected": None,
+        "model_active": None,
+        "model_apply": None,
     }
 
 

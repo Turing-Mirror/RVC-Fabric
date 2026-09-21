@@ -989,7 +989,6 @@
     "b0e24833f7": "Expand",
     "b269c54674": "Hubert model",
     "b27dd877b1": "The trained voice will use this name",
-    "b2ba9634d9": "Not running",
     "b2be174f0f": "Community voices",
     "b2c6913616": "Installing…",
     "b3009f6985": "Off: only the original audio passes through",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "When training finishes the voice appears on the Models page, and the .pth is also under assets/weights. If you quit mid-run, use the same name next time to skip finished steps. Checkpoints keep only the latest large weights; turn on “save a usable model” to write a listen-ready file every N epochs. An index is optional but closer to the original voice.",
     "stsDoneSkipped": "Converted {v0} file(s), skipped {v1} → {v2}",
     "stsSkippedTitle": "These {v0} file(s) were not converted:",
-    "stsFreeVram": "Stopping the realtime voice changer to free VRAM…",
     "stsTargetVoice": "Target voice",
     "stsModelMissing": "Voice model not found: {a0}",
     "stsRecord": "Record",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "Search files",
     "stsTrim": "Trim",
     "stsStillExcluded": "Still excluded by folder: {v0}",
-    "stsRetryFailed": "Retry failed only ({v0})"
+    "stsRetryFailed": "Retry failed only ({v0})",
+    "stsStateUnreadable": "Cannot read source list: {a0}",
+    "stsStateCorrupt": "Source list file is corrupted; changes are blocked to protect it",
+    "engineCmdBusy": "Engine is busy — the previous command has not been picked up yet. Try again in a moment.",
+    "modelApplyUnconfirmed": "Engine has not confirmed the voice was applied. If still silent, retry or restart the engine.",
+    "stsClearConfirm": "Clear all sources and exclusions? This cannot be undone.",
+    "stsForeignBusy": "A conversion is running in another window; this panel is read-only",
+    "stsMissingTag": "Source missing",
+    "stsUnreadableTag": "Unreadable",
+    "stsSourceInsideOut": "A source sits inside the output folder; it was skipped",
+    "stsRefresh": "Refresh",
+    "stsScanCancel": "Stop scan"
   },
   "extras": {
     "engineTitle": "Engine resources",
@@ -2164,7 +2173,8 @@
     "targetExists": "Runtime target already exists: {v0}",
     "verifyFailed": "The migrated runtime did not pass validation.",
     "notFound": "The old runtime was not found.",
-    "runtimeNotReady": "This runtime is not ready."
+    "runtimeNotReady": "This runtime is not ready.",
+    "runtimeBusy": "{v0} process(es) are still using this runtime (the classic WebUI, the realtime panel, or a conversion task). Close them and try again."
   },
   "sepVariant": {
     "normal": "standard",

@@ -70,18 +70,21 @@ export type ModelsPageProps = {
   focusNonce?: number;
   /** Models-page placement, owned by App so the feed is fetched once. */
   banner?: PlazaItem | null;
+  /** 总控已提交的「使用中」音色身份（modelKey 形式）；空串 = 没有在用的音色。 */
+  currentId?: string;
   onVoiceChange?: (info: {
     model: VoiceModel;
     pitch?: number;
     formant?: number;
     profileSummary?: string;
-  }) => void;
+  }) => void | Promise<void>;
   /** 选了 / 停了 DSP 预设。底栏开启变声必须用这个 id，不能再去猜配置。 */
   onDspChange?: (id: string) => void;
 };
 
 function ModelsPageImpl({
   banner = null,
+  currentId = "",
   onVoiceChange,
   onDspChange,
   onOpenPlaza,
@@ -216,7 +219,8 @@ function ModelsPageImpl({
     if (query.trim() && view.length !== models.length) {
       return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
     }
-    const cur = selected?.name || models[0]?.name || "—";
+    // 没有确认在用的音色就写「—」，不能拿目录第一条冒充当前。
+    const cur = selected?.name || "—";
     return translate("s.425fb93e79", { v0: models.length, v1: cur });
   }, [models, query, view.length, selected, translate]);
 
@@ -224,16 +228,21 @@ function ModelsPageImpl({
     try {
       const cat = await listVoices(fresh ? { fresh: true } : undefined);
       setModels(cat.models || []);
-      const idx = cat.selected_idx ?? -1;
-      if (idx >= 0 && cat.models?.[idx]) {
-        setSelectedKey(modelKey(cat.models[idx]));
-      } else {
-        setSelectedKey("");
-      }
     } catch (e) {
       setMsg(String(e));
     }
   }, []);
+
+  // 「使用中」徽标只认总控已提交的身份（换模型被引擎确认后才更新），不按
+  // 目录的 selected_idx —— 那是持久化的选择意图，上次切换失败时它会撒谎。
+  useEffect(() => {
+    if (!currentId) {
+      setSelectedKey("");
+      return;
+    }
+    const hit = models.find((m) => modelKey(m) === currentId);
+    setSelectedKey(hit ? modelKey(hit) : "");
+  }, [currentId, models]);
 
   const reloadPanels = useCallback(async (m: VoiceModel | null) => {
     if (!m || m.source !== "user_data" || !m.dir || m.missing) {
@@ -345,11 +354,11 @@ function ModelsPageImpl({
     // 快速点不同目标只留最新意图；不再用全局 busy 把整个页面锁住。
     setMsg("");
     const out = await requestVoiceSwitch(m, (info) => {
-      setSelectedKey(modelKey(m));
       setDspId("");
       setDspActive(null);
-      onVoiceChange?.(info);
       void reload();
+      // 徽标由 currentId 回流驱动；返回值交给派发器，换模型没落定任务不算完。
+      return onVoiceChange?.(info);
     });
     if (out.kind === "error") {
       setMsg(out.error);

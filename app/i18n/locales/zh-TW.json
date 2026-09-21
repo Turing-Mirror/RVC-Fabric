@@ -989,7 +989,6 @@
     "b0e24833f7": "展開",
     "b269c54674": "Hubert 模型",
     "b27dd877b1": "訓練完成的音色將使用此名稱",
-    "b2ba9634d9": "未執行",
     "b2be174f0f": "社群音色",
     "b2c6913616": "安裝中…",
     "b3009f6985": "關閉後僅輸出系統原聲",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "訓完會進「模型」頁。中途關掉軟體，下次填同一個名字會跳過已經切好的步驟。勾上「另存可用小模型」才會每隔這些輪多寫一份能直接聽的模型。",
     "stsDoneSkipped": "完成 {v0} 個檔案，略過 {v1} 個 → {v2}",
     "stsSkippedTitle": "以下 {v0} 個檔案沒有轉出來：",
-    "stsFreeVram": "正在停止即時變聲以釋放顯示記憶體…",
     "stsTargetVoice": "目標音色",
     "stsModelMissing": "找不到音色模型：{a0}",
     "stsRecord": "錄音",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "搜尋檔名",
     "stsTrim": "裁剪",
     "stsStillExcluded": "仍受目錄排除影響：{v0}",
-    "stsRetryFailed": "只重試失敗項目（{v0}）"
+    "stsRetryFailed": "只重試失敗項目（{v0}）",
+    "stsStateUnreadable": "無法讀取來源清單：{a0}",
+    "stsStateCorrupt": "來源清單檔案已損毀，為保護資料已阻止修改",
+    "engineCmdBusy": "引擎正忙，上一個指令尚未被接收。請稍後再試。",
+    "modelApplyUnconfirmed": "引擎尚未確認音色已套用。若仍無聲，請重試或重新啟動引擎。",
+    "stsClearConfirm": "確定清空全部來源與排除？此操作無法復原。",
+    "stsForeignBusy": "另一個視窗正在轉換，此處唯讀",
+    "stsMissingTag": "來源不存在",
+    "stsUnreadableTag": "目錄不可讀",
+    "stsSourceInsideOut": "來源位於輸出目錄內，已自動略過",
+    "stsRefresh": "重新整理",
+    "stsScanCancel": "停止掃描"
   },
   "extras": {
     "engineTitle": "引擎資源",
@@ -2164,7 +2173,8 @@
     "targetExists": "執行環境目標已存在：{v0}",
     "verifyFailed": "遷移後的執行環境未通過檢查。",
     "notFound": "找不到舊版執行環境。",
-    "runtimeNotReady": "這套執行環境尚未就緒。"
+    "runtimeNotReady": "這套執行環境尚未就緒。",
+    "runtimeBusy": "仍有 {v0} 個處理程序在使用這套執行階段（原版 WebUI、即時面板或轉換工作）。請先關閉它們再重試。"
   },
   "sepVariant": {
     "normal": "標準",

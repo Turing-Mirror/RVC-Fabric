@@ -989,7 +989,6 @@
     "b0e24833f7": "펼치기",
     "b269c54674": "Hubert 모델",
     "b27dd877b1": "학습 완료된 음색에 이 이름이 사용됩니다",
-    "b2ba9634d9": "실행 중이 아님",
     "b2be174f0f": "커뮤니티 음색",
     "b2c6913616": "설치 중…",
     "b3009f6985": "끄면 시스템 원음만 출력됩니다",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "끝나면 「모델」에 나타납니다. 중간에 꺼도 같은 이름이면 끝난 단계는 건너뜁니다. 작은 모델 저장을 켜면 간격마다 들어볼 수 있는 파일도 남습니다.",
     "stsDoneSkipped": "{v0}개 변환 완료, {v1}개 건너뜀 → {v2}",
     "stsSkippedTitle": "다음 {v0}개 파일은 변환되지 않았습니다:",
-    "stsFreeVram": "VRAM 확보를 위해 실시간 음성 변조를 중지하는 중…",
     "stsTargetVoice": "대상 음색",
     "stsModelMissing": "음색 모델을 찾을 수 없음: {a0}",
     "stsRecord": "녹음",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "파일 검색",
     "stsTrim": "자르기",
     "stsStillExcluded": "폴더 제외가 유지됨: {v0}",
-    "stsRetryFailed": "실패 항목만 재시도 ({v0})"
+    "stsRetryFailed": "실패 항목만 재시도 ({v0})",
+    "stsStateUnreadable": "소스 목록을 읽을 수 없습니다: {a0}",
+    "stsStateCorrupt": "소스 목록 파일이 손상되었습니다. 보호를 위해 변경을 차단했습니다",
+    "engineCmdBusy": "엔진이 사용 중입니다. 이전 명령이 아직 수락되지 않았습니다. 잠시 후 다시 시도하세요.",
+    "modelApplyUnconfirmed": "엔진이 음색 적용을 확인하지 않았습니다. 여전히 소리가 없으면 다시 시도하거나 엔진을 재시작하세요.",
+    "stsClearConfirm": "모든 소스와 제외를 지우시겠습니까? 되돌릴 수 없습니다.",
+    "stsForeignBusy": "다른 창에서 변환 중이라 읽기 전용입니다",
+    "stsMissingTag": "소스가 없습니다",
+    "stsUnreadableTag": "읽을 수 없습니다",
+    "stsSourceInsideOut": "소스가 출력 폴더 안에 있어 건너뛰었습니다",
+    "stsRefresh": "새로 고침",
+    "stsScanCancel": "스캔 중지"
   },
   "extras": {
     "engineTitle": "엔진 리소스",
@@ -2164,7 +2173,8 @@
     "targetExists": "런타임 대상이 이미 존재합니다: {v0}",
     "verifyFailed": "마이그레이션한 런타임 검증에 실패했습니다.",
     "notFound": "이전 런타임을 찾을 수 없습니다.",
-    "runtimeNotReady": "이 런타임은 아직 준비되지 않았습니다."
+    "runtimeNotReady": "이 런타임은 아직 준비되지 않았습니다.",
+    "runtimeBusy": "이 런타임을 사용 중인 프로세스가 {v0}개 있습니다(기존 WebUI, 실시간 패널, 변환 작업). 먼저 닫고 다시 시도하세요."
   },
   "sepVariant": {
     "normal": "표준",

@@ -25,6 +25,33 @@ function samePath(a?: string, b?: string): boolean {
   return n(a) === n(b);
 }
 
+const baseName = (p: string) => p.split(/[\\/]/).pop() || p;
+
+/**
+ * 重试集合 = 失败 ∪ 未执行，成功的绝不重跑。
+ *
+ * 依据的是冻结清单的序号顺序：worker 按 manifest 顺序逐条处理，事件里的
+ * `done` 是已处理条数（成功+跳过都算）——`idx >= processed` 就是未执行。
+ * 失败用 skip 事件的 `path` 全路径精确回配；老 worker 不带 path 时
+ * （file==name 纯文件名）退回文件名匹配——那是退而求其次的近似，文档
+ * 里写明了。
+ */
+function deriveRetryable(
+  manifest: ManifestEntry[],
+  failed: Skipped[],
+  processed: number,
+): ManifestEntry[] {
+  return manifest.filter(
+    (e, i) =>
+      i >= processed ||
+      failed.some(
+        (b) =>
+          samePath(b.file, e.src) ||
+          (b.file === b.name && baseName(e.src) === b.name),
+      ),
+  );
+}
+
 /** 工具窗两个模式：官方语义的音频推理 + 保留的文字合成。 */
 type Mode = "sts" | "tts";
 
@@ -42,6 +69,10 @@ type StsStatus = {
   out_dir?: string;
   worker_alive?: boolean;
   busy?: boolean;
+  /** 在跑的是否静默任务（TTS/顾问借用）。只作提示，归属看 owner 凭证。 */
+  run_quiet?: boolean;
+  /** 在跑单子的归属凭证；无凭证任务给 null。只有它等于本窗凭证才算本窗任务。 */
+  run_owner?: string | null;
   /** busy 时后端给的最后一条进度快照，用来给新开的窗口补上进度。 */
   progress?: Progress | null;
   last_input?: string;
@@ -84,11 +115,15 @@ type SrcDef = {
 type SrcScan = {
   sources?: SrcDef[];
   items?: InputFile[];
-  missing?: { id: string; path: string }[];
+  missing?: { id: string; path: string; state?: string }[];
   total?: number;
   pending?: number;
   excluded?: number;
   output_in_source?: boolean;
+  /** 来源落在输出树内（根相等 / 文件源在输出树下） */
+  source_in_output?: boolean;
+  /** 带代次扫描被作废时的返回体；前端直接丢弃。 */
+  cancelled?: boolean;
 };
 
 type ManifestEntry = { src: string; rel: string };
@@ -128,10 +163,14 @@ type Progress = {
   ok?: number;
   skip?: number;
   file?: string;
+  /** skip 事件的源文件全路径（file 只有文件名，同名靠它区分） */
+  path?: string;
   /** skip 事件的干净原因（不含「跳过 name：」前缀） */
   reason?: string;
   /** error 事件带的 worker 错误码 —— 配得上动作按钮的码（如「选到训练存档」）靠它 */
   message_code?: string;
+  /** 有凭证的任务每条事件回显的归属串；与 runToken 相等才算本窗任务。 */
+  owner?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -286,9 +325,36 @@ function StsSection() {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
+  // 任务归属：running=true 只说明后端忙；ownsRun 只代表「本窗发起过请求」，
+  // ownerProven 才是后端认领回执（status/事件回显 runToken）。取消键只在
+  // ownerProven 时出现——snapshot/invoke 在途期间 BUSY 可能是别窗抢走的。
+  const [ownsRun, setOwnsRun] = useState(false);
+  const ownsRunRef = useRef(false);
+  const [ownerProven, setOwnerProven] = useState(false);
+  const ownerProvenRef = useRef(false);
+  // 本窗这次发起的凭证：每次 start 换新的，后端 sts_start 透传、回显比对。
+  // finally 里清空——本单迟到的事件对不上新凭证，不会再进本窗账本。
+  const runTokenRef = useRef("");
+  // sts_start 调用是否还在途：在途期间本单收尾由 start() 的 finally 负责，
+  // 轮询不许越界清 running；invoke 已落定（含拒绝）而后端还在跑时，才轮到
+  // 轮询观察态收尾。
+  const invokePendingRef = useRef(false);
+  // 后端已处理的文件数（progress.done 的最大值）：启动失败/中途崩溃时
+  // 用它划出「已执行/未执行」边界，重试集合 = 失败 ∪ 未执行。
+  const doneCountRef = useRef(0);
+  // 轮询代次：任何更新运行状态的来源（外来事件、本窗 start）先把它加一；
+  // 在途轮询响应回来时发现代次变了 → 旧快照作废，不允许旧 idle 盖掉新 busy。
+  const pollEpochRef = useRef(0);
+  // skip 事件的实时累积放 ref 里：start() 的 catch 读到的是当时最新的
+  // 失败集合（state 闭包可能滞后），全失败时据此给出整单重试。
+  const skippedRef = useRef<Skipped[]>([]);
   // C-09：多来源清单。scan 是后端清单服务给的完整视图（含排除项）；
   // checked 只是批量操作的临时勾选，不参与/排除状态在服务端。
   const [scan, setScan] = useState<SrcScan | null>(null);
+  // 扫描序号：只对最后发起的一次落地；中途被顶掉/取消/任务跑起来的
+  // 结果一律丢弃，避免旧响应把运行期界面改回去。
+  const scanSeqRef = useRef(0);
+  const [scanning, setScanning] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [listFilter, setListFilter] = useState<"active" | "excluded" | "all">("active");
   const [listQuery, setListQuery] = useState("");
@@ -377,10 +443,14 @@ function StsSection() {
       // 跑 —— 用户报的就是这个：以为要从头再来。
       //
       // 后端现在会连着 busy 一起给最后一条进度（sts.rs 的 LAST_PROGRESS），
-      // 这里接上就行：进度条接着走，取消按钮也就有东西可取消了。
+      // 这里接上就行：进度条接着走。取消只给本窗发起的任务，外来任务只读。
       if (s.busy && !runningRef.current) {
         runningRef.current = true;
         setRunning(true);
+        // 打开窗口时后端已在跑 → 这是别处的任务（含静默任务），只读观察，
+        // 不给取消——归属只看本面板是否发起。
+        ownsRunRef.current = false;
+        setOwnsRun(false);
         if (s.progress) setProg(s.progress);
       }
       applyCurrent(s, cat);
@@ -395,6 +465,37 @@ function StsSection() {
     const unsubs: Array<() => void> = [];
     void listen<Progress>("sts-progress", (ev) => {
       const p = ev.payload;
+      // 事件是更新的运行状态来源：在途轮询的旧快照一律作废（代次闸口）。
+      pollEpochRef.current += 1;
+      // 归属回执：事件带 owner 且等于本窗凭证 → 本窗任务被后端认领；
+      // 带别人的凭证 → 无论先前怎么以为，这都是外来任务，只读观察。
+      // 无凭证字段的事件无法证明是本窗的（静默任务本就不发事件）——
+      // 一律按外来处理，绝不进本窗账本。
+      const mine =
+        p.owner !== undefined &&
+        p.owner === runTokenRef.current &&
+        runTokenRef.current !== "";
+      if (p.owner !== undefined) {
+        if (mine) {
+          ownerProvenRef.current = true;
+          setOwnerProven(true);
+        } else {
+          ownsRunRef.current = false;
+          setOwnsRun(false);
+          ownerProvenRef.current = false;
+          setOwnerProven(false);
+        }
+      }
+      // 别窗启动的非静默任务事件也会广播到本窗：把界面接进只读观察态
+      // （静默任务没有事件，由轮询发现；两者都靠 ownerProven=false 排掉取消）。
+      if (!runningRef.current) {
+        runningRef.current = true;
+        setRunning(true);
+        if (p.owner !== runTokenRef.current) {
+          ownsRunRef.current = false;
+          setOwnsRun(false);
+        }
+      }
       if (p.phase === "error") {
         showErr(p.message, p.message_code);
         // 错误正文只走 ErrorNote。进度行再贴一遍就是 26.8.22/4 截图里
@@ -403,19 +504,34 @@ function StsSection() {
       } else {
         setProg(p);
       }
-      // 批量：跳过事件当场入列，方便边跑边看哪个坏了。
-      if (p.phase === "skip" && p.file) {
-        setSkipped((prev) => {
-          if (prev.some((x) => x.name === p.file || x.file === p.file)) return prev;
-          return [
-            ...prev,
-            {
-              file: p.file || p.message,
-              name: p.file || "?",
-              reason: p.reason || p.message,
-            },
-          ];
-        });
+      // 已处理文件数按事件里的 done 取最大值——worker 失败发生在任何
+      // skip 之前时，重试集合要靠「已执行/未执行」边界来算（G-6）。
+      // 只记本窗任务的数：外来任务/迟到上一单的 done 不许进本窗账本。
+      if (mine && typeof p.done === "number" && Number.isFinite(p.done)) {
+        doneCountRef.current = Math.max(doneCountRef.current, p.done);
+      }
+      // 批量：跳过事件当场入列，方便边跑边看哪个坏了。file 记全路径
+      // （path 字段），同名文件靠它区分；老 worker 没 path 时退回文件名。
+      // 同样只记本窗任务的——外来任务的 skip 不进本窗的跳过清单/重试账本。
+      if (mine && p.phase === "skip" && (p.path || p.file)) {
+        const ident = p.path || p.file || "";
+        const entry: Skipped = {
+          file: ident,
+          name: p.file || "?",
+          reason: p.reason || p.message,
+        };
+        // ref 先写、state 后同步：不能在 setState updater 里做副作用——
+        // updater 什么时候跑不归 invoke 的 catch 管。
+        const prev = skippedRef.current;
+        if (
+          !prev.some(
+            (x) => x.file === ident || (x.name === entry.name && !p.path),
+          )
+        ) {
+          const next = [...prev, entry];
+          skippedRef.current = next;
+          setSkipped(next);
+        }
       }
     }).then((fn) => {
       if (disposed) dropListen(fn);
@@ -513,14 +629,95 @@ function StsSection() {
     };
   }, [load, pickVoice, showErr]);
 
+  // 静默任务（TTS/顾问借用转换管线）不发 sts-progress，只能靠轮询发现；
+  // 别窗的非静默任务在事件未到/窗口没开时也一样走这条路。任务收尾由
+  // 「!busy」判定——quiet 运行没有终态事件。
+  //
+  // 串行单飞：上一次没回来就跳过这一拍，不叠加在途请求；响应落地前先查
+  // 代次——期间有事件/start 先动过运行状态，这份旧快照直接作废（旧 idle
+  // 不许盖掉新 busy）；卸载后到达的响应不落任何 state。卸载清理定时器。
+  useEffect(() => {
+    let disposed = false;
+    let inFlight = false;
+    const pollOnce = async () => {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      const epoch = pollEpochRef.current;
+      try {
+        const s = await invoke<StsStatus>("sts_status");
+        if (disposed || epoch !== pollEpochRef.current) return;
+        // 归属回执：本窗发过 start 且凭证被回显 → 取消键放行；凭证是别人
+        // 的 → 不管先前怎么以为，降级成外来观察态。
+        if (s.run_owner != null) {
+          const mine = s.run_owner === runTokenRef.current;
+          if (mine) {
+            if (!ownerProvenRef.current) {
+              ownerProvenRef.current = true;
+              setOwnerProven(true);
+            }
+          } else {
+            ownsRunRef.current = false;
+            setOwnsRun(false);
+            ownerProvenRef.current = false;
+            setOwnerProven(false);
+          }
+        }
+        if (s.busy) {
+          if (!runningRef.current) {
+            runningRef.current = true;
+            setRunning(true);
+          }
+          // 静默任务的事件被静音，但 LAST_PROGRESS 仍在更新：
+          // 观察态靠它让进度条继续走。
+          if (!ownsRunRef.current && s.progress?.phase) {
+            setProg(s.progress);
+          }
+          return;
+        }
+        // 收尾边界：外来任务（!ownsRun）由这里清；本窗任务在 invoke 在途
+        // 时由 start() 的 finally 清——但 invoke 拒绝而后端仍忙（本窗凭证
+        // 还在跑/外来已接管）时 finally 不落地运行态，轮到这里收尾。
+        if (
+          runningRef.current &&
+          (!ownsRunRef.current || !invokePendingRef.current)
+        ) {
+          runningRef.current = false;
+          setRunning(false);
+          setProg(null);
+          ownerProvenRef.current = false;
+          setOwnerProven(false);
+          void refreshScanRef.current?.();
+        }
+      } catch {
+        // 状态问不到就按上一帧的样子显示，下一拍再试。
+      } finally {
+        inFlight = false;
+      }
+    };
+    const id = window.setInterval(() => void pollOnce(), 2000);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
   const refreshScan = useCallback(async () => {
+    const seq = ++scanSeqRef.current;
+    setScanning(true);
     try {
       const r = await invoke<SrcScan>("sts_sources_scan", { output });
+      // 只落地最后发起的一代：被顶掉的、后端作废的、以及任务跑起来后
+      // 才回来的结果都丢弃——运行期界面按冻结清单展示，不被半路改写。
+      if (seq !== scanSeqRef.current || r.cancelled || runningRef.current) {
+        return;
+      }
       setScan(r);
       // 重扫后旧勾选可能已失效（文件消失/被排除规则接管），清掉再选。
       setChecked(new Set());
     } catch (e) {
-      showErr(String(e));
+      if (seq === scanSeqRef.current) showErr(String(e));
+    } finally {
+      if (seq === scanSeqRef.current) setScanning(false);
     }
   }, [output, showErr]);
   const refreshScanRef = useRef<() => Promise<void> | undefined>(() => undefined);
@@ -594,18 +791,16 @@ function StsSection() {
     recordingRef.current = true;
     setRecording(true);
     try {
-      // 录音始终落原默认录音目录，不随手塞进某个来源；录完把这个目录
-      // 登记为来源（已是来源则 add 内部去重），新文件随下次扫描出现。
+      // 录音始终落原默认录音目录；录完只登记这次写出的那个文件——录音
+      // 目录里可能攒着旧录音，整目录加成来源会把它们一股脑扫进清单。
       const folder = await invoke<string>("sts_default_input");
       const r = await invoke<{
         file?: string;
         dir?: string;
         cancelled?: boolean;
       }>("sts_record_start", { input: folder });
-      if (r.dir && !r.cancelled) {
-        await invoke("sts_sources_add", { path: r.dir }).catch(() => undefined);
-      }
       if (r.file && !r.cancelled) {
+        await invoke("sts_sources_add", { path: r.file }).catch(() => undefined);
         showInfo(t("s.stsRecordSaved", { v0: r.file }));
       }
       await refreshScan();
@@ -769,28 +964,52 @@ function StsSection() {
     showInfo("");
     setProg({ phase: "start", done: 0, total: 1, pct: 0, message: t("s.090840132b") });
     setSkipped([]);
+    skippedRef.current = [];
     setRetryable([]);
+    doneCountRef.current = 0;
     runningRef.current = true;
     setRunning(true);
+    // 本次发起的凭证：后端认领 BUSY 才记名并回显，取消键等回执再放行。
+    // 自封「本窗发起」不算数——snapshot 在途时 BUSY 可能是别窗抢走的。
+    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    runTokenRef.current = token;
+    ownerProvenRef.current = false;
+    setOwnerProven(false);
+    ownsRunRef.current = true;
+    setOwnsRun(true);
+    invokePendingRef.current = true;
+    // start 本身是更新运行状态的来源：把在途轮询的旧快照作废。
+    pollEpochRef.current += 1;
+    // invoke 拒绝≠后端空闲：snapshot/认领竞争下别窗可能拿着 BUSY 在跑
+    // 本窗之外的单子。落地前向 sts_status 核实一次，仍在跑就不放控件。
+    let backendBusy = false;
+    let backendOwner: string | null = null;
     try {
       // C-10 显式清单：先冻结快照，把同一份清单交给 worker 执行。
       // 预览计数、进度、worker 三者看到的是同一批文件；重试失败条目时
-      // 直接带上回传入的清单，不再重新扫来源。
-      const manifest =
-        override ??
-        ((
-          await invoke<{ manifest?: ManifestEntry[]; total?: number }>(
-            "sts_snapshot",
-            { output },
-          )
-        )?.manifest ?? []);
+      // 直接带上回传入的清单，不再重新扫来源。snapshot 走后端无代次
+      // 扫描，UI 侧的扫描取消打不断这次冻结。
+      const snap = override
+        ? undefined
+        : await invoke<{
+            manifest?: ManifestEntry[];
+            total?: number;
+            excluded?: number;
+          }>("sts_snapshot", { output });
+      const manifest = override ?? snap?.manifest ?? [];
       if (!manifest.length) {
         showInfo(t("s.stsNoItems"));
         runningRef.current = false;
         setRunning(false);
+        ownsRunRef.current = false;
+        setOwnsRun(false);
+        ownerProvenRef.current = false;
+        setOwnerProven(false);
         setProg(null);
         return;
       }
+      // 冻结清单在 invoke 前就记下来：无论成功失败，重试都对着同一份。
+      lastManifestRef.current = manifest;
       const r = await invoke<{
         files?: string[];
         skipped?: Skipped[];
@@ -799,6 +1018,8 @@ function StsSection() {
         input: "",
         output,
         manifest,
+        owner: token,
+        excluded: snap?.excluded,
         pitch,
         f0method,
         indexRate,
@@ -814,15 +1035,13 @@ function StsSection() {
       });
       const ok = r.files?.length ?? 0;
       const bad = r.skipped ?? [];
-      lastManifestRef.current = manifest;
-      setRetryable(
-        bad.length
-          ? manifest.filter((e) => bad.some((b) => samePath(b.file, e.src)))
-          : [],
-      );
+      // 终态权威计数：全部条目都已处理，重试集合只剩失败那部分。
+      doneCountRef.current = manifest.length;
+      setRetryable(deriveRetryable(manifest, bad, manifest.length));
       if (r.output) lastDestRef.current = String(r.output);
       // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
+      skippedRef.current = bad;
       // 有跳过的就必须在总结里说出来，不然「完成 8 个文件」会被当成全转完了。
       showInfo(
         bad.length
@@ -838,9 +1057,53 @@ function StsSection() {
     } catch (e) {
       showErr(String(e));
       setProg(null);
+      // 启动就死（一条 skip 都没来）→ doneCount=0，整单算未执行，全部进
+      // 重试集合；中途挂 → 已成功的（idx<done 且不在失败里）不重跑，
+      // 失败 ∪ 未执行进重试。
+      setRetryable(
+        deriveRetryable(
+          lastManifestRef.current,
+          skippedRef.current,
+          doneCountRef.current,
+        ),
+      );
+      // 认领竞争下别窗可能拿着 BUSY：向 sts_status 核实一次再决定怎么
+      // 收尾。问不到就当空闲处理（下一次轮询会自己纠回来）。
+      try {
+        const s = await invoke<StsStatus>("sts_status");
+        backendBusy = !!s.busy;
+        backendOwner = s.run_owner ?? null;
+      } catch {
+        /* 状态问不到按空闲收尾 */
+      }
     } finally {
-      runningRef.current = false;
-      setRunning(false);
+      invokePendingRef.current = false;
+      if (backendBusy && backendOwner === token) {
+        // invoke 拒绝但后端仍在执行本单（凭证是它自己回显的）：保留归属
+        // 与凭证——取消仍可发、事件仍按本窗记账，终态由轮询收尾
+        // （invokePending=false 已放行那条路径）。
+      } else {
+        // 空闲、或别窗的任务在跑：本窗凭证作废——本单迟到的回显/事件
+        // 从此对不上，不进账本不误认归属。
+        runTokenRef.current = "";
+        if (backendBusy) {
+          // 别窗的任务在跑：本窗转外来只读观察——不给取消、不改清单，
+          // running 保持 true，控件继续锁定直到轮询看到收尾。
+          ownsRunRef.current = false;
+          setOwnsRun(false);
+          ownerProvenRef.current = false;
+          setOwnerProven(false);
+        } else {
+          runningRef.current = false;
+          setRunning(false);
+          ownsRunRef.current = false;
+          setOwnsRun(false);
+          ownerProvenRef.current = false;
+          setOwnerProven(false);
+          // 运行期丢弃的扫描结果补一轮（清单在任务期间可能被外部动过）。
+          void refreshScan();
+        }
+      }
     }
   };
 
@@ -913,6 +1176,21 @@ function StsSection() {
               v1: scan?.excluded ?? 0,
             })}
           </span>
+          {scanning ? (
+            <Btn
+              ariaLabel={t("s.stsScanCancel")}
+              onClick={() => void invoke("sts_sources_scan_cancel")}
+            >
+              {t("s.stsScanCancel")}
+            </Btn>
+          ) : (
+            <Btn
+              ariaLabel={t("s.stsRefresh")}
+              onClick={() => void refreshScan()}
+            >
+              {t("s.stsRefresh")}
+            </Btn>
+          )}
           <Btn
             disabled={running || recording}
             onClick={() => void addSource(false)}
@@ -925,18 +1203,25 @@ function StsSection() {
         {(scan?.sources?.length ?? 0) > 0 ? (
           <ul className="m-0 list-none p-0 pb-1">
             {scan!.sources!.map((s) => {
-              const gone = scan?.missing?.some((m) => m.id === s.id);
+              const miss = scan?.missing?.find((m) => m.id === s.id);
               return (
                 <li
                   key={s.id}
                   className="flex items-center gap-2 rounded-[var(--rs)] px-2 py-1 text-[12.5px]"
                 >
                   <span
-                    className={`min-w-0 flex-1 truncate font-mono ${gone ? "text-[#b8534f]" : "text-[var(--ink-muted)]"}`}
-                    title={s.path}
+                    className={`min-w-0 flex-1 truncate font-mono ${miss ? "text-[#b8534f]" : "text-[var(--ink-muted)]"}`}
+                    title={miss?.path || s.path}
                   >
-                    {gone ? `⚠ ${s.path}` : s.path}
+                    {s.path}
                   </span>
+                  {miss ? (
+                    <span className="shrink-0 text-[11px] text-[#b8534f]">
+                      {miss.state === "unreadable"
+                        ? t("s.stsUnreadableTag")
+                        : t("s.stsMissingTag")}
+                    </span>
+                  ) : null}
                   {s.kind === "dir" ? (
                     <label className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--meta)] cursor-pointer">
                       <input
@@ -966,10 +1251,16 @@ function StsSection() {
             {t("s.stsOutputInside")}
           </p>
         ) : null}
+        {scan?.source_in_output ? (
+          <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">
+            {t("s.stsSourceInsideOut")}
+          </p>
+        ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
           <span className={PATH}>{output || t("s.53e2db7016")}</span>
           <Btn
+            disabled={running || recording}
             onClick={() => {
               void pickPath<string | null>("sts_pick_output", undefined, t("s.pickBusyFolder")).then(
                 (p) => p && setOutput(p),
@@ -1082,7 +1373,10 @@ function StsSection() {
           <Btn
             disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
             onClick={() => {
-              void invoke("sts_sources_clear").then(() => refreshScan());
+              void (async () => {
+                if (!(await askConfirm(t("s.stsClearConfirm")))) return;
+                await invoke("sts_sources_clear").then(() => refreshScan());
+              })();
             }}
           >
             {t("s.stsClearList")}
@@ -1484,24 +1778,28 @@ function StsSection() {
               })}
             </p>
           ) : null}
+          {running && !ownsRun ? (
+            <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)]">
+              {t("s.stsForeignBusy")}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
       {msg ? <ErrorNote text={msg} error={msgErr} code={msgCode} /> : null}
 
+      {retryable.length && !running ? (
+        <div className="mt-3">
+          <Btn className="mb-1" onClick={() => void start(retryable)}>
+            {t("s.stsRetryFailed", { v0: retryable.length })}
+          </Btn>
+        </div>
+      ) : null}
       {skipped.length ? (
-        <div className="mt-3 pt-2">
+        <div className={retryable.length && !running ? "pt-1" : "mt-3 pt-2"}>
           <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
             {t("s.stsSkippedTitle", { v0: skipped.length })}
           </p>
-          {retryable.length && !running ? (
-            <Btn
-              className="mb-1"
-              onClick={() => void start(retryable)}
-            >
-              {t("s.stsRetryFailed", { v0: retryable.length })}
-            </Btn>
-          ) : null}
           <ul className="m-0 list-none p-0">
             {skipped.map((s) => (
               <li
@@ -1522,8 +1820,14 @@ function StsSection() {
           {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
         </Btn>
         <div className="ml-auto flex items-center gap-2.5">
-          {running ? (
-            <Btn onClick={() => void invoke("sts_cancel")}>{t("s.4d0b4688c7")}</Btn>
+          {running && ownsRun && ownerProven ? (
+            <Btn
+              onClick={() =>
+                void invoke("sts_cancel", { owner: runTokenRef.current })
+              }
+            >
+              {t("s.4d0b4688c7")}
+            </Btn>
           ) : (
             <Btn
               onClick={() =>

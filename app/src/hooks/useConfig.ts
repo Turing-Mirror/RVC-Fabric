@@ -11,22 +11,53 @@ import { applyAppearance } from "../lib/appearance";
  * Cold keys come back in `needs_restart`; the page shows a standing notice
  * instead of silently doing nothing, which is what the old placeholder UI did.
  */
+
+/** 从 src 里把 keys 名单中的键原样摘出来（名单之外的键不碰）。 */
+function pickKeys(src: Config, keys: Set<string>): Config {
+  const out: Config = {};
+  keys.forEach((k) => {
+    if (k in src) out[k] = src[k];
+  });
+  return out;
+}
+
 export function useConfig() {
   const [cfg, setCfg] = useState<Config>({});
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [restartKeys, setRestartKeys] = useState<string[]>([]);
   const pending = useRef<Config>({});
+  // 已发出还没回来的那一份：任何晚到的快照/响应都必须让它压在表面，
+  // 否则加载或别的窗口的 config-changed 会把在途写盘拽回旧值。
+  const inflight = useRef<Config>({});
   const timer = useRef<number | null>(null);
+  // 写盘串行链：同时只有一条 config_set 在途。旧响应晚到也盖不住新写的结论。
+  const tail = useRef<Promise<void>>(Promise.resolve());
+  // 链上还没落定（在途或排队中）的 flush 数。>0 期间新写只能挂到链尾，
+  // 否则「第一条 finally 先跑、排队任务后跑」的空窗会让新写并发发出。
+  const queued = useRef(0);
+  // 初始 getConfig 还没回来就被本地改过的键。旧快照比那次写盘老，
+  // 回来时这些键以界面现值（已写上的值）为准，不按快照回退。
+  const dirty = useRef<Set<string>>(new Set());
+
+  const unconfirmed = useCallback(
+    () => ({ ...inflight.current, ...pending.current }),
+    [],
+  );
 
   useEffect(() => {
     let alive = true;
     getConfig()
       .then((c) => {
-        if (alive) {
-          setCfg(c);
-          setLoaded(true);
-        }
+        if (!alive) return;
+        // 加载期间（含写盘已经完成的）本地改动盖在旧快照上面 —— inflight/
+        // pending 只覆盖「还没落定的」，已写上的键要靠 dirty 名单从现值取。
+        setCfg((prev) => ({
+          ...c,
+          ...pickKeys(prev, dirty.current),
+          ...unconfirmed(),
+        }));
+        setLoaded(true);
       })
       .catch((e) => alive && setError(String(e)));
     let unCfg: (() => void) | undefined;
@@ -34,7 +65,7 @@ export function useConfig() {
       if (!alive) return;
       const next = ev.payload?.config;
       if (next && typeof next === "object") {
-        setCfg({ ...next, ...pending.current });
+        setCfg({ ...next, ...unconfirmed() });
       }
     }).then((fn) => {
       if (!alive) dropListen(fn);
@@ -44,7 +75,7 @@ export function useConfig() {
       alive = false;
       dropListen(unCfg);
     };
-  }, []);
+  }, [unconfirmed]);
 
   /**
    * 外观改一下就套一下，不等写盘、不等换页。
@@ -69,27 +100,52 @@ export function useConfig() {
     cfg.home_banner_opacity,
   ]);
 
-  const flush = useCallback(async () => {
-    const patch = pending.current;
-    pending.current = {};
-    if (!Object.keys(patch).length) return;
-    try {
-      const out = await setConfig(patch);
-      setCfg({ ...out.config, ...pending.current });
-      if (out.needs_restart.length) {
-        setRestartKeys((prev) =>
-          Array.from(new Set([...prev, ...out.needs_restart])),
-        );
+  const flush = useCallback((): Promise<void> => {
+    const run = async () => {
+      const patch = pending.current;
+      pending.current = {};
+      if (!Object.keys(patch).length) return;
+      inflight.current = { ...inflight.current, ...patch };
+      try {
+        const out = await setConfig(patch);
+        for (const k of Object.keys(patch)) delete inflight.current[k];
+        // 写回结果之上仍盖着未确认的意图 —— 服务端快照不拽回待写字段。
+        setCfg({ ...out.config, ...unconfirmed() });
+        if (out.needs_restart.length) {
+          setRestartKeys((prev) =>
+            Array.from(new Set([...prev, ...out.needs_restart])),
+          );
+        }
+        setError("");
+      } catch (e) {
+        for (const k of Object.keys(patch)) delete inflight.current[k];
+        // 没写上的字段放回待写：失败不清空用户意图，下一次 flush 还会带上；
+        // 期间用户又改的同名字段以新值为准。
+        pending.current = { ...patch, ...pending.current };
+        setError(String(e));
+        throw e;
       }
-      setError("");
-    } catch (e) {
-      // 没写上的字段放回待写：失败不清空用户意图，下一次 flush 还会带上；
-      // 期间用户又改的同名字段以新值为准。
-      pending.current = { ...patch, ...pending.current };
-      setError(String(e));
-      throw e;
-    }
-  }, []);
+    };
+    // queued 计数即「链是否排空」：链上还有任何在途/排队任务时，新写
+    // 一律挂尾，直到最后一条落定才回到同步派发。
+    queued.current += 1;
+    const task = (
+      queued.current === 1
+        ? // 空闲：同步开写。immediate 的调用方紧接着的 invoke（比如改完热键
+          // 立刻 hotkeys_apply）仍然排在这条 config_set 后面。
+          run()
+        : // 有在途写盘：排进串行链，等前一条落定再发 —— 乱序的响应永远
+          // 不可能发生，旧成功清不掉新失败。tail 永不拒绝。
+          tail.current.then(run)
+    ).finally(() => {
+      queued.current -= 1;
+    });
+    tail.current = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  }, [unconfirmed]);
 
   /**
    * Coalesce rapid changes (slider drags) into one write.
@@ -104,6 +160,7 @@ export function useConfig() {
     (key: string, value: unknown, immediate = false): Promise<void> => {
       setCfg((c) => ({ ...c, [key]: value }));
       pending.current[key] = value;
+      dirty.current.add(key);
       notifyConfigPatch({ [key]: value });
       if (timer.current) window.clearTimeout(timer.current);
       if (immediate) {

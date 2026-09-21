@@ -989,7 +989,6 @@
     "b0e24833f7": "展開",
     "b269c54674": "Hubert モデル",
     "b27dd877b1": "学習完了後の音色にこの名前が付きます",
-    "b2ba9634d9": "未実行",
     "b2be174f0f": "コミュニティ音声",
     "b2c6913616": "インストール中…",
     "b3009f6985": "オフにすると元の音声のみ出力されます",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "終わると「モデル」に出ます。途中で閉じても、同じ名前なら済んだ工程は飛ばします。小モデル保存をオンにすると、間隔ごとに試聴用ファイルも残ります。",
     "stsDoneSkipped": "{v0} 件を変換、{v1} 件をスキップ → {v2}",
     "stsSkippedTitle": "次の {v0} 件は変換できませんでした：",
-    "stsFreeVram": "VRAM を解放するためリアルタイム変声を停止しています…",
     "stsTargetVoice": "目標音色",
     "stsModelMissing": "音色モデルが見つかりません：{a0}",
     "stsRecord": "録音",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "ファイル名を検索",
     "stsTrim": "トリム",
     "stsStillExcluded": "フォルダー除外が残っています：{v0}",
-    "stsRetryFailed": "失敗分のみ再試行（{v0}）"
+    "stsRetryFailed": "失敗分のみ再試行（{v0}）",
+    "stsStateUnreadable": "ソース一覧を読み取れません: {a0}",
+    "stsStateCorrupt": "ソース一覧ファイルが破損しています。保護のため変更をブロックしました",
+    "engineCmdBusy": "エンジンがビジーです。前のコマンドがまだ受け取られていません。しばらくしてから再試行してください。",
+    "modelApplyUnconfirmed": "エンジンが音色の適用を確認していません。無音のままなら再試行するかエンジンを再起動してください。",
+    "stsClearConfirm": "すべてのソースと除外を消去しますか？元に戻せません。",
+    "stsForeignBusy": "別のウィンドウで変換を実行中のため読み取り専用です",
+    "stsMissingTag": "ソースが見つかりません",
+    "stsUnreadableTag": "読み取れません",
+    "stsSourceInsideOut": "ソースが出力フォルダー内にあるためスキップしました",
+    "stsRefresh": "更新",
+    "stsScanCancel": "スキャン停止"
   },
   "extras": {
     "engineTitle": "エンジンリソース",
@@ -2164,7 +2173,8 @@
     "targetExists": "ランタイムの移行先が既に存在します：{v0}",
     "verifyFailed": "移行したランタイムの検証に失敗しました。",
     "notFound": "旧ランタイムが見つかりません。",
-    "runtimeNotReady": "このランタイムはまだ使用できません。"
+    "runtimeNotReady": "このランタイムはまだ使用できません。",
+    "runtimeBusy": "このランタイムを使用中のプロセスが {v0} 個あります（従来の WebUI、リアルタイムパネル、変換タスク）。閉じてから再試行してください。"
   },
   "sepVariant": {
     "normal": "標準",

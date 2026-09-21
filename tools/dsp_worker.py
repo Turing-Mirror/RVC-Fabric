@@ -793,18 +793,24 @@ def main() -> None:
                 pass
             _rebuild_chains()
 
-    def list_devices(host=None) -> None:
+    def list_devices(host=None, seq=0) -> None:
         try:
             update_devices(host or sg_hostapi or None)
             _write(
                 state="running" if flag["vc"] else "idle",
                 error="",
+                devices_seq=seq,
                 **_payload(),
                 **_sf(DEV_REFRESHED),
             )
         except Exception as e:
             traceback.print_exc()
-            _write(state="error", error="list_devices: %s" % e, **_sf(DEV_LIST_FAILED))
+            _write(
+                state="error",
+                error="list_devices: %s" % e,
+                devices_seq=seq,
+                **_sf(DEV_LIST_FAILED),
+            )
 
     # ---- boot ----
     try:
@@ -853,7 +859,9 @@ def main() -> None:
                         running = False
                         break
                     if action == "list_devices":
-                        list_devices(cmd.get("sg_hostapi") or cmd.get("hostapi"))
+                        list_devices(
+                            cmd.get("sg_hostapi") or cmd.get("hostapi"), seq=seq
+                        )
                     elif action == "start":
                         try:
                             start_vc(cmd)
@@ -875,6 +883,7 @@ def main() -> None:
                                 real_delay_ms=0,
                                 infer_ms=0,
                                 progress=100,
+                                stop_seq=seq,
                                 **_payload(),
                                 **_sf(ENGINE_STOPPED),
                             )
@@ -883,6 +892,7 @@ def main() -> None:
                             _write(
                                 state="error",
                                 error="stop: %s" % e,
+                                stop_seq=seq,
                                 **_sf(VC_STOP_FAILED),
                             )
                     elif action == "set":

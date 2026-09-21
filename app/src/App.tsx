@@ -11,6 +11,7 @@ import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { OnboardingBar } from "./components/OnboardingBar";
 import { Nudge } from "./components/Nudge";
+import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
 import { Btn } from "./components/ui";
 import { followLinks } from "./lib/links";
@@ -24,12 +25,15 @@ import { ProvisionGate } from "./components/ProvisionGate";
 import { RuntimeMigrationDialog } from "./components/RuntimeMigrationDialog";
 import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
+import { useActiveVoiceReconcile } from "./hooks/useActiveVoice";
 import { useEngine } from "./hooks/useEngine";
+import { useModalKeys } from "./hooks/useModalKeys";
 import { usePlaza } from "./hooks/usePlaza";
 import { getConfig, onConfigPatch, setConfig, type Config } from "./lib/config";
-import { deactivateDsp, forceKillEngine, startVc, swapModel } from "./lib/engine";
+import { deactivateDsp, forceKillEngine } from "./lib/engine";
 import type { PageId } from "./lib/nav";
-import { currentVoice, type VoiceModel } from "./lib/voices";
+import { currentVoice, modelKey, type VoiceModel } from "./lib/voices";
+import { applyVoiceToEngine } from "./lib/voiceApply";
 import { requestVoiceSwitch } from "./lib/voiceSwitch";
 import { useUpdateFlow } from "./lib/updateFlow";
 import { pickAutoDevices } from "./lib/deviceSetup";
@@ -132,6 +136,7 @@ export default function App() {
     offer: updateOffer,
     working: updateWorking,
     error: updateError,
+    result: updateResult,
     probe: probeUpdate,
     check: checkUpdate,
     accept: acceptUpdate,
@@ -421,7 +426,19 @@ export default function App() {
     await doForceKill();
   };
 
-
+  // killAsk/closeAsk 这两个自定义确认层和 WebDialog 共用同一套键盘/焦点
+  // 契约（C3）：Escape = 取消语义（保留 / 不关闭），Tab 在层内转圈，
+  // 打开时焦点收进来、关掉还回去。动作与布局不变。
+  const killDlgRef = useRef<HTMLDivElement>(null);
+  useModalKeys(killAsk, killDlgRef, {
+    onEscape: () => setKillAsk(false),
+    focus: () => killDlgRef.current,
+  });
+  const closeDlgRef = useRef<HTMLDivElement>(null);
+  useModalKeys(closeAsk, closeDlgRef, {
+    onEscape: () => void answerClose(false),
+    focus: () => closeDlgRef.current,
+  });
 
   useEffect(() => {
     let alive = true;
@@ -489,7 +506,7 @@ export default function App() {
       {
         if (c.model) {
           setVoiceName(String(c.model.name || ""));
-          setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
+          setVoiceId(modelKey(c.model));
           setVoiceTag(String(c.model.tag || ""));
         }
         setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
@@ -536,9 +553,7 @@ export default function App() {
           .then((cur) => {
             if (!cur.model) return;
             setVoiceName(String(cur.model.name || ""));
-            setVoiceId(
-              String(cur.model.path || cur.model.dir || cur.model.name || ""),
-            );
+            setVoiceId(modelKey(cur.model));
             setVoiceTag(String((cur.model as { tag?: string }).tag || ""));
             setVoicePos(
               cur.index && cur.total ? `${cur.index}/${cur.total}` : "",
@@ -744,7 +759,7 @@ export default function App() {
           const c = await currentVoice();
           if (c.model) {
             setVoiceName(String(c.model.name || ""));
-            setVoiceId(String(c.model.path || c.model.dir || c.model.name || ""));
+            setVoiceId(modelKey(c.model));
             setVoiceTag(String((c.model as { tag?: string }).tag || ""));
             setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
             if (c.pitch != null) setPitch(Number(c.pitch));
@@ -769,6 +784,11 @@ export default function App() {
   const { reload: plazaReload } = plaza;
   const reloadPlaza = useCallback(() => void plazaReload(), [plazaReload]);
 
+  // 引擎合约：swapModel 的 resolve/reject 就是「这次请求真正换入/失败」
+  // 的全部结论 —— 壳层只在精确 seq+路径 committed 后才放行。不许再用
+  // 「status 里有 model_apply 字段」或「worker 曾经有能力上报」当证据：
+  // status.json 是合并写的，上一次的记录会粘在里面；能力标志跨 worker
+  // 生命周期也会粘。
   const applyVoiceChange = useCallback(({
     model,
     pitch: p,
@@ -779,7 +799,7 @@ export default function App() {
     pitch?: number;
     formant?: number;
     profileSummary?: string;
-  }) => {
+  }): void | Promise<void> => {
     if (!model.path && !model.dir && !model.name) {
       setVoiceName("");
       setVoiceId("");
@@ -787,44 +807,76 @@ export default function App() {
       setVoicePos("");
       return;
     }
-    setDspId("");
-    setVoiceName(model.name || "");
-    setVoiceId(model.path || model.dir || model.name || "");
-    if (p != null) setPitch(Number(p));
-    if (f != null) setFormant(Number(f));
-    if (ps) setProfileSummary(ps);
-    setVoiceTag(String((model as { tag?: string }).tag || ""));
-    // Keep what a later start will send in step with what the dock shows.
-    syncParams({
-      pitch: p != null ? Number(p) : undefined,
-      formant: f != null ? Number(f) : undefined,
-    });
-    // The library position moves with the selection; only the shell knows it.
-    void currentVoice()
-      .then((c) => setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : ""))
-      .catch(() => {
-        /* browser preview */
+    // 只有「确认已应用」或「引擎闲着只是记选择」才提交显示 —— 运行中
+    // 换模型没落定前，底栏与卡片仍显示上一音色。
+    const commit = () => {
+      setDspId("");
+      setVoiceName(model.name || "");
+      setVoiceId(modelKey(model));
+      if (p != null) setPitch(Number(p));
+      if (f != null) setFormant(Number(f));
+      if (ps) setProfileSummary(ps);
+      setVoiceTag(String((model as { tag?: string }).tag || ""));
+      // Keep what a later start will send in step with what the dock shows.
+      syncParams({
+        pitch: p != null ? Number(p) : undefined,
+        formant: f != null ? Number(f) : undefined,
       });
-    // 正在变声时热换模型：后台读新权重，旧音色继续出声；装上后只换指针。
-    // 采样率会变时引擎自己退回重开流。worker 没在跑时这里会失败，配置已是
-    // 新的，下次开启就对，所以吞掉。
-    // 纯 DSP worker 手里没有 RVC，热换会失败；改走完整 start（会切到 RVC worker）。
+      // The library position moves with the selection; only the shell knows it.
+      void currentVoice()
+        .then((c) => setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : ""))
+        .catch(() => {
+          /* browser preview */
+        });
+    };
     const currentEngine = engineRef.current;
-    if (currentEngine.running) {
-      const st = currentEngine.status;
-      const dsp =
-        st?.dsp_only === true ||
-        st?.function === "fx" ||
-        st?.worker_kind === "dsp";
-      if (dsp) {
-        noteSwap();
-        void startVc().catch(() => {});
-      } else {
-        noteSwap();
-        void swapModel().catch(() => {});
-      }
+    // 空闲、也没有用户在途的变声启动：只是记下选择，不动音频流。
+    // 预热/boot 的 starting 不算在途 —— 点音色绝不许启动音频。
+    if (!currentEngine.running && !currentEngine.userStartPending()) {
+      commit();
+      return;
     }
+    // 正在变声或用户的启动在途：把选择排到真实引擎结果后面。运行中热换
+    // 时旧音色继续出声、旧显示保留到确认；DSP→RVC 走完整 start 并由
+    // vcApplyError 显式判 status —— state:"error" 的 resolve 也是失败。
+    noteSwap();
+    return (async () => {
+      try {
+        await applyVoiceToEngine(currentEngine);
+        commit();
+      } catch (e) {
+        engineRef.current.reportError?.(
+          e instanceof Error ? e.message : String(e),
+        );
+        throw e;
+      }
+    })();
   }, [noteSwap, syncParams]);
+
+  // 供不进入依赖的回调（快捷键步进、model_active 对账）读最新已提交音色。
+  const voiceIdRef = useRef("");
+  useEffect(() => {
+    voiceIdRef.current = voiceId;
+  }, [voiceId]);
+
+  // 音频线程真正在用的模型是唯一权威：worker 侧换入完成后（含热换落定、
+  // 或别的路径触发的换模型），把底栏/卡片显示对齐到事实，而不是持久化的
+  // 选择意图。对账细节（generation 防迟到覆盖、精确身份匹配、字段缺席
+  // 不动）在 useActiveVoiceReconcile 里。
+  useActiveVoiceReconcile(
+    engine.running,
+    engine.status,
+    useCallback(
+      (v) => {
+        if (v.id === voiceIdRef.current) return;
+        setVoiceName(v.name);
+        setVoiceId(v.id);
+        setVoiceTag(v.tag);
+        if (!v.id) setVoicePos("");
+      },
+      [],
+    ),
+  );
 
   // —— 新手进度：两个历史事件的落盘点 ——
   // 首次成功变声（running 一旦为真就记，之后不再写）。
@@ -871,20 +923,28 @@ export default function App() {
       }>("voices_list");
       const list = cat.models || [];
       if (!list.length) return;
-      const cur = Number(cat.selected_idx ?? -1);
+      // 以「真正在用」的音色为基准步进，不按持久化的 selected_idx —— 上次
+      // 切换失败时那个下标是没生效的意图，从它数会越走越远。
+      const curIdx = list.findIndex(
+        (m) => modelKey(m as VoiceModel) === voiceIdRef.current,
+      );
+      const cur = curIdx >= 0 ? curIdx : Number(cat.selected_idx ?? -1);
       const next = ((cur < 0 ? 0 : cur) + delta + list.length) % list.length;
       const m = list[next];
       // Same dispatcher as the voice cards: rapid hotkey presses resolve to
       // the latest intent, and a repeated step to an already-pending target
       // doesn't submit twice.
-      await requestVoiceSwitch(m as VoiceModel, (info) => {
+      const out = await requestVoiceSwitch(m as VoiceModel, (info) =>
         applyVoiceChange({
           model: info.model,
           pitch: info.pitch,
           formant: info.formant,
           profileSummary: info.profileSummary,
-        });
-      });
+        }),
+      );
+      if (out.kind === "error") {
+        engineRef.current.reportError?.(out.error);
+      }
     } catch {
       /* catalog unavailable */
     }
@@ -1134,6 +1194,7 @@ export default function App() {
               return (
                 <ModelsPage
                   banner={plaza.feed.banner}
+                  currentId={voiceId}
                   onVoiceChange={applyVoiceChange}
                   onDspChange={(id) => setDspId(id)}
                   onOpenPlaza={openPlaza}
@@ -1191,7 +1252,13 @@ export default function App() {
 
       {killAsk ? (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
-          <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
+          <div
+            ref={killDlgRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
+          >
             <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">{t("s.killStsAskBody")}</p>
             <div className="flex gap-2.5 justify-end">
@@ -1212,7 +1279,13 @@ export default function App() {
 
       {closeAsk ? (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
-          <div className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6">
+          <div
+            ref={closeDlgRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
+          >
             <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
             <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
@@ -1316,37 +1389,16 @@ export default function App() {
           }
         >{t("s.guideFirstBody")}</Nudge>
       ) : updateOffer ? (
-        <Nudge
-          title={
-            updateWorking
-              ? t("s.87c1bc6fe6")
-              : t("s.a462205ca5", { v0: updateOffer.remote })
-          }
-          actions={
-            updateWorking ? (
-              <Btn onClick={dismissUpdate} disabled={updateBusy}>
-                {updateBusy ? t("s.65188d08a2") : t("s.cb63c62e50")}
-              </Btn>
-            ) : (
-              <>
-                <Btn onClick={dismissUpdate}>
-                  {updateError ? t("s.cb63c62e50") : t("s.479fcc1cc0")}
-                </Btn>
-                <Btn primary onClick={() => void acceptUpdate()}>{t("s.f4df9977ea")}</Btn>
-              </>
-            )
-          }
-        >
-          {updateWorking
-            ? updateLine
-            : updateError ||
-              t("s.3956a2d8bb", {
-                v0: updateOffer.local,
-                v1:
-                  updateOffer.notes ||
-                  t("s.58941d30b7"),
-              })}
-        </Nudge>
+        <UpdateNudge
+          offer={updateOffer}
+          working={updateWorking}
+          busy={updateBusy}
+          error={updateError}
+          result={updateResult}
+          line={updateLine}
+          onAccept={() => void acceptUpdate()}
+          onDismiss={dismissUpdate}
+        />
       ) : askTelemetry ? (
         <Nudge
           title={t("s.b9feeeb3a8")}

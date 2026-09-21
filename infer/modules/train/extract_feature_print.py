@@ -29,11 +29,14 @@ import torch
 import torch.nn.functional as F
 
 if "privateuseone" not in device:
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
+    # 显式 cpu 要真走 cpu：壳子那边用户选了「后端=CPU」，这里若看见
+    # cuda 可用就偷偷升回去，等于选择没生效。
+    if device != "cpu":
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
 else:
     import torch_directml
 

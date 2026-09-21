@@ -117,6 +117,11 @@ export function Tooltip({
         // 键盘走到这里也要看得到说明，不是只有鼠标用户配看。
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        // 滚动/缩放关掉说明时只清状态、不清 DOM 焦点 —— 键盘用户的焦点不丢。
+        // 但这样按钮还握着焦点，再点它 focus() 是 no-op、不会再发 focus 事件，
+        // 说明就再也叫不回来（验收 C7）。点击落在触发体上就是「想看」，
+        // 捕获阶段把聚焦态补回来；Escape/点到别处照常收。
+        onClickCapture={() => setFocused(true)}
       >
         {children}
       </span>

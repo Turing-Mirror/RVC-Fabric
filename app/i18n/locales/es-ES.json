@@ -989,7 +989,6 @@
     "b0e24833f7": "Desplegar",
     "b269c54674": "Modelo Hubert",
     "b27dd877b1": "La voz entrenada usará este nombre",
-    "b2ba9634d9": "Sin ejecutar",
     "b2be174f0f": "Voces de la comunidad",
     "b2c6913616": "Instalando…",
     "b3009f6985": "Desactivado: solo pasa el audio original",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "Al terminar aparece en Modelos. Si cierras a medias, el mismo nombre salta los pasos ya hechos. Activa guardar el modelo usable para tener un archivo listo cada N épocas.",
     "stsDoneSkipped": "{v0} archivo(s) convertido(s), {v1} omitido(s) → {v2}",
     "stsSkippedTitle": "Estos {v0} archivo(s) no se convirtieron:",
-    "stsFreeVram": "Deteniendo el cambiador de voz en tiempo real para liberar VRAM…",
     "stsTargetVoice": "Voz objetivo",
     "stsModelMissing": "No se encuentra el modelo de voz: {a0}",
     "stsRecord": "Grabar",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "Buscar archivos",
     "stsTrim": "Recortar",
     "stsStillExcluded": "Sigue excluido por la carpeta: {v0}",
-    "stsRetryFailed": "Reintentar solo fallidos ({v0})"
+    "stsRetryFailed": "Reintentar solo fallidos ({v0})",
+    "stsStateUnreadable": "No se puede leer la lista de fuentes: {a0}",
+    "stsStateCorrupt": "El archivo de la lista de fuentes está dañado; los cambios están bloqueados para protegerlo",
+    "engineCmdBusy": "El motor está ocupado: el comando anterior aún no se ha recogido. Inténtalo de nuevo en un momento.",
+    "modelApplyUnconfirmed": "El motor no ha confirmado que la voz se aplicó. Si sigue en silencio, reintenta o reinicia el motor.",
+    "stsClearConfirm": "¿Vaciar todas las fuentes y exclusiones? No se puede deshacer.",
+    "stsForeignBusy": "Otra ventana está convirtiendo; este panel es de solo lectura",
+    "stsMissingTag": "Fuente no encontrada",
+    "stsUnreadableTag": "No se puede leer",
+    "stsSourceInsideOut": "Una fuente está dentro de la carpeta de salida; se omitió",
+    "stsRefresh": "Actualizar",
+    "stsScanCancel": "Detener escaneo"
   },
   "extras": {
     "engineTitle": "Recursos del motor",
@@ -2164,7 +2173,8 @@
     "targetExists": "El destino del runtime ya existe: {v0}",
     "verifyFailed": "El runtime migrado no superó la comprobación.",
     "notFound": "No se encontró el runtime antiguo.",
-    "runtimeNotReady": "Este runtime no está listo."
+    "runtimeNotReady": "Este runtime no está listo.",
+    "runtimeBusy": "Todavía hay {v0} proceso(s) usando este runtime (la WebUI clásica, el panel en tiempo real o una conversión). Ciérrelos e inténtelo de nuevo."
   },
   "sepVariant": {
     "normal": "estándar",

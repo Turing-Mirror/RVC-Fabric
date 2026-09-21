@@ -345,7 +345,11 @@ async fn config_set(
         }
         if let Some(hot) = out.get("hot").and_then(|v| v.as_object()) {
             if !hot.is_empty() && worker::is_worker_alive(&root) {
-                let _ = worker::set_hot(&root, hot.clone());
+                // 派发被有界拒绝 ≠ 已应用：配置已经落盘，如实报「存了没生效」，
+                // 前端走既有的错误提示路径；worker 不在跑时是纯持久化，不算错。
+                worker::set_hot(&root, hot.clone()).map_err(|e| {
+                    format!("{} ({})", crate::i18n::t("s.9249d39bac"), e)
+                })?;
             }
         }
         let _ = app.emit("config-changed", &out);
@@ -964,9 +968,30 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
         // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
-        worker::start_vc(&root)?;
+        let out = worker::start_vc(&root)?;
         let st = worker::wait_vc_running(&root, 180_000);
         if st.get("state").and_then(|v| v.as_str()) == Some("running") {
+            // 验收身份 = start_vc 冻结进命令的那一份（pth/index 随命令本体
+            // 下发给 worker）。启动中途用户再选音色会把配置改走 —— 拿新
+            // 配置验收旧命令是假失败，这里只认冻结值。纯 DSP 启动没有音色
+            // 指针，跳过这条确认。
+            if !out.dsp && !out.pth.is_empty() {
+                if let Err(e) = worker::wait_model_applied(
+                    &root,
+                    out.seq,
+                    &out.pth,
+                    &out.index,
+                    worker::MODEL_APPLY_CONFIRM_MS,
+                ) {
+                    let mut st = st;
+                    if let Some(obj) = st.as_object_mut() {
+                        obj.insert("state".into(), json!("error"));
+                        obj.insert("error".into(), json!(e));
+                    }
+                    return Ok(st);
+                }
+            }
+            // 热推要的是最新意图，不是冻结值 —— 这里才重新读配置。
             let cfg = crate::config::read(&root);
             let _ = worker::push_running_hot(&root, &cfg);
         }
@@ -1297,11 +1322,16 @@ async fn sts_start(
     f0_file: Option<String>,
     // C-10 显式清单：冻结快照 [{src, rel}]。有它 worker 不再扫 input。
     manifest: Option<Vec<Value>>,
+    // 本单归属凭证（面板每次发起一个新 token）：后端认领后事件/状态回显它，
+    // 也只有拿同一个 token 的 sts_cancel 才取得动这一单。
+    owner: Option<String>,
+    // 冻结快照时的 excluded 计数，仅落运行日志 header，不参与执行。
+    excluded: Option<u64>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let model_path = model_path.unwrap_or_default();
     let index_path = index_path.unwrap_or_default();
-    let opts = sts::ConvertOpts::from_raw(
+    let mut opts = sts::ConvertOpts::from_raw(
         filter_radius,
         resample_sr,
         rms_mix_rate,
@@ -1310,6 +1340,8 @@ async fn sts_start(
         sid,
         f0_file,
     );
+    opts.owner = owner;
+    opts.excluded = excluded;
     tauri::async_runtime::spawn_blocking(move || {
         sts::run(
             &app,
@@ -1330,8 +1362,10 @@ async fn sts_start(
 }
 
 #[tauri::command]
-fn sts_cancel() {
-    sts::cancel();
+fn sts_cancel(owner: Option<String>) {
+    // 带凭证：只动凭证匹配的那一单（别窗/静默任务在跑时吞掉这次取消）。
+    // 无凭证：内部调用方的老语义，无条件取消。
+    sts::cancel_for(owner.as_deref());
 }
 
 #[tauri::command]
@@ -1346,59 +1380,116 @@ async fn sts_sources_scan(
     output: Option<String>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    // 代次在调用线程领取：scan_with_gen 途中被 sts_sources_scan_cancel 作废
+    // 时提前返回 {"cancelled": true}，前端据此丢弃过期结果。
+    let gen = sts_sources::scan_begin();
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(sts_sources::scan(&root, output.as_deref().unwrap_or("")))
+        Ok(sts_sources::scan_with_gen(
+            &root,
+            output.as_deref().unwrap_or(""),
+            gen,
+        ))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_add(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
-    sts_sources::add(&root_clone(&state)?, &path)
+fn sts_sources_scan_cancel() {
+    sts_sources::scan_cancel();
+}
+
+// 下面这些改的是真实目录/文件系统，磁盘慢的机器上会把 IPC 线程卡住——
+// 统一 spawn_blocking。服务层内部已用 STATE 锁串行化，签名不变。
+#[tauri::command]
+async fn sts_sources_add(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::add(&root, &path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_remove(state: State<'_, Mutex<AppState>>, id: String) -> Result<Value, String> {
-    sts_sources::remove(&root_clone(&state)?, &id)
+async fn sts_sources_remove(
+    state: State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::remove(&root, &id))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_set_recursive(
+async fn sts_sources_set_recursive(
     state: State<'_, Mutex<AppState>>,
     id: String,
     recursive: bool,
 ) -> Result<(), String> {
-    sts_sources::set_recursive(&root_clone(&state)?, &id, recursive)
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        sts_sources::set_recursive(&root, &id, recursive)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_exclude(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
-    sts_sources::exclude(&root_clone(&state)?, &path)
+async fn sts_sources_exclude(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::exclude(&root, &path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_restore(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
-    sts_sources::restore(&root_clone(&state)?, &path)
+async fn sts_sources_restore(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::restore(&root, &path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    sts_sources::clear(&root_clone(&state)?)
+async fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::clear(&root))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_delete(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
-    sts_sources::delete_file(&root_clone(&state)?, &path)
+async fn sts_sources_delete(
+    state: State<'_, Mutex<AppState>>,
+    path: String,
+) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || sts_sources::delete_file(&root, &path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn sts_sources_rename(
+async fn sts_sources_rename(
     state: State<'_, Mutex<AppState>>,
     path: String,
     new_name: String,
 ) -> Result<String, String> {
-    sts_sources::rename_file(&root_clone(&state)?, &path, &new_name)
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        sts_sources::rename_file(&root, &path, &new_name)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1781,11 +1872,15 @@ fn engine_set_hot_inner(
         logging::shell_log!("persist profile: {e}");
     }
     let _ = app.emit("config-changed", &out);
-    match worker::set_hot(root, payload) {
-        Ok(seq) => Ok(seq),
-        Err(e) if e.contains(&crate::i18n::t("s.b2ba9634d9")) => Ok(0),
-        Err(e) => Err(e),
+    // 配置已经落盘。worker 没在跑时没什么可热推的：不算失败，下次开启自然
+    // 生效。用存活性判断而不是比对错误文案 —— 「未运行」在 8 种语言里只有
+    // 3 种恰好嵌套得上，文案比对等于有 5 种语言把「空闲」报成「失败」。
+    if !worker::is_worker_alive(root) {
+        return Ok(0);
     }
+    // worker 活着进了派发：之后的失败（派发超时、途中死掉）都是真错误，
+    // 如实上传 —— 不能用「事后死了」把它包装成空闲成功。
+    worker::set_hot(root, payload)
 }
 
 /// 变声中换音色。不重开流，只把新模型推给引擎。
@@ -1825,21 +1920,27 @@ fn list_devices_blocking(root: std::path::PathBuf) -> Result<Value, String> {
             return Ok(st);
         }
     }
-    let _ = worker::send_command(&root, "list_devices", Map::new());
+    // 派发失败直接透出：不能把盘上那份旧设备列表当成「刷新成功」交回去。
+    let seq = worker::send_command(&root, "list_devices", Map::new())?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
     while std::time::Instant::now() < deadline {
         let st = worker::status_for_ui(&root);
-        let has = st
-            .get("input_devices")
-            .and_then(|v| v.as_array())
-            .map(|a| !a.is_empty())
-            .unwrap_or(false);
-        if has {
+        // 只认 devices_seq 对号：worker 在枚举收尾（成功或失败）时才写它。
+        // last_cmd_seq 只证明认领了命令，那时盘上的列表还是上一次的旧数据。
+        let done = st
+            .get("devices_seq")
+            .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+            .unwrap_or(0)
+            >= seq;
+        if done {
             return Ok(st);
+        }
+        if !worker::is_worker_alive(&root) {
+            return Err(crate::i18n::t("s.wkDiedListDevices"));
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
-    Ok(worker::status_for_ui(&root))
+    Err(crate::i18n::t("s.wkReadyTimeout"))
 }
 
 #[tauri::command]
@@ -2477,6 +2578,7 @@ pub fn run() {
             sts_delete_input,
             sts_rename_input,
             sts_sources_scan,
+            sts_sources_scan_cancel,
             sts_sources_add,
             sts_sources_remove,
             sts_sources_set_recursive,

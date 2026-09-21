@@ -160,8 +160,13 @@ pub fn activate(root: &Path, id: &str) -> Result<Value, String> {
     if kind.is_none() || rvc_importing {
         let _ = crate::worker::start_worker_kind(root, crate::worker::WorkerKind::Dsp);
     }
-    // worker 没起来只算配置写好了，开启变声会再推一次。
-    let _ = crate::worker::set_hot(root, payload);
+    // worker 没起来只算配置写好了，开启变声会再推一次；在跑而派发被有界
+    // 拒绝的，如实报「存了没生效」，别把失败吞成 ok。
+    if crate::worker::is_worker_alive(root) {
+        crate::worker::set_hot(root, payload).map_err(|e| {
+            format!("{} ({})", crate::i18n::t("s.9249d39bac"), e)
+        })?;
+    }
     Ok(json!({ "ok": true, "id": id, "config": cfg }))
 }
 
@@ -179,7 +184,11 @@ pub fn deactivate(root: &Path) -> Result<Value, String> {
     payload.insert("dsp_enabled".into(), json!(false));
     payload.insert("dsp_preset".into(), json!(""));
     payload.insert("dsp_params".into(), json!({}));
-    let _ = crate::worker::set_hot(root, payload);
+    if crate::worker::is_worker_alive(root) {
+        crate::worker::set_hot(root, payload).map_err(|e| {
+            format!("{} ({})", crate::i18n::t("s.9249d39bac"), e)
+        })?;
+    }
     Ok(json!({ "ok": true, "config": cfg }))
 }
 

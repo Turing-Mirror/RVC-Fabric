@@ -571,10 +571,6 @@ class OomRetryShrinksWindowsTests(unittest.TestCase):
             self.assertTrue(dest.is_file())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ManifestTests(unittest.TestCase):
     """C-10 显式清单：worker 只执行壳冻结的快照，不重新扫目录。"""
 
@@ -598,7 +594,7 @@ class ManifestTests(unittest.TestCase):
             rels = {str(rel).replace("\\", "/") for _, rel in files}
             self.assertEqual(rels, {"srcA/x.wav", "srcB/x.wav"})
 
-    def test_manifest_skips_missing_and_bad_rel(self):
+    def test_manifest_keeps_missing_and_sanitizes_bad_rel(self):
         from tools.sts_core import collect_manifest
 
         with tempfile.TemporaryDirectory() as td:
@@ -612,11 +608,100 @@ class ManifestTests(unittest.TestCase):
                     {"src": str(good), "rel": str(Path(td).resolve() / "abs.wav")},
                 ]
             )
-            # 消失的源跳过；../ 与绝对 rel 退回文件名，写不出输出目录。
-            self.assertEqual(len(files), 2)
+            # 消失的源留在清单里，交给执行端记成逐文件失败；../ 与绝对
+            # rel 退回文件名，写不出输出目录。
+            self.assertEqual(len(files), 3)
+            srcs = {src for src, _ in files}
+            self.assertIn(ghost, srcs)
             for _, rel in files:
                 self.assertFalse(rel.is_absolute())
                 self.assertNotIn("..", rel.parts)
+
+
+class SucceedingVC(FakeVC):
+    """能跑通的假引擎：vc_single 报个进度就回音频。"""
+
+    def vc_single(self, *a, progress_cb=None, **kw):
+        if progress_cb:
+            progress_cb("infer", 1.0)
+        return "ok", (16000, b"\x00\x00")
+
+
+class ManifestRunTests(unittest.TestCase):
+    """冻结清单里的源在任务开始前消失：要计成逐文件失败，不能凭空消失。"""
+
+    def setUp(self):
+        self._saved = {k: sys.modules.get(k) for k in ("scipy", "scipy.io")}
+        scipy = ModuleType("scipy")
+        scipy_io = ModuleType("scipy.io")
+        scipy_io.wavfile = FakeWavfile
+        scipy.io = scipy_io
+        sys.modules["scipy"] = scipy
+        sys.modules["scipy.io"] = scipy_io
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+    def test_missing_src_is_counted_and_carries_full_path(self):
+        from tools.sts_core import collect_manifest
+
+        with tempfile.TemporaryDirectory() as td:
+            good = Path(td) / "g.wav"
+            good.write_bytes(b"RIFF-fake")
+            ghost = Path(td) / "gone.wav"  # 快照之后没了
+            out = Path(td) / "out"
+            files = collect_manifest(
+                [
+                    {"src": str(good), "rel": "g.wav"},
+                    {"src": str(ghost), "rel": "gone.wav"},
+                ]
+            )
+            self.assertEqual(len(files), 2)
+            events: list[dict] = []
+            emit = lambda **e: events.append(e)  # noqa: E731
+            prog = StsProgress(len(files), "rmvpe", emit=emit, load_end=0.0)
+            params = {
+                "pitch": 0,
+                "f0method": "rmvpe",
+                "index_path": None,
+                "index_rate": 0.75,
+                "filter_radius": 3,
+                "resample_sr": 0,
+                "rms_mix_rate": 0.25,
+                "protect": 0.33,
+                "format": "wav",
+                "sid": 0,
+                "f0_file": None,
+            }
+            out_files, skipped, cancelled = run_batch(
+                SucceedingVC(), files, out, params, prog, emit,
+                allow_cpu_fallback=False,
+            )
+            self.assertFalse(cancelled)
+            self.assertEqual(len(out_files), 1, skipped)
+            # 消失的源进了失败清单，file 是全路径，原因说人话。
+            self.assertEqual(len(skipped), 1)
+            self.assertEqual(skipped[0]["file"], str(ghost))
+            self.assertEqual(skipped[0]["name"], "gone.wav")
+            self.assertIn("不存在", skipped[0]["reason"])
+            # 实时跳过事件带全路径，界面才能把记录对回清单条目。
+            skip_ev = [e for e in events if e.get("phase") == "skip"]
+            self.assertEqual(len(skip_ev), 1)
+            self.assertEqual(skip_ev[0]["path"], str(ghost))
+            self.assertEqual(skip_ev[0]["file"], "gone.wav")
+
+
+class OfflineFallbackBoundaryTests(unittest.TestCase):
+    def test_offline_fallback_cannot_kill_realtime_workers(self):
+        # 源码边界守卫；真实音频共存仍需单独进行实机验收。
+        source = (Path(__file__).resolve().parents[1] / "app/src-tauri/src/sts.rs").read_text(encoding="utf-8")
+        offline = source.split("fn run_inner(", 1)[1].split("#[cfg(test)]", 1)[0]
+        self.assertNotIn("crate::worker::kill_known_workers(", offline)
+        self.assertNotIn("crate::worker::stop_vc(", offline)
 
 
 if __name__ == "__main__":

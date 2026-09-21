@@ -28,7 +28,7 @@ type Props = {
     pitch?: number;
     formant?: number;
     profileSummary?: string;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
@@ -184,7 +184,6 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
   useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState(-1);
   // Distinguish "no voices installed" from "could not read the catalog" —
   // showing 「还没有本地音色」 after a failed call sends the user off to import
   // something they may already have.
@@ -201,7 +200,6 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
     try {
       const cat = await listVoices();
       setModels(cat.models || []);
-      setSelectedIdx(Number(cat.selected_idx ?? -1));
       const rk = (cat as unknown as { recent_keys?: unknown }).recent_keys;
       setRecentKeys(Array.isArray(rk) ? rk.map(String) : []);
       setLoadError("");
@@ -214,12 +212,13 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
     void load();
   }, [currentId]);
 
-  const selected =
-    selectedIdx >= 0 ? models[selectedIdx] : undefined;
-  // 没选中就不要把库里第一条画成当前。以前回退到 models[0] 让中间
-  // 那张卡永远亮着，用户以为选了音色，一点开启却被拒（diag 26.8.16）。
-  const current = selected;
-  const hasSelection = Boolean(selected);
+  // 「使用中」以总控已提交的音色身份为准（currentId 在换模型被确认后才
+  // 更新），不按目录的 selected_idx —— 那是持久化的意图，上次切换失败
+  // 时它会撒谎。没选中就不要把库里第一条画成当前（diag 26.8.16）。
+  const current = currentId
+    ? models.find((m) => modelKey(m) === currentId)
+    : undefined;
+  const hasSelection = Boolean(current);
 
   // Most-recent first, current excluded — it always takes the centre slot.
   const rest = [...models]
@@ -250,9 +249,10 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       // Picking here used to only record the selection: the voice's saved
       // pitch / formant were never pushed to a running stream and the dock kept
       // showing the previous voice's name and numbers. Same handling as the
-      // models page now.
-      onVoiceChange?.(info);
+      // models page now. 返回值交给派发器：换模型没落地之前任务不算完。
+      const applied = onVoiceChange?.(info);
       void load();
+      return applied;
     });
     if (out.kind === "error") {
       // Clicking a card and having nothing happen is the worst outcome.
@@ -302,7 +302,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
       >
         <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0">
-          {selected ? selected.name : t("s.262d11e2d6")}
+          {current ? current.name : t("s.262d11e2d6")}
         </p>
         {/* 副标题不再有固定文案 —— 那句「切换立即生效 · 运行中可无缝换音色」
             对老用户是废话。这行只显示用户自己写的（设置 → 外观），没写就不占位。 */}

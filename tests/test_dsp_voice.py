@@ -326,7 +326,19 @@ class ShellContractTests(unittest.TestCase):
     def test_worker_start_merges_dsp_from_start_command(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
         body = src[src.index("def _worker_start") : src.index("def _worker_stop")]
-        self.assertIn('for k in ("dsp_enabled", "dsp_preset", "dsp_params", "function")', body)
+        # DSP 字段 + 冻结的模型身份都允许命令本体覆盖 inuse：
+        # 启动中途的另一次选择不许改这条 start 的结论。
+        for k in (
+            '"dsp_enabled"',
+            '"dsp_preset"',
+            '"dsp_params"',
+            '"function"',
+            '"pth_path"',
+            '"index_path"',
+            '"index_rate"',
+        ):
+            self.assertIn(k, body, f"_worker_start 的命令覆盖表缺 {k}")
+        self.assertIn("values[k] = cmd[k]", body)
         self.assertIn("start values pth=", body)
         self.assertNotIn('i18n("请选择pth文件")', src)
 
@@ -340,8 +352,12 @@ class ShellContractTests(unittest.TestCase):
         src = (ROOT / "app" / "src" / "pages" / "HomePage.tsx").read_text(
             encoding="utf-8"
         )
+        # 「使用中」= 总控已提交的音色身份（currentId）在目录里的查找结果；
+        # 没选中就是 undefined，不许拿目录第一条或持久化意图冒充当前音色。
+        self.assertIn("modelKey(m) === currentId", src)
+        self.assertIn(": undefined", src)
         self.assertNotIn("const current = selected ??", src)
-        self.assertIn("const current = selected;", src)
+        self.assertNotIn("?? models[0]", src)
 
     def test_dsp_activate_keeps_last_model(self):
         src = (ROOT / "app" / "src-tauri" / "src" / "config.rs").read_text(

@@ -9,16 +9,34 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::paths;
 
-static BUSY: Mutex<bool> = Mutex::new(false);
-/// 这一单要不要静音（见 `ConvertOpts::quiet`）。只在 `run()` 里改，
-/// 而 `run()` 被 BUSY 串行化，所以不会有两单互相改这个标志。
+/// 一单的生命周期临界区：认领（busy + 记名 + 静默/进度/取消初始化）、
+/// 凭证取消比对、收尾清态，三步都在这一把锁里完成——旧凭证的取消打不到
+/// 新认领的单子，新单子也拿不到被旧收尾清了一半的归属。
+///
+/// 锁序（全仓只允许这两个方向，反向嵌锁不存在）：
+/// - RUN → REC_BUSY：run()/record() 互查占用都按这个序；
+/// - RUN → STATE / RUN → LAST_PROGRESS：来源变更守卫、认领时清旧进度。
+/// STATE、LAST_PROGRESS、REC_BUSY 的持有者从不回头取 RUN。
+/// CANCEL/QUIET 是原子量，只在 RUN 临界区内写。
+pub(crate) struct RunCtl {
+    busy: bool,
+    /// 当前这单的归属凭证：前端发起时给的随机串。认领成功才记名，
+    /// 收尾在锁内清空；带凭证的取消只动凭证匹配的那一单（见 cancel_for）。
+    owner: Option<String>,
+}
+static RUN: Mutex<RunCtl> = Mutex::new(RunCtl {
+    busy: false,
+    owner: None,
+});
+/// 这一单要不要静音（见 `ConvertOpts::quiet`）。只在 `run()` 的 RUN
+/// 临界区内读写，认领/收尾与下一单的初始化串行，不会有两单互相覆盖。
 static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static REC_BUSY: Mutex<bool> = Mutex::new(false);
@@ -56,6 +74,11 @@ pub struct ConvertOpts {
     pub format: String,
     pub sid: u32,
     pub f0_file: String,
+    /// 本单归属凭证。面板每次发起给一个新随机串；后端认领 BUSY 成功才记名。
+    /// 内部调用方（tts/consult）不传 → None → 保持无凭证老行为。
+    pub owner: Option<String>,
+    /// 冻结快照时的 excluded 计数，仅落 run 日志 header，不参与执行。
+    pub excluded: Option<u64>,
 }
 
 impl Default for ConvertOpts {
@@ -69,6 +92,8 @@ impl Default for ConvertOpts {
             format: "wav".into(),
             sid: 0,
             f0_file: String::new(),
+            owner: None,
+            excluded: None,
         }
     }
 }
@@ -279,13 +304,49 @@ pub fn reveal_output(root: &Path, path: &str) -> Result<(), String> {
     crate::shell_extras::reveal(&dir.join("x"))
 }
 
+/// 当前单子的归属凭证（没有在跑/无凭证 → None）。
+fn run_owner() -> Option<String> {
+    RUN.lock().unwrap_or_else(|e| e.into_inner()).owner.clone()
+}
+
+/// 带归属凭证的取消：给了非空 owner 就只动凭证匹配的那一单——别窗/静默
+/// 任务在跑时，本窗迟到的取消会被原样吞掉，不会误杀别人的任务。
+/// None/空串 = 无凭证老语义，无条件取消（内部调用方照旧）。
+///
+/// 比对与置旗在同一把 RUN 锁里完成：旧单的凭证在新单认领后必然错配，
+/// 不存在「读到 A 的 owner、置的却是 B 的取消旗」的交错窗口。
+pub fn cancel_for(owner: Option<&str>) -> bool {
+    let owner = owner.map(str::trim).filter(|s| !s.is_empty());
+    let g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(tok) = owner {
+        if g.owner.as_deref() != Some(tok) {
+            crate::logging::shell_log!("sts cancel ignored: owner mismatch");
+            return false;
+        }
+    }
+    cancel_flag().store(true, Ordering::SeqCst);
+    true
+}
+
+/// 来源变更互斥守卫（sts_sources 用）：拿住 RUN 期间 `run()` 无法认领新单，
+/// 「没在跑」的判定与随后的状态修改被焊成同一个临界区——不再是先查 busy
+/// 再放开的 TOCTOU。调用方随后再取 sts_sources 的 STATE 锁（锁序
+/// RUN → STATE），扫描/快照只碰 STATE 永不反向。
+pub(crate) fn mutation_guard() -> Result<MutexGuard<'static, RunCtl>, String> {
+    let g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+    if g.busy {
+        return Err(crate::i18n::t("s.6a025ac81b").into());
+    }
+    Ok(g)
+}
+
 pub fn cancel() {
     cancel_flag().store(true, Ordering::SeqCst);
 }
 
 /// 有没有正在跑的转换任务。强杀引擎前拿它决定要不要先问一句。
 pub fn is_busy() -> bool {
-    *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+    RUN.lock().unwrap_or_else(|e| e.into_inner()).busy
 }
 
 /// 取消并等它真的停下来，最多等 `secs` 秒。返回停没停下来。
@@ -305,7 +366,9 @@ pub fn cancel_and_wait(secs: u64) -> bool {
 }
 
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
-    emit_full(app, phase, done, total, message, None, None, None, None, None, None);
+    emit_full(
+        app, phase, done, total, message, None, None, None, None, None, None,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -323,7 +386,7 @@ fn emit_full(
     file: Option<&str>,
 ) {
     emit_full_ex(
-        app, phase, done, total, message, pct, step, current, ok, skip, file, None,
+        app, phase, done, total, message, pct, step, current, ok, skip, file, None, None,
     );
 }
 
@@ -341,6 +404,7 @@ fn emit_full_ex(
     skip: Option<u64>,
     file: Option<&str>,
     reason: Option<&str>,
+    path: Option<&str>,
 ) {
     let mut body = json!({
         "phase": phase,
@@ -375,6 +439,17 @@ fn emit_full_ex(
             body["reason"] = json!(r);
         }
     }
+    // 跳过事件的完整源路径：file 只有文件名，同名文件对不上号；
+    // path 让界面能把跳过记录精确映射回清单条目。
+    if let Some(p) = path {
+        if !p.is_empty() {
+            body["path"] = json!(p);
+        }
+    }
+    // 归属回显：有凭证的单子每条事件都带 owner，别窗靠它判断能不能取消。
+    if let Some(o) = run_owner() {
+        body["owner"] = json!(o);
+    }
     *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(body.clone());
     if QUIET.load(Ordering::SeqCst) {
         return;
@@ -384,7 +459,12 @@ fn emit_full_ex(
 
 /// 当前能不能转、用哪个音色。
 pub fn status(root: &Path) -> Value {
-    let busy = *BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    // busy 与归属凭证同一把锁读出，拿到的是一致对——不会出现
+    // 「busy=true 但 owner 已被下一单换掉」的撕裂快照。
+    let (busy, owner_now) = {
+        let g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+        (g.busy, g.owner.clone())
+    };
     let cfg = crate::config::read(root);
     let pth = cfg
         .get("pth_path")
@@ -426,6 +506,16 @@ pub fn status(root: &Path) -> Value {
         // 实时变声是否还占着显存。面板拿它决定要不要先问一句再开转。
         "worker_alive": crate::worker::is_worker_alive(root),
         "busy": busy,
+        // 当前在跑的是不是静默任务（TTS/顾问借用转换管线）。面板据此给
+        // 外来观察态一个说法；它不是归属判据——别窗开的非静默任务 quiet
+        // 也是 false，归属只看本面板是否发起。
+        "run_quiet": busy && QUIET.load(Ordering::SeqCst),
+        // 在跑单子的归属凭证；无凭证任务（静默借用）给 null。
+        "run_owner": if busy {
+            owner_now.map(|o| json!(o)).unwrap_or(Value::Null)
+        } else {
+            Value::Null
+        },
         // 只在还在跑的时候给，跑完了给一份陈旧进度反而误导。
         "progress": if busy {
             LAST_PROGRESS
@@ -729,15 +819,19 @@ pub fn cancel_record() {
 /// 在输入文件夹录一段 wav。阻塞到用户停止或超时。
 pub fn record(app: &AppHandle, root: &Path, input: &str) -> Result<Value, String> {
     {
-        let conv = *BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if conv {
+        // 认领录音占用的整个判定在 RUN 锁内做（RUN → REC_BUSY 序，与
+        // run() 认领同向）：run() 也在 RUN 里查 REC_BUSY，两个方向的
+        // 「对方没在占用」检查因此对彼此都是原子的——不存在录音刚起步
+        // 转换就挤进来的交错。
+        let g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+        if g.busy {
             return Err(crate::i18n::t("s.stsRecordBusy"));
         }
-        let mut g = REC_BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
+        let mut rec = REC_BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        if *rec {
             return Err(crate::i18n::t("s.stsRecordAlready"));
         }
-        *g = true;
+        *rec = true;
     }
     rec_cancel_flag().store(false, Ordering::SeqCst);
     let log = crate::logging::begin_run(
@@ -1083,6 +1177,11 @@ struct Resident {
     root: PathBuf,
     /// 上一批结束的时间，空闲回收按它算。
     last: std::time::Instant,
+    /// 拉起这个进程时的 spawn 策略指纹（accel_backend|main_gpu）。
+    /// env_for_runtime 把这两个设置烘进进程环境；之后用户改了设置，
+    /// 旧进程的指纹就对不上——take 时换掉，绝不能把上一套 CUDA 环境
+    /// 喂给显式选了 CPU 的下一条任务。
+    fingerprint: String,
     /// 活着期间一直占着，免得「关变声」把它当残留杀了。
     _guard: crate::worker::ToolPidGuard,
 }
@@ -1149,11 +1248,25 @@ fn ensure_reaper() {
     });
 }
 
-/// 取出可用的常驻进程。产品根对不上、进程已死的一律丢掉重来。
+/// 热路径能不能复用这个活着的实时 worker：worker 活着、是 RVC 工种
+/// （DSP worker 不会转），且出生时的 spawn 策略指纹与「现在请求的那套
+/// CPU/GPU/运行时身份」一致。判定走 worker.rs 的只读 API（alive + 落盘
+/// v2 指纹 vs env_for_runtime+runtime_pythonw 重算），不开第二套算法。
+/// 任一不满足 → 冷路径（常驻进程按当前配置另起），绝不动活着的实时音频。
+fn live_worker_compatible(root: &Path) -> bool {
+    crate::worker::worker_kind_of(root) == Some(crate::worker::WorkerKind::Rvc)
+        && crate::worker::live_worker_matches_current_spawn_policy(root)
+}
+
+/// 取出可用的常驻进程。产品根对不上、进程已死、spawn 策略指纹过期的
+/// 一律丢掉重来 —— 下一条任务用新设置重起，不在设置变更点杀进程。
+/// 指纹比较走 worker::current_spawn_fingerprint（env+解释器路径重算）：
+/// 当前 spawn 不出来（None）时任何常驻进程都不能算兼容。
 fn take_resident(root: &Path) -> Option<Resident> {
     let mut g = RESIDENT.lock().unwrap_or_else(|e| e.into_inner());
     let mut r = g.take()?;
-    if r.root.as_path() != root {
+    let want = crate::worker::current_spawn_fingerprint(root);
+    if r.root.as_path() != root || Some(r.fingerprint.as_str()) != want.as_deref() {
         drop(g);
         stop_resident(r);
         return None;
@@ -1178,7 +1291,7 @@ fn keep_resident(mut r: Resident) {
     }
     r.last = std::time::Instant::now();
     let mut g = RESIDENT.lock().unwrap_or_else(|e| e.into_inner());
-    // 理论上此刻 RESIDENT 必然是 None（同一时刻只有一批在跑，BUSY 拦着）。
+    // 理论上此刻 RESIDENT 必然是 None（同一时刻只有一批在跑，RUN 拦着）。
     // 真撞上了就让旧的那个走，别攒出两个占显存的进程。
     if let Some(old) = g.replace(r) {
         drop(g);
@@ -1318,6 +1431,7 @@ fn forward_sts_event(
     let ok_n = v.get("ok").and_then(|x| x.as_u64());
     let skip_n = v.get("skip").and_then(|x| x.as_u64());
     let file = v.get("file").and_then(|x| x.as_str());
+    let path = v.get("path").and_then(|x| x.as_str());
 
     match phase {
         "error" => {
@@ -1395,7 +1509,7 @@ fn forward_sts_event(
                 .unwrap_or(msg);
             emit_full_ex(
                 app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
-                Some(reason),
+                Some(reason), path,
             );
         }
         _ => {
@@ -1433,19 +1547,32 @@ pub fn run(
     manifest: Option<Vec<Value>>,
 ) -> Result<Value, String> {
     {
+        // 认领在 RUN 一把锁里做完：busy 判定、录音占用互查、记名、
+        // 静默/进度/取消旗初始化。认领后才到达的 cancel_for 必然看到
+        // 本单 owner（正确取消）；认领前的取消一律错配被吞——不存在
+        // 「busy 已置、取消旗还没清」的中间态窗口。
+        let mut g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+        if g.busy {
+            return Err(crate::i18n::t("s.6a025ac81b").into());
+        }
+        // RUN → REC_BUSY 序：与 record() 的认领同向，两个方向的互斥
+        // 判定因此对彼此原子，且无锁序环。
         if *REC_BUSY.lock().unwrap_or_else(|e| e.into_inner()) {
             return Err(crate::i18n::t("s.stsRecordConvertBusy").into());
         }
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
-            return Err(crate::i18n::t("s.6a025ac81b").into());
-        }
-        *g = true;
+        g.busy = true;
+        // 认领成功才记名：抢 RUN 失败的调用方不会顶掉在跑单子的归属。
+        g.owner = opts
+            .owner
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        QUIET.store(opts.quiet, Ordering::SeqCst);
+        // 上一单的终态别留给这一单看。
+        *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        cancel_flag().store(false, Ordering::SeqCst);
     }
-    QUIET.store(opts.quiet, Ordering::SeqCst);
-    // 上一单的终态别留给这一单看。
-    *LAST_PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    cancel_flag().store(false, Ordering::SeqCst);
     // Open the run log *before* preflight so a 22:00 "engine missing" still
     // leaves a file with that timestamp. The old single sts.log never saw those.
     let header = json!({
@@ -1463,6 +1590,9 @@ pub fn run(
         "format": opts.format,
         "sid": opts.sid,
         "f0_file": opts.f0_file,
+        // 冻结时排除掉的条数：清单长度替代不了它（C9 验收口径）。
+        "excluded": opts.excluded,
+        "owner": opts.owner.as_deref().unwrap_or(""),
     });
     let log_path = crate::logging::begin_run(root, crate::logging::CH_STS, &header);
     crate::logging::shell_log!(
@@ -1519,12 +1649,21 @@ pub fn run(
             crate::logging::finish_run(&log_path, true, outcome);
         }
     }
-    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+    // 终态错误事件先按本单归属发出：此刻 busy/owner 仍是本单，事件带的
+    // 是自己的凭证而不是下一单的（下一单还没法认领）。随后在临界区内
+    // 一次性清 busy/owner/quiet——不存在「B 已认领却被 A 的收尾清掉
+    // owner、A 的错误顶着 B 的归属发出」的交错。
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
     }
-    // 复位必须在 emit 之后：上面那条错误也该跟着静音。
-    QUIET.store(false, Ordering::SeqCst);
+    {
+        let mut g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+        g.busy = false;
+        g.owner = None;
+        // quiet 复位也在临界区内：与下一单的 quiet 初始化串行，不互相
+        // 覆盖；且在 emit 之后——静默单的收尾错误照旧不广播。
+        QUIET.store(false, Ordering::SeqCst);
+    }
     result
 }
 
@@ -1570,10 +1709,12 @@ fn run_inner(
 
     let (pth, index) = resolve_model(root, model_path, index_path)?;
 
-    // 实时 worker 还活着的话，hubert / net_g / rmvpe / faiss 全在它显存里躺着。
-    // 老做法是把它杀掉再起一个新 python 把这四样从盘上重读一遍——一条 5 秒语音
-    // 真正干活一两秒，其余全耗在这上面。现在直接让它兼职把活干了。
-    if crate::worker::is_worker_alive(root) {
+    // 实时 worker 还活着且带着当前 spawn 策略的话，hubert / net_g / rmvpe /
+    // faiss 全在它显存里躺着，直接让它兼职把活干了。指纹对不上（用户起
+    // 实时后改过后端/主显卡）、或活着的是 DSP 工种：直接走冷路径另起常驻
+    // 进程——不碰热尝试，也就永远到不了 Unavailable→kill_known_workers
+    // 那条会杀掉实时音频的路。显式 CPU 选择绝不在旧 CUDA 环境的 worker 上跑。
+    if live_worker_compatible(root) {
         job.route = "hot";
         job.trace.note("hot path: reusing live worker models");
         // 界面上也要说走了哪条路。用户对同一段音频两次转换耗时差二十秒毫无头绪，
@@ -1593,19 +1734,9 @@ fn run_inner(
             }
             Err(HotError::Failed(e)) => return Err(e),
             Err(HotError::Unavailable(why)) => {
-                // 热路径没接上（worker 半死、模型还没加载好…）。退回冷路径，
-                // 慢是慢，但不能因为提速的那条路没走通就干脆转不了。
+                // 离线回退不能为了释放显存关闭实时音频；资源不足按正常转换错误返回。
                 job.route = "cold";
                 job.trace.note(&format!("hot path unavailable: {why}"));
-                let free_msg = crate::i18n::t("s.stsFreeVram");
-                emit_full(
-                    app, "run", 0, 1, &free_msg, Some(0), Some("free_vram"),
-                    Some(0), Some(0), Some(0), None,
-                );
-                crate::worker::kill_known_workers(root);
-                // 给驱动一点时间把进程显存真正吐回池子；立刻 spawn 下一份 python
-                // 时偶发还能看见「reserved >> free」。3GB 卡上 400ms 有时不够。
-                std::thread::sleep(std::time::Duration::from_millis(700));
             }
         }
     }
@@ -1679,13 +1810,16 @@ fn run_inner(
                 .open(&job.trace.path)
                 .ok();
 
+            // env 先取一份本地变量：它既喂给子进程，也喂给出生指纹 ——
+            // 指纹必须描述「实际传下去的那份环境」，不能 spawn 后再重读配置。
+            let env = crate::worker::env_for_runtime(root);
             let mut cmd = Command::new(&py);
             cmd.arg(script.as_os_str())
                 .arg(req.as_os_str())
                 // 跑完不退出，模型留在显存里等下一条请求（见上面 Resident 的说明）。
                 .arg("--resident")
                 .current_dir(root)
-                .envs(crate::worker::env_for_runtime(root))
+                .envs(&env)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(match errfile {
@@ -1739,6 +1873,7 @@ fn run_inner(
                 rx,
                 root: root.to_path_buf(),
                 last: std::time::Instant::now(),
+                fingerprint: crate::worker::spawn_fingerprint_for(&env, &py),
                 _guard: guard,
             }
         }
@@ -1783,6 +1918,7 @@ fn run_inner(
         let ok_n = v.get("ok").and_then(|x| x.as_u64());
         let skip_n = v.get("skip").and_then(|x| x.as_u64());
         let file = v.get("file").and_then(|x| x.as_str());
+        let path = v.get("path").and_then(|x| x.as_str());
         match phase {
             "start" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
@@ -1831,8 +1967,10 @@ fn run_inner(
                     .filter(|s| !s.is_empty())
                     .unwrap_or(msg);
                 if let Some(fname) = file {
+                    // file 与终端 skipped 清单同形（全路径），name 只留文件名；
+                    // 同名文件靠全路径区分，重试匹配也用它。
                     skipped.push(json!({
-                        "file": fname,
+                        "file": path.unwrap_or(fname),
                         "name": fname,
                         "reason": reason,
                     }));
@@ -1850,6 +1988,7 @@ fn run_inner(
                     skip_n,
                     file,
                     Some(reason),
+                    path,
                 );
             }
             "done" => {
@@ -2020,6 +2159,162 @@ mod tests {
         );
         assert_eq!(o.resample_sr, 44100);
         assert_eq!(o.format, "flac");
+    }
+
+    /// 改 RUN.owner / 取消旗的测试互相串行：同一测试进程里别的用例并行跑，
+    /// 不加这把锁两个用例会互踩 owner 字段。注意测试里只写 owner 不写
+    /// busy——sts_sources 的用例经 mutation_guard 查 busy，置 true 会误伤
+    /// 并行用例。
+    static RUN_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 归属凭证取消：只有回显凭证一致才动这一单；错配原样吞掉。
+    /// 无凭证/空串保留老语义（内部调用方 tts/consult 无条件取消）。
+    #[test]
+    fn cancel_for_matches_owner_only() {
+        let _tl = RUN_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let reset = |owner: Option<String>| {
+            RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = owner;
+            cancel_flag().store(false, Ordering::SeqCst);
+        };
+        reset(Some("w1".into()));
+        // 别人的凭证：不动取消旗。
+        assert!(!cancel_for(Some("w2")));
+        assert!(!cancel_flag().load(Ordering::SeqCst));
+        // 本窗凭证：取消生效。
+        assert!(cancel_for(Some("w1")));
+        assert!(cancel_flag().load(Ordering::SeqCst));
+        // 无凭证（None/空串）= 老内部调用方：无条件取消，不看记名。
+        reset(Some("w1".into()));
+        assert!(cancel_for(None));
+        assert!(cancel_flag().load(Ordering::SeqCst));
+        reset(Some("w1".into()));
+        assert!(cancel_for(Some("")));
+        assert!(cancel_flag().load(Ordering::SeqCst));
+        // 无记名的单子：带凭证的取消不匹配任何东西，也无凭证路径不变。
+        reset(None);
+        assert!(!cancel_for(Some("w1")));
+        assert!(!cancel_flag().load(Ordering::SeqCst));
+        assert!(cancel_for(None));
+        assert!(cancel_flag().load(Ordering::SeqCst));
+        reset(None);
+    }
+
+    /// 交错证明（确定性，不靠时序运气）：主线把 RUN 拿在手里模拟「B 正在
+    /// 认领」的临界区，另一线程对旧凭证 A 调 cancel_for —— 它必须阻塞在锁
+    /// 上直到临界区结束，然后读到的是 B 的 owner → 错配吞掉，B 的取消旗
+    /// 不被置起。旧实现（查 owner 放锁再置旗）在这个交错里会误杀 B。
+    #[test]
+    fn cancel_for_blocks_during_claim_then_misses_old_owner() {
+        let _tl = RUN_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = Some("A".into());
+        cancel_flag().store(false, Ordering::SeqCst);
+
+        let mut g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+        let t = std::thread::spawn(|| cancel_for(Some("A")));
+        // 它要么还没被调度、要么阻塞在 RUN 上——无论哪种都没跑完。
+        // 若 cancel_for 能不经 RUN 置旗（旧实现），这里可能已经结束了。
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(!t.is_finished(), "cancel_for 必须等 RUN 临界区结束");
+        // B 的认领在同一临界区内完成：换名 + 取消旗复位。
+        g.owner = Some("B".into());
+        cancel_flag().store(false, Ordering::SeqCst);
+        drop(g);
+
+        assert!(!t.join().unwrap(), "A 的迟到取消打不到已换名的单子");
+        assert!(!cancel_flag().load(Ordering::SeqCst), "B 的取消旗不能被 A 置起");
+        RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = None;
+    }
+
+    /// 反方向交错：取消先抢到锁（A 还在跑），置旗生效；随后 B 认领在临界
+    /// 区内复位取消旗——A 的取消不会漏到 B 身上。
+    #[test]
+    fn cancel_before_next_claim_does_not_leak() {
+        let _tl = RUN_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = Some("A".into());
+        cancel_flag().store(false, Ordering::SeqCst);
+        assert!(cancel_for(Some("A")));
+        assert!(cancel_flag().load(Ordering::SeqCst));
+
+        // B 认领（模拟 run() 临界区）：换名 + 初始化取消旗。
+        {
+            let mut g = RUN.lock().unwrap_or_else(|e| e.into_inner());
+            g.owner = Some("B".into());
+            cancel_flag().store(false, Ordering::SeqCst);
+        }
+        // A 的取消已被认领初始化清掉，B 的新取消要按 B 的凭证来。
+        assert!(!cancel_flag().load(Ordering::SeqCst), "A 的取消不许漏到 B");
+        assert!(cancel_for(Some("B")), "B 的凭证取消自己的单子");
+        RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = None;
+        cancel_flag().store(false, Ordering::SeqCst);
+    }
+
+    /// 来源变更守卫：mutation_guard 持有 RUN 期间，任何带凭证的取消都得
+    /// 排在变更事务后面——busy 判定与状态读写被焊成同一临界区。
+    /// 守卫放手后单子仍空闲（没跑），迟到取消按无主错配吞掉。
+    #[test]
+    fn mutation_guard_holds_run_across_source_transaction() {
+        let _tl = RUN_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        RUN.lock().unwrap_or_else(|e| e.into_inner()).owner = None;
+        let guard = mutation_guard().expect("空闲时应拿到守卫");
+        let t = std::thread::spawn(|| cancel_for(Some("late")));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(!t.is_finished(), "守卫活着时 RUN 不可进入");
+        drop(guard);
+        assert!(!t.join().unwrap());
+    }
+
+    /// 复用判定跟「实际 spawn 身份」走：常驻进程出生指纹 =
+    /// spawn_fingerprint_for(env_for_runtime, runtime_pythonw)，
+    /// take_resident 拿它和 current_spawn_fingerprint 比 —— 与实时 worker
+    /// 的 worker.fingerprint 同一条 v2 公式（含运行时解释器身份）。
+    /// accel_backend / cuda 下的 main_gpu 任一变化都必须换指纹；
+    /// 运行时缺失 → None → 任何旧进程都不能算兼容。
+    #[test]
+    fn spawn_fingerprint_tracks_policy_and_runtime() {
+        let root = tmp_root();
+        let rt = crate::paths::runtime_dir(&root);
+        fs::create_dir_all(&rt).unwrap();
+        fs::write(rt.join("pythonw.exe"), b"fake").unwrap();
+        let cfgp = crate::paths::app_config_path(&root);
+        fs::create_dir_all(cfgp.parent().unwrap()).unwrap();
+        fs::write(&cfgp, r#"{"accel_backend":"cuda","main_gpu":0}"#).unwrap();
+
+        // 常驻出生指纹：env+pyw 直接算 —— 必须与「现在 spawn」同式同值。
+        let env = crate::worker::env_for_runtime(&root);
+        let pyw = crate::paths::runtime_pythonw(&root).unwrap();
+        let cuda = crate::worker::spawn_fingerprint_for(&env, &pyw);
+        assert_eq!(
+            crate::worker::current_spawn_fingerprint(&root).as_deref(),
+            Some(cuda.as_str()),
+            "常驻出生指纹与 current_spawn_fingerprint 必须同源"
+        );
+
+        // 换后端：CUDA 环境进程不能给显式 CPU 单复用。
+        fs::write(&cfgp, r#"{"accel_backend":"cpu","main_gpu":0}"#).unwrap();
+        let cpu = crate::worker::current_spawn_fingerprint(&root).unwrap();
+        assert_ne!(cuda, cpu, "换后端必须换指纹");
+
+        // cuda 后端下换主显卡 → CUDA_VISIBLE_DEVICES 变 → 指纹变。
+        fs::write(&cfgp, r#"{"accel_backend":"cuda","main_gpu":1}"#).unwrap();
+        let gpu1 = crate::worker::current_spawn_fingerprint(&root).unwrap();
+        assert_ne!(cuda, gpu1, "cuda 下换 main_gpu 必须换指纹");
+
+        // 运行时解释器没了 → None：不能 spawn ≠ 随便兼容。
+        fs::remove_file(rt.join("pythonw.exe")).unwrap();
+        assert!(crate::worker::current_spawn_fingerprint(&root).is_none());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 热路径门：没有活 worker / 活的是 DSP 工种 → 绝不复用（返回 false 走
+    /// 冷路径）。worker 活着时的指纹对号严格性由 worker.rs 的
+    /// live_worker_spawn_policy_query_is_read_only_and_strict 覆盖
+    /// （活进程身份需要 worker.rs 内部的身份缓存，本模块无法伪造）。
+    #[test]
+    fn live_worker_compatible_requires_alive_rvc_worker() {
+        let root = tmp_root();
+        // 死寂状态：没有任何 pid/status 文件 → 不兼容。
+        assert!(!live_worker_compatible(&root));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

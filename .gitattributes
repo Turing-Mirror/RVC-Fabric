@@ -1,0 +1,10 @@
+# Batch entry points in this repo misparse under LF endings — observed on
+# scripts/run_tests.bat (cmd.exe exit 9009). Pin the extensions so checkouts
+# stay CRLF. Not a claim that every .bat everywhere requires CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# These two files are stored CRLF. Without cr-at-eol, `git diff --check`
+# flags every added line's CR as "trailing whitespace".
+infer/modules/train/extract/extract_f0_rmvpe_dml.py whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+infer/modules/train/extract_feature_print.py whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

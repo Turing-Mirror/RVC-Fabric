@@ -636,7 +636,10 @@ def stage_f0(req, exp_dir, py, n_stages):
                 "1", "0", "0", str(exp_dir), str(req["is_half"])]
     elif method == "rmvpe":
         # DirectML / CPU 走单独那份：rmvpe.py 里是写死 cuda 的。
-        args = [py, "infer/modules/train/extract/extract_f0_rmvpe_dml.py", str(exp_dir)]
+        # device 一并递进去：显式 cpu 时必须真的走 CPU，不能指望
+        # torch_directml 在场（CPU 运行时不带这个包）。
+        args = [py, "infer/modules/train/extract/extract_f0_rmvpe_dml.py",
+                str(exp_dir), str(req["device"])]
     else:
         args = [py, "infer/modules/train/extract/extract_f0_print.py",
                 str(exp_dir), str(req["n_cpu"]), method]

@@ -35,8 +35,11 @@ export type SwitchOutcome =
 type Job = {
   key: string;
   model: Pick<VoiceModel, "path" | "dir" | "name">;
-  apply: (info: VoiceApplyInfo) => void;
+  /** 返回 promise 时挂起整条任务直到应用落定（引擎换模型是异步的）。 */
+  apply: (info: VoiceApplyInfo) => void | Promise<void>;
   waiters: Array<(o: SwitchOutcome) => void>;
+  /** 结果已定形（superseded/done/error 已定），之后到达的同目标请求必须新开任务。 */
+  closed?: boolean;
 };
 
 let current: Job | null = null;
@@ -71,34 +74,42 @@ function settle(job: Job, outcome: SwitchOutcome) {
 async function run(job: Job): Promise<SwitchOutcome> {
   try {
     const res = await selectVoice(job.model);
-    try {
-      await setHot({
-        dsp_enabled: false,
-        dsp_preset: "",
-        dsp_params: {},
-        function: "vc",
-        ...(res.pitch != null || res.formant != null
-          ? {
-              pitch: Number(res.pitch ?? 0),
-              formant: Number(res.formant ?? 0),
-            }
-          : {}),
-      });
-    } catch {
-      /* worker may be idle */
-    }
+    // setHot 失败是真实失败（合约：空闲时后端结构性返回 Ok，只有出错才
+    // 拒绝）—— 不再吞掉，否则参数没下发成功也会显示已切换。
+    await setHot({
+      dsp_enabled: false,
+      dsp_preset: "",
+      dsp_params: {},
+      function: "vc",
+      ...(res.pitch != null || res.formant != null
+        ? {
+            pitch: Number(res.pitch ?? 0),
+            formant: Number(res.formant ?? 0),
+          }
+        : {}),
+    });
     // 跑完时已有更新意图在排队：这次结果被接管，apply 只服务最新目标。
     if (next) {
+      job.closed = true;
       return { kind: "superseded" };
     }
-    job.apply({
+    // apply 可能是异步的（运行中换模型要等引擎真正换入）。任务在整个
+    // 应用期间保持打开：同目标的点击仍按去重挂进来共享这次应用。
+    await job.apply({
       model: (res.model as VoiceModel) || (job.model as VoiceModel),
       pitch: res.pitch as number | undefined,
       formant: res.formant as number | undefined,
       profileSummary: res.profile_summary,
     });
+    // 应用落定这一刻结果才定形：等待 apply 期间到达的更新意图接管结论，
+    // 之后到达的同目标请求必须新开任务。
+    job.closed = true;
+    if (next) {
+      return { kind: "superseded" };
+    }
     return { kind: "done" };
   } catch (e) {
+    job.closed = true;
     return { kind: "error", error: String(e) };
   }
 }
@@ -130,14 +141,28 @@ async function pump() {
  */
 export function requestVoiceSwitch(
   model: Pick<VoiceModel, "path" | "dir" | "name"> & Partial<VoiceModel>,
-  apply: (info: VoiceApplyInfo) => void,
+  apply: (info: VoiceApplyInfo) => void | Promise<void>,
 ): Promise<SwitchOutcome> {
   const key = modelKey(model as VoiceModel);
-  const existing = next?.key === key ? next : current?.key === key ? current : null;
-  if (existing) {
-    // 同一目标已在切换/排队：结果共享，不重复读取、发命令或加载模型。
+  if (next && next.key === key) {
+    // 排队中的同目标：共享结果，不重复提交。
+    const job = next;
     return new Promise<SwitchOutcome>((resolve) => {
-      existing.waiters.push(resolve);
+      job.waiters.push(resolve);
+    });
+  }
+  if (current && current.key === key && !current.closed) {
+    // 在途的同目标本来就是最新意图。若另一个目标还排着队（A→B→A 里
+    // 最后点回 A），它被这次点击顶掉 —— 最新意图是 current，不是 next。
+    const job = current;
+    const stale = next;
+    next = null;
+    if (stale) {
+      emit();
+      settle(stale, { kind: "superseded" });
+    }
+    return new Promise<SwitchOutcome>((resolve) => {
+      job.waiters.push(resolve);
     });
   }
   return new Promise<SwitchOutcome>((resolve) => {

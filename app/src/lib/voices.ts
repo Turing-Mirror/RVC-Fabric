@@ -435,7 +435,11 @@ export function filterSortModels(
   return out;
 }
 
-export function modelKey(m: VoiceModel): string {
+export function modelKey(m: {
+  path?: string;
+  dir?: string;
+  name?: string;
+}): string {
   if (m.path) return m.path;
   return `${m.dir || ""}|${m.name || ""}`;
 }

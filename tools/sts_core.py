@@ -310,8 +310,8 @@ def collect_manifest(entries) -> list[tuple[Path, Path]]:
     for e in entries or []:
         src = Path(str(e.get("src") or "").strip())
         rel_raw = str(e.get("rel") or "").strip() or src.name
-        if not src.is_file():
-            continue
+        # 快照后消失的源不在这里丢：清单身份必须保住，交给执行端
+        # （run_batch）记成逐文件跳过，不然少掉的文件既不成功也不失败。
         # 防清单里混入绝对路径/上跳：rel 必须是相对路径。
         rel = Path(rel_raw)
         if rel.is_absolute() or ".." in rel.parts:
@@ -842,6 +842,29 @@ def run_batch(
                     break
                 prog.begin_file(i, src.name)
 
+                # 快照后源文件消失（移动/删除/掉盘）：记成跳过而不是让它
+                # 从清单里凭空消失——不然它既不在成功也不在失败里。
+                if not src.is_file():
+                    reason = "源文件不存在（可能在任务开始前被移动或删除）"
+                    skipped.append(
+                        {"file": str(src), "name": src.name, "reason": reason}
+                    )
+                    prog.file_done(i, src.name, ok=False)
+                    emit(
+                        phase="skip",
+                        done=i,
+                        total=total,
+                        pct=prog.last_pct,
+                        current=i,
+                        ok=prog.ok_count,
+                        skip=prog.skip_count,
+                        file=src.name,
+                        path=str(src),
+                        reason=reason,
+                        message=f"跳过 {src.name}：{reason}",
+                    )
+                    continue
+
                 def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
                     # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
                     if _cancelled():
@@ -933,6 +956,7 @@ def run_batch(
                         ok=prog.ok_count,
                         skip=prog.skip_count,
                         file=src.name,
+                        path=str(src),
                         reason=reason,
                         message=f"跳过 {src.name}：{reason}",
                     )

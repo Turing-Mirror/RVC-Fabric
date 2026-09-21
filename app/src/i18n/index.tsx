@@ -15,6 +15,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -88,6 +89,8 @@ function translate(
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<LocaleCode>(DEFAULT_LOCALE);
   const [ready, setReady] = useState(false);
+  // 语言切换的意图序号：快速连点以最后一次点击为准，先回来的旧请求丢弃。
+  const localeReq = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -143,9 +146,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const setLocale = useCallback((code: LocaleCode) => {
     // 按需加载的目标包到了再切 locale：用户不会看到「先是中文、半秒后
     // 变目标语言」的跳变。包已在缓存里时这条路是同步完成的。
+    // 连点以最后一次点击为准；包加载失败保持当前语言，也不落配置。
+    const seq = ++localeReq.current;
     void ensurePack(code)
-      .catch(() => undefined)
       .then(() => {
+        if (seq !== localeReq.current) return;
         setLocaleState(code);
         setStaticLocale(code);
         setGlossaryLocale(code);
@@ -153,6 +158,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         document.documentElement.lang = code;
         void invoke("config_set", { patch: { ui_locale: code } }).catch(() => {});
         void invoke("i18n_set_locale", { locale: code }).catch(() => {});
+      })
+      .catch(() => {
+        /* 包没装上：保持当前语言，不落配置 */
       });
   }, []);
 

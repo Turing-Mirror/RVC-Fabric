@@ -817,6 +817,28 @@ fn is_nvidia(root: &Path) -> bool {
     }
 }
 
+/// 训练/抽取用的设备选择。
+///
+/// 用户在「设置」里显式选了 CPU 就必须给 CPU —— 哪怕是 N 卡机型。 DirectML
+/// 训练本就不支持，这里不接：选了 directml 也照旧只按机型走（N 卡 cuda，
+/// 否则 cpu），算子能力没有被悄悄放大。
+fn train_device(root: &Path) -> &'static str {
+    let cfg = crate::config::read(root);
+    let accel = cfg
+        .get("accel_backend")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if accel == "cpu" {
+        return "cpu";
+    }
+    if is_nvidia(root) {
+        "cuda"
+    } else {
+        "cpu"
+    }
+}
+
 /// 训练是否在跑。卸载底模前要问一句 —— 训练正读着底模，删掉只会让它在
 /// 某个 epoch 中间炸掉。
 pub fn busy() -> bool {
@@ -1304,7 +1326,7 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
     // 记住选择：音色库要一直扫这个目录，不然重启之后训好的音色就「消失」了。
     let _ = crate::config::set_train_output_dir(root, &out_dir);
     req.output_dir = out_dir;
-    let device = if is_nvidia(root) { "cuda" } else { "cpu" };
+    let device = train_device(root);
     let log = crate::logging::begin_run(
         root,
         crate::logging::CH_TRAIN,
@@ -1363,7 +1385,7 @@ fn run_inner(
     if let Some(p) = reqfile.parent() {
         let _ = std::fs::create_dir_all(p);
     }
-    let device = if is_nvidia(root) { "cuda" } else { "cpu" };
+    let device = train_device(root);
     let payload = json!({
         "exp": req.exp.trim(),
         "dataset": req.dataset,
@@ -1940,5 +1962,24 @@ mod tests {
         // 没 Runtime 就该在这里停，而不是起个进程再失败。
         assert!(preflight(&base, &req).is_err());
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// F1：「设置」里显式选了 CPU，训练就必须给 CPU —— 哪怕这台机器有 N 卡。
+    /// DirectML 不在候选里：选了 directml 也照旧按机型走，不放大算子能力。
+    #[test]
+    fn explicit_cpu_backend_really_routes_training_to_cpu() {
+        let root = crate::testutil::scratch("train-cpu");
+        let _ = std::fs::remove_dir_all(&root);
+        let cfgp = crate::paths::app_config_path(&root);
+        std::fs::create_dir_all(cfgp.parent().unwrap()).unwrap();
+        std::fs::write(&cfgp, r#"{"accel_backend":"cpu"}"#).unwrap();
+        assert_eq!(train_device(&root), "cpu", "显式 CPU 必须真走 CPU");
+
+        std::fs::write(&cfgp, r#"{"accel_backend":"directml"}"#).unwrap();
+        // directml 训练不支持：不能冒出 privateuseone，只能按机型落到 cpu/cuda。
+        let d = train_device(&root);
+        assert!(d == "cpu" || d == "cuda", "directml 不许进训练：{d}");
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

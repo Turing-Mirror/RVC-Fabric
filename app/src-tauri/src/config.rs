@@ -787,9 +787,22 @@ pub fn update(root: &Path, patch: Map<String, Value>) -> Result<Value, String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")),
         );
-        // worker 没起来就算了 —— inuse 已经写好，下次启动自然生效。
-        let _ = crate::worker::set_hot(root, p);
-        needs_restart.retain(|k| k != "monitor_self" && k != "monitor_device");
+        // worker 没起来就算了 —— inuse 已经写好，下次启动自然生效，没什么
+        // 可重启的。在跑而派发被有界拒绝的，保留 needs_restart：如实告诉
+        // 界面「这两项没热推上去，重启变声后生效」。
+        if !crate::worker::is_worker_alive(root) {
+            needs_restart.retain(|k| k != "monitor_self" && k != "monitor_device");
+        } else {
+            match crate::worker::set_hot(root, p) {
+                Ok(_) => {
+                    needs_restart
+                        .retain(|k| k != "monitor_self" && k != "monitor_device");
+                }
+                Err(e) => {
+                    crate::logging::shell_log!("monitor hot-apply dispatch failed: {e}");
+                }
+            }
+        }
     }
 
     Ok(json!({

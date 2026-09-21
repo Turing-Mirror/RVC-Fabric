@@ -28,6 +28,9 @@ export function useEngine() {
   // Read by the adaptive poll without making it a dependency.
   const stateRef = useRef<string>("idle");
   const [lastError, setLastError] = useState("");
+  // 手工上报的错误（快捷键切音色失败这类不走 status.json 的）：running
+  // 轮询每次都会清 lastError，不给个保留窗的话错误一闪而过根本看不见。
+  const manualErr = useRef<{ msg: string; until: number } | null>(null);
   // What the next start will send. Seeded from the saved config via
   // `syncParams`, not guessed: these used to default to 15 / 1.2 and were only
   // ever written when the user dragged a slider, so a first 开启变声 pushed a
@@ -42,6 +45,19 @@ export function useEngine() {
   // 先拖音高再拖共鸣就把音高丢了 —— 待发的是字段合并后的一份。
   const hotPending = useRef<Parameters<typeof setHot>[0]>({});
   const startingRef = useRef(false);
+  // 用户**亲手**发起的「开启变声」操作：从按下那一刻（意图）到 startVc
+  // 真正落定（结果）都由这一个 op 管 —— 轮询报 idle/running、准备期的
+  // getConfig/assets 等待、取消和卸载，都不许绕过它提前结算等待者。
+  const startOpRef = useRef<{
+    waiters: ((st: EngineStatus) => void)[];
+    settled: EngineStatus | null;
+    /** engine_start_vc 已经发出去了吗。取消一个没派发的启动直接落定 idle；
+     *  已派发的必须等 stop 的结局说话 —— stop 没回来就报 idle 是谎报。 */
+    dispatched: boolean;
+  } | null>(null);
+  const lastStartRef = useRef<EngineStatus | null>(null);
+  // op 的 React 镜像：立起/落定都触发重渲染，让「停止」按钮在准备期就可见。
+  const [startPending, setStartPending] = useState(false);
   // 用户**亲手**按下「开启变声」的次数。
   //
   // `starting` 不能当这个用：开机预热引擎、导入推理库的时候后端一样会报
@@ -51,6 +67,44 @@ export function useEngine() {
   const [userStarts, setUserStarts] = useState(0);
   const [swapHint, setSwapHint] = useState(false);
   const progressRef = useRef<number | null>(null);
+
+  /**
+   * 落定一次用户启动：幂等 —— 取消/卸载先行结算过的 op，迟到的 start
+   * resolve 不许把等待者再结算一遍。
+   */
+  const settleStart = useCallback(
+    (
+      op: {
+        waiters: ((st: EngineStatus) => void)[];
+        settled: EngineStatus | null;
+        dispatched: boolean;
+      },
+      st: EngineStatus,
+    ) => {
+      if (op.settled) return;
+      op.settled = st;
+      lastStartRef.current = st;
+      if (startOpRef.current === op) startOpRef.current = null;
+      setStartPending(startOpRef.current != null);
+      for (const w of op.waiters.splice(0)) {
+        try {
+          w(st);
+        } catch {
+          /* 等待者自己的链上处理，跟我们无关 */
+        }
+      }
+    },
+    [],
+  );
+
+  // 卸载时还有在途启动：等待者不能成孤儿，落定 idle 让它们干净收尾。
+  useEffect(
+    () => () => {
+      const op = startOpRef.current;
+      if (op && op.settled == null) settleStart(op, { state: "idle" });
+    },
+    [settleStart],
+  );
 
   // 运行时是不是已经补全了。用 ref 是因为轮询回调要读它，又不能让它进依赖 ——
   // 进了依赖每次翻转都会重建定时器。
@@ -116,7 +170,10 @@ export function useEngine() {
       if (st.state === "error" && st.error) {
         setLastError(String(st.error));
       } else if (st.state === "running") {
-        setLastError("");
+        if (!manualErr.current || manualErr.current.until <= Date.now()) {
+          manualErr.current = null;
+          setLastError("");
+        }
       }
       // idle 不要清 lastError：start 失败后 worker 可能马上被一条 set
       // 写回 idle，这里一清底栏就变回「引擎就绪」，像没点过。
@@ -244,6 +301,7 @@ export function useEngine() {
   // 导入推理库不是「变声启动中」：底栏按钮仍应是「开启变声」。
   const starting =
     startingRef.current ||
+    startPending ||
     (status.state === "starting" && !bootCode) ||
     busy;
 
@@ -256,7 +314,26 @@ export function useEngine() {
     }
     // 开机导入推理库时 status 也会是 starting。那一下点按钮必须是「开启」，
     // 不能被当成「停止」把还没发出去的 start 吃掉。
-    const stopping = running || startingRef.current;
+    const pendingOp = startOpRef.current;
+    const stopping =
+      running ||
+      startingRef.current ||
+      (pendingOp != null && pendingOp.settled == null);
+    // 「开启」意图在按下这一刻就认领：getConfig / 资源检查中间隔着好几个
+    // await，不立 op 的话这期间点音色会被当成空闲、双击也会漏成两次 start。
+    const startOp: {
+      waiters: ((st: EngineStatus) => void)[];
+      settled: EngineStatus | null;
+      dispatched: boolean;
+    } | null = stopping ? null : { waiters: [], settled: null, dispatched: false };
+    if (startOp) {
+      startOpRef.current = startOp;
+      setStartPending(true);
+    }
+    const failStart = (error: string) => {
+      setLastError(error);
+      if (startOp) settleStart(startOp, { state: "error", error });
+    };
     let dspOnly = Boolean(opts?.dspId?.trim());
     let dspId = String(opts?.dspId || "").trim();
     if (!stopping) {
@@ -276,7 +353,7 @@ export function useEngine() {
           const pth = String(cfg.pth_path || cfg.last_model_path || "").trim();
           const last = String(cfg.last_model || "").trim();
           if (!pth && !last) {
-            setLastError(t("msg.vc.need_model"));
+            failStart(t("msg.vc.need_model"));
             return;
           }
         }
@@ -289,22 +366,37 @@ export function useEngine() {
         const { ensureEngineCoreOrPrompt } = await import("../lib/downloadModels");
         const ok = await ensureEngineCoreOrPrompt(t("s.vcNeedEngineCore"));
         if (!ok) {
-          setLastError(t("s.vcNeedEngineCoreShort"));
+          failStart(t("s.vcNeedEngineCoreShort"));
           return;
         }
       } catch {
         /* 预览模式忽略 */
       }
     }
+    // 准备期间用户又按了一下：stop 分支已经把 op 落定成 idle，这次启动
+    // 作废，不许再把 startVc 发出去。
+    if (startOp && startOp.settled != null) return;
     setBusy(true);
     setLastError("");
     try {
       if (stopping) {
+        // 在途启动被这下取消。还没派发 startVc 的：落定 idle 就行。
+        // 已经派发的：worker 可能真在起 —— 等待者不许听一句假的 idle，
+        // 要等 stop 的结局；stop 失败则把结算权还给在途 start 自己的结果。
+        if (pendingOp && pendingOp.settled == null && !pendingOp.dispatched) {
+          settleStart(pendingOp, { state: "idle" });
+        }
         startingRef.current = false;
         // 软停：只停音频流，worker 进程留下。force 会杀掉整棵 Python，
         // 下次开启还要再冷启动 torch/CUDA。
         const st = await stopVc(false);
-        setStatus(st);
+        if (pendingOp && pendingOp.settled == null) {
+          settleStart(pendingOp, st.state ? st : { ...st, state: "idle" });
+        }
+        // stop 的 await 期间用户可能已经又开了新一轮：settleStart 只清
+        // 自己那个 op，此刻 ref 仍非空 = 有 B 接管，旧 stop 的 idle 结果
+        // 不许盖掉新 op 的界面状态。
+        if (startOpRef.current == null) setStatus(st);
       } else {
         startingRef.current = true;
         setUserStarts((n) => n + 1);
@@ -316,8 +408,17 @@ export function useEngine() {
         }
         // 不再在 start 前推 function=vc：那条 set 会跟 start 抢槽，失败时
         // 还会把 error 盖成「参数已应用」。音高由 start 读 inuse、成功后再热补。
+        // 取消可能落在 activateDsp 的 await 上：派发前再验一次，然后才打标记。
+        if (startOp && startOp.settled != null) return;
+        if (startOp) startOp.dispatched = true;
         const st = await startVc();
+        // 这次启动已被取消/结算：迟到的 resolve 是被取消那次的余响，
+        // 不许再写 status/错误 —— 界面归当前持有者或轮询管。
+        if (startOp && startOp.settled != null) return;
         setStatus(st);
+        // 落定这一刻放行在等的选音色请求 —— 它们要按这份真实结果决定
+        // 补 swap 还是报错，不许拿启动前的快照猜。
+        if (startOp) settleStart(startOp, st);
         if (st.state === "error" && st.error) {
           setLastError(String(st.error));
         } else if (st.state !== "running") {
@@ -327,13 +428,50 @@ export function useEngine() {
         }
       }
     } catch (e) {
-      setLastError(String(e));
+      // 被取消/结算过的 op 抛出的迟到错误不写底栏 —— 那是旧一轮的事。
+      if (!(startOp && startOp.settled != null)) {
+        setLastError(String(e));
+      }
+      if (startOp) {
+        // 启动分支抛错也要放行等待者：它们等的是「这次 start 的结果」，
+        // 拒绝一样是结果。
+        settleStart(startOp, { state: "error", error: String(e) });
+      }
       await refresh();
     } finally {
-      startingRef.current = false;
-      setBusy(false);
+      // 只有没有更新一轮操作接管时才动 starting/busy：被取消后用户
+      // 可能已经开了 B，这两个标志位归 B 管，旧调用的 finally 不许清。
+      if (startOpRef.current == null) {
+        startingRef.current = false;
+        setBusy(false);
+      }
     }
-  }, [running, refresh, provision]);
+  }, [running, refresh, provision, settleStart]);
+
+  /**
+   * 用户亲手发起的变声启动还在等结果吗。`starting`/`status.state` 不行：
+   * 开机预热和导入推理库也报 starting，而那时点音色只是记选择。op 从
+   * 按下那一刻立起，准备期的 config/assets 等待也算在途。
+   */
+  const userStartPending = useCallback(() => {
+    const op = startOpRef.current;
+    return op != null && op.settled == null;
+  }, []);
+
+  /**
+   * 等在途的用户启动落定，resolve 拿到那份 status。没有在途启动时立刻
+   * resolve 最近一次的结果（没有启动过就是空对象）—— 调用方刚判过
+   * pending 再来等，落定可能抢在订阅前发生。
+   */
+  const awaitUserStart = useCallback((): Promise<EngineStatus> => {
+    const op = startOpRef.current;
+    if (op && op.settled == null) {
+      return new Promise<EngineStatus>((res) => {
+        op.waiters.push(res);
+      });
+    }
+    return Promise.resolve(lastStartRef.current ?? {});
+  }, []);
 
   /**
    * Ask the worker to re-enumerate audio devices.
@@ -358,17 +496,33 @@ export function useEngine() {
     }
   }, []);
 
-  const scheduleHot = useCallback((patch: Parameters<typeof setHot>[0]) => {
-    hotPending.current = { ...hotPending.current, ...patch };
-    if (hotTimer.current) window.clearTimeout(hotTimer.current);
-    hotTimer.current = window.setTimeout(() => {
-      const merged = hotPending.current;
-      hotPending.current = {};
-      void setHot(merged).catch(() => {
-        /* ignore when idle without worker */
-      });
-    }, 80);
+  /**
+   * 把一条不走 status.json 的错误放上底栏副标题（快捷键切音色、换模型
+   * 未被引擎确认等）。保留一个读得完的时间窗，不被 running 轮询立刻清掉；
+   * 真实的引擎错误照旧由 status 覆盖它。
+   */
+  const reportError = useCallback((msg: string) => {
+    if (!msg) return;
+    manualErr.current = { msg, until: Date.now() + 4000 };
+    setLastError(msg);
   }, []);
+
+  const scheduleHot = useCallback(
+    (patch: Parameters<typeof setHot>[0]) => {
+      hotPending.current = { ...hotPending.current, ...patch };
+      if (hotTimer.current) window.clearTimeout(hotTimer.current);
+      hotTimer.current = window.setTimeout(() => {
+        const merged = hotPending.current;
+        hotPending.current = {};
+        // 契约：idle 的 setHot 结构性地返回 Ok（只落盘）。走到 catch 的
+        // 是真失败 —— 参数没送进去，不能悄悄吞掉。
+        void setHot(merged).catch((e) => {
+          reportError(e instanceof Error ? e.message : String(e));
+        });
+      }, 80);
+    },
+    [reportError],
+  );
 
   const onPitch = useCallback(
     (v: number) => {
@@ -442,6 +596,9 @@ export function useEngine() {
     progress: loadProgress(hinted),
     noteSwap,
     lastError,
+    reportError,
+    userStartPending,
+    awaitUserStart,
     toggleRun,
     onPitch,
     onFormant,

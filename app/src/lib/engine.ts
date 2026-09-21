@@ -43,6 +43,29 @@ export type EngineStatus = {
   function?: string;
   dsp_only?: boolean;
   worker_kind?: string;
+  /**
+   * 最近一次被接受的目标音色（配置意图）。引擎合约新增字段：旧 worker
+   * 会缺席 —— 缺席意味着「换模型结果无法回执」，不代表没有目标。
+   */
+  model_selected?: { pth_path?: string; index_path?: string } | null;
+  /**
+   * 音频线程当前真正在用的模型；null = 没有在用的模型。
+   * 「使用中」徽标只认它，不认持久化的选择意图。
+   */
+  model_active?: { pth_path?: string; index_path?: string } | null;
+  /**
+   * 最近一次换模型请求的结果，按 seq 与路径双重关联。
+   * phase: "loading" | "committed" | "failed"；只有 committed 算应用成功。
+   */
+  model_apply?: {
+    seq?: number;
+    pth_path?: string;
+    index_path?: string;
+    phase?: string;
+    error_code?: string;
+    error?: string;
+    ts?: number;
+  } | null;
   [key: string]: unknown;
 };
 

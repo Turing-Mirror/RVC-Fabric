@@ -107,6 +107,26 @@ describe("Toggle 里的小问号", () => {
     expect(tooltipEl()).not.toBeNull();
   });
 
+  it("聚焦问号被滚动关掉后，同一颗仍聚焦的按钮点一下能重开（C7）", async () => {
+    // 复现验收用例：close() 只清了 focused 状态没清 DOM 焦点，按钮还握着
+    // 焦点；再点它 focus() 是 no-op，不会再发 focus 事件，说明就一直关着。
+    // 键盘激活在 DOM 层同样落成 click 事件 —— 这条断言同时覆盖键盘重开。
+    const m = mount(<HelpMark title={TIP} />);
+    mounts.push(m);
+    const btn = m.container.querySelector("button") as HTMLElement;
+    act(() => btn.click());
+    await tick();
+    expect(tooltipEl()).not.toBeNull();
+    act(() => window.dispatchEvent(new Event("scroll")));
+    await tick();
+    expect(tooltipEl()).toBeNull();
+    // 滚动关闭不清 DOM 焦点（设计如此：键盘用户的焦点不能丢）
+    expect(document.activeElement).toBe(btn);
+    act(() => btn.click());
+    await tick();
+    expect(tooltipEl()).not.toBeNull();
+  });
+
   it("悬停文字区域不打开问号的说明", async () => {
     const m = mount(
       <Toggle checked={false} onChange={() => {}} label="开关" tip={TIP} />,

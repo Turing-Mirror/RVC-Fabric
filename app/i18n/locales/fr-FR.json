@@ -989,7 +989,6 @@
     "b0e24833f7": "Déplier",
     "b269c54674": "Modèle Hubert",
     "b27dd877b1": "La voix entraînée portera ce nom",
-    "b2ba9634d9": "Non lancé",
     "b2be174f0f": "Voix de la communauté",
     "b2c6913616": "Installation…",
     "b3009f6985": "Désactivé : seul l'audio d'origine passe",
@@ -1436,7 +1435,6 @@
     "trainGuideA6": "À la fin, la voix apparaît dans Modèles. Si vous fermez en cours, le même nom saute les étapes déjà faites. Cochez le petit modèle utilisable pour avoir un fichier à écouter tous les N tours.",
     "stsDoneSkipped": "{v0} fichier(s) converti(s), {v1} ignoré(s) → {v2}",
     "stsSkippedTitle": "Ces {v0} fichier(s) n'ont pas été convertis :",
-    "stsFreeVram": "Arrêt du changeur de voix en temps réel pour libérer la VRAM…",
     "stsTargetVoice": "Voix cible",
     "stsModelMissing": "Modèle de voix introuvable : {a0}",
     "stsRecord": "Enregistrer",
@@ -2012,7 +2010,18 @@
     "stsSearchPh": "Rechercher des fichiers",
     "stsTrim": "Rogner",
     "stsStillExcluded": "Toujours exclu par le dossier : {v0}",
-    "stsRetryFailed": "Réessayer les échecs ({v0})"
+    "stsRetryFailed": "Réessayer les échecs ({v0})",
+    "stsStateUnreadable": "Impossible de lire la liste des sources : {a0}",
+    "stsStateCorrupt": "Le fichier de la liste des sources est corrompu ; les modifications sont bloquées pour le protéger",
+    "engineCmdBusy": "Le moteur est occupé — la commande précédente n'a pas encore été prise en compte. Réessayez dans un instant.",
+    "modelApplyUnconfirmed": "Le moteur n'a pas confirmé l'application de la voix. En cas de silence, réessayez ou redémarrez le moteur.",
+    "stsClearConfirm": "Vider toutes les sources et exclusions ? Action irréversible.",
+    "stsForeignBusy": "Une conversion est en cours dans une autre fenêtre ; panneau en lecture seule",
+    "stsMissingTag": "Source introuvable",
+    "stsUnreadableTag": "Illisible",
+    "stsSourceInsideOut": "Une source est dans le dossier de sortie ; ignorée",
+    "stsRefresh": "Actualiser",
+    "stsScanCancel": "Arrêter le scan"
   },
   "extras": {
     "engineTitle": "Ressources moteur",
@@ -2164,7 +2173,8 @@
     "targetExists": "La destination du runtime existe déjà : {v0}",
     "verifyFailed": "Le runtime migré n'a pas passé la vérification.",
     "notFound": "Ancien runtime introuvable.",
-    "runtimeNotReady": "Ce runtime n'est pas prêt."
+    "runtimeNotReady": "Ce runtime n'est pas prêt.",
+    "runtimeBusy": "{v0} processus utilisent encore ce runtime (WebUI classique, panneau temps réel ou conversion en cours). Fermez-les puis réessayez."
   },
   "sepVariant": {
     "normal": "standard",

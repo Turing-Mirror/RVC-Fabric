@@ -64,8 +64,6 @@ FORBIDDEN = (
     "docs",
     "Runtime",
     "runtime",
-    "ffmpeg.exe",
-    "ffprobe.exe",
 )
 
 
@@ -86,7 +84,7 @@ def mark_installer_kind() -> None:
     meta["installer"] = "tauri_nsis"
     meta.pop("iss", None)
     meta["note"] = (
-        "薄包：壳+源码。Runtime（分版）+ engine-core（共用）+ VB-Cable 均从 CNB 补全"
+        "内置共用音频组件；Runtime、变声资源及 VB-Cable 按需补全。"
     )
     meta_path.write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

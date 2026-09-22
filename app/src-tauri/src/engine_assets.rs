@@ -1,10 +1,10 @@
 //! engine-core and VB-Cable provisioning.
 //!
-//! Ports `launcher/engine_core.py` and `launcher/vbcable.py`. Both are required
-//! for a usable install and neither ships inside Setup:
+//! Shared voice resources and virtual-cable provisioning.
 //!
 //! * **engine-core** — hubert + rmvpe + ffmpeg/ffprobe, shared by every GPU
-//!   variant. Without it the worker cannot start at all.
+//!   variant. New installers carry ffmpeg/ffprobe at the same root paths;
+//!   legacy engine-core archives remain compatible and do not add a second copy.
 //! * **VB-Cable** — the virtual cable. Without it nothing the user says reaches
 //!   the game, which is the whole point of the product.
 //!

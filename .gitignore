@@ -209,6 +209,7 @@ AGENTS.md
 /app/dist/
 /app/src-tauri/target/
 /app/src-tauri/target2/
+/app/audio-core/target/
 /app/frontend/
 /app/.vscode/
 

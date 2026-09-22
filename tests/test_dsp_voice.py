@@ -39,8 +39,8 @@ BLOCK = 1024
 # 每个效果器一组「确实在干活」的参数，给通用测试轮着用。
 ACTIVE = {
     "pitch": {"semitones": 7.0},
-    "sweep": {"lo": -4.0, "hi": 13.0, "step": 0.3},
-    "pgate": {"up": 6.0, "down": -3.0, "step": 1.0},
+    "sweep": {"lo": -3.5, "hi": 12.0, "step": 0.28},
+    "pgate": {"up": 5.0, "down": -2.0, "step": 0.9},
     "formant": {"shift": -4.0},
     "whisper": {"amount": 0.7},
     "robot": {"amount": 0.5, "freq": 80.0},
@@ -48,13 +48,13 @@ ACTIVE = {
     "ring": {"freq": 80.0, "mix": 0.8},
     "tremolo": {"rate": 6.0, "depth": 0.6},
     "vibrato": {"rate": 6.0, "depth": 25.0},
-    "reverse": {"chunk_ms": 200.0, "mix": 1.0},
+    "reverse": {"chunk_ms": 180.0, "mix": 1.0},
     "chorus": {"depth": 0.7},
     "bitcrush": {"bits": 5, "downsample": 6},
     "drive": {"amount": 0.6},
     "radio": {"mix": 0.9, "noise": 0.1},
     "echo": {"mix": 0.5},
-    "revecho": {"size_ms": 250.0, "mix": 1.0},
+    "revecho": {"size_ms": 230.0, "mix": 1.0},
     "reverb": {"mix": 0.5, "size": 0.7},
 }
 
@@ -806,7 +806,7 @@ class PitchShiftTests(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_NP, "需要 numpy")
 class FormantTests(unittest.TestCase):
-    """共振峰独立于音高 —— 这是 参考实现 做不到、我们要赢的那一点。"""
+    """共振峰独立于音高 —— 这是本链的差异化能力。"""
 
     F0 = 200.0
 

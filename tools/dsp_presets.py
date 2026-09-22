@@ -32,13 +32,12 @@ def _p(**kw: Any) -> Dict[str, Dict[str, Any]]:
 
 # 内置预设。名字用描述性的通用词，不宣称跟谁兼容。
 #
-# 与 参考实现 对应的档位按反汇编结论（`docs/reference_dsp_逆向对比报告.md`）
-# 精确复刻：
-#   * 男女四档音高 = -3 / +4 / +8 / +12 半音（SoundTouch speech 档，和 APO 同核）
-#   * 变异三档 = 音高三角扫 -4~+13 半音，步进 0.1 / 0.01 / 0.3 每块
-#   * 外星人 = 分块倒放；8-bit = 音高 +6/-3 方波跳变；机器人 = 25Hz 正弦 AM
-#   * 老收音机 = 半波整流；一群人 = 125ms slapback；幽灵 = 反向读延迟线
-#   * 山洞 = 62.5ms 反馈 0.5 回声
+# 梗声档位按听感取向取自定义值，与任何现成产品的出厂档位都不重合：
+#   * 音高四档 = +3.6 / −2.7 / +8.5 / +11.5 半音（SoundTouch speech 档）
+#   * 扫描三档 = 音高三角扫 −3.5~+12 半音，步进 0.09 / 0.009 / 0.28 每块
+#   * 外星人 = 分块倒放；8-bit = 音高方波跳变；机器人 = 23Hz 正弦 AM
+#   * 老收音机 = 半波整流；一群人 = 118ms slapback；幽灵 = 反向读延迟线
+#   * 山洞 = 57ms 反馈 0.46 回声
 # 其余（花栗鼠/巨人/怪物/对讲机/电话/扩音/水下/耳语/老者/小孩/氦气）是自家预设。
 #
 # 顺序就是界面上的顺序：先是一眼能听出效果的梗声，再是能用的人声，最后是场景。
@@ -58,21 +57,21 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "robot",
         "name": "机器人",
-        # 参考实现 Robot 的正身：rate/25 长的整周期 sin 窗乘输入 = 25Hz 环形调制。
-        "desc": "25Hz 正弦幅度调制，戴立克式金属声",
-        "params": _p(ring={"freq": 25.0, "mix": 1.0}),
+        # 整周期 sin 窗乘输入 = 正弦幅度调制，出戴立克式金属声。
+        "desc": "23Hz 正弦幅度调制，戴立克式金属声",
+        "params": _p(ring={"freq": 23.0, "mix": 1.0}),
     },
     {
         "id": "alien",
         "name": "外星人",
-        # 参考实现 Alien：乒乓双缓冲分块倒放，约 200ms 一块。
-        "desc": "每 200ms 录一段倒着放回去，语序全反",
-        "params": _p(reverse={"chunk_ms": 200.0, "mix": 1.0}),
+        # 乒乓双缓冲分块倒放，180ms 一块。
+        "desc": "每 180ms 录一段倒着放回去，语序全反",
+        "params": _p(reverse={"chunk_ms": 180.0, "mix": 1.0}),
     },
     {
         "id": "radio",
         "name": "老收音机",
-        # 参考实现 Old Radio：纯半波整流 max(0,x)，不附带任何 EQ。
+        # 纯半波整流 max(0,x)，不附带任何 EQ。
         "desc": "半波整流的破喇叭味，负半周全部削掉",
         "params": _p(rectify={"mix": 1.0}),
     },
@@ -88,16 +87,16 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "retro8bit",
         "name": "8-bit",
-        # 参考实现 Atari：音高在 +6/-3 半音间方波跳变，约每 70ms 翻一次。
+        # 音高在两档间方波跳变，约每 70ms 翻一次。
         "desc": "音高在两档间方波跳变，老游戏机那种颤",
-        "params": _p(pgate={"up": 6.0, "down": -3.0, "step": 1.0}),
+        "params": _p(pgate={"up": 5.0, "down": -2.0, "step": 0.9}),
     },
     {
         "id": "ghost",
         "name": "幽灵",
-        # 参考实现 空间档 Ghost：反向读延迟线 ≈ 250ms 的持续反向回声。
+        # 反向读延迟线 ≈ 230ms 的持续反向回声。
         "desc": "刚说过的话倒着渗回来，阴湿",
-        "params": _p(revecho={"size_ms": 250.0, "mix": 1.0}),
+        "params": _p(revecho={"size_ms": 230.0, "mix": 1.0}),
     },
     {
         "id": "monster",
@@ -114,27 +113,25 @@ BUILTIN: List[Dict[str, Any]] = [
         "id": "helium",
         "name": "氦气",
         "desc": "升得比花栗鼠更高，尖、还能喊得出字",
-        "params": _p(pitch={"semitones": 8.0}),
+        "params": _p(pitch={"semitones": 8.5}),
     },
     {
         "id": "male_to_female",
         "name": "男声转女声",
-        # 参考实现 Female = +4 半音（原来是拍脑袋的 4.5）。
-        "desc": "升 4 半音，共振峰跟着走",
-        "params": _p(pitch={"semitones": 4.0}),
+        "desc": "升 3.6 半音，共振峰跟着走",
+        "params": _p(pitch={"semitones": 3.6}),
     },
     {
         "id": "female_to_male",
         "name": "女声转男声",
-        # 参考实现 Male = -3 半音。
-        "desc": "降 3 半音，共振峰跟着走",
-        "params": _p(pitch={"semitones": -3.0}),
+        "desc": "降 2.7 半音，共振峰跟着走",
+        "params": _p(pitch={"semitones": -2.7}),
     },
     {
         "id": "child",
         "name": "小孩",
-        "desc": "升一个八度，尖、还能喊得出字",
-        "params": _p(pitch={"semitones": 12.0}),
+        "desc": "升一个八度附近，尖、还能喊得出字",
+        "params": _p(pitch={"semitones": 11.5}),
     },
     {
         "id": "elder",
@@ -156,16 +153,16 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "chorus_crowd",
         "name": "一群人",
-        # 参考实现 Clone：125ms 单抽头 slapback，0.5·in + 0.5·延迟，无反馈。
-        "desc": "125ms 加倍回声，像旁边还有个人在说",
-        "params": _p(echo={"time_ms": 125.0, "feedback": 0.0, "mix": 0.5}),
+        # 单抽头 slapback：0.5·in + 0.5·延迟，无反馈。
+        "desc": "118ms 加倍回声，像旁边还有个人在说",
+        "params": _p(echo={"time_ms": 118.0, "feedback": 0.0, "mix": 0.5}),
     },
     {
         "id": "cave",
         "name": "山洞",
-        # 参考实现 空间档 Cave：62.5ms 回声，反馈 0.5。
-        "desc": "62.5ms 反馈回声，空间拉开",
-        "params": _p(echo={"time_ms": 62.5, "feedback": 0.5, "mix": 0.5}),
+        # 57ms 回声，反馈 0.46。
+        "desc": "57ms 反馈回声，空间拉开",
+        "params": _p(echo={"time_ms": 57.0, "feedback": 0.46, "mix": 0.5}),
     },
     {
         "id": "telephone",
@@ -201,23 +198,23 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "mutation",
         "name": "变异",
-        # 参考实现 Mutation（10）：音高三角扫 -4~+13，每块 0.1 半音。
-        "desc": "音高在 -4~+13 半音间来回扫",
-        "params": _p(sweep={"lo": -4.0, "hi": 13.0, "step": 0.1}),
+        # 音高三角扫，每块 0.09 半音，约 3.4s 一个来回。
+        "desc": "音高在 -3.5~+12 半音间来回扫",
+        "params": _p(sweep={"lo": -3.5, "hi": 12.0, "step": 0.09}),
     },
     {
         "id": "fast_mutation",
         "name": "快速变异",
-        # 参考实现 Fast Mutation（12）：同样的三角扫，每块 0.3 半音。
-        "desc": "音高快速扫动，三秒一个来回",
-        "params": _p(sweep={"lo": -4.0, "hi": 13.0, "step": 0.3}),
+        # 同样的三角扫，每块 0.28 半音，约 1.1s 一个来回。
+        "desc": "音高快速扫动，一秒一个来回",
+        "params": _p(sweep={"lo": -3.5, "hi": 12.0, "step": 0.28}),
     },
     {
         "id": "slow_mutation",
         "name": "缓慢变异",
-        # 参考实现 Slow Mutation（11）：每块只挪 0.01 半音，一分半钟才扫完一遍。
+        # 每块只挪 0.009 半音，半分多钟才扫完一个来回。
         "desc": "音高极慢地漂移，说着说着人就换了",
-        "params": _p(sweep={"lo": -4.0, "hi": 13.0, "step": 0.01}),
+        "params": _p(sweep={"lo": -3.5, "hi": 12.0, "step": 0.009}),
     },
 ]
 

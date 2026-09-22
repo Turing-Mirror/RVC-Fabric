@@ -3,7 +3,7 @@
   "desc": "刚说过的话倒着渗回来，阴湿",
   "params": {
     "revecho": {
-      "size_ms": 250.0,
+      "size_ms": 230.0,
       "mix": 1.0
     }
   }

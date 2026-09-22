@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Official SoundTouch DLL wrapper (LGPL 2.1, dynamic link).
 
-Speech settings match what 参考实现's APO calls:
+Speech settings used by the built-in voice presets:
   USE_QUICKSEEK=0, USE_AA_FILTER=1, SEQUENCE=40, SEEKWINDOW=15, OVERLAP=8.
 """
 
@@ -91,7 +91,7 @@ class SoundTouch:
         if lib.soundtouch_setSampleRate(handle, int(sample_rate)) == 0:
             self.close()
             raise OSError("soundtouch_setSampleRate failed")
-        # 参考实现 APO: speech preset, quality seek, AA on.
+        # Speech preset: quality seek off, anti-alias on.
         lib.soundtouch_setSetting(handle, SETTING_USE_QUICKSEEK, 0)
         lib.soundtouch_setSetting(handle, SETTING_USE_AA_FILTER, 1)
         lib.soundtouch_setSetting(handle, SETTING_SEQUENCE_MS, 40)

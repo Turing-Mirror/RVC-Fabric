@@ -1,10 +1,10 @@
 {
   "name": "山洞",
-  "desc": "62.5ms 反馈回声，空间拉开",
+  "desc": "57ms 反馈回声，空间拉开",
   "params": {
     "echo": {
-      "time_ms": 62.5,
-      "feedback": 0.5,
+      "time_ms": 57.0,
+      "feedback": 0.46,
       "mix": 0.5
     }
   }

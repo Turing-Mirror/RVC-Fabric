@@ -1,9 +1,9 @@
 {
   "name": "女声转男声",
-  "desc": "降 3 半音，共振峰跟着走",
+  "desc": "降 2.7 半音，共振峰跟着走",
   "params": {
     "pitch": {
-      "semitones": -3.0
+      "semitones": -2.7
     }
   }
 }

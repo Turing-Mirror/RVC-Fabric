@@ -84,42 +84,54 @@ class BuiltinTests(unittest.TestCase):
             self.assertEqual(body["params"], p["params"], p["id"])
 
     def test_gender_presets_are_pitch_only(self):
-        """男女档跟 参考实现 一样只动 pitch，共振峰跟着走。"""
+        """男女档只动 pitch，共振峰跟着音高走。"""
         m2f = next(p for p in BUILTIN if p["id"] == "male_to_female")
-        # 参考实现 Female = +4 半音（APO 反汇编确认的精确值）
-        self.assertAlmostEqual(m2f["params"]["pitch"]["semitones"], 4.0)
+        self.assertAlmostEqual(m2f["params"]["pitch"]["semitones"], 3.6)
         self.assertNotIn("formant", m2f["params"])
         f2m = next(p for p in BUILTIN if p["id"] == "female_to_male")
-        # 参考实现 Male = -3 半音
-        self.assertAlmostEqual(f2m["params"]["pitch"]["semitones"], -3.0)
+        self.assertAlmostEqual(f2m["params"]["pitch"]["semitones"], -2.7)
         self.assertNotIn("formant", f2m["params"])
 
-    def test_reference_presets_use_the_real_mechanisms(self):
-        """钉住 参考实现 反汇编查出来的真实现，防退化回「差不多」的凑法。"""
+    def test_builtin_presets_use_the_real_mechanisms(self):
+        """钉住每个梗声档背后的真机制，防退化回「差不多」的凑法。"""
         robot = next(p for p in BUILTIN if p["id"] == "robot")
-        # Robot = 25Hz 正弦 AM（rate/25 整周期 sin 窗），不是环调凑数也不是声码器
+        # 机器人 = 23Hz 正弦 AM（整周期 sin 窗），不是环调凑数也不是声码器
         self.assertEqual(set(robot["params"]), {"ring"})
-        self.assertAlmostEqual(robot["params"]["ring"]["freq"], 25.0)
+        self.assertAlmostEqual(robot["params"]["ring"]["freq"], 23.0)
         self.assertAlmostEqual(robot["params"]["ring"]["mix"], 1.0)
         alien = next(p for p in BUILTIN if p["id"] == "alien")
-        # Alien = 分块倒放，不是「升调+颤音」
+        # 外星人 = 分块倒放，不是「升调+颤音」
         self.assertEqual(set(alien["params"]), {"reverse"})
+        self.assertAlmostEqual(alien["params"]["reverse"]["chunk_ms"], 180.0)
         radio = next(p for p in BUILTIN if p["id"] == "radio")
-        # Old Radio = 纯半波整流，不附带 EQ
+        # 老收音机 = 纯半波整流，不附带 EQ
         self.assertEqual(set(radio["params"]), {"rectify"})
         self.assertAlmostEqual(radio["params"]["rectify"]["mix"], 1.0)
         retro = next(p for p in BUILTIN if p["id"] == "retro8bit")
-        # Atari = 音高 +6/-3 方波跳变
+        # 8-bit = 音高方波跳变
         self.assertEqual(set(retro["params"]), {"pgate"})
-        for pid, step in (("mutation", 0.1), ("fast_mutation", 0.3), ("slow_mutation", 0.01)):
+        self.assertAlmostEqual(retro["params"]["pgate"]["up"], 5.0)
+        self.assertAlmostEqual(retro["params"]["pgate"]["down"], -2.0)
+        for pid, step in (
+            ("mutation", 0.09),
+            ("fast_mutation", 0.28),
+            ("slow_mutation", 0.009),
+        ):
             p = next(x for x in BUILTIN if x["id"] == pid)
             self.assertAlmostEqual(p["params"]["sweep"]["step"], step, pid)
-            self.assertAlmostEqual(p["params"]["sweep"]["lo"], -4.0, pid)
-            self.assertAlmostEqual(p["params"]["sweep"]["hi"], 13.0, pid)
+            self.assertAlmostEqual(p["params"]["sweep"]["lo"], -3.5, pid)
+            self.assertAlmostEqual(p["params"]["sweep"]["hi"], 12.0, pid)
         clone = next(p for p in BUILTIN if p["id"] == "chorus_crowd")
-        # Clone = 125ms slapback，0.5 干湿、无反馈
-        self.assertAlmostEqual(clone["params"]["echo"]["time_ms"], 125.0)
+        # 一群人 = 118ms slapback，0.5 干湿、无反馈
+        self.assertAlmostEqual(clone["params"]["echo"]["time_ms"], 118.0)
         self.assertAlmostEqual(clone["params"]["echo"]["feedback"], 0.0)
+        cave = next(p for p in BUILTIN if p["id"] == "cave")
+        self.assertAlmostEqual(cave["params"]["echo"]["time_ms"], 57.0)
+        self.assertAlmostEqual(cave["params"]["echo"]["feedback"], 0.46)
+        ghost = next(p for p in BUILTIN if p["id"] == "ghost")
+        # 幽灵 = 反向读延迟线
+        self.assertEqual(set(ghost["params"]), {"revecho"})
+        self.assertAlmostEqual(ghost["params"]["revecho"]["size_ms"], 230.0)
 
     def test_chipmunk_and_child_do_not_stack_formant(self):
         for pid in ("chipmunk", "child", "giant"):

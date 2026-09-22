@@ -1,9 +1,9 @@
 {
   "name": "小孩",
-  "desc": "升一个八度，尖、还能喊得出字",
+  "desc": "升一个八度附近，尖、还能喊得出字",
   "params": {
     "pitch": {
-      "semitones": 12.0
+      "semitones": 11.5
     }
   }
 }

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -16,6 +16,32 @@ const SCHEMA_VERSION: u32 = 1;
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 static EXPORT_BUSY: AtomicBool = AtomicBool::new(false);
 static EXPORT_CANCEL: AtomicBool = AtomicBool::new(false);
+static SCAN_BUSY: AtomicBool = AtomicBool::new(false);
+static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+
+struct ScanGuard;
+impl ScanGuard {
+    fn start() -> Result<Self, String> {
+        SCAN_BUSY
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "audio_scan_busy".to_string())?;
+        SCAN_CANCEL.store(false, Ordering::Release);
+        Ok(Self)
+    }
+}
+impl Drop for ScanGuard {
+    fn drop(&mut self) {
+        SCAN_BUSY.store(false, Ordering::Release);
+    }
+}
+
+fn scan_check(cancel: &AtomicBool) -> Result<(), String> {
+    if cancel.load(Ordering::Acquire) {
+        Err("audio_scan_cancelled".into())
+    } else {
+        Ok(())
+    }
+}
 
 struct ExportGuard;
 impl ExportGuard {
@@ -257,7 +283,15 @@ fn audio_file(path: &Path) -> bool {
     )
 }
 
-fn collect(root: &Path, path: &Path, recursive: bool) -> Result<Vec<PathBuf>, String> {
+fn collect(
+    root: &Path,
+    path: &Path,
+    recursive: bool,
+    cancel: &AtomicBool,
+    found: &mut u64,
+    progress: &mut dyn FnMut(u64),
+) -> Result<Vec<PathBuf>, String> {
+    scan_check(cancel)?;
     let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let user_data = paths::user_data(&canonical_root);
     let skipped = [user_data.join("audio"), user_data.join("audio_clips")];
@@ -266,6 +300,8 @@ fn collect(root: &Path, path: &Path, recursive: bool) -> Result<Vec<PathBuf>, St
     }
     if path.is_file() {
         return if audio_file(path) {
+            *found += 1;
+            progress(*found);
             Ok(vec![path.to_path_buf()])
         } else {
             Err("audio_file_type_unsupported".into())
@@ -277,7 +313,9 @@ fn collect(root: &Path, path: &Path, recursive: bool) -> Result<Vec<PathBuf>, St
     let mut files = Vec::new();
     let mut pending = vec![path.to_path_buf()];
     while let Some(dir) = pending.pop() {
+        scan_check(cancel)?;
         for item in fs::read_dir(dir).map_err(|e| e.to_string())? {
+            scan_check(cancel)?;
             let item = item.map_err(|e| e.to_string())?;
             let kind = item.file_type().map_err(|e| e.to_string())?;
             if skipped
@@ -293,6 +331,10 @@ fn collect(root: &Path, path: &Path, recursive: bool) -> Result<Vec<PathBuf>, St
                 pending.push(item.path());
             } else if kind.is_file() && audio_file(&item.path()) {
                 files.push(item.path());
+                *found += 1;
+                if *found % 32 == 0 {
+                    progress(*found);
+                }
             }
         }
     }
@@ -316,6 +358,7 @@ fn attach_files(
     source: &Source,
     files: &[PathBuf],
     created_copies: &mut Vec<PathBuf>,
+    cancel: &AtomicBool,
 ) -> Result<bool, String> {
     let mut changed = false;
     let mut by_origin: HashMap<String, usize> = library
@@ -325,6 +368,7 @@ fn attach_files(
         .map(|(index, asset)| (stored_key(&asset.origin), index))
         .collect();
     for file in files {
+        scan_check(cancel)?;
         let origin = fs::canonicalize(file).map_err(|e| e.to_string())?;
         let key = path_key(&origin);
         if source.excludes.contains(&key) {
@@ -346,7 +390,7 @@ fn attach_files(
                 asset.available = available;
             }
             if source.mode == ImportMode::Copy && asset.path == asset.origin {
-                let copy = copy_to_library(root, &asset.id, &origin)?;
+                let copy = copy_to_library(root, &asset.id, &origin, cancel)?;
                 created_copies.push(copy.clone());
                 asset.path = copy.to_string_lossy().into_owned();
                 changed = true;
@@ -364,7 +408,7 @@ fn attach_files(
         }
         let id = library.id("asset");
         let path = if source.mode == ImportMode::Copy {
-            let copy = copy_to_library(root, &id, &origin)?;
+            let copy = copy_to_library(root, &id, &origin, cancel)?;
             created_copies.push(copy.clone());
             copy
         } else {
@@ -404,7 +448,12 @@ fn attach_files(
     Ok(changed)
 }
 
-fn copy_to_library(root: &Path, id: &str, source: &Path) -> Result<PathBuf, String> {
+fn copy_to_library(
+    root: &Path,
+    id: &str,
+    source: &Path,
+    cancel: &AtomicBool,
+) -> Result<PathBuf, String> {
     let media = paths::user_data(root).join("audio").join("media");
     fs::create_dir_all(&media).map_err(|e| e.to_string())?;
     let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("wav");
@@ -416,10 +465,27 @@ fn copy_to_library(root: &Path, id: &str, source: &Path) -> Result<PathBuf, Stri
         .create_new(true)
         .open(&temp)
         .map_err(|e| e.to_string())?;
-    if let Err(e) = std::io::copy(&mut input, &mut output).and_then(|_| output.sync_all()) {
+    let copied = (|| -> Result<(), String> {
+        let mut buffer = [0u8; 256 * 1024];
+        loop {
+            scan_check(cancel)?;
+            let read = input.read(&mut buffer).map_err(|e| e.to_string())?;
+            if read == 0 {
+                break;
+            }
+            output
+                .write_all(&buffer[..read])
+                .map_err(|e| e.to_string())?;
+        }
+        output.sync_all().map_err(|e| e.to_string())?;
+        scan_check(cancel)
+    })();
+    if let Err(e) = copied {
+        drop(output);
         let _ = fs::remove_file(&temp);
-        return Err(e.to_string());
+        return Err(e);
     }
+    drop(output);
     crate::file_publish::publish_new(&temp, &target).map_err(|e| {
         let _ = fs::remove_file(&temp);
         if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -431,34 +497,58 @@ fn copy_to_library(root: &Path, id: &str, source: &Path) -> Result<PathBuf, Stri
     Ok(target)
 }
 
-pub fn import(
+#[cfg(test)]
+fn import(
     root: &Path,
     paths: &[PathBuf],
     mode: ImportMode,
     recursive: bool,
 ) -> Result<Library, String> {
+    import_with_progress(
+        root,
+        paths,
+        mode,
+        recursive,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+}
+
+fn import_with_progress(
+    root: &Path,
+    paths: &[PathBuf],
+    mode: ImportMode,
+    recursive: bool,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64),
+) -> Result<Library, String> {
     if paths.is_empty() {
         return snapshot(root);
     }
     // Scan outside the mutation lock. A slow or offline directory cannot block numbering edits.
+    let mut found = 0;
     let scans: Result<Vec<_>, String> = paths
         .iter()
         .map(|path| {
+            scan_check(cancel)?;
             let canonical = fs::canonicalize(path).map_err(|e| e.to_string())?;
             let kind = if canonical.is_dir() {
                 SourceKind::Directory
             } else {
                 SourceKind::File
             };
-            let files = collect(root, &canonical, recursive)?;
+            let files = collect(root, &canonical, recursive, cancel, &mut found, progress)?;
             Ok((canonical, kind, files))
         })
         .collect();
     let scans = scans?;
+    progress(found);
+    scan_check(cancel)?;
     let mut created_copies = Vec::new();
     let result = mutate(root, |library| {
         let mut changed = false;
         for (path, kind, files) in &scans {
+            scan_check(cancel)?;
             let key = path_key(path);
             let source = if let Some(existing) =
                 library.sources.iter().find(|s| stored_key(&s.path) == key)
@@ -482,8 +572,9 @@ pub fn import(
                 changed = true;
                 source
             };
-            changed |= attach_files(root, library, &source, files, &mut created_copies)?;
+            changed |= attach_files(root, library, &source, files, &mut created_copies, cancel)?;
         }
+        scan_check(cancel)?;
         Ok(changed)
     });
     if result.is_err() {
@@ -494,7 +585,298 @@ pub fn import(
     result
 }
 
-pub fn refresh(root: &Path, source_id: &str) -> Result<Library, String> {
+#[cfg(test)]
+fn refresh(root: &Path, source_id: &str) -> Result<Library, String> {
+    refresh_with_progress(root, source_id, &AtomicBool::new(false), &mut |_| {})
+}
+
+fn relocated_path(source: &Source, replacement: &Path, original: &str) -> Result<PathBuf, String> {
+    if source.kind == SourceKind::File {
+        if stored_key(original) != stored_key(&source.path) {
+            return Err("audio_relink_invalid_source".into());
+        }
+        return Ok(replacement.to_path_buf());
+    }
+    let old_root = stored_key(&source.path);
+    let old_path = stored_key(original);
+    let relative = Path::new(&old_path)
+        .strip_prefix(&old_root)
+        .map_err(|_| "audio_relink_invalid_source")?;
+    Ok(replacement.join(relative))
+}
+
+#[cfg(test)]
+fn relink_source(root: &Path, source_id: &str, replacement: &Path) -> Result<Library, String> {
+    relink_source_with_progress(
+        root,
+        source_id,
+        replacement,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+}
+
+fn relink_source_with_progress(
+    root: &Path,
+    source_id: &str,
+    replacement: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64),
+) -> Result<Library, String> {
+    scan_check(cancel)?;
+    let replacement = fs::canonicalize(replacement).map_err(|e| e.to_string())?;
+    let current = snapshot(root)?;
+    let source = current
+        .sources
+        .iter()
+        .find(|s| s.id == source_id)
+        .ok_or("audio_source_unknown")?;
+    if source.mode != ImportMode::Reference {
+        return Err("audio_relink_copy_source".into());
+    }
+    if current
+        .sources
+        .iter()
+        .any(|item| item.id != source_id && stored_key(&item.path) == path_key(&replacement))
+    {
+        return Err("audio_relink_conflict".into());
+    }
+    if current
+        .assets
+        .iter()
+        .any(|asset| asset.source_ids.contains(&source.id) && asset.source_ids.len() != 1)
+    {
+        return Err("audio_relink_shared_asset".into());
+    }
+    let is_expected_kind = match source.kind {
+        SourceKind::File => replacement.is_file() && audio_file(&replacement),
+        SourceKind::Directory => replacement.is_dir(),
+    };
+    if !is_expected_kind {
+        return Err("audio_relink_kind_mismatch".into());
+    }
+    let mut found = 0;
+    let files = collect(
+        root,
+        &replacement,
+        source.recursive,
+        cancel,
+        &mut found,
+        progress,
+    )?;
+    progress(found);
+    scan_check(cancel)?;
+    mutate(root, |library| {
+        let index = library
+            .sources
+            .iter()
+            .position(|s| s.id == source_id)
+            .ok_or("audio_source_unknown")?;
+        let original = library.sources[index].clone();
+        let new_key = path_key(&replacement);
+        if library
+            .sources
+            .iter()
+            .any(|s| s.id != source_id && stored_key(&s.path) == new_key)
+        {
+            return Err("audio_relink_conflict".into());
+        }
+        let moving: HashSet<_> = library
+            .assets
+            .iter()
+            .filter(|asset| asset.source_ids.contains(&original.id))
+            .map(|asset| asset.id.as_str())
+            .collect();
+        let occupied: HashSet<_> = library
+            .assets
+            .iter()
+            .filter(|asset| !moving.contains(asset.id.as_str()))
+            .map(|asset| stored_key(&asset.origin))
+            .collect();
+        let mut changes = Vec::new();
+        for (asset_index, asset) in library.assets.iter().enumerate() {
+            if !moving.contains(asset.id.as_str()) {
+                continue;
+            }
+            if asset.source_ids.len() != 1 || asset.path != asset.origin {
+                return Err("audio_relink_shared_asset".into());
+            }
+            let target = relocated_path(&original, &replacement, &asset.origin)?;
+            let key = path_key(&target);
+            if occupied.contains(&key) {
+                return Err("audio_relink_conflict".into());
+            }
+            changes.push((asset_index, target));
+        }
+        let mut updated = original.clone();
+        updated.path = replacement.to_string_lossy().into_owned();
+        updated.excludes = original
+            .excludes
+            .iter()
+            .map(|excluded| relocated_path(&original, &replacement, excluded).map(|p| path_key(&p)))
+            .collect::<Result<_, _>>()?;
+        library.sources[index] = updated.clone();
+        for (asset_index, target) in changes {
+            scan_check(cancel)?;
+            let asset = &mut library.assets[asset_index];
+            let path = target.canonicalize().unwrap_or(target);
+            let path_str = path.to_string_lossy().into_owned();
+            if asset.path != path_str {
+                asset.duration = None;
+            }
+            let available = path.is_file();
+            if available {
+                let (size, modified_ms) = file_stamp(&path)?;
+                if asset.size != size || asset.modified_ms != modified_ms {
+                    asset.duration = None;
+                }
+                asset.size = size;
+                asset.modified_ms = modified_ms;
+            }
+            asset.origin = path_str.clone();
+            asset.path = path_str;
+            asset.available = available;
+        }
+        attach_files(root, library, &updated, &files, &mut Vec::new(), cancel)?;
+        scan_check(cancel)?;
+        Ok(true)
+    })
+}
+
+pub fn relink_asset(
+    root: &Path,
+    asset_id: &str,
+    replacement: &Path,
+    replace_scanned_duplicate: bool,
+) -> Result<Library, String> {
+    let replacement = fs::canonicalize(replacement).map_err(|e| e.to_string())?;
+    if !replacement.is_file() || !audio_file(&replacement) {
+        return Err("audio_relink_kind_mismatch".into());
+    }
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let user_data = paths::user_data(&canonical_root);
+    if replacement.starts_with(user_data.join("audio"))
+        || replacement.starts_with(user_data.join("audio_clips"))
+    {
+        return Err("audio_source_managed".into());
+    }
+    mutate(root, |library| {
+        let index = library
+            .assets
+            .iter()
+            .position(|a| a.id == asset_id)
+            .ok_or("audio_asset_unknown")?;
+        let old = library.assets[index].clone();
+        if old.path != old.origin {
+            return Err("audio_relink_copy_source".into());
+        }
+        let new_key = path_key(&replacement);
+        let collision = library
+            .assets
+            .iter()
+            .find(|a| a.id != asset_id && stored_key(&a.origin) == new_key)
+            .cloned();
+        if library.sources.iter().any(|source| {
+            source.kind == SourceKind::File
+                && !old.source_ids.contains(&source.id)
+                && stored_key(&source.path) == new_key
+        }) {
+            return Err("audio_relink_conflict".into());
+        }
+        let mut related = old.source_ids.clone();
+        if let Some(duplicate) = &collision {
+            let entries: Vec<_> = library
+                .entries
+                .iter()
+                .filter(|entry| entry.asset_id == duplicate.id)
+                .collect();
+            let default_name = replacement
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let untouched = entries.len() == 1
+                && entries[0].name == default_name
+                && entries[0].number.is_none()
+                && entries[0].start == 0.0
+                && entries[0].end.is_none()
+                && entries[0].volume == 1.0
+                && !entries[0].looped;
+            if duplicate.path != duplicate.origin || !untouched {
+                return Err("audio_relink_conflict".into());
+            }
+            if !replace_scanned_duplicate {
+                return Err("audio_relink_duplicate_target".into());
+            }
+            for id in &duplicate.source_ids {
+                if !related.contains(id) {
+                    related.push(id.clone());
+                }
+            }
+        }
+        for source in &library.sources {
+            if !related.contains(&source.id) {
+                continue;
+            }
+            if source.kind == SourceKind::Directory {
+                let source_path = stored_key(&source.path);
+                let selected_path = Path::new(&new_key);
+                if !selected_path.starts_with(&source_path)
+                    || (!source.recursive
+                        && selected_path.parent() != Some(Path::new(&source_path)))
+                {
+                    return Err("audio_relink_outside_source".into());
+                }
+            }
+        }
+        let old_key = stored_key(&old.origin);
+        for source in &mut library.sources {
+            if !related.contains(&source.id) {
+                continue;
+            }
+            if source.kind == SourceKind::File {
+                source.path = replacement.to_string_lossy().into_owned();
+            }
+            for excluded in &mut source.excludes {
+                if *excluded == old_key {
+                    *excluded = new_key.clone();
+                }
+            }
+        }
+        let (size, modified_ms) = file_stamp(&replacement)?;
+        if let Some(duplicate) = &collision {
+            library
+                .entries
+                .retain(|entry| entry.asset_id != duplicate.id);
+            library.assets.retain(|asset| asset.id != duplicate.id);
+        }
+        let asset = library
+            .assets
+            .iter_mut()
+            .find(|asset| asset.id == asset_id)
+            .ok_or("audio_asset_unknown")?;
+        asset.source_ids = related;
+        let next_path = replacement.to_string_lossy().into_owned();
+        if asset.path != next_path {
+            asset.duration = None;
+        }
+        asset.origin = next_path;
+        asset.path = asset.origin.clone();
+        asset.available = true;
+        if asset.size != size || asset.modified_ms != modified_ms {
+            asset.duration = None;
+        }
+        asset.size = size;
+        asset.modified_ms = modified_ms;
+        Ok(true)
+    })
+}
+
+fn refresh_with_progress(
+    root: &Path,
+    source_id: &str,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64),
+) -> Result<Library, String> {
     let source = snapshot(root)?
         .sources
         .into_iter()
@@ -515,11 +897,21 @@ pub fn refresh(root: &Path, source_id: &str) -> Result<Library, String> {
             Ok(changed)
         });
     }
-    let files = match collect(root, Path::new(&source.path), source.recursive) {
+    let mut found = 0;
+    let files = match collect(
+        root,
+        Path::new(&source.path),
+        source.recursive,
+        cancel,
+        &mut found,
+        progress,
+    ) {
         Ok(files) => files,
         Err(error) if error == "audio_source_missing" => Vec::new(),
         Err(error) => return Err(error),
     };
+    progress(found);
+    scan_check(cancel)?;
     let found: HashSet<_> = files.iter().map(|path| path_key(path)).collect();
     mutate(root, |library| {
         let current = library
@@ -542,7 +934,8 @@ pub fn refresh(root: &Path, source_id: &str) -> Result<Library, String> {
             changed |= asset.available != available;
             asset.available = available;
         }
-        changed |= attach_files(root, library, &current, &files, &mut Vec::new())?;
+        changed |= attach_files(root, library, &current, &files, &mut Vec::new(), cancel)?;
+        scan_check(cancel)?;
         Ok(changed)
     })
 }
@@ -751,6 +1144,32 @@ pub async fn audio_library_pick(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn audio_library_pick_replacement(
+    window: tauri::WebviewWindow,
+    kind: String,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let picker = crate::shell_extras::dialog_on(Some(&window));
+        let path = match kind.as_str() {
+            "file" => picker
+                .set_title(&crate::i18n::t("audio.relinkFile"))
+                .add_filter(
+                    &crate::i18n::t("audio.title"),
+                    &["wav", "mp3", "flac", "m4a", "ogg", "aac", "opus"],
+                )
+                .pick_file(),
+            "directory" => picker
+                .set_title(&crate::i18n::t("audio.relinkSource"))
+                .pick_folder(),
+            _ => return Err("audio_pick_kind_invalid".into()),
+        };
+        Ok(path.map(|path| path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn notify(app: &AppHandle, library: &Library) {
     let _ = app.emit("audio-library://changed", library.revision);
 }
@@ -764,9 +1183,11 @@ pub async fn audio_library_import(
     recursive: bool,
 ) -> Result<Library, String> {
     let root = crate::root_clone(&state)?;
+    let progress_app = app.clone();
     let library = tauri::async_runtime::spawn_blocking(move || {
+        let _guard = ScanGuard::start()?;
         let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
-        import(
+        import_with_progress(
             &root,
             &paths,
             if copy {
@@ -775,6 +1196,10 @@ pub async fn audio_library_import(
                 ImportMode::Reference
             },
             recursive,
+            &SCAN_CANCEL,
+            &mut |files| {
+                let _ = progress_app.emit("audio-library://scan", files);
+            },
         )
     })
     .await
@@ -790,9 +1215,75 @@ pub async fn audio_library_refresh(
     source_id: String,
 ) -> Result<Library, String> {
     let root = crate::root_clone(&state)?;
-    let library = tauri::async_runtime::spawn_blocking(move || refresh(&root, &source_id))
-        .await
-        .map_err(|e| e.to_string())??;
+    let progress_app = app.clone();
+    let library = tauri::async_runtime::spawn_blocking(move || {
+        let _guard = ScanGuard::start()?;
+        refresh_with_progress(&root, &source_id, &SCAN_CANCEL, &mut |files| {
+            let _ = progress_app.emit("audio-library://scan", files);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    notify(&app, &library);
+    Ok(library)
+}
+
+#[tauri::command]
+pub fn audio_library_scan_cancel() -> bool {
+    if SCAN_BUSY.load(Ordering::Acquire) {
+        SCAN_CANCEL.store(true, Ordering::Release);
+        true
+    } else {
+        false
+    }
+}
+
+#[tauri::command]
+pub async fn audio_library_relink_source(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+    source_id: String,
+    replacement: String,
+) -> Result<Library, String> {
+    let root = crate::root_clone(&state)?;
+    let progress_app = app.clone();
+    let library = tauri::async_runtime::spawn_blocking(move || {
+        let _guard = ScanGuard::start()?;
+        relink_source_with_progress(
+            &root,
+            &source_id,
+            Path::new(&replacement),
+            &SCAN_CANCEL,
+            &mut |files| {
+                let _ = progress_app.emit("audio-library://scan", files);
+            },
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    notify(&app, &library);
+    Ok(library)
+}
+
+#[tauri::command]
+pub async fn audio_library_relink_asset(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+    asset_id: String,
+    replacement: String,
+    replace_scanned_duplicate: bool,
+) -> Result<Library, String> {
+    let root = crate::root_clone(&state)?;
+    let library = tauri::async_runtime::spawn_blocking(move || {
+        relink_asset(
+            &root,
+            &asset_id,
+            Path::new(&replacement),
+            replace_scanned_duplicate,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     notify(&app, &library);
     Ok(library)
 }
@@ -1003,6 +1494,10 @@ pub fn stop_export_on_exit() {
     }
 }
 
+pub fn stop_scan_on_exit() {
+    SCAN_CANCEL.store(true, Ordering::Release);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1154,5 +1649,133 @@ mod tests {
         fs::remove_file(managed).unwrap();
         let updated = refresh(&f.0, &both.sources[1].id).unwrap();
         assert!(!updated.assets[0].available);
+    }
+
+    #[test]
+    fn relocating_offline_directory_preserves_identity_number_and_exclusions() {
+        let f = Fixture::new();
+        f.audio("old/song.wav");
+        let excluded = f.audio("old/excluded.wav");
+        let first = import(&f.0, &[f.0.join("old")], ImportMode::Reference, true).unwrap();
+        let source_id = first.sources[0].id.clone();
+        let song = first
+            .entries
+            .iter()
+            .find(|entry| entry.name == "song")
+            .unwrap();
+        let entry_id = song.id.clone();
+        let asset_id = song.asset_id.clone();
+        let excluded_asset = first
+            .assets
+            .iter()
+            .find(|asset| asset.origin == excluded.canonicalize().unwrap().to_string_lossy())
+            .unwrap();
+        exclude(&f.0, &source_id, &excluded_asset.id).unwrap();
+        set_number(&f.0, &entry_id, Some(12345)).unwrap();
+        fs::rename(f.0.join("old"), f.0.join("new")).unwrap();
+        f.audio("new/fresh.wav");
+        let moved = relink_source(&f.0, &source_id, &f.0.join("new")).unwrap();
+        let song_after = moved
+            .entries
+            .iter()
+            .find(|entry| entry.id == entry_id)
+            .unwrap();
+        let asset_after = moved
+            .assets
+            .iter()
+            .find(|asset| asset.id == asset_id)
+            .unwrap();
+        assert_eq!(song_after.number, Some(12345));
+        assert!(asset_after.available);
+        assert!(asset_after.origin.ends_with("new/song.wav"));
+        assert!(moved.sources[0]
+            .excludes
+            .iter()
+            .any(|key| key.ends_with("new/excluded.wav")));
+        assert_eq!(moved.entries.len(), first.entries.len() + 1);
+        assert_eq!(
+            refresh(&f.0, &source_id).unwrap().entries.len(),
+            moved.entries.len()
+        );
+    }
+
+    #[test]
+    fn relocating_file_source_keeps_entry_and_rejects_collision() {
+        let f = Fixture::new();
+        let old = f.audio("old.wav");
+        let other = f.audio("other.wav");
+        let first = import(
+            &f.0,
+            &[old.clone(), other.clone()],
+            ImportMode::Reference,
+            true,
+        )
+        .unwrap();
+        let original = first.entries[0].id.clone();
+        set_number(&f.0, &original, Some(777)).unwrap();
+        assert!(relink_source(&f.0, &first.sources[0].id, &other).is_err());
+        assert_eq!(snapshot(&f.0).unwrap().entries[0].number, Some(777));
+        let replacement = f.audio("moved.wav");
+        fs::remove_file(old).unwrap();
+        let after = relink_source(&f.0, &first.sources[0].id, &replacement).unwrap();
+        assert_eq!(after.entries[0].id, original);
+        assert_eq!(after.entries[0].number, Some(777));
+        assert_eq!(
+            after.sources[0].path,
+            replacement.canonicalize().unwrap().to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn relocating_single_missing_asset_inside_source_keeps_number() {
+        let f = Fixture::new();
+        let old = f.audio("folder/old.wav");
+        let first = import(&f.0, &[f.0.join("folder")], ImportMode::Reference, false).unwrap();
+        set_number(&f.0, &first.entries[0].id, Some(98)).unwrap();
+        let next = f.0.join("folder/new.wav");
+        fs::rename(old, &next).unwrap();
+        refresh(&f.0, &first.sources[0].id).unwrap();
+        assert_eq!(
+            relink_asset(&f.0, &first.assets[0].id, &next, false)
+                .err()
+                .as_deref(),
+            Some("audio_relink_duplicate_target")
+        );
+        let after = relink_asset(&f.0, &first.assets[0].id, &next, true).unwrap();
+        assert_eq!(after.entries.len(), 1);
+        assert_eq!(after.entries[0].id, first.entries[0].id);
+        assert_eq!(after.entries[0].number, Some(98));
+        assert!(after.assets[0].available);
+        assert_eq!(
+            after.assets[0].path,
+            next.canonicalize().unwrap().to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn cancelling_scan_leaves_library_unchanged() {
+        let f = Fixture::new();
+        let file = f.audio("file.wav");
+        let cancel = AtomicBool::new(true);
+        let result =
+            import_with_progress(&f.0, &[file], ImportMode::Copy, true, &cancel, &mut |_| {});
+        assert_eq!(result.err().as_deref(), Some("audio_scan_cancelled"));
+        assert!(snapshot(&f.0).unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn relocating_shared_asset_is_rejected_without_mutation() {
+        let f = Fixture::new();
+        let file = f.audio("old/song.wav");
+        let first = import(&f.0, &[f.0.join("old"), file], ImportMode::Reference, true).unwrap();
+        let revision = first.revision;
+        f.audio("new/song.wav");
+        assert_eq!(
+            relink_source(&f.0, &first.sources[0].id, &f.0.join("new"))
+                .err()
+                .as_deref(),
+            Some("audio_relink_shared_asset")
+        );
+        assert_eq!(snapshot(&f.0).unwrap().revision, revision);
     }
 }

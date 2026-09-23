@@ -65,6 +65,8 @@ export function AudioPage() {
   const [preview, setPreview] = useState<PreviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [scanActive, setScanActive] = useState(false);
+  const [scanned, setScanned] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -90,9 +92,11 @@ export function AudioPage() {
     const listener = listen("audio-library://changed", () => {
       void invoke<Library>("audio_library_get").then(acceptLibrary).catch(() => {});
     });
+    const scanListener = listen<number>("audio-library://scan", (event) => setScanned(event.payload));
     return () => {
       alive = false;
       void listener.then((off) => off());
+      void scanListener.then((off) => off());
     };
   }, [t, acceptLibrary]);
 
@@ -153,10 +157,15 @@ export function AudioPage() {
       await action();
     } catch (cause) {
       const code = String(cause);
-      if (code.includes("audio_export_cancelled")) {
+      if (code.includes("audio_scan_cancelled")) {
+        setNotice(t("audio.scanCancelled"));
+      } else if (code.includes("audio_export_cancelled")) {
         setNotice(t("audio.exportCancelled"));
       } else setError(code.includes("audio_number_taken") ? t("audio.numberTaken")
         : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
+        : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? t("audio.relinkConflict")
+        : code.includes("audio_relink_outside_source") ? t("audio.relinkOutsideSource")
+        : code.includes("audio_relink_kind_mismatch") ? t("audio.relinkKindMismatch")
         : code.includes("audio_export_exists") ? t("audio.exportExists")
         : code.includes("audio_tools_missing") ? t("audio.toolsMissing")
         : t("audio.operationFailed"));
@@ -169,7 +178,38 @@ export function AudioPage() {
     void run(async () => {
       const paths = await invoke<string[]>("audio_library_pick", { kind });
       if (paths.length === 0) return;
-      acceptLibrary(await invoke<Library>("audio_library_import", { paths, copy, recursive }));
+      setScanned(0);
+      setScanActive(true);
+      try {
+        acceptLibrary(await invoke<Library>("audio_library_import", { paths, copy, recursive }));
+      } finally {
+        setScanActive(false);
+      }
+    });
+  };
+
+  const relink = (kind: "file" | "directory", scope: "source" | "asset", id: string) => {
+    void run(async () => {
+      const replacement = await invoke<string | null>("audio_library_pick_replacement", { kind });
+      if (!replacement) return;
+      const command = scope === "source" ? "audio_library_relink_source" : "audio_library_relink_asset";
+      const args = scope === "source" ? { sourceId: id, replacement } : { assetId: id, replacement, replaceScannedDuplicate: false };
+      if (scope === "source") {
+        setScanned(0);
+        setScanActive(true);
+      }
+      try {
+        try {
+          acceptLibrary(await invoke<Library>(command, args));
+        } catch (cause) {
+          if (scope !== "asset" || !String(cause).includes("audio_relink_duplicate_target")) throw cause;
+          if (await askConfirm(t("audio.relinkDuplicateConfirm"))) {
+            acceptLibrary(await invoke<Library>(command, { ...args, replaceScannedDuplicate: true }));
+          }
+        }
+      } finally {
+        setScanActive(false);
+      }
     });
   };
 
@@ -274,6 +314,10 @@ export function AudioPage() {
       </div>
       {error ? <p role="alert" className="text-[13px] text-[var(--danger)] mt-4">{error}</p> : null}
       {notice ? <p role="status" className="text-[13px] text-[var(--meta)] mt-4">{notice}</p> : null}
+      {scanActive ? <div className="flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
+        <span>{t("audio.scanProgress", { count: scanned })}</span>
+        <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
+      </div> : null}
 
       <Block title={t("audio.sources")}>
         <div className="flex flex-wrap gap-2">
@@ -285,7 +329,17 @@ export function AudioPage() {
           ))}
         </div>
         {sourceId ? <div className="flex gap-2 mt-3">
-          <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId })); })}>{t("audio.refresh")}</Btn>
+          <Btn disabled={busy} onClick={() => void run(async () => {
+            setScanned(0);
+            setScanActive(true);
+            try { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId })); }
+            finally { setScanActive(false); }
+          })}>{t("audio.refresh")}</Btn>
+          {library.sources.find((source) => source.id === sourceId)?.mode === "reference" ?
+            <Btn disabled={busy} onClick={() => {
+              const source = library.sources.find((source) => source.id === sourceId);
+              if (source) relink(source.kind, "source", source.id);
+            }}>{t("audio.relinkSource")}</Btn> : null}
           <Btn disabled={busy} onClick={() => void run(async () => {
             if (!(await askConfirm(t("audio.removeConfirm")))) return;
             acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId }));
@@ -317,7 +371,11 @@ export function AudioPage() {
       {selected && selectedAsset ? <Block title={selected.name}>
         <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
           <div className="text-[12px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
-          {selectedAsset.available === false ? <div className="text-[12px] text-[var(--meta)]">{t("audio.missing")}</div> : null}
+          {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12px] text-[var(--meta)]">
+            <span>{t("audio.missing")}</span>
+            {selectedAsset.path === selectedAsset.origin ?
+              <Btn disabled={busy} onClick={() => relink("file", "asset", selectedAsset.id)}>{t("audio.relinkFile")}</Btn> : null}
+          </div> : null}
           <div className="flex items-end gap-3 flex-wrap">
             <label className="text-[12px] text-[var(--meta)]">{t("audio.entryName")}
               <input value={entryName} onChange={(e) => setEntryName(e.target.value)} className="block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />

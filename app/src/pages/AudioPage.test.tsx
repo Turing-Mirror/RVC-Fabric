@@ -62,4 +62,33 @@ describe("音频库页面", () => {
     expect(preview?.disabled).toBe(true);
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "ensure_engine")).toBe(false);
   });
+
+  it("重新定位失联文件时按稳定资产 ID 提交", async () => {
+    shell.invoke.mockImplementation(async (cmd) => {
+      if (cmd === "config_get") return { ui_locale: "zh-CN" };
+      if (cmd === "audio_library_get") return library;
+      if (cmd === "audio_preview_devices") return [];
+      if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
+      if (cmd === "audio_library_pick_replacement") return "E:\\Moved\\lost.wav";
+      if (cmd === "audio_library_relink_asset") return library;
+      return null;
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const lost = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("失联"));
+    act(() => lost!.click());
+    const relink = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "重新定位文件");
+    expect(relink).toBeDefined();
+    act(() => relink!.click());
+    await tick();
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_library_relink_asset", {
+      assetId: "asset-2",
+      replacement: "E:\\Moved\\lost.wav",
+      replaceScannedDuplicate: false,
+    });
+  });
 });

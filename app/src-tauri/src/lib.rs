@@ -2455,8 +2455,12 @@ pub fn run() {
             audio_edit::audio_cut,
             audio_library::audio_library_get,
             audio_library::audio_library_pick,
+            audio_library::audio_library_pick_replacement,
             audio_library::audio_library_import,
             audio_library::audio_library_refresh,
+            audio_library::audio_library_scan_cancel,
+            audio_library::audio_library_relink_source,
+            audio_library::audio_library_relink_asset,
             audio_library::audio_library_set_number,
             audio_library::audio_library_rename_entry,
             audio_library::audio_library_add_clip,
@@ -2861,6 +2865,7 @@ pub fn run() {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
                 audio_preview::audio_preview_stop();
+                audio_library::stop_scan_on_exit();
                 audio_library::stop_export_on_exit();
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
                     sts::release_resident();

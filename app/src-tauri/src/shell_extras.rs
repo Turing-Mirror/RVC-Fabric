@@ -10,6 +10,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::{json, Value};
 use std::sync::OnceLock;
@@ -226,6 +227,18 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+fn pressed_edge(held: &AtomicBool, state: tauri_plugin_global_shortcut::ShortcutState) -> bool {
+    match state {
+        tauri_plugin_global_shortcut::ShortcutState::Pressed => {
+            !held.swap(true, Ordering::AcqRel)
+        }
+        tauri_plugin_global_shortcut::ShortcutState::Released => {
+            held.store(false, Ordering::Release);
+            false
+        }
+    }
+}
+
 /// Register or unregister the global hotkeys. Failing to grab a combo (another
 /// app already owns it) must not break the rest — report and carry on.
 pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
@@ -248,7 +261,11 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
         }
         let handle = app.clone();
         let act = action.to_string();
-        match gs.on_shortcut(combo.as_str(), move |_a, _s, _e| {
+        let held = AtomicBool::new(false);
+        match gs.on_shortcut(combo.as_str(), move |_a, _s, event| {
+            if !pressed_edge(&held, event.state) {
+                return;
+            }
             // 显示 / 隐藏窗口在这里就地做完，不往前端发事件。
             //
             // 窗口藏起来的时候 webview 有可能被系统挂起，事件到不了前端 ——
@@ -1487,6 +1504,16 @@ mod tests {
         assert!(!combo_ok("Ctrl+A+B+C+D+E"));
         assert!(!combo_ok("Ctrl+<script>"));
         assert!(!combo_ok(&"A".repeat(60)));
+    }
+
+    #[test]
+    fn hotkey_fires_only_once_per_press_edge() {
+        use tauri_plugin_global_shortcut::ShortcutState::{Pressed, Released};
+        let held = AtomicBool::new(false);
+        assert!(pressed_edge(&held, Pressed));
+        assert!(!pressed_edge(&held, Pressed));
+        assert!(!pressed_edge(&held, Released));
+        assert!(pressed_edge(&held, Pressed));
     }
 
     /// 配置里是垃圾值时必须退回默认，而不是注册一个乱七八糟的组合。

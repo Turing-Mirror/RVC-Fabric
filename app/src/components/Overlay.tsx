@@ -219,8 +219,11 @@ export function Overlay() {
           <div data-tauri-drag-region className="min-w-0 flex-1" title={audio.name}>
             <div data-tauri-drag-region className="flex items-center gap-1.5 text-[11px] text-white">
               <span data-tauri-drag-region className="min-w-0 flex-1 truncate">{audio.name}</span>
-              {audio.active_count > 1 ? <span data-tauri-drag-region className="flex-none text-[#b5bec9]"
-                title={t("audio.morePlaying", { count: audio.active_count - 1 })}>+{audio.active_count - 1}</span> : null}
+              {audio.active_count > 1 ? <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-[11px] text-[#b5bec9] hover:text-white"
+                aria-label={t("audio.morePlaying", { count: audio.active_count - 1 })}
+                title={t("audio.morePlaying", { count: audio.active_count - 1 })}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => void act(() => invoke("tools_open_audio"))}>+{audio.active_count - 1}</button> : null}
               <span data-tauri-drag-region className="flex-none tabular-nums text-[#b5bec9]">
                 {playbackClock(audio.played_frames, audio.sample_rate)} / {playbackClock(audio.length_frames, audio.sample_rate)}
               </span>

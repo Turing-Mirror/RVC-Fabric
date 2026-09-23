@@ -733,6 +733,12 @@ export default function App() {
     });
     return () => dropListen(un);
   }, [openHelp]);
+
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void listen("open-audio", () => setPage("audio")).then((f) => { un = f; });
+    return () => dropListen(un);
+  }, []);
   // 进广场同时把小红点消掉 —— 和顶栏点「广场」是同一件事，不能只有一条路
   // 清红点，否则从模型页进来的用户那个点永远亮着。
   const stopDsp = useCallback(() => {

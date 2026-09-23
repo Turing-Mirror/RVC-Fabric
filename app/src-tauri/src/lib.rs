@@ -1137,6 +1137,11 @@ fn tools_open_help(app: AppHandle, section: Option<String>) -> Result<(), String
     tool_window::focus_main_help(&app, section.as_deref().unwrap_or("train"))
 }
 
+#[tauri::command]
+fn tools_open_audio(app: AppHandle) -> Result<(), String> {
+    tool_window::focus_main_audio(&app)
+}
+
 /// DSP 变声预设：内置 + 用户自存，同 id 用户覆盖内置。
 #[tauri::command]
 async fn dsp_activate(
@@ -2512,6 +2517,7 @@ pub fn run() {
             tools_open,
             overlay_audio_layout,
             tools_open_help,
+            tools_open_audio,
             shell_version,
             ui_ready,
             ui_log,

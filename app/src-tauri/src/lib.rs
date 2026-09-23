@@ -8,6 +8,7 @@ mod audio_library;
 mod audio_preview;
 mod audio_probe;
 mod audio_recovery;
+mod audio_waveform;
 mod autostart;
 mod browser_keys;
 pub mod catalog;
@@ -2476,6 +2477,8 @@ pub fn run() {
             audio_preview::audio_preview_status,
             audio_preview::audio_preview_pause,
             audio_preview::audio_preview_stop,
+            audio_waveform::audio_waveform_get,
+            audio_waveform::audio_waveform_cancel,
             audio_recovery::audio_recover,
             voices::voices_export_model,
             wallpaper_data_url,
@@ -2865,6 +2868,7 @@ pub fn run() {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
                 audio_preview::audio_preview_stop();
+                audio_waveform::cancel_all();
                 audio_library::stop_scan_on_exit();
                 audio_library::stop_export_on_exit();
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {

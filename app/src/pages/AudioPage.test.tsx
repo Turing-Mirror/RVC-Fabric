@@ -58,7 +58,7 @@ describe("音频库页面", () => {
     expect(lost).toBeDefined();
     act(() => lost!.click());
     const preview = Array.from(mounted.container.querySelectorAll("button"))
-      .find((button) => button.textContent === "试听");
+      .find((button) => button.textContent === "试听选区");
     expect(preview?.disabled).toBe(true);
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "ensure_engine")).toBe(false);
   });
@@ -89,6 +89,45 @@ describe("音频库页面", () => {
       assetId: "asset-2",
       replacement: "E:\\Moved\\lost.wav",
       replaceScannedDuplicate: false,
+    });
+  });
+
+  it("试听使用当前草稿范围而非已保存范围", async () => {
+    shell.invoke.mockImplementation(async (cmd) => {
+      if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
+      if (cmd === "audio_library_get") return library;
+      if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
+      if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
+      if (cmd === "audio_waveform_get") return { duration: 10, peaks: [0, 120, 255] };
+      if (cmd === "audio_preview_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
+      return null;
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const entry = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("可试听"));
+    act(() => entry!.click());
+    await tick();
+    const start = Array.from(mounted.container.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("开始时间（秒）"))?.querySelector("input");
+    const end = Array.from(mounted.container.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("结束时间（秒"))?.querySelector("input");
+    expect(start).toBeDefined();
+    expect(end).toBeDefined();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(start, "1.25");
+      start!.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(end, "2.75");
+      end!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const preview = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "试听选区");
+    act(() => preview!.click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_preview_start", {
+      entryId: "entry-1", deviceId: "speaker", start: 1.25, end: 2.75,
     });
   });
 });

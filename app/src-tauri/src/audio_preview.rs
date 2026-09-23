@@ -112,6 +112,8 @@ pub async fn audio_preview_start(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     device_id: String,
+    start: f64,
+    end: Option<f64>,
 ) -> Result<PreviewStatus, String> {
     let root = crate::root_clone(&state)?;
     let request = REQUEST.fetch_add(1, Ordering::AcqRel) + 1;
@@ -135,10 +137,7 @@ pub async fn audio_preview_start(
         let decoded = decode::decode(
             &AudioTools::at(&root),
             Path::new(&asset.path),
-            ClipRange {
-                start: entry.start,
-                end: entry.end,
-            },
+            ClipRange { start, end },
             format,
             0.25,
         )?;

@@ -1,17 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { useI18n } from "../i18n";
 import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
-import {
-  fitPxPerSec,
-  scrollAfterZoom,
-  timeAtX,
-  waveformWidth as waveW,
-  xAtTime,
-  zoomPxPerSec,
-} from "../lib/waveformView";
+import { useAudioWaveform } from "../lib/useAudioWaveform";
+import { WaveformRange } from "./WaveformRange";
 
 type AudioTrimProps = {
   input: string;
@@ -42,212 +36,34 @@ type AudioTrimEditorProps = AudioTrimProps & {
   onBusyChange?: (busy: boolean) => void;
 };
 
-const WAVE_HEIGHT = 160;
-
 export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: AudioTrimEditorProps) {
   const { t } = useI18n();
   const audio = useRef<HTMLAudioElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const scroll = useRef<HTMLDivElement>(null);
-  const dragStart = useRef<number | null>(null);
-  const pendingScroll = useRef<number | null>(null);
-  const pxRef = useRef(0);
   const previewing = useRef(false);
-  const [duration, setDuration] = useState(0);
+  const waveform = useAudioWaveform(input);
+  const [metadata, setMetadata] = useState({ input: "", duration: 0 });
+  const duration = waveform.duration || (metadata.input === input ? metadata.duration : 0);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [peaks, setPeaks] = useState<number[]>([]);
-  const [waveformLoading, setWaveformLoading] = useState(false);
-  const [waveformError, setWaveformError] = useState("");
   const [mode, setMode] = useState<EditMode>("keep");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [viewW, setViewW] = useState(0);
-  const [pxPerSec, setPxPerSec] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    let alive = true;
-    let context: AudioContext | null = null;
-    setDuration(0);
+    audio.current?.pause();
+    previewing.current = false;
+    setMetadata({ input, duration: 0 });
     setStart(0);
     setEnd(0);
-    setPeaks([]);
-    setWaveformError("");
-    setWaveformLoading(true);
-    setPxPerSec(0);
     setCurrentTime(0);
     setMode("keep");
-
-    const load = async () => {
-      try {
-        const src = convertFileSrc(input);
-        const response = await fetch(src);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        context = new AudioContext();
-        const buffer = await context.decodeAudioData(await response.arrayBuffer());
-        const bins = Math.min(24_000, Math.max(1_200, Math.ceil(buffer.duration * 24)));
-        const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
-        const result = new Array<number>(bins).fill(0);
-        const step = buffer.length / bins;
-        for (let i = 0; i < bins; i += 1) {
-          const from = Math.floor(i * step);
-          const to = Math.max(from + 1, Math.min(buffer.length, Math.ceil((i + 1) * step)));
-          let peak = 0;
-          for (let sample = from; sample < to; sample += 1) {
-            for (const channel of channels) peak = Math.max(peak, Math.abs(channel[sample] || 0));
-          }
-          result[i] = peak;
-        }
-        if (alive) {
-          setDuration(buffer.duration);
-          setStart(0);
-          setEnd(buffer.duration);
-          setPeaks(result);
-        }
-      } catch (e) {
-        if (alive) setWaveformError(String(e));
-      } finally {
-        if (alive) setWaveformLoading(false);
-        if (context && context.state !== "closed") void context.close().catch(() => undefined);
-      }
-    };
-    void load();
-    return () => {
-      alive = false;
-      if (context && context.state !== "closed") void context.close().catch(() => undefined);
-    };
   }, [input]);
 
   useEffect(() => {
-    const el = scroll.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setViewW(el.clientWidth));
-    ro.observe(el);
-    setViewW(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
-
-  const minFit = fitPxPerSec(duration, viewW || 720);
-  const scale = pxPerSec || minFit;
-  pxRef.current = scale;
-  const waveformWidth = waveW(duration, scale);
-
-  useEffect(() => {
-    const el = scroll.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!duration) return;
-      if (e.shiftKey) {
-        e.preventDefault();
-        el.scrollLeft += e.deltaY || e.deltaX;
-        return;
-      }
-      e.preventDefault();
-      const oldScale = pxRef.current || minFit;
-      const oldWidth = waveW(duration, oldScale);
-      const next = zoomPxPerSec(oldScale, e.deltaY, minFit);
-      const rect = el.getBoundingClientRect();
-      const cursor = e.clientX - rect.left;
-      pendingScroll.current = scrollAfterZoom(el.scrollLeft, cursor, oldWidth, waveW(duration, next));
-      setPxPerSec(next);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [duration, minFit]);
-
-  useLayoutEffect(() => {
-    if (pendingScroll.current == null || !scroll.current) return;
-    scroll.current.scrollLeft = pendingScroll.current;
-    pendingScroll.current = null;
-  }, [waveformWidth]);
-
-  useEffect(() => {
-    const el = canvas.current;
-    if (!el) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    el.width = Math.max(1, Math.ceil(waveformWidth * dpr));
-    el.height = Math.ceil(WAVE_HEIGHT * dpr);
-    el.style.width = `${waveformWidth}px`;
-    el.style.height = `${WAVE_HEIGHT}px`;
-    const ctx = el.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.documentElement);
-    const surface = css.getPropertyValue("--surface").trim() || "#ffffff";
-    const meta = css.getPropertyValue("--meta").trim() || "#9aa7b2";
-    const accent = css.getPropertyValue("--accent").trim() || "#53b9dc";
-    ctx.fillStyle = surface;
-    ctx.fillRect(0, 0, waveformWidth, WAVE_HEIGHT);
-    ctx.strokeStyle = meta;
-    ctx.beginPath();
-    ctx.moveTo(0, WAVE_HEIGHT / 2 + 0.5);
-    ctx.lineTo(waveformWidth, WAVE_HEIGHT / 2 + 0.5);
-    ctx.stroke();
-    if (!peaks.length || !duration) return;
-
-    const left = xAtTime(start, duration, waveformWidth);
-    const right = Math.max(left, xAtTime(end, duration, waveformWidth));
-    ctx.fillStyle = "rgba(20, 26, 33, 0.12)";
-    ctx.fillRect(0, 0, left, WAVE_HEIGHT);
-    ctx.fillRect(right, 0, waveformWidth - right, WAVE_HEIGHT);
-    const middle = WAVE_HEIGHT / 2;
-    const unit = waveformWidth / peaks.length;
-    ctx.lineWidth = 1;
-    peaks.forEach((peak, i) => {
-      const x = (i + 0.5) * unit;
-      const h = Math.max(1, peak * (WAVE_HEIGHT * 0.44));
-      const selected = x >= left && x <= right;
-      ctx.strokeStyle = selected ? accent : meta;
-      ctx.beginPath();
-      ctx.moveTo(x, middle - h);
-      ctx.lineTo(x, middle + h);
-      ctx.stroke();
-    });
-    ctx.fillStyle = accent;
-    ctx.fillRect(Math.max(0, left - 1), 0, 2, WAVE_HEIGHT);
-    ctx.fillRect(Math.min(waveformWidth - 2, right - 1), 0, 2, WAVE_HEIGHT);
-  }, [duration, end, peaks, start, waveformWidth]);
-
-  useEffect(() => {
-    const el = scroll.current;
-    if (!el || !playing || !duration) return;
-    const x = xAtTime(currentTime, duration, waveformWidth);
-    const left = el.scrollLeft;
-    const right = left + el.clientWidth;
-    const margin = 32;
-    if (x < left + margin || x > right - margin) {
-      el.scrollLeft = Math.max(0, x - el.clientWidth / 3);
-    }
-  }, [currentTime, duration, playing, waveformWidth]);
-
-  const timeAt = (clientX: number) => {
-    const el = canvas.current;
-    if (!el || !duration) return 0;
-    const rect = el.getBoundingClientRect();
-    const x = (clientX - rect.left) * (waveformWidth / Math.max(rect.width, 1));
-    return timeAtX(x, duration, waveformWidth);
-  };
-
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || busy || !duration) return;
-    const value = timeAt(e.clientX);
-    dragStart.current = value;
-    setStart(value);
-    setEnd(value);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragStart.current == null) return;
-    const value = timeAt(e.clientX);
-    setStart(Math.min(dragStart.current, value));
-    setEnd(Math.max(dragStart.current, value));
-  };
-  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    dragStart.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-  };
+    if (duration > 0) setEnd((value) => value || duration);
+  }, [duration]);
 
   const valid =
     duration > 0 &&
@@ -258,7 +74,6 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     end <= duration;
   const removingEverything = valid && start <= 0.01 && end >= duration - 0.01;
   const canApply = valid && (mode === "keep" || !removingEverything);
-  const playhead = xAtTime(currentTime, duration, waveformWidth);
 
   const apply = async () => {
     if (!canApply || busy) return;
@@ -292,7 +107,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
       onLoadedMetadata={(e) => {
         const d = e.currentTarget.duration;
         if (Number.isFinite(d) && d > 0) {
-          setDuration((v) => v || d);
+          setMetadata({ input, duration: d });
           setEnd((v) => v || d);
         }
       }}
@@ -318,32 +133,11 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
         ]}
       />
     </div>
-    <div
-      ref={scroll}
-      className="max-w-full overflow-x-auto rounded-[var(--rs)] border border-[var(--hairline)] bg-[var(--surface)]"
-    >
-      <div className="relative" style={{ width: waveformWidth, height: WAVE_HEIGHT }}>
-        <canvas
-          ref={canvas}
-          role="img"
-          aria-label={t("neptune.waveform")}
-          className="block max-w-none cursor-crosshair touch-none"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        />
-        {duration > 0 ? (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute top-0 w-px bg-[var(--ink)]"
-            style={{ left: playhead, height: WAVE_HEIGHT, opacity: 0.55 }}
-          />
-        ) : null}
-      </div>
-    </div>
-    {waveformLoading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
-    {waveformError ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
+    <WaveformRange duration={duration} peaks={waveform.peaks} start={start} end={end}
+      currentTime={currentTime} playing={playing} disabled={disabled || busy}
+      label={t("neptune.waveform")} onRangeChange={(nextStart, nextEnd) => { setStart(nextStart); setEnd(nextEnd); }} />
+    {waveform.loading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
+    {waveform.error ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
     <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
     <RangeBar ariaLabel={t("neptune.position")} min={0} max={duration || 1} step={0.01} value={currentTime}
       disabled={busy || disabled || !duration} onChange={seek} />

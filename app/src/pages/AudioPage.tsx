@@ -5,6 +5,8 @@ import { Block, Btn, PageHead, PagePad } from "../components/ui";
 import { Select } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
+import { useAudioWaveform } from "../lib/useAudioWaveform";
+import { WaveformRange } from "../components/WaveformRange";
 
 type Source = {
   id: string;
@@ -131,6 +133,7 @@ export function AudioPage() {
   }, [library.sources]);
   const selected = library.entries.find((entry) => entry.id === selectedId);
   const selectedAsset = selected && assetById.get(selected.asset_id);
+  const waveform = useAudioWaveform(selectedAsset?.available ? selectedAsset.path : null);
   const selectedExcluded = selectedAsset && sourceId
     ? selectedAsset.excluded_source_ids?.includes(sourceId) === true
     : false;
@@ -162,6 +165,7 @@ export function AudioPage() {
       } else if (code.includes("audio_export_cancelled")) {
         setNotice(t("audio.exportCancelled"));
       } else setError(code.includes("audio_number_taken") ? t("audio.numberTaken")
+        : code.includes("audio_clip_invalid") ? t("audio.clipInvalid")
         : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
         : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? t("audio.relinkConflict")
         : code.includes("audio_relink_outside_source") ? t("audio.relinkOutsideSource")
@@ -288,10 +292,18 @@ export function AudioPage() {
       setError(t("audio.chooseDevice"));
       return;
     }
+    const start = Number(clipStart);
+    const end = clipEnd.trim() ? Number(clipEnd) : null;
+    if (!Number.isFinite(start) || start < 0 || (end != null && (!Number.isFinite(end) || end <= start))) {
+      setError(t("audio.clipInvalid"));
+      return;
+    }
     void run(async () => {
       setPreview(await invoke<PreviewStatus>("audio_preview_start", {
         entryId: selected.id,
         deviceId,
+        start,
+        end,
       }));
     });
   };
@@ -389,6 +401,16 @@ export function AudioPage() {
             </label>
             <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
           </div>
+          {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
+            start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}
+            end={clipEnd.trim() && Number.isFinite(Number(clipEnd)) ? Number(clipEnd) : waveform.duration}
+            disabled={busy} label={t("neptune.waveform")}
+            onRangeChange={(start, end) => {
+              setClipStart(String(Math.min(start, waveform.duration, Number(start.toFixed(4)))));
+              setClipEnd(String(Math.min(end, waveform.duration, Number(end.toFixed(4)))));
+            }} /> : null}
+          {waveform.loading ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformLoading")}</p> : null}
+          {waveform.error ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformFailed")}</p> : null}
           <div className="flex items-end gap-3 flex-wrap">
             <label className="text-[12px] text-[var(--meta)]">{t("audio.localOutput")}
               <Select value={deviceId} options={[{ id: "", label: t("audio.chooseDevice") }, ...devices.map((device) => ({ id: device.id, label: device.name }))]}
@@ -410,10 +432,10 @@ export function AudioPage() {
               <input value={clipName} onChange={(e) => setClipName(e.target.value)} className="block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
             </label>
             <label className="text-[12px] text-[var(--meta)]">{t("audio.startSeconds")}
-              <input type="number" min="0" step="0.01" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
+              <input type="number" min="0" step="0.001" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
             </label>
             <label className="text-[12px] text-[var(--meta)]">{t("audio.endSeconds")}
-              <input type="number" min="0" step="0.01" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
+              <input type="number" min="0" step="0.001" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
             </label>
             <Btn disabled={busy} onClick={addClip}>{t("audio.addClip")}</Btn>
             <Btn disabled={busy} onClick={applyRange}>{t("audio.applyRange")}</Btn>

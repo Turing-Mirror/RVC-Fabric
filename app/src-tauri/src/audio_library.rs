@@ -998,9 +998,24 @@ pub fn add_clip(
     {
         return Err("audio_clip_invalid".into());
     }
+    let asset = snapshot(root)?
+        .assets
+        .into_iter()
+        .find(|asset| asset.id == asset_id)
+        .ok_or("audio_asset_unknown")?;
+    fabric_audio::format::ClipRange { start, end }
+        .resolve(
+            fabric_audio::decode::AudioTools::at(root).probe(Path::new(&asset.path))?,
+            48_000,
+        )
+        .map_err(|_| "audio_clip_invalid")?;
     mutate(root, |library| {
-        if !library.assets.iter().any(|asset| asset.id == asset_id) {
-            return Err("audio_asset_unknown".into());
+        if !library
+            .assets
+            .iter()
+            .any(|current| current.id == asset_id && current.path == asset.path)
+        {
+            return Err("audio_asset_changed".into());
         }
         let id = library.id("entry");
         library.entries.push(Entry {
@@ -1027,7 +1042,32 @@ pub fn set_range(
     {
         return Err("audio_clip_invalid".into());
     }
+    let snapshot = snapshot(root)?;
+    let current_entry = snapshot
+        .entries
+        .iter()
+        .find(|entry| entry.id == entry_id)
+        .ok_or("audio_entry_unknown")?;
+    let asset = snapshot
+        .assets
+        .iter()
+        .find(|asset| asset.id == current_entry.asset_id)
+        .ok_or("audio_asset_unknown")?;
+    fabric_audio::format::ClipRange { start, end }
+        .resolve(
+            fabric_audio::decode::AudioTools::at(root).probe(Path::new(&asset.path))?,
+            48_000,
+        )
+        .map_err(|_| "audio_clip_invalid")?;
+    let validated_path = asset.path.clone();
     mutate(root, |library| {
+        if !library
+            .assets
+            .iter()
+            .any(|asset| asset.id == current_entry.asset_id && asset.path == validated_path)
+        {
+            return Err("audio_asset_changed".into());
+        }
         let entry = library
             .entries
             .iter_mut()

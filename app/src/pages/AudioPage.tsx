@@ -7,6 +7,7 @@ import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
 import { WaveformRange } from "../components/WaveformRange";
+import type { PlaybackStatus } from "../lib/audioPlayback";
 
 type Source = {
   id: string;
@@ -38,13 +39,7 @@ type Library = {
   entries: Entry[];
 };
 type Device = { id: string; name: string };
-type PreviewStatus = {
-  state: "idle" | "playing" | "paused" | "ended" | "error";
-  name: string;
-  played_frames: number;
-  length_frames: number;
-  sample_rate: number;
-};
+type PreviewStatus = PlaybackStatus;
 
 const EMPTY: Library = { revision: 0, sources: [], assets: [], entries: [] };
 

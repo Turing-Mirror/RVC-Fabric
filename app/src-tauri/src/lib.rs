@@ -766,6 +766,13 @@ async fn tools_open(app: AppHandle, kind: String) -> Result<(), String> {
     tool_window::open(&app, &kind)
 }
 
+#[tauri::command]
+async fn overlay_audio_layout(window: tauri::WebviewWindow, active: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || tool_window::resize_overlay(&window, active))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Shipping version. The 「其他」page had this typed in as a literal, so it
 /// would quietly disagree with the binary after any bump.
 #[tauri::command]
@@ -2501,6 +2508,7 @@ pub fn run() {
             voices::voices_export_model,
             wallpaper_data_url,
             tools_open,
+            overlay_audio_layout,
             tools_open_help,
             shell_version,
             ui_ready,

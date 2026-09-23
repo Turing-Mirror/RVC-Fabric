@@ -12,8 +12,8 @@
 //!
 //! `overlay` 是个例外，它不是「工具」而是**状态显示**：透明背景、无边框、置顶、
 //! 不进任务栏、不可拉伸。用户开着游戏或者在开会，主窗被挡住了，他要知道的只有
-//! 两件事 —— 变声开着没有、麦有没有声音。所以它只有麦克风电平和音色名，一个
-//! 按钮都不放：在游戏里误点一下换音色要停流重开，声音当场断一两秒。
+//! 变声状态、麦克风电平，以及独立播放的音频。音频出现时才展开第二行，
+//! 停止变声不会顺带停止音频。
 //!
 //! 复用这里的建窗机制（同一扇窗只开一次、连点收成一次、按主窗定位）是有意的，
 //! 这几件事和它是不是工具窗无关。
@@ -75,6 +75,10 @@ struct Spec {
     overlay: bool,
 }
 
+const OVERLAY_WIDTH: f64 = 260.0;
+const OVERLAY_IDLE_HEIGHT: f64 = 52.0;
+const OVERLAY_AUDIO_HEIGHT: f64 = 96.0;
+
 /// 最小尺寸不是随便填的：比这再窄，里面那几行「标签 + 路径 + 按钮」就要换行，
 /// 路径被挤成两个字。宽度按内容排出来的最窄可用宽给。
 fn spec_for(kind: &str) -> Option<Spec> {
@@ -108,14 +112,49 @@ fn spec_for(kind: &str) -> Option<Spec> {
         // 再宽就成了一块横幅，压在游戏画面上碍事；再窄音色名要截断。
         "overlay" => Spec {
             title: crate::i18n::t("overlay.title"),
-            w: 260.0,
-            h: 52.0,
-            min_w: 260.0,
-            min_h: 52.0,
+            w: OVERLAY_WIDTH,
+            h: OVERLAY_IDLE_HEIGHT,
+            min_w: OVERLAY_WIDTH,
+            min_h: OVERLAY_IDLE_HEIGHT,
             overlay: true,
         },
         _ => return None,
     })
+}
+
+fn clamp_overlay_axis(position: i32, origin: i32, extent: u32, length: u32) -> i32 {
+    position.clamp(
+        origin,
+        origin.saturating_add(extent.saturating_sub(length) as i32),
+    )
+}
+
+/// Resize only the invoking overlay. The work area is in physical pixels;
+/// resize first, then keep the expanded window inside its current monitor.
+pub fn resize_overlay(win: &tauri::WebviewWindow, audio_active: bool) -> Result<(), String> {
+    if win.label() != "tool-overlay" {
+        return Err("overlay_window_required".into());
+    }
+    let height = if audio_active {
+        OVERLAY_AUDIO_HEIGHT
+    } else {
+        OVERLAY_IDLE_HEIGHT
+    };
+    let monitor = win.current_monitor().map_err(|e| e.to_string())?;
+    win.set_size(tauri::LogicalSize::new(OVERLAY_WIDTH, height))
+        .map_err(|e| e.to_string())?;
+    if let Some(monitor) = monitor {
+        let area = monitor.work_area();
+        let size = win.outer_size().map_err(|e| e.to_string())?;
+        let pos = win.outer_position().map_err(|e| e.to_string())?;
+        let x = clamp_overlay_axis(pos.x, area.position.x, area.size.width, size.width);
+        let y = clamp_overlay_axis(pos.y, area.position.y, area.size.height, size.height);
+        if x != pos.x || y != pos.y {
+            win.set_position(tauri::PhysicalPosition::new(x, y))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 pub fn label_for(kind: &str) -> String {
@@ -330,6 +369,13 @@ fn watch_overlay_pos(win: &tauri::WebviewWindow) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expanded_overlay_stays_inside_the_work_area() {
+        assert_eq!(clamp_overlay_axis(1010, 0, 1080, 96), 984);
+        assert_eq!(clamp_overlay_axis(-100, -80, 900, 260), -80);
+        assert_eq!(clamp_overlay_axis(50, 50, 40, 96), 50);
+    }
 
     #[test]
     fn only_the_three_known_tools_have_a_window() {

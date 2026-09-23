@@ -2235,7 +2235,7 @@
     "noVoice": "Aucune voix sélectionnée",
     "close": "Fermer l'indicateur",
     "open": "Indicateur flottant",
-    "openHint": "Affiche le niveau du microphone et la voix actuelle au-dessus des autres fenêtres. Indisponible tant qu'un jeu s'exécute en plein écran exclusif."
+    "openHint": "Affiche la conversion vocale, le niveau du microphone et la progression audio au-dessus des autres fenêtres. Indisponible pendant les jeux en plein écran exclusif."
   },
   "runtimeActions": {
     "download": "Télécharger",

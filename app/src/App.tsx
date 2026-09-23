@@ -51,6 +51,9 @@ const HelpPage = lazy(() =>
 const HomePage = lazy(() =>
   import("./pages/HomePage").then((m) => ({ default: m.HomePage })),
 );
+const AudioPage = lazy(() =>
+  import("./pages/AudioPage").then((m) => ({ default: m.AudioPage })),
+);
 const ModelsPage = lazy(() =>
   import("./pages/ModelsPage").then((m) => ({ default: m.ModelsPage })),
 );
@@ -231,10 +234,8 @@ export default function App() {
     };
   }, []);
   const [showProvision, setShowProvision] = useState(false);
-  const [provisionDismissed, setProvisionDismissed] = useState(false);
   // 新装 ui_locale_picked===false 时先选语言，再走 Runtime 补全。
   const [showLangGate, setShowLangGate] = useState(false);
-  const [langGateChecked, setLangGateChecked] = useState(false);
 
   const engine = useEngine();
   // App re-renders on the engine status heartbeat. Keep the latest status
@@ -454,32 +455,12 @@ export default function App() {
         }
       } catch {
         /* 预览 */
-      } finally {
-        if (alive) setLangGateChecked(true);
       }
     })();
     return () => {
       alive = false;
     };
   }, []);
-
-  useEffect(() => {
-    // 语言引导优先于 Runtime 补全，避免补全窗还是默认中文。
-    if (!langGateChecked || showLangGate) return;
-    if (engine.provision.runtime_migration_required) {
-      setShowProvision(false);
-      return;
-    }
-    if (engine.provision.need_provision && !provisionDismissed) {
-      setShowProvision(true);
-    }
-  }, [
-    engine.provision.need_provision,
-    provisionDismissed,
-    langGateChecked,
-    showLangGate,
-    engine.provision.runtime_migration_required,
-  ]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 520px)");
@@ -972,7 +953,13 @@ export default function App() {
   });
   useEffect(() => {
     actionsRef.current = {
-      toggleRun: () => void engine.toggleRun(),
+      toggleRun: () => {
+        if (engine.provision.need_provision || engine.provision.runtime_ready === false) {
+          setShowProvision(true);
+        } else {
+          void engine.toggleRun();
+        }
+      },
       shiftVoice: (d: number) => void shiftVoice(d),
       toggleMode: () =>
         setMode((m) => {
@@ -1149,7 +1136,6 @@ export default function App() {
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);
-          setProvisionDismissed(false);
           // 这里以前调的是 getProvisionStatus()，**结果直接扔掉** —— 问了等于
           // 没问，engine.provision 还是补全之前那份 runtime_ready: false。
           // 于是运行时装好了，「开启变声」照样被 toggleRun 开头那道闸拦下来
@@ -1164,7 +1150,6 @@ export default function App() {
         }}
         onDismiss={() => {
           setShowProvision(false);
-          setProvisionDismissed(true);
         }}
       />
 
@@ -1179,6 +1164,7 @@ export default function App() {
                   currentId={voiceId}
                   onOpenModels={openModels}
                   onOpenDsp={openDsp}
+                  onOpenAudio={() => setPage("audio")}
                   onVoiceChange={applyVoiceChange}
                 />
               );
@@ -1193,6 +1179,8 @@ export default function App() {
                   scrollToDownloads={scrollToDownloads}
                 />
               );
+            case "audio":
+              return <AudioPage />;
             case "models":
               return (
                 <ModelsPage
@@ -1239,7 +1227,6 @@ export default function App() {
                   provision={engine.provision}
                   onForceKill={requestForceKill}
                   onOpenProvision={() => {
-                    setProvisionDismissed(false);
                     setShowProvision(true);
                   }}
                   onOpenDownloadModels={openDownloadModels}
@@ -1461,7 +1448,13 @@ export default function App() {
         mode={mode}
         onMode={handleMode}
         running={engine.running || engine.starting}
-        onToggleRun={() => void engine.toggleRun({ dspId })}
+        onToggleRun={() => {
+          if (engine.provision.need_provision || engine.provision.runtime_ready === false) {
+            setShowProvision(true);
+          } else {
+            void engine.toggleRun({ dspId });
+          }
+        }}
         profileSummary={profileSummary}
         statusTitle={engine.title}
         statusSub={engine.sub}

@@ -4,6 +4,8 @@
 
 mod asset_scope;
 mod audio_edit;
+mod audio_library;
+mod audio_preview;
 mod audio_probe;
 mod audio_recovery;
 mod autostart;
@@ -16,6 +18,7 @@ mod crash;
 mod download;
 mod dsp;
 mod engine_assets;
+mod file_publish;
 mod extra_assets;
 mod extract;
 mod gpu_pref;
@@ -2450,6 +2453,25 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             audio_edit::audio_trim,
             audio_edit::audio_cut,
+            audio_library::audio_library_get,
+            audio_library::audio_library_pick,
+            audio_library::audio_library_import,
+            audio_library::audio_library_refresh,
+            audio_library::audio_library_set_number,
+            audio_library::audio_library_rename_entry,
+            audio_library::audio_library_add_clip,
+            audio_library::audio_library_set_range,
+            audio_library::audio_library_exclude,
+            audio_library::audio_library_restore,
+            audio_library::audio_library_remove_source,
+            audio_library::audio_library_grant_asset,
+            audio_library::audio_library_export,
+            audio_library::audio_library_export_cancel,
+            audio_preview::audio_preview_devices,
+            audio_preview::audio_preview_start,
+            audio_preview::audio_preview_status,
+            audio_preview::audio_preview_pause,
+            audio_preview::audio_preview_stop,
             audio_recovery::audio_recover,
             voices::voices_export_model,
             wallpaper_data_url,
@@ -2838,6 +2860,8 @@ pub fn run() {
         .run(|app, event| {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
+                audio_preview::audio_preview_stop();
+                audio_library::stop_export_on_exit();
                 if let Ok(g) = app.state::<Mutex<AppState>>().lock() {
                     sts::release_resident();
                     worker::kill_known_workers(&g.root);

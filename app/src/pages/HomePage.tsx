@@ -1,5 +1,5 @@
 import { useEffect, useState, memo } from "react";
-import { Btn, Block, HelpMark, PagePad } from "../components/ui";
+import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { getConfig, onConfigPatch } from "../lib/config";
 import { listVoices, modelKey, type VoiceModel } from "../lib/voices";
@@ -22,6 +22,7 @@ type Props = {
   currentId?: string;
   onOpenModels?: () => void;
   onOpenDsp?: () => void;
+  onOpenAudio?: () => void;
   /** Same payload the models page reports, so the dock agrees either way. */
   onVoiceChange?: (info: {
     model: VoiceModel;
@@ -180,7 +181,7 @@ function useBannerTexts(): { title: string; sub: string } {
 const STAGE_BG =
   "color-mix(in srgb, var(--stage) calc(var(--banner-opacity, 1) * 100%), transparent)";
 
-function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Props) {
+function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onVoiceChange }: Props) {
   useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
@@ -279,15 +280,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
           <Block title={t("s.71265fc4cb")}>
             <div className="flex justify-center gap-3 flex-wrap">
               <Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>
-              {onOpenDsp ? (
-                <span className="inline-flex items-center gap-[9px]">
-                  <Btn onClick={onOpenDsp}>{t("s.dspHomeOpen")}</Btn>
-                  <HelpMark title={dspTips().home} />
-                </span>
-              ) : null}
             </div>
           </Block>
-          <DspHomeEntry onOpen={onOpenDsp} />
+          <HomeAudioEntries onOpenDsp={onOpenDsp} onOpenAudio={onOpenAudio} />
           <ToolShortcuts />
         </PagePad>
       </div>
@@ -415,7 +410,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onVoiceChange }: Pro
             })}
           </div>
         </Block>
-        <DspHomeEntry onOpen={onOpenDsp} />
+        <HomeAudioEntries onOpenDsp={onOpenDsp} onOpenAudio={onOpenAudio} />
         <ToolShortcuts />
       </PagePad>
     </div>
@@ -445,6 +440,23 @@ function DspHomeEntry({ onOpen }: { onOpen?: () => void }) {
       </button>
     </Block>
   );
+}
+
+function HomeAudioEntries({ onOpenDsp, onOpenAudio }: { onOpenDsp?: () => void; onOpenAudio?: () => void }) {
+  if (!onOpenAudio) return <DspHomeEntry onOpen={onOpenDsp} />;
+  return <div className="grid grid-cols-2 gap-4 max-[720px]:grid-cols-1">
+    <DspHomeEntry onOpen={onOpenDsp} />
+    <Block title={t("audio.homeTitle")}>
+      <button
+        type="button"
+        onClick={onOpenAudio}
+        className="w-full text-left border-0 cursor-pointer rounded-[var(--r)] px-4 py-3.5 bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-[transform,background] duration-200 ease-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] active:scale-[0.985]"
+      >
+        <div className="text-[13.5px] font-semibold text-[var(--ink)]">{t("audio.open")}</div>
+        <div className="text-[12px] text-[var(--meta)] mt-1">{t("audio.homeDesc")}</div>
+      </button>
+    </Block>
+  </div>;
 }
 
 /**

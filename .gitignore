@@ -69,6 +69,8 @@ ffprobe.*
 /User_Data/catalog_cache.json
 /User_Data/cover_cache/
 /User_Data/sts/
+/User_Data/audio/
+/User_Data/audio_clips/
 # Dev/package-root local banner dump (user data lives under User_Data/ch-banner)
 /ch-banner/
 

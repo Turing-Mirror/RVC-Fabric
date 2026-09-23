@@ -11,7 +11,7 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Debug)]
@@ -41,7 +41,10 @@ impl AudioTools {
         if !input.is_file() {
             return Err("audio_file_missing".into());
         }
-        let result = hidden(&self.ffprobe)
+        if !self.ready() {
+            return Err("audio_tools_missing".into());
+        }
+        let mut child = hidden(&self.ffprobe)
             .args([
                 "-v",
                 "error",
@@ -55,11 +58,37 @@ impl AudioTools {
                 "json",
             ])
             .arg(input)
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
             .map_err(|e| e.to_string())?;
-        if !result.status.success() {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
+                Ok(None) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("audio_probe_timeout".into());
+                }
+                Err(e) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(e.to_string());
+                }
+            }
+        };
+        if !status.success() {
             return Err("audio_probe_failed".into());
         }
+        let mut stdout = Vec::new();
+        child
+            .stdout
+            .take()
+            .ok_or("audio_probe_pipe_missing")?
+            .read_to_end(&mut stdout)
+            .map_err(|e| e.to_string())?;
         #[derive(Deserialize)]
         struct DurationInfo {
             duration: Option<String>,
@@ -69,7 +98,7 @@ impl AudioTools {
             streams: Vec<DurationInfo>,
             format: Option<DurationInfo>,
         }
-        let info: Probe = serde_json::from_slice(&result.stdout).map_err(|e| e.to_string())?;
+        let info: Probe = serde_json::from_slice(&stdout).map_err(|e| e.to_string())?;
         let stream = info.streams.first().ok_or("audio_stream_missing")?;
         let duration = stream
             .duration

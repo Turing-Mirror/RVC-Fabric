@@ -1,8 +1,8 @@
-/** Navigation order — must match product shell (首页 广场 模型 设置 说明 其他). */
+/** Navigation order — must match product shell. */
 
 import { tStatic } from "../i18n";
 
-export type PageId = "home" | "plaza" | "models" | "settings" | "help" | "more";
+export type PageId = "home" | "plaza" | "audio" | "models" | "settings" | "help" | "more";
 
 type NavDef = {
   id: PageId;
@@ -14,6 +14,7 @@ type NavDef = {
 const NAV_DEFS: readonly NavDef[] = [
   { id: "home", labelKey: "nav.home" },
   { id: "plaza", labelKey: "nav.plaza", badge: true },
+  { id: "audio", labelKey: "nav.audio" },
   { id: "models", labelKey: "nav.models" },
   { id: "settings", labelKey: "nav.settings" },
   { id: "help", labelKey: "nav.help" },

@@ -1,6 +1,6 @@
 use crate::format::PcmFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rtrb::Consumer;
+use rtrb::{Consumer, Producer, RingBuffer};
 use serde::Serialize;
 use std::sync::{
     atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
@@ -10,6 +10,7 @@ use std::sync::{
 pub struct TrackControl {
     pub paused: AtomicBool,
     pub stopped: AtomicBool,
+    pub flush: AtomicBool,
     pub played_frames: AtomicU64,
     pub underrun_frames: AtomicU64,
     gain: AtomicU32,
@@ -19,6 +20,7 @@ impl Default for TrackControl {
         Self {
             paused: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
+            flush: AtomicBool::new(false),
             played_frames: AtomicU64::new(0),
             underrun_frames: AtomicU64::new(0),
             gain: AtomicU32::new(1.0f32.to_bits()),
@@ -53,11 +55,35 @@ impl Track {
     }
 }
 /// Construction happens off callback. Each input is already converted to this format.
-/// Topology is fixed for this A00 prototype; dynamic instance replacement is B03.
 pub struct Mixer {
     format: PcmFormat,
     tracks: Vec<Track>,
     scratch: Vec<f32>,
+    music_swap: Option<MusicSwapCallback>,
+}
+
+struct MusicSwapCallback {
+    incoming: Consumer<Track>,
+    retired: Producer<Track>,
+}
+
+/// SPSC control plane. The callback only moves a prepared track between
+/// preallocated queues; old decoder/ring memory is reclaimed by the owner.
+pub struct MusicControl {
+    incoming: Producer<Track>,
+    retired: Consumer<Track>,
+}
+
+impl MusicControl {
+    pub fn try_replace(&mut self, track: Track) -> Result<(), Track> {
+        self.incoming.push(track).map_err(|error| match error {
+            rtrb::PushError::Full(track) => track,
+        })
+    }
+
+    pub fn take_retired(&mut self) -> Option<Track> {
+        self.retired.pop().ok()
+    }
 }
 impl Mixer {
     pub fn new(format: PcmFormat, tracks: Vec<Track>) -> Result<Self, String> {
@@ -66,12 +92,52 @@ impl Mixer {
             format,
             tracks,
             scratch: vec![0.0; format.channels as usize],
+            music_swap: None,
         })
+    }
+
+    /// The first track is microphone PCM; the second is replaceable music.
+    /// Both tracks must already use the output device's PCM format.
+    pub fn with_music_slot(
+        format: PcmFormat,
+        microphone: Track,
+        music: Track,
+    ) -> Result<(Self, MusicControl), String> {
+        let mut mixer = Self::new(format, vec![microphone, music])?;
+        let (incoming, callback_incoming) = RingBuffer::new(1);
+        let (callback_retired, retired) = RingBuffer::new(1);
+        mixer.music_swap = Some(MusicSwapCallback {
+            incoming: callback_incoming,
+            retired: callback_retired,
+        });
+        Ok((mixer, MusicControl { incoming, retired }))
+    }
+
+    fn apply_music_swap(&mut self) {
+        let Some(control) = self.music_swap.as_mut() else {
+            return;
+        };
+        // Do not pop a command unless there is space to hand the old track
+        // back. A ring/decoder is never destroyed in the audio callback.
+        if control.retired.slots() == 0 {
+            return;
+        }
+        if let Ok(next) = control.incoming.pop() {
+            let old = std::mem::replace(&mut self.tracks[1], next);
+            let _ = control.retired.push(old);
+        }
     }
     pub fn format(&self) -> PcmFormat {
         self.format
     }
     pub fn render<T: cpal::Sample + cpal::FromSample<f32>>(&mut self, data: &mut [T]) {
+        self.apply_music_swap();
+        for track in &mut self.tracks {
+            if track.control.flush.swap(false, Ordering::AcqRel) {
+                while track.pcm.pop().is_ok() {}
+                track.control.played_frames.store(0, Ordering::Release);
+            }
+        }
         let channels = self.format.channels as usize;
         // Whole-frame consumption avoids channel skew on starvation.
         let mut frames = data.chunks_exact_mut(channels);
@@ -285,5 +351,61 @@ mod tests {
         let mut out = [0.0f32; 2];
         mixer.render(&mut out);
         assert_eq!(out, [1.0, 0.5]);
+    }
+
+    #[test]
+    fn replaces_music_at_a_buffer_boundary_and_returns_old_track() {
+        let (mic, _) = track(&[0.1, 0.1, 0.1, 0.1], None);
+        let (old, _) = track(&[0.2, 0.2], None);
+        let (new, _) = track(&[0.4, -0.4], None);
+        let (mut mixer, mut control) = Mixer::with_music_slot(format(), mic, old).unwrap();
+        control.try_replace(new).ok().unwrap();
+        assert!(control.take_retired().is_none());
+        let mut out = [0.0f32; 2];
+        mixer.render(&mut out);
+        assert_eq!(out, [0.5, -0.3]);
+        assert!(control.take_retired().is_some());
+        mixer.render(&mut out);
+        assert_eq!(out, [0.1, 0.1]);
+    }
+
+    #[test]
+    fn full_control_queues_defer_replacement_without_dropping_in_callback() {
+        let (mic, _) = track(&[], None);
+        let (old, _) = track(&[0.1, 0.1], None);
+        let (next, _) = track(&[0.2, 0.2], None);
+        let (later, _) = track(&[0.3, 0.3], None);
+        let (mut mixer, mut control) = Mixer::with_music_slot(format(), mic, old).unwrap();
+        control.try_replace(next).ok().unwrap();
+        let later = control
+            .try_replace(later)
+            .err()
+            .expect("queue must be bounded");
+        let mut out = [0.0f32; 2];
+        mixer.render(&mut out);
+        assert_eq!(out, [0.2, 0.2]);
+        control.try_replace(later).ok().unwrap();
+        // Retired queue is still occupied, so the new command waits.
+        mixer.render(&mut out);
+        assert_eq!(out, [0.0, 0.0]);
+        let _old = control.take_retired().unwrap();
+        mixer.render(&mut out);
+        assert_eq!(out, [0.3, 0.3]);
+        assert!(control.take_retired().is_some());
+    }
+
+    #[test]
+    fn stopped_microphone_can_discard_old_frames_before_restarting() {
+        let (mic, ctl) = track(&[0.7, 0.7, 0.6, 0.6], None);
+        let mut mixer = Mixer::new(format(), vec![mic]).unwrap();
+        ctl.stopped.store(true, Ordering::Release);
+        ctl.flush.store(true, Ordering::Release);
+        let mut out = [1.0f32; 2];
+        mixer.render(&mut out);
+        assert_eq!(out, [0.0, 0.0]);
+        assert!(!ctl.flush.load(Ordering::Acquire));
+        ctl.stopped.store(false, Ordering::Release);
+        mixer.render(&mut out);
+        assert_eq!(out, [0.0, 0.0]);
     }
 }

@@ -120,6 +120,9 @@ def main() -> None:
     voice_chain: VoiceChain | None = None
     fx_chain: RealtimeFxChain | None = None
     audio_proc = None
+    bridge_writer = None
+    bridge_lock = threading.Lock()
+    audio_thread = None
     in_mem = out_mem = None
     in_buf = out_buf = None
     in_ptr = out_ptr = play_ptr = None
@@ -428,10 +431,21 @@ def main() -> None:
 
     def stop_stream() -> None:
         nonlocal audio_proc, in_mem, out_mem, in_buf, out_buf
+        nonlocal bridge_writer, audio_thread
         nonlocal in_ptr, out_ptr, play_ptr, in_evt, stop_evt
         nonlocal queue_frames, infer_ema
         flag["vc"] = False
+        if in_evt is not None:
+            in_evt.set()
+        if audio_thread is not None and audio_thread is not threading.current_thread():
+            audio_thread.join(timeout=3.0)
+        audio_thread = None
         _close_monitor()
+        with bridge_lock:
+            writer = bridge_writer
+            bridge_writer = None
+            if writer is not None:
+                writer.close()
         proc = audio_proc
         if proc is None:
             return
@@ -545,6 +559,13 @@ def main() -> None:
                 else:
                     outdata = np.repeat(y.reshape(-1, 1), int(channels), axis=1)
                 _write_monitor(outdata)
+                with bridge_lock:
+                    if bridge_writer is not None:
+                        if flag["vc"]:
+                            bridge_writer.publish(outdata, int(samplerate))
+                        last_infer_ms = int((time.perf_counter() - t0) * 1000)
+                        queue_frames = 0.0
+                        continue
                 if out_buf is None or not flag["vc"] or out_ptr is None or play_ptr is None:
                     return
                 start = int(out_ptr.value)
@@ -572,6 +593,7 @@ def main() -> None:
 
     def start_stream() -> None:
         nonlocal audio_proc, in_mem, out_mem, in_buf, out_buf
+        nonlocal audio_thread
         nonlocal in_ptr, out_ptr, play_ptr, in_evt, stop_evt, delay_time
         if flag["vc"]:
             return
@@ -586,6 +608,7 @@ def main() -> None:
             is_input_wasapi_exclusive=exclusive,
             is_output_wasapi_exclusive=exclusive,
             is_device_combined=True,
+            input_only=bridge_writer is not None,
         )
         in_mem = SharedMemory(name=audio_proc.get_in_mem_name())
         out_mem = SharedMemory(name=audio_proc.get_out_mem_name())
@@ -615,7 +638,8 @@ def main() -> None:
             _open_monitor()
         except Exception:
             traceback.print_exc()
-        threading.Thread(target=audio_loop, name="dsp-audio", daemon=True).start()
+        audio_thread = threading.Thread(target=audio_loop, name="dsp-audio", daemon=True)
+        audio_thread.start()
         delay_time = float(block_time) + 0.01
         if audio_proc is not None:
             for _ in range(20):
@@ -671,6 +695,7 @@ def main() -> None:
 
     def start_vc(cmd=None) -> None:
         nonlocal samplerate, channels, block_frame, dsp_preset, dsp_params
+        nonlocal bridge_writer
         stop_stream()
         data = _read_inuse()
         if isinstance(cmd, dict):
@@ -706,7 +731,11 @@ def main() -> None:
                 pass
         samplerate = int(sd.query_devices(device=sd.default.device[0])["default_samplerate"])
         max_in = int(sd.query_devices(device=sd.default.device[0])["max_input_channels"])
-        max_out = int(sd.query_devices(device=sd.default.device[1])["max_output_channels"])
+        bridge_name = str(cmd.get("pcm_bridge_name") or "") if isinstance(cmd, dict) else ""
+        max_out = (
+            int(sd.query_devices(device=sd.default.device[1])["max_output_channels"])
+            if not bridge_name else 2
+        )
         channels = min(max_in, max_out, 2)
         zc = max(1, samplerate // 100)
         block_frame = int(np.round(block_time * samplerate / zc)) * zc
@@ -717,7 +746,17 @@ def main() -> None:
             block_frame,
             ",".join(voice_chain.active()) if voice_chain else "-",
         )
-        start_stream()
+        if bridge_name:
+            from tools.audio_pcm_bridge import PcmBridgeWriter
+
+            bridge_writer = PcmBridgeWriter(
+                bridge_name, int(cmd.get("pcm_bridge_epoch") or 0)
+            )
+        try:
+            start_stream()
+        except Exception:
+            stop_stream()
+            raise
         live = _live_ms()
         _write(
             state="running",

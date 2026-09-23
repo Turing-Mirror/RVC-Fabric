@@ -3,6 +3,7 @@
 //! Stages 1–4: window/UI, worker bridge, Runtime provision, voice catalog & store.
 
 mod asset_scope;
+mod audio_bus;
 mod audio_edit;
 mod audio_library;
 mod audio_preview;
@@ -916,7 +917,13 @@ fn product_root(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
 #[tauri::command]
 fn engine_status(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
-    Ok(worker::status_for_ui(&root))
+    let mut status = worker::status_for_ui(&root);
+    if audio_voice::microphone_failed() {
+        if let Some(object) = status.as_object_mut() {
+            object.insert("mic_bridge_error".into(), json!(true));
+        }
+    }
+    Ok(status)
 }
 
 #[tauri::command]
@@ -971,15 +978,16 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
     // Run it off the IPC thread or the window is frozen for that whole time —
     // no status updates, no way to press 停止.
     tauri::async_runtime::spawn_blocking(move || {
-        let _audio_gate = audio_voice::begin_engine_start()?;
+        let mut audio_gate = audio_voice::begin_engine_start(&root)?;
         // 重新把 app_config 刷进 inuse 再启动。app_config 才是选中音色的权威，
         // 而 worker 冷启动只认 inuse 那个文件。「其他」页强制结束引擎之后，
         // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
-        let out = worker::start_vc(&root)?;
+        let out = worker::start_vc_with_bridge(&root, audio_gate.descriptor())?;
         let st = worker::wait_vc_running(&root, 180_000);
         if st.get("state").and_then(|v| v.as_str()) == Some("running") {
+            audio_gate.commit();
             // 验收身份 = start_vc 冻结进命令的那一份（pth/index 随命令本体
             // 下发给 worker）。启动中途用户再选音色会把配置改走 —— 拿新
             // 配置验收旧命令是假失败，这里只认冻结值。纯 DSP 启动没有音色

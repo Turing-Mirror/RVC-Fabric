@@ -68,7 +68,7 @@ pub struct PlaybackStatus {
 }
 
 impl PlaybackStatus {
-    const fn idle() -> Self {
+    pub const fn idle() -> Self {
         Self {
             state: "idle",
             name: String::new(),
@@ -126,15 +126,6 @@ impl Player {
         let _ = self
             .pending
             .compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire);
-    }
-
-    pub fn busy(&self) -> bool {
-        self.pending.load(Ordering::Acquire) != 0
-            || self
-                .current
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_some()
     }
 
     pub fn start(
@@ -262,12 +253,12 @@ mod tests {
     fn stopped_or_replaced_requests_cannot_remain_pending() {
         let player = Player::new();
         let first = player.reserve();
-        assert!(player.busy());
+        assert_eq!(player.pending.load(Ordering::Acquire), first);
         let second = player.reserve();
         player.release(first);
-        assert!(player.busy());
+        assert_eq!(player.pending.load(Ordering::Acquire), second);
         player.stop();
         player.release(second);
-        assert!(!player.busy());
+        assert_eq!(player.pending.load(Ordering::Acquire), 0);
     }
 }

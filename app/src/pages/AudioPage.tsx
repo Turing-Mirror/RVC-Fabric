@@ -184,6 +184,8 @@ export function AudioPage() {
         : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
         : code.includes("audio_voice_engine_active") ? t("audio.voiceEngineActive")
         : code.includes("audio_voice_device_is_preview") ? t("audio.voiceDeviceInvalid")
+        : code.includes("audio_voice_device_locked") ? t("audio.voiceDeviceLocked")
+        : code.includes("audio_voice_output_failed") ? t("audio.microphoneBridgeFailed")
         : code.includes("audio_playback_cancelled") ? t("audio.playbackCancelled")
         : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? t("audio.relinkConflict")
         : code.includes("audio_relink_outside_source") ? t("audio.relinkOutsideSource")
@@ -332,6 +334,7 @@ export function AudioPage() {
       return;
     }
     void run(async () => {
+      await invoke("config_set", { patch: { audio_voice_device_id: voiceDeviceId } });
       setVoice(await invoke<PreviewStatus>("audio_voice_start", {
         entryId: selected.id,
         deviceId: voiceDeviceId,

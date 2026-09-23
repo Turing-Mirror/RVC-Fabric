@@ -409,6 +409,8 @@ if __name__ == "__main__":
             # 就不存在「一块音频用了新模型的采样率、旧模型的重采样器」这种半截状态。
             self._pending_model = None
             self._pending_model_lock = threading.Lock()
+            self._pcm_bridge_lock = threading.Lock()
+            self._audio_loop_thread = None
             # 后台线程建好的新 RVC；音频线程只做指针替换。
             self._swap_ready = None
             self._swap_busy = False
@@ -1789,6 +1791,15 @@ if __name__ == "__main__":
                 else:
                     wasapi_exclusive = False
                 try:
+                    bridge_name = str(getattr(self, "_pcm_bridge_name", "") or "")
+                    with self._pcm_bridge_lock:
+                        self._pcm_bridge_writer = None
+                        if bridge_name:
+                            from tools.audio_pcm_bridge import PcmBridgeWriter
+
+                            self._pcm_bridge_writer = PcmBridgeWriter(
+                                bridge_name, int(getattr(self, "_pcm_bridge_epoch", 0) or 0)
+                            )
                     self.audio_proc = AudioIoProcess(
                         input_device=sd.default.device[0],
                         output_device=sd.default.device[1],
@@ -1797,7 +1808,8 @@ if __name__ == "__main__":
                         channel_num=self.gui_config.channels,
                         is_input_wasapi_exclusive=wasapi_exclusive,
                         is_output_wasapi_exclusive=wasapi_exclusive,
-                        is_device_combined=True
+                        is_device_combined=True,
+                        input_only=self._pcm_bridge_writer is not None,
                         # TODO: Add control UI to allow devices with different type API & different WASAPI settings
                     )
                     self.in_mem = SharedMemory(name=self.audio_proc.get_in_mem_name())
@@ -1854,14 +1866,14 @@ if __name__ == "__main__":
                                 traceback.print_exc()
                                 break
 
-                    threading.Thread(target=audio_loop, daemon=True).start()
+                    self._audio_loop_thread = threading.Thread(target=audio_loop, daemon=True)
+                    self._audio_loop_thread.start()
                 except Exception:
                     flag_vc = False
-                    self.audio_proc = None
                     try:
-                        self._close_monitor_stream()
+                        self.stop_stream()
                     except Exception:
-                        pass
+                        traceback.print_exc()
                     raise
 
         @staticmethod
@@ -2183,6 +2195,15 @@ if __name__ == "__main__":
             global flag_vc
             flag_vc = False
             try:
+                if getattr(self, "in_evt", None) is not None:
+                    self.in_evt.set()
+            except Exception:
+                pass
+            audio_thread = self._audio_loop_thread
+            if audio_thread is not None and audio_thread is not threading.current_thread():
+                audio_thread.join(timeout=3.0)
+            self._audio_loop_thread = None
+            try:
                 self._save_perf_report()
             except Exception:
                 traceback.print_exc()
@@ -2190,6 +2211,14 @@ if __name__ == "__main__":
                 self._close_monitor_stream()
             except Exception:
                 pass
+            with self._pcm_bridge_lock:
+                writer = getattr(self, "_pcm_bridge_writer", None)
+                self._pcm_bridge_writer = None
+                if writer is not None:
+                    try:
+                        writer.close()
+                    except Exception:
+                        traceback.print_exc()
             proc = getattr(self, "audio_proc", None)
             if proc is not None:
                 printt("stop_stream: shutting down AudioIoProcess")
@@ -2269,6 +2298,12 @@ if __name__ == "__main__":
         def _commit_output(self, outdata: np.ndarray, buf_size: int) -> None:
             """Write one block into the shared ring. Underrun writes at play_ptr."""
             global flag_vc
+            with self._pcm_bridge_lock:
+                bridge = getattr(self, "_pcm_bridge_writer", None)
+                if bridge is not None:
+                    if flag_vc:
+                        bridge.publish(outdata, int(self.gui_config.samplerate))
+                    return
             if self.out_buf is None or not flag_vc:
                 return
             if getattr(self, "out_ptr", None) is None or getattr(self, "play_ptr", None) is None:
@@ -2421,6 +2456,13 @@ if __name__ == "__main__":
             else:
                 outdata = np.repeat(y.reshape(-1, 1), ch, axis=1)
             self._write_monitor(outdata)
+            with self._pcm_bridge_lock:
+                bridge = getattr(self, "_pcm_bridge_writer", None)
+                if bridge is not None:
+                    if flag_vc:
+                        bridge.publish(outdata, int(self.gui_config.samplerate))
+                    self.last_infer_ms = int((time.perf_counter() - start_time) * 1000)
+                    return
             if self.out_buf is None or not flag_vc:
                 return
             start = self.out_ptr.value
@@ -3898,6 +3940,9 @@ if __name__ == "__main__":
                 self.stop_stream()
             except Exception:
                 traceback.print_exc()
+            if isinstance(cmd, dict):
+                self._pcm_bridge_name = str(cmd.get("pcm_bridge_name") or "")
+                self._pcm_bridge_epoch = int(cmd.get("pcm_bridge_epoch") or 0)
             dsp_hint = False
             if isinstance(cmd, dict):
                 dsp_hint = bool(cmd.get("dsp_enabled")) or bool(
@@ -4156,6 +4201,8 @@ if __name__ == "__main__":
         def _worker_stop(self, seq=0):
             try:
                 self.stop_stream()
+                self._pcm_bridge_name = ""
+                self._pcm_bridge_epoch = 0
             except Exception as e:
                 traceback.print_exc()
                 self._worker_write_status(

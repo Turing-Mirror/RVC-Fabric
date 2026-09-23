@@ -119,14 +119,16 @@
     "removeConfirm": "仅从音频库移除此来源，不删除原文件。此来源独有的条目、片段和编号也会移除。确定继续吗？",
     "previewDeviceInvalid": "此设备可能用于语音输出，不能用于本地试听。请选择耳机或扬声器。",
     "voiceOutput": "语音输出",
-    "voiceOutputNote": "当前仅支持变声停止时播放。请选择虚拟声卡的写入端。",
+    "voiceOutputNote": "请选择虚拟声卡的写入端。在 Windows 上，音频与变声将共用此设备。",
     "voiceDevice": "语音输出设备",
     "chooseVoiceDevice": "请选择语音输出设备。",
     "playToVoice": "播放到语音",
     "voiceEngineActive": "变声正在运行。请先停止变声，再播放音频。",
     "voiceDeviceInvalid": "语音输出设备与本地监听设备相同。请选择虚拟声卡的写入端。",
+    "voiceDeviceLocked": "变声运行期间不能更换语音输出设备。请先停止变声。",
     "voiceStopBeforeEngine": "音频正在语音输出中。请先停止音频，再开启变声。",
     "voicePlaybackFailed": "语音输出已中断。请检查设备后重试。",
+    "microphoneBridgeFailed": "音频混音连接已中断。请停止并重新开启变声。",
     "playbackCancelled": "已取消这次播放。"
   },
   "window": {

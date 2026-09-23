@@ -3789,6 +3789,7 @@ dependencies = [
  "reqwest 0.12.28",
  "rfd",
  "ripget",
+ "rtrb",
  "serde",
  "serde_json",
  "sha2",

@@ -167,7 +167,9 @@ export function useEngine() {
         setSwapHint(false);
       }
       setStatus(st);
-      if (st.state === "error" && st.error) {
+      if (st.mic_bridge_error === true) {
+        setLastError(t("audio.microphoneBridgeFailed"));
+      } else if (st.state === "error" && st.error) {
         setLastError(String(st.error));
       } else if (st.state === "running") {
         if (!manualErr.current || manualErr.current.until <= Date.now()) {

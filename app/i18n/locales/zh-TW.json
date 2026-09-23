@@ -119,14 +119,16 @@
     "removeConfirm": "僅從音訊庫移除此來源，不刪除原始檔案。此來源獨有的項目、片段和編號也會移除。確定繼續嗎？",
     "previewDeviceInvalid": "此裝置可能用於語音輸出，不能用來本機試聽。請選擇耳機或揚聲器。",
     "voiceOutput": "語音輸出",
-    "voiceOutputNote": "目前僅支援停止變聲時播放。請選擇虛擬音效卡的輸入端。",
+    "voiceOutputNote": "請選擇虛擬音效卡的輸入端。在 Windows 上，音訊與變聲將共用此裝置。",
     "voiceDevice": "語音輸出裝置",
     "chooseVoiceDevice": "請選擇語音輸出裝置。",
     "playToVoice": "播放到語音",
     "voiceEngineActive": "變聲正在執行。請先停止變聲，再播放音訊。",
     "voiceDeviceInvalid": "語音輸出裝置與本機監聽裝置相同。請選擇虛擬音效卡的輸入端。",
+    "voiceDeviceLocked": "變聲執行期間無法更換語音輸出裝置。請先停止變聲。",
     "voiceStopBeforeEngine": "音訊正在輸出到語音裝置。請先停止音訊，再開啟變聲。",
     "voicePlaybackFailed": "語音輸出已中斷。請檢查裝置後重試。",
+    "microphoneBridgeFailed": "音訊混音連線已中斷。請停止並重新開啟變聲。",
     "playbackCancelled": "已取消這次播放。"
   },
   "window": {

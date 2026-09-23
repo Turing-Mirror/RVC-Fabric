@@ -79,10 +79,6 @@ impl PcmMapping {
         &self.name
     }
 
-    pub fn header(&self) -> Header {
-        self.header
-    }
-
     fn cursor(&self, offset: usize) -> &AtomicU64 {
         // Both offsets are 8-byte aligned inside a page-aligned mapping.
         unsafe { &*self.view.Value.cast::<u8>().add(offset).cast::<AtomicU64>() }

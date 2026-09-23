@@ -1450,7 +1450,10 @@ pub struct StartOutcome {
 }
 
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
-pub fn start_vc(root: &Path) -> Result<StartOutcome, String> {
+pub fn start_vc_with_bridge(
+    root: &Path,
+    bridge: Option<&crate::audio_bus::BridgeDescriptor>,
+) -> Result<StartOutcome, String> {
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
     // 必须在选 worker 之前：dsp_enabled 决定走哪条进程。
     let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));
@@ -1523,6 +1526,10 @@ pub fn start_vc(root: &Path) -> Result<StartOutcome, String> {
     // worker 听载荷的，于是走纯 DSP，RVC 永远加载不上 —— 这就是「DSP 之后换不
     // 回 RVC，要反复切模型甚至重启」。
     let mut payload = dsp_command_fields(&cfg);
+    if let Some(bridge) = bridge {
+        payload.insert("pcm_bridge_name".into(), json!(bridge.name));
+        payload.insert("pcm_bridge_epoch".into(), json!(bridge.epoch));
+    }
     // 模型身份冻结进命令本体：worker 处理 start 时用载荷里的 pth/index，
     // 不再以认领那一刻的 inuse 为准 —— 启动中途用户又点了别的音色，
     // 这条 start 的结论仍然可判定。
@@ -1692,6 +1699,7 @@ pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {
             kill_known_workers(root);
             kill_runtime_pythons(root, true);
         }
+        let _ = crate::audio_voice::on_engine_stopped();
         return Ok(());
     }
     // 软停没有兜底：stop 派发不出去 / worker 没有给出完结证据都必须如实
@@ -1723,6 +1731,9 @@ pub fn stop_vc(root: &Path, force: bool) -> Result<(), String> {
         // AudioIoProcess 是 multiprocessing 子进程；父进程死后若没跟上，
         // 这里按「Runtime 下、父进程已死」收掉，不动正在跑的 STS/训练。
         kill_runtime_pythons(root, true);
+    }
+    if let Err(error) = crate::audio_voice::on_engine_stopped() {
+        append_log(root, &format!("microphone bridge detach: {error}"));
     }
     Ok(())
 }

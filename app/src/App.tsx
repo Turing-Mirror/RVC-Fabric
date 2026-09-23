@@ -19,7 +19,7 @@ import { QrDialog } from "./components/QrDialog";
 import { WebDialogHost } from "./components/WebDialog";
 import { NativeDialogHint } from "./components/NativeDialogHint";
 import { openExternal } from "./lib/plaza";
-import { comboFromEvent, localHotkeyMap, typingInto } from "./lib/hotkeys";
+import { comboFromEvent, localAudioHotkeyMap, localHotkeyMap, typingInto, type AudioHotkeyBinding } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
 import { RuntimeMigrationDialog } from "./components/RuntimeMigrationDialog";
@@ -1036,11 +1036,15 @@ export default function App() {
   // 不会和全局的重复触发：localHotkeyMap 只收 `_global` 为 false 的。
   useEffect(() => {
     let map = new Map<string, string>();
+    let audioMap = new Map<string, AudioHotkeyBinding>();
     let alive = true;
     const reload = () => {
       void invoke<Record<string, unknown>>("config_get")
         .then((cfg) => {
-          if (alive) map = localHotkeyMap(cfg);
+          if (alive) {
+            map = localHotkeyMap(cfg);
+            audioMap = localAudioHotkeyMap(cfg);
+          }
         })
         .catch(() => {
           /* 浏览器预览下没有配置 */
@@ -1049,7 +1053,15 @@ export default function App() {
     reload();
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || typingInto(e.target)) return;
-      const action = map.get(comboFromEvent(e));
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const audioBinding = audioMap.get(combo);
+      if (audioBinding) {
+        e.preventDefault();
+        void invoke("audio_hotkey_run", { bindingId: audioBinding.binding_id }).catch(() => {});
+        return;
+      }
+      const action = map.get(combo);
       if (!action) return;
       e.preventDefault();
       const a = actionsRef.current;

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
 import { AudioRecoverySettings } from "../components/AudioRecovery";
+import { AudioHotkeyEditor } from "../components/AudioHotkeyEditor";
 import { useConfig } from "../hooks/useConfig";
 import { setConfig, tips } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
-import { HOTKEYS } from "../lib/hotkeys";
+import { HOTKEYS, comboFromEvent } from "../lib/hotkeys";
 import { setHot, type EngineStatus } from "../lib/engine";
 import { backendLabel, normalizeAccel } from "../lib/backend";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
@@ -183,10 +184,15 @@ function SettingsPageImpl({
    * 那一层。于是用户为了确认现在是哪个组合而按一下 Ctrl+F2，变声就真的被打开
    * 了 —— 他只是想改个键，结果软件开始出声。松开录制就按当前配置装回去。
    */
-  const setRecordingHotkey = (active: boolean) => {
-    void safeInvoke("hotkeys_apply", {
-      enabled: active ? false : c.bool("hotkeys_enabled"),
-    });
+  const setRecordingHotkey = async (active: boolean): Promise<boolean> => {
+    try {
+      const result = await invoke<{ registered: string[] }>("hotkeys_apply", {
+        enabled: active ? false : c.bool("hotkeys_enabled"),
+      });
+      return !active || (Array.isArray(result.registered) && result.registered.length === 0);
+    } catch {
+      return false;
+    }
   };
 
   const fxOn = c.bool("fx_enabled");
@@ -1127,13 +1133,14 @@ function SettingsPageImpl({
                     key={h.key}
                     label={hotkeyLabels()[h.action] ?? h.action}
                     value={c.str(h.key, h.fallback)}
-                    onChange={(v) => void saveHotkey(h.key, v)}
+                    onChange={(v) => c.set(h.key, v, true)}
                     global={c.cfg[`${h.key}_global`] !== false}
                     onGlobalChange={(v) => void saveHotkey(`${h.key}_global`, v)}
                     onRecording={setRecordingHotkey}
                   />
                 ))}
               </div>
+              <AudioHotkeyEditor />
               <p className="text-xs text-[var(--help)] m-0">
                 <b>{t("s.d15328af87")}</b>：<br />{t("s.b8d74a5e97")}<br />{t("s.d7278f3458")}<br />{t("s.5ece668b53")}<br />{t("s.e6eed3ec41")}</p>
             </div>
@@ -1193,9 +1200,10 @@ function hotkeyLabels(): Record<string, string> {
 
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
 function prettyCombo(v: string): string {
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   return v
     .split("+")
-    .map((p) => (p === "CmdOrCtrl" ? "Ctrl" : p === "Super" ? "Win" : p))
+    .map((p) => (p === "CmdOrCtrl" ? (mac ? "Command" : "Ctrl") : p === "Super" ? (mac ? "Command" : "Win") : p))
     .join(" + ");
 }
 
@@ -1215,18 +1223,60 @@ function HotkeyRow({
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (v: string) => Promise<void>;
   /** 抢成全局（任何软件在前台都生效），还是只在本软件窗口里生效。 */
   global: boolean;
   onGlobalChange: (v: boolean) => void;
   /** 进入 / 退出录制。录制期间全局快捷键要摘掉，否则按一下就真触发了。 */
-  onRecording: (active: boolean) => void;
+  onRecording: (active: boolean) => Promise<boolean>;
 }) {
   const [recording, setRecording] = useState(false);
+  const [arming, setArming] = useState(false);
+  const [recordError, setRecordError] = useState(false);
+  const recordingRef = useRef(false);
+  const armingRef = useRef(false);
+  const restoreRef = useRef(onRecording);
+  useEffect(() => { restoreRef.current = onRecording; }, [onRecording]);
+  useEffect(() => () => {
+    if (recordingRef.current || armingRef.current) {
+      armingRef.current = false;
+      void restoreRef.current(false);
+    }
+  }, []);
+
+  const beginRecording = async () => {
+    if (recordingRef.current || armingRef.current) return;
+    armingRef.current = true;
+    setArming(true);
+    setRecordError(false);
+    const ready = await onRecording(true).catch(() => false);
+    if (armingRef.current && ready) {
+      recordingRef.current = true;
+      setRecording(true);
+    } else if (ready) {
+      void onRecording(false);
+    } else {
+      setRecordError(true);
+    }
+    armingRef.current = false;
+    setArming(false);
+  };
 
   const stopRecording = () => {
+    if (armingRef.current) {
+      armingRef.current = false;
+      return;
+    }
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
     setRecording(false);
-    onRecording(false);
+    void onRecording(false);
+  };
+
+  const commit = (combo: string) => {
+    recordingRef.current = false;
+    setRecording(false);
+    void onChange(combo).catch(() => {}).finally(() => onRecording(false));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -1236,22 +1286,10 @@ function HotkeyRow({
       stopRecording();
       return;
     }
-    const mods: string[] = [];
-    if (e.ctrlKey || e.metaKey) mods.push("CmdOrCtrl");
-    if (e.altKey) mods.push("Alt");
-    if (e.shiftKey) mods.push("Shift");
+    const combo = comboFromEvent(e.nativeEvent);
+    if (!combo) return;
 
-    const code = e.code;
-    let main = "";
-    if (/^Key[A-Z]$/.test(code)) main = code.slice(3);
-    else if (/^Digit[0-9]$/.test(code)) main = code.slice(5);
-    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) main = code;
-    if (!main) return; // 还只按着修饰键，继续等
-
-    // 只 setRecording(false)，不走 stopRecording：onChange 存完盘会自己按新
-    // 配置重装一遍，这里再装一次是拿旧值多注册一轮。
-    setRecording(false);
-    onChange([...mods, main].join("+"));
+    commit(combo);
   };
 
   return (
@@ -1269,10 +1307,8 @@ function HotkeyRow({
         />{t("s.a5644f4bbf")}</label>
       <button
         type="button"
-        onClick={() => {
-          setRecording(true);
-          onRecording(true);
-        }}
+        onClick={() => void beginRecording()}
+        data-hotkey-recorder
         onBlur={stopRecording}
         onKeyDown={recording ? onKeyDown : undefined}
         className={[
@@ -1285,8 +1321,10 @@ function HotkeyRow({
             : "text-[var(--meta)] hover:text-[var(--ink)]",
         ].join(" ")}
       >
-        {recording ? t("s.31469944aa") : prettyCombo(value)}
+        {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
+      {recordError ? <span role="alert" className="text-[var(--danger)]">{t("audio.hotkeySuspendFailed")}</span> : null}
+      {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}
     </div>
   );
 }

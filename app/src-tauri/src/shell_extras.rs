@@ -20,6 +20,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{config, paths, worker};
+use crate::hotkey_catalog::{self, AudioBinding, HotkeyScope};
 
 // ---------------------------------------------------------------------------
 // Tray
@@ -139,35 +140,81 @@ fn legacy_hotkeys() -> &'static [crate::hotkey_catalog::LegacyHotkey] {
     &crate::hotkey_catalog::catalog().legacy
 }
 
+pub fn audio_conflicts_with_legacy(root: &Path, bindings: &[AudioBinding]) -> bool {
+    use tauri_plugin_global_shortcut::Shortcut;
+    let legacy: std::collections::HashSet<u32> = legacy_hotkeys()
+        .iter()
+        .filter_map(|binding| combo_for(Some(root), &binding.key, &binding.fallback)
+            .and_then(|text| text.parse::<Shortcut>().ok())
+            .map(|combo| combo.id()))
+        .collect();
+    bindings.iter().filter(|binding| binding.enabled)
+        .filter_map(|binding| binding.combo.parse::<Shortcut>().ok())
+        .any(|combo| legacy.contains(&combo.id()))
+}
+
 /// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。
 ///
 /// 注册失败的组合会被 Tauri 直接拒掉，但一个乱七八糟的字符串还可能让
 /// on_shortcut 直接 panic —— 先自己筛一道。
 fn combo_ok(s: &str) -> bool {
     let s = s.trim();
-    if s.is_empty() || s.len() > 48 {
-        return false;
-    }
-    let parts: Vec<&str> = s.split('+').map(str::trim).collect();
-    if parts.len() > 5 || parts.iter().any(|p| p.is_empty()) {
-        return false;
-    }
-    parts
-        .iter()
-        .all(|p| p.chars().all(|c| c.is_ascii_alphanumeric()))
+    !s.is_empty() && s.len() <= 128 && s.parse::<tauri_plugin_global_shortcut::Shortcut>().is_ok()
 }
 
-/// 用户配的组合键，没配或配得不合法就用默认值。
-fn combo_for(root: Option<&Path>, key: &str, fallback: &str) -> String {
+pub fn run_audio_binding(app: &AppHandle, binding: AudioBinding) -> Result<(), String> {
+    if binding.action == "show-audio" {
+        return crate::tool_window::focus_main_audio(app);
+    }
+    let root = root_of(app).ok_or("audio_hotkey_root_missing")?;
+    std::thread::Builder::new()
+        .name("fabric-audio-hotkey".into())
+        .spawn(move || {
+            let result: Result<(), String> = match binding.action.as_str() {
+                "play-entry" => {
+                    let cfg = config::read(&root);
+                    let device = cfg.get("audio_voice_device_id")
+                        .and_then(Value::as_str).unwrap_or("").to_string();
+                    match binding.target_entry_id {
+                        Some(entry) if !device.is_empty() => crate::audio_voice::start_entry(
+                            &root, entry, device, binding.mode.as_deref() == Some("overlay"),
+                        ).map(|_| ()),
+                        Some(_) => Err("audio_voice_device_missing".into()),
+                        None => Err("audio_hotkey_entry_missing".into()),
+                    }
+                }
+                "pause-current" => crate::audio_voice::toggle_pause_latest().map(|_| ()),
+                "stop-current" => crate::audio_voice::stop_latest().map(|_| ()),
+                "stop-all" => { crate::audio_voice::audio_voice_stop(); Ok(()) },
+                _ => Err("audio_hotkey_action_invalid".into()),
+            };
+            if let Err(error) = result {
+                crate::logging::shell_log!("audio hotkey: {error}");
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// An explicit empty string clears a binding; a missing or malformed value
+/// retains the original default for compatibility with older installs.
+fn combo_for(root: Option<&Path>, key: &str, fallback: &str) -> Option<String> {
     let Some(root) = root else {
-        return fallback.to_string();
+        return Some(fallback.to_string());
     };
     let v = config::read(root);
-    let raw = v.get(key).and_then(|x| x.as_str()).unwrap_or("").trim();
+    parsed_combo(v.get(key).and_then(|x| x.as_str()), fallback)
+}
+
+fn parsed_combo(raw: Option<&str>, fallback: &str) -> Option<String> {
+    let raw = raw.unwrap_or(fallback).trim();
+    if raw.is_empty() {
+        return None;
+    }
     if combo_ok(raw) {
-        raw.to_string()
+        Some(raw.to_string())
     } else {
-        fallback.to_string()
+        Some(fallback.to_string())
     }
 }
 
@@ -219,51 +266,190 @@ fn pressed_edge(held: &AtomicBool, state: tauri_plugin_global_shortcut::Shortcut
     }
 }
 
-/// Register or unregister the global hotkeys. Failing to grab a combo (another
-/// app already owns it) must not break the rest — report and carry on.
+#[derive(Clone, PartialEq, Eq)]
+enum HotkeyTarget {
+    Legacy(String),
+    Audio(AudioBinding),
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct RegisteredHotkey {
+    combo: String,
+    target: HotkeyTarget,
+}
+
+static REGISTERED_HOTKEYS: std::sync::Mutex<Option<std::collections::HashMap<String, RegisteredHotkey>>> =
+    std::sync::Mutex::new(None);
+static HOTKEYS_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+fn register_hotkey(app: &AppHandle, binding: &RegisteredHotkey) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let handle = app.clone();
+    let target = binding.target.clone();
+    let held = AtomicBool::new(false);
+    app.global_shortcut()
+        .on_shortcut(binding.combo.as_str(), move |_a, _s, event| {
+            if !pressed_edge(&held, event.state) || !HOTKEYS_ACTIVE.load(Ordering::Acquire) {
+                return;
+            }
+            match &target {
+                HotkeyTarget::Legacy(action) if action == "toggle-window" => {
+                    toggle_main_window(&handle);
+                }
+                HotkeyTarget::Legacy(action) => {
+                    let _ = handle.emit(&format!("hotkey://{action}"), ());
+                }
+                HotkeyTarget::Audio(binding) => {
+                    if let Err(error) = run_audio_binding(&handle, binding.clone()) {
+                        crate::logging::shell_log!("audio hotkey: {error}");
+                    }
+                }
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Change only the affected registrations. On a failed rebind, keep the
+/// previously working registration and leave unrelated shortcuts untouched.
 pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    HOTKEYS_ACTIVE.store(enabled, Ordering::Release);
     let gs = app.global_shortcut();
-    let _ = gs.unregister_all();
-    if !enabled {
-        return json!({"enabled": false, "registered": [], "failed": []});
-    }
     let root = root_of(app);
-    let mut ok: Vec<String> = Vec::new();
-    let mut failed: Vec<String> = Vec::new();
-    // 用户特地设成「只在软件内」的那些。不注册全局，交给前端的 keydown。
+    let mut desired = std::collections::HashMap::<String, RegisteredHotkey>::new();
     let mut local: Vec<String> = Vec::new();
-    for binding in legacy_hotkeys() {
-        let combo = combo_for(root.as_deref(), &binding.key, &binding.fallback);
-        if !global_for(root.as_deref(), &binding.key) {
-            local.push(combo);
+    let mut audio_bindings = Vec::new();
+    let mut config_error = None;
+    if enabled {
+        for binding in legacy_hotkeys() {
+            let Some(combo) = combo_for(root.as_deref(), &binding.key, &binding.fallback) else {
+                continue;
+            };
+            if !global_for(root.as_deref(), &binding.key) {
+                local.push(combo);
+                continue;
+            }
+            desired.insert(format!("legacy:{}", binding.key), RegisteredHotkey {
+                combo,
+                target: HotkeyTarget::Legacy(binding.action.clone()),
+            });
+        }
+        if let Some(root) = root.as_deref() {
+            match hotkey_catalog::read_bindings(root) {
+                Ok(bindings) => {
+                    for binding in &bindings {
+                        if binding.enabled && binding.scope == HotkeyScope::Global
+                            && !binding.combo.trim().is_empty() {
+                            desired.insert(format!("audio:{}", binding.binding_id), RegisteredHotkey {
+                                combo: binding.combo.clone(),
+                                target: HotkeyTarget::Audio(binding.clone()),
+                            });
+                        }
+                    }
+                    audio_bindings = bindings;
+                }
+                Err(error) => config_error = Some(error),
+            }
+        }
+    }
+    let mut registry = REGISTERED_HOTKEYS.lock().unwrap_or_else(|e| e.into_inner());
+    let active = registry.get_or_insert_with(std::collections::HashMap::new);
+    let changes: Vec<_> = active.iter()
+        .filter(|(id, old)| desired.get(*id) != Some(*old))
+        .map(|(id, old)| (id.clone(), old.clone()))
+        .collect();
+    let mut removed = Vec::new();
+    let mut blocked = std::collections::HashSet::new();
+    for (id, old) in changes {
+        if gs.unregister(old.combo.as_str()).is_ok() {
+            active.remove(&id);
+            removed.push((id, old));
+        } else {
+            blocked.insert(id);
+        }
+    }
+    let mut added = Vec::new();
+    let mut restore = false;
+    let mut ordered: Vec<_> = desired.iter().collect();
+    ordered.sort_by(|(left, _), (right, _)| {
+        (!left.starts_with("legacy:"), left).cmp(&(!right.starts_with("legacy:"), right))
+    });
+    for (id, binding) in ordered {
+        if blocked.contains(id) || active.get(id) == Some(binding) {
             continue;
         }
-        let handle = app.clone();
-        let act = binding.action.clone();
-        let held = AtomicBool::new(false);
-        match gs.on_shortcut(combo.as_str(), move |_a, _s, event| {
-            if !pressed_edge(&held, event.state) {
-                return;
+        match register_hotkey(app, binding) {
+            Ok(()) => { active.insert(id.clone(), binding.clone()); added.push(id.clone()); }
+            Err(_) if removed.iter().any(|(old_id, _)| old_id == id) => {
+                restore = true;
+                break;
             }
-            // 显示 / 隐藏窗口在这里就地做完，不往前端发事件。
-            //
-            // 窗口藏起来的时候 webview 有可能被系统挂起，事件到不了前端 ——
-            // 而「窗口是藏着的」恰恰是最需要这个快捷键的时候。发事件让前端
-            // 把自己显示出来，等于让一个睡着的人自己叫醒自己。
-            if act == "toggle-window" {
-                toggle_main_window(&handle);
-                return;
-            }
-            let _ = handle.emit(&format!("hotkey://{act}"), ());
-        }) {
-            Ok(()) => ok.push(combo),
-            // 组合被别的程序占了就跳过这一个，其余的照常注册 —— 一个冲突
-            // 不该让所有快捷键全废。界面上会把失败的那个标出来。
-            Err(_) => failed.push(combo),
+            Err(_) => {}
         }
     }
-    json!({"enabled": true, "registered": ok, "failed": failed, "local": local})
+    if restore {
+        for id in added {
+            if let Some(binding) = active.remove(&id) {
+                let _ = gs.unregister(binding.combo.as_str());
+            }
+        }
+        for (id, old) in removed {
+            if register_hotkey(app, &old).is_ok() {
+                active.insert(id, old);
+            }
+        }
+    }
+
+    let mut registered: Vec<_> = active.values().map(|binding| binding.combo.clone()).collect();
+    registered.sort();
+    let mut failed: Vec<_> = desired.iter()
+        .filter(|(id, binding)| active.get(*id) != Some(*binding))
+        .map(|(_, binding)| binding.combo.clone())
+        .collect();
+    failed.sort();
+    let mut audio_failed = Vec::new();
+    let audio_status: Vec<_> = audio_bindings.iter().map(|binding| {
+        let state = if !binding.enabled { "disabled" }
+            else if binding.combo.trim().is_empty() { "unbound" }
+            else if binding.scope == HotkeyScope::Window { "window" }
+            else if active.get(&format!("audio:{}", binding.binding_id))
+                == desired.get(&format!("audio:{}", binding.binding_id)) { "registered" }
+            else { audio_failed.push(binding.binding_id.clone()); "conflict" };
+        json!({"binding_id": binding.binding_id, "state": state})
+    }).collect();
+    for (id, binding) in active.iter() {
+        if id.starts_with("audio:") && desired.get(id) != Some(binding) {
+            let binding_id = id.trim_start_matches("audio:").to_string();
+            if !audio_failed.contains(&binding_id) {
+                audio_failed.push(binding_id);
+            }
+        }
+    }
+    if let Some(error) = config_error {
+        failed.push(error.clone());
+        audio_failed.push(error);
+    }
+    json!({"enabled": enabled, "registered": registered, "failed": failed,
+        "local": local, "audio_failed": audio_failed, "audio_status": audio_status})
+}
+
+pub fn audio_hotkey_status(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let root = root_of(app).ok_or("audio_hotkey_root_missing")?;
+    let config = config::read(&root);
+    let enabled = config.get("hotkeys_enabled").and_then(Value::as_bool) == Some(true);
+    let bindings = hotkey_catalog::read_bindings(&root)?;
+    let registry = REGISTERED_HOTKEYS.lock().unwrap_or_else(|e| e.into_inner());
+    let active = registry.as_ref();
+    Ok(bindings.iter().map(|binding| {
+        let state = if !enabled || !binding.enabled { "disabled" }
+            else if binding.combo.trim().is_empty() { "unbound" }
+            else if binding.scope == HotkeyScope::Window { "window" }
+            else if active.and_then(|map| map.get(&format!("audio:{}", binding.binding_id)))
+                == Some(&RegisteredHotkey { combo: binding.combo.clone(),
+                    target: HotkeyTarget::Audio(binding.clone()) }) { "registered" }
+            else { "conflict" };
+        json!({"binding_id": binding.binding_id, "state": state})
+    }).collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -1507,7 +1693,8 @@ mod tests {
     /// 配置里是垃圾值时必须退回默认，而不是注册一个乱七八糟的组合。
     #[test]
     fn bad_config_falls_back_to_default() {
-        assert_eq!(combo_for(None, "hotkey_toggle_vc", "CmdOrCtrl+F2"), "CmdOrCtrl+F2");
+        assert_eq!(combo_for(None, "hotkey_toggle_vc", "CmdOrCtrl+F2"), Some("CmdOrCtrl+F2".into()));
+        assert_eq!(parsed_combo(Some(""), "CmdOrCtrl+F2"), None);
     }
 
     #[test]

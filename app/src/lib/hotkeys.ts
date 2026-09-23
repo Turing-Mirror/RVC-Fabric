@@ -16,17 +16,35 @@ export type HotkeySpec = { key: string; action: string; fallback: string };
 export const HOTKEYS: HotkeySpec[] = catalog.legacy;
 export const AUDIO_ACTIONS = catalog.audio_actions;
 
+export type AudioHotkeyBinding = {
+  binding_id: string;
+  action: string;
+  target_entry_id: string | null;
+  combo: string;
+  scope: "global" | "window";
+  enabled: boolean;
+  mode: "replace" | "overlay" | null;
+};
+
 /**
  * 把一个真实按键事件写成 Tauri 那套组合键字符串，好和配置直接比。
  *
  * 修饰键的顺序写死成 CmdOrCtrl → Alt → Shift，和设置页录制时用的顺序一致；
  * 顺序不一致的话同一个组合会有两种写法，比出来永远不相等。
  *
- * 当前窗口内录制仍只认字母、数字和 F1~F24；其余键位扩展将与录制逻辑一起做。
+ * 录制和窗口内执行共用此规范化规则。
  */
 export function comboFromEvent(e: KeyboardEvent): string {
     const mods: string[] = [];
-    if (e.ctrlKey || e.metaKey) mods.push("CmdOrCtrl");
+    if (e.isComposing || e.getModifierState?.("AltGraph")) return "";
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    if (mac) {
+      if (e.metaKey) mods.push("CmdOrCtrl");
+      if (e.ctrlKey) mods.push("Ctrl");
+    } else {
+      if (e.ctrlKey) mods.push("CmdOrCtrl");
+      if (e.metaKey) mods.push("Super");
+    }
     if (e.altKey) mods.push("Alt");
     if (e.shiftKey) mods.push("Shift");
 
@@ -35,8 +53,23 @@ export function comboFromEvent(e: KeyboardEvent): string {
     if (/^Key[A-Z]$/.test(code)) main = code.slice(3);
     else if (/^Digit[0-9]$/.test(code)) main = code.slice(5);
     else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) main = code;
+    else if (/^Numpad([0-9]|Add|Decimal|Divide|Enter|Equal|Multiply|Subtract)$/.test(code)) main = code;
+    else if (/^(Arrow(Up|Down|Left|Right)|Backquote|Backslash|BracketLeft|BracketRight|Comma|Equal|Minus|Period|Quote|Semicolon|Slash|Backspace|Enter|Space|Tab|Delete|End|Home|Insert|PageDown|PageUp|PrintScreen|ScrollLock|Pause|NumLock|AudioVolume(Down|Up|Mute)|Media(Play|Pause|PlayPause|Stop|TrackNext|TrackPrevious))$/.test(code)) main = code;
     if (!main) return "";
     return [...mods, main].join("+");
+}
+
+export function localAudioHotkeyMap(cfg: Record<string, unknown>): Map<string, AudioHotkeyBinding> {
+  const out = new Map<string, AudioHotkeyBinding>();
+  if (cfg.hotkeys_enabled !== true || !Array.isArray(cfg.audio_hotkeys)) return out;
+  for (const item of cfg.audio_hotkeys) {
+    if (!item || typeof item !== "object") continue;
+    const binding = item as AudioHotkeyBinding;
+    if (binding.enabled && binding.scope === "window" && binding.combo) {
+      out.set(binding.combo, binding);
+    }
+  }
+  return out;
 }
 
 /**
@@ -54,7 +87,8 @@ export function localHotkeyMap(
   if (cfg.hotkeys_enabled === false) return out;
   for (const h of HOTKEYS) {
     if (cfg[`${h.key}_global`] !== false) continue;
-    const combo = String(cfg[h.key] ?? "").trim() || h.fallback;
+    const combo = typeof cfg[h.key] === "string" ? String(cfg[h.key]).trim() : h.fallback;
+    if (!combo) continue;
     out.set(combo, h.action);
   }
   return out;
@@ -69,6 +103,7 @@ export function localHotkeyMap(
 export function typingInto(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el || !el.tagName) return false;
+  if (el.closest?.("[data-hotkey-recorder]")) return true;
   const tag = el.tagName.toLowerCase();
   return (
     tag === "input" ||

@@ -38,6 +38,8 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_hotkeys_get") return [];
+      if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       return null;
@@ -71,6 +73,8 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_hotkeys_get") return [];
+      if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_library_pick_replacement") return "E:\\Moved\\lost.wav";
@@ -102,6 +106,8 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_hotkeys_get") return [];
+      if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_waveform_get") return { duration: 10, peaks: [0, 120, 255] };
@@ -143,6 +149,8 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
       if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
+      if (cmd === "audio_hotkeys_get") return [];
+      if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status" || cmd === "audio_voice_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
       if (cmd === "audio_voice_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
@@ -181,6 +189,8 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
       if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
+      if (cmd === "audio_hotkeys_get") return [];
+      if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
       if (cmd === "audio_voice_status") return second;
       if (cmd === "audio_voice_instances") return [second, first];

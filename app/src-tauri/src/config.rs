@@ -235,6 +235,7 @@ pub fn defaults() -> Map<String, Value> {
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));
     m.insert("audio_voice_device_id".into(), json!(""));
+    m.insert("audio_hotkeys".into(), json!([]));
     // One catalogue supplies both defaults and labels. Existing nine
     // shortcuts retain their original combinations and global scope.
     for binding in &crate::hotkey_catalog::catalog().legacy {

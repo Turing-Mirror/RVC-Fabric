@@ -288,125 +288,131 @@ pub async fn audio_voice_start(
         _ => return Err("audio_playback_mode_invalid".into()),
     };
     let root = crate::root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let request = {
-            let _gate = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
-            if ENGINE_STARTING.load(Ordering::Acquire) != 0 {
-                return Err("audio_voice_engine_active".into());
+    tauri::async_runtime::spawn_blocking(move || start_entry(&root, entry_id, device_id, overlay))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The same service entrypoint is used by UI commands and native global hotkeys.
+pub fn start_entry(
+    root: &Path,
+    entry_id: String,
+    device_id: String,
+    overlay: bool,
+) -> Result<VoicePlaybackStatus, String> {
+    let request = {
+        let _gate = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
+        if ENGINE_STARTING.load(Ordering::Acquire) != 0 {
+            return Err("audio_voice_engine_active".into());
+        }
+        let cfg = crate::config::read(root);
+        if cfg
+            .get("audio_preview_device_id")
+            .and_then(|value| value.as_str())
+            == Some(device_id.as_str())
+        {
+            return Err("audio_voice_device_is_preview".into());
+        }
+        let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+        if engine_output_active(root)
+            && !voice
+                .bus
+                .as_ref()
+                .is_some_and(VoiceBus::microphone_attached)
+        {
+            return Err("audio_voice_engine_active".into());
+        }
+        if voice
+            .bus
+            .as_ref()
+            .is_some_and(|bus| bus.microphone_attached() && bus.device_id() != device_id)
+        {
+            return Err("audio_voice_device_locked".into());
+        }
+        if voice
+            .bus
+            .as_ref()
+            .is_some_and(|bus| bus.microphone_attached() && bus.failed())
+        {
+            return Err("audio_voice_output_failed".into());
+        }
+        if overlay
+            && voice
+                .bus
+                .as_ref()
+                .is_some_and(|bus| bus.has_music() && bus.device_id() != device_id)
+        {
+            return Err("audio_voice_device_locked".into());
+        }
+        voice.request = voice.request.wrapping_add(1).max(1);
+        voice.pending = voice.request;
+        voice.request
+    };
+    let result = (|| {
+        let source = audio_session::entry(root, &entry_id)?;
+        let format = {
+            let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+            match voice.bus.as_ref() {
+                Some(bus) if bus.device_id() == device_id && !bus.failed() => bus.format(),
+                _ => output::device_format(&device_id)?,
             }
-            let cfg = crate::config::read(&root);
-            if cfg
-                .get("audio_preview_device_id")
-                .and_then(|value| value.as_str())
-                == Some(device_id.as_str())
-            {
-                return Err("audio_voice_device_is_preview".into());
+        };
+        let decoded = decode::decode(
+            &AudioTools::at(root),
+            &source.path,
+            source.range,
+            format,
+            0.25,
+        )?;
+        let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+        if voice.request != request {
+            return Err("audio_playback_cancelled".into());
+        }
+        if voice
+            .bus
+            .as_ref()
+            .is_some_and(VoiceBus::microphone_attached)
+        {
+            let bus = voice.bus.as_ref().unwrap();
+            if bus.device_id() != device_id {
+                return Err("audio_voice_device_locked".into());
             }
-            let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-            if engine_output_active(&root)
+            if bus.failed() {
+                return Err("audio_voice_output_failed".into());
+            }
+        } else if ENGINE_STARTING.load(Ordering::Acquire) != 0 || engine_output_active(root) {
+            return Err("audio_voice_engine_active".into());
+        }
+        if voice
+            .bus
+            .as_ref()
+            .is_none_or(|bus| bus.device_id() != device_id || bus.failed())
+        {
+            voice.bus = Some(VoiceBus::open(device_id)?);
+        }
+        let bus = voice.bus.as_mut().unwrap();
+        if let Err(error) = bus.play_decoded(request, source.name, decoded, source.gain, overlay) {
+            if (error.starts_with("audio_music_swap")
+                || voice.bus.as_ref().is_some_and(VoiceBus::failed))
                 && !voice
                     .bus
                     .as_ref()
                     .is_some_and(VoiceBus::microphone_attached)
             {
-                return Err("audio_voice_engine_active".into());
+                voice.bus = None;
             }
-            if voice
-                .bus
-                .as_ref()
-                .is_some_and(|bus| bus.microphone_attached() && bus.device_id() != device_id)
-            {
-                return Err("audio_voice_device_locked".into());
-            }
-            if voice
-                .bus
-                .as_ref()
-                .is_some_and(|bus| bus.microphone_attached() && bus.failed())
-            {
-                return Err("audio_voice_output_failed".into());
-            }
-            if overlay
-                && voice
-                    .bus
-                    .as_ref()
-                    .is_some_and(|bus| bus.has_music() && bus.device_id() != device_id)
-            {
-                return Err("audio_voice_device_locked".into());
-            }
-            voice.request = voice.request.wrapping_add(1).max(1);
-            voice.pending = voice.request;
-            voice.request
-        };
-        let result = (|| {
-            let source = audio_session::entry(&root, &entry_id)?;
-            let format = {
-                let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-                match voice.bus.as_ref() {
-                    Some(bus) if bus.device_id() == device_id && !bus.failed() => bus.format(),
-                    _ => output::device_format(&device_id)?,
-                }
-            };
-            let decoded = decode::decode(
-                &AudioTools::at(&root),
-                &source.path,
-                source.range,
-                format,
-                0.25,
-            )?;
-            let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-            if voice.request != request {
-                return Err("audio_playback_cancelled".into());
-            }
-            if voice
-                .bus
-                .as_ref()
-                .is_some_and(VoiceBus::microphone_attached)
-            {
-                let bus = voice.bus.as_ref().unwrap();
-                if bus.device_id() != device_id {
-                    return Err("audio_voice_device_locked".into());
-                }
-                if bus.failed() {
-                    return Err("audio_voice_output_failed".into());
-                }
-            } else if ENGINE_STARTING.load(Ordering::Acquire) != 0 || engine_output_active(&root) {
-                return Err("audio_voice_engine_active".into());
-            }
-            if voice
-                .bus
-                .as_ref()
-                .is_none_or(|bus| bus.device_id() != device_id || bus.failed())
-            {
-                voice.bus = Some(VoiceBus::open(device_id)?);
-            }
-            let bus = voice.bus.as_mut().unwrap();
-            if let Err(error) =
-                bus.play_decoded(request, source.name, decoded, source.gain, overlay)
-            {
-                if (error.starts_with("audio_music_swap")
-                    || voice.bus.as_ref().is_some_and(VoiceBus::failed))
-                    && !voice
-                        .bus
-                        .as_ref()
-                        .is_some_and(VoiceBus::microphone_attached)
-                {
-                    voice.bus = None;
-                }
-                return Err(error);
-            }
-            let status = playback_status(voice.bus.as_ref().unwrap(), request);
-            voice.last = VoicePlaybackStatus::idle();
-            watch(request);
-            Ok(status)
-        })();
-        let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-        if voice.pending == request {
-            voice.pending = 0;
+            return Err(error);
         }
-        result
-    })
-    .await
-    .map_err(|e| e.to_string())?
+        let status = playback_status(voice.bus.as_ref().unwrap(), request);
+        voice.last = VoicePlaybackStatus::idle();
+        watch(request);
+        Ok(status)
+    })();
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    if voice.pending == request {
+        voice.pending = 0;
+    }
+    result
 }
 
 #[tauri::command]
@@ -444,6 +450,18 @@ pub fn audio_voice_pause(
     Ok(playback_status(bus, id))
 }
 
+pub fn toggle_pause_latest() -> Result<VoicePlaybackStatus, String> {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
+    let id = bus.latest_music_id().ok_or("audio_playback_not_playing")?;
+    let paused = bus
+        .music_status(id)
+        .ok_or("audio_playback_not_playing")?
+        .paused;
+    bus.pause(id, !paused)?;
+    Ok(playback_status(bus, id))
+}
+
 #[tauri::command]
 pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus, String> {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
@@ -454,6 +472,17 @@ pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus
     }
     voice.last = VoicePlaybackStatus::idle();
     Ok(current_status(&voice))
+}
+
+pub fn stop_latest() -> Result<VoicePlaybackStatus, String> {
+    let id = VOICE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .bus
+        .as_ref()
+        .and_then(VoiceBus::latest_music_id)
+        .ok_or("audio_playback_not_playing")?;
+    audio_voice_stop_instance(id)
 }
 
 #[tauri::command]

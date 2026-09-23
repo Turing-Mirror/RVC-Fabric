@@ -452,6 +452,72 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
     out
 }
 
+#[tauri::command]
+fn audio_hotkeys_get(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<hotkey_catalog::AudioBinding>, String> {
+    hotkey_catalog::read_bindings(&root_clone(&state)?)
+}
+
+#[tauri::command]
+fn audio_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, String> {
+    shell_extras::audio_hotkey_status(&app)
+}
+
+#[tauri::command]
+fn audio_hotkeys_set(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    bindings: Vec<hotkey_catalog::AudioBinding>,
+) -> Result<Value, String> {
+    hotkey_catalog::validate_bindings(&bindings)?;
+    let root = root_clone(&state)?;
+    if shell_extras::audio_conflicts_with_legacy(&root, &bindings) {
+        return Err("audio_hotkey_conflict".into());
+    }
+    let previous = hotkey_catalog::read_bindings(&root)?;
+    let mut patch = Map::new();
+    patch.insert("audio_hotkeys".into(), json!(bindings));
+    let changed = config::update(&root, patch)?;
+    let enabled = config::read(&root)
+        .get("hotkeys_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let result = shell_extras::apply_hotkeys(&app, enabled);
+    if result.get("audio_failed").and_then(Value::as_array).is_some_and(|v| !v.is_empty()) {
+        let mut rollback = Map::new();
+        rollback.insert("audio_hotkeys".into(), json!(previous));
+        config::update(&root, rollback)?;
+        shell_extras::apply_hotkeys(&app, enabled);
+        return Err("audio_hotkey_registration_failed".into());
+    }
+    let _ = app.emit("config-changed", &changed);
+    let _ = app.emit("hotkeys://changed", ());
+    Ok(result)
+}
+
+#[tauri::command]
+fn audio_hotkey_run(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    binding_id: String,
+) -> Result<(), String> {
+    let root = root_clone(&state)?;
+    let config = config::read(&root);
+    if !config.get("hotkeys_enabled").and_then(Value::as_bool).unwrap_or(false) {
+        return Err("audio_hotkey_disabled".into());
+    }
+    let binding = hotkey_catalog::read_bindings(&root)?
+        .into_iter()
+        .find(|binding| binding.binding_id == binding_id)
+        .ok_or("audio_hotkey_missing")?;
+    if !binding.enabled || binding.scope != hotkey_catalog::HotkeyScope::Window
+        || binding.combo.trim().is_empty() {
+        return Err("audio_hotkey_disabled".into());
+    }
+    shell_extras::run_audio_binding(&app, binding)
+}
+
 /// 出包之前，把这个包里已经能看出来的问题先摆给用户看。
 ///
 /// 支援收到的包里，相当一部分结论用户自己就能得出（选错模型、数据集没读进去、
@@ -2542,6 +2608,10 @@ pub fn run() {
             update_apply,
             update_app,
             hotkeys_apply,
+            audio_hotkeys_get,
+            audio_hotkeys_status,
+            audio_hotkeys_set,
+            audio_hotkey_run,
             diagnostics_build,
             diagnostics_self_check,
             link_check,

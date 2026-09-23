@@ -7,6 +7,7 @@ import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
 import { WaveformRange } from "../components/WaveformRange";
+import { AudioHotkeyEditor } from "../components/AudioHotkeyEditor";
 import type { PlaybackStatus, VoicePlaybackStatus } from "../lib/audioPlayback";
 
 type Source = {
@@ -505,6 +506,7 @@ export function AudioPage() {
             {preview.name} · {(preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1)} / {(preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1)} s
             <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
           </div> : null}
+          <AudioHotkeyEditor key={selected.id} entryId={selected.id} entries={library.entries} />
           <div className="flex items-end gap-3 flex-wrap">
             <label className="text-[12px] text-[var(--meta)]">{t("audio.clipName")}
               <input value={clipName} onChange={(e) => setClipName(e.target.value)} className="block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />

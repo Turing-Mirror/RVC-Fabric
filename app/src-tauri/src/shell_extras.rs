@@ -135,29 +135,9 @@ fn root_of(app: &AppHandle) -> Option<PathBuf> {
 // Global hotkeys
 // ---------------------------------------------------------------------------
 
-/// 全局快捷键：配置键名、动作名、默认组合。
-///
-/// 前四个的默认值和旧的 Python 壳一样，用户有肌肉记忆，不能改。用户改过的
-/// 组合存在配置里，这里只是缺省。
-///
-/// 收录标准只有一条：**这件事值不值得在窗口看不见的时候做**。全局快捷键是给
-/// 正在游戏、正在直播、主界面缩在托盘里的人用的。改设置、翻音色库这些非得看着
-/// 界面才能做的事，给它配快捷键没有意义。
-pub const HOTKEYS: &[(&str, &str, &str)] = &[
-    ("hotkey_toggle_vc", "toggle-vc", "CmdOrCtrl+F2"),
-    ("hotkey_toggle_mode", "toggle-mode", "CmdOrCtrl+F3"),
-    ("hotkey_prev_voice", "prev-voice", "CmdOrCtrl+F5"),
-    ("hotkey_next_voice", "next-voice", "CmdOrCtrl+F6"),
-    // 音高一次一个半音。开着黑发现音色偏高偏低，不用退出游戏调。
-    ("hotkey_pitch_up", "pitch-up", "CmdOrCtrl+F7"),
-    ("hotkey_pitch_down", "pitch-down", "CmdOrCtrl+F8"),
-    // 监听自己。队友说你声音怪，想立刻听一耳朵自己现在是什么效果。
-    ("hotkey_toggle_monitor", "toggle-monitor", "CmdOrCtrl+F9"),
-    // 后期音效总开关。怀疑是压缩/均衡把声音搞糊了，一键旁路对比。
-    ("hotkey_toggle_fx", "toggle-fx", "CmdOrCtrl+F10"),
-    // 显示 / 隐藏主界面。缩在托盘里时这是唯一不用去点托盘图标的入口。
-    ("hotkey_toggle_window", "toggle-window", "CmdOrCtrl+F11"),
-];
+fn legacy_hotkeys() -> &'static [crate::hotkey_catalog::LegacyHotkey] {
+    &crate::hotkey_catalog::catalog().legacy
+}
 
 /// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。
 ///
@@ -253,14 +233,14 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
     let mut failed: Vec<String> = Vec::new();
     // 用户特地设成「只在软件内」的那些。不注册全局，交给前端的 keydown。
     let mut local: Vec<String> = Vec::new();
-    for (key, action, default) in HOTKEYS {
-        let combo = combo_for(root.as_deref(), key, default);
-        if !global_for(root.as_deref(), key) {
+    for binding in legacy_hotkeys() {
+        let combo = combo_for(root.as_deref(), &binding.key, &binding.fallback);
+        if !global_for(root.as_deref(), &binding.key) {
             local.push(combo);
             continue;
         }
         let handle = app.clone();
-        let act = action.to_string();
+        let act = binding.action.clone();
         let held = AtomicBool::new(false);
         match gs.on_shortcut(combo.as_str(), move |_a, _s, event| {
             if !pressed_edge(&held, event.state) {
@@ -1480,12 +1460,20 @@ mod tests {
 
     #[test]
     fn the_original_four_hotkeys_keep_their_combos() {
-        let combos: Vec<&str> = HOTKEYS.iter().take(4).map(|(_, _, d)| *d).collect();
+        let combos: Vec<&str> = legacy_hotkeys()
+            .iter()
+            .take(4)
+            .map(|h| h.fallback.as_str())
+            .collect();
         assert_eq!(
             combos,
             vec!["CmdOrCtrl+F2", "CmdOrCtrl+F3", "CmdOrCtrl+F5", "CmdOrCtrl+F6"]
         );
-        let actions: Vec<&str> = HOTKEYS.iter().take(4).map(|(_, a, _)| *a).collect();
+        let actions: Vec<&str> = legacy_hotkeys()
+            .iter()
+            .take(4)
+            .map(|h| h.action.as_str())
+            .collect();
         assert_eq!(
             actions,
             vec!["toggle-vc", "toggle-mode", "prev-voice", "next-voice"]
@@ -1546,24 +1534,19 @@ mod tests {
         let _ = std::fs::remove_file(&p);
     }
 
-    /// 快捷键的默认组合有三份拷贝：这里的 HOTKEYS、config::defaults()、
-    /// 以及设置页 SettingsPage.tsx 的 HOTKEYS 数组。前两份能在这里对上，
-    /// 第三份只能靠注释。
-    ///
-    /// 对不上的后果很隐蔽：设置页显示 F7，实际注册的是别的键，用户按着没反应
-    /// 又看不出哪里错了。
+    /// 配置默认值必须由共享目录生成，不能偏离界面和注册器显示的组合。
     #[test]
     fn hotkey_defaults_match_the_config_defaults() {
         // 语言是进程级全局状态，cargo 默认多线程跑测试。不钉住的话，
         // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
         let _g = crate::i18n::testing::pin("zh-CN");
         let d = crate::config::defaults();
-        for (key, _action, default) in HOTKEYS {
+        for binding in legacy_hotkeys() {
             let got = d
-                .get(*key)
+                .get(&binding.key)
                 .and_then(|v| v.as_str())
                 .unwrap_or_else(|| panic!("{}", crate::i18n::t("s.e64959c277")));
-            assert_eq!(got, *default);
+            assert_eq!(got, binding.fallback);
         }
     }
 
@@ -1577,8 +1560,8 @@ mod tests {
         // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
         let _g = crate::i18n::testing::pin("zh-CN");
         let d = crate::config::defaults();
-        for (key, _action, _default) in HOTKEYS {
-            let k = format!("{key}_global");
+        for binding in legacy_hotkeys() {
+            let k = format!("{}_global", binding.key);
             let got = d
                 .get(&k)
                 .and_then(|v| v.as_bool())
@@ -1592,21 +1575,21 @@ mod tests {
     /// 而 fallback 就是它自己，于是永远注册不上，也没人报错。
     #[test]
     fn every_default_combo_is_well_formed() {
-        for (_key, _action, default) in HOTKEYS {
-            assert!(combo_ok(default));
+        for binding in legacy_hotkeys() {
+            assert!(combo_ok(&binding.fallback));
         }
     }
 
     /// 动作名不能撞：撞了就是两个快捷键触发同一件事，另一件永远做不了。
     #[test]
     fn hotkey_keys_and_actions_are_unique() {
-        let mut keys: Vec<&str> = HOTKEYS.iter().map(|h| h.0).collect();
+        let mut keys: Vec<&str> = legacy_hotkeys().iter().map(|h| h.key.as_str()).collect();
         let n = keys.len();
         keys.sort_unstable();
         keys.dedup();
         assert_eq!(keys.len(), n);
 
-        let mut acts: Vec<&str> = HOTKEYS.iter().map(|h| h.1).collect();
+        let mut acts: Vec<&str> = legacy_hotkeys().iter().map(|h| h.action.as_str()).collect();
         acts.sort_unstable();
         acts.dedup();
         assert_eq!(acts.len(), n);

@@ -1,0 +1,20 @@
+{
+  "legacy": [
+    { "key": "hotkey_toggle_vc", "action": "toggle-vc", "fallback": "CmdOrCtrl+F2" },
+    { "key": "hotkey_toggle_mode", "action": "toggle-mode", "fallback": "CmdOrCtrl+F3" },
+    { "key": "hotkey_prev_voice", "action": "prev-voice", "fallback": "CmdOrCtrl+F5" },
+    { "key": "hotkey_next_voice", "action": "next-voice", "fallback": "CmdOrCtrl+F6" },
+    { "key": "hotkey_pitch_up", "action": "pitch-up", "fallback": "CmdOrCtrl+F7" },
+    { "key": "hotkey_pitch_down", "action": "pitch-down", "fallback": "CmdOrCtrl+F8" },
+    { "key": "hotkey_toggle_monitor", "action": "toggle-monitor", "fallback": "CmdOrCtrl+F9" },
+    { "key": "hotkey_toggle_fx", "action": "toggle-fx", "fallback": "CmdOrCtrl+F10" },
+    { "key": "hotkey_toggle_window", "action": "toggle-window", "fallback": "CmdOrCtrl+F11" }
+  ],
+  "audio_actions": [
+    { "action": "play-entry", "requires_entry": true },
+    { "action": "pause-current", "requires_entry": false },
+    { "action": "stop-current", "requires_entry": false },
+    { "action": "stop-all", "requires_entry": false },
+    { "action": "show-audio", "requires_entry": false }
+  ]
+}

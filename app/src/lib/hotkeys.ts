@@ -5,32 +5,16 @@
  * 按不出它原本的功能了。所以每个组合都可以单独取消「全局」——取消之后 Rust
  * 那边就不注册它，改由本文件在 RVC Fabric 是当前窗口时用 keydown 接住。
  *
- * 顺序、键名、默认值必须和 `shell_extras::HOTKEYS` 对得上；`_global` 后缀的
- * 配置键也是那边定的。
+ * 动作、键名和默认值来自 shared/hotkeys.json，与 Rust 端使用同一份目录。
  */
+
+import catalog from "../../shared/hotkeys.json";
 
 /** 一条快捷键：配置键名、动作名、默认组合。 */
 export type HotkeySpec = { key: string; action: string; fallback: string };
 
-export const HOTKEYS: HotkeySpec[] = [
-  { key: "hotkey_toggle_vc", action: "toggle-vc", fallback: "CmdOrCtrl+F2" },
-  { key: "hotkey_toggle_mode", action: "toggle-mode", fallback: "CmdOrCtrl+F3" },
-  { key: "hotkey_prev_voice", action: "prev-voice", fallback: "CmdOrCtrl+F5" },
-  { key: "hotkey_next_voice", action: "next-voice", fallback: "CmdOrCtrl+F6" },
-  { key: "hotkey_pitch_up", action: "pitch-up", fallback: "CmdOrCtrl+F7" },
-  { key: "hotkey_pitch_down", action: "pitch-down", fallback: "CmdOrCtrl+F8" },
-  {
-    key: "hotkey_toggle_monitor",
-    action: "toggle-monitor",
-    fallback: "CmdOrCtrl+F9",
-  },
-  { key: "hotkey_toggle_fx", action: "toggle-fx", fallback: "CmdOrCtrl+F10" },
-  {
-    key: "hotkey_toggle_window",
-    action: "toggle-window",
-    fallback: "CmdOrCtrl+F11",
-  },
-];
+export const HOTKEYS: HotkeySpec[] = catalog.legacy;
+export const AUDIO_ACTIONS = catalog.audio_actions;
 
 /**
  * 把一个真实按键事件写成 Tauri 那套组合键字符串，好和配置直接比。
@@ -38,8 +22,7 @@ export const HOTKEYS: HotkeySpec[] = [
  * 修饰键的顺序写死成 CmdOrCtrl → Alt → Shift，和设置页录制时用的顺序一致；
  * 顺序不一致的话同一个组合会有两种写法，比出来永远不相等。
  *
- * 只认字母、数字和 F1~F24 —— 和录制时能录到的范围一样。别的键（中文输入法的
- * 候选键、小键盘、媒体键）返回空串，调用方当作没按。
+ * 当前窗口内录制仍只认字母、数字和 F1~F24；其余键位扩展将与录制逻辑一起做。
  */
 export function comboFromEvent(e: KeyboardEvent): string {
     const mods: string[] = [];

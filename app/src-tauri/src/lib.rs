@@ -29,6 +29,7 @@ mod extra_assets;
 mod extract;
 mod gpu_pref;
 mod hf;
+mod hotkey_catalog;
 mod i18n;
 mod known_issues;
 mod legacy;

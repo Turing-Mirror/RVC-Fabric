@@ -235,24 +235,11 @@ pub fn defaults() -> Map<String, Value> {
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));
     m.insert("audio_voice_device_id".into(), json!(""));
-    // 快捷键组合。默认沿用旧 Python 壳的那四个，用户有肌肉记忆；
-    // 键名要和 shell_extras::HOTKEYS 对上。
-    m.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F2"));
-    m.insert("hotkey_toggle_mode".into(), json!("CmdOrCtrl+F3"));
-    m.insert("hotkey_prev_voice".into(), json!("CmdOrCtrl+F5"));
-    m.insert("hotkey_next_voice".into(), json!("CmdOrCtrl+F6"));
-    m.insert("hotkey_pitch_up".into(), json!("CmdOrCtrl+F7"));
-    m.insert("hotkey_pitch_down".into(), json!("CmdOrCtrl+F8"));
-    m.insert("hotkey_toggle_monitor".into(), json!("CmdOrCtrl+F9"));
-    m.insert("hotkey_toggle_fx".into(), json!("CmdOrCtrl+F10"));
-    m.insert("hotkey_toggle_window".into(), json!("CmdOrCtrl+F11"));
-    // 每个快捷键单独决定要不要抢成全局。默认全开 —— 以前九个一律全局，
-    // 改默认值等于悄悄拿走用户已经在用的功能。
-    //
-    // 关掉的那些只在软件是当前窗口时有效。意义在于全局快捷键是**独占**的：
-    // 被我们抢走的组合，用户在别的软件里就再也按不出原本的功能了。
-    for (key, _, _) in crate::shell_extras::HOTKEYS {
-        m.insert(format!("{key}_global"), json!(true));
+    // One catalogue supplies both defaults and labels. Existing nine
+    // shortcuts retain their original combinations and global scope.
+    for binding in &crate::hotkey_catalog::catalog().legacy {
+        m.insert(binding.key.clone(), json!(binding.fallback));
+        m.insert(format!("{}_global", binding.key), json!(true));
     }
     m.insert("telemetry_opt_in".into(), json!(Value::Null));
     // 完成过多少次变声（开启→停止算一次）。攒够十次问一句要不要关注我们。

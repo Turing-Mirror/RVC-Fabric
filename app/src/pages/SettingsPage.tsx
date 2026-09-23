@@ -1175,8 +1175,7 @@ function SettingsPageImpl({
   );
 }
 
-/** 每个动作在设置页里怎么称呼。键名和默认组合来自 `lib/hotkeys`，
- *  那份表和 `shell_extras::HOTKEYS` 一一对应 —— 三处抄三遍迟早对不上。
+/** 每个动作在设置页里怎么称呼。键名和默认组合来自共享快捷键目录；
  *  必须调用时 t()，模块级会冻成默认中文。 */
 function hotkeyLabels(): Record<string, string> {
   return {

@@ -234,6 +234,7 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("hotkeys_enabled".into(), json!(false));
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));
+    m.insert("audio_voice_device_id".into(), json!(""));
     // 快捷键组合。默认沿用旧 Python 壳的那四个，用户有肌肉记忆；
     // 键名要和 shell_extras::HOTKEYS 对上。
     m.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F2"));

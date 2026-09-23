@@ -8,6 +8,8 @@ mod audio_library;
 mod audio_preview;
 mod audio_probe;
 mod audio_recovery;
+mod audio_session;
+mod audio_voice;
 mod audio_waveform;
 mod autostart;
 mod browser_keys;
@@ -967,6 +969,7 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
     // Run it off the IPC thread or the window is frozen for that whole time —
     // no status updates, no way to press 停止.
     tauri::async_runtime::spawn_blocking(move || {
+        let _audio_gate = audio_voice::begin_engine_start()?;
         // 重新把 app_config 刷进 inuse 再启动。app_config 才是选中音色的权威，
         // 而 worker 冷启动只认 inuse 那个文件。「其他」页强制结束引擎之后，
         // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
@@ -2477,6 +2480,11 @@ pub fn run() {
             audio_preview::audio_preview_status,
             audio_preview::audio_preview_pause,
             audio_preview::audio_preview_stop,
+            audio_voice::audio_voice_devices,
+            audio_voice::audio_voice_start,
+            audio_voice::audio_voice_status,
+            audio_voice::audio_voice_pause,
+            audio_voice::audio_voice_stop,
             audio_waveform::audio_waveform_get,
             audio_waveform::audio_waveform_cancel,
             audio_recovery::audio_recover,
@@ -2868,6 +2876,7 @@ pub fn run() {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
                 audio_preview::audio_preview_stop();
+                audio_voice::audio_voice_stop();
                 audio_waveform::cancel_all();
                 audio_library::stop_scan_on_exit();
                 audio_library::stop_export_on_exit();

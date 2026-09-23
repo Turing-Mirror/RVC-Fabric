@@ -53,6 +53,8 @@ export function AudioPage() {
   const [library, setLibrary] = useState<Library>(EMPTY);
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState("");
+  const [voiceDevices, setVoiceDevices] = useState<Device[]>([]);
+  const [voiceDeviceId, setVoiceDeviceId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -65,6 +67,7 @@ export function AudioPage() {
   const [clipStart, setClipStart] = useState("0");
   const [clipEnd, setClipEnd] = useState("");
   const [preview, setPreview] = useState<PreviewStatus | null>(null);
+  const [voice, setVoice] = useState<PreviewStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [scanActive, setScanActive] = useState(false);
@@ -84,10 +87,16 @@ export function AudioPage() {
     void invoke<Device[]>("audio_preview_devices")
       .then((value) => { if (alive) setDevices(value); })
       .catch(() => { if (alive) setDevices([]); });
+    void invoke<Device[]>("audio_voice_devices")
+      .then((value) => { if (alive) setVoiceDevices(value); })
+      .catch(() => { if (alive) setVoiceDevices([]); });
     void invoke<Record<string, unknown>>("config_get")
       .then((cfg) => {
         if (alive && typeof cfg.audio_preview_device_id === "string") {
           setDeviceId(cfg.audio_preview_device_id);
+        }
+        if (alive && typeof cfg.audio_voice_device_id === "string") {
+          setVoiceDeviceId(cfg.audio_voice_device_id);
         }
       })
       .catch(() => {});
@@ -110,6 +119,12 @@ export function AudioPage() {
         if (active) setPreview(status);
       } catch {
         if (active) setPreview(null);
+      }
+      try {
+        const status = await invoke<PreviewStatus>("audio_voice_status");
+        if (active) setVoice(status);
+      } catch {
+        if (active) setVoice(null);
       }
     };
     void poll();
@@ -167,6 +182,9 @@ export function AudioPage() {
       } else setError(code.includes("audio_number_taken") ? t("audio.numberTaken")
         : code.includes("audio_clip_invalid") ? t("audio.clipInvalid")
         : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
+        : code.includes("audio_voice_engine_active") ? t("audio.voiceEngineActive")
+        : code.includes("audio_voice_device_is_preview") ? t("audio.voiceDeviceInvalid")
+        : code.includes("audio_playback_cancelled") ? t("audio.playbackCancelled")
         : code.includes("audio_relink_conflict") || code.includes("audio_relink_shared_asset") ? t("audio.relinkConflict")
         : code.includes("audio_relink_outside_source") ? t("audio.relinkOutsideSource")
         : code.includes("audio_relink_kind_mismatch") ? t("audio.relinkKindMismatch")
@@ -308,8 +326,24 @@ export function AudioPage() {
     });
   };
 
+  const startVoice = () => {
+    if (!selected || !voiceDeviceId) {
+      setError(t("audio.chooseVoiceDevice"));
+      return;
+    }
+    void run(async () => {
+      setVoice(await invoke<PreviewStatus>("audio_voice_start", {
+        entryId: selected.id,
+        deviceId: voiceDeviceId,
+      }));
+    });
+  };
+
   const progress = preview && preview.length_frames > 0
     ? Math.min(100, preview.played_frames / preview.length_frames * 100)
+    : 0;
+  const voiceProgress = voice && voice.length_frames > 0
+    ? Math.min(100, voice.played_frames / voice.length_frames * 100)
     : 0;
 
   return (
@@ -380,6 +414,24 @@ export function AudioPage() {
         </div>
       </Block>
 
+      <Block title={t("audio.voiceOutput")} note={t("audio.voiceOutputNote")}>
+        <div className="flex items-end gap-3 flex-wrap">
+          <label className="text-[12px] text-[var(--meta)]">{t("audio.voiceDevice")}
+            <Select value={voiceDeviceId} options={[{ id: "", label: t("audio.chooseVoiceDevice") }, ...voiceDevices.map((device) => ({ id: device.id, label: device.name }))]}
+              onChange={(id) => { setVoiceDeviceId(id); void invoke("config_set", { patch: { audio_voice_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={240} />
+          </label>
+          <Btn disabled={!voice || (voice.state !== "playing" && voice.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_voice_pause", { paused: voice?.state !== "paused" }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>
+            {voice?.state === "paused" ? t("audio.resume") : t("audio.pause")}
+          </Btn>
+          <Btn disabled={!voice || (voice.state !== "playing" && voice.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_voice_stop").then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
+        </div>
+        {voice && voice.state !== "idle" ? <div className="text-[12px] text-[var(--meta)] mt-3">
+          {voice.state === "error" ? <p role="alert">{t("audio.voicePlaybackFailed")}</p> : null}
+          {voice.name} · {(voice.played_frames / Math.max(1, voice.sample_rate)).toFixed(1)} / {(voice.length_frames / Math.max(1, voice.sample_rate)).toFixed(1)} s
+          <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${voiceProgress}%` }} /></div>
+        </div> : null}
+      </Block>
+
       {selected && selectedAsset ? <Block title={selected.name}>
         <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
           <div className="text-[12px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
@@ -417,6 +469,7 @@ export function AudioPage() {
                 onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={240} />
             </label>
             <Btn disabled={busy || !deviceId || selectedAsset.available === false || selectedExcluded || (selectedAsset.excluded_source_ids?.length ?? 0) === selectedAsset.source_ids.length} onClick={startPreview}>{t("audio.preview")}</Btn>
+            <Btn disabled={busy || !voiceDeviceId || selectedAsset.available === false || selectedExcluded || (selectedAsset.excluded_source_ids?.length ?? 0) === selectedAsset.source_ids.length} onClick={startVoice}>{t("audio.playToVoice")}</Btn>
             <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_pause", { paused: preview?.state !== "paused" }).then(setPreview).catch(() => setError(t("audio.operationFailed")))}>
               {preview?.state === "paused" ? t("audio.resume") : t("audio.pause")}
             </Btn>

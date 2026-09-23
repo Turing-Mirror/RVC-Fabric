@@ -117,7 +117,17 @@
     "restore": "還原到此來源",
     "missing": "檔案無法使用",
     "removeConfirm": "僅從音訊庫移除此來源，不刪除原始檔案。此來源獨有的項目、片段和編號也會移除。確定繼續嗎？",
-    "previewDeviceInvalid": "此裝置可能用於語音輸出，不能用來本機試聽。請選擇耳機或揚聲器。"
+    "previewDeviceInvalid": "此裝置可能用於語音輸出，不能用來本機試聽。請選擇耳機或揚聲器。",
+    "voiceOutput": "語音輸出",
+    "voiceOutputNote": "目前僅支援停止變聲時播放。請選擇虛擬音效卡的輸入端。",
+    "voiceDevice": "語音輸出裝置",
+    "chooseVoiceDevice": "請選擇語音輸出裝置。",
+    "playToVoice": "播放到語音",
+    "voiceEngineActive": "變聲正在執行。請先停止變聲，再播放音訊。",
+    "voiceDeviceInvalid": "語音輸出裝置與本機監聽裝置相同。請選擇虛擬音效卡的輸入端。",
+    "voiceStopBeforeEngine": "音訊正在輸出到語音裝置。請先停止音訊，再開啟變聲。",
+    "voicePlaybackFailed": "語音輸出已中斷。請檢查裝置後重試。",
+    "playbackCancelled": "已取消這次播放。"
   },
   "window": {
     "minimize": "最小化",

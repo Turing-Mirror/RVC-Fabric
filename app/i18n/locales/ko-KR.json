@@ -117,7 +117,17 @@
     "restore": "이 소스로 복원",
     "missing": "파일을 사용할 수 없음",
     "removeConfirm": "원본 파일을 삭제하지 않고 이 소스를 보관함에서 제거합니다. 이 소스에만 속한 항목, 구간, 번호도 제거됩니다. 계속하시겠습니까?",
-    "previewDeviceInvalid": "이 장치는 음성 출력에 사용될 수 있어 로컬 미리 듣기에 사용할 수 없습니다. 헤드폰 또는 스피커를 선택하세요."
+    "previewDeviceInvalid": "이 장치는 음성 출력에 사용될 수 있어 로컬 미리 듣기에 사용할 수 없습니다. 헤드폰 또는 스피커를 선택하세요.",
+    "voiceOutput": "음성 출력",
+    "voiceOutputNote": "현재는 음성 변환이 중지된 동안에만 재생할 수 있습니다. 가상 오디오 케이블의 입력 장치를 선택하세요.",
+    "voiceDevice": "음성 출력 장치",
+    "chooseVoiceDevice": "음성 출력 장치를 선택하세요.",
+    "playToVoice": "음성 출력으로 재생",
+    "voiceEngineActive": "음성 변환이 실행 중입니다. 중지한 후 오디오를 재생하세요.",
+    "voiceDeviceInvalid": "음성 출력 장치와 로컬 모니터링 장치가 같습니다. 가상 오디오 케이블의 입력 장치를 선택하세요.",
+    "voiceStopBeforeEngine": "오디오가 음성 출력으로 재생 중입니다. 중지한 후 음성 변환을 시작하세요.",
+    "voicePlaybackFailed": "음성 출력이 중단되었습니다. 장치를 확인하고 다시 시도하세요.",
+    "playbackCancelled": "이번 재생을 취소했습니다."
   },
   "window": {
     "minimize": "최소화",

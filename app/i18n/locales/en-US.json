@@ -117,7 +117,17 @@
     "restore": "Restore to this source",
     "missing": "File unavailable",
     "removeConfirm": "This removes the source from the library without deleting original files. Entries, clips, and numbers unique to this source will also be removed. Continue?",
-    "previewDeviceInvalid": "This device may be used for voice output and cannot be used for local preview. Select headphones or speakers."
+    "previewDeviceInvalid": "This device may be used for voice output and cannot be used for local preview. Select headphones or speakers.",
+    "voiceOutput": "Voice output",
+    "voiceOutputNote": "Playback is currently available only while voice conversion is stopped. Select the input side of your virtual audio cable.",
+    "voiceDevice": "Voice output device",
+    "chooseVoiceDevice": "Select a voice output device.",
+    "playToVoice": "Play to voice",
+    "voiceEngineActive": "Voice conversion is running. Stop it before playing audio.",
+    "voiceDeviceInvalid": "The voice output device matches the local monitoring device. Select the input side of a virtual audio cable.",
+    "voiceStopBeforeEngine": "Audio is playing to voice output. Stop it before starting voice conversion.",
+    "voicePlaybackFailed": "Voice output was interrupted. Check the device and try again.",
+    "playbackCancelled": "This playback was cancelled."
   },
   "window": {
     "minimize": "Minimize",

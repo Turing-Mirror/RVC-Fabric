@@ -37,6 +37,7 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
+      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       return null;
     });
@@ -68,6 +69,7 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
+      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_library_pick_replacement") return "E:\\Moved\\lost.wav";
       if (cmd === "audio_library_relink_asset") return library;
@@ -97,6 +99,7 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
+      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_waveform_get") return { duration: 10, peaks: [0, 120, 255] };
       if (cmd === "audio_preview_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
@@ -129,5 +132,34 @@ describe("音频库页面", () => {
     expect(shell.invoke).toHaveBeenCalledWith("audio_preview_start", {
       entryId: "entry-1", deviceId: "speaker", start: 1.25, end: 2.75,
     });
+  });
+
+  it("语音输出使用已保存条目和明确选择的设备，不依赖引擎", async () => {
+    shell.invoke.mockImplementation(async (cmd) => {
+      if (cmd === "config_get") return { ui_locale: "zh-CN", audio_voice_device_id: "cable" };
+      if (cmd === "audio_library_get") return library;
+      if (cmd === "audio_preview_devices") return [];
+      if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
+      if (cmd === "audio_preview_status" || cmd === "audio_voice_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
+      if (cmd === "audio_voice_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
+      return null;
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const missing = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("失联"));
+    act(() => missing!.click());
+    expect(Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "播放到语音")?.disabled).toBe(true);
+    const available = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("可试听"));
+    act(() => available!.click());
+    const play = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "播放到语音");
+    act(() => play!.click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable" });
+    expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "engine_start_vc")).toBe(false);
   });
 });

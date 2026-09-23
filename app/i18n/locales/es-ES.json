@@ -117,7 +117,17 @@
     "restore": "Restaurar en esta fuente",
     "missing": "Archivo no disponible",
     "removeConfirm": "Se quitará esta fuente de la biblioteca sin borrar los archivos originales. También se quitarán las entradas, los fragmentos y los números exclusivos de esta fuente. ¿Continuar?",
-    "previewDeviceInvalid": "Este dispositivo puede estar destinado a la salida de voz y no se puede usar para la escucha local. Selecciona auriculares o altavoces."
+    "previewDeviceInvalid": "Este dispositivo puede estar destinado a la salida de voz y no se puede usar para la escucha local. Selecciona auriculares o altavoces.",
+    "voiceOutput": "Salida de voz",
+    "voiceOutputNote": "Por ahora, la reproducción solo está disponible cuando la conversión de voz está detenida. Selecciona la entrada del cable de audio virtual.",
+    "voiceDevice": "Dispositivo de salida de voz",
+    "chooseVoiceDevice": "Selecciona un dispositivo de salida de voz.",
+    "playToVoice": "Reproducir en la salida de voz",
+    "voiceEngineActive": "La conversión de voz está activa. Detenla antes de reproducir audio.",
+    "voiceDeviceInvalid": "El dispositivo de salida de voz coincide con el de escucha local. Selecciona la entrada de un cable de audio virtual.",
+    "voiceStopBeforeEngine": "Hay audio reproduciéndose en la salida de voz. Deténlo antes de iniciar la conversión de voz.",
+    "voicePlaybackFailed": "Se interrumpió la salida de voz. Comprueba el dispositivo e inténtalo de nuevo.",
+    "playbackCancelled": "Se canceló esta reproducción."
   },
   "window": {
     "minimize": "Minimizar",

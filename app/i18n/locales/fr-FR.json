@@ -117,7 +117,17 @@
     "restore": "Rétablir dans cette source",
     "missing": "Fichier indisponible",
     "removeConfirm": "Cette source sera retirée de la bibliothèque sans supprimer les fichiers d'origine. Ses entrées, extraits et numéros exclusifs seront aussi retirés. Continuer ?",
-    "previewDeviceInvalid": "Cet appareil peut servir à la sortie vocale et ne peut pas être utilisé pour l'écoute locale. Choisissez un casque ou des haut-parleurs."
+    "previewDeviceInvalid": "Cet appareil peut servir à la sortie vocale et ne peut pas être utilisé pour l'écoute locale. Choisissez un casque ou des haut-parleurs.",
+    "voiceOutput": "Sortie vocale",
+    "voiceOutputNote": "La lecture est actuellement disponible uniquement lorsque la conversion vocale est arrêtée. Choisissez l'entrée du câble audio virtuel.",
+    "voiceDevice": "Périphérique de sortie vocale",
+    "chooseVoiceDevice": "Choisissez un périphérique de sortie vocale.",
+    "playToVoice": "Lire vers la sortie vocale",
+    "voiceEngineActive": "La conversion vocale est en cours. Arrêtez-la avant de lire un audio.",
+    "voiceDeviceInvalid": "La sortie vocale et l'écoute locale utilisent le même périphérique. Choisissez l'entrée d'un câble audio virtuel.",
+    "voiceStopBeforeEngine": "Un audio est lu vers la sortie vocale. Arrêtez-le avant de démarrer la conversion vocale.",
+    "voicePlaybackFailed": "La sortie vocale a été interrompue. Vérifiez le périphérique et réessayez.",
+    "playbackCancelled": "Cette lecture a été annulée."
   },
   "window": {
     "minimize": "Réduire",

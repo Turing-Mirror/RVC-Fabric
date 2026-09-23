@@ -6,6 +6,11 @@ export type PlaybackStatus = {
   sample_rate: number;
 };
 
+export type VoicePlaybackStatus = PlaybackStatus & {
+  instance_id: number | null;
+  active_count: number;
+};
+
 export function playbackActive(status: PlaybackStatus | null): boolean {
   return status?.state === "playing" || status?.state === "paused";
 }

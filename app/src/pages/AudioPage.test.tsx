@@ -38,6 +38,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       return null;
     });
@@ -70,6 +71,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_library_pick_replacement") return "E:\\Moved\\lost.wav";
       if (cmd === "audio_library_relink_asset") return library;
@@ -100,6 +102,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
       if (cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
       if (cmd === "audio_waveform_get") return { duration: 10, peaks: [0, 120, 255] };
       if (cmd === "audio_preview_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
@@ -140,6 +143,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
       if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
+      if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status" || cmd === "audio_voice_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
       if (cmd === "audio_voice_start") return { state: "playing", name: "可试听", played_frames: 0, length_frames: 48000, sample_rate: 48000 };
       return null;
@@ -159,7 +163,48 @@ describe("音频库页面", () => {
       .find((button) => button.textContent === "播放到语音");
     act(() => play!.click());
     await tick();
-    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable" });
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable", mode: "replace" });
+    const overlay = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "叠加播放到语音");
+    act(() => overlay!.click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable", mode: "overlay" });
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "engine_start_vc")).toBe(false);
+  });
+
+  it("叠加实例可以分别暂停和停止，也可以一次停止全部", async () => {
+    const first = { state: "playing", name: "第一段", played_frames: 12000, length_frames: 48000,
+      sample_rate: 48000, instance_id: 11, active_count: 2 };
+    const second = { ...first, name: "第二段", instance_id: 12 };
+    shell.invoke.mockImplementation(async (cmd) => {
+      if (cmd === "config_get") return { ui_locale: "zh-CN", audio_voice_device_id: "cable" };
+      if (cmd === "audio_library_get") return library;
+      if (cmd === "audio_preview_devices") return [];
+      if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
+      if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
+      if (cmd === "audio_voice_status") return second;
+      if (cmd === "audio_voice_instances") return [second, first];
+      if (cmd === "audio_voice_pause" || cmd === "audio_voice_stop_instance") return first;
+      if (cmd === "audio_voice_stop") return { ...first, state: "idle", active_count: 0, instance_id: null };
+      return null;
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const list = mounted.container.querySelector('[aria-label="正在语音输出的音频"]');
+    expect(list?.textContent).toContain("第一段");
+    expect(list?.textContent).toContain("第二段");
+    const buttons = list!.querySelectorAll("button");
+    act(() => buttons[0].click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_pause", { paused: true, instanceId: 12 });
+    act(() => buttons[3].click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_stop_instance", { instanceId: 11 });
+    const stopAll = Array.from(mounted.container.querySelectorAll("button"))
+      .find((button) => button.textContent === "停止全部音频");
+    act(() => stopAll!.click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_stop");
   });
 });

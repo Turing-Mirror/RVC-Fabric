@@ -9,6 +9,7 @@ use fabric_audio::{
     decode::{self, AudioTools},
     output,
 };
+use serde::Serialize;
 use std::{
     path::Path,
     sync::{
@@ -23,7 +24,25 @@ struct VoiceState {
     bus: Option<VoiceBus>,
     request: u64,
     pending: u64,
-    last: PlaybackStatus,
+    last: VoicePlaybackStatus,
+}
+
+#[derive(Clone, Serialize)]
+pub struct VoicePlaybackStatus {
+    #[serde(flatten)]
+    playback: PlaybackStatus,
+    pub instance_id: Option<u64>,
+    pub active_count: usize,
+}
+
+impl VoicePlaybackStatus {
+    const fn idle() -> Self {
+        Self {
+            playback: PlaybackStatus::idle(),
+            instance_id: None,
+            active_count: 0,
+        }
+    }
 }
 
 impl VoiceState {
@@ -32,7 +51,7 @@ impl VoiceState {
             bus: None,
             request: 0,
             pending: 0,
-            last: PlaybackStatus::idle(),
+            last: VoicePlaybackStatus::idle(),
         }
     }
 
@@ -77,6 +96,9 @@ pub fn begin_engine_start(root: &Path) -> Result<EngineStartGuard, String> {
     let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
     #[cfg(windows)]
     let mut voice = voice;
+    if voice.pending != 0 {
+        return Err("audio_voice_engine_active".into());
+    }
     let configured = crate::config::read(root)
         .get("audio_voice_device_id")
         .and_then(|value| value.as_str())
@@ -183,51 +205,67 @@ fn engine_output_active(root: &Path) -> bool {
         )
 }
 
-fn playback_status(bus: &VoiceBus) -> PlaybackStatus {
-    let Some((name, played, length, paused, failed)) = bus.music_status() else {
-        return PlaybackStatus::idle();
+fn playback_status(bus: &VoiceBus, id: u64) -> VoicePlaybackStatus {
+    let Some(music) = bus.music_status(id) else {
+        return VoicePlaybackStatus::idle();
     };
-    PlaybackStatus {
-        state: if failed || bus.failed() {
-            "error"
-        } else if paused {
-            "paused"
-        } else {
-            "playing"
+    VoicePlaybackStatus {
+        playback: PlaybackStatus {
+            state: if music.failed || bus.failed() {
+                "error"
+            } else if music.paused {
+                "paused"
+            } else {
+                "playing"
+            },
+            name: music.name,
+            played_frames: music.played,
+            length_frames: music.length,
+            sample_rate: bus.format().sample_rate,
         },
-        name: name.to_string(),
-        played_frames: played,
-        length_frames: length,
-        sample_rate: bus.format().sample_rate,
+        instance_id: Some(music.id),
+        active_count: bus.music_count(),
     }
 }
 
-fn watch(request: u64) {
+fn current_status(voice: &VoiceState) -> VoicePlaybackStatus {
+    voice
+        .bus
+        .as_ref()
+        .and_then(|bus| bus.latest_music_id().map(|id| playback_status(bus, id)))
+        .unwrap_or_else(|| voice.last.clone())
+}
+
+fn watch(id: u64) {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(50));
         let mut state = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-        if state.request != request {
+        let Some(bus) = state.bus.as_mut() else { break };
+        if bus.music_status(id).is_none() {
             break;
         }
-        let Some(bus) = state.bus.as_mut() else { break };
-        if !bus.failed() && !bus.music_finished() {
+        if !bus.failed() && !bus.music_finished(id) {
             continue;
         }
-        let mut status = playback_status(bus);
-        status.state = if bus.failed() || status.state == "error" {
+        let mut status = playback_status(bus, id);
+        status.playback.state = if bus.failed() || status.playback.state == "error" {
             "error"
         } else {
             "ended"
         };
-        let result = bus.stop_music();
-        let idle_bus = !bus.microphone_attached();
+        let result = bus.stop_music(id);
+        let idle_bus = !bus.has_music() && !bus.microphone_attached();
+        let no_music = !bus.has_music();
         if idle_bus {
             state.bus = None;
         }
-        if result.is_err() && !idle_bus {
-            status.state = "error";
+        if result.is_err() {
+            status.playback.state = "error";
         }
-        state.last = status;
+        if no_music {
+            status.active_count = 0;
+            state.last = status;
+        }
         break;
     });
 }
@@ -242,7 +280,13 @@ pub async fn audio_voice_start(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
     device_id: String,
-) -> Result<PlaybackStatus, String> {
+    mode: Option<String>,
+) -> Result<VoicePlaybackStatus, String> {
+    let overlay = match mode.as_deref().unwrap_or("replace") {
+        "replace" => false,
+        "overlay" => true,
+        _ => return Err("audio_playback_mode_invalid".into()),
+    };
     let root = crate::root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let request = {
@@ -280,6 +324,14 @@ pub async fn audio_voice_start(
                 .is_some_and(|bus| bus.microphone_attached() && bus.failed())
             {
                 return Err("audio_voice_output_failed".into());
+            }
+            if overlay
+                && voice
+                    .bus
+                    .as_ref()
+                    .is_some_and(|bus| bus.has_music() && bus.device_id() != device_id)
+            {
+                return Err("audio_voice_device_locked".into());
             }
             voice.request = voice.request.wrapping_add(1).max(1);
             voice.pending = voice.request;
@@ -328,7 +380,9 @@ pub async fn audio_voice_start(
                 voice.bus = Some(VoiceBus::open(device_id)?);
             }
             let bus = voice.bus.as_mut().unwrap();
-            if let Err(error) = bus.play_decoded(source.name, decoded, source.gain) {
+            if let Err(error) =
+                bus.play_decoded(request, source.name, decoded, source.gain, overlay)
+            {
                 if (error.starts_with("audio_music_swap")
                     || voice.bus.as_ref().is_some_and(VoiceBus::failed))
                     && !voice
@@ -340,8 +394,8 @@ pub async fn audio_voice_start(
                 }
                 return Err(error);
             }
-            let status = playback_status(voice.bus.as_ref().unwrap());
-            voice.last = PlaybackStatus::idle();
+            let status = playback_status(voice.bus.as_ref().unwrap(), request);
+            voice.last = VoicePlaybackStatus::idle();
             watch(request);
             Ok(status)
         })();
@@ -356,38 +410,66 @@ pub async fn audio_voice_start(
 }
 
 #[tauri::command]
-pub fn audio_voice_status() -> PlaybackStatus {
+pub fn audio_voice_status() -> VoicePlaybackStatus {
     let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
-    voice
-        .bus
-        .as_ref()
-        .filter(|bus| bus.has_music())
-        .map(playback_status)
-        .unwrap_or_else(|| voice.last.clone())
+    current_status(&voice)
 }
 
 #[tauri::command]
-pub fn audio_voice_pause(paused: bool) -> Result<PlaybackStatus, String> {
+pub fn audio_voice_instances() -> Vec<VoicePlaybackStatus> {
+    let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(bus) = voice.bus.as_ref() else {
+        return Vec::new();
+    };
+    let mut instances: Vec<_> = bus
+        .music_ids()
+        .into_iter()
+        .map(|id| playback_status(bus, id))
+        .collect();
+    instances.sort_by_key(|status| std::cmp::Reverse(status.instance_id));
+    instances
+}
+
+#[tauri::command]
+pub fn audio_voice_pause(
+    paused: bool,
+    instance_id: Option<u64>,
+) -> Result<VoicePlaybackStatus, String> {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
     let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
-    bus.pause(paused)?;
-    Ok(playback_status(bus))
+    let id = instance_id
+        .or_else(|| bus.latest_music_id())
+        .ok_or("audio_playback_not_playing")?;
+    bus.pause(id, paused)?;
+    Ok(playback_status(bus, id))
 }
 
 #[tauri::command]
-pub fn audio_voice_stop() -> PlaybackStatus {
+pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus, String> {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
+    bus.stop_music(instance_id)?;
+    if !bus.has_music() && !bus.microphone_attached() {
+        voice.bus = None;
+    }
+    voice.last = VoicePlaybackStatus::idle();
+    Ok(current_status(&voice))
+}
+
+#[tauri::command]
+pub fn audio_voice_stop() -> VoicePlaybackStatus {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
     voice.request = voice.request.wrapping_add(1).max(1);
     voice.pending = 0;
     if let Some(bus) = voice.bus.as_mut() {
         if bus.has_music() {
-            let _ = bus.stop_music();
+            let _ = bus.stop_all_music();
         }
         if !bus.microphone_attached() {
             voice.bus = None;
         }
     }
-    voice.last = PlaybackStatus::idle();
+    voice.last = VoicePlaybackStatus::idle();
     voice.last.clone()
 }
 
@@ -403,14 +485,32 @@ mod tests {
         }
         let root = Path::new("/nonexistent-audio-voice-test");
         assert!(begin_engine_start(root).is_err());
-        {
-            let mut state = VOICE.lock().unwrap();
-            state.pending = 0;
-        }
+        assert_eq!(audio_voice_stop().active_count, 0);
+        assert_eq!(VOICE.lock().unwrap().pending, 0);
         let first = begin_engine_start(root).unwrap();
         assert!(begin_engine_start(root).is_err());
         assert_eq!(ENGINE_STARTING.load(Ordering::Acquire), 1);
         drop(first);
         assert_eq!(ENGINE_STARTING.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn voice_status_keeps_playback_fields_at_the_top_level() {
+        let status = VoicePlaybackStatus {
+            playback: PlaybackStatus {
+                state: "playing",
+                name: "clip".into(),
+                played_frames: 1,
+                length_frames: 2,
+                sample_rate: 48000,
+            },
+            instance_id: Some(7),
+            active_count: 2,
+        };
+        let value = serde_json::to_value(status).unwrap();
+        assert_eq!(value["state"], "playing");
+        assert_eq!(value["instance_id"], 7);
+        assert_eq!(value["active_count"], 2);
+        assert!(value.get("playback").is_none());
     }
 }

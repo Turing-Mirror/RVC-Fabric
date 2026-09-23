@@ -6,7 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { currentVoice } from "../lib/voices";
 import { displayVoiceName } from "../lib/voiceDisplay";
 import { useI18n } from "../i18n";
-import { playbackActive, playbackClock, type PlaybackStatus } from "../lib/audioPlayback";
+import { playbackActive, playbackClock, type VoicePlaybackStatus } from "../lib/audioPlayback";
 
 /**
  * 悬浮窗：变声状态与正在语音输出的音频。
@@ -40,7 +40,7 @@ export function Overlay() {
   const [bypass, setBypass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [audio, setAudio] = useState<PlaybackStatus | null>(null);
+  const [audio, setAudio] = useState<VoicePlaybackStatus | null>(null);
   // 安静一段时间就整体变淡。一个一直保持全亮的置顶方块压在游戏画面上很烦，
   // 而说话的那一刻它必须立刻亮回来 —— 淡的是不透明度，不是内容。
   const [quiet, setQuiet] = useState(true);
@@ -72,7 +72,7 @@ export function Overlay() {
         setLive(false);
       }
       try {
-        const playback = await invoke<PlaybackStatus>("audio_voice_status");
+        const playback = await invoke<VoicePlaybackStatus>("audio_voice_status");
         audioPlaying = playbackActive(playback);
         if (!stop) setAudio(playback);
       } catch {
@@ -219,6 +219,8 @@ export function Overlay() {
           <div data-tauri-drag-region className="min-w-0 flex-1" title={audio.name}>
             <div data-tauri-drag-region className="flex items-center gap-1.5 text-[11px] text-white">
               <span data-tauri-drag-region className="min-w-0 flex-1 truncate">{audio.name}</span>
+              {audio.active_count > 1 ? <span data-tauri-drag-region className="flex-none text-[#b5bec9]"
+                title={t("audio.morePlaying", { count: audio.active_count - 1 })}>+{audio.active_count - 1}</span> : null}
               <span data-tauri-drag-region className="flex-none tabular-nums text-[#b5bec9]">
                 {playbackClock(audio.played_frames, audio.sample_rate)} / {playbackClock(audio.length_frames, audio.sample_rate)}
               </span>
@@ -236,12 +238,12 @@ export function Overlay() {
             <button type="button" disabled={busy} aria-label={t(audio.state === "paused" ? "audio.resume" : "audio.pause")}
               title={t(audio.state === "paused" ? "audio.resume" : "audio.pause")}
               className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
-              onClick={() => void act(() => invoke<PlaybackStatus>("audio_voice_pause", { paused: audio.state !== "paused" }).then(setAudio))}>
+              onClick={() => void act(() => invoke<VoicePlaybackStatus>("audio_voice_pause", { paused: audio.state !== "paused", instanceId: audio.instance_id }).then(setAudio))}>
               {audio.state === "paused" ? "▷" : "Ⅱ"}
             </button>
             <button type="button" disabled={busy} aria-label={t("audio.stop")} title={t("audio.stop")}
               className={`${iconButtonClass} cursor-pointer border-0 bg-transparent text-white disabled:opacity-40`}
-              onClick={() => void act(() => invoke<PlaybackStatus>("audio_voice_stop").then(setAudio))}>■</button>
+              onClick={() => void act(() => invoke<VoicePlaybackStatus>("audio_voice_stop_instance", { instanceId: audio.instance_id }).then(setAudio))}>■</button>
           </div>
         </div> : null}
       </div>

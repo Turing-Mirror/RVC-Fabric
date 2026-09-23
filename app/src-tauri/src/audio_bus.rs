@@ -23,6 +23,8 @@ use std::{
 
 const MIC_BUFFER_SECONDS: f64 = 0.5;
 const SWAP_TIMEOUT: Duration = Duration::from_millis(750);
+// Only concurrent decoder/track resources are bounded; the library is not.
+pub const MAX_MUSIC_INSTANCES: usize = 16;
 #[cfg(windows)]
 const BRIDGE_BUFFER_SECONDS: u32 = 1;
 #[cfg(windows)]
@@ -64,10 +66,36 @@ impl Drop for MicReader {
 }
 
 struct Music {
+    id: u64,
     name: String,
     length: u64,
     control: Arc<TrackControl>,
     decoder: Decoder,
+}
+
+impl Music {
+    fn failed(&self) -> bool {
+        self.decoder.state.failed.load(Ordering::Acquire)
+            || (self.decoder.state.finished.load(Ordering::Acquire)
+                && self.decoder.state.decoded_frames.load(Ordering::Acquire) == 0)
+    }
+
+    fn finished(&self) -> bool {
+        self.failed()
+            || self.control.played_frames.load(Ordering::Acquire) >= self.length
+            || (self.decoder.state.finished.load(Ordering::Acquire)
+                && self.control.played_frames.load(Ordering::Acquire)
+                    >= self.decoder.state.decoded_frames.load(Ordering::Acquire))
+    }
+}
+
+pub struct MusicSnapshot {
+    pub id: u64,
+    pub name: String,
+    pub played: u64,
+    pub length: u64,
+    pub paused: bool,
+    pub failed: bool,
 }
 
 pub struct VoiceBus {
@@ -75,7 +103,7 @@ pub struct VoiceBus {
     format: PcmFormat,
     output: OutputStream,
     music_control: MusicControl,
-    music: Option<Music>,
+    music: Vec<Option<Music>>,
     mic_producer: Option<Producer<f32>>,
     #[cfg(windows)]
     mic_control: Arc<TrackControl>,
@@ -90,17 +118,17 @@ impl VoiceBus {
         let (mic_producer, mic_pcm) = RingBuffer::new(capacity);
         let (mic_track, mic_control) = Track::new(mic_pcm, None);
         mic_control.stopped.store(true, Ordering::Release);
-        let (_, empty_music) = RingBuffer::new(format.channels as usize);
-        let (idle_track, idle_control) = Track::new(empty_music, None);
-        idle_control.stopped.store(true, Ordering::Release);
-        let (mixer, music_control) = output::Mixer::with_music_slot(format, mic_track, idle_track)?;
+        let tracks = (0..MAX_MUSIC_INSTANCES)
+            .map(|_| Self::idle_track(format))
+            .collect();
+        let (mixer, music_control) = output::Mixer::with_music_tracks(format, mic_track, tracks)?;
         let output = output::open(&device_id, mixer)?;
         Ok(Self {
             device_id,
             format,
             output,
             music_control,
-            music: None,
+            music: (0..MAX_MUSIC_INSTANCES).map(|_| None).collect(),
             mic_producer: Some(mic_producer),
             #[cfg(windows)]
             mic_control,
@@ -119,6 +147,13 @@ impl VoiceBus {
 
     pub fn failed(&self) -> bool {
         self.output.failed.load(Ordering::Acquire)
+    }
+
+    fn idle_track(format: PcmFormat) -> Track {
+        let (_, pcm) = RingBuffer::new(format.channels as usize);
+        let (track, control) = Track::new(pcm, None);
+        control.stopped.store(true, Ordering::Release);
+        track
     }
 
     #[cfg(windows)]
@@ -210,13 +245,13 @@ impl VoiceBus {
         Ok(())
     }
 
-    fn swap_music(&mut self, track: Track) -> Result<(), String> {
+    fn swap_music(&mut self, slot: usize, track: Track) -> Result<(), String> {
         self.music_control
-            .try_replace(track)
+            .try_replace_at(slot, track)
             .map_err(|_| "audio_music_swap_busy".to_string())?;
         let deadline = Instant::now() + SWAP_TIMEOUT;
         loop {
-            if let Some(old) = self.music_control.take_retired() {
+            if let Some(old) = self.music_control.take_retired_at(slot) {
                 drop(old);
                 return Ok(());
             }
@@ -229,9 +264,11 @@ impl VoiceBus {
 
     pub fn play_decoded(
         &mut self,
+        id: u64,
         name: String,
         decoded: DecodedStream,
         gain: f32,
+        overlay: bool,
     ) -> Result<(), String> {
         if decoded.format != self.format {
             return Err("output_format_changed".into());
@@ -240,61 +277,121 @@ impl VoiceBus {
         let (track, control) = Track::new(decoded.pcm, Some(length));
         control.set_gain(gain)?;
         control.paused.store(true, Ordering::Release);
-        self.swap_music(track)?;
-        self.music = Some(Music {
+        let slot = if overlay {
+            self.music
+                .iter()
+                .position(Option::is_none)
+                .ok_or("audio_music_capacity_reached")?
+        } else {
+            0
+        };
+        if let Err(error) = self.swap_music(slot, track) {
+            // A timed-out command may still reach a live callback. Never let
+            // that late track become audible after the caller saw an error.
+            control.stopped.store(true, Ordering::Release);
+            return Err(error);
+        }
+        if !overlay {
+            for music in self.music.iter().flatten().filter(|music| music.id != id) {
+                music.control.stopped.store(true, Ordering::Release);
+            }
+        }
+        self.music[slot] = Some(Music {
+            id,
             name,
             length,
             control: control.clone(),
             decoder: decoded.decoder,
         });
         control.paused.store(false, Ordering::Release);
+        if !overlay {
+            let other_ids: Vec<_> = self
+                .music
+                .iter()
+                .flatten()
+                .filter(|music| music.id != id)
+                .map(|music| music.id)
+                .collect();
+            for other_id in other_ids {
+                self.stop_music(other_id)?;
+            }
+        }
         Ok(())
     }
 
-    pub fn pause(&mut self, paused: bool) -> Result<(), String> {
-        let music = self.music.as_ref().ok_or("audio_playback_not_playing")?;
+    pub fn pause(&mut self, id: u64, paused: bool) -> Result<(), String> {
+        let music = self
+            .music
+            .iter()
+            .flatten()
+            .find(|music| music.id == id)
+            .ok_or("audio_playback_not_playing")?;
         music.control.paused.store(paused, Ordering::Release);
         Ok(())
     }
 
-    pub fn stop_music(&mut self) -> Result<(), String> {
-        if let Some(music) = self.music.as_ref() {
-            music.control.stopped.store(true, Ordering::Release);
-        }
-        let (_, silent_pcm) = RingBuffer::new(self.format.channels as usize);
-        let (silent, ctl) = Track::new(silent_pcm, None);
-        ctl.stopped.store(true, Ordering::Release);
-        self.swap_music(silent)?;
-        self.music = None;
+    pub fn stop_music(&mut self, id: u64) -> Result<(), String> {
+        let slot = self
+            .music
+            .iter()
+            .position(|music| music.as_ref().is_some_and(|m| m.id == id))
+            .ok_or("audio_playback_not_playing")?;
+        self.music[slot]
+            .as_ref()
+            .unwrap()
+            .control
+            .stopped
+            .store(true, Ordering::Release);
+        self.swap_music(slot, Self::idle_track(self.format))?;
+        self.music[slot] = None;
         Ok(())
     }
 
-    pub fn music_status(&self) -> Option<(&str, u64, u64, bool, bool)> {
-        self.music.as_ref().map(|music| {
-            (
-                music.name.as_str(),
-                music.control.played_frames.load(Ordering::Acquire),
-                music.length,
-                music.control.paused.load(Ordering::Acquire),
-                music.decoder.state.failed.load(Ordering::Acquire)
-                    || (music.decoder.state.finished.load(Ordering::Acquire)
-                        && music.decoder.state.decoded_frames.load(Ordering::Acquire) == 0),
-            )
+    pub fn stop_all_music(&mut self) -> Result<(), String> {
+        for music in self.music.iter().flatten() {
+            music.control.stopped.store(true, Ordering::Release);
+        }
+        let ids = self.music_ids();
+        for id in ids {
+            self.stop_music(id)?;
+        }
+        Ok(())
+    }
+
+    pub fn music_status(&self, id: u64) -> Option<MusicSnapshot> {
+        let music = self.music.iter().flatten().find(|music| music.id == id)?;
+        Some(MusicSnapshot {
+            id,
+            name: music.name.clone(),
+            played: music.control.played_frames.load(Ordering::Acquire),
+            length: music.length,
+            paused: music.control.paused.load(Ordering::Acquire),
+            failed: music.failed(),
         })
     }
 
-    pub fn music_finished(&self) -> bool {
-        self.music.as_ref().is_some_and(|music| {
-            music.decoder.state.failed.load(Ordering::Acquire)
-                || music.control.played_frames.load(Ordering::Acquire) >= music.length
-                || (music.decoder.state.finished.load(Ordering::Acquire)
-                    && music.control.played_frames.load(Ordering::Acquire)
-                        >= music.decoder.state.decoded_frames.load(Ordering::Acquire))
-        })
+    pub fn music_ids(&self) -> Vec<u64> {
+        self.music.iter().flatten().map(|music| music.id).collect()
+    }
+
+    pub fn music_finished(&self, id: u64) -> bool {
+        self.music
+            .iter()
+            .flatten()
+            .find(|music| music.id == id)
+            .is_some_and(Music::finished)
+    }
+
+    pub fn latest_music_id(&self) -> Option<u64> {
+        self.music.iter().flatten().map(|music| music.id).max()
+    }
+
+    pub fn music_count(&self) -> usize {
+        self.music.iter().flatten().count()
     }
 
     pub fn has_music(&self) -> bool {
-        self.music.is_some()
+        self.music.iter().any(Option::is_some)
     }
 
     pub fn microphone_attached(&self) -> bool {

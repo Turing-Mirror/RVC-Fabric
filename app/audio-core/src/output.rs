@@ -59,7 +59,7 @@ pub struct Mixer {
     format: PcmFormat,
     tracks: Vec<Track>,
     scratch: Vec<f32>,
-    music_swap: Option<MusicSwapCallback>,
+    music_swap: Vec<MusicSwapCallback>,
 }
 
 struct MusicSwapCallback {
@@ -70,19 +70,38 @@ struct MusicSwapCallback {
 /// SPSC control plane. The callback only moves a prepared track between
 /// preallocated queues; old decoder/ring memory is reclaimed by the owner.
 pub struct MusicControl {
+    slots: Vec<MusicSlotControl>,
+}
+
+struct MusicSlotControl {
     incoming: Producer<Track>,
     retired: Consumer<Track>,
 }
 
 impl MusicControl {
     pub fn try_replace(&mut self, track: Track) -> Result<(), Track> {
-        self.incoming.push(track).map_err(|error| match error {
+        self.try_replace_at(0, track)
+    }
+
+    pub fn try_replace_at(&mut self, slot: usize, track: Track) -> Result<(), Track> {
+        let Some(control) = self.slots.get_mut(slot) else {
+            return Err(track);
+        };
+        control.incoming.push(track).map_err(|error| match error {
             rtrb::PushError::Full(track) => track,
         })
     }
 
     pub fn take_retired(&mut self) -> Option<Track> {
-        self.retired.pop().ok()
+        self.take_retired_at(0)
+    }
+
+    pub fn take_retired_at(&mut self, slot: usize) -> Option<Track> {
+        self.slots.get_mut(slot)?.retired.pop().ok()
+    }
+
+    pub fn slot_count(&self) -> usize {
+        self.slots.len()
     }
 }
 impl Mixer {
@@ -92,7 +111,7 @@ impl Mixer {
             format,
             tracks,
             scratch: vec![0.0; format.channels as usize],
-            music_swap: None,
+            music_swap: Vec::new(),
         })
     }
 
@@ -103,28 +122,49 @@ impl Mixer {
         microphone: Track,
         music: Track,
     ) -> Result<(Self, MusicControl), String> {
-        let mut mixer = Self::new(format, vec![microphone, music])?;
-        let (incoming, callback_incoming) = RingBuffer::new(1);
-        let (callback_retired, retired) = RingBuffer::new(1);
-        mixer.music_swap = Some(MusicSwapCallback {
-            incoming: callback_incoming,
-            retired: callback_retired,
-        });
-        Ok((mixer, MusicControl { incoming, retired }))
+        Self::with_music_tracks(format, microphone, vec![music])
+    }
+
+    /// Reserve all music slots before the output stream starts. Every slot
+    /// has its own bounded command and retirement queue, so adding or removing
+    /// a music track never allocates or drops it in the audio callback.
+    pub fn with_music_tracks(
+        format: PcmFormat,
+        microphone: Track,
+        music: Vec<Track>,
+    ) -> Result<(Self, MusicControl), String> {
+        if music.is_empty() {
+            return Err("audio_music_slots_empty".into());
+        }
+        let count = music.len();
+        let mut tracks = Vec::with_capacity(count + 1);
+        tracks.push(microphone);
+        tracks.extend(music);
+        let mut mixer = Self::new(format, tracks)?;
+        let mut slots = Vec::with_capacity(count);
+        mixer.music_swap.reserve(count);
+        for _ in 0..count {
+            let (incoming, callback_incoming) = RingBuffer::new(1);
+            let (callback_retired, retired) = RingBuffer::new(1);
+            mixer.music_swap.push(MusicSwapCallback {
+                incoming: callback_incoming,
+                retired: callback_retired,
+            });
+            slots.push(MusicSlotControl { incoming, retired });
+        }
+        Ok((mixer, MusicControl { slots }))
     }
 
     fn apply_music_swap(&mut self) {
-        let Some(control) = self.music_swap.as_mut() else {
-            return;
-        };
-        // Do not pop a command unless there is space to hand the old track
-        // back. A ring/decoder is never destroyed in the audio callback.
-        if control.retired.slots() == 0 {
-            return;
-        }
-        if let Ok(next) = control.incoming.pop() {
-            let old = std::mem::replace(&mut self.tracks[1], next);
-            let _ = control.retired.push(old);
+        for (slot, control) in self.music_swap.iter_mut().enumerate() {
+            // Do not pop a command unless the old track can be handed back.
+            if control.retired.slots() == 0 {
+                continue;
+            }
+            if let Ok(next) = control.incoming.pop() {
+                let old = std::mem::replace(&mut self.tracks[slot + 1], next);
+                let _ = control.retired.push(old);
+            }
         }
     }
     pub fn format(&self) -> PcmFormat {
@@ -392,6 +432,37 @@ mod tests {
         mixer.render(&mut out);
         assert_eq!(out, [0.3, 0.3]);
         assert!(control.take_retired().is_some());
+    }
+
+    #[test]
+    fn independent_music_slots_mix_and_retire_without_interrupting_microphone() {
+        let (mic, _) = track(&[0.125, 0.125, 0.125, 0.125], None);
+        let (idle_a, _) = track(&[], None);
+        let (idle_b, _) = track(&[], None);
+        let (mut mixer, mut control) =
+            Mixer::with_music_tracks(format(), mic, vec![idle_a, idle_b]).unwrap();
+        assert_eq!(control.slot_count(), 2);
+        let (a, _) = track(&[0.25, 0.25], None);
+        let (b, _) = track(&[0.5, -0.5, 0.25, -0.25], None);
+        control.try_replace_at(0, a).ok().unwrap();
+        control.try_replace_at(1, b).ok().unwrap();
+        let mut out = [0.0f32; 2];
+        mixer.render(&mut out);
+        assert_eq!(out, [0.875, -0.125]);
+        assert!(control.take_retired_at(0).is_some());
+        assert!(control.take_retired_at(1).is_some());
+
+        let (silence, _) = track(&[], None);
+        control.try_replace_at(0, silence).ok().unwrap();
+        mixer.render(&mut out);
+        assert_eq!(out, [0.375, -0.125]);
+        assert!(control.take_retired_at(0).is_some());
+    }
+
+    #[test]
+    fn music_slots_require_a_nonempty_fixed_budget() {
+        let (mic, _) = track(&[], None);
+        assert!(Mixer::with_music_tracks(format(), mic, vec![]).is_err());
     }
 
     #[test]

@@ -8,6 +8,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -59,6 +60,67 @@ class AudioIoRingTests(unittest.TestCase):
         out2 = np.ones((8, 1), dtype=np.float32)
         self.copy_and_consume_ring(ring, 0, 8, out2)
         self.assertTrue(np.allclose(out2, 0))
+
+    def test_input_only_does_not_open_or_select_an_output_device(self):
+        from tools import audio_io_process
+
+        class InputStream:
+            latency = 0.01
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        class FakeSoundDevice:
+            def __init__(self):
+                self.default = type("Default", (), {"device": (1, 2)})()
+                self.input_args = None
+
+            def WasapiSettings(self, **_):
+                return object()
+
+            def InputStream(self, **kwargs):
+                self.input_args = kwargs
+                return InputStream()
+
+            def OutputStream(self, **_):
+                raise AssertionError("input-only mode opened an output stream")
+
+            def Stream(self, **_):
+                raise AssertionError("input-only mode opened a duplex stream")
+
+        class FakeMemory:
+            storage = {}
+
+            def __init__(self, name=None, create=False, size=0):
+                self.name = name or f"test-memory-{len(self.storage)}"
+                if create:
+                    self.storage[self.name] = bytearray(size)
+                self.buf = self.storage[self.name]
+
+            def close(self):
+                pass
+
+            def unlink(self):
+                self.storage.pop(self.name, None)
+
+        fake = FakeSoundDevice()
+        with patch.object(audio_io_process, "SharedMemory", FakeMemory):
+            proc = audio_io_process.AudioIoProcess(
+                input_device=7,
+                output_device=9,
+                input_audio_block_size=16,
+                sample_rate=48000,
+                input_only=True,
+            )
+            proc.stop_evt.set()
+            with patch.object(audio_io_process, "sd", fake):
+                proc.run()
+            self.assertEqual(fake.input_args["device"], 7)
+            self.assertEqual(fake.default.device, (1, 2))
+            self.assertEqual(proc.get_latency(), 0.01)
 
 
 class GuiV1HotPathTests(unittest.TestCase):

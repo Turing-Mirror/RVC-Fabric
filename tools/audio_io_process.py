@@ -41,7 +41,8 @@ class AudioIoProcess(Process):
                  channel_num: int = 2,
                  is_device_combined: bool = True,
                  is_input_wasapi_exclusive: bool = False,
-                 is_output_wasapi_exclusive: bool = False
+                 is_output_wasapi_exclusive: bool = False,
+                 input_only: bool = False,
                  ):
         super().__init__()
         self.in_dev = input_device
@@ -53,6 +54,7 @@ class AudioIoProcess(Process):
         self.is_device_combined: bool = is_device_combined
         self.is_input_wasapi_exclusive: bool = is_input_wasapi_exclusive
         self.is_output_wasapi_exclusive: bool = is_output_wasapi_exclusive
+        self.input_only: bool = input_only
 
         self.__rec_ptr = 0
         self.in_ptr = Value('i', 0)  # 当收满一个block时由本进程设置
@@ -136,7 +138,8 @@ class AudioIoProcess(Process):
 
         exclusive_settings = sd.WasapiSettings(exclusive=True)
 
-        sd.default.device = (self.in_dev, self.out_dev)
+        if not self.input_only:
+            sd.default.device = (self.in_dev, self.out_dev)
 
         def output_callback(outdata, frames, time_info, status):
             boost_current_thread_audio()
@@ -171,7 +174,22 @@ class AudioIoProcess(Process):
             input_callback(indata, frames, time_info, status)
 
         try:
-            if self.is_device_combined:
+            if self.input_only:
+                # The native mixer owns the target output. Keep the existing
+                # shared input/event contract without opening a second output.
+                with sd.InputStream(
+                    device=self.in_dev,
+                    samplerate=self.sample_rate,
+                    channels=self.channels,
+                    dtype=self.buf_dtype,
+                    latency='low',
+                    extra_settings=exclusive_settings if self.is_input_wasapi_exclusive else None,
+                    callback=input_callback,
+                ) as si:
+                    self.latency.value = float(si.latency)
+                    self.stop_evt.wait()
+                    self.out_buf.fill(0.0)
+            elif self.is_device_combined:
                 with sd.Stream(
                     samplerate=self.sample_rate,
                     channels=self.channels,

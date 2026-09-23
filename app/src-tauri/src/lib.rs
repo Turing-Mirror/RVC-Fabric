@@ -7,6 +7,8 @@ mod audio_edit;
 mod audio_library;
 mod audio_preview;
 mod audio_probe;
+#[cfg(windows)]
+mod audio_pcm_mapping;
 mod audio_recovery;
 mod audio_session;
 mod audio_voice;

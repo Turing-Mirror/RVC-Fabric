@@ -2,3 +2,4 @@
 pub mod decode;
 pub mod format;
 pub mod output;
+pub mod pcm_bridge;

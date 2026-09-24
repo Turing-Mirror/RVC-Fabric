@@ -184,6 +184,57 @@ mod audio_hotkey_conflict_tests {
         config.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F12"));
         assert!(!audio_conflicts_with_legacy_config(&config, &[AudioBinding { enabled: false, ..binding }]));
     }
+
+    #[test]
+    fn two_legacy_actions_cannot_share_a_combo_but_cleared_ones_can() {
+        let mut config = config::defaults();
+        assert!(!legacy_duplicates_config(&config));
+        config.insert("hotkey_toggle_mode".into(), json!("CmdOrCtrl+F2"));
+        assert!(legacy_duplicates_config(&config));
+        config.insert("hotkey_toggle_mode".into(), json!(""));
+        config.insert("hotkey_toggle_vc".into(), json!(""));
+        assert!(!legacy_duplicates_config(&config));
+    }
+}
+
+/// Two of the original nine sharing one combo would fire both actions.
+pub fn legacy_duplicates_config(config: &serde_json::Map<String, Value>) -> bool {
+    use tauri_plugin_global_shortcut::Shortcut;
+    let mut seen = std::collections::HashSet::new();
+    legacy_hotkeys().iter()
+        .filter_map(|binding| parsed_combo(config.get(&binding.key).and_then(Value::as_str), &binding.fallback)
+            .and_then(|text| text.parse::<Shortcut>().ok())
+            .map(|combo| combo.id()))
+        .any(|id| !seen.insert(id))
+}
+
+/// Per-key state of the original nine, in the same vocabulary as audio bindings.
+fn legacy_states(
+    config: &serde_json::Map<String, Value>,
+    enabled: bool,
+    active: Option<&std::collections::HashMap<String, RegisteredHotkey>>,
+) -> Vec<Value> {
+    legacy_hotkeys().iter().map(|binding| {
+        let combo = parsed_combo(config.get(&binding.key).and_then(Value::as_str), &binding.fallback);
+        let global = config.get(&format!("{}_global", binding.key)).and_then(Value::as_bool).unwrap_or(true);
+        let state = match combo {
+            _ if !enabled => "disabled",
+            None => "unbound",
+            Some(_) if !global => "window",
+            Some(ref combo) if active.and_then(|map| map.get(&format!("legacy:{}", binding.key)))
+                == Some(&RegisteredHotkey { combo: combo.clone(), target: HotkeyTarget::Legacy(binding.action.clone()) }) => "registered",
+            Some(_) => "conflict",
+        };
+        json!({"key": binding.key, "state": state})
+    }).collect()
+}
+
+pub fn legacy_hotkey_status(app: &AppHandle) -> Result<Vec<Value>, String> {
+    let root = root_of(app).ok_or("audio_hotkey_root_missing")?;
+    let config = config::read(&root);
+    let enabled = config.get("hotkeys_enabled").and_then(Value::as_bool) == Some(true);
+    let registry = REGISTERED_HOTKEYS.lock().unwrap_or_else(|e| e.into_inner());
+    Ok(legacy_states(&config, enabled, registry.as_ref()))
 }
 
 /// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。
@@ -476,8 +527,12 @@ pub fn apply_hotkeys(app: &AppHandle, enabled: bool) -> Value {
         failed.push(error.clone());
         audio_failed.push(error);
     }
+    let legacy_status = root.as_deref()
+        .map(|root| legacy_states(&config::read(root), enabled, Some(active)))
+        .unwrap_or_default();
     json!({"enabled": enabled, "registered": registered, "failed": failed,
-        "local": local, "audio_failed": audio_failed, "audio_status": audio_status})
+        "local": local, "audio_failed": audio_failed, "audio_status": audio_status,
+        "legacy_status": legacy_status})
 }
 
 pub fn audio_hotkey_status(app: &AppHandle) -> Result<Vec<Value>, String> {

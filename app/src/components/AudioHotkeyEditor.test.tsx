@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { I18nProvider } from "../i18n";
+import { I18nProvider, tStatic } from "../i18n";
 import { mount, tick, type Mounted } from "../test/dom";
 import type { AudioHotkeyBinding } from "../lib/hotkeys";
 
@@ -68,4 +68,46 @@ it("does not arm recording while a global shortcut remains registered", async ()
   await tick();
   expect(mounted.container.textContent).not.toContain("请按组合键");
   expect(mounted.container.querySelector("[role=alert]")).not.toBeNull();
+});
+
+it("splits playback and numbered-entry bindings and filters both by the query", async () => {
+  bindings = [
+    { binding_id: "stop", action: "stop-all", target_entry_id: null, combo: "F10", scope: "window", enabled: true, mode: null },
+    { binding_id: "horn", action: "play-entry", target_entry_id: "e1", combo: "F11", scope: "window", enabled: true, mode: "replace" },
+  ];
+  const entries = [{ id: "e1", name: "喇叭", number: 3 }];
+  mounted = mount(<I18nProvider>
+    <div data-group="playback"><AudioHotkeyEditor group="playback" entries={entries} /></div>
+    <div data-group="entries"><AudioHotkeyEditor group="entries" entries={entries} query="喇叭" /></div>
+  </I18nProvider>);
+  await tick();
+  await tick();
+  const playback = mounted.container.querySelector("[data-group=playback]")!;
+  const numbered = mounted.container.querySelector("[data-group=entries]")!;
+  expect(playback.querySelectorAll("[data-hotkey-recorder]")).toHaveLength(1);
+  expect(playback.textContent).toContain("F10");
+  expect(numbered.querySelectorAll("[data-hotkey-recorder]")).toHaveLength(1);
+  expect(numbered.textContent).toContain("F11");
+  mounted.unmount();
+  mounted = mount(<I18nProvider><AudioHotkeyEditor group="entries" entries={entries} query="nothing" /></I18nProvider>);
+  await tick();
+  await tick();
+  expect(mounted.container.querySelectorAll("[data-hotkey-recorder]")).toHaveLength(0);
+});
+
+it("applies an edit to the saved list so a second editor's change is kept", async () => {
+  bindings = [
+    { binding_id: "stop", action: "stop-all", target_entry_id: null, combo: "F10", scope: "window", enabled: true, mode: null },
+  ];
+  mounted = mount(<I18nProvider><AudioHotkeyEditor group="playback" entries={[]} /></I18nProvider>);
+  await tick();
+  await tick();
+  // Another editor saved meanwhile; this one still shows the old list.
+  bindings = [...bindings, { binding_id: "other", action: "play-entry", target_entry_id: "e1", combo: "F9",
+    scope: "window", enabled: true, mode: "replace" }];
+  const clear = Array.from(mounted.container.querySelectorAll("button")).find((b) => b.textContent === tStatic("audio.hotkeyClear"));
+  act(() => clear!.click());
+  await tick();
+  await tick();
+  expect(bindings.map((b) => [b.binding_id, b.combo])).toEqual([["stop", ""], ["other", "F9"]]);
 });

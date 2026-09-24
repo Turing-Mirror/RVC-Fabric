@@ -362,7 +362,8 @@ async fn config_set(
                     &bindings, library.entries.iter().map(|entry| entry.id.as_str()),
                 )?;
             }
-            if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings) {
+            if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings)
+                || shell_extras::legacy_duplicates_config(&proposed) {
                 return Err("audio_hotkey_conflict".into());
             }
         }
@@ -471,6 +472,60 @@ fn hotkeys_apply(app: AppHandle, enabled: bool) -> Value {
     // 设置页每改一次快捷键都会调到这里，正好是通知的时机。
     let _ = app.emit("hotkeys://changed", ());
     out
+}
+
+/// Save one of the original nine (combo and/or its global flag). A combo the
+/// system or another program already holds is rolled back, not left saved as
+/// if it worked.
+#[tauri::command]
+fn legacy_hotkey_set(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    patch: Map<String, Value>,
+) -> Result<Value, String> {
+    let legacy = &hotkey_catalog::catalog().legacy;
+    let touched: Vec<&str> = patch.keys().map(|key| {
+        legacy.iter()
+            .find(|binding| *key == binding.key || *key == format!("{}_global", binding.key))
+            .map(|binding| binding.key.as_str())
+            .ok_or("hotkey_key_invalid")
+    }).collect::<Result<_, _>>()?;
+    let root = root_clone(&state)?;
+    let _hotkey_guard = hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let current = config::read(&root);
+    let mut proposed = current.clone();
+    proposed.extend(patch.clone());
+    let bindings: Vec<hotkey_catalog::AudioBinding> = serde_json::from_value(
+        proposed.get("audio_hotkeys").cloned().unwrap_or_else(|| json!([]))
+    ).map_err(|_| "audio_hotkey_config_invalid")?;
+    if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings)
+        || shell_extras::legacy_duplicates_config(&proposed) {
+        return Err("audio_hotkey_conflict".into());
+    }
+    let previous: Map<String, Value> = patch.keys()
+        .filter_map(|key| current.get(key).map(|value| (key.clone(), value.clone())))
+        .collect();
+    let changed = config::update(&root, patch)?;
+    let enabled = current.get("hotkeys_enabled").and_then(Value::as_bool).unwrap_or(false);
+    let result = shell_extras::apply_hotkeys(&app, enabled);
+    let rejected = result.get("legacy_status").and_then(Value::as_array).is_some_and(|states| {
+        states.iter().any(|item| item.get("state") == Some(&json!("conflict"))
+            && item.get("key").and_then(Value::as_str).is_some_and(|key| touched.contains(&key)))
+    });
+    if rejected {
+        config::update(&root, previous)?;
+        shell_extras::apply_hotkeys(&app, enabled);
+        let _ = app.emit("hotkeys://changed", ());
+        return Err("hotkey_registration_failed".into());
+    }
+    let _ = app.emit("config-changed", &changed);
+    let _ = app.emit("hotkeys://changed", ());
+    Ok(result)
+}
+
+#[tauri::command]
+fn legacy_hotkeys_status(app: AppHandle) -> Result<Vec<Value>, String> {
+    shell_extras::legacy_hotkey_status(&app)
 }
 
 #[tauri::command]
@@ -2642,6 +2697,8 @@ pub fn run() {
             update_apply,
             update_app,
             hotkeys_apply,
+            legacy_hotkey_set,
+            legacy_hotkeys_status,
             audio_hotkeys_get,
             audio_hotkeys_status,
             audio_hotkeys_set,

@@ -6,9 +6,30 @@ import { Select } from "./controls";
 import { useI18n } from "../i18n";
 import { AUDIO_ACTIONS, comboFromEvent, type AudioHotkeyBinding } from "../lib/hotkeys";
 
-type Entry = { id: string; name: string };
+type Entry = { id: string; name: string; number?: number | null };
 
-export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; entryId?: string }) {
+/** "entries" = bindings that play a numbered entry; "playback" = everything else. */
+export type AudioHotkeyGroup = "playback" | "entries";
+
+export function bindingGroup(binding: AudioHotkeyBinding): AudioHotkeyGroup {
+  return binding.action === "play-entry" ? "entries" : "playback";
+}
+
+function entryLabel(entry: Entry): string {
+  return entry.number != null ? `#${entry.number} ${entry.name}` : entry.name;
+}
+
+type Props = {
+  entries?: Entry[];
+  /** Only this entry's play bindings, as on the audio page. */
+  entryId?: string;
+  group?: AudioHotkeyGroup;
+  title?: string;
+  /** Case-insensitive filter over action, entry name and combo. */
+  query?: string;
+};
+
+export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }: Props) {
   const { t } = useI18n();
   const [available, setAvailable] = useState<Entry[]>(entries ?? []);
   const [bindings, setBindings] = useState<AudioHotkeyBinding[]>([]);
@@ -54,15 +75,18 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     }
   }, []);
 
-  const save = async (next: AudioHotkeyBinding[]) => {
+  /** Edits apply to the saved list, so another editor on the page cannot be overwritten. */
+  const save = async (change: (list: AudioHotkeyBinding[]) => AudioHotkeyBinding[]) => {
     setBusy(true);
     setError("");
     try {
-      await invoke("audio_hotkeys_set", { bindings: next });
+      const latest = await invoke<AudioHotkeyBinding[]>("audio_hotkeys_get");
+      await invoke("audio_hotkeys_set", { bindings: change(latest) });
       await refresh();
     } catch (cause) {
-      setError(String(cause).includes("audio_hotkey_conflict")
-        ? t("audio.hotkeyConflict") : t("audio.hotkeySaveFailed"));
+      const text = String(cause);
+      setError(text.includes("audio_hotkey_conflict") ? t("audio.hotkeyConflict")
+        : text.includes("registration_failed") ? t("audio.hotkeyTaken") : t("audio.hotkeySaveFailed"));
       await refresh().catch(() => {});
     } finally {
       setBusy(false);
@@ -70,11 +94,11 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
   };
 
   const update = (id: string, patch: Partial<AudioHotkeyBinding>) => {
-    void save(bindings.map((binding) => binding.binding_id === id ? { ...binding, ...patch } : binding));
+    void save((list) => list.map((binding) => binding.binding_id === id ? { ...binding, ...patch } : binding));
   };
 
   const add = () => {
-    const target = entryId ?? available[0]?.id ?? null;
+    const target = group === "playback" ? null : entryId ?? available[0]?.id ?? null;
     const next: AudioHotkeyBinding = {
       binding_id: crypto.randomUUID(),
       action: target ? "play-entry" : "pause-current",
@@ -84,7 +108,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
       enabled: true,
       mode: "replace",
     };
-    void save([...bindings, next]);
+    void save((list) => [...list, next]);
   };
 
   const beginRecording = async (id: string) => {
@@ -122,7 +146,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     setRecording(null);
     void (async () => {
       if (combo !== undefined) {
-        await save(bindings.map((binding) => binding.binding_id === id ? { ...binding, combo } : binding));
+        await save((list) => list.map((binding) => binding.binding_id === id ? { ...binding, combo } : binding));
       }
       await invoke("hotkeys_apply", { enabled: hotkeysEnabledRef.current }).catch(() => {});
     })();
@@ -137,9 +161,8 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     if (combo) endRecording(id, combo);
   };
 
-  const shown = entryId
-    ? bindings.filter((binding) => binding.action === "play-entry" && binding.target_entry_id === entryId)
-    : bindings;
+  const needle = query.trim().toLowerCase();
+  const entryNames = new Map(available.map((entry) => [entry.id, entryLabel(entry)]));
   const actionLabels: Record<string, string> = {
     "play-entry": t("audio.playToVoice"),
     "pause-current": t("audio.hotkeyPauseCurrent"),
@@ -153,6 +176,15 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     "mute-audio": t("audio.hotkeyToggleMute"),
     "show-audio": t("audio.hotkeyShowAudio"),
   };
+  const shown = bindings
+    .filter((binding) => entryId
+      ? binding.action === "play-entry" && binding.target_entry_id === entryId
+      : !group || bindingGroup(binding) === group)
+    .filter((binding) => !needle || [
+      actionLabels[binding.action] ?? binding.action,
+      binding.target_entry_id ? entryNames.get(binding.target_entry_id) ?? "" : "",
+      binding.combo,
+    ].some((text) => text.toLowerCase().includes(needle)));
   const statusLabels: Record<string, string> = {
     registered: t("audio.hotkeyRegistered"),
     window: t("audio.hotkeyWindow"),
@@ -163,15 +195,16 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
 
   return <div className="space-y-3 text-[12px] text-[var(--meta)]">
     <div className="flex items-center gap-3">
-      <span className="text-[13px] text-[var(--ink)]">{t("audio.hotkeySection")}</span>
-      <Btn disabled={busy || arming} onClick={add}>{t("audio.hotkeyAdd")}</Btn>
+      <span className="text-[13px] text-[var(--ink)]">{title ?? t("audio.hotkeySection")}</span>
+      <Btn disabled={busy || arming || (group === "entries" && available.length === 0)} onClick={add}>{t("audio.hotkeyAdd")}</Btn>
     </div>
     {error ? <p role="alert" className="text-[var(--danger)]">{error}</p> : null}
-    {shown.length === 0 ? <p>{t("audio.hotkeyEmpty")}</p> : shown.map((binding) => <div key={binding.binding_id}
+    {shown.length === 0 ? <p>{t(needle ? "audio.hotkeyNoMatch" : "audio.hotkeyEmpty")}</p> : shown.map((binding) => <div key={binding.binding_id}
       className="flex flex-wrap items-end gap-2 rounded-[var(--rs)] bg-[var(--group)] px-3 py-2">
-      {!entryId ? <label>{t("audio.hotkeyAction")}
+      {!entryId && group !== "entries" ? <label>{t("audio.hotkeyAction")}
         <Select value={binding.action} disabled={busy || arming} options={AUDIO_ACTIONS
           .filter((action) => !action.requires_entry || available.length > 0)
+          .filter((action) => group !== "playback" || !action.requires_entry)
           .map((action) => ({ id: action.action, label: actionLabels[action.action] ?? action.action }))}
           onChange={(action) => update(binding.binding_id, {
             action,
@@ -180,7 +213,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
       </label> : null}
       {binding.action === "play-entry" && !entryId ? <label>{t("audio.hotkeyEntry")}
         <Select value={binding.target_entry_id ?? ""} disabled={busy || arming}
-          options={available.map((entry) => ({ id: entry.id, label: entry.name }))}
+          options={available.map((entry) => ({ id: entry.id, label: entryLabel(entry) }))}
           onChange={(target_entry_id) => update(binding.binding_id, { target_entry_id })} />
       </label> : null}
       {binding.action === "play-entry" ? <label>{t("audio.hotkeyMode")}
@@ -207,7 +240,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
       </button>
       <span className="pb-1">{statusLabels[statuses[binding.binding_id] ?? ""] ?? ""}</span>
       <Btn disabled={busy || arming || !binding.combo} onClick={() => update(binding.binding_id, { combo: "" })}>{t("audio.hotkeyClear")}</Btn>
-      <Btn disabled={busy || arming} onClick={() => void save(bindings.filter((item) => item.binding_id !== binding.binding_id))}>{t("audio.hotkeyRemove")}</Btn>
+      <Btn disabled={busy || arming} onClick={() => void save((list) => list.filter((item) => item.binding_id !== binding.binding_id))}>{t("audio.hotkeyRemove")}</Btn>
     </div>)}
   </div>;
 }

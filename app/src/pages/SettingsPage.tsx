@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
 import { Block, Btn, HelpMark, PagePad } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
@@ -165,14 +166,9 @@ function SettingsPageImpl({
     };
   }, []);
 
-  // 旧九项由后端校验碰撞后写入；失败时不把未保存的新组合留在页面上。
+  // 旧九项由后端校验碰撞、注册后才算保存；被系统或其他软件占用时后端恢复原组合。
   const persistHotkey = async (key: string, v: unknown) => {
-    await invoke("config_set", { patch: { [key]: v } });
-  };
-
-  const saveHotkey = async (key: string, v: unknown) => {
-    await persistHotkey(key, v);
-    await safeInvoke("hotkeys_apply", { enabled: c.bool("hotkeys_enabled") });
+    await invoke("legacy_hotkey_set", { patch: { [key]: v } });
   };
 
   /**
@@ -1125,20 +1121,12 @@ function SettingsPageImpl({
                     .then(() => safeInvoke("hotkeys_apply", { enabled: v }));
                 }}
               />
-              <div className="flex flex-col">
-                {HOTKEYS.map((h) => (
-                  <HotkeyRow
-                    key={h.key}
-                    label={hotkeyLabels()[h.action] ?? h.action}
-                    value={c.str(h.key, h.fallback)}
-                    onChange={(v) => persistHotkey(h.key, v)}
-                    global={c.cfg[`${h.key}_global`] !== false}
-                    onGlobalChange={(v) => saveHotkey(`${h.key}_global`, v)}
-                    onRecording={setRecordingHotkey}
-                  />
-                ))}
-              </div>
-              <AudioHotkeyEditor />
+              <HotkeyGroups
+                value={(key, fallback) => c.str(key, fallback)}
+                global={(key) => c.cfg[`${key}_global`] !== false}
+                onChange={persistHotkey}
+                onRecording={setRecordingHotkey}
+              />
               <p className="text-xs text-[var(--help)] m-0">
                 <b>{t("s.d15328af87")}</b>：<br />{t("s.b8d74a5e97")}<br />{t("s.d7278f3458")}<br />{t("s.5ece668b53")}<br />{t("s.e6eed3ec41")}</p>
             </div>
@@ -1196,6 +1184,58 @@ function hotkeyLabels(): Record<string, string> {
   };
 }
 
+const HOTKEY_GROUP_TITLE = "text-[13px] text-[var(--ink)] m-0";
+
+/** 快捷键按「变声 / 音频播放 / 编号音频」分组，顶部一个搜索框同时筛三组。 */
+function HotkeyGroups({
+  value,
+  global,
+  onChange,
+  onRecording,
+}: {
+  value: (key: string, fallback: string) => string;
+  global: (key: string) => boolean;
+  onChange: (key: string, v: unknown) => Promise<void>;
+  onRecording: (active: boolean) => Promise<boolean>;
+}) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => void safeInvoke<{ key: string; state: string }[]>("legacy_hotkeys_status")
+      .then((items) => { if (alive && items) setStatus(Object.fromEntries(items.map((item) => [item.key, item.state]))); });
+    refresh();
+    const off = listen("hotkeys://changed", refresh);
+    return () => { alive = false; void off.then((stop) => stop()); };
+  }, []);
+  const labels = hotkeyLabels();
+  const needle = query.trim().toLowerCase();
+  const voiceRows = HOTKEYS.filter((h) => !needle || [labels[h.action] ?? h.action, prettyCombo(value(h.key, h.fallback))]
+    .some((text) => text.toLowerCase().includes(needle)));
+  return <>
+    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("audio.hotkeySearch")}
+      aria-label={t("audio.hotkeySearch")}
+      className="w-full max-w-[400px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+    <div className="flex flex-col">
+      <p className={HOTKEY_GROUP_TITLE}>{t("audio.hotkeyGroupVoice")}</p>
+      {voiceRows.length === 0 ? <p className="text-[12px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
+        <HotkeyRow
+          key={h.key}
+          label={labels[h.action] ?? h.action}
+          value={value(h.key, h.fallback)}
+          status={status[h.key]}
+          onChange={(v) => onChange(h.key, v)}
+          global={global(h.key)}
+          onGlobalChange={(v) => onChange(`${h.key}_global`, v)}
+          onRecording={onRecording}
+        />
+      ))}
+    </div>
+    <AudioHotkeyEditor group="playback" title={t("audio.hotkeyGroupPlayback")} query={query} />
+    <AudioHotkeyEditor group="entries" title={t("audio.hotkeyGroupEntries")} query={query} />
+  </>;
+}
+
 /** 把组合键写成用户读得懂的样子：CmdOrCtrl+F2 → Ctrl + F2。 */
 function prettyCombo(v: string): string {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -1203,6 +1243,23 @@ function prettyCombo(v: string): string {
     .split("+")
     .map((p) => (p === "CmdOrCtrl" ? (mac ? "Command" : "Ctrl") : p === "Super" ? (mac ? "Command" : "Win") : p))
     .join(" + ");
+}
+
+function hotkeyError(error: unknown): string {
+  const text = String(error);
+  return text.includes("audio_hotkey_conflict") ? t("audio.hotkeyConflict")
+    : text.includes("registration_failed") ? t("audio.hotkeyTaken") : t("audio.hotkeySaveFailed");
+}
+
+function hotkeyStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    registered: t("audio.hotkeyRegistered"),
+    window: t("audio.hotkeyWindow"),
+    unbound: t("audio.hotkeyUnbound"),
+    disabled: t("audio.hotkeyDisabled"),
+    conflict: t("audio.hotkeyConflictStatus"),
+  };
+  return labels[status] ?? "";
 }
 
 /**
@@ -1214,6 +1271,7 @@ function prettyCombo(v: string): string {
 function HotkeyRow({
   label,
   value,
+  status,
   onChange,
   global: isGlobal,
   onGlobalChange,
@@ -1221,6 +1279,8 @@ function HotkeyRow({
 }: {
   label: string;
   value: string;
+  /** registered / window / unbound / disabled / conflict，与音频快捷键同一套。 */
+  status?: string;
   onChange: (v: string) => Promise<void>;
   /** 抢成全局（任何软件在前台都生效），还是只在本软件窗口里生效。 */
   global: boolean;
@@ -1277,8 +1337,7 @@ function HotkeyRow({
     setRecording(false);
     setSaveError("");
     void onChange(combo)
-      .catch((error) => setSaveError(String(error).includes("audio_hotkey_conflict")
-        ? t("audio.hotkeyConflict") : t("audio.hotkeySaveFailed")))
+      .catch((error) => setSaveError(hotkeyError(error)))
       .finally(() => onRecording(false));
   };
 
@@ -1308,8 +1367,7 @@ function HotkeyRow({
           onChange={(e) => {
             setSaveError("");
             void onGlobalChange(e.target.checked).catch((error) =>
-              setSaveError(String(error).includes("audio_hotkey_conflict")
-                ? t("audio.hotkeyConflict") : t("audio.hotkeySaveFailed")));
+              setSaveError(hotkeyError(error)));
           }}
           className="accent-[var(--accent)] w-[13px] h-[13px]"
         />{t("s.a5644f4bbf")}</label>
@@ -1331,6 +1389,7 @@ function HotkeyRow({
       >
         {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
+      {status ? <span className="ml-2 text-[12px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
       {recordError ? <span role="alert" className="text-[var(--danger)]">{t("audio.hotkeySuspendFailed")}</span> : null}
       {saveError ? <span role="alert" className="text-[var(--danger)]">{saveError}</span> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}

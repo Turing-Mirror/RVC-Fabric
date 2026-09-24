@@ -470,8 +470,14 @@ fn audio_hotkeys_set(
     state: State<'_, Mutex<AppState>>,
     bindings: Vec<hotkey_catalog::AudioBinding>,
 ) -> Result<Value, String> {
+    let _hotkey_guard = hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     hotkey_catalog::validate_bindings(&bindings)?;
     let root = root_clone(&state)?;
+    let library = audio_library::snapshot(&root)?;
+    hotkey_catalog::validate_entry_targets(
+        &bindings,
+        library.entries.iter().map(|entry| entry.id.as_str()),
+    )?;
     if shell_extras::audio_conflicts_with_legacy(&root, &bindings) {
         return Err("audio_hotkey_conflict".into());
     }

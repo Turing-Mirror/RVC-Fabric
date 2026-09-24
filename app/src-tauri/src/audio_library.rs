@@ -1121,27 +1121,43 @@ pub fn restore(root: &Path, source_id: &str, path: &str) -> Result<Library, Stri
     })
 }
 
-pub fn remove_source(root: &Path, source_id: &str) -> Result<Library, String> {
-    mutate(root, |library| {
-        let before = library.sources.len();
-        library.sources.retain(|source| source.id != source_id);
-        if before == library.sources.len() {
-            return Err("audio_source_unknown".into());
+pub fn remove_source(root: &Path, source_id: &str) -> Result<(Library, bool), String> {
+    let _hotkey_guard = crate::hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _library_guard = WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut library = load(root)?;
+    let before = library.sources.len();
+    library.sources.retain(|source| source.id != source_id);
+    if before == library.sources.len() {
+        return Err("audio_source_unknown".into());
+    }
+    for asset in &mut library.assets {
+        asset.source_ids.retain(|id| id != source_id);
+    }
+    library.assets.retain(|asset| !asset.source_ids.is_empty());
+    let kept: HashSet<_> = library.assets.iter().map(|asset| asset.id.as_str()).collect();
+    library.entries.retain(|entry| kept.contains(entry.asset_id.as_str()));
+
+    let bindings = crate::hotkey_catalog::read_bindings(root)?;
+    let retained = crate::hotkey_catalog::without_deleted_entries(
+        bindings.clone(), library.entries.iter().map(|entry| entry.id.as_str()),
+    );
+    let changed = retained != bindings;
+    if changed {
+        let mut patch = serde_json::Map::new();
+        patch.insert("audio_hotkeys".into(), serde_json::json!(retained));
+        crate::config::update(root, patch)?;
+    }
+    library.revision += 1;
+    if let Err(error) = save(root, &library) {
+        if changed {
+            let mut rollback = serde_json::Map::new();
+            rollback.insert("audio_hotkeys".into(), serde_json::json!(bindings));
+            crate::config::update(root, rollback)?;
         }
-        for asset in &mut library.assets {
-            asset.source_ids.retain(|id| id != source_id);
-        }
-        library.assets.retain(|asset| !asset.source_ids.is_empty());
-        let kept: HashSet<_> = library
-            .assets
-            .iter()
-            .map(|asset| asset.id.as_str())
-            .collect();
-        library
-            .entries
-            .retain(|entry| kept.contains(entry.asset_id.as_str()));
-        Ok(true)
-    })
+        return Err(error);
+    }
+    mark_status(&mut library);
+    Ok((library, changed))
 }
 
 #[tauri::command]
@@ -1442,7 +1458,14 @@ pub fn audio_library_remove_source(
     state: State<'_, Mutex<crate::AppState>>,
     source_id: String,
 ) -> Result<Library, String> {
-    let library = remove_source(&crate::root_clone(&state)?, &source_id)?;
+    let root = crate::root_clone(&state)?;
+    let (library, hotkeys_changed) = remove_source(&root, &source_id)?;
+    if hotkeys_changed {
+        let enabled = crate::config::read(&root)
+            .get("hotkeys_enabled").and_then(serde_json::Value::as_bool).unwrap_or(false);
+        crate::shell_extras::apply_hotkeys(&app, enabled);
+        let _ = app.emit("hotkeys://changed", ());
+    }
     notify(&app, &library);
     Ok(library)
 }
@@ -1582,9 +1605,53 @@ mod tests {
         assert_eq!(second.entries.len(), 1);
         assert_eq!(second.assets[0].source_ids.len(), 2);
         assert_eq!(second.entries[0].number, Some(1200));
-        let after = remove_source(&f.0, &source_id).unwrap();
+        let binding = crate::hotkey_catalog::AudioBinding {
+            binding_id: "overlap".into(), action: "play-entry".into(),
+            target_entry_id: Some(id.clone()), combo: String::new(),
+            scope: crate::hotkey_catalog::HotkeyScope::Window,
+            enabled: true, mode: None,
+        };
+        let mut patch = serde_json::Map::new();
+        patch.insert("audio_hotkeys".into(), serde_json::json!([binding]));
+        crate::config::update(&f.0, patch).unwrap();
+        let (after, changed) = remove_source(&f.0, &source_id).unwrap();
+        assert!(!changed);
         assert_eq!(after.entries[0].id, id);
         assert_eq!(after.entries[0].number, Some(1200));
+        assert_eq!(crate::hotkey_catalog::read_bindings(&f.0).unwrap()[0].binding_id, "overlap");
+    }
+
+    #[test]
+    fn removing_last_source_removes_only_its_entry_hotkeys() {
+        use crate::hotkey_catalog::{AudioBinding, HotkeyScope};
+        let f = Fixture::new();
+        let first = import(&f.0, &[f.audio("a.wav")], ImportMode::Reference, true).unwrap();
+        let second = import(&f.0, &[f.audio("b.wav")], ImportMode::Reference, true).unwrap();
+        let source_id = first.sources[0].id.clone();
+        let removed_entry_id = first.entries[0].id.clone();
+        let kept_entry_id = second.entries.iter().find(|entry| entry.id != removed_entry_id)
+            .unwrap().id.clone();
+        let binding = |id: &str, target: Option<&str>| AudioBinding {
+            binding_id: id.into(),
+            action: if target.is_some() { "play-entry" } else { "stop-preview" }.into(),
+            target_entry_id: target.map(str::to_owned), combo: String::new(),
+            scope: HotkeyScope::Window, enabled: true, mode: None,
+        };
+        let bindings = vec![
+            binding("removed", Some(&removed_entry_id)),
+            binding("kept", Some(&kept_entry_id)),
+            binding("preview", None),
+        ];
+        let mut patch = serde_json::Map::new();
+        patch.insert("audio_hotkeys".into(), serde_json::json!(bindings));
+        crate::config::update(&f.0, patch).unwrap();
+        let (after, changed) = remove_source(&f.0, &source_id).unwrap();
+        assert!(changed);
+        assert_eq!(after.entries.len(), 1);
+        assert_eq!(after.entries[0].id, kept_entry_id);
+        let saved = crate::hotkey_catalog::read_bindings(&f.0).unwrap();
+        assert_eq!(saved.iter().map(|binding| binding.binding_id.as_str()).collect::<Vec<_>>(),
+            ["kept", "preview"]);
     }
 
     #[test]

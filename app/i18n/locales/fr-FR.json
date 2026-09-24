@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "Impossible de lancer l'enregistrement du raccourci en toute sécurité. Réessayez.",
     "hotkeyPauseCurrent": "Mettre en pause ou reprendre l'audio actuel",
     "hotkeyStopCurrent": "Arrêter l'audio actuel",
+    "hotkeyStopPreview": "Arrêter la préécoute",
     "hotkeyShowAudio": "Ouvrir la page audio",
     "hotkeyRegistered": "Actif",
     "hotkeyUnbound": "Non attribué",

@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "Не удалось безопасно начать запись сочетания клавиш. Повторите попытку.",
     "hotkeyPauseCurrent": "Приостановить или возобновить текущее аудио",
     "hotkeyStopCurrent": "Остановить текущее аудио",
+    "hotkeyStopPreview": "Остановить предпрослушивание",
     "hotkeyShowAudio": "Открыть страницу аудио",
     "hotkeyRegistered": "Активно",
     "hotkeyUnbound": "Не назначено",

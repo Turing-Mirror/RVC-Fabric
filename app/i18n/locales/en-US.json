@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "Shortcut recording could not start safely. Please try again.",
     "hotkeyPauseCurrent": "Pause or resume current audio",
     "hotkeyStopCurrent": "Stop current audio",
+    "hotkeyStopPreview": "Stop preview",
     "hotkeyShowAudio": "Open audio page",
     "hotkeyRegistered": "Active",
     "hotkeyUnbound": "Unbound",

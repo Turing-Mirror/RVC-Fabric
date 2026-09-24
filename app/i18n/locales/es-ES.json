@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "No se pudo iniciar la grabación del atajo de forma segura. Inténtalo de nuevo.",
     "hotkeyPauseCurrent": "Pausar o reanudar el audio actual",
     "hotkeyStopCurrent": "Detener el audio actual",
+    "hotkeyStopPreview": "Detener la vista previa",
     "hotkeyShowAudio": "Abrir la página de audio",
     "hotkeyRegistered": "Activo",
     "hotkeyUnbound": "Sin asignar",

@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "无法安全录制快捷键。请重试。",
     "hotkeyPauseCurrent": "暂停或继续当前音频",
     "hotkeyStopCurrent": "停止当前音频",
+    "hotkeyStopPreview": "停止试听",
     "hotkeyShowAudio": "打开音频页",
     "hotkeyRegistered": "已生效",
     "hotkeyUnbound": "未绑定",

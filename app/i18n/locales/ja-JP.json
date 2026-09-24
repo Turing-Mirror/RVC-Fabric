@@ -156,6 +156,7 @@
     "hotkeySuspendFailed": "安全にショートカットを記録できません。もう一度お試しください。",
     "hotkeyPauseCurrent": "現在の音声を一時停止または再開",
     "hotkeyStopCurrent": "現在の音声を停止",
+    "hotkeyStopPreview": "試聴を停止",
     "hotkeyShowAudio": "音声ページを開く",
     "hotkeyRegistered": "有効",
     "hotkeyUnbound": "未割り当て",

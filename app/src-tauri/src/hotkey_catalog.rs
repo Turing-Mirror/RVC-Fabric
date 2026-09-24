@@ -1,7 +1,11 @@
 //! Shared action catalogue; the frontend imports the same JSON at build time.
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, path::Path, sync::OnceLock};
+use std::{collections::HashSet, path::Path, sync::{Mutex, OnceLock}};
 use tauri_plugin_global_shortcut::Shortcut;
+
+/// Serializes full-list edits with source deletion so a stale editor cannot
+/// restore a binding to an entry that was just removed.
+pub static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LegacyHotkey {
@@ -96,6 +100,31 @@ pub fn read_bindings(root: &Path) -> Result<Vec<AudioBinding>, String> {
     Ok(bindings)
 }
 
+pub fn validate_entry_targets<'a>(
+    bindings: &[AudioBinding],
+    entry_ids: impl IntoIterator<Item = &'a str>,
+) -> Result<(), String> {
+    let known: HashSet<_> = entry_ids.into_iter().collect();
+    if bindings.iter().any(|binding| {
+        binding.action == "play-entry"
+            && binding.target_entry_id.as_deref().is_none_or(|id| !known.contains(id))
+    }) {
+        return Err("audio_hotkey_entry_missing".into());
+    }
+    Ok(())
+}
+
+pub fn without_deleted_entries<'a>(
+    bindings: Vec<AudioBinding>,
+    entry_ids: impl IntoIterator<Item = &'a str>,
+) -> Vec<AudioBinding> {
+    let known: HashSet<_> = entry_ids.into_iter().collect();
+    bindings.into_iter().filter(|binding| {
+        binding.action != "play-entry"
+            || binding.target_entry_id.as_deref().is_some_and(|id| known.contains(id))
+    }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +185,24 @@ mod tests {
             ..one
         }])
         .is_err());
+    }
+
+    #[test]
+    fn deleted_entry_pruning_keeps_other_actions_and_surviving_targets() {
+        let make = |id: &str, action: &str, target: Option<&str>| AudioBinding {
+            binding_id: id.into(), action: action.into(),
+            target_entry_id: target.map(str::to_owned), combo: String::new(),
+            scope: HotkeyScope::Window, enabled: true, mode: None,
+        };
+        let bindings = vec![
+            make("gone", "play-entry", Some("entry-1")),
+            make("kept", "play-entry", Some("entry-2")),
+            make("stop", "stop-preview", None),
+        ];
+        assert!(validate_entry_targets(&bindings, ["entry-2"]).is_err());
+        let kept = without_deleted_entries(bindings, ["entry-2"]);
+        assert_eq!(kept.iter().map(|binding| binding.binding_id.as_str()).collect::<Vec<_>>(),
+            ["kept", "stop"]);
+        assert!(validate_entry_targets(&kept, ["entry-2"]).is_ok());
     }
 }

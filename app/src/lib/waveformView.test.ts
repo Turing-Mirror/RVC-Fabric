@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   clampPxPerSec,
+  columnAmplitudes,
   fitPxPerSec,
   scrollAfterZoom,
   timeAtX,
@@ -30,4 +31,13 @@ it("keeps the cursor's time still when the waveform grows", () => {
   expect(waveformWidth(10, 80)).toBe(800);
   expect(timeAtX(400, 10, 800)).toBe(5);
   expect(xAtTime(5, 10, 800)).toBe(400);
+});
+
+it("keeps the envelope continuous when zoomed past the peak density", () => {
+  const zoomedIn = columnAmplitudes([0, 200], 20, 0, 20);
+  expect(Array.from(zoomedIn).every((v, i, all) => i === 0 || v >= all[i - 1])).toBe(true);
+  expect(zoomedIn[10]).toBeGreaterThan(0);
+  expect(zoomedIn[19]).toBe(200);
+  expect(Array.from(columnAmplitudes([10, 90, 30, 5], 2, 0, 2))).toEqual([90, 30]);
+  expect(Array.from(columnAmplitudes([10, 90, 30, 5], 2, 1, 2))).toEqual([30, 0]);
 });

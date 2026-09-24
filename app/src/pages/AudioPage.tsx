@@ -510,6 +510,7 @@ export function AudioPage() {
               setClipStart(String(Math.min(start, waveform.duration, Number(start.toFixed(4)))));
               setClipEnd(String(Math.min(end, waveform.duration, Number(end.toFixed(4)))));
             }} /> : null}
+          {waveform.duration > 0 ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformHint")}</p> : null}
           {waveform.loading ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformLoading")}</p> : null}
           {waveform.error ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformFailed")}</p> : null}
           <div className="flex items-end gap-3 flex-wrap">

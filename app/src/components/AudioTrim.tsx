@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { useI18n } from "../i18n";
-import { RangeBar } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
 import { WaveformRange } from "./WaveformRange";
@@ -94,13 +93,6 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     }
   };
 
-  const seek = (time: number) => {
-    previewing.current = false;
-    const t0 = Math.max(0, Math.min(duration, time));
-    setCurrentTime(t0);
-    if (audio.current) audio.current.currentTime = t0;
-  };
-
   if (!canTrimAudio(input)) return null;
   return <div className="mt-3 flex flex-col gap-3">
     <audio ref={audio} src={(() => { try { return convertFileSrc(input); } catch { return ""; } })()} preload="metadata" className="hidden"
@@ -139,18 +131,12 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     {waveform.loading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
     {waveform.error ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
     <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
-    <RangeBar ariaLabel={t("neptune.position")} min={0} max={duration || 1} step={0.01} value={currentTime}
-      disabled={busy || disabled || !duration} onChange={seek} />
     <div className="flex flex-wrap items-center gap-3">
       <label>{t("neptune.trimStart")} <input type="number" min={0} max={end} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(start) ? start.toFixed(2) : ""} onChange={(e) => setStart(Number(e.target.value))} /></label>
       <label>{t("neptune.trimEnd")} <input type="number" min={start} max={duration} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(end) ? end.toFixed(2) : ""} onChange={(e) => setEnd(Number(e.target.value))} /></label>
     </div>
-    <RangeBar ariaLabel={t("neptune.trimStart")} min={0} max={duration} step={0.01} value={start}
-      disabled={busy || disabled} onChange={(v) => setStart(Math.min(v, end))} />
-    <RangeBar ariaLabel={t("neptune.trimEnd")} min={0} max={duration} step={0.01} value={end}
-      disabled={busy || disabled} onChange={(v) => setEnd(Math.max(v, start))} />
     <div className="flex gap-2">
       <Btn disabled={!valid || busy || disabled} onClick={() => {
         if (audio.current) {

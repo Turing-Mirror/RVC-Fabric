@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  columnAmplitudes,
   fitPxPerSec,
+  MAX_PX_PER_SEC,
   scrollAfterZoom,
   timeAtX,
   waveformWidth,
@@ -49,7 +51,7 @@ export function WaveformRange({ duration, peaks, start, end, currentTime, playin
   }, []);
 
   const fit = fitPxPerSec(duration, viewWidth);
-  const maxScale = Math.min(400, MAX_WIDTH / Math.max(duration, 0.001));
+  const maxScale = Math.min(MAX_PX_PER_SEC, MAX_WIDTH / Math.max(duration, 0.001));
   const scale = Math.min(pxPerSec || fit, maxScale);
   const width = waveformWidth(duration, scale);
   scaleRef.current = scale;
@@ -59,9 +61,10 @@ export function WaveformRange({ duration, peaks, start, end, currentTime, playin
     if (!el) return;
     const onWheel = (event: WheelEvent) => {
       if (!duration) return;
-      if (event.shiftKey) {
+      // Shift+wheel, or a sideways trackpad swipe, pans instead of zooming.
+      if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
         event.preventDefault();
-        el.scrollLeft += event.deltaY || event.deltaX;
+        el.scrollLeft += event.shiftKey ? event.deltaY || event.deltaX : event.deltaX;
         return;
       }
       event.preventDefault();
@@ -109,21 +112,25 @@ export function WaveformRange({ duration, peaks, start, end, currentTime, playin
     ctx.fillStyle = "rgba(20, 26, 33, 0.12)";
     ctx.fillRect(0, 0, Math.max(0, left), HEIGHT);
     ctx.fillRect(Math.max(0, right), 0, Math.max(0, viewWidth - right), HEIGHT);
-    const first = Math.max(0, Math.floor(scrollLeft / width * peaks.length));
-    const last = Math.min(peaks.length, Math.ceil((scrollLeft + viewWidth) / width * peaks.length));
-    const columns = new Uint8Array(Math.ceil(viewWidth) + 1);
-    for (let i = first; i < last; i += 1) {
-      const x = Math.floor((i + 0.5) / peaks.length * width - scrollLeft);
-      if (x >= 0 && x < columns.length) columns[x] = Math.max(columns[x], peaks[i]);
-    }
-    for (let x = 0; x < columns.length; x += 1) {
-      if (!columns[x]) continue;
-      const half = Math.max(1, columns[x] / 255 * HEIGHT * 0.44);
-      ctx.strokeStyle = x >= left && x <= right ? accent : meta;
+    const amps = columnAmplitudes(peaks, width, scrollLeft, viewWidth);
+    const scaleY = HEIGHT * 0.44 / 255;
+    const fillEnvelope = (color: string) => {
       ctx.beginPath();
-      ctx.moveTo(x + 0.5, HEIGHT / 2 - half);
-      ctx.lineTo(x + 0.5, HEIGHT / 2 + half);
-      ctx.stroke();
+      ctx.moveTo(0, HEIGHT / 2);
+      for (let x = 0; x < amps.length; x += 1) ctx.lineTo(x + 0.5, HEIGHT / 2 - Math.max(0.5, amps[x] * scaleY));
+      for (let x = amps.length - 1; x >= 0; x -= 1) ctx.lineTo(x + 0.5, HEIGHT / 2 + Math.max(0.5, amps[x] * scaleY));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    fillEnvelope(meta);
+    if (right > left) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(left, 0, right - left, HEIGHT);
+      ctx.clip();
+      fillEnvelope(accent);
+      ctx.restore();
     }
     ctx.fillStyle = accent;
     if (left >= 0 && left < viewWidth) ctx.fillRect(left - 1, 0, 2, HEIGHT);

@@ -15,7 +15,7 @@ use std::{
 use tauri::State;
 
 const RATE: u32 = 8_000;
-const CACHE_VERSION: u8 = 1;
+const CACHE_VERSION: u8 = 2;
 const MAX_WAVEFORM_JOBS: usize = 4;
 static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 static JOBS: LazyLock<Mutex<HashMap<String, Arc<Job>>>> =
@@ -70,8 +70,14 @@ impl Job {
     }
 }
 
+/// 400 bins per second keeps the envelope detailed at the editor's maximum zoom;
+/// the cap bounds memory and IPC size for very long files.
+const BINS_PER_SEC: f64 = 400.0;
+const MIN_BINS: f64 = 1_200.0;
+const MAX_BINS: f64 = 720_000.0;
+
 fn bins_for(duration: f64) -> usize {
-    (duration * 24.0).ceil().clamp(1_200.0, 24_000.0) as usize
+    (duration * BINS_PER_SEC).ceil().clamp(MIN_BINS, MAX_BINS) as usize
 }
 
 fn cache_path(root: &Path, input: &Path, meta: &fs::Metadata) -> PathBuf {
@@ -304,8 +310,8 @@ mod tests {
 
     #[test]
     fn waveform_bin_count_is_bounded() {
-        assert_eq!(bins_for(1.0), 1200);
-        assert_eq!(bins_for(100.0), 2400);
-        assert_eq!(bins_for(100_000.0), 24_000);
+        assert_eq!(bins_for(1.0), 1_200);
+        assert_eq!(bins_for(100.0), 40_000);
+        assert_eq!(bins_for(100_000.0), 720_000);
     }
 }

@@ -98,24 +98,21 @@ export function ToolWindow({ kind }: { kind: ToolKind }) {
   // 常驻操作栏挂载的那个格子。用 state 而不是 ref：ref 变了不会触发重渲染，
   // 面板第一次渲染时拿到的会永远是 null，按钮就再也进不了这条栏。
   const [footer, setFooter] = useState<HTMLElement | null>(null);
-  const [titleActions, setTitleActions] = useState<HTMLElement | null>(null);
   return (
     // 无边框窗口 + shadow(false)，浅色桌面上整扇窗和背景糊在一起，看不出边界
     // 在哪 —— 用户报的就是这个。补一条 1px 外框；用 --line 不用 --hairline，
     // 后者是 0.1 透明度的界面内分隔线，当窗口边界几乎看不见。
     <div className="h-full flex flex-col text-[var(--ink)] overflow-hidden border border-[var(--line)]">
-      <ToolTitleBar title={toolTitle(kind)} actionsSlot={setTitleActions} />
-      <ToolTitleSlot.Provider value={titleActions}>
-        <ToolFooterSlot.Provider value={footer}>
-          <div className="flex-1 overflow-y-auto">
-            <Suspense fallback={null}>
-              {kind === "separate" ? <SeparatePanel /> : null}
-              {kind === "train" ? <TrainPanel /> : null}
-              {kind === "tts" ? <TtsPanel /> : null}
-            </Suspense>
-          </div>
-        </ToolFooterSlot.Provider>
-      </ToolTitleSlot.Provider>
+      <ToolTitleBar title={toolTitle(kind)} />
+      <ToolFooterSlot.Provider value={footer}>
+        <div className="flex-1 overflow-y-auto">
+          <Suspense fallback={null}>
+            {kind === "separate" ? <SeparatePanel /> : null}
+            {kind === "train" ? <TrainPanel /> : null}
+            {kind === "tts" ? <TtsPanel /> : null}
+          </Suspense>
+        </div>
+      </ToolFooterSlot.Provider>
       <div ref={setFooter} className="flex-none" />
       <WebDialogHost />
       <NativeDialogHint />
@@ -126,18 +123,14 @@ export function ToolWindow({ kind }: { kind: ToolKind }) {
 /** 操作栏要挂到哪个 DOM 结点上。`null` = 还没挂好，先就地渲染。 */
 const ToolFooterSlot = createContext<HTMLElement | null>(null);
 
-/** 标题栏辅助按钮（下载模型／查看说明）挂到哪个 DOM 结点上。 */
-const ToolTitleSlot = createContext<HTMLElement | null>(null);
-
 /**
- * 面板往标题栏送的辅助按钮（C4：三个工具窗口统一顶部结构）。
+ * 面板的辅助按钮（下载模型／查看说明）：正文第一行、说明文字上方左侧并排。
  *
- * 传送到标题栏里工具名的右侧、窗口控制键的左边；槽位还没挂好的首帧
- * 先不渲染 —— 这些是窗口 chrome，不是内容，在正文里闪一下反而乱。
+ * 曾经传送到标题栏里工具名右侧（C4 的顶部统一），实测挤在标题和窗口控制键
+ * 之间太局促，改回内容区就地渲染。
  */
 export function ToolTitleActions({ children }: { children: ReactNode }) {
-  const slot = useContext(ToolTitleSlot);
-  return slot ? createPortal(children, slot) : null;
+  return <div className="mb-3 flex items-center gap-2">{children}</div>;
 }
 
 /**
@@ -166,13 +159,7 @@ export function ToolActions({ children }: { children: ReactNode }) {
   return slot ? createPortal(bar, slot) : bar;
 }
 
-function ToolTitleBar({
-  title,
-  actionsSlot,
-}: {
-  title: string;
-  actionsSlot: (el: HTMLElement | null) => void;
-}) {
+function ToolTitleBar({ title }: { title: string }) {
   const win = () => {
     try {
       return getCurrentWindow();
@@ -191,13 +178,6 @@ function ToolTitleBar({
       >
         {title}
       </span>
-      {/* 辅助操作（下载模型/查看说明）由面板经 ToolTitleActions 送上来，
-          与最右侧窗口控制之间留出间距。 */}
-      <div
-        ref={actionsSlot}
-        className="ml-4 flex items-center gap-1.5"
-        onPointerDown={(e) => e.stopPropagation()}
-      />
       <div
         className="ml-auto flex text-[var(--meta)]"
         onPointerDown={(e) => e.stopPropagation()}

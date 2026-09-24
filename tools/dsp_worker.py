@@ -121,6 +121,8 @@ def main() -> None:
     fx_chain: RealtimeFxChain | None = None
     audio_proc = None
     bridge_writer = None
+    # 壳在本地输出上播麦克风（原生监听），本进程不再开自己的监听流。
+    shell_monitor = False
     bridge_lock = threading.Lock()
     audio_thread = None
     in_mem = out_mem = None
@@ -331,6 +333,8 @@ def main() -> None:
         nonlocal monitor_src_sr, monitor_device
         _close_monitor()
         if not monitor_enabled:
+            return
+        if bridge_writer is not None and shell_monitor:
             return
         name = (monitor_device or "").strip()
         if (not name) or _is_virtual_play(name):
@@ -695,7 +699,7 @@ def main() -> None:
 
     def start_vc(cmd=None) -> None:
         nonlocal samplerate, channels, block_frame, dsp_preset, dsp_params
-        nonlocal bridge_writer
+        nonlocal bridge_writer, shell_monitor
         stop_stream()
         data = _read_inuse()
         if isinstance(cmd, dict):
@@ -746,6 +750,7 @@ def main() -> None:
             block_frame,
             ",".join(voice_chain.active()) if voice_chain else "-",
         )
+        shell_monitor = bool(bridge_name) and bool(cmd.get("pcm_bridge_monitor"))
         if bridge_name:
             from tools.audio_pcm_bridge import PcmBridgeWriter
 

@@ -368,6 +368,12 @@ async fn config_set(
             }
         }
         let out = config::update(&root, patch.clone())?;
+        if ["monitor_self", "monitor_device", "audio_preview_device_id"]
+            .iter()
+            .any(|key| patch.contains_key(*key))
+        {
+            audio_voice::refresh_mic_monitor(&root);
+        }
         // 壁纸路径也可能由导入配置档案写进来（不是走选择框），同样要放行。
         if let Some(Value::String(p)) = patch.get("wallpaper_path") {
             asset_scope::grant_file(&app, p);

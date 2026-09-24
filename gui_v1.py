@@ -410,6 +410,8 @@ if __name__ == "__main__":
             self._pending_model = None
             self._pending_model_lock = threading.Lock()
             self._pcm_bridge_lock = threading.Lock()
+            # 壳在本地输出上播麦克风（原生监听），本进程不再开自己的监听流。
+            self._pcm_bridge_monitor = False
             self._audio_loop_thread = None
             # 后台线程建好的新 RVC；音频线程只做指针替换。
             self._swap_ready = None
@@ -2031,6 +2033,11 @@ if __name__ == "__main__":
             self._monitor_status = ""
             self._monitor_err_count = 0
             if not bool(getattr(self.gui_config, "monitor_enabled", False)):
+                return
+            if getattr(self, "_pcm_bridge_writer", None) is not None and getattr(
+                self, "_pcm_bridge_monitor", False
+            ):
+                self._monitor_status = "ok:shell"
                 return
             name = str(getattr(self.gui_config, "monitor_device", "") or "").strip()
             # Auto-fix virtual / empty monitor targets (common bug: Steam Speakers)
@@ -3943,6 +3950,7 @@ if __name__ == "__main__":
             if isinstance(cmd, dict):
                 self._pcm_bridge_name = str(cmd.get("pcm_bridge_name") or "")
                 self._pcm_bridge_epoch = int(cmd.get("pcm_bridge_epoch") or 0)
+                self._pcm_bridge_monitor = bool(cmd.get("pcm_bridge_monitor"))
             dsp_hint = False
             if isinstance(cmd, dict):
                 dsp_hint = bool(cmd.get("dsp_enabled")) or bool(
@@ -4203,6 +4211,7 @@ if __name__ == "__main__":
                 self.stop_stream()
                 self._pcm_bridge_name = ""
                 self._pcm_bridge_epoch = 0
+                self._pcm_bridge_monitor = False
             except Exception as e:
                 traceback.print_exc()
                 self._worker_write_status(

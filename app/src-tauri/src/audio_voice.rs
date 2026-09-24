@@ -126,8 +126,11 @@ struct VoiceState {
     /// Most recently started entry and device, so replay still works after it ended.
     recent: Option<(String, String)>,
     /// The same instances on the local output, so the user hears what others hear.
-    /// Separate device: its failure never stops voice output.
+    /// Separate device: its failure never stops voice output. While the voice
+    /// changer runs it also carries the processed microphone.
     monitor: Option<VoiceBus>,
+    /// Fixed at engine start: the shell, not the worker, monitors the microphone.
+    shell_mic_monitor: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -159,6 +162,7 @@ impl VoiceState {
             last: VoicePlaybackStatus::idle(),
             recent: None,
             monitor: None,
+            shell_mic_monitor: false,
         }
     }
 
@@ -170,25 +174,132 @@ impl VoiceState {
     fn with_monitor(&mut self, action: impl FnOnce(&mut VoiceBus)) {
         if let Some(monitor) = self.monitor.as_mut() {
             action(monitor);
-            if !monitor.has_music() || monitor.failed() {
+            if (!monitor.has_music() && !monitor.monitoring_input()) || monitor.failed() {
                 self.monitor = None;
             }
         }
     }
 }
 
-/// Local output that mirrors voice playback, or `None` when monitoring is off,
-/// no local device is chosen, or it is the voice device itself.
-fn monitor_device(root: &Path, voice_device: &str) -> Option<String> {
+/// The one local output for previews, music monitoring and the microphone:
+/// the audio page's local output, else the settings page's monitor device
+/// matched by name. Never the voice device or a virtual cable.
+fn local_output(root: &Path, voice_device: &str) -> Option<String> {
     let config = crate::config::read(root);
-    if config.get("audio_music_monitor").and_then(serde_json::Value::as_bool) == Some(false) {
-        return None;
-    }
-    config
+    let chosen = config
         .get("audio_preview_device_id")
         .and_then(|value| value.as_str())
-        .filter(|id| !id.is_empty() && *id != voice_device)
-        .map(str::to_string)
+        .filter(|id| !id.is_empty() && *id != voice_device);
+    if let Some(id) = chosen {
+        return Some(id.to_string());
+    }
+    let name = config.get("monitor_device").and_then(|value| value.as_str())?;
+    let devices = output::devices().ok()?;
+    match_output_name(
+        name,
+        devices.iter().map(|device| (device.id.as_str(), device.name.as_str())),
+        voice_device,
+    )
+}
+
+/// PortAudio's MME names are cut at 31 characters, so a long enough prefix counts.
+fn match_output_name<'a>(
+    name: &str,
+    devices: impl Iterator<Item = (&'a str, &'a str)>,
+    voice_device: &str,
+) -> Option<String> {
+    let wanted = name.trim().to_lowercase();
+    if wanted.is_empty() || wanted.contains("cable") {
+        return None;
+    }
+    devices
+        .filter(|(id, _)| *id != voice_device)
+        .find(|(_, candidate)| {
+            let candidate = candidate.trim().to_lowercase();
+            candidate == wanted
+                || (wanted.chars().count() >= 20
+                    && (candidate.starts_with(&wanted) || wanted.starts_with(&candidate)))
+        })
+        .map(|(id, _)| id.to_string())
+}
+
+/// Local output that mirrors voice playback, or `None` when music monitoring is off.
+fn monitor_device(root: &Path, voice_device: &str) -> Option<String> {
+    if crate::config::read(root)
+        .get("audio_music_monitor")
+        .and_then(serde_json::Value::as_bool)
+        == Some(false)
+    {
+        return None;
+    }
+    local_output(root, voice_device)
+}
+
+/// Bring the microphone copy on the local output in line with the settings.
+/// Only runs while the shell owns monitoring for this engine session.
+fn sync_mic_monitor(voice: &mut VoiceState, root: &Path) {
+    let Some(bus) = voice.bus.as_ref() else {
+        return;
+    };
+    let wanted = voice.shell_mic_monitor
+        && bus.microphone_attached()
+        && crate::config::read(root)
+            .get("monitor_self")
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+    let target = wanted
+        .then(|| local_output(root, bus.device_id()))
+        .flatten();
+    let source = bus.format();
+    let current = voice.monitor.as_ref().map(|monitor| monitor.device_id().to_string());
+    let active = bus.has_mic_tee();
+    if active && target.is_some() && current == target {
+        return;
+    }
+    if active {
+        release_mic_monitor(voice);
+    }
+    let Some(target) = target else {
+        return;
+    };
+    if voice
+        .monitor
+        .as_ref()
+        .is_none_or(|monitor| monitor.device_id() != target || monitor.failed())
+    {
+        voice.monitor = match VoiceBus::open(target) {
+            Ok(monitor) => Some(monitor),
+            Err(error) => {
+                crate::logging::shell_log!("microphone monitor: {error}");
+                None
+            }
+        };
+    }
+    let Some(monitor) = voice.monitor.as_mut() else {
+        return;
+    };
+    match monitor.take_monitor_input(source) {
+        Ok(tee) => {
+            if let Some(bus) = voice.bus.as_ref() {
+                bus.set_mic_tee(Some(tee));
+            }
+        }
+        Err(error) => crate::logging::shell_log!("microphone monitor: {error}"),
+    }
+}
+
+fn release_mic_monitor(voice: &mut VoiceState) {
+    let tee = voice.bus.as_ref().and_then(|bus| bus.set_mic_tee(None));
+    if let (Some(tee), Some(monitor)) = (tee, voice.monitor.as_mut()) {
+        monitor.return_monitor_input(tee);
+    }
+    voice.with_monitor(|_| {});
+}
+
+/// Settings for monitoring changed while the voice changer may be running.
+pub fn refresh_mic_monitor(root: &Path) {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    sync_mic_monitor(&mut voice, root);
 }
 
 static VOICE: Mutex<VoiceState> = Mutex::new(VoiceState::new());
@@ -269,14 +380,20 @@ pub fn begin_engine_start(root: &Path) -> Result<EngineStartGuard, String> {
                 .as_ref()
                 .is_none_or(|bus| bus.device_id() != selected || bus.failed())
             {
-                voice.bus = Some(VoiceBus::open(selected)?);
+                voice.bus = Some(VoiceBus::open(selected.clone())?);
             }
+            release_mic_monitor(&mut voice);
             let bus = voice.bus.as_mut().unwrap();
             if bus.microphone_attached() {
                 bus.detach_microphone()?;
             }
             match bus.attach_microphone() {
-                Ok(descriptor) => Some(descriptor),
+                Ok(mut descriptor) => {
+                    voice.shell_mic_monitor = local_output(root, &selected).is_some();
+                    descriptor.monitor = voice.shell_mic_monitor;
+                    sync_mic_monitor(&mut voice, root);
+                    Some(descriptor)
+                }
                 Err(error) => {
                     voice.bus = None;
                     return Err(error);
@@ -301,6 +418,8 @@ pub fn begin_engine_start(root: &Path) -> Result<EngineStartGuard, String> {
 
 pub fn on_engine_stopped() -> Result<(), String> {
     let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    release_mic_monitor(&mut voice);
+    voice.shell_mic_monitor = false;
     #[cfg(windows)]
     if let Some(bus) = voice.bus.as_mut() {
         if let Err(error) = bus.detach_microphone() {
@@ -637,7 +756,7 @@ fn start_entry_placed(
         let status = playback_status(voice.bus.as_ref().unwrap(), request);
         voice.last = VoicePlaybackStatus::idle();
         voice.recent = Some((entry_id.clone(), device_id));
-        play_monitor(&mut voice, monitor, NewMonitor {
+        play_monitor(&mut voice, root, monitor, NewMonitor {
             id: request,
             entry_id,
             name: source.name,
@@ -672,6 +791,7 @@ struct NewMonitor {
 /// anything going wrong here only drops the local copy.
 fn play_monitor(
     voice: &mut VoiceState,
+    root: &Path,
     prepared: Option<(String, decode::DecodedStream, u64)>,
     next: NewMonitor,
 ) {
@@ -707,7 +827,10 @@ fn play_monitor(
         .as_ref()
         .is_none_or(|monitor| monitor.device_id() != monitor_id || monitor.failed())
     {
+        // The microphone copy lives on this bus too; move it along.
+        release_mic_monitor(voice);
         voice.monitor = VoiceBus::open(monitor_id).ok();
+        sync_mic_monitor(voice, root);
     }
     voice.with_monitor(|monitor| {
         let played = monitor.play_decoded(NewMusic {
@@ -1006,6 +1129,23 @@ mod tests {
         assert_eq!(ENGINE_STARTING.load(Ordering::Acquire), 1);
         drop(first);
         assert_eq!(ENGINE_STARTING.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn monitor_device_names_match_exactly_or_by_a_long_prefix() {
+        let devices = [
+            ("cable", "CABLE Input (VB-Audio Virtual Cable)"),
+            ("phones", "耳机 (Realtek(R) Audio Headphones Output)"),
+            ("speakers", "Speakers"),
+        ];
+        let find = |name: &str, voice: &str| match_output_name(name, devices.iter().copied(), voice);
+        assert_eq!(find("speakers", "cable").as_deref(), Some("speakers"));
+        // MME truncates to 31 characters.
+        assert_eq!(find("耳机 (Realtek(R) Audio Headphones", "cable").as_deref(), Some("phones"));
+        assert_eq!(find("Speak", "cable"), None);
+        assert_eq!(find("CABLE Input (VB-Audio Virtual Cable)", "phones"), None);
+        assert_eq!(find("Speakers", "speakers"), None);
+        assert_eq!(find("", "cable"), None);
     }
 
     #[test]

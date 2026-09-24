@@ -8,6 +8,7 @@ use fabric_audio::{
     decode::{DecodedStream, Decoder},
     format::PcmFormat,
     output::{self, MusicControl, OutputStream, Track, TrackControl},
+    resample::Converter,
 };
 use rtrb::{Producer, RingBuffer};
 #[cfg(windows)]
@@ -19,12 +20,15 @@ use std::{
 use std::{
     sync::{
         atomic::{AtomicBool as LoopFlag, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 
 const MIC_BUFFER_SECONDS: f64 = 0.5;
+/// Microphone copied to the local output drops input beyond this much backlog,
+/// so a slower local clock never turns into growing monitor delay.
+const MONITOR_MAX_LAG_SECONDS: f64 = 0.06;
 const SWAP_TIMEOUT: Duration = Duration::from_millis(750);
 /// Start, pause, stop and replacement ramp over this long instead of clicking.
 const FADE_SECONDS: f64 = 0.008;
@@ -64,7 +68,36 @@ const MIC_MAX_LAG_MS: u32 = 400;
 pub struct BridgeDescriptor {
     pub name: String,
     pub epoch: u64,
+    /// The shell plays the microphone on the local output; the worker must not
+    /// open its own monitor stream.
+    pub monitor: bool,
 }
+
+/// Microphone PCM handed from the voice bus to the local output's mixer.
+pub struct MicTee {
+    producer: Producer<f32>,
+    converter: Converter,
+    capacity: usize,
+    max_fill: usize,
+}
+
+impl MicTee {
+    fn push(&mut self, samples: &[f32]) {
+        if self.capacity - self.producer.slots() > self.max_fill {
+            return;
+        }
+        let producer = &mut self.producer;
+        self.converter.process(samples, |frame| {
+            if producer.slots() >= frame.len() {
+                for sample in frame {
+                    let _ = producer.push(*sample);
+                }
+            }
+        });
+    }
+}
+
+type TeeSlot = Arc<Mutex<Option<MicTee>>>;
 
 #[cfg(windows)]
 struct MicReader {
@@ -174,8 +207,9 @@ pub struct VoiceBus {
     music_control: MusicControl,
     music: Vec<Option<Music>>,
     mic_producer: Option<Producer<f32>>,
-    #[cfg(windows)]
     mic_control: Arc<TrackControl>,
+    /// Filled while this bus's microphone is also played on the local output.
+    mic_tee: TeeSlot,
     #[cfg(windows)]
     mic_reader: Option<MicReader>,
 }
@@ -199,8 +233,8 @@ impl VoiceBus {
             music_control,
             music: (0..MAX_MUSIC_INSTANCES).map(|_| None).collect(),
             mic_producer: Some(mic_producer),
-            #[cfg(windows)]
             mic_control,
+            mic_tee: Arc::new(Mutex::new(None)),
             #[cfg(windows)]
             mic_reader: None,
         })
@@ -243,6 +277,7 @@ impl VoiceBus {
         let descriptor = BridgeDescriptor {
             name: mapping.name().to_string(),
             epoch: header.epoch,
+            monitor: false,
         };
         let mut producer = self
             .mic_producer
@@ -254,6 +289,7 @@ impl VoiceBus {
         let failure = failed.clone();
         let channels = self.format.channels as usize;
         let max_lag = (self.format.sample_rate / 1000 * MIC_MAX_LAG_MS).max(1);
+        let tee = self.mic_tee.clone();
         let thread = std::thread::Builder::new()
             .name("fabric-microphone-bridge".into())
             .spawn(move || {
@@ -268,14 +304,17 @@ impl VoiceBus {
                     match mapping.read_into(&mut samples[..free_frames * channels], max_lag) {
                         Ok(0) => std::thread::sleep(Duration::from_millis(2)),
                         Ok(frames) => {
-                            for frame in samples[..frames * channels].chunks_exact(channels) {
-                                for sample in frame {
-                                    let _ = producer.push(if sample.is_finite() {
-                                        *sample
-                                    } else {
-                                        0.0
-                                    });
+                            let block = &mut samples[..frames * channels];
+                            for sample in block.iter_mut() {
+                                if !sample.is_finite() {
+                                    *sample = 0.0;
                                 }
+                            }
+                            for sample in block.iter() {
+                                let _ = producer.push(*sample);
+                            }
+                            if let Some(tee) = tee.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                                tee.push(block);
                             }
                         }
                         Err(_) => {
@@ -500,7 +539,57 @@ impl VoiceBus {
     }
 
     pub fn microphone_attached(&self) -> bool {
-        self.mic_producer.is_none()
+        #[cfg(windows)]
+        return self.mic_reader.is_some();
+        #[cfg(not(windows))]
+        false
+    }
+
+    /// Hand this bus's microphone track to another bus's reader, converting
+    /// from `source` to this device's format.
+    pub fn take_monitor_input(&mut self, source: PcmFormat) -> Result<MicTee, String> {
+        if self.microphone_attached() {
+            return Err("pcm_bridge_already_attached".into());
+        }
+        let producer = self.mic_producer.take().ok_or("audio_monitor_input_taken")?;
+        let capacity = producer.buffer().capacity();
+        let tee = Converter::new(source, self.format).map(|converter| MicTee {
+            capacity,
+            max_fill: self
+                .format
+                .samples_for(MONITOR_MAX_LAG_SECONDS)
+                .unwrap_or(capacity)
+                .min(capacity),
+            producer,
+            converter,
+        });
+        match tee {
+            Ok(tee) => {
+                self.mic_control.stopped.store(false, Ordering::Release);
+                Ok(tee)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Take the microphone track back and drop what it still holds.
+    pub fn return_monitor_input(&mut self, tee: MicTee) {
+        self.mic_control.stopped.store(true, Ordering::Release);
+        self.mic_control.flush.store(true, Ordering::Release);
+        self.mic_producer = Some(tee.producer);
+    }
+
+    pub fn monitoring_input(&self) -> bool {
+        self.mic_producer.is_none() && !self.microphone_attached()
+    }
+
+    /// Install or remove the copy of this bus's microphone; returns the previous one.
+    pub fn set_mic_tee(&self, tee: Option<MicTee>) -> Option<MicTee> {
+        std::mem::replace(&mut *self.mic_tee.lock().unwrap_or_else(|e| e.into_inner()), tee)
+    }
+
+    pub fn has_mic_tee(&self) -> bool {
+        self.mic_tee.lock().unwrap_or_else(|e| e.into_inner()).is_some()
     }
 
     pub fn microphone_failed(&self) -> bool {
@@ -525,6 +614,33 @@ mod tests {
         assert_eq!(music_slot(MusicPlacement::ReplaceAll, ids.into_iter()).unwrap(), 0);
         assert_eq!(music_slot(MusicPlacement::ReplaceInstance(9), ids.into_iter()).unwrap_err(),
             "audio_playback_cancelled");
+    }
+
+    #[test]
+    fn microphone_copy_converts_and_drops_input_instead_of_building_delay() {
+        let (producer, mut consumer) = RingBuffer::new(64);
+        let mut tee = MicTee {
+            capacity: 64,
+            max_fill: 8,
+            producer,
+            converter: Converter::new(
+                PcmFormat { sample_rate: 48000, channels: 1 },
+                PcmFormat { sample_rate: 48000, channels: 2 },
+            )
+            .unwrap(),
+        };
+        tee.push(&[0.1, 0.2, 0.3]);
+        let mut got = Vec::new();
+        while let Ok(sample) = consumer.pop() {
+            got.push(sample);
+        }
+        assert_eq!(got, [0.1, 0.1, 0.2, 0.2]);
+        // Nobody drains: once the backlog passes the limit, input is dropped.
+        for _ in 0..20 {
+            tee.push(&[0.5; 4]);
+        }
+        let backlog = 64 - tee.producer.slots();
+        assert!(backlog <= 8 + 8, "{backlog}");
     }
 
     #[test]

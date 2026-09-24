@@ -1529,6 +1529,7 @@ pub fn start_vc_with_bridge(
     if let Some(bridge) = bridge {
         payload.insert("pcm_bridge_name".into(), json!(bridge.name));
         payload.insert("pcm_bridge_epoch".into(), json!(bridge.epoch));
+        payload.insert("pcm_bridge_monitor".into(), json!(bridge.monitor));
     }
     // 模型身份冻结进命令本体：worker 处理 start 时用载荷里的 pth/index，
     // 不再以认领那一刻的 inuse 为准 —— 启动中途用户又点了别的音色，

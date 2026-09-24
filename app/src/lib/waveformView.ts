@@ -12,9 +12,12 @@ export function clampPxPerSec(value: number, minFit: number): number {
   return Math.min(MAX_PX_PER_SEC, Math.max(minFit, value));
 }
 
-/** `deltaY < 0` zooms in. */
+/** Wheel distance (pixels) that doubles or halves the zoom; one mouse notch is about 100. */
+export const ZOOM_DOUBLING_DELTA = 250;
+
+/** `deltaY < 0` zooms in, proportionally to how far the wheel moved. */
 export function zoomPxPerSec(current: number, deltaY: number, minFit: number): number {
-  const factor = deltaY < 0 ? 1.15 : 1 / 1.15;
+  const factor = Math.min(2, Math.max(0.5, 2 ** (-deltaY / ZOOM_DOUBLING_DELTA)));
   return clampPxPerSec(current * factor, minFit);
 }
 

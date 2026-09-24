@@ -69,7 +69,9 @@ export function WaveformRange({ duration, peaks, start, end, currentTime, playin
       }
       event.preventDefault();
       const oldScale = scaleRef.current || fit;
-      const next = Math.min(maxScale, zoomPxPerSec(oldScale, event.deltaY, fit));
+      // Line-based wheels (deltaMode 1) report rows, not pixels.
+      const delta = event.deltaMode === 1 ? event.deltaY * 40 : event.deltaY;
+      const next = Math.min(maxScale, zoomPxPerSec(oldScale, delta, fit));
       const cursor = event.clientX - el.getBoundingClientRect().left;
       pendingScroll.current = scrollAfterZoom(el.scrollLeft, cursor, waveformWidth(duration, oldScale), waveformWidth(duration, next));
       setPxPerSec(next);

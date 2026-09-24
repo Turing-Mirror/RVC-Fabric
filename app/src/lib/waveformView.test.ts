@@ -22,6 +22,10 @@ it("zooms in and out around the current scale and stays in range", () => {
   const minFit = 40;
   expect(zoomPxPerSec(80, -1, minFit)).toBeGreaterThan(80);
   expect(zoomPxPerSec(80, 1, minFit)).toBeLessThan(80);
+  // One mouse notch zooms noticeably; a fine trackpad step only slightly.
+  expect(zoomPxPerSec(80, -100, minFit)).toBeGreaterThan(100);
+  expect(zoomPxPerSec(80, -4, minFit)).toBeLessThan(82);
+  expect(zoomPxPerSec(80, -10000, minFit)).toBe(160);
   expect(clampPxPerSec(1, minFit)).toBe(minFit);
   expect(clampPxPerSec(9999, minFit)).toBe(MAX_PX_PER_SEC);
 });

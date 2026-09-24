@@ -16,6 +16,9 @@
     { "action": "stop-current", "requires_entry": false },
     { "action": "stop-all", "requires_entry": false },
     { "action": "stop-preview", "requires_entry": false },
+    { "action": "volume-up", "requires_entry": false },
+    { "action": "volume-down", "requires_entry": false },
+    { "action": "mute-audio", "requires_entry": false },
     { "action": "show-audio", "requires_entry": false }
   ]
 }

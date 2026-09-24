@@ -69,6 +69,7 @@ struct Music {
     id: u64,
     name: String,
     length: u64,
+    base_gain: f32,
     control: Arc<TrackControl>,
     decoder: Decoder,
 }
@@ -268,6 +269,7 @@ impl VoiceBus {
         name: String,
         decoded: DecodedStream,
         gain: f32,
+        master_gain: f32,
         overlay: bool,
     ) -> Result<(), String> {
         if decoded.format != self.format {
@@ -275,7 +277,7 @@ impl VoiceBus {
         }
         let length = decoded.range.frames();
         let (track, control) = Track::new(decoded.pcm, Some(length));
-        control.set_gain(gain)?;
+        control.set_gain(gain * master_gain)?;
         control.paused.store(true, Ordering::Release);
         let slot = if overlay {
             self.music
@@ -300,6 +302,7 @@ impl VoiceBus {
             id,
             name,
             length,
+            base_gain: gain,
             control: control.clone(),
             decoder: decoded.decoder,
         });
@@ -327,6 +330,13 @@ impl VoiceBus {
             .find(|music| music.id == id)
             .ok_or("audio_playback_not_playing")?;
         music.control.paused.store(paused, Ordering::Release);
+        Ok(())
+    }
+
+    pub fn set_master_gain(&mut self, gain: f32) -> Result<(), String> {
+        for music in self.music.iter().flatten() {
+            music.control.set_gain(music.base_gain * gain)?;
+        }
         Ok(())
     }
 

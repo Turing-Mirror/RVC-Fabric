@@ -200,6 +200,7 @@ pub fn run_audio_binding(app: &AppHandle, binding: AudioBinding) -> Result<(), S
         return crate::tool_window::focus_main_audio(app);
     }
     let root = root_of(app).ok_or("audio_hotkey_root_missing")?;
+    let app = app.clone();
     std::thread::Builder::new()
         .name("fabric-audio-hotkey".into())
         .spawn(move || {
@@ -220,6 +221,16 @@ pub fn run_audio_binding(app: &AppHandle, binding: AudioBinding) -> Result<(), S
                 "stop-current" => crate::audio_voice::stop_latest().map(|_| ()),
                 "stop-all" => { crate::audio_voice::audio_voice_stop(); Ok(()) },
                 "stop-preview" => { crate::audio_preview::audio_preview_stop(); Ok(()) },
+                "volume-up" | "volume-down" | "mute-audio" => {
+                    let status = match binding.action.as_str() {
+                        "volume-up" => crate::audio_voice::adjust_volume(&root, 1),
+                        "volume-down" => crate::audio_voice::adjust_volume(&root, -1),
+                        _ => crate::audio_voice::toggle_mute(&root),
+                    };
+                    status.map(|status| {
+                        let _ = app.emit("audio-volume://changed", status);
+                    })
+                }
                 _ => Err("audio_hotkey_action_invalid".into()),
             };
             if let Err(error) = result {

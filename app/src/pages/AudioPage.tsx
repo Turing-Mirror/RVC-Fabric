@@ -41,6 +41,7 @@ type Library = {
 };
 type Device = { id: string; name: string };
 type PreviewStatus = PlaybackStatus;
+type AudioVolumeStatus = { volume: number; muted: boolean };
 
 const EMPTY: Library = { revision: 0, sources: [], assets: [], entries: [] };
 
@@ -65,6 +66,7 @@ export function AudioPage() {
   const [preview, setPreview] = useState<PreviewStatus | null>(null);
   const [voice, setVoice] = useState<VoicePlaybackStatus | null>(null);
   const [voiceInstances, setVoiceInstances] = useState<VoicePlaybackStatus[]>([]);
+  const [volume, setVolume] = useState<AudioVolumeStatus>({ volume: 1, muted: false });
   const [busy, setBusy] = useState(false);
   const [voicePreparing, setVoicePreparing] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -98,13 +100,20 @@ export function AudioPage() {
         }
       })
       .catch(() => {});
+    void invoke<AudioVolumeStatus>("audio_voice_volume_get")
+      .then((value) => { if (alive && value) setVolume(value); })
+      .catch(() => {});
     const listener = listen("audio-library://changed", () => {
       void invoke<Library>("audio_library_get").then(acceptLibrary).catch(() => {});
+    });
+    const volumeListener = listen<AudioVolumeStatus>("audio-volume://changed", (event) => {
+      if (alive && event.payload) setVolume(event.payload);
     });
     const scanListener = listen<number>("audio-library://scan", (event) => setScanned(event.payload));
     return () => {
       alive = false;
       void listener.then((off) => off());
+      void volumeListener.then((off) => off());
       void scanListener.then((off) => off());
     };
   }, [t, acceptLibrary]);
@@ -204,6 +213,11 @@ export function AudioPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const changeVolume = (command: string, args?: Record<string, unknown>) => {
+    void invoke<AudioVolumeStatus>(command, args).then(setVolume)
+      .catch(() => setError(t("audio.operationFailed")));
   };
 
   const pick = (kind: "file" | "directory") => {
@@ -433,6 +447,12 @@ export function AudioPage() {
             setVoice(status);
             setVoiceInstances([]);
           }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mt-3 text-[12px] text-[var(--meta)]">
+          <span className="mr-1 tabular-nums">{t("audio.masterVolume")}：{Math.round(volume.volume * 100)}%</span>
+          <Btn onClick={() => changeVolume("audio_voice_volume_adjust", { direction: -1 })}>{t("audio.volumeDown")}</Btn>
+          <Btn onClick={() => changeVolume("audio_voice_volume_adjust", { direction: 1 })}>{t("audio.volumeUp")}</Btn>
+          <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
         </div>
         {voice?.state === "error" ? <p role="alert" className="text-[12px] text-[var(--danger)] mt-3">{t("audio.voicePlaybackFailed")}</p> : null}
         {voiceInstances.length > 0 ? <div className="mt-3 space-y-2" aria-label={t("audio.activePlayback")}>

@@ -146,6 +146,9 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     "stop-current": t("audio.hotkeyStopCurrent"),
     "stop-all": t("audio.stopAll"),
     "stop-preview": t("audio.hotkeyStopPreview"),
+    "volume-up": t("audio.volumeUp"),
+    "volume-down": t("audio.volumeDown"),
+    "mute-audio": t("audio.hotkeyToggleMute"),
     "show-audio": t("audio.hotkeyShowAudio"),
   };
   const statusLabels: Record<string, string> = {

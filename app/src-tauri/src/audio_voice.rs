@@ -10,6 +10,7 @@ use fabric_audio::{
     output,
 };
 use serde::Serialize;
+use serde_json::{json, Map};
 use std::{
     path::Path,
     sync::{
@@ -18,7 +19,96 @@ use std::{
     },
     time::Duration,
 };
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
+
+const VOLUME_STEPS: i16 = 10;
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct AudioVolumeStatus {
+    pub volume: f32,
+    pub muted: bool,
+}
+
+fn volume_settings(root: &Path) -> AudioVolumeStatus {
+    let config = crate::config::read(root);
+    AudioVolumeStatus {
+        volume: config
+            .get("audio_music_volume")
+            .and_then(serde_json::Value::as_f64)
+            .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
+            .unwrap_or(1.0) as f32,
+        muted: config
+            .get("audio_music_muted")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+    }
+}
+
+fn update_volume(
+    root: &Path,
+    update: impl FnOnce(AudioVolumeStatus) -> AudioVolumeStatus,
+) -> Result<AudioVolumeStatus, String> {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let previous = volume_settings(root);
+    let next = update(previous);
+    if next != previous {
+        let mut patch = Map::new();
+        patch.insert("audio_music_volume".into(), json!(next.volume));
+        patch.insert("audio_music_muted".into(), json!(next.muted));
+        crate::config::update(root, patch)?;
+        if let Some(bus) = voice.bus.as_mut() {
+            bus.set_master_gain(if next.muted { 0.0 } else { next.volume })?;
+        }
+    }
+    Ok(next)
+}
+
+pub fn adjust_volume(root: &Path, direction: i8) -> Result<AudioVolumeStatus, String> {
+    if !matches!(direction, -1 | 1) {
+        return Err("audio_volume_direction_invalid".into());
+    }
+    update_volume(root, |previous| AudioVolumeStatus {
+        volume: ((previous.volume * VOLUME_STEPS as f32).round() as i16 + direction as i16)
+            .clamp(0, VOLUME_STEPS) as f32
+            / VOLUME_STEPS as f32,
+        muted: false,
+    })
+}
+
+pub fn toggle_mute(root: &Path) -> Result<AudioVolumeStatus, String> {
+    update_volume(root, |previous| AudioVolumeStatus {
+        muted: !previous.muted,
+        ..previous
+    })
+}
+
+#[tauri::command]
+pub fn audio_voice_volume_get(
+    state: State<'_, Mutex<crate::AppState>>,
+) -> Result<AudioVolumeStatus, String> {
+    Ok(volume_settings(&crate::root_clone(&state)?))
+}
+
+#[tauri::command]
+pub fn audio_voice_volume_adjust(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+    direction: i8,
+) -> Result<AudioVolumeStatus, String> {
+    let status = adjust_volume(&crate::root_clone(&state)?, direction)?;
+    let _ = app.emit("audio-volume://changed", status);
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn audio_voice_volume_toggle(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+) -> Result<AudioVolumeStatus, String> {
+    let status = toggle_mute(&crate::root_clone(&state)?)?;
+    let _ = app.emit("audio-volume://changed", status);
+    Ok(status)
+}
 
 struct VoiceState {
     bus: Option<VoiceBus>,
@@ -391,7 +481,16 @@ pub fn start_entry(
             voice.bus = Some(VoiceBus::open(device_id)?);
         }
         let bus = voice.bus.as_mut().unwrap();
-        if let Err(error) = bus.play_decoded(request, source.name, decoded, source.gain, overlay) {
+        let volume = volume_settings(root);
+        let master_gain = if volume.muted { 0.0 } else { volume.volume };
+        if let Err(error) = bus.play_decoded(
+            request,
+            source.name,
+            decoded,
+            source.gain,
+            master_gain,
+            overlay,
+        ) {
             if (error.starts_with("audio_music_swap")
                 || voice.bus.as_ref().is_some_and(VoiceBus::failed))
                 && !voice
@@ -541,5 +640,26 @@ mod tests {
         assert_eq!(value["instance_id"], 7);
         assert_eq!(value["active_count"], 2);
         assert!(value.get("playback").is_none());
+    }
+
+    #[test]
+    fn volume_changes_are_persistent_and_mute_keeps_the_level() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("fabric-volume-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        assert_eq!(volume_settings(&root).volume, 1.0);
+        assert_eq!(adjust_volume(&root, -1).unwrap().volume, 0.9);
+        let muted = toggle_mute(&root).unwrap();
+        assert!(muted.muted);
+        assert_eq!(muted.volume, 0.9);
+        let raised = adjust_volume(&root, 1).unwrap();
+        assert!(!raised.muted);
+        assert_eq!(raised.volume, 1.0);
+        assert_eq!(volume_settings(&root), raised);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

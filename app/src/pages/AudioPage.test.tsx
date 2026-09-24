@@ -67,6 +67,29 @@ describe("音频库页面", () => {
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "ensure_engine")).toBe(false);
   });
 
+  it("语音音频总音量与静音使用独立的原生控制", async () => {
+    const original = shell.invoke.getMockImplementation()!;
+    shell.invoke.mockImplementation(async (cmd, args) => {
+      if (cmd === "audio_voice_volume_get") return { volume: 0.8, muted: false };
+      if (cmd === "audio_voice_volume_adjust") return { volume: 0.7, muted: false };
+      if (cmd === "audio_voice_volume_toggle") return { volume: 0.7, muted: true };
+      return original(cmd, args);
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    expect(mounted.container.textContent).toContain("音频总音量：80%");
+    const button = (label: string) => Array.from(mounted.container.querySelectorAll("button"))
+      .find((item) => item.textContent === label)!;
+    act(() => button("降低音量").click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_volume_adjust", { direction: -1 });
+    act(() => button("静音").click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_volume_toggle", undefined);
+    expect(mounted.container.textContent).toContain("取消静音");
+  });
+
   it("重新定位失联文件时按稳定资产 ID 提交", async () => {
     shell.invoke.mockImplementation(async (cmd) => {
       if (cmd === "config_get") return { ui_locale: "zh-CN" };

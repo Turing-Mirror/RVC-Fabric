@@ -2660,6 +2660,7 @@ pub fn run() {
             audio_voice::audio_voice_replay,
             audio_voice::audio_voice_seek,
             audio_voice::audio_voice_loop,
+            audio_voice::audio_voice_monitor_set,
             audio_voice::audio_voice_stop_instance,
             audio_voice::audio_voice_stop,
             audio_voice::audio_voice_volume_get,

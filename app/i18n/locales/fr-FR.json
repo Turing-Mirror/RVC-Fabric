@@ -101,6 +101,7 @@
     "replay": "Rejouer",
     "loop": "Boucle",
     "loopByDefault": "Lire en boucle par défaut",
+    "monitorMusic": "Lire aussi sur la sortie locale pour l'entendre",
     "hotkeyToggleLoop": "Activer ou désactiver la boucle",
     "stop": "Arrêter",
     "clipName": "Nom de l'extrait",

@@ -69,6 +69,7 @@ export function AudioPage() {
   const [voice, setVoice] = useState<VoicePlaybackStatus | null>(null);
   const [voiceInstances, setVoiceInstances] = useState<VoicePlaybackStatus[]>([]);
   const [volume, setVolume] = useState<AudioVolumeStatus>({ volume: 1, muted: false });
+  const [monitor, setMonitor] = useState(true);
   const [busy, setBusy] = useState(false);
   const [voicePreparing, setVoicePreparing] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -100,6 +101,7 @@ export function AudioPage() {
         if (alive && typeof cfg.audio_voice_device_id === "string") {
           setVoiceDeviceId(cfg.audio_voice_device_id);
         }
+        if (alive) setMonitor(cfg.audio_music_monitor !== false);
       })
       .catch(() => {});
     void invoke<AudioVolumeStatus>("audio_voice_volume_get")
@@ -456,6 +458,12 @@ export function AudioPage() {
           <Btn onClick={() => changeVolume("audio_voice_volume_adjust", { direction: 1 })}>{t("audio.volumeUp")}</Btn>
           <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
         </div>
+        <label className="flex items-center gap-1.5 mt-3 text-[12px] text-[var(--meta)]">
+          <input type="checkbox" checked={monitor} className="accent-[var(--accent)]"
+            onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
+              .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
+          {t("audio.monitorMusic")}
+        </label>
         {voice?.state === "error" ? <p role="alert" className="text-[12px] text-[var(--danger)] mt-3">{t("audio.voicePlaybackFailed")}</p> : null}
         {voiceInstances.length > 0 ? <div className="mt-3 space-y-2" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}

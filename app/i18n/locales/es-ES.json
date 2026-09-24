@@ -101,6 +101,7 @@
     "replay": "Repetir",
     "loop": "Repetir",
     "loopByDefault": "Repetir por defecto",
+    "monitorMusic": "Reproducir también en la salida local para oírlo",
     "hotkeyToggleLoop": "Activar o desactivar repetición",
     "stop": "Detener",
     "clipName": "Nombre del fragmento",

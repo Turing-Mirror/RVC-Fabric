@@ -101,6 +101,7 @@
     "replay": "最初から再生",
     "loop": "ループ",
     "loopByDefault": "既定でループ再生",
+    "monitorMusic": "ローカル出力でも再生して自分でも聞く",
     "hotkeyToggleLoop": "ループ切り替え",
     "stop": "停止",
     "clipName": "区間名",

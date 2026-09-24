@@ -101,6 +101,7 @@
     "replay": "重播",
     "loop": "循環",
     "loopByDefault": "預設循環播放",
+    "monitorMusic": "同時在本機輸出播放，自己也聽得到",
     "hotkeyToggleLoop": "切換循環",
     "stop": "停止",
     "clipName": "片段名稱",

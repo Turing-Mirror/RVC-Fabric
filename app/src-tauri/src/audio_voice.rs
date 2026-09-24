@@ -60,9 +60,13 @@ fn update_volume(
         patch.insert("audio_music_volume".into(), json!(next.volume));
         patch.insert("audio_music_muted".into(), json!(next.muted));
         crate::config::update(root, patch)?;
+        let gain = if next.muted { 0.0 } else { next.volume };
         if let Some(bus) = voice.bus.as_mut() {
-            bus.set_master_gain(if next.muted { 0.0 } else { next.volume })?;
+            bus.set_master_gain(gain)?;
         }
+        voice.with_monitor(|monitor| {
+            let _ = monitor.set_master_gain(gain);
+        });
     }
     Ok(next)
 }
@@ -121,6 +125,9 @@ struct VoiceState {
     last: VoicePlaybackStatus,
     /// Most recently started entry and device, so replay still works after it ended.
     recent: Option<(String, String)>,
+    /// The same instances on the local output, so the user hears what others hear.
+    /// Separate device: its failure never stops voice output.
+    monitor: Option<VoiceBus>,
 }
 
 #[derive(Clone, Serialize)]
@@ -151,12 +158,37 @@ impl VoiceState {
             pending: 0,
             last: VoicePlaybackStatus::idle(),
             recent: None,
+            monitor: None,
         }
     }
 
     fn busy(&self) -> bool {
         self.pending != 0 || self.bus.as_ref().is_some_and(VoiceBus::has_music)
     }
+
+    /// Mirror an operation to the local copy; release the device once it is idle.
+    fn with_monitor(&mut self, action: impl FnOnce(&mut VoiceBus)) {
+        if let Some(monitor) = self.monitor.as_mut() {
+            action(monitor);
+            if !monitor.has_music() || monitor.failed() {
+                self.monitor = None;
+            }
+        }
+    }
+}
+
+/// Local output that mirrors voice playback, or `None` when monitoring is off,
+/// no local device is chosen, or it is the voice device itself.
+fn monitor_device(root: &Path, voice_device: &str) -> Option<String> {
+    let config = crate::config::read(root);
+    if config.get("audio_music_monitor").and_then(serde_json::Value::as_bool) == Some(false) {
+        return None;
+    }
+    config
+        .get("audio_preview_device_id")
+        .and_then(|value| value.as_str())
+        .filter(|id| !id.is_empty() && *id != voice_device)
+        .map(str::to_string)
 }
 
 static VOICE: Mutex<VoiceState> = Mutex::new(VoiceState::new());
@@ -359,6 +391,9 @@ fn watch(id: u64) {
         if idle_bus {
             state.bus = None;
         }
+        state.with_monitor(|monitor| {
+            let _ = monitor.stop_music(id);
+        });
         if result.is_err() {
             status.playback.state = "error";
         }
@@ -514,6 +549,32 @@ fn start_entry_placed(
                 edge_fade_seconds: EDGE_FADE_SECONDS,
             },
         )?;
+        // Best effort: a missing or failing local device never blocks voice output.
+        let monitor = monitor_device(root, &device_id).and_then(|monitor_id| {
+            let format = {
+                let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+                match voice.monitor.as_ref() {
+                    Some(bus) if bus.device_id() == monitor_id && !bus.failed() => Some(bus.format()),
+                    _ => None,
+                }
+            }
+            .or_else(|| output::device_format(&monitor_id).ok())?;
+            let offset = (options.offset_seconds * format.sample_rate as f64).floor() as u64;
+            let decoded = decode::decode_clip(
+                &AudioTools::at(root),
+                &source.path,
+                source.range,
+                format,
+                DECODE_BUFFER_SECONDS,
+                ClipOptions {
+                    offset_frames: offset,
+                    looping: Some(looping.clone()),
+                    edge_fade_seconds: EDGE_FADE_SECONDS,
+                },
+            )
+            .ok()?;
+            Some((monitor_id, decoded, offset))
+        });
         let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
         if voice.request != request {
             return Err("audio_playback_cancelled".into());
@@ -553,10 +614,10 @@ fn start_entry_placed(
         if let Err(error) = bus.play_decoded(NewMusic {
             id: request,
             entry_id: entry_id.clone(),
-            name: source.name,
+            name: source.name.clone(),
             decoded,
             offset,
-            looping,
+            looping: looping.clone(),
             paused: options.paused,
             gain: source.gain,
             master_gain,
@@ -575,7 +636,17 @@ fn start_entry_placed(
         }
         let status = playback_status(voice.bus.as_ref().unwrap(), request);
         voice.last = VoicePlaybackStatus::idle();
-        voice.recent = Some((entry_id, device_id));
+        voice.recent = Some((entry_id.clone(), device_id));
+        play_monitor(&mut voice, monitor, NewMonitor {
+            id: request,
+            entry_id,
+            name: source.name,
+            looping,
+            paused: options.paused,
+            gain: source.gain,
+            master_gain,
+            placement,
+        });
         watch(request);
         Ok(status)
     })();
@@ -584,6 +655,100 @@ fn start_entry_placed(
         voice.pending = 0;
     }
     result
+}
+
+struct NewMonitor {
+    id: u64,
+    entry_id: String,
+    name: String,
+    looping: Arc<AtomicBool>,
+    paused: bool,
+    gain: f32,
+    master_gain: f32,
+    placement: MusicPlacement,
+}
+
+/// Put the local copy in the matching slot. Voice playback already succeeded;
+/// anything going wrong here only drops the local copy.
+fn play_monitor(
+    voice: &mut VoiceState,
+    prepared: Option<(String, decode::DecodedStream, u64)>,
+    next: NewMonitor,
+) {
+    let placement = match next.placement {
+        MusicPlacement::ReplaceInstance(old) => {
+            let present = voice
+                .monitor
+                .as_ref()
+                .is_some_and(|monitor| monitor.music_status(old).is_some());
+            if present {
+                MusicPlacement::ReplaceInstance(old)
+            } else {
+                MusicPlacement::Overlay
+            }
+        }
+        other => other,
+    };
+    let Some((monitor_id, decoded, offset)) = prepared else {
+        // Monitoring off or unavailable: do not keep playing a stale copy.
+        if let MusicPlacement::ReplaceInstance(old) = placement {
+            voice.with_monitor(|monitor| {
+                let _ = monitor.stop_music(old);
+            });
+        } else if matches!(placement, MusicPlacement::ReplaceAll) {
+            voice.with_monitor(|monitor| {
+                let _ = monitor.stop_all_music();
+            });
+        }
+        return;
+    };
+    if voice
+        .monitor
+        .as_ref()
+        .is_none_or(|monitor| monitor.device_id() != monitor_id || monitor.failed())
+    {
+        voice.monitor = VoiceBus::open(monitor_id).ok();
+    }
+    voice.with_monitor(|monitor| {
+        let played = monitor.play_decoded(NewMusic {
+            id: next.id,
+            entry_id: next.entry_id,
+            name: next.name,
+            decoded,
+            offset,
+            looping: next.looping,
+            paused: next.paused,
+            gain: next.gain,
+            master_gain: next.master_gain,
+            placement,
+        });
+        if let Err(error) = played {
+            crate::logging::shell_log!("audio monitor: {error}");
+        }
+    });
+}
+
+/// Switch local monitoring; turning it off releases the local copy at once.
+pub fn set_monitor(root: &Path, enabled: bool) -> Result<bool, String> {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut patch = Map::new();
+    patch.insert("audio_music_monitor".into(), json!(enabled));
+    crate::config::update(root, patch)?;
+    if !enabled {
+        voice.with_monitor(|monitor| {
+            let _ = monitor.stop_all_music();
+        });
+        voice.monitor = None;
+    }
+    Ok(enabled)
+}
+
+#[tauri::command]
+pub fn audio_voice_monitor_set(
+    state: State<'_, Mutex<crate::AppState>>,
+    enabled: bool,
+) -> Result<bool, String> {
+    set_monitor(&crate::root_clone(&state)?, enabled)
 }
 
 /// Restart an instance from its clip start. With no instance given and nothing
@@ -753,7 +918,11 @@ pub fn audio_voice_pause(
         .or_else(|| bus.latest_music_id())
         .ok_or("audio_playback_not_playing")?;
     bus.pause(id, paused)?;
-    Ok(playback_status(bus, id))
+    let status = playback_status(bus, id);
+    voice.with_monitor(|monitor| {
+        let _ = monitor.pause(id, paused);
+    });
+    Ok(status)
 }
 
 pub fn toggle_pause_latest() -> Result<VoicePlaybackStatus, String> {
@@ -765,7 +934,11 @@ pub fn toggle_pause_latest() -> Result<VoicePlaybackStatus, String> {
         .ok_or("audio_playback_not_playing")?
         .paused;
     bus.pause(id, !paused)?;
-    Ok(playback_status(bus, id))
+    let status = playback_status(bus, id);
+    voice.with_monitor(|monitor| {
+        let _ = monitor.pause(id, !paused);
+    });
+    Ok(status)
 }
 
 #[tauri::command]
@@ -776,6 +949,9 @@ pub fn audio_voice_stop_instance(instance_id: u64) -> Result<VoicePlaybackStatus
     if !bus.has_music() && !bus.microphone_attached() {
         voice.bus = None;
     }
+    voice.with_monitor(|monitor| {
+        let _ = monitor.stop_music(instance_id);
+    });
     voice.last = VoicePlaybackStatus::idle();
     Ok(current_status(&voice))
 }
@@ -804,6 +980,9 @@ pub fn audio_voice_stop() -> VoicePlaybackStatus {
             voice.bus = None;
         }
     }
+    voice.with_monitor(|monitor| {
+        let _ = monitor.stop_all_music();
+    });
     voice.last = VoicePlaybackStatus::idle();
     voice.last.clone()
 }

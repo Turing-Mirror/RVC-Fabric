@@ -237,6 +237,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("audio_voice_device_id".into(), json!(""));
     m.insert("audio_music_volume".into(), json!(1.0));
     m.insert("audio_music_muted".into(), json!(false));
+    // Voice-output audio is also played on the local output so the user hears it.
+    m.insert("audio_music_monitor".into(), json!(true));
     m.insert("audio_hotkeys".into(), json!([]));
     // One catalogue supplies both defaults and labels. Existing nine
     // shortcuts retain their original combinations and global scope.

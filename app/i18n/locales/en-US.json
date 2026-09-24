@@ -101,6 +101,7 @@
     "replay": "Replay",
     "loop": "Loop",
     "loopByDefault": "Loop by default",
+    "monitorMusic": "Also play on the local output so you can hear it",
     "hotkeyToggleLoop": "Toggle loop",
     "stop": "Stop",
     "clipName": "Clip name",

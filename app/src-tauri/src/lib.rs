@@ -2601,6 +2601,7 @@ pub fn run() {
             audio_voice::audio_voice_status,
             audio_voice::audio_voice_instances,
             audio_voice::audio_voice_pause,
+            audio_voice::audio_voice_replay,
             audio_voice::audio_voice_stop_instance,
             audio_voice::audio_voice_stop,
             audio_voice::audio_voice_volume_get,

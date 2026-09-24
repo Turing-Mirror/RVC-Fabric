@@ -2,7 +2,7 @@
 //! the selected endpoint. Legacy RVC/DSP output remains mutually exclusive
 //! until their microphone producers are connected to the native bus.
 use crate::{
-    audio_bus::{BridgeDescriptor, VoiceBus},
+    audio_bus::{BridgeDescriptor, MusicPlacement, VoiceBus},
     audio_session::{self, PlaybackStatus},
 };
 use fabric_audio::{
@@ -390,6 +390,19 @@ pub fn start_entry(
     device_id: String,
     overlay: bool,
 ) -> Result<VoicePlaybackStatus, String> {
+    start_entry_placed(root, entry_id, device_id, if overlay {
+        MusicPlacement::Overlay
+    } else {
+        MusicPlacement::ReplaceAll
+    })
+}
+
+fn start_entry_placed(
+    root: &Path,
+    entry_id: String,
+    device_id: String,
+    placement: MusicPlacement,
+) -> Result<VoicePlaybackStatus, String> {
     let request = {
         let _gate = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
         if ENGINE_STARTING.load(Ordering::Acquire) != 0 {
@@ -426,13 +439,19 @@ pub fn start_entry(
         {
             return Err("audio_voice_output_failed".into());
         }
-        if overlay
+        if matches!(placement, MusicPlacement::Overlay)
             && voice
                 .bus
                 .as_ref()
                 .is_some_and(|bus| bus.has_music() && bus.device_id() != device_id)
         {
             return Err("audio_voice_device_locked".into());
+        }
+        if let MusicPlacement::ReplaceInstance(id) = placement {
+            let bus = voice.bus.as_ref().ok_or("audio_playback_cancelled")?;
+            if bus.failed() || bus.device_id() != device_id || bus.music_status(id).is_none() {
+                return Err("audio_playback_cancelled".into());
+            }
         }
         voice.request = voice.request.wrapping_add(1).max(1);
         voice.pending = voice.request;
@@ -457,6 +476,13 @@ pub fn start_entry(
         let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
         if voice.request != request {
             return Err("audio_playback_cancelled".into());
+        }
+        if let MusicPlacement::ReplaceInstance(id) = placement {
+            if voice.bus.as_ref().is_none_or(|bus| {
+                bus.failed() || bus.device_id() != device_id || bus.music_status(id).is_none()
+            }) {
+                return Err("audio_playback_cancelled".into());
+            }
         }
         if voice
             .bus
@@ -485,11 +511,12 @@ pub fn start_entry(
         let master_gain = if volume.muted { 0.0 } else { volume.volume };
         if let Err(error) = bus.play_decoded(
             request,
+            entry_id,
             source.name,
             decoded,
             source.gain,
             master_gain,
-            overlay,
+            placement,
         ) {
             if (error.starts_with("audio_music_swap")
                 || voice.bus.as_ref().is_some_and(VoiceBus::failed))
@@ -512,6 +539,29 @@ pub fn start_entry(
         voice.pending = 0;
     }
     result
+}
+
+pub fn replay(root: &Path, instance_id: Option<u64>) -> Result<VoicePlaybackStatus, String> {
+    let (id, entry_id, device_id) = {
+        let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+        let bus = voice.bus.as_ref().ok_or("audio_playback_not_playing")?;
+        let id = instance_id.or_else(|| bus.latest_music_id())
+            .ok_or("audio_playback_not_playing")?;
+        let entry_id = bus.music_entry_id(id).ok_or("audio_playback_not_playing")?;
+        (id, entry_id.to_string(), bus.device_id().to_string())
+    };
+    start_entry_placed(root, entry_id, device_id, MusicPlacement::ReplaceInstance(id))
+}
+
+#[tauri::command]
+pub async fn audio_voice_replay(
+    state: State<'_, Mutex<crate::AppState>>,
+    instance_id: Option<u64>,
+) -> Result<VoicePlaybackStatus, String> {
+    let root = crate::root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || replay(&root, instance_id))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

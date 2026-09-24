@@ -25,6 +25,30 @@ const MIC_BUFFER_SECONDS: f64 = 0.5;
 const SWAP_TIMEOUT: Duration = Duration::from_millis(750);
 // Only concurrent decoder/track resources are bounded; the library is not.
 pub const MAX_MUSIC_INSTANCES: usize = 16;
+
+#[derive(Clone, Copy)]
+pub enum MusicPlacement {
+    ReplaceAll,
+    Overlay,
+    ReplaceInstance(u64),
+}
+
+fn music_slot(
+    placement: MusicPlacement,
+    ids: impl Iterator<Item = Option<u64>>,
+) -> Result<usize, String> {
+    match placement {
+        MusicPlacement::ReplaceAll => Ok(0),
+        MusicPlacement::Overlay => ids
+            .enumerate()
+            .find_map(|(slot, id)| id.is_none().then_some(slot))
+            .ok_or("audio_music_capacity_reached".into()),
+        MusicPlacement::ReplaceInstance(target) => ids
+            .enumerate()
+            .find_map(|(slot, id)| (id == Some(target)).then_some(slot))
+            .ok_or("audio_playback_cancelled".into()),
+    }
+}
 #[cfg(windows)]
 const BRIDGE_BUFFER_SECONDS: u32 = 1;
 #[cfg(windows)]
@@ -67,6 +91,7 @@ impl Drop for MicReader {
 
 struct Music {
     id: u64,
+    entry_id: String,
     name: String,
     length: u64,
     base_gain: f32,
@@ -266,11 +291,12 @@ impl VoiceBus {
     pub fn play_decoded(
         &mut self,
         id: u64,
+        entry_id: String,
         name: String,
         decoded: DecodedStream,
         gain: f32,
         master_gain: f32,
-        overlay: bool,
+        placement: MusicPlacement,
     ) -> Result<(), String> {
         if decoded.format != self.format {
             return Err("output_format_changed".into());
@@ -279,27 +305,21 @@ impl VoiceBus {
         let (track, control) = Track::new(decoded.pcm, Some(length));
         control.set_gain(gain * master_gain)?;
         control.paused.store(true, Ordering::Release);
-        let slot = if overlay {
-            self.music
-                .iter()
-                .position(Option::is_none)
-                .ok_or("audio_music_capacity_reached")?
-        } else {
-            0
-        };
+        let slot = music_slot(placement, self.music.iter().map(|music| music.as_ref().map(|m| m.id)))?;
         if let Err(error) = self.swap_music(slot, track) {
             // A timed-out command may still reach a live callback. Never let
             // that late track become audible after the caller saw an error.
             control.stopped.store(true, Ordering::Release);
             return Err(error);
         }
-        if !overlay {
+        if matches!(placement, MusicPlacement::ReplaceAll) {
             for music in self.music.iter().flatten().filter(|music| music.id != id) {
                 music.control.stopped.store(true, Ordering::Release);
             }
         }
         self.music[slot] = Some(Music {
             id,
+            entry_id,
             name,
             length,
             base_gain: gain,
@@ -307,7 +327,7 @@ impl VoiceBus {
             decoder: decoded.decoder,
         });
         control.paused.store(false, Ordering::Release);
-        if !overlay {
+        if matches!(placement, MusicPlacement::ReplaceAll) {
             let other_ids: Vec<_> = self
                 .music
                 .iter()
@@ -380,6 +400,11 @@ impl VoiceBus {
         })
     }
 
+    pub fn music_entry_id(&self, id: u64) -> Option<&str> {
+        self.music.iter().flatten().find(|music| music.id == id)
+            .map(|music| music.entry_id.as_str())
+    }
+
     pub fn music_ids(&self) -> Vec<u64> {
         self.music.iter().flatten().map(|music| music.id).collect()
     }
@@ -415,5 +440,20 @@ impl VoiceBus {
                 || reader.thread.as_ref().is_some_and(JoinHandle::is_finished);
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replay_reuses_only_its_own_slot_and_rejects_a_stopped_target() {
+        let ids = [Some(11), Some(12), None];
+        assert_eq!(music_slot(MusicPlacement::ReplaceInstance(12), ids.into_iter()).unwrap(), 1);
+        assert_eq!(music_slot(MusicPlacement::Overlay, ids.into_iter()).unwrap(), 2);
+        assert_eq!(music_slot(MusicPlacement::ReplaceAll, ids.into_iter()).unwrap(), 0);
+        assert_eq!(music_slot(MusicPlacement::ReplaceInstance(9), ids.into_iter()).unwrap_err(),
+            "audio_playback_cancelled");
     }
 }

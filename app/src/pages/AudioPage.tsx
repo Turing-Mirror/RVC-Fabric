@@ -464,6 +464,10 @@ export function AudioPage() {
               <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
                 paused: instance.state !== "paused", instanceId: instance.instance_id,
               }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
+              <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_replay", {
+                instanceId: instance.instance_id,
+              }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
+                ? t("audio.playbackCancelled") : t("audio.operationFailed")))}>{t("audio.replay")}</Btn>
               <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop_instance", {
                 instanceId: instance.instance_id,
               }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>

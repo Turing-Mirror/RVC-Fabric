@@ -143,6 +143,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
   const actionLabels: Record<string, string> = {
     "play-entry": t("audio.playToVoice"),
     "pause-current": t("audio.hotkeyPauseCurrent"),
+    "replay-current": t("audio.hotkeyReplayCurrent"),
     "stop-current": t("audio.hotkeyStopCurrent"),
     "stop-all": t("audio.stopAll"),
     "stop-preview": t("audio.hotkeyStopPreview"),

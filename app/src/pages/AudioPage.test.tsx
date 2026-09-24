@@ -217,7 +217,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
       if (cmd === "audio_voice_status") return second;
       if (cmd === "audio_voice_instances") return [second, first];
-      if (cmd === "audio_voice_pause" || cmd === "audio_voice_stop_instance") return first;
+      if (cmd === "audio_voice_pause" || cmd === "audio_voice_replay" || cmd === "audio_voice_stop_instance") return first;
       if (cmd === "audio_voice_stop") return { ...first, state: "idle", active_count: 0, instance_id: null };
       return null;
     });
@@ -231,7 +231,13 @@ describe("音频库页面", () => {
     act(() => buttons[0].click());
     await tick();
     expect(shell.invoke).toHaveBeenCalledWith("audio_voice_pause", { paused: true, instanceId: 12 });
-    act(() => buttons[3].click());
+    act(() => buttons[1].click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_replay", { instanceId: 12 });
+    const firstCard = Array.from(list!.children).find((card) => card.textContent?.includes("第一段"))!;
+    const stopFirst = Array.from(firstCard.querySelectorAll("button"))
+      .find((button) => button.textContent === "停止")!;
+    act(() => stopFirst.click());
     await tick();
     expect(shell.invoke).toHaveBeenCalledWith("audio_voice_stop_instance", { instanceId: 11 });
     const stopAll = Array.from(mounted.container.querySelectorAll("button"))

@@ -8,7 +8,7 @@ Stable full versions (APP_VERSION / catalog gui.version)::
     X.Y.Z              formal baseline
     X.Y.Z-hotfixN      post-release OTA hotfixes (N >= 1)
 
-See ``docs/项目白皮书.md`` §5.1（稳定通道仅 X.Y.Z；历史 -hotfixN 只保留比较）.
+稳定通道仅 X.Y.Z；历史 -hotfixN 只保留比较。
 """
 
 from __future__ import annotations

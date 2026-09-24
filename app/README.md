@@ -45,8 +45,6 @@ Vite writes static assets to `app/frontend/`.
 | `src-tauri/` | Rust host |
 | `frontend/` | Production UI build output (gitignored) |
 
-Product behaviour and decisions: see internal `docs/项目白皮书.md` (gitignored).
-
 ## Worker bridge
 
 The shell talks to `Runtime\\pythonw.exe tools\\realtime_worker.py` through the same

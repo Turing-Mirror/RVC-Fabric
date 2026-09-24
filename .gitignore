@@ -167,7 +167,6 @@ Desktop.ini
 # (repo is public on GitHub + CNB — keep handoff & ops notes off the remote)
 #
 # 权威布局（全部在 docs/ 根下，不再使用 RVC-Fabric-界面迁移交接包/ 子目录）：
-#   docs/项目白皮书.md
 #   docs/GUI迁移计划书.md
 #   docs/界面迁移-交接说明.md
 #   docs/界面预览.html
@@ -177,7 +176,6 @@ Desktop.ini
 #   docs/RVC Fabric Plan B *.md
 # 公开仍提交：docs/en|jp|kr|fr|pt|tr|cn|legal/
 # ---------------------------------------------------------------------------
-/docs/项目白皮书.md
 /docs/GUI迁移计划书.md
 /docs/界面迁移-交接说明.md
 /docs/界面预览.html
@@ -243,12 +241,12 @@ AGENTS.md
 /docs/i18n/
 /docs/界面文案总表.md
 
-# 第三方音色选品/扩充（临时调研与开发计划；完成后要点并入白皮书）
+# 第三方音色选品/扩充（临时调研与开发计划；完成后删除）
 # 注意：上方有 !docs/**/*.md 反例，必须在其后显式忽略
 /docs/第三方音色选品调研.md
 /docs/第三方音色扩充计划.md
 
-# 封面裁剪工具落地方案（交给另一 AI 的临时方案；完成后要点并入白皮书或删除）
+# 封面裁剪工具落地方案（交给另一 AI 的临时方案；完成后删除）
 /docs/cover-tool-方案.md
 
 # AI agent scratch dirs

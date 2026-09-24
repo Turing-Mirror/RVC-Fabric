@@ -345,6 +345,27 @@ async fn config_set(
     // set_hot 派发要等上一条命令被认领（上限 CMD_ACK_TIMEOUT_MS），同步命令
     // 会让这段等待落在 IPC 线程上 —— 拖一次滑条窗口就冻结几秒（R01）。
     tauri::async_runtime::spawn_blocking(move || {
+        let hotkey_change = patch.contains_key("audio_hotkeys")
+            || hotkey_catalog::catalog().legacy.iter().any(|binding| patch.contains_key(&binding.key));
+        let _hotkey_guard = hotkey_change.then(||
+            hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner()));
+        if hotkey_change {
+            let mut proposed = config::read(&root);
+            proposed.extend(patch.clone());
+            let bindings: Vec<hotkey_catalog::AudioBinding> = serde_json::from_value(
+                proposed.get("audio_hotkeys").cloned().unwrap_or_else(|| json!([]))
+            ).map_err(|_| "audio_hotkey_config_invalid")?;
+            hotkey_catalog::validate_bindings(&bindings)?;
+            if patch.contains_key("audio_hotkeys") {
+                let library = audio_library::snapshot(&root)?;
+                hotkey_catalog::validate_entry_targets(
+                    &bindings, library.entries.iter().map(|entry| entry.id.as_str()),
+                )?;
+            }
+            if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings) {
+                return Err("audio_hotkey_conflict".into());
+            }
+        }
         let out = config::update(&root, patch.clone())?;
         // 壁纸路径也可能由导入配置档案写进来（不是走选择框），同样要放行。
         if let Some(Value::String(p)) = patch.get("wallpaper_path") {

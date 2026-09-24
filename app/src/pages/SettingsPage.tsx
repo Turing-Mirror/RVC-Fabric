@@ -165,15 +165,13 @@ function SettingsPageImpl({
     };
   }, []);
 
-  /**
-   * 改一条快捷键：**先把配置写进盘里，再让 Rust 重新注册**。
-   *
-   * Rust 那边的 `apply_hotkeys` 是从配置文件里读组合键的，不是从参数里拿的。
-   * 所以这两步的顺序不能反 —— 反了就注册到旧值上，界面写着 F2、真正能用的
-   * 还是上一次那个 F1，而且每改一次就再错一次，永远差一步。
-   */
+  // 旧九项由后端校验碰撞后写入；失败时不把未保存的新组合留在页面上。
+  const persistHotkey = async (key: string, v: unknown) => {
+    await invoke("config_set", { patch: { [key]: v } });
+  };
+
   const saveHotkey = async (key: string, v: unknown) => {
-    await c.set(key, v, true);
+    await persistHotkey(key, v);
     await safeInvoke("hotkeys_apply", { enabled: c.bool("hotkeys_enabled") });
   };
 
@@ -1133,9 +1131,9 @@ function SettingsPageImpl({
                     key={h.key}
                     label={hotkeyLabels()[h.action] ?? h.action}
                     value={c.str(h.key, h.fallback)}
-                    onChange={(v) => c.set(h.key, v, true)}
+                    onChange={(v) => persistHotkey(h.key, v)}
                     global={c.cfg[`${h.key}_global`] !== false}
-                    onGlobalChange={(v) => void saveHotkey(`${h.key}_global`, v)}
+                    onGlobalChange={(v) => saveHotkey(`${h.key}_global`, v)}
                     onRecording={setRecordingHotkey}
                   />
                 ))}
@@ -1226,13 +1224,14 @@ function HotkeyRow({
   onChange: (v: string) => Promise<void>;
   /** 抢成全局（任何软件在前台都生效），还是只在本软件窗口里生效。 */
   global: boolean;
-  onGlobalChange: (v: boolean) => void;
+  onGlobalChange: (v: boolean) => Promise<void>;
   /** 进入 / 退出录制。录制期间全局快捷键要摘掉，否则按一下就真触发了。 */
   onRecording: (active: boolean) => Promise<boolean>;
 }) {
   const [recording, setRecording] = useState(false);
   const [arming, setArming] = useState(false);
   const [recordError, setRecordError] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const recordingRef = useRef(false);
   const armingRef = useRef(false);
   const restoreRef = useRef(onRecording);
@@ -1276,7 +1275,11 @@ function HotkeyRow({
   const commit = (combo: string) => {
     recordingRef.current = false;
     setRecording(false);
-    void onChange(combo).catch(() => {}).finally(() => onRecording(false));
+    setSaveError("");
+    void onChange(combo)
+      .catch((error) => setSaveError(String(error).includes("audio_hotkey_conflict")
+        ? t("audio.hotkeyConflict") : t("audio.hotkeySaveFailed")))
+      .finally(() => onRecording(false));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -1302,7 +1305,12 @@ function HotkeyRow({
         <input
           type="checkbox"
           checked={isGlobal}
-          onChange={(e) => onGlobalChange(e.target.checked)}
+          onChange={(e) => {
+            setSaveError("");
+            void onGlobalChange(e.target.checked).catch((error) =>
+              setSaveError(String(error).includes("audio_hotkey_conflict")
+                ? t("audio.hotkeyConflict") : t("audio.hotkeySaveFailed")));
+          }}
           className="accent-[var(--accent)] w-[13px] h-[13px]"
         />{t("s.a5644f4bbf")}</label>
       <button
@@ -1324,6 +1332,7 @@ function HotkeyRow({
         {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
       {recordError ? <span role="alert" className="text-[var(--danger)]">{t("audio.hotkeySuspendFailed")}</span> : null}
+      {saveError ? <span role="alert" className="text-[var(--danger)]">{saveError}</span> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}
     </div>
   );

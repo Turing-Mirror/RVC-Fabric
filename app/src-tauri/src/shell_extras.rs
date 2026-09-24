@@ -141,16 +141,49 @@ fn legacy_hotkeys() -> &'static [crate::hotkey_catalog::LegacyHotkey] {
 }
 
 pub fn audio_conflicts_with_legacy(root: &Path, bindings: &[AudioBinding]) -> bool {
+    let config = config::read(root);
+    audio_conflicts_with_legacy_config(&config, bindings)
+}
+
+pub fn audio_conflicts_with_legacy_config(
+    config: &serde_json::Map<String, Value>,
+    bindings: &[AudioBinding],
+) -> bool {
     use tauri_plugin_global_shortcut::Shortcut;
     let legacy: std::collections::HashSet<u32> = legacy_hotkeys()
         .iter()
-        .filter_map(|binding| combo_for(Some(root), &binding.key, &binding.fallback)
+        .filter_map(|binding| parsed_combo(config.get(&binding.key).and_then(Value::as_str), &binding.fallback)
             .and_then(|text| text.parse::<Shortcut>().ok())
             .map(|combo| combo.id()))
         .collect();
     bindings.iter().filter(|binding| binding.enabled)
         .filter_map(|binding| binding.combo.parse::<Shortcut>().ok())
         .any(|combo| legacy.contains(&combo.id()))
+}
+
+#[cfg(test)]
+mod audio_hotkey_conflict_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_and_audio_bindings_conflict_in_both_scopes_but_clear_does_not() {
+        let mut config = config::defaults();
+        let binding = AudioBinding {
+            binding_id: "audio".into(), action: "stop-preview".into(),
+            target_entry_id: None, combo: "CmdOrCtrl+F12".into(),
+            scope: HotkeyScope::Window, enabled: true, mode: None,
+        };
+        assert!(!audio_conflicts_with_legacy_config(&config, &[binding.clone()]));
+        config.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F12"));
+        assert!(audio_conflicts_with_legacy_config(&config, &[binding.clone()]));
+        assert!(audio_conflicts_with_legacy_config(&config, &[AudioBinding {
+            scope: HotkeyScope::Global, ..binding.clone()
+        }]));
+        config.insert("hotkey_toggle_vc".into(), json!(""));
+        assert!(!audio_conflicts_with_legacy_config(&config, &[binding.clone()]));
+        config.insert("hotkey_toggle_vc".into(), json!("CmdOrCtrl+F12"));
+        assert!(!audio_conflicts_with_legacy_config(&config, &[AudioBinding { enabled: false, ..binding }]));
+    }
 }
 
 /// 组合键的合法形状：零个或多个修饰键 + 一个主键，`+` 连接。

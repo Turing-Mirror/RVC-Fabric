@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Block, Btn, PageHead, PagePad } from "../components/ui";
-import { Select } from "../components/controls";
+import { Select, Slider } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
@@ -452,10 +452,15 @@ export function AudioPage() {
             setVoiceInstances([]);
           }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
         </div>
-        <div className="flex items-center gap-2 flex-wrap mt-3 text-[12px] text-[var(--meta)]">
-          <span className="mr-1 tabular-nums">{t("audio.masterVolume")}：{Math.round(volume.volume * 100)}%</span>
-          <Btn onClick={() => changeVolume("audio_voice_volume_adjust", { direction: -1 })}>{t("audio.volumeDown")}</Btn>
-          <Btn onClick={() => changeVolume("audio_voice_volume_adjust", { direction: 1 })}>{t("audio.volumeUp")}</Btn>
+        <div className="flex items-center gap-3 mt-3 text-[12px] text-[var(--meta)]">
+          <span className="flex-none whitespace-nowrap">{t("audio.masterVolume")}</span>
+          <div className="flex-1 max-w-[320px]">
+            <Slider
+              value={volume.muted ? 0 : Math.round(volume.volume * 100)}
+              min={0} max={100} step={1}
+              onChange={(v) => changeVolume("audio_voice_volume_set", { volume: v / 100 })}
+            />
+          </div>
           <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
         </div>
         <label className="flex items-center gap-1.5 mt-3 text-[12px] text-[var(--meta)]">

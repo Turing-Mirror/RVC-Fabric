@@ -67,23 +67,30 @@ describe("音频库页面", () => {
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "ensure_engine")).toBe(false);
   });
 
-  it("语音音频总音量与静音使用独立的原生控制", async () => {
+  it("语音音频总音量滑块与静音使用独立的原生控制", async () => {
     const original = shell.invoke.getMockImplementation()!;
     shell.invoke.mockImplementation(async (cmd, args) => {
       if (cmd === "audio_voice_volume_get") return { volume: 0.8, muted: false };
-      if (cmd === "audio_voice_volume_adjust") return { volume: 0.7, muted: false };
-      if (cmd === "audio_voice_volume_toggle") return { volume: 0.7, muted: true };
+      if (cmd === "audio_voice_volume_set") return { volume: 0.6, muted: false };
+      if (cmd === "audio_voice_volume_toggle") return { volume: 0.6, muted: true };
       return original(cmd, args);
     });
     const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
     mounts.push(mounted);
     await tick();
-    expect(mounted.container.textContent).toContain("音频总音量：80%");
+    expect(mounted.container.textContent).toContain("音频总音量");
+    expect(mounted.container.textContent).toContain("80");
+    const range = mounted.container.querySelector<HTMLInputElement>("input[type=range]")!;
+    expect(range).toBeTruthy();
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      setValue.call(range, "60");
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_volume_set", { volume: 0.6 });
     const button = (label: string) => Array.from(mounted.container.querySelectorAll("button"))
       .find((item) => item.textContent === label)!;
-    act(() => button("降低音量").click());
-    await tick();
-    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_volume_adjust", { direction: -1 });
     act(() => button("静音").click());
     await tick();
     expect(shell.invoke).toHaveBeenCalledWith("audio_voice_volume_toggle", undefined);

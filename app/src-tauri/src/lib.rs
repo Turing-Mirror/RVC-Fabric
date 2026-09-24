@@ -2671,6 +2671,7 @@ pub fn run() {
             audio_voice::audio_voice_stop,
             audio_voice::audio_voice_volume_get,
             audio_voice::audio_voice_volume_adjust,
+            audio_voice::audio_voice_volume_set,
             audio_voice::audio_voice_volume_toggle,
             audio_waveform::audio_waveform_get,
             audio_waveform::audio_waveform_cancel,

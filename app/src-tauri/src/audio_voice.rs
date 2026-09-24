@@ -83,6 +83,17 @@ pub fn adjust_volume(root: &Path, direction: i8) -> Result<AudioVolumeStatus, St
     })
 }
 
+/// 滑块的绝对值设置：拖动音量时解除静音（和步进一致——动了音量就是想听）。
+pub fn set_volume(root: &Path, volume: f32) -> Result<AudioVolumeStatus, String> {
+    if !volume.is_finite() || !(0.0..=1.0).contains(&volume) {
+        return Err("audio_volume_out_of_range".into());
+    }
+    update_volume(root, |_| AudioVolumeStatus {
+        volume,
+        muted: false,
+    })
+}
+
 pub fn toggle_mute(root: &Path) -> Result<AudioVolumeStatus, String> {
     update_volume(root, |previous| AudioVolumeStatus {
         muted: !previous.muted,
@@ -104,6 +115,17 @@ pub fn audio_voice_volume_adjust(
     direction: i8,
 ) -> Result<AudioVolumeStatus, String> {
     let status = adjust_volume(&crate::root_clone(&state)?, direction)?;
+    let _ = app.emit("audio-volume://changed", status);
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn audio_voice_volume_set(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+    volume: f32,
+) -> Result<AudioVolumeStatus, String> {
+    let status = set_volume(&crate::root_clone(&state)?, volume)?;
     let _ = app.emit("audio-volume://changed", status);
     Ok(status)
 }
@@ -1188,6 +1210,27 @@ mod tests {
         assert!(!raised.muted);
         assert_eq!(raised.volume, 1.0);
         assert_eq!(volume_settings(&root), raised);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn set_volume_accepts_absolute_values_and_unmutes() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("fabric-volume-set-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(set_volume(&root, f32::NAN).is_err());
+        assert!(set_volume(&root, f32::INFINITY).is_err());
+        assert!(set_volume(&root, -0.01).is_err());
+        assert!(set_volume(&root, 1.01).is_err());
+        assert!(toggle_mute(&root).unwrap().muted);
+        let set = set_volume(&root, 0.35).unwrap();
+        assert!(!set.muted);
+        assert_eq!(set.volume, 0.35);
+        assert_eq!(volume_settings(&root), set);
         let _ = std::fs::remove_dir_all(root);
     }
 }

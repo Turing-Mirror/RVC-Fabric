@@ -9,6 +9,7 @@ export type PlaybackStatus = {
 export type VoicePlaybackStatus = PlaybackStatus & {
   instance_id: number | null;
   active_count: number;
+  looping: boolean;
 };
 
 export function playbackActive(status: PlaybackStatus | null): boolean {

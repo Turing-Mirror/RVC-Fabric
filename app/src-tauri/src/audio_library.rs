@@ -965,6 +965,20 @@ pub fn set_number(root: &Path, entry_id: &str, number: Option<u64>) -> Result<Li
     })
 }
 
+/// Whether playback of this entry loops by default; a running instance can still be switched.
+pub fn set_loop(root: &Path, entry_id: &str, looped: bool) -> Result<Library, String> {
+    mutate(root, |library| {
+        let entry = library
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == entry_id)
+            .ok_or("audio_entry_unknown")?;
+        let changed = entry.looped != looped;
+        entry.looped = looped;
+        Ok(changed)
+    })
+}
+
 pub fn rename_entry(root: &Path, entry_id: &str, name: &str) -> Result<Library, String> {
     let name = name.trim();
     if name.is_empty() || name.len() > 200 {
@@ -1352,6 +1366,18 @@ pub fn audio_library_set_number(
     number: Option<u64>,
 ) -> Result<Library, String> {
     let library = set_number(&crate::root_clone(&state)?, &entry_id, number)?;
+    notify(&app, &library);
+    Ok(library)
+}
+
+#[tauri::command]
+pub fn audio_library_set_loop(
+    app: AppHandle,
+    state: State<'_, Mutex<crate::AppState>>,
+    entry_id: String,
+    looped: bool,
+) -> Result<Library, String> {
+    let library = set_loop(&crate::root_clone(&state)?, &entry_id, looped)?;
     notify(&app, &library);
     Ok(library)
 }

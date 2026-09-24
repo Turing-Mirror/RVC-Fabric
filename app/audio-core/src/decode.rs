@@ -147,7 +147,9 @@ impl Drop for Decoder {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        // A looping worker may have started the next pass after the first kill.
         if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
             let _ = child.wait();
         }
     }
@@ -155,9 +157,23 @@ impl Drop for Decoder {
 pub struct DecodedStream {
     pub decoder: Decoder,
     pub pcm: Consumer<f32>,
+    /// The whole clip in output frames, independent of any first-pass offset.
     pub range: FrameRange,
     pub format: PcmFormat,
 }
+
+#[derive(Clone, Default)]
+pub struct ClipOptions {
+    /// Skip this many clip frames on the first pass only (seek).
+    pub offset_frames: u64,
+    /// While raised, each pass is followed by another from the clip start.
+    /// Checked until the last decoded frame is consumed, so it can be
+    /// switched on or off during playback.
+    pub looping: Option<Arc<AtomicBool>>,
+    /// Short fade at each pass's edges so seams and seeks do not click.
+    pub edge_fade_seconds: f64,
+}
+
 pub fn decode(
     tools: &AudioTools,
     input: &Path,
@@ -165,16 +181,40 @@ pub fn decode(
     format: PcmFormat,
     buffer_seconds: f64,
 ) -> Result<DecodedStream, String> {
-    format.validate()?;
-    let frames = range.resolve(tools.probe(input)?, format.sample_rate)?;
-    let capacity = format
-        .samples_for(buffer_seconds)?
-        .max(format.channels as usize);
-    let (mut producer, pcm) = RingBuffer::new(capacity);
-    let filter = format!(
+    decode_clip(
+        tools,
+        input,
+        range,
+        format,
+        buffer_seconds,
+        ClipOptions::default(),
+    )
+}
+
+fn pass_filter(pass: FrameRange, format: PcmFormat, edge_fade_seconds: f64) -> String {
+    let mut filter = format!(
         "aresample={},atrim=start_sample={}:end_sample={},asetpts=PTS-STARTPTS",
-        format.sample_rate, frames.start, frames.end
+        format.sample_rate, pass.start, pass.end
     );
+    let length = pass.frames() as f64 / format.sample_rate as f64;
+    let fade = edge_fade_seconds.min(length / 4.0);
+    if fade.is_finite() && fade > 0.0 {
+        filter.push_str(&format!(
+            ",afade=t=in:d={fade:.6},afade=t=out:st={:.6}:d={fade:.6}",
+            length - fade
+        ));
+    }
+    filter
+}
+
+fn spawn_pass(
+    tools: &AudioTools,
+    input: &Path,
+    pass: FrameRange,
+    format: PcmFormat,
+    edge_fade_seconds: f64,
+) -> Result<(Child, BufReader<std::process::ChildStdout>), String> {
+    let filter = pass_filter(pass, format, edge_fade_seconds);
     let mut child = hidden(&tools.ffmpeg)
         .args([
             "-nostdin",
@@ -205,57 +245,157 @@ pub fn decode(
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
-    let mut stdout = BufReader::new(child.stdout.take().ok_or("audio_decoder_pipe_missing")?);
+    match child.stdout.take() {
+        Some(stdout) => Ok((child, BufReader::new(stdout))),
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err("audio_decoder_pipe_missing".into())
+        }
+    }
+}
+
+enum PassEnd {
+    Done,
+    Failed,
+    Cancelled,
+}
+
+fn read_pass(
+    stdout: &mut BufReader<std::process::ChildStdout>,
+    frames: u64,
+    producer: &mut rtrb::Producer<f32>,
+    ctl: &DecodeState,
+    channels: usize,
+    total: &mut u64,
+) -> PassEnd {
+    let mut bytes = vec![0u8; channels * 4];
+    let mut count = 0u64;
+    while count < frames {
+        if ctl.cancelled.load(Ordering::Acquire) {
+            return PassEnd::Cancelled;
+        }
+        match stdout.read_exact(&mut bytes) {
+            Ok(()) => {}
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => return PassEnd::Done,
+            Err(_) => return PassEnd::Failed,
+        }
+        while producer.slots() < channels {
+            if ctl.cancelled.load(Ordering::Acquire) {
+                return PassEnd::Cancelled;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        for sample in bytes.chunks_exact(4) {
+            let value = f32::from_le_bytes(sample.try_into().unwrap());
+            let _ = producer.push(if value.is_finite() { value } else { 0.0 });
+        }
+        count += 1;
+        *total += 1;
+        ctl.decoded_frames.store(*total, Ordering::Release);
+    }
+    PassEnd::Done
+}
+
+/// Reap without holding the child lock while waiting: Drop must be able to cancel.
+/// `None` means cancelled.
+fn reap(process: &Mutex<Child>, ctl: &DecodeState) -> Option<bool> {
+    loop {
+        if ctl.cancelled.load(Ordering::Acquire) {
+            return None;
+        }
+        let result = process.lock().unwrap().try_wait();
+        match result {
+            Ok(Some(status)) => return Some(status.success()),
+            Err(_) => return Some(false),
+            Ok(None) => thread::sleep(Duration::from_millis(1)),
+        }
+    }
+}
+
+pub fn decode_clip(
+    tools: &AudioTools,
+    input: &Path,
+    range: ClipRange,
+    format: PcmFormat,
+    buffer_seconds: f64,
+    options: ClipOptions,
+) -> Result<DecodedStream, String> {
+    format.validate()?;
+    let frames = range.resolve(tools.probe(input)?, format.sample_rate)?;
+    if options.offset_frames >= frames.frames() {
+        return Err("invalid_clip_offset".into());
+    }
+    let capacity = format
+        .samples_for(buffer_seconds)?
+        .max(format.channels as usize);
+    let (mut producer, pcm) = RingBuffer::new(capacity);
+    let first = FrameRange {
+        start: frames.start + options.offset_frames,
+        end: frames.end,
+    };
+    let (child, mut stdout) = spawn_pass(tools, input, first, format, options.edge_fade_seconds)?;
     let child = Arc::new(Mutex::new(child));
     let state = Arc::new(DecodeState::default());
     let ctl = state.clone();
     let process = child.clone();
+    let tools = tools.clone();
+    let input = input.to_path_buf();
     let worker = thread::Builder::new()
         .name("fabric-audio-decode".into())
         .spawn(move || {
-            let mut bytes = vec![0u8; format.channels as usize * 4];
-            let mut count = 0u64;
-            while !ctl.cancelled.load(Ordering::Acquire) && count < frames.frames() {
-                match stdout.read_exact(&mut bytes) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        if e.kind() != ErrorKind::UnexpectedEof {
-                            ctl.failed.store(true, Ordering::Release);
-                        }
+            let channels = format.channels as usize;
+            let mut pass = first;
+            let mut total = 0u64;
+            loop {
+                match read_pass(&mut stdout, pass.frames(), &mut producer, &ctl, channels, &mut total) {
+                    PassEnd::Cancelled => return,
+                    PassEnd::Failed => {
+                        ctl.failed.store(true, Ordering::Release);
                         break;
                     }
+                    PassEnd::Done => {}
                 }
-                while producer.slots() < format.channels as usize {
+                match reap(&process, &ctl) {
+                    None => return,
+                    Some(false) => {
+                        ctl.failed.store(true, Ordering::Release);
+                        break;
+                    }
+                    Some(true) => {}
+                }
+                let Some(looping) = options.looping.as_ref() else {
+                    break;
+                };
+                let again = loop {
                     if ctl.cancelled.load(Ordering::Acquire) {
                         return;
                     }
-                    thread::sleep(Duration::from_millis(1));
-                }
-                for sample in bytes.chunks_exact(4) {
-                    let value = f32::from_le_bytes(sample.try_into().unwrap());
-                    let _ = producer.push(if value.is_finite() { value } else { 0.0 });
-                }
-                count += 1;
-                ctl.decoded_frames.store(count, Ordering::Release);
-            }
-            // Reap without holding the child lock while waiting: Drop must be able to cancel.
-            loop {
-                if ctl.cancelled.load(Ordering::Acquire) {
+                    if looping.load(Ordering::Acquire) {
+                        break true;
+                    }
+                    if producer.slots() == capacity {
+                        break false;
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                };
+                if !again {
                     break;
                 }
-                let result = process.lock().unwrap().try_wait();
-                match result {
-                    Ok(Some(status)) => {
-                        if !status.success() {
-                            ctl.failed.store(true, Ordering::Release);
+                pass = frames;
+                match spawn_pass(&tools, &input, pass, format, options.edge_fade_seconds) {
+                    Ok((next, reader)) => {
+                        *process.lock().unwrap() = next;
+                        stdout = reader;
+                        if ctl.cancelled.load(Ordering::Acquire) {
+                            let _ = process.lock().unwrap().kill();
+                            return;
                         }
-                        break;
                     }
                     Err(_) => {
                         ctl.failed.store(true, Ordering::Release);
                         break;
                     }
-                    Ok(None) => thread::sleep(Duration::from_millis(1)),
                 }
             }
             ctl.finished.store(true, Ordering::Release);

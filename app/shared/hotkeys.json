@@ -14,6 +14,7 @@
     { "action": "play-entry", "requires_entry": true },
     { "action": "pause-current", "requires_entry": false },
     { "action": "replay-current", "requires_entry": false },
+    { "action": "toggle-loop", "requires_entry": false },
     { "action": "stop-current", "requires_entry": false },
     { "action": "stop-all", "requires_entry": false },
     { "action": "stop-preview", "requires_entry": false },

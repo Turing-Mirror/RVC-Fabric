@@ -20,6 +20,7 @@ pub struct Source {
     pub path: PathBuf,
     pub range: ClipRange,
     pub gain: f32,
+    pub looped: bool,
 }
 
 pub fn entry(root: &Path, entry_id: &str) -> Result<Source, String> {
@@ -45,6 +46,7 @@ pub fn entry(root: &Path, entry_id: &str) -> Result<Source, String> {
             end: entry.end,
         },
         gain: entry.volume,
+        looped: entry.looped,
     })
 }
 

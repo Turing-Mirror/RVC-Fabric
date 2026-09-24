@@ -219,6 +219,7 @@ pub fn run_audio_binding(app: &AppHandle, binding: AudioBinding) -> Result<(), S
                 }
                 "pause-current" => crate::audio_voice::toggle_pause_latest().map(|_| ()),
                 "replay-current" => crate::audio_voice::replay(&root, None).map(|_| ()),
+                "toggle-loop" => crate::audio_voice::set_loop(None, None).map(|_| ()),
                 "stop-current" => crate::audio_voice::stop_latest().map(|_| ()),
                 "stop-all" => { crate::audio_voice::audio_voice_stop(); Ok(()) },
                 "stop-preview" => { crate::audio_preview::audio_preview_stop(); Ok(()) },

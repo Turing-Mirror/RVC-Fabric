@@ -8,6 +8,7 @@ import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
 import { WaveformRange } from "../components/WaveformRange";
 import { AudioHotkeyEditor } from "../components/AudioHotkeyEditor";
+import { SeekBar } from "../components/SeekBar";
 import type { PlaybackStatus, VoicePlaybackStatus } from "../lib/audioPlayback";
 
 type Source = {
@@ -32,6 +33,7 @@ type Entry = {
   number: number | null;
   start: number;
   end: number | null;
+  looped: boolean;
 };
 type Library = {
   revision: number;
@@ -468,14 +470,21 @@ export function AudioPage() {
                 instanceId: instance.instance_id,
               }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
                 ? t("audio.playbackCancelled") : t("audio.operationFailed")))}>{t("audio.replay")}</Btn>
+              <Btn on={instance.looping} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_loop", {
+                instanceId: instance.instance_id, looping: !instance.looping,
+              }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.loop")}</Btn>
               <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop_instance", {
                 instanceId: instance.instance_id,
               }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
             </div>
-            <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden" role="progressbar"
-              aria-label={instance.name} aria-valuemin={0} aria-valuemax={instance.length_frames}
-              aria-valuenow={Math.min(instance.played_frames, instance.length_frames)}>
-              <div className="h-full bg-[var(--accent)]" style={{ width: `${instance.length_frames > 0 ? Math.min(100, instance.played_frames / instance.length_frames * 100) : 0}%` }} />
+            <div className="mt-2">
+              <SeekBar label={instance.name}
+                position={instance.played_frames / Math.max(1, instance.sample_rate)}
+                length={instance.length_frames / Math.max(1, instance.sample_rate)}
+                onSeek={(seconds) => void invoke<VoicePlaybackStatus>("audio_voice_seek", {
+                  instanceId: instance.instance_id, seconds,
+                }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
+                  ? t("audio.playbackCancelled") : t("audio.operationFailed")))} />
             </div>
           </div>)}
         </div> : null}
@@ -501,6 +510,11 @@ export function AudioPage() {
                 className="block mt-1 w-36 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
             </label>
             <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
+            <label className="flex items-center gap-1.5 pb-2 text-[12px] text-[var(--meta)]">
+              <input type="checkbox" checked={selected.looped} disabled={busy} className="accent-[var(--accent)]"
+                onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
+              {t("audio.loopByDefault")}
+            </label>
           </div>
           {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
             start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}

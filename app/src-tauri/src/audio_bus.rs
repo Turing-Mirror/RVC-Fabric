@@ -17,12 +17,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use std::{
-    sync::{atomic::Ordering, Arc},
+    sync::{
+        atomic::{AtomicBool as LoopFlag, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
 const MIC_BUFFER_SECONDS: f64 = 0.5;
 const SWAP_TIMEOUT: Duration = Duration::from_millis(750);
+/// Start, pause, stop and replacement ramp over this long instead of clicking.
+const FADE_SECONDS: f64 = 0.008;
+const FADE_TIMEOUT: Duration = Duration::from_millis(120);
 // Only concurrent decoder/track resources are bounded; the library is not.
 pub const MAX_MUSIC_INSTANCES: usize = 16;
 
@@ -93,7 +99,11 @@ struct Music {
     id: u64,
     entry_id: String,
     name: String,
+    /// Whole clip in output frames.
     length: u64,
+    /// Where in the clip the current decode started (seek).
+    offset: u64,
+    looping: Arc<LoopFlag>,
     base_gain: f32,
     control: Arc<TrackControl>,
     decoder: Decoder,
@@ -106,22 +116,55 @@ impl Music {
                 && self.decoder.state.decoded_frames.load(Ordering::Acquire) == 0)
     }
 
+    /// The decoder caps every pass at the clip end, so everything it produced
+    /// having been played is the end, looping or not.
     fn finished(&self) -> bool {
         self.failed()
-            || self.control.played_frames.load(Ordering::Acquire) >= self.length
             || (self.decoder.state.finished.load(Ordering::Acquire)
                 && self.control.played_frames.load(Ordering::Acquire)
                     >= self.decoder.state.decoded_frames.load(Ordering::Acquire))
+    }
+
+    fn position(&self) -> u64 {
+        clip_position(
+            self.offset + self.control.played_frames.load(Ordering::Acquire),
+            self.length,
+        )
+    }
+}
+
+/// Position within the clip after any number of loop passes; the exact end of
+/// a pass reads as the end, not as zero.
+fn clip_position(frames: u64, length: u64) -> u64 {
+    if length == 0 || frames <= length {
+        frames
+    } else {
+        (frames - 1) % length + 1
     }
 }
 
 pub struct MusicSnapshot {
     pub id: u64,
+    pub entry_id: String,
     pub name: String,
     pub played: u64,
     pub length: u64,
     pub paused: bool,
+    pub looping: bool,
     pub failed: bool,
+}
+
+pub struct NewMusic {
+    pub id: u64,
+    pub entry_id: String,
+    pub name: String,
+    pub decoded: DecodedStream,
+    pub offset: u64,
+    pub looping: Arc<LoopFlag>,
+    pub paused: bool,
+    pub gain: f32,
+    pub master_gain: f32,
+    pub placement: MusicPlacement,
 }
 
 pub struct VoiceBus {
@@ -271,6 +314,22 @@ impl VoiceBus {
         Ok(())
     }
 
+    /// Ask the callback to ramp a track down and give it one fade to finish.
+    fn fade_out(&self, control: &TrackControl) {
+        control.stopped.store(true, Ordering::Release);
+        let deadline = Instant::now() + FADE_TIMEOUT;
+        while !control.faded_out.load(Ordering::Acquire)
+            && !self.failed()
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn fade_frames(&self) -> u32 {
+        (self.format.sample_rate as f64 * FADE_SECONDS).round() as u32
+    }
+
     fn swap_music(&mut self, slot: usize, track: Track) -> Result<(), String> {
         self.music_control
             .try_replace_at(slot, track)
@@ -288,24 +347,30 @@ impl VoiceBus {
         }
     }
 
-    pub fn play_decoded(
-        &mut self,
-        id: u64,
-        entry_id: String,
-        name: String,
-        decoded: DecodedStream,
-        gain: f32,
-        master_gain: f32,
-        placement: MusicPlacement,
-    ) -> Result<(), String> {
+    pub fn play_decoded(&mut self, next: NewMusic) -> Result<(), String> {
+        let NewMusic {
+            id,
+            entry_id,
+            name,
+            decoded,
+            offset,
+            looping,
+            paused,
+            gain,
+            master_gain,
+            placement,
+        } = next;
         if decoded.format != self.format {
             return Err("output_format_changed".into());
         }
         let length = decoded.range.frames();
-        let (track, control) = Track::new(decoded.pcm, Some(length));
+        let (track, control) = Track::with_fade(decoded.pcm, None, self.fade_frames());
         control.set_gain(gain * master_gain)?;
         control.paused.store(true, Ordering::Release);
         let slot = music_slot(placement, self.music.iter().map(|music| music.as_ref().map(|m| m.id)))?;
+        if let Some(current) = self.music[slot].as_ref() {
+            self.fade_out(&current.control);
+        }
         if let Err(error) = self.swap_music(slot, track) {
             // A timed-out command may still reach a live callback. Never let
             // that late track become audible after the caller saw an error.
@@ -322,11 +387,13 @@ impl VoiceBus {
             entry_id,
             name,
             length,
+            offset,
+            looping,
             base_gain: gain,
             control: control.clone(),
             decoder: decoded.decoder,
         });
-        control.paused.store(false, Ordering::Release);
+        control.paused.store(paused, Ordering::Release);
         if matches!(placement, MusicPlacement::ReplaceAll) {
             let other_ids: Vec<_> = self
                 .music
@@ -353,6 +420,17 @@ impl VoiceBus {
         Ok(())
     }
 
+    pub fn set_looping(&mut self, id: u64, looping: bool) -> Result<(), String> {
+        let music = self
+            .music
+            .iter()
+            .flatten()
+            .find(|music| music.id == id)
+            .ok_or("audio_playback_not_playing")?;
+        music.looping.store(looping, Ordering::Release);
+        Ok(())
+    }
+
     pub fn set_master_gain(&mut self, gain: f32) -> Result<(), String> {
         for music in self.music.iter().flatten() {
             music.control.set_gain(music.base_gain * gain)?;
@@ -366,12 +444,7 @@ impl VoiceBus {
             .iter()
             .position(|music| music.as_ref().is_some_and(|m| m.id == id))
             .ok_or("audio_playback_not_playing")?;
-        self.music[slot]
-            .as_ref()
-            .unwrap()
-            .control
-            .stopped
-            .store(true, Ordering::Release);
+        self.fade_out(&self.music[slot].as_ref().unwrap().control);
         self.swap_music(slot, Self::idle_track(self.format))?;
         self.music[slot] = None;
         Ok(())
@@ -392,17 +465,14 @@ impl VoiceBus {
         let music = self.music.iter().flatten().find(|music| music.id == id)?;
         Some(MusicSnapshot {
             id,
+            entry_id: music.entry_id.clone(),
             name: music.name.clone(),
-            played: music.control.played_frames.load(Ordering::Acquire),
+            played: music.position(),
             length: music.length,
             paused: music.control.paused.load(Ordering::Acquire),
+            looping: music.looping.load(Ordering::Acquire),
             failed: music.failed(),
         })
-    }
-
-    pub fn music_entry_id(&self, id: u64) -> Option<&str> {
-        self.music.iter().flatten().find(|music| music.id == id)
-            .map(|music| music.entry_id.as_str())
     }
 
     pub fn music_ids(&self) -> Vec<u64> {
@@ -455,5 +525,14 @@ mod tests {
         assert_eq!(music_slot(MusicPlacement::ReplaceAll, ids.into_iter()).unwrap(), 0);
         assert_eq!(music_slot(MusicPlacement::ReplaceInstance(9), ids.into_iter()).unwrap_err(),
             "audio_playback_cancelled");
+    }
+
+    #[test]
+    fn loop_position_wraps_but_the_end_of_a_pass_reads_as_the_end() {
+        assert_eq!(clip_position(0, 100), 0);
+        assert_eq!(clip_position(100, 100), 100);
+        assert_eq!(clip_position(101, 100), 1);
+        assert_eq!(clip_position(250, 100), 50);
+        assert_eq!(clip_position(300, 100), 100);
     }
 }

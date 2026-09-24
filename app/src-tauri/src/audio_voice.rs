@@ -2,11 +2,11 @@
 //! the selected endpoint. Legacy RVC/DSP output remains mutually exclusive
 //! until their microphone producers are connected to the native bus.
 use crate::{
-    audio_bus::{BridgeDescriptor, MusicPlacement, VoiceBus},
+    audio_bus::{BridgeDescriptor, MusicPlacement, NewMusic, VoiceBus},
     audio_session::{self, PlaybackStatus},
 };
 use fabric_audio::{
-    decode::{self, AudioTools},
+    decode::{self, AudioTools, ClipOptions},
     output,
 };
 use serde::Serialize;
@@ -14,14 +14,18 @@ use serde_json::{json, Map};
 use std::{
     path::Path,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, Mutex,
     },
     time::Duration,
 };
 use tauri::{AppHandle, Emitter, State};
 
 const VOLUME_STEPS: i16 = 10;
+/// Decoded audio kept ahead of the callback; a loop pass restarts within it.
+const DECODE_BUFFER_SECONDS: f64 = 1.0;
+/// Fade at clip edges so loop seams and seeks do not click.
+const EDGE_FADE_SECONDS: f64 = 0.005;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub struct AudioVolumeStatus {
@@ -115,6 +119,8 @@ struct VoiceState {
     request: u64,
     pending: u64,
     last: VoicePlaybackStatus,
+    /// Most recently started entry and device, so replay still works after it ended.
+    recent: Option<(String, String)>,
 }
 
 #[derive(Clone, Serialize)]
@@ -123,6 +129,7 @@ pub struct VoicePlaybackStatus {
     playback: PlaybackStatus,
     pub instance_id: Option<u64>,
     pub active_count: usize,
+    pub looping: bool,
 }
 
 impl VoicePlaybackStatus {
@@ -131,6 +138,7 @@ impl VoicePlaybackStatus {
             playback: PlaybackStatus::idle(),
             instance_id: None,
             active_count: 0,
+            looping: false,
         }
     }
 }
@@ -142,6 +150,7 @@ impl VoiceState {
             request: 0,
             pending: 0,
             last: VoicePlaybackStatus::idle(),
+            recent: None,
         }
     }
 
@@ -315,6 +324,7 @@ fn playback_status(bus: &VoiceBus, id: u64) -> VoicePlaybackStatus {
         },
         instance_id: Some(music.id),
         active_count: bus.music_count(),
+        looping: music.looping,
     }
 }
 
@@ -390,19 +400,40 @@ pub fn start_entry(
     device_id: String,
     overlay: bool,
 ) -> Result<VoicePlaybackStatus, String> {
-    start_entry_placed(root, entry_id, device_id, if overlay {
+    start_entry_placed(root, entry_id, device_id, StartOptions::new(if overlay {
         MusicPlacement::Overlay
     } else {
         MusicPlacement::ReplaceAll
-    })
+    }))
+}
+
+struct StartOptions {
+    placement: MusicPlacement,
+    /// Seconds into the clip; only the first pass starts there.
+    offset_seconds: f64,
+    /// `None` takes the entry's saved loop setting.
+    looping: Option<bool>,
+    paused: bool,
+}
+
+impl StartOptions {
+    fn new(placement: MusicPlacement) -> Self {
+        Self {
+            placement,
+            offset_seconds: 0.0,
+            looping: None,
+            paused: false,
+        }
+    }
 }
 
 fn start_entry_placed(
     root: &Path,
     entry_id: String,
     device_id: String,
-    placement: MusicPlacement,
+    options: StartOptions,
 ) -> Result<VoicePlaybackStatus, String> {
+    let placement = options.placement;
     let request = {
         let _gate = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
         if ENGINE_STARTING.load(Ordering::Acquire) != 0 {
@@ -466,12 +497,22 @@ fn start_entry_placed(
                 _ => output::device_format(&device_id)?,
             }
         };
-        let decoded = decode::decode(
+        if !options.offset_seconds.is_finite() || options.offset_seconds < 0.0 {
+            return Err("invalid_clip_offset".into());
+        }
+        let looping = Arc::new(AtomicBool::new(options.looping.unwrap_or(source.looped)));
+        let offset = (options.offset_seconds * format.sample_rate as f64).floor() as u64;
+        let decoded = decode::decode_clip(
             &AudioTools::at(root),
             &source.path,
             source.range,
             format,
-            0.25,
+            DECODE_BUFFER_SECONDS,
+            ClipOptions {
+                offset_frames: offset,
+                looping: Some(looping.clone()),
+                edge_fade_seconds: EDGE_FADE_SECONDS,
+            },
         )?;
         let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
         if voice.request != request {
@@ -504,20 +545,23 @@ fn start_entry_placed(
             .as_ref()
             .is_none_or(|bus| bus.device_id() != device_id || bus.failed())
         {
-            voice.bus = Some(VoiceBus::open(device_id)?);
+            voice.bus = Some(VoiceBus::open(device_id.clone())?);
         }
         let bus = voice.bus.as_mut().unwrap();
         let volume = volume_settings(root);
         let master_gain = if volume.muted { 0.0 } else { volume.volume };
-        if let Err(error) = bus.play_decoded(
-            request,
-            entry_id,
-            source.name,
+        if let Err(error) = bus.play_decoded(NewMusic {
+            id: request,
+            entry_id: entry_id.clone(),
+            name: source.name,
             decoded,
-            source.gain,
+            offset,
+            looping,
+            paused: options.paused,
+            gain: source.gain,
             master_gain,
             placement,
-        ) {
+        }) {
             if (error.starts_with("audio_music_swap")
                 || voice.bus.as_ref().is_some_and(VoiceBus::failed))
                 && !voice
@@ -531,6 +575,7 @@ fn start_entry_placed(
         }
         let status = playback_status(voice.bus.as_ref().unwrap(), request);
         voice.last = VoicePlaybackStatus::idle();
+        voice.recent = Some((entry_id, device_id));
         watch(request);
         Ok(status)
     })();
@@ -541,16 +586,128 @@ fn start_entry_placed(
     result
 }
 
+/// Restart an instance from its clip start. With no instance given and nothing
+/// playing, the most recently started entry plays again.
 pub fn replay(root: &Path, instance_id: Option<u64>) -> Result<VoicePlaybackStatus, String> {
-    let (id, entry_id, device_id) = {
+    let target = {
+        let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+        let active = voice
+            .bus
+            .as_ref()
+            .and_then(|bus| instance_id.or_else(|| bus.latest_music_id()).map(|id| (bus, id)));
+        match active {
+            Some((bus, id)) => {
+                let music = bus.music_status(id).ok_or("audio_playback_not_playing")?;
+                Some((id, music.entry_id, bus.device_id().to_string(), music.looping))
+            }
+            None if instance_id.is_some() => return Err("audio_playback_not_playing".into()),
+            None => None,
+        }
+    };
+    match target {
+        Some((id, entry_id, device_id, looping)) => start_entry_placed(
+            root,
+            entry_id,
+            device_id,
+            StartOptions {
+                looping: Some(looping),
+                ..StartOptions::new(MusicPlacement::ReplaceInstance(id))
+            },
+        ),
+        None => {
+            let (entry_id, device_id) = VOICE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .recent
+                .clone()
+                .ok_or("audio_playback_not_playing")?;
+            start_entry_placed(
+                root,
+                entry_id,
+                device_id,
+                StartOptions::new(MusicPlacement::ReplaceAll),
+            )
+        }
+    }
+}
+
+/// Jump within the clip. The instance keeps its slot, loop and pause state.
+pub fn seek(
+    root: &Path,
+    instance_id: Option<u64>,
+    seconds: f64,
+) -> Result<VoicePlaybackStatus, String> {
+    if !seconds.is_finite() {
+        return Err("invalid_clip_offset".into());
+    }
+    let (id, entry_id, device_id, looping, paused, length, rate) = {
         let voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
         let bus = voice.bus.as_ref().ok_or("audio_playback_not_playing")?;
-        let id = instance_id.or_else(|| bus.latest_music_id())
+        let id = instance_id
+            .or_else(|| bus.latest_music_id())
             .ok_or("audio_playback_not_playing")?;
-        let entry_id = bus.music_entry_id(id).ok_or("audio_playback_not_playing")?;
-        (id, entry_id.to_string(), bus.device_id().to_string())
+        let music = bus.music_status(id).ok_or("audio_playback_not_playing")?;
+        (
+            id,
+            music.entry_id,
+            bus.device_id().to_string(),
+            music.looping,
+            music.paused,
+            music.length,
+            bus.format().sample_rate,
+        )
     };
-    start_entry_placed(root, entry_id, device_id, MusicPlacement::ReplaceInstance(id))
+    let last_frame = length.saturating_sub(1) as f64 / rate.max(1) as f64;
+    start_entry_placed(
+        root,
+        entry_id,
+        device_id,
+        StartOptions {
+            placement: MusicPlacement::ReplaceInstance(id),
+            offset_seconds: seconds.clamp(0.0, last_frame),
+            looping: Some(looping),
+            paused,
+        },
+    )
+}
+
+#[tauri::command]
+pub async fn audio_voice_seek(
+    state: State<'_, Mutex<crate::AppState>>,
+    instance_id: Option<u64>,
+    seconds: f64,
+) -> Result<VoicePlaybackStatus, String> {
+    let root = crate::root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || seek(&root, instance_id, seconds))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Switch looping for one instance; `None` toggles. Takes effect until the
+/// last decoded frame has played, so it can still rescue an ending clip.
+pub fn set_loop(
+    instance_id: Option<u64>,
+    looping: Option<bool>,
+) -> Result<VoicePlaybackStatus, String> {
+    let mut voice = VOICE.lock().unwrap_or_else(|e| e.into_inner());
+    let bus = voice.bus.as_mut().ok_or("audio_playback_not_playing")?;
+    let id = instance_id
+        .or_else(|| bus.latest_music_id())
+        .ok_or("audio_playback_not_playing")?;
+    let current = bus
+        .music_status(id)
+        .ok_or("audio_playback_not_playing")?
+        .looping;
+    bus.set_looping(id, looping.unwrap_or(!current))?;
+    Ok(playback_status(bus, id))
+}
+
+#[tauri::command]
+pub fn audio_voice_loop(
+    instance_id: Option<u64>,
+    looping: Option<bool>,
+) -> Result<VoicePlaybackStatus, String> {
+    set_loop(instance_id, looping)
 }
 
 #[tauri::command]
@@ -684,11 +841,13 @@ mod tests {
             },
             instance_id: Some(7),
             active_count: 2,
+            looping: true,
         };
         let value = serde_json::to_value(status).unwrap();
         assert_eq!(value["state"], "playing");
         assert_eq!(value["instance_id"], 7);
         assert_eq!(value["active_count"], 2);
+        assert_eq!(value["looping"], true);
         assert!(value.get("playback").is_none());
     }
 

@@ -13,6 +13,8 @@ pub struct TrackControl {
     pub flush: AtomicBool,
     pub played_frames: AtomicU64,
     pub underrun_frames: AtomicU64,
+    /// Set by the callback once a paused or stopped track has ramped to zero.
+    pub faded_out: AtomicBool,
     gain: AtomicU32,
 }
 impl Default for TrackControl {
@@ -23,6 +25,7 @@ impl Default for TrackControl {
             flush: AtomicBool::new(false),
             played_frames: AtomicU64::new(0),
             underrun_frames: AtomicU64::new(0),
+            faded_out: AtomicBool::new(true),
             gain: AtomicU32::new(1.0f32.to_bits()),
         }
     }
@@ -40,15 +43,34 @@ pub struct Track {
     pcm: Consumer<f32>,
     control: Arc<TrackControl>,
     length: Option<u64>,
+    /// Envelope change per frame; zero switches instantly.
+    fade_step: f32,
+    envelope: f32,
 }
 impl Track {
     pub fn new(pcm: Consumer<f32>, length: Option<u64>) -> (Self, Arc<TrackControl>) {
+        Self::with_fade(pcm, length, 0)
+    }
+
+    /// Start, pause, resume and stop ramp over `fade_frames` instead of
+    /// switching on a sample boundary, which is audible as a click.
+    pub fn with_fade(
+        pcm: Consumer<f32>,
+        length: Option<u64>,
+        fade_frames: u32,
+    ) -> (Self, Arc<TrackControl>) {
         let control = Arc::new(TrackControl::default());
         (
             Self {
                 pcm,
                 control: control.clone(),
                 length,
+                fade_step: if fade_frames == 0 {
+                    0.0
+                } else {
+                    1.0 / fade_frames as f32
+                },
+                envelope: 0.0,
             },
             control,
         )
@@ -185,7 +207,17 @@ impl Mixer {
             self.scratch.fill(0.0);
             for track in &mut self.tracks {
                 let ctl = &track.control;
-                if ctl.paused.load(Ordering::Relaxed) || ctl.stopped.load(Ordering::Relaxed) {
+                let target = if ctl.paused.load(Ordering::Relaxed)
+                    || ctl.stopped.load(Ordering::Relaxed)
+                {
+                    0.0
+                } else {
+                    1.0
+                };
+                if track.fade_step == 0.0 {
+                    track.envelope = target;
+                }
+                if target == 0.0 && track.envelope <= 0.0 {
                     continue;
                 }
                 let position = ctl.played_frames.load(Ordering::Relaxed);
@@ -196,7 +228,12 @@ impl Mixer {
                     ctl.underrun_frames.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
-                let gain = f32::from_bits(ctl.gain.load(Ordering::Relaxed));
+                if track.envelope < target {
+                    track.envelope = (track.envelope + track.fade_step).min(1.0);
+                } else if track.envelope > target {
+                    track.envelope = (track.envelope - track.fade_step).max(0.0);
+                }
+                let gain = f32::from_bits(ctl.gain.load(Ordering::Relaxed)) * track.envelope;
                 for value in &mut self.scratch {
                     let sample = track.pcm.pop().unwrap_or(0.0);
                     *value += if sample.is_finite() {
@@ -219,6 +256,12 @@ impl Mixer {
         }
         for sample in frames.into_remainder() {
             *sample = T::EQUILIBRIUM;
+        }
+        for track in &self.tracks {
+            track
+                .control
+                .faded_out
+                .store(track.envelope <= 0.0, Ordering::Release);
         }
     }
 }
@@ -457,6 +500,27 @@ mod tests {
         mixer.render(&mut out);
         assert_eq!(out, [0.375, -0.125]);
         assert!(control.take_retired_at(0).is_some());
+    }
+
+    #[test]
+    fn faded_track_ramps_in_and_out_without_a_step() {
+        let values: Vec<f32> = std::iter::repeat_n(1.0, 16).collect();
+        let (mut producer, consumer) = RingBuffer::new(16);
+        for v in values {
+            producer.push(v).unwrap();
+        }
+        let (t, ctl) = Track::with_fade(consumer, None, 4);
+        let mut mixer = Mixer::new(format(), vec![t]).unwrap();
+        let mut out = [0.0f32; 8];
+        mixer.render(&mut out);
+        assert_eq!(out, [0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1.0, 1.0]);
+        assert!(!ctl.faded_out.load(Ordering::Acquire));
+        ctl.stopped.store(true, Ordering::Release);
+        mixer.render(&mut out);
+        assert_eq!(out, [0.75, 0.75, 0.5, 0.5, 0.25, 0.25, 0.0, 0.0]);
+        assert!(ctl.faded_out.load(Ordering::Acquire));
+        mixer.render(&mut out);
+        assert_eq!(out, [0.0; 8]);
     }
 
     #[test]

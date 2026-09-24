@@ -144,6 +144,7 @@ export function AudioHotkeyEditor({ entries, entryId }: { entries?: Entry[]; ent
     "play-entry": t("audio.playToVoice"),
     "pause-current": t("audio.hotkeyPauseCurrent"),
     "replay-current": t("audio.hotkeyReplayCurrent"),
+    "toggle-loop": t("audio.hotkeyToggleLoop"),
     "stop-current": t("audio.hotkeyStopCurrent"),
     "stop-all": t("audio.stopAll"),
     "stop-preview": t("audio.hotkeyStopPreview"),

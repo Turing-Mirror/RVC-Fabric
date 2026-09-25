@@ -56,6 +56,7 @@ import {
   type VoiceAuthor,
   type VoiceModel,
 } from "../lib/voices";
+import { Leave } from "../components/Presence";
 
 type SortKey = "default" | "name" | "index";
 /** 列表看的是哪一种东西。RVC 音色和 DSP 预设不混排。 */
@@ -889,11 +890,11 @@ function ModelsPageImpl({
         />
       ) : null}
 
-      {authorPick ? (
+      <Leave>{authorPick ? (
         <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
-      ) : null}
+      ) : null}</Leave>
 
-      {coverEdit ? (
+      <Leave>{coverEdit ? (
         <CropCoverDialog
           model={coverEdit}
           onClose={() => setCoverEdit(null)}
@@ -903,7 +904,7 @@ function ModelsPageImpl({
             if (message) setMsg(message);
           }}
         />
-      ) : null}
+      ) : null}</Leave>
 
     </PagePad>
   );

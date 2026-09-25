@@ -3,6 +3,7 @@ import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { openExternal } from "../lib/plaza";
 import type { VoiceAuthor } from "../lib/voices";
+import { Modal } from "./Modal";
 
 /**
  * 多作者时问一声「打开哪一位的主页」。居中卡片，跟关闭询问同一套样式；
@@ -23,10 +24,7 @@ export function AuthorsDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div
-      className="fixed inset-0 z-[92] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={onClose}
-    >
+    <Modal z={92} onBackdrop={onClose}>
       <div
         className="w-full max-w-[360px] rounded-[var(--r)] bg-[var(--surface)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
@@ -49,6 +47,6 @@ export function AuthorsDialog({
           ))}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

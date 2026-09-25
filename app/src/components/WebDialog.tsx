@@ -5,6 +5,7 @@ import {
   registerDialogHandler,
   type DialogRequest,
 } from "../lib/webDialog";
+import { Modal } from "./Modal";
 
 /**
  * 主窗和工具窗各挂一份。队列在模块里，哪个 webview 的 handler 在，就在哪画。
@@ -96,13 +97,10 @@ export function WebDialogHost() {
     return () => window.removeEventListener("keydown", onKey);
   }, [req]);
 
-  if (!req) return null;
+  if (!req) return <Modal open={false} />;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={() => finish(req.kind === "confirm" ? false : null)}
-    >
+    <Modal z={100} onBackdrop={() => finish(req.kind === "confirm" ? false : null)}>
       <div
         ref={dialogRef}
         tabIndex={-1}
@@ -155,6 +153,6 @@ export function WebDialogHost() {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

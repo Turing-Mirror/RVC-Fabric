@@ -7,6 +7,8 @@ import { openHelpSection } from "../lib/helpNav";
 import { copyText } from "../lib/clipboard";
 import qqGroup from "../assets/qq_group.jpg";
 import { t } from "../i18n/t";
+import { Modal } from "./Modal";
+import { Leave } from "./Presence";
 
 /**
  * 链路自检：把「听不到」从 dock 上的一句红字，变成一张逐项可核对的清单。
@@ -307,10 +309,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         : "text-[var(--meta)]";
 
   return (
-    <div
-      className="fixed inset-0 z-[90] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={onClose}
-    >
+    <Modal z={90} onBackdrop={onClose}>
       <div
         className="w-full max-w-[620px] max-h-[82vh] overflow-auto rounded-[var(--r)] bg-[var(--surface)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
@@ -410,9 +409,9 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-      {qr ? (
+      <Leave>{qr ? (
         <QrDialog src={qqGroup} label={t("s.lcQrLabel")} onClose={() => setQr(false)} />
-      ) : null}
-    </div>
+      ) : null}</Leave>
+    </Modal>
   );
 }

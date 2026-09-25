@@ -79,6 +79,8 @@ import { registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
+import { Leave } from "./components/Presence";
+import { Modal } from "./components/Modal";
 
 /**
  * 变声多少次之后问一句「要不要关注」。
@@ -1258,8 +1260,7 @@ export default function App() {
         )}
       </PageHost>
 
-      {killAsk ? (
-        <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
+      <Modal open={Boolean(killAsk)} z={60} contained>
           <div
             ref={killDlgRef}
             tabIndex={-1}
@@ -1282,11 +1283,9 @@ export default function App() {
               >{t("s.killStsAskGo")}</button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </Modal>
 
-      {closeAsk ? (
-        <div className="absolute inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
+      <Modal open={Boolean(closeAsk)} z={60} contained>
           <div
             ref={closeDlgRef}
             tabIndex={-1}
@@ -1316,8 +1315,7 @@ export default function App() {
               >{t("s.aea56dcdfe")}</button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </Modal>
 
       {/* 撕裂这两条排在所有 Nudge 前面：用户正卡着，别让「要不要更新」
           「要不要开统计」挡在他前面。 */}
@@ -1446,9 +1444,9 @@ export default function App() {
         >{t("s.7f3ebfb67b")}</Nudge>
       ) : null}
 
-      {qr ? (
+      <Leave>{qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
-      ) : null}
+      ) : null}</Leave>
 
       <WebDialogHost />
       <NativeDialogHint />
@@ -1483,7 +1481,7 @@ export default function App() {
         showSelfCheck={engine.status?.state === "error"}
         onSelfCheck={() => setSelfCheckOpen(true)}
       />
-      {selfCheckOpen ? <LinkCheckDialog onClose={() => setSelfCheckOpen(false)} /> : null}
+      <Leave>{selfCheckOpen ? <LinkCheckDialog onClose={() => setSelfCheckOpen(false)} /> : null}</Leave>
       {page === "home" ? (
         <OnboardingBar
           tick={onboardTick}

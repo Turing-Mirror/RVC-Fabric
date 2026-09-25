@@ -8,6 +8,7 @@ import {
   setVoiceCover,
   type VoiceModel,
 } from "../lib/voices";
+import { Modal } from "./Modal";
 
 /**
  * 封面裁剪对话框（模型页「⋯」→「更换封面」）。
@@ -429,12 +430,9 @@ export function CropCoverDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[92] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={() => {
+    <Modal z={92} onBackdrop={() => {
         if (!busy) onClose();
-      }}
-    >
+      }}>
       <div
         className="w-full max-w-[860px] max-h-[86vh] overflow-auto rounded-[var(--r)] bg-[var(--surface)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
@@ -574,6 +572,6 @@ export function CropCoverDialog({
           </span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

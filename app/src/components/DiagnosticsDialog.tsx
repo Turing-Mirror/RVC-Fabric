@@ -9,6 +9,7 @@ import {
   prepareShot,
   type Shot,
 } from "../lib/shots";
+import { Modal } from "./Modal";
 
 /** 出包之前的文件清单。bytes 为 null 表示这份是出包时现生成的。 */
 type DiagPreview = {
@@ -148,7 +149,7 @@ export function DiagnosticsDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onCancel]);
 
-  if (!open) return null;
+  if (!open) return <Modal open={false} />;
 
   const field =
     "w-full px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent " +
@@ -156,10 +157,7 @@ export function DiagnosticsDialog({
     "focus:shadow-[inset_0_0_0_1px_var(--accent)]";
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={onCancel}
-    >
+    <Modal z={100} onBackdrop={onCancel}>
       <div
         role="dialog"
         aria-modal="true"
@@ -383,7 +381,7 @@ export function DiagnosticsDialog({
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Modal } from "./Modal";
 
 /**
  * 一张二维码，铺在一层半透明底上。
@@ -27,10 +28,7 @@ export function QrDialog({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-[90] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={onClose}
-    >
+    <Modal z={90} onBackdrop={onClose}>
       <div
         className="rounded-[var(--r)] bg-[var(--surface)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
         onClick={(e) => e.stopPropagation()}
@@ -43,6 +41,6 @@ export function QrDialog({
           className="block h-auto max-h-[min(70vh,560px)] w-auto max-w-[min(420px,80vw)] select-none rounded-[var(--rs)]"
         />
       </div>
-    </div>
+    </Modal>
   );
 }

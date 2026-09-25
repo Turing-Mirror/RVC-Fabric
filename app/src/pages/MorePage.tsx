@@ -22,6 +22,7 @@ import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
 import { scheduleScrollToId } from "../lib/scrollPane";
+import { Leave } from "../components/Presence";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
  *  打包）都已经在，开放时把它改成 true 即可，不要删代码。 */
@@ -568,9 +569,9 @@ export function MorePage({
           ))}
         </Group>
       </Block>
-      {qr ? (
+      <Leave>{qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />
-      ) : null}
+      ) : null}</Leave>
       <ConsultDialog
         open={consultOpen}
         onCancel={() => setConsultOpen(false)}

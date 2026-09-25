@@ -7,6 +7,7 @@ import {
   useI18n,
   type LocaleCode,
 } from "../i18n";
+import { Modal } from "./Modal";
 
 type Props = {
   open: boolean;
@@ -28,7 +29,7 @@ export function LanguageGate({ open, onDone }: Props) {
     if (open) setChoice(locale || system);
   }, [open, locale, system]);
 
-  if (!open) return null;
+  if (!open) return <Modal open={false} />;
 
   const confirm = () => {
     const code = choice;
@@ -40,7 +41,7 @@ export function LanguageGate({ open, onDone }: Props) {
   };
 
   return (
-    <div className="absolute inset-0 z-[55] flex items-center justify-center bg-[color-mix(in_srgb,var(--ink)_28%,transparent)] p-6">
+    <Modal z={55} contained>
       <div className="w-full max-w-[440px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">
           {t("onboarding.languageTitle")}
@@ -96,6 +97,6 @@ export function LanguageGate({ open, onDone }: Props) {
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

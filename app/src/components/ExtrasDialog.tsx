@@ -19,6 +19,7 @@ import {
   type ExtraProgress,
 } from "../lib/extraJobs";
 import { useI18n } from "../i18n";
+import { Modal } from "./Modal";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -406,12 +407,9 @@ export function ExtrasDialog({
   reason?: string;
 }) {
   const [busy, setBusy] = useState(false);
-  if (!open) return null;
+  if (!open) return <Modal open={false} />;
   return (
-    <div
-      className="fixed inset-0 z-[80] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={busy ? undefined : onClose}
-    >
+    <Modal z={80} onBackdrop={busy ? undefined : onClose}>
       {/*
         内层要 min-h-0 + overflow-y-auto。
         外面给了 max-h，里面的 flex 子项却默认 min-height:auto —— 不肯缩到
@@ -430,7 +428,7 @@ export function ExtrasDialog({
           onBusyChange={setBusy}
         />
       </div>
-    </div>
+    </Modal>
   );
 }
 

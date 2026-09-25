@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
+import { Modal } from "./Modal";
 
 /**
  * 申请专业优化：照着稿子念一遍，软件打包寄出去。
@@ -96,7 +97,7 @@ export function ConsultDialog({
     };
   }, [open, refresh]);
 
-  if (!open) return null;
+  if (!open) return <Modal open={false} />;
 
   const block = blockOf(st?.script, lang);
   const langs = st?.langs ?? ["zh", "en", "ja"];
@@ -142,10 +143,7 @@ export function ConsultDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]"
-      onClick={busy ? undefined : onCancel}
-    >
+    <Modal z={100} onBackdrop={busy ? undefined : onCancel}>
       <div
         role="dialog"
         aria-modal="true"
@@ -252,6 +250,6 @@ export function ConsultDialog({
           </Btn>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { mount, pressKey, tick, type Mounted } from "../test/dom";
 import { WebDialogHost } from "./WebDialog";
+import { EXIT_MS } from "../hooks/useExit";
 
 function buttons(m: Mounted): HTMLElement[] {
   return Array.from(m.container.querySelectorAll("[role=dialog] button"));
@@ -61,7 +62,8 @@ describe("WebDialog 确认框键盘语义", () => {
     await expect(p).resolves.toBe(false);
     // 弹窗关掉之后不能再有残留的对话框响应后续按键
     pressKey(document.body, "Enter");
-    await tick();
+    // 退场动画放完才卸掉。
+    await act(() => new Promise((r) => setTimeout(r, EXIT_MS + 20)));
     expect(m.container.querySelector("[role=dialog]")).toBeNull();
   });
 

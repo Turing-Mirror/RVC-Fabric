@@ -50,6 +50,7 @@ import { openExternal } from "../lib/plaza";
 import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
 import { useI18n } from "../i18n";
+import { Leave } from "./Presence";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
@@ -1043,9 +1044,9 @@ function VoiceCard({
           ) : null}
         </div>
       ) : null}
-      {authorPick ? (
+      <Leave>{authorPick ? (
         <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
-      ) : null}
+      ) : null}</Leave>
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
         {v.installed ? (
           <Btn on disabled>

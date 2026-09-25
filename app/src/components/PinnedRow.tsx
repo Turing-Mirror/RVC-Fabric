@@ -64,13 +64,14 @@ function PinCard({ item, onPick }: { item: PlazaItem; onPick: () => void }) {
       onClick={onPick}
       title={label}
       className={[
-        "text-left bg-transparent border-0 p-0 cursor-pointer block w-full",
+        "group text-left bg-transparent border-0 p-0 cursor-pointer block w-full",
         "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
         "rounded-[var(--r)] transition-transform duration-200 ease-[var(--ease)]",
-        "hover:-translate-y-0.5 active:scale-[0.985]",
+        "active:scale-[0.985]",
       ].join(" ")}
     >
-      <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
+      {/* 指到时封面往里收一点（内阴影），不上浮。 */}
+      <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl after:content-[''] after:absolute after:inset-0 after:rounded-[inherit] after:pointer-events-none after:transition-shadow after:duration-200 group-hover:after:shadow-[inset_0_2px_12px_rgba(0,0,0,.14)]">
         {showImg ? (
           <img
             src={item.image_url}

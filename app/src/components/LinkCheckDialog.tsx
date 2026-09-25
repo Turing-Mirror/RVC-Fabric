@@ -329,13 +329,10 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
 
         {rows.length ? (
           <div className="flex flex-col">
-            {rows.map((r, i) => (
+            {rows.map((r) => (
               <div
                 key={r.id}
-                className={[
-                  "py-2.5",
-                  i > 0 ? "border-t border-[var(--hairline)]" : "",
-                ].join(" ")}
+                className="py-2.5"
               >
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-mono text-[11px] shrink-0 w-[36px] text-right">
@@ -353,7 +350,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
             ))}
 
             {/* 麦克风电平：交互检查行 */}
-            <div className="py-2.5 border-t border-[var(--hairline)]">
+            <div className="py-2.5">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-mono text-[11px] shrink-0 w-[36px] text-right">
                   <span
@@ -397,7 +394,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
           </div>
         ) : null}
 
-        <div className="mt-4 pt-3 border-t border-[var(--hairline)] flex items-center gap-2.5 flex-wrap">
+        <div className="mt-5 flex items-center gap-2.5 flex-wrap">
           <span className="text-[12px] text-[var(--meta)]">{t("s.lcHint")}</span>
           <div className="ml-auto flex items-center gap-2.5">
             <Btn onClick={() => void load()}>{t("s.38108eaa1d")}</Btn>

@@ -68,7 +68,7 @@ export function CkptAdvanced() {
   };
 
   return (
-    <div className="mt-5 border-t border-[var(--hairline)] pt-4">
+    <div className="mt-7">
       <SegmentControl<Tab>
         value={tab}
         onChange={setTab}

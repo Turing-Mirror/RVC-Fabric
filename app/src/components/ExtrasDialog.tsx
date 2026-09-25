@@ -328,7 +328,7 @@ export function ExtrasPanel({
             <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
           </div>
         ) : (
-          <div className="min-h-[200px] flex flex-col border-t border-[var(--hairline)]">
+          <div className="min-h-[200px] flex flex-col">
             <div className="flex-1">
               {pageItems.map((it) => (
                 <ItemRow
@@ -454,7 +454,7 @@ function ItemRow({
     ? Math.round(((progress.done ?? 0) / Math.max(progress.total, 1)) * 100)
     : 0;
   return (
-    <div className="border-b border-[var(--hairline)] py-3.5">
+    <div className="py-3.5">
       <div className="flex items-center gap-4">
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] leading-snug">

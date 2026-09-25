@@ -432,7 +432,7 @@ export function AudioPage() {
         <div className="mt-3 bg-[var(--group)] rounded-[var(--r)] px-4">
           {shown.length === 0 ? <p className="text-[13px] text-[var(--meta)] py-4 m-0">{t("audio.empty")}</p> : shown.map((entry) => (
             <button type="button" key={entry.id} onClick={() => chooseEntry(entry)}
-              className="w-full text-left flex items-center gap-3 py-3 border-0 border-b border-[var(--line)] last:border-b-0 bg-transparent cursor-pointer hover:text-[var(--accent)]">
+              className="w-full text-left flex items-center gap-3 py-3 border-0 bg-transparent cursor-pointer hover:text-[var(--accent)]">
               <span className="w-12 text-[var(--meta)] text-[12px]">{entry.number ?? "—"}</span>
               <span className="min-w-0 truncate text-[13px] text-[var(--ink)]">{entry.name}</span>
               <span className="ml-auto text-[11px] text-[var(--meta)]">{assetById.get(entry.asset_id)?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : ""}</span>

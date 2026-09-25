@@ -1360,7 +1360,7 @@ function HotkeyRow({
   };
 
   return (
-    <div className="flex items-center py-2.5 border-b border-[var(--hairline)] last:border-b-0">
+    <div className="flex items-center py-2.5">
       <span className="text-[13px]">{label}</span>
       {/* 「全局」逐个可关。全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
           用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在

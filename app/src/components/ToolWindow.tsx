@@ -169,7 +169,7 @@ function ToolTitleBar({ title }: { title: string }) {
   };
   return (
     <header
-      className="flex-none h-[42px] flex items-center pl-[18px] pr-1.5 border-b border-[var(--hairline)]"
+      className="flex-none h-[42px] flex items-center pl-[18px] pr-1.5"
       data-tauri-drag-region
     >
       <span

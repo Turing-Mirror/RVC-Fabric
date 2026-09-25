@@ -193,7 +193,7 @@ export function DspPresetEditor({
   if (!specs) return null;
 
   return (
-    <div className="mt-6 pt-5 border-t border-[var(--hairline)]">
+    <div className="mt-9">
       <div className="flex items-center gap-3 mb-2">
         <h4 className="m-0 text-[14px] font-semibold flex items-center gap-[9px]">
           {t("s.dspEditTitle", { v0: preset.name })}

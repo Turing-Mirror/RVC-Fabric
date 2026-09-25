@@ -70,12 +70,6 @@ export function FindingList({ findings }: { findings: Finding[] }) {
         const action = actionFor(f);
         return (
           <li key={f.code + i} className="relative py-2 first:pt-0">
-            {i > 0 ? (
-              <div
-                aria-hidden
-                className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
-              />
-            ) : null}
             <div className="flex flex-wrap gap-2 items-baseline">
               {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先处理哪个。 */}
               <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">

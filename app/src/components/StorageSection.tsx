@@ -186,14 +186,8 @@ export function StorageSection() {
               {t("s.cleanupDesc")}
             </p>
             <ul className="m-0 list-none p-0">
-              {pageRows.map((row, i) => (
+              {pageRows.map((row) => (
                 <li key={row.exp} className="relative py-3 first:pt-0">
-                  {i > 0 ? (
-                    <div
-                      aria-hidden
-                      className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
-                    />
-                  ) : null}
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-[13px] font-semibold">{row.exp}</span>
                     <span className="font-mono text-[11.5px] text-[var(--meta)] tabular-nums">

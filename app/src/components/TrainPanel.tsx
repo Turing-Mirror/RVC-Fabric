@@ -523,12 +523,6 @@ export function TrainPanel() {
           <ul className="m-0 mb-4 list-none p-0">
             {checks.map((c, i) => (
               <li key={i} className="relative py-2 first:pt-0">
-                {i > 0 ? (
-                  <div
-                    aria-hidden
-                    className="absolute top-0 left-0 right-0 h-px bg-[var(--hairline)]"
-                  />
-                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先做哪个。 */}
                   <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">

@@ -147,7 +147,7 @@ export function MicTest({ deviceReady }: { deviceReady: boolean }) {
           <p
             className={[
               "m-0 mt-1.5 text-[12.5px] leading-relaxed whitespace-pre-line",
-              bad ? "text-[#b8534f]" : "text-[var(--help)]",
+              bad ? "text-[var(--danger)]" : "text-[var(--help)]",
             ].join(" ")}
           >
             {msg}

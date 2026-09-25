@@ -563,7 +563,7 @@ function ModelsPageImpl({
                           </span>
                         ) : null}
                         {v.missing ? (
-                          <span className="text-[11px] text-[#c44]">{t("s.2fe9b75856")}</span>
+                          <span className="text-[11px] text-[var(--danger)]">{t("s.2fe9b75856")}</span>
                         ) : null}
                       </span>
                     ) : null}

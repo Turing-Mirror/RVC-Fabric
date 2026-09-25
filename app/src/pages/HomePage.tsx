@@ -315,7 +315,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onVoice
           action={<Btn onClick={onOpenModels}>{t("s.35e4afb47d")}</Btn>}
         >
           {msg ? (
-            <p className="text-[12.5px] text-[#b8534f] m-0 mb-3">{msg}</p>
+            <p className="text-[12.5px] text-[var(--danger)] m-0 mb-3">{msg}</p>
           ) : null}
           <div
             ref={flipRowRef}

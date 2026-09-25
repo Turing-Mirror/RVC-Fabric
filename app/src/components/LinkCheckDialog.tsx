@@ -303,7 +303,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
     l === "ok"
       ? "text-[var(--accent)]"
       : l === "bad"
-        ? "text-[#b8534f]"
+        ? "text-[var(--danger)]"
         : "text-[var(--meta)]";
 
   return (
@@ -321,7 +321,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {err ? (
-          <p className="m-0 mb-3 text-[12.5px] text-[#b8534f]">{err}</p>
+          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger)]">{err}</p>
         ) : null}
 
         {!data && !err ? (
@@ -362,7 +362,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
                       micState === "ok"
                         ? "text-[var(--accent)]"
                         : micState === "bad"
-                          ? "text-[#b8534f]"
+                          ? "text-[var(--danger)]"
                           : "text-[var(--meta)]"
                     }
                   >

@@ -228,7 +228,7 @@ export function ConsultDialog({
         />
 
         {err ? (
-          <p className="text-[12px] text-[var(--danger,#c0392b)] mt-0 mb-3 break-all">{err}</p>
+          <p className="text-[12px] text-[var(--danger)] mt-0 mb-3 break-all">{err}</p>
         ) : null}
 
         <div className="flex gap-2 justify-end items-center flex-wrap">

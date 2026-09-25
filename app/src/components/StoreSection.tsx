@@ -25,7 +25,7 @@ import {
   useStoreJobs,
   type VoiceProg,
 } from "../lib/storeJobs";
-import { Btn } from "./ui";
+import { Btn, Warn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
@@ -573,11 +573,11 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       </div>
 
       {source !== "official" ? (
-        <div className="mb-3 text-[11.5px] leading-snug text-[var(--meta)] bg-[color-mix(in_srgb,var(--notify)_12%,transparent)] rounded-[var(--rs)] px-3 py-2">{t("s.7fe9bcf336")}</div>
+        <Warn className="mb-3">{t("s.7fe9bcf336")}</Warn>
       ) : null}
 
       {err || jobs.error ? (
-        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[color-mix(in_srgb,#c44_90%,var(--ink))]">
+        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[var(--danger)]">
           {err || jobs.error}
         </div>
       ) : null}

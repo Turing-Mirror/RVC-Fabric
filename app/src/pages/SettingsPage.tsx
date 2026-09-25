@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
-import { Block, Btn, HelpMark, PagePad } from "../components/ui";
+import { Block, Btn, HelpMark, PagePad, Warn } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
 import { AudioRecoverySettings } from "../components/AudioRecovery";
@@ -263,14 +263,16 @@ function SettingsPageImpl({
 
       <PagePad>
         {c.error ? (
-          <p className="text-[12.5px] text-[#b8534f] mt-4 mb-0">{c.error}</p>
+          <p className="text-[12.5px] text-[var(--danger)] mt-4 mb-0">{c.error}</p>
         ) : null}
 
         {c.restartKeys.length ? (
-          <div className="mt-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_14%,transparent)] px-3.5 py-2.5 flex items-center gap-3 flex-wrap">
-            <span className="text-[12.5px] text-[var(--ink-muted)]">{t("s.63bb17a9d2")}</span>
-            <Btn className="!ml-auto" onClick={c.clearRestartNotice}>{t("s.cb63c62e50")}</Btn>
-          </div>
+          <Warn
+            className="mt-4"
+            action={<Btn onClick={c.clearRestartNotice}>{t("s.cb63c62e50")}</Btn>}
+          >
+            {t("s.63bb17a9d2")}
+          </Warn>
         ) : null}
 
         {!c.loaded ? (

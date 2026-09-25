@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Btn } from "./ui";
+import { Btn, Warn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
@@ -251,9 +251,7 @@ export function ExtrasPanel({
         </p>
 
         {reason ? (
-          <p className="m-0 mb-3 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_14%,transparent)] px-3 py-2 text-[12.5px] text-[var(--ink-muted)] leading-relaxed">
-            {reason}
-          </p>
+          <Warn className="mb-3">{reason}</Warn>
         ) : null}
 
         {/* 引擎资源前置卡：CNB engine-core，约 720MB */}

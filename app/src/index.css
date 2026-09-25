@@ -30,7 +30,10 @@
   --accent-ink: #ffffff;
   --accent-soft: rgba(18, 137, 240, 0.1);
   --stage: #e8f4fd;
-  --notify: #e8a91c;
+  /* 提醒色，取系统橙。只用在图标和一行字上，不铺底。 */
+  --notify: #ff9500;
+  /* 出错的字和图标。 */
+  --danger: #b8534f;
   --page-bg: #dfe4ea;
   --ui:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI",
@@ -96,7 +99,8 @@
     --accent: #4aa3f0;
     --accent-ink: #0f1319;
     --accent-soft: rgba(74, 163, 240, 0.14);
-    --notify: #e0ae3d;
+    --notify: #ff9f0a;
+    --danger: #e0807b;
     --page-bg: #0c0f13;
     --glass:
       0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
@@ -134,7 +138,8 @@
   --accent: #4aa3f0;
   --accent-ink: #0f1319;
   --accent-soft: rgba(74, 163, 240, 0.14);
-  --notify: #e0ae3d;
+  --notify: #ff9f0a;
+  --danger: #e0807b;
   --page-bg: #0c0f13;
   --glass:
     0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
@@ -427,6 +432,118 @@ option {
 
 .nudge-in {
   animation: nudge-in 0.44s var(--spring) both;
+}
+
+/* 退场。时长与 hooks/useExit 的 EXIT_MS 一致（0.18s），放完组件才卸掉。
+   外层是 grid，行高收到 0，下面的东西跟着平滑地挪上来，不会一跳。 */
+@keyframes nudge-out {
+  from {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-bottom: 0;
+    transform: translateY(8px);
+  }
+}
+.nudge-out {
+  animation: nudge-out 0.18s var(--ease) forwards;
+}
+
+@keyframes tooltip-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.tooltip-out {
+  animation: tooltip-out 0.12s var(--ease) forwards;
+}
+
+/* 弹窗。底色淡入，面板从略低、略小的位置浮上来；关闭时反过来。
+   面板是 .modal-scrim 的直接子元素，样式由各弹窗自己定。 */
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.modal-scrim {
+  animation: scrim-in 0.22s var(--ease) both;
+}
+.modal-scrim > * {
+  animation: panel-in 0.32s var(--ease) both;
+}
+.modal-scrim[data-leaving] {
+  animation: scrim-out 0.18s var(--ease) forwards;
+  pointer-events: none;
+}
+.modal-scrim[data-leaving] > * {
+  animation: panel-out 0.18s var(--ease) forwards;
+}
+
+/* 展开区：行高在 0 与内容高度之间过渡。 */
+.collapse-area {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s var(--ease),
+    opacity 0.2s var(--ease);
+}
+.collapse-area[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* 设置页子页签切换：新内容淡入并略微上移。 */
+@keyframes tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.tab-in {
+  animation: tab-in 0.26s var(--ease) both;
+}
+
+/* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.menu-in {
+  animation: menu-in 0.16s var(--ease) both;
+}
+.menu-out {
+  animation: menu-out 0.14s var(--ease) forwards;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

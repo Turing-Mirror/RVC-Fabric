@@ -171,7 +171,7 @@ export function SeparatePanel() {
 
         {blocked ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+            <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
           </div>
         ) : null}
 

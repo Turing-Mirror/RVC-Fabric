@@ -535,7 +535,7 @@ export function TrainPanel() {
                   <p
                     className={
                       "m-0 flex items-center gap-1.5 text-[13px] " +
-                      (c.level === "must" ? "text-[#b8534f]" : "text-[var(--ink-muted)]")
+                      (c.level === "must" ? "text-[var(--danger)]" : "text-[var(--ink-muted)]")
                     }
                   >
                     {c.text}

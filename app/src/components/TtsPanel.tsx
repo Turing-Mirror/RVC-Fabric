@@ -1136,7 +1136,7 @@ function StsSection() {
       </ToolTitleActions>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
         </div>
       ) : null}
 
@@ -1210,13 +1210,13 @@ function StsSection() {
                   className="flex items-center gap-2 rounded-[var(--rs)] px-2 py-1 text-[12.5px]"
                 >
                   <span
-                    className={`min-w-0 flex-1 truncate font-mono ${miss ? "text-[#b8534f]" : "text-[var(--ink-muted)]"}`}
+                    className={`min-w-0 flex-1 truncate font-mono ${miss ? "text-[var(--danger)]" : "text-[var(--ink-muted)]"}`}
                     title={miss?.path || s.path}
                   >
                     {s.path}
                   </span>
                   {miss ? (
-                    <span className="shrink-0 text-[11px] text-[#b8534f]">
+                    <span className="shrink-0 text-[11px] text-[var(--danger)]">
                       {miss.state === "unreadable"
                         ? t("s.stsUnreadableTag")
                         : t("s.stsMissingTag")}
@@ -1966,7 +1966,7 @@ function TtsSection() {
 
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[#b8534f]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
           {useRvc && !st.infer_present ? (
             <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
           ) : null}
@@ -1977,7 +1977,7 @@ function TtsSection() {
         className={[
           "w-full min-h-[120px] rounded-[var(--rs)] border px-3 py-2.5 text-[13.5px] leading-relaxed",
           "bg-transparent text-[var(--ink)] resize-y",
-          over ? "border-[#b8534f]" : "border-[var(--hairline)]",
+          over ? "border-[var(--danger)]" : "border-[var(--hairline)]",
         ].join(" ")}
         placeholder={t("s.f2f07193b8")}
         value={text}
@@ -1986,7 +1986,7 @@ function TtsSection() {
       <p
         className={[
           "m-0 mt-1.5 text-[12px] text-right tabular-nums",
-          over ? "text-[#b8534f]" : "text-[var(--meta)]",
+          over ? "text-[var(--danger)]" : "text-[var(--meta)]",
         ].join(" ")}
       >
         {text.length} / {max}

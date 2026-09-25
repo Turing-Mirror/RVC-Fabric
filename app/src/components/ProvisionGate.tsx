@@ -11,7 +11,7 @@ import {
   type ProvisionStatus,
   type ProvisionProgress,
 } from "../lib/engine";
-import { Btn, HelpMark } from "./ui";
+import { Btn, HelpMark, Warn } from "./ui";
 import { isEngineCoreReady } from "../lib/downloadModels";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "./MainGpuPicker";
 import { t } from "../i18n/t";
@@ -520,12 +520,12 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
             {/* 真的卡住了就直说。不说的话用户面对的是一条不动的进度条，
                 只能干等或者强退 —— 强退之前下的那部分其实是留着的。 */}
             {stalled ? (
-              <div className="mt-2 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--notify)_16%,transparent)] px-3 py-2 text-[11.5px] text-[var(--ink-muted)] leading-relaxed">
+              <Warn className="mt-2">
                 {t("s.2a4fa38f1e", { v0: formatDuration(idleMs) })}
                 {isDownload
                   ? t("s.7d2fe2ae0a")
                   : t("s.703e6f531a")}
-                <br />{t("s.de5de9e783")}</div>
+                <br />{t("s.de5de9e783")}</Warn>
             ) : null}
           </div>
         ) : null}

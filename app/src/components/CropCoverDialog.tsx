@@ -557,7 +557,7 @@ export function CropCoverDialog({
         )}
 
         {err ? (
-          <p className="mt-3 mb-0 text-[12.5px] text-[#b8534f] break-all">{err}</p>
+          <p className="mt-3 mb-0 text-[12.5px] text-[var(--danger)] break-all">{err}</p>
         ) : null}
 
         <div className="mt-4 flex items-center gap-2.5 flex-wrap">

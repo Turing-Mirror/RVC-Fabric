@@ -60,7 +60,7 @@ export function MoreMenuPopup({
           className={[
             "block w-full text-left whitespace-nowrap border-0 bg-transparent px-3.5 py-2 text-[13px] cursor-pointer",
             it.danger
-              ? "text-[#c44] hover:bg-[color-mix(in_srgb,#c44_10%,transparent)]"
+              ? "text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]"
               : "text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]",
           ].join(" ")}
           onClick={() => void it.action()}

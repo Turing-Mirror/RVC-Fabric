@@ -74,6 +74,45 @@ export function Block({
   );
 }
 
+/**
+ * 提醒：一枚橙色的三角图标加一行字，不铺底色。
+ * 需要用户处理的附一个按钮，放在行尾。
+ */
+export function Warn({
+  children,
+  action,
+  className = "",
+}: {
+  children: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      className={`flex items-start gap-2 text-[12.5px] leading-relaxed text-[var(--ink-muted)] ${className}`}
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 16 16"
+        className="w-[14px] h-[14px] flex-none mt-[3px] text-[var(--notify)]"
+      >
+        <path
+          d="M8 1.9 14.6 13.4a.7.7 0 0 1-.6 1H2a.7.7 0 0 1-.6-1L8 1.9Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <path d="M8 6.2v3.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="8" cy="11.9" r=".85" fill="currentColor" />
+      </svg>
+      <div className="min-w-0 flex-1">{children}</div>
+      {action ? <div className="flex-none -my-1">{action}</div> : null}
+    </div>
+  );
+}
+
 export function Group({ children }: { children: ReactNode }) {
   return (
     <div className="bg-[var(--group)] rounded-[var(--r)] px-5 py-2">{children}</div>

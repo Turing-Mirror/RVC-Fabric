@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
-import { Block, Btn, Group, PageHead, PagePad } from "../components/ui";
+import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
 import { ExtrasPanel, type ExtrasFilter } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
@@ -162,9 +162,7 @@ function PlazaPageImpl({
       />
 
       {feed?.errors?.length ? (
-        <p className="text-[12.5px] text-[var(--notify)] m-0 mb-4">
-          {formatLocalizedList(feed.errors)}
-        </p>
+        <Warn className="mb-4">{formatLocalizedList(feed.errors)}</Warn>
       ) : null}
 
       {/* 置顶排在社区音色之上。它只有一排卡片高，压不住下面的东西，而它指向的

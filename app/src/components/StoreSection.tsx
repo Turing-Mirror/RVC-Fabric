@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -26,6 +25,7 @@ import {
   type VoiceProg,
 } from "../lib/storeJobs";
 import { Btn, Warn } from "./ui";
+import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
@@ -516,10 +516,10 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           ]}
         />
         {grouping === "series" && seriesGroups && seriesGroups.length > 0 ? (
-          <select
+          <Select
             value={seriesFocus}
-            onChange={(e) => {
-              const next = e.target.value;
+            width={160}
+            onChange={(next) => {
               setSeriesFocus(next);
               if (!next) return;
               const { parent, group } = focusParts(next);
@@ -538,28 +538,20 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                 return n;
               });
             }}
-            className="min-w-[160px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
-          >
-            <option value="">{t("store.allSeries")}</option>
-            {seriesGroups.map((node) => {
-              const nested = node.groups.filter((g) => g.label);
-              return (
-                <Fragment key={node.key}>
-                  <option value={node.key}>
-                    {node.label} ({node.voices.length})
-                  </option>
-                  {nested.map((g) => (
-                    <option
-                      key={groupFocusKey(node.key, g.raw)}
-                      value={groupFocusKey(node.key, g.raw)}
-                    >
-                      {`\u00A0\u00A0${g.label} (${g.voices.length})`}
-                    </option>
-                  ))}
-                </Fragment>
-              );
-            })}
-          </select>
+            options={[
+              { id: "", label: t("store.allSeries") },
+              ...seriesGroups.flatMap((node) => [
+                { id: node.key, label: `${node.label} (${node.voices.length})` },
+                ...node.groups
+                  .filter((g) => g.label)
+                  .map((g) => ({
+                    id: groupFocusKey(node.key, g.raw),
+                    label: `${g.label} (${g.voices.length})`,
+                    indent: true,
+                  })),
+              ]),
+            ]}
+          />
         ) : null}
         <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
           <input

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
+import { Select } from "./controls";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
@@ -13,6 +14,7 @@ import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
 import { askConfirm } from "../lib/webDialog";
 import { auditionVoice } from "../lib/audition";
+import { TOOL_BOX } from "./Select";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -679,18 +681,15 @@ export function TrainPanel() {
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>{t("s.ab4dae189d")}<HelpMark title={tip(t("s.4bdd408f42"))} />
             </span>
-            <select
-              className={FIELD}
+            <Select
+              box={TOOL_BOX}
               value={sr}
-              onChange={(e) => setSr(e.target.value)}
-            >
-              {(st.pretrained || [{ sample_rate: "48k", ready: false }]).map((p) => (
-                <option key={p.sample_rate} value={p.sample_rate}>
-                  {p.sample_rate}
-                  {p.ready ? "" : t("s.3d19649847")}
-                </option>
-              ))}
-            </select>
+              onChange={setSr}
+              options={(st.pretrained || [{ sample_rate: "48k", ready: false }]).map((p) => ({
+                id: p.sample_rate,
+                label: p.sample_rate + (p.ready ? "" : t("s.3d19649847")),
+              }))}
+            />
             <span className="text-[12px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
           </div>
           {/* 只给相对判断，不给「48k 需要 8 GB」这种绝对承诺 —— 那取决于批大小、
@@ -739,17 +738,12 @@ export function TrainPanel() {
               {t("s.trainF0")}
               <HelpMark title={t("s.trainF0Hint")} />
             </span>
-            <select
-              className={FIELD}
+            <Select
+              box={TOOL_BOX}
               value={f0}
-              onChange={(e) => setF0(e.target.value as (typeof F0_OPTS)[number])}
-            >
-              {F0_OPTS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setF0(v as (typeof F0_OPTS)[number])}
+              options={F0_OPTS.map((m) => ({ id: m, label: m }))}
+            />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>

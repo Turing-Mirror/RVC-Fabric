@@ -5,7 +5,7 @@ import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar } from "./controls";
+import { Field, RangeBar, Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
@@ -17,6 +17,7 @@ import { openDownloadModels } from "../lib/downloadModels";
 import { AudioTrimEditor, canTrimAudio } from "./AudioTrim";
 import { MoreMenuPopup, type PopupAnchor } from "./MoreMenu";
 import { formatLocalizedList } from "../lib/voiceDisplay";
+import { TOOL_BOX } from "./Select";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -1143,24 +1144,18 @@ function StsSection() {
       <div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.stsTargetVoice")}</span>
-          <select
-            className={`flex-1 min-w-0 ${FIELD}`}
+          <Select
+            box={TOOL_BOX}
+            className="flex-1"
             value={voices.find((v) => samePath(v.path, modelPath))?.path || modelPath}
             disabled={running || !voices.length}
-            onChange={(e) => {
-              const m = voices.find((v) => samePath(v.path, e.target.value));
+            onChange={(v) => {
+              const m = voices.find((x) => samePath(x.path, v));
               pickVoice(m);
             }}
-          >
-            {voices.map((m) => (
-              <option key={m.path} value={m.path}>
-                {m.name || m.file || m.path}
-              </option>
-            ))}
-            {!voices.length ? (
-              <option value="">{t("s.03877888b6")}</option>
-            ) : null}
-          </select>
+            options={voices.map((m) => ({ id: m.path, label: m.name || m.file || m.path }))}
+            placeholder={t("s.03877888b6")}
+          />
         </div>
         {!blocked && modelName ? (
           <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
@@ -1337,21 +1332,22 @@ function StsSection() {
               setChecked(new Set());
             }}
           />
-          <select
-            className={FIELD}
+          <Select
+            box={TOOL_BOX}
             value={listFilter}
             disabled={running || recording}
-            onChange={(e) => {
-              setListFilter(e.target.value as typeof listFilter);
+            onChange={(v) => {
+              setListFilter(v as typeof listFilter);
               setInputPage(0);
               // 切换过滤后隐藏的已选条目不能被批量操作——直接清勾选。
               setChecked(new Set());
             }}
-          >
-            <option value="active">{t("s.stsFilterActive")}</option>
-            <option value="excluded">{t("s.stsFilterExcluded")}</option>
-            <option value="all">{t("s.stsFilterAll")}</option>
-          </select>
+            options={[
+              { id: "active", label: t("s.stsFilterActive") },
+              { id: "excluded", label: t("s.stsFilterExcluded") },
+              { id: "all", label: t("s.stsFilterAll") },
+            ]}
+          />
           <Btn
             disabled={running || recording || !visibleItems.length}
             onClick={() => setChecked(new Set(visibleItems.map((x) => x.path)))}
@@ -1566,17 +1562,13 @@ function StsSection() {
             {t("s.3579ac474b")}
             <HelpMark title={t("s.stsF0Hint")} />
           </span>
-          <select
-            className={`flex-1 min-w-0 ${FIELD}`}
+          <Select
+            box={TOOL_BOX}
+            className="flex-1"
             value={f0method}
-            onChange={(e) => setF0method(e.target.value as (typeof STS_F0)[number])}
-          >
-            {STS_F0.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setF0method(v as (typeof STS_F0)[number])}
+            options={STS_F0.map((m) => ({ id: m, label: m }))}
+          />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.389bc211b2")}</span>
@@ -1660,34 +1652,26 @@ function StsSection() {
             {t("s.stsResample")}
             <HelpMark title={t("s.stsResampleHint")} />
           </span>
-          <select
-            className={`flex-1 min-w-0 ${FIELD}`}
-            value={resample}
-            onChange={(e) => setResample(Number(e.target.value) || 0)}
-          >
-            {STS_RATES.map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? t("s.stsResampleOff") : `${n}`}
-              </option>
-            ))}
-          </select>
+          <Select
+            box={TOOL_BOX}
+            className="flex-1"
+            value={String(resample)}
+            onChange={(v) => setResample(Number(v) || 0)}
+            options={STS_RATES.map((n) => ({ id: String(n), label: n === 0 ? t("s.stsResampleOff") : `${n}` }))}
+          />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
             {t("s.stsFormat")}
             <HelpMark title={t("s.stsFormatHint")} />
           </span>
-          <select
-            className={`flex-1 min-w-0 ${FIELD}`}
+          <Select
+            box={TOOL_BOX}
+            className="flex-1"
             value={fmt}
-            onChange={(e) => setFmt(e.target.value as (typeof STS_FMTS)[number])}
-          >
-            {STS_FMTS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setFmt(v as (typeof STS_FMTS)[number])}
+            options={STS_FMTS.map((f) => ({ id: f, label: f }))}
+          />
         </div>
       </div>
 
@@ -1995,18 +1979,14 @@ function TtsSection() {
       <div className="mt-3">
         <div className={ROW}>
           <span className={LABEL}>{t("s.09febb1c95")}</span>
-          <select
-            className={`flex-1 min-w-0 ${FIELD}`}
+          <Select
+            box={TOOL_BOX}
+            className="flex-1"
             value={voice}
-            onChange={(e) => setVoice(e.target.value)}
-          >
-            {(st.voices || []).map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-            {!st.voices?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}
-          </select>
+            onChange={setVoice}
+            options={(st.voices || []).map((v) => ({ id: v, label: v }))}
+            placeholder={t("s.6238bf9ad5")}
+          />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.747374775d")}</span>

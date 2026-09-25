@@ -4,13 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { RangeBar } from "./controls";
+import { RangeBar, Select } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { extraModelLabel } from "../lib/extraModels";
 import { pickPath } from "../lib/nativeDialog";
+import { TOOL_BOX } from "./Select";
 
 type Status = {
   runtime_ready?: boolean;
@@ -39,8 +40,6 @@ const ROW = "flex items-center gap-3 py-2.5";
  * 看起来是有意为之，而不是挤坏了。
  */
 const LABEL = "w-[96px] shrink-0 text-[13px] leading-tight";
-const FIELD =
-  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FORMATS = ["wav", "flac", "mp3", "m4a"] as const;
@@ -189,35 +188,26 @@ export function SeparatePanel() {
           </div>
           <div className={ROW}>
             <span className={LABEL}>{t("s.98fd0cbd9c")}</span>
-            <select
-              className="flex-1 min-w-0 rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]"
+            <Select
+              box={TOOL_BOX}
+              className="flex-1"
               value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {(st.models || []).map((m) => (
-                <option key={m} value={m} title={m}>
-                  {extraModelLabel(m)}
-                </option>
-              ))}
-              {!st.models?.length ? <option value="">{t("s.6238bf9ad5")}</option> : null}
-            </select>
+              onChange={setModel}
+              options={(st.models || []).map((m) => ({ id: m, label: extraModelLabel(m), title: m }))}
+              placeholder={t("s.6238bf9ad5")}
+            />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
               {t("s.sepFormat")}
               <HelpMark title={t("s.sepFormatHint")} />
             </span>
-            <select
-              className={FIELD}
+            <Select
+              box={TOOL_BOX}
               value={fmt}
-              onChange={(e) => setFmt(e.target.value as (typeof FORMATS)[number])}
-            >
-              {FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setFmt(v as (typeof FORMATS)[number])}
+              options={FORMATS.map((f) => ({ id: f, label: f }))}
+            />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>

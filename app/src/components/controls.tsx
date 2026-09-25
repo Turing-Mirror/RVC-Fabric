@@ -69,55 +69,7 @@ export function Field({
   );
 }
 
-export function Select({
-  value,
-  options,
-  onChange,
-  full = false,
-  width,
-  disabled = false,
-}: {
-  value: string;
-  options: { id: string; label: string }[];
-  onChange: (v: string) => void;
-  full?: boolean;
-  width?: number;
-  disabled?: boolean;
-}) {
-  // A saved device that is not in the current list (unplugged, driver reset)
-  // otherwise renders as a blank box: the row looks unset while the engine is
-  // still configured to use it. Keep it visible and say what happened.
-  const missing = Boolean(value) && !options.some((o) => o.id === value);
-  return (
-    <select
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      style={width ? { minWidth: width } : undefined}
-      className={[
-        "text-[13px] text-[var(--ink)] bg-transparent appearance-none cursor-pointer",
-        "px-3.5 py-[7px] rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)]",
-        "outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-50",
-        full ? "w-full" : "",
-      ].join(" ")}
-    >
-      {options.length === 0 && !missing ? (
-        <option value="">{t("s.e6b7c3d266")}</option>
-      ) : null}
-      {missing ? (
-        <option value={value}>
-          {value}
-          {t("s.1cab0503c2")}
-        </option>
-      ) : null}
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
+export { Select, type SelectOption } from "./Select";
 
 /** 轨道高度。把手上下贴齐轨道，所以两者共用这一个数。 */
 const TRACK_H = 26;

@@ -196,14 +196,6 @@ button {
   font: inherit;
 }
 
-/* <select> 展开的那张列表由浏览器画，不继承 select 上的 class。
-   深色下如果只有 color-scheme 而没有这两行，某些 WebView2 版本仍按浅底画，
-   配上我们设的浅色文字就是白底白字。写死一份和主题一致的底色兜底。 */
-option {
-  background: var(--surface);
-  color: var(--ink);
-}
-
 /* 滚动条一条都不留 —— 滚动本身照旧，只是不画那根轨道。
  *
  * 为什么是全局而不是逐个容器：可滚的容器不止一个（页面容器、商店弹窗、

@@ -2,10 +2,11 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar } from "./controls";
+import { Field, RangeBar, Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
+import { TOOL_BOX } from "./Select";
 
 type Tab = "merge" | "change" | "extract" | "onnx";
 
@@ -150,27 +151,29 @@ export function CkptAdvanced() {
                 label={t("s.ab4dae189d")}
                 tip={t("s.ckptSrHint")}
                 control={
-                  <select className={FIELD} value={sr} onChange={(e) => setSr(e.target.value)}>
-                    {["32k", "40k", "48k"].map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    box={TOOL_BOX}
+                    full
+                    value={sr}
+                    onChange={setSr}
+                    options={["32k", "40k", "48k"].map((s) => ({ id: s, label: s }))}
+                  />
                 }
               />
               <Field
                 label={t("s.ckptVersion")}
                 tip={t("s.ckptVersionHint")}
                 control={
-                  <select
-                    className={FIELD}
+                  <Select
+                    box={TOOL_BOX}
+                    full
                     value={version}
-                    onChange={(e) => setVersion(e.target.value)}
-                  >
-                    <option value="v2">v2</option>
-                    <option value="v1">v1</option>
-                  </select>
+                    onChange={setVersion}
+                    options={[
+                      { id: "v2", label: "v2" },
+                      { id: "v1", label: "v1" },
+                    ]}
+                  />
                 }
               />
               <Field
@@ -310,27 +313,29 @@ export function CkptAdvanced() {
                 label={t("s.ab4dae189d")}
                 tip={t("s.ckptSrHint")}
                 control={
-                  <select className={FIELD} value={sr} onChange={(e) => setSr(e.target.value)}>
-                    {["32k", "40k", "48k"].map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    box={TOOL_BOX}
+                    full
+                    value={sr}
+                    onChange={setSr}
+                    options={["32k", "40k", "48k"].map((s) => ({ id: s, label: s }))}
+                  />
                 }
               />
               <Field
                 label={t("s.ckptVersion")}
                 tip={t("s.ckptVersionHint")}
                 control={
-                  <select
-                    className={FIELD}
+                  <Select
+                    box={TOOL_BOX}
+                    full
                     value={version}
-                    onChange={(e) => setVersion(e.target.value)}
-                  >
-                    <option value="v2">v2</option>
-                    <option value="v1">v1</option>
-                  </select>
+                    onChange={setVersion}
+                    options={[
+                      { id: "v2", label: "v2" },
+                      { id: "v1", label: "v1" },
+                    ]}
+                  />
                 }
               />
               <Field

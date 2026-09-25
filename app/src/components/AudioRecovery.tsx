@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { Toggle } from "./controls";
 import { Nudge } from "./Nudge";
+import { Leave } from "./Presence";
 import { useI18n } from "../i18n";
 import { setConfig, type Config } from "../lib/config";
 import { pickAutoDevices } from "../lib/deviceSetup";
@@ -25,18 +26,18 @@ export function AudioRecoveryBanner({ status }: { status?: EngineStatus }) {
   const [error, setError] = useState("");
   const reason = String(status?.error || status?.message || "");
   const relevant = /audio|device|portaudio|asio|声卡|设备|音频|裝置|音訊|0xc000/i.test(reason);
-  if (status?.state !== "error" || !relevant || dismissed === reason) return null;
+  const show = status?.state === "error" && relevant && dismissed !== reason;
   const run = async (action: string) => {
     setBusy(true); setError("");
     try { await recover(action, true); await startVc(); setDismissed(reason); }
     catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  return <Nudge title={t("neptune.deviceIgnore")} actions={<>
+  return <Leave>{show ? <Nudge title={t("neptune.deviceIgnore")} actions={<>
     <Btn disabled={busy} onClick={() => setDismissed(reason)}>{t("neptune.close")}</Btn>
     <Btn disabled={busy} onClick={() => void run("check")}>{t("neptune.deviceIgnore")}</Btn>
     <Btn disabled={busy} onClick={() => void run("compatibility")}>{t("neptune.deviceCompatibility")}</Btn>
-  </>}>{error || t("neptune.deviceRecovery")}{" "}{t("neptune.compatibilityHint")}</Nudge>;
+  </>}>{error || t("neptune.deviceRecovery")}{" "}{t("neptune.compatibilityHint")}</Nudge> : null}</Leave>;
 }
 
 export function AudioRecoverySettings({ config }: { config: Config }) {

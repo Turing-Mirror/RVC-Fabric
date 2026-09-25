@@ -279,6 +279,8 @@ function SettingsPageImpl({
           <p className="text-[12.5px] text-[var(--meta)] mt-6">{t("s.49fd445d8b")}</p>
         ) : null}
 
+        {/* 换子页签时新内容淡入。key 让每次切换都重放一次。 */}
+        <div key={tab} className="tab-in">
         {c.loaded && tab === "device" ? (
           <Block
             title={t("s.9bef06a1f5")}
@@ -1165,6 +1167,7 @@ function SettingsPageImpl({
             </div>
           </Block>
         ) : null}
+        </div>
       </PagePad>
     </div>
   );

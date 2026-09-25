@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PageId } from "../lib/nav";
-import { t } from "../i18n/t";/**
+import { t } from "../i18n/t";
+import { Collapse } from "./Presence";
+/**
  * 新手进度：一行五段，告诉新用户「走到哪了、下一步是什么」。
  *
  * 三条设计约束（都是跟用户约定过的）：
@@ -69,7 +71,8 @@ export function OnboardingBar({
     }
   };
 
-  if (!st || hidden) return null;
+  // 关掉时整条收起，下面的内容跟着平滑上移，不是一下子跳上来。
+  if (!st) return <Collapse open={false}>{null}</Collapse>;
 
   const steps: Step[] = [
     { id: "runtime", label: t("s.obRuntime"), page: "more" },
@@ -86,45 +89,47 @@ export function OnboardingBar({
   const go = (step: Step) => onNavigate(step.page, step.focus);
 
   return (
-    <div className="mx-[30px] mt-4 mb-1 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-4 py-3 max-[1020px]:mx-[22px] max-[720px]:mx-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-[12px] text-[var(--meta)] shrink-0">
-          {allDone ? t("s.obDone") : t("s.obLead")}
-        </span>
-        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-          {steps.map((s, i) => (
-            <span key={s.id} className="flex items-center gap-1.5">
-              {i > 0 ? (
-                <span aria-hidden className="text-[var(--meta)] text-[11px]">
-                  →
-                </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => go(s)}
-                className={[
-                  "border-0 cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] leading-none",
-                  st[s.id]
-                    ? "bg-transparent text-[var(--meta)]"
-                    : "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] font-medium",
-                ].join(" ")}
-                title={t("s.obGoTo", { v0: s.label })}
-              >
-                {i + 1}. {s.label}
-                {st[s.id] ? ` · ${t("s.obStepDone")}` : ""}
-              </button>
-            </span>
-          ))}
+    <Collapse open={!hidden}>
+      <div className="mx-[30px] mt-4 mb-1 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-4 py-3 max-[1020px]:mx-[22px] max-[720px]:mx-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[12px] text-[var(--meta)] shrink-0">
+            {allDone ? t("s.obDone") : t("s.obLead")}
+          </span>
+          <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+            {steps.map((s, i) => (
+              <span key={s.id} className="flex items-center gap-1.5">
+                {i > 0 ? (
+                  <span aria-hidden className="text-[var(--meta)] text-[11px]">
+                    →
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => go(s)}
+                  className={[
+                    "border-0 cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] leading-none",
+                    st[s.id]
+                      ? "bg-transparent text-[var(--meta)]"
+                      : "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] font-medium",
+                  ].join(" ")}
+                  title={t("s.obGoTo", { v0: s.label })}
+                >
+                  {i + 1}. {s.label}
+                  {st[s.id] ? ` · ${t("s.obStepDone")}` : ""}
+                </button>
+              </span>
+            ))}
+          </div>
+          {/* 关闭入口常驻：新手进度永远不能变成赶不走的东西。 */}
+          <button
+            type="button"
+            onClick={() => void dismiss()}
+            className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] underline decoration-dotted underline-offset-2 cursor-pointer shrink-0"
+          >
+            {t("s.obDismiss")}
+          </button>
         </div>
-        {/* 关闭入口常驻：新手进度永远不能变成赶不走的东西。 */}
-        <button
-          type="button"
-          onClick={() => void dismiss()}
-          className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] underline decoration-dotted underline-offset-2 cursor-pointer shrink-0"
-        >
-          {t("s.obDismiss")}
-        </button>
       </div>
-    </div>
+    </Collapse>
   );
 }

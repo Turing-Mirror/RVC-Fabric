@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useExit } from "../hooks/useExit";
 
 /**
  * 自己画的悬浮提示，替掉浏览器原生的 `title`。
@@ -39,6 +40,8 @@ export function Tooltip({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const open = hovered || focused;
+  // 收起时留 0.12 秒放完淡出，再卸掉。
+  const { mounted, leaving } = useExit(open, 120);
   const leaveTimer = useRef<number | null>(null);
   const [pos, setPos] = useState<Pos | null>(null);
 
@@ -125,11 +128,13 @@ export function Tooltip({
       >
         {children}
       </span>
-      {open
+      {mounted
         ? createPortal(
             <div
               ref={bubble}
-              role="tooltip"
+              // 退场那一小段只是在淡出，已经不算提示了。
+              role={leaving ? undefined : "tooltip"}
+              aria-hidden={leaving || undefined}
               className={[
                 "fixed z-[300] pointer-events-none max-w-[320px]",
                 "rounded-[var(--rs)] bg-[var(--surface)] px-3 py-2",
@@ -137,7 +142,7 @@ export function Tooltip({
                 // 字号比正文的辅助文字大一档：这是用户特地凑过去看的东西，
                 // 不该比他不看的说明文字还小。
                 "text-[13.5px] leading-[1.65] text-[var(--ink)] whitespace-pre-line",
-                "tooltip-in",
+                leaving ? "tooltip-out" : "tooltip-in",
               ].join(" ")}
               style={{
                 left: pos?.left ?? -9999,

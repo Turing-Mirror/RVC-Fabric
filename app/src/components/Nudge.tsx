@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLeaving } from "./Presence";
 
 /**
  * 底栏上方那条邀请式提示。
@@ -17,6 +18,9 @@ import type { ReactNode } from "react";
  *
  * 明确不做的：不闪、不跳、不用强调色铺底、不自动消失。自动消失的提示等于
  * 逼用户盯着看，而这两条消息都不值得那样对待。
+ *
+ * 调用处要包在 Leave 里：关掉时它往下淡出、所占的高度收起，底栏上方的
+ * 内容跟着平滑落下。
  */
 export function Nudge({
   title,
@@ -28,22 +32,31 @@ export function Nudge({
   /** 右侧按钮组。第一个应该是「拒绝」，主按钮放最后，和系统对话框一致。 */
   actions: ReactNode;
 }) {
+  const leaving = useLeaving();
   return (
     <div
       className={[
-        "nudge-in mx-[30px] mb-2 max-[720px]:mx-4",
-        "rounded-[var(--r)] bg-[var(--surface)] px-4 py-3",
-        "shadow-[0_6px_20px_-10px_rgba(0,0,0,.3),inset_0_0_0_1px_var(--hairline)]",
-        "flex items-start gap-3 flex-wrap",
+        "grid grid-rows-[1fr] mx-[30px] mb-2 max-[720px]:mx-4",
+        leaving ? "nudge-out" : "nudge-in",
       ].join(" ")}
     >
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold mb-1">{title}</div>
-        <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
-          {children}
+      <div className={leaving ? "min-h-0 overflow-hidden" : "min-h-0"}>
+        <div
+          className={[
+            "rounded-[var(--r)] bg-[var(--surface)] px-4 py-3",
+            "shadow-[0_6px_20px_-10px_rgba(0,0,0,.3),inset_0_0_0_1px_var(--hairline)]",
+            "flex items-start gap-3 flex-wrap",
+          ].join(" ")}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold mb-1">{title}</div>
+            <div className="text-[12.5px] text-[var(--help)] leading-relaxed">
+              {children}
+            </div>
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">{actions}</div>
         </div>
       </div>
-      <div className="flex gap-2 items-center flex-wrap">{actions}</div>
     </div>
   );
 }

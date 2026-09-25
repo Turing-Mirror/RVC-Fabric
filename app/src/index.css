@@ -522,7 +522,7 @@ option {
   }
 }
 .tab-in {
-  animation: tab-in 0.26s var(--ease) both;
+  animation: tab-in 0.26s var(--ease) backwards;
 }
 
 /* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */

@@ -1320,7 +1320,7 @@ export default function App() {
       {/* 撕裂这两条排在所有 Nudge 前面：用户正卡着，别让「要不要更新」
           「要不要开统计」挡在他前面。 */}
       <AudioRecoveryBanner status={engine.status} />
-      {engine.tearAsk ? (
+      <Leave>{engine.tearAsk ? (
         <Nudge
           title={t("s.tearTitle")}
           actions={
@@ -1341,12 +1341,12 @@ export default function App() {
         >
           {engine.notice}
         </Nudge>
-      ) : null}
+      ) : null}</Leave>
 
       {/* 已知问题排在这里：比「要不要更新」重要（它解释的是用户此刻为什么用不了），
           但比撕裂靠后（那条是正在发生的卡顿）。一个会话里关掉就不再出现 ——
           不落配置，因为坑没填之前下次启动本来就该再说一次。 */}
-      {knownIssue ? (
+      <Leave>{knownIssue ? (
         <Nudge
           title={knownIssue.title}
           actions={
@@ -1374,7 +1374,7 @@ export default function App() {
           {knownIssue.body}
           {kiNote ? <span className="block mt-1">{kiNote}</span> : null}
         </Nudge>
-      ) : null}
+      ) : null}</Leave>
 
       {/* 同时最多出现一条。更新排最前 —— 它是开机 4 秒就出来的，那会儿另外
           两条的触发条件（用满 60 秒 / 变声十次）都还远没到。
@@ -1382,7 +1382,7 @@ export default function App() {
       {/* 首次引导排在最前：更新提示是开机 4 秒就出来的，统计和关注更靠后，
           而这条只在用户第一次点「开启变声」的那几秒里有意义，错过就没了。
           它关掉之后被它压住的那条会自己顶上来。 */}
-      {askGuide ? (
+      <Leave>{askGuide ? (
         <Nudge
           title={t("s.guideFirstTitle")}
           actions={
@@ -1442,7 +1442,7 @@ export default function App() {
             </>
           }
         >{t("s.7f3ebfb67b")}</Nudge>
-      ) : null}
+      ) : null}</Leave>
 
       <Leave>{qr ? (
         <QrDialog src={qr.src} label={qr.label} onClose={() => setQr(null)} />

@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { HelpMark } from "./Tooltip";
+import { Collapse } from "./Presence";
 
 export function PagePad({ children }: { children: ReactNode }) {
   return (
@@ -281,16 +282,16 @@ export function ListItem({
       {/* 正文和标题行之间要留出气口。原来是 -mt-1，正文顶边正好压在标题行
           悬停灰底的底边上 —— 鼠标停在标题上时，灰块下沿和文字挨成一条，
           看着像文字被切了一刀。 */}
-      {expanded ? (
-        // 别再往这儿加 `max-w-[NNch]`：`ch` 是「0」字形的宽度（12.5px 字号下
-        // 实测 6.95px），只有一个汉字（12.5px）的一半。按拉丁文校准的 74ch
-        // 折成中文就只剩 41 字、约容器宽度的 47% —— 用户看到的就是「一行话
-        // 没走到一半就断了」。DonateNote 早前是同一个毛病，改成 w-full
-        // min-w-0 治好的，这里跟它对齐。
+      <Collapse open={Boolean(expanded)}>
+        {/* 别再往这儿加 `max-w-[NNch]`：`ch` 是「0」字形的宽度（12.5px 字号下
+            实测 6.95px），只有一个汉字（12.5px）的一半。按拉丁文校准的 74ch
+            折成中文就只剩 41 字、约容器宽度的 47% —— 用户看到的就是「一行话
+            没走到一半就断了」。DonateNote 早前是同一个毛病，改成 w-full
+            min-w-0 治好的，这里跟它对齐。 */}
         <div className="pt-2 pb-4 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line w-full min-w-0">
           {children}
         </div>
-      ) : null}
+      </Collapse>
     </div>
   );
 }

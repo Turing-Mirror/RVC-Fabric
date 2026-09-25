@@ -295,7 +295,7 @@ export function DiagnosticsDialog({
             type="checkbox"
             checked={withPerf}
             onChange={(e) => setWithPerf(e.target.checked)}
-            className="mt-0.5 accent-[var(--accent)]"
+            className="mt-0.5"
           />
           <span className="text-[12.5px] text-[var(--ink-muted)] leading-relaxed">
             {t("s.diagPerf")}

@@ -464,7 +464,7 @@ export function AudioPage() {
           <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
         </div>
         <label className="flex items-center gap-1.5 mt-3 text-[12px] text-[var(--meta)]">
-          <input type="checkbox" checked={monitor} className="accent-[var(--accent)]"
+          <input type="checkbox" checked={monitor}
             onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
               .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
           {t("audio.monitorMusic")}
@@ -524,7 +524,7 @@ export function AudioPage() {
             </label>
             <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
             <label className="flex items-center gap-1.5 pb-2 text-[12px] text-[var(--meta)]">
-              <input type="checkbox" checked={selected.looped} disabled={busy} className="accent-[var(--accent)]"
+              <input type="checkbox" checked={selected.looped} disabled={busy}
                 onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
               {t("audio.loopByDefault")}
             </label>

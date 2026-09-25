@@ -196,6 +196,52 @@ button {
   font: inherit;
 }
 
+/* 勾选框。系统自带的那种在各平台长得不一样，和界面里其余控件也对不上。
+   这里统一画成圆角小方块：未选是一圈细线，选中铺强调色、对勾弹出来。
+   仍是原生 input，键盘、读屏、label 点击都照旧。 */
+input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  display: inline-grid;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+input[type="checkbox"]::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  background: var(--accent-ink);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 5.3 4 7.6 8.4 2.6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 0.18s var(--spring);
+}
+input[type="checkbox"]:checked {
+  background: var(--accent);
+  box-shadow: none;
+}
+input[type="checkbox"]:checked::before {
+  transform: scale(1);
+}
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* 滚动条一条都不留 —— 滚动本身照旧，只是不画那根轨道。
  *
  * 为什么是全局而不是逐个容器：可滚的容器不止一个（页面容器、商店弹窗、

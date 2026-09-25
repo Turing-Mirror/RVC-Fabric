@@ -561,7 +561,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
               setHideInstalled(e.target.checked);
               setPage(1);
             }}
-            className="accent-[var(--accent)]"
+           
           />{t("s.85b3f0512b")}</label>
       </div>
 

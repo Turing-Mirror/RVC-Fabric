@@ -1300,7 +1300,7 @@ export default function App() {
                 type="checkbox"
                 checked={closeRemember}
                 onChange={(e) => setCloseRemember(e.target.checked)}
-                className="accent-[var(--accent)]"
+               
               />{t("s.f75c86ad46")}</label>
             <div className="flex gap-2.5 justify-end">
               <button

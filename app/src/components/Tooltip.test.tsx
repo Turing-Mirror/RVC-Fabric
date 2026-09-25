@@ -58,9 +58,8 @@ describe("Toggle 里的小问号", () => {
       <Toggle checked={false} onChange={onChange} label="开关" tip={TIP} />,
     );
     mounts.push(m);
-    // 复选框的视觉块是 input 的前一个兄弟 —— 不依赖行内其它元素的排布。
-    const box = m.container.querySelector("label input")!
-      .previousElementSibling as HTMLElement;
+    // 勾选框就是 input 本身（样子由 index.css 画）。
+    const box = m.container.querySelector("label input") as HTMLElement;
     act(() => box.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(true);

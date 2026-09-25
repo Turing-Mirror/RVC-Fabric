@@ -1374,7 +1374,7 @@ function HotkeyRow({
             void onGlobalChange(e.target.checked).catch((error) =>
               setSaveError(hotkeyError(error)));
           }}
-          className="accent-[var(--accent)] w-[13px] h-[13px]"
+          className="w-[13px] h-[13px]"
         />{t("s.a5644f4bbf")}</label>
       <button
         type="button"

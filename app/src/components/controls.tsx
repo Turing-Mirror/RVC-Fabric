@@ -365,24 +365,9 @@ export function Toggle({
     <div className="flex items-center gap-[11px]">
       {tip ? <HelpMark title={tip} /> : null}
       <label className="flex items-center gap-[11px] cursor-pointer select-none">
-        {/* 纯视觉的框：点击由 label 转发给真正的 input，不再自己切一次 —
-            否则 label 激活会再点一下 input，一次点击切两回。 */}
-        <span
-          aria-hidden="true"
-          className={[
-            "w-[15px] h-[15px] rounded grid place-items-center flex-none transition-colors",
-            checked
-              ? "bg-[var(--accent)]"
-              : "shadow-[inset_0_0_0_1px_var(--line)]",
-          ].join(" ")}
-        >
-          {checked ? (
-            <span className="text-[10px] leading-none text-[var(--accent-ink)]">✓</span>
-          ) : null}
-        </span>
+        {/* 勾选框的样子由 index.css 统一画，这里就是原生 input。 */}
         <input
           type="checkbox"
-          className="sr-only"
           checked={checked}
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}

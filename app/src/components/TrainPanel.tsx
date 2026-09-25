@@ -765,7 +765,7 @@ export function TrainPanel() {
                 type="checkbox"
                 checked={saveWeights}
                 onChange={(e) => setSaveWeights(e.target.checked)}
-                className="accent-[var(--accent)]"
+               
               />
               {t("s.trainSaveWeights")}
               <HelpMark title={t("s.trainSaveWeightsHint")} />

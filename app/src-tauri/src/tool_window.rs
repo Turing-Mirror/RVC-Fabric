@@ -264,8 +264,8 @@ pub fn open(app: &AppHandle, kind: &str) -> Result<(), String> {
     // 和主窗口一样无边框 + 自己画标题栏。这里用系统标题栏的话，同一个软件里
     // 会同时出现两种窗口长相。
     .decorations(false)
-    // 与主窗一致：无边框不带系统 1px 白边。
-    .shadow(false)
+    // 与主窗一致：Windows 上投影经 DWM 要回，macOS 上直接用系统投影；悬浮窗是透明的，不要投影。
+    .shadow(cfg!(target_os = "macos") && !sp.overlay)
     .center();
     if sp.overlay {
         builder = builder

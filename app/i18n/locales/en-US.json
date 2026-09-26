@@ -707,7 +707,7 @@
     "2b9ddc0b69": "No training base models available right now.",
     "2bd28fc9c2": "Repo & socials",
     "2bd41b71bb": "Starting the original realtime panel — cold start takes ~20–40 s (loading torch/CUDA).",
-    "2d0c1739e0": "Rounded corners: DWM unsupported (fine on Win10, HRESULT={hr:#x}) — falling back to window region clipping",
+    "2d0c1739e0": "Rounded corners: not supported by DWM (normal on Win10); keeping square corners and extending the frame for the system shadow",
     "2d5f93d547": "Extract dry vocals and accompaniment from a song",
     "2de72cf04d": "Multiple NVIDIA GPUs detected. Without a choice, the engine uses the first one, which is not necessarily the fastest. You can change this later under “More → Runtime status”.",
     "2e33db9056": "Synthesis done",

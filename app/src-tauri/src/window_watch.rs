@@ -17,12 +17,6 @@ use tauri::{Monitor, PhysicalPosition, WebviewWindow};
 
 use crate::logging;
 
-/// 圆角是不是得靠自己裁。DWM 那条能走通就一直是 false，Resized 时什么都不做。
-#[cfg(windows)]
-static NEEDS_REGION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-#[cfg(windows)]
-use std::sync::atomic::Ordering;
-
 /// 屏幕坐标里的一个矩形。几何判断全部收在这里，好单测。
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Rect {
@@ -287,7 +281,7 @@ fn ensure_frame_styles(hwnd: windows_sys::Win32::Foundation::HWND, caption: bool
 }
 
 /// 每个窗口自己的最大化状态（主窗 / 工具窗不能共用一个 AtomicBool）。
-/// 只给日志和 Win10 圆角区域用，不再据此改窗口样式或尺寸。
+/// 只给日志用，不再据此改窗口样式或尺寸。
 #[cfg(windows)]
 static MAX_BY_LABEL: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<String, bool>>,
@@ -309,7 +303,7 @@ fn set_max_was(label: &str, v: bool) {
     }
 }
 
-/// 最大化时只处理圆角区域；尺寸由子类化在落地前钳好。
+/// 最大化与还原时重申描边色与厚框；尺寸由子类化在落地前钳好。
 ///
 /// **永远不要** `set_shadow(true)`（无边框 + shadow=true = 1px 白边）。
 /// **永远不要** 关 `DWMWA_NCRENDERING_POLICY`（会搞黑任务栏）。
@@ -332,13 +326,6 @@ fn sync_maximized_frame(win: &WebviewWindow) {
     ensure_thickframe(hwnd);
 
     if maximized {
-        // 区域裁切在最大化时必须撤掉，否则四角露桌面。
-        if NEEDS_REGION.load(Ordering::Relaxed) {
-            use windows_sys::Win32::Graphics::Gdi::SetWindowRgn;
-            unsafe {
-                SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
-            }
-        }
         if !was {
             set_max_was(&label, true);
             logging::shell_log!(
@@ -351,9 +338,6 @@ fn sync_maximized_frame(win: &WebviewWindow) {
             logging::shell_log!(
                 "还原：WS_THICKFRAME 未动，系统按 rcNormalPosition 回到最大化前尺寸"
             );
-        }
-        if NEEDS_REGION.load(Ordering::Relaxed) {
-            apply_corner_region(win);
         }
     }
 }
@@ -504,7 +488,7 @@ unsafe extern "system" fn work_area_subclass_proc(
 /// 画的圆角，投影、动画、贴边分屏全都照旧。
 ///
 /// Windows 10 上这个属性不存在，`DwmSetWindowAttribute` 会回一个错误码。
-/// 那时候退到 `apply_corner_region`：自己拿 GDI 区域把四角裁掉。
+/// 那时候保持直角，只把投影要回来，见 `extend_frame_for_shadow`。
 #[cfg(windows)]
 pub fn round_corners(win: &WebviewWindow) {
     use windows_sys::Win32::Foundation::HWND;
@@ -546,18 +530,28 @@ pub fn round_corners(win: &WebviewWindow) {
         sync_maximized_frame(win);
         return;
     }
-    // 记下走的是兜底那条，之后 Resized 才知道该不该重新裁。DWM 生效的机器上
-    // 再去裁一刀，等于拿硬边盖掉系统画好的抗锯齿圆角。
-    //
-    // 这条分支上 SetWindowRgn 会打断 DWM 合成，投影本来就没有，所以不加
-    // WS_CAPTION —— 加了也画不出来，只多一次样式变更。
-    NEEDS_REGION.store(true, Ordering::Relaxed);
-    // Win10 没有这个属性，DWM 这条路走不通。系统不给画就自己画：给窗口套一个
-    // 圆角区域，把四角裁掉。区域是按像素算的，窗口一变大小就得重新套，所以
-    // 调用方在 Resized 时会再调一次。
+    // Win10 没有系统圆角。以前在这里用 SetWindowRgn 把四角裁圆，代价是整扇窗
+    // 退出 DWM 合成：投影没了，某些机器上还会退回经典样式的边框。现在取舍反过来：
+    // Win10 上保持直角，换回系统投影与合成。
+    ensure_caption_for_shadow(hwnd);
+    extend_frame_for_shadow(hwnd);
     logging::shell_log!(crate::i18n::t("s.2d0c1739e0"));
-    apply_corner_region(win);
     sync_maximized_frame(win);
+}
+
+/// Win10 的投影还差一步：把 DWM 的边框往客户区里延伸 1px，DWM 才会为这扇
+/// 无边框窗画投影。只延伸底边这 1px：`WM_NCCALCSIZE` 让客户区铺满整个窗口，
+/// WebView 盖在它上面，这 1px 不会露出来；即使某台机器上露出来，也只在底边，
+/// 与底栏同色。Win11 走 DWM 的圆角那条路，已经有投影，不做这一步。
+#[cfg(windows)]
+fn extend_frame_for_shadow(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
+    use windows_sys::Win32::UI::Controls::MARGINS;
+    let m = MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: 0, cyBottomHeight: 1 };
+    // SAFETY: hwnd 是本窗；MARGINS 按值传入，函数只读。
+    unsafe {
+        let _ = DwmExtendFrameIntoClientArea(hwnd, &m);
+    }
 }
 
 // 这里曾经有两个函数：`kill_undecorated_shadow_inset_deferred` 和它依赖的
@@ -571,57 +565,12 @@ pub fn round_corners(win: &WebviewWindow) {
 // 「工具窗口永久白屏」（建窗现场跟 WebView2 跨进程同步等待），代价比它治的
 // 病还大。
 
-/// Win10 的兜底：SetWindowRgn 把四角裁圆。
+/// 窗口尺寸变了：重申描边色与厚框。
 ///
-/// 缺点是硬边、没有抗锯齿，所以半径取小一点（8px）不至于难看。DWM 能用的时候
-/// 绝不走这条 —— 那条是系统合成时画的，带抗锯齿也不影响投影。
-#[cfg(windows)]
-fn apply_corner_region(win: &WebviewWindow) {
-    use windows_sys::Win32::Foundation::HWND;
-    // SetWindowRgn 挂在 user32 上，但 windows-sys 把它归在 Graphics::Gdi 里
-    // （跟 HRGN 放一起），不在 UI::WindowsAndMessaging。
-    use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
-
-    let (Ok(hwnd), Ok(size)) = (win.hwnd(), win.inner_size()) else {
-        return;
-    };
-    // 最小化时尺寸是 0，套上去会得到一个空区域 —— 整个窗口都被裁没。
-    if size.width == 0 || size.height == 0 {
-        return;
-    }
-    // 最大化／全屏时窗口是要贴满屏幕的，四角切一刀会在角上露出桌面。这两种
-    // 状态下把区域撤掉（传 null），窗口恢复成完整矩形。
-    let filling = win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
-    if filling {
-        // SAFETY: 传 null 表示清除区域，是这个 API 明确支持的用法。
-        unsafe { SetWindowRgn(hwnd.0 as HWND, std::ptr::null_mut(), 1) };
-        return;
-    }
-    let scale = win.scale_factor().unwrap_or(1.0);
-    let r = (8.0 * scale).round() as i32 + 1;
-    // SAFETY: 尺寸来自窗口自己，非零；区域交给 SetWindowRgn 之后由系统接管，
-    // 成功时不能再 Delete，失败时必须自己删掉，下面按返回值分了。
-    unsafe {
-        let rgn = CreateRoundRectRgn(0, 0, size.width as i32 + 1, size.height as i32 + 1, r, r);
-        if rgn.is_null() {
-            return;
-        }
-        if SetWindowRgn(hwnd.0 as HWND, rgn, 1) == 0 {
-            DeleteObject(rgn);
-        }
-    }
-}
-
-/// 窗口尺寸变了：最大化时撤掉 Win10 圆角区域，还原时重套。
-///
-/// 尺寸钳制已经在子类化里做完。这里只跟圆角区域和 DWM 描边色，
-/// 不再改窗口样式或事后 SetWindowPos。
+/// 尺寸钳制已经在子类化里做完。这里不再改窗口样式或事后 SetWindowPos。
 #[cfg(windows)]
 pub fn refresh_corners(win: &WebviewWindow) {
     sync_maximized_frame(win);
-    if NEEDS_REGION.load(Ordering::Relaxed) && !win.is_maximized().unwrap_or(false) {
-        apply_corner_region(win);
-    }
 }
 
 #[cfg(not(windows))]

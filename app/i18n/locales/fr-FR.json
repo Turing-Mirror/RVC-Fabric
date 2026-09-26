@@ -707,7 +707,7 @@
     "2b9ddc0b69": "Aucun modèle de base d'entraînement disponible pour le moment.",
     "2bd28fc9c2": "Dépôt et réseaux",
     "2bd41b71bb": "Lancement du panneau temps réel d'origine : démarrage à froid d'environ 20–40 s (chargement de torch/CUDA).",
-    "2d0c1739e0": "Coins arrondis : DWM non pris en charge (normal sous Win10, HRESULT={hr:#x}) ; repli sur le rognage de la zone de fenêtre",
+    "2d0c1739e0": "Coins arrondis : non pris en charge par DWM (normal sous Win10) ; coins droits conservés, cadre étendu pour l’ombre système",
     "2d5f93d547": "Extraire la voix sèche et l'accompagnement d'une chanson",
     "2de72cf04d": "Plusieurs GPU NVIDIA détectés. Sans choix, le moteur utilise le premier, pas forcément le plus rapide. Modifiable ensuite dans « Plus → État du runtime ».",
     "2e33db9056": "Synthèse terminée",

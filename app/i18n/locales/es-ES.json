@@ -707,7 +707,7 @@
     "2b9ddc0b69": "No hay modelos base de entrenamiento disponibles por ahora.",
     "2bd28fc9c2": "Repositorio y redes",
     "2bd41b71bb": "Iniciando el panel en tiempo real original: arranque en frío de unos 20–40 s (carga de torch/CUDA).",
-    "2d0c1739e0": "Esquinas redondeadas: DWM no lo soporta (en Win10 sí, HRESULT={hr:#x}); se usa recorte de la región de la ventana",
+    "2d0c1739e0": "Esquinas redondeadas: DWM no lo soporta (normal en Win10); se mantienen rectas y se extiende el marco para la sombra del sistema",
     "2d5f93d547": "Extraer la voz limpia y el acompañamiento de una canción",
     "2de72cf04d": "Se detectaron varias GPU NVIDIA. Sin elección, el motor usa la primera, que no es necesariamente la más rápida. Puede cambiarlo luego en «Más → Estado del runtime».",
     "2e33db9056": "Síntesis completada",

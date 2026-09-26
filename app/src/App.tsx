@@ -10,6 +10,16 @@ import {
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
 import { GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
+import { classifyTrouble, type Trouble } from "./lib/trouble";
+
+/** 各类启动失败的说明与按钮文案。 */
+const TROUBLE_TEXT: Record<Trouble, [string, string]> = {
+  voice: ["s.trouble.voice.body", "s.trouble.voice.act"],
+  runtime: ["s.trouble.runtime.body", "s.trouble.runtime.act"],
+  devices: ["s.trouble.devices.body", "s.trouble.devices.act"],
+  vram: ["s.trouble.vram.body", "s.trouble.vram.act"],
+  unknown: ["s.trouble.unknown.body", "s.trouble.unknown.act"],
+};
 import { Nudge } from "./components/Nudge";
 import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
@@ -900,6 +910,20 @@ export default function App() {
 
   // —— 链路自检对话框：dock 错误态的「自检」入口 ——
   const [selfCheckOpen, setSelfCheckOpen] = useState(false);
+
+  // —— 变声没能启动时的引导：说清是哪一类问题，给一个能按的下一步 ——
+  // 同一条报错只提示一次，用户关掉或处理后不再重复弹出。
+  const [troubleSeen, setTroubleSeen] = useState("");
+  const trouble: Trouble | null = engine.lastError && engine.lastError !== troubleSeen ? classifyTrouble(engine.lastError) : null;
+  const fixTrouble = (kind: Trouble) => {
+    if (kind === "voice") openGuide("voice");
+    else if (kind === "devices") openGuide("devices");
+    else if (kind === "runtime") setShowProvision(true);
+    else if (kind === "vram") {
+      setSettingsTab("perf");
+      setPage("settings");
+    } else setSelfCheckOpen(true);
+  };
   // 新手进度条的刷新信号：两个历史事件落盘时 +1。
 
   // 新手引导：运行时装好后自动打开；中途可收成右下角的小按钮，走完或关掉后不再出现。
@@ -1402,7 +1426,18 @@ export default function App() {
       {/* 首次引导排在最前：更新提示是开机 4 秒就出来的，统计和关注更靠后，
           而这条只在用户第一次点「开启变声」的那几秒里有意义，错过就没了。
           它关掉之后被它压住的那条会自己顶上来。 */}
-      <Leave>{askGuide ? (
+      <Leave>{trouble ? (
+        <Nudge
+          title={t("s.trouble.title")}
+          actions={
+            <>
+              <Btn onClick={() => setTroubleSeen(engine.lastError)}>{t("s.trouble.dismiss")}</Btn>
+              {trouble !== "unknown" ? <Btn onClick={() => { setTroubleSeen(engine.lastError); setSelfCheckOpen(true); }}>{t("s.trouble.check")}</Btn> : null}
+              <Btn primary onClick={() => { setTroubleSeen(engine.lastError); fixTrouble(trouble); }}>{t(TROUBLE_TEXT[trouble][1])}</Btn>
+            </>
+          }
+        >{t(TROUBLE_TEXT[trouble][0])}</Nudge>
+      ) : askGuide ? (
         <Nudge
           title={t("s.guideFirstTitle")}
           actions={

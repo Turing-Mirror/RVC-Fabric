@@ -2210,7 +2210,32 @@
       }
     },
     "guideStart": "Start the setup guide",
-    "firstRunSteps": "All steps"
+    "firstRunSteps": "All steps",
+    "trouble": {
+      "title": "The voice changer did not start",
+      "dismiss": "Dismiss",
+      "check": "Run a check",
+      "voice": {
+        "body": "No voice is selected, or the selected voice’s model file is missing. Choose a voice or use a built-in DSP preset.",
+        "act": "Choose a voice"
+      },
+      "runtime": {
+        "body": "The runtime is not fully installed. Complete it to start the voice changer; DSP presets alone do not need it.",
+        "act": "Complete the runtime"
+      },
+      "devices": {
+        "body": "An audio device could not be opened. It may be disconnected or in exclusive use by another app. Choose the input and output devices again.",
+        "act": "Choose devices"
+      },
+      "vram": {
+        "body": "Out of video memory. Lower the quality in Performance settings, or close other apps using the graphics card and try again.",
+        "act": "Open Performance"
+      },
+      "unknown": {
+        "body": "Something went wrong while starting. The check goes through the runtime, devices and virtual cable one by one and suggests a fix.",
+        "act": "Run a check"
+      }
+    }
   },
   "extras": {
     "engineTitle": "Engine resources",

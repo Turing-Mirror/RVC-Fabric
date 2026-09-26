@@ -2210,7 +2210,32 @@
       }
     },
     "guideStart": "Iniciar la guía",
-    "firstRunSteps": "Todos los pasos"
+    "firstRunSteps": "Todos los pasos",
+    "trouble": {
+      "title": "No se pudo iniciar el cambio de voz",
+      "dismiss": "Cerrar",
+      "check": "Comprobar",
+      "voice": {
+        "body": "No hay ninguna voz seleccionada o falta el archivo de modelo de la voz elegida. Elige una voz o usa un preajuste DSP integrado.",
+        "act": "Elegir una voz"
+      },
+      "runtime": {
+        "body": "El entorno de ejecución no está completo. Complétalo para iniciar el cambio de voz; los preajustes DSP no lo necesitan.",
+        "act": "Completar el entorno"
+      },
+      "devices": {
+        "body": "No se pudo abrir un dispositivo de audio. Puede estar desconectado o en uso exclusivo por otra aplicación. Vuelve a elegir la entrada y la salida.",
+        "act": "Elegir dispositivos"
+      },
+      "vram": {
+        "body": "No hay suficiente memoria de vídeo. Baja la calidad en Rendimiento o cierra otras aplicaciones que usen la tarjeta gráfica y vuelve a intentarlo.",
+        "act": "Abrir Rendimiento"
+      },
+      "unknown": {
+        "body": "Se produjo un error al iniciar. La comprobación revisa el entorno, los dispositivos y el cable virtual y propone una solución.",
+        "act": "Comprobar"
+      }
+    }
   },
   "extras": {
     "engineTitle": "Recursos del motor",

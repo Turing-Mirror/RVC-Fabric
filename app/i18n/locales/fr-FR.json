@@ -2210,7 +2210,32 @@
       }
     },
     "guideStart": "Lancer le guide",
-    "firstRunSteps": "Toutes les étapes"
+    "firstRunSteps": "Toutes les étapes",
+    "trouble": {
+      "title": "La transformation de voix n’a pas démarré",
+      "dismiss": "Fermer",
+      "check": "Vérifier",
+      "voice": {
+        "body": "Aucune voix n’est sélectionnée, ou le fichier de modèle de la voix choisie est introuvable. Choisissez une voix ou utilisez un préréglage DSP intégré.",
+        "act": "Choisir une voix"
+      },
+      "runtime": {
+        "body": "L’environnement d’exécution n’est pas complet. Terminez son installation pour démarrer ; les préréglages DSP n’en ont pas besoin.",
+        "act": "Terminer l’installation"
+      },
+      "devices": {
+        "body": "Un périphérique audio n’a pas pu être ouvert. Il est peut-être débranché ou utilisé en exclusivité par une autre application. Choisissez à nouveau l’entrée et la sortie.",
+        "act": "Choisir les périphériques"
+      },
+      "vram": {
+        "body": "Mémoire vidéo insuffisante. Réduisez la qualité dans Performances ou fermez les autres applications qui utilisent la carte graphique, puis réessayez.",
+        "act": "Ouvrir Performances"
+      },
+      "unknown": {
+        "body": "Une erreur s’est produite au démarrage. La vérification contrôle l’environnement, les périphériques et le câble virtuel, puis propose une solution.",
+        "act": "Vérifier"
+      }
+    }
   },
   "extras": {
     "engineTitle": "Ressources moteur",

@@ -1816,8 +1816,8 @@
     "trainEtaHour": "约剩 {v0} 小时",
     "trainEtaHourMin": "约剩 {v0} 小时 {v1} 分钟",
     "guideFirstTitle": "欢迎使用 RVC Fabric",
-    "guideFirstBody": "RVC Fabric 正在启动变声，建议先阅读基础使用教程。",
-    "guideFirstGo": "转到说明页",
+    "guideFirstBody": "RVC Fabric 正在启动变声。按新手引导完成设置后，游戏与语音软件中的其他人才能听到变声。",
+    "guideFirstGo": "打开新手引导",
     "guideFirstSkip": "跳过",
     "killStsAskTitle": "语音转换仍在进行",
     "killStsAskBody": "强制结束会一并中止语音转换。已完成的文件保留，正在转换的文件不会保存。",
@@ -2094,16 +2094,6 @@
     "lcMicAsking": "正在检测，请对麦克风说话……",
     "lcMicOk": "已检测到输入",
     "lcMicSilent": "未检测到输入，请检查麦克风连接与选择",
-    "obLead": "设置进度",
-    "obDone": "初始设置已完成",
-    "obStepDone": "完成",
-    "obDismiss": "不再显示",
-    "obGoTo": "前往{v0}",
-    "obRuntime": "补全运行时",
-    "obVoice": "选择音色",
-    "obCable": "安装虚拟声卡",
-    "obConvert": "开启变声",
-    "obMonitor": "确认监听",
     "kiUpdate": "更新到 {v0}",
     "kiNoUpdateYet": "当前已是最新版本——这个问题的修复还没发布，请等下一版。",
     "trainInspectQuiet": "素材录音偏轻（抽样平均约 {} dB），建议提升录音音量后再训。",
@@ -2168,7 +2158,59 @@
     "stsUnreadableTag": "目录不可读",
     "stsSourceInsideOut": "来源位于输出目录内，已自动跳过",
     "stsRefresh": "刷新",
-    "stsScanCancel": "停止扫描"
+    "stsScanCancel": "停止扫描",
+    "guide": {
+      "title": "新手引导",
+      "count": "第 {v0} 步，共 {v1} 步",
+      "later": "稍后继续",
+      "resume": "继续新手引导",
+      "close": "不再显示新手引导",
+      "prev": "上一步",
+      "next": "下一步",
+      "skip": "跳过此步",
+      "finish": "完成",
+      "cable": {
+        "title": "安装虚拟声卡",
+        "body": "要让游戏或语音软件中的其他人听到变声，需要一块虚拟声卡传送声音。仅在本机试听效果时，可以跳过此步。",
+        "found": "已检测到 {v0}，无需重复安装。",
+        "installed": "VB-Cable 已安装。",
+        "restart": "安装完成后请重启电脑，设备列表中才会出现 CABLE Input 与 CABLE Output。"
+      },
+      "voice": {
+        "title": "选择音色",
+        "body": "从广场下载现成的音色，或在模型页导入他人提供的 .pth 文件；不使用模型时，也可以选用内置的 DSP 预设，不受显卡类型限制。",
+        "done": "已选择音色。",
+        "plaza": "前往广场",
+        "import": "导入模型",
+        "dsp": "使用 DSP 预设"
+      },
+      "devices": {
+        "title": "设置输入与输出",
+        "body": "输入选择真实的麦克风，输出选择 CABLE Input；如需听到自己的变声，开启监听并选择耳机，不要选择 CABLE。",
+        "load": "设备列表需要启动引擎后读取，首次约需二十至四十秒。"
+      },
+      "try": {
+        "title": "试听变声",
+        "body": "开启变声后对着麦克风说话，输入电平随之跳动即表示麦克风正常；开启监听后，可以在耳机中听到变声。首次开启约需二十至四十秒。",
+        "start": "开启变声",
+        "stop": "停止变声",
+        "level": "输入电平",
+        "running": "变声已开启，请对着麦克风说话"
+      },
+      "share": {
+        "title": "让对方听到",
+        "body": "在游戏或语音软件自身的设置中，将麦克风（输入设备）改为 CABLE Output。此项无法在本软件中修改。",
+        "qqName": "QQ / 微信",
+        "qq": "设置 → 音视频通话 → 麦克风",
+        "discord": "设置 → 语音与视频 → 输入设备",
+        "obs": "来源中的「音频输入采集」→ 设备",
+        "gameName": "游戏",
+        "game": "设置中的「音频」或「语音」一栏",
+        "check": "修改后使用该软件自带的麦克风测试确认，能听到变声即表示已接通。"
+      }
+    },
+    "guideStart": "开始新手引导",
+    "firstRunSteps": "完整步骤"
   },
   "extras": {
     "engineTitle": "引擎资源",

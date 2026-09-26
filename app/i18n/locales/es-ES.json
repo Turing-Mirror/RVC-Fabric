@@ -1816,8 +1816,8 @@
     "trainEtaHour": "quedan unas {v0} h",
     "trainEtaHourMin": "quedan unas {v0} h {v1} min",
     "guideFirstTitle": "Bienvenido a RVC Fabric",
-    "guideFirstBody": "RVC Fabric está iniciando la conversión de voz. Puede leer primero el tutorial básico.",
-    "guideFirstGo": "Ir a la guía",
+    "guideFirstBody": "RVC Fabric está iniciando el cambio de voz. Sigue la guía para que te oigan en juegos y aplicaciones de voz.",
+    "guideFirstGo": "Abrir la guía",
     "guideFirstSkip": "Omitir",
     "killStsAskTitle": "La conversión de voz sigue en curso",
     "killStsAskBody": "Forzar la detención del motor también interrumpirá la conversión. Los archivos terminados se conservan; el archivo en curso no se guardará.",
@@ -2094,16 +2094,6 @@
     "lcMicAsking": "Prueba en curso; hable frente al micrófono…",
     "lcMicOk": "Entrada detectada",
     "lcMicSilent": "No se ha detectado entrada; revise la conexión y la selección del micrófono",
-    "obLead": "Progreso de configuración",
-    "obDone": "Configuración inicial completada",
-    "obStepDone": "Completado",
-    "obDismiss": "No mostrar de nuevo",
-    "obGoTo": "Ir a {v0}",
-    "obRuntime": "Completar el entorno de ejecución",
-    "obVoice": "Elegir una voz",
-    "obCable": "Instalar la tarjeta de sonido virtual",
-    "obConvert": "Activar la conversión de voz",
-    "obMonitor": "Confirmar la monitorización",
     "kiUpdate": "Actualizar a {v0}",
     "kiNoUpdateYet": "Ya tiene la última versión: la corrección de este problema aún no se ha publicado; llegará con la próxima versión.",
     "trainInspectQuiet": "Las grabaciones suenan flojas (media de la muestra en torno a {} dB). Suba el volumen de grabación antes de entrenar.",
@@ -2168,7 +2158,59 @@
     "stsUnreadableTag": "No se puede leer",
     "stsSourceInsideOut": "Una fuente está dentro de la carpeta de salida; se omitió",
     "stsRefresh": "Actualizar",
-    "stsScanCancel": "Detener escaneo"
+    "stsScanCancel": "Detener escaneo",
+    "guide": {
+      "title": "Primeros pasos",
+      "count": "Paso {v0} de {v1}",
+      "later": "Continuar más tarde",
+      "resume": "Continuar la configuración",
+      "close": "No volver a mostrar la guía",
+      "prev": "Atrás",
+      "next": "Siguiente",
+      "skip": "Omitir este paso",
+      "finish": "Terminar",
+      "cable": {
+        "title": "Instalar un cable de audio virtual",
+        "body": "Para que otras personas en juegos o aplicaciones de voz oigan tu voz convertida, un cable de audio virtual lleva el sonido. Si solo quieres escuchar el efecto tú, puedes omitir este paso.",
+        "found": "Se detectó {v0}; no hace falta instalar nada más.",
+        "installed": "VB-Cable está instalado.",
+        "restart": "Reinicia el equipo después de instalar; CABLE Input y CABLE Output solo aparecen en la lista tras reiniciar."
+      },
+      "voice": {
+        "title": "Elegir una voz",
+        "body": "Descarga una voz desde la Plaza o importa un archivo .pth en la página Modelos. Sin modelo, también puedes usar un preajuste DSP integrado, válido con cualquier tarjeta gráfica.",
+        "done": "Ya hay una voz seleccionada.",
+        "plaza": "Ir a la Plaza",
+        "import": "Importar un modelo",
+        "dsp": "Usar un preajuste DSP"
+      },
+      "devices": {
+        "title": "Configurar entrada y salida",
+        "body": "Elige tu micrófono real como entrada y CABLE Input como salida. Para oírte, activa la monitorización y elige tus auriculares, no CABLE.",
+        "load": "La lista de dispositivos se lee cuando arranca el motor; la primera vez tarda unos 20 a 40 segundos."
+      },
+      "try": {
+        "title": "Probarlo",
+        "body": "Activa el cambio de voz y habla al micrófono. Si el nivel de entrada se mueve, el micrófono funciona; con la monitorización activada oirás el resultado en los auriculares. El primer arranque tarda unos 20 a 40 segundos.",
+        "start": "Iniciar",
+        "stop": "Detener",
+        "level": "Nivel de entrada",
+        "running": "En marcha. Habla al micrófono"
+      },
+      "share": {
+        "title": "Que te oigan los demás",
+        "body": "En la configuración del juego o de la aplicación de voz, cambia el micrófono (dispositivo de entrada) a CABLE Output. Esto no se puede cambiar desde RVC Fabric.",
+        "qqName": "QQ / WeChat",
+        "qq": "Ajustes → Llamadas de audio y vídeo → Micrófono",
+        "discord": "Ajustes → Voz y vídeo → Dispositivo de entrada",
+        "obs": "Fuentes → Captura de entrada de audio → Dispositivo",
+        "gameName": "Juegos",
+        "game": "La sección Audio o Voz de los ajustes",
+        "check": "Después, usa la prueba de micrófono de esa aplicación; si oyes la voz convertida, todo está conectado."
+      }
+    },
+    "guideStart": "Iniciar la guía",
+    "firstRunSteps": "Todos los pasos"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

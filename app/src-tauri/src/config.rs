@@ -231,6 +231,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("onboard_convert".into(), json!(false));
     m.insert("onboard_monitor".into(), json!(false));
     m.insert("onboard_dismiss".into(), json!(false));
+    // 新手引导走完或被用户关掉。之后不再主动打开，说明页里仍可再开。
+    m.insert("setup_guide_done".into(), json!(false));
     m.insert("hotkeys_enabled".into(), json!(false));
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));

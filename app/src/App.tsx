@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
-import { OnboardingBar } from "./components/OnboardingBar";
+import { GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
 import { Nudge } from "./components/Nudge";
 import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
@@ -376,9 +376,9 @@ export default function App() {
   }, [engine.userStarts]);
 
   // 「转到说明页」和「不了」都算表过态，都不再问第二次。
-  const closeGuide = (toHelp: boolean) => {
+  const closeGuide = (toGuide: boolean) => {
     setAskGuide(false);
-    if (toHelp) setPage("help");
+    if (toGuide) openGuideRef.current("try");
     void invoke("config_set", { patch: { guide_prompt_done: true } }).catch(
       () => { },
     );
@@ -877,7 +877,6 @@ export default function App() {
     if (!engine.running || onboardConvertDone.current) return;
     onboardConvertDone.current = true;
     void invoke("config_set", { patch: { onboard_convert: true } }).catch(() => { });
-    setOnboardTick((n) => n + 1);
   }, [engine.running]);
 
   // 开启过监听（勾选 monitor_self 即视为完成；取消勾选不回退——「做过」是事实）。
@@ -894,9 +893,7 @@ export default function App() {
       if (p.monitor_self === true && !onboardMonitorDone.current) {
         onboardMonitorDone.current = true;
         void invoke("config_set", { patch: { onboard_monitor: true } }).catch(() => { });
-        setOnboardTick((n) => n + 1);
       }
-      if (p.onboard_dismiss !== undefined) setOnboardTick((n) => n + 1);
     });
     return off;
   }, []);
@@ -904,7 +901,25 @@ export default function App() {
   // —— 链路自检对话框：dock 错误态的「自检」入口 ——
   const [selfCheckOpen, setSelfCheckOpen] = useState(false);
   // 新手进度条的刷新信号：两个历史事件落盘时 +1。
-  const [onboardTick, setOnboardTick] = useState(0);
+
+  // 新手引导：运行时装好后自动打开；中途可收成右下角的小按钮，走完或关掉后不再出现。
+  // 已经用过变声的老用户不主动打扰，从说明页随时可以再打开。
+  const [guide, setGuide] = useState<{ open: boolean; step: GuideStep; pill: boolean }>({ open: false, step: "cable", pill: false });
+  const openGuide = useCallback((step?: GuideStep) => setGuide((g) => ({ open: true, pill: false, step: step ?? g.step })), []);
+  const openGuideRef = useRef(openGuide);
+  openGuideRef.current = openGuide;
+  const finishGuide = useCallback(() => {
+    setGuide((g) => ({ ...g, open: false, pill: false }));
+    void invoke("config_set", { patch: { setup_guide_done: true, onboard_dismiss: true } }).catch(() => { });
+  }, []);
+  useEffect(() => {
+    void invoke<Record<string, unknown>>("config_get")
+      .then((cfg) => {
+        const fresh = cfg.setup_guide_done !== true && cfg.onboard_dismiss !== true && Number(cfg.vc_run_count ?? 0) === 0;
+        if (fresh) setGuide((g) => ({ ...g, pill: true }));
+      })
+      .catch(() => { });
+  }, []);
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {
@@ -1156,6 +1171,10 @@ export default function App() {
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);
+          // 运行时装好了，接着一步步把变声设置好
+          void invoke<Record<string, unknown>>("config_get")
+            .then((cfg) => { if (cfg.setup_guide_done !== true) openGuide("cable"); })
+            .catch(() => { });
           // 这里以前调的是 getProvisionStatus()，**结果直接扔掉** —— 问了等于
           // 没问，engine.provision 还是补全之前那份 runtime_ready: false。
           // 于是运行时装好了，「开启变声」照样被 toggleRun 开头那道闸拦下来
@@ -1238,6 +1257,7 @@ export default function App() {
                   focus={helpFocus}
                   focusNonce={helpFocusNonce}
                   onOpenCommunity={openCommunity}
+                  onStartGuide={() => openGuide("cable")}
                 />
               );
             case "more":
@@ -1482,16 +1502,23 @@ export default function App() {
         onSelfCheck={() => setSelfCheckOpen(true)}
       />
       <Leave>{selfCheckOpen ? <LinkCheckDialog onClose={() => setSelfCheckOpen(false)} /> : null}</Leave>
-      {page === "home" ? (
-        <OnboardingBar
-          tick={onboardTick}
-          onDismissed={() => setOnboardTick((n) => n + 1)}
-          onNavigate={(id, focus) => {
-            if (id === "help") openHelp(focus);
-            else setPage(id);
-          }}
-        />
-      ) : null}
+      <SetupGuide
+        open={guide.open}
+        step={guide.step}
+        onStep={(step) => setGuide((g) => ({ ...g, step }))}
+        onMinimize={() => setGuide((g) => ({ ...g, open: false, pill: true }))}
+        onFinish={finishGuide}
+        status={deviceStatus as Record<string, unknown>}
+        workerAlive={Boolean(engine.status.worker_alive)}
+        devicesBusy={engine.devicesBusy}
+        onReloadDevices={() => void engine.reloadDevices()}
+        running={engine.running}
+        starting={engine.starting}
+        micDb={engine.micDb ?? undefined}
+        onToggleRun={() => void engine.toggleRun()}
+        onNavigate={setPage}
+      />
+      <Leave>{guide.pill && !guide.open ? <GuidePill step={guide.step} onOpen={() => openGuide()} onClose={finishGuide} /> : null}</Leave>
     </div>
   );
 }

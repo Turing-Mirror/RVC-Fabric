@@ -1816,7 +1816,7 @@
     "trainEtaHour": "environ {v0} h restantes",
     "trainEtaHourMin": "environ {v0} h {v1} min restantes",
     "guideFirstTitle": "Bienvenue dans RVC Fabric",
-    "guideFirstBody": "RVC Fabric démarre la conversion vocale. Vous pouvez d'abord consulter le tutoriel de base.",
+    "guideFirstBody": "RVC Fabric démarre la transformation de voix. Suivez le guide pour qu’on vous entende dans les jeux et les applications vocales.",
     "guideFirstGo": "Ouvrir le guide",
     "guideFirstSkip": "Ignorer",
     "killStsAskTitle": "La conversion vocale est toujours en cours",
@@ -2094,16 +2094,6 @@
     "lcMicAsking": "Test en cours ; parlez devant le micro…",
     "lcMicOk": "Entrée détectée",
     "lcMicSilent": "Aucune entrée détectée ; vérifiez le branchement et la sélection du micro",
-    "obLead": "Progression de la configuration",
-    "obDone": "Configuration initiale terminée",
-    "obStepDone": "Terminé",
-    "obDismiss": "Ne plus afficher",
-    "obGoTo": "Aller à {v0}",
-    "obRuntime": "Compléter l'environnement",
-    "obVoice": "Choisir une voix",
-    "obCable": "Installer la carte son virtuelle",
-    "obConvert": "Activer la conversion vocale",
-    "obMonitor": "Vérifier l'écoute de contrôle",
     "kiUpdate": "Mettre à jour vers {v0}",
     "kiNoUpdateYet": "Vous avez déjà la dernière version — le correctif de ce problème n'est pas encore publié ; il arrivera avec la prochaine version.",
     "trainInspectQuiet": "Les enregistrements sont faibles (moyenne d'échantillons autour de {} dB). Augmentez le niveau d'enregistrement avant l'entraînement.",
@@ -2168,7 +2158,59 @@
     "stsUnreadableTag": "Illisible",
     "stsSourceInsideOut": "Une source est dans le dossier de sortie ; ignorée",
     "stsRefresh": "Actualiser",
-    "stsScanCancel": "Arrêter le scan"
+    "stsScanCancel": "Arrêter le scan",
+    "guide": {
+      "title": "Premiers pas",
+      "count": "Étape {v0} sur {v1}",
+      "later": "Continuer plus tard",
+      "resume": "Reprendre la configuration",
+      "close": "Ne plus afficher le guide",
+      "prev": "Précédent",
+      "next": "Suivant",
+      "skip": "Passer cette étape",
+      "finish": "Terminer",
+      "cable": {
+        "title": "Installer un câble audio virtuel",
+        "body": "Pour que les autres entendent votre voix transformée dans un jeu ou une application vocale, un câble audio virtuel achemine le son. Passez cette étape si vous voulez seulement écouter l’effet vous-même.",
+        "found": "{v0} est déjà installé ; rien d’autre n’est nécessaire.",
+        "installed": "VB-Cable est installé.",
+        "restart": "Redémarrez l’ordinateur après l’installation ; CABLE Input et CABLE Output n’apparaissent qu’après un redémarrage."
+      },
+      "voice": {
+        "title": "Choisir une voix",
+        "body": "Téléchargez une voix depuis la Place ou importez un fichier .pth dans la page Modèles. Sans modèle, vous pouvez aussi utiliser un préréglage DSP intégré, compatible avec toute carte graphique.",
+        "done": "Une voix est sélectionnée.",
+        "plaza": "Aller à la Place",
+        "import": "Importer un modèle",
+        "dsp": "Utiliser un préréglage DSP"
+      },
+      "devices": {
+        "title": "Régler l’entrée et la sortie",
+        "body": "Choisissez votre vrai microphone en entrée et CABLE Input en sortie. Pour vous entendre, activez l’écoute et choisissez votre casque, pas CABLE.",
+        "load": "La liste des périphériques est lue au démarrage du moteur ; la première fois prend 20 à 40 secondes environ."
+      },
+      "try": {
+        "title": "Essayer",
+        "body": "Lancez la transformation et parlez dans le microphone. Si le niveau d’entrée bouge, le microphone fonctionne ; avec l’écoute activée, vous entendez le résultat dans le casque. Le premier démarrage prend 20 à 40 secondes environ.",
+        "start": "Démarrer",
+        "stop": "Arrêter",
+        "level": "Niveau d’entrée",
+        "running": "En cours. Parlez dans le microphone"
+      },
+      "share": {
+        "title": "Vous faire entendre",
+        "body": "Dans les réglages du jeu ou de l’application vocale, choisissez CABLE Output comme microphone (périphérique d’entrée). Ce réglage ne se fait pas dans RVC Fabric.",
+        "qqName": "QQ / WeChat",
+        "qq": "Réglages → Appels audio et vidéo → Microphone",
+        "discord": "Paramètres → Voix et vidéo → Périphérique d’entrée",
+        "obs": "Sources → Capture d’entrée audio → Périphérique",
+        "gameName": "Jeux",
+        "game": "La section Audio ou Voix des paramètres",
+        "check": "Ensuite, utilisez le test de microphone de l’application ; si vous entendez la voix transformée, tout est branché."
+      }
+    },
+    "guideStart": "Lancer le guide",
+    "firstRunSteps": "Toutes les étapes"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

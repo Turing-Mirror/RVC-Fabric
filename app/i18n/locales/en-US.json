@@ -1816,8 +1816,8 @@
     "trainEtaHour": "about {v0} h left",
     "trainEtaHourMin": "about {v0} h {v1} min left",
     "guideFirstTitle": "Welcome to RVC Fabric",
-    "guideFirstBody": "RVC Fabric is starting voice conversion. You may want to read the basic tutorial first.",
-    "guideFirstGo": "Open the guide",
+    "guideFirstBody": "RVC Fabric is starting the voice changer. Follow the setup guide so people in games and voice apps can hear it.",
+    "guideFirstGo": "Open the setup guide",
     "guideFirstSkip": "Skip",
     "killStsAskTitle": "Voice conversion is still running",
     "killStsAskBody": "Forcing the engine to stop will also abort the conversion. Finished files are kept; the file being converted will not be saved.",
@@ -2094,16 +2094,6 @@
     "lcMicAsking": "Test in progress; please speak into the microphone...",
     "lcMicOk": "Input detected",
     "lcMicSilent": "No input detected. Please check the microphone connection and its selection.",
-    "obLead": "Setup progress",
-    "obDone": "Initial setup complete",
-    "obStepDone": "Done",
-    "obDismiss": "Do not show again",
-    "obGoTo": "Go to {v0}",
-    "obRuntime": "Complete the runtime",
-    "obVoice": "Choose a voice",
-    "obCable": "Install the virtual sound card",
-    "obConvert": "Enable voice conversion",
-    "obMonitor": "Confirm monitoring",
     "kiUpdate": "Update to {v0}",
     "kiNoUpdateYet": "You are on the latest version — the fix for this issue hasn't shipped yet; it arrives with the next release.",
     "trainInspectQuiet": "The recordings are on the quiet side (sample average around {} dB). Consider raising the recording volume before training.",
@@ -2168,7 +2158,59 @@
     "stsUnreadableTag": "Unreadable",
     "stsSourceInsideOut": "A source sits inside the output folder; it was skipped",
     "stsRefresh": "Refresh",
-    "stsScanCancel": "Stop scan"
+    "stsScanCancel": "Stop scan",
+    "guide": {
+      "title": "Getting started",
+      "count": "Step {v0} of {v1}",
+      "later": "Continue later",
+      "resume": "Continue setup",
+      "close": "Stop showing the setup guide",
+      "prev": "Back",
+      "next": "Next",
+      "skip": "Skip this step",
+      "finish": "Finish",
+      "cable": {
+        "title": "Install a virtual audio cable",
+        "body": "For people in games or voice apps to hear your converted voice, a virtual audio cable carries the sound to them. Skip this step if you only want to hear the effect yourself.",
+        "found": "{v0} is already installed; nothing else is needed.",
+        "installed": "VB-Cable is installed.",
+        "restart": "Restart your computer after installing; CABLE Input and CABLE Output appear in the device list only after a restart."
+      },
+      "voice": {
+        "title": "Choose a voice",
+        "body": "Download a ready-made voice from the Plaza, or import a .pth file on the Models page. Without a model you can also use a built-in DSP preset, which works on any graphics card.",
+        "done": "A voice is selected.",
+        "plaza": "Go to the Plaza",
+        "import": "Import a model",
+        "dsp": "Use a DSP preset"
+      },
+      "devices": {
+        "title": "Set input and output",
+        "body": "Choose your real microphone as input and CABLE Input as output. To hear yourself, turn on monitoring and pick your headphones, not CABLE.",
+        "load": "The device list is read once the engine starts; the first time takes about 20 to 40 seconds."
+      },
+      "try": {
+        "title": "Try it",
+        "body": "Start the voice changer and speak into the microphone. If the input level moves, the microphone works; with monitoring on, you hear the result in your headphones. The first start takes about 20 to 40 seconds.",
+        "start": "Start",
+        "stop": "Stop",
+        "level": "Input level",
+        "running": "Running. Speak into the microphone"
+      },
+      "share": {
+        "title": "Let others hear you",
+        "body": "In the game or voice app’s own settings, set the microphone (input device) to CABLE Output. This cannot be changed from RVC Fabric.",
+        "qqName": "QQ / WeChat",
+        "qq": "Settings → Audio and video calls → Microphone",
+        "discord": "Settings → Voice & Video → Input Device",
+        "obs": "Sources → Audio Input Capture → Device",
+        "gameName": "Games",
+        "game": "The Audio or Voice section of the settings",
+        "check": "Afterwards, use that app’s microphone test; if you hear the converted voice, everything is connected."
+      }
+    },
+    "guideStart": "Start the setup guide",
+    "firstRunSteps": "All steps"
   },
   "extras": {
     "engineTitle": "Engine resources",

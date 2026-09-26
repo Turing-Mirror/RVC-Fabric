@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, memo } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   AccordionGroup,
   Block,
@@ -16,6 +15,7 @@ import { useI18n } from "../i18n";
 import { t } from "../i18n/t";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 import { scheduleScrollToId } from "../lib/scrollPane";
+import { buildRoutes, detectRoutes, deviceNames, useVbCable } from "../lib/routes";
 
 /**
  * 说明页里可以被直接跳转到的段。
@@ -238,79 +238,6 @@ function buildFaq(): { q: string; hint: string; a: string }[] {
   ];
 }
 
-/**
- * 设备列表里认得出来的「能把变声送进游戏」的通道。
- * 匹配键保持中英双语字面量（设备名可能是中文系统），label 走 t()。
- */
-function buildRoutes(): {
-  kind: "virtual" | "physical";
-  label: string;
-  keys: string[];
-}[] {
-  return [
-    {
-      kind: "virtual",
-      label: "VB-Cable",
-      keys: ["cable input", "cable output", "vb-audio virtual cable"],
-    },
-    {
-      kind: "virtual",
-      label: "VoiceMeeter",
-      keys: ["voicemeeter", "voice meeter"],
-    },
-    {
-      kind: "virtual",
-      label: t("s.1d2f7d6189"),
-      // Device-name match tokens: keep Chinese + English literals always.
-      keys: [
-        "virtual audio",
-        "virtual cable",
-        "虚拟音频",
-        "synchronous audio",
-      ],
-    },
-    {
-      kind: "physical",
-      label: t("s.402fd697c1"),
-      keys: [
-        "立体声混音",
-        "stereo mix",
-        "what u hear",
-        "wave out mix",
-        "波输出混合",
-      ],
-    },
-  ];
-}
-
-/** 设备名可能是字符串，也可能是 `{name}`，两边都得认。 */
-function deviceNames(list: unknown): string[] {
-  if (!Array.isArray(list)) return [];
-  return list
-    .map((d) => (typeof d === "string" ? d : String((d as { name?: string })?.name ?? "")))
-    .filter(Boolean);
-}
-
-function detectRoutes(
-  names: string[],
-  routes: ReturnType<typeof buildRoutes>,
-): { kind: "virtual" | "physical"; label: string }[] {
-  const lower = names.map((n) => n.toLowerCase());
-  const hits: { kind: "virtual" | "physical"; label: string }[] = [];
-  for (const r of routes) {
-    // 「其他虚拟声卡」是兜底桶，已经认出具体是哪一款就别再报一遍：
-    // VB-Cable 的设备名是「VB-Audio Virtual Cable」，两条都能命中，
-    // 报成「VB-Cable、其他虚拟声卡」会让人以为自己装了两套。
-    if (r.label === t("s.1d2f7d6189") && hits.some((h) => h.kind === "virtual")) {
-      continue;
-    }
-    if (r.keys.some((k) => lower.some((n) => n.includes(k.toLowerCase())))) {
-      hits.push({ kind: r.kind, label: r.label });
-    }
-  }
-  return hits;
-}
-
 function buildInferGuide(): { q: string; hint: string; a: string }[] {
   return [
     { q: t("s.inferGuideQ1"), hint: t("s.inferGuideH1"), a: t("s.inferGuideA1") },
@@ -349,6 +276,8 @@ type HelpProps = {
   focusNonce?: number;
   /** 跳到「其他」页的仓库与社媒。说明页答不上来的，只能找人问。 */
   onOpenCommunity?: () => void;
+  /** 打开新手引导：从装好软件到对方听得见，一步一步来。 */
+  onStartGuide?: () => void;
 };
 
 function HelpPageImpl({
@@ -356,6 +285,7 @@ function HelpPageImpl({
   focus,
   focusNonce = 0,
   onOpenCommunity,
+  onStartGuide,
 }: HelpProps = {}) {
   const { locale } = useI18n();
   const glossary = useGlossary();
@@ -366,33 +296,13 @@ function HelpPageImpl({
   // 常见情况的本地过滤。二十一条靠「新手撞上的先后」排，第一条不一定是
   // 用户的那条 —— 给个关键词框，比让他逐条展开快。
   const [faqFilter, setFaqFilter] = useState("");
-  // Installing the driver needs UAC, so it can only ever be user-initiated.
-  // Without this entry the pack is downloaded but never actually installed.
-  // "checking" and "we could not check" used to be the same state (null), so a
-  // failed status call showed 「正在检查…」 forever.
-  const [vbReady, setVbReady] = useState<boolean | "checking" | "unknown">(
-    "checking",
-  );
-  const [vbInstalled, setVbInstalled] = useState(false);
-  const [vbRemoved, setVbRemoved] = useState(false);
-  const [vbMsg, setVbMsg] = useState("");
-  const [vbBusy, setVbBusy] = useState<"install" | "uninstall" | false>(false);
-
-  const refreshVb = async () => {
-    try {
-      const st = await invoke<{
-        vbcable_pack_ready?: boolean;
-        vbcable_installed?: boolean;
-      }>("assets_status");
-      setVbReady(!!st.vbcable_pack_ready);
-      setVbInstalled(!!st.vbcable_installed);
-    } catch {
-      setVbReady("unknown");
-    }
-  };
-  useEffect(() => {
-    void refreshVb();
-  }, []);
+  // 虚拟声卡的状态与安装。新手引导里的同一段也用它。
+  const vb = useVbCable();
+  const vbReady = vb.ready;
+  const vbInstalled = vb.installed;
+  const vbRemoved = vb.removed;
+  const vbMsg = vb.msg;
+  const vbBusy = vb.busy;
 
   useEffect(() => {
     // `focus` 允许写成「段#问题 key」，例如 faq#s.faqVramQ。指到「常见情况」
@@ -422,52 +332,8 @@ function HelpPageImpl({
     return scheduleScrollToId(`help-${sec}`);
   }, [focus, focusNonce]);
 
-  const installVb = async () => {
-    if (vbBusy) return;
-    setVbBusy("install");
-    setVbMsg("");
-    try {
-      if (vbReady !== true) {
-        setVbMsg(t("s.3076e38c53"));
-        try {
-          await invoke("assets_ensure_vbcable");
-        } catch (e) {
-          // 下载失败和安装失败是两回事，报错也得分开说：壳那边给的安装
-          // 失败原因已经是整句了，再套一层「下载失败：」只会指错方向。
-          throw new Error(t("s.04c4e3b2b3", { e: String(e) }));
-        }
-        await refreshVb();
-      }
-      setVbMsg(t("s.vbcableInstalling"));
-      // 静默安装，装完才返回。这里的等待就是驱动真正在装的那段时间。
-      await invoke("assets_install_vbcable");
-      setVbRemoved(false);
-      setVbMsg(t("s.vbcableDone"));
-      await refreshVb();
-    } catch (e) {
-      setVbMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setVbBusy(false);
-    }
-  };
-
-  const uninstallVb = async () => {
-    if (vbBusy) return;
-    setVbBusy("uninstall");
-    setVbMsg("");
-    try {
-      setVbMsg(t("s.vbcableUninstalling"));
-      // 静默卸载，装完才返回。优先跑系统里那份官方卸载程序。
-      await invoke("assets_uninstall_vbcable");
-      setVbRemoved(true);
-      setVbMsg(t("s.vbcableUninstalled"));
-      await refreshVb();
-    } catch (e) {
-      setVbMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setVbBusy(false);
-    }
-  };
+  const installVb = vb.install;
+  const uninstallVb = vb.uninstall;
 
   const names = useMemo(
     () => [
@@ -532,117 +398,127 @@ function HelpPageImpl({
         }
       />
 
-      {/* 先放用户必须完成的安装动作。安装按钮位于说明页顶部，和首次运行说明中
-          的落点一致；完整的七步路径紧跟其后，用户不需要在长页面里寻找入口。 */}
-      <Block id="help-vbcable" title={t("s.b386a7fb53")}>
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
-        {/* 先照着用户机器上真实的设备列表说一句话。
-            已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
-            多一层能接错的地方 —— 那不是帮忙。 */}
-        <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed w-full min-w-0">
-          {!known ? (
-            <span className="text-[var(--help)]">{t("s.60f0f911ec")}</span>
-          ) : found.length === 0 ? (
-            <span className="text-[var(--ink-muted)]">
-              {t("s.helpNoRoute", { n: names.length })}
-            </span>
-          ) : (
-            <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{formatLocalizedList(found.map((f) => f.label))}</b>
-              <br />
-              {hasVirtual
-                ? hasCable
-                  ? t("s.a8bd2d876d")
-                  : t("s.10481886ca")
-                : t("s.4951a916f7")}
-            </span>
-          )}
-        </div>
-        <Group>
-          <ListItem
-            title="VB-Cable"
-            titleTip={tip(t("s.7d7d710ba5"))}
-            desc={
-              vbMsg ||
-              (canUninstall
-                ? t("s.3d2c784f94")
-                : vbReady === "checking"
-                ? t("s.481ee2d4bc")
-                : vbReady === "unknown"
-                  ? t("s.1b94ca3bf5")
-                  : vbReady
-                    ? t("s.71c000a0a8")
-                    : t("s.7be46937d4"))
-            }
-            right={
-              <>
-                {canUninstall ? (
-                  <Btn
-                    disabled={!!vbBusy}
-                    onClick={() => void uninstallVb()}
-                  >
-                    {vbBusy === "uninstall"
-                      ? t("s.1cac8ac7f5")
-                      : t("s.vbcableUninstall")}
-                  </Btn>
-                ) : null}
-                <Btn
-                  disabled={!!vbBusy}
-                  onClick={() => void installVb()}
-                >
-                  {vbBusy === "install"
-                    ? t("s.1cac8ac7f5")
-                    : t("s.b386a7fb53")}
-                </Btn>
-              </>
-            }
-          />
-        </Group>
-        <DonateNote />
-      </Block>
-
-      {/* 说明页是在用户第一次点「开启变声」时弹出来的，那一刻他手里没有问题、
-          只有一个没做成的任务 —— 安装完成后先给整条路径，再给查阅材料。 */}
-      <Block id="help-firstrun" title={t("s.firstRunTitle")} note={String(firstRun.length)}>
+      {/* 从装好软件到对方听得见：虚拟声卡、连接方式与七个步骤合在一处，
+          最上面是新手引导的入口，照着一步步做，不用在长页面里找。 */}
+      <Block
+        id="help-firstrun"
+        title={t("s.firstRunTitle")}
+        note={String(firstRun.length)}
+        action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
+      >
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.firstRunLead")}
         </p>
-        <AccordionGroup
-          items={firstRunItems}
-          openId={open}
-          onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
-          openLabel={t("s.5d5815647c")}
-          closedLabel={t("s.b0e24833f7")}
-        />
-      </Block>
+        <div id="help-vbcable" className="scroll-mt-4">
+          <div className="text-[13.5px] font-medium mb-2">{t("s.b386a7fb53")}</div>
 
-      <Block id="help-wiring" title={t("s.149ab7bf0a")}>
-        <Group>
-          <ListItem
-            title={t("s.69f4bc1200")}
-            desc={t("s.0f14377cdd")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
+          <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
+          {/* 先照着用户机器上真实的设备列表说一句话。
+              已经有 VoiceMeeter 的人再装一个 VB-Cable，只会多两个设备、
+              多一层能接错的地方 —— 那不是帮忙。 */}
+          <div className="rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3.5 py-3 mb-4 text-[12.5px] leading-relaxed w-full min-w-0">
+            {!known ? (
+              <span className="text-[var(--help)]">{t("s.60f0f911ec")}</span>
+            ) : found.length === 0 ? (
+              <span className="text-[var(--ink-muted)]">
+                {t("s.helpNoRoute", { n: names.length })}
+              </span>
+            ) : (
+              <span className="text-[var(--ink-muted)]">{t("s.a1fdfdae84")}<b className="font-semibold">{formatLocalizedList(found.map((f) => f.label))}</b>
+                <br />
+                {hasVirtual
+                  ? hasCable
+                    ? t("s.a8bd2d876d")
+                    : t("s.10481886ca")
+                  : t("s.4951a916f7")}
+              </span>
+            )}
+          </div>
+          <Group>
+            <ListItem
+              title="VB-Cable"
+              titleTip={tip(t("s.7d7d710ba5"))}
+              desc={
+                vbMsg ||
+                (canUninstall
+                  ? t("s.3d2c784f94")
+                  : vbReady === "checking"
+                  ? t("s.481ee2d4bc")
+                  : vbReady === "unknown"
+                    ? t("s.1b94ca3bf5")
+                    : vbReady
+                      ? t("s.71c000a0a8")
+                      : t("s.7be46937d4"))
+              }
+              right={
+                <>
+                  {canUninstall ? (
+                    <Btn
+                      disabled={!!vbBusy}
+                      onClick={() => void uninstallVb()}
+                    >
+                      {vbBusy === "uninstall"
+                        ? t("s.1cac8ac7f5")
+                        : t("s.vbcableUninstall")}
+                    </Btn>
+                  ) : null}
+                  <Btn
+                    disabled={!!vbBusy}
+                    onClick={() => void installVb()}
+                  >
+                    {vbBusy === "install"
+                      ? t("s.1cac8ac7f5")
+                      : t("s.b386a7fb53")}
+                  </Btn>
+                </>
+              }
+            />
+          </Group>
+          <DonateNote />
+  
+        </div>
+        <div id="help-wiring" className="mt-7 scroll-mt-4">
+          <div className="text-[13.5px] font-medium mb-2">{t("s.149ab7bf0a")}</div>
+
+          <Group>
+            <ListItem
+              title={t("s.69f4bc1200")}
+              desc={t("s.0f14377cdd")}
+              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
+            />
+            <ListItem
+              title={t("s.b4b5016e9f")}
+              desc={t("s.0709bd6ae7")}
+              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Input</span>}
+            />
+            <ListItem
+              title={t("s.6f63f33852")}
+              desc={t("s.2898cbf891")}
+              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+            />
+            <ListItem
+              title={t("s.d0a420e1ca")}
+              desc={t("s.cad046a475")}
+              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
+            />
+            <ListItem
+              title={t("s.364b26a260")}
+              desc={t("s.26ad7c406b")}
+              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+            />
+          </Group>
+  
+        </div>
+        <div className="mt-7">
+          <div className="text-[13.5px] font-medium mb-3">{t("s.firstRunSteps")}</div>
+          <AccordionGroup
+            items={firstRunItems}
+            openId={open}
+            onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
+            openLabel={t("s.5d5815647c")}
+            closedLabel={t("s.b0e24833f7")}
           />
-          <ListItem
-            title={t("s.b4b5016e9f")}
-            desc={t("s.0709bd6ae7")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Input</span>}
-          />
-          <ListItem
-            title={t("s.6f63f33852")}
-            desc={t("s.2898cbf891")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
-          />
-          <ListItem
-            title={t("s.d0a420e1ca")}
-            desc={t("s.cad046a475")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
-          />
-          <ListItem
-            title={t("s.364b26a260")}
-            desc={t("s.26ad7c406b")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
-          />
-        </Group>
+        </div>
       </Block>
       <Block
         id="help-faq"

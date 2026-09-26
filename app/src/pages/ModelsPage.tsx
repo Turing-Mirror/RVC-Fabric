@@ -26,6 +26,7 @@ import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
+import { Swap, stagger } from "../components/Motion";
 import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
@@ -515,6 +516,7 @@ function ModelsPageImpl({
             ) : null}
           </div>
         ) : (
+        <Swap k={`${kind}|${query}|${page}`}>
         <div
           ref={gridRef}
           className="grid gap-x-4 gap-y-[22px]"
@@ -529,7 +531,7 @@ function ModelsPageImpl({
               {t("s.041c85897b", { v0: query })}
             </div>
           ) : (
-            pageView.map((v) => {
+            pageView.map((v, i) => {
               const cur = modelKey(v) === selectedKey;
               const src = resolveCover(v.cover, coverCache);
               const authors = voiceAuthorList(v);
@@ -538,7 +540,7 @@ function ModelsPageImpl({
               const tag = displayVoiceTag(v) || t("s.c4301894a2");
               const author = displayVoiceAuthor(v);
               return (
-                <div key={modelKey(v)}>
+                <div key={modelKey(v)} className="rise" style={stagger(i)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
                       <img
@@ -636,7 +638,7 @@ function ModelsPageImpl({
             })
           )}
         </div>
-
+        </Swap>
         )}
 
         {kind === "rvc" && view.length > pageSize ? (

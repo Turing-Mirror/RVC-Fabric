@@ -523,7 +523,7 @@ input[type="checkbox"]:disabled {
 @keyframes panel-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.97);
+    transform: translateY(14px) scale(0.96);
   }
 }
 @keyframes panel-out {
@@ -533,10 +533,10 @@ input[type="checkbox"]:disabled {
   }
 }
 .modal-scrim {
-  animation: scrim-in 0.22s var(--ease) both;
+  animation: scrim-in 0.26s var(--ease-soft) both;
 }
 .modal-scrim > * {
-  animation: panel-in 0.32s var(--ease) both;
+  animation: panel-in 0.44s var(--spring-gentle) both;
 }
 .modal-scrim[data-leaving] {
   animation: scrim-out 0.18s var(--ease) forwards;
@@ -558,17 +558,6 @@ input[type="checkbox"]:disabled {
 .collapse-area[data-open] {
   grid-template-rows: 1fr;
   opacity: 1;
-}
-
-/* 设置页子页签切换：新内容淡入并略微上移。 */
-@keyframes tab-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-.tab-in {
-  animation: tab-in 0.26s var(--ease) backwards;
 }
 
 /* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */
@@ -716,3 +705,23 @@ body::before {
   to { opacity: 1; transform: none; }
 }
 .guide-pill { animation: guide-pill-in 0.46s var(--spring-gentle) both; }
+
+/* 页内切换（components/Motion.tsx）：旧内容很快淡出、朝来处让一小步；新内容从去向
+   那一侧浮上来，按临界阻尼收住。方向由 --swap-dx、--swap-ox 给出。 */
+@keyframes swap-in {
+  from { opacity: 0; transform: translate3d(var(--swap-dx, 0px), 8px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes swap-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate3d(var(--swap-ox, 0px), 0, 0); }
+}
+.swap-in { animation: swap-in 0.46s var(--spring-settle) 0.04s both; }
+.swap-out { animation: swap-out 0.18s var(--ease-out-quick) both; }
+
+/* 列表与网格的条目依次浮现，延迟由 stagger() 给出。 */
+@keyframes rise {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.5s var(--spring-settle) both; }

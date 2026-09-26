@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Block, Btn, PageHead, PagePad } from "../components/ui";
+import { Btn, PageHead, PagePad } from "../components/ui";
+import { Swap } from "../components/Motion";
+import { HelpMark } from "../components/Tooltip";
 import { Select, Slider } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
@@ -373,124 +375,199 @@ export function AudioPage() {
   const progress = preview && preview.length_frames > 0
     ? Math.min(100, preview.played_frames / preview.length_frames * 100)
     : 0;
+  const unplayable = (asset?: Asset) => !asset || asset.available === false || selectedExcluded ||
+    (asset.excluded_source_ids?.length ?? 0) === asset.source_ids.length;
+  const sourceCount = (id: string) => library.entries.filter((entry) => assetById.get(entry.asset_id)?.source_ids.includes(id)).length;
+  const selectedSource = library.sources.find((source) => source.id === sourceId);
+  const field = "block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]";
+  // 双击条目：直接替换播放到语音，与常见音效板的用法一致
+  const playNow = (entry: Entry) => {
+    chooseEntry(entry);
+    if (!voiceDeviceId || unplayable(assetById.get(entry.asset_id))) return;
+    setVoicePreparing(true);
+    void run(async () => {
+      setVoice(await invoke<VoicePlaybackStatus>("audio_voice_start", { entryId: entry.id, deviceId: voiceDeviceId, mode: "replace" }));
+    }).finally(() => setVoicePreparing(false));
+  };
+
   return (
     <PagePad>
       <PageHead title={t("audio.title")} sub={t("audio.subtitle")} actions={
         <>
+          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-1"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
+          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-2"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />{t("audio.recursive")}</label>
           <Btn onClick={() => pick("file")} disabled={busy}>{t("audio.importFiles")}</Btn>
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
       } />
-      <div className="flex flex-wrap gap-5 mt-5 text-[12.5px] text-[var(--ink-muted)]">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />{t("audio.recursive")}</label>
-      </div>
-      {error ? <p role="alert" className="text-[13px] text-[var(--danger)] mt-4">{error}</p> : null}
-      {notice ? <p role="status" className="text-[13px] text-[var(--meta)] mt-4">{notice}</p> : null}
+      {error ? <p role="alert" className="text-[13px] text-[var(--danger)] mt-4 mb-0">{error}</p> : null}
+      {notice ? <p role="status" className="text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
       {scanActive ? <div className="flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
         <span>{t("audio.scanProgress", { count: scanned })}</span>
         <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
       </div> : null}
 
-      <Block title={t("audio.sources")}>
-        <div className="flex flex-wrap gap-2">
-          <Btn on={sourceId === ""} onClick={() => { setSourceId(""); setSelectedId(""); }}>{t("audio.all")}</Btn>
-          {library.sources.map((source) => (
-            <Btn key={source.id} on={sourceId === source.id} ariaLabel={source.path} className="max-w-full truncate" onClick={() => { setSourceId(source.id); setSelectedId(""); }}>
-              <span title={source.path}>{sourceNames.get(source.id)}</span>
-            </Btn>
-          ))}
-        </div>
-        {sourceId ? <div className="flex gap-2 mt-3">
-          <Btn disabled={busy} onClick={() => void run(async () => {
-            setScanned(0);
-            setScanActive(true);
-            try { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId })); }
-            finally { setScanActive(false); }
-          })}>{t("audio.refresh")}</Btn>
-          {library.sources.find((source) => source.id === sourceId)?.mode === "reference" ?
-            <Btn disabled={busy} onClick={() => {
-              const source = library.sources.find((source) => source.id === sourceId);
-              if (source) relink(source.kind, "source", source.id);
-            }}>{t("audio.relinkSource")}</Btn> : null}
-          <Btn disabled={busy} onClick={() => void run(async () => {
-            if (!(await askConfirm(t("audio.removeConfirm")))) return;
-            acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId }));
-            setSourceId("");
-            setSelectedId("");
-          })}>{t("audio.removeSource")}</Btn>
-        </div> : null}
-      </Block>
-
-      <Block title={t("audio.entries")} note={t("audio.entryCount", { count: shown.length })}>
-        <label className="flex items-center gap-2 text-[12px] text-[var(--meta)] mb-3">
-          <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
-          {t("audio.showExcluded")}
-        </label>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
-          className="w-full max-w-[400px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
-        <div className="mt-3 bg-[var(--group)] rounded-[var(--r)] px-4">
-          {shown.length === 0 ? <p className="text-[13px] text-[var(--meta)] py-4 m-0">{t("audio.empty")}</p> : shown.map((entry) => (
-            <button type="button" key={entry.id} onClick={() => chooseEntry(entry)}
-              className="w-full text-left flex items-center gap-3 py-3 border-0 bg-transparent cursor-pointer hover:text-[var(--accent)]">
-              <span className="w-12 text-[var(--meta)] text-[12px]">{entry.number ?? "—"}</span>
-              <span className="min-w-0 truncate text-[13px] text-[var(--ink)]">{entry.name}</span>
-              <span className="ml-auto text-[11px] text-[var(--meta)]">{assetById.get(entry.asset_id)?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : ""}</span>
-            </button>
-          ))}
-        </div>
-      </Block>
-
-      <Block title={t("audio.voiceOutput")} note={t("audio.voiceOutputNote")}>
-        <div className="flex items-end gap-3 flex-wrap">
-          <label className="text-[12px] text-[var(--meta)]">{t("audio.voiceDevice")}
-            <Select value={voiceDeviceId} options={[{ id: "", label: t("audio.chooseVoiceDevice") }, ...voiceDevices.map((device) => ({ id: device.id, label: device.name }))]}
-              onChange={(id) => { setVoiceDeviceId(id); void invoke("config_set", { patch: { audio_voice_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={240} />
-          </label>
-          <Btn disabled={voiceInstances.length === 0 && !voicePreparing} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop").then((status) => {
-            setVoice(status);
-            setVoiceInstances([]);
-          }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
-        </div>
-        <div className="flex items-center gap-3 mt-3 text-[12px] text-[var(--meta)]">
-          <span className="flex-none whitespace-nowrap">{t("audio.masterVolume")}</span>
-          <div className="flex-1 max-w-[320px]">
-            <Slider
-              value={volume.muted ? 0 : Math.round(volume.volume * 100)}
-              min={0} max={100} step={1}
-              onChange={(v) => changeVolume("audio_voice_volume_set", { volume: v / 100 })}
-            />
+      {/* 三栏：来源 · 音频列表 · 所选条目的编辑。左右两栏随页面滚动时贴在顶上，列表多长都不影响编辑区 */}
+      <div className="mt-6 grid grid-cols-[180px_minmax(0,1fr)_minmax(300px,380px)] gap-6 items-start max-[1020px]:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+        <aside aria-label={t("audio.sources")} className="sticky top-4 max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain max-[1020px]:hidden">
+          <div className="text-[12px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
+          <div className="flex flex-col gap-0.5">
+            <SourceBtn on={sourceId === ""} label={t("audio.all")} count={library.entries.length} onClick={() => { setSourceId(""); setSelectedId(""); }} />
+            {library.sources.map((source) => (
+              <SourceBtn key={source.id} on={sourceId === source.id} label={sourceNames.get(source.id) ?? source.path} title={source.path} count={sourceCount(source.id)}
+                onClick={() => { setSourceId(source.id); setSelectedId(""); }} />
+            ))}
           </div>
-          <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
-        </div>
-        <label className="flex items-center gap-1.5 mt-3 text-[12px] text-[var(--meta)]">
-          <input type="checkbox" checked={monitor}
-            onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
-              .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
-          {t("audio.monitorMusic")}
-        </label>
-        {voice?.state === "error" ? <p role="alert" className="text-[12px] text-[var(--danger)] mt-3">{t("audio.voicePlaybackFailed")}</p> : null}
-        {voiceInstances.length > 0 ? <div className="mt-3 space-y-2" aria-label={t("audio.activePlayback")}>
-          {voiceInstances.map((instance) => <div key={instance.instance_id}
-            className="rounded-[var(--rs)] bg-[var(--group)] px-3 py-2 text-[12px] text-[var(--meta)]">
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate" title={instance.name}>{instance.name}</span>
-              <span className="flex-none tabular-nums">{(instance.played_frames / Math.max(1, instance.sample_rate)).toFixed(1)} / {(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s</span>
-              <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
-                paused: instance.state !== "paused", instanceId: instance.instance_id,
-              }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
-              <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_replay", {
-                instanceId: instance.instance_id,
-              }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
-                ? t("audio.playbackCancelled") : t("audio.operationFailed")))}>{t("audio.replay")}</Btn>
-              <Btn on={instance.looping} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_loop", {
-                instanceId: instance.instance_id, looping: !instance.looping,
-              }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.loop")}</Btn>
-              <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop_instance", {
-                instanceId: instance.instance_id,
-              }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
+          {selectedSource ? <div className="mt-3 flex flex-col items-start gap-1.5 px-1">
+            <Btn disabled={busy} onClick={() => void run(async () => {
+              setScanned(0);
+              setScanActive(true);
+              try { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId })); }
+              finally { setScanActive(false); }
+            })}>{t("audio.refresh")}</Btn>
+            {selectedSource.mode === "reference" ?
+              <Btn disabled={busy} onClick={() => relink(selectedSource.kind, "source", selectedSource.id)}>{t("audio.relinkSource")}</Btn> : null}
+            <Btn disabled={busy} onClick={() => void run(async () => {
+              if (!(await askConfirm(t("audio.removeConfirm")))) return;
+              acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId }));
+              setSourceId("");
+              setSelectedId("");
+            })}>{t("audio.removeSource")}</Btn>
+          </div> : null}
+        </aside>
+
+        <section aria-label={t("audio.entries")} className="min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* 窄窗口里左栏收起，来源改成下拉 */}
+            <span className="hidden max-[1020px]:block">
+              <Select value={sourceId} options={[{ id: "", label: t("audio.all") }, ...library.sources.map((source) => ({ id: source.id, label: sourceNames.get(source.id) ?? source.path }))]}
+                onChange={(id) => { setSourceId(id); setSelectedId(""); }} width={160} />
+            </span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
+              className="flex-1 min-w-[180px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+            <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
+              <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
+              {t("audio.showExcluded")}
+            </label>
+          </div>
+          <div className="mt-2 flex items-center text-[11.5px] text-[var(--meta)] px-3">
+            <span>{t("audio.entryCount", { count: shown.length })}</span>
+            <span className="ml-auto">{t("audio.dblHint")}</span>
+          </div>
+          <Swap k={`${sourceId}|${showExcluded}`} className="mt-1.5">
+            <div className="bg-[var(--group)] rounded-[var(--r)] p-1.5">
+              {shown.length === 0 ? <p className="text-[13px] text-[var(--meta)] py-4 px-2.5 m-0">{t("audio.empty")}</p> : shown.map((entry) => {
+                const asset = assetById.get(entry.asset_id);
+                const on = entry.id === selectedId;
+                const playing = voiceInstances.some((instance) => instance.name === entry.name);
+                return (
+                  <button type="button" key={entry.id} onClick={() => chooseEntry(entry)} onDoubleClick={() => playNow(entry)} aria-pressed={on}
+                    className={`w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-[var(--rs)] border-0 cursor-pointer transition-colors ${on ? "bg-[var(--accent-soft)]" : "bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]"}`}>
+                    <span className={`w-9 flex-none text-right tabular-nums text-[12px] ${entry.number != null ? "text-[var(--ink-muted)]" : "text-[var(--meta)]"}`}>{entry.number ?? "—"}</span>
+                    <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
+                    {playing ? <span aria-hidden className="flex-none flex items-end gap-[2px] h-3">{[0, 1, 2].map((i) => <span key={i} className="eq-bar w-[2px] rounded-full bg-[var(--accent)]" style={{ animationDelay: `${i * 0.18}s` }} />)}</span> : null}
+                    <span className="ml-auto flex-none text-[11px] text-[var(--meta)]">{asset?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : entry.looped ? t("audio.loop") : ""}</span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="mt-2">
+          </Swap>
+        </section>
+
+        <aside aria-label={selected?.name ?? t("audio.entries")} className="sticky top-4 min-w-0 max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain rounded-[var(--r)]">
+          <Swap k={selected?.id ?? ""}>
+            {selected && selectedAsset ? <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
+              <div>
+                <div className="text-[15px] font-semibold truncate">{selected.name}</div>
+                <div className="mt-1 text-[11.5px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
+              </div>
+              {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12px] text-[var(--meta)]">
+                <span>{t("audio.missing")}</span>
+                {selectedAsset.path === selectedAsset.origin ?
+                  <Btn disabled={busy} onClick={() => relink("file", "asset", selectedAsset.id)}>{t("audio.relinkFile")}</Btn> : null}
+              </div> : null}
+              <div className="flex flex-wrap gap-2">
+                <Btn primary disabled={busy || !voiceDeviceId || unplayable(selectedAsset)} onClick={() => startVoice("replace")}>{t("audio.playToVoice")}</Btn>
+                <Btn disabled={busy || !voiceDeviceId || unplayable(selectedAsset)} onClick={() => startVoice("overlay")}>{t("audio.overlayToVoice")}</Btn>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3 items-end">
+                <label className="text-[12px] text-[var(--meta)] min-w-0">{t("audio.entryName")}
+                  <input value={entryName} onChange={(e) => setEntryName(e.target.value)} className={`${field} w-full`} />
+                </label>
+                <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_rename_entry", { entryId: selected.id, name: entryName })); })}>{t("audio.saveName")}</Btn>
+                <label className="text-[12px] text-[var(--meta)] min-w-0">{t("audio.fixedNumber")}
+                  <input type="number" min="1" step="1" value={number} onChange={(e) => setNumber(e.target.value)} className={`${field} w-full`} />
+                </label>
+                <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
+              </div>
+              <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
+                <input type="checkbox" checked={selected.looped} disabled={busy}
+                  onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
+                {t("audio.loopByDefault")}
+              </label>
+              {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
+                start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}
+                end={clipEnd.trim() && Number.isFinite(Number(clipEnd)) ? Number(clipEnd) : waveform.duration}
+                disabled={busy} label={t("neptune.waveform")}
+                onRangeChange={(start, end) => {
+                  setClipStart(String(Math.min(start, waveform.duration, Number(start.toFixed(4)))));
+                  setClipEnd(String(Math.min(end, waveform.duration, Number(end.toFixed(4)))));
+                }} /> : null}
+              {waveform.duration > 0 ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformHint")}</p> : null}
+              {waveform.loading ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformLoading")}</p> : null}
+              {waveform.error ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformFailed")}</p> : null}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[12px] text-[var(--meta)]">{t("audio.startSeconds")}
+                  <input type="number" min="0" step="0.001" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className={`${field} w-full`} />
+                </label>
+                <label className="text-[12px] text-[var(--meta)]">{t("audio.endSeconds")}
+                  <input type="number" min="0" step="0.001" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className={`${field} w-full`} />
+                </label>
+              </div>
+              <div className="flex items-end gap-2 flex-wrap">
+                <label className="text-[12px] text-[var(--meta)]">{t("audio.localOutput")}
+                  <Select value={deviceId} options={[{ id: "", label: t("audio.chooseDevice") }, ...devices.map((device) => ({ id: device.id, label: device.name }))]}
+                    onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={200} />
+                </label>
+                <Btn disabled={busy || !deviceId || unplayable(selectedAsset)} onClick={startPreview}>{t("audio.preview")}</Btn>
+                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_pause", { paused: preview?.state !== "paused" }).then(setPreview).catch(() => setError(t("audio.operationFailed")))}>
+                  {preview?.state === "paused" ? t("audio.resume") : t("audio.pause")}
+                </Btn>
+                <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_stop").then(setPreview).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
+              </div>
+              {preview && preview.state !== "idle" ? <div className="text-[12px] text-[var(--meta)]">
+                {preview.state === "error" ? <p role="alert" className="m-0">{t("neptune.previewFailed")}</p> : null}
+                {preview.name} · {(preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1)} / {(preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1)} s
+                <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
+              </div> : null}
+              <div className="flex items-end gap-2 flex-wrap">
+                <label className="text-[12px] text-[var(--meta)] flex-1 min-w-[140px]">{t("audio.clipName")}
+                  <input value={clipName} onChange={(e) => setClipName(e.target.value)} className={`${field} w-full`} />
+                </label>
+                <Btn disabled={busy} onClick={addClip}>{t("audio.addClip")}</Btn>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Btn disabled={busy} onClick={applyRange}>{t("audio.applyRange")}</Btn>
+                <Btn disabled={busy || selectedAsset.available === false} onClick={exportClip}>{t("audio.exportWav")}</Btn>
+                {exportBusy ? <Btn onClick={() => void invoke("audio_library_export_cancel")}>{t("audio.cancelExport")}</Btn> : null}
+                {sourceId ? (selectedExcluded
+                  ? <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_restore", { sourceId, path: selectedAsset.origin })); })}>{t("audio.restore")}</Btn>
+                  : <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_exclude", { sourceId, assetId: selectedAsset.id })); })}>{t("audio.exclude")}</Btn>) : null}
+              </div>
+              <AudioHotkeyEditor key={selected.id} entryId={selected.id} entries={library.entries} />
+            </div> : <p className="m-0 px-1 py-2 text-[12.5px] text-[var(--meta)] leading-relaxed">{t("audio.editEmpty")}</p>}
+          </Swap>
+        </aside>
+      </div>
+
+      {/* 底部固定：语音输出设备、总音量，以及正在输出到语音的每一段，每段一行 */}
+      <section aria-label={t("audio.voiceOutput")} className="sticky bottom-0 z-[2] mt-6 -mx-2 px-2 py-2.5 bg-[color-mix(in_srgb,var(--bg)_90%,transparent)] backdrop-blur-md shadow-[0_-1px_0_var(--line)]">
+        {voiceInstances.length > 0 ? <div className="mb-2 max-h-[104px] overflow-y-auto flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
+          {voiceInstances.map((instance) => <div key={instance.instance_id}
+            className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">
+            <span aria-hidden className="flex-none flex items-end gap-[2px] h-3 w-3">{[0, 1, 2].map((i) => <span key={i} className={`${instance.state === "paused" ? "" : "eq-bar"} w-[2px] h-[3px] rounded-full bg-[var(--accent)]`} style={{ animationDelay: `${i * 0.18}s` }} />)}</span>
+            <span className="w-[160px] flex-none truncate text-[12.5px] text-[var(--ink)]" title={instance.name}>{instance.name}</span>
+            <div className="flex-1 min-w-[120px]">
               <SeekBar label={instance.name}
                 position={instance.played_frames / Math.max(1, instance.sample_rate)}
                 length={instance.length_frames / Math.max(1, instance.sample_rate)}
@@ -499,88 +576,65 @@ export function AudioPage() {
                 }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
                   ? t("audio.playbackCancelled") : t("audio.operationFailed")))} />
             </div>
+            <span className="flex-none tabular-nums w-[84px] text-right">{(instance.played_frames / Math.max(1, instance.sample_rate)).toFixed(1)} / {(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s</span>
+            <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
+              paused: instance.state !== "paused", instanceId: instance.instance_id,
+            }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
+            <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_replay", {
+              instanceId: instance.instance_id,
+            }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
+              ? t("audio.playbackCancelled") : t("audio.operationFailed")))}>{t("audio.replay")}</Btn>
+            <Btn on={instance.looping} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_loop", {
+              instanceId: instance.instance_id, looping: !instance.looping,
+            }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.loop")}</Btn>
+            <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop_instance", {
+              instanceId: instance.instance_id,
+            }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
           </div>)}
         </div> : null}
-      </Block>
-
-      {selected && selectedAsset ? <Block title={selected.name}>
-        <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
-          <div className="text-[12px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
-          {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12px] text-[var(--meta)]">
-            <span>{t("audio.missing")}</span>
-            {selectedAsset.path === selectedAsset.origin ?
-              <Btn disabled={busy} onClick={() => relink("file", "asset", selectedAsset.id)}>{t("audio.relinkFile")}</Btn> : null}
-          </div> : null}
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.entryName")}
-              <input value={entryName} onChange={(e) => setEntryName(e.target.value)} className="block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
-            </label>
-            <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_rename_entry", { entryId: selected.id, name: entryName })); })}>{t("audio.saveName")}</Btn>
+        <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
+            <span className="inline-flex items-center gap-1">{t("audio.voiceDevice")}<HelpMark title={t("audio.voiceOutputNote")} /></span>
+            <Select value={voiceDeviceId} options={[{ id: "", label: t("audio.chooseVoiceDevice") }, ...voiceDevices.map((device) => ({ id: device.id, label: device.name }))]}
+              onChange={(id) => { setVoiceDeviceId(id); void invoke("config_set", { patch: { audio_voice_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={220} />
+          </label>
+          <div className="flex items-center gap-2 text-[12px] text-[var(--meta)] min-w-[240px] flex-1 max-w-[360px]">
+            <span className="flex-none whitespace-nowrap">{t("audio.masterVolume")}</span>
+            <div className="flex-1">
+              <Slider
+                value={volume.muted ? 0 : Math.round(volume.volume * 100)}
+                min={0} max={100} step={1}
+                onChange={(v) => changeVolume("audio_voice_volume_set", { volume: v / 100 })}
+              />
+            </div>
+            <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
           </div>
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.fixedNumber")}
-              <input type="number" min="1" step="1" value={number} onChange={(e) => setNumber(e.target.value)}
-                className="block mt-1 w-36 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
-            </label>
-            <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
-            <label className="flex items-center gap-1.5 pb-2 text-[12px] text-[var(--meta)]">
-              <input type="checkbox" checked={selected.looped} disabled={busy}
-                onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
-              {t("audio.loopByDefault")}
-            </label>
-          </div>
-          {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
-            start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}
-            end={clipEnd.trim() && Number.isFinite(Number(clipEnd)) ? Number(clipEnd) : waveform.duration}
-            disabled={busy} label={t("neptune.waveform")}
-            onRangeChange={(start, end) => {
-              setClipStart(String(Math.min(start, waveform.duration, Number(start.toFixed(4)))));
-              setClipEnd(String(Math.min(end, waveform.duration, Number(end.toFixed(4)))));
-            }} /> : null}
-          {waveform.duration > 0 ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformHint")}</p> : null}
-          {waveform.loading ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformLoading")}</p> : null}
-          {waveform.error ? <p className="text-[12px] text-[var(--meta)]">{t("neptune.waveformFailed")}</p> : null}
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.localOutput")}
-              <Select value={deviceId} options={[{ id: "", label: t("audio.chooseDevice") }, ...devices.map((device) => ({ id: device.id, label: device.name }))]}
-                onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={240} />
-            </label>
-            <Btn disabled={busy || !deviceId || selectedAsset.available === false || selectedExcluded || (selectedAsset.excluded_source_ids?.length ?? 0) === selectedAsset.source_ids.length} onClick={startPreview}>{t("audio.preview")}</Btn>
-            <Btn disabled={busy || !voiceDeviceId || selectedAsset.available === false || selectedExcluded || (selectedAsset.excluded_source_ids?.length ?? 0) === selectedAsset.source_ids.length} onClick={() => startVoice("replace")}>{t("audio.playToVoice")}</Btn>
-            <Btn disabled={busy || !voiceDeviceId || selectedAsset.available === false || selectedExcluded || (selectedAsset.excluded_source_ids?.length ?? 0) === selectedAsset.source_ids.length} onClick={() => startVoice("overlay")}>{t("audio.overlayToVoice")}</Btn>
-            <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_pause", { paused: preview?.state !== "paused" }).then(setPreview).catch(() => setError(t("audio.operationFailed")))}>
-              {preview?.state === "paused" ? t("audio.resume") : t("audio.pause")}
-            </Btn>
-            <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_stop").then(setPreview).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
-          </div>
-          {preview && preview.state !== "idle" ? <div className="text-[12px] text-[var(--meta)]">
-            {preview.state === "error" ? <p role="alert">{t("neptune.previewFailed")}</p> : null}
-            {preview.name} · {(preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1)} / {(preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1)} s
-            <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
-          </div> : null}
-          <AudioHotkeyEditor key={selected.id} entryId={selected.id} entries={library.entries} />
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.clipName")}
-              <input value={clipName} onChange={(e) => setClipName(e.target.value)} className="block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
-            </label>
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.startSeconds")}
-              <input type="number" min="0" step="0.001" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
-            </label>
-            <label className="text-[12px] text-[var(--meta)]">{t("audio.endSeconds")}
-              <input type="number" min="0" step="0.001" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className="block mt-1 w-28 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)]" />
-            </label>
-            <Btn disabled={busy} onClick={addClip}>{t("audio.addClip")}</Btn>
-            <Btn disabled={busy} onClick={applyRange}>{t("audio.applyRange")}</Btn>
-            <Btn disabled={busy || selectedAsset.available === false} onClick={exportClip}>{t("audio.exportWav")}</Btn>
-            {exportBusy ? <Btn onClick={() => void invoke("audio_library_export_cancel")}>{t("audio.cancelExport")}</Btn> : null}
-          </div>
-          {sourceId ? <div className="flex gap-2">
-            {selectedExcluded
-              ? <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_restore", { sourceId, path: selectedAsset.origin })); })}>{t("audio.restore")}</Btn>
-              : <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_exclude", { sourceId, assetId: selectedAsset.id })); })}>{t("audio.exclude")}</Btn>}
-          </div> : null}
+          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
+            <input type="checkbox" checked={monitor}
+              onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
+                .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
+            {t("audio.monitorMusic")}
+          </label>
+          <span className="ml-auto">
+            <Btn disabled={voiceInstances.length === 0 && !voicePreparing} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop").then((status) => {
+              setVoice(status);
+              setVoiceInstances([]);
+            }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
+          </span>
         </div>
-      </Block> : null}
+        {voice?.state === "error" ? <p role="alert" className="text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
+      </section>
     </PagePad>
+  );
+}
+
+/** 左栏的一个来源：名称与条目数。选中的底色略深。 */
+function SourceBtn({ on, label, title, count, onClick }: { on: boolean; label: string; title?: string; count: number; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on} aria-label={title}
+      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[var(--rs)] border-0 cursor-pointer text-left text-[13px] transition-colors ${on ? "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[var(--ink)] font-medium" : "bg-transparent text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]"}`}>
+      <span className="min-w-0 truncate" title={title}>{label}</span>
+      <span className="ml-auto flex-none text-[11px] text-[var(--meta)] tabular-nums font-normal">{count}</span>
+    </button>
   );
 }

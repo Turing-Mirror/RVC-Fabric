@@ -4,6 +4,7 @@ import { HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
 import { displayVoiceTag } from "../lib/voiceDisplay";
+import type { StartupStep } from "../lib/engine";
 
 export type OutputMode = "vc" | "bypass";
 
@@ -30,6 +31,8 @@ type Props = {
   progress?: number | null;
   /** True while starting or switching without a numeric percent yet. */
   loading?: boolean;
+  /** 开启变声时走到第几步。有它就按步画进度，副标题写「第 k/N 步 · 在做什么」。 */
+  step?: StartupStep | null;
   /** Mic level in dBFS from the worker; null when the engine is idle. */
   micDb?: number | null;
   /** Response gate in dBFS. Bar stays muted until the level reaches it. */
@@ -63,6 +66,7 @@ export function Dock({
   statusSub,
   progress = null,
   loading = false,
+  step = null,
   micDb = null,
   thresholdDb = -60,
   showSelfCheck = false,
@@ -79,7 +83,8 @@ export function Dock({
   // DEFAULT_LOCALE。现在它初始就是空串，占位由这里在渲染时取，语言换了就跟着换。
   const profile = profileSummary?.trim() ? profileSummary : t("dock.none");
   const title = statusTitle ?? t("dock.engineReady");
-  const sub = statusSub ?? t("dock.engineIdle");
+  // 开启变声的途中按步写：第几步、在做什么；其余时候照旧
+  const sub = step ? t("dock.stepOf", { n: step.index + 1, total: step.count, label: t(step.labelKey) }) : statusSub ?? t("dock.engineIdle");
   const tag = voiceTag ? displayVoiceTag({ tag: voiceTag }) : "";
 
   // Same mapping as the Tk shell's _draw_mic_meter: -60..0 dBFS over the bar.
@@ -218,7 +223,17 @@ export function Dock({
               {t("dock.selfCheck")}
             </button>
           ) : null}
-          {progress != null ? (
+          {step ? (
+            <div className="ml-auto mt-1.5 w-[132px]" role="progressbar" aria-valuemin={1} aria-valuemax={step.count} aria-valuenow={step.index + 1} aria-valuetext={t(step.labelKey)}>
+              <div className="flex gap-[3px]">
+                {Array.from({ length: step.count }, (_, i) => (
+                  <span key={i} className="relative flex-1 h-1 rounded-sm overflow-hidden bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
+                    {i < step.index ? <span className="absolute inset-0 bg-[var(--accent)]" /> : i === step.index ? <span className="absolute inset-y-0 left-0 w-full bg-[var(--accent)] dock-step-now" /> : null}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : progress != null ? (
             <div
               className="ml-auto mt-1.5 h-1 w-[132px] overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]"
               role="progressbar"

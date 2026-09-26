@@ -21,6 +21,7 @@ mod ckpt;
 mod config;
 mod consult;
 mod crash;
+mod device_watch;
 mod download;
 mod dsp;
 mod engine_assets;
@@ -874,6 +875,20 @@ fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
         "freed_bytes": stats.freed_bytes,
         "freed_mb": format!("{:.1}", stats.freed_bytes as f64 / (1024.0 * 1024.0)),
     }))
+}
+
+/// 存储页按类别清理：临时文件、软件日志、诊断包、性能报告、音色回收站。
+/// 类别只认 `paths::STORAGE_CLEAN_KINDS` 里的几个，训练实验走 `train_cleanup_apply`。
+#[tauri::command]
+async fn storage_clean(state: State<'_, Mutex<AppState>>, kinds: Vec<String>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let stats = paths::storage_clean(&root, &kinds)?;
+        paths::log_clean_stats(&crate::i18n::t("s.cacheClear"), &root, &stats);
+        Ok(json!({ "freed_bytes": stats.freed_bytes, "failed": stats.failed }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Open a folder under User_Data in the file manager.
@@ -2727,6 +2742,7 @@ pub fn run() {
             diagnostics_summary_text,
             cache_status,
             cache_clear,
+            storage_clean,
             consult_build,
             consult_state,
             consult_record_start,
@@ -3031,6 +3047,9 @@ pub fn run() {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
             let _ = shell_extras::apply_hotkeys(app.handle(), want_hotkeys);
+
+            // 变声用的设备被拔掉时通知界面，见 device_watch
+            device_watch::spawn(app.handle().clone(), root.clone());
 
             let root_bg = root.clone();
             std::thread::spawn(move || {

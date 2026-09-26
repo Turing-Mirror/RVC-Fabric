@@ -292,6 +292,21 @@ pub fn devices() -> Result<Vec<OutputDevice>, String> {
         })
         .collect()
 }
+/// 系统此刻的输入与输出设备名称，只用于判断用户选的设备是否还在。
+pub fn device_names() -> Result<(Vec<String>, Vec<String>), String> {
+    let host = cpal::default_host();
+    let inputs = host
+        .input_devices()
+        .map_err(|e| e.to_string())?
+        .filter_map(|d| d.description().ok().map(|x| x.name().to_string()))
+        .collect();
+    let outputs = host
+        .output_devices()
+        .map_err(|e| e.to_string())?
+        .filter_map(|d| d.description().ok().map(|x| x.name().to_string()))
+        .collect();
+    Ok((inputs, outputs))
+}
 pub fn device_format(id: &str) -> Result<PcmFormat, String> {
     let device = resolve(id)?;
     let config = device.default_output_config().map_err(|e| e.to_string())?;

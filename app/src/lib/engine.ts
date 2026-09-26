@@ -324,6 +324,30 @@ const LOAD_CODES = new Set([
   "vc.swapping",
 ]);
 
+/**
+ * 开启变声的几步，给底栏按步显示。每一步列出引擎在这一步里会报的阶段码；
+ * 首次开启要把推理库与模型读进显存，约二三十秒，按步写出来，用户知道它在走、走到哪了。
+ * 切换音色（vc.swapping）只是其中一步，不按步显示。
+ */
+export const STARTUP_STEPS = [
+  { labelKey: "dock.stepLaunch", codes: ["engine.launching", "engine.starting", "engine.dsp_starting"] },
+  { labelKey: "dock.stepImport", codes: ["engine.importing"] },
+  { labelKey: "dock.stepVoice", codes: ["vc.loading_hubert", "vc.loading_model", "vc.loading_index", "vc.loading_net"] },
+  { labelKey: "dock.stepWarmup", codes: ["vc.warmup"] },
+  { labelKey: "dock.stepStream", codes: ["vc.opening_stream"] },
+] as const;
+
+export type StartupStep = { index: number; count: number; labelKey: string };
+
+/** 此刻在开启变声的第几步。不在启动过程中（或只是切换音色）时返回 null。 */
+export function startupStep(st: EngineStatus): StartupStep | null {
+  const code = String(st.message_code || "");
+  if (!isLoadPhase(st) || code === "vc.swapping" || st.state === "running") return null;
+  const index = STARTUP_STEPS.findIndex((s) => (s.codes as readonly string[]).includes(code));
+  if (index < 0) return st.state === "starting" ? { index: 0, count: STARTUP_STEPS.length, labelKey: STARTUP_STEPS[0].labelKey } : null;
+  return { index, count: STARTUP_STEPS.length, labelKey: STARTUP_STEPS[index].labelKey };
+}
+
 const BOOT_CODES = new Set([
   "engine.launching",
   "engine.starting",

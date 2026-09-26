@@ -29,6 +29,12 @@
   --accent: #1289f0;
   --accent-ink: #ffffff;
   --accent-soft: rgba(18, 137, 240, 0.1);
+  /* 环形图各段：同一色相由深到浅，最后一段取提醒色的淡色。 */
+  --ring-1: #1289f0;
+  --ring-2: #5aaef3;
+  --ring-3: #9ccbf5;
+  --ring-4: #c9d3dd;
+  --ring-5: #f5c77e;
   --stage: #e8f4fd;
   /* 提醒色，取系统橙。只用在图标和一行字上，不铺底。 */
   --notify: #ff9500;
@@ -107,6 +113,11 @@
     --accent: #4aa3f0;
     --accent-ink: #0f1319;
     --accent-soft: rgba(74, 163, 240, 0.14);
+    --ring-1: #4aa3f0;
+    --ring-2: #3a7fbd;
+    --ring-3: #2c5d8a;
+    --ring-4: #4a5561;
+    --ring-5: #a8793a;
     --notify: #ff9f0a;
     --danger: #e0807b;
     --page-bg: #0c0f13;
@@ -146,6 +157,11 @@
   --accent: #4aa3f0;
   --accent-ink: #0f1319;
   --accent-soft: rgba(74, 163, 240, 0.14);
+  --ring-1: #4aa3f0;
+  --ring-2: #3a7fbd;
+  --ring-3: #2c5d8a;
+  --ring-4: #4a5561;
+  --ring-5: #a8793a;
   --notify: #ff9f0a;
   --danger: #e0807b;
   --page-bg: #0c0f13;
@@ -292,6 +308,15 @@ input[type="checkbox"]:disabled {
   }
 }
 
+/* 开启变声按步显示时，正在走的那一段来回轻轻起伏，表示这一步还在进行。 */
+@keyframes dock-step-now {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.dock-step-now { animation: dock-step-now 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .dock-step-now { animation: none; opacity: 0.7; }
+}
 .dock-bar-indeterminate {
   animation: dock-indeterminate 1.1s ease-in-out infinite;
 }
@@ -725,3 +750,21 @@ body::before {
   to { opacity: 1; transform: none; }
 }
 .rise { animation: rise 0.5s var(--spring-settle) both; }
+
+/* WebKit（macOS 上的 WebView）在带位移的动画放完时会把元素撤回页面重画，看起来像到位后闪一下。
+   入场与退场的元素留在自己的图层上，放完不撤。 */
+.swap-in, .swap-out, .rise { will-change: transform, opacity; }
+
+/* 音频列表里正在输出到语音的那一条：三根小竖条轮流起伏。 */
+@keyframes eq-bar {
+  0%, 100% { height: 3px; }
+  50% { height: 12px; }
+}
+.eq-bar { height: 3px; animation: eq-bar 0.9s ease-in-out infinite; }
+
+/* 环形图的各段从零长到比例。 */
+@keyframes ring-grow { from { stroke-dasharray: 0 999; } }
+.ring-seg { animation: ring-grow 0.9s var(--spring-settle) both; }
+@media (prefers-reduced-motion: reduce) {
+  .eq-bar { animation: none; height: 8px; }
+}

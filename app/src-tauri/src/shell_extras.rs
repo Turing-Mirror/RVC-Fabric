@@ -1157,6 +1157,8 @@ pub fn storage_usage(root: &Path) -> Value {
         // 用户会觉得「我清理完反而更满了」。
         ("trash", crate::voices::trash_dir(root)),
         ("app_logs", paths::logs_dir(root)),
+        // 临时文件：变声与分离的中间产物。与存储页「临时文件」那一项的清理范围对应
+        ("temp", paths::temp_dir(root)),
     ];
     let list: Vec<Value> = items
         .iter()

@@ -49,6 +49,10 @@ type Props = {
   /** 跨主页面导航保留当前设置子页；不传则保持组件自身的默认状态。 */
   selectedTab?: SettingsTab;
   onTabChange?: (tab: SettingsTab) => void;
+  /** 变声此刻是否在跑。在跑时，改了冷参数的提示条直接给「重启变声」。 */
+  running?: boolean;
+  /** 停下再开启变声，让刚改的设备与性能设置生效。 */
+  onRestart?: () => Promise<void>;
 };
 
 /** Device names the worker reported; empty until the worker has been up once. */
@@ -116,10 +120,13 @@ function SettingsPageImpl({
   onOpenCommunity,
   selectedTab,
   onTabChange,
+  running = false,
+  onRestart,
 }: Props = {}) {
   const { t, locale, setLocale } = useI18n();
   // Must re-resolve on locale change — module-level t() freezes zh-CN at import.
   const TIPS = useMemo(() => tips(t), [t]);
+  const [restarting, setRestarting] = useState(false);
   // E-03 实际后端与所选后端的对照：选了没生效（引擎没重启）时要看得见。
   const backendLine = (() => {
     const b = String(status?.compute_backend || "");
@@ -278,9 +285,24 @@ function SettingsPageImpl({
         {c.restartKeys.length ? (
           <Warn
             className="mt-4"
-            action={<Btn onClick={c.clearRestartNotice}>{t("s.cb63c62e50")}</Btn>}
+            action={
+              running && onRestart ? (
+                <span className="flex gap-2">
+                  <Btn onClick={c.clearRestartNotice}>{t("s.restartLater")}</Btn>
+                  <Btn primary busy={restarting} onClick={() => {
+                    setRestarting(true);
+                    void onRestart().finally(() => {
+                      setRestarting(false);
+                      c.clearRestartNotice();
+                    });
+                  }}>{t("s.restartNow")}</Btn>
+                </span>
+              ) : (
+                <Btn onClick={c.clearRestartNotice}>{t("s.cb63c62e50")}</Btn>
+              )
+            }
           >
-            {t("s.63bb17a9d2")}
+            {t(running ? "s.restartRunning" : "s.63bb17a9d2")}
           </Warn>
         ) : null}
 

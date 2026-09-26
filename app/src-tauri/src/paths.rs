@@ -596,6 +596,57 @@ pub fn clear_user_cache(root: &Path) -> CleanStats {
     stats
 }
 
+/// 存储页上可以按类别勾选清理的几类。每类只删可再生、或用户已明确不要的东西；
+/// 训练实验的中间产物另走 `train::cleanup_apply`，逐个实验勾选。
+pub const STORAGE_CLEAN_KINDS: [&str; 5] = ["temp", "app_logs", "diagnostics", "perf_reports", "trash"];
+
+/// 每一类对应的目录。大小按目录算，清理后重新量一遍得出释放了多少。
+fn storage_clean_dirs(root: &Path, kind: &str) -> Vec<PathBuf> {
+    match kind {
+        "temp" => vec![temp_dir(root), update_cache(root)],
+        "app_logs" => vec![logs_dir(root)],
+        "diagnostics" => vec![user_data(root).join("diagnostics")],
+        "perf_reports" => vec![user_data(root).join("perf_reports")],
+        "trash" => vec![crate::voices::trash_dir(root)],
+        _ => vec![],
+    }
+}
+
+/// 按存储页勾选的类别清理。先核对全部类别，有一个认不出就一个都不删。
+///
+/// - temp：与启动时的清理同一套规则，正在下载的半截与待解压的 Runtime 不动。
+/// - app_logs：只删 .log，目录留着，下一次写日志不会失败。
+/// - diagnostics：只删已生成的诊断包（.zip）与半截文件。
+/// - perf_reports：性能报告整批删掉。
+/// - trash：清空音色回收站，已删的音色从此不能恢复。
+pub fn storage_clean(root: &Path, kinds: &[String]) -> Result<CleanStats, String> {
+    if let Some(bad) = kinds.iter().find(|k| !STORAGE_CLEAN_KINDS.contains(&k.as_str())) {
+        return Err(format!("unknown storage kind: {bad}"));
+    }
+    let dirs: Vec<PathBuf> = kinds.iter().flat_map(|k| storage_clean_dirs(root, k)).collect();
+    let before: u64 = dirs.iter().map(|d| dir_size_best_effort(d)).sum();
+    let mut stats = CleanStats::default();
+    for k in kinds {
+        match k.as_str() {
+            "temp" => stats.merge(clean_temps(root)),
+            "app_logs" => {
+                stats.merge(clear_log_files(&logs_dir(root)));
+                let _ = fs_create_all(&logs_dir(root));
+            }
+            "diagnostics" => stats.merge(remove_matching_files(&user_data(root).join("diagnostics"), |name, _| {
+                let lower = name.to_ascii_lowercase();
+                lower.ends_with(".zip") || lower.ends_with(".tmp")
+            })),
+            "perf_reports" => stats.merge(wipe_dir_contents(&user_data(root).join("perf_reports"), true)),
+            "trash" => stats.merge(wipe_dir_contents(&crate::voices::trash_dir(root), true)),
+            _ => {}
+        }
+    }
+    let after: u64 = dirs.iter().map(|d| dir_size_best_effort(d)).sum();
+    stats.freed_bytes = before.saturating_sub(after);
+    Ok(stats)
+}
+
 /// Approximate size of what [`clear_user_cache`] would remove.
 pub fn cache_footprint(root: &Path) -> u64 {
     let mut n = dir_size_logs_only(&logs_dir(root));
@@ -708,6 +759,47 @@ mod cache_clear_tests {
         assert!(!logs.join("sts_fail.log").exists());
         assert!(models.join("a.pth").exists());
         assert!(td.join("User_Data").join("app_config.json").exists());
+        let _ = std::fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn storage_clean_only_touches_the_picked_kinds() {
+        let td = crate::testutil::scratch("storage-clean");
+        let _ = std::fs::remove_dir_all(&td);
+        let ud = td.join("User_Data");
+        std::fs::create_dir_all(ud.join("logs")).unwrap();
+        std::fs::create_dir_all(ud.join("perf_reports")).unwrap();
+        std::fs::create_dir_all(ud.join("trash").join("20260801_120000_old")).unwrap();
+        std::fs::create_dir_all(ud.join("models").join("Anon")).unwrap();
+        std::fs::write(ud.join("logs").join("shell.log"), b"log").unwrap();
+        std::fs::write(ud.join("perf_reports").join("r.json"), vec![0u8; 2048]).unwrap();
+        std::fs::write(ud.join("trash").join("20260801_120000_old").join("a.pth"), b"pth").unwrap();
+        std::fs::write(ud.join("models").join("Anon").join("a.pth"), b"pth").unwrap();
+
+        let stats = storage_clean(&td, &["perf_reports".to_string()]).unwrap();
+        assert!(stats.freed_bytes >= 2048);
+        assert!(!ud.join("perf_reports").join("r.json").exists());
+        assert!(ud.join("perf_reports").is_dir(), "folder is recreated");
+        assert!(ud.join("logs").join("shell.log").exists(), "logs untouched when not picked");
+        assert!(ud.join("trash").join("20260801_120000_old").exists(), "trash untouched when not picked");
+
+        storage_clean(&td, &["trash".to_string(), "app_logs".to_string()]).unwrap();
+        assert!(!ud.join("trash").join("20260801_120000_old").exists());
+        assert!(!ud.join("logs").join("shell.log").exists());
+        assert!(ud.join("models").join("Anon").join("a.pth").exists(), "models never touched");
+        let _ = std::fs::remove_dir_all(&td);
+    }
+
+    #[test]
+    fn storage_clean_refuses_unknown_kinds_before_deleting_anything() {
+        let td = crate::testutil::scratch("storage-clean-bad");
+        let _ = std::fs::remove_dir_all(&td);
+        let reports = td.join("User_Data").join("perf_reports");
+        std::fs::create_dir_all(&reports).unwrap();
+        std::fs::write(reports.join("r.json"), b"x").unwrap();
+        let err = storage_clean(&td, &["perf_reports".to_string(), "models".to_string()]);
+        assert!(err.is_err());
+        assert!(reports.join("r.json").exists(), "nothing deleted when one kind is unknown");
         let _ = std::fs::remove_dir_all(&td);
     }
 

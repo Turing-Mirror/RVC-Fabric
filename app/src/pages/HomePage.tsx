@@ -1,8 +1,9 @@
-import { useEffect, useState, memo } from "react";
+import { useCallback, useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { getConfig, onConfigPatch } from "../lib/config";
-import { listVoices, modelKey, type VoiceModel } from "../lib/voices";
+import { invalidateVoicesCache, listVoices, modelKey, type VoiceModel } from "../lib/voices";
+import { StarterVoices } from "../components/StarterVoices";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { useFlipRow } from "../lib/flip";
@@ -23,6 +24,8 @@ type Props = {
   onOpenModels?: () => void;
   onOpenDsp?: () => void;
   onOpenAudio?: () => void;
+  /** 还没有音色时，首页推荐下面的「查看更多」去广场。 */
+  onOpenPlaza?: () => void;
   /** Same payload the models page reports, so the dock agrees either way. */
   onVoiceChange?: (info: {
     model: VoiceModel;
@@ -181,7 +184,7 @@ function useBannerTexts(): { title: string; sub: string } {
 const STAGE_BG =
   "color-mix(in srgb, var(--stage) calc(var(--banner-opacity, 1) * 100%), transparent)";
 
-function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onVoiceChange }: Props) {
+function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenPlaza, onVoiceChange }: Props) {
   useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
@@ -212,6 +215,11 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onVoice
   useEffect(() => {
     void load();
   }, [currentId]);
+  // 首页推荐的音色装好之后重读音色库；缓存要先作废，否则读到的还是装之前那一份
+  const reloadAfterInstall = useCallback(() => {
+    invalidateVoicesCache();
+    void load();
+  }, []);
 
   // 「使用中」以总控已提交的音色身份为准（currentId 在换模型被确认后才
   // 更新），不按目录的 selected_idx —— 那是持久化的意图，上次切换失败
@@ -277,10 +285,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onVoice
           <HeroEmblem />
         </div>
         <PagePad>
-          <Block title={t("s.71265fc4cb")}>
-            <div className="flex justify-center gap-3 flex-wrap">
-              <Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>
-            </div>
+          {/* 没有音色时先给几个官方音色，一键下载；已有 .pth 的从「模型」页导入 */}
+          <Block title={t("s.starterTitle")} action={<Btn onClick={onOpenModels}>{t("s.3c12966a8c")}</Btn>}>
+            <StarterVoices onInstalled={reloadAfterInstall} onOpenPlaza={() => onOpenPlaza?.()} />
           </Block>
           <HomeAudioEntries onOpenDsp={onOpenDsp} onOpenAudio={onOpenAudio} />
           <ToolShortcuts />

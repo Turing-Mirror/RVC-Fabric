@@ -11,6 +11,7 @@ import {
   startVc,
   statusSub,
   statusTitle,
+  startupStep,
   stopVc,
   type EngineStatus,
   type ProvisionStatus,
@@ -628,6 +629,7 @@ export function useEngine() {
     devicesBusy,
     title: statusTitle(hinted),
     sub,
+    step: startupStep(hinted),
     // Worker writes `input_db` (dBFS) and carries the gate as `threhold`
     // (upstream spelling). Map both with the Tk shell's formula so the meter
     // reads identically: frac = (clamp(db, -60, 0) + 60) / 60.

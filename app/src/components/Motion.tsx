@@ -41,14 +41,15 @@ export function Swap({ k, dir = 0, children, className = "" }: { k: string; dir?
   const vars = { "--swap-dx": `${dir * 18}px`, "--swap-ox": `${dir * -10}px` } as CSSProperties;
   return (
     <div className={`relative ${className}`} style={vars}>
+      <div key={cur.seq} className={cur.seq ? "swap-in" : ""}>
+        {cur.node}
+      </div>
+      {/* 旧的一层排在新的后面：正在淡出的内容压在上面放完，按文档顺序找控件时先找到的是新的 */}
       {old ? (
         <div key={`out-${old.seq}`} inert aria-hidden className="swap-out absolute inset-x-0 top-0 pointer-events-none">
           <Frozen node={old.node} />
         </div>
       ) : null}
-      <div key={cur.seq} className={cur.seq ? "swap-in" : ""}>
-        {cur.node}
-      </div>
     </div>
   );
 }

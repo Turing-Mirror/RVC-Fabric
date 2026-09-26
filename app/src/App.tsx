@@ -924,6 +924,34 @@ export default function App() {
       setPage("settings");
     } else setSelfCheckOpen(true);
   };
+  // —— 变声用的设备被拔掉（见 device_watch.rs）：正在变声就先停下，说明是哪一台；
+  // 插回来之后可以直接继续，也可以去引导里改选别的设备 ——
+  const [unplugged, setUnplugged] = useState<{ kind: string; name: string; back: boolean; wasRunning: boolean } | null>(null);
+  const runRef = useRef({ running: engine.running, toggle: engine.toggleRun });
+  runRef.current = { running: engine.running, toggle: engine.toggleRun };
+  useEffect(() => {
+    const lost = listen<{ kind: string; name: string }>("audio-device://lost", (e) => {
+      const wasRunning = runRef.current.running;
+      if (wasRunning) void runRef.current.toggle();
+      setUnplugged({ ...e.payload, back: false, wasRunning });
+    });
+    const back = listen<{ kind: string; name: string }>("audio-device://back", (e) => {
+      setUnplugged((u) => (u && u.name === e.payload.name ? { ...u, back: true } : u));
+    });
+    return () => {
+      void lost.then((off) => off());
+      void back.then((off) => off());
+    };
+  }, []);
+  // 重启变声：冷参数只在打开音频流时读一次。先停，等界面确认停下（最多 8 秒）再开；
+  // toggleRun 按当时的运行状态决定开还是停，所以第二下要用停下之后的那一个
+  const restartVc = useCallback(async () => {
+    await runRef.current.toggle();
+    const since = Date.now();
+    while (runRef.current.running && Date.now() - since < 8000) await new Promise((r) => setTimeout(r, 100));
+    if (!runRef.current.running) await runRef.current.toggle();
+  }, []);
+  const unplugDevice = unplugged ? t(unplugged.kind === "input" ? "s.unplug.mic" : "s.unplug.out") : "";
   // 新手进度条的刷新信号：两个历史事件落盘时 +1。
 
   // 新手引导：运行时装好后自动打开；中途可收成右下角的小按钮，走完或关掉后不再出现。
@@ -1228,6 +1256,7 @@ export default function App() {
                   onOpenModels={openModels}
                   onOpenDsp={openDsp}
                   onOpenAudio={() => setPage("audio")}
+                  onOpenPlaza={() => setPage("plaza")}
                   onVoiceChange={applyVoiceChange}
                 />
               );
@@ -1270,6 +1299,8 @@ export default function App() {
                   onOpenCommunity={openCommunity}
                   selectedTab={settingsTab}
                   onTabChange={setSettingsTab}
+                  running={engine.running}
+                  onRestart={restartVc}
                 />
               );
             case "help":
@@ -1426,7 +1457,18 @@ export default function App() {
       {/* 首次引导排在最前：更新提示是开机 4 秒就出来的，统计和关注更靠后，
           而这条只在用户第一次点「开启变声」的那几秒里有意义，错过就没了。
           它关掉之后被它压住的那条会自己顶上来。 */}
-      <Leave>{trouble ? (
+      <Leave>{unplugged ? (
+        <Nudge
+          title={t(unplugged.back ? "s.unplug.titleBack" : "s.unplug.title")}
+          actions={
+            <>
+              <Btn onClick={() => setUnplugged(null)}>{t("s.unplug.ok")}</Btn>
+              <Btn primary={!(unplugged.back && unplugged.wasRunning)} onClick={() => { setUnplugged(null); openGuide("devices"); }}>{t("s.unplug.pick")}</Btn>
+              {unplugged.back && unplugged.wasRunning ? <Btn primary onClick={() => { setUnplugged(null); void engine.toggleRun(); }}>{t("s.unplug.resume")}</Btn> : null}
+            </>
+          }
+        >{t(unplugged.back ? "s.unplug.bodyBack" : unplugged.wasRunning ? "s.unplug.bodyRunning" : "s.unplug.bodyIdle", { device: unplugDevice, name: unplugged.name })}</Nudge>
+      ) : trouble ? (
         <Nudge
           title={t("s.trouble.title")}
           actions={
@@ -1531,6 +1573,7 @@ export default function App() {
         statusSub={engine.sub}
         progress={engine.progress}
         loading={engine.starting && engine.progress == null}
+        step={engine.step}
         micDb={engine.micDb}
         thresholdDb={engine.thresholdDb}
         showSelfCheck={engine.status?.state === "error"}

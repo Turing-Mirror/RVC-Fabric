@@ -212,6 +212,7 @@ export function TtsPanel() {
 
   return (
     <ToolBody>
+      <StsTitleActions />
       <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
       <div className="mb-4">
         <SegmentControl<Mode>
@@ -225,6 +226,38 @@ export function TtsPanel() {
       </div>
       {mode === "sts" ? <StsSection /> : <TtsSection />}
     </ToolBody>
+  );
+}
+
+/**
+ * 正文第一行的辅助按钮（下载模型／查看说明）：两个模式共用。
+ *
+ * 引擎就绪与否自己问 `sts_status` —— 挂在 ToolBody 顶层就拿不到 StsSection 里
+ * 那份状态；为一颗按钮把整份表单状态抬上去不值，多问一次很便宜。TtsSection 里
+ * 那颗「下载模型」走的是 tts_status + infer_present，只管合成链路，跟这里不冲突。
+ */
+function StsTitleActions() {
+  const [engineReady, setEngineReady] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    void invoke<StsStatus>("sts_status")
+      .then((s) => {
+        if (alive) setEngineReady(s.engine_core_ready !== false);
+      })
+      .catch(() => {
+        /* 浏览器预览里没有 shell：默认就绪，只留「查看说明」 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return (
+    <ToolTitleActions>
+      {!engineReady ? (
+        <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
+      ) : null}
+      <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+    </ToolTitleActions>
   );
 }
 
@@ -1129,12 +1162,6 @@ function StsSection() {
 
   return (
     <>
-      <ToolTitleActions>
-        {st.engine_core_ready === false ? (
-          <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
-        ) : null}
-        <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
-      </ToolTitleActions>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>

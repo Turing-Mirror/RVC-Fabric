@@ -4,9 +4,7 @@ The mapping is created by the shell. This process only attaches and publishes
 complete frames; it never opens an output audio device.
 """
 
-import ctypes
 import math
-import os
 import struct
 from multiprocessing.shared_memory import SharedMemory
 
@@ -20,25 +18,16 @@ WRITE_FRAME_OFFSET = 32
 READ_FRAME_OFFSET = 40
 
 
+# 说明：InterlockedExchange64 / InterlockedCompareExchange64 在 x64 Windows 上
+# 是编译器内联指令，kernel32 并不导出，ctypes 会取不到而 AttributeError。
+# 两个计数器都在 64 字节头内按 8 字节对齐：x64 上对齐的 8 字节读写天然原子，
+# 且写计数器单生产者、读计数器单消费者（Rust 端），直接用 struct 读写即可。
 def _load_counter(buffer, offset):
-    if os.name != "nt":
-        return struct.unpack_from("<Q", buffer, offset)[0]
-    ptr = ctypes.addressof(ctypes.c_char.from_buffer(buffer, offset))
-    fn = ctypes.windll.kernel32.InterlockedCompareExchange64
-    fn.argtypes = (ctypes.c_void_p, ctypes.c_longlong, ctypes.c_longlong)
-    fn.restype = ctypes.c_longlong
-    return fn(ptr, 0, 0)
+    return struct.unpack_from("<Q", buffer, offset)[0]
 
 
 def _store_counter(buffer, offset, value):
-    if os.name != "nt":
-        struct.pack_into("<Q", buffer, offset, value)
-        return
-    ptr = ctypes.addressof(ctypes.c_char.from_buffer(buffer, offset))
-    fn = ctypes.windll.kernel32.InterlockedExchange64
-    fn.argtypes = (ctypes.c_void_p, ctypes.c_longlong)
-    fn.restype = ctypes.c_longlong
-    fn(ptr, value)
+    struct.pack_into("<Q", buffer, offset, value)
 
 
 class PcmBridgeWriter:

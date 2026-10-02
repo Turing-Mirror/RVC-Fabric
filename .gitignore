@@ -252,3 +252,8 @@ AGENTS.md
 # AI agent scratch dirs
 /.workbuddy-ai/
 /.zcode/
+
+# Codex 驱动 DSH 的本地组件：插件源码(被 ~/.dsh profile 以 link: 引用)与 MCP 口令文件
+/dsh-carrot-on-a-stick/
+/.dsh-mcp-token.txt
+/.acl-recovery/

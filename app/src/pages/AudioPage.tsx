@@ -84,7 +84,9 @@ export function AudioPage() {
   const [srcMenu, setSrcMenu] = useState<{ anchor: PopupAnchor; align: "left" | "right"; source: Source } | null>(null);
   // 关菜单时把焦点还给打开它的那枚按钮（右键打开的还给同一行的 ⋯）。
   const menuReturnFocus = useRef<HTMLElement | null>(null);
-  const menuWasOpen = useRef(false);
+  // 只有 Esc / 点菜单项 / 再点同一枚 ⋯ 这类「用户主动收菜单」才还焦点；
+  // 外点、Tab 离开把焦点留在用户新指的地方（比如刚点进去的搜索框）。
+  const menuRestore = useRef(false);
 
   const acceptLibrary = useCallback((next: Library) => {
     setLibrary((previous) => next.revision >= previous.revision ? next : previous);
@@ -161,36 +163,40 @@ export function AudioPage() {
   }, []);
 
   // 点别处、Esc、换页滚动都关菜单。打开时按钮自己 stopPropagation，不会刚开就关。
+  // 菜单自己内部滚动（项太多超出窗口时）不算换页滚动：data-more-menu 豁免。
   useEffect(() => {
     if (!srcMenu) return;
     const close = () => setSrcMenu(null);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSrcMenu(null);
+      if (e.key === "Escape") menuRestore.current = true;
+      if (e.key === "Escape" || e.key === "Tab") setSrcMenu(null);
+    };
+    const onScroll = (e: Event) => {
+      if ((e.target as Element | null)?.closest?.("[data-more-menu]")) return;
+      close();
     };
     window.addEventListener("click", close);
     window.addEventListener("contextmenu", close);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("contextmenu", close);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [srcMenu]);
 
-  // 菜单关上后焦点还给打开处；那一行（来源被移除）不在了就放过。
+  // 菜单关上后按关闭原因决定焦点去向；那一行（来源被移除）不在了就放过。
+  // preventScroll：还焦点别把刚滚过的来源栏拽回按钮所在处。
   useEffect(() => {
-    if (srcMenu) {
-      menuWasOpen.current = true;
-      return;
-    }
-    if (!menuWasOpen.current) return;
-    menuWasOpen.current = false;
+    if (srcMenu) return;
+    if (!menuRestore.current) return;
+    menuRestore.current = false;
     const el = menuReturnFocus.current;
-    if (el && document.contains(el)) el.focus();
+    if (el && document.contains(el)) el.focus({ preventScroll: true });
   }, [srcMenu]);
 
   /** 行尾「⋯」：右缘对齐按钮；同一条再点一下是关上。 */
@@ -198,10 +204,12 @@ export function AudioPage() {
     e.stopPropagation();
     menuReturnFocus.current = e.currentTarget;
     const r = e.currentTarget.getBoundingClientRect();
-    setSrcMenu((prev) =>
-      prev && prev.source.id === source.id
-        ? null
-        : { anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom }, align: "right", source });
+    // 再点同一枚 ⋯ 是「主动收菜单」：还焦点；开新菜单默认不还。
+    const closing = srcMenu?.source.id === source.id;
+    menuRestore.current = Boolean(closing);
+    setSrcMenu(closing
+      ? null
+      : { anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom }, align: "right", source });
   };
 
   /** 行上右键：菜单贴着指针开，左缘对齐。焦点还给本行的 ⋯ 按钮。 */
@@ -462,17 +470,22 @@ export function AudioPage() {
         <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
       </div> : null}
 
-      {/* 三栏：来源 · 音频列表 · 所选条目的编辑。本区拿走页头和底栏之间的全部高度，
-          各栏在自己内部滚动；来源栏宽吃 --audio-source-w 这一个基准，随页宽收缩、不瓜分富余宽度 */}
-      <div className="mt-4 flex-1 min-h-0 grid gap-6 items-stretch grid-rows-[minmax(0,1fr)] max-[1020px]:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(280px,380px)]"
+      {/* 浏览区（三栏）+ 底栏固定分走页头以下的全部可用高度：
+          底栏恒占内容区的 --audio-bar-share（26%，对 0/1/N 个实例一视同仁），
+          三栏占余下的 74%；内容更多只在栏内滚动，不再改两区的高度。 */}
+      <div className="mt-4 flex-1 min-h-0 flex flex-col"
         style={{ "--audio-source-w": "clamp(140px, 16cqw, 184px)" } as CSSProperties}>
-        <aside aria-label={t("audio.sources")} className="min-h-0 overflow-y-auto overscroll-contain max-[1020px]:hidden">
+      {/* 三栏常驻：任何窗口宽都保留来源栏。来源栏宽吃 --audio-source-w 这一个基准，
+          随页宽收缩、不瓜分富余宽度；各栏在自己内部滚动 */}
+      <div className="flex-none h-[calc(74%_-_8px)] min-h-0 grid gap-6 max-[1020px]:gap-4 items-stretch grid-rows-[minmax(0,1fr)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(260px,380px)]">
+        <aside aria-label={t("audio.sources")} className="min-h-0 overflow-y-auto overscroll-contain">
           <div className="text-[12px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
           <div className="flex flex-col gap-0.5">
             <SourceBtn on={sourceId === ""} label={t("audio.all")} count={library.entries.length} onClick={() => { setSourceId(""); setSelectedId(""); }} />
             {library.sources.map((source) => (
               <SourceBtn key={source.id} on={sourceId === source.id} label={sourceNames.get(source.id) ?? source.path} title={source.path} count={sourceCount(source.id)}
                 menuLabel={t("audio.sourceMenu")}
+                menuOpen={srcMenu?.source.id === source.id}
                 onMenu={(e) => openSourceMenu(e, source)}
                 onContextMenu={(e, row) => openSourceMenuAt(e.clientX, e.clientY, source, row)}
                 onClick={() => { setSourceId(source.id); setSelectedId(""); }} />
@@ -481,17 +494,12 @@ export function AudioPage() {
         </aside>
 
         <section aria-label={t("audio.entries")} className="min-w-0 min-h-0 flex flex-col">
-          <div className="flex-none flex items-stretch gap-3 flex-wrap">
-            {/* 窄窗口里左栏收起，来源改成下拉 */}
-            <span className="hidden max-[1020px]:flex self-stretch">
-              <Select className="h-full" value={sourceId} options={[{ id: "", label: t("audio.all") }, ...library.sources.map((source) => ({ id: source.id, label: sourceNames.get(source.id) ?? source.path }))]}
-                onChange={(id) => { setSourceId(id); setSelectedId(""); }} width={160} />
-            </span>
+          <div className="flex-none flex items-stretch gap-3 flex-nowrap">
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
-              className="flex-1 min-w-[180px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
-            <label className="flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12px] text-[var(--meta)] cursor-pointer">
+              className="flex-1 min-w-[72px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+            <label title={t("audio.showExcluded")} className="min-w-0 flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12px] text-[var(--meta)] cursor-pointer">
               <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
-              {t("audio.showExcluded")}
+              <span className="truncate">{t("audio.showExcluded")}</span>
             </label>
           </div>
           <div className="flex-none mt-2 flex items-center text-[11.5px] text-[var(--meta)] px-3">
@@ -607,9 +615,10 @@ export function AudioPage() {
       </div>
 
       {/* 底部固定区：语音输出设备、总音量，以及正在输出到语音的每一段，每段一行。
-          高度占浏览区整列的一个固定比例（实例多时内部滚动），窗口缩放时跟着伸缩 */}
-      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none min-h-0 max-h-[38%] flex flex-col px-2 py-2.5 shadow-[0_-1px_0_var(--line)]">
-        {voiceInstances.length > 0 ? <div className="min-h-0 mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
+          恒占内容区的 26%（0 个实例与 9 个实例同高）；实例列表弹性伸缩、内部滚动，
+          控件行钉在区底，超出部分不外溢。 */}
+      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none h-[calc(26%_-_8px)] flex flex-col overflow-y-auto overscroll-contain px-2 py-2.5 shadow-[0_-1px_0_var(--line)]">
+        {voiceInstances.length > 0 ? <div className="flex-1 min-h-[36px] mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}
             className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">
             <span aria-hidden className="flex-none flex items-end gap-[2px] h-3 w-3">{[0, 1, 2].map((i) => <span key={i} className={`${instance.state === "paused" ? "" : "eq-bar"} w-[2px] h-[3px] rounded-full bg-[var(--accent)]`} style={{ animationDelay: `${i * 0.18}s` }} />)}</span>
@@ -639,7 +648,7 @@ export function AudioPage() {
             }).then(setVoice).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
           </div>)}
         </div> : null}
-        <div className="flex items-center gap-x-4 gap-y-2 flex-wrap">
+        <div className="flex-none flex items-center gap-x-4 gap-y-2 flex-wrap">
           <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
             <span className="inline-flex items-center gap-1">{t("audio.voiceDevice")}<HelpMark title={t("audio.voiceOutputNote")} /></span>
             <Select value={voiceDeviceId} options={[{ id: "", label: t("audio.chooseVoiceDevice") }, ...voiceDevices.map((device) => ({ id: device.id, label: device.name }))]}
@@ -671,10 +680,15 @@ export function AudioPage() {
         </div>
         {voice?.state === "error" ? <p role="alert" className="flex-none text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
       </section>
+      </div>
 
       {/* 来源行的「⋯」/右键菜单。菜单项绑定 srcMenu.source —— 被点开的那一条，
-          刷新/重新定位/移除都发它的稳定 ID，与左侧当前筛选无关。 */}
-      {srcMenu ? <MoreMenuPopup anchor={srcMenu.anchor} align={srcMenu.align} onClose={() => setSrcMenu(null)} items={[
+          刷新/重新定位/移除都发它的稳定 ID，与左侧当前筛选无关。
+          执行与 Esc 收菜单才把焦点还给行尾 ⋯；Tab 离开保持焦点走向。 */}
+      {srcMenu ? <MoreMenuPopup id="audio-source-menu" anchor={srcMenu.anchor} align={srcMenu.align} onClose={(reason) => {
+        menuRestore.current = reason !== "tab";
+        setSrcMenu(null);
+      }} items={[
         { label: t("audio.refresh"), disabled: busy, action: () => void run(async () => {
           setScanned(0);
           setScanActive(true);
@@ -696,7 +710,7 @@ export function AudioPage() {
 }
 
 /** 左栏的一个来源：名称与条目数；行尾「⋯」/行上右键开来源菜单。选中的底色略深。 */
-function SourceBtn({ on, label, title, count, onClick, menuLabel, onMenu, onContextMenu }: {
+function SourceBtn({ on, label, title, count, onClick, menuLabel, menuOpen, onMenu, onContextMenu }: {
   on: boolean;
   label: string;
   title?: string;
@@ -704,6 +718,8 @@ function SourceBtn({ on, label, title, count, onClick, menuLabel, onMenu, onCont
   onClick: () => void;
   /** 传了才挂行尾 ⋯ 与右键（「全部音频」没有来源可管）。 */
   menuLabel?: string;
+  /** 这一行的菜单正开着：aria-expanded 用，也让 ⋯ 常显不被 hover 收回。 */
+  menuOpen?: boolean;
   onMenu?: (e: MouseEvent<HTMLButtonElement>) => void;
   onContextMenu?: (e: MouseEvent<HTMLElement>, row: HTMLElement) => void;
 }) {
@@ -721,8 +737,9 @@ function SourceBtn({ on, label, title, count, onClick, menuLabel, onMenu, onCont
         <span className={`flex-none text-[11px] text-[var(--meta)] tabular-nums font-normal ${onMenu ? "" : "ml-auto"}`}>{count}</span>
       </button>
       {onMenu ? <button type="button" data-source-menu aria-label={menuLabel} aria-haspopup="menu"
+        aria-expanded={menuOpen ?? false} aria-controls={menuOpen ? "audio-source-menu" : undefined}
         onClick={onMenu}
-        className="absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none text-[var(--meta)] bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] hover:text-[var(--ink)] focus-visible:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none text-[var(--meta)] bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] hover:text-[var(--ink)] focus-visible:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100" : "opacity-0"} group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`}>
         ⋯
       </button> : null}
     </div>

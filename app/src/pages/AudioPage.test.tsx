@@ -274,7 +274,7 @@ describe("音频库页面", () => {
     const trigger = menuOf(mounted.container, "E:\\Music\\A");
     act(() => trigger.click());
     await tick();
-    const menu = mounted.container.querySelector<HTMLElement>("[role=menu]");
+    const menu = document.querySelector<HTMLElement>("[role=menu]");
     expect(menu).toBeTruthy();
     expect(menu?.textContent).toContain("刷新来源");
     expect(menu?.textContent).toContain("重新定位来源");
@@ -285,7 +285,7 @@ describe("音频库页面", () => {
     await tick();
     expect(shell.invoke).toHaveBeenCalledWith("audio_library_refresh", { sourceId: "source-2" });
     // 菜单关上了，焦点回到打开它的 ⋯。
-    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
+    expect(document.querySelector("[role=menu]")).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -307,14 +307,14 @@ describe("音频库页面", () => {
     // 复制模式的来源不提供「重新定位来源」。
     act(() => menuOf(mounted.container, "F:\\Lib\\C").click());
     await tick();
-    let menu = mounted.container.querySelector<HTMLElement>("[role=menu]")!;
+    let menu = document.querySelector<HTMLElement>("[role=menu]")!;
     expect(menu.textContent).not.toContain("重新定位来源");
     // Esc 关闭菜单。
     act(() => {
       menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     });
     await tick();
-    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
+    expect(document.querySelector("[role=menu]")).toBeNull();
     // 行上右键同样打开菜单，且绑定的是那一条来源。
     const row = Array.from(mounted.container.querySelectorAll<HTMLElement>(".group.relative"))
       .find((el) => el.querySelector("button")?.getAttribute("aria-label") === "E:\\Music\\A")!;
@@ -322,7 +322,7 @@ describe("音频库页面", () => {
       row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 60, clientY: 120 }));
     });
     await tick();
-    menu = mounted.container.querySelector<HTMLElement>("[role=menu]")!;
+    menu = document.querySelector<HTMLElement>("[role=menu]")!;
     expect(menu.textContent).toContain("重新定位来源");
     const relink = Array.from(menu.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
       .find((b) => b.textContent === "重新定位来源")!;
@@ -347,7 +347,7 @@ describe("音频库页面", () => {
     // 开 source-2 的菜单点移除：确认过一次才提交，提交后 source-1 的筛选保持。
     act(() => menuOf(mounted.container, "E:\\Music\\A").click());
     await tick();
-    const remove = Array.from(mounted.container.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+    const remove = Array.from(document.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
       .find((b) => b.textContent === "移出音频库")!;
     dialogs.askConfirm.mockResolvedValueOnce(false);
     act(() => remove.click());
@@ -357,7 +357,7 @@ describe("音频库页面", () => {
     // 再开一次点移除并确认。
     act(() => menuOf(mounted.container, "E:\\Music\\A").click());
     await tick();
-    const remove2 = Array.from(mounted.container.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+    const remove2 = Array.from(document.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
       .find((b) => b.textContent === "移出音频库")!;
     act(() => remove2.click());
     await tick();
@@ -367,17 +367,56 @@ describe("音频库页面", () => {
     expect(first.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("点菜单之外任意处关闭菜单", async () => {
+  it("点菜单之外任意处关闭菜单，焦点留在用户新指的地方", async () => {
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const trigger = menuOf(mounted.container, "D:\\Music\\A");
+    act(() => trigger.click());
+    await tick();
+    expect(document.querySelector("[role=menu]")).toBeTruthy();
+    // 菜单开着时点搜索框：菜单关上，但焦点必须留在搜索框，不能被 ⋯ 抢回。
+    const search = mounted.container.querySelector<HTMLInputElement>('input[placeholder="搜索音频"]')!;
+    act(() => {
+      search.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      search.focus();
+    });
+    await tick();
+    expect(document.querySelector("[role=menu]")).toBeNull();
+    expect(document.activeElement).toBe(search);
+    expect(document.activeElement).not.toBe(trigger);
+    // Tab 离开同样不抢焦点（popup 的 onClose("tab") 不触发恢复）。
+    act(() => trigger.click());
+    await tick();
+    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+    act(() => {
+      menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+      search.focus();
+    });
+    await tick();
+    expect(document.querySelector("[role=menu]")).toBeNull();
+    expect(document.activeElement).toBe(search);
+  });
+
+  it("菜单内部滚动不关菜单，栏内滚动才关", async () => {
     const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
     mounts.push(mounted);
     await tick();
     act(() => menuOf(mounted.container, "D:\\Music\\A").click());
     await tick();
-    expect(mounted.container.querySelector("[role=menu]")).toBeTruthy();
+    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+    // 菜单自己太高需要内部滚动时，滚动不能把自己关掉。
     act(() => {
-      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      menu.dispatchEvent(new Event("scroll", { bubbles: false }));
     });
     await tick();
-    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
+    expect(document.querySelector("[role=menu]")).toBeTruthy();
+    // 页面/栏内的滚动照常关闭菜单。
+    const aside = mounted.container.querySelector<HTMLElement>('[aria-label="来源"]')!;
+    act(() => {
+      aside.dispatchEvent(new Event("scroll", { bubbles: false }));
+    });
+    await tick();
+    expect(document.querySelector("[role=menu]")).toBeNull();
   });
 });

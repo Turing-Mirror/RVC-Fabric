@@ -3,6 +3,7 @@
  * 语音转换文件行、模型卡片与音频页来源行共用同一套定位与关闭行为。
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { placePopup, type PopupAnchor, type PopupBox } from "../lib/popupPos";
 
 export type MoreMenuItem = {
@@ -15,18 +16,24 @@ export type MoreMenuItem = {
 
 export type { PopupAnchor };
 
+/** 关闭原因：动作执行与 Esc 把焦点还给打开处；Tab 离开与外点不抢焦点。 */
+export type MoreMenuCloseReason = "action" | "escape" | "tab";
+
 export function MoreMenuPopup({
   anchor,
   items,
   onClose,
   align = "right",
+  id,
 }: {
   anchor: PopupAnchor;
   items: MoreMenuItem[];
-  /** 传了之后：选中项前先关闭，Esc 也走这个关闭 —— 焦点回到打开处的逻辑由调用方挂在它上面。 */
-  onClose?: () => void;
+  /** 传了之后：选中项前先关闭，Esc/Tab 也走这个关闭 —— 原因随参数带回，由调用方决定要不要还焦点。 */
+  onClose?: (reason: MoreMenuCloseReason) => void;
   /** 右键就地打开时用 "left"，菜单左缘贴着指针而不是右缘。 */
   align?: "left" | "right";
+  /** 给触发按钮的 aria-controls 用。 */
+  id?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<PopupBox | null>(null);
@@ -50,12 +57,23 @@ export function MoreMenuPopup({
     return () => window.removeEventListener("resize", place);
   }, [anchor, items.length, align]);
 
-  // 打开时把焦点放进菜单第一项：键盘打开菜单后方向键直接可用，Esc 也能收到。
+  // 打开时把焦点放进菜单第一个可用项：键盘打开菜单后方向键直接可用，Esc 也能收到。
+  // 全禁用时不聚焦任何项，Esc/Tab 照常生效。
   useEffect(() => {
-    ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]")[0]?.focus();
+    ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not([disabled])")[0]?.focus();
   }, []);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Esc/Tab 先判：哪怕所有项都禁用，菜单也得能关。
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose?.("escape");
+      return;
+    }
+    if (e.key === "Tab") {
+      onClose?.("tab");
+      return; // 不 preventDefault，让焦点按原方向落到下一个元素。
+    }
     const opts = Array.from(
       ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not([disabled])") ?? [],
     );
@@ -69,16 +87,17 @@ export function MoreMenuPopup({
     else if (e.key === "ArrowUp") focusAt(i < 0 ? opts.length - 1 : (i - 1 + opts.length) % opts.length);
     else if (e.key === "Home") focusAt(0);
     else if (e.key === "End") focusAt(opts.length - 1);
-    else if (e.key === "Escape") {
-      e.preventDefault();
-      onClose?.();
-    }
   };
 
-  return (
+  // portal 到 body：PageHost 切页时面板带着 transform，父级 container-type 也
+  // 会改变 position:fixed 的包含块 —— 不脱层的话菜单会错位或被裁切。同时标
+  // data-more-menu：页面按「事件目标在菜单里」豁免自身的关闭监听（内部滚动等）。
+  return createPortal(
     <div
       ref={ref}
+      id={id}
       role="menu"
+      data-more-menu
       className="menu-in fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden overscroll-contain"
       style={{
         left: box?.left ?? anchor.right,
@@ -108,13 +127,14 @@ export function MoreMenuPopup({
             it.disabled ? "opacity-50 cursor-default" : "",
           ].join(" ")}
           onClick={() => {
-            onClose?.();
+            onClose?.("action");
             void it.action();
           }}
         >
           {it.label}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

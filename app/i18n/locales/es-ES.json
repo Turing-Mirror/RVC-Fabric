@@ -180,7 +180,8 @@
     "hotkeyDisabled": "Desactivado",
     "hotkeyConflictStatus": "Conflicto",
     "dblHint": "Doble clic para reproducir en la voz",
-    "editEmpty": "Seleccione un elemento de la lista para editar aquí su nombre, número, rango y atajos."
+    "editEmpty": "Seleccione un elemento de la lista para ajustar aquí su nombre, recortar la forma de onda y configurar atajos.",
+    "sourceMenu": "Acciones de la fuente"
   },
   "window": {
     "minimize": "Minimizar",

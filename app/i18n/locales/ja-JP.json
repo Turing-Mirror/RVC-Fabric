@@ -180,7 +180,8 @@
     "hotkeyDisabled": "無効",
     "hotkeyConflictStatus": "競合",
     "dblHint": "ダブルクリックでボイスに再生",
-    "editEmpty": "一覧から音声を選ぶと、ここで名前・番号・再生範囲・ショートカットを編集できます。"
+    "editEmpty": "一覧から音声を選ぶと、ここで名前の調整、波形の切り出し、ショートカットの設定ができます。",
+    "sourceMenu": "ソース操作"
   },
   "window": {
     "minimize": "最小化",

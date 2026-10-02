@@ -180,7 +180,8 @@
     "hotkeyDisabled": "未启用",
     "hotkeyConflictStatus": "冲突",
     "dblHint": "双击条目即播放到语音",
-    "editEmpty": "从列表中选择一条音频，即可在此编辑名称、编号、播放范围与快捷键。"
+    "editEmpty": "从列表中选择一条音频，在此调整名称、截取波形与快捷键。",
+    "sourceMenu": "来源操作"
   },
   "window": {
     "minimize": "最小化",

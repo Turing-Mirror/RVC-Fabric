@@ -180,7 +180,8 @@
     "hotkeyDisabled": "Disabled",
     "hotkeyConflictStatus": "Conflict",
     "dblHint": "Double-click to play to voice",
-    "editEmpty": "Select an item in the list to edit its name, number, range and shortcuts here."
+    "editEmpty": "Select an item in the list to adjust its name, trim the waveform and set shortcuts here.",
+    "sourceMenu": "Source actions"
   },
   "window": {
     "minimize": "Minimize",

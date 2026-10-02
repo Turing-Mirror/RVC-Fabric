@@ -180,7 +180,8 @@
     "hotkeyDisabled": "Désactivé",
     "hotkeyConflictStatus": "Conflit",
     "dblHint": "Double-cliquez pour lire dans la voix",
-    "editEmpty": "Sélectionnez un élément de la liste pour modifier ici son nom, son numéro, sa plage et ses raccourcis."
+    "editEmpty": "Sélectionnez un élément de la liste pour ajuster ici son nom, découper la forme d'onde et définir des raccourcis.",
+    "sourceMenu": "Actions de la source"
   },
   "window": {
     "minimize": "Réduire",

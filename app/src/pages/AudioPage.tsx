@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
+import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import { Swap } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
 import { Select, Slider } from "../components/controls";
@@ -79,6 +80,11 @@ export function AudioPage() {
   const [scanned, setScanned] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // 来源行的「⋯」/右键菜单：绑定的是被点开的那条来源，跟左侧当前筛选无关。
+  const [srcMenu, setSrcMenu] = useState<{ anchor: PopupAnchor; align: "left" | "right"; source: Source } | null>(null);
+  // 关菜单时把焦点还给打开它的那枚按钮（右键打开的还给同一行的 ⋯）。
+  const menuReturnFocus = useRef<HTMLElement | null>(null);
+  const menuWasOpen = useRef(false);
 
   const acceptLibrary = useCallback((next: Library) => {
     setLibrary((previous) => next.revision >= previous.revision ? next : previous);
@@ -153,6 +159,56 @@ export function AudioPage() {
     const timer = window.setInterval(poll, 200);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+
+  // 点别处、Esc、换页滚动都关菜单。打开时按钮自己 stopPropagation，不会刚开就关。
+  useEffect(() => {
+    if (!srcMenu) return;
+    const close = () => setSrcMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSrcMenu(null);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("contextmenu", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("contextmenu", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [srcMenu]);
+
+  // 菜单关上后焦点还给打开处；那一行（来源被移除）不在了就放过。
+  useEffect(() => {
+    if (srcMenu) {
+      menuWasOpen.current = true;
+      return;
+    }
+    if (!menuWasOpen.current) return;
+    menuWasOpen.current = false;
+    const el = menuReturnFocus.current;
+    if (el && document.contains(el)) el.focus();
+  }, [srcMenu]);
+
+  /** 行尾「⋯」：右缘对齐按钮；同一条再点一下是关上。 */
+  const openSourceMenu = (e: MouseEvent<HTMLButtonElement>, source: Source) => {
+    e.stopPropagation();
+    menuReturnFocus.current = e.currentTarget;
+    const r = e.currentTarget.getBoundingClientRect();
+    setSrcMenu((prev) =>
+      prev && prev.source.id === source.id
+        ? null
+        : { anchor: { left: r.left, right: r.right, top: r.top, bottom: r.bottom }, align: "right", source });
+  };
+
+  /** 行上右键：菜单贴着指针开，左缘对齐。焦点还给本行的 ⋯ 按钮。 */
+  const openSourceMenuAt = (x: number, y: number, source: Source, row: HTMLElement) => {
+    menuReturnFocus.current = row.querySelector<HTMLElement>("[data-source-menu]");
+    setSrcMenu({ anchor: { left: x, right: x, top: y, bottom: y }, align: "left", source });
+  };
 
   const assetById = useMemo(() => new Map(library.assets.map((asset) => [asset.id, asset])), [library.assets]);
   const sourceNames = useMemo(() => {
@@ -378,7 +434,6 @@ export function AudioPage() {
   const unplayable = (asset?: Asset) => !asset || asset.available === false || selectedExcluded ||
     (asset.excluded_source_ids?.length ?? 0) === asset.source_ids.length;
   const sourceCount = (id: string) => library.entries.filter((entry) => assetById.get(entry.asset_id)?.source_ids.includes(id)).length;
-  const selectedSource = library.sources.find((source) => source.id === sourceId);
   const field = "block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]";
   // 双击条目：直接替换播放到语音，与常见音效板的用法一致
   const playNow = (entry: Entry) => {
@@ -391,7 +446,7 @@ export function AudioPage() {
   };
 
   return (
-    <PagePad>
+    <PagePad fill>
       <PageHead title={t("audio.title")} sub={t("audio.subtitle")} actions={
         <>
           <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-1"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
@@ -400,61 +455,50 @@ export function AudioPage() {
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
       } />
-      {error ? <p role="alert" className="text-[13px] text-[var(--danger)] mt-4 mb-0">{error}</p> : null}
-      {notice ? <p role="status" className="text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
-      {scanActive ? <div className="flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
+      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger)] mt-4 mb-0">{error}</p> : null}
+      {notice ? <p role="status" className="flex-none text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
+      {scanActive ? <div className="flex-none flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
         <span>{t("audio.scanProgress", { count: scanned })}</span>
         <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
       </div> : null}
 
-      {/* 三栏：来源 · 音频列表 · 所选条目的编辑。左右两栏随页面滚动时贴在顶上，列表多长都不影响编辑区 */}
-      <div className="mt-6 grid grid-cols-[180px_minmax(0,1fr)_minmax(300px,380px)] gap-6 items-start max-[1020px]:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
-        <aside aria-label={t("audio.sources")} className="sticky top-4 max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain max-[1020px]:hidden">
+      {/* 三栏：来源 · 音频列表 · 所选条目的编辑。本区拿走页头和底栏之间的全部高度，
+          各栏在自己内部滚动；来源栏宽吃 --audio-source-w 这一个基准，随页宽收缩、不瓜分富余宽度 */}
+      <div className="mt-4 flex-1 min-h-0 grid gap-6 items-stretch grid-rows-[minmax(0,1fr)] max-[1020px]:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(280px,380px)]"
+        style={{ "--audio-source-w": "clamp(140px, 16cqw, 184px)" } as CSSProperties}>
+        <aside aria-label={t("audio.sources")} className="min-h-0 overflow-y-auto overscroll-contain max-[1020px]:hidden">
           <div className="text-[12px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
           <div className="flex flex-col gap-0.5">
             <SourceBtn on={sourceId === ""} label={t("audio.all")} count={library.entries.length} onClick={() => { setSourceId(""); setSelectedId(""); }} />
             {library.sources.map((source) => (
               <SourceBtn key={source.id} on={sourceId === source.id} label={sourceNames.get(source.id) ?? source.path} title={source.path} count={sourceCount(source.id)}
+                menuLabel={t("audio.sourceMenu")}
+                onMenu={(e) => openSourceMenu(e, source)}
+                onContextMenu={(e, row) => openSourceMenuAt(e.clientX, e.clientY, source, row)}
                 onClick={() => { setSourceId(source.id); setSelectedId(""); }} />
             ))}
           </div>
-          {selectedSource ? <div className="mt-3 flex flex-col items-start gap-1.5 px-1">
-            <Btn disabled={busy} onClick={() => void run(async () => {
-              setScanned(0);
-              setScanActive(true);
-              try { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId })); }
-              finally { setScanActive(false); }
-            })}>{t("audio.refresh")}</Btn>
-            {selectedSource.mode === "reference" ?
-              <Btn disabled={busy} onClick={() => relink(selectedSource.kind, "source", selectedSource.id)}>{t("audio.relinkSource")}</Btn> : null}
-            <Btn disabled={busy} onClick={() => void run(async () => {
-              if (!(await askConfirm(t("audio.removeConfirm")))) return;
-              acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId }));
-              setSourceId("");
-              setSelectedId("");
-            })}>{t("audio.removeSource")}</Btn>
-          </div> : null}
         </aside>
 
-        <section aria-label={t("audio.entries")} className="min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
+        <section aria-label={t("audio.entries")} className="min-w-0 min-h-0 flex flex-col">
+          <div className="flex-none flex items-stretch gap-3 flex-wrap">
             {/* 窄窗口里左栏收起，来源改成下拉 */}
-            <span className="hidden max-[1020px]:block">
-              <Select value={sourceId} options={[{ id: "", label: t("audio.all") }, ...library.sources.map((source) => ({ id: source.id, label: sourceNames.get(source.id) ?? source.path }))]}
+            <span className="hidden max-[1020px]:flex self-stretch">
+              <Select className="h-full" value={sourceId} options={[{ id: "", label: t("audio.all") }, ...library.sources.map((source) => ({ id: source.id, label: sourceNames.get(source.id) ?? source.path }))]}
                 onChange={(id) => { setSourceId(id); setSelectedId(""); }} width={160} />
             </span>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
               className="flex-1 min-w-[180px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
-            <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
+            <label className="flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12px] text-[var(--meta)] cursor-pointer">
               <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
               {t("audio.showExcluded")}
             </label>
           </div>
-          <div className="mt-2 flex items-center text-[11.5px] text-[var(--meta)] px-3">
+          <div className="flex-none mt-2 flex items-center text-[11.5px] text-[var(--meta)] px-3">
             <span>{t("audio.entryCount", { count: shown.length })}</span>
             <span className="ml-auto">{t("audio.dblHint")}</span>
           </div>
-          <Swap k={`${sourceId}|${showExcluded}`} className="mt-1.5">
+          <Swap k={`${sourceId}|${showExcluded}`} className="mt-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain [&>*]:h-full">
             <div className="bg-[var(--group)] rounded-[var(--r)] p-1.5">
               {shown.length === 0 ? <p className="text-[13px] text-[var(--meta)] py-4 px-2.5 m-0">{t("audio.empty")}</p> : shown.map((entry) => {
                 const asset = assetById.get(entry.asset_id);
@@ -474,8 +518,8 @@ export function AudioPage() {
           </Swap>
         </section>
 
-        <aside aria-label={selected?.name ?? t("audio.entries")} className="sticky top-4 min-w-0 max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain rounded-[var(--r)]">
-          <Swap k={selected?.id ?? ""}>
+        <aside aria-label={selected?.name ?? t("audio.entries")} className="min-w-0 min-h-0 overflow-y-auto overscroll-contain rounded-[var(--r)]">
+          <Swap k={selected?.id ?? ""} className="h-full [&>*]:h-full">
             {selected && selectedAsset ? <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
               <div>
                 <div className="text-[15px] font-semibold truncate">{selected.name}</div>
@@ -555,14 +599,17 @@ export function AudioPage() {
                   : <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_exclude", { sourceId, assetId: selectedAsset.id })); })}>{t("audio.exclude")}</Btn>) : null}
               </div>
               <AudioHotkeyEditor key={selected.id} entryId={selected.id} entries={library.entries} />
-            </div> : <p className="m-0 px-1 py-2 text-[12.5px] text-[var(--meta)] leading-relaxed">{t("audio.editEmpty")}</p>}
+            </div> : <div className="h-full min-h-[220px] grid place-items-center rounded-[var(--r)] border border-dashed border-[var(--line)] bg-[color-mix(in_srgb,var(--group)_55%,transparent)] px-6">
+              <p className="m-0 max-w-[300px] text-center text-[12.5px] text-[var(--meta)] leading-relaxed">{t("audio.editEmpty")}</p>
+            </div>}
           </Swap>
         </aside>
       </div>
 
-      {/* 底部固定：语音输出设备、总音量，以及正在输出到语音的每一段，每段一行 */}
-      <section aria-label={t("audio.voiceOutput")} className="sticky bottom-0 z-[2] mt-6 -mx-2 px-2 py-2.5 bg-[color-mix(in_srgb,var(--bg)_90%,transparent)] backdrop-blur-md shadow-[0_-1px_0_var(--line)]">
-        {voiceInstances.length > 0 ? <div className="mb-2 max-h-[104px] overflow-y-auto flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
+      {/* 底部固定区：语音输出设备、总音量，以及正在输出到语音的每一段，每段一行。
+          高度占浏览区整列的一个固定比例（实例多时内部滚动），窗口缩放时跟着伸缩 */}
+      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none min-h-0 max-h-[38%] flex flex-col px-2 py-2.5 shadow-[0_-1px_0_var(--line)]">
+        {voiceInstances.length > 0 ? <div className="min-h-0 mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}
             className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">
             <span aria-hidden className="flex-none flex items-end gap-[2px] h-3 w-3">{[0, 1, 2].map((i) => <span key={i} className={`${instance.state === "paused" ? "" : "eq-bar"} w-[2px] h-[3px] rounded-full bg-[var(--accent)]`} style={{ animationDelay: `${i * 0.18}s` }} />)}</span>
@@ -622,19 +669,62 @@ export function AudioPage() {
             }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
           </span>
         </div>
-        {voice?.state === "error" ? <p role="alert" className="text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
+        {voice?.state === "error" ? <p role="alert" className="flex-none text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
       </section>
+
+      {/* 来源行的「⋯」/右键菜单。菜单项绑定 srcMenu.source —— 被点开的那一条，
+          刷新/重新定位/移除都发它的稳定 ID，与左侧当前筛选无关。 */}
+      {srcMenu ? <MoreMenuPopup anchor={srcMenu.anchor} align={srcMenu.align} onClose={() => setSrcMenu(null)} items={[
+        { label: t("audio.refresh"), disabled: busy, action: () => void run(async () => {
+          setScanned(0);
+          setScanActive(true);
+          try { acceptLibrary(await invoke<Library>("audio_library_refresh", { sourceId: srcMenu.source.id })); }
+          finally { setScanActive(false); }
+        }) },
+        ...(srcMenu.source.mode === "reference" ? [{
+          label: t("audio.relinkSource"), disabled: busy,
+          action: () => relink(srcMenu.source.kind, "source", srcMenu.source.id),
+        }] : []),
+        { label: t("audio.removeSource"), danger: true, disabled: busy, action: () => void run(async () => {
+          if (!(await askConfirm(t("audio.removeConfirm")))) return;
+          acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId: srcMenu.source.id }));
+          if (sourceId === srcMenu.source.id) { setSourceId(""); setSelectedId(""); }
+        }) },
+      ]} /> : null}
     </PagePad>
   );
 }
 
-/** 左栏的一个来源：名称与条目数。选中的底色略深。 */
-function SourceBtn({ on, label, title, count, onClick }: { on: boolean; label: string; title?: string; count: number; onClick: () => void }) {
+/** 左栏的一个来源：名称与条目数；行尾「⋯」/行上右键开来源菜单。选中的底色略深。 */
+function SourceBtn({ on, label, title, count, onClick, menuLabel, onMenu, onContextMenu }: {
+  on: boolean;
+  label: string;
+  title?: string;
+  count: number;
+  onClick: () => void;
+  /** 传了才挂行尾 ⋯ 与右键（「全部音频」没有来源可管）。 */
+  menuLabel?: string;
+  onMenu?: (e: MouseEvent<HTMLButtonElement>) => void;
+  onContextMenu?: (e: MouseEvent<HTMLElement>, row: HTMLElement) => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
   return (
-    <button type="button" onClick={onClick} aria-pressed={on} aria-label={title}
-      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[var(--rs)] border-0 cursor-pointer text-left text-[13px] transition-colors ${on ? "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[var(--ink)] font-medium" : "bg-transparent text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]"}`}>
-      <span className="min-w-0 truncate" title={title}>{label}</span>
-      <span className="ml-auto flex-none text-[11px] text-[var(--meta)] tabular-nums font-normal">{count}</span>
-    </button>
+    <div ref={row} className="group relative"
+      onContextMenu={onContextMenu ? (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(e, row.current ?? e.currentTarget);
+      } : undefined}>
+      <button type="button" onClick={onClick} aria-pressed={on} aria-label={title}
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 ${onMenu ? "pr-7" : ""} rounded-[var(--rs)] border-0 cursor-pointer text-left text-[13px] transition-colors ${on ? "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[var(--ink)] font-medium" : "bg-transparent text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]"}`}>
+        <span className="min-w-0 truncate" title={title}>{label}</span>
+        <span className={`flex-none text-[11px] text-[var(--meta)] tabular-nums font-normal ${onMenu ? "" : "ml-auto"}`}>{count}</span>
+      </button>
+      {onMenu ? <button type="button" data-source-menu aria-label={menuLabel} aria-haspopup="menu"
+        onClick={onMenu}
+        className="absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none text-[var(--meta)] bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] hover:text-[var(--ink)] focus-visible:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+        ⋯
+      </button> : null}
+    </div>
   );
 }

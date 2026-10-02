@@ -7,8 +7,10 @@ import { mount, tick, type Mounted } from "../test/dom";
 const shell = vi.hoisted(() => ({
   invoke: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(),
 }));
+const dialogs = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: shell.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
+vi.mock("../lib/webDialog", () => ({ askConfirm: dialogs.askConfirm }));
 
 import { AudioPage } from "./AudioPage";
 
@@ -17,6 +19,7 @@ const library = {
   sources: [
     { id: "source-1", path: "D:\\Music\\A", kind: "directory", mode: "reference", excludes: [] },
     { id: "source-2", path: "E:\\Music\\A", kind: "directory", mode: "reference", excludes: [] },
+    { id: "source-3", path: "F:\\Lib\\C", kind: "directory", mode: "copy", excludes: [] },
   ],
   assets: [
     { id: "asset-1", path: "D:\\Music\\A\\good.wav", origin: "D:\\Music\\A\\good.wav", source_ids: ["source-1"], available: true, excluded_source_ids: [] },
@@ -33,6 +36,8 @@ const mounts: Mounted[] = [];
 describe("音频库页面", () => {
   beforeEach(() => {
     shell.invoke.mockReset();
+    dialogs.askConfirm.mockClear();
+    dialogs.askConfirm.mockResolvedValue(true);
     shell.invoke.mockImplementation(async (cmd) => {
       if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
       if (cmd === "audio_library_get") return library;
@@ -42,6 +47,7 @@ describe("音频库页面", () => {
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 48000 };
+      if (cmd === "audio_library_refresh" || cmd === "audio_library_remove_source") return library;
       return null;
     });
   });
@@ -252,5 +258,126 @@ describe("音频库页面", () => {
     act(() => stopAll!.click());
     await tick();
     expect(shell.invoke).toHaveBeenCalledWith("audio_voice_stop");
+  });
+
+  const menuOf = (container: HTMLElement, sourcePath: string) => {
+    const row = Array.from(container.querySelectorAll<HTMLElement>(".group.relative"))
+      .find((el) => el.querySelector("button")?.getAttribute("aria-label") === sourcePath);
+    expect(row).toBeDefined();
+    return row!.querySelector<HTMLButtonElement>("[data-source-menu]")!;
+  };
+
+  it("来源菜单按被点开的来源刷新，不用左侧当前筛选", async () => {
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    const trigger = menuOf(mounted.container, "E:\\Music\\A");
+    act(() => trigger.click());
+    await tick();
+    const menu = mounted.container.querySelector<HTMLElement>("[role=menu]");
+    expect(menu).toBeTruthy();
+    expect(menu?.textContent).toContain("刷新来源");
+    expect(menu?.textContent).toContain("重新定位来源");
+    expect(menu?.textContent).toContain("移出音频库");
+    const refresh = Array.from(menu!.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+      .find((b) => b.textContent === "刷新来源")!;
+    act(() => refresh.click());
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_library_refresh", { sourceId: "source-2" });
+    // 菜单关上了，焦点回到打开它的 ⋯。
+    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("重新定位来源只在引用模式出现，并按稳定 ID 提交", async () => {
+    shell.invoke.mockImplementation(async (cmd) => {
+      if (cmd === "audio_library_pick_replacement") return "E:\\Moved\\A";
+      if (cmd === "audio_library_relink_source") return library;
+      if (cmd === "config_get") return { ui_locale: "zh-CN" };
+      if (cmd === "audio_library_get") return library;
+      if (cmd === "audio_preview_devices" || cmd === "audio_voice_devices") return [];
+      if (cmd === "audio_hotkeys_get" || cmd === "audio_hotkeys_status") return [];
+      if (cmd === "audio_voice_instances") return [];
+      if (cmd === "audio_preview_status" || cmd === "audio_voice_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
+      return null;
+    });
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    // 复制模式的来源不提供「重新定位来源」。
+    act(() => menuOf(mounted.container, "F:\\Lib\\C").click());
+    await tick();
+    let menu = mounted.container.querySelector<HTMLElement>("[role=menu]")!;
+    expect(menu.textContent).not.toContain("重新定位来源");
+    // Esc 关闭菜单。
+    act(() => {
+      menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await tick();
+    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
+    // 行上右键同样打开菜单，且绑定的是那一条来源。
+    const row = Array.from(mounted.container.querySelectorAll<HTMLElement>(".group.relative"))
+      .find((el) => el.querySelector("button")?.getAttribute("aria-label") === "E:\\Music\\A")!;
+    act(() => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 60, clientY: 120 }));
+    });
+    await tick();
+    menu = mounted.container.querySelector<HTMLElement>("[role=menu]")!;
+    expect(menu.textContent).toContain("重新定位来源");
+    const relink = Array.from(menu.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+      .find((b) => b.textContent === "重新定位来源")!;
+    act(() => relink.click());
+    await tick();
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_library_relink_source", {
+      sourceId: "source-2",
+      replacement: "E:\\Moved\\A",
+    });
+  });
+
+  it("移除来源先确认；只清掉被移除来源的筛选", async () => {
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    // 先选中 source-1 作为左侧筛选。
+    const first = Array.from(mounted.container.querySelectorAll<HTMLButtonElement>(".group.relative > button"))
+      .find((b) => b.getAttribute("aria-label") === "D:\\Music\\A")!;
+    act(() => first.click());
+    await tick();
+    // 开 source-2 的菜单点移除：确认过一次才提交，提交后 source-1 的筛选保持。
+    act(() => menuOf(mounted.container, "E:\\Music\\A").click());
+    await tick();
+    const remove = Array.from(mounted.container.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+      .find((b) => b.textContent === "移出音频库")!;
+    dialogs.askConfirm.mockResolvedValueOnce(false);
+    act(() => remove.click());
+    await tick();
+    expect(dialogs.askConfirm).toHaveBeenCalledTimes(1);
+    expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "audio_library_remove_source")).toBe(false);
+    // 再开一次点移除并确认。
+    act(() => menuOf(mounted.container, "E:\\Music\\A").click());
+    await tick();
+    const remove2 = Array.from(mounted.container.querySelectorAll<HTMLButtonElement>("[role=menuitem]"))
+      .find((b) => b.textContent === "移出音频库")!;
+    act(() => remove2.click());
+    await tick();
+    await tick();
+    expect(shell.invoke).toHaveBeenCalledWith("audio_library_remove_source", { sourceId: "source-2" });
+    // 没移除的 source-1 仍是当前筛选（按钮保持按下状态）。
+    expect(first.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("点菜单之外任意处关闭菜单", async () => {
+    const mounted = mount(<I18nProvider><AudioPage /></I18nProvider>);
+    mounts.push(mounted);
+    await tick();
+    act(() => menuOf(mounted.container, "D:\\Music\\A").click());
+    await tick();
+    expect(mounted.container.querySelector("[role=menu]")).toBeTruthy();
+    act(() => {
+      document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await tick();
+    expect(mounted.container.querySelector("[role=menu]")).toBeNull();
   });
 });

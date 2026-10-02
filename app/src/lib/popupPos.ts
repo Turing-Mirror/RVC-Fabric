@@ -24,6 +24,7 @@ export function placePopup(
   size: { width: number; height: number },
   view: { width: number; height: number },
   pad = 8,
+  align: "left" | "right" = "right",
 ): PopupBox {
   const vw = Math.max(0, view.width);
   const vh = Math.max(0, view.height);
@@ -31,7 +32,7 @@ export function placePopup(
   const width = Math.max(1, size.width);
   const height = Math.min(Math.max(1, size.height), maxHeight);
 
-  let left = anchor.right - width;
+  let left = align === "left" ? anchor.left : anchor.right - width;
   left = Math.max(pad, Math.min(left, vw - width - pad));
   if (width + pad * 2 > vw) left = pad;
 

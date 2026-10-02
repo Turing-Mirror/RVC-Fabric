@@ -180,7 +180,8 @@
     "hotkeyDisabled": "未啟用",
     "hotkeyConflictStatus": "衝突",
     "dblHint": "按兩下項目即播放到語音",
-    "editEmpty": "從清單中選擇一條音訊，即可在此編輯名稱、編號、播放範圍與快捷鍵。"
+    "editEmpty": "從清單中選擇一條音訊，在此調整名稱、截取波形與快捷鍵。",
+    "sourceMenu": "來源操作"
   },
   "window": {
     "minimize": "最小化",

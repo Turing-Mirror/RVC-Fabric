@@ -2,9 +2,21 @@ import type { MouseEvent, ReactNode } from "react";
 import { HelpMark } from "./Tooltip";
 import { Collapse } from "./Presence";
 
-export function PagePad({ children }: { children: ReactNode }) {
+export function PagePad({
+  children,
+  fill = false,
+}: {
+  children: ReactNode;
+  /**
+   * 整页不随内容滚动的布局（音频页）：撑满所在面板，内部各区块自己滚动。
+   * 同时挂成 inline-size 容器，页内尺寸可以用 cqw 随可用宽度收缩。
+   */
+  fill?: boolean;
+}) {
   return (
-    <div className="px-[30px] pb-[34px] max-[1020px]:px-[22px] max-[1020px]:pb-[30px] max-[720px]:px-4 max-[720px]:pb-[26px]">
+    // h-full 而不是 min-h-full：min-h 只保证至少那么高，grid 长列表照样把整页
+    // 撑高，「各栏内部滚动」就失效了；h-full 把可用高度卡死成面板高度。
+    <div className={`px-[30px] pb-[34px] max-[1020px]:px-[22px] max-[1020px]:pb-[30px] max-[720px]:px-4 max-[720px]:pb-[26px] ${fill ? "h-full flex flex-col [container-type:inline-size]" : ""}`}>
       {children}
     </div>
   );

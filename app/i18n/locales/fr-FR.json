@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "Ouverture du microphone…",
     "stsRecordDevice": "Périphérique d’entrée : {v0}",
     "stsRecordDeviceDefault": "Entrée par défaut du système",
-    "stsInputLibrary": "Dossier d’entrée",
-    "stsInputEmpty": "Pas encore d’audio dans ce dossier. Enregistrez-en un, ou ajoutez un fichier ci-dessus.",
+    "stsInputLibrary": "Liste audio",
     "stsInputCount": "{v0} fichier(s) audio",
     "stsPlay": "Écouter",
     "stsStopPlay": "Arrêter",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "Tous",
     "stsWillProcess": "{v0} fichiers seront traités",
     "stsNoItems": "Liste vide — ajoutez d'abord des fichiers ou des dossiers",
-    "stsOutputInside": "Le dossier de sortie est dans une source ; sa sous-arborescence est exclue",
+    "stsOutputInside": "Le dossier de sortie est dans une source. Les fichiers convertis ne seront pas repris en entrée.",
     "stsExcludedByDir": "Exclu par règle de dossier",
     "stsClearList": "Vider la liste",
     "stsSelectFiltered": "Sélectionner les éléments affichés",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "Une conversion est en cours dans une autre fenêtre ; panneau en lecture seule",
     "stsMissingTag": "Source introuvable",
     "stsUnreadableTag": "Illisible",
-    "stsSourceInsideOut": "Une source est dans le dossier de sortie ; ignorée",
+    "stsSourceInsideOut": "Une source se trouve dans le dossier de sortie, son audio a été ignoré. Choisissez un autre dossier de sortie pour le traiter.",
     "stsRefresh": "Actualiser",
     "stsScanCancel": "Arrêter le scan",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "Les réglages des périphériques et des performances ont changé. Redémarrez la transformation de voix pour les appliquer.",
     "restartNow": "Redémarrer",
-    "restartLater": "Plus tard"
+    "restartLater": "Plus tard",
+    "stsFilterNoHit": "Aucun audio ne correspond.",
+    "stsSourcesNoAudio": "Aucun audio trouvé dans les sources.",
+    "stsOutDefault": "Non sélectionné, enregistrement dans {v0}"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

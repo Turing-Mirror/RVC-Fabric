@@ -245,7 +245,14 @@ fn record_script(root: &Path) -> PathBuf {
     root.join("tools").join("record_worker.py")
 }
 
+/// 没选输出目录时结果存到这里。它和默认输入目录 `sts/input` 并列，不能是它的上一级：
+/// 输出目录里的文件不当输入，上一级会把输入目录和录音整个跳过。
 pub fn out_dir(root: &Path) -> PathBuf {
+    paths::user_data(root).join("sts").join("output")
+}
+
+/// 旧版的默认输出目录，包着默认输入目录。记下的上次输出是它时按没选处理。
+fn legacy_out_dir(root: &Path) -> PathBuf {
     paths::user_data(root).join("sts")
 }
 
@@ -256,18 +263,21 @@ fn norm_dir(p: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-/// 默认 `User_Data/sts`：界面不能预选它，但没选输出时文件仍会落到这儿。
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => norm_dir(a) == norm_dir(b),
+    }
+}
+
+/// 默认输出目录（含旧版的 `User_Data/sts`）：界面不能预选它，但没选输出时文件仍会落到默认目录。
 pub fn is_default_out(root: &Path, path: &str) -> bool {
     let raw = path.trim();
     if raw.is_empty() {
         return false;
     }
     let a = PathBuf::from(raw);
-    let b = out_dir(root);
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(x), Ok(y)) => x == y,
-        _ => norm_dir(&a) == norm_dir(&b),
-    }
+    same_dir(&a, &out_dir(root)) || same_dir(&a, &legacy_out_dir(root))
 }
 
 fn last_output_for_ui(root: &Path, raw: &str) -> String {
@@ -2442,6 +2452,20 @@ mod tests {
             last_output_for_ui(&root, &custom.to_string_lossy()),
             custom.to_string_lossy()
         );
+        // 旧版默认 `User_Data/sts` 也不当成用户选的，不然界面会把它回填成输出目录。
+        let legacy = legacy_out_dir(&root);
+        assert!(is_default_out(&root, &legacy.to_string_lossy()));
+        assert_eq!(last_output_for_ui(&root, &legacy.to_string_lossy()), "");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn default_output_does_not_contain_default_input() {
+        let root = tmp_root();
+        let out = norm_dir(&out_dir(&root));
+        let input = norm_dir(&default_input_dir(&root));
+        assert!(!input.starts_with(&format!("{out}\\")), "{input} is inside {out}");
+        assert!(!out.starts_with(&format!("{input}\\")), "{out} is inside {input}");
         let _ = fs::remove_dir_all(&root);
     }
 }

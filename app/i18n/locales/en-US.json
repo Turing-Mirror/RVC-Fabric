@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "Opening the microphone…",
     "stsRecordDevice": "Input device: {v0}",
     "stsRecordDeviceDefault": "System default input",
-    "stsInputLibrary": "Input folder",
-    "stsInputEmpty": "No audio in this folder yet. Record one, or add a file above.",
+    "stsInputLibrary": "Audio list",
     "stsInputCount": "{v0} audio file(s)",
     "stsPlay": "Play",
     "stsStopPlay": "Stop",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "All",
     "stsWillProcess": "Will process {v0} files",
     "stsNoItems": "Nothing here yet — add files or folders first",
-    "stsOutputInside": "Output folder sits inside a source; its subtree is excluded",
+    "stsOutputInside": "The output folder is inside a source. Converted files will not be used as input.",
     "stsExcludedByDir": "Excluded by folder rule",
     "stsClearList": "Clear list",
     "stsSelectFiltered": "Select filtered",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "A conversion is running in another window; this panel is read-only",
     "stsMissingTag": "Source missing",
     "stsUnreadableTag": "Unreadable",
-    "stsSourceInsideOut": "A source sits inside the output folder; it was skipped",
+    "stsSourceInsideOut": "A source is inside the output folder, so its audio was skipped. Choose another output folder to process it.",
     "stsRefresh": "Refresh",
     "stsScanCancel": "Stop scan",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "Device and performance settings changed. Voice changing is running; restart it to apply the new settings.",
     "restartNow": "Restart",
-    "restartLater": "Later"
+    "restartLater": "Later",
+    "stsFilterNoHit": "No audio matches.",
+    "stsSourcesNoAudio": "No audio found in the sources.",
+    "stsOutDefault": "Not selected, saving to {v0}"
   },
   "extras": {
     "engineTitle": "Engine resources",

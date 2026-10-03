@@ -196,6 +196,14 @@ const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 const FIELD =
   "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
+
+/** 把路径拆成最后一段的名字和它所在的目录，来源列表按「名字 + 目录」显示。 */
+function splitPath(path: string): { name: string; parent: string } {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const cut = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
+  if (cut < 0) return { name: trimmed, parent: "" };
+  return { name: trimmed.slice(cut + 1), parent: trimmed.slice(0, cut + 1) };
+}
 const STS_F0 = ["rmvpe", "harvest", "pm", "crepe"] as const;
 const STS_FMTS = ["wav", "flac", "mp3", "m4a"] as const;
 const STS_RATES = [0, 16000, 32000, 40000, 44100, 48000] as const;
@@ -1226,16 +1234,19 @@ function StsSection() {
           <ul className="m-0 list-none p-0 pb-1">
             {scan!.sources!.map((s) => {
               const miss = scan?.missing?.find((m) => m.id === s.id);
+              const { name, parent } = splitPath(s.path);
               return (
                 <li
                   key={s.id}
                   className="flex items-center gap-2 rounded-[var(--rs)] px-2 py-1 text-[12.5px]"
+                  title={miss?.path || s.path}
                 >
-                  <span
-                    className={`min-w-0 flex-1 truncate font-mono ${miss ? "text-[var(--danger)]" : "text-[var(--ink-muted)]"}`}
-                    title={miss?.path || s.path}
-                  >
-                    {s.path}
+                  {/* 名字在前、所在目录在后：长路径截掉的是目录，不是名字。 */}
+                  <span className={`min-w-0 max-w-[55%] truncate ${miss ? "text-[var(--danger)]" : "text-[var(--ink)]"}`}>
+                    {name}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[var(--meta)]">
+                    {parent}
                   </span>
                   {miss ? (
                     <span className="shrink-0 text-[11px] text-[var(--danger)]">
@@ -1268,19 +1279,17 @@ function StsSection() {
             })}
           </ul>
         ) : null}
-        {scan?.output_in_source ? (
+        {/* 只说一件事：有来源被跳过最要紧，其次才是输出目录在来源里。 */}
+        {scan?.source_in_output || scan?.output_in_source ? (
           <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">
-            {t("s.stsOutputInside")}
-          </p>
-        ) : null}
-        {scan?.source_in_output ? (
-          <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">
-            {t("s.stsSourceInsideOut")}
+            {t(scan.source_in_output ? "s.stsSourceInsideOut" : "s.stsOutputInside")}
           </p>
         ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>
-          <span className={PATH}>{output || t("s.53e2db7016")}</span>
+          <span className={PATH} title={output || st.out_dir || undefined}>
+            {output || (st.out_dir ? t("s.stsOutDefault", { v0: st.out_dir }) : t("s.53e2db7016"))}
+          </span>
           <Btn
             disabled={running || recording}
             onClick={() => {
@@ -1423,7 +1432,11 @@ function StsSection() {
         ) : null}
         {!visibleItems.length ? (
           <p className="m-0 text-[12.5px] text-[var(--meta)]">
-            {scan?.items?.length ? t("s.stsInputEmpty") : t("s.stsNoItems")}
+            {scan?.items?.length
+              ? t("s.stsFilterNoHit")
+              : scan?.sources?.length
+                ? t("s.stsSourcesNoAudio")
+                : t("s.stsNoItems")}
           </p>
         ) : (
           <>

@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "Abriendo el micrófono…",
     "stsRecordDevice": "Dispositivo de entrada: {v0}",
     "stsRecordDeviceDefault": "Entrada predeterminada del sistema",
-    "stsInputLibrary": "Carpeta de entrada",
-    "stsInputEmpty": "Aún no hay audio en esta carpeta. Graba uno o añade un archivo arriba.",
+    "stsInputLibrary": "Lista de audio",
     "stsInputCount": "{v0} archivo(s) de audio",
     "stsPlay": "Escuchar",
     "stsStopPlay": "Detener",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "Todos",
     "stsWillProcess": "Se procesarán {v0} archivos",
     "stsNoItems": "Lista vacía — añade primero archivos o carpetas",
-    "stsOutputInside": "La carpeta de salida está dentro de una fuente; su subárbol queda excluido",
+    "stsOutputInside": "La carpeta de salida está dentro de una fuente. Los archivos convertidos no se usarán como entrada.",
     "stsExcludedByDir": "Excluido por regla de carpeta",
     "stsClearList": "Vaciar lista",
     "stsSelectFiltered": "Seleccionar mostrados",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "Otra ventana está convirtiendo; este panel es de solo lectura",
     "stsMissingTag": "Fuente no encontrada",
     "stsUnreadableTag": "No se puede leer",
-    "stsSourceInsideOut": "Una fuente está dentro de la carpeta de salida; se omitió",
+    "stsSourceInsideOut": "Una fuente está dentro de la carpeta de salida y se omitió su audio. Elige otra carpeta de salida para procesarlo.",
     "stsRefresh": "Actualizar",
     "stsScanCancel": "Detener escaneo",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "Se cambió la configuración de dispositivos y rendimiento. Reinicie el cambio de voz para aplicarla.",
     "restartNow": "Reiniciar",
-    "restartLater": "Más tarde"
+    "restartLater": "Más tarde",
+    "stsFilterNoHit": "Ningún audio coincide.",
+    "stsSourcesNoAudio": "No se encontró audio en las fuentes.",
+    "stsOutDefault": "Sin seleccionar, se guarda en {v0}"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

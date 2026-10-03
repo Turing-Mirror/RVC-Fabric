@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "正在打开麦克风…",
     "stsRecordDevice": "输入设备：{v0}",
     "stsRecordDeviceDefault": "系统默认输入设备",
-    "stsInputLibrary": "输入文件夹",
-    "stsInputEmpty": "这个文件夹里还没有音频。可以录音，或用上面的「文件」加入。",
+    "stsInputLibrary": "音频清单",
     "stsInputCount": "{v0} 个音频",
     "stsPlay": "试听",
     "stsStopPlay": "停止",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "全部",
     "stsWillProcess": "将处理 {v0} 个音频",
     "stsNoItems": "清单为空，先添加文件或目录",
-    "stsOutputInside": "输出目录位于来源内，已自动排除该子树",
+    "stsOutputInside": "输出目录在来源里，转换结果不会再被当成输入。",
     "stsExcludedByDir": "受目录排除影响",
     "stsClearList": "清空清单",
     "stsSelectFiltered": "选择当前结果",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "另一个窗口正在进行转换，此处只读",
     "stsMissingTag": "源不存在",
     "stsUnreadableTag": "目录不可读",
-    "stsSourceInsideOut": "来源位于输出目录内，已自动跳过",
+    "stsSourceInsideOut": "有来源在输出目录里，里面的音频已跳过。换一个输出目录就能处理。",
     "stsRefresh": "刷新",
     "stsScanCancel": "停止扫描",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "设备与性能设置已改动。变声正在运行，重启变声后新设置才会生效。",
     "restartNow": "重启变声",
-    "restartLater": "稍后"
+    "restartLater": "稍后",
+    "stsFilterNoHit": "没有符合条件的音频。",
+    "stsSourcesNoAudio": "来源里没有找到音频。",
+    "stsOutDefault": "未选择，存到 {v0}"
   },
   "extras": {
     "engineTitle": "引擎资源",

@@ -298,6 +298,12 @@ pub fn add(root: &Path, raw: &str) -> Result<Value, String> {
     if let Some(s) = st.sources.iter().find(|s| norm_key(Path::new(&s.path)) == key) {
         return Ok(json!({ "id": s.id, "dup": true }));
     }
+    // 已经在某个目录来源里扫得到的文件不再单独加一条，比如录音存进了已添加的输入目录。
+    if kind == "file" {
+        if let Some(s) = st.sources.iter().find(|s| dir_covers(s, path)) {
+            return Ok(json!({ "id": s.id, "dup": true }));
+        }
+    }
     let src = Source {
         id: new_id(),
         kind: kind.into(),
@@ -308,6 +314,18 @@ pub fn add(root: &Path, raw: &str) -> Result<Value, String> {
     st.sources.push(src);
     save(root, &st)?;
     Ok(json!({ "id": id, "dup": false }))
+}
+
+/// 目录来源扫描时会不会扫到这个文件：直接在目录里，或含子目录时在它下面。
+fn dir_covers(src: &Source, file: &Path) -> bool {
+    if src.kind != "dir" {
+        return false;
+    }
+    let dir = norm_key(Path::new(&src.path));
+    if src.recursive {
+        return norm_key(file).starts_with(&format!("{dir}\\"));
+    }
+    file.parent().is_some_and(|p| norm_key(p) == dir)
 }
 
 /// 移除来源：其专属排除里「只覆盖该来源子树」的条目一并清掉——排除
@@ -619,20 +637,22 @@ fn scan_impl(root: &Path, output: &str, gen: u64) -> Value {
                     continue;
                 }
                 if ft.is_dir() {
-                    let k = norm_key(&p);
-                    if k == out_key {
+                    // 不含子目录时输出目录本来就扫不到，不用提示。
+                    if !src.recursive {
+                        continue;
+                    }
+                    if norm_key(&p) == out_key {
                         output_in_source = true;
                         continue;
                     }
-                    if src.recursive {
-                        stack.push(p);
-                    }
+                    stack.push(p);
                     continue;
                 }
                 if !ft.is_file() || !crate::sts::is_audio_path(&p) {
                     continue;
                 }
-                push_file(&st, &out_key, &mut items, &mut seen, &mut output_in_source, idx, spath, &p);
+                // 目录里的文件落在输出树里，只可能是这个来源本身在输出目录下面。
+                push_file(&st, &out_key, &mut items, &mut seen, &mut source_in_output, idx, spath, &p);
             }
         }
     }
@@ -865,6 +885,52 @@ mod tests {
         let v = scan(&root, &out.to_string_lossy());
         assert_eq!(v["output_in_source"].as_bool().unwrap(), true);
         assert_eq!(v["pending"].as_u64().unwrap(), 1);
+    }
+
+    #[test]
+    fn file_already_in_a_dir_source_is_not_added_again() {
+        // 录音存进已添加的输入目录：清单里已经有它，来源列表不再多一行。
+        let root = setup();
+        let d = root.join("in");
+        let rec = d.join("rec_1.wav");
+        audio(&rec);
+        add_src(&root, &d);
+        let r = add(&root, &rec.to_string_lossy()).unwrap();
+        assert!(r["dup"].as_bool().unwrap(), "{r}");
+        assert_eq!(load(&root).sources.len(), 1);
+        // 不含子目录的目录来源只管第一层，下一层的文件仍可单独加。
+        let deep = d.join("sub").join("rec_2.wav");
+        audio(&deep);
+        set_recursive(&root, &load(&root).sources[0].id, false).unwrap();
+        let r = add(&root, &deep.to_string_lossy()).unwrap();
+        assert!(!r["dup"].as_bool().unwrap(), "{r}");
+    }
+
+    #[test]
+    fn dir_source_inside_output_reports_source_in_output() {
+        // 来源在输出目录下面：提示的是「来源在输出目录里」，不是反过来。
+        let root = setup();
+        let out = root.join("out");
+        let d = out.join("in");
+        audio(&d.join("x.wav"));
+        add_src(&root, &d);
+        let v = scan(&root, &out.to_string_lossy());
+        assert_eq!(v["total"].as_u64().unwrap(), 0, "{v}");
+        assert!(v["source_in_output"].as_bool().unwrap(), "{v}");
+        assert!(!v["output_in_source"].as_bool().unwrap(), "{v}");
+    }
+
+    #[test]
+    fn default_input_dir_is_scanned_when_no_output_is_chosen() {
+        // 没选输出目录时，默认输入目录里的录音要能进清单。
+        let root = setup();
+        let d = crate::sts::default_input_dir(&root);
+        audio(&d.join("rec_1.wav"));
+        add_src(&root, &d);
+        let v = scan(&root, "");
+        assert_eq!(v["pending"].as_u64().unwrap(), 1, "{v}");
+        assert!(!v["source_in_output"].as_bool().unwrap(), "{v}");
+        assert!(!v["output_in_source"].as_bool().unwrap(), "{v}");
     }
 
     #[test]

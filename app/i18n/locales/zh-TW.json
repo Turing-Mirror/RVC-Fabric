@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "正在開啟麥克風…",
     "stsRecordDevice": "輸入裝置：{v0}",
     "stsRecordDeviceDefault": "系統預設輸入裝置",
-    "stsInputLibrary": "輸入資料夾",
-    "stsInputEmpty": "這個資料夾裡還沒有音訊。可以錄音，或用上面的「檔案」加入。",
+    "stsInputLibrary": "音訊清單",
     "stsInputCount": "{v0} 個音訊",
     "stsPlay": "試聽",
     "stsStopPlay": "停止",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "全部",
     "stsWillProcess": "將處理 {v0} 個音訊",
     "stsNoItems": "清單為空，先新增檔案或目錄",
-    "stsOutputInside": "輸出目錄位於來源內，已自動排除該子樹",
+    "stsOutputInside": "輸出目錄在來源裡，轉換結果不會再被當成輸入。",
     "stsExcludedByDir": "受目錄排除影響",
     "stsClearList": "清空清單",
     "stsSelectFiltered": "選擇目前結果",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "另一個視窗正在轉換，此處唯讀",
     "stsMissingTag": "來源不存在",
     "stsUnreadableTag": "目錄不可讀",
-    "stsSourceInsideOut": "來源位於輸出目錄內，已自動略過",
+    "stsSourceInsideOut": "有來源在輸出目錄裡，裡面的音訊已略過。換一個輸出目錄就能處理。",
     "stsRefresh": "重新整理",
     "stsScanCancel": "停止掃描",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "裝置與效能設定已變更。變聲正在執行，重新啟動變聲後新設定才會生效。",
     "restartNow": "重新啟動變聲",
-    "restartLater": "稍後"
+    "restartLater": "稍後",
+    "stsFilterNoHit": "沒有符合條件的音訊。",
+    "stsSourcesNoAudio": "來源裡沒有找到音訊。",
+    "stsOutDefault": "未選擇，存到 {v0}"
   },
   "extras": {
     "engineTitle": "引擎資源",

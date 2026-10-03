@@ -1581,8 +1581,7 @@
     "stsRecordOpening": "マイクを開いています…",
     "stsRecordDevice": "入力デバイス：{v0}",
     "stsRecordDeviceDefault": "システムの既定入力",
-    "stsInputLibrary": "入力フォルダ",
-    "stsInputEmpty": "このフォルダにはまだ音声がありません。録音するか、上の「ファイル」から追加してください。",
+    "stsInputLibrary": "音声リスト",
     "stsInputCount": "{v0} 件の音声",
     "stsPlay": "試聴",
     "stsStopPlay": "停止",
@@ -2123,7 +2122,7 @@
     "stsFilterAll": "すべて",
     "stsWillProcess": "{v0} 件を処理",
     "stsNoItems": "項目がありません。先にファイルまたはフォルダーを追加",
-    "stsOutputInside": "出力先がソース内にあるため、その配下は除外済み",
+    "stsOutputInside": "出力フォルダーがソースの中にあります。変換結果は入力として扱いません。",
     "stsExcludedByDir": "フォルダー除外の対象",
     "stsClearList": "リストをクリア",
     "stsSelectFiltered": "表示中を選択",
@@ -2140,7 +2139,7 @@
     "stsForeignBusy": "別のウィンドウで変換を実行中のため読み取り専用です",
     "stsMissingTag": "ソースが見つかりません",
     "stsUnreadableTag": "読み取れません",
-    "stsSourceInsideOut": "ソースが出力フォルダー内にあるためスキップしました",
+    "stsSourceInsideOut": "出力フォルダーの中にソースがあるため、その音声はスキップしました。別の出力フォルダーを選ぶと処理できます。",
     "stsRefresh": "更新",
     "stsScanCancel": "スキャン停止",
     "guide": {
@@ -2252,7 +2251,10 @@
     },
     "restartRunning": "デバイスとパフォーマンスの設定が変更されました。ボイスチェンジを再起動すると新しい設定が反映されます。",
     "restartNow": "再起動",
-    "restartLater": "あとで"
+    "restartLater": "あとで",
+    "stsFilterNoHit": "条件に合う音声はありません。",
+    "stsSourcesNoAudio": "ソースに音声が見つかりません。",
+    "stsOutDefault": "未選択、{v0} に保存"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

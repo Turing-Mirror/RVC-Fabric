@@ -1820,10 +1820,7 @@
     "trainEtaMin": "约剩 {v0} 分钟",
     "trainEtaHour": "约剩 {v0} 小时",
     "trainEtaHourMin": "约剩 {v0} 小时 {v1} 分钟",
-    "guideFirstTitle": "欢迎使用 RVC Fabric",
-    "guideFirstBody": "RVC Fabric 正在启动变声。按新手引导完成设置后，游戏与语音软件中的其他人才能听到变声。",
-    "guideFirstGo": "打开新手引导",
-    "guideFirstSkip": "跳过",
+
     "killStsAskTitle": "语音转换仍在进行",
     "killStsAskBody": "强制结束会一并中止语音转换。已完成的文件保留，正在转换的文件不会保存。",
     "killStsAskKeep": "取消",

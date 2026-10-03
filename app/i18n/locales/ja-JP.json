@@ -1820,10 +1820,7 @@
     "trainEtaMin": "残り約 {v0} 分",
     "trainEtaHour": "残り約 {v0} 時間",
     "trainEtaHourMin": "残り約 {v0} 時間 {v1} 分",
-    "guideFirstTitle": "RVC Fabric へようこそ",
-    "guideFirstBody": "RVC Fabric が変声を起動しています。セットアップガイドに沿って設定すると、ゲームや通話アプリの相手にも届きます。",
-    "guideFirstGo": "セットアップガイドを開く",
-    "guideFirstSkip": "スキップ",
+
     "killStsAskTitle": "音声変換が実行中です",
     "killStsAskBody": "強制終了すると音声変換も中止されます。完了済みのファイルは保持され、変換中のファイルは保存されません。",
     "killStsAskKeep": "キャンセル",

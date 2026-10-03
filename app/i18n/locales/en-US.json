@@ -1820,10 +1820,7 @@
     "trainEtaMin": "about {v0} min left",
     "trainEtaHour": "about {v0} h left",
     "trainEtaHourMin": "about {v0} h {v1} min left",
-    "guideFirstTitle": "Welcome to RVC Fabric",
-    "guideFirstBody": "RVC Fabric is starting the voice changer. Follow the setup guide so people in games and voice apps can hear it.",
-    "guideFirstGo": "Open the setup guide",
-    "guideFirstSkip": "Skip",
+
     "killStsAskTitle": "Voice conversion is still running",
     "killStsAskBody": "Forcing the engine to stop will also abort the conversion. Finished files are kept; the file being converted will not be saved.",
     "killStsAskKeep": "Cancel",

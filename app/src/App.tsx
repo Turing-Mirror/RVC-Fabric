@@ -361,39 +361,6 @@ export default function App() {
     })();
   }, [engine.running]);
 
-  // 第一次点「开启变声」时问一句要不要先看说明。
-  //
-  // 挂在 engine.userStarts 上，不是 engine.starting。starting 在开机预热引擎、
-  // 导入推理库的时候也会为真，界面上根本没人按过东西 —— 挂在它上面的结果是
-  // 软件一启动就弹说明，用户报的就是这个。userStarts 只在 toggleRun 真的走
-  // 开启分支时才加，是「有人按了那个按钮」的唯一凭据。
-  //
-  // 挑开启的那一刻而不是 running：引擎起来要好几秒，那几秒用户本来就在等，
-  // 是唯一不打扰人的空档；等 running 了他已经在说话了。
-  const [askGuide, setAskGuide] = useState(false);
-  const guideAsked = useRef(false);
-  useEffect(() => {
-    if (engine.userStarts === 0 || guideAsked.current) return;
-    guideAsked.current = true;
-    void (async () => {
-      try {
-        const cfg = await invoke<Record<string, unknown>>("config_get");
-        if (cfg.guide_prompt_done !== true) setAskGuide(true);
-      } catch {
-        /* 配置读不到就算了，这不是要紧事 */
-      }
-    })();
-  }, [engine.userStarts]);
-
-  // 「转到说明页」和「不了」都算表过态，都不再问第二次。
-  const closeGuide = (toGuide: boolean) => {
-    setAskGuide(false);
-    if (toGuide) openGuideRef.current("try");
-    void invoke("config_set", { patch: { guide_prompt_done: true } }).catch(
-      () => { },
-    );
-  };
-
   // 不管点的是哪个社媒还是「以后再说」，都不再问第二次。反复问一件用户
   // 已经表过态的事，比不问更让人反感。
   const closeFollow = () => {
@@ -963,8 +930,6 @@ export default function App() {
   // 已经用过变声的老用户不主动打扰，从说明页随时可以再打开。
   const [guide, setGuide] = useState<{ open: boolean; step: GuideStep; pill: boolean }>({ open: false, step: "cable", pill: false });
   const openGuide = useCallback((step?: GuideStep) => setGuide((g) => ({ open: true, pill: false, step: step ?? g.step })), []);
-  const openGuideRef = useRef(openGuide);
-  openGuideRef.current = openGuide;
   const finishGuide = useCallback(() => {
     setGuide((g) => ({ ...g, open: false, pill: false }));
     void invoke("config_set", { patch: { setup_guide_done: true, onboard_dismiss: true } }).catch(() => { });
@@ -1484,18 +1449,6 @@ export default function App() {
             </>
           }
         >{t(TROUBLE_TEXT[trouble][0])}</Nudge>
-      ) : askGuide ? (
-        <Nudge
-          title={t("s.guideFirstTitle")}
-          actions={
-            <>
-              <Btn onClick={() => closeGuide(false)}>{t("s.guideFirstSkip")}</Btn>
-              <Btn primary onClick={() => closeGuide(true)}>
-                {t("s.guideFirstGo")}
-              </Btn>
-            </>
-          }
-        >{t("s.guideFirstBody")}</Nudge>
       ) : updateOffer ? (
         <UpdateNudge
           offer={updateOffer}

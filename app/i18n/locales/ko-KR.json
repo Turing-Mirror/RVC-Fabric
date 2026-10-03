@@ -1820,10 +1820,7 @@
     "trainEtaMin": "약 {v0}분 남음",
     "trainEtaHour": "약 {v0}시간 남음",
     "trainEtaHourMin": "약 {v0}시간 {v1}분 남음",
-    "guideFirstTitle": "RVC Fabric 에 오신 것을 환영합니다",
-    "guideFirstBody": "RVC Fabric이 변성을 시작하고 있습니다. 시작 안내에 따라 설정하면 게임과 음성 앱의 상대방도 들을 수 있습니다.",
-    "guideFirstGo": "시작 안내 열기",
-    "guideFirstSkip": "건너뛰기",
+
     "killStsAskTitle": "음성 변환이 진행 중입니다",
     "killStsAskBody": "강제 종료하면 음성 변환도 중단됩니다. 완료된 파일은 유지되며, 변환 중인 파일은 저장되지 않습니다.",
     "killStsAskKeep": "취소",

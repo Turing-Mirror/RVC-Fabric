@@ -1820,10 +1820,7 @@
     "trainEtaMin": "environ {v0} min restantes",
     "trainEtaHour": "environ {v0} h restantes",
     "trainEtaHourMin": "environ {v0} h {v1} min restantes",
-    "guideFirstTitle": "Bienvenue dans RVC Fabric",
-    "guideFirstBody": "RVC Fabric démarre la transformation de voix. Suivez le guide pour qu’on vous entende dans les jeux et les applications vocales.",
-    "guideFirstGo": "Ouvrir le guide",
-    "guideFirstSkip": "Ignorer",
+
     "killStsAskTitle": "La conversion vocale est toujours en cours",
     "killStsAskBody": "Forcer l'arrêt du moteur interrompra également la conversion. Les fichiers terminés sont conservés ; le fichier en cours ne sera pas enregistré.",
     "killStsAskKeep": "Annuler",

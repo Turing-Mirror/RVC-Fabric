@@ -79,33 +79,14 @@ function DonateNote() {
 }
 
 /**
- * 从装好软件到对方听得见的那条线性路径。
- *
- * 这一段和下面的常见情况是两种东西：常见情况是查阅式的，服务「已经知道自己
- * 要干什么、卡在某一步」的人；而说明页是在用户第一次点「开启变声」时弹出来
- * 的，那一刻他手里没有问题，只有一个还没做成的任务。查阅式的页面对这种人是
- * 失效的 —— 他不知道该查哪一条。所以紧跟虚拟声卡安装区块，作为安装后的完整
- * 操作路径。
- */
-function buildFirstRun(): { q: string; hint: string; a: string }[] {
-  return [
-    { q: t("s.firstRunQ1"), hint: t("s.firstRunH1"), a: t("s.firstRunA1") },
-    { q: t("s.firstRunQ2"), hint: t("s.firstRunH2"), a: t("s.firstRunA2") },
-    { q: t("s.firstRunQ3"), hint: t("s.firstRunH3"), a: t("s.firstRunA3") },
-    { q: t("s.firstRunQ4"), hint: t("s.firstRunH4"), a: t("s.firstRunA4") },
-    { q: t("s.firstRunQ5"), hint: t("s.firstRunH5"), a: t("s.firstRunA5") },
-    { q: t("s.firstRunQ6"), hint: t("s.firstRunH6"), a: t("s.firstRunA6") },
-    { q: t("s.firstRunQ7"), hint: t("s.firstRunH7"), a: t("s.firstRunA7") },
-  ];
-}
-
-/**
  * FAQ / route tables must call t() at use time — module-level t() freezes
  * zh-CN because locale packs load after first import (DEFAULT_LOCALE).
  */
 function buildFaq(): { q: string; hint: string; a: string }[] {
   // 顺序按新手实际撞上的先后排，不按写进来的先后。第一次接线时会卡的排在最前，
-  // 装机和收尾类的排在后面。
+  // 装机和收尾类的排在后面。接线组里先放「对方听不到 / 自己听不到」这两条最常
+  // 见的症状，再放两条教程式的（怎么设置对方软件、怎么自查整条链路），最后才
+  // 是装了声卡但找不到设备这种硬件类问题。
   return [
     // —— 接线：声音出不去 / 进不来 ——
     {
@@ -122,6 +103,18 @@ function buildFaq(): { q: string; hint: string; a: string }[] {
       q: t("s.faqSelfSilentQ"),
       hint: t("s.faqSelfSilentH"),
       a: t("s.faqSelfSilentA"),
+    },
+    // 原「完整步骤」的第 6、7 条：七步流程已被新手引导取代，这两条的查法与
+    // 自查清单在引导之外仍有查阅价值，并入常见情况。
+    {
+      q: t("s.firstRunQ6"),
+      hint: t("s.firstRunH6"),
+      a: t("s.firstRunA6"),
+    },
+    {
+      q: t("s.firstRunQ7"),
+      hint: t("s.firstRunH7"),
+      a: t("s.firstRunA7"),
     },
     {
       q: t("s.faqNoCableQ"),
@@ -352,7 +345,6 @@ function HelpPageImpl({
   const canUninstall = !vbRemoved && (hasCable || vbInstalled);
   // These guides contain translated text, so cache them until the locale
   // changes. Expanding one row should not rebuild every help paragraph.
-  const firstRun = useMemo(buildFirstRun, [locale]);
   const faq = useMemo(buildFaq, [locale]);
   const faqNeedle = faqFilter.trim().toLowerCase();
   const faqShown = useMemo(
@@ -367,7 +359,6 @@ function HelpPageImpl({
   const trainGuide = useMemo(buildTrainGuide, [locale]);
   const inferGuide = useMemo(buildInferGuide, [locale]);
   const separateGuide = useMemo(buildSeparateGuide, [locale]);
-  const firstRunItems = useMemo(() => accordionItems(firstRun), [firstRun]);
   const faqItems = useMemo(() => accordionItems(faqShown), [faqShown]);
   const glossaryItems = useMemo(
     () =>
@@ -398,12 +389,11 @@ function HelpPageImpl({
         }
       />
 
-      {/* 从装好软件到对方听得见：虚拟声卡、连接方式与七个步骤合在一处，
-          最上面是新手引导的入口，照着一步步做，不用在长页面里找。 */}
+      {/* 虚拟声卡与连接方式放在说明页最上面，配合右上角的新手引导入口：
+          引导照着做，这两块是给想核对细节的人留的。 */}
       <Block
         id="help-firstrun"
         title={t("s.firstRunTitle")}
-        note={String(firstRun.length)}
         action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
       >
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
@@ -508,16 +498,6 @@ function HelpPageImpl({
             />
           </Group>
   
-        </div>
-        <div className="mt-7">
-          <div className="text-[13.5px] font-medium mb-3">{t("s.firstRunSteps")}</div>
-          <AccordionGroup
-            items={firstRunItems}
-            openId={open}
-            onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
-            openLabel={t("s.5d5815647c")}
-            closedLabel={t("s.b0e24833f7")}
-          />
         </div>
       </Block>
       <Block

@@ -25,14 +25,10 @@ fn preview_device_allowed(root: &Path, id: &str) -> Result<(), String> {
     {
         return Err("audio_preview_device_is_virtual".into());
     }
-    let cfg = crate::config::read(root);
-    if cfg
-        .get("audio_voice_device_id")
-        .and_then(|value| value.as_str())
-        == Some(id)
-    {
+    if crate::audio_voice::voice_device(root).as_deref() == Some(id) {
         return Err("audio_preview_device_is_voice_output".into());
     }
+    let cfg = crate::config::read(root);
     let voice_device = cfg
         .get("sg_output_device")
         .and_then(|value| value.as_str())

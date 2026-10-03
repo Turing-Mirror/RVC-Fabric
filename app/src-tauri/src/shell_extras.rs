@@ -256,18 +256,12 @@ pub fn run_audio_binding(app: &AppHandle, binding: AudioBinding) -> Result<(), S
         .name("fabric-audio-hotkey".into())
         .spawn(move || {
             let result: Result<(), String> = match binding.action.as_str() {
-                "play-entry" => {
-                    let cfg = config::read(&root);
-                    let device = cfg.get("audio_voice_device_id")
-                        .and_then(Value::as_str).unwrap_or("").to_string();
-                    match binding.target_entry_id {
-                        Some(entry) if !device.is_empty() => crate::audio_voice::start_entry(
-                            &root, entry, device, binding.mode.as_deref() == Some("overlay"),
-                        ).map(|_| ()),
-                        Some(_) => Err("audio_voice_device_missing".into()),
-                        None => Err("audio_hotkey_entry_missing".into()),
-                    }
-                }
+                "play-entry" => match binding.target_entry_id {
+                    Some(entry) => crate::audio_voice::start_entry(
+                        &root, entry, binding.mode.as_deref() == Some("overlay"),
+                    ).map(|_| ()),
+                    None => Err("audio_hotkey_entry_missing".into()),
+                },
                 "pause-current" => crate::audio_voice::toggle_pause_latest().map(|_| ()),
                 "replay-current" => crate::audio_voice::replay(&root, None).map(|_| ()),
                 "toggle-loop" => crate::audio_voice::set_loop(None, None).map(|_| ()),

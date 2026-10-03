@@ -123,9 +123,9 @@
     "removeConfirm": "Cette source sera retirée de la bibliothèque sans supprimer les fichiers d'origine. Ses entrées, extraits et numéros exclusifs seront aussi retirés. Continuer ?",
     "previewDeviceInvalid": "Cet appareil peut servir à la sortie vocale et ne peut pas être utilisé pour l'écoute locale. Choisissez un casque ou des haut-parleurs.",
     "voiceOutput": "Sortie vocale",
-    "voiceOutputNote": "Choisissez l'entrée du câble audio virtuel. Sous Windows, la lecture et la conversion vocale utilisent ce même périphérique.",
+    "voiceOutputNote": "Votre voix convertie et l’audio que vous lancez sont mélangés et envoyés vers cet appareil. C’est le périphérique de sortie de Appareil et audio, en général le CABLE Input du câble audio virtuel.",
     "voiceDevice": "Périphérique de sortie vocale",
-    "chooseVoiceDevice": "Choisissez un périphérique de sortie vocale.",
+    "chooseVoiceDevice": "Choisissez d’abord un périphérique de sortie dans Appareil et audio.",
     "playToVoice": "Lire vers la sortie vocale",
     "overlayToVoice": "Superposer dans la sortie vocale",
     "activePlayback": "Audio actif dans la sortie vocale",
@@ -138,7 +138,7 @@
     "unmute": "Rétablir le son",
     "playbackCapacity": "La limite de lectures simultanées est atteinte. Arrêtez d'abord une piste audio.",
     "voiceEngineActive": "La conversion vocale est en cours. Arrêtez-la avant de lire un audio.",
-    "voiceDeviceInvalid": "La sortie vocale et l'écoute locale utilisent le même périphérique. Choisissez l'entrée d'un câble audio virtuel.",
+    "voiceDeviceInvalid": "L’appareil d’écoute local est le même que le périphérique de sortie. Choisissez votre casque ou vos haut-parleurs pour l’écoute locale.",
     "voiceDeviceLocked": "Le périphérique de sortie vocale est utilisé. Arrêtez l'audio ou la conversion vocale avant de le changer.",
     "voiceStopBeforeEngine": "Un audio est lu vers la sortie vocale. Arrêtez-le avant de démarrer la conversion vocale.",
     "voicePlaybackFailed": "La sortie vocale a été interrompue. Vérifiez le périphérique et réessayez.",
@@ -181,7 +181,9 @@
     "hotkeyConflictStatus": "Conflit",
     "dblHint": "Double-cliquez pour lire dans la voix",
     "editEmpty": "Sélectionnez un élément de la liste pour ajuster ici son nom, découper la forme d'onde et définir des raccourcis.",
-    "sourceMenu": "Actions de la source"
+    "sourceMenu": "Actions de la source",
+    "noVoiceDevice": "Non sélectionné",
+    "changeVoiceDevice": "Modifier"
   },
   "window": {
     "minimize": "Réduire",

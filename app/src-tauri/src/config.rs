@@ -236,7 +236,6 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("hotkeys_enabled".into(), json!(false));
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));
-    m.insert("audio_voice_device_id".into(), json!(""));
     m.insert("audio_music_volume".into(), json!(1.0));
     m.insert("audio_music_muted".into(), json!(false));
     // Voice-output audio is also played on the local output so the user hears it.

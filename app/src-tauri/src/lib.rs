@@ -2673,7 +2673,6 @@ pub fn run() {
             audio_preview::audio_preview_status,
             audio_preview::audio_preview_pause,
             audio_preview::audio_preview_stop,
-            audio_voice::audio_voice_devices,
             audio_voice::audio_voice_start,
             audio_voice::audio_voice_status,
             audio_voice::audio_voice_instances,

@@ -123,9 +123,9 @@
     "removeConfirm": "Se quitará esta fuente de la biblioteca sin borrar los archivos originales. También se quitarán las entradas, los fragmentos y los números exclusivos de esta fuente. ¿Continuar?",
     "previewDeviceInvalid": "Este dispositivo puede estar destinado a la salida de voz y no se puede usar para la escucha local. Selecciona auriculares o altavoces.",
     "voiceOutput": "Salida de voz",
-    "voiceOutputNote": "Selecciona la entrada del cable de audio virtual. En Windows, la reproducción y la conversión de voz comparten este dispositivo.",
+    "voiceOutputNote": "Tu voz convertida y el audio que reproduces se mezclan y salen por este dispositivo. Es el dispositivo de salida de Dispositivos y audio, normalmente el CABLE Input del cable de audio virtual.",
     "voiceDevice": "Dispositivo de salida de voz",
-    "chooseVoiceDevice": "Selecciona un dispositivo de salida de voz.",
+    "chooseVoiceDevice": "Primero elige un dispositivo de salida en Dispositivos y audio.",
     "playToVoice": "Reproducir en la salida de voz",
     "overlayToVoice": "Superponer en la salida de voz",
     "activePlayback": "Audio activo en la salida de voz",
@@ -138,7 +138,7 @@
     "unmute": "Activar audio",
     "playbackCapacity": "Se alcanzó el límite de reproducciones simultáneas. Detén una pista de audio primero.",
     "voiceEngineActive": "La conversión de voz está activa. Detenla antes de reproducir audio.",
-    "voiceDeviceInvalid": "El dispositivo de salida de voz coincide con el de escucha local. Selecciona la entrada de un cable de audio virtual.",
+    "voiceDeviceInvalid": "El dispositivo de escucha local es el mismo que el de salida. Cambia la escucha local a tus auriculares o altavoces.",
     "voiceDeviceLocked": "El dispositivo de salida de voz está en uso. Detén el audio o la conversión de voz antes de cambiarlo.",
     "voiceStopBeforeEngine": "Hay audio reproduciéndose en la salida de voz. Deténlo antes de iniciar la conversión de voz.",
     "voicePlaybackFailed": "Se interrumpió la salida de voz. Comprueba el dispositivo e inténtalo de nuevo.",
@@ -181,7 +181,9 @@
     "hotkeyConflictStatus": "Conflicto",
     "dblHint": "Doble clic para reproducir en la voz",
     "editEmpty": "Seleccione un elemento de la lista para ajustar aquí su nombre, recortar la forma de onda y configurar atajos.",
-    "sourceMenu": "Acciones de la fuente"
+    "sourceMenu": "Acciones de la fuente",
+    "noVoiceDevice": "Sin seleccionar",
+    "changeVoiceDevice": "Cambiar"
   },
   "window": {
     "minimize": "Minimizar",

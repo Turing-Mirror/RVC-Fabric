@@ -123,9 +123,9 @@
     "removeConfirm": "僅從音訊庫移除此來源，不刪除原始檔案。此來源獨有的項目、片段和編號也會移除。確定繼續嗎？",
     "previewDeviceInvalid": "此裝置可能用於語音輸出，不能用來本機試聽。請選擇耳機或揚聲器。",
     "voiceOutput": "語音輸出",
-    "voiceOutputNote": "請選擇虛擬音效卡的輸入端。在 Windows 上，音訊與變聲將共用此裝置。",
+    "voiceOutputNote": "變聲後的聲音和插播的音訊混在一起，從這個裝置出去。它就是「裝置與音訊」裡的輸出裝置，一般是虛擬音效卡的 CABLE Input。",
     "voiceDevice": "語音輸出裝置",
-    "chooseVoiceDevice": "請選擇語音輸出裝置。",
+    "chooseVoiceDevice": "請先在「裝置與音訊」裡選擇輸出裝置。",
     "playToVoice": "播放到語音",
     "overlayToVoice": "疊加播放到語音",
     "activePlayback": "正在語音輸出的音訊",
@@ -138,7 +138,7 @@
     "unmute": "取消靜音",
     "playbackCapacity": "同時播放的音訊已達上限。請先停止一段音訊。",
     "voiceEngineActive": "變聲正在執行。請先停止變聲，再播放音訊。",
-    "voiceDeviceInvalid": "語音輸出裝置與本機監聽裝置相同。請選擇虛擬音效卡的輸入端。",
+    "voiceDeviceInvalid": "本機監聽裝置和輸出裝置是同一個。請把本機監聽裝置換成耳機或喇叭。",
     "voiceDeviceLocked": "目前的語音輸出裝置正在使用。請先停止音訊或變聲，再更換裝置。",
     "voiceStopBeforeEngine": "音訊正在輸出到語音裝置。請先停止音訊，再開啟變聲。",
     "voicePlaybackFailed": "語音輸出已中斷。請檢查裝置後重試。",
@@ -181,7 +181,9 @@
     "hotkeyConflictStatus": "衝突",
     "dblHint": "按兩下項目即播放到語音",
     "editEmpty": "從清單中選擇一條音訊，在此調整名稱、截取波形與快捷鍵。",
-    "sourceMenu": "來源操作"
+    "sourceMenu": "來源操作",
+    "noVoiceDevice": "未選擇",
+    "changeVoiceDevice": "變更"
   },
   "window": {
     "minimize": "最小化",

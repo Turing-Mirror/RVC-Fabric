@@ -42,7 +42,6 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
-      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_hotkeys_get") return [];
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
@@ -108,7 +107,6 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
-      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_hotkeys_get") return [];
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
@@ -141,7 +139,6 @@ describe("音频库页面", () => {
       if (cmd === "config_get") return { ui_locale: "zh-CN", audio_preview_device_id: "speaker" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [{ id: "speaker", name: "Speakers" }];
-      if (cmd === "audio_voice_devices") return [];
       if (cmd === "audio_hotkeys_get") return [];
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
@@ -179,12 +176,11 @@ describe("音频库页面", () => {
     });
   });
 
-  it("语音输出使用已保存条目和明确选择的设备，不依赖引擎", async () => {
+  it("语音输出跟随设置里的输出设备，不依赖引擎", async () => {
     shell.invoke.mockImplementation(async (cmd) => {
-      if (cmd === "config_get") return { ui_locale: "zh-CN", audio_voice_device_id: "cable" };
+      if (cmd === "config_get") return { ui_locale: "zh-CN", sg_output_device: "CABLE Input (VB-Audio Virtual Cable)" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
-      if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
       if (cmd === "audio_hotkeys_get") return [];
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
@@ -207,12 +203,13 @@ describe("音频库页面", () => {
       .find((button) => button.textContent === "播放到语音");
     act(() => play!.click());
     await tick();
-    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable", mode: "replace" });
+    expect(mounted.container.textContent).toContain("CABLE Input (VB-Audio Virtual Cable)");
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", mode: "replace" });
     const overlay = Array.from(mounted.container.querySelectorAll("button"))
       .find((button) => button.textContent === "叠加播放到语音");
     act(() => overlay!.click());
     await tick();
-    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", deviceId: "cable", mode: "overlay" });
+    expect(shell.invoke).toHaveBeenCalledWith("audio_voice_start", { entryId: "entry-1", mode: "overlay" });
     expect(shell.invoke.mock.calls.some(([cmd]) => cmd === "engine_start_vc")).toBe(false);
   });
 
@@ -221,10 +218,9 @@ describe("音频库页面", () => {
       sample_rate: 48000, instance_id: 11, active_count: 2 };
     const second = { ...first, name: "第二段", instance_id: 12 };
     shell.invoke.mockImplementation(async (cmd) => {
-      if (cmd === "config_get") return { ui_locale: "zh-CN", audio_voice_device_id: "cable" };
+      if (cmd === "config_get") return { ui_locale: "zh-CN", sg_output_device: "CABLE Input (VB-Audio Virtual Cable)" };
       if (cmd === "audio_library_get") return library;
       if (cmd === "audio_preview_devices") return [];
-      if (cmd === "audio_voice_devices") return [{ id: "cable", name: "CABLE Input" }];
       if (cmd === "audio_hotkeys_get") return [];
       if (cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_preview_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };
@@ -295,7 +291,6 @@ describe("音频库页面", () => {
       if (cmd === "audio_library_relink_source") return library;
       if (cmd === "config_get") return { ui_locale: "zh-CN" };
       if (cmd === "audio_library_get") return library;
-      if (cmd === "audio_preview_devices" || cmd === "audio_voice_devices") return [];
       if (cmd === "audio_hotkeys_get" || cmd === "audio_hotkeys_status") return [];
       if (cmd === "audio_voice_instances") return [];
       if (cmd === "audio_preview_status" || cmd === "audio_voice_status") return { state: "idle", name: "", played_frames: 0, length_frames: 0, sample_rate: 0 };

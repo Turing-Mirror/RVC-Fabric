@@ -50,13 +50,18 @@ type AudioVolumeStatus = { volume: number; muted: boolean };
 
 const EMPTY: Library = { revision: 0, sources: [], assets: [], entries: [] };
 
-export function AudioPage() {
+type Props = {
+  /** 「语音输出设备」旁的「更改」：去设置页的设备分页改输出设备。 */
+  onOpenDeviceSettings?: () => void;
+};
+
+export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
   const { t } = useI18n();
   const [library, setLibrary] = useState<Library>(EMPTY);
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState("");
-  const [voiceDevices, setVoiceDevices] = useState<Device[]>([]);
-  const [voiceDeviceId, setVoiceDeviceId] = useState("");
+  // 插播和变声从同一个设备出去：设置页的「输出设备」。这里只显示，不另外选。
+  const [outputName, setOutputName] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -100,16 +105,13 @@ export function AudioPage() {
     void invoke<Device[]>("audio_preview_devices")
       .then((value) => { if (alive) setDevices(value); })
       .catch(() => { if (alive) setDevices([]); });
-    void invoke<Device[]>("audio_voice_devices")
-      .then((value) => { if (alive) setVoiceDevices(value); })
-      .catch(() => { if (alive) setVoiceDevices([]); });
     void invoke<Record<string, unknown>>("config_get")
       .then((cfg) => {
         if (alive && typeof cfg.audio_preview_device_id === "string") {
           setDeviceId(cfg.audio_preview_device_id);
         }
-        if (alive && typeof cfg.audio_voice_device_id === "string") {
-          setVoiceDeviceId(cfg.audio_voice_device_id);
+        if (alive && typeof cfg.sg_output_device === "string") {
+          setOutputName(cfg.sg_output_device);
         }
         if (alive) setMonitor(cfg.audio_music_monitor !== false);
       })
@@ -270,6 +272,7 @@ export function AudioPage() {
         : code.includes("audio_preview_device_is_") ? t("audio.previewDeviceInvalid")
         : code.includes("audio_voice_engine_active") ? t("audio.voiceEngineActive")
         : code.includes("audio_voice_device_is_preview") ? t("audio.voiceDeviceInvalid")
+        : code.includes("audio_voice_device_missing") ? t("audio.chooseVoiceDevice")
         : code.includes("audio_voice_device_locked") ? t("audio.voiceDeviceLocked")
         : code.includes("audio_voice_output_failed") ? t("audio.microphoneBridgeFailed")
         : code.includes("audio_music_capacity_reached") ? t("audio.playbackCapacity")
@@ -421,16 +424,14 @@ export function AudioPage() {
   };
 
   const startVoice = (mode: "replace" | "overlay") => {
-    if (!selected || !voiceDeviceId) {
+    if (!selected || !outputName) {
       setError(t("audio.chooseVoiceDevice"));
       return;
     }
     setVoicePreparing(true);
     void run(async () => {
-      await invoke("config_set", { patch: { audio_voice_device_id: voiceDeviceId } });
       setVoice(await invoke<VoicePlaybackStatus>("audio_voice_start", {
         entryId: selected.id,
-        deviceId: voiceDeviceId,
         mode,
       }));
     }).finally(() => setVoicePreparing(false));
@@ -446,10 +447,10 @@ export function AudioPage() {
   // 双击条目：直接替换播放到语音，与常见音效板的用法一致
   const playNow = (entry: Entry) => {
     chooseEntry(entry);
-    if (!voiceDeviceId || unplayable(assetById.get(entry.asset_id))) return;
+    if (!outputName || unplayable(assetById.get(entry.asset_id))) return;
     setVoicePreparing(true);
     void run(async () => {
-      setVoice(await invoke<VoicePlaybackStatus>("audio_voice_start", { entryId: entry.id, deviceId: voiceDeviceId, mode: "replace" }));
+      setVoice(await invoke<VoicePlaybackStatus>("audio_voice_start", { entryId: entry.id, mode: "replace" }));
     }).finally(() => setVoicePreparing(false));
   };
 
@@ -470,14 +471,13 @@ export function AudioPage() {
         <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
       </div> : null}
 
-      {/* 浏览区（三栏）+ 底栏固定分走页头以下的全部可用高度：
-          底栏恒占内容区的 --audio-bar-share（26%，对 0/1/N 个实例一视同仁），
-          三栏占余下的 74%；内容更多只在栏内滚动，不再改两区的高度。 */}
+      {/* 浏览区（三栏）占页头以下的剩余高度；语音输出栏贴在底部，紧挨着 Dock。
+          正在播放的段多了只在栏内滚动，栏高有上限。 */}
       <div className="mt-4 flex-1 min-h-0 flex flex-col"
         style={{ "--audio-source-w": "clamp(140px, 16cqw, 184px)" } as CSSProperties}>
       {/* 三栏常驻：任何窗口宽都保留来源栏。来源栏宽吃 --audio-source-w 这一个基准，
           随页宽收缩、不瓜分富余宽度；各栏在自己内部滚动 */}
-      <div className="flex-none h-[calc(74%_-_8px)] min-h-0 grid gap-6 max-[1020px]:gap-4 items-stretch grid-rows-[minmax(0,1fr)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(260px,380px)]">
+      <div className="flex-1 min-h-0 grid gap-6 max-[1020px]:gap-4 items-stretch grid-rows-[minmax(0,1fr)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(260px,380px)]">
         <aside aria-label={t("audio.sources")} className="min-h-0 overflow-y-auto overscroll-contain">
           <div className="text-[12px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
           <div className="flex flex-col gap-0.5">
@@ -539,8 +539,8 @@ export function AudioPage() {
                   <Btn disabled={busy} onClick={() => relink("file", "asset", selectedAsset.id)}>{t("audio.relinkFile")}</Btn> : null}
               </div> : null}
               <div className="flex flex-wrap gap-2">
-                <Btn primary disabled={busy || !voiceDeviceId || unplayable(selectedAsset)} onClick={() => startVoice("replace")}>{t("audio.playToVoice")}</Btn>
-                <Btn disabled={busy || !voiceDeviceId || unplayable(selectedAsset)} onClick={() => startVoice("overlay")}>{t("audio.overlayToVoice")}</Btn>
+                <Btn primary disabled={busy || !outputName || unplayable(selectedAsset)} onClick={() => startVoice("replace")}>{t("audio.playToVoice")}</Btn>
+                <Btn disabled={busy || !outputName || unplayable(selectedAsset)} onClick={() => startVoice("overlay")}>{t("audio.overlayToVoice")}</Btn>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3 items-end">
                 <label className="text-[12px] text-[var(--meta)] min-w-0">{t("audio.entryName")}
@@ -614,11 +614,10 @@ export function AudioPage() {
         </aside>
       </div>
 
-      {/* 底部固定区：语音输出设备、总音量，以及正在输出到语音的每一段，每段一行。
-          恒占内容区的 26%（0 个实例与 9 个实例同高）；实例列表弹性伸缩、内部滚动，
-          控件行钉在区底，超出部分不外溢。 */}
-      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none h-[calc(26%_-_8px)] flex flex-col overflow-y-auto overscroll-contain px-2 py-2.5 shadow-[0_-1px_0_var(--line)]">
-        {voiceInstances.length > 0 ? <div className="flex-1 min-h-[36px] mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
+      {/* 底部的语音输出栏：输出设备、总音量，以及正在输出到语音的每一段，每段一行。
+          贴着 Dock 放，像是 Dock 往上多出的一层；只在这一页有。 */}
+      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none flex flex-col px-2 pt-2.5 pb-3 shadow-[0_-1px_0_var(--line)]">
+        {voiceInstances.length > 0 ? <div className="max-h-[112px] mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}
             className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">
             <span aria-hidden className="flex-none flex items-end gap-[2px] h-3 w-3">{[0, 1, 2].map((i) => <span key={i} className={`${instance.state === "paused" ? "" : "eq-bar"} w-[2px] h-[3px] rounded-full bg-[var(--accent)]`} style={{ animationDelay: `${i * 0.18}s` }} />)}</span>
@@ -649,11 +648,11 @@ export function AudioPage() {
           </div>)}
         </div> : null}
         <div className="flex-none flex items-center gap-x-4 gap-y-2 flex-wrap">
-          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
-            <span className="inline-flex items-center gap-1">{t("audio.voiceDevice")}<HelpMark title={t("audio.voiceOutputNote")} /></span>
-            <Select value={voiceDeviceId} options={[{ id: "", label: t("audio.chooseVoiceDevice") }, ...voiceDevices.map((device) => ({ id: device.id, label: device.name }))]}
-              onChange={(id) => { setVoiceDeviceId(id); void invoke("config_set", { patch: { audio_voice_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={220} />
-          </label>
+          <div className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] min-w-0">
+            <span className="flex-none inline-flex items-center gap-1">{t("audio.voiceDevice")}<HelpMark title={t("audio.voiceOutputNote")} /></span>
+            <span className="min-w-0 max-w-[240px] truncate text-[12.5px] text-[var(--ink)]" title={outputName || undefined}>{outputName || t("audio.noVoiceDevice")}</span>
+            {onOpenDeviceSettings ? <Btn onClick={onOpenDeviceSettings}>{t("audio.changeVoiceDevice")}</Btn> : null}
+          </div>
           <div className="flex items-center gap-2 text-[12px] text-[var(--meta)] min-w-[240px] flex-1 max-w-[360px]">
             <span className="flex-none whitespace-nowrap">{t("audio.masterVolume")}</span>
             <div className="flex-1">

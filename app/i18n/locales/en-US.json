@@ -123,9 +123,9 @@
     "removeConfirm": "This removes the source from the library without deleting original files. Entries, clips, and numbers unique to this source will also be removed. Continue?",
     "previewDeviceInvalid": "This device may be used for voice output and cannot be used for local preview. Select headphones or speakers.",
     "voiceOutput": "Voice output",
-    "voiceOutputNote": "Select the input side of your virtual audio cable. On Windows, audio playback and voice conversion share this device.",
+    "voiceOutputNote": "Your converted voice and the audio you play are mixed and sent to this device. It is the output device in Device & Audio, usually the CABLE Input of your virtual audio cable.",
     "voiceDevice": "Voice output device",
-    "chooseVoiceDevice": "Select a voice output device.",
+    "chooseVoiceDevice": "Choose an output device in Device & Audio first.",
     "playToVoice": "Play to voice",
     "overlayToVoice": "Overlay in voice output",
     "activePlayback": "Active voice-output audio",
@@ -138,7 +138,7 @@
     "unmute": "Unmute audio",
     "playbackCapacity": "The concurrent playback limit has been reached. Stop one audio track first.",
     "voiceEngineActive": "Voice conversion is running. Stop it before playing audio.",
-    "voiceDeviceInvalid": "The voice output device matches the local monitoring device. Select the input side of a virtual audio cable.",
+    "voiceDeviceInvalid": "The local monitoring device is the same as the output device. Switch local monitoring to your headphones or speakers.",
     "voiceDeviceLocked": "The voice output device is in use. Stop audio playback or voice conversion before changing devices.",
     "voiceStopBeforeEngine": "Audio is playing to voice output. Stop it before starting voice conversion.",
     "voicePlaybackFailed": "Voice output was interrupted. Check the device and try again.",
@@ -181,7 +181,9 @@
     "hotkeyConflictStatus": "Conflict",
     "dblHint": "Double-click to play to voice",
     "editEmpty": "Select an item in the list to adjust its name, trim the waveform and set shortcuts here.",
-    "sourceMenu": "Source actions"
+    "sourceMenu": "Source actions",
+    "noVoiceDevice": "Not selected",
+    "changeVoiceDevice": "Change"
   },
   "window": {
     "minimize": "Minimize",

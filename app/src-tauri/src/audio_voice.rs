@@ -1,6 +1,9 @@
 //! Native voice-output service. Music changes mixer slots without reopening
-//! the selected endpoint. Legacy RVC/DSP output remains mutually exclusive
-//! until their microphone producers are connected to the native bus.
+//! the endpoint. The endpoint is the settings page's output device: RVC/DSP
+//! publish their processed microphone over the PCM bridge and it is mixed
+//! with music here, so there is one output owner and one device setting.
+//! If that device cannot be matched on the system list, the engine falls back
+//! to its own output and music waits until the voice changer stops.
 use crate::{
     audio_bus::{BridgeDescriptor, MusicPlacement, NewMusic, VoiceBus},
     audio_session::{self, PlaybackStatus},
@@ -224,25 +227,56 @@ fn local_output(root: &Path, voice_device: &str) -> Option<String> {
     )
 }
 
-/// PortAudio's MME names are cut at 31 characters, so a long enough prefix counts.
+/// A settings-page device name (PortAudio's naming) on the system list: the
+/// same name, else a long enough prefix, since MME cuts names at 31 characters.
+fn find_output_by_name<'a>(
+    name: &str,
+    devices: impl Iterator<Item = (&'a str, &'a str)>,
+    skip: &str,
+) -> Option<String> {
+    let wanted = name.trim().to_lowercase();
+    if wanted.is_empty() {
+        return None;
+    }
+    let candidates: Vec<(&str, String)> = devices
+        .filter(|(id, _)| *id != skip)
+        .map(|(id, candidate)| (id, candidate.trim().to_lowercase()))
+        .collect();
+    candidates
+        .iter()
+        .find(|(_, candidate)| *candidate == wanted)
+        .or_else(|| {
+            candidates.iter().find(|(_, candidate)| {
+                wanted.chars().count() >= 20
+                    && (candidate.starts_with(&wanted) || wanted.starts_with(candidate.as_str()))
+            })
+        })
+        .map(|(id, _)| id.to_string())
+}
+
+/// The local monitor never resolves to a virtual cable.
 fn match_output_name<'a>(
     name: &str,
     devices: impl Iterator<Item = (&'a str, &'a str)>,
     voice_device: &str,
 ) -> Option<String> {
-    let wanted = name.trim().to_lowercase();
-    if wanted.is_empty() || wanted.contains("cable") {
+    if name.to_lowercase().contains("cable") {
         return None;
     }
-    devices
-        .filter(|(id, _)| *id != voice_device)
-        .find(|(_, candidate)| {
-            let candidate = candidate.trim().to_lowercase();
-            candidate == wanted
-                || (wanted.chars().count() >= 20
-                    && (candidate.starts_with(&wanted) || wanted.starts_with(&candidate)))
-        })
-        .map(|(id, _)| id.to_string())
+    find_output_by_name(name, devices, voice_device)
+}
+
+/// 变声和插播共用的输出：设置页「输出设备」在系统列表里的那一台。
+/// 变声后的声音和插播的音频在这里混在一起，从这一台出去。没选或对不上时为 None。
+pub fn voice_device(root: &Path) -> Option<String> {
+    let config = crate::config::read(root);
+    let name = config.get("sg_output_device").and_then(|value| value.as_str())?;
+    let devices = output::devices().ok()?;
+    find_output_by_name(
+        name,
+        devices.iter().map(|device| (device.id.as_str(), device.name.as_str())),
+        "",
+    )
 }
 
 /// Local output that mirrors voice playback, or `None` when music monitoring is off.
@@ -363,11 +397,7 @@ pub fn begin_engine_start(root: &Path) -> Result<EngineStartGuard, String> {
     if voice.pending != 0 {
         return Err("audio_voice_engine_active".into());
     }
-    let configured = crate::config::read(root)
-        .get("audio_voice_device_id")
-        .and_then(|value| value.as_str())
-        .unwrap_or("")
-        .to_string();
+    let configured = voice_device(root).unwrap_or_default();
     #[cfg(windows)]
     let descriptor = {
         if !configured.is_empty()
@@ -547,15 +577,9 @@ fn watch(id: u64) {
 }
 
 #[tauri::command]
-pub fn audio_voice_devices() -> Result<Vec<output::OutputDevice>, String> {
-    output::devices()
-}
-
-#[tauri::command]
 pub async fn audio_voice_start(
     state: State<'_, Mutex<crate::AppState>>,
     entry_id: String,
-    device_id: String,
     mode: Option<String>,
 ) -> Result<VoicePlaybackStatus, String> {
     let overlay = match mode.as_deref().unwrap_or("replace") {
@@ -564,18 +588,19 @@ pub async fn audio_voice_start(
         _ => return Err("audio_playback_mode_invalid".into()),
     };
     let root = crate::root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || start_entry(&root, entry_id, device_id, overlay))
+    tauri::async_runtime::spawn_blocking(move || start_entry(&root, entry_id, overlay))
         .await
         .map_err(|e| e.to_string())?
 }
 
 /// The same service entrypoint is used by UI commands and native global hotkeys.
+/// Music always goes to the voice changer's own output device.
 pub fn start_entry(
     root: &Path,
     entry_id: String,
-    device_id: String,
     overlay: bool,
 ) -> Result<VoicePlaybackStatus, String> {
+    let device_id = voice_device(root).ok_or("audio_voice_device_missing")?;
     start_entry_placed(root, entry_id, device_id, StartOptions::new(if overlay {
         MusicPlacement::Overlay
     } else {
@@ -1168,6 +1193,24 @@ mod tests {
         assert_eq!(find("CABLE Input (VB-Audio Virtual Cable)", "phones"), None);
         assert_eq!(find("Speakers", "speakers"), None);
         assert_eq!(find("", "cable"), None);
+    }
+
+    #[test]
+    fn voice_device_follows_the_settings_output_name() {
+        let devices = [
+            ("cable-a", "CABLE-A Input (VB-Audio Cable A)"),
+            ("cable", "CABLE Input (VB-Audio Virtual Cable)"),
+            ("speakers", "Speakers"),
+        ];
+        let find = |name: &str| find_output_by_name(name, devices.iter().copied(), "");
+        // 变声的输出就是虚拟声卡，不能像本地监听那样把 cable 排除掉。
+        assert_eq!(find("CABLE Input (VB-Audio Virtual Cable)").as_deref(), Some("cable"));
+        // MME 截到 31 个字符。
+        assert_eq!(find("CABLE Input (VB-Audio Virtual C").as_deref(), Some("cable"));
+        // 名字完全相同的优先于前缀相同的。
+        assert_eq!(find("speakers").as_deref(), Some("speakers"));
+        assert_eq!(find("Unknown device name here"), None);
+        assert_eq!(find(""), None);
     }
 
     #[test]

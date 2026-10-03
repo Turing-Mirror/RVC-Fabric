@@ -663,6 +663,11 @@ export default function App() {
     setModelsKindNonce((n) => n + 1);
     setPage("models");
   }, []);
+  // 音频页的输出设备跟随设置页，「更改」直接打开设备分页。
+  const openDeviceSettings = useCallback(() => {
+    setSettingsTab("device");
+    setPage("settings");
+  }, []);
   // 「用不了？联系社区」的落点。仓库与社媒那张表只在「其他」页有一份，
   // 不在设置页和说明页各抄一遍 —— 抄了就得改三处，迟早对不上。
   // 加一 = 「再滚一次」：同一页反复点也要每次都滚过去。
@@ -1272,7 +1277,7 @@ export default function App() {
                 />
               );
             case "audio":
-              return <AudioPage />;
+              return <AudioPage onOpenDeviceSettings={openDeviceSettings} />;
             case "models":
               return (
                 <ModelsPage

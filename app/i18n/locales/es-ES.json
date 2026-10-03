@@ -2192,6 +2192,14 @@
         "gameName": "Juegos",
         "game": "La sección Audio o Voz de los ajustes",
         "check": "Después, usa la prueba de micrófono de esa aplicación; si oyes la voz convertida, todo está conectado."
+      },
+      "notice": {
+        "title": "Dónde informar de problemas",
+        "where": "Si algo falla, infórmalo en el grupo de QQ o en GitHub Issues. Los comentarios de vídeos y publicaciones no se usan para soporte.",
+        "diag": "Antes de informar, genera un paquete de diagnóstico (Más → Mantenimiento → Generar paquete de diagnóstico) y envíalo con tu informe.",
+        "detail": "Explica qué hiciste, qué viste y en qué paso falló. Las capturas de pantalla ayudan.",
+        "wait": "Entendido ({v0})",
+        "ok": "Entendido"
       }
     },
     "guideStart": "Iniciar la guía",
@@ -2256,7 +2264,9 @@
     "restartLater": "Más tarde",
     "stsFilterNoHit": "Ningún audio coincide.",
     "stsSourcesNoAudio": "No se encontró audio en las fuentes.",
-    "stsOutDefault": "Sin seleccionar, se guarda en {v0}"
+    "stsOutDefault": "Sin seleccionar, se guarda en {v0}",
+    "feedbackDiagTitle": "Antes de enviar comentarios, prueba a generar un paquete de diagnóstico",
+    "feedbackDiagGo": "Ir"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

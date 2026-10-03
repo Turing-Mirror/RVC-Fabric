@@ -2192,6 +2192,14 @@
         "gameName": "遊戲",
         "game": "設定中的「音訊」或「語音」一欄",
         "check": "修改後使用該軟體內建的麥克風測試確認，能聽到變聲即表示已接通。"
+      },
+      "notice": {
+        "title": "遇到問題去哪回饋",
+        "where": "軟體出了問題，請到 QQ 群或 GitHub Issue 回饋。影片和動態下面的留言區不處理求助。",
+        "diag": "回饋前先生成診斷包：其他 → 維護 → 生成診斷包，和問題一起發出來。",
+        "detail": "寫清楚做了什麼、看到了什麼、哪一步不對，有截圖更好。",
+        "wait": "我知道了（{v0}）",
+        "ok": "我知道了"
       }
     },
     "guideStart": "開始新手引導",
@@ -2256,7 +2264,9 @@
     "restartLater": "稍後",
     "stsFilterNoHit": "沒有符合條件的音訊。",
     "stsSourcesNoAudio": "來源裡沒有找到音訊。",
-    "stsOutDefault": "未選擇，存到 {v0}"
+    "stsOutDefault": "未選擇，存到 {v0}",
+    "feedbackDiagTitle": "提交回饋前，可嘗試生成診斷包",
+    "feedbackDiagGo": "前往"
   },
   "extras": {
     "engineTitle": "引擎資源",

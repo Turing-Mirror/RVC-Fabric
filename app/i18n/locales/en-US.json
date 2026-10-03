@@ -2192,6 +2192,14 @@
         "gameName": "Games",
         "game": "The Audio or Voice section of the settings",
         "check": "Afterwards, use that app’s microphone test; if you hear the converted voice, everything is connected."
+      },
+      "notice": {
+        "title": "Where to report problems",
+        "where": "If something goes wrong, report it in the QQ group or on GitHub Issues. Comments under videos and posts are not used for support.",
+        "diag": "Before reporting, generate a diagnostic pack (More → Maintenance → Generate diagnostic pack) and send it with your report.",
+        "detail": "Say what you did, what you saw, and which step went wrong. Screenshots help.",
+        "wait": "Got it ({v0})",
+        "ok": "Got it"
       }
     },
     "guideStart": "Start the setup guide",
@@ -2256,7 +2264,9 @@
     "restartLater": "Later",
     "stsFilterNoHit": "No audio matches.",
     "stsSourcesNoAudio": "No audio found in the sources.",
-    "stsOutDefault": "Not selected, saving to {v0}"
+    "stsOutDefault": "Not selected, saving to {v0}",
+    "feedbackDiagTitle": "Before sending feedback, try generating a diagnostic pack",
+    "feedbackDiagGo": "Go"
   },
   "extras": {
     "engineTitle": "Engine resources",

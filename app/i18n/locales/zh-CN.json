@@ -2192,6 +2192,14 @@
         "gameName": "游戏",
         "game": "设置中的「音频」或「语音」一栏",
         "check": "修改后使用该软件自带的麦克风测试确认，能听到变声即表示已接通。"
+      },
+      "notice": {
+        "title": "遇到问题去哪反馈",
+        "where": "软件出了问题，请到 QQ 群或 GitHub Issue 反馈。视频和动态下面的评论区不处理求助。",
+        "diag": "反馈前先生成诊断包：其他 → 维护 → 生成诊断包，和问题一起发出来。",
+        "detail": "写清楚做了什么、看到了什么、哪一步不对，有截图更好。",
+        "wait": "我知道了（{v0}）",
+        "ok": "我知道了"
       }
     },
     "guideStart": "开始新手引导",
@@ -2256,7 +2264,9 @@
     "restartLater": "稍后",
     "stsFilterNoHit": "没有符合条件的音频。",
     "stsSourcesNoAudio": "来源里没有找到音频。",
-    "stsOutDefault": "未选择，存到 {v0}"
+    "stsOutDefault": "未选择，存到 {v0}",
+    "feedbackDiagTitle": "提交反馈前，可尝试生成诊断包",
+    "feedbackDiagGo": "前往"
   },
   "extras": {
     "engineTitle": "引擎资源",

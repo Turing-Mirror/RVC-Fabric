@@ -12,6 +12,8 @@ import { setConfig } from "../lib/config";
 import { assessDevices } from "../lib/deviceSetup";
 import { buildRoutes, detectRoutes, deviceNames, useVbCable } from "../lib/routes";
 import { formatLocalizedList } from "../lib/voiceDisplay";
+import { issueLink, qqGroupLink } from "../lib/links";
+import { openExternal } from "../lib/plaza";
 import type { PageId } from "../lib/nav";
 
 /**
@@ -24,6 +26,8 @@ import type { PageId } from "../lib/nav";
  */
 
 export type GuideStep = "cable" | "voice" | "devices" | "try" | "share";
+/** 引导开头的反馈须知至少停留几秒，读完才能继续。 */
+const NOTICE_SECONDS = 5;
 export const GUIDE_STEPS: GuideStep[] = ["cable", "voice", "devices", "try", "share"];
 
 /** 各步是否已完成。取自 onboarding_status 与引擎状态。 */
@@ -56,6 +60,18 @@ export function SetupGuide(props: Props) {
   // 换步的方向：往后翻从右边进，往前翻从左边进
   const [dir, setDir] = useState<1 | -1>(1);
   const index = GUIDE_STEPS.indexOf(step);
+  // 反馈须知：true = 还没看过，先看它；null = 还没读到配置，先不画，免得步骤闪一下再换成须知
+  const [notice, setNotice] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!open || notice !== null) return;
+    void invoke<Record<string, unknown>>("config_get")
+      .then((cfg) => setNotice(cfg.feedback_notice_done !== true))
+      .catch(() => setNotice(false));
+  }, [open, notice]);
+  const ackNotice = () => {
+    setNotice(false);
+    void setConfig({ feedback_notice_done: true }).catch(() => {});
+  };
 
   // 状态每两秒读一次：装声卡、下音色都是在别处完成的，回来时这里要已经知道
   useEffect(() => {
@@ -86,8 +102,9 @@ export function SetupGuide(props: Props) {
   );
 
   return (
-    <Modal open={open} z={60}>
+    <Modal open={open && notice !== null} z={60}>
       <div className="guide-panel w-full max-w-[600px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
+        {notice ? <FeedbackNotice onDone={ackNotice} /> : <>
         <div className="flex items-baseline gap-3">
           <h2 className="text-[22px] font-semibold m-0">{t("s.guide.title")}</h2>
           <span className="text-[12.5px] text-[var(--meta)]">{t("s.guide.count", { v0: index + 1, v1: GUIDE_STEPS.length })}</span>
@@ -144,8 +161,48 @@ export function SetupGuide(props: Props) {
             <Btn primary={Boolean(done[step]) || step === "devices"} onClick={() => go(index + 1)}>{t("s.guide.next")}</Btn>
           )}
         </div>
+        </>}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * 引导最前面的反馈须知：出了问题去哪说、说之前准备什么。
+ *
+ * 引导的几步管不到用户遇到的各种问题，评论区也不是客服。所以第一次打开引导时先把
+ * 反馈的去处和要点摆出来，停够几秒才能点「我知道了」，之后不再出现。
+ */
+function FeedbackNotice({ onDone }: { onDone: () => void }) {
+  const [left, setLeft] = useState(NOTICE_SECONDS);
+  useEffect(() => {
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [left]);
+  const qq = qqGroupLink();
+  const issues = issueLink();
+  return (
+    <div>
+      <h2 className="text-[22px] font-semibold m-0">{t("s.guide.notice.title")}</h2>
+      <div className="mt-5 flex gap-6 items-start max-[560px]:flex-col">
+        <ol className="m-0 pl-5 flex-1 min-w-0 flex flex-col gap-3 text-[13.5px] text-[var(--ink)] leading-relaxed">
+          <li>{t("s.guide.notice.where")}</li>
+          <li>{t("s.guide.notice.diag")}</li>
+          <li>{t("s.guide.notice.detail")}</li>
+        </ol>
+        {qq?.qr ? (
+          <img src={qq.qr} alt={qq.title} draggable={false} className="flex-none w-[128px] h-auto rounded-[var(--rs)] select-none" />
+        ) : null}
+      </div>
+      <div className="mt-7 flex items-center gap-2">
+        <Btn onClick={() => void openExternal(issues.url)}>{issues.short}</Btn>
+        <span className="flex-1" />
+        <Btn primary disabled={left > 0} onClick={onDone}>
+          {left > 0 ? t("s.guide.notice.wait", { v0: left }) : t("s.guide.notice.ok")}
+        </Btn>
+      </div>
+    </div>
   );
 }
 

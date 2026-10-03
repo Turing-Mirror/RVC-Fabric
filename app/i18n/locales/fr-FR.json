@@ -2192,6 +2192,14 @@
         "gameName": "Jeux",
         "game": "La section Audio ou Voix des paramètres",
         "check": "Ensuite, utilisez le test de microphone de l’application ; si vous entendez la voix transformée, tout est branché."
+      },
+      "notice": {
+        "title": "Où signaler un problème",
+        "where": "En cas de problème, signalez-le dans le groupe QQ ou sur GitHub Issues. Les commentaires sous les vidéos et publications ne servent pas au support.",
+        "diag": "Avant de signaler, générez un pack de diagnostic (Plus → Maintenance → Générer un pack de diagnostic) et joignez-le à votre message.",
+        "detail": "Indiquez ce que vous avez fait, ce que vous avez vu et quelle étape a échoué. Les captures d’écran aident.",
+        "wait": "Compris ({v0})",
+        "ok": "Compris"
       }
     },
     "guideStart": "Lancer le guide",
@@ -2256,7 +2264,9 @@
     "restartLater": "Plus tard",
     "stsFilterNoHit": "Aucun audio ne correspond.",
     "stsSourcesNoAudio": "Aucun audio trouvé dans les sources.",
-    "stsOutDefault": "Non sélectionné, enregistrement dans {v0}"
+    "stsOutDefault": "Non sélectionné, enregistrement dans {v0}",
+    "feedbackDiagTitle": "Avant d’envoyer un retour, essayez de générer un pack de diagnostic",
+    "feedbackDiagGo": "Y aller"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

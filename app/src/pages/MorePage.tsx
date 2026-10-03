@@ -20,7 +20,7 @@ import { DiagnosticsDialog, type DiagReport } from "../components/DiagnosticsDia
 import { FindingList, type Finding } from "../components/FindingList";
 import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
-import { scheduleScrollToId } from "../lib/scrollPane";
+import { scheduleScrollToId, scrollPaneToId } from "../lib/scrollPane";
 import { Leave } from "../components/Presence";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
@@ -419,7 +419,7 @@ export function MorePage({
       </Block>
 
       <StorageSection />
-      <Block title={t("s.72527e2f0e")}>
+      <Block id="more-maint" title={t("s.72527e2f0e")}>
         <Group>
           <ListItem
             title={t("s.sumCopyTitle")}
@@ -515,6 +515,11 @@ export function MorePage({
       </Block>
       <Block id="more-community" title={t("s.2bd28fc9c2")}>
         <Group>
+          {/* 反馈之前先把诊断包备好：说清问题最省事的办法。 */}
+          <ListItem
+            title={t("s.feedbackDiagTitle")}
+            right={<Btn onClick={() => scrollPaneToId("more-maint")}>{t("s.feedbackDiagGo")}</Btn>}
+          />
           {allLinks().map((l) => (
             <ListItem
               key={l.url}

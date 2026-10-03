@@ -233,6 +233,8 @@ pub fn defaults() -> Map<String, Value> {
     m.insert("onboard_dismiss".into(), json!(false));
     // 新手引导走完或被用户关掉。之后不再主动打开，说明页里仍可再开。
     m.insert("setup_guide_done".into(), json!(false));
+    // 新手引导开头的反馈须知看过了。只出现一次。
+    m.insert("feedback_notice_done".into(), json!(false));
     m.insert("hotkeys_enabled".into(), json!(false));
     // Explicit local preview endpoint. Empty means no sound until the user selects one.
     m.insert("audio_preview_device_id".into(), json!(""));

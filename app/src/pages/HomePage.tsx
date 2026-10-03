@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { getConfig, onConfigPatch } from "../lib/config";
-import { invalidateVoicesCache, listVoices, modelKey, type VoiceModel } from "../lib/voices";
+import {
+  invalidateVoicesCache,
+  listVoices,
+  modelKey,
+  peekVoices,
+  type VoiceModel,
+  type VoicesCatalog,
+} from "../lib/voices";
 import { StarterVoices } from "../components/StarterVoices";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { resolveCover, useCoverCache } from "../lib/cover";
@@ -36,6 +43,12 @@ type Props = {
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
+
+/** 音色库里的「最近使用」顺序（app_config `recent_models`）。 */
+function recentKeysOf(cat: VoicesCatalog | null): string[] {
+  const rk = (cat as unknown as { recent_keys?: unknown } | null)?.recent_keys;
+  return Array.isArray(rk) ? rk.map(String) : [];
+}
 
 /**
  * 最近使用三卡封面边长：随窗口宽自适应。
@@ -186,8 +199,12 @@ const STAGE_BG =
 
 function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenPlaza, onVoiceChange }: Props) {
   useI18n();
-  const [models, setModels] = useState<VoiceModel[]>([]);
-  const [recentKeys, setRecentKeys] = useState<string[]>([]);
+  // 每次回到首页页面都会重新挂载。先用上一次读到的音色库画出来，不能先按「没有音色」
+  // 画一帧：那一帧会闪出推荐音色的三张卡片。
+  const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
+  const [recentKeys, setRecentKeys] = useState<string[]>(() => recentKeysOf(peekVoices()));
+  /** 音色库读完过一次。没读完之前不知道有没有音色，两种样子都不画。 */
+  const [loaded, setLoaded] = useState(() => peekVoices() != null);
   // Distinguish "no voices installed" from "could not read the catalog" —
   // showing 「还没有本地音色」 after a failed call sends the user off to import
   // something they may already have.
@@ -204,12 +221,13 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
     try {
       const cat = await listVoices();
       setModels(cat.models || []);
-      const rk = (cat as unknown as { recent_keys?: unknown }).recent_keys;
-      setRecentKeys(Array.isArray(rk) ? rk.map(String) : []);
+      setRecentKeys(recentKeysOf(cat));
       setLoadError("");
     } catch (e) {
       setModels([]);
       setLoadError(String(e));
+    } finally {
+      setLoaded(true);
     }
   };
   useEffect(() => {
@@ -268,6 +286,21 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
       setMsg(t("home.switchFail", { error: out.error }));
     }
   };
+
+  if (!loaded) {
+    return (
+      <div>
+        <div
+          className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
+          style={{ background: STAGE_BG }}
+        >
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+          <p className="text-[19px] m-0">{" "}</p>
+          <HeroEmblem />
+        </div>
+      </div>
+    );
+  }
 
   if (!models.length) {
     return (

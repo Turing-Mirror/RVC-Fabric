@@ -52,6 +52,14 @@ describe("首页使用中徽标", () => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
+  // 必须排在最前：后面的用例会在 lib/voices 里留下读过的音色库。
+  it("音色库还没读完：不画「没有音色」的推荐区", () => {
+    tauri.invoke.mockImplementation(() => new Promise(() => {}));
+    const m = mount(<HomePage currentId="" />);
+    mounts.push(m);
+    expect(m.container.textContent).not.toContain(t("s.starterTitle"));
+  });
+
   it("currentId 为空：不贴任何卡的「使用中」，主角位显示占位文案", async () => {
     const badge = t("s.e6aa2cbd7b");
     const m = mount(<HomePage currentId="" />);
@@ -68,6 +76,20 @@ describe("首页使用中徽标", () => {
     expect(hero).not.toBeNull();
     expect(hero!.textContent).toBe(t("s.262d11e2d6"));
     expect(hero!.textContent).not.toContain("乙");
+  });
+
+  it("回到首页：第一帧就是上次读到的音色，不闪推荐区", async () => {
+    const first = mount(<HomePage currentId="" />);
+    await tick();
+    await tick();
+    first.unmount();
+    // 作废缓存后重新挂载：新的读取还在路上，第一帧用上一次的结果。
+    invalidateVoicesCache();
+    tauri.invoke.mockImplementation(() => new Promise(() => {}));
+    const m = mount(<HomePage currentId="" />);
+    mounts.push(m);
+    expect(m.container.textContent).toContain("甲");
+    expect(m.container.textContent).not.toContain(t("s.starterTitle"));
   });
 
   it("currentId 指向乙：只有乙贴徽标，主角位是它的名字", async () => {

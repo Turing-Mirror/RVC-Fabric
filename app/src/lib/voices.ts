@@ -134,6 +134,13 @@ const VOICE_CACHE_TTL_MS = 30_000;
 let voiceCache: { value: VoicesCatalog; expiresAt: number } | null = null;
 let voiceCacheEpoch = 0;
 let voiceRequest: { epoch: number; promise: Promise<VoicesCatalog> } | null = null;
+/** 最近一次读到的音色库。作废缓存不清它：页面重新挂载时先用它画出来，新结果到了再换。 */
+let lastCatalog: VoicesCatalog | null = null;
+
+/** 同步取最近一次读到的音色库；还没读过返回 null。 */
+export function peekVoices(): VoicesCatalog | null {
+  return lastCatalog;
+}
 
 /** 外部文件变化或音色写操作完成后，让下一次读取重新走后端。 */
 export function invalidateVoicesCache(): void {
@@ -160,6 +167,7 @@ export async function listVoices(options?: { fresh?: boolean }): Promise<VoicesC
     .then((value) => {
       if (epoch === voiceCacheEpoch) {
         voiceCache = { value, expiresAt: Date.now() + VOICE_CACHE_TTL_MS };
+        lastCatalog = value;
       }
       return value;
     })

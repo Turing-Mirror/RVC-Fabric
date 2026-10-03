@@ -504,18 +504,21 @@ function HelpPageImpl({
         id="help-faq"
         title={t("s.209d309d58")}
         note={faqNeedle ? `${faqShown.length} / ${faq.length}` : String(faq.length)}
+        extra={
+          <input
+            type="text"
+            value={faqFilter}
+            onChange={(e) => setFaqFilter(e.target.value)}
+            placeholder={t("s.helpFaqFilter")}
+            aria-label={t("s.helpFaqFilter")}
+            className={[
+              "flex-1 min-w-[200px] max-w-[380px] rounded-[var(--rs)] border px-3 py-1.5 text-[13px]",
+              "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
+              "focus:outline-none focus:border-[var(--accent)]",
+            ].join(" ")}
+          />
+        }
       >
-        <input
-          type="text"
-          value={faqFilter}
-          onChange={(e) => setFaqFilter(e.target.value)}
-          placeholder={t("s.helpFaqFilter")}
-          className={[
-            "w-full max-w-[380px] rounded-[var(--rs)] border px-3 py-2 text-[13px] mb-4",
-            "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-            "focus:outline-none focus:border-[var(--accent)]",
-          ].join(" ")}
-        />
         {faqShown.length === 0 ? (
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-4">
             {t("s.helpFaqNoHit")}

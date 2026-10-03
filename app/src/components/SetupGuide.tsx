@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { Field, Toggle } from "./controls";
@@ -347,6 +347,49 @@ function ShareStep() {
       </div>
       <p className="text-[12.5px] text-[var(--meta)] m-0 mt-5 leading-relaxed">{t("s.guide.share.check")}</p>
     </div>
+  );
+}
+
+/**
+ * 反馈须知的独立入口。
+ *
+ * 跳过运行时补全的人不进完整引导（五步大半做不了），但「出了问题去哪说」这
+ * 一页对谁都成立 —— 单独弹一次，照样停够几秒才能关。装完运行时走
+ * SetupGuide，那里面自带同一页，已看过的这里直接交还，不闪空弹窗。
+ */
+export function FeedbackNoticeGate({ open, onDone }: { open: boolean; onDone: () => void }) {
+  const [show, setShow] = useState(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  useEffect(() => {
+    if (!open) {
+      setShow(false);
+      return;
+    }
+    let alive = true;
+    void invoke<Record<string, unknown>>("config_get")
+      .then((cfg) => {
+        if (!alive) return;
+        if (cfg.feedback_notice_done === true) onDoneRef.current();
+        else setShow(true);
+      })
+      .catch(() => {
+        if (alive) onDoneRef.current();
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+  const ack = () => {
+    void setConfig({ feedback_notice_done: true }).catch(() => {});
+    onDone();
+  };
+  return (
+    <Modal open={open && show} z={60}>
+      <div className="guide-panel w-full max-w-[600px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
+        <FeedbackNotice onDone={ack} />
+      </div>
+    </Modal>
   );
 }
 

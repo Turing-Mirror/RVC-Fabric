@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
-import { GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
+import { FeedbackNoticeGate, GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
 import { classifyTrouble, type Trouble } from "./lib/trouble";
 
 /** 各类启动失败的说明与按钮文案。 */
@@ -246,6 +246,8 @@ export default function App() {
     };
   }, []);
   const [showProvision, setShowProvision] = useState(false);
+  // 跳过运行时补全的人不进完整引导，单独弹一次反馈须知（SetupGuide 里同一页）。
+  const [noticeGate, setNoticeGate] = useState(false);
   // 新装 ui_locale_picked===false 时先选语言，再走 Runtime 补全。
   const [showLangGate, setShowLangGate] = useState(false);
 
@@ -1211,8 +1213,10 @@ export default function App() {
         }}
         onDismiss={() => {
           setShowProvision(false);
+          setNoticeGate(true);
         }}
       />
+      <FeedbackNoticeGate open={noticeGate} onDone={() => setNoticeGate(false)} />
 
       <PageHost page={page}>
         {(id) => (

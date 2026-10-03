@@ -1853,7 +1853,7 @@
     "computeBackendIdle": "Engine not running",
     "computeBackendWarn": "The NVIDIA runtime is installed, but CUDA is not in use. Revert “Primary GPU” to “Automatic”, or update your NVIDIA driver and try again.",
     "firstRunTitle": "Install & connect",
-    "firstRunLead": "The virtual sound card and how everything connects. First time? Follow the step-by-step setup guide.",
+
     "firstRunQ6": "How do others hear my converted voice?",
     "firstRunH6": "Set the other app's microphone to CABLE Output",
     "firstRunA6": "In the game’s or voice app’s own settings, set the microphone (input device) to CABLE Output. This cannot be changed inside this app; it must be done in the other software.\nQQ / WeChat: Settings → Audio & Video Calls → Microphone.\nDiscord: Settings → Voice & Video → Input device.\nOBS: “Audio Input Capture” under Sources → Device.\nGames usually place it under an “Audio” or “Voice” section of their settings.\nAfter changing it, use that software’s own microphone test — hearing the converted voice means the chain is connected.",

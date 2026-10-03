@@ -1853,7 +1853,7 @@
     "computeBackendIdle": "Moteur à l’arrêt",
     "computeBackendWarn": "Le runtime NVIDIA est installé, mais CUDA n’est pas utilisé. Rétablissez « GPU principal » sur « Automatique », ou mettez à jour le pilote NVIDIA puis réessayez.",
     "firstRunTitle": "Installation et connexion",
-    "firstRunLead": "La carte son virtuelle et le câblage de l'audio. Première utilisation ? Suivez le guide pas à pas.",
+
     "firstRunQ6": "Comment faire entendre ma voix transformée aux autres ?",
     "firstRunH6": "Réglez le micro de l'autre logiciel sur CABLE Output",
     "firstRunA6": "Dans les réglages du jeu ou de l'application vocale elle-même, réglez le micro (périphérique d'entrée) sur CABLE Output. Cela ne peut pas se faire dans cette application ; il faut le faire dans l'autre logiciel.\nQQ / WeChat : Réglages → Appels audio et vidéo → Micro.\nDiscord : Réglages → Voix et vidéo → Périphérique d'entrée.\nOBS : « Capture d’entrée audio » dans Sources → Périphérique.\nLes jeux placent généralement ce réglage dans une section « Audio » ou « Voix ».\nAprès modification, utilisez le test micro du logiciel : si vous entendez la voix convertie, la chaîne est reliée.",

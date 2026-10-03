@@ -1853,7 +1853,7 @@
     "computeBackendIdle": "Motor detenido",
     "computeBackendWarn": "El runtime de NVIDIA está instalado, pero no se está usando CUDA. Vuelva a poner «GPU principal» en «Automático» o actualice el controlador NVIDIA e inténtelo de nuevo.",
     "firstRunTitle": "Instalación y conexión",
-    "firstRunLead": "La tarjeta de sonido virtual y la forma de conectar todo. Si es la primera vez, sigue la guía para principiantes paso a paso.",
+
     "firstRunQ6": "¿Cómo hago para que los demás oigan mi voz cambiada?",
     "firstRunH6": "Pon el micrófono de la otra aplicación en CABLE Output",
     "firstRunA6": "En los ajustes del propio juego o aplicación de voz, ponga el micrófono (dispositivo de entrada) en CABLE Output. Esto no puede cambiarse dentro de esta aplicación; debe hacerse en el otro software.\nQQ / WeChat: Ajustes → Llamadas de audio y vídeo → Micrófono.\nDiscord: Ajustes → Voz y vídeo → Dispositivo de entrada.\nOBS: «Captura de audio de entrada» en Fuentes → Dispositivo.\nLos juegos suelen situarlo en la sección «Audio» o «Voz» de sus ajustes.\nTras cambiarlo, use la prueba de micrófono de ese software: si escucha la voz convertida, la cadena está conectada.",

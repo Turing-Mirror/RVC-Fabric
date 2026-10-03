@@ -396,9 +396,6 @@ function HelpPageImpl({
         title={t("s.firstRunTitle")}
         action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
       >
-        <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
-          {t("s.firstRunLead")}
-        </p>
         <div id="help-vbcable" className="scroll-mt-4">
           <div className="text-[13.5px] font-medium mb-2">{t("s.b386a7fb53")}</div>
 

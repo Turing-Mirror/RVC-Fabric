@@ -52,10 +52,7 @@ export function AudioRecoverySettings({ config }: { config: Config }) {
     finally { setBusy(false); }
   };
   return <div className="my-4 rounded-[var(--r)] bg-[var(--group)] px-5 py-4 flex flex-col gap-3">
-    <div className="flex items-center justify-between gap-3">
-      <Toggle label={t("neptune.deviceCompatibility")} checked={config.audio_compatibility === true} disabled={busy} onChange={(v) => void run("compatibility", v)} />
-    </div>
-    <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.compatibilityHint")}</p>
+    <Toggle label={t("neptune.deviceCompatibility")} tip={t("neptune.compatibilityHint")} checked={config.audio_compatibility === true} disabled={busy} onChange={(v) => void run("compatibility", v)} />
     {ignored.length > 0 && <>
       <span>{t("neptune.ignoredDevices")}</span>
       <Toggle label={t("neptune.ignoreEnabled")} checked={config.audio_ignore_enabled === true} disabled={busy} onChange={(v) => void run("ignore", v)} />

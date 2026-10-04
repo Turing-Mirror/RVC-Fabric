@@ -616,7 +616,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
       {/* 底部的语音输出栏：输出设备、总音量，以及正在输出到语音的每一段，每段一行。
           贴着 Dock 放，像是 Dock 往上多出的一层；只在这一页有。 */}
-      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none flex flex-col px-2 pt-2.5 pb-3 shadow-[0_-1px_0_var(--line)]">
+      <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none flex flex-col px-2 pt-2.5 pb-3">
         {voiceInstances.length > 0 ? <div className="max-h-[112px] mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}
             className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">

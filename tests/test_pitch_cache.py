@@ -76,7 +76,8 @@ class WiringTests(unittest.TestCase):
     """算术对了但没人调，等于没修。"""
 
     def test_the_silent_branch_advances_the_pitch_cache(self):
-        with open(os.path.join(ROOT, "gui_v1.py"), encoding="utf-8") as fh:
+        # 一块声音的处理在 tools/realtime_block.py，实时链路和离线渲染共用。
+        with open(os.path.join(ROOT, "tools", "realtime_block.py"), encoding="utf-8") as fh:
             src = fh.read()
         # 跳过分支的标志是那句 peak 判据；skip_block 必须紧跟在它后面出现。
         i = src.find("if peak < 2e-5:")

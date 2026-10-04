@@ -113,7 +113,10 @@ class ShapeTests(unittest.TestCase):
         gui = self._read("gui_v1.py")
         code = "\n".join(l for l in gui.splitlines() if not l.lstrip().startswith("#"))
         self.assertNotIn("min(self.crossfade_frame, 4 * self.zc)", code)
-        self.assertEqual(code.count("from tools.block_geometry import geometry"), 2)
+        # 无模型 DSP 开流在 gui_v1 里取；RVC 开流在 tools/realtime_block.py 里取。
+        self.assertEqual(code.count("from tools.block_geometry import geometry"), 1)
+        rb = self._read(os.path.join("tools", "realtime_block.py"))
+        self.assertEqual(rb.count("from tools.block_geometry import geometry"), 1)
 
     def test_the_repair_hook_defaults_to_off_in_the_engine(self):
         """壳里默认关还不够 —— 引擎侧自己也要默认关。

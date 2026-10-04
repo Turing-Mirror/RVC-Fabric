@@ -131,60 +131,14 @@ def _msg(code: str, **params):
         return out
 
 
-def soft_clip_np(data: "np.ndarray", ceiling: float = 0.97) -> "np.ndarray":
-    """Gentle peak soft-clip (cubic) then hard limit — less DAC harshness than bare clip."""
-    import numpy as np
-
-    x = np.asarray(data, dtype=np.float32)
-    # slightly stronger soft knee than 0.12 — peaks a bit less brittle
-    y = x - (x * x * x) * 0.15
-    np.clip(y, -ceiling, ceiling, out=y)
-    return y
-
-
-def _rms_db_frames(y, frame_length, hop_length):
-    """librosa.feature.rms(center=True) + amplitude_to_db 的直接等价实现。
-
-    每个音频块都要过一次；去掉 librosa 的封装层（valid_audio / frame /
-    pad_mode 分支）实测每块省约 60µs。数值等价（含 top_db=80 相对裁剪）
-    由 tests/test_rms_db_gate.py 对照 librosa 保证。
-    """
-    import numpy as np
-
-    yp = np.pad(np.asarray(y, dtype=np.float32), frame_length // 2)
-    n = 1 + (len(yp) - frame_length) // hop_length
-    if n <= 0:
-        return np.empty(0, dtype=np.float32)
-    frames = np.lib.stride_tricks.as_strided(
-        yp, shape=(n, frame_length), strides=(hop_length * yp.strides[0], yp.strides[0])
-    )
-    rms = np.sqrt(np.mean(np.square(frames), axis=1))
-    db = 20.0 * np.log10(np.maximum(rms, 1e-5))
-    return np.maximum(db, db.max() - 80.0)
-
-
-def phase_vocoder(a, b, fade_out, fade_in):
-    window = torch.sqrt(fade_out * fade_in)
-    fa = torch.fft.rfft(a * window)
-    fb = torch.fft.rfft(b * window)
-    absab = torch.abs(fa) + torch.abs(fb)
-    n = a.shape[0]
-    if n % 2 == 0:
-        absab[1:-1] *= 2
-    else:
-        absab[1:] *= 2
-    phia = torch.angle(fa)
-    phib = torch.angle(fb)
-    deltaphase = phib - phia
-    deltaphase = deltaphase - 2 * np.pi * torch.floor(deltaphase / 2 / np.pi + 0.5)
-    w = 2 * np.pi * torch.arange(n // 2 + 1).to(a) + deltaphase
-    t = torch.arange(n).unsqueeze(-1).to(a) / n
-    result = (
-        a * (fade_out**2)
-        + b * (fade_in**2)
-        + torch.sum(absab * torch.cos(w * t + phia), -1) * window / n
-    )
-    return result
+# 一块声音的处理（软限幅、阈值分帧、相位声码器拼接等）在 tools/realtime_block.py，
+# 实时链路和离线渲染共用那一份。这里按原名导出，老代码和测试照旧能用。
+from tools.realtime_block import (  # noqa: E402
+    phase_vocoder,
+    process_block,
+    rms_db_frames as _rms_db_frames,
+    soft_clip_np,
+)
 
 
 class Harvest(multiprocessing.Process):
@@ -1291,127 +1245,37 @@ if __name__ == "__main__":
             self._rebuild_voice_chain()
 
         def _rebuild_voice_chain(self) -> None:
-            """建 / 更新 DSP 变声链。参数热改，不重建实例——重建会清掉延迟线。"""
-            gc = self.gui_config
-            params = gc.dsp_params if isinstance(getattr(gc, "dsp_params", None), dict) else {}
-            preset = str(getattr(gc, "dsp_preset", "") or "").strip()
-            if preset and not params:
-                try:
-                    from tools.dsp_presets import get_preset
+            """建 / 更新 DSP 变声链。实现在 tools/realtime_block.py。"""
+            from tools.realtime_block import rebuild_voice_chain
 
-                    got = get_preset(preset)
-                    if got and isinstance(got.get("params"), dict):
-                        params = got["params"]
-                        gc.dsp_params = params
-                except Exception:
-                    traceback.print_exc()
-            if not params and not bool(getattr(gc, "dsp_enabled", False)):
-                self._voice_chain = None
-                return
-            try:
-                from tools.dsp_voice import VoiceChain
-
-                if not params:
-                    self._voice_chain = None
-                    return
-                if self._voice_chain is None:
-                    self._voice_chain = VoiceChain(params)
-                else:
-                    self._voice_chain.apply(params)
-            except Exception:
-                traceback.print_exc()
-                self._voice_chain = None
+            rebuild_voice_chain(self)
 
         def _apply_voice_chain(self, wav: torch.Tensor) -> torch.Tensor:
-            """DSP 变声跑在最后一块上（前面是 SOLA 要的重叠历史）。"""
-            if self._voice_chain is None:
-                self._rebuild_voice_chain()
-            if self._voice_chain is None:
-                return wav
-            sr = int(getattr(self.gui_config, "samplerate", 48000) or 48000)
-            n = int(getattr(self, "block_frame", 0) or 0)
-            if n <= 0 or wav.numel() < n:
-                x = wav.cpu().numpy()
-                y = self._voice_chain.process(x, sr)
-                return torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
-                    wav.device
-                ).type_as(wav)
-            head = wav[:-n]
-            tail = wav[-n:].cpu().numpy()
-            y = self._voice_chain.process(tail, sr)
-            tail_t = torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
-                wav.device
-            ).type_as(wav)
-            return torch.cat([head, tail_t], dim=0)
+            from tools.realtime_block import apply_voice_chain
+
+            return apply_voice_chain(self, wav)
 
         def _fx_config_dict(self) -> dict:
-            gc = self.gui_config
-            return {
-                "fx_enabled": bool(gc.fx_enabled),
-                "fx_gate_enabled": bool(gc.fx_gate_enabled),
-                "fx_gate_threshold_db": float(gc.fx_gate_threshold_db),
-                "fx_gate_release_ms": float(gc.fx_gate_release_ms),
-                "fx_gate_hold_ms": float(gc.fx_gate_hold_ms),
-                "fx_gate_range_db": float(gc.fx_gate_range_db),
-                "fx_comp_enabled": bool(gc.fx_comp_enabled),
-                "fx_comp_threshold_db": float(gc.fx_comp_threshold_db),
-                "fx_comp_ratio": float(gc.fx_comp_ratio),
-                "fx_comp_attack_ms": float(gc.fx_comp_attack_ms),
-                "fx_comp_release_ms": float(gc.fx_comp_release_ms),
-                "fx_comp_makeup_db": float(gc.fx_comp_makeup_db),
-                "fx_eq_enabled": bool(gc.fx_eq_enabled),
-                "fx_eq_gains": list(gc.fx_eq_gains),
-                "fx_eq_preset": str(gc.fx_eq_preset or "flat"),
-                "fx_out_gain_db": float(gc.fx_out_gain_db or 0),
-            }
+            from tools.realtime_block import fx_config_dict
+
+            return fx_config_dict(self.gui_config)
 
         def _apply_out_gain(self, y):
-            """出声前的总音量。RVC 和 DSP 两条路都走这里，软限幅之前。
+            """出声前的总音量。实现在 tools/realtime_block.py。"""
+            from tools.realtime_block import apply_out_gain
 
-            放在软限幅之前而不是之后：限幅是为了不削爆，加完增益再限才有意义；
-            反过来先限后加，加多了照样爆出去。
-            """
-            g = float(getattr(self.gui_config, "out_gain_db", 0.0) or 0.0)
-            if abs(g) < 0.05:
-                return y
-            return (y * np.float32(10.0 ** (g / 20.0))).astype(np.float32)
+            return apply_out_gain(self.gui_config, y)
 
         def _rebuild_fx_chain(self) -> None:
-            try:
-                from tools.dsp_fx import RealtimeFxChain
+            from tools.realtime_block import rebuild_fx_chain
 
-                if self._fx_chain is None:
-                    self._fx_chain = RealtimeFxChain(self._fx_config_dict())
-                else:
-                    self._fx_chain.apply_config(self._fx_config_dict())
-            except Exception:
-                traceback.print_exc()
-                self._fx_chain = None
+            rebuild_fx_chain(self)
 
         def _apply_fx_chain(self, infer_wav: torch.Tensor) -> torch.Tensor:
-            """Run numpy DSP on last block_frame samples of infer_wav (device tensor)."""
-            if self._fx_chain is None:
-                self._rebuild_fx_chain()
-            if self._fx_chain is None or not self._fx_chain.enabled:
-                return infer_wav
-            sr = int(getattr(self.gui_config, "samplerate", 40000) or 40000)
-            n = int(getattr(self, "block_frame", 0) or 0)
-            if n <= 0 or infer_wav.numel() < n:
-                # process whole tensor — .cpu() already detaches + copies
-                x = infer_wav.cpu().numpy()
-                y = self._fx_chain.process(x, sr)
-                return torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
-                    infer_wav.device
-                ).type_as(infer_wav)
-            # only shape the newest block (rest is overlap history for SOLA)
-            head = infer_wav[:-n]
-            tail = infer_wav[-n:]
-            x = tail.cpu().numpy()
-            y = self._fx_chain.process(x, sr)
-            tail_t = torch.from_numpy(np.asarray(y, dtype=np.float32)).to(
-                infer_wav.device
-            ).type_as(infer_wav)
-            return torch.cat([head, tail_t], dim=0)
+            """修音链只处理最新的一块。实现在 tools/realtime_block.py。"""
+            from tools.realtime_block import apply_fx_chain
+
+            return apply_fx_chain(self, infer_wav)
 
         def _start_dsp_only(self, preset: str, params: dict) -> None:
             """纯 DSP：不开 RVC、不占 GPU、不报「正在加载音色」。"""
@@ -1590,85 +1454,11 @@ if __name__ == "__main__":
                     self._voice_chain.reset()
             except Exception:
                 traceback.print_exc()
-            # 分块几何统一从 tools/block_geometry.py 取。
-            #
-            # 这段算术原来在这里（两处）、benchmark_realtime.py，以及将来离线
-            # 渲染器里各写一份。几份必须完全一致，而**不一致时没有任何征兆**：
-            # 渲染出来的声音听着像那么回事，只是和用户实际听到的差了半个块，
-            # 照着它调出来的参数到用户机器上就不对。所以只留一份。
-            from tools.block_geometry import geometry
+            # 分块几何、缓冲区、重采样器和降噪器统一在 tools/realtime_block.py 建，
+            # 离线渲染建的是同一套。
+            from tools.realtime_block import build_stream
 
-            _geo = geometry(
-                self.gui_config.samplerate,
-                self.gui_config.block_time,
-                self.gui_config.crossfade_time,
-                self.gui_config.extra_time,
-            )
-            self.zc = _geo["zc"]
-            self.block_frame = _geo["block_frame"]
-            self.block_frame_16k = _geo["block_frame_16k"]
-            self.crossfade_frame = _geo["crossfade_frame"]
-            self.sola_buffer_frame = _geo["sola_buffer_frame"]
-            self.sola_search_frame = _geo["sola_search_frame"]
-            self.extra_frame = _geo["extra_frame"]
-            io_dev = self._io_device
-            self.input_wav: torch.Tensor = torch.zeros(
-                self.extra_frame
-                + self.crossfade_frame
-                + self.sola_search_frame
-                + self.block_frame,
-                device=io_dev,
-                dtype=torch.float32,
-            )
-            self.input_wav_denoise: torch.Tensor = self.input_wav.clone()
-            self.input_wav_res: torch.Tensor = torch.zeros(
-                160 * self.input_wav.shape[0] // self.zc,
-                device=io_dev,
-                dtype=torch.float32,
-            )
-            self.rms_buffer: np.ndarray = np.zeros(4 * self.zc, dtype="float32")
-            self.sola_buffer: torch.Tensor = torch.zeros(
-                self.sola_buffer_frame, device=io_dev, dtype=torch.float32
-            )
-            self.nr_buffer: torch.Tensor = self.sola_buffer.clone()
-            self.output_buffer: torch.Tensor = self.input_wav.clone()
-            self.skip_head = self.extra_frame // self.zc
-            self.return_length = (
-                self.block_frame + self.sola_buffer_frame + self.sola_search_frame
-            ) // self.zc
-            self.fade_in_window: torch.Tensor = (
-                torch.sin(
-                    0.5
-                    * np.pi
-                    * torch.linspace(
-                        0.0,
-                        1.0,
-                        steps=self.sola_buffer_frame,
-                        device=io_dev,
-                        dtype=torch.float32,
-                    )
-                )
-                ** 2
-            )
-            self.fade_out_window: torch.Tensor = 1 - self.fade_in_window
-            self.resampler = tat.Resample(
-                orig_freq=self.gui_config.samplerate,
-                new_freq=16000,
-                dtype=torch.float32,
-            ).to(io_dev)
-            # DSP 模式没有模型，也就没有 tgt_sr，输入输出同一个采样率。
-            rvc_sr = getattr(self.rvc, "tgt_sr", None) if self.rvc is not None else None
-            if rvc_sr and rvc_sr != self.gui_config.samplerate:
-                self.resampler2 = tat.Resample(
-                    orig_freq=self.rvc.tgt_sr,
-                    new_freq=self.gui_config.samplerate,
-                    dtype=torch.float32,
-                ).to(self.config.device)
-            else:
-                self.resampler2 = None
-            self.tg = TorchGate(
-                sr=self.gui_config.samplerate, n_fft=4 * self.zc, prop_decrease=0.9
-            ).to(io_dev)
+            build_stream(self)
             # Bill one-time costs (lazy f0 model load, cudnn autotune, CUDA context)
             # here instead of inside the first audible blocks
             self._report_load(VC_WARMUP, 78)
@@ -2526,252 +2316,13 @@ if __name__ == "__main__":
             # librosa.to_mono(indata.T) 的直接等价：in_buf 为 (samples, ch)
             # float32，逐通道求均值，省每块约 60µs 的封装开销。
             indata = indata.mean(axis=1) if indata.ndim == 2 else indata
-            # Mic pre-gain (dB) before meter/gate so both see the boosted signal
-            in_gain_db = float(getattr(self.gui_config, "in_gain_db", 0.0) or 0.0)
-            if abs(in_gain_db) >= 0.05:
-                indata = indata * np.float32(10.0 ** (in_gain_db / 20.0))
-                np.clip(indata, -1.0, 1.0, out=indata)
-            # Block input level in dB for the launcher's mic meter (cheap)
-            try:
-                _rms = float(np.sqrt(np.mean(np.square(indata))) + 1e-9)
-                self.last_input_db = float(max(-90.0, 20.0 * np.log10(_rms)))
-            except Exception:
-                pass
-            if self.gui_config.threhold > -60:
-                indata = np.append(self.rms_buffer, indata)
-                db_all = _rms_db_frames(indata, 4 * self.zc, self.zc)
-                self.rms_buffer[:] = indata[-4 * self.zc :]
-                indata = indata[2 * self.zc - self.zc // 2 :]
-                db_threhold = db_all[2:] < self.gui_config.threhold
-                for i in range(db_threhold.shape[0]):
-                    if db_threhold[i]:
-                        indata[i * self.zc : (i + 1) * self.zc] = 0
-                indata = indata[self.zc // 2 :]
-            io_dev = self.input_wav.device
-            self.input_wav[: -self.block_frame] = self.input_wav[
-                self.block_frame :
-            ].clone()
-            self.input_wav[-indata.shape[0] :] = torch.from_numpy(indata).to(io_dev)
-
-            peak = float(np.max(np.abs(indata))) if indata.size else 0.0
-            # 起音诊断：静音之后的头两块单独记一行。
-            try:
-                if peak < 2e-5:
-                    self._onset_left = 2
-                elif int(getattr(self, "_onset_left", 0) or 0) > 0:
-                    self._onset_left = int(self._onset_left) - 1
-                    printt(
-                        "onset peak=%.4f in_db=%.1f gate=%s infer_ms=%s q=%.0f",
-                        peak,
-                        float(getattr(self, "last_input_db", -90.0)),
-                        float(getattr(self.gui_config, "threhold", -60) or -60),
-                        int(getattr(self, "last_infer_ms", 0) or 0),
-                        float(getattr(self, "_queue_frames", 0.0) or 0.0),
-                    )
-            except Exception:
-                pass
-
-            if self.function == "vc" and peak < 2e-5:
-                # Quiet block: do not touch the GPU. TorchGate + skip_block +
-                # SOLA on DirectML wait for the game's 3D queue — that is the
-                # 17s Infer time with no Spent time in diag 26.8.21/1.
-                self.input_wav_res[: -self.block_frame_16k] = self.input_wav_res[
-                    self.block_frame_16k :
-                ].clone()
-                self.input_wav_res[-self.block_frame_16k :] = 0
-                self._pitch_skip_blocks = int(
-                    getattr(self, "_pitch_skip_blocks", 0) or 0
-                ) + 1
-                try:
-                    self.sola_buffer.mul_(0.88)
-                except Exception:
-                    pass
+            # 从这里到出声前的全部处理在 tools/realtime_block.py，离线渲染调的是
+            # 同一个函数。整块静音时它返回 None，这一块不碰显卡。
+            y = process_block(self, indata)
+            if y is None:
                 self._emit_silence(buf_size, start_time)
                 return
-
-            self.input_wav_res[: -self.block_frame_16k] = self.input_wav_res[
-                self.block_frame_16k :
-            ].clone()
-            # Skip denoise when already late — catching the deadline matters
-            # more than one block of spectral gating.
-            budget_ms = float(getattr(self.gui_config, "block_time", 0.25) or 0.25) * 850.0
-            behind = int(getattr(self, "last_infer_ms", 0) or 0) > budget_ms
-            denoise = bool(self.gui_config.I_noise_reduce) and not behind
-            if denoise:
-                self.input_wav_denoise[: -self.block_frame] = self.input_wav_denoise[
-                    self.block_frame :
-                ].clone()
-                input_wav = self.input_wav[-self.sola_buffer_frame - self.block_frame :]
-                input_wav = self.tg(
-                    input_wav.unsqueeze(0), self.input_wav.unsqueeze(0)
-                ).squeeze(0)
-                input_wav[: self.sola_buffer_frame] *= self.fade_in_window
-                input_wav[: self.sola_buffer_frame] += (
-                    self.nr_buffer * self.fade_out_window
-                )
-                self.input_wav_denoise[-self.block_frame :] = input_wav[
-                    : self.block_frame
-                ]
-                self.nr_buffer[:] = input_wav[self.block_frame :]
-                self.input_wav_res[-self.block_frame_16k - 160 :] = self.resampler(
-                    self.input_wav_denoise[-self.block_frame - 2 * self.zc :]
-                )[160:]
-            else:
-                self.input_wav_res[-160 * (indata.shape[0] // self.zc + 1) :] = (
-                    self.resampler(self.input_wav[-indata.shape[0] - 2 * self.zc :])[
-                        160:
-                    ]
-                )
-            # infer
-            if self.function == "vc":
-                nskip = int(getattr(self, "_pitch_skip_blocks", 0) or 0)
-                if nskip:
-                    # 静音时没动 GPU 上的音高历史。开口这一块一次性补上，
-                    # 否则模型拿着几秒前的音高轨迹解码，前几个字发糊。
-                    try:
-                        self.rvc.skip_block(self.block_frame_16k * nskip)
-                    except Exception:
-                        traceback.print_exc()
-                    self._pitch_skip_blocks = 0
-                feat16 = self.input_wav_res
-                if getattr(self, "_dml", False):
-                    feat16 = feat16.to(self.config.device)
-                infer_wav = self.rvc.infer(
-                    feat16,
-                    self.block_frame_16k,
-                    self.skip_head,
-                    self.return_length,
-                    self.gui_config.f0method,
-                )
-                if self.resampler2 is not None:
-                    infer_wav = self.resampler2(infer_wav)
-                if getattr(self, "_dml", False):
-                    infer_wav = infer_wav.to(io_dev)
-            elif self.gui_config.I_noise_reduce:
-                infer_wav = self.input_wav_denoise[self.extra_frame :].clone()
-            else:
-                infer_wav = self.input_wav[self.extra_frame :].clone()
-            # 后面的 SOLA 和输出装填都按「至少一个块 + 交叉淡化 + 搜索窗」的
-            # 长度在切。个别后端（26.8.16 那台 Intel 核显的 DirectML）会偶发
-            # 返回短一截的输出，短了就是一句
-            # 「The expanded size of the tensor (1764) must match the existing
-            # size (954)」把整条变声流带走。不足的部分补静音：这一块听着空
-            # 一点，比整条流断掉强。
-            _need = self.block_frame + self.sola_buffer_frame + self.sola_search_frame
-            if infer_wav.shape[0] < _need:
-                _pad = torch.zeros(
-                    _need - infer_wav.shape[0],
-                    device=infer_wav.device,
-                    dtype=infer_wav.dtype,
-                )
-                infer_wav = torch.cat([infer_wav, _pad], dim=0)
-            # output noise reduction
-            if self.gui_config.O_noise_reduce and self.function == "vc":
-                self.output_buffer[: -self.block_frame] = self.output_buffer[
-                    self.block_frame :
-                ].clone()
-                self.output_buffer[-self.block_frame :] = infer_wav[-self.block_frame :]
-                infer_wav = self.tg(
-                    infer_wav.unsqueeze(0), self.output_buffer.unsqueeze(0)
-                ).squeeze(0)
-            # DSP 变声。function=fx 时只要链还在就处理，不额外看 dsp_enabled：
-            # 热推可能把开关写丢，链在就该出声。
-            if self.function == "fx":
-                try:
-                    infer_wav = self._apply_voice_chain(infer_wav)
-                except Exception:
-                    traceback.print_exc()
-            # DSP 修音链（gate / 压缩 / EQ）—— numpy on CPU
-            if (
-                self.function in ("vc", "fx")
-                and bool(getattr(self.gui_config, "fx_enabled", False))
-            ):
-                try:
-                    infer_wav = self._apply_fx_chain(infer_wav)
-                except Exception:
-                    traceback.print_exc()
-            # volume envelop mixing
-            if self.gui_config.rms_mix_rate < 1 and self.function == "vc":
-                if denoise:
-                    input_wav = self.input_wav_denoise[self.extra_frame :]
-                else:
-                    input_wav = self.input_wav[self.extra_frame :]
-                mix_dev = infer_wav.device
-                rms1 = librosa.feature.rms(
-                    y=input_wav[: infer_wav.shape[0]].detach().cpu().numpy(),
-                    frame_length=4 * self.zc,
-                    hop_length=self.zc,
-                )
-                rms1 = torch.from_numpy(rms1).to(mix_dev)
-                rms1 = F.interpolate(
-                    rms1.unsqueeze(0),
-                    size=infer_wav.shape[0] + 1,
-                    mode="linear",
-                    align_corners=True,
-                )[0, 0, :-1]
-                rms2 = librosa.feature.rms(
-                    y=infer_wav[:].detach().cpu().numpy(),
-                    frame_length=4 * self.zc,
-                    hop_length=self.zc,
-                )
-                rms2 = torch.from_numpy(rms2).to(mix_dev)
-                rms2 = F.interpolate(
-                    rms2.unsqueeze(0),
-                    size=infer_wav.shape[0] + 1,
-                    mode="linear",
-                    align_corners=True,
-                )[0, 0, :-1]
-                rms2 = torch.max(rms2, torch.zeros_like(rms2) + 2e-3)
-                # Clamp envelope gain — avoids rare sudden loud pops when rms2 dips
-                exp = float(1.0 - self.gui_config.rms_mix_rate)
-                gain = torch.pow(rms1 / rms2, exp)
-                gain = torch.clamp(gain, 0.15, 3.5)
-                infer_wav *= gain
-            # SOLA algorithm from https://github.com/yxlllc/DDSP-SVC
-            conv_input = infer_wav[
-                None, None, : self.sola_buffer_frame + self.sola_search_frame
-            ]
-            cor_nom = F.conv1d(conv_input, self.sola_buffer[None, None, :])
-            cor_den = torch.sqrt(
-                F.conv1d(
-                    conv_input**2,
-                    torch.ones(
-                        1, 1, self.sola_buffer_frame, device=self.sola_buffer.device
-                    ),
-                )
-                + 1e-8
-            )
-            if sys.platform == "darwin":
-                _, sola_offset = torch.max(cor_nom[0, 0] / cor_den[0, 0])
-                sola_offset = sola_offset.item()
-            else:
-                sola_offset = torch.argmax(cor_nom[0, 0] / cor_den[0, 0])
-            # Hot-path: no per-block log (was printt every chunk → latency)
-            infer_wav = infer_wav[sola_offset:]
-            if "privateuseone" in str(self.config.device) or not self.gui_config.use_pv:
-                infer_wav[: self.sola_buffer_frame] *= self.fade_in_window
-                infer_wav[: self.sola_buffer_frame] += (
-                    self.sola_buffer * self.fade_out_window
-                )
-            else:
-                infer_wav[: self.sola_buffer_frame] = phase_vocoder(
-                    self.sola_buffer,
-                    infer_wav[: self.sola_buffer_frame],
-                    self.fade_out_window,
-                    self.fade_in_window,
-                )
-            self.sola_buffer[:] = infer_wav[
-                self.block_frame : self.block_frame + self.sola_buffer_frame
-            ]
-            outdata = (
-                infer_wav[: self.block_frame]
-                .repeat(self.gui_config.channels, 1)
-                .t()
-                .cpu()
-                .numpy()
-            )
-            outdata = self._apply_out_gain(outdata)
-            outdata = soft_clip_np(outdata)
+            outdata = np.repeat(y.reshape(-1, 1), self.gui_config.channels, axis=1)
 
             # Self-monitor: same converted audio to headphones (main out stays CABLE)
             self._write_monitor(outdata)

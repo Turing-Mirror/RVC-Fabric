@@ -131,12 +131,17 @@ class BlockGeometryTests(unittest.TestCase):
             line for line in gui.splitlines() if not line.lstrip().startswith("#")
         )
         self.assertNotIn("min(self.crossfade_frame, 4 * self.zc)", code)
-        # gui_v1 里有两处开流（RVC 与无模型 DSP），两处都必须接过来。
+        # gui_v1 里有两处开流。无模型 DSP 那处自己取几何；RVC 那处调
+        # tools/realtime_block.build_stream，几何在那里取，离线渲染建的是同一套。
         self.assertEqual(
             code.count("from tools.block_geometry import geometry"),
-            2,
-            "gui_v1 有两处开流，两处都要用共享几何",
+            1,
+            "无模型 DSP 开流要用共享几何",
         )
+        self.assertIn("build_stream(self)", code)
+        with open(os.path.join(SRC, "tools", "realtime_block.py"), encoding="utf-8") as f:
+            rb = f.read()
+        self.assertEqual(rb.count("from tools.block_geometry import geometry"), 1)
         self.assertIsNone(
             re.search(r"self\.block_frame\s*=\s*\(\s*\n\s*int\(", code),
             "gui_v1 又自己算 block_frame 了",

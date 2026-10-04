@@ -126,15 +126,21 @@ class AudioIoRingTests(unittest.TestCase):
 class GuiV1HotPathTests(unittest.TestCase):
     def test_quiet_block_skips_gpu_before_torchgate(self):
         src = (ROOT / "gui_v1.py").read_text(encoding="utf-8")
-        infer = src[src.index("def audio_infer") : src.index("def update_devices")]
+        # 一块声音的处理在 tools/realtime_block.py；音频回调只在它返回 None
+        # （整块静音）时补一块静音。
+        cb = src[src.index("def audio_infer") : src.index("def update_devices")]
+        self.assertIn("process_block(self, indata)", cb)
+        self.assertIn("_emit_silence", cb)
+        rb = (ROOT / "tools" / "realtime_block.py").read_text(encoding="utf-8")
+        infer = rb[rb.index("def process_block") : rb.index("# ----", rb.index("def process_block"))]
         peak_at = infer.index("peak = float(np.max")
-        tg_at = infer.index("self.tg(")
-        silent_at = infer.index("_emit_silence")
+        tg_at = infer.index("s.tg(")
+        silent_at = infer.index("return None")
         spent_skip = infer.index("_pitch_skip_blocks")
         self.assertLess(peak_at, tg_at)
         self.assertLess(silent_at, tg_at)
         self.assertLess(spent_skip, tg_at)
-        self.assertIn("feat16 = feat16.to(self.config.device)", infer)
+        self.assertIn("feat16 = feat16.to(s.config.device)", infer)
         self.assertIn("infer_wav = infer_wav.to(io_dev)", infer)
         start = src[src.index("def start_vc") : src.index("def _on_rvc_progress")]
         self.assertIn("_io_device", start)

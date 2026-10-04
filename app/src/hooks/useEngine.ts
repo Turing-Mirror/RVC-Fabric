@@ -623,7 +623,9 @@ export function useEngine() {
     // Worker writes `input_db` (dBFS) and carries the gate as `threhold`
     // (upstream spelling). Map both with the Tk shell's formula so the meter
     // reads identically: frac = (clamp(db, -60, 0) + 60) / 60.
-    micDb: status.input_db === undefined || status.input_db === null
+    // 电平只在流真的开着时才有意义：status.json 留着上次运行写的最后一个读数，
+    // 停下来还拿它画条，等于假装在听 —— Dock 注释也写死了 idle 时给 null。
+    micDb: !running || status.input_db === undefined || status.input_db === null
       ? null
       : Number(status.input_db),
     thresholdDb: Number(status.threhold ?? -60),

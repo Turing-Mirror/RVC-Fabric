@@ -8,7 +8,6 @@ import { tip } from "../lib/glossary";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import {
   displayVoiceName,
-  displayVoiceTag,
   displayVoiceAuthor,
   formatLocalizedList,
   voiceAuthorList,
@@ -537,7 +536,6 @@ function ModelsPageImpl({
               const authors = voiceAuthorList(v);
               const ver = voiceVersionLabel(v.date);
               const title = displayVoiceName(v);
-              const tag = displayVoiceTag(v) || t("s.c4301894a2");
               const author = displayVoiceAuthor(v);
               return (
                 <div key={modelKey(v)} className="rise" style={stagger(i)}>
@@ -577,10 +575,7 @@ function ModelsPageImpl({
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
-                  <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
-                    {tag}
-                  </div>
-                  <div className="text-[14.5px] font-semibold mt-0.5 truncate">
+                  <div className="text-[14.5px] font-semibold mt-2.5 truncate">
                     {title}
                   </div>
                   <div
@@ -985,7 +980,7 @@ function MoreMenu({
       label: t("neptune.exportSummary"),
       action: async () => {
         const authors = voiceAuthorList(model).map((a) => [a.name, a.url].filter(Boolean).join(" · "));
-        const text = [model.name, model.tag, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
+        const text = [model.name, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
         onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"));
         onClose();
       },

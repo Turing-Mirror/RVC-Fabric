@@ -252,32 +252,6 @@ pub fn safe_model_dir_name(name: &str) -> Result<String, String> {
     Ok(n.chars().take(80).collect())
 }
 
-fn guess_tag(name: &str) -> String {
-    let n = name.to_lowercase();
-    let k_girl = crate::i18n::t("s.26bc84961c");
-    let k_loli = crate::i18n::t("s.2eb8caf80a");
-    let k_shao = crate::i18n::t("s.22d9b9afb9");
-    if [k_girl.as_str(), "girl", "loli", k_loli.as_str(), k_shao.as_str()]
-        .iter()
-        .any(|k| n.contains(k) || name.contains(k))
-    {
-        return crate::i18n::t("s.bacc87084d");
-    }
-    let k_boy = crate::i18n::t("s.51625d909c");
-    let k_nan = crate::i18n::t("s.3c689400b4");
-    let k_shu = crate::i18n::t("s.a0c5fa2d9f");
-    if [k_boy.as_str(), "boy", k_nan.as_str(), k_shu.as_str()]
-        .iter()
-        .any(|k| n.contains(k) || name.contains(k))
-    {
-        return crate::i18n::t("s.3c689400b4");
-    }
-    let k_other = crate::i18n::t("s.b0684a167c");
-    if name.contains(&k_other) {
-        return crate::i18n::t("s.1bf4a01d78");
-    }
-    crate::i18n::t("s.c4301894a2")
-}
 
 fn find_pth(folder: &Path) -> Option<PathBuf> {
     let mut pths: Vec<PathBuf> = fs::read_dir(folder)
@@ -513,15 +487,12 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
-        // 名字/标签/作者按当前界面语言取：`config.json` 里存着下载时一并带下来
+        // 名字/作者按当前界面语言取：`config.json` 里存着下载时一并带下来
         // 的整张多语言表（store::copy_i18n_fields），`pick_str` 取不到译名才落回
         // 中文主名。所以换语言不用重新下载，模型页跟着变。
         let name = Some(crate::i18n::pick_str_obj(&side, "name"))
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| vid.clone());
-        let tag = Some(crate::i18n::pick_str_obj(&side, "tag"))
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| guess_tag(&name).to_string());
         let mut author = crate::i18n::pick_str_obj(&side, "author");
         let mut author_url = side
             .get("author_url")
@@ -630,7 +601,6 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
                 "cover": cover,
                 "index": "",
                 "has_index": false,
-                "tag": tag,
                 "author": author,
                 "author_url": author_url,
                 "authors": authors,
@@ -652,7 +622,6 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             "cover": cover,
             "index": index,
             "has_index": !index.is_empty(),
-            "tag": tag,
             "author": author,
             "author_url": author_url,
             "authors": authors,
@@ -724,7 +693,6 @@ fn list_legacy(root: &Path) -> Vec<Value> {
             "cover": cover,
             "index": "",
             "has_index": false,
-            "tag": guess_tag(&name),
             "author": "",
             "author_url": "",
             "source_url": "",
@@ -1889,7 +1857,6 @@ pub fn import_files(
                 &path,
                 "",
                 "",
-                &crate::i18n::t("s.c4301894a2"),
                 false, // local user import — never mark as 图灵镜 official
                 None,  // 本地导入没有清单条目，多语言信息只能靠包里自带的
             ) {
@@ -1983,7 +1950,6 @@ fn import_pth(root: &Path, src: &Path) -> Result<Value, String> {
     }
     let mut side = Map::new();
     side.insert("name".into(), json!(name));
-    side.insert("tag".into(), json!(guess_tag(&name)));
     side.insert(
         "file".into(),
         json!(dest_pth.file_name().and_then(|s| s.to_str()).unwrap_or("")),
@@ -2000,7 +1966,6 @@ fn import_pth(root: &Path, src: &Path) -> Result<Value, String> {
         "file": dest_pth.file_name().and_then(|s| s.to_str()).unwrap_or(""),
         "dir": dest_dir.to_string_lossy(),
         "index": index_path,
-        "tag": guess_tag(&name),
         "source": "user_data",
     }))
 }
@@ -2243,7 +2208,7 @@ pub fn export_model(root: &Path, model_dir: &str, dest: &Path) -> Result<(), Str
         .ok_or_else(|| crate::i18n::t("neptune.exportMissing"))?;
     let side = read_sidecar(md);
     let mut meta = Map::new();
-    for key in ["name", "tag", "author", "author_url", "authors", "source_url", "description", "license", "language", "gender"]
+    for key in ["name", "author", "author_url", "authors", "source_url", "description", "license", "language", "gender"]
         .iter().copied().chain(PROFILE_VOICE_KEYS.iter().copied()).chain(PROFILE_FX_KEYS.iter().copied()).chain(PROFILE_PERF_KEYS.iter().copied()) {
         if let Some(v) = side.get(key) { meta.insert(key.into(), v.clone()); }
     }

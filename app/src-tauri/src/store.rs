@@ -219,7 +219,7 @@ fn parse_voice_entry(d: &Value, force_official: Option<bool>) -> Option<Value> {
         "name_ja": name_ja,
         "name_en": name_en,
         "name_zh_Hant": name_zh_hant,
-        "tag": d.get("tag").and_then(|v| v.as_str()).unwrap_or(&crate::i18n::t("s.c4301894a2")),
+
         "version": d.get("version").and_then(|v| v.as_str()).unwrap_or("1"),
         "package_type": d.get("package_type").or_else(|| d.get("type")).and_then(|v| v.as_str()).unwrap_or(""),
         "pack_url": pack_url,
@@ -327,7 +327,7 @@ fn merge_i18n_map(
 }
 
 fn merge_catalog_i18n(data: &mut Value, bundled: &Value) {
-    const FIELDS: [&str; 6] = ["name", "tag", "series", "author", "description", "group"];
+    const FIELDS: [&str; 5] = ["name", "series", "author", "description", "group"];
     for (section, alternate) in [
         ("voices", "models"),
         ("thirdparty_voices", "third_party_voices"),
@@ -968,7 +968,7 @@ fn merge_voice_meta(extra: &mut Map<String, Value>, src: &Value) {
 
 fn copy_i18n_fields(entry: &Value, extra: &mut Map<String, Value>) {
     let Some(obj) = entry.as_object() else { return };
-    const FIELDS: [&str; 6] = ["name", "tag", "series", "author", "description", "group"];
+    const FIELDS: [&str; 5] = ["name", "series", "author", "description", "group"];
     for (k, v) in obj {
         let Some((field, rest)) = k.split_once('_') else {
             continue;
@@ -988,7 +988,6 @@ fn write_voice_config(
     dest_dir: &Path,
     dest_pth: &Path,
     name: &str,
-    tag: &str,
     online_id: &str,
     index_path: &str,
     source: &str,
@@ -997,7 +996,6 @@ fn write_voice_config(
 ) -> Value {
     let mut side = Map::new();
     side.insert("name".into(), json!(name));
-    side.insert("tag".into(), json!(tag));
     side.insert(
         "file".into(),
         json!(dest_pth.file_name().and_then(|s| s.to_str()).unwrap_or("")),
@@ -1024,7 +1022,6 @@ fn write_voice_config(
         "file": dest_pth.file_name().and_then(|s| s.to_str()).unwrap_or(""),
         "dir": dest_dir.to_string_lossy(),
         "index": index_path,
-        "tag": tag,
         "source": "user_data",
         "online_id": online_id,
     })
@@ -1066,7 +1063,6 @@ pub fn install_voice_pack_zip(
     zip_path: &Path,
     voice_id: &str,
     display_name: &str,
-    tag: &str,
     official: bool,
     entry: Option<&Value>,
 ) -> Result<Value, String> {
@@ -1128,16 +1124,7 @@ pub fn install_voice_pack_zip(
                 .unwrap_or(&vid)
                 .to_string()
         };
-        let tag = if tag.is_empty() {
-            pack_cfg
-                .get("tag")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&crate::i18n::t("s.c4301894a2"))
-                .to_string()
-        } else {
-            tag.to_string()
-        };
-        let dest_dir = paths::models_dir(root).join(&vid);
+            let dest_dir = paths::models_dir(root).join(&vid);
         if dest_dir.is_dir() {
             // clear previous
             for e in fs::read_dir(&dest_dir).map_err(|e| e.to_string())? {
@@ -1222,7 +1209,6 @@ pub fn install_voice_pack_zip(
             &dest_dir,
             &dest_pth,
             &name,
-            &tag,
             &vid,
             &index_path,
             source,
@@ -1249,11 +1235,6 @@ pub fn install_voice_entry(
         .get("name")
         .and_then(|v| v.as_str())
         .unwrap_or(&id)
-        .to_string();
-    let tag = entry
-        .get("tag")
-        .and_then(|v| v.as_str())
-        .unwrap_or(&crate::i18n::t("s.c4301894a2"))
         .to_string();
     let official = entry
         .get("official")
@@ -1355,7 +1336,7 @@ pub fn install_voice_entry(
             }));
         }
         emit("extract", 0, 1, &crate::i18n::t("s.6b42cff431"));
-        let info = install_voice_pack_zip(&root, &zpath, &id, &name, &tag, official, Some(&entry))?;
+        let info = install_voice_pack_zip(&root, &zpath, &id, &name, official, Some(&entry))?;
         emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
         return Ok(info);
     }
@@ -1514,7 +1495,6 @@ pub fn install_voice_entry(
         &dest_dir,
         &dest_pth,
         &name,
-        &tag,
         &vid,
         &index_path,
         source,
@@ -1618,7 +1598,7 @@ pub fn install_staged(
 ) -> Result<Value, String> {
     let id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
-    let tag = entry.get("tag").and_then(|v| v.as_str()).unwrap_or(&crate::i18n::t("s.c4301894a2")).to_string();
+
     let official = entry.get("official").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let dir = staged_dir(&root, if id.is_empty() { &name } else { &id })?;
@@ -1640,9 +1620,9 @@ pub fn install_staged(
         .unwrap_or(false);
 
     let info = if is_zip {
-        install_voice_pack_zip(&root, &payload, &id, &name, &tag, official, Some(&entry))?
+        install_voice_pack_zip(&root, &payload, &id, &name, official, Some(&entry))?
     } else {
-        install_staged_files(&root, &dir, &payload, &id, &name, &tag, official, &entry)?
+        install_staged_files(&root, &dir, &payload, &id, &name, official, &entry)?
     };
     // 装完就把暂存清掉，不然用户的 User_Data 会慢慢堆满几百 MB 的重复文件。
     let _ = fs::remove_dir_all(&dir);
@@ -1658,7 +1638,6 @@ fn install_staged_files(
     pth: &Path,
     id: &str,
     name: &str,
-    tag: &str,
     official: bool,
     entry: &Value,
 ) -> Result<Value, String> {
@@ -1713,7 +1692,7 @@ fn install_staged_files(
     }
     let source = if official { "online_files" } else { "thirdparty_files" };
     Ok(write_voice_config(
-        &dest_dir, &dest_pth, name, tag, &vid, &index_path, source, official, &extra,
+        &dest_dir, &dest_pth, name, &vid, &index_path, source, official, &extra,
     ))
 }
 
@@ -1788,7 +1767,7 @@ mod tests {
             "name": "千早爱音",
             "name_i18n": { "en-US": "Chihaya Anon", "ko-KR": "치하야 아논" },
             "name_en": "Chihaya Anon",
-            "tag_i18n": { "en-US": "Young Girl Voice" },
+            "series_i18n": { "en-US": "MyGO!!!!!" },
             "author": "望月星逸",
             "author_url": "https://example.invalid/u",
             "sha256": "deadbeef",
@@ -1798,7 +1777,7 @@ mod tests {
 
         assert!(extra.contains_key("name_i18n"), "少了 name_i18n：{extra:?}");
         assert!(extra.contains_key("name_en"));
-        assert!(extra.contains_key("tag_i18n"));
+        assert!(extra.contains_key("series_i18n"));
         // 地址不是译名，`author_url` 不该被当成 author 的一个语言变体带走。
         assert!(!extra.contains_key("author_url"));
         // 白名单外的字段一个都不许混进来。

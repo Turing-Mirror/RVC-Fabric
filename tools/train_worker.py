@@ -344,7 +344,6 @@ def publish_voice(root, req, weights, index_path):
         if not isinstance(data, dict):
             data = {}
         data["name"] = req["exp"]
-        data["tag"] = data.get("tag") or "自制"
         data["source"] = "trained"
         data["sample_rate"] = req["sample_rate"]
         sidecar.write_text(

@@ -3,7 +3,6 @@ import { RangeBar } from "./controls";
 import { HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
-import { displayVoiceTag } from "../lib/voiceDisplay";
 import type { StartupStep } from "../lib/engine";
 
 export type OutputMode = "vc" | "bypass";
@@ -14,7 +13,6 @@ type Props = {
   dspName?: string;
   /** 点一下关掉 DSP。 */
   onStopDsp?: () => void;
-  voiceTag?: string;
   voiceIndex?: string;
   profileSummary?: string;
   pitch: number;
@@ -51,7 +49,6 @@ export function Dock({
   voiceName,
   dspName,
   onStopDsp,
-  voiceTag = "",
   voiceIndex = "",
   profileSummary,
   pitch,
@@ -85,7 +82,7 @@ export function Dock({
   const title = statusTitle ?? t("dock.engineReady");
   // 开启变声的途中按步写：第几步、在做什么；其余时候照旧
   const sub = step ? t("dock.stepOf", { n: step.index + 1, total: step.count, label: t(step.labelKey) }) : statusSub ?? t("dock.engineIdle");
-  const tag = voiceTag ? displayVoiceTag({ tag: voiceTag }) : "";
+  // 目录序号（3/142）：换音色时是找「下一个是哪个」的定位信息，保留。
 
   // Same mapping as the Tk shell's _draw_mic_meter: -60..0 dBFS over the bar.
   const frac = (db: number) =>
@@ -121,9 +118,9 @@ export function Dock({
             </button>
           </div>
         ) : null}
-        {tag || voiceIndex ? (
+        {voiceIndex ? (
           <div className="text-xs text-[var(--meta)] mt-0.5">
-            {[tag, voiceIndex].filter(Boolean).join(" · ")}
+            {voiceIndex}
           </div>
         ) : null}
         <div

@@ -35,7 +35,6 @@ import {
   displayVoiceFieldForGroup,
   displayVoiceName,
   displayVoiceOrigin,
-  displayVoiceTag,
   isCharacterAsGroup,
   isCharacterAsSeries,
   voiceAuthorList,
@@ -937,8 +936,7 @@ function VoiceCard({
   const parentLabel = voiceParentSeries(v, loc);
   const childLabel = voiceChildGroup(v, loc);
   const meta =
-    [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ") ||
-    displayVoiceTag(v, loc);
+    [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ");
   const coverBadge = author || displayVoiceOrigin(v);
   // 发布日期当版本号（v26.07.31）：同一角色常有多个版本在架，下载前先看清
   // 自己装的是哪一版。没有日期就不画，不留一个空角标。

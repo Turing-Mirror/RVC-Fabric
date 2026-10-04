@@ -737,7 +737,6 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     known = {
         "id",
         "name",
-        "tag",
         "series",
         "group",
         "author",
@@ -763,12 +762,10 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "name_ja",
         "name_en",
         "name_zh_Hant",
-        "tag_i18n",
         "description_i18n",
         "series_ja",
         "series_en",
         "series_zh_Hant",
-        "group",
         "notes",
     }
     item: dict[str, Any] = {
@@ -777,7 +774,6 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "author": str(v.get("author") or "RVC Fabric"),
         "author_url": str(v.get("author_url") or "https://cnb.cool/Turing-Mirror"),
         "released": date,
-        "tag": str(v.get("tag") or "音色"),
         "version": str(v.get("version") or "1"),
         "package_type": str(v.get("package_type") or "voice_pack"),
         "cover": cover,
@@ -792,7 +788,7 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
     item["sha256"] = art["sha256"]
     item["size_bytes"] = int(art["size_bytes"] or 0)
     item["description"] = str(v.get("description") or "")
-    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author", "group"])
+    _attach_i18n_fields(v, item, ["description", "name", "series", "author", "group"])
     item["publisher"] = str(v.get("publisher") or "rvc_fabric")
     item["fabric_official"] = bool(v.get("fabric_official", True))
     item["date"] = date
@@ -893,7 +889,6 @@ def _compile_thirdparty_voice(
     item: dict[str, Any] = {
         "id": vid,
         "name": str(v.get("name") or vid),
-        "tag": str(v.get("tag") or "音色"),
         "origin": str(v.get("origin") or "huggingface"),
         "source_url": str(v.get("source_url") or "").strip(),
         "author": str(v.get("author") or "").strip(),
@@ -927,7 +922,7 @@ def _compile_thirdparty_voice(
     group = str(v.get("group") or "").strip()
     if group:
         item["group"] = group
-    _attach_i18n_fields(v, item, ["tag", "description", "name", "series", "author", "group"])
+    _attach_i18n_fields(v, item, ["description", "name", "series", "author", "group"])
     for k in ("hf_downloads", "hf_likes", "snapshot_date", "real_person"):
         if k in v and v[k] is not None and v[k] != "":
             item[k] = v[k]
@@ -2303,7 +2298,6 @@ def cmd_init(paths: Paths, *, force: bool = False) -> int:
         data = {
             "id": vid,
             "name": str(v.get("name") or vid),
-            "tag": str(v.get("tag") or "音色"),
         }
         if series:
             data["series"] = series

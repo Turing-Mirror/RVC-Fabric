@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { listVoices, modelKey } from "../lib/voices";
 import type { EngineStatus } from "../lib/engine";
 
-export type ActiveVoiceLabel = { id: string; name: string; tag: string };
+export type ActiveVoiceLabel = { id: string; name: string };
 
 /** 分隔符与大小写归一后的路径比较：Windows 路径两种斜杠、盘符大小写都算同一个。 */
 function normPath(p: string): string {
@@ -83,7 +83,7 @@ export function useActiveVoiceReconcile(
       // 明确回报「没有在用的模型」（纯 DSP / 尚未应用）→ 显示也清空。
       doneKey.current = key;
       fails.current = 0;
-      cbRef.current({ id: "", name: "", tag: "" });
+      cbRef.current({ id: "", name: "" });
       return;
     }
     void listVoices()
@@ -110,7 +110,6 @@ export function useActiveVoiceReconcile(
           cbRef.current({
             id: modelKey(hit),
             name: String(hit.name || ""),
-            tag: String((hit as { tag?: string }).tag || ""),
           });
         } else {
           // 目录里没有这个模型：仍如实显示它在用，名字退成文件名。
@@ -118,7 +117,7 @@ export function useActiveVoiceReconcile(
             /\.pth$/i,
             "",
           );
-          cbRef.current({ id: pth, name: stem, tag: "" });
+          cbRef.current({ id: pth, name: stem });
         }
       })
       .catch(() => {

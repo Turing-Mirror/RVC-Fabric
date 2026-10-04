@@ -199,7 +199,7 @@ describe("useActiveVoiceReconcile", () => {
       });
     });
     await tick();
-    expect(calls).toEqual([{ id: "m/a.pth", name: "甲", tag: "" }]);
+    expect(calls).toEqual([{ id: "m/a.pth", name: "甲" }]);
   });
 
   it("初始就是 model_active:null：也要把已显示的选中音色清掉", async () => {
@@ -209,7 +209,7 @@ describe("useActiveVoiceReconcile", () => {
     const m = mount(<Probe status={st(null)} />);
     mounts.push(m);
     await tick();
-    expect(calls).toEqual([{ id: "", name: "", tag: "" }]);
+    expect(calls).toEqual([{ id: "", name: "" }]);
     expect(tauri.invoke).not.toHaveBeenCalled();
   });
 
@@ -243,7 +243,7 @@ describe("useActiveVoiceReconcile", () => {
       });
     });
     await tick();
-    expect(calls).toEqual([{ id: "m/a.pth", name: "甲", tag: "" }]);
+    expect(calls).toEqual([{ id: "m/a.pth", name: "甲" }]);
   });
 
   it("停了再起的同一路径要重新对账（worker 寿命变了）", async () => {
@@ -319,7 +319,7 @@ describe("useActiveVoiceReconcile", () => {
     await tick();
     await tick();
     expect(calls).toEqual([
-      { id: "F:/Root/User_Data/models/a/model.pth", name: "甲", tag: "" },
+      { id: "F:/Root/User_Data/models/a/model.pth", name: "甲" },
     ]);
   });
 
@@ -367,6 +367,6 @@ describe("useActiveVoiceReconcile", () => {
       m.root.render(<Probe status={st(null)} />);
     });
     await tick();
-    expect(calls[calls.length - 1]).toEqual({ id: "", name: "", tag: "" });
+    expect(calls[calls.length - 1]).toEqual({ id: "", name: "" });
   });
 });

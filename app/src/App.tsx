@@ -223,7 +223,6 @@ export default function App() {
   const [voiceName, setVoiceName] = useState("");
   const [voiceId, setVoiceId] = useState("");
   const [profileSummary, setProfileSummary] = useState("");
-  const [voiceTag, setVoiceTag] = useState("");
   const [voicePos, setVoicePos] = useState("");
   /** 生效中的 DSP 预设 id；空 = 没开。底栏靠它画那条「音色 → 预设」的链。 */
   const [dspId, setDspId] = useState("");
@@ -472,7 +471,6 @@ export default function App() {
         if (c.model) {
           setVoiceName(String(c.model.name || ""));
           setVoiceId(modelKey(c.model));
-          setVoiceTag(String(c.model.tag || ""));
         }
         setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
         if (c.pitch != null) setPitch(Number(c.pitch));
@@ -519,7 +517,6 @@ export default function App() {
             if (!cur.model) return;
             setVoiceName(String(cur.model.name || ""));
             setVoiceId(modelKey(cur.model));
-            setVoiceTag(String((cur.model as { tag?: string }).tag || ""));
             setVoicePos(
               cur.index && cur.total ? `${cur.index}/${cur.total}` : "",
             );
@@ -736,7 +733,6 @@ export default function App() {
           if (c.model) {
             setVoiceName(String(c.model.name || ""));
             setVoiceId(modelKey(c.model));
-            setVoiceTag(String((c.model as { tag?: string }).tag || ""));
             setVoicePos(c.index && c.total ? `${c.index}/${c.total}` : "");
             if (c.pitch != null) setPitch(Number(c.pitch));
             if (c.formant != null) setFormant(Number(c.formant));
@@ -779,7 +775,6 @@ export default function App() {
     if (!model.path && !model.dir && !model.name) {
       setVoiceName("");
       setVoiceId("");
-      setVoiceTag("");
       setVoicePos("");
       return;
     }
@@ -792,7 +787,6 @@ export default function App() {
       if (p != null) setPitch(Number(p));
       if (f != null) setFormant(Number(f));
       if (ps) setProfileSummary(ps);
-      setVoiceTag(String((model as { tag?: string }).tag || ""));
       // Keep what a later start will send in step with what the dock shows.
       syncParams({
         pitch: p != null ? Number(p) : undefined,
@@ -847,7 +841,6 @@ export default function App() {
         if (v.id === voiceIdRef.current) return;
         setVoiceName(v.name);
         setVoiceId(v.id);
-        setVoiceTag(v.tag);
         if (!v.id) setVoicePos("");
       },
       [],
@@ -1514,7 +1507,6 @@ export default function App() {
         voiceName={voiceName}
         dspName={dspName}
         onStopDsp={stopDsp}
-        voiceTag={voiceTag}
         voiceIndex={voicePos}
         pitch={pitch}
         formant={formant}

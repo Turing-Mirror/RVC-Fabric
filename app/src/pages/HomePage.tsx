@@ -16,7 +16,6 @@ import { resolveCover, useCoverCache } from "../lib/cover";
 import { useFlipRow } from "../lib/flip";
 import {
   displayVoiceName,
-  displayVoiceTag,
   displayVoiceAuthor,
   voiceAuthorList,
   voiceVersionLabel,
@@ -369,7 +368,6 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
               const ver = voiceVersionLabel(v.date);
               const authors = voiceAuthorList(v);
               const title = displayVoiceName(v);
-              const tag = displayVoiceTag(v) || t("s.c4301894a2");
               const author = displayVoiceAuthor(v);
               return (
                 <button
@@ -428,9 +426,6 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                     {v.has_index ? (
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
                     ) : null}
-                  </div>
-                  <div className="text-[11.5px] text-[var(--meta)] mt-3">
-                    {tag}
                   </div>
                   <div
                     className={[

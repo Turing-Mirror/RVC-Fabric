@@ -391,7 +391,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                       // 封面按原色显示。以前未选中的一律去色、选中才恢复，
                       // 那是拿画师的画当状态指示器用 —— 选中状态由描边和尺寸
                       // 表达就够了。
-                      "transition-[width,font-size,transform,box-shadow] duration-300 ease-[var(--spring)]",
+                      // 尺寸和换位一起交给外层 FLIP；宽度再做 CSS 过渡会让落点漂移。
+                      "transition-[transform,box-shadow] duration-300 ease-[var(--spring)]",
                       "active:scale-[0.985]",
                       cur || pend
                         ? "shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--ink)_26%,transparent)]"

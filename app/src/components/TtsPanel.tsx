@@ -1492,6 +1492,18 @@ function StsSection() {
                   >
                     {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
                   </Btn>
+                  {canTrimAudio(f.path) ? (
+                    <Btn
+                      disabled={running || recording}
+                      onClick={() => {
+                        setFileMenu(null);
+                        setTrimPath(f.path);
+                        setTrimOpen(true);
+                      }}
+                    >
+                      {t("s.stsTrim")}
+                    </Btn>
+                  ) : null}
                   <Btn
                     className="px-2.5"
                     disabled={running || recording}
@@ -1507,18 +1519,6 @@ function StsSection() {
               <MoreMenuPopup
                 anchor={fileMenu.anchor}
                 items={[
-                  ...(canTrimAudio(fileMenu.file.path)
-                    ? [
-                        {
-                          label: t("s.stsTrim"),
-                          action: () => {
-                            setFileMenu(null);
-                            setTrimPath(fileMenu.file.path);
-                            setTrimOpen(true);
-                          },
-                        },
-                      ]
-                    : []),
                   ...(fileMenu.file.excluded
                     ? [
                         {

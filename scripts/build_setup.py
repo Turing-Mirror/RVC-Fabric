@@ -238,7 +238,7 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
         "includes_vbcable": False,
         "includes_engine_assets": False,
         "includes_engine_core": False,
-        "includes_audio_tools": True,
+        "includes_audio_tools": False,
         "runtime_channel": "cnb_release",
         "runtime_release_tag": "RVC-runtime",
         "engine_core_channel": "cnb_lfs",
@@ -247,7 +247,7 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
         "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
         "installer": "inno_setup",
         "iss": "installer/RVC_Fabric_Setup.iss",
-        "note": "内置共用音频组件；Runtime、变声资源及 VB-Cable 按需补全。",
+        "note": "Runtime、变声资源、音频组件及 VB-Cable 按需补全。",
     }
     (out / "setup_package.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"

@@ -86,7 +86,7 @@ def mark_installer_kind() -> None:
     meta["installer"] = "tauri_nsis"
     meta.pop("iss", None)
     meta["note"] = (
-        "内置共用音频组件；Runtime、变声资源及 VB-Cable 按需补全。"
+        "Runtime、变声资源、音频组件及 VB-Cable 按需补全。"
     )
     meta_path.write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

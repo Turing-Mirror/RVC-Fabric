@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
+import { Collapse } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar, Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
@@ -375,13 +376,14 @@ function formatRecSec(sec: number): string {
 }
 
 /**
- * 条目名字下面那一行：单条音高与「原声 / 转换后」切换。
+ * 条目名字下面那一行：音高标签与「原声 / 转换后」切换。
  *
- * 两样都只在用到时才出现 —— 没设单条音高、还没转换过的条目，这一行不画，
- * 新手看到的清单和以前一样。
+ * 音高标签常驻：未单独设置时以浅色显示整批音高，单独设置后高亮。
+ * 单条音高只从这个标签进入，不另设按钮或菜单项。
  */
 function ItemExtras({
   pitch,
+  batchPitch,
   outputs,
   selected,
   disabled,
@@ -389,13 +391,13 @@ function ItemExtras({
   onVersion,
 }: {
   pitch?: number;
+  batchPitch: number;
   outputs: StsResult[];
   selected: string;
   disabled: boolean;
   onPitch: () => void;
   onVersion: (dest: string) => void;
 }) {
-  if (pitch == null && !outputs.length) return null;
   const pill = (on: boolean) =>
     [
       "cursor-pointer rounded-full border-0 px-2 py-0.5",
@@ -406,11 +408,15 @@ function ItemExtras({
   return (
     // 字号写在容器上：全局 button { font: inherit } 会盖掉按钮自己的字号类。
     <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight">
-      {pitch != null ? (
-        <button type="button" className={pill(false)} disabled={disabled} onClick={onPitch}>
-          {t("s.stsItemPitch", { v0: fmtPitch(pitch) })}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className={pill(pitch != null)}
+        disabled={disabled}
+        title={t("s.stsItemPitchTip")}
+        onClick={onPitch}
+      >
+        {t("s.stsItemPitch", { v0: fmtPitch(pitch ?? batchPitch) })}
+      </button>
       {outputs.length ? (
         <>
           <button type="button" className={pill(!selected)} onClick={() => onVersion("")}>
@@ -455,7 +461,13 @@ function StsSection() {
   // 用户在一个面板学会的位置到另一个面板就找不着了。
   const advRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (adv) advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    if (!adv) return;
+    // 等展开动画放完再滚，否则滚到的是动画中途的高度。
+    const id = window.setTimeout(
+      () => advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" }),
+      300,
+    );
+    return () => window.clearTimeout(id);
   }, [adv]);
   const [sid, setSid] = useState(STS_DEFAULTS.sid);
   const [f0File, setF0File] = useState(STS_DEFAULTS.f0File);
@@ -1551,7 +1563,10 @@ function StsSection() {
           <ul className="m-0 list-none p-0 pb-1">
             {scan!.sources!.map((s) => {
               const miss = scan?.missing?.find((m) => m.id === s.id);
-              const { name, parent } = splitPath(s.path);
+              const split = splitPath(s.path);
+              const isDefault = !!st.default_input_dir && samePath(s.path, st.default_input_dir);
+              const name = isDefault ? t("s.stsDefaultInputDir") : split.name;
+              const parent = isDefault ? s.path : split.parent;
               return (
                 <li
                   key={s.id}
@@ -1720,12 +1735,6 @@ function StsSection() {
             {t("s.stsRestoreSel")}
           </Btn>
           <Btn
-            disabled={running || recording || !checked.size}
-            onClick={() => void editItemPitch([...checked])}
-          >
-            {t("s.stsItemPitchSet")}
-          </Btn>
-          <Btn
             disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
             onClick={() => {
               void (async () => {
@@ -1812,10 +1821,13 @@ function StsSection() {
                   </button>
                   <ItemExtras
                     pitch={itemPitch[pathKey(f.path)]}
+                    batchPitch={pitch}
                     outputs={outputs[pathKey(f.path)] || []}
                     selected={version[pathKey(f.path)] ?? ""}
                     disabled={running || recording}
-                    onPitch={() => void editItemPitch([f.path])}
+                    onPitch={() =>
+                      void editItemPitch(checked.has(f.path) ? [...checked] : [f.path])
+                    }
                     onVersion={(dest) => switchVersion(f, dest)}
                   />
                   </div>
@@ -1876,13 +1888,6 @@ function StsSection() {
                             void invoke("sts_sources_exclude", {
                               path: fileMenu.file.path,
                             }).then(() => refreshScan());
-                          },
-                        },
-                        {
-                          label: t("s.stsItemPitchSet"),
-                          action: () => {
-                            setFileMenu(null);
-                            void editItemPitch([fileMenu.file.path]);
                           },
                         },
                         {
@@ -1987,7 +1992,7 @@ function StsSection() {
       </div>
 
       {/* 进阶设置的开关挪进了底栏（与训练面板同位），展开的内容留在这里。 */}
-      {adv ? (
+      <Collapse open={adv}>
         <div ref={advRef} className="mt-3 flex flex-col gap-3.5">
           <div>
           <div className={ROW}>
@@ -2118,7 +2123,7 @@ function StsSection() {
               }
             />
           </div>
-      ) : null}
+      </Collapse>
 
       {prog || running ? (
         <div className="mt-4">

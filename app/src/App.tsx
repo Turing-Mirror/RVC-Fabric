@@ -85,7 +85,8 @@ function prefetchPages() {
   void import("./pages/HelpPage");
   void import("./pages/MorePage");
 }
-import { ensureAudioTools, registerDownloadModelsOpener } from "./lib/downloadModels";
+import { getAssetsStatus, promptAudioTools, registerAudioToolsPrompt, registerDownloadModelsOpener } from "./lib/downloadModels";
+import { AudioToolsDialog } from "./components/AudioToolsDialog";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
@@ -683,6 +684,40 @@ export default function App() {
     return () => registerDownloadModelsOpener(null);
   }, [openDownloadModels]);
 
+  // —— 音频组件（ffmpeg）提示：安装包不带，缺了就问一声，由用户决定下不下 ——
+  const [audioTools, setAudioTools] = useState<{ open: boolean; size?: number }>({ open: false });
+  const audioToolsThen = useRef<(() => void) | null>(null);
+  const audioToolsAsked = useRef(false);
+  useEffect(() => {
+    registerAudioToolsPrompt((opts) => {
+      const then = opts?.then;
+      if (!opts?.force && audioToolsAsked.current) {
+        then?.();
+        return;
+      }
+      void getAssetsStatus()
+        .then((st) => {
+          if (st.audio_tools_ready !== false) {
+            then?.();
+            return;
+          }
+          audioToolsAsked.current = true;
+          audioToolsThen.current = then ?? null;
+          setAudioTools({ open: true, size: st.audio_tools_size_bytes });
+        })
+        .catch(() => then?.());
+    });
+    return () => registerAudioToolsPrompt(null);
+  }, []);
+  const closeAudioTools = () => {
+    setAudioTools((a) => ({ ...a, open: false }));
+    const then = audioToolsThen.current;
+    audioToolsThen.current = null;
+    then?.();
+  };
+  // 跳过运行时：反馈须知看完之后再问音频组件，两个窗口不叠在一起。
+  const audioAfterNotice = useRef(false);
+
   // 工具窗口（人声分离 / 训练音色）点「下载模型」时发过来的。那边是独立的
   // webview，没有广场可去，只能把主窗口叫到前面再让它跳。
   useEffect(() => {
@@ -1192,12 +1227,13 @@ export default function App() {
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);
-          // 跳过引擎资源时同样缺音频组件；已装好则后端直接返回。
-          void ensureAudioTools();
-          // 运行时装好了，接着一步步把变声设置好
-          void invoke<Record<string, unknown>>("config_get")
-            .then((cfg) => { if (cfg.setup_guide_done !== true) openGuide("cable"); })
-            .catch(() => { });
+          // 跳过了引擎资源就还缺音频组件：先问一声，再进新手引导。
+          promptAudioTools({
+            then: () =>
+              void invoke<Record<string, unknown>>("config_get")
+                .then((cfg) => { if (cfg.setup_guide_done !== true) openGuide("cable"); })
+                .catch(() => { }),
+          });
           // 这里以前调的是 getProvisionStatus()，**结果直接扔掉** —— 问了等于
           // 没问，engine.provision 还是补全之前那份 runtime_ready: false。
           // 于是运行时装好了，「开启变声」照样被 toggleRun 开头那道闸拦下来
@@ -1213,11 +1249,20 @@ export default function App() {
         onDismiss={() => {
           setShowProvision(false);
           setNoticeGate(true);
-          // 安装包不带 ffmpeg；跳过 Runtime 的用户也要能用音频库。
-          void ensureAudioTools();
+          audioAfterNotice.current = true;
         }}
       />
-      <FeedbackNoticeGate open={noticeGate} onDone={() => setNoticeGate(false)} />
+      <FeedbackNoticeGate
+        open={noticeGate}
+        onDone={() => {
+          setNoticeGate(false);
+          if (audioAfterNotice.current) {
+            audioAfterNotice.current = false;
+            promptAudioTools();
+          }
+        }}
+      />
+      <AudioToolsDialog open={audioTools.open} sizeBytes={audioTools.size} onClose={closeAudioTools} />
 
       <PageHost page={page}>
         {(id) => (

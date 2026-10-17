@@ -69,7 +69,7 @@
     "recursive": "Include subfolders",
     "readFailed": "The audio library could not be read. Check the library file.",
     "operationFailed": "The operation could not be completed. Check the file or device and try again.",
-    "toolsMissing": "The audio components are missing and are downloading in the background. Try again when the download finishes.",
+    "toolsMissing": "The audio components are missing. Download them first.",
     "numberTaken": "Another audio entry already uses this number.",
     "numberInvalid": "Enter a valid positive integer.",
     "clipInvalid": "Enter a clip name and a valid time range.",
@@ -184,6 +184,17 @@
     "sourceMenu": "Source actions",
     "noVoiceDevice": "Not selected",
     "changeVoiceDevice": "Change"
+  },
+  "audioTools": {
+    "title": "Audio components",
+    "desc": "Playback, preview and waveforms on the Audio page need the audio components (ffmpeg, about {v0}). Download them now or later from the Audio page.",
+    "download": "Download",
+    "later": "Later",
+    "downloading": "Downloading audio components",
+    "background": "Continue in background",
+    "done": "The audio components are ready.",
+    "ok": "OK",
+    "retry": "Retry"
   },
   "window": {
     "minimize": "Minimize",

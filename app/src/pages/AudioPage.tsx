@@ -7,7 +7,7 @@ import { Swap } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
 import { Select, Slider } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
-import { ensureAudioTools } from "../lib/downloadModels";
+import { promptAudioTools } from "../lib/downloadModels";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
 import { WaveformRange } from "../components/WaveformRange";
@@ -98,9 +98,9 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     setLibrary((previous) => next.revision >= previous.revision ? next : previous);
   }, []);
 
-  // 安装包不带 ffmpeg：进音频页时后台补上，已有则立即返回。
+  // 安装包不带 ffmpeg：进音频页时缺了就问一声（每次启动只问一次）。
   useEffect(() => {
-    void ensureAudioTools();
+    promptAudioTools();
   }, []);
 
   useEffect(() => {
@@ -269,7 +269,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
       await action();
     } catch (cause) {
       const code = String(cause);
-      if (code.includes("audio_tools_missing")) void ensureAudioTools();
+      if (code.includes("audio_tools_missing")) promptAudioTools({ force: true });
       if (code.includes("audio_scan_cancelled")) {
         setNotice(t("audio.scanCancelled"));
       } else if (code.includes("audio_export_cancelled")) {

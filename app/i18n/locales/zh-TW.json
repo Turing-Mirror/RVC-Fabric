@@ -69,7 +69,7 @@
     "recursive": "包含子資料夾",
     "readFailed": "無法讀取音訊庫。請檢查音訊庫檔案。",
     "operationFailed": "操作未能完成。請檢查檔案或裝置後重試。",
-    "toolsMissing": "缺少音訊處理元件，正在背景下載。下載完成後請重試。",
+    "toolsMissing": "缺少音訊元件。請先下載音訊元件。",
     "numberTaken": "此編號已由其他音訊使用。",
     "numberInvalid": "請輸入有效的正整數編號。",
     "clipInvalid": "請填寫片段名稱和有效的起訖時間。",
@@ -184,6 +184,17 @@
     "sourceMenu": "來源操作",
     "noVoiceDevice": "未選擇",
     "changeVoiceDevice": "變更"
+  },
+  "audioTools": {
+    "title": "音訊元件",
+    "desc": "音訊頁的播放、試聽和波形需要音訊元件（ffmpeg，約 {v0}）。可現在下載，也可稍後在音訊頁下載。",
+    "download": "下載",
+    "later": "稍後",
+    "downloading": "正在下載音訊元件",
+    "background": "背景下載",
+    "done": "音訊元件已就緒。",
+    "ok": "好的",
+    "retry": "重試"
   },
   "window": {
     "minimize": "最小化",

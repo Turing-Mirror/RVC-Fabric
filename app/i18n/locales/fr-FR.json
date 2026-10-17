@@ -69,7 +69,7 @@
     "recursive": "Inclure les sous-dossiers",
     "readFailed": "La bibliothèque audio est illisible. Vérifiez son fichier.",
     "operationFailed": "L'opération a échoué. Vérifiez le fichier ou l'appareil, puis réessayez.",
-    "toolsMissing": "Des composants audio sont manquants et sont en cours de téléchargement en arrière-plan. Réessayez une fois le téléchargement terminé.",
+    "toolsMissing": "Les composants audio sont manquants. Téléchargez-les d'abord.",
     "numberTaken": "Une autre entrée audio utilise déjà ce numéro.",
     "numberInvalid": "Saisissez un entier positif valide.",
     "clipInvalid": "Saisissez un nom et une plage de temps valide pour l'extrait.",
@@ -184,6 +184,17 @@
     "sourceMenu": "Actions de la source",
     "noVoiceDevice": "Non sélectionné",
     "changeVoiceDevice": "Modifier"
+  },
+  "audioTools": {
+    "title": "Composants audio",
+    "desc": "La lecture, l'écoute et les formes d'onde de la page Audio nécessitent les composants audio (ffmpeg, environ {v0}). Téléchargez-les maintenant ou plus tard depuis la page Audio.",
+    "download": "Télécharger",
+    "later": "Plus tard",
+    "downloading": "Téléchargement des composants audio",
+    "background": "Continuer en arrière-plan",
+    "done": "Les composants audio sont prêts.",
+    "ok": "OK",
+    "retry": "Réessayer"
   },
   "window": {
     "minimize": "Réduire",

@@ -43,16 +43,19 @@ class AudioToolsPayload(unittest.TestCase):
             self.assertIn(tool, module.FORBIDDEN)
         self.assertIn("Runtime", module.FORBIDDEN)
 
-    def test_gate_exits_fetch_audio_tools(self):
+    def test_download_is_offered_not_silent(self):
         app = (ROOT / "app/src/App.tsx").read_text(encoding="utf-8")
-        gate = app[app.index("<ProvisionGate"):app.index("<FeedbackNoticeGate")]
-        for handler in ("onDone", "onDismiss"):
-            body = re.search(handler + r"=\{[\s\S]*?\n        \}\}", gate)
-            self.assertIsNotNone(body, handler)
-            self.assertIn("ensureAudioTools()", body.group(0), handler)
+        gate = app[app.index("<ProvisionGate"):app.index("<AudioToolsDialog")]
+        self.assertIn("promptAudioTools({", gate[gate.index("onDone="):gate.index("onDismiss=")])
+        self.assertIn("audioAfterNotice.current = true", gate)
+        self.assertIn("promptAudioTools()", gate[gate.index("<FeedbackNoticeGate"):])
+        # 只有提示窗里点了下载才会真正下载
+        for path in ("app/src/App.tsx", "app/src/pages/AudioPage.tsx"):
+            self.assertNotIn("ensureAudioTools(", (ROOT / path).read_text(encoding="utf-8"), path)
+        dialog = (ROOT / "app/src/components/AudioToolsDialog.tsx").read_text(encoding="utf-8")
+        self.assertIn("ensureAudioTools()", dialog)
         rust = (ROOT / "app/src-tauri/src/lib.rs").read_text(encoding="utf-8")
         self.assertIn("assets_ensure_audio_tools,", rust)
-
 
 if __name__ == "__main__":
     unittest.main()

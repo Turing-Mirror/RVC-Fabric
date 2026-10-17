@@ -69,7 +69,7 @@
     "recursive": "包含子文件夹",
     "readFailed": "无法读取音频库。请检查音频库文件。",
     "operationFailed": "操作未能完成。请检查文件或设备后重试。",
-    "toolsMissing": "缺少音频处理组件，正在后台下载。下载完成后请重试。",
+    "toolsMissing": "缺少音频组件。请先下载音频组件。",
     "numberTaken": "该编号已被其他音频使用。",
     "numberInvalid": "请输入有效的正整数编号。",
     "clipInvalid": "请填写片段名称和有效的起止时间。",
@@ -184,6 +184,17 @@
     "sourceMenu": "来源操作",
     "noVoiceDevice": "未选择",
     "changeVoiceDevice": "更改"
+  },
+  "audioTools": {
+    "title": "音频组件",
+    "desc": "音频页的播放、试听和波形需要音频组件（ffmpeg，约 {v0}）。可现在下载，也可稍后在音频页下载。",
+    "download": "下载",
+    "later": "稍后",
+    "downloading": "正在下载音频组件",
+    "background": "后台下载",
+    "done": "音频组件已就绪。",
+    "ok": "好的",
+    "retry": "重试"
   },
   "window": {
     "minimize": "最小化",

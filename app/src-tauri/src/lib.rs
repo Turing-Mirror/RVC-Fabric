@@ -142,14 +142,24 @@ async fn assets_ensure_engine_core(
     .map_err(|e| e.to_string())?
 }
 
-/// 补全音频组件（ffmpeg / ffprobe）。安装包不再自带，跳过 Runtime 的用户
-/// 在新手引导结束后由界面在后台调用；已有就直接返回。
+/// 补全音频组件（ffmpeg / ffprobe）。安装包不再自带，用户在提示窗里点了
+/// 下载才走到这里；已有就直接返回。进度走 `audio-tools-progress`。
 #[tauri::command]
-async fn assets_ensure_audio_tools(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn assets_ensure_audio_tools(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::async_runtime::spawn_blocking(move || {
-        engine_assets::ensure_audio_tools(&root, cancel, None).map(|_| json!({"ok": true}))
+        let cb: download::ProgressFn = Arc::new(move |done, total, _phase| {
+            let pct = ((done as f64 / total.max(1) as f64) * 100.0).clamp(0.0, 100.0);
+            let _ = app.emit(
+                "audio-tools-progress",
+                json!({ "done": done, "total": total.max(1), "percent": pct }),
+            );
+        });
+        engine_assets::ensure_audio_tools(&root, cancel, Some(cb)).map(|_| json!({"ok": true}))
     })
     .await
     .map_err(|e| e.to_string())?

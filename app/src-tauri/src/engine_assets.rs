@@ -111,6 +111,8 @@ pub fn engine_core_ready(root: &Path) -> bool {
 const AUDIO_TOOLS_SHA: &str =
     "cb64b8af7d50c8198cdf8a0adb023ab12e36fddbfd9d5d4b3fbe8ae007bfb1dc";
 const AUDIO_TOOLS_NAME: &str = "audio-tools-261017.zip";
+/// Shown in the download prompt before the request starts.
+pub const AUDIO_TOOLS_SIZE: u64 = 70_906_118;
 
 pub fn audio_tools_ready(root: &Path) -> bool {
     fabric_audio::decode::AudioTools::at(root).ready()
@@ -544,6 +546,7 @@ pub fn assets_status(root: &Path) -> Value {
         "engine_core_ready": missing.is_empty(),
         "engine_core_missing": missing,
         "audio_tools_ready": audio_tools_ready(root),
+        "audio_tools_size_bytes": AUDIO_TOOLS_SIZE,
         "vbcable_pack_ready": vbcable_pack_ready(root),
         "vbcable_installed": vbcable_installed(),
         "vbcable_dir": vbcable_dir(root).to_string_lossy(),

@@ -69,7 +69,7 @@
     "recursive": "Incluir subcarpetas",
     "readFailed": "No se pudo leer la biblioteca de audio. Comprueba el archivo de la biblioteca.",
     "operationFailed": "No se pudo completar la operación. Comprueba el archivo o dispositivo e inténtalo de nuevo.",
-    "toolsMissing": "Faltan componentes de audio y se están descargando en segundo plano. Inténtalo de nuevo cuando termine la descarga.",
+    "toolsMissing": "Faltan los componentes de audio. Descárgalos primero.",
     "numberTaken": "Otra entrada de audio ya utiliza este número.",
     "numberInvalid": "Introduce un número entero positivo válido.",
     "clipInvalid": "Introduce un nombre y un intervalo de tiempo válido para el fragmento.",
@@ -184,6 +184,17 @@
     "sourceMenu": "Acciones de la fuente",
     "noVoiceDevice": "Sin seleccionar",
     "changeVoiceDevice": "Cambiar"
+  },
+  "audioTools": {
+    "title": "Componentes de audio",
+    "desc": "La reproducción, la escucha previa y las formas de onda de la página Audio necesitan los componentes de audio (ffmpeg, unos {v0}). Descárgalos ahora o más tarde desde la página Audio.",
+    "download": "Descargar",
+    "later": "Más tarde",
+    "downloading": "Descargando componentes de audio",
+    "background": "Continuar en segundo plano",
+    "done": "Los componentes de audio están listos.",
+    "ok": "Aceptar",
+    "retry": "Reintentar"
   },
   "window": {
     "minimize": "Minimizar",

@@ -16,6 +16,7 @@ export type AssetsStatus = {
   engine_core_ready?: boolean;
   engine_core_missing?: string[];
   audio_tools_ready?: boolean;
+  audio_tools_size_bytes?: number;
   vbcable_pack_ready?: boolean;
   vbcable_installed?: boolean;
 };
@@ -77,21 +78,41 @@ export async function isEngineCoreReady(): Promise<boolean> {
 }
 
 /**
- * 后台补全音频组件（ffmpeg / ffprobe）。安装包不带它们；已有时后端直接返回。
- * 同一时刻只跑一次，失败不打扰用户，下次用到时再试。
+ * 下载音频组件（ffmpeg / ffprobe）。安装包不带它们；已有时后端直接返回。
+ * 同一时刻只跑一次：提示窗关掉后下载照常继续，再打开时接上同一个任务。
  */
-let audioToolsJob: Promise<boolean> | null = null;
+let audioToolsJob: Promise<void> | null = null;
 
-export function ensureAudioTools(): Promise<boolean> {
+export function ensureAudioTools(): Promise<void> {
   if (!audioToolsJob) {
     audioToolsJob = invoke("assets_ensure_audio_tools")
-      .then(() => true)
-      .catch(() => false)
+      .then(() => undefined)
       .finally(() => {
         audioToolsJob = null;
       });
   }
   return audioToolsJob;
+}
+
+export function audioToolsDownloading(): boolean {
+  return audioToolsJob !== null;
+}
+
+type AudioToolsPrompt = (opts?: { force?: boolean; then?: () => void }) => void;
+let audioToolsPrompt: AudioToolsPrompt | null = null;
+
+/** App 挂载时注册「音频组件」提示窗。 */
+export function registerAudioToolsPrompt(fn: AudioToolsPrompt | null): void {
+  audioToolsPrompt = fn;
+}
+
+/**
+ * 缺音频组件时弹提示窗，让用户决定下不下。已就绪则直接执行 then。
+ * 不带 force 时每次启动只问一次，用户点了「稍后」就不再追着问。
+ */
+export function promptAudioTools(opts?: { force?: boolean; then?: () => void }): void {
+  if (audioToolsPrompt) audioToolsPrompt(opts);
+  else opts?.then?.();
 }
 
 /**

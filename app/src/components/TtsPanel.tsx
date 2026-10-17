@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
@@ -47,8 +47,9 @@ function deriveRetryable(
       i >= processed ||
       failed.some(
         (b) =>
-          samePath(b.file, e.src) ||
-          (b.file === b.name && baseName(e.src) === b.name),
+          (b.tag ?? "") === (e.tag ?? "") &&
+          (samePath(b.file, e.src) ||
+            (b.file === b.name && baseName(e.src) === b.name)),
       ),
   );
 }
@@ -127,7 +128,21 @@ type SrcScan = {
   cancelled?: boolean;
 };
 
-type ManifestEntry = { src: string; rel: string };
+/**
+ * 冻结清单的一条。多音色对比时同一个源文件按音色各出现一次（model/index/tag），
+ * 单条音高写在 pitch 上；都缺省时与旧清单一样。
+ */
+type ManifestEntry = {
+  src: string;
+  rel: string;
+  pitch?: number;
+  model?: string;
+  index?: string;
+  tag?: string;
+};
+
+/** 一条转换结果：哪个源文件、写到了哪里、用的哪个音色标签。 */
+type StsResult = { src: string; dest: string; tag?: string };
 
 type TtsStatus = {
   runtime_ready?: boolean;
@@ -172,6 +187,8 @@ type Progress = {
   message_code?: string;
   /** 有凭证的任务每条事件回显的归属串；与 runToken 相等才算本窗任务。 */
   owner?: string;
+  /** skip 事件：多音色对比时是哪个音色。 */
+  tag?: string;
 };
 
 /** 批量转换里没转出来的那几个：哪个文件、为什么。 */
@@ -179,6 +196,8 @@ type Skipped = {
   file: string;
   name: string;
   reason: string;
+  /** 多音色对比时是哪个音色没转出来。 */
+  tag?: string;
 };
 
 const ROW = "flex items-center gap-3 py-2.5";
@@ -208,6 +227,51 @@ const STS_F0 = ["rmvpe", "harvest", "pm", "crepe"] as const;
 const STS_FMTS = ["wav", "flac", "mp3", "m4a"] as const;
 const STS_RATES = [0, 16000, 32000, 40000, 44100, 48000] as const;
 
+/** 转换参数的默认值。初始值、滑条复位与「恢复默认」共用这一份。 */
+const STS_DEFAULTS = {
+  pitch: 0,
+  f0method: "rmvpe" as (typeof STS_F0)[number],
+  indexRate: 0.75,
+  protect: 0.33,
+  rms: 0.25,
+  filterRadius: 3,
+  resample: 0,
+  fmt: "wav" as (typeof STS_FMTS)[number],
+  sid: 0,
+  f0File: "",
+};
+/** 除目标音色外最多再加几个对比音色。 */
+const STS_COMPARE_MAX = 3;
+/** 单条音高的可选范围，与整批音高一致。 */
+const STS_PITCH_RANGE = 24;
+/** 单条音高、转换结果、对比音色存在本机，关掉窗口再打开仍在。 */
+const STS_ITEM_PITCH_KEY = "sts.itemPitch";
+const STS_OUTPUTS_KEY = "sts.outputs";
+const STS_COMPARE_KEY = "sts.compare";
+
+/** 路径归一成比较键：Windows 下大小写与斜杠方向不算区别。 */
+const pathKey = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+function loadStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || "null");
+    return raw && typeof raw === "object" ? (raw as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** 存不下（隐私模式、空间满）就只在本次打开期间有效。 */
+function saveStored(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* 忽略 */
+  }
+}
+
+const fmtPitch = (n: number) => (n > 0 ? `+${n}` : String(n));
+
 /**
  * 语音转换工具窗。
  *
@@ -220,18 +284,19 @@ export function TtsPanel() {
 
   return (
     <ToolBody>
-      <StsTitleActions />
-      <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
-      <div className="mb-4">
-        <SegmentControl<Mode>
-          value={mode}
-          onChange={setMode}
-          options={[
-            { id: "sts", label: t("s.9035f9b6d1") },
-            { id: "tts", label: t("s.90872a6528") },
-          ]}
-        />
-      </div>
+      <StsTitleActions
+        right={
+          <SegmentControl<Mode>
+            value={mode}
+            onChange={setMode}
+            options={[
+              { id: "sts", label: t("s.9035f9b6d1") },
+              { id: "tts", label: t("s.90872a6528") },
+            ]}
+          />
+        }
+      />
+      <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
       {mode === "sts" ? <StsSection /> : <TtsSection />}
     </ToolBody>
   );
@@ -244,7 +309,7 @@ export function TtsPanel() {
  * 那份状态；为一颗按钮把整份表单状态抬上去不值，多问一次很便宜。TtsSection 里
  * 那颗「下载模型」走的是 tts_status + infer_present，只管合成链路，跟这里不冲突。
  */
-function StsTitleActions() {
+function StsTitleActions({ right }: { right?: ReactNode }) {
   const [engineReady, setEngineReady] = useState(true);
   useEffect(() => {
     let alive = true;
@@ -265,6 +330,7 @@ function StsTitleActions() {
         <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
       ) : null}
       <Btn onClick={() => openHelpSection("infer")}>{t("s.trainOpenHelp")}</Btn>
+      {right ? <div className="ml-auto">{right}</div> : null}
     </ToolTitleActions>
   );
 }
@@ -308,6 +374,65 @@ function formatRecSec(sec: number): string {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/**
+ * 条目名字下面那一行：单条音高与「原声 / 转换后」切换。
+ *
+ * 两样都只在用到时才出现 —— 没设单条音高、还没转换过的条目，这一行不画，
+ * 新手看到的清单和以前一样。
+ */
+function ItemExtras({
+  pitch,
+  outputs,
+  selected,
+  disabled,
+  onPitch,
+  onVersion,
+}: {
+  pitch?: number;
+  outputs: StsResult[];
+  selected: string;
+  disabled: boolean;
+  onPitch: () => void;
+  onVersion: (dest: string) => void;
+}) {
+  if (pitch == null && !outputs.length) return null;
+  const pill = (on: boolean) =>
+    [
+      "cursor-pointer rounded-full border-0 px-2 py-0.5",
+      on
+        ? "bg-[var(--accent-soft)] text-[var(--ink)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_40%,transparent)]"
+        : "bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] text-[var(--ink-muted)]",
+    ].join(" ");
+  return (
+    // 字号写在容器上：全局 button { font: inherit } 会盖掉按钮自己的字号类。
+    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight">
+      {pitch != null ? (
+        <button type="button" className={pill(false)} disabled={disabled} onClick={onPitch}>
+          {t("s.stsItemPitch", { v0: fmtPitch(pitch) })}
+        </button>
+      ) : null}
+      {outputs.length ? (
+        <>
+          <button type="button" className={pill(!selected)} onClick={() => onVersion("")}>
+            {t("s.stsVersionOriginal")}
+          </button>
+          {outputs.map((o) => (
+            <button
+              key={o.dest}
+              type="button"
+              className={pill(samePath(selected, o.dest))}
+              title={o.dest}
+              onClick={() => onVersion(o.dest)}
+            >
+              {o.tag || t("s.stsVersionConverted")}
+            </button>
+          ))}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function StsSection() {
   const [st, setSt] = useState<StsStatus>({});
   const [voices, setVoices] = useState<VoiceModel[]>([]);
@@ -316,14 +441,14 @@ function StsSection() {
   const [indexPath, setIndexPath] = useState("");
   const [modelName, setModelName] = useState("");
   const [output, setOutput] = useState("");
-  const [pitch, setPitch] = useState(0);
-  const [f0method, setF0method] = useState<(typeof STS_F0)[number]>("rmvpe");
-  const [indexRate, setIndexRate] = useState(0.75);
-  const [protect, setProtect] = useState(0.33);
-  const [rms, setRms] = useState(0.25);
-  const [filterRadius, setFilterRadius] = useState(3);
-  const [resample, setResample] = useState(0);
-  const [fmt, setFmt] = useState<(typeof STS_FMTS)[number]>("wav");
+  const [pitch, setPitch] = useState(STS_DEFAULTS.pitch);
+  const [f0method, setF0method] = useState<(typeof STS_F0)[number]>(STS_DEFAULTS.f0method);
+  const [indexRate, setIndexRate] = useState(STS_DEFAULTS.indexRate);
+  const [protect, setProtect] = useState(STS_DEFAULTS.protect);
+  const [rms, setRms] = useState(STS_DEFAULTS.rms);
+  const [filterRadius, setFilterRadius] = useState(STS_DEFAULTS.filterRadius);
+  const [resample, setResample] = useState(STS_DEFAULTS.resample);
+  const [fmt, setFmt] = useState<(typeof STS_FMTS)[number]>(STS_DEFAULTS.fmt);
   const [adv, setAdv] = useState(false);
   // 与训练面板同一模式：开关在底栏、内容在正文末尾。展开时把内容滚进
   // 视野 —— 两个工具窗曾经各摆各的（这里原来把按钮放在正文中间），
@@ -332,8 +457,34 @@ function StsSection() {
   useEffect(() => {
     if (adv) advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [adv]);
-  const [sid, setSid] = useState(0);
-  const [f0File, setF0File] = useState("");
+  const [sid, setSid] = useState(STS_DEFAULTS.sid);
+  const [f0File, setF0File] = useState(STS_DEFAULTS.f0File);
+  // 进阶里藏着的参数有没有改过：改过就在「进阶设置」按钮上标一个点，免得忘了。
+  const advChanged =
+    protect !== STS_DEFAULTS.protect ||
+    rms !== STS_DEFAULTS.rms ||
+    filterRadius !== STS_DEFAULTS.filterRadius ||
+    resample !== STS_DEFAULTS.resample ||
+    sid !== STS_DEFAULTS.sid ||
+    f0File !== STS_DEFAULTS.f0File;
+  const paramsChanged =
+    advChanged ||
+    pitch !== STS_DEFAULTS.pitch ||
+    f0method !== STS_DEFAULTS.f0method ||
+    indexRate !== STS_DEFAULTS.indexRate ||
+    fmt !== STS_DEFAULTS.fmt;
+  const resetParams = () => {
+    setPitch(STS_DEFAULTS.pitch);
+    setF0method(STS_DEFAULTS.f0method);
+    setIndexRate(STS_DEFAULTS.indexRate);
+    setProtect(STS_DEFAULTS.protect);
+    setRms(STS_DEFAULTS.rms);
+    setFilterRadius(STS_DEFAULTS.filterRadius);
+    setResample(STS_DEFAULTS.resample);
+    setFmt(STS_DEFAULTS.fmt);
+    setSid(STS_DEFAULTS.sid);
+    setF0File(STS_DEFAULTS.f0File);
+  };
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
@@ -409,6 +560,22 @@ function StsSection() {
   const [rec, setRec] = useState<RecProgress | null>(null);
   const [playing, setPlaying] = useState("");
   const [fileMenu, setFileMenu] = useState<{ anchor: PopupAnchor; file: InputFile } | null>(null);
+  // 对比音色（目标音色之外再转几遍）。新手看不到，点「添加对比」才出现。
+  const [compare, setCompare] = useState<string[]>(() => loadStored<string[]>(STS_COMPARE_KEY, []));
+  useEffect(() => saveStored(STS_COMPARE_KEY, compare), [compare]);
+  const [compareMenu, setCompareMenu] = useState<PopupAnchor | null>(null);
+  // 单条音高：路径键 → 半音。覆盖整批音高，存在本机。
+  const [itemPitch, setItemPitch] = useState<Record<string, number>>(() =>
+    loadStored<Record<string, number>>(STS_ITEM_PITCH_KEY, {}),
+  );
+  useEffect(() => saveStored(STS_ITEM_PITCH_KEY, itemPitch), [itemPitch]);
+  // 转换结果：路径键 → 各音色的输出。有了才在条目下显示「原声 / 转换后」。
+  const [outputs, setOutputs] = useState<Record<string, StsResult[]>>(() =>
+    loadStored<Record<string, StsResult[]>>(STS_OUTPUTS_KEY, {}),
+  );
+  useEffect(() => saveStored(STS_OUTPUTS_KEY, outputs), [outputs]);
+  // 每条当前选中的版本：空串 = 原声，否则是输出文件路径。
+  const [version, setVersion] = useState<Record<string, string>>({});
   const recordingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastHomePath = useRef("");
@@ -561,13 +728,16 @@ function StsSection() {
           file: ident,
           name: p.file || "?",
           reason: p.reason || p.message,
+          tag: p.tag,
         };
         // ref 先写、state 后同步：不能在 setState updater 里做副作用——
         // updater 什么时候跑不归 invoke 的 catch 管。
         const prev = skippedRef.current;
         if (
           !prev.some(
-            (x) => x.file === ident || (x.name === entry.name && !p.path),
+            (x) =>
+              (x.tag ?? "") === (entry.tag ?? "") &&
+              (x.file === ident || (x.name === entry.name && !p.path)),
           )
         ) {
           const next = [...prev, entry];
@@ -799,16 +969,61 @@ function StsSection() {
           ? t("s.03877888b6")
           : "";
 
+  /** 这一轮要转的音色：目标音色在前，对比音色在后，去重、去掉已不存在的。 */
+  const targets = (() => {
+    const out: VoiceModel[] = [];
+    const main = voices.find((v) => samePath(v.path, modelPath));
+    for (const path of [modelPath, ...compare]) {
+      if (!path || out.some((v) => samePath(v.path, path))) continue;
+      const v = samePath(path, modelPath) ? main : voices.find((x) => samePath(x.path, path));
+      if (v) out.push(v);
+      else if (samePath(path, modelPath)) out.push({ path: modelPath, name: modelName, index: indexPath } as VoiceModel);
+    }
+    return out;
+  })();
+  const voiceLabel = (v: VoiceModel) => v.name || v.file || baseName(v.path);
+  const compareChoices = voices.filter((v) => !targets.some((x) => samePath(x.path, v.path)));
+
+  const editItemPitch = async (paths: string[]) => {
+    if (!paths.length) return;
+    const cur = itemPitch[pathKey(paths[0])];
+    const raw = await askPrompt(
+      t("s.stsItemPitchAsk", { v0: STS_PITCH_RANGE }),
+      cur == null ? "" : String(cur),
+    );
+    if (raw == null) return;
+    const text = raw.trim();
+    const n = Math.round(Number(text));
+    setItemPitch((prev) => {
+      const next = { ...prev };
+      for (const path of paths) {
+        if (!text || !Number.isFinite(n)) delete next[pathKey(path)];
+        else next[pathKey(path)] = Math.max(-STS_PITCH_RANGE, Math.min(STS_PITCH_RANGE, n));
+      }
+      return next;
+    });
+  };
+
+  /** 本条正在播的是不是它（原声或任一转换结果）。 */
+  const isPlayingItem = (f: InputFile) =>
+    !!playing &&
+    (samePath(playing, f.path) ||
+      (outputs[pathKey(f.path)] || []).some((o) => samePath(o.dest, playing)));
+
+  /** 切换版本；正在播就从同一位置接着播另一个版本，方便对比。 */
+  const switchVersion = (f: InputFile, dest: string) => {
+    setVersion((v) => ({ ...v, [pathKey(f.path)]: dest }));
+    if (!isPlayingItem(f)) return;
+    const at = audioRef.current?.currentTime ?? 0;
+    startPlay(dest || f.path, at);
+  };
+
   const stopPlay = () => {
     audioRef.current?.pause();
     setPlaying("");
   };
 
-  const playFile = (path: string) => {
-    if (playing === path) {
-      stopPlay();
-      return;
-    }
+  const startPlay = (path: string, at = 0) => {
     stopPlay();
     try {
       const el = audioRef.current ?? new Audio();
@@ -819,6 +1034,14 @@ function StsSection() {
         setPlaying("");
         showErr(t("s.stsPlayFail"));
       };
+      if (at > 0) {
+        el.onloadedmetadata = () => {
+          el.currentTime = Math.min(at, el.duration || at);
+          el.onloadedmetadata = null;
+        };
+      } else {
+        el.onloadedmetadata = null;
+      }
       void el.play().then(() => setPlaying(path));
     } catch (e) {
       showErr(String(e));
@@ -1038,7 +1261,28 @@ function StsSection() {
             total?: number;
             excluded?: number;
           }>("sts_snapshot", { output });
-      const manifest = override ?? snap?.manifest ?? [];
+      // 按音色分组展开：先目标音色整批，再逐个对比音色，后端只在换音色时重装。
+      // 只有一个音色时不带 model/tag，输出名与以前一致。
+      const multi = targets.length > 1;
+      const base = snap?.manifest ?? [];
+      const withPitch = (e: ManifestEntry): ManifestEntry => {
+        const own = itemPitch[pathKey(e.src)];
+        return own == null ? e : { ...e, pitch: own };
+      };
+      const manifest =
+        override ??
+        (multi
+          ? targets.flatMap((v) =>
+              base.map((e) =>
+                withPitch({
+                  ...e,
+                  model: v.path,
+                  index: typeof v.index === "string" ? v.index : "",
+                  tag: voiceLabel(v),
+                }),
+              ),
+            )
+          : base.map(withPitch));
       if (!manifest.length) {
         showInfo(t("s.stsNoItems"));
         runningRef.current = false;
@@ -1056,6 +1300,7 @@ function StsSection() {
         files?: string[];
         skipped?: Skipped[];
         output?: string;
+        results?: StsResult[];
       }>("sts_start", {
         input: "",
         output,
@@ -1081,6 +1326,27 @@ function StsSection() {
       doneCountRef.current = manifest.length;
       setRetryable(deriveRetryable(manifest, bad, manifest.length));
       if (r.output) lastDestRef.current = String(r.output);
+      // 记下每条的输出，条目下出现「原声 / 转换后」；默认选中刚转出来的第一个。
+      const results = r.results ?? [];
+      if (results.length) {
+        setOutputs((prev) => {
+          const next = { ...prev };
+          for (const res of results) {
+            const k = pathKey(res.src);
+            const kept = (next[k] || []).filter((o) => (o.tag ?? "") !== (res.tag ?? ""));
+            next[k] = [...kept, res];
+          }
+          return next;
+        });
+        setVersion((prev) => {
+          const next = { ...prev };
+          for (const res of results) {
+            const k = pathKey(res.src);
+            if (!next[k] || !results.some((x) => samePath(x.dest, next[k]))) next[k] = res.dest;
+          }
+          return next;
+        });
+      }
       // 终态清单覆盖过程中累积的，避免 reason 被截断的半截文案。
       setSkipped(bad);
       skippedRef.current = bad;
@@ -1191,12 +1457,63 @@ function StsSection() {
             options={voices.map((m) => ({ id: m.path, label: m.name || m.file || m.path }))}
             placeholder={t("s.03877888b6")}
           />
+          <Btn
+            disabled={running || !compareChoices.length || targets.length > STS_COMPARE_MAX}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setCompareMenu(
+                compareMenu ? null : { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
+              );
+            }}
+          >
+            {t("s.stsCompareAdd")}
+          </Btn>
         </div>
         {!blocked && modelName ? (
           <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
             {t("s.6c415e91bb", { v0: modelName })}
             {indexPath ? t("s.0ca99fa9f1") : ""}
           </p>
+        ) : null}
+        {compareMenu ? (
+          <MoreMenuPopup
+            anchor={compareMenu}
+            onClose={() => setCompareMenu(null)}
+            items={compareChoices.map((v) => ({
+              label: voiceLabel(v),
+              action: () => {
+                setCompareMenu(null);
+                setCompare((c) => [...c, v.path]);
+              },
+            }))}
+          />
+        ) : null}
+        {targets.length > 1 ? (
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.stsCompare")}
+              <HelpMark title={t("s.stsCompareHint")} />
+            </span>
+            <div className="flex flex-1 flex-wrap items-center gap-1.5">
+              {targets.slice(1).map((v) => (
+                <span
+                  key={v.path}
+                  className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] py-1 pl-2.5 pr-1.5 text-[12px]"
+                >
+                  {voiceLabel(v)}
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent px-1 text-[13px] leading-none text-[var(--meta)] hover:text-[var(--ink)]"
+                    disabled={running}
+                    aria-label={t("s.stsCompareRemove", { v0: voiceLabel(v) })}
+                    onClick={() => setCompare((c) => c.filter((x) => !samePath(x, v.path)))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
         ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.stsSources")}</span>
@@ -1358,7 +1675,7 @@ function StsSection() {
         </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <input
-            className={`${FIELD} min-w-0 flex-1`}
+            className={`${FIELD} min-w-[160px] flex-1`}
             placeholder={t("s.stsSearchPh")}
             value={listQuery}
             onChange={(e) => {
@@ -1401,6 +1718,12 @@ function StsSection() {
             onClick={() => void restoreSelected()}
           >
             {t("s.stsRestoreSel")}
+          </Btn>
+          <Btn
+            disabled={running || recording || !checked.size}
+            onClick={() => void editItemPitch([...checked])}
+          >
+            {t("s.stsItemPitchSet")}
           </Btn>
           <Btn
             disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
@@ -1465,9 +1788,10 @@ function StsSection() {
                     onChange={() => undefined}
                     aria-label={f.name}
                   />
+                  <div className="min-w-0 flex-1">
                   <button
                     type="button"
-                    className={`min-w-0 flex-1 border-0 bg-transparent p-0 text-left cursor-pointer ${f.excluded ? "opacity-55" : ""}`}
+                    className={`block w-full min-w-0 border-0 bg-transparent p-0 text-left cursor-pointer ${f.excluded ? "opacity-55" : ""}`}
                     disabled={running || recording}
                     onClick={() => toggleItem(f, false)}
                     title={f.path}
@@ -1486,11 +1810,24 @@ function StsSection() {
                         : `${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
                     </span>
                   </button>
+                  <ItemExtras
+                    pitch={itemPitch[pathKey(f.path)]}
+                    outputs={outputs[pathKey(f.path)] || []}
+                    selected={version[pathKey(f.path)] ?? ""}
+                    disabled={running || recording}
+                    onPitch={() => void editItemPitch([f.path])}
+                    onVersion={(dest) => switchVersion(f, dest)}
+                  />
+                  </div>
                   <Btn
                     disabled={recording}
-                    onClick={() => playFile(f.path)}
+                    onClick={() =>
+                      isPlayingItem(f)
+                        ? stopPlay()
+                        : startPlay(version[pathKey(f.path)] || f.path)
+                    }
                   >
-                    {playing === f.path ? t("s.stsStopPlay") : t("s.stsPlay")}
+                    {isPlayingItem(f) ? t("s.stsStopPlay") : t("s.stsPlay")}
                   </Btn>
                   {canTrimAudio(f.path) ? (
                     <Btn
@@ -1542,6 +1879,13 @@ function StsSection() {
                           },
                         },
                         {
+                          label: t("s.stsItemPitchSet"),
+                          action: () => {
+                            setFileMenu(null);
+                            void editItemPitch([fileMenu.file.path]);
+                          },
+                        },
+                        {
                           label: t("s.1cd80fd7a8"),
                           action: () => {
                             setFileMenu(null);
@@ -1588,7 +1932,7 @@ function StsSection() {
               min={-24}
               max={24}
               step={1}
-              defaultValue={0}
+              defaultValue={STS_DEFAULTS.pitch}
               onChange={setPitch}
               ariaLabel={t("s.bda11a3c2d")}
             />
@@ -1618,7 +1962,7 @@ function StsSection() {
               min={0}
               max={1}
               step={0.01}
-              defaultValue={0.75}
+              defaultValue={STS_DEFAULTS.indexRate}
               onChange={setIndexRate}
               ariaLabel={t("s.389bc211b2")}
             />
@@ -1626,79 +1970,6 @@ function StsSection() {
           <span className="w-[52px] text-right text-[13px] tabular-nums">
             {indexRate.toFixed(2)}
           </span>
-        </div>
-        <div className={ROW}>
-          <span className={`${LABEL} flex items-center gap-1.5`}>
-            {t("s.stsProtect")}
-            <HelpMark title={t("s.stsProtectHint")} />
-          </span>
-          <div className="flex-1">
-            <RangeBar
-              value={protect}
-              min={0}
-              max={0.5}
-              step={0.01}
-              defaultValue={0.33}
-              onChange={setProtect}
-              ariaLabel={t("s.stsProtect")}
-            />
-          </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {protect.toFixed(2)}
-          </span>
-        </div>
-        <div className={ROW}>
-          <span className={`${LABEL} flex items-center gap-1.5`}>
-            {t("s.stsRms")}
-            <HelpMark title={t("s.stsRmsHint")} />
-          </span>
-          <div className="flex-1">
-            <RangeBar
-              value={rms}
-              min={0}
-              max={1}
-              step={0.01}
-              defaultValue={0.25}
-              onChange={setRms}
-              ariaLabel={t("s.stsRms")}
-            />
-          </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {rms.toFixed(2)}
-          </span>
-        </div>
-        <div className={ROW}>
-          <span className={`${LABEL} flex items-center gap-1.5`}>
-            {t("s.stsFilter")}
-            <HelpMark title={t("s.stsFilterHint")} />
-          </span>
-          <div className="flex-1">
-            <RangeBar
-              value={filterRadius}
-              min={0}
-              max={7}
-              step={1}
-              defaultValue={3}
-              onChange={setFilterRadius}
-              ariaLabel={t("s.stsFilter")}
-            />
-          </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {filterRadius}
-          </span>
-        </div>
-        <div className={ROW}>
-          <span className={`${LABEL} flex items-center gap-1.5`}>
-            {t("s.stsResample")}
-            <HelpMark title={t("s.stsResampleHint")} />
-          </span>
-          <Select
-            box={TOOL_BOX}
-            className="flex-1"
-            value={String(resample)}
-            onChange={(v) => setResample(Number(v) || 0)}
-            options={STS_RATES.map((n) => ({ id: String(n), label: n === 0 ? t("s.stsResampleOff") : `${n}` }))}
-          />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -1718,6 +1989,81 @@ function StsSection() {
       {/* 进阶设置的开关挪进了底栏（与训练面板同位），展开的内容留在这里。 */}
       {adv ? (
         <div ref={advRef} className="mt-3 flex flex-col gap-3.5">
+          <div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.stsProtect")}
+              <HelpMark title={t("s.stsProtectHint")} />
+            </span>
+            <div className="flex-1">
+              <RangeBar
+                value={protect}
+                min={0}
+                max={0.5}
+                step={0.01}
+                defaultValue={STS_DEFAULTS.protect}
+                onChange={setProtect}
+                ariaLabel={t("s.stsProtect")}
+              />
+            </div>
+            <span className="w-[52px] text-right text-[13px] tabular-nums">
+              {protect.toFixed(2)}
+            </span>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.stsRms")}
+              <HelpMark title={t("s.stsRmsHint")} />
+            </span>
+            <div className="flex-1">
+              <RangeBar
+                value={rms}
+                min={0}
+                max={1}
+                step={0.01}
+                defaultValue={STS_DEFAULTS.rms}
+                onChange={setRms}
+                ariaLabel={t("s.stsRms")}
+              />
+            </div>
+            <span className="w-[52px] text-right text-[13px] tabular-nums">
+              {rms.toFixed(2)}
+            </span>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.stsFilter")}
+              <HelpMark title={t("s.stsFilterHint")} />
+            </span>
+            <div className="flex-1">
+              <RangeBar
+                value={filterRadius}
+                min={0}
+                max={7}
+                step={1}
+                defaultValue={STS_DEFAULTS.filterRadius}
+                onChange={setFilterRadius}
+                ariaLabel={t("s.stsFilter")}
+              />
+            </div>
+            <span className="w-[52px] text-right text-[13px] tabular-nums">
+              {filterRadius}
+            </span>
+          </div>
+          <div className={ROW}>
+            <span className={`${LABEL} flex items-center gap-1.5`}>
+              {t("s.stsResample")}
+              <HelpMark title={t("s.stsResampleHint")} />
+            </span>
+            <Select
+              box={TOOL_BOX}
+              className="flex-1"
+              value={String(resample)}
+              onChange={(v) => setResample(Number(v) || 0)}
+              options={STS_RATES.map((n) => ({ id: String(n), label: n === 0 ? t("s.stsResampleOff") : `${n}` }))}
+            />
+          </div>
+          </div>
             <Field
               label={t("s.stsSid")}
               tip={t("s.stsSidHint")}
@@ -1729,7 +2075,7 @@ function StsSection() {
                       min={0}
                       max={16}
                       step={1}
-                      defaultValue={0}
+                      defaultValue={STS_DEFAULTS.sid}
                       onChange={setSid}
                       ariaLabel={t("s.stsSid")}
                     />
@@ -1827,10 +2173,11 @@ function StsSection() {
           <ul className="m-0 list-none p-0">
             {skipped.map((s) => (
               <li
-                key={s.file}
+                key={`${s.file}|${s.tag ?? ""}`}
                 className="py-0.5 text-[12px] text-[var(--meta)] break-all"
               >
                 <span className="font-mono">{s.name}</span>
+                {s.tag ? ` · ${s.tag}` : ""}
                 {` — ${s.reason}`}
               </li>
             ))}
@@ -1842,6 +2189,15 @@ function StsSection() {
         {/* 进阶设置开关与训练面板同位：底栏左侧，主操作永远在最右。 */}
         <Btn onClick={() => setAdv((v) => !v)}>
           {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
+          {advChanged && !adv ? (
+            <span
+              aria-hidden
+              className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)] align-middle"
+            />
+          ) : null}
+        </Btn>
+        <Btn disabled={running || !paramsChanged} onClick={resetParams}>
+          {t("s.stsResetDefaults")}
         </Btn>
         <div className="ml-auto flex items-center gap-2.5">
           {running && ownsRun && ownerProven ? (
@@ -1873,7 +2229,7 @@ function StsSection() {
           >
             {running
               ? t("s.090840132b")
-              : t("s.stsWillProcess", { v0: scan?.pending ?? 0 })}
+              : t("s.stsWillProcess", { v0: (scan?.pending ?? 0) * Math.max(1, targets.length) })}
           </Btn>
         </div>
       </ToolActions>

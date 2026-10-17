@@ -4021,9 +4021,10 @@ if __name__ == "__main__":
 
             out_files: list = []
             skipped: list = []
+            results: list = []
             try:
                 with _sts_stage(timer, "convert"):
-                    out_files, skipped, cancelled = sts_core.run_batch(
+                    out_files, skipped, cancelled, results = sts_core.run_batch(
                         vc,
                         files,
                         out_dir,
@@ -4092,6 +4093,7 @@ if __name__ == "__main__":
                     done=len(out_files),
                     pct=prog.last_pct,
                     files=out_files,
+                    results=results,
                     skipped=skipped,
                     ok=len(out_files),
                     skip=len(skipped),
@@ -4123,6 +4125,7 @@ if __name__ == "__main__":
             self._sts_emit(
                 phase="done",
                 files=out_files,
+                results=results,
                 skipped=skipped,
                 total=total,
                 done=total,

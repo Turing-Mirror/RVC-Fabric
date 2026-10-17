@@ -6,7 +6,10 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -333,6 +336,204 @@ class TorchRuntimeTests(unittest.TestCase):
                 sys.modules.pop("torch", None)
             else:
                 sys.modules["torch"] = old
+
+
+class ManifestWorkerTests(unittest.TestCase):
+    def setUp(self):
+        import tools.sts_worker as worker
+
+        self.worker = worker
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
+        self.src = self.root / "a.wav"
+        self.src.write_bytes(b"RIFF-fake")
+        self.models = {name: self.root / f"{name}.pth" for name in ("A", "B", "bad")}
+        for model in self.models.values():
+            model.touch()
+        self.events, self.loads, self.converted = [], [], []
+        self.side_loads = {"hubert": 0, "rmvpe": 0}
+        fixture = self
+
+        class VC:
+            pipeline = None
+            hubert_model = None
+
+            def get_vc(self, model):
+                fixture.loads.append(model)
+                if model == str(fixture.models["bad"]) or not Path(model).is_file():
+                    raise RuntimeError("模型损坏")
+                self.model = model
+                self.pipeline = SimpleNamespace(device="cpu", is_half=False)
+
+        self.engine = worker._Engine()
+        self.engine.config = SimpleNamespace(device="cpu", is_half=False)
+        self.engine.vc = VC()
+
+        def preload(vc, config, f0method, prog):
+            if vc.hubert_model is None:
+                self.side_loads["hubert"] += 1
+                vc.hubert_model = object()
+            if not hasattr(vc.pipeline, "model_rmvpe"):
+                self.side_loads["rmvpe"] += 1
+                vc.pipeline.model_rmvpe = object()
+
+        def convert(vc, src, dest, **kwargs):
+            self.converted.append((vc.model, str(src), kwargs["pitch"], kwargs["index_path"]))
+            dest.write_bytes(b"audio")
+
+        for name, value in (
+            ("_ensure_rvc_env", None), ("_preflight_engine", None), ("_new_timer", None),
+            ("_tune_torch", None), ("cuda_empty_cache", None),
+        ):
+            self.stack.enter_context(patch.object(worker, name, return_value=value))
+        self.stack.enter_context(patch.object(worker, "emit", side_effect=lambda **e: self.events.append(e)))
+        self.stack.enter_context(patch.object(worker, "preload_side_models", side_effect=preload))
+        self.stack.enter_context(patch("tools.sts_core.convert_one", side_effect=convert))
+        self.stack.enter_context(patch.dict(os.environ, {"TM_VOICE_ROOT": str(self.root)}))
+        scipy = ModuleType("scipy")
+        scipy_io = ModuleType("scipy.io")
+        scipy.io = scipy_io
+        scipy_io.wavfile = SimpleNamespace()
+        self.stack.enter_context(patch.dict(sys.modules, {"scipy": scipy, "scipy.io": scipy_io}))
+
+    def request(self, manifest):
+        return dict(output=str(self.root / "out"), model=str(self.models["A"]), pitch=7, manifest=manifest)
+
+    def item(self, model=None, tag="", **extra):
+        entry = dict(src=str(self.src), rel="source/a.wav", tag=tag, **extra)
+        if model:
+            entry["model"] = str(self.models[model])
+        return entry
+
+    def test_model_order_reloads_only_on_changes_and_keeps_side_models(self):
+        manifest = [self.item(tag="A1", pitch=0), self.item(tag="A2"), self.item("B", "B1", pitch=-4),
+                    self.item("B", "B2", pitch=None), self.item("A", "A3")]
+        rc = self.worker.run_request(self.engine, self.request(manifest))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.loads, [str(self.models[m]) for m in ("A", "B", "A")])
+        self.assertEqual([c[0] for c in self.converted], [str(self.models[m]) for m in ("A", "A", "B", "B", "A")])
+        self.assertEqual([c[2] for c in self.converted], [0, 7, -4, 7, 7])
+        self.assertEqual(self.side_loads, {"hubert": 1, "rmvpe": 1})
+        done = self.events[-1]
+        self.assertEqual(done["phase"], "done")
+        self.assertEqual(done["total"], len(manifest))
+        self.assertEqual([r["tag"] for r in done["results"]], [e["tag"] for e in manifest])
+        self.assertEqual([r["dest"] for r in done["results"]], done["files"])
+        progress = [e["done"] for e in self.events if "done" in e]
+        self.assertEqual(progress, sorted(progress))
+        # 后续请求继续复用当前 A，换音色时也只重装 net_g。
+        self.assertEqual(self.worker.run_request(self.engine, self.request([self.item()])), 0)
+        self.assertEqual(self.loads, [str(self.models[m]) for m in ("A", "B", "A")])
+        self.assertEqual(self.side_loads, {"hubert": 1, "rmvpe": 1})
+
+    def test_failed_model_is_skipped_once_and_later_models_continue_in_order(self):
+        manifest = [self.item("bad", "bad1"), self.item(tag="A1"), self.item("bad", "bad2"),
+                    self.item("B", "B1"), self.item("B", "B2")]
+        self.assertEqual(self.worker.run_request(self.engine, self.request(manifest)), 0)
+        self.assertEqual(self.loads, [str(self.models[m]) for m in ("bad", "A", "B")])
+        self.assertEqual([c[0] for c in self.converted], [str(self.models[m]) for m in ("A", "B", "B")])
+        done = self.events[-1]
+        self.assertEqual(done["total"], 5)
+        self.assertEqual((done["ok"], done["skip"]), (3, 2))
+        self.assertEqual([r["tag"] for r in done["results"]], ["A1", "B1", "B2"])
+        self.assertEqual([r["tag"] for r in done["skipped"]], ["bad1", "bad2"])
+        skips = [e for e in self.events if e["phase"] == "skip"]
+        self.assertEqual([e["done"] for e in skips], [1, 3])
+        self.assertEqual([e["tag"] for e in skips], ["bad1", "bad2"])
+        for skipped in done["skipped"]:
+            self.assertIn(str(self.models["bad"]), skipped["reason"])
+            self.assertIn("模型损坏", skipped["reason"])
+
+    def test_failed_default_model_does_not_abort_other_voices(self):
+        req = self.request([self.item(tag="bad1"), self.item("A", "A"), self.item(tag="bad2")])
+        req["model"] = str(self.models["bad"])
+        self.assertEqual(self.worker.run_request(self.engine, req), 0)
+        self.assertEqual(self.loads, [str(self.models[m]) for m in ("bad", "A")])
+        self.assertEqual([r["tag"] for r in self.events[-1]["results"]], ["A"])
+
+    def test_load_failure_after_success_does_not_lose_shared_models(self):
+        manifest = [self.item(tag="A1"), self.item("bad", "bad1"), self.item(tag="A2"),
+                    self.item("B", "B1"), self.item("bad", "bad2"), self.item("B", "B2")]
+        self.assertEqual(self.worker.run_request(self.engine, self.request(manifest)), 0)
+        self.assertEqual(self.loads, [str(self.models[m]) for m in ("A", "bad", "A", "B")])
+        self.assertEqual(self.side_loads, {"hubert": 1, "rmvpe": 1})
+        self.assertEqual([r["tag"] for r in self.events[-1]["results"]], ["A1", "A2", "B1", "B2"])
+
+    def test_old_manifest_and_input_requests_keep_default_parameters(self):
+        request_index = self.root / "request.index"
+        request_index.touch()
+        for manifest in ([{"src": str(self.src), "rel": "source/a.wav"}], None):
+            with self.subTest(manifest=manifest):
+                req = self.request(manifest)
+                req.update(input=str(self.src), index=str(request_index))
+                self.assertEqual(self.worker.run_request(self.engine, req), 0)
+                done = self.events[-1]
+                self.assertEqual(done["skipped"], [])
+                self.assertEqual(Path(done["files"][0]).name, "a_rvc.wav")
+                self.assertEqual(done["results"], [{"src": str(self.src), "dest": done["files"][0], "tag": ""}])
+                self.assertEqual(self.converted[-1][2:], (7, str(request_index)))
+
+    def test_conversion_timing_excludes_model_switches(self):
+        from tools.sts_perf import StsTimer
+
+        clock = [0.0]
+        get_vc = self.engine.vc.get_vc
+
+        def load(model):
+            clock[0] += 2.0
+            get_vc(model)
+
+        def convert(vc, src, dest, **kwargs):
+            clock[0] += 3.0
+            dest.write_bytes(b"audio")
+
+        with patch("tools.sts_worker.time.monotonic", side_effect=lambda: clock[0]):
+            timer = StsTimer()
+            with patch.object(self.worker, "_new_timer", return_value=timer), patch.object(
+                self.worker, "_save_timing",
+            ), patch.object(self.engine.vc, "get_vc", side_effect=load), patch(
+                "tools.sts_core.convert_one", side_effect=convert,
+            ):
+                self.assertEqual(self.worker.run_request(self.engine, self.request([
+                    self.item(tag="A1"), self.item(tag="A2"), self.item("B", "B1"),
+                ])), 0)
+            timing = timer.summary()
+        self.assertEqual(timing["total_s"], 13.0)
+        self.assertEqual(timing["stages_s"]["model"], 4.0)
+        self.assertEqual(timing["stages_s"]["convert"], 9.0)
+
+    def test_hot_handler_honors_entry_pitch_tag_and_results(self):
+        # 只提取真实处理函数，避免导入 gui_v1 时加载 GUI、torch 和音频设备。
+        import ast
+        import traceback
+
+        tree = ast.parse((ROOT / "gui_v1.py").read_text(encoding="utf-8"))
+        handler = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_worker_convert")
+        module = ast.Module(body=[handler], type_ignores=[])
+        namespace = dict(os=os, traceback=traceback, flag_vc=False, printt=lambda *a: None,
+                         _sts_stage=lambda *a: nullcontext())
+        exec(compile(module, str(ROOT / "gui_v1.py"), "exec"), namespace)
+        self.engine.vc.get_vc(str(self.models["A"]))
+        resident = SimpleNamespace(
+            config=self.engine.config, gui_config=SimpleNamespace(index_path=""),
+            _sts_emit=lambda **e: self.events.append(e), _sts_timer=lambda: None,
+            _sts_resident_vc=lambda *a: (self.engine.vc, ""), _sts_cancelled=lambda: False,
+        )
+        cuda_graph = ModuleType("tools.cuda_graph")
+        cuda_graph.clear_cuda_graph_cache = lambda *a: None
+        manifest = [self.item(tag="A/B", pitch=0), self.item(tag="down", pitch=-3), self.item(tag="default", pitch=None),
+                    {"src": str(self.root / "gone.wav"), "tag": "missing"}]
+        with patch.dict(sys.modules, {"tools.cuda_graph": cuda_graph}):
+            namespace["_worker_convert"](resident, self.request(manifest))
+        done = self.events[-1]
+        self.assertEqual(done["phase"], "done")
+        self.assertEqual([c[2] for c in self.converted], [0, -3, 7])
+        self.assertEqual([r["tag"] for r in done["results"]], ["A/B", "down", "default"])
+        self.assertEqual([r["dest"] for r in done["results"]], done["files"])
+        self.assertEqual(Path(done["files"][0]).name, "a_A_B.wav")
+        self.assertEqual(done["skipped"][0]["tag"], "missing")
+        self.assertEqual(next(e for e in self.events if e["phase"] == "skip")["tag"], "missing")
 
 
 class ResidentLoopTests(unittest.TestCase):

@@ -56,6 +56,7 @@ vi.mock("../lib/helpNav", () => ({ openHelpSection: vi.fn() }));
 vi.mock("../lib/downloadModels", () => ({ openDownloadModels: vi.fn() }));
 
 import { TtsPanel } from "./TtsPanel";
+import { listVoices } from "../lib/voices";
 
 type IpcArgs = Record<string, unknown> | undefined;
 
@@ -628,5 +629,92 @@ describe("TtsPanel STS 任务生命周期", () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
     expect(calls.filter((c) => c.cmd === "sts_status")).toHaveLength(before);
+  });
+
+  it("对比音色与单条音高：清单按音色分组展开，结果出现原声/各音色切换", async () => {
+    localStorage.setItem("sts.compare", JSON.stringify(["D:/models/b.pth"]));
+    localStorage.setItem("sts.itemPitch", JSON.stringify({ "d:/in/a.wav": 5 }));
+    vi.mocked(listVoices).mockResolvedValue({
+      models: [
+        { path: "D:/models/a.pth", name: "A", index: "D:/models/a.index" },
+        { path: "D:/models/b.pth", name: "B", index: "" },
+      ],
+      selected_idx: 0,
+    } as never);
+    status = { ...READY };
+    ipc.sts_sources_scan = () => ({
+      ...SCAN_IDLE,
+      pending: 2,
+      items: [
+        { name: "a.wav", rel: "a.wav", path: "D:/in/a.wav", size: 1, mtime: 1 },
+        { name: "b.wav", rel: "b.wav", path: "D:/in/b.wav", size: 1, mtime: 1 },
+      ],
+    });
+    ipc.sts_snapshot = () => ({
+      manifest: [
+        { src: "D:/in/a.wav", rel: "a.wav" },
+        { src: "D:/in/b.wav", rel: "b.wav" },
+      ],
+      total: 2,
+    });
+    ipc.sts_start = () => ({
+      files: ["D:/out/a_A.wav", "D:/out/a_B.wav"],
+      results: [
+        { src: "D:/in/a.wav", dest: "D:/out/a_A.wav", tag: "A" },
+        { src: "D:/in/a.wav", dest: "D:/out/a_B.wav", tag: "B" },
+      ],
+      skipped: [],
+      output: "D:/out",
+    });
+    try {
+      const m = mount(<TtsPanel />);
+      mounts.push(m);
+      await tick();
+      await tick();
+      // 两个音色 × 两条
+      click(btn(m, t("s.stsWillProcess", { v0: 4 }))!);
+      await tick();
+      await tick();
+      const start = calls.find((c) => c.cmd === "sts_start");
+      expect((start?.args as { manifest: unknown[] }).manifest).toEqual([
+        { src: "D:/in/a.wav", rel: "a.wav", model: "D:/models/a.pth", index: "D:/models/a.index", tag: "A", pitch: 5 },
+        { src: "D:/in/b.wav", rel: "b.wav", model: "D:/models/a.pth", index: "D:/models/a.index", tag: "A" },
+        { src: "D:/in/a.wav", rel: "a.wav", model: "D:/models/b.pth", index: "", tag: "B", pitch: 5 },
+        { src: "D:/in/b.wav", rel: "b.wav", model: "D:/models/b.pth", index: "", tag: "B" },
+      ]);
+      await tick();
+      expect(btn(m, t("s.stsVersionOriginal"))).not.toBeNull();
+      expect(btn(m, "B")).not.toBeNull();
+      expect(btn(m, t("s.stsItemPitch", { v0: "+5" }))).not.toBeNull();
+    } finally {
+      localStorage.clear();
+      vi.mocked(listVoices).mockResolvedValue({ models: [], selected_idx: -1 } as never);
+    }
+  });
+
+  it("单个音色时清单不带音色字段，只带单条音高", async () => {
+    localStorage.setItem("sts.itemPitch", JSON.stringify({ "d:/in/a.wav": -3 }));
+    status = { ...READY };
+    ipc.sts_sources_scan = () => ({
+      ...SCAN_IDLE,
+      pending: 1,
+      items: [{ name: "a.wav", rel: "a.wav", path: "D:/in/a.wav", size: 1, mtime: 1 }],
+    });
+    ipc.sts_snapshot = () => ({ manifest: [{ src: "D:/in/a.wav", rel: "a.wav" }], total: 1 });
+    ipc.sts_start = () => ({ files: ["D:/out/a_rvc.wav"], skipped: [], output: "D:/out" });
+    try {
+      const m = mount(<TtsPanel />);
+      mounts.push(m);
+      await tick();
+      click(btn(m, t("s.stsWillProcess", { v0: 1 }))!);
+      await tick();
+      await tick();
+      const start = calls.find((c) => c.cmd === "sts_start");
+      expect((start?.args as { manifest: unknown[] }).manifest).toEqual([
+        { src: "D:/in/a.wav", rel: "a.wav", pitch: -3 },
+      ]);
+    } finally {
+      localStorage.clear();
+    }
   });
 });

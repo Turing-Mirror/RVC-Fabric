@@ -19,6 +19,7 @@ stdlib + 惰性 numpy，可以在没有 Runtime 的机器上导入和单测。
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import traceback
@@ -300,13 +301,30 @@ def collect_inputs(path: str) -> list[tuple[Path, Path]]:
     return files
 
 
-def collect_manifest(entries) -> list[tuple[Path, Path]]:
-    """显式清单：壳在任务开始时冻结的快照 [{src, rel}]。
+class ManifestItem:
+    def __init__(
+        self, src: Path, rel: Path, pitch: int | None = None,
+        model: str | None = None, index: str | None = None, tag: str = "",
+    ) -> None:
+        self.src = src
+        self.rel = rel
+        self.pitch = pitch
+        self.model = model
+        self.index = index
+        self.tag = tag
+
+    def __iter__(self):
+        # 路径读取与 collect_inputs 返回的二元组共用同一套逻辑。
+        return iter((self.src, self.rel))
+
+
+def collect_manifest(entries) -> list[ManifestItem]:
+    """显式清单：壳在任务开始时冻结的路径与条目参数。
 
     rel 已含来源短名前缀（多来源时），直接当输出相对路径用。worker 拿到
     manifest 后不再扫目录——排除项、任务期间新增的源文件都不会回流。
     """
-    files: list[tuple[Path, Path]] = []
+    files: list[ManifestItem] = []
     for e in entries or []:
         src = Path(str(e.get("src") or "").strip())
         rel_raw = str(e.get("rel") or "").strip() or src.name
@@ -316,8 +334,58 @@ def collect_manifest(entries) -> list[tuple[Path, Path]]:
         rel = Path(rel_raw)
         if rel.is_absolute() or ".." in rel.parts:
             rel = Path(src.name)
-        files.append((src, rel))
+        files.append(ManifestItem(
+            src, rel,
+            pitch=int(e["pitch"]) if e.get("pitch") is not None else None,
+            model=str(e.get("model") or "").strip() or None,
+            index=str(e["index"]).strip() if e.get("index") is not None else None,
+            tag=str(e.get("tag") or ""),
+        ))
     return files
+
+
+def model_index_path(model: str) -> str | None:
+    """按音色库规则读取绑定：有效绑定的本地同名文件优先，再取本地 index。
+
+    只解析库内音色（含训练输出目录）；外部 pth 和旧 weights 不借用请求级 index。
+    """
+    root = Path(os.environ.get("TM_VOICE_ROOT") or Path(__file__).resolve().parents[1])
+    user_data = root / "User_Data"
+    if not user_data.is_dir() and (root / "UserData").is_dir():
+        user_data = root / "UserData"
+    models_root = user_data / "models"
+    try:
+        config = json.loads((user_data / "app_config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = {}
+    if not isinstance(config, dict):
+        config = {}
+    roots = [models_root]
+    extra = str(config.get("train_output_dir") or "").strip()
+    if extra:
+        roots.append(Path(extra))
+    pth = Path(model).resolve()
+    folder = pth.parent
+    if not any(folder.parent == base.resolve() for base in roots) or folder.name.startswith("."):
+        return None
+    try:
+        weights = sorted(folder.glob("*.pth"))
+        if not weights or weights[0].resolve() != pth:
+            return None
+        try:
+            side = json.loads((folder / "config.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            side = {}
+        if not isinstance(side, dict):
+            side = {}
+        bound = str(side.get("index") or "").strip()
+        if bound and Path(bound).is_file():
+            local = folder / Path(bound).name
+            return str((local if local.is_file() else Path(bound)).resolve())
+        indices = sorted(p for p in folder.iterdir() if p.suffix.lower() == ".index" and p.is_file())
+        return str(indices[0].resolve()) if indices else None
+    except OSError:
+        return None
 
 
 def file_weights(paths: Iterable[Path]) -> list[float]:
@@ -339,15 +407,29 @@ def normalize_format(name: str) -> str:
     return ext if ext in _AUDIO_OUT else "wav"
 
 
-def unique_dest(out_dir: Path, rel: Path, stem: str, ext: str = "wav") -> Path:
+def clean_tag(tag: str) -> str:
+    """标签只用于文件名；结果映射仍回传清单中的原标签。"""
+    cleaned = "".join(
+        "_" if ch in '<>:"/\\|?*' or ord(ch) < 32 else ch
+        for ch in tag.strip()
+    )[:40].rstrip(" .")
+    reserved = {"CON", "PRN", "AUX", "NUL"}
+    reserved.update(f"{prefix}{n}" for prefix in ("COM", "LPT") for n in "123456789¹²³")
+    if cleaned.split(".", 1)[0].upper() in reserved:
+        cleaned = "_" + cleaned[:39]
+    return cleaned.rstrip(" .")
+
+
+def unique_dest(out_dir: Path, rel: Path, stem: str, ext: str = "wav", tag: str = "") -> Path:
     """输出路径，保持输入的目录层级，重名加序号。"""
     ext = normalize_format(ext)
     sub = out_dir / rel.parent
     sub.mkdir(parents=True, exist_ok=True)
-    dest = sub / f"{stem}_rvc.{ext}"
+    suffix = clean_tag(tag) or "rvc"
+    dest = sub / f"{stem}_{suffix}.{ext}"
     n = 1
     while dest.exists():
-        dest = sub / f"{stem}_rvc_{n}.{ext}"
+        dest = sub / f"{stem}_{suffix}_{n}.{ext}"
         n += 1
     return dest
 
@@ -496,7 +578,8 @@ class StsProgress:
         }
         a, b, msg = bands.get(phase, (0.0, 1.0, "准备中…"))
         pct = self.LOAD_END * (a + (b - a) * frac)
-        self._push(0, pct, msg, step=f"load_{phase}", force=True)
+        done = self.ok_count + self.skip_count
+        self._push(done, max(self._last_pct, pct), msg, step=f"load_{phase}", force=True)
 
     def begin_file(self, index: int, name: str) -> None:
         """index 为 1-based 序号。"""
@@ -800,15 +883,16 @@ def preload_side_models(vc, config, f0method: str, prog: StsProgress) -> None:
 
 def run_batch(
     vc,
-    files: Sequence[tuple[Path, Path]],
+    files: Sequence[tuple[Path, Path] | ManifestItem],
     out_dir: str | Path,
     params: dict[str, Any],
     prog: StsProgress,
     emit: Callable[..., None],
     should_cancel: Callable[[], bool] | None = None,
     allow_cpu_fallback: bool = True,
-) -> tuple[list[str], list[dict], bool]:
-    """转一批文件。返回 (成功清单, 跳过清单, 是否被取消)。
+    prepare_model: Callable[[str], Any] | None = None,
+) -> tuple[list[str], list[dict], bool, list[dict]]:
+    """转一批文件。返回 (成功清单, 跳过清单, 是否被取消, 结果映射)。
 
     单个文件坏掉不该毁掉整批：记下来接着跑，最后一起报。批量转 50 个，第 3 个
     是段损坏的 mp3，剩下 47 个照样得转出来。
@@ -824,10 +908,12 @@ def run_batch(
     out_root = Path(out_dir)
     total = len(files)
     out_files: list[str] = []
+    results: list[dict] = []
     skipped: list[dict] = []
     cancelled = False
     cpu_fallback_done = False
     index_path = params.get("index_path") or None
+    model_indices: dict[str, str | None] = {}
     # 批量：尽量不 empty_cache；OOM 或显存吃紧时才清。末尾清一次即可。
     cache_every = 8
 
@@ -836,34 +922,14 @@ def run_batch(
 
     try:
         with inference_context():
-            for i, (src, rel) in enumerate(files, start=1):
+            for i, item in enumerate(files, start=1):
                 if _cancelled():
                     cancelled = True
                     break
-                prog.begin_file(i, src.name)
-
-                # 快照后源文件消失（移动/删除/掉盘）：记成跳过而不是让它
-                # 从清单里凭空消失——不然它既不在成功也不在失败里。
-                if not src.is_file():
-                    reason = "源文件不存在（可能在任务开始前被移动或删除）"
-                    skipped.append(
-                        {"file": str(src), "name": src.name, "reason": reason}
-                    )
-                    prog.file_done(i, src.name, ok=False)
-                    emit(
-                        phase="skip",
-                        done=i,
-                        total=total,
-                        pct=prog.last_pct,
-                        current=i,
-                        ok=prog.ok_count,
-                        skip=prog.skip_count,
-                        file=src.name,
-                        path=str(src),
-                        reason=reason,
-                        message=f"跳过 {src.name}：{reason}",
-                    )
-                    continue
+                entry = item if isinstance(item, ManifestItem) else ManifestItem(*item)
+                src, rel = entry
+                prog._file_i = i - 1
+                prog._file_name = src.name
 
                 def on_stage(stage: str, frac: float = 0.0, _i=i, _name=src.name) -> None:
                     # 闭包默认参数钉死当前文件，避免循环变量晚绑定。
@@ -875,13 +941,26 @@ def run_batch(
 
                 hit_oom = False
                 try:
+                    if prepare_model is not None:
+                        vc = prepare_model(entry.model or params["model"])
+                    prog.begin_file(i, src.name)
+                    if not src.is_file():
+                        raise FileNotFoundError("源文件不存在（可能在任务开始前被移动或删除）")
+                    if entry.index is not None:
+                        item_index = entry.index if entry.index and Path(entry.index).is_file() else None
+                    elif entry.model:
+                        if entry.model not in model_indices:
+                            model_indices[entry.model] = model_index_path(entry.model)
+                        item_index = model_indices[entry.model]
+                    else:
+                        item_index = index_path
                     dest = unique_dest(
-                        out_root, rel, src.stem, params.get("format") or "wav"
+                        out_root, rel, src.stem, params.get("format") or "wav", entry.tag
                     )
                     kwargs = dict(
-                        pitch=params["pitch"],
+                        pitch=entry.pitch if entry.pitch is not None else params["pitch"],
                         f0method=params["f0method"],
-                        index_path=index_path,
+                        index_path=item_index,
                         index_rate=params["index_rate"],
                         filter_radius=params["filter_radius"],
                         resample_sr=params["resample_sr"],
@@ -939,12 +1018,13 @@ def run_batch(
                         else:
                             raise
                     out_files.append(str(dest))
+                    results.append({"src": str(src), "dest": str(dest), "tag": entry.tag})
                     prog.file_done(i, src.name, ok=True)
                 except Exception as e:
                     traceback.print_exc()
                     reason = friendly_error(e)
                     hit_oom = is_oom(reason)
-                    skipped.append({"file": str(src), "name": src.name, "reason": reason})
+                    skipped.append({"file": str(src), "name": src.name, "reason": reason, "tag": entry.tag})
                     prog.file_done(i, src.name, ok=False)
                     # reason 单独字段，界面列表不要再叠一层「跳过 name：」。
                     emit(
@@ -957,6 +1037,7 @@ def run_batch(
                         skip=prog.skip_count,
                         file=src.name,
                         path=str(src),
+                        tag=entry.tag,
                         reason=reason,
                         message=f"跳过 {src.name}：{reason}",
                     )
@@ -971,4 +1052,4 @@ def run_batch(
         cancelled = True
         cuda_empty_cache()
 
-    return out_files, skipped, cancelled
+    return out_files, skipped, cancelled, results

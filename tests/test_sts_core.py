@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -15,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from tools.sts_core import (  # noqa: E402
     ConversionCancelled,
+    collect_manifest,
     StsProgress,
     convert_one,
     convert_one_with_cpu_fallback,
@@ -22,6 +24,7 @@ from tools.sts_core import (  # noqa: E402
     is_dml_backend_error,
     is_dml_runtime_failure,
     move_models_to_cpu,
+    model_index_path,
     normalize_format,
     run_batch,
     unique_dest,
@@ -93,6 +96,33 @@ class HotPathProgressTests(unittest.TestCase):
 
 
 class UniqueDestTests(unittest.TestCase):
+    def test_tag_names_preserve_tree_format_and_collision_numbers(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            first = unique_dest(out, Path("A/vocal.wav"), "vocal", "flac", "音色A")
+            self.assertEqual(first.relative_to(out), Path("A/vocal_音色A.flac"))
+            first.write_bytes(b"x")
+            self.assertEqual(
+                unique_dest(out, Path("A/vocal.wav"), "vocal", "flac", "音色A").name,
+                "vocal_音色A_1.flac",
+            )
+
+    def test_tag_cleaning_and_length(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            for tag, expected in (
+                (' A<>:"/\\|?*\x00\x1f. ', "A" + "_" * 11),
+                ("长" * 45, "长" * 40),
+                ("a" * 39 + ".tail", "a" * 39),
+                ("CON", "_CON"),
+                ("lpt¹.txt", "_lpt¹.txt"),
+                ("   ...  ", "rvc"),
+                ("", "rvc"),
+            ):
+                with self.subTest(tag=tag):
+                    dest = unique_dest(out, Path("a.wav"), "a", tag=tag)
+                    self.assertEqual(dest.name, f"a_{expected}.wav")
+
     def test_preserves_subdir_and_dedupes(self):
         with tempfile.TemporaryDirectory() as td:
             out = Path(td)
@@ -393,7 +423,7 @@ class CpuFallbackTests(unittest.TestCase):
 
     def test_retries_on_cpu_and_the_file_comes_out(self):
         vc = DmlFailingVC()
-        (out_files, skipped, cancelled), events = self._run(vc)
+        (out_files, skipped, cancelled, _results), events = self._run(vc)
         self.assertEqual(len(out_files), 1, skipped)
         self.assertEqual(skipped, [])
         self.assertFalse(cancelled)
@@ -406,7 +436,7 @@ class CpuFallbackTests(unittest.TestCase):
     def test_hot_path_never_touches_the_resident_models(self):
         # 热路径的 net_g / hubert 就是实时引擎那几个对象，挪走实时变声就废了。
         vc = DmlFailingVC()
-        (out_files, skipped, _), _ = self._run(vc, allow_cpu_fallback=False)
+        (out_files, skipped, _, _results), _ = self._run(vc, allow_cpu_fallback=False)
         self.assertEqual(out_files, [])
         self.assertEqual(len(skipped), 1)
         self.assertEqual(vc.calls, 1)
@@ -427,7 +457,7 @@ class CpuFallbackTests(unittest.TestCase):
                 raise ValueError("找不到音频文件")
 
         vc = Broken()
-        (out_files, skipped, _), _ = self._run(vc)
+        (out_files, skipped, _, _results), _ = self._run(vc)
         self.assertEqual(out_files, [])
         self.assertEqual(vc.calls, 1)
         self.assertEqual(vc.pipeline.device, "privateuseone:0")
@@ -447,7 +477,7 @@ class CpuFallbackTests(unittest.TestCase):
                 return "ok", (16000, b"\x00\x00")
 
         vc = BareDmlFailure()
-        (out_files, skipped, _), _ = self._run(vc)
+        (out_files, skipped, _, _results), _ = self._run(vc)
         self.assertEqual(len(out_files), 1, skipped)
         self.assertEqual(vc.calls, 2)
 
@@ -574,6 +604,68 @@ class OomRetryShrinksWindowsTests(unittest.TestCase):
 class ManifestTests(unittest.TestCase):
     """C-10 显式清单：worker 只执行壳冻结的快照，不重新扫目录。"""
 
+    def test_manifest_retains_entry_options_in_order(self):
+        entries = collect_manifest([
+            {"src": "a.wav", "rel": "A/a.wav", "pitch": 0, "model": " A.pth ", "index": "", "tag": "A/B"},
+            {"src": "b.wav", "pitch": None, "tag": ""},
+        ])
+        self.assertEqual([p for p, _ in entries], [Path("a.wav"), Path("b.wav")])
+        self.assertEqual(entries[0].pitch, 0)
+        self.assertEqual(entries[0].model, "A.pth")
+        self.assertEqual(entries[0].index, "")
+        self.assertEqual(entries[0].tag, "A/B")
+        self.assertIsNone(entries[1].pitch)
+        self.assertIsNone(entries[1].model)
+        self.assertIsNone(entries[1].index)
+
+    def test_model_index_follows_library_binding_and_local_fallback(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as td, patch.dict("os.environ", {"TM_VOICE_ROOT": td}):
+            root = Path(td)
+            folder = root / "User_Data/models/A"
+            folder.mkdir(parents=True)
+            model = folder / "a.pth"
+            model.touch()
+            outside = root / "bound.index"
+            outside.touch()
+            local = folder / "bound.index"
+            local.touch()
+            first = folder / "a.index"
+            first.touch()
+            side = folder / "config.json"
+            side.write_text(json.dumps({"index": str(outside)}), encoding="utf-8")
+            self.assertEqual(model_index_path(str(model)), str(local.resolve()))
+            local.unlink()
+            self.assertEqual(model_index_path(str(model)), str(outside.resolve()))
+            outside.unlink()
+            self.assertEqual(model_index_path(str(model)), str(first.resolve()))
+            first.unlink()
+            self.assertIsNone(model_index_path(str(model)))
+            # 外部 pth 即使旁边有 index，也不属于音色库绑定。
+            (root / "external.pth").touch()
+            (root / "external.index").touch()
+            self.assertIsNone(model_index_path(str(root / "external.pth")))
+            # 自定义训练输出目录与默认模型库遵循相同规则。
+            extra = root / "trained"
+            trained = extra / "B"
+            trained.mkdir(parents=True)
+            (trained / "b.pth").touch()
+            (trained / "b.INDEX").touch()
+            (root / "User_Data/app_config.json").write_text(
+                json.dumps({"train_output_dir": str(extra)}), encoding="utf-8",
+            )
+            self.assertEqual(model_index_path(str(trained / "b.pth")), str((trained / "b.INDEX").resolve()))
+
+    def test_model_index_supports_legacy_user_data_directory(self):
+        with tempfile.TemporaryDirectory() as td, patch.dict("os.environ", {"TM_VOICE_ROOT": td}):
+            folder = Path(td) / "UserData/models/A"
+            folder.mkdir(parents=True)
+            model, index = folder / "a.pth", folder / "a.index"
+            model.touch()
+            index.touch()
+            self.assertEqual(model_index_path(str(model)), str(index.resolve()))
+
     def test_manifest_used_verbatim(self):
         from tools.sts_core import collect_manifest
 
@@ -646,6 +738,60 @@ class ManifestRunTests(unittest.TestCase):
             else:
                 sys.modules[k] = v
 
+    def test_entry_pitch_index_tags_and_results_share_the_execution_order(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "a.wav"
+            src.write_bytes(b"RIFF-fake")
+            request_index = root / "request.index"
+            request_index.touch()
+            bound_index = root / "bound.index"
+            bound_index.touch()
+            explicit_index = root / "explicit.index"
+            explicit_index.touch()
+            entries = collect_manifest([
+                {"src": str(src), "pitch": 0, "tag": "A/B"},
+                {"src": str(src), "pitch": -5, "model": "B.pth", "tag": "B"},
+                {"src": str(src), "pitch": None, "index": str(explicit_index), "tag": "explicit"},
+                {"src": str(src), "model": "C.pth", "tag": "unbound"},
+                {"src": str(src), "model": "B.pth", "index": "", "tag": "no-index"},
+                {"src": str(src), "model": "B.pth", "index": str(explicit_index), "tag": "override"},
+                {"src": str(root / "gone.wav"), "tag": "missing"},
+                {"src": str(src), "tag": "broken"},
+                {"src": str(src)},
+            ])
+            events, calls = [], []
+
+            def convert(vc, source, dest, **kwargs):
+                if dest.stem.endswith("_broken"):
+                    raise ValueError("坏音频")
+                calls.append((kwargs["pitch"], kwargs["index_path"]))
+                dest.write_bytes(b"audio")
+
+            params = dict(pitch=7, f0method="rmvpe", index_path=str(request_index), index_rate=0.75,
+                          filter_radius=3, resample_sr=0, rms_mix_rate=0.25, protect=0.33)
+            prog = StsProgress(len(entries), "rmvpe", emit=lambda **e: events.append(e), load_end=0.0)
+            with patch("tools.sts_core.convert_one", side_effect=convert), patch(
+                "tools.sts_core.model_index_path",
+                side_effect=lambda model: str(bound_index) if model == "B.pth" else None,
+            ):
+                outputs, skipped, cancelled, results = run_batch(
+                    SucceedingVC(), entries, root / "out", params, prog, lambda **e: events.append(e),
+                )
+            self.assertFalse(cancelled)
+            self.assertEqual(calls, [
+                (0, str(request_index)), (-5, str(bound_index)), (7, str(explicit_index)),
+                (7, None), (7, None), (7, str(explicit_index)), (7, str(request_index)),
+            ])
+            self.assertEqual([r["dest"] for r in results], outputs)
+            self.assertEqual([r["src"] for r in results], [str(src)] * len(outputs))
+            self.assertEqual([r["tag"] for r in results], ["A/B", "B", "explicit", "unbound", "no-index", "override", ""])
+            self.assertEqual(Path(outputs[0]).name, "a_A_B.wav")
+            self.assertEqual(Path(outputs[-1]).name, "a_rvc.wav")
+            self.assertEqual([r["tag"] for r in skipped], ["missing", "broken"])
+            self.assertEqual([e["tag"] for e in events if e["phase"] == "skip"], ["missing", "broken"])
+            self.assertEqual((prog.ok_count, prog.skip_count), (7, 2))
+
     def test_missing_src_is_counted_and_carries_full_path(self):
         from tools.sts_core import collect_manifest
 
@@ -677,12 +823,13 @@ class ManifestRunTests(unittest.TestCase):
                 "sid": 0,
                 "f0_file": None,
             }
-            out_files, skipped, cancelled = run_batch(
+            out_files, skipped, cancelled, results = run_batch(
                 SucceedingVC(), files, out, params, prog, emit,
                 allow_cpu_fallback=False,
             )
             self.assertFalse(cancelled)
             self.assertEqual(len(out_files), 1, skipped)
+            self.assertEqual(results, [{"src": str(good), "dest": out_files[0], "tag": ""}])
             # 消失的源进了失败清单，file 是全路径，原因说人话。
             self.assertEqual(len(skipped), 1)
             self.assertEqual(skipped[0]["file"], str(ghost))

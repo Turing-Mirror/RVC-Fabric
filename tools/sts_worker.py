@@ -44,7 +44,7 @@ stdout 每行一条 JSON（与 separate_worker 同形）::
     {"phase":"run","done":i,"total":N,"pct":0-100,"step":"...","current":k,
      "ok":a,"skip":b,"file":"name.wav","message":"..."}
     {"phase":"skip","done":i,"total":N,"pct":..,"current":k,"ok":a,"skip":b,"message":"..."}
-    {"phase":"done","files":[...],"skipped":[...]}
+    {"phase":"done","files":[...],"results":[{"src":"...","dest":"...","tag":"..."}],"skipped":[...]}
     {"phase":"error","message":"..."}
 
 ``pct`` 是整次任务 0–100 的细粒度进度（含模型加载与单文件内分步），
@@ -58,6 +58,7 @@ import contextlib
 import json
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -358,7 +359,7 @@ def run_request(engine: "_Engine", req: dict) -> int:
     if (not inp and not manifest) or not out_dir or not model:
         emit(phase="error", **mc.msg_fields(mc.STS_EMPTY_FIELDS))
         return 2
-    if not Path(model).is_file():
+    if not manifest and not Path(model).is_file():
         emit(phase="error", **mc.msg_fields(mc.STS_MODEL_MISSING, {"model": model}))
         return 2
 
@@ -398,25 +399,37 @@ def run_request(engine: "_Engine", req: dict) -> int:
     reused = engine.vc is not None
     timer = _new_timer(hot=False)
 
-    try:
-        _prepare(engine, model, f0method, prog, timer, est_seconds, total)
-    except Exception as e:
-        traceback.print_exc()
-        engine.reset()
-        # 训练存档单独立码：壳侧给这个码配了「打开训练窗」按钮，用户手里的
-        # G_/D_ 存档要先在模型提取里转成音色才有得转。
-        if "训练过程中的存档" in str(e):
-            emit(phase="error", **mc.msg_fields(mc.STS_MODEL_IS_ARCHIVE))
-        else:
-            emit(phase="error", **mc.msg_fields(mc.STS_LOAD_FAILED, {"error": friendly_error(e)}))
-        return 1
+    failed_models: dict[str, str] = {}
+    prepared_model: str | None = None
+    load_seconds = 0.0
+
+    def prepare_model(path: str):
+        nonlocal prepared_model, load_seconds
+        if path in failed_models:
+            raise RuntimeError(failed_models[path])
+        if prepared_model != path:
+            started = time.monotonic()
+            try:
+                _prepare(engine, path, f0method, prog, timer, est_seconds, total)
+            except Exception as e:
+                # 失败仅属于这个音色；保留 hubert / rmvpe，后续音色继续复用。
+                prepared_model = None
+                engine.model = ""
+                reason = f"音色模型加载失败（{path}）：{friendly_error(e)}"
+                failed_models[path] = reason
+                raise RuntimeError(reason) from e
+            finally:
+                load_seconds += time.monotonic() - started
+            prepared_model = path
+        return engine.vc
 
     with _stage(timer, "convert"):
-        out_files, skipped, _cancelled = run_batch(
+        out_files, skipped, _cancelled, results = run_batch(
             engine.vc,
             files,
             out_dir,
             {
+                "model": model,
                 "pitch": pitch,
                 "f0method": f0method,
                 "index_path": index if index and Path(index).is_file() else None,
@@ -433,12 +446,19 @@ def run_request(engine: "_Engine", req: dict) -> int:
             emit,
             # 冷路径的取消是壳直接杀进程，不需要软取消。
             should_cancel=None,
+            prepare_model=prepare_model,
         )
+    if timer is not None:
+        # 模型切换已单独计时，不重复计入推理耗时。
+        timer.add("convert", -load_seconds)
     _save_timing(timer, total=total, ok=len(out_files), seconds=est_seconds, reused=reused)
 
     if not out_files:
         # 一个都没成，这就是失败，不能报「全部完成 0 个」。
         first = skipped[0]["reason"] if skipped else "未知错误"
+        if "训练过程中的存档" in first:
+            emit(phase="error", **mc.msg_fields(mc.STS_MODEL_IS_ARCHIVE))
+            return 1
         emit(
             phase="error",
             **mc.msg_fields(mc.STS_ALL_FAILED, {"total": total, "first": first}),
@@ -448,6 +468,7 @@ def run_request(engine: "_Engine", req: dict) -> int:
     emit(
         phase="done",
         files=out_files,
+        results=results,
         skipped=skipped,
         total=total,
         pct=100,

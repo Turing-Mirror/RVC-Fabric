@@ -396,7 +396,7 @@ fn emit_full(
     file: Option<&str>,
 ) {
     emit_full_ex(
-        app, phase, done, total, message, pct, step, current, ok, skip, file, None, None,
+        app, phase, done, total, message, pct, step, current, ok, skip, file, None, None, None,
     );
 }
 
@@ -415,6 +415,7 @@ fn emit_full_ex(
     file: Option<&str>,
     reason: Option<&str>,
     path: Option<&str>,
+    tag: Option<&str>,
 ) {
     let mut body = json!({
         "phase": phase,
@@ -455,6 +456,9 @@ fn emit_full_ex(
         if !p.is_empty() {
             body["path"] = json!(p);
         }
+    }
+    if let Some(t) = tag {
+        body["tag"] = json!(t);
     }
     // 归属回显：有凭证的单子每条事件都带 owner，别窗靠它判断能不能取消。
     if let Some(o) = run_owner() {
@@ -1153,6 +1157,18 @@ fn index_for_model_path(root: &Path, pth: &str) -> String {
     String::new()
 }
 
+/// 清单只要指定了不同的音色，就交给冷路径按顺序切换模型。
+fn manifest_matches_model(manifest: Option<&[Value]>, model: &str) -> bool {
+    manifest.unwrap_or_default().iter().all(|item| {
+        item.get("model")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(|path| path == model.trim())
+            .unwrap_or(true)
+    })
+}
+
 /// Full success = process ok, no error phase, no skipped files, at least one output.
 fn sts_run_clean_success(files: &[String], skipped: &[Value]) -> bool {
     skipped.is_empty() && !files.is_empty()
@@ -1442,6 +1458,7 @@ fn forward_sts_event(
     let skip_n = v.get("skip").and_then(|x| x.as_u64());
     let file = v.get("file").and_then(|x| x.as_str());
     let path = v.get("path").and_then(|x| x.as_str());
+    let tag = v.get("tag").and_then(Value::as_str).unwrap_or("");
 
     match phase {
         "error" => {
@@ -1507,6 +1524,7 @@ fn forward_sts_event(
             return Some(Ok(json!({
                 "ok": true,
                 "files": files,
+                "results": v.get("results").cloned().unwrap_or_else(|| json!([])),
                 "skipped": skipped,
                 "output": out.to_string_lossy(),
             })));
@@ -1519,7 +1537,7 @@ fn forward_sts_event(
                 .unwrap_or(msg);
             emit_full_ex(
                 app, "skip", done, total, msg, pct, step, current, ok_n, skip_n, file,
-                Some(reason), path,
+                Some(reason), path, Some(tag),
             );
         }
         _ => {
@@ -1724,7 +1742,7 @@ fn run_inner(
     // 实时后改过后端/主显卡）、或活着的是 DSP 工种：直接走冷路径另起常驻
     // 进程——不碰热尝试，也就永远到不了 Unavailable→kill_known_workers
     // 那条会杀掉实时音频的路。显式 CPU 选择绝不在旧 CUDA 环境的 worker 上跑。
-    if live_worker_compatible(root) {
+    if manifest_matches_model(manifest.as_deref(), &pth) && live_worker_compatible(root) {
         job.route = "hot";
         job.trace.note("hot path: reusing live worker models");
         // 界面上也要说走了哪条路。用户对同一段音频两次转换耗时差二十秒毫无头绪，
@@ -1890,6 +1908,7 @@ fn run_inner(
     };
 
     let mut files: Vec<String> = Vec::new();
+    let mut results: Vec<Value> = Vec::new();
     let mut skipped: Vec<Value> = Vec::new();
     let mut fail: Option<String> = None;
     let mut total: u64 = 1;
@@ -1929,6 +1948,7 @@ fn run_inner(
         let skip_n = v.get("skip").and_then(|x| x.as_u64());
         let file = v.get("file").and_then(|x| x.as_str());
         let path = v.get("path").and_then(|x| x.as_str());
+        let tag = v.get("tag").and_then(Value::as_str).unwrap_or("");
         match phase {
             "start" => {
                 total = v.get("total").and_then(|x| x.as_u64()).unwrap_or(1).max(1);
@@ -1983,6 +2003,7 @@ fn run_inner(
                         "file": path.unwrap_or(fname),
                         "name": fname,
                         "reason": reason,
+                        "tag": tag,
                     }));
                 }
                 emit_full_ex(
@@ -1999,6 +2020,7 @@ fn run_inner(
                     file,
                     Some(reason),
                     path,
+                    Some(tag),
                 );
             }
             "done" => {
@@ -2011,6 +2033,9 @@ fn run_inner(
                 if let Some(arr) = v.get("skipped").and_then(|x| x.as_array()) {
                     // 终态清单为准；过程中 skip 事件可能已塞过。
                     skipped = arr.clone();
+                }
+                if let Some(arr) = v.get("results").and_then(Value::as_array) {
+                    results = arr.clone();
                 }
                 // 这里**不**推 100%。worker 说完 done 之后还可能非零退出，
                 // 先亮一次「完成」再翻成红字，用户只会觉得程序在骗人。
@@ -2094,6 +2119,7 @@ fn run_inner(
     Ok(json!({
         "ok": true,
         "files": files,
+        "results": results,
         "skipped": skipped,
         "output": out.to_string_lossy(),
     }))
@@ -2101,6 +2127,29 @@ fn run_inner(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mixed_manifest_models_disable_hot_path() {
+        let manifest = vec![
+            json!({"src": "a.wav", "model": "voice-a.pth", "pitch": 0, "tag": "A"}),
+            json!({"src": "a.wav", "model": "voice-b.pth", "tag": "B"}),
+            json!({"src": "b.wav"}),
+        ];
+        assert!(!manifest_matches_model(Some(&manifest), "voice-a.pth"));
+        assert!(!manifest_matches_model(Some(&manifest), "voice-b.pth"));
+    }
+
+    #[test]
+    fn single_model_manifests_keep_hot_path_available() {
+        let manifest = vec![
+            json!({"src": "a.wav", "rel": "a.wav"}),
+            json!({"src": "a.wav", "model": null, "pitch": -3}),
+            json!({"src": "b.wav", "model": "", "index": "other.index"}),
+            json!({"src": "b.wav", "model": " voice-a.pth ", "pitch": 0, "tag": "A"}),
+        ];
+        assert!(manifest_matches_model(None, "voice-a.pth"));
+        assert!(manifest_matches_model(Some(&[]), "voice-a.pth"));
+        assert!(manifest_matches_model(Some(&manifest), "voice-a.pth"));
+    }
 
     /// quiet 打开时不发 sts-progress。
     #[test]

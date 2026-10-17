@@ -2125,7 +2125,7 @@
     "stsNoItems": "清單為空。請新增檔案或目錄。",
     "stsOutputInside": "輸出目錄位於來源中，轉換結果不會作為輸入。",
     "stsExcludedByDir": "受目錄排除影響",
-    "stsClearList": "移除全部來源",
+    "stsClearList": "全部移除",
     "stsSelectFiltered": "全選",
     "stsPendingCount": "待處理 {v0} · 已排除 {v1}",
     "stsSearchPh": "搜尋檔名",

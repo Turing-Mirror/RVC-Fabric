@@ -1558,6 +1558,17 @@ function StsSection() {
             disabled={running || recording}
             onClick={() => void addSource(true)}
           >{t("s.stsAddDir")}</Btn>
+          <Btn
+            disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
+            onClick={() => {
+              void (async () => {
+                if (!(await askConfirm(t("s.stsClearConfirm")))) return;
+                await invoke("sts_sources_clear").then(() => refreshScan());
+              })();
+            }}
+          >
+            {t("s.stsClearList")}
+          </Btn>
         </div>
         {(scan?.sources?.length ?? 0) > 0 ? (
           <ul className="m-0 list-none p-0 pb-1">
@@ -1733,17 +1744,6 @@ function StsSection() {
             onClick={() => void restoreSelected()}
           >
             {t("s.stsRestoreSel")}
-          </Btn>
-          <Btn
-            disabled={running || recording || !(scan?.sources?.length || scan?.items?.length)}
-            onClick={() => {
-              void (async () => {
-                if (!(await askConfirm(t("s.stsClearConfirm")))) return;
-                await invoke("sts_sources_clear").then(() => refreshScan());
-              })();
-            }}
-          >
-            {t("s.stsClearList")}
           </Btn>
         </div>
         {checked.size ? (

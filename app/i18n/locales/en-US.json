@@ -2125,7 +2125,7 @@
     "stsNoItems": "Nothing here yet — add files or folders first",
     "stsOutputInside": "The output folder is inside a source. Converted files will not be used as input.",
     "stsExcludedByDir": "Excluded by folder rule",
-    "stsClearList": "Remove all sources",
+    "stsClearList": "Remove all",
     "stsSelectFiltered": "Select all",
     "stsPendingCount": "{v0} pending · {v1} excluded",
     "stsSearchPh": "Search files",

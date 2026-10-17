@@ -2125,7 +2125,7 @@
     "stsNoItems": "項目がありません。先にファイルまたはフォルダーを追加",
     "stsOutputInside": "出力フォルダーがソースの中にあります。変換結果は入力として扱いません。",
     "stsExcludedByDir": "フォルダー除外の対象",
-    "stsClearList": "すべてのソースを削除",
+    "stsClearList": "すべて削除",
     "stsSelectFiltered": "すべて選択",
     "stsPendingCount": "対象 {v0}・除外 {v1}",
     "stsSearchPh": "ファイル名を検索",

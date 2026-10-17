@@ -2125,7 +2125,7 @@
     "stsNoItems": "항목 없음 — 먼저 파일 또는 폴더를 추가하세요",
     "stsOutputInside": "출력 폴더가 소스 안에 있습니다. 변환 결과는 입력으로 쓰지 않습니다.",
     "stsExcludedByDir": "폴더 제외 규칙 적용",
-    "stsClearList": "모든 소스 제거",
+    "stsClearList": "모두 제거",
     "stsSelectFiltered": "모두 선택",
     "stsPendingCount": "대기 {v0} · 제외 {v1}",
     "stsSearchPh": "파일 검색",

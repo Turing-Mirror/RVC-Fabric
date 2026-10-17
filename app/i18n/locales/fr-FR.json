@@ -2125,7 +2125,7 @@
     "stsNoItems": "Liste vide — ajoutez d'abord des fichiers ou des dossiers",
     "stsOutputInside": "Le dossier de sortie est dans une source. Les fichiers convertis ne seront pas repris en entrée.",
     "stsExcludedByDir": "Exclu par règle de dossier",
-    "stsClearList": "Retirer toutes les sources",
+    "stsClearList": "Tout retirer",
     "stsSelectFiltered": "Tout sélectionner",
     "stsPendingCount": "{v0} en attente · {v1} exclus",
     "stsSearchPh": "Rechercher des fichiers",

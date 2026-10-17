@@ -2125,7 +2125,7 @@
     "stsNoItems": "Lista vacía — añade primero archivos o carpetas",
     "stsOutputInside": "La carpeta de salida está dentro de una fuente. Los archivos convertidos no se usarán como entrada.",
     "stsExcludedByDir": "Excluido por regla de carpeta",
-    "stsClearList": "Quitar todas las fuentes",
+    "stsClearList": "Quitar todo",
     "stsSelectFiltered": "Seleccionar todo",
     "stsPendingCount": "{v0} pendientes · {v1} excluidos",
     "stsSearchPh": "Buscar archivos",

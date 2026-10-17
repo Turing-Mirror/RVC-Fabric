@@ -3,8 +3,10 @@
 //! Shared voice resources and virtual-cable provisioning.
 //!
 //! * **engine-core** — hubert + rmvpe + ffmpeg/ffprobe, shared by every GPU
-//!   variant. New installers carry ffmpeg/ffprobe at the same root paths;
-//!   legacy engine-core archives remain compatible and do not add a second copy.
+//!   variant.
+//! * **audio-tools** — ffmpeg/ffprobe alone, for users who skip the Runtime and
+//!   engine-core but still use the audio library. Same root paths as engine-core,
+//!   so the two packs never leave a second copy.
 //! * **VB-Cable** — the virtual cable. Without it nothing the user says reaches
 //!   the game, which is the whole point of the product.
 //!
@@ -46,7 +48,7 @@ fn catalog_size_for(root: &Path, cache_name: &str) -> u64 {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(|| json!({}));
-    for section in ["engine_core", "vbcable", "extras"] {
+    for section in ["engine_core", "audio_tools", "vbcable", "extras"] {
         let Some(v) = data.get(section) else { continue };
         // 段本身就是条目（engine_core / vbcable 在清单里是单对象）。
         if v.get("name").and_then(|x| x.as_str()) == Some(cache_name) {
@@ -100,6 +102,40 @@ pub fn engine_core_missing(root: &Path) -> Vec<String> {
 
 pub fn engine_core_ready(root: &Path) -> bool {
     engine_core_missing(root).is_empty()
+}
+
+// ---------------------------------------------------------------------------
+// audio-tools
+// ---------------------------------------------------------------------------
+
+const AUDIO_TOOLS_SHA: &str =
+    "cb64b8af7d50c8198cdf8a0adb023ab12e36fddbfd9d5d4b3fbe8ae007bfb1dc";
+const AUDIO_TOOLS_NAME: &str = "audio-tools-261017.zip";
+
+pub fn audio_tools_ready(root: &Path) -> bool {
+    fabric_audio::decode::AudioTools::at(root).ready()
+}
+
+/// Download + extract ffmpeg/ffprobe into the install root. Returns at once
+/// when they are already there (from engine-core or an older installer).
+pub fn ensure_audio_tools(
+    root: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: Option<download::ProgressFn>,
+) -> Result<(), String> {
+    let _flight = pack_lock();
+    if audio_tools_ready(root) {
+        return Ok(());
+    }
+    fetch_and_extract(AUDIO_TOOLS_NAME, AUDIO_TOOLS_SHA, root, root, cancel, progress)?;
+    if !audio_tools_ready(root) {
+        hoist_nested(root, "audio-tools");
+    }
+    if audio_tools_ready(root) {
+        Ok(())
+    } else {
+        Err(crate::i18n::te("s.f36aff2870", &"ffmpeg.exe / ffprobe.exe"))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +280,7 @@ fn release_ref(cache_name: &str) -> Option<(&'static str, &'static str)> {
     match cache_name {
         ENGINE_CORE_NAME => Some(("engine-core", ENGINE_CORE_NAME)),
         VBCABLE_NAME => Some(("vbcable", VBCABLE_NAME)),
+        AUDIO_TOOLS_NAME => Some(("audio-tools", AUDIO_TOOLS_NAME)),
         _ => None,
     }
 }
@@ -506,6 +543,7 @@ pub fn assets_status(root: &Path) -> Value {
     json!({
         "engine_core_ready": missing.is_empty(),
         "engine_core_missing": missing,
+        "audio_tools_ready": audio_tools_ready(root),
         "vbcable_pack_ready": vbcable_pack_ready(root),
         "vbcable_installed": vbcable_installed(),
         "vbcable_dir": vbcable_dir(root).to_string_lossy(),

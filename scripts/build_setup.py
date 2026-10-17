@@ -6,7 +6,7 @@ What goes into Setup (payload) — **thin, universal shell**::
   - Tauri 壳：RVC Fabric.exe + 可替换的 frontend/（OTA 策略 A 依赖它在磁盘上）
   - 引擎源码与配置：gui_v1 / infer / configs / tools / launcher 支撑模块
   - **不含** Runtime（CNB Release，按显卡分版）
-  - 内置 ffmpeg / ffprobe，音频工具与 RVC 共用产品根目录的一份
+  - 不带 ffmpeg / ffprobe：随 engine-core 或单独的 audio-tools 包下载到产品根目录
   - **不含** engine-core 权重（hubert / rmvpe — CNB LFS 共用包）
   - **不含** VB-Cable（CNB LFS）
 
@@ -109,11 +109,12 @@ def write_payload_readme(out: Path) -> None:
     text = """RVC Fabric · Setup 薄包
 ========================================
 
-本包含：RVC Fabric 主程序、界面资源（frontend/）、引擎源码与配置、FFmpeg 音频组件。
+本包含：RVC Fabric 主程序、界面资源（frontend/）、引擎源码与配置。
 本包不含（首次运行时由程序从 CNB 下载）：
   1. Runtime（绿色 Python，按显卡分版）
   2. engine-core（hubert / rmvpe 等变声资源，全卡共用）
   3. VB-Cable 虚拟声卡安装包
+  4. audio-tools（ffmpeg / ffprobe，跳过 Runtime 时单独下载）
 
 CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases
 """
@@ -121,7 +122,7 @@ CNB：https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases
 
 
 def strip_heavy_from_payload(out: Path) -> None:
-    """Remove model weights; retain the shared audio tools for runtime-free audio."""
+    """Remove model weights and audio tools; both are downloaded after install."""
     removed = 0
 
     def _rm(p: Path) -> None:
@@ -145,6 +146,8 @@ def strip_heavy_from_payload(out: Path) -> None:
         "assets/hubert/hubert_base.pt",
         "assets/rmvpe/rmvpe.pt",
         "assets/rmvpe/rmvpe.onnx",
+        "ffmpeg.exe",
+        "ffprobe.exe",
     ):
         _rm(out / rel)
 
@@ -198,18 +201,6 @@ def sanitize_inuse_config(out: Path) -> None:
     log("[payload] sanitized configs/inuse/config.json (clean template, no absolute paths)")
 
 
-def copy_audio_tools(out: Path) -> None:
-    """One shared copy at product root. Never collect binaries from a user's Runtime."""
-    names = ("ffmpeg.exe", "ffprobe.exe")
-    # Validate the complete input set before copying either tool.
-    for name in names:
-        src = REPO / name
-        if not src.is_file() or src.stat().st_size < 1_000_000:
-            raise FileNotFoundError(f"Missing audio build resource: {src}")
-    for name in names:
-        shutil.copy2(REPO / name, out / name)
-
-
 def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     log(f"[payload] assemble -> {out}")
     out.mkdir(parents=True, exist_ok=True)
@@ -217,7 +208,6 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
     sanitize_inuse_config(out)
     ensure_no_runtime(out)
     strip_heavy_from_payload(out)
-    copy_audio_tools(out)
     # 确保旧壳目录不会被误拷进 payload（ENGINE_DIRS 已不含 launcher）
     legacy_launcher = out / "launcher"
     if legacy_launcher.exists():

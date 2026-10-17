@@ -1,61 +1,58 @@
-"""Audio tools share the product root; no Runtime is copied or required."""
+"""Audio tools are downloaded after install; the Setup payload no longer carries them."""
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import build_setup
 
+TOOLS = ("ffmpeg.exe", "ffprobe.exe")
+
+
 class AudioToolsPayload(unittest.TestCase):
-    def test_tools_are_listed_once_at_shared_root(self):
+    def test_tools_are_not_bundled(self):
         config = json.loads((ROOT / "app/src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
         resources = config["bundle"]["resources"]
-        for tool in ("ffmpeg.exe", "ffprobe.exe"):
-            self.assertEqual(resources[f"engine-payload/{tool}"], tool)
-            self.assertEqual(list(resources.values()).count(tool), 1)
+        for tool in TOOLS:
+            self.assertNotIn(f"engine-payload/{tool}", resources)
+            self.assertNotIn(tool, resources.values())
 
-    def test_complete_pair_is_required_before_copy(self):
+    def test_strip_removes_audio_tools_and_weights(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            source, dest = root / "source", root / "dest"
-            source.mkdir()
-            dest.mkdir()
-            (source / "ffmpeg.exe").write_bytes(b"x" * 1_000_000)
-            with patch.object(build_setup, "REPO", source):
-                with self.assertRaises(FileNotFoundError):
-                    build_setup.copy_audio_tools(dest)
-                self.assertEqual(list(dest.iterdir()), [])
-                (source / "ffprobe.exe").write_bytes(b"y" * 1_000_000)
-                build_setup.copy_audio_tools(dest)
-            self.assertEqual(sorted(p.name for p in dest.iterdir()), ["ffmpeg.exe", "ffprobe.exe"])
-            self.assertEqual((dest / "ffmpeg.exe").read_bytes(), (source / "ffmpeg.exe").read_bytes())
-
-    def test_strip_preserves_audio_tools_but_removes_weights(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            for tool in ("ffmpeg.exe", "ffprobe.exe"):
+            for tool in TOOLS:
                 (root / tool).write_bytes(b"fixture")
             weight = root / "assets/hubert/hubert_base.pt"
             weight.parent.mkdir(parents=True)
             weight.write_bytes(b"weight")
             build_setup.strip_heavy_from_payload(root)
             self.assertFalse(weight.exists())
-            for tool in ("ffmpeg.exe", "ffprobe.exe"):
-                self.assertEqual((root / tool).read_bytes(), b"fixture")
+            for tool in TOOLS:
+                self.assertFalse((root / tool).exists())
 
-    def test_tools_are_not_forbidden_in_prepared_payload(self):
+    def test_tools_are_forbidden_in_prepared_payload(self):
         spec = importlib.util.spec_from_file_location("audio_payload_test", ROOT / "scripts/prepare_engine_payload.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        for tool in ("ffmpeg.exe", "ffprobe.exe"):
-            self.assertNotIn(tool, module.FORBIDDEN)
+        for tool in TOOLS:
+            self.assertIn(tool, module.FORBIDDEN)
         self.assertIn("Runtime", module.FORBIDDEN)
-        self.assertIn("assets/hubert/hubert_base.pt", module.FORBIDDEN)
+
+    def test_gate_exits_fetch_audio_tools(self):
+        app = (ROOT / "app/src/App.tsx").read_text(encoding="utf-8")
+        gate = app[app.index("<ProvisionGate"):app.index("<FeedbackNoticeGate")]
+        for handler in ("onDone", "onDismiss"):
+            body = re.search(handler + r"=\{[\s\S]*?\n        \}\}", gate)
+            self.assertIsNotNone(body, handler)
+            self.assertIn("ensureAudioTools()", body.group(0), handler)
+        rust = (ROOT / "app/src-tauri/src/lib.rs").read_text(encoding="utf-8")
+        self.assertIn("assets_ensure_audio_tools,", rust)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -85,7 +85,7 @@ function prefetchPages() {
   void import("./pages/HelpPage");
   void import("./pages/MorePage");
 }
-import { registerDownloadModelsOpener } from "./lib/downloadModels";
+import { ensureAudioTools, registerDownloadModelsOpener } from "./lib/downloadModels";
 import { registerHelpOpener } from "./lib/helpNav";
 import { useI18n } from "./i18n";
 import { t } from "./i18n/t";
@@ -1164,7 +1164,11 @@ export default function App() {
 
       <LanguageGate
         open={showLangGate}
-        onDone={() => setShowLangGate(false)}
+        onDone={() => {
+          setShowLangGate(false);
+          // 补全提示在选语言之前就取好了，换语言后重取一次。
+          void refreshProvision().catch(() => { });
+        }}
       />
 
       <RuntimeMigrationDialog
@@ -1188,6 +1192,8 @@ export default function App() {
         initial={engine.provision}
         onDone={async () => {
           setShowProvision(false);
+          // 跳过引擎资源时同样缺音频组件；已装好则后端直接返回。
+          void ensureAudioTools();
           // 运行时装好了，接着一步步把变声设置好
           void invoke<Record<string, unknown>>("config_get")
             .then((cfg) => { if (cfg.setup_guide_done !== true) openGuide("cable"); })
@@ -1207,6 +1213,8 @@ export default function App() {
         onDismiss={() => {
           setShowProvision(false);
           setNoticeGate(true);
+          // 安装包不带 ffmpeg；跳过 Runtime 的用户也要能用音频库。
+          void ensureAudioTools();
         }}
       />
       <FeedbackNoticeGate open={noticeGate} onDone={() => setNoticeGate(false)} />

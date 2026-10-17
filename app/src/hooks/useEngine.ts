@@ -192,11 +192,9 @@ export function useEngine() {
           const st = await ensureEngine();
           if (!cancelled) setStatus(st);
         } else {
+          // 缺运行时不算出错：底栏已显示补全提示，点「开启变声」才弹补全窗。
           const st = await getEngineStatus();
-          if (!cancelled) {
-            setStatus(st);
-            setLastError(String(p.message || t("s.14b8f39742")));
-          }
+          if (!cancelled) setStatus(st);
         }
       } catch (e) {
         if (!cancelled) setLastError(String(e));

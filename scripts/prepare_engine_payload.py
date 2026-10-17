@@ -56,6 +56,8 @@ FORBIDDEN = (
     "assets/hubert/hubert_base.pt",
     "assets/rmvpe/rmvpe.pt",
     "assets/rmvpe/rmvpe.onnx",
+    "ffmpeg.exe",
+    "ffprobe.exe",
     "assets/pretrained",
     "assets/pretrained_v2",
     # 产品早就不用 UVR5 了（分离走 PyMSS），代码也删了。这一条留着是因为从

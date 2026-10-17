@@ -142,6 +142,19 @@ async fn assets_ensure_engine_core(
     .map_err(|e| e.to_string())?
 }
 
+/// 补全音频组件（ffmpeg / ffprobe）。安装包不再自带，跳过 Runtime 的用户
+/// 在新手引导结束后由界面在后台调用；已有就直接返回。
+#[tauri::command]
+async fn assets_ensure_audio_tools(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_assets::ensure_audio_tools(&root, cancel, None).map(|_| json!({"ok": true}))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// 喂一次心跳给撕裂判定。只可能建议放宽块长（要停流重开，得用户点头）。
 /// 音高算法（rmvpe 等）这里绝不改 —— 欠载误判把用户的 rmvpe 改成 fcpe
 /// 比漏降一档更糟。
@@ -2752,6 +2765,7 @@ pub fn run() {
             close_finish,
             assets_status,
             assets_ensure_engine_core,
+            assets_ensure_audio_tools,
             assets_ensure_vbcable,
             tearing_step,
             tearing_reset,

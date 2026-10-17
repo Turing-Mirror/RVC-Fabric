@@ -77,7 +77,8 @@ def invoke_calls() -> list[tuple[str, set[str]]]:
     calls = []
     for m in re.finditer(r'invoke(?:<[^>]*>)?\(\s*"(\w+)"\s*,\s*\{([^{}]*)\}', src):
         body = m.group(2)
-        keys = set(re.findall(r"(\w+)\s*:", body)) | set(
+        # 只认行首或逗号后的键，三元表达式里的 `x ? a : b` 不算。
+        keys = set(re.findall(r"(?:^|,)\s*(\w+)\s*:", body, re.M)) | set(
             re.findall(r"^\s*(\w+)\s*,?\s*$", body, re.M)
         )
         calls.append((m.group(1), {k for k in keys if k}))

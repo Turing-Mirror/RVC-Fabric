@@ -15,6 +15,7 @@ import type { ExtrasFilter } from "../components/ExtrasDialog";
 export type AssetsStatus = {
   engine_core_ready?: boolean;
   engine_core_missing?: string[];
+  audio_tools_ready?: boolean;
   vbcable_pack_ready?: boolean;
   vbcable_installed?: boolean;
 };
@@ -73,6 +74,24 @@ export async function getAssetsStatus(): Promise<AssetsStatus> {
 export async function isEngineCoreReady(): Promise<boolean> {
   const st = await getAssetsStatus();
   return st.engine_core_ready !== false;
+}
+
+/**
+ * 后台补全音频组件（ffmpeg / ffprobe）。安装包不带它们；已有时后端直接返回。
+ * 同一时刻只跑一次，失败不打扰用户，下次用到时再试。
+ */
+let audioToolsJob: Promise<boolean> | null = null;
+
+export function ensureAudioTools(): Promise<boolean> {
+  if (!audioToolsJob) {
+    audioToolsJob = invoke("assets_ensure_audio_tools")
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => {
+        audioToolsJob = null;
+      });
+  }
+  return audioToolsJob;
 }
 
 /**

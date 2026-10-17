@@ -1820,11 +1820,11 @@ mod tests {
             .unwrap();
         assert_eq!(song_after.number, Some(12345));
         assert!(asset_after.available);
-        assert!(asset_after.origin.ends_with("new/song.wav"));
+        assert!(Path::new(&asset_after.origin).ends_with("new/song.wav"));
         assert!(moved.sources[0]
             .excludes
             .iter()
-            .any(|key| key.ends_with("new/excluded.wav")));
+            .any(|key| Path::new(key).ends_with("new/excluded.wav")));
         assert_eq!(moved.entries.len(), first.entries.len() + 1);
         assert_eq!(
             refresh(&f.0, &source_id).unwrap().entries.len(),

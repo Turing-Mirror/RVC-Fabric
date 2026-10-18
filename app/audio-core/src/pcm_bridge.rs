@@ -9,6 +9,49 @@ pub const VERSION: u32 = 1;
 pub const WRITE_FRAME_OFFSET: usize = 32;
 pub const READ_FRAME_OFFSET: usize = 40;
 
+/// Inference publishes a whole block at once. Keep that burst in the bridge,
+/// then pace the output ring so the local monitor sees playback, not a burst.
+#[derive(Clone, Copy, Debug)]
+pub struct MicrophoneBuffering {
+    pub capacity_frames: u32,
+    pub max_lag_frames: u32,
+    read_ahead_frames: usize,
+}
+
+impl MicrophoneBuffering {
+    pub fn for_block(format: PcmFormat, block_seconds: f64) -> Result<Self, String> {
+        const BLOCK_ROUNDING_SECONDS: f64 = 0.01;
+        const BACKLOG_SECONDS: f64 = 0.4;
+        const MIN_BRIDGE_SECONDS: f64 = 1.0;
+        const READ_AHEAD_SECONDS: f64 = 0.03;
+        let frames = PcmFormat {
+            channels: 1,
+            ..format
+        };
+        frames.samples_for(block_seconds)?;
+        // Workers round blocks to 10 ms. A normal block is not stale backlog.
+        let max_lag_seconds = block_seconds + BLOCK_ROUNDING_SECONDS + BACKLOG_SECONDS;
+        let capacity_frames =
+            frames.samples_for((2.0 * max_lag_seconds).max(MIN_BRIDGE_SECONDS))?;
+        let max_lag_frames = frames.samples_for(max_lag_seconds)?;
+        Ok(Self {
+            capacity_frames: capacity_frames.try_into().map_err(|_| "buffer_too_large")?,
+            max_lag_frames: max_lag_frames.try_into().map_err(|_| "buffer_too_large")?,
+            read_ahead_frames: frames.samples_for(READ_AHEAD_SECONDS)?,
+        })
+    }
+
+    /// Leave the rest of an inference burst in shared memory until playback
+    /// advances. This stays below the monitor's independent clock-drift budget.
+    pub fn read_frames(self, queued_frames: usize, free_frames: usize) -> usize {
+        const CHUNK_FRAMES: usize = 1024;
+        self.read_ahead_frames
+            .saturating_sub(queued_frames)
+            .min(free_frames)
+            .min(CHUNK_FRAMES)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Header {
     pub format: PcmFormat,
@@ -78,6 +121,27 @@ impl Header {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn microphone_buffering_accepts_every_supported_block_duration() {
+        for sample_rate in [44_100, 48_000] {
+            for block_seconds in [0.02, 0.06, 0.07, 0.28, 0.58, 1.13, 1.5] {
+                let format = PcmFormat {
+                    sample_rate,
+                    channels: 2,
+                };
+                let buffering = MicrophoneBuffering::for_block(format, block_seconds).unwrap();
+                let block_frames = (sample_rate as f64 * block_seconds).ceil() as u32;
+                assert!(buffering.max_lag_frames >= block_frames);
+                assert!(buffering.capacity_frames >= 2 * buffering.max_lag_frames - 1);
+                let ahead = buffering.read_ahead_frames;
+                assert!(ahead < format.samples_for(0.06).unwrap() / 2);
+                assert_eq!(buffering.read_frames(ahead, 4096), 0);
+                assert_eq!(buffering.read_frames(ahead - 1, 4096), 1);
+                assert_eq!(buffering.read_frames(0, 32), 32);
+            }
+        }
+    }
 
     #[test]
     fn header_round_trip_matches_the_python_layout() {

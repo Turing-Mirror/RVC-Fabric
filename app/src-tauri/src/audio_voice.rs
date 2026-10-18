@@ -439,7 +439,11 @@ pub fn begin_engine_start(root: &Path) -> Result<EngineStartGuard, String> {
             if bus.microphone_attached() {
                 bus.detach_microphone()?;
             }
-            match bus.attach_microphone() {
+            let block_seconds = crate::config::read(root)
+                .get("block_time")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.25);
+            match bus.attach_microphone(block_seconds) {
                 Ok(mut descriptor) => {
                     voice.shell_mic_monitor = local_output(root, &selected).is_some();
                     descriptor.monitor = voice.shell_mic_monitor;

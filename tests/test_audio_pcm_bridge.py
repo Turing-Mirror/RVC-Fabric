@@ -64,6 +64,28 @@ class PcmBridgeTests(unittest.TestCase):
         self.assertFalse(writer.publish(self.np.ones((1, 2), dtype=self.np.float32), 48000))
         self.assertEqual(struct.unpack_from("<Q", self.buffer, 32)[0], 4)
 
+    def test_publishes_blocks_longer_than_one_second_when_the_shell_sizes_the_ring(self):
+        for sample_rate in (44100, 48000):
+            for seconds in (0.28, 0.58, 1.13, 1.5):
+                with self.subTest(sample_rate=sample_rate, seconds=seconds):
+                    capacity = sample_rate * 4
+                    self.buffer = bytearray(64 + capacity * 2 * 4)
+                    self.buffer[:8] = b"FABPCM01"
+                    struct.pack_into("<III", self.buffer, 8, 1, capacity, sample_rate)
+                    struct.pack_into("<H", self.buffer, 20, 2)
+                    struct.pack_into("<Q", self.buffer, 24, 19)
+                    writer = self.bridge.PcmBridgeWriter("test", 19)
+                    frames = round(sample_rate * seconds)
+                    pcm = self.np.arange(frames * 2, dtype=self.np.float32).reshape(-1, 2)
+                    self.assertTrue(writer.publish(pcm, sample_rate))
+                    self.assertEqual(struct.unpack_from("<Q", self.buffer, 32)[0], frames)
+                    self.np.testing.assert_array_equal(
+                        self.np.frombuffer(self.buffer, dtype="<f4", count=frames * 2, offset=64)
+                        .reshape(-1, 2),
+                        pcm,
+                    )
+                    writer.close()
+
     def test_stale_epoch_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "epoch"):
             self.bridge.PcmBridgeWriter("test", 20)

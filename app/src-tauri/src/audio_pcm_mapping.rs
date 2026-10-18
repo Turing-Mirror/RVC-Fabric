@@ -133,3 +133,57 @@ impl Drop for PcmMapping {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fabric_audio::{format::PcmFormat, pcm_bridge::MicrophoneBuffering};
+
+    #[test]
+    fn reads_whole_inference_blocks_without_trimming_the_prefix() {
+        for sample_rate in [44_100, 48_000] {
+            for block_seconds in [0.06, 0.28, 0.58, 1.13, 1.5] {
+                let format = PcmFormat {
+                    sample_rate,
+                    channels: 2,
+                };
+                let buffering = MicrophoneBuffering::for_block(format, block_seconds).unwrap();
+                let mut mapping = PcmMapping::create(Header {
+                    format,
+                    capacity_frames: buffering.capacity_frames,
+                    epoch: (sample_rate as f64 * block_seconds) as u64 + 1,
+                })
+                .unwrap();
+                let frames = (sample_rate as f64 * block_seconds).round() as usize;
+                let input: Vec<_> = (0..frames * 2).map(|n| n as f32).collect();
+                unsafe {
+                    ptr::copy_nonoverlapping(
+                        input.as_ptr(),
+                        mapping
+                            .view
+                            .Value
+                            .cast::<u8>()
+                            .add(HEADER_BYTES)
+                            .cast::<f32>(),
+                        input.len(),
+                    );
+                }
+                mapping
+                    .cursor(WRITE_FRAME_OFFSET)
+                    .store(frames as u64, Ordering::Release);
+                let mut chunk = [0f32; 2048];
+                let mut received = Vec::new();
+                loop {
+                    let frames = mapping
+                        .read_into(&mut chunk, buffering.max_lag_frames)
+                        .unwrap();
+                    if frames == 0 {
+                        break;
+                    }
+                    received.extend_from_slice(&chunk[..frames * 2]);
+                }
+                assert_eq!(received, input, "{sample_rate} Hz, {block_seconds} s");
+            }
+        }
+    }
+}

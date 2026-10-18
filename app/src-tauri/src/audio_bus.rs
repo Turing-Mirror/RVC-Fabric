@@ -3,7 +3,7 @@
 #[cfg(windows)]
 use crate::audio_pcm_mapping::PcmMapping;
 #[cfg(windows)]
-use fabric_audio::pcm_bridge::Header;
+use fabric_audio::pcm_bridge::{Header, MicrophoneBuffering};
 use fabric_audio::{
     decode::{DecodedStream, Decoder},
     format::PcmFormat,
@@ -59,11 +59,6 @@ fn music_slot(
             .ok_or("audio_playback_cancelled".into()),
     }
 }
-#[cfg(windows)]
-const BRIDGE_BUFFER_SECONDS: u32 = 1;
-#[cfg(windows)]
-const MIC_MAX_LAG_MS: u32 = 400;
-
 #[derive(Clone)]
 pub struct BridgeDescriptor {
     pub name: String,
@@ -260,17 +255,18 @@ impl VoiceBus {
     }
 
     #[cfg(windows)]
-    pub fn attach_microphone(&mut self) -> Result<BridgeDescriptor, String> {
+    pub fn attach_microphone(&mut self, block_seconds: f64) -> Result<BridgeDescriptor, String> {
         if self.mic_reader.is_some() {
             return Err("pcm_bridge_already_attached".into());
         }
+        let buffering = MicrophoneBuffering::for_block(self.format, block_seconds)?;
         let epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| e.to_string())?
             .as_nanos() as u64;
         let header = Header {
             format: self.format,
-            capacity_frames: self.format.sample_rate * BRIDGE_BUFFER_SECONDS,
+            capacity_frames: buffering.capacity_frames,
             epoch: epoch.max(1),
         };
         let mapping = PcmMapping::create(header)?;
@@ -288,7 +284,6 @@ impl VoiceBus {
         let failed = Arc::new(AtomicBool::new(false));
         let failure = failed.clone();
         let channels = self.format.channels as usize;
-        let max_lag = (self.format.sample_rate / 1000 * MIC_MAX_LAG_MS).max(1);
         let tee = self.mic_tee.clone();
         let thread = std::thread::Builder::new()
             .name("fabric-microphone-bridge".into())
@@ -296,12 +291,17 @@ impl VoiceBus {
                 let mut mapping = mapping;
                 let mut samples = vec![0f32; 1024 * channels];
                 while !stopping.load(Ordering::Acquire) {
-                    let free_frames = (producer.slots() / channels).min(1024);
+                    let free = producer.slots();
+                    let queued = producer.buffer().capacity() - free;
+                    let free_frames = buffering.read_frames(queued / channels, free / channels);
                     if free_frames == 0 {
                         std::thread::sleep(Duration::from_millis(2));
                         continue;
                     }
-                    match mapping.read_into(&mut samples[..free_frames * channels], max_lag) {
+                    match mapping.read_into(
+                        &mut samples[..free_frames * channels],
+                        buffering.max_lag_frames,
+                    ) {
                         Ok(0) => std::thread::sleep(Duration::from_millis(2)),
                         Ok(frames) => {
                             let block = &mut samples[..frames * channels];
@@ -313,7 +313,9 @@ impl VoiceBus {
                             for sample in block.iter() {
                                 let _ = producer.push(*sample);
                             }
-                            if let Some(tee) = tee.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                            if let Some(tee) =
+                                tee.lock().unwrap_or_else(|e| e.into_inner()).as_mut()
+                            {
                                 tee.push(block);
                             }
                         }
@@ -406,7 +408,10 @@ impl VoiceBus {
         let (track, control) = Track::with_fade(decoded.pcm, None, self.fade_frames());
         control.set_gain(gain * master_gain)?;
         control.paused.store(true, Ordering::Release);
-        let slot = music_slot(placement, self.music.iter().map(|music| music.as_ref().map(|m| m.id)))?;
+        let slot = music_slot(
+            placement,
+            self.music.iter().map(|music| music.as_ref().map(|m| m.id)),
+        )?;
         if let Some(current) = self.music[slot].as_ref() {
             self.fade_out(&current.control);
         }
@@ -551,7 +556,10 @@ impl VoiceBus {
         if self.microphone_attached() {
             return Err("pcm_bridge_already_attached".into());
         }
-        let producer = self.mic_producer.take().ok_or("audio_monitor_input_taken")?;
+        let producer = self
+            .mic_producer
+            .take()
+            .ok_or("audio_monitor_input_taken")?;
         let capacity = producer.buffer().capacity();
         let tee = Converter::new(source, self.format).map(|converter| MicTee {
             capacity,
@@ -585,11 +593,17 @@ impl VoiceBus {
 
     /// Install or remove the copy of this bus's microphone; returns the previous one.
     pub fn set_mic_tee(&self, tee: Option<MicTee>) -> Option<MicTee> {
-        std::mem::replace(&mut *self.mic_tee.lock().unwrap_or_else(|e| e.into_inner()), tee)
+        std::mem::replace(
+            &mut *self.mic_tee.lock().unwrap_or_else(|e| e.into_inner()),
+            tee,
+        )
     }
 
     pub fn has_mic_tee(&self) -> bool {
-        self.mic_tee.lock().unwrap_or_else(|e| e.into_inner()).is_some()
+        self.mic_tee
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
     }
 
     pub fn microphone_failed(&self) -> bool {
@@ -609,11 +623,22 @@ mod tests {
     #[test]
     fn replay_reuses_only_its_own_slot_and_rejects_a_stopped_target() {
         let ids = [Some(11), Some(12), None];
-        assert_eq!(music_slot(MusicPlacement::ReplaceInstance(12), ids.into_iter()).unwrap(), 1);
-        assert_eq!(music_slot(MusicPlacement::Overlay, ids.into_iter()).unwrap(), 2);
-        assert_eq!(music_slot(MusicPlacement::ReplaceAll, ids.into_iter()).unwrap(), 0);
-        assert_eq!(music_slot(MusicPlacement::ReplaceInstance(9), ids.into_iter()).unwrap_err(),
-            "audio_playback_cancelled");
+        assert_eq!(
+            music_slot(MusicPlacement::ReplaceInstance(12), ids.into_iter()).unwrap(),
+            1
+        );
+        assert_eq!(
+            music_slot(MusicPlacement::Overlay, ids.into_iter()).unwrap(),
+            2
+        );
+        assert_eq!(
+            music_slot(MusicPlacement::ReplaceAll, ids.into_iter()).unwrap(),
+            0
+        );
+        assert_eq!(
+            music_slot(MusicPlacement::ReplaceInstance(9), ids.into_iter()).unwrap_err(),
+            "audio_playback_cancelled"
+        );
     }
 
     #[test]
@@ -624,8 +649,14 @@ mod tests {
             max_fill: 8,
             producer,
             converter: Converter::new(
-                PcmFormat { sample_rate: 48000, channels: 1 },
-                PcmFormat { sample_rate: 48000, channels: 2 },
+                PcmFormat {
+                    sample_rate: 48000,
+                    channels: 1,
+                },
+                PcmFormat {
+                    sample_rate: 48000,
+                    channels: 2,
+                },
             )
             .unwrap(),
         };
@@ -641,6 +672,71 @@ mod tests {
         }
         let backlog = 64 - tee.producer.slots();
         assert!(backlog <= 8 + 8, "{backlog}");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn microphone_monitor_preserves_long_inference_bursts() {
+        for sample_rate in [44_100, 48_000] {
+            for block_seconds in [0.06, 0.28, 0.58, 1.13, 1.5] {
+                let format = PcmFormat {
+                    sample_rate,
+                    channels: 2,
+                };
+                let buffering = MicrophoneBuffering::for_block(format, block_seconds).unwrap();
+                let capacity = format.samples_for(MIC_BUFFER_SECONDS).unwrap();
+                let (mut producer, mut output) = RingBuffer::new(capacity);
+                let (monitor_producer, mut monitor) = RingBuffer::new(capacity);
+                let mut tee = MicTee {
+                    capacity,
+                    max_fill: format.samples_for(MONITOR_MAX_LAG_SECONDS).unwrap(),
+                    producer: monitor_producer,
+                    converter: Converter::new(format, format).unwrap(),
+                };
+                let frames = (sample_rate as f64 * block_seconds).round() as usize;
+                let input: Vec<_> = (0..frames * 2).map(|n| (n % 997) as f32 / 997.0).collect();
+                let mut written = 0;
+                let mut played = Vec::new();
+                let mut heard = Vec::new();
+                while written < input.len() || output.slots() != 0 {
+                    loop {
+                        let free = producer.slots();
+                        let queued = capacity - free;
+                        let frames = buffering
+                            .read_frames(queued / 2, free / 2)
+                            .min((input.len() - written) / 2);
+                        if frames == 0 {
+                            break;
+                        }
+                        let chunk = &input[written..written + frames * 2];
+                        for sample in chunk {
+                            producer.push(*sample).unwrap();
+                        }
+                        tee.push(chunk);
+                        written += chunk.len();
+                    }
+                    // Both devices consume on their own 2 ms callback cadence.
+                    for _ in 0..sample_rate as usize / 500 * 2 {
+                        if let Ok(sample) = output.pop() {
+                            played.push(sample);
+                        }
+                        if let Ok(sample) = monitor.pop() {
+                            heard.push(sample);
+                        }
+                    }
+                }
+                while let Ok(sample) = monitor.pop() {
+                    heard.push(sample);
+                }
+                assert_eq!(played, input, "output: {sample_rate} Hz, {block_seconds} s");
+                // The converter keeps one source frame for interpolation.
+                assert_eq!(
+                    heard,
+                    input[..input.len() - 2],
+                    "monitor: {sample_rate} Hz, {block_seconds} s"
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.7.0",
+    "version": "1.7.1",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.7.0",
+      "version": "1.7.1",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "9a8db73f1f5a7fe9b69a32b774973682c1c77a6f7b9e368d884e213ed3157f9d",
-      "size_bytes": 12457558,
+      "sha256": "029a37fad0ee418752b489c68a7292070e30d8bcd95bf2e0902ab98cd478ca58",
+      "size_bytes": 12435052,
       "min_app_version": "1.3.0",
-      "notes": "1.7.0 新增本地音频库，可管理曲目、查看波形、选择区间试听、创建片段并导出 WAV；语音输出增加多实例播放控制。语音转换支持多来源清单，为每条任务单独设置音色、标签和音高，可对同一来源使用多音色转换，并在原声与转换结果间切换试听、保留播放位置。无模型 DSP 效果链更新，训练可显式选择 CPU。安装包不再携带 FFmpeg/ffprobe；未安装 engine-core 时，应用会在需要音频工具时询问用户，确认后才下载。另调整音频区间控件位置、修复首页音色卡刷新动画，并改进 STS 设置布局。"
+      "notes": "1.7.1 修复实时音频桥对长采样块的处理：共享缓冲容量和积压上限随启动时的采样块时长调整，读取按播放队列的消耗推进，避免正常推理块被当作积压截断或在监听队列中丢弃。界面与模型算法不变。"
     }
   },
   "community": {

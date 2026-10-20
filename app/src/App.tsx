@@ -1303,6 +1303,7 @@ export default function App() {
                   onOpenPlaza={openPlaza}
                   focusKind={modelsKind}
                   focusNonce={modelsKindNonce}
+                  onKindChange={setModelsKind}
                 />
               );
             case "settings":

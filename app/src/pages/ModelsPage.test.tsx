@@ -4,6 +4,7 @@
  * 不认持久化的 selected_idx。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, useState } from "react";
 import { mount, tick, type Mounted } from "../test/dom";
 
 const tauri = vi.hoisted(() => ({
@@ -29,6 +30,37 @@ const CATALOG = {
 };
 
 const mounts: Mounted[] = [];
+
+/** 与 App 一样，导航保留在父层，模型页离开后会卸载。 */
+function ModelsNavigation({ initialKind = "dsp" }: { initialKind?: "rvc" | "dsp" }) {
+  const [visible, setVisible] = useState(true);
+  const [kind, setKind] = useState<"rvc" | "dsp">(initialKind);
+  const [nonce, setNonce] = useState(0);
+  return (
+    <>
+      <button data-testid="leave" onClick={() => setVisible(false)}>离开</button>
+      <button data-testid="return" onClick={() => setVisible(true)}>返回</button>
+      <button data-testid="open-dsp" onClick={() => {
+        setKind("dsp");
+        setNonce((n) => n + 1);
+        setVisible(true);
+      }}>首页 DSP 入口</button>
+      {visible ? <ModelsPage focusKind={kind} focusNonce={nonce} onKindChange={setKind} /> : null}
+    </>
+  );
+}
+
+function kindButton(m: Mounted, kind: "rvc" | "dsp"): HTMLButtonElement {
+  const label = t(kind === "rvc" ? "s.dspKindRvc" : "s.dspKindDsp");
+  const button = Array.from(m.container.querySelectorAll("button"))
+    .find((b) => b.textContent === label);
+  if (!button) throw new Error(`Missing models kind button: ${label}`);
+  return button;
+}
+
+function navigate(m: Mounted, action: string) {
+  act(() => (m.container.querySelector(`[data-testid="${action}"]`) as HTMLButtonElement).click());
+}
 
 describe("模型页使用中徽标", () => {
   beforeEach(() => {
@@ -71,5 +103,38 @@ describe("模型页使用中徽标", () => {
     // 徽章所在的卡片容器里得有乙的名字。
     const card = badges[0].closest("div");
     expect(card?.parentElement?.textContent).toContain("乙");
+  });
+
+  it("首页 DSP 入口首帧即选中 DSP，不先闪 RVC", () => {
+    const m = mount(<ModelsPage focusKind="dsp" />);
+    mounts.push(m);
+    expect(kindButton(m, "dsp").classList.contains("text-[var(--ink)]")).toBe(true);
+  });
+
+  it("首页进入 DSP 后手动切回 RVC，离开再返回保留 RVC（issue #8）", async () => {
+    const m = mount(<ModelsNavigation />);
+    mounts.push(m);
+    await tick();
+    act(() => kindButton(m, "rvc").click());
+    expect(kindButton(m, "rvc").classList.contains("text-[var(--ink)]")).toBe(true);
+    navigate(m, "leave");
+    navigate(m, "return");
+    await tick();
+    expect(kindButton(m, "rvc").classList.contains("text-[var(--ink)]")).toBe(true);
+  });
+
+  it("手动切换 DSP 也能跨页面保留，首页明确跳转仍然有效", async () => {
+    const m = mount(<ModelsNavigation initialKind="rvc" />);
+    mounts.push(m);
+    await tick();
+    act(() => kindButton(m, "rvc").click());
+    act(() => kindButton(m, "dsp").click());
+    navigate(m, "leave");
+    navigate(m, "return");
+    await tick();
+    expect(kindButton(m, "dsp").classList.contains("text-[var(--ink)]")).toBe(true);
+    act(() => kindButton(m, "rvc").click());
+    navigate(m, "open-dsp");
+    expect(kindButton(m, "dsp").classList.contains("text-[var(--ink)]")).toBe(true);
   });
 });

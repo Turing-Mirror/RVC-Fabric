@@ -69,6 +69,8 @@ export type ModelsPageProps = {
   focusKind?: Kind;
   /** 加一就再切一次 focusKind（连点首页入口也要生效）。 */
   focusNonce?: number;
+  /** 将手动切换回写给导航层，离开重进时保留用户最新选择。 */
+  onKindChange?: (kind: Kind) => void;
   /** Models-page placement, owned by App so the feed is fetched once. */
   banner?: PlazaItem | null;
   /** 总控已提交的「使用中」音色身份（modelKey 形式）；空串 = 没有在用的音色。 */
@@ -91,13 +93,14 @@ function ModelsPageImpl({
   onOpenPlaza,
   focusKind,
   focusNonce = 0,
+  onKindChange,
 }: ModelsPageProps) {
   const { t: translate } = useI18n();
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("default");
-  const [kind, setKind] = useState<Kind>("rvc");
+  const [kind, setKind] = useState<Kind>(focusKind ?? "rvc");
   /** 当前生效的 DSP 预设 id；空串 = DSP 没开。 */
   const [dspId, setDspId] = useState("");
   /** 当前生效的那条预设本体，编辑器要拿它画滑条。 */
@@ -454,6 +457,7 @@ function ModelsPageImpl({
             value={kind}
             onChange={(v) => {
               setKind(v);
+              onKindChange?.(v);
               setPage(0);
             }}
             options={[

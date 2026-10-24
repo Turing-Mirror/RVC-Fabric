@@ -14,7 +14,7 @@ pub fn install_on_hdd(root: &Path) -> bool {
 }
 
 /// `E:\RVC Fabric` → `E:`。网络路径等没有盘符的情况返回 None。
-fn volume_of(root: &Path) -> Option<String> {
+pub(crate) fn volume_of(root: &Path) -> Option<String> {
     let canon = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let s = canon.to_string_lossy();
     let s = s.strip_prefix(r"\\?\").unwrap_or(&s);

@@ -135,14 +135,26 @@ class InstallerHooks(unittest.TestCase):
         self.assertEqual(opens, closes, "!macro 和 !macroend 不配对")
 
     def test_install_hooks_never_touch_user_data_or_runtime(self):
-        """覆盖升级靠 Runtime / User_Data 留下来。安装钩子不许碰它们。"""
+        """覆盖升级靠 Runtime / User_Data 留下来。安装钩子不许碰安装目录里的它们。"""
         bodies = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))
         for name in ("NSIS_HOOK_PREINSTALL", "NSIS_HOOK_POSTINSTALL"):
             for code in live_lines(bodies[name]):
                 for danger in ("Runtime", "User_Data", "engine-core"):
                     self.assertNotIn(
-                        danger, code, f"{name} 碰了 {danger}：{code}"
+                        f"$INSTDIR\\{danger}", code, f"{name} 碰了 {danger}：{code}"
                     )
+
+    def test_moving_install_location_is_left_to_the_app(self):
+        """换安装位置时，复制、核对、改路径都交给软件本体；没搬成就取消安装。"""
+        pre = macro_bodies(HOOKS.read_text(encoding="utf-8-sig"))["NSIS_HOOK_PREINSTALL"]
+        code = "\n".join(live_lines(pre))
+        code = code[code.index('StrCpy $MoveFrom ""') : code.index("skip_move:")]
+        self.assertIn("--move-install", code)
+        self.assertIn("IfSilent skip_move", code)
+        self.assertIn("StrCmp $UpdateMode 1 skip_move", code)
+        self.assertIn("Abort", code)
+        for op in ("CopyFiles", "Rename", "RMDir /r"):
+            self.assertNotIn(op, code, f"NSIS_HOOK_PREINSTALL 自己在搬文件：{op}")
 
     def test_never_recursively_deletes_the_install_dir(self):
         """不许 RMDir /r $INSTDIR。用户万一装到 D:\\ 这种宽目录，会把同盘别的东西一起带走。"""

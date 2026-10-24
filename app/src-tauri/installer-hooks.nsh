@@ -11,15 +11,23 @@
 ;   - 卸载时只删自己装的文件，RMDir 不带 /r —— Runtime\ 和 User_Data\ 不会被删
 ;
 ; 安装钩子（PREINSTALL / POSTINSTALL）绝对不要碰 Runtime\ 和 User_Data\：
-; 覆盖升级要靠它们留下来。卸载钩子（PREUNINSTALL / POSTUNINSTALL）相反：
-; 薄包首次运行后会从 CNB 再下 Runtime、engine-core、音色、分离/训练底模，
-; 这些不在安装清单里，模板清不掉。真正卸载时必须清 Runtime 等运行环境，
-; User_Data 由用户勾选「同时删除用户数据」或弹窗选择，默认保留。
+; 覆盖升级要靠它们留下来。唯一的例外是换安装位置：用户确认后，由软件本体
+; （install_move.rs）把它们整体搬到新目录，搬不成就取消安装、原样不动。
+; 卸载钩子（PREUNINSTALL / POSTUNINSTALL）相反：薄包首次运行后会从 CNB
+; 再下 Runtime、engine-core、音色、分离/训练底模，这些不在安装清单里，
+; 模板清不掉。用户数据和这些已下载组件一起由用户选择保留或删除，默认保留。
 ; OTA（/UPDATE）和被动安装（/P）会走卸载器时仍跳过，避免升级把运行时卸掉。
 ; VB-Cable 是系统驱动，卸载程序只删安装目录里的安装包，驱动要用户自己卸。
 
 ; 卸载时记住「要不要留 User_Data」。默认 1 = 保留。
 Var KeepUserData
+; 换安装位置：原目录、原来有没有桌面快捷方式和开机自启。
+Var MoveOld
+Var MoveFrom
+Var MoveDesktop
+Var MoveAutostart
+Var MoveCode
+Var MoveReport
 
 !macro NSIS_HOOK_PREINSTALL
   ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
@@ -78,6 +86,58 @@ Var KeepUserData
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}_is1"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-4789-ABCD-EF1234567890}_is1"
 
+  ; 换安装位置。注册表记的原目录和这次选的不一样、原目录里有用户数据时，
+  ; 问要不要搬。复制、核对、改设置里的路径都在软件本体的 install_move.rs，
+  ; 有测试；这里只负责问、调用和收尾。
+  StrCpy $MoveFrom ""
+  IfSilent skip_move
+  StrCmp $UpdateMode 1 skip_move
+  StrCmp $PassiveMode 1 skip_move
+  ReadRegStr $MoveOld SHCTX "${MANUPRODUCTKEY}" ""
+  StrCmp $MoveOld "" skip_move
+  StrCmp $MoveOld $INSTDIR skip_move
+  IfFileExists "$MoveOld\User_Data\*.*" 0 skip_move
+  MessageBox MB_YESNO|MB_ICONQUESTION "RVC Fabric 原来安装在：$\r$\n$MoveOld$\r$\n$\r$\n是否把音色、设置和已下载的组件搬到新位置？$\r$\n$INSTDIR$\r$\n$\r$\n选「否」将在新位置全新安装，原位置保持不变。" IDNO skip_move
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  ; 原目录里的引擎进程还占着 Runtime 的文件，不停掉搬不动。只按路径前缀匹配。
+  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath(''$MoveOld''); Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  Sleep 800
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\move-install.exe" "${MAINBINARYSRCPATH}"
+  StrCpy $MoveReport "$PLUGINSDIR\move-report.txt"
+  DetailPrint "正在搬移音色、设置和已下载的组件，可能需要几分钟…"
+  ClearErrors
+  ExecWait '"$PLUGINSDIR\move-install.exe" --move-install "$MoveOld" "$INSTDIR" "$MoveReport"' $MoveCode
+  IfErrors move_failed
+  StrCmp $MoveCode 0 move_ok
+  ; 2：只是写法不同的同一个目录，照常覆盖安装。
+  StrCmp $MoveCode 2 skip_move
+  move_failed:
+    StrCpy $R3 ""
+    ClearErrors
+    FileOpen $R4 "$MoveReport" r
+    IfErrors move_report_done
+    FileReadUTF16LE $R4 $R3
+    FileClose $R4
+    move_report_done:
+    MessageBox MB_OK|MB_ICONEXCLAMATION "搬移没有完成：$\r$\n$R3$\r$\n$\r$\n原位置的软件和数据都没有改动，本次安装已取消。"
+    Abort
+  move_ok:
+  ; 原位置剩下的程序文件交给原来的卸载程序删。它会顺带删掉快捷方式和开机自启，
+  ; 先记下来，装好后在新位置重建。
+  StrCpy $MoveFrom $MoveOld
+  StrCpy $MoveDesktop 0
+  IfFileExists "$DESKTOP\${PRODUCTNAME}.lnk" 0 +2
+    StrCpy $MoveDesktop 1
+  ReadRegStr $MoveAutostart HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
+  IfFileExists "$MoveFrom\uninstall.exe" 0 move_old_done
+    ExecWait '"$MoveFrom\uninstall.exe" /S _?=$MoveFrom'
+    ; 带 _?= 运行时卸载程序删不掉自己。
+    Delete "$MoveFrom\uninstall.exe"
+    RMDir "$MoveFrom"
+  move_old_done:
+  skip_move:
+
   ; Inno 的卸载程序本体。留着它没有入口能调用，纯粹占地方，而且用户手动双击
   ; 它一样会把新装的文件删坏。
   Delete "$INSTDIR\unins000.exe"
@@ -86,6 +146,12 @@ Var KeepUserData
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  StrCmp $MoveFrom "" skip_move_restore
+    StrCmp $MoveDesktop 1 0 +2
+      Call CreateOrUpdateDesktopShortcut
+    StrCmp $MoveAutostart "" +2
+      WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}" '"$INSTDIR\${MAINBINARYNAME}.exe"'
+  skip_move_restore:
   ; 安装目录的注册表键由 Tauri 的模板自己写（WriteRegStr SHCTX MANUPRODUCTKEY），
   ; 这里不用重复写。重复写反而危险：写歪一个字符，下次 OTA 就找不到安装目录，
   ; 当成全新安装落到 %LOCALAPPDATA%，用户几个 GB 的运行时要重下一遍。
@@ -101,7 +167,7 @@ Var KeepUserData
   ; 两种路径都要提到 VB-Cable：它是系统驱动，这里卸不掉。
   StrCmp $DeleteAppDataCheckboxState 1 uninst_force_delete_data
   IfSilent skip_uninst_prompt
-    MessageBox MB_YESNO|MB_ICONQUESTION "是否保留用户数据（音色、设置、日志）？$\r$\n$\r$\n选「是」将保留 User_Data，下次安装后可继续使用。$\r$\n选「否」将连同用户数据一起删除。$\r$\n$\r$\nRuntime 等下载的运行环境会一并清除。$\r$\n$\r$\n注意：VB-Cable 虚拟声卡是系统驱动，需要到 Windows「应用和功能」中单独卸载 VB-Audio Virtual Cable。本程序不会卸载它。" IDYES skip_uninst_prompt
+    MessageBox MB_YESNO|MB_ICONQUESTION "是否保留用户数据（音色、设置、日志）和已下载的组件？$\r$\n$\r$\n选「是」将保留，下次安装后可继续使用，不用重新下载。$\r$\n选「否」将全部删除。$\r$\n$\r$\n注意：VB-Cable 虚拟声卡是系统驱动，需要到 Windows「应用和功能」中单独卸载 VB-Audio Virtual Cable。本程序不会卸载它。" IDYES skip_uninst_prompt
     StrCpy $KeepUserData 0
     Goto skip_uninst_prompt
   uninst_force_delete_data:
@@ -123,29 +189,33 @@ Var KeepUserData
   StrCmp $UpdateMode 1 skip_uninst_clean
   StrCmp $PassiveMode 1 skip_uninst_clean
 
-  RMDir /r "$INSTDIR\Runtime"
-  RMDir /r "$INSTDIR\runtime"
+  ; 用户数据和已下载的组件：选「保留」就都留下，换位置安装时整体搬走。
+  ; KEEP_LIST_BEGIN —— 与 install_move.rs 的 CARRIED 一致，有测试核对。
   StrCmp $KeepUserData 1 skip_uninst_userdata
     RMDir /r "$INSTDIR\User_Data"
     RMDir /r "$INSTDIR\UserData"
+    RMDir /r "$INSTDIR\Runtime"
+    Delete "$INSTDIR\package_meta.json"
+    Delete "$INSTDIR\ffmpeg.exe"
+    Delete "$INSTDIR\ffprobe.exe"
+    Delete "$INSTDIR\assets\hubert\hubert_base.pt"
+    Delete "$INSTDIR\assets\rmvpe\rmvpe.pt"
+    Delete "$INSTDIR\assets\rmvpe\rmvpe.onnx"
+    RMDir /r "$INSTDIR\assets\pretrained_v2"
+    RMDir /r "$INSTDIR\assets\pretrained"
+    RMDir /r "$INSTDIR\assets\uvr5_weights"
+    RMDir /r "$INSTDIR\assets\pymss"
+    RMDir /r "$INSTDIR\assets\weights"
+    RMDir /r "$INSTDIR\assets\hubert"
+    RMDir /r "$INSTDIR\assets\rmvpe"
   skip_uninst_userdata:
+  ; KEEP_LIST_END
   RMDir /r "$INSTDIR\TEMP"
   RMDir /r "$INSTDIR\VBCABLE"
   ; OTA gui_patch 换过 frontend 后哈希文件名对不上清单，模板删不干净
   RMDir /r "$INSTDIR\frontend"
-  Delete "$INSTDIR\ffmpeg.exe"
-  Delete "$INSTDIR\ffprobe.exe"
-  Delete "$INSTDIR\package_meta.json"
-  Delete "$INSTDIR\assets\hubert\hubert_base.pt"
-  Delete "$INSTDIR\assets\rmvpe\rmvpe.pt"
-  Delete "$INSTDIR\assets\rmvpe\rmvpe.onnx"
-  RMDir /r "$INSTDIR\assets\pretrained_v2"
-  RMDir /r "$INSTDIR\assets\pretrained"
-  RMDir /r "$INSTDIR\assets\uvr5_weights"
-  RMDir /r "$INSTDIR\assets\pymss"
-  RMDir /r "$INSTDIR\assets\hubert"
-  RMDir /r "$INSTDIR\assets\rmvpe"
-  RMDir /r "$INSTDIR\assets\weights"
+  RMDir "$INSTDIR\assets\hubert"
+  RMDir "$INSTDIR\assets\rmvpe"
   RMDir "$INSTDIR\assets"
   RMDir "$INSTDIR"
   skip_uninst_clean:

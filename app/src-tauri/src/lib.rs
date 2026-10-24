@@ -33,6 +33,7 @@ mod gpu_pref;
 mod hf;
 mod hotkey_catalog;
 mod i18n;
+pub mod install_move;
 mod known_issues;
 mod legacy;
 mod link_check;

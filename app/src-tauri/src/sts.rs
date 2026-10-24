@@ -56,6 +56,7 @@ const LIST_CAP: usize = 300;
 const WALK_CAP: usize = 2000;
 pub(crate) const LAST_INPUT: &str = "last_sts_input";
 pub(crate) const LAST_OUTPUT: &str = "last_sts_output";
+pub(crate) const RECORD_DIR: &str = "sts_record_dir";
 const MAX_RECORD_SEC: u64 = 30 * 60;
 
 /// 原版单次推理那几个旋钮。缺省跟 infer-web 单次推理一致。
@@ -509,6 +510,7 @@ pub fn status(root: &Path) -> Value {
         "index_rate": cfg.get("index_rate").and_then(|v| v.as_f64()).unwrap_or(0.75),
         "out_dir": out_dir(root).to_string_lossy(),
         "default_input_dir": default_input_dir(root).to_string_lossy(),
+        "record_dir": record_dir(root).to_string_lossy(),
         "last_input": existing_path(cfg.get(LAST_INPUT).and_then(|v| v.as_str()).unwrap_or("")),
         "last_output": last_output_for_ui(
             root,
@@ -577,6 +579,21 @@ pub fn default_input_dir(root: &Path) -> PathBuf {
     paths::user_data(root).join("sts").join("input")
 }
 
+/// 录音保存目录：用户选过就用选的，没选过用默认录音目录。
+pub fn record_dir(root: &Path) -> PathBuf {
+    crate::config::read(root)
+        .get(RECORD_DIR)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_input_dir(root))
+}
+
+pub fn remember_record_dir(root: &Path, path: &str) {
+    remember(root, RECORD_DIR, path);
+}
+
 pub fn is_audio_path(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
@@ -642,7 +659,15 @@ pub fn pick_input(win: Option<&tauri::WebviewWindow>, folder: bool) -> Option<St
 }
 
 pub fn pick_output(win: Option<&tauri::WebviewWindow>) -> Option<String> {
-    let title = crate::i18n::t("s.cb12ce77e7");
+    pick_folder(win, "s.cb12ce77e7")
+}
+
+pub fn pick_record_dir(win: Option<&tauri::WebviewWindow>) -> Option<String> {
+    pick_folder(win, "s.stsRecordPickDir")
+}
+
+fn pick_folder(win: Option<&tauri::WebviewWindow>, title_key: &str) -> Option<String> {
+    let title = crate::i18n::t(title_key);
     let picked = crate::shell_extras::dialog_on(win)
         .set_title(&title)
         .pick_folder()

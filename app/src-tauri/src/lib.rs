@@ -1480,9 +1480,21 @@ fn sts_reveal_input(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn sts_pick_record_dir(
+    window: tauri::WebviewWindow,
+    state: State<'_, Mutex<AppState>>,
+) -> Option<String> {
+    let p = sts::pick_record_dir(Some(&window))?;
+    if let Ok(root) = root_clone(&state) {
+        sts::remember_record_dir(&root, &p);
+    }
+    Some(p)
+}
+
+#[tauri::command]
 fn sts_default_input(state: State<'_, Mutex<AppState>>) -> Result<String, String> {
     let root = root_clone(&state)?;
-    let dir = sts::default_input_dir(&root);
+    let dir = sts::record_dir(&root);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     sts::remember_input(&root, &dir.to_string_lossy());
     Ok(dir.to_string_lossy().into_owned())
@@ -2862,6 +2874,7 @@ pub fn run() {
             sts_snapshot,
             sts_reveal_input,
             sts_default_input,
+            sts_pick_record_dir,
             sts_record_start,
             sts_record_stop,
             mic_test_start,

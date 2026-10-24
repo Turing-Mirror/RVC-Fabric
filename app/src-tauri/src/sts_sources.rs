@@ -310,6 +310,11 @@ pub fn add(root: &Path, raw: &str) -> Result<Value, String> {
         path: display_path(path),
         recursive: true,
     };
+    // 新加的目录收掉落在它里面的单文件来源，比如之前一条一条登记的录音。
+    if kind == "dir" {
+        st.sources
+            .retain(|s| s.kind != "file" || !dir_covers(&src, Path::new(&s.path)));
+    }
     let id = src.id.clone();
     st.sources.push(src);
     save(root, &st)?;
@@ -904,6 +909,25 @@ mod tests {
         set_recursive(&root, &load(&root).sources[0].id, false).unwrap();
         let r = add(&root, &deep.to_string_lossy()).unwrap();
         assert!(!r["dup"].as_bool().unwrap(), "{r}");
+    }
+
+    #[test]
+    fn adding_a_dir_absorbs_the_single_files_inside_it() {
+        // 以前一条一条登记的录音：加上录音目录后并成一行。
+        let root = setup();
+        let d = root.join("rec");
+        let a = d.join("rec_1.wav");
+        let b = d.join("rec_2.wav");
+        let other = root.join("x.wav");
+        for f in [&a, &b, &other] {
+            audio(f);
+            add_src(&root, f);
+        }
+        add_src(&root, &d);
+        let st = load(&root);
+        assert_eq!(st.sources.len(), 2);
+        assert!(st.sources.iter().any(|s| s.kind == "dir"));
+        assert_eq!(scan(&root, "")["total"].as_u64().unwrap(), 3);
     }
 
     #[test]

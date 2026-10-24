@@ -81,6 +81,7 @@ type StsStatus = {
   last_input?: string;
   last_output?: string;
   default_input_dir?: string;
+  record_dir?: string;
   input_device?: string;
   recorder_present?: boolean;
   recording?: boolean;
@@ -951,6 +952,20 @@ function StsSection() {
     void refreshScan();
   }, [refreshScan]);
 
+  // 旧版把每段录音单独记成一条来源：发现录音目录里有这样的条目，就换成整个目录。
+  const mergedRecRef = useRef(false);
+  useEffect(() => {
+    const dir = st.record_dir;
+    if (!dir || mergedRecRef.current || running || recording || !scan?.sources) return;
+    if (!scan.sources.some((x) => x.kind === "file" && samePath(splitPath(x.path).parent, dir))) {
+      return;
+    }
+    mergedRecRef.current = true;
+    void invoke("sts_sources_add", { path: dir })
+      .then(() => refreshScan())
+      .catch(() => undefined);
+  }, [st.record_dir, scan?.sources, running, recording, refreshScan]);
+
   // 单文件音高提取可能静默几十秒；有已用时间用户才知道还在跑。
   useEffect(() => {
     if (!running) {
@@ -1068,8 +1083,7 @@ function StsSection() {
     recordingRef.current = true;
     setRecording(true);
     try {
-      // 录音始终落原默认录音目录；录完只登记这次写出的那个文件——录音
-      // 目录里可能攒着旧录音，整目录加成来源会把它们一股脑扫进清单。
+      // 录音存进录音目录，清单里整个目录算一条来源。
       const folder = await invoke<string>("sts_default_input");
       const r = await invoke<{
         file?: string;
@@ -1077,7 +1091,7 @@ function StsSection() {
         cancelled?: boolean;
       }>("sts_record_start", { input: folder });
       if (r.file && !r.cancelled) {
-        await invoke("sts_sources_add", { path: r.file }).catch(() => undefined);
+        await invoke("sts_sources_add", { path: folder }).catch(() => undefined);
         showInfo(t("s.stsRecordSaved", { v0: r.file }));
       }
       await refreshScan();
@@ -1575,7 +1589,7 @@ function StsSection() {
             {scan!.sources!.map((s) => {
               const miss = scan?.missing?.find((m) => m.id === s.id);
               const split = splitPath(s.path);
-              const isDefault = !!st.default_input_dir && samePath(s.path, st.default_input_dir);
+              const isDefault = samePath(s.path, st.record_dir);
               const name = isDefault ? t("s.stsDefaultInputDir") : split.name;
               const parent = isDefault ? s.path : split.parent;
               return (
@@ -1689,6 +1703,20 @@ function StsSection() {
                   })}
             </p>
           </div>
+        </div>
+        <div className={ROW}>
+          <span className={LABEL}>{t("s.stsRecordDir")}</span>
+          <span className={PATH} title={st.record_dir || undefined}>
+            {st.record_dir || ""}
+          </span>
+          <Btn
+            disabled={running || recording}
+            onClick={() => {
+              void pickPath<string | null>("sts_pick_record_dir", undefined, t("s.pickBusyFolder")).then(
+                (p) => p && void load(false),
+              );
+            }}
+          >{t("s.70b208202c")}</Btn>
         </div>
       </div>
 

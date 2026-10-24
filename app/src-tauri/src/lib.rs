@@ -2943,6 +2943,11 @@ pub fn run() {
                         }
                     }
                 }
+                // 训练音色的存放目录也在音色库里，封面从那里读。
+                let train_out = config::train_output_dir(&root);
+                if !train_out.is_empty() {
+                    asset_scope::grant_dir(app.handle(), std::path::Path::new(&train_out));
+                }
             }
             // Window URL must use the custom scheme registered above.
             // WebView2 cannot register non-standard schemes at all, so wry

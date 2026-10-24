@@ -1325,6 +1325,10 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
     };
     // 记住选择：音色库要一直扫这个目录，不然重启之后训好的音色就「消失」了。
     let _ = crate::config::set_train_output_dir(root, &out_dir);
+    // 存放目录可能是手填或上次会话留下的，没经过选择框放行；封面要从那里读。
+    if !out_dir.is_empty() {
+        crate::asset_scope::grant_dir(app, Path::new(&out_dir));
+    }
     req.output_dir = out_dir;
     let device = train_device(root);
     let log = crate::logging::begin_run(

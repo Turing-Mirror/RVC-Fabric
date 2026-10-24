@@ -22,6 +22,7 @@ mod config;
 mod consult;
 mod crash;
 mod device_watch;
+mod disk_kind;
 mod download;
 mod dsp;
 mod engine_assets;
@@ -1479,6 +1480,12 @@ fn sts_reveal_input(path: String) -> Result<(), String> {
     sts::reveal_path(&path)
 }
 
+/// 安装位置是不是机械硬盘。底栏开启变声慢时据此提示。
+#[tauri::command]
+fn install_on_hdd(state: State<'_, Mutex<AppState>>) -> bool {
+    root_clone(&state).is_ok_and(|r| disk_kind::install_on_hdd(&r))
+}
+
 #[tauri::command]
 fn sts_pick_record_dir(
     window: tauri::WebviewWindow,
@@ -2875,6 +2882,7 @@ pub fn run() {
             sts_reveal_input,
             sts_default_input,
             sts_pick_record_dir,
+            install_on_hdd,
             sts_record_start,
             sts_record_stop,
             mic_test_start,

@@ -240,6 +240,7 @@
     "stepOf": "{n}/{total} · {label}",
     "stepLaunch": "エンジンを起動中",
     "stepImport": "推論ライブラリを読み込み中",
+    "slowDisk": "インストール先の読み込みが遅いため、SSD へのインストールをおすすめします。",
     "stepVoice": "音色を読み込み中",
     "stepWarmup": "ウォームアップ中",
     "stepStream": "オーディオデバイスを開いています"

@@ -240,6 +240,7 @@
     "stepOf": "Paso {n} de {total} · {label}",
     "stepLaunch": "Iniciando el motor",
     "stepImport": "Cargando la biblioteca de inferencia",
+    "slowDisk": "La ubicación de instalación lee despacio. Se recomienda instalar en un SSD.",
     "stepVoice": "Cargando la voz",
     "stepWarmup": "Calentando",
     "stepStream": "Abriendo los dispositivos de audio"

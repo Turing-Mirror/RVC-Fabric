@@ -240,6 +240,7 @@
     "stepOf": "Step {n} of {total} · {label}",
     "stepLaunch": "Starting the engine",
     "stepImport": "Loading the inference library",
+    "slowDisk": "The install location reads slowly. Installing on an SSD is recommended.",
     "stepVoice": "Loading the voice",
     "stepWarmup": "Warming up",
     "stepStream": "Opening audio devices"

@@ -240,6 +240,7 @@
     "stepOf": "第 {n}/{total} 步 · {label}",
     "stepLaunch": "啟動引擎",
     "stepImport": "載入推理庫",
+    "slowDisk": "目前安裝位置讀取較慢，建議安裝到固態硬碟。",
     "stepVoice": "載入音色",
     "stepWarmup": "預熱",
     "stepStream": "開啟音訊裝置"

@@ -37,6 +37,7 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useActiveVoiceReconcile } from "./hooks/useActiveVoice";
 import { useEngine } from "./hooks/useEngine";
+import { useSlowDiskHint } from "./hooks/useSlowDiskHint";
 import { useModalKeys } from "./hooks/useModalKeys";
 import { usePlaza } from "./hooks/usePlaza";
 import { getConfig, onConfigPatch, setConfig, type Config } from "./lib/config";
@@ -252,6 +253,7 @@ export default function App() {
   const [showLangGate, setShowLangGate] = useState(false);
 
   const engine = useEngine();
+  const slowDisk = useSlowDiskHint(engine.step);
   // App re-renders on the engine status heartbeat. Keep the latest status
   // available to voice selection without making the selection callback change
   // on every heartbeat and forcing the memoised pages to rebuild.
@@ -1582,6 +1584,7 @@ export default function App() {
         progress={engine.progress}
         loading={engine.starting && engine.progress == null}
         step={engine.step}
+        slowDisk={slowDisk}
         micDb={engine.micDb}
         thresholdDb={engine.thresholdDb}
         showSelfCheck={engine.status?.state === "error"}

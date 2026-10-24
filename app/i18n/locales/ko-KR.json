@@ -240,6 +240,7 @@
     "stepOf": "{n}/{total}단계 · {label}",
     "stepLaunch": "엔진 시작",
     "stepImport": "추론 라이브러리 불러오기",
+    "slowDisk": "설치 위치의 읽기 속도가 느립니다. SSD에 설치하는 것을 권장합니다.",
     "stepVoice": "음색 불러오기",
     "stepWarmup": "예열",
     "stepStream": "오디오 장치 열기"

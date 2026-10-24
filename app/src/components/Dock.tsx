@@ -31,6 +31,8 @@ type Props = {
   loading?: boolean;
   /** 开启变声时走到第几步。有它就按步画进度，副标题写「第 k/N 步 · 在做什么」。 */
   step?: StartupStep | null;
+  /** 开启变声读盘慢且装在机械硬盘上时，在副标题下多显示一行建议。 */
+  slowDisk?: boolean;
   /** Mic level in dBFS from the worker; null when the engine is idle. */
   micDb?: number | null;
   /** Response gate in dBFS. Bar stays muted until the level reaches it. */
@@ -64,6 +66,7 @@ export function Dock({
   progress = null,
   loading = false,
   step = null,
+  slowDisk = false,
   micDb = null,
   thresholdDb = -60,
   showSelfCheck = false,
@@ -209,6 +212,11 @@ export function Dock({
           >
             {sub}
           </div>
+          {slowDisk ? (
+            <div className="text-[11.5px] text-[var(--meta)] mt-0.5 max-w-[280px] ml-auto">
+              {t("dock.slowDisk")}
+            </div>
+          ) : null}
           {/* 出错的那一刻是用户最愿意看点子的时刻。「自检」入口只在这里长
               出来 —— 平时不占底栏任何宽度（见 LinkCheckDialog）。 */}
           {showSelfCheck && onSelfCheck ? (

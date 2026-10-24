@@ -82,4 +82,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_Storage_FileSystem",
   # 安装前能力说明要报内存总量（GlobalMemoryStatusEx）。
   "Win32_System_SystemInformation",
+  # 判断安装位置是不是机械硬盘（DeviceIoControl 查寻道代价）。
+  "Win32_System_IO",
+  "Win32_System_Ioctl",
 ] }

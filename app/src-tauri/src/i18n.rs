@@ -564,10 +564,10 @@ mod tests {
         // 分离 worker 打上来的一行：自带中文兜底 + 稳定的码。
         let line = json!({
             "phase": "error",
-            "message": "模型 / 输入 / 输出 都不能为空",
+            "message": "模型、输入路径与输出路径均不能为空",
             "message_code": "sep.empty_fields",
         });
-        assert_eq!(t_worker_msg(&line), "Model, input and output are all required");
+        assert_eq!(t_worker_msg(&line), "Model, input path, and output path cannot be empty");
     }
 
     #[test]

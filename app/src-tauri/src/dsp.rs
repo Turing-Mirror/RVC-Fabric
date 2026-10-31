@@ -205,8 +205,8 @@ pub fn save(root: &Path, id: &str, name: &str, params: &Value) -> Result<Value, 
     let body = json!({
         "name": if name.trim().is_empty() { id } else { name.trim() },
         "desc": "",
-        "desc_i18n": raw.get("desc_i18n").cloned().unwrap_or_else(|| json!({})),
-                "params": params,
+        "desc_i18n": {},
+        "params": params,
     });
     let text = serde_json::to_string_pretty(&body).unwrap_or_default() + "\n";
     fs::write(dir.join(format!("{id}.json")), text)

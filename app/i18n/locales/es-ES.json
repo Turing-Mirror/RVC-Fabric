@@ -2034,7 +2034,6 @@
     "auditionBtn": "Escuchar",
     "auditionBusy": "Sintetizando…",
     "auditionFailed": "Error en la escucha: {}",
-    "helpFaqFilter": "Filtrar por palabra clave, p. ej. sin sonido / VRAM / ruta china",
     "helpFaqNoHit": "Ninguna entrada coincide; pruebe otra palabra clave.",
     "lcTitle": "Autocomprobación de la cadena de audio",
     "lcOk": "Correcto",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "No se encontró audio en las fuentes.",
     "stsOutDefault": "Sin seleccionar, se guarda en {v0}",
     "feedbackDiagTitle": "Antes de enviar comentarios, prueba a generar un paquete de diagnóstico",
-    "feedbackDiagGo": "Ir"
+    "feedbackDiagGo": "Ir",
+    "helpSearch": "Buscar en la ayuda"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

@@ -2034,7 +2034,6 @@
     "auditionBtn": "Écouter",
     "auditionBusy": "Synthèse…",
     "auditionFailed": "Échec de l'aperçu : {}",
-    "helpFaqFilter": "Filtrer par mot-clé, ex. pas de son / VRAM / chemin chinois",
     "helpFaqNoHit": "Aucune entrée correspondante ; essayez un autre mot-clé.",
     "lcTitle": "Auto-vérification de la chaîne audio",
     "lcOk": "Réussi",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "Aucun audio trouvé dans les sources.",
     "stsOutDefault": "Non sélectionné, enregistrement dans {v0}",
     "feedbackDiagTitle": "Avant d’envoyer un retour, essayez de générer un pack de diagnostic",
-    "feedbackDiagGo": "Y aller"
+    "feedbackDiagGo": "Y aller",
+    "helpSearch": "Rechercher dans l'aide"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

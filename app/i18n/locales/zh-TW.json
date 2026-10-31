@@ -2034,7 +2034,6 @@
     "auditionBtn": "試聽",
     "auditionBusy": "合成中…",
     "auditionFailed": "試聽失敗：{}",
-    "helpFaqFilter": "輸入關鍵詞過濾，如：聽不到 / 視訊記憶體 / 中文路徑",
     "helpFaqNoHit": "沒有匹配的條目，請更換關鍵詞。",
     "lcTitle": "音訊鏈路自檢",
     "lcOk": "通過",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "來源中未識別到音訊。",
     "stsOutDefault": "未選擇，預設儲存至 {v0}",
     "feedbackDiagTitle": "提交回饋前，可嘗試生成診斷包",
-    "feedbackDiagGo": "前往"
+    "feedbackDiagGo": "前往",
+    "helpSearch": "搜尋說明"
   },
   "extras": {
     "engineTitle": "引擎資源",

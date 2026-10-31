@@ -286,9 +286,8 @@ function HelpPageImpl({
   const [open, setOpen] = useState<string>("");
   // 名词表和常见情况各自独立展开，互不影响。
   const [openTerm, setOpenTerm] = useState<string>("");
-  // 常见情况的本地过滤。二十一条靠「新手撞上的先后」排，第一条不一定是
-  // 用户的那条 —— 给个关键词框，比让他逐条展开快。
-  const [faqFilter, setFaqFilter] = useState("");
+  // 页头的搜索框：在全部问答与名词里找，没有命中的分组整块隐藏。
+  const [query, setQuery] = useState("");
   // 虚拟声卡的状态与安装。新手引导里的同一段也用它。
   const vb = useVbCable();
   const vbReady = vb.ready;
@@ -346,20 +345,11 @@ function HelpPageImpl({
   // These guides contain translated text, so cache them until the locale
   // changes. Expanding one row should not rebuild every help paragraph.
   const faq = useMemo(buildFaq, [locale]);
-  const faqNeedle = faqFilter.trim().toLowerCase();
-  const faqShown = useMemo(
-    () =>
-      faqNeedle
-        ? faq.filter((f) =>
-            `${f.q}\n${f.hint}\n${f.a}`.toLowerCase().includes(faqNeedle),
-          )
-        : faq,
-    [faq, faqNeedle],
-  );
+  const needle = query.trim().toLowerCase();
   const trainGuide = useMemo(buildTrainGuide, [locale]);
   const inferGuide = useMemo(buildInferGuide, [locale]);
   const separateGuide = useMemo(buildSeparateGuide, [locale]);
-  const faqItems = useMemo(() => accordionItems(faqShown), [faqShown]);
+  const faqItems = useMemo(() => accordionItems(faq), [faq]);
   const glossaryItems = useMemo(
     () =>
       glossary.map((term) => ({
@@ -377,20 +367,59 @@ function HelpPageImpl({
   );
   const trainItems = useMemo(() => accordionItems(trainGuide), [trainGuide]);
 
+  // 有搜索词时，每组只留命中的条目。
+  const groups = useMemo(() => {
+    const pick = (items: AccordionItem[]) =>
+      needle
+        ? items.filter((e) =>
+            [e.title, e.desc, e.content].some((v) => String(v ?? "").toLowerCase().includes(needle)),
+          )
+        : items;
+    return {
+      faq: pick(faqItems),
+      infer: pick(inferItems),
+      separate: pick(separateItems),
+      train: pick(trainItems),
+      glossary: pick(glossaryItems),
+    };
+  }, [needle, faqItems, inferItems, separateItems, trainItems, glossaryItems]);
+  const hits = Object.values(groups).reduce((n, g) => n + g.length, 0);
+  const note = (shown: AccordionItem[], all: AccordionItem[]) =>
+    needle ? `${shown.length} / ${all.length}` : String(all.length);
+
   return (
     <PagePad>
       <PageHead
         title={t("s.26670dda42")}
         sub={t("s.e137006ffd")}
         actions={
-          onOpenCommunity ? (
-            <Btn onClick={() => onOpenCommunity()}>{t("s.contactCommunity")}</Btn>
-          ) : undefined
+          <>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("s.helpSearch")}
+              aria-label={t("s.helpSearch")}
+              className={[
+                "w-[240px] rounded-[var(--rs)] border px-3 py-1.5 text-[13px]",
+                "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
+                "focus:outline-none focus:border-[var(--accent)]",
+              ].join(" ")}
+            />
+            {onOpenCommunity ? (
+              <Btn onClick={() => onOpenCommunity()}>{t("s.contactCommunity")}</Btn>
+            ) : null}
+          </>
         }
       />
 
+      {needle && hits === 0 ? (
+        <p className="text-[13px] text-[var(--ink-muted)] m-0 mb-4">{t("s.helpFaqNoHit")}</p>
+      ) : null}
+
       {/* 虚拟声卡与连接方式放在说明页最上面，配合右上角的新手引导入口：
           引导照着做，这两块是给想核对细节的人留的。 */}
+      {needle ? null : (
       <Block
         id="help-firstrun"
         title={t("s.firstRunTitle")}
@@ -497,83 +526,71 @@ function HelpPageImpl({
   
         </div>
       </Block>
-      <Block
-        id="help-faq"
-        title={t("s.209d309d58")}
-        note={faqNeedle ? `${faqShown.length} / ${faq.length}` : String(faq.length)}
-        extra={
-          <input
-            type="text"
-            value={faqFilter}
-            onChange={(e) => setFaqFilter(e.target.value)}
-            placeholder={t("s.helpFaqFilter")}
-            aria-label={t("s.helpFaqFilter")}
-            className={[
-              "flex-1 min-w-[200px] max-w-[380px] rounded-[var(--rs)] border px-3 py-1.5 text-[13px]",
-              "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-              "focus:outline-none focus:border-[var(--accent)]",
-            ].join(" ")}
-          />
-        }
-      >
-        {faqShown.length === 0 ? (
-          <p className="text-[12.5px] text-[var(--ink-muted)] m-0 mb-4">
-            {t("s.helpFaqNoHit")}
-          </p>
-        ) : null}
+      )}
+      {groups.faq.length ? (
+      <Block id="help-faq" title={t("s.209d309d58")} note={note(groups.faq, faqItems)}>
         <AccordionGroup
-          items={faqItems}
+          items={groups.faq}
           openId={open}
           onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
-      <Block id="help-infer" title={t("s.inferGuideTitle")} note={String(inferGuide.length)}>
+      ) : null}
+      {groups.infer.length ? (
+      <Block id="help-infer" title={t("s.inferGuideTitle")} note={note(groups.infer, inferItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
         </p>
         <AccordionGroup
-          items={inferItems}
+          items={groups.infer}
           openId={open}
           onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
-      <Block id="help-separate" title={t("s.sepGuideTitle")} note={String(separateGuide.length)}>
+      ) : null}
+      {groups.separate.length ? (
+      <Block id="help-separate" title={t("s.sepGuideTitle")} note={note(groups.separate, separateItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.sepGuideLead")}
         </p>
         <AccordionGroup
-          items={separateItems}
+          items={groups.separate}
           openId={open}
           onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
-      <Block id="help-train" title={t("s.trainGuideTitle")} note={String(trainGuide.length)}>
+      ) : null}
+      {groups.train.length ? (
+      <Block id="help-train" title={t("s.trainGuideTitle")} note={note(groups.train, trainItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.trainGuideLead")}
         </p>
         <AccordionGroup
-          items={trainItems}
+          items={groups.train}
           openId={open}
           onToggle={(id) => setOpen((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
-      <Block title={glossaryTitle} note={String(glossary.length)}>
+      ) : null}
+      {groups.glossary.length ? (
+      <Block title={glossaryTitle} note={note(groups.glossary, glossaryItems)}>
         <AccordionGroup
-          items={glossaryItems}
+          items={groups.glossary}
           openId={openTerm}
           onToggle={(id) => setOpenTerm((cur) => (cur === id ? "" : id))}
           openLabel={t("s.5d5815647c")}
           closedLabel={t("s.b0e24833f7")}
         />
       </Block>
+      ) : null}
     </PagePad>
   );
 }

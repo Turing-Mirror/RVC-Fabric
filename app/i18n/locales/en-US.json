@@ -2034,7 +2034,6 @@
     "auditionBtn": "Preview",
     "auditionBusy": "Synthesizing…",
     "auditionFailed": "Preview failed: {}",
-    "helpFaqFilter": "Filter by keyword, e.g. no sound / VRAM / Chinese path",
     "helpFaqNoHit": "No matching entries; try another keyword.",
     "lcTitle": "Audio chain self-check",
     "lcOk": "Pass",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "No audio found in the sources.",
     "stsOutDefault": "Not selected, saving to {v0}",
     "feedbackDiagTitle": "Before sending feedback, try generating a diagnostic pack",
-    "feedbackDiagGo": "Go"
+    "feedbackDiagGo": "Go",
+    "helpSearch": "Search help"
   },
   "extras": {
     "engineTitle": "Engine resources",

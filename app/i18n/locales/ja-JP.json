@@ -2034,7 +2034,6 @@
     "auditionBtn": "試聴",
     "auditionBusy": "合成中…",
     "auditionFailed": "試聴に失敗しました：{}",
-    "helpFaqFilter": "キーワードで絞り込み（例：聞こえない / VRAM / 中文パス）",
     "helpFaqNoHit": "一致する項目がありません。別のキーワードをお試しください。",
     "lcTitle": "オーディオ経路のセルフチェック",
     "lcOk": "正常",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "ソースに音声が見つかりません。",
     "stsOutDefault": "未選択、{v0} に保存",
     "feedbackDiagTitle": "フィードバックの前に、診断パックの生成をお試しください",
-    "feedbackDiagGo": "移動"
+    "feedbackDiagGo": "移動",
+    "helpSearch": "ヘルプを検索"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

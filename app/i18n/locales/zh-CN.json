@@ -2034,7 +2034,6 @@
     "auditionBtn": "试听",
     "auditionBusy": "合成中…",
     "auditionFailed": "试听失败：{}",
-    "helpFaqFilter": "输入关键词过滤，如：听不到 / 显存 / 中文路径",
     "helpFaqNoHit": "没有匹配的条目，请更换关键词。",
     "lcTitle": "音频链路自检",
     "lcOk": "通过",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "来源中未识别到音频。",
     "stsOutDefault": "未选择，默认保存至 {v0}",
     "feedbackDiagTitle": "提交反馈前，可尝试生成诊断包",
-    "feedbackDiagGo": "前往"
+    "feedbackDiagGo": "前往",
+    "helpSearch": "搜索说明"
   },
   "extras": {
     "engineTitle": "引擎资源",

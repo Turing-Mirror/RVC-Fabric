@@ -2034,7 +2034,6 @@
     "auditionBtn": "미리 듣기",
     "auditionBusy": "합성 중…",
     "auditionFailed": "미리 듣기에 실패했습니다: {}",
-    "helpFaqFilter": "키워드로 필터(예: 안 들림 / VRAM / 중국어 경로)",
     "helpFaqNoHit": "일치하는 항목이 없습니다. 다른 키워드로 시도하세요.",
     "lcTitle": "오디오 경로 자가 점검",
     "lcOk": "정상",
@@ -2276,7 +2275,8 @@
     "stsSourcesNoAudio": "소스에서 오디오를 찾지 못했습니다.",
     "stsOutDefault": "선택 안 함, {v0}에 저장",
     "feedbackDiagTitle": "피드백을 보내기 전에 진단 팩을 생성해 보세요",
-    "feedbackDiagGo": "이동"
+    "feedbackDiagGo": "이동",
+    "helpSearch": "도움말 검색"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

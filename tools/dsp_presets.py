@@ -45,13 +45,33 @@ BUILTIN: List[Dict[str, Any]] = [
     {
         "id": "chipmunk",
         "name": "花栗鼠",
-        "desc": "升调，共振峰跟着走 —— 尖细、能说话",
+        "desc": "音高与共振峰同步上提，呈现灵动俏皮的卡通声线",
+        "desc_i18n": {
+            "zh-CN": "音高与共振峰同步上提，呈现灵动俏皮的卡通声线",
+            "zh-TW": "音高與共振峰同步上提，呈現靈動俏皮的卡通聲線",
+            "en-US": "Raises both pitch and formants for a bright, playful cartoon voice",
+            "ja-JP": "ピッチとフォルマントを同時に引き上げ、軽快で愛らしいカートゥーン風の声にします",
+            "ko-KR": "음높이와 포먼트를 동시에 끌어올려 통통 튀고 발랄한 만화 캐릭터 목소리를 연출합니다",
+            "es-ES": "Eleva simultáneamente el tono y los formantes para lograr una voz de dibujo animado ágil y divertida",
+            "fr-FR": "Rehausse simultanément la hauteur et les formants pour une voix de dessin animé vive et espiègle",
+            "ru-RU": "Одновременно повышает высоту тона и форманты, создавая звонкий и игривый мультяшный голос"
+        },
         "params": _p(pitch={"semitones": 7.0}),
     },
     {
         "id": "giant",
         "name": "巨人",
-        "desc": "降调，整个人变大一号，不加混响",
+        "desc": "音高下潜并下移共振峰，塑造深沉浑厚的巨人声线",
+        "desc_i18n": {
+            "zh-CN": "音高下潜并下移共振峰，塑造深沉浑厚的巨人声线",
+            "zh-TW": "音高下潛並下移共振峰，塑造深沉渾厚的巨人聲線",
+            "en-US": "Drops pitch and formants downward to shape a deep, booming giant voice",
+            "ja-JP": "ピッチとフォルマントを低く沈め、重厚で迫力のある巨人の声を作ります",
+            "ko-KR": "음높이를 낮추고 포먼트를 아래로 이동시켜 깊고 묵직한 거인의 목소리를 만듭니다",
+            "es-ES": "Desciende el tono y desplaza los formantes hacia abajo para esculpir una voz de gigante profunda y rotunda",
+            "fr-FR": "Abaisse la hauteur et les formants pour façonner une voix de géant grave et profonde",
+            "ru-RU": "Понижает высоту тона и смещает форманты вниз, формируя глубокий и густой голос великана"
+        },
         "params": _p(pitch={"semitones": -7.0}),
     },
     {
@@ -95,7 +115,17 @@ BUILTIN: List[Dict[str, Any]] = [
         "id": "ghost",
         "name": "幽灵",
         # 反向读延迟线 ≈ 230ms 的持续反向回声。
-        "desc": "刚说过的话倒着渗回来，阴湿",
+        "desc": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
+        "desc_i18n": {
+            "zh-CN": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
+            "zh-TW": "反向尾音殘響：將近期語音逆序衰減並混入尾音，營造幽邃的殘響氛圍",
+            "en-US": "Reverse tail reverb: blends reversed decaying speech into the reverb tail for an eerie, haunting ambiance",
+            "ja-JP": "リバーステールリバーブ：直前の発話を逆向きに減衰させながら残響に混ぜ、幻想的な余韻を作ります",
+            "ko-KR": "역방향 잔향(리버스 테일): 최근 음성을 역순으로 감쇠시켜 잔향 끝에 섞어 넣음으로써 깊고 서늘한 잔향 분위기를 연출합니다",
+            "es-ES": "Reverberación de cola inversa: atenúa el habla reciente en orden inverso y la mezcla en la cola de reverberación para crear una atmósfera profunda y espectral",
+            "fr-FR": "Réverbération à queue inversée : mêle les paroles récentes inversées à la traînée de réverbération pour une atmosphère spectrale",
+            "ru-RU": "Реверберация с обратным хвостом: подмешивает инвертированное затухание недавней речи в шлейф реверберации, создавая глубокую мистическую атмосферу"
+        },
         "params": _p(revecho={"size_ms": 230.0, "mix": 1.0}),
     },
     {
@@ -199,7 +229,17 @@ BUILTIN: List[Dict[str, Any]] = [
         "id": "mutation",
         "name": "变异",
         # 音高三角扫，每块 0.09 半音，约 3.4s 一个来回。
-        "desc": "音高在 -3.5~+12 半音间来回扫",
+        "desc": "三角波音高扫频：使音高在设定的半音区间内周期性往复滑动",
+        "desc_i18n": {
+            "zh-CN": "三角波音高扫频：使音高在设定的半音区间内周期性往复滑动",
+            "zh-TW": "三角波音高掃頻：使音高在設定的半音區間內週期性往復滑動",
+            "en-US": "Triangle pitch sweep: continuously glides pitch back and forth between two semitone bounds",
+            "ja-JP": "三角波ピッチスイープ：設定した半音範囲内でピッチを周期的に上下へスライドさせます",
+            "ko-KR": "삼각파 음높이 스위프: 설정한 반음 구간 내에서 음높이가 주기적으로 왕복 슬라이드하도록 합니다",
+            "es-ES": "Barrido de tono en onda triangular: desliza el tono periódicamente de un extremo a otro dentro del intervalo de semitonos configurado",
+            "fr-FR": "Balayage de hauteur en onde triangulaire : fait glisser périodiquement la hauteur entre deux limites en demi-tons",
+            "ru-RU": "Треугольная развёртка высоты тона: периодически плавно смещает высоту тона вверх и вниз в заданном диапазоне полутонов"
+        },
         "params": _p(sweep={"lo": -3.5, "hi": 12.0, "step": 0.09}),
     },
     {
@@ -251,6 +291,7 @@ def _sanitize(raw: Dict[str, Any], pid: str, source: str) -> Optional[Dict[str, 
         "id": pid,
         "name": str(raw.get("name") or pid),
         "desc": str(raw.get("desc") or ""),
+        "desc_i18n": raw.get("desc_i18n", {}),
         "params": clean,
         "source": source,
     }

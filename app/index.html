@@ -132,7 +132,7 @@
          * never got there. 8s is well past a cold start on a slow disk. */
         setTimeout(function () {
           if (el("boot")) {
-            fail("界面载入超时", "8 秒内界面没有挂载；脚本没有报错。");
+            fail("界面加载超时", "8 秒内界面没有挂载；脚本没有报错。");
           }
         }, 8000);
       })();
@@ -141,7 +141,7 @@
   <body>
     <div id="root">
       <div id="boot">
-        <div id="boot-title">正在载入界面…</div>
+        <div id="boot-title">正在加载界面…</div>
         <div id="boot-msg"></div>
         <div id="boot-detail"></div>
       </div>

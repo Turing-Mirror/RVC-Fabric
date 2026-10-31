@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
-import { t } from "../i18n/t";
+import { getTLocale, t } from "../i18n/t";
 
 /** 一条预设。参数的合法范围由引擎侧 dsp_voice.EFFECT_SPECS 定义，壳不重复一份。 */
 export type DspPreset = {
   id: string;
   name: string;
   desc?: string;
+  desc_i18n?: Record<string, string>;
   params: Record<string, Record<string, number>>;
   source?: "builtin" | "user";
 };
@@ -38,6 +39,11 @@ function effectNames(p: DspPreset): string {
   return Object.keys(p.params || {})
     .map((k) => (EFFECT_LABEL[k] ? t(EFFECT_LABEL[k]) : k))
     .join(" · ");
+}
+
+/** Built-in descriptions follow the UI locale; user-authored descriptions remain unchanged. */
+function presetDescription(p: DspPreset, locale: string): string {
+  return (p.source === "builtin" && p.desc_i18n?.[locale]) || p.desc || "";
 }
 
 /**
@@ -94,6 +100,7 @@ export function DspPresetGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadToken]);
 
+  const locale = getTLocale();
   const view = useMemo(() => {
     const q = query.trim().toLowerCase();
     const all = list || [];
@@ -102,9 +109,9 @@ export function DspPresetGrid({
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.id.includes(q) ||
-        (p.desc || "").toLowerCase().includes(q),
+        presetDescription(p, locale).toLowerCase().includes(q),
     );
-  }, [list, query]);
+  }, [list, query, locale]);
 
   if (list == null) {
     return (
@@ -154,7 +161,7 @@ export function DspPresetGrid({
             </div>
             <div className="text-[14.5px] font-semibold mt-0.5 truncate">{p.name}</div>
             <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
-              {p.desc || ""}
+              {presetDescription(p, locale)}
             </div>
             <div className="mt-2.5 flex items-center gap-1.5">
               {cur ? (

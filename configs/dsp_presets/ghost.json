@@ -1,10 +1,20 @@
 {
   "name": "幽灵",
-  "desc": "刚说过的话倒着渗回来，阴湿",
+  "desc": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
   "params": {
     "revecho": {
       "size_ms": 230.0,
       "mix": 1.0
     }
+  },
+  "desc_i18n": {
+    "zh-CN": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
+    "zh-TW": "反向尾音殘響：將近期語音逆序衰減並混入尾音，營造幽邃的殘響氛圍",
+    "en-US": "Reverse tail reverb: blends reversed decaying speech into the reverb tail for an eerie, haunting ambiance",
+    "ja-JP": "リバーステールリバーブ：直前の発話を逆向きに減衰させながら残響に混ぜ、幻想的な余韻を作ります",
+    "ko-KR": "역방향 잔향(리버스 테일): 최근 음성을 역순으로 감쇠시켜 잔향 끝에 섞어 넣음으로써 깊고 서늘한 잔향 분위기를 연출합니다",
+    "es-ES": "Reverberación de cola inversa: atenúa el habla reciente en orden inverso y la mezcla en la cola de reverberación para crear una atmósfera profunda y espectral",
+    "fr-FR": "Réverbération à queue inversée : mêle les paroles récentes inversées à la traînée de réverbération pour une atmosphère spectrale",
+    "ru-RU": "Реверберация с обратным хвостом: подмешивает инвертированное затухание недавней речи в шлейф реверберации, создавая глубокую мистическую атмосферу"
   }
 }

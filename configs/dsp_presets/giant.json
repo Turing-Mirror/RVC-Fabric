@@ -1,9 +1,19 @@
 {
   "name": "巨人",
-  "desc": "降调，整个人变大一号，不加混响",
+  "desc": "音高下潜并下移共振峰，塑造深沉浑厚的巨人声线",
   "params": {
     "pitch": {
       "semitones": -7.0
     }
+  },
+  "desc_i18n": {
+    "zh-CN": "音高下潜并下移共振峰，塑造深沉浑厚的巨人声线",
+    "zh-TW": "音高下潛並下移共振峰，塑造深沉渾厚的巨人聲線",
+    "en-US": "Drops pitch and formants downward to shape a deep, booming giant voice",
+    "ja-JP": "ピッチとフォルマントを低く沈め、重厚で迫力のある巨人の声を作ります",
+    "ko-KR": "음높이를 낮추고 포먼트를 아래로 이동시켜 깊고 묵직한 거인의 목소리를 만듭니다",
+    "es-ES": "Desciende el tono y desplaza los formantes hacia abajo para esculpir una voz de gigante profunda y rotunda",
+    "fr-FR": "Abaisse la hauteur et les formants pour façonner une voix de géant grave et profonde",
+    "ru-RU": "Понижает высоту тона и смещает форманты вниз, формируя глубокий и густой голос великана"
   }
 }

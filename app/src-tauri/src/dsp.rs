@@ -77,6 +77,7 @@ fn read_dir_presets(dir: &Path, source: &str, out: &mut Map<String, Value>) {
                 "id": stem,
                 "name": raw.get("name").and_then(|v| v.as_str()).unwrap_or(stem),
                 "desc": raw.get("desc").and_then(|v| v.as_str()).unwrap_or(""),
+                "desc_i18n": raw.get("desc_i18n").cloned().unwrap_or_else(|| json!({})),
                 "params": params,
                 "source": source,
             }),
@@ -204,7 +205,8 @@ pub fn save(root: &Path, id: &str, name: &str, params: &Value) -> Result<Value, 
     let body = json!({
         "name": if name.trim().is_empty() { id } else { name.trim() },
         "desc": "",
-        "params": params,
+        "desc_i18n": raw.get("desc_i18n").cloned().unwrap_or_else(|| json!({})),
+                "params": params,
     });
     let text = serde_json::to_string_pretty(&body).unwrap_or_default() + "\n";
     fs::write(dir.join(format!("{id}.json")), text)

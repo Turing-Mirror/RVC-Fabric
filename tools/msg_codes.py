@@ -178,9 +178,9 @@ TRAIN_RESUME_FEATURE_PARTIAL = "train.resume_feature_partial"
 
 # Chinese fallbacks (zh-CN). Must match app/i18n/locales/zh-CN.json msg.*
 _FALLBACK_ZH: dict[str, str] = {
-    SEP_NO_REQUEST: "缺请求文件参数",
+    SEP_NO_REQUEST: "缺少请求文件参数",
     SEP_BAD_REQUEST: "无法读取请求文件：{error}",
-    SEP_EMPTY_FIELDS: "模型 / 输入 / 输出 都不能为空",
+    SEP_EMPTY_FIELDS: "模型、输入路径与输出路径均不能为空",
     SEP_FAILED: "分离失败，详见日志",
     CKPT_NAME_EMPTY: "保存名不能为空",
     CKPT_NAME_BAD_CHARS: "保存名不能含 \\ / : * ? \" < > |",
@@ -189,10 +189,10 @@ _FALLBACK_ZH: dict[str, str] = {
     CKPT_MISSING_MODEL_A: "A 模型不存在：{path}",
     CKPT_MISSING_MODEL_B: "B 模型不存在：{path}",
     CKPT_MISSING_BIG_MODEL: "大模型不存在：{path}",
-    CKPT_INFO_SAVED: "已改模型信息",
+    CKPT_INFO_SAVED: "已保存模型信息",
     CKPT_BAD_SAMPLE_RATE: "不支持的采样率：{sample_rate}",
     CKPT_MERGED: "融合完成",
-    CKPT_EXTRACTED: "已提取小模型",
+    CKPT_EXTRACTED: "已提取推理模型",
     CKPT_MKDIR_FAILED: "无法创建输出目录：{error}",
     CKPT_ONNX_MISSING_DEPS: "当前 Runtime 没有 ONNX 导出依赖（onnx / onnxsim）：{error}",
     CKPT_ONNX_FAILED: "ONNX 导出失败：{error}",
@@ -213,15 +213,14 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_HOT_DML_FALLBACK: "显卡无法完成这次处理，改用独立进程转换，速度可能降低。",
     STS_DEGRADED: "当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。",
     STS_MODEL_IS_ARCHIVE: (
-        "选到的是训练存档（G_ / D_ 开头那种），不能直接当音色用。\n"
-        "请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"
+        "所选文件为训练检查点（以 G_ 或 D_ 开头），无法直接用于语音转换。\n请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"
     ),
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",
     TRAIN_F0_FAILED: "音高提取失败（退出码 {code}），详情见 {log}",
     TRAIN_FEATURE_FAILED: "特征提取失败（退出码 {code}），详情见 {log}",
     TRAIN_TRAIN_FAILED: "训练失败（退出码 {code}），详情见 {log}",
-    TRAIN_NO_SLICES: "预处理没有产出任何切片。检查数据集里是不是没有可读的音频文件。",
+    TRAIN_NO_SLICES: "未找到切分后的音频片段，请检查数据集中是否包含可读取的音频文件",
     TRAIN_RMVPE_MISSING: "缺少 assets/rmvpe/rmvpe.pt，请先补全引擎资源。",
     TRAIN_EXTRACT_F0: "提取音高…",
     TRAIN_NO_F0: "音高提取没有产出。换一种音高算法再试。",
@@ -255,10 +254,10 @@ _FALLBACK_ZH: dict[str, str] = {
     TRAIN_SKIP_FEATURE: "已有特征，跳过",
     TRAIN_CANCELLED: "已取消",
     TRAIN_NO_WEIGHT: "训练结束但没找到 {name}。查看 logs/{exp}/train.log。",
-    TRAIN_OOM: "显存不足，训练中断。可以把批大小（当前 {batch}）调小、关掉其他占显存的程序后重试。详情见 {log}",
+    TRAIN_OOM: "显卡内存不足，请调小批大小（Batch Size）或关闭其他占用显卡内存的程序后重试\n当前批大小: {batch}\n{log}",
     TRAIN_PREPROCESS_PARTIAL: "{failed} 个音频没能读取（共 {total} 个），只用成功的 {ok} 个继续。详情见 {log}",
-    TRAIN_RESUME_F0_PARTIAL: "上次音高只提取了 {done}/{total}，这次把剩下的补齐。",
-    TRAIN_RESUME_FEATURE_PARTIAL: "上次特征只提取了 {done}/{total}，这次把剩下的补齐。",
+    TRAIN_RESUME_F0_PARTIAL: "检测到上次音高特征已提取 {done}/{total}，正在继续提取剩余部分…",
+    TRAIN_RESUME_FEATURE_PARTIAL: "检测到上次语音特征已提取 {done}/{total}，正在继续提取剩余部分…",
     ENGINE_LAUNCHING: "正在启动引擎进程…",
     ENGINE_STARTING: "引擎进程已启动，正在加载运行库…",
     ENGINE_IMPORTING: "正在导入推理库（可能需要十几秒）…",

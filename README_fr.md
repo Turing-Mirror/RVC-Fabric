@@ -39,7 +39,7 @@ Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Proj
 
 RVC Fabric est un logiciel de bureau de modification vocale par IA en temps réel pour Windows, prêt à l'emploi : pas besoin d'installer vous-même Python, PyTorch, ni d'ouvrir un navigateur pour accéder à la page Gradio. Il suffit de l'installer pour modifier votre voix.
 
-Pour jouer avec des amis, discuter en vocal, interagir en direct, ou produire de l'audio — conversion vocale en temps réel à faible latence et haute fidélité, un seul logiciel suffit.
+Logiciel de bureau de conversion vocale par IA en temps réel à faible latence et d'entraînement de modèles, conçu pour les appels vocaux, le streaming en direct et la production audio.
 
 ## Fonctionnalités principales
 

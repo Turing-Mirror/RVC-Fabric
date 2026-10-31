@@ -451,7 +451,7 @@
         "id": "rvc",
         "term": "RVC",
         "brief": "La tecnología de conversión de voz en la que se basa el programa",
-        "detail": "RVC (Retrieval-based Voice Conversion — conversión de voz basada en recuperación): cada voz es un modelo independiente, y cambiar de voz significa cambiar de archivo de modelo."
+        "detail": "RVC (Retrieval-based Voice Conversion, conversión de voz basada en recuperación): cada voz es un modelo independiente, y cambiar de voz significa cambiar de archivo de modelo."
       },
       {
         "id": "rvc_fabric",
@@ -1046,7 +1046,7 @@
     "946a92f5a2": "Faltan componentes de entrenamiento; la instalación puede estar incompleta",
     "950d0895e7": "El nombre de la voz supera el límite de longitud",
     "95344bde41": "Descargar voces de Turing Mirror y de fuentes de terceros",
-    "9546e0b7e2": "La comprobación diaria de actualizaciones envía un ID anónimo aleatorio, la versión del programa y el tipo de aceleración de la GPU. Sin cuentas, voces, grabaciones ni geolocalización. Sirve sobre todo para demostrar actividad a los patrocinadores — una de las vías de Turing Mirror para financiar el desarrollo. Se desactiva cuando quieras en Ajustes → General.",
+    "9546e0b7e2": "La comprobación diaria de actualizaciones envía un ID anónimo aleatorio, la versión del programa y el tipo de aceleración de la GPU. Sin cuentas, voces, grabaciones ni geolocalización. Sirve sobre todo para demostrar actividad a los patrocinadores, que es una de las vías de Turing Mirror para financiar el desarrollo. Se desactiva cuando quieras en Ajustes → General.",
     "95af7bd399": "El motor está arrancando; la lista de dispositivos aparecerá en breve",
     "966b701690": "Recargar lista de dispositivos",
     "983328d89b": "1. Desactiva la reducción de ruido / reverberación / cambio de voz del controlador para que no choque con el programa",
@@ -1470,7 +1470,7 @@
     "sepGuideH1": "Primero extracción vocal",
     "sepGuideA1": "Para limpiar material de entrenamiento, descargue «Extracción de voz»; para eliminar armonías y conservar solo la voz principal, descargue «Karaoke». La eliminación de eco y reverberación es opcional. HP2 tiene más calidad pero pesa más; no hace falta descargarlo primero para el uso diario.",
     "sepGuideQ2": "¿Una carpeta entera?",
-    "sepGuideH2": "Sí — Carpeta",
+    "sepGuideH2": "Sí. Use Carpeta.",
     "sepGuideA2": "Se admiten carpetas para procesar por lotes: un archivo suelto o una carpeta entera sirven. Solo se ejecuta una tarea a la vez para evitar el conflicto por la VRAM.",
     "sepGuideQ3": "¿La intensidad?",
     "sepGuideH3": "Por defecto 10",
@@ -2105,7 +2105,7 @@
     "stsFilterExcluded": "Excluidos",
     "stsFilterAll": "Todos",
     "stsWillProcess": "Se procesarán {v0} archivos",
-    "stsNoItems": "Lista vacía — añade primero archivos o carpetas",
+    "stsNoItems": "Lista vacía. Añade primero archivos o carpetas",
     "stsOutputInside": "La carpeta de salida está dentro de una fuente. Los archivos convertidos no se usarán como entrada.",
     "stsExcludedByDir": "Excluido por regla de carpeta",
     "stsClearList": "Quitar todo",
@@ -2304,7 +2304,7 @@
       },
       "pymss-hp2": {
         "label": "HP2 alta calidad (avanzado)",
-        "notes": "La serie HP2, más grande y pesada — mayor calidad y tamaño (unos 1,5 GB). Para el uso diario basta «Extracción de voz»."
+        "notes": "La serie HP2, más grande, ofrece mayor calidad pero ocupa más espacio (unos 1,5 GB). Para el uso diario basta «Extracción de voz»."
       },
       "pymss-mgm": {
         "label": "Fusión MGM (avanzado)",

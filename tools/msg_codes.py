@@ -194,7 +194,7 @@ _FALLBACK_ZH: dict[str, str] = {
     CKPT_MERGED: "融合完成",
     CKPT_EXTRACTED: "已提取推理模型",
     CKPT_MKDIR_FAILED: "无法创建输出目录：{error}",
-    CKPT_ONNX_MISSING_DEPS: "当前 Runtime 没有 ONNX 导出依赖（onnx / onnxsim）：{error}",
+    CKPT_ONNX_MISSING_DEPS: "当前运行环境缺少 ONNX 导出所需的组件（onnx 和 onnxsim）：{error}",
     CKPT_ONNX_FAILED: "ONNX 导出失败：{error}",
     CKPT_USAGE: "用法：ckpt_worker.py <request.json>",
     CKPT_BAD_REQUEST: "无法读取请求文件：{error}",
@@ -203,7 +203,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_NO_REQUEST: "缺请求文件参数",
     STS_BAD_REQUEST: "无法读取请求文件：{error}",
     STS_F0_CURVE_MISSING: "找不到 F0 曲线文件：{path}",
-    STS_EMPTY_FIELDS: "输入 / 输出 / 音色模型 都不能为空",
+    STS_EMPTY_FIELDS: "输入、输出和音色模型都不能为空",
     STS_MODEL_MISSING: "找不到音色模型：{model}",
     STS_NO_AUDIO: "没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）",
     STS_LOAD_FAILED: "加载模型失败：{error}",
@@ -213,7 +213,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_HOT_DML_FALLBACK: "显卡无法完成这次处理，改用独立进程转换，速度可能降低。",
     STS_DEGRADED: "当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。",
     STS_MODEL_IS_ARCHIVE: (
-        "所选文件为训练检查点（以 G_ 或 D_ 开头），无法直接用于语音转换。\n请先在训练窗「进阶设置 → 模型提取」里把它转成音色模型，再来转换。"
+        "所选文件为训练检查点（以 G_ 或 D_ 开头），无法直接用于语音转换。\n请先在训练窗口的「进阶设置 → 模型提取」中将其导出为音色模型，再进行转换。"
     ),
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",

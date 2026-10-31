@@ -1772,7 +1772,7 @@ mod tests {
         for bad in ["", "  ", "a/b", "a\\b", "c:d", "x?y", "*", ".hidden", "mute"] {
             assert!(validate_name(bad).is_err(), "should reject {bad:?}");
         }
-        for ok in [&crate::i18n::t("s.6ca6738e54"), "my voice", "voice-2026_v2"] {
+        for ok in ["小明", "my voice", "voice-2026_v2"] {
             assert!(validate_name(ok).is_ok(), "should accept {ok:?}");
         }
     }
@@ -1833,16 +1833,16 @@ mod tests {
         let base = crate::testutil::scratch("train-exps");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(base.join("logs").join("mute")).unwrap();
-        std::fs::create_dir_all(base.join("logs").join(&crate::i18n::t("s.6ca6738e54")).join("1_16k_wavs")).unwrap();
+        std::fs::create_dir_all(base.join("logs").join("小明").join("1_16k_wavs")).unwrap();
         std::fs::write(
-            base.join("logs").join(&crate::i18n::t("s.6ca6738e54")).join("1_16k_wavs").join("a.wav"),
+            base.join("logs").join("小明").join("1_16k_wavs").join("a.wav"),
             b"x",
         )
         .unwrap();
 
         let exps = experiments(&base);
         assert_eq!(exps.len(), 1);
-        assert_eq!(exps[0]["name"], json!(crate::i18n::t("s.6ca6738e54")));
+        assert_eq!(exps[0]["name"], json!("小明"));
         assert_eq!(exps[0]["slices"], json!(1));
         assert_eq!(exps[0]["resumable"], json!(true));
         let _ = std::fs::remove_dir_all(&base);

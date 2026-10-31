@@ -465,7 +465,7 @@ mod tests {
         let b = mk("ad", "");
         assert!(!b.recommended && b.is_ad);
         // both — our pick, someone paid for the slot
-        let c = mk("news", &crate::i18n::t("s.b4ce6178be"));
+        let c = mk("news", "some sound card brand");
         assert!(c.recommended && c.is_ad);
     }
 
@@ -571,13 +571,13 @@ mod tests {
         let _g = crate::i18n::testing::pin("zh-CN");
         // 封面和跳转目标共用一条内容，卡片上的字可以另写。
         let items = parse_feed(&json!({"items": [
-            {"id": "a", "title": &crate::i18n::t("s.c7f1de0914"),
-             "pinned": true, "pin_title": &crate::i18n::t("s.4f35061e6d")},
-            {"id": "b", "title": &crate::i18n::t("s.15ada3dd1b"), "pinned": true},
+            {"id": "a", "title": "a very long sponsored title that barely fits on one line",
+             "pinned": true, "pin_title": "short title"},
+            {"id": "b", "title": "falls back to title", "pinned": true},
         ]}));
         let a = items.iter().find(|i| i.id == "a").unwrap();
         let b = items.iter().find(|i| i.id == "b").unwrap();
-        assert_eq!(a.pin_title, crate::i18n::t("s.4f35061e6d"));
+        assert_eq!(a.pin_title, "short title");
         assert_eq!(b.pin_title, "");
     }
 
@@ -602,7 +602,7 @@ mod tests {
         let data = json!({"entries": [
             {"version": "1.2.4", "date": "260730",
              "highlights": [&crate::i18n::t("s.1937f75369"), &crate::i18n::t("s.754db380c0")],
-             "body": &crate::i18n::t("s.5ba1f75537")},
+             "body": "full body"},
         ]});
         let rows = parse_changelog(&data);
         assert_eq!(rows.len(), 1);
@@ -614,9 +614,9 @@ mod tests {
     fn body_is_the_last_resort_so_the_entry_is_never_blank() {
         // 语言是进程级全局状态，别的测试改了会让这里的 t() 前后取到两种语言。
         let _g = crate::i18n::testing::pin("zh-CN");
-        let data = json!({"entries": [{"version": "1.2.3", "body": &crate::i18n::t("s.39cb51599c")}]});
+        let data = json!({"entries": [{"version": "1.2.3", "body": "single body"}]});
         let rows = parse_changelog(&data);
-        assert_eq!(rows[0].notes, vec![crate::i18n::t("s.39cb51599c")]);
+        assert_eq!(rows[0].notes, vec!["single body"]);
     }
 
     #[test]
@@ -628,7 +628,7 @@ mod tests {
         // 广场自己已经有更新日志区块，再挂一条就是同一件事说两遍。
         let feed = json!({"items": [
             {"id": "release-1.2.4", "type": "news", "title": &crate::i18n::t("s.772fad9699")},
-            {"id": "ad-1", "type": "ad", "title": &crate::i18n::t("s.ca8050f45e")},
+            {"id": "ad-1", "type": "ad", "title": "real ad"},
         ]});
         let items = parse_feed(&feed);
         let vis = visible_items(&items, PLACEMENT_PLAZA, "1.3.0", "260801", &[]);

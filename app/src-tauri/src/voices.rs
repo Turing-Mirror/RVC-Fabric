@@ -2660,14 +2660,14 @@ mod tests {
         // 界面「使用中」是别人，重开变声也用错模型 —— 而随手切一次别的再切
         // 回来就好了，因为那一下会把三个键一起改写。
         let models = vec![
-            model(&crate::i18n::t("s.3d9fe9e5d0"), "model.pth", "C:\\rvc\\models\\other\\model.pth"),
-            model(&crate::i18n::t("s.8fd94350c5"), "model.pth", "C:\\rvc\\models\\mine\\model.pth"),
+            model("other voice", "model.pth", "C:\\rvc\\models\\other\\model.pth"),
+            model("my voice", "model.pth", "C:\\rvc\\models\\mine\\model.pth"),
         ];
         let idx = resolve_selected(
             &models,
             "C:\\rvc\\models\\mine\\model.pth", // 全路径，唯一，必须赢
             "model.pth",                        // 文件名，两条都对得上
-            &crate::i18n::t("s.8fd94350c5"),
+            "my voice",
         );
         assert_eq!(idx, 1);
     }
@@ -2678,8 +2678,8 @@ mod tests {
         // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
         let _g = crate::i18n::testing::pin("zh-CN");
         let models = vec![
-            model(&crate::i18n::t("s.1b85dd8d61"), "a.pth", "/lib/a/a.pth"),
-            model(&crate::i18n::t("s.3458316756"), "b.pth", "/lib/b/b.pth"),
+            model("A", "a.pth", "/lib/a/a.pth"),
+            model("B", "b.pth", "/lib/b/b.pth"),
         ];
         // 路径变了（换了安装目录），文件名还在
         assert_eq!(resolve_selected(&models, "/old/b.pth", "b.pth", ""), 1);
@@ -2689,18 +2689,18 @@ mod tests {
                 &models,
                 "/old/x.pth",
                 "x.pth",
-                &crate::i18n::t("s.3458316756")
+                "B"
             ),
             1
         );
         // 三个都对不上：就是没选中。退回第一条会让 DSP 清音色后检索库又露出来。
         assert_eq!(
-            resolve_selected(&models, "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
+            resolve_selected(&models, "/x", "x.pth", "C"),
             -1
         );
         // 一条音色都没有
         assert_eq!(
-            resolve_selected(&[], "/x", "x.pth", &crate::i18n::t("s.c72e61fc70")),
+            resolve_selected(&[], "/x", "x.pth", "C"),
             -1
         );
     }

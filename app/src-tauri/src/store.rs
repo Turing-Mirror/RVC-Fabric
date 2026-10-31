@@ -2115,7 +2115,7 @@ mod tests {
         // 且不含任何能往上跳的成分。
         let root = Path::new("C:\\App");
         for bad in ["../../evil", "a/b", "..\\..\\evil", "./x"] {
-            let d = staged_dir(root, bad).expect(&crate::i18n::t("s.ab16acefd8"));
+            let d = staged_dir(root, bad).expect("should be sanitized, not rejected");
             let s = d.to_string_lossy().to_string();
             assert!(s.contains("downloads"), "{bad:?} -> {s}");
             assert!(!s.contains(".."));

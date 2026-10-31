@@ -51,7 +51,7 @@ RVC Fabric 是面向 Windows 的实时 AI 变声桌面软件，开箱即用：�
   - **人声分离**：基于 PyMSS 分离模型，快速提取干声与伴奏。
   - **语音合成**：输入文本生成语音，并自动转换为目标音色（TTS + RVC）。
   - **音色训练**：内置训练面板，一键训练专属音色（需 NVIDIA 显卡）。
-- **全自动硬件加速**：NVIDIA CUDA（含 RTX 50 系列）与 AMD / Intel（DirectML）自动识别，并下载对应的计算运行时。
+- **全自动硬件加速**：NVIDIA CUDA（含 RTX 50 系列）与 AMD / Intel（DirectML）自动识别，并下载对应的计算运行环境。
 
 ## 快速开始
 
@@ -59,7 +59,7 @@ RVC Fabric 是面向 Windows 的实时 AI 变声桌面软件，开箱即用：�
 
 1. 从 [Releases 页面](https://github.com/Turing-Mirror/RVC-Fabric/releases) 下载 `RVC_Fabric_Setup.exe`；
 2. 运行安装程序（建议安装到纯英文路径）；
-3. 启动软件，跟随引导自动完成硬件识别、运行时补全与虚拟声卡安装。
+3. 启动软件，跟随引导自动完成硬件识别、运行环境补全与虚拟声卡安装。
 
 ### 2. 音频路由（虚拟声卡接法）
 

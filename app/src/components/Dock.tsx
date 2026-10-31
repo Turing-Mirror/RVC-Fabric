@@ -206,12 +206,15 @@ export function Dock({
           {/* 报错整句会走这里（「引擎进程被系统终止，退出码 …」之类），不截住
               就会把底栏撑成三行，把音高共鸣两条挤扁。跟上面音色简介同一套
               处理：一行、省略号、完整内容挂 title。 */}
-          <div
-            className="text-[11.5px] text-[var(--meta)] mt-0.5 max-w-[280px] ml-auto overflow-hidden text-ellipsis whitespace-nowrap"
-            title={sub}
-          >
-            {sub}
-          </div>
+          {/* 与上一行相同时（如「引擎就绪」）不再重复显示。 */}
+          {sub && sub !== title ? (
+            <div
+              className="text-[11.5px] text-[var(--meta)] mt-0.5 max-w-[280px] ml-auto overflow-hidden text-ellipsis whitespace-nowrap"
+              title={sub}
+            >
+              {sub}
+            </div>
+          ) : null}
           {slowDisk ? (
             <div className="text-[11.5px] text-[var(--meta)] mt-0.5 max-w-[280px] ml-auto">
               {t("dock.slowDisk")}

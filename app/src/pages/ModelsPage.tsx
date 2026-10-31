@@ -983,7 +983,7 @@ function MoreMenu({
     items.push({
       label: t("neptune.exportSummary"),
       action: async () => {
-        const authors = voiceAuthorList(model).map((a) => [a.name, a.url].filter(Boolean).join(" · "));
+        const authors = voiceAuthorList(model).map((a) => (a.name && a.url ? t("s.labelWithDetail", { v0: a.name, v1: a.url }) : a.name || a.url));
         const text = [model.name, ...authors, model.source_url, "RVC Fabric"].filter(Boolean).join("\n");
         onMessage(t(await copyText(text) ? "s.sumCopied" : "s.sumCopyFailed"));
         onClose();

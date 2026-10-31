@@ -20,6 +20,7 @@ import {
 } from "../lib/extraJobs";
 import { useI18n } from "../i18n";
 import { Modal } from "./Modal";
+import { joinClauses } from "../lib/text";
 
 export type ExtraGroup = "train" | "separate" | "other";
 
@@ -293,9 +294,11 @@ export function ExtrasPanel({
                     />
                   </div>
                   <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
-                    {coreProg.message || t("s.65188d08a2")}
-                    {coreProg.speed_label ? ` · ${coreProg.speed_label}` : ""}
-                    {corePct > 0 ? ` · ${Math.round(corePct)}%` : ""}
+                    {joinClauses([
+                      coreProg.message || t("s.65188d08a2"),
+                      coreProg.speed_label && t("s.metaSpeed", { v0: coreProg.speed_label }),
+                      corePct > 0 && t("s.metaProgress", { v0: String(Math.round(corePct)) }),
+                    ])}
                   </p>
                 </div>
               ) : null}
@@ -469,9 +472,11 @@ function ItemRow({
             </span>
           ) : null}
           <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
-            {mb(it.size_bytes)}
-            {it.files?.length ? t("s.8e7dddc185", { v0: it.files.length }) : ""}
-            {it.installed ? t("s.f7b11922f6") : ""}
+            {joinClauses([
+              mb(it.size_bytes),
+              !!it.files?.length && t("s.8e7dddc185", { v0: it.files.length }),
+              it.installed && t("s.f7b11922f6"),
+            ])}
           </span>
         </span>
         {it.installed ? (

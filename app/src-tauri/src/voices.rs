@@ -1020,7 +1020,7 @@ fn profile_summary_from_cfg(cfg: &Map<String, Value>) -> String {
     if pitch == 0 && (formant - 0.0).abs() < 0.001 {
         label
     } else {
-        // Template s.6aaa2fc9a9: "{label} · 音高 {sign}{pitch} 共鸣 {formant:.2}"
+        // Template s.6aaa2fc9a9: "{label}：音高 {sign}{pitch}，共鸣 {formant:.2}"
         // Pass preformatted keys so locale packs keep format specs.
         let sign = if pitch >= 0 { "+" } else { "" };
         let mut vars = std::collections::HashMap::new();

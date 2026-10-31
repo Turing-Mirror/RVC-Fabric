@@ -245,7 +245,7 @@ function Notes({ entry }: { entry: ChangelogEntry }) {
         {entry.notes.map((t) => (
           <li
             key={t}
-            className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['·'] before:absolute before:left-1.5 before:text-[var(--meta)]"
+            className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['•'] before:absolute before:left-1.5 before:text-[var(--meta)]"
           >
             {t}
           </li>

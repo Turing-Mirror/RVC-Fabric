@@ -590,7 +590,7 @@ class StsProgress:
             msg = f"开始转换 {name}"
         else:
             msg = (
-                f"[{index}/{self.total}] {name} · 开始"
+                f"[{index}/{self.total}] {name}：开始"
                 f"（已完成 {self.ok_count}，跳过 {self.skip_count}）"
             )
         self._push(self._file_i, start, msg, step="file_start", force=True)
@@ -602,7 +602,7 @@ class StsProgress:
         start, end = self._file_bounds(self._file_i)
         pct = start + (end - start) * (a + (b - a) * frac)
         name = self._file_name or "音频"
-        prefix = f"[{self._file_i + 1}/{self.total}] {name} · " if self.total > 1 else ""
+        prefix = f"[{self._file_i + 1}/{self.total}] {name}：" if self.total > 1 else ""
         if stage == "read":
             msg = f"{prefix}读取音频…"
         elif stage == "hubert":

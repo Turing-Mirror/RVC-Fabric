@@ -50,6 +50,7 @@ import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
 import { useI18n } from "../i18n";
 import { Leave } from "./Presence";
+import { joinClauses } from "../lib/text";
 
 /** Parent + child focus key. Tab never appears in series / group labels. */
 const FOCUS_SEP = "\t";
@@ -936,7 +937,7 @@ function VoiceCard({
   const parentLabel = voiceParentSeries(v, loc);
   const childLabel = voiceChildGroup(v, loc);
   const meta =
-    [parentLabel, childLabel, v.size_label].filter(Boolean).join(" · ");
+    joinClauses([parentLabel, childLabel, v.size_label && t("s.metaSize", { v0: v.size_label })]);
   const coverBadge = author || displayVoiceOrigin(v);
   // 发布日期当版本号（v26.07.31）：同一角色常有多个版本在架，下载前先看清
   // 自己装的是哪一版。没有日期就不画，不留一个空角标。

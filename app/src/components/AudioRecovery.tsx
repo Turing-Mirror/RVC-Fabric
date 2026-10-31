@@ -8,6 +8,7 @@ import { useI18n } from "../i18n";
 import { setConfig, type Config } from "../lib/config";
 import { pickAutoDevices } from "../lib/deviceSetup";
 import { startVc, type EngineStatus } from "../lib/engine";
+import { joinClauses } from "../lib/text";
 
 type Device = { name: string; hostapi: string; direction: string };
 
@@ -58,7 +59,7 @@ export function AudioRecoverySettings({ config }: { config: Config }) {
       <Toggle label={t("neptune.ignoreEnabled")} checked={config.audio_ignore_enabled === true} disabled={busy} onChange={(v) => void run("ignore", v)} />
       <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.ignoredHint")}</p>
       {ignored.map((device) => <div key={`${device.hostapi}:${device.name}:${device.direction}`} className="flex items-center justify-between gap-3">
-        <span className="min-w-0 break-words">{device.name} · {device.hostapi} · {t(device.direction === "input" ? "neptune.input" : "neptune.output")}</span>
+        <span className="min-w-0 break-words">{t("s.labelWithDetail", { v0: device.name, v1: joinClauses([device.hostapi, t(device.direction === "input" ? "neptune.input" : "neptune.output")]) })}</span>
         <Btn disabled={busy} onClick={() => void run("restore", undefined, device)}>{t("neptune.deviceRestore")}</Btn>
       </div>)}
     </>}

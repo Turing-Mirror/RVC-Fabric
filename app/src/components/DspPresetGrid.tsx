@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
+import { listText } from "../lib/text";
 
 /** 一条预设。参数的合法范围由引擎侧 dsp_voice.EFFECT_SPECS 定义，壳不重复一份。 */
 export type DspPreset = {
@@ -37,9 +38,7 @@ const EFFECT_LABEL: Record<string, string> = {
 };
 
 function effectNames(p: DspPreset): string {
-  return Object.keys(p.params || {})
-    .map((k) => (EFFECT_LABEL[k] ? t(EFFECT_LABEL[k]) : k))
-    .join(" · ");
+  return listText(Object.keys(p.params || {}).map((k) => (EFFECT_LABEL[k] ? t(EFFECT_LABEL[k]) : k)));
 }
 
 /** Built-in descriptions follow the UI locale; user-authored descriptions remain unchanged. */

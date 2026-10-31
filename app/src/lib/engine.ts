@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import {  tStatic as t, tStatic  } from "../i18n";
+import { joinClauses, listText } from "./text";
 
 /** Mirrors User_Data/runtime_control/status.json + shell extras. */
 export type EngineStatus = {
@@ -132,7 +133,7 @@ export function runtimeRecommendation(status?: Pick<
   ProvisionStatus,
   "recommended_variant" | "gpus"
 >): string {
-  const gpu = status?.gpus?.filter(Boolean).join(" · ") || t("s.90b74980e4");
+  const gpu = listText(status?.gpus?.filter(Boolean) ?? []) || t("s.90b74980e4");
   switch (status?.recommended_variant) {
     case "nvidia50":
       return t("s.8289d5d0bc", { v0: gpu });
@@ -159,9 +160,9 @@ export function capabilityLines(
     info.memory_gb && info.memory_gb > 0
       ? t("s.capMemGb", { v0: String(info.memory_gb) })
       : t("s.capUnknownMem"),
-    info.gpus?.filter(Boolean).join(" · ") || t("s.capNoGpu"),
+    listText(info.gpus?.filter(Boolean) ?? []) || t("s.capNoGpu"),
   ];
-  const lines = [t("s.capDetected", { v0: parts.join(" · ") })];
+  const lines = [t("s.capDetected", { v0: joinClauses(parts) })];
   const wantsNvidia = variant.startsWith("nvidia");
   const wantsDml = variant === "amd";
   const noGpu = !(info.gpus?.filter(Boolean).length);

@@ -22,6 +22,7 @@ import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
 import { scheduleScrollToId, scrollPaneToId } from "../lib/scrollPane";
 import { Leave } from "../components/Presence";
+import { joinClauses, listText } from "../lib/text";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
  *  打包）都已经在，开放时把它改成 true 即可，不要删代码。 */
@@ -87,7 +88,7 @@ export function MorePage({
   const backendDevice = String(status?.compute_device || "");
   const backendLine = backendLabel
     ? backendDevice && backendDevice !== backendLabel
-      ? `${backendLabel} · ${backendDevice}`
+      ? t("s.labelWithDetail", { v0: backendLabel, v1: backendDevice })
       : backendLabel
     : t("s.computeBackendIdle");
   // 装了 N 卡运行时却没用上 CUDA —— 这个矛盾我们判得出来，就别让用户自己猜。
@@ -183,7 +184,7 @@ export function MorePage({
           },
         },
       );
-      const note = out?.perf_note ? ` · ${out.perf_note}` : "";
+      const note = out?.perf_note ? `${t("s.clauseSep")}${out.perf_note}` : "";
       setBusyMsg(t("s.ae82b8cc23", { v0: out?.path ?? "", v1: note }));
     } catch (e) {
       setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
@@ -247,7 +248,7 @@ export function MorePage({
         : "—";
 
   const gpus = provision?.gpus?.length
-    ? provision.gpus.join(" · ")
+    ? listText(provision.gpus)
     : t("s.90b74980e4");
   const currentRuntimeRow = provision?.variants?.find(
     (row) => row.id === provision.installed_variant,
@@ -374,8 +375,9 @@ export function MorePage({
             title={t("s.fbb8ddd570")}
             right={
               <span className="text-[13.5px] text-[var(--ink-muted)]">
-                {status ? statusTitle(status) : "—"}
-                {status?.pid ? ` · pid ${status.pid}` : ""}
+                {status
+                  ? joinClauses([statusTitle(status), !!status.pid && t("s.metaPid", { v0: String(status.pid) })])
+                  : "—"}
               </span>
             }
           />

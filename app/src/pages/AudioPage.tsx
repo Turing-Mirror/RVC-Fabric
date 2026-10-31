@@ -14,6 +14,7 @@ import { WaveformRange } from "../components/WaveformRange";
 import { AudioHotkeyEditor } from "../components/AudioHotkeyEditor";
 import { SeekBar } from "../components/SeekBar";
 import type { PlaybackStatus, VoicePlaybackStatus } from "../lib/audioPlayback";
+import { joinClauses } from "../lib/text";
 
 type Source = {
   id: string;
@@ -596,7 +597,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               </div>
               {preview && preview.state !== "idle" ? <div className="text-[12px] text-[var(--meta)]">
                 {preview.state === "error" ? <p role="alert" className="m-0">{t("neptune.previewFailed")}</p> : null}
-                {preview.name} · {(preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1)} / {(preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1)} s
+                {joinClauses([preview.name, t("s.metaPlayback", { v0: (preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1), v1: (preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1) })])}
                 <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
               </div> : null}
               <div className="flex items-end gap-2 flex-wrap">

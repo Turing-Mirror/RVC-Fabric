@@ -6,6 +6,7 @@ import { coverSrc, fetchStoreCatalog, type StoreVoice } from "../lib/voices";
 import { displayVoiceName } from "../lib/voiceDisplay";
 import { cancelStoreJob, enqueueStoreDownload, useStoreJobs } from "../lib/storeJobs";
 import { stagger } from "./Motion";
+import { joinClauses } from "../lib/text";
 
 /** 首页推荐几个。取广场清单里排在最前的官方音色：清单的顺序由维护者编排，排在前面的就是推荐的。 */
 const STARTER_COUNT = 3;
@@ -48,7 +49,7 @@ export function StarterVoices({ onInstalled, onOpenPlaza }: { onInstalled: () =>
               <div className="aspect-[16/9] bg-[color-mix(in_srgb,var(--accent)_10%,var(--group))]" style={cover ? { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
               <div className="px-4 py-3">
                 <div className="text-[14px] font-semibold truncate">{displayVoiceName(v, locale)}</div>
-                <div className="mt-0.5 text-[11.5px] text-[var(--meta)] truncate">{[v.series, v.size_label].filter(Boolean).join(" · ")}</div>
+                <div className="mt-0.5 text-[11.5px] text-[var(--meta)] truncate">{joinClauses([v.series && t("s.metaSeries", { v0: v.series }), v.size_label && t("s.metaSize", { v0: v.size_label })])}</div>
                 <div className="mt-3 flex items-center gap-2">
                   {running || queued ? (
                     <>

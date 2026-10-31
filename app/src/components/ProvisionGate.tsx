@@ -17,6 +17,7 @@ import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "./MainGpuPicker";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { Modal } from "./Modal";
+import { joinClauses } from "../lib/text";
 
 type VariantRow = {
   id: string;
@@ -439,8 +440,10 @@ export function ProvisionGate({ open, initial, onDone, onDismiss }: Props) {
                   ) : null}
                   {v.installed ? (
                     <span className="text-[11.5px] text-[var(--meta)]">
-                      {v.active ? t("runtimeMigration.active") : t("runtimeMigration.installed")}
-                      {v.installed_version ? ` · ${v.installed_version}` : ""}
+                      {joinClauses([
+                        v.active ? t("runtimeMigration.active") : t("runtimeMigration.installed"),
+                        v.installed_version && t("s.metaVersion", { v0: v.installed_version }),
+                      ])}
                     </span>
                   ) : null}
                 </span>

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { Modal } from "./Modal";
+import { joinClauses } from "../lib/text";
 
 /**
  * 申请专业优化：照着稿子念一遍，软件打包寄出去。
@@ -200,7 +201,7 @@ export function ConsultDialog({
                 })}
               </span>
               <span className="text-[12.5px] text-[var(--meta)] tabular-nums">
-                {seconds.toFixed(1)}s · {level.toFixed(0)} dB
+                {joinClauses([t("s.metaDuration", { v0: seconds.toFixed(1) }), t("s.metaLevel", { v0: level.toFixed(0) })])}
               </span>
             </>
           ) : (

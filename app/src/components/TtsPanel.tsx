@@ -19,6 +19,7 @@ import { AudioTrimEditor, canTrimAudio } from "./AudioTrim";
 import { MoreMenuPopup, type PopupAnchor } from "./MoreMenu";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 import { TOOL_BOX } from "./Select";
+import { joinClauses } from "../lib/text";
 
 /** Windows path compare: slash / case must not hide a just-selected voice. */
 function samePath(a?: string, b?: string): boolean {
@@ -1497,8 +1498,7 @@ function StsSection() {
         </div>
         {!blocked && modelName ? (
           <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
-            {t("s.6c415e91bb", { v0: modelName })}
-            {indexPath ? t("s.0ca99fa9f1") : ""}
+            {joinClauses([t("s.6c415e91bb", { v0: modelName }), !!indexPath && t("s.0ca99fa9f1")])}
           </p>
         ) : null}
         {compareMenu ? (
@@ -1835,16 +1835,16 @@ function StsSection() {
                   >
                     <span className="block truncate text-[12.5px] font-mono">
                       {f.rel || f.name}
-                      {f.source_name && (scan?.sources?.length ?? 0) > 1
-                        ? `  · ${f.source_name}`
-                        : ""}
+                      {f.source_name && (scan?.sources?.length ?? 0) > 1 ? (
+                        <span className="ml-2 font-sans text-[var(--meta)]">{t("s.metaSource", { v0: f.source_name })}</span>
+                      ) : null}
                     </span>
                     <span className="block text-[11px] text-[var(--meta)] tabular-nums">
                       {f.excluded
                         ? f.excluded_by_dir
                           ? t("s.stsExcludedByDir")
                           : t("s.stsFilterExcluded")
-                        : `${formatBytes(f.size)}${f.mtime ? ` · ${formatMtime(f.mtime)}` : ""}`}
+                        : joinClauses([formatBytes(f.size), !!f.mtime && t("s.metaModified", { v0: formatMtime(f.mtime) })])}
                     </span>
                   </button>
                   <ItemExtras
@@ -2166,10 +2166,12 @@ function StsSection() {
               {prog?.message || t("s.090840132b")}
             </p>
             <p className="m-0 shrink-0 tabular-nums text-right">
-              {fileHint ? `${fileHint} · ` : ""}
-              {`${pct}%`}
-              {running ? ` · ${formatElapsed(elapsed)}` : ""}
-              {eta ? ` · ${eta}` : ""}
+              {joinClauses([
+                fileHint,
+                t("s.metaProgress", { v0: String(pct) }),
+                running && t("s.metaElapsed", { v0: formatElapsed(elapsed) }),
+                eta,
+              ])}
             </p>
           </div>
           {multi && running ? (
@@ -2209,9 +2211,10 @@ function StsSection() {
                 key={`${s.file}|${s.tag ?? ""}`}
                 className="py-0.5 text-[12px] text-[var(--meta)] break-all"
               >
-                <span className="font-mono">{s.name}</span>
-                {s.tag ? ` · ${s.tag}` : ""}
-                {` — ${s.reason}`}
+                {t("s.itemReason", {
+                  v0: s.tag ? t("s.labelWithDetail", { v0: s.name, v1: s.tag }) : s.name,
+                  v1: s.reason,
+                })}
               </li>
             ))}
           </ul>

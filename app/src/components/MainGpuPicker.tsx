@@ -31,7 +31,7 @@ export function MainGpuPicker({
 }) {
   const options = [
     { id: String(MAIN_GPU_AUTO), label: t("s.74982a8e00") },
-    ...gpus.map((name, i) => ({ id: String(i), label: `${i} · ${name}` })),
+    ...gpus.map((name, i) => ({ id: String(i), label: t("s.gpuIndexed", { v0: String(i), v1: name }) })),
   ];
   return (
     <Select

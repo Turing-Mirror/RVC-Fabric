@@ -15,6 +15,7 @@ import { HOTKEYS, comboFromEvent } from "../lib/hotkeys";
 import { setHot, type EngineStatus } from "../lib/engine";
 import { backendLabel, normalizeAccel } from "../lib/backend";
 import { t, LOCALES, useI18n, type LocaleCode } from "../i18n";
+import { joinClauses } from "../lib/text";
 
 const TAB_KEYS = [
   "device",
@@ -133,7 +134,7 @@ function SettingsPageImpl({
     if (!b) return "";
     const dev = String(status?.compute_device || "");
     const label = backendLabel(b);
-    return dev && dev !== label ? `${label} · ${dev}` : label;
+    return dev && dev !== label ? t("s.labelWithDetail", { v0: label, v1: dev }) : label;
   })();
   const tabLabels = useMemo(
     () =>
@@ -594,10 +595,10 @@ function SettingsPageImpl({
                   还显示核显，就是后端没遵守选择。 */}
               {backendLine ? (
                 <div className="text-[12.5px] text-[var(--help)] -mt-2">
-                  {t("s.accelBackendNow", { v0: backendLine })}
-                  {c.restartKeys.includes("accel_backend")
-                    ? ` · ${t("s.accelRestart")}`
-                    : ""}
+                  {joinClauses([
+                    t("s.accelBackendNow", { v0: backendLine }),
+                    c.restartKeys.includes("accel_backend") && t("s.accelRestart"),
+                  ])}
                 </div>
               ) : null}
               <Field

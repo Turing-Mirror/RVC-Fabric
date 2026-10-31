@@ -15,6 +15,7 @@ import { pickPath } from "../lib/nativeDialog";
 import { askConfirm } from "../lib/webDialog";
 import { auditionVoice } from "../lib/audition";
 import { TOOL_BOX } from "./Select";
+import { joinClauses } from "../lib/text";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -783,8 +784,12 @@ export function TrainPanel() {
                   ].join(" ")}
                   onClick={() => setName(e.name)}
                 >
-                  {e.name}
-                  {e.trained ? " · pth" : e.resumable ? ` · ${e.slices}` : ""}
+                  {e.trained || e.resumable
+                    ? t("s.labelWithDetail", {
+                        v0: e.name,
+                        v1: e.trained ? t("s.metaTrained") : t("s.metaSlices", { v0: String(e.slices) }),
+                      })
+                    : e.name}
                 </button>
               ))}
             </div>
@@ -886,10 +891,12 @@ export function TrainPanel() {
               />
             </div>
             <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
-              {stepLine ? `${stepLine} · ` : ""}
-              {prog.message}
-              {prog.phase === "stage" ? ` ${pct}%` : ""}
-              {eta ? ` · ${eta}` : ""}
+              {joinClauses([
+                stepLine,
+                prog.message,
+                prog.phase === "stage" && t("s.metaProgress", { v0: String(pct) }),
+                eta,
+              ])}
             </p>
           </div>
         ) : null}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
-import { getTLocale, t } from "../i18n/t";
+import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 
 /** 一条预设。参数的合法范围由引擎侧 dsp_voice.EFFECT_SPECS 定义，壳不重复一份。 */
 export type DspPreset = {
@@ -100,7 +101,7 @@ export function DspPresetGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadToken]);
 
-  const locale = getTLocale();
+  const { locale } = useI18n();
   const view = useMemo(() => {
     const q = query.trim().toLowerCase();
     const all = list || [];

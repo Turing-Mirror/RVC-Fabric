@@ -27,6 +27,7 @@ import {
 import { Btn, Warn } from "./ui";
 import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
+import { Pager } from "./Pager";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -698,24 +699,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
         )}
       </div>
 
-      {grouping !== "series" && totalPages > 1 ? (
-        <div className="flex items-center justify-center gap-3 pt-5 text-[12.5px] text-[var(--meta)]">
-          <Btn
-            disabled={pageClamped <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >{t("s.b41561d807")}</Btn>
-          <span className="tabular-nums">
-            {t("s.40a021ed44", {
-              v0: pageClamped,
-              v1: totalPages,
-              v2: list.length,
-            })}
-          </span>
-          <Btn
-            disabled={pageClamped >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >{t("s.67a246a344")}</Btn>
-        </div>
+      {grouping !== "series" ? (
+        <Pager className="pt-5" page={pageClamped} pages={totalPages} onChange={setPage} />
       ) : null}
     </div>
   );
@@ -794,38 +779,13 @@ function SeriesPageGrid({
           </Btn>
         </div>
       ) : null}
-      {paged && totalS > 1 ? (
-        <div className="flex items-center justify-center gap-3 pt-5 text-[12.5px] text-[var(--meta)]">
-          <Btn
-            disabled={curS <= 1}
-            onClick={() =>
-              setSeriesPage((prev) => ({
-                ...prev,
-                [seriesKey]: Math.max(1, curS - 1),
-              }))
-            }
-          >
-            {t("s.b41561d807")}
-          </Btn>
-          <span className="tabular-nums">
-            {t("s.40a021ed44", {
-              v0: curS,
-              v1: totalS,
-              v2: voices.length,
-            })}
-          </span>
-          <Btn
-            disabled={curS >= totalS}
-            onClick={() =>
-              setSeriesPage((prev) => ({
-                ...prev,
-                [seriesKey]: Math.min(totalS, curS + 1),
-              }))
-            }
-          >
-            {t("s.67a246a344")}
-          </Btn>
-        </div>
+      {paged ? (
+        <Pager
+          className="pt-5"
+          page={curS}
+          pages={totalS}
+          onChange={(p) => setSeriesPage((prev) => ({ ...prev, [seriesKey]: p }))}
+        />
       ) : null}
     </>
   );

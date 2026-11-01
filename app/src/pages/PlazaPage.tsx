@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
+import { Pager } from "../components/Pager";
 import { ExtrasPanel, type ExtrasFilter } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
@@ -129,15 +130,7 @@ function PlazaPageImpl({
             )}
           </Group>
         </Block>
-        {total > 1 ? (
-          <div className="flex items-center justify-center gap-3 py-5">
-            <Btn disabled={cur <= 0} onClick={() => setPageNo(cur - 1)}>{t("s.b41561d807")}</Btn>
-            <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
-              {cur + 1} / {total}
-            </span>
-            <Btn disabled={cur >= total - 1} onClick={() => setPageNo(cur + 1)}>{t("s.67a246a344")}</Btn>
-          </div>
-        ) : null}
+        <Pager className="py-5" page={cur + 1} pages={total} onChange={(p) => setPageNo(p - 1)} />
       </PagePad>
     );
   }

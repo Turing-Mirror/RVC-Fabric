@@ -193,7 +193,7 @@ fn decide(cat: &Value, local: &str, exe_version: &str) -> Value {
 
     json!({
         "local": local,
-        "remote": if remote.is_empty() { "—".into() } else { remote },
+        "remote": if remote.is_empty() { crate::i18n::t("s.valueUnknown") } else { remote },
         "available": newer && !url.is_empty() && !blocked,
         "blocked_by_min_version": blocked,
         "min_app_version": min_app,
@@ -366,7 +366,7 @@ mod tests {
     fn empty_catalog_offers_nothing() {
         let r = decide(&json!({}), "1.3.3", "1.3.3");
         assert_eq!(r["available"], false);
-        assert_eq!(r["remote"], "—");
+        assert_eq!(r["remote"], crate::i18n::t("s.valueUnknown"));
     }
 
     #[test]

@@ -1181,7 +1181,7 @@ function SettingsPageImpl({
                 inline
                 control={
                   <span className="text-[13px] text-[var(--ink-muted)] tabular-nums">
-                    {appVersion || "—"}
+                    {appVersion || t("s.valueLoading")}
                   </span>
                 }
               />

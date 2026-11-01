@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { SegmentControl } from "../components/SegmentControl";
+import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
 import { DspPresetGrid, type DspPreset } from "../components/DspPresetGrid";
 import { DspPresetEditor } from "../components/DspPresetEditor";
@@ -223,8 +224,8 @@ function ModelsPageImpl({
     if (query.trim() && view.length !== models.length) {
       return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
     }
-    // 没有确认在用的音色就写「—」，不能拿目录第一条冒充当前。
-    const cur = selected?.name || "—";
+    // 没有确认在用的音色就写「未选择」，不能拿目录第一条冒充当前。
+    const cur = selected?.name || translate("s.noneSelected");
     return translate("s.425fb93e79", { v0: models.length, v1: cur });
   }, [models, query, view.length, selected, translate]);
 
@@ -640,24 +641,8 @@ function ModelsPageImpl({
         </Swap>
         )}
 
-        {kind === "rvc" && view.length > pageSize ? (
-          <div className="flex items-center justify-center gap-3 mt-[26px] text-[12.5px] text-[var(--meta)]">
-            <Btn
-              disabled={pageClamped <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >{t("s.b41561d807")}</Btn>
-            <span>
-              {t("s.40a021ed44", {
-                v0: pageClamped + 1,
-                v1: totalPages,
-                v2: view.length,
-              })}
-            </span>
-            <Btn
-              disabled={pageClamped >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            >{t("s.67a246a344")}</Btn>
-          </div>
+        {kind === "rvc" ? (
+          <Pager className="mt-[26px]" page={pageClamped + 1} pages={totalPages} onChange={(p) => setPage(p - 1)} />
         ) : null}
       </Block>
 

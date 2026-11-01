@@ -665,7 +665,7 @@ pub fn provision_status(root: &Path) -> Value {
 
 fn format_speed(bps: u64) -> String {
     if bps == 0 {
-        return "—".into();
+        return String::new();
     }
     if bps >= 1_000_000_000 {
         format!("{:.2} GB/s", bps as f64 / 1e9)

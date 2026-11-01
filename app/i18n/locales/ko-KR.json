@@ -1405,7 +1405,6 @@
     "fa2f7e5279": "{v0} 사용됨",
     "2a4fa38f1e": "{v0} 동안 새 데이터를 수신하지 못했습니다.",
     "9d38fc19bb": "전체 {v0}개 보기",
-    "40a021ed44": "{v1}페이지 중 {v0}페이지, 총 {v2}개",
     "0340e37d88": "'{v0}'에 이미 {v1}개 슬라이스가 있습니다. 이번 실행은 이전 진행 상황부터 이어지며 다시 자르지 않습니다.",
     "6c415e91bb": "현재 음색: {v0}",
     "041c85897b": "'{v0}'와 일치하는 음색을 찾을 수 없습니다. 검색을 지우면 모두 볼 수 있습니다.",
@@ -2280,7 +2279,16 @@
     "metaPlayback": "{v1}초 중 {v0}초 재생",
     "metaSlices": "슬라이스: {v0}",
     "metaTrained": "학습 완료",
-    "gpuIndexed": "GPU {v0}: {v1}"
+    "gpuIndexed": "GPU {v0}: {v1}",
+    "valueLoading": "불러오는 중",
+    "valueFailed": "읽지 못했습니다",
+    "valueUnknown": "알 수 없음",
+    "sizeUnknown": "크기 알 수 없음",
+    "notDetected": "감지되지 않음",
+    "engineStopped": "엔진이 실행되지 않음",
+    "noneSelected": "선택 안 함",
+    "noNumber": "없음",
+    "pagerLabel": "페이지"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn } from "./ui";
 import { Ring, type RingSegment } from "./Ring";
+import { Pager } from "./Pager";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import { formatLocalizedList } from "../lib/voiceDisplay";
@@ -158,7 +159,7 @@ export function StorageSection() {
   return (
     <Block
       title={t("s.storageTitle")}
-      note={usage ? t("s.storageTotal", { a0: human(usage.total_bytes), a1: usage.free_bytes == null ? "—" : human(usage.free_bytes) }) : undefined}
+      note={usage ? t("s.storageTotal", { a0: human(usage.total_bytes), a1: usage.free_bytes == null ? t("s.valueUnknown") : human(usage.free_bytes) }) : undefined}
       action={
         <Btn onClick={() => void scan()} disabled={busy} busy={busy}>
           {busy ? t("s.storageScanning") : t("s.storageScan")}
@@ -223,13 +224,7 @@ export function StorageSection() {
               </li>
             ))}
           </ul>
-          {totalPages > 1 ? (
-            <div className="flex items-center justify-center gap-3 pt-2 text-[12.5px] text-[var(--meta)]">
-              <Btn disabled={pageClamped <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>{t("s.b41561d807")}</Btn>
-              <span className="tabular-nums">{t("s.40a021ed44", { v0: pageClamped, v1: totalPages, v2: sorted.length })}</span>
-              <Btn disabled={pageClamped >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>{t("s.67a246a344")}</Btn>
-            </div>
-          ) : null}
+          <Pager className="pt-2" page={pageClamped} pages={totalPages} onChange={setPage} />
 
           <div className="mt-3 pt-3 flex items-center gap-3 shadow-[0_-1px_0_var(--hairline)]">
             <span className="text-[12.5px] text-[var(--meta)]" role="status">

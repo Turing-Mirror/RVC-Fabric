@@ -1405,7 +1405,6 @@
     "fa2f7e5279": "{v0} utilisé",
     "2a4fa38f1e": "Aucune nouvelle donnée reçue depuis {v0}.",
     "9d38fc19bb": "Voir les {v0} éléments",
-    "40a021ed44": "Page {v0} sur {v1}, {v2} au total",
     "0340e37d88": "« {v0} » contient déjà {v1} tranches ; cette exécution reprend la progression précédente, sans recouper.",
     "6c415e91bb": "Voix actuelle : {v0}",
     "041c85897b": "Aucune voix correspondant à \"{v0}\" trouvée, effacez la recherche pour tout voir.",
@@ -2280,7 +2279,16 @@
     "metaPlayback": "{v0} s lues sur {v1} s",
     "metaSlices": "Segments : {v0}",
     "metaTrained": "Entraîné",
-    "gpuIndexed": "GPU {v0} : {v1}"
+    "gpuIndexed": "GPU {v0} : {v1}",
+    "valueLoading": "Chargement",
+    "valueFailed": "Lecture impossible",
+    "valueUnknown": "Inconnu",
+    "sizeUnknown": "Taille inconnue",
+    "notDetected": "Non détecté",
+    "engineStopped": "Moteur arrêté",
+    "noneSelected": "Aucune sélection",
+    "noNumber": "Aucun",
+    "pagerLabel": "Pages"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

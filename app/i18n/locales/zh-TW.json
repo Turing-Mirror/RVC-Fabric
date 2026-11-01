@@ -1405,7 +1405,6 @@
     "fa2f7e5279": "已用 {v0}",
     "2a4fa38f1e": "已經 {v0} 沒有收到新資料。",
     "9d38fc19bb": "查看全部 {v0} 條",
-    "40a021ed44": "第 {v0} / {v1} 頁，共 {v2} 個",
     "0340e37d88": "「{v0}」已有 {v1} 條切片，本次將繼續上次的進度，無需重新切片。",
     "6c415e91bb": "目前音色：{v0}",
     "041c85897b": "沒有找到符合「{v0}」的音色，清空搜尋即可查看全部。",
@@ -2280,7 +2279,16 @@
     "metaPlayback": "已播放 {v0} 秒，共 {v1} 秒",
     "metaSlices": "已切片：{v0}",
     "metaTrained": "已訓練",
-    "gpuIndexed": "顯示卡 {v0}：{v1}"
+    "gpuIndexed": "顯示卡 {v0}：{v1}",
+    "valueLoading": "正在讀取",
+    "valueFailed": "讀取失敗",
+    "valueUnknown": "未知",
+    "sizeUnknown": "大小未知",
+    "notDetected": "未偵測到",
+    "engineStopped": "引擎未執行",
+    "noneSelected": "未選擇",
+    "noNumber": "無",
+    "pagerLabel": "翻頁"
   },
   "extras": {
     "engineTitle": "引擎資源",

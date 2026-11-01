@@ -1405,7 +1405,6 @@
     "fa2f7e5279": "{v0} 使用済み",
     "2a4fa38f1e": "{v0} 新しいデータを受信していません。",
     "9d38fc19bb": "全 {v0} 件を表示",
-    "40a021ed44": "{v1} ページ中 {v0} ページ目、全 {v2} 件",
     "0340e37d88": "「{v0}」には既に {v1} 個のスライスがあります。今回は前回の進捗から続き、再スライスは行われません。",
     "6c415e91bb": "現在の音声：{v0}",
     "041c85897b": "「{v0}」に一致する音声は見つかりませんでした。検索をクリアするとすべて表示されます。",
@@ -2280,7 +2279,16 @@
     "metaPlayback": "{v1} 秒中 {v0} 秒を再生",
     "metaSlices": "スライス済み：{v0}",
     "metaTrained": "学習済み",
-    "gpuIndexed": "GPU {v0}：{v1}"
+    "gpuIndexed": "GPU {v0}：{v1}",
+    "valueLoading": "読み込み中",
+    "valueFailed": "読み込めませんでした",
+    "valueUnknown": "不明",
+    "sizeUnknown": "サイズ不明",
+    "notDetected": "検出されていません",
+    "engineStopped": "エンジン停止中",
+    "noneSelected": "未選択",
+    "noNumber": "なし",
+    "pagerLabel": "ページ"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

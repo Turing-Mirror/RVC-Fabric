@@ -550,7 +550,6 @@ function SettingsPageImpl({
               <Field
                 label={t("settings.f0Repair")}
                 tip={t("settings.f0RepairTip")}
-                desc={t("settings.f0RepairDesc")}
                 control={
                   <Toggle
                     label={

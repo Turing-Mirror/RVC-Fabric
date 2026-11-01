@@ -140,7 +140,6 @@ export function Dock({
             {
               id: "vc" as const,
               label: t("dock.modeVc"),
-              title: t("dock.modeVcTip"),
             },
             {
               id: "bypass" as const,

@@ -12,7 +12,7 @@ import { mount, pressKey, tick, type Mounted } from "../test/dom";
 import { WebDialogHost } from "./WebDialog";
 import { EXIT_MS } from "../hooks/useExit";
 
-function buttons(m: Mounted): HTMLElement[] {
+function buttons(): HTMLElement[] {
   return Array.from(document.body.querySelectorAll("[role=dialog] button"));
 }
 
@@ -30,7 +30,7 @@ describe("WebDialog 确认框键盘语义", () => {
       p = askConfirm("确定吗？");
     });
     await tick();
-    const [cancel] = buttons(m);
+    const [cancel] = buttons();
     cancel.focus();
     pressKey(cancel, "Enter");
     await expect(p).resolves.toBe(false);
@@ -44,7 +44,7 @@ describe("WebDialog 确认框键盘语义", () => {
       p = askConfirm("确定吗？");
     });
     await tick();
-    const [, ok] = buttons(m);
+    const [, ok] = buttons();
     ok.focus();
     pressKey(ok, "Enter");
     await expect(p).resolves.toBe(true);
@@ -77,7 +77,7 @@ describe("WebDialog 确认框键盘语义", () => {
       p2 = askConfirm("第二个？");
     });
     await tick();
-    const [cancel] = buttons(m);
+    const [cancel] = buttons();
     cancel.focus();
     pressKey(cancel, "Enter");
     await expect(p1).resolves.toBe(false);

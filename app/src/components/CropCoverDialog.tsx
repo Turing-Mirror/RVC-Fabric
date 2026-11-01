@@ -546,9 +546,6 @@ export function CropCoverDialog({
                     <img src={preview.before} alt="" className="w-full h-full object-contain" />
                   ) : null}
                 </div>
-                <div className="text-[11.5px] text-[var(--meta)] mt-1.5">
-                  {t("crop.previewBeforeNote")}
-                </div>
               </div>
             </div>
           </div>
@@ -567,9 +564,6 @@ export function CropCoverDialog({
               <Btn onClick={() => void openPicker()}>{t("crop.repick")}</Btn>
             </>
           ) : null}
-          <span className="ml-auto text-[11.5px] text-[var(--meta)]">
-            {t("crop.localNote")}
-          </span>
         </div>
       </div>
     </Modal>

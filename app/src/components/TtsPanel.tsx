@@ -299,7 +299,6 @@ export function TtsPanel() {
           />
         }
       />
-      <p className="m-0 mb-4 text-[12.5px] text-[var(--ink-muted)]">{t("s.859b483004")}</p>
       {mode === "sts" ? <StsSection /> : <TtsSection />}
     </ToolBody>
   );
@@ -1636,11 +1635,9 @@ function StsSection() {
             })}
           </ul>
         ) : null}
-        {/* 只说一件事：有来源被跳过最要紧，其次才是输出目录在来源里。 */}
-        {scan?.source_in_output || scan?.output_in_source ? (
-          <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">
-            {t(scan.source_in_output ? "s.stsSourceInsideOut" : "s.stsOutputInside")}
-          </p>
+        {/* 有来源被跳过时才提示；输出目录在来源里不影响结果，不提示 */}
+        {scan?.source_in_output ? (
+          <p className="m-0 pb-1 text-[11.5px] text-[var(--meta)]">{t("s.stsSourceInsideOut")}</p>
         ) : null}
         <div className={ROW}>
           <span className={LABEL}>{t("s.a0bc984876")}</span>

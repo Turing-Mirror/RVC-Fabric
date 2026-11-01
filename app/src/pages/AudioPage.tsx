@@ -464,7 +464,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
   return (
     <PagePad fill>
-      <PageHead title={t("audio.title")} sub={t("audio.subtitle")} actions={
+      <PageHead title={t("audio.title")} actions={
         <>
           <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-1"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
           <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-2"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />{t("audio.recursive")}</label>

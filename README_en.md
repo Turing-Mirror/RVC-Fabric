@@ -23,7 +23,7 @@ Deeply customized based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-
 
 [GitHub Repository](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB Artifacts Download](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
 
-**Social Media**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　QQ Group @Turing Mirror Community (Group ID `1077458748`)
+**Social Media**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　[YouTube @Turing Mirror](https://www.youtube.com/@TuringMirror) (YouTube handle `@TuringMirror`)　·　QQ Group @Turing Mirror Community (Group ID `1077458748`)
 
 <!-- qq-group -->
 <img src="assets/brand/qq_group.jpg" alt="QQ group QR code" width="200">

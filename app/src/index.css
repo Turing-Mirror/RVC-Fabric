@@ -2,6 +2,8 @@
 
 /* Design tokens — match docs handoff preview (Schale light-blue, no AI gradients) */
 :root {
+  /* 收起、退场动画的时长，与 hooks/useExit 的 EXIT_MS 一致 */
+  --out-ms: 260ms;
   --bg-base: #f4f6f8;
   --bg: var(--bg-base);
   --surface: #ffffff;
@@ -257,6 +259,12 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::before {
   transform: scale(1);
 }
+/* 焦点环只给键盘操作（lib/inputModality.ts）：最近一次输入来自鼠标或触控时不画。
+ * 窗口切回来、弹窗关闭把焦点还给按钮时，WebView2 会给点过的按钮误画焦点环。 */
+html[data-input="pointer"] :focus-visible {
+  outline: none !important;
+}
+
 input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -301,6 +309,50 @@ input[type="checkbox"]:disabled {
   50% { opacity: 1; }
 }
 .dock-step-now { animation: dock-step-now 1.2s ease-in-out infinite; }
+/* 流动列表、滚字、拉幕（components/Motion.tsx）共用一个时长。 */
+:root { --flow-ms: 420ms; }
+
+/* 流动列表：新来的项从零高度撑开，离开的项收拢到零。 */
+@keyframes flow-open {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to { grid-template-rows: 1fr; opacity: 1; }
+}
+@keyframes flow-close {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to { grid-template-rows: 0fr; opacity: 0; }
+}
+.flow-item { display: grid; grid-template-rows: 1fr; }
+.flow-body { min-height: 0; }
+.flow-enter, .flow-leave { overflow: clip; overflow-clip-margin: 6px; }
+.flow-enter { animation: flow-open var(--flow-ms) var(--ease-nav) both; }
+.flow-leave { animation: flow-close var(--flow-ms) var(--ease-nav) both; pointer-events: none; }
+
+/* 滚字：两段字叠在同一格里，旧字向下滑出，新字从上方滑入。 */
+.roll { display: inline-grid; overflow: clip; overflow-clip-margin: 2px; vertical-align: bottom; }
+.roll > span { grid-area: 1 / 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes roll-in {
+  from { transform: translate3d(0, -70%, 0); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes roll-out {
+  from { transform: none; opacity: 1; }
+  to { transform: translate3d(0, 70%, 0); opacity: 0; }
+}
+.roll-in { animation: roll-in var(--flow-ms) var(--ease-nav) both; }
+.roll-out { animation: roll-out var(--flow-ms) var(--ease-nav) both; }
+
+/* 拉幕：一块区域第一次出现时从上往下展开，收起时从下往上收回。 */
+@keyframes curtain-in {
+  from { clip-path: inset(0 0 100% 0 round var(--r)); opacity: 0.6; }
+  to { clip-path: inset(0 0 0 0 round var(--r)); opacity: 1; }
+}
+@keyframes curtain-out {
+  from { clip-path: inset(0 0 0 0 round var(--r)); opacity: 1; }
+  to { clip-path: inset(0 0 100% 0 round var(--r)); opacity: 0.6; }
+}
+.curtain-in { animation: curtain-in 0.5s var(--ease-nav) both; }
+.curtain-out { animation: curtain-out var(--flow-ms) var(--ease-nav) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .dock-step-now { animation: none; opacity: 0.7; }
 }
@@ -479,7 +531,7 @@ input[type="checkbox"]:disabled {
 @keyframes tooltip-in {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.8);
   }
   to {
     opacity: 1;
@@ -487,7 +539,7 @@ input[type="checkbox"]:disabled {
   }
 }
 .tooltip-in {
-  animation: tooltip-in 0.13s var(--ease) both;
+  animation: tooltip-in 0.2s var(--ease) both;
 }
 
 @keyframes nudge-in {
@@ -505,7 +557,7 @@ input[type="checkbox"]:disabled {
   animation: nudge-in 0.44s var(--spring) both;
 }
 
-/* 退场。时长与 hooks/useExit 的 EXIT_MS 一致（0.18s），放完组件才卸掉。
+/* 退场。时长与 hooks/useExit 的 EXIT_MS 一致（--out-ms），放完组件才卸掉。
    外层是 grid，行高收到 0，下面的东西跟着平滑地挪上来，不会一跳。 */
 @keyframes nudge-out {
   from {
@@ -520,7 +572,7 @@ input[type="checkbox"]:disabled {
   }
 }
 .nudge-out {
-  animation: nudge-out 0.18s var(--ease) forwards;
+  animation: nudge-out var(--out-ms) var(--ease-soft) forwards;
 }
 
 @keyframes pager-ghost {
@@ -538,11 +590,11 @@ input[type="checkbox"]:disabled {
 @keyframes tooltip-out {
   to {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.8);
   }
 }
 .tooltip-out {
-  animation: tooltip-out 0.12s var(--ease) forwards;
+  animation: tooltip-out var(--out-ms) var(--ease-soft) forwards;
 }
 
 /* 弹窗。底色淡入，面板从略低、略小的位置浮上来；关闭时反过来。
@@ -576,11 +628,11 @@ input[type="checkbox"]:disabled {
   animation: panel-in 0.44s var(--spring-gentle) both;
 }
 .modal-scrim[data-leaving] {
-  animation: scrim-out 0.18s var(--ease) forwards;
+  animation: scrim-out var(--out-ms) var(--ease-soft) forwards;
   pointer-events: none;
 }
 .modal-scrim[data-leaving] > * {
-  animation: panel-out 0.18s var(--ease) forwards;
+  animation: panel-out var(--out-ms) var(--ease-soft) forwards;
 }
 
 /* 展开区：行高在 0 与内容高度之间过渡。 */
@@ -614,7 +666,7 @@ input[type="checkbox"]:disabled {
   animation: menu-in 0.16s var(--ease) both;
 }
 .menu-out {
-  animation: menu-out 0.14s var(--ease) forwards;
+  animation: menu-out var(--out-ms) var(--ease-soft) forwards;
   pointer-events: none;
 }
 

@@ -9,6 +9,9 @@ import { applyAppearance } from "./lib/appearance";
 import "./index.css";
 import { invoke } from "@tauri-apps/api/core";
 import { isBrowserKey } from "./lib/browserKeys";
+import { trackInputModality } from "./lib/inputModality";
+
+trackInputModality();
 
 window.addEventListener("keydown", (event) => {
   if (isBrowserKey(event)) event.preventDefault();

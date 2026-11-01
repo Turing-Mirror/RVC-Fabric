@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { placePopup, type PopupAnchor, type PopupBox } from "../lib/popupPos";
+import { useLeaving } from "./Presence";
 
 export type MoreMenuItem = {
   label: string;
@@ -36,6 +37,8 @@ export function MoreMenuPopup({
   id?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // 包在 <Leave> 里时，收起那段时间照原位放完收起动画
+  const leaving = useLeaving();
   const [box, setBox] = useState<PopupBox | null>(null);
 
   useLayoutEffect(() => {
@@ -98,7 +101,8 @@ export function MoreMenuPopup({
       id={id}
       role="menu"
       data-more-menu
-      className="menu-in fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden overscroll-contain"
+      inert={leaving}
+      className={`${leaving ? "menu-out" : "menu-in"} fixed z-[90] min-w-[160px] py-1 rounded-[var(--rs)] bg-[var(--surface)] shadow-[0_8px_28px_rgba(0,0,0,0.18)] overflow-y-auto overflow-x-hidden overscroll-contain`}
       style={{
         left: box?.left ?? anchor.right,
         top: box?.top ?? anchor.bottom + 6,

@@ -64,7 +64,7 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const [place, setPlace] = useState<Place | null>(null);
-  const { mounted, leaving } = useExit(open, 140);
+  const { mounted, leaving } = useExit(open);
 
   // 已保存的设备不在当前列表里（拔掉了、驱动重置）时，照样显示出来并注明，
   // 不能显示成空白 —— 那样看着像没设，引擎其实还在用它。

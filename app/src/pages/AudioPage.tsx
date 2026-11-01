@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
-import { Swap } from "../components/Motion";
+import { Collapse, Leave } from "../components/Presence";
+import { Curtain, FlowList, Roll } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
 import { Select, Slider } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
@@ -514,14 +515,15 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             <span>{t("audio.entryCount", { count: shown.length })}</span>
             <span className="ml-auto">{t("audio.dblHint")}</span>
           </div>
-          <Swap k={`${sourceId}|${showExcluded}`} className="mt-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain [&>*]:h-full">
+          {/* 换来源时底板不动：留下的条目滑到新位置，不属于这个来源的收拢 */}
+          <div className="mt-1.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="bg-[var(--group)] rounded-[var(--r)] p-1.5">
-              {shown.length === 0 ? <p className="text-[13px] text-[var(--meta)] py-4 px-2.5 m-0">{t("audio.empty")}</p> : shown.map((entry) => {
+              <FlowList items={shown} keyOf={(entry) => entry.id} render={(entry) => {
                 const asset = assetById.get(entry.asset_id);
                 const on = entry.id === selectedId;
                 const playing = voiceInstances.some((instance) => instance.name === entry.name);
                 return (
-                  <button type="button" key={entry.id} onClick={() => chooseEntry(entry)} onDoubleClick={() => playNow(entry)} aria-pressed={on}
+                  <button type="button" onClick={() => chooseEntry(entry)} onDoubleClick={() => playNow(entry)} aria-pressed={on}
                     className={`w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-[var(--rs)] border-0 cursor-pointer transition-colors ${on ? "bg-[var(--accent-soft)]" : "bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]"}`}>
                     <span className={`w-9 flex-none text-right tabular-nums text-[12px] ${entry.number != null ? "text-[var(--ink-muted)]" : "text-[var(--meta)]"}`}>{entry.number ?? t("s.noNumber")}</span>
                     <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
@@ -529,16 +531,24 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                     <span className="ml-auto flex-none text-[11px] text-[var(--meta)]">{asset?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : entry.looped ? t("audio.loop") : ""}</span>
                   </button>
                 );
-              })}
+              }} />
+              <Collapse open={!shown.length}>
+                <p className="text-[13px] text-[var(--meta)] py-4 px-2.5 m-0">{t("audio.empty")}</p>
+              </Collapse>
             </div>
-          </Swap>
+          </div>
         </section>
 
         <aside aria-label={selected?.name ?? t("audio.entries")} className="min-w-0 min-h-0 overflow-y-auto overscroll-contain rounded-[var(--r)]">
-          <Swap k={selected?.id ?? ""} className="h-full [&>*]:h-full">
+          {/* 第一次选中时编辑栏拉开；之后换选中项只有标题滚动换字，底板不动 */}
+          <Curtain className="h-full" fallback={(
+            <div className="h-full min-h-[220px] grid place-items-center rounded-[var(--r)] border border-dashed border-[var(--line)] bg-[color-mix(in_srgb,var(--group)_55%,transparent)] px-6">
+              <p className="m-0 max-w-[300px] text-center text-[12.5px] text-[var(--meta)] leading-relaxed">{t("audio.editEmpty")}</p>
+            </div>
+          )}>
             {selected && selectedAsset ? <div className="bg-[var(--group)] rounded-[var(--r)] p-4 space-y-4">
               <div>
-                <div className="text-[15px] font-semibold truncate">{selected.name}</div>
+                <div className="text-[15px] font-semibold truncate"><Roll value={selected.name} className="max-w-full" /></div>
                 <div className="mt-1 text-[11.5px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
               </div>
               {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12px] text-[var(--meta)]">
@@ -615,10 +625,8 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                   : <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_exclude", { sourceId, assetId: selectedAsset.id })); })}>{t("audio.exclude")}</Btn>) : null}
               </div>
               <AudioHotkeyEditor key={selected.id} entryId={selected.id} entries={library.entries} />
-            </div> : <div className="h-full min-h-[220px] grid place-items-center rounded-[var(--r)] border border-dashed border-[var(--line)] bg-[color-mix(in_srgb,var(--group)_55%,transparent)] px-6">
-              <p className="m-0 max-w-[300px] text-center text-[12.5px] text-[var(--meta)] leading-relaxed">{t("audio.editEmpty")}</p>
-            </div>}
-          </Swap>
+            </div> : null}
+          </Curtain>
         </aside>
       </div>
 
@@ -692,7 +700,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
       {/* 来源行的「⋯」/右键菜单。菜单项绑定 srcMenu.source —— 被点开的那一条，
           刷新/重新定位/移除都发它的稳定 ID，与左侧当前筛选无关。
           执行与 Esc 收菜单才把焦点还给行尾 ⋯；Tab 离开保持焦点走向。 */}
-      {srcMenu ? <MoreMenuPopup id="audio-source-menu" anchor={srcMenu.anchor} align={srcMenu.align} onClose={(reason) => {
+      <Leave>{srcMenu ? <MoreMenuPopup id="audio-source-menu" anchor={srcMenu.anchor} align={srcMenu.align} onClose={(reason) => {
         menuRestore.current = reason !== "tab";
         setSrcMenu(null);
       }} items={[
@@ -711,7 +719,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
           acceptLibrary(await invoke<Library>("audio_library_remove_source", { sourceId: srcMenu.source.id }));
           if (sourceId === srcMenu.source.id) { setSourceId(""); setSelectedId(""); }
         }) },
-      ]} /> : null}
+      ]} /> : null}</Leave>
     </PagePad>
   );
 }
@@ -746,7 +754,7 @@ function SourceBtn({ on, label, title, count, onClick, menuLabel, menuOpen, onMe
       {onMenu ? <button type="button" data-source-menu aria-label={menuLabel} aria-haspopup="menu"
         aria-expanded={menuOpen ?? false} aria-controls={menuOpen ? "audio-source-menu" : undefined}
         onClick={onMenu}
-        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none text-[var(--meta)] bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] hover:text-[var(--ink)] focus-visible:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100" : "opacity-0"} group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity`}>
+        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none bg-transparent hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100 text-[var(--accent)]" : "opacity-0 text-[var(--meta)]"} group-hover:opacity-100 group-focus-within:opacity-100 transition-[opacity,color]`}>
         ⋯
       </button> : null}
     </div>

@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
-import { Collapse } from "./Presence";
+import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar, Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
@@ -1500,7 +1500,7 @@ function StsSection() {
             {joinClauses([t("s.6c415e91bb", { v0: modelName }), !!indexPath && t("s.0ca99fa9f1")])}
           </p>
         ) : null}
-        {compareMenu ? (
+        <Leave>{compareMenu ? (
           <MoreMenuPopup
             anchor={compareMenu}
             onClose={() => setCompareMenu(null)}
@@ -1512,7 +1512,7 @@ function StsSection() {
               },
             }))}
           />
-        ) : null}
+        ) : null}</Leave>
         {targets.length > 1 ? (
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -1889,7 +1889,7 @@ function StsSection() {
                 </li>
               ))}
             </ul>
-            {fileMenu ? (
+            <Leave>{fileMenu ? (
               <MoreMenuPopup
                 anchor={fileMenu.anchor}
                 items={[
@@ -1933,7 +1933,7 @@ function StsSection() {
                       ]),
                 ]}
               />
-            ) : null}
+            ) : null}</Leave>
             {inputPageCount > 1 ? (
               <div className="mt-2 flex items-center justify-between gap-2">
                 <Btn

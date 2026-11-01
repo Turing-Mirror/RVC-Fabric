@@ -855,7 +855,7 @@ function ModelsPageImpl({
       </>
       )}
 
-      {menu ? (
+      <Leave>{menu ? (
         <MoreMenu
           anchor={menu.anchor}
           model={menu.model}
@@ -874,7 +874,7 @@ function ModelsPageImpl({
             setCoverEdit(m);
           }}
         />
-      ) : null}
+      ) : null}</Leave>
 
       <Leave>{authorPick ? (
         <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />

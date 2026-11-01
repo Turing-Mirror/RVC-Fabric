@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /** 退场动画的时长。index.css 里 *-out 那几条动画用的是同一个数。 */
-export const EXIT_MS = 180;
+export const EXIT_MS = 260;
 
 /**
  * 让一个元素在「不该显示」之后再多留一小段，把退场动画放完再卸掉。

@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "app": {
-    "version": "1.7.1",
+    "version": "1.7.2",
     "channel": "stable",
     "gui": {
       "package_type": "full_package",
-      "version": "1.7.1",
+      "version": "1.7.2",
       "kind": "exe",
       "url": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/releases/download/setup/RVC_Fabric_Setup.exe",
-      "sha256": "029a37fad0ee418752b489c68a7292070e30d8bcd95bf2e0902ab98cd478ca58",
-      "size_bytes": 12435052,
+      "sha256": "2011d6db7f875451956f2a692bb8063900762be83485884d6fc517adf68175a3",
+      "size_bytes": 12543071,
       "min_app_version": "1.3.0",
-      "notes": "1.7.1 修复实时音频桥对长采样块的处理：共享缓冲容量和积压上限随启动时的采样块时长调整，读取按播放队列的消耗推进，避免正常推理块被当作积压截断或在监听队列中丢弃。界面与模型算法不变。"
+      "notes": "1.7.2 统一界面组件和交互动效，改进顶部分段拖动、列表分页、菜单和弹窗的操作反馈。工具窗口最大化时按屏幕工作区调整，表单随窗口展开，还原后恢复原来的位置和大小。模型页保留手动选择的 RVC 或 DSP 页面；语音转换把录音目录作为一条来源，可修改录音保存位置。安装时更换目录可迁移用户数据及已下载组件；机械硬盘读盘较慢时会提示使用固态硬盘。说明页支持搜索全部问答和名词，更新八种语言文案及 DSP 预设说明，并修复重启后训练音色封面无法读取的问题。"
     }
   },
   "community": {

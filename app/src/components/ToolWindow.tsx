@@ -179,7 +179,7 @@ function ToolTitleBar({ title }: { title: string }) {
         {title}
       </span>
       <div
-        className="ml-auto flex text-[var(--meta)]"
+        className="native-window-controls ml-auto flex text-[var(--meta)]"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <ToolWinBtn label={t("s.ca8223c5fc")} onClick={() => void win()?.minimize()}>

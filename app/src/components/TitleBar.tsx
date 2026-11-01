@@ -79,7 +79,7 @@ export function TitleBar({
         </div>
 
         <div
-          className="flex text-[var(--meta)] ml-3.5"
+          className="native-window-controls flex text-[var(--meta)] ml-3.5"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <WinBtn

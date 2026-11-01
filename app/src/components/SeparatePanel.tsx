@@ -23,6 +23,7 @@ type Status = {
 };
 
 type Progress = {
+  owner?: string | null;
   phase: "start" | "run" | "done" | "error";
   done: number;
   total: number;
@@ -91,6 +92,7 @@ export function SeparatePanel() {
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<Progress>("separate-progress", (ev) => {
+      if (ev.payload.owner != null) return;
       setProg(ev.payload);
       if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {

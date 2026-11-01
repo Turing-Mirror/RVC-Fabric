@@ -6,10 +6,11 @@ mod asset_scope;
 mod audio_bus;
 mod audio_edit;
 mod audio_library;
-mod audio_preview;
-mod audio_probe;
+mod audio_mix;
 #[cfg(windows)]
 mod audio_pcm_mapping;
+mod audio_preview;
+mod audio_probe;
 mod audio_recovery;
 mod audio_session;
 mod audio_voice;
@@ -26,9 +27,9 @@ mod disk_kind;
 mod download;
 mod dsp;
 mod engine_assets;
-mod file_publish;
 mod extra_assets;
 mod extract;
+mod file_publish;
 mod gpu_pref;
 mod hf;
 mod hotkey_catalog;
@@ -37,6 +38,7 @@ pub mod install_move;
 mod known_issues;
 mod legacy;
 mod link_check;
+mod local_api;
 mod logging;
 mod mic;
 mod mirrors;
@@ -372,24 +374,36 @@ async fn config_set(
     // 会让这段等待落在 IPC 线程上 —— 拖一次滑条窗口就冻结几秒（R01）。
     tauri::async_runtime::spawn_blocking(move || {
         let hotkey_change = patch.contains_key("audio_hotkeys")
-            || hotkey_catalog::catalog().legacy.iter().any(|binding| patch.contains_key(&binding.key));
-        let _hotkey_guard = hotkey_change.then(||
-            hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner()));
+            || hotkey_catalog::catalog()
+                .legacy
+                .iter()
+                .any(|binding| patch.contains_key(&binding.key));
+        let _hotkey_guard = hotkey_change.then(|| {
+            hotkey_catalog::WRITE_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+        });
         if hotkey_change {
             let mut proposed = config::read(&root);
             proposed.extend(patch.clone());
             let bindings: Vec<hotkey_catalog::AudioBinding> = serde_json::from_value(
-                proposed.get("audio_hotkeys").cloned().unwrap_or_else(|| json!([]))
-            ).map_err(|_| "audio_hotkey_config_invalid")?;
+                proposed
+                    .get("audio_hotkeys")
+                    .cloned()
+                    .unwrap_or_else(|| json!([])),
+            )
+            .map_err(|_| "audio_hotkey_config_invalid")?;
             hotkey_catalog::validate_bindings(&bindings)?;
             if patch.contains_key("audio_hotkeys") {
                 let library = audio_library::snapshot(&root)?;
                 hotkey_catalog::validate_entry_targets(
-                    &bindings, library.entries.iter().map(|entry| entry.id.as_str()),
+                    &bindings,
+                    library.entries.iter().map(|entry| entry.id.as_str()),
                 )?;
             }
             if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings)
-                || shell_extras::legacy_duplicates_config(&proposed) {
+                || shell_extras::legacy_duplicates_config(&proposed)
+            {
                 return Err("audio_hotkey_conflict".into());
             }
         }
@@ -411,9 +425,8 @@ async fn config_set(
             if !hot.is_empty() && worker::is_worker_alive(&root) {
                 // 派发被有界拒绝 ≠ 已应用：配置已经落盘，如实报「存了没生效」，
                 // 前端走既有的错误提示路径；worker 不在跑时是纯持久化，不算错。
-                worker::set_hot(&root, hot.clone()).map_err(|e| {
-                    format!("{} ({})", crate::i18n::t("s.9249d39bac"), e)
-                })?;
+                worker::set_hot(&root, hot.clone())
+                    .map_err(|e| format!("{} ({})", crate::i18n::t("s.9249d39bac"), e))?;
             }
         }
         let _ = app.emit("config-changed", &out);
@@ -516,34 +529,57 @@ fn legacy_hotkey_set(
     patch: Map<String, Value>,
 ) -> Result<Value, String> {
     let legacy = &hotkey_catalog::catalog().legacy;
-    let touched: Vec<&str> = patch.keys().map(|key| {
-        legacy.iter()
-            .find(|binding| *key == binding.key || *key == format!("{}_global", binding.key))
-            .map(|binding| binding.key.as_str())
-            .ok_or("hotkey_key_invalid")
-    }).collect::<Result<_, _>>()?;
+    let touched: Vec<&str> = patch
+        .keys()
+        .map(|key| {
+            legacy
+                .iter()
+                .find(|binding| *key == binding.key || *key == format!("{}_global", binding.key))
+                .map(|binding| binding.key.as_str())
+                .ok_or("hotkey_key_invalid")
+        })
+        .collect::<Result<_, _>>()?;
     let root = root_clone(&state)?;
-    let _hotkey_guard = hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _hotkey_guard = hotkey_catalog::WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let current = config::read(&root);
     let mut proposed = current.clone();
     proposed.extend(patch.clone());
     let bindings: Vec<hotkey_catalog::AudioBinding> = serde_json::from_value(
-        proposed.get("audio_hotkeys").cloned().unwrap_or_else(|| json!([]))
-    ).map_err(|_| "audio_hotkey_config_invalid")?;
+        proposed
+            .get("audio_hotkeys")
+            .cloned()
+            .unwrap_or_else(|| json!([])),
+    )
+    .map_err(|_| "audio_hotkey_config_invalid")?;
     if shell_extras::audio_conflicts_with_legacy_config(&proposed, &bindings)
-        || shell_extras::legacy_duplicates_config(&proposed) {
+        || shell_extras::legacy_duplicates_config(&proposed)
+    {
         return Err("audio_hotkey_conflict".into());
     }
-    let previous: Map<String, Value> = patch.keys()
+    let previous: Map<String, Value> = patch
+        .keys()
         .filter_map(|key| current.get(key).map(|value| (key.clone(), value.clone())))
         .collect();
     let changed = config::update(&root, patch)?;
-    let enabled = current.get("hotkeys_enabled").and_then(Value::as_bool).unwrap_or(false);
+    let enabled = current
+        .get("hotkeys_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let result = shell_extras::apply_hotkeys(&app, enabled);
-    let rejected = result.get("legacy_status").and_then(Value::as_array).is_some_and(|states| {
-        states.iter().any(|item| item.get("state") == Some(&json!("conflict"))
-            && item.get("key").and_then(Value::as_str).is_some_and(|key| touched.contains(&key)))
-    });
+    let rejected = result
+        .get("legacy_status")
+        .and_then(Value::as_array)
+        .is_some_and(|states| {
+            states.iter().any(|item| {
+                item.get("state") == Some(&json!("conflict"))
+                    && item
+                        .get("key")
+                        .and_then(Value::as_str)
+                        .is_some_and(|key| touched.contains(&key))
+            })
+        });
     if rejected {
         config::update(&root, previous)?;
         shell_extras::apply_hotkeys(&app, enabled);
@@ -578,7 +614,9 @@ fn audio_hotkeys_set(
     state: State<'_, Mutex<AppState>>,
     bindings: Vec<hotkey_catalog::AudioBinding>,
 ) -> Result<Value, String> {
-    let _hotkey_guard = hotkey_catalog::WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _hotkey_guard = hotkey_catalog::WRITE_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     hotkey_catalog::validate_bindings(&bindings)?;
     let root = root_clone(&state)?;
     let library = audio_library::snapshot(&root)?;
@@ -598,7 +636,11 @@ fn audio_hotkeys_set(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let result = shell_extras::apply_hotkeys(&app, enabled);
-    if result.get("audio_failed").and_then(Value::as_array).is_some_and(|v| !v.is_empty()) {
+    if result
+        .get("audio_failed")
+        .and_then(Value::as_array)
+        .is_some_and(|v| !v.is_empty())
+    {
         let mut rollback = Map::new();
         rollback.insert("audio_hotkeys".into(), json!(previous));
         config::update(&root, rollback)?;
@@ -618,15 +660,21 @@ fn audio_hotkey_run(
 ) -> Result<(), String> {
     let root = root_clone(&state)?;
     let config = config::read(&root);
-    if !config.get("hotkeys_enabled").and_then(Value::as_bool).unwrap_or(false) {
+    if !config
+        .get("hotkeys_enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Err("audio_hotkey_disabled".into());
     }
     let binding = hotkey_catalog::read_bindings(&root)?
         .into_iter()
         .find(|binding| binding.binding_id == binding_id)
         .ok_or("audio_hotkey_missing")?;
-    if !binding.enabled || binding.scope != hotkey_catalog::HotkeyScope::Window
-        || binding.combo.trim().is_empty() {
+    if !binding.enabled
+        || binding.scope != hotkey_catalog::HotkeyScope::Window
+        || binding.combo.trim().is_empty()
+    {
         return Err("audio_hotkey_disabled".into());
     }
     shell_extras::run_audio_binding(&app, binding)
@@ -905,7 +953,10 @@ fn cache_clear(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
 /// 存储页按类别清理：临时文件、软件日志、诊断包、性能报告、音色回收站。
 /// 类别只认 `paths::STORAGE_CLEAN_KINDS` 里的几个，训练实验走 `train_cleanup_apply`。
 #[tauri::command]
-async fn storage_clean(state: State<'_, Mutex<AppState>>, kinds: Vec<String>) -> Result<Value, String> {
+async fn storage_clean(
+    state: State<'_, Mutex<AppState>>,
+    kinds: Vec<String>,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let stats = paths::storage_clean(&root, &kinds)?;
@@ -1367,7 +1418,10 @@ async fn dsp_activate(
 }
 
 #[tauri::command]
-async fn dsp_deactivate(app: AppHandle, state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+async fn dsp_deactivate(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
         let out = dsp::deactivate(&root)?;
@@ -1644,10 +1698,7 @@ fn sts_sources_scan_cancel() {
 // 下面这些改的是真实目录/文件系统，磁盘慢的机器上会把 IPC 线程卡住——
 // 统一 spawn_blocking。服务层内部已用 STATE 锁串行化，签名不变。
 #[tauri::command]
-async fn sts_sources_add(
-    state: State<'_, Mutex<AppState>>,
-    path: String,
-) -> Result<Value, String> {
+async fn sts_sources_add(state: State<'_, Mutex<AppState>>, path: String) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::add(&root, &path))
         .await
@@ -1672,11 +1723,9 @@ async fn sts_sources_set_recursive(
     recursive: bool,
 ) -> Result<(), String> {
     let root = root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        sts_sources::set_recursive(&root, &id, recursive)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || sts_sources::set_recursive(&root, &id, recursive))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1710,10 +1759,7 @@ async fn sts_sources_clear(state: State<'_, Mutex<AppState>>) -> Result<(), Stri
 }
 
 #[tauri::command]
-async fn sts_sources_delete(
-    state: State<'_, Mutex<AppState>>,
-    path: String,
-) -> Result<(), String> {
+async fn sts_sources_delete(state: State<'_, Mutex<AppState>>, path: String) -> Result<(), String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || sts_sources::delete_file(&root, &path))
         .await
@@ -1727,11 +1773,9 @@ async fn sts_sources_rename(
     new_name: String,
 ) -> Result<String, String> {
     let root = root_clone(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        sts_sources::rename_file(&root, &path, &new_name)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || sts_sources::rename_file(&root, &path, &new_name))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1741,7 +1785,10 @@ async fn sts_snapshot(
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(sts_sources::snapshot(&root, output.as_deref().unwrap_or("")))
+        Ok(sts_sources::snapshot(
+            &root,
+            output.as_deref().unwrap_or(""),
+        ))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -2023,7 +2070,20 @@ async fn engine_set_hot(
     let root = root_clone(&state)?;
     // 落盘 + set_hot 派发等待都要离开 IPC 线程（R01）。
     tauri::async_runtime::spawn_blocking(move || {
-        engine_set_hot_inner(&app, &root, pitch, formant, function, threhold, index_rate, rms_mix_rate, f0_repair, dsp_enabled, dsp_preset, dsp_params)
+        engine_set_hot_inner(
+            &app,
+            &root,
+            pitch,
+            formant,
+            function,
+            threhold,
+            index_rate,
+            rms_mix_rate,
+            f0_repair,
+            dsp_enabled,
+            dsp_preset,
+            dsp_params,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -2627,6 +2687,42 @@ async fn wallpaper_data_url(path: String) -> Result<String, String> {
 }
 
 pub fn run() {
+    let mut args = std::env::args();
+    while let Some(arg) = args.next() {
+        if arg == "--product-root" {
+            if let Some(path) = args.next() {
+                std::env::set_var("TM_VOICE_ROOT", path);
+            }
+        }
+    }
+    if std::env::args().any(|arg| arg == "--print-api-manifest") {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&local_api::manifest()).expect("manifest")
+        );
+        return;
+    }
+    if std::env::args().any(|arg| arg == "--register-api") {
+        let record = trm_app_protocol::discovery::Installation::new(
+            local_api::manifest(),
+            std::env::current_exe().expect("executable"),
+            std::env::var("TM_VOICE_ROOT")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| paths::product_root()),
+            ui_assets::external_dir(),
+        );
+        record.register().expect("register installation");
+        return;
+    }
+    let mut context = tauri::generate_context!();
+    let identity = trm_app_protocol::discovery::Installation::new(
+        local_api::manifest(),
+        std::env::current_exe().expect("executable"),
+        paths::product_root(),
+        None,
+    );
+    context.config_mut().identifier =
+        format!("{}.{}", context.config().identifier, identity.install_id);
     let root = paths::product_root();
     // Before anything else: a release build has no console, so without this the
     // rest of these lines would go nowhere.
@@ -2652,13 +2748,6 @@ pub fn run() {
     // 必须在建窗之前：WebView2 只在第一个 webview 创建时读这个环境变量。
     apply_webview_compat_flag(&root);
 
-    // 尽早清 TEMP：放在 setup 之前，避免建窗/预热 worker 占着文件删不掉。
-    // 官方 WebUI 也是一启动就 rmtree(TEMP)。
-    {
-        let stats = paths::clean_temps(&root);
-        paths::log_clean_stats(&crate::i18n::t("s.ebd26da421"), &root, &stats);
-    }
-
     tauri::Builder::default()
         // 必须是第一个：插件在第二个进程里做的事就是把命令行递给已经在跑的那个，
         // 然后自己 exit，越早越好，别让它先把窗口和 worker 建起来。
@@ -2670,15 +2759,13 @@ pub fn run() {
         // 第二个进程在插件里直接退出，它自己的日志只会留下一行启动横幅然后没有
         // 下文，看起来很像白屏。真正的说明在这里由第一个进程写出来。
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            if argv.iter().any(|arg| arg == "--headless") { return; }
             logging::shell_log!("检测到重复启动（argv={argv:?} cwd={cwd}），聚焦现有窗口");
-            let Some(win) = app.get_webview_window("main") else {
-                return;
-            };
+            if app.get_webview_window("main").is_none(){return;}
             // rescue 的注释写着「只在有理由相信窗口不见了不是用户的意思时调用」。
             // 用户刚刚又点了一次图标，那就是他要看到这扇窗 —— 关到托盘里、最小化
             // 了、被拖到屏幕外，这里都该拉回来。
-            window_watch::rescue(&win);
-            let _ = win.set_focus();
+            local_api::show_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -2911,6 +2998,9 @@ pub fn run() {
             ckpt_cancel,
         ])
         .setup(move |app| {
+            // Only the owning process may clean temporary engine files.
+            let stats = paths::clean_temps(&root);
+            paths::log_clean_stats(&crate::i18n::t("s.ebd26da421"), &root, &stats);
             // 原生对话框要认父窗口，先把句柄存下来（见 shell_extras::dialog）。
             shell_extras::remember_app(app.handle());
             // asset 协议白名单：tauri.conf.json 的静态 scope 为空，全部放行
@@ -2962,9 +3052,10 @@ pub fn run() {
             let main_window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                tauri::WebviewUrl::CustomProtocol(url.parse().expect("fabric url")),
+                if local_api::headless(){tauri::WebviewUrl::External("about:blank".parse().unwrap())}else{tauri::WebviewUrl::CustomProtocol(url.parse().expect("fabric url"))},
             )
             .title("RVC Fabric")
+            .visible(!local_api::headless())
             .inner_size(1180.0, 780.0)
             .min_inner_size(880.0, 640.0)
             .resizable(true)
@@ -2979,10 +3070,11 @@ pub fn run() {
             // `.center()` 只认主显示器。多显示器的人主屏未必是他正在看的那
             // 块，窗口连同任务栏按钮一起去了另一块屏，这头看起来就跟没启动
             // 一样。摆到光标所在的屏上。
-            window_watch::place_on_active_monitor(&main_window);
+            if !local_api::headless() { window_watch::place_on_active_monitor(&main_window); }
             // 无边框窗口默认是直角的，Win11 上跟系统其他窗口格格不入。
             window_watch::round_corners(&main_window);
-            window_watch::report_and_rescue(&main_window, &crate::i18n::t("s.ad667e5e16"));
+            if !local_api::headless() { window_watch::report_and_rescue(&main_window, &crate::i18n::t("s.ad667e5e16")); }
+            local_api::start(app.handle(), root.clone()).map_err(std::io::Error::other)?;
 
             // A blank window is the one failure the user cannot describe and we
             // cannot see. If the UI never reports back, say so in the log with
@@ -3016,7 +3108,7 @@ pub fn run() {
                         //
                         // 界面报到了就说明它活着、看得见，用户把它收哪儿是他的事。
                         window_watch::report(&w, &crate::i18n::t("s.6c0434f6f2"));
-                        if !ui_assets::ui_reported_ready() {
+                        if !local_api::headless() && !ui_assets::ui_reported_ready() {
                             window_watch::rescue(&w);
                         }
                     }
@@ -3103,6 +3195,7 @@ pub fn run() {
 
             let root_bg = root.clone();
             std::thread::spawn(move || {
+                if local_api::headless() { return; }
                 if paths::runtime_migration_required(&root_bg) {
                     logging::shell_log!("skip worker prewarm: Runtime migration required");
                 } else if paths::runtime_ready(&root_bg) {
@@ -3136,11 +3229,12 @@ pub fn run() {
             });
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while running RVC Fabric")
         .run(|app, event| {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
+                if let Some(api) = app.try_state::<std::sync::Arc<trm_app_protocol::Service>>() { api.remove_running_record(); }
                 audio_preview::audio_preview_stop();
                 audio_voice::audio_voice_stop();
                 audio_waveform::cancel_all();

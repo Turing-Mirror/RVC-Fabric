@@ -12,6 +12,7 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+trm-app-protocol = { git = "https://github.com/Turing-Mirror/trm-app-protocol.git", rev = "f02269b436215a04980b0b450edf7764a5d79493", features = ["codegen"] }
 tauri-build = { version = "2", features = [] }
 
 [[bin]]
@@ -23,6 +24,7 @@ name = "catalog-check"
 path = "src/bin/catalog-check.rs"
 
 [dependencies]
+trm-app-protocol = { git = "https://github.com/Turing-Mirror/trm-app-protocol.git", rev = "f02269b436215a04980b0b450edf7764a5d79493" }
 fabric-audio = { path = "../audio-core" }
 rtrb = "=0.4.0"
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
@@ -86,3 +88,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_IO",
   "Win32_System_Ioctl",
 ] }
+
+[[bin]]
+name = "rvc-fabric-mcp"
+path = "src/bin/mcp.rs"

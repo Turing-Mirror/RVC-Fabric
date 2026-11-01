@@ -232,3 +232,6 @@ input[type="checkbox"]:disabled {
 @media (prefers-reduced-motion: reduce) {
   .eq-bar { animation: none; height: 8px; }
 }
+
+/* Embedded hosts own the outer window; application navigation stays intact. */
+[data-trm-host="embedded"] .native-window-controls { display: none; }

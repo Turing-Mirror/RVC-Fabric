@@ -21,6 +21,7 @@ use crate::paths;
 
 /// 一次只跑一个：分离很吃显存，两个一起跑基本必爆。
 static BUSY: Mutex<bool> = Mutex::new(false);
+static OWNER: Mutex<Option<String>> = Mutex::new(None);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 
 fn cancel_flag() -> Arc<AtomicBool> {
@@ -49,7 +50,10 @@ fn worker_script(root: &Path) -> PathBuf {
 /// `pymss_core`，缺任意一半都是同样的崩溃。这里只查后半 —— 前半缺了
 /// 会在 import 时报错，但报的是另一条链路；后半缺失时给用户能读懂的提示。
 fn core_present(root: &Path) -> bool {
-    root.join("tools").join("pymss_core").join("__init__.py").is_file()
+    root.join("tools")
+        .join("pymss_core")
+        .join("__init__.py")
+        .is_file()
 }
 
 /// 分离能不能用：要 Runtime、要 worker 脚本、要至少一个权重文件。
@@ -104,13 +108,23 @@ fn any_model_present(dir: &Path) -> bool {
 }
 
 pub fn cancel() {
-    cancel_flag().store(true, Ordering::SeqCst);
+    cancel_for(None);
+}
+pub fn cancel_for(owner: Option<&str>) -> bool {
+    let busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+    if *busy && OWNER.lock().unwrap_or_else(|e| e.into_inner()).as_deref() == owner {
+        cancel_flag().store(true, Ordering::SeqCst);
+        true
+    } else {
+        false
+    }
 }
 
 fn emit(app: &AppHandle, phase: &str, done: u64, total: u64, message: &str) {
     let _ = app.emit(
         "separate-progress",
         json!({
+            "owner": OWNER.lock().unwrap_or_else(|e| e.into_inner()).clone(),
             "phase": phase,
             "done": done,
             "total": total.max(1),
@@ -129,14 +143,27 @@ pub fn run(
     format: &str,
     aggression: u32,
 ) -> Result<Value, String> {
+    run_owned(app, root, input, output, model, format, aggression, None)
+}
+pub fn run_owned(
+    app: &AppHandle,
+    root: &Path,
+    input: &str,
+    output: &str,
+    model: &str,
+    format: &str,
+    aggression: u32,
+    owner: Option<String>,
+) -> Result<Value, String> {
     {
         let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
         if *g {
             return Err(crate::i18n::t("s.38d4c44c83").into());
         }
         *g = true;
+        *OWNER.lock().unwrap_or_else(|e| e.into_inner()) = owner;
+        cancel_flag().store(false, Ordering::SeqCst);
     }
-    cancel_flag().store(false, Ordering::SeqCst);
     let log = crate::logging::begin_run(
         root,
         crate::logging::CH_SEPARATE,
@@ -157,14 +184,7 @@ pub fn run(
     let mut trace = crate::logging::RunTrace::new(log.clone());
     let started = std::time::Instant::now();
     let result = run_inner(
-        app,
-        root,
-        input,
-        output,
-        model,
-        format,
-        aggression,
-        &mut trace,
+        app, root, input, output, model, format, aggression, &mut trace,
     );
     let outcome = match &result {
         Ok(_) => "ok",
@@ -201,12 +221,13 @@ pub fn run(
             crate::logging::finish_run(&log, true, outcome);
         }
     }
-    {
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        *g = false;
-    }
     if let Err(ref e) = result {
         emit(app, "error", 0, 1, e);
+    }
+    {
+        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+        *OWNER.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *g = false;
     }
     result
 }
@@ -262,8 +283,11 @@ fn run_inner(
         "format": fmt,
         "aggression": agg,
     });
-    std::fs::write(&req, serde_json::to_string_pretty(&payload).unwrap_or_default())
-        .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
+    std::fs::write(
+        &req,
+        serde_json::to_string_pretty(&payload).unwrap_or_default(),
+    )
+    .map_err(|e| crate::i18n::te("s.5ee0565f28", &(e)))?;
 
     // pythonw：piped stdout 仍然能读。python.exe 自己的窗口能用 CREATE_NO_WINDOW
     // 压掉，但它再拉起来的 ffmpeg 还是会闪黑框。
@@ -291,18 +315,35 @@ fn run_inner(
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let mut child = cmd.spawn().map_err(|e| crate::i18n::te("s.c727da1f5b", &(e)))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| crate::i18n::te("s.c727da1f5b", &(e)))?;
     let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.1a66c860cd"))?;
     let mut files: Vec<String> = Vec::new();
+    let mut stems = json!([]);
     let mut fail: Option<String> = None;
 
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    loop {
         if cancel_flag().load(Ordering::SeqCst) {
             let _ = child.kill();
+            let _ = child.wait();
             trace.note("cancelled by user");
             return Err(crate::i18n::t("s.a5ffdc95ee").into());
         }
+        let line = match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            Ok(line) => line,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        };
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue; // 不是我们的协议行，忽略
         };
@@ -322,23 +363,17 @@ fn run_inner(
             "run" => {
                 let fallback = crate::i18n::t("s.2282c91c77");
                 // worker 已按百分比去重，这里再按 2 秒节流，避免长音频刷盘。
-                trace.progress(
-                    "run",
-                    &format!("progress run {done}/{total} {msg}"),
-                );
+                trace.progress("run", &format!("progress run {done}/{total} {msg}"));
                 emit(
                     app,
                     "run",
                     done,
                     total,
-                    if msg.is_empty() {
-                        &fallback
-                    } else {
-                        msg
-                    },
+                    if msg.is_empty() { &fallback } else { msg },
                 );
             }
             "done" => {
+                stems = v.get("stems").cloned().unwrap_or(json!([]));
                 if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
                     files = arr
                         .iter()
@@ -360,7 +395,9 @@ fn run_inner(
         }
     }
 
-    let st = child.wait().map_err(|e| crate::i18n::te("s.a4abecd0fe", &(e)))?;
+    let st = child
+        .wait()
+        .map_err(|e| crate::i18n::te("s.a4abecd0fe", &(e)))?;
     if let Some(e) = fail {
         return Err(e);
     }
@@ -371,7 +408,8 @@ fn run_inner(
     // 分离会在 TEMP 里落 reformatted.wav 等中间文件，用完就清。
     let stats = crate::paths::clean_temps(root);
     crate::paths::log_clean_stats(&crate::i18n::t("s.b0cf745781"), root, &stats);
-    Ok(json!({ "ok": true, "files": files, "output": output }))
+    Ok(json!({ "ok": true, "files": files,
+        "stems": stems, "output": output }))
 }
 
 #[cfg(test)]

@@ -129,3 +129,7 @@ npm run dev
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — 可选音高算法
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 人声分离引擎（跟随上游 RVC，已取代 UVR5）· [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 分离模型来源 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 音频处理
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虚拟声卡（把变声结果送入游戏/语音软件）
+
+## Local API (Neptune)
+
+The Neptune branch includes an independent local API and bundled MCP server. See [API v1](docs/api-v1.md) for discovery, capabilities, tasks, and standalone use.

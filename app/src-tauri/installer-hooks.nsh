@@ -146,6 +146,8 @@ Var MoveReport
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  ; Register the local capability manifest without starting the interface.
+  nsExec::ExecToLog '"$INSTDIR\${MAINBINARYNAME}.exe" --register-api --product-root "$INSTDIR"'
   StrCmp $MoveFrom "" skip_move_restore
     StrCmp $MoveDesktop 1 0 +2
       Call CreateOrUpdateDesktopShortcut

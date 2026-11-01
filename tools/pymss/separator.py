@@ -1340,6 +1340,9 @@ class MSSeparator:
         output_format = self.output_format.lower()
         os.makedirs(save_dir, exist_ok=True)
         self.save_audio(audio, sr, f"{file_name}_{instr}", save_dir)
+        callback = getattr(self, "output_callback", None)
+        if callback:
+            callback(os.path.join(save_dir, f"{file_name}_{instr}.{output_format}"), instr)
         self.logger.debug(f"Saved {instr} for {file_name}_{instr}.{output_format} in {save_dir}")
 
     def _resolve_output_dir(self, save_dir, file_name):

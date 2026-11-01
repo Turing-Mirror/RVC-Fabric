@@ -259,3 +259,6 @@ AGENTS.md
 /dsh-carrot-on-a-stick/
 /.dsh-mcp-token.txt
 /.acl-recovery/
+
+# Local API jobs and generated audio
+/User_Data/api/

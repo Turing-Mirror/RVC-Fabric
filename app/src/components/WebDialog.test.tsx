@@ -13,7 +13,7 @@ import { WebDialogHost } from "./WebDialog";
 import { EXIT_MS } from "../hooks/useExit";
 
 function buttons(m: Mounted): HTMLElement[] {
-  return Array.from(m.container.querySelectorAll("[role=dialog] button"));
+  return Array.from(document.body.querySelectorAll("[role=dialog] button"));
 }
 
 describe("WebDialog 确认框键盘语义", () => {
@@ -64,7 +64,7 @@ describe("WebDialog 确认框键盘语义", () => {
     pressKey(document.body, "Enter");
     // 退场动画放完才卸掉。
     await act(() => new Promise((r) => setTimeout(r, EXIT_MS + 20)));
-    expect(m.container.querySelector("[role=dialog]")).toBeNull();
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
   });
 
   it("排队的下一个确认仍要被回答，不能被前一次按键吞掉", async () => {
@@ -83,7 +83,7 @@ describe("WebDialog 确认框键盘语义", () => {
     await expect(p1).resolves.toBe(false);
     // 第二个请求接管弹窗，而不是悄悄丢失
     await tick();
-    expect(m.container.querySelector("[role=dialog]")).not.toBeNull();
+    expect(document.body.querySelector("[role=dialog]")).not.toBeNull();
     pressKey(document.body, "Escape");
     await expect(p2).resolves.toBe(false);
   });
@@ -98,7 +98,7 @@ describe("WebDialog 确认框键盘语义", () => {
       p2 = askConfirm("确定吗？");
     });
     await tick();
-    const input = m.container.querySelector(
+    const input = document.body.querySelector(
       "[role=dialog] input",
     ) as HTMLInputElement;
     expect(input).not.toBeNull();
@@ -111,7 +111,7 @@ describe("WebDialog 确认框键盘语义", () => {
     });
     await tick();
     expect(settled2).toBe("pending");
-    expect(m.container.querySelector("[role=dialog]")).not.toBeNull();
+    expect(document.body.querySelector("[role=dialog]")).not.toBeNull();
     // 第二个弹窗需要一次新的、独立的按键。
     pressKey(document.body, "Escape");
     await expect(p2).resolves.toBe(false);
@@ -159,7 +159,7 @@ describe("WebDialog 确认框键盘语义", () => {
       p = askPrompt("名字？", "默认");
     });
     await tick();
-    const input = m.container.querySelector(
+    const input = document.body.querySelector(
       "[role=dialog] input",
     ) as HTMLInputElement;
     // 输入法组词还没结束，Enter 是选词不是提交。

@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useExit } from "../hooks/useExit";
 import { useLeaving } from "./Presence";
 
@@ -9,6 +10,9 @@ import { useLeaving } from "./Presence";
  * 面板就是 children 本身，样式各弹窗自己定。
  *
  * open 为假时（或外层 Leave 正在退场时）按最后一次的内容画完退场。
+ *
+ * 盖住整个窗口的弹窗挂到 body 上：页面切换时页面层带着变换，弹窗留在页面里会被困在
+ * 页面那一层，底栏的分段控件之类就会画到弹窗上面。
  */
 export function Modal({
   open = true,
@@ -31,7 +35,7 @@ export function Modal({
   const last = useRef<ReactNode>(null);
   if (show) last.current = children;
   if (!mounted) return null;
-  return (
+  const layer = (
     <div
       data-leaving={leaving || undefined}
       className={`modal-scrim ${contained ? "absolute" : "fixed"} inset-0 grid place-items-center p-6 bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]`}
@@ -41,4 +45,5 @@ export function Modal({
       {show ? children : last.current}
     </div>
   );
+  return contained ? layer : createPortal(layer, document.body);
 }

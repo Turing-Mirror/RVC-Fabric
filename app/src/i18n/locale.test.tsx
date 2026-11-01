@@ -30,12 +30,17 @@ vi.mock("./dict", async (importOriginal) => {
 });
 
 import { I18nProvider, useI18n, type TranslateFn } from "./index";
+import { useI18n as useSharedI18n } from "trm-ui";
+
+const SHARED_EMPTY_KEY = "ui.select.empty";
 
 type Ctx = {
   locale: LocaleCode;
   ready: boolean;
   setLocale: (c: LocaleCode) => void;
   t: TranslateFn;
+  sharedLocale: LocaleCode;
+  sharedEmpty: string;
 };
 
 function deferred<T = Dict>() {
@@ -69,7 +74,8 @@ describe("setLocale 语言包加载语义", () => {
     });
     function Probe() {
       const v = useI18n();
-      ctx = { locale: v.locale, ready: v.ready, setLocale: v.setLocale, t: v.t };
+      const shared = useSharedI18n();
+      ctx = { locale: v.locale, ready: v.ready, setLocale: v.setLocale, t: v.t, sharedLocale: shared.locale, sharedEmpty: shared.t(SHARED_EMPTY_KEY) };
       return null;
     }
     const m = mount(
@@ -82,6 +88,15 @@ describe("setLocale 语言包加载语义", () => {
 
   afterEach(() => {
     while (mounts.length) mounts.pop()?.unmount();
+  });
+
+  it("安装的 TRM UI 包跟随产品语言并提供通用组件文案", async () => {
+    await tick();
+    expect(ctx.sharedLocale).toBe("zh-CN");
+    act(() => ctx.setLocale("en-US"));
+    await tick();
+    expect(ctx.sharedLocale).toBe(ctx.locale);
+    expect(ctx.sharedEmpty).toBe("No options available");
   });
 
   it("加载成功才切换并落配置", async () => {

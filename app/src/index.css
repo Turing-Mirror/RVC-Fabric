@@ -1,87 +1,37 @@
 @import "tailwindcss";
+@import "trm-ui/styles.css";
+
+/* Product presentation; behavior and shared tokens are supplied by TRM UI. */
+:root {
+  --page-head-top: 26px;
+  --overlay-exit-fill: forwards;
+  --menu-enter-ms: 0.16s;
+  --menu-exit-y: -4px;
+  --menu-origin: center;
+  --collapse-ms: 280ms;
+  --collapse-ease: var(--ease);
+  --collapse-opacity-ms: 0.2s;
+  --collapse-opacity-ease: var(--ease);
+  --rise-y: 10px;
+  --rise-scale: 1;
+  --rise-ms: 0.5s;
+  --rise-ease: var(--spring-settle);
+}
 
 /* Design tokens — match docs handoff preview (Schale light-blue, no AI gradients) */
 :root {
-  /* 收起、退场动画的时长，与 hooks/useExit 的 EXIT_MS 一致 */
-  --out-ms: 260ms;
-  --bg-base: #f4f6f8;
-  --bg: var(--bg-base);
-  --surface: #ffffff;
-  --group-base: rgba(255, 255, 255, 0.6);
-  --group: var(--group-base);
-  /* 设了背景图时的两个量。见文件末尾 [data-wallpaper] 那一段。
-     scrim = 整块内容区那层磨砂的浓度区间，卡片实度不再逐个调。 */
-  --wp-scrim-min: 0.52;
-  --wp-scrim-max: 0.86;
-  /* 卡片实度的两端，由「冲突度」在其间取值。 */
-  --wp-group-a0: 0.72;
-  --wp-group-a1: 0.92;
-  --group-ink: #ffffff;
-  /* 冲突度：这张图的亮度贴近本主题底色的程度，0 = 离得远，1 = 几乎一样。
-     浅色主题的底是 #f4f6f8（亮度 0.96），所以图越亮越冲突。
-     不用 abs() —— 每个主题的底都在亮度的一端，一次线性钳位就够，
-     而 abs() 在这几个 webview 上的支持还不齐。 */
-  --wp-clash: clamp(0, calc((var(--wp-luma, 0.5) - 0.46) / 0.5), 1);
-  --ink: #1e242b;
-  --ink-muted: #5d6874;
-  --help: #8a949e;
-  --meta: #a3acb6;
-  --hairline: rgba(30, 36, 43, 0.1);
-  --line: rgba(30, 36, 43, 0.14);
-  --accent: #1289f0;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(18, 137, 240, 0.1);
   /* 环形图各段：同一色相由深到浅，最后一段取提醒色的淡色。 */
   --ring-1: #1289f0;
   --ring-2: #5aaef3;
   --ring-3: #9ccbf5;
   --ring-4: #c9d3dd;
   --ring-5: #f5c77e;
-  --stage: #e8f4fd;
-  /* 提醒色，取系统橙。只用在图标和一行字上，不铺底。 */
-  --notify: #ff9500;
   /* 出错的字和图标。 */
   --danger: #b8534f;
-  --page-bg: #dfe4ea;
-  --ui:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI",
-    "PingFang SC", "Microsoft YaHei", sans-serif;
-  --r: 14px;
-  --rs: 8px;
-  --spring: cubic-bezier(0.34, 1.42, 0.64, 1);
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  /* 换页专用曲线。起步快、收尾长，全程不冲过终点。
-     苹果自家的推入/面板动画就是这条形状：动作一开始就已经走掉一大半，
-     剩下的距离用很长的时间贴上去 —— 看着「快」，但停下来的那一刻没有硬边。
-     不要换成 --spring：那条会冲过终点，页面层贴着窗口边，冲过头就是一条缝。 */
-  --ease-nav: cubic-bezier(0.32, 0.72, 0, 1);
-  /* 动效曲线，与图灵镜其他软件同一套。soft 起步平缓、尾段慢慢停稳；out-quick 用于离场，
-     短而轻。弹簧曲线由阻尼振子取样：settle 为临界阻尼，不过冲，用于大跨度的移动；
-     gentle 过冲约 1%，用于小位移；bouncy 过冲约 8%，只用于小幅度的缩放。 */
-  --ease-soft: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  --ease-out-quick: cubic-bezier(0.4, 0, 1, 1);
-  --spring-settle: linear(0, 0.0172, 0.0604, 0.1198, 0.1882, 0.2604, 0.3329, 0.4031, 0.4697, 0.5316, 0.5883, 0.6398, 0.6861, 0.7273, 0.7639, 0.7961, 0.8244, 0.8491, 0.8706, 0.8892, 0.9053, 0.9192, 0.9312, 0.9415, 0.9503, 0.9578, 0.9642, 0.9697, 0.9744, 0.9783, 0.9817, 0.9846, 0.987, 0.989, 0.9908, 0.9922, 0.9935, 0.9945, 0.9954, 0.9961, 0.9967, 0.9973, 0.9977, 0.9981, 0.9984, 0.9987, 0.9989, 0.9991, 1);
-  --spring-gentle: linear(0, 0.0104, 0.0382, 0.0791, 0.1294, 0.186, 0.2466, 0.3089, 0.3714, 0.4327, 0.492, 0.5485, 0.6016, 0.6511, 0.6968, 0.7385, 0.7763, 0.8104, 0.8407, 0.8677, 0.8914, 0.9121, 0.93, 0.9454, 0.9585, 0.9696, 0.9789, 0.9866, 0.9929, 0.9979, 1.0019, 1.005, 1.0073, 1.0089, 1.0101, 1.0107, 1.0111, 1.0111, 1.0109, 1.0105, 1.01, 1.0094, 1.0088, 1.0081, 1.0074, 1.0067, 1.006, 1.0054, 1);
-  --spring-bouncy: linear(0, 0.0106, 0.0396, 0.0834, 0.1386, 0.202, 0.271, 0.3433, 0.4167, 0.4897, 0.5607, 0.6286, 0.6927, 0.7521, 0.8066, 0.8558, 0.8996, 0.938, 0.9711, 0.9993, 1.0226, 1.0416, 1.0564, 1.0676, 1.0755, 1.0805, 1.0831, 1.0834, 1.0821, 1.0792, 1.0752, 1.0704, 1.0649, 1.0591, 1.053, 1.0468, 1.0408, 1.0349, 1.0293, 1.0241, 1.0193, 1.0149, 1.0109, 1.0074, 1.0043, 1.0016, 0.9994, 0.9976, 1);
-  --glass:
-    0 2px 10px rgba(0, 0, 0, 0.1), inset 0 0 0 0.5px rgba(255, 255, 255, 0.6);
-  /* The wordmark's script half is near-black. On the dark ground it has to be
-     flattened to a white silhouette; inverting instead would drag the blue
-     half to orange. */
-  --logo-filter: none;
   /* Watermark strength in the home hero band. 0.18 was too ghostly on the light
      stage (barely readable). Keep it softer than solid brand chrome, but
      legible. Dark ground uses a slightly lower value so weight matches. */
   --emblem-opacity: 0.34;
-  /* 数值条把手的颜色。浅色下就是纸白 —— 比轨道亮，一眼看出是"能抓的那个"。 */
-  --knob: var(--surface);
-  /* 分段控件（设置页顶部那排标签）的滑块底色。浅色下半透明的白就够亮了。 */
-  --seg-thumb: color-mix(in srgb, var(--surface) 86%, transparent);
-  /* 原生控件（<select> 展开的那张列表、右键菜单、日期选择器）的配色由这一项
-     决定，不由我们的 CSS 决定 —— 那张列表是系统画的，画在页面之外。
-     不声明的话 WebView2 一律按浅色画：深色模式下白底列表配我们设的浅色文字，
-     等于白底白字。data-theme 切换时下面两块会跟着改。 */
-  color-scheme: light;
 }
 
 /* 设置 → 界面配色 writes `theme_mode` and App stamps it on <html> as
@@ -89,137 +39,25 @@
    「浅色」/「深色」 were inert and the app always followed the OS. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-base: #171b22;
-    --bg: var(--bg-base);
-    --surface: #1f242d;
-    /* 卡片/分组底色。0.045 在深色底上几乎和背景一样，一屏设置看下来分不出
-       哪些项是一组的。抬到 0.075 刚好能看出边界，又不至于变成一块块灰砖。 */
-    --group-base: rgba(232, 240, 248, 0.075);
-    --group: var(--group-base);
-    /* 深色下的磨砂要更浓一点：浅色字压在一张亮照片上，比深色字压在暗照片上
-       更早读不出来。7.5% 的卡片色也抬一档 —— 底本身透了之后它更看不出来。 */
-    --wp-scrim-min: 0.58;
-    --wp-scrim-max: 0.90;
-    --wp-group-a0: 0.14;
-    --wp-group-a1: 0.48;
-    --group-ink: #e8f0f8;
     /* 深色主题的底是 #171b22（亮度 0.11），所以图越暗越冲突。 */
-    --wp-clash: clamp(0, calc((0.59 - var(--wp-luma, 0.5)) / 0.5), 1);
-    --stage: #1e2837;
-    --ink: #e4e9ef;
-    --ink-muted: #a9b3be;
-    --help: #828c96;
-    --meta: #6e7883;
-    --hairline: rgba(232, 240, 248, 0.14);
-    --line: rgba(232, 240, 248, 0.22);
-    --accent: #4aa3f0;
-    --accent-ink: #0f1319;
-    --accent-soft: rgba(74, 163, 240, 0.14);
     --ring-1: #4aa3f0;
     --ring-2: #3a7fbd;
     --ring-3: #2c5d8a;
     --ring-4: #4a5561;
     --ring-5: #a8793a;
-    --notify: #ff9f0a;
     --danger: #e0807b;
-    --page-bg: #0c0f13;
-    --glass:
-      0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-    --logo-filter: brightness(0) invert(1);
     --emblem-opacity: 0.28;
-    /* 深色下不能照抄 --surface：#1f242d 比轨道(≈#2b2f36)还暗，把手看着
-       不像把手，像轨道上破了个洞。要比轨道亮才抓得住。 */
-    --knob: #7c8794;
-    /* 深色下 --surface(#1f242d) 和 --bg(#171b22) 只差一点点，半透明之后滑块
-       几乎看不见 —— 选中的是哪个标签得靠猜。抬一档并且不再透。 */
-    --seg-thumb: #2b323e;
-    color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg-base: #171b22;
-  --bg: var(--bg-base);
-  --surface: #1f242d;
-  --group-base: rgba(232, 240, 248, 0.075);
-  --group: var(--group-base);
-  --wp-scrim-min: 0.58;
-  --wp-scrim-max: 0.90;
-  --wp-group-a0: 0.14;
-  --wp-group-a1: 0.48;
-  --group-ink: #e8f0f8;
-  --wp-clash: clamp(0, calc((0.59 - var(--wp-luma, 0.5)) / 0.5), 1);
-  --stage: #1e2837;
-  --ink: #e4e9ef;
-  --ink-muted: #a9b3be;
-  --help: #828c96;
-  --meta: #6e7883;
-  --hairline: rgba(232, 240, 248, 0.14);
-  --line: rgba(232, 240, 248, 0.22);
-  --accent: #4aa3f0;
-  --accent-ink: #0f1319;
-  --accent-soft: rgba(74, 163, 240, 0.14);
   --ring-1: #4aa3f0;
   --ring-2: #3a7fbd;
   --ring-3: #2c5d8a;
   --ring-4: #4a5561;
   --ring-5: #a8793a;
-  --notify: #ff9f0a;
   --danger: #e0807b;
-  --page-bg: #0c0f13;
-  --glass:
-    0 2px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-  --logo-filter: brightness(0) invert(1);
   --emblem-opacity: 0.28;
-  --knob: #7c8794;
-  --seg-thumb: #2b323e;
-  color-scheme: dark;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-
-/* 底色画在 html 上，不画在 body 上。
- *
- * 壁纸是 `body::before` 加 `z-index: -1`：负层级只能画在**画布背景**之上、
- * 正常内容之下。以前 body 自己带着不透明的 --bg，于是壁纸被压在 body 的
- * 底色底下，画了等于没画 —— 磨砂和不透明度自然也跟着一起没反应，因为那
- * 三个设置改的是同一个看不见的图层。
- *
- * 底色搬到 html（会传播成画布背景），body 透明，壁纸这一层才有地方待。
- * 没设壁纸时 --wp-opacity 是 0，这一层完全透明，观感和以前一模一样。 */
-html {
-  background: var(--bg);
-  /* 根元素自己也不许滚。以前只有 body 是 overflow:hidden，可根滚动容器是
-     视口（html），不是 body —— 只要有任何一个元素撑出视口，画的就是**根**
-     滚动条，body 上那句管不着。软件是定高布局，根本不该有根滚动这回事。 */
-  height: 100%;
-  overflow: hidden;
-}
-
-body {
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--ui);
-  font-size: 15px;
-  line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-  user-select: none;
-}
-
-button {
-  font: inherit;
 }
 
 /* 勾选框。系统自带的那种在各平台长得不一样，和界面里其余控件也对不上。
@@ -261,9 +99,6 @@ input[type="checkbox"]:checked::before {
 }
 /* 焦点环只给键盘操作（lib/inputModality.ts）：最近一次输入来自鼠标或触控时不画。
  * 窗口切回来、弹窗关闭把焦点还给按钮时，WebView2 会给点过的按钮误画焦点环。 */
-html[data-input="pointer"] :focus-visible {
-  outline: none !important;
-}
 
 input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--accent);
@@ -283,16 +118,6 @@ input[type="checkbox"]:disabled {
  *
  * 键盘、滚轮、触控板、拖动全部不受影响；被隐藏的只有那根指示条。
  */
-* {
-  scrollbar-width: none; /* Firefox / 新版 Chromium */
-  -ms-overflow-style: none; /* 老 Edge */
-}
-
-*::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
 
 @keyframes dock-indeterminate {
   0% {
@@ -309,49 +134,8 @@ input[type="checkbox"]:disabled {
   50% { opacity: 1; }
 }
 .dock-step-now { animation: dock-step-now 1.2s ease-in-out infinite; }
-/* 流动列表、滚字、拉幕（components/Motion.tsx）共用一个时长。 */
-:root { --flow-ms: 420ms; }
-
-/* 流动列表：新来的项从零高度撑开，离开的项收拢到零。 */
-@keyframes flow-open {
-  from { grid-template-rows: 0fr; opacity: 0; }
-  to { grid-template-rows: 1fr; opacity: 1; }
-}
-@keyframes flow-close {
-  from { grid-template-rows: 1fr; opacity: 1; }
-  to { grid-template-rows: 0fr; opacity: 0; }
-}
-.flow-item { display: grid; grid-template-rows: 1fr; }
-.flow-body { min-height: 0; }
-.flow-enter, .flow-leave { overflow: clip; overflow-clip-margin: 6px; }
-.flow-enter { animation: flow-open var(--flow-ms) var(--ease-nav) both; }
-.flow-leave { animation: flow-close var(--flow-ms) var(--ease-nav) both; pointer-events: none; }
-
-/* 滚字：两段字叠在同一格里，旧字向下滑出，新字从上方滑入。 */
-.roll { display: inline-grid; overflow: clip; overflow-clip-margin: 2px; vertical-align: bottom; }
-.roll > span { grid-area: 1 / 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@keyframes roll-in {
-  from { transform: translate3d(0, -70%, 0); opacity: 0; }
-  to { transform: none; opacity: 1; }
-}
-@keyframes roll-out {
-  from { transform: none; opacity: 1; }
-  to { transform: translate3d(0, 70%, 0); opacity: 0; }
-}
-.roll-in { animation: roll-in var(--flow-ms) var(--ease-nav) both; }
-.roll-out { animation: roll-out var(--flow-ms) var(--ease-nav) both; }
 
 /* 拉幕：一块区域第一次出现时从上往下展开，收起时从下往上收回。 */
-@keyframes curtain-in {
-  from { clip-path: inset(0 0 100% 0 round var(--r)); opacity: 0.6; }
-  to { clip-path: inset(0 0 0 0 round var(--r)); opacity: 1; }
-}
-@keyframes curtain-out {
-  from { clip-path: inset(0 0 0 0 round var(--r)); opacity: 1; }
-  to { clip-path: inset(0 0 100% 0 round var(--r)); opacity: 0.6; }
-}
-.curtain-in { animation: curtain-in 0.5s var(--ease-nav) both; }
-.curtain-out { animation: curtain-out var(--flow-ms) var(--ease-nav) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .dock-step-now { animation: none; opacity: 0.7; }
@@ -367,194 +151,11 @@ input[type="checkbox"]:disabled {
  * 动的这三个点才是回执。
  *
  * 不用转圈也不用强调色：它出现在按钮文字前面，只需要「在动」这一件事。 */
-.btn-dots {
-  width: 1.1em;
-  height: 1em;
-  background-image: radial-gradient(currentColor 42%, transparent 45%);
-  background-size: 0.36em 0.36em;
-  background-repeat: repeat-x;
-  background-position: 0 center;
-  animation: btn-dots 0.9s linear infinite;
-  opacity: 0.7;
-}
-
-@keyframes btn-dots {
-  from {
-    background-position: 0 center;
-  }
-  to {
-    /* 走满一个点距，循环处接得上，看着就是一串点在往前挪。 */
-    background-position: 0.36em center;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .btn-dots {
     animation: none;
   }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-/* 换页的四条动画。
- *
- * 两层同时在动：离场的旧页往「后面」退，入场的新页从边上推进来。做法上抄的是
- * 苹果那套推入动画的三个要点：
- *
- * 1. **两层走的距离不一样。** 新页走 6%，旧页只走 2.5%，而且带一点缩小。
- *    等距离平移是一张纸横着拖过去，差速才有前后关系 —— 旧的退到后面去了，
- *    新的盖上来。这是「耐看」的来源，不是速度也不是缓动。
- * 2. **两层时长一样（0.42s）。** 以前入场 0.46s、离场 0.3s，中间那 0.16s
- *    旧页已经没了、新页还在走，画面上是一层孤零零地滑 —— 动作断成两截。
- * 3. **曲线不冲过终点。** --ease-nav 起步快收尾长；--spring 那种冲过头的
- *    曲线放在整页平移上会在窗口边露出一条缝（见下面 --spring 的注释）。
- *
- * 位移只有 6%，不是整屏：这是同级页签之间的切换，不是层级推进。整屏推拉会
- * 让「首页 → 广场」显得像进了下一层，而它们是平级的。 */
-@keyframes leaveL {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-2.5%) scale(0.985);
-  }
-}
-@keyframes enterL {
-  from {
-    opacity: 0;
-    transform: translateX(6%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes leaveR {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(2.5%) scale(0.985);
-  }
-}
-@keyframes enterR {
-  from {
-    opacity: 0;
-    transform: translateX(-6%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* 切页的四条动画一律用 --ease-nav，**不要**换回 --spring。
- *
- * --spring 是 cubic-bezier(0.34, 1.42, 0.64, 1)，控制点 y=1.42 会冲过终点：
- * 采样下来在 62% 处进度到 1.058，也就是整个页面层会越过静止位置约 6% × 5.8%
- * ≈ 0.35% 宽。1185px 的窗口下就是 4px，窗口越大越宽。
- *
- * 页面层是 absolute inset-0 的透明层，冲过头的那几个像素等于在窗口边上开了
- * 一条缝：往左翻页时缝在左边，往右翻页时在右边，缝里露出的是底下正在淡出的
- * 上一页 —— 一条竖直的细线，里面还带着上一页的字。看上去就像「滚动条没删干净」。
- *
- * 小元件（分段控件的滑块、邀请浮层）可以继续用 --spring：它们不贴着窗口边，
- * 冲过头也没有边可露。 */
-.page-leave-l {
-  animation: leaveL 0.42s var(--ease-nav) forwards;
-}
-.page-enter-l {
-  animation: enterL 0.42s var(--ease-nav);
-}
-.page-leave-r {
-  animation: leaveR 0.42s var(--ease-nav) forwards;
-}
-.page-enter-r {
-  animation: enterR 0.42s var(--ease-nav);
-}
-
-.seg-thumb {
-  will-change: transform, width;
-}
-.seg-glass {
-  background: var(--seg-thumb);
-  -webkit-backdrop-filter: blur(10px) saturate(1.5);
-  backdrop-filter: blur(10px) saturate(1.5);
-  box-shadow:
-    var(--glass),
-    inset 0 1px 0.5px rgba(255, 255, 255, 0.55),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.04);
-  will-change: transform;
-}
-.seg-lens {
-  will-change: transform, left;
-}
-
-/* 邀请式提示的入场：从底下托上来，带一点点回弹。
-   页面上别的东西都是静的，一个动起来的东西自然会被看到 —— 靠这个吸引注意，
-   不靠颜色。放一次就停，不循环、不闪。 */
-/* 从广场置顶点下来之后，落点那条投放亮一下。
-   亮的是一圈线和一层很淡的底，不是强调色铺满 —— 这是「你点的是这条」，
-   不是警告。1.6 秒后组件自己把 class 摘掉，不会留成选中态。 */
-@keyframes spotlight {
-  0% {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
-  }
-  70% {
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
-  }
-  100% {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px transparent;
-  }
-}
-.spotlight {
-  animation: spotlight 1.6s var(--ease) both;
-}
-
-/* 提示框入场。很短很轻 —— 提示是用户移过去就要看到的东西，
-   动画只是让它「浮上来」而不是「啪一下出现」，不能变成等待。 */
-@keyframes tooltip-in {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.tooltip-in {
-  animation: tooltip-in 0.2s var(--ease) both;
-}
-
-@keyframes nudge-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.nudge-in {
-  animation: nudge-in 0.44s var(--spring) both;
 }
 
 /* 退场。时长与 hooks/useExit 的 EXIT_MS 一致（--out-ms），放完组件才卸掉。
@@ -587,88 +188,7 @@ input[type="checkbox"]:disabled {
   animation: pager-ghost 0.42s var(--ease-nav) both;
 }
 
-@keyframes tooltip-out {
-  to {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-}
-.tooltip-out {
-  animation: tooltip-out var(--out-ms) var(--ease-soft) forwards;
-}
-
-/* 弹窗。底色淡入，面板从略低、略小的位置浮上来；关闭时反过来。
-   面板是 .modal-scrim 的直接子元素，样式由各弹窗自己定。 */
-@keyframes scrim-in {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes scrim-out {
-  to {
-    opacity: 0;
-  }
-}
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.96);
-  }
-}
-@keyframes panel-out {
-  to {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-}
-.modal-scrim {
-  animation: scrim-in 0.26s var(--ease-soft) both;
-}
-.modal-scrim > * {
-  animation: panel-in 0.44s var(--spring-gentle) both;
-}
-.modal-scrim[data-leaving] {
-  animation: scrim-out var(--out-ms) var(--ease-soft) forwards;
-  pointer-events: none;
-}
-.modal-scrim[data-leaving] > * {
-  animation: panel-out var(--out-ms) var(--ease-soft) forwards;
-}
-
-/* 展开区：行高在 0 与内容高度之间过渡。 */
-.collapse-area {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows 0.28s var(--ease),
-    opacity 0.2s var(--ease);
-}
-.collapse-area[data-open] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-
 /* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */
-@keyframes menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-  }
-}
-@keyframes menu-out {
-  to {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-  }
-}
-.menu-in {
-  animation: menu-in 0.16s var(--ease) both;
-}
-.menu-out {
-  animation: menu-out var(--out-ms) var(--ease-soft) forwards;
-  pointer-events: none;
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -691,97 +211,6 @@ input[type="checkbox"]:disabled {
   background: transparent;
 }
 
-/* 设了背景图时的协调层。
- *
- * `data-wallpaper` 和下面两个变量由 lib/appearance 写：`--wp-tint` 是那张图的
- * 平均色，`--wp-detail` 是它的细节量（0–1，相邻像素平均差换算来的）。没设图的
- * 时候这一段整块不生效，界面和以前一个像素都不差。
- *
- * 两件事，全部按图自适应，一个新开关都不加：
- *
- * 1. **整块内容区盖一层磨砂，浓度跟着细节量走。** 一张灰调的雾景，磨砂可以很薄，
- *    图透出来才好看；一张满是花纹的图，磨砂必须够厚，不然字压上去读不出来。
- *
- *    盖的是 `#root` 整块，不是逐个卡片。界面里那五十多处「4% 的墨色」小色块
- *    （首页的工具格、分段控件、列表行）压在照片上等于不存在，一个个去调既改不
- *    干净又会把弹窗一起改坏。整块盖一层之后，它们各自和底的对比关系原封不动，
- *    透出来的是同一层被磨过的图 —— macOS 的做法也是一整块毛玻璃，不是一片片。
- *
- * 2. **底色、卡片色、描边各往图的平均色偏一点，卡片实度抬一档。** 整屏于是像
- *    一个房间里的东西，而不是照片上摆了几张纸。偏得很轻 —— 再多浅色就发浑。
- *
- * 磨砂和不透明度那两根滑杆这里一个都不碰。那是用户明确表达过的意思，拿一个
- * 推断去覆盖它就是「撕裂自动降 f0」犯过的错。他把磨砂拖到 0，这里的应对是把
- * 这层磨砂加厚到字能看清，不是偷偷把他的滑杆拧回去。
- *
- * **校准记录（26.8.28，三张真实壁纸）。** 下面那些数不是拍的，是拿三张风格
- * 差得很远的插画量出来再对着屏幕调的。改这几个端点之前先看这张表：
- *
- * | 图         | 亮度 | 细节 | 浅色磨砂 / 卡片 | 深色磨砂 / 卡片 |
- * |------------|------|------|-----------------|-----------------|
- * | 城市蓝天   | 0.61 | 0.44 | 58% / 78%       | 72% / 14%       |
- * | 雨夜       | 0.36 | 0.39 | 65% / 72%       | 59% / 30%       |
- * | 车厢近白   | 0.81 | 0.33 | 49% / 86%       | 69% / 14%       |
- *
- * 三张图的细节量都落在 0.33–0.44 —— 真实插画不会像棋盘格那样把这根轴顶满，
- * 所以光靠细节量，磨砂只在 63–67% 之间动，几乎等于没有自适应。**真正拉开
- * 差距的是冲突度**：车厢那张亮度 0.81，在浅色主题下和底色几乎同值，卡片
- * 原本和底分不出来、图也透不出来；加了冲突度之后磨砂降到 49%（图看得见了）、
- * 卡片抬到 86%（卡片分得出来了）。雨夜那张在深色主题下是同一回事。 */
-:root[data-wallpaper] {
-  --bg: color-mix(in srgb, var(--bg-base) 90%, var(--wp-tint, transparent));
-  /* 图和主题底色撞亮度的时候，卡片要主动离开底色，不然一屏看下来分不清
-     哪些项是一组的（26.8.28 拿三张真图试出来的，最惨的一张卡片和底几乎同值）。 */
-  --wp-group-a: calc(
-    var(--wp-group-a0) + (var(--wp-group-a1) - var(--wp-group-a0)) * var(--wp-clash)
-  );
-  --group: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--group-ink) 92%, var(--wp-tint, transparent))
-      calc(var(--wp-group-a) * 100%),
-    transparent
-  );
-  --hairline: color-mix(in srgb, var(--ink) 20%, transparent);
-  --line: color-mix(in srgb, var(--ink) 26%, transparent);
-  /* 次要文字各抬一档。这就是那条待办问的「要不要让组件更浓重」的正确版本：
-     浓的是**压在半透明底上的次要文字**，不是字号字重，也不是把每个控件描粗。
-     用 --ink 的透明度写，不写死颜色 —— 深浅两套主题的 --ink 本来就是反的，
-     写死会让其中一套彻底失效。今天的实际值约 72 / 55 / 44，这里各抬几个点。 */
-  --ink-muted: color-mix(in srgb, var(--ink) 78%, transparent);
-  --help: color-mix(in srgb, var(--ink) 62%, transparent);
-  --meta: color-mix(in srgb, var(--ink) 52%, transparent);
-}
-
-:root[data-wallpaper] #root {
-  background: color-mix(
-    in srgb,
-    var(--bg)
-      calc(
-        (
-            var(--wp-scrim-min) +
-              (var(--wp-scrim-max) - var(--wp-scrim-min)) * var(--wp-detail, 0.5)
-          ) * (1 - 0.35 * var(--wp-clash)) * 100%
-      ),
-    transparent
-  );
-}
-
-/* Wallpaper layer. Set by App from app_config; absent means no background. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image: var(--wp-image, none);
-  background-size: cover;
-  background-position: center;
-  filter: blur(var(--wp-blur, 0px));
-  opacity: var(--wp-opacity, 0);
-  transform: scale(1.06); /* hide blur edges */
-}
-
-
 /* 新手引导：换步时旧的一步不留，新的一步从去向那一侧滑进来，按临界阻尼收住；
    --dir 为 1 表示往后翻。收起后的小按钮从右边浮上来。 */
 @keyframes guide-step-in {
@@ -795,40 +224,11 @@ body::before {
 }
 .guide-pill { animation: guide-pill-in 0.46s var(--spring-gentle) both; }
 
-/* 页内切换（components/Motion.tsx）：旧内容很快淡出、朝来处让一小步；新内容从去向
-   那一侧浮上来，按临界阻尼收住。方向由 --swap-dx、--swap-ox 给出。 */
-@keyframes swap-in {
-  from { opacity: 0; transform: translate3d(var(--swap-dx, 0px), 8px, 0); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes swap-out {
-  from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translate3d(var(--swap-ox, 0px), 0, 0); }
-}
-.swap-in { animation: swap-in 0.46s var(--spring-settle) 0.04s both; }
-.swap-out { animation: swap-out 0.18s var(--ease-out-quick) both; }
-
-/* 列表与网格的条目依次浮现，延迟由 stagger() 给出。 */
-@keyframes rise {
-  from { opacity: 0; transform: translate3d(0, 10px, 0); }
-  to { opacity: 1; transform: none; }
-}
-.rise { animation: rise 0.5s var(--spring-settle) both; }
-
 /* WebKit（macOS 上的 WebView）在带位移的动画放完时会把元素撤回页面重画，看起来像到位后闪一下。
    入场与退场的元素留在自己的图层上，放完不撤。 */
 .swap-in, .swap-out, .rise { will-change: transform, opacity; }
 
-/* 音频列表里正在输出到语音的那一条：三根小竖条轮流起伏。 */
-@keyframes eq-bar {
-  0%, 100% { height: 3px; }
-  50% { height: 12px; }
-}
-.eq-bar { height: 3px; animation: eq-bar 0.9s ease-in-out infinite; }
-
 /* 环形图的各段从零长到比例。 */
-@keyframes ring-grow { from { stroke-dasharray: 0 999; } }
-.ring-seg { animation: ring-grow 0.9s var(--spring-settle) both; }
 @media (prefers-reduced-motion: reduce) {
   .eq-bar { animation: none; height: 8px; }
 }

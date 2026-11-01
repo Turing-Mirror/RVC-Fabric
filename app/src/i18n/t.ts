@@ -7,10 +7,13 @@
 import { fallbackPack, interpolate, lookup, packOf } from "./dict";
 import { DEFAULT_LOCALE, type LocaleCode } from "./types";
 
+import { setTLocale as setSharedLocale } from "trm-ui";
+
 let _locale: LocaleCode = DEFAULT_LOCALE;
 
 export function setTLocale(code: LocaleCode) {
   _locale = code;
+  setSharedLocale(code);
 }
 
 export function getTLocale(): LocaleCode {

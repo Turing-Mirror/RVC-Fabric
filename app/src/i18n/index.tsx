@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { I18nScope } from "trm-ui";
 import {
   ensurePack,
   fallbackPack,
@@ -216,7 +217,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   // like the model was reloading — language is not an engine restart.
   // Labels refresh via context (useI18n) + setTLocale for static t() callers;
   // App (and other roots) must subscribe with useI18n so they re-render.
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={value}><I18nScope value={value}>{children}</I18nScope></Ctx.Provider>;
 }
 
 export function useI18n(): I18nCtx {

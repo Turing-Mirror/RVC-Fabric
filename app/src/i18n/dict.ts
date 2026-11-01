@@ -48,48 +48,4 @@ export function fallbackPack(): Dict {
   return PACKS["zh-CN"]!;
 }
 
-/** Dot-path lookup: "dock.start" → packs.dock.start ; "s.ab12" → packs.s.ab12 */
-export function lookup(dict: Dict, key: string): unknown {
-  const parts = key.split(".").filter(Boolean);
-  if (!parts.length) return undefined;
-  let cur: unknown = dict;
-  for (let i = 0; i < parts.length; i++) {
-    if (cur == null || typeof cur !== "object") return undefined;
-    const part = parts[i];
-    const obj = cur as Dict;
-    if (part in obj) {
-      cur = obj[part];
-      continue;
-    }
-    const rest = parts.slice(i).join(".");
-    return obj[rest];
-  }
-  return cur;
-}
-
-/**
- * Interpolate `{name}` placeholders.
- * Also accepts legacy `${name}` from older catalogs, and bare `{}` slots filled
- * left-to-right from `v0`, `v1`, … — the same convention the Rust side's
- * `te`/`t2`/`tn` already handles, so one pack can serve both sides.
- */
-export function interpolate(
-  template: string,
-  vars?: Record<string, string | number | undefined | null>,
-): string {
-  if (!vars) return template;
-  let slot = 0;
-  return template
-    .replace(/\$\{(\w+)\}/g, (_, k: string) => {
-      const v = vars[k];
-      return v == null ? "" : String(v);
-    })
-    .replace(/\{(\w+)\}/g, (_, k: string) => {
-      const v = vars[k];
-      return v == null ? "" : String(v);
-    })
-    .replace(/\{\}/g, () => {
-      const v = vars[`v${slot++}`];
-      return v == null ? "{}" : String(v);
-    });
-}
+export { lookup, interpolate } from "trm-ui";

@@ -63,8 +63,9 @@ export function MoreMenuPopup({
   // 打开时把焦点放进菜单第一个可用项：键盘打开菜单后方向键直接可用，Esc 也能收到。
   // 全禁用时不聚焦任何项，Esc/Tab 照常生效。
   useEffect(() => {
+    if (leaving) return;
     ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]:not([disabled])")[0]?.focus();
-  }, []);
+  }, [leaving]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     // Esc/Tab 先判：哪怕所有项都禁用，菜单也得能关。

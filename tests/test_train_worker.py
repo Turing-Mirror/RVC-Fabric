@@ -91,15 +91,18 @@ class NormalizeTests(unittest.TestCase):
         self.assertFalse(tw.normalize({"exp": "x", "device": "cpu"})["is_half"])
 
 
-class TrainLogTailTests(unittest.TestCase):
+class TrainLogParsingTests(unittest.TestCase):
     """train.py 的 logger 只挂了 FileHandler —— epoch 行不会出现在 stdout 上，
     只能从 train.log 里读。这段解析错了进度条就永远停在 0%。"""
 
     def _tail_once(self, text: str, total=100):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "train.log"
-            p.write_text(text, encoding="utf-8")
+            p.write_text("", encoding="utf-8")
             t = tw.TrainLogTail(p, total, 4, 5)
+            # 只追构造后的新日志；已有内容属于上一轮，不能作为本轮进度。
+            with p.open("a", encoding="utf-8") as log:
+                log.write(text)
             with _Capture() as cap:
                 t._scan()
             return cap.lines()
@@ -132,10 +135,11 @@ class TrainLogTailTests(unittest.TestCase):
 
     def test_a_missing_log_is_not_an_error(self):
         # 训练刚起来的头几秒 train.log 还不存在，轮询不该炸。
-        t = tw.TrainLogTail(Path("/definitely/not/here.log"), 10, 4, 5)
-        with _Capture() as cap:
-            t._scan()
-        self.assertEqual(cap.lines(), [])
+        with tempfile.TemporaryDirectory() as td:
+            t = tw.TrainLogTail(Path(td) / "train.log", 10, 4, 5)
+            with _Capture() as cap:
+                t._scan()
+            self.assertEqual(cap.lines(), [])
 
 
 class WatcherJoinTests(unittest.TestCase):

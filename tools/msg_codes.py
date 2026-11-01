@@ -264,7 +264,7 @@ _FALLBACK_ZH: dict[str, str] = {
     ENGINE_DSP_STARTING: "正在启动 DSP 变声…",
     ENGINE_MISSING_GUI: "安装不完整：缺少引擎主程序",
     ENGINE_CRASH_LOAD: "引擎加载时崩溃，详见日志",
-    ENGINE_FILES_CORRUPT: "引擎程序文件损坏（{files}）。重新运行安装包覆盖安装即可修复，音色与运行环境会保留",
+    ENGINE_FILES_CORRUPT: "引擎程序文件损坏（{files}）。重新运行安装包覆盖安装即可修复。",
     ENGINE_READY: "引擎就绪",
     ENGINE_IDLE: "待命",
     ENGINE_STOPPED: "已停止",

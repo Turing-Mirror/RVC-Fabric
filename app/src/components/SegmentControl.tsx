@@ -80,6 +80,24 @@ export function SegmentControl<T extends string>({ options, value, onChange, cla
   const drag = useRef<{ id: number; moved: boolean; px: number } | null>(null);
   const suppressClick = useRef(false);
 
+  const finishPointer = useCallback((e: Pick<PointerEvent, "pointerId" | "timeStamp">) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    // 拖过之后紧接着的 click 不算点击；根节点与 window 收到同一事件只收尾一次。
+    suppressClick.current = d.moved;
+    sim.current?.release(e.timeStamp);
+  }, []);
+  useEffect(() => {
+    // 移动超过阈值前还没捕获指针，直接移出控件时也必须接住松手。
+    window.addEventListener("pointerup", finishPointer);
+    window.addEventListener("pointercancel", finishPointer);
+    return () => {
+      window.removeEventListener("pointerup", finishPointer);
+      window.removeEventListener("pointercancel", finishPointer);
+    };
+  }, [finishPointer]);
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const s = sim.current;
     const thumb = thumbRef.current;
@@ -97,15 +115,6 @@ export function SegmentControl<T extends string>({ options, value, onChange, cla
     d.moved = true;
     sim.current?.move(e.clientX, e.timeStamp);
   };
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d || d.id !== e.pointerId) return;
-    drag.current = null;
-    // 拖过之后紧接着的 click 不算点击
-    suppressClick.current = d.moved;
-    sim.current?.release(e.timeStamp);
-  };
-
   const label = (opt: SegmentOption<T>) => <span className="block text-[13px] px-4 py-1.5 whitespace-nowrap">{opt.label}</span>;
 
   return (
@@ -114,8 +123,9 @@ export function SegmentControl<T extends string>({ options, value, onChange, cla
       role={role}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={finishPointer}
+      onPointerCancel={finishPointer}
+      onLostPointerCapture={finishPointer}
       className={[
         // inline-flex + w-fit：块级的 flex 容器会撑满父元素，于是字变短之后
         // 药丸还是原来那么长（四个字的标签，条子却按八个字的宽度画）。

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+import json
 import os
 import sys
 import time
@@ -405,11 +406,13 @@ class ShellContractTests(unittest.TestCase):
     def test_ui_does_not_say_infer_on_dsp(self):
         src = (ROOT / "app" / "src" / "lib" / "engine.ts").read_text(encoding="utf-8")
         self.assertIn("delayLineDsp", src)
-        zh = (ROOT / "app" / "i18n" / "locales" / "zh-CN.json").read_text(
+        zh = json.loads((ROOT / "app" / "i18n" / "locales" / "zh-CN.json").read_text(
             encoding="utf-8"
-        )
-        self.assertIn('"delayLineDsp"', zh)
-        self.assertIn("处理 {infer}", zh)
+        ))["dock"]["delayLineDsp"]
+        self.assertIn("处理", zh)
+        self.assertIn("{infer}", zh)
+        self.assertIn("{delay}", zh)
+        self.assertNotIn("推理", zh)
 
     def test_set_hot_does_not_wipe_last_model(self):
         rust = (ROOT / "app" / "src-tauri" / "src" / "lib.rs").read_text(

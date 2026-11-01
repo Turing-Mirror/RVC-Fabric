@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from typing import NamedTuple, Optional
 
-APP_VERSION: str = "1.7.1"
+APP_VERSION: str = "1.7.2"
 APP_CHANNEL: str = "stable"
 
 # After this many hotfixes on one base, prefer shipping X.Y.(Z+1).

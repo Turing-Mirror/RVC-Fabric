@@ -230,8 +230,8 @@ function ToolWinBtn({
  *
  * 以前这三块是主窗口上的模态卡片，自己带 `max-w` 和圆角阴影 —— 那是「浮在
  * 页面上的一张纸」该有的样子。现在它们就是整扇窗口的内容，再套一层卡片等于
- * 窗口里画了个窗口，所以只留内边距和一个读起来舒服的最大宽度。
+ * 窗口里画了个窗口，所以只留内边距，正文和底部操作栏一起随窗口伸展。
  */
 export function ToolBody({ children }: { children: ReactNode }) {
-  return <div className="px-6 py-5 max-w-[720px]">{children}</div>;
+  return <div className="w-full min-w-0 px-6 py-5">{children}</div>;
 }

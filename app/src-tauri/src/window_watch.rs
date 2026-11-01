@@ -348,12 +348,12 @@ fn sync_maximized_frame(win: &WebviewWindow) {
 /// 真正改提案尺寸要在 `WM_WINDOWPOSCHANGING`：这时系统还没把新尺寸写进
 /// `rcNormalPosition`，还原矩形仍是最大化前的窗口。
 #[cfg(windows)]
-fn install_work_area_minmax(hwnd: windows_sys::Win32::Foundation::HWND) {
+fn install_work_area_minmax(hwnd: windows_sys::Win32::Foundation::HWND) -> bool {
     use windows_sys::Win32::UI::Shell::SetWindowSubclass;
 
     // SAFETY: 本窗 HWND；子类过程只改最大化相关消息，其余交给 DefSubclassProc。
     unsafe {
-        let _ = SetWindowSubclass(hwnd, Some(work_area_subclass_proc), 0x5246_4357, 0);
+        SetWindowSubclass(hwnd, Some(work_area_subclass_proc), 0x5246_4357, 0) != 0
     }
 }
 
@@ -491,6 +491,17 @@ unsafe extern "system" fn work_area_subclass_proc(
 /// 那时候保持直角，只把投影要回来，见 `extend_frame_for_shadow`。
 #[cfg(windows)]
 pub fn round_corners(win: &WebviewWindow) {
+    // tools_open 是 async command，建窗返回后仍在 tokio 线程上。
+    // SetWindowSubclass 只能在 HWND 所属线程调用；跨线程会失败，导致工具窗
+    // 没有工作区约束，还会露出本应由 WM_NCCALCSIZE 去掉的非客户区。
+    let w = win.clone();
+    if let Err(error) = win.run_on_main_thread(move || round_corners_on_main_thread(&w)) {
+        logging::shell_log!("窗口边框初始化派发失败（{}）：{error}", win.label());
+    }
+}
+
+#[cfg(windows)]
+fn round_corners_on_main_thread(win: &WebviewWindow) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
@@ -501,12 +512,15 @@ pub fn round_corners(win: &WebviewWindow) {
         return;
     };
     let hwnd = hwnd.0 as HWND;
+    // 先接管非客户区消息，再改样式，避免中途按系统标题栏计算客户区。
+    if !install_work_area_minmax(hwnd) {
+        logging::shell_log!("窗口工作区回调安装失败（{}）", win.label());
+        return;
+    }
     // 先关系统描边色，避免一启动就有 1px Aero 框。
     hide_dwm_border_color(hwnd);
     // 厚框只当拖边命中区，最大化时也不摘。
     ensure_thickframe(hwnd);
-    // 最大化矩形在落地前钳到工作区（无边框默认会盖任务栏）。
-    install_work_area_minmax(hwnd);
     let pref = DWMWCP_ROUND;
     // SAFETY: hwnd 来自 Tauri 刚建好的窗口；传的是一个 i32 大小的枚举值，
     // 长度如实给出。属性不支持时函数只是返回错误，不会写回任何东西。
@@ -689,6 +703,10 @@ fn opt<T: std::fmt::Debug, E>(r: &Result<T, E>) -> String {
         Err(_) => "?".into(),
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "window_watch_tests.rs"]
+mod windows_tests;
 
 #[cfg(test)]
 mod tests {

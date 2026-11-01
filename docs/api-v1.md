@@ -54,3 +54,9 @@ Manifest 同时发布原前端入口和通用 Host 协议，供原生容器加�
 从 app 运行 npm ci、npm run build，再在 app/src-tauri 运行 cargo build --bins -j 1。Tauri 根据 Cargo 的 bin 列表打包主程序及 MCP；便携打包脚本也复制 MCP 程序。没有增加正式版的账号入口。
 
 可使用协议仓库的 examples/mcp-smoke.mjs 验证初始化、能力列表、真实资源及任务查询。音频验收需要本机运行环境和模型；构建通过不代替实际音频试听。
+
+### 前端运行接口适配
+
+Vite 使用固定版本的 `trm-app-protocol/vite` 插件处理 Tauri API 模块。页面存在通用 Host 连接时，调用通过该连接转发；普通独立窗口继续调用本软件的 Tauri 接口。适配不覆盖容器中已有的只读全局对象。
+
+修改前端配置后应重新构建并同步实际运行目录中的 `frontend`。验证包含模型列表、运行状态、页面切换和工具入口；不能仅凭构建成功判断集成可用。

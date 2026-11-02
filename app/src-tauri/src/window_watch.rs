@@ -38,6 +38,22 @@ fn size_overflows_work(cx: i32, cy: i32, work_w: i32, work_h: i32, mon_w: i32, m
     (cx + 2 >= mon_w && cy + 2 >= mon_h) || cx > work_w + 2 || cy > work_h + 2
 }
 
+/// Maximized frames may extend outside the monitor; only the visible area is content.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn maximized_client_rect(proposed: Rect, work: Rect) -> Rect {
+    if !proposed.intersects(&work) {
+        return proposed;
+    }
+    let x = proposed.x.max(work.x);
+    let y = proposed.y.max(work.y);
+    Rect {
+        x,
+        y,
+        w: (proposed.x + proposed.w).min(work.x + work.w) - x,
+        h: (proposed.y + proposed.h).min(work.y + work.h) - y,
+    }
+}
+
 impl Rect {
     fn intersects(&self, o: &Rect) -> bool {
         self.x < o.x + o.w && self.x + self.w > o.x && self.y < o.y + o.h && self.y + self.h > o.y
@@ -238,7 +254,7 @@ fn ensure_thickframe(hwnd: windows_sys::Win32::Foundation::HWND) {
 ///
 /// 系统给窗口画投影看的是样式里有没有 `WS_CAPTION`。加上它，DWM 就照常画
 /// 投影、照常做最小化/还原动画；标题栏本身不会露出来，因为
-/// `work_area_subclass_proc` 里的 `WM_NCCALCSIZE` 一律把客户区撑满整个窗口。
+/// `work_area_subclass_proc` 里的 `WM_NCCALCSIZE` 去掉标题栏，并在最大化时排除屏幕外的边框。
 /// VS Code、Windows Terminal 走的都是这条路。
 ///
 /// `set_shadow(false)` 那几处一个都不用动 —— 投影不再靠它，它继续负责挡住
@@ -380,6 +396,19 @@ fn monitor_work_and_full(
 }
 
 #[cfg(windows)]
+fn proposed_monitor_work(rect: &windows_sys::Win32::Foundation::RECT) -> Option<Rect> {
+    use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromRect, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+    unsafe {
+        let monitor = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST);
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(monitor, &mut info) == 0 { return None; }
+        let work = info.rcWork;
+        Some(Rect { x: work.left, y: work.top, w: work.right - work.left, h: work.bottom - work.top })
+    }
+}
+
+#[cfg(windows)]
 unsafe extern "system" fn work_area_subclass_proc(
     hwnd: windows_sys::Win32::Foundation::HWND,
     msg: u32,
@@ -391,7 +420,7 @@ unsafe extern "system" fn work_area_subclass_proc(
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::Shell::DefSubclassProc;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowRect, MINMAXINFO, WINDOWPOS, SWP_NOMOVE, SWP_NOSIZE,
+        GetWindowRect, IsZoomed, MINMAXINFO, NCCALCSIZE_PARAMS, WINDOWPOS, SWP_NOMOVE, SWP_NOSIZE,
     };
 
     const WM_GETMINMAXINFO: u32 = 0x0024;
@@ -463,17 +492,23 @@ unsafe extern "system" fn work_area_subclass_proc(
         return ret;
     }
 
-    if msg == WM_NCCALCSIZE && wparam != 0 {
-        // 客户区 = 整个窗口矩形，一律如此，不分最大化。
-        //
-        // 这一行是整套无边框窗口的地基，之前只在最大化时生效，剩下的情况
-        // 交给 DefSubclassProc → tao，而 tao 会按「有边框」把客户区四周内缩
-        // 一圈（Win10 上左右下各 8px）。那圈非客户区 WebView 不铺、没人画，
-        // 窗口一移动系统重画框架就把旧像素钉在左缘 —— 「拖动后出现、再也不
-        // 消失的竖带」。以前是另起一个线程、等 WebView2 渲染器就绪、再翻
-        // set_shadow 标志去反推同一个结果；直接在这里拦下就没那回事了。
-        //
-        // 不调 DefSubclassProc 是有意的：只要它跑了，tao 就会内缩。
+    if msg == WM_NCCALCSIZE && wparam != 0 && lparam != 0 {
+        // Normal windows keep their borderless client area. For maximized windows,
+        // Windows can leave the resize frame outside the work area (for example -8,-8).
+        // Returning that whole rectangle as content clips the page's edge spacing.
+        // Correct the client rectangle here, before WebView receives its size; do not
+        // move the window after maximizing or add product-specific CSS padding.
+        if IsZoomed(hwnd) != 0 {
+            let rect = &mut (*(lparam as *mut NCCALCSIZE_PARAMS)).rgrc[0];
+            if let Some(work) = proposed_monitor_work(rect) {
+                let client = maximized_client_rect(Rect { x: rect.left, y: rect.top, w: rect.right - rect.left, h: rect.bottom - rect.top }, work);
+                rect.left = client.x;
+                rect.top = client.y;
+                rect.right = client.x + client.w;
+                rect.bottom = client.y + client.h;
+            }
+        }
+        // Do not ask the default procedure to add a caption or normal-window inset.
         return 0;
     }
 
@@ -574,8 +609,8 @@ fn extend_frame_for_shadow(hwnd: windows_sys::Win32::Foundation::HWND) {
 // 只为了达成一件事：客户区铺满整个窗口，别留一圈没人画的非客户区（Win10 上
 // 那圈会变成「拖动后出现、再也不消失的左缘竖带」）。
 //
-// 现在 `work_area_subclass_proc` 的 `WM_NCCALCSIZE` 一律返回 0，客户区从建窗
-// 第一帧起就是整个窗口矩形，上面那一串全是多余的。别再写回来 —— 它引入过
+// `WM_NCCALCSIZE` 直接确定客户区：普通窗口铺满，最大化只用工作区内的部分。
+// 上面那一串异步补救全是多余的。别再写回来 —— 它引入过
 // 「工具窗口永久白屏」（建窗现场跟 WebView2 跨进程同步等待），代价比它治的
 // 病还大。
 
@@ -716,6 +751,30 @@ mod tests {
     const MAIN: Rect = Rect { x: 0, y: 0, w: 1920, h: 1080 };
     const MAIN_WORK: Rect = Rect { x: 0, y: 0, w: 1920, h: 1040 };
     const LEFT: Rect = Rect { x: -1920, y: 7, w: 1920, h: 1080 };
+
+    #[test]
+    fn maximized_client_excludes_the_hidden_resize_frame() {
+        let proposed = Rect { x: -8, y: -8, w: 1936, h: 1056 };
+        assert_eq!(maximized_client_rect(proposed, MAIN_WORK), MAIN_WORK);
+        assert_eq!(maximized_client_rect(MAIN_WORK, MAIN_WORK), MAIN_WORK);
+    }
+
+    #[test]
+    fn maximized_client_uses_physical_work_bounds_at_any_scale() {
+        let work = Rect { x: 0, y: 0, w: 3840, h: 2080 };
+        for border in [8, 12, 16, 24] {
+            let proposed = Rect { x: -border, y: -border, w: work.w + border * 2, h: work.h + border * 2 };
+            assert_eq!(maximized_client_rect(proposed, work), work);
+        }
+    }
+
+    #[test]
+    fn maximized_client_respects_negative_monitors_and_taskbar_edges() {
+        for work in [Rect { x: -1920, y: 47, w: 1920, h: 1040 }, Rect { x: -1880, y: 7, w: 1880, h: 1080 }] {
+            let proposed = Rect { x: -1928, y: -1, w: 1936, h: 1096 };
+            assert_eq!(maximized_client_rect(proposed, work), work);
+        }
+    }
 
     #[test]
     fn center_matches_what_tauri_computed() {

@@ -101,7 +101,8 @@ describe("Toggle 里的小问号", () => {
     pressKey(btn, "Escape");
     await tick();
     expect(tooltipEl()).toBeNull();
-    act(() => btn.focus());
+    expect(document.activeElement).toBe(btn);
+    act(() => btn.click());
     await tick();
     expect(tooltipEl()).not.toBeNull();
   });

@@ -25,6 +25,7 @@ type Props = {
   onToggleRun: () => void;
   statusTitle?: string;
   statusSub?: string;
+  pairedMobile?: string;
   /** 0–99 while the engine is loading or switching; null to hide the bar. */
   progress?: number | null;
   /** True while starting or switching without a numeric percent yet. */
@@ -63,6 +64,7 @@ export function Dock({
   onToggleRun,
   statusTitle,
   statusSub,
+  pairedMobile,
   progress = null,
   loading = false,
   step = null,
@@ -202,6 +204,7 @@ export function Dock({
           <div className="text-[13px] font-semibold text-[var(--ink-muted)]">
             {title}
           </div>
+          {pairedMobile && <div className="text-[11.5px] text-[var(--meta)] mt-0.5">{pairedMobile}</div>}
           {/* 报错整句会走这里（「引擎进程被系统终止，退出码 …」之类），不截住
               就会把底栏撑成三行，把音高共鸣两条挤扁。跟上面音色简介同一套
               处理：一行、省略号、完整内容挂 title。 */}

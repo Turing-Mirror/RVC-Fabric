@@ -41,6 +41,7 @@ mod link_check;
 mod local_api;
 mod logging;
 mod mic;
+mod mobile;
 mod mirrors;
 pub mod paths;
 pub mod plaza;
@@ -1230,17 +1231,23 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
     // The cold start is 20–40s (torch/CUDA) and the wait allows up to 180s.
     // Run it off the IPC thread or the window is frozen for that whole time —
     // no status updates, no way to press 停止.
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut audio_gate = audio_voice::begin_engine_start(&root)?;
+    let mobile_start = mobile::prepare_start()?;
+    let is_mobile = mobile_start.is_some();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut audio_gate = if mobile_start.is_none() { Some(audio_voice::begin_engine_start(&root)?) } else { None };
         // 重新把 app_config 刷进 inuse 再启动。app_config 才是选中音色的权威，
         // 而 worker 冷启动只认 inuse 那个文件。「其他」页强制结束引擎之后，
         // 新起的 worker 就是从这个文件里读模型 —— 它但凡漂了一点，用户看到的
         // 就是「引擎错误：请选择pth文件」，而唯一的解法是回去重新点一次音色，
         // 也就是手动干这里该干的事。
-        let out = worker::start_vc_with_bridge(&root, audio_gate.descriptor())?;
+        let out = worker::start_vc_with_input(&root, audio_gate.as_ref().and_then(|g|g.descriptor()), mobile_start.as_ref().map(|m|&m.descriptor))?;
         let st = worker::wait_vc_running(&root, 180_000);
+        if mobile_start.as_ref().is_some_and(|start|!mobile::start_current(start)) {
+            let _ = worker::stop_vc(&root, false);
+            return Ok(worker::status_for_ui(&root));
+        }
         if st.get("state").and_then(|v| v.as_str()) == Some("running") {
-            audio_gate.commit();
+            if let Some(gate)=audio_gate.as_mut() { gate.commit(); }
             // 验收身份 = start_vc 冻结进命令的那一份（pth/index 随命令本体
             // 下发给 worker）。启动中途用户再选音色会把配置改走 —— 拿新
             // 配置验收旧命令是假失败，这里只认冻结值。纯 DSP 启动没有音色
@@ -1268,7 +1275,9 @@ async fn engine_start_vc(state: State<'_, Mutex<AppState>>) -> Result<Value, Str
         Ok(st)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    if is_mobile && result.as_ref().map_or(true, |st| st["state"] != "running") { mobile::stop_audio(); }
+    result
 }
 
 #[tauri::command]
@@ -1277,6 +1286,7 @@ async fn engine_stop_vc(
     force: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    mobile::stop_audio();
     let f = force.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
         worker::stop_vc(&root, f)?;
@@ -2017,6 +2027,7 @@ fn ckpt_cancel() {
 #[tauri::command]
 async fn engine_force_kill(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
     let root = root_clone(&state)?;
+    mobile::stop_audio();
     tauri::async_runtime::spawn_blocking(move || {
         // 先把语音转换收掉。
         //
@@ -2896,6 +2907,9 @@ pub fn run() {
             engine_ensure,
             engine_start_worker,
             engine_start_vc,
+            mobile::mobile_status,
+            mobile::mobile_pairing,
+            mobile::mobile_action,
             engine_stop_vc,
             engine_force_kill,
             engine_set_hot,
@@ -3075,6 +3089,9 @@ pub fn run() {
             window_watch::round_corners(&main_window);
             if !local_api::headless() { window_watch::report_and_rescue(&main_window, &crate::i18n::t("s.ad667e5e16")); }
             local_api::start(app.handle(), root.clone()).map_err(std::io::Error::other)?;
+            if let Err(error) = mobile::initialize(app.handle().clone(), root.clone()) {
+                logging::shell_log!("mobile initialization: {error}");
+            }
 
             // A blank window is the one failure the user cannot describe and we
             // cannot see. If the UI never reports back, say so in the log with
@@ -3234,6 +3251,7 @@ pub fn run() {
         .run(|app, event| {
             // 退出时再清一遍，把本会话分离/下载留下的中间文件收掉。
             if let tauri::RunEvent::Exit = event {
+                mobile::shutdown();
                 if let Some(api) = app.try_state::<std::sync::Arc<trm_app_protocol::Service>>() { api.remove_running_record(); }
                 audio_preview::audio_preview_stop();
                 audio_voice::audio_voice_stop();

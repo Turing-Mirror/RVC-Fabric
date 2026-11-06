@@ -1450,9 +1450,10 @@ pub struct StartOutcome {
 }
 
 /// Soft-stop then start (same order as Tk shell before start_vc_remote).
-pub fn start_vc_with_bridge(
+pub fn start_vc_with_input(
     root: &Path,
     bridge: Option<&crate::audio_bus::BridgeDescriptor>,
+    mobile_input: Option<&Value>,
 ) -> Result<StartOutcome, String> {
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
     // 必须在选 worker 之前：dsp_enabled 决定走哪条进程。
@@ -1468,7 +1469,7 @@ pub fn start_vc_with_bridge(
     let keep_rvc_for_dsp = dsp_on
         && worker_kind_of(root) == Some(WorkerKind::Rvc)
         && worker_ready_for_commands(root);
-    let kind = if keep_rvc_for_dsp {
+    let kind = if keep_rvc_for_dsp || mobile_input.is_some() {
         WorkerKind::Rvc
     } else {
         want
@@ -1526,6 +1527,7 @@ pub fn start_vc_with_bridge(
     // worker 听载荷的，于是走纯 DSP，RVC 永远加载不上 —— 这就是「DSP 之后换不
     // 回 RVC，要反复切模型甚至重启」。
     let mut payload = dsp_command_fields(&cfg);
+    if let Some(input)=mobile_input { payload.insert("mobile_input".into(), input.clone()); }
     if let Some(bridge) = bridge {
         payload.insert("pcm_bridge_name".into(), json!(bridge.name));
         payload.insert("pcm_bridge_epoch".into(), json!(bridge.epoch));

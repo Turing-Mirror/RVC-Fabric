@@ -30,8 +30,19 @@ class AudioToolsPayload(unittest.TestCase):
             weight = root / "assets/hubert/hubert_base.pt"
             weight.parent.mkdir(parents=True)
             weight.write_bytes(b"weight")
+            personal = root / "assets/weights/private.pth"
+            personal.parent.mkdir(parents=True)
+            personal.write_bytes(b"personal")
+            separation = root / "assets/pymss/model/model.pth"
+            separation.parent.mkdir(parents=True)
+            separation.write_bytes(b"downloaded")
+            settings = separation.with_suffix(".yaml")
+            settings.write_text("sample_rate: 48000")
             build_setup.strip_heavy_from_payload(root)
             self.assertFalse(weight.exists())
+            self.assertFalse(personal.exists())
+            self.assertFalse(separation.exists())
+            self.assertTrue(settings.exists())
             for tool in TOOLS:
                 self.assertFalse((root / tool).exists())
 

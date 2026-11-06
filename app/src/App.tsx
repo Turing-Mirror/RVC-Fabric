@@ -37,6 +37,7 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useActiveVoiceReconcile } from "./hooks/useActiveVoice";
 import { useEngine } from "./hooks/useEngine";
+import { useMobile } from "./hooks/useMobile";
 import { useSlowDiskHint } from "./hooks/useSlowDiskHint";
 import { useModalKeys } from "./hooks/useModalKeys";
 import { usePlaza } from "./hooks/usePlaza";
@@ -253,6 +254,7 @@ export default function App() {
   const [showLangGate, setShowLangGate] = useState(false);
 
   const engine = useEngine();
+  const mobile = useMobile();
   const slowDisk = useSlowDiskHint(engine.step);
   // App re-renders on the engine status heartbeat. Keep the latest status
   // available to voice selection without making the selection callback change
@@ -1341,6 +1343,7 @@ export default function App() {
             case "more":
               return (
                 <MorePage
+                  mobile={mobile}
                   status={engine.status}
                   provision={engine.provision}
                   onForceKill={requestForceKill}
@@ -1579,7 +1582,8 @@ export default function App() {
           }
         }}
         profileSummary={profileSummary}
-        statusTitle={engine.title}
+        statusTitle={mobile.status.running && mobile.status.selected ? t("mobile.running") : engine.title}
+        pairedMobile={mobile.status.connected ? t("mobile.paired") : undefined}
         statusSub={engine.sub}
         progress={engine.progress}
         loading={engine.starting && engine.progress == null}

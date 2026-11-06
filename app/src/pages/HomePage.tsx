@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, memo } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { getConfig, onConfigPatch } from "../lib/config";
@@ -42,6 +42,7 @@ type Props = {
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
+const uniqueModels = (models: VoiceModel[]) => Array.from(new Map(models.map(m => [modelKey(m), m])).values());
 
 /** 音色库里的「最近使用」顺序（app_config `recent_models`）。 */
 function recentKeysOf(cat: VoicesCatalog | null): string[] {
@@ -200,7 +201,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
   useI18n();
   // 每次回到首页页面都会重新挂载。先用上一次读到的音色库画出来，不能先按「没有音色」
   // 画一帧：那一帧会闪出推荐音色的三张卡片。
-  const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
+  const [models, setModels] = useState<VoiceModel[]>(() => uniqueModels(peekVoices()?.models ?? []));
   const [recentKeys, setRecentKeys] = useState<string[]>(() => recentKeysOf(peekVoices()));
   /** 音色库读完过一次。没读完之前不知道有没有音色，两种样子都不画。 */
   const [loaded, setLoaded] = useState(() => peekVoices() != null);
@@ -216,17 +217,20 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
   const cardPx = useRecentCardMetrics();
   // 卡片换序的位置过渡（C-04）：数组重排后卡片滑过去，不瞬移。
   const flipRowRef = useFlipRow<HTMLDivElement>();
+  const loadRevision = useRef(0);
   const load = async () => {
+    const revision = ++loadRevision.current;
     try {
       const cat = await listVoices();
-      setModels(cat.models || []);
+      if (revision !== loadRevision.current) return;
+      setModels(uniqueModels(cat.models || []));
       setRecentKeys(recentKeysOf(cat));
       setLoadError("");
     } catch (e) {
-      setModels([]);
+      if (revision !== loadRevision.current) return;
       setLoadError(String(e));
     } finally {
-      setLoaded(true);
+      if (revision === loadRevision.current) setLoaded(true);
     }
   };
   useEffect(() => {
@@ -371,9 +375,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
               const author = displayVoiceAuthor(v);
               return (
                 <button
-                  key={keyOf(v)}
+                  key={modelKey(v)}
                   type="button"
-                  data-flip={keyOf(v)}
+                  data-flip={modelKey(v)}
                   onClick={() => void pick(v)}
                   className="border-0 bg-transparent p-0 text-left cursor-pointer"
                 >

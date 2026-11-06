@@ -292,6 +292,15 @@ pub fn devices() -> Result<Vec<OutputDevice>, String> {
         })
         .collect()
 }
+/// Resolve an explicit request for the current system output once, then pin its ID.
+pub fn default_output_id() -> Result<String, String> {
+    cpal::default_host()
+        .default_output_device()
+        .ok_or("output_device_missing")?
+        .id()
+        .map(|id| id.to_string())
+        .map_err(|e| e.to_string())
+}
 /// 系统此刻的输入与输出设备名称，只用于判断用户选的设备是否还在。
 pub fn device_names() -> Result<(Vec<String>, Vec<String>), String> {
     let host = cpal::default_host();

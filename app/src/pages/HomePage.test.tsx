@@ -108,4 +108,15 @@ describe("首页使用中徽标", () => {
     ).filter((s) => s.textContent === badge);
     expect(badges).toHaveLength(1);
   });
+  it("同目录多个模型使用独立卡片身份，重复目录记录不会分裂卡片", async () => {
+    const models = CATALOG.models.map(m => ({ ...m, dir: "shared" }));
+    tauri.invoke.mockImplementation(cmd => Promise.resolve(cmd === "voices_list"
+      ? { ...CATALOG, models: [...models, models[1]] } : {}));
+    const m = mount(<HomePage currentId="m/b.pth" />);
+    mounts.push(m);
+    await tick(); await tick();
+    const keys = [...m.container.querySelectorAll<HTMLElement>("[data-flip]")].map(n => n.dataset.flip);
+    expect(keys).toEqual(["m/a.pth", "m/b.pth", "m/c.pth"]);
+    expect(new Set(keys).size).toBe(3);
+  });
 });

@@ -22,6 +22,8 @@ import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
 import { scheduleScrollToId, scrollPaneToId } from "../lib/scrollPane";
 import { Leave } from "../components/Presence";
+import { MobileSection } from "../components/MobileSection";
+import type { MobileController } from "../hooks/useMobile";
 import { joinClauses, listText } from "../lib/text";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
@@ -29,6 +31,7 @@ import { joinClauses, listText } from "../lib/text";
 const SHOW_CONSULT = false;
 
 type Props = {
+  mobile?: MobileController;
   status?: EngineStatus;
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
@@ -47,6 +50,7 @@ type Props = {
 };
 
 export function MorePage({
+  mobile,
   status,
   provision,
   onForceKill,
@@ -281,6 +285,11 @@ export function MorePage({
   return (
     <PagePad>
       <PageHead title={t("s.1a26edf94a")} sub={t("s.d0b65d2fd2")} />
+      <Block title={t("overlay.open")}>
+        <Group><ListItem title={t("overlay.open")} desc={t("overlay.openHint")}
+          right={<Btn onClick={openOverlay}>{t("s.65fc81e161")}</Btn>} /></Group>
+      </Block>
+      {mobile && <MobileSection mobile={mobile} />}
       <Block title={t("s.2a4080ad9f")}>
         <Group>
           <ListItem
@@ -406,11 +415,6 @@ export function MorePage({
             title={t("s.6f311c47fe")}
             desc={t("s.ba7bd6e071")}
             right={<Btn onClick={() => openTool("tts")}>{t("s.65fc81e161")}</Btn>}
-          />
-          <ListItem
-            title={t("overlay.open")}
-            desc={t("overlay.openHint")}
-            right={<Btn onClick={openOverlay}>{t("s.65fc81e161")}</Btn>}
           />
           {/* 入口留着（老用户是从这儿找它的），功能已经搬去广场了。 */}
           <ListItem

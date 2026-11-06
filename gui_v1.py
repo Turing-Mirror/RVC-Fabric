@@ -1163,7 +1163,8 @@ if __name__ == "__main__":
                 return False
             # Devices must exist for current hostapi list
             try:
-                self.set_devices(values["sg_input_device"], values["sg_output_device"])
+                if not getattr(self, "_mobile_endpoint", None):
+                    self.set_devices(values["sg_input_device"], values["sg_output_device"])
             except Exception as e:
                 self._notify(f"设备无效: {e}", DEV_INVALID, detail=str(e))
                 return False
@@ -1300,6 +1301,8 @@ if __name__ == "__main__":
             self.gui_config.pth_path = ""
             self.gui_config.index_path = ""
             self.gui_config.samplerate = self.get_device_samplerate()
+            if getattr(self, "_mobile_endpoint", None):
+                self.gui_config.samplerate = 48000
             self.gui_config.channels = self.get_device_channels()
             printt(
                 "dsp start preset=%s effects=%s",
@@ -1444,6 +1447,8 @@ if __name__ == "__main__":
                 if self.gui_config.sr_type == "sr_model"
                 else self.get_device_samplerate()
             )
+            if getattr(self, "_mobile_endpoint", None):
+                self.gui_config.samplerate = 48000
             self.gui_config.channels = self.get_device_channels()
             try:
                 self._rebuild_fx_chain()
@@ -1559,6 +1564,13 @@ if __name__ == "__main__":
             if path:
                 printt("perf report saved: %s", path)
 
+        def _new_audio_io(self, **kwargs):
+            endpoint = getattr(self, "_mobile_endpoint", None)
+            if endpoint:
+                from tools.mobile_audio import MobileAudioIo
+                return MobileAudioIo(endpoint, self.block_frame)
+            return AudioIoProcess(**kwargs)
+
         def start_stream(self):
             global flag_vc
             if not flag_vc:
@@ -1592,7 +1604,7 @@ if __name__ == "__main__":
                             self._pcm_bridge_writer = PcmBridgeWriter(
                                 bridge_name, int(getattr(self, "_pcm_bridge_epoch", 0) or 0)
                             )
-                    self.audio_proc = AudioIoProcess(
+                    self.audio_proc = self._new_audio_io(
                         input_device=sd.default.device[0],
                         output_device=sd.default.device[1],
                         input_audio_block_size=self.block_frame,
@@ -1642,6 +1654,7 @@ if __name__ == "__main__":
                         traceback.print_exc()
 
                     def audio_loop():
+                        global flag_vc
                         try:
                             from tools.win_realtime import boost_current_thread_audio
 
@@ -1650,12 +1663,17 @@ if __name__ == "__main__":
                             pass
                         while flag_vc:
                             try:
+                                if getattr(self.audio_proc, "error", None):
+                                    raise ConnectionError(self.audio_proc.error)
                                 if getattr(self, "dsp_only", False):
                                     self.audio_infer_dsp(self.block_frame << 1)
                                 else:
                                     self.audio_infer(self.block_frame << 1)
-                            except Exception:
+                            except Exception as exc:
                                 traceback.print_exc()
+                                if getattr(self, "_mobile_endpoint", None):
+                                    flag_vc = False
+                                    self._worker_write_status(state="error", error=str(exc))
                                 break
 
                     self._audio_loop_thread = threading.Thread(target=audio_loop, daemon=True)
@@ -1814,6 +1832,8 @@ if __name__ == "__main__":
             return preferred if preferred in outs else (outs[0] if outs else "")
 
         def _open_monitor_stream(self) -> None:
+            if getattr(self, "_mobile_endpoint", None):
+                return
             """Play converted audio to a second device (headphones) for self-listen.
 
             Uses callback + queue so the infer thread never blocks on stream.write,
@@ -2018,6 +2038,8 @@ if __name__ == "__main__":
                         traceback.print_exc()
             proc = getattr(self, "audio_proc", None)
             if proc is not None:
+                if getattr(self, "_mobile_endpoint", None):
+                    proc.terminate()
                 printt("stop_stream: shutting down AudioIoProcess")
                 try:
                     if getattr(self, "stop_evt", None) is not None:
@@ -2057,6 +2079,8 @@ if __name__ == "__main__":
                     except Exception:
                         pass
                 finally:
+                    if getattr(self, "_mobile_endpoint", None):
+                        proc.close()
                     self.audio_proc = None
                     self.in_mem = None
                     self.out_mem = None
@@ -2095,6 +2119,10 @@ if __name__ == "__main__":
         def _commit_output(self, outdata: np.ndarray, buf_size: int) -> None:
             """Write one block into the shared ring. Underrun writes at play_ptr."""
             global flag_vc
+            if getattr(self, "_mobile_endpoint", None):
+                if flag_vc and self.audio_proc is not None:
+                    self.audio_proc.publish(outdata)
+                return
             with self._pcm_bridge_lock:
                 bridge = getattr(self, "_pcm_bridge_writer", None)
                 if bridge is not None:
@@ -2172,6 +2200,11 @@ if __name__ == "__main__":
             ch = int(getattr(self.gui_config, "channels", 2) or 2)
             outdata = np.zeros((int(self.block_frame), max(1, ch)), dtype=np.float32)
             self._write_monitor(outdata)
+            if getattr(self, "_mobile_endpoint", None):
+                if flag_vc and self.audio_proc is not None:
+                    self.audio_proc.publish(outdata)
+                self.last_infer_ms = int((time.perf_counter() - start_time) * 1000)
+                return
             self._commit_output(outdata, buf_size)
             self._finish_block_timing(start_time)
 
@@ -2418,11 +2451,15 @@ if __name__ == "__main__":
             )
 
         def get_device_samplerate(self):
+            if getattr(self, "_mobile_endpoint", None):
+                return 48000
             return int(
                 sd.query_devices(device=sd.default.device[0])["default_samplerate"]
             )
 
         def get_device_channels(self):
+            if getattr(self, "_mobile_endpoint", None):
+                return 1
             max_input_channels = sd.query_devices(device=sd.default.device[0])[
                 "max_input_channels"
             ]
@@ -3081,7 +3118,7 @@ if __name__ == "__main__":
                 )
                 return
 
-            if str(getattr(self.gui_config, "sr_type", "") or "") == "sr_model":
+            if not getattr(self, "_mobile_endpoint", None) and str(getattr(self.gui_config, "sr_type", "") or "") == "sr_model":
                 sr = self._ckpt_tgt_sr(pth)
                 if sr is None or sr != int(getattr(self.gui_config, "samplerate", 0) or 0):
                     printt("换模型：采样率要从 %s 变，重开流", self.gui_config.samplerate)
@@ -3499,6 +3536,7 @@ if __name__ == "__main__":
             except Exception:
                 traceback.print_exc()
             if isinstance(cmd, dict):
+                self._mobile_endpoint = cmd.get("mobile_input")
                 self._pcm_bridge_name = str(cmd.get("pcm_bridge_name") or "")
                 self._pcm_bridge_epoch = int(cmd.get("pcm_bridge_epoch") or 0)
                 self._pcm_bridge_monitor = bool(cmd.get("pcm_bridge_monitor"))

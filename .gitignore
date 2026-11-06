@@ -262,3 +262,5 @@ AGENTS.md
 
 # Local API jobs and generated audio
 /User_Data/api/
+/User_Data/mobile/
+/.local/

@@ -8,7 +8,7 @@
 [简体中文](./README.md)　·　繁體中文　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Windows 即時 AI 語音轉換與模型訓練工作台**
+**Windows 即時變聲與語音音效播放軟體**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric 主畫面與即時變聲控制" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
 <!-- screenshots -->
 
-[官方截圖](https://www.turingmirror.com/zh-hant/products/rvc-fabric/screenshots/)
-
-截圖記錄於 2026 年 8 月。
-
-[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/)
-
-[使用指南](https://www.turingmirror.com/zh-hant/guides/rvc-fabric/)
-
-[下載 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [使用指南](https://www.turingmirror.com/zh-hant/guides/rvc-fabric/) · [下載 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 以 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 為基礎開發，由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 維護。
 
@@ -47,10 +39,11 @@
 
 ## 專案簡介
 
-RVC Fabric 是圖靈鏡開發的免費開源 Windows 桌面軟體，提供即時語音轉換、音色管理、人聲分離和模型訓練，適用於語音通話、直播與音訊製作。首次使用需設定執行環境並下載或匯入音色模型。
+RVC Fabric 是圖靈鏡開發的免費開源 Windows 軟體，可在 QQ、Discord 和遊戲語音中即時變聲、播放音樂和音效，也可在直播中混合人聲與伴奏。內建音訊庫支援片段管理與快捷鍵播放，並提供音色模型管理、人聲分離和模型訓練。
 
 ## 核心特性
 
+- 音訊庫可將音樂、音效或選定片段播放到語音，與變聲後的麥克風聲音同時輸出，支援疊加、循環、獨立音量和全域快捷鍵。
 - 將麥克風輸入轉換為所選音色，支援切換原聲、ASIO 通道選擇和獨立監聽。實際延遲取決於硬體、模型與音訊設定。
 - 內建噪聲門、壓縮器與 5 段參數等化器，支援預設套用與精細調音。
 - 音色庫支援關聯 .index 特徵檔案，並可儲存、匯入和匯出參數預設。
@@ -58,13 +51,14 @@ RVC Fabric 是圖靈鏡開發的免費開源 Windows 桌面軟體，提供即時
 - 提供人聲分離、文字轉語音和音色訓練工具。訓練精靈包含音訊切分、音高與特徵擷取、模型訓練和索引匯出。
 - 支援 NVIDIA CUDA，以及 AMD 和 Intel 顯示卡的 DirectML 加速。安裝引導可辨識硬體並設定對應的執行環境。
 
-截至 2026 年 11 月 7 日，Neptune 海王星開發分支包含手機配對、本機 API 和 MCP 介面。手機擷取音訊後，由桌面端執行語音轉換。已發行版本的功能見對應發行說明。
+Neptune 海王星開發分支另提供手機配對、本機 API 和 MCP 介面，手機擷取的音訊由桌面端轉換。
 
-## 快速開始
+## 語音聊天與遊戲內播放音樂
 
-1. 執行 RVC_Fabric_Setup.exe，建議安裝到純英文路徑。
-2. 依照引導設定執行環境，下載或匯入音色模型。需要向其他軟體傳送聲音時，安裝 VB-Cable 虛擬音效卡。安裝後需重新啟動電腦。
-3. 將軟體輸出設為 CABLE Input，並將 QQ、Discord 或直播軟體的輸入設為 CABLE Output。
+1. 安裝 RVC Fabric，依照引導設定所需元件。安裝 VB-Cable 虛擬音效卡後重新啟動電腦。
+2. 在「裝置與音訊」中選擇實際麥克風，將輸出設為 CABLE Input；在 QQ、Discord 或遊戲的語音設定中，將麥克風設為 CABLE Output。
+3. 開啟「音訊」，匯入音樂或音效，按兩下項目即可播放到語音。需要邊播放音樂邊變聲時，選擇音色模型並開啟變聲，兩路聲音會混合輸出。
+4. 將本機監聽裝置設為耳機，視需要開啟音樂監聽。可為常用片段設定全域快捷鍵，在遊戲中控制播放、暫停和停止。
 
 ## 技術架構與開發
 

@@ -8,7 +8,7 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　한국어　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Windows용 실시간 AI 음성 변환 및 모델 학습**
+**Windows용 실시간 음성 변환 및 사운드보드**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric 홈 화면 및 실시간 음성 변환 제어" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
 <!-- screenshots -->
 
-[공식 스크린샷 (영어)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
-
-이 스크린샷은 2026년 8월에 기록되었습니다.
-
-[공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/)
-
-[사용 안내서(영어)](https://www.turingmirror.com/en/guides/rvc-fabric/)
-
-[Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/) · [사용 안내서(영어)](https://www.turingmirror.com/en/guides/rvc-fabric/) · [Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)를 기반으로 개발되었으며 [Turing Mirror](https://github.com/Turing-Mirror)가 유지보수합니다.
 
@@ -47,22 +39,25 @@
 
 ## 프로젝트 소개
 
-RVC Fabric은 Turing Mirror가 개발하는 무료 오픈 소스 Windows 데스크톱 애플리케이션입니다. 음성 통화, 방송, 오디오 제작을 위한 실시간 음성 변환, 음성 모델 관리, 보컬 분리, 모델 학습 기능을 제공합니다. 처음 사용하기 전에 실행 환경을 구성하고 음성 모델을 다운로드하거나 가져오세요.
+RVC Fabric은 Turing Mirror가 개발하는 무료 오픈 소스 Windows 앱입니다. QQ, Discord, 게임 내 음성 채팅에서 목소리를 바꾸고 음악이나 효과음을 재생하며, 방송에서는 목소리와 반주를 함께 출력할 수 있습니다. 오디오 라이브러리의 클립 관리와 단축키 재생 외에도 음성 모델 관리, 보컬 분리, 모델 학습을 제공합니다.
 
 ## 핵심 기능
 
+- 음악, 효과음, 선택한 클립을 변환된 마이크 음성과 함께 음성 채팅으로 출력합니다. 겹쳐 재생, 반복, 별도 볼륨 조절, 전역 단축키를 지원합니다.
 - 실시간으로 마이크 음성을 변환하고 원음으로 전환할 수 있습니다. 지연 시간은 하드웨어, 모델, 오디오 설정에 따라 달라집니다.
 - 노이즈 게이트, 컴프레서, 5밴드 파라메트릭 이퀄라이저를 제공합니다.
 - 음성 모델과 프리셋을 관리하고 공식 및 타사 배포처에서 모델을 다운로드할 수 있습니다.
 - 보컬 분리, 텍스트 음성 합성, 모델 학습 도구를 제공합니다. 현재 학습 화면에서는 NVIDIA GPU가 필요합니다.
 - NVIDIA CUDA 및 AMD와 Intel GPU의 DirectML 가속을 지원합니다.
 
-2026년 11월 7일 기준, Neptune 개발 브랜치에는 휴대폰 페어링, 로컬 API, MCP 인터페이스가 포함되어 있습니다. 휴대폰에서 수집한 오디오는 데스크톱에서 변환합니다. 배포된 버전의 기능은 해당 릴리스 노트에 나와 있습니다.
+Neptune 개발 브랜치는 휴대폰 페어링, 로컬 API, MCP 인터페이스도 제공합니다. 휴대폰에서 수집한 오디오는 데스크톱에서 변환합니다.
 
-## 시작하기
+## 음성 채팅과 게임 내 음악 재생
 
-1. 설치 프로그램을 실행한 후 안내에 따라 실행 환경을 구성하고 음성 모델을 준비하세요.
-2. 다른 앱으로 음성을 보내려면 VB-Cable을 설치한 후 컴퓨터를 다시 시작하세요. RVC Fabric의 출력은 CABLE Input으로, 대상 앱의 입력은 CABLE Output으로 설정하세요.
+1. RVC Fabric을 설치하고 필요한 구성 요소를 설정합니다. VB-Cable 가상 오디오 장치를 설치한 뒤 컴퓨터를 다시 시작합니다.
+2. 오디오 장치 설정에서 실제 마이크를 선택하고 출력을 CABLE Input으로 설정합니다. QQ, Discord 또는 게임의 마이크 입력은 CABLE Output으로 설정합니다.
+3. 오디오 라이브러리에 음악이나 효과음을 가져온 뒤 항목을 두 번 클릭하면 음성 채팅으로 재생됩니다. 음악을 재생하면서 목소리도 바꾸려면 음성 모델을 선택하고 변환을 시작합니다. 두 소리가 같은 출력으로 믹싱됩니다.
+4. 로컬 모니터링 장치로 헤드폰을 선택하고 필요에 따라 음악 모니터링을 켭니다. 자주 쓰는 클립에 전역 단축키를 지정하면 게임 중에도 재생, 일시 정지, 정지를 제어할 수 있습니다.
 
 ## 기술 아키텍처 및 개발
 

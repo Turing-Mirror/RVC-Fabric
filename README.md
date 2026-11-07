@@ -8,7 +8,7 @@
 简体中文　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Windows 实时 AI 语音转换与模型训练工作台**
+**Windows 实时变声与语音音效播放软件**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric 主界面与实时变声控制" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能页面" width="32%">
 <!-- screenshots -->
 
-[官方截图](https://www.turingmirror.com/products/rvc-fabric/screenshots/)
-
-截图记录于 2026 年 8 月。
-
-[官网](https://www.turingmirror.com/products/rvc-fabric/)
-
-[使用指南](https://www.turingmirror.com/guides/rvc-fabric/)
-
-[下载 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[官网](https://www.turingmirror.com/products/rvc-fabric/) · [使用指南](https://www.turingmirror.com/guides/rvc-fabric/) · [下载 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 开发，由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 维护。
 
@@ -47,10 +39,11 @@
 
 ## 项目简介
 
-RVC Fabric 是图灵镜开发的免费开源 Windows 桌面软件，提供实时语音转换、音色管理、人声分离和模型训练，适用于语音通话、直播与音频制作。首次使用需配置运行环境并下载或导入音色模型。
+RVC Fabric 是图灵镜开发的免费开源 Windows 软件，可在 QQ、Discord 和游戏语音中实时变声、播放音乐和音效，也可在直播中混合人声与伴奏。内置音频库支持片段管理与快捷键播放，并提供音色模型管理、人声分离和模型训练。
 
 ## 核心特性
 
+- 音频库可将音乐、音效或选定片段播放到语音，与变声后的麦克风声音同时输出，支持叠加、循环、独立音量和全局快捷键。
 - 将麦克风输入转换为所选音色，支持切换原声、ASIO 通道选择和独立监听。实际延迟取决于硬件、模型与音频设置。
 - 内置噪声门、压缩器与 5 段参数均衡器，支持预设套用与精细调音。
 - 音色库支持关联 .index 特征文件，并可保存、导入和导出参数预设。
@@ -58,13 +51,14 @@ RVC Fabric 是图灵镜开发的免费开源 Windows 桌面软件，提供实时
 - 提供人声分离、文本转语音和音色训练工具。训练向导包含音频切分、音高与特征提取、模型训练和索引导出。
 - 支持 NVIDIA CUDA，以及 AMD 和 Intel 显卡的 DirectML 加速。安装引导可识别硬件并配置对应的运行环境。
 
-截至 2026 年 11 月 7 日，Neptune 海王星开发分支包含手机配对、本地 API 和 MCP 接口。手机采集音频后，由桌面端执行语音转换。已发布版本的功能见对应发布说明。
+Neptune 海王星开发分支还提供手机配对、本地 API 和 MCP 接口，手机采集的音频由桌面端转换。
 
-## 快速开始
+## 语音聊天与游戏内放歌
 
-1. 运行 RVC_Fabric_Setup.exe，建议安装到纯英文路径。
-2. 按照引导配置运行环境，下载或导入音色模型。需要向其他软件传输声音时，安装 VB-Cable 虚拟声卡。安装后需重启电脑。
-3. 将软件输出设为 CABLE Input，并将 QQ、Discord 或直播软件的输入设为 CABLE Output。
+1. 安装 RVC Fabric，按引导配置所需组件。安装 VB-Cable 虚拟声卡后重启电脑。
+2. 在「设备与音频」中选择实际麦克风，将输出设为 CABLE Input；在 QQ、Discord 或游戏的语音设置中，将麦克风设为 CABLE Output。
+3. 打开「音频」，导入音乐或音效，双击条目即可播放到语音。需要边放歌边变声时，选择音色模型并开启变声，两路声音会混合输出。
+4. 将本地监听设备设为耳机，按需开启音乐监听。可为常用片段设置全局快捷键，在游戏中控制播放、暂停和停止。
 
 ## 技术架构与开发
 

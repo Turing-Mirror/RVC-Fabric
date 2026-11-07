@@ -8,7 +8,7 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　日本語　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Windows 向けリアルタイム AI 音声変換とモデル学習**
+**Windows 向けリアルタイムボイスチェンジャー・サウンドボード**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric ホーム画面とリアルタイム変換の操作" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
 <!-- screenshots -->
 
-[公式スクリーンショット](https://www.turingmirror.com/ja/products/rvc-fabric/screenshots/)
-
-以下は 2026 年 8 月に記録された画面です。
-
-[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/)
-
-[利用ガイド](https://www.turingmirror.com/ja/guides/rvc-fabric/)
-
-[Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [利用ガイド](https://www.turingmirror.com/ja/guides/rvc-fabric/) · [Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
 
@@ -47,10 +39,11 @@
 
 ## プロジェクト概要
 
-RVC Fabric は Turing Mirror が開発する無料のオープンソース Windows デスクトップアプリです。通話、配信、音声制作に向けて、リアルタイム音声変換、ボイス管理、ボーカル分離、モデル学習を提供します。初回利用時に実行環境を設定し、ボイスモデルをダウンロードまたはインポートしてください。
+RVC Fabric は Turing Mirror が開発する無料のオープンソース Windows アプリです。QQ、Discord、ゲーム内のボイスチャットで声を変えたり、音楽や効果音を流したりでき、配信では声と伴奏をミックスできます。音声ライブラリでのクリップ管理とショートカット再生に加え、ボイスモデル管理、ボーカル分離、モデル学習にも対応しています。
 
 ## 主な特徴
 
+- 音楽、効果音、選択したクリップを変換後のマイク音声とともにボイスチャットへ出力できます。重ねて再生、ループ、個別の音量調整、グローバルショートカットに対応しています。
 - マイク入力を選択したボイスに変換します。原音への切り替え、ASIO チャンネル選択、独立したモニタリングに対応しています。遅延はハードウェア、モデル、音声設定によって異なります。
 - ノイズゲート、コンプレッサー、5 バンドパラメトリック EQ を内蔵しています。プリセットと個別の調整に対応しています。
 - ボイスライブラリでは .index ファイルを関連付け、パラメータープリセットを保存、インポート、エクスポートできます。
@@ -58,13 +51,14 @@ RVC Fabric は Turing Mirror が開発する無料のオープンソース Windo
 - ボーカル分離、テキスト読み上げ、ボイス学習ツールを提供します。学習手順には音声分割、ピッチと特徴量の抽出、モデル学習、インデックスの書き出しが含まれます。
 - NVIDIA CUDA と、AMD および Intel GPU の DirectML アクセラレーションに対応しています。セットアップでハードウェアを検出し、対応する実行環境を設定します。
 
-2026 年 11 月 7 日時点で、開発ブランチ Neptune にはスマートフォンのペアリング、ローカル API、MCP インターフェースがあります。スマートフォンで音声を収録し、デスクトップで変換します。公開済みの各バージョンの機能はリリースノートに記載しています。
+開発ブランチ Neptune はスマートフォンとのペアリング、ローカル API、MCP インターフェースも提供します。スマートフォンで収録した音声はデスクトップで変換します。
 
-## クイックスタート
+## ボイスチャットとゲーム内での音楽再生
 
-1. RVC_Fabric_Setup.exe を実行します。英数字のみのパスへのインストールを推奨します。
-2. 案内に従って実行環境を設定し、ボイスモデルをダウンロードまたはインポートします。他のアプリへ音声を送る場合は VB-Cable をインストールします。インストール後はコンピューターを再起動します。
-3. 本アプリの出力を CABLE Input に、QQ、Discord、配信アプリの入力を CABLE Output に設定します。
+1. RVC Fabric をインストールし、必要なコンポーネントを設定します。仮想オーディオデバイス VB-Cable をインストールしたら、コンピューターを再起動します。
+2. 音声デバイス設定で実際のマイクを選択し、出力を CABLE Input にします。QQ、Discord、ゲームの音声設定では、マイクを CABLE Output にします。
+3. 音声ライブラリに音楽や効果音をインポートし、項目をダブルクリックしてボイスチャットへ再生します。音楽を流しながら変声するには、ボイスモデルを選択して変換を開始します。両方の音声が同じ出力にミックスされます。
+4. ローカルモニタリングにはヘッドホンを選び、必要に応じて音楽のモニタリングを有効にします。よく使うクリップにグローバルショートカットを割り当てると、ゲーム中に再生、一時停止、停止を操作できます。
 
 ## 技術アーキテクチャと開発
 

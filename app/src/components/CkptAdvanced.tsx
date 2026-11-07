@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar, Select } from "./controls";
+import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
 import { pickPath } from "../lib/nativeDialog";
@@ -79,6 +80,7 @@ export function CkptAdvanced() {
           { id: "onnx", label: t("s.ckptOnnx") },
         ]}
       />
+      <CatalogTransition scope={tab} order={["merge", "change", "extract", "onnx"]}>
       <div className="mt-4 flex flex-col gap-3.5">
         {tab === "merge" ? (
           <>
@@ -421,6 +423,7 @@ export function CkptAdvanced() {
           <ErrorNote text={msg} error={msgErr} />
         ) : null}
       </div>
+      </CatalogTransition>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar, Select } from "./controls";
+import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
@@ -299,7 +300,9 @@ export function TtsPanel() {
           />
         }
       />
-      {mode === "sts" ? <StsSection /> : <TtsSection />}
+      <CatalogTransition scope={mode} order={["sts", "tts"]}>
+        {mode === "sts" ? <StsSection /> : <TtsSection />}
+      </CatalogTransition>
     </ToolBody>
   );
 }

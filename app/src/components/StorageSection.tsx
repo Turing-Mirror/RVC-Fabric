@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn } from "./ui";
 import { Ring, type RingSegment } from "./Ring";
+import { CatalogTransition } from "./CatalogTransition";
 import { Pager } from "./Pager";
 import { askConfirm } from "../lib/webDialog";
 import { useI18n } from "../i18n";
@@ -214,6 +215,7 @@ export function StorageSection() {
           </div>
           <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)] leading-relaxed">{t("s.cleanupDesc")}</p>
           {rows && rows.length === 0 ? <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{t("s.cleanupNothing")}</p> : null}
+          <CatalogTransition scope="storage-training" page={pageClamped}>
           <ul className="m-0 mt-1 list-none p-0">
             {pageRows.map((row) => (
               <li key={row.exp} className="py-2">
@@ -238,6 +240,7 @@ export function StorageSection() {
               </li>
             ))}
           </ul>
+          </CatalogTransition>
           <Pager className="pt-2" page={pageClamped} pages={totalPages} onChange={setPage} />
 
           <div className="mt-3 pt-3 flex items-center gap-3 shadow-[0_-1px_0_var(--hairline)]">

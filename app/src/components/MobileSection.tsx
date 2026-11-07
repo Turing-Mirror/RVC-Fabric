@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem } from "./ui";
 import { Select, Toggle, Slider } from "./controls";
@@ -6,6 +6,13 @@ import { useI18n } from "../i18n";
 import type { MobileController } from "../hooks/useMobile";
 
 type Invitation = { payload: string; svg: string; expires_at: number; endpoint: string; addresses: string[]; host: string };
+
+/** Keep a readable label beside controls, then wrap the controls when the row is narrow. */
+function MobileControlRow({ title, right }: { title: string; right: ReactNode }) {
+  return <div className="[&>div]:flex-wrap [&>div>span:first-child]:flex-1 [&>div>span:first-child]:min-w-[10rem] [&>div>span:last-child]:max-w-full">
+    <ListItem title={title} right={right} />
+  </div>;
+}
 function GainControl({ label, value, min, max, onChange }: {
   label: string; value: number; min: number; max: number; onChange: (value: number) => Promise<void>;
 }) {
@@ -20,8 +27,8 @@ function GainControl({ label, value, min, max, onChange }: {
       void onChange(next).finally(() => { if (request === revision.current) setDraft(null); });
     }, 250);
   };
-  return <ListItem title={label} right={<Slider value={draft ?? value} min={min} max={max} step={0.5}
-    onChange={change} ariaLabel={label} format={v => `${v} dB`} />} />;
+  return <MobileControlRow title={label} right={<div className="w-64 max-w-full"><Slider value={draft ?? value} min={min} max={max} step={0.5}
+    onChange={change} ariaLabel={label} format={v => `${v} dB`} /></div>} />;
 }
 export function MobileSection({ mobile }: { mobile: MobileController }) {
   const { t } = useI18n();
@@ -51,9 +58,9 @@ export function MobileSection({ mobile }: { mobile: MobileController }) {
   const route = (kind: "monitor" | "output") => {
     const current = kind === "monitor" ? status.pc_monitor : status.voice_output;
     const device = routeDevice[kind] || current?.device || "";
-    return <ListItem title={t(kind === "monitor" ? "mobile.monitor" : "mobile.output")}
-      right={<div className="flex flex-wrap items-center justify-end gap-3">
-        <Select value={device} options={[{ id: "", label: t("s.53e2db7016") }, ...(status.output_devices || []).map(d => ({ id: d.id, label: d.name }))]}
+    return <MobileControlRow title={t(kind === "monitor" ? "mobile.monitor" : "mobile.output")}
+      right={<div className="w-[22rem] max-w-full flex flex-wrap items-center justify-end gap-3">
+        <Select full value={device} options={[{ id: "", label: t("s.53e2db7016") }, ...(status.output_devices || []).map(d => ({ id: d.id, label: d.name }))]}
           onChange={id => { setRouteDevice(p => ({ ...p, [kind]: id })); if (current?.enabled) void action({ type: kind, enabled: !!id, device: id }); }} />
         <Toggle label={t(kind === "monitor" ? "mobile.monitor" : "mobile.output")} checked={!!current?.enabled}
           disabled={busy || (!device && !current?.enabled)} onChange={enabled => void action({ type: kind, enabled, device })} />

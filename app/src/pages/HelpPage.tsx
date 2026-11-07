@@ -388,7 +388,7 @@ function HelpPageImpl({
     needle ? `${shown.length} / ${all.length}` : String(all.length);
 
   return (
-    <PagePad>
+    <PagePad width="read">
       <PageHead
         title={t("s.26670dda42")}
         sub={t("s.e137006ffd")}
@@ -421,6 +421,7 @@ function HelpPageImpl({
           引导照着做，这两块是给想核对细节的人留的。 */}
       {needle ? null : (
       <Block
+        className="!mt-6"
         id="help-firstrun"
         title={t("s.firstRunTitle")}
         action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
@@ -528,7 +529,7 @@ function HelpPageImpl({
       </Block>
       )}
       {groups.faq.length ? (
-      <Block id="help-faq" title={t("s.209d309d58")} note={note(groups.faq, faqItems)}>
+      <Block className="!mt-6" id="help-faq" title={t("s.209d309d58")} note={note(groups.faq, faqItems)}>
         <AccordionGroup
           items={groups.faq}
           openId={open}
@@ -539,7 +540,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.infer.length ? (
-      <Block id="help-infer" title={t("s.inferGuideTitle")} note={note(groups.infer, inferItems)}>
+      <Block className="!mt-6" id="help-infer" title={t("s.inferGuideTitle")} note={note(groups.infer, inferItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
         </p>
@@ -553,7 +554,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.separate.length ? (
-      <Block id="help-separate" title={t("s.sepGuideTitle")} note={note(groups.separate, separateItems)}>
+      <Block className="!mt-6" id="help-separate" title={t("s.sepGuideTitle")} note={note(groups.separate, separateItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.sepGuideLead")}
         </p>
@@ -567,7 +568,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.train.length ? (
-      <Block id="help-train" title={t("s.trainGuideTitle")} note={note(groups.train, trainItems)}>
+      <Block className="!mt-6" id="help-train" title={t("s.trainGuideTitle")} note={note(groups.train, trainItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.trainGuideLead")}
         </p>
@@ -581,7 +582,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.glossary.length ? (
-      <Block title={glossaryTitle} note={note(groups.glossary, glossaryItems)}>
+      <Block className="!mt-6" title={glossaryTitle} note={note(groups.glossary, glossaryItems)}>
         <AccordionGroup
           items={groups.glossary}
           openId={openTerm}

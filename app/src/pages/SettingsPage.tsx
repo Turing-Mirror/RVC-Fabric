@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
-import { Swap } from "../components/Motion";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { Block, Btn, HelpMark, PagePad, Warn } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
@@ -250,14 +250,6 @@ function SettingsPageImpl({
     }
   };
 
-  // 换子页签的方向：往右边的页签切，新内容从右边来
-  const [prevTab, setPrevTab] = useState(tab);
-  const [tabDir, setTabDir] = useState<-1 | 0 | 1>(0);
-  if (prevTab !== tab) {
-    setTabDir(TAB_KEYS.indexOf(tab) > TAB_KEYS.indexOf(prevTab) ? 1 : -1);
-    setPrevTab(tab);
-  }
-
   return (
     <div>
       {/* 「联系社区」跟标签栏同一行，八个子设置都在 —— 卡住的人不会先想到
@@ -311,8 +303,8 @@ function SettingsPageImpl({
           <p className="text-[12.5px] text-[var(--meta)] mt-6">{t("s.49fd445d8b")}</p>
         ) : null}
 
-        {/* 换子页签时旧内容淡出，新内容从去向那一侧浮上来，与图灵镜其他软件同一套切换。 */}
-        <Swap k={tab} dir={tabDir}>
+        {/* 分类按标签顺序左右切换，表单更新保留当前内容。 */}
+        <CatalogTransition scope={tab} order={TAB_KEYS}>
         {c.loaded && tab === "device" ? (
           <Block
             title={t("s.9bef06a1f5")}
@@ -1198,7 +1190,7 @@ function SettingsPageImpl({
             </div>
           </Block>
         ) : null}
-        </Swap>
+        </CatalogTransition>
       </PagePad>
     </div>
   );

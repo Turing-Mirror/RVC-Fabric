@@ -283,7 +283,7 @@ export function MorePage({
     : "";
 
   return (
-    <PagePad>
+    <PagePad width="read">
       <PageHead title={t("s.1a26edf94a")} sub={t("s.d0b65d2fd2")} />
       <Block title={t("overlay.open")}>
         <Group><ListItem title={t("overlay.open")} desc={t("overlay.openHint")}

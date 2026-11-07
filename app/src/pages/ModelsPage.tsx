@@ -27,7 +27,7 @@ import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
-import { Swap, stagger } from "../components/Motion";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { useI18n } from "../i18n";
 import { askConfirm, askPrompt } from "../lib/webDialog";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
@@ -519,8 +519,10 @@ function ModelsPageImpl({
           ) : null}
         </div>
 
+        <div ref={gridRef}>
+        <CatalogTransition scope={kind} page={kind === "rvc" ? pageClamped + 1 : 1} order={["rvc", "dsp"]}>
         {kind === "dsp" ? (
-          <div ref={gridRef}>
+          <div>
             {selectedKey ? (
               <div className="mb-4 flex items-center gap-[9px]">
                 <Btn onClick={() => void dropVoice()}>{t("s.dspClearVoice")}</Btn>
@@ -557,9 +559,7 @@ function ModelsPageImpl({
             ) : null}
           </div>
         ) : (
-        <Swap k={`${kind}|${query}|${page}`}>
         <div
-          ref={gridRef}
           className="grid gap-x-4 gap-y-[22px]"
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -572,7 +572,7 @@ function ModelsPageImpl({
               {t("s.041c85897b", { v0: query })}
             </div>
           ) : (
-            pageView.map((v, i) => {
+            pageView.map((v) => {
               const cur = modelKey(v) === selectedKey;
               const src = resolveCover(v.cover, coverCache);
               const authors = voiceAuthorList(v);
@@ -580,7 +580,7 @@ function ModelsPageImpl({
               const title = displayVoiceName(v);
               const author = displayVoiceAuthor(v);
               return (
-                <div key={modelKey(v)} className="rise" style={stagger(i)}>
+                <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
                       <img
@@ -675,8 +675,9 @@ function ModelsPageImpl({
             })
           )}
         </div>
-        </Swap>
         )}
+        </CatalogTransition>
+        </div>
 
         {kind === "rvc" ? (
           <Pager className="mt-[26px]" page={pageClamped + 1} pages={totalPages} onChange={(p) => setPage(p - 1)} />

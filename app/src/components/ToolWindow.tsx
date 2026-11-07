@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { usePaneOn } from "trm-ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -146,6 +147,8 @@ export function ToolTitleActions({ children }: { children: ReactNode }) {
  */
 export function ToolActions({ children }: { children: ReactNode }) {
   const slot = useContext(ToolFooterSlot);
+  const active = usePaneOn();
+  if (!active) return null;
   const bar = (
     <div className="relative px-6 py-3.5 flex items-center gap-2.5">
       {/* 和主窗口底栏一样：两端内缩的发丝线，不是整条 border-top。 */}

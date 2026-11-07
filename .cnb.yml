@@ -29,6 +29,9 @@ $:
           script: cd app && npm ci --no-audit --no-fund
         - name: Build Windows NSIS candidate
           timeout: 60m
+          env:
+            # Let cargo-xwin honor +crt-static without Tauri's conflicting UCRT overrides.
+            STATIC_VCRUNTIME: "false"
           script: >-
             cd app && npm run tauri:build -- --ci --runner cargo-xwin
             --target x86_64-pc-windows-msvc --bundles nsis

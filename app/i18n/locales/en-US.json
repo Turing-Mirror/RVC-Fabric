@@ -759,7 +759,6 @@
     "30e91c9e4d": "Train a custom voice model from dry vocals",
     "31469944aa": "Press the shortcut…",
     "314a72cba4": "This voice's model files are missing or incomplete. Re-download or repair them.",
-    "3166554c46": "Resume training",
     "31a98593f1": "Skip",
     "31e3310765": "Hotkeys",
     "324ed94533": "Failed to sync inuse before starting the realtime panel: {e}",
@@ -801,7 +800,6 @@
     "3d2c784f94": "A CABLE device is already installed. Reinstall only if the device is damaged.",
     "3d4e683008": "Last step: install the virtual sound card",
     "3db536a84d": "Rounded corners: DWM active (no system border)",
-    "3e6b1657c7": "Training…",
     "3ff3e5ff9b": "Join usage stats",
     "40018c2fe1": "No parameters can be updated while running",
     "40019094c0": "No voice model is selected. Pick one on Home before running the test",
@@ -876,7 +874,6 @@
     "579ea14ab7": "5-band parametric EQ for fine-tuning the converted voice. Not sure where to start?",
     "57da23c608": "Legacy single-file voice: convert it to a managed voice to bind an index and presets.",
     "582c50066c": "chars",
-    "588a754143": "Step {v0} of {v1}: {v2}",
     "58a0882f6f": "Extraction done",
     "58b4af2771": "Refreshed",
     "594eba5310": "Pick the headphones or speakers you actually use.\nA virtual card means silence and possible feedback howl.",
@@ -1040,7 +1037,6 @@
     "8923a00d0b": "Default (original settings)",
     "899c21edd3": "Path is outside the voice library",
     "89dd7d9dec": "De-nasalize",
-    "8a5ef195d6": "Training can take hours. Progress survives interruption (processed slices and finished epochs); reuse the same name to resume.",
     "8ab59cc845": "Please verify licensing before commercial use.\n\n",
     "8af26d69aa": "Active profile file missing",
     "8b720e5330": "Generate diagnostic pack",
@@ -1176,7 +1172,6 @@
     "bc94a9c280": "Advanced option; keeping the default value is generally recommended",
     "bd45f9d523": "Parsing CNB runtime environment manifest…",
     "bda11a3c2d": "Pitch",
-    "be24590d21": "Start training",
     "be70b437af": "Separate songs into vocals and accompaniment; use it before training to remove background music or noise",
     "be8da62ea1": "Image",
     "bea562b0a7": "Browser preview can't fetch Plaza content online",
@@ -1363,7 +1358,6 @@
     "f7c13500d5": "{v0} hr {v1} min",
     "8efd7ca6b1": "Done, exported {v0} files",
     "de94f39aff": "Are you sure you want to delete the downloaded voice files?\n\n{v0}\n\nYou will need to re-download them if you want to use them again.",
-    "2b30598b60": "Training completed: {v0}",
     "156ff9271b": "Engine resources are incomplete (missing {v0}). Please complete the engine resource download on the main interface first.",
     "4d8ef8514f": "Completed {v0} files",
     "6a17eda1b7": "Completed {v0} files → {v1}",
@@ -2028,7 +2022,6 @@
     "cleanupEffectRestart": "Training must start again from preprocessing",
     "cleanupApply": "Clear selected",
     "cleanupNothing": "There is nothing to clean up.",
-    "trainLeftover": "This training run produced about {} of intermediate files. They can be cleared under “More → Storage”.",
     "storageTrash": "Trash (kept 7 days)",
     "trainInspect": "Check dataset",
     "trainInspecting": "Checking…",
@@ -2312,7 +2305,12 @@
     "engineStopped": "Engine not running",
     "noneSelected": "None selected",
     "noNumber": "None",
-    "pagerLabel": "Pages"
+    "pagerLabel": "Pages",
+    "storageRuntime": "Runtime",
+    "storageSharedModels": "Shared models",
+    "storageAudio": "Audio files",
+    "storageOther": "Other user files",
+    "storageScanFailed": "Storage information could not be refreshed. Scan again."
   },
   "extras": {
     "engineTitle": "Engine resources",
@@ -2418,8 +2416,7 @@
     "previewAfter": "Cropped",
     "previewBefore": "Original",
     "previewNote": "Output size: {v0} px",
-    "save": "Save cover",
-    "saving": "Saving…"
+    "save": "Save cover"
   },
   "overlay": {
     "title": "Status Overlay",
@@ -2476,5 +2473,28 @@
   },
   "sepModels": {
     "deechoDereverb": "De-echo & de-reverb"
+  },
+  "trainingQueue": {
+    "Title": "Training queue",
+    "Add": "Add to queue",
+    "Clear": "Clear finished",
+    "Queued": "Waiting",
+    "Running": "Training",
+    "Cancelling": "Stopping",
+    "Paused": "Paused",
+    "Interrupted": "Interrupted",
+    "Completed": "Completed",
+    "Failed": "Failed",
+    "Cancelled": "Cancelled",
+    "Continue": "Continue",
+    "Retry": "Retry",
+    "Remove": "Remove",
+    "Empty": "Added tasks train one after another.",
+    "Conflict": "A character with this name is already training or waiting. Choose another name.",
+    "Missing": "This training task has been removed.",
+    "Changed": "The task status has changed. Try again.",
+    "Parameters": "{v0} epochs, batch size {v1}",
+    "WaitRealtime": "The queue will continue after real-time conversion stops.",
+    "EngineBusy": "Training is running. Stop training first."
   }
 }

@@ -1140,46 +1140,83 @@ fn diag_entry_text(e: &DiagEntry, redaction: Option<&(String, String)>) -> Optio
 /// 不知道是谁占的。异步跑：logs 下可能有好几万个文件。
 pub fn storage_usage(root: &Path) -> Value {
     let ud = paths::user_data(root);
-    let items = [
-        ("logs", root.join("logs")),
-        ("weights", root.join("assets").join("weights")),
-        ("models", ud.join("models")),
-        ("update_cache", paths::update_cache(root)),
-        ("diagnostics", ud.join("diagnostics")),
-        ("perf_reports", ud.join("perf_reports")),
-        // 回收站要单列。删完音色磁盘占用短期不会下降，界面上不写出来的话，
-        // 用户会觉得「我清理完反而更满了」。
-        ("trash", crate::voices::trash_dir(root)),
-        ("app_logs", paths::logs_dir(root)),
-        // 临时文件：变声与分离的中间产物。与存储页「临时文件」那一项的清理范围对应
-        ("temp", paths::temp_dir(root)),
+    let mut groups = vec![
+        ("logs", vec![root.join("logs")]),
+        ("weights", vec![root.join("assets/weights")]),
+        ("models", vec![ud.join("models")]),
+        ("update_cache", vec![paths::update_cache(root)]),
+        ("diagnostics", vec![ud.join("diagnostics")]),
+        ("perf_reports", vec![ud.join("perf_reports")]),
+        ("trash", vec![crate::voices::trash_dir(root)]),
+        ("app_logs", vec![paths::logs_dir(root)]),
+        ("temp", vec![paths::temp_dir(root)]),
+        ("runtime", vec![paths::runtimes_dir(root), root.join("ffmpeg.exe"), root.join("ffprobe.exe")]),
+        ("shared_models", vec![root.join("assets")]),
+        ("audio", vec![ud.join("audio"), ud.join("audio_clips"), ud.join("tts"), ud.join("sts")]),
+        ("other", vec![ud.clone()]),
     ];
-    let list: Vec<Value> = items
-        .iter()
-        .map(|(name, p)| json!({ "name": name, "bytes": dir_bytes(p) }))
-        .collect();
-    let total: u64 = list
-        .iter()
-        .filter_map(|v| v.get("bytes").and_then(|b| b.as_u64()))
-        .sum();
-    json!({
-        "items": list,
-        "total_bytes": total,
-        "free_bytes": paths::free_space_bytes(root).map(Value::from).unwrap_or(Value::Null),
-    })
+    if let Some(legacy) = paths::legacy_runtime_dir(root) {
+        groups.iter_mut().find(|(name, _)| *name == "runtime").unwrap().1.push(legacy);
+    }
+    let model_output = config::train_output_dir(root);
+    if !model_output.is_empty() {
+        add_storage_output(root, &ud, &mut groups.iter_mut().find(|(name, _)| *name == "models").unwrap().1, PathBuf::from(model_output), &["pth", "index", "json", "jpg", "jpeg", "png", "webp"]);
+    }
+    for use_rvc in [false, true] {
+        add_storage_output(root, &ud, &mut groups.iter_mut().find(|(name, _)| *name == "audio").unwrap().1, crate::tts::out_dir_for(root, use_rvc), &["wav", "mp3", "flac", "ogg", "m4a"]);
+    }
+    let totals = storage_totals(&groups);
+    let items: Vec<Value> = groups.iter().zip(&totals)
+        .map(|((name, _), bytes)| json!({ "name": name, "bytes": bytes })).collect();
+    json!({ "items": items, "total_bytes": totals.iter().sum::<u64>(),
+        "free_bytes": paths::free_space_bytes(root).map(Value::from).unwrap_or(Value::Null) })
 }
 
-fn dir_bytes(p: &Path) -> u64 {
-    let Ok(meta) = std::fs::metadata(p) else {
-        return 0;
-    };
-    if meta.is_file() {
-        return meta.len();
+// An output folder can be the application folder itself. Count only output files
+// there, rather than claiming the entire application as generated audio/models.
+fn add_storage_output(root: &Path, ud: &Path, destinations: &mut Vec<PathBuf>, output: PathBuf, extensions: &[&str]) {
+    let Ok(canonical) = output.canonicalize() else { return };
+    let contains_app = root.canonicalize().is_ok_and(|p| p.starts_with(&canonical));
+    let is_user_data = ud.canonicalize().is_ok_and(|p| p == canonical);
+    if contains_app || is_user_data {
+        if let Ok(entries) = std::fs::read_dir(output) {
+            destinations.extend(entries.flatten().map(|e| e.path()).filter(|p| {
+                p.is_file() && p.extension().and_then(|s| s.to_str())
+                    .is_some_and(|ext| extensions.iter().any(|candidate| ext.eq_ignore_ascii_case(candidate)))
+            }));
+        }
+    } else {
+        destinations.push(output);
     }
-    let Ok(rd) = std::fs::read_dir(p) else {
-        return 0;
-    };
-    rd.flatten().map(|e| dir_bytes(&e.path())).sum()
+}
+
+fn storage_totals(groups: &[(&str, Vec<PathBuf>)]) -> Vec<u64> {
+    let mut totals = vec![0; groups.len()];
+    let mut locations: Vec<_> = groups.iter().enumerate()
+        .flat_map(|(index, (_, dirs))| dirs.iter().map(move |path| (index, path))).collect();
+    // Specific nested categories own their files before parent remainders. The
+    // canonical visited set also deduplicates aliases and terminates junction loops.
+    locations.sort_by_cached_key(|(_, path)| std::cmp::Reverse(
+        path.canonicalize().unwrap_or_else(|_| (*path).clone()).components().count()));
+    let mut owners = std::collections::BTreeMap::new();
+    for (index, (_, dirs)) in groups.iter().enumerate() {
+        for path in dirs {
+            if let Ok(canonical) = path.canonicalize() { owners.entry(canonical).or_insert(index); }
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for (index, path) in locations { totals[index] += storage_bytes(path, index, &owners, &mut seen); }
+    totals
+}
+
+fn storage_bytes(path: &Path, owner: usize, owners: &std::collections::BTreeMap<PathBuf, usize>, seen: &mut std::collections::BTreeSet<PathBuf>) -> u64 {
+    let Ok(canonical) = path.canonicalize() else { return 0 };
+    if owners.get(&canonical).is_some_and(|category| *category != owner) { return 0; }
+    if !seen.insert(canonical.clone()) { return 0; }
+    let Ok(meta) = std::fs::metadata(&canonical) else { return 0 };
+    if meta.is_file() { return meta.len(); }
+    std::fs::read_dir(canonical).map(|entries| entries.flatten()
+        .map(|entry| storage_bytes(&entry.path(), owner, owners, seen)).sum()).unwrap_or(0)
 }
 
 /// 一段可以直接粘进群里的环境信息。
@@ -1553,6 +1590,70 @@ pub fn finish_close(app: &AppHandle, to_tray: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn storage_nested_categories_are_counted_once() {
+        let root = crate::testutil::scratch("storage-nested");
+        std::fs::create_dir_all(root.join("assets/weights")).unwrap();
+        std::fs::write(root.join("assets/weights/model.pth"), b"12345").unwrap();
+        std::fs::write(root.join("assets/shared.pt"), b"123").unwrap();
+        let groups = vec![("shared", vec![root.join("assets")]),
+            ("weights", vec![root.join("assets/weights"), root.join("assets/weights")])];
+        assert_eq!(storage_totals(&groups), vec![3, 5]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn storage_junction_alias_and_cycle_terminate_without_duplicates() {
+        let root = crate::testutil::scratch("storage-junction");
+        std::fs::create_dir_all(root.join("data")).unwrap();
+        std::fs::write(root.join("data/file.bin"), b"1234567").unwrap();
+        std::fs::create_dir_all(root.join("audio")).unwrap();
+        std::fs::write(root.join("audio/a.wav"), b"123").unwrap();
+        for (link, target) in [(root.join("alias"), root.join("data")), (root.join("data").join("loop"), root.clone())] {
+            let status = std::process::Command::new("cmd").args(["/c", "mklink", "/J"])
+                .arg(&link).arg(&target).output().unwrap();
+            assert!(status.status.success(), "junction creation failed: {:?}", status);
+        }
+        let result = storage_totals(&[("data", vec![root.join("data"), root.join("alias")]), ("audio", vec![root.join("audio")])]);
+        // Remove junction entries only, never recursively walk the cycle during cleanup.
+        std::fs::remove_dir(root.join("data").join("loop")).unwrap();
+        std::fs::remove_dir(root.join("alias")).unwrap();
+        assert_eq!(result, vec![7, 3]);
+    }
+
+    #[test]
+    fn storage_includes_managed_runtime_shared_models_and_audio() {
+        let root = crate::testutil::scratch("storage-scope");
+        for (path, bytes) in [("User_Data/runtimes/cpu/python.exe", 7),
+            ("assets/hubert/base.pt", 11), ("User_Data/audio/media/a.wav", 13),
+            ("User_Data/sts/output/b.wav", 17), ("User_Data/tts/read/c.wav", 19),
+            ("User_Data/misc/config.json", 23)] {
+            let target = root.join(path);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(target, vec![0; bytes]).unwrap();
+        }
+        let result = storage_usage(&root);
+        let bytes = |name| result["items"].as_array().unwrap().iter()
+            .find(|v| v["name"] == name).unwrap()["bytes"].as_u64().unwrap();
+        assert_eq!(bytes("runtime"), 7);
+        assert_eq!(bytes("shared_models"), 11);
+        assert_eq!(bytes("audio"), 49);
+        assert!(bytes("other") >= 23);
+        assert_eq!(result["total_bytes"].as_u64().unwrap(), result["items"].as_array().unwrap().iter()
+            .map(|v| v["bytes"].as_u64().unwrap()).sum::<u64>());
+    }
+
+    #[test]
+    fn storage_output_at_app_root_does_not_claim_application_files() {
+        let root = crate::testutil::scratch("storage-root-output");
+        std::fs::create_dir_all(root.join("User_Data")).unwrap();
+        std::fs::write(root.join("app.exe"), b"app").unwrap();
+        std::fs::write(root.join("out.wav"), b"wave").unwrap();
+        let mut outputs = Vec::new();
+        add_storage_output(&root, &root.join("User_Data"), &mut outputs, root.clone(), &["wav"]);
+        assert_eq!(storage_totals(&[("audio", outputs)]), vec![4]);
+    }
 
     /// 这段文字是给用户贴到群里的，所以两件事必须成立：该有的字段一个不少，
     /// 以及路径里的 Windows 用户名不能跟着出去 —— 它比诊断包更容易被贴到公开

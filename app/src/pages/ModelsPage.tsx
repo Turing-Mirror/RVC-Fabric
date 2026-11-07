@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -97,6 +98,12 @@ function ModelsPageImpl({
   onKindChange,
 }: ModelsPageProps) {
   const { t: translate } = useI18n();
+  const active = usePageActive();
+  const pageOn = useRef(active);
+  const listRequest = useRef(0);
+  const panelRequest = useRef(0);
+  const panelsFor = useRef("");
+  const dspRequest = useRef(0);
   const [models, setModels] = useState<VoiceModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [query, setQuery] = useState("");
@@ -112,6 +119,7 @@ function ModelsPageImpl({
   // DSP 是热键，开关和换预设都不重开流。用完立刻回读配置，别让界面和引擎
   // 各记各的 —— 那种不一致用户看不出原因，只会觉得「点了没反应」。
   const applyDsp = useCallback(async (p: DspPreset | null) => {
+    const request = ++dspRequest.current;
     const next = p ? p.id : "";
     const prevId = dspId;
     const prevActive = dspActive;
@@ -122,12 +130,14 @@ function ModelsPageImpl({
       if (p) await activateDsp(p.id);
       else await deactivateDsp();
     } catch (e) {
+      if (request !== dspRequest.current) return;
       setDspId(prevId);
       setDspActive(prevActive);
       onDspChange?.(prevId);
       setMsg(String(e));
       return;
     }
+    if (request !== dspRequest.current) return;
     if (p) {
       setSelectedKey("");
       onVoiceChange?.({
@@ -143,9 +153,10 @@ function ModelsPageImpl({
   // 进页面时把当前预设读回来，不然切走再切回来「使用中」的标记就没了。
   useEffect(() => {
     let alive = true;
+    const request = dspRequest.current;
     void getConfig()
       .then((c) => {
-        if (!alive) return;
+        if (!alive || request !== dspRequest.current) return;
         setDspId(c?.dsp_enabled ? String(c?.dsp_preset || "") : "");
       })
       .catch(() => {});
@@ -195,6 +206,19 @@ function ModelsPageImpl({
   // 正在换封面的模型（裁剪对话框）。
   const [coverEdit, setCoverEdit] = useState<VoiceModel | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    pageOn.current = active;
+    if (!active) {
+      setMenu(null);
+      setAuthorPick(null);
+      setCoverEdit(null);
+    }
+    const on = pageOn;
+    const list = listRequest;
+    const panel = panelRequest;
+    const dsp = dspRequest;
+    return () => { on.current = false; list.current++; panel.current++; dsp.current++; };
+  }, [active]);
 
   const selected = useMemo(
     () => models.find((m) => modelKey(m) === selectedKey) || null,
@@ -230,11 +254,13 @@ function ModelsPageImpl({
   }, [models, query, view.length, selected, translate]);
 
   const reload = useCallback(async (fresh = false) => {
+    if (!pageOn.current) return;
+    const request = ++listRequest.current;
     try {
       const cat = await listVoices(fresh ? { fresh: true } : undefined);
-      setModels(cat.models || []);
+      if (request === listRequest.current) setModels(cat.models || []);
     } catch (e) {
-      setMsg(String(e));
+      if (request === listRequest.current) setMsg(String(e));
     }
   }, []);
 
@@ -250,6 +276,14 @@ function ModelsPageImpl({
   }, [currentId, models]);
 
   const reloadPanels = useCallback(async (m: VoiceModel | null) => {
+    if (!pageOn.current) return;
+    const request = ++panelRequest.current;
+    const identity = m ? modelKey(m) : "";
+    if (panelsFor.current !== identity) {
+      setIndexItems([]);
+      setProfiles([]);
+    }
+    panelsFor.current = identity;
     if (!m || m.source !== "user_data" || !m.dir || m.missing) {
       setIndexItems([]);
       setProfiles([]);
@@ -260,27 +294,30 @@ function ModelsPageImpl({
         listIndex(m.dir),
         listProfiles(m.dir),
       ]);
+      if (request !== panelRequest.current) return;
       setIndexItems(ix.items || []);
       setProfiles(pr.items || []);
     } catch {
+      if (request !== panelRequest.current) return;
       setIndexItems([]);
       setProfiles([]);
     }
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (active) void reload();
+  }, [active, reload]);
 
   useEffect(() => {
-    void reloadPanels(selected);
-  }, [selected, reloadPanels]);
+    if (active) void reloadPanels(selected);
+  }, [active, selected, reloadPanels]);
 
   useEffect(() => {
-    if (!selected?.dir) return;
+    if (!active || !selected?.dir) return;
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<{ hot?: Record<string, unknown> }>("config-changed", (ev) => {
+      if (disposed) return;
       const hot = ev.payload?.hot;
       if (!hot) return;
       if (hot.pitch == null && hot.formant == null) return;
@@ -293,7 +330,7 @@ function ModelsPageImpl({
       disposed = true;
       dropListen(un);
     };
-  }, [selected, reloadPanels]);
+  }, [active, selected, reloadPanels]);
 
   useEffect(() => {
     const el = gridRef.current?.parentElement || gridRef.current;
@@ -882,6 +919,7 @@ function ModelsPageImpl({
 
       <Leave>{coverEdit ? (
         <CropCoverDialog
+          key={modelKey(coverEdit)}
           model={coverEdit}
           onClose={() => setCoverEdit(null)}
           onSaved={async (message) => {

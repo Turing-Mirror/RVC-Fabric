@@ -264,3 +264,7 @@ AGENTS.md
 /User_Data/api/
 /User_Data/mobile/
 /.local/
+
+# Native training queue state
+/User_Data/train_queue.json
+/User_Data/train_queue.json.tmp

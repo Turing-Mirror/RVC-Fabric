@@ -27,6 +27,10 @@ static BUSY: Mutex<bool> = Mutex::new(false);
 static CANCEL: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 /// 训练子进程本身会再 fork 出 worker 进程，光靠 cancel 标志杀不干净，得留句柄。
 static CHILD: Mutex<Option<u32>> = Mutex::new(None);
+/// Queue cancellation must not stop a direct/API training request.
+static QUEUE_JOB: Mutex<Option<String>> = Mutex::new(None);
+/// Serialize resource admission with real-time startup, not the full training run.
+static START_GATE: Mutex<()> = Mutex::new(());
 
 /// 界面只暴露这三档。原版还有 v1 和无 f0 的组合，那些对着我们的用户没有意义
 /// —— 选错了只会训出更差的模型。
@@ -176,9 +180,7 @@ fn dir_or_file_bytes(p: &Path) -> u64 {
     let Ok(rd) = std::fs::read_dir(p) else {
         return 0;
     };
-    rd.flatten()
-        .map(|e| dir_or_file_bytes(&e.path()))
-        .sum()
+    rd.flatten().map(|e| dir_or_file_bytes(&e.path())).sum()
 }
 
 /// 数据集抽样体检。
@@ -193,7 +195,11 @@ fn dir_or_file_bytes(p: &Path) -> u64 {
 /// 全程可跳过：拿不到 ffprobe（比如开发机上）就返回 available=false，界面不显示
 /// 这一块，而不是报错。
 pub fn inspect_dataset(root: &Path, dir: &Path) -> Value {
-    let probe = root.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
+    let probe = root.join(if cfg!(windows) {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    });
     if !probe.is_file() {
         return json!({ "available": false });
     }
@@ -285,10 +291,14 @@ fn collect_audio(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
 fn probe_one(probe: &Path, file: &Path) -> Option<(f64, u32, u32)> {
     let mut cmd = std::process::Command::new(probe);
     cmd.args([
-        "-v", "error",
-        "-select_streams", "a:0",
-        "-show_entries", "stream=sample_rate,channels:format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=sample_rate,channels:format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=0",
     ])
     .arg(file)
     .stdin(std::process::Stdio::null())
@@ -398,7 +408,11 @@ fn parse_volume_report(text: &str) -> (Option<f64>, f64) {
 /// 返回 (平均响度 dB, 静音占比 0..1)；ffmpeg 不在或全军覆没就 None，界面
 /// 不显示这一块。
 fn probe_loudness(root: &Path, files: &[(PathBuf, f64)]) -> Option<(f64, f64)> {
-    let ffmpeg = root.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
+    let ffmpeg = root.join(if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    });
     if !ffmpeg.is_file() {
         return None;
     }
@@ -427,8 +441,7 @@ fn probe_loudness(root: &Path, files: &[(PathBuf, f64)]) -> Option<(f64, f64)> {
             cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         // 坏文件能让 ffmpeg 卡住；这里要连着跑五次，超时必须比 probe_one 紧。
-        let Some(text) = run_with_timeout_stderr(cmd, std::time::Duration::from_secs(20))
-        else {
+        let Some(text) = run_with_timeout_stderr(cmd, std::time::Duration::from_secs(20)) else {
             continue;
         };
         let (mean, silence) = parse_volume_report(&text);
@@ -532,7 +545,12 @@ fn cleanup_targets(root: &Path, exp: &str, kind: &str) -> Vec<PathBuf> {
 
 fn list_files(dir: &Path) -> Vec<PathBuf> {
     std::fs::read_dir(dir)
-        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.is_file()).collect())
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_file())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -738,8 +756,7 @@ fn preprocess_failure_list(log: &Path) -> Vec<Value> {
 /// 那两份完全一致 —— 界面上报「找到 120 个音频」而预处理只认出 80 个，比不报
 /// 还糟：用户会拿这个数字去判断自己的数据集够不够，而它是假的。有一条测试直接
 /// 读 train_worker.py 的那一行来比对，改一边忘了另一边就红。
-pub const DATASET_AUDIO_EXT: [&str; 8] =
-    ["wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus"];
+pub const DATASET_AUDIO_EXT: [&str; 8] = ["wav", "mp3", "flac", "ogg", "m4a", "aac", "wma", "opus"];
 
 /// 选完数据集立刻数一遍。
 ///
@@ -812,7 +829,9 @@ fn is_nvidia(root: &Path) -> bool {
         // 没写过 package_meta 就现场看显卡名。
         None => {
             let gpus = crate::provision::list_gpus();
-            crate::provision::recommend_variant(&gpus).0.starts_with("nvidia")
+            crate::provision::recommend_variant(&gpus)
+                .0
+                .starts_with("nvidia")
         }
     }
 }
@@ -822,7 +841,7 @@ fn is_nvidia(root: &Path) -> bool {
 /// 用户在「设置」里显式选了 CPU 就必须给 CPU —— 哪怕是 N 卡机型。 DirectML
 /// 训练本就不支持，这里不接：选了 directml 也照旧只按机型走（N 卡 cuda，
 /// 否则 cpu），算子能力没有被悄悄放大。
-fn train_device(root: &Path) -> &'static str {
+pub(crate) fn train_device(root: &Path) -> &'static str {
     let cfg = crate::config::read(root);
     let accel = cfg
         .get("accel_backend")
@@ -899,29 +918,28 @@ fn last_interrupted(root: &Path) -> Option<Value> {
     if text.contains("=== done (") {
         return None;
     }
-    parse_interrupted(&text).map(|(exp, done, total)| {
-        json!({ "exp": exp, "epoch": done, "total": total })
-    })
+    parse_interrupted(&text)
+        .map(|(exp, done, total)| json!({ "exp": exp, "epoch": done, "total": total }))
 }
 
 /// 从一份没写完的训练日志里挖出实验名和最后一轮。日志格式见 `begin_run`
 /// （头部是请求 JSON）和 `note_progress`（`progress stage stage=train 99/200 …`）。
 fn parse_interrupted(text: &str) -> Option<(String, u32, u32)> {
-    let exp = text
-        .lines()
-        .find_map(|l| {
-            let l = l.trim();
-            let rest = l.strip_prefix("\"exp\":")?;
-            let v = rest.trim().trim_end_matches(',').trim();
-            let v = v.strip_prefix('"')?.strip_suffix('"')?;
-            (!v.is_empty()).then(|| v.to_string())
-        })?;
+    let exp = text.lines().find_map(|l| {
+        let l = l.trim();
+        let rest = l.strip_prefix("\"exp\":")?;
+        let v = rest.trim().trim_end_matches(',').trim();
+        let v = v.strip_prefix('"')?.strip_suffix('"')?;
+        (!v.is_empty()).then(|| v.to_string())
+    })?;
     let mut last = None;
     for line in text.lines() {
         let Some(at) = line.find("stage=train ") else {
             continue;
         };
-        let tail = line[at + "stage=train ".len()..].split_whitespace().next()?;
+        let tail = line[at + "stage=train ".len()..]
+            .split_whitespace()
+            .next()?;
         let (a, b) = tail.split_once('/')?;
         if let (Ok(a), Ok(b)) = (a.parse::<u32>(), b.parse::<u32>()) {
             last = Some((a, b));
@@ -952,6 +970,46 @@ pub fn cancel() {
     }
 }
 
+pub(crate) fn cancel_queued(id: &str) {
+    let owner = QUEUE_JOB.lock().unwrap_or_else(|e| e.into_inner());
+    if owner.as_deref() == Some(id) {
+        cancel();
+    }
+}
+
+fn release_training_slot() {
+    *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *QUEUE_JOB.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
+}
+
+pub(crate) fn realtime_start_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    let guard = START_GATE.lock().unwrap_or_else(|e| e.into_inner());
+    if busy() {
+        return Err(crate::i18n::t("trainingQueue.EngineBusy"));
+    }
+    Ok(guard)
+}
+
+fn realtime_requested(status: &Value, command: &Value) -> bool {
+    if matches!(
+        status["state"].as_str(),
+        Some("running" | "starting" | "restarting" | "stopping")
+    ) {
+        return true;
+    }
+    command["cmd"] == "start"
+        && command["seq"].as_u64().unwrap_or(0) > status["last_cmd_seq"].as_u64().unwrap_or(0)
+}
+
+pub(crate) fn realtime_active(root: &Path) -> bool {
+    crate::worker::is_worker_alive(root)
+        && realtime_requested(
+            &crate::protocol::read_status(root),
+            &crate::protocol::read_command(root),
+        )
+}
+
 #[cfg(windows)]
 fn kill_tree(pid: u32) {
     use std::os::windows::process::CommandExt;
@@ -966,12 +1024,15 @@ fn kill_tree(pid: u32) {
     let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
 }
 
-fn emit(app: &AppHandle, payload: Value) {
+fn emit(app: &AppHandle, payload: Value, job_id: Option<&str>) {
+    if let Some(id) = job_id {
+        crate::train_queue::progress(app, id, &payload);
+    }
     let _ = app.emit("train-progress", payload);
 }
 
 /// 训练请求。字段和 `tools/train_worker.py` 的 `normalize()` 一一对应。
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrainReq {
     pub exp: String,
     pub dataset: String,
@@ -999,13 +1060,10 @@ fn suggested_batch() -> u32 {
     static CACHED: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
     *CACHED.get_or_init(|| {
         let mut cmd = Command::new("nvidia-smi");
-        cmd.args([
-            "--query-gpu=memory.total",
-            "--format=csv,noheader,nounits",
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        cmd.args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -1052,7 +1110,7 @@ pub fn validate_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
+pub(crate) fn preflight(root: &Path, req: &TrainReq) -> Result<(), String> {
     validate_name(&req.exp)?;
     if !paths::runtime_ready(root) {
         return Err(crate::i18n::t("s.dc92f52f68").into());
@@ -1130,17 +1188,16 @@ fn write_outcome(root: &Path, exp: &str, log: &Path, progress: &Progress, outcom
         .into_iter()
         .filter(|n| n == &format!("{exp}.pth") || n.starts_with(&format!("{exp}_e")))
         .collect::<Vec<_>>();
-    let usable = if crate::logging::file_len(&final_w) > 0
-        || crate::logging::file_len(&published) > 0
-    {
-        "final"
-    } else if !weight_pths.is_empty() || !exp_pths.is_empty() {
-        "intermediate"
-    } else if counts[1].1 > 0 {
-        "slices_only"
-    } else {
-        "none"
-    };
+    let usable =
+        if crate::logging::file_len(&final_w) > 0 || crate::logging::file_len(&published) > 0 {
+            "final"
+        } else if !weight_pths.is_empty() || !exp_pths.is_empty() {
+            "intermediate"
+        } else if counts[1].1 > 0 {
+            "slices_only"
+        } else {
+            "none"
+        };
     let last = if progress.stage.is_empty() {
         "-".into()
     } else {
@@ -1283,7 +1340,6 @@ fn note_progress(log: &Path, v: &Value, progress: &mut Progress) {
     );
 }
 
-
 /// 校验用户选的音色存放目录，返回归一化后的路径（空 = 用默认的 `User_Data/models`）。
 ///
 /// 必须是绝对路径：相对路径会跟着进程的 cwd 走，训了几小时最后落在谁也找不到
@@ -1303,15 +1359,46 @@ pub fn normalize_output_dir(raw: &str) -> Result<String, String> {
 }
 
 /// 阻塞跑一次训练，调用方负责挪到后台线程。
-pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, String> {
-    {
-        let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
-        if *g {
-            return Err(crate::i18n::t("s.fce4b463c1").into());
+pub fn run(app: &AppHandle, root: &Path, req: TrainReq) -> Result<Value, String> {
+    run_queued(app, root, req, None, None)
+}
+
+pub(crate) fn run_queued(
+    app: &AppHandle,
+    root: &Path,
+    mut req: TrainReq,
+    job_id: Option<&str>,
+    device_override: Option<&str>,
+) -> Result<Value, String> {
+    loop {
+        if job_id.is_some_and(crate::train_queue::cancelled) {
+            return Err(crate::i18n::t("s.a5ffdc95ee"));
         }
-        *g = true;
+        let admission = match START_GATE.try_lock() {
+            Ok(guard) => Some(guard),
+            Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => None,
+        };
+        if let Some(admission) = admission {
+            let mut g = BUSY.lock().unwrap_or_else(|e| e.into_inner());
+            if !*g && (job_id.is_none() || !realtime_active(root)) {
+                *g = true;
+                *QUEUE_JOB.lock().unwrap_or_else(|e| e.into_inner()) = job_id.map(str::to_owned);
+                break;
+            }
+            drop(g);
+            drop(admission);
+        }
+        if job_id.is_none() {
+            return Err(crate::i18n::t("s.fce4b463c1"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
     }
     cancel_flag().store(false, Ordering::SeqCst);
+    if job_id.is_some_and(crate::train_queue::cancelled) {
+        release_training_slot();
+        return Err(crate::i18n::t("s.a5ffdc95ee"));
+    }
     // 训练是这里最吃显存的一件事。离线语音转换留下的常驻 python 还攥着
     // hubert + rmvpe + net_g，先放掉再开，别让训练从第一步就 OOM。
     crate::sts::release_resident();
@@ -1319,7 +1406,7 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
     let out_dir = match normalize_output_dir(&req.output_dir) {
         Ok(d) => d,
         Err(e) => {
-            *BUSY.lock().unwrap_or_else(|err| err.into_inner()) = false;
+            release_training_slot();
             return Err(e);
         }
     };
@@ -1330,7 +1417,7 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
         crate::asset_scope::grant_dir(app, Path::new(&out_dir));
     }
     req.output_dir = out_dir;
-    let device = train_device(root);
+    let device = device_override.unwrap_or_else(|| train_device(root));
     let log = crate::logging::begin_run(
         root,
         crate::logging::CH_TRAIN,
@@ -1353,7 +1440,7 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
         log.file_name().and_then(|s| s.to_str()).unwrap_or("train")
     );
     let mut progress = Progress::default();
-    let result = run_inner(app, root, &req, &log, &mut progress);
+    let result = run_inner(app, root, &req, &log, &mut progress, job_id, device);
     let outcome = match &result {
         Ok(_) => "ok",
         Err(e) if e == &crate::i18n::t("s.a5ffdc95ee") => "cancelled",
@@ -1367,11 +1454,10 @@ pub fn run(app: &AppHandle, root: &Path, mut req: TrainReq) -> Result<Value, Str
             crate::logging::finish_run(&log, true, outcome);
         }
     }
-    *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
-    *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = None;
     if let Err(ref e) = result {
-        emit(app, json!({ "phase": "error", "message": e }));
+        emit(app, json!({ "phase": "error", "message": e }), job_id);
     }
+    release_training_slot();
     result
 }
 
@@ -1381,6 +1467,8 @@ fn run_inner(
     req: &TrainReq,
     log: &Path,
     progress: &mut Progress,
+    job_id: Option<&str>,
+    device: &str,
 ) -> Result<Value, String> {
     preflight(root, req)?;
 
@@ -1389,7 +1477,6 @@ fn run_inner(
     if let Some(p) = reqfile.parent() {
         let _ = std::fs::create_dir_all(p);
     }
-    let device = train_device(root);
     let payload = json!({
         "exp": req.exp.trim(),
         "dataset": req.dataset,
@@ -1434,8 +1521,16 @@ fn run_inner(
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    let mut child: Child = cmd.spawn().map_err(|e| crate::i18n::te("s.217047672d", &(e)))?;
+    if cancel_flag().load(Ordering::SeqCst) || job_id.is_some_and(crate::train_queue::cancelled) {
+        return Err(crate::i18n::t("s.a5ffdc95ee"));
+    }
+    let mut child: Child = cmd
+        .spawn()
+        .map_err(|e| crate::i18n::te("s.217047672d", &(e)))?;
     *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child.id());
+    if cancel_flag().load(Ordering::SeqCst) {
+        kill_tree(child.id());
+    }
     let _keep = crate::worker::ToolPidGuard::new(child.id());
     let stdout = child.stdout.take().ok_or(crate::i18n::t("s.c73d43b29b"))?;
 
@@ -1465,10 +1560,12 @@ fn run_inner(
             "done" => done = Some(v.clone()),
             _ => {}
         }
-        emit(app, v);
+        emit(app, v, job_id);
     }
 
-    let st = child.wait().map_err(|e| crate::i18n::te("s.d21a4981b7", &(e)))?;
+    let st = child
+        .wait()
+        .map_err(|e| crate::i18n::te("s.d21a4981b7", &(e)))?;
     if cancel_flag().load(Ordering::SeqCst) {
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
@@ -1476,7 +1573,11 @@ fn run_inner(
         return Err(e);
     }
     if !st.success() {
-        return Err(crate::i18n::t2("s.7803aff201", &st.code().unwrap_or(-1), &req.exp.trim()));
+        return Err(crate::i18n::t2(
+            "s.7803aff201",
+            &st.code().unwrap_or(-1),
+            &req.exp.trim(),
+        ));
     }
     let d = done.ok_or(crate::i18n::t("s.7dc4ea39fd"))?;
     // 预处理/特征提取可能在 TEMP 落中间文件。
@@ -1552,7 +1653,10 @@ mod tests {
         let v = preprocess_failure_list(&log);
         assert_eq!(v.len(), 2);
         assert_eq!(v[0]["name"], "bad 1.flac");
-        assert_eq!(v[0]["reason"], "UnicodeDecodeError: 'utf-8' codec can't decode");
+        assert_eq!(
+            v[0]["reason"],
+            "UnicodeDecodeError: 'utf-8' codec can't decode"
+        );
         assert_eq!(v[1]["name"], "bad2.mp3");
         // 原因是最后一个非空行（真正的异常行），不是 traceback 中间的 File 行，
         // 也不是收尾的 end preprocess。
@@ -1611,13 +1715,19 @@ mod tests {
         assert_eq!(freed, 500);
         assert!(!weights.join("miku_e5_s50.pth").exists());
         assert!(!exp.join("G_100.pth").exists());
-        assert!(exp.join("1_16k_wavs").join("a.wav").is_file(), "没勾的类别不能动");
+        assert!(
+            exp.join("1_16k_wavs").join("a.wav").is_file(),
+            "没勾的类别不能动"
+        );
         assert!(weights.join("miku.pth").is_file(), "正式权重永远不动");
         assert!(exp.join("added_miku.index").is_file(), "索引永远不动");
         assert!(exp.join("train.log").is_file(), "日志永远不动");
 
         // 认不出来的类别名直接忽略，不做任何事。
-        assert_eq!(cleanup_apply(&root, "miku", &["everything".to_string()]).unwrap(), 0);
+        assert_eq!(
+            cleanup_apply(&root, "miku", &["everything".to_string()]).unwrap(),
+            0
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -1701,7 +1811,10 @@ mod tests {
             .find(|l| l.starts_with("AUDIO_EXT"))
             .expect("train_worker.py 里没有 AUDIO_EXT");
         for ext in DATASET_AUDIO_EXT {
-            assert!(line.contains(&format!("\".{ext}\"")), "Python 那边没有 {ext}：{line}");
+            assert!(
+                line.contains(&format!("\".{ext}\"")),
+                "Python 那边没有 {ext}：{line}"
+            );
         }
         // 反向：Python 多出来的也要在这边补上。
         let py_count = line.matches('"').count() / 2;
@@ -1769,7 +1882,9 @@ mod tests {
         // 断言里两次取文案可能落在不同语言上（实测到过法语 vs 韩语）。
         let _g = crate::i18n::testing::pin("zh-CN");
         // 这些字符不拦，用户会在训练跑了半小时之后收到一个建目录失败。
-        for bad in ["", "  ", "a/b", "a\\b", "c:d", "x?y", "*", ".hidden", "mute"] {
+        for bad in [
+            "", "  ", "a/b", "a\\b", "c:d", "x?y", "*", ".hidden", "mute",
+        ] {
             assert!(validate_name(bad).is_err(), "should reject {bad:?}");
         }
         for ok in ["小明", "my voice", "voice-2026_v2"] {
@@ -1835,7 +1950,10 @@ mod tests {
         std::fs::create_dir_all(base.join("logs").join("mute")).unwrap();
         std::fs::create_dir_all(base.join("logs").join("小明").join("1_16k_wavs")).unwrap();
         std::fs::write(
-            base.join("logs").join("小明").join("1_16k_wavs").join("a.wav"),
+            base.join("logs")
+                .join("小明")
+                .join("1_16k_wavs")
+                .join("a.wav"),
             b"x",
         )
         .unwrap();
@@ -1935,11 +2053,7 @@ mod tests {
         assert!(body.contains("sliced 1 file"), "{body}");
 
         std::fs::create_dir_all(td.join("assets").join("weights")).unwrap();
-        std::fs::write(
-            td.join("assets").join("weights").join("voice.pth"),
-            b"pth",
-        )
-        .unwrap();
+        std::fs::write(td.join("assets").join("weights").join("voice.pth"), b"pth").unwrap();
         write_outcome(&td, "voice", &log, &progress, "ok");
         let body = std::fs::read_to_string(&log).unwrap();
         assert!(body.contains("usable: final"), "{body}");
@@ -1985,5 +2099,35 @@ mod tests {
         assert!(d == "cpu" || d == "cuda", "directml 不许进训练：{d}");
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+    #[test]
+    fn queue_cancellation_cannot_cancel_another_owner_or_direct_training() {
+        cancel_flag().store(false, Ordering::SeqCst);
+        *QUEUE_JOB.lock().unwrap() = Some("new-job".into());
+        cancel_queued("old-job");
+        assert!(!cancel_flag().load(Ordering::SeqCst));
+        cancel_queued("new-job");
+        assert!(cancel_flag().load(Ordering::SeqCst));
+        cancel_flag().store(false, Ordering::SeqCst);
+        *QUEUE_JOB.lock().unwrap() = None;
+        cancel_queued("new-job");
+        assert!(!cancel_flag().load(Ordering::SeqCst));
+    }
+    #[test]
+    fn realtime_admission_covers_pending_start_without_treating_idle_as_active() {
+        assert!(realtime_requested(&json!({"state":"running"}), &json!({})));
+        assert!(realtime_requested(&json!({"state":"starting"}), &json!({})));
+        assert!(realtime_requested(
+            &json!({"state":"idle","last_cmd_seq":4}),
+            &json!({"cmd":"start","seq":5})
+        ));
+        assert!(!realtime_requested(
+            &json!({"state":"idle","last_cmd_seq":5}),
+            &json!({"cmd":"start","seq":5})
+        ));
+        assert!(!realtime_requested(
+            &json!({"state":"idle","last_cmd_seq":4}),
+            &json!({"cmd":"set","seq":5})
+        ));
     }
 }

@@ -8,12 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountCounts, resetMountCounts } from "../lib/lifecycle";
 import type { PageId } from "../lib/nav";
 import { mount, type Mounted } from "../test/dom";
+import { usePageActive } from "trm-ui";
 import { PageHost } from "./PageHost";
 
 const pages: PageId[] = ["home", "models", "plaza", "more", "settings", "help"];
 
 function Stub({ id }: { id: PageId }) {
-  return <div data-testid={`pane-${id}`}>{id}</div>;
+  const active = usePageActive();
+  return <div data-testid={`pane-${id}`} data-active={String(active)}>{id}</div>;
 }
 
 function host(page: PageId) {
@@ -53,6 +55,18 @@ describe("PageHost lifecycle (C-01)", () => {
     const home = mountCounts().get("page:home");
     expect(home?.mounts).toBe(1); // 未被离场-再进入重复挂载
     expect(home?.unmounts).toBe(0);
+  });
+
+  it("leaving panes become inactive and inert immediately, including a quick return", () => {
+    m = mount(host("home"));
+    act(() => m.root.render(host("models")));
+    const home = m.container.querySelector('[data-testid="pane-home"]')!;
+    expect(home.getAttribute("data-active")).toBe("false");
+    expect(home.parentElement?.hasAttribute("inert")).toBe(true);
+    expect(home.parentElement?.getAttribute("aria-hidden")).toBe("true");
+    act(() => m.root.render(host("home")));
+    expect(home.getAttribute("data-active")).toBe("true");
+    expect(home.parentElement?.hasAttribute("inert")).toBe(false);
   });
 
   it("100 switches leave no net growth in mounted panes", () => {

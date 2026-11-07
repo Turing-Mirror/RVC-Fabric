@@ -759,7 +759,6 @@
     "30e91c9e4d": "Entraîner un modèle de voix personnel avec de la voix sèche",
     "31469944aa": "Appuyez sur la combinaison…",
     "314a72cba4": "Les fichiers du modèle de cette voix sont manquants ou incomplets : retéléchargez-les ou réparez-les.",
-    "3166554c46": "Reprendre l'entraînement",
     "31a98593f1": "Ignorer",
     "31e3310765": "Raccourcis",
     "324ed94533": "Échec de la synchronisation d'inuse avant le lancement du panneau temps réel : {e}",
@@ -801,7 +800,6 @@
     "3d2c784f94": "Un périphérique CABLE est déjà installé. Ne le réinstallez que s'il est endommagé.",
     "3d4e683008": "Dernière étape : installer la carte son virtuelle",
     "3db536a84d": "Coins arrondis : DWM actif (sans bordure système)",
-    "3e6b1657c7": "Entraînement…",
     "3ff3e5ff9b": "Participer aux statistiques",
     "40018c2fe1": "Aucun paramètre ne peut être modifié en cours d'exécution",
     "40019094c0": "Pas de modèle de voix : choisissez une voix sur l'Accueil avant le test",
@@ -876,7 +874,6 @@
     "579ea14ab7": "Égaliseur paramétrique 5 bandes : réglage fin du volume de la voix convertie par fréquences.",
     "57da23c608": "Anciennes voix à fichier unique : une fois converties en « voix gérable », vous pouvez lier un index et des préréglages.",
     "582c50066c": "caractères",
-    "588a754143": "Étape {v0} sur {v1} : {v2}",
     "58a0882f6f": "Extraction terminée",
     "58b4af2771": "Actualisé",
     "594eba5310": "Choisissez le casque ou les enceintes que vous utilisez vraiment.\nAvec une carte virtuelle : silence et risque de Larsen.",
@@ -1040,7 +1037,6 @@
     "8923a00d0b": "Par défaut (paramètres d'origine)",
     "899c21edd3": "Le chemin est hors de la bibliothèque de voix",
     "89dd7d9dec": "Enlever le nasillement",
-    "8a5ef195d6": "L'entraînement peut prendre plusieurs heures. En cas d'interruption, la progression est conservée (morceaux traités et époques terminées) ; réutilisez le même nom pour reprendre.",
     "8ab59cc845": "Vérifiez vous-même la licence avant toute utilisation commerciale.\n\n",
     "8af26d69aa": "Le fichier du profil actif n'existe pas",
     "8b720e5330": "Générer un pack de diagnostic",
@@ -1176,7 +1172,6 @@
     "bc94a9c280": "Option avancée ; il est généralement recommandé de conserver la valeur par défaut",
     "bd45f9d523": "Analyse du manifeste de l'environnement d'exécution CNB…",
     "bda11a3c2d": "Hauteur",
-    "be24590d21": "Lancer l'entraînement",
     "be70b437af": "Sépare les chansons en voix et accompagnement ; à utiliser avant l'entraînement pour retirer musique de fond ou bruit",
     "be8da62ea1": "Image",
     "bea562b0a7": "L'aperçu navigateur ne peut pas récupérer le contenu de la Place",
@@ -1363,7 +1358,6 @@
     "f7c13500d5": "{v0} h {v1} min",
     "8efd7ca6b1": "Terminé, {v0} fichiers de sortie",
     "de94f39aff": "Voulez-vous vraiment supprimer les fichiers vocaux téléchargés ?\n\n{v0}\n\nVous devrez les télécharger à nouveau pour les utiliser.",
-    "2b30598b60": "Entraînement terminé : {v0}",
     "156ff9271b": "Ressources du moteur incomplètes (manque {v0}). Veuillez télécharger les ressources du moteur sur l'interface principale.",
     "4d8ef8514f": "{v0} fichiers terminés",
     "6a17eda1b7": "{v0} fichiers terminés → {v1}",
@@ -2028,7 +2022,6 @@
     "cleanupEffectRestart": "Il faudra repartir du prétraitement",
     "cleanupApply": "Effacer la sélection",
     "cleanupNothing": "Il n'y a rien à nettoyer.",
-    "trainLeftover": "Cet entraînement a produit environ {} de fichiers intermédiaires. Vous pouvez les supprimer dans « Autres → Stockage ».",
     "storageTrash": "Corbeille (conservée 7 jours)",
     "trainInspect": "Vérifier le jeu de données",
     "trainInspecting": "Vérification…",
@@ -2312,7 +2305,12 @@
     "engineStopped": "Moteur arrêté",
     "noneSelected": "Aucune sélection",
     "noNumber": "Aucun",
-    "pagerLabel": "Pages"
+    "pagerLabel": "Pages",
+    "storageRuntime": "Environnement d’exécution",
+    "storageSharedModels": "Modèles partagés",
+    "storageAudio": "Fichiers audio",
+    "storageOther": "Autres fichiers utilisateur",
+    "storageScanFailed": "Impossible d’actualiser le stockage. Relancez l’analyse."
   },
   "extras": {
     "engineTitle": "Ressources moteur",
@@ -2418,8 +2416,7 @@
     "previewAfter": "Après recadrage",
     "previewBefore": "Original",
     "previewNote": "Taille de sortie : {v0} px",
-    "save": "Enregistrer la couverture",
-    "saving": "Enregistrement…"
+    "save": "Enregistrer la couverture"
   },
   "overlay": {
     "title": "Indicateur flottant",
@@ -2476,5 +2473,28 @@
   },
   "sepModels": {
     "deechoDereverb": "Anti-écho et réverbération"
+  },
+  "trainingQueue": {
+    "Title": "File d’entraînement",
+    "Add": "Ajouter à la file",
+    "Clear": "Effacer les tâches terminées",
+    "Queued": "En attente",
+    "Running": "En cours",
+    "Cancelling": "Arrêt en cours",
+    "Paused": "En pause",
+    "Interrupted": "Interrompu",
+    "Completed": "Terminé",
+    "Failed": "Échec",
+    "Cancelled": "Annulé",
+    "Continue": "Continuer",
+    "Retry": "Réessayer",
+    "Remove": "Retirer",
+    "Empty": "Les tâches ajoutées sont entraînées dans l’ordre.",
+    "Conflict": "Un personnage de ce nom est déjà en cours d’entraînement ou en attente. Choisissez un autre nom.",
+    "Missing": "Cette tâche d’entraînement a été retirée.",
+    "Changed": "L’état de la tâche a changé. Réessayez.",
+    "Parameters": "{v0} époques, taille de lot {v1}",
+    "WaitRealtime": "La file reprendra après l’arrêt de la conversion en temps réel.",
+    "EngineBusy": "Un entraînement est en cours. Arrêtez-le d’abord."
   }
 }

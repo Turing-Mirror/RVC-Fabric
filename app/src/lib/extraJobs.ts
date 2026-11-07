@@ -88,6 +88,7 @@ export function startExtraDownload(key: string, engineReady: boolean | null): vo
   }
   starting.add(key);
   busyKeys = { ...busyKeys, [key]: true };
+  progByKey = { ...progByKey, [key]: { key, phase: "run", done: 0 } };
   msg = "";
   emit();
   void (async () => {

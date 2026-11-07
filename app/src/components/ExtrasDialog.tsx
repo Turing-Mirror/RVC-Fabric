@@ -369,7 +369,7 @@ export function ExtrasPanel({
           </div>
         )}
 
-        {msg ? (
+        {msg || jobs.msg ? (
           // 下载失败现在是多行的（一句人话 + 试过的源 + 怎么办 + 技术细节），
           // 不换行的话整段挤成一坨，等于白写。
           <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line break-words">

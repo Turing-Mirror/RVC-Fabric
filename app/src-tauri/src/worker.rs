@@ -1455,6 +1455,8 @@ pub fn start_vc_with_input(
     bridge: Option<&crate::audio_bus::BridgeDescriptor>,
     mobile_input: Option<&Value>,
 ) -> Result<StartOutcome, String> {
+    // Share admission with training so simultaneous starts cannot both claim the GPU.
+    let _training_admission = crate::train::realtime_start_guard()?;
     // 锁里再读一次：补上预设参数，避免用过期的空 DSP 把 inuse 盖掉。
     // 必须在选 worker 之前：dsp_enabled 决定走哪条进程。
     let cfg = crate::config::prepare_vc_start(root).unwrap_or_else(|_| crate::config::read(root));

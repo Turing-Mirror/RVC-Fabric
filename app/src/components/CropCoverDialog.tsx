@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
+import { useI18n } from "../i18n";
 import { coverSize } from "../lib/imageSize";
-import {
-  coverDataUrl,
-  pickCoverImage,
-  setVoiceCover,
-  type VoiceModel,
-} from "../lib/voices";
+import { coverDataUrl, pickCoverImage, setVoiceCover, type VoiceModel } from "../lib/voices";
 import { Modal } from "./Modal";
 
 /**
@@ -33,7 +29,7 @@ function loadImageEl(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("image load failed"));
+    img.onerror = () => reject(new Error(t("models.coverBadImage")));
     img.src = src;
   });
 }
@@ -48,12 +44,16 @@ export function CropCoverDialog({
   /** 保存成功后回调（参数是给页面 toast 的一句话）。 */
   onSaved: (message?: string) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
+  const sourceRequest = useRef(0);
+  const dragCleanup = useRef<(() => void) | null>(null);
+  const [picking, setPicking] = useState(false);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [srcLabel, setSrcLabel] = useState("");
   const [ratio, setRatio] = useState<Ratio>("4:3");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [preview, setPreview] = useState({ after: "", before: "", note: "" });
+  const [preview, setPreview] = useState({ after: "", before: "", size: "" });
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -131,7 +131,7 @@ export function CropCoverDialog({
     if (!ctx) return;
     const { scale, ox, oy } = tf.current;
     ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.fillStyle = "#18181b";
+    ctx.fillStyle = getComputedStyle(cv).getPropertyValue("--group").trim() || getComputedStyle(cv).backgroundColor;
     ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.save();
     ctx.translate(ox, oy);
@@ -156,6 +156,9 @@ export function CropCoverDialog({
     const g = cv.getContext("2d");
     if (!g) return null;
     g.imageSmoothingQuality = "high";
+    // JPEG has no alpha. Use the shared opaque light fill for preview and save.
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--group-ink").trim();
+    g.fillRect(0, 0, outW, outH);
     g.drawImage(im, x, y, w, h, 0, 0, outW, outH);
     return { canvas: cv, w: outW, h: outH };
   }, []);
@@ -173,7 +176,7 @@ export function CropCoverDialog({
     setPreview({
       after,
       before: imgRef.current?.src || "",
-      note: t("crop.previewNote", { v0: `${out.w}×${out.h}` }),
+      size: `${out.w}×${out.h}`,
     });
   }, [renderCrop]);
 
@@ -186,7 +189,7 @@ export function CropCoverDialog({
     const iw = im.naturalWidth;
     const ih = im.naturalHeight;
     cv.width = cw;
-    cv.height = Math.max(40, Math.round((cw * ih) / iw));
+    cv.height = Math.max(120, Math.min(360, Math.round((cw * ih) / iw)));
     const vs = Math.min(cv.width / iw, cv.height / ih);
     tf.current = {
       scale: vs,
@@ -227,46 +230,47 @@ export function CropCoverDialog({
   );
 
   const openPicker = useCallback(async () => {
+    const request = ++sourceRequest.current;
+    setPicking(true);
     setErr("");
     try {
-      const p = await pickCoverImage();
-      if (!p) return;
-      const el = await loadImageEl(await coverDataUrl(p));
-      setSrcLabel(p.split(/[\\/]/).pop() || p);
+      const data = await pickCoverImage();
+      if (!data || request !== sourceRequest.current) return;
+      const el = await loadImageEl(await coverDataUrl(data));
+      if (request !== sourceRequest.current) return;
+      setSrcLabel(data.split(/[\\/]/).pop() || data);
       startEditor(el);
     } catch (e) {
-      setErr(String(e));
+      if (request === sourceRequest.current) setErr(String(e));
+    } finally {
+      if (request === sourceRequest.current) setPicking(false);
     }
   }, [startEditor]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape" && !busy && !picking) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, [busy, picking, onClose]);
 
-  // 打开时带上当前封面。字节从壳读成 data URL 再画 —— 直接用远程图或
-  // convertFileSrc 会把 canvas 弄脏，预览/保存一起挂（diag 26.8.27）。
   useEffect(() => {
-    const raw = (model.cover || "").trim();
-    if (!raw) return;
-    let cancelled = false;
-    void coverDataUrl(raw)
-      .then((data) => loadImageEl(data))
-      .then((el) => {
-        if (cancelled) return;
-        setSrcLabel(raw.split(/[\\/]/).pop() || raw);
+    const request = ++sourceRequest.current;
+    if (model.cover?.trim()) {
+      const raw = model.cover.trim();
+      void coverDataUrl(raw).then(loadImageEl).then((el) => {
+        if (request !== sourceRequest.current) return;
+        setSrcLabel(model.cover || "");
         startEditor(el);
-      })
-      .catch((e) => {
-        if (!cancelled) setErr(String(e));
+      }).catch((e) => {
+        if (request === sourceRequest.current) setErr(String(e));
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [model.cover, startEditor]);
+    }
+    const counter = sourceRequest;
+    const drag = dragCleanup;
+    return () => { counter.current++; drag.current?.(); };
+  }, [model.cover, model.dir, startEditor]);
 
   // 编辑器 DOM 挂上之后再量宽度。以前 startEditor 里立刻 rAF，那时
   // wrap 还没渲染，画布 0 宽，预览区也是空的。
@@ -311,7 +315,7 @@ export function CropCoverDialog({
   };
 
   const onCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!imgRef.current || e.button !== 0) return;
+    if (!imgRef.current || e.button !== 0 || busy || picking) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     e.currentTarget.style.cursor = "grabbing";
     const start = { x: e.clientX, y: e.clientY, ox: tf.current.ox, oy: tf.current.oy };
@@ -324,22 +328,27 @@ export function CropCoverDialog({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      dragCleanup.current = null;
       const cvs = canvasRef.current;
       if (cvs) cvs.style.cursor = "grab";
     };
+    dragCleanup.current?.();
+    dragCleanup.current = up;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    if (!imgRef.current) return;
+    if (!imgRef.current || busy || picking) return;
     e.preventDefault();
     const { cx, cy } = canvasPoint(e);
     zoomAt(e.deltaY < 0 ? 1.15 : 0.87, cx, cy);
   };
 
   const onBoxPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!imgRef.current) return;
+    if (!imgRef.current || e.button !== 0 || busy || picking) return;
     e.stopPropagation();
     e.preventDefault();
     const target = e.target as HTMLElement;
@@ -393,9 +402,14 @@ export function CropCoverDialog({
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      dragCleanup.current = null;
     };
+    dragCleanup.current?.();
+    dragCleanup.current = up;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   const changeRatio = (r: Ratio) => {
@@ -407,7 +421,7 @@ export function CropCoverDialog({
   };
 
   const save = async () => {
-    if (!model.dir || busy) return;
+    if (busy || picking) return;
     const out = renderCrop();
     if (!out) return;
     setBusy(true);
@@ -431,23 +445,25 @@ export function CropCoverDialog({
 
   return (
     <Modal z={92} onBackdrop={() => {
-        if (!busy) onClose();
+        if (!busy && !picking) onClose();
       }}>
       <div
-        className="w-full max-w-[860px] max-h-[86vh] overflow-auto rounded-[var(--r)] bg-[var(--surface)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]"
+        role="dialog" aria-modal="true" aria-label={t("crop.title")}
+        className="w-full max-w-[860px] max-h-[86vh] flex flex-col overflow-hidden rounded-[var(--r)] bg-[var(--surface)] p-5 shadow-[0_20px_60px_var(--scrim)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex shrink-0 items-center justify-between gap-3 mb-1">
           <h3 className="m-0 text-[16px] font-semibold">{t("crop.title")}</h3>
-          <Btn onClick={onClose}>{t("s.6c14bd7f6f")}</Btn>
+          <Btn disabled={busy || picking} onClick={onClose}>{t("s.6c14bd7f6f")}</Btn>
         </div>
-        <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)]">
+        <p className="m-0 mb-3 shrink-0 text-[12.5px] text-[var(--ink-muted)]">
           {t("crop.lead", { v0: model.name })}
         </p>
 
+        <div className="min-h-0 overflow-y-auto">
         {!img ? (
           <div className="flex flex-col items-start gap-3 py-8">
-            <Btn primary onClick={() => void openPicker()}>
+            <Btn primary busy={picking} onClick={() => void openPicker()}>
               {t("crop.pick")}
             </Btn>
             <span className="text-[12px] text-[var(--meta)]">{t("crop.pickHint")}</span>
@@ -460,7 +476,7 @@ export function CropCoverDialog({
             <div>
               <div
                 ref={wrapRef}
-                className="relative w-full rounded-lg overflow-hidden bg-[#111] touch-none select-none"
+                className="relative w-full rounded-lg overflow-hidden bg-[var(--group)] touch-none select-none"
               >
                 <canvas
                   ref={canvasRef}
@@ -471,12 +487,12 @@ export function CropCoverDialog({
                 <div
                   ref={boxRef}
                   onPointerDown={onBoxPointerDown}
-                  className="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] cursor-move"
+                  className="absolute border-2 border-[var(--accent)] shadow-[0_0_0_9999px_color-mix(in_srgb,var(--surface)_65%,transparent)] cursor-move"
                 >
-                  <div className="absolute left-0 right-0 top-1/3 h-px bg-white/55" />
-                  <div className="absolute left-0 right-0 top-2/3 h-px bg-white/55" />
-                  <div className="absolute top-0 bottom-0 left-1/3 w-px bg-white/55" />
-                  <div className="absolute top-0 bottom-0 left-2/3 w-px bg-white/55" />
+                  <div className="absolute left-0 right-0 top-1/3 h-px bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]" />
+                  <div className="absolute left-0 right-0 top-2/3 h-px bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]" />
+                  <div className="absolute top-0 bottom-0 left-1/3 w-px bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]" />
+                  <div className="absolute top-0 bottom-0 left-2/3 w-px bg-[color-mix(in_srgb,var(--surface)_55%,transparent)]" />
                   {[
                     ["nw", "-top-[7px] -left-[7px] cursor-nwse-resize"],
                     ["n", "-top-[7px] left-1/2 -translate-x-1/2 cursor-ns-resize"],
@@ -490,20 +506,20 @@ export function CropCoverDialog({
                     <span
                       key={h}
                       data-h={h}
-                      className={`absolute w-3 h-3 bg-white border border-neutral-700 rounded-[3px] ${cls}`}
+                      className={`absolute w-3 h-3 bg-[var(--surface)] border border-[var(--accent)] rounded-[3px] ${cls}`}
                     />
                   ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                <Btn onClick={() => zoomAt(1.3, (canvasRef.current?.width || 0) / 2, (canvasRef.current?.height || 0) / 2)}>
+                <Btn disabled={busy || picking} onClick={() => zoomAt(1.3, (canvasRef.current?.width || 0) / 2, (canvasRef.current?.height || 0) / 2)}>
                   {t("crop.zoomIn")}
                 </Btn>
-                <Btn onClick={() => zoomAt(1 / 1.3, (canvasRef.current?.width || 0) / 2, (canvasRef.current?.height || 0) / 2)}>
+                <Btn disabled={busy || picking} onClick={() => zoomAt(1 / 1.3, (canvasRef.current?.width || 0) / 2, (canvasRef.current?.height || 0) / 2)}>
                   {t("crop.zoomOut")}
                 </Btn>
-                <Btn onClick={fitCanvas}>{t("crop.fit")}</Btn>
-                <Btn
+                <Btn disabled={busy || picking} onClick={fitCanvas}>{t("crop.fit")}</Btn>
+                <Btn disabled={busy || picking}
                   onClick={() => {
                     tf.current = { scale: 1, ox: 0, oy: 0 };
                     draw();
@@ -516,7 +532,7 @@ export function CropCoverDialog({
                   {t("crop.ratioLabel")}
                 </span>
                 {(["4:3", "1:1", "free"] as Ratio[]).map((r) => (
-                  <Btn key={r} on={ratio === r} onClick={() => changeRatio(r)}>
+                  <Btn disabled={busy || picking} key={r} on={ratio === r} onClick={() => changeRatio(r)}>
                     {r === "free" ? t("crop.free") : r}
                   </Btn>
                 ))}
@@ -533,8 +549,8 @@ export function CropCoverDialog({
                     <img src={preview.after} alt="" className="w-full h-full object-contain" />
                   ) : null}
                 </div>
-                {preview.note ? (
-                  <div className="text-[11.5px] text-[var(--meta)] mt-1.5">{preview.note}</div>
+                {preview.size ? (
+                  <div className="text-[11.5px] text-[var(--meta)] mt-1.5">{t("crop.previewNote", { v0: preview.size })}</div>
                 ) : null}
               </div>
               <div className="rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] p-2.5">
@@ -555,13 +571,14 @@ export function CropCoverDialog({
           <p className="mt-3 mb-0 text-[12.5px] text-[var(--danger)] break-all">{err}</p>
         ) : null}
 
-        <div className="mt-4 flex items-center gap-2.5 flex-wrap">
+        </div>
+        <div className="mt-4 flex shrink-0 items-center gap-2.5 flex-wrap">
           {img ? (
             <>
-              <Btn primary busy={busy} onClick={() => void save()}>
-                {busy ? t("crop.saving") : t("crop.save")}
+              <Btn primary busy={busy} disabled={picking} onClick={() => void save()}>
+                {t("crop.save")}
               </Btn>
-              <Btn onClick={() => void openPicker()}>{t("crop.repick")}</Btn>
+              <Btn disabled={busy} busy={picking} onClick={() => void openPicker()}>{t("crop.repick")}</Btn>
             </>
           ) : null}
         </div>

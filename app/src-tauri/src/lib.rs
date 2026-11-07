@@ -60,6 +60,7 @@ mod telemetry;
 mod testutil;
 mod tool_window;
 mod train;
+mod train_queue;
 mod tts;
 mod ui_assets;
 pub mod update;
@@ -1998,6 +1999,27 @@ async fn train_start(
 }
 
 #[tauri::command]
+async fn train_queue_list(state: State<'_, Mutex<AppState>>) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || train_queue::list(&root))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn train_queue_add(app: AppHandle, state: State<'_, Mutex<AppState>>, req: train::TrainReq) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || train_queue::enqueue(app, root, req))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn train_queue_action(app: AppHandle, state: State<'_, Mutex<AppState>>, id: String, action: String) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || train_queue::action(app, root, id, action))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 fn train_cancel() {
     train::cancel();
 }
@@ -3004,6 +3026,9 @@ pub fn run() {
             train_status,
             train_pick_dataset,
             train_start,
+            train_queue_list,
+            train_queue_add,
+            train_queue_action,
             train_pick_output_dir,
             train_output_dir,
             train_cancel,

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { navDirection, type PageId } from "../lib/nav";
+import { PageActive } from "trm-ui";
 import { noteMount, noteUnmount } from "../lib/lifecycle";
 
 type Props = {
@@ -43,7 +44,8 @@ export function PageHost({ page, children }: Props) {
   const leaveTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (page === phase.page) return;
+    if (page === phase.page && !(reduce && phase.leaving)) return;
+    if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
     const dir = navDirection(phase.page, page);
     if (reduce || dir === 0) {
       setPhase({ page, leaving: null, dir: 0 });
@@ -98,6 +100,7 @@ export function PageHost({ page, children }: Props) {
           <PagePane
             key={id}
             id={id}
+            active={!leaving && id === page}
             paneRef={leaving ? undefined : paneRef}
             className={
               leaving
@@ -120,10 +123,12 @@ export function PageHost({ page, children }: Props) {
 function PagePane({
   id,
   paneRef,
+  active,
   className,
   children,
 }: {
   id: PageId;
+  active: boolean;
   paneRef?: React.RefObject<HTMLDivElement | null>;
   className: string;
   children: ReactNode;
@@ -133,8 +138,8 @@ function PagePane({
     return () => noteUnmount(`page:${id}`);
   }, [id]);
   return (
-    <div ref={paneRef} className={className}>
-      {children}
+    <div ref={paneRef} className={className} inert={!active} aria-hidden={!active || undefined} data-page-scroll={active ? "" : undefined}>
+      <PageActive value={active}>{children}</PageActive>
     </div>
   );
 }

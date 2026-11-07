@@ -80,6 +80,32 @@ describe("模型页使用中徽标", () => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
+  it("late index/profile responses cannot overwrite a newer selection", async () => {
+    const pending = new Map<string, (value: unknown) => void>();
+    tauri.invoke.mockImplementation((cmd, args) => {
+      if (cmd === "voices_list") return Promise.resolve({ models: CATALOG.models.map((m) => ({ ...m, source: "user_data" })) });
+      if (cmd === "voices_index_list" || cmd === "voices_profiles_list") {
+        const dir = (args as { modelDir: string }).modelDir;
+        return new Promise((resolve) => pending.set(`${cmd}:${dir}`, resolve));
+      }
+      return Promise.resolve({});
+    });
+    const m = mount(<ModelsPage currentId="m/a.pth" />);
+    mounts.push(m);
+    await tick(); await tick();
+    act(() => m.root.render(<ModelsPage currentId="m/b.pth" />));
+    await tick();
+    const resolve = (dir: string, label: string) => {
+      pending.get(`voices_index_list:${dir}`)!({ items: [{ path: label, label, active: true, badge: "" }] });
+      pending.get(`voices_profiles_list:${dir}`)!({ items: [{ id: label, name: label, source: "user", source_label: "", active: true }] });
+    };
+    await act(async () => resolve("m/b", "NEW_PANEL"));
+    expect(m.container.textContent).toContain("NEW_PANEL");
+    await act(async () => resolve("m/a", "OLD_PANEL"));
+    expect(m.container.textContent).toContain("NEW_PANEL");
+    expect(m.container.textContent).not.toContain("OLD_PANEL");
+  });
+
   it("currentId 为空：selected_idx 不许假造「使用中」徽标", async () => {
     const badge = t("s.e6aa2cbd7b");
     const m = mount(<ModelsPage currentId="" />);
@@ -98,7 +124,7 @@ describe("模型页使用中徽标", () => {
     await tick();
     const badges = Array.from(
       m.container.querySelectorAll("span"),
-    ).filter((s) => s.textContent === badge);
+    ).filter((s) => s.textContent === badge && !s.closest("button"));
     expect(badges).toHaveLength(1);
     // 徽章所在的卡片容器里得有乙的名字。
     const card = badges[0].closest("div");

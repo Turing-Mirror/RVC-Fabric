@@ -958,7 +958,6 @@
     "6f63f33852": "Monitor (optional)",
     "6fe5607f45": "Failed to start PowerShell: {e}",
     "703e6f531a": "Verifying and extracting large component files. Please wait…",
-    "70927369db": "Download the engine resources first; then the separation models and base models below become selectable.",
     "70b208202c": "Select",
     "70f6a74f68": "Archive contains an empty path",
     "71031cc3ad": "CNB releases & artifacts",
@@ -1283,7 +1282,6 @@
     "e7a64d4aaf": "NVIDIA 50-series (RTX 50xx)",
     "e84378f99a": "No voice selected yet. Pick one on Home or Models.",
     "e8850440f2": "Input",
-    "e8a77f003d": "Download the engine resources before the actual models.",
     "e9c01e81cb": "Pick the input file or folder first",
     "e9ddef6eab": "Unable to create output directory: {e}",
     "ea5083770c": "**Note**",
@@ -1327,7 +1325,7 @@
     "f8893054c2": "No separation model installed yet. We recommend downloading “Vocal extraction” first. It covers cleaning training material.",
     "f950213ab7": "Reading…",
     "f9786f5b73": "48k sounds best but uses more VRAM",
-    "f9cbb1e0c6": "Not installed, about 720 MB",
+    "f9cbb1e0c6": "Not installed",
     "f9e62f8c38": "The benchmark finished without generating a report file",
     "f9f2a78f9f": "No campaigns yet.",
     "fbb8ddd570": "Engine status",
@@ -1770,7 +1768,7 @@
     "extraRemoveSepBusy": "Vocal separation is running; stop it before uninstalling separation models.",
     "extraRemoveTrainBusy": "Training is running; stop it before uninstalling base models.",
     "extraRemoveFailed": "{a0} could not be deleted: {a1}. The files may be in use; stop separation/training and retry.",
-    "vcNeedEngineCore": "Realtime conversion needs the engine resources (hubert / rmvpe / ffmpeg, about 720 MB). Download them first, then hit Start.",
+    "vcNeedEngineCore": "Real-time voice changing requires engine resources. Download them to start.",
     "vcNeedEngineCoreShort": "Download the engine resources before starting conversion",
     "wkDiedDuringLoad": "The engine process exited while loading. See today's log under User_Data/logs/worker/.",
     "wkPidNotAlive": "The engine process is no longer running",
@@ -1794,7 +1792,7 @@
     "trainOutPick": "Choose where to save voices",
     "trainOutRelative": "The save folder must be a full path (for example D:\\Voices); got “{a0}”.",
     "trainOutUnwritable": "Cannot create the save folder {a0}: {a1}. Please pick a writable location before starting.",
-    "provCoreAsk": "The core components are hubert, rmvpe and ffmpeg, about 720 MB. Realtime conversion, file conversion and voice training need them; DSP conversion and vocal separation do not. Download them now, or later from Plaza.",
+    "provCoreAsk": "Engine resources are required for real-time voice changing, voice conversion and training. Download now or later in Plaza.",
     "provCoreGet": "Download engine resources",
     "provCoreSkip": "Not now; enter the app",
     "provCoreDownloading": "Downloading engine resources…",
@@ -2314,8 +2312,7 @@
   },
   "extras": {
     "engineTitle": "Engine resources",
-    "engineDesc": "Contains hubert, rmvpe and ffmpeg, which realtime conversion, file conversion and voice training all need. First-time setup downloads only the runtime environment; this item downloads when it is first needed.",
-    "missingList": " Missing: {list}",
+    "engineDesc": "Base resources for real-time voice changing, voice conversion and training.",
     "countItems": "{n} items",
     "items": {
       "pymss-vocal": {
@@ -2378,7 +2375,8 @@
         "label": "Base model 48k",
         "notes": "For training custom voices. Download only the sample rate you use; 48k is best quality, more VRAM. Includes G/D/f0G/f0D like RVC pretrained_v2."
       }
-    }
+    },
+    "downloadSize": "Download size: {size}"
   },
   "onboarding": {
     "languageTitle": "Choose language",

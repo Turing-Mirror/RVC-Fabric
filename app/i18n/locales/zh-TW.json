@@ -958,7 +958,6 @@
     "6f63f33852": "監聽（可選）",
     "6fe5607f45": "PowerShell 啟動失敗：{e}",
     "703e6f531a": "正在校驗並解壓大型元件檔案，請稍候…",
-    "70927369db": "請先下載引擎資源，完成後即可選擇下方的人聲分離模型或訓練底模。",
     "70b208202c": "選擇",
     "70f6a74f68": "壓縮包含空路徑",
     "71031cc3ad": "CNB 發布與製品",
@@ -1283,7 +1282,6 @@
     "e7a64d4aaf": "NVIDIA 50 系（RTX 50xx）",
     "e84378f99a": "還沒有選中的音色。先在「首頁」或「模型」頁選一個。",
     "e8850440f2": "輸入",
-    "e8a77f003d": "請先下載引擎資源，再下載具體模型。",
     "e9c01e81cb": "請先選好輸入檔案或資料夾",
     "e9ddef6eab": "無法建立輸出目錄：{e}",
     "ea5083770c": "**注意**",
@@ -1327,7 +1325,7 @@
     "f8893054c2": "尚未安裝分離模型。建議優先下載「人聲提取」，清理訓練素材使用該模型即可。",
     "f950213ab7": "讀取中…",
     "f9786f5b73": "48k 音質最佳，但顯示記憶體佔用更高",
-    "f9cbb1e0c6": "未安裝，約 720 MB",
+    "f9cbb1e0c6": "未安裝",
     "f9e62f8c38": "效能測試已結束，但未產生測試報告檔案",
     "f9f2a78f9f": "暫無投放內容。",
     "fbb8ddd570": "引擎狀態",
@@ -1770,7 +1768,7 @@
     "extraRemoveSepBusy": "人聲分離正在進行，請先停止後再解除安裝分離模型。",
     "extraRemoveTrainBusy": "訓練正在進行，請先停止後再解除安裝訓練底模。",
     "extraRemoveFailed": "{a0} 無法刪除：{a1}。檔案可能正被佔用，請先停止分離/訓練後重試。",
-    "vcNeedEngineCore": "即時變聲需要引擎資源（hubert / rmvpe / ffmpeg，約 720 MB）。先下載補齊，完成後再點「開啟變聲」。",
+    "vcNeedEngineCore": "即時變聲需要引擎資源。下載完成後即可開啟變聲。",
     "vcNeedEngineCoreShort": "請先補齊引擎資源，再開啟變聲",
     "wkDiedDuringLoad": "引擎程序在載入過程中結束，請檢視 User_Data/logs/worker/ 中當天的紀錄。",
     "wkPidNotAlive": "引擎處理程序已不在執行",
@@ -1794,7 +1792,7 @@
     "trainOutPick": "選音色存放目錄",
     "trainOutRelative": "存放目錄必須是完整路徑（比如 D:\\RVC音色），目前填的是「{a0}」。",
     "trainOutUnwritable": "無法建立存放目錄 {a0}：{a1}。請改用可寫入的位置後再開始。",
-    "provCoreAsk": "核心元件包含 hubert、rmvpe 和 ffmpeg，約 720 MB。即時變聲、語音轉換和訓練音色需要這些元件，DSP 變聲和人聲分離不需要。可以現在下載，也可以稍後在「廣場」中下載。",
+    "provCoreAsk": "即時變聲、語音轉換和訓練需要引擎資源。可現在下載，也可稍後在廣場下載。",
     "provCoreGet": "下載引擎資源",
     "provCoreSkip": "暫不下載，進入軟體",
     "provCoreDownloading": "正在下載引擎資源…",
@@ -2314,8 +2312,7 @@
   },
   "extras": {
     "engineTitle": "引擎資源",
-    "engineDesc": "包含 hubert、rmvpe 和 ffmpeg，即時變聲、語音轉換和訓練音色都需要。首次補全只下載執行環境，此項在用到時再下載。",
-    "missingList": " 目前缺少：{list}",
+    "engineDesc": "即時變聲、語音轉換和訓練所需的基礎資源。",
     "countItems": "共 {n} 項",
     "items": {
       "pymss-vocal": {
@@ -2378,7 +2375,8 @@
         "label": "底模 48k",
         "notes": "訓練專屬音色時需要。只下你選的取樣率那一套即可；48k 音質最好、顯存占用更高。含 G/D/f0G/f0D，與 RVC 原版 pretrained_v2 一致。"
       }
-    }
+    },
+    "downloadSize": "下載大小：{size}"
   },
   "onboarding": {
     "languageTitle": "選擇介面語言",

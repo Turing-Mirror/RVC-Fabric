@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
 import { StoreSection } from "../components/StoreSection";
 import { Pager } from "../components/Pager";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { ExtrasPanel, type ExtrasFilter } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
@@ -122,13 +123,15 @@ function PlazaPageImpl({
           }
         />
         <Block title={t("s.pageOf", { cur: cur + 1, total })}>
-          <Group>
-            {slice.length ? (
-              slice.map((e) => <Notes key={e.version} entry={e} />)
-            ) : (
-              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
-            )}
-          </Group>
+          <CatalogTransition scope="changelog" page={cur + 1}>
+            <Group>
+              {slice.length ? (
+                slice.map((e) => <Notes key={e.version} entry={e} />)
+              ) : (
+                <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
+              )}
+            </Group>
+          </CatalogTransition>
         </Block>
         <Pager className="py-5" page={cur + 1} pages={total} onChange={(p) => setPageNo(p - 1)} />
       </PagePad>

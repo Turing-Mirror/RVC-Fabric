@@ -28,6 +28,8 @@ import { Btn, Warn } from "./ui";
 import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
+import { CatalogTransition } from "./CatalogTransition";
+import { useDir } from "trm-ui";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -343,6 +345,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     return kept;
   }, [grouping, list, locale]);
 
+  const catalogDirection = useDir(["all", "official", "thirdparty"].indexOf(source) * 2 + (grouping === "series" ? 1 : 0));
   const perPage = cols * PAGE_ROWS;
   const totalPages = Math.max(1, Math.ceil(list.length / perPage));
   const pageClamped = Math.min(page, totalPages);
@@ -579,124 +582,127 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       {/* gridRef 挂在网格上，宽度是从它的父级量的 —— 系列视图下网格有好几个，
           但外面这一层永远只有一个，量它才稳。 */}
       <div ref={gridRef}>
-        {grouping === "series" && seriesGroups ? (
-          seriesGroups.length === 0 ? (
+        <CatalogTransition scope={JSON.stringify([source, grouping, seriesFocus, q, hideInstalled])}
+          page={pageClamped} dir={catalogDirection || 1}>
+          {grouping === "series" && seriesGroups ? (
+            seriesGroups.length === 0 ? (
+              <Empty loading={loading} />
+            ) : (
+              (focusParts(seriesFocus).parent
+                ? seriesGroups.filter((s) => s.key === focusParts(seriesFocus).parent)
+                : seriesGroups
+              ).map((node) => {
+                const { group: focusGroup } = focusParts(seriesFocus);
+                const openS = seriesFocus ? true : expanded.has(node.key);
+                const nested = node.groups.some((g) => g.label);
+                // 下拉选中父类：整类平铺，不再先点一个同名子类。
+                const parentAll = !!seriesFocus && !focusGroup;
+                const groups = focusGroup
+                  ? node.groups.filter((g) => g.raw === focusGroup)
+                  : node.groups;
+                return (
+                  <div key={node.key} className="mb-3">
+                    {seriesFocus ? null : (
+                      <button
+                        type="button"
+                        className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2.5 cursor-pointer flex justify-between items-center"
+                        onClick={() =>
+                          setExpanded((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(node.key)) n.delete(node.key);
+                            else n.add(node.key);
+                            return n;
+                          })
+                        }
+                      >
+                          <span className="font-semibold text-[14px]">{node.label}</span>
+                        <span className="text-[12px] text-[var(--meta)]">
+                          {t("s.c8542337dc", {
+                            v0: node.voices.length,
+                            v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
+                          })}
+                        </span>
+                      </button>
+                    )}
+                    {openS ? (
+                      nested && !parentAll ? (
+                        groups.map((g) => {
+                          const gk = groupFocusKey(node.key, g.raw);
+                          const openG = !!focusGroup || expandedGroups.has(gk);
+                          return (
+                            <div key={gk} className="pl-3 mt-1.5">
+                              {focusGroup ? null : (
+                                <button
+                                  type="button"
+                                  className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2 cursor-pointer flex justify-between items-center"
+                                  onClick={() =>
+                                    setExpandedGroups((prev) => {
+                                      const n = new Set(prev);
+                                      if (n.has(gk)) n.delete(gk);
+                                      else n.add(gk);
+                                      return n;
+                                    })
+                                  }
+                                >
+                                  <span className="text-[13px]">{g.label}</span>
+                                  <span className="text-[12px] text-[var(--meta)]">
+                                    {t("s.c8542337dc", {
+                                      v0: g.voices.length,
+                                      v1: openG
+                                        ? t("s.5d5815647c")
+                                        : t("s.b0e24833f7"),
+                                    })}
+                                  </span>
+                                </button>
+                              )}
+                              {openG ? (
+                                <SeriesPageGrid
+                                  seriesKey={gk}
+                                  voices={g.voices}
+                                  cols={cols}
+                                  perPage={perPage}
+                                  forcedFull={!!focusGroup}
+                                  seriesFull={seriesFull}
+                                  setSeriesFull={setSeriesFull}
+                                  seriesPage={seriesPage}
+                                  setSeriesPage={setSeriesPage}
+                                  cardProps={cardProps}
+                                  gridStyle={gridStyle}
+                                />
+                              ) : null}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <SeriesPageGrid
+                          seriesKey={node.key}
+                          voices={node.voices}
+                          cols={cols}
+                          perPage={perPage}
+                          forcedFull={!!seriesFocus}
+                          seriesFull={seriesFull}
+                          setSeriesFull={setSeriesFull}
+                          seriesPage={seriesPage}
+                          setSeriesPage={setSeriesPage}
+                          cardProps={cardProps}
+                          gridStyle={gridStyle}
+                        />
+                      )
+                    ) : null}
+                  </div>
+                );
+              })
+            )
+          ) : pageItems.length === 0 ? (
             <Empty loading={loading} />
           ) : (
-            (focusParts(seriesFocus).parent
-              ? seriesGroups.filter((s) => s.key === focusParts(seriesFocus).parent)
-              : seriesGroups
-            ).map((node) => {
-              const { group: focusGroup } = focusParts(seriesFocus);
-              const openS = seriesFocus ? true : expanded.has(node.key);
-              const nested = node.groups.some((g) => g.label);
-              // 下拉选中父类：整类平铺，不再先点一个同名子类。
-              const parentAll = !!seriesFocus && !focusGroup;
-              const groups = focusGroup
-                ? node.groups.filter((g) => g.raw === focusGroup)
-                : node.groups;
-              return (
-                <div key={node.key} className="mb-3">
-                  {seriesFocus ? null : (
-                    <button
-                      type="button"
-                      className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2.5 cursor-pointer flex justify-between items-center"
-                      onClick={() =>
-                        setExpanded((prev) => {
-                          const n = new Set(prev);
-                          if (n.has(node.key)) n.delete(node.key);
-                          else n.add(node.key);
-                          return n;
-                        })
-                      }
-                    >
-                        <span className="font-semibold text-[14px]">{node.label}</span>
-                      <span className="text-[12px] text-[var(--meta)]">
-                        {t("s.c8542337dc", {
-                          v0: node.voices.length,
-                          v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
-                        })}
-                      </span>
-                    </button>
-                  )}
-                  {openS ? (
-                    nested && !parentAll ? (
-                      groups.map((g) => {
-                        const gk = groupFocusKey(node.key, g.raw);
-                        const openG = !!focusGroup || expandedGroups.has(gk);
-                        return (
-                          <div key={gk} className="pl-3 mt-1.5">
-                            {focusGroup ? null : (
-                              <button
-                                type="button"
-                                className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2 cursor-pointer flex justify-between items-center"
-                                onClick={() =>
-                                  setExpandedGroups((prev) => {
-                                    const n = new Set(prev);
-                                    if (n.has(gk)) n.delete(gk);
-                                    else n.add(gk);
-                                    return n;
-                                  })
-                                }
-                              >
-                                <span className="text-[13px]">{g.label}</span>
-                                <span className="text-[12px] text-[var(--meta)]">
-                                  {t("s.c8542337dc", {
-                                    v0: g.voices.length,
-                                    v1: openG
-                                      ? t("s.5d5815647c")
-                                      : t("s.b0e24833f7"),
-                                  })}
-                                </span>
-                              </button>
-                            )}
-                            {openG ? (
-                              <SeriesPageGrid
-                                seriesKey={gk}
-                                voices={g.voices}
-                                cols={cols}
-                                perPage={perPage}
-                                forcedFull={!!focusGroup}
-                                seriesFull={seriesFull}
-                                setSeriesFull={setSeriesFull}
-                                seriesPage={seriesPage}
-                                setSeriesPage={setSeriesPage}
-                                cardProps={cardProps}
-                                gridStyle={gridStyle}
-                              />
-                            ) : null}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <SeriesPageGrid
-                        seriesKey={node.key}
-                        voices={node.voices}
-                        cols={cols}
-                        perPage={perPage}
-                        forcedFull={!!seriesFocus}
-                        seriesFull={seriesFull}
-                        setSeriesFull={setSeriesFull}
-                        seriesPage={seriesPage}
-                        setSeriesPage={setSeriesPage}
-                        cardProps={cardProps}
-                        gridStyle={gridStyle}
-                      />
-                    )
-                  ) : null}
-                </div>
-              );
-            })
-          )
-        ) : pageItems.length === 0 ? (
-          <Empty loading={loading} />
-        ) : (
-          <div className="grid gap-x-4 gap-y-[22px]" style={gridStyle}>
-            {pageItems.map((v) => (
-              <VoiceCard key={v.id} {...cardProps(v)} />
-            ))}
-          </div>
-        )}
+            <div className="grid gap-x-4 gap-y-[22px]" style={gridStyle}>
+              {pageItems.map((v) => (
+                <VoiceCard key={v.id} {...cardProps(v)} />
+              ))}
+            </div>
+          )}
+        </CatalogTransition>
       </div>
 
       {grouping !== "series" ? (
@@ -763,11 +769,13 @@ function SeriesPageGrid({
     : voices.slice(0, preview);
   return (
     <>
-      <div className="grid gap-x-4 gap-y-[22px] mt-4" style={gridStyle}>
-        {shown.map((v) => (
-          <VoiceCard key={v.id} {...cardProps(v)} />
-        ))}
-      </div>
+      <CatalogTransition scope={seriesKey} page={curS}>
+        <div className="grid gap-x-4 gap-y-[22px] mt-4" style={gridStyle}>
+          {shown.map((v) => (
+            <VoiceCard key={v.id} {...cardProps(v)} />
+          ))}
+        </div>
+      </CatalogTransition>
       {voices.length > preview && !paged ? (
         <div className="mt-3 flex justify-center">
           <Btn

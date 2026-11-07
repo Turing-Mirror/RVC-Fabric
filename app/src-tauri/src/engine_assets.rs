@@ -545,6 +545,7 @@ pub fn assets_status(root: &Path) -> Value {
     json!({
         "engine_core_ready": missing.is_empty(),
         "engine_core_missing": missing,
+        "engine_core_size_bytes": catalog_size_for(root, ENGINE_CORE_NAME),
         "audio_tools_ready": audio_tools_ready(root),
         "audio_tools_size_bytes": AUDIO_TOOLS_SIZE,
         "vbcable_pack_ready": vbcable_pack_ready(root),
@@ -571,6 +572,7 @@ mod tests {
         .unwrap();
         assert_eq!(catalog_size_for(&root, "engine-core-260722.zip"), 753_796_337);
         assert_eq!(catalog_size_for(&root, "not-in-catalog.zip"), 0);
+        assert_eq!(assets_status(&root)["engine_core_size_bytes"], 753_796_337);
         let _ = std::fs::remove_dir_all(&root);
     }
 

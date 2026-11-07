@@ -78,14 +78,9 @@ function ensureListen() {
   }).catch(() => undefined);
 }
 
-export function startExtraDownload(key: string, engineReady: boolean | null): void {
+export function startExtraDownload(key: string): void {
   ensureListen();
   if (coreBusy || busyKeys[key] || starting.has(key)) return;
-  if (engineReady === false) {
-    msg = t("s.e8a77f003d");
-    emit();
-    return;
-  }
   starting.add(key);
   busyKeys = { ...busyKeys, [key]: true };
   progByKey = { ...progByKey, [key]: { key, phase: "run", done: 0 } };

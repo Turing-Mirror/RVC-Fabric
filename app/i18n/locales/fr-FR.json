@@ -958,7 +958,6 @@
     "6f63f33852": "Écoute (optionnel)",
     "6fe5607f45": "Impossible de lancer PowerShell : {e}",
     "703e6f531a": "Vérification et extraction de fichiers de composants volumineux. Veuillez patienter…",
-    "70927369db": "Téléchargez d'abord les ressources du moteur ; ensuite, les modèles de séparation et les bases d'entraînement ci-dessous deviennent sélectionnables.",
     "70b208202c": "Choisir",
     "70f6a74f68": "L'archive contient un chemin vide",
     "71031cc3ad": "Versions et artefacts CNB",
@@ -1283,7 +1282,6 @@
     "e7a64d4aaf": "Série NVIDIA 50 (RTX 50xx)",
     "e84378f99a": "Aucune voix choisie pour l'instant : sélectionnez-en une sur l'Accueil ou dans Modèles.",
     "e8850440f2": "Entrée",
-    "e8a77f003d": "Téléchargez d'abord les ressources du moteur, puis les modèles précis.",
     "e9c01e81cb": "Choisissez d'abord le fichier ou le dossier d'entrée",
     "e9ddef6eab": "Impossible de créer le dossier de sortie : {e}",
     "ea5083770c": "**Attention**",
@@ -1327,7 +1325,7 @@
     "f8893054c2": "Aucun modèle de séparation installé pour le moment. Nous recommandons de télécharger d'abord « Extraction vocale » : c'est suffisant pour nettoyer le matériau d'entraînement.",
     "f950213ab7": "Lecture…",
     "f9786f5b73": "Le 48k sonne mieux, mais consomme plus de VRAM",
-    "f9cbb1e0c6": "Non installé, environ 720 Mo",
+    "f9cbb1e0c6": "Non installé",
     "f9e62f8c38": "Le test de performances s'est terminé sans générer de fichier de rapport",
     "f9f2a78f9f": "Pas encore de publicité.",
     "fbb8ddd570": "État du moteur",
@@ -1770,7 +1768,7 @@
     "extraRemoveSepBusy": "La séparation vocale est en cours ; arrêtez-la avant de désinstaller les modèles de séparation.",
     "extraRemoveTrainBusy": "L'entraînement est en cours ; arrêtez-le avant de désinstaller les modèles de base.",
     "extraRemoveFailed": "Impossible de supprimer {a0} : {a1}. Les fichiers sont peut-être utilisés ; arrêtez la séparation/l'entraînement puis réessayez.",
-    "vcNeedEngineCore": "La conversion en temps réel exige les ressources moteur (hubert / rmvpe / ffmpeg, environ 720 Mo). Téléchargez-les d'abord, puis appuyez sur Démarrer.",
+    "vcNeedEngineCore": "La modification vocale en temps réel nécessite les ressources du moteur. Téléchargez-les pour commencer.",
     "vcNeedEngineCoreShort": "Téléchargez les ressources moteur avant de démarrer la conversion",
     "wkDiedDuringLoad": "Le processus du moteur s'est arrêté pendant le chargement. Consultez le journal du jour dans User_Data/logs/worker/.",
     "wkPidNotAlive": "Le processus moteur ne tourne plus",
@@ -1794,7 +1792,7 @@
     "trainOutPick": "Choisir où enregistrer les voix",
     "trainOutRelative": "Le dossier d'enregistrement doit être un chemin complet (par exemple D:\\Voices) ; reçu « {a0} ».",
     "trainOutUnwritable": "Impossible de créer le dossier {a0} : {a1}. Choisissez un emplacement inscriptible avant de lancer.",
-    "provCoreAsk": "hubert / rmvpe / ffmpeg, environ 720 Mo. La conversion temps réel, la conversion de fichiers et l'entraînement en ont besoin ; la conversion DSP et la séparation vocale, non. Téléchargez-les maintenant, ou plus tard depuis « Place ».",
+    "provCoreAsk": "Les ressources du moteur sont nécessaires à la modification vocale en temps réel, à la conversion et à l’entraînement. Téléchargez-les maintenant ou plus tard dans la place.",
     "provCoreGet": "Télécharger les ressources moteur",
     "provCoreSkip": "Plus tard ; entrer dans l'application",
     "provCoreDownloading": "Téléchargement des ressources moteur…",
@@ -2314,8 +2312,7 @@
   },
   "extras": {
     "engineTitle": "Ressources moteur",
-    "engineDesc": "Contient hubert, rmvpe et ffmpeg, nécessaires à la conversion en temps réel, à la conversion de fichiers et à l'entraînement. La première installation ne télécharge que l'environnement d'exécution ; cet élément se télécharge au moment où il devient nécessaire.",
-    "missingList": " Manque : {list}",
+    "engineDesc": "Ressources de base pour la modification vocale en temps réel, la conversion et l’entraînement.",
     "countItems": "{n} éléments",
     "items": {
       "pymss-vocal": {
@@ -2378,7 +2375,8 @@
         "label": "Modèle de base 48k",
         "notes": "Pour entraîner des voix perso. Ne prenez que le sample rate utile ; 48k = meilleure qualité, plus de VRAM. Inclut G/D/f0G/f0D comme RVC pretrained_v2."
       }
-    }
+    },
+    "downloadSize": "Taille du téléchargement : {size}"
   },
   "onboarding": {
     "languageTitle": "Choisir la langue",

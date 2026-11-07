@@ -958,7 +958,6 @@
     "6f63f33852": "Escucha (opcional)",
     "6fe5607f45": "No se puede iniciar PowerShell: {e}",
     "703e6f531a": "Verificando y extrayendo archivos de componentes grandes. Espere…",
-    "70927369db": "Descarga primero los recursos del motor; luego podrás elegir los modelos de separación y las bases de entrenamiento de abajo.",
     "70b208202c": "Elegir",
     "70f6a74f68": "El archivo contiene una ruta vacía",
     "71031cc3ad": "Lanzamientos y artefactos CNB",
@@ -1283,7 +1282,6 @@
     "e7a64d4aaf": "Serie NVIDIA 50 (RTX 50xx)",
     "e84378f99a": "Aún no hay voz elegida: selecciona una en Inicio o en Modelos.",
     "e8850440f2": "Entrada",
-    "e8a77f003d": "Descarga primero los recursos del motor y luego los modelos concretos.",
     "e9c01e81cb": "Elige primero el archivo o la carpeta de entrada",
     "e9ddef6eab": "No se puede crear la carpeta de salida: {e}",
     "ea5083770c": "**Aviso**",
@@ -1327,7 +1325,7 @@
     "f8893054c2": "Aún no hay modelo de separación instalado. Recomendamos descargar primero «Extracción de voz»: basta para limpiar material de entrenamiento.",
     "f950213ab7": "Leyendo…",
     "f9786f5b73": "48k suena mejor, pero usa más VRAM",
-    "f9cbb1e0c6": "No instalado, unos 720 MB",
+    "f9cbb1e0c6": "Sin instalar",
     "f9e62f8c38": "La prueba de rendimiento finalizó, pero no se generó ningún archivo de informe",
     "f9f2a78f9f": "Aún no hay publicidad.",
     "fbb8ddd570": "Estado del motor",
@@ -1770,7 +1768,7 @@
     "extraRemoveSepBusy": "La separación de voces está en curso; deténgala antes de desinstalar los modelos de separación.",
     "extraRemoveTrainBusy": "El entrenamiento está en curso; deténgalo antes de desinstalar los modelos base.",
     "extraRemoveFailed": "No se pudo eliminar {a0}: {a1}. Puede que los archivos estén en uso; detenga la separación/el entrenamiento y reintente.",
-    "vcNeedEngineCore": "La conversión en tiempo real necesita los recursos del motor (hubert / rmvpe / ffmpeg, unos 720 MB). Descárgalos primero y luego pulsa Iniciar.",
+    "vcNeedEngineCore": "El cambio de voz en tiempo real requiere los recursos del motor. Descárgalos para empezar.",
     "vcNeedEngineCoreShort": "Descarga los recursos del motor antes de iniciar la conversión",
     "wkDiedDuringLoad": "El proceso del motor finalizó durante la carga. Consulte el registro de hoy en User_Data/logs/worker/.",
     "wkPidNotAlive": "El proceso del motor ya no se está ejecutando",
@@ -1794,7 +1792,7 @@
     "trainOutPick": "Elige dónde guardar las voces",
     "trainOutRelative": "La carpeta de guardado debe ser una ruta completa (por ejemplo D:\\Voices); se recibió «{a0}».",
     "trainOutUnwritable": "No se puede crear la carpeta {a0}: {a1}. Elige una ubicación con permiso de escritura antes de empezar.",
-    "provCoreAsk": "hubert / rmvpe / ffmpeg, unos 720 MB. La conversión en tiempo real, la conversión de archivos y el entrenamiento los necesitan; la conversión DSP y la separación de voces, no. Descárguelos ahora o más tarde desde «Plaza».",
+    "provCoreAsk": "El cambio de voz en tiempo real, la conversión y el entrenamiento requieren los recursos del motor. Descárgalos ahora o más tarde en la plaza.",
     "provCoreGet": "Descargar recursos del motor",
     "provCoreSkip": "Más tarde; entrar en la aplicación",
     "provCoreDownloading": "Descargando recursos del motor…",
@@ -2314,8 +2312,7 @@
   },
   "extras": {
     "engineTitle": "Recursos del motor",
-    "engineDesc": "Contiene hubert, rmvpe y ffmpeg, necesarios para la conversión en tiempo real, la conversión de archivos y el entrenamiento. La primera instalación solo descarga el entorno de ejecución; este elemento se descarga cuando se necesita por primera vez.",
-    "missingList": " Falta: {list}",
+    "engineDesc": "Recursos básicos para el cambio de voz en tiempo real, la conversión y el entrenamiento.",
     "countItems": "{n} elementos",
     "items": {
       "pymss-vocal": {
@@ -2378,7 +2375,8 @@
         "label": "Modelo base 48k",
         "notes": "Para entrenar voces propias. Baja solo el sample rate que uses; 48k mejor calidad, más VRAM. Incluye G/D/f0G/f0D como RVC pretrained_v2."
       }
-    }
+    },
+    "downloadSize": "Tamaño de descarga: {size}"
   },
   "onboarding": {
     "languageTitle": "Elegir idioma",

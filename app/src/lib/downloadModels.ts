@@ -2,7 +2,7 @@
  * 引擎资源 / 「下载模型」入口。
  *
  * 实时变声（rtrvc）与离线工具都依赖 hubert / rmvpe（及 ffmpeg）。
- * 缺了就打开「下载模型」弹窗：先补引擎资源，再允许下分离/训练附加包。
+ * 使用功能时检查依赖；模型浏览和下载不要求预先安装引擎资源。
  *
  * - 底栏「开启变声」：Runtime 就绪后，若缺引擎资源 → 跳转广场「下载模型」
  * - 音频工具入口：同上
@@ -15,6 +15,7 @@ import type { ExtrasFilter } from "../components/ExtrasDialog";
 export type AssetsStatus = {
   engine_core_ready?: boolean;
   engine_core_missing?: string[];
+  engine_core_size_bytes?: number;
   audio_tools_ready?: boolean;
   audio_tools_size_bytes?: number;
   vbcable_pack_ready?: boolean;

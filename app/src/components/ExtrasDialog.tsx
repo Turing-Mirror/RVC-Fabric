@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn, Warn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
+import { CatalogTransition } from "./CatalogTransition";
+import { Roll } from "trm-ui";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import {
-  formatLocalizedList,
   localizedTextValue,
 } from "../lib/voiceDisplay";
 import {
@@ -87,7 +88,7 @@ function categoryBlurb(cat: Category): string {
  * 附加资源下载：引擎资源 + 分离模型 + 训练底模。
  *
  * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色），
- * 列表分页每页 5 条。引擎资源是前置依赖：未就绪时先下载它，再选模型。
+ * 列表分页每页 5 条。浏览和下载不依赖引擎资源的安装状态。
  *
  * 这里只有内容，没有弹窗那层壳。两个地方用它：
  *
@@ -174,7 +175,7 @@ export function ExtrasPanel({
   };
 
   const start = (key: string) => {
-    startExtraDownload(key, engineReady);
+    startExtraDownload(key);
   };
 
   /**
@@ -223,7 +224,7 @@ export function ExtrasPanel({
         ? t("s.2b9ddc0b69")
         : t("s.7e9782377b");
 
-  const locked = engineReady === false;
+  const coreMissing = engineReady === false;
   const anyBusy = downloading.length > 0 || !!removeKey || coreBusy;
   useEffect(() => {
     onBusyChange?.(anyBusy);
@@ -249,18 +250,18 @@ export function ExtrasPanel({
           />
         </div>
         <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)] leading-snug">
-          {categoryBlurb(category)}
+          <Roll value={categoryBlurb(category)} />
         </p>
 
         {reason ? (
           <Warn className="mb-3">{reason}</Warn>
         ) : null}
 
-        {/* 引擎资源前置卡：CNB engine-core，约 720MB */}
+        {/* Shared base resources; size comes from the download catalog. */}
         <div
           className={[
             "mb-4 rounded-[var(--rs)] px-3.5 py-3",
-            locked
+            coreMissing
               ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_28%,transparent)]"
               : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
           ].join(" ")}
@@ -279,12 +280,13 @@ export function ExtrasPanel({
               </div>
               <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
                 {t("extras.engineDesc")}
-                {assets?.engine_core_missing?.length
-                  ? t("extras.missingList", {
-                      list: formatLocalizedList(assets.engine_core_missing),
-                    })
-                  : ""}
+
               </p>
+              {assets?.engine_core_size_bytes ? (
+                <p className="m-0 mt-2 text-[12.5px] text-[var(--ink-muted)]">
+                  {t("extras.downloadSize", { size: mb(assets.engine_core_size_bytes) })}
+                </p>
+              ) : null}
               {coreBusy && coreProg ? (
                 <div className="mt-2">
                   <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
@@ -318,46 +320,47 @@ export function ExtrasPanel({
           </div>
         </div>
 
-        {locked ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)] leading-relaxed">{t("s.70927369db")}</p>
-          </div>
-        ) : list === null ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--meta)]">{t("s.cd178d24a2")}</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
-          </div>
-        ) : (
-          <div className="min-h-[200px] flex flex-col">
-            <div className="flex-1">
-              {pageItems.map((it) => (
-                <ItemRow
-                  key={it.key}
-                  it={it}
-                  busy={!!busyKeys[it.key]}
-                  progress={progByKey[it.key]}
-                  removeKey={removeKey}
-                  disabled={coreBusy}
-                  onStart={start}
-                  onRemove={remove}
-                />
-              ))}
+        <CatalogTransition scope={category} page={pageClamped + 1} order={["separate", "train"]}>
+          {list === null ? (
+            <div className="min-h-[200px] flex items-center">
+              <p className="m-0 py-4 text-[13px] text-[var(--meta)]">{t("s.cd178d24a2")}</p>
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="min-h-[200px] flex items-center">
+              <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
+            </div>
+          ) : (
+            <div className="min-h-[200px] flex flex-col">
+              <div className="flex-1">
+                {pageItems.map((it) => (
+                  <ItemRow
+                    key={it.key}
+                    it={it}
+                    busy={!!busyKeys[it.key]}
+                    progress={progByKey[it.key]}
+                    removeKey={removeKey}
+                    disabled={coreBusy}
+                    onStart={start}
+                    onRemove={remove}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
+        </CatalogTransition>
+        {list && filtered.length > 0 ? <>
             {totalPages > 1 ? (
               <div className="flex items-center justify-center gap-3 pt-4 pb-1">
                 <Btn
-                  disabled={pageClamped <= 0 || !!removeKey || coreBusy}
+                  disabled={pageClamped <= 0}
                   onClick={() => setPage(pageClamped - 1)}
                 >{t("s.b41561d807")}</Btn>
                 <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
                   {pageClamped + 1} / {totalPages}
                 </span>
                 <Btn
-                  disabled={pageClamped >= totalPages - 1 || !!removeKey || coreBusy}
+                  disabled={pageClamped >= totalPages - 1}
                   onClick={() => setPage(pageClamped + 1)}
                 >{t("s.67a246a344")}</Btn>
               </div>
@@ -366,8 +369,7 @@ export function ExtrasPanel({
                 {t("extras.countItems", { n: filtered.length })}
               </p>
             )}
-          </div>
-        )}
+        </> : null}
 
         {msg || jobs.msg ? (
           // 下载失败现在是多行的（一句人话 + 试过的源 + 怎么办 + 技术细节），

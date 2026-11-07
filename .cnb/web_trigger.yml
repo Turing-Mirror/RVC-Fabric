@@ -1,0 +1,10 @@
+branch:
+  - reg: ^codex/cnb-windows-build$
+    buttons:
+      - name: 构建 Windows 测试安装包
+        description: 交叉编译 NSIS，附件保留 30 天，供人工验收。
+        event: web_trigger_windows_candidate
+        permissions:
+          roles:
+            - master
+            - developer

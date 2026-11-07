@@ -16,6 +16,8 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
 <!-- screenshots -->
 
+[공식 스크린샷 (영어)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
+
 이 스크린샷은 2026년 8월 저장소에 기록된 이전 화면입니다. 현재 화면과 다를 수 있습니다.
 
 [공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/)

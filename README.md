@@ -16,6 +16,8 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能页面" width="32%">
 <!-- screenshots -->
 
+[官方截图](https://www.turingmirror.com/products/rvc-fabric/screenshots/)
+
 截图为仓库保存的历史界面，记录于 2026 年 8 月。当前界面可能有所不同。
 
 [官网](https://www.turingmirror.com/products/rvc-fabric/)

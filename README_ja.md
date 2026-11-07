@@ -16,6 +16,8 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
 <!-- screenshots -->
 
+[公式スクリーンショット](https://www.turingmirror.com/ja/products/rvc-fabric/screenshots/)
+
 以下は 2026 年 8 月にリポジトリに記録された過去の画面です。現在の画面とは異なる場合があります。
 
 [公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/)

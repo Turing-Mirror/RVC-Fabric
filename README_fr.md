@@ -8,13 +8,21 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　Français　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Client de bureau de modification vocale par IA en temps réel haute performance**
+**Conversion vocale par IA en temps réel et entraînement de modèles sous Windows**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="Home" width="32%">
-<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
-<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<img src="assets/screenshots/home.png" alt="RVC Fabric écran d’accueil et commandes de conversion en temps réel" width="32%">
+<img src="assets/screenshots/settings.png" alt="RVC Fabric écran des paramètres" width="32%">
+<img src="assets/screenshots/misc.png" alt="RVC Fabric écran des outils supplémentaires" width="32%">
 <!-- screenshots -->
+
+Ces captures d’interface ont été enregistrées dans le dépôt en août 2026. L’interface actuelle peut différer.
+
+[Site officiel](https://www.turingmirror.com/en/products/rvc-fabric/)
+
+[Guide d’utilisation (anglais)](https://www.turingmirror.com/en/guides/rvc-fabric/)
+
+[Télécharger pour Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Développé et maintenu par [Turing Mirror](https://github.com/Turing-Mirror)
 
@@ -37,41 +45,22 @@ Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Proj
 
 ## Introduction du projet
 
-RVC Fabric est un logiciel de bureau de modification vocale par IA en temps réel pour Windows, prêt à l'emploi : pas besoin d'installer vous-même Python, PyTorch, ni d'ouvrir un navigateur pour accéder à la page Gradio. Il suffit de l'installer pour modifier votre voix.
-
-Logiciel de bureau de conversion vocale par IA en temps réel à faible latence et d'entraînement de modèles, conçu pour les appels vocaux, le streaming en direct et la production audio.
+RVC Fabric est une application de bureau gratuite et open source pour Windows, développée par Turing Mirror. Elle propose la conversion vocale en temps réel, la gestion des voix, la séparation vocale et l’entraînement de modèles pour les appels, la diffusion en direct et la production audio. Avant la première utilisation, configurez l’environnement d’exécution et téléchargez ou importez un modèle de voix.
 
 ## Fonctionnalités principales
 
-- **Modification vocale en temps réel** : Inférence en temps réel à faible latence, changement fluide de voix pendant la modification vocale, bascule en un clic « Modification vocale en temps réel / Voix originale (Bypass) ».
-- **Chaîne d'effets DSP** : Noise gate (porte de bruit) en post-traitement, compresseur dynamique et égaliseur paramétrique à 5 bandes intégrés, support des préréglages et de l'ajustement fin.
-- **Gestion des voix et des préréglages** : Bibliothèque de voix sous forme de grille, liaison de la bibliothèque de caractéristiques de récupération .index, les préréglages de paramètres peuvent être sauvegardés, importés, exportés et partagés.
-- **Place communautaire des voix** : Boutique à double source (source officielle Turing Mirror + sources ouvertes tierces), téléchargement simultané multi-thread, reprise des téléchargements interrompus.
-- **Boîte à outils audio intégrée** :
-  - **Séparation vocale** : Basé sur le modèle de séparation PyMSS, extraction rapide de la voix a cappella et de l'accompagnement.
-  - **Synthèse vocale** : Saisie de texte pour générer de la voix, et conversion automatique vers la voix cible (TTS + RVC).
-  - **Entraînement vocal** : Panneau d'entraînement intégré, entraînement de voix exclusives en un clic (nécessite une carte graphique NVIDIA).
-- **Accélération matérielle entièrement automatique** : Identification automatique de NVIDIA CUDA (y compris la série RTX 50) et AMD / Intel (DirectML), avec téléchargement du runtime de calcul correspondant.
+- Convertit la voix du microphone en temps réel et permet de revenir à la voix d’origine. La latence dépend du matériel, du modèle et des réglages audio.
+- Comprend une porte de bruit, un compresseur et un égaliseur paramétrique à cinq bandes.
+- Permet de gérer les modèles et les préréglages, et de télécharger des voix depuis les sources officielles ou tierces.
+- Propose la séparation vocale, la synthèse vocale et l’entraînement de modèles. L’interface d’entraînement actuelle nécessite un GPU NVIDIA.
+- Prend en charge NVIDIA CUDA et l’accélération DirectML pour les GPU AMD et Intel.
+
+La branche Neptune comprend l’appairage mobile, une API locale et une interface MCP. Consultez les notes de la version téléchargée pour vérifier si elle inclut ces fonctions.
 
 ## Démarrage rapide
 
-### 1. Installation et initialisation
-
-1. Téléchargez `RVC_Fabric_Setup.exe` depuis la [page Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases) ;
-2. Exécutez le programme d'installation (il est recommandé de l'installer dans un chemin uniquement en anglais) ;
-3. Lancez le logiciel et suivez le guide pour terminer automatiquement l'identification du matériel, la complétion du runtime et l'installation de la carte son virtuelle.
-
-### 2. Routage audio (Méthode de la carte son virtuelle)
-
-Pour que les personnes dans un jeu, QQ, Discord ou un logiciel de streaming en direct entendent la voix modifiée, la carte son virtuelle VB-Cable doit faire le relais au milieu :
-
-| Élément de configuration | Choix recommandé | Description |
-| :--- | :--- | :--- |
-| **Entrée du logiciel** | Microphone réel | Capture la voix parlée d'origine |
-| **Sortie du logiciel** | **CABLE Input** | Envoie le résultat de la modification vocale dans la carte son virtuelle |
-| **Écoute (Facultatif)** | Écouteurs physiques / Haut-parleurs | Écoute locale en temps réel de l'effet de modification vocale |
-| **Microphone du jeu / vocal** | **CABLE Output** | Logiciel tiers recevant l'effet de modification vocale |
-| **Lecture par défaut de Windows** | Écouteurs physiques (Ne pas choisir CABLE) | Assure la lecture normale des autres sons du système |
+1. Exécutez le programme d’installation, puis suivez les instructions pour configurer l’environnement d’exécution et préparer un modèle de voix.
+2. Pour envoyer le son vers une autre application, installez VB-Cable. Sélectionnez CABLE Input comme sortie de RVC Fabric et CABLE Output comme entrée de l’autre application.
 
 ## Architecture technique et développement
 

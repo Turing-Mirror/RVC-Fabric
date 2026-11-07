@@ -20,7 +20,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "trm-ui": "github:Turing-Mirror/TRM-UI#8936ca2e5369f8ab90251203e8cdf03d23c0d0e7"
+    "trm-ui": "github:Turing-Mirror/TRM-UI#27efd8a0b2fadb5fd2939a9236426b142555fcdb"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

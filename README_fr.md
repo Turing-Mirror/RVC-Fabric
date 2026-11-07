@@ -18,7 +18,7 @@
 
 [Captures officielles (en anglais)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
 
-Ces captures d’interface ont été enregistrées dans le dépôt en août 2026. L’interface actuelle peut différer.
+Ces captures ont été enregistrées en août 2026.
 
 [Site officiel](https://www.turingmirror.com/en/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@ Ces captures d’interface ont été enregistrées dans le dépôt en août 2026
 
 [Télécharger pour Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Développé et maintenu par [Turing Mirror](https://github.com/Turing-Mirror)
+Le projet est basé sur [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) et maintenu par [Turing Mirror](https://github.com/Turing-Mirror).
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@ Profondément personnalisé à partir de [RVC WebUI](https://github.com/RVC-Proj
 <img src="assets/brand/qq_group.jpg" alt="Code QR du groupe QQ" width="200">
 <!-- qq-group -->
 
-**Sponsorisation et promotion**　[Moitié prix le premier mois · Serveur cloud / Cloud de jeu / Serveur panel avec un bon rapport qualité-prix · Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**Sponsorisation et promotion**　[Serveurs Rainyun : 50 % de réduction le premier mois](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -57,12 +57,12 @@ RVC Fabric est une application de bureau gratuite et open source pour Windows, d
 - Propose la séparation vocale, la synthèse vocale et l’entraînement de modèles. L’interface d’entraînement actuelle nécessite un GPU NVIDIA.
 - Prend en charge NVIDIA CUDA et l’accélération DirectML pour les GPU AMD et Intel.
 
-La branche Neptune comprend l’appairage mobile, une API locale et une interface MCP. Consultez les notes de la version téléchargée pour vérifier si elle inclut ces fonctions.
+Au 7 novembre 2026, la branche de développement Neptune comprend l’appairage mobile, une API locale et une interface MCP. Le téléphone capture le son et l’ordinateur effectue la conversion vocale. Les notes de version décrivent les fonctions de chaque version publiée.
 
 ## Démarrage rapide
 
 1. Exécutez le programme d’installation, puis suivez les instructions pour configurer l’environnement d’exécution et préparer un modèle de voix.
-2. Pour envoyer le son vers une autre application, installez VB-Cable. Sélectionnez CABLE Input comme sortie de RVC Fabric et CABLE Output comme entrée de l’autre application.
+2. Pour envoyer le son vers une autre application, installez VB-Cable, puis redémarrez l’ordinateur. Sélectionnez CABLE Input comme sortie de RVC Fabric et CABLE Output comme entrée de l’autre application.
 
 ## Architecture technique et développement
 
@@ -104,11 +104,11 @@ npm run dev
 - **Packager la version hors ligne complète** : `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Construire le catalogue en ligne** : `python scripts\build_catalog.py build --diff`
 
-## Licence open source et clause de non-responsabilité
+## Licence du code source et autorisation d’utilisation des voix
 
 - Le code source de ce projet est sous licence open source [MIT License](./LICENSE).
 - Les poids des modèles, les packs vocaux et les ressources tierces sont soumis à leurs accords de licence d'origine.
-- **Clause de non-responsabilité** : N'utilisez pas ce logiciel pour usurper une identité, commettre une fraude ou toute autre activité illégale. Obtenez l'autorisation du titulaire des droits avant d'entraîner ou de convertir la voix d'autrui. Les utilisateurs sont responsables du respect des lois et réglementations locales.
+- Obtenez l’autorisation du titulaire des droits avant d’utiliser la voix d’autrui pour l’entraînement ou la conversion.
 
 ## Remerciements
 
@@ -119,4 +119,4 @@ Merci aux excellents projets open source suivants pour leur support technique à
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Récupération et réduction du bruit en temps réel
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Algorithmes de hauteur optionnels
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Moteur de séparation vocale (suit RVC en amont ; remplace UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Source des modèles de séparation · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Traitement audio
-- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Carte son virtuelle (Indispensable pour entendre la voix modifiée dans le jeu)
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Périphérique audio virtuel qui transmet la voix convertie aux jeux et aux applications vocales

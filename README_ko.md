@@ -18,7 +18,7 @@
 
 [공식 스크린샷 (영어)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
 
-이 스크린샷은 2026년 8월 저장소에 기록된 이전 화면입니다. 현재 화면과 다를 수 있습니다.
+이 스크린샷은 2026년 8월에 기록되었습니다.
 
 [공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@
 
 [Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-[RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 기반 딥 커스터마이징 · [Turing Mirror](https://github.com/Turing-Mirror) 개발 및 유지보수
+[RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)를 기반으로 개발되었으며 [Turing Mirror](https://github.com/Turing-Mirror)가 유지보수합니다.
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@
 <img src="assets/brand/qq_group.jpg" alt="QQ 그룹 QR 코드" width="200">
 <!-- qq-group -->
 
-**후원 프로모션**　[첫 달 50% 할인　·　가성비 클라우드 서버 / 게임 클라우드 / 패널 서버　·　Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**후원 프로모션**　[Rainyun 서버 첫 달 50% 할인](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -57,12 +57,12 @@ RVC Fabric은 Turing Mirror가 개발하는 무료 오픈 소스 Windows 데스�
 - 보컬 분리, 텍스트 음성 합성, 모델 학습 도구를 제공합니다. 현재 학습 화면에서는 NVIDIA GPU가 필요합니다.
 - NVIDIA CUDA 및 AMD와 Intel GPU의 DirectML 가속을 지원합니다.
 
-Neptune 브랜치에는 휴대폰 페어링, 로컬 API, MCP 인터페이스가 포함되어 있습니다. 다운로드한 버전의 포함 여부는 해당 릴리스 노트를 확인하세요.
+2026년 11월 7일 기준, Neptune 개발 브랜치에는 휴대폰 페어링, 로컬 API, MCP 인터페이스가 포함되어 있습니다. 휴대폰에서 수집한 오디오는 데스크톱에서 변환합니다. 배포된 버전의 기능은 해당 릴리스 노트에 나와 있습니다.
 
 ## 시작하기
 
 1. 설치 프로그램을 실행한 후 안내에 따라 실행 환경을 구성하고 음성 모델을 준비하세요.
-2. 다른 앱으로 음성을 보내려면 VB-Cable을 설치하세요. RVC Fabric의 출력은 CABLE Input으로, 대상 앱의 입력은 CABLE Output으로 설정하세요.
+2. 다른 앱으로 음성을 보내려면 VB-Cable을 설치한 후 컴퓨터를 다시 시작하세요. RVC Fabric의 출력은 CABLE Input으로, 대상 앱의 입력은 CABLE Output으로 설정하세요.
 
 ## 기술 아키텍처 및 개발
 
@@ -104,11 +104,11 @@ npm run dev
 - **전체 오프라인 패키지 패키징**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **온라인 매니페스트 빌드**: `python scripts\build_catalog.py build --diff`
 
-## 오픈 소스 라이선스 및 면책 조항
+## 소스 코드 라이선스 및 음성 사용 허가
 
 - 본 프로젝트의 소스 코드는 [MIT License](./LICENSE) 라이선스에 따라 오픈 소스로 제공됩니다.
 - 모델 가중치, 음색 패키지 및 서드파티 리소스는 원래 라이선스를 따릅니다.
-- **면책 조항**: 본 소프트웨어를 신원 사칭, 사기 또는 기타 불법 목적으로 사용하지 마십시오. 타인의 목소리를 학습하거나 변환하기 전에 권리자의 허가를 받으십시오. 사용자는 현지 법률 및 규정을 준수할 책임이 있습니다.
+- 타인의 목소리를 학습하거나 변환하기 전에 권리자의 허가를 받으십시오.
 
 ## 감사의 글
 

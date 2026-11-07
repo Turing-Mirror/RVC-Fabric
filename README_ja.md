@@ -18,7 +18,7 @@
 
 [公式スクリーンショット](https://www.turingmirror.com/ja/products/rvc-fabric/screenshots/)
 
-以下は 2026 年 8 月にリポジトリに記録された過去の画面です。現在の画面とは異なる場合があります。
+以下は 2026 年 8 月に記録された画面です。
 
 [公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@
 
 [Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-[RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)をベースにディープカスタマイズ · [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が開発・メンテナンス
+[RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@
 <img src="assets/brand/qq_group.jpg" alt="QQ グループの QR コード" width="200">
 <!-- qq-group -->
 
-**スポンサープロモーション**　[初月半額　·　高コスパクラウドサーバー / ゲームクラウド / パネルサーバー　·　雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**スポンサープロモーション**　[Rainyun のサーバーは初月半額](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -58,7 +58,7 @@ RVC Fabric は Turing Mirror が開発する無料のオープンソース Windo
 - ボーカル分離、テキスト読み上げ、ボイス学習ツールを提供します。学習手順には音声分割、ピッチと特徴量の抽出、モデル学習、インデックスの書き出しが含まれます。
 - NVIDIA CUDA と、AMD および Intel GPU の DirectML アクセラレーションに対応しています。セットアップでハードウェアを検出し、対応する実行環境を設定します。
 
-2026 年 11 月 7 日時点で、Neptune ブランチにはスマートフォンのペアリング、ローカル API、MCP インターフェースがあります。スマートフォンで音声を収録し、デスクトップで変換します。ダウンロードしたビルドに含まれる機能は、そのバージョンのリリースノートで確認してください。
+2026 年 11 月 7 日時点で、開発ブランチ Neptune にはスマートフォンのペアリング、ローカル API、MCP インターフェースがあります。スマートフォンで音声を収録し、デスクトップで変換します。公開済みの各バージョンの機能はリリースノートに記載しています。
 
 ## クイックスタート
 
@@ -106,11 +106,11 @@ npm run dev
 - **完全なオフラインパッケージの作成**：`python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **オンラインカタログの構築**：`python scripts\build_catalog.py build --diff`
 
-## オープンソースライセンスと免責事項
+## ソースコードのライセンスと音声の利用許諾
 
 - 本プロジェクトのソースコードは [MIT License](./LICENSE) の下でオープンソース化されています。
 - モデルの重み、音声パッケージ、サードパーティのリソースは、それぞれの元のライセンスに従います。
-- **免責事項**：本ソフトウェアを身元詐称、詐欺、その他の違法な目的に使用しないでください。他者の声を学習・変換する前に、権利者の許可を取得してください。利用者は現地の法令を遵守する責任を負います。
+- 他人の声を学習や変換に使う前に、権利者の許諾を得てください。
 
 ## 謝辞
 

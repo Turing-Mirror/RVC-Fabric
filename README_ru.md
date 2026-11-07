@@ -18,7 +18,7 @@
 
 [Официальные снимки экрана (на английском)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
 
-Эти архивные снимки интерфейса были сохранены в репозитории в августе 2026 года. Текущий интерфейс может отличаться.
+Эти снимки экрана были сохранены в августе 2026 года.
 
 [Официальный сайт](https://www.turingmirror.com/en/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@
 
 [Скачать для Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-Глубоко настроен на основе [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Разработано и поддерживается [Turing Mirror](https://github.com/Turing-Mirror)
+Проект основан на [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) и поддерживается [Turing Mirror](https://github.com/Turing-Mirror).
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@
 <img src="assets/brand/qq_group.jpg" alt="QR-код группы QQ" width="200">
 <!-- qq-group -->
 
-**Спонсорство и продвижение**　[Скидка 50% на первый месяц · Облачный сервер с высокой производительностью / Игровое облако / Панельный сервер · Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**Спонсорство и продвижение**　[Серверы Rainyun: скидка 50 % на первый месяц](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -57,12 +57,12 @@ RVC Fabric — бесплатное настольное приложение с
 - Предоставляет разделение вокала, синтез речи и обучение моделей. Текущий интерфейс обучения требует GPU NVIDIA.
 - Поддерживает NVIDIA CUDA и ускорение DirectML для GPU AMD и Intel.
 
-Ветка Neptune включает сопряжение с телефоном, локальный API и интерфейс MCP. Наличие этих функций в загруженной версии уточняйте в её примечаниях к выпуску.
+По состоянию на 7 ноября 2026 года ветка разработки Neptune включает сопряжение с телефоном, локальный API и интерфейс MCP. Телефон записывает звук, а компьютер преобразует голос. Функции опубликованных версий описаны в примечаниях к выпуску.
 
 ## Быстрый старт
 
 1. Запустите установщик, затем настройте среду выполнения и подготовьте модель голоса, следуя инструкциям.
-2. Для передачи звука в другое приложение установите VB-Cable. Выберите CABLE Input как выход RVC Fabric и CABLE Output как вход другого приложения.
+2. Для передачи звука в другое приложение установите VB-Cable и перезагрузите компьютер. Выберите CABLE Input как выход RVC Fabric и CABLE Output как вход другого приложения.
 
 ## Техническая архитектура и разработка
 
@@ -104,11 +104,11 @@ npm run dev
 - **Сборка полного оффлайн-пакета**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Сборка онлайн-каталога**: `python scripts\build_catalog.py build --diff`
 
-## Открытая лицензия и отказ от ответственности
+## Лицензия исходного кода и разрешение на использование голоса
 
 - Исходный код этого проекта открыт под лицензией [MIT License](./LICENSE).
 - Веса моделей, пакеты тембров и сторонние ресурсы регулируются их первоначальными лицензионными соглашениями.
-- **Отказ от ответственности**: Не используйте это программное обеспечение для подделки личности, мошенничества или других незаконных целей. Перед обучением или преобразованием чужого голоса получите разрешение правообладателя. Пользователи обязаны соблюдать местные законы и нормативные акты.
+- Перед использованием чужого голоса для обучения или преобразования получите разрешение правообладателя.
 
 ## Благодарности
 
@@ -119,4 +119,4 @@ npm run dev
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Поиск и шумоподавление в реальном времени
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Опциональные алгоритмы высоты тона
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Движок разделения вокала (следует за upstream RVC, заменил UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Источник моделей разделения · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Обработка звука
-- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Виртуальная звуковая карта (именно благодаря ей вы слышите измененный голос в игре)
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Виртуальное аудиоустройство для передачи преобразованного голоса в игры и приложения для общения

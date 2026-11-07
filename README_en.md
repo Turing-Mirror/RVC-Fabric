@@ -18,7 +18,7 @@
 
 [Official screenshots](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
 
-These archived interface screenshots were recorded in the repository in August 2026. The current interface may differ.
+These screenshots were recorded in August 2026.
 
 [Website](https://www.turingmirror.com/en/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@ These archived interface screenshots were recorded in the repository in August 2
 
 [Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-Deeply customized based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Developed and maintained by [Turing Mirror](https://github.com/Turing-Mirror)
+Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) and maintained by [Turing Mirror](https://github.com/Turing-Mirror).
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@ Deeply customized based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-
 <img src="assets/brand/qq_group.jpg" alt="QQ group QR code" width="200">
 <!-- qq-group -->
 
-**Sponsorship & Promotion**　[50% off for the first month · Cost-effective Cloud Server / Game Cloud / Panel Server · RainYun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**Sponsorship & Promotion**　[Rainyun servers: 50% off the first month](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -58,7 +58,7 @@ RVC Fabric is a free, open-source Windows desktop application developed by Turin
 - Provides vocal separation, text-to-speech and voice training tools. The training workflow covers audio slicing, pitch and feature extraction, model training and index export.
 - Supports NVIDIA CUDA and DirectML acceleration for AMD and Intel GPUs. Setup detects hardware and configures the corresponding runtime.
 
-As of November 7, 2026, the Neptune branch includes mobile pairing, a local API and an MCP interface. Mobile pairing captures audio on the phone and performs voice conversion on the desktop. Check the release notes to determine whether a downloaded build includes these branch features.
+As of November 7, 2026, the Neptune development branch includes mobile pairing, a local API and an MCP interface. The phone captures audio and the desktop converts the voice. Release notes describe the features in each published version.
 
 ## Quick Start
 
@@ -106,11 +106,11 @@ npm run dev
 - **Package Full Offline Release**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Build Online Catalog**: `python scripts\build_catalog.py build --diff`
 
-## Open Source License and Disclaimer
+## Source code and voice permissions
 
 - The source code of this project is open-sourced under the [MIT License](./LICENSE).
 - Model weights, voice packages, and third-party resources follow their original licensing agreements.
-- **Disclaimer**: Do not use this software for identity fraud, impersonation, or any other illegal purpose. Obtain the rights holder's authorization before training on or converting someone else's voice. Users are responsible for complying with local laws and regulations.
+- Obtain the rights holder’s permission before training on or converting someone else’s voice.
 
 ## Acknowledgements
 

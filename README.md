@@ -8,13 +8,21 @@
 简体中文　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**高性能实时 AI 变声桌面客户端**
+**Windows 实时 AI 语音转换与模型训练工作台**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="Home" width="32%">
-<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
-<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<img src="assets/screenshots/home.png" alt="RVC Fabric 主界面与实时变声控制" width="32%">
+<img src="assets/screenshots/settings.png" alt="RVC Fabric 设置页面" width="32%">
+<img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能页面" width="32%">
 <!-- screenshots -->
+
+截图为仓库保存的历史界面，记录于 2026 年 8 月。当前界面可能有所不同。
+
+[官网](https://www.turingmirror.com/products/rvc-fabric/)
+
+[使用指南](https://www.turingmirror.com/guides/rvc-fabric/)
+
+[下载 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 深度定制 · 由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 开发维护
 
@@ -37,42 +45,24 @@
 
 ## 项目简介
 
-RVC Fabric 是面向 Windows 的实时 AI 变声桌面软件，开箱即用：不需要自己装 Python、PyTorch，也不用开浏览器点 Gradio 页面，安装完就能变声。
-
-面向语音通话、直播互动与音频制作的低延迟实时 AI 语音转换与模型训练桌面软件。
+RVC Fabric 是图灵镜开发的免费开源 Windows 桌面软件，提供实时语音转换、音色管理、人声分离和模型训练，适用于语音通话、直播与音频制作。首次使用需配置运行环境并下载或导入音色模型。
 
 ## 核心特性
 
-- **实时变声**：低延迟实时推理，变声中可无缝切换音色，「实时变声 / 旁路原声 (Bypass)」一键切换。
-- **DSP 效果链**：内置后级噪声门、动态压缩器与 5 段参数均衡器，支持预设套用与精细调音。
-- **音色与预设管理**：网格化音色库、.index 检索特征库绑定，参数预设可保存、导入、导出分享。
-- **手机配对**：Neptune 支持在“其他”页扫码连接 RVC Fabric Mobile，由手机采集、桌面引擎变声，分别控制电脑监听与声音输出。详见[手机接入说明](docs/mobile-v1.md)。
-- **社区音色广场**：双源商店（图灵镜官方源 + 第三方开放源），多线程并发下载、断点续传。
-- **内置音频工具箱**：
-  - **人声分离**：基于 PyMSS 分离模型，快速提取干声与伴奏。
-  - **语音合成**：输入文本生成语音，并自动转换为目标音色（TTS + RVC）。
-  - **音色训练**：内置训练面板，一键训练专属音色（需 NVIDIA 显卡）。
-- **全自动硬件加速**：NVIDIA CUDA（含 RTX 50 系列）与 AMD / Intel（DirectML）自动识别，并下载对应的计算运行环境。
+- 将麦克风输入转换为所选音色，支持切换原声、ASIO 通道选择和独立监听。实际延迟取决于硬件、模型与音频设置。
+- 内置噪声门、压缩器与 5 段参数均衡器，支持预设套用与精细调音。
+- 音色库支持关联 .index 特征文件，并可保存、导入和导出参数预设。
+- 可从图灵镜和第三方来源获取音色模型，支持下载进度管理与中断后继续下载。
+- 提供人声分离、文本转语音和音色训练工具。训练向导包含音频切分、音高与特征提取、模型训练和索引导出。
+- 支持 NVIDIA CUDA，以及 AMD 和 Intel 显卡的 DirectML 加速。安装引导可识别硬件并配置对应的运行环境。
+
+截至 2026 年 11 月 7 日，海王星分支包含手机配对、本地 API 和 MCP 接口。手机配对由手机采集音频，桌面端执行语音转换；这些分支功能是否包含在下载版本中，应以该版本的发布说明为准。
 
 ## 快速开始
 
-### 1. 安装与初始化
-
-1. 从 [Releases 页面](https://github.com/Turing-Mirror/RVC-Fabric/releases) 下载 `RVC_Fabric_Setup.exe`；
-2. 运行安装程序（建议安装到纯英文路径）；
-3. 启动软件，跟随引导自动完成硬件识别、运行环境补全与虚拟声卡安装。
-
-### 2. 音频路由（虚拟声卡接法）
-
-想让游戏、QQ、Discord 或直播软件里的人听到变声，需要 VB-Cable 虚拟声卡在中间转发音频：
-
-| 配置项 | 推荐选择 | 说明 |
-| :--- | :--- | :--- |
-| **软件输入** | 真实麦克风 | 采集原始说话声音 |
-| **软件输出** | **CABLE Input** | 把变声结果送进虚拟声卡 |
-| **监听（可选）** | 物理耳机 / 音箱 | 本地实时试听变声效果 |
-| **游戏 / 语音麦克风** | **CABLE Output** | 第三方软件接收变声效果 |
-| **Windows 默认播放** | 物理耳机（不要选 CABLE） | 保证系统其他声音正常播放 |
+1. 运行 RVC_Fabric_Setup.exe，建议安装到纯英文路径。
+2. 按照引导配置运行环境，下载或导入音色模型。需要向其他软件传输声音时，安装 VB-Cable 虚拟声卡。安装后需重启电脑。
+3. 将软件输出设为 CABLE Input，并将 QQ、Discord 或直播软件的输入设为 CABLE Output。
 
 ## 技术架构与开发
 
@@ -130,7 +120,3 @@ npm run dev
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — 可选音高算法
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — 人声分离引擎（跟随上游 RVC，已取代 UVR5）· [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — 分离模型来源 · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — 音频处理
 - [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — 虚拟声卡（把变声结果送入游戏/语音软件）
-
-## Local API (Neptune)
-
-The Neptune branch includes an independent local API and bundled MCP server. See [API v1](docs/api-v1.md) for discovery, capabilities, tasks, and standalone use.

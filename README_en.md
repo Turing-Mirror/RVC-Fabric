@@ -8,13 +8,21 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　English　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**High-Performance Real-time AI Voice Changer Desktop Client**
+**Real-time AI voice conversion and model training for Windows**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="Home" width="32%">
-<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
-<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<img src="assets/screenshots/home.png" alt="RVC Fabric home screen and real-time conversion controls" width="32%">
+<img src="assets/screenshots/settings.png" alt="RVC Fabric settings screen" width="32%">
+<img src="assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
 <!-- screenshots -->
+
+These archived interface screenshots were recorded in the repository in August 2026. The current interface may differ.
+
+[Website](https://www.turingmirror.com/en/products/rvc-fabric/)
+
+[User guide](https://www.turingmirror.com/en/guides/rvc-fabric/)
+
+[Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 Deeply customized based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Developed and maintained by [Turing Mirror](https://github.com/Turing-Mirror)
 
@@ -37,41 +45,24 @@ Deeply customized based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-
 
 ## Project Introduction
 
-RVC Fabric is a real-time AI voice changer desktop software for Windows, ready to use out of the box: no need to install Python or PyTorch yourself, and no need to open a browser to click on Gradio pages. You can change your voice immediately after installation.
-
-Low-latency real-time AI voice conversion and model training desktop software for voice calls, live streaming, and audio production.
+RVC Fabric is a free, open-source Windows desktop application developed by Turing Mirror. It provides real-time voice conversion, voice management, vocal separation and model training for voice calls, live streaming and audio production. Configure the runtime and download or import a voice model before first use.
 
 ## Core Features
 
-- **Real-time Voice Changing**: Low latency real-time inference, seamless switching of voices during conversion, one-click switch between "Real-time Voice Changing / Bypass".
-- **DSP Effect Chain**: Built-in post-level noise gate, dynamic compressor, and 5-band parametric equalizer, supporting preset application and fine tuning.
-- **Voice and Preset Management**: Grid-based voice library, .index retrieval feature library binding, parameter presets can be saved, imported, exported, and shared.
-- **Community Voice Square**: Dual-source store (Turing Mirror official source + third-party open source), multi-threaded concurrent download, resumable download.
-- **Built-in Audio Toolkit**:
-  - **Vocal Separation**: Based on the PyMSS separation model, quickly extract dry vocals and accompaniment.
-  - **Speech Synthesis**: Input text to generate speech, and automatically convert it to the target voice (TTS + RVC).
-  - **Voice Training**: Built-in training panel, one-click training of exclusive voices (requires NVIDIA graphics card).
-- **Fully Automatic Hardware Acceleration**: Automatic recognition of NVIDIA CUDA (including RTX 50 series) and AMD / Intel (DirectML), and download the corresponding computing runtime.
+- Converts microphone input to the selected voice, with original-voice bypass, ASIO channel selection and independent monitoring. Latency depends on hardware, the model and audio settings.
+- Includes a noise gate, compressor and 5-band parametric EQ, with presets and individual adjustments.
+- The voice library supports associated .index files and lets you save, import and export parameter presets.
+- Download voice models from Turing Mirror and third-party sources, track progress and resume interrupted downloads.
+- Provides vocal separation, text-to-speech and voice training tools. The training workflow covers audio slicing, pitch and feature extraction, model training and index export.
+- Supports NVIDIA CUDA and DirectML acceleration for AMD and Intel GPUs. Setup detects hardware and configures the corresponding runtime.
+
+As of November 7, 2026, the Neptune branch includes mobile pairing, a local API and an MCP interface. Mobile pairing captures audio on the phone and performs voice conversion on the desktop. Check the release notes to determine whether a downloaded build includes these branch features.
 
 ## Quick Start
 
-### 1. Installation and Initialization
-
-1. Download `RVC_Fabric_Setup.exe` from the [Releases page](https://github.com/Turing-Mirror/RVC-Fabric/releases);
-2. Run the installer (it is recommended to install to a pure English path);
-3. Start the software and follow the guide to automatically complete hardware recognition, runtime completion, and virtual sound card installation.
-
-### 2. Audio Routing (Virtual Sound Card Setup)
-
-To let people in games, QQ, Discord, or live streaming software hear the changed voice, you need the VB-Cable virtual sound card to route the audio:
-
-| Configuration Item | Recommended Selection | Description |
-| :--- | :--- | :--- |
-| **Software Input** | Real Microphone | Capture original speaking voice |
-| **Software Output** | **CABLE Input** | Send the changed voice result to the virtual sound card |
-| **Monitor (Optional)** | Physical Headphones / Speakers | Listen to the voice changing effect locally in real time |
-| **Game / Voice Chat Microphone** | **CABLE Output** | Third-party software receives the voice changing effect |
-| **Windows Default Playback** | Physical Headphones (Do NOT select CABLE) | Ensure normal playback of other system sounds |
+1. Run RVC_Fabric_Setup.exe. An install path with only English characters is recommended.
+2. Follow setup to configure the runtime and download or import a voice model. Install VB-Cable to send audio to another application. Restart the computer after installation.
+3. Set the application output to CABLE Input and the input in QQ, Discord or your streaming application to CABLE Output.
 
 ## Technical Architecture and Development
 

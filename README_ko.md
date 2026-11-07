@@ -8,13 +8,21 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　한국어　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**고성능 실시간 AI 변조 데스크톱 클라이언트**
+**Windows용 실시간 AI 음성 변환 및 모델 학습**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="Home" width="32%">
-<img src="assets/screenshots/settings.png" alt="Settings" width="32%">
-<img src="assets/screenshots/misc.png" alt="More" width="32%">
+<img src="assets/screenshots/home.png" alt="RVC Fabric 홈 화면 및 실시간 음성 변환 제어" width="32%">
+<img src="assets/screenshots/settings.png" alt="RVC Fabric 설정 화면" width="32%">
+<img src="assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
 <!-- screenshots -->
+
+이 스크린샷은 2026년 8월 저장소에 기록된 이전 화면입니다. 현재 화면과 다를 수 있습니다.
+
+[공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/)
+
+[사용 안내서(영어)](https://www.turingmirror.com/en/guides/rvc-fabric/)
+
+[Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 기반 딥 커스터마이징 · [Turing Mirror](https://github.com/Turing-Mirror) 개발 및 유지보수
 
@@ -37,41 +45,22 @@
 
 ## 프로젝트 소개
 
-RVC Fabric은 Windows용 실시간 AI 변조 데스크톱 소프트웨어로, 설치 즉시 사용할 수 있습니다. Python이나 PyTorch를 직접 설치할 필요가 없으며, 브라우저를 열어 Gradio 페이지를 클릭할 필요도 없이 설치만 하면 바로 변조가 가능합니다.
-
-음성 통화, 라이브 방송 및 오디오 제작을 위한 저지연 실시간 AI 음성 변환 및 모델 학습 데스크톱 소프트웨어.
+RVC Fabric은 Turing Mirror가 개발하는 무료 오픈 소스 Windows 데스크톱 애플리케이션입니다. 음성 통화, 방송, 오디오 제작을 위한 실시간 음성 변환, 음성 모델 관리, 보컬 분리, 모델 학습 기능을 제공합니다. 처음 사용하기 전에 실행 환경을 구성하고 음성 모델을 다운로드하거나 가져오세요.
 
 ## 핵심 기능
 
-- **실시간 변조**: 짧은 지연 시간의 실시간 추론, 변조 중 매끄러운 음색 전환, 「실시간 변조 / 우회 원음 (Bypass)」 원클릭 전환.
-- **DSP 이펙트 체인**: 포스트 레벨 노이즈 게이트, 다이내믹 컴프레서 및 5밴드 파라메트릭 이퀄라이저 내장, 프리셋 적용 및 정밀 튜닝 지원.
-- **음색 및 프리셋 관리**: 그리드형 음색 라이브러리, .index 검색 특징 라이브러리 바인딩, 매개변수 프리셋 저장, 가져오기, 내보내기 및 공유 가능.
-- **커뮤니티 음색 광장**: 듀얼 소스 스토어 (Turing Mirror 공식 소스 + 서드파티 오픈 소스), 멀티스레드 동시 다운로드 및 이어받기 지원.
-- **내장 오디오 툴박스**:
-  - **보컬 분리**: PyMSS 분리 모델 기반으로 원음과 반주를 빠르게 추출.
-  - **음성 합성**: 텍스트를 입력하여 음성을 생성하고 목표 음색으로 자동 변환 (TTS + RVC).
-  - **음색 훈련**: 내장 훈련 패널을 통해 전용 음색 원클릭 훈련 (NVIDIA 그래픽 카드 필요).
-- **전자동 하드웨어 가속**: NVIDIA CUDA (RTX 50 시리즈 포함) 및 AMD / Intel (DirectML) 자동 인식, 해당 컴퓨팅 런타임 다운로드.
+- 실시간으로 마이크 음성을 변환하고 원음으로 전환할 수 있습니다. 지연 시간은 하드웨어, 모델, 오디오 설정에 따라 달라집니다.
+- 노이즈 게이트, 컴프레서, 5밴드 파라메트릭 이퀄라이저를 제공합니다.
+- 음성 모델과 프리셋을 관리하고 공식 및 타사 배포처에서 모델을 다운로드할 수 있습니다.
+- 보컬 분리, 텍스트 음성 합성, 모델 학습 도구를 제공합니다. 현재 학습 화면에서는 NVIDIA GPU가 필요합니다.
+- NVIDIA CUDA 및 AMD와 Intel GPU의 DirectML 가속을 지원합니다.
+
+Neptune 브랜치에는 휴대폰 페어링, 로컬 API, MCP 인터페이스가 포함되어 있습니다. 다운로드한 버전의 포함 여부는 해당 릴리스 노트를 확인하세요.
 
 ## 시작하기
 
-### 1. 설치 및 초기화
-
-1. [Releases 페이지](https://github.com/Turing-Mirror/RVC-Fabric/releases)에서 `RVC_Fabric_Setup.exe` 다운로드;
-2. 설치 프로그램 실행 (영문 경로 설치 권장);
-3. 소프트웨어를 시작하고 안내에 따라 하드웨어 인식, 런타임 보완 및 가상 사운드 카드 설치 자동 완료.
-
-### 2. 오디오 라우팅 (가상 사운드 카드 연결 방법)
-
-게임, QQ, Discord 또는 라이브 스트리밍 소프트웨어에서 사람들이 변조된 목소리를 듣게 하려면 중간에 VB-Cable 가상 사운드 카드를 거쳐야 합니다:
-
-| 설정 항목 | 권장 선택 | 설명 |
-| :--- | :--- | :--- |
-| **소프트웨어 입력** | 실제 마이크 | 말하는 원본 목소리 수음 |
-| **소프트웨어 출력** | **CABLE Input** | 변조 결과를 가상 사운드 카드로 전송 |
-| **모니터링 (선택)** | 물리적 이어폰 / 스피커 | 로컬에서 실시간 변조 효과 청취 |
-| **게임 / 음성 마이크** | **CABLE Output** | 서드파티 소프트웨어에서 변조 효과 수신 |
-| **Windows 기본 재생** | 물리적 이어폰 (CABLE 선택 금지) | 시스템의 다른 소리가 정상적으로 재생되도록 보장 |
+1. 설치 프로그램을 실행한 후 안내에 따라 실행 환경을 구성하고 음성 모델을 준비하세요.
+2. 다른 앱으로 음성을 보내려면 VB-Cable을 설치하세요. RVC Fabric의 출력은 CABLE Input으로, 대상 앱의 입력은 CABLE Output으로 설정하세요.
 
 ## 기술 아키텍처 및 개발
 

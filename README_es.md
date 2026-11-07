@@ -8,7 +8,7 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　Español　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Conversión de voz con IA en tiempo real y entrenamiento de modelos para Windows**
+**Cambiador de voz en tiempo real y panel de sonidos para Windows**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric pantalla de inicio y controles de conversión en tiempo real" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric pantalla de herramientas adicionales" width="32%">
 <!-- screenshots -->
 
-[Capturas oficiales (en inglés)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
-
-Estas capturas se registraron en agosto de 2026.
-
-[Sitio oficial](https://www.turingmirror.com/en/products/rvc-fabric/)
-
-[Guía de uso (inglés)](https://www.turingmirror.com/en/guides/rvc-fabric/)
-
-[Descargar para Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[Sitio oficial](https://www.turingmirror.com/en/products/rvc-fabric/) · [Guía de uso (inglés)](https://www.turingmirror.com/en/guides/rvc-fabric/) · [Descargar para Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 El proyecto está basado en [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) y lo mantiene [Turing Mirror](https://github.com/Turing-Mirror).
 
@@ -47,22 +39,25 @@ El proyecto está basado en [RVC WebUI](https://github.com/RVC-Project/Retrieval
 
 ## Introducción al proyecto
 
-RVC Fabric es una aplicación de escritorio gratuita y de código abierto para Windows, desarrollada por Turing Mirror. Ofrece conversión de voz en tiempo real, gestión de voces, separación de voces y entrenamiento de modelos para llamadas, transmisiones y producción de audio. Antes del primer uso, configure el entorno de ejecución y descargue o importe un modelo de voz.
+RVC Fabric es una aplicación gratuita y de código abierto para Windows desarrollada por Turing Mirror. Permite cambiar la voz y reproducir música o efectos en QQ, Discord y el chat de voz de los juegos, así como mezclar voz y acompañamiento durante una transmisión. Su biblioteca de audio permite gestionar fragmentos y reproducirlos con atajos de teclado. También incluye gestión de modelos de voz, separación vocal y entrenamiento de modelos.
 
 ## Características principales
 
+- Reproduce música, efectos o fragmentos seleccionados en el chat de voz junto con el audio del micrófono convertido, con reproducción superpuesta, bucles, volumen independiente y atajos globales.
 - Convierte la voz del micrófono en tiempo real y permite volver a la voz original. La latencia depende del hardware, el modelo y los ajustes de audio.
 - Incluye puerta de ruido, compresor y ecualizador paramétrico de cinco bandas.
 - Permite gestionar modelos y ajustes preestablecidos, y descargar voces de fuentes oficiales y de terceros.
 - Ofrece separación de voces, síntesis de voz y entrenamiento de modelos. La interfaz de entrenamiento actual requiere una GPU NVIDIA.
 - Admite NVIDIA CUDA y aceleración DirectML para GPU AMD e Intel.
 
-A fecha de 7 de noviembre de 2026, la rama de desarrollo Neptune incluye vinculación móvil, una API local y una interfaz MCP. El teléfono captura el audio y el ordenador convierte la voz. Las notas de cada versión publicada describen sus funciones.
+La rama de desarrollo Neptune también ofrece vinculación móvil, una API local y una interfaz MCP. El audio capturado en el teléfono se convierte en el equipo de escritorio.
 
-## Inicio rápido
+## Chat de voz y música dentro de los juegos
 
-1. Ejecute el instalador y siga las instrucciones para configurar el entorno de ejecución y preparar un modelo de voz.
-2. Para enviar audio a otra aplicación, instale VB-Cable y reinicie el ordenador. Seleccione CABLE Input como salida de RVC Fabric y CABLE Output como entrada de la otra aplicación.
+1. Instala RVC Fabric y configura los componentes necesarios. Instala el dispositivo de audio virtual VB-Cable y reinicia el equipo.
+2. En los ajustes de audio, selecciona tu micrófono físico y CABLE Input como salida. En QQ, Discord o el juego, selecciona CABLE Output como micrófono.
+3. Importa música o efectos en la biblioteca de audio y haz doble clic en una entrada para reproducirla en el chat de voz. Para cambiar la voz mientras suena la música, selecciona un modelo e inicia la conversión. Ambos audios se mezclan en la misma salida.
+4. Selecciona auriculares para la monitorización local y activa la monitorización de música si la necesitas. Asigna atajos globales a los fragmentos habituales para reproducirlos, pausarlos o detenerlos durante el juego.
 
 ## Arquitectura técnica y desarrollo
 

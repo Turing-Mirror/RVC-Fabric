@@ -1,3 +1,4 @@
+import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
 import { usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
@@ -110,7 +111,10 @@ function ModelsPageImpl({
   const [sort, setSort] = useState<SortKey>("default");
   const [kind, setKind] = useState<Kind>(focusKind ?? "rvc");
   /** 当前生效的 DSP 预设 id；空串 = DSP 没开。 */
-  const [dspId, setDspId] = useState("");
+  const [dspId, setDspId] = useState(() => {
+    const cfg = configSnapshot.get().config;
+    return cfg.dsp_enabled ? String(cfg.dsp_preset || "") : "";
+  });
   /** 当前生效的那条预设本体，编辑器要拿它画滑条。 */
   const [dspActive, setDspActive] = useState<DspPreset | null>(null);
   /** 加一就让预设列表重拉（存了/删了自定义预设之后）。 */

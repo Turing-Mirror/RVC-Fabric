@@ -1,3 +1,4 @@
+import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
@@ -22,8 +23,8 @@ function pickKeys(src: Config, keys: Set<string>): Config {
 }
 
 export function useConfig() {
-  const [cfg, setCfg] = useState<Config>({});
-  const [loaded, setLoaded] = useState(false);
+  const [cfg, setCfg] = useState<Config>(() => configSnapshot.get().config);
+  const [loaded, setLoaded] = useState(() => configSnapshot.get().loaded);
   const [error, setError] = useState("");
   const [restartKeys, setRestartKeys] = useState<string[]>([]);
   const pending = useRef<Config>({});
@@ -65,6 +66,7 @@ export function useConfig() {
       if (!alive) return;
       const next = ev.payload?.config;
       if (next && typeof next === "object") {
+        configSnapshot.receive(next, undefined, next);
         setCfg({ ...next, ...unconfirmed() });
       }
     }).then((fn) => {

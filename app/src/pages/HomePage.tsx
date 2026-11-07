@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
-import { getConfig, onConfigPatch } from "../lib/config";
+import { useConfigSnapshot } from "../hooks/useConfigSnapshot";
 import {
   invalidateVoicesCache,
   listVoices,
@@ -157,36 +157,13 @@ function HeroEmblem() {
  * 留空 = 不显示。以前这里固定写着「切换立即生效 · 运行中可无缝换音色」，
  * 对每天用的人来说是废话，现在这行只属于用户自己。
  *
- * 只在这一个组件里读：memo 化的 HomePage 不接收任何新 prop，配置变化走
- * onConfigPatch 触发内部 state 更新，别的页面完全感知不到。
+ * 横幅读取窗口内的配置快照；切页保留文案，后台刷新不回退到默认值。
  */
-function useBannerTexts(): { title: string; sub: string } {
-  const [texts, setTexts] = useState({ title: "", sub: "" });
-  useEffect(() => {
-    let alive = true;
-    void getConfig()
-      .then((c) => {
-        if (!alive) return;
-        setTexts({
-          title: typeof c.home_banner_text === "string" ? c.home_banner_text : "",
-          sub: typeof c.home_banner_sub === "string" ? c.home_banner_sub : "",
-        });
-      })
-      .catch(() => {
-        /* 浏览器预览里没有 Tauri 后端，用默认标题 */
-      });
-    const off = onConfigPatch((p) => {
-      setTexts((prev) => ({
-        title: typeof p.home_banner_text === "string" ? p.home_banner_text : prev.title,
-        sub: typeof p.home_banner_sub === "string" ? p.home_banner_sub : prev.sub,
-      }));
-    });
-    return () => {
-      alive = false;
-      off();
-    };
-  }, []);
-  return { title: texts.title.trim(), sub: texts.sub.trim() };
+function useBannerTexts() {
+  const { config, loaded } = useConfigSnapshot();
+  const str = (key: string) => typeof config[key] === "string" ? (config[key] as string).trim() : "";
+  return { title: str("home_banner_text"), sub: str("home_banner_sub"), role: str("synth_role"),
+    ready: loaded || !("__TAURI_INTERNALS__" in window) };
 }
 
 /**
@@ -297,7 +274,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
           <p className="text-[19px] m-0">{" "}</p>
           <HeroEmblem />
         </div>
@@ -312,7 +289,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? t("s.c4a98bd0e6", { v0: loadError })
@@ -338,7 +315,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
         className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5"
         style={{ background: STAGE_BG }}
       >
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
         <p className="text-[19px] font-semibold text-[var(--accent)] m-0">
           {current ? current.name : t("s.262d11e2d6")}
         </p>

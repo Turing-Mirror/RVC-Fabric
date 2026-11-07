@@ -1,3 +1,6 @@
+import { listen } from "@tauri-apps/api/event";
+import { getConfig, type Config } from "./lib/config";
+import { configSnapshot } from "./lib/configSnapshot";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -54,11 +57,19 @@ if (overlay) {
   // 不在这儿补一次，用户设了深色 / 背景图之后，弹出来的工具窗还是浅色的。
   // 悬浮窗不参与：它是一块自带配色的深色药丸，跟着主题走反而会在浅色下变白，
   // 压到亮画面上就看不见了。
-  void invoke<Record<string, unknown>>("config_get")
+  void getConfig()
     .then(applyAppearance)
     .catch(() => {
       /* 浏览器预览里没有 shell */
     });
+}
+
+// Keep the window snapshot current even while no configuration page is mounted.
+if ("__TAURI_INTERNALS__" in window) {
+  void listen<{ config?: Config }>("config-changed", event => {
+    if (event.payload.config) configSnapshot.receive(event.payload.config, undefined, event.payload.config);
+  }).catch(() => {});
+  void getConfig().catch(() => {});
 }
 
 ReactDOM.createRoot(root).render(

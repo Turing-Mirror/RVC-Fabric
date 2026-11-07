@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { RangeBar, Select } from "./controls";
+import { RangeBar, Select, SliderValue } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
@@ -227,7 +227,8 @@ export function SeparatePanel() {
                 ariaLabel={t("s.sepAgg")}
               />
             </div>
-            <span className="w-[36px] text-right text-[13px] tabular-nums">{agg}</span>
+            <SliderValue value={agg} min={0} max={20} step={1} onChange={setAgg}
+              ariaLabel={t("s.sepAgg")} className="w-[36px] text-right text-[13px] tabular-nums" />
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select } from "./controls";
+import { Field, RangeBar, Select, SliderValue } from "./controls";
 import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
@@ -1970,9 +1970,8 @@ function StsSection() {
               ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {pitch > 0 ? `+${pitch}` : pitch}
-          </span>
+          <SliderValue value={pitch} min={-24} max={24} step={1} onChange={setPitch}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.bda11a3c2d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2000,9 +1999,8 @@ function StsSection() {
               ariaLabel={t("s.389bc211b2")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {indexRate.toFixed(2)}
-          </span>
+          <SliderValue value={indexRate} min={0} max={1} step={0.01} onChange={setIndexRate}
+            format={(v) => v.toFixed(2)} ariaLabel={t("s.389bc211b2")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2039,9 +2037,8 @@ function StsSection() {
                 ariaLabel={t("s.stsProtect")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {protect.toFixed(2)}
-            </span>
+            <SliderValue value={protect} min={0} max={0.5} step={0.01} onChange={setProtect}
+              format={(v) => v.toFixed(2)} ariaLabel={t("s.stsProtect")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2059,9 +2056,8 @@ function StsSection() {
                 ariaLabel={t("s.stsRms")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {rms.toFixed(2)}
-            </span>
+            <SliderValue value={rms} min={0} max={1} step={0.01} onChange={setRms}
+              format={(v) => v.toFixed(2)} ariaLabel={t("s.stsRms")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2079,9 +2075,7 @@ function StsSection() {
                 ariaLabel={t("s.stsFilter")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {filterRadius}
-            </span>
+            <SliderValue value={filterRadius} min={0} max={7} step={1} onChange={setFilterRadius} ariaLabel={t("s.stsFilter")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2432,9 +2426,8 @@ function TtsSection() {
               ariaLabel={t("s.747374775d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {rate > 0 ? `+${rate}` : rate}
-          </span>
+          <SliderValue value={rate} min={-6} max={6} step={1} onChange={setRate}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.747374775d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.bda11a3c2d")}</span>
@@ -2449,9 +2442,8 @@ function TtsSection() {
               ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {pitch > 0 ? `+${pitch}` : pitch}
-          </span>
+          <SliderValue value={pitch} min={-12} max={12} step={1} onChange={setPitch}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.bda11a3c2d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.a46919fc8e")}</span>

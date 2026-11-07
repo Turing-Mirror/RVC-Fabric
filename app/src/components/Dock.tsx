@@ -1,5 +1,5 @@
 import { SegmentControl } from "./SegmentControl";
-import { RangeBar } from "./controls";
+import { RangeBar, SliderValue } from "./controls";
 import { HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
@@ -310,7 +310,8 @@ function SliderTile({
     <div className="flex-1 min-w-[100px] max-w-[300px]">
       <div className="flex justify-between items-baseline mb-2">
         <span className="text-xs text-[var(--meta)]">{label}</span>
-        <b className="text-[15px] font-semibold tabular-nums">{display}</b>
+        <SliderValue value={value} min={min} max={max} step={step} onChange={onChange}
+          format={() => display} ariaLabel={label} className="text-[15px] font-semibold tabular-nums" />
       </div>
       <RangeBar
         value={value}

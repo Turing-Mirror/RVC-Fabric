@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select } from "./controls";
+import { Field, RangeBar, Select, SliderValue } from "./controls";
 import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
@@ -120,9 +120,9 @@ export function CkptAdvanced() {
                       ariaLabel={t("s.ckptAlpha")}
                     />
                   </div>
-                  <span className="w-[44px] text-right text-[13px] tabular-nums">
-                    {alpha.toFixed(2)}
-                  </span>
+                  <SliderValue value={alpha} min={0} max={1} step={0.01} onChange={setAlpha}
+                    format={(v) => v.toFixed(2)} ariaLabel={t("s.ckptAlpha")}
+                    className="w-[44px] text-right text-[13px] tabular-nums" />
                 </div>
               }
             />

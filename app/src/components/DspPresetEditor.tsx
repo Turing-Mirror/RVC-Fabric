@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { RangeBar } from "./controls";
+import { RangeBar, SliderValue } from "./controls";
 import { Btn, HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { t } from "../i18n/t";
@@ -260,9 +260,9 @@ export function DspPresetEditor({
                       ariaLabel={`${effect}.${key}`}
                     />
                   </div>
-                  <span className="w-[56px] text-right text-[13px] tabular-nums">
-                    {fmt(v, step)}
-                  </span>
+                  <SliderValue value={v} min={lo} max={hi} step={step}
+                    onChange={(nv) => setParam(effect, key, nv)} format={(value) => fmt(value, step)}
+                    ariaLabel={`${effect}.${key}`} className="w-[56px] text-right text-[13px] tabular-nums" />
                 </div>
               );
             })}

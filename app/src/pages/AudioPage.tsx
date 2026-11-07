@@ -6,7 +6,7 @@ import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import { Collapse, Leave } from "../components/Presence";
 import { Curtain, FlowList, Roll } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
-import { Select, Slider } from "../components/controls";
+import { Select, Slider, SliderValue } from "../components/controls";
 import { askConfirm } from "../lib/webDialog";
 import { promptAudioTools } from "../lib/downloadModels";
 import { useI18n } from "../i18n";
@@ -295,6 +295,12 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const seekVoice = (instanceId: number | null, seconds: number) => {
+    void invoke<VoicePlaybackStatus>("audio_voice_seek", { instanceId, seconds })
+      .then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
+        ? t("audio.playbackCancelled") : t("audio.operationFailed")));
   };
 
   const changeVolume = (command: string, args?: Record<string, unknown>) => {
@@ -642,12 +648,15 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               <SeekBar label={instance.name}
                 position={instance.played_frames / Math.max(1, instance.sample_rate)}
                 length={instance.length_frames / Math.max(1, instance.sample_rate)}
-                onSeek={(seconds) => void invoke<VoicePlaybackStatus>("audio_voice_seek", {
-                  instanceId: instance.instance_id, seconds,
-                }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
-                  ? t("audio.playbackCancelled") : t("audio.operationFailed")))} />
+                onSeek={(seconds) => seekVoice(instance.instance_id, seconds)} />
             </div>
-            <span className="flex-none tabular-nums w-[84px] text-right">{(instance.played_frames / Math.max(1, instance.sample_rate)).toFixed(1)} / {(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s</span>
+            <span className="flex-none tabular-nums w-[84px] text-right">
+              <SliderValue value={instance.played_frames / Math.max(1, instance.sample_rate)} min={0}
+                max={instance.length_frames / Math.max(1, instance.sample_rate)} step={0.1}
+                onChange={(seconds) => seekVoice(instance.instance_id, seconds)} format={(seconds) => seconds.toFixed(1)}
+                ariaLabel={instance.name} disabled={!(instance.length_frames > 0)} className="tabular-nums" />
+              {" / "}{(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s
+            </span>
             <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
               paused: instance.state !== "paused", instanceId: instance.instance_id,
             }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>

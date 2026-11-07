@@ -18,7 +18,7 @@
 
 [Capturas oficiales (en inglés)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
 
-Estas capturas históricas se registraron en el repositorio en agosto de 2026. La interfaz actual puede ser diferente.
+Estas capturas se registraron en agosto de 2026.
 
 [Sitio oficial](https://www.turingmirror.com/en/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@ Estas capturas históricas se registraron en el repositorio en agosto de 2026. L
 
 [Descargar para Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-Personalización profunda basada en [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) · Desarrollado y mantenido por [Turing Mirror](https://github.com/Turing-Mirror)
+El proyecto está basado en [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) y lo mantiene [Turing Mirror](https://github.com/Turing-Mirror).
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@ Personalización profunda basada en [RVC WebUI](https://github.com/RVC-Project/R
 <img src="assets/brand/qq_group.jpg" alt="Código QR del grupo de QQ" width="200">
 <!-- qq-group -->
 
-**Patrocinio**　[50% de descuento en el primer mes · Servidores en la nube rentables / Nube de juegos / Servidores de panel · Rainyun](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**Patrocinio**　[Servidores Rainyun: 50 % de descuento el primer mes](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -57,12 +57,12 @@ RVC Fabric es una aplicación de escritorio gratuita y de código abierto para W
 - Ofrece separación de voces, síntesis de voz y entrenamiento de modelos. La interfaz de entrenamiento actual requiere una GPU NVIDIA.
 - Admite NVIDIA CUDA y aceleración DirectML para GPU AMD e Intel.
 
-La rama Neptune incluye vinculación móvil, una API local y una interfaz MCP. Consulte las notas de la versión descargada para confirmar si incluye estas funciones.
+A fecha de 7 de noviembre de 2026, la rama de desarrollo Neptune incluye vinculación móvil, una API local y una interfaz MCP. El teléfono captura el audio y el ordenador convierte la voz. Las notas de cada versión publicada describen sus funciones.
 
 ## Inicio rápido
 
 1. Ejecute el instalador y siga las instrucciones para configurar el entorno de ejecución y preparar un modelo de voz.
-2. Para enviar audio a otra aplicación, instale VB-Cable. Seleccione CABLE Input como salida de RVC Fabric y CABLE Output como entrada de la otra aplicación.
+2. Para enviar audio a otra aplicación, instale VB-Cable y reinicie el ordenador. Seleccione CABLE Input como salida de RVC Fabric y CABLE Output como entrada de la otra aplicación.
 
 ## Arquitectura técnica y desarrollo
 
@@ -104,11 +104,11 @@ npm run dev
 - **Empaquetar paquete offline completo**: `python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **Construir manifiesto en línea**: `python scripts\build_catalog.py build --diff`
 
-## Licencia de código abierto y descargo de responsabilidad
+## Licencia del código fuente y autorización de uso de voces
 
 - El código fuente de este proyecto es de código abierto bajo la [Licencia MIT](./LICENSE).
 - Los pesos del modelo, los paquetes de voz y los recursos de terceros siguen sus acuerdos de licencia originales.
-- **Descargo de responsabilidad**: No utilice este software para suplantación de identidad, fraude u otros fines ilegales. Obtenga la autorización del titular de los derechos antes de entrenar o convertir la voz de otra persona. Los usuarios son responsables de cumplir con las leyes y regulaciones locales.
+- Obtenga la autorización del titular de los derechos antes de utilizar la voz de otra persona para el entrenamiento o la conversión.
 
 ## Agradecimientos
 
@@ -119,4 +119,4 @@ Agradecemos a los siguientes excelentes proyectos de código abierto por brindar
 - [faiss](https://github.com/facebookresearch/faiss) · [TorchGate](https://github.com/timsainb/TorchGate) — Recuperación y reducción de ruido en tiempo real
 - [FCPE](https://github.com/CNChTu/FCPE) · [Parselmouth](https://github.com/YannickJadoul/Parselmouth) · [torchcrepe](https://github.com/maxrmorrison/torchcrepe) — Algoritmos de tono opcionales
 - [PyMSS](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) — Motor de separación vocal (sigue a RVC original; sustituye a UVR5) · [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) — Origen de los modelos de separación · [FFmpeg](https://github.com/FFmpeg/FFmpeg) — Procesamiento de audio
-- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Tarjeta de sonido virtual (Escuchar el cambio de voz en el juego depende de esto)
+- [VB-Audio Virtual Cable](https://vb-audio.com/Cable/) — Dispositivo de audio virtual que envía la voz convertida a juegos y aplicaciones de voz

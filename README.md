@@ -18,7 +18,7 @@
 
 [官方截图](https://www.turingmirror.com/products/rvc-fabric/screenshots/)
 
-截图为仓库保存的历史界面，记录于 2026 年 8 月。当前界面可能有所不同。
+截图记录于 2026 年 8 月。
 
 [官网](https://www.turingmirror.com/products/rvc-fabric/)
 
@@ -26,7 +26,7 @@
 
 [下载 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
-基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 深度定制 · 由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 开发维护
+基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 开发，由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 维护。
 
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
@@ -39,7 +39,7 @@
 <img src="assets/brand/qq_group.jpg" alt="QQ 群二维码" width="200">
 <!-- qq-group -->
 
-**赞助推广**　[首月五折　·　性价比云服务器 / 游戏云 / 面板服　·　雨云](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
+**赞助推广**　[雨云服务器首月五折](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
 
 </div>
 
@@ -58,7 +58,7 @@ RVC Fabric 是图灵镜开发的免费开源 Windows 桌面软件，提供实时
 - 提供人声分离、文本转语音和音色训练工具。训练向导包含音频切分、音高与特征提取、模型训练和索引导出。
 - 支持 NVIDIA CUDA，以及 AMD 和 Intel 显卡的 DirectML 加速。安装引导可识别硬件并配置对应的运行环境。
 
-截至 2026 年 11 月 7 日，海王星分支包含手机配对、本地 API 和 MCP 接口。手机配对由手机采集音频，桌面端执行语音转换；这些分支功能是否包含在下载版本中，应以该版本的发布说明为准。
+截至 2026 年 11 月 7 日，Neptune 海王星开发分支包含手机配对、本地 API 和 MCP 接口。手机采集音频后，由桌面端执行语音转换。已发布版本的功能见对应发布说明。
 
 ## 快速开始
 
@@ -106,11 +106,11 @@ npm run dev
 - **打包全量离线包**：`python scripts\build_release.py --variant nvidia|amd|nvidia50`
 - **构建在线清单**：`python scripts\build_catalog.py build --diff`
 
-## 开源许可与免责声明
+## 开源许可与声音授权
 
 - 本项目源码采用 [MIT License](./LICENSE) 许可协议开源。
 - 模型权重、音色包及第三方资源遵循其原始许可协议。
-- **免责声明**：请勿将本软件用于伪造身份、欺诈或其他违法用途。使用他人声音进行训练或转换前，请取得原权利人授权。使用者应遵守当地法律法规。
+- 使用他人声音进行训练或转换前，请取得声音权利人的授权。
 
 ## 致谢
 

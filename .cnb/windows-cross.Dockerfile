@@ -1,9 +1,11 @@
 FROM node:24.14.0-bookworm
 
+# Tauri CLI checks the host tray library even when bundling a Windows target.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates clang lld llvm nsis python3 python3-venv \
-       cmake ninja-build \
+       cmake ninja-build pkg-config libayatana-appindicator3-dev \
+    && pkg-config --exists ayatana-appindicator3-0.1 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CARGO_HOME=/root/.cargo RUSTUP_HOME=/root/.rustup

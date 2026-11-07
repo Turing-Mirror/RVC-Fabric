@@ -14,6 +14,8 @@ $:
           - /root/.cache/tauri:copy-on-write
           - app/src-tauri/target:copy-on-write
       env:
+        LANG: C.UTF-8
+        LC_ALL: C.UTF-8
         XWIN_ARCH: x86_64
         XWIN_CACHE_DIR: /root/.cache/xwin
         CARGO_BUILD_JOBS: "8"

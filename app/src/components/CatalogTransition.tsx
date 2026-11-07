@@ -12,6 +12,7 @@ export function CatalogTransition({ scope, page = 1, order, dir, children }: {
   return (
     <Morph>
       <QueueList
+        className="catalog-transition"
         scope={scope}
         page={page}
         order={order}

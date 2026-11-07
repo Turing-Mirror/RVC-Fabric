@@ -235,3 +235,7 @@ input[type="checkbox"]:disabled {
 
 /* Embedded hosts own the outer window; application navigation stays intact. */
 [data-trm-host="embedded"] .native-window-controls { display: none; }
+
+/* Catalog transitions grow with their content; the surrounding page owns scrolling.
+   QueueList's default containment otherwise traps wheel/trackpad input here. */
+.trm-queue-list.catalog-transition { overscroll-behavior: auto; }

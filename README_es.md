@@ -16,6 +16,8 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric pantalla de herramientas adicionales" width="32%">
 <!-- screenshots -->
 
+[Capturas oficiales (en inglés)](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
+
 Estas capturas históricas se registraron en el repositorio en agosto de 2026. La interfaz actual puede ser diferente.
 
 [Sitio oficial](https://www.turingmirror.com/en/products/rvc-fabric/)

@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
 <!-- screenshots -->
 
-[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [利用ガイド](https://www.turingmirror.com/ja/guides/rvc-fabric/) · [Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
 
@@ -50,8 +50,6 @@ RVC Fabric は Turing Mirror が開発する無料のオープンソース Windo
 - Turing Mirror とサードパーティの配布元からボイスモデルを取得できます。進捗の確認と中断したダウンロードの再開に対応しています。
 - ボーカル分離、テキスト読み上げ、ボイス学習ツールを提供します。学習手順には音声分割、ピッチと特徴量の抽出、モデル学習、インデックスの書き出しが含まれます。
 - NVIDIA CUDA と、AMD および Intel GPU の DirectML アクセラレーションに対応しています。セットアップでハードウェアを検出し、対応する実行環境を設定します。
-
-開発ブランチ Neptune はスマートフォンとのペアリング、ローカル API、MCP インターフェースも提供します。スマートフォンで収録した音声はデスクトップで変換します。
 
 ## ボイスチャットとゲーム内での音楽再生
 

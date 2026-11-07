@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
 <!-- screenshots -->
 
-[Website](https://www.turingmirror.com/en/products/rvc-fabric/) · [User guide](https://www.turingmirror.com/en/guides/rvc-fabric/) · [Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[Website](https://www.turingmirror.com/en/products/rvc-fabric/) · [Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) and maintained by [Turing Mirror](https://github.com/Turing-Mirror).
 
@@ -50,8 +50,6 @@ RVC Fabric is a free, open-source Windows application developed by Turing Mirror
 - Download voice models from Turing Mirror and third-party sources, track progress and resume interrupted downloads.
 - Provides vocal separation, text-to-speech and voice training tools. The training workflow covers audio slicing, pitch and feature extraction, model training and index export.
 - Supports NVIDIA CUDA and DirectML acceleration for AMD and Intel GPUs. Setup detects hardware and configures the corresponding runtime.
-
-The Neptune development branch also provides mobile pairing, a local API and an MCP interface. Audio captured on the phone is converted on the desktop.
 
 ## Voice chat and in-game music playback
 

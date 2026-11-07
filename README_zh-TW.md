@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
 <!-- screenshots -->
 
-[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [使用指南](https://www.turingmirror.com/zh-hant/guides/rvc-fabric/) · [下載 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [下載 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 以 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 為基礎開發，由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 維護。
 
@@ -50,8 +50,6 @@ RVC Fabric 是圖靈鏡開發的免費開源 Windows 軟體，可在 QQ、Discor
 - 可從圖靈鏡和第三方來源取得音色模型，支援下載進度管理與中斷後繼續下載。
 - 提供人聲分離、文字轉語音和音色訓練工具。訓練精靈包含音訊切分、音高與特徵擷取、模型訓練和索引匯出。
 - 支援 NVIDIA CUDA，以及 AMD 和 Intel 顯示卡的 DirectML 加速。安裝引導可辨識硬體並設定對應的執行環境。
-
-Neptune 海王星開發分支另提供手機配對、本機 API 和 MCP 介面，手機擷取的音訊由桌面端轉換。
 
 ## 語音聊天與遊戲內播放音樂
 

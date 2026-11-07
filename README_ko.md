@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
 <!-- screenshots -->
 
-[공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/) · [사용 안내서(영어)](https://www.turingmirror.com/en/guides/rvc-fabric/) · [Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/) · [Windows용 다운로드](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)를 기반으로 개발되었으며 [Turing Mirror](https://github.com/Turing-Mirror)가 유지보수합니다.
 
@@ -49,8 +49,6 @@ RVC Fabric은 Turing Mirror가 개발하는 무료 오픈 소스 Windows 앱입�
 - 음성 모델과 프리셋을 관리하고 공식 및 타사 배포처에서 모델을 다운로드할 수 있습니다.
 - 보컬 분리, 텍스트 음성 합성, 모델 학습 도구를 제공합니다. 현재 학습 화면에서는 NVIDIA GPU가 필요합니다.
 - NVIDIA CUDA 및 AMD와 Intel GPU의 DirectML 가속을 지원합니다.
-
-Neptune 개발 브랜치는 휴대폰 페어링, 로컬 API, MCP 인터페이스도 제공합니다. 휴대폰에서 수집한 오디오는 데스크톱에서 변환합니다.
 
 ## 음성 채팅과 게임 내 음악 재생
 

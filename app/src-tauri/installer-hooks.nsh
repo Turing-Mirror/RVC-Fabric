@@ -29,6 +29,13 @@ Var MoveAutostart
 Var MoveCode
 Var MoveReport
 
+; 用环境变量传路径，避免路径中的单引号被当成 PowerShell 源码。
+!macro StopInstallDirProcesses ROOT
+  System::Call 'kernel32::SetEnvironmentVariableW(w "RVC_FABRIC_STOP_ROOT", w "${ROOT}")'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath($$env:RVC_FABRIC_STOP_ROOT).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar; Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  System::Call 'kernel32::SetEnvironmentVariableW(w "RVC_FABRIC_STOP_ROOT", p 0)'
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   ; 路径里有中文时 faiss 读不了检索库。OTA 静默升级不要挡（已经装在中文目录
   ; 的人卸了重来更糟），正常安装弹一句，让他改到 D:\RVCFabric 这种纯英文路径。
@@ -99,8 +106,8 @@ Var MoveReport
   IfFileExists "$MoveOld\User_Data\*.*" 0 skip_move
   MessageBox MB_YESNO|MB_ICONQUESTION "RVC Fabric 原来安装在：$\r$\n$MoveOld$\r$\n$\r$\n是否把音色、设置和已下载的组件搬到新位置？$\r$\n$INSTDIR$\r$\n$\r$\n选「否」将在新位置全新安装，原位置保持不变。" IDNO skip_move
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
-  ; 原目录里的引擎进程还占着 Runtime 的文件，不停掉搬不动。只按路径前缀匹配。
-  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath(''$MoveOld''); Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  ; 原目录里的引擎进程还占着 Runtime 文件；匹配完整目录边界，不碰同名前缀目录。
+  !insertmacro StopInstallDirProcesses "$MoveOld"
   Sleep 800
   InitPluginsDir
   File "/oname=$PLUGINSDIR\move-install.exe" "${MAINBINARYSRCPATH}"
@@ -177,8 +184,8 @@ Var MoveReport
   skip_uninst_prompt:
 
   ; 停掉安装目录里的进程，否则 Runtime\pythonw.exe 还攥着 DLL，后面 RMDir 会剩半截。
-  ; 只按 ExecutablePath 前缀匹配 $INSTDIR，绝不 taskkill pythonw（会误伤别的程序）。
-  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath(''$INSTDIR''); Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  ; 只匹配 $INSTDIR 目录内的 ExecutablePath，绝不按进程名批量停止。
+  !insertmacro StopInstallDirProcesses "$INSTDIR"
   Sleep 800
   skip_uninst_kill:
 !macroend

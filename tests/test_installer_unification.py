@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -114,6 +116,41 @@ class PayloadDoesNotShipDevMachinePaths(unittest.TestCase):
 
 
 class InstallerHooks(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "requires Windows PowerShell")
+    def test_process_cleanup_respects_directory_boundaries(self):
+        """Run the actual hook script with fake processes; never stop real processes."""
+        text = HOOKS.read_text(encoding="utf-8-sig")
+        scripts = re.findall(r'nsExec::ExecToLog .*?-Command "(.*)"\s*\x27', text)
+        self.assertTrue(scripts, "missing process cleanup PowerShell")
+        for script in scripts:
+            script = script.replace("$$", "$").replace("''", "'")
+            for root in (r"C:\RVC", "C:\\RVC\\", r"C:\RVC O'Brien"):
+                with self.subTest(root=root, script=script):
+                    actual = script.replace("$MoveOld", root).replace("$INSTDIR", root)
+                    prefix = root.rstrip("\\")
+                    paths = [prefix + r"\Runtime\pythonw.exe",
+                             prefix.lower() + r"\rvc-fabric.exe",
+                             prefix + r"-other\pythonw.exe", ""]
+                    fixture = json.dumps(paths).replace("'", "''")
+                    harness = (
+                        "$ErrorActionPreference = 'Stop'; "
+                        "$script:stopped = @(); "
+                        f"$script:paths = '{fixture}' | ConvertFrom-Json; "
+                        "function Get-CimInstance { "
+                        "for ($i = 0; $i -lt $script:paths.Count; $i++) { "
+                        "[pscustomobject]@{ ExecutablePath=$script:paths[$i]; ProcessId=$i+1 } } }; "
+                        "function Stop-Process { param($Id, [switch]$Force, $ErrorAction) "
+                        "$script:stopped += $Id }; "
+                        f"$env:RVC_FABRIC_STOP_ROOT = '{root.replace(chr(39), chr(39)*2)}'; "
+                        + actual + "; ConvertTo-Json -Compress -InputObject @($script:stopped)"
+                    )
+                    result = subprocess.run(
+                        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", harness],
+                        capture_output=True, text=True, timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(json.loads(result.stdout), [1, 2])
+
     def test_hooks_file_has_a_bom(self):
         """钩子里有中文文件名（启动器.exe 等），NSIS 要 UTF-8 BOM 才认。"""
         self.assertEqual(HOOKS.read_bytes()[:3], b"\xef\xbb\xbf")
@@ -177,7 +214,8 @@ class InstallerHooks(unittest.TestCase):
         self.assertIn("pretrained_v2", post)
         pre = bodies["NSIS_HOOK_PREUNINSTALL"]
         self.assertIn("$INSTDIR", pre)
-        self.assertIn("Stop-Process", pre)
+        self.assertIn('!insertmacro StopInstallDirProcesses "$INSTDIR"', pre)
+        self.assertIn("Stop-Process", bodies["StopInstallDirProcesses"])
 
     def test_uninstall_asks_to_keep_user_data_and_mentions_vbcable(self):
         """用户数据默认保留；弹窗可选删除，并告知 VB-Cable 要单独卸载。"""

@@ -121,7 +121,7 @@ pub fn tick(root: &Path, app_version: &str, accel: &str) -> Value {
     // 下载源成败搭这趟车走，不单开请求。
     let dl = download_summary(&cfg);
     let has_dl = dl.as_array().map(|a| !a.is_empty()).unwrap_or(false);
-    let mut body = json!({ "id": id, "days": days, "ver": app_version, "accel": accel });
+    let mut body = json!({ "product": "rvc-fabric", "id": id, "days": days, "ver": app_version, "accel": accel });
     if has_dl {
         body["dl"] = dl;
     }

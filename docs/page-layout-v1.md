@@ -60,3 +60,5 @@ RVCF 没有 GPT-SoVITS 的数据标注页。本次核查其实际同类问题：
 行为依据：[MDN 的 load 资源重置说明](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/load)、[MDN 的 play Promise 说明](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play)、[React 初始状态说明](https://react.dev/reference/react/useState)和[Effect 清理规则](https://react.dev/reference/react/useEffect)。
 
 开发实例验收：已同步本轮前端并重新启动，原生窗口有响应且记录“界面已挂载”。没有运行真实训练。
+
+广场卡片保留左上角发布版本号，封面省略作者标签，文件体积直接显示。作者主页与来源仓库位于下载旁的更多菜单。

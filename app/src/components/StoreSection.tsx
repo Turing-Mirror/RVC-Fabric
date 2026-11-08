@@ -29,7 +29,7 @@ import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
 import { CatalogTransition } from "./CatalogTransition";
-import { useDir } from "trm-ui";
+import { useDir, useMenu, type MenuItem } from "trm-ui";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -37,7 +37,6 @@ import {
   displayVoiceAuthor,
   displayVoiceFieldForGroup,
   displayVoiceName,
-  displayVoiceOrigin,
   isCharacterAsGroup,
   isCharacterAsSeries,
   voiceAuthorList,
@@ -905,8 +904,7 @@ function VoiceCard({
   const parentLabel = voiceParentSeries(v, loc);
   const childLabel = voiceChildGroup(v, loc);
   const meta =
-    joinClauses([parentLabel, childLabel, v.size_label && t("s.metaSize", { v0: v.size_label })]);
-  const coverBadge = author || displayVoiceOrigin(v);
+    joinClauses([parentLabel, childLabel, v.size_label]);
   // 发布日期当版本号（v26.07.31）：同一角色常有多个版本在架，下载前先看清
   // 自己装的是哪一版。没有日期就不画，不留一个空角标。
   const ver = voiceVersionLabel(v.date);
@@ -918,6 +916,20 @@ function VoiceCard({
     /^https?:\/\//i.test(a.url || ""),
   );
   const sourceUrl = (v.source_url || "").trim();
+  const menu = useMenu();
+  const links: MenuItem[] = [];
+  if (authors.length) {
+    links.push({
+      id: "author", label: t("s.voiceLinkAuthor"),
+      onSelect: () => {
+        if (authors.length === 1) void openExternal(authors[0].url || "");
+        else setAuthorPick(authors);
+      },
+    });
+  }
+  if (/^https?:\/\//i.test(sourceUrl)) {
+    links.push({ id: "source", label: t("s.voiceLinkSource"), onSelect: () => void openExternal(sourceUrl) });
+  }
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
@@ -950,9 +962,6 @@ function VoiceCard({
             {ver}
           </span>
         ) : null}
-        <span className="absolute left-2.5 bottom-2 text-[11px] text-[var(--ink)] drop-shadow">
-          {coverBadge}
-        </span>
         {busy && !staged ? (
           <CardProgressBar
             percent={progress?.percent ?? 0}
@@ -972,35 +981,6 @@ function VoiceCard({
       {meta ? (
         <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
           {meta}
-        </div>
-      ) : null}
-      {(authors.length || /^https?:\/\//i.test(sourceUrl)) ? (
-        <div className="mt-1 flex items-center gap-3 flex-wrap">
-          {authors.length ? (
-            <button
-              type="button"
-              // 走壳打开，落到用户自己的浏览器；顺带过一遍 http/https 白名单
-              // —— 清单里的地址是第三方写的，不能当可信输入。
-              onClick={() => {
-                if (authors.length === 1) void openExternal(authors[0].url || "");
-                else setAuthorPick(authors);
-              }}
-              title={authors.length === 1 ? authors[0].url : undefined}
-              className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
-            >
-              {t("s.voiceLinkAuthor")}
-            </button>
-          ) : null}
-          {/^https?:\/\//i.test(sourceUrl) ? (
-            <button
-              type="button"
-              onClick={() => void openExternal(sourceUrl)}
-              title={sourceUrl}
-              className="border-0 bg-transparent p-0 text-[11.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
-            >
-              {t("s.voiceLinkSource")}
-            </button>
-          ) : null}
         </div>
       ) : null}
       <Leave>{authorPick ? (
@@ -1046,7 +1026,13 @@ function VoiceCard({
             {t("s.2b9d013177")}
           </Btn>
         )}
+        {links.length ? (
+          <Btn className="shrink-0 px-2.5" ariaLabel={t("models.more")} onClick={event => menu.open(event.currentTarget, links)}>
+            ⋯
+          </Btn>
+        ) : null}
       </div>
+      {menu.node}
     </div>
   );
 }

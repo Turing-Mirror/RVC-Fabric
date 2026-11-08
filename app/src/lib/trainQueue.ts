@@ -33,30 +33,39 @@ export function trainPercent(job?: TrainJob): number {
   const within = p?.total && typeof p.done === "number" ? Math.max(0, Math.min(1, p.done / p.total)) : 0;
   return Math.round(((stage + within) / TRAIN_STAGES.length) * 100);
 }
+// Keep the latest native snapshot while the tool page is unmounted.
+let lastSnapshot: Snapshot | null = null;
+let snapshotRevision = 0;
 export function useTrainingQueue() {
-  const [jobs, setJobs] = useState<TrainJob[]>([]);
+  const [jobs, setJobs] = useState<TrainJob[]>(() => lastSnapshot?.jobs ?? []);
   const [error, setError] = useState("");
-  const [waitingForRealtime, setWaitingForRealtime] = useState(false);
+  const [waitingForRealtime, setWaitingForRealtime] = useState(() => !!lastSnapshot?.waiting_for_realtime);
+  const [loaded, setLoaded] = useState(() => lastSnapshot !== null);
   const updates = useRef(0);
   const fetching = useRef(false);
   const refresh = useCallback(async () => {
     if (!("__TAURI_INTERNALS__" in window) || fetching.current) return;
     fetching.current = true;
     const revision = updates.current;
+    const sharedRevision = snapshotRevision;
     try {
       const value = await invoke<Snapshot>("train_queue_list");
-      if (revision === updates.current) { setJobs(value.jobs); setWaitingForRealtime(!!value.waiting_for_realtime); }
+      if (revision === updates.current && sharedRevision === snapshotRevision) {
+        lastSnapshot = value;
+        snapshotRevision += 1;
+        setJobs(value.jobs); setWaitingForRealtime(!!value.waiting_for_realtime); setLoaded(true);
+      }
       setError("");
     } catch (e) { setError(String(e)); } finally { fetching.current = false; }
   }, []);
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     let disposed = false;
-    const un = listen<Snapshot>("train-queue", event => { if (!disposed) { updates.current += 1; setJobs(event.payload.jobs); setWaitingForRealtime(!!event.payload.waiting_for_realtime); } });
+    const un = listen<Snapshot>("train-queue", event => { if (!disposed) { updates.current += 1; snapshotRevision += 1; lastSnapshot = event.payload; setJobs(event.payload.jobs); setWaitingForRealtime(!!event.payload.waiting_for_realtime); setLoaded(true); } });
     // Subscribe before reading the snapshot to cover mounting during a transition.
     void un.then(() => { if (!disposed) void refresh(); }).catch(e => { if (!disposed) setError(String(e)); });
     const timer = window.setInterval(() => void refresh(), 2000);
-    return () => { disposed = true; window.clearInterval(timer); void un.then(dropListen).catch(() => {}); };
+    return () => { disposed = true; updates.current += 1; window.clearInterval(timer); void un.then(dropListen).catch(() => {}); };
   }, [refresh]);
   const action = useCallback(async (id: string, action: string) => {
     try {
@@ -64,5 +73,5 @@ export function useTrainingQueue() {
       await refresh();
     } catch (e) { setError(String(e)); }
   }, [refresh]);
-  return { jobs, error, waitingForRealtime, refresh, action };
+  return { jobs, error, loaded, waitingForRealtime, refresh, action };
 }

@@ -11,8 +11,8 @@ const STATE_KEYS: Record<TrainJobState, string> = {
   failed: "trainingQueue.Failed", cancelled: "trainingQueue.Cancelled",
 };
 const STAGE_KEYS = { preprocess: "s.1a37ffe775", f0: "s.bda11a3c2d", feature: "s.672c1db9d8", train: "s.796e01d5af", index: "s.79f9110607" };
-export function TrainingQueue({ jobs, error, waitingForRealtime, eta, onAction, onBatch }: {
-  jobs: TrainJob[]; error: string; waitingForRealtime: boolean; eta?: string; onBatch?: () => void; onAction: (id: string, action: string) => Promise<void>;
+export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, eta, onAction, onBatch }: {
+  jobs: TrainJob[]; error: string; loaded?: boolean; waitingForRealtime: boolean; eta?: string; onBatch?: () => void; onAction: (id: string, action: string) => Promise<void>;
 }) {
   const paged = usePaged(jobs, 5);
   const [pending, setPending] = useState<string[]>([]);
@@ -30,7 +30,7 @@ export function TrainingQueue({ jobs, error, waitingForRealtime, eta, onAction, 
     <div className="rounded-[var(--r)] bg-[var(--group)] p-3.5 min-h-0 overflow-y-auto">
       <QueueList scope="training" page={paged.page} items={paged.slice} keyOf={job => job.id}
         className="flex flex-col gap-4"
-        empty={<div className="text-[12.5px] text-[var(--help)]">{t("trainingQueue.Empty")}</div>}
+        empty={loaded ? <div className="text-[12.5px] text-[var(--help)]">{t("trainingQueue.Empty")}</div> : null}
         render={job => {
             const running = job.state === "running" || job.state === "cancelling";
             const stage = job.progress?.stage;

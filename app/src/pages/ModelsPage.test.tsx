@@ -17,7 +17,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { ModelsPage } from "./ModelsPage";
-import { invalidateVoicesCache } from "../lib/voices";
+import { invalidateVoicesCache, listVoices } from "../lib/voices";
 import { t } from "../i18n/t";
 
 const CATALOG = {
@@ -78,6 +78,28 @@ describe("模型页使用中徽标", () => {
     while (mounts.length) mounts.pop()?.unmount();
     invalidateVoicesCache();
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  it("does not claim an empty library before the first read completes", () => {
+    tauri.invoke.mockImplementation(cmd => cmd === "voices_list" ? new Promise(() => {}) : Promise.resolve({}));
+    const m = mount(<ModelsPage />); mounts.push(m);
+    expect(m.container.textContent).not.toContain(t("s.c9efc20514"));
+    expect(m.container.textContent).not.toContain(t("s.b4ac696046"));
+  });
+
+  it("renders cached models before a delayed refresh and retains them on failure", async () => {
+    await listVoices();
+    invalidateVoicesCache();
+    let reject!: (reason: Error) => void;
+    tauri.invoke.mockImplementation(cmd => cmd === "voices_list"
+      ? new Promise((_resolve, fail) => { reject = fail; }) : Promise.resolve({}));
+    const m = mount(<ModelsPage currentId="m/b.pth" />);
+    mounts.push(m);
+    expect(m.container.textContent).toContain("甲");
+    expect(m.container.textContent).toContain("乙");
+    expect(m.container.textContent).not.toContain(t("s.c9efc20514"));
+    await act(async () => reject(new Error("offline")));
+    expect(m.container.textContent).toContain("甲");
   });
 
   it("late index/profile responses cannot overwrite a newer selection", async () => {

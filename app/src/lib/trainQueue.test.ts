@@ -32,6 +32,15 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 
 describe("training queue reconnect", () => {
+  it("distinguishes a cold pending queue read from an empty queue", async () => {
+    let resolve!: (value: { jobs: TrainJob[] }) => void;
+    bridge.invoke.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    await mount();
+    expect(current.loaded).toBe(false);
+    await act(async () => resolve({ jobs: [] }));
+    expect(current.loaded).toBe(true);
+    expect(current.jobs).toEqual([]);
+  });
   it("restores current progress and observes jobs added while another is running", async () => {
     bridge.invoke.mockResolvedValue({ jobs: [job("1", "running")] });
     await mount();
@@ -45,6 +54,32 @@ describe("training queue reconnect", () => {
     await mount();
     expect(activeJob(current.jobs)?.id).toBe("2");
     expect(unlisten).toHaveBeenCalledOnce();
+  });
+  it("restores jobs and waiting state synchronously while the remount read is pending", async () => {
+    bridge.invoke.mockResolvedValue({ jobs: [job("cached", "queued")], waiting_for_realtime: true });
+    await mount();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    bridge.invoke.mockImplementation(() => new Promise(() => {}));
+    act(() => root.render(createElement(Harness)));
+    expect(current.jobs[0].id).toBe("cached");
+    expect(current.waitingForRealtime).toBe(true);
+    expect(current.loaded).toBe(true);
+  });
+  it("does not let an unmounted reader replace the new cached snapshot", async () => {
+    let resolve!: (value: { jobs: TrainJob[] }) => void;
+    bridge.invoke.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    await mount();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    await act(async () => event({ payload: { jobs: [job("new", "running")] } }));
+    await act(async () => resolve({ jobs: [job("old", "running")] }));
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    bridge.invoke.mockImplementation(() => new Promise(() => {}));
+    act(() => root.render(createElement(Harness)));
+    expect(current.jobs[0].id).toBe("new");
   });
   it("does not replace a new progress event with an older pending snapshot", async () => {
     await mount();

@@ -45,6 +45,7 @@ import {
   listIndex,
   listProfiles,
   listVoices,
+  peekVoices,
   modelKey,
   openModelsDir,
   promoteLegacy,
@@ -105,8 +106,9 @@ function ModelsPageImpl({
   const panelRequest = useRef(0);
   const panelsFor = useRef("");
   const dspRequest = useRef(0);
-  const [models, setModels] = useState<VoiceModel[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
+  const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
+  const [loaded, setLoaded] = useState(() => peekVoices() !== null);
+  const [selectedKey, setSelectedKey] = useState(currentId);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("default");
   const [kind, setKind] = useState<Kind>(focusKind ?? "rvc");
@@ -248,6 +250,7 @@ function ModelsPageImpl({
   );
 
   const statusSub = useMemo(() => {
+    if (!loaded) return "";
     if (!models.length) return translate("s.b4ac696046");
     if (query.trim() && view.length !== models.length) {
       return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
@@ -255,14 +258,14 @@ function ModelsPageImpl({
     // 没有确认在用的音色就写「未选择」，不能拿目录第一条冒充当前。
     const cur = selected?.name || translate("s.noneSelected");
     return translate("s.425fb93e79", { v0: models.length, v1: cur });
-  }, [models, query, view.length, selected, translate]);
+  }, [loaded, models, query, view.length, selected, translate]);
 
   const reload = useCallback(async (fresh = false) => {
     if (!pageOn.current) return;
     const request = ++listRequest.current;
     try {
       const cat = await listVoices(fresh ? { fresh: true } : undefined);
-      if (request === listRequest.current) setModels(cat.models || []);
+      if (request === listRequest.current) { setModels(cat.models || []); setLoaded(true); }
     } catch (e) {
       if (request === listRequest.current) setMsg(String(e));
     }
@@ -569,7 +572,7 @@ function ModelsPageImpl({
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
           }}
         >
-          {!models.length ? (
+          {!loaded ? null : !models.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
           ) : !view.length ? (
             <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">

@@ -845,7 +845,7 @@ export function TrainPanel() {
           </p>
         ) : null}
 
-        <TrainingQueue jobs={queue.jobs} error={queue.error} waitingForRealtime={queue.waitingForRealtime}
+        <TrainingQueue jobs={queue.jobs} error={queue.error} loaded={queue.loaded} waitingForRealtime={queue.waitingForRealtime}
           eta={eta} onAction={queue.action} onBatch={focusBatch} />
 
         {trained && !running ? (

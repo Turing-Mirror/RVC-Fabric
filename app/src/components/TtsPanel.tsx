@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { releaseAudio } from "../lib/releaseAudio";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
@@ -283,7 +285,17 @@ const fmtPitch = (n: number) => (n > 0 ? `+${n}` : String(n));
  *   用当前音色离线换成目标声线。这是本意。
  * - **文字合成（TTS）**：系统 SAPI 先念字，再可选 RVC 换音色。额外保留。
  */
+function useTtsDraft() {
+  const [text, setText] = useState("");
+  const [voice, setVoice] = useState("");
+  const [rate, setRate] = useState(0);
+  const [pitch, setPitch] = useState(0);
+  const [useRvc, setUseRvc] = useState(true);
+  return { text, setText, voice, setVoice, rate, setRate, pitch, setPitch, useRvc, setUseRvc };
+}
+
 export function TtsPanel() {
+  const draft = useTtsDraft();
   const [mode, setMode] = useState<Mode>("sts");
 
   return (
@@ -301,7 +313,7 @@ export function TtsPanel() {
         }
       />
       <CatalogTransition scope={mode} order={["sts", "tts"]}>
-        {mode === "sts" ? <StsSection /> : <TtsSection />}
+        {mode === "sts" ? <StsSection /> : <TtsSection draft={draft} />}
       </CatalogTransition>
     </ToolBody>
   );
@@ -594,6 +606,7 @@ function StsSection() {
   const [version, setVersion] = useState<Record<string, string>>({});
   const recordingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playPathRef = useRef("");
   const lastHomePath = useRef("");
   /** 上一次真正写出文件的目录。打开输出目录用它，不看默认 sts。 */
   const lastDestRef = useRef("");
@@ -853,7 +866,10 @@ function StsSection() {
       disposed = true;
       unsubs.forEach((f) => dropListen(f));
       dropListen(unFocus);
-      audioRef.current?.pause();
+      const audio = audioRef.current;
+      audioRef.current = null;
+      playPathRef.current = "";
+      releaseAudio(audio);
     };
   }, [load, pickVoice, showErr]);
 
@@ -1048,20 +1064,25 @@ function StsSection() {
     startPlay(dest || f.path, at);
   };
 
-  const stopPlay = () => {
-    audioRef.current?.pause();
+  const stopPlay = useCallback(() => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    playPathRef.current = "";
+    releaseAudio(audio);
     setPlaying("");
-  };
+  }, []);
 
   const startPlay = (path: string, at = 0) => {
     stopPlay();
     try {
-      const el = audioRef.current ?? new Audio();
+      const el = new Audio();
       audioRef.current = el;
+      playPathRef.current = path;
       el.src = convertFileSrc(path);
-      el.onended = () => setPlaying("");
+      el.onended = () => { if (audioRef.current === el) stopPlay(); };
       el.onerror = () => {
-        setPlaying("");
+        if (audioRef.current !== el) return;
+        stopPlay();
         showErr(t("s.stsPlayFail"));
       };
       if (at > 0) {
@@ -1072,8 +1093,14 @@ function StsSection() {
       } else {
         el.onloadedmetadata = null;
       }
-      void el.play().then(() => setPlaying(path));
+      setPlaying(path);
+      void el.play().catch(() => {
+        if (audioRef.current !== el) return;
+        stopPlay();
+        showErr(t("s.stsPlayFail"));
+      });
     } catch (e) {
+      stopPlay();
       showErr(String(e));
     }
   };
@@ -1107,9 +1134,16 @@ function StsSection() {
     }
   };
 
+  const releaseFilePreview = (f: InputFile) => {
+    const path = playPathRef.current;
+    if (samePath(path, f.path) || (outputs[pathKey(f.path)] || []).some(o => samePath(path, o.dest))) stopPlay();
+    // Commit the editor cleanup before native file operations acquire the same path.
+    if (trimOpen && samePath(trimPath, f.path)) flushSync(() => setTrimOpen(false));
+  };
+
   const removeFile = async (f: InputFile) => {
     if (!(await askConfirm(t("s.stsDeleteConfirm", { v0: f.name })))) return;
-    if (playing === f.path) stopPlay();
+    releaseFilePreview(f);
     try {
       await invoke("sts_sources_delete", { path: f.path });
       await refreshScan();
@@ -1122,7 +1156,7 @@ function StsSection() {
     const name = await askPrompt(t("s.b8659855b0"), f.name);
     const nextName = name?.trim();
     if (!nextName || nextName === f.name) return;
-    if (playing === f.path) stopPlay();
+    releaseFilePreview(f);
     try {
       await invoke<string>("sts_sources_rename", {
         path: f.path,
@@ -1146,6 +1180,12 @@ function StsSection() {
   const inputPageCount = Math.max(1, Math.ceil(visibleItems.length / 20));
   const currentInputPage = Math.min(inputPage, inputPageCount - 1);
   const pagedItems = visibleItems.slice(currentInputPage * 20, (currentInputPage + 1) * 20);
+
+  const playingVisible = !playing || pagedItems.some(f => samePath(playing, f.path)
+    || (outputs[pathKey(f.path)] || []).some(o => samePath(o.dest, playing)));
+  useEffect(() => {
+    if (!playingVisible) stopPlay();
+  }, [playingVisible, stopPlay]);
 
   const toggleItem = (f: InputFile, shift: boolean) => {
     setChecked((prev) => {
@@ -2271,13 +2311,9 @@ function StsSection() {
 // 文字合成（TTS → 可选 RVC）— 保留
 // ---------------------------------------------------------------------------
 
-function TtsSection() {
+function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
   const [st, setSt] = useState<TtsStatus>({});
-  const [text, setText] = useState("");
-  const [voice, setVoice] = useState("");
-  const [rate, setRate] = useState(0);
-  const [pitch, setPitch] = useState(0);
-  const [useRvc, setUseRvc] = useState(true);
+  const { text, setText, voice, setVoice, rate, setRate, pitch, setPitch, useRvc, setUseRvc } = draft;
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
@@ -2327,7 +2363,7 @@ function TtsSection() {
       disposed = true;
       dropListen(un);
     };
-  }, []);
+  }, [setVoice]);
 
   // 当前模式那一路的输出目录，以及它是不是用户自己选过的（选过才给「恢复默认」）。
   const outDir = (useRvc ? st.out_dir_voice : st.out_dir_read) || "";

@@ -122,6 +122,129 @@ describe("TtsPanel STS 任务生命周期", () => {
     while (mounts.length) mounts.pop()?.unmount();
   });
 
+  it("handles playback rejection, switching and stale callbacks", async () => {
+    const pending: ReturnType<typeof deferred<void>>[] = [];
+    const elements: HTMLAudioElement[] = [];
+    const audioSpy = vi.spyOn(window, "Audio").mockImplementation(function () {
+      const element = document.createElement("audio");
+      element.pause = vi.fn();
+      element.play = vi.fn(() => { const d = deferred<void>(); pending.push(d); return d.promise; });
+      elements.push(element);
+      return element;
+    });
+    ipc.sts_sources_scan = () => ({ ...SCAN_IDLE, items: ["a", "b"].map(name => ({
+      name: `${name}.wav`, rel: `${name}.wav`, path: `D:/in/${name}.wav`, size: 1, mtime: 1,
+    })) });
+    try {
+      const m = mount(<TtsPanel />); mounts.push(m); await tick();
+      click(btn(m, t("s.stsPlay"))!);
+      click(btn(m, t("s.stsPlay"))!);
+      expect(elements[0].pause).toHaveBeenCalledOnce();
+      await act(async () => pending[0].reject(new Error("old aborted")));
+      expect(btn(m, t("s.stsStopPlay"))).not.toBeNull();
+      expect(m.container.textContent).not.toContain(t("s.stsPlayFail"));
+      await act(async () => pending[1].reject(new Error("unsupported")));
+      expect(btn(m, t("s.stsStopPlay"))).toBeNull();
+      expect(m.container.textContent).toContain(t("s.stsPlayFail"));
+      click(btn(m, t("s.stsPlay"))!);
+      click(btn(m, t("s.stsStopPlay"))!);
+      await act(async () => pending[2].resolve());
+      expect(btn(m, t("s.stsStopPlay"))).toBeNull();
+    } finally { audioSpy.mockRestore(); }
+  });
+
+  it("stops a filtered preview and ignores its late play resolution", async () => {
+    const play = deferred<void>();
+    const audio = document.createElement("audio");
+    audio.pause = vi.fn(); audio.play = vi.fn(() => play.promise);
+    const audioSpy = vi.spyOn(window, "Audio").mockImplementation(function () { return audio; });
+    ipc.sts_sources_scan = () => ({ ...SCAN_IDLE, items: [{ name: "a.wav", rel: "a.wav", path: "D:/in/a.wav", size: 1, mtime: 1 }] });
+    try {
+      const m = mount(<TtsPanel />); mounts.push(m); await tick();
+      click(btn(m, t("s.stsPlay"))!);
+      const search = m.container.querySelector(`input[placeholder="${t("s.stsSearchPh")}"]`) as HTMLInputElement;
+      act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "missing");
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(audio.pause).toHaveBeenCalledOnce();
+      await act(async () => play.resolve());
+      act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "");
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(btn(m, t("s.stsStopPlay"))).toBeNull();
+    } finally { audioSpy.mockRestore(); }
+  });
+
+  it("retains unsynthesized text across the top mode switch", async () => {
+    const m = mount(<TtsPanel />); mounts.push(m); await tick();
+    click(btn(m, t("s.90872a6528"))!); await tick();
+    const input = m.container.querySelector("textarea")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, "Unsubmitted draft");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    click(btn(m, t("s.9035f9b6d1"))!); await tick();
+    click(btn(m, t("s.90872a6528"))!); await tick();
+    expect(m.container.querySelector("textarea")?.value).toBe("Unsubmitted draft");
+  });
+
+  it("stops when paging away from a preview row", async () => {
+    const audio = document.createElement("audio");
+    audio.pause = vi.fn(); audio.play = vi.fn().mockResolvedValue(undefined);
+    const audioSpy = vi.spyOn(window, "Audio").mockImplementation(function () { return audio; });
+    ipc.sts_sources_scan = () => ({ ...SCAN_IDLE, items: Array.from({ length: 21 }, (_, n) => ({
+      name: `${n}.wav`, rel: `${n}.wav`, path: `D:/in/${n}.wav`, size: 1, mtime: 1,
+    })) });
+    try {
+      const m = mount(<TtsPanel />); mounts.push(m); await tick();
+      click(btn(m, t("s.stsPlay"))!); await tick();
+      click(btn(m, t("s.67a246a344"))!);
+      expect(audio.pause).toHaveBeenCalledOnce();
+      click(btn(m, t("s.prevPage"))!);
+      expect(btn(m, t("s.stsStopPlay"))).toBeNull();
+    } finally { audioSpy.mockRestore(); }
+  });
+
+  it.each(["delete", "rename"])("releases pending converted playback and an open trim editor before %s", async action => {
+    const pending = deferred<void>();
+    const audio = document.createElement("audio");
+    audio.pause = vi.fn(); audio.load = vi.fn(); audio.play = vi.fn(() => pending.promise);
+    const audioSpy = vi.spyOn(window, "Audio").mockImplementation(function () { return audio; });
+    const trimLoad = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+    let trimAudio: HTMLAudioElement;
+    localStorage.setItem("sts.outputs", JSON.stringify({ "d:/in/a.wav": [{ src: "D:/in/a.wav", dest: "D:/out/a.wav", tag: "Converted" }] }));
+    ipc.sts_sources_scan = () => ({ ...SCAN_IDLE, items: [{ name: "a.wav", rel: "a.wav", path: "D:/in/a.wav", size: 1, mtime: 1 }] });
+    const command = `sts_sources_${action}`;
+    ipc[command] = () => {
+      expect(audio.pause).toHaveBeenCalledOnce();
+      expect(audio.hasAttribute("src")).toBe(false);
+      expect(audio.load).toHaveBeenCalledOnce();
+      expect(trimAudio.hasAttribute("src")).toBe(false);
+      expect(trimLoad).toHaveBeenCalled();
+      return action === "rename" ? "D:/in/new.wav" : {};
+    };
+    if (action === "rename") dialogs.askPrompt.mockResolvedValueOnce("new.wav");
+    try {
+      const m = mount(<TtsPanel />); mounts.push(m); await tick();
+      click(btn(m, t("s.stsTrim"))!); await tick();
+      trimAudio = m.container.querySelector("audio")!;
+      expect(trimAudio.hasAttribute("src")).toBe(true);
+      click(btn(m, "Converted")!);
+      click(btn(m, t("s.stsPlay"))!); await tick();
+      expect(audio.src.toLowerCase()).toContain("d:/out/a.wav");
+      click(m.container.querySelector(`button[aria-label="${t("models.more")}"]`)!);
+      const label = t(action === "delete" ? "s.stsDelete" : "s.1cd80fd7a8");
+      const item = [...document.querySelectorAll<HTMLElement>("button, [role=menuitem]")].find(b => b.textContent?.trim() === label);
+      click(item!); await tick();
+      expect(calls.some(c => c.cmd === command)).toBe(true);
+      await act(async () => pending.reject(new DOMException("reset", "AbortError")));
+      expect(btn(m, t("s.stsStopPlay"))).toBeNull();
+      expect(m.container.textContent).not.toContain(t("s.stsPlayFail"));
+    } finally { audioSpy.mockRestore(); trimLoad.mockRestore(); localStorage.removeItem("sts.outputs"); }
+  });
+
   /** 让 sts_sources_scan 排队，由测试逐个放行。 */
   function queueScans() {
     ipc.sts_sources_scan = () => {

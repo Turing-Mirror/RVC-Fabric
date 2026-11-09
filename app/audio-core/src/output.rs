@@ -11,6 +11,7 @@ pub struct TrackControl {
     pub paused: AtomicBool,
     pub stopped: AtomicBool,
     pub flush: AtomicBool,
+    /// Written by the mixer callback and read by playback status queries.
     pub played_frames: AtomicU64,
     pub underrun_frames: AtomicU64,
     /// Set by the callback once a paused or stopped track has ramped to zero.
@@ -224,25 +225,27 @@ impl Mixer {
                 if track.length.is_some_and(|n| position >= n) {
                     continue;
                 }
-                if track.pcm.slots() < channels {
+                let Ok(pcm) = track.pcm.read_chunk(channels) else {
                     ctl.underrun_frames.fetch_add(1, Ordering::Relaxed);
                     continue;
-                }
+                };
                 if track.envelope < target {
                     track.envelope = (track.envelope + track.fade_step).min(1.0);
                 } else if track.envelope > target {
                     track.envelope = (track.envelope - track.fade_step).max(0.0);
                 }
                 let gain = f32::from_bits(ctl.gain.load(Ordering::Relaxed)) * track.envelope;
-                for value in &mut self.scratch {
-                    let sample = track.pcm.pop().unwrap_or(0.0);
+                let (first, second) = pcm.as_slices();
+                for (value, &sample) in self.scratch.iter_mut().zip(first.iter().chain(second)) {
                     *value += if sample.is_finite() {
                         sample * gain
                     } else {
                         0.0
                     };
                 }
-                ctl.played_frames.fetch_add(1, Ordering::Relaxed);
+                pcm.commit_all();
+                ctl.played_frames
+                    .store(position.wrapping_add(1), Ordering::Relaxed);
             }
             // Linked-channel peak control preserves stereo balance; no lookahead latency.
             let peak = self.scratch.iter().fold(1.0f32, |p, v| p.max(v.abs()));
@@ -438,6 +441,24 @@ mod tests {
         mixer.render(&mut out);
         assert_eq!(out, [0.2, 0.3]);
         assert_eq!(ctl.underrun_frames.load(Ordering::Relaxed), 1);
+    }
+    #[test]
+    fn incomplete_input_frame_waits_and_then_plays_across_the_ring_boundary() {
+        let (mut producer, consumer) = RingBuffer::new(3);
+        producer.push_entire_slice(&[0.1, 0.2, 0.3]).unwrap();
+        let (track, control) = Track::new(consumer, None);
+        let mut mixer = Mixer::new(format(), vec![track]).unwrap();
+        let mut output = [0.0f32; 4];
+        mixer.render(&mut output);
+        assert_eq!(output, [0.1, 0.2, 0.0, 0.0]);
+        assert_eq!(control.played_frames.load(Ordering::Relaxed), 1);
+        assert_eq!(control.underrun_frames.load(Ordering::Relaxed), 1);
+
+        producer.push(0.4).unwrap();
+        mixer.render(&mut output[..2]);
+        assert_eq!(output[..2], [0.3, 0.4]);
+        assert_eq!(control.played_frames.load(Ordering::Relaxed), 2);
+        assert_eq!(control.underrun_frames.load(Ordering::Relaxed), 1);
     }
     #[test]
     fn ends_at_sample_boundary_and_zeroes_partial_frame() {

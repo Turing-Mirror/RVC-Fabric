@@ -83,11 +83,7 @@ impl MicTee {
         }
         let producer = &mut self.producer;
         self.converter.process(samples, |frame| {
-            if producer.slots() >= frame.len() {
-                for sample in frame {
-                    let _ = producer.push(*sample);
-                }
-            }
+            let _ = producer.push_entire_slice(frame);
         });
     }
 }
@@ -310,9 +306,8 @@ impl VoiceBus {
                                     *sample = 0.0;
                                 }
                             }
-                            for sample in block.iter() {
-                                let _ = producer.push(*sample);
-                            }
+                            // The reader already limited this block to free whole frames.
+                            let _ = producer.push_entire_slice(block);
                             if let Some(tee) =
                                 tee.lock().unwrap_or_else(|e| e.into_inner()).as_mut()
                             {
@@ -709,9 +704,7 @@ mod tests {
                             break;
                         }
                         let chunk = &input[written..written + frames * 2];
-                        for sample in chunk {
-                            producer.push(*sample).unwrap();
-                        }
+                        producer.push_entire_slice(chunk).unwrap();
                         tee.push(chunk);
                         written += chunk.len();
                     }

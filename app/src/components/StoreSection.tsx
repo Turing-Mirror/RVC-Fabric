@@ -29,7 +29,7 @@ import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
 import { CatalogTransition } from "./CatalogTransition";
-import { useDir, useMenu, type MenuItem } from "trm-ui";
+import { CatalogCover, useDir, useMenu, type MenuItem } from "trm-ui";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -353,24 +353,36 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       ? []
       : list.slice((pageClamped - 1) * perPage, pageClamped * perPage);
 
-  // 封面本地化：按可视区解析——分页模式只取当前页 + 下一页预取，系列模式
-  // 取前若干个，滚动/翻页新增的卡片随列表变化自然进入解析范围。不再每次
-  // 打开商店就把全部远程封面一次性交给 Rust（国内访问 CNB 间歇失败曾导致
-  // 随机缺图；现在配合磁盘缓存 + 逐批回传，先显示的先用）。
-  const coverCache = useCoverCache(
-    useMemo(() => {
-      if (!cat) return [];
-      const pick = (v: StoreVoice) => (v.cover_url || v.cover || "").trim();
-      if (grouping !== "series") {
-        const start = (pageClamped - 1) * perPage;
-        return list
-          .slice(start, start + perPage * 2)
-          .map(pick)
-          .filter(Boolean);
+  // 预取当前可见的分页；收起的系列不占封面缓存请求。
+  const coverUrls = useMemo(() => {
+    const pick = (v: StoreVoice) => (v.cover_url || v.cover || "").trim();
+    if (!seriesGroups) {
+      const start = (pageClamped - 1) * perPage;
+      return list.slice(start, start + perPage * 2).map(pick).filter(Boolean);
+    }
+    const { parent, group } = focusParts(seriesFocus);
+    const visible: StoreVoice[] = [];
+    const append = (key: string, voices: StoreVoice[], forcedFull: boolean) => {
+      const { shown } = seriesSlice(voices, cols, perPage, forcedFull || seriesFull.has(key), seriesPage[key]);
+      visible.push(...shown);
+    };
+    for (const node of seriesGroups) {
+      if (parent ? node.key !== parent : !expanded.has(node.key)) continue;
+      if ((parent && !group) || !node.groups.some(g => g.label)) {
+        append(node.key, node.voices, Boolean(parent));
+      } else {
+        for (const entry of node.groups) {
+          const key = groupFocusKey(node.key, entry.raw);
+          if (group ? entry.raw === group : expandedGroups.has(key)) {
+            append(key, entry.voices, Boolean(group));
+          }
+        }
       }
-      return list.slice(0, 60).map(pick).filter(Boolean);
-    }, [cat, grouping, list, pageClamped, perPage]),
-  );
+      if (visible.length >= 60) break;
+    }
+    return [...new Set(visible.map(pick).filter(Boolean))].slice(0, 60);
+  }, [cols, expanded, expandedGroups, list, pageClamped, perPage, seriesFocus, seriesFull, seriesGroups, seriesPage]);
+  const coverCache = useCoverCache(coverUrls);
 
   // 窗口变窄导致每页装得下的变少时，当前页可能已经越界。
   useEffect(() => {
@@ -479,11 +491,12 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     coverMap: coverCache,
   });
 
+  const hasVoices = Boolean(cat?.voices?.length || cat?.thirdparty_voices?.length);
   const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-[18px]">
+      {hasVoices ? <div className="flex flex-wrap items-center gap-3 mb-[18px]">
         <input
           value={q}
           onChange={(e) => {
@@ -566,9 +579,9 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             }}
            
           />{t("s.85b3f0512b")}</label>
-      </div>
+      </div> : null}
 
-      {source !== "official" ? (
+      {source !== "official" && Boolean(cat?.thirdparty_voices?.length) ? (
         <Warn className="mb-3">{t("s.7fe9bcf336")}</Warn>
       ) : null}
 
@@ -733,6 +746,14 @@ type CardPropsFn = (v: StoreVoice) => {
   coverMap?: Record<string, string>;
 };
 
+function seriesSlice(voices: StoreVoice[], cols: number, perPage: number, paged: boolean, page = 1) {
+  const preview = cols * SERIES_PREVIEW_ROWS;
+  const totalS = Math.max(1, Math.ceil(voices.length / perPage));
+  const curS = Math.min(page, totalS);
+  const shown = paged ? voices.slice((curS - 1) * perPage, curS * perPage) : voices.slice(0, preview);
+  return { preview, totalS, curS, shown };
+}
+
 /** 一组卡片：先铺一行，再「查看全部」或分页。 */
 function SeriesPageGrid({
   seriesKey,
@@ -759,13 +780,8 @@ function SeriesPageGrid({
   cardProps: CardPropsFn;
   gridStyle: { gridTemplateColumns: string };
 }) {
-  const preview = cols * SERIES_PREVIEW_ROWS;
   const paged = forcedFull || seriesFull.has(seriesKey);
-  const totalS = Math.max(1, Math.ceil(voices.length / perPage));
-  const curS = Math.min(seriesPage[seriesKey] || 1, totalS);
-  const shown = paged
-    ? voices.slice((curS - 1) * perPage, curS * perPage)
-    : voices.slice(0, preview);
+  const { preview, totalS, curS, shown } = seriesSlice(voices, cols, perPage, paged, seriesPage[seriesKey]);
   return (
     <>
       <CatalogTransition scope={seriesKey} page={curS}>
@@ -795,35 +811,6 @@ function SeriesPageGrid({
         />
       ) : null}
     </>
-  );
-}
-
-/** Thin fill on the cover — stays on the card, no banner jumping around. */
-function CardProgressBar({
-  percent,
-  connecting,
-}: {
-  percent: number;
-  connecting?: boolean;
-}) {
-  const pct = Math.max(0, Math.min(100, percent));
-  const barWidth = connecting ? 33 : pct > 0 && pct < 0.5 ? Math.max(pct, 0.5) : pct;
-  const reduce =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  return (
-    <div
-      className="absolute left-0 right-0 bottom-0 h-[3px] bg-[color-mix(in_srgb,var(--ink)_16%,transparent)]"
-      aria-hidden
-    >
-      <div
-        className={`h-full bg-[var(--accent)]${connecting && !reduce ? " animate-pulse" : ""}`}
-        style={{
-          width: `${barWidth}%`,
-          transition: reduce || connecting ? undefined : "width 160ms var(--ease)",
-        }}
-      />
-    </div>
   );
 }
 
@@ -861,32 +848,21 @@ function VoiceCard({
   /** 封面本地化缓存（url → 本地路径），见 lib/cover.ts。 */
   coverMap?: Record<string, string>;
 }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const [useLocalCover, setUseLocalCover] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const lastMove = useRef({ at: 0, done: -1 });
   const progressDoneRef = useRef(progress?.done ?? 0);
   progressDoneRef.current = progress?.done ?? 0;
   const loc = getTLocale();
   const title = displayVoiceName(v, loc);
-  // Catalog normalizes to cover_url (https://cnb.cool/…/ch-banner/…).
-  // Older caches may only have a relative cover path — skip those (no convert).
-  // 本地化后走本地缓存（一次成功永久可用），失败回退远程直连。
-  const coverRemote = (v.cover_url || "").trim();
-  const coverRel = (v.cover || "").trim();
-  const coverAbs = (v.cover_local || "").trim();
-  const coverHttp = resolveCover(coverRemote || coverRel, coverMap ?? {});
-  const coverLocal =
-    (coverAbs ? coverSrc(coverAbs) : "") ||
-    (coverRel && coverRel !== coverRemote ? resolveCover(coverRel, {}) : "");
-  const shownCover = useLocalCover && coverLocal ? coverLocal : coverHttp || coverLocal;
-  const showImg = Boolean(shownCover) && !imgFailed;
-  // src 变化（如重试成功后换成本地缓存路径）时解除失败占位，
-  // img 换 src 会自动重新加载 —— 不被 imgFailed 永久卡死。
-  useEffect(() => {
-    setImgFailed(false);
-    setUseLocalCover(false);
-  }, [coverHttp]);
+  const remote = (v.cover_url || v.cover || "").trim();
+  const local = (v.cover_local || "").trim();
+  const legacy = (v.cover || "").trim();
+  const sources = [
+    resolveCover(remote, coverMap ?? {}),
+    local ? coverSrc(local) : "",
+    legacy !== remote ? resolveCover(legacy, {}) : "",
+    resolveCover(remote, {}),
+  ];
   useEffect(() => {
     if (!busy) return;
     lastMove.current = { at: Date.now(), done: progressDoneRef.current };
@@ -933,42 +909,13 @@ function VoiceCard({
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
-      <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
-        {showImg ? (
-          <img
-            // src 变化时重建 img：避免旧 src（远程直连）的 onError 晚到，
-            // 把已经换成本地缓存路径的图错误地置回失败占位。
-            key={shownCover}
-            src={shownCover}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            draggable={false}
-            onError={() => {
-              if (!useLocalCover && coverLocal) setUseLocalCover(true);
-              else setImgFailed(true);
-            }}
-            // contain：竖向立绘在 4:3 卡里用 cover 会裁成胸口/腿；完整展示优先。
-            className="absolute inset-0 w-full h-full object-contain"
-          />
-        ) : (
-          <span>{(title || v.id || "?").slice(0, 4)}</span>
-        )}
-        {v.installed ? (
-          <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.eb88ff57c9")}</span>
-        ) : null}
-        {ver ? (
-          <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
-            {ver}
-          </span>
-        ) : null}
-        {busy && !staged ? (
-          <CardProgressBar
-            percent={progress?.percent ?? 0}
-            connecting={(progress?.done ?? 0) <= 0}
-          />
-        ) : null}
-      </div>
+      <CatalogCover
+        sources={sources}
+        placeholder={(title || v.id || "?").slice(0, 4)}
+        release={ver}
+        progress={busy && !staged ? progress?.percent ?? 0 : undefined}
+        connecting={busy && !staged && (progress?.done ?? 0) <= 0}
+      />
       <div className="text-[14.5px] font-semibold mt-2.5 truncate" title={title}>
         {title}
       </div>

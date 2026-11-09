@@ -176,18 +176,6 @@ input[type="checkbox"]:disabled {
   animation: nudge-out var(--out-ms) var(--ease-soft) forwards;
 }
 
-@keyframes pager-ghost {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-.pager-ghost {
-  animation: pager-ghost 0.42s var(--ease-nav) both;
-}
-
 /* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */
 
 @media (prefers-reduced-motion: reduce) {

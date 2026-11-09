@@ -174,19 +174,11 @@ function PlazaPageImpl({
         <StoreSection reloadToken={reloadToken} />
       </Block>
 
-      <Block title={t("s.aff4b0df8a")} note={items.length ? String(items.length) : ""}>
-        <Group>
-          {loading && !items.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
-          ) : items.length ? (
-            items.map((it) => (
-              <Feed key={it.id} item={it} spotlight={spotlight === it.id} />
-            ))
-          ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f9f2a78f9f")}</p>
-          )}
-        </Group>
-      </Block>
+      {items.length ? (
+        <Block title={t("s.aff4b0df8a")} note={String(items.length)}>
+          <Group>{items.map((it) => <Feed key={it.id} item={it} spotlight={spotlight === it.id} />)}</Group>
+        </Block>
+      ) : null}
 
       <Block title={t("s.1252c81119")}>
         <div id="download-models" ref={extrasRef} className="scroll-mt-4">

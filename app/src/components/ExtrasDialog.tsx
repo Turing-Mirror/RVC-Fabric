@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn, Warn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
 import { CatalogTransition } from "./CatalogTransition";
-import { Roll } from "trm-ui";
+import { ResourceDownloadRow, Roll } from "trm-ui";
 import { askConfirm } from "../lib/webDialog";
 import { t } from "../i18n/t";
 import {
@@ -454,69 +454,22 @@ function ItemRow({
   onStart: (key: string) => void;
   onRemove: (it: Item) => void;
 }) {
-  const removing = removeKey === it.key;
-  const pct = progress?.total
-    ? Math.round(((progress.done ?? 0) / Math.max(progress.total, 1)) * 100)
-    : 0;
   return (
-    <div className="py-3.5">
-      <div className="flex items-center gap-4">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] leading-snug">
-            {extraLabel(it)}
-            {it.recommended ? (
-              <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
-            ) : null}
-          </span>
-          {extraNotes(it) ? (
-            <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
-              {extraNotes(it)}
-            </span>
-          ) : null}
-          <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
-            {joinClauses([
-              mb(it.size_bytes),
-              !!it.files?.length && t("s.8e7dddc185", { v0: it.files.length }),
-              it.installed && t("s.f7b11922f6"),
-            ])}
-          </span>
-        </span>
-        {it.installed ? (
-          // 已装好的给一个卸载口子：模型动辄几百 MB，试过不合用就该能删掉，
-          // 不然只能让用户自己去 assets 里翻文件。
-          <span className="shrink-0 flex items-center gap-2">
-            <span className="text-[13px] text-[var(--ink-muted)] px-1">{t("s.eb88ff57c9")}</span>
-            <Btn
-              className="min-w-[72px]"
-              disabled={busy || !!removeKey || !!disabled}
-              onClick={() => void onRemove(it)}
-            >
-              {removing ? t("s.extraRemoving") : t("s.extraRemove")}
-            </Btn>
-          </span>
-        ) : (
-          <Btn
-            className="shrink-0 min-w-[72px]"
-            disabled={busy || !!removeKey || !!disabled}
-            onClick={() => void onStart(it.key)}
-          >
-            {busy ? t("s.65188d08a2") : t("s.2b9d013177")}
-          </Btn>
-        )}
-      </div>
-      {busy && progress ? (
-        <div className="mt-2">
-          <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
-            <div
-              className="h-full bg-[var(--accent)] transition-[width] duration-200"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
-            {progress.message} {pct > 0 ? ` ${pct}%` : ""}
-          </p>
-        </div>
-      ) : null}
-    </div>
+    <ResourceDownloadRow
+      title={extraLabel(it)}
+      description={extraNotes(it)}
+      detail={joinClauses([
+        mb(it.size_bytes),
+        !!it.files?.length && t("s.8e7dddc185", { v0: it.files.length }),
+      ])}
+      recommended={it.recommended}
+      installed={it.installed}
+      downloading={busy}
+      removing={removeKey === it.key}
+      disabled={disabled || !!removeKey}
+      progress={progress}
+      onDownload={() => void onStart(it.key)}
+      onRemove={() => void onRemove(it)}
+    />
   );
 }

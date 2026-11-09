@@ -42,6 +42,8 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+from scripts.pack_spec import FABRIC_VOICE_AUTHOR, FABRIC_VOICE_AUTHOR_URL
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
@@ -768,11 +770,13 @@ def _compile_voice(v: dict, paths: Paths, rep: Report) -> Optional[dict]:
         "series_zh_Hant",
         "notes",
     }
+    author = str(v.get("author") or FABRIC_VOICE_AUTHOR)
+    author_url = str(v.get("author_url") or (FABRIC_VOICE_AUTHOR_URL if author == FABRIC_VOICE_AUTHOR else ""))
     item: dict[str, Any] = {
         "id": vid,
         "name": str(v.get("name") or vid),
-        "author": str(v.get("author") or "RVC Fabric"),
-        "author_url": str(v.get("author_url") or "https://cnb.cool/Turing-Mirror"),
+        "author": author,
+        "author_url": author_url,
         "released": date,
         "version": str(v.get("version") or "1"),
         "package_type": str(v.get("package_type") or "voice_pack"),

@@ -50,6 +50,8 @@ TYPE_ALIASES: dict[str, str] = {
 
 # Manifest filename inside zip (UTF-8 JSON)
 TM_PACKAGE_JSON = "tm_package.json"
+FABRIC_VOICE_AUTHOR = "Kara251"
+FABRIC_VOICE_AUTHOR_URL = "https://space.bilibili.com/6652330"
 
 # GUI patch allow / block (relative to product root, forward slash, lower for compare)
 GUI_BLOCKED_PREFIXES = (

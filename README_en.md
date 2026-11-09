@@ -47,7 +47,7 @@ RVC Fabric is a free, open-source Windows application developed by Turing Mirror
 - Converts microphone input to the selected voice, with original-voice bypass, ASIO channel selection and independent monitoring. Latency depends on hardware, the model and audio settings.
 - Includes a noise gate, compressor and 5-band parametric EQ, with presets and individual adjustments.
 - The voice library supports associated .index files and lets you save, import and export parameter presets.
-- Download voice models from Turing Mirror and third-party sources, track progress and resume interrupted downloads.
+- Download voice models from Kara251 and third-party sources, track progress and resume interrupted downloads.
 - Provides vocal separation, text-to-speech and voice training tools. The training workflow covers audio slicing, pitch and feature extraction, model training and index export.
 - Supports NVIDIA CUDA and DirectML acceleration for AMD and Intel GPUs. Setup detects hardware and configures the corresponding runtime.
 

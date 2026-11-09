@@ -73,6 +73,7 @@ const RESUME_STALL: Duration = Duration::from_secs(15);
 #[allow(dead_code)] // VoicePack / GuiPatch used when store & update land
 pub enum DownloadKind {
     Runtime,
+    Dependency,
     VoicePack,
     GuiPatch,
     Generic,
@@ -84,7 +85,7 @@ impl DownloadKind {
             Self::Runtime => "runtime",
             Self::VoicePack => "voice_pack",
             Self::GuiPatch => "gui_patch",
-            Self::Generic => "file",
+            Self::Dependency | Self::Generic => "file",
         }
     }
 }
@@ -194,9 +195,7 @@ pub fn explain_error(raw: &str) -> Option<&'static str> {
     if e.contains("os error 112") || e.contains("no space left") || e.contains("not enough space") {
         return Some("s.dlWhyDisk");
     }
-    if e.contains("os error 5")
-        || e.contains("access is denied")
-        || e.contains("permission denied")
+    if e.contains("os error 5") || e.contains("access is denied") || e.contains("permission denied")
     {
         return Some("s.dlWhyPerm");
     }
@@ -396,53 +395,76 @@ async fn resume_one_url(
     let client = reqwest::Client::builder()
         .user_agent(UA)
         .connect_timeout(Duration::from_secs(15))
-        .read_timeout(RESUME_STALL)
+        .read_timeout(FIRST_BYTE_TIMEOUT)
         .build()
         .map_err(|e| format!("client: {e}"))?;
 
-    let mut req = client.get(url);
+    let mut req = client
+        .get(url)
+        .header(reqwest::header::ACCEPT_ENCODING, "identity");
     if have > 0 {
-        req = req.header("Range", format!("bytes={have}-"));
+        req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
     }
     let resp = req.send().await.map_err(|e| format!("resume: {e}"))?;
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(format!("resume: status {}", status.as_u16()));
-    }
-
-    // 服务器不认 Range（回 200 而不是 206）：它给的是整个文件，之前那截作废。
-    let partial = status == reqwest::StatusCode::PARTIAL_CONTENT;
-    let start = if partial && have > 0 { have } else { 0 };
-    let total = resp
-        .content_length()
-        .map(|n| start + n)
-        .unwrap_or(size_hint)
-        .max(1);
-
-    let mut f = if start > 0 {
-        std::fs::OpenOptions::new()
-            .append(true)
-            .open(part)
-            .map_err(|e| e.to_string())?
-    } else {
-        std::fs::File::create(part).map_err(|e| e.to_string())?
+    let (start, response_end, complete_size) = match resp.status() {
+        reqwest::StatusCode::OK => (0, resp.content_length(), resp.content_length()),
+        reqwest::StatusCode::PARTIAL_CONTENT => {
+            let (end, size) = resp
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| resume_range(value, have))
+                .ok_or("resume: invalid Content-Range")?;
+            (have, Some(end), Some(size))
+        }
+        status => return Err(format!("resume: status {}", status.as_u16())),
     };
+    let total = complete_size.unwrap_or(size_hint).max(1);
 
-    let mut done = start;
+    // Keep the existing bytes until a server that ignores Range actually
+    // starts sending the replacement.
+    let mut resp = resp;
+    let first = resp
+        .chunk()
+        .await
+        .map_err(|e| format!("resume: connection: {e}"))?;
+    let Some(first) = first else {
+        return Err("resume: unexpected end of stream".into());
+    };
+    if cancel.load(Ordering::SeqCst) {
+        return Err(crate::i18n::t("s.a5ffdc95ee"));
+    }
+    let mut done = start + first.len() as u64;
+    if response_end.is_some_and(|end| done > end) {
+        return Err("resume: invalid response length".into());
+    }
+    let mut file = if start > 0 {
+        std::fs::OpenOptions::new().append(true).open(part)
+    } else {
+        std::fs::File::create(part)
+    }
+    .map_err(|e| e.to_string())?;
+    file.write_all(&first).map_err(|e| e.to_string())?;
+
     let mut last_emit = std::time::Instant::now();
     if let Some(ref cb) = progress {
         cb(done, total, kind.as_str());
     }
-    let mut resp = resp;
     loop {
         if cancel.load(Ordering::SeqCst) {
-            let _ = f.flush();
             return Err(crate::i18n::t("s.a5ffdc95ee"));
         }
-        let chunk = resp.chunk().await.map_err(|e| format!("resume: {e}"))?;
+        let chunk = tokio::time::timeout(RESUME_STALL, resp.chunk())
+            .await
+            .map_err(|_| "resume: timed out waiting for data")?
+            .map_err(|e| format!("resume: connection: {e}"))?;
         let Some(bytes) = chunk else { break };
-        f.write_all(&bytes).map_err(|e| e.to_string())?;
-        done += bytes.len() as u64;
+        let next = done + bytes.len() as u64;
+        if response_end.is_some_and(|end| next > end) {
+            return Err("resume: invalid response length".into());
+        }
+        file.write_all(&bytes).map_err(|e| e.to_string())?;
+        done = next;
         if let Some(ref cb) = progress {
             if last_emit.elapsed() >= Duration::from_millis(150) {
                 last_emit = std::time::Instant::now();
@@ -450,11 +472,23 @@ async fn resume_one_url(
             }
         }
     }
-    f.flush().map_err(|e| e.to_string())?;
+    file.flush().map_err(|e| e.to_string())?;
+    if complete_size.is_some_and(|size| done != size) {
+        return Err("resume: unexpected end of stream".into());
+    }
     if let Some(ref cb) = progress {
         cb(done, total.max(done), kind.as_str());
     }
     Ok(())
+}
+
+fn resume_range(value: &str, offset: u64) -> Option<(u64, u64)> {
+    let (range, size) = value.strip_prefix("bytes ")?.split_once('/')?;
+    let (start, end) = range.split_once('-')?;
+    let start: u64 = start.parse().ok()?;
+    let end: u64 = end.parse().ok()?;
+    let size = size.parse().ok()?;
+    (start == offset && end >= start && end < size).then(|| (end + 1, size))
 }
 
 /// Adaptive connection count (mirrors `launcher/online/multipart.auto_connections`).
@@ -547,10 +581,7 @@ impl ProgressBridge {
     }
 
     fn effective_total(&self) -> u64 {
-        self.total
-            .load(Ordering::SeqCst)
-            .max(self.size_hint)
-            .max(1)
+        self.total.load(Ordering::SeqCst).max(self.size_hint).max(1)
     }
 
     fn emit(&self, done: u64, phase: &str, force: bool) {
@@ -651,21 +682,14 @@ pub fn download_request(
         return Err(crate::i18n::t("s.a5ffdc95ee").into());
     }
 
-    let threads = req
-        .connections
-        .unwrap_or_else(|| auto_connections(req.size_hint))
-        .clamp(1, MAX_CONNECTIONS);
-
-    // Tell the UI we are past "idle" before HEAD/TLS/handshake so the bar is
-    // not stuck at 0% while the NIC is already moving packets.
-    if let Some(ref cb) = progress {
-        let total = req.size_hint.max(1);
-        cb(
-            0,
-            total,
-            &crate::i18n::t2("s.a32e5d5c37", &req.kind.as_str(), &threads),
-        );
-    }
+    // Setup packages preserve their bytes from the first connection.
+    let threads = if matches!(req.kind, DownloadKind::Runtime | DownloadKind::Dependency) {
+        1
+    } else {
+        req.connections
+            .unwrap_or_else(|| auto_connections(req.size_hint))
+            .clamp(1, MAX_CONNECTIONS)
+    };
 
     // Download to .part then rename after verify
     let part_path = suffixed(&req.dest, ".part");
@@ -698,6 +722,7 @@ pub fn download_request(
     let urls = probe_order(&req.urls, &cancel);
 
     let mut last_err = String::new();
+    let mut unavailable = Vec::new();
     let mut attempt = 0u32;
     // 有合法半截时把那个源钉在最前；连着两轮没长进就放开（见 pin_resume_first）。
     let mut pinned_stalls: u32 = 0;
@@ -710,45 +735,65 @@ pub fn download_request(
         let pinned_this_round = resume_url.clone();
         let round_urls = pin_resume_first(urls.clone(), &pinned_this_round, pinned_stalls);
         for url in &round_urls {
+            if unavailable.contains(url) {
+                continue;
+            }
             if cancel.load(Ordering::SeqCst) {
                 return Err(crate::i18n::t("s.a5ffdc95ee").into());
             }
-            let conns = connections_for_attempt(threads, attempt);
+            let use_resume = threads == 1 || attempt > 1 || !resume_url.is_empty();
+            let conns = if use_resume {
+                1
+            } else {
+                connections_for_attempt(threads, attempt)
+            };
             crate::logging::shell_log!(format!(
                 "download {} try {} (attempt {attempt}, conns {conns})",
                 req.kind.as_str(),
                 url
             ));
-            if let Some(ref cb) = progress {
-                cb(
-                    0,
-                    req.size_hint.max(1),
-                    &crate::i18n::te("s.9d7d0dbc49", &(req.kind.as_str())),
-                );
-            }
-            // 第一次走 ripget（多连接，健康网络上快得多）；重试走单流续传 ——
-            // 重试才是网络烂的时候的常态，而那正是续传值钱的地方。手上已经
-            // 攒着这个源的半截时，第一次就直接接着下。
-            let use_resume = attempt > 1 || resume_url == *url;
-            if !use_resume {
-                // 交给 ripget：它会预分配，接不上，半截作废。
+            // Verified mirrors can complete the same partial archive. Unverified
+            // downloads must restart when the source changes.
+            if !use_resume || (resume_url != *url && req.expected_sha256.is_empty()) {
                 let _ = std::fs::remove_file(&part_path);
                 let _ = std::fs::remove_file(&tag_path);
-            } else if resume_url != *url {
-                // 换源了：别在别人的字节后面接。
-                let _ = std::fs::remove_file(&part_path);
+            }
+            let offset = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+            if let Some(ref cb) = progress {
+                cb(offset, req.size_hint.max(offset).max(1), "connecting:");
             }
             let outcome = if use_resume {
                 resume_url = url.clone();
-                let _ = std::fs::write(&tag_path, url);
-                rt.block_on(resume_one_url(
-                    url,
-                    &part_path,
-                    req.kind,
-                    req.size_hint,
-                    cancel.clone(),
-                    progress.clone(),
-                ))
+                std::fs::write(&tag_path, url).map_err(|e| e.to_string())?;
+                let resume = || {
+                    rt.block_on(async {
+                        tokio::select! {
+                            biased;
+                            _ = wait_for_cancel(&cancel) => Err(crate::i18n::t("s.a5ffdc95ee")),
+                            result = resume_one_url(
+                                url,
+                                &part_path,
+                                req.kind,
+                                req.size_hint,
+                                cancel.clone(),
+                                progress.clone(),
+                            ) => result,
+                        }
+                    })
+                };
+                let first = resume();
+                if offset > 0 && first.as_ref().is_err_and(|e| e == "resume: status 416") {
+                    if !req.expected_sha256.is_empty()
+                        && verify_sha256(&part_path, &req.expected_sha256).is_ok()
+                    {
+                        Ok(())
+                    } else {
+                        std::fs::remove_file(&part_path).map_err(|e| e.to_string())?;
+                        resume()
+                    }
+                } else {
+                    first
+                }
             } else {
                 rt.block_on(download_one_url(
                     url,
@@ -791,9 +836,9 @@ pub fn download_request(
                     if req.dest.is_file() {
                         let _ = std::fs::remove_file(&req.dest);
                     }
-                    let _ = std::fs::remove_file(&tag_path);
                     std::fs::rename(&part_path, &req.dest)
                         .map_err(|e| crate::i18n::te("s.fe9e98a65c", &(e)))?;
+                    let _ = std::fs::remove_file(&tag_path);
                     if let Some(ref cb) = progress {
                         let len = req.dest.metadata().map(|m| m.len()).unwrap_or(0);
                         cb(len, len.max(1), "download");
@@ -822,26 +867,26 @@ pub fn download_request(
                         let _ = std::fs::remove_file(&tag_path);
                     }
                     let transient = is_transient_download_error(&e);
-                    if transient {
-                        saw_transient = true;
+                    saw_transient |= transient;
+                    if ["status 401", "status 403", "status 404", "status 410"]
+                        .iter()
+                        .any(|status| e.contains(status))
+                    {
+                        unavailable.push(url.clone());
                     }
-                    // 钉住的源这轮是瞬时断流：本轮到此为止，别再往下轮询 ——
-                    // 再往下就得换源，换源就要丢掉已攒的半截。下一轮还是它
-                    // 先来接着续；这轮有没有长进决定钉还放不放开。
-                    let pinned_broke =
-                        use_resume && pinned_this_round == *url && transient;
-                    if pinned_broke {
-                        let now_len =
-                            std::fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0);
-                        if now_len > len_at_round_start {
-                            pinned_stalls = 0;
-                        } else {
-                            pinned_stalls += 1;
-                        }
+                    let now_len = part_path.metadata().map(|m| m.len()).unwrap_or(0);
+                    let made_progress = use_resume && now_len > len_at_round_start;
+                    if made_progress {
+                        pinned_stalls = 0;
+                    } else if pinned_this_round == *url {
+                        pinned_stalls += 1;
                     }
-                    // last_err 必须先记下：外层靠它决定还要不要再续一轮。
+                    // Give a working stream the next retry before trying a slower mirror.
                     last_err = e;
-                    if pinned_broke {
+                    if transient
+                        && (made_progress
+                            || (offset > 0 && pinned_this_round == *url && pinned_stalls < 2))
+                    {
                         break;
                     }
                 }
@@ -857,7 +902,12 @@ pub fn download_request(
             "download retry {attempt}/{MAX_TRANSIENT_ATTEMPTS} after: {last_err}"
         ));
         if let Some(ref cb) = progress {
-            cb(0, req.size_hint.max(1), &retry_phase(attempt));
+            let have = if resume_url.is_empty() {
+                0
+            } else {
+                part_path.metadata().map(|m| m.len()).unwrap_or(0)
+            };
+            cb(have, req.size_hint.max(have).max(1), &retry_phase(attempt));
         }
         wait_retry(&cancel)?;
     }
@@ -920,22 +970,12 @@ async fn download_one_url(
     let download = ripget::download_url_with_options(url, dest, options);
     tokio::pin!(download);
 
-    let cancel_wait = async {
-        loop {
-            if cancel.load(Ordering::SeqCst) {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        }
-    };
-    tokio::pin!(cancel_wait);
-
     let first_byte_wait = wait_first_byte_or_timeout(got_bytes, cancel.clone());
     tokio::pin!(first_byte_wait);
 
     tokio::select! {
         biased;
-        _ = &mut cancel_wait => {
+        _ = wait_for_cancel(&cancel) => {
             Err(crate::i18n::t("s.a5ffdc95ee").into())
         }
         timed_out = &mut first_byte_wait => {
@@ -944,6 +984,12 @@ async fn download_one_url(
         res = &mut download => {
             res.map(|_| ()).map_err(|e| format!("ripget: {e}"))
         }
+    }
+}
+
+async fn wait_for_cancel(cancel: &AtomicBool) {
+    while !cancel.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(200)).await;
     }
 }
 
@@ -974,6 +1020,73 @@ mod tests {
     use super::*;
 
     #[test]
+    fn setup_download_resumes_after_the_first_connection_drops() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::{Ipv4Addr, TcpListener};
+
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            for (expected_range, response) in [
+                (
+                    None,
+                    "HTTP/1.1 200 OK\r\nContent-Length: 12\r\nConnection: close\r\n\r\nhello",
+                ),
+                (
+                    Some("range: bytes=5-"),
+                    "HTTP/1.1 206 Partial Content\r\nContent-Length: 7\r\nContent-Range: bytes 5-11/12\r\nConnection: close\r\n\r\n fabric",
+                ),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut reader = BufReader::new(&stream);
+                let mut range = None;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" || line.is_empty() {
+                        break;
+                    }
+                    let line = line.trim().to_ascii_lowercase();
+                    if line.starts_with("range:") {
+                        range = Some(line);
+                    }
+                }
+                assert_eq!(range.as_deref(), expected_range);
+                stream.write_all(response.as_bytes()).unwrap();
+            }
+        });
+        let dir = crate::testutil::scratch("setup-download-resume");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("runtime.tar");
+        download_request(
+            DownloadRequest {
+                urls: vec![format!("http://{address}/runtime.tar")],
+                root: None,
+                dest: dest.clone(),
+                expected_sha256: format!("{:x}", Sha256::digest(b"hello fabric")),
+                size_hint: 12,
+                connections: Some(16),
+                kind: DownloadKind::Runtime,
+            },
+            Arc::new(AtomicBool::new(false)),
+            None,
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello fabric");
+        assert!(!suffixed(&dest, ".part.src").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn resume_requires_the_requested_start_offset() {
+        assert_eq!(resume_range("bytes 10-19/20", 10), Some((20, 20)));
+        assert_eq!(resume_range("bytes 0-19/20", 10), None);
+        assert_eq!(resume_range("bytes 10-20/20", 10), None);
+    }
+
+    #[test]
     fn a_resumable_source_is_pinned_to_the_front() {
         let urls = vec![
             "https://a.cn/p.zip".to_string(),
@@ -982,14 +1095,23 @@ mod tests {
         // 有半截的源排最前，探测选出来的顺序让位。
         assert_eq!(
             pin_resume_first(urls.clone(), "https://b.cn/p.zip", 0),
-            vec!["https://b.cn/p.zip".to_string(), "https://a.cn/p.zip".to_string()]
+            vec![
+                "https://b.cn/p.zip".to_string(),
+                "https://a.cn/p.zip".to_string()
+            ]
         );
         // 没有半截就维持原序。
         assert_eq!(pin_resume_first(urls.clone(), "", 0), urls);
         // 半截指向不在候选里的源：不动。
-        assert_eq!(pin_resume_first(urls.clone(), "https://c.cn/p.zip", 0), urls);
+        assert_eq!(
+            pin_resume_first(urls.clone(), "https://c.cn/p.zip", 0),
+            urls
+        );
         // 连续两轮颗粒无收：放开钉，让备用源有机会顶上。
-        assert_eq!(pin_resume_first(urls.clone(), "https://b.cn/p.zip", 2), urls);
+        assert_eq!(
+            pin_resume_first(urls.clone(), "https://b.cn/p.zip", 2),
+            urls
+        );
     }
 
     #[test]
@@ -1028,7 +1150,10 @@ mod tests {
     fn a_stale_partial_is_only_kept_with_a_matching_tag() {
         // `.part` 单看是分不出「续传攒下的前缀」和「ripget 预分配的空壳」的，
         // 所以只认标记文件。
-        let urls = vec!["https://a.cn/p.zip".to_string(), "https://b.cn/p.zip".to_string()];
+        let urls = vec![
+            "https://a.cn/p.zip".to_string(),
+            "https://b.cn/p.zip".to_string(),
+        ];
         assert_eq!(
             resumable_from("https://a.cn/p.zip", &urls, 1024),
             Some("https://a.cn/p.zip".to_string())
@@ -1044,7 +1169,10 @@ mod tests {
     #[test]
     fn part_and_tag_sit_next_to_the_destination() {
         let dest = std::path::Path::new("/tmp/x/pack.zip");
-        assert_eq!(suffixed(dest, ".part").file_name().unwrap(), "pack.zip.part");
+        assert_eq!(
+            suffixed(dest, ".part").file_name().unwrap(),
+            "pack.zip.part"
+        );
         assert_eq!(
             suffixed(dest, ".part.src").file_name().unwrap(),
             "pack.zip.part.src"

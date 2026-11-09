@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { TransferProgress } from "trm-ui";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { Modal } from "./Modal";
+import { ErrorNote } from "./ErrorNote";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
 import { audioToolsDownloading, ensureAudioTools } from "../lib/downloadModels";
@@ -67,26 +69,20 @@ export function AudioToolsDialog({ open, sizeBytes, onClose }: Props) {
     <Modal open={open} z={60}>
       <div className="w-full max-w-[440px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">{t("audioTools.title")}</h2>
-        <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed whitespace-pre-line">
-          {phase === "done"
-            ? t("audioTools.done")
-            : phase === "failed"
-              ? error
-              : t("audioTools.desc", { v0: size })}
-        </p>
+        {phase === "failed" ? (
+          <div className="mb-5"><ErrorNote text={error} compact /></div>
+        ) : phase !== "downloading" ? (
+          <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">
+            {phase === "done" ? t("audioTools.done") : t("audioTools.desc", { v0: size })}
+          </p>
+        ) : null}
 
         {phase === "downloading" ? (
           <div className="mb-5">
-            <div className="flex justify-between gap-3 text-[12px] text-[var(--meta)] mb-1.5">
-              <span>{t("audioTools.downloading")}</span>
-              <span className="tabular-nums">{`${Math.round(pct)}%`}</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-[color-mix(in_srgb,var(--ink)_10%,transparent)] overflow-hidden">
-              <div
-                className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-200"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            <TransferProgress
+              message={t("audioTools.downloading")}
+              percent={pct > 0 ? pct : undefined}
+            />
           </div>
         ) : null}
 

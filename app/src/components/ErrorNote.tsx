@@ -21,8 +21,10 @@ export function ErrorNote({
   error = true,
   code,
   extraAction,
+  compact = false,
 }: {
   text: string;
+  compact?: boolean;
   /**
    * 这句话是报错还是结果。
    *
@@ -48,6 +50,19 @@ export function ErrorNote({
   }
 
   const { head, detail, hasMore } = splitErrorText(text);
+  if (compact) {
+    return (
+      <div className="mt-3 text-[12.5px] leading-relaxed">
+        <p role="alert" className="m-0 break-words text-[var(--danger)]">{head}</p>
+        {hasMore ? (
+          <details className="mt-1 text-[var(--meta)]">
+            <summary className="cursor-pointer">{t("s.errDetails")}</summary>
+            <pre className="m-0 max-h-[144px] overflow-auto whitespace-pre-wrap break-all text-[11px]">{detail}</pre>
+          </details>
+        ) : null}
+      </div>
+    );
+  }
   const action = extraAction ?? actionFor(code);
 
   const done = () => {

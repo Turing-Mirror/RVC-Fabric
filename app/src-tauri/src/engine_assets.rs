@@ -264,7 +264,7 @@ pub fn fetch_pack_with_fallback(
                 expected_sha256: sha.to_string(),
                 size_hint: catalog_size_for(root, cache_name),
                 connections: None,
-                kind: download::DownloadKind::Generic,
+                kind: download::DownloadKind::Dependency,
             },
             cancel,
             progress,
@@ -304,7 +304,7 @@ fn fetch_and_extract(
     if !cached_ok {
         // Passing progress through is what keeps the first-run gate honest:
         // without it the bar sits still while the NIC is busy for minutes.
-        let mut urls = lfs_urls(root, sha);
+        let mut urls = if cache_name == AUDIO_TOOLS_NAME { Vec::new() } else { lfs_urls(root, sha) };
         if let Some((tag, file)) = release_ref(cache_name) {
             urls.extend(release_urls(root, tag, file));
         }
@@ -314,9 +314,9 @@ fn fetch_and_extract(
                 root: Some(root.to_path_buf()),
                 dest: archive.clone(),
                 expected_sha256: sha.to_string(),
-                size_hint: catalog_size_for(root, cache_name),
+                size_hint: if cache_name == AUDIO_TOOLS_NAME { AUDIO_TOOLS_SIZE } else { catalog_size_for(root, cache_name) },
                 connections: None,
-                kind: download::DownloadKind::Generic,
+                kind: download::DownloadKind::Dependency,
             },
             cancel,
             progress,

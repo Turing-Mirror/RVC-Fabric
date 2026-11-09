@@ -43,6 +43,10 @@ pub fn try_begin() -> Result<ProvisionGuard, String> {
 /// Shared with download layer (async-fetcher shutdown).
 static CANCEL: std::sync::OnceLock<Arc<AtomicBool>> = std::sync::OnceLock::new();
 
+pub fn is_busy() -> bool {
+    *PROVISION_BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn cancel_flag() -> Arc<AtomicBool> {
     CANCEL
         .get_or_init(|| Arc::new(AtomicBool::new(false)))
@@ -858,26 +862,7 @@ pub fn run_provision(
         }
 
         let size = spec.size_bytes.max(part.size_bytes);
-        let conns_preview = download::auto_connections(size);
-        emit_progress(
-            &app,
-            "download",
-            0,
-            size.max(1),
-            &crate::i18n::tn(
-                "s.c5f9b6cc72",
-                &[
-                    &spec.label,
-                    if spec.version.is_empty() {
-                        "?"
-                    } else {
-                        &spec.version
-                    },
-                    &format_size(size),
-                    &conns_preview.to_string(),
-                ],
-            ),
-        );
+        emit_progress(&app, "connecting:", 0, size.max(1), &crate::i18n::t("s.setupConnecting"));
 
         let cache = cache_dir(&root);
         let dest_file = cache.join(if part.name.is_empty() {
@@ -886,15 +871,10 @@ pub fn run_provision(
             part.name.clone()
         });
 
-        // A deliberate update / re-download must not silently reuse the old
-        // archive. A failed download still leaves the installed tree intact.
-        if force && dest_file.is_file() {
-            let _ = fs::remove_file(&dest_file);
-        }
-
         // Reuse the cache only after verifying it. A stale or truncated file
         // must be dropped, never trusted because it happens to exist.
         if dest_file.is_file() {
+            emit_progress(&app, "verify", 0, 1, &crate::i18n::t("s.setupVerifying"));
             if download::verify_sha256(&dest_file, &part.sha256).is_ok() {
                 emit_progress(
                     &app,
@@ -917,7 +897,6 @@ pub fn run_provision(
         if !dest_file.is_file() {
             let app_cb = app.clone();
             let size_hint = size.max(1);
-            let conns = download::auto_connections(size);
             // Wall-clock + last sample for average / near-instant speed.
             let t0 = std::sync::Mutex::new(std::time::Instant::now());
             let last = std::sync::Mutex::new((std::time::Instant::now(), 0u64));
@@ -980,7 +959,7 @@ pub fn run_provision(
                     dest: dest_file.clone(),
                     expected_sha256: part.sha256.clone(),
                     size_hint: size,
-                    connections: Some(conns),
+                    connections: None,
                     kind: download::DownloadKind::Runtime,
                 },
                 cancel_flag(),
@@ -1055,6 +1034,7 @@ pub fn run_provision(
         // 时候。放后台线程，别把补全流程的收尾卡在 90 秒的等待上。
         ensure_worker_background(root.clone());
 
+        let _ = fs::remove_file(&dest_file);
         emit_progress(&app, "done", 1, 1, &crate::i18n::t("s.a64a986f63"));
         Ok(json!({
             "ok": true,

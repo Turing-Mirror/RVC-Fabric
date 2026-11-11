@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 /**
- * C-01 页面生命周期回归：离场层不再是新挂载的副本，离场期间不重新执行
- * 页面初始化；切页 N 次后台账无净增长。
+ * C-01 页面生命周期回归：离场的页在推移期间保持挂载、不重新初始化；
+ * 切页 N 次后台账无净增长。
  */
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mountCounts, resetMountCounts } from "../lib/lifecycle";
 import type { PageId } from "../lib/nav";
 import { mount, type Mounted } from "../test/dom";
@@ -24,36 +24,48 @@ function host(page: PageId) {
 
 describe("PageHost lifecycle (C-01)", () => {
   let m: Mounted;
+  let finish: (() => void)[] = [];
+  const original = HTMLElement.prototype.animate;
+  const settle = async () => {
+    await act(async () => {
+      finish[finish.length - 1]?.();
+      await Promise.resolve();
+    });
+  };
   beforeEach(() => {
-    vi.useFakeTimers();
     resetMountCounts();
+    finish = [];
+    // 可手动结束的动画替身：推移进行中两页都在，finish 之后才卸下离场页。
+    HTMLElement.prototype.animate = function () {
+      let done!: () => void;
+      let fail!: (reason: unknown) => void;
+      const finished = new Promise<void>((resolve, reject) => { done = resolve; fail = reject; });
+      finish.push(done);
+      return { finished, cancel: () => fail(new Error("cancelled")) } as unknown as Animation;
+    } as typeof HTMLElement.prototype.animate;
   });
   afterEach(() => {
     m?.unmount();
-    vi.useRealTimers();
+    HTMLElement.prototype.animate = original;
   });
 
-  it("leaving page stays mounted during its exit animation, then unmounts", () => {
+  it("leaving page stays mounted while the pages move, then unmounts", async () => {
     m = mount(host("home"));
     act(() => m.root.render(host("models")));
-    // 动画进行中：两页都在，旧页没有重挂
     expect(mountCounts().get("page:home")).toEqual({ mounts: 1, unmounts: 0 });
     expect(mountCounts().get("page:models")).toEqual({ mounts: 1, unmounts: 0 });
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
+    await settle();
     expect(mountCounts().get("page:home")).toEqual({ mounts: 1, unmounts: 1 });
     expect(mountCounts().get("page:models")).toEqual({ mounts: 1, unmounts: 0 });
   });
 
-  it("navigating back to a still-leaving page does not remount it", () => {
+  it("navigating back to a still-leaving page does not remount it", async () => {
     m = mount(host("home"));
     act(() => m.root.render(host("models")));
-    act(() => vi.advanceTimersByTime(100)); // home 还在离场动画里
     act(() => m.root.render(host("home")));
-    act(() => vi.advanceTimersByTime(500));
+    await settle();
     const home = mountCounts().get("page:home");
-    expect(home?.mounts).toBe(1); // 未被离场-再进入重复挂载
+    expect(home?.mounts).toBe(1);
     expect(home?.unmounts).toBe(0);
   });
 
@@ -69,16 +81,15 @@ describe("PageHost lifecycle (C-01)", () => {
     expect(home.parentElement?.hasAttribute("inert")).toBe(false);
   });
 
-  it("100 switches leave no net growth in mounted panes", () => {
+  it("100 switches leave no net growth in mounted panes", async () => {
     m = mount(host("home"));
     for (let i = 0; i < 100; i += 1) {
       const next = pages[i % pages.length];
       act(() => m.root.render(host(next)));
-      act(() => vi.advanceTimersByTime(500));
+      await settle();
     }
-    const counts = mountCounts();
     let net = 0;
-    counts.forEach((c) => {
+    mountCounts().forEach((c) => {
       net += c.mounts - c.unmounts;
     });
     // 只剩当前页一层在台上。

@@ -1,6 +1,6 @@
 import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
-import { usePageActive } from "trm-ui";
+import { ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -591,7 +591,7 @@ function ModelsPageImpl({
                 <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
-                      <img
+                      <ThumbImage
                         src={src}
                         alt=""
                         // contain：官方 1:1 与框内一致不裁；第三方竖立绘用 cover 会
@@ -614,12 +614,12 @@ function ModelsPageImpl({
                           </span>
                         ) : null}
                         {v.missing ? (
-                          <span className="text-[11px] text-[var(--danger)]">{t("s.2fe9b75856")}</span>
+                          <span className="text-[11px] text-[var(--danger-text)]">{t("s.2fe9b75856")}</span>
                         ) : null}
                       </span>
                     ) : null}
                     {cur ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>

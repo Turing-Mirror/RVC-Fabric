@@ -303,9 +303,9 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
     l === "ok" ? t("s.lcOk") : l === "bad" ? t("s.lcBad") : t("s.lcInfo");
   const levelClass = (l: Level) =>
     l === "ok"
-      ? "text-[var(--accent)]"
+      ? "text-[var(--accent-text)]"
       : l === "bad"
-        ? "text-[var(--danger)]"
+        ? "text-[var(--danger-text)]"
         : "text-[var(--meta)]";
 
   return (
@@ -320,7 +320,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {err ? (
-          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger)]">{err}</p>
+          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger-text)]">{err}</p>
         ) : null}
 
         {!data && !err ? (
@@ -356,9 +356,9 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
                   <span
                     className={
                       micState === "ok"
-                        ? "text-[var(--accent)]"
+                        ? "text-[var(--accent-text)]"
                         : micState === "bad"
-                          ? "text-[var(--danger)]"
+                          ? "text-[var(--danger-text)]"
                           : "text-[var(--meta)]"
                     }
                   >

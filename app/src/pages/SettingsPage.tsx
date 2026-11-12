@@ -274,7 +274,7 @@ function SettingsPageImpl({
 
       <PagePad>
         {c.error ? (
-          <p className="text-[12.5px] text-[var(--danger)] mt-4 mb-0">{c.error}</p>
+          <p className="text-[12.5px] text-[var(--danger-text)] mt-4 mb-0">{c.error}</p>
         ) : null}
 
         {c.restartKeys.length ? (
@@ -1413,15 +1413,15 @@ function HotkeyRow({
           "shadow-[inset_0_0_0_1px_var(--line)] transition-colors duration-200",
           "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
           recording
-            ? "text-[var(--accent)] shadow-[inset_0_0_0_1px_var(--accent)]"
+            ? "text-[var(--accent-text)] shadow-[inset_0_0_0_1px_var(--accent)]"
             : "text-[var(--meta)] hover:text-[var(--ink)]",
         ].join(" ")}
       >
         {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
       {status ? <span className="ml-2 text-[12px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
-      {recordError ? <span role="alert" className="text-[var(--danger)]">{t("audio.hotkeySuspendFailed")}</span> : null}
-      {saveError ? <span role="alert" className="text-[var(--danger)]">{saveError}</span> : null}
+      {recordError ? <span role="alert" className="text-[var(--danger-text)]">{t("audio.hotkeySuspendFailed")}</span> : null}
+      {saveError ? <span role="alert" className="text-[var(--danger-text)]">{saveError}</span> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}
     </div>
   );

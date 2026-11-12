@@ -69,7 +69,7 @@ function DonateNote() {
           e.preventDefault();
           void openExternal(VBCABLE_URL);
         }}
-        className="text-[var(--accent)] underline underline-offset-2 rounded-[2px] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+        className="text-[var(--accent-text)] underline underline-offset-2 rounded-[2px] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
       >
         {VBCABLE_SITE}
       </a>

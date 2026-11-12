@@ -1507,7 +1507,7 @@ function StsSection() {
     <>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger-text)]">{blocked}</p>
         </div>
       ) : null}
 
@@ -1641,14 +1641,14 @@ function StsSection() {
                   title={miss?.path || s.path}
                 >
                   {/* 名字在前、所在目录在后：长路径截掉的是目录，不是名字。 */}
-                  <span className={`min-w-0 max-w-[55%] truncate ${miss ? "text-[var(--danger)]" : "text-[var(--ink)]"}`}>
+                  <span className={`min-w-0 max-w-[55%] truncate ${miss ? "text-[var(--danger-text)]" : "text-[var(--ink)]"}`}>
                     {name}
                   </span>
                   <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[var(--meta)]">
                     {parent}
                   </span>
                   {miss ? (
-                    <span className="shrink-0 text-[11px] text-[var(--danger)]">
+                    <span className="shrink-0 text-[11px] text-[var(--danger-text)]">
                       {miss.state === "unreadable"
                         ? t("s.stsUnreadableTag")
                         : t("s.stsMissingTag")}
@@ -2412,7 +2412,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
 
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger-text)]">{blocked}</p>
           {useRvc && !st.infer_present ? (
             <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
           ) : null}
@@ -2432,7 +2432,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
       <p
         className={[
           "m-0 mt-1.5 text-[12px] text-right tabular-nums",
-          over ? "text-[var(--danger)]" : "text-[var(--meta)]",
+          over ? "text-[var(--danger-text)]" : "text-[var(--meta)]",
         ].join(" ")}
       >
         {text.length} / {max}

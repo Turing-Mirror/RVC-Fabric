@@ -486,7 +486,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
       } />
-      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger)] mt-4 mb-0">{error}</p> : null}
+      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger-text)] mt-4 mb-0">{error}</p> : null}
       {notice ? <p role="status" className="flex-none text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
       {scanActive ? <div className="flex-none flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
         <span>{t("audio.scanProgress", { count: scanned })}</span>
@@ -539,7 +539,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                   <button type="button" onClick={() => chooseEntry(entry)} onDoubleClick={() => playNow(entry)} aria-pressed={on}
                     className={`w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-[var(--rs)] border-0 cursor-pointer transition-colors ${on ? "bg-[var(--accent-soft)]" : "bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]"}`}>
                     <span className={`w-9 flex-none text-right tabular-nums text-[12px] ${entry.number != null ? "text-[var(--ink-muted)]" : "text-[var(--meta)]"}`}>{entry.number ?? t("s.noNumber")}</span>
-                    <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
+                    <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent-text)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
                     {playing ? <span aria-hidden className="flex-none flex items-end gap-[2px] h-3">{[0, 1, 2].map((i) => <span key={i} className="eq-bar w-[2px] rounded-full bg-[var(--accent)]" style={{ animationDelay: `${i * 0.18}s` }} />)}</span> : null}
                     <span className="ml-auto flex-none text-[11px] text-[var(--meta)]">{asset?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : entry.looped ? t("audio.loop") : ""}</span>
                   </button>
@@ -709,7 +709,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
           </span>
         </div>
-        {voice?.state === "error" ? <p role="alert" className="flex-none text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
+        {voice?.state === "error" ? <p role="alert" className="flex-none text-[12px] text-[var(--danger-text)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
       </section>
       </div>
 
@@ -770,7 +770,7 @@ function SourceBtn({ on, label, title, count, onClick, menuLabel, menuOpen, onMe
       {onMenu ? <button type="button" data-source-menu aria-label={menuLabel} aria-haspopup="menu"
         aria-expanded={menuOpen ?? false} aria-controls={menuOpen ? "audio-source-menu" : undefined}
         onClick={onMenu}
-        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none bg-transparent hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100 text-[var(--accent)]" : "opacity-0 text-[var(--meta)]"} group-hover:opacity-100 group-focus-within:opacity-100 transition-[opacity,color]`}>
+        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none bg-transparent hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100 text-[var(--accent-text)]" : "opacity-0 text-[var(--meta)]"} group-hover:opacity-100 group-focus-within:opacity-100 transition-[opacity,color]`}>
         ⋯
       </button> : null}
     </div>

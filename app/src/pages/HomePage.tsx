@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
-import { usePageLeave } from "trm-ui";
+import { ThumbImage, usePageLeave } from "trm-ui";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { useConfigSnapshot } from "../hooks/useConfigSnapshot";
@@ -318,7 +318,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
         style={{ background: STAGE_BG }}
       >
         <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
-        <p className="text-[19px] font-semibold text-[var(--accent)] m-0">
+        <p className="text-[19px] font-semibold text-[var(--accent-text)] m-0">
           {current ? current.name : t("s.262d11e2d6")}
         </p>
         {/* 副标题不再有固定文案 —— 那句「切换立即生效 · 运行中可无缝换音色」
@@ -337,7 +337,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           action={<Btn onClick={onOpenModels}>{t("s.35e4afb47d")}</Btn>}
         >
           {msg ? (
-            <p className="text-[12.5px] text-[var(--danger)] m-0 mb-3">{msg}</p>
+            <p className="text-[12.5px] text-[var(--danger-text)] m-0 mb-3">{msg}</p>
           ) : null}
           <div
             ref={flipRowRef}
@@ -383,7 +383,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                     ].join(" ")}
                   >
                     {v.cover ? (
-                      <img
+                      <ThumbImage
                         src={resolveCover(v.cover, coverCache)}
                         alt=""
                         draggable={false}
@@ -403,9 +403,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                       </span>
                     ) : null}
                     {pend ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("dock.switching")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)]">{t("dock.switching")}</span>
                     ) : cur && hasSelection ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (
                       <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>

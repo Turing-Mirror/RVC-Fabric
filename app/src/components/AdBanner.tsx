@@ -42,7 +42,7 @@ export function AdBanner({ banner }: { banner: PlazaItem | null }) {
         <button
           type="button"
           onClick={() => void openExternal(item.url)}
-          className="flex-none border-0 bg-transparent cursor-pointer text-[13px] text-[var(--accent)] px-2 py-1 rounded-[var(--rs)] hover:bg-[var(--accent-soft)]"
+          className="flex-none border-0 bg-transparent cursor-pointer text-[13px] text-[var(--accent-text)] px-2 py-1 rounded-[var(--rs)] hover:bg-[var(--accent-soft)]"
         >
           {item.action_label || t("s.f7acefd2d4")}
         </button>

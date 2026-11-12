@@ -211,7 +211,7 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
                     <span className="inline-flex items-center flex-wrap gap-x-2 gap-y-0.5">
                       <span>{row.label}</span>
                       {initial?.recommended_variant === row.id ? (
-                        <span className="text-[11.5px] text-[var(--accent)]">{t("s.62b46f24ae")}</span>
+                        <span className="text-[11.5px] text-[var(--accent-text)]">{t("s.62b46f24ae")}</span>
                       ) : null}
                       <span className="text-[11.5px] text-[var(--meta)]">
                         {row.installed ? joinClauses([

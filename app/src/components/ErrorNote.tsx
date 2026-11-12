@@ -53,7 +53,7 @@ export function ErrorNote({
   if (compact) {
     return (
       <div className="mt-3 text-[12.5px] leading-relaxed">
-        <p role="alert" className="m-0 break-words text-[var(--danger)]">{head}</p>
+        <p role="alert" className="m-0 break-words text-[var(--danger-text)]">{head}</p>
         {hasMore ? (
           <details className="mt-1 text-[var(--meta)]">
             <summary className="cursor-pointer">{t("s.errDetails")}</summary>

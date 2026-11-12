@@ -146,7 +146,7 @@ export function DspPresetGrid({
                 {effectNames(p)}
               </div>
               {cur ? (
-                <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold">
+                <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)] font-semibold">
                   {t("s.e6aa2cbd7b")}
                 </span>
               ) : null}

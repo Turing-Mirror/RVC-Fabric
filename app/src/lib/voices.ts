@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n/t";
+import { forgetThumb } from "trm-ui";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -356,13 +357,18 @@ export async function coverDataUrl(src: string): Promise<string> {
 /** 把界面裁好的封面（data URL）写进模型目录。 */
 export async function setVoiceCover(modelDir: string, image: string) {
   if (!isTauri()) return { ok: false };
-  return invokeVoiceMutation("voices_set_cover", { modelDir, image });
+  const result = await invokeVoiceMutation("voices_set_cover", { modelDir, image });
+  // 封面文件名不变、内容变了：缩略图要重新生成。
+  forgetThumb();
+  return result;
 }
 
 /** 撤销自定义封面，回落到包内 / 清单封面。 */
 export async function resetVoiceCover(modelDir: string) {
   if (!isTauri()) return { ok: false };
-  return invokeVoiceMutation("voices_reset_cover", { modelDir });
+  const result = await invokeVoiceMutation("voices_reset_cover", { modelDir });
+  forgetThumb();
+  return result;
 }
 
 export async function promoteLegacy(pthPath: string) {

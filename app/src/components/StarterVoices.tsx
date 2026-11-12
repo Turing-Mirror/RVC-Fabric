@@ -68,9 +68,9 @@ export function StarterVoices({ onInstalled, onOpenPlaza }: { onInstalled: () =>
           );
         })}
       </div>
-      {jobs.error ? <p role="alert" className="m-0 mt-3 text-[12.5px] text-[var(--danger)]">{jobs.error}</p> : null}
+      {jobs.error ? <p role="alert" className="m-0 mt-3 text-[12.5px] text-[var(--danger-text)]">{jobs.error}</p> : null}
       <div className="mt-3 text-center">
-        <button type="button" onClick={onOpenPlaza} className="bg-transparent border-0 cursor-pointer text-[12.5px] text-[var(--accent)] hover:underline underline-offset-2">
+        <button type="button" onClick={onOpenPlaza} className="bg-transparent border-0 cursor-pointer text-[12.5px] text-[var(--accent-text)] hover:underline underline-offset-2">
           {t("s.starterMore")}
         </button>
       </div>

@@ -228,7 +228,7 @@ export function Dock({
             <button
               type="button"
               onClick={onSelfCheck}
-              className="ml-auto mt-0.5 border-0 bg-transparent p-0 text-[11.5px] text-[var(--accent)] underline underline-offset-2 cursor-pointer"
+              className="ml-auto mt-0.5 border-0 bg-transparent p-0 text-[11.5px] text-[var(--accent-text)] underline underline-offset-2 cursor-pointer"
             >
               {t("dock.selfCheck")}
             </button>

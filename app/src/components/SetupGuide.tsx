@@ -135,7 +135,7 @@ export function SetupGuide(props: Props) {
               </span>
               <span className={`block mt-2 text-[11.5px] truncate transition-colors ${i === index ? "text-[var(--ink)] font-medium" : "text-[var(--meta)] group-hover:text-[var(--ink-muted)]"}`}>
                 {labels[i]}
-                {done[s] ? <span className="ml-1 text-[var(--accent)]">✓</span> : null}
+                {done[s] ? <span className="ml-1 text-[var(--accent-text)]">✓</span> : null}
               </span>
             </button>
           ))}

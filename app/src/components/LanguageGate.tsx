@@ -81,7 +81,7 @@ export function LanguageGate({ open, onDone }: Props) {
                 <span className="inline-flex items-center flex-wrap gap-x-2">
                   <span>{t(l.labelKey)}</span>
                   {isSys ? (
-                    <span className="text-[11.5px] text-[var(--accent)]">
+                    <span className="text-[11.5px] text-[var(--accent-text)]">
                       {t("onboarding.languageSystemBadge")}
                     </span>
                   ) : null}

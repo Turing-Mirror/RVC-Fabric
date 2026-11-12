@@ -198,7 +198,7 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
       <span className="text-[13px] text-[var(--ink)]">{title ?? t("audio.hotkeySection")}</span>
       <Btn disabled={busy || arming || (group === "entries" && available.length === 0)} onClick={add}>{t("audio.hotkeyAdd")}</Btn>
     </div>
-    {error ? <p role="alert" className="text-[var(--danger)]">{error}</p> : null}
+    {error ? <p role="alert" className="text-[var(--danger-text)]">{error}</p> : null}
     {shown.length === 0 ? <p>{t(needle ? "audio.hotkeyNoMatch" : "audio.hotkeyEmpty")}</p> : shown.map((binding) => <div key={binding.binding_id}
       className="flex flex-wrap items-end gap-2 rounded-[var(--rs)] bg-[var(--group)] px-3 py-2">
       {!entryId && group !== "entries" ? <label>{t("audio.hotkeyAction")}

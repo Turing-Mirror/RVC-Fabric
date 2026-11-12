@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check:i18n": "node scripts/check_i18n.mjs",
-    "build": "eslint . && tsc && node scripts/check_i18n.mjs && vite build",
+    "check:design": "trm-design-check",
+    "build": "eslint . && tsc && node scripts/check_i18n.mjs && trm-design-check && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -20,7 +21,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "trm-ui": "github:Turing-Mirror/TRM-UI#7f0a65fa7395545e36883ae5db956ad0bbb8cd13"
+    "trm-ui": "github:Turing-Mirror/TRM-UI#eae13ef83df987f06cb9df52827b5b9f3264e398"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -595,7 +595,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       ) : null}
 
       {err || jobs.error ? (
-        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[var(--danger)]">
+        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[var(--danger-text)]">
           {err || jobs.error}
         </div>
       ) : null}

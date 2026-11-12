@@ -273,7 +273,7 @@ export function ExtrasPanel({
                 {engineReady === true ? (
                   <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
                 ) : engineReady === false ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--accent)]">{t("s.f9cbb1e0c6")}</span>
+                  <span className="ml-2 text-[12px] font-normal text-[var(--accent-text)]">{t("s.f9cbb1e0c6")}</span>
                 ) : (
                   <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
                 )}

@@ -8,7 +8,7 @@
 [简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　English　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
-**Real-time AI voice conversion and model training for Windows**
+**Real-time voice changer and soundboard for Windows**
 
 <!-- screenshots -->
 <img src="assets/screenshots/home.png" alt="RVC Fabric home screen and real-time conversion controls" width="32%">
@@ -16,15 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
 <!-- screenshots -->
 
-[Official screenshots](https://www.turingmirror.com/en/products/rvc-fabric/screenshots/)
-
-These screenshots were recorded in August 2026.
-
-[Website](https://www.turingmirror.com/en/products/rvc-fabric/)
-
-[User guide](https://www.turingmirror.com/en/guides/rvc-fabric/)
-
-[Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[Website](https://www.turingmirror.com/en/products/rvc-fabric/) · [Download for Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
 
 Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) and maintained by [Turing Mirror](https://github.com/Turing-Mirror).
 
@@ -47,10 +39,11 @@ Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conver
 
 ## Project Introduction
 
-RVC Fabric is a free, open-source Windows desktop application developed by Turing Mirror. It provides real-time voice conversion, voice management, vocal separation and model training for voice calls, live streaming and audio production. Configure the runtime and download or import a voice model before first use.
+RVC Fabric is a free, open-source Windows application developed by Turing Mirror. Change your voice and play music or sound effects in QQ, Discord and in-game voice chat, or mix your voice with backing tracks during a live stream. Its soundboard supports audio clips and hotkeys, alongside voice model management, vocal separation and model training.
 
 ## Core Features
 
+- Play music, sound effects or selected clips into voice chat alongside your converted microphone audio, with overlapping playback, looping, separate volume control and global hotkeys.
 - Converts microphone input to the selected voice, with original-voice bypass, ASIO channel selection and independent monitoring. Latency depends on hardware, the model and audio settings.
 - Includes a noise gate, compressor and 5-band parametric EQ, with presets and individual adjustments.
 - The voice library supports associated .index files and lets you save, import and export parameter presets.
@@ -58,13 +51,12 @@ RVC Fabric is a free, open-source Windows desktop application developed by Turin
 - Provides vocal separation, text-to-speech and voice training tools. The training workflow covers audio slicing, pitch and feature extraction, model training and index export.
 - Supports NVIDIA CUDA and DirectML acceleration for AMD and Intel GPUs. Setup detects hardware and configures the corresponding runtime.
 
-As of November 7, 2026, the Neptune development branch includes mobile pairing, a local API and an MCP interface. The phone captures audio and the desktop converts the voice. Release notes describe the features in each published version.
+## Voice chat and in-game music playback
 
-## Quick Start
-
-1. Run RVC_Fabric_Setup.exe. An install path with only English characters is recommended.
-2. Follow setup to configure the runtime and download or import a voice model. Install VB-Cable to send audio to another application. Restart the computer after installation.
-3. Set the application output to CABLE Input and the input in QQ, Discord or your streaming application to CABLE Output.
+1. Install RVC Fabric and configure the required components. Install the VB-Cable virtual audio device and restart your computer.
+2. In the audio device settings, select your physical microphone and set the output to CABLE Input. Set the microphone in QQ, Discord or your game to CABLE Output.
+3. Open the audio library, import music or sound effects, and double-click an entry to play it into voice chat. To change your voice while playing music, select a voice model and start conversion. Both signals are mixed into the same output.
+4. Select headphones for local monitoring and enable music monitoring as needed. Assign global hotkeys to frequently used clips to play, pause and stop them while in a game.
 
 ## Technical Architecture and Development
 

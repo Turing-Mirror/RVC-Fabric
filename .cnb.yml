@@ -1,0 +1,50 @@
+$:
+  api_trigger_windows_candidate: &windows_candidate
+    - name: Windows NSIS candidate
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 8
+      docker:
+        build: .cnb/windows-cross.Dockerfile
+        volumes:
+          - /root/.npm:copy-on-write
+          - /root/.cargo/registry:copy-on-write
+          - /root/.cargo/git:copy-on-write
+          - /root/.cache/xwin:copy-on-write
+          - /root/.cache/tauri:copy-on-write
+          - app/src-tauri/target:copy-on-write
+      env:
+        LANG: C.UTF-8
+        LC_ALL: C.UTF-8
+        XWIN_ARCH: x86_64
+        XWIN_CACHE_DIR: /root/.cache/xwin
+        CARGO_BUILD_JOBS: "8"
+      stages:
+        - name: Check versions and toolchain
+          script:
+            - node --version
+            - rustc --version
+            - cargo xwin --version
+            - python3 -m unittest tests.test_version_sync -v
+        - name: Install frontend dependencies
+          timeout: 15m
+          script: cd app && npm ci --no-audit --no-fund
+        - name: Build Windows NSIS candidate
+          timeout: 60m
+          env:
+            # Let cargo-xwin honor +crt-static without Tauri's conflicting UCRT overrides.
+            STATIC_VCRUNTIME: "false"
+          script: >-
+            cd app && npm run tauri:build -- --ci --runner cargo-xwin
+            --target x86_64-pc-windows-msvc --bundles nsis
+            --config ../.cnb/tauri.candidate.conf.json -- --locked
+        - name: Collect installer and build metadata
+          script: python3 scripts/ci/collect_windows_candidate.py
+        - name: Attach candidate to this source commit
+          image: cnbcool/attachments:latest
+          settings:
+            commit: $CNB_COMMIT
+            attachments:
+              - dist/cnb-candidate/*
+            ttl: 30
+  web_trigger_windows_candidate: *windows_candidate

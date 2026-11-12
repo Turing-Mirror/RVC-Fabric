@@ -1289,7 +1289,7 @@ export default function App() {
 
       <AudioToolsDialog open={audioTools.open} sizeBytes={audioTools.size} onClose={closeAudioTools} />
 
-      <PageHost page={page} keepCommunity>
+      <PageHost page={page}>
         {(id) => (
           <Suspense fallback={null}>
           {(() => {

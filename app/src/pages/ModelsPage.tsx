@@ -218,6 +218,7 @@ function ModelsPageImpl({
       setMenu(null);
       setAuthorPick(null);
       setCoverEdit(null);
+      setMsg("");
     }
     const on = pageOn;
     const list = listRequest;

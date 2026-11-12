@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openOverlay, openTool } from "../components/ToolWindow";
@@ -197,20 +198,32 @@ export function MorePage({
       setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
     }
   };
+  // 页面常驻，每次回来副作用都会重新执行：已处理过的请求记下来，不再重复滚动。
+  const communityDone = useRef(0);
+  const topDone = useRef(0);
+  usePageLeave(() => {
+    setBusyMsg("");
+    setSumMsg("");
+    setGpuMsg("");
+    setLegacyMsg({});
+  });
   useEffect(() => {
-    if (!focusCommunityNonce) return;
+    if (!focusCommunityNonce || communityDone.current === focusCommunityNonce) return;
     // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了个 translate 动画，
     // 而 scrollIntoView 是按元素**变换后**的屏幕位置算的 —— 动画跑到哪就滚到
     // 哪，落点每次都不一样。offsetTop 不受 transform 影响，直接算给滚动容器。
     //
-    // 还得等一拍：PageHost 换页时有个 useLayoutEffect 把 scrollTop 归零，
+    // 还得等一拍：PageHost 换页时有个 useLayoutEffect 恢复这一页上次的滚动位置，
     // 同一帧里滚过去会被它抹掉。
-    return scheduleScrollToId("more-community");
+    return scheduleScrollToId("more-community", 12, () => {
+      communityDone.current = focusCommunityNonce;
+    });
   }, [focusCommunityNonce]);
 
   useEffect(() => {
-    if (!resetScrollNonce) return;
+    if (!resetScrollNonce || topDone.current === resetScrollNonce) return;
     const id = window.setTimeout(() => {
+      topDone.current = resetScrollNonce;
       const el = document.getElementById("more-community");
       const pane = el?.closest(".overflow-y-auto");
       if (pane instanceof HTMLElement) pane.scrollTop = 0;

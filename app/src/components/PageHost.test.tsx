@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * C-01 页面生命周期回归：离场的页在推移期间保持挂载、不重新初始化；
- * 切页 N 次后台账无净增长。
+ * C-01 页面生命周期回归：离场的页在推移期间保持运行、不重新初始化；
+ * 停稳后停掉副作用但保留状态；切页 N 次后台账无净增长。
  */
 import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -19,13 +19,13 @@ function Stub({ id }: { id: PageId }) {
   return (
     <div data-testid={`pane-${id}`} data-active={String(active)}>
       {id}
-      {id === "plaza" && <button onClick={() => setDraft("Voice draft")}>{draft || "Edit"}</button>}
+      <button onClick={() => setDraft("Voice draft")}>{draft || "Edit"}</button>
     </div>
   );
 }
 
-function host(page: PageId, keepCommunity?: boolean) {
-  return <PageHost page={page} keepCommunity={keepCommunity}>{(id) => <Stub id={id} />}</PageHost>;
+function host(page: PageId) {
+  return <PageHost page={page}>{(id) => <Stub id={id} />}</PageHost>;
 }
 
 describe("PageHost lifecycle (C-01)", () => {
@@ -55,7 +55,7 @@ describe("PageHost lifecycle (C-01)", () => {
     HTMLElement.prototype.animate = original;
   });
 
-  it("leaving page stays mounted while the pages move, then unmounts", async () => {
+  it("leaving page keeps running while the pages move, then pauses", async () => {
     m = mount(host("home"));
     act(() => m.root.render(host("models")));
     expect(mountCounts().get("page:home")).toEqual({ mounts: 1, unmounts: 0 });
@@ -87,56 +87,48 @@ describe("PageHost lifecycle (C-01)", () => {
     expect(home.parentElement?.hasAttribute("inert")).toBe(false);
   });
 
-  it("100 switches leave no net growth in mounted panes", async () => {
+  it("100 switches leave only the current page and Community running", async () => {
     m = mount(host("home"));
     for (let i = 0; i < 100; i += 1) {
       const next = pages[i % pages.length];
       act(() => m.root.render(host(next)));
       await settle();
     }
-    let net = 0;
-    mountCounts().forEach((c) => {
-      net += c.mounts - c.unmounts;
-    });
-    // 只剩当前页一层在台上。
-    expect(net).toBe(1);
-  });
-
-  it("retains only Community and its state through 100 switches when requested", async () => {
-    m = mount(host("home", true));
-    const findPane = (id: PageId) => m.container.querySelector(`[data-testid="pane-${id}"]`);
-    expect(findPane("plaza")).toBeNull();
-
-    act(() => m.root.render(host("plaza", true)));
-    await settle();
-    const community = findPane("plaza")!;
-    act(() => community.querySelector("button")!.click());
-
-    for (let i = 0; i < 100; i += 1) {
-      const next = pages[i % pages.length];
-      act(() => m.root.render(host(next, true)));
-      await settle();
-
-      const expected = new Set<PageId>([next, "plaza"]);
-      for (const id of pages) {
-        const pane = findPane(id);
-        if (expected.has(id)) {
-          expect(pane?.getAttribute("data-active")).toBe(String(id === next));
-        } else {
-          expect(pane).toBeNull();
-        }
-      }
-      expect(findPane("plaza")).toBe(community);
-      expect(community.parentElement?.hasAttribute("inert")).toBe(next !== "plaza");
-      expect(community.parentElement?.getAttribute("aria-hidden")).toBe(next === "plaza" ? null : "true");
-      expect(community.querySelector("button")?.textContent).toBe("Voice draft");
-    }
-
-    expect(mountCounts().get("page:plaza")).toEqual({ mounts: 1, unmounts: 0 });
     const lastPage = pages[99 % pages.length];
     for (const id of pages) {
       const count = mountCounts().get(`page:${id}`)!;
       expect(count.mounts - count.unmounts).toBe(id === "plaza" || id === lastPage ? 1 : 0);
+    }
+    // 社区页露面后一直运行，没有重启过。
+    expect(mountCounts().get("page:plaza")).toEqual({ mounts: 1, unmounts: 0 });
+  });
+
+  it("every page keeps its node and state across 100 switches", async () => {
+    m = mount(host("home"));
+    const findPane = (id: PageId) => m.container.querySelector<HTMLElement>(`[data-testid="pane-${id}"]`);
+    const kept = new Map<PageId, HTMLElement>();
+    for (const id of pages) {
+      act(() => m.root.render(host(id)));
+      await settle();
+      const pane = findPane(id)!;
+      act(() => pane.querySelector("button")!.click());
+      kept.set(id, pane);
+    }
+
+    for (let i = 0; i < 100; i += 1) {
+      const next = pages[i % pages.length];
+      act(() => m.root.render(host(next)));
+      await settle();
+      for (const id of pages) {
+        const pane = findPane(id)!;
+        expect(pane).toBe(kept.get(id));
+        expect(pane.getAttribute("data-active")).toBe(String(id === next));
+        expect(pane.parentElement?.hasAttribute("inert")).toBe(id !== next);
+        expect(pane.parentElement?.getAttribute("aria-hidden")).toBe(id === next ? null : "true");
+        expect(pane.querySelector("button")?.textContent).toBe("Voice draft");
+        // 停用副作用的页由 React 藏起来；社区页照常运行，只是不可见。
+        expect(pane.style.display).toBe(id === next || id === "plaza" ? "" : "none");
+      }
     }
   });
 });

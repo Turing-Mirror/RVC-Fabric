@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
@@ -95,6 +96,12 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
   // 只有 Esc / 点菜单项 / 再点同一枚 ⋯ 这类「用户主动收菜单」才还焦点；
   // 外点、Tab 离开把焦点留在用户新指的地方（比如刚点进去的搜索框）。
   const menuRestore = useRef(false);
+
+  usePageLeave(() => {
+    setError("");
+    setNotice("");
+    setSrcMenu(null);
+  });
 
   const acceptLibrary = useCallback((next: Library) => {
     setLibrary((previous) => next.revision >= previous.revision ? next : previous);

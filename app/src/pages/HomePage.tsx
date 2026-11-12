@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
+import { usePageLeave } from "trm-ui";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { useConfigSnapshot } from "../hooks/useConfigSnapshot";
@@ -194,6 +195,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
   const cardPx = useRecentCardMetrics();
   // 卡片换序的位置过渡（C-04）：数组重排后卡片滑过去，不瞬移。
   const flipRowRef = useFlipRow<HTMLDivElement>();
+  usePageLeave(() => setMsg(""));
   const loadRevision = useRef(0);
   const load = async () => {
     const revision = ++loadRevision.current;

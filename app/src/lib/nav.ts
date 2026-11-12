@@ -42,6 +42,9 @@ export const NAV_PAGES = NAV_DEFS.map((p) => ({
   ...(p.badge ? { badge: true as const } : {}),
 }));
 
+/** Every page id, in navigation order. */
+export const PAGE_IDS: readonly PageId[] = NAV_DEFS.map((p) => p.id);
+
 export function pageIndex(id: PageId): number {
   return NAV_DEFS.findIndex((p) => p.id === id);
 }

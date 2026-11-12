@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import {
   AccordionGroup,
   Block,
@@ -296,7 +296,10 @@ function HelpPageImpl({
   const vbMsg = vb.msg;
   const vbBusy = vb.busy;
 
+  // 页面常驻，每次回来副作用都会重新执行：已处理过的跳转记下来，不再重复展开和滚动。
+  const focusDone = useRef(0);
   useEffect(() => {
+    if (focusNonce && focusDone.current === focusNonce) return;
     // `focus` 允许写成「段#问题 key」，例如 faq#s.faqVramQ。指到「常见情况」
     // 那一整块没什么用 —— 二十一条里找自己那条，跟没指一样。带上 key 就能直接
     // 把那一条展开。用 key 不用序号：条目会增删，序号会错位，key 不会。
@@ -321,7 +324,9 @@ function HelpPageImpl({
     }
     // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了 transform，
     // scrollIntoView 跟着动画走，落点停在页顶。offsetTop 不受 transform 影响。
-    return scheduleScrollToId(`help-${sec}`);
+    return scheduleScrollToId(`help-${sec}`, 12, () => {
+      focusDone.current = focusNonce;
+    });
   }, [focus, focusNonce]);
 
   const installVb = vb.install;

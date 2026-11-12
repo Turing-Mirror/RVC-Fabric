@@ -36,14 +36,23 @@ export function scrollPaneToId(id: string, pad = 12): boolean {
 }
 
 /**
- * PageHost zeros scrollTop in useLayoutEffect when the page id changes.
- * A same-frame scroll is overwritten; wait a tick, then try once more after
- * accordions have had a chance to open.
+ * PageHost restores a kept page's scroll position in useLayoutEffect when the
+ * page id changes. A same-frame scroll is overwritten; wait a tick, then try
+ * once more after accordions have had a chance to open.
+ *
+ * `onDone` fires on the first scroll. Kept pages re-run their effects on every
+ * return, so callers record the handled request there and skip it next time.
  */
-export function scheduleScrollToId(id: string, pad = 12): () => void {
+export function scheduleScrollToId(id: string, pad = 12, onDone?: () => void): () => void {
   let cancelled = false;
+  let reported = false;
   const run = () => {
-    if (!cancelled) scrollPaneToId(id, pad);
+    if (cancelled) return;
+    scrollPaneToId(id, pad);
+    if (!reported) {
+      reported = true;
+      onDone?.();
+    }
   };
   const a = window.setTimeout(run, 80);
   const b = window.setTimeout(run, 280);

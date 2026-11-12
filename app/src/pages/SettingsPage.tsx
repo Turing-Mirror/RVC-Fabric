@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
@@ -240,6 +241,7 @@ function SettingsPageImpl({
    * 「重启后生效」提示条会自己亮起来。
    */
   const [autoDevMsg, setAutoDevMsg] = useState("");
+  usePageLeave(() => setAutoDevMsg(""));
   const runAutoSetup = async () => {
     try {
       const advice = assessDevices(c.cfg, raw ?? {});

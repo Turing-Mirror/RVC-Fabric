@@ -5,18 +5,21 @@ import { noteMount, noteUnmount } from "../lib/lifecycle";
 
 type Props = {
   page: PageId;
+  /** Keep the Community catalog and editor state across app tabs. */
+  keepCommunity?: boolean;
   children: (id: PageId) => ReactNode;
 };
 
 const nav = { direction: navDirection };
+const keepCommunityPage = (id: PageId) => id === "plaza";
 
 /**
  * 按导航顺序整页推移，动效由 TRM UI 的 PageHost 提供：
  * 新旧两页首尾相接一起平移，中途改主意时从当前位置接着走。
  */
-export function PageHost({ page, children }: Props) {
+export function PageHost({ page, keepCommunity = false, children }: Props) {
   return (
-    <SlideHost nav={nav} page={page}>
+    <SlideHost nav={nav} page={page} keep={keepCommunity ? keepCommunityPage : undefined}>
       {(id) => <Ledger id={id}>{children(id)}</Ledger>}
     </SlideHost>
   );

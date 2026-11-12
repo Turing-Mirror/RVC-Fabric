@@ -45,6 +45,10 @@ cap.call 接收 capability、arguments，以及可选 clientId/requestId。相�
 
 运行依赖和模型沿用本软件现有安装流程。API 不自行下载模型，不代替用户选择音色。未安装运行环境或指定资源不存在时返回实际错误。
 
+### 安装社区音色包
+
+已下载社区音色 ZIP 后，可通过本机 `ui.invoke` 调用 `community_install_voice`。传入 `assetId`、`versionId`、`fileId` 和本机 `packagePath`。程序向社区核对公开版本、文件大小和 SHA-256，安装成功后返回音色的 `path`、`dir` 和 `name`。`res.list` 列出的 `rvc.voice` 可直接用于 `rvc.convert`。公开音色安装无需登录图灵镜账号。
+
 ## 界面适配
 
 Manifest 同时发布原前端入口和通用 Host 协议，供原生容器加载软件实际页面。UI 命令桥接不作为 Agent 的任意执行工具暴露。托管适配仍在 Neptune 验证；普通独立窗口和 API 可分别使用。

@@ -19,6 +19,9 @@ mod autostart;
 mod browser_keys;
 pub mod catalog;
 mod ckpt;
+mod community_account;
+mod community_catalog;
+mod community_publish;
 mod config;
 mod consult;
 mod crash;
@@ -2617,6 +2620,27 @@ fn voices_open_dir(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn community_links() -> Value {
+    community_catalog::links()
+}
+
+#[tauri::command]
+async fn community_install_voice(
+    state: State<'_, Mutex<AppState>>,
+    asset_id: String,
+    version_id: String,
+    file_id: String,
+    package_path: PathBuf,
+) -> Result<Value, String> {
+    let root = root_clone(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        store::install_community_voice(&root, &asset_id, &version_id, &file_id, &package_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn store_catalog(
     state: State<'_, Mutex<AppState>>,
     prefer_remote: Option<bool>,
@@ -2968,6 +2992,12 @@ pub fn run() {
             voices_promote,
             voices_open_dir,
             store_catalog,
+            community_links,
+            community_install_voice,
+            community_account::community_account_status,
+            community_account::community_account_sign_in,
+            community_account::community_account_sign_out,
+            community_publish::community_publication,
             store_install,
             store_cancel,
             store_staged,

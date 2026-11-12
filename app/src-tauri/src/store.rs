@@ -11,6 +11,7 @@ use serde_json::{json, Map, Value};
 use sha2::Digest;
 use tauri::{AppHandle, Emitter};
 
+use crate::community_catalog::{self, Package};
 use crate::download::{self, DownloadKind, DownloadRequest};
 use crate::paths;
 use crate::voices::safe_model_dir_name;
@@ -87,6 +88,29 @@ fn cancel_flag_for(id: &str) -> Arc<AtomicBool> {
         .clone();
     flag.store(false, Ordering::SeqCst);
     flag
+}
+
+struct CommunityJob<'a> {
+    id: &'a str,
+    cancel: Arc<AtomicBool>,
+}
+
+impl<'a> CommunityJob<'a> {
+    fn start(id: &'a str) -> Result<Self, String> {
+        let mut jobs = STORE_CANCELS.lock().unwrap_or_else(|e| e.into_inner());
+        let jobs = jobs.get_or_insert_with(HashMap::new);
+        let std::collections::hash_map::Entry::Vacant(job) = jobs.entry(id.to_owned()) else {
+            return Err("This Community package is already being processed.".into());
+        };
+        let cancel = job.insert(Arc::new(AtomicBool::new(false))).clone();
+        Ok(Self { id, cancel })
+    }
+}
+
+impl Drop for CommunityJob<'_> {
+    fn drop(&mut self) {
+        drop_cancel_flag(self.id);
+    }
 }
 
 fn drop_cancel_flag(id: &str) {
@@ -456,8 +480,29 @@ fn schedule_catalog_refresh(cache_p: PathBuf) {
     });
 }
 
-/// Fetch / merge online catalog; annotate installed flags.
+/// Merge Community releases into the store while keeping both CNB catalog lists available.
 pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
+    let _ = paths::ensure_user_dirs(root);
+    let (mut catalog, mut entries) = if prefer_remote {
+        std::thread::scope(|scope| {
+            let shared = scope.spawn(|| community_catalog::entries(root, true));
+            (fetch_legacy_store_catalog(root, true), shared.join().unwrap_or_default())
+        })
+    } else {
+        (fetch_legacy_store_catalog(root, false), community_catalog::entries(root, false))
+    };
+    community_catalog::annotate_installed(root, &mut entries);
+    for entry in &mut entries {
+        entry["origin_label"] = json!(crate::i18n::t("nav.plaza"));
+        entry["size_label"] = json!(format_size(entry["size_bytes"].as_u64().unwrap_or(0)));
+    }
+    if let Some(thirdparty) = catalog["thirdparty_voices"].as_array_mut() {
+        thirdparty.extend(entries);
+    }
+    catalog
+}
+
+pub(crate) fn fetch_legacy_store_catalog(root: &Path, prefer_remote: bool) -> Value {
     let _ = paths::ensure_user_dirs(root);
     let mut data = json!({});
     let mut source = "empty";
@@ -993,7 +1038,7 @@ fn write_voice_config(
     source: &str,
     official: bool,
     extra: &Map<String, Value>,
-) -> Value {
+) -> Result<Value, String> {
     let mut side = Map::new();
     side.insert("name".into(), json!(name));
     side.insert(
@@ -1005,26 +1050,26 @@ fn write_voice_config(
     side.insert("fabric_official".into(), json!(official));
     if !index_path.is_empty() {
         side.insert("index".into(), json!(index_path));
-        side.insert("index_files".into(), json!([index_path]));
+        if !extra.contains_key("index_files") {
+            side.insert("index_files".into(), json!([index_path]));
+        }
     }
     for (k, v) in extra {
         if !side.contains_key(k) {
             side.insert(k.clone(), v.clone());
         }
     }
-    let path = dest_dir.join("config.json");
-    if let Ok(text) = serde_json::to_string_pretty(&Value::Object(side.clone())) {
-        let _ = fs::write(path, text);
-    }
-    json!({
+    trm_app_protocol::discovery::write_json(&dest_dir.join("config.json"), &side)
+        .map_err(|e| e.message)?;
+    Ok(json!({
         "name": name,
         "path": dest_pth.to_string_lossy(),
         "file": dest_pth.file_name().and_then(|s| s.to_str()).unwrap_or(""),
-        "dir": dest_dir.to_string_lossy(),
+        "dir": dest_pth.parent().unwrap_or(dest_dir).to_string_lossy(),
         "index": index_path,
         "source": "user_data",
         "online_id": online_id,
-    })
+    }))
 }
 
 /// 每次安装一份独立的解压目录，并发装两个音色才不会互相踩。
@@ -1053,6 +1098,58 @@ fn unique_voice_extract_dir(root: &Path, voice_id: &str) -> PathBuf {
     ))
 }
 
+fn retain_voice_files(
+    old: &Path,
+    new: &Path,
+    excluded: &[&std::ffi::OsStr],
+) -> std::io::Result<()> {
+    fs::create_dir_all(new)?;
+    for entry in fs::read_dir(old)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if excluded.contains(&name.as_os_str()) {
+            continue;
+        }
+        let kind = entry.file_type()?;
+        let destination = new.join(name);
+        if kind.is_dir() {
+            retain_voice_files(&entry.path(), &destination, &[])?;
+        } else if kind.is_file() {
+            fs::hard_link(entry.path(), &destination)
+                .or_else(|_| fs::copy(entry.path(), &destination).map(|_| ()))?;
+        } else {
+            return Err(std::io::Error::other("Could not retain the existing voice files."));
+        }
+    }
+    Ok(())
+}
+
+fn commit_community_voice(
+    dest: &Path,
+    incoming: &Path,
+    backup: &Path,
+    replacing: bool,
+) -> Result<(), String> {
+    if !replacing {
+        if dest.exists() {
+            return Err("A different voice already uses this location.".into());
+        }
+        return fs::rename(incoming, dest).map_err(|e| e.to_string());
+    }
+    fs::rename(dest, backup).map_err(|e| e.to_string())?;
+    if let Err(error) = fs::rename(incoming, dest) {
+        if let Err(restore) = fs::rename(backup, dest) {
+            return Err(format!(
+                "Could not install the update. The original voice is at {}. {restore}",
+                backup.display()
+            ));
+        }
+        return Err(error.to_string());
+    }
+    let _ = fs::remove_dir_all(backup);
+    Ok(())
+}
+
 /// Install a local voice_pack zip into User_Data/models/<id>/.
 /// `entry` 是清单里那条（广场下载时有，本地导入 zip 时没有）。它带着
 /// `name_i18n` 之类的多语言字段，装进本地 `config.json` 才能让模型页按当前
@@ -1076,8 +1173,15 @@ pub fn install_voice_pack_zip(
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let result = (|| {
-        safe_extract_zip(zip_path, &tmp)?;
-        let content = find_content_root(&tmp);
+        let unpacked = tmp.join("unpacked");
+        safe_extract_zip(zip_path, &unpacked)?;
+        let content = find_content_root(&unpacked);
+        let package = entry.map(Package::from_entry).transpose()?.flatten();
+        let known_voices = package.as_ref().map(|_| community_catalog::installed_voices(root));
+        let installed = package
+            .as_ref()
+            .zip(known_voices.as_deref())
+            .and_then(|(package, known)| package.installed(known));
         let pth = find_first(&content, "pth")
             .ok_or_else(|| crate::i18n::t("s.41e7454584"))?;
         let size = pth.metadata().map(|m| m.len()).unwrap_or(0);
@@ -1097,8 +1201,12 @@ pub fn install_voice_pack_zip(
                 Map::new()
             }
         };
-        let vid = safe_model_dir_name(
-            if !voice_id.is_empty() {
+        let vid = if let Some(installed) = installed {
+            installed.id.clone()
+        } else if let Some(package) = &package {
+            package.model_id()
+        } else {
+            safe_model_dir_name(if !voice_id.is_empty() {
                 voice_id
             } else if let Some(s) = pack_cfg
                 .get("voice_id")
@@ -1113,9 +1221,18 @@ pub fn install_voice_pack_zip(
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("voice")
-            },
-        )?;
-        let name = if !display_name.is_empty() {
+            })?
+        };
+        let online_id = installed
+            .map(|voice| voice.config_text("online_id"))
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| package.as_ref().map_or(vid.as_str(), |package| package.asset_id));
+        let name = if let Some(previous_name) = installed
+            .map(|voice| voice.config_text("name"))
+            .filter(|name| !name.is_empty())
+        {
+            previous_name.to_owned()
+        } else if !display_name.is_empty() {
             display_name.to_string()
         } else {
             pack_cfg
@@ -1124,10 +1241,15 @@ pub fn install_voice_pack_zip(
                 .unwrap_or(&vid)
                 .to_string()
         };
-            let dest_dir = paths::models_dir(root).join(&vid);
-        if dest_dir.is_dir() {
+        let dest_dir = paths::models_dir(root).join(&vid);
+        let work_dir = if package.is_some() {
+            tmp.join("ready")
+        } else {
+            dest_dir.clone()
+        };
+        if work_dir.is_dir() {
             // clear previous
-            for e in fs::read_dir(&dest_dir).map_err(|e| e.to_string())? {
+            for e in fs::read_dir(&work_dir).map_err(|e| e.to_string())? {
                 let p = e.map_err(|e| e.to_string())?.path();
                 if p.is_file() {
                     let _ = fs::remove_file(&p);
@@ -1136,52 +1258,106 @@ pub fn install_voice_pack_zip(
                 }
             }
         }
-        fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
-        let dest_pth = dest_dir.join(pth.file_name().unwrap_or_default());
-        fs::copy(&pth, &dest_pth).map_err(|e| crate::i18n::te("s.8c8dade1e1", &(e)))?;
+        fs::create_dir_all(&work_dir).map_err(|e| e.to_string())?;
+        let zip_model_file = pth.file_name().unwrap_or_default();
+        let lower_extension = Path::new(zip_model_file).with_extension("pth");
+        let model_file = if let Some(voice) = installed {
+            voice.pth.file_name().unwrap_or_default()
+        } else if package.is_some() {
+            lower_extension.as_os_str()
+        } else {
+            zip_model_file
+        };
+        let dest_pth = dest_dir.join(model_file);
+        let mut extra = Map::new();
+        if let Some(previous) = installed {
+            retain_voice_files(
+                &dest_dir,
+                &work_dir,
+                &[model_file, std::ffi::OsStr::new("config.json")],
+            )
+            .map_err(|e| e.to_string())?;
+            extra = previous.config.clone();
+        }
+        let work_pth = work_dir.join(model_file);
+        if package.is_some() {
+            fs::rename(&pth, &work_pth)
+        } else {
+            fs::copy(&pth, &work_pth).map(|_| ())
+        }
+        .map_err(|e| crate::i18n::te("s.8c8dade1e1", &e))?;
 
-        let mut index_path = String::new();
+        let previous_index = extra.get("index").and_then(Value::as_str).map(str::to_owned);
+        let mut index_path = previous_index.clone().unwrap_or_default();
         if let Some(idx) = find_first(&content, "index") {
             if idx.metadata().map(|m| m.len()).unwrap_or(0) > 1000 {
-                let dest_idx = dest_dir.join(idx.file_name().unwrap_or_default());
-                fs::copy(&idx, &dest_idx).map_err(|e| e.to_string())?;
-                index_path = dest_idx
-                    .canonicalize()
-                    .unwrap_or(dest_idx)
-                    .to_string_lossy()
-                    .into_owned();
+                let name = idx.file_name().unwrap_or_default();
+                let mut work_idx = work_dir.join(name);
+                if let Some(package) = &package {
+                    if work_idx.exists() {
+                        work_idx = work_dir.join(format!("{}.index", package.staging_id()));
+                    }
+                    if !work_idx.exists() {
+                        fs::rename(&idx, &work_idx).map_err(|e| e.to_string())?;
+                    }
+                    let file = dest_dir.join(work_idx.file_name().unwrap_or_default());
+                    let binding = file.to_string_lossy().into_owned();
+                    if previous_index.is_none() {
+                        index_path = binding.clone();
+                    }
+                    let files = extra
+                        .entry("index_files")
+                        .or_insert_with(|| json!([]));
+                    if let Some(files) = files.as_array_mut() {
+                        if !files.iter().any(|path| path.as_str() == Some(&binding)) {
+                            files.push(json!(binding));
+                        }
+                    }
+                } else {
+                    fs::copy(&idx, &work_idx).map_err(|e| e.to_string())?;
+                    index_path = work_idx
+                        .canonicalize()
+                        .unwrap_or(work_idx)
+                        .to_string_lossy()
+                        .into_owned();
+                }
             }
         }
         // cover
         for name in ["cover.png", "cover.jpg", "cover.jpeg", "cover.webp"] {
             let c = content.join(name);
             if c.is_file() {
-                let _ = fs::copy(&c, dest_dir.join(name));
+                let target = work_dir.join(name);
+                if !target.exists() {
+                    let _ = fs::copy(&c, target);
+                }
                 break;
             }
         }
         // copy profiles if present
         let prof_src = content.join("profiles");
         if prof_src.is_dir() {
-            let prof_dst = dest_dir.join("profiles");
+            let prof_dst = work_dir.join("profiles");
             let _ = fs::create_dir_all(&prof_dst);
             if let Ok(rd) = fs::read_dir(&prof_src) {
                 for e in rd.flatten() {
                     let p = e.path();
                     if p.is_file() {
-                        let _ = fs::copy(&p, prof_dst.join(p.file_name().unwrap_or_default()));
+                        let target = prof_dst.join(p.file_name().unwrap_or_default());
+                        if !target.exists() {
+                            let _ = fs::copy(&p, target);
+                        }
                     }
                 }
             }
         }
 
-        let mut extra = Map::new();
         // 包内 config.json 先抄：官方包自己带作者。空串不能当「已有」——
         // 第三方 zip 经常写 `"author": ""`，以前 contains_key 为真就把清单
         // 里的真作者挡掉，模型页变成「作者 : —」。
         merge_voice_meta(&mut extra, &Value::Object(pack_cfg.clone()));
         if let Some(c) = pack_cfg.get("cover").filter(|v| value_is_filled(v)) {
-            extra.insert("cover".into(), c.clone());
+            extra.entry("cover").or_insert_with(|| c.clone());
         }
         // 作者 / 主页 / 来源 / 日期 / 多作者数组多半只写在清单里。
         if let Some(e) = entry {
@@ -1205,19 +1381,42 @@ pub fn install_voice_pack_zip(
         } else {
             "thirdparty_pack"
         };
-        Ok(write_voice_config(
-            &dest_dir,
-            &dest_pth,
-            &name,
-            &vid,
-            &index_path,
-            source,
-            official,
-            &extra,
-        ))
+        if let Some(package) = &package {
+            extra.insert("community_asset_id".into(), json!(package.asset_id));
+            extra.insert("community_version_id".into(), json!(package.version_id));
+            if let Some(license) = entry.and_then(|entry| entry.get("license")) {
+                extra.insert("license".into(), license.clone());
+            }
+        }
+        let info = write_voice_config(
+            &work_dir, &dest_pth, &name, online_id, &index_path, source, official, &extra,
+        )?;
+        if package.is_some() {
+            let backup = tmp.with_extension("previous");
+            commit_community_voice(&dest_dir, &work_dir, &backup, installed.is_some())?;
+        }
+        Ok(info)
     })();
     let _ = fs::remove_dir_all(&tmp);
     result
+}
+
+pub(crate) fn install_community_voice(
+    root: &Path,
+    asset_id: &str,
+    version_id: &str,
+    file_id: &str,
+    package_path: &Path,
+) -> Result<Value, String> {
+    if !package_path.is_file() {
+        return Err("Choose a downloaded ZIP package.".into());
+    }
+    let _job = CommunityJob::start(asset_id)?;
+    let entry = community_catalog::release_entry(asset_id, version_id, file_id)?;
+    let package = Package::from_entry(&entry)?.ok_or_else(community_catalog::refresh_required)?;
+    package.verify_file(package_path)?;
+    let name = entry["name"].as_str().unwrap_or_default();
+    install_voice_pack_zip(root, package_path, asset_id, name, false, Some(&entry))
 }
 
 /// Download + install one catalog voice entry.
@@ -1236,15 +1435,20 @@ pub fn install_voice_entry(
         .and_then(|v| v.as_str())
         .unwrap_or(&id)
         .to_string();
-    let official = entry
-        .get("official")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let pack_url = entry
-        .get("pack_url")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let package = Package::from_entry(&entry)?;
+    let official = package.is_none() && entry["official"].as_bool().unwrap_or(true);
+    let community_job = package
+        .as_ref()
+        .map(|_| CommunityJob::start(&id))
+        .transpose()?;
+    let pack_url = if let Some(package) = &package {
+        package.download_url().map_err(|error| {
+            crate::logging::shell_log!(format!("community download {id}: {error}"));
+            community_catalog::refresh_required()
+        })?
+    } else {
+        entry["pack_url"].as_str().unwrap_or_default().to_owned()
+    };
     let pth_url = entry
         .get("pth_url")
         .and_then(|v| v.as_str())
@@ -1289,17 +1493,23 @@ pub fn install_voice_entry(
 
     // HF 清单写规范域；下载时扩成镜像列表 —— 见 `voice_download_urls`。
     if !pack_url.is_empty() {
-        let vid = safe_model_dir_name(if id.is_empty() { &name } else { &id })?;
+        let stage_id = package
+            .as_ref()
+            .map(Package::staging_id)
+            .map(Ok)
+            .unwrap_or_else(|| safe_model_dir_name(if id.is_empty() { &name } else { &id }))?;
         let cache = if stage_only {
-            staged_dir(&root, if id.is_empty() { &name } else { &id })?
+            staged_dir(&root, &stage_id)?
         } else {
             paths::update_cache(&root).join("voice_packs")
         };
         fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-        let zpath = cache.join(format!("{vid}.zip"));
+        let zpath = cache.join(format!("{stage_id}.zip"));
         // This download's own flag — cancelling another voice must not touch it.
-        let cancel = cancel_flag_for(&id);
-        let cancel_flag = cancel.clone();
+        let cancel_flag = community_job
+            .as_ref()
+            .map(|job| job.cancel.clone())
+            .unwrap_or_else(|| cancel_flag_for(&id));
 
         let app2 = app.clone();
         let id2 = id.clone();
@@ -1324,8 +1534,16 @@ pub fn install_voice_entry(
             cancel_flag,
             Some(progress),
         );
-        drop_cancel_flag(&id);
+        if community_job.is_none() {
+            drop_cancel_flag(&id);
+        }
         res?;
+        if let Some(package) = &package {
+            if let Err(error) = package.verify_size(&zpath) {
+                let _ = fs::remove_file(&zpath);
+                return Err(error);
+            }
+        }
         if stage_only {
             emit("staged", 1, 1, &crate::i18n::t("s.1245a7db42"));
             return Ok(json!({
@@ -1501,8 +1719,9 @@ pub fn install_voice_entry(
         official,
         &extra,
     );
-    emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
     drop_cancel_flag(&id);
+    let info = info?;
+    emit("done", 1, 1, &crate::i18n::t("s.f423573349"));
     Ok(info)
 }
 
@@ -1599,10 +1818,26 @@ pub fn install_staged(
     let id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
 
-    let official = entry.get("official").and_then(|v| v.as_bool()).unwrap_or(false);
-
-    let dir = staged_dir(&root, if id.is_empty() { &name } else { &id })?;
-    let payload = staged_payload(&dir).ok_or(crate::i18n::t("s.361cb27e7b"))?;
+    let package = Package::from_entry(&entry)?;
+    let official = package.is_none() && entry["official"].as_bool().unwrap_or(false);
+    let _community_job = package
+        .as_ref()
+        .map(|_| CommunityJob::start(&id))
+        .transpose()?;
+    let (dir, payload) = if let Some(package) = &package {
+        let stage_id = package.staging_id();
+        let dir = staged_dir(&root, &stage_id)?;
+        let payload = dir.join(format!("{stage_id}.zip"));
+        if !payload.is_file() {
+            return Err(crate::i18n::t("s.361cb27e7b"));
+        }
+        package.verify_file(&payload)?;
+        (dir, payload)
+    } else {
+        let dir = staged_dir(&root, if id.is_empty() { &name } else { &id })?;
+        let payload = staged_payload(&dir).ok_or_else(|| crate::i18n::t("s.361cb27e7b"))?;
+        (dir, payload)
+    };
 
     let emit = |phase: &str, message: &str| {
         let _ = app.emit(
@@ -1691,9 +1926,9 @@ fn install_staged_files(
         extra.insert("cover".into(), v);
     }
     let source = if official { "online_files" } else { "thirdparty_files" };
-    Ok(write_voice_config(
+    write_voice_config(
         &dest_dir, &dest_pth, name, &vid, &index_path, source, official, &extra,
-    ))
+    )
 }
 
 /// Cancel one voice's download, or every in-flight one when `id` is empty.
@@ -1715,6 +1950,107 @@ pub fn cancel_store_download(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn community_zip_updates_preserve_the_existing_model_path_and_local_settings() {
+        use std::io::Write;
+
+        let root = crate::testutil::scratch("community-voice-update");
+        let model_dir = paths::models_dir(&root).join("legacy-voice");
+        fs::create_dir_all(model_dir.join("profiles")).unwrap();
+        let original = model_dir.join("original.pth");
+        fs::write(&original, b"old weights").unwrap();
+        let profile = model_dir.join("profiles/user.tmvp");
+        fs::write(&profile, b"user settings").unwrap();
+        let index = model_dir.join("custom.index");
+        fs::write(&index, b"user index").unwrap();
+        let config = model_dir.join("config.json");
+        fs::write(
+            &config,
+            json!({
+                "name": "My voice",
+                "online_id": "legacy-voice",
+                "active_profile": "user",
+                "index": index,
+                "index_files": [index],
+                "pitch": 3
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let archive = root.join("incoming.zip");
+        let bytes = vec![3u8; 210_000];
+        let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("different-filename.PTH", options).unwrap();
+        zip.write_all(&bytes).unwrap();
+        zip.start_file("pack.index", options).unwrap();
+        zip.write_all(&[2u8; 1024]).unwrap();
+        zip.finish().unwrap();
+        let mut entry = json!({
+            "id": "public-asset",
+            "community_version_id": "release-v2",
+            "community_file_id": "zip-file",
+            "community_package_path": "models/model.zip",
+            "legacy_catalog_id": "legacy-voice",
+            "size_bytes": fs::metadata(&archive).unwrap().len(),
+            "sha256": format!("{:x}", sha2::Sha256::digest(fs::read(&archive).unwrap())),
+        });
+        let info = install_voice_pack_zip(
+            &root, &archive, "public-asset", "Catalog name", false, Some(&entry),
+        )
+        .unwrap();
+        assert_eq!(info["path"], original.to_string_lossy().as_ref());
+        assert_eq!(fs::read(&original).unwrap(), bytes);
+        assert_eq!(fs::read(profile).unwrap(), b"user settings");
+        assert_eq!(fs::read(&index).unwrap(), b"user index");
+        assert!(model_dir.join("pack.index").is_file());
+        let side = crate::voices::read_sidecar(&model_dir);
+        assert_eq!(side["name"], "My voice");
+        assert_eq!(side["active_profile"], "user");
+        assert_eq!(side["pitch"], 3);
+        assert_eq!(side["online_id"], "legacy-voice");
+        assert_eq!(side["community_asset_id"], "public-asset");
+        assert_eq!(side["community_version_id"], "release-v2");
+        assert_eq!(side["index"], index.to_string_lossy().as_ref());
+        assert_eq!(side["index_files"].as_array().unwrap().len(), 2);
+
+        let mut entries = vec![entry.clone()];
+        community_catalog::annotate_installed(&root, &mut entries);
+        assert_eq!(entries[0]["installed"], true);
+        assert_eq!(entries[0]["update_available"], false);
+        assert_eq!(entries[0]["installed_voice_id"], "legacy-voice");
+
+        entry["community_version_id"] = json!("release-v3");
+        fs::write(&archive, b"invalid ZIP").unwrap();
+        assert!(install_voice_pack_zip(
+            &root, &archive, "public-asset", "Catalog name", false, Some(&entry),
+        )
+        .is_err());
+        assert_eq!(fs::read(&original).unwrap(), bytes);
+        assert_eq!(crate::voices::read_sidecar(&model_dir)["community_version_id"], "release-v2");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn community_catalog_empty_keeps_both_existing_lists_usable() {
+        let root = crate::testutil::scratch("community-legacy-catalog");
+        paths::ensure_user_dirs(&root).unwrap();
+        fs::write(
+            cache_catalog_path(&root),
+            json!({
+                "voices": [{"id": "official-voice", "pack_url": "https://example.org/one.zip"}],
+                "thirdparty_voices": [{"id": "other-voice", "pth_url": "https://example.org/two.pth"}]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let catalog = fetch_store_catalog(&root, false);
+        assert_eq!(catalog["voices"][0]["id"], "official-voice");
+        assert_eq!(catalog["thirdparty_voices"][0]["id"], "other-voice");
+        let _ = fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn stale_catalog_inherits_bundled_translations_without_overwriting_remote() {

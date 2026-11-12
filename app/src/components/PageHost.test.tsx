@@ -3,7 +3,7 @@
  * C-01 页面生命周期回归：离场的页在推移期间保持挂载、不重新初始化；
  * 切页 N 次后台账无净增长。
  */
-import { act } from "react";
+import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mountCounts, resetMountCounts } from "../lib/lifecycle";
 import type { PageId } from "../lib/nav";
@@ -15,11 +15,17 @@ const pages: PageId[] = ["home", "models", "plaza", "more", "settings", "help"];
 
 function Stub({ id }: { id: PageId }) {
   const active = usePageActive();
-  return <div data-testid={`pane-${id}`} data-active={String(active)}>{id}</div>;
+  const [draft, setDraft] = useState("");
+  return (
+    <div data-testid={`pane-${id}`} data-active={String(active)}>
+      {id}
+      {id === "plaza" && <button onClick={() => setDraft("Voice draft")}>{draft || "Edit"}</button>}
+    </div>
+  );
 }
 
-function host(page: PageId) {
-  return <PageHost page={page}>{(id) => <Stub id={id} />}</PageHost>;
+function host(page: PageId, keepCommunity?: boolean) {
+  return <PageHost page={page} keepCommunity={keepCommunity}>{(id) => <Stub id={id} />}</PageHost>;
 }
 
 describe("PageHost lifecycle (C-01)", () => {
@@ -94,5 +100,43 @@ describe("PageHost lifecycle (C-01)", () => {
     });
     // 只剩当前页一层在台上。
     expect(net).toBe(1);
+  });
+
+  it("retains only Community and its state through 100 switches when requested", async () => {
+    m = mount(host("home", true));
+    const findPane = (id: PageId) => m.container.querySelector(`[data-testid="pane-${id}"]`);
+    expect(findPane("plaza")).toBeNull();
+
+    act(() => m.root.render(host("plaza", true)));
+    await settle();
+    const community = findPane("plaza")!;
+    act(() => community.querySelector("button")!.click());
+
+    for (let i = 0; i < 100; i += 1) {
+      const next = pages[i % pages.length];
+      act(() => m.root.render(host(next, true)));
+      await settle();
+
+      const expected = new Set<PageId>([next, "plaza"]);
+      for (const id of pages) {
+        const pane = findPane(id);
+        if (expected.has(id)) {
+          expect(pane?.getAttribute("data-active")).toBe(String(id === next));
+        } else {
+          expect(pane).toBeNull();
+        }
+      }
+      expect(findPane("plaza")).toBe(community);
+      expect(community.parentElement?.hasAttribute("inert")).toBe(next !== "plaza");
+      expect(community.parentElement?.getAttribute("aria-hidden")).toBe(next === "plaza" ? null : "true");
+      expect(community.querySelector("button")?.textContent).toBe("Voice draft");
+    }
+
+    expect(mountCounts().get("page:plaza")).toEqual({ mounts: 1, unmounts: 0 });
+    const lastPage = pages[99 % pages.length];
+    for (const id of pages) {
+      const count = mountCounts().get(`page:${id}`)!;
+      expect(count.mounts - count.unmounts).toBe(id === "plaza" || id === lastPage ? 1 : 0);
+    }
   });
 });

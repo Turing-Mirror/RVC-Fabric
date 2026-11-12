@@ -107,6 +107,14 @@ export type StoreVoice = {
   source_url?: string;
   official?: boolean;
   installed?: boolean;
+  installed_voice_id?: string;
+  update_available?: boolean;
+  community_version_id?: string;
+  community_file_id?: string;
+  community_package_path?: string;
+  community_staging_id?: string;
+  legacy_catalog_id?: string;
+  license?: { id?: string; url?: string; text?: string };
 };
 
 export type StoreCatalog = {

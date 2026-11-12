@@ -29,7 +29,7 @@ import { Select } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
 import { CatalogTransition } from "./CatalogTransition";
-import { CatalogCover, useDir, useMenu, type MenuItem } from "trm-ui";
+import { CatalogCover, useDir, useMenu, usePageActive, usePaneOn, type MenuItem } from "trm-ui";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -137,8 +137,15 @@ type Props = {
   onInstalled?: () => void;
 };
 
+function stagingId(voice: StoreVoice) {
+  return voice.community_staging_id || voice.id;
+}
+
 export function StoreSection({ reloadToken, onInstalled }: Props) {
   const { locale } = useI18n();
+  const pageActive = usePageActive();
+  const paneActive = usePaneOn();
+  const active = pageActive && paneActive;
   const [cat, setCat] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<Source>("all");
@@ -196,12 +203,13 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     }
   }, []);
 
-  // 首次挂载和每次「刷新」都走这里。reloadToken 初值也算一次，所以不用再单独
-  // 写一个只跑一次的 effect。
+  // Refresh on entry and when the user clicks Refresh. The mounted catalog
+  // keeps its filters and page while the user opens another view.
   useEffect(() => {
+    if (!pageActive) return;
     void refresh(true);
     void loadStaged();
-  }, [reloadToken, refresh, loadStaged]);
+  }, [pageActive, reloadToken, refresh, loadStaged]);
 
   // A job that finished while this page was unmounted still has to refresh the
   // catalog and the staged list, otherwise the card stays on 「下载」.
@@ -214,14 +222,15 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   }, [jobs.generation, jobs.lastCompleted, jobs.lastCompletedThird, loadStaged, refresh, onInstalled]);
 
   useEffect(() => {
-    if (!scrollToId || !staged[scrollToId]) return;
+    if (!active || !scrollToId) return;
+    const voice = cat?.thirdparty_voices?.find((entry) => entry.id === scrollToId);
+    if (!staged[voice ? stagingId(voice) : scrollToId]) return;
     const el = document.getElementById(`store-voice-${scrollToId}`);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
-    const btn = el?.querySelector<HTMLElement>(".confirm-install");
-    btn?.focus();
+    el?.querySelector<HTMLElement>(".confirm-install")?.focus();
     setScrollToId("");
-  }, [scrollToId, staged]);
+  }, [active, cat, scrollToId, staged]);
 
   // 列数跟着容器宽度走，和模型页同一个函数。
   useEffect(() => {
@@ -249,7 +258,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           : [...official, ...third];
     // 一律按收录日期倒序。分组视图也排，这样每个系列内部顺序是稳定的。
     base.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-    if (hideInstalled) base = base.filter((v) => !v.installed);
+    if (hideInstalled) base = base.filter((v) => !v.installed || v.update_available);
     const qq = q.trim().toLowerCase();
     if (qq) {
       base = base.filter((v) =>
@@ -429,14 +438,14 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
 
   const viewStaged = async (v: StoreVoice) => {
     try {
-      await revealStagedVoice(v.id);
+      await revealStagedVoice(stagingId(v));
     } catch (e) {
       setErr(String(e));
     }
   };
 
   const discard = async (v: StoreVoice) => {
-    const s = staged[v.id];
+    const s = staged[stagingId(v)];
     if (
       !(await askConfirm(
         t("s.de94f39aff", { v0: s?.file || v.name }),
@@ -444,7 +453,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     )
       return;
     try {
-      await discardStagedVoice(v.id);
+      await discardStagedVoice(stagingId(v));
       await loadStaged();
     } catch (e) {
       setErr(String(e));
@@ -452,7 +461,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   };
 
   const install = async (v: StoreVoice) => {
-    if (v.installed || running.includes(v.id) || queued.includes(v.id)) return;
+    if ((v.installed && !v.update_available) || running.includes(v.id) || queued.includes(v.id)) return;
     if (v.official !== false && !officialAck) {
       const ok = await askConfirm(
         t("s.9a9349a407") +
@@ -484,7 +493,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
     progress: prog[v.id],
     onInstall: () => void install(v),
     onCancel: () => cancelOne(v.id),
-    staged: staged[v.id],
+    staged: staged[stagingId(v)],
     onView: () => void viewStaged(v),
     onInstallStaged: () => void installStaged(v),
     onDiscard: () => void discard(v),
@@ -581,7 +590,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
           />{t("s.85b3f0512b")}</label>
       </div> : null}
 
-      {source !== "official" && Boolean(cat?.thirdparty_voices?.length) ? (
+      {source !== "official" && cat?.thirdparty_voices?.some((voice) => !voice.community_version_id) ? (
         <Warn className="mb-3">{t("s.7fe9bcf336")}</Warn>
       ) : null}
 
@@ -892,6 +901,8 @@ function VoiceCard({
     /^https?:\/\//i.test(a.url || ""),
   );
   const sourceUrl = (v.source_url || "").trim();
+  const license = v.license?.id || v.license?.text;
+  const licenseUrl = v.license?.url;
   const menu = useMenu();
   const links: MenuItem[] = [];
   if (authors.length) {
@@ -906,6 +917,9 @@ function VoiceCard({
   if (/^https?:\/\//i.test(sourceUrl)) {
     links.push({ id: "source", label: t("s.voiceLinkSource"), onSelect: () => void openExternal(sourceUrl) });
   }
+  if (licenseUrl && /^https:\/\//i.test(licenseUrl)) {
+    links.push({ id: "license", label: t("community.license"), onSelect: () => void openExternal(licenseUrl) });
+  }
 
   return (
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
@@ -913,6 +927,7 @@ function VoiceCard({
         sources={sources}
         placeholder={(title || v.id || "?").slice(0, 4)}
         release={ver}
+        detail={v.community_version_id ? t("nav.plaza") : undefined}
         progress={busy && !staged ? progress?.percent ?? 0 : undefined}
         connecting={busy && !staged && (progress?.done ?? 0) <= 0}
       />
@@ -930,11 +945,12 @@ function VoiceCard({
           {meta}
         </div>
       ) : null}
+      {license && <div className="text-[11.5px] text-[var(--meta)] truncate" title={license}>{license}</div>}
       <Leave>{authorPick ? (
         <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
       ) : null}</Leave>
       <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-        {v.installed ? (
+        {v.installed && !v.update_available ? (
           <Btn on disabled>
             {t("s.eb88ff57c9")}
           </Btn>
@@ -970,7 +986,7 @@ function VoiceCard({
           </>
         ) : (
           <Btn primary onClick={onInstall}>
-            {t("s.2b9d013177")}
+            {v.update_available ? t("community.update") : t("s.2b9d013177")}
           </Btn>
         )}
         {links.length ? (

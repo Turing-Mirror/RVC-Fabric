@@ -18,7 +18,7 @@ type State = { error: Error | null; stack: string };
 const ebBtn: CSSProperties = {
   fontSize: 13,
   padding: "6px 12px",
-  borderRadius: "var(--rs)",
+  borderRadius: "var(--rs, 8px)",
   border: "1px solid var(--line, #cfd6dd)",
   background: "transparent",
   color: "var(--ink, #1e242b)",

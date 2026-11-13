@@ -147,7 +147,7 @@ export function WebDialogHost() {
             ref={okRef}
             type="button"
             onClick={() => finish(req.kind === "prompt" ? draft : true)}
-            className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+            className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent-fill)] text-[var(--accent-ink)] border-0 cursor-pointer"
           >
             {t("dialog.ok")}
           </button>

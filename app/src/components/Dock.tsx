@@ -267,7 +267,7 @@ export function Dock({
           onClick={onToggleRun}
           className={[
             "border-0 rounded-[var(--rs)] px-7 py-3 cursor-pointer whitespace-nowrap",
-            "text-sm font-semibold bg-[var(--accent)] text-[var(--accent-ink)]",
+            "text-sm font-semibold bg-[var(--accent-fill)] text-[var(--accent-ink)]",
             // 不加彩色光晕。悬停只是稍微压暗一点 —— 按钮周围散出一圈强调色的
             // 光是纯装饰，跟状态没有任何关系。
             "transition-[transform,filter] duration-200 ease-[var(--spring)]",

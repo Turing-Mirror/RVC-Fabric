@@ -240,7 +240,7 @@ export function DiagnosticsDialog({
           <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
             {t("s.diagShots")}
           </span>
-          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-relaxed">
+          <p className="m-0 mb-2 text-[12.5px] text-[var(--meta)] leading-relaxed">
             {t("s.diagShotsHint")}
           </p>
           {shots.length ? (
@@ -259,7 +259,7 @@ export function DiagnosticsDialog({
                     onClick={() =>
                       setShots((prev) => prev.filter((x) => x.id !== sh.id))
                     }
-                    className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full border-0 cursor-pointer bg-[var(--surface)] text-[12px] leading-none text-[var(--meta)] shadow-[0_0_0_1px_var(--line)] hover:text-[var(--ink)]"
+                    className="absolute -right-1.5 -top-1.5 h-5 w-5 rounded-full border-0 cursor-pointer bg-[var(--surface)] text-[12.5px] leading-none text-[var(--meta)] shadow-[0_0_0_1px_var(--line)] hover:text-[var(--ink)]"
                   >
                     ×
                   </button>
@@ -286,7 +286,7 @@ export function DiagnosticsDialog({
             {t("s.diagShotsAdd")}
           </Btn>
           {shotMsg ? (
-            <p className="m-0 mt-1.5 text-[12px] text-[var(--ink-muted)]">{shotMsg}</p>
+            <p className="m-0 mt-1.5 text-[12.5px] text-[var(--ink-muted)]">{shotMsg}</p>
           ) : null}
         </div>
 
@@ -309,11 +309,11 @@ export function DiagnosticsDialog({
             {t("s.diagFindingsTitle")}
           </span>
           {findings === null ? (
-            <p className="m-0 text-[12px] text-[var(--meta)]">
+            <p className="m-0 text-[12.5px] text-[var(--meta)]">
               {t("s.diagFindingsChecking")}
             </p>
           ) : findings.length === 0 ? (
-            <p className="m-0 text-[12px] text-[var(--meta)]">
+            <p className="m-0 text-[12.5px] text-[var(--meta)]">
               {t("s.diagFindingsNone")}
             </p>
           ) : (
@@ -324,12 +324,12 @@ export function DiagnosticsDialog({
         {/* 用户要把这个包发到群里，所以得先说清楚里面有什么、没有什么。
             光说不够 —— 底下那份清单是这句话的凭据，他自己能看一眼。 */}
         <div className="mb-4 rounded-[var(--rs)] bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] px-3 py-2">
-          <p className="m-0 text-[12px] text-[var(--meta)] leading-relaxed">
+          <p className="m-0 text-[12.5px] text-[var(--meta)] leading-relaxed">
             {t("s.diagPrivacy")}
           </p>
           {preview ? (
             <details className="mt-1.5">
-              <summary className="cursor-pointer text-[12px] text-[var(--meta)] select-none">
+              <summary className="cursor-pointer text-[12.5px] text-[var(--meta)] select-none">
                 {t("s.diagFilesSummary", {
                   a0: String(preview.items.length + shots.length),
                   a1: humanBytes(
@@ -348,7 +348,7 @@ export function DiagnosticsDialog({
                 ].map((f) => (
                   <li
                     key={f.name}
-                    className="flex justify-between gap-3 font-mono text-[11px] text-[var(--meta)] leading-relaxed"
+                    className="flex justify-between gap-3 font-mono text-[11.5px] text-[var(--meta)] leading-relaxed"
                   >
                     <span className="truncate">{f.name}</span>
                     <span className="shrink-0 tabular-nums">

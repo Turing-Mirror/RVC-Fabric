@@ -195,7 +195,7 @@ export function DspPresetEditor({
   return (
     <div className="mt-9">
       <div className="flex items-center gap-3 mb-2">
-        <h4 className="m-0 text-[14px] font-semibold flex items-center gap-[9px]">
+        <h4 className="m-0 text-[13px] font-semibold flex items-center gap-[9px]">
           {t("s.dspEditTitle", { v0: preset.name })}
           <HelpMark title={dspTips().edit} />
         </h4>
@@ -228,7 +228,7 @@ export function DspPresetEditor({
                 <button
                   type="button"
                   onClick={() => removeEffect(effect)}
-                  className="ml-auto border-0 bg-transparent p-0 text-[12px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
+                  className="ml-auto border-0 bg-transparent p-0 text-[12.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
                 >
                   {t("s.dspRemoveEffect")}
                 </button>

@@ -423,7 +423,7 @@ function ItemExtras({
     ].join(" ");
   return (
     // 字号写在容器上：全局 button { font: inherit } 会盖掉按钮自己的字号类。
-    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight">
+    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11.5px] leading-tight">
       <button
         type="button"
         className={pill(pitch != null)}
@@ -1539,7 +1539,7 @@ function StsSection() {
           </Btn>
         </div>
         {!blocked && modelName ? (
-          <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
+          <p className="m-0 px-0 pb-1 text-[12.5px] text-[var(--meta)]">
             {joinClauses([t("s.6c415e91bb", { v0: modelName }), !!indexPath && t("s.0ca99fa9f1")])}
           </p>
         ) : null}
@@ -1566,7 +1566,7 @@ function StsSection() {
               {targets.slice(1).map((v) => (
                 <span
                   key={v.path}
-                  className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] py-1 pl-2.5 pr-1.5 text-[12px]"
+                  className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] py-1 pl-2.5 pr-1.5 text-[12.5px]"
                 >
                   {voiceLabel(v)}
                   <button
@@ -1648,7 +1648,7 @@ function StsSection() {
                     {parent}
                   </span>
                   {miss ? (
-                    <span className="shrink-0 text-[11px] text-[var(--danger-text)]">
+                    <span className="shrink-0 text-[11.5px] text-[var(--danger-text)]">
                       {miss.state === "unreadable"
                         ? t("s.stsUnreadableTag")
                         : t("s.stsMissingTag")}
@@ -1705,7 +1705,7 @@ function StsSection() {
                 title={t("s.stsRecord")}
               >
                 <div
-                  className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-75"
+                  className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-100"
                   style={{
                     width: `${
                       recording
@@ -1879,7 +1879,7 @@ function StsSection() {
                         <span className="ml-2 font-sans text-[var(--meta)]">{t("s.metaSource", { v0: f.source_name })}</span>
                       ) : null}
                     </span>
-                    <span className="block text-[11px] text-[var(--meta)] tabular-nums">
+                    <span className="block text-[11.5px] text-[var(--meta)] tabular-nums">
                       {f.excluded
                         ? f.excluded_by_dir
                           ? t("s.stsExcludedByDir")
@@ -2195,7 +2195,7 @@ function StsSection() {
               style={{ width: `${running && pct < 2 ? 2 : pct}%` }}
             />
           </div>
-          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12px] text-[var(--meta)]">
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12.5px] text-[var(--meta)]">
             <p className="m-0 min-w-0 flex-1 break-all">
               {prog?.message || t("s.090840132b")}
             </p>
@@ -2236,14 +2236,14 @@ function StsSection() {
       ) : null}
       {skipped.length ? (
         <div className={retryable.length && !running ? "pt-1" : "mt-3 pt-2"}>
-          <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
+          <p className="m-0 mb-1 text-[12.5px] text-[var(--meta)]">
             {t("s.stsSkippedTitle", { v0: skipped.length })}
           </p>
           <ul className="m-0 list-none p-0">
             {skipped.map((s) => (
               <li
                 key={`${s.file}|${s.tag ?? ""}`}
-                className="py-0.5 text-[12px] text-[var(--meta)] break-all"
+                className="py-0.5 text-[12.5px] text-[var(--meta)] break-all"
               >
                 {t("s.itemReason", {
                   v0: s.tag ? t("s.labelWithDetail", { v0: s.name, v1: s.tag }) : s.name,
@@ -2421,7 +2421,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
 
       <textarea
         className={[
-          "w-full min-h-[120px] rounded-[var(--rs)] border px-3 py-2.5 text-[13.5px] leading-relaxed",
+          "w-full min-h-[120px] rounded-[var(--rs)] border px-3 py-2.5 text-[13px] leading-relaxed",
           "bg-transparent text-[var(--ink)] resize-y",
           over ? "border-[var(--danger)]" : "border-[var(--hairline)]",
         ].join(" ")}
@@ -2431,7 +2431,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
       />
       <p
         className={[
-          "m-0 mt-1.5 text-[12px] text-right tabular-nums",
+          "m-0 mt-1.5 text-[12.5px] text-right tabular-nums",
           over ? "text-[var(--danger-text)]" : "text-[var(--meta)]",
         ].join(" ")}
       >
@@ -2491,7 +2491,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
             />
             {st.model_name || t("s.9bbf6a5dce")}
           </label>
-          <span className="text-[12px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
+          <span className="text-[12.5px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
         </div>
         {/* 只显示当前模式那一路。两行并排摆出来的话，用户改了不用的那一行却
             以为改的是这一次要用的，比不给还糟。 */}
@@ -2537,7 +2537,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
               style={{ width: `${prog.total ? Math.round((prog.done / prog.total) * 100) : 0}%` }}
             />
           </div>
-          <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">{prog.message}</p>
+          <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{prog.message}</p>
         </div>
       ) : null}
 

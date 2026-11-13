@@ -87,7 +87,7 @@ function PinCard({ item, onPick }: { item: PlazaItem; onPick: () => void }) {
           <CoverPlaceholder name={label} seed={item.id} />
         )}
       </div>
-      <div className="mt-2 text-[13.5px] leading-snug truncate">{label}</div>
+      <div className="mt-2 text-[13px] leading-snug truncate">{label}</div>
     </button>
   );
 }

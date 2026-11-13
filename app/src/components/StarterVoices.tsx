@@ -48,7 +48,7 @@ export function StarterVoices({ onInstalled, onOpenPlaza }: { onInstalled: () =>
             <div key={v.id} className="rise bg-[var(--group)] rounded-[var(--r)] overflow-hidden" style={stagger(i)}>
               <div className="aspect-[16/9] bg-[color-mix(in_srgb,var(--accent)_10%,var(--group))]" style={cover ? { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
               <div className="px-4 py-3">
-                <div className="text-[14px] font-semibold truncate">{displayVoiceName(v, locale)}</div>
+                <div className="text-[13px] font-semibold truncate">{displayVoiceName(v, locale)}</div>
                 <div className="mt-0.5 text-[11.5px] text-[var(--meta)] truncate">{joinClauses([v.series && t("s.metaSeries", { v0: v.series }), v.size_label && t("s.metaSize", { v0: v.size_label })])}</div>
                 <div className="mt-3 flex items-center gap-2">
                   {running || queued ? (

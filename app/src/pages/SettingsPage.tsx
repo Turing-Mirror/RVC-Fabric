@@ -1248,7 +1248,7 @@ function HotkeyGroups({
       className="w-full max-w-[400px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
     <div className="flex flex-col">
       <p className={HOTKEY_GROUP_TITLE}>{t("audio.hotkeyGroupVoice")}</p>
-      {voiceRows.length === 0 ? <p className="text-[12px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
+      {voiceRows.length === 0 ? <p className="text-[12.5px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
         <HotkeyRow
           key={h.key}
           label={labels[h.action] ?? h.action}
@@ -1390,7 +1390,7 @@ function HotkeyRow({
       {/* 「全局」逐个可关。全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
           用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在
           RVC Fabric 是当前窗口时有效，机器上其他软件照常用得着。 */}
-      <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12px] text-[var(--meta)] cursor-pointer select-none">
+      <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] cursor-pointer select-none">
         <input
           type="checkbox"
           checked={isGlobal}
@@ -1419,7 +1419,7 @@ function HotkeyRow({
       >
         {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
-      {status ? <span className="ml-2 text-[12px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
+      {status ? <span className="ml-2 text-[12.5px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
       {recordError ? <span role="alert" className="text-[var(--danger-text)]">{t("audio.hotkeySuspendFailed")}</span> : null}
       {saveError ? <span role="alert" className="text-[var(--danger-text)]">{saveError}</span> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}

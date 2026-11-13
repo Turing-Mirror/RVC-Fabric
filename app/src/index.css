@@ -182,8 +182,10 @@ input[type="checkbox"]:disabled {
   *,
   *::before,
   *::after {
+    /* design-allow: 减少动态效果时必须近乎立即完成动画，同时保留动画结束事件。 */
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    /* design-allow: 减少动态效果时必须近乎立即完成过渡，同时保留过渡结束事件。 */
     transition-duration: 0.001ms !important;
   }
 }

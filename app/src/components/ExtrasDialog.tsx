@@ -234,7 +234,7 @@ export function ExtrasPanel({
     <>
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
           {title ? (
-            <h3 className="m-0 text-[17px] font-semibold">{title}</h3>
+            <h3 className="m-0 text-[16px] font-semibold">{title}</h3>
           ) : null}
           <SegmentControl<Category>
             className={title ? "" : "ml-auto"}
@@ -268,14 +268,14 @@ export function ExtrasPanel({
         >
           <div className="flex items-start gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
-              <div className="text-[13.5px] font-semibold">
+              <div className="text-[13px] font-semibold">
                 {t("extras.engineTitle")}
                 {engineReady === true ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
                 ) : engineReady === false ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--accent-text)]">{t("s.f9cbb1e0c6")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--accent-text)]">{t("s.f9cbb1e0c6")}</span>
                 ) : (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
                 )}
               </div>
               <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
@@ -295,7 +295,7 @@ export function ExtrasPanel({
                       style={{ width: `${corePct}%` }}
                     />
                   </div>
-                  <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
+                  <p className="m-0 mt-1.5 text-[12.5px] text-[var(--meta)]">
                     {joinClauses([
                       coreProg.message || t("s.65188d08a2"),
                       coreProg.speed_label && t("s.metaSpeed", { v0: coreProg.speed_label }),
@@ -365,7 +365,7 @@ export function ExtrasPanel({
                 >{t("s.67a246a344")}</Btn>
               </div>
             ) : (
-              <p className="m-0 pt-3 text-[12px] text-[var(--meta)] text-center tabular-nums">
+              <p className="m-0 pt-3 text-[12.5px] text-[var(--meta)] text-center tabular-nums">
                 {t("extras.countItems", { n: filtered.length })}
               </p>
             )}

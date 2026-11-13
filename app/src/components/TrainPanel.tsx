@@ -489,7 +489,7 @@ export function TrainPanel() {
               <li key={i} className="relative py-2 first:pt-0">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先做哪个。 */}
-                  <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
+                  <span className="font-mono text-[11.5px] text-[var(--meta)] shrink-0">
                     {c.level === "must" ? t("s.trainCheckMust") : t("s.trainCheckShould")}
                   </span>
                   <p
@@ -528,7 +528,7 @@ export function TrainPanel() {
                 {inspecting ? t("s.trainInspecting") : t("s.trainInspect")}
               </Btn>
               {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
-                <span className="text-[12px] text-[var(--meta)]">
+                <span className="text-[12.5px] text-[var(--meta)]">
                   {t("s.trainInspectResult", {
                     a0: String(inspect.sampled),
                     a1: humanSeconds(inspect.estimated_total_seconds ?? 0),
@@ -541,19 +541,19 @@ export function TrainPanel() {
           {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
             <div className="mb-2 flex flex-col gap-1">
               {(inspect.estimated_total_seconds ?? 0) < 600 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectShort")}
                 </p>
               ) : null}
               {(inspect.median_seconds ?? 0) > 60 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectLong", {
                     v0: humanSeconds(inspect.median_seconds ?? 0),
                   })}
                 </p>
               ) : null}
               {(inspect.sample_rates?.length ?? 0) > 1 ? (
-                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--meta)] leading-snug">
                   {t("s.trainInspectMixedRate", {
                     v0: (inspect.sample_rates ?? [])
                       .map((r) => `${Math.round(r.rate / 1000)}k×${r.files}`)
@@ -564,21 +564,21 @@ export function TrainPanel() {
               {/* 阈值只给相对判断用的「值得看一眼」线，不是承诺：偏轻到什么程度
                   该重录，取决于用户能接受什么质量。 */}
               {inspect.mean_volume_db != null && inspect.mean_volume_db < -35 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectQuiet", {
                     v0: inspect.mean_volume_db.toFixed(1),
                   })}
                 </p>
               ) : null}
               {(inspect.silence_ratio ?? 0) > 0.6 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectSilent", {
                     v0: Math.round((inspect.silence_ratio ?? 0) * 100),
                   })}
                 </p>
               ) : null}
               {(inspect.channels?.length ?? 0) > 1 ? (
-                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--meta)] leading-snug">
                   {t("s.trainInspectMixedCh", {
                     v0: (inspect.channels ?? [])
                       .map((c) => `${c.channels}ch×${c.files}`)
@@ -591,7 +591,7 @@ export function TrainPanel() {
           {dataset ? (
             <p
               className={
-                "m-0 mb-2 text-[12px] leading-snug " +
+                "m-0 mb-2 text-[12.5px] leading-snug " +
                 (scan && scan.files === 0
                   ? "text-[var(--ink-muted)] font-semibold"
                   : "text-[var(--meta)]")
@@ -623,7 +623,7 @@ export function TrainPanel() {
               }}
             >{t("s.70b208202c")}</Btn>
           </div>
-          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+          <p className="m-0 mb-2 text-[12.5px] text-[var(--meta)] leading-snug">
             {t("s.trainOutHint")}
           </p>
           <div className={ROW}>
@@ -648,11 +648,11 @@ export function TrainPanel() {
                 label: p.sample_rate + (p.ready ? "" : t("s.3d19649847")),
               }))}
             />
-            <span className="text-[12px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
+            <span className="text-[12.5px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
           </div>
           {/* 只给相对判断，不给「48k 需要 8 GB」这种绝对承诺 —— 那取决于批大小、
               数据集长度和显卡，说死了就会有人拿着它来对账。 */}
-          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+          <p className="m-0 mb-2 text-[12.5px] text-[var(--meta)] leading-snug">
             {t("s.trainSrCost")}
             {onlyHighSrReady ? ` ${t("s.trainSrOnly48")}` : ""}
           </p>
@@ -666,7 +666,7 @@ export function TrainPanel() {
               value={epochs}
               onChange={(e) => setEpochs(Number(e.target.value) || 1)}
             />
-            <span className="text-[12px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
+            <span className="text-[12.5px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -686,7 +686,7 @@ export function TrainPanel() {
               }}
             />
             {st.suggested_batch ? (
-              <span className="text-[12px] text-[var(--meta)]">
+              <span className="text-[12.5px] text-[var(--meta)]">
                 {t("s.trainSuggested", { v0: st.suggested_batch })}
               </span>
             ) : null}
@@ -733,14 +733,14 @@ export function TrainPanel() {
 
         {st.experiments && st.experiments.length > 0 ? (
           <div className="mt-3">
-            <div className="text-[12px] text-[var(--meta)] mb-1.5">{t("s.trainExps")}</div>
+            <div className="text-[12.5px] text-[var(--meta)] mb-1.5">{t("s.trainExps")}</div>
             <div className="flex flex-wrap gap-1.5">
               {st.experiments.map((e) => (
                 <button
                   key={e.name}
                   type="button"
                   className={[
-                    "text-[12px] px-2 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
+                    "text-[12.5px] px-2 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
                     e.name === name.trim()
                       ? "bg-[var(--accent-soft)] text-[var(--ink)]"
                       : "bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] text-[var(--ink-muted)]",
@@ -778,12 +778,12 @@ export function TrainPanel() {
               })}
             </p>
             {existing && existing.complete === false ? (
-              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+              <p className="m-0 mt-1 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                 {t("s.trainStagesIncomplete")}
               </p>
             ) : null}
             {existing && (existing.preprocess_failed ?? 0) > 0 ? (
-              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+              <p className="m-0 mt-1 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                 {t("s.trainPreprocessFailed", {
                   a0: String(existing.preprocess_failed),
                   a1: String(existing.preprocess_ok ?? 0),
@@ -796,7 +796,7 @@ export function TrainPanel() {
               <div className="mt-1">
                 <Btn
                   onClick={() => setShowFailed((v) => !v)}
-                  className="!py-1 !px-2 text-[12px]"
+                  className="!py-1 !px-2 text-[12.5px]"
                 >
                   {showFailed
                     ? t("s.trainFailedHide")

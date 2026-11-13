@@ -71,7 +71,7 @@ describe("首页使用中徽标", () => {
     expect(m.container.textContent).not.toContain(badge);
     // 主角位（横幅下的 accent 行）显示的是占位文案，不是目录第一条。
     const hero = m.container.querySelector(
-      "p.text-\\[19px\\]",
+      "p.text-\\[16px\\]",
     ) as HTMLElement | null;
     expect(hero).not.toBeNull();
     expect(hero!.textContent).toBe(t("s.262d11e2d6"));
@@ -99,7 +99,7 @@ describe("首页使用中徽标", () => {
     await tick();
     await tick();
     const hero = m.container.querySelector(
-      "p.text-\\[19px\\]",
+      "p.text-\\[16px\\]",
     ) as HTMLElement | null;
     expect(hero!.textContent).toContain("乙");
     // 徽章只出现一次 —— 在乙的卡上。

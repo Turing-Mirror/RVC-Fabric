@@ -276,8 +276,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
-          <p className="text-[19px] m-0">{" "}</p>
+          <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
+          <p className="text-[16px] m-0">{" "}</p>
           <HeroEmblem />
         </div>
       </div>
@@ -291,7 +291,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
+          <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? t("s.c4a98bd0e6", { v0: loadError })
@@ -317,8 +317,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
         className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5"
         style={{ background: STAGE_BG }}
       >
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
-        <p className="text-[19px] font-semibold text-[var(--accent-text)] m-0">
+        <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
+        <p className="text-[16px] font-semibold text-[var(--accent-text)] m-0">
           {current ? current.name : t("s.262d11e2d6")}
         </p>
         {/* 副标题不再有固定文案 —— 那句「切换立即生效 · 运行中可无缝换音色」
@@ -398,23 +398,23 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                       <CoverPlaceholder name={title} seed={modelKey(v)} />
                     )}
                     {ver ? (
-                      <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                      <span className="absolute left-2.5 top-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
                         {ver}
                       </span>
                     ) : null}
                     {pend ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)]">{t("dock.switching")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)]">{t("dock.switching")}</span>
                     ) : cur && hasSelection ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)]">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (
-                      <span className="absolute right-2.5 bottom-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
                   <div
                     className={[
                       "font-semibold mt-0.5 leading-snug",
-                      cur ? "text-[14.5px]" : "text-[13.5px]",
+                      cur ? "text-[15px]" : "text-[13px]",
                     ].join(" ")}
                   >
                     {title}
@@ -452,10 +452,10 @@ function DspHomeEntry({ onOpen }: { onOpen?: () => void }) {
           "active:scale-[0.985]",
         ].join(" ")}
       >
-        <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+        <div className="text-[13px] font-semibold text-[var(--ink)]">
           {t("s.dspHomeOpen")}
         </div>
-        <div className="text-[12px] text-[var(--meta)] mt-1">{t("s.dspHomeDesc")}</div>
+        <div className="text-[12.5px] text-[var(--meta)] mt-1">{t("s.dspHomeDesc")}</div>
       </button>
     </Block>
   );
@@ -471,8 +471,8 @@ function HomeAudioEntries({ onOpenDsp, onOpenAudio }: { onOpenDsp?: () => void; 
         onClick={onOpenAudio}
         className="w-full text-left border-0 cursor-pointer rounded-[var(--r)] px-4 py-3.5 bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-[transform,background] duration-200 ease-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] active:scale-[0.985]"
       >
-        <div className="text-[13.5px] font-semibold text-[var(--ink)]">{t("audio.open")}</div>
-        <div className="text-[12px] text-[var(--meta)] mt-1">{t("audio.homeDesc")}</div>
+        <div className="text-[13px] font-semibold text-[var(--ink)]">{t("audio.open")}</div>
+        <div className="text-[12.5px] text-[var(--meta)] mt-1">{t("audio.homeDesc")}</div>
       </button>
     </Block>
   </div>;
@@ -520,10 +520,10 @@ function ToolShortcuts() {
               "active:scale-[0.985]",
             ].join(" ")}
           >
-            <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+            <div className="text-[13px] font-semibold text-[var(--ink)]">
               {it.label}
             </div>
-            <div className="text-[12px] text-[var(--meta)] mt-1">{it.desc}</div>
+            <div className="text-[12.5px] text-[var(--meta)] mt-1">{it.desc}</div>
           </button>
         ))}
       </div>

@@ -240,7 +240,7 @@ export function SeparatePanel() {
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
+            <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">
               {prog.message} {prog.phase === "run" ? `${pct}%` : ""}
             </p>
           </div>

@@ -193,7 +193,7 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
     conflict: t("audio.hotkeyConflictStatus"),
   };
 
-  return <div className="space-y-3 text-[12px] text-[var(--meta)]">
+  return <div className="space-y-3 text-[12.5px] text-[var(--meta)]">
     <div className="flex items-center gap-3">
       <span className="text-[13px] text-[var(--ink)]">{title ?? t("audio.hotkeySection")}</span>
       <Btn disabled={busy || arming || (group === "entries" && available.length === 0)} onClick={add}>{t("audio.hotkeyAdd")}</Btn>

@@ -18,7 +18,7 @@ type State = { error: Error | null; stack: string };
 const ebBtn: CSSProperties = {
   fontSize: 13,
   padding: "6px 12px",
-  borderRadius: 6,
+  borderRadius: "var(--rs)",
   border: "1px solid var(--line, #cfd6dd)",
   background: "transparent",
   color: "var(--ink, #1e242b)",
@@ -60,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
           userSelect: "text",
         }}
       >
-        <div style={{ fontSize: 17, color: "var(--ink, #1e242b)" }}>{t("s.61f43bf584")}</div>
+        <div style={{ fontSize: 16, color: "var(--ink, #1e242b)" }}>{t("s.61f43bf584")}</div>
         <div>{t("s.d851b62cf4")}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -90,7 +90,7 @@ export class ErrorBoundary extends Component<Props, State> {
             overflow: "auto",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
-            fontSize: 12,
+            fontSize: 12.5,
             color: "var(--meta, #8a949e)",
           }}
         >

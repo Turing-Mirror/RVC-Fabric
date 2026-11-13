@@ -156,7 +156,7 @@ export function Overlay() {
     >
       <div
         data-tauri-drag-region
-        className="flex h-full flex-col overflow-hidden rounded-[13px]"
+        className="flex h-full flex-col overflow-hidden rounded-[var(--r)]"
         style={{ background: "rgba(16, 19, 24, 0.74)" }}
       >
         <div data-tauri-drag-region className="flex h-[52px] flex-none items-center gap-2.5 px-3">
@@ -217,9 +217,9 @@ export function Overlay() {
           className="flex h-[44px] flex-none items-center gap-2 border-t px-3"
           style={{ borderColor: "rgba(238, 242, 247, 0.14)" }}>
           <div data-tauri-drag-region className="min-w-0 flex-1" title={audio.name}>
-            <div data-tauri-drag-region className="flex items-center gap-1.5 text-[11px] text-white">
+            <div data-tauri-drag-region className="flex items-center gap-1.5 text-[11.5px] text-white">
               <span data-tauri-drag-region className="min-w-0 flex-1 truncate">{audio.name}</span>
-              {audio.active_count > 1 ? <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-[11px] text-[#b5bec9] hover:text-white"
+              {audio.active_count > 1 ? <button type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-[11.5px] text-[#b5bec9] hover:text-white"
                 aria-label={t("audio.morePlaying", { count: audio.active_count - 1 })}
                 title={t("audio.morePlaying", { count: audio.active_count - 1 })}
                 onPointerDown={(e) => e.stopPropagation()}

@@ -263,11 +263,11 @@ function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasF
       >
         <Group>
           {loading && !changelog.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
+            <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.f950213ab7")}</p>
           ) : shown.length ? (
             shown.map((e) => <Notes key={e.version} entry={e} />)
           ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
+            <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.0a432092e4")}</p>
           )}
         </Group>
       </Block>
@@ -304,7 +304,7 @@ function ChangelogPage({ changelog, onBack }: { changelog: ChangelogEntry[]; onB
             {slice.length ? (
               slice.map((e) => <Notes key={e.version} entry={e} />)
             ) : (
-              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
+              <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.0a432092e4")}</p>
             )}
           </Group>
         </CatalogTransition>
@@ -332,7 +332,7 @@ function Notes({ entry }: { entry: ChangelogEntry }) {
         {entry.notes.map((t) => (
           <li
             key={t}
-            className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['•'] before:absolute before:left-1.5 before:text-[var(--meta)]"
+            className="text-[13px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['•'] before:absolute before:left-1.5 before:text-[var(--meta)]"
           >
             {t}
           </li>
@@ -394,13 +394,13 @@ function Feed({
         <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
       )}
       <div>
-        <h4 className="m-0 mb-1.5 text-[14.5px] font-semibold flex items-center gap-2 flex-wrap">
+        <h4 className="m-0 mb-1.5 text-[15px] font-semibold flex items-center gap-2 flex-wrap">
           {item.title}
           {tags.map((t) => (
             <span
               key={t.label}
               className={[
-                "text-[11.5px] px-2 py-0.5 rounded-[5px] whitespace-nowrap shadow-[inset_0_0_0_1px_var(--line)]",
+                "text-[11.5px] px-2 py-0.5 rounded-[var(--rs)] whitespace-nowrap shadow-[inset_0_0_0_1px_var(--line)]",
                 t.ad
                   ? "text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]"
                   : "text-[var(--meta)]",

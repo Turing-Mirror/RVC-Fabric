@@ -217,7 +217,7 @@ function ToolWinBtn({
       onClick={onClick}
       className={[
         "w-9 h-[30px] grid place-items-center text-xs rounded-md border-0 bg-transparent cursor-pointer",
-        "text-[var(--meta)] transition-[background,color] duration-150 ease-[var(--ease)]",
+        "text-[var(--meta)] transition-[background,color] duration-200 ease-[var(--ease)]",
         danger
           ? "hover:bg-[#e81123] hover:text-white"
           : "hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-[var(--ink)]",

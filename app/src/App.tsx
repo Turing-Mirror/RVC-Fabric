@@ -1390,7 +1390,7 @@ export default function App() {
             aria-modal="true"
             className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
           >
-            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
+            <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">{t("s.killStsAskBody")}</p>
             <div className="flex gap-2.5 justify-end">
               <button
@@ -1415,7 +1415,7 @@ export default function App() {
             aria-modal="true"
             className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
           >
-            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
+            <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
             <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
               <input

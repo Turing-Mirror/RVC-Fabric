@@ -115,7 +115,7 @@ export function DspPresetGrid({
 
   if (list == null) {
     return (
-      <div className="text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
+      <div className="text-[13px] text-[var(--ink-muted)] py-10 px-2">
         {t("s.dspPresetsLoading")}
       </div>
     );
@@ -125,7 +125,7 @@ export function DspPresetGrid({
   }
   if (!view.length) {
     return (
-      <div className="text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
+      <div className="text-[13px] text-[var(--ink-muted)] py-10 px-2">
         {query ? t("s.041c85897b", { v0: query }) : t("s.dspNoPresets")}
       </div>
     );
@@ -142,16 +142,16 @@ export function DspPresetGrid({
           <div key={p.id}>
             <div className="aspect-[4/3] rounded-[var(--r)] relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] p-3.5 flex flex-col justify-end">
               {/* 预设没有立绘，画它用到哪几个效果器 —— 那才是用户想知道的 */}
-              <div className="text-[12px] text-[var(--ink-muted)] leading-relaxed line-clamp-4">
+              <div className="text-[12.5px] text-[var(--ink-muted)] leading-relaxed line-clamp-4">
                 {effectNames(p)}
               </div>
               {cur ? (
-                <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)] font-semibold">
+                <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)] font-semibold">
                   {t("s.e6aa2cbd7b")}
                 </span>
               ) : null}
               {p.source === "user" ? (
-                <span className="absolute left-2.5 top-2.5 text-[11px] text-[var(--meta)]">
+                <span className="absolute left-2.5 top-2.5 text-[11.5px] text-[var(--meta)]">
                   {t("s.dspPresetMine")}
                 </span>
               ) : null}
@@ -159,7 +159,7 @@ export function DspPresetGrid({
             <div className="text-[11.5px] text-[var(--meta)] mt-2.5">
               {t("s.dspPresetTag")}
             </div>
-            <div className="text-[14.5px] font-semibold mt-0.5 truncate">{p.name}</div>
+            <div className="text-[15px] font-semibold mt-0.5 truncate">{p.name}</div>
             <div className="text-xs text-[var(--meta)] mt-0.5 truncate">
               {presetDescription(p, locale)}
             </div>

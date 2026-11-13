@@ -156,7 +156,7 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
                 <article key={item.id} className="flex flex-wrap items-center gap-3 py-3">
                   {isDraft && item.cover && <img src={item.cover} alt="" draggable={false} className="h-12 w-16 shrink-0 rounded-[var(--rs)] object-cover" />}
                   <div className="min-w-[170px] flex-1">
-                    <div className="break-words text-[14px] font-semibold">{title || t("publication.untitled")}</div>
+                    <div className="break-words text-[13px] font-semibold">{title || t("publication.untitled")}</div>
                     {description && <p className="m-0 mt-1 break-words text-[13px] text-[var(--ink-muted)]">{description}</p>}
                     <p className="m-0 mt-1 text-xs text-[var(--meta)]">{date(item.updatedAt)}</p>
                     {note && <p className="m-0 mt-2 whitespace-pre-wrap break-words text-[13px] text-[var(--ink-muted)]">{note}</p>}
@@ -184,7 +184,7 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
       {pages > 1 && <Pager page={current} pages={pages} onChange={setPage} />}
       <Modal open={active && Boolean(confirm)} onClose={() => { if (!applying) setConfirm(undefined); }}
         label={t(confirm?.kind === "draft" ? "publication.removeDraft" : "publication.withdraw")} width={400}>
-        <p className="mt-0 text-[14px]">{t(confirm?.kind === "draft" ? "publication.removeDraftConfirm" : "publication.withdrawConfirm")}</p>
+        <p className="mt-0 text-[13px]">{t(confirm?.kind === "draft" ? "publication.removeDraftConfirm" : "publication.withdrawConfirm")}</p>
         <div className="flex justify-end gap-2">
           <Btn disabled={applying} onClick={() => setConfirm(undefined)}>{uiText("ui.common.cancel")}</Btn>
           <Btn primary busy={applying} onClick={() => void apply()}>{uiText("ui.common.confirm")}</Btn>

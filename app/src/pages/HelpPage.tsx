@@ -432,7 +432,7 @@ function HelpPageImpl({
         action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
       >
         <div id="help-vbcable" className="scroll-mt-4">
-          <div className="text-[13.5px] font-medium mb-2">{t("s.b386a7fb53")}</div>
+          <div className="text-[13px] font-medium mb-2">{t("s.b386a7fb53")}</div>
 
           <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
           {/* 先照着用户机器上真实的设备列表说一句话。
@@ -500,33 +500,33 @@ function HelpPageImpl({
   
         </div>
         <div id="help-wiring" className="mt-7 scroll-mt-4">
-          <div className="text-[13.5px] font-medium mb-2">{t("s.149ab7bf0a")}</div>
+          <div className="text-[13px] font-medium mb-2">{t("s.149ab7bf0a")}</div>
 
           <Group>
             <ListItem
               title={t("s.69f4bc1200")}
               desc={t("s.0f14377cdd")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
             />
             <ListItem
               title={t("s.b4b5016e9f")}
               desc={t("s.0709bd6ae7")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Input</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">CABLE Input</span>}
             />
             <ListItem
               title={t("s.6f63f33852")}
               desc={t("s.2898cbf891")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
             />
             <ListItem
               title={t("s.d0a420e1ca")}
               desc={t("s.cad046a475")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">CABLE Output</span>}
             />
             <ListItem
               title={t("s.364b26a260")}
               desc={t("s.26ad7c406b")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
             />
           </Group>
   

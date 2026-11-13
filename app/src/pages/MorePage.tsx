@@ -308,14 +308,14 @@ export function MorePage({
           <ListItem
             title={t("s.a8f48b775b")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">{shownValue(version)}</span>
+              <span className="text-[13px] text-[var(--ink-muted)]">{shownValue(version)}</span>
             }
           />
           <ListItem
             title={t("s.2a4b19a6b1")}
             right={
               <span
-                className="text-[13.5px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
+                className="text-[13px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
                 title={root || undefined}
               >
                 {shownValue(root)}
@@ -330,13 +330,13 @@ export function MorePage({
               (status?.product_root ? String(status.product_root) : t("s.002dcbcd28"))
             }
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">{runtimeLine}</span>
+              <span className="text-[13px] text-[var(--ink-muted)]">{runtimeLine}</span>
             }
           />
           <ListItem
             title={t("s.f41830a38d")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
+              <span className="text-[13px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
                 {gpus}
               </span>
             }
@@ -365,7 +365,7 @@ export function MorePage({
             desc={backendMismatch ? t("s.computeBackendWarn") : undefined}
             right={
               <span
-                className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate"
+                className="text-[13px] text-[var(--ink-muted)] max-w-[220px] text-right truncate"
                 title={backendLine}
               >
                 {backendLine}
@@ -383,7 +383,7 @@ export function MorePage({
             }
             right={
               <span className="flex items-center gap-2">
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                <span className="text-[13px] text-[var(--ink-muted)]">
                   {runtimeVariantLabel(provision?.recommended_variant) ||
                     provision?.recommended_variant ||
                     t("s.notDetected")}
@@ -399,7 +399,7 @@ export function MorePage({
           <ListItem
             title={t("s.fbb8ddd570")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">
+              <span className="text-[13px] text-[var(--ink-muted)]">
                 {status
                   ? joinClauses([statusTitle(status), !!status.pid && t("s.metaPid", { v0: String(status.pid) })])
                   : t("s.valueLoading")}
@@ -408,7 +408,7 @@ export function MorePage({
           />
           <ListItem
             title={t("s.746fcbb99c")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{latency}</span>}
+            right={<span className="text-[13px] text-[var(--ink-muted)]">{latency}</span>}
           />
         </Group>
       </Block>

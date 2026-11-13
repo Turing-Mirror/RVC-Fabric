@@ -161,7 +161,7 @@ export function Dock({
           >
             <div
               className={
-                "absolute inset-y-0 left-0 rounded-sm transition-[width,background-color] duration-75 linear " +
+                "absolute inset-y-0 left-0 rounded-sm transition-[width,background-color] duration-100 linear " +
                 (over
                   ? "bg-[var(--accent)]"
                   : "bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]")

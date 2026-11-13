@@ -49,3 +49,8 @@ tools/soundtouch/COPYING.TXT
 PySimpleGUI
 https://github.com/PySimpleGUI/PySimpleGUI/blob/master/license.txt
 LPGLv3 License
+
+Noto Sans SC
+https://github.com/notofonts/noto-cjk/blob/main/Sans/LICENSE
+SIL Open Font License 1.1
+docs/licenses/NotoSansSC-OFL.txt

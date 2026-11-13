@@ -148,9 +148,9 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     <WaveformRange duration={duration} peaks={waveform.peaks} start={start} end={end}
       currentTime={currentTime} playing={playing} disabled={disabled || busy}
       label={t("neptune.waveform")} onRangeChange={(nextStart, nextEnd) => { setStart(nextStart); setEnd(nextEnd); }} />
-    {waveform.loading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
-    {waveform.error ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
-    <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
+    {waveform.loading ? <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
+    {waveform.error ? <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
+    <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
     <div className="flex flex-wrap items-center gap-3">
       <label>{t("neptune.trimStart")} <input type="number" min={0} max={end} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(start) ? start.toFixed(2) : ""} onChange={(e) => setStart(Number(e.target.value))} /></label>
@@ -176,7 +176,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
       }}>{t("neptune.previewSelection")}</Btn>
       <Btn disabled={!canApply || busy || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
     </div>
-    <p className="m-0 text-[12px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
+    <p className="m-0 text-[12.5px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
   </div>;
 }
 

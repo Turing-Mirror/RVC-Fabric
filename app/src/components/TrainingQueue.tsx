@@ -22,7 +22,7 @@ export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, 
   };
   return <div className="mt-4 flex flex-col min-h-0 gap-2.5">
     <div className="flex items-center justify-between gap-2">
-      <h3 className="text-[15.5px] font-semibold m-0">{t("trainingQueue.Title")}</h3>
+      <h3 className="text-[15px] font-semibold m-0">{t("trainingQueue.Title")}</h3>
       {jobs.some(terminalJob) ? <Btn disabled={pending.includes("")} onClick={() => void action("", "clear")}>{t("trainingQueue.Clear")}</Btn> : null}
     </div>
     {error ? <ErrorNote text={error} /> : null}
@@ -40,17 +40,17 @@ export function TrainingQueue({ jobs, error, loaded = true, waitingForRealtime, 
                 <span className="font-medium break-all">{job.req.exp}</span>
                 <Tag tone={job.state === "failed" ? "warn" : running || job.state === "completed" ? "accent" : "muted"}>{t(STATE_KEYS[job.state])}</Tag>
               </div>
-              <div className="text-[12px] text-[var(--meta)]">{job.req.sample_rate}</div>
-              <div className="text-[12px] text-[var(--help)]">{t("trainingQueue.Parameters", { v0: String(job.req.total_epoch), v1: String(job.req.batch_size) })}</div>
+              <div className="text-[12.5px] text-[var(--meta)]">{job.req.sample_rate}</div>
+              <div className="text-[12.5px] text-[var(--help)]">{t("trainingQueue.Parameters", { v0: String(job.req.total_epoch), v1: String(job.req.batch_size) })}</div>
               {running ? <>
-                <div className="flex justify-between gap-2 text-[12px] text-[var(--help)]">
+                <div className="flex justify-between gap-2 text-[12.5px] text-[var(--help)]">
                   <span>{stage && stage in STAGE_KEYS ? t(STAGE_KEYS[stage]) : t("trainingQueue.Running")}</span>
                   <span className="tabular-nums">{job.progress?.total ? `${job.progress.done ?? 0} / ${job.progress.total}` : ""}</span>
                 </div>
                 <div className="h-[5px] rounded-full bg-[var(--line)] overflow-hidden">
-                  <div className="h-full bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${trainPercent(job)}%` }} />
+                  <div className="h-full bg-[var(--accent)] transition-[width] duration-200" style={{ width: `${trainPercent(job)}%` }} />
                 </div>
-                {eta ? <div className="text-[12px] text-[var(--meta)]">{eta}</div> : null}
+                {eta ? <div className="text-[12.5px] text-[var(--meta)]">{eta}</div> : null}
               </> : null}
               {job.state === "failed" && job.error ? <ErrorNote text={job.error} code={job.progress?.message_code} extraAction={job.progress?.message_code === "train.oom" && onBatch ? { label: t("s.errActBatch"), run: onBatch } : null} /> : null}
               <div className="flex items-center gap-2 flex-wrap">

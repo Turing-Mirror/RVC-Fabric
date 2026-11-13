@@ -232,7 +232,7 @@ export function StorageSection() {
                         <input type="checkbox" className={check} disabled={empty || busy} checked={train[row.exp]?.has(k.id) ?? false} onChange={() => toggleTrain(row.exp, k.id)} />
                         <span>{t(k.labelKey)}</span>
                         <span className="text-[11.5px] text-[var(--meta)]">{t(k.effectKey)}</span>
-                        <span className="ml-auto font-mono text-[11px] text-[var(--meta)] tabular-nums">{human(info?.bytes ?? 0)}</span>
+                        <span className="ml-auto font-mono text-[11.5px] text-[var(--meta)] tabular-nums">{human(info?.bytes ?? 0)}</span>
                       </label>
                     );
                   })}

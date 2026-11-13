@@ -131,7 +131,7 @@ export function MicTest({ deviceReady }: { deviceReady: boolean }) {
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="relative h-1.5 w-[140px] shrink-0 overflow-hidden rounded-sm bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
             <div
-              className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-75"
+              className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-100"
               style={{ width: `${busy ? barPercent(peak) : 0}%` }}
             />
           </div>

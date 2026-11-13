@@ -28,10 +28,10 @@ export function AdBanner({ banner }: { banner: PlazaItem | null }) {
         />
       ) : null}
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold flex items-center gap-2 flex-wrap">
+        <div className="text-[13px] font-semibold flex items-center gap-2 flex-wrap">
           {item.title}
           {item.is_ad ? (
-            <span className="text-[11.5px] px-2 py-0.5 rounded-[5px] whitespace-nowrap text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]">{t("s.3d13883b98")}</span>
+            <span className="text-[11.5px] px-2 py-0.5 rounded-[var(--rs)] whitespace-nowrap text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]">{t("s.3d13883b98")}</span>
           ) : null}
         </div>
         {item.body ? (

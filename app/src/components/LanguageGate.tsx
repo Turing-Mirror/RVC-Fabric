@@ -49,7 +49,7 @@ export function LanguageGate({ open, onDone }: Props) {
         <p className="text-[13px] text-[var(--help)] m-0 mb-1 leading-relaxed">
           {t("onboarding.languageDesc")}
         </p>
-        <p className="text-[12px] text-[var(--meta)] m-0 mb-5 leading-relaxed">
+        <p className="text-[12.5px] text-[var(--meta)] m-0 mb-5 leading-relaxed">
           {t("onboarding.languageSystemHint", {
             lang: t(
               LOCALES.find((l) => l.id === system)?.labelKey || "locale.zh-CN",
@@ -72,7 +72,7 @@ export function LanguageGate({ open, onDone }: Props) {
                 }}
                 className={[
                   "text-left border-0 rounded-[var(--rs)] px-3.5 py-2.5 cursor-pointer",
-                  "text-[13.5px] transition-colors",
+                  "text-[13px] transition-colors",
                   on
                     ? "bg-[var(--accent-soft)] text-[var(--ink)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_40%,transparent)]"
                     : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] text-[var(--ink-muted)]",

@@ -202,7 +202,7 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
                     aria-pressed={active}
                     onClick={() => setVariant(row.id)}
                     className={[
-                      "text-left border-0 rounded-[var(--rs)] px-3.5 py-2.5 cursor-pointer text-[13.5px] transition-colors",
+                      "text-left border-0 rounded-[var(--rs)] px-3.5 py-2.5 cursor-pointer text-[13px] transition-colors",
                       active
                         ? "bg-[var(--accent-soft)] text-[var(--ink)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_40%,transparent)]"
                         : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] text-[var(--ink-muted)]",

@@ -595,7 +595,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
       ) : null}
 
       {err || jobs.error ? (
-        <div className="mb-3 text-[12px] leading-relaxed whitespace-pre-line break-words text-[var(--danger-text)]">
+        <div className="mb-3 text-[12.5px] leading-relaxed whitespace-pre-line break-words text-[var(--danger-text)]">
           {err || jobs.error}
         </div>
       ) : null}
@@ -636,8 +636,8 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                           })
                         }
                       >
-                          <span className="font-semibold text-[14px]">{node.label}</span>
-                        <span className="text-[12px] text-[var(--meta)]">
+                          <span className="font-semibold text-[13px]">{node.label}</span>
+                        <span className="text-[12.5px] text-[var(--meta)]">
                           {t("s.c8542337dc", {
                             v0: node.voices.length,
                             v1: openS ? t("s.5d5815647c") : t("s.b0e24833f7"),
@@ -666,7 +666,7 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
                                   }
                                 >
                                   <span className="text-[13px]">{g.label}</span>
-                                  <span className="text-[12px] text-[var(--meta)]">
+                                  <span className="text-[12.5px] text-[var(--meta)]">
                                     {t("s.c8542337dc", {
                                       v0: g.voices.length,
                                       v1: openG
@@ -932,7 +932,7 @@ function VoiceCard({
         progress={busy && !staged ? progress?.percent ?? 0 : undefined}
         connecting={busy && !staged && (progress?.done ?? 0) <= 0}
       />
-      <div className="text-[14.5px] font-semibold mt-2.5 truncate" title={title}>
+      <div className="text-[15px] font-semibold mt-2.5 truncate" title={title}>
         {title}
       </div>
       <div

@@ -481,7 +481,7 @@ function ModelsPageImpl({
       {msg ? (
         <div
           role="status"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[95] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
         >
           {msg}
         </div>
@@ -574,9 +574,9 @@ function ModelsPageImpl({
           }}
         >
           {!loaded ? null : !models.length ? (
-            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
+            <div className="col-span-full text-[13px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
           ) : !view.length ? (
-            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
+            <div className="col-span-full text-[13px] text-[var(--ink-muted)] py-10 px-2">
               {t("s.041c85897b", { v0: query })}
             </div>
           ) : (
@@ -609,23 +609,23 @@ function ModelsPageImpl({
                     {(ver || v.missing) ? (
                       <span className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1">
                         {ver ? (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                          <span className="text-[11.5px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
                             {ver}
                           </span>
                         ) : null}
                         {v.missing ? (
-                          <span className="text-[11px] text-[var(--danger-text)]">{t("s.2fe9b75856")}</span>
+                          <span className="text-[11.5px] text-[var(--danger-text)]">{t("s.2fe9b75856")}</span>
                         ) : null}
                       </span>
                     ) : null}
                     {cur ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
-                      <span className="absolute right-2.5 bottom-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
-                  <div className="text-[14.5px] font-semibold mt-2.5 truncate">
+                  <div className="text-[15px] font-semibold mt-2.5 truncate">
                     {title}
                   </div>
                   <div

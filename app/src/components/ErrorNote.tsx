@@ -57,7 +57,7 @@ export function ErrorNote({
         {hasMore ? (
           <details className="mt-1 text-[var(--meta)]">
             <summary className="cursor-pointer">{t("s.errDetails")}</summary>
-            <pre className="m-0 max-h-[144px] overflow-auto whitespace-pre-wrap break-all text-[11px]">{detail}</pre>
+            <pre className="m-0 max-h-[144px] overflow-auto whitespace-pre-wrap break-all text-[11.5px]">{detail}</pre>
           </details>
         ) : null}
       </div>
@@ -101,7 +101,7 @@ export function ErrorNote({
         {head}
       </p>
       {open && hasMore ? (
-        <pre className="mt-1.5 mb-0 max-h-[168px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-[var(--meta)] leading-relaxed">
+        <pre className="mt-1.5 mb-0 max-h-[168px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11.5px] text-[var(--meta)] leading-relaxed">
           {detail}
         </pre>
       ) : null}

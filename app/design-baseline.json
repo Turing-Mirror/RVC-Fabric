@@ -1,7 +1,7 @@
 {
-  "fontSize": 164,
-  "radius": 4,
-  "duration": 10,
-  "zIndex": 3,
+  "fontSize": 0,
+  "radius": 0,
+  "duration": 0,
+  "zIndex": 0,
   "rawInput": 47
 }

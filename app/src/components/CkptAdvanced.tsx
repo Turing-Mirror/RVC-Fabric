@@ -6,7 +6,7 @@ import { Field, RangeBar, Select, SliderValue } from "./controls";
 import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
-import { pickPath } from "../lib/nativeDialog";
+import { pickPath } from "trm-ui/fabric";
 import { TOOL_BOX } from "./Select";
 
 type Tab = "merge" | "change" | "extract" | "onnx";

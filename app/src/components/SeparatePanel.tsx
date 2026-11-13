@@ -10,7 +10,7 @@ import { openHelpSection } from "../lib/helpNav";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { extraModelLabel } from "../lib/extraModels";
-import { pickPath } from "../lib/nativeDialog";
+import { pickPath } from "trm-ui/fabric";
 import { TOOL_BOX } from "./Select";
 
 type Status = {

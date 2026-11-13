@@ -46,7 +46,7 @@ import {
   voiceSearchText,
   voiceVersionLabel,
 } from "../lib/voiceDisplay";
-import { askConfirm } from "../lib/webDialog";
+import { askConfirm } from "trm-ui/fabric";
 import { openExternal } from "../lib/plaza";
 import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
@@ -925,7 +925,8 @@ function VoiceCard({
     <div id={v.id ? `store-voice-${v.id}` : undefined}>
       <CatalogCover
         sources={sources}
-        placeholder={(title || v.id || "?").slice(0, 4)}
+        placeholder={title || v.id || ""}
+        seed={v.id || title}
         release={ver}
         detail={v.community_version_id ? t("nav.plaza") : undefined}
         progress={busy && !staged ? progress?.percent ?? 0 : undefined}

@@ -11,8 +11,8 @@ import { CkptAdvanced } from "./CkptAdvanced";
 import { ErrorNote } from "./ErrorNote";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
-import { pickPath } from "../lib/nativeDialog";
-import { askConfirm } from "../lib/webDialog";
+import { pickPath } from "trm-ui/fabric";
+import { askConfirm } from "trm-ui/fabric";
 import { auditionVoice } from "../lib/audition";
 import { TOOL_BOX } from "./Select";
 

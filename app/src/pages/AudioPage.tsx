@@ -8,7 +8,7 @@ import { Collapse, Leave } from "../components/Presence";
 import { Curtain, FlowList, Roll } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
 import { Select, Slider, SliderValue } from "../components/controls";
-import { askConfirm } from "../lib/webDialog";
+import { askConfirm } from "trm-ui/fabric";
 import { promptAudioTools } from "../lib/downloadModels";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";

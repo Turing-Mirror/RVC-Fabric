@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
-import { ThumbImage, usePageLeave } from "trm-ui";
+import { CoverPlaceholder, ThumbImage, usePageLeave } from "trm-ui";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
 import { useConfigSnapshot } from "../hooks/useConfigSnapshot";
@@ -395,7 +395,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                         className="absolute inset-0 w-full h-full object-contain"
                       />
                     ) : (
-                      <span>{(title || "?").slice(0, 4)}</span>
+                      <CoverPlaceholder name={title} seed={modelKey(v)} />
                     )}
                     {ver ? (
                       <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
@@ -408,7 +408,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
                   <div

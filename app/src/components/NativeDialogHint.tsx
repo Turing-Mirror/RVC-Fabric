@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { subscribeNativeDialogHint } from "../lib/nativeDialog";
+import { subscribeNativeDialogHint } from "trm-ui/fabric";
 
 /**
  * 原生选择对话框开着时那条横幅。

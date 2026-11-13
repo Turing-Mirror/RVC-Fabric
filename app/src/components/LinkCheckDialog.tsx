@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { QrDialog } from "./QrDialog";
 import { openHelpSection } from "../lib/helpNav";
-import { copyText } from "../lib/clipboard";
+import { copyText } from "trm-ui";
 import qqGroup from "../assets/qq_group.jpg";
 import { t } from "../i18n/t";
 import { Modal } from "./Modal";

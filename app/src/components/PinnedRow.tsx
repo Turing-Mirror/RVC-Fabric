@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CoverPlaceholder } from "trm-ui";
 import { colsForWidth } from "../lib/voices";
 import type { PlazaItem } from "../lib/plaza";
 
@@ -83,7 +84,7 @@ function PinCard({ item, onPick }: { item: PlazaItem; onPick: () => void }) {
             className="absolute inset-0 w-full h-full object-contain"
           />
         ) : (
-          <span>{label.slice(0, 4)}</span>
+          <CoverPlaceholder name={label} seed={item.id} />
         )}
       </div>
       <div className="mt-2 text-[13.5px] leading-snug truncate">{label}</div>

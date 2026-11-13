@@ -47,11 +47,11 @@ vi.mock("@tauri-apps/api/window", () => ({
 vi.mock("../lib/voices", () => ({
   listVoices: vi.fn(async () => ({ models: [], selected_idx: -1 })),
 }));
-vi.mock("../lib/nativeDialog", () => ({ pickPath: dialogs.pickPath }));
-vi.mock("../lib/webDialog", () => ({
+vi.mock("trm-ui/fabric", async (orig) => ({ ...(await orig<typeof import("trm-ui/fabric")>()), ...({
+  pickPath: dialogs.pickPath,
   askConfirm: dialogs.askConfirm,
   askPrompt: dialogs.askPrompt,
-}));
+}) }));
 vi.mock("../lib/helpNav", () => ({ openHelpSection: vi.fn() }));
 vi.mock("../lib/downloadModels", () => ({ openDownloadModels: vi.fn() }));
 

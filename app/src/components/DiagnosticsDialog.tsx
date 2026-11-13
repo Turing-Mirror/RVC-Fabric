@@ -8,7 +8,7 @@ import {
   imageFilesFrom,
   prepareShot,
   type Shot,
-} from "../lib/shots";
+} from "trm-ui/fabric";
 import { Modal } from "./Modal";
 
 /** 出包之前的文件清单。bytes 为 null 表示这份是出包时现生成的。 */

@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { PageHost as SlideHost } from "trm-ui";
 import { PAGE_IDS, navDirection, type PageId } from "../lib/nav";
-import { noteMount, noteUnmount } from "../lib/lifecycle";
+import { noteMount, noteUnmount } from "trm-ui/fabric";
 
 type Props = {
   page: PageId;

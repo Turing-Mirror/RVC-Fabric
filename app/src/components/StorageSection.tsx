@@ -4,7 +4,7 @@ import { Block, Btn } from "./ui";
 import { Ring, type RingSegment } from "./Ring";
 import { CatalogTransition } from "./CatalogTransition";
 import { Pager } from "./Pager";
-import { askConfirm } from "../lib/webDialog";
+import { askConfirm } from "trm-ui/fabric";
 import { useI18n } from "../i18n";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 

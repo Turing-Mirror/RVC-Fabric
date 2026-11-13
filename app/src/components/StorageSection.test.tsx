@@ -4,7 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, type Mounted } from "../test/dom";
 const mocks = vi.hoisted(() => ({ invoke: vi.fn(), confirm: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
-vi.mock("../lib/webDialog", () => ({ askConfirm: mocks.confirm }));
+vi.mock("trm-ui/fabric", async (orig) => ({ ...(await orig<typeof import("trm-ui/fabric")>()), ...({ askConfirm: mocks.confirm }) }));
 import { StorageSection } from "./StorageSection";
 import { t } from "../i18n/t";
 

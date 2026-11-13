@@ -1,6 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Config } from "./config";
-import { NEUTRAL_TONE, sampleWallpaper } from "./wallpaperTone";
+import { NEUTRAL_TONE, sampleWallpaper } from "trm-ui";
 
 /**
  * 外观：配色 + 背景图 + 磨砂 + 不透明度。

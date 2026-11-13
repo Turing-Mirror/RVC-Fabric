@@ -4,7 +4,7 @@ import { useModalKeys } from "../hooks/useModalKeys";
 import {
   registerDialogHandler,
   type DialogRequest,
-} from "../lib/webDialog";
+} from "trm-ui/fabric";
 import { Modal } from "./Modal";
 
 /**

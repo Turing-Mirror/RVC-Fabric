@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { actionFor } from "../lib/errorActions";
-import { splitErrorText } from "../lib/errorText";
+import { splitErrorText } from "trm-ui/fabric";
 
 /**
  * 面板里那行报错。

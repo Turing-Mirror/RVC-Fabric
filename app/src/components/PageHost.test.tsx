@@ -5,7 +5,7 @@
  */
 import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mountCounts, resetMountCounts } from "../lib/lifecycle";
+import { mountCounts, resetMountCounts } from "trm-ui/fabric";
 import type { PageId } from "../lib/nav";
 import { mount, type Mounted } from "../test/dom";
 import { usePageActive } from "trm-ui";

@@ -6,7 +6,7 @@ import { t } from "../i18n/t";
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), pick: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: bridge.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
-vi.mock("../lib/nativeDialog", () => ({ pickPath: bridge.pick }));
+vi.mock("trm-ui/fabric", async (orig) => ({ ...(await orig<typeof import("trm-ui/fabric")>()), ...({ pickPath: bridge.pick }) }));
 vi.mock("./ToolWindow", () => {
   const Slot = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { ToolBody: Slot, ToolActions: Slot, ToolTitleActions: Slot };

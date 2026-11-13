@@ -1,6 +1,6 @@
 import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
-import { ThumbImage, usePageActive } from "trm-ui";
+import { CoverPlaceholder, ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -18,7 +18,7 @@ import {
 } from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
-import { copyText } from "../lib/clipboard";
+import { copyText } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
@@ -30,7 +30,7 @@ import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
 import { CatalogTransition } from "../components/CatalogTransition";
 import { useI18n } from "../i18n";
-import { askConfirm, askPrompt } from "../lib/webDialog";
+import { askConfirm, askPrompt } from "trm-ui/fabric";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import {
   bindIndex,
@@ -602,7 +602,7 @@ function ModelsPageImpl({
                         decoding="async"
                       />
                     ) : (
-                      <span>{(title || "?").slice(0, 4)}</span>
+                      <CoverPlaceholder name={title} seed={modelKey(v)} />
                     )}
                     {/* 左上角：发布日期当版本号（v26.07.31），方便认同一角色的
                         不同版本；下面才是「文件丢失」。都没有就不占位。 */}
@@ -622,7 +622,7 @@ function ModelsPageImpl({
                       <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent-text)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
                   <div className="text-[14.5px] font-semibold mt-2.5 truncate">

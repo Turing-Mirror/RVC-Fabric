@@ -6,7 +6,7 @@ import { I18nProvider } from "../i18n";
 import { ensurePack } from "../i18n/dict";
 import { newDraft, prepareSubmission } from "../lib/communityPublication";
 import type { StagedVoice, StoreVoice } from "../lib/voices";
-import { registerDialogHandler } from "../lib/webDialog";
+import { registerDialogHandler } from "trm-ui/fabric";
 import { mount, tick, type Mounted } from "../test/dom";
 import { PlazaPage } from "./PlazaPage";
 

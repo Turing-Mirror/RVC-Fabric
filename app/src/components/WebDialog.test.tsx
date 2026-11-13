@@ -7,7 +7,7 @@
  */
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { askConfirm, askPrompt } from "../lib/webDialog";
+import { askConfirm, askPrompt } from "trm-ui/fabric";
 import { mount, pressKey, tick, type Mounted } from "../test/dom";
 import { WebDialogHost } from "./WebDialog";
 import { EXIT_MS } from "../hooks/useExit";

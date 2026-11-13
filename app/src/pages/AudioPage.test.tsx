@@ -10,7 +10,7 @@ const shell = vi.hoisted(() => ({
 const dialogs = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: shell.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
-vi.mock("../lib/webDialog", () => ({ askConfirm: dialogs.askConfirm }));
+vi.mock("trm-ui/fabric", async (orig) => ({ ...(await orig<typeof import("trm-ui/fabric")>()), ...({ askConfirm: dialogs.askConfirm }) }));
 
 import { AudioPage } from "./AudioPage";
 

@@ -2,7 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n/t";
 
 export type License = { id?: string; url?: string; text?: string };
-export type SourceFile = { id: string; path: string; sizeBytes: number; providerDigest?: { algorithm: string; value: string } };
+export type SourceFile = {
+  id: string;
+  path: string;
+  sizeBytes: number;
+  assetId?: string;
+  blobId?: string;
+  updatedAt?: string;
+  providerDigest?: { algorithm: string; value: string };
+};
 export type Source = {
   resolveId: string;
   expiresAt: string;
@@ -15,6 +23,9 @@ export type PublisherRole = "original_author" | "reposter" | "maintainer";
 export type ReviewState = "pending" | "published" | "rejected" | "withdrawn";
 export type Submission = {
   id: string;
+  operation?: "create" | "new_version";
+  batchId?: string;
+  assetId?: string;
   state: ReviewState;
   asset: {
     title: string;
@@ -27,6 +38,7 @@ export type Submission = {
   };
   version: {
     label: string;
+    metadata?: Record<string, unknown>;
     files: Array<{ path: string; sha256: string; sources: Array<{ canonicalUrl: string; revision: string }> }>;
   };
   updatedAt: string;
@@ -35,9 +47,10 @@ export type Submission = {
 
 type Selection = Omit<Source, "files" | "detectedLicense"> & { file: SourceFile; account: string };
 type SubmissionBody = {
-  operation: "create";
+  operation: "create" | "new_version";
+  assetId?: string;
   previousSubmissionId?: string;
-  asset: Submission["asset"] & { kind: "model"; upstreamUrl: string; metadata: { family: "rvc"; format: "voice_package"; series?: string; group?: string } };
+  asset: Submission["asset"] & { kind: "model"; upstreamUrl: string; metadata: { family: "rvc"; format: "voice_package"; series?: string; group?: string; language?: string } };
   version: { label: string; files: Array<{ path: string; role: "package"; resolveId: string; sourceFileId: string; sha256?: string }>; dependencies: [] };
   coverUploadId?: string;
 };
@@ -62,10 +75,12 @@ export type Draft = {
   selection?: Selection;
   previousSubmissionId?: string;
   previousFilePath?: string;
+  assetId?: string;
+  language?: string;
   pending?: { account: string; key: string; body: SubmissionBody };
 };
 
-export function newDraft(previous?: Submission): Draft {
+export function newDraft(previous?: Submission, assetId?: string): Draft {
   const file = previous?.version.files[0];
   const source = file?.sources[0];
   return {
@@ -84,7 +99,8 @@ export function newDraft(previous?: Submission): Draft {
     group: previous?.asset.metadata?.group ?? "",
     cover: "",
     checksum: file?.sha256 ?? "",
-    previousSubmissionId: previous?.id,
+    previousSubmissionId: assetId ? undefined : previous?.id,
+    assetId: assetId ?? (previous?.operation === "new_version" ? previous.assetId : undefined),
     previousFilePath: file?.path,
   };
 }
@@ -123,14 +139,17 @@ type PublicationRequest =
   | { action: "resolve"; url: string; revision?: string }
   | { action: "cover"; bytes: number[] }
   | { action: "submit"; key: string; body: SubmissionBody }
-  | { action: "mine"; state: ReviewState; page: number; limit: number }
+  | { action: "batch"; batchId: string; items: Array<{ key: string; body: SubmissionBody }> }
+  | { action: "author"; id: string; cursor?: string }
+  | { action: "owned"; cursor?: string }
+  | { action: "mine"; state: ReviewState; page: number; limit: number; batch?: string }
   | { action: "withdraw"; id: string };
 
 export function publication<T>(request: PublicationRequest) {
   return invoke<T>("community_publication", { request });
 }
 
-export async function prepareSubmission(draft: Draft, account: string) {
+export async function prepareSubmission(draft: Draft, account: string, send = publication) {
   if (draft.pending?.account === account) return draft.pending;
   const selection = draft.selection;
   if (!selection || selection.account !== account || Date.parse(selection.expiresAt) <= Date.now()) {
@@ -139,12 +158,13 @@ export async function prepareSubmission(draft: Draft, account: string) {
   let coverUploadId: string | undefined;
   if (draft.cover) {
     const bytes = Array.from(atob(draft.cover.split(",")[1]), (character) => character.charCodeAt(0));
-    coverUploadId = (await publication<{ uploadId: string }>({ action: "cover", bytes })).uploadId;
+    coverUploadId = (await send<{ uploadId: string }>({ action: "cover", bytes })).uploadId;
   }
 
   const { file } = selection;
   const body: SubmissionBody = {
-    operation: "create",
+    operation: draft.assetId ? "new_version" : "create",
+    assetId: draft.assetId,
     previousSubmissionId: draft.previousSubmissionId,
     coverUploadId,
     asset: {
@@ -161,6 +181,7 @@ export async function prepareSubmission(draft: Draft, account: string) {
         format: "voice_package",
         series: draft.series.trim() || undefined,
         group: draft.group.trim() || undefined,
+        language: draft.language?.trim() || undefined,
       },
     },
     version: {
@@ -175,10 +196,11 @@ export async function prepareSubmission(draft: Draft, account: string) {
 export function publicationError(error: unknown, action: "resolve" | "submit" | "list") {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
   if (code === "unauthorized" || (code === "auth_required" && action !== "resolve")) return t("publication.signInRequired");
-  if (action === "submit" && ["read_source", "conflict", "not_found", "source_changed"].includes(String(code))) return t("publication.readAgain");
+  if (action === "submit" && ["read_source", "conflict", "not_found"].includes(String(code))) return t("publication.readAgain");
   if (code === "invalid_cover") return t("publication.coverError");
+  if (code === "source_changed") return t("publication.sourceChanged");
   if (code === "hash_mismatch") return t("publication.hashMismatch");
-  if (code === "rate_limited") return t("publication.rateLimited");
+  if (code === "rate_limited") return t(action === "resolve" ? "publication.rateLimited" : "publication.retryQueued");
   if (action === "resolve" && (code === "auth_required" || code === "unsupported" || code === "not_found")) return t("publication.publicSource");
   return t("publication.requestFailed");
 }

@@ -38,13 +38,14 @@ function TextField({ label, value, onChange, limit, disabled, multiline = false 
   return <Field label={label} control={multiline ? <TextArea {...props} rows={4} /> : <TextInput {...props} />} />;
 }
 
-export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted, onMySubmissions }: {
+export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted, onMySubmissions, onBatch }: {
   initial: Draft;
   auth: CommunityAccount;
   onBack: (draft: Draft) => void;
   onSave: (draft: Draft) => boolean;
   onSubmitted: (draft: Draft, submission: Submission) => void;
   onMySubmissions: (draft: Draft) => void;
+  onBatch: (draft: Draft) => void;
 }) {
   const { t, locale } = useI18n();
   const { t: uiText } = useUiI18n();
@@ -154,6 +155,7 @@ export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted,
       <PageHead title={t("publication.title")} actions={
         <>
           <Btn disabled={Boolean(busy)} onClick={() => onBack(draft)}>{uiText("ui.common.back")}</Btn>
+          {draft.assetId === undefined && !draft.previousSubmissionId && <Btn disabled={Boolean(busy)} onClick={() => onBatch(draft)}>{t("publication.batch")}</Btn>}
           <Btn disabled={Boolean(busy)} onClick={() => onMySubmissions(draft)}>{t("community.submissions")}</Btn>
           <Btn disabled={Boolean(busy)} onClick={() => {
             if (onSave(draft)) {

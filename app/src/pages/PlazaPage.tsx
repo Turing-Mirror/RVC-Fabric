@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, memo, type ReactNode } from "
 import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
 import { Pane, Panes, useNotify, usePageActive, usePaneOn } from "trm-ui";
 import { CommunityActions, useCommunityAccount } from "../components/CommunityActions";
+import { CommunityBatchPublisher } from "../components/CommunityBatchPublisher";
+import { CommunityAuthor } from "../components/CommunityAuthor";
 import { CommunityPublisher } from "../components/CommunityPublisher";
 import { CommunitySubmissions } from "../components/CommunitySubmissions";
 import { loadDrafts, newDraft, storeDrafts, type Draft, type Submission } from "../lib/communityPublication";
@@ -55,7 +57,7 @@ type PlazaProps = {
   scrollToDownloads?: number;
 };
 
-const communityPages = ["catalog", "changelog", "publish", "submissions"] as const;
+const communityPages = ["catalog", "changelog", "publish", "batch", "submissions", "author", "owned", "model"] as const;
 type CommunityPage = (typeof communityPages)[number];
 
 function PlazaPageImpl(props: PlazaProps) {
@@ -64,6 +66,9 @@ function PlazaPageImpl(props: PlazaProps) {
   const { tip } = useNotify();
   const [page, setPage] = useState<CommunityPage>("catalog");
   const [editor, setEditor] = useState<Draft>();
+  const [author, setAuthor] = useState("");
+  const [authorModel, setAuthorModel] = useState<{ id: string; title: string; from: "author" | "owned" }>();
+  const [batchEntry, setBatchEntry] = useState<{ source?: string; back: "publish" | "submissions" }>({ back: "publish" });
   const [drafts, setDrafts] = useState(loadDrafts);
   const currentDrafts = useRef(drafts);
   const [recent, setRecent] = useState<Submission>();
@@ -109,7 +114,8 @@ function PlazaPageImpl(props: PlazaProps) {
       <Pane id="catalog">
         <Catalog
           {...props}
-          actions={<CommunityActions auth={auth} onPublish={() => openEditor()} onSubmissions={() => setPage("submissions")} />}
+          actions={<CommunityActions auth={auth} onPublish={() => openEditor()} onSubmissions={() => setPage("submissions")} onOwned={() => setPage("owned")} />}
+          onAuthor={(id) => { setAuthor(id); setPage("author"); }}
           onChangelog={() => setPage("changelog")}
         />
       </Pane>
@@ -125,6 +131,12 @@ function PlazaPageImpl(props: PlazaProps) {
             onBack={(draft) => leaveEditor(draft, "catalog")}
             onSave={save}
             onMySubmissions={(draft) => leaveEditor(draft, "submissions")}
+            onBatch={(draft) => {
+              if (!(draft.url || draft.title || draft.updatedAt) || save(draft)) {
+                setBatchEntry({ source: draft.url, back: "publish" });
+                setPage("batch");
+              }
+            }}
             onSubmitted={(draft, submission) => {
               remove(draft.id);
               setRecent(submission);
@@ -133,6 +145,24 @@ function PlazaPageImpl(props: PlazaProps) {
           />
         )}
       </Pane>
+      <Pane id="batch">
+        {page === "batch" && <CommunityBatchPublisher auth={auth} sourceLink={batchEntry.source} onBack={() => setPage(batchEntry.back)}
+          onSubmitted={(submission) => { setRecent(submission); setPage("submissions"); }} />}
+      </Pane>
+      <Pane id="author">
+        {author && <CommunityAuthor key={author} author={author} onBack={() => setPage("catalog")}
+          onView={(id, title) => { setAuthorModel({ id, title, from: "author" }); setPage("model"); }} />}
+      </Pane>
+      <Pane id="owned">
+        {auth.account?.signedIn && <CommunityAuthor key={auth.account.email} owned onBack={() => setPage("catalog")} onNewVersion={openEditor}
+          onView={(id, title) => { setAuthorModel({ id, title, from: "owned" }); setPage("model"); }} />}
+      </Pane>
+      <Pane id="model">
+        {authorModel && <PagePad>
+          <PageHead title={authorModel.title} back={() => setPage(authorModel.from)} />
+          <StoreSection key={authorModel.id} reloadToken={0} assetId={authorModel.id} />
+        </PagePad>}
+      </Pane>
       <Pane id="submissions">
         <CommunitySubmissions
           auth={auth}
@@ -140,6 +170,7 @@ function PlazaPageImpl(props: PlazaProps) {
           recent={recent}
           onBack={() => setPage("catalog")}
           onNew={() => openEditor()}
+          onBatch={() => { setBatchEntry({ back: "submissions" }); setPage("batch"); }}
           onEdit={openEditor}
           onRemove={remove}
           onRevise={(previous) => openEditor(newDraft(previous))}
@@ -149,7 +180,7 @@ function PlazaPageImpl(props: PlazaProps) {
   );
 }
 
-function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasFilter = "all", scrollToDownloads = 0, actions, onChangelog }: PlazaProps & { actions: ReactNode; onChangelog: () => void }) {
+function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasFilter = "all", scrollToDownloads = 0, actions, onChangelog, onAuthor }: PlazaProps & { actions: ReactNode; onChangelog: () => void; onAuthor: (id: string) => void }) {
   useI18n();
   const paneActive = usePaneOn();
   const pageActive = usePageActive();
@@ -235,7 +266,7 @@ function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasF
       ) : null}
 
       <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
-        <StoreSection reloadToken={reloadToken} />
+        <StoreSection reloadToken={reloadToken} onAuthor={onAuthor} />
       </Block>
 
       {items.length ? (

@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use trm_app_protocol::{ApiError, ApiResult};
 
-const PRODUCT_ID: &str = "com.turingmirror.rvcfabric";
+pub(crate) const PRODUCT_ID: &str = "com.turingmirror.rvcfabric";
 pub(crate) const FAMILY: &str = "rvc";
 const COMMUNITY_API: &str = "https://api.turingmirror.com/v1/community";
 
@@ -299,6 +299,7 @@ fn package_entry(asset: &Value, version: &Value, package: &Value, api: &Url) -> 
         "cover_url": cover,
         "description": field(asset, "description"),
         "author": field(asset, "originalAuthor"),
+        "community_author_id": field(asset, "communityAuthorId"),
         "author_url": public_url(field(asset, "authorUrl"), false).ok().map(|url| url.to_string()),
         "series": field(meta, "series"),
         "group": field(meta, "group"),

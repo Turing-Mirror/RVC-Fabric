@@ -518,9 +518,17 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     if exp.len() != 64 {
         return Err(crate::i18n::t("s.5ca337dd03").into());
     }
+    let got = file_sha256(path)?;
+    if got != exp {
+        return Err(crate::i18n::t2("s.73a397a7fd", &exp, &got));
+    }
+    Ok(())
+}
+
+pub(crate) fn file_sha256(path: &Path) -> Result<String, String> {
     let mut f = std::fs::File::open(path).map_err(|e| crate::i18n::te("s.21ce93c732", &(e)))?;
     let mut hasher = Sha256::new();
-    let mut buf = [0u8; 1024 * 1024];
+    let mut buf = vec![0u8; 1024 * 1024];
     use std::io::Read;
     loop {
         let n = f.read(&mut buf).map_err(|e| e.to_string())?;
@@ -529,11 +537,7 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
         }
         hasher.update(&buf[..n]);
     }
-    let got = hex::encode(hasher.finalize());
-    if got != exp {
-        return Err(crate::i18n::t2("s.73a397a7fd", &exp, &got));
-    }
-    Ok(())
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// Options for a single product download (Runtime / voice / patch).

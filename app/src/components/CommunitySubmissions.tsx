@@ -11,12 +11,13 @@ const states = ["draft", "pending", "rejected", "published", "withdrawn"] as con
 type State = "draft" | ReviewState;
 const PER_PAGE = 8;
 
-export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEdit, onRemove, onRevise }: {
+export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onBatch, onEdit, onRemove, onRevise }: {
   auth: CommunityAccount;
   drafts: Draft[];
   recent?: Submission;
   onBack: () => void;
   onNew: () => void;
+  onBatch: () => void;
   onEdit: (draft: Draft) => void;
   onRemove: (id: string) => void;
   onRevise: (submission: Submission) => void;
@@ -30,7 +31,8 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
   const account = auth.account?.signedIn ? auth.account.email ?? "" : null;
   const [filter, setFilter] = useState<State>("draft");
   const [page, setPage] = useState(1);
-  const [snapshot, setSnapshot] = useState<{ account: string; state: ReviewState; page: number; totalPages: number; items: Submission[] }>();
+  const [batch, setBatch] = useState<string>();
+  const [snapshot, setSnapshot] = useState<{ account: string; state: ReviewState; page: number; totalPages: number; items: Submission[]; batch?: string }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<{ id: string; kind: "draft" | "withdraw" }>();
@@ -38,16 +40,16 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
   const request = useRef(0);
   const seen = useRef<string | undefined>(undefined);
   const lastSubmission = useRef<string | undefined>(undefined);
-  const keyFor = (owner: string, state: ReviewState, page: number) => JSON.stringify([owner, state, page]);
+  const keyFor = (owner: string, state: ReviewState, page: number, batch?: string) => JSON.stringify([owner, state, page, batch]);
 
-  const refresh = useCallback(async (owner: string, state: ReviewState, page: number) => {
+  const refresh = useCallback(async (owner: string, state: ReviewState, page: number, batch?: string) => {
     const current = ++request.current;
-    seen.current = keyFor(owner, state, page);
+    seen.current = keyFor(owner, state, page, batch);
     setBusy(true);
     setError("");
     try {
       const read = () => publication<{ items: Submission[]; page: number; totalPages: number }>({
-        action: "mine", state, page, limit: PER_PAGE,
+        action: "mine", state, page, limit: PER_PAGE, batch,
       });
       const result = await read().catch(async (error: unknown) => {
         if (typeof error !== "object" || error === null || !("code" in error) || error.code !== "unavailable" || request.current !== current) throw error;
@@ -56,9 +58,9 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
         return read();
       });
       if (request.current !== current) return;
-      setSnapshot({ account: owner, state, ...result });
+      setSnapshot({ account: owner, state, ...result, batch });
       if (result.page !== page) {
-        seen.current = keyFor(owner, state, result.page);
+        seen.current = keyFor(owner, state, result.page, batch);
         setPage(result.page);
       }
     } catch (error) {
@@ -80,17 +82,18 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
     if (!active) return;
     if (recent && recent.id !== lastSubmission.current) {
       lastSubmission.current = recent.id;
+      setBatch(recent.batchId);
       seen.current = undefined;
-      if (filter !== "pending" || page !== 1) {
+      if (filter !== "pending" || page !== 1 || batch !== recent.batchId) {
         setFilter("pending");
         setPage(1);
         return;
       }
     }
-    if (filter !== "draft" && seen.current !== keyFor(account, filter, page)) void refresh(account, filter, page);
-  }, [account, active, filter, page, recent, refresh]);
+    if (filter !== "draft" && seen.current !== keyFor(account, filter, page, batch)) void refresh(account, filter, page, batch);
+  }, [account, active, filter, page, recent, refresh, batch]);
 
-  const remote = snapshot?.account === account && snapshot?.state === filter ? snapshot : undefined;
+  const remote = snapshot?.account === account && snapshot?.state === filter && snapshot?.batch === batch ? snapshot : undefined;
   const pages = filter === "draft" ? Math.max(1, Math.ceil(drafts.length / PER_PAGE)) : remote?.totalPages ?? 1;
   const current = filter === "draft" ? Math.min(pages, page) : page;
   const items = filter === "draft" ? drafts.slice((current - 1) * PER_PAGE, current * PER_PAGE)
@@ -132,12 +135,14 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
       <PageHead title={t("community.submissions")} actions={
         <>
           <Btn onClick={onBack}>{uiText("ui.common.back")}</Btn>
-          {account !== null && filter !== "draft" && <Btn busy={busy} onClick={() => void refresh(account, filter, page)}>{t("s.38108eaa1d")}</Btn>}
+          {account !== null && filter !== "draft" && <Btn busy={busy} onClick={() => void refresh(account, filter, page, batch)}>{t("s.38108eaa1d")}</Btn>}
+          {filter === "draft" && <Btn onClick={onBatch}>{t("publication.batch")}</Btn>}
           <Btn primary onClick={onNew}>{t("community.publish")}</Btn>
         </>
       } />
       <SegmentControl className="mb-5" value={filter} options={states.map((id) => ({ id, label: labels[id] }))}
         onChange={(next) => { setFilter(next); setPage(1); }} />
+      {batch && filter !== "draft" && <Btn onClick={() => { setBatch(undefined); setPage(1); }}>{uiText("ui.common.clear")}</Btn>}
       {error && account !== null && filter !== "draft" && <Warn className="mb-3">{error}</Warn>}
       <CatalogTransition scope={filter} order={states} page={current}>
         {filter !== "draft" && account === null ? (
@@ -166,11 +171,13 @@ export function CommunitySubmissions({ auth, drafts, recent, onBack, onNew, onEd
                       <Btn onClick={() => setConfirm({ id: item.id, kind: "draft" })}>{t("publication.removeDraft")}</Btn>
                       <Btn onClick={() => onEdit(item)}>{t("publication.edit")}</Btn>
                     </div>
-                  ) : item.state === "pending" ? (
-                    <Btn onClick={() => setConfirm({ id: item.id, kind: "withdraw" })}>{t("publication.withdraw")}</Btn>
-                  ) : item.state === "rejected" || item.state === "withdrawn" ? (
-                    <Btn onClick={() => onRevise(item)}>{t("publication.edit")}</Btn>
-                  ) : null}
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {item.batchId && item.batchId !== batch && <Btn onClick={() => { setBatch(item.batchId); setPage(1); }}>{t("publication.batchFilter")}</Btn>}
+                      {item.state === "pending" && <Btn onClick={() => setConfirm({ id: item.id, kind: "withdraw" })}>{t("publication.withdraw")}</Btn>}
+                      {(item.state === "rejected" || item.state === "withdrawn") && <Btn onClick={() => onRevise(item)}>{t("publication.edit")}</Btn>}
+                    </div>
+                  )}
                 </article>
               );
             })}

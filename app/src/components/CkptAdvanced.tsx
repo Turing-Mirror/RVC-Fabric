@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
 import { Field, RangeBar, Select, SliderValue } from "./controls";
@@ -11,8 +12,6 @@ import { TOOL_BOX } from "./Select";
 
 type Tab = "merge" | "change" | "extract" | "onnx";
 
-const FIELD =
-  "w-full min-w-0 rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 
@@ -130,24 +129,14 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <Field
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <div className="flex flex-wrap gap-3">
@@ -242,24 +231,14 @@ export function CkptAdvanced() {
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <Field
               label={t("s.ckptSaveAs")}
               tip={t("s.ckptSaveAsHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <div className="flex justify-end">
@@ -297,24 +276,14 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <Field
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                // design-allow: 等 TextInput 补上紧凑外观。
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <div className="flex flex-wrap gap-3">

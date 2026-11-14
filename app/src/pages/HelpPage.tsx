@@ -399,7 +399,7 @@ function HelpPageImpl({
         sub={t("s.e137006ffd")}
         actions={
           <>
-            {/* design-allow: TextInput 暂不支持 type="search" 与独立边框样式。 */}
+            {/* design-allow: 水平内边距 px-3+border（13px）与 compact（9px）差 4px，超过 2px 上限。 */}
             <input
               type="search"
               value={query}

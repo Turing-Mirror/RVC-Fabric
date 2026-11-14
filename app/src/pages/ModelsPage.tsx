@@ -1,6 +1,6 @@
 import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
-import { CoverPlaceholder, ThumbImage, usePageActive } from "trm-ui";
+import { CoverPlaceholder, TextInput, ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -491,12 +491,12 @@ function ModelsPageImpl({
 
       <Block>
         <div className="flex items-center gap-3 flex-wrap mb-[18px]">
-          {/* design-allow: 等 TextInput 支持行内自适应宽度。 */}
-          <input
+          <TextInput
+            fit
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder={t("s.fc3bad4cea")}
-            className="inline-flex min-w-[230px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+            className="min-w-[230px]"
           />
           {/* RVC 音色 / DSP 预设二选一。故意不给「全部」—— 两种东西混在
               一个列表里，小白分不清自己点的是音色还是效果。 */}

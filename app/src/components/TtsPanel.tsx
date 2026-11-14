@@ -5,7 +5,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { TextArea } from "trm-ui";
+import { TextArea, TextInput } from "trm-ui";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
@@ -220,8 +220,6 @@ const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
-const FIELD =
-  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 
 /** 把路径拆成最后一段的名字和它所在的目录，来源列表按「名字 + 目录」显示。 */
 function splitPath(path: string): { name: string; parent: string } {
@@ -1770,13 +1768,14 @@ function StsSection() {
           </span>
         </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-          <input
-            className={`${FIELD} min-w-[160px] flex-1`}
+          <TextInput
+            look="compact"
+            fit
+            className="min-w-[160px] flex-1"
             placeholder={t("s.stsSearchPh")}
             value={listQuery}
-            onChange={(e) => {
-              setListQuery(e.target.value);
+            onChange={(v) => {
+              setListQuery(v);
               setInputPage(0);
               // 搜索只筛显示，不改参与集合；隐藏的勾选先清掉。
               setChecked(new Set());
@@ -2151,15 +2150,16 @@ function StsSection() {
                       ariaLabel={t("s.stsSid")}
                     />
                   </div>
-                  {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-                  <input
-                    className={`w-[64px] ${FIELD}`}
+                  <TextInput
+                    look="compact"
+                    fit
+                    className="w-[64px]"
                     type="number"
                     min={0}
                     max={2333}
-                    value={sid}
-                    onChange={(e) =>
-                      setSid(Math.max(0, Math.min(2333, Number(e.target.value) || 0)))
+                    value={String(sid)}
+                    onChange={(v) =>
+                      setSid(Math.max(0, Math.min(2333, Number(v) || 0)))
                     }
                   />
                 </div>

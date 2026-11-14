@@ -938,7 +938,7 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_text}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* design-allow: 等 TextInput 补上横幅设置输入外观。 */}
+                    {/* design-allow: px-3 py-2+border 与 compact 水平内边距差 3px、高度差 4px，与 field 描边色不同（--hairline 对 --line）。 */}
                     <input
                       type="text"
                       maxLength={40}
@@ -964,7 +964,7 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_sub}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* design-allow: 等 TextInput 补上横幅设置输入外观。 */}
+                    {/* design-allow: px-3 py-2+border 与 compact 水平内边距差 3px、高度差 4px，与 field 描边色不同（--hairline 对 --line）。 */}
                     <input
                       type="text"
                       maxLength={60}

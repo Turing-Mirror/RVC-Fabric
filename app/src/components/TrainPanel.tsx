@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { TextInput } from "trm-ui";
 import { activeJob, latestExperimentJob, useTrainingQueue } from "../lib/trainQueue";
 import { TrainingQueue } from "./TrainingQueue";
 import { Btn, HelpMark } from "./ui";
@@ -147,8 +148,6 @@ const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
-const FIELD =
-  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 
 const F0_OPTS = ["rmvpe", "harvest", "pm"] as const;
 
@@ -628,13 +627,14 @@ export function TrainPanel() {
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.4eea655d6f")}</span>
-            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-            <input
+            <TextInput
               ref={nameRef}
-              className={`flex-1 min-w-0 ${FIELD}`}
+              look="compact"
+              fit
+              className="flex-1 min-w-0"
               value={name}
               placeholder={t("s.b27dd877b1")}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
             />
           </div>
           <div className={ROW}>
@@ -659,14 +659,15 @@ export function TrainPanel() {
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.61fdf63b84")}</span>
-            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-            <input
-              className={`w-[100px] ${FIELD}`}
+            <TextInput
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={1000}
-              value={epochs}
-              onChange={(e) => setEpochs(Number(e.target.value) || 1)}
+              value={String(epochs)}
+              onChange={(v) => setEpochs(Number(v) || 1)}
             />
             <span className="text-[12.5px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
           </div>
@@ -675,17 +676,18 @@ export function TrainPanel() {
               {t("s.trainBatch")}
               <HelpMark title={t("s.trainBatchHint")} />
             </span>
-            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-            <input
+            <TextInput
               ref={batchRef}
-              className={`w-[100px] ${FIELD}`}
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={40}
-              value={batch}
-              onChange={(e) => {
+              value={String(batch)}
+              onChange={(v) => {
                 batchTouchedRef.current = true;
-                setBatch(Math.max(1, Number(e.target.value) || 1));
+                setBatch(Math.max(1, Number(v) || 1));
               }}
             />
             {st.suggested_batch ? (
@@ -711,14 +713,15 @@ export function TrainPanel() {
               {t("s.trainSaveEvery")}
               <HelpMark title={t("s.trainSaveEveryHint")} />
             </span>
-            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
-            <input
-              className={`w-[100px] ${FIELD}`}
+            <TextInput
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={50}
-              value={saveEvery}
-              onChange={(e) => setSaveEvery(Math.max(1, Number(e.target.value) || 5))}
+              value={String(saveEvery)}
+              onChange={(v) => setSaveEvery(Math.max(1, Number(v) || 5))}
             />
           </div>
           <div className={ROW}>

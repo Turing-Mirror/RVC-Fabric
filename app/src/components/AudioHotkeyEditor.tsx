@@ -235,6 +235,7 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
         label={t("audio.hotkeyEnabled")}
       />
       <button type="button" disabled={busy} data-hotkey-recorder
+        // design-allow: 与 1px inset 描边凑整以对齐同高输入框与 Btn。
         className="rounded-[var(--rs)] px-3 py-[7px] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] disabled:opacity-50"
         onClick={() => void beginRecording(binding.binding_id)}
         onBlur={() => endRecording(binding.binding_id)}

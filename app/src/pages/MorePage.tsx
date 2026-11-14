@@ -527,6 +527,7 @@ export function MorePage({
             desc={t("s.5258b304cc")}
             right={
               <Btn
+                danger
                 onClick={() => {
                   void onForceKill?.();
                 }}

@@ -232,7 +232,7 @@ function CableStep({ status }: { status?: Record<string, unknown> }) {
         </div>
       ) : (
         <div className="flex items-center gap-3 flex-wrap">
-          <Btn primary disabled={!!vb.busy} onClick={() => void vb.install()}>
+          <Btn primary busy={!!vb.busy} onClick={() => void vb.install()}>
             {vb.busy === "install" ? t("s.1cac8ac7f5") : t("s.b386a7fb53")}
           </Btn>
           {vb.msg ? <span className="text-[12.5px] text-[var(--help)]">{vb.msg}</span> : null}
@@ -296,7 +296,7 @@ function DevicesStep({ status, workerAlive, devicesBusy, onReloadDevices }: Prop
       ) : (
         <div className="flex items-center gap-3 flex-wrap text-[12.5px] text-[var(--help)]">
           <span>{devicesBusy ? t("s.abd52d0c37") : workerAlive ? t("s.1831f7eb53") : t("s.guide.devices.load")}</span>
-          <Btn disabled={devicesBusy} onClick={onReloadDevices}>{devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}</Btn>
+          <Btn busy={devicesBusy} onClick={onReloadDevices}>{devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}</Btn>
         </div>
       )}
     </div>

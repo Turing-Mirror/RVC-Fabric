@@ -235,6 +235,7 @@ export function Dock({
           ) : null}
           {step ? (
             <div className="ml-auto mt-1.5 w-[132px]" role="progressbar" aria-valuemin={1} aria-valuemax={step.count} aria-valuenow={step.index + 1} aria-valuetext={t(step.labelKey)}>
+              {/* design-allow: 132px 分步进度条段间窄缝。 */}
               <div className="flex gap-[3px]">
                 {Array.from({ length: step.count }, (_, i) => (
                   <span key={i} className="relative flex-1 h-1 rounded-sm overflow-hidden bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">

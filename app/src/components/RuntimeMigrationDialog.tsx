@@ -231,7 +231,7 @@ export function RuntimeMigrationDialog({ open, onDone }: Props) {
               {t("runtimeMigration.retry")}
             </Btn>
           ) : (
-            <Btn disabled>{t("runtimeMigration.busy")}</Btn>
+            <Btn busy>{t("runtimeMigration.busy")}</Btn>
           )}
         </div>
       </div>

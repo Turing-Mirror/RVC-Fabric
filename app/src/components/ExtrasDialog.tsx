@@ -309,7 +309,8 @@ export function ExtrasPanel({
               <Btn
                 primary
                 className="shrink-0"
-                disabled={coreBusy || downloading.length > 0}
+                busy={coreBusy}
+                disabled={downloading.length > 0}
                 onClick={() => void downloadEngineCore()}
               >
                 {coreBusy ? t("s.65188d08a2") : t("s.cbf7f4dada")}

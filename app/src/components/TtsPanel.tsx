@@ -5,7 +5,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { SearchBox, TextArea, TextInput } from "trm-ui";
+import { Icon, SearchBox, TextArea, TextInput } from "trm-ui";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
@@ -2265,10 +2265,7 @@ function StsSection() {
         <Btn onClick={() => setAdv((v) => !v)}>
           {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
           {advChanged && !adv ? (
-            <span
-              aria-hidden
-              className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)] align-middle"
-            />
+            <Icon name="sliders" size={12} className="ml-1.5 inline-block align-middle text-[var(--accent-text)]" />
           ) : null}
         </Btn>
         <Btn disabled={running || !paramsChanged} onClick={resetParams}>

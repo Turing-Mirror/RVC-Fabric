@@ -176,7 +176,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
           });
         }
       }}>{t("neptune.previewSelection")}</Btn>
-      <Btn disabled={!canApply || busy || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
+      <Btn busy={busy} disabled={!canApply || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
     </div>
     <p className="m-0 text-[12.5px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
   </div>;

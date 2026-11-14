@@ -196,12 +196,12 @@ export function DspPresetEditor({
   return (
     <div className="mt-9">
       <div className="flex items-center gap-3 mb-2">
-        <h4 className="m-0 text-[13px] font-semibold flex items-center gap-[9px]">
+        <h4 className="m-0 text-[13px] font-semibold flex items-center gap-2">
           {t("s.dspEditTitle", { v0: preset.name })}
           <HelpMark title={dspTips().edit} />
         </h4>
         {preset.source === "user" ? (
-          <Btn className="ml-auto" disabled={busy} onClick={() => void remove()}>
+          <Btn danger className="ml-auto" disabled={busy} onClick={() => void remove()}>
             {t("s.dspDelete")}
           </Btn>
         ) : null}
@@ -216,7 +216,7 @@ export function DspPresetEditor({
         return (
           <div key={effect} className="mb-3">
             <div className="flex items-center gap-2 mb-0.5">
-              <div className="text-[12.5px] text-[var(--meta)] flex items-center gap-[9px]">
+              <div className="text-[12.5px] text-[var(--meta)] flex items-center gap-2">
                 {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
                 {dspTips().fx[effect] ? (
                   <HelpMark title={dspTips().fx[effect]} />
@@ -226,13 +226,9 @@ export function DspPresetEditor({
                   用户只会以为整个功能坏了。要不出声就关掉 DSP，那是另一个
                   开关，不该从这里绕过去。 */}
               {shown.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => removeEffect(effect)}
-                  className="ml-auto border-0 bg-transparent p-0 text-[12.5px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
-                >
+                <Btn text className="ml-auto" onClick={() => removeEffect(effect)}>
                   {t("s.dspRemoveEffect")}
-                </button>
+                </Btn>
               ) : null}
             </div>
             {Object.keys(spec.params).map((key) => {
@@ -242,7 +238,7 @@ export function DspPresetEditor({
               const v = Number(params[effect]?.[key] ?? dflt);
               return (
                 <div key={key} className={ROW}>
-                  <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-[9px]">
+                  <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-2">
                     <span className="truncate">
                       {PARAM_LABEL[key] ? t(PARAM_LABEL[key]) : key}
                     </span>
@@ -273,7 +269,7 @@ export function DspPresetEditor({
 
       {unused.length ? (
         <div className="mt-4 mb-2">
-          <div className="text-[12.5px] text-[var(--meta)] mb-1.5 flex items-center gap-[9px]">
+          <div className="text-[12.5px] text-[var(--meta)] mb-1.5 flex items-center gap-2">
             {t("s.dspAddEffect")}
             <HelpMark title={dspTips().add} />
           </div>

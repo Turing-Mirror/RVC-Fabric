@@ -3,5 +3,6 @@
   "radius": 0,
   "duration": 0,
   "zIndex": 0,
+  "spacing": 1,
   "rawInput": 0
 }

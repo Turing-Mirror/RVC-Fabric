@@ -1394,16 +1394,8 @@ export default function App() {
             <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">{t("s.killStsAskBody")}</p>
             <div className="flex gap-2.5 justify-end">
-              <button
-                type="button"
-                onClick={() => setKillAsk(false)}
-                className="text-[13px] px-3.5 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] border-0 cursor-pointer shadow-[inset_0_0_0_1px_var(--line)]"
-              >{t("s.killStsAskKeep")}</button>
-              <button
-                type="button"
-                onClick={() => void doForceKill()}
-                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent-fill)] text-[var(--accent-ink)] border-0 cursor-pointer"
-              >{t("s.killStsAskGo")}</button>
+              <Btn onClick={() => setKillAsk(false)}>{t("s.killStsAskKeep")}</Btn>
+              <Btn primary danger onClick={() => void doForceKill()}>{t("s.killStsAskGo")}</Btn>
             </div>
           </div>
         </Modal>

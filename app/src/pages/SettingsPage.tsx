@@ -390,7 +390,7 @@ function SettingsPageImpl({
                   />
                 }
               />
-              <div className="flex items-center gap-[11px] flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Toggle
                   label={t("s.1747a288fd")}
                   tip={TIPS.sg_wasapi_exclusive}
@@ -415,7 +415,7 @@ function SettingsPageImpl({
                   >
                     {t("s.devAutoBtn")}
                   </Btn>
-                  <Btn onClick={onReloadDevices} disabled={devicesBusy}>
+                  <Btn onClick={onReloadDevices} busy={devicesBusy}>
                     {devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}
                   </Btn>
                 </span>
@@ -1177,7 +1177,7 @@ function SettingsPageImpl({
                 desc={updateLine || t("s.1fd4658c44")}
                 inline
                 control={
-                  <Btn onClick={onCheckUpdate} disabled={updateBusy}>
+                  <Btn onClick={onCheckUpdate} busy={updateBusy}>
                     {updateBusy ? t("s.5fc65af5b3") : t("s.72523c6421")}
                   </Btn>
                 }

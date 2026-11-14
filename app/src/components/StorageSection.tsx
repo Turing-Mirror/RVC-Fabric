@@ -249,7 +249,7 @@ export function StorageSection() {
               {msg || (pickedCount ? t("s.cleanPicked", { n: pickedCount, size: human(pickedBytes) }) : t("s.cleanNonePicked"))}
             </span>
             <span className="ml-auto">
-              <Btn primary onClick={() => void apply()} busy={busy} disabled={busy || pickedCount === 0}>{t("s.cleanupApply")}</Btn>
+              <Btn danger onClick={() => void apply()} busy={busy} disabled={busy || pickedCount === 0}>{t("s.cleanupApply")}</Btn>
             </span>
           </div>
         </div>

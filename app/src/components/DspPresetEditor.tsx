@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { TextInput } from "trm-ui";
 import { RangeBar, SliderValue } from "./controls";
 import { Btn, HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
@@ -287,12 +288,13 @@ export function DspPresetEditor({
       ) : null}
 
       <div className="flex items-center gap-2 mt-4">
-        {/* design-allow: px-[11px] py-[6px] 与 field 高度差 4px、水平内边距差 3px，与 compact 描边色不同（--line 对 --hairline）。 */}
-        <input
+        <TextInput
+          look="compact"
+          fit
           value={saveAs}
-          onChange={(e) => setSaveAs(e.target.value)}
+          onChange={setSaveAs}
           placeholder={t("s.dspSaveAsPlaceholder")}
-          className="min-w-[180px] px-[11px] py-[6px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+          className="min-w-[180px]"
         />
         <Btn disabled={busy || !saveAs.trim()} onClick={() => void save()}>
           {t("s.dspSaveAs")}

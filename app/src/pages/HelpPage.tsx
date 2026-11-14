@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { TextInput } from "trm-ui";
 import {
   AccordionGroup,
   Block,
@@ -399,18 +400,15 @@ function HelpPageImpl({
         sub={t("s.e137006ffd")}
         actions={
           <>
-            {/* design-allow: 水平内边距 px-3+border（13px）与 compact（9px）差 4px，超过 2px 上限。 */}
-            <input
+            <TextInput
               type="search"
+              look="compact"
+              fit
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={setQuery}
               placeholder={t("s.helpSearch")}
               aria-label={t("s.helpSearch")}
-              className={[
-                "w-[240px] rounded-[var(--rs)] border px-3 py-1.5 text-[13px]",
-                "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                "focus:outline-none focus:border-[var(--accent)]",
-              ].join(" ")}
+              className="w-[240px]"
             />
             {onOpenCommunity ? (
               <Btn onClick={() => onOpenCommunity()}>{t("s.contactCommunity")}</Btn>

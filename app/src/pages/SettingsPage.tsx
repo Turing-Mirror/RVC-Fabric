@@ -938,18 +938,14 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_text}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* design-allow: px-3 py-2+border 与 compact 水平内边距差 3px、高度差 4px，与 field 描边色不同（--hairline 对 --line）。 */}
-                    <input
+                    <TextInput
+                      fit
                       type="text"
                       maxLength={40}
-                      className={[
-                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
-                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                        "focus:outline-none focus:border-[var(--accent)]",
-                      ].join(" ")}
+                      className="w-[260px]"
                       placeholder={t("settings.bannerTextPlaceholder")}
                       value={c.str("home_banner_text")}
-                      onChange={(e) => c.set("home_banner_text", e.target.value)}
+                      onChange={(v) => c.set("home_banner_text", v)}
                     />
                     {c.str("home_banner_text") ? (
                       <Btn onClick={() => c.set("home_banner_text", "", true)}>
@@ -964,18 +960,14 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_sub}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {/* design-allow: px-3 py-2+border 与 compact 水平内边距差 3px、高度差 4px，与 field 描边色不同（--hairline 对 --line）。 */}
-                    <input
+                    <TextInput
+                      fit
                       type="text"
                       maxLength={60}
-                      className={[
-                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
-                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                        "focus:outline-none focus:border-[var(--accent)]",
-                      ].join(" ")}
+                      className="w-[260px]"
                       placeholder={t("settings.bannerSubPlaceholder")}
                       value={c.str("home_banner_sub")}
-                      onChange={(e) => c.set("home_banner_sub", e.target.value)}
+                      onChange={(v) => c.set("home_banner_sub", v)}
                     />
                     {c.str("home_banner_sub") ? (
                       <Btn onClick={() => c.set("home_banner_sub", "", true)}>

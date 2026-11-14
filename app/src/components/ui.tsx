@@ -8,7 +8,8 @@ export function Block(props: ComponentProps<typeof SharedBlock>) {
   return <SharedBlock actionClassName="ml-auto" {...props} />;
 }
 export function Btn(props: ComponentProps<typeof SharedBtn>) {
-  return <SharedBtn noWrap={false} {...props} />;
+  // 选中且禁用的按钮是状态标识（例如"使用中"），不变淡。
+  return <SharedBtn noWrap={false} dimDisabled={!props.on} {...props} />;
 }
 export function ListItem(props: ComponentProps<typeof SharedListItem>) {
   return <SharedListItem collapseMs={280} {...props} />;

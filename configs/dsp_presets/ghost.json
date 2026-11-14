@@ -1,6 +1,6 @@
 {
   "name": "幽灵",
-  "desc": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
+  "desc": "反向尾音混响，倒放回声效果",
   "params": {
     "revecho": {
       "size_ms": 230.0,
@@ -8,13 +8,13 @@
     }
   },
   "desc_i18n": {
-    "zh-CN": "反向尾音混响：将近期语音逆序衰减并混入尾音，营造幽邃的残响氛围",
-    "zh-TW": "反向尾音殘響：將近期語音逆序衰減並混入尾音，營造幽邃的殘響氛圍",
-    "en-US": "Reverse tail reverb: blends reversed decaying speech into the reverb tail for an eerie, haunting ambiance",
-    "ja-JP": "リバーステールリバーブ：直前の発話を逆向きに減衰させながら残響に混ぜ、幻想的な余韻を作ります",
-    "ko-KR": "역방향 잔향(리버스 테일): 최근 음성을 역순으로 감쇠시켜 잔향 끝에 섞어 넣음으로써 깊고 서늘한 잔향 분위기를 연출합니다",
-    "es-ES": "Reverberación de cola inversa: atenúa el habla reciente en orden inverso y la mezcla en la cola de reverberación para crear una atmósfera profunda y espectral",
-    "fr-FR": "Réverbération à queue inversée : mêle les paroles récentes inversées à la traînée de réverbération pour une atmosphère spectrale",
-    "ru-RU": "Реверберация с обратным хвостом: подмешивает инвертированное затухание недавней речи в шлейф реверберации, создавая глубокую мистическую атмосферу"
+    "zh-CN": "反向尾音混响，倒放回声效果",
+    "zh-TW": "反向尾音殘響，倒放回聲效果",
+    "en-US": "Reverse-tail reverb that blends reversed decaying speech into the reverb tail",
+    "ja-JP": "直前の音声を逆向きに減衰させて残響へ混ぜる、逆再生エコー効果です",
+    "ko-KR": "최근 음성을 역순으로 감쇠시켜 잔향 끝에 섞는 역방향 에코 효과입니다",
+    "es-ES": "Reverberación con cola inversa que mezcla el habla invertida y atenuada en la cola de eco",
+    "fr-FR": "Réverbération à queue inversée mêlant la parole inversée et atténuée à la traînée d'écho",
+    "ru-RU": "Реверберация с обратным хвостом, подмешивающая затухающую инвертированную речь"
   }
 }

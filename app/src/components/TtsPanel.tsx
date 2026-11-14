@@ -5,11 +5,11 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { TextArea, TextInput } from "trm-ui";
+import { SearchBox, TextArea, TextInput } from "trm-ui";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select, SliderValue } from "./controls";
+import { Field, RangeBar, Select, SliderValue, Toggle } from "./controls";
 import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
@@ -1658,6 +1658,7 @@ function StsSection() {
                       {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                       <input
                         type="checkbox"
+                        className="trm-check"
                         checked={s.recursive}
                         disabled={running || recording}
                         onChange={(e) => void toggleRecursive(s.id, e.target.checked)}
@@ -1768,8 +1769,7 @@ function StsSection() {
           </span>
         </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <TextInput
-            look="compact"
+          <SearchBox
             fit
             className="min-w-[160px] flex-1"
             placeholder={t("s.stsSearchPh")}
@@ -1856,7 +1856,7 @@ function StsSection() {
                   {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                   <input
                     type="checkbox"
-                    className="shrink-0"
+                    className="trm-check shrink-0"
                     checked={checked.has(f.path)}
                     disabled={running || recording}
                     // Shift 连选取点击时的 shiftKey；click 里拦下默认切换，
@@ -2485,15 +2485,12 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.a46919fc8e")}</span>
-          <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-            {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-            <input
-              type="checkbox"
-              checked={useRvc}
-              onChange={(e) => setUseRvc(e.target.checked)}
-            />
-            {st.model_name || t("s.9bbf6a5dce")}
-          </label>
+          <Toggle
+            look="inline"
+            checked={useRvc}
+            onChange={setUseRvc}
+            label={st.model_name || t("s.9bbf6a5dce")}
+          />
           <span className="text-[12.5px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
         </div>
         {/* 只显示当前模式那一路。两行并排摆出来的话，用户改了不用的那一行却

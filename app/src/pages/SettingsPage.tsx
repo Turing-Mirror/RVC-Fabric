@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { TextInput, usePageLeave } from "trm-ui";
+import { SearchBox, TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
@@ -1237,9 +1237,9 @@ function HotkeyGroups({
   const voiceRows = HOTKEYS.filter((h) => !needle || [labels[h.action] ?? h.action, prettyCombo(value(h.key, h.fallback))]
     .some((text) => text.toLowerCase().includes(needle)));
   return <>
-    <TextInput value={query} onChange={setQuery} placeholder={t("audio.hotkeySearch")}
-      aria-label={t("audio.hotkeySearch")}
-      className="max-w-[400px]" />
+    <SearchBox fit value={query} onChange={setQuery} placeholder={t("audio.hotkeySearch")}
+      ariaLabel={t("audio.hotkeySearch")}
+      className="w-full max-w-[400px]" />
     <div className="flex flex-col">
       <p className={HOTKEY_GROUP_TITLE}>{t("audio.hotkeyGroupVoice")}</p>
       {voiceRows.length === 0 ? <p className="text-[12.5px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
@@ -1384,18 +1384,17 @@ function HotkeyRow({
       {/* 「全局」逐个可关。全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
           用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在
           RVC Fabric 是当前窗口时有效，机器上其他软件照常用得着。 */}
-      <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] cursor-pointer select-none">
-        {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-        <input
-          type="checkbox"
-          checked={isGlobal}
-          onChange={(e) => {
-            setSaveError("");
-            void onGlobalChange(e.target.checked).catch((error) =>
-              setSaveError(hotkeyError(error)));
-          }}
-          className="w-[13px] h-[13px]"
-        />{t("s.a5644f4bbf")}</label>
+      <Toggle
+        look="compact"
+        className="ml-auto mr-3"
+        checked={isGlobal}
+        onChange={(checked) => {
+          setSaveError("");
+          void onGlobalChange(checked).catch((error) =>
+            setSaveError(hotkeyError(error)));
+        }}
+        label={t("s.a5644f4bbf")}
+      />
       <button
         type="button"
         onClick={() => void beginRecording()}

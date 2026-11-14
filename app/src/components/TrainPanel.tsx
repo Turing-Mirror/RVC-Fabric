@@ -4,7 +4,7 @@ import { TextInput } from "trm-ui";
 import { activeJob, latestExperimentJob, useTrainingQueue } from "../lib/trainQueue";
 import { TrainingQueue } from "./TrainingQueue";
 import { Btn, HelpMark } from "./ui";
-import { Select } from "./controls";
+import { Select, Toggle } from "./controls";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
@@ -725,17 +725,14 @@ export function TrainPanel() {
             />
           </div>
           <div className={ROW}>
-            <label className="flex items-center gap-2 text-[13px] cursor-pointer select-none">
-              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-              <input
-                type="checkbox"
-                checked={saveWeights}
-                onChange={(e) => setSaveWeights(e.target.checked)}
-               
-              />
-              {t("s.trainSaveWeights")}
-              <HelpMark title={t("s.trainSaveWeightsHint")} />
-            </label>
+            <Toggle
+              look="inline"
+              tipPosition="end"
+              checked={saveWeights}
+              onChange={setSaveWeights}
+              label={t("s.trainSaveWeights")}
+              tip={t("s.trainSaveWeightsHint")}
+            />
           </div>
         </div>
 

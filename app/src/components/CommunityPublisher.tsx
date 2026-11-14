@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Field, Pane, Panes, SegmentControl, Select, TextArea, TextInput, useI18n as useUiI18n, useNotify } from "trm-ui";
+import { Field, Pane, Panes, SearchBox, SegmentControl, Select, TextArea, TextInput, useI18n as useUiI18n, useNotify } from "trm-ui";
 import { useI18n } from "../i18n";
 import {
   isSha256,
@@ -188,7 +188,7 @@ export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted,
             </div>
             {source && (
               <section className="space-y-2">
-                <TextInput aria-label={uiText("ui.common.search")} placeholder={uiText("ui.common.search")} value={query}
+                <SearchBox full ariaLabel={uiText("ui.common.search")} value={query}
                   onChange={(value) => { setQuery(value); setPage(1); }} />
                 <CatalogTransition scope={query} page={currentPage}>
                   <div className="grid gap-1">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
-import { TextInput, usePageLeave } from "trm-ui";
+import { SearchBox, TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
@@ -7,7 +7,7 @@ import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import { Collapse, Leave } from "../components/Presence";
 import { Curtain, FlowList, Roll } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
-import { Select, Slider, SliderValue } from "../components/controls";
+import { Select, Slider, SliderValue, Toggle } from "../components/controls";
 import { askConfirm } from "trm-ui/fabric";
 import { promptAudioTools } from "../lib/downloadModels";
 import { useI18n } from "../i18n";
@@ -479,8 +479,8 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     <PagePad fill>
       <PageHead title={t("audio.title")} actions={
         <>
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] mr-1"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] mr-2"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />{t("audio.recursive")}</label>
+          <Toggle look="compact" className="mr-1" checked={copy} onChange={setCopy} label={t("audio.copyFiles")} />
+          <Toggle look="compact" className="mr-2" checked={recursive} onChange={setRecursive} label={t("audio.recursive")} />
           <Btn onClick={() => pick("file")} disabled={busy}>{t("audio.importFiles")}</Btn>
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
@@ -516,10 +516,11 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
         <section aria-label={t("audio.entries")} className="min-w-0 min-h-0 flex flex-col">
           <div className="flex-none flex items-stretch gap-3 flex-nowrap">
-            <TextInput value={search} onChange={setSearch} placeholder={t("audio.search")}
+            <SearchBox fit value={search} onChange={setSearch} placeholder={t("audio.search")}
               className="flex-1 min-w-[72px]" />
             <label title={t("audio.showExcluded")} className="min-w-0 flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12.5px] text-[var(--meta)] cursor-pointer">
-              <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
+              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+              <input type="checkbox" className="trm-check" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
               <span className="truncate">{t("audio.showExcluded")}</span>
             </label>
           </div>
@@ -582,11 +583,13 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                 </label>
                 <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
               </div>
-              <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--meta)]">
-                <input type="checkbox" checked={selected.looped} disabled={busy}
-                  onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
-                {t("audio.loopByDefault")}
-              </label>
+              <Toggle
+                look="compact"
+                checked={selected.looped}
+                disabled={busy}
+                onChange={(looped) => { void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }}
+                label={t("audio.loopByDefault")}
+              />
               {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
                 start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}
                 end={clipEnd.trim() && Number.isFinite(Number(clipEnd)) ? Number(clipEnd) : waveform.duration}
@@ -695,12 +698,13 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             </div>
             <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
           </div>
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--meta)]">
-            <input type="checkbox" checked={monitor}
-              onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
-                .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
-            {t("audio.monitorMusic")}
-          </label>
+          <Toggle
+            look="compact"
+            checked={monitor}
+            onChange={(enabled) => { void invoke<boolean>("audio_voice_monitor_set", { enabled })
+              .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }}
+            label={t("audio.monitorMusic")}
+          />
           <span className="ml-auto">
             <Btn disabled={voiceInstances.length === 0 && !voicePreparing} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop").then((status) => {
               setVoice(status);

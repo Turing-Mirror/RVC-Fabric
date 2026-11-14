@@ -24,6 +24,7 @@ import { Nudge } from "./components/Nudge";
 import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
 import { Btn } from "./components/ui";
+import { Toggle } from "./components/controls";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
 import { WebDialogHost } from "./components/WebDialog";
@@ -1417,14 +1418,13 @@ export default function App() {
           >
             <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
-            <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
-              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-              <input
-                type="checkbox"
-                checked={closeRemember}
-                onChange={(e) => setCloseRemember(e.target.checked)}
-               
-              />{t("s.f75c86ad46")}</label>
+            <Toggle
+              look="inline"
+              className="mb-5"
+              checked={closeRemember}
+              onChange={setCloseRemember}
+              label={t("s.f75c86ad46")}
+            />
             <div className="flex gap-2.5 justify-end">
               <button
                 type="button"

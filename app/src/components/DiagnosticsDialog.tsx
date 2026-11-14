@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TextArea, TextInput } from "trm-ui";
 import { Btn } from "./ui";
+import { Toggle } from "./controls";
 import { t } from "../i18n/t";
 import { FindingList, type Finding } from "./FindingList";
 import {
@@ -285,18 +286,14 @@ export function DiagnosticsDialog({
           ) : null}
         </div>
 
-        <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
-          {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-          <input
-            type="checkbox"
-            checked={withPerf}
-            onChange={(e) => setWithPerf(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span className="text-[12.5px] text-[var(--ink-muted)] leading-relaxed">
-            {t("s.diagPerf")}
-          </span>
-        </label>
+        <Toggle
+          look="compact"
+          align="start"
+          className="mb-4 leading-relaxed"
+          checked={withPerf}
+          onChange={setWithPerf}
+          label={t("s.diagPerf")}
+        />
 
         {/* 包里已经能看出来的问题。用户当场就能改掉一部分（选错模型、盘满），
             剩下的支援也省一轮问答。没有结论时只留一行，不占地方。 */}

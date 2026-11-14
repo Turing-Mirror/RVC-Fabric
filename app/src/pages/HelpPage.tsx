@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { TextInput } from "trm-ui";
+import { SearchBox } from "trm-ui";
 import {
   AccordionGroup,
   Block,
@@ -400,14 +400,12 @@ function HelpPageImpl({
         sub={t("s.e137006ffd")}
         actions={
           <>
-            <TextInput
-              type="search"
-              look="compact"
+            <SearchBox
               fit
               value={query}
               onChange={setQuery}
               placeholder={t("s.helpSearch")}
-              aria-label={t("s.helpSearch")}
+              ariaLabel={t("s.helpSearch")}
               className="w-[240px]"
             />
             {onOpenCommunity ? (

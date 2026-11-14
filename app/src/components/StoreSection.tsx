@@ -24,9 +24,9 @@ import {
   useStoreJobs,
   type VoiceProg,
 } from "../lib/storeJobs";
-import { TextInput } from "trm-ui";
+import { SearchBox } from "trm-ui";
 import { Btn, Warn } from "./ui";
-import { Select } from "./controls";
+import { Select, Toggle } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
 import { CatalogTransition } from "./CatalogTransition";
@@ -507,16 +507,15 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
   return (
     <div>
       {hasVoices ? <div className="flex flex-wrap items-center gap-3 mb-[18px]">
-        <div className="min-w-[200px] flex-1 max-w-[320px]">
-          <TextInput
-            value={q}
-            onChange={(value) => {
-              setQ(value);
-              setPage(1);
-            }}
-            placeholder={t("store.searchHint")}
-          />
-        </div>
+        <SearchBox
+          value={q}
+          onChange={(value) => {
+            setQ(value);
+            setPage(1);
+          }}
+          placeholder={t("store.searchHint")}
+          className="min-w-[200px]"
+        />
         <SegmentControl<Source>
           value={source}
           onChange={(v) => {
@@ -580,17 +579,15 @@ export function StoreSection({ reloadToken, onInstalled }: Props) {
             ]}
           />
         ) : null}
-        <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--ink-muted)] cursor-pointer select-none">
-          {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-          <input
-            type="checkbox"
-            checked={hideInstalled}
-            onChange={(e) => {
-              setHideInstalled(e.target.checked);
-              setPage(1);
-            }}
-           
-          />{t("s.85b3f0512b")}</label>
+        <Toggle
+          look="compact"
+          checked={hideInstalled}
+          onChange={(value) => {
+            setHideInstalled(value);
+            setPage(1);
+          }}
+          label={t("s.85b3f0512b")}
+        />
       </div> : null}
 
       {source !== "official" && cat?.thirdparty_voices?.some((voice) => !voice.community_version_id) ? (

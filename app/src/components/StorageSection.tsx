@@ -169,7 +169,6 @@ export function StorageSection() {
     }
   };
 
-  const check = "w-[14px] h-[14px] flex-none accent-[var(--accent)]";
   return (
     <Block
       title={t("s.storageTitle")}
@@ -199,7 +198,8 @@ export function StorageSection() {
               return (
                 <li key={k.id}>
                   <label className={`flex items-center gap-2.5 py-1.5 text-[13px] ${empty ? "opacity-45" : "cursor-pointer"}`}>
-                    <input type="checkbox" className={check} disabled={empty || busy} checked={direct.has(k.id)} onChange={() => toggleDirect(k.id)} />
+                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+                    <input type="checkbox" className="trm-check" disabled={empty || busy} checked={direct.has(k.id)} onChange={() => toggleDirect(k.id)} />
                     <span>{t(k.labelKey)}</span>
                     <span className="text-[11.5px] text-[var(--meta)]">{t(k.effectKey)}</span>
                     <span className="ml-auto font-mono text-[11.5px] text-[var(--meta)] tabular-nums">{human(bytes)}</span>
@@ -229,7 +229,8 @@ export function StorageSection() {
                     const empty = !info || info.bytes === 0;
                     return (
                       <label key={k.id} className={`flex items-center gap-2.5 py-1 text-[12.5px] ${empty ? "opacity-45" : "cursor-pointer"}`}>
-                        <input type="checkbox" className={check} disabled={empty || busy} checked={train[row.exp]?.has(k.id) ?? false} onChange={() => toggleTrain(row.exp, k.id)} />
+                        {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+                        <input type="checkbox" className="trm-check" disabled={empty || busy} checked={train[row.exp]?.has(k.id) ?? false} onChange={() => toggleTrain(row.exp, k.id)} />
                         <span>{t(k.labelKey)}</span>
                         <span className="text-[11.5px] text-[var(--meta)]">{t(k.effectKey)}</span>
                         <span className="ml-auto font-mono text-[11.5px] text-[var(--meta)] tabular-nums">{human(info?.bytes ?? 0)}</span>

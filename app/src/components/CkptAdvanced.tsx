@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select, SliderValue } from "./controls";
+import { Field, RangeBar, Select, SliderValue, Toggle } from "./controls";
 import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
@@ -173,15 +173,12 @@ export function CkptAdvanced() {
                 label={t("s.ckptIfF0")}
                 tip={t("s.ckptIfF0Hint")}
                 control={
-                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-                    <input
-                      type="checkbox"
-                      checked={ifF0}
-                      onChange={(e) => setIfF0(e.target.checked)}
-                    />
-                    {t("s.ckptIfF0Yes")}
-                  </label>
+                  <Toggle
+                    look="inline"
+                    checked={ifF0}
+                    onChange={setIfF0}
+                    label={t("s.ckptIfF0Yes")}
+                  />
                 }
               />
             </div>
@@ -320,15 +317,12 @@ export function CkptAdvanced() {
                 label={t("s.ckptIfF0")}
                 tip={t("s.ckptIfF0Hint")}
                 control={
-                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
-                    <input
-                      type="checkbox"
-                      checked={ifF0}
-                      onChange={(e) => setIfF0(e.target.checked)}
-                    />
-                    {t("s.ckptIfF0Yes")}
-                  </label>
+                  <Toggle
+                    look="inline"
+                    checked={ifF0}
+                    onChange={setIfF0}
+                    label={t("s.ckptIfF0Yes")}
+                  />
                 }
               />
             </div>

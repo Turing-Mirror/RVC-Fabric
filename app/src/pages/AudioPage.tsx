@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
-import { usePageLeave } from "trm-ui";
+import { TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
@@ -465,7 +465,6 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
   const unplayable = (asset?: Asset) => !asset || asset.available === false || selectedExcluded ||
     (asset.excluded_source_ids?.length ?? 0) === asset.source_ids.length;
   const sourceCount = (id: string) => library.entries.filter((entry) => assetById.get(entry.asset_id)?.source_ids.includes(id)).length;
-  const field = "block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]";
   // 双击条目：直接替换播放到语音，与常见音效板的用法一致
   const playNow = (entry: Entry) => {
     chooseEntry(entry);
@@ -517,8 +516,8 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
         <section aria-label={t("audio.entries")} className="min-w-0 min-h-0 flex flex-col">
           <div className="flex-none flex items-stretch gap-3 flex-nowrap">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
-              className="flex-1 min-w-[72px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+            <TextInput value={search} onChange={setSearch} placeholder={t("audio.search")}
+              className="flex-1 min-w-[72px]" />
             <label title={t("audio.showExcluded")} className="min-w-0 flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12.5px] text-[var(--meta)] cursor-pointer">
               <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
               <span className="truncate">{t("audio.showExcluded")}</span>
@@ -575,11 +574,11 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3 items-end">
                 <label className="text-[12.5px] text-[var(--meta)] min-w-0">{t("audio.entryName")}
-                  <input value={entryName} onChange={(e) => setEntryName(e.target.value)} className={`${field} w-full`} />
+                  <TextInput value={entryName} onChange={setEntryName} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_rename_entry", { entryId: selected.id, name: entryName })); })}>{t("audio.saveName")}</Btn>
                 <label className="text-[12.5px] text-[var(--meta)] min-w-0">{t("audio.fixedNumber")}
-                  <input type="number" min="1" step="1" value={number} onChange={(e) => setNumber(e.target.value)} className={`${field} w-full`} />
+                  <TextInput type="number" min="1" step="1" value={number} onChange={setNumber} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
               </div>
@@ -601,10 +600,10 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               {waveform.error ? <p className="text-[12.5px] text-[var(--meta)] m-0">{t("neptune.waveformFailed")}</p> : null}
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[12.5px] text-[var(--meta)]">{t("audio.startSeconds")}
-                  <input type="number" min="0" step="0.001" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className={`${field} w-full`} />
+                  <TextInput type="number" min="0" step="0.001" value={clipStart} onChange={setClipStart} className="block mt-1" />
                 </label>
                 <label className="text-[12.5px] text-[var(--meta)]">{t("audio.endSeconds")}
-                  <input type="number" min="0" step="0.001" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className={`${field} w-full`} />
+                  <TextInput type="number" min="0" step="0.001" value={clipEnd} onChange={setClipEnd} className="block mt-1" />
                 </label>
               </div>
               <div className="flex items-end gap-2 flex-wrap">
@@ -625,7 +624,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
               </div> : null}
               <div className="flex items-end gap-2 flex-wrap">
                 <label className="text-[12.5px] text-[var(--meta)] flex-1 min-w-[140px]">{t("audio.clipName")}
-                  <input value={clipName} onChange={(e) => setClipName(e.target.value)} className={`${field} w-full`} />
+                  <TextInput value={clipName} onChange={setClipName} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={addClip}>{t("audio.addClip")}</Btn>
               </div>

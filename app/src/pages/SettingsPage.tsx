@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { usePageLeave } from "trm-ui";
+import { TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
@@ -938,6 +938,7 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_text}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* design-allow: 等 TextInput 补上横幅设置输入外观。 */}
                     <input
                       type="text"
                       maxLength={40}
@@ -963,6 +964,7 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_sub}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* design-allow: 等 TextInput 补上横幅设置输入外观。 */}
                     <input
                       type="text"
                       maxLength={60}
@@ -1243,9 +1245,9 @@ function HotkeyGroups({
   const voiceRows = HOTKEYS.filter((h) => !needle || [labels[h.action] ?? h.action, prettyCombo(value(h.key, h.fallback))]
     .some((text) => text.toLowerCase().includes(needle)));
   return <>
-    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("audio.hotkeySearch")}
+    <TextInput value={query} onChange={setQuery} placeholder={t("audio.hotkeySearch")}
       aria-label={t("audio.hotkeySearch")}
-      className="w-full max-w-[400px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+      className="max-w-[400px]" />
     <div className="flex flex-col">
       <p className={HOTKEY_GROUP_TITLE}>{t("audio.hotkeyGroupVoice")}</p>
       {voiceRows.length === 0 ? <p className="text-[12.5px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
@@ -1391,6 +1393,7 @@ function HotkeyRow({
           用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在
           RVC Fabric 是当前窗口时有效，机器上其他软件照常用得着。 */}
       <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] cursor-pointer select-none">
+        {/* design-allow: 勾选框样式与 Toggle 不同。 */}
         <input
           type="checkbox"
           checked={isGlobal}

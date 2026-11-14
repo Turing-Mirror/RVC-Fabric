@@ -5,6 +5,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { TextArea } from "trm-ui";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
@@ -1656,6 +1657,7 @@ function StsSection() {
                   ) : null}
                   {s.kind === "dir" ? (
                     <label className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--meta)] cursor-pointer">
+                      {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                       <input
                         type="checkbox"
                         checked={s.recursive}
@@ -1768,6 +1770,7 @@ function StsSection() {
           </span>
         </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          {/* design-allow: 等 TextInput 补上紧凑外观。 */}
           <input
             className={`${FIELD} min-w-[160px] flex-1`}
             placeholder={t("s.stsSearchPh")}
@@ -1851,6 +1854,7 @@ function StsSection() {
                       : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
                   ].join(" ")}
                 >
+                  {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                   <input
                     type="checkbox"
                     className="shrink-0"
@@ -2147,6 +2151,7 @@ function StsSection() {
                       ariaLabel={t("s.stsSid")}
                     />
                   </div>
+                  {/* design-allow: 等 TextInput 补上紧凑外观。 */}
                   <input
                     className={`w-[64px] ${FIELD}`}
                     type="number"
@@ -2419,15 +2424,12 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
         </div>
       ) : null}
 
-      <textarea
-        className={[
-          "w-full min-h-[120px] rounded-[var(--rs)] border px-3 py-2.5 text-[13px] leading-relaxed",
-          "bg-transparent text-[var(--ink)] resize-y",
-          over ? "border-[var(--danger)]" : "border-[var(--hairline)]",
-        ].join(" ")}
+      <TextArea
+        className="min-h-[120px] leading-relaxed"
+        invalid={over}
         placeholder={t("s.f2f07193b8")}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
       />
       <p
         className={[
@@ -2484,6 +2486,7 @@ function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
         <div className={ROW}>
           <span className={LABEL}>{t("s.a46919fc8e")}</span>
           <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+            {/* design-allow: 勾选框样式与 Toggle 不同。 */}
             <input
               type="checkbox"
               checked={useRvc}

@@ -130,6 +130,7 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={name}
@@ -141,6 +142,7 @@ export function CkptAdvanced() {
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={info}
@@ -183,6 +185,7 @@ export function CkptAdvanced() {
                 tip={t("s.ckptIfF0Hint")}
                 control={
                   <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                     <input
                       type="checkbox"
                       checked={ifF0}
@@ -239,6 +242,7 @@ export function CkptAdvanced() {
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={info}
@@ -250,6 +254,7 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveAs")}
               tip={t("s.ckptSaveAsHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={name}
@@ -292,6 +297,7 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={name}
@@ -303,6 +309,7 @@ export function CkptAdvanced() {
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
+                // design-allow: 等 TextInput 补上紧凑外观。
                 <input
                   className={FIELD}
                   value={info}
@@ -345,6 +352,7 @@ export function CkptAdvanced() {
                 tip={t("s.ckptIfF0Hint")}
                 control={
                   <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                     <input
                       type="checkbox"
                       checked={ifF0}

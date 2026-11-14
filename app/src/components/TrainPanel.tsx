@@ -628,6 +628,7 @@ export function TrainPanel() {
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.4eea655d6f")}</span>
+            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
             <input
               ref={nameRef}
               className={`flex-1 min-w-0 ${FIELD}`}
@@ -658,6 +659,7 @@ export function TrainPanel() {
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.61fdf63b84")}</span>
+            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
             <input
               className={`w-[100px] ${FIELD}`}
               type="number"
@@ -673,6 +675,7 @@ export function TrainPanel() {
               {t("s.trainBatch")}
               <HelpMark title={t("s.trainBatchHint")} />
             </span>
+            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
             <input
               ref={batchRef}
               className={`w-[100px] ${FIELD}`}
@@ -708,6 +711,7 @@ export function TrainPanel() {
               {t("s.trainSaveEvery")}
               <HelpMark title={t("s.trainSaveEveryHint")} />
             </span>
+            {/* design-allow: 等 TextInput 补上紧凑外观。 */}
             <input
               className={`w-[100px] ${FIELD}`}
               type="number"
@@ -719,6 +723,7 @@ export function TrainPanel() {
           </div>
           <div className={ROW}>
             <label className="flex items-center gap-2 text-[13px] cursor-pointer select-none">
+              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
               <input
                 type="checkbox"
                 checked={saveWeights}

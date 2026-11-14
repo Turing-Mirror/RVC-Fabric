@@ -219,6 +219,7 @@ export function ConsultDialog({
         <label className="block text-[12.5px] text-[var(--help)] mb-1">
           {t("s.consultNote")}
         </label>
+        {/* design-allow: 等 TextArea 支持禁止拉伸。 */}
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}

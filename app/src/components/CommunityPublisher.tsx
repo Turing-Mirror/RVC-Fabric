@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Field, Pane, Panes, SegmentControl, Select, useI18n as useUiI18n, useNotify } from "trm-ui";
+import { Field, Pane, Panes, SegmentControl, Select, TextArea, TextInput, useI18n as useUiI18n, useNotify } from "trm-ui";
 import { useI18n } from "../i18n";
 import {
   isSha256,
@@ -23,21 +23,19 @@ import type { CommunityAccount } from "./CommunityActions";
 const steps = ["source", "details", "preview"] as const;
 type Step = (typeof steps)[number];
 const filesPerPage = 7;
-const inputClass = "w-full rounded-[var(--rs)] bg-transparent px-3 py-2 text-[13px] text-[var(--ink)] border border-[var(--line)] outline-none focus:border-[var(--accent)]";
 
 function TextField({ label, value, onChange, limit, disabled, multiline = false }: {
   label: string; value: string; onChange: (value: string) => void;
   limit?: number; disabled?: boolean; multiline?: boolean;
 }) {
   const props = {
-    className: inputClass,
     "aria-label": label,
     value,
     maxLength: limit,
     disabled,
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
+    onChange,
   };
-  return <Field label={label} control={multiline ? <textarea {...props} rows={4} /> : <input {...props} />} />;
+  return <Field label={label} control={multiline ? <TextArea {...props} rows={4} /> : <TextInput {...props} />} />;
 }
 
 export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted, onMySubmissions }: {
@@ -190,8 +188,8 @@ export function CommunityPublisher({ initial, auth, onBack, onSave, onSubmitted,
             </div>
             {source && (
               <section className="space-y-2">
-                <input className={inputClass} aria-label={uiText("ui.common.search")} placeholder={uiText("ui.common.search")} value={query}
-                  onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
+                <TextInput aria-label={uiText("ui.common.search")} placeholder={uiText("ui.common.search")} value={query}
+                  onChange={(value) => { setQuery(value); setPage(1); }} />
                 <CatalogTransition scope={query} page={currentPage}>
                   <div className="grid gap-1">
                     {matching.slice((currentPage - 1) * filesPerPage, currentPage * filesPerPage).map((file) => (

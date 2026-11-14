@@ -287,6 +287,7 @@ export function DspPresetEditor({
       ) : null}
 
       <div className="flex items-center gap-2 mt-4">
+        {/* design-allow: 等 TextInput 补上紧凑外观。 */}
         <input
           value={saveAs}
           onChange={(e) => setSaveAs(e.target.value)}

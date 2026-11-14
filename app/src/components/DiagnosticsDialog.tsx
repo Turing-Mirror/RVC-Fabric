@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { TextArea, TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { FindingList, type Finding } from "./FindingList";
@@ -151,11 +152,6 @@ export function DiagnosticsDialog({
 
   if (!open) return <Modal open={false} />;
 
-  const field =
-    "w-full px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent " +
-    "text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none " +
-    "focus:shadow-[inset_0_0_0_1px_var(--accent)]";
-
   return (
     <Modal z={100} onBackdrop={onCancel}>
       <div
@@ -198,13 +194,12 @@ export function DiagnosticsDialog({
           <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
             {t("s.diagNickname")}
           </span>
-          <input
+          <TextInput
             ref={firstRef}
             value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            onChange={setNickname}
             maxLength={64}
             placeholder={t("s.diagNicknameHint")}
-            className={field}
           />
         </label>
 
@@ -212,13 +207,12 @@ export function DiagnosticsDialog({
           <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
             {t("s.diagQq")}
           </span>
-          <input
+          <TextInput
             value={qq}
-            onChange={(e) => setQq(e.target.value)}
+            onChange={setQq}
             maxLength={32}
             inputMode="numeric"
             placeholder={t("s.diagQqHint")}
-            className={field}
           />
         </label>
 
@@ -226,13 +220,13 @@ export function DiagnosticsDialog({
           <span className="block mb-1.5 text-[12.5px] text-[var(--ink-muted)]">
             {t("s.diagDesc")}
           </span>
-          <textarea
+          <TextArea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             maxLength={4000}
             rows={4}
             placeholder={t("s.diagDescHint")}
-            className={field + " resize-y leading-relaxed"}
+            className="leading-relaxed"
           />
         </label>
 
@@ -267,6 +261,7 @@ export function DiagnosticsDialog({
               ))}
             </ul>
           ) : null}
+          {/* design-allow: 隐藏的文件选择输入，只用于触发系统选择框。 */}
           <input
             ref={fileRef}
             type="file"
@@ -291,6 +286,7 @@ export function DiagnosticsDialog({
         </div>
 
         <label className="flex items-start gap-2.5 mb-4 cursor-pointer">
+          {/* design-allow: 勾选框样式与 Toggle 不同。 */}
           <input
             type="checkbox"
             checked={withPerf}

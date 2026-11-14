@@ -152,8 +152,10 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     {waveform.error ? <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
     <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
     <div className="flex flex-wrap items-center gap-3">
+      {/* design-allow: 等 TextInput 补上紧凑外观。 */}
       <label>{t("neptune.trimStart")} <input type="number" min={0} max={end} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(start) ? start.toFixed(2) : ""} onChange={(e) => setStart(Number(e.target.value))} /></label>
+      {/* design-allow: 等 TextInput 补上紧凑外观。 */}
       <label>{t("neptune.trimEnd")} <input type="number" min={start} max={duration} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(end) ? end.toFixed(2) : ""} onChange={(e) => setEnd(Number(e.target.value))} /></label>
     </div>

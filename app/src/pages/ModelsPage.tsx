@@ -491,6 +491,7 @@ function ModelsPageImpl({
 
       <Block>
         <div className="flex items-center gap-3 flex-wrap mb-[18px]">
+          {/* design-allow: 等 TextInput 支持行内自适应宽度。 */}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

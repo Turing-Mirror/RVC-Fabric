@@ -1418,6 +1418,7 @@ export default function App() {
             <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
             <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
+              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
               <input
                 type="checkbox"
                 checked={closeRemember}

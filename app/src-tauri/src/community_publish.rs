@@ -29,10 +29,30 @@ pub enum PublicationRequest {
     },
     Author {
         id: String,
+        page: Option<u32>,
         cursor: Option<String>,
+        query: Option<String>,
+        limit: Option<u32>,
     },
     Owned {
+        page: Option<u32>,
         cursor: Option<String>,
+        query: Option<String>,
+        limit: Option<u32>,
+    },
+    Asset {
+        id: String,
+    },
+    Version {
+        id: String,
+        #[serde(rename = "versionId")]
+        version_id: String,
+    },
+    CoverPreview {
+        id: String,
+    },
+    Categories {
+        parent: Option<String>,
     },
     Mine {
         state: Option<String>,
@@ -47,6 +67,30 @@ pub enum PublicationRequest {
 
 fn unavailable() -> ApiError {
     ApiError::new("unavailable", "Community is temporarily unavailable.")
+}
+
+fn catalog_query(url: &mut reqwest::Url, page: Option<u32>, cursor: Option<String>, query: Option<String>, limit: Option<u32>) {
+    let mut pairs = url.query_pairs_mut();
+    pairs.append_pair("productId", community_catalog::PRODUCT_ID);
+    if let Some(page) = page {
+        pairs.append_pair("page", &page.to_string());
+    } else if let Some(cursor) = cursor {
+        pairs.append_pair("cursor", &cursor);
+    }
+    if let Some(query) = query {
+        pairs.append_pair("q", &query);
+    }
+    if let Some(limit) = limit {
+        pairs.append_pair("limit", &limit.to_string());
+    }
+}
+
+fn attach_cover(value: &mut Value, base: &reqwest::Url) {
+    if let (Some(id), Some(cover)) = (value["id"].as_str(), value["coverUploadId"].as_str()) {
+        let mut url = community_catalog::endpoint(base, &["assets", id, "cover"]);
+        url.query_pairs_mut().append_pair("v", cover);
+        value["coverUrl"] = json!(url.as_str());
+    }
 }
 
 fn json_body(request: RequestBuilder, body: &Value) -> RequestBuilder {
@@ -85,7 +129,9 @@ pub async fn community_publication(request: PublicationRequest) -> ApiResult {
         .build()
         .map_err(|_| unavailable())?;
     let endpoint = |path: &[&str]| community_catalog::endpoint(&base, path);
-    let public = matches!(&request, PublicationRequest::Author { .. });
+    let public = matches!(&request, PublicationRequest::Author { .. }
+        | PublicationRequest::Asset { .. } | PublicationRequest::Version { .. } | PublicationRequest::Categories { .. });
+    let preview = matches!(&request, PublicationRequest::CoverPreview { .. });
     let request = match request {
         PublicationRequest::Resolve { url, revision } => json_body(
             client.post(endpoint(&["sources", "resolve"])),
@@ -114,16 +160,24 @@ pub async fn community_publication(request: PublicationRequest) -> ApiResult {
             }
             json_body(client.post(endpoint(&["submissions", "batch"])), &json!({ "batchId": batch_id, "items": items }))
         }
-        PublicationRequest::Author { id, cursor } => {
+        PublicationRequest::Author { id, page, cursor, query, limit } => {
             let mut url = endpoint(&["authors", &id]);
-            if let Some(cursor) = cursor { url.query_pairs_mut().append_pair("cursor", &cursor); }
-            url.query_pairs_mut().append_pair("productId", community_catalog::PRODUCT_ID);
+            catalog_query(&mut url, page, cursor, query, limit);
             client.get(url)
         }
-        PublicationRequest::Owned { cursor } => {
+        PublicationRequest::Owned { page, cursor, query, limit } => {
             let mut url = endpoint(&["me", "assets"]);
-            if let Some(cursor) = cursor { url.query_pairs_mut().append_pair("cursor", &cursor); }
-            url.query_pairs_mut().append_pair("productId", community_catalog::PRODUCT_ID);
+            catalog_query(&mut url, page, cursor, query, limit);
+            client.get(url)
+        }
+        PublicationRequest::Asset { id } => client.get(endpoint(&["assets", &id])),
+        PublicationRequest::Version { id, version_id } => client.get(endpoint(&["assets", &id, "versions", &version_id])),
+        PublicationRequest::CoverPreview { id } => client.get(endpoint(&["uploads", &id, "content"])),
+        PublicationRequest::Categories { parent } => {
+            let mut url = endpoint(&["categories"]);
+            if let Some(parent) = parent {
+                url.query_pairs_mut().append_pair("parent", &parent);
+            }
             client.get(url)
         }
         PublicationRequest::Mine { state, page, limit, batch } => {
@@ -154,17 +208,35 @@ pub async fn community_publication(request: PublicationRequest) -> ApiResult {
         .await
         .map_err(|_| unavailable())?;
     let status = response.status();
+    if preview && status.is_success() {
+        let mime = response.headers().get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()).unwrap_or_default().to_owned();
+        let size = response.content_length();
+        if !matches!(mime.as_str(), "image/jpeg" | "image/png" | "image/webp" | "image/avif" | "image/gif")
+            || size.is_none_or(|size| size > 8 * 1024 * 1024) {
+            return Err(ApiError::invalid("Invalid Community cover."));
+        }
+        let bytes = response.bytes().await.map_err(|_| unavailable())?;
+        return Ok(json!({ "url": format!("data:{mime};base64,{}", crate::wallpaper::encode_base64(&bytes)) }));
+    }
     let body = response.text().await.map_err(|_| unavailable())?;
     let mut value: Value = serde_json::from_str(&body).map_err(|_| unavailable())?;
     if status.is_success() {
         if let Some(items) = value["items"].as_array_mut() {
             for item in items {
-                if let (Some(id), Some(cover)) = (item["id"].as_str(), item["coverUploadId"].as_str()) {
-                    let mut url = endpoint(&["assets", id, "cover"]);
-                    url.query_pairs_mut().append_pair("v", cover);
-                    item["coverUrl"] = json!(url.as_str());
+                if item.get("asset").is_none() {
+                    attach_cover(item, &base);
+                } else if item["state"] == "published" {
+                    if let (Some(id), Some(cover)) = (item["assetId"].as_str(), item["coverUploadId"].as_str()) {
+                        let mut url = endpoint(&["assets", id, "cover"]);
+                        url.query_pairs_mut().append_pair("v", cover);
+                        item["coverUrl"] = json!(url.as_str());
+                    }
                 }
             }
+        }
+        if let Some(asset) = value.get_mut("asset") {
+            attach_cover(asset, &base);
         }
         return Ok(value);
     }

@@ -30,7 +30,7 @@ import { Select, Toggle } from "./controls";
 import { SegmentControl } from "./SegmentControl";
 import { Pager } from "./Pager";
 import { CatalogTransition } from "./CatalogTransition";
-import { CatalogCover, useDir, useMenu, usePageActive, usePaneOn, type MenuItem } from "trm-ui";
+import { CatalogCover, Collapse, useDir, useMenu, usePageActive, usePaneOn, type MenuItem } from "trm-ui";
 import { resolveCover, useCoverCache } from "../lib/cover";
 import { t, getTLocale } from "../i18n/t";
 import {
@@ -45,9 +45,10 @@ import {
   voiceGroupRaw,
   voiceParentSeries,
   voiceSearchText,
-  voiceVersionLabel,
+  voiceReleaseDate,
 } from "../lib/voiceDisplay";
 import { askConfirm } from "trm-ui/fabric";
+import { authorLinkName } from "../lib/communityPublication";
 import { openExternal } from "../lib/plaza";
 import { AuthorsDialog } from "./AuthorsDialog";
 import type { VoiceAuthor } from "../lib/voices";
@@ -125,6 +126,7 @@ type Grouping = "time" | "series";
 const SERIES_PREVIEW_ROWS = 1;
 /** 一页几行。和模型页一样。 */
 const PAGE_ROWS = 3;
+const DEPARTMENTS_PER_PAGE = 8;
 
 type Props = {
   /**
@@ -137,14 +139,16 @@ type Props = {
   /** 装好一个音色。模型页下次进入时会自己重新列，这里只用来提示。 */
   onInstalled?: () => void;
   onAuthor?: (id: string) => void;
+  onOpenModel?: (id: string, title: string, versionId?: string) => void;
   assetId?: string;
+  detail?: boolean;
 };
 
 function stagingId(voice: StoreVoice) {
   return voice.community_staging_id || voice.id;
 }
 
-export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Props) {
+export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, assetId, detail }: Props) {
   const { locale } = useI18n();
   const pageActive = usePageActive();
   const paneActive = usePaneOn();
@@ -163,6 +167,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
   const [seriesFocus, setSeriesFocus] = useState("");
   /** 某个系列「查看全部」之后的页码。 */
   const [seriesPage, setSeriesPage] = useState<Record<string, number>>({});
+  const [departmentPages, setDepartmentPages] = useState<Record<string, number>>({});
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [cols, setCols] = useState(5);
@@ -209,13 +214,13 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
     }
   }, [assetId]);
 
-  // Refresh on entry and when the user clicks Refresh. The mounted catalog
-  // keeps its filters and page while the user opens another view.
+  const lastLoad = useRef<{ assetId?: string; token: number } | undefined>(undefined);
   useEffect(() => {
-    if (!pageActive) return;
+    if (!active || (lastLoad.current?.token === reloadToken && lastLoad.current.assetId === assetId)) return;
+    lastLoad.current = { assetId, token: reloadToken };
     void refresh(true);
     void loadStaged();
-  }, [pageActive, reloadToken, refresh, loadStaged]);
+  }, [active, assetId, reloadToken, refresh, loadStaged]);
 
   // A job that finished while this page was unmounted still has to refresh the
   // catalog and the staged list, otherwise the card stays on 「下载」.
@@ -506,10 +511,22 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
     onDiscard: () => void discard(v),
     coverMap: coverCache,
     onAuthor: onAuthor && v.community_author_id ? () => onAuthor(v.community_author_id!) : undefined,
+    onOpenModel: onOpenModel && v.community_version_id
+      ? () => onOpenModel(v.id, displayVoiceName(v, locale), v.community_version_id)
+      : undefined,
   });
 
   const hasVoices = Boolean(cat?.voices?.length || cat?.thirdparty_voices?.length);
   const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
+
+  if (detail) {
+    const model = list[0];
+    return <>
+      {(err || jobs.error) && <Warn className="mb-4">{err || jobs.error}</Warn>}
+      {model ? <VoiceCard {...cardProps(model)} detail />
+        : !err && <p className="text-[13px] text-[var(--help)]">{t(loading ? "s.f950213ab7" : "publication.noMatchingModels")}</p>}
+    </>;
+  }
 
   return (
     <div>
@@ -628,12 +645,17 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
                 const groups = focusGroup
                   ? node.groups.filter((g) => g.raw === focusGroup)
                   : node.groups;
+                const departmentTotal = Math.max(1, Math.ceil(groups.length / DEPARTMENTS_PER_PAGE));
+                const departmentPage = Math.min(departmentPages[node.key] ?? 1, departmentTotal);
+                const departmentStart = (departmentPage - 1) * DEPARTMENTS_PER_PAGE;
+                const shownGroups = groups.slice(departmentStart, departmentStart + DEPARTMENTS_PER_PAGE);
                 return (
                   <div key={node.key} className="mb-3">
                     {seriesFocus ? null : (
                       <button
                         type="button"
                         className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2.5 cursor-pointer flex justify-between items-center"
+                        aria-expanded={openS}
                         onClick={() =>
                           setExpanded((prev) => {
                             const n = new Set(prev);
@@ -643,7 +665,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
                           })
                         }
                       >
-                          <span className="font-semibold text-[13px]">{node.label}</span>
+                        <span className="font-semibold text-[13px]">{node.label}</span>
                         <span className="text-[12.5px] text-[var(--meta)]">
                           {t("s.c8542337dc", {
                             v0: node.voices.length,
@@ -652,55 +674,66 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
                         </span>
                       </button>
                     )}
-                    {openS ? (
-                      nested && !parentAll ? (
-                        groups.map((g) => {
-                          const gk = groupFocusKey(node.key, g.raw);
-                          const openG = !!focusGroup || expandedGroups.has(gk);
-                          return (
-                            <div key={gk} className="pl-3 mt-1.5">
-                              {focusGroup ? null : (
-                                <button
-                                  type="button"
-                                  className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2 cursor-pointer flex justify-between items-center"
-                                  onClick={() =>
-                                    setExpandedGroups((prev) => {
-                                      const n = new Set(prev);
-                                      if (n.has(gk)) n.delete(gk);
-                                      else n.add(gk);
-                                      return n;
-                                    })
-                                  }
-                                >
-                                  <span className="text-[13px]">{g.label}</span>
-                                  <span className="text-[12.5px] text-[var(--meta)]">
-                                    {t("s.c8542337dc", {
-                                      v0: g.voices.length,
-                                      v1: openG
-                                        ? t("s.5d5815647c")
-                                        : t("s.b0e24833f7"),
-                                    })}
-                                  </span>
-                                </button>
-                              )}
-                              {openG ? (
-                                <SeriesPageGrid
-                                  seriesKey={gk}
-                                  voices={g.voices}
-                                  cols={cols}
-                                  perPage={perPage}
-                                  forcedFull={!!focusGroup}
-                                  seriesFull={seriesFull}
-                                  setSeriesFull={setSeriesFull}
-                                  seriesPage={seriesPage}
-                                  setSeriesPage={setSeriesPage}
-                                  cardProps={cardProps}
-                                  gridStyle={gridStyle}
-                                />
-                              ) : null}
-                            </div>
-                          );
-                        })
+                    <Collapse open={openS}>
+                      {nested && !parentAll ? (
+                        <>
+                          <CatalogTransition scope={node.key + ":departments"} page={departmentPage}>
+                            {shownGroups.map((g) => {
+                              const gk = groupFocusKey(node.key, g.raw);
+                              const openG = !!focusGroup || expandedGroups.has(gk);
+                              return (
+                                <div key={gk} className="pl-3 mt-1.5">
+                                  {focusGroup ? null : (
+                                    <button
+                                      type="button"
+                                      className="w-full text-left border-0 bg-[var(--group)] rounded-[var(--rs)] px-3 py-2 cursor-pointer flex justify-between items-center"
+                                      aria-expanded={openG}
+                                      onClick={() =>
+                                        setExpandedGroups((prev) => {
+                                          const n = new Set(prev);
+                                          if (n.has(gk)) n.delete(gk);
+                                          else n.add(gk);
+                                          return n;
+                                        })
+                                      }
+                                    >
+                                      <span className="text-[13px]">{g.label}</span>
+                                      <span className="text-[12.5px] text-[var(--meta)]">
+                                        {t("s.c8542337dc", {
+                                          v0: g.voices.length,
+                                          v1: openG
+                                            ? t("s.5d5815647c")
+                                            : t("s.b0e24833f7"),
+                                        })}
+                                      </span>
+                                    </button>
+                                  )}
+                                  <Collapse open={openG}>
+                                    <SeriesPageGrid
+                                      seriesKey={gk}
+                                      voices={g.voices}
+                                      cols={cols}
+                                      perPage={perPage}
+                                      forcedFull={!!focusGroup}
+                                      seriesFull={seriesFull}
+                                      setSeriesFull={setSeriesFull}
+                                      seriesPage={seriesPage}
+                                      setSeriesPage={setSeriesPage}
+                                      cardProps={cardProps}
+                                      gridStyle={gridStyle}
+                                    />
+                                  </Collapse>
+                                </div>
+                              );
+                            })}
+                          </CatalogTransition>
+                          <Pager
+                            className="pt-3"
+                            page={departmentPage}
+                            pages={departmentTotal}
+                            onChange={(next) => setDepartmentPages((old) => ({ ...old, [node.key]: next }))}
+                          />
+                        </>
                       ) : (
                         <SeriesPageGrid
                           seriesKey={node.key}
@@ -715,8 +748,8 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, assetId }: Pr
                           cardProps={cardProps}
                           gridStyle={gridStyle}
                         />
-                      )
-                    ) : null}
+                      )}
+                    </Collapse>
                   </div>
                 );
               })
@@ -849,6 +882,8 @@ function VoiceCard({
   onDiscard,
   coverMap,
   onAuthor,
+  onOpenModel,
+  detail,
 }: {
   v: StoreVoice;
   busy: boolean;
@@ -865,6 +900,8 @@ function VoiceCard({
   /** 封面本地化缓存（url → 本地路径），见 lib/cover.ts。 */
   coverMap?: Record<string, string>;
   onAuthor?: () => void;
+  onOpenModel?: () => void;
+  detail?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const lastMove = useRef({ at: 0, done: -1 });
@@ -895,16 +932,12 @@ function VoiceCard({
     }
   }, [progress?.done]);
   const author = displayVoiceAuthor(v, loc);
+  const attribution = author ? t("s.7feea73fa3", { v0: author }) : t("s.2af26573b0");
   const parentLabel = voiceParentSeries(v, loc);
   const childLabel = voiceChildGroup(v, loc);
   const meta =
     joinClauses([parentLabel, childLabel, v.size_label]);
-  // 发布日期当版本号（v26.07.31）：同一角色常有多个版本在架，下载前先看清
-  // 自己装的是哪一版。没有日期就不画，不留一个空角标。
-  const ver = voiceVersionLabel(v.date);
-  // 第三方音色下下来是别人的东西：作者是谁、从哪个仓库发的，得在**下载之前**
-  // 就能点开看，不能等装完了才在模型页的「⋯」里找得到。清单里两个地址常常
-  // 只有一个，有哪条给哪条。作者可以有多位 —— 多位时点了先问一声开哪个。
+  const date = voiceReleaseDate(v.date);
   const [authorPick, setAuthorPick] = useState<VoiceAuthor[] | null>(null);
   const authors = voiceAuthorList(v).filter((a) =>
     /^https?:\/\//i.test(a.url || ""),
@@ -914,10 +947,12 @@ function VoiceCard({
   const licenseUrl = v.license?.url;
   const menu = useMenu();
   const links: MenuItem[] = [];
-  if (onAuthor) links.push({ id: "author", label: t("s.voiceLinkAuthor"), onSelect: onAuthor });
-  if (authors.length) {
+  if (onOpenModel) links.push({ id: "details", label: t("publication.viewModel"), onSelect: onOpenModel });
+  if (onAuthor && !detail) links.push({ id: "author", label: t("s.voiceLinkAuthor"), onSelect: onAuthor });
+  if (!v.community_author_id && authors.length) {
+    const label = authors.length === 1 ? authorLinkName(authors[0].url!, v.author_url_label) : "";
     links.push({
-      id: "external-author", label: t(onAuthor ? "publication.externalAuthor" : "s.voiceLinkAuthor"),
+      id: "external-author", label: label || t("s.voiceLinkAuthor"),
       onSelect: () => {
         if (authors.length === 1) void openExternal(authors[0].url || "");
         else setAuthorPick(authors);
@@ -931,32 +966,18 @@ function VoiceCard({
     links.push({ id: "license", label: t("community.license"), onSelect: () => void openExternal(licenseUrl) });
   }
 
-  return (
-    <div id={v.id ? `store-voice-${v.id}` : undefined}>
+  const cover = (
       <CatalogCover
         sources={sources}
         placeholder={title || v.id || ""}
         seed={v.id || title}
-        release={ver}
+        release={date}
         detail={v.community_version_id ? t("nav.plaza") : undefined}
         progress={busy && !staged ? progress?.percent ?? 0 : undefined}
         connecting={busy && !staged && (progress?.done ?? 0) <= 0}
       />
-      <div className="text-[15px] font-semibold mt-2.5 truncate" title={title}>
-        {title}
-      </div>
-      <div
-        className="text-xs text-[var(--meta)] mt-0.5 truncate"
-        title={author || undefined}
-      >
-        {author ? t("s.7feea73fa3", { v0: author }) : t("s.2af26573b0")}
-      </div>
-      {meta ? (
-        <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
-          {meta}
-        </div>
-      ) : null}
-      {license && <div className="text-[11.5px] text-[var(--meta)] truncate" title={license}>{license}</div>}
+  );
+  const actions = <>
       <Leave>{authorPick ? (
         <AuthorsDialog authors={authorPick} onClose={() => setAuthorPick(null)} />
       ) : null}</Leave>
@@ -1007,6 +1028,45 @@ function VoiceCard({
         ) : null}
       </div>
       {menu.node}
+  </>;
+  if (detail) {
+    return (
+      <div className="grid items-start gap-6 sm:grid-cols-[minmax(220px,320px)_minmax(0,1fr)]">
+        <div>{cover}</div>
+        <div className="min-w-0 space-y-3 pt-1">
+          {author && (onAuthor
+            ? <Btn text onClick={onAuthor}>{author}</Btn>
+            : <p className="m-0 text-[15px] font-semibold">{author}</p>)}
+          {meta && <p className="m-0 break-words text-[13px] text-[var(--help)]">{meta}</p>}
+          {v.description && <p className="m-0 whitespace-pre-wrap break-words text-[15px]">{v.description}</p>}
+          {license && <p className="m-0 whitespace-pre-wrap break-words text-[12.5px] text-[var(--help)]">{license}</p>}
+          {actions}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div id={v.id ? `store-voice-${v.id}` : undefined}>
+      {cover}
+      <div className="text-[15px] font-semibold mt-2.5 truncate" title={title}>
+        {title}
+      </div>
+      <div className="mt-0.5 text-xs text-[var(--meta)]">
+        {onAuthor && author ? (
+          <button type="button" onClick={onAuthor} title={attribution}
+            className="block max-w-full cursor-pointer truncate rounded-[var(--rs)] border-0 bg-transparent p-0 text-start text-[var(--accent-text)] hover:underline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+            {attribution}
+          </button>
+        ) : <div className="truncate" title={author || undefined}>{attribution}</div>}
+      </div>
+      {meta ? (
+        <div className="text-[11.5px] text-[var(--meta)] truncate" title={meta}>
+          {meta}
+        </div>
+      ) : null}
+      {license && <div className="text-[11.5px] text-[var(--meta)] truncate" title={license}>{license}</div>}
+      {actions}
     </div>
   );
 }

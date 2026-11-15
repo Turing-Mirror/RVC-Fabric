@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isSha256, newDraft, providerHash, publication, validUrl, type Draft, type Source, type SourceFile } from "./communityPublication";
+import { AUTHOR_URL_LABEL_LIMIT, isSha256, newDraft, providerHash, publication, validUrl, type Draft, type Source, type SourceFile } from "./communityPublication";
 
 export type Pack = {
   name: string;
@@ -71,6 +71,7 @@ export function fillPackDetails(draft: Draft, pack: NonNullable<Pack["result"]>)
     originalAuthor: draft.originalAuthor || text("author"),
     description: draft.description || text("description", 50_000),
     authorUrl: draft.authorUrl || (validUrl(link) ? link : ""),
+    authorUrlLabel: draft.authorUrlLabel ?? (!draft.authorUrl && validUrl(link) ? text("author_url_label", AUTHOR_URL_LABEL_LIMIT) || undefined : undefined),
     series: draft.series || text("series"),
     group: draft.group || text("group") || text("club"),
     language: draft.language || text("language", 50) || text("lang", 50),
@@ -103,9 +104,11 @@ export function resolveBatchDraft(batch: BatchDraft, row: Draft): Draft {
     description: row.description || shared.description,
     originalAuthor: row.originalAuthor || shared.originalAuthor,
     publisherRole: shared.publisherRole,
-    authorUrl: row.authorUrl || shared.authorUrl,
-    series: row.series || shared.series,
-    group: row.group || shared.group,
+    authorUrl: row.authorUrl.trim() || shared.authorUrl,
+    authorUrlLabel: row.authorUrlLabel ?? (row.authorUrl.trim() ? undefined : shared.authorUrlLabel),
+    series: row.categorySelection !== undefined ? row.series : row.series || shared.series,
+    group: row.categorySelection !== undefined ? row.group : row.group || shared.group,
+    categorySelection: row.categorySelection !== undefined ? row.categorySelection : shared.categorySelection,
     license: row.license.id || row.license.url || row.license.text ? row.license : shared.license,
   };
 }

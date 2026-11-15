@@ -463,12 +463,48 @@ async fn refresh_session(issuer: String, cached: &mut Option<Session>) -> ApiRes
 // The frontend receives only presentation fields, never native credentials.
 fn public_status(current: Value) -> Value {
     let profile = &current["profile"];
+    let id = profile["id"].as_str().filter(|id| !id.is_empty());
     json!({
-        "signedIn": profile["id"].as_str().is_some_and(|id| !id.is_empty()),
+        "signedIn": id.is_some(),
+        "authorId": id,
         "displayName": profile["name"].as_str(),
         "email": profile["email"].as_str(),
         "offline": current["offline"].as_bool().unwrap_or(false)
     })
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct AuthorProfileUpdate {
+    url: String,
+    label: String,
+}
+
+#[tauri::command]
+pub async fn community_account_author_profile(update: Option<AuthorProfileUpdate>) -> ApiResult {
+    let endpoint = reqwest::Url::parse(&issuer()?)
+        .and_then(|url| url.join("/api/account/author-profile"))
+        .map_err(ApiError::invalid)?;
+    let http = http()?;
+    let token = access_token().await?;
+    let request = match update {
+        Some(link) => http
+            .put(endpoint)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(serde_json::to_string(&link).map_err(ApiError::invalid)?),
+        None => http.get(endpoint),
+    };
+    let unavailable = || ApiError::new("unavailable", "Could not connect to TRM Account.");
+    let response = request.bearer_auth(token).send().await.map_err(|_| unavailable())?;
+    match response.status().as_u16() {
+        200 => {
+            let body = response.text().await.map_err(|_| unavailable())?;
+            serde_json::from_str(&body).map_err(|_| unavailable())
+        }
+        400 => Err(ApiError::new("invalid_author_link", "Enter a public HTTPS link.")),
+        401 => Err(ApiError::new("unauthorized", "Sign in to TRM Account.")),
+        429 => Err(ApiError::new("rate_limited", "Please try again later.")),
+        _ => Err(unavailable()),
+    }
 }
 
 #[tauri::command]
@@ -596,7 +632,7 @@ mod status_tests {
         assert_eq!(
             public_status(json!({"profile": null})),
             json!({
-                "signedIn": false, "displayName": null, "email": null, "offline": false
+                "signedIn": false, "authorId": null, "displayName": null, "email": null, "offline": false
             })
         );
         let status = public_status(
@@ -604,7 +640,7 @@ mod status_tests {
         );
         assert_eq!(
             status,
-            json!({"signedIn": true, "displayName": "Test", "email": "test@example.invalid", "offline": true})
+            json!({"signedIn": true, "authorId": "subject", "displayName": "Test", "email": "test@example.invalid", "offline": true})
         );
     }
 }

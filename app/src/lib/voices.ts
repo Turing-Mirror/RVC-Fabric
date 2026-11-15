@@ -115,6 +115,7 @@ export type StoreVoice = {
   community_package_path?: string;
   community_staging_id?: string;
   community_author_id?: string;
+  author_url_label?: string;
   legacy_catalog_id?: string;
   license?: { id?: string; url?: string; text?: string };
 };

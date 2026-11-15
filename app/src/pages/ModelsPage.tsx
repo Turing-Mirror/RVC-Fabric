@@ -1,6 +1,7 @@
+import { ExportVoicePackages } from "../components/ExportVoicePackages";
 import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
-import { Modal as ExportModal, Toggle, useI18n as useUiI18n, CoverPlaceholder, SearchBox, ThumbImage, usePageActive } from "trm-ui";
+import { CoverPlaceholder, SearchBox, ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -106,10 +107,8 @@ function ModelsPageImpl({
   const panelRequest = useRef(0);
   const panelsFor = useRef("");
   const dspRequest = useRef(0);
-  const { t: uiText } = useUiI18n();
   const [exportOpen, setExportOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportSelection, setExportSelection] = useState<Set<string>>(new Set());
+  const [exportInstance, setExportInstance] = useState(0);
   const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
   const [loaded, setLoaded] = useState(() => peekVoices() !== null);
   const [selectedKey, setSelectedKey] = useState(currentId);
@@ -478,55 +477,13 @@ function ModelsPageImpl({
                 void openModelsDir().catch((e) => setMsg(String(e)));
               }}
             >{t("s.031c105578")}</Btn>
-            {models.some((model) => model.dir && !model.missing) && <Btn onClick={() => { setExportSelection(new Set()); setExportOpen(true); }}>{t("publication.exportPacks")}</Btn>}
+            {models.some((model) => model.dir && !model.missing) && <Btn onClick={() => { setExportInstance((previous) => previous + 1); setExportOpen(true); }}>{t("publication.exportPacks")}</Btn>}
           </>
         }
       />
 
-      <ExportModal open={exportOpen} onClose={() => { if (!exporting) setExportOpen(false); }} label={t("publication.exportPacks")}>
-        <div className="max-h-[45vh] overflow-auto">
-          <Toggle
-            look="inline"
-            className="py-2"
-            checked={exportSelection.size === models.filter((model) => model.dir && !model.missing).length}
-            disabled={exporting}
-            onChange={(checked) => setExportSelection(checked ? new Set(models.filter((model) => model.dir && !model.missing).map((model) => model.dir)) : new Set())}
-            label={t("publication.selectAll")}
-          />
-          {models.filter((model) => model.dir && !model.missing).map((role) => (
-            <Toggle
-              key={role.dir}
-              look="inline"
-              className="py-2"
-              checked={exportSelection.has(role.dir)}
-              disabled={exporting}
-              onChange={() => {
-                const next = new Set(exportSelection);
-                if (next.has(role.dir)) next.delete(role.dir); else next.add(role.dir);
-                setExportSelection(next);
-              }}
-              label={role.name}
-            />
-          ))}
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Btn disabled={exporting} onClick={() => setExportOpen(false)}>{uiText("ui.common.cancel")}</Btn>
-          <Btn primary busy={exporting} disabled={!exportSelection.size || exporting} onClick={async () => {
-            setExporting(true);
-            try {
-              const result = await invoke<{ folder: string; packs: Array<{ name: string; error?: string }> } | null>(
-                "publication_export_packs", { dirs: [...exportSelection] },
-              );
-              if (result) {
-                const failed = result.packs.filter((pack) => pack.error).map((pack) => pack.name);
-                setMsg([result.folder, ...failed.map((name) => t("publication.packFailed", { v0: name }))].join("\n"));
-                setExportOpen(false);
-              }
-            } catch { setMsg(t("publication.packReadError")); }
-            finally { setExporting(false); }
-          }}>{t("publication.exportPacks")}</Btn>
-        </div>
-      </ExportModal>
+      <ExportVoicePackages key={exportInstance} open={active && exportOpen} onClose={() => setExportOpen(false)}
+        voices={models.filter((model) => model.dir && !model.missing).map((model) => ({ id: model.dir, name: model.name }))} />
       {msg ? (
         <div
           role="status"

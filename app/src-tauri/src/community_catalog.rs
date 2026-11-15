@@ -300,6 +300,7 @@ fn package_entry(asset: &Value, version: &Value, package: &Value, api: &Url) -> 
         "description": field(asset, "description"),
         "author": field(asset, "originalAuthor"),
         "community_author_id": field(asset, "communityAuthorId"),
+        "author_url_label": asset["authorUrlLabel"],
         "author_url": public_url(field(asset, "authorUrl"), false).ok().map(|url| url.to_string()),
         "series": field(meta, "series"),
         "group": field(meta, "group"),

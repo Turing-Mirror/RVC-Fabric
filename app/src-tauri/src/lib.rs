@@ -2996,6 +2996,7 @@ pub fn run() {
             community_links,
             community_install_voice,
             community_account::community_account_status,
+            community_account::community_account_author_profile,
             community_account::community_account_sign_in,
             community_account::community_account_sign_out,
             community_publish::community_publication,

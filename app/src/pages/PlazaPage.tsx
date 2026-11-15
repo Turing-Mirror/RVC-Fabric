@@ -3,10 +3,12 @@ import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
 import { Pane, Panes, useNotify, usePageActive, usePaneOn } from "trm-ui";
 import { CommunityActions, useCommunityAccount } from "../components/CommunityActions";
 import { CommunityBatchPublisher } from "../components/CommunityBatchPublisher";
-import { CommunityAuthor } from "../components/CommunityAuthor";
+import { CommunityAuthorModels } from "../components/CommunityModelList";
 import { CommunityPublisher } from "../components/CommunityPublisher";
+import { CommunityModelDetail } from "../components/CommunityModelDetail";
+import { CommunitySubmissionDetail } from "../components/CommunitySubmissionDetail";
 import { CommunitySubmissions } from "../components/CommunitySubmissions";
-import { loadDrafts, newDraft, storeDrafts, type Draft, type Submission } from "../lib/communityPublication";
+import { editListingDraft, loadDrafts, newDraft, newVersionDraft, publication, publicationError, storeDrafts, type CatalogModel, type Draft, type ModelDetail, type PublishedVersion, type Submission } from "../lib/communityPublication";
 import { StoreSection } from "../components/StoreSection";
 import { Pager } from "../components/Pager";
 import { CatalogTransition } from "../components/CatalogTransition";
@@ -23,28 +25,7 @@ import {
 import { formatLocalizedList } from "../lib/voiceDisplay";
 import { useI18n } from "../i18n";
 
-/**
- * 广场：社区音色、投放、下载模型、更新日志，从上往下就是这个顺序。
- * DSP 预设不上广场（内置在模型页）。
- *
- * 社区音色排第一，因为这是用户主动进广场的唯一理由 —— 投放和更新日志是我们
- * 想让他看的，音色是他想看的。把想让人看的东西摆在人想看的东西前面，结果是
- * 两个都没人看。
- *
- * 投放卡片**不可关闭**：承载投放正是这一页存在的意义。可关闭的是模型页顶部
- * 那一条横幅，在那边单独处理。
- *
- * 刷新只有一个：右上角那个。一次点击把三块内容全刷了 —— 音色清单走
- * StoreSection 的 reloadToken，投放和更新日志走 onReload。三个各自的刷新
- * 按钮只会让人猜「我该点哪个」。
- *
- * 「下载模型」排在投放下面：它和社区音色是同一类事（都是往本机装东西），
- * 但用户主动来找它的次数少得多 —— 一台机器装一次引擎资源就完了。所以不跟
- * 社区音色抢第一屏，但也不能压到更新日志后面去。
- *
- * 它原来是「其他」页上弹出来的一个框。「其他」页现在只留一个入口，点了跳
- * 到这儿来 —— 和「模型」页的「社区音色」是一样的处理。
- */
+/** Community voices, notices, model resources and release notes. */
 /** 更新日志二级页每页几条。够看又不至于把滚动条拉成一条线。 */
 const PER_PAGE = 5;
 
@@ -57,8 +38,18 @@ type PlazaProps = {
   scrollToDownloads?: number;
 };
 
-const communityPages = ["catalog", "changelog", "publish", "batch", "submissions", "author", "owned", "model"] as const;
+const communityPages = ["catalog", "changelog", "author", "submissions", "submission", "model", "publish", "batch"] as const;
 type CommunityPage = (typeof communityPages)[number];
+type ModelOrigin = "catalog" | "author" | "submissions";
+
+type OpenModel = {
+  id: string;
+  title: string;
+  versionId?: string;
+  from: ModelOrigin;
+  navigationId: number;
+  management?: { account: string | null; owner: true | string };
+};
 
 function PlazaPageImpl(props: PlazaProps) {
   const auth = useCommunityAccount();
@@ -67,7 +58,11 @@ function PlazaPageImpl(props: PlazaProps) {
   const [page, setPage] = useState<CommunityPage>("catalog");
   const [editor, setEditor] = useState<Draft>();
   const [author, setAuthor] = useState("");
-  const [authorModel, setAuthorModel] = useState<{ id: string; title: string; from: "author" | "owned" }>();
+  const [authorReturn, setAuthorReturn] = useState<"catalog" | "model" | "submissions">("catalog");
+  const [model, setModel] = useState<OpenModel>();
+  const [submission, setSubmission] = useState<Submission>();
+  const [editorBack, setEditorBack] = useState<ModelOrigin | "model" | "submission">("catalog");
+  const revisionRequest = useRef(0);
   const [batchEntry, setBatchEntry] = useState<{ source?: string; back: "publish" | "submissions" }>({ back: "publish" });
   const [drafts, setDrafts] = useState(loadDrafts);
   const currentDrafts = useRef(drafts);
@@ -95,18 +90,51 @@ function PlazaPageImpl(props: PlazaProps) {
     return persist((previous) => [{ ...draft, updatedAt: new Date().toISOString() }, ...previous.filter((item) => item.id !== draft.id)]);
   }
 
-  function remove(id: string) {
-    persist((previous) => previous.filter((item) => item.id !== id));
-  }
-
-  function openEditor(draft = newDraft()) {
+  function openEditor(draft = newDraft(), back: typeof editorBack = "catalog") {
+    ++revisionRequest.current;
     setEditor(draft);
+    setEditorBack(back);
     setPage("publish");
   }
 
-  function leaveEditor(draft: Draft, next: "catalog" | "submissions") {
-    const hasContent = draft.url || draft.title || draft.description || draft.originalAuthor || draft.authorUrl || draft.licenseEdited || draft.cover || draft.updatedAt;
-    if (!hasContent || save(draft)) setPage(next);
+  function openAuthor(id: string, back: typeof authorReturn = "catalog") {
+    ++revisionRequest.current;
+    setAuthor(id);
+    setAuthorReturn(back);
+    setPage("author");
+  }
+
+  const ownAuthorId = auth.account?.signedIn ? auth.account.authorId : null;
+  const ownAuthorName = ownAuthorId && ownAuthorId === author ? auth.account?.displayName : undefined;
+
+  function openModel(id: string, title: string, from: ModelOrigin, versionId?: string, owner?: true | string) {
+    const navigationId = ++revisionRequest.current;
+    const management = owner && auth.account?.signedIn ? { account: auth.account.email, owner } : undefined;
+    setModel({ id, title, versionId, from, navigationId, management });
+    setPage("model");
+  }
+
+  function editVersion(asset: ModelDetail["asset"], version: PublishedVersion, back: "submissions" | "model", metadataOnly = false) {
+    const draft = metadataOnly ? editListingDraft(asset, version) : newVersionDraft(asset, version);
+    if (draft) openEditor(draft, back);
+    else tip(t("publication.noFiles"));
+  }
+
+  async function readCurrentVersion(item: CatalogModel, metadataOnly = false) {
+    const request = ++revisionRequest.current;
+    try {
+      const result = await publication<{ asset: ModelDetail["asset"]; version: PublishedVersion }>({
+        action: "version", id: item.id, versionId: item.compatibleVersion.id,
+      });
+      if (request === revisionRequest.current) editVersion(result.asset, result.version, "submissions", metadataOnly);
+    } catch (error) {
+      if (request === revisionRequest.current) tip(publicationError(error, "list"));
+    }
+  }
+
+  function leaveEditor(draft: Draft, next: typeof editorBack) {
+    const hasContent = draft.url || draft.title || draft.description || draft.originalAuthor || draft.cover || draft.updatedAt;
+    if (draft === editor || !hasContent || save(draft)) setPage(next);
   }
 
   return (
@@ -114,8 +142,10 @@ function PlazaPageImpl(props: PlazaProps) {
       <Pane id="catalog">
         <Catalog
           {...props}
-          actions={<CommunityActions auth={auth} onPublish={() => openEditor()} onSubmissions={() => setPage("submissions")} onOwned={() => setPage("owned")} />}
-          onAuthor={(id) => { setAuthor(id); setPage("author"); }}
+          actions={<CommunityActions auth={auth} onPublish={() => openEditor()} onSubmissions={() => setPage("submissions")}
+            onAuthor={() => { if (ownAuthorId) openAuthor(ownAuthorId); }} />}
+          onAuthor={openAuthor}
+          onOpenModel={(id, title, versionId) => openModel(id, title, "catalog", versionId)}
           onChangelog={() => setPage("changelog")}
         />
       </Pane>
@@ -128,7 +158,7 @@ function PlazaPageImpl(props: PlazaProps) {
             key={editor.id}
             initial={editor}
             auth={auth}
-            onBack={(draft) => leaveEditor(draft, "catalog")}
+            onBack={(draft) => leaveEditor(draft, editorBack)}
             onSave={save}
             onMySubmissions={(draft) => leaveEditor(draft, "submissions")}
             onBatch={(draft) => {
@@ -138,7 +168,7 @@ function PlazaPageImpl(props: PlazaProps) {
               }
             }}
             onSubmitted={(draft, submission) => {
-              remove(draft.id);
+              persist((previous) => previous.filter((item) => item.id !== draft.id));
               setRecent(submission);
               setPage((current) => current === "publish" ? "submissions" : current);
             }}
@@ -150,37 +180,61 @@ function PlazaPageImpl(props: PlazaProps) {
           onSubmitted={(submission) => { setRecent(submission); setPage("submissions"); }} />}
       </Pane>
       <Pane id="author">
-        {author && <CommunityAuthor key={author} author={author} onBack={() => setPage("catalog")}
-          onView={(id, title) => { setAuthorModel({ id, title, from: "author" }); setPage("model"); }} />}
-      </Pane>
-      <Pane id="owned">
-        {auth.account?.signedIn && <CommunityAuthor key={auth.account.email} owned onBack={() => setPage("catalog")} onNewVersion={openEditor}
-          onView={(id, title) => { setAuthorModel({ id, title, from: "owned" }); setPage("model"); }} />}
+        {author && <PagePad width="wide">
+          <CommunityAuthorModels key={author} author={author} own={author === ownAuthorId} ownName={ownAuthorName}
+            onBack={() => setPage(authorReturn)}
+            onView={(item) => {
+              if (authorReturn === "model" && model?.id === item.id) setPage("model");
+              else openModel(item.id, item.title, "author", item.compatibleVersion.id);
+            }} />
+        </PagePad>}
       </Pane>
       <Pane id="model">
-        {authorModel && <PagePad>
-          <PageHead title={authorModel.title} back={() => setPage(authorModel.from)} />
-          <StoreSection key={authorModel.id} reloadToken={0} assetId={authorModel.id} />
-        </PagePad>}
+        {model && <CommunityModelDetail key={model.navigationId} id={model.id} title={model.title}
+          versionId={model.versionId}
+          owner={auth.account?.signedIn && model.management?.account === auth.account.email ? model.management?.owner : undefined}
+          onBack={() => setPage(model.from)}
+          onAuthor={(id) => {
+            if (model.from === "author" && author === id) setPage("author");
+            else openAuthor(id, model.from === "author" ? "catalog" : "model");
+          }}
+          onNewVersion={(detail, version) => editVersion(detail.asset, version, "model")}
+          onEditListing={(detail, version) => editVersion(detail.asset, version, "model", true)} />}
+      </Pane>
+      <Pane id="submission">
+        {submission && <CommunitySubmissionDetail key={submission.id} submission={submission}
+          onBack={() => setPage("submissions")} onEdit={() => openEditor(newDraft(submission), "submission")} />}
       </Pane>
       <Pane id="submissions">
         <CommunitySubmissions
           auth={auth}
           drafts={drafts}
           recent={recent}
-          onBack={() => setPage("catalog")}
-          onNew={() => openEditor()}
-          onBatch={() => { setBatchEntry({ back: "submissions" }); setPage("batch"); }}
-          onEdit={openEditor}
-          onRemove={remove}
-          onRevise={(previous) => openEditor(newDraft(previous))}
+          onAuthor={ownAuthorId ? () => openAuthor(ownAuthorId, "submissions") : undefined}
+          onBack={() => { ++revisionRequest.current; setPage("catalog"); }}
+          onNew={() => openEditor(newDraft(), "submissions")}
+          onBatch={() => { ++revisionRequest.current; setBatchEntry({ back: "submissions" }); setPage("batch"); }}
+          onEdit={(draft) => openEditor(draft, "submissions")}
+          onRemove={(id) => persist((previous) => previous.filter((item) => item.id !== id))}
+          onRevise={(previous) => openEditor(newDraft(previous), "submissions")}
+          onView={(item) => { ++revisionRequest.current; setSubmission(item); setPage("submission"); }}
+          onViewModel={(item) => {
+            if (item.assetId) openModel(item.assetId, item.asset.title, "submissions", undefined, item.publisherId);
+          }}
+          onManage={(item, action) => void readCurrentVersion(item, action === "listing")}
+          onOpenPublished={(item) => openModel(item.id, item.title, "submissions", item.compatibleVersion.id, true)}
         />
       </Pane>
     </Panes>
   );
 }
 
-function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasFilter = "all", scrollToDownloads = 0, actions, onChangelog, onAuthor }: PlazaProps & { actions: ReactNode; onChangelog: () => void; onAuthor: (id: string) => void }) {
+function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasFilter = "all", scrollToDownloads = 0, actions, onChangelog, onAuthor, onOpenModel }: PlazaProps & {
+  actions: ReactNode;
+  onChangelog: () => void;
+  onAuthor: (id: string) => void;
+  onOpenModel: (id: string, title: string, versionId?: string) => void;
+}) {
   useI18n();
   const paneActive = usePaneOn();
   const pageActive = usePageActive();
@@ -266,7 +320,7 @@ function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasF
       ) : null}
 
       <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
-        <StoreSection reloadToken={reloadToken} onAuthor={onAuthor} />
+        <StoreSection reloadToken={reloadToken} onAuthor={onAuthor} onOpenModel={onOpenModel} />
       </Block>
 
       {items.length ? (

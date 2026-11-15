@@ -45,13 +45,8 @@ function str(v: unknown): string {
   return "";
 }
 
-/**
- * 发布日期 → 版本号样式的角标（260731 → v26.07.31）。
- *
- * 认三种写法：YYMMDD（清单现行格式）、YYYYMMDD、ISO 前缀。认不出返回空串，
- * 卡片上就不画这个角标 —— 没有日期不该显示成「v」加一串问号。
- */
-export function voiceVersionLabel(date?: unknown): string {
+/** Matches the catalog's compact and ISO date formats. */
+export function voiceReleaseDate(date?: unknown): string {
   const d = str(date).replace(/[/.]/g, "-");
   let y = "";
   let m = "";
@@ -73,11 +68,15 @@ export function voiceVersionLabel(date?: unknown): string {
     }
   }
   if (!y || !m || !day) return "";
-  const yy = y.length === 4 ? y.slice(2) : y;
   if (Number(m) < 1 || Number(m) > 12 || Number(day) < 1 || Number(day) > 31) {
     return "";
   }
-  return `v${yy}.${m}.${day}`;
+  return [y.length === 2 ? "20" + y : y, m, day].join("-");
+}
+
+export function voiceVersionLabel(date?: unknown): string {
+  const releaseDate = voiceReleaseDate(date);
+  return releaseDate ? "v" + releaseDate.slice(2).replace(/-/g, ".") : "";
 }
 
 export type VoiceAuthor = { name: string; url?: string };

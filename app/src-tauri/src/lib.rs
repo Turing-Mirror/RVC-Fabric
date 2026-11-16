@@ -2645,13 +2645,20 @@ async fn community_install_voice(
 async fn store_catalog(
     state: State<'_, Mutex<AppState>>,
     prefer_remote: Option<bool>,
+    starter_only: Option<bool>,
 ) -> Result<Value, String> {
     let root = root_clone(&state)?;
     let remote = prefer_remote.unwrap_or(true);
-    // Network fetch — never on the IPC thread.
-    tauri::async_runtime::spawn_blocking(move || Ok(store::fetch_store_catalog(&root, remote)))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let catalog = if starter_only.unwrap_or(false) {
+            store::fetch_legacy_store_catalog(&root, remote)
+        } else {
+            community_catalog::catalog(&root, remote)
+        };
+        Ok(catalog)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

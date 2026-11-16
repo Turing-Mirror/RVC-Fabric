@@ -2468,6 +2468,7 @@
     "signInFailed": "ログインできませんでした。もう一度お試しください。",
     "signOutFailed": "ログアウトできませんでした。もう一度お試しください。",
     "linkFailed": "リンクを開けませんでした。",
+    "catalogUnavailable": "コミュニティの一覧を更新できませんでした。",
     "refreshBeforeDownload": "一覧を更新してから、このバージョンをダウンロードしてください。",
     "update": "更新",
     "license": "ライセンス"

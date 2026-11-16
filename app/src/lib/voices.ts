@@ -383,7 +383,7 @@ export async function openModelsDir() {
   return invoke("voices_open_dir");
 }
 
-export async function fetchStoreCatalog(preferRemote = true) {
+export async function fetchStoreCatalog(preferRemote = true, options?: { starterOnly: boolean }) {
   if (!isTauri()) {
     return {
       source: "demo",
@@ -392,7 +392,7 @@ export async function fetchStoreCatalog(preferRemote = true) {
       fetch_error: t("s.d15a7a3da1"),
     } satisfies StoreCatalog;
   }
-  return invoke<StoreCatalog>("store_catalog", { preferRemote });
+  return invoke<StoreCatalog>("store_catalog", { preferRemote, starterOnly: options?.starterOnly });
 }
 
 export async function installStoreVoice(entry: StoreVoice) {

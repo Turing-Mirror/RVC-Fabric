@@ -399,29 +399,57 @@ fn load_entries(api: &Url) -> Result<Vec<Value>, String> {
     }
 }
 
-pub(crate) fn entries(root: &Path, prefer_remote: bool) -> Vec<Value> {
-    let Ok(api) = api_base() else {
-        return Vec::new();
-    };
+pub(crate) fn catalog(root: &Path, prefer_remote: bool) -> Value {
     let cache = crate::paths::user_data(root).join("community_catalog_cache.json");
-    if prefer_remote {
-        match load_entries(&api) {
-            Ok(entries) => {
-                let _ = trm_app_protocol::discovery::write_json(
-                    &cache,
-                    &json!({ "url": api.as_str(), "entries": entries }),
-                );
-                return entries;
+    let (mut entries, source, failed) = match api_base() {
+        Ok(api) => {
+            let fetched = prefer_remote.then(|| load_entries(&api));
+            match fetched {
+                Some(Ok(entries)) => {
+                    let _ = trm_app_protocol::discovery::write_json(
+                        &cache,
+                        &json!({ "url": api.as_str(), "entries": entries }),
+                    );
+                    (entries, "remote", false)
+                }
+                result => {
+                    let failed = if let Some(Err(error)) = result {
+                        crate::logging::shell_log!(format!("community catalog: {error}"));
+                        true
+                    } else {
+                        false
+                    };
+                    let cached = fs::read_to_string(&cache)
+                        .ok()
+                        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+                        .filter(|data| field(data, "url") == api.as_str())
+                        .and_then(|data| data["entries"].as_array().cloned());
+                    match cached {
+                        Some(entries) => (entries, "cache", failed),
+                        None => (Vec::new(), if failed { "error" } else { "empty" }, failed),
+                    }
+                }
             }
-            Err(error) => crate::logging::shell_log!(format!("community catalog: {error}")),
         }
+        Err(error) => {
+            crate::logging::shell_log!(format!("community catalog: {error}"));
+            (Vec::new(), "error", true)
+        }
+    };
+
+    annotate_installed(root, &mut entries);
+    for entry in &mut entries {
+        entry["origin_label"] = json!(crate::i18n::t("nav.plaza"));
+        entry["size_label"] = json!(crate::store::format_size(
+            entry["size_bytes"].as_u64().unwrap_or_default()
+        ));
     }
-    fs::read_to_string(&cache)
-        .ok()
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .filter(|data| field(data, "url") == api.as_str())
-        .and_then(|data| data["entries"].as_array().cloned())
-        .unwrap_or_default()
+    let error = if failed {
+        crate::i18n::t("community.catalogUnavailable")
+    } else {
+        String::new()
+    };
+    json!({ "source": source, "voices": [], "thirdparty_voices": entries, "fetch_error": error })
 }
 
 pub(crate) fn annotate_installed(root: &Path, entries: &mut Vec<Value>) {

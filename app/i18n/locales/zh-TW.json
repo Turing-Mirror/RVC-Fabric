@@ -2468,6 +2468,7 @@
     "signInFailed": "登入失敗，請重試。",
     "signOutFailed": "登出失敗，請重試。",
     "linkFailed": "無法開啟連結。",
+    "catalogUnavailable": "無法重新整理社群目錄。",
     "refreshBeforeDownload": "請重新整理社群後再下載此版本。",
     "update": "更新",
     "license": "授權條款"

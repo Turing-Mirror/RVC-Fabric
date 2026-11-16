@@ -1287,7 +1287,7 @@
     "ecf753d9da": "Compression threshold",
     "ed2172fd78": "View all",
     "eea9655c7b": "Performance test incomplete: {e}",
-    "ef00eb8f3b": "Turing Mirror source",
+    "ef00eb8f3b": "TRM source",
     "ef8cc2df41": "The converted voice goes here.\nTo reach people in games/chat: set the output to CABLE Input, then the in-game mic to CABLE Output.",
     "ef92935b07": "Not joined",
     "efbfd16623": "Xiaohongshu @Turing Mirror",
@@ -2468,6 +2468,7 @@
     "signInFailed": "Could not sign in. Try again.",
     "signOutFailed": "Could not sign out. Try again.",
     "linkFailed": "Could not open the link.",
+    "catalogUnavailable": "Could not refresh the Community catalog.",
     "refreshBeforeDownload": "Refresh Community before downloading this version.",
     "update": "Update",
     "license": "License"

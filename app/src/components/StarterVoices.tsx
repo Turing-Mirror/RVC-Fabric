@@ -22,7 +22,7 @@ export function StarterVoices({ onInstalled, onOpenPlaza }: { onInstalled: () =>
 
   useEffect(() => {
     let alive = true;
-    void fetchStoreCatalog(true)
+    void fetchStoreCatalog(false, { starterOnly: true })
       .then((c) => alive && setVoices((c.voices ?? []).filter((v) => v.official && !v.installed).slice(0, STARTER_COUNT)))
       .catch(() => alive && setVoices([]));
     return () => {

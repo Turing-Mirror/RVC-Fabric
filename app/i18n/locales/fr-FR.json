@@ -2468,6 +2468,7 @@
     "signInFailed": "Connexion impossible. Réessayez.",
     "signOutFailed": "Déconnexion impossible. Réessayez.",
     "linkFailed": "Impossible d’ouvrir le lien.",
+    "catalogUnavailable": "Impossible d’actualiser le catalogue de la communauté.",
     "refreshBeforeDownload": "Actualisez le catalogue avant de télécharger cette version.",
     "update": "Mettre à jour",
     "license": "Licence"

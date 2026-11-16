@@ -2468,6 +2468,7 @@
     "signInFailed": "登录失败，请重试。",
     "signOutFailed": "退出登录失败，请重试。",
     "linkFailed": "无法打开链接。",
+    "catalogUnavailable": "无法刷新社区目录。",
     "refreshBeforeDownload": "请刷新社区后再下载此版本。",
     "update": "更新",
     "license": "许可证"

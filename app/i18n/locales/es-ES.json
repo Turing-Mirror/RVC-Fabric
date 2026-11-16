@@ -2468,6 +2468,7 @@
     "signInFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
     "signOutFailed": "No se pudo cerrar sesión. Inténtalo de nuevo.",
     "linkFailed": "No se pudo abrir el enlace.",
+    "catalogUnavailable": "No se pudo actualizar el catálogo de la comunidad.",
     "refreshBeforeDownload": "Actualiza el catálogo antes de descargar esta versión.",
     "update": "Actualizar",
     "license": "Licencia"

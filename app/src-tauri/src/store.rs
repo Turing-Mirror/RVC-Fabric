@@ -480,28 +480,6 @@ fn schedule_catalog_refresh(cache_p: PathBuf) {
     });
 }
 
-/// Merge Community releases into the store while keeping both CNB catalog lists available.
-pub fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Value {
-    let _ = paths::ensure_user_dirs(root);
-    let (mut catalog, mut entries) = if prefer_remote {
-        std::thread::scope(|scope| {
-            let shared = scope.spawn(|| community_catalog::entries(root, true));
-            (fetch_legacy_store_catalog(root, true), shared.join().unwrap_or_default())
-        })
-    } else {
-        (fetch_legacy_store_catalog(root, false), community_catalog::entries(root, false))
-    };
-    community_catalog::annotate_installed(root, &mut entries);
-    for entry in &mut entries {
-        entry["origin_label"] = json!(crate::i18n::t("nav.plaza"));
-        entry["size_label"] = json!(format_size(entry["size_bytes"].as_u64().unwrap_or(0)));
-    }
-    if let Some(thirdparty) = catalog["thirdparty_voices"].as_array_mut() {
-        thirdparty.extend(entries);
-    }
-    catalog
-}
-
 pub(crate) fn fetch_legacy_store_catalog(root: &Path, prefer_remote: bool) -> Value {
     let _ = paths::ensure_user_dirs(root);
     let mut data = json!({});
@@ -856,7 +834,7 @@ fn local_banner_for_hint(root: &Path, hint: &str) -> Option<String> {
     None
 }
 
-fn format_size(n: u64) -> String {
+pub(crate) fn format_size(n: u64) -> String {
     if n == 0 {
         return String::new();
     }
@@ -2034,7 +2012,7 @@ mod tests {
     }
 
     #[test]
-    fn community_catalog_empty_keeps_both_existing_lists_usable() {
+    fn community_keeps_an_empty_snapshot_separate_from_the_legacy_lists() {
         let root = crate::testutil::scratch("community-legacy-catalog");
         paths::ensure_user_dirs(&root).unwrap();
         fs::write(
@@ -2046,9 +2024,20 @@ mod tests {
             .to_string(),
         )
         .unwrap();
-        let catalog = fetch_store_catalog(&root, false);
-        assert_eq!(catalog["voices"][0]["id"], "official-voice");
-        assert_eq!(catalog["thirdparty_voices"][0]["id"], "other-voice");
+        trm_app_protocol::discovery::write_json(
+            &paths::user_data(&root).join("community_catalog_cache.json"),
+            &json!({ "url": "https://api.turingmirror.com/v1/community", "entries": [] }),
+        )
+        .unwrap();
+
+        let community = community_catalog::catalog(&root, false);
+        assert_eq!(community["source"], "cache");
+        assert_eq!(community["voices"], json!([]));
+        assert_eq!(community["thirdparty_voices"], json!([]));
+
+        let legacy = fetch_legacy_store_catalog(&root, false);
+        assert_eq!(legacy["voices"][0]["id"], "official-voice");
+        assert_eq!(legacy["thirdparty_voices"][0]["id"], "other-voice");
         let _ = fs::remove_dir_all(&root);
     }
 

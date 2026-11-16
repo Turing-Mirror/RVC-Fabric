@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useI18n as useUiI18n, Field, Pane, Panes, SearchBox, SegmentControl, Select, TextArea, TextInput, useNotify } from "trm-ui";
+import { useI18n as useUiI18n, Field, Pane, Panes, SearchBox, SegmentControl, TextArea, TextInput, useNotify, usePaged } from "trm-ui";
 import { useI18n } from "../i18n";
 import { chooseManifest, choosePacks, newBatch, readBatch, resolveBatchDraft, saveBatch, setBatchFile,
   batchRequest, matchesSnapshot, uniqueMatches, suggestedTitle, fillPackDetails, type BatchDraft, type BatchRow, type Pack } from "../lib/communityBatch";
@@ -10,10 +10,12 @@ import { CatalogTransition } from "./CatalogTransition";
 import { CommunityCategories } from "./CommunityCategories";
 import { CommunityCover } from "./CommunityCover";
 import { Pager } from "./Pager";
+import { Select } from "./Select";
 import type { CommunityAccount } from "./CommunityActions";
 
 const steps = ["source", "details", "preview"] as const;
 const pageSize = 10;
+const previewPageSize = 6;
 const submitChunk = 4;
 type Step = (typeof steps)[number];
 type BatchResult = { items: Array<{ key: string; error?: { code: string }; submission?: Submission }> };
@@ -49,6 +51,7 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
   const [submitProgress, setSubmitProgress] = useState(0);
   const [waiting, setWaiting] = useState(false);
   const rows = Object.values(batch.rows);
+  const preview = usePaged(Object.entries(batch.rows), previewPageSize, batch.id);
   const hasSubmission = rows.some((item) => item.submitted || item.draft.pending);
   const remaining = rows.filter((row) => !row.submitted);
   const files = source?.files.filter((file) => file.path.toLowerCase().endsWith(".zip")) ?? [];
@@ -368,30 +371,34 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
         </div>
       </Pane>
       <Pane id="preview">
-        <div className="space-y-2 pb-4">
-          {Object.entries(batch.rows).map(([id, item]) => {
-            const draft = resolveBatchDraft(batch, item.draft);
-            return <div key={id} className="flex items-start gap-3 py-2 text-[13px]">
-              {draft.cover && <img src={draft.cover} alt="" draggable={false} className="h-12 w-16 rounded-[var(--rs)] object-cover" />}
-              <div className="min-w-0 flex-1 break-words">
-                <div>{draft.title || draft.selection?.file.path}</div>
-                <div className="text-[var(--help)]">{[draft.originalAuthor, draft.label, draft.license.id].filter(Boolean).join("  ")}</div>
-                {draft.publisherRole !== "original_author" && draft.authorUrl && <div className="break-words text-[var(--help)]"
-                  title={draft.authorUrl}>{authorLinkName(draft.authorUrl, draft.authorUrlLabel)}</div>}
-                {item.error && <div className="text-[var(--warn)]">{item.error}</div>}
-              </div>
-              {item.submitted ? <span className="text-[var(--help)]">{t("publication.pending")}</span> :
-                <Btn disabled={Boolean(busy)} onClick={() => { setActive(id); setStep("details"); }}>
-                  {t(canSubmit(draft, signedIn, account) ? "publication.edit" : "publication.needsDetails")}
-                </Btn>}
-              {!item.submitted && !item.draft.pending && <Btn disabled={Boolean(busy)} onClick={() => {
-                const copy = { ...batch.rows };
-                delete copy[id];
-                update({ rows: copy });
-              }}>{t("publication.removeDraft")}</Btn>}
-            </div>;
-          })}
-        </div>
+        <CatalogTransition scope={batch.id} page={preview.page}>
+          <div className="space-y-2 pb-4">
+            {preview.slice.map(([id, item]) => {
+              const draft = resolveBatchDraft(batch, item.draft);
+              return <div key={id} className="flex items-start gap-3 py-2 text-[13px]">
+                {draft.cover && <img src={draft.cover} alt="" draggable={false} className="h-12 w-16 rounded-[var(--rs)] object-cover" />}
+                <div className="min-w-0 flex-1 break-words">
+                  <div>{draft.title || draft.selection?.file.path}</div>
+                  <div className="text-[var(--help)]">{[draft.originalAuthor, draft.label, draft.license.id].filter(Boolean).join("  ")}</div>
+                  {draft.publisherRole !== "original_author" && draft.authorUrl && <div className="break-words text-[var(--help)]"
+                    title={draft.authorUrl}>{authorLinkName(draft.authorUrl, draft.authorUrlLabel)}</div>}
+                  {item.error && <div className="text-[var(--warn)]">{item.error}</div>}
+                </div>
+                {item.submitted ? <span className="text-[var(--help)]">{t("publication.pending")}</span> :
+                  <Btn disabled={Boolean(busy)} onClick={() => { setActive(id); setStep("details"); }}>
+                    {t(canSubmit(draft, signedIn, account) ? "publication.edit" : "publication.needsDetails")}
+                  </Btn>}
+                {!item.submitted && !item.draft.pending && <Btn disabled={Boolean(busy)} onClick={() => {
+                  const copy = { ...batch.rows };
+                  delete copy[id];
+                  update({ rows: copy });
+                  if (active === id) setActive("");
+                }}>{t("publication.removeDraft")}</Btn>}
+              </div>;
+            })}
+          </div>
+        </CatalogTransition>
+        <Pager className="mb-4" page={preview.page} pages={preview.pages} onChange={preview.setPage} />
         <div className="flex flex-wrap items-center justify-end gap-3">
           {busy === "submit" && <span role="status" className="text-[13px] text-[var(--help)]">
             {waiting ? t("publication.retryQueued") : submitProgress + " / " + rows.length}

@@ -87,10 +87,10 @@ describe("SegmentControl 的指针收尾", () => {
     expect(frames.size).toBe(0);
   });
 
-  it("普通点击仍等滑块到达目标后才切换", () => {
+  it("点击当帧切换，不等滑块到达", () => {
     const { root, changed } = setup();
     act(() => root.querySelectorAll("button")[1].click());
-    expect(changed).not.toHaveBeenCalled();
+    expect(changed).toHaveBeenCalledExactlyOnceWith("b");
     finishFrames();
     finishFrames();
     expect(changed).toHaveBeenCalledExactlyOnceWith("b");

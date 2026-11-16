@@ -58,6 +58,7 @@ VC_PTH_MISSING = "vc.pth_missing"
 VC_RUNNING = "vc.running"
 VC_BAD_SETTINGS = "vc.bad_settings"
 VC_START_FAILED = "vc.start_failed"
+VC_START_TIMEOUT = "vc.start_timeout"
 VC_DML_ALLOC = "vc.dml_alloc"
 VC_STOP_FAILED = "vc.stop_failed"
 VC_PARAMS_APPLIED = "vc.params_applied"
@@ -180,7 +181,7 @@ TRAIN_RESUME_FEATURE_PARTIAL = "train.resume_feature_partial"
 _FALLBACK_ZH: dict[str, str] = {
     SEP_NO_REQUEST: "缺少请求文件参数",
     SEP_BAD_REQUEST: "无法读取请求文件：{error}",
-    SEP_EMPTY_FIELDS: "模型、输入路径与输出路径均不能为空",
+    SEP_EMPTY_FIELDS: "模型、输入路径与输出路径不能为空",
     SEP_FAILED: "分离失败，详见日志",
     CKPT_NAME_EMPTY: "保存名不能为空",
     CKPT_NAME_BAD_CHARS: "保存名不能含 \\ / : * ? \" < > |",
@@ -203,7 +204,7 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_NO_REQUEST: "缺请求文件参数",
     STS_BAD_REQUEST: "无法读取请求文件：{error}",
     STS_F0_CURVE_MISSING: "找不到 F0 曲线文件：{path}",
-    STS_EMPTY_FIELDS: "输入、输出和音色模型都不能为空",
+    STS_EMPTY_FIELDS: "音色模型、输入路径与输出路径不能为空",
     STS_MODEL_MISSING: "找不到音色模型：{model}",
     STS_NO_AUDIO: "没有找到可转换的音频（支持 wav/mp3/flac/ogg/m4a 等）",
     STS_LOAD_FAILED: "加载模型失败：{error}",
@@ -212,15 +213,13 @@ _FALLBACK_ZH: dict[str, str] = {
     STS_HOT_UNAVAILABLE: "实时引擎里没有已加载的音色，改用独立进程转换（会慢一些）。",
     STS_HOT_DML_FALLBACK: "显卡无法完成这次处理，改用独立进程转换，速度可能降低。",
     STS_DEGRADED: "当前设置无法完成这次转换（{why}），已自动改用「{rung}」继续，速度会慢一些。",
-    STS_MODEL_IS_ARCHIVE: (
-        "所选文件为训练检查点（以 G_ 或 D_ 开头），无法直接用于语音转换。\n请先在训练窗口的「进阶设置 → 模型提取」中将其导出为音色模型，再进行转换。"
-    ),
+    STS_MODEL_IS_ARCHIVE: "所选文件为训练检查点（G_ / D_ 开头），无法直接用于转换。\n请先在训练页面的「进阶设置 → 模型提取」中导出音色模型。",
     TRAIN_STEP_FAILED: "该步骤失败（退出码 {code}），详情见 {log}",
     TRAIN_PREPROCESS_FAILED: "数据预处理失败（退出码 {code}），详情见 {log}",
     TRAIN_F0_FAILED: "音高提取失败（退出码 {code}），详情见 {log}",
     TRAIN_FEATURE_FAILED: "特征提取失败（退出码 {code}），详情见 {log}",
     TRAIN_TRAIN_FAILED: "训练失败（退出码 {code}），详情见 {log}",
-    TRAIN_NO_SLICES: "未找到切分后的音频片段，请检查数据集中是否包含可读取的音频文件",
+    TRAIN_NO_SLICES: "未找到可用的音频切片，请检查数据集中是否包含有效音频文件。",
     TRAIN_RMVPE_MISSING: "缺少 assets/rmvpe/rmvpe.pt，请先补全引擎资源。",
     TRAIN_EXTRACT_F0: "提取音高…",
     TRAIN_NO_F0: "音高提取没有产出。换一种音高算法再试。",
@@ -289,6 +288,7 @@ _FALLBACK_ZH: dict[str, str] = {
     VC_RUNNING: "变声中",
     VC_BAD_SETTINGS: "设置无效，无法开始变声",
     VC_START_FAILED: "启动失败",
+    VC_START_TIMEOUT: "启动超时：引擎未进入变声。请重试，或查看 User_Data/logs/realtime_worker.log",
     VC_DML_ALLOC: "当前显卡（{gpu}）无法在 DirectML 上分配模型缓存。若有 NVIDIA 显卡，请先安装官方驱动。",
     VC_STOP_FAILED: "停止失败",
     VC_PARAMS_APPLIED: "参数已应用",

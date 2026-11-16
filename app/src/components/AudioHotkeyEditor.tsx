@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "re
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
-import { Select } from "./controls";
+import { Select, Toggle } from "./controls";
 import { useI18n } from "../i18n";
 import { AUDIO_ACTIONS, comboFromEvent, type AudioHotkeyBinding } from "../lib/hotkeys";
 
@@ -193,12 +193,12 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
     conflict: t("audio.hotkeyConflictStatus"),
   };
 
-  return <div className="space-y-3 text-[12px] text-[var(--meta)]">
+  return <div className="space-y-3 text-[12.5px] text-[var(--meta)]">
     <div className="flex items-center gap-3">
       <span className="text-[13px] text-[var(--ink)]">{title ?? t("audio.hotkeySection")}</span>
       <Btn disabled={busy || arming || (group === "entries" && available.length === 0)} onClick={add}>{t("audio.hotkeyAdd")}</Btn>
     </div>
-    {error ? <p role="alert" className="text-[var(--danger)]">{error}</p> : null}
+    {error ? <p role="alert" className="text-[var(--danger-text)]">{error}</p> : null}
     {shown.length === 0 ? <p>{t(needle ? "audio.hotkeyNoMatch" : "audio.hotkeyEmpty")}</p> : shown.map((binding) => <div key={binding.binding_id}
       className="flex flex-wrap items-end gap-2 rounded-[var(--rs)] bg-[var(--group)] px-3 py-2">
       {!entryId && group !== "entries" ? <label>{t("audio.hotkeyAction")}
@@ -226,12 +226,16 @@ export function AudioHotkeyEditor({ entries, entryId, group, title, query = "" }
           options={[{ id: "window", label: t("audio.hotkeyWindow") }, { id: "global", label: t("audio.hotkeyGlobal") }]}
           onChange={(scope) => update(binding.binding_id, { scope: scope as "window" | "global" })} />
       </label>
-      <label className="flex items-center gap-1.5 pb-1">
-        <input type="checkbox" checked={binding.enabled} disabled={busy || arming}
-          onChange={(event) => update(binding.binding_id, { enabled: event.target.checked })} />
-        {t("audio.hotkeyEnabled")}
-      </label>
+      <Toggle
+        look="compact"
+        className="pb-1"
+        checked={binding.enabled}
+        disabled={busy || arming}
+        onChange={(enabled) => update(binding.binding_id, { enabled })}
+        label={t("audio.hotkeyEnabled")}
+      />
       <button type="button" disabled={busy} data-hotkey-recorder
+        // design-allow: 与 1px inset 描边凑整以对齐同高输入框与 Btn。
         className="rounded-[var(--rs)] px-3 py-[7px] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] disabled:opacity-50"
         onClick={() => void beginRecording(binding.binding_id)}
         onBlur={() => endRecording(binding.binding_id)}

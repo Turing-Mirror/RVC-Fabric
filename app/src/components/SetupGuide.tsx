@@ -129,13 +129,13 @@ export function SetupGuide(props: Props) {
             >
               <span className="block h-1 rounded-full overflow-hidden bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]">
                 <span
-                  className="block h-full rounded-full bg-[var(--accent)] origin-left transition-transform duration-500 ease-[var(--ease)]"
+                  className="block h-full rounded-full bg-[var(--accent)] origin-left transition-transform duration-420 ease-[var(--ease)]"
                   style={{ transform: `scaleX(${done[s] ? 1 : i === index ? 0.5 : i < index ? 1 : 0})`, opacity: done[s] || i <= index ? 1 : 0 }}
                 />
               </span>
               <span className={`block mt-2 text-[11.5px] truncate transition-colors ${i === index ? "text-[var(--ink)] font-medium" : "text-[var(--meta)] group-hover:text-[var(--ink-muted)]"}`}>
                 {labels[i]}
-                {done[s] ? <span className="ml-1 text-[var(--accent)]">✓</span> : null}
+                {done[s] ? <span className="ml-1 text-[var(--accent-text)]">✓</span> : null}
               </span>
             </button>
           ))}
@@ -186,7 +186,7 @@ function FeedbackNotice({ onDone }: { onDone: () => void }) {
     <div>
       <h2 className="text-[22px] font-semibold m-0">{t("s.guide.notice.title")}</h2>
       <div className="mt-5 flex gap-6 items-start max-[560px]:flex-col">
-        <ol className="m-0 pl-5 flex-1 min-w-0 flex flex-col gap-3 text-[13.5px] text-[var(--ink)] leading-relaxed">
+        <ol className="m-0 pl-5 flex-1 min-w-0 flex flex-col gap-3 text-[13px] text-[var(--ink)] leading-relaxed">
           <li>{t("s.guide.notice.where")}</li>
           <li>{t("s.guide.notice.diag")}</li>
           <li>{t("s.guide.notice.detail")}</li>
@@ -232,7 +232,7 @@ function CableStep({ status }: { status?: Record<string, unknown> }) {
         </div>
       ) : (
         <div className="flex items-center gap-3 flex-wrap">
-          <Btn primary disabled={!!vb.busy} onClick={() => void vb.install()}>
+          <Btn primary busy={!!vb.busy} onClick={() => void vb.install()}>
             {vb.busy === "install" ? t("s.1cac8ac7f5") : t("s.b386a7fb53")}
           </Btn>
           {vb.msg ? <span className="text-[12.5px] text-[var(--help)]">{vb.msg}</span> : null}
@@ -296,7 +296,7 @@ function DevicesStep({ status, workerAlive, devicesBusy, onReloadDevices }: Prop
       ) : (
         <div className="flex items-center gap-3 flex-wrap text-[12.5px] text-[var(--help)]">
           <span>{devicesBusy ? t("s.abd52d0c37") : workerAlive ? t("s.1831f7eb53") : t("s.guide.devices.load")}</span>
-          <Btn disabled={devicesBusy} onClick={onReloadDevices}>{devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}</Btn>
+          <Btn busy={devicesBusy} onClick={onReloadDevices}>{devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}</Btn>
         </div>
       )}
     </div>
@@ -315,9 +315,9 @@ function TryStep({ running, starting, micDb, onToggleRun }: Props) {
           {running ? t("s.guide.try.stop") : t("s.guide.try.start")}
         </Btn>
         <div className="flex-1 min-w-0">
-          <div className="text-[12px] text-[var(--meta)] mb-1.5">{running ? t("s.guide.try.running") : t("s.guide.try.level")}</div>
+          <div className="text-[12.5px] text-[var(--meta)] mb-1.5">{running ? t("s.guide.try.running") : t("s.guide.try.level")}</div>
           <div className="h-1.5 rounded-full overflow-hidden bg-[color-mix(in_srgb,var(--ink)_8%,transparent)]">
-            <div className="h-full rounded-full bg-[var(--accent)] origin-left transition-transform duration-150" style={{ transform: `scaleX(${running ? level : 0})` }} />
+            <div className="h-full rounded-full bg-[var(--accent)] origin-left transition-transform duration-200" style={{ transform: `scaleX(${running ? level : 0})` }} />
           </div>
         </div>
       </div>
@@ -396,10 +396,11 @@ export function FeedbackNoticeGate({ open, onDone }: { open: boolean; onDone: ()
 /** 收起后留在右下角的小按钮：点它回到引导的那一步。 */
 export function GuidePill({ step, onOpen, onClose }: { step: GuideStep; onOpen: () => void; onClose: () => void }) {
   return (
+    // design-allow: 引导入口必须低于本文件层级为六十的引导弹窗，保留原有先后关系。
     <div className="guide-pill fixed right-5 bottom-[92px] z-[40] flex items-center rounded-full bg-[var(--surface)] shadow-[0_8px_24px_-10px_rgba(20,26,33,.35),inset_0_0_0_1px_var(--hairline)]">
       <button type="button" onClick={onOpen} className="h-10 pl-4 pr-2 border-0 bg-transparent cursor-pointer text-[13px] text-[var(--ink)]">
         {t("s.guide.resume")}
-        <span className="ml-2 text-[12px] text-[var(--meta)]">{t("s.guide.count", { v0: GUIDE_STEPS.indexOf(step) + 1, v1: GUIDE_STEPS.length })}</span>
+        <span className="ml-2 text-[12.5px] text-[var(--meta)]">{t("s.guide.count", { v0: GUIDE_STEPS.indexOf(step) + 1, v1: GUIDE_STEPS.length })}</span>
       </button>
       <button type="button" onClick={onClose} aria-label={t("s.guide.close")} title={t("s.guide.close")} className="h-10 w-9 grid place-items-center border-0 bg-transparent cursor-pointer text-[var(--meta)] hover:text-[var(--ink)] rounded-full">
         ×

@@ -79,7 +79,7 @@ export function TitleBar({
         </div>
 
         <div
-          className="flex text-[var(--meta)] ml-3.5"
+          className="native-window-controls flex text-[var(--meta)] ml-3.5"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <WinBtn
@@ -125,7 +125,7 @@ function WinBtn({
       onClick={onClick}
       className={[
         "w-10 h-[34px] grid place-items-center text-xs rounded-md border-0 bg-transparent cursor-pointer",
-        "text-[var(--meta)] transition-[background,color] duration-150 ease-[var(--ease)]",
+        "text-[var(--meta)] transition-[background,color] duration-200 ease-[var(--ease)]",
         danger
           ? "hover:bg-[#e81123] hover:text-white"
           : "hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-[var(--ink)]",

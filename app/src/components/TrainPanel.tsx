@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { dropListen } from "../lib/tauriListen";
+import { TextInput } from "trm-ui";
+import { activeJob, latestExperimentJob, useTrainingQueue } from "../lib/trainQueue";
+import { TrainingQueue } from "./TrainingQueue";
 import { Btn, HelpMark } from "./ui";
-import { Select } from "./controls";
+import { Select, Toggle } from "./controls";
 import { tip } from "../lib/glossary";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
@@ -11,11 +12,10 @@ import { CkptAdvanced } from "./CkptAdvanced";
 import { ErrorNote } from "./ErrorNote";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
-import { pickPath } from "../lib/nativeDialog";
-import { askConfirm } from "../lib/webDialog";
+import { pickPath } from "trm-ui/fabric";
+import { askConfirm } from "trm-ui/fabric";
 import { auditionVoice } from "../lib/audition";
 import { TOOL_BOX } from "./Select";
-import { joinClauses } from "../lib/text";
 
 type Pretrained = { sample_rate: string; ready: boolean };
 
@@ -86,17 +86,6 @@ type Progress = {
   message_code?: string;
 };
 
-function stageName(id: string): string {
-  const map: Record<string, string> = {
-    preprocess: t("s.1a37ffe775"),
-    f0: t("s.bda11a3c2d"),
-    feature: t("s.672c1db9d8"),
-    train: t("s.796e01d5af"),
-    index: t("s.79f9110607"),
-  };
-  return map[id] || id;
-}
-
 /** 最多留这么多轮的到达时刻。太少会被偶发的一轮抖动带偏，太多则在
  *  显卡降频之后半天跟不上真实速度。 */
 const ETA_WINDOW = 8;
@@ -159,8 +148,6 @@ const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
-const FIELD =
-  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 
 const F0_OPTS = ["rmvpe", "harvest", "pm"] as const;
 
@@ -238,7 +225,11 @@ export function TrainPanel() {
   // 训完之后立刻能听一下像不像。「训完才发现白训」是这个产品里最贵的一种失望，
   // 而「像不像」只有用户自己判断得了 —— 我们能做的是把这一步从「导出、找文件、
   // 拖进播放器」缩成一个按钮。
-  const [trained, setTrained] = useState("");
+  const queue = useTrainingQueue();
+  const refreshQueue = queue.refresh;
+  const active = activeJob(queue.jobs);
+  const currentJob = latestExperimentJob(queue.jobs, name);
+  const trained = currentJob?.state === "completed" ? currentJob.result?.weights || "" : "";
   const [auditing, setAuditing] = useState(false);
   const audition = async () => {
     if (!trained || auditing) return;
@@ -283,7 +274,7 @@ export function TrainPanel() {
   const [f0, setF0] = useState<(typeof F0_OPTS)[number]>("rmvpe");
   const [saveEvery, setSaveEvery] = useState(5);
   const [saveWeights, setSaveWeights] = useState(false);
-  const [prog, setProg] = useState<Progress | null>(null);
+  const prog = active?.progress;
   const [msg, setMsg] = useState("");
   // 配一个能按的按钮要靠错误码，光有文案认不出来是哪一类错。
   const [msgCode, setMsgCode] = useState("");
@@ -299,7 +290,8 @@ export function TrainPanel() {
     setMsg(v);
   }, []);
 
-  const [running, setRunning] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const running = !!active || !!st.busy;
   const [adv, setAdv] = useState(false);
   // 进阶设置的开关在底栏、内容在正文末尾。展开时把内容滚进视野，不然用户点完
   // 按钮，画面上什么都不会变 —— 新长出来的那块在滚动区外面。
@@ -307,7 +299,7 @@ export function TrainPanel() {
   useEffect(() => {
     if (adv) advRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [adv]);
-  const runningRef = useRef(false);
+  const addingRef = useRef(false);
   /** 每轮到达的时刻，用来估剩余时间。只留最近若干个。 */
   const epochMarks = useRef<{ at: number; done: number }[]>([]);
   const [eta, setEta] = useState("");
@@ -331,31 +323,19 @@ export function TrainPanel() {
     void invoke<string>("train_output_dir")
       .then((d) => setOutDir(d || ""))
       .catch(() => {});
-    // listen() 是异步的，弹窗在它 resolve 之前关掉就会把注销句柄丢掉，
-    // 每开一次泄漏一个监听。和 SeparateDialog 一样的处理。
-    let disposed = false;
-    let un: (() => void) | undefined;
-    void listen<Progress>("train-progress", (ev) => {
-      setProg(ev.payload);
-      setEta(trackEta(epochMarks.current, ev.payload));
-      const line = ev.payload.message || "";
-      if (ev.payload.phase === "error") {
-        showErr(line || t("s.60a21a8105"));
-        setMsgCode(ev.payload.message_code || "");
-      } else if (ev.payload.phase === "skip" && line) {
-        // skip 下一拍就是 stage，prog.message 会被盖掉。半份产物那种警告
-        // 必须写到 msg 上，否则界面上看着像正常续跑。
-        setMsg((prev) => (prev && prev !== line ? `${prev}\n${line}` : line));
-      }
-    }).then((fn) => {
-      if (disposed) dropListen(fn);
-      else un = fn;
-    });
-    return () => {
-      disposed = true;
-      dropListen(un);
-    };
-  }, [load, showErr]);
+  }, [load]);
+
+  const queueState = queue.jobs.map(job => `${job.id}:${job.state}`).join("|");
+  useEffect(() => { void load(); }, [load, queueState]);
+  useEffect(() => {
+    epochMarks.current = [];
+    setEta("");
+  }, [active?.id]);
+  useEffect(() => {
+    if (!prog || prog.stage !== "train") { setEta(""); return; }
+    const estimate = trackEta(epochMarks.current, { ...prog, phase: "stage" });
+    if (estimate) setEta(estimate);
+  }, [prog]);
 
   const existing = st.experiments?.find((e) => e.name === name.trim());
   // 有切片就能续跑，预处理是最慢的一步（几十分钟），能跳过就跳过。
@@ -462,17 +442,13 @@ export function TrainPanel() {
   const mustFix = checks.some((c) => c.level === "must");
 
   const start = async () => {
-    if (runningRef.current) return;
+    if (addingRef.current) return;
     showInfo("");
     setMsgCode("");
-    setTrained("");
-    setProg(null);
-    setEta("");
-    epochMarks.current = [];
-    runningRef.current = true;
-    setRunning(true);
+    addingRef.current = true;
+    setAdding(true);
     try {
-      const r = await invoke<{ weights?: string; leftover_bytes?: number }>("train_start", {
+      await invoke("train_queue_add", {
         req: {
           exp: name.trim(),
           dataset,
@@ -486,31 +462,17 @@ export function TrainPanel() {
           output_dir: outDir,
         },
       });
-      setTrained(String(r?.weights ?? ""));
-      const leftover = r?.leftover_bytes ?? 0;
-      showInfo(
-        t("s.2b30598b60", { v0: r.weights ?? "" }) +
-          // 训练刚跑完是用户唯一会读这句话的时刻。只报数，不自动删 —— 中间产物
-          // 还留着才能续训。
-          (leftover > 0 ? `\n${t("s.trainLeftover", { v0: humanBytes(leftover) })}` : ""),
-      );
     } catch (e) {
       showErr(String(e));
     } finally {
-      runningRef.current = false;
-      setRunning(false);
+      addingRef.current = false;
+      setAdding(false);
+      void refreshQueue();
       // 成败都回读一次：训好的音色要出现在列表里，失败/取消的那次也要
       // 让「上次中断了」这条提示跟着盘上的实际情况走。
       void load();
     }
   };
-
-  const pct = prog?.total ? Math.round(((prog.done ?? 0) / prog.total) * 100) : 0;
-  const stageLabel = prog?.stage ? stageName(prog.stage) : "";
-  const stepLine =
-    prog?.index && prog?.total_stages
-      ? t("s.588a754143", { v0: prog.index, v1: prog.total_stages, v2: stageLabel })
-      : "";
 
   return (
     <ToolBody>
@@ -526,13 +488,13 @@ export function TrainPanel() {
               <li key={i} className="relative py-2 first:pt-0">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先做哪个。 */}
-                  <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
+                  <span className="font-mono text-[11.5px] text-[var(--meta)] shrink-0">
                     {c.level === "must" ? t("s.trainCheckMust") : t("s.trainCheckShould")}
                   </span>
                   <p
                     className={
                       "m-0 flex items-center gap-1.5 text-[13px] " +
-                      (c.level === "must" ? "text-[var(--danger)]" : "text-[var(--ink-muted)]")
+                      (c.level === "must" ? "text-[var(--danger-text)]" : "text-[var(--ink-muted)]")
                     }
                   >
                     {c.text}
@@ -565,7 +527,7 @@ export function TrainPanel() {
                 {inspecting ? t("s.trainInspecting") : t("s.trainInspect")}
               </Btn>
               {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
-                <span className="text-[12px] text-[var(--meta)]">
+                <span className="text-[12.5px] text-[var(--meta)]">
                   {t("s.trainInspectResult", {
                     a0: String(inspect.sampled),
                     a1: humanSeconds(inspect.estimated_total_seconds ?? 0),
@@ -578,19 +540,19 @@ export function TrainPanel() {
           {inspect && inspect.available && (inspect.sampled ?? 0) > 0 ? (
             <div className="mb-2 flex flex-col gap-1">
               {(inspect.estimated_total_seconds ?? 0) < 600 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectShort")}
                 </p>
               ) : null}
               {(inspect.median_seconds ?? 0) > 60 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectLong", {
                     v0: humanSeconds(inspect.median_seconds ?? 0),
                   })}
                 </p>
               ) : null}
               {(inspect.sample_rates?.length ?? 0) > 1 ? (
-                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--meta)] leading-snug">
                   {t("s.trainInspectMixedRate", {
                     v0: (inspect.sample_rates ?? [])
                       .map((r) => `${Math.round(r.rate / 1000)}k×${r.files}`)
@@ -601,21 +563,21 @@ export function TrainPanel() {
               {/* 阈值只给相对判断用的「值得看一眼」线，不是承诺：偏轻到什么程度
                   该重录，取决于用户能接受什么质量。 */}
               {inspect.mean_volume_db != null && inspect.mean_volume_db < -35 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectQuiet", {
                     v0: inspect.mean_volume_db.toFixed(1),
                   })}
                 </p>
               ) : null}
               {(inspect.silence_ratio ?? 0) > 0.6 ? (
-                <p className="m-0 text-[12px] text-[var(--ink-muted)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                   {t("s.trainInspectSilent", {
                     v0: Math.round((inspect.silence_ratio ?? 0) * 100),
                   })}
                 </p>
               ) : null}
               {(inspect.channels?.length ?? 0) > 1 ? (
-                <p className="m-0 text-[12px] text-[var(--meta)] leading-snug">
+                <p className="m-0 text-[12.5px] text-[var(--meta)] leading-snug">
                   {t("s.trainInspectMixedCh", {
                     v0: (inspect.channels ?? [])
                       .map((c) => `${c.channels}ch×${c.files}`)
@@ -628,7 +590,7 @@ export function TrainPanel() {
           {dataset ? (
             <p
               className={
-                "m-0 mb-2 text-[12px] leading-snug " +
+                "m-0 mb-2 text-[12.5px] leading-snug " +
                 (scan && scan.files === 0
                   ? "text-[var(--ink-muted)] font-semibold"
                   : "text-[var(--meta)]")
@@ -660,17 +622,19 @@ export function TrainPanel() {
               }}
             >{t("s.70b208202c")}</Btn>
           </div>
-          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+          <p className="m-0 mb-2 text-[12.5px] text-[var(--meta)] leading-snug">
             {t("s.trainOutHint")}
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.4eea655d6f")}</span>
-            <input
+            <TextInput
               ref={nameRef}
-              className={`flex-1 min-w-0 ${FIELD}`}
+              look="compact"
+              fit
+              className="flex-1 min-w-0"
               value={name}
               placeholder={t("s.b27dd877b1")}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
             />
           </div>
           <div className={ROW}>
@@ -685,45 +649,49 @@ export function TrainPanel() {
                 label: p.sample_rate + (p.ready ? "" : t("s.3d19649847")),
               }))}
             />
-            <span className="text-[12px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
+            <span className="text-[12.5px] text-[var(--meta)]">{t("s.f9786f5b73")}</span>
           </div>
           {/* 只给相对判断，不给「48k 需要 8 GB」这种绝对承诺 —— 那取决于批大小、
               数据集长度和显卡，说死了就会有人拿着它来对账。 */}
-          <p className="m-0 mb-2 text-[12px] text-[var(--meta)] leading-snug">
+          <p className="m-0 mb-2 text-[12.5px] text-[var(--meta)] leading-snug">
             {t("s.trainSrCost")}
             {onlyHighSrReady ? ` ${t("s.trainSrOnly48")}` : ""}
           </p>
           <div className={ROW}>
             <span className={LABEL}>{t("s.61fdf63b84")}</span>
-            <input
-              className={`w-[100px] ${FIELD}`}
+            <TextInput
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={1000}
-              value={epochs}
-              onChange={(e) => setEpochs(Number(e.target.value) || 1)}
+              value={String(epochs)}
+              onChange={(v) => setEpochs(Number(v) || 1)}
             />
-            <span className="text-[12px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
+            <span className="text-[12.5px] text-[var(--meta)]">{t("s.c7acce2c4c")}</span>
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
               {t("s.trainBatch")}
               <HelpMark title={t("s.trainBatchHint")} />
             </span>
-            <input
+            <TextInput
               ref={batchRef}
-              className={`w-[100px] ${FIELD}`}
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={40}
-              value={batch}
-              onChange={(e) => {
+              value={String(batch)}
+              onChange={(v) => {
                 batchTouchedRef.current = true;
-                setBatch(Math.max(1, Number(e.target.value) || 1));
+                setBatch(Math.max(1, Number(v) || 1));
               }}
             />
             {st.suggested_batch ? (
-              <span className="text-[12px] text-[var(--meta)]">
+              <span className="text-[12.5px] text-[var(--meta)]">
                 {t("s.trainSuggested", { v0: st.suggested_batch })}
               </span>
             ) : null}
@@ -745,39 +713,39 @@ export function TrainPanel() {
               {t("s.trainSaveEvery")}
               <HelpMark title={t("s.trainSaveEveryHint")} />
             </span>
-            <input
-              className={`w-[100px] ${FIELD}`}
+            <TextInput
+              look="compact"
+              fit
+              className="w-[100px]"
               type="number"
               min={1}
               max={50}
-              value={saveEvery}
-              onChange={(e) => setSaveEvery(Math.max(1, Number(e.target.value) || 5))}
+              value={String(saveEvery)}
+              onChange={(v) => setSaveEvery(Math.max(1, Number(v) || 5))}
             />
           </div>
           <div className={ROW}>
-            <label className="flex items-center gap-2 text-[13px] cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={saveWeights}
-                onChange={(e) => setSaveWeights(e.target.checked)}
-               
-              />
-              {t("s.trainSaveWeights")}
-              <HelpMark title={t("s.trainSaveWeightsHint")} />
-            </label>
+            <Toggle
+              look="inline"
+              tipPosition="end"
+              checked={saveWeights}
+              onChange={setSaveWeights}
+              label={t("s.trainSaveWeights")}
+              tip={t("s.trainSaveWeightsHint")}
+            />
           </div>
         </div>
 
         {st.experiments && st.experiments.length > 0 ? (
           <div className="mt-3">
-            <div className="text-[12px] text-[var(--meta)] mb-1.5">{t("s.trainExps")}</div>
+            <div className="text-[12.5px] text-[var(--meta)] mb-1.5">{t("s.trainExps")}</div>
             <div className="flex flex-wrap gap-1.5">
               {st.experiments.map((e) => (
                 <button
                   key={e.name}
                   type="button"
                   className={[
-                    "text-[12px] px-2 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
+                    "text-[12.5px] px-2 py-1 rounded-[var(--rs)] border-0 cursor-pointer",
                     e.name === name.trim()
                       ? "bg-[var(--accent-soft)] text-[var(--ink)]"
                       : "bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] text-[var(--ink-muted)]",
@@ -815,12 +783,12 @@ export function TrainPanel() {
               })}
             </p>
             {existing && existing.complete === false ? (
-              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+              <p className="m-0 mt-1 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                 {t("s.trainStagesIncomplete")}
               </p>
             ) : null}
             {existing && (existing.preprocess_failed ?? 0) > 0 ? (
-              <p className="m-0 mt-1 text-[12px] text-[var(--ink-muted)] leading-snug">
+              <p className="m-0 mt-1 text-[12.5px] text-[var(--ink-muted)] leading-snug">
                 {t("s.trainPreprocessFailed", {
                   a0: String(existing.preprocess_failed),
                   a1: String(existing.preprocess_ok ?? 0),
@@ -833,7 +801,7 @@ export function TrainPanel() {
               <div className="mt-1">
                 <Btn
                   onClick={() => setShowFailed((v) => !v)}
-                  className="!py-1 !px-2 text-[12px]"
+                  className="!py-1 !px-2 text-[12.5px]"
                 >
                   {showFailed
                     ? t("s.trainFailedHide")
@@ -864,7 +832,7 @@ export function TrainPanel() {
               <Btn
                 onClick={() => void resetStages()}
                 busy={resetting}
-                disabled={running || resetting}
+                disabled={running || resetting || queue.jobs.some(job => job.req.exp === name.trim() && ["queued", "paused"].includes(job.state))}
               >
                 {t("s.trainResumeReset")}
               </Btn>
@@ -882,24 +850,8 @@ export function TrainPanel() {
           </p>
         ) : null}
 
-        {prog ? (
-          <div className="mt-4">
-            <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
-              <div
-                className="h-full bg-[var(--accent)] transition-[width] duration-200"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
-              {joinClauses([
-                stepLine,
-                prog.message,
-                prog.phase === "stage" && t("s.metaProgress", { v0: String(pct) }),
-                eta,
-              ])}
-            </p>
-          </div>
-        ) : null}
+        <TrainingQueue jobs={queue.jobs} error={queue.error} loaded={queue.loaded} waitingForRealtime={queue.waitingForRealtime}
+          eta={eta} onAction={queue.action} onBatch={focusBatch} />
 
         {trained && !running ? (
           <div className="mt-3">
@@ -924,10 +876,6 @@ export function TrainPanel() {
           />
         ) : null}
 
-        {running ? (
-          <p className="m-0 mt-3 text-[12px] text-[var(--meta)]">{t("s.8a5ef195d6")}</p>
-        ) : null}
-
         {/* 进阶设置的按钮进了底栏，展开的内容留在这里 —— 那是一整块表单，塞进
             操作栏没地方放。展开时把它滚进视野，否则按钮在窗口底部、内容在正文
             末尾，用户点完会以为什么都没发生。 */}
@@ -942,17 +890,14 @@ export function TrainPanel() {
           {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
         </Btn>
         <div className="ml-auto flex items-center gap-2.5">
-          {running ? (
-            <Btn onClick={() => void invoke("train_cancel")}>{t("s.44e681a374")}</Btn>
-          ) : null}
           <span ref={startRef}>
           <Btn
             primary
-            busy={running}
-            disabled={running || mustFix || !name.trim() || (!dataset && !resume)}
+            busy={adding}
+            disabled={adding || mustFix || !name.trim() || (!dataset && !resume)}
             onClick={() => void start()}
           >
-            {running ? t("s.3e6b1657c7") : resume ? t("s.3166554c46") : t("s.be24590d21")}
+            {t("trainingQueue.Add")}
           </Btn>
           </span>
         </div>

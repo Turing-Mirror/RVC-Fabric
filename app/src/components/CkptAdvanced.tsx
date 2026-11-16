@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { TextInput } from "trm-ui";
 import { Btn } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select } from "./controls";
+import { Field, RangeBar, Select, SliderValue, Toggle } from "./controls";
+import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { t } from "../i18n/t";
-import { pickPath } from "../lib/nativeDialog";
+import { pickPath } from "trm-ui/fabric";
 import { TOOL_BOX } from "./Select";
 
 type Tab = "merge" | "change" | "extract" | "onnx";
 
-const FIELD =
-  "w-full min-w-0 rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
 
@@ -79,6 +79,7 @@ export function CkptAdvanced() {
           { id: "onnx", label: t("s.ckptOnnx") },
         ]}
       />
+      <CatalogTransition scope={tab} order={["merge", "change", "extract", "onnx"]}>
       <div className="mt-4 flex flex-col gap-3.5">
         {tab === "merge" ? (
           <>
@@ -118,9 +119,9 @@ export function CkptAdvanced() {
                       ariaLabel={t("s.ckptAlpha")}
                     />
                   </div>
-                  <span className="w-[44px] text-right text-[13px] tabular-nums">
-                    {alpha.toFixed(2)}
-                  </span>
+                  <SliderValue value={alpha} min={0} max={1} step={0.01} onChange={setAlpha}
+                    format={(v) => v.toFixed(2)} ariaLabel={t("s.ckptAlpha")}
+                    className="w-[44px] text-right text-[13px] tabular-nums" />
                 </div>
               }
             />
@@ -128,22 +129,14 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <Field
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <div className="flex flex-wrap gap-3">
@@ -180,14 +173,12 @@ export function CkptAdvanced() {
                 label={t("s.ckptIfF0")}
                 tip={t("s.ckptIfF0Hint")}
                 control={
-                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={ifF0}
-                      onChange={(e) => setIfF0(e.target.checked)}
-                    />
-                    {t("s.ckptIfF0Yes")}
-                  </label>
+                  <Toggle
+                    look="inline"
+                    checked={ifF0}
+                    onChange={setIfF0}
+                    label={t("s.ckptIfF0Yes")}
+                  />
                 }
               />
             </div>
@@ -237,22 +228,14 @@ export function CkptAdvanced() {
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <Field
               label={t("s.ckptSaveAs")}
               tip={t("s.ckptSaveAsHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <div className="flex justify-end">
@@ -290,22 +273,14 @@ export function CkptAdvanced() {
               label={t("s.ckptSaveName")}
               tip={t("s.ckptSaveNameHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <TextInput look="compact" value={name} onChange={setName} />
               }
             />
             <Field
               label={t("s.ckptInfo")}
               tip={t("s.ckptInfoHint")}
               control={
-                <input
-                  className={FIELD}
-                  value={info}
-                  onChange={(e) => setInfo(e.target.value)}
-                />
+                <TextInput look="compact" value={info} onChange={setInfo} />
               }
             />
             <div className="flex flex-wrap gap-3">
@@ -342,14 +317,12 @@ export function CkptAdvanced() {
                 label={t("s.ckptIfF0")}
                 tip={t("s.ckptIfF0Hint")}
                 control={
-                  <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={ifF0}
-                      onChange={(e) => setIfF0(e.target.checked)}
-                    />
-                    {t("s.ckptIfF0Yes")}
-                  </label>
+                  <Toggle
+                    look="inline"
+                    checked={ifF0}
+                    onChange={setIfF0}
+                    label={t("s.ckptIfF0Yes")}
+                  />
                 }
               />
             </div>
@@ -421,6 +394,7 @@ export function CkptAdvanced() {
           <ErrorNote text={msg} error={msgErr} />
         ) : null}
       </div>
+      </CatalogTransition>
     </div>
   );
 }

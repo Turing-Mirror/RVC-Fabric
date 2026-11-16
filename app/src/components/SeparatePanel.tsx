@@ -4,13 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { Btn, HelpMark } from "./ui";
 import { ErrorNote } from "./ErrorNote";
-import { RangeBar, Select } from "./controls";
+import { RangeBar, Select, SliderValue } from "./controls";
 import { openDownloadModels } from "../lib/downloadModels";
 import { openHelpSection } from "../lib/helpNav";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
 import { extraModelLabel } from "../lib/extraModels";
-import { pickPath } from "../lib/nativeDialog";
+import { pickPath } from "trm-ui/fabric";
 import { TOOL_BOX } from "./Select";
 
 type Status = {
@@ -23,6 +23,7 @@ type Status = {
 };
 
 type Progress = {
+  owner?: string | null;
   phase: "start" | "run" | "done" | "error";
   done: number;
   total: number;
@@ -91,6 +92,7 @@ export function SeparatePanel() {
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<Progress>("separate-progress", (ev) => {
+      if (ev.payload.owner != null) return;
       setProg(ev.payload);
       if (ev.payload.phase === "error") showErr(ev.payload.message);
     }).then((fn) => {
@@ -170,7 +172,7 @@ export function SeparatePanel() {
 
         {blocked ? (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
+            <p className="m-0 text-[13px] text-[var(--danger-text)]">{blocked}</p>
           </div>
         ) : null}
 
@@ -225,7 +227,8 @@ export function SeparatePanel() {
                 ariaLabel={t("s.sepAgg")}
               />
             </div>
-            <span className="w-[36px] text-right text-[13px] tabular-nums">{agg}</span>
+            <SliderValue value={agg} min={0} max={20} step={1} onChange={setAgg}
+              ariaLabel={t("s.sepAgg")} className="w-[36px] text-right text-[13px] tabular-nums" />
           </div>
         </div>
 
@@ -237,7 +240,7 @@ export function SeparatePanel() {
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">
+            <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">
               {prog.message} {prog.phase === "run" ? `${pct}%` : ""}
             </p>
           </div>

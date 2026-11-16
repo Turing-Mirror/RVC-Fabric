@@ -98,12 +98,13 @@ class PcmBridgeWriter:
         start = write % self.capacity
         first = min(frames, self.capacity - start)
         frame_bytes = self.channels * 4
-        raw = pcm.tobytes()
+        raw = memoryview(pcm).cast("B")
         data = self.shm.buf
         first_offset = HEADER_BYTES + start * frame_bytes
-        data[first_offset:first_offset + first * frame_bytes] = raw[:first * frame_bytes]
+        first_bytes = first * frame_bytes
+        data[first_offset:first_offset + first_bytes] = raw[:first_bytes]
         if first < frames:
             tail = (frames - first) * frame_bytes
-            data[HEADER_BYTES:HEADER_BYTES + tail] = raw[first * frame_bytes:]
+            data[HEADER_BYTES:HEADER_BYTES + tail] = raw[first_bytes:]
         _store_counter(data, WRITE_FRAME_OFFSET, write + frames)
         return True

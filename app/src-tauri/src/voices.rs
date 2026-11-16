@@ -253,7 +253,7 @@ pub fn safe_model_dir_name(name: &str) -> Result<String, String> {
 }
 
 
-fn find_pth(folder: &Path) -> Option<PathBuf> {
+pub(crate) fn find_pth(folder: &Path) -> Option<PathBuf> {
     let mut pths: Vec<PathBuf> = fs::read_dir(folder)
         .ok()?
         .flatten()
@@ -347,7 +347,7 @@ fn looks_like_voice_folder(folder: &Path) -> bool {
     (folder.join("config.json")).is_file() || find_cover(folder).is_some()
 }
 
-fn read_sidecar(folder: &Path) -> Map<String, Value> {
+pub(crate) fn read_sidecar(folder: &Path) -> Map<String, Value> {
     let v = read_json(&folder.join("config.json"));
     v.as_object().cloned().unwrap_or_default()
 }
@@ -525,7 +525,7 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             && !oid.is_empty()
         {
             let cat = catalog
-                .get_or_insert_with(|| crate::store::fetch_store_catalog(root, false));
+                .get_or_insert_with(|| crate::store::fetch_legacy_store_catalog(root, false));
             if let Some(meta) = catalog_entry_meta(cat, &oid) {
                 let mut healed = Map::new();
                 if author_placeholder {
@@ -585,7 +585,7 @@ fn scan_models_dir(root: &Path, models_root: &Path) -> Vec<Value> {
             // 旧版本装的第三方音色，sidecar 里没有 cover（安装时漏写）。
             // 按 online_id 从内置清单回补封面 URL —— 用户不用重下也有封面。
             let cat = catalog
-                .get_or_insert_with(|| crate::store::fetch_store_catalog(root, false));
+                .get_or_insert_with(|| crate::store::fetch_legacy_store_catalog(root, false));
             cover = catalog_cover(cat, &oid);
         }
 

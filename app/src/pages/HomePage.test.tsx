@@ -71,7 +71,7 @@ describe("首页使用中徽标", () => {
     expect(m.container.textContent).not.toContain(badge);
     // 主角位（横幅下的 accent 行）显示的是占位文案，不是目录第一条。
     const hero = m.container.querySelector(
-      "p.text-\\[19px\\]",
+      "p.text-\\[16px\\]",
     ) as HTMLElement | null;
     expect(hero).not.toBeNull();
     expect(hero!.textContent).toBe(t("s.262d11e2d6"));
@@ -99,7 +99,7 @@ describe("首页使用中徽标", () => {
     await tick();
     await tick();
     const hero = m.container.querySelector(
-      "p.text-\\[19px\\]",
+      "p.text-\\[16px\\]",
     ) as HTMLElement | null;
     expect(hero!.textContent).toContain("乙");
     // 徽章只出现一次 —— 在乙的卡上。
@@ -107,5 +107,16 @@ describe("首页使用中徽标", () => {
       m.container.querySelectorAll("span"),
     ).filter((s) => s.textContent === badge);
     expect(badges).toHaveLength(1);
+  });
+  it("同目录多个模型使用独立卡片身份，重复目录记录不会分裂卡片", async () => {
+    const models = CATALOG.models.map(m => ({ ...m, dir: "shared" }));
+    tauri.invoke.mockImplementation(cmd => Promise.resolve(cmd === "voices_list"
+      ? { ...CATALOG, models: [...models, models[1]] } : {}));
+    const m = mount(<HomePage currentId="m/b.pth" />);
+    mounts.push(m);
+    await tick(); await tick();
+    const keys = [...m.container.querySelectorAll<HTMLElement>("[data-flip]")].map(n => n.dataset.flip);
+    expect(keys).toEqual(["m/a.pth", "m/b.pth", "m/c.pth"]);
+    expect(new Set(keys).size).toBe(3);
   });
 });

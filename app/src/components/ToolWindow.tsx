@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { usePaneOn } from "trm-ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -146,6 +147,8 @@ export function ToolTitleActions({ children }: { children: ReactNode }) {
  */
 export function ToolActions({ children }: { children: ReactNode }) {
   const slot = useContext(ToolFooterSlot);
+  const active = usePaneOn();
+  if (!active) return null;
   const bar = (
     <div className="relative px-6 py-3.5 flex items-center gap-2.5">
       {/* 和主窗口底栏一样：两端内缩的发丝线，不是整条 border-top。 */}
@@ -179,7 +182,7 @@ function ToolTitleBar({ title }: { title: string }) {
         {title}
       </span>
       <div
-        className="ml-auto flex text-[var(--meta)]"
+        className="native-window-controls ml-auto flex text-[var(--meta)]"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <ToolWinBtn label={t("s.ca8223c5fc")} onClick={() => void win()?.minimize()}>
@@ -214,7 +217,7 @@ function ToolWinBtn({
       onClick={onClick}
       className={[
         "w-9 h-[30px] grid place-items-center text-xs rounded-md border-0 bg-transparent cursor-pointer",
-        "text-[var(--meta)] transition-[background,color] duration-150 ease-[var(--ease)]",
+        "text-[var(--meta)] transition-[background,color] duration-200 ease-[var(--ease)]",
         danger
           ? "hover:bg-[#e81123] hover:text-white"
           : "hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-[var(--ink)]",

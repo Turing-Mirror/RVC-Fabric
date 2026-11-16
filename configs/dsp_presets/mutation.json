@@ -1,6 +1,6 @@
 {
   "name": "变异",
-  "desc": "三角波音高扫频：使音高在设定的半音区间内周期性往复滑动",
+  "desc": "音高在设定半音区间内周期性往复渐变",
   "params": {
     "sweep": {
       "lo": -3.5,
@@ -9,13 +9,13 @@
     }
   },
   "desc_i18n": {
-    "zh-CN": "三角波音高扫频：使音高在设定的半音区间内周期性往复滑动",
-    "zh-TW": "三角波音高掃頻：使音高在設定的半音區間內週期性往復滑動",
-    "en-US": "Triangle pitch sweep: continuously glides pitch back and forth between two semitone bounds",
-    "ja-JP": "三角波ピッチスイープ：設定した半音範囲内でピッチを周期的に上下へスライドさせます",
-    "ko-KR": "삼각파 음높이 스위프: 설정한 반음 구간 내에서 음높이가 주기적으로 왕복 슬라이드하도록 합니다",
-    "es-ES": "Barrido de tono en onda triangular: desliza el tono periódicamente de un extremo a otro dentro del intervalo de semitonos configurado",
-    "fr-FR": "Balayage de hauteur en onde triangulaire : fait glisser périodiquement la hauteur entre deux limites en demi-tons",
-    "ru-RU": "Треугольная развёртка высоты тона: периодически плавно смещает высоту тона вверх и вниз в заданном диапазоне полутонов"
+    "zh-CN": "音高在设定半音区间内周期性往复渐变",
+    "zh-TW": "音高在設定半音區間內週期性往復漸變",
+    "en-US": "Continuously glides pitch back and forth across the configured semitone range",
+    "ja-JP": "設定した半音範囲内でピッチを周期的に往復変化させます",
+    "ko-KR": "설정한 반음 구간 내에서 음높이를 주기적으로 왕복 변화시킵니다",
+    "es-ES": "Desliza el tono periódicamente de un extremo a otro dentro del rango de semitonos configurado",
+    "fr-FR": "Fait glisser périodiquement la hauteur dans l'intervalle en demi-tons configuré",
+    "ru-RU": "Периодически плавно изменяет высоту тона вверх и вниз в заданном диапазоне полутонов"
   }
 }

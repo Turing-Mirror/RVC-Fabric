@@ -1,10 +1,9 @@
 /**
  * Plaza voice downloads live here, not in StoreSection.
  *
- * PageHost unmounts the plaza as soon as you leave it. If the queue and the
- * in-flight invoke sit in that component, the UI forgets the job and the user
- * has to click Download again. Rust keeps transferring; this module keeps the
- * JS side of the same job until it finishes or the user cancels.
+ * The queue and the in-flight invoke belong to the app. Rust keeps transferring
+ * while the user changes pages; this module keeps the corresponding frontend
+ * job until it finishes or the user cancels.
  */
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -134,7 +133,7 @@ async function startOne(id: string) {
     }
     generation += 1;
     lastCompleted = id;
-    lastCompletedThird = job.voice.official === false;
+    lastCompletedThird = job.kind === "pack" && job.voice.official === false;
   } catch (e) {
     error = `${label || id}：${String(e)}`;
   } finally {

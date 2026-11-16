@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { TextInput } from "trm-ui";
 import { t } from "../i18n/t";
 import { useModalKeys } from "../hooks/useModalKeys";
 import {
   registerDialogHandler,
   type DialogRequest,
-} from "../lib/webDialog";
+} from "trm-ui/fabric";
 import { Modal } from "./Modal";
 
 /**
@@ -113,10 +114,10 @@ export function WebDialogHost() {
           {req.message}
         </p>
         {req.kind === "prompt" ? (
-          <input
+          <TextInput
             ref={inputRef}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={setDraft}
             onKeyDown={(e) => {
               if (
                 e.key !== "Enter" ||
@@ -131,7 +132,7 @@ export function WebDialogHost() {
               e.stopPropagation();
               finish(draft);
             }}
-            className="w-full mb-4 px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+            className="mb-4"
           />
         ) : null}
         <div className="flex gap-2.5 justify-end">
@@ -147,7 +148,7 @@ export function WebDialogHost() {
             ref={okRef}
             type="button"
             onClick={() => finish(req.kind === "prompt" ? draft : true)}
-            className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+            className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent-fill)] text-[var(--accent-ink)] border-0 cursor-pointer"
           >
             {t("dialog.ok")}
           </button>

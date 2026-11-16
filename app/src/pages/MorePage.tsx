@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn, Group, ListItem, PageHead, PagePad } from "../components/ui";
 import { openOverlay, openTool } from "../components/ToolWindow";
@@ -22,6 +23,8 @@ import { StorageSection } from "../components/StorageSection";
 import { ConsultDialog } from "../components/ConsultDialog";
 import { scheduleScrollToId, scrollPaneToId } from "../lib/scrollPane";
 import { Leave } from "../components/Presence";
+import { MobileSection } from "../components/MobileSection";
+import type { MobileController } from "../hooks/useMobile";
 import { joinClauses, listText } from "../lib/text";
 
 /** 「申请专业优化」的开关。服务还没开放，先藏起来；整条链路（录音 → 转换 →
@@ -29,6 +32,7 @@ import { joinClauses, listText } from "../lib/text";
 const SHOW_CONSULT = false;
 
 type Props = {
+  mobile?: MobileController;
   status?: EngineStatus;
   provision?: ProvisionStatus;
   onForceKill?: () => void | Promise<void>;
@@ -47,6 +51,7 @@ type Props = {
 };
 
 export function MorePage({
+  mobile,
   status,
   provision,
   onForceKill,
@@ -193,20 +198,32 @@ export function MorePage({
       setBusyMsg(t("s.7fae0289b6", { v0: String(e) }));
     }
   };
+  // 页面常驻，每次回来副作用都会重新执行：已处理过的请求记下来，不再重复滚动。
+  const communityDone = useRef(0);
+  const topDone = useRef(0);
+  usePageLeave(() => {
+    setBusyMsg("");
+    setSumMsg("");
+    setGpuMsg("");
+    setLegacyMsg({});
+  });
   useEffect(() => {
-    if (!focusCommunityNonce) return;
+    if (!focusCommunityNonce || communityDone.current === focusCommunityNonce) return;
     // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了个 translate 动画，
     // 而 scrollIntoView 是按元素**变换后**的屏幕位置算的 —— 动画跑到哪就滚到
     // 哪，落点每次都不一样。offsetTop 不受 transform 影响，直接算给滚动容器。
     //
-    // 还得等一拍：PageHost 换页时有个 useLayoutEffect 把 scrollTop 归零，
+    // 还得等一拍：PageHost 换页时有个 useLayoutEffect 恢复这一页上次的滚动位置，
     // 同一帧里滚过去会被它抹掉。
-    return scheduleScrollToId("more-community");
+    return scheduleScrollToId("more-community", 12, () => {
+      communityDone.current = focusCommunityNonce;
+    });
   }, [focusCommunityNonce]);
 
   useEffect(() => {
-    if (!resetScrollNonce) return;
+    if (!resetScrollNonce || topDone.current === resetScrollNonce) return;
     const id = window.setTimeout(() => {
+      topDone.current = resetScrollNonce;
       const el = document.getElementById("more-community");
       const pane = el?.closest(".overflow-y-auto");
       if (pane instanceof HTMLElement) pane.scrollTop = 0;
@@ -279,21 +296,26 @@ export function MorePage({
     : "";
 
   return (
-    <PagePad>
+    <PagePad width="read">
       <PageHead title={t("s.1a26edf94a")} sub={t("s.d0b65d2fd2")} />
+      <Block title={t("overlay.open")}>
+        <Group><ListItem title={t("overlay.open")} desc={t("overlay.openHint")}
+          right={<Btn onClick={openOverlay}>{t("s.65fc81e161")}</Btn>} /></Group>
+      </Block>
+      {mobile && <MobileSection mobile={mobile} />}
       <Block title={t("s.2a4080ad9f")}>
         <Group>
           <ListItem
             title={t("s.a8f48b775b")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">{shownValue(version)}</span>
+              <span className="text-[13px] text-[var(--ink-muted)]">{shownValue(version)}</span>
             }
           />
           <ListItem
             title={t("s.2a4b19a6b1")}
             right={
               <span
-                className="text-[13.5px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
+                className="text-[13px] text-[var(--ink-muted)] max-w-[300px] text-right truncate"
                 title={root || undefined}
               >
                 {shownValue(root)}
@@ -308,13 +330,13 @@ export function MorePage({
               (status?.product_root ? String(status.product_root) : t("s.002dcbcd28"))
             }
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">{runtimeLine}</span>
+              <span className="text-[13px] text-[var(--ink-muted)]">{runtimeLine}</span>
             }
           />
           <ListItem
             title={t("s.f41830a38d")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
+              <span className="text-[13px] text-[var(--ink-muted)] max-w-[220px] text-right truncate" title={gpus}>
                 {gpus}
               </span>
             }
@@ -343,7 +365,7 @@ export function MorePage({
             desc={backendMismatch ? t("s.computeBackendWarn") : undefined}
             right={
               <span
-                className="text-[13.5px] text-[var(--ink-muted)] max-w-[220px] text-right truncate"
+                className="text-[13px] text-[var(--ink-muted)] max-w-[220px] text-right truncate"
                 title={backendLine}
               >
                 {backendLine}
@@ -361,7 +383,7 @@ export function MorePage({
             }
             right={
               <span className="flex items-center gap-2">
-                <span className="text-[13.5px] text-[var(--ink-muted)]">
+                <span className="text-[13px] text-[var(--ink-muted)]">
                   {runtimeVariantLabel(provision?.recommended_variant) ||
                     provision?.recommended_variant ||
                     t("s.notDetected")}
@@ -377,7 +399,7 @@ export function MorePage({
           <ListItem
             title={t("s.fbb8ddd570")}
             right={
-              <span className="text-[13.5px] text-[var(--ink-muted)]">
+              <span className="text-[13px] text-[var(--ink-muted)]">
                 {status
                   ? joinClauses([statusTitle(status), !!status.pid && t("s.metaPid", { v0: String(status.pid) })])
                   : t("s.valueLoading")}
@@ -386,7 +408,7 @@ export function MorePage({
           />
           <ListItem
             title={t("s.746fcbb99c")}
-            right={<span className="text-[13.5px] text-[var(--ink-muted)]">{latency}</span>}
+            right={<span className="text-[13px] text-[var(--ink-muted)]">{latency}</span>}
           />
         </Group>
       </Block>
@@ -406,11 +428,6 @@ export function MorePage({
             title={t("s.6f311c47fe")}
             desc={t("s.ba7bd6e071")}
             right={<Btn onClick={() => openTool("tts")}>{t("s.65fc81e161")}</Btn>}
-          />
-          <ListItem
-            title={t("overlay.open")}
-            desc={t("overlay.openHint")}
-            right={<Btn onClick={openOverlay}>{t("s.65fc81e161")}</Btn>}
           />
           {/* 入口留着（老用户是从这儿找它的），功能已经搬去广场了。 */}
           <ListItem
@@ -510,6 +527,7 @@ export function MorePage({
             desc={t("s.5258b304cc")}
             right={
               <Btn
+                danger
                 onClick={() => {
                   void onForceKill?.();
                 }}

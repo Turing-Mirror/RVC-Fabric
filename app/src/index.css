@@ -60,55 +60,6 @@
   --emblem-opacity: 0.28;
 }
 
-/* 勾选框。系统自带的那种在各平台长得不一样，和界面里其余控件也对不上。
-   这里统一画成圆角小方块：未选是一圈细线，选中铺强调色、对勾弹出来。
-   仍是原生 input，键盘、读屏、label 点击都照旧。 */
-input[type="checkbox"] {
-  appearance: none;
-  flex: none;
-  display: inline-grid;
-  place-content: center;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  border-radius: 4px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
-  vertical-align: middle;
-  cursor: pointer;
-  transition:
-    background-color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
-}
-input[type="checkbox"]::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  background: var(--accent-ink);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 5.3 4 7.6 8.4 2.6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  transform: scale(0);
-  transition: transform 0.18s var(--spring);
-}
-input[type="checkbox"]:checked {
-  background: var(--accent);
-  box-shadow: none;
-}
-input[type="checkbox"]:checked::before {
-  transform: scale(1);
-}
-/* 焦点环只给键盘操作（lib/inputModality.ts）：最近一次输入来自鼠标或触控时不画。
- * 窗口切回来、弹窗关闭把焦点还给按钮时，WebView2 会给点过的按钮误画焦点环。 */
-
-input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-input[type="checkbox"]:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 /* 滚动条一条都不留 —— 滚动本身照旧，只是不画那根轨道。
  *
  * 为什么是全局而不是逐个容器：可滚的容器不止一个（页面容器、商店弹窗、
@@ -176,26 +127,16 @@ input[type="checkbox"]:disabled {
   animation: nudge-out var(--out-ms) var(--ease-soft) forwards;
 }
 
-@keyframes pager-ghost {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-.pager-ghost {
-  animation: pager-ghost 0.42s var(--ease-nav) both;
-}
-
 /* 下拉菜单。从控件下方展开（贴在上方时从上方），退场反过来。 */
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    /* design-allow: 减少动态效果时必须近乎立即完成动画，同时保留动画结束事件。 */
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    /* design-allow: 减少动态效果时必须近乎立即完成过渡，同时保留过渡结束事件。 */
     transition-duration: 0.001ms !important;
   }
 }
@@ -232,3 +173,10 @@ input[type="checkbox"]:disabled {
 @media (prefers-reduced-motion: reduce) {
   .eq-bar { animation: none; height: 8px; }
 }
+
+/* Embedded hosts own the outer window; application navigation stays intact. */
+[data-trm-host="embedded"] .native-window-controls { display: none; }
+
+/* Catalog transitions grow with their content; the surrounding page owns scrolling.
+   QueueList's default containment otherwise traps wheel/trackpad input here. */
+.trm-queue-list.catalog-transition { overscroll-behavior: auto; }

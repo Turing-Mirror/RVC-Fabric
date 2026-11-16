@@ -30,6 +30,7 @@ import json
 import os
 import sys
 import traceback
+import threading
 from pathlib import Path
 
 def setup_sys_path() -> None:
@@ -121,6 +122,13 @@ def main(argv: list[str]) -> int:
                 message=str(message or ""),
             )
 
+        stems = []
+        outputs_lock = threading.Lock()
+        def output_saved(path, stem):
+            role = {"vocals": "vocal", "vocal": "vocal", "instrumental": "accompaniment", "accompaniment": "accompaniment"}.get(str(stem).lower(), "stem")
+            with outputs_lock:
+                stems.append({"path": str(Path(path).resolve()), "stem": str(stem), "role": role})
+
         with create_separator(
             model,
             model_dir=model_dir or None,
@@ -131,8 +139,9 @@ def main(argv: list[str]) -> int:
             progress_callback=on_progress,
             inference_params={"aggression": agg},
         ) as sep:
-            files = sep.process_folder(inp)
-        emit(phase="done", files=[str(f) for f in (files or [])])
+            sep.output_callback = output_saved
+            sep.process_folder(inp)
+        emit(phase="done", files=[item["path"] for item in stems], stems=stems)
         return 0
     except Exception as e:
         # 原始异常进 stderr（壳会收进日志），界面上只给中文。

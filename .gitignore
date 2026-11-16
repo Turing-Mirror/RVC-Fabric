@@ -259,3 +259,12 @@ AGENTS.md
 /dsh-carrot-on-a-stick/
 /.dsh-mcp-token.txt
 /.acl-recovery/
+
+# Local API jobs and generated audio
+/User_Data/api/
+/User_Data/mobile/
+/.local/
+
+# Native training queue state
+/User_Data/train_queue.json
+/User_Data/train_queue.json.tmp

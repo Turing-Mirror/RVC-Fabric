@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { releaseAudio } from "../lib/releaseAudio";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { dropListen } from "../lib/tauriListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Icon, SearchBox, TextArea, TextInput } from "trm-ui";
 import { Btn, HelpMark } from "./ui";
 import { Collapse, Leave } from "./Presence";
 import { ErrorNote } from "./ErrorNote";
-import { Field, RangeBar, Select } from "./controls";
+import { Field, RangeBar, Select, SliderValue, Toggle } from "./controls";
+import { CatalogTransition } from "./CatalogTransition";
 import { SegmentControl } from "./SegmentControl";
 import { ToolActions, ToolBody, ToolTitleActions } from "./ToolWindow";
 import { t } from "../i18n/t";
-import { pickPath } from "../lib/nativeDialog";
+import { pickPath } from "trm-ui/fabric";
 import { openHelpSection } from "../lib/helpNav";
 import { listVoices, type VoiceModel } from "../lib/voices";
-import { askConfirm, askPrompt } from "../lib/webDialog";
+import { askConfirm, askPrompt } from "trm-ui/fabric";
 import { openDownloadModels } from "../lib/downloadModels";
 import { AudioTrimEditor, canTrimAudio } from "./AudioTrim";
 import { MoreMenuPopup, type PopupAnchor } from "./MoreMenu";
@@ -216,8 +220,6 @@ const ROW = "flex items-center gap-3 py-2.5";
 const LABEL = "w-[112px] shrink-0 text-[13px] leading-tight";
 const PATH =
   "flex-1 min-w-0 truncate text-[12.5px] text-[var(--ink-muted)] font-mono";
-const FIELD =
-  "rounded-[var(--rs)] border border-[var(--hairline)] bg-transparent px-2 py-1.5 text-[13px]";
 
 /** 把路径拆成最后一段的名字和它所在的目录，来源列表按「名字 + 目录」显示。 */
 function splitPath(path: string): { name: string; parent: string } {
@@ -282,7 +284,17 @@ const fmtPitch = (n: number) => (n > 0 ? `+${n}` : String(n));
  *   用当前音色离线换成目标声线。这是本意。
  * - **文字合成（TTS）**：系统 SAPI 先念字，再可选 RVC 换音色。额外保留。
  */
+function useTtsDraft() {
+  const [text, setText] = useState("");
+  const [voice, setVoice] = useState("");
+  const [rate, setRate] = useState(0);
+  const [pitch, setPitch] = useState(0);
+  const [useRvc, setUseRvc] = useState(true);
+  return { text, setText, voice, setVoice, rate, setRate, pitch, setPitch, useRvc, setUseRvc };
+}
+
 export function TtsPanel() {
+  const draft = useTtsDraft();
   const [mode, setMode] = useState<Mode>("sts");
 
   return (
@@ -299,7 +311,9 @@ export function TtsPanel() {
           />
         }
       />
-      {mode === "sts" ? <StsSection /> : <TtsSection />}
+      <CatalogTransition scope={mode} order={["sts", "tts"]}>
+        {mode === "sts" ? <StsSection /> : <TtsSection draft={draft} />}
+      </CatalogTransition>
     </ToolBody>
   );
 }
@@ -408,7 +422,7 @@ function ItemExtras({
     ].join(" ");
   return (
     // 字号写在容器上：全局 button { font: inherit } 会盖掉按钮自己的字号类。
-    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight">
+    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11.5px] leading-tight">
       <button
         type="button"
         className={pill(pitch != null)}
@@ -591,6 +605,7 @@ function StsSection() {
   const [version, setVersion] = useState<Record<string, string>>({});
   const recordingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playPathRef = useRef("");
   const lastHomePath = useRef("");
   /** 上一次真正写出文件的目录。打开输出目录用它，不看默认 sts。 */
   const lastDestRef = useRef("");
@@ -850,7 +865,10 @@ function StsSection() {
       disposed = true;
       unsubs.forEach((f) => dropListen(f));
       dropListen(unFocus);
-      audioRef.current?.pause();
+      const audio = audioRef.current;
+      audioRef.current = null;
+      playPathRef.current = "";
+      releaseAudio(audio);
     };
   }, [load, pickVoice, showErr]);
 
@@ -1045,20 +1063,25 @@ function StsSection() {
     startPlay(dest || f.path, at);
   };
 
-  const stopPlay = () => {
-    audioRef.current?.pause();
+  const stopPlay = useCallback(() => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    playPathRef.current = "";
+    releaseAudio(audio);
     setPlaying("");
-  };
+  }, []);
 
   const startPlay = (path: string, at = 0) => {
     stopPlay();
     try {
-      const el = audioRef.current ?? new Audio();
+      const el = new Audio();
       audioRef.current = el;
+      playPathRef.current = path;
       el.src = convertFileSrc(path);
-      el.onended = () => setPlaying("");
+      el.onended = () => { if (audioRef.current === el) stopPlay(); };
       el.onerror = () => {
-        setPlaying("");
+        if (audioRef.current !== el) return;
+        stopPlay();
         showErr(t("s.stsPlayFail"));
       };
       if (at > 0) {
@@ -1069,8 +1092,14 @@ function StsSection() {
       } else {
         el.onloadedmetadata = null;
       }
-      void el.play().then(() => setPlaying(path));
+      setPlaying(path);
+      void el.play().catch(() => {
+        if (audioRef.current !== el) return;
+        stopPlay();
+        showErr(t("s.stsPlayFail"));
+      });
     } catch (e) {
+      stopPlay();
       showErr(String(e));
     }
   };
@@ -1104,9 +1133,16 @@ function StsSection() {
     }
   };
 
+  const releaseFilePreview = (f: InputFile) => {
+    const path = playPathRef.current;
+    if (samePath(path, f.path) || (outputs[pathKey(f.path)] || []).some(o => samePath(path, o.dest))) stopPlay();
+    // Commit the editor cleanup before native file operations acquire the same path.
+    if (trimOpen && samePath(trimPath, f.path)) flushSync(() => setTrimOpen(false));
+  };
+
   const removeFile = async (f: InputFile) => {
     if (!(await askConfirm(t("s.stsDeleteConfirm", { v0: f.name })))) return;
-    if (playing === f.path) stopPlay();
+    releaseFilePreview(f);
     try {
       await invoke("sts_sources_delete", { path: f.path });
       await refreshScan();
@@ -1119,7 +1155,7 @@ function StsSection() {
     const name = await askPrompt(t("s.b8659855b0"), f.name);
     const nextName = name?.trim();
     if (!nextName || nextName === f.name) return;
-    if (playing === f.path) stopPlay();
+    releaseFilePreview(f);
     try {
       await invoke<string>("sts_sources_rename", {
         path: f.path,
@@ -1143,6 +1179,12 @@ function StsSection() {
   const inputPageCount = Math.max(1, Math.ceil(visibleItems.length / 20));
   const currentInputPage = Math.min(inputPage, inputPageCount - 1);
   const pagedItems = visibleItems.slice(currentInputPage * 20, (currentInputPage + 1) * 20);
+
+  const playingVisible = !playing || pagedItems.some(f => samePath(playing, f.path)
+    || (outputs[pathKey(f.path)] || []).some(o => samePath(o.dest, playing)));
+  useEffect(() => {
+    if (!playingVisible) stopPlay();
+  }, [playingVisible, stopPlay]);
 
   const toggleItem = (f: InputFile, shift: boolean) => {
     setChecked((prev) => {
@@ -1464,7 +1506,7 @@ function StsSection() {
     <>
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger-text)]">{blocked}</p>
         </div>
       ) : null}
 
@@ -1496,7 +1538,7 @@ function StsSection() {
           </Btn>
         </div>
         {!blocked && modelName ? (
-          <p className="m-0 px-0 pb-1 text-[12px] text-[var(--meta)]">
+          <p className="m-0 px-0 pb-1 text-[12.5px] text-[var(--meta)]">
             {joinClauses([t("s.6c415e91bb", { v0: modelName }), !!indexPath && t("s.0ca99fa9f1")])}
           </p>
         ) : null}
@@ -1523,7 +1565,7 @@ function StsSection() {
               {targets.slice(1).map((v) => (
                 <span
                   key={v.path}
-                  className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] py-1 pl-2.5 pr-1.5 text-[12px]"
+                  className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] py-1 pl-2.5 pr-1.5 text-[12.5px]"
                 >
                   {voiceLabel(v)}
                   <button
@@ -1598,14 +1640,14 @@ function StsSection() {
                   title={miss?.path || s.path}
                 >
                   {/* 名字在前、所在目录在后：长路径截掉的是目录，不是名字。 */}
-                  <span className={`min-w-0 max-w-[55%] truncate ${miss ? "text-[var(--danger)]" : "text-[var(--ink)]"}`}>
+                  <span className={`min-w-0 max-w-[55%] truncate ${miss ? "text-[var(--danger-text)]" : "text-[var(--ink)]"}`}>
                     {name}
                   </span>
                   <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[var(--meta)]">
                     {parent}
                   </span>
                   {miss ? (
-                    <span className="shrink-0 text-[11px] text-[var(--danger)]">
+                    <span className="shrink-0 text-[11.5px] text-[var(--danger-text)]">
                       {miss.state === "unreadable"
                         ? t("s.stsUnreadableTag")
                         : t("s.stsMissingTag")}
@@ -1613,8 +1655,10 @@ function StsSection() {
                   ) : null}
                   {s.kind === "dir" ? (
                     <label className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--meta)] cursor-pointer">
+                      {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                       <input
                         type="checkbox"
+                        className="trm-check"
                         checked={s.recursive}
                         disabled={running || recording}
                         onChange={(e) => void toggleRecursive(s.id, e.target.checked)}
@@ -1662,7 +1706,7 @@ function StsSection() {
                 title={t("s.stsRecord")}
               >
                 <div
-                  className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-75"
+                  className="absolute inset-y-0 left-0 rounded-sm bg-[var(--accent)] transition-[width] duration-100"
                   style={{
                     width: `${
                       recording
@@ -1725,12 +1769,13 @@ function StsSection() {
           </span>
         </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <input
-            className={`${FIELD} min-w-[160px] flex-1`}
+          <SearchBox
+            fit
+            className="min-w-[160px] flex-1"
             placeholder={t("s.stsSearchPh")}
             value={listQuery}
-            onChange={(e) => {
-              setListQuery(e.target.value);
+            onChange={(v) => {
+              setListQuery(v);
               setInputPage(0);
               // 搜索只筛显示，不改参与集合；隐藏的勾选先清掉。
               setChecked(new Set());
@@ -1808,9 +1853,10 @@ function StsSection() {
                       : "hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
                   ].join(" ")}
                 >
+                  {/* design-allow: 勾选框样式与 Toggle 不同。 */}
                   <input
                     type="checkbox"
-                    className="shrink-0"
+                    className="trm-check shrink-0"
                     checked={checked.has(f.path)}
                     disabled={running || recording}
                     // Shift 连选取点击时的 shiftKey；click 里拦下默认切换，
@@ -1836,7 +1882,7 @@ function StsSection() {
                         <span className="ml-2 font-sans text-[var(--meta)]">{t("s.metaSource", { v0: f.source_name })}</span>
                       ) : null}
                     </span>
-                    <span className="block text-[11px] text-[var(--meta)] tabular-nums">
+                    <span className="block text-[11.5px] text-[var(--meta)] tabular-nums">
                       {f.excluded
                         ? f.excluded_by_dir
                           ? t("s.stsExcludedByDir")
@@ -1967,9 +2013,8 @@ function StsSection() {
               ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {pitch > 0 ? `+${pitch}` : pitch}
-          </span>
+          <SliderValue value={pitch} min={-24} max={24} step={1} onChange={setPitch}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.bda11a3c2d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -1997,9 +2042,8 @@ function StsSection() {
               ariaLabel={t("s.389bc211b2")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {indexRate.toFixed(2)}
-          </span>
+          <SliderValue value={indexRate} min={0} max={1} step={0.01} onChange={setIndexRate}
+            format={(v) => v.toFixed(2)} ariaLabel={t("s.389bc211b2")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2036,9 +2080,8 @@ function StsSection() {
                 ariaLabel={t("s.stsProtect")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {protect.toFixed(2)}
-            </span>
+            <SliderValue value={protect} min={0} max={0.5} step={0.01} onChange={setProtect}
+              format={(v) => v.toFixed(2)} ariaLabel={t("s.stsProtect")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2056,9 +2099,8 @@ function StsSection() {
                 ariaLabel={t("s.stsRms")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {rms.toFixed(2)}
-            </span>
+            <SliderValue value={rms} min={0} max={1} step={0.01} onChange={setRms}
+              format={(v) => v.toFixed(2)} ariaLabel={t("s.stsRms")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2076,9 +2118,7 @@ function StsSection() {
                 ariaLabel={t("s.stsFilter")}
               />
             </div>
-            <span className="w-[52px] text-right text-[13px] tabular-nums">
-              {filterRadius}
-            </span>
+            <SliderValue value={filterRadius} min={0} max={7} step={1} onChange={setFilterRadius} ariaLabel={t("s.stsFilter")} className="w-[52px] text-right text-[13px] tabular-nums" />
           </div>
           <div className={ROW}>
             <span className={`${LABEL} flex items-center gap-1.5`}>
@@ -2110,14 +2150,16 @@ function StsSection() {
                       ariaLabel={t("s.stsSid")}
                     />
                   </div>
-                  <input
-                    className={`w-[64px] ${FIELD}`}
+                  <TextInput
+                    look="compact"
+                    fit
+                    className="w-[64px]"
                     type="number"
                     min={0}
                     max={2333}
-                    value={sid}
-                    onChange={(e) =>
-                      setSid(Math.max(0, Math.min(2333, Number(e.target.value) || 0)))
+                    value={String(sid)}
+                    onChange={(v) =>
+                      setSid(Math.max(0, Math.min(2333, Number(v) || 0)))
                     }
                   />
                 </div>
@@ -2158,7 +2200,7 @@ function StsSection() {
               style={{ width: `${running && pct < 2 ? 2 : pct}%` }}
             />
           </div>
-          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12px] text-[var(--meta)]">
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12.5px] text-[var(--meta)]">
             <p className="m-0 min-w-0 flex-1 break-all">
               {prog?.message || t("s.090840132b")}
             </p>
@@ -2199,14 +2241,14 @@ function StsSection() {
       ) : null}
       {skipped.length ? (
         <div className={retryable.length && !running ? "pt-1" : "mt-3 pt-2"}>
-          <p className="m-0 mb-1 text-[12px] text-[var(--meta)]">
+          <p className="m-0 mb-1 text-[12.5px] text-[var(--meta)]">
             {t("s.stsSkippedTitle", { v0: skipped.length })}
           </p>
           <ul className="m-0 list-none p-0">
             {skipped.map((s) => (
               <li
                 key={`${s.file}|${s.tag ?? ""}`}
-                className="py-0.5 text-[12px] text-[var(--meta)] break-all"
+                className="py-0.5 text-[12.5px] text-[var(--meta)] break-all"
               >
                 {t("s.itemReason", {
                   v0: s.tag ? t("s.labelWithDetail", { v0: s.name, v1: s.tag }) : s.name,
@@ -2223,10 +2265,7 @@ function StsSection() {
         <Btn onClick={() => setAdv((v) => !v)}>
           {adv ? t("s.ckptAdvancedHide") : t("s.ckptAdvanced")}
           {advChanged && !adv ? (
-            <span
-              aria-hidden
-              className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)] align-middle"
-            />
+            <Icon name="sliders" size={12} className="ml-1.5 inline-block align-middle text-[var(--accent-text)]" />
           ) : null}
         </Btn>
         <Btn disabled={running || !paramsChanged} onClick={resetParams}>
@@ -2274,13 +2313,9 @@ function StsSection() {
 // 文字合成（TTS → 可选 RVC）— 保留
 // ---------------------------------------------------------------------------
 
-function TtsSection() {
+function TtsSection({ draft }: { draft: ReturnType<typeof useTtsDraft> }) {
   const [st, setSt] = useState<TtsStatus>({});
-  const [text, setText] = useState("");
-  const [voice, setVoice] = useState("");
-  const [rate, setRate] = useState(0);
-  const [pitch, setPitch] = useState(0);
-  const [useRvc, setUseRvc] = useState(true);
+  const { text, setText, voice, setVoice, rate, setRate, pitch, setPitch, useRvc, setUseRvc } = draft;
   const [prog, setProg] = useState<Progress | null>(null);
   const [msg, setMsg] = useState("");
   // msg 这一格既报错也报成功。「复制完整错误 / 打开日志」只在报错时才该出现，
@@ -2330,7 +2365,7 @@ function TtsSection() {
       disposed = true;
       dropListen(un);
     };
-  }, []);
+  }, [setVoice]);
 
   // 当前模式那一路的输出目录，以及它是不是用户自己选过的（选过才给「恢复默认」）。
   const outDir = (useRvc ? st.out_dir_voice : st.out_dir_read) || "";
@@ -2379,27 +2414,24 @@ function TtsSection() {
 
       {blocked ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <p className="m-0 text-[13px] text-[var(--danger)]">{blocked}</p>
+          <p className="m-0 text-[13px] text-[var(--danger-text)]">{blocked}</p>
           {useRvc && !st.infer_present ? (
             <Btn onClick={() => openDownloadModels()}>{t("s.1252c81119")}</Btn>
           ) : null}
         </div>
       ) : null}
 
-      <textarea
-        className={[
-          "w-full min-h-[120px] rounded-[var(--rs)] border px-3 py-2.5 text-[13.5px] leading-relaxed",
-          "bg-transparent text-[var(--ink)] resize-y",
-          over ? "border-[var(--danger)]" : "border-[var(--hairline)]",
-        ].join(" ")}
+      <TextArea
+        className="min-h-[120px] leading-relaxed"
+        invalid={over}
         placeholder={t("s.f2f07193b8")}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
       />
       <p
         className={[
-          "m-0 mt-1.5 text-[12px] text-right tabular-nums",
-          over ? "text-[var(--danger)]" : "text-[var(--meta)]",
+          "m-0 mt-1.5 text-[12.5px] text-right tabular-nums",
+          over ? "text-[var(--danger-text)]" : "text-[var(--meta)]",
         ].join(" ")}
       >
         {text.length} / {max}
@@ -2429,9 +2461,8 @@ function TtsSection() {
               ariaLabel={t("s.747374775d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {rate > 0 ? `+${rate}` : rate}
-          </span>
+          <SliderValue value={rate} min={-6} max={6} step={1} onChange={setRate}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.747374775d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.bda11a3c2d")}</span>
@@ -2446,21 +2477,18 @@ function TtsSection() {
               ariaLabel={t("s.bda11a3c2d")}
             />
           </div>
-          <span className="w-[52px] text-right text-[13px] tabular-nums">
-            {pitch > 0 ? `+${pitch}` : pitch}
-          </span>
+          <SliderValue value={pitch} min={-12} max={12} step={1} onChange={setPitch}
+            format={(v) => v > 0 ? `+${v}` : String(v)} ariaLabel={t("s.bda11a3c2d")} className="w-[52px] text-right text-[13px] tabular-nums" />
         </div>
         <div className={ROW}>
           <span className={LABEL}>{t("s.a46919fc8e")}</span>
-          <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useRvc}
-              onChange={(e) => setUseRvc(e.target.checked)}
-            />
-            {st.model_name || t("s.9bbf6a5dce")}
-          </label>
-          <span className="text-[12px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
+          <Toggle
+            look="inline"
+            checked={useRvc}
+            onChange={setUseRvc}
+            label={st.model_name || t("s.9bbf6a5dce")}
+          />
+          <span className="text-[12.5px] text-[var(--meta)]">{t("s.b3009f6985")}</span>
         </div>
         {/* 只显示当前模式那一路。两行并排摆出来的话，用户改了不用的那一行却
             以为改的是这一次要用的，比不给还糟。 */}
@@ -2506,7 +2534,7 @@ function TtsSection() {
               style={{ width: `${prog.total ? Math.round((prog.done / prog.total) * 100) : 0}%` }}
             />
           </div>
-          <p className="m-0 mt-2 text-[12px] text-[var(--meta)]">{prog.message}</p>
+          <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{prog.message}</p>
         </div>
       ) : null}
 

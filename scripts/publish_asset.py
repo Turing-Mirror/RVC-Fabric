@@ -36,6 +36,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -171,22 +172,24 @@ def upload(repo: str, release_id: str, path: Path) -> dict[str, Any]:
         "--asset-path", asset_path, "--ttl", "0",
     )
 
-    # 回读校验：CNB 服务端自己算 sha256，和本地比对上才算成功。
-    out = cnb(
-        "releases", "get-release-by-id", "--repo", repo, "--release-id", release_id
-    )
-    # 附件块的字段顺序是 path → hash_algo → hash_value → url → name，所以从
-    # 「name: <本文件名>」那行往回找 hash_value。不能直接 split(文件名)：
-    # path 那行里也含文件名，会切在 hash_value 之前，永远读不到。
+    # Confirmation can precede visibility in the release attachment list.
     remote_sha = ""
-    lines = out.splitlines()
-    idx = next(
-        (i for i, ln in enumerate(lines) if ln.strip() == f"name: {path.name}"), -1
-    )
-    if idx > 0:
-        for ln in reversed(lines[:idx]):
-            if "hash_value:" in ln:
-                remote_sha = ln.split(":", 1)[1].strip().strip('"')
+    for delay in (0, 2, 5, 10, 20, 30):
+        if delay:
+            time.sleep(delay)
+        out = cnb(
+            "releases", "get-release-by-id", "--repo", repo, "--release-id", release_id
+        )
+        # The asset's hash precedes its name in the CLI output.
+        lines = out.splitlines()
+        idx = next((i for i, line in enumerate(lines) if line.strip() == f"name: {path.name}"), -1)
+        if idx > 0:
+            remote_sha = next(
+                (line.split(":", 1)[1].strip().strip('"')
+                 for line in reversed(lines[:idx]) if "hash_value:" in line),
+                "",
+            )
+            if remote_sha == local_sha:
                 break
     if not remote_sha:
         raise RuntimeError("回读不到服务端 sha256，无法确认上传完整")

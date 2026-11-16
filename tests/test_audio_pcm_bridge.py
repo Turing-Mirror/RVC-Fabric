@@ -28,10 +28,10 @@ class PcmBridgeTests(unittest.TestCase):
 
         class FakeMemory:
             def __init__(self, name, create=False):
-                self.buf = outer.buffer
+                self.buf = memoryview(outer.buffer)
 
             def close(self):
-                pass
+                self.buf.release()
 
         self.mapping = patch.object(audio_pcm_bridge, "SharedMemory", FakeMemory)
         self.mapping.start()
@@ -49,13 +49,14 @@ class PcmBridgeTests(unittest.TestCase):
             first,
         )
         struct.pack_into("<Q", self.buffer, 40, 2)
-        second = self.np.array([[0.5, 0.6], [0.7, 0.8], [0.9, 1.0]], dtype=self.np.float32)
+        second = self.np.array(
+            [[0.5, 0.6], [0.7, 0.8], [0.9, 1.0]], dtype=self.np.float32, order="F"
+        )
         self.assertTrue(writer.publish(second, 48000))
         self.assertEqual(struct.unpack_from("<Q", self.buffer, 32)[0], 5)
-        self.np.testing.assert_allclose(
-            self.np.frombuffer(self.buffer, dtype="<f4", count=2, offset=64),
-            second[2],
-        )
+        ring = self.np.frombuffer(self.buffer, dtype="<f4", offset=64).reshape(4, 2)
+        self.np.testing.assert_array_equal(ring[2:], second[:2])
+        self.np.testing.assert_array_equal(ring[:1], second[2:])
         writer.close()
 
     def test_full_ring_drops_new_audio_and_does_not_advance_cursor(self):

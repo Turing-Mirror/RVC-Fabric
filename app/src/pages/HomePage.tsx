@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, memo } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
+import { CoverPlaceholder, ThumbImage, usePageLeave } from "trm-ui";
 import { Btn, Block, PagePad } from "../components/ui";
 import { dspTips } from "../lib/dspTips";
-import { getConfig, onConfigPatch } from "../lib/config";
+import { useConfigSnapshot } from "../hooks/useConfigSnapshot";
 import {
   invalidateVoicesCache,
   listVoices,
@@ -42,6 +43,7 @@ type Props = {
 };
 
 const keyOf = (m: VoiceModel) => m.dir || m.path || m.name;
+const uniqueModels = (models: VoiceModel[]) => Array.from(new Map(models.map(m => [modelKey(m), m])).values());
 
 /** 音色库里的「最近使用」顺序（app_config `recent_models`）。 */
 function recentKeysOf(cat: VoicesCatalog | null): string[] {
@@ -156,36 +158,13 @@ function HeroEmblem() {
  * 留空 = 不显示。以前这里固定写着「切换立即生效 · 运行中可无缝换音色」，
  * 对每天用的人来说是废话，现在这行只属于用户自己。
  *
- * 只在这一个组件里读：memo 化的 HomePage 不接收任何新 prop，配置变化走
- * onConfigPatch 触发内部 state 更新，别的页面完全感知不到。
+ * 横幅读取窗口内的配置快照；切页保留文案，后台刷新不回退到默认值。
  */
-function useBannerTexts(): { title: string; sub: string } {
-  const [texts, setTexts] = useState({ title: "", sub: "" });
-  useEffect(() => {
-    let alive = true;
-    void getConfig()
-      .then((c) => {
-        if (!alive) return;
-        setTexts({
-          title: typeof c.home_banner_text === "string" ? c.home_banner_text : "",
-          sub: typeof c.home_banner_sub === "string" ? c.home_banner_sub : "",
-        });
-      })
-      .catch(() => {
-        /* 浏览器预览里没有 Tauri 后端，用默认标题 */
-      });
-    const off = onConfigPatch((p) => {
-      setTexts((prev) => ({
-        title: typeof p.home_banner_text === "string" ? p.home_banner_text : prev.title,
-        sub: typeof p.home_banner_sub === "string" ? p.home_banner_sub : prev.sub,
-      }));
-    });
-    return () => {
-      alive = false;
-      off();
-    };
-  }, []);
-  return { title: texts.title.trim(), sub: texts.sub.trim() };
+function useBannerTexts() {
+  const { config, loaded } = useConfigSnapshot();
+  const str = (key: string) => typeof config[key] === "string" ? (config[key] as string).trim() : "";
+  return { title: str("home_banner_text"), sub: str("home_banner_sub"), role: str("synth_role"),
+    ready: loaded || !("__TAURI_INTERNALS__" in window) };
 }
 
 /**
@@ -200,7 +179,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
   useI18n();
   // 每次回到首页页面都会重新挂载。先用上一次读到的音色库画出来，不能先按「没有音色」
   // 画一帧：那一帧会闪出推荐音色的三张卡片。
-  const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
+  const [models, setModels] = useState<VoiceModel[]>(() => uniqueModels(peekVoices()?.models ?? []));
   const [recentKeys, setRecentKeys] = useState<string[]>(() => recentKeysOf(peekVoices()));
   /** 音色库读完过一次。没读完之前不知道有没有音色，两种样子都不画。 */
   const [loaded, setLoaded] = useState(() => peekVoices() != null);
@@ -216,17 +195,21 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
   const cardPx = useRecentCardMetrics();
   // 卡片换序的位置过渡（C-04）：数组重排后卡片滑过去，不瞬移。
   const flipRowRef = useFlipRow<HTMLDivElement>();
+  usePageLeave(() => setMsg(""));
+  const loadRevision = useRef(0);
   const load = async () => {
+    const revision = ++loadRevision.current;
     try {
       const cat = await listVoices();
-      setModels(cat.models || []);
+      if (revision !== loadRevision.current) return;
+      setModels(uniqueModels(cat.models || []));
       setRecentKeys(recentKeysOf(cat));
       setLoadError("");
     } catch (e) {
-      setModels([]);
+      if (revision !== loadRevision.current) return;
       setLoadError(String(e));
     } finally {
-      setLoaded(true);
+      if (revision === loadRevision.current) setLoaded(true);
     }
   };
   useEffect(() => {
@@ -293,8 +276,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
-          <p className="text-[19px] m-0">{" "}</p>
+          <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-4 max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
+          <p className="text-[16px] m-0">{" "}</p>
           <HeroEmblem />
         </div>
       </div>
@@ -308,7 +291,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[720px]:px-4"
           style={{ background: STAGE_BG }}
         >
-          <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
+          <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-4 max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
           <p className="text-[12.5px] text-[var(--ink-muted)] m-0">
             {loadError
               ? t("s.c4a98bd0e6", { v0: loadError })
@@ -334,8 +317,8 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
         className="relative overflow-hidden px-[30px] pt-8 pb-7 max-[1020px]:px-[22px] max-[1020px]:pt-7 max-[1020px]:pb-6 max-[720px]:px-4 max-[720px]:pt-[22px] max-[720px]:pb-5"
         style={{ background: STAGE_BG }}
       >
-        <h2 className="text-[27px] font-semibold tracking-tight m-0 mb-[15px] max-[860px]:text-2xl">{bannerTexts.title || t("s.9d835868b4")}</h2>
-        <p className="text-[19px] font-semibold text-[var(--accent)] m-0">
+        <h2 className="text-[25px] font-semibold tracking-tight m-0 mb-4 max-[860px]:text-2xl">{bannerTexts.ready ? bannerTexts.title || t("s.9d835868b4") : ""}</h2>
+        <p className="text-[16px] font-semibold text-[var(--accent-text)] m-0">
           {current ? current.name : t("s.262d11e2d6")}
         </p>
         {/* 副标题不再有固定文案 —— 那句「切换立即生效 · 运行中可无缝换音色」
@@ -354,7 +337,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
           action={<Btn onClick={onOpenModels}>{t("s.35e4afb47d")}</Btn>}
         >
           {msg ? (
-            <p className="text-[12.5px] text-[var(--danger)] m-0 mb-3">{msg}</p>
+            <p className="text-[12.5px] text-[var(--danger-text)] m-0 mb-3">{msg}</p>
           ) : null}
           <div
             ref={flipRowRef}
@@ -371,9 +354,9 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
               const author = displayVoiceAuthor(v);
               return (
                 <button
-                  key={keyOf(v)}
+                  key={modelKey(v)}
                   type="button"
-                  data-flip={keyOf(v)}
+                  data-flip={modelKey(v)}
                   onClick={() => void pick(v)}
                   className="border-0 bg-transparent p-0 text-left cursor-pointer"
                 >
@@ -400,7 +383,7 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                     ].join(" ")}
                   >
                     {v.cover ? (
-                      <img
+                      <ThumbImage
                         src={resolveCover(v.cover, coverCache)}
                         alt=""
                         draggable={false}
@@ -412,26 +395,26 @@ function HomePageImpl({ currentId, onOpenModels, onOpenDsp, onOpenAudio, onOpenP
                         className="absolute inset-0 w-full h-full object-contain"
                       />
                     ) : (
-                      <span>{(title || "?").slice(0, 4)}</span>
+                      <CoverPlaceholder name={title} seed={modelKey(v)} />
                     )}
                     {ver ? (
-                      <span className="absolute left-2.5 top-2.5 text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                      <span className="absolute left-2.5 top-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
                         {ver}
                       </span>
                     ) : null}
                     {pend ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("dock.switching")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)]">{t("dock.switching")}</span>
                     ) : cur && hasSelection ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)]">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)]">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
                   <div
                     className={[
                       "font-semibold mt-0.5 leading-snug",
-                      cur ? "text-[14.5px]" : "text-[13.5px]",
+                      cur ? "text-[15px]" : "text-[13px]",
                     ].join(" ")}
                   >
                     {title}
@@ -469,10 +452,10 @@ function DspHomeEntry({ onOpen }: { onOpen?: () => void }) {
           "active:scale-[0.985]",
         ].join(" ")}
       >
-        <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+        <div className="text-[13px] font-semibold text-[var(--ink)]">
           {t("s.dspHomeOpen")}
         </div>
-        <div className="text-[12px] text-[var(--meta)] mt-1">{t("s.dspHomeDesc")}</div>
+        <div className="text-[12.5px] text-[var(--meta)] mt-1">{t("s.dspHomeDesc")}</div>
       </button>
     </Block>
   );
@@ -488,8 +471,8 @@ function HomeAudioEntries({ onOpenDsp, onOpenAudio }: { onOpenDsp?: () => void; 
         onClick={onOpenAudio}
         className="w-full text-left border-0 cursor-pointer rounded-[var(--r)] px-4 py-3.5 bg-[color-mix(in_srgb,var(--ink)_4%,transparent)] transition-[transform,background] duration-200 ease-[var(--ease)] hover:bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] active:scale-[0.985]"
       >
-        <div className="text-[13.5px] font-semibold text-[var(--ink)]">{t("audio.open")}</div>
-        <div className="text-[12px] text-[var(--meta)] mt-1">{t("audio.homeDesc")}</div>
+        <div className="text-[13px] font-semibold text-[var(--ink)]">{t("audio.open")}</div>
+        <div className="text-[12.5px] text-[var(--meta)] mt-1">{t("audio.homeDesc")}</div>
       </button>
     </Block>
   </div>;
@@ -537,10 +520,10 @@ function ToolShortcuts() {
               "active:scale-[0.985]",
             ].join(" ")}
           >
-            <div className="text-[13.5px] font-semibold text-[var(--ink)]">
+            <div className="text-[13px] font-semibold text-[var(--ink)]">
               {it.label}
             </div>
-            <div className="text-[12px] text-[var(--meta)] mt-1">{it.desc}</div>
+            <div className="text-[12.5px] text-[var(--meta)] mt-1">{it.desc}</div>
           </button>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import { SegmentControl } from "./SegmentControl";
-import { RangeBar } from "./controls";
+import { RangeBar, SliderValue } from "./controls";
 import { HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { useI18n } from "../i18n";
@@ -25,6 +25,7 @@ type Props = {
   onToggleRun: () => void;
   statusTitle?: string;
   statusSub?: string;
+  pairedMobile?: string;
   /** 0–99 while the engine is loading or switching; null to hide the bar. */
   progress?: number | null;
   /** True while starting or switching without a numeric percent yet. */
@@ -63,6 +64,7 @@ export function Dock({
   onToggleRun,
   statusTitle,
   statusSub,
+  pairedMobile,
   progress = null,
   loading = false,
   step = null,
@@ -159,7 +161,7 @@ export function Dock({
           >
             <div
               className={
-                "absolute inset-y-0 left-0 rounded-sm transition-[width,background-color] duration-75 linear " +
+                "absolute inset-y-0 left-0 rounded-sm transition-[width,background-color] duration-100 linear " +
                 (over
                   ? "bg-[var(--accent)]"
                   : "bg-[color-mix(in_srgb,var(--ink)_28%,transparent)]")
@@ -202,6 +204,7 @@ export function Dock({
           <div className="text-[13px] font-semibold text-[var(--ink-muted)]">
             {title}
           </div>
+          {pairedMobile && <div className="text-[11.5px] text-[var(--meta)] mt-0.5">{pairedMobile}</div>}
           {/* 报错整句会走这里（「引擎进程被系统终止，退出码 …」之类），不截住
               就会把底栏撑成三行，把音高共鸣两条挤扁。跟上面音色简介同一套
               处理：一行、省略号、完整内容挂 title。 */}
@@ -225,13 +228,14 @@ export function Dock({
             <button
               type="button"
               onClick={onSelfCheck}
-              className="ml-auto mt-0.5 border-0 bg-transparent p-0 text-[11.5px] text-[var(--accent)] underline underline-offset-2 cursor-pointer"
+              className="ml-auto mt-0.5 border-0 bg-transparent p-0 text-[11.5px] text-[var(--accent-text)] underline underline-offset-2 cursor-pointer"
             >
               {t("dock.selfCheck")}
             </button>
           ) : null}
           {step ? (
             <div className="ml-auto mt-1.5 w-[132px]" role="progressbar" aria-valuemin={1} aria-valuemax={step.count} aria-valuenow={step.index + 1} aria-valuetext={t(step.labelKey)}>
+              {/* design-allow: 132px 分步进度条段间窄缝。 */}
               <div className="flex gap-[3px]">
                 {Array.from({ length: step.count }, (_, i) => (
                   <span key={i} className="relative flex-1 h-1 rounded-sm overflow-hidden bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
@@ -264,7 +268,7 @@ export function Dock({
           onClick={onToggleRun}
           className={[
             "border-0 rounded-[var(--rs)] px-7 py-3 cursor-pointer whitespace-nowrap",
-            "text-sm font-semibold bg-[var(--accent)] text-[var(--accent-ink)]",
+            "text-sm font-semibold bg-[var(--accent-fill)] text-[var(--accent-ink)]",
             // 不加彩色光晕。悬停只是稍微压暗一点 —— 按钮周围散出一圈强调色的
             // 光是纯装饰，跟状态没有任何关系。
             "transition-[transform,filter] duration-200 ease-[var(--spring)]",
@@ -307,7 +311,8 @@ function SliderTile({
     <div className="flex-1 min-w-[100px] max-w-[300px]">
       <div className="flex justify-between items-baseline mb-2">
         <span className="text-xs text-[var(--meta)]">{label}</span>
-        <b className="text-[15px] font-semibold tabular-nums">{display}</b>
+        <SliderValue value={value} min={min} max={max} step={step} onChange={onChange}
+          format={() => display} ariaLabel={label} className="text-[15px] font-semibold tabular-nums" />
       </div>
       <RangeBar
         value={value}

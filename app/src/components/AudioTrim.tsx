@@ -4,6 +4,7 @@ import { Btn } from "./ui";
 import { useI18n } from "../i18n";
 import { SegmentControl } from "./SegmentControl";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
+import { releaseAudio } from "../lib/releaseAudio";
 import { WaveformRange } from "./WaveformRange";
 
 type AudioTrimProps = {
@@ -39,7 +40,9 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
   const { t } = useI18n();
   const audio = useRef<HTMLAudioElement>(null);
   const previewing = useRef(false);
+  const generation = useRef(0);
   const waveform = useAudioWaveform(input);
+  const source = (() => { try { return convertFileSrc(input); } catch { return ""; } })();
   const [metadata, setMetadata] = useState({ input: "", duration: 0 });
   const duration = waveform.duration || (metadata.input === input ? metadata.duration : 0);
   const [start, setStart] = useState(0);
@@ -51,14 +54,26 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    audio.current?.pause();
+    const element = audio.current;
+    generation.current += 1;
+    if (element) {
+      if (source) element.src = source;
+      else element.removeAttribute("src");
+    }
     previewing.current = false;
+    setPlaying(false);
+    setError("");
     setMetadata({ input, duration: 0 });
     setStart(0);
     setEnd(0);
     setCurrentTime(0);
     setMode("keep");
-  }, [input]);
+    return () => {
+      generation.current += 1;
+      previewing.current = false;
+      releaseAudio(element);
+    };
+  }, [input, source]);
 
   useEffect(() => {
     if (duration > 0) setEnd((value) => value || duration);
@@ -79,14 +94,18 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     setBusy(true);
     onBusyChange?.(true);
     setError("");
-    audio.current?.pause();
+    generation.current += 1;
+    const request = generation.current;
+    previewing.current = false;
+    releaseAudio(audio.current);
+    setPlaying(false);
     try {
       const output = await invoke<string>(mode === "keep" ? "audio_trim" : "audio_cut", mode === "keep"
         ? { input, start, end }
         : { input, start, end, duration });
-      onApply(output);
+      if (request === generation.current) onApply(output);
     } catch (e) {
-      setError(String(e));
+      if (request === generation.current) setError(String(e));
     } finally {
       setBusy(false);
       onBusyChange?.(false);
@@ -95,7 +114,7 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
 
   if (!canTrimAudio(input)) return null;
   return <div className="mt-3 flex flex-col gap-3">
-    <audio ref={audio} src={(() => { try { return convertFileSrc(input); } catch { return ""; } })()} preload="metadata" className="hidden"
+    <audio ref={audio} preload="metadata" className="hidden"
       onLoadedMetadata={(e) => {
         const d = e.currentTarget.duration;
         if (Number.isFinite(d) && d > 0) {
@@ -103,7 +122,8 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
           setEnd((v) => v || d);
         }
       }}
-      onError={() => setError(t("neptune.previewFailed"))}
+      onError={() => { previewing.current = false; setPlaying(false); setError(t("neptune.previewFailed")); }}
+      onEnded={() => { previewing.current = false; setPlaying(false); }}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
       onTimeUpdate={(e) => {
@@ -128,27 +148,37 @@ export function AudioTrimEditor({ input, disabled, onApply, onBusyChange }: Audi
     <WaveformRange duration={duration} peaks={waveform.peaks} start={start} end={end}
       currentTime={currentTime} playing={playing} disabled={disabled || busy}
       label={t("neptune.waveform")} onRangeChange={(nextStart, nextEnd) => { setStart(nextStart); setEnd(nextEnd); }} />
-    {waveform.loading ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
-    {waveform.error ? <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
-    <p className="m-0 text-[12px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
+    {waveform.loading ? <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformLoading")}</p> : null}
+    {waveform.error ? <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformFailed")}</p> : null}
+    <p className="m-0 text-[12.5px] text-[var(--help)]">{t("neptune.waveformHint")}</p>
     <div className="flex flex-wrap items-center gap-3">
+      {/* design-allow: py-1+border(--surface) 与 compact 高度差 4px 且 .trm-input 覆盖背景为透明。 */}
       <label>{t("neptune.trimStart")} <input type="number" min={0} max={end} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(start) ? start.toFixed(2) : ""} onChange={(e) => setStart(Number(e.target.value))} /></label>
+      {/* design-allow: py-1+border(--surface) 与 compact 高度差 4px 且 .trm-input 覆盖背景为透明。 */}
       <label>{t("neptune.trimEnd")} <input type="number" min={start} max={duration} step="0.01"
         className="w-24 rounded-md border border-[var(--hairline)] bg-[var(--surface)] px-2 py-1" disabled={busy || disabled} value={Number.isFinite(end) ? end.toFixed(2) : ""} onChange={(e) => setEnd(Number(e.target.value))} /></label>
     </div>
     <div className="flex gap-2">
       <Btn disabled={!valid || busy || disabled} onClick={() => {
         if (audio.current) {
+          const request = ++generation.current;
+          setError("");
           previewing.current = true;
+          if (!audio.current.hasAttribute("src")) audio.current.src = source;
           audio.current.currentTime = start;
           setCurrentTime(start);
-          void audio.current.play().catch(() => setError(t("neptune.previewFailed")));
+          void audio.current.play().catch(() => {
+            if (request !== generation.current) return;
+            previewing.current = false;
+            setPlaying(false);
+            setError(t("neptune.previewFailed"));
+          });
         }
       }}>{t("neptune.previewSelection")}</Btn>
-      <Btn disabled={!canApply || busy || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
+      <Btn busy={busy} disabled={!canApply || disabled} onClick={() => void apply()}>{t(busy ? "neptune.trimming" : "neptune.applyTrim")}</Btn>
     </div>
-    <p className="m-0 text-[12px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
+    <p className="m-0 text-[12.5px] text-[var(--help)]">{error || (removingEverything && mode === "remove" ? t("neptune.selectionInvalid") : duration > 0 && !valid ? t("neptune.trimInvalid") : null)}</p>
   </div>;
 }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { TextArea } from "trm-ui";
 import { Btn } from "./ui";
 import { t } from "../i18n/t";
 import { Modal } from "./Modal";
@@ -219,15 +220,16 @@ export function ConsultDialog({
         <label className="block text-[12.5px] text-[var(--help)] mb-1">
           {t("s.consultNote")}
         </label>
-        <textarea
+        <TextArea
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={setNote}
           rows={2}
-          className="w-full text-[13px] px-3 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--line)] outline-none resize-none mb-4"
+          resize="none"
+          className="mb-4"
         />
 
         {err ? (
-          <p className="text-[12px] text-[var(--danger)] mt-0 mb-3 break-all">{err}</p>
+          <p className="text-[12.5px] text-[var(--danger-text)] mt-0 mb-3 break-all">{err}</p>
         ) : null}
 
         <div className="flex gap-2 justify-end items-center flex-wrap">

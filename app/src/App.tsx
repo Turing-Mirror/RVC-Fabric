@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Dock, type OutputMode } from "./components/Dock";
 import { LinkCheckDialog } from "./components/LinkCheckDialog";
-import { FeedbackNoticeGate, GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
+import { GuidePill, SetupGuide, type GuideStep } from "./components/SetupGuide";
 import { classifyTrouble, type Trouble } from "./lib/trouble";
 
 /** 各类启动失败的说明与按钮文案。 */
@@ -24,6 +24,7 @@ import { Nudge } from "./components/Nudge";
 import { UpdateNudge } from "./components/UpdateNudge";
 import { AudioRecoveryBanner } from "./components/AudioRecovery";
 import { Btn } from "./components/ui";
+import { Toggle } from "./components/controls";
 import { followLinks } from "./lib/links";
 import { QrDialog } from "./components/QrDialog";
 import { WebDialogHost } from "./components/WebDialog";
@@ -37,6 +38,7 @@ import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
 import { useActiveVoiceReconcile } from "./hooks/useActiveVoice";
 import { useEngine } from "./hooks/useEngine";
+import { useMobile } from "./hooks/useMobile";
 import { useSlowDiskHint } from "./hooks/useSlowDiskHint";
 import { useModalKeys } from "./hooks/useModalKeys";
 import { usePlaza } from "./hooks/usePlaza";
@@ -247,12 +249,14 @@ export default function App() {
     };
   }, []);
   const [showProvision, setShowProvision] = useState(false);
-  // 跳过运行时补全的人不进完整引导，单独弹一次反馈须知（SetupGuide 里同一页）。
-  const [noticeGate, setNoticeGate] = useState(false);
-  // 新装 ui_locale_picked===false 时先选语言，再走 Runtime 补全。
+  const [provisionDismissed, setProvisionDismissed] = useState(false);
+  const [coreOnly, setCoreOnly] = useState(false);
   const [showLangGate, setShowLangGate] = useState(false);
-
+  const [firstLaunch, setFirstLaunch] = useState(false);
+  const [langGateChecked, setLangGateChecked] = useState(false);
+  const [guidePending, setGuidePending] = useState(false);
   const engine = useEngine();
+  const mobile = useMobile();
   const slowDisk = useSlowDiskHint(engine.step);
   // App re-renders on the engine status heartbeat. Keep the latest status
   // available to voice selection without making the selection callback change
@@ -432,12 +436,16 @@ export default function App() {
     void (async () => {
       try {
         const cfg = await invoke<Record<string, unknown>>("config_get");
-        // 仅新装默认 false 弹引导；老配置没有该键 → 不弹。
-        if (alive && cfg.ui_locale_picked === false) {
-          setShowLangGate(true);
+        if (alive) {
+          const needsLanguage = cfg.ui_locale_picked === false;
+          setFirstLaunch(needsLanguage);
+          setShowLangGate(needsLanguage);
+          setGuidePending(cfg.setup_guide_done !== true && cfg.onboard_dismiss !== true && Number(cfg.vc_run_count ?? 0) === 0);
         }
       } catch {
         /* 预览 */
+      } finally {
+        if (alive) setLangGateChecked(true);
       }
     })();
     return () => {
@@ -718,7 +726,6 @@ export default function App() {
     then?.();
   };
   // 跳过运行时：反馈须知看完之后再问音频组件，两个窗口不叠在一起。
-  const audioAfterNotice = useRef(false);
 
   // 工具窗口（人声分离 / 训练音色）点「下载模型」时发过来的。那边是独立的
   // webview，没有广场可去，只能把主窗口叫到前面再让它跳。
@@ -963,17 +970,67 @@ export default function App() {
   const [guide, setGuide] = useState<{ open: boolean; step: GuideStep; pill: boolean }>({ open: false, step: "cable", pill: false });
   const openGuide = useCallback((step?: GuideStep) => setGuide((g) => ({ open: true, pill: false, step: step ?? g.step })), []);
   const finishGuide = useCallback(() => {
+    setGuidePending(false);
     setGuide((g) => ({ ...g, open: false, pill: false }));
     void invoke("config_set", { patch: { setup_guide_done: true, onboard_dismiss: true } }).catch(() => { });
   }, []);
+
+  const guideRequested = useRef(false);
+  const { need_provision: needRuntime, runtime_ready: runtimeReady, runtime_migration_required: needsMigration } = engine.provision;
+
   useEffect(() => {
-    void invoke<Record<string, unknown>>("config_get")
-      .then((cfg) => {
-        const fresh = cfg.setup_guide_done !== true && cfg.onboard_dismiss !== true && Number(cfg.vc_run_count ?? 0) === 0;
-        if (fresh) setGuide((g) => ({ ...g, pill: true }));
-      })
-      .catch(() => { });
-  }, []);
+    if (!langGateChecked || showLangGate || showProvision || provisionDismissed || needsMigration) return;
+    if (firstLaunch && needRuntime && guidePending) {
+      setShowProvision(true);
+      return;
+    }
+    if (!runtimeReady || !guidePending) return;
+    let alive = true;
+    void getAssetsStatus().then(assets => {
+      if (!alive) return;
+      if (assets.engine_core_ready !== false) {
+        setGuide(g => g.open || g.pill ? g : { ...g, pill: true });
+      } else if (firstLaunch) {
+        setCoreOnly(true);
+        setShowProvision(true);
+      }
+    });
+    return () => { alive = false; };
+  }, [firstLaunch, langGateChecked, showLangGate, showProvision, provisionDismissed, needRuntime, runtimeReady, guidePending, needsMigration]);
+
+  async function startGuide() {
+    if (!runtimeReady) {
+      guideRequested.current = true;
+      setCoreOnly(false);
+      setShowProvision(true);
+      return;
+    }
+    const assets = await getAssetsStatus();
+    if (assets.engine_core_ready === false) {
+      guideRequested.current = true;
+      setCoreOnly(true);
+      setShowProvision(true);
+    } else {
+      openGuide("cable");
+    }
+  }
+
+  function closeProvision() {
+    setShowProvision(false);
+    setCoreOnly(false);
+    setProvisionDismissed(true);
+  }
+
+  async function finishProvision() {
+    closeProvision();
+    const provision = await refreshProvision().catch(() => undefined);
+    await engine.refresh();
+    const requested = guideRequested.current;
+    guideRequested.current = false;
+    if (!(provision?.runtime_ready ?? runtimeReady) || (!requested && !guidePending)) return;
+    promptAudioTools({ then: () => openGuide("cable") });
+  }
+
 
   // Ctrl+F5 / F6 step through the catalog, same as the old shell.
   const shiftVoice = useCallback(async (delta: number) => {
@@ -1221,49 +1278,16 @@ export default function App() {
       />
 
       <ProvisionGate
-        open={
-          showProvision &&
-          !showLangGate &&
-          engine.provision.runtime_migration_required !== true
-        }
+        open={showProvision && !showLangGate && !needsMigration}
         initial={engine.provision}
-        onDone={async () => {
-          setShowProvision(false);
-          // 跳过了引擎资源就还缺音频组件：先问一声，再进新手引导。
-          promptAudioTools({
-            then: () =>
-              void invoke<Record<string, unknown>>("config_get")
-                .then((cfg) => { if (cfg.setup_guide_done !== true) openGuide("cable"); })
-                .catch(() => { }),
-          });
-          // 这里以前调的是 getProvisionStatus()，**结果直接扔掉** —— 问了等于
-          // 没问，engine.provision 还是补全之前那份 runtime_ready: false。
-          // 于是运行时装好了，「开启变声」照样被 toggleRun 开头那道闸拦下来
-          // 说「运行时未就绪」，只能重启软件。refreshProvision 会把结果写回
-          // 状态，并且在 false → true 的那一下顺手把引擎拉起来。
-          try {
-            await refreshProvision();
-          } catch {
-            /* 轮询兜底 */
-          }
-          await engine.refresh();
-        }}
+        coreOnly={coreOnly}
+        onDone={() => void finishProvision()}
         onDismiss={() => {
-          setShowProvision(false);
-          setNoticeGate(true);
-          audioAfterNotice.current = true;
+          guideRequested.current = false;
+          closeProvision();
         }}
       />
-      <FeedbackNoticeGate
-        open={noticeGate}
-        onDone={() => {
-          setNoticeGate(false);
-          if (audioAfterNotice.current) {
-            audioAfterNotice.current = false;
-            promptAudioTools();
-          }
-        }}
-      />
+
       <AudioToolsDialog open={audioTools.open} sizeBytes={audioTools.size} onClose={closeAudioTools} />
 
       <PageHost page={page}>
@@ -1335,12 +1359,13 @@ export default function App() {
                   focus={helpFocus}
                   focusNonce={helpFocusNonce}
                   onOpenCommunity={openCommunity}
-                  onStartGuide={() => openGuide("cable")}
+                  onStartGuide={() => void startGuide()}
                 />
               );
             case "more":
               return (
                 <MorePage
+                  mobile={mobile}
                   status={engine.status}
                   provision={engine.provision}
                   onForceKill={requestForceKill}
@@ -1366,19 +1391,11 @@ export default function App() {
             aria-modal="true"
             className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
           >
-            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
+            <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.killStsAskTitle")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-5 leading-relaxed">{t("s.killStsAskBody")}</p>
             <div className="flex gap-2.5 justify-end">
-              <button
-                type="button"
-                onClick={() => setKillAsk(false)}
-                className="text-[13px] px-3.5 py-2 rounded-[var(--rs)] bg-transparent text-[var(--ink-muted)] border-0 cursor-pointer shadow-[inset_0_0_0_1px_var(--line)]"
-              >{t("s.killStsAskKeep")}</button>
-              <button
-                type="button"
-                onClick={() => void doForceKill()}
-                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
-              >{t("s.killStsAskGo")}</button>
+              <Btn onClick={() => setKillAsk(false)}>{t("s.killStsAskKeep")}</Btn>
+              <Btn primary danger onClick={() => void doForceKill()}>{t("s.killStsAskGo")}</Btn>
             </div>
           </div>
         </Modal>
@@ -1391,15 +1408,15 @@ export default function App() {
             aria-modal="true"
             className="w-full max-w-[420px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-6 outline-none"
           >
-            <h2 className="text-[19px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
+            <h2 className="text-[16px] font-semibold m-0 mb-2">{t("s.43b19c9a61")}</h2>
             <p className="text-[13px] text-[var(--help)] m-0 mb-4 leading-relaxed">{t("s.bc19958103")}</p>
-            <label className="flex items-center gap-2.5 text-[13px] cursor-pointer mb-5 select-none">
-              <input
-                type="checkbox"
-                checked={closeRemember}
-                onChange={(e) => setCloseRemember(e.target.checked)}
-               
-              />{t("s.f75c86ad46")}</label>
+            <Toggle
+              look="inline"
+              className="mb-5"
+              checked={closeRemember}
+              onChange={setCloseRemember}
+              label={t("s.f75c86ad46")}
+            />
             <div className="flex gap-2.5 justify-end">
               <button
                 type="button"
@@ -1409,7 +1426,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => void answerClose(true)}
-                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent)] text-[var(--accent-ink)] border-0 cursor-pointer"
+                className="text-[13px] font-semibold px-3.5 py-2 rounded-[var(--rs)] bg-[var(--accent-fill)] text-[var(--accent-ink)] border-0 cursor-pointer"
               >{t("s.aea56dcdfe")}</button>
             </div>
           </div>
@@ -1579,7 +1596,8 @@ export default function App() {
           }
         }}
         profileSummary={profileSummary}
-        statusTitle={engine.title}
+        statusTitle={mobile.status.running && mobile.status.selected ? t("mobile.running") : engine.title}
+        pairedMobile={mobile.status.connected ? t("mobile.paired") : undefined}
         statusSub={engine.sub}
         progress={engine.progress}
         loading={engine.starting && engine.progress == null}
@@ -1592,7 +1610,7 @@ export default function App() {
       />
       <Leave>{selfCheckOpen ? <LinkCheckDialog onClose={() => setSelfCheckOpen(false)} /> : null}</Leave>
       <SetupGuide
-        open={guide.open}
+        open={guide.open && !showLangGate && !showProvision && !needsMigration && !audioTools.open}
         step={guide.step}
         onStep={(step) => setGuide((g) => ({ ...g, step }))}
         onMinimize={() => setGuide((g) => ({ ...g, open: false, pill: true }))}
@@ -1607,7 +1625,7 @@ export default function App() {
         onToggleRun={() => void engine.toggleRun()}
         onNavigate={setPage}
       />
-      <Leave>{guide.pill && !guide.open ? <GuidePill step={guide.step} onOpen={() => openGuide()} onClose={finishGuide} /> : null}</Leave>
+      <Leave>{guide.pill && !guide.open && !showLangGate && !showProvision && !needsMigration && !audioTools.open ? <GuidePill step={guide.step} onOpen={() => openGuide()} onClose={finishGuide} /> : null}</Leave>
     </div>
   );
 }

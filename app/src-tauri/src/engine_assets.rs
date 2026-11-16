@@ -264,7 +264,7 @@ pub fn fetch_pack_with_fallback(
                 expected_sha256: sha.to_string(),
                 size_hint: catalog_size_for(root, cache_name),
                 connections: None,
-                kind: download::DownloadKind::Generic,
+                kind: download::DownloadKind::Dependency,
             },
             cancel,
             progress,
@@ -304,7 +304,7 @@ fn fetch_and_extract(
     if !cached_ok {
         // Passing progress through is what keeps the first-run gate honest:
         // without it the bar sits still while the NIC is busy for minutes.
-        let mut urls = lfs_urls(root, sha);
+        let mut urls = if cache_name == AUDIO_TOOLS_NAME { Vec::new() } else { lfs_urls(root, sha) };
         if let Some((tag, file)) = release_ref(cache_name) {
             urls.extend(release_urls(root, tag, file));
         }
@@ -314,9 +314,9 @@ fn fetch_and_extract(
                 root: Some(root.to_path_buf()),
                 dest: archive.clone(),
                 expected_sha256: sha.to_string(),
-                size_hint: catalog_size_for(root, cache_name),
+                size_hint: if cache_name == AUDIO_TOOLS_NAME { AUDIO_TOOLS_SIZE } else { catalog_size_for(root, cache_name) },
                 connections: None,
-                kind: download::DownloadKind::Generic,
+                kind: download::DownloadKind::Dependency,
             },
             cancel,
             progress,
@@ -545,6 +545,7 @@ pub fn assets_status(root: &Path) -> Value {
     json!({
         "engine_core_ready": missing.is_empty(),
         "engine_core_missing": missing,
+        "engine_core_size_bytes": catalog_size_for(root, ENGINE_CORE_NAME),
         "audio_tools_ready": audio_tools_ready(root),
         "audio_tools_size_bytes": AUDIO_TOOLS_SIZE,
         "vbcable_pack_ready": vbcable_pack_ready(root),
@@ -571,6 +572,7 @@ mod tests {
         .unwrap();
         assert_eq!(catalog_size_for(&root, "engine-core-260722.zip"), 753_796_337);
         assert_eq!(catalog_size_for(&root, "not-in-catalog.zip"), 0);
+        assert_eq!(assets_status(&root)["engine_core_size_bytes"], 753_796_337);
         let _ = std::fs::remove_dir_all(&root);
     }
 

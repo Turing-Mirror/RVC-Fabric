@@ -356,15 +356,31 @@ fn recently_modified(p: &Path) -> bool {
 ///   正在下的大文件不在此列 —— 删了它就是让用户从头再下一遍。
 /// - 绝不碰 Runtime / models / app_config / 已装音色。
 pub fn clean_temps(root: &Path) -> CleanStats {
+    clean_temps_impl(root, false)
+}
+
+fn clean_temps_impl(root: &Path, clear_downloads: bool) -> CleanStats {
     let mut stats = CleanStats::default();
 
     let temp = temp_dir(root);
     stats.merge(wipe_dir_contents(&temp, /*recreate*/ true));
 
     let cache = update_cache(root);
-    // 半截下载 / 临时名（活跃下载除外，见 recently_modified）
+    let runtime_cache = cache.join("runtime");
+    let installing = crate::provision::is_busy();
     stats.merge(remove_matching_files(&cache, |name, path| {
+        // Keep verified archives until that specific install succeeds, even
+        // when another runtime is already installed.
+        if path.starts_with(&runtime_cache) {
+            return clear_downloads && !installing && !recently_modified(path);
+        }
         let lower = name.to_ascii_lowercase();
+        if lower.ends_with(".part.src") {
+            return !recently_modified(path) && !path.with_extension("").exists();
+        }
+        if lower.ends_with(".part") && path.with_extension("part.src").is_file() && !clear_downloads {
+            return false;
+        }
         (lower.ends_with(".part")
             || lower.ends_with(".tmp")
             || lower.ends_with(".download")
@@ -372,18 +388,8 @@ pub fn clean_temps(root: &Path) -> CleanStats {
             || lower.ends_with(".crdownload"))
             && !recently_modified(path)
     }));
-    // OTA 暂存目录整清（装完就没用了）。`runtime` 只在引擎已解压后才算
-    // 没用：Runtime 还没就绪时，里面躺着的可能是刚下完、还没来得及解压的
-    // tar —— 这时候清掉，几 GB 就得原样重下。
-    let runtime_installed = runtime_ready(root);
-    for sub in [
-        "gui_stage",
-        "frontend_stage",
-        "runtime",
-        "runtime_install",
-        "runtime_extract",
-    ] {
-        if sub == "runtime" && !runtime_installed {
+    for sub in ["gui_stage", "frontend_stage", "runtime_install", "runtime_extract"] {
+        if installing && sub.starts_with("runtime_") {
             continue;
         }
         let p = cache.join(sub);
@@ -584,7 +590,7 @@ fn clean_system_temp_leftovers() -> CleanStats {
 /// log files, and old diagnostic zips. Never touches Runtime, User_Data/models,
 /// app_config, wallpaper, or installed voices.
 pub fn clear_user_cache(root: &Path) -> CleanStats {
-    let mut stats = clean_temps(root);
+    let mut stats = clean_temps_impl(root, true);
     stats.merge(clear_log_files(&logs_dir(root)));
     let diag = user_data(root).join("diagnostics");
     stats.merge(remove_matching_files(&diag, |name, _| {
@@ -628,7 +634,7 @@ pub fn storage_clean(root: &Path, kinds: &[String]) -> Result<CleanStats, String
     let mut stats = CleanStats::default();
     for k in kinds {
         match k.as_str() {
-            "temp" => stats.merge(clean_temps(root)),
+            "temp" => stats.merge(clean_temps_impl(root, true)),
             "app_logs" => {
                 stats.merge(clear_log_files(&logs_dir(root)));
                 let _ = fs_create_all(&logs_dir(root));
@@ -804,7 +810,7 @@ mod cache_clear_tests {
     }
 
     #[test]
-    fn clean_temps_spares_a_download_in_progress() {
+    fn clean_temps_preserves_resumable_downloads_across_restarts() {
         // diag 26.8.22/1：启动清理把下到 322MB 的 Runtime 半截当垃圾删了，
         // 六 GB 的包只好从零再来。刚写过的 .part 必须活过清理。
         let td = crate::testutil::scratch("fresh-part");
@@ -816,16 +822,28 @@ mod cache_clear_tests {
 
         clean_temps(&td);
         assert!(part.exists(), "freshly written .part must survive cleanup");
+        std::fs::write(part.with_extension("part.src"), b"https://example.com/archive").unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&part)
+            .unwrap()
+            .set_times(std::fs::FileTimes::new().set_modified(
+                std::time::SystemTime::now() - std::time::Duration::from_secs(7200),
+            ))
+            .unwrap();
+        clean_temps(&td);
+        assert!(part.exists(), "a tagged partial must survive even after a long pause");
+
 
         // Runtime 还没就绪时，update_cache/runtime 里下完待解压的 tar 也得留。
         let rt_cache = cache.join("runtime");
         std::fs::create_dir_all(&rt_cache).unwrap();
-        let tar = rt_cache.join("runtime-nvidia.tar");
+        let tar = rt_cache.join("runtime-secondary.tar");
         std::fs::write(&tar, vec![0u8; 4096]).unwrap();
         clean_temps(&td);
         assert!(tar.exists(), "unextracted runtime tar must survive cleanup");
 
-        // 引擎装好之后同一个 tar 才算「装完没用了」，可以清。
+        // A different installed runtime must not clear the pending archive.
         std::fs::create_dir_all(
             td.join("Runtime")
                 .join("Lib")
@@ -845,7 +863,7 @@ mod cache_clear_tests {
         .unwrap();
         assert!(runtime_ready(&td), "fixture must look installed");
         clean_temps(&td);
-        assert!(!tar.exists(), "tar is regenerable once runtime extracted");
+        assert!(tar.exists(), "another installed runtime must not clear the archive");
         // 活跃半截的保护与引擎是否装好无关。
         assert!(part.exists());
         let _ = std::fs::remove_dir_all(&td);

@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n/t";
+import { forgetThumb } from "trm-ui";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -107,6 +108,16 @@ export type StoreVoice = {
   source_url?: string;
   official?: boolean;
   installed?: boolean;
+  installed_voice_id?: string;
+  update_available?: boolean;
+  community_version_id?: string;
+  community_file_id?: string;
+  community_package_path?: string;
+  community_staging_id?: string;
+  community_author_id?: string;
+  author_url_label?: string;
+  legacy_catalog_id?: string;
+  license?: { id?: string; url?: string; text?: string };
 };
 
 export type StoreCatalog = {
@@ -348,13 +359,18 @@ export async function coverDataUrl(src: string): Promise<string> {
 /** 把界面裁好的封面（data URL）写进模型目录。 */
 export async function setVoiceCover(modelDir: string, image: string) {
   if (!isTauri()) return { ok: false };
-  return invokeVoiceMutation("voices_set_cover", { modelDir, image });
+  const result = await invokeVoiceMutation("voices_set_cover", { modelDir, image });
+  // 封面文件名不变、内容变了：缩略图要重新生成。
+  forgetThumb();
+  return result;
 }
 
 /** 撤销自定义封面，回落到包内 / 清单封面。 */
 export async function resetVoiceCover(modelDir: string) {
   if (!isTauri()) return { ok: false };
-  return invokeVoiceMutation("voices_reset_cover", { modelDir });
+  const result = await invokeVoiceMutation("voices_reset_cover", { modelDir });
+  forgetThumb();
+  return result;
 }
 
 export async function promoteLegacy(pthPath: string) {
@@ -367,7 +383,7 @@ export async function openModelsDir() {
   return invoke("voices_open_dir");
 }
 
-export async function fetchStoreCatalog(preferRemote = true) {
+export async function fetchStoreCatalog(preferRemote = true, options?: { starterOnly: boolean }) {
   if (!isTauri()) {
     return {
       source: "demo",
@@ -376,7 +392,7 @@ export async function fetchStoreCatalog(preferRemote = true) {
       fetch_error: t("s.d15a7a3da1"),
     } satisfies StoreCatalog;
   }
-  return invoke<StoreCatalog>("store_catalog", { preferRemote });
+  return invoke<StoreCatalog>("store_catalog", { preferRemote, starterOnly: options?.starterOnly });
 }
 
 export async function installStoreVoice(entry: StoreVoice) {

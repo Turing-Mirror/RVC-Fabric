@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Btn, Warn } from "./ui";
 import { SegmentControl } from "./SegmentControl";
-import { askConfirm } from "../lib/webDialog";
+import { CatalogTransition } from "./CatalogTransition";
+import { ResourceDownloadRow, Roll } from "trm-ui";
+import { askConfirm } from "trm-ui/fabric";
 import { t } from "../i18n/t";
 import {
-  formatLocalizedList,
   localizedTextValue,
 } from "../lib/voiceDisplay";
 import {
@@ -87,7 +88,7 @@ function categoryBlurb(cat: Category): string {
  * 附加资源下载：引擎资源 + 分离模型 + 训练底模。
  *
  * 布局对齐广场「社区音色」：顶部分段切换分类（人声分离 / 训练音色），
- * 列表分页每页 5 条。引擎资源是前置依赖：未就绪时先下载它，再选模型。
+ * 列表分页每页 5 条。浏览和下载不依赖引擎资源的安装状态。
  *
  * 这里只有内容，没有弹窗那层壳。两个地方用它：
  *
@@ -174,7 +175,7 @@ export function ExtrasPanel({
   };
 
   const start = (key: string) => {
-    startExtraDownload(key, engineReady);
+    startExtraDownload(key);
   };
 
   /**
@@ -223,7 +224,7 @@ export function ExtrasPanel({
         ? t("s.2b9ddc0b69")
         : t("s.7e9782377b");
 
-  const locked = engineReady === false;
+  const coreMissing = engineReady === false;
   const anyBusy = downloading.length > 0 || !!removeKey || coreBusy;
   useEffect(() => {
     onBusyChange?.(anyBusy);
@@ -233,7 +234,7 @@ export function ExtrasPanel({
     <>
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
           {title ? (
-            <h3 className="m-0 text-[17px] font-semibold">{title}</h3>
+            <h3 className="m-0 text-[16px] font-semibold">{title}</h3>
           ) : null}
           <SegmentControl<Category>
             className={title ? "" : "ml-auto"}
@@ -249,42 +250,43 @@ export function ExtrasPanel({
           />
         </div>
         <p className="m-0 mb-3 text-[12.5px] text-[var(--ink-muted)] leading-snug">
-          {categoryBlurb(category)}
+          <Roll value={categoryBlurb(category)} />
         </p>
 
         {reason ? (
           <Warn className="mb-3">{reason}</Warn>
         ) : null}
 
-        {/* 引擎资源前置卡：CNB engine-core，约 720MB */}
+        {/* Shared base resources; size comes from the download catalog. */}
         <div
           className={[
             "mb-4 rounded-[var(--rs)] px-3.5 py-3",
-            locked
+            coreMissing
               ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_28%,transparent)]"
               : "bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]",
           ].join(" ")}
         >
           <div className="flex items-start gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
-              <div className="text-[13.5px] font-semibold">
+              <div className="text-[13px] font-semibold">
                 {t("extras.engineTitle")}
                 {engineReady === true ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--meta)]">{t("s.f2afde8960")}</span>
                 ) : engineReady === false ? (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--accent)]">{t("s.f9cbb1e0c6")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--accent-text)]">{t("s.f9cbb1e0c6")}</span>
                 ) : (
-                  <span className="ml-2 text-[12px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
+                  <span className="ml-2 text-[12.5px] font-normal text-[var(--meta)]">{t("s.5fc65af5b3")}</span>
                 )}
               </div>
               <p className="m-0 mt-1 text-[12.5px] text-[var(--help)] leading-relaxed">
                 {t("extras.engineDesc")}
-                {assets?.engine_core_missing?.length
-                  ? t("extras.missingList", {
-                      list: formatLocalizedList(assets.engine_core_missing),
-                    })
-                  : ""}
+
               </p>
+              {assets?.engine_core_size_bytes ? (
+                <p className="m-0 mt-2 text-[12.5px] text-[var(--ink-muted)]">
+                  {t("extras.downloadSize", { size: mb(assets.engine_core_size_bytes) })}
+                </p>
+              ) : null}
               {coreBusy && coreProg ? (
                 <div className="mt-2">
                   <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
@@ -293,7 +295,7 @@ export function ExtrasPanel({
                       style={{ width: `${corePct}%` }}
                     />
                   </div>
-                  <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
+                  <p className="m-0 mt-1.5 text-[12.5px] text-[var(--meta)]">
                     {joinClauses([
                       coreProg.message || t("s.65188d08a2"),
                       coreProg.speed_label && t("s.metaSpeed", { v0: coreProg.speed_label }),
@@ -307,7 +309,8 @@ export function ExtrasPanel({
               <Btn
                 primary
                 className="shrink-0"
-                disabled={coreBusy || downloading.length > 0}
+                busy={coreBusy}
+                disabled={downloading.length > 0}
                 onClick={() => void downloadEngineCore()}
               >
                 {coreBusy ? t("s.65188d08a2") : t("s.cbf7f4dada")}
@@ -318,58 +321,58 @@ export function ExtrasPanel({
           </div>
         </div>
 
-        {locked ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)] leading-relaxed">{t("s.70927369db")}</p>
-          </div>
-        ) : list === null ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--meta)]">{t("s.cd178d24a2")}</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="min-h-[200px] flex items-center">
-            <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
-          </div>
-        ) : (
-          <div className="min-h-[200px] flex flex-col">
-            <div className="flex-1">
-              {pageItems.map((it) => (
-                <ItemRow
-                  key={it.key}
-                  it={it}
-                  busy={!!busyKeys[it.key]}
-                  progress={progByKey[it.key]}
-                  removeKey={removeKey}
-                  disabled={coreBusy}
-                  onStart={start}
-                  onRemove={remove}
-                />
-              ))}
+        <CatalogTransition scope={category} page={pageClamped + 1} order={["separate", "train"]}>
+          {list === null ? (
+            <div className="min-h-[200px] flex items-center">
+              <p className="m-0 py-4 text-[13px] text-[var(--meta)]">{t("s.cd178d24a2")}</p>
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="min-h-[200px] flex items-center">
+              <p className="m-0 py-4 text-[13px] text-[var(--ink-muted)]">{emptyHint}</p>
+            </div>
+          ) : (
+            <div className="min-h-[200px] flex flex-col">
+              <div className="flex-1">
+                {pageItems.map((it) => (
+                  <ItemRow
+                    key={it.key}
+                    it={it}
+                    busy={!!busyKeys[it.key]}
+                    progress={progByKey[it.key]}
+                    removeKey={removeKey}
+                    disabled={coreBusy}
+                    onStart={start}
+                    onRemove={remove}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
+        </CatalogTransition>
+        {list && filtered.length > 0 ? <>
             {totalPages > 1 ? (
               <div className="flex items-center justify-center gap-3 pt-4 pb-1">
                 <Btn
-                  disabled={pageClamped <= 0 || !!removeKey || coreBusy}
+                  disabled={pageClamped <= 0}
                   onClick={() => setPage(pageClamped - 1)}
                 >{t("s.b41561d807")}</Btn>
                 <span className="text-[12.5px] text-[var(--meta)] tabular-nums min-w-[72px] text-center">
                   {pageClamped + 1} / {totalPages}
                 </span>
                 <Btn
-                  disabled={pageClamped >= totalPages - 1 || !!removeKey || coreBusy}
+                  disabled={pageClamped >= totalPages - 1}
                   onClick={() => setPage(pageClamped + 1)}
                 >{t("s.67a246a344")}</Btn>
               </div>
             ) : (
-              <p className="m-0 pt-3 text-[12px] text-[var(--meta)] text-center tabular-nums">
+              <p className="m-0 pt-3 text-[12.5px] text-[var(--meta)] text-center tabular-nums">
                 {t("extras.countItems", { n: filtered.length })}
               </p>
             )}
-          </div>
-        )}
+        </> : null}
 
-        {msg ? (
+        {msg || jobs.msg ? (
           // 下载失败现在是多行的（一句人话 + 试过的源 + 怎么办 + 技术细节），
           // 不换行的话整段挤成一坨，等于白写。
           <p className="m-0 mt-3 text-[12.5px] text-[var(--ink-muted)] leading-relaxed whitespace-pre-line break-words">
@@ -452,69 +455,22 @@ function ItemRow({
   onStart: (key: string) => void;
   onRemove: (it: Item) => void;
 }) {
-  const removing = removeKey === it.key;
-  const pct = progress?.total
-    ? Math.round(((progress.done ?? 0) / Math.max(progress.total, 1)) * 100)
-    : 0;
   return (
-    <div className="py-3.5">
-      <div className="flex items-center gap-4">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] leading-snug">
-            {extraLabel(it)}
-            {it.recommended ? (
-              <span className="ml-1.5 text-[11px] text-[var(--accent)] font-medium">{t("s.62b46f24ae")}</span>
-            ) : null}
-          </span>
-          {extraNotes(it) ? (
-            <span className="block mt-1 text-[12.5px] text-[var(--meta)] leading-snug">
-              {extraNotes(it)}
-            </span>
-          ) : null}
-          <span className="block mt-1 text-[12px] text-[var(--meta)] tabular-nums">
-            {joinClauses([
-              mb(it.size_bytes),
-              !!it.files?.length && t("s.8e7dddc185", { v0: it.files.length }),
-              it.installed && t("s.f7b11922f6"),
-            ])}
-          </span>
-        </span>
-        {it.installed ? (
-          // 已装好的给一个卸载口子：模型动辄几百 MB，试过不合用就该能删掉，
-          // 不然只能让用户自己去 assets 里翻文件。
-          <span className="shrink-0 flex items-center gap-2">
-            <span className="text-[13px] text-[var(--ink-muted)] px-1">{t("s.eb88ff57c9")}</span>
-            <Btn
-              className="min-w-[72px]"
-              disabled={busy || !!removeKey || !!disabled}
-              onClick={() => void onRemove(it)}
-            >
-              {removing ? t("s.extraRemoving") : t("s.extraRemove")}
-            </Btn>
-          </span>
-        ) : (
-          <Btn
-            className="shrink-0 min-w-[72px]"
-            disabled={busy || !!removeKey || !!disabled}
-            onClick={() => void onStart(it.key)}
-          >
-            {busy ? t("s.65188d08a2") : t("s.2b9d013177")}
-          </Btn>
-        )}
-      </div>
-      {busy && progress ? (
-        <div className="mt-2">
-          <div className="h-1 w-full overflow-hidden rounded bg-[color-mix(in_srgb,var(--ink)_10%,transparent)]">
-            <div
-              className="h-full bg-[var(--accent)] transition-[width] duration-200"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <p className="m-0 mt-1.5 text-[12px] text-[var(--meta)]">
-            {progress.message} {pct > 0 ? ` ${pct}%` : ""}
-          </p>
-        </div>
-      ) : null}
-    </div>
+    <ResourceDownloadRow
+      title={extraLabel(it)}
+      description={extraNotes(it)}
+      detail={joinClauses([
+        mb(it.size_bytes),
+        !!it.files?.length && t("s.8e7dddc185", { v0: it.files.length }),
+      ])}
+      recommended={it.recommended}
+      installed={it.installed}
+      downloading={busy}
+      removing={removeKey === it.key}
+      disabled={disabled || !!removeKey}
+      progress={progress}
+      onDownload={() => void onStart(it.key)}
+      onRemove={() => void onRemove(it)}
+    />
   );
 }

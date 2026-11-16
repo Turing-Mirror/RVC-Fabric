@@ -1,4 +1,7 @@
+import { ExportVoicePackages } from "../components/ExportVoicePackages";
+import { configSnapshot } from "../lib/configSnapshot";
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type MouseEvent } from "react";
+import { CoverPlaceholder, SearchBox, ThumbImage, usePageActive } from "trm-ui";
 import { SegmentControl } from "../components/SegmentControl";
 import { Pager } from "../components/Pager";
 import { AdBanner } from "../components/AdBanner";
@@ -16,7 +19,7 @@ import {
 } from "../lib/voiceDisplay";
 import { Block, Btn, Group, HelpMark, ListItem, PageHead, PagePad } from "../components/ui";
 import { CropCoverDialog } from "../components/CropCoverDialog";
-import { copyText } from "../lib/clipboard";
+import { copyText } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { AuthorsDialog } from "../components/AuthorsDialog";
 import { dspTips } from "../lib/dspTips";
@@ -26,9 +29,9 @@ import { activateDsp, deactivateDsp, setHot } from "../lib/engine";
 import { requestVoiceSwitch, useVoiceSwitchPending } from "../lib/voiceSwitch";
 import { getConfig, setConfig } from "../lib/config";
 import { t } from "../i18n/t";
-import { Swap, stagger } from "../components/Motion";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { useI18n } from "../i18n";
-import { askConfirm, askPrompt } from "../lib/webDialog";
+import { askConfirm, askPrompt } from "trm-ui/fabric";
 import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import {
   bindIndex,
@@ -43,6 +46,7 @@ import {
   listIndex,
   listProfiles,
   listVoices,
+  peekVoices,
   modelKey,
   openModelsDir,
   promoteLegacy,
@@ -97,13 +101,25 @@ function ModelsPageImpl({
   onKindChange,
 }: ModelsPageProps) {
   const { t: translate } = useI18n();
-  const [models, setModels] = useState<VoiceModel[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
+  const active = usePageActive();
+  const pageOn = useRef(active);
+  const listRequest = useRef(0);
+  const panelRequest = useRef(0);
+  const panelsFor = useRef("");
+  const dspRequest = useRef(0);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportInstance, setExportInstance] = useState(0);
+  const [models, setModels] = useState<VoiceModel[]>(() => peekVoices()?.models ?? []);
+  const [loaded, setLoaded] = useState(() => peekVoices() !== null);
+  const [selectedKey, setSelectedKey] = useState(currentId);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("default");
   const [kind, setKind] = useState<Kind>(focusKind ?? "rvc");
   /** 当前生效的 DSP 预设 id；空串 = DSP 没开。 */
-  const [dspId, setDspId] = useState("");
+  const [dspId, setDspId] = useState(() => {
+    const cfg = configSnapshot.get().config;
+    return cfg.dsp_enabled ? String(cfg.dsp_preset || "") : "";
+  });
   /** 当前生效的那条预设本体，编辑器要拿它画滑条。 */
   const [dspActive, setDspActive] = useState<DspPreset | null>(null);
   /** 加一就让预设列表重拉（存了/删了自定义预设之后）。 */
@@ -112,6 +128,7 @@ function ModelsPageImpl({
   // DSP 是热键，开关和换预设都不重开流。用完立刻回读配置，别让界面和引擎
   // 各记各的 —— 那种不一致用户看不出原因，只会觉得「点了没反应」。
   const applyDsp = useCallback(async (p: DspPreset | null) => {
+    const request = ++dspRequest.current;
     const next = p ? p.id : "";
     const prevId = dspId;
     const prevActive = dspActive;
@@ -122,12 +139,14 @@ function ModelsPageImpl({
       if (p) await activateDsp(p.id);
       else await deactivateDsp();
     } catch (e) {
+      if (request !== dspRequest.current) return;
       setDspId(prevId);
       setDspActive(prevActive);
       onDspChange?.(prevId);
       setMsg(String(e));
       return;
     }
+    if (request !== dspRequest.current) return;
     if (p) {
       setSelectedKey("");
       onVoiceChange?.({
@@ -143,9 +162,10 @@ function ModelsPageImpl({
   // 进页面时把当前预设读回来，不然切走再切回来「使用中」的标记就没了。
   useEffect(() => {
     let alive = true;
+    const request = dspRequest.current;
     void getConfig()
       .then((c) => {
-        if (!alive) return;
+        if (!alive || request !== dspRequest.current) return;
         setDspId(c?.dsp_enabled ? String(c?.dsp_preset || "") : "");
       })
       .catch(() => {});
@@ -195,6 +215,20 @@ function ModelsPageImpl({
   // 正在换封面的模型（裁剪对话框）。
   const [coverEdit, setCoverEdit] = useState<VoiceModel | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    pageOn.current = active;
+    if (!active) {
+      setMenu(null);
+      setAuthorPick(null);
+      setCoverEdit(null);
+      setMsg("");
+    }
+    const on = pageOn;
+    const list = listRequest;
+    const panel = panelRequest;
+    const dsp = dspRequest;
+    return () => { on.current = false; list.current++; panel.current++; dsp.current++; };
+  }, [active]);
 
   const selected = useMemo(
     () => models.find((m) => modelKey(m) === selectedKey) || null,
@@ -220,6 +254,7 @@ function ModelsPageImpl({
   );
 
   const statusSub = useMemo(() => {
+    if (!loaded) return "";
     if (!models.length) return translate("s.b4ac696046");
     if (query.trim() && view.length !== models.length) {
       return translate("s.e5323dcb69", { v0: models.length, v1: view.length });
@@ -227,14 +262,16 @@ function ModelsPageImpl({
     // 没有确认在用的音色就写「未选择」，不能拿目录第一条冒充当前。
     const cur = selected?.name || translate("s.noneSelected");
     return translate("s.425fb93e79", { v0: models.length, v1: cur });
-  }, [models, query, view.length, selected, translate]);
+  }, [loaded, models, query, view.length, selected, translate]);
 
   const reload = useCallback(async (fresh = false) => {
+    if (!pageOn.current) return;
+    const request = ++listRequest.current;
     try {
       const cat = await listVoices(fresh ? { fresh: true } : undefined);
-      setModels(cat.models || []);
+      if (request === listRequest.current) { setModels(cat.models || []); setLoaded(true); }
     } catch (e) {
-      setMsg(String(e));
+      if (request === listRequest.current) setMsg(String(e));
     }
   }, []);
 
@@ -250,6 +287,14 @@ function ModelsPageImpl({
   }, [currentId, models]);
 
   const reloadPanels = useCallback(async (m: VoiceModel | null) => {
+    if (!pageOn.current) return;
+    const request = ++panelRequest.current;
+    const identity = m ? modelKey(m) : "";
+    if (panelsFor.current !== identity) {
+      setIndexItems([]);
+      setProfiles([]);
+    }
+    panelsFor.current = identity;
     if (!m || m.source !== "user_data" || !m.dir || m.missing) {
       setIndexItems([]);
       setProfiles([]);
@@ -260,27 +305,30 @@ function ModelsPageImpl({
         listIndex(m.dir),
         listProfiles(m.dir),
       ]);
+      if (request !== panelRequest.current) return;
       setIndexItems(ix.items || []);
       setProfiles(pr.items || []);
     } catch {
+      if (request !== panelRequest.current) return;
       setIndexItems([]);
       setProfiles([]);
     }
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (active) void reload();
+  }, [active, reload]);
 
   useEffect(() => {
-    void reloadPanels(selected);
-  }, [selected, reloadPanels]);
+    if (active) void reloadPanels(selected);
+  }, [active, selected, reloadPanels]);
 
   useEffect(() => {
-    if (!selected?.dir) return;
+    if (!active || !selected?.dir) return;
     let disposed = false;
     let un: (() => void) | undefined;
     void listen<{ hot?: Record<string, unknown> }>("config-changed", (ev) => {
+      if (disposed) return;
       const hot = ev.payload?.hot;
       if (!hot) return;
       if (hot.pitch == null && hot.formant == null) return;
@@ -293,7 +341,7 @@ function ModelsPageImpl({
       disposed = true;
       dropListen(un);
     };
-  }, [selected, reloadPanels]);
+  }, [active, selected, reloadPanels]);
 
   useEffect(() => {
     const el = gridRef.current?.parentElement || gridRef.current;
@@ -429,14 +477,17 @@ function ModelsPageImpl({
                 void openModelsDir().catch((e) => setMsg(String(e)));
               }}
             >{t("s.031c105578")}</Btn>
+            {models.some((model) => model.dir && !model.missing) && <Btn onClick={() => { setExportInstance((previous) => previous + 1); setExportOpen(true); }}>{t("publication.exportPacks")}</Btn>}
           </>
         }
       />
 
+      <ExportVoicePackages key={exportInstance} open={active && exportOpen} onClose={() => setExportOpen(false)}
+        voices={models.filter((model) => model.dir && !model.missing).map((model) => ({ id: model.dir, name: model.name }))} />
       {msg ? (
         <div
           role="status"
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[95] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] max-w-[72vw] px-4 py-2.5 rounded-[var(--rs)] text-[13px] leading-relaxed text-center whitespace-pre-wrap bg-[var(--ink)] text-[var(--surface)] shadow-[0_10px_30px_rgba(0,0,0,0.28)]"
         >
           {msg}
         </div>
@@ -446,11 +497,12 @@ function ModelsPageImpl({
 
       <Block>
         <div className="flex items-center gap-3 flex-wrap mb-[18px]">
-          <input
+          <SearchBox
+            fit
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder={t("s.fc3bad4cea")}
-            className="inline-flex min-w-[230px] px-[13px] py-[7px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+            className="min-w-[230px]"
           />
           {/* RVC 音色 / DSP 预设二选一。故意不给「全部」—— 两种东西混在
               一个列表里，小白分不清自己点的是音色还是效果。 */}
@@ -482,8 +534,10 @@ function ModelsPageImpl({
           ) : null}
         </div>
 
+        <div ref={gridRef}>
+        <CatalogTransition scope={kind} page={kind === "rvc" ? pageClamped + 1 : 1} order={["rvc", "dsp"]}>
         {kind === "dsp" ? (
-          <div ref={gridRef}>
+          <div>
             {selectedKey ? (
               <div className="mb-4 flex items-center gap-[9px]">
                 <Btn onClick={() => void dropVoice()}>{t("s.dspClearVoice")}</Btn>
@@ -520,22 +574,20 @@ function ModelsPageImpl({
             ) : null}
           </div>
         ) : (
-        <Swap k={`${kind}|${query}|${page}`}>
         <div
-          ref={gridRef}
           className="grid gap-x-4 gap-y-[22px]"
           style={{
             gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
           }}
         >
-          {!models.length ? (
-            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
+          {!loaded ? null : !models.length ? (
+            <div className="col-span-full text-[13px] text-[var(--ink-muted)] py-10 px-2">{t("s.c9efc20514")}</div>
           ) : !view.length ? (
-            <div className="col-span-full text-[13.5px] text-[var(--ink-muted)] py-10 px-2">
+            <div className="col-span-full text-[13px] text-[var(--ink-muted)] py-10 px-2">
               {t("s.041c85897b", { v0: query })}
             </div>
           ) : (
-            pageView.map((v, i) => {
+            pageView.map((v) => {
               const cur = modelKey(v) === selectedKey;
               const src = resolveCover(v.cover, coverCache);
               const authors = voiceAuthorList(v);
@@ -543,10 +595,10 @@ function ModelsPageImpl({
               const title = displayVoiceName(v);
               const author = displayVoiceAuthor(v);
               return (
-                <div key={modelKey(v)} className="rise" style={stagger(i)}>
+                <div key={modelKey(v)}>
                   <div className="aspect-[4/3] rounded-[var(--r)] grid place-items-center relative overflow-hidden bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[color-mix(in_srgb,var(--ink)_32%,transparent)] text-2xl">
                     {src ? (
-                      <img
+                      <ThumbImage
                         src={src}
                         alt=""
                         // contain：官方 1:1 与框内一致不裁；第三方竖立绘用 cover 会
@@ -557,30 +609,30 @@ function ModelsPageImpl({
                         decoding="async"
                       />
                     ) : (
-                      <span>{(title || "?").slice(0, 4)}</span>
+                      <CoverPlaceholder name={title} seed={modelKey(v)} />
                     )}
                     {/* 左上角：发布日期当版本号（v26.07.31），方便认同一角色的
                         不同版本；下面才是「文件丢失」。都没有就不占位。 */}
                     {(ver || v.missing) ? (
                       <span className="absolute left-2.5 top-2.5 flex flex-col items-start gap-1">
                         {ver ? (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
+                          <span className="text-[11.5px] px-1.5 py-0.5 rounded-[4px] tabular-nums text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">
                             {ver}
                           </span>
                         ) : null}
                         {v.missing ? (
-                          <span className="text-[11px] text-[var(--danger)]">{t("s.2fe9b75856")}</span>
+                          <span className="text-[11.5px] text-[var(--danger-text)]">{t("s.2fe9b75856")}</span>
                         ) : null}
                       </span>
                     ) : null}
                     {cur ? (
-                      <span className="absolute top-2.5 right-2.5 text-[11px] text-[var(--accent)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
+                      <span className="absolute top-2.5 right-2.5 text-[11.5px] text-[var(--accent-text)] font-semibold drop-shadow">{t("s.e6aa2cbd7b")}</span>
                     ) : null}
                     {v.has_index || v.index ? (
-                      <span className="absolute right-2.5 bottom-2 text-[11px] text-[var(--meta)]">{t("s.ec673c54d6")}</span>
+                      <span className="absolute right-2.5 bottom-2.5 text-[11.5px] px-1.5 py-0.5 rounded-[4px] text-[var(--ink)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] shadow-[inset_0_0_0_1px_var(--line)]">{t("s.ec673c54d6")}</span>
                     ) : null}
                   </div>
-                  <div className="text-[14.5px] font-semibold mt-2.5 truncate">
+                  <div className="text-[15px] font-semibold mt-2.5 truncate">
                     {title}
                   </div>
                   <div
@@ -638,8 +690,9 @@ function ModelsPageImpl({
             })
           )}
         </div>
-        </Swap>
         )}
+        </CatalogTransition>
+        </div>
 
         {kind === "rvc" ? (
           <Pager className="mt-[26px]" page={pageClamped + 1} pages={totalPages} onChange={(p) => setPage(p - 1)} />
@@ -882,6 +935,7 @@ function ModelsPageImpl({
 
       <Leave>{coverEdit ? (
         <CropCoverDialog
+          key={modelKey(coverEdit)}
           model={coverEdit}
           onClose={() => setCoverEdit(null)}
           onSaved={async (message) => {

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Block, Btn } from "./ui";
 import { Ring, type RingSegment } from "./Ring";
+import { CatalogTransition } from "./CatalogTransition";
 import { Pager } from "./Pager";
-import { askConfirm } from "../lib/webDialog";
-import { t } from "../i18n/t";
+import { askConfirm } from "trm-ui/fabric";
+import { useI18n } from "../i18n";
 import { formatLocalizedList } from "../lib/voiceDisplay";
 
 type Usage = {
@@ -31,11 +32,11 @@ const TRAIN_KINDS = [
  * 原「其他 → 维护」里的「清理缓存」拆成了这里的临时文件、程序日志与诊断包三项。
  */
 const DIRECT_KINDS = [
-  { id: "temp", usage: "temp", labelKey: "s.storageTemp", effectKey: "s.cleanEffectTemp" },
-  { id: "app_logs", usage: "app_logs", labelKey: "s.storageAppLogs", effectKey: "s.cleanEffectLogs" },
-  { id: "diagnostics", usage: "diagnostics", labelKey: "s.storageDiagnostics", effectKey: "s.cleanEffectDiag" },
-  { id: "perf_reports", usage: "perf_reports", labelKey: "s.storagePerf", effectKey: "s.cleanEffectPerf" },
-  { id: "trash", usage: "trash", labelKey: "s.storageTrash", effectKey: "s.cleanEffectTrash" },
+  { id: "temp", usage: ["temp", "update_cache"], labelKey: "s.storageTemp", effectKey: "s.cleanEffectTemp" },
+  { id: "app_logs", usage: ["app_logs"], labelKey: "s.storageAppLogs", effectKey: "s.cleanEffectLogs" },
+  { id: "diagnostics", usage: ["diagnostics"], labelKey: "s.storageDiagnostics", effectKey: "s.cleanEffectDiag" },
+  { id: "perf_reports", usage: ["perf_reports"], labelKey: "s.storagePerf", effectKey: "s.cleanEffectPerf" },
+  { id: "trash", usage: ["trash"], labelKey: "s.storageTrash", effectKey: "s.cleanEffectTrash" },
 ] as const;
 
 /** 环形图里单独成段的几类，其余并入「其他」。颜色取 index.css 里的 --ring-* 令牌。 */
@@ -45,6 +46,10 @@ const RING_PARTS = [
   { names: ["update_cache"], labelKey: "s.storageUpdateCache" },
   { names: ["temp", "app_logs", "diagnostics", "perf_reports"], labelKey: "s.storageJunk" },
   { names: ["trash"], labelKey: "s.storageTrash" },
+  { names: ["runtime"], labelKey: "s.storageRuntime" },
+  { names: ["shared_models"], labelKey: "s.storageSharedModels" },
+  { names: ["audio"], labelKey: "s.storageAudio" },
+  { names: ["other"], labelKey: "s.storageOther" },
 ] as const;
 
 /** 训练实验一页列几个。按占用从大到小排，最该处理的永远在第一页。 */
@@ -66,6 +71,9 @@ function human(n: number): string {
  * 明确不做「一键全选」：误删一次就是不可挽回的信任损失，而它省下的只是几次点击。
  */
 export function StorageSection() {
+  const { t } = useI18n();
+  const request = useRef(0);
+  const [scanError, setScanError] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,23 +89,25 @@ export function StorageSection() {
   const bytesOf = (name: string) => usage?.items.find((x) => x.name === name)?.bytes ?? 0;
 
   const scan = async () => {
+    const current = ++request.current;
     setBusy(true);
-    try {
-      const [u, r] = await Promise.all([invoke<Usage>("storage_usage"), invoke<Row[]>("train_cleanup_scan")]);
-      setUsage(u);
-      setRows(Array.isArray(r) ? r : []);
-      setDirect(new Set());
-      setTrain({});
+    setScanError(false);
+    const [u, r] = await Promise.allSettled([
+      invoke<Usage>("storage_usage"), invoke<Row[]>("train_cleanup_scan"),
+    ]);
+    if (current !== request.current) return;
+    if (u.status === "fulfilled") setUsage(u.value);
+    if (r.status === "fulfilled") {
+      setRows(Array.isArray(r.value) ? r.value : []);
       setPage(1);
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setBusy(false);
     }
+    setScanError(u.status === "rejected" || r.status === "rejected");
+    setBusy(false);
   };
-  // 打开就统计一次，不用先找按钮
   useEffect(() => {
     void scan();
+    const counter = request;
+    return () => { counter.current++; };
   }, []);
 
   const segments: RingSegment[] = usage
@@ -105,7 +115,7 @@ export function StorageSection() {
         id: p.labelKey,
         label: t(p.labelKey),
         value: p.names.reduce((n, name) => n + bytesOf(name), 0),
-        color: `var(--ring-${i + 1})`,
+        color: i < 5 ? `var(--ring-${i + 1})` : `color-mix(in srgb, var(--ring-${i - 4}) 65%, var(--group-ink))`,
       }))
         .filter((s) => s.value > 0)
         .map((s) => ({ ...s, note: human(s.value) }))
@@ -128,7 +138,7 @@ export function StorageSection() {
 
   const pickedTrain = Object.entries(train).filter(([, kinds]) => kinds.size > 0);
   const pickedBytes =
-    [...direct].reduce((n, id) => n + bytesOf(DIRECT_KINDS.find((k) => k.id === id)?.usage ?? ""), 0) +
+    [...direct].reduce((n, id) => n + (DIRECT_KINDS.find((k) => k.id === id)?.usage ?? []).reduce((total, name) => total + bytesOf(name), 0), 0) +
     pickedTrain.reduce((n, [exp, kinds]) => n + [...kinds].reduce((m, k) => m + (rows?.find((r) => r.exp === exp)?.kinds[k]?.bytes ?? 0), 0), 0);
   const pickedCount = direct.size + pickedTrain.reduce((n, [, kinds]) => n + kinds.size, 0);
 
@@ -140,32 +150,36 @@ export function StorageSection() {
     ];
     if (!(await askConfirm(t("s.cleanConfirm", { list: formatLocalizedList(names) })))) return;
     setBusy(true);
+    setMsg("");
     let freed = 0;
     try {
-      if (direct.size) freed += (await invoke<{ freed_bytes?: number }>("storage_clean", { kinds: [...direct] }))?.freed_bytes ?? 0;
+      if (direct.size) {
+        freed += (await invoke<{ freed_bytes?: number }>("storage_clean", { kinds: [...direct] }))?.freed_bytes ?? 0;
+        setDirect(new Set());
+      }
       for (const [exp, kinds] of pickedTrain) {
         freed += (await invoke<{ freed_bytes?: number }>("train_cleanup_apply", { exp, kinds: [...kinds] }))?.freed_bytes ?? 0;
+        setTrain((prev) => ({ ...prev, [exp]: new Set() }));
       }
       setMsg(t("s.cleanDone", { size: human(freed) }));
     } catch (e) {
       setMsg(String(e));
     } finally {
-      setBusy(false);
       await scan();
     }
   };
 
-  const check = "w-[14px] h-[14px] flex-none accent-[var(--accent)]";
   return (
     <Block
       title={t("s.storageTitle")}
       note={usage ? t("s.storageTotal", { a0: human(usage.total_bytes), a1: usage.free_bytes == null ? t("s.valueUnknown") : human(usage.free_bytes) }) : undefined}
       action={
         <Btn onClick={() => void scan()} disabled={busy} busy={busy}>
-          {busy ? t("s.storageScanning") : t("s.storageScan")}
+          {t("s.storageScan")}
         </Btn>
       }
     >
+      {scanError ? <p role="alert" className="m-0 mb-3 text-[12.5px] text-[var(--help)]">{t("s.storageScanFailed")}</p> : null}
       <div className="bg-[var(--group)] rounded-[var(--r)] px-5 py-4">
         {usage ? (
           <Ring segments={segments} center={human(usage.total_bytes)} sub={t("s.storageTitle")} size={132} />
@@ -179,12 +193,13 @@ export function StorageSection() {
           <p className="m-0 text-[12.5px] font-medium">{t("s.cleanGroupDirect")}</p>
           <ul className="m-0 mt-2 list-none p-0 flex flex-col">
             {DIRECT_KINDS.map((k) => {
-              const bytes = bytesOf(k.usage);
+              const bytes = k.usage.reduce((total, name) => total + bytesOf(name), 0);
               const empty = bytes === 0;
               return (
                 <li key={k.id}>
                   <label className={`flex items-center gap-2.5 py-1.5 text-[13px] ${empty ? "opacity-45" : "cursor-pointer"}`}>
-                    <input type="checkbox" className={check} disabled={empty || busy} checked={direct.has(k.id)} onChange={() => toggleDirect(k.id)} />
+                    {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+                    <input type="checkbox" className="trm-check" disabled={empty || busy} checked={direct.has(k.id)} onChange={() => toggleDirect(k.id)} />
                     <span>{t(k.labelKey)}</span>
                     <span className="text-[11.5px] text-[var(--meta)]">{t(k.effectKey)}</span>
                     <span className="ml-auto font-mono text-[11.5px] text-[var(--meta)] tabular-nums">{human(bytes)}</span>
@@ -200,6 +215,7 @@ export function StorageSection() {
           </div>
           <p className="m-0 mt-1 text-[11.5px] text-[var(--meta)] leading-relaxed">{t("s.cleanupDesc")}</p>
           {rows && rows.length === 0 ? <p className="m-0 mt-2 text-[12.5px] text-[var(--meta)]">{t("s.cleanupNothing")}</p> : null}
+          <CatalogTransition scope="storage-training" page={pageClamped}>
           <ul className="m-0 mt-1 list-none p-0">
             {pageRows.map((row) => (
               <li key={row.exp} className="py-2">
@@ -213,10 +229,11 @@ export function StorageSection() {
                     const empty = !info || info.bytes === 0;
                     return (
                       <label key={k.id} className={`flex items-center gap-2.5 py-1 text-[12.5px] ${empty ? "opacity-45" : "cursor-pointer"}`}>
-                        <input type="checkbox" className={check} disabled={empty || busy} checked={train[row.exp]?.has(k.id) ?? false} onChange={() => toggleTrain(row.exp, k.id)} />
+                        {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+                        <input type="checkbox" className="trm-check" disabled={empty || busy} checked={train[row.exp]?.has(k.id) ?? false} onChange={() => toggleTrain(row.exp, k.id)} />
                         <span>{t(k.labelKey)}</span>
                         <span className="text-[11.5px] text-[var(--meta)]">{t(k.effectKey)}</span>
-                        <span className="ml-auto font-mono text-[11px] text-[var(--meta)] tabular-nums">{human(info?.bytes ?? 0)}</span>
+                        <span className="ml-auto font-mono text-[11.5px] text-[var(--meta)] tabular-nums">{human(info?.bytes ?? 0)}</span>
                       </label>
                     );
                   })}
@@ -224,6 +241,7 @@ export function StorageSection() {
               </li>
             ))}
           </ul>
+          </CatalogTransition>
           <Pager className="pt-2" page={pageClamped} pages={totalPages} onChange={setPage} />
 
           <div className="mt-3 pt-3 flex items-center gap-3 shadow-[0_-1px_0_var(--hairline)]">
@@ -231,7 +249,7 @@ export function StorageSection() {
               {msg || (pickedCount ? t("s.cleanPicked", { n: pickedCount, size: human(pickedBytes) }) : t("s.cleanNonePicked"))}
             </span>
             <span className="ml-auto">
-              <Btn primary onClick={() => void apply()} busy={busy} disabled={busy || pickedCount === 0}>{t("s.cleanupApply")}</Btn>
+              <Btn danger onClick={() => void apply()} busy={busy} disabled={busy || pickedCount === 0}>{t("s.cleanupApply")}</Btn>
             </span>
           </div>
         </div>

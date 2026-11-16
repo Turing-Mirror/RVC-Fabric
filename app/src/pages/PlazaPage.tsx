@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useRef, useState, memo, type ReactNode } from "react";
 import { Block, Btn, Group, PageHead, PagePad, Warn } from "../components/ui";
+import { Pane, Panes, useNotify, usePageActive, usePaneOn } from "trm-ui";
+import { CommunityActions, useCommunityAccount } from "../components/CommunityActions";
+import { CommunityBatchPublisher } from "../components/CommunityBatchPublisher";
+import { CommunityAuthorModels } from "../components/CommunityModelList";
+import { CommunityPublisher } from "../components/CommunityPublisher";
+import { CommunityModelDetail } from "../components/CommunityModelDetail";
+import { CommunitySubmissionDetail } from "../components/CommunitySubmissionDetail";
+import { CommunitySubmissions } from "../components/CommunitySubmissions";
+import { editListingDraft, loadDrafts, newDraft, newVersionDraft, publication, publicationError, storeDrafts, type CatalogModel, type Draft, type ModelDetail, type PublishedVersion, type Submission } from "../lib/communityPublication";
 import { StoreSection } from "../components/StoreSection";
 import { Pager } from "../components/Pager";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { ExtrasPanel, type ExtrasFilter } from "../components/ExtrasDialog";
 import { PinnedRow } from "../components/PinnedRow";
 import { t } from "../i18n/t";
@@ -15,54 +25,220 @@ import {
 import { formatLocalizedList } from "../lib/voiceDisplay";
 import { useI18n } from "../i18n";
 
-/**
- * 广场：社区音色、投放、下载模型、更新日志，从上往下就是这个顺序。
- * DSP 预设不上广场（内置在模型页）。
- *
- * 社区音色排第一，因为这是用户主动进广场的唯一理由 —— 投放和更新日志是我们
- * 想让他看的，音色是他想看的。把想让人看的东西摆在人想看的东西前面，结果是
- * 两个都没人看。
- *
- * 投放卡片**不可关闭**：承载投放正是这一页存在的意义。可关闭的是模型页顶部
- * 那一条横幅，在那边单独处理。
- *
- * 刷新只有一个：右上角那个。一次点击把三块内容全刷了 —— 音色清单走
- * StoreSection 的 reloadToken，投放和更新日志走 onReload。三个各自的刷新
- * 按钮只会让人猜「我该点哪个」。
- *
- * 「下载模型」排在投放下面：它和社区音色是同一类事（都是往本机装东西），
- * 但用户主动来找它的次数少得多 —— 一台机器装一次引擎资源就完了。所以不跟
- * 社区音色抢第一屏，但也不能压到更新日志后面去。
- *
- * 它原来是「其他」页上弹出来的一个框。「其他」页现在只留一个入口，点了跳
- * 到这儿来 —— 和「模型」页的「社区音色」是一样的处理。
- */
+/** Community voices, notices, model resources and release notes. */
 /** 更新日志二级页每页几条。够看又不至于把滚动条拉成一条线。 */
 const PER_PAGE = 5;
 
-function PlazaPageImpl({
-  feed,
-  loading = false,
-  onReload,
-  downloadReason = "",
-  extrasFilter = "all",
-  scrollToDownloads = 0,
-}: {
+type PlazaProps = {
   feed: PlazaFeed;
   loading?: boolean;
   onReload?: () => void;
-  /** 从工具入口跳过来时的说明（缺引擎资源等）。 */
   downloadReason?: string;
-  /** 从分离/训练跳过来时预选对应分类。 */
   extrasFilter?: ExtrasFilter;
-  /** 加一就滚到「下载模型」。用计数而不是布尔：连着跳两次也得再滚一次。 */
   scrollToDownloads?: number;
+};
+
+const communityPages = ["catalog", "changelog", "author", "submissions", "submission", "model", "publish", "batch"] as const;
+type CommunityPage = (typeof communityPages)[number];
+type ModelOrigin = "catalog" | "author" | "submissions";
+
+type OpenModel = {
+  id: string;
+  title: string;
+  versionId?: string;
+  from: ModelOrigin;
+  navigationId: number;
+  management?: { account: string | null; owner: true | string };
+};
+
+function PlazaPageImpl(props: PlazaProps) {
+  const auth = useCommunityAccount();
+  const { t } = useI18n();
+  const { tip } = useNotify();
+  const [page, setPage] = useState<CommunityPage>("catalog");
+  const [editor, setEditor] = useState<Draft>();
+  const [author, setAuthor] = useState("");
+  const [authorReturn, setAuthorReturn] = useState<"catalog" | "model" | "submissions">("catalog");
+  const [model, setModel] = useState<OpenModel>();
+  const [submission, setSubmission] = useState<Submission>();
+  const [editorBack, setEditorBack] = useState<ModelOrigin | "model" | "submission">("catalog");
+  const revisionRequest = useRef(0);
+  const [batchEntry, setBatchEntry] = useState<{ source?: string; back: "publish" | "submissions" }>({ back: "publish" });
+  const [drafts, setDrafts] = useState(loadDrafts);
+  const currentDrafts = useRef(drafts);
+  const [recent, setRecent] = useState<Submission>();
+  const [request, setRequest] = useState(props.scrollToDownloads);
+  if (request !== props.scrollToDownloads) {
+    setRequest(props.scrollToDownloads);
+    if (props.scrollToDownloads) setPage("catalog");
+  }
+
+  function persist(update: (previous: Draft[]) => Draft[]) {
+    try {
+      const next = update(currentDrafts.current);
+      storeDrafts(next);
+      currentDrafts.current = next;
+      setDrafts(next);
+      return true;
+    } catch {
+      tip(t("publication.saveFailed"));
+      return false;
+    }
+  }
+
+  function save(draft: Draft) {
+    return persist((previous) => [{ ...draft, updatedAt: new Date().toISOString() }, ...previous.filter((item) => item.id !== draft.id)]);
+  }
+
+  function openEditor(draft = newDraft(), back: typeof editorBack = "catalog") {
+    ++revisionRequest.current;
+    setEditor(draft);
+    setEditorBack(back);
+    setPage("publish");
+  }
+
+  function openAuthor(id: string, back: typeof authorReturn = "catalog") {
+    ++revisionRequest.current;
+    setAuthor(id);
+    setAuthorReturn(back);
+    setPage("author");
+  }
+
+  const ownAuthorId = auth.account?.signedIn ? auth.account.authorId : null;
+  const ownAuthorName = ownAuthorId && ownAuthorId === author ? auth.account?.displayName : undefined;
+
+  function openModel(id: string, title: string, from: ModelOrigin, versionId?: string, owner?: true | string) {
+    const navigationId = ++revisionRequest.current;
+    const management = owner && auth.account?.signedIn ? { account: auth.account.email, owner } : undefined;
+    setModel({ id, title, versionId, from, navigationId, management });
+    setPage("model");
+  }
+
+  function editVersion(asset: ModelDetail["asset"], version: PublishedVersion, back: "submissions" | "model", metadataOnly = false) {
+    const draft = metadataOnly ? editListingDraft(asset, version) : newVersionDraft(asset, version);
+    if (draft) openEditor(draft, back);
+    else tip(t("publication.noFiles"));
+  }
+
+  async function readCurrentVersion(item: CatalogModel, metadataOnly = false) {
+    const request = ++revisionRequest.current;
+    try {
+      const result = await publication<{ asset: ModelDetail["asset"]; version: PublishedVersion }>({
+        action: "version", id: item.id, versionId: item.compatibleVersion.id,
+      });
+      if (request === revisionRequest.current) editVersion(result.asset, result.version, "submissions", metadataOnly);
+    } catch (error) {
+      if (request === revisionRequest.current) tip(publicationError(error, "list"));
+    }
+  }
+
+  function leaveEditor(draft: Draft, next: typeof editorBack) {
+    const hasContent = draft.url || draft.title || draft.description || draft.originalAuthor || draft.cover || draft.updatedAt;
+    if (draft === editor || !hasContent || save(draft)) setPage(next);
+  }
+
+  return (
+    <Panes value={page} order={communityPages} transition="slide" keepScroll>
+      <Pane id="catalog">
+        <Catalog
+          {...props}
+          actions={<CommunityActions auth={auth} onPublish={() => openEditor()} onSubmissions={() => setPage("submissions")}
+            onAuthor={() => { if (ownAuthorId) openAuthor(ownAuthorId); }} />}
+          onAuthor={openAuthor}
+          onOpenModel={(id, title, versionId) => openModel(id, title, "catalog", versionId)}
+          onChangelog={() => setPage("changelog")}
+        />
+      </Pane>
+      <Pane id="changelog">
+        <ChangelogPage changelog={props.feed.changelog ?? []} onBack={() => setPage("catalog")} />
+      </Pane>
+      <Pane id="publish">
+        {editor && (
+          <CommunityPublisher
+            key={editor.id}
+            initial={editor}
+            auth={auth}
+            onBack={(draft) => leaveEditor(draft, editorBack)}
+            onSave={save}
+            onMySubmissions={(draft) => leaveEditor(draft, "submissions")}
+            onBatch={(draft) => {
+              if (!(draft.url || draft.title || draft.updatedAt) || save(draft)) {
+                setBatchEntry({ source: draft.url, back: "publish" });
+                setPage("batch");
+              }
+            }}
+            onSubmitted={(draft, submission) => {
+              persist((previous) => previous.filter((item) => item.id !== draft.id));
+              setRecent(submission);
+              setPage((current) => current === "publish" ? "submissions" : current);
+            }}
+          />
+        )}
+      </Pane>
+      <Pane id="batch">
+        {page === "batch" && <CommunityBatchPublisher auth={auth} sourceLink={batchEntry.source} onBack={() => setPage(batchEntry.back)}
+          onSubmitted={(submission) => { setRecent(submission); setPage("submissions"); }} />}
+      </Pane>
+      <Pane id="author">
+        {author && <PagePad width="wide">
+          <CommunityAuthorModels key={author} author={author} own={author === ownAuthorId} ownName={ownAuthorName}
+            onBack={() => setPage(authorReturn)}
+            onView={(item) => {
+              if (authorReturn === "model" && model?.id === item.id) setPage("model");
+              else openModel(item.id, item.title, "author", item.compatibleVersion.id);
+            }} />
+        </PagePad>}
+      </Pane>
+      <Pane id="model">
+        {model && <CommunityModelDetail key={model.navigationId} id={model.id} title={model.title}
+          versionId={model.versionId}
+          owner={auth.account?.signedIn && model.management?.account === auth.account.email ? model.management?.owner : undefined}
+          onBack={() => setPage(model.from)}
+          onAuthor={(id) => {
+            if (model.from === "author" && author === id) setPage("author");
+            else openAuthor(id, model.from === "author" ? "catalog" : "model");
+          }}
+          onNewVersion={(detail, version) => editVersion(detail.asset, version, "model")}
+          onEditListing={(detail, version) => editVersion(detail.asset, version, "model", true)} />}
+      </Pane>
+      <Pane id="submission">
+        {submission && <CommunitySubmissionDetail key={submission.id} submission={submission}
+          onBack={() => setPage("submissions")} onEdit={() => openEditor(newDraft(submission), "submission")} />}
+      </Pane>
+      <Pane id="submissions">
+        <CommunitySubmissions
+          auth={auth}
+          drafts={drafts}
+          recent={recent}
+          onAuthor={ownAuthorId ? () => openAuthor(ownAuthorId, "submissions") : undefined}
+          onBack={() => { ++revisionRequest.current; setPage("catalog"); }}
+          onNew={() => openEditor(newDraft(), "submissions")}
+          onBatch={() => { ++revisionRequest.current; setBatchEntry({ back: "submissions" }); setPage("batch"); }}
+          onEdit={(draft) => openEditor(draft, "submissions")}
+          onRemove={(id) => persist((previous) => previous.filter((item) => item.id !== id))}
+          onRevise={(previous) => openEditor(newDraft(previous), "submissions")}
+          onView={(item) => { ++revisionRequest.current; setSubmission(item); setPage("submission"); }}
+          onViewModel={(item) => {
+            if (item.assetId) openModel(item.assetId, item.asset.title, "submissions", undefined, item.publisherId);
+          }}
+          onManage={(item, action) => void readCurrentVersion(item, action === "listing")}
+          onOpenPublished={(item) => openModel(item.id, item.title, "submissions", item.compatibleVersion.id, true)}
+        />
+      </Pane>
+    </Panes>
+  );
+}
+
+function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasFilter = "all", scrollToDownloads = 0, actions, onChangelog, onAuthor, onOpenModel }: PlazaProps & {
+  actions: ReactNode;
+  onChangelog: () => void;
+  onAuthor: (id: string) => void;
+  onOpenModel: (id: string, title: string, versionId?: string) => void;
 }) {
   useI18n();
-  // 「查看全部」进的是独立一页，不是在原地展开一条长列表 —— 版本多了以后
-  // 原地展开会把「投放」挤到看不见的地方，而且没有尽头。
-  const [showAll, setShowAll] = useState(false);
-  const [pageNo, setPageNo] = useState(0);
+  const paneActive = usePaneOn();
+  const pageActive = usePageActive();
+  const active = paneActive && pageActive;
   // 加一就是「再拉一次音色清单」。父组件不需要拿到 StoreSection 的方法。
   const [reloadToken, setReloadToken] = useState(0);
   // 被置顶卡片点中的那条投放。高亮完就清掉，不是持久状态。
@@ -70,10 +246,16 @@ function PlazaPageImpl({
   const spotTimer = useRef<number | null>(null);
   // 从别处跳过来找「下载模型」的：这一页很长，不滚过去等于没跳。
   const extrasRef = useRef<HTMLDivElement>(null);
+  const lastScroll = useRef(0);
   useEffect(() => {
-    if (!scrollToDownloads) return;
-    extrasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [scrollToDownloads]);
+    if (!active || !scrollToDownloads || lastScroll.current === scrollToDownloads) return;
+    const frame = requestAnimationFrame(() => {
+      lastScroll.current = scrollToDownloads;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      extrasRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, scrollToDownloads]);
   useEffect(
     () => () => {
       if (spotTimer.current) window.clearTimeout(spotTimer.current);
@@ -102,39 +284,6 @@ function PlazaPageImpl({
     spotTimer.current = window.setTimeout(() => setSpotlight(""), 1600);
   }, []);
 
-  if (showAll) {
-    const total = Math.max(1, Math.ceil(changelog.length / PER_PAGE));
-    // 数据刷新后条目变少，页码可能已经越界；夹住而不是显示空白页。
-    const cur = Math.min(pageNo, total - 1);
-    const slice = changelog.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
-    return (
-      <PagePad>
-        <PageHead
-          title={t("s.185368440e")}
-          sub={t("s.6ca99d2c45", { v0: changelog.length })}
-          actions={
-            <Btn
-              onClick={() => {
-                setShowAll(false);
-                setPageNo(0);
-              }}
-            >{t("s.5b254c438b")}</Btn>
-          }
-        />
-        <Block title={t("s.pageOf", { cur: cur + 1, total })}>
-          <Group>
-            {slice.length ? (
-              slice.map((e) => <Notes key={e.version} entry={e} />)
-            ) : (
-              <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
-            )}
-          </Group>
-        </Block>
-        <Pager className="py-5" page={cur + 1} pages={total} onChange={(p) => setPageNo(p - 1)} />
-      </PagePad>
-    );
-  }
-
   const shown = changelog.slice(0, 1);
 
   return (
@@ -142,15 +291,18 @@ function PlazaPageImpl({
       <PageHead
         title={t("s.a8776899a4")}
         actions={
-          <Btn
-            onClick={() => {
-              onReload?.();
-              setReloadToken((n) => n + 1);
-            }}
-            disabled={loading}
-          >
-            {loading ? t("s.d47379f917") : t("s.38108eaa1d")}
-          </Btn>
+          <>
+            {actions}
+            <Btn
+              onClick={() => {
+                onReload?.();
+                setReloadToken((n) => n + 1);
+              }}
+              disabled={loading}
+            >
+              {loading ? t("s.d47379f917") : t("s.38108eaa1d")}
+            </Btn>
+          </>
         }
       />
 
@@ -167,23 +319,15 @@ function PlazaPageImpl({
         </Block>
       ) : null}
 
-      <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
-        <StoreSection reloadToken={reloadToken} />
+      <Block title={t("s.b2be174f0f")}>
+        <StoreSection reloadToken={reloadToken} onAuthor={onAuthor} onOpenModel={onOpenModel} />
       </Block>
 
-      <Block title={t("s.aff4b0df8a")} note={items.length ? String(items.length) : ""}>
-        <Group>
-          {loading && !items.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
-          ) : items.length ? (
-            items.map((it) => (
-              <Feed key={it.id} item={it} spotlight={spotlight === it.id} />
-            ))
-          ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f9f2a78f9f")}</p>
-          )}
-        </Group>
-      </Block>
+      {items.length ? (
+        <Block title={t("s.aff4b0df8a")} note={String(items.length)}>
+          <Group>{items.map((it) => <Feed key={it.id} item={it} spotlight={spotlight === it.id} />)}</Group>
+        </Block>
+      ) : null}
 
       <Block title={t("s.1252c81119")}>
         <div id="download-models" ref={extrasRef} className="scroll-mt-4">
@@ -197,25 +341,60 @@ function PlazaPageImpl({
         action={
           changelog.length > 1 ? (
             <Btn
-              onClick={() => {
-                setPageNo(0);
-                setShowAll(true);
-              }}
+              onClick={onChangelog}
             >{t("s.ed2172fd78")}</Btn>
           ) : undefined
         }
       >
         <Group>
           {loading && !changelog.length ? (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.f950213ab7")}</p>
+            <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.f950213ab7")}</p>
           ) : shown.length ? (
             shown.map((e) => <Notes key={e.version} entry={e} />)
           ) : (
-            <p className="py-3 m-0 text-[13.5px] text-[var(--help)]">{t("s.0a432092e4")}</p>
+            <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.0a432092e4")}</p>
           )}
         </Group>
       </Block>
 
+    </PagePad>
+  );
+}
+
+function ChangelogPage({ changelog, onBack }: { changelog: ChangelogEntry[]; onBack: () => void }) {
+  useI18n();
+  const [pageNo, setPageNo] = useState(0);
+  function back() {
+    setPageNo(0);
+    onBack();
+  }
+  const total = Math.max(1, Math.ceil(changelog.length / PER_PAGE));
+  // 数据刷新后条目变少，页码可能已经越界；夹住而不是显示空白页。
+  const cur = Math.min(pageNo, total - 1);
+  const slice = changelog.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+  return (
+    <PagePad>
+      <PageHead
+        title={t("s.185368440e")}
+        sub={t("s.6ca99d2c45", { v0: changelog.length })}
+        actions={
+          <Btn
+            onClick={back}
+          >{t("s.5b254c438b")}</Btn>
+        }
+      />
+      <Block title={t("s.pageOf", { cur: cur + 1, total })}>
+        <CatalogTransition scope="changelog" page={cur + 1}>
+          <Group>
+            {slice.length ? (
+              slice.map((e) => <Notes key={e.version} entry={e} />)
+            ) : (
+              <p className="py-3 m-0 text-[13px] text-[var(--help)]">{t("s.0a432092e4")}</p>
+            )}
+          </Group>
+        </CatalogTransition>
+      </Block>
+      <Pager className="py-5" page={cur + 1} pages={total} onChange={(p) => setPageNo(p - 1)} />
     </PagePad>
   );
 }
@@ -238,7 +417,7 @@ function Notes({ entry }: { entry: ChangelogEntry }) {
         {entry.notes.map((t) => (
           <li
             key={t}
-            className="text-[13.5px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['•'] before:absolute before:left-1.5 before:text-[var(--meta)]"
+            className="text-[13px] text-[var(--ink-muted)] leading-relaxed pl-[18px] relative before:content-['•'] before:absolute before:left-1.5 before:text-[var(--meta)]"
           >
             {t}
           </li>
@@ -300,13 +479,13 @@ function Feed({
         <div className="w-[104px] h-16 rounded-[var(--rs)] flex-none bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] max-[720px]:w-[76px] max-[720px]:h-[50px]" />
       )}
       <div>
-        <h4 className="m-0 mb-1.5 text-[14.5px] font-semibold flex items-center gap-2 flex-wrap">
+        <h4 className="m-0 mb-1.5 text-[15px] font-semibold flex items-center gap-2 flex-wrap">
           {item.title}
           {tags.map((t) => (
             <span
               key={t.label}
               className={[
-                "text-[11.5px] px-2 py-0.5 rounded-[5px] whitespace-nowrap shadow-[inset_0_0_0_1px_var(--line)]",
+                "text-[11.5px] px-2 py-0.5 rounded-[var(--rs)] whitespace-nowrap shadow-[inset_0_0_0_1px_var(--line)]",
                 t.ad
                   ? "text-[var(--notify)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--notify)_48%,transparent)]"
                   : "text-[var(--meta)]",

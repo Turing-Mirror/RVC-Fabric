@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { SearchBox } from "trm-ui";
 import {
   AccordionGroup,
   Block,
@@ -69,7 +70,7 @@ function DonateNote() {
           e.preventDefault();
           void openExternal(VBCABLE_URL);
         }}
-        className="text-[var(--accent)] underline underline-offset-2 rounded-[2px] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+        className="text-[var(--accent-text)] underline underline-offset-2 rounded-[2px] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
       >
         {VBCABLE_SITE}
       </a>
@@ -296,7 +297,10 @@ function HelpPageImpl({
   const vbMsg = vb.msg;
   const vbBusy = vb.busy;
 
+  // 页面常驻，每次回来副作用都会重新执行：已处理过的跳转记下来，不再重复展开和滚动。
+  const focusDone = useRef(0);
   useEffect(() => {
+    if (focusNonce && focusDone.current === focusNonce) return;
     // `focus` 允许写成「段#问题 key」，例如 faq#s.faqVramQ。指到「常见情况」
     // 那一整块没什么用 —— 二十一条里找自己那条，跟没指一样。带上 key 就能直接
     // 把那一条展开。用 key 不用序号：条目会增删，序号会错位，key 不会。
@@ -321,7 +325,9 @@ function HelpPageImpl({
     }
     // 不用 scrollIntoView：换页时 PageHost 给整个面板挂了 transform，
     // scrollIntoView 跟着动画走，落点停在页顶。offsetTop 不受 transform 影响。
-    return scheduleScrollToId(`help-${sec}`);
+    return scheduleScrollToId(`help-${sec}`, 12, () => {
+      focusDone.current = focusNonce;
+    });
   }, [focus, focusNonce]);
 
   const installVb = vb.install;
@@ -388,23 +394,19 @@ function HelpPageImpl({
     needle ? `${shown.length} / ${all.length}` : String(all.length);
 
   return (
-    <PagePad>
+    <PagePad width="read">
       <PageHead
         title={t("s.26670dda42")}
         sub={t("s.e137006ffd")}
         actions={
           <>
-            <input
-              type="search"
+            <SearchBox
+              fit
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={setQuery}
               placeholder={t("s.helpSearch")}
-              aria-label={t("s.helpSearch")}
-              className={[
-                "w-[240px] rounded-[var(--rs)] border px-3 py-1.5 text-[13px]",
-                "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                "focus:outline-none focus:border-[var(--accent)]",
-              ].join(" ")}
+              ariaLabel={t("s.helpSearch")}
+              className="w-[240px]"
             />
             {onOpenCommunity ? (
               <Btn onClick={() => onOpenCommunity()}>{t("s.contactCommunity")}</Btn>
@@ -421,12 +423,13 @@ function HelpPageImpl({
           引导照着做，这两块是给想核对细节的人留的。 */}
       {needle ? null : (
       <Block
+        className="!mt-6"
         id="help-firstrun"
         title={t("s.firstRunTitle")}
         action={onStartGuide ? <Btn primary onClick={() => onStartGuide()}>{t("s.guideStart")}</Btn> : undefined}
       >
         <div id="help-vbcable" className="scroll-mt-4">
-          <div className="text-[13.5px] font-medium mb-2">{t("s.b386a7fb53")}</div>
+          <div className="text-[13px] font-medium mb-2">{t("s.b386a7fb53")}</div>
 
           <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">{t("s.5695956a42")}</p>
           {/* 先照着用户机器上真实的设备列表说一句话。
@@ -494,33 +497,33 @@ function HelpPageImpl({
   
         </div>
         <div id="help-wiring" className="mt-7 scroll-mt-4">
-          <div className="text-[13.5px] font-medium mb-2">{t("s.149ab7bf0a")}</div>
+          <div className="text-[13px] font-medium mb-2">{t("s.149ab7bf0a")}</div>
 
           <Group>
             <ListItem
               title={t("s.69f4bc1200")}
               desc={t("s.0f14377cdd")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.bbefc72e6f")}</span>}
             />
             <ListItem
               title={t("s.b4b5016e9f")}
               desc={t("s.0709bd6ae7")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Input</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">CABLE Input</span>}
             />
             <ListItem
               title={t("s.6f63f33852")}
               desc={t("s.2898cbf891")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
             />
             <ListItem
               title={t("s.d0a420e1ca")}
               desc={t("s.cad046a475")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">CABLE Output</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">CABLE Output</span>}
             />
             <ListItem
               title={t("s.364b26a260")}
               desc={t("s.26ad7c406b")}
-              right={<span className="text-[13.5px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
+              right={<span className="text-[13px] text-[var(--ink-muted)]">{t("s.d5ca969dc3")}</span>}
             />
           </Group>
   
@@ -528,7 +531,7 @@ function HelpPageImpl({
       </Block>
       )}
       {groups.faq.length ? (
-      <Block id="help-faq" title={t("s.209d309d58")} note={note(groups.faq, faqItems)}>
+      <Block className="!mt-6" id="help-faq" title={t("s.209d309d58")} note={note(groups.faq, faqItems)}>
         <AccordionGroup
           items={groups.faq}
           openId={open}
@@ -539,7 +542,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.infer.length ? (
-      <Block id="help-infer" title={t("s.inferGuideTitle")} note={note(groups.infer, inferItems)}>
+      <Block className="!mt-6" id="help-infer" title={t("s.inferGuideTitle")} note={note(groups.infer, inferItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.inferGuideLead")}
         </p>
@@ -553,7 +556,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.separate.length ? (
-      <Block id="help-separate" title={t("s.sepGuideTitle")} note={note(groups.separate, separateItems)}>
+      <Block className="!mt-6" id="help-separate" title={t("s.sepGuideTitle")} note={note(groups.separate, separateItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.sepGuideLead")}
         </p>
@@ -567,7 +570,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.train.length ? (
-      <Block id="help-train" title={t("s.trainGuideTitle")} note={note(groups.train, trainItems)}>
+      <Block className="!mt-6" id="help-train" title={t("s.trainGuideTitle")} note={note(groups.train, trainItems)}>
         <p className="text-[12.5px] text-[var(--help)] leading-relaxed m-0 mb-4 w-full min-w-0">
           {t("s.trainGuideLead")}
         </p>
@@ -581,7 +584,7 @@ function HelpPageImpl({
       </Block>
       ) : null}
       {groups.glossary.length ? (
-      <Block title={glossaryTitle} note={note(groups.glossary, glossaryItems)}>
+      <Block className="!mt-6" title={glossaryTitle} note={note(groups.glossary, glossaryItems)}>
         <AccordionGroup
           items={groups.glossary}
           openId={openTerm}

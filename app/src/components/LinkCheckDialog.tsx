@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
 import { QrDialog } from "./QrDialog";
 import { openHelpSection } from "../lib/helpNav";
-import { copyText } from "../lib/clipboard";
+import { copyText } from "trm-ui";
 import qqGroup from "../assets/qq_group.jpg";
 import { t } from "../i18n/t";
 import { Modal } from "./Modal";
@@ -303,9 +303,9 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
     l === "ok" ? t("s.lcOk") : l === "bad" ? t("s.lcBad") : t("s.lcInfo");
   const levelClass = (l: Level) =>
     l === "ok"
-      ? "text-[var(--accent)]"
+      ? "text-[var(--accent-text)]"
       : l === "bad"
-        ? "text-[var(--danger)]"
+        ? "text-[var(--danger-text)]"
         : "text-[var(--meta)]";
 
   return (
@@ -320,7 +320,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {err ? (
-          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger)]">{err}</p>
+          <p className="m-0 mb-3 text-[12.5px] text-[var(--danger-text)]">{err}</p>
         ) : null}
 
         {!data && !err ? (
@@ -335,10 +335,10 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
                 className="py-2.5"
               >
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-mono text-[11px] shrink-0 w-[36px] text-right">
+                  <span className="font-mono text-[11.5px] shrink-0 w-[36px] text-right">
                     <span className={levelClass(r.level)}>{levelLabel(r.level)}</span>
                   </span>
-                  <span className="text-[13.5px] font-medium">{r.title}</span>
+                  <span className="text-[13px] font-medium">{r.title}</span>
                   {r.actionLabel && r.action ? (
                     <Btn onClick={r.action}>{r.actionLabel}</Btn>
                   ) : null}
@@ -352,13 +352,13 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
             {/* 麦克风电平：交互检查行 */}
             <div className="py-2.5">
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-mono text-[11px] shrink-0 w-[36px] text-right">
+                <span className="font-mono text-[11.5px] shrink-0 w-[36px] text-right">
                   <span
                     className={
                       micState === "ok"
-                        ? "text-[var(--accent)]"
+                        ? "text-[var(--accent-text)]"
                         : micState === "bad"
-                          ? "text-[var(--danger)]"
+                          ? "text-[var(--danger-text)]"
                           : "text-[var(--meta)]"
                     }
                   >
@@ -369,7 +369,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
                         : t("s.lcInfo")}
                   </span>
                 </span>
-                <span className="text-[13.5px] font-medium">{t("s.lcMic")}</span>
+                <span className="text-[13px] font-medium">{t("s.lcMic")}</span>
                 {micState === "running" ? (
                   <Btn
                     onClick={() => {
@@ -395,7 +395,7 @@ export function LinkCheckDialog({ onClose }: { onClose: () => void }) {
         ) : null}
 
         <div className="mt-5 flex items-center gap-2.5 flex-wrap">
-          <span className="text-[12px] text-[var(--meta)]">{t("s.lcHint")}</span>
+          <span className="text-[12.5px] text-[var(--meta)]">{t("s.lcHint")}</span>
           <div className="ml-auto flex items-center gap-2.5">
             <Btn onClick={() => void load()}>{t("s.38108eaa1d")}</Btn>
             {hasBad ? (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { SearchBox, TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Btn, PageHead, PagePad } from "../components/ui";
@@ -6,8 +7,8 @@ import { MoreMenuPopup, type PopupAnchor } from "../components/MoreMenu";
 import { Collapse, Leave } from "../components/Presence";
 import { Curtain, FlowList, Roll } from "../components/Motion";
 import { HelpMark } from "../components/Tooltip";
-import { Select, Slider } from "../components/controls";
-import { askConfirm } from "../lib/webDialog";
+import { Select, Slider, SliderValue, Toggle } from "../components/controls";
+import { askConfirm } from "trm-ui/fabric";
 import { promptAudioTools } from "../lib/downloadModels";
 import { useI18n } from "../i18n";
 import { useAudioWaveform } from "../lib/useAudioWaveform";
@@ -95,6 +96,12 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
   // 只有 Esc / 点菜单项 / 再点同一枚 ⋯ 这类「用户主动收菜单」才还焦点；
   // 外点、Tab 离开把焦点留在用户新指的地方（比如刚点进去的搜索框）。
   const menuRestore = useRef(false);
+
+  usePageLeave(() => {
+    setError("");
+    setNotice("");
+    setSrcMenu(null);
+  });
 
   const acceptLibrary = useCallback((next: Library) => {
     setLibrary((previous) => next.revision >= previous.revision ? next : previous);
@@ -297,6 +304,12 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     }
   };
 
+  const seekVoice = (instanceId: number | null, seconds: number) => {
+    void invoke<VoicePlaybackStatus>("audio_voice_seek", { instanceId, seconds })
+      .then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
+        ? t("audio.playbackCancelled") : t("audio.operationFailed")));
+  };
+
   const changeVolume = (command: string, args?: Record<string, unknown>) => {
     void invoke<AudioVolumeStatus>(command, args).then(setVolume)
       .catch(() => setError(t("audio.operationFailed")));
@@ -452,7 +465,6 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
   const unplayable = (asset?: Asset) => !asset || asset.available === false || selectedExcluded ||
     (asset.excluded_source_ids?.length ?? 0) === asset.source_ids.length;
   const sourceCount = (id: string) => library.entries.filter((entry) => assetById.get(entry.asset_id)?.source_ids.includes(id)).length;
-  const field = "block mt-1 px-3 py-2 rounded-[var(--rs)] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]";
   // 双击条目：直接替换播放到语音，与常见音效板的用法一致
   const playNow = (entry: Entry) => {
     chooseEntry(entry);
@@ -467,15 +479,15 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
     <PagePad fill>
       <PageHead title={t("audio.title")} actions={
         <>
-          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-1"><input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} />{t("audio.copyFiles")}</label>
-          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] mr-2"><input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />{t("audio.recursive")}</label>
+          <Toggle look="compact" className="mr-1" checked={copy} onChange={setCopy} label={t("audio.copyFiles")} />
+          <Toggle look="compact" className="mr-2" checked={recursive} onChange={setRecursive} label={t("audio.recursive")} />
           <Btn onClick={() => pick("file")} disabled={busy}>{t("audio.importFiles")}</Btn>
           <Btn onClick={() => pick("directory")} disabled={busy}>{t("audio.importFolders")}</Btn>
         </>
       } />
-      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger)] mt-4 mb-0">{error}</p> : null}
+      {error ? <p role="alert" className="flex-none text-[13px] text-[var(--danger-text)] mt-4 mb-0">{error}</p> : null}
       {notice ? <p role="status" className="flex-none text-[13px] text-[var(--meta)] mt-4 mb-0">{notice}</p> : null}
-      {scanActive ? <div className="flex-none flex items-center gap-3 mt-4 text-[12px] text-[var(--meta)]" role="status">
+      {scanActive ? <div className="flex-none flex items-center gap-3 mt-4 text-[12.5px] text-[var(--meta)]" role="status">
         <span>{t("audio.scanProgress", { count: scanned })}</span>
         <Btn onClick={() => void invoke("audio_library_scan_cancel")}>{t("audio.cancelScan")}</Btn>
       </div> : null}
@@ -488,7 +500,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
           随页宽收缩、不瓜分富余宽度；各栏在自己内部滚动 */}
       <div className="flex-1 min-h-0 grid gap-6 max-[1020px]:gap-4 items-stretch grid-rows-[minmax(0,1fr)] grid-cols-[var(--audio-source-w)_minmax(0,1fr)_minmax(260px,380px)]">
         <aside aria-label={t("audio.sources")} className="min-h-0 overflow-y-auto overscroll-contain">
-          <div className="text-[12px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
+          <div className="text-[12.5px] text-[var(--meta)] mb-2 px-2.5">{t("audio.sources")}</div>
           <div className="flex flex-col gap-0.5">
             <SourceBtn on={sourceId === ""} label={t("audio.all")} count={library.entries.length} onClick={() => { setSourceId(""); setSelectedId(""); }} />
             {library.sources.map((source) => (
@@ -504,10 +516,11 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
 
         <section aria-label={t("audio.entries")} className="min-w-0 min-h-0 flex flex-col">
           <div className="flex-none flex items-stretch gap-3 flex-nowrap">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("audio.search")}
-              className="flex-1 min-w-[72px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
-            <label title={t("audio.showExcluded")} className="min-w-0 flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12px] text-[var(--meta)] cursor-pointer">
-              <input type="checkbox" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
+            <SearchBox fit value={search} onChange={setSearch} placeholder={t("audio.search")}
+              className="flex-1 min-w-[72px]" />
+            <label title={t("audio.showExcluded")} className="min-w-0 flex items-center gap-1.5 px-3 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] text-[12.5px] text-[var(--meta)] cursor-pointer">
+              {/* design-allow: 勾选框样式与 Toggle 不同。 */}
+              <input type="checkbox" className="trm-check" checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
               <span className="truncate">{t("audio.showExcluded")}</span>
             </label>
           </div>
@@ -525,10 +538,10 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                 return (
                   <button type="button" onClick={() => chooseEntry(entry)} onDoubleClick={() => playNow(entry)} aria-pressed={on}
                     className={`w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-[var(--rs)] border-0 cursor-pointer transition-colors ${on ? "bg-[var(--accent-soft)]" : "bg-transparent hover:bg-[color-mix(in_srgb,var(--ink)_5%,transparent)]"}`}>
-                    <span className={`w-9 flex-none text-right tabular-nums text-[12px] ${entry.number != null ? "text-[var(--ink-muted)]" : "text-[var(--meta)]"}`}>{entry.number ?? t("s.noNumber")}</span>
-                    <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
+                    <span className={`w-9 flex-none text-right tabular-nums text-[12.5px] ${entry.number != null ? "text-[var(--ink-muted)]" : "text-[var(--meta)]"}`}>{entry.number ?? t("s.noNumber")}</span>
+                    <span className={`min-w-0 truncate text-[13px] ${on ? "text-[var(--accent-text)] font-medium" : "text-[var(--ink)]"}`}>{entry.name}</span>
                     {playing ? <span aria-hidden className="flex-none flex items-end gap-[2px] h-3">{[0, 1, 2].map((i) => <span key={i} className="eq-bar w-[2px] rounded-full bg-[var(--accent)]" style={{ animationDelay: `${i * 0.18}s` }} />)}</span> : null}
-                    <span className="ml-auto flex-none text-[11px] text-[var(--meta)]">{asset?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : entry.looped ? t("audio.loop") : ""}</span>
+                    <span className="ml-auto flex-none text-[11.5px] text-[var(--meta)]">{asset?.available === false ? t("audio.missing") : entry.start > 0 || entry.end != null ? t("audio.clip") : entry.looped ? t("audio.loop") : ""}</span>
                   </button>
                 );
               }} />
@@ -551,7 +564,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                 <div className="text-[15px] font-semibold truncate"><Roll value={selected.name} className="max-w-full" /></div>
                 <div className="mt-1 text-[11.5px] text-[var(--meta)] break-all">{selectedAsset.path}</div>
               </div>
-              {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12px] text-[var(--meta)]">
+              {selectedAsset.available === false ? <div className="flex items-center gap-2 text-[12.5px] text-[var(--meta)]">
                 <span>{t("audio.missing")}</span>
                 {selectedAsset.path === selectedAsset.origin ?
                   <Btn disabled={busy} onClick={() => relink("file", "asset", selectedAsset.id)}>{t("audio.relinkFile")}</Btn> : null}
@@ -561,20 +574,22 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                 <Btn disabled={busy || !outputName || unplayable(selectedAsset)} onClick={() => startVoice("overlay")}>{t("audio.overlayToVoice")}</Btn>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3 items-end">
-                <label className="text-[12px] text-[var(--meta)] min-w-0">{t("audio.entryName")}
-                  <input value={entryName} onChange={(e) => setEntryName(e.target.value)} className={`${field} w-full`} />
+                <label className="text-[12.5px] text-[var(--meta)] min-w-0">{t("audio.entryName")}
+                  <TextInput value={entryName} onChange={setEntryName} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={() => void run(async () => { acceptLibrary(await invoke<Library>("audio_library_rename_entry", { entryId: selected.id, name: entryName })); })}>{t("audio.saveName")}</Btn>
-                <label className="text-[12px] text-[var(--meta)] min-w-0">{t("audio.fixedNumber")}
-                  <input type="number" min="1" step="1" value={number} onChange={(e) => setNumber(e.target.value)} className={`${field} w-full`} />
+                <label className="text-[12.5px] text-[var(--meta)] min-w-0">{t("audio.fixedNumber")}
+                  <TextInput type="number" min="1" step="1" value={number} onChange={setNumber} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={saveNumber}>{t("audio.saveNumber")}</Btn>
               </div>
-              <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
-                <input type="checkbox" checked={selected.looped} disabled={busy}
-                  onChange={(event) => { const looped = event.target.checked; void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }} />
-                {t("audio.loopByDefault")}
-              </label>
+              <Toggle
+                look="compact"
+                checked={selected.looped}
+                disabled={busy}
+                onChange={(looped) => { void run(async () => { acceptLibrary(await invoke<Library>("audio_library_set_loop", { entryId: selected.id, looped })); }); }}
+                label={t("audio.loopByDefault")}
+              />
               {waveform.duration > 0 ? <WaveformRange duration={waveform.duration} peaks={waveform.peaks}
                 start={Number.isFinite(Number(clipStart)) ? Number(clipStart) : 0}
                 end={clipEnd.trim() && Number.isFinite(Number(clipEnd)) ? Number(clipEnd) : waveform.duration}
@@ -583,19 +598,19 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                   setClipStart(String(Math.min(start, waveform.duration, Number(start.toFixed(4)))));
                   setClipEnd(String(Math.min(end, waveform.duration, Number(end.toFixed(4)))));
                 }} /> : null}
-              {waveform.duration > 0 ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformHint")}</p> : null}
-              {waveform.loading ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformLoading")}</p> : null}
-              {waveform.error ? <p className="text-[12px] text-[var(--meta)] m-0">{t("neptune.waveformFailed")}</p> : null}
+              {waveform.duration > 0 ? <p className="text-[12.5px] text-[var(--meta)] m-0">{t("neptune.waveformHint")}</p> : null}
+              {waveform.loading ? <p className="text-[12.5px] text-[var(--meta)] m-0">{t("neptune.waveformLoading")}</p> : null}
+              {waveform.error ? <p className="text-[12.5px] text-[var(--meta)] m-0">{t("neptune.waveformFailed")}</p> : null}
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-[12px] text-[var(--meta)]">{t("audio.startSeconds")}
-                  <input type="number" min="0" step="0.001" value={clipStart} onChange={(e) => setClipStart(e.target.value)} className={`${field} w-full`} />
+                <label className="text-[12.5px] text-[var(--meta)]">{t("audio.startSeconds")}
+                  <TextInput type="number" min="0" step="0.001" value={clipStart} onChange={setClipStart} className="block mt-1" />
                 </label>
-                <label className="text-[12px] text-[var(--meta)]">{t("audio.endSeconds")}
-                  <input type="number" min="0" step="0.001" value={clipEnd} onChange={(e) => setClipEnd(e.target.value)} className={`${field} w-full`} />
+                <label className="text-[12.5px] text-[var(--meta)]">{t("audio.endSeconds")}
+                  <TextInput type="number" min="0" step="0.001" value={clipEnd} onChange={setClipEnd} className="block mt-1" />
                 </label>
               </div>
               <div className="flex items-end gap-2 flex-wrap">
-                <label className="text-[12px] text-[var(--meta)]">{t("audio.localOutput")}
+                <label className="text-[12.5px] text-[var(--meta)]">{t("audio.localOutput")}
                   <Select value={deviceId} options={[{ id: "", label: t("audio.chooseDevice") }, ...devices.map((device) => ({ id: device.id, label: device.name }))]}
                     onChange={(id) => { setDeviceId(id); void invoke("config_set", { patch: { audio_preview_device_id: id } }).catch(() => setError(t("audio.operationFailed"))); }} width={200} />
                 </label>
@@ -605,14 +620,14 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
                 </Btn>
                 <Btn disabled={!preview || (preview.state !== "playing" && preview.state !== "paused")} onClick={() => void invoke<PreviewStatus>("audio_preview_stop").then(setPreview).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stop")}</Btn>
               </div>
-              {preview && preview.state !== "idle" ? <div className="text-[12px] text-[var(--meta)]">
+              {preview && preview.state !== "idle" ? <div className="text-[12.5px] text-[var(--meta)]">
                 {preview.state === "error" ? <p role="alert" className="m-0">{t("neptune.previewFailed")}</p> : null}
                 {joinClauses([preview.name, t("s.metaPlayback", { v0: (preview.played_frames / Math.max(1, preview.sample_rate)).toFixed(1), v1: (preview.length_frames / Math.max(1, preview.sample_rate)).toFixed(1) })])}
                 <div className="h-1.5 mt-2 rounded-full bg-[var(--line)] overflow-hidden"><div className="h-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
               </div> : null}
               <div className="flex items-end gap-2 flex-wrap">
-                <label className="text-[12px] text-[var(--meta)] flex-1 min-w-[140px]">{t("audio.clipName")}
-                  <input value={clipName} onChange={(e) => setClipName(e.target.value)} className={`${field} w-full`} />
+                <label className="text-[12.5px] text-[var(--meta)] flex-1 min-w-[140px]">{t("audio.clipName")}
+                  <TextInput value={clipName} onChange={setClipName} className="block mt-1" />
                 </label>
                 <Btn disabled={busy} onClick={addClip}>{t("audio.addClip")}</Btn>
               </div>
@@ -635,19 +650,22 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
       <section aria-label={t("audio.voiceOutput")} className="mt-4 flex-none flex flex-col px-2 pt-2.5 pb-3">
         {voiceInstances.length > 0 ? <div className="max-h-[112px] mb-2 overflow-y-auto overscroll-contain flex flex-col gap-1" aria-label={t("audio.activePlayback")}>
           {voiceInstances.map((instance) => <div key={instance.instance_id}
-            className="rise flex items-center gap-2.5 text-[12px] text-[var(--meta)]">
+            className="rise flex items-center gap-2.5 text-[12.5px] text-[var(--meta)]">
             <span aria-hidden className="flex-none flex items-end gap-[2px] h-3 w-3">{[0, 1, 2].map((i) => <span key={i} className={`${instance.state === "paused" ? "" : "eq-bar"} w-[2px] h-[3px] rounded-full bg-[var(--accent)]`} style={{ animationDelay: `${i * 0.18}s` }} />)}</span>
             <span className="w-[160px] flex-none truncate text-[12.5px] text-[var(--ink)]" title={instance.name}>{instance.name}</span>
             <div className="flex-1 min-w-[120px]">
               <SeekBar label={instance.name}
                 position={instance.played_frames / Math.max(1, instance.sample_rate)}
                 length={instance.length_frames / Math.max(1, instance.sample_rate)}
-                onSeek={(seconds) => void invoke<VoicePlaybackStatus>("audio_voice_seek", {
-                  instanceId: instance.instance_id, seconds,
-                }).then(setVoice).catch((cause) => setError(String(cause).includes("audio_playback_cancelled")
-                  ? t("audio.playbackCancelled") : t("audio.operationFailed")))} />
+                onSeek={(seconds) => seekVoice(instance.instance_id, seconds)} />
             </div>
-            <span className="flex-none tabular-nums w-[84px] text-right">{(instance.played_frames / Math.max(1, instance.sample_rate)).toFixed(1)} / {(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s</span>
+            <span className="flex-none tabular-nums w-[84px] text-right">
+              <SliderValue value={instance.played_frames / Math.max(1, instance.sample_rate)} min={0}
+                max={instance.length_frames / Math.max(1, instance.sample_rate)} step={0.1}
+                onChange={(seconds) => seekVoice(instance.instance_id, seconds)} format={(seconds) => seconds.toFixed(1)}
+                ariaLabel={instance.name} disabled={!(instance.length_frames > 0)} className="tabular-nums" />
+              {" / "}{(instance.length_frames / Math.max(1, instance.sample_rate)).toFixed(1)} s
+            </span>
             <Btn onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_pause", {
               paused: instance.state !== "paused", instanceId: instance.instance_id,
             }).catch(() => setError(t("audio.operationFailed")))}>{t(instance.state === "paused" ? "audio.resume" : "audio.pause")}</Btn>
@@ -664,12 +682,12 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
           </div>)}
         </div> : null}
         <div className="flex-none flex items-center gap-x-4 gap-y-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-[12px] text-[var(--meta)] min-w-0">
+          <div className="flex items-center gap-1.5 text-[12.5px] text-[var(--meta)] min-w-0">
             <span className="flex-none inline-flex items-center gap-1">{t("audio.voiceDevice")}<HelpMark title={t("audio.voiceOutputNote")} /></span>
             <span className="min-w-0 max-w-[240px] truncate text-[12.5px] text-[var(--ink)]" title={outputName || undefined}>{outputName || t("audio.noVoiceDevice")}</span>
             {onOpenDeviceSettings ? <Btn onClick={onOpenDeviceSettings}>{t("audio.changeVoiceDevice")}</Btn> : null}
           </div>
-          <div className="flex items-center gap-2 text-[12px] text-[var(--meta)] min-w-[240px] flex-1 max-w-[360px]">
+          <div className="flex items-center gap-2 text-[12.5px] text-[var(--meta)] min-w-[240px] flex-1 max-w-[360px]">
             <span className="flex-none whitespace-nowrap">{t("audio.masterVolume")}</span>
             <div className="flex-1">
               <Slider
@@ -680,12 +698,13 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             </div>
             <Btn onClick={() => changeVolume("audio_voice_volume_toggle")}>{t(volume.muted ? "audio.unmute" : "audio.mute")}</Btn>
           </div>
-          <label className="flex items-center gap-1.5 text-[12px] text-[var(--meta)]">
-            <input type="checkbox" checked={monitor}
-              onChange={(event) => { const enabled = event.target.checked; void invoke<boolean>("audio_voice_monitor_set", { enabled })
-                .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }} />
-            {t("audio.monitorMusic")}
-          </label>
+          <Toggle
+            look="compact"
+            checked={monitor}
+            onChange={(enabled) => { void invoke<boolean>("audio_voice_monitor_set", { enabled })
+              .then(setMonitor).catch(() => setError(t("audio.operationFailed"))); }}
+            label={t("audio.monitorMusic")}
+          />
           <span className="ml-auto">
             <Btn disabled={voiceInstances.length === 0 && !voicePreparing} onClick={() => void invoke<VoicePlaybackStatus>("audio_voice_stop").then((status) => {
               setVoice(status);
@@ -693,7 +712,7 @@ export function AudioPage({ onOpenDeviceSettings }: Props = {}) {
             }).catch(() => setError(t("audio.operationFailed")))}>{t("audio.stopAll")}</Btn>
           </span>
         </div>
-        {voice?.state === "error" ? <p role="alert" className="flex-none text-[12px] text-[var(--danger)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
+        {voice?.state === "error" ? <p role="alert" className="flex-none text-[12.5px] text-[var(--danger-text)] mt-2 mb-0">{t("audio.voicePlaybackFailed")}</p> : null}
       </section>
       </div>
 
@@ -749,12 +768,12 @@ function SourceBtn({ on, label, title, count, onClick, menuLabel, menuOpen, onMe
       <button type="button" onClick={onClick} aria-pressed={on} aria-label={title}
         className={`w-full flex items-center gap-2 px-2.5 py-1.5 ${onMenu ? "pr-7" : ""} rounded-[var(--rs)] border-0 cursor-pointer text-left text-[13px] transition-colors ${on ? "bg-[color-mix(in_srgb,var(--ink)_7%,transparent)] text-[var(--ink)] font-medium" : "bg-transparent text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[color-mix(in_srgb,var(--ink)_4%,transparent)]"}`}>
         <span className="min-w-0 truncate" title={title}>{label}</span>
-        <span className={`flex-none text-[11px] text-[var(--meta)] tabular-nums font-normal ${onMenu ? "" : "ml-auto"}`}>{count}</span>
+        <span className={`flex-none text-[11.5px] text-[var(--meta)] tabular-nums font-normal ${onMenu ? "" : "ml-auto"}`}>{count}</span>
       </button>
       {onMenu ? <button type="button" data-source-menu aria-label={menuLabel} aria-haspopup="menu"
         aria-expanded={menuOpen ?? false} aria-controls={menuOpen ? "audio-source-menu" : undefined}
         onClick={onMenu}
-        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[6px] border-0 cursor-pointer text-[13px] leading-none bg-transparent hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100 text-[var(--accent)]" : "opacity-0 text-[var(--meta)]"} group-hover:opacity-100 group-focus-within:opacity-100 transition-[opacity,color]`}>
+        className={`absolute right-0.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-[var(--rs)] border-0 cursor-pointer text-[13px] leading-none bg-transparent hover:text-[var(--ink)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-[-1px] ${menuOpen ? "opacity-100 text-[var(--accent-text)]" : "opacity-0 text-[var(--meta)]"} group-hover:opacity-100 group-focus-within:opacity-100 transition-[opacity,color]`}>
         ⋯
       </button> : null}
     </div>

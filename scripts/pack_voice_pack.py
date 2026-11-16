@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from pack_spec import (
+    FABRIC_VOICE_AUTHOR,
+    FABRIC_VOICE_AUTHOR_URL,
     PKG_VOICE_PACK,
     TM_PACKAGE_JSON,
     normalize_yymmdd,
@@ -38,7 +40,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Pack voice_pack zip with identity config.json")
     ap.add_argument("--id", required=True, help="Stable voice id (folder name)")
     ap.add_argument("--name", default="", help="Display name")
-    ap.add_argument("--author", default="RVC Fabric", help="Author display name")
+    ap.add_argument("--author", default=FABRIC_VOICE_AUTHOR, help="Author display name")
     ap.add_argument("--author-url", default="", dest="author_url", help="Author homepage URL")
     ap.add_argument(
         "--date",
@@ -59,7 +61,7 @@ def main() -> int:
     ap.add_argument("--notes", default="")
     ap.add_argument(
         "--author-url-default",
-        default="https://cnb.cool/Turing-Mirror",
+        default="",
         help="Fallback author_url when --author-url empty",
     )
     args = ap.parse_args()
@@ -72,8 +74,10 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     name = (args.name or args.id).strip()
-    author = (args.author or "RVC Fabric").strip()
-    author_url = (args.author_url or args.author_url_default or "").strip()
+    author = args.author.strip() or FABRIC_VOICE_AUTHOR
+    author_url = (args.author_url or args.author_url_default).strip()
+    if not author_url and author == FABRIC_VOICE_AUTHOR:
+        author_url = FABRIC_VOICE_AUTHOR_URL
     date = normalize_yymmdd(args.date) or datetime.now().strftime("%y%m%d")
 
     cover_arc = "cover.jpg"

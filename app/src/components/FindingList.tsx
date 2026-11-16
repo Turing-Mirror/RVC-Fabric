@@ -72,7 +72,7 @@ export function FindingList({ findings }: { findings: Finding[] }) {
           <li key={f.code + i} className="relative py-2 first:pt-0">
             <div className="flex flex-wrap gap-2 items-baseline">
               {/* 等宽的级别标签，不靠颜色分级 —— 一片红黄看不出该先处理哪个。 */}
-              <span className="font-mono text-[11px] text-[var(--meta)] shrink-0">
+              <span className="font-mono text-[11.5px] text-[var(--meta)] shrink-0">
                 {levelLabel(f.level)}
               </span>
               <span className="text-[12.5px] leading-relaxed flex-1 min-w-[180px]">
@@ -83,7 +83,7 @@ export function FindingList({ findings }: { findings: Finding[] }) {
             {f.evidence.map((e, j) => (
               <div
                 key={j}
-                className="mt-0.5 font-mono text-[11px] text-[var(--meta)] break-all"
+                className="mt-0.5 font-mono text-[11.5px] text-[var(--meta)] break-all"
               >
                 {e.file}
                 {e.line != null ? `:${e.line}` : ""} — {e.text}

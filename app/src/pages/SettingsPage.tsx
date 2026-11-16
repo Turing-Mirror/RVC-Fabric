@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { SearchBox, TextInput, usePageLeave } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SegmentControl } from "../components/SegmentControl";
-import { Swap } from "../components/Motion";
+import { CatalogTransition } from "../components/CatalogTransition";
 import { Block, Btn, HelpMark, PagePad, Warn } from "../components/ui";
 import { Field, Select, Slider, Toggle } from "../components/controls";
 import { MicTest } from "../components/MicTest";
@@ -240,6 +241,7 @@ function SettingsPageImpl({
    * 「重启后生效」提示条会自己亮起来。
    */
   const [autoDevMsg, setAutoDevMsg] = useState("");
+  usePageLeave(() => setAutoDevMsg(""));
   const runAutoSetup = async () => {
     try {
       const advice = assessDevices(c.cfg, raw ?? {});
@@ -249,14 +251,6 @@ function SettingsPageImpl({
       setAutoDevMsg(String(e));
     }
   };
-
-  // 换子页签的方向：往右边的页签切，新内容从右边来
-  const [prevTab, setPrevTab] = useState(tab);
-  const [tabDir, setTabDir] = useState<-1 | 0 | 1>(0);
-  if (prevTab !== tab) {
-    setTabDir(TAB_KEYS.indexOf(tab) > TAB_KEYS.indexOf(prevTab) ? 1 : -1);
-    setPrevTab(tab);
-  }
 
   return (
     <div>
@@ -280,7 +274,7 @@ function SettingsPageImpl({
 
       <PagePad>
         {c.error ? (
-          <p className="text-[12.5px] text-[var(--danger)] mt-4 mb-0">{c.error}</p>
+          <p className="text-[12.5px] text-[var(--danger-text)] mt-4 mb-0">{c.error}</p>
         ) : null}
 
         {c.restartKeys.length ? (
@@ -311,8 +305,8 @@ function SettingsPageImpl({
           <p className="text-[12.5px] text-[var(--meta)] mt-6">{t("s.49fd445d8b")}</p>
         ) : null}
 
-        {/* 换子页签时旧内容淡出，新内容从去向那一侧浮上来，与图灵镜其他软件同一套切换。 */}
-        <Swap k={tab} dir={tabDir}>
+        {/* 分类按标签顺序左右切换，表单更新保留当前内容。 */}
+        <CatalogTransition scope={tab} order={TAB_KEYS}>
         {c.loaded && tab === "device" ? (
           <Block
             title={t("s.9bef06a1f5")}
@@ -396,7 +390,7 @@ function SettingsPageImpl({
                   />
                 }
               />
-              <div className="flex items-center gap-[11px] flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Toggle
                   label={t("s.1747a288fd")}
                   tip={TIPS.sg_wasapi_exclusive}
@@ -421,7 +415,7 @@ function SettingsPageImpl({
                   >
                     {t("s.devAutoBtn")}
                   </Btn>
-                  <Btn onClick={onReloadDevices} disabled={devicesBusy}>
+                  <Btn onClick={onReloadDevices} busy={devicesBusy}>
                     {devicesBusy ? t("s.f950213ab7") : t("s.966b701690")}
                   </Btn>
                 </span>
@@ -944,17 +938,14 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_text}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <input
+                    <TextInput
+                      fit
                       type="text"
                       maxLength={40}
-                      className={[
-                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
-                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                        "focus:outline-none focus:border-[var(--accent)]",
-                      ].join(" ")}
+                      className="w-[260px]"
                       placeholder={t("settings.bannerTextPlaceholder")}
                       value={c.str("home_banner_text")}
-                      onChange={(e) => c.set("home_banner_text", e.target.value)}
+                      onChange={(v) => c.set("home_banner_text", v)}
                     />
                     {c.str("home_banner_text") ? (
                       <Btn onClick={() => c.set("home_banner_text", "", true)}>
@@ -969,17 +960,14 @@ function SettingsPageImpl({
                 tip={TIPS.home_banner_sub}
                 control={
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <input
+                    <TextInput
+                      fit
                       type="text"
                       maxLength={60}
-                      className={[
-                        "w-[260px] rounded-[var(--rs)] border px-3 py-2 text-[13px]",
-                        "bg-transparent text-[var(--ink)] border-[var(--hairline)]",
-                        "focus:outline-none focus:border-[var(--accent)]",
-                      ].join(" ")}
+                      className="w-[260px]"
                       placeholder={t("settings.bannerSubPlaceholder")}
                       value={c.str("home_banner_sub")}
-                      onChange={(e) => c.set("home_banner_sub", e.target.value)}
+                      onChange={(v) => c.set("home_banner_sub", v)}
                     />
                     {c.str("home_banner_sub") ? (
                       <Btn onClick={() => c.set("home_banner_sub", "", true)}>
@@ -1189,7 +1177,7 @@ function SettingsPageImpl({
                 desc={updateLine || t("s.1fd4658c44")}
                 inline
                 control={
-                  <Btn onClick={onCheckUpdate} disabled={updateBusy}>
+                  <Btn onClick={onCheckUpdate} busy={updateBusy}>
                     {updateBusy ? t("s.5fc65af5b3") : t("s.72523c6421")}
                   </Btn>
                 }
@@ -1198,7 +1186,7 @@ function SettingsPageImpl({
             </div>
           </Block>
         ) : null}
-        </Swap>
+        </CatalogTransition>
       </PagePad>
     </div>
   );
@@ -1249,12 +1237,12 @@ function HotkeyGroups({
   const voiceRows = HOTKEYS.filter((h) => !needle || [labels[h.action] ?? h.action, prettyCombo(value(h.key, h.fallback))]
     .some((text) => text.toLowerCase().includes(needle)));
   return <>
-    <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("audio.hotkeySearch")}
-      aria-label={t("audio.hotkeySearch")}
-      className="w-full max-w-[400px] text-[13px] text-[var(--ink)] bg-transparent px-3.5 py-2 rounded-[var(--rs)] shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]" />
+    <SearchBox fit value={query} onChange={setQuery} placeholder={t("audio.hotkeySearch")}
+      ariaLabel={t("audio.hotkeySearch")}
+      className="w-full max-w-[400px]" />
     <div className="flex flex-col">
       <p className={HOTKEY_GROUP_TITLE}>{t("audio.hotkeyGroupVoice")}</p>
-      {voiceRows.length === 0 ? <p className="text-[12px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
+      {voiceRows.length === 0 ? <p className="text-[12.5px] text-[var(--meta)] m-0 py-2">{t("audio.hotkeyNoMatch")}</p> : voiceRows.map((h) => (
         <HotkeyRow
           key={h.key}
           label={labels[h.action] ?? h.action}
@@ -1396,17 +1384,17 @@ function HotkeyRow({
       {/* 「全局」逐个可关。全局快捷键是**独占**的：Ctrl+F7 被我们抢走之后，
           用户在别的软件里就再也按不出它原本的功能了。关掉之后这个组合只在
           RVC Fabric 是当前窗口时有效，机器上其他软件照常用得着。 */}
-      <label className="ml-auto mr-3 flex items-center gap-1.5 text-[12px] text-[var(--meta)] cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isGlobal}
-          onChange={(e) => {
-            setSaveError("");
-            void onGlobalChange(e.target.checked).catch((error) =>
-              setSaveError(hotkeyError(error)));
-          }}
-          className="w-[13px] h-[13px]"
-        />{t("s.a5644f4bbf")}</label>
+      <Toggle
+        look="compact"
+        className="ml-auto mr-3"
+        checked={isGlobal}
+        onChange={(checked) => {
+          setSaveError("");
+          void onGlobalChange(checked).catch((error) =>
+            setSaveError(hotkeyError(error)));
+        }}
+        label={t("s.a5644f4bbf")}
+      />
       <button
         type="button"
         onClick={() => void beginRecording()}
@@ -1419,15 +1407,15 @@ function HotkeyRow({
           "shadow-[inset_0_0_0_1px_var(--line)] transition-colors duration-200",
           "focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2",
           recording
-            ? "text-[var(--accent)] shadow-[inset_0_0_0_1px_var(--accent)]"
+            ? "text-[var(--accent-text)] shadow-[inset_0_0_0_1px_var(--accent)]"
             : "text-[var(--meta)] hover:text-[var(--ink)]",
         ].join(" ")}
       >
         {recording || arming ? t("s.31469944aa") : value ? prettyCombo(value) : t("audio.hotkeyRecord")}
       </button>
-      {status ? <span className="ml-2 text-[12px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
-      {recordError ? <span role="alert" className="text-[var(--danger)]">{t("audio.hotkeySuspendFailed")}</span> : null}
-      {saveError ? <span role="alert" className="text-[var(--danger)]">{saveError}</span> : null}
+      {status ? <span className="ml-2 text-[12.5px] text-[var(--meta)]">{hotkeyStatusLabel(status)}</span> : null}
+      {recordError ? <span role="alert" className="text-[var(--danger-text)]">{t("audio.hotkeySuspendFailed")}</span> : null}
+      {saveError ? <span role="alert" className="text-[var(--danger-text)]">{saveError}</span> : null}
       {value ? <Btn onClick={() => commit("")}>{t("audio.hotkeyClear")}</Btn> : null}
     </div>
   );

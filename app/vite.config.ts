@@ -1,3 +1,4 @@
+import { trmHostAdapter } from "trm-app-protocol/vite";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -24,7 +25,7 @@ function stripCrossorigin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), stripCrossorigin()],
+  plugins: [trmHostAdapter(), react(), tailwindcss(), stripCrossorigin()],
 
   // Relative asset URLs so custom-protocol pages resolve next to index.html.
   base: "./",

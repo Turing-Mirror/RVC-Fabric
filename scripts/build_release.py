@@ -471,6 +471,8 @@ def build_tauri_shell(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     shutil.copy2(exe, out / TAURI_EXE_NAME)
     log(f"  exe: {TAURI_EXE_NAME} ({exe.stat().st_size // 1024} KB)")
+    # Keep the independent stdio bridge beside the portable app.
+    shutil.copy2(release / "rvc-fabric-mcp.exe", out / "rvc-fabric-mcp.exe")
 
     fe_src = APP_DIR / "frontend"
     if not (fe_src / "index.html").is_file():

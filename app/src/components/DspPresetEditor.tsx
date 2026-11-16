@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { RangeBar } from "./controls";
+import { TextInput } from "trm-ui";
+import { RangeBar, SliderValue } from "./controls";
 import { Btn, HelpMark } from "./ui";
 import { dspTips } from "../lib/dspTips";
 import { t } from "../i18n/t";
@@ -195,12 +196,12 @@ export function DspPresetEditor({
   return (
     <div className="mt-9">
       <div className="flex items-center gap-3 mb-2">
-        <h4 className="m-0 text-[14px] font-semibold flex items-center gap-[9px]">
+        <h4 className="m-0 text-[13px] font-semibold flex items-center gap-2">
           {t("s.dspEditTitle", { v0: preset.name })}
           <HelpMark title={dspTips().edit} />
         </h4>
         {preset.source === "user" ? (
-          <Btn className="ml-auto" disabled={busy} onClick={() => void remove()}>
+          <Btn danger className="ml-auto" disabled={busy} onClick={() => void remove()}>
             {t("s.dspDelete")}
           </Btn>
         ) : null}
@@ -215,7 +216,7 @@ export function DspPresetEditor({
         return (
           <div key={effect} className="mb-3">
             <div className="flex items-center gap-2 mb-0.5">
-              <div className="text-[12.5px] text-[var(--meta)] flex items-center gap-[9px]">
+              <div className="text-[12.5px] text-[var(--meta)] flex items-center gap-2">
                 {EFFECT_LABEL[effect] ? t(EFFECT_LABEL[effect]) : effect}
                 {dspTips().fx[effect] ? (
                   <HelpMark title={dspTips().fx[effect]} />
@@ -225,13 +226,9 @@ export function DspPresetEditor({
                   用户只会以为整个功能坏了。要不出声就关掉 DSP，那是另一个
                   开关，不该从这里绕过去。 */}
               {shown.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => removeEffect(effect)}
-                  className="ml-auto border-0 bg-transparent p-0 text-[12px] text-[var(--meta)] cursor-pointer underline decoration-dotted underline-offset-2 hover:text-[var(--ink)]"
-                >
+                <Btn text className="ml-auto" onClick={() => removeEffect(effect)}>
                   {t("s.dspRemoveEffect")}
-                </button>
+                </Btn>
               ) : null}
             </div>
             {Object.keys(spec.params).map((key) => {
@@ -241,7 +238,7 @@ export function DspPresetEditor({
               const v = Number(params[effect]?.[key] ?? dflt);
               return (
                 <div key={key} className={ROW}>
-                  <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-[9px]">
+                  <span className="w-[108px] shrink-0 text-[13px] flex items-center gap-2">
                     <span className="truncate">
                       {PARAM_LABEL[key] ? t(PARAM_LABEL[key]) : key}
                     </span>
@@ -260,9 +257,9 @@ export function DspPresetEditor({
                       ariaLabel={`${effect}.${key}`}
                     />
                   </div>
-                  <span className="w-[56px] text-right text-[13px] tabular-nums">
-                    {fmt(v, step)}
-                  </span>
+                  <SliderValue value={v} min={lo} max={hi} step={step}
+                    onChange={(nv) => setParam(effect, key, nv)} format={(value) => fmt(value, step)}
+                    ariaLabel={`${effect}.${key}`} className="w-[56px] text-right text-[13px] tabular-nums" />
                 </div>
               );
             })}
@@ -272,7 +269,7 @@ export function DspPresetEditor({
 
       {unused.length ? (
         <div className="mt-4 mb-2">
-          <div className="text-[12.5px] text-[var(--meta)] mb-1.5 flex items-center gap-[9px]">
+          <div className="text-[12.5px] text-[var(--meta)] mb-1.5 flex items-center gap-2">
             {t("s.dspAddEffect")}
             <HelpMark title={dspTips().add} />
           </div>
@@ -287,11 +284,13 @@ export function DspPresetEditor({
       ) : null}
 
       <div className="flex items-center gap-2 mt-4">
-        <input
+        <TextInput
+          look="compact"
+          fit
           value={saveAs}
-          onChange={(e) => setSaveAs(e.target.value)}
+          onChange={setSaveAs}
           placeholder={t("s.dspSaveAsPlaceholder")}
-          className="min-w-[180px] px-[11px] py-[6px] rounded-[var(--rs)] text-[13px] text-[var(--ink)] bg-transparent shadow-[inset_0_0_0_1px_var(--line)] outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)]"
+          className="min-w-[180px]"
         />
         <Btn disabled={busy || !saveAs.trim()} onClick={() => void save()}>
           {t("s.dspSaveAs")}

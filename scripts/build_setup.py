@@ -167,10 +167,18 @@ def strip_heavy_from_payload(out: Path) -> None:
         "assets/pretrained_v2",
         "assets/uvr5_weights",
         "assets/indices",
+        "assets/weights",
     ):
         p = out / rel
         if p.exists():
             _rm(p)
+
+    # Downloaded separation weights are local data; keep the bundled configs.
+    pymss = out / "assets" / "pymss"
+    if pymss.is_dir():
+        for weight in pymss.rglob("*"):
+            if weight.is_file() and weight.suffix.lower() in {".pth", ".pt", ".onnx", ".ckpt", ".safetensors"}:
+                _rm(weight)
 
     for name in ("TM_Setup.exe", "TM_Voice.exe"):
         _rm(out / name)

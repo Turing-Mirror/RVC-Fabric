@@ -87,7 +87,23 @@ export function qqGroupLink(): LinkEntry | undefined {
 
 /** 「其他」页那张列表的顺序：先仓库后社媒。 */
 export function allLinks(): LinkEntry[] {
-  return [...repoLinks(), ...socialLinks()];
+  const website = t("social.website");
+  return [
+    ...repoLinks(),
+    {
+      title: website,
+      short: website,
+      desc: "www.turingmirror.com",
+      url: "https://www.turingmirror.com/",
+    },
+    ...socialLinks(),
+    {
+      title: "YouTube",
+      short: "YouTube",
+      desc: "@TuringMirror",
+      url: "https://www.youtube.com/@TuringMirror",
+    },
+  ];
 }
 
 /** 邀请关注时给的四个去处：三大社媒 + GitHub。CNB 是发制品的，不放在这里。 */

@@ -2518,7 +2518,7 @@
     "noModels": "Aún no hay modelos publicados.",
     "exportPacks": "Exportar paquetes",
     "selectAll": "Seleccionar todo",
-    "selectResults": "Seleccionar resultados",
+    "selectResults": "Seleccionar todos los resultados",
     "batchFilter": "Mostrar solo este lote",
     "authorLink": "Enlace a la página del autor",
     "sourceChanged": "El origen cambió. Vuelve a leerlo y confirma la selección.",

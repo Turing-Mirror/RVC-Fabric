@@ -2518,7 +2518,7 @@
     "noModels": "게시된 모델이 없습니다.",
     "exportPacks": "패키지 내보내기",
     "selectAll": "모두 선택",
-    "selectResults": "검색 결과 선택",
+    "selectResults": "검색 결과 모두 선택",
     "batchFilter": "이 일괄 작업만 표시",
     "authorLink": "작성자 페이지 링크",
     "sourceChanged": "소스가 변경되었습니다. 다시 읽고 선택을 확인하세요.",

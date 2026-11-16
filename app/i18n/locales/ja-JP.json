@@ -2518,7 +2518,7 @@
     "noModels": "公開済みのモデルはありません。",
     "exportPacks": "パッケージを書き出す",
     "selectAll": "すべて選択",
-    "selectResults": "検索結果を選択",
+    "selectResults": "検索結果をすべて選択",
     "batchFilter": "このバッチのみ表示",
     "authorLink": "作者ページのリンク",
     "sourceChanged": "ソースが変更されました。再読み込みして選択を確認してください。",

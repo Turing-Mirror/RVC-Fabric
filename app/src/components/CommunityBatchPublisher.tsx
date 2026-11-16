@@ -52,7 +52,8 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
   const hasSubmission = rows.some((item) => item.submitted || item.draft.pending);
   const remaining = rows.filter((row) => !row.submitted);
   const files = source?.files.filter((file) => file.path.toLowerCase().endsWith(".zip")) ?? [];
-  const filtered = files.filter((file) => file.path.toLowerCase().includes(search.trim().toLowerCase()));
+  const query = search.trim().toLowerCase();
+  const filtered = files.filter((file) => file.path.toLowerCase().includes(query));
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const current = Math.min(page, pages);
   const row = batch.rows[active];
@@ -283,7 +284,11 @@ export function CommunityBatchPublisher({ auth, sourceLink = "", onBack, onSubmi
           {source && <>
             <SearchBox full ariaLabel={uiText("ui.common.search")} value={search}
               onChange={(value) => { setPage(1); setSearch(value); }} />
-            {filtered.length > 1 && <Btn disabled={Boolean(busy)} onClick={selectResults}>{t("publication.selectResults")}</Btn>}
+            {filtered.length > 1 && (
+              <Btn disabled={Boolean(busy)} onClick={selectResults}>
+                {t(query ? "publication.selectResults" : "publication.selectAll")}
+              </Btn>
+            )}
             <CatalogTransition scope={search} page={current}>
               {filtered.slice((current - 1) * pageSize, current * pageSize).map((file) => (
                 <label key={file.id} className="flex min-w-0 items-center gap-3 rounded-[var(--rs)] px-3 py-2 text-[13px] hover:bg-[var(--stage)]">

@@ -2518,7 +2518,7 @@
     "noModels": "还没有已发布的模型。",
     "exportPacks": "导出模型包",
     "selectAll": "全选",
-    "selectResults": "选择搜索结果",
+    "selectResults": "全选搜索结果",
     "batchFilter": "仅显示此批次",
     "authorLink": "作者主页链接",
     "sourceChanged": "来源已变更。请重新读取并确认选择。",

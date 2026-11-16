@@ -46,7 +46,7 @@ RVC Fabric es una aplicación gratuita y de código abierto para Windows desarro
 - Reproduce música, efectos o fragmentos seleccionados en el chat de voz junto con el audio del micrófono convertido, con reproducción superpuesta, bucles, volumen independiente y atajos globales.
 - Convierte la voz del micrófono en tiempo real y permite volver a la voz original. La latencia depende del hardware, el modelo y los ajustes de audio.
 - Incluye puerta de ruido, compresor y ecualizador paramétrico de cinco bandas.
-- Permite gestionar modelos y ajustes preestablecidos, y descargar voces de fuentes oficiales y de terceros.
+- Permite gestionar modelos y ajustes preestablecidos y descargar modelos de voz desde la comunidad.
 - Ofrece separación de voces, síntesis de voz y entrenamiento de modelos. La interfaz de entrenamiento actual requiere una GPU NVIDIA.
 - Admite NVIDIA CUDA y aceleración DirectML para GPU AMD e Intel.
 

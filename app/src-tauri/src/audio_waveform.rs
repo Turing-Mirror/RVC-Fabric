@@ -75,6 +75,8 @@ impl Job {
 const BINS_PER_SEC: f64 = 400.0;
 const MIN_BINS: f64 = 1_200.0;
 const MAX_BINS: f64 = 720_000.0;
+// A serialized u8 peak needs at most three digits and a comma, plus JSON metadata.
+const MAX_CACHE_BYTES: u64 = MAX_BINS as u64 * 4 + 1024;
 
 fn bins_for(duration: f64) -> usize {
     (duration * BINS_PER_SEC).ceil().clamp(MIN_BINS, MAX_BINS) as usize
@@ -98,7 +100,7 @@ fn cache_path(root: &Path, input: &Path, meta: &fs::Metadata) -> PathBuf {
 }
 
 fn read_cache(path: &Path) -> Option<Waveform> {
-    if fs::metadata(path).ok()?.len() > 128 * 1024 {
+    if fs::metadata(path).ok()?.len() > MAX_CACHE_BYTES {
         return None;
     }
     let data = fs::read(path).ok()?;
@@ -313,5 +315,29 @@ mod tests {
         assert_eq!(bins_for(1.0), 1_200);
         assert_eq!(bins_for(100.0), 40_000);
         assert_eq!(bins_for(100_000.0), 720_000);
+    }
+
+    #[test]
+    fn long_waveform_cache_roundtrips() {
+        let dir = std::env::temp_dir().join(format!(
+            "fabric-waveform-cache-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        for duration in [240.0, 3_600.0] {
+            let path = dir.join(format!("{duration}.json"));
+            let waveform = Waveform {
+                duration,
+                peaks: vec![255; bins_for(duration)],
+            };
+            write_cache(&path, &waveform);
+            assert!(fs::metadata(&path).unwrap().len() > 128 * 1024);
+            let cached = read_cache(&path);
+            let _ = fs::remove_file(&path);
+            let cached = cached.expect("a complete long waveform cache must be reusable");
+            assert_eq!(cached.duration, waveform.duration);
+            assert_eq!(cached.peaks, waveform.peaks);
+        }
+        fs::remove_dir_all(dir).unwrap();
     }
 }

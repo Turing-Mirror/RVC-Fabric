@@ -166,7 +166,12 @@ it.each([
   const entry = { ...listing, installed, update_available: updateAvailable };
   const host = await openCommunity();
   const card = host.querySelector<HTMLElement>("#store-voice-approved-voice")!;
-  expect(card.textContent).toContain("Community");
+  expect(card.textContent).not.toContain("Community");
+  const catalogButtons = [...pane(host, "catalog").querySelectorAll("button")].map(node => node.textContent?.trim());
+  expect(catalogButtons).not.toContain("TRM source");
+  expect(catalogButtons).not.toContain("Third-party");
+  expect(catalogButtons).toContain("By time");
+  expect(catalogButtons).toContain("By series");
   expect(card.textContent).toContain("2026-11-15");
   expect(card.textContent).toContain("CC-BY-4.0");
   expect(host.textContent).not.toContain("unreviewed third-party voices");

@@ -319,7 +319,7 @@ function Catalog({ feed, loading = false, onReload, downloadReason = "", extrasF
         </Block>
       ) : null}
 
-      <Block title={t("s.b2be174f0f")} note={t("s.95344bde41")}>
+      <Block title={t("s.b2be174f0f")}>
         <StoreSection reloadToken={reloadToken} onAuthor={onAuthor} onOpenModel={onOpenModel} />
       </Block>
 

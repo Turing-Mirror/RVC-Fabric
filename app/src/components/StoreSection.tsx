@@ -116,10 +116,6 @@ function groupFocusKey(parent: string, group: string): string {
  * 两个网格在任何窗口宽度下都是一样的密度。
  */
 
-// 来源和组织方式是两个独立维度。原本压在一个 SegmentControl 里（最新合流 /
-// 图灵镜源 / 第三方 / 系列专区），结果「原神系列里的第三方音色」这种组合根本
-// 表达不出来 —— 选了系列就没法筛来源，选了第三方就没有系列分组。
-type Source = "all" | "official" | "thirdparty";
 type Grouping = "time" | "series";
 
 /** 一个系列先铺几行，再多要点「查看全部」。 */
@@ -155,7 +151,6 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
   const active = pageActive && paneActive;
   const [cat, setCat] = useState<StoreCatalog | null>(null);
   const [loading, setLoading] = useState(false);
-  const [source, setSource] = useState<Source>("all");
   const [grouping, setGrouping] = useState<Grouping>("time");
   const [hideInstalled, setHideInstalled] = useState(false);
   /** 哪些系列被点了「查看全部」。 */
@@ -256,17 +251,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
   }, []);
 
   const list = useMemo(() => {
-    // Derived inside the memo on purpose: `cat?.voices || []` allocates a fresh
-    // array every render, so listing them as dependencies meant this filter and
-    // sort re-ran on every keystroke elsewhere on the page.
-    const official = cat?.voices || [];
-    const third = cat?.thirdparty_voices || [];
-    let base: StoreVoice[] =
-      source === "official"
-        ? [...official]
-        : source === "thirdparty"
-          ? [...third]
-          : [...official, ...third];
+    let base = [...(cat?.voices ?? []), ...(cat?.thirdparty_voices ?? [])];
     // 一律按收录日期倒序。分组视图也排，这样每个系列内部顺序是稳定的。
     if (assetId) base = base.filter((voice) => voice.id === assetId);
     base.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -278,7 +263,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
       );
     }
     return base;
-  }, [source, hideInstalled, cat, q, assetId]);
+  }, [hideInstalled, cat, q, assetId]);
 
   const seriesGroups = useMemo((): SeriesNode[] | null => {
     if (grouping !== "series") return null;
@@ -365,7 +350,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
     return kept;
   }, [grouping, list, locale]);
 
-  const catalogDirection = useDir(["all", "official", "thirdparty"].indexOf(source) * 2 + (grouping === "series" ? 1 : 0));
+  const catalogDirection = useDir(grouping === "series" ? 1 : 0);
   const perPage = cols * PAGE_ROWS;
   const totalPages = Math.max(1, Math.ceil(list.length / perPage));
   const pageClamped = Math.min(page, totalPages);
@@ -540,19 +525,6 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
           placeholder={t("store.searchHint")}
           className="min-w-[200px]"
         />
-        <SegmentControl<Source>
-          value={source}
-          onChange={(v) => {
-            setSource(v);
-            setPage(1);
-            setSeriesFocus("");
-          }}
-          options={[
-            { id: "all", label: t("s.778fc8f994") },
-            { id: "official", label: t("s.ef00eb8f3b") },
-            { id: "thirdparty", label: t("s.4500b5dfc7") },
-          ]}
-        />
         <SegmentControl<Grouping>
           value={grouping}
           onChange={(v) => {
@@ -614,7 +586,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
         />
       </div> : null}
 
-      {source !== "official" && cat?.thirdparty_voices?.some((voice) => !voice.community_version_id) ? (
+      {cat?.thirdparty_voices?.some((voice) => !voice.community_version_id) ? (
         <Warn className="mb-3">{t("s.7fe9bcf336")}</Warn>
       ) : null}
 
@@ -627,7 +599,7 @@ export function StoreSection({ reloadToken, onInstalled, onAuthor, onOpenModel, 
       {/* gridRef 挂在网格上，宽度是从它的父级量的 —— 系列视图下网格有好几个，
           但外面这一层永远只有一个，量它才稳。 */}
       <div ref={gridRef}>
-        <CatalogTransition scope={JSON.stringify([source, grouping, seriesFocus, q, hideInstalled])}
+        <CatalogTransition scope={JSON.stringify([grouping, seriesFocus, q, hideInstalled])}
           page={pageClamped} dir={catalogDirection || 1}>
           {grouping === "series" && seriesGroups ? (
             seriesGroups.length === 0 ? (
@@ -972,7 +944,6 @@ function VoiceCard({
         placeholder={title || v.id || ""}
         seed={v.id || title}
         release={date}
-        detail={v.community_version_id ? t("nav.plaza") : undefined}
         progress={busy && !staged ? progress?.percent ?? 0 : undefined}
         connecting={busy && !staged && (progress?.done ?? 0) <= 0}
       />

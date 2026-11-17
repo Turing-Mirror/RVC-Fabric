@@ -75,6 +75,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
+        "https://www.turingmirror.com/releases/rvc-fabric/updater.json",
         "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main/updater.json"
       ],
       "dialog": false,

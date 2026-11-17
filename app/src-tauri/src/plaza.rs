@@ -8,8 +8,7 @@
 //!
 //! * **Ads are identifiable.** `ad` / `sponsor`, or any entry with a sponsor
 //!   name, is flagged so the UI must badge it.
-//! * **Images come from CNB only.** Foreign image hosts are dropped — the
-//!   supply chain stays ours.
+//! * **Images come from the release site or CNB.** Other hosts are ignored.
 //!
 //! Dismissibility is decided by *placement*, not by type: the plaza itself
 //! exists to carry ads and they are not dismissible there; the models page may
@@ -36,6 +35,7 @@ pub const PLACEMENT_MODELS: &str = "models_page";
 /// 「投放」里。发布侧 `build_catalog.py` 会先警告一次。
 pub const MAX_PINNED: usize = 5;
 
+const RELEASE_SITE: &str = "https://www.turingmirror.com/releases/rvc-fabric";
 const CNB_RAW_MAIN: &str =
     "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases/-/git/raw/main";
 
@@ -108,11 +108,16 @@ fn safe_link(url: &str) -> String {
     }
 }
 
-/// CNB-only image policy: relative path → raw URL; foreign hosts dropped.
+/// The release site publishes absolute image URLs. Relative paths are for legacy CNB feeds.
 fn resolve_image_url(image: &str) -> String {
     let s = image.trim();
     if s.is_empty() {
         return String::new();
+    }
+    if s.strip_prefix(RELEASE_SITE)
+        .is_some_and(|path| path.starts_with("/images/"))
+    {
+        return s.to_string();
     }
     let lower = s.to_ascii_lowercase();
     if lower.starts_with("http://") || lower.starts_with("https://") {
@@ -412,27 +417,22 @@ pub fn today_yymmdd() -> String {
     chrono::Local::now().format("%y%m%d").to_string()
 }
 
-/// Pull `plaza.json` + `changelog.json` from the release repo.
-///
-/// One network round each, failures reported per-feed: a broken changelog must
-/// not blank the ad placements, and vice versa — the plaza carries paid slots
-/// and a partial outage should not read to a sponsor as "not shown at all".
+fn fetch_release_feed(file: &str, timeout_secs: u64) -> Result<Value, String> {
+    crate::catalog::http_get_json(&format!("{RELEASE_SITE}/{file}"), timeout_secs.min(3))
+        .or_else(|_| crate::catalog::http_get_json(&format!("{CNB_RAW_MAIN}/{file}"), timeout_secs))
+}
+
+/// Fetch announcements and release notes independently, with a CNB fallback.
 pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<String>) {
     let mut errors = Vec::new();
-    let items = match crate::catalog::http_get_json(
-        &format!("{CNB_RAW_MAIN}/plaza.json"),
-        timeout_secs,
-    ) {
+    let items = match fetch_release_feed("plaza.json", timeout_secs) {
         Ok(v) => parse_feed(&v),
         Err(e) => {
             errors.push(crate::i18n::te("s.a005e42321", &(e)));
             Vec::new()
         }
     };
-    let changelog = match crate::catalog::http_get_json(
-        &format!("{CNB_RAW_MAIN}/changelog.json"),
-        timeout_secs,
-    ) {
+    let changelog = match fetch_release_feed("changelog.json", timeout_secs) {
         Ok(v) => parse_changelog(&v),
         Err(e) => {
             errors.push(crate::i18n::te("s.d2620f4b90", &(e)));
@@ -489,6 +489,9 @@ mod tests {
             "https://cnb.cool/a/b.jpg"
         );
         assert!(resolve_image_url("plaza/a.jpg").starts_with(CNB_RAW_MAIN));
+        let image = format!("{RELEASE_SITE}/images/a.webp");
+        assert_eq!(resolve_image_url(&image), image);
+        assert_eq!(resolve_image_url(&format!("{RELEASE_SITE}/other/a.webp")), "");
     }
 
     #[test]

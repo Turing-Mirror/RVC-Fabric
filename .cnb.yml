@@ -5,7 +5,7 @@ $:
         tags: cnb:arch:amd64
         cpus: 8
       docker:
-        build: .cnb/windows-cross.Dockerfile
+        build: scripts/ci/windows-cross.Dockerfile
         volumes:
           - /root/.npm:copy-on-write
           - /root/.cargo/registry:copy-on-write
@@ -37,7 +37,7 @@ $:
           script: >-
             cd app && npm run tauri:build -- --ci --runner cargo-xwin
             --target x86_64-pc-windows-msvc --bundles nsis
-            --config ../.cnb/tauri.candidate.conf.json -- --locked
+            --config ../scripts/ci/tauri.candidate.conf.json -- --locked
         - name: Collect installer and build metadata
           script: python3 scripts/ci/collect_windows_candidate.py
         - name: Attach candidate to this source commit

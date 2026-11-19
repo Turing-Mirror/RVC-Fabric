@@ -10,12 +10,6 @@
 
 **Changeur de voix en temps réel et lecteur de sons pour Windows**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric écran d’accueil et commandes de conversion en temps réel" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric écran des paramètres" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric écran des outils supplémentaires" width="32%">
-<!-- screenshots -->
-
 [Site officiel](https://www.turingmirror.com/en/products/rvc-fabric/) · [Télécharger pour Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 Le projet est basé sur [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) et maintenu par [Turing Mirror](https://github.com/Turing-Mirror).
@@ -36,6 +30,14 @@ Le projet est basé sur [RVC WebUI](https://github.com/RVC-Project/Retrieval-bas
 </div>
 
 ---
+
+## Captures d’écran
+
+![RVC Fabric écran d’accueil et commandes de conversion en temps réel](../../assets/screenshots/home.png)
+
+![RVC Fabric écran des paramètres](../../assets/screenshots/settings.png)
+
+![RVC Fabric écran des outils supplémentaires](../../assets/screenshots/misc.png)
 
 ## Introduction du projet
 

@@ -10,12 +10,6 @@
 
 **Windows 向けリアルタイムボイスチェンジャー・サウンドボード**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric ホーム画面とリアルタイム変換の操作" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 設定画面" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
-<!-- screenshots -->
-
 [公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [Windows 版をダウンロード](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
@@ -36,6 +30,14 @@
 </div>
 
 ---
+
+## スクリーンショット
+
+![RVC Fabric ホーム画面とリアルタイム変換の操作](../../assets/screenshots/home.png)
+
+![RVC Fabric 設定画面](../../assets/screenshots/settings.png)
+
+![RVC Fabric その他の機能の画面](../../assets/screenshots/misc.png)
 
 ## プロジェクト概要
 

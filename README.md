@@ -10,12 +10,6 @@
 
 **Windows 实时变声与语音音效播放软件**
 
-<!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="RVC Fabric 主界面与实时变声控制" width="32%">
-<img src="assets/screenshots/settings.png" alt="RVC Fabric 设置页面" width="32%">
-<img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能页面" width="32%">
-<!-- screenshots -->
-
 [官网](https://www.turingmirror.com/products/rvc-fabric/) · [下载 Windows 版](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 基于 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 开发，由 [图灵镜 Turing Mirror](https://github.com/Turing-Mirror) 维护。
@@ -36,6 +30,14 @@
 </div>
 
 ---
+
+## 界面截图
+
+![RVC Fabric 主界面与实时变声控制](assets/screenshots/home.png)
+
+![RVC Fabric 设置页面](assets/screenshots/settings.png)
+
+![RVC Fabric 其他功能页面](assets/screenshots/misc.png)
 
 ## 项目简介
 

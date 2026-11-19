@@ -10,12 +10,6 @@
 
 **Windows 即時變聲與語音音效播放軟體**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric 主畫面與即時變聲控制" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 設定頁面" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
-<!-- screenshots -->
-
 [官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [下載 Windows 版](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 以 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 為基礎開發，由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 維護。
@@ -36,6 +30,14 @@
 </div>
 
 ---
+
+## 介面截圖
+
+![RVC Fabric 主畫面與即時變聲控制](../../assets/screenshots/home.png)
+
+![RVC Fabric 設定頁面](../../assets/screenshots/settings.png)
+
+![RVC Fabric 其他功能頁面](../../assets/screenshots/misc.png)
 
 ## 專案簡介
 

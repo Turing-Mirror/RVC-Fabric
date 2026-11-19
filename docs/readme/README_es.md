@@ -10,12 +10,6 @@
 
 **Cambiador de voz en tiempo real y panel de sonidos para Windows**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric pantalla de inicio y controles de conversión en tiempo real" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric pantalla de ajustes" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric pantalla de herramientas adicionales" width="32%">
-<!-- screenshots -->
-
 [Sitio oficial](https://www.turingmirror.com/en/products/rvc-fabric/) · [Descargar para Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 El proyecto está basado en [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) y lo mantiene [Turing Mirror](https://github.com/Turing-Mirror).
@@ -36,6 +30,14 @@ El proyecto está basado en [RVC WebUI](https://github.com/RVC-Project/Retrieval
 </div>
 
 ---
+
+## Capturas de pantalla
+
+![RVC Fabric pantalla de inicio y controles de conversión en tiempo real](../../assets/screenshots/home.png)
+
+![RVC Fabric pantalla de ajustes](../../assets/screenshots/settings.png)
+
+![RVC Fabric pantalla de herramientas adicionales](../../assets/screenshots/misc.png)
 
 ## Introducción al proyecto
 

@@ -10,12 +10,6 @@
 
 **Windows용 실시간 음성 변환 및 사운드보드**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric 홈 화면 및 실시간 음성 변환 제어" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 설정 화면" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
-<!-- screenshots -->
-
 [공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/) · [Windows용 다운로드](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)를 기반으로 개발되었으며 [Turing Mirror](https://github.com/Turing-Mirror)가 유지보수합니다.
@@ -36,6 +30,14 @@
 </div>
 
 ---
+
+## 스크린샷
+
+![RVC Fabric 홈 화면 및 실시간 음성 변환 제어](../../assets/screenshots/home.png)
+
+![RVC Fabric 설정 화면](../../assets/screenshots/settings.png)
+
+![RVC Fabric 추가 기능 화면](../../assets/screenshots/misc.png)
 
 ## 프로젝트 소개
 

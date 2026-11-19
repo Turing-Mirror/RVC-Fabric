@@ -10,12 +10,6 @@
 
 **Real-time voice changer and soundboard for Windows**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric home screen and real-time conversion controls" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric settings screen" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
-<!-- screenshots -->
-
 [Website](https://www.turingmirror.com/en/products/rvc-fabric/) · [Download for Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) and maintained by [Turing Mirror](https://github.com/Turing-Mirror).
@@ -36,6 +30,14 @@ Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conver
 </div>
 
 ---
+
+## Screenshots
+
+![RVC Fabric home screen and real-time conversion controls](../../assets/screenshots/home.png)
+
+![RVC Fabric settings screen](../../assets/screenshots/settings.png)
+
+![RVC Fabric additional tools screen](../../assets/screenshots/misc.png)
 
 ## Project Introduction
 

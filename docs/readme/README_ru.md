@@ -10,12 +10,6 @@
 
 **Изменение голоса в реальном времени и саундборд для Windows**
 
-<!-- screenshots -->
-<img src="../../assets/screenshots/home.png" alt="RVC Fabric главный экран и управление преобразованием голоса" width="32%">
-<img src="../../assets/screenshots/settings.png" alt="RVC Fabric экран настроек" width="32%">
-<img src="../../assets/screenshots/misc.png" alt="RVC Fabric экран дополнительных инструментов" width="32%">
-<!-- screenshots -->
-
 [Официальный сайт](https://www.turingmirror.com/en/products/rvc-fabric/) · [Скачать для Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 Проект основан на [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) и поддерживается [Turing Mirror](https://github.com/Turing-Mirror).
@@ -36,6 +30,14 @@
 </div>
 
 ---
+
+## Снимки экрана
+
+![RVC Fabric главный экран и управление преобразованием голоса](../../assets/screenshots/home.png)
+
+![RVC Fabric экран настроек](../../assets/screenshots/settings.png)
+
+![RVC Fabric экран дополнительных инструментов](../../assets/screenshots/misc.png)
 
 ## О проекте
 

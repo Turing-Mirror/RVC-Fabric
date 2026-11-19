@@ -17,7 +17,7 @@
 [![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](../../LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
 
-[GitHub 倉庫](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB 製品下載](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
+[GitHub 倉庫](https://github.com/Turing-Mirror/RVC-Fabric) · [GitHub Releases](https://github.com/Turing-Mirror/RVC-Fabric/releases)
 
 **社群媒體**　[嗶哩嗶哩 @圖靈鏡](https://space.bilibili.com/3546871148579062)　·　[抖音 @圖靈鏡](https://v.douyin.com/6NxXcrKK9cc)（抖音號 `TuringMirror`）　·　[小紅書 @圖靈鏡](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小紅書號 `TuringMirror`）　·　[YouTube @圖靈鏡](https://www.youtube.com/@TuringMirror)（YouTube 帳號 `@TuringMirror`）　·　QQ 群 @圖靈鏡社區（群號 `1077458748`）
 

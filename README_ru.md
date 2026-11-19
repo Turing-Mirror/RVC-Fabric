@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric экран дополнительных инструментов" width="32%">
 <!-- screenshots -->
 
-[Официальный сайт](https://www.turingmirror.com/en/products/rvc-fabric/) · [Скачать для Windows](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[Официальный сайт](https://www.turingmirror.com/en/products/rvc-fabric/) · [Скачать для Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 Проект основан на [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) и поддерживается [Turing Mirror](https://github.com/Turing-Mirror).
 

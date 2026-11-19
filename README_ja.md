@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
 <!-- screenshots -->
 
-[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [Windows 版をダウンロード](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [Windows 版をダウンロード](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
 

@@ -417,12 +417,11 @@ pub fn today_yymmdd() -> String {
     chrono::Local::now().format("%y%m%d").to_string()
 }
 
-fn fetch_release_feed(file: &str, timeout_secs: u64) -> Result<Value, String> {
-    crate::catalog::http_get_json(&format!("{RELEASE_SITE}/{file}"), timeout_secs.min(3))
-        .or_else(|_| crate::catalog::http_get_json(&format!("{CNB_RAW_MAIN}/{file}"), timeout_secs))
+pub(crate) fn fetch_release_feed(file: &str, timeout_secs: u64) -> Result<Value, String> {
+    crate::catalog::http_get_json(&format!("{RELEASE_SITE}/{file}"), timeout_secs)
 }
 
-/// Fetch announcements and release notes independently, with a CNB fallback.
+/// Fetch announcements and release notes independently from the release website.
 pub fn fetch(timeout_secs: u64) -> (Vec<PlazaItem>, Vec<ChangelogEntry>, Vec<String>) {
     let mut errors = Vec::new();
     let items = match fetch_release_feed("plaza.json", timeout_secs) {

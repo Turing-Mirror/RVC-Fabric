@@ -16,7 +16,7 @@
 <img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
 <!-- screenshots -->
 
-[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [下載 Windows 版](https://cdn.turingmirror.com/d/rvc-fabric-setup)
+[官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [下載 Windows 版](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 以 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 為基礎開發，由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 維護。
 

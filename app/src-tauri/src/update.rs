@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use crate::{catalog, download, extract, paths, ui_assets};
+use crate::{download, extract, paths, ui_assets};
 
 /// 本机版本号，编译期从 Cargo.toml 取。
 ///
@@ -205,9 +205,9 @@ fn decide(cat: &Value, local: &str, exe_version: &str) -> Value {
     })
 }
 
-/// Ask the catalog whether a newer build exists.
+/// Check the release website for a newer build.
 pub fn check(timeout_secs: u64) -> Result<Value, String> {
-    let cat = catalog::fetch_remote_catalog(timeout_secs)?;
+    let cat = crate::plaza::fetch_release_feed("app.json", timeout_secs)?;
     Ok(decide(&cat, &effective_version(), APP_VERSION))
 }
 

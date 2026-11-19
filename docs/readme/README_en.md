@@ -1,26 +1,26 @@
 <div align="center">
 
-<img src="assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
+<img src="../../assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
 
 # RVC Fabric
 
 <!-- lang-nav -->
-[简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　English　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+[简体中文](../../README.md)　·　[繁體中文](./README_zh-TW.md)　·　English　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
 **Real-time voice changer and soundboard for Windows**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="RVC Fabric home screen and real-time conversion controls" width="32%">
-<img src="assets/screenshots/settings.png" alt="RVC Fabric settings screen" width="32%">
-<img src="assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
+<img src="../../assets/screenshots/home.png" alt="RVC Fabric home screen and real-time conversion controls" width="32%">
+<img src="../../assets/screenshots/settings.png" alt="RVC Fabric settings screen" width="32%">
+<img src="../../assets/screenshots/misc.png" alt="RVC Fabric additional tools screen" width="32%">
 <!-- screenshots -->
 
 [Website](https://www.turingmirror.com/en/products/rvc-fabric/) · [Download for Windows](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) and maintained by [Turing Mirror](https://github.com/Turing-Mirror).
 
-[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
+[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](../../LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
 
 [GitHub Repository](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB Artifacts Download](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
@@ -28,7 +28,7 @@ Based on [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conver
 **Social Media**　[Bilibili @Turing Mirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @Turing Mirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @Turing Mirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　[YouTube @Turing Mirror](https://www.youtube.com/@TuringMirror) (YouTube handle `@TuringMirror`)　·　QQ Group @Turing Mirror Community (Group ID `1077458748`)
 
 <!-- qq-group -->
-<img src="assets/brand/qq_group.jpg" alt="QQ group QR code" width="200">
+<img src="../../assets/brand/qq_group.jpg" alt="QQ group QR code" width="200">
 <!-- qq-group -->
 
 **Sponsorship & Promotion**　[Rainyun servers: 50% off the first month](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
@@ -100,7 +100,7 @@ npm run dev
 
 ## Source code and voice permissions
 
-- The source code of this project is open-sourced under the [MIT License](./LICENSE).
+- The source code of this project is open-sourced under the [MIT License](../../LICENSE).
 - Model weights, voice packages, and third-party resources follow their original licensing agreements.
 - Obtain the rights holder’s permission before training on or converting someone else’s voice.
 

@@ -533,17 +533,20 @@ def click_train(
                 )
             )
     fea_dim = 256 if version19 == "v1" else 768
+    mute_dir = os.path.join(now_dir, "assets", "training", "mute")
+    if not os.path.isdir(mute_dir):
+        mute_dir = os.path.join(now_dir, "logs", "mute")
     if if_f0_3:
         for _ in range(2):
             opt.append(
-                "%s/logs/mute/0_gt_wavs/mute%s.wav|%s/logs/mute/3_feature%s/mute.npy|%s/logs/mute/2a_f0/mute.wav.npy|%s/logs/mute/2b-f0nsf/mute.wav.npy|%s"
-                % (now_dir, sr2, now_dir, fea_dim, now_dir, now_dir, spk_id5)
+                "%s/0_gt_wavs/mute%s.wav|%s/3_feature%s/mute.npy|%s/2a_f0/mute.wav.npy|%s/2b-f0nsf/mute.wav.npy|%s"
+                % (mute_dir, sr2, mute_dir, fea_dim, mute_dir, mute_dir, spk_id5)
             )
     else:
         for _ in range(2):
             opt.append(
-                "%s/logs/mute/0_gt_wavs/mute%s.wav|%s/logs/mute/3_feature%s/mute.npy|%s"
-                % (now_dir, sr2, now_dir, fea_dim, spk_id5)
+                "%s/0_gt_wavs/mute%s.wav|%s/3_feature%s/mute.npy|%s"
+                % (mute_dir, sr2, mute_dir, fea_dim, spk_id5)
             )
     shuffle(opt)
     with open("%s/filelist.txt" % exp_dir, "w") as f:

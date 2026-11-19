@@ -698,7 +698,9 @@ def write_filelist(req, exp_dir, root):
         % (esc(gt), n, esc(feat), n, esc(f0d), n, esc(f0nsf), n, spk)
         for n in sorted(names)
     ]
-    mute = root / "logs" / "mute"
+    mute = root / "assets" / "training" / "mute"
+    if not mute.is_dir():
+        mute = root / "logs" / "mute"
     if not (mute / "0_gt_wavs" / ("mute%s.wav" % req["sample_rate"])).is_file():
         fail_code(mc.TRAIN_MUTE_MISSING)
     for _ in range(2):

@@ -1,26 +1,26 @@
 <div align="center">
 
-<img src="assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
+<img src="../../assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
 
 # RVC Fabric
 
 <!-- lang-nav -->
-[简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　日本語　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+[简体中文](../../README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　日本語　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
 **Windows 向けリアルタイムボイスチェンジャー・サウンドボード**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="RVC Fabric ホーム画面とリアルタイム変換の操作" width="32%">
-<img src="assets/screenshots/settings.png" alt="RVC Fabric 設定画面" width="32%">
-<img src="assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
+<img src="../../assets/screenshots/home.png" alt="RVC Fabric ホーム画面とリアルタイム変換の操作" width="32%">
+<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 設定画面" width="32%">
+<img src="../../assets/screenshots/misc.png" alt="RVC Fabric その他の機能の画面" width="32%">
 <!-- screenshots -->
 
 [公式サイト](https://www.turingmirror.com/ja/products/rvc-fabric/) · [Windows 版をダウンロード](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) を基に開発し、[图灵镜 Turing Mirror](https://github.com/Turing-Mirror) が保守しています。
 
-[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
+[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](../../LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
 
 [GitHub リポジトリ](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB成果物ダウンロード](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
@@ -28,7 +28,7 @@
 **ソーシャルメディア**　[bilibili @图灵镜](https://space.bilibili.com/3546871148579062)　·　[抖音 @图灵镜](https://v.douyin.com/6NxXcrKK9cc)（抖音ID `TuringMirror`）　·　[小紅書 @图灵镜](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小紅書ID `TuringMirror`）　·　[YouTube @图灵镜](https://www.youtube.com/@TuringMirror)（YouTube ハンドル `@TuringMirror`）　·　QQ グループ @图灵镜社区（グループ番号 `1077458748`）
 
 <!-- qq-group -->
-<img src="assets/brand/qq_group.jpg" alt="QQ グループの QR コード" width="200">
+<img src="../../assets/brand/qq_group.jpg" alt="QQ グループの QR コード" width="200">
 <!-- qq-group -->
 
 **スポンサープロモーション**　[Rainyun のサーバーは初月半額](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
@@ -100,7 +100,7 @@ npm run dev
 
 ## ソースコードのライセンスと音声の利用許諾
 
-- 本プロジェクトのソースコードは [MIT License](./LICENSE) の下でオープンソース化されています。
+- 本プロジェクトのソースコードは [MIT License](../../LICENSE) の下でオープンソース化されています。
 - モデルの重み、音声パッケージ、サードパーティのリソースは、それぞれの元のライセンスに従います。
 - 他人の声を学習や変換に使う前に、権利者の許諾を得てください。
 

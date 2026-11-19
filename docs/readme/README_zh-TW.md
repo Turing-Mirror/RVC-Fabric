@@ -1,26 +1,26 @@
 <div align="center">
 
-<img src="assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
+<img src="../../assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
 
 # RVC Fabric
 
 <!-- lang-nav -->
-[简体中文](./README.md)　·　繁體中文　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+[简体中文](../../README.md)　·　繁體中文　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
 **Windows 即時變聲與語音音效播放軟體**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="RVC Fabric 主畫面與即時變聲控制" width="32%">
-<img src="assets/screenshots/settings.png" alt="RVC Fabric 設定頁面" width="32%">
-<img src="assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
+<img src="../../assets/screenshots/home.png" alt="RVC Fabric 主畫面與即時變聲控制" width="32%">
+<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 設定頁面" width="32%">
+<img src="../../assets/screenshots/misc.png" alt="RVC Fabric 其他功能頁面" width="32%">
 <!-- screenshots -->
 
 [官網](https://www.turingmirror.com/zh-hant/products/rvc-fabric/) · [下載 Windows 版](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 以 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 為基礎開發，由 [圖靈鏡 Turing Mirror](https://github.com/Turing-Mirror) 維護。
 
-[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
+[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](../../LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
 
 [GitHub 倉庫](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB 製品下載](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
@@ -28,7 +28,7 @@
 **社群媒體**　[嗶哩嗶哩 @圖靈鏡](https://space.bilibili.com/3546871148579062)　·　[抖音 @圖靈鏡](https://v.douyin.com/6NxXcrKK9cc)（抖音號 `TuringMirror`）　·　[小紅書 @圖靈鏡](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094)（小紅書號 `TuringMirror`）　·　[YouTube @圖靈鏡](https://www.youtube.com/@TuringMirror)（YouTube 帳號 `@TuringMirror`）　·　QQ 群 @圖靈鏡社區（群號 `1077458748`）
 
 <!-- qq-group -->
-<img src="assets/brand/qq_group.jpg" alt="QQ 群 QR Code" width="200">
+<img src="../../assets/brand/qq_group.jpg" alt="QQ 群 QR Code" width="200">
 <!-- qq-group -->
 
 **贊助推廣**　[雨雲伺服器首月五折](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
@@ -100,7 +100,7 @@ npm run dev
 
 ## 開源授權與聲音授權
 
-- 本專案原始碼採用 [MIT License](./LICENSE) 許可協議開源。
+- 本專案原始碼採用 [MIT License](../../LICENSE) 許可協議開源。
 - 模型權重、音色包及第三方資源遵循其原始許可協議。
 - 使用他人聲音進行訓練或轉換前，請取得聲音權利人的授權。
 

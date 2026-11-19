@@ -312,7 +312,7 @@ class CountFilesTests(unittest.TestCase):
 class FilelistTests(unittest.TestCase):
     """filelist 拼错，训练会在最后一步（读数据）才炸，前面几十分钟全白费。"""
 
-    def _fixture(self, td: Path, *, names=("0", "1"), with_mute=True):
+    def _fixture(self, td: Path, *, names=("0", "1"), with_mute=True, mute_path="logs/mute"):
         root = td
         exp = root / "logs" / "voice"
         for sub in ("0_gt_wavs", "3_feature768", "2a_f0", "2b-f0nsf"):
@@ -323,26 +323,27 @@ class FilelistTests(unittest.TestCase):
             (exp / "2a_f0" / f"{n}.wav.npy").write_text("x")
             (exp / "2b-f0nsf" / f"{n}.wav.npy").write_text("x")
         if with_mute:
-            m = root / "logs" / "mute" / "0_gt_wavs"
+            m = root / mute_path / "0_gt_wavs"
             m.mkdir(parents=True)
             (m / "mute48k.wav").write_text("x")
         return root, exp
 
     def test_appends_two_mute_rows(self):
-        with tempfile.TemporaryDirectory() as td:
-            root, exp = self._fixture(Path(td))
-            req = tw.normalize({"exp": "voice", "sample_rate": "48k"})
-            with _Capture():
-                n = tw.write_filelist(req, exp, root)
-            self.assertEqual(n, 4)  # 2 条样本 + 2 条静音
-            rows = (exp / "filelist.txt").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(len(rows), 4)
-            self.assertEqual(sum(1 for r in rows if "mute48k.wav" in r), 2)
-            for r in rows:
-                self.assertEqual(len(r.split("|")), 5)
+        for mute_path in ("assets/training/mute", "logs/mute"):
+            with self.subTest(mute_path=mute_path), tempfile.TemporaryDirectory() as td:
+                root, exp = self._fixture(Path(td), mute_path=mute_path)
+                req = tw.normalize({"exp": "voice", "sample_rate": "48k"})
+                with _Capture():
+                    n = tw.write_filelist(req, exp, root)
+                self.assertEqual(n, 4)
+                rows = (exp / "filelist.txt").read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(rows), 4)
+                self.assertEqual(sum(1 for r in rows if "mute48k.wav" in r), 2)
+                for row in rows:
+                    self.assertEqual(len(row.split("|")), 5)
 
     def test_missing_mute_fixture_fails_loudly(self):
-        # logs/mute 不随 GUI 补丁下发，打包漏了就必须在这里就说清楚，
+        # 安装缺少静音样本时，在训练开始前说明问题，
         # 而不是让 train.py 在读第 3 条数据时抛一个看不懂的 FileNotFound。
         with tempfile.TemporaryDirectory() as td:
             root, exp = self._fixture(Path(td), with_mute=False)

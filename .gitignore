@@ -30,12 +30,10 @@ rmvpe.pt
 /assets/weights/*
 /ffmpeg.exe
 /ffprobe.exe
-# VB-Cable binaries synced from RVCMAX (keep text readme only if desired)
-/VBCABLE/*.exe
-/VBCABLE/*.sys
-/VBCABLE/*.cat
-/VBCABLE/*.inf
-/VBCABLE/*.ico
+# Local driver downloads and user data
+/VBCABLE/
+/User_Data/
+/UserData/
 !/assets/weights/请将音色模型放在这里.txt
 ffmpeg.*
 ffprobe.*
@@ -51,27 +49,6 @@ ffprobe.*
 /变声器.exe
 /TM_Setup.exe
 /TM_Voice.exe
-/UserData/app_config.json
-/UserData/gui_configs.json
-/User_Data/app_config.json
-/User_Data/gui_configs.json
-/User_Data/update_state.json
-/User_Data/runtime_control/
-/User_Data/logs/*
-!/User_Data/logs/.gitkeep
-/User_Data/models/**
-!/User_Data/models/.gitkeep
-!/User_Data/README.md
-/User_Data/ch-banner/
-/User_Data/update_cache/
-/User_Data/indices/
-/User_Data/shared_profiles/
-/User_Data/catalog_cache.json
-/User_Data/cover_cache/
-/User_Data/sts/
-/User_Data/sts_sources.json
-/User_Data/audio/
-/User_Data/audio_clips/
 # Dev/package-root local banner dump (user data lives under User_Data/ch-banner)
 /ch-banner/
 
@@ -98,16 +75,6 @@ ffprobe.*
 # One-off local sync backups (multi-GB possible)
 /_sync_backup_*/
 /_local/
-/UserData/
-
-# Runtime-generated user data (beyond app configs already listed)
-/User_Data/perf_reports/
-/User_Data/diagnostics/
-/User_Data/consult_packs/
-/User_Data/consult_samples/
-/User_Data/dev_variant.txt
-/User_Data/wallpaper/
-
 # 本机试听样本与打包产物标记 —— 用户内容留在本地，不进 Git
 /auditions/
 /package_meta.json
@@ -260,11 +227,4 @@ AGENTS.md
 /.dsh-mcp-token.txt
 /.acl-recovery/
 
-# Local API jobs and generated audio
-/User_Data/api/
-/User_Data/mobile/
 /.local/
-
-# Native training queue state
-/User_Data/train_queue.json
-/User_Data/train_queue.json.tmp

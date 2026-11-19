@@ -1,26 +1,26 @@
 <div align="center">
 
-<img src="assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
+<img src="../../assets/brand/logo_wordmark.png" alt="RVC Fabric" width="320">
 
 # RVC Fabric
 
 <!-- lang-nav -->
-[简体中文](./README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　한국어　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+[简体中文](../../README.md)　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　한국어　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
 <!-- lang-nav -->
 
 **Windows용 실시간 음성 변환 및 사운드보드**
 
 <!-- screenshots -->
-<img src="assets/screenshots/home.png" alt="RVC Fabric 홈 화면 및 실시간 음성 변환 제어" width="32%">
-<img src="assets/screenshots/settings.png" alt="RVC Fabric 설정 화면" width="32%">
-<img src="assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
+<img src="../../assets/screenshots/home.png" alt="RVC Fabric 홈 화면 및 실시간 음성 변환 제어" width="32%">
+<img src="../../assets/screenshots/settings.png" alt="RVC Fabric 설정 화면" width="32%">
+<img src="../../assets/screenshots/misc.png" alt="RVC Fabric 추가 기능 화면" width="32%">
 <!-- screenshots -->
 
 [공식 웹사이트](https://www.turingmirror.com/en/products/rvc-fabric/) · [Windows용 다운로드](https://www.turingmirror.com/releases/rvc-fabric/setup.exe)
 
 [RVC WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)를 기반으로 개발되었으며 [Turing Mirror](https://github.com/Turing-Mirror)가 유지보수합니다.
 
-[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](./LICENSE)
+[![Licence](https://img.shields.io/badge/LICENSE-MIT-green.svg?style=flat-square)](../../LICENSE)
 [![Based on RVC](https://img.shields.io/badge/based%20on-RVC%20WebUI-1289F0?style=flat-square)](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
 
 [GitHub 저장소](https://github.com/Turing-Mirror/RVC-Fabric) · [CNB 아티팩트 다운로드](https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases)
@@ -28,7 +28,7 @@
 **소셜 미디어**　[Bilibili @TuringMirror](https://space.bilibili.com/3546871148579062)　·　[Douyin @TuringMirror](https://v.douyin.com/6NxXcrKK9cc) (Douyin ID `TuringMirror`)　·　[Xiaohongshu @TuringMirror](https://www.xiaohongshu.com/user/profile/65f56bf1000000000b00e094) (Xiaohongshu ID `TuringMirror`)　·　[YouTube @TuringMirror](https://www.youtube.com/@TuringMirror) (YouTube 핸들 `@TuringMirror`)　·　QQ 그룹 @TuringMirror 커뮤니티 (그룹 번호 `1077458748`)
 
 <!-- qq-group -->
-<img src="assets/brand/qq_group.jpg" alt="QQ 그룹 QR 코드" width="200">
+<img src="../../assets/brand/qq_group.jpg" alt="QQ 그룹 QR 코드" width="200">
 <!-- qq-group -->
 
 **후원 프로모션**　[Rainyun 서버 첫 달 50% 할인](https://www.rainyun.com/m1rror_?s=RVC-Fabric)
@@ -99,7 +99,7 @@ npm run dev
 
 ## 소스 코드 라이선스 및 음성 사용 허가
 
-- 본 프로젝트의 소스 코드는 [MIT License](./LICENSE) 라이선스에 따라 오픈 소스로 제공됩니다.
+- 본 프로젝트의 소스 코드는 [MIT License](../../LICENSE) 라이선스에 따라 오픈 소스로 제공됩니다.
 - 모델 가중치, 음색 패키지 및 서드파티 리소스는 원래 라이선스를 따릅니다.
 - 타인의 목소리를 학습하거나 변환하기 전에 권리자의 허가를 받으십시오.
 

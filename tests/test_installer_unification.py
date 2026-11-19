@@ -17,7 +17,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 TAURI_CONF = REPO / "app" / "src-tauri" / "tauri.conf.json"
 HOOKS = REPO / "app" / "src-tauri" / "installer-hooks.nsh"
-ISS = REPO / "installer" / "RVC_Fabric_Setup.iss"
+ISS = REPO / "scripts" / "installer" / "RVC_Fabric_Setup.iss"
 PREP = REPO / "scripts" / "prepare_engine_payload.py"
 
 

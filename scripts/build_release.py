@@ -560,14 +560,6 @@ def copy_engine(out: Path) -> None:
     # 批处理和测试清单，用户拿到既不会用也用不上，而且它引用的那套老
     # Python 启动器早就不存在了。
 
-    # logs/ 整个不进包（那是用户的训练实验目录），但 logs/mute 必须进：
-    # 训练的 filelist 末尾要补两条静音样本，缺了训练在最后一步才会炸。
-    # 1.4 MB，只有这一个子目录。
-    mute_src = REPO / "logs" / "mute"
-    if mute_src.is_dir():
-        copy_tree(mute_src, out / "logs" / "mute")
-        log("  keep: logs/mute (训练用静音样本)")
-
     # Merge critical weights/ffmpeg from RVCMAX if repo placeholders are empty
     merge_rvcmax_engine_bits(out)
 
@@ -668,7 +660,7 @@ def copy_runtime(out: Path, runtime_src: Path | None) -> None:
 def copy_vbcable(out: Path, src: Path | None) -> None:
     dst = out / "VBCABLE"
     if src is None or not src.is_dir():
-        log("[vbcable] using repo VBCABLE + placeholder")
+        log("[vbcable] using local installation files when available")
         repo_v = REPO / "VBCABLE"
         if repo_v.is_dir():
             copy_tree(repo_v, dst)

@@ -202,8 +202,8 @@ scripts\dev\build_setup.bat --copy-cnb
 
 | 目录/文件 | 归属 |
 |-----------|------|
-| `app/` `tools/` `infer/` `configs/` `i18n/` `scripts/` `tests/` `installer/` `assets/` `docs/` `requirements/` `launcher/` | 源码（进 Git） |
-| `User_Data/` | 用户数据（模型/配置/缓存/输出；个别 `.gitkeep`、README 除外，一律不进 Git） |
+| `app/` `tools/` `infer/` `configs/` `i18n/` `scripts/` `tests/` `assets/` `docs/` `requirements/` | 源码、资源与文档（进 Git） |
+| `User_Data/` | 用户数据（模型、配置、缓存和输出，不进 Git） |
 | `Runtime/` `VBCABLE/` `TEMP/` `logs/` `__pycache__/` `_local/` | 运行时/临时产物（不进 Git） |
 | `auditions/` | 本机试听样本（用户内容，不进 Git，勿删） |
 | `package_meta.json` | 打包产物标记（构建时生成，只在成品目录里有意义） |

@@ -57,7 +57,13 @@ fn pretrained_dir(root: &Path) -> PathBuf {
 /// 静音样本：filelist 末尾要拼 `mute{sr}.wav`。只看目录在不在会让缺文件的
 /// 安装过了预检，训到最后一步才炸。
 fn mute_ready(root: &Path, sr: Option<&str>) -> bool {
-    let d = root.join("logs").join("mute").join("0_gt_wavs");
+    let fixture = root.join("assets").join("training").join("mute");
+    let fixture = if fixture.is_dir() {
+        fixture
+    } else {
+        root.join("logs").join("mute")
+    };
+    let d = fixture.join("0_gt_wavs");
     let check = |rate: &str| d.join(format!("mute{rate}.wav")).is_file();
     match sr {
         Some(rate) => check(rate),

@@ -5,7 +5,7 @@
 # RVC Fabric
 
 <!-- lang-nav -->
-简体中文　·　[繁體中文](./README_zh-TW.md)　·　[English](./README_en.md)　·　[日本語](./README_ja.md)　·　[한국어](./README_ko.md)　·　[Español](./README_es.md)　·　[Français](./README_fr.md)　·　[Русский](./README_ru.md)
+简体中文　·　[繁體中文](./docs/readme/README_zh-TW.md)　·　[English](./docs/readme/README_en.md)　·　[日本語](./docs/readme/README_ja.md)　·　[한국어](./docs/readme/README_ko.md)　·　[Español](./docs/readme/README_es.md)　·　[Français](./docs/readme/README_fr.md)　·　[Русский](./docs/readme/README_ru.md)
 <!-- lang-nav -->
 
 **Windows 实时变声与语音音效播放软件**

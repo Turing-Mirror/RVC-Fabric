@@ -226,7 +226,7 @@ _FALLBACK_ZH: dict[str, str] = {
     TRAIN_EXTRACT_FEATURE: "提取音色特征…",
     TRAIN_NO_FEATURE: "特征提取没有产出。通常为 assets/hubert/hubert_base.pt 缺失或损坏。",
     TRAIN_NO_SAMPLES: "四类训练产物的条目无法对应，没有可用的训练样本。建议清空该实验后重新开始。",
-    TRAIN_MUTE_MISSING: "缺少 logs/mute 静音样本，安装不完整。",
+    TRAIN_MUTE_MISSING: "缺少训练用的静音样本，安装不完整。",
     TRAIN_CONFIG_MISSING: "缺少 configs/{name}",
     TRAIN_PRETRAINED_MISSING: "缺少 {sample_rate} 的底模（assets/pretrained_v2/f0G{sample_rate}.pth）。从零训练需要数十小时与上百小时的素材，本软件不支持该方式，请先下载对应底模。",
     TRAIN_COLLECT_FEATURE: "收集特征…",

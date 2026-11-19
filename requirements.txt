@@ -1,2 +1,0 @@
-# Default deps: see requirements/ folder
--r requirements/requirements.txt

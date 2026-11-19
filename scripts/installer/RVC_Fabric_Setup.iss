@@ -28,10 +28,10 @@
 
 ; Payload 由 scripts/build_setup.py 生成（相对本 .iss 的路径）
 #ifndef PayloadDir
-  #define PayloadDir "..\dist\RVC_Fabric_Setup_payload"
+  #define PayloadDir "..\..\dist\RVC_Fabric_Setup_payload"
 #endif
 #ifndef OutputDir
-  #define OutputDir "..\dist"
+  #define OutputDir "..\..\dist"
 #endif
 #ifndef OutputBase
   #define OutputBase "RVC_Fabric_Setup"
@@ -53,7 +53,7 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBase}
-SetupIconFile=..\assets\brand\app.ico
+SetupIconFile=..\..\assets\brand\app.ico
 ; Point uninstall + Start Menu icons at the shipped .ico (not only the exe resource).
 ; gui_patch can refresh assets/brand/app.ico without re-embedding PyInstaller icons.
 UninstallDisplayIcon={app}\assets\brand\app.ico
@@ -83,8 +83,7 @@ ShowLanguageDialog=no
 UsePreviousLanguage=no
 
 [Languages]
-; 安装向导整体中文：简中语言文件随仓库自带（installer/ChineseSimplified.isl，
-; UTF-8 带 BOM），相对本 .iss 引用，不依赖打包机的 Inno 语言包。
+; 简中语言文件采用 UTF-8 BOM，与本脚本放在同一目录。
 ; 只保留简中一种语言：任何系统语言、任何升级路径都不会落回英文。
 Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 

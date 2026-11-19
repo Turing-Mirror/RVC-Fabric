@@ -36,4 +36,4 @@ python scripts/legacy_update.py --publish
 
 ## 下次发版
 
-将 `app/package.json`、`app/src-tauri/Cargo.toml`、`app/src-tauri/tauri.conf.json`、`installer/RVC_Fabric_Setup.iss` 及 `scripts/shell_version.py` 同步到新版本，同时更新 npm 和 Cargo 锁文件中的应用版本，在 `docs/releases/X.Y.Z.md` 写用户能看到的变化。运行 `python -m unittest tests.test_version_sync` 后推送发版分支，重复第 1、2 步。保管好私钥及其密码，签名用的 GitHub Secrets 在 RVC Fabric 仓库的 `release` 环境中。
+将 `app/package.json`、`app/src-tauri/Cargo.toml`、`app/src-tauri/tauri.conf.json`、`scripts/installer/RVC_Fabric_Setup.iss` 及 `scripts/shell_version.py` 同步到新版本，同时更新 npm 和 Cargo 锁文件中的应用版本，在 `docs/releases/X.Y.Z.md` 写用户能看到的变化。运行 `python -m unittest tests.test_version_sync` 后推送发版分支，重复第 1、2 步。保管好私钥及其密码，签名用的 GitHub Secrets 在 RVC Fabric 仓库的 `release` 环境中。

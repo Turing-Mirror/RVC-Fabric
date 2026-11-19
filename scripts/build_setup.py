@@ -32,7 +32,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 PAYLOAD_DEFAULT = REPO / "dist" / "RVC_Fabric_Setup_payload"
 DIST_DEFAULT = REPO / "dist"
-ISS_FILE = REPO / "installer" / "RVC_Fabric_Setup.iss"
+ISS_FILE = REPO / "scripts" / "installer" / "RVC_Fabric_Setup.iss"
 CNB_SETUP = REPO / "CNB-GIT-RELEASE" / "setup"
 SETUP_EXE_NAME = "RVC_Fabric_Setup.exe"
 
@@ -254,7 +254,7 @@ def assemble_payload(out: Path, *, skip_exe: bool) -> None:
         "vbcable_channel": "cnb_lfs",
         "cnb_repo": "https://cnb.cool/Turing-Mirror/RVC-Fabric-Releases",
         "installer": "inno_setup",
-        "iss": "installer/RVC_Fabric_Setup.iss",
+        "iss": ISS_FILE.relative_to(REPO).as_posix(),
         "note": "Runtime、变声资源、音频组件及 VB-Cable 按需补全。",
     }
     (out / "setup_package.json").write_text(

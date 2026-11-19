@@ -1,5 +1,5 @@
 ﻿; 简体中文 — Inno Setup 6 安装向导语言文件（RVC Fabric 随仓库自带）
-; 放在 installer/ 内并由 RVC_Fabric_Setup.iss 以相对路径引用，
+; 由同目录下的 RVC_Fabric_Setup.iss 以相对路径引用，
 ; 不依赖打包机的 Inno Setup 是否安装了官方简中语言包。
 ; 保存为 UTF-8（带 BOM）。缺失的条目编译时会回落英文并给出警告，不影响构建。
 

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CARGO_TOML = ROOT / "app" / "src-tauri" / "Cargo.toml"
 TAURI_CONF = ROOT / "app" / "src-tauri" / "tauri.conf.json"
 PACKAGE_JSON = ROOT / "app" / "package.json"
-INNO_ISS = ROOT / "installer" / "RVC_Fabric_Setup.iss"
+INNO_ISS = ROOT / "scripts" / "installer" / "RVC_Fabric_Setup.iss"
 UPDATE_RS = ROOT / "app" / "src-tauri" / "src" / "update.rs"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
@@ -49,7 +49,7 @@ def cargo_version() -> str:
 def inno_version() -> str:
     text = INNO_ISS.read_text(encoding="utf-8", errors="replace")
     m = re.search(r'#define\s+MyAppVersion\s+"([^"]+)"', text)
-    assert m, "installer/RVC_Fabric_Setup.iss 里没找到 MyAppVersion"
+    assert m, f"{INNO_ISS.relative_to(ROOT)} 里没找到 MyAppVersion"
     return m.group(1)
 
 
@@ -59,7 +59,7 @@ class TestVersionSync(unittest.TestCase):
             "Cargo.toml": cargo_version(),
             "tauri.conf.json": json.loads(TAURI_CONF.read_text(encoding="utf-8"))["version"],
             "package.json": json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))["version"],
-            "installer/RVC_Fabric_Setup.iss": inno_version(),
+            INNO_ISS.relative_to(ROOT).as_posix(): inno_version(),
         }
         uniq = set(got.values())
         self.assertEqual(

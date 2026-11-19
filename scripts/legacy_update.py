@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import yaml
 
@@ -40,6 +40,11 @@ def run(*args, cwd=None, capture=False):
     return result.stdout.strip() if capture else None
 
 
+def open_release_url(url, timeout):
+    request = Request(url, headers={"User-Agent": f"RVC-Fabric/{VERSION}"})
+    return urlopen(request, timeout=timeout)
+
+
 def verify_release(directory):
     tag = "v" + VERSION
     release = json.loads(run("gh", "release", "view", tag, "--repo", PRODUCT, "--json",
@@ -59,7 +64,7 @@ def verify_release(directory):
             or platform["signature"] != signed["signature"] or manifest["pub_date"] != signed["pub_date"]
             or checksum != signed["sha256"] + "  " + NAME):
         raise ValueError("The signed Setup and its GitHub release files do not match.")
-    with urlopen(SITE + "app.json", timeout=30) as response:
+    with open_release_url(SITE + "app.json", timeout=30) as response:
         current = json.load(response)["app"]
     if (tuple(map(int, current["version"].split("."))) < tuple(map(int, VERSION.split(".")))
             or (current["version"] == VERSION and current["gui"]["sha256"] != signed["sha256"])):
@@ -117,7 +122,7 @@ def prepare_catalog(repo, scratch, signed, manifest, published_at):
 
 def remote_sha256(url):
     try:
-        with urlopen(url, timeout=90) as response:
+        with open_release_url(url, timeout=90) as response:
             return hashlib.file_digest(response, "sha256").hexdigest()
     except HTTPError as error:
         if error.code == 404:

@@ -108,7 +108,7 @@ fn safe_link(url: &str) -> String {
     }
 }
 
-/// The release site publishes absolute image URLs. Relative paths are for legacy CNB feeds.
+/// New feed images live under the release site's images/ directory. Legacy paths remain on CNB.
 fn resolve_image_url(image: &str) -> String {
     let s = image.trim();
     if s.is_empty() {
@@ -135,7 +135,11 @@ fn resolve_image_url(image: &str) -> String {
         return String::new();
     }
     let rel = s.replace('\\', "/");
-    format!("{CNB_RAW_MAIN}/{}", rel.trim_start_matches('/'))
+    let path = rel.trim_start_matches('/');
+    if path.starts_with("images/") {
+        return format!("{RELEASE_SITE}/{path}");
+    }
+    format!("{CNB_RAW_MAIN}/{path}")
 }
 
 impl PlazaItem {
@@ -490,6 +494,8 @@ mod tests {
         assert!(resolve_image_url("plaza/a.jpg").starts_with(CNB_RAW_MAIN));
         let image = format!("{RELEASE_SITE}/images/a.webp");
         assert_eq!(resolve_image_url(&image), image);
+        assert_eq!(resolve_image_url("images/a.webp"), image);
+        assert_eq!(resolve_image_url("/images/a.webp"), image);
         assert_eq!(resolve_image_url(&format!("{RELEASE_SITE}/other/a.webp")), "");
     }
 

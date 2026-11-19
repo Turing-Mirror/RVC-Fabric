@@ -30,6 +30,10 @@ python scripts/legacy_update.py --publish
 
 最后用一份仍在运行的 1.7.2 点「检查更新」，确认能下载、安装并重新启动到 1.8.0。保留这份 CNB 安装包、签名清单和旧索引，晚几个月打开软件的用户仍能升级。更早版本若无法使用内置更新，可以从官网下载 Setup，覆盖原安装目录。运行环境、底模和工具仍从原资源地址按需下载。
 
+## 社区公告和图片
+
+在官网仓库编辑 `public/releases/rvc-fabric/plaza.json`，将配图放在同目录的 `images/` 下。公告里填 `images/文件名.webp` 即可。运行 `npm run build` 后，把改过的源文件和对应的 `dist/` 文件一起推送到 `main`，1.8.0 客户端刷新后即可看到。
+
 ## 下次发版
 
 将 `app/package.json`、`app/src-tauri/Cargo.toml`、`app/src-tauri/tauri.conf.json`、`installer/RVC_Fabric_Setup.iss` 及 `scripts/shell_version.py` 同步到新版本，同时更新 npm 和 Cargo 锁文件中的应用版本，在 `docs/releases/X.Y.Z.md` 写用户能看到的变化。运行 `python -m unittest tests.test_version_sync` 后推送发版分支，重复第 1、2 步。保管好私钥及其密码，签名用的 GitHub Secrets 在 RVC Fabric 仓库的 `release` 环境中。

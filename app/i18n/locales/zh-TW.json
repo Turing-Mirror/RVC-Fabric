@@ -2286,7 +2286,12 @@
     "storageSharedModels": "共用模型",
     "storageAudio": "音訊檔案",
     "storageOther": "其他使用者檔案",
-    "storageScanFailed": "儲存空間資訊更新失敗，請重新統計。"
+    "storageScanFailed": "儲存空間資訊更新失敗，請重新統計。",
+    "setupBackground": "背景下載",
+    "setupNextStep": "有待確認的步驟，點擊開啟",
+    "orbDownloadLabel": "檢視下載進度",
+    "communityDownloading": "社群背景下載",
+    "communityDownloadCount": "共 {v0} 項任務"
   },
   "extras": {
     "engineTitle": "引擎資源",

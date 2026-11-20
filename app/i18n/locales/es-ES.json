@@ -2286,7 +2286,12 @@
     "storageSharedModels": "Modelos compartidos",
     "storageAudio": "Archivos de audio",
     "storageOther": "Otros archivos del usuario",
-    "storageScanFailed": "No se pudo actualizar el almacenamiento. Vuelve a analizarlo."
+    "storageScanFailed": "No se pudo actualizar el almacenamiento. Vuelve a analizarlo.",
+    "setupBackground": "Continuar en segundo plano",
+    "setupNextStep": "Siguiente paso listo; haz clic para abrir",
+    "orbDownloadLabel": "Ver progreso de descarga",
+    "communityDownloading": "Descarga de Comunidad",
+    "communityDownloadCount": "{v0} tareas activas"
   },
   "extras": {
     "engineTitle": "Recursos del motor",

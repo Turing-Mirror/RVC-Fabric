@@ -29,6 +29,7 @@ export type StoreJobsSnap = {
   running: string[];
   queued: string[];
   prog: Record<string, VoiceProg>;
+  activeLabel: string;
   error: string;
   generation: number;
   lastCompleted: string;
@@ -68,7 +69,10 @@ let listening = false;
 const listeners = new Set<() => void>();
 
 function snap(): StoreJobsSnap {
-  return { running, queued, prog, error, generation, lastCompleted, lastCompletedThird };
+  const firstId = running[0];
+  const firstEntry = firstId ? entries.get(firstId) : undefined;
+  const activeLabel = firstEntry ? displayVoiceName(firstEntry.voice) : "";
+  return { running, queued, prog, activeLabel, error, generation, lastCompleted, lastCompletedThird };
 }
 
 function emit() {

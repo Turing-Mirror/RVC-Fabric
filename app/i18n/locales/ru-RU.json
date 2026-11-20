@@ -2286,7 +2286,12 @@
     "storageSharedModels": "Общие модели",
     "storageAudio": "Аудиофайлы",
     "storageOther": "Другие файлы пользователя",
-    "storageScanFailed": "Не удалось обновить сведения о хранилище. Повторите подсчёт."
+    "storageScanFailed": "Не удалось обновить сведения о хранилище. Повторите подсчёт.",
+    "setupBackground": "Продолжить в фоне",
+    "setupNextStep": "Следующий шаг готов; нажмите, чтобы открыть",
+    "orbDownloadLabel": "Показать ход загрузки",
+    "communityDownloading": "Загрузка из Сообщества",
+    "communityDownloadCount": "Задач: {v0}"
   },
   "extras": {
     "engineTitle": "Ресурсы движка",

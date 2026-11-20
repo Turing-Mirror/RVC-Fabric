@@ -2286,7 +2286,12 @@
     "storageSharedModels": "公共模型",
     "storageAudio": "音频文件",
     "storageOther": "其他用户文件",
-    "storageScanFailed": "存储信息刷新失败，请重新统计。"
+    "storageScanFailed": "存储信息刷新失败，请重新统计。",
+    "setupBackground": "后台下载",
+    "setupNextStep": "有待确认的步骤，点击打开",
+    "orbDownloadLabel": "查看下载进度",
+    "communityDownloading": "社区后台下载",
+    "communityDownloadCount": "共 {v0} 项任务"
   },
   "extras": {
     "engineTitle": "引擎资源",

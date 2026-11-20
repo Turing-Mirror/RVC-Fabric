@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { TransferProgress } from "trm-ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DockableModal, TransferProgress } from "trm-ui";
 import { listen } from "@tauri-apps/api/event";
 import { Btn } from "./ui";
-import { Modal } from "./Modal";
 import { ErrorNote } from "./ErrorNote";
 import { t } from "../i18n/t";
 import { useI18n } from "../i18n";
+import { joinClauses } from "../lib/text";
 import { audioToolsDownloading, ensureAudioTools } from "../lib/downloadModels";
 
 type Phase = "ask" | "downloading" | "done" | "failed";
@@ -14,6 +14,9 @@ type Props = {
   open: boolean;
   /** 包体大小（字节），来自后端，提示里显示「约 xx MB」。 */
   sizeBytes?: number;
+  minimized?: boolean;
+  onMinimizedChange?: (minimized: boolean) => void;
+  orbSlot?: number;
   onClose: () => void;
 };
 
@@ -27,14 +30,40 @@ function formatMb(n?: number): string {
  * 安装包不带这两个文件。与运行时的弹窗同一种样子：说明用途和大小，由用户
  * 决定下不下。下载中可以关掉窗口，任务在后台继续。
  */
-export function AudioToolsDialog({ open, sizeBytes, onClose }: Props) {
+export function AudioToolsDialog({
+  open,
+  sizeBytes,
+  minimized,
+  onMinimizedChange,
+  orbSlot = 0,
+  onClose,
+}: Props) {
   useI18n();
   const [phase, setPhase] = useState<Phase>("ask");
   const [error, setError] = useState("");
   const [pct, setPct] = useState(0);
+  const [innerMin, setInnerMin] = useState(false);
+
+  const isMin = minimized ?? innerMin;
+  const minRef = useRef(isMin);
+  useEffect(() => {
+    minRef.current = isMin;
+  }, [isMin]);
+
+  const setMin = useCallback(
+    (next: boolean) => {
+      minRef.current = next;
+      if (onMinimizedChange) onMinimizedChange(next);
+      else setInnerMin(next);
+    },
+    [onMinimizedChange],
+  );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setMin(false);
+      return;
+    }
     setPhase(audioToolsDownloading() ? "downloading" : "ask");
     setError("");
     let disposed = false;
@@ -49,14 +78,20 @@ export function AudioToolsDialog({ open, sizeBytes, onClose }: Props) {
       disposed = true;
       un?.();
     };
-  }, [open]);
+  }, [open, setMin]);
 
   const start = () => {
     setPhase("downloading");
     setError("");
     setPct(0);
     ensureAudioTools()
-      .then(() => setPhase("done"))
+      .then(() => {
+        if (minRef.current) {
+          onClose();
+        } else {
+          setPhase("done");
+        }
+      })
       .catch((e) => {
         setError(String(e));
         setPhase("failed");
@@ -64,10 +99,31 @@ export function AudioToolsDialog({ open, sizeBytes, onClose }: Props) {
   };
 
   const size = formatMb(sizeBytes);
+  const tooltip = joinClauses([
+    t("audioTools.title"),
+    phase === "failed" ? error : t("audioTools.downloading"),
+    phase === "downloading" && pct > 0 ? `${Math.round(pct)}%` : "",
+  ]);
 
   return (
-    <Modal open={open} z={60}>
-      <div className="w-full max-w-[440px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_rgba(20,26,33,.34)] p-7">
+    <DockableModal
+      open={open}
+      minimized={isMin}
+      onMinimizedChange={setMin}
+      canMinimize={phase === "downloading" || isMin}
+      onClose={phase !== "downloading" ? onClose : undefined}
+      maxWidth={440}
+      contained={false}
+      z={60}
+      slot={orbSlot}
+      bottom={92}
+      label={t("audioTools.title")}
+      orbLabel={t("s.orbDownloadLabel")}
+      percent={phase === "downloading" && pct > 0 ? pct : undefined}
+      attention={phase === "failed" ? "error" : "idle"}
+      tooltip={tooltip}
+    >
+      <div className="p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-2">{t("audioTools.title")}</h2>
         {phase === "failed" ? (
           <div className="mb-5"><ErrorNote text={error} compact /></div>
@@ -99,12 +155,12 @@ export function AudioToolsDialog({ open, sizeBytes, onClose }: Props) {
               </Btn>
             </>
           ) : phase === "downloading" ? (
-            <Btn onClick={onClose}>{t("audioTools.background")}</Btn>
+            <Btn onClick={() => setMin(true)}>{t("audioTools.background")}</Btn>
           ) : (
             <Btn primary onClick={onClose}>{t("audioTools.ok")}</Btn>
           )}
         </div>
       </div>
-    </Modal>
+    </DockableModal>
   );
 }

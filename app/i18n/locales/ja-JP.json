@@ -2286,7 +2286,12 @@
     "storageSharedModels": "共有モデル",
     "storageAudio": "音声ファイル",
     "storageOther": "その他のユーザーファイル",
-    "storageScanFailed": "ストレージ情報を更新できませんでした。再集計してください。"
+    "storageScanFailed": "ストレージ情報を更新できませんでした。再集計してください。",
+    "setupBackground": "バックグラウンドで続行",
+    "setupNextStep": "次の手順があります。クリックして開く",
+    "orbDownloadLabel": "ダウンロード進捗を表示",
+    "communityDownloading": "コミュニティのダウンロード",
+    "communityDownloadCount": "進行中 {v0} 件"
   },
   "extras": {
     "engineTitle": "エンジンリソース",

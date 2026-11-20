@@ -2286,7 +2286,12 @@
     "storageSharedModels": "Shared models",
     "storageAudio": "Audio files",
     "storageOther": "Other user files",
-    "storageScanFailed": "Storage information could not be refreshed. Scan again."
+    "storageScanFailed": "Storage information could not be refreshed. Scan again.",
+    "setupBackground": "Continue in background",
+    "setupNextStep": "Next step ready; click to open",
+    "orbDownloadLabel": "View download progress",
+    "communityDownloading": "Community download",
+    "communityDownloadCount": "{v0} tasks active"
   },
   "extras": {
     "engineTitle": "Engine resources",

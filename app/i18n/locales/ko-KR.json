@@ -2286,7 +2286,12 @@
     "storageSharedModels": "공유 모델",
     "storageAudio": "오디오 파일",
     "storageOther": "기타 사용자 파일",
-    "storageScanFailed": "저장 공간 정보를 새로 고치지 못했습니다. 다시 집계하세요."
+    "storageScanFailed": "저장 공간 정보를 새로 고치지 못했습니다. 다시 집계하세요.",
+    "setupBackground": "백그라운드에서 계속",
+    "setupNextStep": "다음 단계가 있습니다. 클릭하여 열기",
+    "orbDownloadLabel": "다운로드 진행률 보기",
+    "communityDownloading": "커뮤니티 다운로드",
+    "communityDownloadCount": "작업 {v0}개 진행 중"
   },
   "extras": {
     "engineTitle": "엔진 리소스",

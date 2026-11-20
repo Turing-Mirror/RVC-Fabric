@@ -33,6 +33,7 @@ import { openExternal } from "./lib/plaza";
 import { comboFromEvent, localAudioHotkeyMap, localHotkeyMap, typingInto, type AudioHotkeyBinding } from "./lib/hotkeys";
 import { PageHost } from "./components/PageHost";
 import { ProvisionGate } from "./components/ProvisionGate";
+import { CommunityDownloadOrb } from "./components/CommunityDownloadOrb";
 import { RuntimeMigrationDialog } from "./components/RuntimeMigrationDialog";
 import { LanguageGate } from "./components/LanguageGate";
 import { TitleBar } from "./components/TitleBar";
@@ -249,6 +250,8 @@ export default function App() {
     };
   }, []);
   const [showProvision, setShowProvision] = useState(false);
+  const [provisionMinimized, setProvisionMinimized] = useState(false);
+  const [audioToolsMinimized, setAudioToolsMinimized] = useState(false);
   const [provisionDismissed, setProvisionDismissed] = useState(false);
   const [coreOnly, setCoreOnly] = useState(false);
   const [showLangGate, setShowLangGate] = useState(false);
@@ -713,6 +716,7 @@ export default function App() {
           }
           audioToolsAsked.current = true;
           audioToolsThen.current = then ?? null;
+          setAudioToolsMinimized(false);
           setAudioTools({ open: true, size: st.audio_tools_size_bytes });
         })
         .catch(() => then?.());
@@ -721,6 +725,7 @@ export default function App() {
   }, []);
   const closeAudioTools = () => {
     setAudioTools((a) => ({ ...a, open: false }));
+    setAudioToolsMinimized(false);
     const then = audioToolsThen.current;
     audioToolsThen.current = null;
     then?.();
@@ -929,7 +934,10 @@ export default function App() {
   const fixTrouble = (kind: Trouble) => {
     if (kind === "voice") openGuide("voice");
     else if (kind === "devices") openGuide("devices");
-    else if (kind === "runtime") setShowProvision(true);
+    else if (kind === "runtime") {
+      setProvisionMinimized(false);
+      setShowProvision(true);
+    }
     else if (kind === "vram") {
       setSettingsTab("perf");
       setPage("settings");
@@ -1002,6 +1010,7 @@ export default function App() {
     if (!runtimeReady) {
       guideRequested.current = true;
       setCoreOnly(false);
+      setProvisionMinimized(false);
       setShowProvision(true);
       return;
     }
@@ -1009,6 +1018,7 @@ export default function App() {
     if (assets.engine_core_ready === false) {
       guideRequested.current = true;
       setCoreOnly(true);
+      setProvisionMinimized(false);
       setShowProvision(true);
     } else {
       openGuide("cable");
@@ -1017,6 +1027,7 @@ export default function App() {
 
   function closeProvision() {
     setShowProvision(false);
+    setProvisionMinimized(false);
     setCoreOnly(false);
     setProvisionDismissed(true);
   }
@@ -1089,6 +1100,7 @@ export default function App() {
     actionsRef.current = {
       toggleRun: () => {
         if (engine.provision.need_provision || engine.provision.runtime_ready === false) {
+          setProvisionMinimized(false);
           setShowProvision(true);
         } else {
           void engine.toggleRun();
@@ -1281,6 +1293,8 @@ export default function App() {
         open={showProvision && !showLangGate && !needsMigration}
         initial={engine.provision}
         coreOnly={coreOnly}
+        minimized={provisionMinimized}
+        onMinimizedChange={setProvisionMinimized}
         onDone={() => void finishProvision()}
         onDismiss={() => {
           guideRequested.current = false;
@@ -1288,7 +1302,24 @@ export default function App() {
         }}
       />
 
-      <AudioToolsDialog open={audioTools.open} sizeBytes={audioTools.size} onClose={closeAudioTools} />
+      <AudioToolsDialog
+        open={audioTools.open}
+        sizeBytes={audioTools.size}
+        minimized={audioToolsMinimized}
+        onMinimizedChange={setAudioToolsMinimized}
+        orbSlot={showProvision && !showLangGate && !needsMigration && provisionMinimized ? 1 : 0}
+        onClose={closeAudioTools}
+      />
+
+      <CommunityDownloadOrb
+        activePage={page}
+        orbSlot={
+          (showProvision && !showLangGate && !needsMigration && provisionMinimized ? 1 : 0) +
+          (audioTools.open && audioToolsMinimized ? 1 : 0)
+        }
+        onOpenPlaza={openPlaza}
+        onOpenDownloads={() => openDownloadModels()}
+      />
 
       <PageHost page={page}>
         {(id) => (
@@ -1370,6 +1401,7 @@ export default function App() {
                   provision={engine.provision}
                   onForceKill={requestForceKill}
                   onOpenProvision={() => {
+                    setProvisionMinimized(false);
                     setShowProvision(true);
                   }}
                   onOpenDownloadModels={openDownloadModels}
@@ -1590,6 +1622,7 @@ export default function App() {
         running={engine.running || engine.starting}
         onToggleRun={() => {
           if (engine.provision.need_provision || engine.provision.runtime_ready === false) {
+            setProvisionMinimized(false);
             setShowProvision(true);
           } else {
             void engine.toggleRun({ dspId });

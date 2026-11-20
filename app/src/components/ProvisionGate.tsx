@@ -1,7 +1,7 @@
-import { TransferProgress } from "trm-ui";
+import { DockableModal, TransferProgress } from "trm-ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelProvision,
   startProvision,
@@ -13,7 +13,6 @@ import { useI18n } from "../i18n";
 import { joinClauses } from "../lib/text";
 import { ErrorNote } from "./ErrorNote";
 import { MainGpuPicker, MAIN_GPU_AUTO, mainGpuTip } from "./MainGpuPicker";
-import { Modal } from "./Modal";
 import { Btn, HelpMark } from "./ui";
 
 type Dependency = "core" | "vcredist" | "vbcable";
@@ -22,6 +21,9 @@ type Props = {
   open: boolean;
   initial?: ProvisionStatus;
   coreOnly?: boolean;
+  minimized?: boolean;
+  onMinimizedChange?: (minimized: boolean) => void;
+  orbSlot?: number;
   onDone: () => void;
   onDismiss?: () => void;
 };
@@ -37,7 +39,16 @@ function isCancelError(error: string, cancelled: string): boolean {
   return error.includes(cancelled) || error.toLowerCase().includes("cancel");
 }
 
-export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismiss }: Props) {
+export function ProvisionGate({
+  open,
+  initial,
+  coreOnly = false,
+  minimized,
+  onMinimizedChange,
+  orbSlot = 0,
+  onDone,
+  onDismiss,
+}: Props) {
   const { t } = useI18n();
   const preferred = initial?.installed_variant || initial?.recommended_variant;
   const [variant, setVariant] = useState(preferred && preferred !== "unknown" ? preferred : "nvidia");
@@ -50,6 +61,26 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
   const [progress, setProgress] = useState<ProvisionProgress | null>(null);
   const [error, setError] = useState("");
   const [mainGpu, setMainGpu] = useState(MAIN_GPU_AUTO);
+  const [innerMin, setInnerMin] = useState(false);
+
+  const isMin = minimized ?? innerMin;
+  const minRef = useRef(isMin);
+  useEffect(() => {
+    minRef.current = isMin;
+  }, [isMin]);
+
+  const setMin = useCallback(
+    (next: boolean) => {
+      minRef.current = next;
+      if (onMinimizedChange) onMinimizedChange(next);
+      else setInnerMin(next);
+    },
+    [onMinimizedChange],
+  );
+
+  useEffect(() => {
+    if (!open) setMin(false);
+  }, [open, setMin]);
 
   useEffect(() => {
     if (!open) return;
@@ -131,17 +162,30 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
         if (!vcrInstalled) next.push("vcredist");
         if (assets.vbcable_installed === false) next.push("vbcable");
         setCoreSize(assets.engine_core_size_bytes ?? 0);
+        if (next.length === 0 && minRef.current) {
+          onDone();
+          return;
+        }
         setPending(next);
         setRuntimeComplete(true);
         setProgress(null);
       } else if (step === "core") {
         await invoke("assets_ensure_engine_core");
+        if (pending.length <= 1 && !restartNeeded && minRef.current) {
+          onDone();
+          return;
+        }
         advance();
       } else if (step === "vcredist" || step === "vbcable") {
         await invoke("assets_ensure_" + step);
         setProgress({ phase: "installing", done: 0, total: 0, percent: 0 });
         await invoke(step === "vcredist" ? "vcredist_install" : "assets_install_vbcable");
+        const willNeedRestart = restartNeeded || step === "vbcable";
         if (step === "vbcable") setRestartNeeded(true);
+        if (pending.length <= 1 && !willNeedRestart && minRef.current) {
+          onDone();
+          return;
+        }
         advance();
       }
     } catch (cause) {
@@ -183,10 +227,33 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
     : phase === "done" ? t("s.2105061e3e")
     : t("s.setupDownloading");
 
-  if (!open) return <Modal open={false} />;
+  const percent = busy && total > 1 && phase !== "installing" ? Math.min(100, (100 * done) / total) : undefined;
+  const attention = error && !busy ? "error" : !busy && (pending.length > 0 || restartNeeded) ? "ready" : "idle";
+  const tooltip = joinClauses([
+    title,
+    busy ? message : error ? error : pending.length > 0 || restartNeeded ? t("s.setupNextStep") : "",
+    percent !== undefined ? `${Math.round(percent)}%` : "",
+    busy && downloading && progress?.speed_bps ? progress.speed_label : "",
+  ]);
+
   return (
-    <Modal z={50} contained>
-      <div className="w-full max-w-[520px] rounded-[var(--r)] bg-[var(--surface)] shadow-[0_22px_56px_-18px_var(--scrim)] p-7">
+    <DockableModal
+      open={open}
+      minimized={isMin}
+      onMinimizedChange={setMin}
+      canMinimize={busy || isMin}
+      onClose={!busy && step === "runtime" ? onDismiss : undefined}
+      contained
+      z={50}
+      slot={orbSlot}
+      bottom={92}
+      label={title}
+      orbLabel={t("s.orbDownloadLabel")}
+      percent={percent}
+      attention={attention}
+      tooltip={tooltip}
+    >
+      <div className="p-7">
         <h2 className="text-[22px] font-semibold m-0 mb-4">{title}</h2>
         {step === "runtime" && !busy ? (
           <>
@@ -260,7 +327,7 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
         {busy ? (
           <TransferProgress
             message={message}
-            percent={total > 1 && phase !== "installing" ? Math.min(100, 100 * done / total) : undefined}
+            percent={percent}
             speed={downloading && progress?.speed_bps ? progress.speed_label : undefined}
             detail={downloading && done > 0 ? (total > 1 ? formatBytes(done) + " / " + formatBytes(total) : formatBytes(done)) : undefined}
           />
@@ -268,7 +335,10 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
         {!busy && error ? <ErrorNote text={error} compact /> : null}
         <div className="flex items-center gap-2 justify-end mt-5">
           {busy ? (
-            canPause ? <Btn onClick={() => void pause()} disabled={pausing}>{t("s.setupPause")}</Btn> : null
+            <>
+              <Btn onClick={() => setMin(true)}>{t("s.setupBackground")}</Btn>
+              {canPause ? <Btn onClick={() => void pause()} disabled={pausing}>{t("s.setupPause")}</Btn> : null}
+            </>
           ) : step === "done" ? (
             <Btn primary onClick={onDone}>{t("s.33246f6a5e")}</Btn>
           ) : (
@@ -286,6 +356,6 @@ export function ProvisionGate({ open, initial, coreOnly = false, onDone, onDismi
           )}
         </div>
       </div>
-    </Modal>
+    </DockableModal>
   );
 }

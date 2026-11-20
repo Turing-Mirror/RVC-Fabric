@@ -57,3 +57,96 @@ it("offers one dependency at a time and keeps remaining steps when one is skippe
     modal.unmount();
   }
 });
+
+it("minimizes active downloads to a bottom-left orb and auto-completes or prompts on click", async () => {
+  let resolveProvision!: (value: { ok: boolean; message?: string }) => void;
+  invoke.mockImplementation((command: string) => {
+    switch (command) {
+      case "provision_start":
+        return new Promise((resolve) => {
+          resolveProvision = resolve;
+        });
+      case "assets_status":
+        return Promise.resolve({ engine_core_ready: true, vbcable_installed: true });
+      case "vcredist_installed":
+        return Promise.resolve(true);
+      default:
+        return Promise.resolve({});
+    }
+  });
+
+  const finish = vi.fn();
+  const modal = mount(
+    <ProvisionGate open initial={{ recommended_variant: "nvidia" }} onDone={finish} />,
+  );
+  const body = modal.container.ownerDocument.body;
+  const clickButton = async (label: string) => {
+    const button = Array.from(body.querySelectorAll("button")).find((b) => b.textContent?.trim() === label);
+    expect(button, label).toBeDefined();
+    await act(async () => button!.click());
+    await tick();
+  };
+
+  try {
+    await clickButton(t("runtimeActions.download"));
+    await clickButton(t("s.setupBackground"));
+    const orb = body.querySelector(`button[aria-label="${t("s.orbDownloadLabel")}"]`) as HTMLButtonElement | null;
+    expect(orb).not.toBeNull();
+    expect(finish).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveProvision({ ok: true });
+      await tick();
+    });
+    expect(finish).toHaveBeenCalledOnce();
+  } finally {
+    modal.unmount();
+  }
+});
+
+it("keeps orb highlighted when next dependency happens while minimized and expands on click", async () => {
+  let resolveProvision!: (value: { ok: boolean; message?: string }) => void;
+  invoke.mockImplementation((command: string) => {
+    switch (command) {
+      case "provision_start":
+        return new Promise((resolve) => {
+          resolveProvision = resolve;
+        });
+      case "assets_status":
+        return Promise.resolve({ engine_core_ready: false, vbcable_installed: true });
+      case "vcredist_installed":
+        return Promise.resolve(true);
+      default:
+        return Promise.resolve({});
+    }
+  });
+
+  const finish = vi.fn();
+  const modal = mount(
+    <ProvisionGate open initial={{ recommended_variant: "nvidia" }} onDone={finish} />,
+  );
+  const body = modal.container.ownerDocument.body;
+  const clickButton = async (label: string) => {
+    const button = Array.from(body.querySelectorAll("button")).find((b) => b.textContent?.trim() === label);
+    expect(button, label).toBeDefined();
+    await act(async () => button!.click());
+    await tick();
+  };
+
+  try {
+    await clickButton(t("runtimeActions.download"));
+    await clickButton(t("s.setupBackground"));
+    await act(async () => {
+      resolveProvision({ ok: true });
+      await tick();
+    });
+    expect(finish).not.toHaveBeenCalled();
+    const orb = body.querySelector(`button[aria-label="${t("s.orbDownloadLabel")}"]`) as HTMLButtonElement | null;
+    expect(orb).not.toBeNull();
+    await act(async () => orb!.click());
+    await tick();
+    expect(body.textContent).toContain(t("extras.engineTitle"));
+  } finally {
+    modal.unmount();
+  }
+});

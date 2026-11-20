@@ -33,6 +33,7 @@ export type ExtraJobsSnap = {
   progByKey: Record<string, ExtraProgress>;
   coreProg: CoreProgress | null;
   msg: string;
+  hasError: boolean;
   generation: number;
 };
 
@@ -46,12 +47,13 @@ let coreBusy = false;
 let progByKey: Record<string, ExtraProgress> = {};
 let coreProg: CoreProgress | null = null;
 let msg = "";
+let hasError = false;
 let generation = 0;
 let listening = false;
 const listeners = new Set<() => void>();
 
 function snap(): ExtraJobsSnap {
-  return { busyKeys, coreBusy, progByKey, coreProg, msg, generation };
+  return { busyKeys, coreBusy, progByKey, coreProg, msg, hasError, generation };
 }
 
 function emit() {
@@ -65,7 +67,10 @@ function ensureListen() {
     const p = ev.payload;
     if (!p?.key) return;
     progByKey = { ...progByKey, [p.key]: p };
-    if (p.phase === "error") msg = p.message || t("s.e0dab22b1a");
+    if (p.phase === "error") {
+      msg = p.message || t("s.e0dab22b1a");
+      hasError = true;
+    }
     emit();
   }).catch(() => {
     listening = false;
@@ -85,6 +90,7 @@ export function startExtraDownload(key: string): void {
   busyKeys = { ...busyKeys, [key]: true };
   progByKey = { ...progByKey, [key]: { key, phase: "run", done: 0 } };
   msg = "";
+  hasError = false;
   emit();
   void (async () => {
     try {
@@ -93,6 +99,7 @@ export function startExtraDownload(key: string): void {
       msg = t("s.4bbcf94739");
     } catch (e) {
       msg = String(e);
+      hasError = true;
     } finally {
       starting.delete(key);
       const next = { ...busyKeys };
@@ -108,6 +115,7 @@ export function startEngineCoreDownload(): void {
   if (coreBusy || Object.keys(busyKeys).length > 0) return;
   coreBusy = true;
   msg = "";
+  hasError = false;
   coreProg = {
     phase: "engine-core",
     done: 0,
@@ -124,6 +132,7 @@ export function startEngineCoreDownload(): void {
       coreProg = null;
     } catch (e) {
       msg = String(e);
+      hasError = true;
     } finally {
       coreBusy = false;
       emit();

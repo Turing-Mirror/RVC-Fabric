@@ -2286,7 +2286,12 @@
     "storageSharedModels": "Modèles partagés",
     "storageAudio": "Fichiers audio",
     "storageOther": "Autres fichiers utilisateur",
-    "storageScanFailed": "Impossible d’actualiser le stockage. Relancez l’analyse."
+    "storageScanFailed": "Impossible d’actualiser le stockage. Relancez l’analyse.",
+    "setupBackground": "Continuer en arrière-plan",
+    "setupNextStep": "Étape suivante prête ; cliquez pour ouvrir",
+    "orbDownloadLabel": "Afficher la progression",
+    "communityDownloading": "Téléchargement Communauté",
+    "communityDownloadCount": "{v0} tâches actives"
   },
   "extras": {
     "engineTitle": "Ressources moteur",

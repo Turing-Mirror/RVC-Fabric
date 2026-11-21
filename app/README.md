@@ -64,8 +64,13 @@ npm run tauri:dev
 - Index panel: bind / use / unbind `.index` (copied next to `.pth`)
 - Profiles: list / switch / save / import / export `.tmvp`
 - Import `.pth` / `.index` / `.zip`; delete / rename / promote legacy
-- Community voices live on the **Plaza** page (dual-source catalog, series zone,
-  third-party disclaimer). Multi-connection download via shared `download.rs`
+- Community voices live on the **Plaza** page. The catalog combines approved
+  TRM Community releases with `thirdparty_voices` from the existing online
+  manifest, with independent caches and concurrent refreshes. Migrated entries
+  use the Community version; legacy official packs remain in the starter catalog.
+  Source filters (All / Community / Third-party) work with search and series
+  grouping. Third-party downloads retain their source notice and staged-install
+  confirmation. Multi-connection download via shared `download.rs`
   (`DownloadKind::VoicePack`). Display names follow `name_i18n` + UI locale.
 
 ## Runtime provision

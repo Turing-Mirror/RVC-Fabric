@@ -2650,12 +2650,11 @@ async fn store_catalog(
     let root = root_clone(&state)?;
     let remote = prefer_remote.unwrap_or(true);
     tauri::async_runtime::spawn_blocking(move || {
-        let catalog = if starter_only.unwrap_or(false) {
-            store::fetch_legacy_store_catalog(&root, remote)
+        if starter_only.unwrap_or(false) {
+            Ok(store::fetch_legacy_store_catalog(&root, remote))
         } else {
-            community_catalog::catalog(&root, remote)
-        };
-        Ok(catalog)
+            store::fetch_store_catalog(&root, remote)
+        }
     })
     .await
     .map_err(|e| e.to_string())?

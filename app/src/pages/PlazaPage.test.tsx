@@ -44,10 +44,20 @@ const listing: StoreVoice = {
   license: { id: "CC-BY-4.0" },
 };
 
+const thirdPartyListing: StoreVoice = {
+  id: "tp-external",
+  name: "Third-party voice",
+  date: "20261015",
+  official: false,
+  pack_url: "https://example.test/voice.zip",
+  source_url: "https://example.test/voices",
+};
+
 let mounted: Mounted | undefined;
 let staged: Record<string, StagedVoice>;
 let installed: boolean;
 let updateAvailable: boolean;
+let thirdPartyInstalled: boolean;
 let submissionAttempts: number;
 
 beforeEach(async () => {
@@ -62,8 +72,9 @@ beforeEach(async () => {
   staged = {};
   installed = false;
   updateAvailable = false;
+  thirdPartyInstalled = false;
   submissionAttempts = 0;
-  invoke.mockReset().mockImplementation(async (command: string, args?: { request?: { action: string } }) => {
+  invoke.mockReset().mockImplementation(async (command: string, args?: { request?: { action: string }; entry?: StoreVoice }) => {
     switch (command) {
       case "config_get": return { ui_locale: "en-US", ui_locale_picked: true };
       case "community_links": return { enabled: true, accountUrl: "https://account.example.test/" };
@@ -83,16 +94,24 @@ beforeEach(async () => {
         }
         break;
       }
-      case "store_catalog": return { thirdparty_voices: [{ ...listing, installed, update_available: updateAvailable }] };
+      case "store_catalog": return { thirdparty_voices: [
+        { ...listing, installed, update_available: updateAvailable },
+        { ...thirdPartyListing, installed: thirdPartyInstalled },
+      ] };
       case "store_staged": return staged;
       case "store_install": {
-        staged = { [listing.community_staging_id!]: { dir: "staged", file: "voice.zip", size_bytes: 128 } };
+        const entry = args!.entry!;
+        staged = { [entry.community_staging_id || entry.id]: { dir: "staged", file: "voice.zip", size_bytes: 128 } };
         return { ok: true };
       }
       case "store_install_staged": {
         staged = {};
-        installed = true;
-        updateAvailable = false;
+        if (args?.entry?.community_version_id) {
+          installed = true;
+          updateAvailable = false;
+        } else {
+          thirdPartyInstalled = true;
+        }
         return { ok: true };
       }
     }
@@ -165,13 +184,16 @@ it.each([
   updateAvailable = installedBefore;
   const entry = { ...listing, installed, update_available: updateAvailable };
   const host = await openCommunity();
-  const card = host.querySelector<HTMLElement>("#store-voice-approved-voice")!;
-  expect(card.textContent).not.toContain("Community");
   const catalogButtons = [...pane(host, "catalog").querySelectorAll("button")].map(node => node.textContent?.trim());
   expect(catalogButtons).not.toContain("TRM source");
-  expect(catalogButtons).not.toContain("Third-party");
+  expect(catalogButtons).toContain("Community");
+  expect(catalogButtons).toContain("Third-party");
   expect(catalogButtons).toContain("By time");
   expect(catalogButtons).toContain("By series");
+  await click("Community", pane(host, "catalog"));
+  const card = host.querySelector<HTMLElement>("#store-voice-approved-voice")!;
+  expect(card.textContent).not.toContain("Community");
+  expect(host.querySelector("#store-voice-tp-external")).toBeNull();
   expect(card.textContent).toContain("2026-11-15");
   expect(card.textContent).toContain("CC-BY-4.0");
   expect(host.textContent).not.toContain("unreviewed third-party voices");
@@ -184,6 +206,31 @@ it.each([
   expect(invoke).toHaveBeenCalledWith("store_install_staged", { entry });
   expect(button("Installed", card).disabled).toBe(true);
   expect(invoke.mock.calls.some(([command]) => command === "community_account_sign_in")).toBe(false);
+});
+
+it("browses, downloads and installs third-party voices without losing the source filter on refresh", async () => {
+  const host = await openCommunity();
+  const catalog = pane(host, "catalog");
+  expect(catalog.querySelector("#store-voice-approved-voice")).not.toBeNull();
+  expect(catalog.querySelector("#store-voice-tp-external")).not.toBeNull();
+  await click("Third-party", catalog);
+  expect(catalog.querySelector("#store-voice-approved-voice")).toBeNull();
+  expect(catalog.textContent).toContain("unreviewed third-party voices");
+  const card = catalog.querySelector<HTMLElement>("#store-voice-tp-external")!;
+  const entry = { ...thirdPartyListing, installed: false };
+  await click("Download", card);
+  expect(invoke).toHaveBeenCalledWith("store_install", { entry });
+  expect(button("Confirm install", card)).toBeDefined();
+  await click("View", card);
+  expect(invoke).toHaveBeenCalledWith("store_reveal_staged", { voiceId: thirdPartyListing.id });
+  await click("Confirm install", card);
+  expect(invoke).toHaveBeenCalledWith("store_install_staged", { entry });
+  expect(button("Installed", card).disabled).toBe(true);
+  await click("Refresh", catalog);
+  expect(catalog.querySelector("#store-voice-approved-voice")).toBeNull();
+  expect(button("Installed", catalog.querySelector("#store-voice-tp-external")!).disabled).toBe(true);
+  await click("All", catalog);
+  expect(catalog.querySelector("#store-voice-approved-voice")).not.toBeNull();
 });
 
 it("saves, previews and retries an RVC voice submission with the publisher's edited license", async () => {

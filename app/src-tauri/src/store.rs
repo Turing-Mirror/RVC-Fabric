@@ -480,6 +480,44 @@ fn schedule_catalog_refresh(cache_p: PathBuf) {
     });
 }
 
+pub(crate) fn fetch_store_catalog(root: &Path, prefer_remote: bool) -> Result<Value, String> {
+    // Keep each source's cache and failure handling independent, and fetch both
+    // concurrently so their network timeouts do not add up.
+    std::thread::scope(|scope| {
+        let legacy = scope.spawn(|| fetch_legacy_store_catalog(root, prefer_remote));
+        let community = community_catalog::catalog(root, prefer_remote);
+        let legacy = legacy
+            .join()
+            .map_err(|_| crate::i18n::t("community.catalogUnavailable"))?;
+        Ok(merge_store_catalogs(community, legacy))
+    })
+}
+
+fn merge_store_catalogs(mut community: Value, legacy: Value) -> Value {
+    let entries = community["thirdparty_voices"].as_array_mut().unwrap();
+    let mut identities: HashSet<String> = entries
+        .iter()
+        .flat_map(|entry| [entry["id"].as_str(), entry["legacy_catalog_id"].as_str()])
+        .flatten()
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if let Some(thirdparty) = legacy["thirdparty_voices"].as_array() {
+        entries.extend(thirdparty.iter().filter(|entry| {
+            entry["id"].as_str().is_some_and(|id| identities.insert(id.to_owned()))
+        }).cloned());
+    }
+    // Legacy official packs remain in the starter catalog. Community versions
+    // take precedence over their former manifest entries.
+    community["fetch_error"] = json!([&community, &legacy]
+        .into_iter()
+        .filter_map(|catalog| catalog["fetch_error"].as_str())
+        .filter(|error| !error.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n"));
+    community
+}
+
 pub(crate) fn fetch_legacy_store_catalog(root: &Path, prefer_remote: bool) -> Value {
     let _ = paths::ensure_user_dirs(root);
     let mut data = json!({});
@@ -2038,7 +2076,51 @@ mod tests {
         let legacy = fetch_legacy_store_catalog(&root, false);
         assert_eq!(legacy["voices"][0]["id"], "official-voice");
         assert_eq!(legacy["thirdparty_voices"][0]["id"], "other-voice");
+
+        let combined = fetch_store_catalog(&root, false).unwrap();
+        assert_eq!(combined["voices"], json!([]));
+        assert_eq!(combined["thirdparty_voices"][0]["id"], "other-voice");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn combined_catalog_prefers_community_versions_over_migrated_thirdparty_entries() {
+        let community_entry = json!({
+            "id": "community-voice", "legacy_catalog_id": "tp-migrated",
+            "community_version_id": "release-v2", "installed": true,
+            "update_available": true
+        });
+        let thirdparty_entry = json!({
+            "id": "tp-external", "official": false,
+            "pack_url": "https://example.org/voice.zip", "installed": true
+        });
+        let combined = merge_store_catalogs(
+            json!({ "voices": [], "thirdparty_voices": [community_entry], "fetch_error": "" }),
+            json!({
+                "voices": [{ "id": "starter-voice" }],
+                "thirdparty_voices": [
+                    { "id": "tp-migrated" }, { "id": "community-voice" },
+                    thirdparty_entry, thirdparty_entry
+                ],
+                "fetch_error": ""
+            }),
+        );
+        assert_eq!(combined["voices"], json!([]));
+        assert_eq!(combined["thirdparty_voices"], json!([community_entry, thirdparty_entry]));
+        assert_eq!(combined["fetch_error"], "");
+    }
+
+    #[test]
+    fn combined_catalog_keeps_available_thirdparty_entries_and_both_source_errors() {
+        let combined = merge_store_catalogs(
+            json!({ "voices": [], "thirdparty_voices": [], "fetch_error": "Community unavailable" }),
+            json!({
+                "thirdparty_voices": [{ "id": "tp-cached", "installed": false }],
+                "fetch_error": "Third-party catalog could not refresh"
+            }),
+        );
+        assert_eq!(combined["thirdparty_voices"][0]["id"], "tp-cached");
+        assert_eq!(combined["fetch_error"], "Community unavailable\nThird-party catalog could not refresh");
     }
 
     #[test]

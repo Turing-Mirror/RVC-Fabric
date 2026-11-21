@@ -127,7 +127,7 @@ function WinBtn({
         "w-10 h-[34px] grid place-items-center text-xs rounded-md border-0 bg-transparent cursor-pointer",
         "text-[var(--meta)] transition-[background,color] duration-200 ease-[var(--ease)]",
         danger
-          ? "hover:bg-[#e81123] hover:text-white"
+          ? "hover:bg-[var(--danger-fill)] hover:text-[var(--accent-ink)]"
           : "hover:bg-[color-mix(in_srgb,var(--ink)_6%,transparent)] hover:text-[var(--ink)]",
       ].join(" ")}
     >

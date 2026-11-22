@@ -30,9 +30,10 @@ Var MoveCode
 Var MoveReport
 
 ; 用环境变量传路径，避免路径中的单引号被当成 PowerShell 源码。
+; 安装器/卸载器可能也在该目录内，必须保留当前 helper 的整个父进程链。
 !macro StopInstallDirProcesses ROOT
   System::Call 'kernel32::SetEnvironmentVariableW(w "RVC_FABRIC_STOP_ROOT", w "${ROOT}")'
-  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath($$env:RVC_FABRIC_STOP_ROOT).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar; Get-CimInstance Win32_Process | ForEach-Object { $$e = [string]$$_.ExecutablePath; if ($$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
+  nsExec::ExecToLog 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$$p = [IO.Path]::GetFullPath($$env:RVC_FABRIC_STOP_ROOT).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar; $$all = @(Get-CimInstance Win32_Process); $$parents = @{}; foreach ($$proc in $$all) { $$parents[[uint32]$$proc.ProcessId] = [uint32]$$proc.ParentProcessId }; $$keep = @{}; $$current = [uint32]$$PID; while ($$current -and !$$keep.ContainsKey($$current)) { $$keep[$$current] = $$true; $$current = [uint32]$$parents[$$current] }; $$all | ForEach-Object { $$e = [string]$$_.ExecutablePath; if (!$$keep.ContainsKey([uint32]$$_.ProcessId) -and $$e -and $$e.StartsWith($$p, [StringComparison]::OrdinalIgnoreCase)) { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"'
   System::Call 'kernel32::SetEnvironmentVariableW(w "RVC_FABRIC_STOP_ROOT", p 0)'
 !macroend
 

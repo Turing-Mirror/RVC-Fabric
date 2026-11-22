@@ -130,7 +130,9 @@ class InstallerHooks(unittest.TestCase):
                     prefix = root.rstrip("\\")
                     paths = [prefix + r"\Runtime\pythonw.exe",
                              prefix.lower() + r"\rvc-fabric.exe",
-                             prefix + r"-other\pythonw.exe", ""]
+                             prefix + r"-other\pythonw.exe", "",
+                             prefix + r"\uninstall.exe",
+                             prefix + r"\Setup.exe"]
                     fixture = json.dumps(paths).replace("'", "''")
                     harness = (
                         "$ErrorActionPreference = 'Stop'; "
@@ -138,7 +140,10 @@ class InstallerHooks(unittest.TestCase):
                         f"$script:paths = '{fixture}' | ConvertFrom-Json; "
                         "function Get-CimInstance { "
                         "for ($i = 0; $i -lt $script:paths.Count; $i++) { "
-                        "[pscustomobject]@{ ExecutablePath=$script:paths[$i]; ProcessId=$i+1 } } }; "
+                        "[pscustomobject]@{ ExecutablePath=$script:paths[$i]; ProcessId=$i+1; "
+                        "ParentProcessId=$(if ($i -eq 4) { 6 } else { 0 }) } }; "
+                        "[pscustomobject]@{ ExecutablePath='C:\\Windows\\powershell.exe'; "
+                        "ProcessId=$PID; ParentProcessId=5 } }; "
                         "function Stop-Process { param($Id, [switch]$Force, $ErrorAction) "
                         "$script:stopped += $Id }; "
                         f"$env:RVC_FABRIC_STOP_ROOT = '{root.replace(chr(39), chr(39)*2)}'; "

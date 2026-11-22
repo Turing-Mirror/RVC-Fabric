@@ -12,7 +12,7 @@ LangString failedToKillApp ${LANG_SIMPCHINESE} "无法终止 {{product_name}}。
 LangString installingWebview2 ${LANG_SIMPCHINESE} "正在安装 WebView2..."
 LangString newerVersionInstalled ${LANG_SIMPCHINESE} "有一个更新版本的 ${PRODUCTNAME} 已经安装了！不推荐你安装旧的版本。如果你真的想要安装这个旧的版本，推荐先卸载当前版本。选择你想要执行的操作后点击下一步以继续。"
 LangString older ${LANG_SIMPCHINESE} "旧的"
-LangString olderOrUnknownVersionInstalled ${LANG_SIMPCHINESE} "系统中已存在版本为 $R4 的 ${PRODUCTNAME}。推荐先卸载当前版本后再进行安装。选择你想要执行的操作后点击下一步以继续。"
+LangString olderOrUnknownVersionInstalled ${LANG_SIMPCHINESE} "系统中已存在旧版或版本信息未知的 ${PRODUCTNAME}。选择你想要执行的操作后点击下一步以继续。"
 LangString silentDowngrades ${LANG_SIMPCHINESE} "降级操作在此安装程序上已禁用，无法进行安静安装，请使用图形操作界面。$\n"
 LangString unableToUninstall ${LANG_SIMPCHINESE} "无法卸载！"
 LangString uninstallApp ${LANG_SIMPCHINESE} "卸载 ${PRODUCTNAME}"

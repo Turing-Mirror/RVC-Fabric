@@ -50,6 +50,8 @@ class BetaVersions(unittest.TestCase):
             new_config = beta.read_json(root / "app/src-tauri/tauri.conf.json")
             self.assertEqual(new_config["plugins"]["updater"], old_config["plugins"]["updater"])
             self.assertTrue(new_config["bundle"]["windows"]["allowDowngrades"])
+            self.assertEqual(new_config["bundle"]["windows"]["nsis"]["template"],
+                             "nsis-beta-template.nsi")
             self.assertFalse(new_config["bundle"]["createUpdaterArtifacts"])
             self.assertIn(f'APP_VERSION: str = "{expected}"',
                           (root / "scripts/shell_version.py").read_text(encoding="utf-8"))

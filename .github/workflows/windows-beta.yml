@@ -61,7 +61,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Test the source and Beta publishing logic
         run: |
-          python -m unittest tests.test_version_sync tests.test_beta_version tests.test_beta_release -v
+          python -m unittest tests.test_version_sync tests.test_beta_version tests.test_beta_release tests.test_installer_unification -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --test tests/test_setup_signature.mjs tests/test_beta_signature.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

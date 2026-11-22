@@ -41,7 +41,7 @@ def replace_one(text: str, pattern: str, replacement: str) -> str:
 
 
 def prepare(root: Path, number: int) -> str:
-    """Change only application versions in a checkout, never dependency versions."""
+    """Prepare Beta metadata and its installer in a disposable checkout."""
     package_path = root / "app/package.json"
     package = read_json(package_path)
     stable = package["version"]
@@ -79,6 +79,7 @@ def prepare(root: Path, number: int) -> str:
     config["version"] = version
     config["bundle"]["createUpdaterArtifacts"] = False
     config["bundle"]["windows"]["allowDowngrades"] = True
+    config["bundle"]["windows"]["nsis"]["template"] = "nsis-beta-template.nsi"
     for path, data in ((package_path, package), (lock_path, lock), (config_path, config)):
         write_json(path, data)
     for path, text in ((cargo_path, cargo), (cargo_lock_path, cargo_lock), (inno_path, inno), (shell_path, shell)):

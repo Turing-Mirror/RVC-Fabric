@@ -179,12 +179,25 @@ impl<'a> Package<'a> {
             })
     }
 
+    /// Errors are shown to the user: the service's own message when it gives one.
     pub(crate) fn download_url(&self) -> Result<String, String> {
-        let api = api_base()?;
-        let descriptor = request(
-            &client()?,
-            endpoint(&api, &["files", self.file_id, "download"]),
-        )?;
+        let api = api_base().map_err(|error| refresh_after(&error))?;
+        let response = client()
+            .and_then(|client| {
+                client
+                    .get(endpoint(&api, &["files", self.file_id, "download"]))
+                    .send()
+                    .map_err(|e| e.to_string())
+            })
+            .map_err(|error| refresh_after(&error))?;
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        let descriptor: Value = serde_json::from_str(&body).unwrap_or_default();
+        if !status.is_success() {
+            let message = descriptor["error"]["message"].as_str().unwrap_or_default();
+            crate::logging::shell_log!(format!("community download {}: HTTP {status} {message}", self.file_id));
+            return Err(if message.is_empty() { refresh_required() } else { message.to_owned() });
+        }
         self.verified_url(&descriptor, &api)
     }
 
@@ -221,6 +234,11 @@ fn path_id(identity: &str) -> String {
 
 pub(crate) fn refresh_required() -> String {
     crate::i18n::t("community.refreshBeforeDownload")
+}
+
+fn refresh_after(error: &str) -> String {
+    crate::logging::shell_log!(format!("community download: {error}"));
+    refresh_required()
 }
 
 pub(crate) struct InstalledVoice {

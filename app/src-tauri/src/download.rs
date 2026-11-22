@@ -392,7 +392,9 @@ async fn resume_one_url(
     use std::io::Write;
 
     let have = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+    // Packs need raw bytes: progress and resume rely on the real Content-Length and byte offsets.
     let client = reqwest::Client::builder()
+        .no_gzip()
         .user_agent(UA)
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(FIRST_BYTE_TIMEOUT)

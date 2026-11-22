@@ -1458,10 +1458,7 @@ pub fn install_voice_entry(
         .map(|_| CommunityJob::start(&id))
         .transpose()?;
     let pack_url = if let Some(package) = &package {
-        package.download_url().map_err(|error| {
-            crate::logging::shell_log!(format!("community download {id}: {error}"));
-            community_catalog::refresh_required()
-        })?
+        package.download_url()?
     } else {
         entry["pack_url"].as_str().unwrap_or_default().to_owned()
     };

@@ -179,6 +179,18 @@ impl<'a> Package<'a> {
             })
     }
 
+    /// Tells the service a download failed, so it rechecks the source within the hour.
+    /// Runs in the background and never affects the install result.
+    pub(crate) fn report_failure(&self) {
+        let Ok(api) = api_base() else { return };
+        let url = endpoint(&api, &["files", self.file_id, "report"]);
+        std::thread::spawn(move || {
+            if let Ok(client) = client() {
+                let _ = client.post(url).send();
+            }
+        });
+    }
+
     /// Errors are shown to the user: the service's own message when it gives one.
     pub(crate) fn download_url(&self) -> Result<String, String> {
         let api = api_base().map_err(|error| refresh_after(&error))?;

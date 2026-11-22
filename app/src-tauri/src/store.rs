@@ -1458,7 +1458,7 @@ pub fn install_voice_entry(
         .map(|_| CommunityJob::start(&id))
         .transpose()?;
     let pack_url = if let Some(package) = &package {
-        package.download_url()?
+        package.download_url().inspect_err(|_| package.report_failure())?
     } else {
         entry["pack_url"].as_str().unwrap_or_default().to_owned()
     };
@@ -1534,6 +1534,7 @@ pub fn install_voice_entry(
         });
 
         let urls = voice_download_urls(&root, &pack_url);
+        let cancelled = cancel_flag.clone();
         let res = download::download_request(
             DownloadRequest {
                 urls,
@@ -1550,10 +1551,16 @@ pub fn install_voice_entry(
         if community_job.is_none() {
             drop_cancel_flag(&id);
         }
+        if let Some(package) = &package {
+            if res.is_err() && !cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                package.report_failure();
+            }
+        }
         res?;
         if let Some(package) = &package {
             if let Err(error) = package.verify_size(&zpath) {
                 let _ = fs::remove_file(&zpath);
+                package.report_failure();
                 return Err(error);
             }
         }
